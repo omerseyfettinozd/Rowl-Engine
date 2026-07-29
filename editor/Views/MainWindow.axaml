@@ -1,0 +1,211 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:RowlEngine.Editor.ViewModels"
+        xmlns:views="using:RowlEngine.Editor.Views"
+        xmlns:controls="using:RowlEngine.Editor.Controls"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="1600" d:DesignHeight="900"
+        x:Class="RowlEngine.Editor.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Title="Rowl Engine Editor"
+        Width="1600" Height="900"
+        WindowStartupLocation="CenterScreen"
+        Background="#121218">
+
+    <Design.DataContext>
+        <vm:MainWindowViewModel/>
+    </Design.DataContext>
+
+    <Grid RowDefinitions="Auto, *">
+        <!-- Top Toolbar -->
+        <Border Grid.Row="0" Background="#1E1E2A" BorderBrush="#2D2D3F" BorderThickness="0,0,0,1" Padding="12,8">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8">
+                    <Button Content="⚡ Connect IPC" Command="{Binding ConnectIpcCommand}" Background="#2563EB" Foreground="White" FontWeight="Bold" CornerRadius="4" Padding="10,6"/>
+                    <Button Content="{Binding PlayButtonText}" Command="{Binding TogglePlayStandaloneCommand}" Background="{Binding PlayButtonColor}" Foreground="White" FontWeight="Bold" CornerRadius="4" Padding="10,6"/>
+                    <Button Content="+ Add Node" Command="{Binding AddNodeCommand}" Background="#3B82F6" Foreground="White" CornerRadius="4" Padding="10,6"/>
+                    <Button Content="✂ Disconnect Wires" Command="{Binding DisconnectSelectedNodeCablesCommand}" Background="#D97706" Foreground="White" CornerRadius="4" Padding="10,6"/>
+                    <Button Content="🗑 Delete Node" Command="{Binding DeleteSelectedNodeCommand}" Background="#DC2626" Foreground="White" CornerRadius="4" Padding="10,6"/>
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                    <TextBlock Text="🎮 ROWL ENGINE EDITOR" FontWeight="Bold" Foreground="#38BDF8" FontSize="14" VerticalAlignment="Center"/>
+                    <Border Background="#2D2D3F" CornerRadius="12" Padding="10,4">
+                        <TextBlock Text="{Binding StatusText}" Foreground="#A1A1AA" FontSize="12"/>
+                    </Border>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <!-- Main Dock Workspace -->
+        <Grid Grid.Row="1" ColumnDefinitions="260, 4, *, 4, 320" RowDefinitions="*, 4, 180">
+
+            <!-- Left Pane: Project Asset Browser -->
+            <Border Grid.Row="0" Grid.Column="0" Grid.RowSpan="3" Background="#181822" BorderBrush="#2D2D3F" BorderThickness="0,0,1,0">
+                <Grid RowDefinitions="Auto, *">
+                    <Border Grid.Row="0" Background="#1E1E2A" Padding="12,10" BorderBrush="#2D2D3F" BorderThickness="0,0,0,1">
+                        <DockPanel>
+                            <Button Content="+ Import" Command="{Binding ImportAssetCommand}" DockPanel.Dock="Right" Background="#3B82F6" Foreground="White" FontSize="11" Padding="6,2" CornerRadius="3"/>
+                            <TextBlock Text="📁 Project Assets" FontWeight="Bold" Foreground="#94A3B8" FontSize="13" VerticalAlignment="Center"/>
+                        </DockPanel>
+                    </Border>
+                    <ListBox Grid.Row="1" Background="Transparent" ItemsSource="{Binding AssetBrowserViewModel.Assets}" Margin="4" Foreground="#E2E8F0">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate x:DataType="vm:AssetItemViewModel">
+                                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding Icon}" Foreground="{Binding IconColor}" FontSize="14" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{Binding Name}" Foreground="#CBD5E1" FontSize="12" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Grid>
+            </Border>
+
+            <!-- Vertical Splitter 1 -->
+            <GridSplitter Grid.Row="0" Grid.Column="1" Grid.RowSpan="3" Background="#2D2D3F" ResizeBehavior="PreviousAndNext"/>
+
+            <!-- Center Content: Node Graph & Live Preview Tabs -->
+            <Border Grid.Row="0" Grid.Column="2" Background="#0F172A">
+                <TabControl Background="Transparent">
+                    <!-- Tab 1: Node Graph Canvas -->
+                    <TabItem Header="📊 Node Graph">
+                        <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+                            <Canvas Width="3000" Height="2000" Background="#0F172A">
+                                <!-- Background Grid Pattern Visual -->
+                                <Rectangle Width="3000" Height="2000" Fill="#0F172A"/>
+
+                                <!-- Connection Wires -->
+                                <ItemsControl ItemsSource="{Binding Connections}" Canvas.Left="0" Canvas.Top="0" Width="3000" Height="2000">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <Canvas Width="3000" Height="2000"/>
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:ConnectionViewModel">
+                                            <controls:BezierWireRenderer StartPoint="{Binding StartPoint}" EndPoint="{Binding EndPoint}" WireBrush="#00FF66" WireThickness="3.0"/>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
+                                <!-- Active Drag Wire -->
+                                <controls:BezierWireRenderer StartPoint="{Binding WireStartPoint}" EndPoint="{Binding WireEndPoint}" IsVisible="{Binding IsDraggingWire}" WireBrush="#38BDF8" WireThickness="3.5"/>
+
+                                <!-- Node Cards -->
+                                <ItemsControl ItemsSource="{Binding Nodes}" Canvas.Left="0" Canvas.Top="0" Width="3000" Height="2000">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <Canvas Width="3000" Height="2000"/>
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.Styles>
+                                        <Style Selector="ItemsControl > ContentPresenter" x:DataType="vm:NodeViewModel">
+                                            <Setter Property="Canvas.Left" Value="{Binding X}"/>
+                                            <Setter Property="Canvas.Top" Value="{Binding Y}"/>
+                                        </Style>
+                                    </ItemsControl.Styles>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate DataType="vm:NodeViewModel">
+                                            <views:NodeControl />
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </Canvas>
+                        </ScrollViewer>
+                    </TabItem>
+
+                    <!-- Tab 2: Live Preview -->
+                    <TabItem Header="📺 Live Preview">
+                        <views:LivePreviewControl DataContext="{Binding}" />
+                    </TabItem>
+                </TabControl>
+            </Border>
+
+            <!-- Vertical Splitter 2 -->
+            <GridSplitter Grid.Row="0" Grid.Column="3" Grid.RowSpan="1" Background="#2D2D3F" ResizeBehavior="PreviousAndNext"/>
+
+            <!-- Right Pane: Inspector -->
+            <Border Grid.Row="0" Grid.Column="4" Background="#181822" BorderBrush="#2D2D3F" BorderThickness="1,0,0,0">
+                <Grid RowDefinitions="Auto, *">
+                    <Border Grid.Row="0" Background="#1E1E2A" Padding="12,10" BorderBrush="#2D2D3F" BorderThickness="0,0,0,1">
+                        <TextBlock Text="🎛️ Node Inspector" FontWeight="Bold" Foreground="#94A3B8" FontSize="13"/>
+                    </Border>
+
+                    <ScrollViewer Grid.Row="1" Padding="16">
+                        <StackPanel Spacing="14">
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="Node Title" FontSize="12" Foreground="#94A3B8"/>
+                                <TextBox Text="{Binding SelectedNode.Title, FallbackValue='No Node Selected'}" Background="#0F172A" Foreground="#F8FAFC" BorderBrush="#334155"/>
+                            </StackPanel>
+
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="Speaker Name" FontSize="12" Foreground="#94A3B8"/>
+                                <TextBox Text="{Binding SelectedNode.Speaker, FallbackValue='Evelyn'}" Background="#0F172A" Foreground="#F8FAFC" BorderBrush="#334155"/>
+                            </StackPanel>
+
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="Dialogue Content" FontSize="12" Foreground="#94A3B8"/>
+                                <TextBox Text="{Binding SelectedNode.DialogueText, FallbackValue=''}" AcceptsReturn="True" Height="80" TextWrapping="Wrap" Background="#0F172A" Foreground="#F8FAFC" BorderBrush="#334155"/>
+                            </StackPanel>
+
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="Background Layer" FontSize="12" Foreground="#94A3B8"/>
+                                <ComboBox ItemsSource="{Binding AssetBrowserViewModel.AssetNames}" SelectedItem="{Binding SelectedNode.BackgroundTexture}" HorizontalAlignment="Stretch" Background="#0F172A" Foreground="#F8FAFC" BorderBrush="#334155"/>
+                            </StackPanel>
+
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="Character Sprite" FontSize="12" Foreground="#94A3B8"/>
+                                <ComboBox ItemsSource="{Binding AssetBrowserViewModel.AssetNames}" SelectedItem="{Binding SelectedNode.CharacterSprite}" HorizontalAlignment="Stretch" Background="#0F172A" Foreground="#F8FAFC" BorderBrush="#334155"/>
+                            </StackPanel>
+
+                            <Grid ColumnDefinitions="*, *" Margin="0,4">
+                                <StackPanel Grid.Column="0" Spacing="4" Margin="0,0,4,0">
+                                    <TextBlock Text="Character X" FontSize="12" Foreground="#94A3B8"/>
+                                    <NumericUpDown Value="{Binding SelectedNode.CharacterX}" Minimum="-100" Maximum="1920" Increment="20" Background="#0F172A" Foreground="#F8FAFC" BorderBrush="#334155"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Spacing="4" Margin="4,0,0,0">
+                                    <TextBlock Text="Character Y" FontSize="12" Foreground="#94A3B8"/>
+                                    <NumericUpDown Value="{Binding SelectedNode.CharacterY}" Minimum="-100" Maximum="1080" Increment="20" Background="#0F172A" Foreground="#F8FAFC" BorderBrush="#334155"/>
+                                </StackPanel>
+                            </Grid>
+
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="Dialogue Box Y" FontSize="12" Foreground="#94A3B8"/>
+                                <NumericUpDown Value="{Binding SelectedNode.DialogueBoxY}" Minimum="0" Maximum="1080" Increment="20" Background="#0F172A" Foreground="#F8FAFC" BorderBrush="#334155"/>
+                            </StackPanel>
+
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="Audio &amp; DSP Filter" FontSize="12" Foreground="#94A3B8"/>
+                                <ComboBox SelectedItem="{Binding SelectedNode.DspFilter}" HorizontalAlignment="Stretch" Background="#0F172A" Foreground="#F8FAFC" BorderBrush="#334155">
+                                    <ComboBoxItem>Normal</ComboBoxItem>
+                                    <ComboBoxItem>Telephone</ComboBoxItem>
+                                    <ComboBoxItem>CaveReverb</ComboBoxItem>
+                                    <ComboBoxItem>UnderwaterLowPass</ComboBoxItem>
+                                </ComboBox>
+                            </StackPanel>
+
+                            <Button Content="Sync Selected Node to Engine" Command="{Binding PushHotReloadPacketCommand}" HorizontalAlignment="Stretch" Margin="0,8,0,0" Background="#2563EB" Foreground="White" FontWeight="Bold" CornerRadius="4" Padding="12,8"/>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Grid>
+            </Border>
+
+            <!-- Horizontal Splitter -->
+            <GridSplitter Grid.Row="1" Grid.Column="2" Grid.ColumnSpan="3" Background="#2D2D3F" ResizeBehavior="PreviousAndNext"/>
+
+            <!-- Bottom Pane: Output Log -->
+            <Border Grid.Row="2" Grid.Column="2" Grid.ColumnSpan="3" Background="#0F172A" BorderBrush="#2D2D3F" BorderThickness="0,1,0,0">
+                <Grid RowDefinitions="Auto, *">
+                    <Border Grid.Row="0" Background="#1E1E2A" Padding="12,6" BorderBrush="#2D2D3F" BorderThickness="0,0,0,1">
+                        <TextBlock Text="📋 Output Log &amp; IPC Stream" FontSize="12" Foreground="#94A3B8"/>
+                    </Border>
+                    <ScrollViewer Grid.Row="1" Padding="8">
+                        <TextBox Text="{Binding LogOutput}" IsReadOnly="True" AcceptsReturn="True" Background="Transparent" BorderThickness="0" FontFamily="Consolas, Monospace" FontSize="12" Foreground="#22C55E"/>
+                    </ScrollViewer>
+                </Grid>
+            </Border>
+        </Grid>
+    </Grid>
+</Window>

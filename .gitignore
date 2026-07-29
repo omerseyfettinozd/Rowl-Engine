@@ -1,0 +1,44 @@
+# Rowl Engine GitIgnore
+
+# C++ Build Output & CMake Artifacts
+build/
+bin/
+lib/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+*.cmake
+!.clang-format
+
+# C# .NET & Avalonia Build Artifacts
+**/bin/
+**/obj/
+.nuget/
+.dotnet/
+.vs/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Executables & Binaries
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.dylib
+*.exe
+*.dll
+*.pdb
+
+# Socket & IPC Temp Files
+*.sock
+/tmp/
+
+# OS & IDE Files
+.DS_Store
+Thumbs.db
+.vscode/
