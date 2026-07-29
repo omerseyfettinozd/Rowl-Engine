@@ -1,0 +1,100 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="clr-namespace:RowlEngine.Editor.ViewModels"
+             mc:Ignorable="d" d:DesignWidth="1280" d:DesignHeight="720"
+             x:Class="RowlEngine.Editor.Views.LivePreviewControl"
+             x:DataType="vm:MainWindowViewModel">
+
+    <Border Background="#0B0F19" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+        <Grid>
+            <!-- 16:9 Aspect Guardian Letterbox Container -->
+            <Viewbox Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="12">
+                <Border Width="1920" Height="1080" Background="#121624" CornerRadius="8" ClipToBounds="True" BoxShadow="0 10 30 0 #000000">
+                    <Canvas x:Name="ViewportCanvas" Width="1920" Height="1080" Background="#161B2E">
+                        <!-- Scene Background Bitmap Layer -->
+                        <Border Canvas.Left="0" Canvas.Top="0" Width="1920" Height="1080" Background="#1A2035">
+                            <Grid>
+                                <!-- Actual Bitmap Image Render -->
+                                <Image Source="{Binding SelectedNode.BackgroundBitmap}" Stretch="UniformToFill" Width="1920" Height="1080"/>
+                                
+                                <!-- Decorative Atmosphere Fallback Text if Bitmap loading -->
+                                <TextBlock Text="{Binding SelectedNode.BackgroundTexture, StringFormat='Scene BG: {0}'}" 
+                                           IsVisible="{Binding SelectedNode.BackgroundBitmap, Converter={x:Static ObjectConverters.IsNull}}"
+                                           Foreground="#64748B" FontSize="20" FontWeight="Bold" Margin="40,90" HorizontalAlignment="Left"/>
+                            </Grid>
+                        </Border>
+
+                        <!-- Top Resolution Banner -->
+                        <Border Canvas.Left="0" Canvas.Top="0" Width="1920" Height="80" Background="#0F172A" Opacity="0.92">
+                            <DockPanel Margin="30,0">
+                                <StackPanel Orientation="Horizontal" Spacing="16" VerticalAlignment="Center">
+                                    <TextBlock Text="⚡ LIVE VIEWPORT" Foreground="#00F0FF" FontSize="22" FontWeight="Bold"/>
+                                    <Border Background="#1E293B" CornerRadius="4" Padding="10,4">
+                                        <TextBlock Text="1920x1080 Virtual Canvas (Photoshop Interactive Mode)" Foreground="#94A3B8" FontSize="16"/>
+                                    </Border>
+                                </StackPanel>
+                                <TextBlock Text="{Binding SelectedNode.Title, StringFormat='Active Node: {0}'}" 
+                                           Foreground="#F8FAFC" FontSize="18" FontWeight="SemiBold" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                            </DockPanel>
+                        </Border>
+
+                        <!-- Interactive Character Sprite Layer (Drag with Mouse!) -->
+                        <Border x:Name="CharacterBox"
+                                Canvas.Left="{Binding SelectedNode.CharacterX}" 
+                                Canvas.Top="{Binding SelectedNode.CharacterY}" 
+                                Width="360" Height="540" Cursor="Hand"
+                                Background="#2A374A" BorderBrush="#00F0FF" BorderThickness="3" CornerRadius="12" BoxShadow="0 10 30 0 #000000">
+                            <Grid RowDefinitions="*, Auto">
+                                <!-- Bitmap Image Render for Character -->
+                                <Image Grid.Row="0" Source="{Binding SelectedNode.CharacterBitmap}" Stretch="Uniform" Margin="8"/>
+
+                                <!-- Fallback Placeholder if Image fails -->
+                                <StackPanel Grid.Row="0" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="12"
+                                            IsVisible="{Binding SelectedNode.CharacterBitmap, Converter={x:Static ObjectConverters.IsNull}}">
+                                    <TextBlock Text="👤" FontSize="72" HorizontalAlignment="Center"/>
+                                    <TextBlock Text="{Binding SelectedNode.CharacterSprite}" Foreground="#38BDF8" FontSize="18" FontWeight="Bold" HorizontalAlignment="Center"/>
+                                </StackPanel>
+
+                                <!-- Drag handle label -->
+                                <Border Grid.Row="1" Background="#0F172A" Padding="8,6">
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="6">
+                                        <TextBlock Text="✋ Drag Character" Foreground="#00F0FF" FontSize="13" FontWeight="Bold"/>
+                                        <TextBlock Text="{Binding SelectedNode.CharacterX, StringFormat='X:{0:F0}'}" Foreground="#94A3B8" FontSize="12"/>
+                                    </StackPanel>
+                                </Border>
+                            </Grid>
+                        </Border>
+
+                        <!-- Interactive 9-Slice Dialogue Box Container (Drag with Mouse!) -->
+                        <Border x:Name="DialogueBox"
+                                Canvas.Left="{Binding SelectedNode.DialogueBoxX}" 
+                                Canvas.Top="{Binding SelectedNode.DialogueBoxY}" 
+                                Width="{Binding SelectedNode.DialogueBoxWidth}" 
+                                Height="{Binding SelectedNode.DialogueBoxHeight}" Cursor="Hand"
+                                Background="#12121A" BorderBrush="#00F0FF" BorderThickness="3" CornerRadius="12" BoxShadow="0 10 30 0 #000000">
+                            <Canvas Width="{Binding SelectedNode.DialogueBoxWidth}" Height="{Binding SelectedNode.DialogueBoxHeight}">
+                                <!-- Speaker Name Badge -->
+                                <Border Canvas.Left="30" Canvas.Top="-20" Background="#2563EB" CornerRadius="6" Padding="20,8" BoxShadow="0 4 10 0 #000000">
+                                    <TextBlock Text="{Binding SelectedNode.Speaker, FallbackValue='Evelyn'}" Foreground="#FFFFFF" FontSize="20" FontWeight="Bold"/>
+                                </Border>
+
+                                <!-- Dialogue Content Text -->
+                                <TextBlock Canvas.Left="36" Canvas.Top="36" 
+                                           Width="1680" TextWrapping="Wrap"
+                                           Text="{Binding SelectedNode.DialogueText, FallbackValue='Select a node to preview live dialogue scene.'}" 
+                                           Foreground="#F8FAFC" FontSize="24" LineHeight="36"/>
+
+                                <!-- Drag handle badge -->
+                                <Border Canvas.Right="20" Canvas.Top="-15" Background="#0F172A" BorderBrush="#00F0FF" BorderThickness="1" CornerRadius="4" Padding="6,2">
+                                    <TextBlock Text="✋ Drag Box" Foreground="#00F0FF" FontSize="11" FontWeight="Bold"/>
+                                </Border>
+                            </Canvas>
+                        </Border>
+                    </Canvas>
+                </Border>
+            </Viewbox>
+        </Grid>
+    </Border>
+</UserControl>

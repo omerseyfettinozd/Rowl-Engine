@@ -1,0 +1,52 @@
+namespace Rowl.IPC;
+
+enum MessageType : byte {
+    HandshakeReq = 0,
+    HandshakeResp = 1,
+    UpdateNodeGraph = 2,
+    SetActiveNode = 3,
+    UpdateVariable = 4,
+    TriggerEvent = 5,
+    Heartbeat = 6,
+    RuntimeStateReport = 7
+}
+
+table HandshakeReq {
+    editor_version: string;
+    protocol_version: uint;
+}
+
+table HandshakeResp {
+    engine_version: string;
+    status_code: uint;
+}
+
+table NodeData {
+    id: ulong;
+    node_type: string;
+    payload_json: string;
+}
+
+table UpdateNodeGraph {
+    nodes: [NodeData];
+    active_node_id: ulong;
+}
+
+table SetActiveNode {
+    node_id: ulong;
+    instant_jump: bool;
+}
+
+table UpdateVariable {
+    var_name: string;
+    var_value: string;
+}
+
+table MessageEnvelope {
+    msg_type: MessageType;
+    sequence_id: ulong;
+    timestamp_ms: uint64;
+    payload: [ubyte];
+}
+
+root_type MessageEnvelope;

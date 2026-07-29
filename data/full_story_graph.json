@@ -1,0 +1,29 @@
+{
+  "start_node_id": 101,
+  "nodes": [
+    {
+      "id": 101,
+      "speaker": "sexxxxx",
+      "dialogue": "sdfffffffffffffff",
+      "background": "Devreler.jpg",
+      "character": "Otsu.jpg",
+      "character_pos": "Right",
+      "character_x": 1498,95435684648,
+      "character_y": 118,522821576764,
+      "dialogue_box_y": 240,18257261410668,
+      "next_id": 102
+    },
+    {
+      "id": 102,
+      "speaker": "jhgkgkljgkjlg",
+      "dialogue": "jyhgfıyjgfjkgjhgjh",
+      "background": "Otsu.jpg",
+      "character": "Devreler.jpg",
+      "character_pos": "Right",
+      "character_x": 1440,
+      "character_y": 340,
+      "dialogue_box_y": 860,
+      "next_id": 0
+    }
+  ]
+}
