@@ -50,16 +50,71 @@
                             <TextBlock Text="📁 Project Assets" FontWeight="Bold" Foreground="#94A3B8" FontSize="13" VerticalAlignment="Center"/>
                         </DockPanel>
                     </Border>
-                    <ListBox Grid.Row="1" Background="Transparent" ItemsSource="{Binding AssetBrowserViewModel.Assets}" Margin="4" Foreground="#E2E8F0">
-                        <ListBox.ItemTemplate>
-                            <DataTemplate x:DataType="vm:AssetItemViewModel">
-                                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <TreeView Grid.Row="1" 
+                              Background="Transparent" 
+                              ItemsSource="{Binding AssetBrowserViewModel.AssetTree}" 
+                              SelectedItem="{Binding AssetBrowserViewModel.SelectedNode, Mode=TwoWay}"
+                              Margin="4" 
+                              Foreground="#E2E8F0">
+                        <TreeView.ContextMenu>
+                            <ContextMenu>
+                                <MenuItem Header="📁 Yeni Klasör Oluştur" Command="{Binding AssetBrowserViewModel.CreateFolderCommand}"/>
+                                <MenuItem Header="📥 Dosya İçe Aktar..." Command="{Binding ImportAssetCommand}"/>
+                                <Separator/>
+                                <MenuItem Header="✏️ Yeniden Adlandır (F2)" Command="{Binding AssetBrowserViewModel.StartRenameCommand}"/>
+                                <MenuItem Header="📂 Dosya Yöneticisinde Aç" Command="{Binding AssetBrowserViewModel.OpenInExplorerCommand}"/>
+                                <Separator/>
+                                <MenuItem Header="🗑️ Sil" Command="{Binding AssetBrowserViewModel.DeleteAssetCommand}"/>
+                                <MenuItem Header="🔄 Yenile" Command="{Binding AssetBrowserViewModel.RefreshAssetsCommand}"/>
+                            </ContextMenu>
+                        </TreeView.ContextMenu>
+                        <TreeView.Styles>
+                            <Style Selector="TreeViewItem" x:DataType="vm:AssetNodeViewModel">
+                                <Setter Property="IsExpanded" Value="True"/>
+                                <Setter Property="Padding" Value="2,3"/>
+                            </Style>
+                        </TreeView.Styles>
+                        <TreeView.ItemTemplate>
+                            <TreeDataTemplate x:DataType="vm:AssetNodeViewModel" ItemsSource="{Binding Children}">
+                                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" Background="Transparent">
+                                    <StackPanel.ContextMenu>
+                                        <ContextMenu>
+                                            <MenuItem Header="📁 Yeni Klasör Oluştur" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.CreateFolderCommand}"/>
+                                            <MenuItem Header="📥 Dosya İçe Aktar..." Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ImportAssetCommand}"/>
+                                            <Separator/>
+                                            <MenuItem Header="✏️ Yeniden Adlandır (F2)" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.StartRenameCommand}"/>
+                                            <MenuItem Header="📂 Dosya Yöneticisinde Aç" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.OpenInExplorerCommand}"/>
+                                            <Separator/>
+                                            <MenuItem Header="🗑️ Sil" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.DeleteAssetCommand}"/>
+                                            <MenuItem Header="🔄 Yenile" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.RefreshAssetsCommand}"/>
+                                        </ContextMenu>
+                                    </StackPanel.ContextMenu>
                                     <TextBlock Text="{Binding Icon}" Foreground="{Binding IconColor}" FontSize="14" VerticalAlignment="Center"/>
-                                    <TextBlock Text="{Binding Name}" Foreground="#CBD5E1" FontSize="12" VerticalAlignment="Center"/>
+                                    
+                                    <TextBlock Text="{Binding Name}" 
+                                               IsVisible="{Binding !IsEditing}" 
+                                               Foreground="#CBD5E1" 
+                                               FontSize="12" 
+                                               VerticalAlignment="Center"/>
+
+                                    <TextBox Text="{Binding EditingName, Mode=TwoWay}" 
+                                             IsVisible="{Binding IsEditing}" 
+                                             FontSize="12" 
+                                             Padding="4,2" 
+                                             Margin="0,-2,0,-2" 
+                                             MinHeight="22" 
+                                             Background="#0F172A" 
+                                             Foreground="#F8FAFC" 
+                                             BorderBrush="#38BDF8">
+                                        <TextBox.KeyBindings>
+                                            <KeyBinding Gesture="Enter" Command="{Binding CommitRenameCommand}"/>
+                                            <KeyBinding Gesture="Escape" Command="{Binding CancelRenameCommand}"/>
+                                        </TextBox.KeyBindings>
+                                    </TextBox>
                                 </StackPanel>
-                            </DataTemplate>
-                        </ListBox.ItemTemplate>
-                    </ListBox>
+                            </TreeDataTemplate>
+                        </TreeView.ItemTemplate>
+                    </TreeView>
                 </Grid>
             </Border>
 
@@ -71,16 +126,26 @@
                 <TabControl Background="Transparent">
                     <!-- Tab 1: Node Graph Canvas -->
                     <TabItem Header="📊 Node Graph">
-                        <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
-                            <Canvas Width="3000" Height="2000" Background="#0F172A">
-                                <!-- Background Grid Pattern Visual -->
-                                <Rectangle Width="3000" Height="2000" Fill="#0F172A"/>
+                        <Grid x:Name="NodeGraphContainer" 
+                              Background="#0B0F19" 
+                              ClipToBounds="True">
+                            <!-- Transformable Infinite Canvas Viewport -->
+                            <Canvas Width="10000" Height="10000" HorizontalAlignment="Left" VerticalAlignment="Top" RenderTransformOrigin="0,0">
+                                <Canvas.RenderTransform>
+                                    <TransformGroup>
+                                        <ScaleTransform ScaleX="{Binding ZoomScale}" ScaleY="{Binding ZoomScale}"/>
+                                        <TranslateTransform X="{Binding PanX}" Y="{Binding PanY}"/>
+                                    </TransformGroup>
+                                </Canvas.RenderTransform>
+
+                                <!-- Infinite Grid Visual -->
+                                <Rectangle Width="10000" Height="10000" Fill="#0B0F19"/>
 
                                 <!-- Connection Wires -->
-                                <ItemsControl ItemsSource="{Binding Connections}" Canvas.Left="0" Canvas.Top="0" Width="3000" Height="2000">
+                                <ItemsControl ItemsSource="{Binding Connections}" Canvas.Left="0" Canvas.Top="0" Width="10000" Height="10000">
                                     <ItemsControl.ItemsPanel>
                                         <ItemsPanelTemplate>
-                                            <Canvas Width="3000" Height="2000"/>
+                                            <Canvas Width="10000" Height="10000"/>
                                         </ItemsPanelTemplate>
                                     </ItemsControl.ItemsPanel>
                                     <ItemsControl.ItemTemplate>
@@ -94,10 +159,10 @@
                                 <controls:BezierWireRenderer StartPoint="{Binding WireStartPoint}" EndPoint="{Binding WireEndPoint}" IsVisible="{Binding IsDraggingWire}" WireBrush="#38BDF8" WireThickness="3.5"/>
 
                                 <!-- Node Cards -->
-                                <ItemsControl ItemsSource="{Binding Nodes}" Canvas.Left="0" Canvas.Top="0" Width="3000" Height="2000">
+                                <ItemsControl ItemsSource="{Binding Nodes}" Canvas.Left="0" Canvas.Top="0" Width="10000" Height="10000">
                                     <ItemsControl.ItemsPanel>
                                         <ItemsPanelTemplate>
-                                            <Canvas Width="3000" Height="2000"/>
+                                            <Canvas Width="10000" Height="10000"/>
                                         </ItemsPanelTemplate>
                                     </ItemsControl.ItemsPanel>
                                     <ItemsControl.Styles>
@@ -113,7 +178,15 @@
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
                             </Canvas>
-                        </ScrollViewer>
+
+                            <!-- Canvas Viewport Controls Overlay (Zoom badge & Reset (0,0) Button) -->
+                            <Border HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="16" Background="#1E1E2A" BorderBrush="#334155" BorderThickness="1" CornerRadius="6" Padding="8,4">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <TextBlock Text="{Binding ZoomScale, StringFormat='🔍 {0:P0}'}" Foreground="#94A3B8" FontSize="11" VerticalAlignment="Center"/>
+                                    <Button Content="🎯 Reset View (0,0)" Command="{Binding ResetCanvasViewCommand}" Padding="6,2" FontSize="11" Background="#2563EB" Foreground="White" CornerRadius="4"/>
+                                </StackPanel>
+                            </Border>
+                        </Grid>
                     </TabItem>
 
                     <!-- Tab 2: Live Preview -->
@@ -150,30 +223,102 @@
                                 <TextBox Text="{Binding SelectedNode.DialogueText, FallbackValue=''}" AcceptsReturn="True" Height="80" TextWrapping="Wrap" Background="#0F172A" Foreground="#F8FAFC" BorderBrush="#334155"/>
                             </StackPanel>
 
-                            <StackPanel Spacing="4">
-                                <TextBlock Text="Background Layer" FontSize="12" Foreground="#94A3B8"/>
+                            <!-- Background Layer Controls -->
+                            <StackPanel Spacing="6">
+                                <TextBlock Text="🖼️ Background Layer" FontSize="12" FontWeight="Bold" Foreground="#38BDF8"/>
                                 <ComboBox ItemsSource="{Binding AssetBrowserViewModel.AssetNames}" SelectedItem="{Binding SelectedNode.BackgroundTexture}" HorizontalAlignment="Stretch" Background="#0F172A" Foreground="#F8FAFC" BorderBrush="#334155"/>
+                                
+                                <Grid ColumnDefinitions="*, *" Margin="0,2">
+                                    <StackPanel Grid.Column="0" Spacing="4" Margin="0,0,4,0">
+                                        <TextBlock Text="BG X" FontSize="11" Foreground="#94A3B8"/>
+                                        <NumericUpDown Value="{Binding SelectedNode.BackgroundX}" Minimum="-1000" Maximum="3000" Increment="20" Background="#0F172A" Foreground="#F8FAFC" BorderBrush="#334155"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Spacing="4" Margin="4,0,0,0">
+                                        <TextBlock Text="BG Y" FontSize="11" Foreground="#94A3B8"/>
+                                        <NumericUpDown Value="{Binding SelectedNode.BackgroundY}" Minimum="-1000" Maximum="3000" Increment="20" Background="#0F172A" Foreground="#F8FAFC" BorderBrush="#334155"/>
+                                    </StackPanel>
+                                </Grid>
+                                <Grid ColumnDefinitions="*, *" Margin="0,2">
+                                    <StackPanel Grid.Column="0" Spacing="4" Margin="0,0,4,0">
+                                        <TextBlock Text="BG Width" FontSize="11" Foreground="#94A3B8"/>
+                                        <NumericUpDown Value="{Binding SelectedNode.BackgroundWidth}" Minimum="100" Maximum="4000" Increment="40" Background="#0F172A" Foreground="#F8FAFC" BorderBrush="#334155"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Spacing="4" Margin="4,0,0,0">
+                                        <TextBlock Text="BG Height" FontSize="11" Foreground="#94A3B8"/>
+                                        <NumericUpDown Value="{Binding SelectedNode.BackgroundHeight}" Minimum="100" Maximum="4000" Increment="40" Background="#0F172A" Foreground="#F8FAFC" BorderBrush="#334155"/>
+                                    </StackPanel>
+                                </Grid>
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="🔍 Unity Scale / Ölçek (1.0 = %100, 0.5 = %50)" FontSize="11" Foreground="#38BDF8" FontWeight="Bold"/>
+                                    <NumericUpDown Value="{Binding SelectedNode.BackgroundScale}" Minimum="0.1" Maximum="5.0" Increment="0.1" FormatString="0.00" Background="#0F172A" Foreground="#38BDF8" BorderBrush="#2563EB"/>
+                                </StackPanel>
+                                <Button Content="🖥️ Reset BG Fullscreen (1920x1080)" Command="{Binding ResetBackgroundDimensionsCommand}" HorizontalAlignment="Stretch" Padding="6,4" FontSize="11" Background="#1E293B" Foreground="#94A3B8" CornerRadius="4"/>
                             </StackPanel>
 
-                            <StackPanel Spacing="4">
-                                <TextBlock Text="Character Sprite" FontSize="12" Foreground="#94A3B8"/>
+                            <!-- Character Sprite Controls -->
+                            <StackPanel Spacing="6">
+                                <TextBlock Text="👤 Character Sprite &amp; Dimensions" FontSize="12" FontWeight="Bold" Foreground="#38BDF8"/>
                                 <ComboBox ItemsSource="{Binding AssetBrowserViewModel.AssetNames}" SelectedItem="{Binding SelectedNode.CharacterSprite}" HorizontalAlignment="Stretch" Background="#0F172A" Foreground="#F8FAFC" BorderBrush="#334155"/>
+                                
+                                <Grid ColumnDefinitions="*, *" Margin="0,2">
+                                    <StackPanel Grid.Column="0" Spacing="4" Margin="0,0,4,0">
+                                        <TextBlock Text="Char X" FontSize="11" Foreground="#94A3B8"/>
+                                        <NumericUpDown Value="{Binding SelectedNode.CharacterX}" Minimum="-500" Maximum="2500" Increment="20" Background="#0F172A" Foreground="#F8FAFC" BorderBrush="#334155"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Spacing="4" Margin="4,0,0,0">
+                                        <TextBlock Text="Char Y" FontSize="11" Foreground="#94A3B8"/>
+                                        <NumericUpDown Value="{Binding SelectedNode.CharacterY}" Minimum="-500" Maximum="2500" Increment="20" Background="#0F172A" Foreground="#F8FAFC" BorderBrush="#334155"/>
+                                    </StackPanel>
+                                </Grid>
+                                <Grid ColumnDefinitions="*, *" Margin="0,2">
+                                    <StackPanel Grid.Column="0" Spacing="4" Margin="0,0,4,0">
+                                        <TextBlock Text="Char Width" FontSize="11" Foreground="#94A3B8"/>
+                                        <NumericUpDown Value="{Binding SelectedNode.CharacterWidth}" Minimum="60" Maximum="2000" Increment="20" Background="#0F172A" Foreground="#F8FAFC" BorderBrush="#334155"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Spacing="4" Margin="4,0,0,0">
+                                        <TextBlock Text="Char Height" FontSize="11" Foreground="#94A3B8"/>
+                                        <NumericUpDown Value="{Binding SelectedNode.CharacterHeight}" Minimum="60" Maximum="2000" Increment="20" Background="#0F172A" Foreground="#F8FAFC" BorderBrush="#334155"/>
+                                    </StackPanel>
+                                </Grid>
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="🔍 Unity Scale / Ölçek (1.0 = %100, 0.5 = %50)" FontSize="11" Foreground="#38BDF8" FontWeight="Bold"/>
+                                    <NumericUpDown Value="{Binding SelectedNode.CharacterScale}" Minimum="0.1" Maximum="5.0" Increment="0.1" FormatString="0.00" Background="#0F172A" Foreground="#38BDF8" BorderBrush="#2563EB"/>
+                                </StackPanel>
+                                <Button Content="📐 Reset Character Size (360x540)" Command="{Binding ResetCharacterDimensionsCommand}" HorizontalAlignment="Stretch" Padding="6,4" FontSize="11" Background="#1E293B" Foreground="#94A3B8" CornerRadius="4"/>
                             </StackPanel>
 
-                            <Grid ColumnDefinitions="*, *" Margin="0,4">
-                                <StackPanel Grid.Column="0" Spacing="4" Margin="0,0,4,0">
-                                    <TextBlock Text="Character X" FontSize="12" Foreground="#94A3B8"/>
-                                    <NumericUpDown Value="{Binding SelectedNode.CharacterX}" Minimum="-100" Maximum="1920" Increment="20" Background="#0F172A" Foreground="#F8FAFC" BorderBrush="#334155"/>
+                            <!-- Dialogue Box / Speech Bubble Controls -->
+                            <StackPanel Spacing="6">
+                                <TextBlock Text="💬 Dialogue Box / Speech Bubble" FontSize="12" FontWeight="Bold" Foreground="#38BDF8"/>
+                                
+                                <Grid ColumnDefinitions="*, *" Margin="0,2">
+                                    <StackPanel Grid.Column="0" Spacing="4" Margin="0,0,4,0">
+                                        <TextBlock Text="Box X" FontSize="11" Foreground="#94A3B8"/>
+                                        <NumericUpDown Value="{Binding SelectedNode.DialogueBoxX}" Minimum="-200" Maximum="2500" Increment="20" Background="#0F172A" Foreground="#F8FAFC" BorderBrush="#334155"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Spacing="4" Margin="4,0,0,0">
+                                        <TextBlock Text="Box Y" FontSize="11" Foreground="#94A3B8"/>
+                                        <NumericUpDown Value="{Binding SelectedNode.DialogueBoxY}" Minimum="-200" Maximum="2500" Increment="20" Background="#0F172A" Foreground="#F8FAFC" BorderBrush="#334155"/>
+                                    </StackPanel>
+                                </Grid>
+                                <Grid ColumnDefinitions="*, *" Margin="0,2">
+                                    <StackPanel Grid.Column="0" Spacing="4" Margin="0,0,4,0">
+                                        <TextBlock Text="Box Width" FontSize="11" Foreground="#94A3B8"/>
+                                        <NumericUpDown Value="{Binding SelectedNode.DialogueBoxWidth}" Minimum="100" Maximum="1920" Increment="20" Background="#0F172A" Foreground="#F8FAFC" BorderBrush="#334155"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Spacing="4" Margin="4,0,0,0">
+                                        <TextBlock Text="Box Height" FontSize="11" Foreground="#94A3B8"/>
+                                        <NumericUpDown Value="{Binding SelectedNode.DialogueBoxHeight}" Minimum="100" Maximum="1080" Increment="20" Background="#0F172A" Foreground="#F8FAFC" BorderBrush="#334155"/>
+                                    </StackPanel>
+                                </Grid>
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="🔍 Unity Scale / Ölçek (1.0 = %100, 0.5 = %50)" FontSize="11" Foreground="#38BDF8" FontWeight="Bold"/>
+                                    <NumericUpDown Value="{Binding SelectedNode.DialogueBoxScale}" Minimum="0.1" Maximum="5.0" Increment="0.1" FormatString="0.00" Background="#0F172A" Foreground="#38BDF8" BorderBrush="#2563EB"/>
                                 </StackPanel>
-                                <StackPanel Grid.Column="1" Spacing="4" Margin="4,0,0,0">
-                                    <TextBlock Text="Character Y" FontSize="12" Foreground="#94A3B8"/>
-                                    <NumericUpDown Value="{Binding SelectedNode.CharacterY}" Minimum="-100" Maximum="1080" Increment="20" Background="#0F172A" Foreground="#F8FAFC" BorderBrush="#334155"/>
-                                </StackPanel>
-                            </Grid>
-
-                            <StackPanel Spacing="4">
-                                <TextBlock Text="Dialogue Box Y" FontSize="12" Foreground="#94A3B8"/>
-                                <NumericUpDown Value="{Binding SelectedNode.DialogueBoxY}" Minimum="0" Maximum="1080" Increment="20" Background="#0F172A" Foreground="#F8FAFC" BorderBrush="#334155"/>
+                                <Grid ColumnDefinitions="*, *" Margin="0,2">
+                                    <Button Grid.Column="0" Content="⬜ Kare (500x500)" Command="{Binding SetSquareDialogueBoxCommand}" HorizontalAlignment="Stretch" Margin="0,0,2,0" Padding="6,4" FontSize="11" Background="#2563EB" Foreground="White" CornerRadius="4"/>
+                                    <Button Grid.Column="1" Content="↕ Standard Banner" Command="{Binding SetStandardDialogueBoxCommand}" HorizontalAlignment="Stretch" Margin="2,0,0,0" Padding="6,4" FontSize="11" Background="#1E293B" Foreground="#94A3B8" CornerRadius="4"/>
+                                </Grid>
                             </StackPanel>
 
                             <StackPanel Spacing="4">

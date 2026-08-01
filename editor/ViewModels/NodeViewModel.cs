@@ -1,3 +1,4 @@
+using System;
 using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using System.IO;
@@ -44,10 +45,31 @@ namespace RowlEngine.Editor.ViewModels
         }
 
         [ObservableProperty]
+        private double _backgroundX = 0.0;
+
+        [ObservableProperty]
+        private double _backgroundY = 0.0;
+
+        [ObservableProperty]
+        private double _backgroundWidth = 1920.0;
+
+        [ObservableProperty]
+        private double _backgroundHeight = 1080.0;
+
+        [ObservableProperty]
+        private double _backgroundScale = 1.0;
+
+        [ObservableProperty]
         private double _characterX = 1440.0;
 
         [ObservableProperty]
         private double _characterY = 340.0;
+
+        [ObservableProperty]
+        private double _characterWidth = 360.0;
+
+        [ObservableProperty]
+        private double _characterHeight = 540.0;
 
         [ObservableProperty]
         private double _characterScale = 1.0;
@@ -63,6 +85,62 @@ namespace RowlEngine.Editor.ViewModels
 
         [ObservableProperty]
         private double _dialogueBoxHeight = 180.0;
+
+        [ObservableProperty]
+        private double _dialogueBoxScale = 1.0;
+
+        private bool _isUpdatingScaleInternal = false;
+
+        partial void OnCharacterScaleChanged(double value)
+        {
+            if (_isUpdatingScaleInternal || value <= 0) return;
+            _isUpdatingScaleInternal = true;
+            CharacterWidth = 360.0 * value;
+            CharacterHeight = 540.0 * value;
+            _isUpdatingScaleInternal = false;
+        }
+
+        partial void OnBackgroundScaleChanged(double value)
+        {
+            if (_isUpdatingScaleInternal || value <= 0) return;
+            _isUpdatingScaleInternal = true;
+            BackgroundWidth = 1920.0 * value;
+            BackgroundHeight = 1080.0 * value;
+            _isUpdatingScaleInternal = false;
+        }
+
+        partial void OnDialogueBoxScaleChanged(double value)
+        {
+            if (_isUpdatingScaleInternal || value <= 0) return;
+            _isUpdatingScaleInternal = true;
+            DialogueBoxWidth = 1760.0 * value;
+            DialogueBoxHeight = 180.0 * value;
+            _isUpdatingScaleInternal = false;
+        }
+
+        partial void OnCharacterWidthChanged(double value)
+        {
+            if (_isUpdatingScaleInternal) return;
+            _isUpdatingScaleInternal = true;
+            CharacterScale = Math.Round(value / 360.0, 2);
+            _isUpdatingScaleInternal = false;
+        }
+
+        partial void OnBackgroundWidthChanged(double value)
+        {
+            if (_isUpdatingScaleInternal) return;
+            _isUpdatingScaleInternal = true;
+            BackgroundScale = Math.Round(value / 1920.0, 2);
+            _isUpdatingScaleInternal = false;
+        }
+
+        partial void OnDialogueBoxWidthChanged(double value)
+        {
+            if (_isUpdatingScaleInternal) return;
+            _isUpdatingScaleInternal = true;
+            DialogueBoxScale = Math.Round(value / 1760.0, 2);
+            _isUpdatingScaleInternal = false;
+        }
 
         [ObservableProperty]
         private Bitmap? _backgroundBitmap;
@@ -86,11 +164,21 @@ namespace RowlEngine.Editor.ViewModels
         {
             if (string.IsNullOrWhiteSpace(filename)) return null;
             string dataDir = "/home/chaple/Belgeler/Rowl Engine/data";
-            string fullPath = Path.Combine(dataDir, filename);
-            if (File.Exists(fullPath))
+            string[] searchPaths = new string[]
             {
-                try { return new Bitmap(fullPath); }
-                catch { return null; }
+                filename,
+                Path.Combine(dataDir, filename),
+                Path.Combine(dataDir, "images", filename),
+                Path.Combine(dataDir, "images", Path.GetFileName(filename))
+            };
+
+            foreach (var p in searchPaths)
+            {
+                if (File.Exists(p))
+                {
+                    try { return new Bitmap(p); }
+                    catch { }
+                }
             }
             return null;
         }

@@ -144,8 +144,14 @@ namespace RowlEngine.Editor.Views
                 double deltaX = currentPointerPos.X - _dragStartPointerPos.X;
                 double deltaY = currentPointerPos.Y - _dragStartPointerPos.Y;
 
-                vm.X = System.Math.Max(0, _dragStartNodePos.X + deltaX);
-                vm.Y = System.Math.Max(0, _dragStartNodePos.Y + deltaY);
+                if (VisualRoot is MainWindow mw && mw.DataContext is MainWindowViewModel mainVm && mainVm.ZoomScale > 0)
+                {
+                    deltaX /= mainVm.ZoomScale;
+                    deltaY /= mainVm.ZoomScale;
+                }
+
+                vm.X = _dragStartNodePos.X + deltaX;
+                vm.Y = _dragStartNodePos.Y + deltaY;
                 e.Handled = true;
             }
         }

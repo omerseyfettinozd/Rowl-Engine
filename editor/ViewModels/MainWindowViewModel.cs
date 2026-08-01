@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Documents;
+using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Dock.Model.Core;
@@ -43,7 +44,60 @@ namespace RowlEngine.Editor.ViewModels
         [ObservableProperty]
         private bool _isDraggingWire = false;
 
+        [ObservableProperty]
+        private double _panX = 0;
+
+        [ObservableProperty]
+        private double _panY = 0;
+
+        [ObservableProperty]
+        private double _zoomScale = 1.0;
+
+        public double TargetPanX { get; set; } = 0;
+        public double TargetPanY { get; set; } = 0;
+        public double TargetZoom { get; set; } = 1.0;
+
+        private readonly DispatcherTimer _smoothTimer;
+
         private NodeViewModel? _wireDragSourceNode;
+
+        public void StartSmoothViewAnimation()
+        {
+            if (!_smoothTimer.IsEnabled)
+            {
+                _smoothTimer.Start();
+            }
+        }
+
+        private void SmoothUpdateStep()
+        {
+            double zoomDiff = TargetZoom - ZoomScale;
+            double panXDiff = TargetPanX - PanX;
+            double panYDiff = TargetPanY - PanY;
+
+            if (Math.Abs(zoomDiff) > 0.0001 || Math.Abs(panXDiff) > 0.05 || Math.Abs(panYDiff) > 0.05)
+            {
+                ZoomScale += zoomDiff * 0.22;
+                PanX += panXDiff * 0.22;
+                PanY += panYDiff * 0.22;
+            }
+            else
+            {
+                ZoomScale = TargetZoom;
+                PanX = TargetPanX;
+                PanY = TargetPanY;
+                _smoothTimer.Stop();
+            }
+        }
+
+        [RelayCommand]
+        public void ResetCanvasView()
+        {
+            TargetPanX = 0;
+            TargetPanY = 0;
+            TargetZoom = 1.0;
+            StartSmoothViewAnimation();
+        }
 
         public ObservableCollection<NodeViewModel> Nodes { get; } = new();
         public ObservableCollection<ConnectionViewModel> Connections { get; } = new();
@@ -57,6 +111,12 @@ namespace RowlEngine.Editor.ViewModels
             _ipcClient = new IpcClient("rowl_engine_ipc");
             OutputLogViewModel = new OutputLogViewModel(this);
             InspectorViewModel = new InspectorViewModel(this);
+
+            _smoothTimer = new DispatcherTimer
+            {
+                Interval = TimeSpan.FromMilliseconds(16)
+            };
+            _smoothTimer.Tick += (s, e) => SmoothUpdateStep();
 
             var node1 = new NodeViewModel(101, "Dialogue Node #101", 60, 80)
             {
@@ -99,7 +159,22 @@ namespace RowlEngine.Editor.ViewModels
                      e.PropertyName == nameof(NodeViewModel.DialogueText) ||
                      e.PropertyName == nameof(NodeViewModel.BackgroundTexture) ||
                      e.PropertyName == nameof(NodeViewModel.CharacterSprite) ||
-                     e.PropertyName == nameof(NodeViewModel.CharacterPosition))
+                     e.PropertyName == nameof(NodeViewModel.CharacterPosition) ||
+                     e.PropertyName == nameof(NodeViewModel.BackgroundX) ||
+                     e.PropertyName == nameof(NodeViewModel.BackgroundY) ||
+                     e.PropertyName == nameof(NodeViewModel.BackgroundWidth) ||
+                     e.PropertyName == nameof(NodeViewModel.BackgroundHeight) ||
+                     e.PropertyName == nameof(NodeViewModel.BackgroundScale) ||
+                     e.PropertyName == nameof(NodeViewModel.CharacterX) ||
+                     e.PropertyName == nameof(NodeViewModel.CharacterY) ||
+                     e.PropertyName == nameof(NodeViewModel.CharacterWidth) ||
+                     e.PropertyName == nameof(NodeViewModel.CharacterHeight) ||
+                     e.PropertyName == nameof(NodeViewModel.CharacterScale) ||
+                     e.PropertyName == nameof(NodeViewModel.DialogueBoxX) ||
+                     e.PropertyName == nameof(NodeViewModel.DialogueBoxY) ||
+                     e.PropertyName == nameof(NodeViewModel.DialogueBoxWidth) ||
+                     e.PropertyName == nameof(NodeViewModel.DialogueBoxHeight) ||
+                     e.PropertyName == nameof(NodeViewModel.DialogueBoxScale))
             {
                 SaveActiveStoryFile();
             }
@@ -268,7 +343,12 @@ namespace RowlEngine.Editor.ViewModels
         public void AddNode()
         {
             ulong nextId = (ulong)(101 + Nodes.Count);
-            var newNode = new NodeViewModel(nextId, $"Dialogue Node #{nextId}", 100 + (Nodes.Count * 60), 100 + (Nodes.Count * 40))
+
+            double zoom = ZoomScale > 0 ? ZoomScale : 1.0;
+            double spawnX = (-PanX + 300) / zoom + ((Nodes.Count % 5) * 40);
+            double spawnY = (-PanY + 180) / zoom + ((Nodes.Count % 5) * 30);
+
+            var newNode = new NodeViewModel(nextId, $"Dialogue Node #{nextId}", spawnX, spawnY)
             {
                 Speaker = "Narrator",
                 DialogueText = $"New dialogue block #{nextId}. Drag green pin to connect!",
@@ -279,7 +359,7 @@ namespace RowlEngine.Editor.ViewModels
             newNode.PropertyChanged += OnNodePropertyChanged;
             Nodes.Add(newNode);
             SelectedNode = newNode;
-            AppendLog($"Added new node #{nextId} to canvas.");
+            AppendLog($"✨ Added new node #{nextId} at visible screen center ({spawnX:F0}, {spawnY:F0})");
         }
 
         [RelayCommand]
@@ -322,16 +402,27 @@ namespace RowlEngine.Editor.ViewModels
                     var nextConn = Connections.FirstOrDefault(c => c.SourceNode == n);
                     ulong nextId = nextConn != null ? nextConn.TargetNode.Id : 0;
 
+                    var inv = System.Globalization.CultureInfo.InvariantCulture;
                     sb.AppendLine("    {");
-                    sb.AppendLine($"      \"id\": {n.Id},");
+                    sb.AppendLine(FormattableString.Invariant($"      \"id\": {n.Id},"));
                     sb.AppendLine($"      \"speaker\": \"{n.Speaker}\",");
                     sb.AppendLine($"      \"dialogue\": \"{n.DialogueText}\",");
                     sb.AppendLine($"      \"background\": \"{n.BackgroundTexture}\",");
+                    sb.AppendLine(FormattableString.Invariant($"      \"background_x\": {n.BackgroundX},"));
+                    sb.AppendLine(FormattableString.Invariant($"      \"background_y\": {n.BackgroundY},"));
+                    sb.AppendLine(FormattableString.Invariant($"      \"background_width\": {n.BackgroundWidth},"));
+                    sb.AppendLine(FormattableString.Invariant($"      \"background_height\": {n.BackgroundHeight},"));
                     sb.AppendLine($"      \"character\": \"{n.CharacterSprite}\",");
                     sb.AppendLine($"      \"character_pos\": \"{n.CharacterPosition}\",");
-                    sb.AppendLine($"      \"character_x\": {n.CharacterX},");
-                    sb.AppendLine($"      \"character_y\": {n.CharacterY},");
-                    sb.AppendLine($"      \"dialogue_box_y\": {n.DialogueBoxY},");
+                    sb.AppendLine(FormattableString.Invariant($"      \"character_x\": {n.CharacterX},"));
+                    sb.AppendLine(FormattableString.Invariant($"      \"character_y\": {n.CharacterY},"));
+                    sb.AppendLine(FormattableString.Invariant($"      \"character_width\": {n.CharacterWidth},"));
+                    sb.AppendLine(FormattableString.Invariant($"      \"character_height\": {n.CharacterHeight},"));
+                    sb.AppendLine(FormattableString.Invariant($"      \"character_scale\": {n.CharacterScale},"));
+                    sb.AppendLine(FormattableString.Invariant($"      \"dialogue_box_x\": {n.DialogueBoxX},"));
+                    sb.AppendLine(FormattableString.Invariant($"      \"dialogue_box_y\": {n.DialogueBoxY},"));
+                    sb.AppendLine(FormattableString.Invariant($"      \"dialogue_box_width\": {n.DialogueBoxWidth},"));
+                    sb.AppendLine(FormattableString.Invariant($"      \"dialogue_box_height\": {n.DialogueBoxHeight},"));
                     sb.AppendLine($"      \"next_id\": {nextId}");
                     sb.Append("    }");
 
@@ -357,9 +448,9 @@ namespace RowlEngine.Editor.ViewModels
                 var node = SelectedNode ?? Nodes.FirstOrDefault();
                 if (node != null)
                 {
-                    string dataPath = "/home/chaple/Belgeler/Rowl Engine/data";
+                    string dataPath = "/home/chaple/Belgeler/Rowl Engine/data/json";
                     System.IO.Directory.CreateDirectory(dataPath);
-                    string json = $"{{\n  \"node_id\": {node.Id},\n  \"speaker\": \"{node.Speaker}\",\n  \"dialogue\": \"{node.DialogueText}\",\n  \"background\": \"{node.BackgroundTexture}\",\n  \"character\": \"{node.CharacterSprite}\",\n  \"character_pos\": \"{node.CharacterPosition}\",\n  \"character_x\": {node.CharacterX},\n  \"character_y\": {node.CharacterY},\n  \"dialogue_box_y\": {node.DialogueBoxY},\n  \"dsp\": \"{node.DspFilter}\"\n}}";
+                    string json = FormattableString.Invariant($"{{\n  \"node_id\": {node.Id},\n  \"speaker\": \"{node.Speaker}\",\n  \"dialogue\": \"{node.DialogueText}\",\n  \"background\": \"{node.BackgroundTexture}\",\n  \"background_x\": {node.BackgroundX},\n  \"background_y\": {node.BackgroundY},\n  \"background_width\": {node.BackgroundWidth},\n  \"background_height\": {node.BackgroundHeight},\n  \"character\": \"{node.CharacterSprite}\",\n  \"character_pos\": \"{node.CharacterPosition}\",\n  \"character_x\": {node.CharacterX},\n  \"character_y\": {node.CharacterY},\n  \"character_width\": {node.CharacterWidth},\n  \"character_height\": {node.CharacterHeight},\n  \"character_scale\": {node.CharacterScale},\n  \"dialogue_box_x\": {node.DialogueBoxX},\n  \"dialogue_box_y\": {node.DialogueBoxY},\n  \"dialogue_box_width\": {node.DialogueBoxWidth},\n  \"dialogue_box_height\": {node.DialogueBoxHeight},\n  \"dsp\": \"{node.DspFilter}\"\n}}");
                     System.IO.File.WriteAllText(System.IO.Path.Combine(dataPath, "active_story.json"), json);
                     SaveFullStoryGraphFile();
                 }
@@ -368,6 +459,47 @@ namespace RowlEngine.Editor.ViewModels
             {
                 AppendLog($"⚠️ Failed to save active_story.json: {ex.Message}");
             }
+        }
+
+        [RelayCommand]
+        public void SetSquareDialogueBox()
+        {
+            if (SelectedNode == null) return;
+            SelectedNode.DialogueBoxWidth = 500.0;
+            SelectedNode.DialogueBoxHeight = 500.0;
+            AppendLog($"Set Dialogue Box to Square (500x500) for Node #{SelectedNode.Id}");
+        }
+
+        [RelayCommand]
+        public void SetStandardDialogueBox()
+        {
+            if (SelectedNode == null) return;
+            SelectedNode.DialogueBoxWidth = 1760.0;
+            SelectedNode.DialogueBoxHeight = 180.0;
+            SelectedNode.DialogueBoxX = 80.0;
+            SelectedNode.DialogueBoxY = 860.0;
+            AppendLog($"Reset Dialogue Box to Standard Banner (1760x180) for Node #{SelectedNode.Id}");
+        }
+
+        [RelayCommand]
+        public void ResetBackgroundDimensions()
+        {
+            if (SelectedNode == null) return;
+            SelectedNode.BackgroundX = 0.0;
+            SelectedNode.BackgroundY = 0.0;
+            SelectedNode.BackgroundWidth = 1920.0;
+            SelectedNode.BackgroundHeight = 1080.0;
+            AppendLog($"Reset Background to Fullscreen Canvas (1920x1080) for Node #{SelectedNode.Id}");
+        }
+
+        [RelayCommand]
+        public void ResetCharacterDimensions()
+        {
+            if (SelectedNode == null) return;
+            SelectedNode.CharacterWidth = 360.0;
+            SelectedNode.CharacterHeight = 540.0;
+            SelectedNode.CharacterScale = 1.0;
+            AppendLog($"Reset Character Sprite size to Default (360x540) for Node #{SelectedNode.Id}");
         }
 
         [RelayCommand]
@@ -536,9 +668,22 @@ namespace RowlEngine.Editor.ViewModels
                         foreach (var file in result)
                         {
                             string fileName = System.IO.Path.GetFileName(file);
-                            string destPath = System.IO.Path.Combine(dataPath, fileName);
+                            string ext = System.IO.Path.GetExtension(fileName).ToLowerInvariant();
+                            string subDir = ext switch
+                            {
+                                ".png" or ".jpg" or ".jpeg" or ".bmp" or ".tga" => "images",
+                                ".json" or ".lua" => "json",
+                                ".rowlpkg" => "packages",
+                                _ => ""
+                            };
+                            string targetDir = string.IsNullOrEmpty(subDir) 
+                                ? "/home/chaple/Belgeler/Rowl Engine/data" 
+                                : System.IO.Path.Combine("/home/chaple/Belgeler/Rowl Engine/data", subDir);
+                            System.IO.Directory.CreateDirectory(targetDir);
+
+                            string destPath = System.IO.Path.Combine(targetDir, fileName);
                             System.IO.File.Copy(file, destPath, true);
-                            AppendLog($"📥 Imported Asset: {fileName} -> data/{fileName}");
+                            AppendLog($"📥 Imported Asset: {fileName} -> data/{(string.IsNullOrEmpty(subDir) ? "" : subDir + "/")}{fileName}");
                         }
                         AssetBrowserViewModel.RefreshAssets();
                     }
@@ -554,6 +699,133 @@ namespace RowlEngine.Editor.ViewModels
         {
             LogOutput += $"[{DateTime.Now:HH:mm:ss}] {message}\n";
         }
+    }
+
+    public partial class AssetNodeViewModel : ViewModelBase
+    {
+        public string Name { get; private set; }
+        public string RelativePath { get; private set; }
+        public string FullPath { get; private set; }
+        public bool IsDirectory { get; }
+        public string Icon { get; }
+        public string IconColor { get; }
+        public ObservableCollection<AssetNodeViewModel> Children { get; } = new();
+
+        [ObservableProperty]
+        private bool _isEditing;
+
+        [ObservableProperty]
+        private string _editingName = string.Empty;
+
+        private readonly Action? _onRenamed;
+
+        public AssetNodeViewModel(string name, string relativePath, string fullPath, bool isDirectory, Action? onRenamed = null)
+        {
+            Name = name;
+            RelativePath = relativePath;
+            FullPath = fullPath;
+            IsDirectory = isDirectory;
+            _onRenamed = onRenamed;
+
+            if (isDirectory)
+            {
+                Icon = "📁";
+                IconColor = "#FBBF24";
+            }
+            else
+            {
+                string ext = System.IO.Path.GetExtension(name).ToLowerInvariant();
+                if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp" || ext == ".webp" || ext == ".gif")
+                {
+                    Icon = "🖼️";
+                    IconColor = "#38BDF8";
+                }
+                else if (ext == ".mp3" || ext == ".wav" || ext == ".ogg" || ext == ".flac")
+                {
+                    Icon = "🎵";
+                    IconColor = "#A855F7";
+                }
+                else if (ext == ".json" || ext == ".txt" || ext == ".lua")
+                {
+                    Icon = "📜";
+                    IconColor = "#F59E0B";
+                }
+                else if (ext == ".rowlpkg")
+                {
+                    Icon = "📦";
+                    IconColor = "#10B981";
+                }
+                else
+                {
+                    Icon = "📄";
+                    IconColor = "#94A3B8";
+                }
+            }
+        }
+
+        public void StartRename()
+        {
+            EditingName = Name;
+            IsEditing = true;
+        }
+
+        [RelayCommand]
+        public void CommitRename()
+        {
+            if (!IsEditing) return;
+            IsEditing = false;
+
+            if (string.IsNullOrWhiteSpace(EditingName) || EditingName.Trim() == Name)
+            {
+                return;
+            }
+
+            try
+            {
+                string? parentDir = System.IO.Path.GetDirectoryName(FullPath);
+                if (string.IsNullOrEmpty(parentDir)) return;
+
+                string newFullPath = System.IO.Path.Combine(parentDir, EditingName.Trim());
+
+                if (IsDirectory)
+                {
+                    if (System.IO.Directory.Exists(FullPath) && !System.IO.Directory.Exists(newFullPath))
+                    {
+                        System.IO.Directory.Move(FullPath, newFullPath);
+                    }
+                }
+                else
+                {
+                    if (System.IO.File.Exists(FullPath) && !System.IO.File.Exists(newFullPath))
+                    {
+                        System.IO.File.Move(FullPath, newFullPath);
+                    }
+                }
+
+                _onRenamed?.Invoke();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Failed to rename asset: {ex.Message}");
+            }
+        }
+
+        [RelayCommand]
+        public void CancelRename()
+        {
+            IsEditing = false;
+        }
+
+        public override string ToString() => RelativePath;
+
+        public override bool Equals(object? obj)
+        {
+            if (obj is AssetNodeViewModel other) return RelativePath == other.RelativePath;
+            if (obj is string str) return RelativePath == str;
+            return false;
+        }
+
+        public override int GetHashCode() => RelativePath.GetHashCode();
     }
 
     public partial class AssetItemViewModel : ViewModelBase
@@ -602,6 +874,10 @@ namespace RowlEngine.Editor.ViewModels
 
     public partial class AssetBrowserViewModel : ViewModelBase
     {
+        [ObservableProperty]
+        private AssetNodeViewModel? _selectedNode;
+
+        public ObservableCollection<AssetNodeViewModel> AssetTree { get; } = new();
         public ObservableCollection<AssetItemViewModel> Assets { get; } = new();
         public ObservableCollection<string> AssetNames { get; } = new();
 
@@ -612,28 +888,172 @@ namespace RowlEngine.Editor.ViewModels
 
         public void RefreshAssets()
         {
+            AssetTree.Clear();
             Assets.Clear();
             AssetNames.Clear();
+
             string dataPath = "/home/chaple/Belgeler/Rowl Engine/data";
             if (System.IO.Directory.Exists(dataPath))
             {
-                foreach (var file in System.IO.Directory.GetFiles(dataPath, "*.*", System.IO.SearchOption.AllDirectories))
-                {
-                    string relPath = System.IO.Path.GetRelativePath(dataPath, file);
-                    Assets.Add(new AssetItemViewModel(relPath));
-                    AssetNames.Add(relPath);
-                }
+                var rootDir = new System.IO.DirectoryInfo(dataPath);
+                PopulateDirectoryNode(rootDir, dataPath, AssetTree);
             }
 
-            if (Assets.Count == 0)
+            if (AssetNames.Count == 0)
             {
                 string[] defaults = new[] { "bg_beach.png", "bg_classroom.png", "spr_evelyn.png", "bgm_theme.ogg", "test_story.json" };
                 foreach (var d in defaults)
                 {
                     Assets.Add(new AssetItemViewModel(d));
                     AssetNames.Add(d);
+                    AssetTree.Add(new AssetNodeViewModel(d, d, d, false));
                 }
             }
+        }
+
+        private void PopulateDirectoryNode(System.IO.DirectoryInfo dirInfo, string rootPath, ObservableCollection<AssetNodeViewModel> targetCollection)
+        {
+            foreach (var subDir in dirInfo.GetDirectories().OrderBy(d => d.Name))
+            {
+                if (subDir.Name.StartsWith(".")) continue;
+
+                string relPath = System.IO.Path.GetRelativePath(rootPath, subDir.FullName);
+                var dirNode = new AssetNodeViewModel(subDir.Name, relPath, subDir.FullName, true, RefreshAssets);
+
+                PopulateDirectoryNode(subDir, rootPath, dirNode.Children);
+
+                targetCollection.Add(dirNode);
+            }
+
+            foreach (var file in dirInfo.GetFiles().OrderBy(f => f.Name))
+            {
+                if (file.Name.StartsWith(".") || file.Name.Equals(".gitkeep", StringComparison.OrdinalIgnoreCase)) continue;
+
+                string relPath = System.IO.Path.GetRelativePath(rootPath, file.FullName);
+                var fileNode = new AssetNodeViewModel(file.Name, relPath, file.FullName, false, RefreshAssets);
+
+                targetCollection.Add(fileNode);
+                Assets.Add(new AssetItemViewModel(relPath));
+                AssetNames.Add(relPath);
+            }
+        }
+
+        [RelayCommand]
+        public void CreateFolder()
+        {
+            try
+            {
+                string rootPath = "/home/chaple/Belgeler/Rowl Engine/data";
+                string targetDir = rootPath;
+
+                if (SelectedNode != null)
+                {
+                    if (SelectedNode.IsDirectory)
+                    {
+                        targetDir = SelectedNode.FullPath;
+                    }
+                    else
+                    {
+                        string? parent = System.IO.Path.GetDirectoryName(SelectedNode.FullPath);
+                        if (!string.IsNullOrEmpty(parent)) targetDir = parent;
+                    }
+                }
+
+                string newFolderName = "YeniKlasor";
+                string fullNewFolderPath = System.IO.Path.Combine(targetDir, newFolderName);
+                int counter = 1;
+                while (System.IO.Directory.Exists(fullNewFolderPath))
+                {
+                    newFolderName = $"YeniKlasor_{counter++}";
+                    fullNewFolderPath = System.IO.Path.Combine(targetDir, newFolderName);
+                }
+
+                System.IO.Directory.CreateDirectory(fullNewFolderPath);
+                System.IO.File.WriteAllText(System.IO.Path.Combine(fullNewFolderPath, ".gitkeep"), "");
+
+                RefreshAssets();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Failed to create folder: {ex.Message}");
+            }
+        }
+
+        [RelayCommand]
+        public void DeleteAsset()
+        {
+            if (SelectedNode == null) return;
+            try
+            {
+                if (SelectedNode.IsDirectory)
+                {
+                    if (System.IO.Directory.Exists(SelectedNode.FullPath))
+                    {
+                        System.IO.Directory.Delete(SelectedNode.FullPath, true);
+                    }
+                }
+                else
+                {
+                    if (System.IO.File.Exists(SelectedNode.FullPath))
+                    {
+                        System.IO.File.Delete(SelectedNode.FullPath);
+                    }
+                }
+                SelectedNode = null;
+                RefreshAssets();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Failed to delete asset: {ex.Message}");
+            }
+        }
+
+        [RelayCommand]
+        public void OpenInExplorer()
+        {
+            try
+            {
+                string targetPath = SelectedNode?.IsDirectory == true 
+                    ? SelectedNode.FullPath 
+                    : (System.IO.Path.GetDirectoryName(SelectedNode?.FullPath) ?? "/home/chaple/Belgeler/Rowl Engine/data");
+                
+                if (string.IsNullOrEmpty(targetPath) || !System.IO.Directory.Exists(targetPath))
+                {
+                    targetPath = "/home/chaple/Belgeler/Rowl Engine/data";
+                }
+
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = targetPath,
+                    UseShellExecute = true
+                });
+            }
+            catch
+            {
+                try
+                {
+                    string targetPath = SelectedNode?.IsDirectory == true 
+                        ? SelectedNode.FullPath 
+                        : (System.IO.Path.GetDirectoryName(SelectedNode?.FullPath) ?? "/home/chaple/Belgeler/Rowl Engine/data");
+                    System.Diagnostics.Process.Start("xdg-open", targetPath);
+                }
+                catch { }
+            }
+        }
+
+        [RelayCommand]
+        public void StartRename()
+        {
+            if (SelectedNode != null)
+            {
+                SelectedNode.StartRename();
+            }
+        }
+
+        [RelayCommand]
+        public void RefreshAssetsCommand()
+        {
+            RefreshAssets();
         }
     }
 
