@@ -25,10 +25,20 @@ struct StoryNode {
     std::string speaker;
     std::string dialogue;
     std::string background;
+    float backgroundX = 0.0f;
+    float backgroundY = 0.0f;
+    float backgroundWidth = 1920.0f;
+    float backgroundHeight = 1080.0f;
     std::string character;
     float characterX = 1440.0f;
     float characterY = 340.0f;
+    float characterWidth = 360.0f;
+    float characterHeight = 540.0f;
+    float characterScale = 1.0f;
+    float dialogueBoxX = 80.0f;
     float dialogueBoxY = 860.0f;
+    float dialogueBoxWidth = 1760.0f;
+    float dialogueBoxHeight = 180.0f;
     uint64_t nextNodeId = 0;
 };
 
@@ -53,7 +63,15 @@ public:
     Rowl::Render::Window* getWindow() const { return m_window.get(); }
     Rowl::IPC::IpcServer* getIpcServer() const { return m_ipcServer.get(); }
 
-    void updateActiveScene(const std::string& speaker, const std::string& dialogue, const std::string& background, const std::string& character, float charX = 1440.0f, float charY = 340.0f, float dlgBoxY = 860.0f);
+    void updateActiveScene(
+        const std::string& speaker,
+        const std::string& dialogue,
+        const std::string& background,
+        float bgX = 0.0f, float bgY = 0.0f, float bgW = 1920.0f, float bgH = 1080.0f,
+        const std::string& character = "",
+        float charX = 1440.0f, float charY = 340.0f, float charW = 360.0f, float charH = 540.0f,
+        float dlgX = 80.0f, float dlgY = 860.0f, float dlgW = 1760.0f, float dlgH = 180.0f
+    );
     void loadActiveStoryFile();
     void loadStoryGraphFile();
     void advanceToNextNode();
@@ -64,7 +82,12 @@ public:
     std::string getActiveCharacter() const { return m_activeCharacter; }
     float getActiveCharacterX() const { return m_activeCharacterX; }
     float getActiveCharacterY() const { return m_activeCharacterY; }
+    float getActiveCharacterWidth() const { return m_activeCharacterWidth; }
+    float getActiveCharacterHeight() const { return m_activeCharacterHeight; }
+    float getActiveDialogueBoxX() const { return m_activeDialogueBoxX; }
     float getActiveDialogueBoxY() const { return m_activeDialogueBoxY; }
+    float getActiveDialogueBoxWidth() const { return m_activeDialogueBoxWidth; }
+    float getActiveDialogueBoxHeight() const { return m_activeDialogueBoxHeight; }
     uint64_t getCurrentNodeId() const { return m_currentNodeId; }
 
 private:
@@ -80,10 +103,19 @@ private:
     std::string m_activeSpeaker = "Evelyn";
     std::string m_activeDialogue = "Welcome to Rowl Engine!";
     std::string m_activeBackground = "bg_beach_sunset.png";
+    float m_activeBackgroundX = 0.0f;
+    float m_activeBackgroundY = 0.0f;
+    float m_activeBackgroundWidth = 1920.0f;
+    float m_activeBackgroundHeight = 1080.0f;
     std::string m_activeCharacter = "spr_evelyn.png";
     float m_activeCharacterX = 1440.0f;
     float m_activeCharacterY = 340.0f;
+    float m_activeCharacterWidth = 360.0f;
+    float m_activeCharacterHeight = 540.0f;
+    float m_activeDialogueBoxX = 80.0f;
     float m_activeDialogueBoxY = 860.0f;
+    float m_activeDialogueBoxWidth = 1760.0f;
+    float m_activeDialogueBoxHeight = 180.0f;
 
     bool m_isRunning = false;
     bool m_initialized = false;

@@ -94,12 +94,16 @@ int main(int argc, char* argv[]) {
     
     // Try multiple paths for package file
     std::string pkgPath;
-    if (std::filesystem::exists("data/game_data.rowlpkg")) {
+    if (std::filesystem::exists("data/packages/game_data.rowlpkg")) {
+        pkgPath = "data/packages/game_data.rowlpkg";
+    } else if (std::filesystem::exists("data/game_data.rowlpkg")) {
         pkgPath = "data/game_data.rowlpkg";
+    } else if (std::filesystem::exists("../data/packages/game_data.rowlpkg")) {
+        pkgPath = "../data/packages/game_data.rowlpkg";
     } else if (std::filesystem::exists("../data/game_data.rowlpkg")) {
         pkgPath = "../data/game_data.rowlpkg";
     } else {
-        ROWL_LOG_WARN("Package file not found at data/game_data.rowlpkg or ../data/game_data.rowlpkg");
+        ROWL_LOG_WARN("Package file not found at data/packages/game_data.rowlpkg or data/game_data.rowlpkg");
     }
     
     if (!pkgPath.empty()) {

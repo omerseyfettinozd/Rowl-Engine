@@ -23,7 +23,15 @@ public:
     bool initialize(const std::string& title, uint32_t width, uint32_t height, bool vsync = true);
     void pollEvents(bool& outShouldQuit);
     void beginFrame();
-    void renderVisualNovelFrame(const std::string& speaker, const std::string& dialogue, const std::string& background, const std::string& character = "", float characterX = 1440.0f, float characterY = 340.0f, float dialogueBoxY = 860.0f);
+    void renderVisualNovelFrame(
+        const std::string& speaker,
+        const std::string& dialogue,
+        const std::string& background,
+        float bgX, float bgY, float bgW, float bgH,
+        const std::string& character,
+        float charX, float charY, float charW, float charH,
+        float dlgX, float dlgY, float dlgW, float dlgH
+    );
     void endFrame();
     void shutdown();
 

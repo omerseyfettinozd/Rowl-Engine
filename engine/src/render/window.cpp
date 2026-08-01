@@ -7,6 +7,7 @@
 #include <SDL3/SDL.h>
 #include <filesystem>
 #include <vector>
+#include <algorithm>
 
 namespace Rowl::Render {
 
@@ -89,9 +90,16 @@ void Window::pollEvents(bool& outShouldQuit) {
                 }
                 break;
             case SDL_EVENT_WINDOW_RESIZED:
-                m_width = static_cast<uint32_t>(event.window.data1);
-                m_height = static_cast<uint32_t>(event.window.data2);
-                ROWL_LOG_TRACE("Window resized to: " + std::to_string(m_width) + "x" + std::to_string(m_height));
+            case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
+                int rw = 0, rh = 0;
+                if (SDL_GetRenderOutputSize(m_sdlRenderer, &rw, &rh) && rw > 0 && rh > 0) {
+                    m_width = static_cast<uint32_t>(rw);
+                    m_height = static_cast<uint32_t>(rh);
+                } else {
+                    m_width = static_cast<uint32_t>(event.window.data1);
+                    m_height = static_cast<uint32_t>(event.window.data2);
+                }
+                ROWL_LOG_TRACE("Window resized to physical render output: " + std::to_string(m_width) + "x" + std::to_string(m_height));
                 break;
         }
     }
@@ -115,6 +123,9 @@ SDL_Texture* Window::loadTexture(const std::string& filename) {
 
     std::vector<std::string> searchPaths = {
         filename,
+        "data/images/" + filename,
+        "../data/images/" + filename,
+        "/home/chaple/Belgeler/Rowl Engine/data/images/" + filename,
         "data/" + filename,
         "../data/" + filename,
         "/home/chaple/Belgeler/Rowl Engine/data/" + filename
@@ -162,8 +173,23 @@ SDL_Texture* Window::loadTexture(const std::string& filename) {
     return texture;
 }
 
-void Window::renderVisualNovelFrame(const std::string& speaker, const std::string& dialogue, const std::string& background, const std::string& character, float characterX, float characterY, float dialogueBoxY) {
+void Window::renderVisualNovelFrame(
+    const std::string& speaker,
+    const std::string& dialogue,
+    const std::string& background,
+    float bgX, float bgY, float bgW, float bgH,
+    const std::string& character,
+    float charX, float charY, float charW, float charH,
+    float dlgX, float dlgY, float dlgW, float dlgH
+) {
     if (!m_initialized || !m_sdlRenderer) return;
+
+    // Dynamically query actual physical render output size (High-DPI / Maximized / Resized)
+    int currentPhysW = 0, currentPhysH = 0;
+    if (SDL_GetRenderOutputSize(m_sdlRenderer, &currentPhysW, &currentPhysH) && currentPhysW > 0 && currentPhysH > 0) {
+        m_width = static_cast<uint32_t>(currentPhysW);
+        m_height = static_cast<uint32_t>(currentPhysH);
+    }
 
     // Calculate Aspect Guardian resolution metrics (1920x1080 virtual canvas)
     ViewportMetrics metrics = AspectGuardian::calculateViewport(m_width, m_height, 1920, 1080);
@@ -172,8 +198,13 @@ void Window::renderVisualNovelFrame(const std::string& speaker, const std::strin
     SDL_SetRenderDrawColor(m_sdlRenderer, 11, 15, 25, 255);
     SDL_RenderClear(m_sdlRenderer);
 
-    // 1. Render Background Texture or Fill into 16:9 Virtual Viewport
-    SDL_FRect vpRect = { static_cast<float>(metrics.x), static_cast<float>(metrics.y), static_cast<float>(metrics.width), static_cast<float>(metrics.height) };
+    // 1. Render Background Texture or Fill into Virtual Viewport
+    float physBgX, physBgY;
+    AspectGuardian::virtualToPhysical(bgX, bgY, metrics, physBgX, physBgY);
+    float scaledBgW = bgW * metrics.scaleFactor;
+    float scaledBgH = bgH * metrics.scaleFactor;
+    SDL_FRect vpRect = { physBgX, physBgY, scaledBgW, scaledBgH };
+
     SDL_Texture* bgTex = loadTexture(background);
     if (bgTex) {
         SDL_RenderTexture(m_sdlRenderer, bgTex, nullptr, &vpRect);
@@ -182,27 +213,15 @@ void Window::renderVisualNovelFrame(const std::string& speaker, const std::strin
         SDL_RenderFillRect(m_sdlRenderer, &vpRect);
     }
 
-    // Top atmosphere banner (virtual Y: 0..80)
-    float bannerX, bannerY;
-    AspectGuardian::virtualToPhysical(0.0f, 0.0f, metrics, bannerX, bannerY);
-    SDL_FRect topBanner = { bannerX, bannerY, static_cast<float>(metrics.width), 80.0f * metrics.scaleFactor };
-    SDL_SetRenderDrawColor(m_sdlRenderer, 15, 23, 42, 220);
-    SDL_RenderFillRect(m_sdlRenderer, &topBanner);
+    // (Top atmosphere debug banner removed for clean gameplay presentation)
 
-    SDL_SetRenderDrawColor(m_sdlRenderer, 56, 189, 248, 255);
-    SDL_RenderDebugText(m_sdlRenderer, bannerX + 20.0f * metrics.scaleFactor, bannerY + 20.0f * metrics.scaleFactor, "ROWL ENGINE - VISUAL NOVEL RUNTIME (1920x1080 Aspect Guardian Active)");
-
-    std::string bgInfo = "Active Background: " + (background.empty() ? "bg_beach_sunset.png" : background);
-    SDL_SetRenderDrawColor(m_sdlRenderer, 148, 163, 184, 255);
-    SDL_RenderDebugText(m_sdlRenderer, bannerX + 20.0f * metrics.scaleFactor, bannerY + 45.0f * metrics.scaleFactor, bgInfo.c_str());
-
-    // 2. Render Character Sprite / Portrait (Virtual Position: characterX, characterY, W=360, H=540)
-    float charW = 360.0f * metrics.scaleFactor;
-    float charH = 540.0f * metrics.scaleFactor;
+    // 2. Render Character Sprite / Portrait
+    float scaledCharW = charW * metrics.scaleFactor;
+    float scaledCharH = charH * metrics.scaleFactor;
     float physCharX, physCharY;
-    AspectGuardian::virtualToPhysical(characterX, characterY, metrics, physCharX, physCharY);
+    AspectGuardian::virtualToPhysical(charX, charY, metrics, physCharX, physCharY);
 
-    SDL_FRect charBox = { physCharX, physCharY, charW, charH };
+    SDL_FRect charBox = { physCharX, physCharY, scaledCharW, scaledCharH };
     SDL_Texture* charTex = loadTexture(character);
     if (charTex) {
         SDL_RenderTexture(m_sdlRenderer, charTex, nullptr, &charBox);
@@ -214,16 +233,16 @@ void Window::renderVisualNovelFrame(const std::string& speaker, const std::strin
 
         std::string charInfo = "[ CHAR: " + (character.empty() ? "spr_evelyn.png" : character) + " ]";
         SDL_SetRenderDrawColor(m_sdlRenderer, 56, 189, 248, 255);
-        SDL_RenderDebugText(m_sdlRenderer, physCharX + 30.0f * metrics.scaleFactor, physCharY + 250.0f * metrics.scaleFactor, charInfo.c_str());
+        SDL_RenderDebugText(m_sdlRenderer, physCharX + 20.0f * metrics.scaleFactor, physCharY + (scaledCharH / 2.0f), charInfo.c_str());
     }
 
-    // 3. Dialogue Box (Virtual Position: X=80, Y=dialogueBoxY, W=1760, H=180)
-    float boxW = 1760.0f * metrics.scaleFactor;
-    float boxH = 180.0f * metrics.scaleFactor;
+    // 3. Render Dialogue Box
+    float scaledDlgW = dlgW * metrics.scaleFactor;
+    float scaledDlgH = dlgH * metrics.scaleFactor;
     float physBoxX, physBoxY;
-    AspectGuardian::virtualToPhysical(80.0f, dialogueBoxY, metrics, physBoxX, physBoxY);
+    AspectGuardian::virtualToPhysical(dlgX, dlgY, metrics, physBoxX, physBoxY);
 
-    SDL_FRect dlgBox = { physBoxX, physBoxY, boxW, boxH };
+    SDL_FRect dlgBox = { physBoxX, physBoxY, scaledDlgW, scaledDlgH };
     SDL_SetRenderDrawColor(m_sdlRenderer, 15, 15, 26, 240);
     SDL_RenderFillRect(m_sdlRenderer, &dlgBox);
 
@@ -231,20 +250,20 @@ void Window::renderVisualNovelFrame(const std::string& speaker, const std::strin
     SDL_RenderRect(m_sdlRenderer, &dlgBox);
 
     // Speaker Name Tag Badge
-    float tagW = 200.0f * metrics.scaleFactor;
-    float tagH = 36.0f * metrics.scaleFactor;
-    SDL_FRect speakerTag = { physBoxX + (24.0f * metrics.scaleFactor), physBoxY - (18.0f * metrics.scaleFactor), tagW, tagH };
+    float tagW = std::clamp(160.0f * metrics.scaleFactor, 60.0f, scaledDlgW * 0.8f);
+    float tagH = 32.0f * metrics.scaleFactor;
+    SDL_FRect speakerTag = { physBoxX + (16.0f * metrics.scaleFactor), physBoxY - (16.0f * metrics.scaleFactor), tagW, tagH };
     SDL_SetRenderDrawColor(m_sdlRenderer, 37, 99, 235, 255);
     SDL_RenderFillRect(m_sdlRenderer, &speakerTag);
 
     std::string speakerText = speaker.empty() ? "Evelyn" : speaker;
     SDL_SetRenderDrawColor(m_sdlRenderer, 255, 255, 255, 255);
-    SDL_RenderDebugText(m_sdlRenderer, physBoxX + (40.0f * metrics.scaleFactor), physBoxY - (8.0f * metrics.scaleFactor), speakerText.c_str());
+    SDL_RenderDebugText(m_sdlRenderer, physBoxX + (28.0f * metrics.scaleFactor), physBoxY - (8.0f * metrics.scaleFactor), speakerText.c_str());
 
     // Dialogue Content Text
     std::string dlgText = dialogue.empty() ? "Welcome to Rowl Engine!" : dialogue;
     SDL_SetRenderDrawColor(m_sdlRenderer, 241, 245, 249, 255);
-    SDL_RenderDebugText(m_sdlRenderer, physBoxX + (28.0f * metrics.scaleFactor), physBoxY + (40.0f * metrics.scaleFactor), dlgText.c_str());
+    SDL_RenderDebugText(m_sdlRenderer, physBoxX + (24.0f * metrics.scaleFactor), physBoxY + (28.0f * metrics.scaleFactor), dlgText.c_str());
 }
 
 void Window::endFrame() {

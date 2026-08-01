@@ -14,15 +14,25 @@
                 <Border Width="1920" Height="1080" Background="#121624" CornerRadius="8" ClipToBounds="True" BoxShadow="0 10 30 0 #000000">
                     <Canvas x:Name="ViewportCanvas" Width="1920" Height="1080" Background="#161B2E">
                         <!-- Scene Background Bitmap Layer -->
-                        <Border Canvas.Left="0" Canvas.Top="0" Width="1920" Height="1080" Background="#1A2035">
+                        <Border x:Name="BackgroundBox"
+                                Canvas.Left="{Binding SelectedNode.BackgroundX}" 
+                                Canvas.Top="{Binding SelectedNode.BackgroundY}" 
+                                Width="{Binding SelectedNode.BackgroundWidth}" 
+                                Height="{Binding SelectedNode.BackgroundHeight}" 
+                                Background="#1A2035" BorderBrush="#3B82F6" BorderThickness="1.5">
                             <Grid>
                                 <!-- Actual Bitmap Image Render -->
-                                <Image Source="{Binding SelectedNode.BackgroundBitmap}" Stretch="UniformToFill" Width="1920" Height="1080"/>
+                                <Image Source="{Binding SelectedNode.BackgroundBitmap}" Stretch="Fill" 
+                                       Width="{Binding SelectedNode.BackgroundWidth}" Height="{Binding SelectedNode.BackgroundHeight}"/>
                                 
                                 <!-- Decorative Atmosphere Fallback Text if Bitmap loading -->
                                 <TextBlock Text="{Binding SelectedNode.BackgroundTexture, StringFormat='Scene BG: {0}'}" 
                                            IsVisible="{Binding SelectedNode.BackgroundBitmap, Converter={x:Static ObjectConverters.IsNull}}"
                                            Foreground="#64748B" FontSize="20" FontWeight="Bold" Margin="40,90" HorizontalAlignment="Left"/>
+
+                                <!-- Background Resize Handles -->
+                                <Border Name="BgHandleBR" Width="18" Height="18" HorizontalAlignment="Right" VerticalAlignment="Bottom" 
+                                        Background="#3B82F6" BorderBrush="White" BorderThickness="2" CornerRadius="9" Cursor="BottomRightCorner" Margin="0,0,-7,-7" ToolTip.Tip="Resize Background"/>
                             </Grid>
                         </Border>
 
@@ -32,7 +42,7 @@
                                 <StackPanel Orientation="Horizontal" Spacing="16" VerticalAlignment="Center">
                                     <TextBlock Text="⚡ LIVE VIEWPORT" Foreground="#00F0FF" FontSize="22" FontWeight="Bold"/>
                                     <Border Background="#1E293B" CornerRadius="4" Padding="10,4">
-                                        <TextBlock Text="1920x1080 Virtual Canvas (Photoshop Interactive Mode)" Foreground="#94A3B8" FontSize="16"/>
+                                        <TextBlock Text="1920x1080 Virtual Canvas (Interactive Drag &amp; Resize Mode)" Foreground="#94A3B8" FontSize="16"/>
                                     </Border>
                                 </StackPanel>
                                 <TextBlock Text="{Binding SelectedNode.Title, StringFormat='Active Node: {0}'}" 
@@ -40,11 +50,12 @@
                             </DockPanel>
                         </Border>
 
-                        <!-- Interactive Character Sprite Layer (Drag with Mouse!) -->
+                        <!-- Interactive Character Sprite Layer (Drag or Resize with Mouse!) -->
                         <Border x:Name="CharacterBox"
                                 Canvas.Left="{Binding SelectedNode.CharacterX}" 
                                 Canvas.Top="{Binding SelectedNode.CharacterY}" 
-                                Width="360" Height="540" Cursor="Hand"
+                                Width="{Binding SelectedNode.CharacterWidth}" 
+                                Height="{Binding SelectedNode.CharacterHeight}" Cursor="Hand"
                                 Background="#2A374A" BorderBrush="#00F0FF" BorderThickness="3" CornerRadius="12" BoxShadow="0 10 30 0 #000000">
                             <Grid RowDefinitions="*, Auto">
                                 <!-- Bitmap Image Render for Character -->
@@ -53,44 +64,64 @@
                                 <!-- Fallback Placeholder if Image fails -->
                                 <StackPanel Grid.Row="0" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="12"
                                             IsVisible="{Binding SelectedNode.CharacterBitmap, Converter={x:Static ObjectConverters.IsNull}}">
-                                    <TextBlock Text="👤" FontSize="72" HorizontalAlignment="Center"/>
-                                    <TextBlock Text="{Binding SelectedNode.CharacterSprite}" Foreground="#38BDF8" FontSize="18" FontWeight="Bold" HorizontalAlignment="Center"/>
+                                    <TextBlock Text="👤" FontSize="48" HorizontalAlignment="Center"/>
+                                    <TextBlock Text="{Binding SelectedNode.CharacterSprite}" Foreground="#38BDF8" FontSize="14" FontWeight="Bold" HorizontalAlignment="Center"/>
                                 </StackPanel>
 
                                 <!-- Drag handle label -->
-                                <Border Grid.Row="1" Background="#0F172A" Padding="8,6">
-                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="6">
-                                        <TextBlock Text="✋ Drag Character" Foreground="#00F0FF" FontSize="13" FontWeight="Bold"/>
-                                        <TextBlock Text="{Binding SelectedNode.CharacterX, StringFormat='X:{0:F0}'}" Foreground="#94A3B8" FontSize="12"/>
+                                <Border Grid.Row="1" Background="#0F172A" Padding="6,4">
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="4">
+                                        <TextBlock Text="✋ Character" Foreground="#00F0FF" FontSize="11" FontWeight="Bold"/>
+                                        <TextBlock Text="{Binding SelectedNode.CharacterWidth, StringFormat='({0:0}'}" Foreground="#94A3B8" FontSize="10"/>
+                                        <TextBlock Text="x" Foreground="#94A3B8" FontSize="10"/>
+                                        <TextBlock Text="{Binding SelectedNode.CharacterHeight, StringFormat='{}{0:0})'}" Foreground="#94A3B8" FontSize="10"/>
                                     </StackPanel>
                                 </Border>
+
+                                <!-- Character Resize Corner Handles -->
+                                <Border Name="CharHandleTL" Width="16" Height="16" HorizontalAlignment="Left" VerticalAlignment="Top" Background="#00F0FF" BorderBrush="White" BorderThickness="2" CornerRadius="8" Cursor="TopLeftCorner" Margin="-6,-6,0,0"/>
+                                <Border Name="CharHandleTR" Width="16" Height="16" HorizontalAlignment="Right" VerticalAlignment="Top" Background="#00F0FF" BorderBrush="White" BorderThickness="2" CornerRadius="8" Cursor="TopRightCorner" Margin="0,-6,-6,0"/>
+                                <Border Name="CharHandleBL" Width="16" Height="16" HorizontalAlignment="Left" VerticalAlignment="Bottom" Background="#00F0FF" BorderBrush="White" BorderThickness="2" CornerRadius="8" Cursor="BottomLeftCorner" Margin="-6,0,0,-6"/>
+                                <Border Name="CharHandleBR" Width="16" Height="16" HorizontalAlignment="Right" VerticalAlignment="Bottom" Background="#00F0FF" BorderBrush="White" BorderThickness="2" CornerRadius="8" Cursor="BottomRightCorner" Margin="0,0,-6,-6"/>
                             </Grid>
                         </Border>
 
-                        <!-- Interactive 9-Slice Dialogue Box Container (Drag with Mouse!) -->
+                        <!-- Interactive Dialogue Box Container (Drag or Resize with Mouse!) -->
                         <Border x:Name="DialogueBox"
                                 Canvas.Left="{Binding SelectedNode.DialogueBoxX}" 
                                 Canvas.Top="{Binding SelectedNode.DialogueBoxY}" 
                                 Width="{Binding SelectedNode.DialogueBoxWidth}" 
                                 Height="{Binding SelectedNode.DialogueBoxHeight}" Cursor="Hand"
                                 Background="#12121A" BorderBrush="#00F0FF" BorderThickness="3" CornerRadius="12" BoxShadow="0 10 30 0 #000000">
-                            <Canvas Width="{Binding SelectedNode.DialogueBoxWidth}" Height="{Binding SelectedNode.DialogueBoxHeight}">
+                            <Grid>
                                 <!-- Speaker Name Badge -->
-                                <Border Canvas.Left="30" Canvas.Top="-20" Background="#2563EB" CornerRadius="6" Padding="20,8" BoxShadow="0 4 10 0 #000000">
-                                    <TextBlock Text="{Binding SelectedNode.Speaker, FallbackValue='Evelyn'}" Foreground="#FFFFFF" FontSize="20" FontWeight="Bold"/>
+                                <Border HorizontalAlignment="Left" VerticalAlignment="Top" Margin="20,-16,0,0" Background="#2563EB" CornerRadius="6" Padding="14,4" BoxShadow="0 4 10 0 #000000">
+                                    <TextBlock Text="{Binding SelectedNode.Speaker, FallbackValue='Evelyn'}" Foreground="#FFFFFF" FontSize="16" FontWeight="Bold"/>
                                 </Border>
 
-                                <!-- Dialogue Content Text -->
-                                <TextBlock Canvas.Left="36" Canvas.Top="36" 
-                                           Width="1680" TextWrapping="Wrap"
-                                           Text="{Binding SelectedNode.DialogueText, FallbackValue='Select a node to preview live dialogue scene.'}" 
-                                           Foreground="#F8FAFC" FontSize="24" LineHeight="36"/>
+                                <!-- Dialogue Content Text Container (Adaptively wraps inside square or rectangular box) -->
+                                <ScrollViewer Margin="20,24,20,20" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+                                    <TextBlock TextWrapping="Wrap"
+                                               Text="{Binding SelectedNode.DialogueText, FallbackValue='Select a node to preview live dialogue scene.'}" 
+                                               Foreground="#F8FAFC" FontSize="20" LineHeight="28"/>
+                                </ScrollViewer>
 
                                 <!-- Drag handle badge -->
-                                <Border Canvas.Right="20" Canvas.Top="-15" Background="#0F172A" BorderBrush="#00F0FF" BorderThickness="1" CornerRadius="4" Padding="6,2">
-                                    <TextBlock Text="✋ Drag Box" Foreground="#00F0FF" FontSize="11" FontWeight="Bold"/>
+                                <Border HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-14,14,0" Background="#0F172A" BorderBrush="#00F0FF" BorderThickness="1" CornerRadius="4" Padding="6,2">
+                                    <StackPanel Orientation="Horizontal" Spacing="4">
+                                        <TextBlock Text="✋ Box" Foreground="#00F0FF" FontSize="10" FontWeight="Bold"/>
+                                        <TextBlock Text="{Binding SelectedNode.DialogueBoxWidth, StringFormat='({0:0}'}" Foreground="#94A3B8" FontSize="10"/>
+                                        <TextBlock Text="x" Foreground="#94A3B8" FontSize="10"/>
+                                        <TextBlock Text="{Binding SelectedNode.DialogueBoxHeight, StringFormat='{}{0:0})'}" Foreground="#94A3B8" FontSize="10"/>
+                                    </StackPanel>
                                 </Border>
-                            </Canvas>
+
+                                <!-- Dialogue Box Resize Corner Handles -->
+                                <Border Name="DlgHandleTL" Width="16" Height="16" HorizontalAlignment="Left" VerticalAlignment="Top" Background="#00F0FF" BorderBrush="White" BorderThickness="2" CornerRadius="8" Cursor="TopLeftCorner" Margin="-6,-6,0,0"/>
+                                <Border Name="DlgHandleTR" Width="16" Height="16" HorizontalAlignment="Right" VerticalAlignment="Top" Background="#00F0FF" BorderBrush="White" BorderThickness="2" CornerRadius="8" Cursor="TopRightCorner" Margin="0,-6,-6,0"/>
+                                <Border Name="DlgHandleBL" Width="16" Height="16" HorizontalAlignment="Left" VerticalAlignment="Bottom" Background="#00F0FF" BorderBrush="White" BorderThickness="2" CornerRadius="8" Cursor="BottomLeftCorner" Margin="-6,0,0,-6"/>
+                                <Border Name="DlgHandleBR" Width="16" Height="16" HorizontalAlignment="Right" VerticalAlignment="Bottom" Background="#00F0FF" BorderBrush="White" BorderThickness="2" CornerRadius="8" Cursor="BottomRightCorner" Margin="0,0,-6,-6"/>
+                            </Grid>
                         </Border>
                     </Canvas>
                 </Border>
