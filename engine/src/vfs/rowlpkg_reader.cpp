@@ -2,6 +2,7 @@
 #include "rowl/core/logger.hpp"
 #include <zstd.h>
 #include <cstring>
+#include <mutex>
 
 namespace Rowl::VFS {
 
@@ -43,7 +44,7 @@ bool RowlPkgDataSource::loadIndexTable() {
         ROWL_LOG_ERROR("Package file count too large: " + std::to_string(header.fileCount));
         return false;
     }
-    
+
     if (header.indexOffset > 1000000000ULL) {  // Sanity check
         ROWL_LOG_ERROR("Package index offset suspiciously large: " + std::to_string(header.indexOffset));
         return false;
@@ -112,6 +113,10 @@ std::vector<uint8_t> RowlPkgDataSource::read(const std::string& path) {
     }
 
     const auto& entry = it->second;
+
+    // Thread-safe file access for multi-threaded VFS
+    std::lock_guard<std::mutex> lock(m_fileMutex);
+
     m_fileStream.seekg(entry.offset, std::ios::beg);
 
     if (!m_fileStream.good()) {

@@ -3,6 +3,7 @@
 #include "rowl/core/logger.hpp"
 #include <fstream>
 #include <filesystem>
+#include <algorithm>
 
 namespace Rowl::VFS {
 
@@ -29,7 +30,7 @@ std::vector<uint8_t> LooseDirectorySource::read(const std::string& path) {
         ROWL_LOG_WARN("Failed to determine file size: " + fullPath.string());
         return {};
     }
-    
+
     file.seekg(0, std::ios::beg);
 
     std::vector<uint8_t> buffer(size);
@@ -50,18 +51,18 @@ void VFSManager::initialize() {
 
     ROWL_LOG_INFO("Initializing Hybrid Virtual File System (VFS)...");
 
-    // Default mounts: Priority 1 = mods/, Priority 2 = data/
+    // Default mounts: Priority 1 = Assets/ (canonical), Priority 2 = mods/
     // Check if directories exist before mounting
+    if (fs::exists("Assets") && fs::is_directory("Assets")) {
+        mountDirectory("Assets", "Assets");
+    } else {
+        ROWL_LOG_WARN("Assets directory not found, skipping mount.");
+    }
+
     if (fs::exists("mods") && fs::is_directory("mods")) {
         mountDirectory("mods", "mods");
     } else {
         ROWL_LOG_WARN("Mods directory not found, skipping mount.");
-    }
-    
-    if (fs::exists("data") && fs::is_directory("data")) {
-        mountDirectory("data", "data");
-    } else {
-        ROWL_LOG_WARN("Data directory not found, skipping mount.");
     }
 
     m_initialized = true;
@@ -86,13 +87,10 @@ void VFSManager::mountPackage(const std::string& virtualPrefix, const std::strin
 
 bool VFSManager::exists(const std::string& vfsPath) {
     if (vfsPath.empty()) return false;
-    
+
+    // Try with prefix stripping first (correct priority: mods > data > packages)
     for (const auto& [prefix, source] : m_mountPoints) {
-        // Try direct path first, then try with prefix stripped
-        if (source->exists(vfsPath)) {
-            return true;
-        }
-        // If vfsPath starts with prefix, try without it
+        // If vfsPath starts with prefix, try stripped version first
         if (!prefix.empty() && vfsPath.size() > prefix.size() &&
             vfsPath.compare(0, prefix.size(), prefix) == 0 &&
             vfsPath[prefix.size()] == '/') {
@@ -100,6 +98,13 @@ bool VFSManager::exists(const std::string& vfsPath) {
             if (source->exists(stripped)) {
                 return true;
             }
+        }
+    }
+
+    // Fallback: try direct path (for paths without prefix)
+    for (const auto& [prefix, source] : m_mountPoints) {
+        if (source->exists(vfsPath)) {
+            return true;
         }
     }
     return false;
@@ -110,23 +115,28 @@ std::vector<uint8_t> VFSManager::readBytes(const std::string& vfsPath) {
         ROWL_LOG_WARN("VFS attempted to read empty path");
         return {};
     }
-    
+
+    // Try with prefix stripping first (correct priority order)
     for (const auto& [prefix, source] : m_mountPoints) {
-        if (source->exists(vfsPath)) {
-            ROWL_LOG_TRACE("VFS Resolved '" + vfsPath + "' via " + source->getSourceName());
-            return source->read(vfsPath);
-        }
-        // If vfsPath starts with prefix, try without it
         if (!prefix.empty() && vfsPath.size() > prefix.size() &&
             vfsPath.compare(0, prefix.size(), prefix) == 0 &&
             vfsPath[prefix.size()] == '/') {
             std::string stripped = vfsPath.substr(prefix.size() + 1);
             if (source->exists(stripped)) {
                 ROWL_LOG_TRACE("VFS Resolved '" + vfsPath + "' via " + source->getSourceName() + " (prefix-stripped)");
-                return source->read(stripped);  // BUG FIX: was reading vfsPath instead of stripped
+                return source->read(stripped);
             }
         }
     }
+
+    // Fallback: try direct path
+    for (const auto& [prefix, source] : m_mountPoints) {
+        if (source->exists(vfsPath)) {
+            ROWL_LOG_TRACE("VFS Resolved '" + vfsPath + "' via " + source->getSourceName());
+            return source->read(vfsPath);
+        }
+    }
+
     ROWL_LOG_WARN("VFS File not found: '" + vfsPath + "'");
     return {};
 }

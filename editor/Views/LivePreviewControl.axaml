@@ -40,7 +40,7 @@
                         <Border Canvas.Left="0" Canvas.Top="0" Width="1920" Height="80" Background="#0F172A" Opacity="0.92">
                             <DockPanel Margin="30,0">
                                 <StackPanel Orientation="Horizontal" Spacing="16" VerticalAlignment="Center">
-                                    <TextBlock Text="⚡ LIVE VIEWPORT" Foreground="#00F0FF" FontSize="22" FontWeight="Bold"/>
+                                    <TextBlock Text="⚡ EDIT FRAME" Foreground="#00F0FF" FontSize="22" FontWeight="Bold"/>
                                     <Border Background="#1E293B" CornerRadius="4" Padding="10,4">
                                         <TextBlock Text="1920x1080 Virtual Canvas (Interactive Drag &amp; Resize Mode)" Foreground="#94A3B8" FontSize="16"/>
                                     </Border>

@@ -1,0 +1,14 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:RowlEngine.Editor.ViewModels"
+             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="200"
+             x:Class="RowlEngine.Editor.Views.Panels.OutputLogView"
+             x:DataType="vm:MainWindowViewModel">
+    <Border Background="#0F172A">
+        <ScrollViewer Padding="8" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+            <TextBox Text="{Binding LogOutput}" IsReadOnly="True" AcceptsReturn="True" Background="Transparent" BorderThickness="0" FontFamily="Consolas, Monospace" FontSize="12" Foreground="#22C55E"/>
+        </ScrollViewer>
+    </Border>
+</UserControl>

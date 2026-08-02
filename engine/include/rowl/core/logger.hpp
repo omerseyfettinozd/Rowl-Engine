@@ -5,6 +5,7 @@
 #include <mutex>
 #include <memory>
 #include <iostream>
+#include <fstream>
 
 namespace Rowl::Core {
 
@@ -19,7 +20,7 @@ enum class LogLevel {
 
 class Logger {
 public:
-    static void init();
+    static void init(const std::string& logFile = "");
     static void setLogLevel(LogLevel level);
     static LogLevel getLogLevel();
 
@@ -36,9 +37,13 @@ private:
     static LogLevel s_logLevel;
     static std::mutex s_logMutex;
     static bool s_initialized;
+    static std::unique_ptr<std::ofstream> s_logFile;
+    static size_t s_logFileSize;
+    static const size_t MAX_LOG_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 
     static std::string_view logLevelToString(LogLevel level);
     static std::string formatTimestamp();
+    static void rotateLogFile();
 };
 
 } // namespace Rowl::Core

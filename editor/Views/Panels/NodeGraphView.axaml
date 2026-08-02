@@ -1,0 +1,78 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:RowlEngine.Editor.ViewModels"
+             xmlns:views="using:RowlEngine.Editor.Views"
+             xmlns:controls="using:RowlEngine.Editor.Controls"
+             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="600"
+             x:Class="RowlEngine.Editor.Views.Panels.NodeGraphView"
+             x:DataType="vm:MainWindowViewModel">
+    <Grid x:Name="NodeGraphContainer" 
+          Background="#0B0F19" 
+          ClipToBounds="True">
+        <!-- Transformable Infinite Canvas Viewport (Unclipped 2D Infinite Coordinate Space) -->
+        <Canvas x:Name="OuterCanvas" 
+                HorizontalAlignment="Stretch" 
+                VerticalAlignment="Stretch" 
+                Background="Transparent"
+                ClipToBounds="False"
+                RenderTransformOrigin="0,0">
+            <Canvas.RenderTransform>
+                <TransformGroup>
+                    <ScaleTransform ScaleX="{Binding ZoomScale}" ScaleY="{Binding ZoomScale}"/>
+                    <TranslateTransform X="{Binding PanX}" Y="{Binding PanY}"/>
+                </TransformGroup>
+            </Canvas.RenderTransform>
+
+            <!-- Infinite Grid Visual Background Surface -->
+            <Rectangle Width="400000" Height="400000" Canvas.Left="-200000" Canvas.Top="-200000" Fill="#0B0F19"/>
+
+            <!-- Connection Wires Layer -->
+            <ItemsControl ItemsSource="{Binding Connections}" ClipToBounds="False">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <Canvas ClipToBounds="False"/>
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:ConnectionViewModel">
+                        <controls:BezierWireRenderer StartPoint="{Binding StartPoint}" EndPoint="{Binding EndPoint}" WireBrush="#00FF66" WireThickness="3.0"/>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <!-- Active Drag Wire Layer -->
+            <controls:BezierWireRenderer StartPoint="{Binding WireStartPoint}" EndPoint="{Binding WireEndPoint}" IsVisible="{Binding IsDraggingWire}" WireBrush="#38BDF8" WireThickness="3.5"/>
+
+            <!-- Node Cards Layer -->
+            <ItemsControl ItemsSource="{Binding Nodes}" ClipToBounds="False">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <Canvas ClipToBounds="False"/>
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.Styles>
+                    <Style Selector="ItemsControl > ContentPresenter" x:DataType="vm:NodeViewModel">
+                        <Setter Property="Canvas.Left" Value="{Binding X}"/>
+                        <Setter Property="Canvas.Top" Value="{Binding Y}"/>
+                        <Setter Property="ClipToBounds" Value="False"/>
+                    </Style>
+                </ItemsControl.Styles>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="vm:NodeViewModel">
+                        <views:NodeControl />
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </Canvas>
+
+        <!-- Canvas Viewport Controls Overlay (Zoom badge & Reset (0,0) Button) -->
+        <Border HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="16" Background="#1E1E2A" BorderBrush="#334155" BorderThickness="1" CornerRadius="6" Padding="8,4">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBlock Text="{Binding ZoomScale, StringFormat='🔍 {0:P0}'}" Foreground="#94A3B8" FontSize="11" VerticalAlignment="Center"/>
+                <Button Content="🎯 Reset View (0,0)" Command="{Binding ResetCanvasViewCommand}" Padding="6,2" FontSize="11" Background="#2563EB" Foreground="White" CornerRadius="4"/>
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>

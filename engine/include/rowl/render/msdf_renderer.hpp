@@ -4,6 +4,7 @@
 #include <vector>
 #include <cstdint>
 #include <unordered_map>
+#include <nlohmann/json.hpp>
 
 namespace Rowl::Render {
 
@@ -24,6 +25,7 @@ public:
 
     bool isLoaded() const { return m_loaded; }
     float getPixelRange() const { return m_pixelRange; }
+    const std::unordered_map<uint32_t, MsdfGlyphMetrics>& getGlyphs() const { return m_glyphs; }
 
 private:
     float m_pixelRange = 4.0f;

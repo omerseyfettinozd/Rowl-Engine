@@ -1,0 +1,78 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:RowlEngine.Editor.ViewModels"
+             mc:Ignorable="d" d:DesignWidth="300" d:DesignHeight="600"
+             x:Class="RowlEngine.Editor.Views.Panels.ProjectAssetsView"
+             x:DataType="vm:MainWindowViewModel">
+    <Border Background="#181822">
+        <Grid RowDefinitions="*">
+            <TreeView Grid.Row="0" 
+                      Background="Transparent" 
+                      ItemsSource="{Binding AssetBrowserViewModel.AssetTree}" 
+                      SelectedItem="{Binding AssetBrowserViewModel.SelectedNode, Mode=TwoWay}"
+                      Margin="4" 
+                      Foreground="#E2E8F0">
+                <TreeView.ContextMenu>
+                    <ContextMenu>
+                        <MenuItem Header="📁 Yeni Klasör Oluştur" Command="{Binding AssetBrowserViewModel.CreateFolderCommand}"/>
+                        <MenuItem Header="📥 Dosya İçe Aktar..." Command="{Binding ImportAssetCommand}"/>
+                        <Separator/>
+                        <MenuItem Header="✏️ Yeniden Adlandır (F2)" Command="{Binding AssetBrowserViewModel.StartRenameCommand}"/>
+                        <MenuItem Header="📂 Dosya Yöneticisinde Aç" Command="{Binding AssetBrowserViewModel.OpenInExplorerCommand}"/>
+                        <Separator/>
+                        <MenuItem Header="🗑️ Sil" Command="{Binding AssetBrowserViewModel.DeleteAssetCommand}"/>
+                        <MenuItem Header="🔄 Yenile" Command="{Binding AssetBrowserViewModel.RefreshAssetsCommand}"/>
+                    </ContextMenu>
+                </TreeView.ContextMenu>
+                <TreeView.Styles>
+                    <Style Selector="TreeViewItem" x:DataType="vm:AssetNodeViewModel">
+                        <Setter Property="IsExpanded" Value="True"/>
+                        <Setter Property="Padding" Value="2,3"/>
+                    </Style>
+                </TreeView.Styles>
+                <TreeView.ItemTemplate>
+                    <TreeDataTemplate x:DataType="vm:AssetNodeViewModel" ItemsSource="{Binding Children}">
+                        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" Background="Transparent">
+                            <StackPanel.ContextMenu>
+                                <ContextMenu>
+                                    <MenuItem Header="📁 Yeni Klasör Oluştur" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.CreateFolderCommand}"/>
+                                    <MenuItem Header="📥 Dosya İçe Aktar..." Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ImportAssetCommand}"/>
+                                    <Separator/>
+                                    <MenuItem Header="✏️ Yeniden Adlandır (F2)" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.StartRenameCommand}"/>
+                                    <MenuItem Header="📂 Dosya Yöneticisinde Aç" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.OpenInExplorerCommand}"/>
+                                    <Separator/>
+                                    <MenuItem Header="🗑️ Sil" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.DeleteAssetCommand}"/>
+                                    <MenuItem Header="🔄 Yenile" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.RefreshAssetsCommand}"/>
+                                </ContextMenu>
+                            </StackPanel.ContextMenu>
+                            <TextBlock Text="{Binding Icon}" Foreground="{Binding IconColor}" FontSize="14" VerticalAlignment="Center"/>
+                            
+                            <TextBlock Text="{Binding Name}" 
+                                       IsVisible="{Binding !IsEditing}" 
+                                       Foreground="#CBD5E1" 
+                                       FontSize="12" 
+                                       VerticalAlignment="Center"/>
+
+                            <TextBox Text="{Binding EditingName, Mode=TwoWay}" 
+                                     IsVisible="{Binding IsEditing}" 
+                                     FontSize="12" 
+                                     Padding="4,2" 
+                                     Margin="0,-2,0,-2" 
+                                     MinHeight="22" 
+                                     Background="#0F172A" 
+                                     Foreground="#F8FAFC" 
+                                     BorderBrush="#38BDF8">
+                                <TextBox.KeyBindings>
+                                    <KeyBinding Gesture="Enter" Command="{Binding CommitRenameCommand}"/>
+                                    <KeyBinding Gesture="Escape" Command="{Binding CancelRenameCommand}"/>
+                                </TextBox.KeyBindings>
+                            </TextBox>
+                        </StackPanel>
+                    </TreeDataTemplate>
+                </TreeView.ItemTemplate>
+            </TreeView>
+        </Grid>
+    </Border>
+</UserControl>

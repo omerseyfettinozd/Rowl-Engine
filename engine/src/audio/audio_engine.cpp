@@ -51,8 +51,8 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
 
 void AudioEngine::setBgmVolume(float volume) {
     m_bgmVolume = volume;
-    // Recalculate gain based on current ducking state
-    m_bgmGain = m_isDuckingActive ? (m_bgmVolume * 0.5f) : m_bgmVolume; // -6 dB ducking = 0.5 multiplier
+    // Recalculate gain based on current ducking state using configured ducking factor
+    m_bgmGain = m_isDuckingActive ? (m_bgmVolume * m_duckingFactor) : m_bgmVolume;
 }
 
 void AudioEngine::triggerVoiceDucking(bool isVoiceActive) {

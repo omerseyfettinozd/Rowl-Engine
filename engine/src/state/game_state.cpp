@@ -37,16 +37,30 @@ std::shared_ptr<const GameState> GameState::createNextState(
         nextState->dspFilter = current->dspFilter;
     }
 
+    // Structural sharing: only create new VariableMap if a variable actually changes
     if (!varKey.empty()) {
-        // Create new variable map copying existing data and setting updated key
-        auto newVarMap = std::make_shared<VariableMap>();
+        // Create new variable map only if the value is different from current
+        bool valueChanged = true;
         if (current && current->variables) {
-            newVarMap->data = current->variables->data; // Structural sharing copy
+            auto it = current->variables->data.find(varKey);
+            if (it != current->variables->data.end() && it->second == varValue) {
+                valueChanged = false;
+            }
         }
-        newVarMap->data[varKey] = varValue;
-        nextState->variables = newVarMap;
+
+        if (valueChanged) {
+            auto newVarMap = std::make_shared<VariableMap>();
+            if (current && current->variables) {
+                newVarMap->data = current->variables->data; // Copy only when needed
+            }
+            newVarMap->data[varKey] = varValue;
+            nextState->variables = newVarMap;
+        } else {
+            // Value unchanged - share the same variable map (true structural sharing!)
+            nextState->variables = current ? current->variables : std::make_shared<VariableMap>();
+        }
     } else {
-        // Reuse unchanged variable map pointer directly (Zero-copy structural sharing!)
+        // No variable change - share the same pointer (zero-copy structural sharing!)
         nextState->variables = current ? current->variables : std::make_shared<VariableMap>();
     }
 

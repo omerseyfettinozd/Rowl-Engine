@@ -8,6 +8,7 @@
 #include <filesystem>
 #include <vector>
 #include <algorithm>
+#include <string>
 
 namespace Rowl::Render {
 
@@ -17,6 +18,50 @@ Window::~Window() {
     if (m_initialized) {
         shutdown();
     }
+}
+
+bool Window::initializeOffscreen(uint32_t width, uint32_t height) {
+    if (m_initialized) return true;
+
+    ROWL_LOG_INFO("Initializing SDL3 Offscreen Surface & Software Renderer (" +
+                  std::to_string(width) + "x" + std::to_string(height) + ")...");
+
+    if (!SDL_Init(SDL_INIT_VIDEO)) {
+        ROWL_LOG_ERROR("SDL_Init(SDL_INIT_VIDEO) failed: " + std::string(SDL_GetError()));
+        return false;
+    }
+
+    m_width = width;
+    m_height = height;
+
+    m_offscreenSurface = SDL_CreateSurface(static_cast<int>(width), static_cast<int>(height), SDL_PIXELFORMAT_RGBA32);
+    if (!m_offscreenSurface) {
+        ROWL_LOG_ERROR("SDL_CreateSurface (offscreen) failed: " + std::string(SDL_GetError()));
+        SDL_Quit();
+        return false;
+    }
+
+    m_sdlRenderer = SDL_CreateSoftwareRenderer(m_offscreenSurface);
+    if (!m_sdlRenderer) {
+        ROWL_LOG_ERROR("SDL_CreateSoftwareRenderer failed: " + std::string(SDL_GetError()));
+        SDL_DestroySurface(m_offscreenSurface);
+        m_offscreenSurface = nullptr;
+        SDL_Quit();
+        return false;
+    }
+
+    m_isOpen = true;
+    m_initialized = true;
+    m_isOffscreen = true;
+
+    ROWL_LOG_INFO("SDL3 Offscreen Engine Surface initialized (" +
+                  std::to_string(width) + "x" + std::to_string(height) + " RGBA32)");
+    return true;
+}
+
+const uint8_t* Window::getPixelBuffer() const {
+    if (!m_offscreenSurface) return nullptr;
+    return static_cast<const uint8_t*>(m_offscreenSurface->pixels);
 }
 
 bool Window::initialize(const std::string& title, uint32_t width, uint32_t height, bool vsync) {
@@ -63,6 +108,78 @@ bool Window::initialize(const std::string& title, uint32_t width, uint32_t heigh
 
     ROWL_LOG_INFO("SDL3 Window successfully created (" + std::to_string(width) + "x" + std::to_string(height) + ")");
     return true;
+}
+
+bool Window::initializeEmbedded(void* nativeHandle, uint32_t width, uint32_t height, bool vsync) {
+    if (m_initialized) return true;
+    if (!nativeHandle) {
+        ROWL_LOG_ERROR("initializeEmbedded called with null native handle!");
+        return false;
+    }
+
+    ROWL_LOG_INFO("Initializing SDL3 in Embedded mode (native handle: " +
+                  std::to_string(reinterpret_cast<uintptr_t>(nativeHandle)) + ")");
+
+    if (!SDL_Init(SDL_INIT_VIDEO)) {
+        ROWL_LOG_ERROR("SDL_Init(SDL_INIT_VIDEO) failed: " + std::string(SDL_GetError()));
+        return false;
+    }
+
+    m_width  = width;
+    m_height = height;
+
+    // SDL3 native handle embedding via properties
+    SDL_PropertiesID props = SDL_CreateProperties();
+#if defined(_WIN32)
+    SDL_SetPointerProperty(props, SDL_PROP_WINDOW_CREATE_WIN32_HWND_POINTER, nativeHandle);
+#elif defined(__APPLE__)
+    SDL_SetPointerProperty(props, SDL_PROP_WINDOW_CREATE_COCOA_WINDOW_POINTER, nativeHandle);
+#else
+    // X11 Window XID
+    SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_X11_WINDOW_NUMBER,
+                          static_cast<Sint64>(reinterpret_cast<uintptr_t>(nativeHandle)));
+#endif
+    SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_BORDERLESS_BOOLEAN, true);
+    SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_WIDTH_NUMBER,  static_cast<Sint64>(width));
+    SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_HEIGHT_NUMBER, static_cast<Sint64>(height));
+
+    m_sdlWindow = SDL_CreateWindowWithProperties(props);
+    SDL_DestroyProperties(props);
+
+    if (!m_sdlWindow) {
+        ROWL_LOG_ERROR("SDL_CreateWindowWithProperties (embedded) failed: " + std::string(SDL_GetError()));
+        SDL_Quit();
+        return false;
+    }
+
+    m_sdlRenderer = SDL_CreateRenderer(m_sdlWindow, nullptr);
+    if (!m_sdlRenderer) {
+        ROWL_LOG_ERROR("SDL_CreateRenderer (embedded) failed: " + std::string(SDL_GetError()));
+        SDL_DestroyWindow(m_sdlWindow);
+        m_sdlWindow = nullptr;
+        SDL_Quit();
+        return false;
+    }
+
+    if (vsync) SDL_SetRenderVSync(m_sdlRenderer, 1);
+
+    m_isOpen      = true;
+    m_initialized = true;
+    m_isEmbedded  = true;
+
+    ROWL_LOG_INFO("SDL3 Embedded Window initialized (" +
+                  std::to_string(width) + "x" + std::to_string(height) + ")");
+    return true;
+}
+
+void Window::resizeViewport(uint32_t newWidth, uint32_t newHeight) {
+    if (newWidth < 50 || newHeight < 50) return;
+    m_width  = newWidth;
+    m_height = newHeight;
+    if (m_sdlWindow) {
+        SDL_SetWindowSize(m_sdlWindow, static_cast<int>(newWidth), static_cast<int>(newHeight));
+    }
+    ROWL_LOG_INFO("Viewport resized to " + std::to_string(newWidth) + "x" + std::to_string(newHeight));
 }
 
 void Window::pollEvents(bool& outShouldQuit) {
@@ -116,39 +233,40 @@ void Window::beginFrame() {
 SDL_Texture* Window::loadTexture(const std::string& filename) {
     if (filename.empty() || !m_sdlRenderer) return nullptr;
 
+    // Cache hit: return previously loaded texture (nullptr means "known-missing", skip)
     auto it = m_textureCache.find(filename);
     if (it != m_textureCache.end()) {
-        return it->second;
+        return it->second; // may be nullptr if previously failed
     }
 
-    std::vector<std::string> searchPaths = {
-        filename,
-        "data/images/" + filename,
-        "../data/images/" + filename,
-        "/home/chaple/Belgeler/Rowl Engine/data/images/" + filename,
-        "data/" + filename,
-        "../data/" + filename,
-        "/home/chaple/Belgeler/Rowl Engine/data/" + filename
+    // Cache miss: never cache nullptr — so we retry on next call if file appears later.
+    namespace fs = std::filesystem;
+    fs::path cwd = fs::current_path();
+    std::vector<fs::path> searchPaths = {
+        cwd / filename,
+        cwd / "Assets" / "images" / filename,
+        cwd / "Assets" / filename,
+        cwd / ".." / "Assets" / "images" / filename,
+        cwd / ".." / "Assets" / filename,
     };
 
-    std::string foundPath;
+    fs::path foundPath;
     for (const auto& p : searchPaths) {
-        if (std::filesystem::exists(p)) {
+        if (fs::exists(p) && fs::is_regular_file(p)) {
             foundPath = p;
             break;
         }
     }
 
     if (foundPath.empty()) {
-        m_textureCache[filename] = nullptr;
+        // Do NOT cache nullptr — allow retry if file is added later
         return nullptr;
     }
 
     int width, height, channels;
     unsigned char* data = stbi_load(foundPath.c_str(), &width, &height, &channels, 4);
     if (!data) {
-        ROWL_LOG_ERROR("stbi_load failed for image: " + foundPath);
-        m_textureCache[filename] = nullptr;
+        ROWL_LOG_ERROR("stbi_load failed for image: " + foundPath.string());
         return nullptr;
     }
 
@@ -158,7 +276,6 @@ SDL_Texture* Window::loadTexture(const std::string& filename) {
 
     if (!surface) {
         stbi_image_free(data);
-        m_textureCache[filename] = nullptr;
         return nullptr;
     }
 
@@ -166,9 +283,10 @@ SDL_Texture* Window::loadTexture(const std::string& filename) {
     SDL_DestroySurface(surface);
     stbi_image_free(data);
 
-    m_textureCache[filename] = texture;
+    // Only cache successful loads
     if (texture) {
-        ROWL_LOG_INFO("✅ Loaded Hardware Texture: " + foundPath + " (" + std::to_string(width) + "x" + std::to_string(height) + ")");
+        m_textureCache[filename] = texture;
+        ROWL_LOG_INFO("✅ Loaded Hardware Texture: " + foundPath.string() + " (" + std::to_string(width) + "x" + std::to_string(height) + ")");
     }
     return texture;
 }
@@ -184,12 +302,18 @@ void Window::renderVisualNovelFrame(
 ) {
     if (!m_initialized || !m_sdlRenderer) return;
 
-    // Dynamically query actual physical render output size (High-DPI / Maximized / Resized)
-    int currentPhysW = 0, currentPhysH = 0;
-    if (SDL_GetRenderOutputSize(m_sdlRenderer, &currentPhysW, &currentPhysH) && currentPhysW > 0 && currentPhysH > 0) {
-        m_width = static_cast<uint32_t>(currentPhysW);
-        m_height = static_cast<uint32_t>(currentPhysH);
+    // Dynamically query physical size if standalone, or use host-provided size if embedded
+    if (!m_isEmbedded) {
+        int currentPhysW = 0, currentPhysH = 0;
+        if (SDL_GetRenderOutputSize(m_sdlRenderer, &currentPhysW, &currentPhysH) && currentPhysW > 10 && currentPhysH > 10) {
+            m_width = static_cast<uint32_t>(currentPhysW);
+            m_height = static_cast<uint32_t>(currentPhysH);
+        }
     }
+
+    // Safety fallback for collapsed or uninitialized viewport bounds
+    if (m_width < 10)  m_width  = 1920;
+    if (m_height < 10) m_height = 1080;
 
     // Calculate Aspect Guardian resolution metrics (1920x1080 virtual canvas)
     ViewportMetrics metrics = AspectGuardian::calculateViewport(m_width, m_height, 1920, 1080);
@@ -292,6 +416,11 @@ void Window::shutdown() {
     if (m_sdlWindow) {
         SDL_DestroyWindow(m_sdlWindow);
         m_sdlWindow = nullptr;
+    }
+
+    if (m_offscreenSurface) {
+        SDL_DestroySurface(m_offscreenSurface);
+        m_offscreenSurface = nullptr;
     }
 
     SDL_Quit();
