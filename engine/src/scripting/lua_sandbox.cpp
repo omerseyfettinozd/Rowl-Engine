@@ -1,5 +1,6 @@
 #include "rowl/scripting/lua_sandbox.hpp"
 #include "rowl/core/logger.hpp"
+#include <cstdint>
 
 extern "C" {
 #include <lua.h>
@@ -9,12 +10,19 @@ extern "C" {
 
 namespace Rowl::Scripting {
 
-static thread_local LuaSandbox* s_activeSandbox = nullptr;
+// Per-sandbox state stored in Lua registry
+static const char* SANDBOX_REGISTRY_KEY = "_rowl_sandbox_ptr";
 
 static int lua_rowl_var_get(lua_State* L) {
     if (lua_gettop(L) >= 1 && lua_isstring(L, 1)) {
         std::string key = lua_tostring(L, 1);
-        std::string value = s_activeSandbox ? s_activeSandbox->getVariable(key) : "";
+
+        // Retrieve sandbox pointer from registry
+        lua_getfield(L, LUA_REGISTRYINDEX, SANDBOX_REGISTRY_KEY);
+        LuaSandbox* sandbox = static_cast<LuaSandbox*>(lua_touserdata(L, -1));
+        lua_pop(L, 1);
+
+        std::string value = sandbox ? sandbox->getVariable(key) : "";
         lua_pushstring(L, value.c_str());
         return 1;
     }
@@ -26,17 +34,38 @@ static int lua_rowl_var_set(lua_State* L) {
     if (lua_gettop(L) >= 2 && lua_isstring(L, 1) && lua_isstring(L, 2)) {
         std::string key = lua_tostring(L, 1);
         std::string value = lua_tostring(L, 2);
-        if (s_activeSandbox) {
-            s_activeSandbox->setVariable(key, value);
+
+        // Retrieve sandbox pointer from registry
+        lua_getfield(L, LUA_REGISTRYINDEX, SANDBOX_REGISTRY_KEY);
+        LuaSandbox* sandbox = static_cast<LuaSandbox*>(lua_touserdata(L, -1));
+        lua_pop(L, 1);
+
+        if (sandbox) {
+            sandbox->setVariable(key, value);
         }
     }
     return 0;
 }
 
+// Instruction counter hook - counts accumulated instructions
 static void lua_instruction_hook(lua_State* L, lua_Debug* ar) {
     (void)ar;
-    // Use luaL_error with a safe message - hook errors are caught by pcall
-    luaL_error(L, "Lua sandbox instruction limit exceeded (max 10,000,000 instructions). Possible infinite loop detected!");
+
+    // Retrieve instruction count from registry
+    lua_getfield(L, LUA_REGISTRYINDEX, "_rowl_instruction_count");
+    uint64_t count = static_cast<uint64_t>(lua_tointeger(L, -1));
+    lua_pop(L, 1);
+
+    count += 100000; // Called every 100K instructions
+
+    if (count > 10000000) { // 10M total instruction limit
+        lua_pushstring(L, "Lua sandbox instruction limit exceeded (max 10,000,000 instructions). Possible infinite loop detected!");
+        lua_error(L);
+        return;
+    }
+
+    lua_pushinteger(L, static_cast<lua_Integer>(count));
+    lua_setfield(L, LUA_REGISTRYINDEX, "_rowl_instruction_count");
 }
 
 LuaSandbox::LuaSandbox() = default;
@@ -58,7 +87,13 @@ bool LuaSandbox::initialize() {
         return false;
     }
 
-    s_activeSandbox = this;
+    // Store this sandbox pointer in Lua registry for C callback access
+    lua_pushlightuserdata(m_luaState, this);
+    lua_setfield(m_luaState, LUA_REGISTRYINDEX, SANDBOX_REGISTRY_KEY);
+
+    // Initialize instruction counter
+    lua_pushinteger(m_luaState, 0);
+    lua_setfield(m_luaState, LUA_REGISTRYINDEX, "_rowl_instruction_count");
 
     // Load safe standard libraries only
     luaL_requiref(m_luaState, "_G", luaopen_base, 1);
@@ -76,8 +111,7 @@ bool LuaSandbox::initialize() {
     lua_pushnil(m_luaState); lua_setglobal(m_luaState, "debug");
     lua_pushnil(m_luaState); lua_setglobal(m_luaState, "package");
 
-    // Set instruction count hook for infinite loop protection (100,000 count = ~10M instructions)
-    // LUA_MASKCOUNT triggers hook every 'count' VM instructions
+    // Set instruction count hook for infinite loop protection (every 100K instructions)
     lua_sethook(m_luaState, lua_instruction_hook, LUA_MASKCOUNT, 100000);
 
     bindEngineApis();
@@ -122,6 +156,10 @@ bool LuaSandbox::executeString(const std::string& scriptCode) {
         return false;
     }
 
+    // Reset instruction counter before each execution
+    lua_pushinteger(m_luaState, 0);
+    lua_setfield(m_luaState, LUA_REGISTRYINDEX, "_rowl_instruction_count");
+
     int loadStatus = luaL_loadstring(m_luaState, scriptCode.c_str());
     if (loadStatus != LUA_OK) {
         std::string err = lua_tostring(m_luaState, -1);
@@ -146,13 +184,18 @@ void LuaSandbox::shutdown() {
     if (!m_initialized) return;
 
     ROWL_LOG_INFO("Shutting down Sandboxed Lua Environment...");
+
+    // Clean up registry entries
     if (m_luaState) {
+        lua_pushnil(m_luaState);
+        lua_setfield(m_luaState, LUA_REGISTRYINDEX, SANDBOX_REGISTRY_KEY);
+        lua_pushnil(m_luaState);
+        lua_setfield(m_luaState, LUA_REGISTRYINDEX, "_rowl_instruction_count");
+
         lua_close(m_luaState);
         m_luaState = nullptr;
     }
-    if (s_activeSandbox == this) {
-        s_activeSandbox = nullptr;
-    }
+
     m_initialized = false;
     ROWL_LOG_INFO("Lua Environment Shutdown Complete.");
 }

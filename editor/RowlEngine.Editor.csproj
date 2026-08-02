@@ -6,6 +6,10 @@
     <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+
+    <!-- Path to the built native library (relative to editor/ directory) -->
+    <RowlNativeLib>$(MSBuildThisFileDirectory)..\build\lib\libRowlEngineCore.so</RowlNativeLib>
   </PropertyGroup>
 
   <ItemGroup>
@@ -14,12 +18,19 @@
     <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.11" />
     <PackageReference Include="Avalonia.Fonts.Inter" Version="11.3.11" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
-    <PackageReference Include="Dock.Avalonia" Version="11.3.11" />
-    <PackageReference Include="Dock.Model.Mvvm" Version="11.3.11" />
   </ItemGroup>
 
-  <ItemGroup>
-    <AvaloniaResource Include="Controls\**\*.axaml" />
-    <AvaloniaResource Include="Views\**\*.axaml" Exclude="Views\MainWindow.axaml;Views\NodeControl.axaml;Views\LivePreviewControl.axaml" />
-  </ItemGroup>
+  <!-- Auto-copy native library to output directory after build -->
+  <Target Name="CopyNativeLib" AfterTargets="Build" Condition="Exists('$(RowlNativeLib)')">
+    <Copy SourceFiles="$(RowlNativeLib)"
+          DestinationFolder="$(OutputPath)"
+          SkipUnchangedFiles="true" />
+    <Message Text="✅ libRowlEngineCore.so copied to $(OutputPath)" Importance="high" />
+  </Target>
+
+  <!-- Warn if library is missing (not yet built) -->
+  <Target Name="WarnNativeLibMissing" AfterTargets="Build" Condition="!Exists('$(RowlNativeLib)')">
+    <Warning Text="libRowlEngineCore.so not found at $(RowlNativeLib). Run: cmake --build ../build" />
+  </Target>
+
 </Project>

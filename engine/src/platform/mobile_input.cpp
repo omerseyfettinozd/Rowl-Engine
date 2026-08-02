@@ -8,39 +8,40 @@ bool MobileInput::processSdlEvent(const SDL_Event& sdlEvent, InputEvent& outEven
     switch (sdlEvent.type) {
         case SDL_EVENT_MOUSE_BUTTON_DOWN:
             outEvent.type = InputEventType::TapDown;
-            outEvent.x = sdlEvent.button.x;
-            outEvent.y = sdlEvent.button.y;
+            outEvent.x = static_cast<float>(sdlEvent.button.x);
+            outEvent.y = static_cast<float>(sdlEvent.button.y);
             outEvent.touchId = UINT32_MAX;  // Mouse uses special ID to distinguish from touch
             return true;
 
         case SDL_EVENT_MOUSE_BUTTON_UP:
             outEvent.type = InputEventType::TapUp;
-            outEvent.x = sdlEvent.button.x;
-            outEvent.y = sdlEvent.button.y;
+            outEvent.x = static_cast<float>(sdlEvent.button.x);
+            outEvent.y = static_cast<float>(sdlEvent.button.y);
             outEvent.touchId = UINT32_MAX;
             return true;
 
         case SDL_EVENT_FINGER_DOWN:
             outEvent.type = InputEventType::TapDown;
-            outEvent.x = sdlEvent.tfinger.x;
-            outEvent.y = sdlEvent.tfinger.y;
+            // SDL3 touch coordinates are normalized [0,1] - convert to virtual canvas (1920x1080)
+            outEvent.x = sdlEvent.tfinger.x * 1920.0f;
+            outEvent.y = sdlEvent.tfinger.y * 1080.0f;
             outEvent.touchId = static_cast<uint32_t>(sdlEvent.tfinger.fingerID);
             ROWL_LOG_TRACE("Unified Mobile Touch Tap Down at (" + std::to_string(outEvent.x) + ", " + std::to_string(outEvent.y) + ")");
             return true;
 
         case SDL_EVENT_FINGER_UP:
             outEvent.type = InputEventType::TapUp;
-            outEvent.x = sdlEvent.tfinger.x;
-            outEvent.y = sdlEvent.tfinger.y;
+            outEvent.x = sdlEvent.tfinger.x * 1920.0f;
+            outEvent.y = sdlEvent.tfinger.y * 1080.0f;
             outEvent.touchId = static_cast<uint32_t>(sdlEvent.tfinger.fingerID);
             return true;
 
         case SDL_EVENT_FINGER_MOTION:
             outEvent.type = InputEventType::DragMotion;
-            outEvent.x = sdlEvent.tfinger.x;
-            outEvent.y = sdlEvent.tfinger.y;
-            outEvent.deltaX = sdlEvent.tfinger.dx;
-            outEvent.deltaY = sdlEvent.tfinger.dy;
+            outEvent.x = sdlEvent.tfinger.x * 1920.0f;
+            outEvent.y = sdlEvent.tfinger.y * 1080.0f;
+            outEvent.deltaX = sdlEvent.tfinger.dx * 1920.0f;
+            outEvent.deltaY = sdlEvent.tfinger.dy * 1080.0f;
             outEvent.touchId = static_cast<uint32_t>(sdlEvent.tfinger.fingerID);
             return true;
 

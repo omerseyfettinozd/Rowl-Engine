@@ -8,6 +8,11 @@ namespace RowlEngine.Editor.Views
 {
     public partial class LivePreviewControl : UserControl
     {
+        // ── Constants for virtual canvas bounds ──
+        private const double VirtualCanvasWidth = 1920.0;
+        private const double VirtualCanvasHeight = 1080.0;
+        private const double DragLimitPadding = 500.0; // Allow dragging slightly outside canvas
+
         private enum ResizeTarget { None, Background, Character, DialogueBox }
         private enum ResizeCorner { TopLeft, TopRight, BottomLeft, BottomRight }
 
@@ -279,8 +284,8 @@ namespace RowlEngine.Editor.Views
             double deltaX = currentPointerPos.X - _dragStartPointerCanvasPos.X;
             double deltaY = currentPointerPos.Y - _dragStartPointerCanvasPos.Y;
 
-            mainVm.SelectedNode.CharacterX = Math.Clamp(_dragStartStartX + deltaX, -500, 1920);
-            mainVm.SelectedNode.CharacterY = Math.Clamp(_dragStartStartY + deltaY, -500, 1080);
+            mainVm.SelectedNode.CharacterX = Math.Clamp(_dragStartStartX + deltaX, -DragLimitPadding, VirtualCanvasWidth);
+            mainVm.SelectedNode.CharacterY = Math.Clamp(_dragStartStartY + deltaY, -DragLimitPadding, VirtualCanvasHeight);
             e.Handled = true;
         }
 
@@ -326,8 +331,8 @@ namespace RowlEngine.Editor.Views
             double deltaX = currentPointerPos.X - _dragStartPointerCanvasPos.X;
             double deltaY = currentPointerPos.Y - _dragStartPointerCanvasPos.Y;
 
-            mainVm.SelectedNode.DialogueBoxX = Math.Clamp(_dragStartStartX + deltaX, -100, 1920);
-            mainVm.SelectedNode.DialogueBoxY = Math.Clamp(_dragStartStartY + deltaY, -100, 1080);
+            mainVm.SelectedNode.DialogueBoxX = Math.Clamp(_dragStartStartX + deltaX, -DragLimitPadding, VirtualCanvasWidth);
+            mainVm.SelectedNode.DialogueBoxY = Math.Clamp(_dragStartStartY + deltaY, -DragLimitPadding, VirtualCanvasHeight);
             e.Handled = true;
         }
 

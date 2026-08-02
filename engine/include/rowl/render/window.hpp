@@ -8,6 +8,7 @@
 struct SDL_Window;
 struct SDL_Renderer;
 struct SDL_Texture;
+struct SDL_Surface;
 
 namespace Rowl::Render {
 
@@ -20,38 +21,76 @@ public:
     Window(const Window&) = delete;
     Window& operator=(const Window&) = delete;
 
-    bool initialize(const std::string& title, uint32_t width, uint32_t height, bool vsync = true);
+    /**
+     * Offscreen initialization: renders into an internal RGBA32 surface/buffer (e.g. 1920x1080)
+     * instead of a native OS window.
+     */
+    bool initializeOffscreen(uint32_t width, uint32_t height);
+
+    /**
+     * Provides direct access to the RGBA32 pixel memory pointer for zero-copy/fast host sharing.
+     */
+    const uint8_t* getPixelBuffer() const;
+
+    /**
+     * Standard initialization: creates an SDL3 top-level window.
+     * Used in standalone / runtime-only mode.
+     */
+    bool initialize(const std::string& title,
+                    uint32_t width,
+                    uint32_t height,
+                    bool vsync = true);
+
+    /**
+     * Embedded initialization: renders into an existing native OS handle.
+     */
+    bool initializeEmbedded(void* nativeHandle,
+                             uint32_t width,
+                             uint32_t height,
+                             bool vsync = true);
+
+    /**
+     * Notify the window of a viewport resize (e.g. host control resized).
+     */
+    void resizeViewport(uint32_t newWidth, uint32_t newHeight);
+
     void pollEvents(bool& outShouldQuit);
     void beginFrame();
     void renderVisualNovelFrame(
         const std::string& speaker,
         const std::string& dialogue,
         const std::string& background,
-        float bgX, float bgY, float bgW, float bgH,
+        float bgX,   float bgY,   float bgW,   float bgH,
         const std::string& character,
         float charX, float charY, float charW, float charH,
-        float dlgX, float dlgY, float dlgW, float dlgH
+        float dlgX,  float dlgY,  float dlgW,  float dlgH
     );
     void endFrame();
     void shutdown();
 
-    bool isOpen() const { return m_isOpen; }
-    uint32_t getWidth() const { return m_width; }
-    uint32_t getHeight() const { return m_height; }
+    bool isOpen()          const { return m_isOpen; }
+    uint32_t getWidth()    const { return m_width; }
+    uint32_t getHeight()   const { return m_height; }
+    bool isEmbedded()      const { return m_isEmbedded; }
+    bool isOffscreen()     const { return m_isOffscreen; }
 
-    SDL_Window* getNativeWindow() const { return m_sdlWindow; }
+    SDL_Window*   getNativeWindow()   const { return m_sdlWindow; }
     SDL_Renderer* getNativeRenderer() const { return m_sdlRenderer; }
 
     SDL_Texture* loadTexture(const std::string& filename);
 
 private:
-    SDL_Window* m_sdlWindow = nullptr;
-    SDL_Renderer* m_sdlRenderer = nullptr;
+    SDL_Window*   m_sdlWindow         = nullptr;
+    SDL_Renderer* m_sdlRenderer       = nullptr;
+    SDL_Surface*  m_offscreenSurface  = nullptr;
     std::unordered_map<std::string, SDL_Texture*> m_textureCache;
-    uint32_t m_width = 1920;
-    uint32_t m_height = 1080;
-    bool m_isOpen = false;
-    bool m_initialized = false;
+
+    uint32_t m_width       = 1920;
+    uint32_t m_height      = 1080;
+    bool m_isOpen          = false;
+    bool m_initialized     = false;
+    bool m_isEmbedded      = false; // true → rendering into host control
+    bool m_isOffscreen     = false; // true → rendering to RGBA32 surface
 };
 
 } // namespace Rowl::Render

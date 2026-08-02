@@ -7,15 +7,18 @@
     <Canvas Width="260" Height="120" Background="Transparent" ClipToBounds="False">
         <!-- Main Card Body -->
         <Border Canvas.Left="10" Canvas.Top="0" Width="240" Height="120"
-                Background="#181825" BorderBrush="#2A2A3D" BorderThickness="1.5" CornerRadius="8"
+                Background="#181825" BorderBrush="{Binding BorderColor}" BorderThickness="1.5" CornerRadius="8"
                 BoxShadow="0 4 12 0 #40000000">
             <Grid RowDefinitions="36, *">
                 <!-- Node Header (ComfyUI Style Header Bar) -->
                 <Border Grid.Row="0" Background="#1E1E2E" CornerRadius="7,7,0,0" Padding="12,0">
                     <DockPanel VerticalAlignment="Center">
                         <Border DockPanel.Dock="Left" Width="8" Height="8" CornerRadius="4" Background="#00F0FF" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                        <Border IsVisible="{Binding IsStartNode}" Background="#10B981" CornerRadius="3" Padding="4,1" Margin="0,0,6,0" VerticalAlignment="Center" DockPanel.Dock="Right">
+                            <TextBlock Text="▶ START" FontSize="9" Foreground="White" FontWeight="Black"/>
+                        </Border>
+                        <TextBlock Text="{Binding Id, StringFormat='#{0}'}" Foreground="#64748B" FontSize="11" HorizontalAlignment="Right" VerticalAlignment="Center" DockPanel.Dock="Right" Margin="0,0,6,0"/>
                         <TextBlock Text="{Binding Title}" FontWeight="Bold" Foreground="#F8FAFC" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-                        <TextBlock Text="{Binding Id, StringFormat='#{0}'}" Foreground="#64748B" FontSize="11" HorizontalAlignment="Right" VerticalAlignment="Center"/>
                     </DockPanel>
                 </Border>
 

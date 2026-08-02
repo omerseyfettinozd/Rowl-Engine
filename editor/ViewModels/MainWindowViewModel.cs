@@ -4,27 +4,99 @@ using Avalonia.Controls.Documents;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Dock.Model.Core;
-using Dock.Model.Controls;
-using Dock.Model.Mvvm;
-using Dock.Model.Mvvm.Controls;
-using RowlEngine.Editor.Ipc;
+using RowlEngine.Editor.Native;
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text;
+using System.Text.Json;
 using System.Threading.Tasks;
 
 namespace RowlEngine.Editor.ViewModels
 {
     public partial class MainWindowViewModel : ViewModelBase
     {
-        private readonly IpcClient _ipcClient;
-        private readonly Factory _dockFactory = new();
+        // ── Centralized path helpers ──
+        /// <summary>
+        /// Resolves the real project root (where Assets/ and editor/ live) by
+        /// walking up from the executing assembly location until we find a
+        /// directory containing "Assets" or "*.csproj". This fixes the classic
+        /// bin/Debug/net10.0 → project root resolution problem.
+        /// </summary>
+        public static string ProjectRoot { get; } = ResolveProjectRoot();
 
+        private static string ResolveProjectRoot()
+        {
+            // Start from the directory of the executing assembly (bin/Debug/netX.Y)
+            string dir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? ".";
+            // Walk up to 6 levels looking for the canonical project root.
+            // Strategy: prefer the parent that contains BOTH Assets/ AND editor/.
+            // editor/ itself may also have an Assets/ stub, so skip up if Assets/
+            // appears inside editor/ sub-tree.
+            string? best = null;
+            for (int i = 0; i < 6; i++)
+            {
+                bool hasAssets = Directory.Exists(Path.Combine(dir, "Assets"));
+                bool hasEditor = Directory.Exists(Path.Combine(dir, "editor")) ||
+                                 File.Exists(Path.Combine(dir, "CMakeLists.txt"));
+                // Prefer the directory that has BOTH Assets and editor/ or CMakeLists.txt
+                if (hasAssets && hasEditor)
+                {
+                    best = dir;
+                    // Keep going up — parent may also qualify (repo root is the highest match)
+                }
+
+                var parent = Directory.GetParent(dir);
+                if (parent == null) break;
+                dir = parent.FullName;
+            }
+            // Fallback: any dir with Assets/ found along the way
+            if (best == null)
+            {
+                dir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? ".";
+                for (int i = 0; i < 6; i++)
+                {
+                    if (Directory.Exists(Path.Combine(dir, "Assets")))
+                        return dir;
+                    var parent = Directory.GetParent(dir);
+                    if (parent == null) break;
+                    dir = parent.FullName;
+                }
+            }
+            return best ?? Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? ".";
+        }
+
+        /// <summary>
+        /// Returns the assets directory (ProjectRoot/Assets).
+        /// </summary>
+        public static string AssetsPath => Path.Combine(ProjectRoot, "Assets");
+
+        /// <summary>
+        /// Returns the assets/json subdirectory.
+        /// </summary>
+        public static string AssetsJsonPath => Path.Combine(AssetsPath, "json");
+
+        /// <summary>
+        /// Returns the assets/images subdirectory.
+        /// </summary>
+        public static string AssetsImagesPath => Path.Combine(AssetsPath, "images");
+
+        /// <summary>
+        /// Returns the assets/packages subdirectory.
+        /// </summary>
+        public static string AssetsPackagesPath => Path.Combine(AssetsPath, "packages");
+
+        /// <summary>
+        /// The embedded C++ engine host. Exposed publicly so EnginePreviewControl
+        /// can register the native surface handle before initialization.
+        /// </summary>
+        public EngineHost EngineHost { get; } = new EngineHost();
         [ObservableProperty]
-        private string _statusText = "Ready — Waiting to connect to C++ Engine IPC...";
+        private string _statusText = "Ready — Engine initializing...";
 
         [ObservableProperty]
         private bool _isConnected = false;
@@ -57,10 +129,54 @@ namespace RowlEngine.Editor.ViewModels
         public double TargetPanY { get; set; } = 0;
         public double TargetZoom { get; set; } = 1.0;
 
+        // Panel visibility (menu toggles). Lightweight, deterministic, mobile-friendly — no floating windows.
+        [ObservableProperty]
+        private bool _isAssetsPanelVisible = true;
+
+        [ObservableProperty]
+        private bool _isInspectorPanelVisible = true;
+
+        [ObservableProperty]
+        private bool _isLogPanelVisible = true;
+
+        // Center view: single active tab (radio semantics). Node Graph is default.
+        [ObservableProperty]
+        private bool _isNodeGraphActive = true;
+
+        [ObservableProperty]
+        private bool _isPreviewActive = false;
+
+        [ObservableProperty]
+        private bool _isEnginePreviewActive = false;
+
+        // Split-screen mode: both Node Graph + Live Preview visible side-by-side.
+        // Toggled via toolbar button; when off, center area goes back to radio toggle.
+        [ObservableProperty]
+        private int _splitScreenMode = 0; // 0: Off, 1: Horizontal, 2: Vertical
+
+        public bool IsSplitScreenOff => SplitScreenMode == 0;
+        public bool IsSplitScreenHorizontal => SplitScreenMode == 1;
+        public bool IsSplitScreenVertical => SplitScreenMode == 2;
+
+        public string SplitScreenButtonText => SplitScreenMode > 0 ? $"⇱ ⇲ Split: {(SplitScreenMode == 1 ? "H" : "V")}" : "⊞ Split Screen";
+        public string SplitScreenButtonColor => SplitScreenMode > 0 ? "#2563EB" : "#1E293B";
+        public string SplitScreenButtonForeground => SplitScreenMode > 0 ? "White" : "#94A3B8";
+
+        partial void OnSplitScreenModeChanged(int value)
+        {
+            OnPropertyChanged(nameof(IsSplitScreenOff));
+            OnPropertyChanged(nameof(IsSplitScreenHorizontal));
+            OnPropertyChanged(nameof(IsSplitScreenVertical));
+            OnPropertyChanged(nameof(SplitScreenButtonText));
+            OnPropertyChanged(nameof(SplitScreenButtonColor));
+            OnPropertyChanged(nameof(SplitScreenButtonForeground));
+        }
+
+        public string ConnectButtonColor => IsConnected ? "#2563EB" : "#64748B";
+
         private readonly DispatcherTimer _smoothTimer;
 
         private NodeViewModel? _wireDragSourceNode;
-
         public void StartSmoothViewAnimation()
         {
             if (!_smoothTimer.IsEnabled)
@@ -102,15 +218,19 @@ namespace RowlEngine.Editor.ViewModels
         public ObservableCollection<NodeViewModel> Nodes { get; } = new();
         public ObservableCollection<ConnectionViewModel> Connections { get; } = new();
 
-        public AssetBrowserViewModel AssetBrowserViewModel { get; } = new();
+        public AssetBrowserViewModel AssetBrowserViewModel { get; }
         public OutputLogViewModel OutputLogViewModel { get; }
         public InspectorViewModel InspectorViewModel { get; }
+        public NodeGraphViewModel NodeGraphViewModel { get; }
+        public LivePreviewViewModel LivePreviewViewModel { get; }
 
         public MainWindowViewModel()
         {
-            _ipcClient = new IpcClient("rowl_engine_ipc");
+            AssetBrowserViewModel = new AssetBrowserViewModel(this);
             OutputLogViewModel = new OutputLogViewModel(this);
             InspectorViewModel = new InspectorViewModel(this);
+            NodeGraphViewModel = new NodeGraphViewModel(this);
+            LivePreviewViewModel = new LivePreviewViewModel(this);
 
             _smoothTimer = new DispatcherTimer
             {
@@ -144,6 +264,21 @@ namespace RowlEngine.Editor.ViewModels
             Connections.Add(new ConnectionViewModel(node1, node2));
             EnforceSingleOutgoingWireRule();
             SelectedNode = node1;
+            UpdateStartNodeState();
+
+            // Embedded engine: initialize directly (no separate process needed)
+            _ = ConnectEngineAsync();
+        }
+
+        public void UpdateStartNodeState()
+        {
+            var startNode = Nodes.FirstOrDefault(n => !Connections.Any(c => c.TargetNode == n))
+                            ?? Nodes.OrderBy(n => n.Id).FirstOrDefault();
+
+            foreach (var node in Nodes)
+            {
+                node.IsStartNode = (node == startNode);
+            }
         }
 
         private void OnNodePropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -176,7 +311,7 @@ namespace RowlEngine.Editor.ViewModels
                      e.PropertyName == nameof(NodeViewModel.DialogueBoxHeight) ||
                      e.PropertyName == nameof(NodeViewModel.DialogueBoxScale))
             {
-                SaveActiveStoryFile();
+                ScheduleSave();
             }
         }
 
@@ -189,11 +324,11 @@ namespace RowlEngine.Editor.ViewModels
             for (int i = Connections.Count - 1; i >= 0; i--)
             {
                 var conn = Connections[i];
-                if (seenSourceNodes.Contains(conn.SourceNode))
+                if (conn.SourceNode != null && seenSourceNodes.Contains(conn.SourceNode))
                 {
                     toRemove.Add(conn);
                 }
-                else
+                else if (conn.SourceNode != null)
                 {
                     seenSourceNodes.Add(conn.SourceNode);
                 }
@@ -203,6 +338,7 @@ namespace RowlEngine.Editor.ViewModels
             {
                 Connections.Remove(conn);
             }
+            UpdateStartNodeState();
         }
 
         public void StartWireDrag(NodeViewModel sourceNode, Point pinPos)
@@ -337,12 +473,13 @@ namespace RowlEngine.Editor.ViewModels
             Nodes.Remove(node);
             AppendLog($"🗑️ Deleted Node #{node.Id} ({node.Title})");
             SelectedNode = Nodes.FirstOrDefault();
+            UpdateStartNodeState();
         }
 
         [RelayCommand]
         public void AddNode()
         {
-            ulong nextId = (ulong)(101 + Nodes.Count);
+            ulong nextId = Nodes.Count > 0 ? Nodes.Max(n => n.Id) + 1 : 101;
 
             double zoom = ZoomScale > 0 ? ZoomScale : 1.0;
             double spawnX = (-PanX + 300) / zoom + ((Nodes.Count % 5) * 40);
@@ -359,81 +496,123 @@ namespace RowlEngine.Editor.ViewModels
             newNode.PropertyChanged += OnNodePropertyChanged;
             Nodes.Add(newNode);
             SelectedNode = newNode;
+            UpdateStartNodeState();
             AppendLog($"✨ Added new node #{nextId} at visible screen center ({spawnX:F0}, {spawnY:F0})");
         }
 
         [RelayCommand]
-        public async Task ConnectIpcAsync()
+        public async Task ConnectEngineAsync()
         {
-            StatusText = "Connecting to Engine IPC...";
-            bool success = await _ipcClient.ConnectAsync();
+            StatusText = "Initializing embedded C++ Engine...";
+            AppendLog("[Engine] Starting embedded RowlEngineCore library...");
+
+            // Initialize engine (standalone window mode; embedded NativeControlHost mode
+            // is set up separately by the view via InitializeEmbedded).
+            bool success = await Task.Run(() => EngineHost.Initialize(1920, 1080, true));
             IsConnected = success;
+
             if (success)
             {
-                StatusText = "IPC Connected to C++ Engine Runtime! (Live Preview Active)";
-                AppendLog("IPC Connected to Unix Socket /tmp/rowl_engine_ipc.sock");
+                StatusText = "Engine Ready — Embedded C++ Runtime Active";
+                AppendLog("[Engine] RowlEngineCore initialized successfully (P/Invoke, zero IPC overhead).");
+
+                // Push the currently selected node to the engine immediately
+                if (SelectedNode != null)
+                    PushSceneToEngine(SelectedNode);
             }
             else
             {
-                StatusText = "IPC Connection failed. Launch C++ Engine with --ipc-mode.";
-                AppendLog("IPC Connection failed (Engine not running with --ipc-mode).");
+                StatusText = "Engine Init Failed — Check that libRowlEngineCore.so is built.";
+                AppendLog("[Engine] RowlEngineCore initialization failed. Run: cmake --build build");
             }
+        }
+
+        /// <summary>
+        /// Compatibility alias — kept so any XAML bindings that reference
+        /// ConnectIpcAsync continue to compile during transition.
+        /// </summary>
+        [RelayCommand]
+        public Task ConnectIpcAsync() => ConnectEngineAsync();
+
+        /// <summary>Sends the active node's scene data directly to the engine via P/Invoke.</summary>
+        private void PushSceneToEngine(NodeViewModel node)
+        {
+            if (!EngineHost.IsInitialized) return;
+
+            EngineHost.UpdateScene(
+                node.Speaker       ?? "",
+                node.DialogueText  ?? "",
+                node.BackgroundTexture ?? "",
+                (float)node.BackgroundX,  (float)node.BackgroundY,
+                (float)node.BackgroundWidth, (float)node.BackgroundHeight,
+                node.CharacterSprite ?? "",
+                (float)node.CharacterX,   (float)node.CharacterY,
+                (float)node.CharacterWidth, (float)node.CharacterHeight,
+                (float)node.DialogueBoxX,  (float)node.DialogueBoxY,
+                (float)node.DialogueBoxWidth, (float)node.DialogueBoxHeight
+            );
         }
 
         public void SaveFullStoryGraphFile()
         {
             try
             {
-                string dataPath = "/home/chaple/Belgeler/Rowl Engine/data";
-                System.IO.Directory.CreateDirectory(dataPath);
+                System.IO.Directory.CreateDirectory(AssetsPath);
+                System.IO.Directory.CreateDirectory(AssetsJsonPath);
 
-                // Auto-detect Root / Start Node: Node with 0 incoming connections, or lowest ID node
-                var startNode = Nodes.FirstOrDefault(n => !Connections.Any(c => c.TargetNode == n)) ?? Nodes.FirstOrDefault();
+                // Auto-detect Root / Start Node
+                var startNode = GetStartNode();
                 ulong startId = startNode != null ? startNode.Id : 101;
 
-                var sb = new StringBuilder();
-                sb.AppendLine("{");
-                sb.AppendLine($"  \"start_node_id\": {startId},");
-                sb.AppendLine("  \"nodes\": [");
-
-                for (int i = 0; i < Nodes.Count; i++)
+                // Use System.Text.Json for proper escaping
+                var options = new JsonSerializerOptions
                 {
-                    var n = Nodes[i];
-                    var nextConn = Connections.FirstOrDefault(c => c.SourceNode == n);
-                    ulong nextId = nextConn != null ? nextConn.TargetNode.Id : 0;
+                    WriteIndented = true,
+                    Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+                };
 
-                    var inv = System.Globalization.CultureInfo.InvariantCulture;
-                    sb.AppendLine("    {");
-                    sb.AppendLine(FormattableString.Invariant($"      \"id\": {n.Id},"));
-                    sb.AppendLine($"      \"speaker\": \"{n.Speaker}\",");
-                    sb.AppendLine($"      \"dialogue\": \"{n.DialogueText}\",");
-                    sb.AppendLine($"      \"background\": \"{n.BackgroundTexture}\",");
-                    sb.AppendLine(FormattableString.Invariant($"      \"background_x\": {n.BackgroundX},"));
-                    sb.AppendLine(FormattableString.Invariant($"      \"background_y\": {n.BackgroundY},"));
-                    sb.AppendLine(FormattableString.Invariant($"      \"background_width\": {n.BackgroundWidth},"));
-                    sb.AppendLine(FormattableString.Invariant($"      \"background_height\": {n.BackgroundHeight},"));
-                    sb.AppendLine($"      \"character\": \"{n.CharacterSprite}\",");
-                    sb.AppendLine($"      \"character_pos\": \"{n.CharacterPosition}\",");
-                    sb.AppendLine(FormattableString.Invariant($"      \"character_x\": {n.CharacterX},"));
-                    sb.AppendLine(FormattableString.Invariant($"      \"character_y\": {n.CharacterY},"));
-                    sb.AppendLine(FormattableString.Invariant($"      \"character_width\": {n.CharacterWidth},"));
-                    sb.AppendLine(FormattableString.Invariant($"      \"character_height\": {n.CharacterHeight},"));
-                    sb.AppendLine(FormattableString.Invariant($"      \"character_scale\": {n.CharacterScale},"));
-                    sb.AppendLine(FormattableString.Invariant($"      \"dialogue_box_x\": {n.DialogueBoxX},"));
-                    sb.AppendLine(FormattableString.Invariant($"      \"dialogue_box_y\": {n.DialogueBoxY},"));
-                    sb.AppendLine(FormattableString.Invariant($"      \"dialogue_box_width\": {n.DialogueBoxWidth},"));
-                    sb.AppendLine(FormattableString.Invariant($"      \"dialogue_box_height\": {n.DialogueBoxHeight},"));
-                    sb.AppendLine($"      \"next_id\": {nextId}");
-                    sb.Append("    }");
+                var graph = new
+                {
+                    start_node_id = startId,
+                    nodes = Nodes.Select(n =>
+                    {
+                        // Get all outgoing connections from this node
+                        var outgoingConns = Connections.Where(c => c.SourceNode == n && c.TargetNode != null).ToList();
+                        var nextNodes = outgoingConns.Select(c => new
+                        {
+                            id = c.TargetNode!.Id,
+                            label = "" // No label in current ConnectionViewModel, could be extended
+                        }).ToArray();
 
-                    if (i < Nodes.Count - 1) sb.AppendLine(",");
-                    else sb.AppendLine();
-                }
+                        return new
+                        {
+                            id = n.Id,
+                            speaker = n.Speaker,
+                            dialogue = n.DialogueText,
+                            background = n.BackgroundTexture,
+                            background_x = n.BackgroundX,
+                            background_y = n.BackgroundY,
+                            background_width = n.BackgroundWidth,
+                            background_height = n.BackgroundHeight,
+                            character = n.CharacterSprite,
+                            character_pos = n.CharacterPosition,
+                            character_x = n.CharacterX,
+                            character_y = n.CharacterY,
+                            character_width = n.CharacterWidth,
+                            character_height = n.CharacterHeight,
+                            character_scale = n.CharacterScale,
+                            dialogue_box_x = n.DialogueBoxX,
+                            dialogue_box_y = n.DialogueBoxY,
+                            dialogue_box_width = n.DialogueBoxWidth,
+                            dialogue_box_height = n.DialogueBoxHeight,
+                            next_nodes = nextNodes
+                        };
+                    }).ToArray()
+                };
 
-                sb.AppendLine("  ]");
-                sb.AppendLine("}");
-
-                System.IO.File.WriteAllText(System.IO.Path.Combine(dataPath, "full_story_graph.json"), sb.ToString());
+                string content = JsonSerializer.Serialize(graph, options);
+                System.IO.File.WriteAllText(System.IO.Path.Combine(AssetsPath, "full_story_graph.json"), content);
+                System.IO.File.WriteAllText(System.IO.Path.Combine(AssetsJsonPath, "full_story_graph.json"), content);
             }
             catch (Exception ex)
             {
@@ -448,11 +627,40 @@ namespace RowlEngine.Editor.ViewModels
                 var node = SelectedNode ?? Nodes.FirstOrDefault();
                 if (node != null)
                 {
-                    string dataPath = "/home/chaple/Belgeler/Rowl Engine/data/json";
-                    System.IO.Directory.CreateDirectory(dataPath);
-                    string json = FormattableString.Invariant($"{{\n  \"node_id\": {node.Id},\n  \"speaker\": \"{node.Speaker}\",\n  \"dialogue\": \"{node.DialogueText}\",\n  \"background\": \"{node.BackgroundTexture}\",\n  \"background_x\": {node.BackgroundX},\n  \"background_y\": {node.BackgroundY},\n  \"background_width\": {node.BackgroundWidth},\n  \"background_height\": {node.BackgroundHeight},\n  \"character\": \"{node.CharacterSprite}\",\n  \"character_pos\": \"{node.CharacterPosition}\",\n  \"character_x\": {node.CharacterX},\n  \"character_y\": {node.CharacterY},\n  \"character_width\": {node.CharacterWidth},\n  \"character_height\": {node.CharacterHeight},\n  \"character_scale\": {node.CharacterScale},\n  \"dialogue_box_x\": {node.DialogueBoxX},\n  \"dialogue_box_y\": {node.DialogueBoxY},\n  \"dialogue_box_width\": {node.DialogueBoxWidth},\n  \"dialogue_box_height\": {node.DialogueBoxHeight},\n  \"dsp\": \"{node.DspFilter}\"\n}}");
-                    System.IO.File.WriteAllText(System.IO.Path.Combine(dataPath, "active_story.json"), json);
-                    SaveFullStoryGraphFile();
+                    System.IO.Directory.CreateDirectory(AssetsJsonPath);
+
+                    var activeNode = new
+                    {
+                        node_id = node.Id,
+                        speaker = node.Speaker,
+                        dialogue = node.DialogueText,
+                        background = node.BackgroundTexture,
+                        background_x = node.BackgroundX,
+                        background_y = node.BackgroundY,
+                        background_width = node.BackgroundWidth,
+                        background_height = node.BackgroundHeight,
+                        character = node.CharacterSprite,
+                        character_pos = node.CharacterPosition,
+                        character_x = node.CharacterX,
+                        character_y = node.CharacterY,
+                        character_width = node.CharacterWidth,
+                        character_height = node.CharacterHeight,
+                        character_scale = node.CharacterScale,
+                        dialogue_box_x = node.DialogueBoxX,
+                        dialogue_box_y = node.DialogueBoxY,
+                        dialogue_box_width = node.DialogueBoxWidth,
+                        dialogue_box_height = node.DialogueBoxHeight,
+                        dsp = node.DspFilter
+                    };
+
+                    var options = new JsonSerializerOptions
+                    {
+                        WriteIndented = true,
+                        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+                    };
+
+                    string json = JsonSerializer.Serialize(activeNode, options);
+                    System.IO.File.WriteAllText(System.IO.Path.Combine(AssetsJsonPath, "active_story.json"), json);
                 }
             }
             catch (Exception ex)
@@ -506,135 +714,118 @@ namespace RowlEngine.Editor.ViewModels
         public async Task PushHotReloadPacketAsync()
         {
             SaveActiveStoryFile();
+            SaveFullStoryGraphFile();
 
-            if (!_ipcClient.IsConnected)
+            if (SelectedNode == null)
             {
-                bool reconnected = await _ipcClient.ConnectAsync();
-                IsConnected = reconnected;
+                AppendLog("[Hot-Reload] No node selected.");
+                return;
             }
 
-            string title = SelectedNode != null ? SelectedNode.Title : "Default Node";
-            string payload = $"{{\"node_id\":{SelectedNode?.Id ?? 101}, \"title\":\"{title}\", \"speaker\":\"{SelectedNode?.Speaker}\", \"dialogue\":\"{SelectedNode?.DialogueText}\", \"background\":\"{SelectedNode?.BackgroundTexture}\", \"character\":\"{SelectedNode?.CharacterSprite}\", \"timestamp\":{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}}}";
-            byte[] bytes = Encoding.UTF8.GetBytes(payload);
+            if (!EngineHost.IsInitialized)
+            {
+                // Engine not yet ready — try to start it
+                await ConnectEngineAsync();
+                if (!EngineHost.IsInitialized)
+                {
+                    AppendLog("[Hot-Reload] Engine not running. Build libRowlEngineCore first.");
+                    return;
+                }
+            }
 
-            bool sent = await _ipcClient.SendPacketAsync(MessageType.UpdateNodeGraph, bytes);
-            if (sent)
-            {
-                AppendLog($"[Hot-Reload] Sent UpdateNodeGraph packet ({bytes.Length} bytes) -> Engine");
-            }
-            else
-            {
-                AppendLog("[Hot-Reload] Saved story state to disk (Engine not running in --ipc-mode).");
-            }
+            // Direct P/Invoke call — zero serialization, nanosecond latency
+            PushSceneToEngine(SelectedNode);
+
+            // Also reload the full graph so the engine picks up connection changes
+            string graphPath = System.IO.Path.Combine(AssetsJsonPath, "full_story_graph.json");
+            if (System.IO.File.Exists(graphPath))
+                EngineHost.LoadStoryGraph(graphPath);
+
+            AppendLog($"[Hot-Reload] Scene pushed directly to engine (P/Invoke) — Node #{SelectedNode.Id}");
+            IsConnected = true;
         }
 
         [ObservableProperty]
         private bool _isPlayingStandalone = false;
 
         [ObservableProperty]
-        private string _playButtonText = "▶ Play Standalone";
+        private string _playButtonText = "▶ Play";
 
         [ObservableProperty]
         private string _playButtonColor = "#16A34A";
 
-        private System.Diagnostics.Process? _standaloneProcess;
+        public NodeViewModel? GetStartNode()
+        {
+            return Nodes.FirstOrDefault(n => n.IsStartNode)
+                   ?? Nodes.FirstOrDefault(n => !Connections.Any(c => c.TargetNode == n))
+                   ?? Nodes.OrderBy(n => n.Id).FirstOrDefault();
+        }
 
         [RelayCommand]
         public void TogglePlayStandalone()
         {
-            if (IsPlayingStandalone && _standaloneProcess != null && !_standaloneProcess.HasExited)
-            {
+            if (IsPlayingStandalone)
                 StopStandaloneGame();
-            }
             else
-            {
                 StartStandaloneGame();
-            }
         }
 
         private void StartStandaloneGame()
         {
             SaveActiveStoryFile();
-            AppendLog("▶ Starting Standalone Play Test (Engine runs without IPC)...");
+            SaveFullStoryGraphFile();
+            AppendLog("▶ Starting Offscreen Play Mode...");
 
-            try
+            if (!EngineHost.IsInitialized)
             {
-                string projectRoot = "/home/chaple/Belgeler/Rowl Engine";
-                string engineBinary = System.IO.Path.Combine(projectRoot, "build", "bin", "rowl_engine");
-
-                if (!System.IO.File.Exists(engineBinary))
-                {
-                    AppendLog("❌ Engine binary not found. Build the C++ project first.");
-                    return;
-                }
-
-                _standaloneProcess = new System.Diagnostics.Process
-                {
-                    StartInfo = new System.Diagnostics.ProcessStartInfo
-                    {
-                        FileName = engineBinary,
-                        WorkingDirectory = projectRoot,
-                        UseShellExecute = false,
-                        RedirectStandardOutput = true,
-                        RedirectStandardError = true,
-                        CreateNoWindow = true
-                    },
-                    EnableRaisingEvents = true
-                };
-
-                _standaloneProcess.OutputDataReceived += (s, e) => {
-                    if (!string.IsNullOrEmpty(e.Data))
-                        AppendLog($"[Engine] {e.Data}");
-                };
-                _standaloneProcess.ErrorDataReceived += (s, e) => {
-                    if (!string.IsNullOrEmpty(e.Data))
-                        AppendLog($"[Engine Error] {e.Data}");
-                };
-
-                _standaloneProcess.Exited += (s, e) => {
-                    Avalonia.Threading.Dispatcher.UIThread.Post(() => {
-                        IsPlayingStandalone = false;
-                        PlayButtonText = "▶ Play Standalone";
-                        PlayButtonColor = "#16A34A";
-                        StatusText = "Ready — Game Process Terminated";
-                        AppendLog("⏹ Standalone Engine Process Exited.");
-                    });
-                };
-
-                _standaloneProcess.Start();
-                _standaloneProcess.BeginOutputReadLine();
-                _standaloneProcess.BeginErrorReadLine();
-
-                IsPlayingStandalone = true;
-                PlayButtonText = "⏹ Stop Game";
-                PlayButtonColor = "#DC2626";
-                StatusText = $"Running Game Process (PID: {_standaloneProcess.Id})";
-                AppendLog($"✅ Standalone engine launched (PID: {_standaloneProcess.Id}). Click 'Stop Game' or close window to end.");
+                AppendLog("❌ Engine not initialized. Click 'Connect Engine' first.");
+                return;
             }
-            catch (Exception ex)
+
+            // Reload the story graph into the running engine
+            string graphPath = System.IO.Path.Combine(AssetsJsonPath, "full_story_graph.json");
+            if (System.IO.File.Exists(graphPath))
             {
-                AppendLog($"❌ Failed to launch standalone engine: {ex.Message}");
+                EngineHost.LoadStoryGraph(graphPath);
+                AppendLog($"[Play] Story graph loaded from: {graphPath}");
             }
+
+            // Reset engine state to initial start node (first frame)
+            EngineHost.ResetToStartNode();
+
+            var startNode = GetStartNode();
+            if (startNode != null)
+            {
+                PushSceneToEngine(startNode);
+                SelectNode(startNode);
+            }
+
+            EngineHost.SetPlayState(true);
+
+            IsPlayingStandalone = true;
+            PlayButtonText = "⏹ Stop";
+            PlayButtonColor = "#DC2626";
+            StatusText = "Offscreen Play Mode Active";
+            AppendLog("✅ Engine play state activated (Started from first frame).");
         }
 
         private void StopStandaloneGame()
         {
-            if (_standaloneProcess != null && !_standaloneProcess.HasExited)
-            {
-                try
-                {
-                    AppendLog($"⏹ Stopping Standalone Engine (PID: {_standaloneProcess.Id})...");
-                    _standaloneProcess.Kill(true);
-                }
-                catch (Exception ex)
-                {
-                    AppendLog($"⚠️ Error stopping process: {ex.Message}");
-                }
-            }
+            EngineHost.SetPlayState(false);
+            EngineHost.ResetToStartNode();
+
             IsPlayingStandalone = false;
-            PlayButtonText = "▶ Play Standalone";
+            PlayButtonText = "▶ Play";
             PlayButtonColor = "#16A34A";
-            StatusText = "Ready — Waiting to connect to C++ Engine IPC...";
+            StatusText = "Engine Ready — Offscreen C++ Runtime Active";
+            AppendLog("⏹ Play mode stopped (Engine reset to first frame).");
+
+            var startNode = GetStartNode();
+            if (startNode != null)
+            {
+                PushSceneToEngine(startNode);
+                SelectNode(startNode);
+            }
         }
 
         public void SelectNode(NodeViewModel node)
@@ -642,7 +833,18 @@ namespace RowlEngine.Editor.ViewModels
             if (SelectedNode != null) SelectedNode.IsSelected = false;
             SelectedNode = node;
             SelectedNode.IsSelected = true;
-            SaveActiveStoryFile();
+            ScheduleSave();
+            AppendLog($"Selected Node #{node.Id} ({node.Title})");
+        }
+
+        /// <summary>
+        /// Selects a node without triggering debounced file saves (used during gameplay for zero-latency node advance).
+        /// </summary>
+        public void SelectNodeQuiet(NodeViewModel node)
+        {
+            if (SelectedNode != null) SelectedNode.IsSelected = false;
+            SelectedNode = node;
+            SelectedNode.IsSelected = true;
             AppendLog($"Selected Node #{node.Id} ({node.Title})");
         }
 
@@ -651,43 +853,42 @@ namespace RowlEngine.Editor.ViewModels
         {
             try
             {
+                var window = (Avalonia.Application.Current?.ApplicationLifetime as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.MainWindow;
+                if (window == null) return;
+
                 var dialog = new OpenFileDialog
                 {
                     Title = "Import Asset File into Rowl Engine Project",
                     AllowMultiple = true
                 };
-                var window = (Avalonia.Application.Current?.ApplicationLifetime as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.MainWindow;
-                if (window != null)
-                {
-                    var result = await dialog.ShowAsync(window);
-                    if (result != null && result.Length > 0)
-                    {
-                        string dataPath = "/home/chaple/Belgeler/Rowl Engine/data";
-                        System.IO.Directory.CreateDirectory(dataPath);
+                var result = await dialog.ShowAsync(window);
+                if (result != null && result.Length > 0)
+                                {
+                                    string dataPath = MainWindowViewModel.AssetsPath;
+                                    System.IO.Directory.CreateDirectory(dataPath);
 
-                        foreach (var file in result)
-                        {
-                            string fileName = System.IO.Path.GetFileName(file);
-                            string ext = System.IO.Path.GetExtension(fileName).ToLowerInvariant();
-                            string subDir = ext switch
-                            {
-                                ".png" or ".jpg" or ".jpeg" or ".bmp" or ".tga" => "images",
-                                ".json" or ".lua" => "json",
-                                ".rowlpkg" => "packages",
-                                _ => ""
-                            };
-                            string targetDir = string.IsNullOrEmpty(subDir) 
-                                ? "/home/chaple/Belgeler/Rowl Engine/data" 
-                                : System.IO.Path.Combine("/home/chaple/Belgeler/Rowl Engine/data", subDir);
-                            System.IO.Directory.CreateDirectory(targetDir);
+                                    foreach (var file in result)
+                                    {
+                                        string fileName = System.IO.Path.GetFileName(file);
+                                        string ext = System.IO.Path.GetExtension(fileName).ToLowerInvariant();
+                                        string subDir = ext switch
+                                        {
+                                            ".png" or ".jpg" or ".jpeg" or ".bmp" or ".tga" => "images",
+                                            ".json" or ".lua" => "json",
+                                            ".rowlpkg" => "packages",
+                                            _ => ""
+                                        };
+                                        string targetDir = string.IsNullOrEmpty(subDir)
+                                            ? MainWindowViewModel.AssetsPath
+                                            : System.IO.Path.Combine(MainWindowViewModel.AssetsPath, subDir);
+                                        System.IO.Directory.CreateDirectory(targetDir);
 
-                            string destPath = System.IO.Path.Combine(targetDir, fileName);
-                            System.IO.File.Copy(file, destPath, true);
-                            AppendLog($"📥 Imported Asset: {fileName} -> data/{(string.IsNullOrEmpty(subDir) ? "" : subDir + "/")}{fileName}");
-                        }
-                        AssetBrowserViewModel.RefreshAssets();
-                    }
-                }
+                                        string destPath = System.IO.Path.Combine(targetDir, fileName);
+                                        System.IO.File.Copy(file, destPath, true);
+                                        AppendLog($"📥 Imported Asset: {fileName} -> Assets/{(string.IsNullOrEmpty(subDir) ? "" : subDir + "/")}{fileName}");
+                                    }
+                                    AssetBrowserViewModel.RefreshAssets();
+                                }
             }
             catch (Exception ex)
             {
@@ -698,6 +899,67 @@ namespace RowlEngine.Editor.ViewModels
         private void AppendLog(string message)
         {
             LogOutput += $"[{DateTime.Now:HH:mm:ss}] {message}\n";
+        }
+
+        // Debounced save to avoid disk thrashing during drag operations
+        private DispatcherTimer? _saveDebounceTimer;
+        private void ScheduleSave()
+        {
+            _saveDebounceTimer?.Stop();
+            _saveDebounceTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
+            _saveDebounceTimer.Tick += (s, e) =>
+            {
+                _saveDebounceTimer!.Stop();
+                SaveActiveStoryFile();
+                SaveFullStoryGraphFile();
+            };
+            _saveDebounceTimer.Start();
+        }
+
+        [RelayCommand]
+        public void ShowPanel(string panelName)
+        {
+            switch (panelName)
+            {
+                case "Assets":
+                    IsAssetsPanelVisible = !IsAssetsPanelVisible;
+                    break;
+                case "Inspector":
+                    IsInspectorPanelVisible = !IsInspectorPanelVisible;
+                    break;
+                case "Log":
+                    IsLogPanelVisible = !IsLogPanelVisible;
+                    break;
+                case "NodeGraph":
+                    IsNodeGraphActive = true;
+                    IsPreviewActive = false;
+                    IsEnginePreviewActive = false;
+                    SplitScreenMode = 0; // Exits split screen mode to show full single Node Graph
+                    break;
+                case "Preview":
+                    IsPreviewActive = true;
+                    IsNodeGraphActive = false;
+                    IsEnginePreviewActive = false;
+                    break;
+                case "EnginePreview":
+                    IsEnginePreviewActive = true;
+                    IsNodeGraphActive = false;
+                    IsPreviewActive = false;
+                    break;
+                case "SplitScreen":
+                    SplitScreenMode = (SplitScreenMode + 1) % 3;
+                    if (SplitScreenMode > 0)
+                    {
+                        IsNodeGraphActive = true;
+                    }
+                    else
+                    {
+                        IsNodeGraphActive = true;
+                        IsEnginePreviewActive = false;
+                        IsPreviewActive = false;
+                    }
+                    break;
+            }
         }
     }
 
@@ -874,6 +1136,8 @@ namespace RowlEngine.Editor.ViewModels
 
     public partial class AssetBrowserViewModel : ViewModelBase
     {
+        public MainWindowViewModel MainViewModel { get; }
+
         [ObservableProperty]
         private AssetNodeViewModel? _selectedNode;
 
@@ -881,8 +1145,9 @@ namespace RowlEngine.Editor.ViewModels
         public ObservableCollection<AssetItemViewModel> Assets { get; } = new();
         public ObservableCollection<string> AssetNames { get; } = new();
 
-        public AssetBrowserViewModel()
+        public AssetBrowserViewModel(MainWindowViewModel main)
         {
+            MainViewModel = main;
             RefreshAssets();
         }
 
@@ -892,11 +1157,26 @@ namespace RowlEngine.Editor.ViewModels
             Assets.Clear();
             AssetNames.Clear();
 
-            string dataPath = "/home/chaple/Belgeler/Rowl Engine/data";
-            if (System.IO.Directory.Exists(dataPath))
+            // Define VFS mount point: only Assets/ is the canonical asset root.
+            var mountPoints = new List<(string displayName, string path)>
             {
-                var rootDir = new System.IO.DirectoryInfo(dataPath);
-                PopulateDirectoryNode(rootDir, dataPath, AssetTree);
+                ("Assets", MainWindowViewModel.AssetsPath),
+                ("Mods", Path.Combine(MainWindowViewModel.ProjectRoot, "mods"))
+            };
+
+            foreach (var mountPoint in mountPoints)
+            {
+                string displayName = mountPoint.displayName;
+                string mountPath = mountPoint.path;
+
+                if (System.IO.Directory.Exists(mountPath))
+                {
+                    var rootDir = new System.IO.DirectoryInfo(mountPath);
+                    var rootNode = new AssetNodeViewModel(displayName, displayName, mountPath, true, RefreshAssets);
+
+                    PopulateDirectoryNode(rootDir, mountPath, rootNode.Children);
+                    AssetTree.Add(rootNode);
+                }
             }
 
             if (AssetNames.Count == 0)
@@ -943,7 +1223,7 @@ namespace RowlEngine.Editor.ViewModels
         {
             try
             {
-                string rootPath = "/home/chaple/Belgeler/Rowl Engine/data";
+                string rootPath = MainWindowViewModel.AssetsPath;
                 string targetDir = rootPath;
 
                 if (SelectedNode != null)
@@ -1013,13 +1293,13 @@ namespace RowlEngine.Editor.ViewModels
         {
             try
             {
-                string targetPath = SelectedNode?.IsDirectory == true 
-                    ? SelectedNode.FullPath 
-                    : (System.IO.Path.GetDirectoryName(SelectedNode?.FullPath) ?? "/home/chaple/Belgeler/Rowl Engine/data");
-                
+                string targetPath = SelectedNode?.IsDirectory == true
+                    ? SelectedNode.FullPath
+                    : (System.IO.Path.GetDirectoryName(SelectedNode?.FullPath) ?? MainWindowViewModel.AssetsPath);
+
                 if (string.IsNullOrEmpty(targetPath) || !System.IO.Directory.Exists(targetPath))
                 {
-                    targetPath = "/home/chaple/Belgeler/Rowl Engine/data";
+                    targetPath = MainWindowViewModel.AssetsPath;
                 }
 
                 System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
@@ -1032,9 +1312,9 @@ namespace RowlEngine.Editor.ViewModels
             {
                 try
                 {
-                    string targetPath = SelectedNode?.IsDirectory == true 
-                        ? SelectedNode.FullPath 
-                        : (System.IO.Path.GetDirectoryName(SelectedNode?.FullPath) ?? "/home/chaple/Belgeler/Rowl Engine/data");
+                    string targetPath = SelectedNode?.IsDirectory == true
+                        ? SelectedNode.FullPath
+                        : (System.IO.Path.GetDirectoryName(SelectedNode?.FullPath) ?? MainWindowViewModel.AssetsPath);
                     System.Diagnostics.Process.Start("xdg-open", targetPath);
                 }
                 catch { }
@@ -1059,48 +1339,58 @@ namespace RowlEngine.Editor.ViewModels
 
     public partial class InspectorViewModel : ViewModelBase
     {
-        private readonly MainWindowViewModel _main;
+        public MainWindowViewModel MainViewModel { get; }
 
         public InspectorViewModel(MainWindowViewModel main)
         {
-            _main = main;
+            MainViewModel = main;
+            main.PropertyChanged += (s, e) =>
+            {
+                if (e.PropertyName == nameof(MainWindowViewModel.SelectedNode))
+                    OnPropertyChanged(nameof(SelectedNode));
+            };
         }
 
-        public NodeViewModel? SelectedNode => _main.SelectedNode;
+        public NodeViewModel? SelectedNode => MainViewModel.SelectedNode;
     }
 
     public partial class OutputLogViewModel : ViewModelBase
     {
-        private readonly MainWindowViewModel _main;
+        public MainWindowViewModel MainViewModel { get; }
 
         public OutputLogViewModel(MainWindowViewModel main)
         {
-            _main = main;
+            MainViewModel = main;
+            main.PropertyChanged += (s, e) =>
+            {
+                if (e.PropertyName == nameof(MainWindowViewModel.LogOutput))
+                    OnPropertyChanged(nameof(LogOutput));
+            };
         }
 
-        public string LogOutput => _main.LogOutput;
+        public string LogOutput => MainViewModel.LogOutput;
     }
 
     public partial class NodeGraphViewModel : ViewModelBase
     {
-        private readonly MainWindowViewModel _main;
+        public MainWindowViewModel MainViewModel { get; }
 
         public NodeGraphViewModel(MainWindowViewModel main)
         {
-            _main = main;
+            MainViewModel = main;
         }
 
-        public ObservableCollection<NodeViewModel> Nodes => _main.Nodes;
-        public ObservableCollection<ConnectionViewModel> Connections => _main.Connections;
+        public ObservableCollection<NodeViewModel> Nodes => MainViewModel.Nodes;
+        public ObservableCollection<ConnectionViewModel> Connections => MainViewModel.Connections;
     }
 
     public partial class LivePreviewViewModel : ViewModelBase
     {
-        private readonly MainWindowViewModel _main;
+        public MainWindowViewModel MainViewModel { get; }
 
         public LivePreviewViewModel(MainWindowViewModel main)
         {
-            _main = main;
+            MainViewModel = main;
         }
     }
 }

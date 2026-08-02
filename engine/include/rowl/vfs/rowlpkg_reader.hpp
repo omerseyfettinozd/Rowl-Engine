@@ -7,6 +7,7 @@
 #include <unordered_map>
 #include <fstream>
 #include <memory>
+#include <mutex>
 
 namespace Rowl::VFS {
 
@@ -51,9 +52,10 @@ private:
     bool loadIndexTable();
 
     std::string m_filepath;
-    mutable std::ifstream m_fileStream;
+    std::ifstream m_fileStream;
     std::unordered_map<std::string, PackageEntry> m_indexTable;
     bool m_isValid = false;
+    mutable std::mutex m_fileMutex; // Thread safety for multi-threaded VFS reads
 };
 
 } // namespace Rowl::VFS

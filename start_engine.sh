@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
-# Rowl Engine - C++ Standalone Motor Başlatma Betiği
+# Rowl Engine - Embedded C++ Library Builder & Launcher
 echo "==================================================="
-echo "  Rowl Engine - C++ Standalone Runtime (Oyun Motoru)"
+echo "  Rowl Engine - Embedded C++ Library (libRowlEngineCore.so)"
 echo "==================================================="
-if [ ! -f "build/bin/rowl_engine" ]; then
-    echo "[!] Motor derlenmemiş! Derleme başlatılıyor..."
-    cmake -B build -DCMAKE_BUILD_TYPE=Release
-    cmake --build build --parallel
-fi
-echo "[1/1] C++ Oyun Motoru Çalıştırılıyor..."
-./build/bin/rowl_engine "$@"
+echo "[1/2] C++ Motor Kütüphanesi derleniyor..."
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --parallel
+
+echo "[2/2] Editör (Avalonia UI + Embedded C++ Engine) başlatılıyor..."
+dotnet run --project editor/RowlEngine.Editor.csproj "$@"

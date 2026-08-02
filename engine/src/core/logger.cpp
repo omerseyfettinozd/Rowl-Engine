@@ -3,18 +3,30 @@
 #include <iomanip>
 #include <sstream>
 #include <iostream>
+#include <filesystem>
 
 namespace Rowl::Core {
 
 LogLevel Logger::s_logLevel = LogLevel::Trace;
 std::mutex Logger::s_logMutex;
 bool Logger::s_initialized = false;
+std::unique_ptr<std::ofstream> Logger::s_logFile;
+size_t Logger::s_logFileSize = 0;
 
-void Logger::init() {
+void Logger::init(const std::string& logFile) {
     std::lock_guard<std::mutex> lock(s_logMutex);
     if (!s_initialized) {
         s_initialized = true;
         s_logLevel = LogLevel::Trace;
+
+        if (!logFile.empty()) {
+            s_logFile = std::make_unique<std::ofstream>(logFile, std::ios::app);
+            if (s_logFile && s_logFile->is_open()) {
+                // Get current file size
+                s_logFile->seekp(0, std::ios::end);
+                s_logFileSize = static_cast<size_t>(s_logFile->tellp());
+            }
+        }
     }
 }
 
@@ -54,6 +66,26 @@ std::string Logger::formatTimestamp() {
     return ss.str();
 }
 
+void Logger::rotateLogFile() {
+    if (!s_logFile || !s_logFile->is_open()) return;
+
+    if (s_logFileSize >= MAX_LOG_FILE_SIZE) {
+        s_logFile->close();
+
+        // Rename current log to .1, .2, .3 (keep 3 backups)
+        for (int i = 2; i >= 0; --i) {
+            std::string src = (i == 0) ? "rowl_engine.log" : "rowl_engine.log." + std::to_string(i);
+            std::string dst = "rowl_engine.log." + std::to_string(i + 1);
+            if (std::filesystem::exists(src)) {
+                std::filesystem::rename(src, dst);
+            }
+        }
+
+        s_logFile = std::make_unique<std::ofstream>("rowl_engine.log", std::ios::app);
+        s_logFileSize = 0;
+    }
+}
+
 void Logger::log(LogLevel level, std::string_view msg) {
     std::lock_guard<std::mutex> lock(s_logMutex);
     if (level < s_logLevel) {
@@ -76,7 +108,18 @@ void Logger::log(LogLevel level, std::string_view msg) {
         case LogLevel::Critical: colorCode = "\033[35m"; break; // Magenta
     }
 
-    std::cout << "[" << timestamp << "] [" << colorCode << levelStr << colorReset << "] " << msg << std::endl;
+    std::string logLine = "[" + timestamp + "] [" + std::string(colorCode) + std::string(levelStr) + colorReset + "] " + std::string(msg);
+
+    // Console output
+    std::cout << logLine << std::endl;
+
+    // File output with rotation
+    if (s_logFile && s_logFile->is_open()) {
+        rotateLogFile();
+        *s_logFile << "[" << timestamp << "] [" << levelStr << "] " << msg << std::endl;
+        s_logFile->flush();
+        s_logFileSize += logLine.size() + 1;
+    }
 }
 
 } // namespace Rowl::Core

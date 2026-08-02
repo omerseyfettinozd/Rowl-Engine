@@ -27,7 +27,7 @@ namespace RowlEngine.Editor.Views
             Visual? current = this;
             while (current != null)
             {
-                if (current is Canvas c && c.Width >= 2000)
+                if (current is Canvas c && (c.Name == "OuterCanvas" || c.Width >= 1000))
                 {
                     return c;
                 }
@@ -76,7 +76,7 @@ namespace RowlEngine.Editor.Views
                 if (VisualRoot is MainWindow mwUnplug && mwUnplug.DataContext is MainWindowViewModel mainVmUnplug)
                 {
                     var existingConn = mainVmUnplug.Connections.FirstOrDefault(c => c.TargetNode == vm);
-                    if (existingConn != null)
+                    if (existingConn != null && existingConn.SourceNode != null)
                     {
                         var sourceNode = existingConn.SourceNode;
                         mainVmUnplug.Connections.Remove(existingConn);
@@ -143,12 +143,6 @@ namespace RowlEngine.Editor.Views
                 var currentPointerPos = e.GetPosition(canvasToUse);
                 double deltaX = currentPointerPos.X - _dragStartPointerPos.X;
                 double deltaY = currentPointerPos.Y - _dragStartPointerPos.Y;
-
-                if (VisualRoot is MainWindow mw && mw.DataContext is MainWindowViewModel mainVm && mainVm.ZoomScale > 0)
-                {
-                    deltaX /= mainVm.ZoomScale;
-                    deltaY /= mainVm.ZoomScale;
-                }
 
                 vm.X = _dragStartNodePos.X + deltaX;
                 vm.Y = _dragStartNodePos.Y + deltaY;
