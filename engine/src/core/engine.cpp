@@ -230,6 +230,15 @@ void Engine::updateActiveScene(
     m_activeDialogueBoxWidth = dlgW;
     m_activeDialogueBoxHeight = dlgH;
 
+    m_activeDialogueData.hasDialogueBox = m_hasDialogueBox;
+    m_activeDialogueData.speaker = m_activeSpeaker;
+    m_activeDialogueData.dialogue = m_activeDialogue;
+    m_activeDialogueData.x = dlgX;
+    m_activeDialogueData.y = dlgY;
+    m_activeDialogueData.width = dlgW;
+    m_activeDialogueData.height = dlgH;
+    m_activeDialogueData.typewriterEnabled = false;
+
     ROWL_LOG_INFO("Scene Updated (Legacy) → Speaker: '" + m_activeSpeaker + "', Dialogue: '" +
                   m_activeDialogue + "', BG: '" + m_activeBackground + "'");
 }
@@ -259,9 +268,34 @@ void Engine::updateSceneFromComponents(const std::string& componentsJson) {
                 m_activeDialogueBoxWidth = data.value("width", m_activeDialogueBoxWidth);
                 m_activeDialogueBoxHeight = data.value("height", m_activeDialogueBoxHeight);
                 m_hasDialogueBox = true;
+
+                // Sync rich dialogue properties
+                m_activeDialogueData.hasDialogueBox = true;
+                m_activeDialogueData.speaker = m_activeSpeaker;
+                m_activeDialogueData.dialogue = m_activeDialogue;
+                m_activeDialogueData.x = m_activeDialogueBoxX;
+                m_activeDialogueData.y = m_activeDialogueBoxY;
+                m_activeDialogueData.width = m_activeDialogueBoxWidth;
+                m_activeDialogueData.height = m_activeDialogueBoxHeight;
+                m_activeDialogueData.scale = data.value("scale", 1.0f);
+                m_activeDialogueData.typewriterEnabled = data.value("typewriter_enabled", true);
+                m_activeDialogueData.textSpeed = data.value("text_speed", 30);
+                m_activeDialogueData.fontSize = data.value("font_size", 24.0f);
+                m_activeDialogueData.textColor = data.value("text_color", "#F1F5F9");
+                m_activeDialogueData.speakerColor = data.value("speaker_color", "#38BDF8");
+                m_activeDialogueData.textAlignment = data.value("text_alignment", "Left");
+                m_activeDialogueData.boxOpacity = data.value("box_opacity", 0.88f);
+                m_activeDialogueData.boxColor = data.value("box_color", "#0F0F1A");
+                m_activeDialogueData.borderColor = data.value("border_color", "#00F0FF");
+                m_activeDialogueData.borderThickness = data.value("border_thickness", 2.0f);
+                m_activeDialogueData.cornerRadius = data.value("corner_radius", 8.0f);
+                m_activeDialogueData.customBoxTexture = data.value("custom_box_texture", "");
+                m_activeDialogueData.elapsedTypewriterTime = 0.0f; // reset animation on dialogue change
             } else if (type == "speaker") {
                 m_activeSpeaker = data.value("speaker", m_activeSpeaker);
                 m_activeDialogue = data.value("dialogue", m_activeDialogue);
+                m_activeDialogueData.speaker = m_activeSpeaker;
+                m_activeDialogueData.dialogue = m_activeDialogue;
             } else if (type == "background") {
                 m_activeBackground = data.value("texture", m_activeBackground);
                 m_activeBackgroundX = data.value("x", m_activeBackgroundX);
@@ -292,6 +326,11 @@ void Engine::updateSceneFromComponents(const std::string& componentsJson) {
                 m_activeDialogueBoxWidth = data.value("width", m_activeDialogueBoxWidth);
                 m_activeDialogueBoxHeight = data.value("height", m_activeDialogueBoxHeight);
                 m_hasDialogueBox = true;
+                m_activeDialogueData.x = m_activeDialogueBoxX;
+                m_activeDialogueData.y = m_activeDialogueBoxY;
+                m_activeDialogueData.width = m_activeDialogueBoxWidth;
+                m_activeDialogueData.height = m_activeDialogueBoxHeight;
+                m_activeDialogueData.hasDialogueBox = true;
             } else if (type == "audio") {
                 std::string dsp = data.value("dsp_filter", "Normal");
                 ROWL_LOG_INFO("[Audio] Applied DSP Filter from Component: " + dsp);
@@ -506,16 +545,17 @@ void Engine::step(float deltaTime) {
         return;
     }
 
+    if (m_activeDialogueData.typewriterEnabled) {
+        m_activeDialogueData.elapsedTypewriterTime += deltaTime;
+    }
+
     m_window->renderVisualNovelFrame(
         m_hasBackground,
         m_activeBackground,
         m_activeBackgroundX,  m_activeBackgroundY,
         m_activeBackgroundWidth, m_activeBackgroundHeight,
         m_activeCharacters,
-        m_hasDialogueBox,
-        m_activeSpeaker,    m_activeDialogue,
-        m_activeDialogueBoxX, m_activeDialogueBoxY,
-        m_activeDialogueBoxWidth, m_activeDialogueBoxHeight
+        m_activeDialogueData
     );
     m_window->endFrame();
 }

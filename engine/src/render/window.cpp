@@ -313,15 +313,42 @@ SDL_Texture* Window::loadTexture(const std::string& filename) {
     return texture;
 }
 
+static SDL_Color parseHexColor(const std::string& hex, uint8_t defaultA = 255) {
+    if (hex.empty()) return {255, 255, 255, defaultA};
+    std::string clean = hex;
+    if (clean[0] == '#') clean = clean.substr(1);
+
+    uint32_t val = 0;
+    try {
+        val = std::stoul(clean, nullptr, 16);
+    } catch (...) {
+        return {255, 255, 255, defaultA};
+    }
+
+    if (clean.length() == 6) {
+        return {
+            static_cast<uint8_t>((val >> 16) & 0xFF),
+            static_cast<uint8_t>((val >> 8) & 0xFF),
+            static_cast<uint8_t>(val & 0xFF),
+            defaultA
+        };
+    } else if (clean.length() == 8) {
+        return {
+            static_cast<uint8_t>((val >> 24) & 0xFF),
+            static_cast<uint8_t>((val >> 16) & 0xFF),
+            static_cast<uint8_t>((val >> 8) & 0xFF),
+            static_cast<uint8_t>(val & 0xFF)
+        };
+    }
+    return {255, 255, 255, defaultA};
+}
+
 void Window::renderVisualNovelFrame(
     bool hasBackground,
     const std::string& background,
     float bgX, float bgY, float bgW, float bgH,
     const std::vector<CharacterRenderData>& characters,
-    bool hasDialogueBox,
-    const std::string& speaker,
-    const std::string& dialogue,
-    float dlgX, float dlgY, float dlgW, float dlgH
+    const DialogueRenderData& dlg
 ) {
     if (!m_initialized || !m_sdlRenderer) return;
 
@@ -388,57 +415,81 @@ void Window::renderVisualNovelFrame(
     }
 
     // 3. Render Dialogue Box (Only if enabled / present)
-    if (hasDialogueBox) {
-        float scaledDlgW = dlgW * metrics.scaleFactor;
-        float scaledDlgH = dlgH * metrics.scaleFactor;
+    if (dlg.hasDialogueBox) {
+        float scaledDlgW = dlg.width * metrics.scaleFactor;
+        float scaledDlgH = dlg.height * metrics.scaleFactor;
         float physBoxX, physBoxY;
-        AspectGuardian::virtualToPhysical(dlgX, dlgY, metrics, physBoxX, physBoxY);
+        AspectGuardian::virtualToPhysical(dlg.x, dlg.y, metrics, physBoxX, physBoxY);
 
         SDL_FRect dlgBox = { physBoxX, physBoxY, scaledDlgW, scaledDlgH };
-        SDL_SetRenderDrawColor(m_sdlRenderer, 15, 15, 26, 240);
+
+        // Parse custom box styling & opacity
+        uint8_t boxAlpha = static_cast<uint8_t>(std::clamp(dlg.boxOpacity, 0.0f, 1.0f) * 255.0f);
+        SDL_Color boxColor = parseHexColor(dlg.boxColor, boxAlpha);
+        SDL_SetRenderDrawColor(m_sdlRenderer, boxColor.r, boxColor.g, boxColor.b, boxColor.a);
         SDL_RenderFillRect(m_sdlRenderer, &dlgBox);
 
-        SDL_SetRenderDrawColor(m_sdlRenderer, 0, 240, 255, 255);
+        // Border
+        SDL_Color borderColor = parseHexColor(dlg.borderColor, 255);
+        SDL_SetRenderDrawColor(m_sdlRenderer, borderColor.r, borderColor.g, borderColor.b, borderColor.a);
         SDL_RenderRect(m_sdlRenderer, &dlgBox);
+        if (dlg.borderThickness > 1.5f) {
+            SDL_FRect innerBox = { physBoxX + 1.0f, physBoxY + 1.0f, scaledDlgW - 2.0f, scaledDlgH - 2.0f };
+            SDL_RenderRect(m_sdlRenderer, &innerBox);
+        }
 
         // Speaker Name Tag Badge (if speaker name provided)
-        if (!speaker.empty()) {
+        if (!dlg.speaker.empty()) {
             float tagW = std::clamp(160.0f * metrics.scaleFactor, 60.0f, scaledDlgW * 0.8f);
             float tagH = 32.0f * metrics.scaleFactor;
             SDL_FRect speakerTag = { physBoxX + (16.0f * metrics.scaleFactor), physBoxY - (16.0f * metrics.scaleFactor), tagW, tagH };
-            SDL_SetRenderDrawColor(m_sdlRenderer, 37, 99, 235, 255);
+
+            SDL_Color speakerTagColor = parseHexColor(dlg.speakerColor, 255);
+            SDL_SetRenderDrawColor(m_sdlRenderer, speakerTagColor.r, speakerTagColor.g, speakerTagColor.b, speakerTagColor.a);
             SDL_RenderFillRect(m_sdlRenderer, &speakerTag);
 
             SDL_SetRenderDrawColor(m_sdlRenderer, 255, 255, 255, 255);
-            SDL_RenderDebugText(m_sdlRenderer, physBoxX + (28.0f * metrics.scaleFactor), physBoxY - (8.0f * metrics.scaleFactor), speaker.c_str());
+            SDL_RenderDebugText(m_sdlRenderer, physBoxX + (28.0f * metrics.scaleFactor), physBoxY - (8.0f * metrics.scaleFactor), dlg.speaker.c_str());
         }
 
-        // Dialogue Content Text (with multi-line & word-wrapping support + memoization)
-        if (!dialogue.empty()) {
-            SDL_SetRenderDrawColor(m_sdlRenderer, 241, 245, 249, 255);
+        // Dialogue Content Text (with Typewriter Progression + Memoization)
+        if (!dlg.dialogue.empty()) {
+            SDL_Color textColor = parseHexColor(dlg.textColor, 255);
+            SDL_SetRenderDrawColor(m_sdlRenderer, textColor.r, textColor.g, textColor.b, textColor.a);
 
             float paddingLeft = 24.0f * metrics.scaleFactor;
             float paddingTop = 28.0f * metrics.scaleFactor;
-            float lineHeight = 18.0f * std::max(1.0f, metrics.scaleFactor);
+            float fontRatio = std::max(0.6f, dlg.fontSize / 24.0f);
+            float lineHeight = 18.0f * std::max(1.0f, metrics.scaleFactor) * fontRatio;
             float maxLineWidth = scaledDlgW - (48.0f * metrics.scaleFactor);
 
-            // Fast path: Check text wrap memoization cache to avoid heap allocations per frame
-            bool cacheValid = (m_textWrapCache.dialogue == dialogue &&
+            // Calculate visible characters based on typewriter progression
+            size_t totalChars = dlg.dialogue.length();
+            size_t visibleCharCount = totalChars;
+            if (dlg.typewriterEnabled && dlg.textSpeed > 0) {
+                float msPerChar = static_cast<float>(dlg.textSpeed);
+                float elapsedMs = dlg.elapsedTypewriterTime * 1000.0f;
+                visibleCharCount = static_cast<size_t>(elapsedMs / msPerChar);
+                if (visibleCharCount > totalChars) visibleCharCount = totalChars;
+            }
+
+            // Text wrap memoization cache
+            bool cacheValid = (m_textWrapCache.dialogue == dlg.dialogue &&
                                std::abs(m_textWrapCache.boxWidth - scaledDlgW) < 0.1f &&
                                std::abs(m_textWrapCache.scaleFactor - metrics.scaleFactor) < 0.001f);
 
             if (!cacheValid) {
-                m_textWrapCache.dialogue = dialogue;
+                m_textWrapCache.dialogue = dlg.dialogue;
                 m_textWrapCache.boxWidth = scaledDlgW;
                 m_textWrapCache.scaleFactor = metrics.scaleFactor;
                 m_textWrapCache.wrappedLines.clear();
 
-                size_t maxCharsPerLine = static_cast<size_t>(std::max(10.0f, maxLineWidth / (8.0f * std::max(1.0f, metrics.scaleFactor))));
+                size_t maxCharsPerLine = static_cast<size_t>(std::max(10.0f, maxLineWidth / (8.0f * std::max(1.0f, metrics.scaleFactor) * fontRatio)));
 
                 // Split into paragraphs by \n
                 std::vector<std::string> lines;
                 std::string currentParagraph;
-                for (char c : dialogue) {
+                for (char c : dlg.dialogue) {
                     if (c == '\n') {
                         lines.push_back(currentParagraph);
                         currentParagraph.clear();
@@ -464,7 +515,6 @@ void Window::renderVisualNovelFrame(
                             break;
                         }
 
-                        // Find last space within maxCharsPerLine
                         size_t end = start + maxCharsPerLine;
                         size_t spacePos = para.rfind(' ', end);
                         if (spacePos != std::string::npos && spacePos > start) {
@@ -478,17 +528,50 @@ void Window::renderVisualNovelFrame(
                 }
             }
 
-            // Render each wrapped line directly from memoized cache (Zero allocation!)
+            // Render each wrapped line with typewriter character count clamping
             float currentY = physBoxY + paddingTop;
+            size_t remainingChars = visibleCharCount;
+
             for (const auto& line : m_textWrapCache.wrappedLines) {
                 if (currentY + lineHeight > physBoxY + scaledDlgH - (10.0f * metrics.scaleFactor))
                     break; // Do not overflow bottom of dialogue box
 
-                SDL_RenderDebugText(m_sdlRenderer, physBoxX + paddingLeft, currentY, line.c_str());
+                if (remainingChars == 0) break;
+
+                if (remainingChars >= line.length()) {
+                    SDL_RenderDebugText(m_sdlRenderer, physBoxX + paddingLeft, currentY, line.c_str());
+                    remainingChars -= line.length();
+                } else {
+                    std::string partialLine = line.substr(0, remainingChars);
+                    SDL_RenderDebugText(m_sdlRenderer, physBoxX + paddingLeft, currentY, partialLine.c_str());
+                    remainingChars = 0;
+                }
                 currentY += lineHeight;
             }
         }
     }
+}
+
+void Window::renderVisualNovelFrame(
+    bool hasBackground,
+    const std::string& background,
+    float bgX, float bgY, float bgW, float bgH,
+    const std::vector<CharacterRenderData>& characters,
+    bool hasDialogueBox,
+    const std::string& speaker,
+    const std::string& dialogue,
+    float dlgX, float dlgY, float dlgW, float dlgH
+) {
+    DialogueRenderData dlg;
+    dlg.hasDialogueBox = hasDialogueBox;
+    dlg.speaker = speaker;
+    dlg.dialogue = dialogue;
+    dlg.x = dlgX;
+    dlg.y = dlgY;
+    dlg.width = dlgW;
+    dlg.height = dlgH;
+    dlg.typewriterEnabled = false; // Legacy direct call has typewriter disabled by default
+    renderVisualNovelFrame(hasBackground, background, bgX, bgY, bgW, bgH, characters, dlg);
 }
 
 void Window::endFrame() {
