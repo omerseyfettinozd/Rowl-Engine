@@ -115,24 +115,38 @@
                                 Canvas.Top="{Binding SelectedNode.DialogueBoxY}" 
                                 Width="{Binding SelectedNode.DialogueBoxWidth}" 
                                 Height="{Binding SelectedNode.DialogueBoxHeight}" Cursor="Hand"
-                                Background="#12121A" BorderBrush="#00F0FF" BorderThickness="3" CornerRadius="12" BoxShadow="0 10 30 0 #000000">
+                                Background="{Binding SelectedNode.BoxColor}"
+                                Opacity="{Binding SelectedNode.BoxOpacity}"
+                                BorderBrush="{Binding SelectedNode.BorderColorHex}"
+                                BorderThickness="{Binding SelectedNode.BorderThickness}"
+                                CornerRadius="{Binding SelectedNode.CornerRadius}"
+                                BoxShadow="0 10 30 0 #000000">
                             <Grid>
                                 <!-- Speaker Name Badge -->
-                                <Border HorizontalAlignment="Left" VerticalAlignment="Top" Margin="20,-16,0,0" Background="#2563EB" CornerRadius="6" Padding="14,4" BoxShadow="0 4 10 0 #000000" IsHitTestVisible="False">
-                                    <TextBlock Text="{Binding SelectedNode.Speaker, FallbackValue='Evelyn'}" Foreground="#FFFFFF" FontSize="16" FontWeight="Bold"/>
+                                <Border HorizontalAlignment="Left" VerticalAlignment="Top"
+                                        Margin="20,-18,0,0"
+                                        Background="{Binding SelectedNode.SpeakerColor}"
+                                        CornerRadius="6" Padding="14,4"
+                                        BoxShadow="0 4 10 0 #000000" IsHitTestVisible="False">
+                                    <TextBlock Text="{Binding SelectedNode.Speaker, FallbackValue='Evelyn'}"
+                                               Foreground="#FFFFFF"
+                                               FontSize="{Binding SelectedNode.SpeakerFontSize}"
+                                               FontWeight="Bold"/>
                                 </Border>
 
                                 <!-- Dialogue Content Text Container (HitTest disabled so box receives pointer events) -->
-                                <ScrollViewer Margin="20,24,20,20" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" IsHitTestVisible="False">
+                                <ScrollViewer Margin="20,28,20,20" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" IsHitTestVisible="False">
                                     <TextBlock TextWrapping="Wrap"
                                                Text="{Binding SelectedNode.DialogueText, FallbackValue='Select a node to preview live dialogue scene.'}" 
-                                               Foreground="#F8FAFC" FontSize="20" LineHeight="28"/>
+                                               Foreground="{Binding SelectedNode.TextColor}"
+                                               FontSize="{Binding SelectedNode.FontSize}"
+                                               TextAlignment="{Binding SelectedNode.TextAlignment}"/>
                                 </ScrollViewer>
 
                                 <!-- Drag handle badge -->
-                                <Border HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-14,14,0" Background="#0F172A" BorderBrush="#00F0FF" BorderThickness="1" CornerRadius="4" Padding="6,2" IsHitTestVisible="False">
+                                <Border HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-14,14,0" Background="#0F172A" BorderBrush="{Binding SelectedNode.BorderColorHex}" BorderThickness="1" CornerRadius="4" Padding="6,2" IsHitTestVisible="False">
                                     <StackPanel Orientation="Horizontal" Spacing="4">
-                                        <TextBlock Text="✋ Dialogue Box" Foreground="#00F0FF" FontSize="10" FontWeight="Bold"/>
+                                        <TextBlock Text="✋ Dialogue Box" Foreground="{Binding SelectedNode.BorderColorHex}" FontSize="10" FontWeight="Bold"/>
                                         <TextBlock Text="{Binding SelectedNode.DialogueBoxWidth, StringFormat='({0:0}'}" Foreground="#94A3B8" FontSize="10"/>
                                         <TextBlock Text="x" Foreground="#94A3B8" FontSize="10"/>
                                         <TextBlock Text="{Binding SelectedNode.DialogueBoxHeight, StringFormat='{}{0:0})'}" Foreground="#94A3B8" FontSize="10"/>
@@ -140,10 +154,10 @@
                                 </Border>
 
                                 <!-- Dialogue Box Resize Corner Handles -->
-                                <Border Name="DlgHandleTL" Width="18" Height="18" HorizontalAlignment="Left" VerticalAlignment="Top" Background="#00F0FF" BorderBrush="White" BorderThickness="2" CornerRadius="9" Cursor="TopLeftCorner" Margin="-7,-7,0,0"/>
-                                <Border Name="DlgHandleTR" Width="18" Height="18" HorizontalAlignment="Right" VerticalAlignment="Top" Background="#00F0FF" BorderBrush="White" BorderThickness="2" CornerRadius="9" Cursor="TopRightCorner" Margin="0,-7,-7,0"/>
-                                <Border Name="DlgHandleBL" Width="18" Height="18" HorizontalAlignment="Left" VerticalAlignment="Bottom" Background="#00F0FF" BorderBrush="White" BorderThickness="2" CornerRadius="9" Cursor="BottomLeftCorner" Margin="-7,0,0,-7"/>
-                                <Border Name="DlgHandleBR" Width="18" Height="18" HorizontalAlignment="Right" VerticalAlignment="Bottom" Background="#00F0FF" BorderBrush="White" BorderThickness="2" CornerRadius="9" Cursor="BottomRightCorner" Margin="0,0,-7,-7"/>
+                                <Border Name="DlgHandleTL" Width="18" Height="18" HorizontalAlignment="Left" VerticalAlignment="Top" Background="{Binding SelectedNode.BorderColorHex}" BorderBrush="White" BorderThickness="2" CornerRadius="9" Cursor="TopLeftCorner" Margin="-7,-7,0,0"/>
+                                <Border Name="DlgHandleTR" Width="18" Height="18" HorizontalAlignment="Right" VerticalAlignment="Top" Background="{Binding SelectedNode.BorderColorHex}" BorderBrush="White" BorderThickness="2" CornerRadius="9" Cursor="TopRightCorner" Margin="0,-7,-7,0"/>
+                                <Border Name="DlgHandleBL" Width="18" Height="18" HorizontalAlignment="Left" VerticalAlignment="Bottom" Background="{Binding SelectedNode.BorderColorHex}" BorderBrush="White" BorderThickness="2" CornerRadius="9" Cursor="BottomLeftCorner" Margin="-7,0,0,-7"/>
+                                <Border Name="DlgHandleBR" Width="18" Height="18" HorizontalAlignment="Right" VerticalAlignment="Bottom" Background="{Binding SelectedNode.BorderColorHex}" BorderBrush="White" BorderThickness="2" CornerRadius="9" Cursor="BottomRightCorner" Margin="0,0,-7,-7"/>
                             </Grid>
                         </Border>
 

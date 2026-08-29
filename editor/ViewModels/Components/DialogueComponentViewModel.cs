@@ -58,6 +58,9 @@ namespace RowlEngine.Editor.ViewModels.Components
         private double _fontSize = 24.0;
 
         [ObservableProperty]
+        private double _speakerFontSize = 20.0;
+
+        [ObservableProperty]
         private string _textColor = "#F1F5F9"; // Default clean light slate
 
         [ObservableProperty]
@@ -65,6 +68,31 @@ namespace RowlEngine.Editor.ViewModels.Components
 
         [ObservableProperty]
         private string _textAlignment = "Left"; // Left, Center, Right
+
+        public bool IsAlignLeft
+        {
+            get => TextAlignment == "Left";
+            set { if (value) TextAlignment = "Left"; }
+        }
+
+        public bool IsAlignCenter
+        {
+            get => TextAlignment == "Center";
+            set { if (value) TextAlignment = "Center"; }
+        }
+
+        public bool IsAlignRight
+        {
+            get => TextAlignment == "Right";
+            set { if (value) TextAlignment = "Right"; }
+        }
+
+        partial void OnTextAlignmentChanged(string value)
+        {
+            OnPropertyChanged(nameof(IsAlignLeft));
+            OnPropertyChanged(nameof(IsAlignCenter));
+            OnPropertyChanged(nameof(IsAlignRight));
+        }
 
         // Box Visuals & Theme
         [ObservableProperty]
@@ -173,6 +201,7 @@ namespace RowlEngine.Editor.ViewModels.Components
                 ["auto_advance"] = AutoAdvance,
                 ["auto_advance_delay"] = AutoAdvanceDelay,
                 ["font_size"] = FontSize,
+                ["speaker_font_size"] = SpeakerFontSize,
                 ["text_color"] = TextColor,
                 ["speaker_color"] = SpeakerColor,
                 ["text_alignment"] = TextAlignment,
@@ -236,8 +265,19 @@ namespace RowlEngine.Editor.ViewModels.Components
             if (data.TryGetValue("auto_advance_delay", out var aadd) && aadd is double dAadd)
                 AutoAdvanceDelay = dAadd;
 
-            if (data.TryGetValue("font_size", out var fsz) && fsz is double dFsz)
-                FontSize = dFsz;
+            if (data.TryGetValue("font_size", out var fsz))
+            {
+                if (fsz is double dFsz) FontSize = dFsz;
+                else if (fsz is int iFsz) FontSize = iFsz;
+                else if (fsz is long lFsz) FontSize = lFsz;
+            }
+
+            if (data.TryGetValue("speaker_font_size", out var sfs))
+            {
+                if (sfs is double dSfs) SpeakerFontSize = dSfs;
+                else if (sfs is int iSfs) SpeakerFontSize = iSfs;
+                else if (sfs is long lSfs) SpeakerFontSize = lSfs;
+            }
 
             if (data.TryGetValue("text_color", out var tc) && tc is string sTc)
                 TextColor = sTc;

@@ -38,6 +38,7 @@ struct DialogueRenderData {
 
     // Typography & Colors
     float fontSize = 24.0f;
+    float speakerFontSize = 20.0f;
     std::string textColor = "#F1F5F9";
     std::string speakerColor = "#38BDF8";
     std::string textAlignment = "Left";
