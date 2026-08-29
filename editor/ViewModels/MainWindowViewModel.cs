@@ -1607,11 +1607,21 @@ namespace RowlEngine.Editor.ViewModels
             }
         }
 
+        private static readonly HashSet<string> IgnoredDirectoryNames = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "json", "packages", "test_assets", "bin", "obj", ".git", ".vs"
+        };
+
+        private static readonly HashSet<string> IgnoredFileExtensions = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ".json", ".rowlproj", ".rowlpkg", ".gitkeep", ".tmp", ".log"
+        };
+
         private void PopulateDirectoryNode(System.IO.DirectoryInfo dirInfo, string rootPath, ObservableCollection<AssetNodeViewModel> targetCollection)
         {
             foreach (var subDir in dirInfo.GetDirectories().OrderBy(d => d.Name))
             {
-                if (subDir.Name.StartsWith(".")) continue;
+                if (subDir.Name.StartsWith(".") || IgnoredDirectoryNames.Contains(subDir.Name)) continue;
 
                 string relPath = System.IO.Path.GetRelativePath(rootPath, subDir.FullName);
                 var dirNode = new AssetNodeViewModel(subDir.Name, relPath, subDir.FullName, true, RefreshAssets);
@@ -1623,7 +1633,9 @@ namespace RowlEngine.Editor.ViewModels
 
             foreach (var file in dirInfo.GetFiles().OrderBy(f => f.Name))
             {
-                if (file.Name.StartsWith(".") || file.Name.Equals(".gitkeep", StringComparison.OrdinalIgnoreCase)) continue;
+                if (file.Name.StartsWith(".") ||
+                    IgnoredFileExtensions.Contains(file.Extension) ||
+                    file.Name.Equals(".gitkeep", StringComparison.OrdinalIgnoreCase)) continue;
 
                 string relPath = System.IO.Path.GetRelativePath(rootPath, file.FullName);
                 var fileNode = new AssetNodeViewModel(file.Name, relPath, file.FullName, false, RefreshAssets);
