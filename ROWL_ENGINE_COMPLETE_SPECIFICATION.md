@@ -1177,6 +1177,21 @@ Exposes legacy flat properties that route getters/setters directly to attached c
 | `_isAddComponentMenuOpen` | `IsAddComponentMenuOpen` | `bool` | `false` | Dropdown popup state for Add Component. |
 | `_isSnapAssistEnabled` | `IsSnapAssistEnabled` | `bool` | `true` | Magnetic snap toggle in Edit Frame. |
 
+#### Auxiliary Public Properties & Computed Bindings:
+- `CurrentProjectPath`: `public string CurrentProjectPath => ProjectRoot;` (Exposes active project directory for UI display).
+- `TopLevelHint`: `public object? TopLevelHint { get; set; }` (Provides visual tree root reference for modal dialog ownership).
+- `TargetPanX`, `TargetPanY`, `TargetZoom`: `double` destinations for 60 FPS smooth lerp canvas animation.
+- `BuildButtonText`: Returns `"Build (" + CurrentBuildTarget + ")"` (e.g. `"Build (Linux)"`).
+- `BuildButtonTooltip`: Dynamic description based on active target platform.
+- `BuildTargetDisplayText`: Clean display string for status bar.
+- `ConnectButtonColor`: Returns `"#10B981"` when connected, else `"#4F46E5"`.
+- `ThemeButtonText`: Returns `"☀️ Light"` when dark mode is on, else `"🌙 Dark"`.
+- `ThemeButtonColor`: Returns `"#334155"` (dark) or `"#D97706"` (light).
+- `ThemeButtonForeground`: Dynamic foreground brush matching active theme.
+- `IsSplitScreenOff`, `IsSplitScreenHorizontal`, `IsSplitScreenVertical`: Boolean flags for split-screen layouts.
+- `SplitScreenButtonText`: Returns `"Split: Off"`, `"Split: Horizontal"`, or `"Split: Vertical"`.
+- `SplitScreenButtonColor`, `SplitScreenButtonForeground`: Dynamic styling for split-screen button.
+
 #### Collections & Sub-ViewModels:
 - `ObservableCollection<NodeViewModel> Nodes { get; }`
 - `ObservableCollection<ConnectionViewModel> Connections { get; }`
@@ -1190,45 +1205,93 @@ Exposes legacy flat properties that route getters/setters directly to attached c
 - `UndoRedoService UndoRedo => UndoRedoService.Instance;`
 - `EngineHost EngineHost { get; } = new EngineHost();`
 
-#### Key Relay Commands & Methods:
-1. `SetBuildTarget(string target)`: Switches `CurrentBuildTarget` and notifies computed string properties.
-2. `OpenSettings()`: Launches modal `SettingsDialog`.
-3. `OpenProjectHub()`: Spawns `ProjectHubWindow`, subscribes to `ProjectOpened`, transitions desktop window, closes editor.
-4. `Undo()` / `Redo()`: Dispatches undo/redo stack actions and shows toast notification.
-5. `ToggleSearch()`: Shows/hides quick search box. Searching dynamically centers and smooth-zooms onto matching node.
-6. `ToggleFullscreen()`: Toggles window state between `Normal` and `FullScreen`.
-7. `ToggleTheme()`: Switches `IsDarkMode` and updates `Application.Current.RequestedThemeVariant`.
-8. `ResetCanvasView()`: Animates `PanX`, `PanY`, `ZoomScale` smoothly back to `(0, 0, 1.0)`.
-9. `AddNode()`: Calculates visible canvas center, generates new node ID (`Max(Id) + 1`), attaches default components and property listeners, and adds to `Nodes`.
-10. `DeleteSelectedNode()` / `DeleteNode(NodeViewModel node)`: Unplugs all connected cables, removes node from collection, updates start node indicator.
-11. `DisconnectSelectedNodeCables()` / `DisconnectNodeInputs(node)` / `DisconnectNodeOutputs(node)` / `DisconnectAllNodeCables(node)`: Removes connections referencing specified node.
-12. `StartWireDrag(node, pinPos)` / `StartUnplugWireDrag(node, mousePos)` / `UpdateWireDrag(mousePos)` / `EndWireDrag(releasePos)`: Implements interactive wire drawing with hit-testing (radius 75px) on input pins.
-13. `EnforceSingleOutgoingWireRule()`: Enforces that an output pin can only have one cable originating from it; removes duplicate outgoing connections.
-14. `ConnectEngineAsync()`: Initializes embedded native `libRowlEngineCore.so` via `EngineHost.Initialize(1920, 1080, true)`.
-15. `PushSceneToEngine(NodeViewModel node)`: Serializes active components to JSON and transmits to native runtime via `EngineHost.UpdateSceneFromComponents()`.
-16. `TogglePlayStandalone()` / `StartStandaloneGame()` / `StopStandaloneGame()`: Starts/stops live gameplay execution loop in native engine with state reset to root node.
-17. `SelectNode(NodeViewModel node)` / `SelectNodeQuiet(NodeViewModel node)`: Manages selection state; quiet variant bypasses debounce disk writes during high-speed gameplay node advancement.
-18. `ImportAssetAsync()`: Opens OS file picker and copies imported assets to `Assets/images/`, `Assets/json/`, or `Assets/packages/`.
-19. `ScheduleSave()`: 500ms debounce timer writing `active_story.json` and `full_story_graph.json`.
-20. `ShowPanel(string panelName)`: Controls visibility of Assets, Inspector, Log, and tabs (`NodeGraph`, `Preview`, `EnginePreview`, `SplitScreen`).
-21. `AddComponentByType(string typeKey)`: Instantiates component from `ComponentRegistry` and attaches to selected node.
-22. `RemoveComponent(NodeComponentViewModel? comp)`: Detaches component and notifies native engine.
-23. `SelectImageForComponentAsync(NodeComponentViewModel? comp)`: Opens image picker, auto-copies to `Assets/images/` via `ImportImageFileToProject()`, and refreshes bitmap.
-24. `FitBackgroundToScreen()`: OBS Assist setting background to 1920x1080 at (0,0).
-25. `CenterSelectedElement()`: Centers character or background horizontally and vertically.
-26. `AlignCharacterToBottom()`: Aligns all character sprites to baseline ground level (`1080 - Height - 20`).
-27. `ResetCharacterSize(charComp)`: Sets dimensions to standard 600x900.
-28. `PresetDialogueBox(string preset)`: Presets dialogue box to `"BottomBanner"` (1720x220 at 100,820) or `"Center"`.
-29. `SaveProject()` / `SaveProjectAsAsync()` / `SaveProjectToDirectory(dir)`: Persists project files, recursive assets copy, and writes `project.rowlproj` manifest.
-30. `BuildGameAsync()` / `ExecuteBuildPipeline(outDir)`: Full 5-stage standalone PC distribution export (compiled graph, assets, native binaries `RowlGame`/`libRowlEngineCore.so`, executable permissions, `run_game.sh` launcher script, `README.txt`).
-31. `BuildPackageAsync()`: Packages assets into single `.rowlpkg` binary archive via `tools/package_assets.py`.
+#### Complete Reference of All 40 `[RelayCommand]` Methods:
+
+1. **`SetBuildTarget(string target)`**: Switches `CurrentBuildTarget` to `"Linux"`, `"Windows"`, `"macOS"`, `"Android"`, or `"iOS"`, updates button labels, and shows toast notification.
+2. **`OpenSettings()`**: Instantiates `SettingsViewModel`, binds to `TopLevelHint`, and displays the modal `SettingsDialog` with 5 configuration tabs.
+3. **`OpenProjectHub()`**: Spawns `ProjectHubWindow`, subscribes to `ProjectOpened` event, transitions desktop lifetime main window to new `MainWindow(projectPath)`, and closes the current editor window.
+4. **`Undo()`**: Invokes `UndoRedoService.Instance.Undo()`, restores canvas node/connection state, and shows info toast.
+5. **`Redo()`**: Invokes `UndoRedoService.Instance.Redo()`, re-applies changes, and shows info toast.
+6. **`ToggleSearch()`**: Shows/hides the Spotlight quick search bar. Live search query matches node titles and smoothly centers/zooms canvas onto the target node.
+7. **`ToggleFullscreen()`**: Toggles host `Window.WindowState` between `WindowState.Normal` and `WindowState.FullScreen`.
+8. **`ToggleTheme()`**: Inverts `IsDarkMode`, updates `Application.Current.RequestedThemeVariant`, and recalculates button colors.
+9. **`ResetCanvasView()`**: Sets `TargetPanX = 0`, `TargetPanY = 0`, `TargetZoom = 1.0` and triggers smooth lerp animation.
+10. **`DisconnectSelectedNodeCables()`**: Removes all incoming and outgoing connections attached to `SelectedNode` and records an undo action.
+11. **`DeleteSelectedNode()`**: Calls `DeleteNode(SelectedNode)`, unplugs all cables, removes node from collection, records undo action, and recalculates `IsStartNode`.
+12. **`AddNode()`**: Calculates canvas center `(-PanX + 400) / ZoomScale, (-PanY + 300) / ZoomScale`, generates ID (`Max(Id) + 1`), attaches default components (`Dialogue`, `Background`, `Character`, `Audio`), hooks property change events, adds to `Nodes`, records undo action, and selects the new node.
+13. **`ConnectEngineAsync()`**: Initializes embedded native `RowlEngineCore` shared library via `EngineHost.Initialize(1920, 1080, true)`.
+14. **`ConnectIpcAsync()`**: Backward-compatibility command alias forwarding directly to `ConnectEngineAsync()`.
+15. **`SetSquareDialogueBox()`**: Resizes selected node's dialogue box to 500x500 square avatar layout ($X=80, Y=540$).
+16. **`SetStandardDialogueBox()`**: Resets dialogue box to full-width bottom banner layout ($1760\times 180$ at $X=80, Y=860$).
+17. **`ResetBackgroundDimensions()`**: Resets background to standard 1080p full-canvas coverage ($1920\times 1080$ at $X=0, Y=0, \text{scale}=1.0$).
+18. **`ResetCharacterDimensions()`**: Resets character dimensions to standard 360x540 at scale 1.0.
+19. **`PushHotReloadPacketAsync()`**: Persists active story and full graph to disk, verifies engine initialization, serializes scene to JSON, calls `EngineHost.UpdateSceneFromComponents()`, and triggers a frame step.
+20. **`TogglePlayStandalone()`**: Dispatches to `StartStandaloneGame()` or `StopStandaloneGame()`.
+21. **`ImportAssetAsync()`**: Opens OS file picker (`AllowMultiple = true`), copies selected files into corresponding project asset subdirectories (`images/`, `json/`, `packages/`), and triggers `AssetBrowserViewModel.RefreshAssets()`.
+22. **`ShowPanel(string panelName)`**: Toggles visibility of docked panels (`"Assets"`, `"Inspector"`, `"Log"`) or switches central viewport tabs (`"NodeGraph"`, `"Preview"`, `"EnginePreview"`, `"SplitScreen"`).
+23. **`ShowAddComponentMenu()`**: Toggles `IsAddComponentMenuOpen` dropdown state in the Inspector.
+24. **`AddComponentByType(string typeKey)`**: Instantiates component via `ComponentRegistry.Create(typeKey)`, hooks `PropertyChanged` listeners, attaches to `SelectedNode.Components`, and syncs with native engine.
+25. **`RemoveComponent(NodeComponentViewModel? comp)`**: Detaches component from `SelectedNode`, unhooks listeners, and refreshes native engine state.
+26. **`SelectImageForComponentAsync(NodeComponentViewModel? comp)`**: Opens image file picker, automatically copies chosen file into `<ProjectRoot>/Assets/images/` via `ImportImageFileToProject()`, updates component path property, and triggers bitmap cache refresh.
+27. **`MoveComponentUp(NodeComponentViewModel? comp)`**: Moves component up in render order stack.
+28. **`MoveComponentDown(NodeComponentViewModel? comp)`**: Moves component down in render order stack.
+29. **`ToggleSnapAssist()`**: Toggles `IsSnapAssistEnabled = !IsSnapAssistEnabled` with status notification.
+30. **`FitBackgroundToScreen()`**: OBS Assist tool forcing background component to $X=0, Y=0, W=1920, H=1080, \text{scale}=1.0$.
+31. **`CenterSelectedElement()`**: Centers character horizontally ($X = (1920 - W)/2$) with baseline ground alignment, or centers background.
+32. **`AlignCharacterToBottom()`**: Aligns all character components in selected node to ground baseline ($Y = 1080 - H - 20$).
+33. **`ResetCharacterSize(CharacterComponentViewModel? charComp)`**: Sets character component dimensions to standard 600x900 at scale 1.0.
+34. **`PresetDialogueBox(string preset)`**: Applies `"BottomBanner"` ($1720\times 220$ at $100, 820$) or `"Center"` dialogue layout.
+35. **`SaveProject()`**: Saves active story, writes `full_story_graph.json`, generates `project.rowlproj` manifest, and displays success toast.
+36. **`OpenProjectFolder()`**: Opens the current project root in the OS desktop file manager (`xdg-open` on Linux, `explorer.exe` on Windows, `open` on macOS).
+37. **`OpenProjectAsync()`**: Launches folder picker, uses 3-tier heuristic resolution to locate project root, loads story graph, and refreshes asset browser.
+38. **`SaveProjectAsAsync()`**: Prompts folder picker, creates timestamped project folder `RowlProject_yyyy-MM-dd_HH-mm/`, copies assets recursively, writes manifest, and rebinds project root.
+39. **`BuildGameAsync()`**: Executes multiplatform build pipeline exporting compiled story graph, assets, native binaries, launcher scripts, and README.
+40. **`BuildPackageAsync()`**: Packages project assets into `.rowlpkg` binary archive via `tools/package_assets.py` or internal `RowlPackageBuilder`.
+
+#### Architectural Lifecycle & Internal Subsystems:
+
+- **3-Tier Project Path Resolution Heuristic (`OpenProjectAsync`)**:
+  1. *Case 1 (Project Root)*: If selected directory contains an `Assets/` subfolder $\to$ `ProjectRoot = selectedDir`.
+  2. *Case 2 (`Assets/` Folder)*: If directory basename is `"Assets"` $\to$ `ProjectRoot = Directory.GetParent(selectedDir)`.
+  3. *Case 3 (`Assets/json/` Folder)*: If folder contains `full_story_graph.json` $\to$ `ProjectRoot = Path.GetFullPath(selectedDir/../../)`.
+  - Re-initializes file paths, invokes `LoadFullStoryGraphFile()`, updates `AssetBrowserViewModel.RefreshAssets()`, and selects first node.
+
+- **7-Step Standalone Game Playback Lifecycle**:
+  - *Start (`StartStandaloneGame`)*:
+    1. Flushes active story and story graph to disk.
+    2. Calls `EngineHost.LoadStoryGraph(AssetsJsonPath/full_story_graph.json)`.
+    3. Calls `EngineHost.ResetToStartNode()`.
+    4. Finds root node via `GetStartNode()` (Priority: `IsStartNode` $\to$ node with 0 incoming wires $\to$ lowest numeric `Id`).
+    5. Pushes scene to engine via `PushSceneToEngine(startNode)`.
+    6. Selects start node in editor UI.
+    7. Calls `EngineHost.SetPlayState(true)` and updates button to `"⏹ Stop"` (`#DC2626`).
+  - *Stop (`StopStandaloneGame`)*:
+    1. Calls `EngineHost.SetPlayState(false)`.
+    2. Calls `EngineHost.ResetToStartNode()`.
+    3. Re-pushes start node scene to reset offscreen buffer.
+    4. Updates button to `"▶ Play"` (`#16A34A`).
+
+- **Story Graph Persistence & Dual-Write Architecture**:
+  - `SaveFullStoryGraphFile()` writes the complete node graph JSON to **both**:
+    - `Assets/json/full_story_graph.json` (canonical runtime path)
+    - `Assets/full_story_graph.json` (engine discovery fallback path)
+  - `LoadFullStoryGraphFile()` contains a dual-version parser:
+    - **v2 Format**: Deserializes `nodes` array containing modular `components` lists.
+    - **v1 Legacy Fallback**: If `format_version < 2`, automatically synthesizes `DialogueComponentViewModel`, `BackgroundComponentViewModel`, `CharacterComponentViewModel`, and `AudioComponentViewModel` from flat JSON fields.
+
+- **Smooth Canvas Camera Interpolation (`StartSmoothViewAnimation`)**:
+  - Runs a 16ms `DispatcherTimer` (60 FPS) executing exponential damping:
+    $$\text{PanX} \leftarrow \text{PanX} + (\text{TargetPanX} - \text{PanX}) \times 0.25$$
+    $$\text{PanY} \leftarrow \text{PanY} + (\text{TargetPanY} - \text{PanY}) \times 0.25$$
+    $$\text{ZoomScale} \leftarrow \text{ZoomScale} + (\text{TargetZoom} - \text{ZoomScale}) \times 0.25$$
+  - Automatically stops timer when differences fall below $0.001$.
 
 ---
 
 ### 4.2 AssetNodeViewModel & AssetItemViewModel
 - **`AssetNodeViewModel`**:
   - Properties: `Name`, `RelativePath`, `FullPath`, `IsDirectory`, `Icon`, `IconColor`, `Children`, `IsEditing`, `EditingName`.
-  - Methods: `StartRename()`, `CommitRename()`, `CancelRename()`.
+  - Commands & Methods: `StartRename()`, `CommitRename()` (`[RelayCommand]`), `CancelRename()` (`[RelayCommand]`).
   - Behavior: Provides tree representation of project filesystem. Moving or renaming files on disk triggers `_onRenamed` callback.
 - **`AssetItemViewModel`**:
   - Properties: `Name`, `Icon`, `IconColor`.
@@ -1239,7 +1302,7 @@ Exposes legacy flat properties that route getters/setters directly to attached c
 ### 4.3 Panel Sub-ViewModels (Nested in MainWindowViewModel.cs)
 - **`AssetBrowserViewModel`**:
   - Properties: `SelectedNode`, `AssetTree`, `Assets`, `AssetNames`.
-  - Methods: `RefreshAssets()`, `CreateFolder()`, `DeleteAsset()`, `OpenInExplorer()`, `StartRename()`.
+  - Commands & Methods: `RefreshAssets()`, `RefreshAssetsCommand()` (`[RelayCommand]`), `CreateFolder()`, `DeleteAsset()`, `OpenInExplorer()`, `StartRename()`.
   - VFS Mounts: Mounts `Assets/` and `mods/` directories. Populates recursive folder hierarchies and default fallback items.
 - **`InspectorViewModel`**:
   - Properties: `SelectedNode => MainViewModel.SelectedNode`.
@@ -1267,6 +1330,9 @@ Exposes legacy flat properties that route getters/setters directly to attached c
 |---|---|---|---|---|
 | `_statusText` | `StatusText` | `string` | `"Projeler yükleniyor..."` | Status notification in hub header. |
 | `_isEmpty` | `IsEmpty` | `bool` | `false` | True if no projects exist in registry. |
+
+#### Auxiliary Properties:
+- `TopLevelHint`: `public object? TopLevelHint { get; set; }` (Provides visual root reference for modal dialog window ownership).
 
 #### Collections & Events:
 - `ObservableCollection<ProjectCardViewModel> Projects { get; }`
@@ -1312,13 +1378,18 @@ Exposes legacy flat properties that route getters/setters directly to attached c
 | `_defaultBuildTarget`| `DefaultBuildTarget` | `string` | `"Linux"` | Default build platform. |
 | `_defaultExportPath` | `DefaultExportPath` | `string` | `""` | Default export directory. |
 | `_autoSaveEnabled` | `AutoSaveEnabled` | `bool` | `true` | Auto-save active state. |
-| `_autoSaveIntervalSeconds`| `AutoSaveIntervalSeconds`| `int` | `60` | Auto-save frequency (15, 30, 60, 120, 300). |
+| `_autoSaveIntervalSeconds`| `AutoSaveIntervalSeconds`| `int` | `60` | Auto-save frequency. |
 | `_showFpsOverlay` | `ShowFpsOverlay` | `bool` | `false` | FPS diagnostic display toggle. |
 | `_gridSnapping` | `GridSnapping` | `bool` | `false` | Grid snapping toggle. |
-| `_cableStyle` | `CableStyle` | `string` | `"Bezier"` | Wire rendering style (`"Bezier"`, `"Düz Çizgi"`). |
+| `_cableStyle` | `CableStyle` | `string` | `"Bezier"` | Wire rendering style. |
 | `_showNodeMinimap` | `ShowNodeMinimap` | `bool` | `false` | Canvas minimap toggle. |
 | `_editorLanguage` | `EditorLanguage` | `string` | `"Türkçe"` | UI language. |
 | `_selectedTabIndex`| `SelectedTabIndex` | `int` | `0` | Settings dialog tab index. |
+
+#### ComboBox Options Collections:
+- `AutoSaveIntervals`: `List<int>` containing `[15, 30, 60, 120, 300]` (seconds).
+- `CableStyleOptions`: `List<string>` containing `["Bezier", "Düz Çizgi"]`.
+- `LanguageOptions`: `List<string>` containing `["Türkçe", "English"]`.
 
 #### Theme Palette Dictionary (`ThemePalettes`):
 Defines 4 comprehensive color palettes mapped to `Application.Current.Resources`:
@@ -1517,6 +1588,9 @@ IntPtr RowlEngine_GetDialogue(IntPtr handle);
 ulong  RowlEngine_GetCurrentNodeId(IntPtr handle);
 ```
 
+#### Managed String Helpers:
+- `public static string? PtrToString(IntPtr ptr)`: Safely marshals an unmanaged UTF-8 native string pointer (`char*`) to a managed .NET string via `Marshal.PtrToStringUTF8(ptr)`.
+
 ---
 
 ### 7.2 EngineHost
@@ -1689,7 +1763,78 @@ Stored at `[ProjectRoot]/Assets/full_story_graph.json` and `[ProjectRoot]/Assets
 ```
 
 ### 9.2 `active_story.json`
-Stored at `[ProjectRoot]/Assets/json/active_story.json`. Contains component structure and legacy flat fields for the currently selected active node.
+Stored at `[ProjectRoot]/Assets/json/active_story.json`. Represents the currently selected active scene node consumed by the native C++ engine runtime (`RowlEngine_UpdateSceneFromJson` / `RowlEngine_UpdateScene`). It contains both modern modular `components` and flat legacy fields for zero-friction backwards compatibility:
+
+```json
+{
+  "format_version": 2,
+  "node_id": 101,
+  "components": [
+    {
+      "type": "background",
+      "id": "fa2c7944",
+      "enabled": true,
+      "data": {
+        "texture": "bg_sunset.png",
+        "x": 0.0,
+        "y": 0.0,
+        "width": 1920.0,
+        "height": 1080.0,
+        "scale": 1.0
+      }
+    },
+    {
+      "type": "dialogue",
+      "id": "5dd39192",
+      "enabled": true,
+      "data": {
+        "speaker": "Evelyn",
+        "dialogue": "Welcome to the story.",
+        "x": 80.0,
+        "y": 860.0,
+        "width": 1760.0,
+        "height": 180.0,
+        "scale": 1.0
+      }
+    },
+    {
+      "type": "character",
+      "id": "2c306a08",
+      "enabled": true,
+      "data": {
+        "sprite": "spr_evelyn.png",
+        "position": "Right",
+        "x": 1440.0,
+        "y": 340.0,
+        "width": 360.0,
+        "height": 540.0,
+        "scale": 1.0
+      }
+    }
+  ],
+  "speaker": "Evelyn",
+  "dialogue": "Welcome to the story.",
+  "background": "bg_sunset.png",
+  "background_x": 0.0,
+  "background_y": 0.0,
+  "background_width": 1920.0,
+  "background_height": 1080.0,
+  "character": "spr_evelyn.png",
+  "character_pos": "Right",
+  "character_x": 1440.0,
+  "character_y": 340.0,
+  "character_width": 360.0,
+  "character_height": 540.0,
+  "character_scale": 1.0,
+  "dialogue_box_x": 80.0,
+  "dialogue_box_y": 860.0,
+  "dialogue_box_width": 1760.0,
+  "dialogue_box_height": 180.0,
+  "dsp": "Normal"
+}
+```
+
+---
 
 ### 9.3 `project.rowlproj`
 Project manifest descriptor saved in the root folder of each project.
@@ -2856,14 +3001,23 @@ struct RowlPkgEntryRaw {
 ### 7.3 FlatBuffers IPC Schema (`shared/rowl_ipc.fbs`)
 - **Namespace:** `Rowl.IPC`
 - **Root Type:** `MessageEnvelope`
-- **Defined Messages:**
-  - `HandshakeReq` (`editor_version`, `protocol_version`)
-  - `HandshakeResp` (`engine_version`, `status_code`)
-  - `NodeData` (`id`, `node_type`, `payload_json`)
-  - `UpdateNodeGraph` (`nodes`, `active_node_id`)
-  - `SetActiveNode` (`node_id`, `instant_jump`)
-  - `UpdateVariable` (`var_name`, `var_value`)
-  - `MessageEnvelope` (`msg_type`, `sequence_id`, `timestamp_ms`, `payload`)
+- **`MessageType` Enum (Byte):**
+  1. `HandshakeReq = 0`: Initial connection negotiation from editor to engine.
+  2. `HandshakeResp = 1`: Engine initialization acknowledgement with version and status code.
+  3. `UpdateNodeGraph = 2`: Batch graph synchronization payload containing all nodes and active node ID.
+  4. `SetActiveNode = 3`: Story progression cursor command (supports instant jump).
+  5. `UpdateVariable = 4`: Key-value narrative variable mutation.
+  6. `TriggerEvent = 5`: Custom scripted narrative event trigger.
+  7. `Heartbeat = 6`: Periodic bidirectional keep-alive ping.
+  8. `RuntimeStateReport = 7`: Telemetry and performance report from native core.
+- **Defined Message Tables:**
+  - `HandshakeReq` (`editor_version: string`, `protocol_version: uint`)
+  - `HandshakeResp` (`engine_version: string`, `status_code: uint`)
+  - `NodeData` (`id: ulong`, `node_type: string`, `payload_json: string`)
+  - `UpdateNodeGraph` (`nodes: [NodeData]`, `active_node_id: ulong`)
+  - `SetActiveNode` (`node_id: ulong`, `instant_jump: bool`)
+  - `UpdateVariable` (`var_name: string`, `var_value: string`)
+  - `MessageEnvelope` (`msg_type: MessageType`, `sequence_id: ulong`, `timestamp_ms: uint64`, `payload: [ubyte]`)
 
 ---
 
@@ -2905,9 +3059,9 @@ struct RowlPkgEntryRaw {
       - *Background*: `texture`, `x`, `y`, `width`, `height`, `scale`
       - *Character*: `sprite`, `position`, `x`, `y`, `width`, `height`, `scale`
       - *Dialogue*: `speaker`, `dialogue`, `x`, `y`, `width`, `height`, `scale`
-      - *Audio*: `dsp_filter` ("Normal" | "Telephone" | "Underwater" | "Cave")
+      - *Audio*: `dsp_filter` ("Normal" | "Telephone" | "CaveReverb" | "UnderwaterLowPass")
   - `next_nodes` (array of branch targets): `[ { "id": 102, "label": "Choice Option" } ]`
-  - Legacy proxy compatibility fields: `speaker`, `dialogue`, `background`, `background_x`, `background_y`, `background_width`, `background_height`, `character`, `character_pos`, `character_x`, `character_y`, `character_width`, `character_height`, `character_scale`, `dialogue_box_x`, `dialogue_box_y`, `dialogue_box_width`, `dialogue_box_height`.
+  - Legacy proxy compatibility fields: `speaker`, `dialogue`, `background`, `background_x`, `background_y`, `background_width`, `background_height`, `character`, `character_pos`, `character_x`, `character_y`, `character_width`, `character_height`, `character_scale`, `dialogue_box_x`, `dialogue_box_y`, `dialogue_box_width`, `dialogue_box_height`, `dsp`.
 
 ### 8.3 Active Scene Runtime Schema (`Assets/json/active_story.json`)
 - **Location:** [`/home/chaple/Belgeler/Rowl Engine/Assets/json/active_story.json`](file:///home/chaple/Belgeler/Rowl%20Engine/Assets/json/active_story.json)
@@ -2964,7 +3118,7 @@ struct RowlPkgEntryRaw {
 
 ## 10. Master Blueprint & Archive Summary
 
-The master reference document [`ROWL_ENGINE_MASTER_BLUEPRINT_AND_ARCHIVE.md`](file:///file:///home/chaple/Belgeler/Rowl%20Engine/ROWL_ENGINE_MASTER_BLUEPRINT_AND_ARCHIVE.md) contains the authoritative technical record of all resolved bugs and design requirements:
+The master reference document [`ROWL_ENGINE_MASTER_BLUEPRINT_AND_ARCHIVE.md`](file:///home/chaple/Belgeler/Rowl%20Engine/ROWL_ENGINE_MASTER_BLUEPRINT_AND_ARCHIVE.md) contains the authoritative technical record of all resolved bugs and design requirements:
 
 1. **64-bit FNV-1a Hash Alignment**: Resolved fatal corruption where C# `BinaryWriter` emitted 4-byte hashes against C++ expecting 8-byte uint64 headers.
 2. **Strict VFS Isolation**: Removed directory climbing (`../../`) to prevent projects from accessing out-of-workspace resources during package exports.
@@ -2973,4 +3127,38 @@ The master reference document [`ROWL_ENGINE_MASTER_BLUEPRINT_AND_ARCHIVE.md`](fi
 5. **Zero-Latency In-Process Preview**: Replaced inter-process sockets with in-memory offscreen framebuffers blitted at 60 FPS directly into Avalonia controls.
 
 ---
-*Report generated and validated for Rowl Engine Commercial Release Spec.*
+
+## 11. Package Hash Implementation Nuances & Complete Documentation Index
+
+### 11.1 `.rowlpkg` Path Hashing Implementations
+Across the Rowl Engine ecosystem, two complementary hashing implementations exist for `.rowlpkg` index table generation:
+- **C# Editor Service (`RowlPackageBuilder.cs`)**: Uses canonical 64-bit **FNV-1a** algorithm (`offsetBasis = 14695981039346656037UL`, `prime = 1099511628211UL`).
+- **Python CLI Tool (`tools/package_assets.py`)**: Uses **CRC32** zero-extended to an 8-byte `uint64_t` field (`zlib.crc32(path_bytes) & 0xFFFFFFFF`, packed with `<Q`).
+- **C++ Native VFS (`RowlPkgDataSource.cpp`)**: Resolves virtual files by string relative path matching against `m_indexTable` entries, ensuring compatibility with packages produced by either toolchain.
+
+### 11.2 Auxiliary Documentation & Specification File Index
+The repository includes a comprehensive set of modular sub-specifications and phase guides located under `Rowl Engine Dökümantasyon Listesi/`:
+
+| Document Path | Description |
+| :--- | :--- |
+| [`ASSET_PRODUCTION_GUIDE.md`](file:///home/chaple/Belgeler/Rowl%20Engine/Rowl%20Engine%20Dökümantasyon%20Listesi/ASSET_PRODUCTION_GUIDE.md) | Standard asset resolutions (1080p), MSDF font atlas formats, audio sample rates (48kHz stereo) |
+| [`BUILD_MATRIX.md`](file:///home/chaple/Belgeler/Rowl%20Engine/Rowl%20Engine%20Dökümantasyon%20Listesi/BUILD_MATRIX.md) | Compiler matrix (GCC 13, Clang 17, MSVC 2022), CMake targets, cross-compilation flags |
+| [`CONTRIBUTING.md`](file:///home/chaple/Belgeler/Rowl%20Engine/Rowl%20Engine%20Dökümantasyon%20Listesi/CONTRIBUTING.md) | Coding standards (C++20, C# .NET 10, MVVM Toolkit conventions, PR guidelines) |
+| [`MASTER_SPEC.md`](file:///home/chaple/Belgeler/Rowl%20Engine/Rowl%20Engine%20Dökümantasyon%20Listesi/MASTER_SPEC.md) | High-level system requirements, module boundaries, architectural principles |
+| [`PERFORMANCE_BUDGETS.md`](file:///home/chaple/Belgeler/Rowl%20Engine/Rowl%20Engine%20Dökümantasyon%20Listesi/PERFORMANCE_BUDGETS.md) | Frame time budgets (<16.6ms), memory budgets (<256MB RAM), garbage collection thresholds |
+| [`ROADMAP.md`](file:///home/chaple/Belgeler/Rowl%20Engine/Rowl%20Engine%20Dökümantasyon%20Listesi/ROADMAP.md) | Version roadmap (v1.0 Core Engine, v1.1 Visual Editor, v1.2 Mobile, v2.0 3D Layer) |
+| [`phases/phase_1_foundation.md`](file:///home/chaple/Belgeler/Rowl%20Engine/Rowl%20Engine%20Dökümantasyon%20Listesi/phases/phase_1_foundation.md) | Phase 1 milestone: C++ core, SDL3 windowing, MSDF font engine, CMake structure |
+| [`phases/phase_2_editor_and_ipc.md`](file:///home/chaple/Belgeler/Rowl%20Engine/Rowl%20Engine%20Dökümantasyon%20Listesi/phases/phase_2_editor_and_ipc.md) | Phase 2 milestone: Avalonia UI shell, FlatBuffers IPC, in-process P/Invoke migration |
+| [`phases/phase_3_node_graph_system.md`](file:///home/chaple/Belgeler/Rowl%20Engine/Rowl%20Engine%20Dökümantasyon%20Listesi/phases/phase_3_node_graph_system.md) | Phase 3 milestone: Node graph canvas, cubic bezier wires, modular component stack |
+| [`phases/phase_4_lua_and_state.md`](file:///home/chaple/Belgeler/Rowl%20Engine/Rowl%20Engine%20Dökümantasyon%20Listesi/phases/phase_4_lua_and_state.md) | Phase 4 milestone: Lua 5.4 sandbox, instruction limit hook, immutable GameState rewind |
+| [`phases/phase_5_mobile_export.md`](file:///home/chaple/Belgeler/Rowl%20Engine/Rowl%20Engine%20Dökümantasyon%20Listesi/phases/phase_5_mobile_export.md) | Phase 5 milestone: Android NDK `SDLActivity`, iOS Xcode build, touch normalization |
+| [`sub-specs/01_architecture_and_ipc.md`](file:///home/chaple/Belgeler/Rowl%20Engine/Rowl%20Engine%20Dökümantasyon%20Listesi/sub-specs/01_architecture_and_ipc.md) | Deep sub-spec on embedded native interop and zero-copy framebuffer sharing |
+| [`sub-specs/02_state_and_rewind.md`](file:///home/chaple/Belgeler/Rowl%20Engine/Rowl%20Engine%20Dökümantasyon%20Listesi/sub-specs/02_state_and_rewind.md) | Deep sub-spec on immutable state DAGs and structural variable map sharing |
+| [`sub-specs/03_vfs_and_storage.md`](file:///home/chaple/Belgeler/Rowl%20Engine/Rowl%20Engine%20Dökümantasyon%20Listesi/sub-specs/03_vfs_and_storage.md) | Deep sub-spec on VFS priority mounting, `.rowlpkg` binary layout, and Zstd compression |
+| [`sub-specs/04_scripting_lua.md`](file:///home/chaple/Belgeler/Rowl%20Engine/Rowl%20Engine%20Dökümantasyon%20Listesi/sub-specs/04_scripting_lua.md) | Deep sub-spec on Lua 5.4 environment sandboxing, security policies, and instruction limits |
+| [`sub-specs/05_audio_subsystem.md`](file:///home/chaple/Belgeler/Rowl%20Engine/Rowl%20Engine%20Dökümantasyon%20Listesi/sub-specs/05_audio_subsystem.md) | Deep sub-spec on multi-channel audio mixing, voice ducking curves, and DSP filters |
+| [`sub-specs/06_typography_and_i18n.md`](file:///home/chaple/Belgeler/Rowl%20Engine/Rowl%20Engine%20Dökümantasyon%20Listesi/sub-specs/06_typography_and_i18n.md) | Deep sub-spec on MSDF glyph evaluation, text wrapping memoization, and UTF-8 handling |
+| [`sub-specs/07_node_graph_editor.md`](file:///home/chaple/Belgeler/Rowl%20Engine/Rowl%20Engine%20Dökümantasyon%20Listesi/sub-specs/07_node_graph_editor.md) | Deep sub-spec on Avalonia infinite canvas, bezier geometry caching, and drag-drop systems |
+
+---
+*Document verified and complete for Rowl Engine Release Specification.*

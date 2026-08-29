@@ -83,4 +83,11 @@
     <SolidColorBrush x:Key="NodeCardBg" Color="{DynamicResource NodeCardBgColor}"/>
     <SolidColorBrush x:Key="NodeHeaderBg" Color="{DynamicResource NodeHeaderBgColor}"/>
 
+    <!-- ── Compatibility & Helper Aliases ──────────────────────────────── -->
+    <SolidColorBrush x:Key="CardBackground" Color="{DynamicResource NodeCardBgColor}"/>
+    <SolidColorBrush x:Key="CardHeaderBackground" Color="{DynamicResource NodeHeaderBgColor}"/>
+    <SolidColorBrush x:Key="CardBorderColor" Color="{DynamicResource BorderColorValue}"/>
+    <SolidColorBrush x:Key="AccentButtonFg" Color="{DynamicResource PrimaryTextColor}"/>
+    <SolidColorBrush x:Key="GraphCanvasBg" Color="{DynamicResource CanvasBackgroundColor}"/>
+
 </ResourceDictionary>
