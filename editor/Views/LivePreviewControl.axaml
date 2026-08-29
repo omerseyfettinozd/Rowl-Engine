@@ -156,48 +156,6 @@
                             <TextBlock x:Name="SnapBadgeText" Text="🧲 Snapped" Foreground="#00F0FF" FontSize="13" FontWeight="Bold"/>
                         </Border>
 
-                        <!-- Top Resolution Banner & OBS Assist Quick Action Bar -->
-                        <Border Canvas.Left="0" Canvas.Top="0" Width="1920" Height="80" Background="#0F172A" Opacity="0.94">
-                            <DockPanel Margin="24,0">
-                                <StackPanel Orientation="Horizontal" Spacing="14" VerticalAlignment="Center" DockPanel.Dock="Left">
-                                    <TextBlock Text="⚡ EDIT FRAME" Foreground="#00F0FF" FontSize="22" FontWeight="Bold" VerticalAlignment="Center"/>
-                                    <Border Background="#1E293B" CornerRadius="4" Padding="10,4" VerticalAlignment="Center">
-                                        <TextBlock Text="1920x1080 (16:9 HD)" Foreground="#94A3B8" FontSize="14"/>
-                                    </Border>
-                                </StackPanel>
-
-                                <!-- OBS Quick Assist Action Toolbar -->
-                                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" HorizontalAlignment="Center">
-                                    <ToggleButton IsChecked="{Binding IsSnapAssistEnabled}" ToolTip.Tip="Manyetik Hizalama / Magnet Snap Assist (Shift ile geçici devre dışı bırakılabilir)"
-                                                  Background="{DynamicResource InputBackground}" Foreground="#00F0FF" FontSize="12" FontWeight="Bold" Padding="10,6" CornerRadius="6">
-                                        <StackPanel Orientation="Horizontal" Spacing="6">
-                                            <TextBlock Text="🧲 Snap Assist"/>
-                                            <TextBlock Text="{Binding IsSnapAssistEnabled, Converter={x:Static ObjectConverters.IsNotNull}, StringFormat='({0})'}" Foreground="#38BDF8"/>
-                                        </StackPanel>
-                                    </ToggleButton>
-
-                                    <Button Content="🎯 Ortala (Center)" Command="{Binding CenterSelectedElementCommand}" 
-                                            ToolTip.Tip="Seçili görseli veya karakteri ekranda yatay ve dikey tam merkeze hizalar"
-                                            Background="#1E293B" Foreground="#F8FAFC" FontSize="12" Padding="10,6" CornerRadius="6"/>
-
-                                    <Button Content="📐 1080p Sığdır (Fit)" Command="{Binding FitBackgroundToScreenCommand}" 
-                                            ToolTip.Tip="Arka planı 1920x1080 tam ekran çerçevesine oturtur"
-                                            Background="#1E293B" Foreground="#F8FAFC" FontSize="12" Padding="10,6" CornerRadius="6"/>
-
-                                    <Button Content="⬇️ Zemine Oturt" Command="{Binding AlignCharacterToBottomCommand}" 
-                                            ToolTip.Tip="Karakterleri alt zemin çizgisine hizalar"
-                                            Background="#1E293B" Foreground="#F8FAFC" FontSize="12" Padding="10,6" CornerRadius="6"/>
-
-                                    <Button Content="↕ Alt Banner" Command="{Binding PresetDialogueBoxCommand}" CommandParameter="BottomBanner"
-                                            ToolTip.Tip="Diyalog kutusunu standart alt banner (1720x220) yapar"
-                                            Background="#1E293B" Foreground="#F8FAFC" FontSize="12" Padding="10,6" CornerRadius="6"/>
-                                </StackPanel>
-
-                                <TextBlock Text="{Binding SelectedNode.Title, StringFormat='Node: {0}'}" 
-                                           Foreground="#F8FAFC" FontSize="16" FontWeight="SemiBold" HorizontalAlignment="Right" VerticalAlignment="Center" DockPanel.Dock="Right"/>
-                            </DockPanel>
-                        </Border>
-
                     </Canvas>
                 </Border>
             </Viewbox>

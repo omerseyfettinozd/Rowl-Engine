@@ -21,28 +21,6 @@
                                Stretch="Fill"
                                HorizontalAlignment="Center"
                                VerticalAlignment="Center"/>
-
-                        <!-- Top HUD overlay bar (Overlay matching Edit Frame banner) -->
-                        <Border VerticalAlignment="Top" Height="80" Background="#0F172A" Opacity="0.94">
-                            <DockPanel Margin="24,0">
-                                <StackPanel Orientation="Horizontal" Spacing="14" VerticalAlignment="Center" DockPanel.Dock="Left">
-                                    <TextBlock Text="🎮 GAME FRAME" Foreground="#00F0FF" FontSize="22" FontWeight="Bold" VerticalAlignment="Center"/>
-                                    <Border Background="#1E293B" CornerRadius="4" Padding="10,4" VerticalAlignment="Center">
-                                        <TextBlock Text="1920x1080 (SDL3 C++ Engine · Offscreen)" Foreground="#94A3B8" FontSize="14"/>
-                                    </Border>
-                                </StackPanel>
-
-                                <!-- Engine status badge (right side) -->
-                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal"
-                                            VerticalAlignment="Center" Spacing="8">
-                                    <Border x:Name="StatusBadge" Background="#16A34A" CornerRadius="4" Padding="10,4">
-                                        <TextBlock x:Name="StatusText" Text="● OFFSCREEN LIVE" Foreground="White" FontSize="12" FontWeight="Bold"/>
-                                    </Border>
-                                    <TextBlock Text="{Binding SelectedNode.Title, StringFormat='Node: {0}', FallbackValue='No node selected'}"
-                                               Foreground="#F8FAFC" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                                </StackPanel>
-                            </DockPanel>
-                        </Border>
                     </Grid>
                 </Border>
             </Viewbox>
