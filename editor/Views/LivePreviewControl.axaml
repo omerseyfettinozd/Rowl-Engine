@@ -75,20 +75,20 @@
                                             IsVisible="{Binding IsEnabled}"
                                             Background="#2A374A" BorderBrush="#00F0FF" BorderThickness="2" CornerRadius="8" BoxShadow="0 10 30 0 #000000"
                                             PointerPressed="OnCharacterPointerPressed">
-                                        <Grid RowDefinitions="*, Auto">
-                                            <!-- Bitmap Image Render for Character (HitTest disabled so Border captures drag) -->
-                                            <Image Grid.Row="0" Source="{Binding SpriteBitmap}" Stretch="Uniform" Margin="4" IsHitTestVisible="False"/>
+                                        <Grid>
+                                            <!-- Bitmap Image Render for Character (Exact full-bleed bounding box with Uniform stretch) -->
+                                            <Image Source="{Binding SpriteBitmap}" Stretch="Uniform" IsHitTestVisible="False"/>
 
                                             <!-- Fallback Placeholder if Image fails -->
-                                            <StackPanel Grid.Row="0" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="6"
+                                            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="6"
                                                         IsVisible="{Binding SpriteBitmap, Converter={x:Static ObjectConverters.IsNull}}"
                                                         IsHitTestVisible="False">
                                                 <TextBlock Text="👤" FontSize="36" HorizontalAlignment="Center"/>
                                                 <TextBlock Text="{Binding Sprite}" Foreground="#38BDF8" FontSize="12" FontWeight="Bold" HorizontalAlignment="Center"/>
                                             </StackPanel>
 
-                                            <!-- Label -->
-                                            <Border Grid.Row="1" Background="#0F172A" Padding="4,2" IsHitTestVisible="False">
+                                            <!-- Overlay Label at Bottom -->
+                                            <Border VerticalAlignment="Bottom" HorizontalAlignment="Center" Background="#D00F172A" Padding="6,2" Margin="0,0,0,4" CornerRadius="4" IsHitTestVisible="False">
                                                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="4">
                                                     <TextBlock Text="👤 Character" Foreground="#00F0FF" FontSize="10" FontWeight="Bold"/>
                                                     <TextBlock Text="{Binding Width, StringFormat='({0:0}'}" Foreground="#94A3B8" FontSize="9"/>
@@ -98,7 +98,7 @@
                                             </Border>
 
                                             <!-- Character Resize Handle (Bottom-Right) -->
-                                            <Border Grid.Row="0" Grid.RowSpan="2" Width="18" Height="18" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                                            <Border Width="18" Height="18" HorizontalAlignment="Right" VerticalAlignment="Bottom"
                                                     Background="#00F0FF" BorderBrush="White" BorderThickness="2" CornerRadius="9" Cursor="BottomRightCorner" Margin="0,0,-5,-5"
                                                     PointerPressed="OnCharHandlePointerPressed"
                                                     ToolTip.Tip="Resize Character"/>
