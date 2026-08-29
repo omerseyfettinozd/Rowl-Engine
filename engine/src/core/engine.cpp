@@ -158,6 +158,18 @@ const uint8_t* Engine::getPixelBuffer(uint32_t* outW, uint32_t* outH) const {
 void Engine::advanceToNextNode(uint32_t choiceIndex) {
     if (m_storyNodes.empty()) return;
 
+    // If typewriter is still typing out the line, clicking reveals the full text immediately
+    if (m_isPlaying && m_activeDialogueData.typewriterEnabled && m_activeDialogueData.textSpeed > 0) {
+        size_t totalCodepoints = Rowl::Render::FontRenderer::countCodepoints(m_activeDialogueData.dialogue);
+        float msPerChar = static_cast<float>(m_activeDialogueData.textSpeed);
+        float elapsedMs = m_activeDialogueData.elapsedTypewriterTime * 1000.0f;
+        size_t visibleCodepoints = static_cast<size_t>(elapsedMs / msPerChar);
+        if (visibleCodepoints < totalCodepoints) {
+            m_activeDialogueData.elapsedTypewriterTime = 9999.0f;
+            return;
+        }
+    }
+
     auto it = m_storyNodes.find(m_currentNodeId);
     if (it != m_storyNodes.end()) {
         const auto& node = it->second;
@@ -165,10 +177,13 @@ void Engine::advanceToNextNode(uint32_t choiceIndex) {
             uint64_t nextId = node.nextNodes[choiceIndex].nodeId;
             if (nextId != 0 && m_storyNodes.find(nextId) != m_storyNodes.end()) {
                 m_currentNodeId = nextId;
+            } else {
+                return; // End of story chain
             }
         } else {
-            // End of chain reached: loop back to start node
-            m_currentNodeId = m_startNodeId;
+            // End of story chain: stay on last frame (do not loop back)
+            ROWL_LOG_INFO("End of story chain reached on Node #" + std::to_string(m_currentNodeId));
+            return;
         }
 
         auto nextIt = m_storyNodes.find(m_currentNodeId);

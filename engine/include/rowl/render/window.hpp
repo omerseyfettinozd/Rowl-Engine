@@ -5,6 +5,7 @@
 #include <memory>
 #include <vector>
 #include <unordered_map>
+#include "rowl/render/font_renderer.hpp"
 
 struct SDL_Window;
 struct SDL_Renderer;
@@ -125,25 +126,18 @@ public:
     bool isEmbedded()      const { return m_isEmbedded; }
     bool isOffscreen()     const { return m_isOffscreen; }
 
-    SDL_Window*   getNativeWindow()   const { return m_sdlWindow; }
-    SDL_Renderer* getNativeRenderer() const { return m_sdlRenderer; }
-
     SDL_Texture* loadTexture(const std::string& filename);
     void clearTextureCache();
+    FontRenderer* getFontRenderer() const { return m_fontRenderer.get(); }
 
 private:
-    struct TextWrapCache {
-        std::string dialogue;
-        float boxWidth = 0.0f;
-        float scaleFactor = 0.0f;
-        std::vector<std::string> wrappedLines;
-    };
+    void initFontRenderer();
 
     SDL_Window*   m_sdlWindow         = nullptr;
     SDL_Renderer* m_sdlRenderer       = nullptr;
     SDL_Surface*  m_offscreenSurface  = nullptr;
     std::unordered_map<std::string, SDL_Texture*> m_textureCache;
-    TextWrapCache m_textWrapCache;
+    std::unique_ptr<FontRenderer> m_fontRenderer;
 
     uint32_t m_width       = 1920;
     uint32_t m_height      = 1080;

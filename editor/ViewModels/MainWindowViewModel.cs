@@ -1205,6 +1205,14 @@ namespace RowlEngine.Editor.ViewModels
                 return;
             }
 
+            // Auto-switch to Game tab so the user sees the live playable game
+            if (SplitScreenMode == 0)
+            {
+                IsEnginePreviewActive = true;
+                IsPreviewActive = false;
+                IsNodeGraphActive = false;
+            }
+
             // Reload the story graph into the running engine
             string graphPath = System.IO.Path.Combine(AssetsJsonPath, "full_story_graph.json");
             if (System.IO.File.Exists(graphPath))
@@ -1213,17 +1221,17 @@ namespace RowlEngine.Editor.ViewModels
                 AppendLog($"[Play] Story graph loaded from: {graphPath}");
             }
 
-            // Reset engine state to initial start node (first frame)
+            // Activate engine play state FIRST
+            EngineHost.SetPlayState(true);
+
+            // Reset engine state to initial start node (first frame) with typewriter starting at 0
             EngineHost.ResetToStartNode();
 
             var startNode = GetStartNode();
             if (startNode != null)
             {
-                PushSceneToEngine(startNode);
-                SelectNode(startNode);
+                SelectNodeQuiet(startNode);
             }
-
-            EngineHost.SetPlayState(true);
 
             IsPlayingStandalone = true;
             PlayButtonText = "⏹ Stop";

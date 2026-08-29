@@ -69,6 +69,7 @@ add_library(RowlEngineCore SHARED
     src/core/engine.cpp
     # Rendering
     src/render/window.cpp
+    src/render/font_renderer.cpp
     src/render/msdf_renderer.cpp
     src/render/aspect_guardian.cpp
     # VFS
