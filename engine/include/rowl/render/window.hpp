@@ -33,6 +33,7 @@ struct DialogueRenderData {
 
     // Typewriter & Timing
     bool typewriterEnabled = false;
+    bool isPlaying = false;
     int textSpeed = 30; // ms per char
     float elapsedTypewriterTime = 0.0f; // seconds
 

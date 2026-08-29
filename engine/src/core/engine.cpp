@@ -92,6 +92,12 @@ bool Engine::initialize(const EngineConfig& config) {
 
 void Engine::setPlayState(bool isPlaying) {
     m_isPlaying = isPlaying;
+    m_activeDialogueData.isPlaying = isPlaying;
+    if (isPlaying) {
+        m_activeDialogueData.elapsedTypewriterTime = 0.0f;
+    } else {
+        m_activeDialogueData.elapsedTypewriterTime = 9999.0f;
+    }
     ROWL_LOG_INFO("Engine Play State set to: " + std::string(isPlaying ? "PLAYING" : "STOPPED"));
 }
 
@@ -134,6 +140,11 @@ void Engine::resetToStartNode() {
                 startNode.dialogueBoxWidth, startNode.dialogueBoxHeight
             );
         }
+        if (m_isPlaying) {
+            m_activeDialogueData.elapsedTypewriterTime = 0.0f;
+        } else {
+            m_activeDialogueData.elapsedTypewriterTime = 9999.0f;
+        }
         ROWL_LOG_INFO("Engine Reset to Start Node #" + std::to_string(m_currentNodeId));
     }
 }
@@ -146,6 +157,18 @@ const uint8_t* Engine::getPixelBuffer(uint32_t* outW, uint32_t* outH) const {
 
 void Engine::advanceToNextNode(uint32_t choiceIndex) {
     if (m_storyNodes.empty()) return;
+
+    // If typewriter is still typing out the line, clicking reveals the full text immediately
+    if (m_isPlaying && m_activeDialogueData.typewriterEnabled && m_activeDialogueData.textSpeed > 0) {
+        size_t totalChars = m_activeDialogueData.dialogue.length();
+        float msPerChar = static_cast<float>(m_activeDialogueData.textSpeed);
+        float elapsedMs = m_activeDialogueData.elapsedTypewriterTime * 1000.0f;
+        size_t visibleChars = static_cast<size_t>(elapsedMs / msPerChar);
+        if (visibleChars < totalChars) {
+            m_activeDialogueData.elapsedTypewriterTime = 9999.0f;
+            return;
+        }
+    }
 
     auto it = m_storyNodes.find(m_currentNodeId);
     if (it != m_storyNodes.end()) {
@@ -185,6 +208,7 @@ void Engine::advanceToNextNode(uint32_t choiceIndex) {
                     nextNode.dialogueBoxWidth, nextNode.dialogueBoxHeight
                 );
             }
+            m_activeDialogueData.elapsedTypewriterTime = 0.0f;
             ROWL_LOG_INFO("▶ Active Node #" + std::to_string(m_currentNodeId) +
                           " (" + nextNode.speaker + "): " + nextNode.dialogue);
         }
@@ -291,7 +315,12 @@ void Engine::updateSceneFromComponents(const std::string& componentsJson) {
                 m_activeDialogueData.borderThickness = data.value("border_thickness", 2.0f);
                 m_activeDialogueData.cornerRadius = data.value("corner_radius", 8.0f);
                 m_activeDialogueData.customBoxTexture = data.value("custom_box_texture", "");
-                m_activeDialogueData.elapsedTypewriterTime = 0.0f; // reset animation on dialogue change
+                m_activeDialogueData.isPlaying = m_isPlaying;
+                if (m_isPlaying) {
+                    m_activeDialogueData.elapsedTypewriterTime = 0.0f;
+                } else {
+                    m_activeDialogueData.elapsedTypewriterTime = 9999.0f;
+                }
             } else if (type == "speaker") {
                 m_activeSpeaker = data.value("speaker", m_activeSpeaker);
                 m_activeDialogue = data.value("dialogue", m_activeDialogue);
@@ -548,7 +577,8 @@ void Engine::step(float deltaTime) {
         return;
     }
 
-    if (m_activeDialogueData.typewriterEnabled) {
+    m_activeDialogueData.isPlaying = m_isPlaying;
+    if (m_isPlaying && m_activeDialogueData.typewriterEnabled) {
         m_activeDialogueData.elapsedTypewriterTime += deltaTime;
     }
 

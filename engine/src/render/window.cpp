@@ -566,10 +566,10 @@ void Window::renderVisualNovelFrame(
             float paddingTop = 28.0f * metrics.scaleFactor;
             float maxLineWidth = scaledDlgW - (48.0f * metrics.scaleFactor);
 
-            // Calculate visible characters based on typewriter progression
+            // Calculate visible characters based on typewriter progression (animates only in Play Mode)
             size_t totalChars = dlg.dialogue.length();
             size_t visibleCharCount = totalChars;
-            if (dlg.typewriterEnabled && dlg.textSpeed > 0) {
+            if (dlg.isPlaying && dlg.typewriterEnabled && dlg.textSpeed > 0) {
                 float msPerChar = static_cast<float>(dlg.textSpeed);
                 float elapsedMs = dlg.elapsedTypewriterTime * 1000.0f;
                 visibleCharCount = static_cast<size_t>(elapsedMs / msPerChar);
