@@ -110,17 +110,30 @@ void Engine::resetToStartNode() {
     auto it = m_storyNodes.find(m_currentNodeId);
     if (it != m_storyNodes.end()) {
         const auto& startNode = it->second;
-        updateActiveScene(
-            startNode.speaker, startNode.dialogue,
-            startNode.background,
-            startNode.backgroundX,  startNode.backgroundY,
-            startNode.backgroundWidth, startNode.backgroundHeight,
-            startNode.character,
-            startNode.characterX,   startNode.characterY,
-            startNode.characterWidth, startNode.characterHeight,
-            startNode.dialogueBoxX, startNode.dialogueBoxY,
-            startNode.dialogueBoxWidth, startNode.dialogueBoxHeight
-        );
+        if (!startNode.components.empty()) {
+            nlohmann::json compsJson = nlohmann::json::array();
+            for (const auto& c : startNode.components) {
+                compsJson.push_back({
+                    {"type", c.type},
+                    {"id", c.id},
+                    {"enabled", c.enabled},
+                    {"data", c.data}
+                });
+            }
+            updateSceneFromComponents(compsJson.dump());
+        } else {
+            updateActiveScene(
+                startNode.speaker, startNode.dialogue,
+                startNode.background,
+                startNode.backgroundX,  startNode.backgroundY,
+                startNode.backgroundWidth, startNode.backgroundHeight,
+                startNode.character,
+                startNode.characterX,   startNode.characterY,
+                startNode.characterWidth, startNode.characterHeight,
+                startNode.dialogueBoxX, startNode.dialogueBoxY,
+                startNode.dialogueBoxWidth, startNode.dialogueBoxHeight
+            );
+        }
         ROWL_LOG_INFO("Engine Reset to Start Node #" + std::to_string(m_currentNodeId));
     }
 }
@@ -148,17 +161,30 @@ void Engine::advanceToNextNode(uint32_t choiceIndex) {
         auto nextIt = m_storyNodes.find(m_currentNodeId);
         if (nextIt != m_storyNodes.end()) {
             const auto& nextNode = nextIt->second;
-            updateActiveScene(
-                nextNode.speaker, nextNode.dialogue,
-                nextNode.background,
-                nextNode.backgroundX, nextNode.backgroundY,
-                nextNode.backgroundWidth, nextNode.backgroundHeight,
-                nextNode.character,
-                nextNode.characterX, nextNode.characterY,
-                nextNode.characterWidth, nextNode.characterHeight,
-                nextNode.dialogueBoxX, nextNode.dialogueBoxY,
-                nextNode.dialogueBoxWidth, nextNode.dialogueBoxHeight
-            );
+            if (!nextNode.components.empty()) {
+                nlohmann::json compsJson = nlohmann::json::array();
+                for (const auto& c : nextNode.components) {
+                    compsJson.push_back({
+                        {"type", c.type},
+                        {"id", c.id},
+                        {"enabled", c.enabled},
+                        {"data", c.data}
+                    });
+                }
+                updateSceneFromComponents(compsJson.dump());
+            } else {
+                updateActiveScene(
+                    nextNode.speaker, nextNode.dialogue,
+                    nextNode.background,
+                    nextNode.backgroundX, nextNode.backgroundY,
+                    nextNode.backgroundWidth, nextNode.backgroundHeight,
+                    nextNode.character,
+                    nextNode.characterX, nextNode.characterY,
+                    nextNode.characterWidth, nextNode.characterHeight,
+                    nextNode.dialogueBoxX, nextNode.dialogueBoxY,
+                    nextNode.dialogueBoxWidth, nextNode.dialogueBoxHeight
+                );
+            }
             ROWL_LOG_INFO("▶ Active Node #" + std::to_string(m_currentNodeId) +
                           " (" + nextNode.speaker + "): " + nextNode.dialogue);
         }
@@ -176,6 +202,9 @@ void Engine::updateActiveScene(
     float charX, float charY, float charW, float charH,
     float dlgX, float dlgY, float dlgW, float dlgH
 ) {
+    m_hasBackground = !background.empty();
+    m_hasDialogueBox = !dialogue.empty() || !speaker.empty();
+
     if (!speaker.empty())    m_activeSpeaker    = speaker;
     if (!dialogue.empty())   m_activeDialogue   = dialogue;
     if (!background.empty()) m_activeBackground = background;
@@ -183,18 +212,103 @@ void Engine::updateActiveScene(
     m_activeBackgroundY      = bgY;
     m_activeBackgroundWidth  = bgW;
     m_activeBackgroundHeight = bgH;
-    if (!character.empty())  m_activeCharacter  = character;
-    m_activeCharacterX       = charX;
-    m_activeCharacterY       = charY;
-    m_activeCharacterWidth   = charW;
-    m_activeCharacterHeight  = charH;
+
+    m_activeCharacters.clear();
+    if (!character.empty()) {
+        m_activeCharacter       = character;
+        m_activeCharacterX       = charX;
+        m_activeCharacterY       = charY;
+        m_activeCharacterWidth   = charW;
+        m_activeCharacterHeight  = charH;
+        m_activeCharacters.push_back({character, charX, charY, charW, charH});
+    } else {
+        m_activeCharacter = "";
+    }
+
     m_activeDialogueBoxX     = dlgX;
     m_activeDialogueBoxY     = dlgY;
     m_activeDialogueBoxWidth = dlgW;
     m_activeDialogueBoxHeight = dlgH;
 
-    ROWL_LOG_INFO("Scene Updated → Speaker: '" + m_activeSpeaker + "', Dialogue: '" +
+    ROWL_LOG_INFO("Scene Updated (Legacy) → Speaker: '" + m_activeSpeaker + "', Dialogue: '" +
                   m_activeDialogue + "', BG: '" + m_activeBackground + "'");
+}
+
+void Engine::updateSceneFromComponents(const std::string& componentsJson) {
+    try {
+        auto comps = nlohmann::json::parse(componentsJson);
+        if (!comps.is_array()) return;
+
+        m_activeCharacters.clear();
+        m_hasBackground = false;
+        m_hasDialogueBox = false;
+
+        for (const auto& comp : comps) {
+            if (!comp.contains("type") || !comp.contains("data")) continue;
+            bool enabled = comp.value("enabled", true);
+            if (!enabled) continue;
+
+            std::string type = comp["type"].get<std::string>();
+            const auto& data = comp["data"];
+
+            if (type == "dialogue") {
+                m_activeSpeaker = data.value("speaker", m_activeSpeaker);
+                m_activeDialogue = data.value("dialogue", m_activeDialogue);
+                m_activeDialogueBoxX = data.value("x", m_activeDialogueBoxX);
+                m_activeDialogueBoxY = data.value("y", m_activeDialogueBoxY);
+                m_activeDialogueBoxWidth = data.value("width", m_activeDialogueBoxWidth);
+                m_activeDialogueBoxHeight = data.value("height", m_activeDialogueBoxHeight);
+                m_hasDialogueBox = true;
+            } else if (type == "speaker") {
+                m_activeSpeaker = data.value("speaker", m_activeSpeaker);
+                m_activeDialogue = data.value("dialogue", m_activeDialogue);
+            } else if (type == "background") {
+                m_activeBackground = data.value("texture", m_activeBackground);
+                m_activeBackgroundX = data.value("x", m_activeBackgroundX);
+                m_activeBackgroundY = data.value("y", m_activeBackgroundY);
+                m_activeBackgroundWidth = data.value("width", m_activeBackgroundWidth);
+                m_activeBackgroundHeight = data.value("height", m_activeBackgroundHeight);
+                m_hasBackground = true;
+            } else if (type == "character") {
+                CharacterRenderData cd;
+                cd.sprite = data.value("sprite", "spr_evelyn.png");
+                cd.x = data.value("x", 1440.0f);
+                cd.y = data.value("y", 340.0f);
+                cd.width = data.value("width", 360.0f);
+                cd.height = data.value("height", 540.0f);
+                m_activeCharacters.push_back(cd);
+
+                // Set legacy single-character fallback to first character
+                if (m_activeCharacters.size() == 1) {
+                    m_activeCharacter = cd.sprite;
+                    m_activeCharacterX = cd.x;
+                    m_activeCharacterY = cd.y;
+                    m_activeCharacterWidth = cd.width;
+                    m_activeCharacterHeight = cd.height;
+                }
+            } else if (type == "dialogue_box") {
+                m_activeDialogueBoxX = data.value("x", m_activeDialogueBoxX);
+                m_activeDialogueBoxY = data.value("y", m_activeDialogueBoxY);
+                m_activeDialogueBoxWidth = data.value("width", m_activeDialogueBoxWidth);
+                m_activeDialogueBoxHeight = data.value("height", m_activeDialogueBoxHeight);
+                m_hasDialogueBox = true;
+            } else if (type == "audio") {
+                std::string dsp = data.value("dsp_filter", "Normal");
+                ROWL_LOG_INFO("[Audio] Applied DSP Filter from Component: " + dsp);
+            }
+        }
+
+        if (m_activeCharacters.empty()) {
+            m_activeCharacter = "";
+        }
+
+        ROWL_LOG_INFO("Scene Updated (Components) → " + std::to_string(comps.size()) +
+                      " comps, " + std::to_string(m_activeCharacters.size()) + " chars, HasBg: " +
+                      (m_hasBackground ? "true" : "false") + ", HasDlg: " +
+                      (m_hasDialogueBox ? "true" : "false"));
+    } catch (const std::exception& e) {
+        ROWL_LOG_ERROR("Failed to parse components JSON: " + std::string(e.what()));
+    }
 }
 
 void Engine::parseStoryGraphJson(const std::string& jsonContent) {
@@ -226,6 +340,18 @@ void Engine::parseStoryGraphJson(const std::string& jsonContent) {
                 n.dialogueBoxY    = nodeJson.value("dialogue_box_y",    860.0f);
                 n.dialogueBoxWidth= nodeJson.value("dialogue_box_width",1760.0f);
                 n.dialogueBoxHeight=nodeJson.value("dialogue_box_height",180.0f);
+
+                if (nodeJson.contains("components")) {
+                    for (const auto& compJson : nodeJson["components"]) {
+                        ComponentData cd;
+                        cd.type = compJson.value("type", "");
+                        cd.id = compJson.value("id", "");
+                        cd.enabled = compJson.value("enabled", true);
+                        if (compJson.contains("data"))
+                            cd.data = compJson["data"];
+                        n.components.push_back(cd);
+                    }
+                }
 
                 if (nodeJson.contains("next_nodes") && nodeJson["next_nodes"].is_array()) {
                     for (const auto& nextJson : nodeJson["next_nodes"]) {
@@ -261,17 +387,30 @@ void Engine::parseStoryGraphJson(const std::string& jsonContent) {
 
             if (m_storyNodes.count(m_currentNodeId)) {
                 const auto& startNode = m_storyNodes[m_currentNodeId];
-                updateActiveScene(
-                    startNode.speaker, startNode.dialogue,
-                    startNode.background,
-                    startNode.backgroundX,  startNode.backgroundY,
-                    startNode.backgroundWidth, startNode.backgroundHeight,
-                    startNode.character,
-                    startNode.characterX,   startNode.characterY,
-                    startNode.characterWidth, startNode.characterHeight,
-                    startNode.dialogueBoxX, startNode.dialogueBoxY,
-                    startNode.dialogueBoxWidth, startNode.dialogueBoxHeight
-                );
+                if (!startNode.components.empty()) {
+                    nlohmann::json compsJson = nlohmann::json::array();
+                    for (const auto& c : startNode.components) {
+                        compsJson.push_back({
+                            {"type", c.type},
+                            {"id", c.id},
+                            {"enabled", c.enabled},
+                            {"data", c.data}
+                        });
+                    }
+                    updateSceneFromComponents(compsJson.dump());
+                } else {
+                    updateActiveScene(
+                        startNode.speaker, startNode.dialogue,
+                        startNode.background,
+                        startNode.backgroundX,  startNode.backgroundY,
+                        startNode.backgroundWidth, startNode.backgroundHeight,
+                        startNode.character,
+                        startNode.characterX,   startNode.characterY,
+                        startNode.characterWidth, startNode.characterHeight,
+                        startNode.dialogueBoxX, startNode.dialogueBoxY,
+                        startNode.dialogueBoxWidth, startNode.dialogueBoxHeight
+                    );
+                }
                 ROWL_LOG_INFO("Story graph loaded: " + std::to_string(m_storyNodes.size()) +
                               " nodes. Start node #" + std::to_string(m_currentNodeId));
             }
@@ -368,13 +507,13 @@ void Engine::step(float deltaTime) {
     }
 
     m_window->renderVisualNovelFrame(
-        m_activeSpeaker,    m_activeDialogue,
+        m_hasBackground,
         m_activeBackground,
         m_activeBackgroundX,  m_activeBackgroundY,
         m_activeBackgroundWidth, m_activeBackgroundHeight,
-        m_activeCharacter,
-        m_activeCharacterX,  m_activeCharacterY,
-        m_activeCharacterWidth, m_activeCharacterHeight,
+        m_activeCharacters,
+        m_hasDialogueBox,
+        m_activeSpeaker,    m_activeDialogue,
         m_activeDialogueBoxX, m_activeDialogueBoxY,
         m_activeDialogueBoxWidth, m_activeDialogueBoxHeight
     );

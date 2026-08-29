@@ -22,5 +22,6 @@ endif()
 
 message(STATUS "Rowl Engine Root CMake initialized. Target C++ Standard: C++${CMAKE_CXX_STANDARD}")
 
-# Add engine subdirectory
+# Add engine and tests subdirectories
 add_subdirectory(engine)
+add_subdirectory(tests)

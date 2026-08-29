@@ -1,0 +1,277 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:RowlEngine.Editor.ViewModels"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        x:Class="RowlEngine.Editor.Views.Dialogs.SettingsDialog"
+        x:DataType="vm:SettingsViewModel"
+        Title="⚙️ Ayarlar — Rowl Engine"
+        Width="720" Height="560"
+        MinWidth="600" MinHeight="450"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource AppBackground}"
+        CanResize="True">
+
+    <Grid RowDefinitions="Auto, *, Auto">
+
+        <!-- ── Başlık Çubuğu ──────────────────────────────────────── -->
+        <Border Grid.Row="0" Background="{DynamicResource SurfaceBackground}" 
+                BorderBrush="{DynamicResource BorderColor}" BorderThickness="0,0,0,1" Padding="20,14">
+            <StackPanel Orientation="Horizontal" Spacing="10">
+                <TextBlock Text="⚙️" FontSize="18" VerticalAlignment="Center"/>
+                <TextBlock Text="Ayarlar" FontSize="16" FontWeight="Bold" 
+                           Foreground="{DynamicResource PrimaryText}" VerticalAlignment="Center"/>
+            </StackPanel>
+        </Border>
+
+        <!-- ── Ana İçerik — TabControl ────────────────────────────── -->
+        <TabControl Grid.Row="1" SelectedIndex="{Binding SelectedTabIndex}" Margin="0" Padding="0"
+                    Background="Transparent">
+
+            <!-- ═══ SEKME 1: Build &amp; Dışa Aktarım ═══ -->
+            <TabItem Header="🔨 Build">
+                <ScrollViewer Padding="24,16">
+                    <StackPanel Spacing="18">
+                        <TextBlock Text="Build &amp; Dışa Aktarım Ayarları" FontSize="15" FontWeight="Bold" 
+                                   Foreground="{DynamicResource PrimaryText}"/>
+
+                        <StackPanel Spacing="6">
+                            <TextBlock Text="Varsayılan Hedef Platform" FontSize="12" 
+                                       Foreground="{DynamicResource MutedText}"/>
+                            <ComboBox ItemsSource="{Binding BuildTargetOptions}" 
+                                      SelectedItem="{Binding DefaultBuildTarget}"
+                                      HorizontalAlignment="Stretch"
+                                      Background="{DynamicResource InputBackground}" 
+                                      Foreground="{DynamicResource PrimaryText}"
+                                      BorderBrush="{DynamicResource BorderSubtle}"/>
+                        </StackPanel>
+
+                        <StackPanel Spacing="6">
+                            <TextBlock Text="Varsayılan Çıktı Dizini" FontSize="12" 
+                                       Foreground="{DynamicResource MutedText}"/>
+                            <TextBox Text="{Binding DefaultExportPath}" 
+                                     Watermark="Boş bırakılırsa her seferinde sorulur"
+                                     Background="{DynamicResource InputBackground}" 
+                                     Foreground="{DynamicResource PrimaryText}"
+                                     BorderBrush="{DynamicResource BorderSubtle}"/>
+                        </StackPanel>
+
+                        <Border Background="{DynamicResource PanelBackground}" CornerRadius="8" 
+                                Padding="16" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="💡 Build İpuçları" FontSize="13" FontWeight="SemiBold" 
+                                           Foreground="{DynamicResource AccentColor}"/>
+                                <TextBlock TextWrapping="Wrap" FontSize="12" 
+                                           Foreground="{DynamicResource MutedText}"
+                                           Text="• Windows: [ProjeAdı].exe + RowlEngineCore.dll oluşturulur&#x0a;• Linux: [ProjeAdı] + [ProjeAdı].x86_64 + libRowlEngineCore.so&#x0a;• macOS: [ProjeAdı].app (Info.plist dahil) Apple App Bundle&#x0a;• Android: APK / AAB (Google Play Store uyumlu)&#x0a;• iOS: IPA (App Store Connect uyumlu)"/>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- ═══ SEKME 2: Tema &amp; Görünüm ═══ -->
+            <TabItem Header="🎨 Tema">
+                <ScrollViewer Padding="24,16">
+                    <StackPanel Spacing="18">
+                        <TextBlock Text="Tema &amp; Görünüm" FontSize="15" FontWeight="Bold" 
+                                   Foreground="{DynamicResource PrimaryText}"/>
+
+                        <StackPanel Spacing="6">
+                            <TextBlock Text="Editör Teması" FontSize="12" 
+                                       Foreground="{DynamicResource MutedText}"/>
+                            <ComboBox ItemsSource="{Binding AvailableThemes}" 
+                                      SelectedItem="{Binding SelectedTheme}"
+                                      HorizontalAlignment="Stretch"
+                                      Background="{DynamicResource InputBackground}" 
+                                      Foreground="{DynamicResource PrimaryText}"
+                                      BorderBrush="{DynamicResource BorderSubtle}"/>
+                        </StackPanel>
+
+                        <Button Content="🎨 Temayı Uygula" 
+                                Command="{Binding ApplyThemeCommand}"
+                                HorizontalAlignment="Left"
+                                Background="{DynamicResource AccentButtonBg}" 
+                                Foreground="White" 
+                                FontWeight="SemiBold" 
+                                CornerRadius="6" Padding="16,8"/>
+
+                        <!-- Tema Önizleme Kartları -->
+                        <ItemsControl ItemsSource="{Binding AvailableThemes}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel Orientation="Horizontal"/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Width="140" Height="70" CornerRadius="8" Margin="4"
+                                            BorderBrush="{DynamicResource BorderSubtle}" BorderThickness="1"
+                                            Background="{DynamicResource PanelBackground}" Padding="10">
+                                        <TextBlock Text="{Binding}" FontSize="11" FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource SecondaryText}" 
+                                                   VerticalAlignment="Center" HorizontalAlignment="Center"
+                                                   TextAlignment="Center"/>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- ═══ SEKME 3: Genel Editör ═══ -->
+            <TabItem Header="⚙️ Genel">
+                <ScrollViewer Padding="24,16">
+                    <StackPanel Spacing="18">
+                        <TextBlock Text="Genel Editör Ayarları" FontSize="15" FontWeight="Bold" 
+                                   Foreground="{DynamicResource PrimaryText}"/>
+
+                        <!-- Otomatik Kaydetme -->
+                        <Border Background="{DynamicResource PanelBackground}" CornerRadius="8" 
+                                Padding="16" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1">
+                            <StackPanel Spacing="10">
+                                <CheckBox Content="💾 Otomatik Kaydetme" 
+                                          IsChecked="{Binding AutoSaveEnabled}"
+                                          Foreground="{DynamicResource PrimaryText}" FontWeight="SemiBold"/>
+                                <StackPanel Spacing="4" IsVisible="{Binding AutoSaveEnabled}">
+                                    <TextBlock Text="Kaydetme Aralığı (saniye)" FontSize="12" 
+                                               Foreground="{DynamicResource MutedText}"/>
+                                    <ComboBox ItemsSource="{Binding AutoSaveIntervals}" 
+                                              SelectedItem="{Binding AutoSaveIntervalSeconds}"
+                                              HorizontalAlignment="Stretch"
+                                              Background="{DynamicResource InputBackground}" 
+                                              Foreground="{DynamicResource PrimaryText}"
+                                              BorderBrush="{DynamicResource BorderSubtle}"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Node Graph Ayarları -->
+                        <Border Background="{DynamicResource PanelBackground}" CornerRadius="8" 
+                                Padding="16" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1">
+                            <StackPanel Spacing="10">
+                                <TextBlock Text="🕸️ Node Graph" FontSize="13" FontWeight="SemiBold" 
+                                           Foreground="{DynamicResource AccentColor}"/>
+                                <CheckBox Content="📐 Grid Snapping (Izgara Yapışması)" 
+                                          IsChecked="{Binding GridSnapping}"
+                                          Foreground="{DynamicResource PrimaryText}"/>
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Kablo Stili" FontSize="12" 
+                                               Foreground="{DynamicResource MutedText}"/>
+                                    <ComboBox ItemsSource="{Binding CableStyleOptions}" 
+                                              SelectedItem="{Binding CableStyle}"
+                                              HorizontalAlignment="Stretch"
+                                              Background="{DynamicResource InputBackground}" 
+                                              Foreground="{DynamicResource PrimaryText}"
+                                              BorderBrush="{DynamicResource BorderSubtle}"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Performans -->
+                        <Border Background="{DynamicResource PanelBackground}" CornerRadius="8" 
+                                Padding="16" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1">
+                            <StackPanel Spacing="10">
+                                <TextBlock Text="📊 Performans" FontSize="13" FontWeight="SemiBold" 
+                                           Foreground="{DynamicResource AccentColor}"/>
+                                <CheckBox Content="FPS Göstergesi" 
+                                          IsChecked="{Binding ShowFpsOverlay}"
+                                          Foreground="{DynamicResource PrimaryText}"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Dil -->
+                        <StackPanel Spacing="6">
+                            <TextBlock Text="🌐 Editör Dili" FontSize="12" 
+                                       Foreground="{DynamicResource MutedText}"/>
+                            <ComboBox ItemsSource="{Binding LanguageOptions}" 
+                                      SelectedItem="{Binding EditorLanguage}"
+                                      HorizontalAlignment="Stretch"
+                                      Background="{DynamicResource InputBackground}" 
+                                      Foreground="{DynamicResource PrimaryText}"
+                                      BorderBrush="{DynamicResource BorderSubtle}"/>
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- ═══ SEKME 4: Kısayollar ═══ -->
+            <TabItem Header="⌨️ Kısayollar">
+                <ScrollViewer Padding="24,16">
+                    <StackPanel Spacing="12">
+                        <TextBlock Text="Klavye Kısayolları" FontSize="15" FontWeight="Bold" 
+                                   Foreground="{DynamicResource PrimaryText}"/>
+
+                        <Border Background="{DynamicResource PanelBackground}" CornerRadius="8" 
+                                Padding="16" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1">
+                            <StackPanel Spacing="6">
+                                <Grid ColumnDefinitions="*, Auto"><TextBlock Grid.Column="0" Text="Kaydet" Foreground="{DynamicResource SecondaryText}" FontSize="12"/><TextBlock Grid.Column="1" Text="Ctrl + S" Foreground="{DynamicResource AccentColor}" FontSize="12" FontWeight="Bold" FontFamily="Consolas, Monospace"/></Grid>
+                                <Grid ColumnDefinitions="*, Auto"><TextBlock Grid.Column="0" Text="Farklı Kaydet" Foreground="{DynamicResource SecondaryText}" FontSize="12"/><TextBlock Grid.Column="1" Text="Ctrl + Shift + S" Foreground="{DynamicResource AccentColor}" FontSize="12" FontWeight="Bold" FontFamily="Consolas, Monospace"/></Grid>
+                                <Grid ColumnDefinitions="*, Auto"><TextBlock Grid.Column="0" Text="Geri Al (Undo)" Foreground="{DynamicResource SecondaryText}" FontSize="12"/><TextBlock Grid.Column="1" Text="Ctrl + Z" Foreground="{DynamicResource AccentColor}" FontSize="12" FontWeight="Bold" FontFamily="Consolas, Monospace"/></Grid>
+                                <Grid ColumnDefinitions="*, Auto"><TextBlock Grid.Column="0" Text="Yinele (Redo)" Foreground="{DynamicResource SecondaryText}" FontSize="12"/><TextBlock Grid.Column="1" Text="Ctrl + Y" Foreground="{DynamicResource AccentColor}" FontSize="12" FontWeight="Bold" FontFamily="Consolas, Monospace"/></Grid>
+                                <Separator Background="{DynamicResource BorderColor}" Height="1" Margin="0,4"/>
+                                <Grid ColumnDefinitions="*, Auto"><TextBlock Grid.Column="0" Text="Yeni Node Ekle" Foreground="{DynamicResource SecondaryText}" FontSize="12"/><TextBlock Grid.Column="1" Text="Ctrl + N" Foreground="{DynamicResource AccentColor}" FontSize="12" FontWeight="Bold" FontFamily="Consolas, Monospace"/></Grid>
+                                <Grid ColumnDefinitions="*, Auto"><TextBlock Grid.Column="0" Text="Seçili Node Sil" Foreground="{DynamicResource SecondaryText}" FontSize="12"/><TextBlock Grid.Column="1" Text="Delete" Foreground="{DynamicResource AccentColor}" FontSize="12" FontWeight="Bold" FontFamily="Consolas, Monospace"/></Grid>
+                                <Grid ColumnDefinitions="*, Auto"><TextBlock Grid.Column="0" Text="Yeniden Adlandır" Foreground="{DynamicResource SecondaryText}" FontSize="12"/><TextBlock Grid.Column="1" Text="F2" Foreground="{DynamicResource AccentColor}" FontSize="12" FontWeight="Bold" FontFamily="Consolas, Monospace"/></Grid>
+                                <Separator Background="{DynamicResource BorderColor}" Height="1" Margin="0,4"/>
+                                <Grid ColumnDefinitions="*, Auto"><TextBlock Grid.Column="0" Text="Build Al" Foreground="{DynamicResource SecondaryText}" FontSize="12"/><TextBlock Grid.Column="1" Text="Ctrl + B" Foreground="{DynamicResource AccentColor}" FontSize="12" FontWeight="Bold" FontFamily="Consolas, Monospace"/></Grid>
+                                <Grid ColumnDefinitions="*, Auto"><TextBlock Grid.Column="0" Text="Play Mode" Foreground="{DynamicResource SecondaryText}" FontSize="12"/><TextBlock Grid.Column="1" Text="F5" Foreground="{DynamicResource AccentColor}" FontSize="12" FontWeight="Bold" FontFamily="Consolas, Monospace"/></Grid>
+                                <Grid ColumnDefinitions="*, Auto"><TextBlock Grid.Column="0" Text="Tam Ekran" Foreground="{DynamicResource SecondaryText}" FontSize="12"/><TextBlock Grid.Column="1" Text="F11" Foreground="{DynamicResource AccentColor}" FontSize="12" FontWeight="Bold" FontFamily="Consolas, Monospace"/></Grid>
+                                <Grid ColumnDefinitions="*, Auto"><TextBlock Grid.Column="0" Text="Hızlı Arama" Foreground="{DynamicResource SecondaryText}" FontSize="12"/><TextBlock Grid.Column="1" Text="Ctrl + F" Foreground="{DynamicResource AccentColor}" FontSize="12" FontWeight="Bold" FontFamily="Consolas, Monospace"/></Grid>
+                                <Grid ColumnDefinitions="*, Auto"><TextBlock Grid.Column="0" Text="Hub'ı Aç" Foreground="{DynamicResource SecondaryText}" FontSize="12"/><TextBlock Grid.Column="1" Text="Ctrl + H" Foreground="{DynamicResource AccentColor}" FontSize="12" FontWeight="Bold" FontFamily="Consolas, Monospace"/></Grid>
+                                <Grid ColumnDefinitions="*, Auto"><TextBlock Grid.Column="0" Text="Ayarlar" Foreground="{DynamicResource SecondaryText}" FontSize="12"/><TextBlock Grid.Column="1" Text="Ctrl + ," Foreground="{DynamicResource AccentColor}" FontSize="12" FontWeight="Bold" FontFamily="Consolas, Monospace"/></Grid>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- ═══ SEKME 5: Hakkında ═══ -->
+            <TabItem Header="ℹ️ Hakkında">
+                <ScrollViewer Padding="24,16">
+                    <StackPanel Spacing="18" HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <TextBlock Text="🎮 ROWL ENGINE" FontSize="28" FontWeight="Bold" 
+                                   Foreground="{DynamicResource AccentColor}" HorizontalAlignment="Center"/>
+                        <TextBlock Text="Visual Novel &amp; Interactive Storytelling Engine" 
+                                   FontSize="13" Foreground="{DynamicResource MutedText}" HorizontalAlignment="Center"/>
+
+                        <Border Background="{DynamicResource PanelBackground}" CornerRadius="8" 
+                                Padding="20" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1"
+                                MinWidth="400">
+                            <StackPanel Spacing="8">
+                                <Grid ColumnDefinitions="Auto, *"><TextBlock Grid.Column="0" Text="Sürüm:" Foreground="{DynamicResource MutedText}" FontSize="12" Margin="0,0,12,0"/><TextBlock Grid.Column="1" Text="v1.0.0" Foreground="{DynamicResource PrimaryText}" FontSize="12" FontWeight="SemiBold"/></Grid>
+                                <Grid ColumnDefinitions="Auto, *"><TextBlock Grid.Column="0" Text="Motor:" Foreground="{DynamicResource MutedText}" FontSize="12" Margin="0,0,12,0"/><TextBlock Grid.Column="1" Text="SDL3 Hardware Canvas + C++ Core" Foreground="{DynamicResource PrimaryText}" FontSize="12"/></Grid>
+                                <Grid ColumnDefinitions="Auto, *"><TextBlock Grid.Column="0" Text="Editör:" Foreground="{DynamicResource MutedText}" FontSize="12" Margin="0,0,12,0"/><TextBlock Grid.Column="1" Text="Avalonia UI (.NET) + Zero-Copy P/Invoke" Foreground="{DynamicResource PrimaryText}" FontSize="12"/></Grid>
+                                <Grid ColumnDefinitions="Auto, *"><TextBlock Grid.Column="0" Text="Paketleme:" Foreground="{DynamicResource MutedText}" FontSize="12" Margin="0,0,12,0"/><TextBlock Grid.Column="1" Text="Zstd Sıkıştırma + .rowlpkg Arşivi" Foreground="{DynamicResource PrimaryText}" FontSize="12"/></Grid>
+                                <Grid ColumnDefinitions="Auto, *"><TextBlock Grid.Column="0" Text="Platformlar:" Foreground="{DynamicResource MutedText}" FontSize="12" Margin="0,0,12,0"/><TextBlock Grid.Column="1" Text="🪟 Windows  🐧 Linux  🍎 macOS  🤖 Android  📱 iOS" Foreground="{DynamicResource PrimaryText}" FontSize="12"/></Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <TextBlock Text="© 2024–2026 Rowl Engine Team" FontSize="11" 
+                                   Foreground="{DynamicResource DimText}" HorizontalAlignment="Center"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+        </TabControl>
+
+        <!-- ── Alt Butonlar ───────────────────────────────────────── -->
+        <Border Grid.Row="2" Background="{DynamicResource SurfaceBackground}" 
+                BorderBrush="{DynamicResource BorderColor}" BorderThickness="0,1,0,0" Padding="16,10">
+            <DockPanel>
+                <Button DockPanel.Dock="Left" Content="🔄 Varsayılanlara Sıfırla" 
+                        Command="{Binding ResetDefaultsCommand}"
+                        Background="Transparent" Foreground="{DynamicResource MutedText}" 
+                        BorderBrush="{DynamicResource BorderColor}" BorderThickness="1"
+                        CornerRadius="6" Padding="12,6" FontSize="12"/>
+                <Button DockPanel.Dock="Right" Content="Kapat" 
+                        Name="CloseButton"
+                        HorizontalAlignment="Right"
+                        Background="{DynamicResource ToolbarButtonBg}" 
+                        Foreground="{DynamicResource PrimaryText}"
+                        CornerRadius="6" Padding="20,6" FontSize="12" FontWeight="SemiBold"/>
+            </DockPanel>
+        </Border>
+    </Grid>
+</Window>

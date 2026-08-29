@@ -3,32 +3,50 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="clr-namespace:RowlEngine.Editor.ViewModels"
+             xmlns:comp="using:RowlEngine.Editor.ViewModels.Components"
              mc:Ignorable="d" d:DesignWidth="1280" d:DesignHeight="720"
              x:Class="RowlEngine.Editor.Views.LivePreviewControl"
              x:DataType="vm:MainWindowViewModel">
 
-    <Border Background="#0B0F19" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+    <Border Background="#0B0F19" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" DragDrop.AllowDrop="True">
         <Grid>
             <!-- 16:9 Aspect Guardian Letterbox Container -->
             <Viewbox Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="12">
                 <Border Width="1920" Height="1080" Background="#121624" CornerRadius="8" ClipToBounds="True" BoxShadow="0 10 30 0 #000000">
                     <Canvas x:Name="ViewportCanvas" Width="1920" Height="1080" Background="#161B2E">
+                        <Canvas.ContextMenu>
+                            <ContextMenu>
+                                <MenuItem Header="🎯 Merkeze Hizala (Center to Screen)" Command="{Binding CenterSelectedElementCommand}"/>
+                                <MenuItem Header="📐 Çerçeveye Sığdır (Fit to Canvas)" Command="{Binding FitBackgroundToScreenCommand}"/>
+                                <MenuItem Header="🖼️ Arka Planı 1920x1080 Yap (Stretch Full HD)" Command="{Binding FitBackgroundToScreenCommand}"/>
+                                <MenuItem Header="⬇️ Karakterleri Zemine Oturt (Ground Baseline)" Command="{Binding AlignCharacterToBottomCommand}"/>
+                                <Separator/>
+                                <MenuItem Header="↕ Diyalog Alt Banner (1720x220)" Command="{Binding PresetDialogueBoxCommand}" CommandParameter="BottomBanner"/>
+                                <MenuItem Header="🎯 Diyalog Kutusunu Ortala" Command="{Binding PresetDialogueBoxCommand}" CommandParameter="Center"/>
+                                <Separator/>
+                                <MenuItem Header="🧲 Manyetik Snap Kılavuzları (Snap Assist)" Command="{Binding ToggleSnapAssistCommand}"/>
+                            </ContextMenu>
+                        </Canvas.ContextMenu>
+
                         <!-- Scene Background Bitmap Layer -->
                         <Border x:Name="BackgroundBox"
+                                IsVisible="{Binding SelectedNode.HasBackground}"
                                 Canvas.Left="{Binding SelectedNode.BackgroundX}" 
                                 Canvas.Top="{Binding SelectedNode.BackgroundY}" 
                                 Width="{Binding SelectedNode.BackgroundWidth}" 
                                 Height="{Binding SelectedNode.BackgroundHeight}" 
                                 Background="#1A2035" BorderBrush="#3B82F6" BorderThickness="1.5">
                             <Grid>
-                                <!-- Actual Bitmap Image Render -->
+                                <!-- Actual Bitmap Image Render (HitTest disabled so container handles drag) -->
                                 <Image Source="{Binding SelectedNode.BackgroundBitmap}" Stretch="Fill" 
-                                       Width="{Binding SelectedNode.BackgroundWidth}" Height="{Binding SelectedNode.BackgroundHeight}"/>
+                                       Width="{Binding SelectedNode.BackgroundWidth}" Height="{Binding SelectedNode.BackgroundHeight}"
+                                       IsHitTestVisible="False"/>
                                 
                                 <!-- Decorative Atmosphere Fallback Text if Bitmap loading -->
                                 <TextBlock Text="{Binding SelectedNode.BackgroundTexture, StringFormat='Scene BG: {0}'}" 
                                            IsVisible="{Binding SelectedNode.BackgroundBitmap, Converter={x:Static ObjectConverters.IsNull}}"
-                                           Foreground="#64748B" FontSize="20" FontWeight="Bold" Margin="40,90" HorizontalAlignment="Left"/>
+                                           Foreground="#64748B" FontSize="20" FontWeight="Bold" Margin="40,90" HorizontalAlignment="Left"
+                                           IsHitTestVisible="False"/>
 
                                 <!-- Background Resize Handles -->
                                 <Border Name="BgHandleBR" Width="18" Height="18" HorizontalAlignment="Right" VerticalAlignment="Bottom" 
@@ -36,58 +54,63 @@
                             </Grid>
                         </Border>
 
-                        <!-- Top Resolution Banner -->
-                        <Border Canvas.Left="0" Canvas.Top="0" Width="1920" Height="80" Background="#0F172A" Opacity="0.92">
-                            <DockPanel Margin="30,0">
-                                <StackPanel Orientation="Horizontal" Spacing="16" VerticalAlignment="Center">
-                                    <TextBlock Text="⚡ EDIT FRAME" Foreground="#00F0FF" FontSize="22" FontWeight="Bold"/>
-                                    <Border Background="#1E293B" CornerRadius="4" Padding="10,4">
-                                        <TextBlock Text="1920x1080 Virtual Canvas (Interactive Drag &amp; Resize Mode)" Foreground="#94A3B8" FontSize="16"/>
+                        <!-- Interactive Multi-Character Sprite Layer (Renders ALL Character Components) -->
+                        <ItemsControl ItemsSource="{Binding SelectedNode.CharacterComponents}"
+                                      Width="1920" Height="1080" Canvas.Left="0" Canvas.Top="0">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <Canvas Width="1920" Height="1080" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.Styles>
+                                <Style Selector="ContentPresenter" x:DataType="comp:CharacterComponentViewModel">
+                                    <Setter Property="Canvas.Left" Value="{Binding X}"/>
+                                    <Setter Property="Canvas.Top" Value="{Binding Y}"/>
+                                </Style>
+                            </ItemsControl.Styles>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="comp:CharacterComponentViewModel">
+                                    <Border Width="{Binding Width}" 
+                                            Height="{Binding Height}" Cursor="Hand"
+                                            IsVisible="{Binding IsEnabled}"
+                                            Background="#2A374A" BorderBrush="#00F0FF" BorderThickness="2" CornerRadius="8" BoxShadow="0 10 30 0 #000000"
+                                            PointerPressed="OnCharacterPointerPressed">
+                                        <Grid RowDefinitions="*, Auto">
+                                            <!-- Bitmap Image Render for Character (HitTest disabled so Border captures drag) -->
+                                            <Image Grid.Row="0" Source="{Binding SpriteBitmap}" Stretch="Uniform" Margin="4" IsHitTestVisible="False"/>
+
+                                            <!-- Fallback Placeholder if Image fails -->
+                                            <StackPanel Grid.Row="0" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="6"
+                                                        IsVisible="{Binding SpriteBitmap, Converter={x:Static ObjectConverters.IsNull}}"
+                                                        IsHitTestVisible="False">
+                                                <TextBlock Text="👤" FontSize="36" HorizontalAlignment="Center"/>
+                                                <TextBlock Text="{Binding Sprite}" Foreground="#38BDF8" FontSize="12" FontWeight="Bold" HorizontalAlignment="Center"/>
+                                            </StackPanel>
+
+                                            <!-- Label -->
+                                            <Border Grid.Row="1" Background="#0F172A" Padding="4,2" IsHitTestVisible="False">
+                                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="4">
+                                                    <TextBlock Text="👤 Character" Foreground="#00F0FF" FontSize="10" FontWeight="Bold"/>
+                                                    <TextBlock Text="{Binding Width, StringFormat='({0:0}'}" Foreground="#94A3B8" FontSize="9"/>
+                                                    <TextBlock Text="x" Foreground="#94A3B8" FontSize="9"/>
+                                                    <TextBlock Text="{Binding Height, StringFormat='{}{0:0})'}" Foreground="#94A3B8" FontSize="9"/>
+                                                </StackPanel>
+                                            </Border>
+
+                                            <!-- Character Resize Handle (Bottom-Right) -->
+                                            <Border Grid.Row="0" Grid.RowSpan="2" Width="18" Height="18" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                                                    Background="#00F0FF" BorderBrush="White" BorderThickness="2" CornerRadius="9" Cursor="BottomRightCorner" Margin="0,0,-5,-5"
+                                                    PointerPressed="OnCharHandlePointerPressed"
+                                                    ToolTip.Tip="Resize Character"/>
+                                        </Grid>
                                     </Border>
-                                </StackPanel>
-                                <TextBlock Text="{Binding SelectedNode.Title, StringFormat='Active Node: {0}'}" 
-                                           Foreground="#F8FAFC" FontSize="18" FontWeight="SemiBold" HorizontalAlignment="Right" VerticalAlignment="Center"/>
-                            </DockPanel>
-                        </Border>
-
-                        <!-- Interactive Character Sprite Layer (Drag or Resize with Mouse!) -->
-                        <Border x:Name="CharacterBox"
-                                Canvas.Left="{Binding SelectedNode.CharacterX}" 
-                                Canvas.Top="{Binding SelectedNode.CharacterY}" 
-                                Width="{Binding SelectedNode.CharacterWidth}" 
-                                Height="{Binding SelectedNode.CharacterHeight}" Cursor="Hand"
-                                Background="#2A374A" BorderBrush="#00F0FF" BorderThickness="3" CornerRadius="12" BoxShadow="0 10 30 0 #000000">
-                            <Grid RowDefinitions="*, Auto">
-                                <!-- Bitmap Image Render for Character -->
-                                <Image Grid.Row="0" Source="{Binding SelectedNode.CharacterBitmap}" Stretch="Uniform" Margin="8"/>
-
-                                <!-- Fallback Placeholder if Image fails -->
-                                <StackPanel Grid.Row="0" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="12"
-                                            IsVisible="{Binding SelectedNode.CharacterBitmap, Converter={x:Static ObjectConverters.IsNull}}">
-                                    <TextBlock Text="👤" FontSize="48" HorizontalAlignment="Center"/>
-                                    <TextBlock Text="{Binding SelectedNode.CharacterSprite}" Foreground="#38BDF8" FontSize="14" FontWeight="Bold" HorizontalAlignment="Center"/>
-                                </StackPanel>
-
-                                <!-- Drag handle label -->
-                                <Border Grid.Row="1" Background="#0F172A" Padding="6,4">
-                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="4">
-                                        <TextBlock Text="✋ Character" Foreground="#00F0FF" FontSize="11" FontWeight="Bold"/>
-                                        <TextBlock Text="{Binding SelectedNode.CharacterWidth, StringFormat='({0:0}'}" Foreground="#94A3B8" FontSize="10"/>
-                                        <TextBlock Text="x" Foreground="#94A3B8" FontSize="10"/>
-                                        <TextBlock Text="{Binding SelectedNode.CharacterHeight, StringFormat='{}{0:0})'}" Foreground="#94A3B8" FontSize="10"/>
-                                    </StackPanel>
-                                </Border>
-
-                                <!-- Character Resize Corner Handles -->
-                                <Border Name="CharHandleTL" Width="16" Height="16" HorizontalAlignment="Left" VerticalAlignment="Top" Background="#00F0FF" BorderBrush="White" BorderThickness="2" CornerRadius="8" Cursor="TopLeftCorner" Margin="-6,-6,0,0"/>
-                                <Border Name="CharHandleTR" Width="16" Height="16" HorizontalAlignment="Right" VerticalAlignment="Top" Background="#00F0FF" BorderBrush="White" BorderThickness="2" CornerRadius="8" Cursor="TopRightCorner" Margin="0,-6,-6,0"/>
-                                <Border Name="CharHandleBL" Width="16" Height="16" HorizontalAlignment="Left" VerticalAlignment="Bottom" Background="#00F0FF" BorderBrush="White" BorderThickness="2" CornerRadius="8" Cursor="BottomLeftCorner" Margin="-6,0,0,-6"/>
-                                <Border Name="CharHandleBR" Width="16" Height="16" HorizontalAlignment="Right" VerticalAlignment="Bottom" Background="#00F0FF" BorderBrush="White" BorderThickness="2" CornerRadius="8" Cursor="BottomRightCorner" Margin="0,0,-6,-6"/>
-                            </Grid>
-                        </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
 
                         <!-- Interactive Dialogue Box Container (Drag or Resize with Mouse!) -->
                         <Border x:Name="DialogueBox"
+                                IsVisible="{Binding SelectedNode.HasDialogueBox}"
                                 Canvas.Left="{Binding SelectedNode.DialogueBoxX}" 
                                 Canvas.Top="{Binding SelectedNode.DialogueBoxY}" 
                                 Width="{Binding SelectedNode.DialogueBoxWidth}" 
@@ -95,21 +118,21 @@
                                 Background="#12121A" BorderBrush="#00F0FF" BorderThickness="3" CornerRadius="12" BoxShadow="0 10 30 0 #000000">
                             <Grid>
                                 <!-- Speaker Name Badge -->
-                                <Border HorizontalAlignment="Left" VerticalAlignment="Top" Margin="20,-16,0,0" Background="#2563EB" CornerRadius="6" Padding="14,4" BoxShadow="0 4 10 0 #000000">
+                                <Border HorizontalAlignment="Left" VerticalAlignment="Top" Margin="20,-16,0,0" Background="#2563EB" CornerRadius="6" Padding="14,4" BoxShadow="0 4 10 0 #000000" IsHitTestVisible="False">
                                     <TextBlock Text="{Binding SelectedNode.Speaker, FallbackValue='Evelyn'}" Foreground="#FFFFFF" FontSize="16" FontWeight="Bold"/>
                                 </Border>
 
-                                <!-- Dialogue Content Text Container (Adaptively wraps inside square or rectangular box) -->
-                                <ScrollViewer Margin="20,24,20,20" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+                                <!-- Dialogue Content Text Container (HitTest disabled so box receives pointer events) -->
+                                <ScrollViewer Margin="20,24,20,20" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" IsHitTestVisible="False">
                                     <TextBlock TextWrapping="Wrap"
                                                Text="{Binding SelectedNode.DialogueText, FallbackValue='Select a node to preview live dialogue scene.'}" 
                                                Foreground="#F8FAFC" FontSize="20" LineHeight="28"/>
                                 </ScrollViewer>
 
                                 <!-- Drag handle badge -->
-                                <Border HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-14,14,0" Background="#0F172A" BorderBrush="#00F0FF" BorderThickness="1" CornerRadius="4" Padding="6,2">
+                                <Border HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-14,14,0" Background="#0F172A" BorderBrush="#00F0FF" BorderThickness="1" CornerRadius="4" Padding="6,2" IsHitTestVisible="False">
                                     <StackPanel Orientation="Horizontal" Spacing="4">
-                                        <TextBlock Text="✋ Box" Foreground="#00F0FF" FontSize="10" FontWeight="Bold"/>
+                                        <TextBlock Text="✋ Dialogue Box" Foreground="#00F0FF" FontSize="10" FontWeight="Bold"/>
                                         <TextBlock Text="{Binding SelectedNode.DialogueBoxWidth, StringFormat='({0:0}'}" Foreground="#94A3B8" FontSize="10"/>
                                         <TextBlock Text="x" Foreground="#94A3B8" FontSize="10"/>
                                         <TextBlock Text="{Binding SelectedNode.DialogueBoxHeight, StringFormat='{}{0:0})'}" Foreground="#94A3B8" FontSize="10"/>
@@ -117,12 +140,64 @@
                                 </Border>
 
                                 <!-- Dialogue Box Resize Corner Handles -->
-                                <Border Name="DlgHandleTL" Width="16" Height="16" HorizontalAlignment="Left" VerticalAlignment="Top" Background="#00F0FF" BorderBrush="White" BorderThickness="2" CornerRadius="8" Cursor="TopLeftCorner" Margin="-6,-6,0,0"/>
-                                <Border Name="DlgHandleTR" Width="16" Height="16" HorizontalAlignment="Right" VerticalAlignment="Top" Background="#00F0FF" BorderBrush="White" BorderThickness="2" CornerRadius="8" Cursor="TopRightCorner" Margin="0,-6,-6,0"/>
-                                <Border Name="DlgHandleBL" Width="16" Height="16" HorizontalAlignment="Left" VerticalAlignment="Bottom" Background="#00F0FF" BorderBrush="White" BorderThickness="2" CornerRadius="8" Cursor="BottomLeftCorner" Margin="-6,0,0,-6"/>
-                                <Border Name="DlgHandleBR" Width="16" Height="16" HorizontalAlignment="Right" VerticalAlignment="Bottom" Background="#00F0FF" BorderBrush="White" BorderThickness="2" CornerRadius="8" Cursor="BottomRightCorner" Margin="0,0,-6,-6"/>
+                                <Border Name="DlgHandleTL" Width="18" Height="18" HorizontalAlignment="Left" VerticalAlignment="Top" Background="#00F0FF" BorderBrush="White" BorderThickness="2" CornerRadius="9" Cursor="TopLeftCorner" Margin="-7,-7,0,0"/>
+                                <Border Name="DlgHandleTR" Width="18" Height="18" HorizontalAlignment="Right" VerticalAlignment="Top" Background="#00F0FF" BorderBrush="White" BorderThickness="2" CornerRadius="9" Cursor="TopRightCorner" Margin="0,-7,-7,0"/>
+                                <Border Name="DlgHandleBL" Width="18" Height="18" HorizontalAlignment="Left" VerticalAlignment="Bottom" Background="#00F0FF" BorderBrush="White" BorderThickness="2" CornerRadius="9" Cursor="BottomLeftCorner" Margin="-7,0,0,-7"/>
+                                <Border Name="DlgHandleBR" Width="18" Height="18" HorizontalAlignment="Right" VerticalAlignment="Bottom" Background="#00F0FF" BorderBrush="White" BorderThickness="2" CornerRadius="9" Cursor="BottomRightCorner" Margin="0,0,-7,-7"/>
                             </Grid>
                         </Border>
+
+                        <!-- OBS-Style Smart Snap Guidelines (Magnet Alignment Overlay) -->
+                        <Border x:Name="SnapGuideV" Width="2" Height="1080" Background="#00F0FF" IsVisible="False" IsHitTestVisible="False" BoxShadow="0 0 12 3 #00F0FF" />
+                        <Border x:Name="SnapGuideH" Height="2" Width="1920" Background="#00F0FF" IsVisible="False" IsHitTestVisible="False" BoxShadow="0 0 12 3 #00F0FF" />
+
+                        <!-- Floating HUD Snap Tooltip Badge -->
+                        <Border x:Name="SnapBadge" IsVisible="False" IsHitTestVisible="False" Background="#0F172A" BorderBrush="#00F0FF" BorderThickness="2" CornerRadius="6" Padding="10,5" BoxShadow="0 6 16 0 #000000">
+                            <TextBlock x:Name="SnapBadgeText" Text="🧲 Snapped" Foreground="#00F0FF" FontSize="13" FontWeight="Bold"/>
+                        </Border>
+
+                        <!-- Top Resolution Banner & OBS Assist Quick Action Bar -->
+                        <Border Canvas.Left="0" Canvas.Top="0" Width="1920" Height="80" Background="#0F172A" Opacity="0.94">
+                            <DockPanel Margin="24,0">
+                                <StackPanel Orientation="Horizontal" Spacing="14" VerticalAlignment="Center" DockPanel.Dock="Left">
+                                    <TextBlock Text="⚡ EDIT FRAME" Foreground="#00F0FF" FontSize="22" FontWeight="Bold" VerticalAlignment="Center"/>
+                                    <Border Background="#1E293B" CornerRadius="4" Padding="10,4" VerticalAlignment="Center">
+                                        <TextBlock Text="1920x1080 (16:9 HD)" Foreground="#94A3B8" FontSize="14"/>
+                                    </Border>
+                                </StackPanel>
+
+                                <!-- OBS Quick Assist Action Toolbar -->
+                                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" HorizontalAlignment="Center">
+                                    <ToggleButton IsChecked="{Binding IsSnapAssistEnabled}" ToolTip.Tip="Manyetik Hizalama / Magnet Snap Assist (Shift ile geçici devre dışı bırakılabilir)"
+                                                  Background="{DynamicResource InputBackground}" Foreground="#00F0FF" FontSize="12" FontWeight="Bold" Padding="10,6" CornerRadius="6">
+                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                            <TextBlock Text="🧲 Snap Assist"/>
+                                            <TextBlock Text="{Binding IsSnapAssistEnabled, Converter={x:Static ObjectConverters.IsNotNull}, StringFormat='({0})'}" Foreground="#38BDF8"/>
+                                        </StackPanel>
+                                    </ToggleButton>
+
+                                    <Button Content="🎯 Ortala (Center)" Command="{Binding CenterSelectedElementCommand}" 
+                                            ToolTip.Tip="Seçili görseli veya karakteri ekranda yatay ve dikey tam merkeze hizalar"
+                                            Background="#1E293B" Foreground="#F8FAFC" FontSize="12" Padding="10,6" CornerRadius="6"/>
+
+                                    <Button Content="📐 1080p Sığdır (Fit)" Command="{Binding FitBackgroundToScreenCommand}" 
+                                            ToolTip.Tip="Arka planı 1920x1080 tam ekran çerçevesine oturtur"
+                                            Background="#1E293B" Foreground="#F8FAFC" FontSize="12" Padding="10,6" CornerRadius="6"/>
+
+                                    <Button Content="⬇️ Zemine Oturt" Command="{Binding AlignCharacterToBottomCommand}" 
+                                            ToolTip.Tip="Karakterleri alt zemin çizgisine hizalar"
+                                            Background="#1E293B" Foreground="#F8FAFC" FontSize="12" Padding="10,6" CornerRadius="6"/>
+
+                                    <Button Content="↕ Alt Banner" Command="{Binding PresetDialogueBoxCommand}" CommandParameter="BottomBanner"
+                                            ToolTip.Tip="Diyalog kutusunu standart alt banner (1720x220) yapar"
+                                            Background="#1E293B" Foreground="#F8FAFC" FontSize="12" Padding="10,6" CornerRadius="6"/>
+                                </StackPanel>
+
+                                <TextBlock Text="{Binding SelectedNode.Title, StringFormat='Node: {0}'}" 
+                                           Foreground="#F8FAFC" FontSize="16" FontWeight="SemiBold" HorizontalAlignment="Right" VerticalAlignment="Center" DockPanel.Dock="Right"/>
+                            </DockPanel>
+                        </Border>
+
                     </Canvas>
                 </Border>
             </Viewbox>

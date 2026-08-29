@@ -133,35 +133,42 @@ namespace RowlEngine.Editor.Native
         {
             if (_handle == IntPtr.Zero) return;
 
-            IntPtr pixelPtr = NativeBridge.RowlEngine_GetPixelBuffer(_handle, out uint w, out uint h);
-            if (pixelPtr != IntPtr.Zero && w > 0 && h > 0)
+            try
             {
-                int width = (int)w;
-                int height = (int)h;
-
-                if (RenderTargetBitmap == null ||
-                    RenderTargetBitmap.PixelSize.Width != width ||
-                    RenderTargetBitmap.PixelSize.Height != height)
+                IntPtr pixelPtr = NativeBridge.RowlEngine_GetPixelBuffer(_handle, out uint w, out uint h);
+                if (pixelPtr != IntPtr.Zero && w > 0 && h > 0)
                 {
-                    RenderTargetBitmap = new WriteableBitmap(
-                        new PixelSize(width, height),
-                        new Vector(96, 96),
-                        PixelFormat.Rgba8888,
-                        AlphaFormat.Opaque);
-                }
+                    int width = (int)w;
+                    int height = (int)h;
 
-                using (var buf = RenderTargetBitmap.Lock())
-                {
-                    unsafe
+                    if (RenderTargetBitmap == null ||
+                        RenderTargetBitmap.PixelSize.Width != width ||
+                        RenderTargetBitmap.PixelSize.Height != height)
                     {
-                        Buffer.MemoryCopy(
-                            (void*)pixelPtr,
-                            (void*)buf.Address,
-                            buf.RowBytes * height,
-                            width * height * 4);
+                        RenderTargetBitmap = new WriteableBitmap(
+                            new PixelSize(width, height),
+                            new Vector(96, 96),
+                            PixelFormat.Rgba8888,
+                            AlphaFormat.Opaque);
                     }
+
+                    using (var buf = RenderTargetBitmap.Lock())
+                    {
+                        unsafe
+                        {
+                            Buffer.MemoryCopy(
+                                (void*)pixelPtr,
+                                (void*)buf.Address,
+                                buf.RowBytes * height,
+                                width * height * 4);
+                        }
+                    }
+                    OnPropertyChanged(nameof(RenderTargetBitmap));
                 }
-                OnPropertyChanged(nameof(RenderTargetBitmap));
+            }
+            catch
+            {
+                // Safe ignore if running in headless test without Avalonia render interface
             }
         }
 
@@ -220,6 +227,23 @@ namespace RowlEngine.Editor.Native
                 character ?? "",
                 charX, charY, charW, charH,
                 dlgX,  dlgY,  dlgW,  dlgH);
+
+            if (!IsPlaying)
+            {
+                NativeBridge.RowlEngine_Step(_handle, 0.0f);
+                UpdatePixelBuffer();
+            }
+        }
+
+        /// <summary>
+        /// Pushes component-based scene data to the engine as a JSON string.
+        /// This is the component-aware alternative to UpdateScene.
+        /// </summary>
+        public void UpdateSceneFromComponents(string componentsJson)
+        {
+            if (_handle == IntPtr.Zero || string.IsNullOrEmpty(componentsJson)) return;
+
+            NativeBridge.RowlEngine_UpdateSceneFromJson(_handle, componentsJson);
 
             if (!IsPlaying)
             {

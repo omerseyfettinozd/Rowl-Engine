@@ -100,7 +100,7 @@ target_include_directories(RowlEngineCore PUBLIC
     ${LUA_INCLUDE_DIR}
 )
 
-target_link_libraries(RowlEngineCore PRIVATE
+target_link_libraries(RowlEngineCore PUBLIC
     ${ZSTD_TARGET}
     ${SDL3_TARGET}
     ${LUA_LIBRARIES}

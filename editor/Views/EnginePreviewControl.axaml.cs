@@ -187,20 +187,10 @@ namespace RowlEngine.Editor.Views
 
         private void PushNodeScene(NodeViewModel node)
         {
-            if (_engineHost == null || !_engineHost.IsInitialized) return;
-
-            _engineHost.UpdateScene(
-                node.Speaker           ?? "",
-                node.DialogueText      ?? "",
-                node.BackgroundTexture ?? "",
-                (float)node.BackgroundX,   (float)node.BackgroundY,
-                (float)node.BackgroundWidth, (float)node.BackgroundHeight,
-                node.CharacterSprite   ?? "",
-                (float)node.CharacterX,    (float)node.CharacterY,
-                (float)node.CharacterWidth, (float)node.CharacterHeight,
-                (float)node.DialogueBoxX,   (float)node.DialogueBoxY,
-                (float)node.DialogueBoxWidth, (float)node.DialogueBoxHeight
-            );
+            if (DataContext is MainWindowViewModel vm)
+            {
+                vm.PushSceneToEngine(node);
+            }
         }
 
         private void UpdateStatusBadge(string text, string hexColor)

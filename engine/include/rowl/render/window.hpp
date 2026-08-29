@@ -3,6 +3,7 @@
 #include <string>
 #include <cstdint>
 #include <memory>
+#include <vector>
 #include <unordered_map>
 
 struct SDL_Window;
@@ -11,6 +12,14 @@ struct SDL_Texture;
 struct SDL_Surface;
 
 namespace Rowl::Render {
+
+struct CharacterRenderData {
+    std::string sprite;
+    float x = 1440.0f;
+    float y = 340.0f;
+    float width = 360.0f;
+    float height = 540.0f;
+};
 
 class Window {
 public:
@@ -57,12 +66,13 @@ public:
     void pollEvents(bool& outShouldQuit);
     void beginFrame();
     void renderVisualNovelFrame(
-        const std::string& speaker,
-        const std::string& dialogue,
+        bool hasBackground,
         const std::string& background,
         float bgX,   float bgY,   float bgW,   float bgH,
-        const std::string& character,
-        float charX, float charY, float charW, float charH,
+        const std::vector<CharacterRenderData>& characters,
+        bool hasDialogueBox,
+        const std::string& speaker,
+        const std::string& dialogue,
         float dlgX,  float dlgY,  float dlgW,  float dlgH
     );
     void endFrame();
@@ -80,10 +90,18 @@ public:
     SDL_Texture* loadTexture(const std::string& filename);
 
 private:
+    struct TextWrapCache {
+        std::string dialogue;
+        float boxWidth = 0.0f;
+        float scaleFactor = 0.0f;
+        std::vector<std::string> wrappedLines;
+    };
+
     SDL_Window*   m_sdlWindow         = nullptr;
     SDL_Renderer* m_sdlRenderer       = nullptr;
     SDL_Surface*  m_offscreenSurface  = nullptr;
     std::unordered_map<std::string, SDL_Texture*> m_textureCache;
+    TextWrapCache m_textWrapCache;
 
     uint32_t m_width       = 1920;
     uint32_t m_height      = 1080;

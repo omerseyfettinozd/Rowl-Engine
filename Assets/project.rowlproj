@@ -1,0 +1,12 @@
+{
+  "name": "Rowl Engine Project",
+  "version": "1.0.0",
+  "engineVersion": "1.0.0",
+  "savedAt": "2026-08-09T12:53:17.6714512Z",
+  "nodeCount": 3,
+  "startNodeId": 101,
+  "virtualResolution": {
+    "width": 1920,
+    "height": 1080
+  }
+}

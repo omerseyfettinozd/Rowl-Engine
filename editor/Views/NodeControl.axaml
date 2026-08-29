@@ -7,18 +7,18 @@
     <Canvas Width="260" Height="120" Background="Transparent" ClipToBounds="False">
         <!-- Main Card Body -->
         <Border Canvas.Left="10" Canvas.Top="0" Width="240" Height="120"
-                Background="#181825" BorderBrush="{Binding BorderColor}" BorderThickness="1.5" CornerRadius="8"
-                BoxShadow="0 4 12 0 #40000000">
+                Background="{DynamicResource NodeCardBg}" BorderBrush="{Binding BorderColor}" BorderThickness="1.5" CornerRadius="8"
+                BoxShadow="0 4 12 0 #30000000">
             <Grid RowDefinitions="36, *">
                 <!-- Node Header (ComfyUI Style Header Bar) -->
-                <Border Grid.Row="0" Background="#1E1E2E" CornerRadius="7,7,0,0" Padding="12,0">
+                <Border Grid.Row="0" Background="{DynamicResource NodeHeaderBg}" CornerRadius="7,7,0,0" Padding="12,0">
                     <DockPanel VerticalAlignment="Center">
-                        <Border DockPanel.Dock="Left" Width="8" Height="8" CornerRadius="4" Background="#00F0FF" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                        <Border DockPanel.Dock="Left" Width="8" Height="8" CornerRadius="4" Background="{DynamicResource AccentColor}" Margin="0,0,8,0" VerticalAlignment="Center"/>
                         <Border IsVisible="{Binding IsStartNode}" Background="#10B981" CornerRadius="3" Padding="4,1" Margin="0,0,6,0" VerticalAlignment="Center" DockPanel.Dock="Right">
                             <TextBlock Text="▶ START" FontSize="9" Foreground="White" FontWeight="Black"/>
                         </Border>
-                        <TextBlock Text="{Binding Id, StringFormat='#{0}'}" Foreground="#64748B" FontSize="11" HorizontalAlignment="Right" VerticalAlignment="Center" DockPanel.Dock="Right" Margin="0,0,6,0"/>
-                        <TextBlock Text="{Binding Title}" FontWeight="Bold" Foreground="#F8FAFC" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                        <TextBlock Text="{Binding Id, StringFormat='#{0}'}" Foreground="{DynamicResource MutedText}" FontSize="11" HorizontalAlignment="Right" VerticalAlignment="Center" DockPanel.Dock="Right" Margin="0,0,6,0"/>
+                        <TextBlock Text="{Binding Title}" FontWeight="Bold" Foreground="{DynamicResource PrimaryText}" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                     </DockPanel>
                 </Border>
 
@@ -26,12 +26,12 @@
                 <Border Grid.Row="1" Padding="12,8">
                     <StackPanel Spacing="4">
                         <StackPanel Orientation="Horizontal" Spacing="6">
-                            <Border Background="#2563EB" CornerRadius="3" Padding="4,1">
+                            <Border Background="{DynamicResource AccentButtonBg}" CornerRadius="3" Padding="4,1">
                                 <TextBlock Text="{Binding Speaker}" FontSize="10" Foreground="White" FontWeight="Bold"/>
                             </Border>
-                            <TextBlock Text="{Binding BackgroundTexture}" FontSize="10" Foreground="#64748B" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                            <TextBlock Text="{Binding BackgroundTexture}" FontSize="10" Foreground="{DynamicResource MutedText}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                         </StackPanel>
-                        <TextBlock Text="{Binding DialogueText}" FontSize="11" Foreground="#CBD5E1" TextWrapping="Wrap" MaxLines="2" LineHeight="15"/>
+                        <TextBlock Text="{Binding DialogueText}" FontSize="11" Foreground="{DynamicResource SecondaryText}" TextWrapping="Wrap" MaxLines="2" LineHeight="15"/>
                     </StackPanel>
                 </Border>
             </Grid>
@@ -39,12 +39,12 @@
 
         <!-- Left Input Handle (Green Pin Centered Exactly at X=0, Y=60) -->
         <Border Name="InputPinHandle" Canvas.Left="-5" Canvas.Top="45" Width="30" Height="30" Background="Transparent" Cursor="Hand" ToolTip.Tip="Flow Input Pin (Left Click: Drag Cable / Right Click: Disconnect)">
-            <Ellipse Width="16" Height="16" Fill="#00FF66" Stroke="#FFFFFF" StrokeThickness="2" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            <Ellipse Width="16" Height="16" Fill="#10B981" Stroke="#FFFFFF" StrokeThickness="2" HorizontalAlignment="Center" VerticalAlignment="Center"/>
         </Border>
 
         <!-- Right Output Handle (Green Pin Centered Exactly at X=265, Y=60) -->
         <Border Name="OutputPinHandle" Canvas.Left="235" Canvas.Top="45" Width="30" Height="30" Background="Transparent" Cursor="Hand" ToolTip.Tip="Flow Output Pin (Left Click: Drag Cable / Right Click: Disconnect)">
-            <Ellipse Width="16" Height="16" Fill="#00FF66" Stroke="#FFFFFF" StrokeThickness="2" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            <Ellipse Width="16" Height="16" Fill="#10B981" Stroke="#FFFFFF" StrokeThickness="2" HorizontalAlignment="Center" VerticalAlignment="Center"/>
         </Border>
     </Canvas>
 </UserControl>

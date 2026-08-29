@@ -127,6 +127,14 @@ void RowlEngine_UpdateScene(
     );
 }
 
+void RowlEngine_UpdateSceneFromJson(
+    RowlEngineHandle handle,
+    const char* componentsJson)
+{
+    if (!handle || !componentsJson) return;
+    toEngine(handle)->updateSceneFromComponents(componentsJson ? componentsJson : "[]");
+}
+
 void RowlEngine_LoadStoryGraph(RowlEngineHandle handle, const char* jsonPath) {
     if (!handle || !jsonPath) return;
     // Engine'in path'i geçici olarak override et ve graph'i yükle
