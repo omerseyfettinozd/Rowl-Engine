@@ -447,7 +447,7 @@ void Window::renderVisualNovelFrame(
         }
     }
 
-    // 2. Render Character Sprites / Portraits (Multi-Character Support)
+    // 2. Render Character Sprites / Portraits (Multi-Character Support with Proportional Uniform Fit)
     for (const auto& ch : characters) {
         if (ch.sprite.empty()) continue;
 
@@ -456,11 +456,38 @@ void Window::renderVisualNovelFrame(
         float physCharX, physCharY;
         AspectGuardian::virtualToPhysical(ch.x, ch.y, metrics, physCharX, physCharY);
 
-        SDL_FRect charBox = { physCharX, physCharY, scaledCharW, scaledCharH };
         SDL_Texture* charTex = loadTexture(ch.sprite);
         if (charTex) {
-            SDL_RenderTexture(m_sdlRenderer, charTex, nullptr, &charBox);
+            float texW = 0.0f, texH = 0.0f;
+            if (SDL_GetTextureSize(charTex, &texW, &texH) && texW > 0.0f && texH > 0.0f && scaledCharW > 0.0f && scaledCharH > 0.0f) {
+                // Exact Uniform Proportional Fit inside (physCharX, physCharY, scaledCharW, scaledCharH)
+                float texAspect = texW / texH;
+                float boxAspect = scaledCharW / scaledCharH;
+                float drawW = scaledCharW;
+                float drawH = scaledCharH;
+                float drawX = physCharX;
+                float drawY = physCharY;
+
+                if (texAspect > boxAspect) {
+                    // Texture is proportionally wider than bounding box: fit width, center vertically
+                    drawW = scaledCharW;
+                    drawH = scaledCharW / texAspect;
+                    drawY = physCharY + (scaledCharH - drawH) / 2.0f;
+                } else {
+                    // Texture is proportionally taller than bounding box: fit height, center horizontally
+                    drawH = scaledCharH;
+                    drawW = scaledCharH * texAspect;
+                    drawX = physCharX + (scaledCharW - drawW) / 2.0f;
+                }
+
+                SDL_FRect dstRect = { drawX, drawY, drawW, drawH };
+                SDL_RenderTexture(m_sdlRenderer, charTex, nullptr, &dstRect);
+            } else {
+                SDL_FRect charBox = { physCharX, physCharY, scaledCharW, scaledCharH };
+                SDL_RenderTexture(m_sdlRenderer, charTex, nullptr, &charBox);
+            }
         } else {
+            SDL_FRect charBox = { physCharX, physCharY, scaledCharW, scaledCharH };
             SDL_SetRenderDrawColor(m_sdlRenderer, 30, 41, 59, 220);
             SDL_RenderFillRect(m_sdlRenderer, &charBox);
             SDL_SetRenderDrawColor(m_sdlRenderer, 56, 189, 248, 255);

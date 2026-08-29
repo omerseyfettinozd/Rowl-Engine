@@ -128,6 +128,13 @@ namespace RowlEngine.Editor.Views
                     RenderFirstFrame();
                 }
             }
+            else if (e.PropertyName == nameof(MainWindowViewModel.SelectedNode))
+            {
+                if (_engineHost != null && !_engineHost.IsPlaying && sender is MainWindowViewModel mainVm && mainVm.SelectedNode != null)
+                {
+                    PushNodeScene(mainVm.SelectedNode);
+                }
+            }
             else if (e.PropertyName == nameof(MainWindowViewModel.Nodes) ||
                      e.PropertyName == nameof(MainWindowViewModel.Connections))
             {
