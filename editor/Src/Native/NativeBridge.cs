@@ -91,6 +91,11 @@ namespace RowlEngine.Editor.Native
             [MarshalAs(UnmanagedType.LPUTF8Str)] string jsonPath);
 
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern void RowlEngine_SetProjectDirectory(
+            IntPtr handle,
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string projectRoot);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
         internal static extern void RowlEngine_AdvanceNode(
             IntPtr handle,
             uint choiceIndex);

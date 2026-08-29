@@ -162,6 +162,13 @@ ROWL_API void RowlEngine_LoadStoryGraph(RowlEngineHandle handle,
                                          const char* jsonPath);
 
 /**
+ * Sets the active project root directory, isolating VFS mounts to that project.
+ * @param projectRoot Absolute or relative path to the active project folder.
+ */
+ROWL_API void RowlEngine_SetProjectDirectory(RowlEngineHandle handle,
+                                             const char* projectRoot);
+
+/**
  * Advances playback to the next story node.
  * @param choiceIndex Branch index (0 = first / only branch).
  */

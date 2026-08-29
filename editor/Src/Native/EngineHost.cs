@@ -266,6 +266,20 @@ namespace RowlEngine.Editor.Native
             }
         }
 
+        /// <summary>Sets the active project root directory, isolating VFS mounts to that project.</summary>
+        public void SetProjectDirectory(string projectRoot)
+        {
+            if (_handle != IntPtr.Zero && !string.IsNullOrEmpty(projectRoot))
+            {
+                NativeBridge.RowlEngine_SetProjectDirectory(_handle, projectRoot);
+                if (!IsPlaying)
+                {
+                    NativeBridge.RowlEngine_Step(_handle, 0.0f);
+                    UpdatePixelBuffer();
+                }
+            }
+        }
+
         /// <summary>Forces an immediate single-step render and pixel buffer refresh (zero-latency UI update).</summary>
         public void ForceRenderFrame()
         {

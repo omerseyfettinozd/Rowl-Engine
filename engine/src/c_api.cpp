@@ -12,6 +12,7 @@
 #include "rowl/c_api.h"
 #include "rowl/core/engine.hpp"
 #include "rowl/core/logger.hpp"
+#include "rowl/vfs/vfs.hpp"
 
 #include <cstring>
 
@@ -139,6 +140,23 @@ void RowlEngine_LoadStoryGraph(RowlEngineHandle handle, const char* jsonPath) {
     if (!handle || !jsonPath) return;
     // Engine'in path'i geçici olarak override et ve graph'i yükle
     toEngine(handle)->loadStoryGraphFromPath(jsonPath);
+}
+
+void RowlEngine_SetProjectDirectory(RowlEngineHandle handle, const char* projectRoot) {
+    if (!projectRoot || !*projectRoot) return;
+    Rowl::VFS::VFSManager::instance().remountProject(projectRoot);
+    if (handle) {
+        // Try loading story graph from the newly mounted project directory
+        std::string graphPath = std::string(projectRoot) + "/Assets/json/full_story_graph.json";
+        if (std::filesystem::exists(graphPath)) {
+            toEngine(handle)->loadStoryGraphFromPath(graphPath);
+        } else {
+            std::string altGraphPath = std::string(projectRoot) + "/full_story_graph.json";
+            if (std::filesystem::exists(altGraphPath)) {
+                toEngine(handle)->loadStoryGraphFromPath(altGraphPath);
+            }
+        }
+    }
 }
 
 void RowlEngine_AdvanceNode(RowlEngineHandle handle, uint32_t choiceIndex) {
