@@ -525,13 +525,10 @@ void Window::renderVisualNovelFrame(
 
         // Speaker Name Tag Badge (if speaker name provided)
         if (!dlg.speaker.empty()) {
-            float speakerFontScale = std::clamp(dlg.speakerFontSize / 16.0f, 0.8f, 3.5f) * metrics.scaleFactor;
-            float charWidth = 8.0f * speakerFontScale;
-            float charHeight = 8.0f * speakerFontScale;
-            float tagW = std::clamp((static_cast<float>(dlg.speaker.length()) * charWidth) + (32.0f * metrics.scaleFactor), 120.0f * metrics.scaleFactor, scaledDlgW * 0.8f);
-            float tagH = charHeight + (20.0f * metrics.scaleFactor);
+            float tagW = std::clamp((static_cast<float>(dlg.speaker.length()) * 10.0f * metrics.scaleFactor) + (32.0f * metrics.scaleFactor), 120.0f * metrics.scaleFactor, scaledDlgW * 0.8f);
+            float tagH = 34.0f * metrics.scaleFactor;
             float tagX = physBoxX + (20.0f * metrics.scaleFactor);
-            float tagY = physBoxY - (tagH * 0.6f);
+            float tagY = physBoxY - (17.0f * metrics.scaleFactor);
 
             SDL_FRect speakerTag = { tagX, tagY, tagW, tagH };
 
@@ -543,27 +540,19 @@ void Window::renderVisualNovelFrame(
             SDL_SetRenderDrawColor(m_sdlRenderer, 255, 255, 255, 180);
             SDL_RenderRect(m_sdlRenderer, &speakerTag);
 
-            // Draw speaker name text with scale
+            // Draw speaker name text cleanly
             SDL_SetRenderDrawColor(m_sdlRenderer, 255, 255, 255, 255);
-            SDL_SetRenderScale(m_sdlRenderer, speakerFontScale, speakerFontScale);
-            float textDrawX = (tagX + (16.0f * metrics.scaleFactor)) / speakerFontScale;
-            float textDrawY = (tagY + (tagH - charHeight) / 2.0f) / speakerFontScale;
-            SDL_RenderDebugText(m_sdlRenderer, textDrawX, textDrawY, dlg.speaker.c_str());
-            SDL_SetRenderScale(m_sdlRenderer, 1.0f, 1.0f);
+            SDL_RenderDebugText(m_sdlRenderer, tagX + (16.0f * metrics.scaleFactor), tagY + (tagH - 8.0f) / 2.0f, dlg.speaker.c_str());
         }
 
-        // Dialogue Content Text (with Scalable Font + Typewriter Progression + Text Alignment)
+        // Dialogue Content Text (with Typewriter Progression + Text Alignment)
         if (!dlg.dialogue.empty()) {
             SDL_Color textColor = parseHexColor(dlg.textColor, 255);
             SDL_SetRenderDrawColor(m_sdlRenderer, textColor.r, textColor.g, textColor.b, textColor.a);
 
-            float fontScale = std::clamp(dlg.fontSize / 16.0f, 0.8f, 3.5f) * metrics.scaleFactor;
-            float charW = 8.0f * fontScale;
-            float charH = 8.0f * fontScale;
-            float lineHeight = charH * 1.5f;
-
             float paddingLeft = 24.0f * metrics.scaleFactor;
             float paddingTop = 28.0f * metrics.scaleFactor;
+            float lineHeight = 20.0f * metrics.scaleFactor;
             float maxLineWidth = scaledDlgW - (48.0f * metrics.scaleFactor);
 
             // Calculate visible characters based on typewriter progression (animates only in Play Mode)
@@ -579,15 +568,15 @@ void Window::renderVisualNovelFrame(
             // Text wrap memoization cache
             bool cacheValid = (m_textWrapCache.dialogue == dlg.dialogue &&
                                std::abs(m_textWrapCache.boxWidth - scaledDlgW) < 0.1f &&
-                               std::abs(m_textWrapCache.scaleFactor - fontScale) < 0.001f);
+                               std::abs(m_textWrapCache.scaleFactor - metrics.scaleFactor) < 0.001f);
 
             if (!cacheValid) {
                 m_textWrapCache.dialogue = dlg.dialogue;
                 m_textWrapCache.boxWidth = scaledDlgW;
-                m_textWrapCache.scaleFactor = fontScale;
+                m_textWrapCache.scaleFactor = metrics.scaleFactor;
                 m_textWrapCache.wrappedLines.clear();
 
-                size_t maxCharsPerLine = static_cast<size_t>(std::max(10.0f, maxLineWidth / charW));
+                size_t maxCharsPerLine = static_cast<size_t>(std::max(10.0f, maxLineWidth / (8.0f * metrics.scaleFactor)));
 
                 // Split into paragraphs by \n
                 std::vector<std::string> lines;
@@ -635,8 +624,6 @@ void Window::renderVisualNovelFrame(
             float currentY = physBoxY + paddingTop;
             size_t remainingChars = visibleCharCount;
 
-            SDL_SetRenderScale(m_sdlRenderer, fontScale, fontScale);
-
             for (const auto& line : m_textWrapCache.wrappedLines) {
                 if (currentY + lineHeight > physBoxY + scaledDlgH - (10.0f * metrics.scaleFactor))
                     break; // Do not overflow bottom of dialogue box
@@ -645,25 +632,23 @@ void Window::renderVisualNovelFrame(
 
                 float textX = physBoxX + paddingLeft;
                 if (dlg.textAlignment == "Center") {
-                    float lineWidth = static_cast<float>(line.length()) * charW;
+                    float lineWidth = static_cast<float>(line.length()) * 8.0f * metrics.scaleFactor;
                     textX = physBoxX + (scaledDlgW - lineWidth) / 2.0f;
                 } else if (dlg.textAlignment == "Right") {
-                    float lineWidth = static_cast<float>(line.length()) * charW;
+                    float lineWidth = static_cast<float>(line.length()) * 8.0f * metrics.scaleFactor;
                     textX = physBoxX + scaledDlgW - paddingLeft - lineWidth;
                 }
 
                 if (remainingChars >= line.length()) {
-                    SDL_RenderDebugText(m_sdlRenderer, textX / fontScale, currentY / fontScale, line.c_str());
+                    SDL_RenderDebugText(m_sdlRenderer, textX, currentY, line.c_str());
                     remainingChars -= line.length();
                 } else {
                     std::string partialLine = line.substr(0, remainingChars);
-                    SDL_RenderDebugText(m_sdlRenderer, textX / fontScale, currentY / fontScale, partialLine.c_str());
+                    SDL_RenderDebugText(m_sdlRenderer, textX, currentY, partialLine.c_str());
                     remainingChars = 0;
                 }
                 currentY += lineHeight;
             }
-
-            SDL_SetRenderScale(m_sdlRenderer, 1.0f, 1.0f);
         }
     }
 }
