@@ -4,6 +4,7 @@ add_executable(rowl_tests
     main_test_runner.cpp
     ${CMAKE_SOURCE_DIR}/engine/src/core/logger.cpp
     ${CMAKE_SOURCE_DIR}/engine/src/render/aspect_guardian.cpp
+    ${CMAKE_SOURCE_DIR}/engine/src/render/font_renderer.cpp
     ${CMAKE_SOURCE_DIR}/engine/src/render/msdf_renderer.cpp
     ${CMAKE_SOURCE_DIR}/engine/src/render/window.cpp
     ${CMAKE_SOURCE_DIR}/engine/src/state/game_state.cpp

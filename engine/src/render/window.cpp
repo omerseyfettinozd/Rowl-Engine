@@ -55,6 +55,8 @@ bool Window::initializeOffscreen(uint32_t width, uint32_t height) {
     m_initialized = true;
     m_isOffscreen = true;
 
+    initFontRenderer();
+
     ROWL_LOG_INFO("SDL3 Offscreen Engine Surface initialized (" +
                   std::to_string(width) + "x" + std::to_string(height) + " RGBA32)");
     return true;
@@ -170,7 +172,34 @@ bool Window::initializeEmbedded(void* nativeHandle, uint32_t width, uint32_t hei
 
     ROWL_LOG_INFO("SDL3 Embedded Window initialized (" +
                   std::to_string(width) + "x" + std::to_string(height) + ")");
+    initFontRenderer();
     return true;
+}
+
+void Window::initFontRenderer() {
+    if (!m_fontRenderer) {
+        m_fontRenderer = std::make_unique<FontRenderer>();
+    }
+
+    const std::vector<std::string> fontCandidates = {
+        "Assets/fonts/default.ttf",
+        "Assets/fonts/default_bold.ttf",
+        "fonts/default.ttf",
+        "/usr/share/fonts/liberation/LiberationSans-Regular.ttf",
+        "/usr/share/fonts/Adwaita/AdwaitaSans-Regular.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/TTF/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf"
+    };
+
+    for (const auto& path : fontCandidates) {
+        if (std::filesystem::exists(path)) {
+            if (m_fontRenderer->loadFont(path)) {
+                ROWL_LOG_INFO("✅ Loaded Visual Novel TTF Font: " + path);
+                break;
+            }
+        }
+    }
 }
 
 void Window::resizeViewport(uint32_t newWidth, uint32_t newHeight) {
@@ -525,10 +554,15 @@ void Window::renderVisualNovelFrame(
 
         // Speaker Name Tag Badge (if speaker name provided)
         if (!dlg.speaker.empty()) {
-            float tagW = std::clamp((static_cast<float>(dlg.speaker.length()) * 10.0f * metrics.scaleFactor) + (32.0f * metrics.scaleFactor), 120.0f * metrics.scaleFactor, scaledDlgW * 0.8f);
-            float tagH = 34.0f * metrics.scaleFactor;
+            float speakerFontPx = dlg.speakerFontSize * metrics.scaleFactor;
+            float speakerTextW = (m_fontRenderer && m_fontRenderer->isLoaded())
+                ? m_fontRenderer->measureTextWidth(dlg.speaker, speakerFontPx)
+                : (static_cast<float>(dlg.speaker.length()) * 10.0f * metrics.scaleFactor);
+
+            float tagW = std::clamp(speakerTextW + (32.0f * metrics.scaleFactor), 120.0f * metrics.scaleFactor, scaledDlgW * 0.8f);
+            float tagH = (dlg.speakerFontSize * 1.4f + 12.0f) * metrics.scaleFactor;
             float tagX = physBoxX + (20.0f * metrics.scaleFactor);
-            float tagY = physBoxY - (17.0f * metrics.scaleFactor);
+            float tagY = physBoxY - (tagH * 0.6f);
 
             SDL_FRect speakerTag = { tagX, tagY, tagW, tagH };
 
@@ -540,114 +574,62 @@ void Window::renderVisualNovelFrame(
             SDL_SetRenderDrawColor(m_sdlRenderer, 255, 255, 255, 180);
             SDL_RenderRect(m_sdlRenderer, &speakerTag);
 
-            // Draw speaker name text cleanly
-            SDL_SetRenderDrawColor(m_sdlRenderer, 255, 255, 255, 255);
-            SDL_RenderDebugText(m_sdlRenderer, tagX + (16.0f * metrics.scaleFactor), tagY + (tagH - 8.0f) / 2.0f, dlg.speaker.c_str());
+            // Draw speaker name text
+            if (m_fontRenderer && m_fontRenderer->isLoaded() && m_offscreenSurface) {
+                float textDrawY = tagY + (tagH - speakerFontPx) / 2.0f - (2.0f * metrics.scaleFactor);
+                m_fontRenderer->renderText(
+                    m_offscreenSurface,
+                    dlg.speaker,
+                    tagX + (16.0f * metrics.scaleFactor),
+                    textDrawY,
+                    speakerFontPx,
+                    {255, 255, 255, 255},
+                    tagW - (32.0f * metrics.scaleFactor),
+                    tagH,
+                    "Left"
+                );
+            } else {
+                SDL_SetRenderDrawColor(m_sdlRenderer, 255, 255, 255, 255);
+                SDL_RenderDebugText(m_sdlRenderer, tagX + (16.0f * metrics.scaleFactor), tagY + (tagH - 8.0f) / 2.0f, dlg.speaker.c_str());
+            }
         }
 
-        // Dialogue Content Text (with Typewriter Progression + Text Alignment)
+        // Dialogue Content Text (with TrueType Scalable Font + Typewriter Progression + Text Alignment)
         if (!dlg.dialogue.empty()) {
             SDL_Color textColor = parseHexColor(dlg.textColor, 255);
-            SDL_SetRenderDrawColor(m_sdlRenderer, textColor.r, textColor.g, textColor.b, textColor.a);
 
             float paddingLeft = 24.0f * metrics.scaleFactor;
             float paddingTop = 28.0f * metrics.scaleFactor;
-            float lineHeight = 20.0f * metrics.scaleFactor;
             float maxLineWidth = scaledDlgW - (48.0f * metrics.scaleFactor);
+            float maxDialogueHeight = scaledDlgH - (36.0f * metrics.scaleFactor);
+            float fontPx = dlg.fontSize * metrics.scaleFactor;
 
-            // Calculate visible characters based on typewriter progression (animates only in Play Mode)
-            size_t totalChars = dlg.dialogue.length();
-            size_t visibleCharCount = totalChars;
+            // Calculate visible codepoints based on typewriter progression
+            size_t totalCodepoints = FontRenderer::countCodepoints(dlg.dialogue);
+            size_t visibleCodepoints = totalCodepoints;
             if (dlg.isPlaying && dlg.typewriterEnabled && dlg.textSpeed > 0) {
                 float msPerChar = static_cast<float>(dlg.textSpeed);
                 float elapsedMs = dlg.elapsedTypewriterTime * 1000.0f;
-                visibleCharCount = static_cast<size_t>(elapsedMs / msPerChar);
-                if (visibleCharCount > totalChars) visibleCharCount = totalChars;
+                visibleCodepoints = static_cast<size_t>(elapsedMs / msPerChar);
+                if (visibleCodepoints > totalCodepoints) visibleCodepoints = totalCodepoints;
             }
 
-            // Text wrap memoization cache
-            bool cacheValid = (m_textWrapCache.dialogue == dlg.dialogue &&
-                               std::abs(m_textWrapCache.boxWidth - scaledDlgW) < 0.1f &&
-                               std::abs(m_textWrapCache.scaleFactor - metrics.scaleFactor) < 0.001f);
-
-            if (!cacheValid) {
-                m_textWrapCache.dialogue = dlg.dialogue;
-                m_textWrapCache.boxWidth = scaledDlgW;
-                m_textWrapCache.scaleFactor = metrics.scaleFactor;
-                m_textWrapCache.wrappedLines.clear();
-
-                size_t maxCharsPerLine = static_cast<size_t>(std::max(10.0f, maxLineWidth / (8.0f * metrics.scaleFactor)));
-
-                // Split into paragraphs by \n
-                std::vector<std::string> lines;
-                std::string currentParagraph;
-                for (char c : dlg.dialogue) {
-                    if (c == '\n') {
-                        lines.push_back(currentParagraph);
-                        currentParagraph.clear();
-                    } else {
-                        currentParagraph += c;
-                    }
-                }
-                if (!currentParagraph.empty() || lines.empty()) {
-                    lines.push_back(currentParagraph);
-                }
-
-                // Word wrap each paragraph
-                for (const auto& para : lines) {
-                    if (para.length() <= maxCharsPerLine) {
-                        m_textWrapCache.wrappedLines.push_back(para);
-                        continue;
-                    }
-
-                    size_t start = 0;
-                    while (start < para.length()) {
-                        if (para.length() - start <= maxCharsPerLine) {
-                            m_textWrapCache.wrappedLines.push_back(para.substr(start));
-                            break;
-                        }
-
-                        size_t end = start + maxCharsPerLine;
-                        size_t spacePos = para.rfind(' ', end);
-                        if (spacePos != std::string::npos && spacePos > start) {
-                            m_textWrapCache.wrappedLines.push_back(para.substr(start, spacePos - start));
-                            start = spacePos + 1;
-                        } else {
-                            m_textWrapCache.wrappedLines.push_back(para.substr(start, maxCharsPerLine));
-                            start += maxCharsPerLine;
-                        }
-                    }
-                }
-            }
-
-            // Render each wrapped line with typewriter character count clamping & alignment
-            float currentY = physBoxY + paddingTop;
-            size_t remainingChars = visibleCharCount;
-
-            for (const auto& line : m_textWrapCache.wrappedLines) {
-                if (currentY + lineHeight > physBoxY + scaledDlgH - (10.0f * metrics.scaleFactor))
-                    break; // Do not overflow bottom of dialogue box
-
-                if (remainingChars == 0) break;
-
-                float textX = physBoxX + paddingLeft;
-                if (dlg.textAlignment == "Center") {
-                    float lineWidth = static_cast<float>(line.length()) * 8.0f * metrics.scaleFactor;
-                    textX = physBoxX + (scaledDlgW - lineWidth) / 2.0f;
-                } else if (dlg.textAlignment == "Right") {
-                    float lineWidth = static_cast<float>(line.length()) * 8.0f * metrics.scaleFactor;
-                    textX = physBoxX + scaledDlgW - paddingLeft - lineWidth;
-                }
-
-                if (remainingChars >= line.length()) {
-                    SDL_RenderDebugText(m_sdlRenderer, textX, currentY, line.c_str());
-                    remainingChars -= line.length();
-                } else {
-                    std::string partialLine = line.substr(0, remainingChars);
-                    SDL_RenderDebugText(m_sdlRenderer, textX, currentY, partialLine.c_str());
-                    remainingChars = 0;
-                }
-                currentY += lineHeight;
+            if (m_fontRenderer && m_fontRenderer->isLoaded() && m_offscreenSurface) {
+                m_fontRenderer->renderText(
+                    m_offscreenSurface,
+                    dlg.dialogue,
+                    physBoxX + paddingLeft,
+                    physBoxY + paddingTop,
+                    fontPx,
+                    textColor,
+                    maxLineWidth,
+                    maxDialogueHeight,
+                    dlg.textAlignment,
+                    visibleCodepoints
+                );
+            } else {
+                SDL_SetRenderDrawColor(m_sdlRenderer, textColor.r, textColor.g, textColor.b, textColor.a);
+                SDL_RenderDebugText(m_sdlRenderer, physBoxX + paddingLeft, physBoxY + paddingTop, dlg.dialogue.c_str());
             }
         }
     }
