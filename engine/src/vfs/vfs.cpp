@@ -88,6 +88,62 @@ void VFSManager::initialize() {
     ROWL_LOG_INFO("VFS Initialization Complete (" + std::to_string(m_mountPoints.size()) + " mount points).");
 }
 
+void VFSManager::clearMountPoints() {
+    m_mountPoints.clear();
+    ROWL_LOG_INFO("VFS Mount Points Cleared.");
+}
+
+void VFSManager::remountProject(const std::string& projectRoot) {
+    clearMountPoints();
+    m_initialized = true;
+
+    if (projectRoot.empty()) return;
+
+    fs::path root(projectRoot);
+    if (!fs::exists(root) || !fs::is_directory(root)) {
+        ROWL_LOG_WARN("VFS cannot remount non-existent project root: " + projectRoot);
+        return;
+    }
+
+    ROWL_LOG_INFO("Remounting VFS for isolated project root: " + root.string());
+
+    // 1. Mount project root
+    mountDirectory("", root.string());
+
+    // 2. Mount project Assets folder
+    fs::path assetsPath = root / "Assets";
+    if (fs::exists(assetsPath) && fs::is_directory(assetsPath)) {
+        mountDirectory("", assetsPath.string());
+        mountDirectory("Assets", assetsPath.string());
+
+        // 3. Mount images
+        fs::path imgPath = assetsPath / "images";
+        if (fs::exists(imgPath) && fs::is_directory(imgPath)) {
+            mountDirectory("", imgPath.string());
+            mountDirectory("images", imgPath.string());
+        }
+
+        // 4. Mount packages
+        fs::path pkgPath = assetsPath / "packages";
+        if (fs::exists(pkgPath) && fs::is_directory(pkgPath)) {
+            for (const auto& entry : fs::directory_iterator(pkgPath)) {
+                if (entry.is_regular_file() && entry.path().extension() == ".rowlpkg") {
+                    mountPackage("", entry.path().string());
+                }
+            }
+        }
+    }
+
+    // 5. Mount project mods folder if exists
+    fs::path modsPath = root / "mods";
+    if (fs::exists(modsPath) && fs::is_directory(modsPath)) {
+        mountDirectory("mods", modsPath.string());
+    }
+
+    ROWL_LOG_INFO("VFS Remount Complete for project '" + projectRoot + "' (" +
+                  std::to_string(m_mountPoints.size()) + " mount points).");
+}
+
 void VFSManager::mountDirectory(const std::string& virtualPrefix, const std::string& physicalPath) {
     auto source = std::make_shared<LooseDirectorySource>(physicalPath);
     m_mountPoints.emplace_back(virtualPrefix, source);

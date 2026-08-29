@@ -378,23 +378,26 @@ namespace RowlEngine.Editor.ViewModels
         public NodeGraphViewModel NodeGraphViewModel { get; }
         public LivePreviewViewModel LivePreviewViewModel { get; }
 
-        public MainWindowViewModel(string projectPath) : this()
+        public MainWindowViewModel() : this(string.Empty)
         {
+        }
+
+        public MainWindowViewModel(string projectPath)
+        {
+            AssetBitmapCache.Clear();
+
             if (!string.IsNullOrWhiteSpace(projectPath) && Directory.Exists(projectPath))
             {
                 CurrentProjectPath = projectPath;
                 ProjectRoot = projectPath;
-                try
-                {
-                    StatusText = $"✅ Proje yüklendi: {Path.GetFileName(projectPath)}";
-                    LoadFullStoryGraphFile();
-                }
-                catch { }
+                StatusText = $"✅ Proje yüklendi: {Path.GetFileName(projectPath)}";
             }
-        }
+            else
+            {
+                ProjectRoot = ResolveProjectRoot();
+                CurrentProjectPath = ProjectRoot;
+            }
 
-        public MainWindowViewModel()
-        {
             AssetBrowserViewModel = new AssetBrowserViewModel(this);
             OutputLogViewModel = new OutputLogViewModel(this);
             InspectorViewModel = new InspectorViewModel(this);
@@ -407,40 +410,27 @@ namespace RowlEngine.Editor.ViewModels
             };
             _smoothTimer.Tick += (s, e) => SmoothUpdateStep();
 
-            // Try loading saved story graph first; fall back to hardcoded defaults
+            // Try loading saved story graph from project root
             if (!LoadFullStoryGraphFile())
             {
-                var node1 = new NodeViewModel(101, "Dialogue Node #101", 60, 80)
+                var node1 = new NodeViewModel(101, "Giriş Sahnesi", 60, 80)
                 {
-                    Speaker = "Evelyn",
-                    DialogueText = "Welcome to Rowl Engine! Try connecting multiple nodes together!",
-                    BackgroundTexture = "bg_beach_sunset.png",
-                    CharacterSprite = "spr_evelyn.png",
+                    Speaker = "Narrator",
+                    DialogueText = "Rowl Engine dünyasına hoş geldiniz! Burası hikayenizin başlangıcı.",
+                    BackgroundTexture = "",
+                    CharacterSprite = "",
                     DspFilter = "Normal"
                 };
 
-                var node2 = new NodeViewModel(102, "Dialogue Node #102", 420, 160)
-                {
-                    Speaker = "System",
-                    DialogueText = "Player selected Option A. You can connect many cables simultaneously now!",
-                    BackgroundTexture = "bg_classroom.png",
-                    CharacterSprite = "spr_evelyn.png",
-                    DspFilter = "Telephone"
-                };
-
                 node1.PropertyChanged += OnNodePropertyChanged;
-                node2.PropertyChanged += OnNodePropertyChanged;
-
                 Nodes.Add(node1);
-                Nodes.Add(node2);
-                Connections.Add(new ConnectionViewModel(node1, node2));
                 EnforceSingleOutgoingWireRule();
             }
 
             SelectedNode = Nodes.FirstOrDefault();
             UpdateStartNodeState();
 
-            // Embedded engine: initialize directly (no separate process needed)
+            // Embedded engine: initialize directly with isolated project VFS
             _ = ConnectEngineAsync();
         }
 
@@ -699,8 +689,9 @@ namespace RowlEngine.Editor.ViewModels
 
             if (success)
             {
+                EngineHost.SetProjectDirectory(ProjectRoot);
                 StatusText = "Engine Ready — Embedded C++ Runtime Active";
-                AppendLog("[Engine] RowlEngineCore initialized successfully (P/Invoke, zero IPC overhead).");
+                AppendLog($"[Engine] RowlEngineCore mounted isolated project: {ProjectRoot}");
 
                 // Push the currently selected node to the engine immediately
                 if (SelectedNode != null)
@@ -1603,17 +1594,6 @@ namespace RowlEngine.Editor.ViewModels
                     AssetTree.Add(rootNode);
                 }
             }
-
-            if (AssetNames.Count == 0)
-            {
-                string[] defaults = new[] { "bg_beach.png", "bg_classroom.png", "spr_evelyn.png", "bgm_theme.ogg", "test_story.json" };
-                foreach (var d in defaults)
-                {
-                    Assets.Add(new AssetItemViewModel(d));
-                    AssetNames.Add(d);
-                    AssetTree.Add(new AssetNodeViewModel(d, d, d, false));
-                }
-            }
         }
 
         private void PopulateDirectoryNode(System.IO.DirectoryInfo dirInfo, string rootPath, ObservableCollection<AssetNodeViewModel> targetCollection)
@@ -2227,14 +2207,21 @@ namespace RowlEngine.Editor.ViewModels
                     return;
                 }
 
-                // Update project root to the new location
-                ProjectRoot = projectRoot;
+                // 1. Clear cached bitmaps so no old assets remain
+                AssetBitmapCache.Clear();
 
-                // Load the story graph
+                // 2. Update project root and active project path
+                ProjectRoot = projectRoot;
+                CurrentProjectPath = projectRoot;
+
+                // 3. Remount native engine VFS to isolated project directory
+                EngineHost.SetProjectDirectory(projectRoot);
+
+                // 4. Load the story graph
                 bool loaded = LoadFullStoryGraphFile();
                 if (loaded)
                 {
-                    // Refresh asset browser to show new project's assets
+                    // 5. Refresh asset browser strictly from new project's Assets/
                     AssetBrowserViewModel.RefreshAssets();
                     AppendLog($"📂 [PROJE AÇILDI] {projectRoot}");
                     AppendLog($"   📊 {Nodes.Count} düğüm, {Connections.Count} bağlantı yüklendi.");

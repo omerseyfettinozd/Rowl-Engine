@@ -34,6 +34,8 @@ public:
     static VFSManager& instance();
 
     void initialize();
+    void remountProject(const std::string& projectRoot);
+    void clearMountPoints();
     void mountDirectory(const std::string& virtualPrefix, const std::string& physicalPath);
     void mountPackage(const std::string& virtualPrefix, const std::string& pkgPath);
 
