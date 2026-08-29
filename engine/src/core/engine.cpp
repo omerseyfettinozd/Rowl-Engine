@@ -281,6 +281,7 @@ void Engine::updateSceneFromComponents(const std::string& componentsJson) {
                 m_activeDialogueData.typewriterEnabled = data.value("typewriter_enabled", true);
                 m_activeDialogueData.textSpeed = data.value("text_speed", 30);
                 m_activeDialogueData.fontSize = data.value("font_size", 24.0f);
+                m_activeDialogueData.speakerFontSize = data.value("speaker_font_size", 20.0f);
                 m_activeDialogueData.textColor = data.value("text_color", "#F1F5F9");
                 m_activeDialogueData.speakerColor = data.value("speaker_color", "#38BDF8");
                 m_activeDialogueData.textAlignment = data.value("text_alignment", "Left");

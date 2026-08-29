@@ -174,20 +174,24 @@ namespace RowlEngine.Editor.ViewModels
             // Sync proxy property change notifications without thrashing CharacterComponents collection
             if (sender is DialogueComponentViewModel)
             {
-                if (e.PropertyName == nameof(DialogueComponentViewModel.Speaker))
-                    OnPropertyChanged(nameof(Speaker));
-                else if (e.PropertyName == nameof(DialogueComponentViewModel.DialogueText))
-                    OnPropertyChanged(nameof(DialogueText));
-                else if (e.PropertyName == nameof(DialogueComponentViewModel.X))
-                    OnPropertyChanged(nameof(DialogueBoxX));
-                else if (e.PropertyName == nameof(DialogueComponentViewModel.Y))
-                    OnPropertyChanged(nameof(DialogueBoxY));
-                else if (e.PropertyName == nameof(DialogueComponentViewModel.Width))
-                    OnPropertyChanged(nameof(DialogueBoxWidth));
-                else if (e.PropertyName == nameof(DialogueComponentViewModel.Height))
-                    OnPropertyChanged(nameof(DialogueBoxHeight));
-                else if (e.PropertyName == nameof(DialogueComponentViewModel.Scale))
-                    OnPropertyChanged(nameof(DialogueBoxScale));
+                OnPropertyChanged(nameof(Speaker));
+                OnPropertyChanged(nameof(DialogueText));
+                OnPropertyChanged(nameof(FontSize));
+                OnPropertyChanged(nameof(SpeakerFontSize));
+                OnPropertyChanged(nameof(TextColor));
+                OnPropertyChanged(nameof(SpeakerColor));
+                OnPropertyChanged(nameof(BoxOpacity));
+                OnPropertyChanged(nameof(BoxColor));
+                OnPropertyChanged(nameof(BorderColorHex));
+                OnPropertyChanged(nameof(BorderThickness));
+                OnPropertyChanged(nameof(CornerRadius));
+                OnPropertyChanged(nameof(TextAlignment));
+                OnPropertyChanged(nameof(DialogueBoxX));
+                OnPropertyChanged(nameof(DialogueBoxY));
+                OnPropertyChanged(nameof(DialogueBoxWidth));
+                OnPropertyChanged(nameof(DialogueBoxHeight));
+                OnPropertyChanged(nameof(DialogueBoxScale));
+                OnPropertyChanged(nameof(DialogueComponent));
             }
             else if (sender is BackgroundComponentViewModel)
             {
@@ -364,6 +368,68 @@ namespace RowlEngine.Editor.ViewModels
         {
             get => GetComponent<DialogueComponentViewModel>()?.Scale ?? 1.0;
             set { var d = GetComponent<DialogueComponentViewModel>(); if (d != null) d.Scale = value; }
+        }
+
+        public DialogueComponentViewModel? DialogueComponent => GetComponent<DialogueComponentViewModel>();
+
+        public double FontSize
+        {
+            get => GetComponent<DialogueComponentViewModel>()?.FontSize ?? 24.0;
+            set { var d = GetComponent<DialogueComponentViewModel>(); if (d != null) d.FontSize = value; }
+        }
+
+        public double SpeakerFontSize
+        {
+            get => GetComponent<DialogueComponentViewModel>()?.SpeakerFontSize ?? 20.0;
+            set { var d = GetComponent<DialogueComponentViewModel>(); if (d != null) d.SpeakerFontSize = value; }
+        }
+
+        public string TextColor
+        {
+            get => GetComponent<DialogueComponentViewModel>()?.TextColor ?? "#F1F5F9";
+            set { var d = GetComponent<DialogueComponentViewModel>(); if (d != null) d.TextColor = value; }
+        }
+
+        public string SpeakerColor
+        {
+            get => GetComponent<DialogueComponentViewModel>()?.SpeakerColor ?? "#38BDF8";
+            set { var d = GetComponent<DialogueComponentViewModel>(); if (d != null) d.SpeakerColor = value; }
+        }
+
+        public double BoxOpacity
+        {
+            get => GetComponent<DialogueComponentViewModel>()?.BoxOpacity ?? 0.88;
+            set { var d = GetComponent<DialogueComponentViewModel>(); if (d != null) d.BoxOpacity = value; }
+        }
+
+        public string BoxColor
+        {
+            get => GetComponent<DialogueComponentViewModel>()?.BoxColor ?? "#0F0F1A";
+            set { var d = GetComponent<DialogueComponentViewModel>(); if (d != null) d.BoxColor = value; }
+        }
+
+        public string BorderColorHex
+        {
+            get => GetComponent<DialogueComponentViewModel>()?.BorderColor ?? "#00F0FF";
+            set { var d = GetComponent<DialogueComponentViewModel>(); if (d != null) d.BorderColor = value; }
+        }
+
+        public double BorderThickness
+        {
+            get => GetComponent<DialogueComponentViewModel>()?.BorderThickness ?? 2.0;
+            set { var d = GetComponent<DialogueComponentViewModel>(); if (d != null) d.BorderThickness = value; }
+        }
+
+        public double CornerRadius
+        {
+            get => GetComponent<DialogueComponentViewModel>()?.CornerRadius ?? 8.0;
+            set { var d = GetComponent<DialogueComponentViewModel>(); if (d != null) d.CornerRadius = value; }
+        }
+
+        public string TextAlignment
+        {
+            get => GetComponent<DialogueComponentViewModel>()?.TextAlignment ?? "Left";
+            set { var d = GetComponent<DialogueComponentViewModel>(); if (d != null) d.TextAlignment = value; }
         }
 
         // ── Audio ──

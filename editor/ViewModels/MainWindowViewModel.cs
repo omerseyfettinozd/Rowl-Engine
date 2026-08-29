@@ -474,7 +474,18 @@ namespace RowlEngine.Editor.ViewModels
                      e.PropertyName == nameof(NodeViewModel.DialogueBoxY) ||
                      e.PropertyName == nameof(NodeViewModel.DialogueBoxWidth) ||
                      e.PropertyName == nameof(NodeViewModel.DialogueBoxHeight) ||
-                     e.PropertyName == nameof(NodeViewModel.DialogueBoxScale))
+                     e.PropertyName == nameof(NodeViewModel.DialogueBoxScale) ||
+                     e.PropertyName == nameof(NodeViewModel.FontSize) ||
+                     e.PropertyName == nameof(NodeViewModel.SpeakerFontSize) ||
+                     e.PropertyName == nameof(NodeViewModel.TextColor) ||
+                     e.PropertyName == nameof(NodeViewModel.SpeakerColor) ||
+                     e.PropertyName == nameof(NodeViewModel.BoxOpacity) ||
+                     e.PropertyName == nameof(NodeViewModel.BoxColor) ||
+                     e.PropertyName == nameof(NodeViewModel.BorderColorHex) ||
+                     e.PropertyName == nameof(NodeViewModel.BorderThickness) ||
+                     e.PropertyName == nameof(NodeViewModel.CornerRadius) ||
+                     e.PropertyName == nameof(NodeViewModel.TextAlignment) ||
+                     e.PropertyName == nameof(NodeViewModel.DialogueComponent))
             {
                 if (IsInteractivelyDragging)
                 {
