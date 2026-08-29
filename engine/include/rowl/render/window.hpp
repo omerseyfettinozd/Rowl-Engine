@@ -127,6 +127,7 @@ public:
     SDL_Renderer* getNativeRenderer() const { return m_sdlRenderer; }
 
     SDL_Texture* loadTexture(const std::string& filename);
+    void clearTextureCache();
 
 private:
     struct TextWrapCache {
