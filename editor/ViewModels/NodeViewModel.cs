@@ -1,8 +1,13 @@
 using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.IO;
+using System.Linq;
+using System.Reflection;
 using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
-using System.IO;
-using System.Reflection;
+using RowlEngine.Editor.ViewModels.Components;
 
 namespace RowlEngine.Editor.ViewModels
 {
@@ -11,13 +16,7 @@ namespace RowlEngine.Editor.ViewModels
         // ── Path helpers (synced with MainWindowViewModel) ──
         private static string AssetsPath => MainWindowViewModel.AssetsPath;
 
-        // ── Default constants ──
-        private const double DefaultBackgroundWidth = 1920.0;
-        private const double DefaultBackgroundHeight = 1080.0;
-        private const double DefaultCharacterWidth = 360.0;
-        private const double DefaultCharacterHeight = 540.0;
-        private const double DefaultDialogueBoxWidth = 1760.0;
-        private const double DefaultDialogueBoxHeight = 180.0;
+        // ── Graph metadata (these remain on the node, NOT in components) ──
 
         [ObservableProperty]
         private ulong _id;
@@ -30,144 +29,6 @@ namespace RowlEngine.Editor.ViewModels
 
         [ObservableProperty]
         private double _y;
-
-        [ObservableProperty]
-        private string _speaker = "Evelyn";
-
-        [ObservableProperty]
-        private string _dialogueText = string.Empty;
-
-        [ObservableProperty]
-        private string _backgroundTexture = "bg_beach_sunset.png";
-
-        [ObservableProperty]
-        private string _characterSprite = "spr_evelyn.png";
-
-        [ObservableProperty]
-        private string _dspFilter = "Normal";
-
-        [ObservableProperty]
-        private string _characterPosition = "Right";
-
-        partial void OnCharacterPositionChanged(string value)
-        {
-            if (value == "Left") CharacterX = 120.0;
-            else if (value == "Center") CharacterX = 780.0;
-            else if (value == "Right") CharacterX = 1440.0;
-        }
-
-        [ObservableProperty]
-        private double _backgroundX = 0.0;
-
-        [ObservableProperty]
-        private double _backgroundY = 0.0;
-
-        [ObservableProperty]
-        private double _backgroundWidth = DefaultBackgroundWidth;
-
-        [ObservableProperty]
-        private double _backgroundHeight = DefaultBackgroundHeight;
-
-        [ObservableProperty]
-        private double _backgroundScale = 1.0;
-
-        [ObservableProperty]
-        private double _characterX = 1440.0;
-
-        [ObservableProperty]
-        private double _characterY = 340.0;
-
-        [ObservableProperty]
-        private double _characterWidth = DefaultCharacterWidth;
-
-        [ObservableProperty]
-        private double _characterHeight = DefaultCharacterHeight;
-
-        [ObservableProperty]
-        private double _characterScale = 1.0;
-
-        [ObservableProperty]
-        private double _dialogueBoxX = 80.0;
-
-        [ObservableProperty]
-        private double _dialogueBoxY = 860.0;
-
-        [ObservableProperty]
-        private double _dialogueBoxWidth = DefaultDialogueBoxWidth;
-
-        [ObservableProperty]
-        private double _dialogueBoxHeight = DefaultDialogueBoxHeight;
-
-        [ObservableProperty]
-        private double _dialogueBoxScale = 1.0;
-
-        // Separate reentrancy guards for each scale/width group
-        private bool _updatingCharacterScale = false;
-        private bool _updatingBackgroundScale = false;
-        private bool _updatingDialogueBoxScale = false;
-
-        // Character: Scale is source of truth → sets Width/Height
-        partial void OnCharacterScaleChanged(double value)
-        {
-            if (_updatingCharacterScale || value <= 0) return;
-            _updatingCharacterScale = true;
-            CharacterWidth = DefaultCharacterWidth * value;
-            CharacterHeight = DefaultCharacterHeight * value;
-            _updatingCharacterScale = false;
-        }
-
-        // Character: Width change → back-calculate Scale only (don't re-trigger width)
-        partial void OnCharacterWidthChanged(double value)
-        {
-            if (_updatingCharacterScale || value <= 0) return;
-            _updatingCharacterScale = true;
-            CharacterScale = Math.Round(value / DefaultCharacterWidth, 2);
-            _updatingCharacterScale = false;
-        }
-
-        // Background: Scale is source of truth → sets Width/Height
-        partial void OnBackgroundScaleChanged(double value)
-        {
-            if (_updatingBackgroundScale || value <= 0) return;
-            _updatingBackgroundScale = true;
-            BackgroundWidth = DefaultBackgroundWidth * value;
-            BackgroundHeight = DefaultBackgroundHeight * value;
-            _updatingBackgroundScale = false;
-        }
-
-        // Background: Width change → back-calculate Scale only
-        partial void OnBackgroundWidthChanged(double value)
-        {
-            if (_updatingBackgroundScale || value <= 0) return;
-            _updatingBackgroundScale = true;
-            BackgroundScale = Math.Round(value / DefaultBackgroundWidth, 2);
-            _updatingBackgroundScale = false;
-        }
-
-        // DialogueBox: Scale is source of truth → sets Width/Height
-        partial void OnDialogueBoxScaleChanged(double value)
-        {
-            if (_updatingDialogueBoxScale || value <= 0) return;
-            _updatingDialogueBoxScale = true;
-            DialogueBoxWidth = DefaultDialogueBoxWidth * value;
-            DialogueBoxHeight = DefaultDialogueBoxHeight * value;
-            _updatingDialogueBoxScale = false;
-        }
-
-        // DialogueBox: Width change → back-calculate Scale only
-        partial void OnDialogueBoxWidthChanged(double value)
-        {
-            if (_updatingDialogueBoxScale || value <= 0) return;
-            _updatingDialogueBoxScale = true;
-            DialogueBoxScale = Math.Round(value / DefaultDialogueBoxWidth, 2);
-            _updatingDialogueBoxScale = false;
-        }
-
-        [ObservableProperty]
-        private Bitmap? _backgroundBitmap;
-
-        [ObservableProperty]
-        private Bitmap? _characterBitmap;
 
         [ObservableProperty]
         private bool _isSelected;
@@ -183,44 +44,391 @@ namespace RowlEngine.Editor.ViewModels
             BorderColor = value ? "#10B981" : "#2A2A3D";
         }
 
-        partial void OnBackgroundTextureChanged(string value) => RefreshBitmaps();
-        partial void OnCharacterSpriteChanged(string value) => RefreshBitmaps();
+        // ══════════════════════════════════════════════════════════════════════
+        // ██  COMPONENT SYSTEM  ██
+        // ══════════════════════════════════════════════════════════════════════
 
+        /// <summary>
+        /// The ordered collection of components attached to this node.
+        /// Components are rendered/serialized in list order.
+        /// </summary>
+        public ObservableCollection<NodeComponentViewModel> Components { get; } = new();
+
+        // ── Component access helpers ──
+
+        /// <summary>
+        /// Returns the first component of the specified type, or null if none exists.
+        /// </summary>
+        public T? GetComponent<T>() where T : NodeComponentViewModel
+            => Components.OfType<T>().FirstOrDefault();
+
+        /// <summary>
+        /// Returns all components of the specified type.
+        /// </summary>
+        public IEnumerable<T> GetComponents<T>() where T : NodeComponentViewModel
+            => Components.OfType<T>();
+
+        /// <summary>
+        /// Creates and adds a new component of the specified type.
+        /// </summary>
+        public T AddComponent<T>() where T : NodeComponentViewModel, new()
+        {
+            var comp = new T { Node = this };
+            Components.Add(comp);
+            SubscribeComponentChanges(comp);
+
+            if (comp is BackgroundComponentViewModel bg) bg.RefreshBitmap();
+            else if (comp is CharacterComponentViewModel ch) ch.RefreshBitmap();
+
+            OnPropertyChanged(nameof(Components));
+            OnPropertyChanged(nameof(CharacterComponents));
+            OnPropertyChanged(nameof(HasDialogueBox));
+            OnPropertyChanged(nameof(HasBackground));
+            return comp;
+        }
+
+        /// <summary>
+        /// Adds an existing component instance to this node.
+        /// </summary>
+        public void AddComponent(NodeComponentViewModel component)
+        {
+            component.Node = this;
+            Components.Add(component);
+            SubscribeComponentChanges(component);
+
+            if (component is BackgroundComponentViewModel bg) bg.RefreshBitmap();
+            else if (component is CharacterComponentViewModel ch) ch.RefreshBitmap();
+
+            OnPropertyChanged(nameof(Components));
+            OnPropertyChanged(nameof(CharacterComponents));
+            OnPropertyChanged(nameof(HasDialogueBox));
+            OnPropertyChanged(nameof(HasBackground));
+        }
+
+        /// <summary>
+        /// Removes a component from this node.
+        /// </summary>
+        public void RemoveComponent(NodeComponentViewModel component)
+        {
+            UnsubscribeComponentChanges(component);
+            Components.Remove(component);
+            component.Node = null;
+            OnPropertyChanged(nameof(Components));
+            OnPropertyChanged(nameof(CharacterComponents));
+            OnPropertyChanged(nameof(HasDialogueBox));
+            OnPropertyChanged(nameof(HasBackground));
+        }
+
+        public bool HasDialogueBox => Components.OfType<DialogueComponentViewModel>().Any(d => d.IsEnabled);
+        public bool HasBackground => Components.OfType<BackgroundComponentViewModel>().Any(b => b.IsEnabled);
+
+        /// <summary>
+        /// Moves a component up in the list (decreases its render order index).
+        /// </summary>
+        public void MoveComponentUp(NodeComponentViewModel component)
+        {
+            int idx = Components.IndexOf(component);
+            if (idx > 0)
+            {
+                Components.Move(idx, idx - 1);
+                OnPropertyChanged(nameof(Components));
+                OnPropertyChanged(nameof(CharacterComponents));
+            }
+        }
+
+        /// <summary>
+        /// Moves a component down in the list (increases its render order index).
+        /// </summary>
+        public void MoveComponentDown(NodeComponentViewModel component)
+        {
+            int idx = Components.IndexOf(component);
+            if (idx >= 0 && idx < Components.Count - 1)
+            {
+                Components.Move(idx, idx + 1);
+                OnPropertyChanged(nameof(Components));
+                OnPropertyChanged(nameof(CharacterComponents));
+            }
+        }
+
+        // ── Component change propagation ──
+
+        private void SubscribeComponentChanges(NodeComponentViewModel component)
+        {
+            component.PropertyChanged += OnComponentPropertyChanged;
+        }
+
+        private void UnsubscribeComponentChanges(NodeComponentViewModel component)
+        {
+            component.PropertyChanged -= OnComponentPropertyChanged;
+        }
+
+        private void OnComponentPropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(NodeComponentViewModel.IsEnabled))
+            {
+                OnPropertyChanged(nameof(HasDialogueBox));
+                OnPropertyChanged(nameof(HasBackground));
+                OnPropertyChanged(nameof(Components));
+            }
+
+            // Sync proxy property change notifications without thrashing CharacterComponents collection
+            if (sender is DialogueComponentViewModel)
+            {
+                if (e.PropertyName == nameof(DialogueComponentViewModel.Speaker))
+                    OnPropertyChanged(nameof(Speaker));
+                else if (e.PropertyName == nameof(DialogueComponentViewModel.DialogueText))
+                    OnPropertyChanged(nameof(DialogueText));
+                else if (e.PropertyName == nameof(DialogueComponentViewModel.X))
+                    OnPropertyChanged(nameof(DialogueBoxX));
+                else if (e.PropertyName == nameof(DialogueComponentViewModel.Y))
+                    OnPropertyChanged(nameof(DialogueBoxY));
+                else if (e.PropertyName == nameof(DialogueComponentViewModel.Width))
+                    OnPropertyChanged(nameof(DialogueBoxWidth));
+                else if (e.PropertyName == nameof(DialogueComponentViewModel.Height))
+                    OnPropertyChanged(nameof(DialogueBoxHeight));
+                else if (e.PropertyName == nameof(DialogueComponentViewModel.Scale))
+                    OnPropertyChanged(nameof(DialogueBoxScale));
+            }
+            else if (sender is BackgroundComponentViewModel)
+            {
+                if (e.PropertyName == nameof(BackgroundComponentViewModel.Texture))
+                    OnPropertyChanged(nameof(BackgroundTexture));
+                else if (e.PropertyName == nameof(BackgroundComponentViewModel.X))
+                    OnPropertyChanged(nameof(BackgroundX));
+                else if (e.PropertyName == nameof(BackgroundComponentViewModel.Y))
+                    OnPropertyChanged(nameof(BackgroundY));
+                else if (e.PropertyName == nameof(BackgroundComponentViewModel.Width))
+                    OnPropertyChanged(nameof(BackgroundWidth));
+                else if (e.PropertyName == nameof(BackgroundComponentViewModel.Height))
+                    OnPropertyChanged(nameof(BackgroundHeight));
+                else if (e.PropertyName == nameof(BackgroundComponentViewModel.Scale))
+                    OnPropertyChanged(nameof(BackgroundScale));
+                else if (e.PropertyName == nameof(BackgroundComponentViewModel.TextureBitmap))
+                    OnPropertyChanged(nameof(BackgroundBitmap));
+            }
+            else if (sender is CharacterComponentViewModel)
+            {
+                if (e.PropertyName == nameof(CharacterComponentViewModel.Sprite))
+                    OnPropertyChanged(nameof(CharacterSprite));
+                else if (e.PropertyName == nameof(CharacterComponentViewModel.Position))
+                    OnPropertyChanged(nameof(CharacterPosition));
+                else if (e.PropertyName == nameof(CharacterComponentViewModel.X))
+                    OnPropertyChanged(nameof(CharacterX));
+                else if (e.PropertyName == nameof(CharacterComponentViewModel.Y))
+                    OnPropertyChanged(nameof(CharacterY));
+                else if (e.PropertyName == nameof(CharacterComponentViewModel.Width))
+                    OnPropertyChanged(nameof(CharacterWidth));
+                else if (e.PropertyName == nameof(CharacterComponentViewModel.Height))
+                    OnPropertyChanged(nameof(CharacterHeight));
+                else if (e.PropertyName == nameof(CharacterComponentViewModel.Scale))
+                    OnPropertyChanged(nameof(CharacterScale));
+                else if (e.PropertyName == nameof(CharacterComponentViewModel.SpriteBitmap))
+                    OnPropertyChanged(nameof(CharacterBitmap));
+            }
+            else if (sender is AudioComponentViewModel)
+            {
+                if (e.PropertyName == nameof(AudioComponentViewModel.DspFilter))
+                    OnPropertyChanged(nameof(DspFilter));
+            }
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
+        // ██  BACKWARD-COMPATIBLE PROXY PROPERTIES  ██
+        // ══════════════════════════════════════════════════════════════════════
+
+        // ── Speaker & Dialogue ──
+        public string Speaker
+        {
+            get => GetComponent<DialogueComponentViewModel>()?.Speaker ?? "Evelyn";
+            set { var c = GetComponent<DialogueComponentViewModel>(); if (c != null) c.Speaker = value; }
+        }
+
+        public string DialogueText
+        {
+            get => GetComponent<DialogueComponentViewModel>()?.DialogueText ?? "";
+            set { var c = GetComponent<DialogueComponentViewModel>(); if (c != null) c.DialogueText = value; }
+        }
+
+        // ── Background ──
+        public string BackgroundTexture
+        {
+            get => GetComponent<BackgroundComponentViewModel>()?.Texture ?? "bg_beach_sunset.png";
+            set { var c = GetComponent<BackgroundComponentViewModel>(); if (c != null) c.Texture = value; }
+        }
+
+        public double BackgroundX
+        {
+            get => GetComponent<BackgroundComponentViewModel>()?.X ?? 0;
+            set { var c = GetComponent<BackgroundComponentViewModel>(); if (c != null) c.X = value; }
+        }
+
+        public double BackgroundY
+        {
+            get => GetComponent<BackgroundComponentViewModel>()?.Y ?? 0;
+            set { var c = GetComponent<BackgroundComponentViewModel>(); if (c != null) c.Y = value; }
+        }
+
+        public double BackgroundWidth
+        {
+            get => GetComponent<BackgroundComponentViewModel>()?.Width ?? 1920;
+            set { var c = GetComponent<BackgroundComponentViewModel>(); if (c != null) c.Width = value; }
+        }
+
+        public double BackgroundHeight
+        {
+            get => GetComponent<BackgroundComponentViewModel>()?.Height ?? 1080;
+            set { var c = GetComponent<BackgroundComponentViewModel>(); if (c != null) c.Height = value; }
+        }
+
+        public double BackgroundScale
+        {
+            get => GetComponent<BackgroundComponentViewModel>()?.Scale ?? 1.0;
+            set { var c = GetComponent<BackgroundComponentViewModel>(); if (c != null) c.Scale = value; }
+        }
+
+        public Bitmap? BackgroundBitmap => GetComponent<BackgroundComponentViewModel>()?.TextureBitmap;
+
+        public IEnumerable<CharacterComponentViewModel> CharacterComponents => GetComponents<CharacterComponentViewModel>();
+
+        // ── Character (first character component) ──
+        public string CharacterSprite
+        {
+            get => GetComponent<CharacterComponentViewModel>()?.Sprite ?? "spr_evelyn.png";
+            set { var c = GetComponent<CharacterComponentViewModel>(); if (c != null) c.Sprite = value; }
+        }
+
+        public string CharacterPosition
+        {
+            get => GetComponent<CharacterComponentViewModel>()?.Position ?? "Right";
+            set { var c = GetComponent<CharacterComponentViewModel>(); if (c != null) c.Position = value; }
+        }
+
+        public double CharacterX
+        {
+            get => GetComponent<CharacterComponentViewModel>()?.X ?? 1440;
+            set { var c = GetComponent<CharacterComponentViewModel>(); if (c != null) c.X = value; }
+        }
+
+        public double CharacterY
+        {
+            get => GetComponent<CharacterComponentViewModel>()?.Y ?? 340;
+            set { var c = GetComponent<CharacterComponentViewModel>(); if (c != null) c.Y = value; }
+        }
+
+        public double CharacterWidth
+        {
+            get => GetComponent<CharacterComponentViewModel>()?.Width ?? 360;
+            set { var c = GetComponent<CharacterComponentViewModel>(); if (c != null) c.Width = value; }
+        }
+
+        public double CharacterHeight
+        {
+            get => GetComponent<CharacterComponentViewModel>()?.Height ?? 540;
+            set { var c = GetComponent<CharacterComponentViewModel>(); if (c != null) c.Height = value; }
+        }
+
+        public double CharacterScale
+        {
+            get => GetComponent<CharacterComponentViewModel>()?.Scale ?? 1.0;
+            set { var c = GetComponent<CharacterComponentViewModel>(); if (c != null) c.Scale = value; }
+        }
+
+        public Bitmap? CharacterBitmap => GetComponent<CharacterComponentViewModel>()?.SpriteBitmap;
+
+        // ── Dialogue Box ──
+        public double DialogueBoxX
+        {
+            get => GetComponent<DialogueComponentViewModel>()?.X ?? 80;
+            set { var d = GetComponent<DialogueComponentViewModel>(); if (d != null) d.X = value; }
+        }
+
+        public double DialogueBoxY
+        {
+            get => GetComponent<DialogueComponentViewModel>()?.Y ?? 860;
+            set { var d = GetComponent<DialogueComponentViewModel>(); if (d != null) d.Y = value; }
+        }
+
+        public double DialogueBoxWidth
+        {
+            get => GetComponent<DialogueComponentViewModel>()?.Width ?? 1760;
+            set { var d = GetComponent<DialogueComponentViewModel>(); if (d != null) d.Width = value; }
+        }
+
+        public double DialogueBoxHeight
+        {
+            get => GetComponent<DialogueComponentViewModel>()?.Height ?? 180;
+            set { var d = GetComponent<DialogueComponentViewModel>(); if (d != null) d.Height = value; }
+        }
+
+        public double DialogueBoxScale
+        {
+            get => GetComponent<DialogueComponentViewModel>()?.Scale ?? 1.0;
+            set { var d = GetComponent<DialogueComponentViewModel>(); if (d != null) d.Scale = value; }
+        }
+
+        // ── Audio ──
+        public string DspFilter
+        {
+            get => GetComponent<AudioComponentViewModel>()?.DspFilter ?? "Normal";
+            set { var c = GetComponent<AudioComponentViewModel>(); if (c != null) c.DspFilter = value; }
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
+        // ██  BITMAP REFRESH (legacy compat)  ██
+        // ══════════════════════════════════════════════════════════════════════
+
+        /// <summary>
+        /// Refreshes bitmaps on all visual components.
+        /// </summary>
         public void RefreshBitmaps()
         {
-            BackgroundBitmap = LoadBitmap(BackgroundTexture);
-            CharacterBitmap = LoadBitmap(CharacterSprite);
+            GetComponent<BackgroundComponentViewModel>()?.RefreshBitmap();
+            foreach (var charComp in GetComponents<CharacterComponentViewModel>())
+                charComp.RefreshBitmap();
         }
 
-        private static Bitmap? LoadBitmap(string filename)
-        {
-            if (string.IsNullOrWhiteSpace(filename)) return null;
-            string[] searchPaths = new string[]
-            {
-                filename,
-                Path.Combine(AssetsPath, filename),
-                Path.Combine(AssetsPath, "images", filename),
-                Path.Combine(AssetsPath, "images", Path.GetFileName(filename))
-            };
+        // ══════════════════════════════════════════════════════════════════════
+        // ██  CONSTRUCTOR  ██
+        // ══════════════════════════════════════════════════════════════════════
 
-            foreach (var p in searchPaths)
-            {
-                if (File.Exists(p))
-                {
-                    try { return new Bitmap(p); }
-                    catch { }
-                }
-            }
-            return null;
-        }
-
+        /// <summary>
+        /// Creates a new node with default components (Dialogue, Background, Character, Audio).
+        /// </summary>
         public NodeViewModel(ulong id, string title, double x, double y)
         {
             Id = id;
             Title = title;
             X = x;
             Y = y;
+
+            // Add default 4 modular components (Dialogue, Background, Character, Audio)
+            AddComponent<DialogueComponentViewModel>();
+            AddComponent<BackgroundComponentViewModel>();
+            AddComponent<CharacterComponentViewModel>();
+            AddComponent<AudioComponentViewModel>();
+
+            // Trigger initial bitmap loads
             RefreshBitmaps();
+        }
+
+        /// <summary>
+        /// Creates a bare node without any default components.
+        /// Used during deserialization when components will be added manually.
+        /// </summary>
+        public NodeViewModel(ulong id, string title, double x, double y, bool bare)
+        {
+            Id = id;
+            Title = title;
+            X = x;
+            Y = y;
+            if (!bare)
+            {
+                AddComponent<DialogueComponentViewModel>();
+                AddComponent<BackgroundComponentViewModel>();
+                AddComponent<CharacterComponentViewModel>();
+                AddComponent<AudioComponentViewModel>();
+                RefreshBitmaps();
+            }
         }
     }
 }

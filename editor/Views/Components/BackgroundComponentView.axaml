@@ -1,0 +1,105 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:comp="using:RowlEngine.Editor.ViewModels.Components"
+             xmlns:vm="using:RowlEngine.Editor.ViewModels"
+             mc:Ignorable="d"
+             x:Class="RowlEngine.Editor.Views.Components.BackgroundComponentView"
+             x:DataType="comp:BackgroundComponentViewModel">
+
+    <Border Background="{DynamicResource CardBackground}" CornerRadius="6" Margin="0,4" Padding="0" BorderBrush="{DynamicResource CardBorderColor}" BorderThickness="1">
+        <StackPanel>
+            <!-- Component Header -->
+            <Border Background="{DynamicResource CardHeaderBackground}" CornerRadius="6,6,0,0" Padding="8,6">
+                <Grid ColumnDefinitions="*, Auto">
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                        <TextBlock Text="🖼️" FontSize="13" VerticalAlignment="Center"/>
+                        <TextBlock Text="{Binding DisplayName}" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource PrimaryText}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="3" VerticalAlignment="Center">
+                        <CheckBox IsChecked="{Binding IsEnabled}" ToolTip.Tip="Enable/Disable" MinWidth="0" Padding="0" Margin="0,0,2,0"/>
+                        <Button Content="▲" Command="{Binding MoveUpCommand}" ToolTip.Tip="Move Up" FontSize="10" Padding="4,2" MinWidth="0" Background="Transparent" Foreground="{DynamicResource MutedText}" BorderThickness="0"/>
+                        <Button Content="▼" Command="{Binding MoveDownCommand}" ToolTip.Tip="Move Down" FontSize="10" Padding="4,2" MinWidth="0" Background="Transparent" Foreground="{DynamicResource MutedText}" BorderThickness="0"/>
+                        <ToggleButton IsChecked="{Binding IsExpanded}" Content="⚙️" FontSize="10" Padding="4,2" MinWidth="0" Background="Transparent" Foreground="{DynamicResource MutedText}" BorderThickness="0"/>
+                        <Button Content="🗑️" FontSize="10" Padding="4,2" MinWidth="0" Background="Transparent" Foreground="#EF4444" BorderThickness="0" ToolTip.Tip="Remove Component" Command="{Binding RemoveSelfCommand}"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- Component Body -->
+            <StackPanel IsVisible="{Binding IsExpanded}" Spacing="8" Margin="10,8">
+                <StackPanel Spacing="4">
+                    <TextBlock Text="Background Texture Image (Sürükle Bırak / Drag &amp; Drop)" FontSize="11" Foreground="{DynamicResource MutedText}"/>
+                    <Border x:Name="DropZoneBorder"
+                            DragDrop.AllowDrop="True"
+                            Background="{DynamicResource InputBackground}" 
+                            BorderBrush="{DynamicResource BorderColor}" 
+                            BorderThickness="1.5" 
+                            CornerRadius="6" 
+                            Padding="6">
+                        <StackPanel Spacing="6">
+                            <Grid ColumnDefinitions="*, Auto">
+                                <TextBox Grid.Column="0" Text="{Binding Texture}" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}" Margin="0,0,4,0"/>
+                                <Button Grid.Column="1" Content="📁 Browse..." 
+                                        Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).SelectImageForComponentCommand}"
+                                        CommandParameter="{Binding}"
+                                        Background="{DynamicResource AccentButtonBg}" Foreground="{DynamicResource AccentButtonFg}" FontSize="11" Padding="8,4" CornerRadius="4"/>
+                            </Grid>
+                            <!-- Texture Preview Thumbnail / Drop Area -->
+                            <Border Background="{DynamicResource CardHeaderBackground}" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1" CornerRadius="4" Padding="4" MinHeight="65" MaxHeight="130">
+                                <Panel>
+                                    <Image Source="{Binding TextureBitmap}" Stretch="Uniform" MaxHeight="120"
+                                           IsVisible="{Binding TextureBitmap, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+                                    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="2"
+                                                IsVisible="{Binding TextureBitmap, Converter={x:Static ObjectConverters.IsNull}}">
+                                        <TextBlock Text="🖼️ Sürükle Bırak / Drag Image Here" FontSize="11" Foreground="{DynamicResource MutedText}" HorizontalAlignment="Center" FontWeight="SemiBold"/>
+                                        <TextBlock Text="Assets panelinden sürükleyin veya Browse'a tıklayın" FontSize="9" Foreground="{DynamicResource MutedText}" HorizontalAlignment="Center" FontStyle="Italic"/>
+                                    </StackPanel>
+                                </Panel>
+                            </Border>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+                <Grid ColumnDefinitions="*, *" Margin="0,2">
+                    <StackPanel Grid.Column="0" Spacing="4" Margin="0,0,4,0">
+                        <TextBlock Text="X" FontSize="11" Foreground="{DynamicResource MutedText}"/>
+                        <NumericUpDown Value="{Binding X}" Minimum="-1000" Maximum="3000" Increment="20" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Spacing="4" Margin="4,0,0,0">
+                        <TextBlock Text="Y" FontSize="11" Foreground="{DynamicResource MutedText}"/>
+                        <NumericUpDown Value="{Binding Y}" Minimum="-1000" Maximum="3000" Increment="20" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}"/>
+                    </StackPanel>
+                </Grid>
+
+                <Grid ColumnDefinitions="*, *" Margin="0,2">
+                    <StackPanel Grid.Column="0" Spacing="4" Margin="0,0,4,0">
+                        <TextBlock Text="Width" FontSize="11" Foreground="{DynamicResource MutedText}"/>
+                        <NumericUpDown Value="{Binding Width}" Minimum="100" Maximum="4000" Increment="40" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Spacing="4" Margin="4,0,0,0">
+                        <TextBlock Text="Height" FontSize="11" Foreground="{DynamicResource MutedText}"/>
+                        <NumericUpDown Value="{Binding Height}" Minimum="100" Maximum="4000" Increment="40" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}"/>
+                    </StackPanel>
+                </Grid>
+
+                <StackPanel Spacing="4">
+                    <TextBlock Text="🔍 Scale (1.0 = 100%)" FontSize="11" Foreground="{DynamicResource AccentColor}" FontWeight="Bold"/>
+                    <NumericUpDown Value="{Binding Scale}" Minimum="0.1" Maximum="5.0" Increment="0.1" FormatString="0.00" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource AccentColor}" BorderBrush="{DynamicResource BorderColor}"/>
+                </StackPanel>
+
+                <!-- OBS Quick Assist Buttons -->
+                <StackPanel Spacing="4" Margin="0,4,0,0">
+                    <TextBlock Text="🧲 OBS Hızlı Hizalama (Assist)" FontSize="10" Foreground="{DynamicResource MutedText}" FontWeight="SemiBold"/>
+                    <Grid ColumnDefinitions="*, *">
+                        <Button Grid.Column="0" Content="🎯 Merkeze Ortala" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).CenterSelectedElementCommand}" 
+                                Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" FontSize="11" Padding="6,4" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Margin="0,0,3,0" CornerRadius="4"/>
+                        <Button Grid.Column="1" Content="📐 1080p Tam Sığdır" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).FitBackgroundToScreenCommand}" 
+                                Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" FontSize="11" Padding="6,4" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Margin="3,0,0,0" CornerRadius="4"/>
+                    </Grid>
+                </StackPanel>
+            </StackPanel>
+        </StackPanel>
+    </Border>
+</UserControl>

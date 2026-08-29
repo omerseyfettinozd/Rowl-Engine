@@ -1,0 +1,84 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:RowlEngine.Editor.ViewModels"
+             x:Class="RowlEngine.Editor.Views.Panels.HubPanelView"
+             x:DataType="vm:ProjectHubViewModel"
+             Background="{DynamicResource AppBackground}">
+    <Grid RowDefinitions="Auto,*,Auto">
+        <!-- Header — responsive: dar ekranda wrap eder -->
+        <Border Grid.Row="0" Background="{DynamicResource SurfaceBackground}" BorderBrush="{DynamicResource BorderColor}" BorderThickness="0,0,0,1" Padding="12,10">
+            <Grid RowDefinitions="Auto,Auto">
+                <!-- Üst satır: Logo + başlık -->
+                <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                    <TextBlock Text="ROWL" FontWeight="Bold" FontSize="15" Foreground="{DynamicResource PrimaryText}" LetterSpacing="1.0" VerticalAlignment="Center"/>
+                    <TextBlock Text="ENGINE" FontSize="15" Foreground="{DynamicResource MutedText}" LetterSpacing="1.0" Margin="-6,0,0,0" VerticalAlignment="Center"/>
+                    <Border Width="1" Height="16" Background="{DynamicResource BorderColor}" Margin="4,0" VerticalAlignment="Center"/>
+                    <TextBlock Text="Projeler" FontSize="12" Foreground="{DynamicResource SecondaryText}" VerticalAlignment="Center"/>
+                </StackPanel>
+                <!-- Alt satır: Butonlar — sağa hizalı -->
+                <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" Margin="0,8,0,0">
+                    <Button Content="İçe Aktar" Command="{Binding ImportExistingCommand}" Background="Transparent" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1" CornerRadius="8" Padding="12,7" FontSize="12"/>
+                    <Button Content="Yeni Proje" Command="{Binding CreateProjectCommand}" Background="{DynamicResource AccentButtonBg}" Foreground="White" CornerRadius="8" Padding="14,7" FontSize="12" FontWeight="SemiBold"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- İçerik: Boş state veya proje listesi -->
+        <Grid Grid.Row="1">
+            <!-- Boş durum -->
+            <StackPanel IsVisible="{Binding IsEmpty}" Spacing="14" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="20">
+                <Border Width="56" Height="56" CornerRadius="12" Background="{DynamicResource PanelBackground}" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1" HorizontalAlignment="Center">
+                    <TextBlock Text="+" FontSize="28" Foreground="{DynamicResource MutedText}" HorizontalAlignment="Center" VerticalAlignment="Center" FontWeight="Light"/>
+                </Border>
+                <TextBlock Text="Henüz proje yok" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource PrimaryText}" HorizontalAlignment="Center"/>
+                <TextBlock Text="İlk projeni oluştur" Foreground="{DynamicResource MutedText}" FontSize="12" HorizontalAlignment="Center"/>
+                <Button Content="Yeni Proje Oluştur" Command="{Binding CreateProjectCommand}" Background="{DynamicResource AccentButtonBg}" Foreground="White" CornerRadius="8" Padding="20,10" HorizontalAlignment="Center" Margin="0,8,0,0" FontSize="12" FontWeight="SemiBold"/>
+            </StackPanel>
+
+            <!-- Proje listesi — Minecraft dünya şeritleri stili -->
+            <ScrollViewer IsVisible="{Binding !IsEmpty}" Padding="10,8" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+                <ItemsControl ItemsSource="{Binding Projects}" HorizontalAlignment="Stretch">
+                    <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Vertical" Spacing="8"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:ProjectCardViewModel">
+                            <!-- Minecraft şerit: sol kapak kare, orta bilgi, sağ Aç + menü -->
+                            <Border Height="84" CornerRadius="6" Background="#2E2E2E" BorderBrush="#555555" BorderThickness="1" BoxShadow="0 2 0 0 #1A1A1A" ClipToBounds="True">
+                                <Grid ColumnDefinitions="84,*,Auto" Background="#3A3A3A">
+                                    <!-- Sol kapak -->
+                                    <Border Grid.Column="0" Background="#1E1E1E" ClipToBounds="True" BorderBrush="#555555" BorderThickness="0,0,1,0">
+                                        <Panel>
+                                            <Image IsVisible="{Binding IsCoverLoaded}" Source="{Binding CoverBitmap}" Stretch="UniformToFill" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
+                                            <Panel IsVisible="{Binding !IsCoverLoaded}" Background="#2B2B2B">
+                                                <Border Width="28" Height="28" CornerRadius="4" Background="#3A3A3A" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                    <TextBlock Text="▣" Foreground="#7A7A7A" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="14"/>
+                                                </Border>
+                                            </Panel>
+                                        </Panel>
+                                    </Border>
+                                    <!-- Orta bilgi -->
+                                    <StackPanel Grid.Column="1" Margin="10,8" Spacing="2" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding Name}" FontWeight="Bold" FontSize="13" Foreground="White" TextTrimming="CharacterEllipsis"/>
+                                        <TextBlock Text="{Binding Path}" FontSize="10" Foreground="#A0A0A0" TextTrimming="CharacterEllipsis"/>
+                                        <TextBlock Text="{Binding LastOpenedText}" FontSize="10" Foreground="#7A7A7A"/>
+                                    </StackPanel>
+                                    <!-- Sağ aksiyonlar -->
+                                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="0,0,10,0">
+                                        <Button Content="Aç" Command="{Binding OpenCommand}" Background="#5AA535" Foreground="White" CornerRadius="4" Padding="18,8" FontSize="12" FontWeight="Bold" BorderBrush="#3A6E24" BorderThickness="1"/>
+                                        <Button Content="⋯" Background="#555555" Foreground="White" FontSize="14" Padding="8,6" CornerRadius="4" BorderBrush="#3A3A3A" BorderThickness="1" MinWidth="36">
+                                            <Button.Flyout><MenuFlyout><MenuItem Header="İsim Değiştir" Command="{Binding RenameCommand}"/><MenuItem Header="Kapak Değiştir" Command="{Binding SetCoverCommand}"/><Separator/><MenuItem Header="Sil" Command="{Binding DeleteCommand}" Foreground="#DC2626"/></MenuFlyout></Button.Flyout>
+                                        </Button>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </Grid>
+
+        <!-- Status bar -->
+        <Border Grid.Row="2" Background="{DynamicResource SurfaceBackground}" BorderBrush="{DynamicResource BorderColor}" BorderThickness="0,1,0,0" Padding="12,6">
+            <TextBlock Text="{Binding StatusText}" Foreground="{DynamicResource MutedText}" FontSize="11"/>
+        </Border>
+    </Grid>
+</UserControl>

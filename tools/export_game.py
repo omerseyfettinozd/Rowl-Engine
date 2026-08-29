@@ -10,8 +10,13 @@ def export_pc():
     os.makedirs(out_dir, exist_ok=True)
     if os.path.exists("build/bin/rowl_engine"):
         shutil.copy("build/bin/rowl_engine", os.path.join(out_dir, "rowl_engine"))
-    if os.path.exists("data/game_data.rowlpkg"):
-        shutil.copy("data/game_data.rowlpkg", os.path.join(out_dir, "game_data.rowlpkg"))
+    if os.path.exists("build/lib/libRowlEngineCore.so"):
+        shutil.copy("build/lib/libRowlEngineCore.so", os.path.join(out_dir, "libRowlEngineCore.so"))
+    if os.path.exists("Assets"):
+        assets_out = os.path.join(out_dir, "Assets")
+        if os.path.exists(assets_out):
+            shutil.rmtree(assets_out)
+        shutil.copytree("Assets", assets_out)
     print(f"[Export Tool] PC Export successful! Package folder: '{out_dir}'")
 
 def export_android():

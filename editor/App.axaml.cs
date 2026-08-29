@@ -1,3 +1,6 @@
+using System;
+using System.IO;
+using System.Linq;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
@@ -17,10 +20,26 @@ namespace RowlEngine.Editor
         {
             if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
             {
-                desktop.MainWindow = new MainWindow
+                string[]? args = desktop.Args;
+                if (args != null && args.Length > 0 && Directory.Exists(args[0]))
                 {
-                    DataContext = new MainWindowViewModel(),
-                };
+                    desktop.MainWindow = new MainWindow(args[0]);
+                }
+                else
+                {
+                    var hubVm = new ProjectHubViewModel();
+                    var hubWin = new ProjectHubWindow(hubVm);
+
+                    hubVm.ProjectOpened += (projectPath) =>
+                    {
+                        var mainWin = new MainWindow(projectPath);
+                        desktop.MainWindow = mainWin;
+                        mainWin.Show();
+                        hubWin.Close();
+                    };
+
+                    desktop.MainWindow = hubWin;
+                }
             }
 
             base.OnFrameworkInitializationCompleted();

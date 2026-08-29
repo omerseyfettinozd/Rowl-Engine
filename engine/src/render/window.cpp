@@ -4,6 +4,7 @@
 #include "rowl/render/aspect_guardian.hpp"
 #include "rowl/core/engine.hpp"
 #include "rowl/core/logger.hpp"
+#include "rowl/vfs/vfs.hpp"
 #include <SDL3/SDL.h>
 #include <filesystem>
 #include <vector>
@@ -233,40 +234,62 @@ void Window::beginFrame() {
 SDL_Texture* Window::loadTexture(const std::string& filename) {
     if (filename.empty() || !m_sdlRenderer) return nullptr;
 
-    // Cache hit: return previously loaded texture (nullptr means "known-missing", skip)
+    // Cache hit: return previously loaded texture
     auto it = m_textureCache.find(filename);
     if (it != m_textureCache.end()) {
-        return it->second; // may be nullptr if previously failed
+        return it->second;
     }
 
-    // Cache miss: never cache nullptr — so we retry on next call if file appears later.
-    namespace fs = std::filesystem;
-    fs::path cwd = fs::current_path();
-    std::vector<fs::path> searchPaths = {
-        cwd / filename,
-        cwd / "Assets" / "images" / filename,
-        cwd / "Assets" / filename,
-        cwd / ".." / "Assets" / "images" / filename,
-        cwd / ".." / "Assets" / filename,
+    int width = 0, height = 0, channels = 0;
+    unsigned char* data = nullptr;
+    std::string sourceInfo;
+
+    // 1. Try VFS Manager first (supports loose assets, .rowlpkg archives, and mods)
+    std::vector<std::string> vfsCandidates = {
+        filename,
+        "images/" + filename,
+        "Assets/images/" + filename,
+        "Assets/" + filename
     };
 
-    fs::path foundPath;
-    for (const auto& p : searchPaths) {
-        if (fs::exists(p) && fs::is_regular_file(p)) {
-            foundPath = p;
-            break;
+    for (const auto& candidate : vfsCandidates) {
+        auto bytes = Rowl::VFS::VFSManager::instance().readBytes(candidate);
+        if (!bytes.empty()) {
+            data = stbi_load_from_memory(bytes.data(), static_cast<int>(bytes.size()), &width, &height, &channels, 4);
+            if (data) {
+                sourceInfo = "VFS [" + candidate + "]";
+                break;
+            }
         }
     }
 
-    if (foundPath.empty()) {
-        // Do NOT cache nullptr — allow retry if file is added later
-        return nullptr;
+    // 2. Direct filesystem fallback if VFS didn't find it
+    if (!data) {
+        namespace fs = std::filesystem;
+        fs::path cwd = fs::current_path();
+        std::vector<fs::path> searchPaths = {
+            cwd / filename,
+            cwd / "Assets" / "images" / filename,
+            cwd / "Assets" / filename,
+            cwd / ".." / "Assets" / "images" / filename,
+            cwd / ".." / "Assets" / filename,
+            fs::path(filename)
+        };
+
+        for (const auto& p : searchPaths) {
+            if (fs::exists(p) && fs::is_regular_file(p)) {
+                data = stbi_load(p.string().c_str(), &width, &height, &channels, 4);
+                if (data) {
+                    sourceInfo = p.string();
+                    break;
+                }
+            }
+        }
     }
 
-    int width, height, channels;
-    unsigned char* data = stbi_load(foundPath.c_str(), &width, &height, &channels, 4);
     if (!data) {
-        ROWL_LOG_ERROR("stbi_load failed for image: " + foundPath.string());
+        // Negative caching: cache failed lookup so we don't repeat 10 disk/VFS system calls on every frame
+        m_textureCache[filename] = nullptr;
         return nullptr;
     }
 
@@ -283,21 +306,21 @@ SDL_Texture* Window::loadTexture(const std::string& filename) {
     SDL_DestroySurface(surface);
     stbi_image_free(data);
 
-    // Only cache successful loads
     if (texture) {
         m_textureCache[filename] = texture;
-        ROWL_LOG_INFO("✅ Loaded Hardware Texture: " + foundPath.string() + " (" + std::to_string(width) + "x" + std::to_string(height) + ")");
+        ROWL_LOG_INFO("✅ Loaded Hardware Texture: " + filename + " (" + std::to_string(width) + "x" + std::to_string(height) + ") from " + sourceInfo);
     }
     return texture;
 }
 
 void Window::renderVisualNovelFrame(
-    const std::string& speaker,
-    const std::string& dialogue,
+    bool hasBackground,
     const std::string& background,
     float bgX, float bgY, float bgW, float bgH,
-    const std::string& character,
-    float charX, float charY, float charW, float charH,
+    const std::vector<CharacterRenderData>& characters,
+    bool hasDialogueBox,
+    const std::string& speaker,
+    const std::string& dialogue,
     float dlgX, float dlgY, float dlgW, float dlgH
 ) {
     if (!m_initialized || !m_sdlRenderer) return;
@@ -323,71 +346,149 @@ void Window::renderVisualNovelFrame(
     SDL_RenderClear(m_sdlRenderer);
 
     // 1. Render Background Texture or Fill into Virtual Viewport
-    float physBgX, physBgY;
-    AspectGuardian::virtualToPhysical(bgX, bgY, metrics, physBgX, physBgY);
-    float scaledBgW = bgW * metrics.scaleFactor;
-    float scaledBgH = bgH * metrics.scaleFactor;
-    SDL_FRect vpRect = { physBgX, physBgY, scaledBgW, scaledBgH };
+    if (hasBackground && !background.empty()) {
+        float physBgX, physBgY;
+        AspectGuardian::virtualToPhysical(bgX, bgY, metrics, physBgX, physBgY);
+        float scaledBgW = bgW * metrics.scaleFactor;
+        float scaledBgH = bgH * metrics.scaleFactor;
+        SDL_FRect vpRect = { physBgX, physBgY, scaledBgW, scaledBgH };
 
-    SDL_Texture* bgTex = loadTexture(background);
-    if (bgTex) {
-        SDL_RenderTexture(m_sdlRenderer, bgTex, nullptr, &vpRect);
-    } else {
-        SDL_SetRenderDrawColor(m_sdlRenderer, 20, 24, 38, 255);
-        SDL_RenderFillRect(m_sdlRenderer, &vpRect);
+        SDL_Texture* bgTex = loadTexture(background);
+        if (bgTex) {
+            SDL_RenderTexture(m_sdlRenderer, bgTex, nullptr, &vpRect);
+        } else {
+            SDL_SetRenderDrawColor(m_sdlRenderer, 20, 24, 38, 255);
+            SDL_RenderFillRect(m_sdlRenderer, &vpRect);
+        }
     }
 
-    // (Top atmosphere debug banner removed for clean gameplay presentation)
+    // 2. Render Character Sprites / Portraits (Multi-Character Support)
+    for (const auto& ch : characters) {
+        if (ch.sprite.empty()) continue;
 
-    // 2. Render Character Sprite / Portrait
-    float scaledCharW = charW * metrics.scaleFactor;
-    float scaledCharH = charH * metrics.scaleFactor;
-    float physCharX, physCharY;
-    AspectGuardian::virtualToPhysical(charX, charY, metrics, physCharX, physCharY);
+        float scaledCharW = ch.width * metrics.scaleFactor;
+        float scaledCharH = ch.height * metrics.scaleFactor;
+        float physCharX, physCharY;
+        AspectGuardian::virtualToPhysical(ch.x, ch.y, metrics, physCharX, physCharY);
 
-    SDL_FRect charBox = { physCharX, physCharY, scaledCharW, scaledCharH };
-    SDL_Texture* charTex = loadTexture(character);
-    if (charTex) {
-        SDL_RenderTexture(m_sdlRenderer, charTex, nullptr, &charBox);
-    } else {
-        SDL_SetRenderDrawColor(m_sdlRenderer, 30, 41, 59, 220);
-        SDL_RenderFillRect(m_sdlRenderer, &charBox);
-        SDL_SetRenderDrawColor(m_sdlRenderer, 56, 189, 248, 255);
-        SDL_RenderRect(m_sdlRenderer, &charBox);
+        SDL_FRect charBox = { physCharX, physCharY, scaledCharW, scaledCharH };
+        SDL_Texture* charTex = loadTexture(ch.sprite);
+        if (charTex) {
+            SDL_RenderTexture(m_sdlRenderer, charTex, nullptr, &charBox);
+        } else {
+            SDL_SetRenderDrawColor(m_sdlRenderer, 30, 41, 59, 220);
+            SDL_RenderFillRect(m_sdlRenderer, &charBox);
+            SDL_SetRenderDrawColor(m_sdlRenderer, 56, 189, 248, 255);
+            SDL_RenderRect(m_sdlRenderer, &charBox);
 
-        std::string charInfo = "[ CHAR: " + (character.empty() ? "spr_evelyn.png" : character) + " ]";
-        SDL_SetRenderDrawColor(m_sdlRenderer, 56, 189, 248, 255);
-        SDL_RenderDebugText(m_sdlRenderer, physCharX + 20.0f * metrics.scaleFactor, physCharY + (scaledCharH / 2.0f), charInfo.c_str());
+            std::string charInfo = "[ CHAR: " + ch.sprite + " ]";
+            SDL_SetRenderDrawColor(m_sdlRenderer, 56, 189, 248, 255);
+            SDL_RenderDebugText(m_sdlRenderer, physCharX + 20.0f * metrics.scaleFactor, physCharY + (scaledCharH / 2.0f), charInfo.c_str());
+        }
     }
 
-    // 3. Render Dialogue Box
-    float scaledDlgW = dlgW * metrics.scaleFactor;
-    float scaledDlgH = dlgH * metrics.scaleFactor;
-    float physBoxX, physBoxY;
-    AspectGuardian::virtualToPhysical(dlgX, dlgY, metrics, physBoxX, physBoxY);
+    // 3. Render Dialogue Box (Only if enabled / present)
+    if (hasDialogueBox) {
+        float scaledDlgW = dlgW * metrics.scaleFactor;
+        float scaledDlgH = dlgH * metrics.scaleFactor;
+        float physBoxX, physBoxY;
+        AspectGuardian::virtualToPhysical(dlgX, dlgY, metrics, physBoxX, physBoxY);
 
-    SDL_FRect dlgBox = { physBoxX, physBoxY, scaledDlgW, scaledDlgH };
-    SDL_SetRenderDrawColor(m_sdlRenderer, 15, 15, 26, 240);
-    SDL_RenderFillRect(m_sdlRenderer, &dlgBox);
+        SDL_FRect dlgBox = { physBoxX, physBoxY, scaledDlgW, scaledDlgH };
+        SDL_SetRenderDrawColor(m_sdlRenderer, 15, 15, 26, 240);
+        SDL_RenderFillRect(m_sdlRenderer, &dlgBox);
 
-    SDL_SetRenderDrawColor(m_sdlRenderer, 0, 240, 255, 255);
-    SDL_RenderRect(m_sdlRenderer, &dlgBox);
+        SDL_SetRenderDrawColor(m_sdlRenderer, 0, 240, 255, 255);
+        SDL_RenderRect(m_sdlRenderer, &dlgBox);
 
-    // Speaker Name Tag Badge
-    float tagW = std::clamp(160.0f * metrics.scaleFactor, 60.0f, scaledDlgW * 0.8f);
-    float tagH = 32.0f * metrics.scaleFactor;
-    SDL_FRect speakerTag = { physBoxX + (16.0f * metrics.scaleFactor), physBoxY - (16.0f * metrics.scaleFactor), tagW, tagH };
-    SDL_SetRenderDrawColor(m_sdlRenderer, 37, 99, 235, 255);
-    SDL_RenderFillRect(m_sdlRenderer, &speakerTag);
+        // Speaker Name Tag Badge (if speaker name provided)
+        if (!speaker.empty()) {
+            float tagW = std::clamp(160.0f * metrics.scaleFactor, 60.0f, scaledDlgW * 0.8f);
+            float tagH = 32.0f * metrics.scaleFactor;
+            SDL_FRect speakerTag = { physBoxX + (16.0f * metrics.scaleFactor), physBoxY - (16.0f * metrics.scaleFactor), tagW, tagH };
+            SDL_SetRenderDrawColor(m_sdlRenderer, 37, 99, 235, 255);
+            SDL_RenderFillRect(m_sdlRenderer, &speakerTag);
 
-    std::string speakerText = speaker.empty() ? "Evelyn" : speaker;
-    SDL_SetRenderDrawColor(m_sdlRenderer, 255, 255, 255, 255);
-    SDL_RenderDebugText(m_sdlRenderer, physBoxX + (28.0f * metrics.scaleFactor), physBoxY - (8.0f * metrics.scaleFactor), speakerText.c_str());
+            SDL_SetRenderDrawColor(m_sdlRenderer, 255, 255, 255, 255);
+            SDL_RenderDebugText(m_sdlRenderer, physBoxX + (28.0f * metrics.scaleFactor), physBoxY - (8.0f * metrics.scaleFactor), speaker.c_str());
+        }
 
-    // Dialogue Content Text
-    std::string dlgText = dialogue.empty() ? "Welcome to Rowl Engine!" : dialogue;
-    SDL_SetRenderDrawColor(m_sdlRenderer, 241, 245, 249, 255);
-    SDL_RenderDebugText(m_sdlRenderer, physBoxX + (24.0f * metrics.scaleFactor), physBoxY + (28.0f * metrics.scaleFactor), dlgText.c_str());
+        // Dialogue Content Text (with multi-line & word-wrapping support + memoization)
+        if (!dialogue.empty()) {
+            SDL_SetRenderDrawColor(m_sdlRenderer, 241, 245, 249, 255);
+
+            float paddingLeft = 24.0f * metrics.scaleFactor;
+            float paddingTop = 28.0f * metrics.scaleFactor;
+            float lineHeight = 18.0f * std::max(1.0f, metrics.scaleFactor);
+            float maxLineWidth = scaledDlgW - (48.0f * metrics.scaleFactor);
+
+            // Fast path: Check text wrap memoization cache to avoid heap allocations per frame
+            bool cacheValid = (m_textWrapCache.dialogue == dialogue &&
+                               std::abs(m_textWrapCache.boxWidth - scaledDlgW) < 0.1f &&
+                               std::abs(m_textWrapCache.scaleFactor - metrics.scaleFactor) < 0.001f);
+
+            if (!cacheValid) {
+                m_textWrapCache.dialogue = dialogue;
+                m_textWrapCache.boxWidth = scaledDlgW;
+                m_textWrapCache.scaleFactor = metrics.scaleFactor;
+                m_textWrapCache.wrappedLines.clear();
+
+                size_t maxCharsPerLine = static_cast<size_t>(std::max(10.0f, maxLineWidth / (8.0f * std::max(1.0f, metrics.scaleFactor))));
+
+                // Split into paragraphs by \n
+                std::vector<std::string> lines;
+                std::string currentParagraph;
+                for (char c : dialogue) {
+                    if (c == '\n') {
+                        lines.push_back(currentParagraph);
+                        currentParagraph.clear();
+                    } else {
+                        currentParagraph += c;
+                    }
+                }
+                if (!currentParagraph.empty() || lines.empty()) {
+                    lines.push_back(currentParagraph);
+                }
+
+                // Word wrap each paragraph
+                for (const auto& para : lines) {
+                    if (para.length() <= maxCharsPerLine) {
+                        m_textWrapCache.wrappedLines.push_back(para);
+                        continue;
+                    }
+
+                    size_t start = 0;
+                    while (start < para.length()) {
+                        if (para.length() - start <= maxCharsPerLine) {
+                            m_textWrapCache.wrappedLines.push_back(para.substr(start));
+                            break;
+                        }
+
+                        // Find last space within maxCharsPerLine
+                        size_t end = start + maxCharsPerLine;
+                        size_t spacePos = para.rfind(' ', end);
+                        if (spacePos != std::string::npos && spacePos > start) {
+                            m_textWrapCache.wrappedLines.push_back(para.substr(start, spacePos - start));
+                            start = spacePos + 1;
+                        } else {
+                            m_textWrapCache.wrappedLines.push_back(para.substr(start, maxCharsPerLine));
+                            start += maxCharsPerLine;
+                        }
+                    }
+                }
+            }
+
+            // Render each wrapped line directly from memoized cache (Zero allocation!)
+            float currentY = physBoxY + paddingTop;
+            for (const auto& line : m_textWrapCache.wrappedLines) {
+                if (currentY + lineHeight > physBoxY + scaledDlgH - (10.0f * metrics.scaleFactor))
+                    break; // Do not overflow bottom of dialogue box
+
+                SDL_RenderDebugText(m_sdlRenderer, physBoxX + paddingLeft, currentY, line.c_str());
+                currentY += lineHeight;
+            }
+        }
+    }
 }
 
 void Window::endFrame() {

@@ -51,22 +51,41 @@ void VFSManager::initialize() {
 
     ROWL_LOG_INFO("Initializing Hybrid Virtual File System (VFS)...");
 
-    // Default mounts: Priority 1 = Assets/ (canonical), Priority 2 = mods/
-    // Check if directories exist before mounting
-    if (fs::exists("Assets") && fs::is_directory("Assets")) {
-        mountDirectory("Assets", "Assets");
-    } else {
-        ROWL_LOG_WARN("Assets directory not found, skipping mount.");
+    std::vector<fs::path> candidateRoots = {
+        fs::current_path() / "Assets",
+        fs::current_path(),
+        fs::current_path() / ".." / "Assets",
+        fs::current_path() / ".."
+    };
+
+    for (const auto& root : candidateRoots) {
+        if (fs::exists(root) && fs::is_directory(root)) {
+            mountDirectory("", root.string());
+            mountDirectory("Assets", root.string());
+
+            fs::path imgPath = root / "images";
+            if (fs::exists(imgPath) && fs::is_directory(imgPath)) {
+                mountDirectory("", imgPath.string());
+                mountDirectory("images", imgPath.string());
+            }
+
+            fs::path pkgPath = root / "packages";
+            if (fs::exists(pkgPath) && fs::is_directory(pkgPath)) {
+                for (const auto& entry : fs::directory_iterator(pkgPath)) {
+                    if (entry.is_regular_file() && entry.path().extension() == ".rowlpkg") {
+                        mountPackage("", entry.path().string());
+                    }
+                }
+            }
+        }
     }
 
     if (fs::exists("mods") && fs::is_directory("mods")) {
         mountDirectory("mods", "mods");
-    } else {
-        ROWL_LOG_WARN("Mods directory not found, skipping mount.");
     }
 
     m_initialized = true;
-    ROWL_LOG_INFO("VFS Initialization Complete.");
+    ROWL_LOG_INFO("VFS Initialization Complete (" + std::to_string(m_mountPoints.size()) + " mount points).");
 }
 
 void VFSManager::mountDirectory(const std::string& virtualPrefix, const std::string& physicalPath) {

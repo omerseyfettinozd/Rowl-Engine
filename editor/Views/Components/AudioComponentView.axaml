@@ -1,0 +1,44 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:comp="using:RowlEngine.Editor.ViewModels.Components"
+             xmlns:vm="using:RowlEngine.Editor.ViewModels"
+             mc:Ignorable="d"
+             x:Class="RowlEngine.Editor.Views.Components.AudioComponentView"
+             x:DataType="comp:AudioComponentViewModel">
+
+    <Border Background="{DynamicResource CardBackground}" CornerRadius="6" Margin="0,4" Padding="0" BorderBrush="{DynamicResource CardBorderColor}" BorderThickness="1">
+        <StackPanel>
+            <!-- Component Header -->
+            <Border Background="{DynamicResource CardHeaderBackground}" CornerRadius="6,6,0,0" Padding="8,6">
+                <Grid ColumnDefinitions="*, Auto">
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                        <TextBlock Text="🔊" FontSize="13" VerticalAlignment="Center"/>
+                        <TextBlock Text="{Binding DisplayName}" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource PrimaryText}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="3" VerticalAlignment="Center">
+                        <CheckBox IsChecked="{Binding IsEnabled}" ToolTip.Tip="Enable/Disable" MinWidth="0" Padding="0" Margin="0,0,2,0"/>
+                        <Button Content="▲" Command="{Binding MoveUpCommand}" ToolTip.Tip="Move Up" FontSize="10" Padding="4,2" MinWidth="0" Background="Transparent" Foreground="{DynamicResource MutedText}" BorderThickness="0"/>
+                        <Button Content="▼" Command="{Binding MoveDownCommand}" ToolTip.Tip="Move Down" FontSize="10" Padding="4,2" MinWidth="0" Background="Transparent" Foreground="{DynamicResource MutedText}" BorderThickness="0"/>
+                        <ToggleButton IsChecked="{Binding IsExpanded}" Content="⚙️" FontSize="10" Padding="4,2" MinWidth="0" Background="Transparent" Foreground="{DynamicResource MutedText}" BorderThickness="0"/>
+                        <Button Content="🗑️" FontSize="10" Padding="4,2" MinWidth="0" Background="Transparent" Foreground="#EF4444" BorderThickness="0" ToolTip.Tip="Remove Component" Command="{Binding RemoveSelfCommand}"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- Component Body -->
+            <StackPanel IsVisible="{Binding IsExpanded}" Spacing="8" Margin="10,8">
+                <StackPanel Spacing="4">
+                    <TextBlock Text="DSP Filter" FontSize="11" Foreground="{DynamicResource MutedText}"/>
+                    <ComboBox SelectedItem="{Binding DspFilter}" HorizontalAlignment="Stretch" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}">
+                        <x:String>Normal</x:String>
+                        <x:String>Telephone</x:String>
+                        <x:String>CaveReverb</x:String>
+                        <x:String>UnderwaterLowPass</x:String>
+                    </ComboBox>
+                </StackPanel>
+            </StackPanel>
+        </StackPanel>
+    </Border>
+</UserControl>

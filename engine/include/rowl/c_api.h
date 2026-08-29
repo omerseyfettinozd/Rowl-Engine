@@ -145,6 +145,16 @@ ROWL_API void RowlEngine_UpdateScene(
 );
 
 /**
+ * Updates the scene from a JSON string containing component data.
+ * This is the component-based alternative to RowlEngine_UpdateScene.
+ * The JSON should be an array of component objects with 'type', 'enabled', and 'data' fields.
+ */
+ROWL_API void RowlEngine_UpdateSceneFromJson(
+    RowlEngineHandle handle,
+    const char* componentsJson
+);
+
+/**
  * Loads a story graph from a JSON file on disk.
  * @param jsonPath Absolute or CWD-relative path to the JSON file.
  */

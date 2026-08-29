@@ -6,14 +6,14 @@
              mc:Ignorable="d" d:DesignWidth="300" d:DesignHeight="600"
              x:Class="RowlEngine.Editor.Views.Panels.ProjectAssetsView"
              x:DataType="vm:MainWindowViewModel">
-    <Border Background="#181822">
+    <Border Background="{DynamicResource PanelBackground}">
         <Grid RowDefinitions="*">
             <TreeView Grid.Row="0" 
                       Background="Transparent" 
                       ItemsSource="{Binding AssetBrowserViewModel.AssetTree}" 
-                      SelectedItem="{Binding AssetBrowserViewModel.SelectedNode, Mode=TwoWay}"
+                      SelectedItem="{Binding AssetBrowserViewModel.SelectedNode, Mode=TwoWay}" 
                       Margin="4" 
-                      Foreground="#E2E8F0">
+                      Foreground="{DynamicResource PrimaryText}">
                 <TreeView.ContextMenu>
                     <ContextMenu>
                         <MenuItem Header="📁 Yeni Klasör Oluştur" Command="{Binding AssetBrowserViewModel.CreateFolderCommand}"/>
@@ -34,7 +34,10 @@
                 </TreeView.Styles>
                 <TreeView.ItemTemplate>
                     <TreeDataTemplate x:DataType="vm:AssetNodeViewModel" ItemsSource="{Binding Children}">
-                        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" Background="Transparent">
+                        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" Background="Transparent"
+                                    PointerPressed="OnAssetPointerPressed"
+                                    PointerMoved="OnAssetPointerMoved"
+                                    PointerReleased="OnAssetPointerReleased">
                             <StackPanel.ContextMenu>
                                 <ContextMenu>
                                     <MenuItem Header="📁 Yeni Klasör Oluştur" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.CreateFolderCommand}"/>
@@ -51,7 +54,7 @@
                             
                             <TextBlock Text="{Binding Name}" 
                                        IsVisible="{Binding !IsEditing}" 
-                                       Foreground="#CBD5E1" 
+                                       Foreground="{DynamicResource PrimaryText}" 
                                        FontSize="12" 
                                        VerticalAlignment="Center"/>
 
@@ -61,9 +64,9 @@
                                      Padding="4,2" 
                                      Margin="0,-2,0,-2" 
                                      MinHeight="22" 
-                                     Background="#0F172A" 
-                                     Foreground="#F8FAFC" 
-                                     BorderBrush="#38BDF8">
+                                     Background="{DynamicResource InputBackground}" 
+                                     Foreground="{DynamicResource PrimaryText}" 
+                                     BorderBrush="{DynamicResource AccentColor}">
                                 <TextBox.KeyBindings>
                                     <KeyBinding Gesture="Enter" Command="{Binding CommitRenameCommand}"/>
                                     <KeyBinding Gesture="Escape" Command="{Binding CancelRenameCommand}"/>

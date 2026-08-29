@@ -1,135 +1,155 @@
 {
+  "format_version": 2,
   "start_node_id": 101,
   "nodes": [
     {
       "id": 101,
-      "speaker": "Evelyn",
-      "dialogue": "1",
-      "background": "images/Otsu.jpg",
-      "background_x": 0,
-      "background_y": 0,
-      "background_width": 1920,
-      "background_height": 1080,
-      "character": "spr_evelyn.png",
-      "character_pos": "Right",
-      "character_x": 1440,
-      "character_y": 340,
-      "character_width": 360,
-      "character_height": 540,
-      "character_scale": 1,
-      "dialogue_box_x": 69.4835680751173,
-      "dialogue_box_y": 863.004694835681,
-      "dialogue_box_width": 1760,
-      "dialogue_box_height": 180,
+      "title": "Dialogue Node #101",
+      "editor_x": 152.80000000000004,
+      "editor_y": 227.99999999999997,
+      "components": [
+        {
+          "type": "background",
+          "id": "fa2c7944",
+          "enabled": true,
+          "data": {
+            "texture": "3a72957d667c9f393097f09b90a4f59f.jpg",
+            "x": 0,
+            "y": 0,
+            "width": 1920,
+            "height": 1080,
+            "scale": 1
+          }
+        },
+        {
+          "type": "dialogue",
+          "id": "5dd39192",
+          "enabled": true,
+          "data": {
+            "speaker": "Lain",
+            "dialogue": "I hate kids but I love the process",
+            "x": 80,
+            "y": 860,
+            "width": 1760,
+            "height": 180,
+            "scale": 1
+          }
+        },
+        {
+          "type": "character",
+          "id": "2c306a08",
+          "enabled": true,
+          "data": {
+            "sprite": "Margot.jpg",
+            "position": "Right",
+            "x": 110.705608401284,
+            "y": 460.565597667638,
+            "width": 300,
+            "height": 450,
+            "scale": 1
+          }
+        }
+      ],
       "next_nodes": [
         {
           "id": 102,
           "label": ""
         }
-      ]
+      ],
+      "speaker": "Lain",
+      "dialogue": "I hate kids but I love the process",
+      "background": "3a72957d667c9f393097f09b90a4f59f.jpg",
+      "background_x": 0,
+      "background_y": 0,
+      "background_width": 1920,
+      "background_height": 1080,
+      "character": "Margot.jpg",
+      "character_pos": "Right",
+      "character_x": 110.705608401284,
+      "character_y": 460.565597667638,
+      "character_width": 300,
+      "character_height": 450,
+      "character_scale": 1,
+      "dialogue_box_x": 80,
+      "dialogue_box_y": 860,
+      "dialogue_box_width": 1760,
+      "dialogue_box_height": 180
     },
     {
       "id": 102,
-      "speaker": "System",
-      "dialogue": "2",
-      "background": "images/Woman.png",
-      "background_x": 0,
-      "background_y": 0,
-      "background_width": 1920,
-      "background_height": 1080,
-      "character": "spr_evelyn.png",
-      "character_pos": "Right",
-      "character_x": 1440,
-      "character_y": 340,
-      "character_width": 360,
-      "character_height": 540,
-      "character_scale": 1,
-      "dialogue_box_x": 80,
-      "dialogue_box_y": 860,
-      "dialogue_box_width": 1760,
-      "dialogue_box_height": 180,
-      "next_nodes": [
+      "title": "Dialogue Node #102",
+      "editor_x": 480.80000000000007,
+      "editor_y": 206.00000000000003,
+      "components": [
         {
-          "id": 103,
-          "label": ""
-        }
-      ]
-    },
-    {
-      "id": 103,
-      "speaker": "Narrator",
-      "dialogue": "3",
-      "background": "images/Devreler.jpg",
-      "background_x": 0,
-      "background_y": 0,
-      "background_width": 1920,
-      "background_height": 1080,
-      "character": "spr_evelyn.png",
-      "character_pos": "Right",
-      "character_x": 1440,
-      "character_y": 340,
-      "character_width": 360,
-      "character_height": 540,
-      "character_scale": 1,
-      "dialogue_box_x": 80,
-      "dialogue_box_y": 860,
-      "dialogue_box_width": 1760,
-      "dialogue_box_height": 180,
-      "next_nodes": [
+          "type": "dialogue",
+          "id": "d28a0f55",
+          "enabled": true,
+          "data": {
+            "speaker": "Evelyn",
+            "dialogue": "Exploring different scenes seamlessly.",
+            "x": 80,
+            "y": 860,
+            "width": 1760,
+            "height": 180,
+            "scale": 1
+          }
+        },
         {
-          "id": 104,
-          "label": ""
-        }
-      ]
-    },
-    {
-      "id": 104,
-      "speaker": "Narrator",
-      "dialogue": "4",
-      "background": "images/Otsu.jpg",
-      "background_x": 0,
-      "background_y": 0,
-      "background_width": 1920,
-      "background_height": 1080,
-      "character": "spr_evelyn.png",
-      "character_pos": "Right",
-      "character_x": 1440,
-      "character_y": 340,
-      "character_width": 360,
-      "character_height": 540,
-      "character_scale": 1,
-      "dialogue_box_x": 80,
-      "dialogue_box_y": 860,
-      "dialogue_box_width": 1760,
-      "dialogue_box_height": 180,
-      "next_nodes": [
+          "type": "background",
+          "id": "8ea2aaab",
+          "enabled": true,
+          "data": {
+            "texture": "Margot.jpg",
+            "x": 0,
+            "y": 0,
+            "width": 1920,
+            "height": 1080,
+            "scale": 1
+          }
+        },
         {
-          "id": 105,
-          "label": ""
+          "type": "character",
+          "id": "837c292c",
+          "enabled": true,
+          "data": {
+            "sprite": "Woman.png",
+            "position": "Right",
+            "x": 1419.3,
+            "y": 469,
+            "width": 360,
+            "height": 540,
+            "scale": 1
+          }
+        },
+        {
+          "type": "audio",
+          "id": "4fc999eb",
+          "enabled": true,
+          "data": {
+            "dsp_filter": "Normal"
+          }
         }
-      ]
-    },
-    {
-      "id": 105,
-      "speaker": "Narrator",
-      "dialogue": "5",
-      "background": "images/Woman.png",
+      ],
+      "next_nodes": [],
+      "speaker": "Evelyn",
+      "dialogue": "Exploring different scenes seamlessly.",
+      "background": "Margot.jpg",
       "background_x": 0,
       "background_y": 0,
       "background_width": 1920,
       "background_height": 1080,
-      "character": "spr_evelyn.png",
+      "character": "Woman.png",
       "character_pos": "Right",
-      "character_x": 1440,
-      "character_y": 340,
+      "character_x": 1419.3,
+      "character_y": 469,
       "character_width": 360,
       "character_height": 540,
       "character_scale": 1,
       "dialogue_box_x": 80,
       "dialogue_box_y": 860,
       "dialogue_box_width": 1760,
-      "dialogue_box_height": 180,
-      "next_nodes": []
+      "dialogue_box_height": 180
     }
   ]
 }

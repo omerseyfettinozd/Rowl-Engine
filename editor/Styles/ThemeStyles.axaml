@@ -1,0 +1,86 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         Rowl Engine — Dynamic Theme System
+         Tüm renkler DynamicResource olarak tanımlanmıştır.
+         Tema değişikliğinde bu ResourceDictionary runtime'da değiştirilir.
+         ═══════════════════════════════════════════════════════════════════════ -->
+
+    <!-- ── Arka Plan Katmanları ─────────────────────────────────────────── -->
+    <Color x:Key="AppBackgroundColor">#121218</Color>
+    <Color x:Key="SurfaceBackgroundColor">#1E1E2A</Color>
+    <Color x:Key="PanelBackgroundColor">#181822</Color>
+    <Color x:Key="InputBackgroundColor">#0F172A</Color>
+    <Color x:Key="CanvasBackgroundColor">#0B0F19</Color>
+
+    <SolidColorBrush x:Key="AppBackground" Color="{DynamicResource AppBackgroundColor}"/>
+    <SolidColorBrush x:Key="SurfaceBackground" Color="{DynamicResource SurfaceBackgroundColor}"/>
+    <SolidColorBrush x:Key="PanelBackground" Color="{DynamicResource PanelBackgroundColor}"/>
+    <SolidColorBrush x:Key="InputBackground" Color="{DynamicResource InputBackgroundColor}"/>
+    <SolidColorBrush x:Key="CanvasBackground" Color="{DynamicResource CanvasBackgroundColor}"/>
+
+    <!-- ── Kenarlıklar ─────────────────────────────────────────────────── -->
+    <Color x:Key="BorderColorValue">#2D2D3F</Color>
+    <Color x:Key="BorderSubtleColorValue">#334155</Color>
+    <SolidColorBrush x:Key="BorderColor" Color="{DynamicResource BorderColorValue}"/>
+    <SolidColorBrush x:Key="BorderSubtle" Color="{DynamicResource BorderSubtleColorValue}"/>
+
+    <!-- ── Metin Renkleri ──────────────────────────────────────────────── -->
+    <Color x:Key="PrimaryTextColor">#F8FAFC</Color>
+    <Color x:Key="SecondaryTextColor">#CBD5E1</Color>
+    <Color x:Key="MutedTextColor">#94A3B8</Color>
+    <Color x:Key="DimTextColor">#64748B</Color>
+
+    <SolidColorBrush x:Key="PrimaryText" Color="{DynamicResource PrimaryTextColor}"/>
+    <SolidColorBrush x:Key="SecondaryText" Color="{DynamicResource SecondaryTextColor}"/>
+    <SolidColorBrush x:Key="MutedText" Color="{DynamicResource MutedTextColor}"/>
+    <SolidColorBrush x:Key="DimText" Color="{DynamicResource DimTextColor}"/>
+
+    <!-- ── Vurgu (Accent) Renkleri ─────────────────────────────────────── -->
+    <Color x:Key="AccentColor">#38BDF8</Color>
+    <Color x:Key="AccentHoverColor">#7DD3FC</Color>
+    <Color x:Key="AccentButtonBgColor">#2563EB</Color>
+    <Color x:Key="AccentButtonHoverColor">#3B82F6</Color>
+
+    <SolidColorBrush x:Key="Accent" Color="{DynamicResource AccentColor}"/>
+    <SolidColorBrush x:Key="AccentHover" Color="{DynamicResource AccentHoverColor}"/>
+    <SolidColorBrush x:Key="AccentButtonBg" Color="{DynamicResource AccentButtonBgColor}"/>
+    <SolidColorBrush x:Key="AccentButtonHover" Color="{DynamicResource AccentButtonHoverColor}"/>
+
+    <!-- ── İşlevsel Renkler ────────────────────────────────────────────── -->
+    <Color x:Key="SuccessColor">#22C55E</Color>
+    <Color x:Key="WarningColor">#F59E0B</Color>
+    <Color x:Key="ErrorColor">#EF4444</Color>
+    <Color x:Key="InfoColor">#3B82F6</Color>
+
+    <SolidColorBrush x:Key="SuccessBrush" Color="{DynamicResource SuccessColor}"/>
+    <SolidColorBrush x:Key="WarningBrush" Color="{DynamicResource WarningColor}"/>
+    <SolidColorBrush x:Key="ErrorBrush" Color="{DynamicResource ErrorColor}"/>
+    <SolidColorBrush x:Key="InfoBrush" Color="{DynamicResource InfoColor}"/>
+
+    <!-- ── Buton Renkleri ──────────────────────────────────────────────── -->
+    <Color x:Key="ToolbarButtonBgColor">#1E293B</Color>
+    <Color x:Key="ToolbarButtonHoverColor">#334155</Color>
+    <Color x:Key="DangerButtonBgColor">#DC2626</Color>
+    <Color x:Key="PlayButtonGreenColor">#16A34A</Color>
+    <Color x:Key="PlayButtonRedColor">#DC2626</Color>
+
+    <SolidColorBrush x:Key="ToolbarButtonBg" Color="{DynamicResource ToolbarButtonBgColor}"/>
+    <SolidColorBrush x:Key="ToolbarButtonHover" Color="{DynamicResource ToolbarButtonHoverColor}"/>
+    <SolidColorBrush x:Key="DangerButtonBg" Color="{DynamicResource DangerButtonBgColor}"/>
+
+    <!-- ── Status Bar ──────────────────────────────────────────────────── -->
+    <Color x:Key="StatusBarBgColor">#0F172A</Color>
+    <SolidColorBrush x:Key="StatusBarBg" Color="{DynamicResource StatusBarBgColor}"/>
+
+    <!-- ── Node Graph ──────────────────────────────────────────────────── -->
+    <Color x:Key="NodeCardBgColor">#181825</Color>
+    <Color x:Key="NodeHeaderBgColor">#1E1E2E</Color>
+    <Color x:Key="WireColor">#00FF66</Color>
+    <Color x:Key="WireDragColor">#38BDF8</Color>
+
+    <SolidColorBrush x:Key="NodeCardBg" Color="{DynamicResource NodeCardBgColor}"/>
+    <SolidColorBrush x:Key="NodeHeaderBg" Color="{DynamicResource NodeHeaderBgColor}"/>
+
+</ResourceDictionary>

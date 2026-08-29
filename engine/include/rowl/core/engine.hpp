@@ -6,8 +6,19 @@
 #include <memory>
 #include <unordered_map>
 #include <vector>
+#include <nlohmann/json.hpp>
 
 namespace Rowl::Core {
+
+/// Component data container for the component-based node architecture.
+struct ComponentData {
+    std::string type;       // "speaker", "background", "character", "dialogue_box", "audio"
+    std::string id;         // Unique component instance ID
+    bool enabled = true;
+    nlohmann::json data;    // Component-specific JSON payload
+};
+
+using Rowl::Render::CharacterRenderData;
 
 struct EngineConfig {
     std::string appName     = "Rowl Engine Game";
@@ -44,6 +55,9 @@ struct StoryNode {
         std::string label; // e.g. "Option A", "Accept", "Refuse"
     };
     std::vector<NextNode> nextNodes;
+
+    // Component-based data (v2 format)
+    std::vector<ComponentData> components;
 };
 
 class Engine {
@@ -103,6 +117,10 @@ public:
         float dlgW = 1760.0f, float dlgH = 180.0f
     );
 
+    /// Updates the scene from a JSON string containing component data.
+    /// Used by the editor's component-based architecture.
+    void updateSceneFromComponents(const std::string& componentsJson);
+
     void loadActiveStoryFile();
     void loadStoryGraphFile();
 
@@ -151,6 +169,8 @@ private:
     uint64_t m_startNodeId   = 101;
     uint64_t m_currentNodeId = 101;
 
+    bool m_hasBackground   = true;
+    bool m_hasDialogueBox  = true;
     std::string m_activeSpeaker    = "Evelyn";
     std::string m_activeDialogue   = "Welcome to Rowl Engine!";
     std::string m_activeBackground = "bg_beach_sunset.png";
@@ -163,6 +183,7 @@ private:
     float m_activeCharacterY       = 340.0f;
     float m_activeCharacterWidth   = 360.0f;
     float m_activeCharacterHeight  = 540.0f;
+    std::vector<CharacterRenderData> m_activeCharacters;
     float m_activeDialogueBoxX     = 80.0f;
     float m_activeDialogueBoxY     = 860.0f;
     float m_activeDialogueBoxWidth = 1760.0f;

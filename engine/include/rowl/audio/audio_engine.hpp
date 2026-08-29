@@ -34,6 +34,8 @@ public:
 
     float getBgmGain() const { return m_bgmGain; }
     DSPFilterType getActiveFilter() const { return m_activeFilter; }
+    bool isInitialized() const { return m_initialized; }
+    bool isDuckingActive() const { return m_isDuckingActive; }
     void shutdown();
 
 private:

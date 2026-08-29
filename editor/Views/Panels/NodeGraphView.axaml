@@ -9,7 +9,7 @@
              x:Class="RowlEngine.Editor.Views.Panels.NodeGraphView"
              x:DataType="vm:MainWindowViewModel">
     <Grid x:Name="NodeGraphContainer" 
-          Background="#0B0F19" 
+          Background="{DynamicResource GraphCanvasBg}" 
           ClipToBounds="True">
         <!-- Transformable Infinite Canvas Viewport (Unclipped 2D Infinite Coordinate Space) -->
         <Canvas x:Name="OuterCanvas" 
@@ -26,7 +26,7 @@
             </Canvas.RenderTransform>
 
             <!-- Infinite Grid Visual Background Surface -->
-            <Rectangle Width="400000" Height="400000" Canvas.Left="-200000" Canvas.Top="-200000" Fill="#0B0F19"/>
+            <Rectangle Width="400000" Height="400000" Canvas.Left="-200000" Canvas.Top="-200000" Fill="{DynamicResource GraphCanvasBg}"/>
 
             <!-- Connection Wires Layer -->
             <ItemsControl ItemsSource="{Binding Connections}" ClipToBounds="False">
@@ -37,13 +37,13 @@
                 </ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="vm:ConnectionViewModel">
-                        <controls:BezierWireRenderer StartPoint="{Binding StartPoint}" EndPoint="{Binding EndPoint}" WireBrush="#00FF66" WireThickness="3.0"/>
+                        <controls:BezierWireRenderer StartPoint="{Binding StartPoint}" EndPoint="{Binding EndPoint}" WireBrush="#10B981" WireThickness="3.0"/>
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
 
             <!-- Active Drag Wire Layer -->
-            <controls:BezierWireRenderer StartPoint="{Binding WireStartPoint}" EndPoint="{Binding WireEndPoint}" IsVisible="{Binding IsDraggingWire}" WireBrush="#38BDF8" WireThickness="3.5"/>
+            <controls:BezierWireRenderer StartPoint="{Binding WireStartPoint}" EndPoint="{Binding WireEndPoint}" IsVisible="{Binding IsDraggingWire}" WireBrush="{DynamicResource AccentColor}" WireThickness="3.5"/>
 
             <!-- Node Cards Layer -->
             <ItemsControl ItemsSource="{Binding Nodes}" ClipToBounds="False">
@@ -68,10 +68,10 @@
         </Canvas>
 
         <!-- Canvas Viewport Controls Overlay (Zoom badge & Reset (0,0) Button) -->
-        <Border HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="16" Background="#1E1E2A" BorderBrush="#334155" BorderThickness="1" CornerRadius="6" Padding="8,4">
+        <Border HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="16" Background="{DynamicResource SurfaceBackground}" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1" CornerRadius="6" Padding="8,4">
             <StackPanel Orientation="Horizontal" Spacing="8">
-                <TextBlock Text="{Binding ZoomScale, StringFormat='🔍 {0:P0}'}" Foreground="#94A3B8" FontSize="11" VerticalAlignment="Center"/>
-                <Button Content="🎯 Reset View (0,0)" Command="{Binding ResetCanvasViewCommand}" Padding="6,2" FontSize="11" Background="#2563EB" Foreground="White" CornerRadius="4"/>
+                <TextBlock Text="{Binding ZoomScale, StringFormat='🔍 {0:P0}'}" Foreground="{DynamicResource MutedText}" FontSize="11" VerticalAlignment="Center"/>
+                <Button Content="🎯 Reset View (0,0)" Command="{Binding ResetCanvasViewCommand}" Padding="6,2" FontSize="11" Background="{DynamicResource AccentButtonBg}" Foreground="{DynamicResource AccentButtonFg}" CornerRadius="4"/>
             </StackPanel>
         </Border>
     </Grid>
