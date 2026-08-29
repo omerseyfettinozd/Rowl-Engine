@@ -158,18 +158,6 @@ const uint8_t* Engine::getPixelBuffer(uint32_t* outW, uint32_t* outH) const {
 void Engine::advanceToNextNode(uint32_t choiceIndex) {
     if (m_storyNodes.empty()) return;
 
-    // If typewriter is still typing out the line, clicking reveals the full text immediately
-    if (m_isPlaying && m_activeDialogueData.typewriterEnabled && m_activeDialogueData.textSpeed > 0) {
-        size_t totalChars = m_activeDialogueData.dialogue.length();
-        float msPerChar = static_cast<float>(m_activeDialogueData.textSpeed);
-        float elapsedMs = m_activeDialogueData.elapsedTypewriterTime * 1000.0f;
-        size_t visibleChars = static_cast<size_t>(elapsedMs / msPerChar);
-        if (visibleChars < totalChars) {
-            m_activeDialogueData.elapsedTypewriterTime = 9999.0f;
-            return;
-        }
-    }
-
     auto it = m_storyNodes.find(m_currentNodeId);
     if (it != m_storyNodes.end()) {
         const auto& node = it->second;
@@ -178,8 +166,10 @@ void Engine::advanceToNextNode(uint32_t choiceIndex) {
             if (nextId != 0 && m_storyNodes.find(nextId) != m_storyNodes.end()) {
                 m_currentNodeId = nextId;
             }
+        } else {
+            // End of chain reached: loop back to start node
+            m_currentNodeId = m_startNodeId;
         }
-        // If end of story (no next nodes), m_currentNodeId remains on the last frame.
 
         auto nextIt = m_storyNodes.find(m_currentNodeId);
         if (nextIt != m_storyNodes.end()) {
@@ -208,7 +198,11 @@ void Engine::advanceToNextNode(uint32_t choiceIndex) {
                     nextNode.dialogueBoxWidth, nextNode.dialogueBoxHeight
                 );
             }
-            m_activeDialogueData.elapsedTypewriterTime = 0.0f;
+            if (m_isPlaying) {
+                m_activeDialogueData.elapsedTypewriterTime = 0.0f;
+            } else {
+                m_activeDialogueData.elapsedTypewriterTime = 9999.0f;
+            }
             ROWL_LOG_INFO("▶ Active Node #" + std::to_string(m_currentNodeId) +
                           " (" + nextNode.speaker + "): " + nextNode.dialogue);
         }

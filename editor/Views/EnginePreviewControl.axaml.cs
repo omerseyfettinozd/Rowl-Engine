@@ -174,7 +174,7 @@ namespace RowlEngine.Editor.Views
             // Unity behavior: Game interaction / click to advance is active ONLY in Play mode
             if (!_engineHost.IsPlaying) return;
 
-            // Advance story node in C++ Engine (updates m_currentNodeId and triggers instant step)
+            // Advance story node in C++ Engine (updates m_currentNodeId and triggers instant frame step)
             _engineHost.AdvanceNode(0);
 
             // Query new node ID from C++ engine and update selected node in editor
@@ -185,8 +185,6 @@ namespace RowlEngine.Editor.Views
                 if (matchNode != null)
                 {
                     vm.SelectNodeQuiet(matchNode);
-                    PushNodeScene(matchNode);
-                    _engineHost.ForceRenderFrame();
                 }
             }
             e.Handled = true;
