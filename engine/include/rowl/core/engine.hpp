@@ -148,10 +148,11 @@ public:
     float getActiveCharacterY()         const { return m_activeCharacterY; }
     float getActiveCharacterWidth()     const { return m_activeCharacterWidth; }
     float getActiveCharacterHeight()    const { return m_activeCharacterHeight; }
-    float getActiveDialogueBoxX()       const { return m_activeDialogueBoxX; }
-    float getActiveDialogueBoxY()       const { return m_activeDialogueBoxY; }
-    float getActiveDialogueBoxWidth()   const { return m_activeDialogueBoxWidth; }
-    float getActiveDialogueBoxHeight()  const { return m_activeDialogueBoxHeight; }
+    float getActiveDialogueBoxX()       const { return m_activeDialogueData.x; }
+    float getActiveDialogueBoxY()       const { return m_activeDialogueData.y; }
+    float getActiveDialogueBoxWidth()   const { return m_activeDialogueData.width; }
+    float getActiveDialogueBoxHeight()  const { return m_activeDialogueData.height; }
+    const Rowl::Render::DialogueRenderData& getActiveDialogueData() const { return m_activeDialogueData; }
     uint64_t getCurrentNodeId()         const { return m_currentNodeId; }
 
 private:
@@ -188,6 +189,7 @@ private:
     float m_activeDialogueBoxY     = 860.0f;
     float m_activeDialogueBoxWidth = 1760.0f;
     float m_activeDialogueBoxHeight = 180.0f;
+    Rowl::Render::DialogueRenderData m_activeDialogueData;
 
     bool m_isRunning    = false;
     bool m_initialized  = false;

@@ -21,6 +21,36 @@ struct CharacterRenderData {
     float height = 540.0f;
 };
 
+struct DialogueRenderData {
+    bool hasDialogueBox = true;
+    std::string speaker;
+    std::string dialogue;
+    float x = 80.0f;
+    float y = 860.0f;
+    float width = 1760.0f;
+    float height = 180.0f;
+    float scale = 1.0f;
+
+    // Typewriter & Timing
+    bool typewriterEnabled = false;
+    int textSpeed = 30; // ms per char
+    float elapsedTypewriterTime = 0.0f; // seconds
+
+    // Typography & Colors
+    float fontSize = 24.0f;
+    std::string textColor = "#F1F5F9";
+    std::string speakerColor = "#38BDF8";
+    std::string textAlignment = "Left";
+
+    // Box Visuals & Opacity
+    float boxOpacity = 0.88f;
+    std::string boxColor = "#0F0F1A";
+    std::string borderColor = "#00F0FF";
+    float borderThickness = 2.0f;
+    float cornerRadius = 8.0f;
+    std::string customBoxTexture;
+};
+
 class Window {
 public:
     Window();
@@ -65,6 +95,15 @@ public:
 
     void pollEvents(bool& outShouldQuit);
     void beginFrame();
+
+    void renderVisualNovelFrame(
+        bool hasBackground,
+        const std::string& background,
+        float bgX,   float bgY,   float bgW,   float bgH,
+        const std::vector<CharacterRenderData>& characters,
+        const DialogueRenderData& dialogueData
+    );
+
     void renderVisualNovelFrame(
         bool hasBackground,
         const std::string& background,
