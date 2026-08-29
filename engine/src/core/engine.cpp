@@ -297,28 +297,30 @@ void Engine::updateSceneFromComponents(const std::string& componentsJson) {
                 m_activeDialogueData.speaker = m_activeSpeaker;
                 m_activeDialogueData.dialogue = m_activeDialogue;
             } else if (type == "background") {
-                m_activeBackground = data.value("texture", m_activeBackground);
-                m_activeBackgroundX = data.value("x", m_activeBackgroundX);
-                m_activeBackgroundY = data.value("y", m_activeBackgroundY);
-                m_activeBackgroundWidth = data.value("width", m_activeBackgroundWidth);
-                m_activeBackgroundHeight = data.value("height", m_activeBackgroundHeight);
-                m_hasBackground = true;
+                m_activeBackground = data.value("texture", "");
+                m_activeBackgroundX = data.value("x", 0.0f);
+                m_activeBackgroundY = data.value("y", 0.0f);
+                m_activeBackgroundWidth = data.value("width", 1920.0f);
+                m_activeBackgroundHeight = data.value("height", 1080.0f);
+                m_hasBackground = !m_activeBackground.empty();
             } else if (type == "character") {
                 CharacterRenderData cd;
-                cd.sprite = data.value("sprite", "spr_evelyn.png");
-                cd.x = data.value("x", 1440.0f);
-                cd.y = data.value("y", 340.0f);
-                cd.width = data.value("width", 360.0f);
-                cd.height = data.value("height", 540.0f);
-                m_activeCharacters.push_back(cd);
+                cd.sprite = data.value("sprite", "");
+                if (!cd.sprite.empty()) {
+                    cd.x = data.value("x", 1440.0f);
+                    cd.y = data.value("y", 340.0f);
+                    cd.width = data.value("width", 360.0f);
+                    cd.height = data.value("height", 540.0f);
+                    m_activeCharacters.push_back(cd);
 
-                // Set legacy single-character fallback to first character
-                if (m_activeCharacters.size() == 1) {
-                    m_activeCharacter = cd.sprite;
-                    m_activeCharacterX = cd.x;
-                    m_activeCharacterY = cd.y;
-                    m_activeCharacterWidth = cd.width;
-                    m_activeCharacterHeight = cd.height;
+                    // Set legacy single-character fallback to first character
+                    if (m_activeCharacters.size() == 1) {
+                        m_activeCharacter = cd.sprite;
+                        m_activeCharacterX = cd.x;
+                        m_activeCharacterY = cd.y;
+                        m_activeCharacterWidth = cd.width;
+                        m_activeCharacterHeight = cd.height;
+                    }
                 }
             } else if (type == "dialogue_box") {
                 m_activeDialogueBoxX = data.value("x", m_activeDialogueBoxX);

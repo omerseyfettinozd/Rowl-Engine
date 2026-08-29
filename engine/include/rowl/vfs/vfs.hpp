@@ -24,6 +24,7 @@ public:
     bool exists(const std::string& path) override;
     std::vector<uint8_t> read(const std::string& path) override;
     std::string getSourceName() const override { return "LooseDirectorySource [" + m_physicalPath + "]"; }
+    const std::string& getPhysicalPath() const { return m_physicalPath; }
 
 private:
     std::string m_physicalPath;
@@ -42,6 +43,7 @@ public:
     bool exists(const std::string& vfsPath);
     std::vector<uint8_t> readBytes(const std::string& vfsPath);
     std::string readString(const std::string& vfsPath);
+    const std::vector<std::pair<std::string, std::shared_ptr<IDataSource>>>& getMountPoints() const { return m_mountPoints; }
 
 private:
     VFSManager() = default;

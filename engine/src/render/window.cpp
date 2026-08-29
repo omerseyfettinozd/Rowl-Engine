@@ -231,12 +231,28 @@ void Window::beginFrame() {
     SDL_RenderClear(m_sdlRenderer);
 }
 
+void Window::clearTextureCache() {
+    for (auto& [name, tex] : m_textureCache) {
+        if (tex) {
+            SDL_DestroyTexture(tex);
+        }
+    }
+    m_textureCache.clear();
+    ROWL_LOG_INFO("Hardware Texture Cache Cleared.");
+}
+
 SDL_Texture* Window::loadTexture(const std::string& filename) {
     if (filename.empty() || !m_sdlRenderer) return nullptr;
 
-    // Cache hit: return previously loaded texture
-    auto it = m_textureCache.find(filename);
-    if (it != m_textureCache.end()) {
+    namespace fs = std::filesystem;
+
+    // Normalize slashes
+    std::string normPath = filename;
+    std::replace(normPath.begin(), normPath.end(), '\\', '/');
+
+    // Cache hit: only return valid textures
+    auto it = m_textureCache.find(normPath);
+    if (it != m_textureCache.end() && it->second != nullptr) {
         return it->second;
     }
 
@@ -244,36 +260,78 @@ SDL_Texture* Window::loadTexture(const std::string& filename) {
     unsigned char* data = nullptr;
     std::string sourceInfo;
 
-    // 1. Try VFS Manager first (supports loose assets, .rowlpkg archives, and mods)
-    std::vector<std::string> vfsCandidates = {
-        filename,
-        "images/" + filename,
-        "Assets/images/" + filename,
-        "Assets/" + filename
-    };
+    std::string bareName = fs::path(normPath).filename().string();
 
-    for (const auto& candidate : vfsCandidates) {
-        auto bytes = Rowl::VFS::VFSManager::instance().readBytes(candidate);
-        if (!bytes.empty()) {
-            data = stbi_load_from_memory(bytes.data(), static_cast<int>(bytes.size()), &width, &height, &channels, 4);
-            if (data) {
-                sourceInfo = "VFS [" + candidate + "]";
-                break;
+    // 1. Direct absolute or relative filesystem check
+    if (fs::exists(normPath) && fs::is_regular_file(normPath)) {
+        data = stbi_load(normPath.c_str(), &width, &height, &channels, 4);
+        if (data) {
+            sourceInfo = "Direct Path [" + normPath + "]";
+        }
+    }
+
+    // 2. Try VFS Manager candidates
+    if (!data) {
+        std::vector<std::string> vfsCandidates = {
+            normPath,
+            bareName,
+            "images/" + bareName,
+            "images/" + normPath,
+            "Assets/images/" + bareName,
+            "Assets/images/" + normPath,
+            "Assets/" + bareName,
+            "Assets/" + normPath
+        };
+
+        for (const auto& candidate : vfsCandidates) {
+            auto bytes = Rowl::VFS::VFSManager::instance().readBytes(candidate);
+            if (!bytes.empty()) {
+                data = stbi_load_from_memory(bytes.data(), static_cast<int>(bytes.size()), &width, &height, &channels, 4);
+                if (data) {
+                    sourceInfo = "VFS [" + candidate + "]";
+                    break;
+                }
             }
         }
     }
 
-    // 2. Direct filesystem fallback if VFS didn't find it
+    // 3. Search all active VFS physical mount directories directly on disk
     if (!data) {
-        namespace fs = std::filesystem;
+        const auto& mountPoints = Rowl::VFS::VFSManager::instance().getMountPoints();
+        for (const auto& [prefix, source] : mountPoints) {
+            if (auto loose = std::dynamic_pointer_cast<Rowl::VFS::LooseDirectorySource>(source)) {
+                fs::path baseDir(loose->getPhysicalPath());
+                std::vector<fs::path> diskCandidates = {
+                    baseDir / normPath,
+                    baseDir / bareName,
+                    baseDir / "images" / bareName,
+                    baseDir / "Assets" / "images" / bareName
+                };
+                for (const auto& dp : diskCandidates) {
+                    if (fs::exists(dp) && fs::is_regular_file(dp)) {
+                        data = stbi_load(dp.string().c_str(), &width, &height, &channels, 4);
+                        if (data) {
+                            sourceInfo = "VFS Mount Disk [" + dp.string() + "]";
+                            break;
+                        }
+                    }
+                }
+                if (data) break;
+            }
+        }
+    }
+
+    // 4. Fallback search relative to CWD
+    if (!data) {
         fs::path cwd = fs::current_path();
         std::vector<fs::path> searchPaths = {
-            cwd / filename,
-            cwd / "Assets" / "images" / filename,
-            cwd / "Assets" / filename,
-            cwd / ".." / "Assets" / "images" / filename,
-            cwd / ".." / "Assets" / filename,
-            fs::path(filename)
+            cwd / normPath,
+            cwd / bareName,
+            cwd / "Assets" / "images" / bareName,
+            cwd / "Assets" / "images" / normPath,
+            cwd / "Assets" / bareName,
+            cwd / ".." / "Assets" / "images" / bareName,
+            cwd / ".." / "Assets" / bareName
         };
 
         for (const auto& p : searchPaths) {
@@ -288,8 +346,6 @@ SDL_Texture* Window::loadTexture(const std::string& filename) {
     }
 
     if (!data) {
-        // Negative caching: cache failed lookup so we don't repeat 10 disk/VFS system calls on every frame
-        m_textureCache[filename] = nullptr;
         return nullptr;
     }
 
@@ -308,6 +364,8 @@ SDL_Texture* Window::loadTexture(const std::string& filename) {
 
     if (texture) {
         m_textureCache[filename] = texture;
+        m_textureCache[normPath] = texture;
+        m_textureCache[bareName] = texture;
         ROWL_LOG_INFO("✅ Loaded Hardware Texture: " + filename + " (" + std::to_string(width) + "x" + std::to_string(height) + ") from " + sourceInfo);
     }
     return texture;
