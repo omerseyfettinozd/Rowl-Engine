@@ -42,3 +42,8 @@ Makefile
 .DS_Store
 Thumbs.db
 .vscode/
+
+# Python Cache
+__pycache__/
+*.py[cod]
+*$py.class
