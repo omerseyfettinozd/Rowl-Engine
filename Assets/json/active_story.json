@@ -26,7 +26,23 @@
         "y": 860,
         "width": 1760,
         "height": 180,
-        "scale": 1
+        "scale": 1,
+        "typewriter_enabled": true,
+        "text_speed": 30,
+        "typewriter_sound": "",
+        "auto_advance": false,
+        "auto_advance_delay": 2,
+        "font_size": 24,
+        "speaker_font_size": 20,
+        "text_color": "#F1F5F9",
+        "speaker_color": "#38BDF8",
+        "text_alignment": "Left",
+        "box_opacity": 0.88,
+        "box_color": "#0F0F1A",
+        "border_color": "#00F0FF",
+        "border_thickness": 2,
+        "corner_radius": 8,
+        "custom_box_texture": ""
       }
     },
     {
@@ -36,8 +52,8 @@
       "data": {
         "sprite": "Margot.jpg",
         "position": "Right",
-        "x": 110.705608401284,
-        "y": 460.565597667638,
+        "x": 810,
+        "y": 610,
         "width": 300,
         "height": 450,
         "scale": 1
@@ -53,8 +69,8 @@
   "background_height": 1080,
   "character": "Margot.jpg",
   "character_pos": "Right",
-  "character_x": 110.705608401284,
-  "character_y": 460.565597667638,
+  "character_x": 810,
+  "character_y": 610,
   "character_width": 300,
   "character_height": 450,
   "character_scale": 1,
