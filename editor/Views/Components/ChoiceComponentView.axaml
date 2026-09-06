@@ -1,0 +1,90 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:comp="using:RowlEngine.Editor.ViewModels.Components"
+             x:Class="RowlEngine.Editor.Views.Components.ChoiceComponentView"
+             x:DataType="comp:ChoiceComponentViewModel">
+  <Border Background="{DynamicResource CardBackground}" CornerRadius="6" Margin="0,4" Padding="10" BorderBrush="{DynamicResource CardBorderColor}" BorderThickness="1">
+    <StackPanel Spacing="8">
+      <Grid ColumnDefinitions="*,Auto">
+        <TextBlock Text="🔀 Player Choices" FontWeight="Bold" Foreground="{DynamicResource PrimaryText}"/>
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4">
+          <CheckBox IsChecked="{Binding IsEnabled}" ToolTip.Tip="Enable/Disable"/>
+          <Button Content="🗑️" Command="{Binding RemoveSelfCommand}" Foreground="#EF4444" Background="Transparent" BorderThickness="0"/>
+        </StackPanel>
+      </Grid>
+      <TextBox Watermark="Choice heading" Text="{Binding Title}"/>
+      <ItemsControl ItemsSource="{Binding Options}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="comp:ChoiceOptionViewModel">
+            <Border Padding="8" Margin="0,2" BorderBrush="{Binding BorderColor}" Background="{Binding BackgroundColor}" BorderThickness="1" CornerRadius="{Binding CornerRadius}">
+              <StackPanel Spacing="6">
+                <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="4">
+                  <TextBox Grid.Column="0" Watermark="Button text" Text="{Binding Text}" FontSize="{Binding FontSize}" Foreground="{Binding TextColor}"/>
+                  <CheckBox Grid.Column="1" IsChecked="{Binding IsEnabled}" ToolTip.Tip="Enable this button"/>
+                  <ToggleButton Grid.Column="2" Content="⚙" IsChecked="{Binding IsExpanded}" ToolTip.Tip="Button appearance"/>
+                </Grid>
+                <StackPanel IsVisible="{Binding IsExpanded}" Spacing="6">
+                  <Grid ColumnDefinitions="*,90,Auto" ColumnSpacing="5">
+                    <TextBox Grid.Column="0" Watermark="Condition (e.g. affinity_evelyn &gt;= 3)" Text="{Binding Condition}" FontSize="11"/>
+                    <TextBlock Grid.Column="1" Text="Graph cable sets target" FontSize="10" TextWrapping="Wrap" Foreground="{DynamicResource MutedText}" VerticalAlignment="Center"/>
+                    <Button Grid.Column="2" Content="Remove" Command="{Binding $parent[UserControl].DataContext.RemoveOptionCommand}" CommandParameter="{Binding}" Background="Transparent" Foreground="#FCA5A5"/>
+                  </Grid>
+                  <Grid ColumnDefinitions="Auto,*,Auto,*" ColumnSpacing="5">
+                    <TextBlock Text="Preset" VerticalAlignment="Center" FontSize="11"/>
+                    <ComboBox Grid.Column="1" SelectedItem="{Binding StylePreset}">
+                      <x:String>Neon</x:String><x:String>Minimal</x:String><x:String>Paper</x:String><x:String>Danger</x:String>
+                    </ComboBox>
+                    <TextBlock Grid.Column="2" Text="Font" VerticalAlignment="Center" FontSize="11"/>
+                    <TextBox Grid.Column="3" Text="{Binding FontSize}" Width="56"/>
+                  </Grid>
+                  <Grid ColumnDefinitions="Auto,*,Auto,*,Auto,*" ColumnSpacing="5">
+                    <TextBlock Text="X" VerticalAlignment="Center"/><TextBox Grid.Column="1" Text="{Binding X}" Width="58"/>
+                    <TextBlock Grid.Column="2" Text="Y" VerticalAlignment="Center"/><TextBox Grid.Column="3" Text="{Binding Y}" Width="58"/>
+                    <TextBlock Grid.Column="4" Text="Opacity" VerticalAlignment="Center"/><TextBox Grid.Column="5" Text="{Binding Opacity}" Width="58"/>
+                  </Grid>
+                  <Border Tag="Font" DragDrop.AllowDrop="True" DragDrop.DragOver="OnAssetDragOver" DragDrop.Drop="OnAssetDrop"
+                          BorderBrush="#475569" BorderThickness="1" CornerRadius="4" Padding="3">
+                    <TextBox Watermark="Font: Assets panelinden .ttf/.otf sürükle" Text="{Binding FontFamily}" BorderThickness="0"/>
+                  </Border>
+                  <Grid ColumnDefinitions="*,*" ColumnSpacing="5">
+                    <TextBox Watermark="Text #RRGGBB" Text="{Binding TextColor}"/>
+                    <TextBox Grid.Column="1" Watermark="Background #RRGGBB" Text="{Binding BackgroundColor}"/>
+                  </Grid>
+                  <Grid ColumnDefinitions="*,*" ColumnSpacing="5">
+                    <TextBox Watermark="Hover #RRGGBB" Text="{Binding HoverColor}"/>
+                    <TextBox Grid.Column="1" Watermark="Border #RRGGBB" Text="{Binding BorderColor}"/>
+                  </Grid>
+                  <Grid ColumnDefinitions="Auto,*,Auto,*,Auto,*" ColumnSpacing="5">
+                    <TextBlock Text="W" VerticalAlignment="Center"/><TextBox Grid.Column="1" Text="{Binding Width}" Width="54"/>
+                    <TextBlock Grid.Column="2" Text="H" VerticalAlignment="Center"/><TextBox Grid.Column="3" Text="{Binding Height}" Width="54"/>
+                    <TextBlock Grid.Column="4" Text="Radius" VerticalAlignment="Center"/><TextBox Grid.Column="5" Text="{Binding CornerRadius}" Width="54"/>
+                  </Grid>
+                  <TextBlock Text="Buton görselleri — Assets panelinden ilgili alana sürükle bırak"
+                             FontSize="10" Foreground="{DynamicResource MutedText}" TextWrapping="Wrap"/>
+                  <Border Tag="Normal" DragDrop.AllowDrop="True" DragDrop.DragOver="OnAssetDragOver" DragDrop.Drop="OnAssetDrop"
+                          BorderBrush="#38BDF8" BorderThickness="1" CornerRadius="4" Padding="3">
+                    <TextBox Watermark="Normal görseli buraya bırak" Text="{Binding NormalImage}" BorderThickness="0"/>
+                  </Border>
+                  <Border Tag="Hover" DragDrop.AllowDrop="True" DragDrop.DragOver="OnAssetDragOver" DragDrop.Drop="OnAssetDrop"
+                          BorderBrush="#475569" BorderThickness="1" CornerRadius="4" Padding="3">
+                    <TextBox Watermark="Hover görselini buraya bırak" Text="{Binding HoverImage}" BorderThickness="0"/>
+                  </Border>
+                  <Border Tag="Pressed" DragDrop.AllowDrop="True" DragDrop.DragOver="OnAssetDragOver" DragDrop.Drop="OnAssetDrop"
+                          BorderBrush="#475569" BorderThickness="1" CornerRadius="4" Padding="3">
+                    <TextBox Watermark="Pressed görselini buraya bırak" Text="{Binding PressedImage}" BorderThickness="0"/>
+                  </Border>
+                  <Border Tag="Disabled" DragDrop.AllowDrop="True" DragDrop.DragOver="OnAssetDragOver" DragDrop.Drop="OnAssetDrop"
+                          BorderBrush="#475569" BorderThickness="1" CornerRadius="4" Padding="3">
+                    <TextBox Watermark="Disabled görselini buraya bırak" Text="{Binding DisabledImage}" BorderThickness="0"/>
+                  </Border>
+                </StackPanel>
+              </StackPanel>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+      <Button Content="＋ Add choice" Command="{Binding AddOptionCommand}" HorizontalAlignment="Left"/>
+      <TextBlock Text="Each option has a stable ID and a target node. Use the graph cables to visualize routes; the target ID is the source of truth." TextWrapping="Wrap" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+    </StackPanel>
+  </Border>
+</UserControl>

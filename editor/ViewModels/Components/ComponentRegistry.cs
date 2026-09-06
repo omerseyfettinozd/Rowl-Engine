@@ -16,6 +16,7 @@ namespace RowlEngine.Editor.ViewModels.Components
             ["background"] = () => new BackgroundComponentViewModel(),
             ["character"] = () => new CharacterComponentViewModel(),
             ["audio"] = () => new AudioComponentViewModel(),
+            ["choice"] = () => new ChoiceComponentViewModel(),
             // Backward-compatible aliases
             ["speaker"] = () => new DialogueComponentViewModel(),
             ["dialogue_box"] = () => new DialogueComponentViewModel(),
@@ -36,7 +37,7 @@ namespace RowlEngine.Editor.ViewModels.Components
         /// <summary>
         /// Returns primary registered component type keys (excluding aliases).
         /// </summary>
-        public static IReadOnlyList<string> AvailableTypes => new[] { "dialogue", "background", "character", "audio" };
+        public static IReadOnlyList<string> AvailableTypes => new[] { "dialogue", "background", "character", "audio", "choice" };
 
         /// <summary>
         /// Returns display info (typeKey, displayName, icon) for primary registered types.

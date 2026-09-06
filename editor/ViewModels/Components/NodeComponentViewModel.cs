@@ -7,7 +7,7 @@ namespace RowlEngine.Editor.ViewModels.Components
     /// <summary>
     /// Abstract base class for all node components.
     /// Each component represents a modular piece of functionality
-    /// that can be attached to a NodeViewModel (similar to Unity's Component model).
+    /// that can be attached to a FrameObjectViewModel (similar to Unity's Component model).
     /// </summary>
     public abstract partial class NodeComponentViewModel : ObservableObject
     {
@@ -45,36 +45,63 @@ namespace RowlEngine.Editor.ViewModels.Components
         private bool _isEnabled = true;
 
         /// <summary>
+        /// Reference to the GameObject (FrameObjectViewModel) owning this component.
+        /// </summary>
+        [ObservableProperty]
+        private FrameObjectViewModel? _ownerObject;
+
+        /// <summary>
         /// Reference to the parent NodeViewModel owning this component instance.
         /// </summary>
         [ObservableProperty]
         private NodeViewModel? _node;
 
         /// <summary>
-        /// Removes this component from its parent node.
+        /// Removes this component from its parent object / node.
         /// </summary>
         [CommunityToolkit.Mvvm.Input.RelayCommand]
         public void RemoveSelf()
         {
-            Node?.RemoveComponent(this);
+            if (OwnerObject != null)
+            {
+                OwnerObject.RemoveComponent(this);
+            }
+            else
+            {
+                Node?.RemoveComponent(this);
+            }
         }
 
         /// <summary>
-        /// Moves this component up in the parent node's component list.
+        /// Moves this component up in the parent object's component list.
         /// </summary>
         [CommunityToolkit.Mvvm.Input.RelayCommand]
         public void MoveUp()
         {
-            Node?.MoveComponentUp(this);
+            if (OwnerObject != null)
+            {
+                OwnerObject.MoveComponentUp(this);
+            }
+            else
+            {
+                Node?.MoveComponentUp(this);
+            }
         }
 
         /// <summary>
-        /// Moves this component down in the parent node's component list.
+        /// Moves this component down in the parent object's component list.
         /// </summary>
         [CommunityToolkit.Mvvm.Input.RelayCommand]
         public void MoveDown()
         {
-            Node?.MoveComponentDown(this);
+            if (OwnerObject != null)
+            {
+                OwnerObject.MoveComponentDown(this);
+            }
+            else
+            {
+                Node?.MoveComponentDown(this);
+            }
         }
 
         /// <summary>

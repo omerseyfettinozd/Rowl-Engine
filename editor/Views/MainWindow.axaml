@@ -34,9 +34,10 @@
                         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
                             <Menu Background="Transparent">
                                 <MenuItem Header="Pencereler" Foreground="{DynamicResource PrimaryText}" FontSize="12" FontWeight="SemiBold">
-                                    <MenuItem Header="📁 Project Assets" Command="{Binding ShowPanelCommand}" CommandParameter="Assets"/>
+                                    <MenuItem Header="📋 Hierarchy" Command="{Binding ShowPanelCommand}" CommandParameter="Hierarchy"/>
                                     <MenuItem Header="🔍 Node Inspector" Command="{Binding ShowPanelCommand}" CommandParameter="Inspector"/>
                                     <MenuItem Header="📝 Output Log" Command="{Binding ShowPanelCommand}" CommandParameter="Log"/>
+                                    <MenuItem Header="📁 Project Assets" Command="{Binding ShowPanelCommand}" CommandParameter="Assets"/>
                                     <Separator/>
                                     <MenuItem Header="🕸️ Node Graph" Command="{Binding ShowPanelCommand}" CommandParameter="NodeGraph"/>
                                     <MenuItem Header="🎬 Edit Frame" Command="{Binding ShowPanelCommand}" CommandParameter="Preview"/>
@@ -200,9 +201,9 @@
              ══════════════════════════════════════════════════════════════════ -->
         <Grid Grid.Row="1" ColumnDefinitions="280, 6, *, 6, 320">
 
-            <!-- LEFT: Project Assets -->
-            <Grid Grid.Column="0" IsVisible="{Binding IsAssetsPanelVisible}">
-                <panels:ProjectAssetsView/>
+            <!-- LEFT: Hierarchy Panel -->
+            <Grid Grid.Column="0" IsVisible="{Binding IsHierarchyPanelVisible}">
+                <panels:NodeHierarchyView/>
             </Grid>
             <GridSplitter Grid.Column="1" Background="{DynamicResource BorderColor}" ResizeDirection="Columns" Width="6"/>
 
@@ -256,9 +257,24 @@
 
                 <GridSplitter Grid.Row="1" Background="{DynamicResource BorderColor}" ResizeDirection="Rows" Height="6"/>
 
-                <!-- Bottom: Output Log -->
+                <!-- Bottom: Log + Assets (Tabbed) -->
                 <Grid Grid.Row="2" IsVisible="{Binding IsLogPanelVisible}">
-                    <panels:OutputLogView/>
+                    <TabControl SelectedIndex="{Binding BottomPanelActiveTab}"
+                                Background="{DynamicResource PanelBackground}">
+                        <TabControl.Styles>
+                            <Style Selector="TabItem">
+                                <Setter Property="FontSize" Value="12"/>
+                                <Setter Property="Padding" Value="10,5"/>
+                                <Setter Property="Foreground" Value="{DynamicResource PrimaryText}"/>
+                            </Style>
+                        </TabControl.Styles>
+                        <TabItem Header="📝 Log">
+                            <panels:OutputLogView/>
+                        </TabItem>
+                        <TabItem Header="📁 Assets">
+                            <panels:ProjectAssetsView/>
+                        </TabItem>
+                    </TabControl>
                 </Grid>
             </Grid>
 

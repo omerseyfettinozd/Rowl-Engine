@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.VisualTree;
 using RowlEngine.Editor.ViewModels;
+using RowlEngine.Editor.ViewModels.Components;
 using System.Linq;
 
 namespace RowlEngine.Editor.Views
@@ -36,6 +37,16 @@ namespace RowlEngine.Editor.Views
             return null;
         }
 
+        private static string GetChoiceOptionId(object? source)
+        {
+            for (var visual = source as Visual; visual != null; visual = visual.GetVisualParent())
+            {
+                if (visual is Control { Tag: string optionId } && !string.IsNullOrEmpty(optionId))
+                    return optionId;
+            }
+            return string.Empty;
+        }
+
         private void OnPointerPressed(object? sender, PointerPressedEventArgs e)
         {
             if (DataContext is not NodeViewModel vm) return;
@@ -46,6 +57,7 @@ namespace RowlEngine.Editor.Views
             var outputHandle = this.FindControl<Border>("OutputPinHandle");
             var inputHandle = this.FindControl<Border>("InputPinHandle");
             var pointerPoint = e.GetCurrentPoint(this);
+            var choiceOptionId = GetChoiceOptionId(e.Source);
 
             // --- RIGHT CLICK DISCONNECTION ---
             if (pointerPoint.Properties.IsRightButtonPressed)
@@ -59,11 +71,11 @@ namespace RowlEngine.Editor.Views
                     e.Handled = true;
                     return;
                 }
-                else if ((outputHandle != null && outputHandle.Bounds.Contains(pointRelativeToThis)) || pointRelativeToThis.X >= Bounds.Width - 45)
+                else if (!string.IsNullOrEmpty(choiceOptionId) || (outputHandle != null && outputHandle.Bounds.Contains(pointRelativeToThis)))
                 {
                     if (VisualRoot is MainWindow mwOut && mwOut.DataContext is MainWindowViewModel mainVmOut)
                     {
-                        mainVmOut.DisconnectNodeOutputs(vm);
+                        mainVmOut.DisconnectNodeOutputs(vm, choiceOptionId);
                     }
                     e.Handled = true;
                     return;
@@ -80,11 +92,17 @@ namespace RowlEngine.Editor.Views
                     {
                         var sourceNode = existingConn.SourceNode;
                         mainVmUnplug.Connections.Remove(existingConn);
+                        if (!string.IsNullOrEmpty(existingConn.OptionId))
+                        {
+                            var option = sourceNode.GetComponent<ChoiceComponentViewModel>()?.Options
+                                .FirstOrDefault(candidate => candidate.OptionId == existingConn.OptionId);
+                            if (option != null) option.TargetNodeId = 0;
+                        }
 
                         _isDraggingWire = true;
                         e.Pointer.Capture(this);
                         var mouseCanvasPos = e.GetPosition(canvasToUse);
-                        mainVmUnplug.StartUnplugWireDrag(sourceNode, mouseCanvasPos);
+                        mainVmUnplug.StartUnplugWireDrag(sourceNode, mouseCanvasPos, existingConn.OptionId);
                         e.Handled = true;
                         return;
                     }
@@ -93,7 +111,7 @@ namespace RowlEngine.Editor.Views
 
             // --- LEFT CLICK ON OUTPUT PIN: DRAW NEW WIRE ---
             if (pointerPoint.Properties.IsLeftButtonPressed &&
-                ((outputHandle != null && outputHandle.Bounds.Contains(pointRelativeToThis)) || pointRelativeToThis.X >= Bounds.Width - 45))
+                (!string.IsNullOrEmpty(choiceOptionId) || (outputHandle != null && outputHandle.Bounds.Contains(pointRelativeToThis))))
             {
                 _isDraggingWire = true;
                 e.Pointer.Capture(this);
@@ -101,7 +119,7 @@ namespace RowlEngine.Editor.Views
                 if (VisualRoot is MainWindow mainWindow && mainWindow.DataContext is MainWindowViewModel mainVm)
                 {
                     Point mouseCanvasPos = e.GetPosition(canvasToUse);
-                    mainVm.StartWireDrag(vm, mouseCanvasPos);
+                    mainVm.StartWireDrag(vm, mouseCanvasPos, choiceOptionId);
                 }
                 e.Handled = true;
                 return;

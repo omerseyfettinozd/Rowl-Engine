@@ -23,6 +23,7 @@ namespace RowlEngine.Editor.Native
     public sealed class EngineHost : INotifyPropertyChanged, IDisposable
     {
         public event PropertyChangedEventHandler? PropertyChanged;
+        public event Action? FrameUpdated;
 
         private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
         {
@@ -164,6 +165,7 @@ namespace RowlEngine.Editor.Native
                         }
                     }
                     OnPropertyChanged(nameof(RenderTargetBitmap));
+                    FrameUpdated?.Invoke();
                 }
             }
             catch
@@ -299,6 +301,15 @@ namespace RowlEngine.Editor.Native
                 NativeBridge.RowlEngine_Step(_handle, 0.0f);
                 UpdatePixelBuffer();
             }
+        }
+
+        public bool PointerDown(float virtualX, float virtualY)
+        {
+            if (_handle == IntPtr.Zero) return false;
+            bool consumed = NativeBridge.RowlEngine_PointerDown(_handle, virtualX, virtualY) != 0;
+            NativeBridge.RowlEngine_Step(_handle, 0.0f);
+            UpdatePixelBuffer();
+            return consumed;
         }
 
         // ── Viewport control ─────────────────────────────────────────────────

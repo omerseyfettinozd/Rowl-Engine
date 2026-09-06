@@ -5,6 +5,7 @@ using RowlEngine.Editor.ViewModels;
 using RowlEngine.Editor.ViewModels.Components;
 using System;
 using System.Linq;
+using Avalonia.VisualTree;
 
 namespace RowlEngine.Editor.Views
 {
@@ -41,9 +42,32 @@ namespace RowlEngine.Editor.Views
 
         private CharacterComponentViewModel? _draggedCharacterComponent;
 
+        // Individual Dialogue Box drag & resize state
+        private bool _isResizingDialogue = false;
+        private DialogueComponentViewModel? _resizingDialogueComponent;
+        private DialogueComponentViewModel? _draggedDialogueComponent;
+        private ResizeCorner _dialogueResizeCorner = ResizeCorner.BottomRight;
+        private ChoiceOptionViewModel? _draggedChoiceOption;
+        private ChoiceOptionViewModel? _resizingChoiceOption;
+        private bool _isDraggingChoice;
+        private bool _isResizingChoice;
+
+        // Cached UI controls to avoid repeated visual tree searches during fast mouse moves
+        private Canvas? _cachedCanvas;
+        private Border? _cachedGuideV;
+        private Border? _cachedGuideH;
+        private Border? _cachedBadge;
+        private TextBlock? _cachedBadgeText;
+
         public LivePreviewControl()
         {
             InitializeComponent();
+
+            _cachedCanvas = this.FindControl<Canvas>("ViewportCanvas");
+            _cachedGuideV = this.FindControl<Border>("SnapGuideV");
+            _cachedGuideH = this.FindControl<Border>("SnapGuideH");
+            _cachedBadge = this.FindControl<Border>("SnapBadge");
+            _cachedBadgeText = this.FindControl<TextBlock>("SnapBadgeText");
 
             // Hook unified pointer events on the root control
             PointerMoved += OnGlobalPointerMoved;
@@ -56,22 +80,11 @@ namespace RowlEngine.Editor.Views
                 bgBox.PointerPressed += OnBackgroundPointerPressed;
             }
 
-            var dlgBox = this.FindControl<Border>("DialogueBox");
-            if (dlgBox != null)
-            {
-                dlgBox.PointerPressed += OnDialogueBoxPointerPressed;
-            }
-
             AddHandler(DragDrop.DragOverEvent, OnCanvasDragOver);
             AddHandler(DragDrop.DropEvent, OnCanvasDrop);
 
             // Bind Resize Handles
             BindHandle("BgHandleBR", ResizeTarget.Background, ResizeCorner.BottomRight);
-
-            BindHandle("DlgHandleTL", ResizeTarget.DialogueBox, ResizeCorner.TopLeft);
-            BindHandle("DlgHandleTR", ResizeTarget.DialogueBox, ResizeCorner.TopRight);
-            BindHandle("DlgHandleBL", ResizeTarget.DialogueBox, ResizeCorner.BottomLeft);
-            BindHandle("DlgHandleBR", ResizeTarget.DialogueBox, ResizeCorner.BottomRight);
         }
 
         private void OnCanvasDragOver(object? sender, DragEventArgs e)
@@ -90,7 +103,7 @@ namespace RowlEngine.Editor.Views
             string? importedFileName = null;
             if (e.Data.Get("AssetNode") is AssetNodeViewModel node)
             {
-                importedFileName = node.Name;
+                importedFileName = node.RelativePath.Replace('\\', '/');
             }
             else if (e.Data.Get("AssetFileName") is string fileName)
             {
@@ -115,8 +128,25 @@ namespace RowlEngine.Editor.Views
             if (!string.IsNullOrEmpty(importedFileName))
             {
                 string ext = System.IO.Path.GetExtension(importedFileName).ToLowerInvariant();
+                var droppedChoice = FindChoiceOption(e.Source);
+                if (droppedChoice != null && ext is ".ttf" or ".otf")
+                {
+                    droppedChoice.FontFamily = importedFileName;
+                    mainVm.ScheduleSave();
+                    e.Handled = true;
+                    return;
+                }
                 if (ext is ".png" or ".jpg" or ".jpeg" or ".bmp" or ".webp" or ".tga")
                 {
+                    var choiceOption = droppedChoice;
+                    if (choiceOption != null)
+                    {
+                        choiceOption.BackgroundImage = importedFileName;
+                        mainVm.AssetBrowserViewModel.RefreshAssets();
+                        mainVm.ScheduleSave();
+                        e.Handled = true;
+                        return;
+                    }
                     var canvas = GetViewportCanvas();
                     var pos = canvas != null ? e.GetPosition(canvas) : new Point(960, 540);
 
@@ -149,6 +179,35 @@ namespace RowlEngine.Editor.Views
             }
         }
 
+        private void OnChoiceButtonDragOver(object? sender, DragEventArgs e)
+        {
+            if (e.Data.Contains("AssetNode") || e.Data.Contains("AssetFileName") || e.Data.Contains(DataFormats.Files))
+            {
+                e.DragEffects = DragDropEffects.Copy;
+                e.Handled = true;
+            }
+        }
+
+        private void OnChoiceButtonDrop(object? sender, DragEventArgs e)
+        {
+            if (sender is not Control { DataContext: ChoiceOptionViewModel option } || DataContext is not MainWindowViewModel mainVm) return;
+            string? fileName = e.Data.Get("AssetNode") is AssetNodeViewModel asset
+                ? asset.RelativePath.Replace('\\', '/')
+                : e.Data.Get("AssetFileName") as string;
+            if (string.IsNullOrEmpty(fileName) && e.Data.Contains(DataFormats.Files))
+            {
+                var file = e.Data.GetFiles()?.FirstOrDefault();
+                if (file != null) fileName = mainVm.ImportImageFileToProject(file.Path.LocalPath);
+            }
+            if (string.IsNullOrEmpty(fileName)) return;
+            var extension = System.IO.Path.GetExtension(fileName).ToLowerInvariant();
+            if (extension is not (".png" or ".jpg" or ".jpeg" or ".bmp" or ".webp" or ".tga")) return;
+            option.BackgroundImage = fileName;
+            mainVm.AssetBrowserViewModel.RefreshAssets();
+            mainVm.ScheduleSave();
+            e.Handled = true;
+        }
+
         private void BindHandle(string name, ResizeTarget target, ResizeCorner corner)
         {
             var handle = this.FindControl<Border>(name);
@@ -160,11 +219,11 @@ namespace RowlEngine.Editor.Views
 
         private Canvas? GetViewportCanvas()
         {
-            return this.FindControl<Canvas>("ViewportCanvas");
+            return _cachedCanvas ??= this.FindControl<Canvas>("ViewportCanvas");
         }
 
         private bool HasActiveOperation =>
-            _isResizing || _isResizingCharacter || _isDraggingCharacter || _isDraggingDialogueBox || _isDraggingBackground;
+            _isResizing || _isResizingCharacter || _isResizingDialogue || _isDraggingCharacter || _isDraggingDialogueBox || _isDraggingBackground || _isDraggingChoice || _isResizingChoice;
 
         private void EndAllOperations(IPointer? pointer)
         {
@@ -175,10 +234,17 @@ namespace RowlEngine.Editor.Views
             _resizeTarget = ResizeTarget.None;
             _isResizingCharacter = false;
             _resizingCharacterComponent = null;
+            _isResizingDialogue = false;
+            _resizingDialogueComponent = null;
             _isDraggingCharacter = false;
             _draggedCharacterComponent = null;
             _isDraggingDialogueBox = false;
+            _draggedDialogueComponent = null;
             _isDraggingBackground = false;
+            _isDraggingChoice = false;
+            _isResizingChoice = false;
+            _draggedChoiceOption = null;
+            _resizingChoiceOption = null;
 
             pointer?.Capture(null);
 
@@ -189,7 +255,7 @@ namespace RowlEngine.Editor.Views
                 {
                     mainVm.PushSceneToEngine(mainVm.SelectedNode);
                 }
-                mainVm.SaveActiveStoryFile();
+                mainVm.ScheduleSave();
             }
         }
 
@@ -229,6 +295,19 @@ namespace RowlEngine.Editor.Views
             double deltaX = currentPointerPos.X - _dragStartPointerCanvasPos.X;
             double deltaY = currentPointerPos.Y - _dragStartPointerCanvasPos.Y;
             var node = mainVm.SelectedNode;
+
+            if (_isDraggingChoice && _draggedChoiceOption != null)
+            {
+                _draggedChoiceOption.X = Math.Clamp(_dragStartStartX + deltaX, 0, VirtualCanvasWidth - _draggedChoiceOption.Width);
+                _draggedChoiceOption.Y = Math.Clamp(_dragStartStartY + deltaY, 0, VirtualCanvasHeight - _draggedChoiceOption.Height);
+                return;
+            }
+            if (_isResizingChoice && _resizingChoiceOption != null)
+            {
+                _resizingChoiceOption.Width = Math.Clamp(_dragStartStartWidth + deltaX, 48, VirtualCanvasWidth - _resizingChoiceOption.X);
+                _resizingChoiceOption.Height = Math.Clamp(_dragStartStartHeight + deltaY, 48, VirtualCanvasHeight - _resizingChoiceOption.Y);
+                return;
+            }
 
             // 1. Dialogue Box / Background / Generic Resize
             if (_isResizing)
@@ -280,7 +359,47 @@ namespace RowlEngine.Editor.Views
                 return;
             }
 
-            // 2. Character Component Resize
+            // 2. Dialogue Component Resize
+            if (_isResizingDialogue && _resizingDialogueComponent != null)
+            {
+                double newX = _dragStartStartX;
+                double newY = _dragStartStartY;
+                double newW = _dragStartStartWidth;
+                double newH = _dragStartStartHeight;
+
+                switch (_dialogueResizeCorner)
+                {
+                    case ResizeCorner.BottomRight:
+                        newW = Math.Max(120, _dragStartStartWidth + deltaX);
+                        newH = Math.Max(60, _dragStartStartHeight + deltaY);
+                        break;
+                    case ResizeCorner.BottomLeft:
+                        newW = Math.Max(120, _dragStartStartWidth - deltaX);
+                        newX = _dragStartStartX + (_dragStartStartWidth - newW);
+                        newH = Math.Max(60, _dragStartStartHeight + deltaY);
+                        break;
+                    case ResizeCorner.TopRight:
+                        newW = Math.Max(120, _dragStartStartWidth + deltaX);
+                        newH = Math.Max(60, _dragStartStartHeight - deltaY);
+                        newY = _dragStartStartY + (_dragStartStartHeight - newH);
+                        break;
+                    case ResizeCorner.TopLeft:
+                        newW = Math.Max(120, _dragStartStartWidth - deltaX);
+                        newX = _dragStartStartX + (_dragStartStartWidth - newW);
+                        newH = Math.Max(60, _dragStartStartHeight - deltaY);
+                        newY = _dragStartStartY + (_dragStartStartHeight - newH);
+                        break;
+                }
+
+                _resizingDialogueComponent.X = newX;
+                _resizingDialogueComponent.Y = newY;
+                _resizingDialogueComponent.Width = newW;
+                _resizingDialogueComponent.Height = newH;
+                e.Handled = true;
+                return;
+            }
+
+            // 3. Character Component Resize
             if (_isResizingCharacter && _resizingCharacterComponent != null)
             {
                 double charDeltaX = currentPointerPos.X - _charResizeStartPointerCanvasPos.X;
@@ -291,7 +410,7 @@ namespace RowlEngine.Editor.Views
                 return;
             }
 
-            // 3. Character Component Drag
+            // 4. Character Component Drag
             if (_isDraggingCharacter && _draggedCharacterComponent != null)
             {
                 double targetX = _dragStartStartX + deltaX;
@@ -312,23 +431,38 @@ namespace RowlEngine.Editor.Views
                 return;
             }
 
-            // 4. Dialogue Box Drag
+            // 5. Dialogue Box Drag
             if (_isDraggingDialogueBox)
             {
+                var targetDlg = _draggedDialogueComponent ?? node.PrimaryDialogueComponent;
+                double currentW = targetDlg?.Width ?? node.DialogueBoxWidth;
+                double currentH = targetDlg?.Height ?? node.DialogueBoxHeight;
+
                 double targetX = _dragStartStartX + deltaX;
                 double targetY = _dragStartStartY + deltaY;
 
                 if (mainVm.IsSnapAssistEnabled && !e.KeyModifiers.HasFlag(KeyModifiers.Shift))
                 {
-                    (targetX, targetY) = ApplySnapping(targetX, targetY, node.DialogueBoxWidth, node.DialogueBoxHeight);
+                    (targetX, targetY) = ApplySnapping(targetX, targetY, currentW, currentH);
                 }
                 else
                 {
                     HideSnapGuides();
                 }
 
-                node.DialogueBoxX = Math.Clamp(targetX, -DragLimitPadding, VirtualCanvasWidth);
-                node.DialogueBoxY = Math.Clamp(targetY, -DragLimitPadding, VirtualCanvasHeight);
+                double clampedX = Math.Clamp(targetX, -DragLimitPadding, VirtualCanvasWidth);
+                double clampedY = Math.Clamp(targetY, -DragLimitPadding, VirtualCanvasHeight);
+
+                if (targetDlg != null)
+                {
+                    targetDlg.X = clampedX;
+                    targetDlg.Y = clampedY;
+                }
+                else
+                {
+                    node.DialogueBoxX = clampedX;
+                    node.DialogueBoxY = clampedY;
+                }
                 e.Handled = true;
                 return;
             }
@@ -355,13 +489,52 @@ namespace RowlEngine.Editor.Views
             }
         }
 
+        private static ChoiceOptionViewModel? FindChoiceOption(object? source)
+        {
+            for (var visual = source as Visual; visual != null; visual = visual.GetVisualParent())
+                if (visual is Control { DataContext: ChoiceOptionViewModel option }) return option;
+            return null;
+        }
+
+        private void OnChoiceButtonPointerPressed(object? sender, PointerPressedEventArgs e)
+        {
+            if (sender is not Control { DataContext: ChoiceOptionViewModel option } ||
+                !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
+            var canvas = GetViewportCanvas();
+            if (canvas == null) return;
+            _draggedChoiceOption = option;
+            _isDraggingChoice = true;
+            _dragStartPointerCanvasPos = e.GetPosition(canvas);
+            _dragStartStartX = option.X;
+            _dragStartStartY = option.Y;
+            e.Pointer.Capture(this);
+            if (DataContext is MainWindowViewModel vm) vm.IsInteractivelyDragging = true;
+            e.Handled = true;
+        }
+
+        private void OnChoiceButtonResizePointerPressed(object? sender, PointerPressedEventArgs e)
+        {
+            var option = FindChoiceOption(e.Source);
+            if (option == null) return;
+            var canvas = GetViewportCanvas();
+            if (canvas == null) return;
+            _resizingChoiceOption = option;
+            _isResizingChoice = true;
+            _dragStartPointerCanvasPos = e.GetPosition(canvas);
+            _dragStartStartWidth = option.Width;
+            _dragStartStartHeight = option.Height;
+            e.Pointer.Capture(this);
+            if (DataContext is MainWindowViewModel vm) vm.IsInteractivelyDragging = true;
+            e.Handled = true;
+        }
+
         private const double SnapThreshold = 22.0;
 
         private void HideSnapGuides()
         {
-            var guideV = this.FindControl<Border>("SnapGuideV");
-            var guideH = this.FindControl<Border>("SnapGuideH");
-            var badge = this.FindControl<Border>("SnapBadge");
+            var guideV = _cachedGuideV ??= this.FindControl<Border>("SnapGuideV");
+            var guideH = _cachedGuideH ??= this.FindControl<Border>("SnapGuideH");
+            var badge = _cachedBadge ??= this.FindControl<Border>("SnapBadge");
 
             if (guideV != null) guideV.IsVisible = false;
             if (guideH != null) guideH.IsVisible = false;
@@ -370,10 +543,10 @@ namespace RowlEngine.Editor.Views
 
         private void UpdateSnapVisuals(bool snapH, double guideX, bool snapV, double guideY, string snapInfo, double itemX, double itemY)
         {
-            var guideV = this.FindControl<Border>("SnapGuideV");
-            var guideH = this.FindControl<Border>("SnapGuideH");
-            var badge = this.FindControl<Border>("SnapBadge");
-            var badgeText = this.FindControl<TextBlock>("SnapBadgeText");
+            var guideV = _cachedGuideV ??= this.FindControl<Border>("SnapGuideV");
+            var guideH = _cachedGuideH ??= this.FindControl<Border>("SnapGuideH");
+            var badge = _cachedBadge ??= this.FindControl<Border>("SnapBadge");
+            var badgeText = _cachedBadgeText ??= this.FindControl<TextBlock>("SnapBadgeText");
 
             if (guideV != null)
             {
@@ -536,6 +709,12 @@ namespace RowlEngine.Editor.Views
 
             if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
             {
+                var bgComp = mainVm.SelectedNode.GetComponent<BackgroundComponentViewModel>();
+                if (bgComp?.OwnerObject != null && mainVm.HierarchyViewModel != null)
+                {
+                    mainVm.HierarchyViewModel.SelectedObject = bgComp.OwnerObject;
+                }
+
                 _isDraggingBackground = true;
                 mainVm.IsInteractivelyDragging = true;
                 _dragStartPointerCanvasPos = e.GetPosition(canvas);
@@ -557,12 +736,17 @@ namespace RowlEngine.Editor.Views
 
                 if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
                 {
-                    _isDraggingCharacter = true;
-                    _draggedCharacterComponent = charComp;
                     if (DataContext is MainWindowViewModel mainVm)
                     {
                         mainVm.IsInteractivelyDragging = true;
+                        if (charComp.OwnerObject != null && mainVm.HierarchyViewModel != null)
+                        {
+                            mainVm.HierarchyViewModel.SelectedObject = charComp.OwnerObject;
+                        }
                     }
+
+                    _isDraggingCharacter = true;
+                    _draggedCharacterComponent = charComp;
                     _dragStartPointerCanvasPos = e.GetPosition(canvas);
                     _dragStartStartX = charComp.X;
                     _dragStartStartY = charComp.Y;
@@ -592,6 +776,88 @@ namespace RowlEngine.Editor.Views
                     if (DataContext is MainWindowViewModel mainVm)
                     {
                         mainVm.IsInteractivelyDragging = true;
+                        if (charComp.OwnerObject != null && mainVm.HierarchyViewModel != null)
+                        {
+                            mainVm.HierarchyViewModel.SelectedObject = charComp.OwnerObject;
+                        }
+                    }
+
+                    e.Pointer.Capture(this);
+                    e.Handled = true;
+                }
+            }
+        }
+
+        public void OnDialogueBoxItemPointerPressed(object? sender, PointerPressedEventArgs e)
+        {
+            if (HasActiveOperation) return;
+            if (sender is Control ctrl && ctrl.DataContext is DialogueComponentViewModel dlgComp)
+            {
+                if (!dlgComp.IsEnabled) return;
+                var canvas = GetViewportCanvas();
+                if (canvas == null) return;
+
+                if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+                {
+                    if (DataContext is MainWindowViewModel mainVm)
+                    {
+                        mainVm.IsInteractivelyDragging = true;
+                        if (dlgComp.OwnerObject != null && mainVm.HierarchyViewModel != null)
+                        {
+                            mainVm.HierarchyViewModel.SelectedObject = dlgComp.OwnerObject;
+                        }
+                    }
+
+                    _isDraggingDialogueBox = true;
+                    _draggedDialogueComponent = dlgComp;
+                    _dragStartPointerCanvasPos = e.GetPosition(canvas);
+                    _dragStartStartX = dlgComp.X;
+                    _dragStartStartY = dlgComp.Y;
+                    e.Pointer.Capture(this);
+                    e.Handled = true;
+                }
+            }
+        }
+
+        public void OnDialogueHandleTLPointerPressed(object? sender, PointerPressedEventArgs e) =>
+            StartDialogueResize(sender, e, ResizeCorner.TopLeft);
+
+        public void OnDialogueHandleTRPointerPressed(object? sender, PointerPressedEventArgs e) =>
+            StartDialogueResize(sender, e, ResizeCorner.TopRight);
+
+        public void OnDialogueHandleBLPointerPressed(object? sender, PointerPressedEventArgs e) =>
+            StartDialogueResize(sender, e, ResizeCorner.BottomLeft);
+
+        public void OnDialogueHandleBRPointerPressed(object? sender, PointerPressedEventArgs e) =>
+            StartDialogueResize(sender, e, ResizeCorner.BottomRight);
+
+        private void StartDialogueResize(object? sender, PointerPressedEventArgs e, ResizeCorner corner)
+        {
+            if (HasActiveOperation) return;
+            if (sender is Control ctrl && ctrl.DataContext is DialogueComponentViewModel dlgComp)
+            {
+                if (!dlgComp.IsEnabled) return;
+                var canvas = GetViewportCanvas();
+                if (canvas == null) return;
+
+                if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+                {
+                    _isResizingDialogue = true;
+                    _resizingDialogueComponent = dlgComp;
+                    _dialogueResizeCorner = corner;
+                    _dragStartPointerCanvasPos = e.GetPosition(canvas);
+                    _dragStartStartX = dlgComp.X;
+                    _dragStartStartY = dlgComp.Y;
+                    _dragStartStartWidth = dlgComp.Width;
+                    _dragStartStartHeight = dlgComp.Height;
+
+                    if (DataContext is MainWindowViewModel mainVm)
+                    {
+                        mainVm.IsInteractivelyDragging = true;
+                        if (dlgComp.OwnerObject != null && mainVm.HierarchyViewModel != null)
+                        {
+                            mainVm.HierarchyViewModel.SelectedObject = dlgComp.OwnerObject;
+                        }
                     }
 
                     e.Pointer.Capture(this);
@@ -609,11 +875,18 @@ namespace RowlEngine.Editor.Views
 
             if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
             {
+                var dlgComp = mainVm.SelectedNode.PrimaryDialogueComponent;
+                if (dlgComp?.OwnerObject != null && mainVm.HierarchyViewModel != null)
+                {
+                    mainVm.HierarchyViewModel.SelectedObject = dlgComp.OwnerObject;
+                }
+
                 _isDraggingDialogueBox = true;
+                _draggedDialogueComponent = dlgComp;
                 mainVm.IsInteractivelyDragging = true;
                 _dragStartPointerCanvasPos = e.GetPosition(canvas);
-                _dragStartStartX = mainVm.SelectedNode.DialogueBoxX;
-                _dragStartStartY = mainVm.SelectedNode.DialogueBoxY;
+                _dragStartStartX = dlgComp?.X ?? mainVm.SelectedNode.DialogueBoxX;
+                _dragStartStartY = dlgComp?.Y ?? mainVm.SelectedNode.DialogueBoxY;
                 e.Pointer.Capture(this);
                 e.Handled = true;
             }

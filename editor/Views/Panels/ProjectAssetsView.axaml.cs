@@ -61,8 +61,11 @@ namespace RowlEngine.Editor.Views.Panels
 
                 var data = new DataObject();
                 data.Set("AssetNode", node);
-                data.Set("AssetFileName", node.Name);
-                data.Set(DataFormats.Text, node.Name);
+                // Preserve the path relative to Assets/ (e.g. ui/buttons/blue.png).
+                // File names alone are ambiguous and fail for nested asset folders.
+                string assetPath = node.RelativePath.Replace('\\', '/');
+                data.Set("AssetFileName", assetPath);
+                data.Set(DataFormats.Text, assetPath);
                 if (!string.IsNullOrEmpty(node.FullPath) && File.Exists(node.FullPath))
                 {
                     data.Set(DataFormats.Files, new[] { node.FullPath });

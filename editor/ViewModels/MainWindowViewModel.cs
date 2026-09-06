@@ -235,6 +235,14 @@ namespace RowlEngine.Editor.ViewModels
         [ObservableProperty]
         private NodeViewModel? _selectedNode;
 
+        partial void OnSelectedNodeChanged(NodeViewModel? value)
+        {
+            if (value != null && EngineHost.IsInitialized)
+            {
+                PushSceneToEngine(value);
+            }
+        }
+
         [ObservableProperty]
         private Point _wireStartPoint = new Point(0, 0);
 
@@ -243,6 +251,8 @@ namespace RowlEngine.Editor.ViewModels
 
         [ObservableProperty]
         private bool _isDraggingWire = false;
+
+        private string _wireDragOptionId = string.Empty;
 
         [ObservableProperty]
         private double _panX = 0;
@@ -269,6 +279,15 @@ namespace RowlEngine.Editor.ViewModels
 
         [ObservableProperty]
         private bool _isLogPanelVisible = true;
+
+        [ObservableProperty]
+        private bool _isHierarchyPanelVisible = true;
+
+        /// <summary>
+        /// Active tab index in the bottom panel: 0 = Log, 1 = Assets
+        /// </summary>
+        [ObservableProperty]
+        private int _bottomPanelActiveTab = 0;
 
         // Center view: single active tab (radio semantics). Node Graph is default.
         [ObservableProperty]
@@ -377,6 +396,7 @@ namespace RowlEngine.Editor.ViewModels
         public InspectorViewModel InspectorViewModel { get; }
         public NodeGraphViewModel NodeGraphViewModel { get; }
         public LivePreviewViewModel LivePreviewViewModel { get; }
+        public HierarchyViewModel HierarchyViewModel { get; }
 
         public MainWindowViewModel() : this(string.Empty)
         {
@@ -403,6 +423,7 @@ namespace RowlEngine.Editor.ViewModels
             InspectorViewModel = new InspectorViewModel(this);
             NodeGraphViewModel = new NodeGraphViewModel(this);
             LivePreviewViewModel = new LivePreviewViewModel(this);
+            HierarchyViewModel = new HierarchyViewModel(this);
 
             _smoothTimer = new DispatcherTimer
             {
@@ -447,14 +468,18 @@ namespace RowlEngine.Editor.ViewModels
 
         private void OnNodePropertyChanged(object? sender, PropertyChangedEventArgs e)
         {
-            if (e.PropertyName == nameof(NodeViewModel.X) || e.PropertyName == nameof(NodeViewModel.Y))
+            if (e.PropertyName == nameof(NodeViewModel.X) || e.PropertyName == nameof(NodeViewModel.Y) ||
+                e.PropertyName == nameof(NodeViewModel.ChoiceOptions))
             {
                 foreach (var conn in Connections)
                 {
                     conn.UpdatePoints();
                 }
             }
-            else if (e.PropertyName == nameof(NodeViewModel.Components) ||
+            if (e.PropertyName == nameof(NodeViewModel.Objects) ||
+                     e.PropertyName == nameof(NodeViewModel.Components) ||
+                     e.PropertyName == nameof(NodeViewModel.ChoiceOptions) ||
+                     e.PropertyName == nameof(NodeViewModel.ChoiceDataChanged) ||
                      e.PropertyName == nameof(NodeViewModel.Speaker) ||
                      e.PropertyName == nameof(NodeViewModel.DialogueText) ||
                      e.PropertyName == nameof(NodeViewModel.BackgroundTexture) ||
@@ -496,58 +521,38 @@ namespace RowlEngine.Editor.ViewModels
 
                 ScheduleSave();
 
-                // Also push scene update to engine when component data changes
+                // Coalesce rapid text/drag/property changes instead of serializing
+                // JSON and crossing P/Invoke synchronously for every UI event.
                 if (sender is NodeViewModel node && node == SelectedNode && EngineHost.IsInitialized)
-                    PushSceneToEngine(node);
+                    ScheduleEnginePreviewUpdate(node);
             }
         }
 
         public void EnforceSingleOutgoingWireRule()
         {
-            var seenSourceNodes = new System.Collections.Generic.HashSet<NodeViewModel>();
-            var toRemove = new System.Collections.Generic.List<ConnectionViewModel>();
-
-            // Iterate reverse: keep newest cable for any source node, delete older outgoing cables from the same output pin
-            for (int i = Connections.Count - 1; i >= 0; i--)
-            {
-                var conn = Connections[i];
-                if (conn.SourceNode != null && seenSourceNodes.Contains(conn.SourceNode))
-                {
-                    toRemove.Add(conn);
-                }
-                else if (conn.SourceNode != null)
-                {
-                    seenSourceNodes.Add(conn.SourceNode);
-                }
-            }
-
-            foreach (var conn in toRemove)
-            {
-                Connections.Remove(conn);
-            }
+            // Legacy name retained for bindings. Nodes are now multi-output
+            // decision points, so only exact duplicate edges are removed.
+            var duplicates = Connections.GroupBy(c => (c.SourceNode, c.TargetNode, c.OptionId))
+                .SelectMany(group => group.Skip(1)).ToList();
+            foreach (var duplicate in duplicates) Connections.Remove(duplicate);
             UpdateStartNodeState();
         }
 
-        public void StartWireDrag(NodeViewModel sourceNode, Point pinPos)
+        public void StartWireDrag(NodeViewModel sourceNode, Point pinPos, string optionId = "")
         {
-            // Strict Single-Output Rule: Unplug any existing cable originating from sourceNode's output pin
-            var existingOutgoing = Connections.Where(c => c.SourceNode == sourceNode).ToList();
-            foreach (var conn in existingOutgoing)
-            {
-                Connections.Remove(conn);
-            }
-
             _wireDragSourceNode = sourceNode;
-            WireStartPoint = new Point(sourceNode.X + 250, sourceNode.Y + 60);
+            _wireDragOptionId = optionId;
+            WireStartPoint = new Point(sourceNode.X + 265, sourceNode.Y + sourceNode.GetOutputPortY(optionId));
             WireEndPoint = pinPos;
             IsDraggingWire = true;
             AppendLog($"Started drawing wire from Green Output Pin of Node #{sourceNode.Id}...");
         }
 
-        public void StartUnplugWireDrag(NodeViewModel sourceNode, Point mousePos)
+        public void StartUnplugWireDrag(NodeViewModel sourceNode, Point mousePos, string optionId = "")
         {
             _wireDragSourceNode = sourceNode;
-            WireStartPoint = new Point(sourceNode.X + 250, sourceNode.Y + 60);
+            _wireDragOptionId = optionId;
+            WireStartPoint = new Point(sourceNode.X + 265, sourceNode.Y + sourceNode.GetOutputPortY(optionId));
             WireEndPoint = mousePos;
             IsDraggingWire = true;
             AppendLog($"✂️ Unplugged cable from Node #{sourceNode.Id}, re-routing wire...");
@@ -582,14 +587,19 @@ namespace RowlEngine.Editor.ViewModels
 
             if (targetNode != null)
             {
-                // Remove any existing cable originating from _wireDragSourceNode's output pin
-                var existingOutgoing = Connections.Where(c => c.SourceNode == _wireDragSourceNode).ToList();
-                foreach (var conn in existingOutgoing)
+                if (!string.IsNullOrEmpty(_wireDragOptionId))
                 {
-                    Connections.Remove(conn);
+                    // A button has exactly one destination. Reconnecting it
+                    // replaces only that button's previous cable, never the
+                    // sibling decisions on the same node.
+                    foreach (var existing in Connections.Where(connection =>
+                        connection.SourceNode == _wireDragSourceNode && connection.OptionId == _wireDragOptionId).ToList())
+                    {
+                        Connections.Remove(existing);
+                    }
+                    SetChoiceTarget(_wireDragSourceNode, _wireDragOptionId, targetNode.Id);
                 }
-
-                Connections.Add(new ConnectionViewModel(_wireDragSourceNode, targetNode));
+                Connections.Add(new ConnectionViewModel(_wireDragSourceNode, targetNode, _wireDragOptionId));
                 AppendLog($"✅ Connected Wire: Node #{_wireDragSourceNode.Id} ---> Node #{targetNode.Id} (Total cables: {Connections.Count})");
             }
             else
@@ -599,6 +609,7 @@ namespace RowlEngine.Editor.ViewModels
 
             EnforceSingleOutgoingWireRule();
             _wireDragSourceNode = null;
+            _wireDragOptionId = string.Empty;
         }
 
         public void DisconnectNodeInputs(NodeViewModel node)
@@ -614,17 +625,26 @@ namespace RowlEngine.Editor.ViewModels
             }
         }
 
-        public void DisconnectNodeOutputs(NodeViewModel node)
+        public void DisconnectNodeOutputs(NodeViewModel node, string optionId = "")
         {
-            var toRemove = Connections.Where(c => c.SourceNode == node).ToList();
+            var toRemove = Connections.Where(c => c.SourceNode == node &&
+                (string.IsNullOrEmpty(optionId) || c.OptionId == optionId)).ToList();
             foreach (var conn in toRemove)
             {
                 Connections.Remove(conn);
             }
+            if (!string.IsNullOrEmpty(optionId)) SetChoiceTarget(node, optionId, 0);
             if (toRemove.Count > 0)
             {
                 AppendLog($"✂️ Disconnected {toRemove.Count} outgoing cable(s) from Node #{node.Id}");
             }
+        }
+
+        private static void SetChoiceTarget(NodeViewModel node, string optionId, ulong targetNodeId)
+        {
+            var option = node.GetComponent<ChoiceComponentViewModel>()?.Options
+                .FirstOrDefault(candidate => candidate.OptionId == optionId);
+            if (option != null) option.TargetNodeId = targetNodeId;
         }
 
         [RelayCommand]
@@ -727,12 +747,12 @@ namespace RowlEngine.Editor.ViewModels
         {
             if (!EngineHost.IsInitialized) return;
 
-            // Serialize ALL components (including multiple characters) as JSON
+            // Serialize ALL components (including multiple characters) across all active objects as JSON
             // and push via the component-aware API
             try
             {
                 var componentsList = new List<object>();
-                foreach (var comp in node.Components)
+                foreach (var comp in node.AllComponents)
                 {
                     if (!comp.IsEnabled) continue;
                     componentsList.Add(new
@@ -771,7 +791,7 @@ namespace RowlEngine.Editor.ViewModels
 
         /// <summary>
         /// Loads the story graph from full_story_graph.json.
-        /// Supports both v2 (component-based) and legacy v1 (flat fields) formats.
+        /// Supports v3 (GameObject hierarchy), v2 (component-based), and legacy v1 (flat fields) formats.
         /// Returns true if file was loaded successfully, false if file doesn't exist or parsing failed.
         /// </summary>
         public bool LoadFullStoryGraphFile()
@@ -814,11 +834,69 @@ namespace RowlEngine.Editor.ViewModels
                     if (nodeJson.TryGetProperty("editor_x", out var exProp)) posX = exProp.GetDouble();
                     if (nodeJson.TryGetProperty("editor_y", out var eyProp)) posY = eyProp.GetDouble();
 
-                    // Use "bare" constructor (no default components) since we'll add them manually
+                    // Use "bare" constructor (no default objects) since we'll add them manually
                     var node = new NodeViewModel(nodeId, title, posX, posY, bare: true);
 
-                    // ── V2 Format: Deserialize components ──
-                    if (formatVersion >= 2 && nodeJson.TryGetProperty("components", out var compsArray) && compsArray.ValueKind == JsonValueKind.Array)
+                    // ── V3 Format: Objects array (Unity GameObject style) ──
+                    if (nodeJson.TryGetProperty("objects", out var objsArray) && objsArray.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var objJson in objsArray.EnumerateArray())
+                        {
+                            string objName = objJson.TryGetProperty("name", out var onProp) ? onProp.GetString() ?? "GameObject" : "GameObject";
+                            var frameObj = node.CreateObject(objName);
+
+                            if (objJson.TryGetProperty("id", out var oidProp))
+                                frameObj.Id = oidProp.GetString() ?? frameObj.Id;
+
+                            if (objJson.TryGetProperty("is_active", out var actProp))
+                                frameObj.IsActive = actProp.GetBoolean();
+
+                            if (objJson.TryGetProperty("components", out var compsArray) && compsArray.ValueKind == JsonValueKind.Array)
+                            {
+                                foreach (var compJson in compsArray.EnumerateArray())
+                                {
+                                    string typeKey = compJson.TryGetProperty("type", out var typeProp) ? typeProp.GetString() ?? "" : "";
+                                    if (string.IsNullOrEmpty(typeKey)) continue;
+
+                                    try
+                                    {
+                                        var component = ComponentRegistry.Create(typeKey);
+
+                                        if (compJson.TryGetProperty("id", out var cidProp))
+                                            component.ComponentId = cidProp.GetString() ?? component.ComponentId;
+
+                                        if (compJson.TryGetProperty("enabled", out var enabledProp))
+                                            component.IsEnabled = enabledProp.GetBoolean();
+
+                                        if (compJson.TryGetProperty("data", out var dataProp) && dataProp.ValueKind == JsonValueKind.Object)
+                                        {
+                                            var dataDict = new Dictionary<string, object?>();
+                                            foreach (var kvp in dataProp.EnumerateObject())
+                                            {
+                                                dataDict[kvp.Name] = kvp.Value.ValueKind switch
+                                                {
+                                                    JsonValueKind.String => kvp.Value.GetString(),
+                                                    JsonValueKind.Number => kvp.Value.GetDouble(),
+                                                    JsonValueKind.True => true,
+                                                    JsonValueKind.False => false,
+                                                    _ => kvp.Value.GetRawText()
+                                                };
+                                            }
+                                            component.Deserialize(dataDict);
+                                        }
+
+                                        frameObj.AddComponent(component);
+                                    }
+                                    catch (KeyNotFoundException)
+                                    {
+                                        AppendLog($"⚠️ Unknown component type '{typeKey}' in Node #{nodeId}, skipping.");
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    // ── V2 Format: Components array directly under node (auto-migrate into objects) ──
+                    else if (nodeJson.TryGetProperty("components", out var compsArray) && compsArray.ValueKind == JsonValueKind.Array)
                     {
                         foreach (var compJson in compsArray.EnumerateArray())
                         {
@@ -829,15 +907,12 @@ namespace RowlEngine.Editor.ViewModels
                             {
                                 var component = ComponentRegistry.Create(typeKey);
 
-                                // Set component ID if present
                                 if (compJson.TryGetProperty("id", out var cidProp))
                                     component.ComponentId = cidProp.GetString() ?? component.ComponentId;
 
-                                // Set enabled state
                                 if (compJson.TryGetProperty("enabled", out var enabledProp))
                                     component.IsEnabled = enabledProp.GetBoolean();
 
-                                // Deserialize component-specific data
                                 if (compJson.TryGetProperty("data", out var dataProp) && dataProp.ValueKind == JsonValueKind.Object)
                                 {
                                     var dataDict = new Dictionary<string, object?>();
@@ -855,7 +930,9 @@ namespace RowlEngine.Editor.ViewModels
                                     component.Deserialize(dataDict);
                                 }
 
-                                node.AddComponent(component);
+                                string objName = component.DisplayName;
+                                var frameObj = node.CreateObject(objName);
+                                frameObj.AddComponent(component);
                             }
                             catch (KeyNotFoundException)
                             {
@@ -863,11 +940,11 @@ namespace RowlEngine.Editor.ViewModels
                             }
                         }
                     }
-                    // ── V1 Format: Create components from flat fields ──
+                    // ── V1 Format: Create objects & components from flat fields ──
                     else
                     {
-                        // Dialogue (Speaker + Box Layout)
-                        var dlgComp = node.AddComponent<DialogueComponentViewModel>();
+                        var dlgObj = node.CreateObject("Dialogue Box");
+                        var dlgComp = dlgObj.AddComponent<DialogueComponentViewModel>();
                         if (nodeJson.TryGetProperty("speaker", out var spk))
                             dlgComp.Speaker = spk.GetString() ?? "Evelyn";
                         if (nodeJson.TryGetProperty("dialogue", out var dlg))
@@ -877,8 +954,8 @@ namespace RowlEngine.Editor.ViewModels
                         if (nodeJson.TryGetProperty("dialogue_box_width", out var dbw)) dlgComp.Width = dbw.GetDouble();
                         if (nodeJson.TryGetProperty("dialogue_box_height", out var dbh)) dlgComp.Height = dbh.GetDouble();
 
-                        // Background
-                        var bg = node.AddComponent<BackgroundComponentViewModel>();
+                        var bgObj = node.CreateObject("Background");
+                        var bg = bgObj.AddComponent<BackgroundComponentViewModel>();
                         if (nodeJson.TryGetProperty("background", out var bgTex))
                             bg.Texture = bgTex.GetString() ?? "bg_beach_sunset.png";
                         if (nodeJson.TryGetProperty("background_x", out var bgx)) bg.X = bgx.GetDouble();
@@ -886,8 +963,8 @@ namespace RowlEngine.Editor.ViewModels
                         if (nodeJson.TryGetProperty("background_width", out var bgw)) bg.Width = bgw.GetDouble();
                         if (nodeJson.TryGetProperty("background_height", out var bgh)) bg.Height = bgh.GetDouble();
 
-                        // Character
-                        var ch = node.AddComponent<CharacterComponentViewModel>();
+                        var charObj = node.CreateObject("Evelyn");
+                        var ch = charObj.AddComponent<CharacterComponentViewModel>();
                         if (nodeJson.TryGetProperty("character", out var chSpr))
                             ch.Sprite = chSpr.GetString() ?? "spr_evelyn.png";
                         if (nodeJson.TryGetProperty("character_pos", out var chPos))
@@ -898,19 +975,26 @@ namespace RowlEngine.Editor.ViewModels
                         if (nodeJson.TryGetProperty("character_height", out var chh)) ch.Height = chh.GetDouble();
                         if (nodeJson.TryGetProperty("character_scale", out var chs)) ch.Scale = chs.GetDouble();
 
-                        // Audio
-                        var audio = node.AddComponent<AudioComponentViewModel>();
+                        var audioObj = node.CreateObject("Audio");
+                        var audio = audioObj.AddComponent<AudioComponentViewModel>();
                         if (nodeJson.TryGetProperty("dsp", out var dsp))
                             audio.DspFilter = dsp.GetString() ?? "Normal";
                     }
 
-                    // If no components were added at all (unexpected), add defaults
-                    if (node.Components.Count == 0)
+                    // If no objects were added at all (unexpected), add defaults
+                    if (node.Objects.Count == 0)
                     {
-                        node.AddComponent<DialogueComponentViewModel>();
-                        node.AddComponent<BackgroundComponentViewModel>();
-                        node.AddComponent<CharacterComponentViewModel>();
-                        node.AddComponent<AudioComponentViewModel>();
+                        var bgObj = node.CreateObject("Background");
+                        bgObj.AddComponent<BackgroundComponentViewModel>();
+
+                        var charObj = node.CreateObject("Evelyn");
+                        charObj.AddComponent<CharacterComponentViewModel>();
+
+                        var dlgObj = node.CreateObject("Dialogue Box");
+                        dlgObj.AddComponent<DialogueComponentViewModel>();
+
+                        var audioObj = node.CreateObject("Audio");
+                        audioObj.AddComponent<AudioComponentViewModel>();
                     }
 
                     node.RefreshBitmaps();
@@ -932,12 +1016,19 @@ namespace RowlEngine.Editor.ViewModels
                             ulong targetId = nextJson.TryGetProperty("id", out var tidProp) ? tidProp.GetUInt64() : 0;
                             if (targetId != 0 && nodeMap.ContainsKey(targetId))
                             {
-                                Connections.Add(new ConnectionViewModel(nodeMap[sourceId], nodeMap[targetId]));
+                                string optionId = nextJson.TryGetProperty("option_id", out var optionProp) ? optionProp.GetString() ?? "" : "";
+                                Connections.Add(new ConnectionViewModel(nodeMap[sourceId], nodeMap[targetId], optionId));
                             }
                         }
                     }
                 }
                 EnforceSingleOutgoingWireRule();
+
+                var startNode = GetStartNode() ?? Nodes.FirstOrDefault();
+                if (startNode != null)
+                {
+                    SelectNodeQuiet(startNode);
+                }
 
                 AppendLog($"📂 Loaded story graph from {filePath} ({Nodes.Count} nodes, {Connections.Count} connections, format v{formatVersion})");
                 return true;
@@ -969,25 +1060,40 @@ namespace RowlEngine.Editor.ViewModels
 
                 var graph = new
                 {
-                    format_version = 2,
+                    format_version = 4,
                     start_node_id = startId,
                     nodes = Nodes.Select(n =>
                     {
                         // Get all outgoing connections from this node
                         var outgoingConns = Connections.Where(c => c.SourceNode == n && c.TargetNode != null).ToList();
-                        var nextNodes = outgoingConns.Select(c => new
-                        {
-                            id = c.TargetNode!.Id,
-                            label = ""
-                        }).ToArray();
+                        var choice = n.GetComponent<ChoiceComponentViewModel>();
+                        var nextNodes = choice != null
+                            ? choice.Options.Where(option => option.IsEnabled && option.TargetNodeId != 0).Select(option => new
+                            {
+                                id = option.TargetNodeId,
+                                label = option.Text,
+                                option_id = option.OptionId
+                            }).ToArray()
+                            : outgoingConns.Select(c => new
+                            {
+                                id = c.TargetNode!.Id,
+                                label = "",
+                                option_id = c.OptionId
+                            }).ToArray();
 
-                        // Serialize components
-                        var components = n.Components.Select(comp => new
+                        // Serialize GameObjects with their attached components (Unity style)
+                        var objects = n.Objects.Select(obj => new
                         {
-                            type = comp.TypeKey,
-                            id = comp.ComponentId,
-                            enabled = comp.IsEnabled,
-                            data = comp.Serialize()
+                            id = obj.Id,
+                            name = obj.Name,
+                            is_active = obj.IsActive,
+                            components = obj.Components.Select(comp => new
+                            {
+                                type = comp.TypeKey,
+                                id = comp.ComponentId,
+                                enabled = comp.IsEnabled,
+                                data = comp.Serialize()
+                            }).ToArray()
                         }).ToArray();
 
                         return new
@@ -996,7 +1102,7 @@ namespace RowlEngine.Editor.ViewModels
                             title = n.Title,
                             editor_x = n.X,
                             editor_y = n.Y,
-                            components = components,
+                            objects = objects,
                             next_nodes = nextNodes,
                             // Legacy flat fields for backward compatibility with engine
                             speaker = n.Speaker,
@@ -1027,7 +1133,7 @@ namespace RowlEngine.Editor.ViewModels
             }
             catch (Exception ex)
             {
-                AppendLog($"⚠️ Failed to save full_story_graph.json: {ex.Message}");
+                AppendLog($"⚠️ Failed to save story graph: {ex.Message}");
             }
         }
 
@@ -1041,7 +1147,7 @@ namespace RowlEngine.Editor.ViewModels
                     System.IO.Directory.CreateDirectory(AssetsJsonPath);
 
                     // Serialize components for active story file
-                    var components = node.Components.Select(comp => new
+                    var components = node.AllComponents.Select(comp => new
                     {
                         type = comp.TypeKey,
                         id = comp.ComponentId,
@@ -1193,7 +1299,7 @@ namespace RowlEngine.Editor.ViewModels
                 StartStandaloneGame();
         }
 
-        private void StartStandaloneGame()
+        private async void StartStandaloneGame()
         {
             SaveActiveStoryFile();
             SaveFullStoryGraphFile();
@@ -1201,8 +1307,12 @@ namespace RowlEngine.Editor.ViewModels
 
             if (!EngineHost.IsInitialized)
             {
-                AppendLog("❌ Engine not initialized. Click 'Connect Engine' first.");
-                return;
+                await ConnectEngineAsync();
+                if (!EngineHost.IsInitialized)
+                {
+                    AppendLog("❌ Engine not initialized. Click 'Connect Engine' first.");
+                    return;
+                }
             }
 
             // Auto-switch to Game tab so the user sees the live playable game
@@ -1231,6 +1341,7 @@ namespace RowlEngine.Editor.ViewModels
             if (startNode != null)
             {
                 SelectNodeQuiet(startNode);
+                PushSceneToEngine(startNode);
             }
 
             IsPlayingStandalone = true;
@@ -1331,23 +1442,55 @@ namespace RowlEngine.Editor.ViewModels
             }
         }
 
-        private void AppendLog(string message)
+        public void AppendLog(string message)
         {
             LogOutput += $"[{DateTime.Now:HH:mm:ss}] {message}\n";
         }
 
         // Debounced save to avoid disk thrashing during drag operations
         private DispatcherTimer? _saveDebounceTimer;
+        private DispatcherTimer? _enginePreviewDebounceTimer;
+        private NodeViewModel? _pendingEnginePreviewNode;
+        private bool _pendingEnginePreviewRequiresSelection = true;
+
+        public void ScheduleEnginePreviewUpdate(NodeViewModel node, bool requireSelectedNode = true)
+        {
+            _pendingEnginePreviewNode = node;
+            _pendingEnginePreviewRequiresSelection = requireSelectedNode;
+            if (_enginePreviewDebounceTimer == null)
+            {
+                _enginePreviewDebounceTimer = new DispatcherTimer
+                {
+                    Interval = TimeSpan.FromMilliseconds(80)
+                };
+                _enginePreviewDebounceTimer.Tick += (_, _) =>
+                {
+                    _enginePreviewDebounceTimer.Stop();
+                    var pending = _pendingEnginePreviewNode;
+                    bool requiresSelection = _pendingEnginePreviewRequiresSelection;
+                    _pendingEnginePreviewNode = null;
+                    if (!IsInteractivelyDragging && pending != null &&
+                        (!requiresSelection || pending == SelectedNode) && EngineHost.IsInitialized)
+                        PushSceneToEngine(pending);
+                };
+            }
+            _enginePreviewDebounceTimer.Stop();
+            _enginePreviewDebounceTimer.Start();
+        }
+
         public void ScheduleSave()
         {
-            _saveDebounceTimer?.Stop();
-            _saveDebounceTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
-            _saveDebounceTimer.Tick += (s, e) =>
+            if (_saveDebounceTimer == null)
             {
-                _saveDebounceTimer!.Stop();
-                SaveActiveStoryFile();
-                SaveFullStoryGraphFile();
-            };
+                _saveDebounceTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
+                _saveDebounceTimer.Tick += (s, e) =>
+                {
+                    _saveDebounceTimer.Stop();
+                    SaveActiveStoryFile();
+                    SaveFullStoryGraphFile();
+                };
+            }
+            _saveDebounceTimer.Stop();
             _saveDebounceTimer.Start();
         }
 
@@ -1356,14 +1499,29 @@ namespace RowlEngine.Editor.ViewModels
         {
             switch (panelName)
             {
+                case "Hierarchy":
+                    IsHierarchyPanelVisible = !IsHierarchyPanelVisible;
+                    break;
                 case "Assets":
-                    IsAssetsPanelVisible = !IsAssetsPanelVisible;
+                    // Assets is now a tab in the bottom panel — show bottom panel and switch to Assets tab
+                    IsLogPanelVisible = true;
+                    BottomPanelActiveTab = 1;
                     break;
                 case "Inspector":
                     IsInspectorPanelVisible = !IsInspectorPanelVisible;
                     break;
                 case "Log":
-                    IsLogPanelVisible = !IsLogPanelVisible;
+                    if (IsLogPanelVisible && BottomPanelActiveTab == 0)
+                    {
+                        // Already showing log tab — toggle panel off
+                        IsLogPanelVisible = !IsLogPanelVisible;
+                    }
+                    else
+                    {
+                        // Show bottom panel and switch to Log tab
+                        IsLogPanelVisible = true;
+                        BottomPanelActiveTab = 0;
+                    }
                     break;
                 case "NodeGraph":
                     IsNodeGraphActive = true;
@@ -1783,11 +1941,32 @@ namespace RowlEngine.Editor.ViewModels
             main.PropertyChanged += (s, e) =>
             {
                 if (e.PropertyName == nameof(MainWindowViewModel.SelectedNode))
+                {
                     OnPropertyChanged(nameof(SelectedNode));
+                    OnPropertyChanged(nameof(SelectedObject));
+                    OnPropertyChanged(nameof(HasSelectedObject));
+                }
             };
         }
 
         public NodeViewModel? SelectedNode => MainViewModel.SelectedNode;
+
+        /// <summary>
+        /// The GameObject currently selected in the Hierarchy panel.
+        /// The Inspector displays this GameObject's properties and attached components.
+        /// </summary>
+        public FrameObjectViewModel? SelectedObject => MainViewModel.HierarchyViewModel?.SelectedObject;
+
+        public bool HasSelectedObject => SelectedObject != null;
+
+        /// <summary>
+        /// Called by HierarchyViewModel when selected GameObject changes.
+        /// </summary>
+        public void NotifySelectedObjectChanged()
+        {
+            OnPropertyChanged(nameof(SelectedObject));
+            OnPropertyChanged(nameof(HasSelectedObject));
+        }
     }
 
     public partial class OutputLogViewModel : ViewModelBase
@@ -1849,24 +2028,34 @@ namespace RowlEngine.Editor.ViewModels
         }
 
         /// <summary>
-        /// Adds a new component of the specified type to the selected node.
+        /// Adds a new component of the specified type to the currently selected GameObject in Inspector.
         /// </summary>
         [RelayCommand]
         public void AddComponentByType(string typeKey)
         {
             if (SelectedNode == null || string.IsNullOrEmpty(typeKey)) return;
 
+            var targetObj = HierarchyViewModel?.SelectedObject ?? SelectedNode.Objects.FirstOrDefault();
+            if (targetObj == null)
+            {
+                targetObj = SelectedNode.CreateObject("GameObject");
+                if (HierarchyViewModel != null)
+                {
+                    HierarchyViewModel.SelectedObject = targetObj;
+                }
+            }
+
             try
             {
                 var component = ComponentRegistry.Create(typeKey);
-                SelectedNode.AddComponent(component);
+                targetObj.AddComponent(component);
 
                 // Refresh bitmap on visual components so the image loads immediately
                 if (component is BackgroundComponentViewModel bg) bg.RefreshBitmap();
                 else if (component is CharacterComponentViewModel ch) ch.RefreshBitmap();
 
                 IsAddComponentMenuOpen = false;
-                AppendLog($"➕ Added {component.DisplayName} component to Node #{SelectedNode.Id}");
+                AppendLog($"➕ Added {component.DisplayName} component to '{targetObj.Name}' in Node #{SelectedNode.Id}");
                 ScheduleSave();
 
                 // Push updated scene to engine so changes are visible immediately
@@ -1880,14 +2069,23 @@ namespace RowlEngine.Editor.ViewModels
         }
 
         /// <summary>
-        /// Removes a specific component from the selected node.
+        /// Removes a specific component from its parent GameObject.
         /// </summary>
         [RelayCommand]
         public void RemoveComponent(NodeComponentViewModel? component)
         {
             if (SelectedNode == null || component == null) return;
             string name = component.DisplayName;
-            SelectedNode.RemoveComponent(component);
+
+            if (component.OwnerObject != null)
+            {
+                component.OwnerObject.RemoveComponent(component);
+            }
+            else
+            {
+                SelectedNode.RemoveComponent(component);
+            }
+
             AppendLog($"🗑️ Removed {name} component from Node #{SelectedNode.Id}");
             ScheduleSave();
             if (EngineHost.IsInitialized)

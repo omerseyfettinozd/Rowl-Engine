@@ -104,6 +104,13 @@ namespace RowlEngine.Editor.ViewModels.Components
         [ObservableProperty]
         private string _borderColor = "#00F0FF"; // Neon cyan
 
+        public string BorderColorHex => BorderColor;
+
+        partial void OnBorderColorChanged(string value)
+        {
+            OnPropertyChanged(nameof(BorderColorHex));
+        }
+
         [ObservableProperty]
         private double _borderThickness = 2.0;
 

@@ -1,12 +1,13 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:RowlEngine.Editor.ViewModels"
+             xmlns:comp="using:RowlEngine.Editor.ViewModels.Components"
              x:Class="RowlEngine.Editor.Views.NodeControl"
              x:DataType="vm:NodeViewModel">
 
-    <Canvas Width="260" Height="120" Background="Transparent" ClipToBounds="False">
+    <Canvas Width="300" Height="{Binding NodeCardHeight}" Background="Transparent" ClipToBounds="False">
         <!-- Main Card Body -->
-        <Border Canvas.Left="10" Canvas.Top="0" Width="240" Height="120"
+        <Border Canvas.Left="10" Canvas.Top="0" Width="240" Height="{Binding NodeCardHeight}"
                 Background="{DynamicResource NodeCardBg}" BorderBrush="{Binding BorderColor}" BorderThickness="1.5" CornerRadius="8"
                 BoxShadow="0 4 12 0 #30000000">
             <Grid RowDefinitions="36, *">
@@ -42,9 +43,25 @@
             <Ellipse Width="16" Height="16" Fill="#10B981" Stroke="#FFFFFF" StrokeThickness="2" HorizontalAlignment="Center" VerticalAlignment="Center"/>
         </Border>
 
-        <!-- Right Output Handle (Green Pin Centered Exactly at X=265, Y=60) -->
-        <Border Name="OutputPinHandle" Canvas.Left="235" Canvas.Top="45" Width="30" Height="30" Background="Transparent" Cursor="Hand" ToolTip.Tip="Flow Output Pin (Left Click: Drag Cable / Right Click: Disconnect)">
+        <!-- Default output remains for linear nodes. Choice nodes get one pin per option. -->
+        <Border Name="OutputPinHandle" IsVisible="{Binding !HasChoices}" Canvas.Left="250" Canvas.Top="45" Width="30" Height="30" Background="Transparent" Cursor="Hand" ToolTip.Tip="Flow Output Pin">
             <Ellipse Width="16" Height="16" Fill="#10B981" Stroke="#FFFFFF" StrokeThickness="2" HorizontalAlignment="Center" VerticalAlignment="Center"/>
         </Border>
+
+        <ItemsControl ItemsSource="{Binding ChoiceOptions}" Canvas.Left="245" Canvas.Top="45" ClipToBounds="False">
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate><StackPanel Spacing="0"/></ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="comp:ChoiceOptionViewModel">
+                    <Border Tag="{Binding OptionId}" Width="90" Height="30" Background="Transparent" Cursor="Hand" ToolTip.Tip="Choice output — drag to its target node">
+                        <Grid ColumnDefinitions="*,24">
+                            <TextBlock Text="{Binding Text}" FontSize="9" Foreground="{DynamicResource MutedText}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,4,0"/>
+                            <Ellipse Grid.Column="1" Width="16" Height="16" Fill="#38BDF8" Stroke="#FFFFFF" StrokeThickness="2" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
     </Canvas>
 </UserControl>

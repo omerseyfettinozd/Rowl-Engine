@@ -1,4 +1,6 @@
 using Avalonia;
+using Avalonia.Controls;
+using Avalonia.VisualTree;
 using System;
 using System.Diagnostics;
 using System.IO;
@@ -54,6 +56,7 @@ namespace RowlEngine.Editor
             Console.WriteLine("🧪 ROWL ENGINE EDITOR HEADLESS TEST SUITE 🧪");
             Console.WriteLine("=======================================================");
 
+            BuildAvaloniaApp().SetupWithoutStarting();
             var mainVm = new MainWindowViewModel();
 
             // Test 1: NodeViewModel & Component Model & Trash Can Button Command
@@ -75,6 +78,17 @@ namespace RowlEngine.Editor
             secondChar.X = 1200;
             if (node.Components.Count(c => c is CharacterComponentViewModel) != 2)
                 throw new Exception("Multi-character addition failed");
+
+            // Multi-Dialogue test
+            var secondDlg = node.AddComponent<DialogueComponentViewModel>();
+            secondDlg.Speaker = "SecondSpeaker";
+            secondDlg.DialogueText = "I am the second dialogue!";
+            if (node.DialogueComponents.Count != 2)
+                throw new Exception("Multi-dialogue addition failed: expected 2 dialogue components");
+
+            secondDlg.RemoveSelfCommand.Execute(null);
+            if (node.DialogueComponents.Count != 1)
+                throw new Exception("Dialogue removal failed");
 
             // Test Trash Can (RemoveSelfCommand)
             secondChar.RemoveSelfCommand.Execute(null);
@@ -131,6 +145,10 @@ namespace RowlEngine.Editor
 
             // Test 6: OBS Assist & Magnetic Snapping System
             Console.WriteLine("\n📌 [Test 6]: OBS Assist Transform & Alignment System...");
+            if (mainVm.SelectedNode == null && mainVm.Nodes.Count > 0)
+            {
+                mainVm.SelectNode(mainVm.Nodes[0]);
+            }
             if (mainVm.SelectedNode != null)
             {
                 // 1. Fit Background to Screen (1920x1080)

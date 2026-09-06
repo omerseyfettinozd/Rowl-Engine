@@ -16,7 +16,8 @@
                 <Border Width="1920" Height="1080" Background="#121624" CornerRadius="8" ClipToBounds="True" BoxShadow="0 10 30 0 #000000">
                     <Grid>
                         <!-- Offscreen Render Target Image (1920x1080 exact 1:1) -->
-                        <Image Source="{Binding EngineHost.RenderTargetBitmap}"
+                        <Image x:Name="EnginePreviewImage"
+                               Source="{Binding EngineHost.RenderTargetBitmap}"
                                Width="1920" Height="1080"
                                Stretch="Fill"
                                HorizontalAlignment="Center"

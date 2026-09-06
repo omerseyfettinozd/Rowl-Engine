@@ -20,6 +20,7 @@ namespace RowlEngine.Editor.Views.Components
                 BackgroundComponentViewModel => new BackgroundComponentView(),
                 CharacterComponentViewModel  => new CharacterComponentView(),
                 AudioComponentViewModel      => new AudioComponentView(),
+                ChoiceComponentViewModel     => new ChoiceComponentView(),
                 _ => new TextBlock { Text = "Unknown Component" }
             };
         }

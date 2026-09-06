@@ -36,6 +36,7 @@ namespace RowlEngine.Editor.Views
                 if (_engineHost != null)
                 {
                     _engineHost.PropertyChanged += OnEngineHostPropertyChanged;
+                    _engineHost.FrameUpdated += OnEngineHostFrameUpdated;
                     if (!_engineHost.IsInitialized)
                     {
                         _engineHost.Initialize(1920, 1080, true);
@@ -54,11 +55,20 @@ namespace RowlEngine.Editor.Views
                 vm.PropertyChanged -= OnViewModelPropertyChanged;
 
             if (_engineHost != null)
+            {
                 _engineHost.PropertyChanged -= OnEngineHostPropertyChanged;
+                _engineHost.FrameUpdated -= OnEngineHostFrameUpdated;
+            }
 
             UnhookStartNode();
             _engineHost = null;
             base.OnDetachedFromVisualTree(e);
+        }
+
+        private void OnEngineHostFrameUpdated()
+        {
+            var img = this.FindControl<Image>("EnginePreviewImage");
+            img?.InvalidateVisual();
         }
 
         private void OnEngineHostPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -70,6 +80,11 @@ namespace RowlEngine.Editor.Views
                 {
                     RenderFirstFrame();
                 }
+            }
+            else if (e.PropertyName == nameof(EngineHost.RenderTargetBitmap))
+            {
+                var img = this.FindControl<Image>("EnginePreviewImage");
+                img?.InvalidateVisual();
             }
         }
 
@@ -112,9 +127,10 @@ namespace RowlEngine.Editor.Views
         private void OnStartNodePropertyChanged(object? sender, PropertyChangedEventArgs e)
         {
             // If the first frame's properties are modified in the editor, refresh Game view
-            if (_engineHost != null && !_engineHost.IsPlaying && sender is NodeViewModel node)
+            if (_engineHost != null && !_engineHost.IsPlaying && sender is NodeViewModel node &&
+                DataContext is MainWindowViewModel vm)
             {
-                PushNodeScene(node);
+                vm.ScheduleEnginePreviewUpdate(node, requireSelectedNode: false);
             }
         }
 
@@ -126,13 +142,6 @@ namespace RowlEngine.Editor.Views
                 if (_engineHost != null && !_engineHost.IsPlaying)
                 {
                     RenderFirstFrame();
-                }
-            }
-            else if (e.PropertyName == nameof(MainWindowViewModel.SelectedNode))
-            {
-                if (_engineHost != null && !_engineHost.IsPlaying && sender is MainWindowViewModel mainVm && mainVm.SelectedNode != null)
-                {
-                    PushNodeScene(mainVm.SelectedNode);
                 }
             }
             else if (e.PropertyName == nameof(MainWindowViewModel.Nodes) ||
@@ -174,8 +183,13 @@ namespace RowlEngine.Editor.Views
             // Unity behavior: Game interaction / click to advance is active ONLY in Play mode
             if (!_engineHost.IsPlaying) return;
 
-            // Advance story node in C++ Engine (updates m_currentNodeId and triggers instant frame step)
-            _engineHost.AdvanceNode(0);
+            var image = this.FindControl<Image>("EnginePreviewImage");
+            var position = image != null ? e.GetPosition(image) : default;
+            bool buttonConsumed = image != null && image.Bounds.Width > 0 && image.Bounds.Height > 0 &&
+                _engineHost.PointerDown(
+                    (float)(position.X / image.Bounds.Width * 1920.0),
+                    (float)(position.Y / image.Bounds.Height * 1080.0));
+            if (!buttonConsumed) _engineHost.AdvanceNode(0);
 
             // Query new node ID from C++ engine and update selected node in editor
             ulong currentNodeId = _engineHost.GetCurrentNodeId();

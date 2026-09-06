@@ -82,6 +82,23 @@ namespace RowlEngine.Editor.Views
                 vm.TogglePlayStandaloneCommand.Execute(null);
                 e.Handled = true;
             }
+            else if (vm.IsPlayingStandalone && (e.Key == Key.Space || e.Key == Key.Enter))
+            {
+                if (vm.EngineHost.IsInitialized)
+                {
+                    vm.EngineHost.AdvanceNode(0);
+                    ulong currentNodeId = vm.EngineHost.GetCurrentNodeId();
+                    if (currentNodeId != 0)
+                    {
+                        var matchNode = System.Linq.Enumerable.FirstOrDefault(vm.Nodes, n => n.Id == currentNodeId);
+                        if (matchNode != null)
+                        {
+                            vm.SelectNodeQuiet(matchNode);
+                        }
+                    }
+                }
+                e.Handled = true;
+            }
 
             // ── Arama ───────────────────────────────────────────────
             else if (ctrl && e.Key == Key.F)

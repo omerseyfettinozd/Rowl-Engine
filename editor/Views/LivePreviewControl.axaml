@@ -108,58 +108,115 @@
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
 
-                        <!-- Interactive Dialogue Box Container (Drag or Resize with Mouse!) -->
-                        <Border x:Name="DialogueBox"
-                                IsVisible="{Binding SelectedNode.HasDialogueBox}"
-                                Canvas.Left="{Binding SelectedNode.DialogueBoxX}" 
-                                Canvas.Top="{Binding SelectedNode.DialogueBoxY}" 
-                                Width="{Binding SelectedNode.DialogueBoxWidth}" 
-                                Height="{Binding SelectedNode.DialogueBoxHeight}" Cursor="Hand"
-                                Background="{Binding SelectedNode.BoxColor}"
-                                Opacity="{Binding SelectedNode.BoxOpacity}"
-                                BorderBrush="{Binding SelectedNode.BorderColorHex}"
-                                BorderThickness="{Binding SelectedNode.BorderThickness}"
-                                CornerRadius="{Binding SelectedNode.CornerRadius}"
-                                BoxShadow="0 10 30 0 #000000">
-                            <Grid>
-                                <!-- Speaker Name Badge -->
-                                <Border HorizontalAlignment="Left" VerticalAlignment="Top"
-                                        Margin="20,-18,0,0"
-                                        Background="{Binding SelectedNode.SpeakerColor}"
-                                        CornerRadius="6" Padding="14,4"
-                                        BoxShadow="0 4 10 0 #000000" IsHitTestVisible="False">
-                                    <TextBlock Text="{Binding SelectedNode.Speaker, FallbackValue='Evelyn'}"
-                                               Foreground="#FFFFFF"
-                                               FontSize="{Binding SelectedNode.SpeakerFontSize}"
-                                               FontWeight="Bold"/>
-                                </Border>
+                        <!-- Multi-Dialogue Box Canvas Elements with Individual Drag & Resize -->
+                        <ItemsControl ItemsSource="{Binding SelectedNode.DialogueComponents}"
+                                      Width="1920" Height="1080" Canvas.Left="0" Canvas.Top="0">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <Canvas Width="1920" Height="1080" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.Styles>
+                                <Style Selector="ContentPresenter" x:DataType="comp:DialogueComponentViewModel">
+                                    <Setter Property="Canvas.Left" Value="{Binding X}"/>
+                                    <Setter Property="Canvas.Top" Value="{Binding Y}"/>
+                                    <Setter Property="ZIndex" Value="30"/>
+                                </Style>
+                            </ItemsControl.Styles>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="comp:DialogueComponentViewModel">
+                                    <Border Width="{Binding Width}" 
+                                            Height="{Binding Height}" Cursor="Hand"
+                                            IsVisible="{Binding IsEnabled}"
+                                            Background="{Binding BoxColor}"
+                                            Opacity="{Binding BoxOpacity}"
+                                            BorderBrush="{Binding BorderColorHex}"
+                                            BorderThickness="{Binding BorderThickness}"
+                                            CornerRadius="{Binding CornerRadius}"
+                                            BoxShadow="0 10 30 0 #000000"
+                                            PointerPressed="OnDialogueBoxItemPointerPressed">
+                                        <Grid>
+                                            <!-- Speaker Name Badge -->
+                                            <Border HorizontalAlignment="Left" VerticalAlignment="Top"
+                                                    Margin="20,-18,0,0"
+                                                    Background="{Binding SpeakerColor}"
+                                                    CornerRadius="6" Padding="14,4"
+                                                    BoxShadow="0 4 10 0 #000000" IsHitTestVisible="False">
+                                                <TextBlock Text="{Binding Speaker, FallbackValue='Evelyn'}"
+                                                           Foreground="#FFFFFF"
+                                                           FontSize="{Binding SpeakerFontSize}"
+                                                           FontWeight="Bold"/>
+                                            </Border>
 
-                                <!-- Dialogue Content Text Container (HitTest disabled so box receives pointer events) -->
-                                <ScrollViewer Margin="20,28,20,20" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" IsHitTestVisible="False">
-                                    <TextBlock TextWrapping="Wrap"
-                                               Text="{Binding SelectedNode.DialogueText, FallbackValue='Select a node to preview live dialogue scene.'}" 
-                                               Foreground="{Binding SelectedNode.TextColor}"
-                                               FontSize="{Binding SelectedNode.FontSize}"
-                                               TextAlignment="{Binding SelectedNode.TextAlignment}"/>
-                                </ScrollViewer>
+                                            <!-- Dialogue Content Text Container (HitTest disabled so box receives pointer events) -->
+                                            <ScrollViewer Margin="20,28,20,20" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" IsHitTestVisible="False">
+                                                <TextBlock TextWrapping="Wrap"
+                                                           Text="{Binding DialogueText, FallbackValue='...'}" 
+                                                           Foreground="{Binding TextColor}" 
+                                                           FontSize="{Binding FontSize}"
+                                                           TextAlignment="{Binding TextAlignment}"/>
+                                            </ScrollViewer>
 
-                                <!-- Drag handle badge -->
-                                <Border HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-14,14,0" Background="#0F172A" BorderBrush="{Binding SelectedNode.BorderColorHex}" BorderThickness="1" CornerRadius="4" Padding="6,2" IsHitTestVisible="False">
-                                    <StackPanel Orientation="Horizontal" Spacing="4">
-                                        <TextBlock Text="✋ Dialogue Box" Foreground="{Binding SelectedNode.BorderColorHex}" FontSize="10" FontWeight="Bold"/>
-                                        <TextBlock Text="{Binding SelectedNode.DialogueBoxWidth, StringFormat='({0:0}'}" Foreground="#94A3B8" FontSize="10"/>
-                                        <TextBlock Text="x" Foreground="#94A3B8" FontSize="10"/>
-                                        <TextBlock Text="{Binding SelectedNode.DialogueBoxHeight, StringFormat='{}{0:0})'}" Foreground="#94A3B8" FontSize="10"/>
-                                    </StackPanel>
-                                </Border>
+                                            <!-- Drag handle badge -->
+                                            <Border HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-14,14,0" Background="#0F172A" BorderBrush="{Binding BorderColorHex}" BorderThickness="1" CornerRadius="4" Padding="6,2" IsHitTestVisible="False">
+                                                <StackPanel Orientation="Horizontal" Spacing="4">
+                                                    <TextBlock Text="💬 Dialogue Box" Foreground="{Binding BorderColorHex}" FontSize="10" FontWeight="Bold"/>
+                                                    <TextBlock Text="{Binding Width, StringFormat='({0:0}'}" Foreground="#94A3B8" FontSize="10"/>
+                                                    <TextBlock Text="x" Foreground="#94A3B8" FontSize="10"/>
+                                                    <TextBlock Text="{Binding Height, StringFormat='{}{0:0})'}" Foreground="#94A3B8" FontSize="10"/>
+                                                </StackPanel>
+                                            </Border>
 
-                                <!-- Dialogue Box Resize Corner Handles -->
-                                <Border Name="DlgHandleTL" Width="18" Height="18" HorizontalAlignment="Left" VerticalAlignment="Top" Background="{Binding SelectedNode.BorderColorHex}" BorderBrush="White" BorderThickness="2" CornerRadius="9" Cursor="TopLeftCorner" Margin="-7,-7,0,0"/>
-                                <Border Name="DlgHandleTR" Width="18" Height="18" HorizontalAlignment="Right" VerticalAlignment="Top" Background="{Binding SelectedNode.BorderColorHex}" BorderBrush="White" BorderThickness="2" CornerRadius="9" Cursor="TopRightCorner" Margin="0,-7,-7,0"/>
-                                <Border Name="DlgHandleBL" Width="18" Height="18" HorizontalAlignment="Left" VerticalAlignment="Bottom" Background="{Binding SelectedNode.BorderColorHex}" BorderBrush="White" BorderThickness="2" CornerRadius="9" Cursor="BottomLeftCorner" Margin="-7,0,0,-7"/>
-                                <Border Name="DlgHandleBR" Width="18" Height="18" HorizontalAlignment="Right" VerticalAlignment="Bottom" Background="{Binding SelectedNode.BorderColorHex}" BorderBrush="White" BorderThickness="2" CornerRadius="9" Cursor="BottomRightCorner" Margin="0,0,-7,-7"/>
-                            </Grid>
-                        </Border>
+                                            <!-- Dialogue Box Resize Corner Handles -->
+                                            <Border Width="18" Height="18" HorizontalAlignment="Left" VerticalAlignment="Top" Background="{Binding BorderColorHex}" BorderBrush="White" BorderThickness="2" CornerRadius="9" Cursor="TopLeftCorner" Margin="-7,-7,0,0"
+                                                    PointerPressed="OnDialogueHandleTLPointerPressed" ToolTip.Tip="Resize Top-Left"/>
+                                            <Border Width="18" Height="18" HorizontalAlignment="Right" VerticalAlignment="Top" Background="{Binding BorderColorHex}" BorderBrush="White" BorderThickness="2" CornerRadius="9" Cursor="TopRightCorner" Margin="0,-7,-7,0"
+                                                    PointerPressed="OnDialogueHandleTRPointerPressed" ToolTip.Tip="Resize Top-Right"/>
+                                            <Border Width="18" Height="18" HorizontalAlignment="Left" VerticalAlignment="Bottom" Background="{Binding BorderColorHex}" BorderBrush="White" BorderThickness="2" CornerRadius="9" Cursor="BottomLeftCorner" Margin="-7,0,0,-7"
+                                                    PointerPressed="OnDialogueHandleBLPointerPressed" ToolTip.Tip="Resize Bottom-Left"/>
+                                            <Border Width="18" Height="18" HorizontalAlignment="Right" VerticalAlignment="Bottom" Background="{Binding BorderColorHex}" BorderBrush="White" BorderThickness="2" CornerRadius="9" Cursor="BottomRightCorner" Margin="0,0,-7,-7"
+                                                    PointerPressed="OnDialogueHandleBRPointerPressed" ToolTip.Tip="Resize Bottom-Right"/>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <!-- Runtime choice-button preview: each graph option becomes one player-facing button. -->
+                        <ItemsControl ItemsSource="{Binding SelectedNode.ChoiceOptions}" Canvas.Left="0" Canvas.Top="0" Width="1920" Height="1080" ZIndex="60">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate><Canvas Width="1920" Height="1080"/></ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.Styles>
+                                <Style Selector="ContentPresenter" x:DataType="comp:ChoiceOptionViewModel">
+                                    <Setter Property="Canvas.Left" Value="{Binding X}"/>
+                                    <Setter Property="Canvas.Top" Value="{Binding Y}"/>
+                                    <Setter Property="ZIndex" Value="60"/>
+                                </Style>
+                            </ItemsControl.Styles>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="comp:ChoiceOptionViewModel">
+                                    <Border Width="{Binding Width}" Height="{Binding Height}"
+                                            IsVisible="{Binding IsEnabled}"
+                                            Background="{Binding BackgroundColor}" BorderBrush="{Binding BorderColor}"
+                                            BorderThickness="{Binding BorderThickness}" CornerRadius="{Binding CornerRadius}"
+                                            Opacity="{Binding Opacity}" DragDrop.AllowDrop="True"
+                                            PointerPressed="OnChoiceButtonPointerPressed">
+                                        <Grid>
+                                            <Image Source="{Binding NormalBitmap}" Stretch="Fill" Opacity="0.85" IsHitTestVisible="False"/>
+                                            <TextBlock Text="{Binding Text}" FontSize="{Binding FontSize}" Foreground="{Binding TextColor}"
+                                                       FontFamily="{Binding FontFamily}"
+                                                       TextAlignment="{Binding TextAlignment}" VerticalAlignment="Center" HorizontalAlignment="Stretch"
+                                                       Margin="{Binding Padding}" TextWrapping="Wrap" IsHitTestVisible="False"/>
+                                            <Border Width="18" Height="18" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                                                    Background="#38BDF8" BorderBrush="White" BorderThickness="2" CornerRadius="9"
+                                                    Margin="0,0,-6,-6" Cursor="BottomRightCorner"
+                                                    PointerPressed="OnChoiceButtonResizePointerPressed"/>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
 
                         <!-- OBS-Style Smart Snap Guidelines (Magnet Alignment Overlay) -->
                         <Border x:Name="SnapGuideV" Width="2" Height="1080" Background="#00F0FF" IsVisible="False" IsHitTestVisible="False" BoxShadow="0 0 12 3 #00F0FF" />

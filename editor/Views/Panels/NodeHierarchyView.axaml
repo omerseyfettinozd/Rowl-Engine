@@ -1,0 +1,171 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:RowlEngine.Editor.ViewModels"
+             xmlns:comp="using:RowlEngine.Editor.ViewModels.Components"
+             mc:Ignorable="d" d:DesignWidth="280" d:DesignHeight="700"
+             x:Class="RowlEngine.Editor.Views.Panels.NodeHierarchyView"
+             x:DataType="vm:MainWindowViewModel">
+    <Border Background="{DynamicResource PanelBackground}">
+        <Grid RowDefinitions="Auto, *, Auto">
+
+            <!-- ── Panel Header + Node Info + Create Object Button ── -->
+            <Border Grid.Row="0" Background="{DynamicResource SurfaceBackground}" 
+                    BorderBrush="{DynamicResource BorderColor}" BorderThickness="0,0,0,1"
+                    Padding="10,8">
+                <StackPanel Spacing="6">
+                    <DockPanel>
+                        <TextBlock Text="📋 Hierarchy" FontWeight="Bold" FontSize="13" 
+                                   Foreground="{DynamicResource PrimaryText}" VerticalAlignment="Center"/>
+
+                        <!-- ➕ Create Object Button -->
+                        <Button DockPanel.Dock="Right"
+                                Content="➕ Create"
+                                Command="{Binding HierarchyViewModel.ToggleCreateObjectMenuCommand}"
+                                IsEnabled="{Binding HierarchyViewModel.HasCurrentNode}"
+                                Background="{DynamicResource AccentButtonBg}"
+                                Foreground="White"
+                                FontWeight="SemiBold"
+                                FontSize="11"
+                                Padding="8,3"
+                                CornerRadius="4"
+                                HorizontalAlignment="Right">
+                            <Button.Flyout>
+                                <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                    <MenuItem Header="📦 Empty GameObject" 
+                                              Command="{Binding HierarchyViewModel.CreateObjectCommand}" 
+                                              CommandParameter="empty"/>
+                                    <Separator/>
+                                    <MenuItem Header="🖼️ Background Object" 
+                                              Command="{Binding HierarchyViewModel.CreateObjectCommand}" 
+                                              CommandParameter="background"/>
+                                    <MenuItem Header="👤 Character Object" 
+                                              Command="{Binding HierarchyViewModel.CreateObjectCommand}" 
+                                              CommandParameter="character"/>
+                                    <MenuItem Header="💬 Dialogue Object" 
+                                              Command="{Binding HierarchyViewModel.CreateObjectCommand}" 
+                                              CommandParameter="dialogue"/>
+                                    <MenuItem Header="🔊 Audio Object" 
+                                              Command="{Binding HierarchyViewModel.CreateObjectCommand}" 
+                                              CommandParameter="audio"/>
+                                </MenuFlyout>
+                            </Button.Flyout>
+                        </Button>
+                    </DockPanel>
+
+                    <!-- Active Node Info -->
+                    <StackPanel IsVisible="{Binding HierarchyViewModel.HasCurrentNode}" Spacing="1">
+                        <TextBlock Text="{Binding HierarchyViewModel.CurrentNodeTitle}" 
+                                   FontSize="12" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource Accent}"
+                                   TextTrimming="CharacterEllipsis"/>
+                        <TextBlock Text="{Binding HierarchyViewModel.CurrentNodeId}" 
+                                   FontSize="10" 
+                                   Foreground="{DynamicResource MutedText}"/>
+                    </StackPanel>
+                    <TextBlock IsVisible="{Binding !HierarchyViewModel.HasCurrentNode}"
+                               Text="Select a node from the graph"
+                               FontSize="11" FontStyle="Italic"
+                               Foreground="{DynamicResource MutedText}"/>
+                </StackPanel>
+            </Border>
+
+            <!-- ── GameObject List (Hierarchy Tree) ── -->
+            <Grid Grid.Row="1">
+                <ListBox ItemsSource="{Binding SelectedNode.Objects}"
+                         SelectedItem="{Binding HierarchyViewModel.SelectedObject, Mode=TwoWay}"
+                         Background="Transparent"
+                         Margin="4"
+                         SelectionMode="Single"
+                         IsVisible="{Binding HierarchyViewModel.HasCurrentNode}">
+                    <ListBox.Styles>
+                        <Style Selector="ListBoxItem">
+                            <Setter Property="Padding" Value="6,5"/>
+                            <Setter Property="CornerRadius" Value="4"/>
+                            <Setter Property="Margin" Value="2,1"/>
+                        </Style>
+                        <Style Selector="ListBoxItem:selected /template/ ContentPresenter">
+                            <Setter Property="Background" Value="{DynamicResource AccentButtonBg}"/>
+                        </Style>
+                    </ListBox.Styles>
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="vm:FrameObjectViewModel">
+                            <Grid ColumnDefinitions="Auto, *, Auto">
+                                <!-- GameObject Icon -->
+                                <TextBlock Grid.Column="0" Text="{Binding Icon}" FontSize="15" 
+                                           VerticalAlignment="Center" Margin="0,0,8,0"/>
+
+                                <!-- GameObject Name & Subtitle -->
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
+                                    <TextBlock Text="{Binding Name}" 
+                                               FontSize="12" FontWeight="SemiBold"
+                                               Foreground="{DynamicResource PrimaryText}" 
+                                               TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Text="{Binding SummaryText}" 
+                                               FontSize="10" 
+                                               Foreground="{DynamicResource MutedText}" 
+                                               TextTrimming="CharacterEllipsis"/>
+                                </StackPanel>
+
+                                <!-- Active State Toggle -->
+                                <CheckBox Grid.Column="2" 
+                                          IsChecked="{Binding IsActive}" 
+                                          ToolTip.Tip="Enable/Disable GameObject"
+                                          Padding="0" Margin="4,0,0,0"
+                                          MinWidth="18" VerticalAlignment="Center"/>
+                            </Grid>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                    <ListBox.ContextMenu>
+                        <ContextMenu>
+                            <MenuItem Header="📋 Duplicate Object" 
+                                      Command="{Binding HierarchyViewModel.DuplicateObjectCommand}" 
+                                      CommandParameter="{Binding HierarchyViewModel.SelectedObject}"/>
+                            <Separator/>
+                            <MenuItem Header="⬆ Move Up" 
+                                      Command="{Binding HierarchyViewModel.MoveObjectUpCommand}" 
+                                      CommandParameter="{Binding HierarchyViewModel.SelectedObject}"/>
+                            <MenuItem Header="⬇ Move Down" 
+                                      Command="{Binding HierarchyViewModel.MoveObjectDownCommand}" 
+                                      CommandParameter="{Binding HierarchyViewModel.SelectedObject}"/>
+                            <Separator/>
+                            <MenuItem Header="🗑️ Delete Object" 
+                                      Command="{Binding HierarchyViewModel.DeleteObjectCommand}" 
+                                      CommandParameter="{Binding HierarchyViewModel.SelectedObject}"/>
+                        </ContextMenu>
+                    </ListBox.ContextMenu>
+                </ListBox>
+
+                <!-- Placeholder when node has no objects -->
+                <StackPanel IsVisible="{Binding SelectedNode.Objects.Count, Converter={x:Static ObjectConverters.IsNull}}"
+                            VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="6" Margin="16">
+                    <TextBlock Text="📦" FontSize="28" HorizontalAlignment="Center" Foreground="{DynamicResource MutedText}"/>
+                    <TextBlock Text="No GameObjects in this frame." FontSize="11" FontStyle="Italic"
+                               Foreground="{DynamicResource MutedText}" HorizontalAlignment="Center"/>
+                </StackPanel>
+            </Grid>
+
+            <!-- ── Bottom Quick Actions ── -->
+            <Border Grid.Row="2" Padding="6,4,6,6" Background="{DynamicResource SurfaceBackground}"
+                    BorderBrush="{DynamicResource BorderColor}" BorderThickness="0,1,0,0">
+                <Grid ColumnDefinitions="*, *">
+                    <Button Grid.Column="0" Content="📦 + Empty" 
+                            Command="{Binding HierarchyViewModel.CreateObjectCommand}" CommandParameter="empty"
+                            IsEnabled="{Binding HierarchyViewModel.HasCurrentNode}"
+                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                            Padding="6,4" FontSize="11" Margin="0,0,3,0"
+                            Background="{DynamicResource CardHeaderBackground}"
+                            Foreground="{DynamicResource PrimaryText}" CornerRadius="4"/>
+                    <Button Grid.Column="1" Content="🗑️ Delete" 
+                            Command="{Binding HierarchyViewModel.DeleteObjectCommand}" CommandParameter="{Binding HierarchyViewModel.SelectedObject}"
+                            IsEnabled="{Binding HierarchyViewModel.SelectedObject, Converter={x:Static ObjectConverters.IsNotNull}}"
+                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                            Padding="6,4" FontSize="11" Margin="3,0,0,0"
+                            Background="{DynamicResource DangerButtonBg}"
+                            Foreground="White" CornerRadius="4"/>
+                </Grid>
+            </Border>
+        </Grid>
+    </Border>
+</UserControl>

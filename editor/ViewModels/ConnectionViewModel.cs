@@ -17,10 +17,15 @@ namespace RowlEngine.Editor.ViewModels
         [ObservableProperty]
         private Point _endPoint;
 
-        public ConnectionViewModel(NodeViewModel? sourceNode, NodeViewModel? targetNode)
+        /// <summary>Stable ChoiceOption ID when this cable represents a button route.</summary>
+        [ObservableProperty]
+        private string _optionId = string.Empty;
+
+        public ConnectionViewModel(NodeViewModel? sourceNode, NodeViewModel? targetNode, string optionId = "")
         {
             _sourceNode = sourceNode;
             _targetNode = targetNode;
+            _optionId = optionId;
             UpdatePoints();
         }
 
@@ -55,8 +60,8 @@ namespace RowlEngine.Editor.ViewModels
         public void UpdatePoints()
         {
             if (SourceNode == null || TargetNode == null) return;
-            // Right output pin center: Card X + 250, Y + 60
-            StartPoint = new Point(SourceNode.X + 250, SourceNode.Y + 60);
+            // Choice edges begin at the exact option port, not a generic node output.
+            StartPoint = new Point(SourceNode.X + 265, SourceNode.Y + SourceNode.GetOutputPortY(OptionId));
             // Left input pin center: Target Card X + 10, Y + 60
             EndPoint = new Point(TargetNode.X + 10, TargetNode.Y + 60);
         }

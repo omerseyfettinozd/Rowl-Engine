@@ -100,6 +100,14 @@ namespace RowlEngine.Editor.Native
             IntPtr handle,
             uint choiceIndex);
 
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern int RowlEngine_SelectChoice(
+            IntPtr handle,
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string optionId);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern int RowlEngine_PointerDown(IntPtr handle, float x, float y);
+
         /// <summary>
         /// Updates the scene from a JSON string containing component data.
         /// This is the component-based alternative to RowlEngine_UpdateScene.

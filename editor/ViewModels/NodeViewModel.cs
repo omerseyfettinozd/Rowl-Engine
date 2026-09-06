@@ -16,7 +16,7 @@ namespace RowlEngine.Editor.ViewModels
         // ── Path helpers (synced with MainWindowViewModel) ──
         private static string AssetsPath => MainWindowViewModel.AssetsPath;
 
-        // ── Graph metadata (these remain on the node, NOT in components) ──
+        // ── Graph metadata ──
 
         [ObservableProperty]
         private ulong _id;
@@ -45,189 +45,379 @@ namespace RowlEngine.Editor.ViewModels
         }
 
         // ══════════════════════════════════════════════════════════════════════
-        // ██  COMPONENT SYSTEM  ██
+        // ██  UNITY-STYLE GAMEOBJECT / ENTITY HIERARCHY  ██
         // ══════════════════════════════════════════════════════════════════════
 
         /// <summary>
-        /// The ordered collection of components attached to this node.
-        /// Components are rendered/serialized in list order.
+        /// Ordered collection of GameObjects (FrameObjects) in this node/frame scene.
+        /// In Unity, each item in the Hierarchy is a GameObject.
         /// </summary>
-        public ObservableCollection<NodeComponentViewModel> Components { get; } = new();
-
-        // ── Component access helpers ──
+        public ObservableCollection<FrameObjectViewModel> Objects { get; } = new();
 
         /// <summary>
-        /// Returns the first component of the specified type, or null if none exists.
+        /// Flattens all active components across all active GameObjects in this frame.
         /// </summary>
-        public T? GetComponent<T>() where T : NodeComponentViewModel
-            => Components.OfType<T>().FirstOrDefault();
+        public IEnumerable<NodeComponentViewModel> AllComponents =>
+            Objects.Where(o => o.IsActive).SelectMany(o => o.Components);
 
         /// <summary>
-        /// Returns all components of the specified type.
+        /// Compatibility list for AllComponents.
         /// </summary>
-        public IEnumerable<T> GetComponents<T>() where T : NodeComponentViewModel
-            => Components.OfType<T>();
+        public IReadOnlyList<NodeComponentViewModel> Components => AllComponents.ToList();
+
+        // ── GameObject Management ──
+
+        public FrameObjectViewModel CreateObject(string name = "GameObject")
+        {
+            var obj = new FrameObjectViewModel(name, this);
+            Objects.Add(obj);
+            SubscribeObjectChanges(obj);
+            NotifyObjectsChanged();
+            return obj;
+        }
+
+        public void AddObject(FrameObjectViewModel obj)
+        {
+            obj.Node = this;
+            Objects.Add(obj);
+            SubscribeObjectChanges(obj);
+            NotifyObjectsChanged();
+        }
+
+        public void RemoveObject(FrameObjectViewModel obj)
+        {
+            UnsubscribeObjectChanges(obj);
+            Objects.Remove(obj);
+            obj.Node = null;
+            NotifyObjectsChanged();
+        }
+
+        public void MoveObjectUp(FrameObjectViewModel obj)
+        {
+            int idx = Objects.IndexOf(obj);
+            if (idx > 0)
+            {
+                Objects.Move(idx, idx - 1);
+                NotifyObjectsChanged();
+            }
+        }
+
+        public void MoveObjectDown(FrameObjectViewModel obj)
+        {
+            int idx = Objects.IndexOf(obj);
+            if (idx >= 0 && idx < Objects.Count - 1)
+            {
+                Objects.Move(idx, idx + 1);
+                NotifyObjectsChanged();
+            }
+        }
+
+        public FrameObjectViewModel DuplicateObject(FrameObjectViewModel source)
+        {
+            var newObj = CreateObject($"{source.Name} (Copy)");
+            foreach (var comp in source.Components)
+            {
+                var newComp = ComponentRegistry.Create(comp.TypeKey);
+                newComp.Deserialize(comp.Serialize());
+                newObj.AddComponent(newComp);
+            }
+            return newObj;
+        }
+
+        // ── Component Access Helpers ──
+
+        public T? GetComponent<T>() where T : NodeComponentViewModel =>
+            AllComponents.OfType<T>().FirstOrDefault();
+
+        public IEnumerable<T> GetComponents<T>() where T : NodeComponentViewModel =>
+            AllComponents.OfType<T>();
+
+        public bool HasDialogueBox => AllComponents.OfType<DialogueComponentViewModel>().Any(d => d.IsEnabled);
+        public bool HasBackground => AllComponents.OfType<BackgroundComponentViewModel>().Any(b => b.IsEnabled);
+
+        /// Choice options drive the visible output pins on the graph card.
+        public IReadOnlyList<ChoiceOptionViewModel> ChoiceOptions =>
+            AllComponents.OfType<ChoiceComponentViewModel>().SelectMany(choice => choice.Options).ToList();
+
+        public bool HasChoices => ChoiceOptions.Count > 0;
+        public double NodeCardHeight => Math.Max(120, 52 + (ChoiceOptions.Count * 30));
+        public bool ChoiceDataChanged => true;
+        public double GetOutputPortY(string optionId) => string.IsNullOrEmpty(optionId)
+            ? 60 : 60 + (Math.Max(0, ChoiceOptions.ToList().FindIndex(option => option.OptionId == optionId)) * 30);
 
         /// <summary>
-        /// Creates and adds a new component of the specified type.
+        /// Dedicated ObservableCollection of active Character components for smooth UI binding without tree rebuilds.
+        /// </summary>
+        public ObservableCollection<CharacterComponentViewModel> CharacterComponents { get; } = new();
+
+        /// <summary>
+        /// Dedicated ObservableCollection of active Dialogue components for smooth multi-dialogue UI binding.
+        /// </summary>
+        public ObservableCollection<DialogueComponentViewModel> DialogueComponents { get; } = new();
+
+        // ── Legacy Component Helper (wraps into default/first object or creates one) ──
+
+        /// <summary>
+        /// Legacy fallback for adding a component directly to the first object or a new object.
         /// </summary>
         public T AddComponent<T>() where T : NodeComponentViewModel, new()
         {
-            var comp = new T { Node = this };
-            Components.Add(comp);
-            SubscribeComponentChanges(comp);
-
-            if (comp is BackgroundComponentViewModel bg) bg.RefreshBitmap();
-            else if (comp is CharacterComponentViewModel ch) ch.RefreshBitmap();
-
-            OnPropertyChanged(nameof(Components));
-            OnPropertyChanged(nameof(CharacterComponents));
-            OnPropertyChanged(nameof(HasDialogueBox));
-            OnPropertyChanged(nameof(HasBackground));
-            return comp;
-        }
-
-        /// <summary>
-        /// Adds an existing component instance to this node.
-        /// </summary>
-        public void AddComponent(NodeComponentViewModel component)
-        {
-            component.Node = this;
-            Components.Add(component);
-            SubscribeComponentChanges(component);
-
-            if (component is BackgroundComponentViewModel bg) bg.RefreshBitmap();
-            else if (component is CharacterComponentViewModel ch) ch.RefreshBitmap();
-
-            OnPropertyChanged(nameof(Components));
-            OnPropertyChanged(nameof(CharacterComponents));
-            OnPropertyChanged(nameof(HasDialogueBox));
-            OnPropertyChanged(nameof(HasBackground));
-        }
-
-        /// <summary>
-        /// Removes a component from this node.
-        /// </summary>
-        public void RemoveComponent(NodeComponentViewModel component)
-        {
-            UnsubscribeComponentChanges(component);
-            Components.Remove(component);
-            component.Node = null;
-            OnPropertyChanged(nameof(Components));
-            OnPropertyChanged(nameof(CharacterComponents));
-            OnPropertyChanged(nameof(HasDialogueBox));
-            OnPropertyChanged(nameof(HasBackground));
-        }
-
-        public bool HasDialogueBox => Components.OfType<DialogueComponentViewModel>().Any(d => d.IsEnabled);
-        public bool HasBackground => Components.OfType<BackgroundComponentViewModel>().Any(b => b.IsEnabled);
-
-        /// <summary>
-        /// Moves a component up in the list (decreases its render order index).
-        /// </summary>
-        public void MoveComponentUp(NodeComponentViewModel component)
-        {
-            int idx = Components.IndexOf(component);
-            if (idx > 0)
+            var targetObj = Objects.FirstOrDefault();
+            if (targetObj == null)
             {
-                Components.Move(idx, idx - 1);
-                OnPropertyChanged(nameof(Components));
-                OnPropertyChanged(nameof(CharacterComponents));
+                targetObj = CreateObject("GameObject");
+            }
+            return targetObj.AddComponent<T>();
+        }
+
+        public void AddComponent(NodeComponentViewModel comp)
+        {
+            var targetObj = Objects.FirstOrDefault();
+            if (targetObj == null)
+            {
+                targetObj = CreateObject("GameObject");
+            }
+            targetObj.AddComponent(comp);
+        }
+
+        public void RemoveComponent(NodeComponentViewModel comp)
+        {
+            foreach (var obj in Objects)
+            {
+                if (obj.Components.Contains(comp))
+                {
+                    obj.RemoveComponent(comp);
+                    break;
+                }
             }
         }
 
-        /// <summary>
-        /// Moves a component down in the list (increases its render order index).
-        /// </summary>
-        public void MoveComponentDown(NodeComponentViewModel component)
+        public void MoveComponentUp(NodeComponentViewModel comp)
         {
-            int idx = Components.IndexOf(component);
-            if (idx >= 0 && idx < Components.Count - 1)
+            comp.OwnerObject?.MoveComponentUp(comp);
+        }
+
+        public void MoveComponentDown(NodeComponentViewModel comp)
+        {
+            comp.OwnerObject?.MoveComponentDown(comp);
+        }
+
+        // ── Object & Component Change Notifications ──
+
+        private void SubscribeObjectChanges(FrameObjectViewModel obj)
+        {
+            obj.PropertyChanged += OnObjectPropertyChanged;
+        }
+
+        private void UnsubscribeObjectChanges(FrameObjectViewModel obj)
+        {
+            obj.PropertyChanged -= OnObjectPropertyChanged;
+        }
+
+        private void OnObjectPropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(FrameObjectViewModel.IsActive) ||
+                e.PropertyName == nameof(FrameObjectViewModel.Name))
             {
-                Components.Move(idx, idx + 1);
-                OnPropertyChanged(nameof(Components));
-                OnPropertyChanged(nameof(CharacterComponents));
+                NotifyObjectsChanged();
             }
         }
 
-        // ── Component change propagation ──
-
-        private void SubscribeComponentChanges(NodeComponentViewModel component)
+        public void NotifyObjectsChanged()
         {
-            component.PropertyChanged += OnComponentPropertyChanged;
+            SyncCharacterComponents();
+            SyncDialogueComponents();
+
+            OnPropertyChanged(nameof(Objects));
+            OnPropertyChanged(nameof(AllComponents));
+            OnPropertyChanged(nameof(Components));
+            OnPropertyChanged(nameof(DialogueComponents));
+            OnPropertyChanged(nameof(HasDialogueBox));
+            OnPropertyChanged(nameof(HasBackground));
+            OnPropertyChanged(nameof(ChoiceOptions));
+            OnPropertyChanged(nameof(HasChoices));
+            OnPropertyChanged(nameof(NodeCardHeight));
+
+            // Refresh proxy properties
+            OnPropertyChanged(nameof(Speaker));
+            OnPropertyChanged(nameof(DialogueText));
+            OnPropertyChanged(nameof(BackgroundTexture));
+            OnPropertyChanged(nameof(BackgroundBitmap));
+            OnPropertyChanged(nameof(CharacterSprite));
+            OnPropertyChanged(nameof(CharacterBitmap));
+            OnPropertyChanged(nameof(DialogueBoxX));
+            OnPropertyChanged(nameof(DialogueBoxY));
+            OnPropertyChanged(nameof(DialogueBoxWidth));
+            OnPropertyChanged(nameof(DialogueBoxHeight));
         }
 
-        private void UnsubscribeComponentChanges(NodeComponentViewModel component)
+        private void SyncCharacterComponents()
         {
-            component.PropertyChanged -= OnComponentPropertyChanged;
+            var currentChars = AllComponents.OfType<CharacterComponentViewModel>().ToList();
+            if (!CharacterComponents.SequenceEqual(currentChars))
+            {
+                CharacterComponents.Clear();
+                foreach (var ch in currentChars)
+                {
+                    CharacterComponents.Add(ch);
+                }
+            }
         }
 
-        private void OnComponentPropertyChanged(object? sender, PropertyChangedEventArgs e)
+        private void SyncDialogueComponents()
         {
+            var currentDlgs = AllComponents.OfType<DialogueComponentViewModel>().ToList();
+            if (!DialogueComponents.SequenceEqual(currentDlgs))
+            {
+                DialogueComponents.Clear();
+                foreach (var d in currentDlgs)
+                {
+                    DialogueComponents.Add(d);
+                }
+            }
+        }
+
+        public void NotifyComponentPropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (string.IsNullOrEmpty(e.PropertyName)) return;
+
             if (e.PropertyName == nameof(NodeComponentViewModel.IsEnabled))
             {
-                OnPropertyChanged(nameof(HasDialogueBox));
-                OnPropertyChanged(nameof(HasBackground));
-                OnPropertyChanged(nameof(Components));
+                NotifyObjectsChanged();
+                return;
             }
 
-            // Sync proxy property change notifications without thrashing CharacterComponents collection
+            if (sender is ChoiceComponentViewModel && e.PropertyName == nameof(ChoiceComponentViewModel.Options))
+            {
+                // The collection shape changed, so refresh only choice-dependent
+                // projections. Do not rebuild every component proxy in the node.
+                OnPropertyChanged(nameof(ChoiceOptions));
+                OnPropertyChanged(nameof(HasChoices));
+                OnPropertyChanged(nameof(NodeCardHeight));
+                return;
+            }
+
+            if (sender is ChoiceComponentViewModel && e.PropertyName == nameof(ChoiceComponentViewModel.ChoiceDataChanged))
+            {
+                // Existing option bindings update themselves; this marker is for
+                // debounced persistence/runtime synchronization only.
+                OnPropertyChanged(nameof(ChoiceDataChanged));
+                return;
+            }
+
             if (sender is DialogueComponentViewModel)
             {
-                OnPropertyChanged(nameof(Speaker));
-                OnPropertyChanged(nameof(DialogueText));
-                OnPropertyChanged(nameof(FontSize));
-                OnPropertyChanged(nameof(SpeakerFontSize));
-                OnPropertyChanged(nameof(TextColor));
-                OnPropertyChanged(nameof(SpeakerColor));
-                OnPropertyChanged(nameof(BoxOpacity));
-                OnPropertyChanged(nameof(BoxColor));
-                OnPropertyChanged(nameof(BorderColorHex));
-                OnPropertyChanged(nameof(BorderThickness));
-                OnPropertyChanged(nameof(CornerRadius));
-                OnPropertyChanged(nameof(TextAlignment));
-                OnPropertyChanged(nameof(DialogueBoxX));
-                OnPropertyChanged(nameof(DialogueBoxY));
-                OnPropertyChanged(nameof(DialogueBoxWidth));
-                OnPropertyChanged(nameof(DialogueBoxHeight));
-                OnPropertyChanged(nameof(DialogueBoxScale));
-                OnPropertyChanged(nameof(DialogueComponent));
+                switch (e.PropertyName)
+                {
+                    case nameof(DialogueComponentViewModel.Speaker):
+                        OnPropertyChanged(nameof(Speaker));
+                        break;
+                    case nameof(DialogueComponentViewModel.DialogueText):
+                        OnPropertyChanged(nameof(DialogueText));
+                        break;
+                    case nameof(DialogueComponentViewModel.FontSize):
+                        OnPropertyChanged(nameof(FontSize));
+                        break;
+                    case nameof(DialogueComponentViewModel.SpeakerFontSize):
+                        OnPropertyChanged(nameof(SpeakerFontSize));
+                        break;
+                    case nameof(DialogueComponentViewModel.TextColor):
+                        OnPropertyChanged(nameof(TextColor));
+                        break;
+                    case nameof(DialogueComponentViewModel.SpeakerColor):
+                        OnPropertyChanged(nameof(SpeakerColor));
+                        break;
+                    case nameof(DialogueComponentViewModel.BoxOpacity):
+                        OnPropertyChanged(nameof(BoxOpacity));
+                        break;
+                    case nameof(DialogueComponentViewModel.BoxColor):
+                        OnPropertyChanged(nameof(BoxColor));
+                        break;
+                    case nameof(DialogueComponentViewModel.BorderColor):
+                        OnPropertyChanged(nameof(BorderColorHex));
+                        break;
+                    case nameof(DialogueComponentViewModel.BorderThickness):
+                        OnPropertyChanged(nameof(BorderThickness));
+                        break;
+                    case nameof(DialogueComponentViewModel.CornerRadius):
+                        OnPropertyChanged(nameof(CornerRadius));
+                        break;
+                    case nameof(DialogueComponentViewModel.TextAlignment):
+                        OnPropertyChanged(nameof(TextAlignment));
+                        break;
+                    case nameof(DialogueComponentViewModel.X):
+                        OnPropertyChanged(nameof(DialogueBoxX));
+                        break;
+                    case nameof(DialogueComponentViewModel.Y):
+                        OnPropertyChanged(nameof(DialogueBoxY));
+                        break;
+                    case nameof(DialogueComponentViewModel.Width):
+                        OnPropertyChanged(nameof(DialogueBoxWidth));
+                        break;
+                    case nameof(DialogueComponentViewModel.Height):
+                        OnPropertyChanged(nameof(DialogueBoxHeight));
+                        break;
+                    case nameof(DialogueComponentViewModel.Scale):
+                        OnPropertyChanged(nameof(DialogueBoxScale));
+                        break;
+                }
             }
             else if (sender is BackgroundComponentViewModel)
             {
-                if (e.PropertyName == nameof(BackgroundComponentViewModel.Texture))
-                    OnPropertyChanged(nameof(BackgroundTexture));
-                else if (e.PropertyName == nameof(BackgroundComponentViewModel.X))
-                    OnPropertyChanged(nameof(BackgroundX));
-                else if (e.PropertyName == nameof(BackgroundComponentViewModel.Y))
-                    OnPropertyChanged(nameof(BackgroundY));
-                else if (e.PropertyName == nameof(BackgroundComponentViewModel.Width))
-                    OnPropertyChanged(nameof(BackgroundWidth));
-                else if (e.PropertyName == nameof(BackgroundComponentViewModel.Height))
-                    OnPropertyChanged(nameof(BackgroundHeight));
-                else if (e.PropertyName == nameof(BackgroundComponentViewModel.Scale))
-                    OnPropertyChanged(nameof(BackgroundScale));
-                else if (e.PropertyName == nameof(BackgroundComponentViewModel.TextureBitmap))
-                    OnPropertyChanged(nameof(BackgroundBitmap));
+                switch (e.PropertyName)
+                {
+                    case nameof(BackgroundComponentViewModel.Texture):
+                        OnPropertyChanged(nameof(BackgroundTexture));
+                        break;
+                    case nameof(BackgroundComponentViewModel.X):
+                        OnPropertyChanged(nameof(BackgroundX));
+                        break;
+                    case nameof(BackgroundComponentViewModel.Y):
+                        OnPropertyChanged(nameof(BackgroundY));
+                        break;
+                    case nameof(BackgroundComponentViewModel.Width):
+                        OnPropertyChanged(nameof(BackgroundWidth));
+                        break;
+                    case nameof(BackgroundComponentViewModel.Height):
+                        OnPropertyChanged(nameof(BackgroundHeight));
+                        break;
+                    case nameof(BackgroundComponentViewModel.Scale):
+                        OnPropertyChanged(nameof(BackgroundScale));
+                        break;
+                    case nameof(BackgroundComponentViewModel.TextureBitmap):
+                        OnPropertyChanged(nameof(BackgroundBitmap));
+                        break;
+                }
             }
             else if (sender is CharacterComponentViewModel)
             {
-                if (e.PropertyName == nameof(CharacterComponentViewModel.Sprite))
-                    OnPropertyChanged(nameof(CharacterSprite));
-                else if (e.PropertyName == nameof(CharacterComponentViewModel.Position))
-                    OnPropertyChanged(nameof(CharacterPosition));
-                else if (e.PropertyName == nameof(CharacterComponentViewModel.X))
-                    OnPropertyChanged(nameof(CharacterX));
-                else if (e.PropertyName == nameof(CharacterComponentViewModel.Y))
-                    OnPropertyChanged(nameof(CharacterY));
-                else if (e.PropertyName == nameof(CharacterComponentViewModel.Width))
-                    OnPropertyChanged(nameof(CharacterWidth));
-                else if (e.PropertyName == nameof(CharacterComponentViewModel.Height))
-                    OnPropertyChanged(nameof(CharacterHeight));
-                else if (e.PropertyName == nameof(CharacterComponentViewModel.Scale))
-                    OnPropertyChanged(nameof(CharacterScale));
-                else if (e.PropertyName == nameof(CharacterComponentViewModel.SpriteBitmap))
-                    OnPropertyChanged(nameof(CharacterBitmap));
+                switch (e.PropertyName)
+                {
+                    case nameof(CharacterComponentViewModel.Sprite):
+                        OnPropertyChanged(nameof(CharacterSprite));
+                        break;
+                    case nameof(CharacterComponentViewModel.Position):
+                        OnPropertyChanged(nameof(CharacterPosition));
+                        break;
+                    case nameof(CharacterComponentViewModel.X):
+                        OnPropertyChanged(nameof(CharacterX));
+                        break;
+                    case nameof(CharacterComponentViewModel.Y):
+                        OnPropertyChanged(nameof(CharacterY));
+                        break;
+                    case nameof(CharacterComponentViewModel.Width):
+                        OnPropertyChanged(nameof(CharacterWidth));
+                        break;
+                    case nameof(CharacterComponentViewModel.Height):
+                        OnPropertyChanged(nameof(CharacterHeight));
+                        break;
+                    case nameof(CharacterComponentViewModel.Scale):
+                        OnPropertyChanged(nameof(CharacterScale));
+                        break;
+                    case nameof(CharacterComponentViewModel.SpriteBitmap):
+                        OnPropertyChanged(nameof(CharacterBitmap));
+                        break;
+                }
             }
             else if (sender is AudioComponentViewModel)
             {
@@ -240,20 +430,22 @@ namespace RowlEngine.Editor.ViewModels
         // ██  BACKWARD-COMPATIBLE PROXY PROPERTIES  ██
         // ══════════════════════════════════════════════════════════════════════
 
-        // ── Speaker & Dialogue ──
+        public DialogueComponentViewModel? PrimaryDialogueComponent =>
+            AllComponents.OfType<DialogueComponentViewModel>().FirstOrDefault(d => d.IsEnabled)
+            ?? AllComponents.OfType<DialogueComponentViewModel>().FirstOrDefault();
+
         public string Speaker
         {
-            get => GetComponent<DialogueComponentViewModel>()?.Speaker ?? "Evelyn";
-            set { var c = GetComponent<DialogueComponentViewModel>(); if (c != null) c.Speaker = value; }
+            get => PrimaryDialogueComponent?.Speaker ?? "Evelyn";
+            set { var c = PrimaryDialogueComponent; if (c != null) c.Speaker = value; }
         }
 
         public string DialogueText
         {
-            get => GetComponent<DialogueComponentViewModel>()?.DialogueText ?? "";
-            set { var c = GetComponent<DialogueComponentViewModel>(); if (c != null) c.DialogueText = value; }
+            get => PrimaryDialogueComponent?.DialogueText ?? "";
+            set { var c = PrimaryDialogueComponent; if (c != null) c.DialogueText = value; }
         }
 
-        // ── Background ──
         public string BackgroundTexture
         {
             get => GetComponent<BackgroundComponentViewModel>()?.Texture ?? "bg_beach_sunset.png";
@@ -292,9 +484,6 @@ namespace RowlEngine.Editor.ViewModels
 
         public Bitmap? BackgroundBitmap => GetComponent<BackgroundComponentViewModel>()?.TextureBitmap;
 
-        public IEnumerable<CharacterComponentViewModel> CharacterComponents => GetComponents<CharacterComponentViewModel>();
-
-        // ── Character (first character component) ──
         public string CharacterSprite
         {
             get => GetComponent<CharacterComponentViewModel>()?.Sprite ?? "spr_evelyn.png";
@@ -339,100 +528,98 @@ namespace RowlEngine.Editor.ViewModels
 
         public Bitmap? CharacterBitmap => GetComponent<CharacterComponentViewModel>()?.SpriteBitmap;
 
-        // ── Dialogue Box ──
         public double DialogueBoxX
         {
-            get => GetComponent<DialogueComponentViewModel>()?.X ?? 80;
-            set { var d = GetComponent<DialogueComponentViewModel>(); if (d != null) d.X = value; }
+            get => PrimaryDialogueComponent?.X ?? 80;
+            set { var d = PrimaryDialogueComponent; if (d != null) d.X = value; }
         }
 
         public double DialogueBoxY
         {
-            get => GetComponent<DialogueComponentViewModel>()?.Y ?? 860;
-            set { var d = GetComponent<DialogueComponentViewModel>(); if (d != null) d.Y = value; }
+            get => PrimaryDialogueComponent?.Y ?? 860;
+            set { var d = PrimaryDialogueComponent; if (d != null) d.Y = value; }
         }
 
         public double DialogueBoxWidth
         {
-            get => GetComponent<DialogueComponentViewModel>()?.Width ?? 1760;
-            set { var d = GetComponent<DialogueComponentViewModel>(); if (d != null) d.Width = value; }
+            get => PrimaryDialogueComponent?.Width ?? 1760;
+            set { var d = PrimaryDialogueComponent; if (d != null) d.Width = value; }
         }
 
         public double DialogueBoxHeight
         {
-            get => GetComponent<DialogueComponentViewModel>()?.Height ?? 180;
-            set { var d = GetComponent<DialogueComponentViewModel>(); if (d != null) d.Height = value; }
+            get => PrimaryDialogueComponent?.Height ?? 180;
+            set { var d = PrimaryDialogueComponent; if (d != null) d.Height = value; }
         }
 
         public double DialogueBoxScale
         {
-            get => GetComponent<DialogueComponentViewModel>()?.Scale ?? 1.0;
-            set { var d = GetComponent<DialogueComponentViewModel>(); if (d != null) d.Scale = value; }
+            get => PrimaryDialogueComponent?.Scale ?? 1.0;
+            set { var d = PrimaryDialogueComponent; if (d != null) d.Scale = value; }
         }
 
-        public DialogueComponentViewModel? DialogueComponent => GetComponent<DialogueComponentViewModel>();
+        public DialogueComponentViewModel? DialogueComponent => PrimaryDialogueComponent;
 
         public double FontSize
         {
-            get => GetComponent<DialogueComponentViewModel>()?.FontSize ?? 24.0;
-            set { var d = GetComponent<DialogueComponentViewModel>(); if (d != null) d.FontSize = value; }
+            get => PrimaryDialogueComponent?.FontSize ?? 24.0;
+            set { var d = PrimaryDialogueComponent; if (d != null) d.FontSize = value; }
         }
 
         public double SpeakerFontSize
         {
-            get => GetComponent<DialogueComponentViewModel>()?.SpeakerFontSize ?? 20.0;
-            set { var d = GetComponent<DialogueComponentViewModel>(); if (d != null) d.SpeakerFontSize = value; }
+            get => PrimaryDialogueComponent?.SpeakerFontSize ?? 20.0;
+            set { var d = PrimaryDialogueComponent; if (d != null) d.SpeakerFontSize = value; }
         }
 
         public string TextColor
         {
-            get => GetComponent<DialogueComponentViewModel>()?.TextColor ?? "#F1F5F9";
-            set { var d = GetComponent<DialogueComponentViewModel>(); if (d != null) d.TextColor = value; }
+            get => PrimaryDialogueComponent?.TextColor ?? "#F1F5F9";
+            set { var d = PrimaryDialogueComponent; if (d != null) d.TextColor = value; }
         }
 
         public string SpeakerColor
         {
-            get => GetComponent<DialogueComponentViewModel>()?.SpeakerColor ?? "#38BDF8";
-            set { var d = GetComponent<DialogueComponentViewModel>(); if (d != null) d.SpeakerColor = value; }
+            get => PrimaryDialogueComponent?.SpeakerColor ?? "#38BDF8";
+            set { var d = PrimaryDialogueComponent; if (d != null) d.SpeakerColor = value; }
         }
 
         public double BoxOpacity
         {
-            get => GetComponent<DialogueComponentViewModel>()?.BoxOpacity ?? 0.88;
-            set { var d = GetComponent<DialogueComponentViewModel>(); if (d != null) d.BoxOpacity = value; }
+            get => PrimaryDialogueComponent?.BoxOpacity ?? 0.88;
+            set { var d = PrimaryDialogueComponent; if (d != null) d.BoxOpacity = value; }
         }
 
         public string BoxColor
         {
-            get => GetComponent<DialogueComponentViewModel>()?.BoxColor ?? "#0F0F1A";
-            set { var d = GetComponent<DialogueComponentViewModel>(); if (d != null) d.BoxColor = value; }
+            get => PrimaryDialogueComponent?.BoxColor ?? "#0F0F1A";
+            set { var d = PrimaryDialogueComponent; if (d != null) d.BoxColor = value; }
         }
 
         public string BorderColorHex
         {
-            get => GetComponent<DialogueComponentViewModel>()?.BorderColor ?? "#00F0FF";
-            set { var d = GetComponent<DialogueComponentViewModel>(); if (d != null) d.BorderColor = value; }
+            get => PrimaryDialogueComponent?.BorderColor ?? "#00F0FF";
+            set { var d = PrimaryDialogueComponent; if (d != null) d.BorderColor = value; }
         }
 
         public double BorderThickness
         {
-            get => GetComponent<DialogueComponentViewModel>()?.BorderThickness ?? 2.0;
-            set { var d = GetComponent<DialogueComponentViewModel>(); if (d != null) d.BorderThickness = value; }
+            get => PrimaryDialogueComponent?.BorderThickness ?? 2.0;
+            set { var d = PrimaryDialogueComponent; if (d != null) d.BorderThickness = value; }
         }
 
         public double CornerRadius
         {
-            get => GetComponent<DialogueComponentViewModel>()?.CornerRadius ?? 8.0;
-            set { var d = GetComponent<DialogueComponentViewModel>(); if (d != null) d.CornerRadius = value; }
+            get => PrimaryDialogueComponent?.CornerRadius ?? 8.0;
+            set { var d = PrimaryDialogueComponent; if (d != null) d.CornerRadius = value; }
         }
 
         public string TextAlignment
         {
-            get => GetComponent<DialogueComponentViewModel>()?.TextAlignment ?? "Left";
-            set { var d = GetComponent<DialogueComponentViewModel>(); if (d != null) d.TextAlignment = value; }
+            get => PrimaryDialogueComponent?.TextAlignment ?? "Left";
+            set { var d = PrimaryDialogueComponent; if (d != null) d.TextAlignment = value; }
         }
 
-        // ── Audio ──
         public string DspFilter
         {
             get => GetComponent<AudioComponentViewModel>()?.DspFilter ?? "Normal";
@@ -440,12 +627,9 @@ namespace RowlEngine.Editor.ViewModels
         }
 
         // ══════════════════════════════════════════════════════════════════════
-        // ██  BITMAP REFRESH (legacy compat)  ██
+        // ██  BITMAP REFRESH  ██
         // ══════════════════════════════════════════════════════════════════════
 
-        /// <summary>
-        /// Refreshes bitmaps on all visual components.
-        /// </summary>
         public void RefreshBitmaps()
         {
             GetComponent<BackgroundComponentViewModel>()?.RefreshBitmap();
@@ -454,11 +638,11 @@ namespace RowlEngine.Editor.ViewModels
         }
 
         // ══════════════════════════════════════════════════════════════════════
-        // ██  CONSTRUCTOR  ██
+        // ██  CONSTRUCTORS  ██
         // ══════════════════════════════════════════════════════════════════════
 
         /// <summary>
-        /// Creates a new node with default components (Dialogue, Background, Character, Audio).
+        /// Creates a new node with default GameObjects (Background, Evelyn, Dialogue Box, Audio).
         /// </summary>
         public NodeViewModel(ulong id, string title, double x, double y)
         {
@@ -467,19 +651,24 @@ namespace RowlEngine.Editor.ViewModels
             X = x;
             Y = y;
 
-            // Add default 4 modular components (Dialogue, Background, Character, Audio)
-            AddComponent<DialogueComponentViewModel>();
-            AddComponent<BackgroundComponentViewModel>();
-            AddComponent<CharacterComponentViewModel>();
-            AddComponent<AudioComponentViewModel>();
+            // Create default GameObjects (Unity GameObject pattern)
+            var bgObj = CreateObject("Background");
+            bgObj.AddComponent<BackgroundComponentViewModel>();
 
-            // Trigger initial bitmap loads
+            var charObj = CreateObject("Evelyn");
+            charObj.AddComponent<CharacterComponentViewModel>();
+
+            var dlgObj = CreateObject("Dialogue Box");
+            dlgObj.AddComponent<DialogueComponentViewModel>();
+
+            var audioObj = CreateObject("Audio");
+            audioObj.AddComponent<AudioComponentViewModel>();
+
             RefreshBitmaps();
         }
 
         /// <summary>
-        /// Creates a bare node without any default components.
-        /// Used during deserialization when components will be added manually.
+        /// Creates a bare node without default objects (used for JSON loading).
         /// </summary>
         public NodeViewModel(ulong id, string title, double x, double y, bool bare)
         {
@@ -487,12 +676,21 @@ namespace RowlEngine.Editor.ViewModels
             Title = title;
             X = x;
             Y = y;
+
             if (!bare)
             {
-                AddComponent<DialogueComponentViewModel>();
-                AddComponent<BackgroundComponentViewModel>();
-                AddComponent<CharacterComponentViewModel>();
-                AddComponent<AudioComponentViewModel>();
+                var bgObj = CreateObject("Background");
+                bgObj.AddComponent<BackgroundComponentViewModel>();
+
+                var charObj = CreateObject("Evelyn");
+                charObj.AddComponent<CharacterComponentViewModel>();
+
+                var dlgObj = CreateObject("Dialogue Box");
+                dlgObj.AddComponent<DialogueComponentViewModel>();
+
+                var audioObj = CreateObject("Audio");
+                audioObj.AddComponent<AudioComponentViewModel>();
+
                 RefreshBitmaps();
             }
         }

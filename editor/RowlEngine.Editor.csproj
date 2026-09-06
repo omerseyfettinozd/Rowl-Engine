@@ -8,8 +8,13 @@
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 
-    <!-- Path to the built native library (relative to editor/ directory) -->
-    <RowlNativeLib>$(MSBuildThisFileDirectory)..\build\lib\libRowlEngineCore.so</RowlNativeLib>
+    <!-- Cross-platform native library resolution -->
+    <RowlNativeLibWin1>$(MSBuildThisFileDirectory)..\build\bin\RowlEngineCore.dll</RowlNativeLibWin1>
+    <RowlNativeLibWin2>$(MSBuildThisFileDirectory)..\build\bin\Release\RowlEngineCore.dll</RowlNativeLibWin2>
+    <RowlNativeLibWin3>$(MSBuildThisFileDirectory)..\build\lib\Release\RowlEngineCore.dll</RowlNativeLibWin3>
+    <RowlNativeLibWin4>$(MSBuildThisFileDirectory)..\build\lib\RowlEngineCore.dll</RowlNativeLibWin4>
+    <RowlNativeLibLinux>$(MSBuildThisFileDirectory)..\build\lib\libRowlEngineCore.so</RowlNativeLibLinux>
+    <RowlNativeLibMac>$(MSBuildThisFileDirectory)..\build\lib\libRowlEngineCore.dylib</RowlNativeLibMac>
   </PropertyGroup>
 
   <ItemGroup>
@@ -20,17 +25,22 @@
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
   </ItemGroup>
 
-  <!-- Auto-copy native library to output directory after build -->
-  <Target Name="CopyNativeLib" AfterTargets="Build" Condition="Exists('$(RowlNativeLib)')">
-    <Copy SourceFiles="$(RowlNativeLib)"
+  <!-- Auto-copy native library to output directory after build across all platforms -->
+  <Target Name="CopyNativeLib" AfterTargets="Build">
+    <ItemGroup>
+      <NativeLibs Include="$(RowlNativeLibLinux)" Condition="Exists('$(RowlNativeLibLinux)')" />
+      <NativeLibs Include="$(RowlNativeLibMac)" Condition="Exists('$(RowlNativeLibMac)')" />
+      <NativeLibs Include="$(RowlNativeLibWin1)" Condition="Exists('$(RowlNativeLibWin1)')" />
+      <NativeLibs Include="$(RowlNativeLibWin2)" Condition="Exists('$(RowlNativeLibWin2)')" />
+      <NativeLibs Include="$(RowlNativeLibWin3)" Condition="Exists('$(RowlNativeLibWin3)')" />
+      <NativeLibs Include="$(RowlNativeLibWin4)" Condition="Exists('$(RowlNativeLibWin4)')" />
+    </ItemGroup>
+    <Copy SourceFiles="@(NativeLibs)"
           DestinationFolder="$(OutputPath)"
-          SkipUnchangedFiles="true" />
-    <Message Text="✅ libRowlEngineCore.so copied to $(OutputPath)" Importance="high" />
-  </Target>
-
-  <!-- Warn if library is missing (not yet built) -->
-  <Target Name="WarnNativeLibMissing" AfterTargets="Build" Condition="!Exists('$(RowlNativeLib)')">
-    <Warning Text="libRowlEngineCore.so not found at $(RowlNativeLib). Run: cmake --build ../build" />
+          SkipUnchangedFiles="true"
+          Condition="'@(NativeLibs)' != ''" />
+    <Message Text="✅ Native Engine Library (@(NativeLibs)) copied to $(OutputPath)" Importance="high" Condition="'@(NativeLibs)' != ''" />
+    <Warning Text="⚠️ RowlEngineCore native library not found in build directory. Build the C++ engine first (cmake -B build &amp;&amp; cmake --build build)." Condition="'@(NativeLibs)' == ''" />
   </Target>
 
 </Project>

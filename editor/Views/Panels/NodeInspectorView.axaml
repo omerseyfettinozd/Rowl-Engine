@@ -3,77 +3,146 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="using:RowlEngine.Editor.ViewModels"
+             xmlns:comp="using:RowlEngine.Editor.ViewModels.Components"
              xmlns:views="using:RowlEngine.Editor.Views.Components"
              mc:Ignorable="d" d:DesignWidth="320" d:DesignHeight="700"
              x:Class="RowlEngine.Editor.Views.Panels.NodeInspectorView"
              x:DataType="vm:MainWindowViewModel">
     <Border Background="{DynamicResource PanelBackground}">
-        <Grid RowDefinitions="*">
+        <Grid RowDefinitions="Auto, *, Auto">
 
-            <ScrollViewer Grid.Row="0" Padding="8,8" HorizontalScrollBarVisibility="Disabled">
-                <StackPanel Spacing="14">
-                    <!-- ── Node Title (always visible, not a component) ── -->
-                    <StackPanel Spacing="4">
-                        <TextBlock Text="Node Title" FontSize="12" Foreground="{DynamicResource MutedText}"/>
-                        <TextBox Text="{Binding SelectedNode.Title, FallbackValue='No Node Selected'}" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}"/>
+            <!-- ── Panel Header: GameObject Inspector (Unity Style) ── -->
+            <Border Grid.Row="0" Background="{DynamicResource SurfaceBackground}" 
+                    BorderBrush="{DynamicResource BorderColor}" BorderThickness="0,0,0,1"
+                    Padding="10,8">
+                <StackPanel Spacing="6">
+                    <DockPanel>
+                        <TextBlock Text="🔍 Inspector" FontWeight="Bold" FontSize="13" 
+                                   Foreground="{DynamicResource PrimaryText}" VerticalAlignment="Center"/>
+                        <TextBlock DockPanel.Dock="Right" 
+                                   Text="{Binding HierarchyViewModel.SelectedObject.Id, StringFormat='ID: {0}', FallbackValue=''}" 
+                                   FontSize="10" Foreground="{DynamicResource MutedText}" 
+                                   VerticalAlignment="Center"/>
+                    </DockPanel>
+
+                    <!-- Selected GameObject Name & Active State -->
+                    <Grid ColumnDefinitions="*, Auto" 
+                          IsVisible="{Binding InspectorViewModel.HasSelectedObject}">
+                        <!-- Editable GameObject Name -->
+                        <TextBox Grid.Column="0" 
+                                 Text="{Binding HierarchyViewModel.SelectedObject.Name, FallbackValue='GameObject'}" 
+                                 Watermark="GameObject Name"
+                                 Background="{DynamicResource InputBackground}" 
+                                 Foreground="{DynamicResource PrimaryText}" 
+                                 BorderBrush="{DynamicResource BorderColor}"
+                                 FontWeight="SemiBold"
+                                 FontSize="12" Padding="8,5" Margin="0,0,8,0"/>
+
+                        <!-- Active Toggle -->
+                        <CheckBox Grid.Column="1" 
+                                  IsChecked="{Binding HierarchyViewModel.SelectedObject.IsActive}" 
+                                  ToolTip.Tip="Toggle GameObject Active State"
+                                  Content="Active"
+                                  FontSize="11"
+                                  Foreground="{DynamicResource PrimaryText}"
+                                  VerticalAlignment="Center"/>
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <!-- ── Components List & Add Component Button ── -->
+            <ScrollViewer Grid.Row="1" Padding="8,8" HorizontalScrollBarVisibility="Disabled">
+                <StackPanel Spacing="12">
+
+                    <!-- Empty State: No GameObject Selected -->
+                    <StackPanel IsVisible="{Binding !InspectorViewModel.HasSelectedObject}" 
+                                Spacing="8" Margin="0,40">
+                        <TextBlock Text="📦" FontSize="36" HorizontalAlignment="Center" 
+                                   Foreground="{DynamicResource MutedText}"/>
+                        <TextBlock Text="No GameObject Selected" 
+                                   FontSize="13" FontWeight="Bold"
+                                   Foreground="{DynamicResource PrimaryText}"
+                                   HorizontalAlignment="Center"/>
+                        <TextBlock Text="Select an object from the Hierarchy panel or click '+ Create' to add and inspect components."
+                                   FontSize="11" FontStyle="Italic"
+                                   Foreground="{DynamicResource MutedText}"
+                                   HorizontalAlignment="Center"
+                                   TextWrapping="Wrap"
+                                   TextAlignment="Center"
+                                   Margin="16,0"/>
                     </StackPanel>
 
-                    <!-- ── Node ID indicator ── -->
-                    <StackPanel Spacing="2">
-                        <TextBlock Text="{Binding SelectedNode.Id, StringFormat='Node #{0}', FallbackValue='—'}" FontSize="11" Foreground="{DynamicResource MutedText}"/>
-                    </StackPanel>
-
-                    <!-- ══════════════════════════════════════════════════ -->
-                    <!-- ██  DYNAMIC COMPONENT LIST  ██ -->
-                    <!-- ══════════════════════════════════════════════════ -->
-                    <ItemsControl ItemsSource="{Binding SelectedNode.Components}">
+                    <!-- Attached Components Collection (Rendered via ComponentTemplateSelector) -->
+                    <ItemsControl ItemsSource="{Binding HierarchyViewModel.SelectedObject.Components}"
+                                  IsVisible="{Binding InspectorViewModel.HasSelectedObject}">
                         <ItemsControl.ItemTemplate>
                             <views:ComponentTemplateSelector />
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
 
-                    <!-- ── Add Component Button ── -->
-                    <Border Background="{DynamicResource CardBackground}" CornerRadius="6" Padding="0" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1" Margin="0,4">
+                    <!-- ══════════════════════════════════════════════════════════════════
+                         ➕ ADD COMPONENT BUTTON (Positioned Inside Inspector at the Bottom)
+                         ══════════════════════════════════════════════════════════════════ -->
+                    <StackPanel IsVisible="{Binding InspectorViewModel.HasSelectedObject}" Spacing="6" Margin="0,6,0,10">
                         <Button Content="➕ Add Component"
                                 Command="{Binding ShowAddComponentMenuCommand}"
                                 HorizontalAlignment="Stretch"
-                                Padding="12,8"
+                                Padding="12,9"
                                 FontSize="12"
+                                FontWeight="SemiBold"
                                 Background="{DynamicResource CardHeaderBackground}"
                                 Foreground="{DynamicResource PrimaryText}"
+                                BorderBrush="{DynamicResource BorderColor}"
+                                BorderThickness="1"
                                 CornerRadius="6"
                                 HorizontalContentAlignment="Center"/>
-                    </Border>
 
-                    <!-- ── Add Component Flyout Menu ── -->
-                    <StackPanel IsVisible="{Binding IsAddComponentMenuOpen}" Spacing="2" Margin="0,-8,0,0">
-                        <Border Background="{DynamicResource CardHeaderBackground}" CornerRadius="6" Padding="4" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1">
-                            <StackPanel Spacing="2">
-                                <TextBlock Text="Select Component Type" FontSize="11" Foreground="{DynamicResource MutedText}" Margin="8,4"/>
-                                <Button Content="💬 Dialogue &amp; Speaker"
-                                        Command="{Binding AddComponentByTypeCommand}" CommandParameter="dialogue"
-                                        HorizontalAlignment="Stretch" Padding="8,6" FontSize="11"
-                                        Background="Transparent" Foreground="{DynamicResource PrimaryText}" CornerRadius="4"/>
-                                <Button Content="🖼️ Background Layer"
-                                        Command="{Binding AddComponentByTypeCommand}" CommandParameter="background"
-                                        HorizontalAlignment="Stretch" Padding="8,6" FontSize="11"
-                                        Background="Transparent" Foreground="{DynamicResource PrimaryText}" CornerRadius="4"/>
-                                <Button Content="👤 Character Sprite"
-                                        Command="{Binding AddComponentByTypeCommand}" CommandParameter="character"
-                                        HorizontalAlignment="Stretch" Padding="8,6" FontSize="11"
-                                        Background="Transparent" Foreground="{DynamicResource PrimaryText}" CornerRadius="4"/>
-                                <Button Content="🔊 Audio &amp; DSP"
-                                        Command="{Binding AddComponentByTypeCommand}" CommandParameter="audio"
-                                        HorizontalAlignment="Stretch" Padding="8,6" FontSize="11"
-                                        Background="Transparent" Foreground="{DynamicResource PrimaryText}" CornerRadius="4"/>
-                            </StackPanel>
-                        </Border>
+                        <!-- Add Component Flyout List -->
+                        <StackPanel IsVisible="{Binding IsAddComponentMenuOpen}" Spacing="2">
+                            <Border Background="{DynamicResource CardHeaderBackground}" CornerRadius="6" 
+                                    Padding="4" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1">
+                                <StackPanel Spacing="2">
+                                    <TextBlock Text="Select Component to Attach" FontSize="11" 
+                                               Foreground="{DynamicResource MutedText}" Margin="8,4"/>
+                                    <Button Content="💬 Dialogue &amp; Speaker"
+                                            Command="{Binding AddComponentByTypeCommand}" CommandParameter="dialogue"
+                                            HorizontalAlignment="Stretch" Padding="8,6" FontSize="11"
+                                            Background="Transparent" Foreground="{DynamicResource PrimaryText}" CornerRadius="4"/>
+                                    <Button Content="🖼️ Background Layer"
+                                            Command="{Binding AddComponentByTypeCommand}" CommandParameter="background"
+                                            HorizontalAlignment="Stretch" Padding="8,6" FontSize="11"
+                                            Background="Transparent" Foreground="{DynamicResource PrimaryText}" CornerRadius="4"/>
+                                    <Button Content="👤 Character Sprite"
+                                            Command="{Binding AddComponentByTypeCommand}" CommandParameter="character"
+                                            HorizontalAlignment="Stretch" Padding="8,6" FontSize="11"
+                                            Background="Transparent" Foreground="{DynamicResource PrimaryText}" CornerRadius="4"/>
+                                    <Button Content="🔊 Audio &amp; DSP"
+                                            Command="{Binding AddComponentByTypeCommand}" CommandParameter="audio"
+                                            HorizontalAlignment="Stretch" Padding="8,6" FontSize="11"
+                                            Background="Transparent" Foreground="{DynamicResource PrimaryText}" CornerRadius="4"/>
+                                    <Button Content="🔀 Player Choices"
+                                            Command="{Binding AddComponentByTypeCommand}" CommandParameter="choice"
+                                            HorizontalAlignment="Stretch" Padding="8,6" FontSize="11"
+                                            Background="Transparent" Foreground="{DynamicResource PrimaryText}" CornerRadius="4"/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
                     </StackPanel>
 
-                    <!-- ── Engine Sync ── -->
-                    <Button Content="Sync Selected Node to Engine" Command="{Binding PushHotReloadPacketCommand}" HorizontalAlignment="Stretch" Margin="0,8,0,0" Background="{DynamicResource AccentButtonBg}" Foreground="{DynamicResource AccentButtonFg}" FontWeight="Bold" CornerRadius="4" Padding="12,8"/>
                 </StackPanel>
             </ScrollViewer>
+
+            <!-- ── Engine Sync Button ── -->
+            <Border Grid.Row="2" Padding="8,6,8,8" Background="{DynamicResource SurfaceBackground}"
+                    BorderBrush="{DynamicResource BorderColor}" BorderThickness="0,1,0,0">
+                <Button Content="⚡ Sync Selected Node to Engine" 
+                        Command="{Binding PushHotReloadPacketCommand}" 
+                        HorizontalAlignment="Stretch" 
+                        HorizontalContentAlignment="Center"
+                        Background="{DynamicResource AccentButtonBg}" 
+                        Foreground="{DynamicResource AccentButtonFg}" 
+                        FontWeight="Bold" FontSize="11" CornerRadius="4" Padding="12,7"/>
+            </Border>
         </Grid>
     </Border>
 </UserControl>
