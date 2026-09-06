@@ -176,30 +176,111 @@ bool Window::initializeEmbedded(void* nativeHandle, uint32_t width, uint32_t hei
     return true;
 }
 
+void Window::reloadFonts() {
+    initFontRenderer();
+}
+
 void Window::initFontRenderer() {
     if (!m_fontRenderer) {
         m_fontRenderer = std::make_unique<FontRenderer>();
     }
 
-    const std::vector<std::string> fontCandidates = {
+    namespace fs = std::filesystem;
+
+    // 1. Try VFS Manager memory buffer candidates
+    std::vector<std::string> vfsFontCandidates = {
+        "fonts/default.ttf",
+        "fonts/default_bold.ttf",
+        "Assets/fonts/default.ttf",
+        "Assets/fonts/default_bold.ttf",
+        "default.ttf",
+        "default_bold.ttf"
+    };
+
+    for (const auto& vf : vfsFontCandidates) {
+        auto bytes = Rowl::VFS::VFSManager::instance().readBytes(vf);
+        if (!bytes.empty()) {
+            if (m_fontRenderer->loadFontFromMemory(bytes.data(), bytes.size())) {
+                ROWL_LOG_INFO("✅ Loaded Visual Novel Font from VFS [" + vf + "]");
+                return;
+            }
+        }
+    }
+
+    // 2. Search active VFS mount directories directly on disk
+    const auto& mountPoints = Rowl::VFS::VFSManager::instance().getMountPoints();
+    for (const auto& [prefix, source] : mountPoints) {
+        if (auto loose = std::dynamic_pointer_cast<Rowl::VFS::LooseDirectorySource>(source)) {
+            fs::path baseDir(loose->getPhysicalPath());
+            std::vector<fs::path> diskCandidates = {
+                baseDir / "Assets" / "fonts" / "default.ttf",
+                baseDir / "Assets" / "fonts" / "default_bold.ttf",
+                baseDir / "fonts" / "default.ttf",
+                baseDir / "fonts" / "default_bold.ttf",
+                baseDir / "default.ttf"
+            };
+            for (const auto& dp : diskCandidates) {
+                if (fs::exists(dp) && fs::is_regular_file(dp)) {
+                    if (m_fontRenderer->loadFont(dp.string())) {
+                        ROWL_LOG_INFO("✅ Loaded Visual Novel Font from VFS Mount Disk: " + dp.string());
+                        return;
+                    }
+                }
+            }
+        }
+    }
+
+    // 3. Search relative paths from CWD and parent directory levels
+    fs::path cwd = fs::current_path();
+    std::vector<fs::path> relCandidates = {
+        cwd / "Assets" / "fonts" / "default.ttf",
+        cwd / "Assets" / "fonts" / "default_bold.ttf",
+        cwd / "fonts" / "default.ttf",
+        cwd / ".." / "Assets" / "fonts" / "default.ttf",
+        cwd / ".." / "Assets" / "fonts" / "default_bold.ttf",
+        cwd / ".." / "fonts" / "default.ttf",
+        cwd / ".." / ".." / "Assets" / "fonts" / "default.ttf",
         "Assets/fonts/default.ttf",
         "Assets/fonts/default_bold.ttf",
         "fonts/default.ttf",
+        "../Assets/fonts/default.ttf",
+        "../../Assets/fonts/default.ttf"
+    };
+
+    for (const auto& p : relCandidates) {
+        if (fs::exists(p) && fs::is_regular_file(p)) {
+            if (m_fontRenderer->loadFont(p.string())) {
+                ROWL_LOG_INFO("✅ Loaded Visual Novel Font from Relative Path: " + p.string());
+                return;
+            }
+        }
+    }
+
+    // 4. Fallback to System Fonts (Linux, Windows, macOS)
+    const std::vector<std::string> systemFontCandidates = {
         "/usr/share/fonts/liberation/LiberationSans-Regular.ttf",
         "/usr/share/fonts/Adwaita/AdwaitaSans-Regular.ttf",
         "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
         "/usr/share/fonts/TTF/DejaVuSans.ttf",
-        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf"
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+        "/usr/share/fonts/noto/NotoSans-Regular.ttf",
+        "/usr/share/fonts/cantarell/Cantarell-VF.otf",
+        "C:/Windows/Fonts/arial.ttf",
+        "C:/Windows/Fonts/segoeui.ttf",
+        "/System/Library/Fonts/Helvetica.ttc",
+        "/System/Library/Fonts/SFPro.ttf"
     };
 
-    for (const auto& path : fontCandidates) {
-        if (std::filesystem::exists(path)) {
+    for (const auto& path : systemFontCandidates) {
+        if (fs::exists(path) && fs::is_regular_file(path)) {
             if (m_fontRenderer->loadFont(path)) {
-                ROWL_LOG_INFO("✅ Loaded Visual Novel TTF Font: " + path);
-                break;
+                ROWL_LOG_INFO("✅ Loaded Visual Novel TTF Font from System: " + path);
+                return;
             }
         }
     }
+
+    ROWL_LOG_WARN("⚠️ No TrueType Font could be loaded. Fallback debug text will be used.");
 }
 
 void Window::resizeViewport(uint32_t newWidth, uint32_t newHeight) {
@@ -233,7 +314,9 @@ void Window::pollEvents(bool& outShouldQuit) {
                 break;
             case SDL_EVENT_MOUSE_BUTTON_DOWN:
                 if (event.button.button == SDL_BUTTON_LEFT) {
-                    Rowl::Core::Engine::instance().advanceToNextNode();
+                    if (!Rowl::Core::Engine::instance().handlePointerDown(event.button.x, event.button.y)) {
+                        Rowl::Core::Engine::instance().advanceToNextNode();
+                    }
                 }
                 break;
             case SDL_EVENT_WINDOW_RESIZED:
@@ -267,6 +350,7 @@ void Window::clearTextureCache() {
         }
     }
     m_textureCache.clear();
+    m_buttonFontCache.clear();
     ROWL_LOG_INFO("Hardware Texture Cache Cleared.");
 }
 
@@ -435,7 +519,8 @@ void Window::renderVisualNovelFrame(
     const std::string& background,
     float bgX, float bgY, float bgW, float bgH,
     const std::vector<CharacterRenderData>& characters,
-    const DialogueRenderData& dlg
+    const std::vector<DialogueRenderData>& dialogues,
+    const std::vector<ChoiceButtonRenderData>& choices
 ) {
     if (!m_initialized || !m_sdlRenderer) return;
 
@@ -528,8 +613,10 @@ void Window::renderVisualNovelFrame(
         }
     }
 
-    // 3. Render Dialogue Box (Only if enabled / present)
-    if (dlg.hasDialogueBox) {
+    // 3. Render Dialogue Boxes (Supports 1 or multiple dialogue boxes simultaneously)
+    for (const auto& dlg : dialogues) {
+        if (!dlg.hasDialogueBox) continue;
+
         float scaledDlgW = dlg.width * metrics.scaleFactor;
         float scaledDlgH = dlg.height * metrics.scaleFactor;
         float physBoxX, physBoxY;
@@ -575,8 +662,74 @@ void Window::renderVisualNovelFrame(
             SDL_RenderRect(m_sdlRenderer, &speakerTag);
 
             // Draw speaker name text
-            if (m_fontRenderer && m_fontRenderer->isLoaded() && m_offscreenSurface) {
+            if (!m_fontRenderer || !m_fontRenderer->isLoaded() || !m_offscreenSurface) {
+                SDL_SetRenderDrawColor(m_sdlRenderer, 255, 255, 255, 255);
+                SDL_RenderDebugText(m_sdlRenderer, tagX + (16.0f * metrics.scaleFactor), tagY + (tagH - 8.0f) / 2.0f, dlg.speaker.c_str());
+            }
+        }
+
+        // Dialogue Content Text (Debug fallback before present)
+        if (!dlg.dialogue.empty()) {
+            SDL_Color textColor = parseHexColor(dlg.textColor, 255);
+
+            float paddingLeft = 24.0f * metrics.scaleFactor;
+            float paddingTop = 28.0f * metrics.scaleFactor;
+
+            if (!m_fontRenderer || !m_fontRenderer->isLoaded() || !m_offscreenSurface) {
+                SDL_SetRenderDrawColor(m_sdlRenderer, textColor.r, textColor.g, textColor.b, textColor.a);
+                SDL_RenderDebugText(m_sdlRenderer, physBoxX + paddingLeft, physBoxY + paddingTop, dlg.dialogue.c_str());
+            }
+        }
+    }
+
+    // 4. Player choice buttons. Their rectangles use the same 1920x1080
+    // virtual coordinate system as every other scene element.
+    for (const auto& choice : choices) {
+        if (!choice.enabled) continue;
+        float px = 0.0f, py = 0.0f;
+        AspectGuardian::virtualToPhysical(choice.x, choice.y, metrics, px, py);
+        SDL_FRect rect{px, py, choice.width * metrics.scaleFactor, choice.height * metrics.scaleFactor};
+        SDL_Color bg = parseHexColor(choice.backgroundColor, static_cast<uint8_t>(255.0f * std::clamp(choice.opacity, 0.0f, 1.0f)));
+        SDL_SetRenderDrawColor(m_sdlRenderer, bg.r, bg.g, bg.b, bg.a);
+        SDL_RenderFillRect(m_sdlRenderer, &rect);
+        if (!choice.backgroundImage.empty()) {
+            if (auto* texture = loadTexture(choice.backgroundImage)) SDL_RenderTexture(m_sdlRenderer, texture, nullptr, &rect);
+        }
+        SDL_Color border = parseHexColor(choice.borderColor, 255);
+        SDL_SetRenderDrawColor(m_sdlRenderer, border.r, border.g, border.b, border.a);
+        SDL_RenderRect(m_sdlRenderer, &rect);
+        if (!m_fontRenderer || !m_fontRenderer->isLoaded() || !m_offscreenSurface) {
+            SDL_Color text = parseHexColor(choice.textColor, 255);
+            SDL_SetRenderDrawColor(m_sdlRenderer, text.r, text.g, text.b, text.a);
+            SDL_RenderDebugText(m_sdlRenderer, px + 12.0f, py + rect.h * 0.5f - 4.0f, choice.text.c_str());
+        }
+    }
+
+    // In offscreen mode, flush SDL graphics pipeline to m_offscreenSurface BEFORE drawing direct TrueType text
+    if (m_isOffscreen && m_sdlRenderer) {
+        SDL_RenderPresent(m_sdlRenderer);
+    }
+
+    // 4. Render High-Quality Anti-Aliased TrueType Text directly onto Offscreen Surface
+    if (m_fontRenderer && m_fontRenderer->isLoaded() && m_offscreenSurface) {
+        for (const auto& dlg : dialogues) {
+            if (!dlg.hasDialogueBox) continue;
+
+            float scaledDlgW = dlg.width * metrics.scaleFactor;
+            float scaledDlgH = dlg.height * metrics.scaleFactor;
+            float physBoxX, physBoxY;
+            AspectGuardian::virtualToPhysical(dlg.x, dlg.y, metrics, physBoxX, physBoxY);
+
+            // 4a. Speaker Name Text
+            if (!dlg.speaker.empty()) {
+                float speakerFontPx = dlg.speakerFontSize * metrics.scaleFactor;
+                float speakerTextW = m_fontRenderer->measureTextWidth(dlg.speaker, speakerFontPx);
+                float tagW = std::clamp(speakerTextW + (32.0f * metrics.scaleFactor), 120.0f * metrics.scaleFactor, scaledDlgW * 0.8f);
+                float tagH = (dlg.speakerFontSize * 1.4f + 12.0f) * metrics.scaleFactor;
+                float tagX = physBoxX + (20.0f * metrics.scaleFactor);
+                float tagY = physBoxY - (tagH * 0.6f);
                 float textDrawY = tagY + (tagH - speakerFontPx) / 2.0f - (2.0f * metrics.scaleFactor);
+
                 m_fontRenderer->renderText(
                     m_offscreenSurface,
                     dlg.speaker,
@@ -588,33 +741,27 @@ void Window::renderVisualNovelFrame(
                     tagH,
                     "Left"
                 );
-            } else {
-                SDL_SetRenderDrawColor(m_sdlRenderer, 255, 255, 255, 255);
-                SDL_RenderDebugText(m_sdlRenderer, tagX + (16.0f * metrics.scaleFactor), tagY + (tagH - 8.0f) / 2.0f, dlg.speaker.c_str());
-            }
-        }
-
-        // Dialogue Content Text (with TrueType Scalable Font + Typewriter Progression + Text Alignment)
-        if (!dlg.dialogue.empty()) {
-            SDL_Color textColor = parseHexColor(dlg.textColor, 255);
-
-            float paddingLeft = 24.0f * metrics.scaleFactor;
-            float paddingTop = 28.0f * metrics.scaleFactor;
-            float maxLineWidth = scaledDlgW - (48.0f * metrics.scaleFactor);
-            float maxDialogueHeight = scaledDlgH - (36.0f * metrics.scaleFactor);
-            float fontPx = dlg.fontSize * metrics.scaleFactor;
-
-            // Calculate visible codepoints based on typewriter progression
-            size_t totalCodepoints = FontRenderer::countCodepoints(dlg.dialogue);
-            size_t visibleCodepoints = totalCodepoints;
-            if (dlg.isPlaying && dlg.typewriterEnabled && dlg.textSpeed > 0) {
-                float msPerChar = static_cast<float>(dlg.textSpeed);
-                float elapsedMs = dlg.elapsedTypewriterTime * 1000.0f;
-                visibleCodepoints = static_cast<size_t>(elapsedMs / msPerChar);
-                if (visibleCodepoints > totalCodepoints) visibleCodepoints = totalCodepoints;
             }
 
-            if (m_fontRenderer && m_fontRenderer->isLoaded() && m_offscreenSurface) {
+            // 4b. Dialogue Content Text (with Typewriter Progression + Text Alignment)
+            if (!dlg.dialogue.empty()) {
+                SDL_Color textColor = parseHexColor(dlg.textColor, 255);
+                float paddingLeft = 24.0f * metrics.scaleFactor;
+                float paddingTop = 28.0f * metrics.scaleFactor;
+                float maxLineWidth = scaledDlgW - (48.0f * metrics.scaleFactor);
+                float maxDialogueHeight = scaledDlgH - (36.0f * metrics.scaleFactor);
+                float fontPx = dlg.fontSize * metrics.scaleFactor;
+
+                // Calculate visible codepoints based on typewriter progression
+                size_t totalCodepoints = FontRenderer::countCodepoints(dlg.dialogue);
+                size_t visibleCodepoints = totalCodepoints;
+                if (dlg.isPlaying && dlg.typewriterEnabled && dlg.textSpeed > 0) {
+                    float msPerChar = static_cast<float>(dlg.textSpeed);
+                    float elapsedMs = dlg.elapsedTypewriterTime * 1000.0f;
+                    visibleCodepoints = static_cast<size_t>(elapsedMs / msPerChar);
+                    if (visibleCodepoints > totalCodepoints) visibleCodepoints = totalCodepoints;
+                }
+
                 m_fontRenderer->renderText(
                     m_offscreenSurface,
                     dlg.dialogue,
@@ -627,12 +774,46 @@ void Window::renderVisualNovelFrame(
                     dlg.textAlignment,
                     visibleCodepoints
                 );
-            } else {
-                SDL_SetRenderDrawColor(m_sdlRenderer, textColor.r, textColor.g, textColor.b, textColor.a);
-                SDL_RenderDebugText(m_sdlRenderer, physBoxX + paddingLeft, physBoxY + paddingTop, dlg.dialogue.c_str());
             }
         }
+        for (const auto& choice : choices) {
+            if (!choice.enabled || choice.text.empty()) continue;
+            FontRenderer* choiceFont = m_fontRenderer.get();
+            if (!choice.fontFamily.empty() && choice.fontFamily != "Default") {
+                auto found = m_buttonFontCache.find(choice.fontFamily);
+                if (found == m_buttonFontCache.end()) {
+                    auto renderer = std::make_unique<FontRenderer>();
+                    auto bytes = Rowl::VFS::VFSManager::instance().readBytes(choice.fontFamily);
+                    if (!bytes.empty() && renderer->loadFontFromMemory(bytes.data(), bytes.size())) {
+                        found = m_buttonFontCache.emplace(choice.fontFamily, std::move(renderer)).first;
+                    }
+                }
+                if (found != m_buttonFontCache.end()) choiceFont = found->second.get();
+            }
+            float px = 0.0f, py = 0.0f;
+            AspectGuardian::virtualToPhysical(choice.x, choice.y, metrics, px, py);
+            const float w = choice.width * metrics.scaleFactor;
+            const float h = choice.height * metrics.scaleFactor;
+            const float fontPx = choice.fontSize * metrics.scaleFactor;
+            choiceFont->renderText(m_offscreenSurface, choice.text, px + 12.0f * metrics.scaleFactor,
+                py + (h - fontPx) * 0.5f, fontPx, parseHexColor(choice.textColor, 255),
+                w - 24.0f * metrics.scaleFactor, h, choice.textAlignment);
+        }
     }
+}
+
+void Window::renderVisualNovelFrame(
+    bool hasBackground,
+    const std::string& background,
+    float bgX, float bgY, float bgW, float bgH,
+    const std::vector<CharacterRenderData>& characters,
+    const DialogueRenderData& dlg
+) {
+    std::vector<DialogueRenderData> dlgs;
+    if (dlg.hasDialogueBox) {
+        dlgs.push_back(dlg);
+    }
+    renderVisualNovelFrame(hasBackground, background, bgX, bgY, bgW, bgH, characters, dlgs);
 }
 
 void Window::renderVisualNovelFrame(
@@ -660,7 +841,9 @@ void Window::renderVisualNovelFrame(
 void Window::endFrame() {
     if (!m_initialized || !m_sdlRenderer) return;
 
-    SDL_RenderPresent(m_sdlRenderer);
+    if (!m_isOffscreen) {
+        SDL_RenderPresent(m_sdlRenderer);
+    }
 }
 
 void Window::shutdown() {
@@ -695,6 +878,48 @@ void Window::shutdown() {
     m_isOpen = false;
     m_initialized = false;
     ROWL_LOG_INFO("SDL3 Window Shutdown Complete.");
+}
+
+void Window::drawSprite(const std::string& filename,
+                        float virtualX,
+                        float virtualY,
+                        float virtualWidth,
+                        float virtualHeight,
+                        float opacity) {
+    if (!m_initialized || !m_sdlRenderer || filename.empty()) return;
+
+    if (!m_isEmbedded) {
+        int currentPhysW = 0, currentPhysH = 0;
+        if (SDL_GetRenderOutputSize(m_sdlRenderer, &currentPhysW, &currentPhysH) && currentPhysW > 10 && currentPhysH > 10) {
+            m_width = static_cast<uint32_t>(currentPhysW);
+            m_height = static_cast<uint32_t>(currentPhysH);
+        }
+    }
+
+    if (m_width < 10)  m_width  = 1920;
+    if (m_height < 10) m_height = 1080;
+
+    ViewportMetrics metrics = AspectGuardian::calculateViewport(m_width, m_height, 1920, 1080);
+    float physX = 0.0f, physY = 0.0f;
+    AspectGuardian::virtualToPhysical(virtualX, virtualY, metrics, physX, physY);
+
+    float scaledW = virtualWidth * metrics.scaleFactor;
+    float scaledH = virtualHeight * metrics.scaleFactor;
+
+    SDL_Texture* tex = loadTexture(filename);
+    if (tex) {
+        if (virtualWidth <= 0.0f || virtualHeight <= 0.0f) {
+            float tw = 0.0f, th = 0.0f;
+            SDL_GetTextureSize(tex, &tw, &th);
+            if (virtualWidth <= 0.0f) scaledW = tw * metrics.scaleFactor;
+            if (virtualHeight <= 0.0f) scaledH = th * metrics.scaleFactor;
+        }
+
+        SDL_FRect dstRect = { physX, physY, scaledW, scaledH };
+        float alphaClamped = std::clamp(opacity, 0.0f, 1.0f);
+        SDL_SetTextureAlphaMod(tex, static_cast<Uint8>(alphaClamped * 255.0f));
+        SDL_RenderTexture(m_sdlRenderer, tex, nullptr, &dstRect);
+    }
 }
 
 } // namespace Rowl::Render

@@ -14,6 +14,11 @@ add_executable(rowl_tests
     ${CMAKE_SOURCE_DIR}/engine/src/vfs/vfs.cpp
     ${CMAKE_SOURCE_DIR}/engine/src/vfs/rowlpkg_reader.cpp
     ${CMAKE_SOURCE_DIR}/engine/src/core/engine.cpp
+    ${CMAKE_SOURCE_DIR}/engine/src/scene/component.cpp
+    ${CMAKE_SOURCE_DIR}/engine/src/scene/transform_component.cpp
+    ${CMAKE_SOURCE_DIR}/engine/src/scene/sprite_component.cpp
+    ${CMAKE_SOURCE_DIR}/engine/src/scene/game_object.cpp
+    ${CMAKE_SOURCE_DIR}/engine/src/scene/scene.cpp
     ${CMAKE_SOURCE_DIR}/engine/src/c_api.cpp
 )
 

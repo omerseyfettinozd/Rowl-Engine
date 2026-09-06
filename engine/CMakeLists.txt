@@ -83,6 +83,12 @@ add_library(RowlEngineCore SHARED
     src/audio/audio_engine.cpp
     # Platform abstraction
     src/platform/mobile_input.cpp
+    # Entity-Component Scene System
+    src/scene/component.cpp
+    src/scene/transform_component.cpp
+    src/scene/sprite_component.cpp
+    src/scene/game_object.cpp
+    src/scene/scene.cpp
     # C-API bridge (consumed by C# P/Invoke)
     src/c_api.cpp
 )

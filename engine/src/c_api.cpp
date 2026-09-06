@@ -146,14 +146,19 @@ void RowlEngine_SetProjectDirectory(RowlEngineHandle handle, const char* project
     if (!projectRoot || !*projectRoot) return;
     Rowl::VFS::VFSManager::instance().remountProject(projectRoot);
     if (handle) {
+        auto* engine = toEngine(handle);
+        auto* win = engine->getWindow();
+        if (win) {
+            win->reloadFonts();
+        }
         // Try loading story graph from the newly mounted project directory
         std::string graphPath = std::string(projectRoot) + "/Assets/json/full_story_graph.json";
         if (std::filesystem::exists(graphPath)) {
-            toEngine(handle)->loadStoryGraphFromPath(graphPath);
+            engine->loadStoryGraphFromPath(graphPath);
         } else {
             std::string altGraphPath = std::string(projectRoot) + "/full_story_graph.json";
             if (std::filesystem::exists(altGraphPath)) {
-                toEngine(handle)->loadStoryGraphFromPath(altGraphPath);
+                engine->loadStoryGraphFromPath(altGraphPath);
             }
         }
     }
@@ -162,6 +167,18 @@ void RowlEngine_SetProjectDirectory(RowlEngineHandle handle, const char* project
 void RowlEngine_AdvanceNode(RowlEngineHandle handle, uint32_t choiceIndex) {
     if (!handle) return;
     toEngine(handle)->advanceToNextNode(choiceIndex);
+}
+
+int RowlEngine_SelectChoice(RowlEngineHandle handle, const char* optionId) {
+    if (!handle || !optionId || !*optionId) return 0;
+    return toEngine(handle)->advanceToChoice(optionId) ? 1 : 0;
+}
+
+int RowlEngine_PointerDown(RowlEngineHandle handle, float x, float y) {
+    if (!handle) return 0;
+    // Editor supplies 1920x1080 virtual coordinates; the engine's offscreen
+    // surface is the same size, so the shared hit-test path remains canonical.
+    return toEngine(handle)->handlePointerDown(x, y) ? 1 : 0;
 }
 
 /* ── State queries ───────────────────────────────────────────────────────── */

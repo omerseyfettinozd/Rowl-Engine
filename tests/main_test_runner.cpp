@@ -10,6 +10,8 @@
 #include <string>
 #include <vector>
 #include <cmath>
+#include <filesystem>
+#include <fstream>
 #include <SDL3/SDL.h>
 
 #include "rowl/render/aspect_guardian.hpp"
@@ -19,6 +21,10 @@
 #include "rowl/platform/mobile_input.hpp"
 #include "rowl/vfs/vfs.hpp"
 #include "rowl/core/engine.hpp"
+#include "rowl/scene/scene.hpp"
+#include "rowl/scene/game_object.hpp"
+#include "rowl/scene/transform_component.hpp"
+#include "rowl/scene/sprite_component.hpp"
 #include "rowl/c_api.h"
 
 #define TEST_PASS(name) std::cout << "  ✅ [PASS] " << name << std::endl
@@ -238,22 +244,273 @@ void test_native_c_api() {
     RowlEngine_UpdateSceneFromJson(handle, compJson);
     TEST_PASS("RowlEngine_UpdateSceneFromJson (Multi-Character + Multi-Line Dialogue)");
 
-    // Execute 60 frames of step
-    for (int i = 0; i < 60; ++i) {
-        RowlEngine_Step(handle, 0.0166f);
-    }
-
-    uint32_t w = 0, h = 0;
-    const uint8_t* pixels = RowlEngine_GetPixelBuffer(handle, &w, &h);
-    if (!pixels || w != 1920 || h != 1080) {
-        std::cerr << "Pixel buffer mismatch" << std::endl;
+    // Multi-Dialogue Box Test (Two Simultaneous Chat Bubbles in Game Mode)
+    const char* multiDlgJson = R"([
+        {"type":"background","id":"b1","enabled":true,"data":{"texture":"Woman.png","x":0,"y":0,"width":1920,"height":1080,"scale":1}},
+        {"type":"dialogue","id":"d1","enabled":true,"data":{"speaker":"Alice","dialogue":"First dialogue bubble!","x":80,"y":860,"width":1760,"height":180}},
+        {"type":"dialogue","id":"d2","enabled":true,"data":{"speaker":"Bob","dialogue":"Second simultaneous dialogue bubble!","x":120,"y":660,"width":1760,"height":180}}
+    ])";
+    RowlEngine_UpdateSceneFromJson(handle, multiDlgJson);
+    if (Rowl::Core::Engine::instance().getActiveDialogues().size() != 2) {
+        std::cerr << "Expected 2 active dialogues in Engine, got: " << Rowl::Core::Engine::instance().getActiveDialogues().size() << std::endl;
         exit(1);
     }
-    TEST_PASS("RowlEngine_Step (60 FPS Simulation & Valid Pixel Buffer)");
+    TEST_PASS("RowlEngine_UpdateSceneFromJson (Simultaneous Multi-Dialogue Boxes)");
+
+    // Execute 30 frames of multi-dialogue step
+    for (int i = 0; i < 30; ++i) {
+        RowlEngine_Step(handle, 0.0166f);
+    }
+    TEST_PASS("RowlEngine_Step (Simultaneous Multi-Dialogue Render & Pixel Buffer Validation)");
+
+    // Graph v4: choose by stable ID, not fragile array position.
+    const auto graphPath = std::filesystem::temp_directory_path() / "rowl_choice_graph_test.json";
+    {
+        std::ofstream graph(graphPath);
+        graph << R"({"format_version":4,"start_node_id":101,"nodes":[
+          {"id":101,"speaker":"Guide","dialogue":"Choose.","objects":[{"id":"choices","name":"Choices","is_active":true,"components":[
+            {"type":"choice","id":"choice_main","enabled":true,"data":{"options":[
+              {"option_id":"go_left","text":"Left","x":680,"y":520,"width":560,"height":64,"background_color":"#1E293B"},
+              {"option_id":"go_right","text":"Right","x":680,"y":600,"width":560,"height":64,"background_color":"#1E293B"}]}}]}],"next_nodes":[
+            {"id":102,"label":"Left","option_id":"go_left"},
+            {"id":103,"label":"Right","option_id":"go_right"}]},
+          {"id":102,"speaker":"Guide","dialogue":"Left path."},
+          {"id":103,"speaker":"Guide","dialogue":"Right path."}]})";
+    }
+    RowlEngine_LoadStoryGraph(handle, graphPath.string().c_str());
+    RowlEngine_Step(handle, 0.0f);
+    if (RowlEngine_PointerDown(handle, 700.0f, 620.0f) != 1 || RowlEngine_GetCurrentNodeId(handle) != 103) {
+        std::cerr << "Choice button pointer hit-test routing failed" << std::endl;
+        exit(1);
+    }
+    RowlEngine_LoadStoryGraph(handle, graphPath.string().c_str());
+    if (RowlEngine_SelectChoice(handle, "go_right") != 1 || RowlEngine_GetCurrentNodeId(handle) != 103) {
+        std::cerr << "Stable choice ID routing failed" << std::endl;
+        exit(1);
+    }
+    if (RowlEngine_SelectChoice(handle, "does_not_exist") != 0) {
+        std::cerr << "Unknown stable choice ID was accepted" << std::endl;
+        exit(1);
+    }
+    std::filesystem::remove(graphPath);
+    TEST_PASS("Story Graph v4 Stable Choice-ID Routing");
 
     RowlEngine_Shutdown(handle);
     RowlEngine_Destroy(handle);
     TEST_PASS("RowlEngine_Shutdown & Destroy (Clean Resource Teardown)");
+}
+
+class VelocityComponent : public Rowl::Scene::Component {
+public:
+    VelocityComponent(float vx, float vy) : m_vx(vx), m_vy(vy) {}
+
+    void onUpdate(float deltaTime) override {
+        if (auto* tf = getOwner()->getTransform()) {
+            tf->translate(m_vx * deltaTime, m_vy * deltaTime);
+        }
+    }
+
+    float getVx() const { return m_vx; }
+    float getVy() const { return m_vy; }
+
+private:
+    float m_vx = 0.0f;
+    float m_vy = 0.0f;
+};
+
+class LifecycleProbeComponent : public Rowl::Scene::Component {
+public:
+    void onAwake() override { ++awake; }
+    void onEnable() override { ++enabled; }
+    void onStart() override { ++started; }
+    void onUpdate(float) override { ++updated; }
+    void onLateUpdate(float) override { ++lateUpdated; }
+    void onDisable() override { ++disabled; }
+    void onDestroy() override { ++destroyed; }
+
+    int awake = 0;
+    int enabled = 0;
+    int started = 0;
+    int updated = 0;
+    int lateUpdated = 0;
+    int disabled = 0;
+    int destroyed = 0;
+};
+
+class SelfRemovingComponent : public Rowl::Scene::Component {
+public:
+    explicit SelfRemovingComponent(int* updateCount) : m_updateCount(updateCount) {}
+    void onUpdate(float) override {
+        if (m_updateCount) ++*m_updateCount;
+        getOwner()->removeComponent(this);
+    }
+private:
+    int* m_updateCount = nullptr;
+};
+
+void test_game_object_component_system() {
+    TEST_SECTION("Entity-Component & GameObject Subsystem");
+
+    // 1. Create empty scene and game object
+    Rowl::Scene::Scene scene;
+    auto* hero = scene.createGameObject("Hero");
+    if (!hero || hero->getName() != "Hero" || !hero->isActive()) {
+        std::cerr << "GameObject creation failed" << std::endl;
+        exit(1);
+    }
+    if (scene.getObjectCount() != 1) {
+        std::cerr << "Scene object count mismatch" << std::endl;
+        exit(1);
+    }
+
+    // Default transform check
+    auto* transform = hero->getTransform();
+    if (!transform) {
+        std::cerr << "GameObject missing default TransformComponent" << std::endl;
+        exit(1);
+    }
+    transform->setPosition(100.0f, 200.0f);
+    if (std::abs(transform->getX() - 100.0f) > 0.001f || std::abs(transform->getY() - 200.0f) > 0.001f) {
+        std::cerr << "Transform position set failed" << std::endl;
+        exit(1);
+    }
+    TEST_PASS("Empty GameObject Creation with Default TransformComponent");
+
+    // 2. Attach SpriteComponent
+    auto* sprite = hero->addComponent<Rowl::Scene::SpriteComponent>("Margot.jpg", 360.0f, 540.0f, 0.95f);
+    if (!sprite || !hero->hasComponent<Rowl::Scene::SpriteComponent>()) {
+        std::cerr << "SpriteComponent attachment failed" << std::endl;
+        exit(1);
+    }
+    if (hero->getComponent<Rowl::Scene::SpriteComponent>() != sprite) {
+        std::cerr << "getComponent<SpriteComponent> mismatch" << std::endl;
+        exit(1);
+    }
+    if (sprite->getOwner() != hero || sprite->getTexturePath() != "Margot.jpg") {
+        std::cerr << "SpriteComponent owner or texture mismatch" << std::endl;
+        exit(1);
+    }
+    TEST_PASS("Attach SpriteComponent to Empty GameObject");
+
+    // 3. Movement simulation via custom Component onUpdate
+    auto* vel = hero->addComponent<VelocityComponent>(150.0f, 50.0f); // 150 px/s X, 50 px/s Y
+    if (!vel || !hero->hasComponent<VelocityComponent>()) {
+        std::cerr << "VelocityComponent attachment failed" << std::endl;
+        exit(1);
+    }
+
+    // Simulate 2 seconds of updates (e.g. 2 x 1.0s)
+    scene.update(1.0f);
+    scene.update(1.0f);
+
+    // Initial X: 100 + 2*150 = 400; Initial Y: 200 + 2*50 = 300
+    if (std::abs(transform->getX() - 400.0f) > 0.01f || std::abs(transform->getY() - 300.0f) > 0.01f) {
+        std::cerr << "Position after onUpdate translation mismatch: X=" << transform->getX() << ", Y=" << transform->getY() << std::endl;
+        exit(1);
+    }
+    TEST_PASS("Component onUpdate Movement Simulation (Position Translation)");
+
+    // 3b. Unity-style lifecycle order and safe mutation during callbacks.
+    auto* lifecycleObject = scene.createGameObject("Lifecycle Probe");
+    auto* lifecycle = lifecycleObject->addComponent<LifecycleProbeComponent>();
+    if (lifecycle->awake != 1 || lifecycle->enabled != 1 || lifecycle->started != 0) {
+        std::cerr << "Component Awake/OnEnable lifecycle mismatch" << std::endl;
+        exit(1);
+    }
+    lifecycleObject->update(0.016f);
+    if (lifecycle->started != 1 || lifecycle->updated != 1 || lifecycle->lateUpdated != 1) {
+        std::cerr << "Component Start/Update/LateUpdate lifecycle mismatch" << std::endl;
+        exit(1);
+    }
+    lifecycle->setEnabled(false);
+    lifecycle->setEnabled(true);
+    lifecycleObject->setActive(false);
+    lifecycleObject->setActive(true);
+    if (lifecycle->disabled != 2 || lifecycle->enabled != 3 || lifecycle->started != 1) {
+        std::cerr << "Component enable/disable lifecycle mismatch" << std::endl;
+        exit(1);
+    }
+    int selfRemovalUpdates = 0;
+    lifecycleObject->addComponent<SelfRemovingComponent>(&selfRemovalUpdates);
+    lifecycleObject->update(0.016f);
+    if (selfRemovalUpdates != 1 || lifecycleObject->hasComponent<SelfRemovingComponent>()) {
+        std::cerr << "Deferred component removal during update failed" << std::endl;
+        exit(1);
+    }
+    TEST_PASS("Unity-style Lifecycle and Deferred Component Mutation");
+
+    // 4. Direct Transform Translation & Scaling
+    transform->translate(100.0f, -50.0f);
+    transform->setScale(2.0f);
+    if (std::abs(transform->getX() - 500.0f) > 0.01f || std::abs(transform->getY() - 250.0f) > 0.01f ||
+        std::abs(transform->getScaleX() - 2.0f) > 0.01f) {
+        std::cerr << "Direct transform translation/scale failed" << std::endl;
+        exit(1);
+    }
+    TEST_PASS("Direct Transform Translation & Scaling");
+
+    // 5. Engine Step Integration & Scene Rendering to Offscreen Framebuffer
+    {
+        Rowl::Core::Engine engine;
+        Rowl::Core::EngineConfig cfg;
+        cfg.appName = "Scene Test";
+        cfg.virtualWidth = 1920;
+        cfg.virtualHeight = 1080;
+        if (!engine.initialize(cfg)) {
+            std::cerr << "Engine initialize failed" << std::endl;
+            exit(1);
+        }
+
+        auto* engineScene = engine.getScene();
+        if (!engineScene) {
+            std::cerr << "engine.getScene() returned null" << std::endl;
+            exit(1);
+        }
+
+        auto* renderedObj = engineScene->createGameObject("RenderedSprite");
+        renderedObj->getTransform()->setPosition(300.0f, 200.0f);
+        renderedObj->addComponent<Rowl::Scene::SpriteComponent>("Margot.jpg", 360.0f, 540.0f);
+        renderedObj->addComponent<VelocityComponent>(60.0f, 40.0f);
+
+        // Step engine for 30 frames
+        for (int i = 0; i < 30; ++i) {
+            engine.step(0.0166f);
+        }
+
+        // Object moved during step
+        float expectedX = 300.0f + 60.0f * (30 * 0.0166f);
+        if (std::abs(renderedObj->getTransform()->getX() - expectedX) > 1.0f) {
+            std::cerr << "Engine step scene update mismatch" << std::endl;
+            exit(1);
+        }
+
+        // Pixel buffer check
+        uint32_t pw = 0, ph = 0;
+        const uint8_t* pixels = engine.getPixelBuffer(&pw, &ph);
+        if (!pixels || pw != 1920 || ph != 1080) {
+            std::cerr << "Pixel buffer mismatch in scene rendering" << std::endl;
+            exit(1);
+        }
+        TEST_PASS("Engine Step Loop Integration with Scene Render & Pixel Buffer Output");
+
+        engine.shutdown();
+    }
+
+    // 6. Safe Component Removal and Scene Cleanup
+    bool removed = hero->removeComponent<VelocityComponent>();
+    if (!removed || hero->hasComponent<VelocityComponent>()) {
+        std::cerr << "removeComponent failed" << std::endl;
+        exit(1);
+    }
+    TEST_PASS("Dynamic Component Removal (removeComponent<T>)");
+
+    bool destroyed = scene.destroyGameObject(hero);
+    bool lifecycleDestroyed = scene.destroyGameObject(lifecycleObject);
+    if (!destroyed || !lifecycleDestroyed || scene.getObjectCount() != 0) {
+        std::cerr << "destroyGameObject failed" << std::endl;
+        exit(1);
+    }
+    TEST_PASS("Safe GameObject Destruction & Scene Teardown");
 }
 
 int main() {
@@ -267,6 +524,7 @@ int main() {
     test_lua_sandbox();
     test_mobile_input();
     test_native_c_api();
+    test_game_object_component_system();
 
     std::cout << "\n=======================================================" << std::endl;
     std::cout << "🎉 ALL UNIT & INTEGRATION TESTS PASSED SUCCESSFULLY! 🎉" << std::endl;

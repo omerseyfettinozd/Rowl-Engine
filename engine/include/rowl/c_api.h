@@ -175,6 +175,13 @@ ROWL_API void RowlEngine_SetProjectDirectory(RowlEngineHandle handle,
 ROWL_API void RowlEngine_AdvanceNode(RowlEngineHandle handle,
                                       uint32_t choiceIndex);
 
+/** Advances a branch using its stable option ID (graph format v4). */
+ROWL_API int RowlEngine_SelectChoice(RowlEngineHandle handle,
+                                      const char* optionId);
+
+/** Sends a pointer/touch press in virtual-canvas coordinates. */
+ROWL_API int RowlEngine_PointerDown(RowlEngineHandle handle, float x, float y);
+
 /* ── State queries (Engine → Editor) ─────────────────────────────────────── */
 
 /**

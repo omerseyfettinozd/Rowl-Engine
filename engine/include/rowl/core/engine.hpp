@@ -8,6 +8,10 @@
 #include <vector>
 #include <nlohmann/json.hpp>
 
+namespace Rowl::Scene {
+class Scene;
+}
+
 namespace Rowl::Core {
 
 /// Component data container for the component-based node architecture.
@@ -19,6 +23,8 @@ struct ComponentData {
 };
 
 using Rowl::Render::CharacterRenderData;
+using Rowl::Render::DialogueRenderData;
+using Rowl::Render::ChoiceButtonRenderData;
 
 struct EngineConfig {
     std::string appName     = "Rowl Engine Game";
@@ -52,7 +58,8 @@ struct StoryNode {
     // Branching: multiple next nodes with optional choice labels
     struct NextNode {
         uint64_t nodeId = 0;
-        std::string label; // e.g. "Option A", "Accept", "Refuse"
+        std::string label;    // e.g. "Option A", "Accept", "Refuse"
+        std::string optionId; // Stable ID; never use display order as identity.
     };
     std::vector<NextNode> nextNodes;
 
@@ -132,6 +139,10 @@ public:
 
     // choiceIndex: which branch to follow (0 = first). Default 0 for backward compat.
     void advanceToNextNode(uint32_t choiceIndex = 0);
+    /// Advances by the stable option ID stored in graph v4. Returns false for
+    /// missing/disabled options or when dialogue typewriter input consumed it.
+    bool advanceToChoice(const std::string& optionId);
+    bool handlePointerDown(float physicalX, float physicalY);
 
     // ── Playback & Offscreen buffer API ───────────────────────────────────
     void setPlayState(bool isPlaying);
@@ -153,13 +164,16 @@ public:
     float getActiveDialogueBoxWidth()   const { return m_activeDialogueData.width; }
     float getActiveDialogueBoxHeight()  const { return m_activeDialogueData.height; }
     const Rowl::Render::DialogueRenderData& getActiveDialogueData() const { return m_activeDialogueData; }
+    const std::vector<Rowl::Render::DialogueRenderData>& getActiveDialogues() const { return m_activeDialogues; }
     uint64_t getCurrentNodeId()         const { return m_currentNodeId; }
+    Rowl::Scene::Scene* getScene()       const { return m_scene.get(); }
 
 private:
     static Engine* s_instance;
 
     EngineConfig m_config;
     std::unique_ptr<Rowl::Render::Window> m_window;
+    std::unique_ptr<Rowl::Scene::Scene>   m_scene;
 
     // External window handle (embedded / single-window mode)
     void*    m_externalWindowHandle = nullptr;
@@ -190,6 +204,8 @@ private:
     float m_activeDialogueBoxWidth = 1760.0f;
     float m_activeDialogueBoxHeight = 180.0f;
     Rowl::Render::DialogueRenderData m_activeDialogueData;
+    std::vector<Rowl::Render::DialogueRenderData> m_activeDialogues;
+    std::vector<Rowl::Render::ChoiceButtonRenderData> m_activeChoiceButtons;
 
     bool m_isRunning    = false;
     bool m_initialized  = false;

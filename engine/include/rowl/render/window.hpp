@@ -54,6 +54,27 @@ struct DialogueRenderData {
     std::string customBoxTexture;
 };
 
+struct ChoiceButtonRenderData {
+    std::string optionId;
+    std::string text;
+    std::string backgroundImage;
+    float x = 680.0f;
+    float y = 520.0f;
+    float width = 560.0f;
+    float height = 64.0f;
+    float fontSize = 22.0f;
+    float opacity = 1.0f;
+    float borderThickness = 2.0f;
+    float cornerRadius = 8.0f;
+    std::string textColor = "#FFFFFF";
+    std::string backgroundColor = "#1E293B";
+    std::string hoverColor = "#0EA5E9";
+    std::string borderColor = "#38BDF8";
+    std::string textAlignment = "Center";
+    std::string fontFamily = "Default";
+    bool enabled = true;
+};
+
 class Window {
 public:
     Window();
@@ -104,6 +125,15 @@ public:
         const std::string& background,
         float bgX,   float bgY,   float bgW,   float bgH,
         const std::vector<CharacterRenderData>& characters,
+        const std::vector<DialogueRenderData>& dialogues,
+        const std::vector<ChoiceButtonRenderData>& choices = {}
+    );
+
+    void renderVisualNovelFrame(
+        bool hasBackground,
+        const std::string& background,
+        float bgX,   float bgY,   float bgW,   float bgH,
+        const std::vector<CharacterRenderData>& characters,
         const DialogueRenderData& dialogueData
     );
 
@@ -129,6 +159,20 @@ public:
     SDL_Texture* loadTexture(const std::string& filename);
     void clearTextureCache();
     FontRenderer* getFontRenderer() const { return m_fontRenderer.get(); }
+    void reloadFonts();
+
+    /**
+     * Renders a 2D sprite/texture at virtual canvas coordinates (default 1920x1080),
+     * automatically projected to physical window coordinates via AspectGuardian.
+     */
+    void drawSprite(const std::string& filename,
+                    float virtualX,
+                    float virtualY,
+                    float virtualWidth,
+                    float virtualHeight,
+                    float opacity = 1.0f);
+
+    SDL_Renderer* getRenderer() const { return m_sdlRenderer; }
 
 private:
     void initFontRenderer();
@@ -138,6 +182,7 @@ private:
     SDL_Surface*  m_offscreenSurface  = nullptr;
     std::unordered_map<std::string, SDL_Texture*> m_textureCache;
     std::unique_ptr<FontRenderer> m_fontRenderer;
+    std::unordered_map<std::string, std::unique_ptr<FontRenderer>> m_buttonFontCache;
 
     uint32_t m_width       = 1920;
     uint32_t m_height      = 1080;
