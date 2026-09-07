@@ -780,20 +780,13 @@ void Engine::run() {
 
     auto lastTime = std::chrono::high_resolution_clock::now();
     while (m_isRunning) {
-        bool shouldQuit = false;
-        if (m_window) {
-            m_window->pollEvents(shouldQuit);
-            if (shouldQuit) {
-                m_isRunning = false;
-                break;
-            }
-        }
-
         auto currentTime = std::chrono::high_resolution_clock::now();
         float dt = std::chrono::duration<float>(currentTime - lastTime).count();
         lastTime = currentTime;
         if (dt > 0.25f) dt = 0.25f;
         if (dt < 0.0f)  dt = 0.0f;
+
+        // step() internally calls pollEvents() and sets m_isRunning = false on quit
         step(dt);
     }
 

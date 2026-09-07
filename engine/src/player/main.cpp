@@ -102,7 +102,11 @@ int main(int argc, char* argv[]) {
     if (!storyGraphPath.empty() && fs::exists(storyGraphPath)) {
         RowlEngine_LoadStoryGraph(engine, storyGraphPath.c_str());
     } else {
-        std::cout << "[Player] Notice: No external story_graph.json found; running default scene.\n";
+        std::cerr << "[Player] ⚠️  Warning: No story graph file found!\n"
+                  << "  Searched in: " << baseProj.string() << "\n"
+                  << "  Expected: full_story_graph.json (in project root or Assets/)\n"
+                  << "  Use --story <path> to specify manually, or --help for usage.\n"
+                  << "  Starting with empty default scene...\n";
     }
 
     // Start standalone interactive game loop
