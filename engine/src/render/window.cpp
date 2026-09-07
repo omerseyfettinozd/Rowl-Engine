@@ -364,6 +364,7 @@ void Window::clearTextureCache() {
         SDL_DestroyTexture(tex);
     }
     m_textureCache.clear();
+    m_missingTextureCache.clear();
     m_buttonFontCache.clear();
     ROWL_LOG_INFO("Hardware Texture Cache Cleared (" + std::to_string(uniqueTextures.size()) + " unique textures freed).");
 }
@@ -376,6 +377,8 @@ SDL_Texture* Window::loadTexture(const std::string& filename) {
     // Normalize slashes
     std::string normPath = filename;
     std::replace(normPath.begin(), normPath.end(), '\\', '/');
+
+    if (m_missingTextureCache.contains(normPath)) return nullptr;
 
     // Cache hit: only return valid textures
     auto it = m_textureCache.find(normPath);
@@ -473,6 +476,7 @@ SDL_Texture* Window::loadTexture(const std::string& filename) {
     }
 
     if (!data) {
+        m_missingTextureCache.insert(normPath);
         return nullptr;
     }
 
@@ -490,6 +494,7 @@ SDL_Texture* Window::loadTexture(const std::string& filename) {
     stbi_image_free(data);
 
     if (texture) {
+        m_missingTextureCache.erase(normPath);
         m_textureCache[filename] = texture;
         m_textureCache[normPath] = texture;
         m_textureCache[bareName] = texture;
@@ -875,6 +880,7 @@ void Window::shutdown() {
         SDL_DestroyTexture(tex);
     }
     m_textureCache.clear();
+    m_missingTextureCache.clear();
 
     if (m_sdlRenderer) {
         SDL_DestroyRenderer(m_sdlRenderer);

@@ -5,6 +5,7 @@
 #include <memory>
 #include <vector>
 #include <unordered_map>
+#include <unordered_set>
 #include "rowl/render/font_renderer.hpp"
 
 struct SDL_Window;
@@ -158,6 +159,7 @@ public:
 
     SDL_Texture* loadTexture(const std::string& filename);
     void clearTextureCache();
+    size_t getNegativeTextureCacheSize() const { return m_missingTextureCache.size(); }
     FontRenderer* getFontRenderer() const { return m_fontRenderer.get(); }
     void reloadFonts();
 
@@ -181,6 +183,7 @@ private:
     SDL_Renderer* m_sdlRenderer       = nullptr;
     SDL_Surface*  m_offscreenSurface  = nullptr;
     std::unordered_map<std::string, SDL_Texture*> m_textureCache;
+    std::unordered_set<std::string> m_missingTextureCache;
     std::unique_ptr<FontRenderer> m_fontRenderer;
     std::unordered_map<std::string, std::unique_ptr<FontRenderer>> m_buttonFontCache;
 

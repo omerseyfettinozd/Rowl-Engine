@@ -1051,8 +1051,19 @@ void test_hardening_and_reliability() {
             (void)t1; (void)t2;
             win.clearTextureCache(); // Must safely free unique textures only once
             win.loadTexture("Woman.png");
+            if (win.loadTexture("missing_texture_for_negative_cache.png") != nullptr ||
+                win.loadTexture("missing_texture_for_negative_cache.png") != nullptr ||
+                win.getNegativeTextureCacheSize() != 1) {
+                std::cerr << "Texture negative cache did not retain a missing asset lookup" << std::endl;
+                exit(1);
+            }
+            win.clearTextureCache();
+            if (win.getNegativeTextureCacheSize() != 0) {
+                std::cerr << "Texture negative cache was not cleared with the texture cache" << std::endl;
+                exit(1);
+            }
             win.shutdown();          // Must safely free unique textures only once
-            TEST_PASS("Texture Cache Double-Free Prevention & Unique Teardown");
+            TEST_PASS("Texture Cache Unique Teardown and Missing-Asset Negative Cache");
         }
     }
 
