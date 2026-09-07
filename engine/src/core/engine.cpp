@@ -303,9 +303,11 @@ void Engine::updateActiveScene(
     m_hasBackground = !background.empty();
     m_hasDialogueBox = !dialogue.empty() || !speaker.empty();
 
-    if (!speaker.empty())    m_activeSpeaker    = speaker;
-    if (!dialogue.empty())   m_activeDialogue   = dialogue;
-    if (!background.empty()) m_activeBackground = background;
+    // Empty values are meaningful: switching to a silent/blank frame must not
+    // leak text or assets from the previously active node.
+    m_activeSpeaker    = speaker;
+    m_activeDialogue   = dialogue;
+    m_activeBackground = background;
     m_activeBackgroundX      = bgX;
     m_activeBackgroundY      = bgY;
     m_activeBackgroundWidth  = bgW;
@@ -354,6 +356,11 @@ void Engine::updateSceneFromComponents(const std::string& componentsJson) {
         m_activeCharacters.clear();
         m_activeDialogues.clear();
         m_activeChoiceButtons.clear();
+        m_activeSpeaker.clear();
+        m_activeDialogue.clear();
+        m_activeBackground.clear();
+        m_activeCharacter.clear();
+        m_activeDialogueData = {};
         m_hasBackground = false;
         m_hasDialogueBox = false;
 
@@ -681,24 +688,28 @@ void Engine::loadActiveStoryFile() {
                     uint64_t nodeId = data.value("node_id", static_cast<uint64_t>(0));
                     if (nodeId != 0) m_currentNodeId = nodeId;
 
-                    updateActiveScene(
-                        data.value("speaker",          std::string{}),
-                        data.value("dialogue",         std::string{}),
-                        data.value("background",       std::string{}),
-                        data.value("background_x",     0.0f),
-                        data.value("background_y",     0.0f),
-                        data.value("background_width",  1920.0f),
-                        data.value("background_height", 1080.0f),
-                        data.value("character",        std::string{}),
-                        data.value("character_x",      1440.0f),
-                        data.value("character_y",      340.0f),
-                        data.value("character_width",  360.0f),
-                        data.value("character_height", 540.0f),
-                        data.value("dialogue_box_x",   80.0f),
-                        data.value("dialogue_box_y",   860.0f),
-                        data.value("dialogue_box_width",1760.0f),
-                        data.value("dialogue_box_height",180.0f)
-                    );
+                    if (data.contains("components") && data["components"].is_array()) {
+                        updateSceneFromComponents(data["components"].dump());
+                    } else {
+                        updateActiveScene(
+                            data.value("speaker",          std::string{}),
+                            data.value("dialogue",         std::string{}),
+                            data.value("background",       std::string{}),
+                            data.value("background_x",     0.0f),
+                            data.value("background_y",     0.0f),
+                            data.value("background_width",  1920.0f),
+                            data.value("background_height", 1080.0f),
+                            data.value("character",        std::string{}),
+                            data.value("character_x",      1440.0f),
+                            data.value("character_y",      340.0f),
+                            data.value("character_width",  360.0f),
+                            data.value("character_height", 540.0f),
+                            data.value("dialogue_box_x",   80.0f),
+                            data.value("dialogue_box_y",   860.0f),
+                            data.value("dialogue_box_width",1760.0f),
+                            data.value("dialogue_box_height",180.0f)
+                        );
+                    }
                     ROWL_LOG_INFO("Loaded active story node #" +
                                   std::to_string(m_currentNodeId) + " from: " + path);
                     return;

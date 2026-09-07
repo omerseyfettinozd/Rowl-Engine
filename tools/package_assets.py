@@ -2,7 +2,6 @@
 import os
 import sys
 import struct
-import zlib
 
 try:
     import zstandard as zstd
@@ -10,7 +9,17 @@ try:
 except ImportError:
     HAS_ZSTD = False
 
+def fnv1a64(data):
+    value = 14695981039346656037
+    for byte in data:
+        value ^= byte
+        value = (value * 1099511628211) & 0xffffffffffffffff
+    return value
+
+
 def pack_directory(input_dir, output_pkg):
+    input_dir = os.path.realpath(input_dir)
+    output_pkg = os.path.abspath(output_pkg)
     print(f"[Packer] Compressing assets from '{input_dir}' into '{output_pkg}'...")
 
     entries = []
@@ -21,8 +30,17 @@ def pack_directory(input_dir, output_pkg):
     for root, _, files in os.walk(input_dir):
         for f in files:
             full_path = os.path.join(root, f)
+            real_path = os.path.realpath(full_path)
             rel_path = os.path.relpath(full_path, input_dir).replace('\\', '/')
+            if os.path.commonpath((input_dir, real_path)) != input_dir:
+                print(f"[Packer] Skipping symlink outside asset root: {rel_path}")
+                continue
+            if os.path.abspath(full_path) == output_pkg:
+                continue
+            if rel_path.endswith(('.rowlpkg', '.tmp', '.gitkeep')):
+                continue
             file_list.append((full_path, rel_path))
+    file_list.sort(key=lambda item: item[1])
 
     header_size = 4 + 2 + 4 + 8 # 18 bytes
     current_offset = header_size
@@ -44,7 +62,7 @@ def pack_directory(input_dir, output_pkg):
 
         compressed_size = len(compressed_data)
         path_bytes = rel_path.encode('utf-8')
-        path_hash = zlib.crc32(path_bytes) & 0xffffffff
+        path_hash = fnv1a64(path_bytes)
 
         entries.append({
             'path_hash': path_hash,
@@ -82,10 +100,20 @@ def pack_directory(input_dir, output_pkg):
     file_count = len(entries)
     master_header = struct.pack('<4sHIQ', b'ROWL', 1, file_count, index_offset)
 
-    with open(output_pkg, 'wb') as out_f:
-        out_f.write(master_header)
-        out_f.write(payload_bytes)
-        out_f.write(index_bytes)
+    output_dir = os.path.dirname(output_pkg) or '.'
+    os.makedirs(output_dir, exist_ok=True)
+    temporary_pkg = f"{output_pkg}.tmp-{os.getpid()}"
+    try:
+        with open(temporary_pkg, 'wb') as out_f:
+            out_f.write(master_header)
+            out_f.write(payload_bytes)
+            out_f.write(index_bytes)
+            out_f.flush()
+            os.fsync(out_f.fileno())
+        os.replace(temporary_pkg, output_pkg)
+    finally:
+        if os.path.exists(temporary_pkg):
+            os.unlink(temporary_pkg)
 
     print(f"[Packer] Package creation successful! Total files: {file_count}, Output size: {os.path.getsize(output_pkg)} bytes")
 

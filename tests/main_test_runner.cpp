@@ -10,6 +10,8 @@
 #include <string>
 #include <vector>
 #include <cmath>
+#include <chrono>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <SDL3/SDL.h>
@@ -20,6 +22,7 @@
 #include "rowl/scripting/lua_sandbox.hpp"
 #include "rowl/platform/mobile_input.hpp"
 #include "rowl/vfs/vfs.hpp"
+#include "rowl/vfs/rowlpkg_reader.hpp"
 #include "rowl/core/engine.hpp"
 #include "rowl/scene/scene.hpp"
 #include "rowl/scene/game_object.hpp"
@@ -221,8 +224,66 @@ void test_mobile_input() {
     TEST_PASS("SDL3 Touch Coordinate Normalization to 1920x1080 Canvas");
 }
 
+void test_vfs_security() {
+    TEST_SECTION("VFS Isolation & Package Validation");
+
+    const auto uniqueSuffix = std::to_string(
+        std::chrono::high_resolution_clock::now().time_since_epoch().count());
+    const auto testRoot = std::filesystem::temp_directory_path() /
+        ("rowl_vfs_security_" + uniqueSuffix);
+    const auto mountRoot = testRoot / "project";
+    std::filesystem::create_directories(mountRoot);
+
+    {
+        std::ofstream(mountRoot / "inside.txt") << "inside";
+        std::ofstream(testRoot / "outside.txt") << "outside";
+    }
+
+    Rowl::VFS::LooseDirectorySource source(mountRoot.string());
+    if (!source.exists("inside.txt") || source.read("inside.txt").empty()) {
+        std::cerr << "VFS failed to read a valid in-root asset" << std::endl;
+        exit(1);
+    }
+    if (source.exists("../outside.txt") || !source.read("../outside.txt").empty()) {
+        std::cerr << "VFS allowed a parent-directory traversal" << std::endl;
+        exit(1);
+    }
+    TEST_PASS("Loose-directory mounts reject parent traversal");
+
+    const auto malformedPackage = testRoot / "malformed.rowlpkg";
+    {
+        Rowl::VFS::RowlPkgHeader header{{'R', 'O', 'W', 'L'}, 1, 0, 4096};
+        std::ofstream output(malformedPackage, std::ios::binary);
+        output.write(reinterpret_cast<const char*>(&header), sizeof(header));
+    }
+    Rowl::VFS::RowlPkgDataSource package(malformedPackage.string());
+    if (package.isValid()) {
+        std::cerr << "Package with out-of-bounds index was accepted" << std::endl;
+        exit(1);
+    }
+    TEST_PASS("Package reader rejects out-of-bounds index offsets");
+
+    std::filesystem::remove_all(testRoot);
+}
+
 void test_native_c_api() {
     TEST_SECTION("Native C-API & Full Render Loop");
+
+    // The ABI must be defensive because this is called through P/Invoke.
+    // Invalid handles and malformed editor data must never unwind into .NET.
+    uint32_t nullWidth = 99;
+    uint32_t nullHeight = 99;
+    if (RowlEngine_Init(nullptr, 1920, 1080, 0) != 0 ||
+        RowlEngine_IsRunning(nullptr) != 0 ||
+        RowlEngine_GetPixelBuffer(nullptr, &nullWidth, &nullHeight) != nullptr ||
+        nullWidth != 0 || nullHeight != 0 ||
+        std::strlen(RowlEngine_GetSpeaker(nullptr)) != 0 ||
+        std::strlen(RowlEngine_GetDialogue(nullptr)) != 0 ||
+        RowlEngine_GetCurrentNodeId(nullptr) != 0) {
+        std::cerr << "C API null-handle fallback contract failed" << std::endl;
+        exit(1);
+    }
+    TEST_PASS("C-API Null-Handle Fallback Contract");
 
     RowlEngineHandle handle = RowlEngine_Create();
     if (!handle) exit(1);
@@ -244,6 +305,16 @@ void test_native_c_api() {
     RowlEngine_UpdateSceneFromJson(handle, compJson);
     TEST_PASS("RowlEngine_UpdateSceneFromJson (Multi-Character + Multi-Line Dialogue)");
 
+    // Invalid JSON is user-editable input. It must be contained inside the
+    // native boundary and leave the last valid scene usable.
+    RowlEngine_UpdateSceneFromJson(handle, "{ definitely-not-json");
+    if (std::strlen(RowlEngine_GetSpeaker(handle)) == 0 ||
+        std::strlen(RowlEngine_GetDialogue(handle)) == 0) {
+        std::cerr << "Malformed component JSON invalidated the active scene" << std::endl;
+        exit(1);
+    }
+    TEST_PASS("C-API Malformed JSON Containment");
+
     // Multi-Dialogue Box Test (Two Simultaneous Chat Bubbles in Game Mode)
     const char* multiDlgJson = R"([
         {"type":"background","id":"b1","enabled":true,"data":{"texture":"Woman.png","x":0,"y":0,"width":1920,"height":1080,"scale":1}},
@@ -256,6 +327,18 @@ void test_native_c_api() {
         exit(1);
     }
     TEST_PASS("RowlEngine_UpdateSceneFromJson (Simultaneous Multi-Dialogue Boxes)");
+
+    // Empty frames must clear legacy getters instead of leaking the previous
+    // node's speaker/dialogue into save state or editor synchronization.
+    RowlEngine_UpdateSceneFromJson(handle, "[]");
+    if (std::strlen(RowlEngine_GetSpeaker(handle)) != 0 ||
+        std::strlen(RowlEngine_GetDialogue(handle)) != 0 ||
+        !Rowl::Core::Engine::instance().getActiveDialogues().empty()) {
+        std::cerr << "Empty component scene retained stale dialogue state" << std::endl;
+        exit(1);
+    }
+    RowlEngine_UpdateSceneFromJson(handle, multiDlgJson);
+    TEST_PASS("Empty Component Scene Clears Previous Dialogue State");
 
     // Execute 30 frames of multi-dialogue step
     for (int i = 0; i < 30; ++i) {
@@ -523,6 +606,7 @@ int main() {
     test_audio_engine();
     test_lua_sandbox();
     test_mobile_input();
+    test_vfs_security();
     test_native_c_api();
     test_game_object_component_system();
 

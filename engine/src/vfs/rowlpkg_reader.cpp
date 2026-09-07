@@ -2,6 +2,7 @@
 #include "rowl/core/logger.hpp"
 #include <zstd.h>
 #include <cstring>
+#include <filesystem>
 #include <mutex>
 
 namespace Rowl::VFS {
@@ -24,6 +25,13 @@ RowlPkgDataSource::~RowlPkgDataSource() {
 }
 
 bool RowlPkgDataSource::loadIndexTable() {
+    m_fileStream.seekg(0, std::ios::end);
+    const auto archiveEnd = m_fileStream.tellg();
+    if (archiveEnd < static_cast<std::streamoff>(sizeof(RowlPkgHeader))) {
+        ROWL_LOG_ERROR("Package is smaller than its header: " + m_filepath);
+        return false;
+    }
+    const auto archiveSize = static_cast<uint64_t>(archiveEnd);
     m_fileStream.seekg(0, std::ios::beg);
 
     RowlPkgHeader header;
@@ -45,7 +53,7 @@ bool RowlPkgDataSource::loadIndexTable() {
         return false;
     }
 
-    if (header.indexOffset > 1000000000ULL) {  // Sanity check
+    if (header.indexOffset > archiveSize) {
         ROWL_LOG_ERROR("Package index offset suspiciously large: " + std::to_string(header.indexOffset));
         return false;
     }
@@ -79,9 +87,21 @@ bool RowlPkgDataSource::loadIndexTable() {
             return false;
         }
 
+        const std::filesystem::path normalizedPath = std::filesystem::path(relPath).lexically_normal();
+        if (normalizedPath.is_absolute() || normalizedPath.empty() ||
+            normalizedPath.begin() == normalizedPath.end() || *normalizedPath.begin() == "..") {
+            ROWL_LOG_ERROR("Unsafe path in package entry: " + relPath);
+            return false;
+        }
+
         // Validate sizes
         if (rawEntry.compressedSize > 1000000000ULL || rawEntry.uncompressedSize > 1000000000ULL) {
             ROWL_LOG_ERROR("Package entry size too large, possible corruption");
+            return false;
+        }
+        if (rawEntry.offset > archiveSize ||
+            rawEntry.compressedSize > archiveSize - rawEntry.offset) {
+            ROWL_LOG_ERROR("Package entry points outside archive: " + relPath);
             return false;
         }
 
@@ -127,7 +147,7 @@ std::vector<uint8_t> RowlPkgDataSource::read(const std::string& path) {
     std::vector<uint8_t> compressedBuffer(entry.compressedSize);
     m_fileStream.read(reinterpret_cast<char*>(compressedBuffer.data()), entry.compressedSize);
 
-    if (!m_fileStream.good()) {
+    if (m_fileStream.gcount() != static_cast<std::streamsize>(entry.compressedSize)) {
         ROWL_LOG_ERROR("Failed to read compressed data for: " + path);
         return {};
     }
@@ -145,6 +165,10 @@ std::vector<uint8_t> RowlPkgDataSource::read(const std::string& path) {
 
         if (ZSTD_isError(result)) {
             ROWL_LOG_ERROR("Zstd decompression failed for asset '" + path + "': " + std::string(ZSTD_getErrorName(result)));
+            return {};
+        }
+        if (result != entry.uncompressedSize) {
+            ROWL_LOG_ERROR("Zstd output size mismatch for asset '" + path + "'");
             return {};
         }
 

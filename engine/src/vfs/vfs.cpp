@@ -4,30 +4,61 @@
 #include <fstream>
 #include <filesystem>
 #include <algorithm>
+#include <optional>
 
 namespace Rowl::VFS {
 
 namespace fs = std::filesystem;
 
+namespace {
+
+std::optional<fs::path> resolveInsideRoot(const std::string& physicalRoot,
+                                          const std::string& relativePath) {
+    if (relativePath.empty() || relativePath.find('\0') != std::string::npos) return std::nullopt;
+
+    fs::path requested(relativePath);
+    if (requested.is_absolute() || requested.has_root_name() || requested.has_root_directory()) {
+        return std::nullopt;
+    }
+
+    std::error_code error;
+    fs::path root = fs::weakly_canonical(fs::path(physicalRoot), error);
+    if (error) return std::nullopt;
+    fs::path candidate = fs::weakly_canonical(root / requested, error);
+    if (error) return std::nullopt;
+
+    fs::path relative = candidate.lexically_relative(root);
+    if (relative.empty() || relative.is_absolute()) return std::nullopt;
+    const auto first = relative.begin();
+    if (first != relative.end() && *first == "..") return std::nullopt;
+    return candidate;
+}
+
+} // namespace
+
 LooseDirectorySource::LooseDirectorySource(std::string physicalPath)
     : m_physicalPath(std::move(physicalPath)) {}
 
 bool LooseDirectorySource::exists(const std::string& path) {
-    fs::path fullPath = fs::path(m_physicalPath) / path;
-    return fs::exists(fullPath) && fs::is_regular_file(fullPath);
+    const auto fullPath = resolveInsideRoot(m_physicalPath, path);
+    return fullPath && fs::exists(*fullPath) && fs::is_regular_file(*fullPath);
 }
 
 std::vector<uint8_t> LooseDirectorySource::read(const std::string& path) {
-    fs::path fullPath = fs::path(m_physicalPath) / path;
-    std::ifstream file(fullPath, std::ios::binary | std::ios::ate);
+    const auto fullPath = resolveInsideRoot(m_physicalPath, path);
+    if (!fullPath) {
+        ROWL_LOG_WARN("VFS rejected path outside mount root: " + path);
+        return {};
+    }
+    std::ifstream file(*fullPath, std::ios::binary | std::ios::ate);
     if (!file.is_open()) {
-        ROWL_LOG_WARN("Failed to open file: " + fullPath.string());
+        ROWL_LOG_WARN("Failed to open file: " + fullPath->string());
         return {};
     }
 
     std::streamsize size = file.tellg();
     if (size < 0) {
-        ROWL_LOG_WARN("Failed to determine file size: " + fullPath.string());
+        ROWL_LOG_WARN("Failed to determine file size: " + fullPath->string());
         return {};
     }
 
@@ -35,7 +66,7 @@ std::vector<uint8_t> LooseDirectorySource::read(const std::string& path) {
 
     std::vector<uint8_t> buffer(size);
     if (!file.read(reinterpret_cast<char*>(buffer.data()), size)) {
-        ROWL_LOG_WARN("Failed to read file: " + fullPath.string());
+        ROWL_LOG_WARN("Failed to read file: " + fullPath->string());
         return {};
     }
     return buffer;
@@ -53,9 +84,7 @@ void VFSManager::initialize() {
 
     std::vector<fs::path> candidateRoots = {
         fs::current_path() / "Assets",
-        fs::current_path(),
-        fs::current_path() / ".." / "Assets",
-        fs::current_path() / ".."
+        fs::current_path()
     };
 
     for (const auto& root : candidateRoots) {
