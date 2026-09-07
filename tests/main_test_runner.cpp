@@ -10,6 +10,7 @@
 #include <string>
 #include <vector>
 #include <cmath>
+#include <limits>
 #include <chrono>
 #include <cstring>
 #include <filesystem>
@@ -552,6 +553,15 @@ void test_native_c_api() {
     int initRes = RowlEngine_Init(handle, 1920, 1080, 0);
     if (initRes != 1 || RowlEngine_IsRunning(handle) != 1) exit(1);
     TEST_PASS("RowlEngine_Create & Init (1920x1080 Offscreen)");
+
+    RowlEngine_Step(handle, std::numeric_limits<float>::quiet_NaN());
+    RowlEngine_Step(handle, -1.0f);
+    RowlEngine_Step(handle, 10.0f);
+    if (RowlEngine_IsRunning(handle) != 1) {
+        std::cerr << "C-API frame delta normalization destabilized the engine" << std::endl;
+        exit(1);
+    }
+    TEST_PASS("C-API Frame Delta NaN, Negative, and Spike Containment");
 
     // Component JSON Scene Push
     const char* compJson = R"([

@@ -7,6 +7,7 @@
 #include "rowl/render/aspect_guardian.hpp"
 #include <chrono>
 #include <thread>
+#include <cmath>
 #include <fstream>
 #include <filesystem>
 #include <nlohmann/json.hpp>
@@ -880,6 +881,14 @@ void Engine::loadActiveStoryFile() {
 
 void Engine::step(float deltaTime) {
     if (!m_window) return;
+
+    // C API hosts can pass arbitrary frame durations. Keep time-dependent
+    // systems deterministic and avoid poisoning typewriter state with NaN.
+    if (!std::isfinite(deltaTime) || deltaTime < 0.0f) {
+        deltaTime = 0.0f;
+    } else if (deltaTime > 0.25f) {
+        deltaTime = 0.25f;
+    }
 
     bool shouldQuit = false;
     m_window->pollEvents(shouldQuit);
