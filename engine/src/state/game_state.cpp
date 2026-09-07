@@ -4,8 +4,51 @@
 #include <filesystem>
 #include <fstream>
 #include <chrono>
+#include <system_error>
+
+#if defined(_WIN32)
+#define NOMINMAX
+#include <windows.h>
+#endif
 
 namespace Rowl::State {
+
+namespace {
+
+constexpr uint32_t kSaveFormatVersion = 1;
+constexpr int32_t kMinSaveSlot = 0;
+constexpr int32_t kMaxSaveSlot = 99;
+constexpr uintmax_t kMaxSaveFileBytes = 4 * 1024 * 1024;
+constexpr size_t kMaxSaveVariables = 10'000;
+constexpr size_t kMaxVariableKeyBytes = 256;
+constexpr size_t kMaxVariableValueBytes = 64 * 1024;
+
+bool isValidSlotIndex(int32_t slotIndex) {
+    return slotIndex >= kMinSaveSlot && slotIndex <= kMaxSaveSlot;
+}
+
+std::filesystem::path savePathForSlot(int32_t slotIndex, const std::string& saveDir) {
+    const std::filesystem::path directory(saveDir.empty() ? "saves" : saveDir);
+    return directory / ("save_slot_" + std::to_string(slotIndex) + ".json");
+}
+
+bool replaceFileAtomically(const std::filesystem::path& temporaryPath,
+                           const std::filesystem::path& finalPath,
+                           std::error_code& error) {
+#if defined(_WIN32)
+    if (MoveFileExW(temporaryPath.c_str(), finalPath.c_str(),
+                    MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+        return true;
+    }
+    error = std::error_code(static_cast<int>(GetLastError()), std::system_category());
+    return false;
+#else
+    std::filesystem::rename(temporaryPath, finalPath, error);
+    return !error;
+#endif
+}
+
+} // namespace
 
 std::string GameState::getVariable(const std::string& key, const std::string& defaultValue) const {
     if (!variables) return defaultValue;
@@ -88,7 +131,7 @@ std::shared_ptr<const GameState> GameState::rewind(
 
 std::string GameState::serializeJson() const {
     nlohmann::json j;
-    j["version"] = 1;
+    j["version"] = kSaveFormatVersion;
     j["step_id"] = stepId;
     j["active_node_id"] = activeNodeId;
     j["typewriter_index"] = typewriterIndex;
@@ -110,9 +153,19 @@ std::string GameState::serializeJson() const {
 }
 
 std::shared_ptr<const GameState> GameState::deserializeJson(const std::string& jsonStr) {
-    if (jsonStr.empty()) return nullptr;
+    if (jsonStr.empty() || jsonStr.size() > kMaxSaveFileBytes) return nullptr;
     try {
         auto j = nlohmann::json::parse(jsonStr);
+        if (!j.is_object()) {
+            ROWL_LOG_ERROR("GameState JSON root must be an object");
+            return nullptr;
+        }
+        const auto version = j.value("version", kSaveFormatVersion);
+        if (version != kSaveFormatVersion) {
+            ROWL_LOG_ERROR("Unsupported GameState save version: " + std::to_string(version));
+            return nullptr;
+        }
+
         auto state = std::make_shared<GameState>();
         state->stepId = j.value("step_id", static_cast<uint64_t>(1));
         state->activeNodeId = j.value("active_node_id", static_cast<uint64_t>(101));
@@ -120,15 +173,37 @@ std::shared_ptr<const GameState> GameState::deserializeJson(const std::string& j
         state->activeBackground = j.value("active_background", "bg_beach_sunset.png");
         state->dspFilter = j.value("dsp_filter", "Normal");
 
+        if (state->stepId == 0 || state->activeNodeId == 0) {
+            ROWL_LOG_ERROR("GameState JSON contains an invalid step or node identifier");
+            return nullptr;
+        }
+
         auto varMap = std::make_shared<VariableMap>();
         if (j.contains("variables") && j["variables"].is_object()) {
-            for (auto& el : j["variables"].items()) {
-                if (el.value().is_string()) {
-                    varMap->data[el.key()] = el.value().get<std::string>();
-                } else {
-                    varMap->data[el.key()] = el.value().dump();
-                }
+            if (j["variables"].size() > kMaxSaveVariables) {
+                ROWL_LOG_ERROR("GameState JSON has too many variables");
+                return nullptr;
             }
+            for (auto& el : j["variables"].items()) {
+                if (el.key().empty() || el.key().size() > kMaxVariableKeyBytes) {
+                    ROWL_LOG_ERROR("GameState JSON contains an invalid variable key");
+                    return nullptr;
+                }
+                std::string value;
+                if (el.value().is_string()) {
+                    value = el.value().get<std::string>();
+                } else {
+                    value = el.value().dump();
+                }
+                if (value.size() > kMaxVariableValueBytes) {
+                    ROWL_LOG_ERROR("GameState JSON contains an oversized variable value");
+                    return nullptr;
+                }
+                varMap->data[el.key()] = std::move(value);
+            }
+        } else if (j.contains("variables")) {
+            ROWL_LOG_ERROR("GameState JSON variables must be an object");
+            return nullptr;
         }
         state->variables = varMap;
         state->previousState = nullptr;
@@ -140,17 +215,17 @@ std::shared_ptr<const GameState> GameState::deserializeJson(const std::string& j
 }
 
 bool GameState::saveToSlot(const std::shared_ptr<const GameState>& state, int32_t slotIndex, const std::string& saveDir) {
-    if (!state) {
-        ROWL_LOG_ERROR("Cannot save null GameState to slot #" + std::to_string(slotIndex));
+    if (!state || !isValidSlotIndex(slotIndex)) {
+        ROWL_LOG_ERROR("Cannot save GameState to invalid or null slot #" + std::to_string(slotIndex));
         return false;
     }
     try {
         namespace fs = std::filesystem;
-        fs::path dir(saveDir.empty() ? "saves" : saveDir);
+        fs::path finalPath = savePathForSlot(slotIndex, saveDir);
+        fs::path dir = finalPath.parent_path();
         fs::create_directories(dir);
-
-        fs::path finalPath = dir / ("save_slot_" + std::to_string(slotIndex) + ".json");
-        fs::path tmpPath = dir / ("save_slot_" + std::to_string(slotIndex) + ".json.tmp");
+        fs::path tmpPath = finalPath;
+        tmpPath += ".tmp";
 
         std::string jsonStr = state->serializeJson();
         {
@@ -161,9 +236,20 @@ bool GameState::saveToSlot(const std::shared_ptr<const GameState>& state, int32_
             }
             ofs << jsonStr;
             ofs.flush();
+            if (!ofs.good()) {
+                ROWL_LOG_ERROR("Failed to write complete save slot temp file: " + tmpPath.string());
+                ofs.close();
+                fs::remove(tmpPath);
+                return false;
+            }
         }
 
-        fs::rename(tmpPath, finalPath);
+        std::error_code renameError;
+        if (!replaceFileAtomically(tmpPath, finalPath, renameError)) {
+            fs::remove(tmpPath);
+            ROWL_LOG_ERROR("Failed to atomically replace save slot file: " + renameError.message());
+            return false;
+        }
         ROWL_LOG_INFO("Successfully saved GameState to Slot #" + std::to_string(slotIndex) + " (" + finalPath.string() + ")");
         return true;
     } catch (const std::exception& e) {
@@ -173,13 +259,19 @@ bool GameState::saveToSlot(const std::shared_ptr<const GameState>& state, int32_
 }
 
 std::shared_ptr<const GameState> GameState::loadFromSlot(int32_t slotIndex, const std::string& saveDir) {
+    if (!isValidSlotIndex(slotIndex)) return nullptr;
     try {
         namespace fs = std::filesystem;
-        fs::path dir(saveDir.empty() ? "saves" : saveDir);
-        fs::path filePath = dir / ("save_slot_" + std::to_string(slotIndex) + ".json");
+        fs::path filePath = savePathForSlot(slotIndex, saveDir);
 
         if (!fs::exists(filePath) || !fs::is_regular_file(filePath)) {
             ROWL_LOG_WARN("Save slot #" + std::to_string(slotIndex) + " does not exist at: " + filePath.string());
+            return nullptr;
+        }
+        std::error_code sizeError;
+        const auto fileSize = fs::file_size(filePath, sizeError);
+        if (sizeError || fileSize > kMaxSaveFileBytes) {
+            ROWL_LOG_ERROR("Save slot file is too large or unreadable: " + filePath.string());
             return nullptr;
         }
 
@@ -203,17 +295,17 @@ std::shared_ptr<const GameState> GameState::loadFromSlot(int32_t slotIndex, cons
 }
 
 bool GameState::hasSlot(int32_t slotIndex, const std::string& saveDir) {
+    if (!isValidSlotIndex(slotIndex)) return false;
     namespace fs = std::filesystem;
-    fs::path dir(saveDir.empty() ? "saves" : saveDir);
-    fs::path filePath = dir / ("save_slot_" + std::to_string(slotIndex) + ".json");
+    fs::path filePath = savePathForSlot(slotIndex, saveDir);
     return fs::exists(filePath) && fs::is_regular_file(filePath);
 }
 
 bool GameState::deleteSlot(int32_t slotIndex, const std::string& saveDir) {
+    if (!isValidSlotIndex(slotIndex)) return false;
     try {
         namespace fs = std::filesystem;
-        fs::path dir(saveDir.empty() ? "saves" : saveDir);
-        fs::path filePath = dir / ("save_slot_" + std::to_string(slotIndex) + ".json");
+        fs::path filePath = savePathForSlot(slotIndex, saveDir);
         if (fs::exists(filePath)) {
             return fs::remove(filePath);
         }
