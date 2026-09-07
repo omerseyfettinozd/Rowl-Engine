@@ -914,7 +914,19 @@ void test_native_c_api() {
 
     RowlEngine_Shutdown(handle);
     RowlEngine_Destroy(handle);
+    uint32_t staleWidth = 123;
+    uint32_t staleHeight = 456;
+    RowlEngine_Step(handle, 0.016f);
+    RowlEngine_Destroy(handle); // Double destroy must be harmless.
+    if (RowlEngine_IsRunning(handle) != 0 || RowlEngine_GetCurrentNodeId(handle) != 0 ||
+        RowlEngine_GetPixelBuffer(handle, &staleWidth, &staleHeight) != nullptr ||
+        staleWidth != 0 || staleHeight != 0 ||
+        RowlEngine_IsRunning(reinterpret_cast<RowlEngineHandle>(static_cast<uintptr_t>(1))) != 0) {
+        std::cerr << "C-API accepted a stale or unknown engine handle" << std::endl;
+        exit(1);
+    }
     TEST_PASS("RowlEngine_Shutdown & Destroy (Clean Resource Teardown)");
+    TEST_PASS("C-API Stale and Unknown Handle Containment");
 }
 
 class VelocityComponent : public Rowl::Scene::Component {

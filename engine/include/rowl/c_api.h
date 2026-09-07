@@ -44,6 +44,8 @@ ROWL_API RowlEngineHandle RowlEngine_Create(void);
 
 /**
  * Frees the engine instance. Calls Shutdown() internally if needed.
+ * Repeated destroy calls and calls made with an already-destroyed handle are
+ * ignored safely by the native boundary.
  */
 ROWL_API void RowlEngine_Destroy(RowlEngineHandle handle);
 

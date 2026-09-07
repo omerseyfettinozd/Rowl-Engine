@@ -17,9 +17,34 @@
 
 #include <cstring>
 #include <exception>
+#include <memory>
+#include <mutex>
+#include <unordered_set>
 #include <utility>
 
 /* ── Internal helper ─────────────────────────────────────────────────────── */
+namespace {
+
+std::mutex g_handleMutex;
+std::unordered_set<RowlEngineHandle> g_liveHandles;
+
+bool isLiveHandle(RowlEngineHandle handle) noexcept {
+    if (!handle) return false;
+    std::lock_guard<std::mutex> lock(g_handleMutex);
+    return g_liveHandles.contains(handle);
+}
+
+Rowl::Core::Engine* takeLiveHandle(RowlEngineHandle handle) noexcept {
+    if (!handle) return nullptr;
+    std::lock_guard<std::mutex> lock(g_handleMutex);
+    const auto it = g_liveHandles.find(handle);
+    if (it == g_liveHandles.end()) return nullptr;
+    g_liveHandles.erase(it);
+    return static_cast<Rowl::Core::Engine*>(handle);
+}
+
+} // namespace
+
 static inline Rowl::Core::Engine* toEngine(RowlEngineHandle h) {
     return static_cast<Rowl::Core::Engine*>(h);
 }
@@ -49,19 +74,25 @@ static void invokeNoexcept(Fn&& operation) noexcept {
 extern "C" {
 
 RowlEngineHandle RowlEngine_Create(void) {
-    return invokeNoexcept<RowlEngineHandle>([] { return new Rowl::Core::Engine(); }, nullptr);
+    return invokeNoexcept<RowlEngineHandle>([] {
+        auto engine = std::make_unique<Rowl::Core::Engine>();
+        std::lock_guard<std::mutex> lock(g_handleMutex);
+        g_liveHandles.insert(engine.get());
+        return static_cast<RowlEngineHandle>(engine.release());
+    }, nullptr);
 }
 
 void RowlEngine_Destroy(RowlEngineHandle handle) {
-    if (!handle) return;
-    invokeNoexcept([&] { delete toEngine(handle); });
+    auto* engine = takeLiveHandle(handle);
+    if (!engine) return;
+    invokeNoexcept([&] { delete engine; });
 }
 
 int RowlEngine_Init(RowlEngineHandle handle,
                      uint32_t virtualWidth,
                      uint32_t virtualHeight,
                      int vsync) {
-    if (!handle) return 0;
+    if (!isLiveHandle(handle)) return 0;
 
     return invokeNoexcept<int>([&] {
         Rowl::Core::EngineConfig cfg;
@@ -79,7 +110,7 @@ int RowlEngine_InitStandalone(RowlEngineHandle handle,
                                uint32_t virtualWidth,
                                uint32_t virtualHeight,
                                int vsync) {
-    if (!handle) return 0;
+    if (!isLiveHandle(handle)) return 0;
 
     return invokeNoexcept<int>([&] {
         Rowl::Core::EngineConfig cfg;
@@ -93,22 +124,22 @@ int RowlEngine_InitStandalone(RowlEngineHandle handle,
 }
 
 void RowlEngine_Run(RowlEngineHandle handle) {
-    if (!handle) return;
+    if (!isLiveHandle(handle)) return;
     invokeNoexcept([&] { toEngine(handle)->run(); });
 }
 
 void RowlEngine_Step(RowlEngineHandle handle, float deltaTime) {
-    if (!handle) return;
+    if (!isLiveHandle(handle)) return;
     invokeNoexcept([&] { toEngine(handle)->step(deltaTime); });
 }
 
 void RowlEngine_Shutdown(RowlEngineHandle handle) {
-    if (!handle) return;
+    if (!isLiveHandle(handle)) return;
     invokeNoexcept([&] { toEngine(handle)->shutdown(); });
 }
 
 int RowlEngine_IsRunning(RowlEngineHandle handle) {
-    if (!handle) return 0;
+    if (!isLiveHandle(handle)) return 0;
     return invokeNoexcept<int>([&] { return toEngine(handle)->isRunning() ? 1 : 0; }, 0);
 }
 
@@ -118,14 +149,14 @@ void RowlEngine_SetExternalWindowHandle(RowlEngineHandle handle,
                                          void* nativeWindowHandle,
                                          uint32_t width,
                                          uint32_t height) {
-    if (!handle) return;
+    if (!isLiveHandle(handle)) return;
     invokeNoexcept([&] { toEngine(handle)->setExternalWindowHandle(nativeWindowHandle, width, height); });
 }
 
 void RowlEngine_ResizeViewport(RowlEngineHandle handle,
                                 uint32_t newWidth,
                                 uint32_t newHeight) {
-    if (!handle) return;
+    if (!isLiveHandle(handle)) return;
     invokeNoexcept([&] {
         auto* win = toEngine(handle)->getWindow();
         if (win) win->resizeViewport(newWidth, newHeight);
@@ -135,7 +166,7 @@ void RowlEngine_ResizeViewport(RowlEngineHandle handle,
 /* ── Offscreen Framebuffer & Playback Control ────────────────────────────── */
 
 const uint8_t* RowlEngine_GetPixelBuffer(RowlEngineHandle handle, uint32_t* outW, uint32_t* outH) {
-    if (!handle) {
+    if (!isLiveHandle(handle)) {
         if (outW) *outW = 0;
         if (outH) *outH = 0;
         return nullptr;
@@ -144,12 +175,12 @@ const uint8_t* RowlEngine_GetPixelBuffer(RowlEngineHandle handle, uint32_t* outW
 }
 
 void RowlEngine_SetPlayState(RowlEngineHandle handle, int isPlaying) {
-    if (!handle) return;
+    if (!isLiveHandle(handle)) return;
     invokeNoexcept([&] { toEngine(handle)->setPlayState(isPlaying != 0); });
 }
 
 void RowlEngine_ResetToStartNode(RowlEngineHandle handle) {
-    if (!handle) return;
+    if (!isLiveHandle(handle)) return;
     invokeNoexcept([&] { toEngine(handle)->resetToStartNode(); });
 }
 
@@ -165,7 +196,7 @@ void RowlEngine_UpdateScene(
     float charX, float charY, float charW, float charH,
     float dlgX,  float dlgY,  float dlgW,  float dlgH)
 {
-    if (!handle) return;
+    if (!isLiveHandle(handle)) return;
     invokeNoexcept([&] { toEngine(handle)->updateActiveScene(
         speaker    ? speaker    : "",
         dialogue   ? dialogue   : "",
@@ -181,22 +212,21 @@ void RowlEngine_UpdateSceneFromJson(
     RowlEngineHandle handle,
     const char* componentsJson)
 {
-    if (!handle || !componentsJson) return;
+    if (!isLiveHandle(handle) || !componentsJson) return;
     invokeNoexcept([&] { toEngine(handle)->updateSceneFromComponents(componentsJson); });
 }
 
 void RowlEngine_LoadStoryGraph(RowlEngineHandle handle, const char* jsonPath) {
-    if (!handle || !jsonPath) return;
+    if (!isLiveHandle(handle) || !jsonPath) return;
     // Engine'in path'i geçici olarak override et ve graph'i yükle
     invokeNoexcept([&] { toEngine(handle)->loadStoryGraphFromPath(jsonPath); });
 }
 
 void RowlEngine_SetProjectDirectory(RowlEngineHandle handle, const char* projectRoot) {
-    if (!projectRoot || !*projectRoot) return;
+    if (!isLiveHandle(handle) || !projectRoot || !*projectRoot) return;
     invokeNoexcept([&] {
-    Rowl::VFS::VFSManager::instance().remountProject(projectRoot);
-    if (handle) {
         auto* engine = toEngine(handle);
+        Rowl::VFS::VFSManager::instance().remountProject(projectRoot);
         auto* win = engine->getWindow();
         if (win) {
             win->reloadFonts();
@@ -211,22 +241,21 @@ void RowlEngine_SetProjectDirectory(RowlEngineHandle handle, const char* project
                 engine->loadStoryGraphFromPath(altGraphPath);
             }
         }
-    }
     });
 }
 
 void RowlEngine_AdvanceNode(RowlEngineHandle handle, uint32_t choiceIndex) {
-    if (!handle) return;
+    if (!isLiveHandle(handle)) return;
     invokeNoexcept([&] { toEngine(handle)->advanceToNextNode(choiceIndex); });
 }
 
 int RowlEngine_SelectChoice(RowlEngineHandle handle, const char* optionId) {
-    if (!handle || !optionId || !*optionId) return 0;
+    if (!isLiveHandle(handle) || !optionId || !*optionId) return 0;
     return invokeNoexcept<int>([&] { return toEngine(handle)->advanceToChoice(optionId) ? 1 : 0; }, 0);
 }
 
 int RowlEngine_PointerDown(RowlEngineHandle handle, float x, float y) {
-    if (!handle) return 0;
+    if (!isLiveHandle(handle)) return 0;
     // Editor supplies 1920x1080 virtual coordinates; the engine's offscreen
     // surface is the same size, so the shared hit-test path remains canonical.
     return invokeNoexcept<int>([&] { return toEngine(handle)->handlePointerDown(x, y) ? 1 : 0; }, 0);
@@ -235,7 +264,7 @@ int RowlEngine_PointerDown(RowlEngineHandle handle, float x, float y) {
 /* ── State queries ───────────────────────────────────────────────────────── */
 
 const char* RowlEngine_GetSpeaker(RowlEngineHandle handle) {
-    if (!handle) return "";
+    if (!isLiveHandle(handle)) return "";
     // Returned pointer is valid until next step/update — owned by engine
     static thread_local std::string buf;
     return invokeNoexcept<const char*>([&] {
@@ -245,7 +274,7 @@ const char* RowlEngine_GetSpeaker(RowlEngineHandle handle) {
 }
 
 const char* RowlEngine_GetDialogue(RowlEngineHandle handle) {
-    if (!handle) return "";
+    if (!isLiveHandle(handle)) return "";
     static thread_local std::string buf;
     return invokeNoexcept<const char*>([&] {
         buf = toEngine(handle)->getActiveDialogue();
@@ -254,7 +283,7 @@ const char* RowlEngine_GetDialogue(RowlEngineHandle handle) {
 }
 
 uint64_t RowlEngine_GetCurrentNodeId(RowlEngineHandle handle) {
-    if (!handle) return 0;
+    if (!isLiveHandle(handle)) return 0;
     return invokeNoexcept<uint64_t>([&] { return toEngine(handle)->getCurrentNodeId(); }, 0);
 }
 
@@ -262,7 +291,7 @@ void RowlEngine_PlayAudio(RowlEngineHandle handle,
                           const char* assetPath,
                           int channelType,
                           int filterType) {
-    if (!handle || !assetPath) return;
+    if (!isLiveHandle(handle) || !assetPath) return;
     invokeNoexcept([&] {
         auto* audio = toEngine(handle)->getAudio();
         if (!audio) return;
@@ -278,7 +307,7 @@ void RowlEngine_PlayAudio(RowlEngineHandle handle,
 }
 
 void RowlEngine_StopBgm(RowlEngineHandle handle) {
-    if (!handle) return;
+    if (!isLiveHandle(handle)) return;
     invokeNoexcept([&] {
         auto* audio = toEngine(handle)->getAudio();
         if (audio) audio->stopBgm();
@@ -286,7 +315,7 @@ void RowlEngine_StopBgm(RowlEngineHandle handle) {
 }
 
 void RowlEngine_SetBgmVolume(RowlEngineHandle handle, float volume) {
-    if (!handle) return;
+    if (!isLiveHandle(handle)) return;
     invokeNoexcept([&] {
         auto* audio = toEngine(handle)->getAudio();
         if (audio) audio->setBgmVolume(volume);
@@ -294,7 +323,7 @@ void RowlEngine_SetBgmVolume(RowlEngineHandle handle, float volume) {
 }
 
 void RowlEngine_TriggerVoiceDucking(RowlEngineHandle handle, int isVoiceActive) {
-    if (!handle) return;
+    if (!isLiveHandle(handle)) return;
     invokeNoexcept([&] {
         auto* audio = toEngine(handle)->getAudio();
         if (audio) audio->triggerVoiceDucking(isVoiceActive != 0);
@@ -302,56 +331,56 @@ void RowlEngine_TriggerVoiceDucking(RowlEngineHandle handle, int isVoiceActive) 
 }
 
 int RowlEngine_SaveGameSlot(RowlEngineHandle handle, int32_t slotIndex) {
-    if (!handle) return 0;
+    if (!isLiveHandle(handle)) return 0;
     return invokeNoexcept<int>([&] {
         return toEngine(handle)->saveGameSlot(slotIndex) ? 1 : 0;
     }, 0);
 }
 
 int RowlEngine_LoadGameSlot(RowlEngineHandle handle, int32_t slotIndex) {
-    if (!handle) return 0;
+    if (!isLiveHandle(handle)) return 0;
     return invokeNoexcept<int>([&] {
         return toEngine(handle)->loadGameSlot(slotIndex) ? 1 : 0;
     }, 0);
 }
 
 int RowlEngine_HasSaveSlot(RowlEngineHandle handle, int32_t slotIndex) {
-    if (!handle) return 0;
+    if (!isLiveHandle(handle)) return 0;
     return invokeNoexcept<int>([&] {
         return toEngine(handle)->hasSaveSlot(slotIndex) ? 1 : 0;
     }, 0);
 }
 
 int RowlEngine_DeleteSaveSlot(RowlEngineHandle handle, int32_t slotIndex) {
-    if (!handle) return 0;
+    if (!isLiveHandle(handle)) return 0;
     return invokeNoexcept<int>([&] {
         return toEngine(handle)->deleteSaveSlot(slotIndex) ? 1 : 0;
     }, 0);
 }
 
 int RowlEngine_Rewind(RowlEngineHandle handle, uint32_t steps) {
-    if (!handle) return 0;
+    if (!isLiveHandle(handle)) return 0;
     return invokeNoexcept<int>([&] {
         return toEngine(handle)->rewind(steps) ? 1 : 0;
     }, 0);
 }
 
 uint64_t RowlEngine_GetCurrentStepId(RowlEngineHandle handle) {
-    if (!handle) return 0;
+    if (!isLiveHandle(handle)) return 0;
     return invokeNoexcept<uint64_t>([&] {
         return toEngine(handle)->getCurrentStepId();
     }, 0);
 }
 
 void RowlEngine_SetVariable(RowlEngineHandle handle, const char* key, const char* value) {
-    if (!handle || !key || !value) return;
+    if (!isLiveHandle(handle) || !key || !value) return;
     invokeNoexcept([&] {
         toEngine(handle)->setScriptVariable(key, value);
     });
 }
 
 const char* RowlEngine_GetVariable(RowlEngineHandle handle, const char* key) {
-    if (!handle || !key) return "";
+    if (!isLiveHandle(handle) || !key) return "";
     static thread_local std::string buf;
     return invokeNoexcept<const char*>([&] {
         buf = toEngine(handle)->getScriptVariable(key);
@@ -360,14 +389,14 @@ const char* RowlEngine_GetVariable(RowlEngineHandle handle, const char* key) {
 }
 
 int RowlEngine_EvaluateCondition(RowlEngineHandle handle, const char* conditionExpr) {
-    if (!handle || !conditionExpr) return 1;
+    if (!isLiveHandle(handle) || !conditionExpr) return 1;
     return invokeNoexcept<int>([&] {
         return toEngine(handle)->evaluateCondition(conditionExpr) ? 1 : 0;
     }, 1);
 }
 
 int RowlEngine_ExecuteScript(RowlEngineHandle handle, const char* scriptCode) {
-    if (!handle || !scriptCode) return 0;
+    if (!isLiveHandle(handle) || !scriptCode) return 0;
     return invokeNoexcept<int>([&] {
         return toEngine(handle)->executeScript(scriptCode) ? 1 : 0;
     }, 0);
