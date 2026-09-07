@@ -306,6 +306,13 @@ void test_lua_sandbox() {
     }
     TEST_PASS("Dynamic Expression & Condition Evaluation (evaluateCondition)");
 
+    lua.clearVariables();
+    if (!lua.getVariable("player_gold").empty() || !lua.evaluateCondition("player_gold == nil")) {
+        std::cerr << "Lua variable reset left stale globals behind" << std::endl;
+        exit(1);
+    }
+    TEST_PASS("Lua Variable Reset Clears Script Globals");
+
     lua.shutdown();
     if (lua.isInitialized()) exit(1);
     TEST_PASS("Lua Sandbox Clean Shutdown");
@@ -599,9 +606,22 @@ void test_native_c_api() {
         std::cerr << "C-API EvaluateCondition mismatch" << std::endl;
         exit(1);
     }
-    if (RowlEngine_ExecuteScript(handle, "rowl.var_set('hero_gold', '300')") != 1 ||
-        std::string(RowlEngine_GetVariable(handle, "hero_gold")) != "300") {
+    if (RowlEngine_ExecuteScript(handle,
+            "rowl.var_set('hero_gold', '300'); rowl.var_set('quest_state', 'accepted')") != 1 ||
+        std::string(RowlEngine_GetVariable(handle, "hero_gold")) != "300" ||
+        std::string(RowlEngine_GetVariable(handle, "quest_state")) != "accepted") {
         std::cerr << "C-API ExecuteScript mismatch" << std::endl;
+        exit(1);
+    }
+    if (RowlEngine_Rewind(handle, 1) != 1 ||
+        std::string(RowlEngine_GetVariable(handle, "hero_gold")) != "150" ||
+        !std::string(RowlEngine_GetVariable(handle, "quest_state")).empty()) {
+        std::cerr << "Lua script state was not atomically persisted and rewound" << std::endl;
+        exit(1);
+    }
+    if (RowlEngine_ExecuteScript(handle,
+            "rowl.var_set('hero_gold', '300'); rowl.var_set('quest_state', 'accepted')") != 1) {
+        std::cerr << "C-API ExecuteScript replay mismatch" << std::endl;
         exit(1);
     }
     TEST_PASS("C-API Scripting & Dynamic Variables (SetVariable, GetVariable, EvaluateCondition, ExecuteScript)");

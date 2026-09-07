@@ -574,8 +574,8 @@ void Engine::updateSceneFromComponents(const std::string& componentsJson) {
                 }
             } else if (type == "script") {
                 std::string scriptCode = data.value("code", "");
-                if (!scriptCode.empty() && m_luaSandbox) {
-                    m_luaSandbox->executeString(scriptCode);
+                if (!scriptCode.empty()) {
+                    executeScript(scriptCode);
                 }
             }
         }
@@ -1045,7 +1045,16 @@ bool Engine::evaluateCondition(const std::string& conditionExpr) {
 
 bool Engine::executeScript(const std::string& scriptCode) {
     if (m_luaSandbox) {
-        return m_luaSandbox->executeString(scriptCode);
+        if (!m_luaSandbox->executeString(scriptCode)) return false;
+
+        // Scripts persist game data through rowl.var_set. Capture its complete
+        // post-script snapshot as one immutable state transition so save/load
+        // and rewind cannot lose a multi-variable script update.
+        if (m_gameState) {
+            m_gameState = Rowl::State::GameState::createNextStateWithVariables(
+                m_gameState, m_currentNodeId, m_luaSandbox->getAllVariables());
+        }
+        return true;
     }
     return false;
 }

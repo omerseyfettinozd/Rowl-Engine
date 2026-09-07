@@ -114,6 +114,30 @@ std::shared_ptr<const GameState> GameState::createNextState(
     return nextState;
 }
 
+std::shared_ptr<const GameState> GameState::createNextStateWithVariables(
+    const std::shared_ptr<const GameState>& current,
+    uint64_t nextNodeId,
+    const std::unordered_map<std::string, std::string>& nextVariables) {
+
+    if (current && current->activeNodeId == nextNodeId && current->variables &&
+        current->variables->data == nextVariables) {
+        return current;
+    }
+
+    auto nextState = std::make_shared<GameState>();
+    nextState->stepId = current ? current->stepId + 1 : 1;
+    nextState->activeNodeId = nextNodeId;
+    nextState->previousState = current;
+    if (current) {
+        nextState->activeBackground = current->activeBackground;
+        nextState->dspFilter = current->dspFilter;
+    }
+    auto variableMap = std::make_shared<VariableMap>();
+    variableMap->data = nextVariables;
+    nextState->variables = std::move(variableMap);
+    return nextState;
+}
+
 std::shared_ptr<const GameState> GameState::rewind(
     const std::shared_ptr<const GameState>& current,
     uint64_t stepsToRewind) {

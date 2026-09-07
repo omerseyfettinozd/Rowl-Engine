@@ -249,6 +249,13 @@ bool LuaSandbox::evaluateCondition(const std::string& conditionExpr) {
 }
 
 void LuaSandbox::clearVariables() {
+    if (m_luaState) {
+        for (const auto& [key, value] : m_scriptVariables) {
+            (void)value;
+            lua_pushnil(m_luaState);
+            lua_setglobal(m_luaState, key.c_str());
+        }
+    }
     m_scriptVariables.clear();
 }
 

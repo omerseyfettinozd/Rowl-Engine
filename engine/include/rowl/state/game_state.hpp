@@ -40,6 +40,11 @@ struct GameState {
         const std::string& varKey = "",
         const std::string& varValue = ""
     );
+    static std::shared_ptr<const GameState> createNextStateWithVariables(
+        const std::shared_ptr<const GameState>& current,
+        uint64_t nextNodeId,
+        const std::unordered_map<std::string, std::string>& nextVariables
+    );
 
     static std::shared_ptr<const GameState> rewind(
         const std::shared_ptr<const GameState>& current,
