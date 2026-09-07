@@ -3,6 +3,7 @@
 #include "rowl/vfs/vfs.hpp"
 #include "rowl/scene/scene.hpp"
 #include "rowl/audio/audio_engine.hpp"
+#include "rowl/scripting/lua_sandbox.hpp"
 #include "rowl/render/aspect_guardian.hpp"
 #include <chrono>
 #include <thread>
@@ -99,6 +100,13 @@ bool Engine::initialize(const EngineConfig& config) {
     // Initialize Audio Engine Subsystem
     m_audio = std::make_unique<Rowl::Audio::AudioEngine>();
     m_audio->initialize();
+
+    // Initialize Sandboxed Lua Scripting Environment
+    m_luaSandbox = std::make_unique<Rowl::Scripting::LuaSandbox>();
+    m_luaSandbox->initialize();
+
+    // Initialize GameState Subsystem (Root Step #1)
+    m_gameState = Rowl::State::GameState::createInitialState(m_startNodeId);
 
     // Load story graph from disk
     loadStoryGraphFile();
@@ -515,6 +523,15 @@ void Engine::updateSceneFromComponents(const std::string& componentsJson) {
                     button.optionId = option.value("option_id", "");
                     button.text = option.value("text", "Choice");
                     button.enabled = option.value("enabled", true);
+
+                    // Lua condition check
+                    std::string condition = option.value("condition", "");
+                    if (!condition.empty() && condition != "true" && condition != "1") {
+                        if (m_luaSandbox && !m_luaSandbox->evaluateCondition(condition)) {
+                            button.enabled = false;
+                        }
+                    }
+
                     button.x = option.value("x", 680.0f);
                     button.y = option.value("y", 520.0f + static_cast<float>(index) * 80.0f);
                     button.width = option.value("width", 560.0f);
@@ -532,6 +549,29 @@ void Engine::updateSceneFromComponents(const std::string& componentsJson) {
                     button.backgroundImage = option.value("normal_image", option.value("background_image", ""));
                     if (!button.optionId.empty()) m_activeChoiceButtons.push_back(std::move(button));
                     ++index;
+                }
+            } else if (type == "variable") {
+                std::string varKey = data.value("key", "");
+                std::string varVal = data.value("value", "");
+                std::string op = data.value("operation", "set");
+                if (!varKey.empty()) {
+                    if (op == "add" && m_luaSandbox) {
+                        double cur = m_luaSandbox->getGlobalNumber(varKey, 0.0);
+                        double delta = 0.0;
+                        try { delta = std::stod(varVal); } catch (...) {}
+                        double res = cur + delta;
+                        m_luaSandbox->setGlobalNumber(varKey, res);
+                        if (m_gameState) {
+                            m_gameState = Rowl::State::GameState::createNextState(m_gameState, m_currentNodeId, varKey, std::to_string(res));
+                        }
+                    } else {
+                        setScriptVariable(varKey, varVal);
+                    }
+                }
+            } else if (type == "script") {
+                std::string scriptCode = data.value("code", "");
+                if (!scriptCode.empty() && m_luaSandbox) {
+                    m_luaSandbox->executeString(scriptCode);
                 }
             }
         }
@@ -838,6 +878,11 @@ void Engine::shutdown() {
         m_audio.reset();
     }
 
+    if (m_luaSandbox) {
+        m_luaSandbox->shutdown();
+        m_luaSandbox.reset();
+    }
+
     if (m_window) {
         m_window->shutdown();
         m_window.reset();
@@ -846,6 +891,155 @@ void Engine::shutdown() {
     m_isRunning   = false;
     m_initialized = false;
     ROWL_LOG_INFO("Engine shutdown complete.");
+}
+
+bool Engine::saveGameSlot(int32_t slotIndex) {
+    if (!m_gameState) {
+        m_gameState = Rowl::State::GameState::createInitialState(m_currentNodeId);
+    }
+    if (m_gameState->activeNodeId != m_currentNodeId) {
+        m_gameState = Rowl::State::GameState::createNextState(m_gameState, m_currentNodeId);
+    }
+    return Rowl::State::GameState::saveToSlot(m_gameState, slotIndex, m_saveDirectory);
+}
+
+bool Engine::loadGameSlot(int32_t slotIndex) {
+    auto loaded = Rowl::State::GameState::loadFromSlot(slotIndex, m_saveDirectory);
+    if (!loaded) return false;
+
+    m_gameState = loaded;
+    m_currentNodeId = m_gameState->activeNodeId;
+
+    // Sync variables to Lua sandbox
+    if (m_luaSandbox && m_gameState->variables) {
+        m_luaSandbox->clearVariables();
+        for (const auto& [k, v] : m_gameState->variables->data) {
+            m_luaSandbox->setVariable(k, v);
+        }
+    }
+
+    // Synchronize scene to loaded node
+    auto it = m_storyNodes.find(m_currentNodeId);
+    if (it != m_storyNodes.end()) {
+        const auto& nextNode = it->second;
+        if (!nextNode.components.empty()) {
+            nlohmann::json compsJson = nlohmann::json::array();
+            for (const auto& c : nextNode.components) {
+                compsJson.push_back({
+                    {"type", c.type},
+                    {"id", c.id},
+                    {"enabled", c.enabled},
+                    {"data", c.data}
+                });
+            }
+            updateSceneFromComponents(compsJson.dump());
+        } else {
+            updateActiveScene(
+                nextNode.speaker, nextNode.dialogue,
+                nextNode.background,
+                nextNode.backgroundX, nextNode.backgroundY,
+                nextNode.backgroundWidth, nextNode.backgroundHeight,
+                nextNode.character,
+                nextNode.characterX, nextNode.characterY,
+                nextNode.characterWidth, nextNode.characterHeight,
+                nextNode.dialogueBoxX, nextNode.dialogueBoxY,
+                nextNode.dialogueBoxWidth, nextNode.dialogueBoxHeight
+            );
+        }
+    }
+    ROWL_LOG_INFO("Loaded Game Slot #" + std::to_string(slotIndex) + " → Node #" + std::to_string(m_currentNodeId));
+    return true;
+}
+
+bool Engine::hasSaveSlot(int32_t slotIndex) const {
+    return Rowl::State::GameState::hasSlot(slotIndex, m_saveDirectory);
+}
+
+bool Engine::deleteSaveSlot(int32_t slotIndex) {
+    return Rowl::State::GameState::deleteSlot(slotIndex, m_saveDirectory);
+}
+
+bool Engine::rewind(uint64_t steps) {
+    if (!m_gameState) return false;
+    auto rewound = Rowl::State::GameState::rewind(m_gameState, steps);
+    if (!rewound || rewound == m_gameState) return false;
+
+    m_gameState = rewound;
+    m_currentNodeId = m_gameState->activeNodeId;
+
+    if (m_luaSandbox && m_gameState->variables) {
+        m_luaSandbox->clearVariables();
+        for (const auto& [k, v] : m_gameState->variables->data) {
+            m_luaSandbox->setVariable(k, v);
+        }
+    }
+
+    auto it = m_storyNodes.find(m_currentNodeId);
+    if (it != m_storyNodes.end()) {
+        const auto& nextNode = it->second;
+        if (!nextNode.components.empty()) {
+            nlohmann::json compsJson = nlohmann::json::array();
+            for (const auto& c : nextNode.components) {
+                compsJson.push_back({
+                    {"type", c.type},
+                    {"id", c.id},
+                    {"enabled", c.enabled},
+                    {"data", c.data}
+                });
+            }
+            updateSceneFromComponents(compsJson.dump());
+        } else {
+            updateActiveScene(
+                nextNode.speaker, nextNode.dialogue,
+                nextNode.background,
+                nextNode.backgroundX, nextNode.backgroundY,
+                nextNode.backgroundWidth, nextNode.backgroundHeight,
+                nextNode.character,
+                nextNode.characterX, nextNode.characterY,
+                nextNode.characterWidth, nextNode.characterHeight,
+                nextNode.dialogueBoxX, nextNode.dialogueBoxY,
+                nextNode.dialogueBoxWidth, nextNode.dialogueBoxHeight
+            );
+        }
+    }
+    return true;
+}
+
+uint64_t Engine::getCurrentStepId() const {
+    return m_gameState ? m_gameState->stepId : 0;
+}
+
+void Engine::setScriptVariable(const std::string& key, const std::string& value) {
+    if (m_luaSandbox) {
+        m_luaSandbox->setVariable(key, value);
+    }
+    if (m_gameState) {
+        m_gameState = Rowl::State::GameState::createNextState(m_gameState, m_currentNodeId, key, value);
+    }
+}
+
+std::string Engine::getScriptVariable(const std::string& key) const {
+    if (m_luaSandbox) {
+        return m_luaSandbox->getVariable(key);
+    }
+    if (m_gameState) {
+        return m_gameState->getVariable(key);
+    }
+    return "";
+}
+
+bool Engine::evaluateCondition(const std::string& conditionExpr) {
+    if (m_luaSandbox) {
+        return m_luaSandbox->evaluateCondition(conditionExpr);
+    }
+    return true;
+}
+
+bool Engine::executeScript(const std::string& scriptCode) {
+    if (m_luaSandbox) {
+        return m_luaSandbox->executeString(scriptCode);
+    }
+    return false;
 }
 
 } // namespace Rowl::Core

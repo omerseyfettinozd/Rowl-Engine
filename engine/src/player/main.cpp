@@ -22,8 +22,11 @@ static void printHelp(const char* progName) {
               << "      --no-vsync           Disable vertical sync\n\n"
               << "Controls:\n"
               << "  Space / Enter / Click    Advance to next dialogue line / select choice\n"
+              << "  F5                       Quick Save (Slot 0)\n"
+              << "  F9                       Quick Load (Slot 0)\n"
+              << "  Backspace / Z            Rewind 1 step back in history\n"
               << "  Escape                   Exit the game\n"
-              << "=======================================================\n";
+              << "=========================================================================\n";
 }
 
 int main(int argc, char* argv[]) {

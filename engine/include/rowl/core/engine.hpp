@@ -1,6 +1,7 @@
 #pragma once
 
 #include "rowl/render/window.hpp"
+#include "rowl/state/game_state.hpp"
 #include <cstdint>
 #include <string>
 #include <memory>
@@ -14,6 +15,10 @@ class Scene;
 
 namespace Rowl::Audio {
 class AudioEngine;
+}
+
+namespace Rowl::Scripting {
+class LuaSandbox;
 }
 
 namespace Rowl::Core {
@@ -174,6 +179,24 @@ public:
     Rowl::Scene::Scene* getScene()       const { return m_scene.get(); }
     Rowl::Audio::AudioEngine* getAudio() const { return m_audio.get(); }
 
+    // ── Save / Load Slots & State Persistence ──────────────────────────────
+    bool saveGameSlot(int32_t slotIndex);
+    bool loadGameSlot(int32_t slotIndex);
+    bool hasSaveSlot(int32_t slotIndex) const;
+    bool deleteSaveSlot(int32_t slotIndex);
+    bool rewind(uint64_t steps = 1);
+    uint64_t getCurrentStepId() const;
+    void setSaveDirectory(const std::string& saveDir) { m_saveDirectory = saveDir; }
+    std::string getSaveDirectory() const { return m_saveDirectory; }
+    std::shared_ptr<const Rowl::State::GameState> getGameState() const { return m_gameState; }
+
+    // ── Scripting & Variable Evaluation ───────────────────────────────────
+    Rowl::Scripting::LuaSandbox* getLuaSandbox() const { return m_luaSandbox.get(); }
+    void setScriptVariable(const std::string& key, const std::string& value);
+    std::string getScriptVariable(const std::string& key) const;
+    bool evaluateCondition(const std::string& conditionExpr);
+    bool executeScript(const std::string& scriptCode);
+
 private:
     static Engine* s_instance;
 
@@ -181,6 +204,9 @@ private:
     std::unique_ptr<Rowl::Render::Window> m_window;
     std::unique_ptr<Rowl::Scene::Scene>   m_scene;
     std::unique_ptr<Rowl::Audio::AudioEngine> m_audio;
+    std::shared_ptr<const Rowl::State::GameState> m_gameState;
+    std::unique_ptr<Rowl::Scripting::LuaSandbox>  m_luaSandbox;
+    std::string m_saveDirectory = "saves";
 
     // External window handle (embedded / single-window mode)
     void*    m_externalWindowHandle = nullptr;

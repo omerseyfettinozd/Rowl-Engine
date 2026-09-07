@@ -310,6 +310,15 @@ void Window::pollEvents(bool& outShouldQuit) {
                     m_isOpen = false;
                 } else if (event.key.key == SDLK_SPACE || event.key.key == SDLK_RETURN || event.key.key == SDLK_KP_ENTER) {
                     Rowl::Core::Engine::instance().advanceToNextNode();
+                } else if (event.key.key == SDLK_F5) {
+                    ROWL_LOG_INFO("[Player] F5 pressed: Quick Saving to Slot #0...");
+                    Rowl::Core::Engine::instance().saveGameSlot(0);
+                } else if (event.key.key == SDLK_F9) {
+                    ROWL_LOG_INFO("[Player] F9 pressed: Quick Loading from Slot #0...");
+                    Rowl::Core::Engine::instance().loadGameSlot(0);
+                } else if (event.key.key == SDLK_BACKSPACE || event.key.key == SDLK_Z) {
+                    ROWL_LOG_INFO("[Player] Rewind key pressed: Rewinding 1 step...");
+                    Rowl::Core::Engine::instance().rewind(1);
                 }
                 break;
             case SDL_EVENT_MOUSE_BUTTON_DOWN:

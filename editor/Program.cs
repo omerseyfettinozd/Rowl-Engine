@@ -377,6 +377,67 @@ namespace RowlEngine.Editor
 
             Console.WriteLine("  ✅ [PASS] AssetBitmapCache high-throughput negative caching & memory safety verified");
 
+            // ── Test 9: Variable & Condition Components + Native State Slots ───────────
+            Console.WriteLine("\n📌 [Test 9]: Lua Condition, Variable Components & Native State Slots...");
+
+            // Component Creation & Serialization
+            var varComp = (VariableComponentViewModel)ComponentRegistry.Create("variable");
+            varComp.Key = "player_reputation";
+            varComp.Value = "85";
+            varComp.Operation = "set";
+
+            var condComp = (ConditionComponentViewModel)ComponentRegistry.Create("condition");
+            condComp.Expression = "player_reputation >= 80";
+
+            var scriptNode = new NodeViewModel(701, "ScriptNode", 100, 100);
+            var logicObj = scriptNode.CreateObject("Logic");
+            logicObj.AddComponent(varComp);
+            logicObj.AddComponent(condComp);
+
+            var varDict = varComp.Serialize();
+            if ((string)varDict["key"] != "player_reputation" || (string)varDict["value"] != "85")
+                throw new Exception("VariableComponent serialization mismatch");
+
+            var condDict = condComp.Serialize();
+            if ((string)condDict["expression"] != "player_reputation >= 80")
+                throw new Exception("ConditionComponent serialization mismatch");
+
+            // Native P/Invoke Integration via EngineHost
+            var host = mainVm.EngineHost;
+            if (!host.IsInitialized)
+            {
+                host.Initialize(1920, 1080, false);
+            }
+            if (host.IsInitialized)
+            {
+                host.SetVariable("test_affinity", "99");
+                string readAffinity = host.GetVariable("test_affinity");
+                if (readAffinity != "99")
+                    throw new Exception($"Native variable mismatch: expected '99', got '{readAffinity}'");
+
+                if (!host.EvaluateCondition("test_affinity >= 90") || host.EvaluateCondition("test_affinity < 50"))
+                    throw new Exception("Native condition evaluation via EngineHost failed");
+
+                // Save & Load Slots
+                if (!host.SaveGameSlot(10))
+                    throw new Exception("EngineHost.SaveGameSlot(10) failed");
+
+                if (!host.HasSaveSlot(10))
+                    throw new Exception("EngineHost.HasSaveSlot(10) failed");
+
+                if (!host.LoadGameSlot(10))
+                    throw new Exception("EngineHost.LoadGameSlot(10) failed");
+
+                host.DeleteSaveSlot(10);
+                if (host.HasSaveSlot(10))
+                    throw new Exception("EngineHost.DeleteSaveSlot(10) failed");
+
+                // Rewind
+                host.Rewind(1);
+            }
+
+            Console.WriteLine("  ✅ [PASS] Variable/Condition components, serialization, and P/Invoke Save/Load slots verified");
+
             Console.WriteLine("\n=======================================================");
             Console.WriteLine("🎉 ALL EDITOR HEADLESS TESTS PASSED SUCCESSFULLY! 🎉");
             Console.WriteLine("=======================================================\n");

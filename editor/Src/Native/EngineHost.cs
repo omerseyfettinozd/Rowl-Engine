@@ -60,6 +60,9 @@ namespace RowlEngine.Editor.Native
         /// <summary>True after a successful Initialize() call.</summary>
         public bool IsInitialized => _handle != IntPtr.Zero;
 
+        /// <summary>Raw native engine pointer.</summary>
+        public IntPtr Handle => _handle;
+
         // ── Initialisation ───────────────────────────────────────────────────
 
         /// <summary>
@@ -336,6 +339,55 @@ namespace RowlEngine.Editor.Native
         public ulong GetCurrentNodeId()
             => _handle == IntPtr.Zero ? 0
                : NativeBridge.RowlEngine_GetCurrentNodeId(_handle);
+
+        // ── Save / Load Slots & History Rewind ────────────────────────────────
+
+        public bool SaveGameSlot(int slotIndex)
+            => _handle != IntPtr.Zero && NativeBridge.RowlEngine_SaveGameSlot(_handle, slotIndex) != 0;
+
+        public bool LoadGameSlot(int slotIndex)
+        {
+            if (_handle == IntPtr.Zero) return false;
+            bool success = NativeBridge.RowlEngine_LoadGameSlot(_handle, slotIndex) != 0;
+            if (success) ForceRenderFrame();
+            return success;
+        }
+
+        public bool HasSaveSlot(int slotIndex)
+            => _handle != IntPtr.Zero && NativeBridge.RowlEngine_HasSaveSlot(_handle, slotIndex) != 0;
+
+        public bool DeleteSaveSlot(int slotIndex)
+            => _handle != IntPtr.Zero && NativeBridge.RowlEngine_DeleteSaveSlot(_handle, slotIndex) != 0;
+
+        public bool Rewind(uint steps = 1)
+        {
+            if (_handle == IntPtr.Zero) return false;
+            bool success = NativeBridge.RowlEngine_Rewind(_handle, steps) != 0;
+            if (success) ForceRenderFrame();
+            return success;
+        }
+
+        public ulong GetCurrentStepId()
+            => _handle != IntPtr.Zero ? NativeBridge.RowlEngine_GetCurrentStepId(_handle) : 0;
+
+        // ── Scripting & Dynamic Variables ─────────────────────────────────────
+
+        public void SetVariable(string key, string value)
+        {
+            if (_handle != IntPtr.Zero && !string.IsNullOrEmpty(key))
+                NativeBridge.RowlEngine_SetVariable(_handle, key, value ?? string.Empty);
+        }
+
+        public string GetVariable(string key)
+            => _handle != IntPtr.Zero && !string.IsNullOrEmpty(key)
+               ? NativeBridge.PtrToString(NativeBridge.RowlEngine_GetVariable(_handle, key))
+               : string.Empty;
+
+        public bool EvaluateCondition(string conditionExpr)
+            => _handle != IntPtr.Zero && NativeBridge.RowlEngine_EvaluateCondition(_handle, conditionExpr) != 0;
+
+        public bool ExecuteScript(string scriptCode)
+            => _handle != IntPtr.Zero && NativeBridge.RowlEngine_ExecuteScript(_handle, scriptCode) != 0;
 
         // ── Disposal ──────────────────────────────────────────────────────────
 

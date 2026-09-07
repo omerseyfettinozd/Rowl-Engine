@@ -104,6 +104,40 @@ void test_game_state() {
         exit(1);
     }
     TEST_PASS("Multi-Step Historical Rewind (Step 3 -> Step 1)");
+
+    // JSON Serialization & Slot Persistence
+    std::string serialized = s2->serializeJson();
+    auto deserialized = Rowl::State::GameState::deserializeJson(serialized);
+    if (!deserialized || deserialized->stepId != s2->stepId || deserialized->activeNodeId != 102 ||
+        deserialized->getVariable("player_name") != "Evelyn") {
+        std::cerr << "GameState JSON serialize/deserialize mismatch" << std::endl;
+        exit(1);
+    }
+    TEST_PASS("GameState JSON Serialization & Deserialization");
+
+    std::string testSaveDir = "build/test_saves";
+    if (!Rowl::State::GameState::saveToSlot(s2, 1, testSaveDir)) {
+        std::cerr << "GameState saveToSlot failed" << std::endl;
+        exit(1);
+    }
+    if (!Rowl::State::GameState::hasSlot(1, testSaveDir)) {
+        std::cerr << "GameState hasSlot failed" << std::endl;
+        exit(1);
+    }
+    auto loadedSlot = Rowl::State::GameState::loadFromSlot(1, testSaveDir);
+    if (!loadedSlot || loadedSlot->activeNodeId != 102 || loadedSlot->getVariable("player_name") != "Evelyn") {
+        std::cerr << "GameState loadFromSlot content mismatch" << std::endl;
+        exit(1);
+    }
+    TEST_PASS("GameState Slot File Persistence (saveToSlot / loadFromSlot / hasSlot)");
+
+    Rowl::State::GameState::deleteSlot(1, testSaveDir);
+    if (Rowl::State::GameState::hasSlot(1, testSaveDir)) {
+        std::cerr << "GameState deleteSlot failed" << std::endl;
+        exit(1);
+    }
+    TEST_PASS("GameState Slot Cleanup (deleteSlot)");
+    std::filesystem::remove_all(testSaveDir);
 }
 
 void test_audio_engine() {
@@ -207,6 +241,26 @@ void test_lua_sandbox() {
         exit(1);
     }
     TEST_PASS("Infinite Loop Defense (10M Instruction Limit Hook)");
+
+    // Lua Condition Evaluation
+    lua.setGlobalNumber("player_gold", 75.0);
+    if (!lua.evaluateCondition("player_gold >= 50")) {
+        std::cerr << "Lua condition player_gold >= 50 failed" << std::endl;
+        exit(1);
+    }
+    if (lua.evaluateCondition("player_gold > 100")) {
+        std::cerr << "Lua condition player_gold > 100 failed" << std::endl;
+        exit(1);
+    }
+    if (!lua.evaluateCondition("player_gold == 75 and 10 > 5")) {
+        std::cerr << "Lua compound condition failed" << std::endl;
+        exit(1);
+    }
+    if (!lua.evaluateCondition("true") || lua.evaluateCondition("false")) {
+        std::cerr << "Lua boolean literal condition failed" << std::endl;
+        exit(1);
+    }
+    TEST_PASS("Dynamic Expression & Condition Evaluation (evaluateCondition)");
 
     lua.shutdown();
     if (lua.isInitialized()) exit(1);
@@ -400,6 +454,49 @@ void test_native_c_api() {
     RowlEngine_TriggerVoiceDucking(handle, 0);
     RowlEngine_StopBgm(handle);
     TEST_PASS("C-API Audio Control (PlayAudio, SetBgmVolume, Ducking, StopBgm)");
+
+    // Variable & Scripting C-API
+    RowlEngine_SetVariable(handle, "hero_gold", "150");
+    if (std::string(RowlEngine_GetVariable(handle, "hero_gold")) != "150") {
+        std::cerr << "C-API GetVariable mismatch" << std::endl;
+        exit(1);
+    }
+    if (RowlEngine_EvaluateCondition(handle, "hero_gold >= 100") != 1 ||
+        RowlEngine_EvaluateCondition(handle, "hero_gold < 50") != 0) {
+        std::cerr << "C-API EvaluateCondition mismatch" << std::endl;
+        exit(1);
+    }
+    if (RowlEngine_ExecuteScript(handle, "rowl.var_set('hero_gold', '300')") != 1 ||
+        std::string(RowlEngine_GetVariable(handle, "hero_gold")) != "300") {
+        std::cerr << "C-API ExecuteScript mismatch" << std::endl;
+        exit(1);
+    }
+    TEST_PASS("C-API Scripting & Dynamic Variables (SetVariable, GetVariable, EvaluateCondition, ExecuteScript)");
+
+    // Save/Load Slots & Rewind C-API
+    if (RowlEngine_SaveGameSlot(handle, 0) != 1) {
+        std::cerr << "C-API SaveGameSlot failed" << std::endl;
+        exit(1);
+    }
+    if (RowlEngine_HasSaveSlot(handle, 0) != 1) {
+        std::cerr << "C-API HasSaveSlot failed" << std::endl;
+        exit(1);
+    }
+    if (RowlEngine_LoadGameSlot(handle, 0) != 1) {
+        std::cerr << "C-API LoadGameSlot failed" << std::endl;
+        exit(1);
+    }
+    RowlEngine_DeleteSaveSlot(handle, 0);
+    if (RowlEngine_HasSaveSlot(handle, 0) != 0) {
+        std::cerr << "C-API DeleteSaveSlot failed" << std::endl;
+        exit(1);
+    }
+    if (RowlEngine_GetCurrentStepId(handle) == 0) {
+        std::cerr << "C-API GetCurrentStepId mismatch" << std::endl;
+        exit(1);
+    }
+    RowlEngine_Rewind(handle, 1);
+    TEST_PASS("C-API Save / Load Slots & State Rewind (SaveGameSlot, LoadGameSlot, Rewind)");
 
     RowlEngine_Shutdown(handle);
     RowlEngine_Destroy(handle);

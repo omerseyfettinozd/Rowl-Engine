@@ -1380,27 +1380,17 @@ namespace RowlEngine.Editor.ViewModels
         public string ImportImageFileToProject(string fullPath)
         {
             if (string.IsNullOrWhiteSpace(fullPath)) return string.Empty;
-
-            string fileName = System.IO.Path.GetFileName(fullPath);
-            string assetsImagesDir = System.IO.Path.Combine(MainWindowViewModel.AssetsPath, "images");
-            System.IO.Directory.CreateDirectory(assetsImagesDir);
-            string destPath = System.IO.Path.Combine(assetsImagesDir, fileName);
-
-            // If the source is outside the destination path, copy it over
-            if (!string.Equals(System.IO.Path.GetFullPath(fullPath), System.IO.Path.GetFullPath(destPath), StringComparison.OrdinalIgnoreCase))
+            try
             {
-                try
-                {
-                    System.IO.File.Copy(fullPath, destPath, true);
-                    AppendLog($"📥 Auto-imported image '{fileName}' into Assets/images/");
-                }
-                catch (Exception ex)
-                {
-                    AppendLog($"⚠️ Failed to copy '{fileName}' to Assets/images: {ex.Message}");
-                }
+                string fileName = EditorLayoutAssistService.ImportImageFileToProject(fullPath, MainWindowViewModel.AssetsPath);
+                AppendLog($"📥 Auto-imported image '{fileName}' into Assets/images/");
+                return fileName;
             }
-
-            return fileName;
+            catch (Exception ex)
+            {
+                AppendLog($"⚠️ Failed to copy '{System.IO.Path.GetFileName(fullPath)}' to Assets/images: {ex.Message}");
+                return System.IO.Path.GetFileName(fullPath);
+            }
         }
 
         /// <summary>
@@ -1507,106 +1497,57 @@ namespace RowlEngine.Editor.ViewModels
         public void FitBackgroundToScreen()
         {
             if (SelectedNode == null) return;
-            SelectedNode.BackgroundX = 0;
-            SelectedNode.BackgroundY = 0;
-            SelectedNode.BackgroundWidth = 1920;
-            SelectedNode.BackgroundHeight = 1080;
-            SelectedNode.BackgroundScale = 1.0;
+            EditorLayoutAssistService.FitBackgroundToScreen(SelectedNode);
             ScheduleSave();
             if (EngineHost.IsInitialized)
                 PushSceneToEngine(SelectedNode);
             AppendLog("📐 OBS Assist: Arka plan 1920x1080 ekrana tam oturtuldu (Fitted to Screen)");
         }
 
-        /// <summary>
-        /// OBS-style Assist: Centers the selected element (Character, Dialogue, or Background) horizontally and vertically.
-        /// </summary>
         [RelayCommand]
         public void CenterSelectedElement()
         {
             if (SelectedNode == null) return;
-            var charComp = SelectedNode.GetComponent<CharacterComponentViewModel>();
-            var bgComp = SelectedNode.GetComponent<BackgroundComponentViewModel>();
-
-            if (charComp != null)
+            if (EditorLayoutAssistService.CenterSelectedElement(SelectedNode, out string desc))
             {
-                charComp.X = (1920 - charComp.Width) / 2.0;
-                charComp.Y = 1080 - charComp.Height - 30; // ground baseline
-                AppendLog($"🎯 OBS Assist: Karakter ortaya hizalandı (X: {charComp.X:0}, Y: {charComp.Y:0})");
+                AppendLog($"🎯 OBS Assist: {desc}");
             }
-            else if (bgComp != null)
-            {
-                bgComp.X = (1920 - bgComp.Width) / 2.0;
-                bgComp.Y = (1080 - bgComp.Height) / 2.0;
-                AppendLog($"🎯 OBS Assist: Arka plan merkeze hizalandı (X: {bgComp.X:0}, Y: {bgComp.Y:0})");
-            }
-
             ScheduleSave();
             if (EngineHost.IsInitialized)
                 PushSceneToEngine(SelectedNode);
         }
 
-        /// <summary>
-        /// OBS-style Assist: Aligns all character sprites to bottom ground baseline.
-        /// </summary>
         [RelayCommand]
         public void AlignCharacterToBottom()
         {
             if (SelectedNode == null) return;
-            foreach (var charComp in SelectedNode.CharacterComponents)
-            {
-                charComp.Y = 1080 - charComp.Height - 20;
-            }
+            EditorLayoutAssistService.AlignCharacterToBottom(SelectedNode);
             ScheduleSave();
             if (EngineHost.IsInitialized)
                 PushSceneToEngine(SelectedNode);
             AppendLog("⬇️ OBS Assist: Karakterler zemin hizasına oturtuldu (Ground Baseline)");
         }
 
-        /// <summary>
-        /// OBS-style Assist: Fits/Resets character sprite to standard size (600x900).
-        /// </summary>
         [RelayCommand]
         public void ResetCharacterSize(CharacterComponentViewModel? charComp)
         {
-            if (charComp == null && SelectedNode != null)
-                charComp = SelectedNode.GetComponent<CharacterComponentViewModel>();
-            if (charComp == null) return;
-
-            charComp.Width = 600;
-            charComp.Height = 900;
-            charComp.Scale = 1.0;
-            charComp.Y = 1080 - 900 - 20;
+            if (SelectedNode == null && charComp == null) return;
+            EditorLayoutAssistService.ResetCharacterSize(SelectedNode, charComp);
             ScheduleSave();
             if (EngineHost.IsInitialized && SelectedNode != null)
                 PushSceneToEngine(SelectedNode);
             AppendLog("📐 OBS Assist: Karakter boyutu standart orana sıfırlandı (600x900)");
         }
 
-        /// <summary>
-        /// OBS-style Assist: Presets dialogue box to bottom banner or center box.
-        /// </summary>
         [RelayCommand]
         public void PresetDialogueBox(string preset)
         {
             if (SelectedNode == null) return;
-            var dlg = SelectedNode.GetComponent<DialogueComponentViewModel>();
-            if (dlg == null) return;
-
+            EditorLayoutAssistService.PresetDialogueBox(SelectedNode, preset);
             if (preset == "BottomBanner")
-            {
-                dlg.X = 100;
-                dlg.Y = 820;
-                dlg.Width = 1720;
-                dlg.Height = 220;
                 AppendLog("↕ OBS Assist: Diyalog kutusu alt banner olarak ayarlandı (1720x220)");
-            }
             else if (preset == "Center")
-            {
-                dlg.X = (1920 - dlg.Width) / 2.0;
-                dlg.Y = (1080 - dlg.Height) / 2.0;
                 AppendLog("🎯 OBS Assist: Diyalog kutusu merkeze hizalandı");
-            }
             ScheduleSave();
             if (EngineHost.IsInitialized)
                 PushSceneToEngine(SelectedNode);

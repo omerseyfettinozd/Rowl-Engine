@@ -146,6 +146,49 @@ namespace RowlEngine.Editor.Native
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
         internal static extern void RowlEngine_TriggerVoiceDucking(IntPtr handle, int isVoiceActive);
 
+        // ── Save / Load Slots & History Rewind ────────────────────────────────
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern int RowlEngine_SaveGameSlot(IntPtr handle, int slotIndex);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern int RowlEngine_LoadGameSlot(IntPtr handle, int slotIndex);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern int RowlEngine_HasSaveSlot(IntPtr handle, int slotIndex);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern int RowlEngine_DeleteSaveSlot(IntPtr handle, int slotIndex);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern int RowlEngine_Rewind(IntPtr handle, uint steps);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ulong RowlEngine_GetCurrentStepId(IntPtr handle);
+
+        // ── Scripting & Variable Evaluation ───────────────────────────────────
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern void RowlEngine_SetVariable(
+            IntPtr handle,
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string key,
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string value);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern IntPtr RowlEngine_GetVariable(
+            IntPtr handle,
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string key);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern int RowlEngine_EvaluateCondition(
+            IntPtr handle,
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string conditionExpr);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern int RowlEngine_ExecuteScript(
+            IntPtr handle,
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string scriptCode);
+
         // ── Helpers ──────────────────────────────────────────────────────────
 
         /// <summary>Converts a native C UTF-8 string pointer to a managed string safely.</summary>

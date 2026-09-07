@@ -45,6 +45,15 @@ struct GameState {
         const std::shared_ptr<const GameState>& current,
         uint64_t stepsToRewind = 1
     );
+
+    // Serialization & slot persistence
+    std::string serializeJson() const;
+    static std::shared_ptr<const GameState> deserializeJson(const std::string& jsonStr);
+
+    static bool saveToSlot(const std::shared_ptr<const GameState>& state, int32_t slotIndex, const std::string& saveDir = "saves");
+    static std::shared_ptr<const GameState> loadFromSlot(int32_t slotIndex, const std::string& saveDir = "saves");
+    static bool hasSlot(int32_t slotIndex, const std::string& saveDir = "saves");
+    static bool deleteSlot(int32_t slotIndex, const std::string& saveDir = "saves");
 };
 
 #if defined(__GNUC__) && !defined(__clang__)

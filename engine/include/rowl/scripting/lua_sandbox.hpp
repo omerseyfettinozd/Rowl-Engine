@@ -19,6 +19,13 @@ public:
 
     void setVariable(const std::string& key, const std::string& value);
     std::string getVariable(const std::string& key) const;
+    void setGlobalNumber(const std::string& key, double value);
+    double getGlobalNumber(const std::string& key, double defaultValue = 0.0) const;
+
+    bool evaluateCondition(const std::string& conditionExpr);
+
+    const std::unordered_map<std::string, std::string>& getAllVariables() const { return m_scriptVariables; }
+    void clearVariables();
 
     bool isInitialized() const { return m_initialized; }
 

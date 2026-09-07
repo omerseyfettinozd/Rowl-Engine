@@ -301,4 +301,76 @@ void RowlEngine_TriggerVoiceDucking(RowlEngineHandle handle, int isVoiceActive) 
     });
 }
 
+int RowlEngine_SaveGameSlot(RowlEngineHandle handle, int32_t slotIndex) {
+    if (!handle) return 0;
+    return invokeNoexcept<int>([&] {
+        return toEngine(handle)->saveGameSlot(slotIndex) ? 1 : 0;
+    }, 0);
+}
+
+int RowlEngine_LoadGameSlot(RowlEngineHandle handle, int32_t slotIndex) {
+    if (!handle) return 0;
+    return invokeNoexcept<int>([&] {
+        return toEngine(handle)->loadGameSlot(slotIndex) ? 1 : 0;
+    }, 0);
+}
+
+int RowlEngine_HasSaveSlot(RowlEngineHandle handle, int32_t slotIndex) {
+    if (!handle) return 0;
+    return invokeNoexcept<int>([&] {
+        return toEngine(handle)->hasSaveSlot(slotIndex) ? 1 : 0;
+    }, 0);
+}
+
+int RowlEngine_DeleteSaveSlot(RowlEngineHandle handle, int32_t slotIndex) {
+    if (!handle) return 0;
+    return invokeNoexcept<int>([&] {
+        return toEngine(handle)->deleteSaveSlot(slotIndex) ? 1 : 0;
+    }, 0);
+}
+
+int RowlEngine_Rewind(RowlEngineHandle handle, uint32_t steps) {
+    if (!handle) return 0;
+    return invokeNoexcept<int>([&] {
+        return toEngine(handle)->rewind(steps) ? 1 : 0;
+    }, 0);
+}
+
+uint64_t RowlEngine_GetCurrentStepId(RowlEngineHandle handle) {
+    if (!handle) return 0;
+    return invokeNoexcept<uint64_t>([&] {
+        return toEngine(handle)->getCurrentStepId();
+    }, 0);
+}
+
+void RowlEngine_SetVariable(RowlEngineHandle handle, const char* key, const char* value) {
+    if (!handle || !key || !value) return;
+    invokeNoexcept([&] {
+        toEngine(handle)->setScriptVariable(key, value);
+    });
+}
+
+const char* RowlEngine_GetVariable(RowlEngineHandle handle, const char* key) {
+    if (!handle || !key) return "";
+    static thread_local std::string buf;
+    return invokeNoexcept<const char*>([&] {
+        buf = toEngine(handle)->getScriptVariable(key);
+        return buf.c_str();
+    }, "");
+}
+
+int RowlEngine_EvaluateCondition(RowlEngineHandle handle, const char* conditionExpr) {
+    if (!handle || !conditionExpr) return 1;
+    return invokeNoexcept<int>([&] {
+        return toEngine(handle)->evaluateCondition(conditionExpr) ? 1 : 0;
+    }, 1);
+}
+
+int RowlEngine_ExecuteScript(RowlEngineHandle handle, const char* scriptCode) {
+    if (!handle || !scriptCode) return 0;
+    return invokeNoexcept<int>([&] {
+        return toEngine(handle)->executeScript(scriptCode) ? 1 : 0;
+    }, 0);
+}
+
 } // extern "C"

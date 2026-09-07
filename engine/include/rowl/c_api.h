@@ -240,6 +240,40 @@ ROWL_API void RowlEngine_SetBgmVolume(RowlEngineHandle handle, float volume);
 /** Triggers voice ducking attenuation on BGM (1 = voice active, 0 = restored). */
 ROWL_API void RowlEngine_TriggerVoiceDucking(RowlEngineHandle handle, int isVoiceActive);
 
+/* ── Save / Load Slots & History Rewind ───────────────────────────────────── */
+
+/** Saves the current game state to the specified slot (0 = quicksave). Returns 1 on success, 0 on failure. */
+ROWL_API int RowlEngine_SaveGameSlot(RowlEngineHandle handle, int32_t slotIndex);
+
+/** Loads game state from the specified slot. Returns 1 on success, 0 on failure. */
+ROWL_API int RowlEngine_LoadGameSlot(RowlEngineHandle handle, int32_t slotIndex);
+
+/** Returns 1 if the specified save slot exists, 0 otherwise. */
+ROWL_API int RowlEngine_HasSaveSlot(RowlEngineHandle handle, int32_t slotIndex);
+
+/** Deletes the specified save slot. Returns 1 on success, 0 on failure. */
+ROWL_API int RowlEngine_DeleteSaveSlot(RowlEngineHandle handle, int32_t slotIndex);
+
+/** Rewinds the game state by the specified number of steps (default 1). Returns 1 on success, 0 on failure. */
+ROWL_API int RowlEngine_Rewind(RowlEngineHandle handle, uint32_t steps);
+
+/** Returns the current history step ID. */
+ROWL_API uint64_t RowlEngine_GetCurrentStepId(RowlEngineHandle handle);
+
+/* ── Scripting & Variable Evaluation ─────────────────────────────────────── */
+
+/** Sets a string variable in the scripting environment and game state. */
+ROWL_API void RowlEngine_SetVariable(RowlEngineHandle handle, const char* key, const char* value);
+
+/** Gets a variable string by key. The returned pointer is owned by the engine. */
+ROWL_API const char* RowlEngine_GetVariable(RowlEngineHandle handle, const char* key);
+
+/** Evaluates a Lua condition expression (e.g. "gold >= 50"). Returns 1 for true, 0 for false. */
+ROWL_API int RowlEngine_EvaluateCondition(RowlEngineHandle handle, const char* conditionExpr);
+
+/** Executes a sandboxed Lua script string. Returns 1 on success, 0 on error. */
+ROWL_API int RowlEngine_ExecuteScript(RowlEngineHandle handle, const char* scriptCode);
+
 #ifdef __cplusplus
 } /* extern "C" */
 #endif

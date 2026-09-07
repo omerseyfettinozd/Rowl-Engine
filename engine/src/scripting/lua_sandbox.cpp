@@ -139,6 +139,16 @@ void LuaSandbox::bindEngineApis() {
 
 void LuaSandbox::setVariable(const std::string& key, const std::string& value) {
     m_scriptVariables[key] = value;
+    if (m_luaState) {
+        char* end = nullptr;
+        double num = std::strtod(value.c_str(), &end);
+        if (end != value.c_str() && *end == '\0') {
+            lua_pushnumber(m_luaState, num);
+        } else {
+            lua_pushstring(m_luaState, value.c_str());
+        }
+        lua_setglobal(m_luaState, key.c_str());
+    }
     ROWL_LOG_TRACE("Lua Sandbox Variable Set: '" + key + "' = '" + value + "'");
 }
 
@@ -147,7 +157,99 @@ std::string LuaSandbox::getVariable(const std::string& key) const {
     if (it != m_scriptVariables.end()) {
         return it->second;
     }
+    if (m_luaState) {
+        lua_getglobal(m_luaState, key.c_str());
+        if (lua_isstring(m_luaState, -1) || lua_isnumber(m_luaState, -1)) {
+            std::string val = lua_tostring(m_luaState, -1);
+            lua_pop(m_luaState, 1);
+            return val;
+        }
+        lua_pop(m_luaState, 1);
+    }
     return "";
+}
+
+void LuaSandbox::setGlobalNumber(const std::string& key, double value) {
+    m_scriptVariables[key] = std::to_string(value);
+    if (m_luaState) {
+        lua_pushnumber(m_luaState, value);
+        lua_setglobal(m_luaState, key.c_str());
+    }
+    ROWL_LOG_TRACE("Lua Sandbox Number Set: '" + key + "' = " + std::to_string(value));
+}
+
+double LuaSandbox::getGlobalNumber(const std::string& key, double defaultValue) const {
+    if (m_luaState) {
+        lua_getglobal(m_luaState, key.c_str());
+        if (lua_isnumber(m_luaState, -1)) {
+            double val = lua_tonumber(m_luaState, -1);
+            lua_pop(m_luaState, 1);
+            return val;
+        }
+        lua_pop(m_luaState, 1);
+    }
+    auto it = m_scriptVariables.find(key);
+    if (it != m_scriptVariables.end()) {
+        try {
+            return std::stod(it->second);
+        } catch (...) {}
+    }
+    return defaultValue;
+}
+
+bool LuaSandbox::evaluateCondition(const std::string& conditionExpr) {
+    if (conditionExpr.empty() || conditionExpr == "true" || conditionExpr == "1") {
+        return true;
+    }
+    if (conditionExpr == "false" || conditionExpr == "0") {
+        return false;
+    }
+    if (!m_initialized || !m_luaState) {
+        ROWL_LOG_WARN("Lua Sandbox evaluateCondition called without initialization. Defaulting to true.");
+        return true;
+    }
+
+    // Reset instruction counter
+    lua_pushinteger(m_luaState, 0);
+    lua_setfield(m_luaState, LUA_REGISTRYINDEX, "_rowl_instruction_count");
+
+    // Try wrapping in return (...)
+    std::string code;
+    if (conditionExpr.rfind("return", 0) == 0) {
+        code = conditionExpr;
+    } else {
+        code = "return (" + conditionExpr + ")";
+    }
+
+    int loadStatus = luaL_loadstring(m_luaState, code.c_str());
+    if (loadStatus != LUA_OK) {
+        // Pop error and try raw expression with return prefix
+        lua_pop(m_luaState, 1);
+        code = "return " + conditionExpr;
+        loadStatus = luaL_loadstring(m_luaState, code.c_str());
+        if (loadStatus != LUA_OK) {
+            std::string err = lua_tostring(m_luaState, -1);
+            lua_pop(m_luaState, 1);
+            ROWL_LOG_WARN("Lua Condition syntax error in '" + conditionExpr + "': " + err);
+            return false;
+        }
+    }
+
+    int callStatus = lua_pcall(m_luaState, 0, 1, 0);
+    if (callStatus != LUA_OK) {
+        std::string err = lua_tostring(m_luaState, -1);
+        lua_pop(m_luaState, 1);
+        ROWL_LOG_WARN("Lua Condition runtime error in '" + conditionExpr + "': " + err);
+        return false;
+    }
+
+    bool result = lua_toboolean(m_luaState, -1) != 0;
+    lua_pop(m_luaState, 1);
+    return result;
+}
+
+void LuaSandbox::clearVariables() {
+    m_scriptVariables.clear();
 }
 
 bool LuaSandbox::executeString(const std::string& scriptCode) {
