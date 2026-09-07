@@ -14,6 +14,40 @@
 
 namespace Rowl::Render {
 
+namespace {
+
+constexpr int kMaxTextureDimension = 8'192;
+constexpr uint64_t kMaxTexturePixels = 16ULL * 1024 * 1024;
+
+bool hasSafeTextureDimensions(int width, int height) {
+    return width > 0 && height > 0 &&
+           width <= kMaxTextureDimension && height <= kMaxTextureDimension &&
+           static_cast<uint64_t>(width) * static_cast<uint64_t>(height) <= kMaxTexturePixels;
+}
+
+unsigned char* loadTextureFileSafely(const std::string& path, int* width, int* height, int* channels) {
+    int infoWidth = 0, infoHeight = 0, infoChannels = 0;
+    if (!stbi_info(path.c_str(), &infoWidth, &infoHeight, &infoChannels)) return nullptr;
+    if (!hasSafeTextureDimensions(infoWidth, infoHeight)) {
+        ROWL_LOG_WARN("Rejected texture with unsafe dimensions: " + path);
+        return nullptr;
+    }
+    return stbi_load(path.c_str(), width, height, channels, 4);
+}
+
+unsigned char* loadTextureMemorySafely(const uint8_t* bytes, int byteCount,
+                                       int* width, int* height, int* channels) {
+    int infoWidth = 0, infoHeight = 0, infoChannels = 0;
+    if (!stbi_info_from_memory(bytes, byteCount, &infoWidth, &infoHeight, &infoChannels)) return nullptr;
+    if (!hasSafeTextureDimensions(infoWidth, infoHeight)) {
+        ROWL_LOG_WARN("Rejected texture buffer with unsafe dimensions");
+        return nullptr;
+    }
+    return stbi_load_from_memory(bytes, byteCount, width, height, channels, 4);
+}
+
+} // namespace
+
 Window::Window() = default;
 
 Window::~Window() {
@@ -394,7 +428,7 @@ SDL_Texture* Window::loadTexture(const std::string& filename) {
 
     // 1. Direct absolute or relative filesystem check
     if (fs::exists(normPath) && fs::is_regular_file(normPath)) {
-        data = stbi_load(normPath.c_str(), &width, &height, &channels, 4);
+        data = loadTextureFileSafely(normPath, &width, &height, &channels);
         if (data) {
             sourceInfo = "Direct Path [" + normPath + "]";
         }
@@ -416,7 +450,7 @@ SDL_Texture* Window::loadTexture(const std::string& filename) {
         for (const auto& candidate : vfsCandidates) {
             auto bytes = Rowl::VFS::VFSManager::instance().readBytes(candidate);
             if (!bytes.empty()) {
-                data = stbi_load_from_memory(bytes.data(), static_cast<int>(bytes.size()), &width, &height, &channels, 4);
+                data = loadTextureMemorySafely(bytes.data(), static_cast<int>(bytes.size()), &width, &height, &channels);
                 if (data) {
                     sourceInfo = "VFS [" + candidate + "]";
                     break;
@@ -439,7 +473,7 @@ SDL_Texture* Window::loadTexture(const std::string& filename) {
                 };
                 for (const auto& dp : diskCandidates) {
                     if (fs::exists(dp) && fs::is_regular_file(dp)) {
-                        data = stbi_load(dp.string().c_str(), &width, &height, &channels, 4);
+                        data = loadTextureFileSafely(dp.string(), &width, &height, &channels);
                         if (data) {
                             sourceInfo = "VFS Mount Disk [" + dp.string() + "]";
                             break;
@@ -466,7 +500,7 @@ SDL_Texture* Window::loadTexture(const std::string& filename) {
 
         for (const auto& p : searchPaths) {
             if (fs::exists(p) && fs::is_regular_file(p)) {
-                data = stbi_load(p.string().c_str(), &width, &height, &channels, 4);
+                data = loadTextureFileSafely(p.string(), &width, &height, &channels);
                 if (data) {
                     sourceInfo = p.string();
                     break;

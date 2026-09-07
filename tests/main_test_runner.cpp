@@ -1266,6 +1266,23 @@ void test_hardening_and_reliability() {
                 std::cerr << "Texture negative cache was not cleared with the texture cache" << std::endl;
                 exit(1);
             }
+            const auto oversizedTexturePath = std::filesystem::temp_directory_path() / "rowl_oversized_texture.png";
+            const uint8_t oversizedPngHeader[] = {
+                137, 80, 78, 71, 13, 10, 26, 10, // PNG signature
+                0, 0, 0, 13, 'I', 'H', 'D', 'R',
+                0, 0, 78, 32, // 20,000 px width
+                0, 0, 0, 1,   // 1 px height
+                8, 6, 0, 0, 0, 0, 0, 0, 0 // IHDR fields + unused CRC
+            };
+            {
+                std::ofstream oversizedTexture(oversizedTexturePath, std::ios::binary);
+                oversizedTexture.write(reinterpret_cast<const char*>(oversizedPngHeader), sizeof(oversizedPngHeader));
+            }
+            if (win.loadTexture(oversizedTexturePath.string()) != nullptr) {
+                std::cerr << "Renderer decoded a texture with unsafe dimensions" << std::endl;
+                exit(1);
+            }
+            std::filesystem::remove(oversizedTexturePath);
             win.shutdown();          // Must safely free unique textures only once
             TEST_PASS("Texture Cache Unique Teardown and Missing-Asset Negative Cache");
         }
