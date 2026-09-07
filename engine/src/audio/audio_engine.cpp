@@ -4,12 +4,20 @@
 #include <SDL3/SDL.h>
 #include <algorithm>
 #include <cmath>
+#include <climits>
 #include <filesystem>
 #include <vector>
 
 namespace fs = std::filesystem;
 
 namespace Rowl::Audio {
+
+namespace {
+
+constexpr uintmax_t kMaxEncodedAudioBytes = 64ULL * 1024 * 1024;
+constexpr Uint32 kMaxDecodedAudioBytes = 64U * 1024 * 1024;
+
+} // namespace
 
 AudioEngine::AudioEngine() = default;
 
@@ -63,6 +71,17 @@ bool AudioEngine::initialize() {
 
 void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType channel, DSPFilterType filter) {
     if (!m_initialized || assetPath.empty()) return;
+
+    // Avoid opening a locally supplied file that could force SDL to allocate
+    // an unbounded decode buffer. VFS sources have their own 128 MiB asset
+    // cap; audio remains intentionally stricter because BGM is retained for
+    // loop playback.
+    std::error_code fileSizeError;
+    if (fs::is_regular_file(assetPath, fileSizeError) && !fileSizeError &&
+        fs::file_size(assetPath, fileSizeError) > kMaxEncodedAudioBytes && !fileSizeError) {
+        ROWL_LOG_WARN("Audio file exceeds the maximum accepted size: " + assetPath);
+        return;
+    }
 
     std::string channelName = (channel == AudioChannelType::Bgm) ? "BGM (Streaming)" :
                               (channel == AudioChannelType::Voice) ? "Voice" : "SFX (Memory Pool)";
@@ -119,6 +138,11 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
     }
 
     if (loaded && audioBuf && audioLen > 0) {
+        if (audioLen > kMaxDecodedAudioBytes || audioLen > static_cast<Uint32>(INT_MAX)) {
+            ROWL_LOG_WARN("Decoded audio exceeds the maximum accepted size: " + assetPath);
+            SDL_free(audioBuf);
+            return;
+        }
         SDL_AudioStream* targetStream = (channel == AudioChannelType::Bgm) ? m_bgmStream : m_sfxStream;
         if (targetStream) {
             if (channel == AudioChannelType::Bgm) {

@@ -12,6 +12,8 @@ namespace fs = std::filesystem;
 
 namespace {
 
+constexpr uintmax_t kMaxLooseAssetBytes = 128ULL * 1024 * 1024;
+
 std::optional<fs::path> resolveInsideRoot(const std::string& physicalRoot,
                                           const std::string& relativePath) {
     if (relativePath.empty() || relativePath.find('\0') != std::string::npos) return std::nullopt;
@@ -62,6 +64,10 @@ std::vector<uint8_t> LooseDirectorySource::read(const std::string& path) {
     std::streamsize size = file.tellg();
     if (size < 0) {
         ROWL_LOG_WARN("Failed to determine file size: " + fullPath->string());
+        return {};
+    }
+    if (static_cast<uintmax_t>(size) > kMaxLooseAssetBytes) {
+        ROWL_LOG_WARN("VFS rejected oversized loose asset: " + fullPath->string());
         return {};
     }
 

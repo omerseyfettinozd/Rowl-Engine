@@ -12,6 +12,7 @@ namespace Rowl::VFS {
 namespace {
 
 constexpr uint16_t kSupportedPackageVersion = 1;
+constexpr uint64_t kMaxPackageEntryBytes = 128ULL * 1024 * 1024;
 
 std::optional<std::string> normalizePackagePath(std::string path) {
     if (path.empty() || path.find('\0') != std::string::npos) return std::nullopt;
@@ -128,7 +129,8 @@ bool RowlPkgDataSource::loadIndexTable() {
         // duplicate canonical paths are rejected below.
 
         // Validate sizes
-        if (rawEntry.compressedSize > 1000000000ULL || rawEntry.uncompressedSize > 1000000000ULL) {
+        if (rawEntry.compressedSize > kMaxPackageEntryBytes ||
+            rawEntry.uncompressedSize > kMaxPackageEntryBytes) {
             ROWL_LOG_ERROR("Package entry size too large, possible corruption");
             return false;
         }

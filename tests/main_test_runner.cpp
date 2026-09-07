@@ -261,6 +261,15 @@ void test_audio_engine() {
         std::cerr << "Audio BGM path mismatch" << std::endl;
         exit(1);
     }
+    const auto oversizedAudioPath = std::filesystem::temp_directory_path() / "rowl_oversized_audio.wav";
+    std::ofstream(oversizedAudioPath, std::ios::binary).close();
+    std::filesystem::resize_file(oversizedAudioPath, 64ULL * 1024 * 1024 + 1);
+    audio.playAudio(oversizedAudioPath.string(), Rowl::Audio::AudioChannelType::Bgm);
+    if (audio.getCurrentBgmPath() != tonePath.string()) {
+        std::cerr << "Oversized audio load replaced the current playback state" << std::endl;
+        exit(1);
+    }
+    std::filesystem::remove(oversizedAudioPath);
     if (audio.isAudioDeviceAvailable()) {
         audio.playAudio("missing_theme.wav", Rowl::Audio::AudioChannelType::Bgm);
         if (audio.getCurrentBgmPath() != tonePath.string()) {
@@ -405,6 +414,15 @@ void test_vfs_security() {
         exit(1);
     }
     TEST_PASS("Loose-directory mounts reject parent traversal");
+
+    const auto oversizedLooseAsset = mountRoot / "oversized.bin";
+    std::ofstream(oversizedLooseAsset, std::ios::binary).close();
+    std::filesystem::resize_file(oversizedLooseAsset, 128ULL * 1024 * 1024 + 1);
+    if (source.exists("oversized.bin") && !source.read("oversized.bin").empty()) {
+        std::cerr << "VFS loaded an oversized loose asset" << std::endl;
+        exit(1);
+    }
+    TEST_PASS("Loose-directory mounts reject oversized assets");
 
     const auto malformedPackage = testRoot / "malformed.rowlpkg";
     {
