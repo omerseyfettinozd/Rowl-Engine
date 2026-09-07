@@ -339,8 +339,14 @@ namespace RowlEngine.Editor
 
             if (!File.Exists(Path.Combine(testBuildDir, "run_game.sh")))
                 throw new Exception("run_game.sh missing in standalone build output");
+            if (!File.Exists(Path.Combine(testBuildDir, "run_game.bat")))
+                throw new Exception("run_game.bat missing in standalone build output");
             if (!File.Exists(Path.Combine(testBuildDir, "README.txt")))
                 throw new Exception("README.txt missing in standalone build output");
+            if (!File.Exists(Path.Combine(testBuildDir, "RowlGame")) && !File.Exists(Path.Combine(testBuildDir, "rowl_player")))
+                throw new Exception("Standalone player executable missing in standalone build output");
+            if (!File.Exists(Path.Combine(testBuildDir, "libRowlEngineCore.so")))
+                throw new Exception("libRowlEngineCore.so missing in standalone build output");
             if (!Directory.Exists(Path.Combine(testBuildDir, "Assets")))
                 throw new Exception("Assets directory missing in standalone build output");
 

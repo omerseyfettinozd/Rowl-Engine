@@ -2320,90 +2320,16 @@ namespace RowlEngine.Editor.ViewModels
         /// </summary>
         public void ExecuteBuildPipeline(string buildOutDir)
         {
-            AppendLog("\n=======================================================");
-            AppendLog("🚀 ROWL ENGINE STANDALONE BUILD PIPELINE BAŞLATILDI");
-            AppendLog($"📦 Hedef Çıktı Dizini: {buildOutDir}");
-            AppendLog("=======================================================");
-
-            Directory.CreateDirectory(buildOutDir);
-
-            // Step 1: Save latest story graphs
-            AppendLog("[BUILD 1/5] 📝 Hikaye grafiği ve bileşen verileri derleniyor...");
+            // Save latest story graphs
             SaveActiveStoryFile();
             SaveFullStoryGraphFile();
 
-            // Step 2: Copy Assets folder
-            AppendLog("[BUILD 2/5] 🖼️ Varlıklar (Assets) ve görseller paketleniyor...");
-            string outAssets = Path.Combine(buildOutDir, "Assets");
-            ProjectFileSystem.CopyDirectory(MainWindowViewModel.AssetsPath, outAssets);
-
-            // Step 3: Copy native binaries (rowl_engine & libRowlEngineCore.so)
-            AppendLog("[BUILD 3/5] ⚙️ Yerel oyun motoru ikilileri (Rowl Engine Core) kopyalanıyor...");
-            string baseDir = AppDomain.CurrentDomain.BaseDirectory;
-            string rootDir = Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", ".."));
-            string nativeBinSource = Path.Combine(rootDir, "build", "bin", "rowl_engine");
-            string nativeLibSource = Path.Combine(rootDir, "build", "lib", "libRowlEngineCore.so");
-
-            string destEngineExe = Path.Combine(buildOutDir, "RowlGame");
-            string destEngineLib = Path.Combine(buildOutDir, "libRowlEngineCore.so");
-
-            if (File.Exists(nativeBinSource))
-            {
-                File.Copy(nativeBinSource, destEngineExe, true);
-                try
-                {
-                    if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
-                    {
-                        var mode = File.GetUnixFileMode(destEngineExe);
-                        File.SetUnixFileMode(destEngineExe, mode | UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute);
-                    }
-                }
-                catch { }
-            }
-
-            if (File.Exists(nativeLibSource))
-            {
-                File.Copy(nativeLibSource, destEngineLib, true);
-            }
-
-            // Step 4: Create launcher script (run_game.sh)
-            AppendLog("[BUILD 4/5] 📜 Otomatik Başlatıcı (Launcher Script) oluşturuluyor...");
-            string launcherScriptPath = Path.Combine(buildOutDir, "run_game.sh");
-            string launcherContent = "#!/bin/bash\n" +
-                                     "SCRIPT_DIR=\"$(cd \"$(dirname \"${BASH_SOURCE[0]}\")\" && pwd)\"\n" +
-                                     "export LD_LIBRARY_PATH=\"$SCRIPT_DIR:$LD_LIBRARY_PATH\"\n" +
-                                     "cd \"$SCRIPT_DIR\"\n" +
-                                     "exec \"$SCRIPT_DIR/RowlGame\" \"$@\"\n";
-            File.WriteAllText(launcherScriptPath, launcherContent);
-
-            try
-            {
-                if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
-                {
-                    var mode = File.GetUnixFileMode(launcherScriptPath);
-                    File.SetUnixFileMode(launcherScriptPath, mode | UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute);
-                }
-            }
-            catch { }
-
-            // Step 5: Create README instructions
-            AppendLog("[BUILD 5/5] 📄 Dağıtım ve çalıştırma kılavuzu (README) ekleniyor...");
-            string readmePath = Path.Combine(buildOutDir, "README.txt");
-            string readmeContent = "=======================================================\n" +
-                                   "🎮 ROWL ENGINE - STANDALONE GAME RELEASE\n" +
-                                   "=======================================================\n\n" +
-                                   "Oyunu Başlatmak İçin:\n" +
-                                   "Linux / macOS: ./run_game.sh veya ./RowlGame\n" +
-                                   "Windows: RowlGame.exe\n\n" +
-                                   "Tüm grafikler ve hikaye akışı Assets/ klasöründen bağımsız olarak yüklenir.\n" +
-                                   "Oluşturulma Tarihi: " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "\n";
-            File.WriteAllText(readmePath, readmeContent);
-
-            AppendLog("\n=======================================================");
-            AppendLog($"🎉 [BUILD BAŞARILI] Oyun bağımsız dağıtım paketi oluşturuldu!");
-            AppendLog($"📁 Konum: {buildOutDir}");
-            AppendLog($"▶️ Çalıştırmak için: {launcherScriptPath}");
-            AppendLog("=======================================================\n");
+            // Delegate export to ProjectBuildService
+            ProjectBuildService.BuildStandalone(
+                MainWindowViewModel.ProjectRoot,
+                MainWindowViewModel.AssetsPath,
+                buildOutDir,
+                AppendLog);
         }
 
         /// <summary>
