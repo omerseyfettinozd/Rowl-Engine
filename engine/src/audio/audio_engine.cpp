@@ -123,6 +123,7 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
         if (targetStream) {
             if (channel == AudioChannelType::Bgm) {
                 SDL_ClearAudioStream(m_bgmStream);
+                m_bgmData.assign(audioBuf, audioBuf + audioLen);
             }
             SDL_SetAudioStreamFormat(targetStream, &spec, nullptr);
             SDL_PutAudioStreamData(targetStream, audioBuf, static_cast<int>(audioLen));
@@ -141,6 +142,7 @@ void AudioEngine::stopBgm() {
         SDL_PauseAudioStreamDevice(m_bgmStream);
     }
     m_currentBgmPath = "";
+    m_bgmData.clear();
     ROWL_LOG_INFO("[AudioEngine] BGM stopped.");
 }
 
@@ -199,10 +201,23 @@ void AudioEngine::applyDspFilter(DSPFilterType filter) {
     ROWL_LOG_INFO("DSP Filter Applied -> " + filterName);
 }
 
+void AudioEngine::update() {
+    if (!m_initialized || !m_deviceAvailable || !m_bgmStream || m_bgmData.empty() || !m_bgmLoop) {
+        return;
+    }
+    int available = SDL_GetAudioStreamAvailable(m_bgmStream);
+    if (available <= 0) {
+        SDL_PutAudioStreamData(m_bgmStream, m_bgmData.data(), static_cast<int>(m_bgmData.size()));
+        SDL_ResumeAudioStreamDevice(m_bgmStream);
+    }
+}
+
 void AudioEngine::shutdown() {
     if (!m_initialized) return;
 
     ROWL_LOG_INFO("Shutting down Audio Engine Subsystem...");
+
+    m_bgmData.clear();
 
     if (m_bgmStream) {
         SDL_DestroyAudioStream(m_bgmStream);

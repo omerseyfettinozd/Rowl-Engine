@@ -254,6 +254,12 @@ void FontRenderer::renderText(
 ) {
     if (!m_loaded || !targetSurface || utf8Text.empty() || maxVisibleCodepoints == 0) return;
 
+    bool mustUnlock = false;
+    if (SDL_MUSTLOCK(targetSurface)) {
+        if (!SDL_LockSurface(targetSurface)) return;
+        mustUnlock = true;
+    }
+
     int pixelHeight = static_cast<int>(std::round(fontSize));
     if (pixelHeight < 8) pixelHeight = 8;
 
@@ -331,6 +337,10 @@ void FontRenderer::renderText(
         }
 
         currentY += lineHeight;
+    }
+
+    if (mustUnlock) {
+        SDL_UnlockSurface(targetSurface);
     }
 }
 

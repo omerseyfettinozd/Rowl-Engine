@@ -5,6 +5,7 @@
 #include <vector>
 #include <memory>
 #include <utility>
+#include <mutex>
 
 namespace Rowl::VFS {
 
@@ -43,12 +44,16 @@ public:
     bool exists(const std::string& vfsPath);
     std::vector<uint8_t> readBytes(const std::string& vfsPath);
     std::string readString(const std::string& vfsPath);
-    const std::vector<std::pair<std::string, std::shared_ptr<IDataSource>>>& getMountPoints() const { return m_mountPoints; }
+    std::vector<std::pair<std::string, std::shared_ptr<IDataSource>>> getMountPoints() const {
+        std::lock_guard<std::recursive_mutex> lock(m_mutex);
+        return m_mountPoints;
+    }
 
 private:
     VFSManager() = default;
     ~VFSManager() = default;
 
+    mutable std::recursive_mutex m_mutex;
     std::vector<std::pair<std::string, std::shared_ptr<IDataSource>>> m_mountPoints;
     bool m_initialized = false;
 };

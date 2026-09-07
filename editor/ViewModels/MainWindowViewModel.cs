@@ -791,100 +791,44 @@ namespace RowlEngine.Editor.ViewModels
                 var parsedDocument = document!;
                 using (parsedDocument)
                 {
-                var root = parsedDocument.RootElement;
-
-                int formatVersion = 0;
-                if (root.TryGetProperty("format_version", out var fv))
-                    formatVersion = fv.GetInt32();
-
-                if (!root.TryGetProperty("nodes", out var nodesArray) || nodesArray.ValueKind != JsonValueKind.Array)
-                    return false;
-
-                // Clear existing nodes
-                Nodes.Clear();
-                Connections.Clear();
-
-                // Parse nodes
-                var nodeMap = new Dictionary<ulong, NodeViewModel>();
-
-                foreach (var nodeJson in nodesArray.EnumerateArray())
-                {
-                    var node = StoryGraphNodeHydrator.CreateShell(nodeJson, nodeMap.Count);
-                    ulong nodeId = node.Id;
-
-                    // ── V3 Format: Objects array (Unity GameObject style) ──
-                    if (nodeJson.TryGetProperty("objects", out var objsArray) && objsArray.ValueKind == JsonValueKind.Array)
+                    var loadResult = StoryGraphLoaderService.Load(parsedDocument);
+                    if (!loadResult.Success)
                     {
-                        foreach (var objJson in objsArray.EnumerateArray())
-                        {
-                            string objName = objJson.TryGetProperty("name", out var onProp) ? onProp.GetString() ?? "GameObject" : "GameObject";
-                            var frameObj = node.CreateObject(objName);
-
-                            if (objJson.TryGetProperty("id", out var oidProp))
-                                frameObj.Id = oidProp.GetString() ?? frameObj.Id;
-
-                            if (objJson.TryGetProperty("is_active", out var actProp))
-                                frameObj.IsActive = actProp.GetBoolean();
-
-                            if (objJson.TryGetProperty("components", out var compsArray) && compsArray.ValueKind == JsonValueKind.Array)
-                            {
-                                foreach (var compJson in compsArray.EnumerateArray())
-                                {
-                                    if (StoryGraphComponentHydrator.TryCreate(compJson, out var component, out var unknownType))
-                                    {
-                                        frameObj.AddComponent(component!);
-                                    }
-                                    else if (unknownType is not null)
-                                    {
-                                        AppendLog($"⚠️ Unknown component type '{unknownType}' in Node #{nodeId}, skipping.");
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    // ── V2 Format: Components array directly under node (auto-migrate into objects) ──
-                    else if (nodeJson.TryGetProperty("components", out var compsArray) && compsArray.ValueKind == JsonValueKind.Array)
-                    {
-                        foreach (var compJson in compsArray.EnumerateArray())
-                        {
-                            if (StoryGraphComponentHydrator.TryCreate(compJson, out var component, out var unknownType))
-                            {
-                                string objName = component!.DisplayName;
-                                var frameObj = node.CreateObject(objName);
-                                frameObj.AddComponent(component);
-                            }
-                            else if (unknownType is not null)
-                            {
-                                AppendLog($"⚠️ Unknown component type '{unknownType}' in Node #{nodeId}, skipping.");
-                            }
-                        }
-                    }
-                    // ── V1 Format: Create objects & components from flat fields ──
-                    else
-                    {
-                        StoryGraphNodeHydrator.PopulateLegacyFields(node, nodeJson);
+                        if (!string.IsNullOrEmpty(loadResult.ErrorMessage))
+                            AppendLog($"⚠️ Failed to load story graph: {loadResult.ErrorMessage}");
+                        return false;
                     }
 
-                    StoryGraphNodeHydrator.EnsureDefaultObjects(node);
+                    foreach (var warning in loadResult.Warnings)
+                    {
+                        AppendLog(warning);
+                    }
 
-                    node.RefreshBitmaps();
-                    node.PropertyChanged += OnNodePropertyChanged;
-                    Nodes.Add(node);
-                    nodeMap[nodeId] = node;
-                }
+                    Nodes.Clear();
+                    Connections.Clear();
 
-                foreach (var connection in StoryGraphConnectionHydrator.Create(nodesArray, nodeMap))
-                    Connections.Add(connection);
-                EnforceSingleOutgoingWireRule();
+                    foreach (var node in loadResult.Nodes)
+                    {
+                        node.RefreshBitmaps();
+                        node.PropertyChanged += OnNodePropertyChanged;
+                        Nodes.Add(node);
+                    }
 
-                var startNode = GetStartNode() ?? Nodes.FirstOrDefault();
-                if (startNode != null)
-                {
-                    SelectNodeQuiet(startNode);
-                }
+                    foreach (var connection in loadResult.Connections)
+                    {
+                        Connections.Add(connection);
+                    }
 
-                AppendLog($"📂 Loaded story graph from {filePath} ({Nodes.Count} nodes, {Connections.Count} connections, format v{formatVersion})");
-                return true;
+                    EnforceSingleOutgoingWireRule();
+
+                    var startNode = GetStartNode() ?? Nodes.FirstOrDefault();
+                    if (startNode != null)
+                    {
+                        SelectNodeQuiet(startNode);
+                    }
+
+                    AppendLog($"📂 Loaded story graph from {filePath} ({Nodes.Count} nodes, {Connections.Count} connections, format v{loadResult.FormatVersion})");
+                    return true;
                 }
             }
             catch (Exception ex)

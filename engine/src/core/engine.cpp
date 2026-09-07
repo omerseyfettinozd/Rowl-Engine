@@ -139,6 +139,7 @@ void Engine::resetToStartNode() {
     }
 
     m_currentNodeId = m_startNodeId;
+    m_gameState = Rowl::State::GameState::createInitialState(m_startNodeId);
     auto it = m_storyNodes.find(m_currentNodeId);
     if (it != m_storyNodes.end()) {
         const auto& startNode = it->second;
@@ -223,6 +224,9 @@ void Engine::advanceToNextNode(uint32_t choiceIndex) {
             uint64_t nextId = node.nextNodes[choiceIndex].nodeId;
             if (nextId != 0 && m_storyNodes.find(nextId) != m_storyNodes.end()) {
                 m_currentNodeId = nextId;
+                if (m_gameState) {
+                    m_gameState = Rowl::State::GameState::createNextState(m_gameState, m_currentNodeId);
+                }
             } else {
                 return; // End of story chain
             }
@@ -833,6 +837,10 @@ void Engine::step(float deltaTime) {
     if (m_scene) {
         m_scene->update(deltaTime);
         m_scene->render(m_window.get());
+    }
+
+    if (m_audio) {
+        m_audio->update();
     }
 
     m_window->endFrame();

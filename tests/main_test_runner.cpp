@@ -778,6 +778,111 @@ void test_native_performance_benchmarks() {
     RowlEngine_Destroy(handle);
 }
 
+void test_hardening_and_reliability() {
+    TEST_SECTION("Hardening & Lifecycle Reliability");
+
+    // 1. Texture Cache Double-Free Safety
+    {
+        Rowl::Render::Window win;
+        bool initOk = win.initializeOffscreen(400, 300);
+        if (initOk) {
+            auto* t1 = win.loadTexture("Woman.png");
+            auto* t2 = win.loadTexture("Margot.jpg");
+            (void)t1; (void)t2;
+            win.clearTextureCache(); // Must safely free unique textures only once
+            win.loadTexture("Woman.png");
+            win.shutdown();          // Must safely free unique textures only once
+            TEST_PASS("Texture Cache Double-Free Prevention & Unique Teardown");
+        }
+    }
+
+    // 2. VFS Cross-Platform Path Normalization (Windows Backslashes)
+    {
+        auto& vfs = Rowl::VFS::VFSManager::instance();
+        bool existsSlash = vfs.exists("images/Woman.png");
+        bool existsBackslash = vfs.exists("images\\Woman.png");
+        if (existsSlash && !existsBackslash) {
+            std::cerr << "VFS backslash normalization failed for images\\Woman.png" << std::endl;
+            exit(1);
+        }
+        TEST_PASS("VFS Cross-Platform Backslash (\\) Path Normalization");
+    }
+
+    // 3. GameState Step-by-Step Node Traversal & Rewind Integrity
+    {
+        const auto tempGraph = std::filesystem::temp_directory_path() / "rowl_rewind_chain_test.json";
+        {
+            std::ofstream f(tempGraph);
+            f << R"({
+                "format_version": 4,
+                "start_node_id": 201,
+                "nodes": [
+                    {"id": 201, "speaker": "A", "dialogue": "Step 1", "next_nodes": [{"id": 202, "label": "Next"}]},
+                    {"id": 202, "speaker": "B", "dialogue": "Step 2", "next_nodes": [{"id": 203, "label": "Next"}]},
+                    {"id": 203, "speaker": "C", "dialogue": "Step 3", "next_nodes": []}
+                ]
+            })";
+        }
+
+        Rowl::Core::Engine engine;
+        Rowl::Core::EngineConfig cfg;
+        cfg.virtualWidth = 1920;
+        cfg.virtualHeight = 1080;
+        engine.initialize(cfg);
+        engine.loadStoryGraphFromPath(tempGraph.string());
+        engine.setPlayState(true);
+        engine.resetToStartNode();
+
+        if (engine.getCurrentNodeId() != 201) {
+            std::cerr << "Engine failed to start at Node 201" << std::endl;
+            exit(1);
+        }
+
+        engine.advanceToNextNode();
+        if (engine.getCurrentNodeId() != 202) {
+            std::cerr << "Engine failed to advance to Node 202" << std::endl;
+            exit(1);
+        }
+
+        engine.advanceToNextNode();
+        if (engine.getCurrentNodeId() != 203) {
+            std::cerr << "Engine failed to advance to Node 203" << std::endl;
+            exit(1);
+        }
+
+        // Rewind 1 step -> should return to Node 202
+        bool rw1 = engine.rewind(1);
+        if (!rw1 || engine.getCurrentNodeId() != 202) {
+            std::cerr << "Rewind 1 failed: expected Node 202, got " << engine.getCurrentNodeId() << std::endl;
+            exit(1);
+        }
+
+        // Rewind another step -> should return to Node 201
+        bool rw2 = engine.rewind(1);
+        if (!rw2 || engine.getCurrentNodeId() != 201) {
+            std::cerr << "Rewind 2 failed: expected Node 201, got " << engine.getCurrentNodeId() << std::endl;
+            exit(1);
+        }
+        TEST_PASS("GameState Node-by-Node Step Recording & History Rewind Chain");
+        std::filesystem::remove(tempGraph);
+    }
+
+    // 4. BGM Looping State & Configuration
+    {
+        Rowl::Audio::AudioEngine audio;
+        if (!audio.isBgmLooping()) {
+            std::cerr << "BGM looping expected to default to true" << std::endl;
+            exit(1);
+        }
+        audio.setBgmLooping(false);
+        if (audio.isBgmLooping()) {
+            std::cerr << "setBgmLooping(false) failed" << std::endl;
+            exit(1);
+        }
+        TEST_PASS("Audio Engine BGM Looping Configuration");
+    }
+}
+
 int main() {
     std::cout << "\n=======================================================" << std::endl;
     std::cout << "🚀 ROWL ENGINE COMPREHENSIVE NATIVE UNIT TEST SUITE 🚀" << std::endl;
@@ -792,6 +897,7 @@ int main() {
     test_native_c_api();
     test_game_object_component_system();
     test_native_performance_benchmarks();
+    test_hardening_and_reliability();
 
     std::cout << "\n=======================================================" << std::endl;
     std::cout << "🎉 ALL UNIT & INTEGRATION TESTS PASSED SUCCESSFULLY! 🎉" << std::endl;

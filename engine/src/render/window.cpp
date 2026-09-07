@@ -8,6 +8,7 @@
 #include <SDL3/SDL.h>
 #include <filesystem>
 #include <vector>
+#include <unordered_set>
 #include <algorithm>
 #include <string>
 
@@ -353,14 +354,18 @@ void Window::beginFrame() {
 }
 
 void Window::clearTextureCache() {
+    std::unordered_set<SDL_Texture*> uniqueTextures;
     for (auto& [name, tex] : m_textureCache) {
         if (tex) {
-            SDL_DestroyTexture(tex);
+            uniqueTextures.insert(tex);
         }
+    }
+    for (auto* tex : uniqueTextures) {
+        SDL_DestroyTexture(tex);
     }
     m_textureCache.clear();
     m_buttonFontCache.clear();
-    ROWL_LOG_INFO("Hardware Texture Cache Cleared.");
+    ROWL_LOG_INFO("Hardware Texture Cache Cleared (" + std::to_string(uniqueTextures.size()) + " unique textures freed).");
 }
 
 SDL_Texture* Window::loadTexture(const std::string& filename) {
@@ -860,10 +865,14 @@ void Window::shutdown() {
 
     ROWL_LOG_INFO("Shutting down SDL3 Windowing & Graphics Subsystem...");
 
+    std::unordered_set<SDL_Texture*> uniqueTextures;
     for (auto& [name, tex] : m_textureCache) {
         if (tex) {
-            SDL_DestroyTexture(tex);
+            uniqueTextures.insert(tex);
         }
+    }
+    for (auto* tex : uniqueTextures) {
+        SDL_DestroyTexture(tex);
     }
     m_textureCache.clear();
 

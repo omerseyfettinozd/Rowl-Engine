@@ -16,7 +16,10 @@ std::optional<fs::path> resolveInsideRoot(const std::string& physicalRoot,
                                           const std::string& relativePath) {
     if (relativePath.empty() || relativePath.find('\0') != std::string::npos) return std::nullopt;
 
-    fs::path requested(relativePath);
+    std::string normalizedRel = relativePath;
+    std::replace(normalizedRel.begin(), normalizedRel.end(), '\\', '/');
+
+    fs::path requested(normalizedRel);
     if (requested.is_absolute() || requested.has_root_name() || requested.has_root_directory()) {
         return std::nullopt;
     }
@@ -78,6 +81,7 @@ VFSManager& VFSManager::instance() {
 }
 
 void VFSManager::initialize() {
+    std::lock_guard<std::recursive_mutex> lock(m_mutex);
     if (m_initialized) return;
 
     ROWL_LOG_INFO("Initializing Hybrid Virtual File System (VFS)...");
@@ -118,11 +122,13 @@ void VFSManager::initialize() {
 }
 
 void VFSManager::clearMountPoints() {
+    std::lock_guard<std::recursive_mutex> lock(m_mutex);
     m_mountPoints.clear();
     ROWL_LOG_INFO("VFS Mount Points Cleared.");
 }
 
 void VFSManager::remountProject(const std::string& projectRoot) {
+    std::lock_guard<std::recursive_mutex> lock(m_mutex);
     clearMountPoints();
     m_initialized = true;
 
@@ -174,12 +180,14 @@ void VFSManager::remountProject(const std::string& projectRoot) {
 }
 
 void VFSManager::mountDirectory(const std::string& virtualPrefix, const std::string& physicalPath) {
+    std::lock_guard<std::recursive_mutex> lock(m_mutex);
     auto source = std::make_shared<LooseDirectorySource>(physicalPath);
     m_mountPoints.emplace_back(virtualPrefix, source);
     ROWL_LOG_INFO("VFS Mounted directory: '" + physicalPath + "' under virtual prefix '" + virtualPrefix + "'");
 }
 
 void VFSManager::mountPackage(const std::string& virtualPrefix, const std::string& pkgPath) {
+    std::lock_guard<std::recursive_mutex> lock(m_mutex);
     auto source = std::make_shared<RowlPkgDataSource>(pkgPath);
     if (source->isValid()) {
         m_mountPoints.emplace_back(virtualPrefix, source);
@@ -192,13 +200,17 @@ void VFSManager::mountPackage(const std::string& virtualPrefix, const std::strin
 bool VFSManager::exists(const std::string& vfsPath) {
     if (vfsPath.empty()) return false;
 
+    std::string cleanPath = vfsPath;
+    std::replace(cleanPath.begin(), cleanPath.end(), '\\', '/');
+
+    std::lock_guard<std::recursive_mutex> lock(m_mutex);
     // Try with prefix stripping first (correct priority: mods > data > packages)
     for (const auto& [prefix, source] : m_mountPoints) {
-        // If vfsPath starts with prefix, try stripped version first
-        if (!prefix.empty() && vfsPath.size() > prefix.size() &&
-            vfsPath.compare(0, prefix.size(), prefix) == 0 &&
-            vfsPath[prefix.size()] == '/') {
-            std::string stripped = vfsPath.substr(prefix.size() + 1);
+        // If cleanPath starts with prefix, try stripped version first
+        if (!prefix.empty() && cleanPath.size() > prefix.size() &&
+            cleanPath.compare(0, prefix.size(), prefix) == 0 &&
+            cleanPath[prefix.size()] == '/') {
+            std::string stripped = cleanPath.substr(prefix.size() + 1);
             if (source->exists(stripped)) {
                 return true;
             }
@@ -207,7 +219,7 @@ bool VFSManager::exists(const std::string& vfsPath) {
 
     // Fallback: try direct path (for paths without prefix)
     for (const auto& [prefix, source] : m_mountPoints) {
-        if (source->exists(vfsPath)) {
+        if (source->exists(cleanPath)) {
             return true;
         }
     }
@@ -220,14 +232,18 @@ std::vector<uint8_t> VFSManager::readBytes(const std::string& vfsPath) {
         return {};
     }
 
+    std::string cleanPath = vfsPath;
+    std::replace(cleanPath.begin(), cleanPath.end(), '\\', '/');
+
+    std::lock_guard<std::recursive_mutex> lock(m_mutex);
     // Try with prefix stripping first (correct priority order)
     for (const auto& [prefix, source] : m_mountPoints) {
-        if (!prefix.empty() && vfsPath.size() > prefix.size() &&
-            vfsPath.compare(0, prefix.size(), prefix) == 0 &&
-            vfsPath[prefix.size()] == '/') {
-            std::string stripped = vfsPath.substr(prefix.size() + 1);
+        if (!prefix.empty() && cleanPath.size() > prefix.size() &&
+            cleanPath.compare(0, prefix.size(), prefix) == 0 &&
+            cleanPath[prefix.size()] == '/') {
+            std::string stripped = cleanPath.substr(prefix.size() + 1);
             if (source->exists(stripped)) {
-                ROWL_LOG_TRACE("VFS Resolved '" + vfsPath + "' via " + source->getSourceName() + " (prefix-stripped)");
+                ROWL_LOG_TRACE("VFS Resolved '" + cleanPath + "' via " + source->getSourceName() + " (prefix-stripped)");
                 return source->read(stripped);
             }
         }
@@ -235,13 +251,13 @@ std::vector<uint8_t> VFSManager::readBytes(const std::string& vfsPath) {
 
     // Fallback: try direct path
     for (const auto& [prefix, source] : m_mountPoints) {
-        if (source->exists(vfsPath)) {
-            ROWL_LOG_TRACE("VFS Resolved '" + vfsPath + "' via " + source->getSourceName());
-            return source->read(vfsPath);
+        if (source->exists(cleanPath)) {
+            ROWL_LOG_TRACE("VFS Resolved '" + cleanPath + "' via " + source->getSourceName());
+            return source->read(cleanPath);
         }
     }
 
-    ROWL_LOG_WARN("VFS File not found: '" + vfsPath + "'");
+    ROWL_LOG_WARN("VFS File not found: '" + cleanPath + "'");
     return {};
 }
 

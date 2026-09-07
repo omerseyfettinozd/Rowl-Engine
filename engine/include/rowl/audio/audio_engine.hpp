@@ -1,6 +1,8 @@
 #pragma once
 
 #include <string>
+#include <vector>
+#include <cstdint>
 #include <memory>
 #include <unordered_map>
 
@@ -36,6 +38,10 @@ public:
     void triggerVoiceDucking(bool isVoiceActive);
     void setDuckingFactor(float factor);  // Configurable voice ducking attenuation (0.0-1.0)
 
+    void update();
+    bool isBgmLooping() const { return m_bgmLoop; }
+    void setBgmLooping(bool loop) { m_bgmLoop = loop; }
+
     float getBgmGain() const { return m_bgmGain; }
     DSPFilterType getActiveFilter() const { return m_activeFilter; }
     bool isInitialized() const { return m_initialized; }
@@ -54,8 +60,10 @@ private:
     bool m_isDuckingActive = false;
     bool m_initialized = false;
     bool m_deviceAvailable = false;
+    bool m_bgmLoop = true;
 
     std::string m_currentBgmPath = "";
+    std::vector<uint8_t> m_bgmData;
     SDL_AudioStream* m_bgmStream = nullptr;
     SDL_AudioStream* m_sfxStream = nullptr;
 };
