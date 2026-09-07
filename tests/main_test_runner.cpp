@@ -219,6 +219,18 @@ void test_audio_engine() {
     }
     TEST_PASS("Voice Ducking BGM Gain Restoration (100% Full Gain)");
 
+    // std::clamp does not itself sanitize NaN. The public audio boundary must
+    // preserve the last valid gain instead of forwarding it to SDL.
+    audio.setBgmVolume(std::numeric_limits<float>::quiet_NaN());
+    audio.setDuckingFactor(std::numeric_limits<float>::quiet_NaN());
+    audio.triggerVoiceDucking(true);
+    if (!std::isfinite(audio.getBgmGain()) || std::abs(audio.getBgmGain() - 0.5f) > 0.001f) {
+        std::cerr << "Non-finite audio inputs corrupted the active gain" << std::endl;
+        exit(1);
+    }
+    audio.triggerVoiceDucking(false);
+    TEST_PASS("Audio Gain Rejects Non-Finite Inputs");
+
     // DSP Filters
     audio.applyDspFilter(Rowl::Audio::DSPFilterType::Telephone);
     if (audio.getActiveFilter() != Rowl::Audio::DSPFilterType::Telephone) exit(1);
@@ -743,6 +755,13 @@ void test_native_c_api() {
     // Audio C-API calls
     RowlEngine_PlayAudio(handle, "test_bgm.wav", 0, 1);
     RowlEngine_SetBgmVolume(handle, 0.8f);
+    RowlEngine_SetBgmVolume(handle, std::numeric_limits<float>::quiet_NaN());
+    if (!Rowl::Core::Engine::instance().getAudio() ||
+        !std::isfinite(Rowl::Core::Engine::instance().getAudio()->getBgmGain()) ||
+        std::abs(Rowl::Core::Engine::instance().getAudio()->getBgmGain() - 0.8f) > 0.001f) {
+        std::cerr << "C-API accepted a non-finite BGM volume" << std::endl;
+        exit(1);
+    }
     RowlEngine_TriggerVoiceDucking(handle, 1);
     RowlEngine_TriggerVoiceDucking(handle, 0);
     RowlEngine_StopBgm(handle);

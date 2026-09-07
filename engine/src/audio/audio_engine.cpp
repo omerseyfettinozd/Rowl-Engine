@@ -3,6 +3,7 @@
 #include "rowl/vfs/vfs.hpp"
 #include <SDL3/SDL.h>
 #include <algorithm>
+#include <cmath>
 #include <filesystem>
 #include <vector>
 
@@ -162,6 +163,10 @@ void AudioEngine::stopAll() {
 }
 
 void AudioEngine::setBgmVolume(float volume) {
+    if (!std::isfinite(volume)) {
+        ROWL_LOG_WARN("Ignoring non-finite BGM volume");
+        return;
+    }
     m_bgmVolume = std::clamp(volume, 0.0f, 1.0f);
     m_bgmGain = m_isDuckingActive ? (m_bgmVolume * m_duckingFactor) : m_bgmVolume;
     if (m_bgmStream) {
@@ -184,6 +189,10 @@ void AudioEngine::triggerVoiceDucking(bool isVoiceActive) {
 }
 
 void AudioEngine::setDuckingFactor(float factor) {
+    if (!std::isfinite(factor)) {
+        ROWL_LOG_WARN("Ignoring non-finite ducking factor");
+        return;
+    }
     m_duckingFactor = std::clamp(factor, 0.0f, 1.0f);
     if (m_isDuckingActive) {
         m_bgmGain = m_bgmVolume * m_duckingFactor;
