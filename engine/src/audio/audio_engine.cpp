@@ -76,11 +76,10 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
         applyDspFilter(filter);
     }
 
-    if (channel == AudioChannelType::Bgm) {
-        m_currentBgmPath = assetPath;
-    }
-
     if (!m_deviceAvailable) {
+        // Keep intended BGM state in headless/silent environments. This lets
+        // scene transitions remain deterministic even when no device exists.
+        if (channel == AudioChannelType::Bgm) m_currentBgmPath = assetPath;
         ROWL_LOG_INFO("[AudioEngine] Audio play registered (silent fallback): " + assetPath);
         return;
     }
@@ -123,10 +122,17 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
         if (targetStream) {
             if (channel == AudioChannelType::Bgm) {
                 SDL_ClearAudioStream(m_bgmStream);
-                m_bgmData.assign(audioBuf, audioBuf + audioLen);
             }
-            SDL_SetAudioStreamFormat(targetStream, &spec, nullptr);
-            SDL_PutAudioStreamData(targetStream, audioBuf, static_cast<int>(audioLen));
+            if (!SDL_SetAudioStreamFormat(targetStream, &spec, nullptr) ||
+                !SDL_PutAudioStreamData(targetStream, audioBuf, static_cast<int>(audioLen))) {
+                ROWL_LOG_ERROR("[AudioEngine] Failed to queue decoded audio: " + std::string(SDL_GetError()));
+                SDL_free(audioBuf);
+                return;
+            }
+            if (channel == AudioChannelType::Bgm) {
+                m_bgmData.assign(audioBuf, audioBuf + audioLen);
+                m_currentBgmPath = assetPath;
+            }
             SDL_ResumeAudioStreamDevice(targetStream);
             ROWL_LOG_INFO("[AudioEngine] Playback started: " + assetPath + " (" + std::to_string(audioLen) + " bytes)");
         }

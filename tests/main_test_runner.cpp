@@ -227,13 +227,34 @@ void test_audio_engine() {
     if (audio.getActiveFilter() != Rowl::Audio::DSPFilterType::Normal) exit(1);
     TEST_PASS("DSP Filter Switching (Normal, Telephone, Underwater, Cave)");
 
-    // Audio playback & stop tests
-    audio.playAudio("theme.wav", Rowl::Audio::AudioChannelType::Bgm);
-    if (audio.getCurrentBgmPath() != "theme.wav") {
+    // Audio playback uses a real, minimal PCM WAV rather than only recording
+    // an intent string. This exercises SDL's decode and stream queue path.
+    const auto tonePath = std::filesystem::temp_directory_path() / "rowl_audio_test_tone.wav";
+    const uint8_t wavData[] = {
+        'R','I','F','F', 38,0,0,0, 'W','A','V','E',
+        'f','m','t',' ', 16,0,0,0, 1,0, 1,0,
+        68,172,0,0, 136,88,1,0, 2,0, 16,0,
+        'd','a','t','a', 2,0,0,0, 0,0
+    };
+    {
+        std::ofstream tone(tonePath, std::ios::binary);
+        tone.write(reinterpret_cast<const char*>(wavData), sizeof(wavData));
+    }
+    audio.playAudio(tonePath.string(), Rowl::Audio::AudioChannelType::Bgm);
+    audio.update();
+    if (audio.getCurrentBgmPath() != tonePath.string()) {
         std::cerr << "Audio BGM path mismatch" << std::endl;
         exit(1);
     }
-    TEST_PASS("BGM Playback Request & Path Tracking");
+    if (audio.isAudioDeviceAvailable()) {
+        audio.playAudio("missing_theme.wav", Rowl::Audio::AudioChannelType::Bgm);
+        if (audio.getCurrentBgmPath() != tonePath.string()) {
+            std::cerr << "Failed BGM load replaced the current playback state" << std::endl;
+            exit(1);
+        }
+    }
+    std::filesystem::remove(tonePath);
+    TEST_PASS("BGM WAV Decode, Queueing, and Failed-Load State Preservation");
 
     audio.stopBgm();
     if (!audio.getCurrentBgmPath().empty()) {
