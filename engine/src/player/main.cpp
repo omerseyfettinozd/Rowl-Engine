@@ -3,8 +3,36 @@
 #include <string>
 #include <vector>
 #include <filesystem>
+#include <charconv>
+#include <string_view>
 
 namespace fs = std::filesystem;
+
+namespace {
+
+constexpr uint32_t kMaxWindowDimension = 16'384;
+
+bool parseWindowDimension(std::string_view text, uint32_t& output) {
+    uint32_t parsed = 0;
+    const auto [end, error] = std::from_chars(text.data(), text.data() + text.size(), parsed);
+    if (error != std::errc{} || end != text.data() + text.size() || parsed == 0 ||
+        parsed > kMaxWindowDimension) {
+        return false;
+    }
+    output = parsed;
+    return true;
+}
+
+bool requireOptionValue(int& index, int argc, char* argv[], const std::string& option, std::string& output) {
+    if (++index >= argc) {
+        std::cerr << "Missing value for " << option << "\n";
+        return false;
+    }
+    output = argv[index];
+    return true;
+}
+
+} // namespace
 
 static void printHelp(const char* progName) {
     std::cout << "=======================================================\n"
@@ -45,16 +73,21 @@ int main(int argc, char* argv[]) {
         } else if (arg == "-v" || arg == "--version") {
             std::cout << "Rowl Engine Standalone Player v1.0.0\n";
             return 0;
-        } else if ((arg == "-p" || arg == "--project") && i + 1 < argc) {
-            projectDir = argv[++i];
-        } else if ((arg == "-s" || arg == "--story") && i + 1 < argc) {
-            storyGraphPath = argv[++i];
-        } else if ((arg == "-w" || arg == "--width") && i + 1 < argc) {
-            winWidth = static_cast<uint32_t>(std::stoul(argv[++i]));
-        } else if (arg == "--height" && i + 1 < argc) {
-            winHeight = static_cast<uint32_t>(std::stoul(argv[++i]));
-        } else if ((arg == "-t" || arg == "--title") && i + 1 < argc) {
-            appTitle = argv[++i];
+        } else if (arg == "-p" || arg == "--project") {
+            if (!requireOptionValue(i, argc, argv, arg, projectDir)) return 1;
+        } else if (arg == "-s" || arg == "--story") {
+            if (!requireOptionValue(i, argc, argv, arg, storyGraphPath)) return 1;
+        } else if (arg == "-w" || arg == "--width" || arg == "--height") {
+            std::string dimension;
+            if (!requireOptionValue(i, argc, argv, arg, dimension)) return 1;
+            uint32_t& target = (arg == "--height") ? winHeight : winWidth;
+            if (!parseWindowDimension(dimension, target)) {
+                std::cerr << "Invalid " << arg << " value '" << dimension << "' (expected 1-"
+                          << kMaxWindowDimension << ")\n";
+                return 1;
+            }
+        } else if (arg == "-t" || arg == "--title") {
+            if (!requireOptionValue(i, argc, argv, arg, appTitle)) return 1;
         } else if (arg == "--no-vsync") {
             vsync = false;
         } else {
@@ -62,6 +95,16 @@ int main(int argc, char* argv[]) {
             printHelp(argv[0]);
             return 1;
         }
+    }
+
+    const fs::path baseProj = fs::absolute(projectDir);
+    if (!fs::exists(baseProj) || !fs::is_directory(baseProj)) {
+        std::cerr << "Project directory does not exist or is not a directory: " << baseProj.string() << "\n";
+        return 1;
+    }
+    if (!storyGraphPath.empty() && (!fs::exists(storyGraphPath) || !fs::is_regular_file(storyGraphPath))) {
+        std::cerr << "Story graph file does not exist or is not a regular file: " << storyGraphPath << "\n";
+        return 1;
     }
 
     // Allocate engine instance via C API
@@ -79,10 +122,7 @@ int main(int argc, char* argv[]) {
     }
 
     // Set project root directory (isolates and mounts project VFS)
-    fs::path baseProj = fs::absolute(projectDir);
-    if (fs::exists(baseProj)) {
-        RowlEngine_SetProjectDirectory(engine, baseProj.string().c_str());
-    }
+    RowlEngine_SetProjectDirectory(engine, baseProj.string().c_str());
 
     // Determine story graph path if not provided
     if (storyGraphPath.empty()) {

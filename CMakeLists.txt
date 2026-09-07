@@ -50,3 +50,20 @@ set_tests_properties(rowl_player_cli_help PROPERTIES
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     TIMEOUT 10
 )
+
+add_test(
+    NAME rowl_player_cli_invalid_width
+    COMMAND $<TARGET_FILE:rowl_player> --width not-a-number
+)
+add_test(
+    NAME rowl_player_cli_missing_option_value
+    COMMAND $<TARGET_FILE:rowl_player> --project
+)
+set_tests_properties(
+    rowl_player_cli_invalid_width
+    rowl_player_cli_missing_option_value
+    PROPERTIES
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        WILL_FAIL TRUE
+        TIMEOUT 10
+)
