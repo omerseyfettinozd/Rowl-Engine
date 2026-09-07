@@ -71,6 +71,14 @@ bool Engine::initialize(const EngineConfig& config) {
             m_externalWindowHeight > 0 ? m_externalWindowHeight : m_config.virtualHeight,
             m_config.vsync
         );
+    } else if (m_config.standaloneWindow) {
+        // ── Standalone window mode: top-level SDL3 desktop window ──
+        windowOk = m_window->initialize(
+            m_config.appName,
+            m_config.virtualWidth,
+            m_config.virtualHeight,
+            m_config.vsync
+        );
     } else {
         // ── Offscreen Framebuffer mode (Texture Sharing / Zero-Copy) ──
         windowOk = m_window->initializeOffscreen(
@@ -768,9 +776,19 @@ void Engine::run() {
     }
 
     ROWL_LOG_INFO("Entering standalone render loop...");
+    setPlayState(true);
 
     auto lastTime = std::chrono::high_resolution_clock::now();
     while (m_isRunning) {
+        bool shouldQuit = false;
+        if (m_window) {
+            m_window->pollEvents(shouldQuit);
+            if (shouldQuit) {
+                m_isRunning = false;
+                break;
+            }
+        }
+
         auto currentTime = std::chrono::high_resolution_clock::now();
         float dt = std::chrono::duration<float>(currentTime - lastTime).count();
         lastTime = currentTime;

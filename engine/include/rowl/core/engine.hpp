@@ -33,6 +33,8 @@ struct EngineConfig {
     bool isIpcMode          = false; // Legacy field — kept for config compat, ignored
     std::string pipeId      = "";    // Legacy field — ignored in embedded mode
     bool vsync              = true;
+    bool standaloneWindow   = false; // When true, creates a visible top-level SDL3 window
+    bool fullscreen         = false;
 };
 
 struct StoryNode {

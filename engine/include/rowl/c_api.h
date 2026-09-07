@@ -61,6 +61,26 @@ ROWL_API int RowlEngine_Init(RowlEngineHandle handle,
                               int vsync);
 
 /**
+ * Initialises the engine in standalone desktop mode with a visible top-level SDL3 window.
+ * @param handle        Engine handle from RowlEngine_Create().
+ * @param appTitle      Title displayed on the window title bar.
+ * @param virtualWidth  Target logical width (e.g. 1920).
+ * @param virtualHeight Target logical height (e.g. 1080).
+ * @param vsync         1 = enable vsync, 0 = disable.
+ * @return 1 on success, 0 on failure.
+ */
+ROWL_API int RowlEngine_InitStandalone(RowlEngineHandle handle,
+                                        const char* appTitle,
+                                        uint32_t virtualWidth,
+                                        uint32_t virtualHeight,
+                                        int vsync);
+
+/**
+ * Starts the blocking standalone render/event loop until quit or window close.
+ */
+ROWL_API void RowlEngine_Run(RowlEngineHandle handle);
+
+/**
  * Advances the engine by one frame.
  * Call this every frame from the host's render/tick loop.
  * @param deltaTime Elapsed time since the last call, in seconds.

@@ -73,6 +73,29 @@ int RowlEngine_Init(RowlEngineHandle handle,
     }, 0);
 }
 
+int RowlEngine_InitStandalone(RowlEngineHandle handle,
+                               const char* appTitle,
+                               uint32_t virtualWidth,
+                               uint32_t virtualHeight,
+                               int vsync) {
+    if (!handle) return 0;
+
+    return invokeNoexcept<int>([&] {
+        Rowl::Core::EngineConfig cfg;
+        cfg.appName          = (appTitle && appTitle[0] != '\0') ? appTitle : "Rowl Game";
+        cfg.virtualWidth     = virtualWidth > 0 ? virtualWidth : 1920;
+        cfg.virtualHeight    = virtualHeight > 0 ? virtualHeight : 1080;
+        cfg.vsync            = (vsync != 0);
+        cfg.standaloneWindow = true;
+        return toEngine(handle)->initialize(cfg) ? 1 : 0;
+    }, 0);
+}
+
+void RowlEngine_Run(RowlEngineHandle handle) {
+    if (!handle) return;
+    invokeNoexcept([&] { toEngine(handle)->run(); });
+}
+
 void RowlEngine_Step(RowlEngineHandle handle, float deltaTime) {
     if (!handle) return;
     invokeNoexcept([&] { toEngine(handle)->step(deltaTime); });

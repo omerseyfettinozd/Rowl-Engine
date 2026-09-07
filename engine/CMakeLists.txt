@@ -114,12 +114,22 @@ target_link_libraries(RowlEngineCore PUBLIC
     nlohmann_json::nlohmann_json
 )
 
+# ── Rowl Player — Standalone Desktop Executable ───────────────────────────
+add_executable(rowl_player src/player/main.cpp)
+target_link_libraries(rowl_player PRIVATE RowlEngineCore ${SDL3_TARGET})
+set_target_properties(rowl_player PROPERTIES
+    OUTPUT_NAME "rowl_player"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    BUILD_RPATH "$ORIGIN/../lib:$ORIGIN"
+    INSTALL_RPATH "$ORIGIN/../lib:$ORIGIN"
+)
+
 # ── Install rules (optional but useful for packaging) ─────────────────────
-install(TARGETS RowlEngineCore
+install(TARGETS RowlEngineCore rowl_player
     LIBRARY  DESTINATION lib
-    RUNTIME  DESTINATION bin   # Windows DLL goes here
+    RUNTIME  DESTINATION bin   # Windows DLL and player exe go here
     ARCHIVE  DESTINATION lib
 )
 install(DIRECTORY include/ DESTINATION include)
 
-message(STATUS "RowlEngineCore configured as SHARED library (Embedded Library mode — IPC removed).")
+message(STATUS "RowlEngineCore and rowl_player configured successfully.")

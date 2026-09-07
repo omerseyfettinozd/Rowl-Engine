@@ -41,3 +41,12 @@ if(DOTNET_EXECUTABLE)
         TIMEOUT 120
     )
 endif()
+
+add_test(
+    NAME rowl_player_cli_help
+    COMMAND $<TARGET_FILE:rowl_player> --help
+)
+set_tests_properties(rowl_player_cli_help PROPERTIES
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    TIMEOUT 10
+)
