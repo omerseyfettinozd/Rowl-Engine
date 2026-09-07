@@ -13,6 +13,7 @@ namespace {
 
 constexpr uint16_t kSupportedPackageVersion = 1;
 constexpr uint64_t kMaxPackageEntryBytes = 128ULL * 1024 * 1024;
+constexpr uint32_t kMaxPackageFileCount = 100'000;
 
 std::optional<std::string> normalizePackagePath(std::string path) {
     if (path.empty() || path.find('\0') != std::string::npos) return std::nullopt;
@@ -77,13 +78,21 @@ bool RowlPkgDataSource::loadIndexTable() {
     }
 
     // Validate header values
-    if (header.fileCount > 1000000) {  // Sanity check
+    if (header.fileCount > kMaxPackageFileCount) {
         ROWL_LOG_ERROR("Package file count too large: " + std::to_string(header.fileCount));
         return false;
     }
 
     if (header.indexOffset < sizeof(RowlPkgHeader) || header.indexOffset > archiveSize) {
         ROWL_LOG_ERROR("Package index offset suspiciously large: " + std::to_string(header.indexOffset));
+        return false;
+    }
+    // Every entry needs its fixed record plus at least one path byte. Check
+    // this before reserving vectors/maps from untrusted fileCount metadata.
+    constexpr uint64_t kMinIndexEntryBytes = sizeof(RowlPkgEntryRaw) + 1;
+    const uint64_t availableIndexBytes = archiveSize - header.indexOffset;
+    if (header.fileCount > availableIndexBytes / kMinIndexEntryBytes) {
+        ROWL_LOG_ERROR("Package file count cannot fit in the declared index: " + m_filepath);
         return false;
     }
 

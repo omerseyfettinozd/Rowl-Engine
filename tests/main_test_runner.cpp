@@ -457,6 +457,19 @@ void test_vfs_security() {
     }
     TEST_PASS("Package reader rejects out-of-bounds index offsets");
 
+    const auto impossibleCountPackage = testRoot / "impossible_count.rowlpkg";
+    {
+        Rowl::VFS::RowlPkgHeader header{{'R', 'O', 'W', 'L'}, 1, 100'000,
+                                        sizeof(Rowl::VFS::RowlPkgHeader)};
+        std::ofstream output(impossibleCountPackage, std::ios::binary);
+        output.write(reinterpret_cast<const char*>(&header), sizeof(header));
+    }
+    if (Rowl::VFS::RowlPkgDataSource(impossibleCountPackage.string()).isValid()) {
+        std::cerr << "Package accepted an impossible file count before index validation" << std::endl;
+        exit(1);
+    }
+    TEST_PASS("Package reader rejects impossible index file counts before allocation");
+
     // Package metadata is an untrusted boundary. These cases ensure an archive
     // cannot smuggle paths, corrupt payload ranges, or spoof an index entry.
     const auto writePackage = [&](const std::string& name, Rowl::VFS::RowlPkgHeader header,
