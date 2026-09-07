@@ -4,6 +4,8 @@
 #include <memory>
 #include <unordered_map>
 
+struct SDL_AudioStream;
+
 namespace Rowl::Audio {
 
 enum class AudioChannelType {
@@ -26,6 +28,8 @@ public:
 
     bool initialize();
     void playAudio(const std::string& assetPath, AudioChannelType channel, DSPFilterType filter = DSPFilterType::Normal);
+    void stopBgm();
+    void stopAll();
 
     void setBgmVolume(float volume);
     void applyDspFilter(DSPFilterType filter);
@@ -36,6 +40,9 @@ public:
     DSPFilterType getActiveFilter() const { return m_activeFilter; }
     bool isInitialized() const { return m_initialized; }
     bool isDuckingActive() const { return m_isDuckingActive; }
+    bool isAudioDeviceAvailable() const { return m_deviceAvailable; }
+    const std::string& getCurrentBgmPath() const { return m_currentBgmPath; }
+
     void shutdown();
 
 private:
@@ -46,6 +53,11 @@ private:
     DSPFilterType m_activeFilter = DSPFilterType::Normal;
     bool m_isDuckingActive = false;
     bool m_initialized = false;
+    bool m_deviceAvailable = false;
+
+    std::string m_currentBgmPath = "";
+    SDL_AudioStream* m_bgmStream = nullptr;
+    SDL_AudioStream* m_sfxStream = nullptr;
 };
 
 } // namespace Rowl::Audio

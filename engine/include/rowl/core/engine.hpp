@@ -12,6 +12,10 @@ namespace Rowl::Scene {
 class Scene;
 }
 
+namespace Rowl::Audio {
+class AudioEngine;
+}
+
 namespace Rowl::Core {
 
 /// Component data container for the component-based node architecture.
@@ -168,6 +172,7 @@ public:
     const std::vector<Rowl::Render::DialogueRenderData>& getActiveDialogues() const { return m_activeDialogues; }
     uint64_t getCurrentNodeId()         const { return m_currentNodeId; }
     Rowl::Scene::Scene* getScene()       const { return m_scene.get(); }
+    Rowl::Audio::AudioEngine* getAudio() const { return m_audio.get(); }
 
 private:
     static Engine* s_instance;
@@ -175,6 +180,7 @@ private:
     EngineConfig m_config;
     std::unique_ptr<Rowl::Render::Window> m_window;
     std::unique_ptr<Rowl::Scene::Scene>   m_scene;
+    std::unique_ptr<Rowl::Audio::AudioEngine> m_audio;
 
     // External window handle (embedded / single-window mode)
     void*    m_externalWindowHandle = nullptr;

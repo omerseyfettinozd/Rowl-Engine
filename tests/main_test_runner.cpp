@@ -149,6 +149,21 @@ void test_audio_engine() {
     if (audio.getActiveFilter() != Rowl::Audio::DSPFilterType::Normal) exit(1);
     TEST_PASS("DSP Filter Switching (Normal, Telephone, Underwater, Cave)");
 
+    // Audio playback & stop tests
+    audio.playAudio("theme.wav", Rowl::Audio::AudioChannelType::Bgm);
+    if (audio.getCurrentBgmPath() != "theme.wav") {
+        std::cerr << "Audio BGM path mismatch" << std::endl;
+        exit(1);
+    }
+    TEST_PASS("BGM Playback Request & Path Tracking");
+
+    audio.stopBgm();
+    if (!audio.getCurrentBgmPath().empty()) {
+        std::cerr << "Audio BGM stop mismatch" << std::endl;
+        exit(1);
+    }
+    TEST_PASS("BGM Stop & Track Reset");
+
     audio.shutdown();
     if (audio.isInitialized()) exit(1);
     TEST_PASS("Audio Engine Clean Shutdown");
@@ -378,6 +393,14 @@ void test_native_c_api() {
     std::filesystem::remove(graphPath);
     TEST_PASS("Story Graph v4 Stable Choice-ID Routing");
 
+    // Audio C-API calls
+    RowlEngine_PlayAudio(handle, "test_bgm.wav", 0, 1);
+    RowlEngine_SetBgmVolume(handle, 0.8f);
+    RowlEngine_TriggerVoiceDucking(handle, 1);
+    RowlEngine_TriggerVoiceDucking(handle, 0);
+    RowlEngine_StopBgm(handle);
+    TEST_PASS("C-API Audio Control (PlayAudio, SetBgmVolume, Ducking, StopBgm)");
+
     RowlEngine_Shutdown(handle);
     RowlEngine_Destroy(handle);
     TEST_PASS("RowlEngine_Shutdown & Destroy (Clean Resource Teardown)");
@@ -596,6 +619,68 @@ void test_game_object_component_system() {
     TEST_PASS("Safe GameObject Destruction & Scene Teardown");
 }
 
+void test_native_performance_benchmarks() {
+    TEST_SECTION("Performance & Profiling Benchmarks");
+
+    // 1. VFS Query & Read Latency Benchmark
+    auto& vfs = Rowl::VFS::VFSManager::instance();
+    const int VFS_ITERATIONS = 5000;
+    auto vfsStart = std::chrono::high_resolution_clock::now();
+    for (int i = 0; i < VFS_ITERATIONS; ++i) {
+        bool exists = vfs.exists("fonts/default.ttf");
+        (void)exists;
+    }
+    auto vfsEnd = std::chrono::high_resolution_clock::now();
+    double vfsElapsedMs = std::chrono::duration<double, std::milli>(vfsEnd - vfsStart).count();
+    double vfsOpsPerSec = (VFS_ITERATIONS / (vfsElapsedMs / 1000.0));
+    std::cout << "  ⚡ [BENCHMARK] VFS Exists Lookups: " << VFS_ITERATIONS << " queries in "
+              << vfsElapsedMs << "ms (" << static_cast<uint64_t>(vfsOpsPerSec) << " queries/sec)" << std::endl;
+    TEST_PASS("VFS High-Throughput Lookup Benchmark");
+
+    // 2. Scene JSON Parse & Update Benchmark
+    RowlEngineHandle handle = RowlEngine_Create();
+    RowlEngine_Init(handle, 1920, 1080, 0);
+
+    const std::string benchJson = R"([
+        {"type":"speaker","id":"s1","enabled":true,"data":{"speaker":"Evelyn","dialogue":"Benchmark line"}},
+        {"type":"background","id":"b1","enabled":true,"data":{"texture":"Woman.png","x":0,"y":0,"width":1920,"height":1080}},
+        {"type":"character","id":"c1","enabled":true,"data":{"sprite":"Margot.jpg","x":400,"y":200,"width":360,"height":540}},
+        {"type":"dialogue_box","id":"d1","enabled":true,"data":{"x":80,"y":840,"width":1760,"height":200}},
+        {"type":"audio","id":"a1","enabled":true,"data":{"dsp_filter":"Normal"}}
+    ])";
+
+    const int JSON_ITERATIONS = 500;
+    auto jsonStart = std::chrono::high_resolution_clock::now();
+    for (int i = 0; i < JSON_ITERATIONS; ++i) {
+        RowlEngine_UpdateSceneFromJson(handle, benchJson.c_str());
+    }
+    auto jsonEnd = std::chrono::high_resolution_clock::now();
+    double jsonElapsedMs = std::chrono::duration<double, std::milli>(jsonEnd - jsonStart).count();
+    double jsonOpsPerSec = (JSON_ITERATIONS / (jsonElapsedMs / 1000.0));
+    std::cout << "  ⚡ [BENCHMARK] Scene JSON Updates: " << JSON_ITERATIONS << " updates in "
+              << jsonElapsedMs << "ms (" << static_cast<uint64_t>(jsonOpsPerSec) << " updates/sec, "
+              << (jsonElapsedMs / JSON_ITERATIONS) << "ms/op)" << std::endl;
+    TEST_PASS("Scene JSON Ingestion & Entity Synchronization Benchmark");
+
+    // 3. Native Frame Render Step Benchmark
+    const int FRAME_ITERATIONS = 60;
+    auto frameStart = std::chrono::high_resolution_clock::now();
+    for (int i = 0; i < FRAME_ITERATIONS; ++i) {
+        RowlEngine_Step(handle, 0.01667f);
+    }
+    auto frameEnd = std::chrono::high_resolution_clock::now();
+    double frameElapsedMs = std::chrono::duration<double, std::milli>(frameEnd - frameStart).count();
+    double avgFrameMs = frameElapsedMs / FRAME_ITERATIONS;
+    double equivalentFps = 1000.0 / avgFrameMs;
+    std::cout << "  ⚡ [BENCHMARK] Native Render Pipeline: " << FRAME_ITERATIONS << " offscreen frames in "
+              << frameElapsedMs << "ms (Avg: " << avgFrameMs << "ms/frame ~ "
+              << static_cast<uint64_t>(equivalentFps) << " FPS equivalent)" << std::endl;
+    TEST_PASS("Offscreen Software Render Pipeline Latency Benchmark");
+
+    RowlEngine_Shutdown(handle);
+    RowlEngine_Destroy(handle);
+}
+
 int main() {
     std::cout << "\n=======================================================" << std::endl;
     std::cout << "🚀 ROWL ENGINE COMPREHENSIVE NATIVE UNIT TEST SUITE 🚀" << std::endl;
@@ -609,6 +694,7 @@ int main() {
     test_vfs_security();
     test_native_c_api();
     test_game_object_component_system();
+    test_native_performance_benchmarks();
 
     std::cout << "\n=======================================================" << std::endl;
     std::cout << "🎉 ALL UNIT & INTEGRATION TESTS PASSED SUCCESSFULLY! 🎉" << std::endl;

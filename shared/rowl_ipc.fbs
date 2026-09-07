@@ -1,3 +1,9 @@
+// [LEGACY ARCHIVE]
+// This FlatBuffers schema was used in Phase 1 for inter-process pipe communication.
+// The engine has migrated to an embedded in-process shared library architecture
+// (libRowlEngineCore / RowlEngineCore.dll) with C ABI / P/Invoke bindings.
+// This file is retained for historical protocol reference.
+
 namespace Rowl.IPC;
 
 enum MessageType : byte {

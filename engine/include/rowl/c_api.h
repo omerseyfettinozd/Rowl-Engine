@@ -217,6 +217,29 @@ ROWL_API const char* RowlEngine_GetDialogue(RowlEngineHandle handle);
 /** Returns the ID of the currently active story node. */
 ROWL_API uint64_t RowlEngine_GetCurrentNodeId(RowlEngineHandle handle);
 
+/* ── Audio Control (Host → Engine) ───────────────────────────────────────── */
+
+/**
+ * Plays an audio asset on the specified channel with an optional DSP filter.
+ * @param handle      Engine handle from RowlEngine_Create().
+ * @param assetPath   Path to WAV audio file (relative to VFS or physical).
+ * @param channelType 0 = Bgm, 1 = Voice, 2 = Sfx.
+ * @param filterType  0 = Normal, 1 = Cave, 2 = Telephone, 3 = Underwater.
+ */
+ROWL_API void RowlEngine_PlayAudio(RowlEngineHandle handle,
+                                   const char* assetPath,
+                                   int channelType,
+                                   int filterType);
+
+/** Stops currently playing BGM stream. */
+ROWL_API void RowlEngine_StopBgm(RowlEngineHandle handle);
+
+/** Sets BGM volume (0.0f - 1.0f). */
+ROWL_API void RowlEngine_SetBgmVolume(RowlEngineHandle handle, float volume);
+
+/** Triggers voice ducking attenuation on BGM (1 = voice active, 0 = restored). */
+ROWL_API void RowlEngine_TriggerVoiceDucking(RowlEngineHandle handle, int isVoiceActive);
+
 #ifdef __cplusplus
 } /* extern "C" */
 #endif

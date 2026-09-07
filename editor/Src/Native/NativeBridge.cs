@@ -128,6 +128,24 @@ namespace RowlEngine.Editor.Native
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
         internal static extern ulong RowlEngine_GetCurrentNodeId(IntPtr handle);
 
+        // ── Audio Control ───────────────────────────────────────────────────
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern void RowlEngine_PlayAudio(
+            IntPtr handle,
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string assetPath,
+            int channelType,
+            int filterType);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern void RowlEngine_StopBgm(IntPtr handle);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern void RowlEngine_SetBgmVolume(IntPtr handle, float volume);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern void RowlEngine_TriggerVoiceDucking(IntPtr handle, int isVoiceActive);
+
         // ── Helpers ──────────────────────────────────────────────────────────
 
         /// <summary>Converts a native C UTF-8 string pointer to a managed string safely.</summary>

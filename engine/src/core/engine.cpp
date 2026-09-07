@@ -2,6 +2,7 @@
 #include "rowl/core/logger.hpp"
 #include "rowl/vfs/vfs.hpp"
 #include "rowl/scene/scene.hpp"
+#include "rowl/audio/audio_engine.hpp"
 #include "rowl/render/aspect_guardian.hpp"
 #include <chrono>
 #include <thread>
@@ -94,6 +95,10 @@ bool Engine::initialize(const EngineConfig& config) {
 
     // Initialize Entity-Component Scene Manager
     m_scene = std::make_unique<Rowl::Scene::Scene>();
+
+    // Initialize Audio Engine Subsystem
+    m_audio = std::make_unique<Rowl::Audio::AudioEngine>();
+    m_audio->initialize();
 
     // Load story graph from disk
     loadStoryGraphFile();
@@ -478,7 +483,31 @@ void Engine::updateSceneFromComponents(const std::string& componentsJson) {
                 }
             } else if (type == "audio") {
                 std::string dsp = data.value("dsp_filter", "Normal");
+                std::string bgm = data.value("bgm_track", "");
+                std::string sfx = data.value("sfx_track", "");
+                float vol = data.value("volume", 1.0f);
+
                 ROWL_LOG_INFO("[Audio] Applied DSP Filter from Component: " + dsp);
+                if (m_audio) {
+                    if (dsp == "Cave" || dsp == "CaveReverb") {
+                        m_audio->applyDspFilter(Rowl::Audio::DSPFilterType::CaveReverb);
+                    } else if (dsp == "Telephone") {
+                        m_audio->applyDspFilter(Rowl::Audio::DSPFilterType::Telephone);
+                    } else if (dsp == "Underwater" || dsp == "UnderwaterLowPass") {
+                        m_audio->applyDspFilter(Rowl::Audio::DSPFilterType::UnderwaterLowPass);
+                    } else {
+                        m_audio->applyDspFilter(Rowl::Audio::DSPFilterType::Normal);
+                    }
+
+                    m_audio->setBgmVolume(vol);
+
+                    if (!bgm.empty() && bgm != m_audio->getCurrentBgmPath()) {
+                        m_audio->playAudio(bgm, Rowl::Audio::AudioChannelType::Bgm);
+                    }
+                    if (!sfx.empty()) {
+                        m_audio->playAudio(sfx, Rowl::Audio::AudioChannelType::Sfx);
+                    }
+                }
             } else if (type == "choice" && data.contains("options") && data["options"].is_array()) {
                 size_t index = 0;
                 for (const auto& option : data["options"]) {
@@ -802,6 +831,11 @@ void Engine::shutdown() {
     if (m_scene) {
         m_scene->clear();
         m_scene.reset();
+    }
+
+    if (m_audio) {
+        m_audio->shutdown();
+        m_audio.reset();
     }
 
     if (m_window) {

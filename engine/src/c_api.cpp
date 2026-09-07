@@ -12,6 +12,7 @@
 #include "rowl/c_api.h"
 #include "rowl/core/engine.hpp"
 #include "rowl/core/logger.hpp"
+#include "rowl/audio/audio_engine.hpp"
 #include "rowl/vfs/vfs.hpp"
 
 #include <cstring>
@@ -255,6 +256,49 @@ const char* RowlEngine_GetDialogue(RowlEngineHandle handle) {
 uint64_t RowlEngine_GetCurrentNodeId(RowlEngineHandle handle) {
     if (!handle) return 0;
     return invokeNoexcept<uint64_t>([&] { return toEngine(handle)->getCurrentNodeId(); }, 0);
+}
+
+void RowlEngine_PlayAudio(RowlEngineHandle handle,
+                          const char* assetPath,
+                          int channelType,
+                          int filterType) {
+    if (!handle || !assetPath) return;
+    invokeNoexcept([&] {
+        auto* audio = toEngine(handle)->getAudio();
+        if (!audio) return;
+        auto channel = (channelType == 0) ? Rowl::Audio::AudioChannelType::Bgm :
+                       (channelType == 1) ? Rowl::Audio::AudioChannelType::Voice :
+                                            Rowl::Audio::AudioChannelType::Sfx;
+        auto filter  = (filterType == 1)  ? Rowl::Audio::DSPFilterType::CaveReverb :
+                       (filterType == 2)  ? Rowl::Audio::DSPFilterType::Telephone :
+                       (filterType == 3)  ? Rowl::Audio::DSPFilterType::UnderwaterLowPass :
+                                            Rowl::Audio::DSPFilterType::Normal;
+        audio->playAudio(assetPath, channel, filter);
+    });
+}
+
+void RowlEngine_StopBgm(RowlEngineHandle handle) {
+    if (!handle) return;
+    invokeNoexcept([&] {
+        auto* audio = toEngine(handle)->getAudio();
+        if (audio) audio->stopBgm();
+    });
+}
+
+void RowlEngine_SetBgmVolume(RowlEngineHandle handle, float volume) {
+    if (!handle) return;
+    invokeNoexcept([&] {
+        auto* audio = toEngine(handle)->getAudio();
+        if (audio) audio->setBgmVolume(volume);
+    });
+}
+
+void RowlEngine_TriggerVoiceDucking(RowlEngineHandle handle, int isVoiceActive) {
+    if (!handle) return;
+    invokeNoexcept([&] {
+        auto* audio = toEngine(handle)->getAudio();
+        if (audio) audio->triggerVoiceDucking(isVoiceActive != 0);
+    });
 }
 
 } // extern "C"
