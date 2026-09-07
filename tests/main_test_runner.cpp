@@ -534,6 +534,18 @@ void test_native_c_api() {
     }
     TEST_PASS("C-API Null-Handle Fallback Contract");
 
+    // Invalid host dimensions must fail before SDL/offscreen allocation, and a
+    // later valid initialization on the same opaque handle must still work.
+    RowlEngineHandle invalidDimensionHandle = RowlEngine_Create();
+    if (!invalidDimensionHandle || RowlEngine_Init(invalidDimensionHandle, 0, 1080, 0) != 0 ||
+        RowlEngine_Init(invalidDimensionHandle, 20'000, 1080, 0) != 0 ||
+        RowlEngine_Init(invalidDimensionHandle, 1920, 1080, 0) != 1) {
+        std::cerr << "C-API virtual canvas dimension validation failed" << std::endl;
+        exit(1);
+    }
+    RowlEngine_Destroy(invalidDimensionHandle);
+    TEST_PASS("C-API Virtual Canvas Bounds and Retry Safety");
+
     RowlEngineHandle handle = RowlEngine_Create();
     if (!handle) exit(1);
 

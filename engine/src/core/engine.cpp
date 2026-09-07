@@ -14,6 +14,7 @@
 namespace Rowl::Core {
 
 Engine* Engine::s_instance = nullptr;
+constexpr uint32_t kMaxVirtualCanvasDimension = 16'384;
 
 Engine::Engine() {
     s_instance = this;
@@ -46,6 +47,14 @@ bool Engine::initialize(const EngineConfig& config) {
     if (m_initialized) {
         ROWL_LOG_WARN("Engine is already initialized.");
         return true;
+    }
+
+    if (config.virtualWidth == 0 || config.virtualHeight == 0 ||
+        config.virtualWidth > kMaxVirtualCanvasDimension ||
+        config.virtualHeight > kMaxVirtualCanvasDimension) {
+        ROWL_LOG_ERROR("Invalid virtual canvas dimensions: " +
+                       std::to_string(config.virtualWidth) + "x" + std::to_string(config.virtualHeight));
+        return false;
     }
 
     m_config = config;
