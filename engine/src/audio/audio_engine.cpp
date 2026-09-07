@@ -88,18 +88,12 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
 
     ROWL_LOG_INFO("Audio Play -> Asset: '" + assetPath + "' on Channel: " + channelName);
 
-    if (channel == AudioChannelType::Voice) {
-        triggerVoiceDucking(true);
-    }
-
-    if (filter != DSPFilterType::Normal) {
-        applyDspFilter(filter);
-    }
-
     if (!m_deviceAvailable) {
         // Keep intended BGM state in headless/silent environments. This lets
         // scene transitions remain deterministic even when no device exists.
         if (channel == AudioChannelType::Bgm) m_currentBgmPath = assetPath;
+        if (channel == AudioChannelType::Voice) triggerVoiceDucking(true);
+        if (filter != DSPFilterType::Normal) applyDspFilter(filter);
         ROWL_LOG_INFO("[AudioEngine] Audio play registered (silent fallback): " + assetPath);
         return;
     }
@@ -154,6 +148,11 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
                 SDL_free(audioBuf);
                 return;
             }
+            // Device-facing effects are transactional with decode/queue: a
+            // missing voice must not leave BGM ducked, and a failed filtered
+            // SFX must not alter the active DSP state.
+            if (channel == AudioChannelType::Voice) triggerVoiceDucking(true);
+            if (filter != DSPFilterType::Normal) applyDspFilter(filter);
             if (channel == AudioChannelType::Bgm) {
                 m_bgmData.assign(audioBuf, audioBuf + audioLen);
                 m_currentBgmPath = assetPath;

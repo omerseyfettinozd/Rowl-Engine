@@ -276,6 +276,12 @@ void test_audio_engine() {
             std::cerr << "Failed BGM load replaced the current playback state" << std::endl;
             exit(1);
         }
+        audio.playAudio("missing_voice.wav", Rowl::Audio::AudioChannelType::Voice,
+                        Rowl::Audio::DSPFilterType::Telephone);
+        if (audio.isDuckingActive() || audio.getActiveFilter() != Rowl::Audio::DSPFilterType::Normal) {
+            std::cerr << "Failed voice load leaked ducking or DSP side effects" << std::endl;
+            exit(1);
+        }
     }
     std::filesystem::remove(tonePath);
     TEST_PASS("BGM WAV Decode, Queueing, and Failed-Load State Preservation");
