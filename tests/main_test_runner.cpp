@@ -655,6 +655,15 @@ void test_native_c_api() {
     TEST_PASS("C-API Non-Finite Variable Arithmetic Containment");
 
     RowlEngine_UpdateSceneFromJson(handle,
+        R"([{"type":"character","data":{"sprite":"Margot.jpg","x":1e30}}])");
+    if (std::string(RowlEngine_GetSpeaker(handle)) != "Alice" ||
+        std::string(RowlEngine_GetDialogue(handle)).empty()) {
+        std::cerr << "Out-of-range component numeric value invalidated the active scene" << std::endl;
+        exit(1);
+    }
+    TEST_PASS("C-API Component Numeric Range Containment");
+
+    RowlEngine_UpdateSceneFromJson(handle,
         R"([{"type":"character","data":{"sprite":"Margot.jpg","x":"not-a-number"}}])");
     if (std::string(RowlEngine_GetSpeaker(handle)) != "Alice" ||
         std::string(RowlEngine_GetDialogue(handle)).empty()) {

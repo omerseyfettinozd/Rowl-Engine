@@ -25,6 +25,30 @@ constexpr std::size_t kMaxScriptsPerScene = 32;
 constexpr std::size_t kMaxAudioComponentsPerScene = 64;
 constexpr std::size_t kMaxStoryNodes = 10'000;
 constexpr std::size_t kMaxEdgesPerStoryNode = 4'096;
+constexpr std::size_t kMaxComponentStringBytes = 64 * 1024;
+constexpr std::size_t kMaxNestedComponentValues = 4'096;
+constexpr std::size_t kMaxComponentDataDepth = 32;
+constexpr double kMaxComponentNumericMagnitude = 1'000'000.0;
+
+namespace {
+
+bool isSafeComponentData(const nlohmann::json& value, std::size_t depth = 0) {
+    if (depth > kMaxComponentDataDepth) return false;
+    if (value.is_string()) return value.get_ref<const std::string&>().size() <= kMaxComponentStringBytes;
+    if (value.is_number()) {
+        const double number = value.get<double>();
+        return std::isfinite(number) && std::abs(number) <= kMaxComponentNumericMagnitude;
+    }
+    if (value.is_array() || value.is_object()) {
+        if (value.size() > kMaxNestedComponentValues) return false;
+        for (const auto& entry : value) {
+            if (!isSafeComponentData(entry, depth + 1)) return false;
+        }
+    }
+    return true;
+}
+
+} // namespace
 
 Engine::Engine() {
     s_instance = this;
@@ -468,7 +492,8 @@ void Engine::updateSceneFromComponents(const std::string& componentsJson) {
         for (const auto& comp : comps) {
             if (!comp.is_object() || !comp.contains("type") || !comp.contains("data") ||
                 !comp["type"].is_string() || !comp["data"].is_object() ||
-                (comp.contains("enabled") && !comp["enabled"].is_boolean())) {
+                (comp.contains("enabled") && !comp["enabled"].is_boolean()) ||
+                !isSafeComponentData(comp["data"])) {
                 ROWL_LOG_ERROR("Component JSON contains an invalid component schema");
                 return;
             }
