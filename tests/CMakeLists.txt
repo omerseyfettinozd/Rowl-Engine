@@ -29,3 +29,5 @@ target_include_directories(rowl_tests PRIVATE
 target_link_libraries(rowl_tests PRIVATE
     RowlEngineCore
 )
+
+add_test(NAME rowl_native_tests COMMAND rowl_tests)
