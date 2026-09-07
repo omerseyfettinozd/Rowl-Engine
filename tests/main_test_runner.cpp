@@ -616,6 +616,10 @@ void test_native_c_api() {
 
     RowlEngineHandle handle = RowlEngine_Create();
     if (!handle) exit(1);
+    if (RowlEngine_Create() != nullptr) {
+        std::cerr << "C-API allowed more than one live singleton runtime" << std::endl;
+        exit(1);
+    }
 
     int initRes = RowlEngine_Init(handle, 1920, 1080, 0);
     if (initRes != 1 || RowlEngine_IsRunning(handle) != 1) exit(1);

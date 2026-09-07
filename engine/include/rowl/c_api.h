@@ -39,6 +39,8 @@ typedef void* RowlEngineHandle;
 /**
  * Allocates and returns a new Engine instance.
  * Must be paired with RowlEngine_Destroy().
+ * The current native runtime supports one live C API engine per process;
+ * returns NULL while another handle is alive.
  */
 ROWL_API RowlEngineHandle RowlEngine_Create(void);
 
