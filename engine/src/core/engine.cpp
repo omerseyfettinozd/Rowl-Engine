@@ -389,6 +389,59 @@ void Engine::updateSceneFromComponents(const std::string& componentsJson) {
         ROWL_LOG_ERROR("Component JSON exceeds the maximum accepted size");
         return;
     }
+    const auto previousCharacters = m_activeCharacters;
+    const auto previousDialogues = m_activeDialogues;
+    const auto previousChoices = m_activeChoiceButtons;
+    const auto previousSpeaker = m_activeSpeaker;
+    const auto previousDialogue = m_activeDialogue;
+    const auto previousBackground = m_activeBackground;
+    const auto previousCharacter = m_activeCharacter;
+    const auto previousBackgroundX = m_activeBackgroundX;
+    const auto previousBackgroundY = m_activeBackgroundY;
+    const auto previousBackgroundWidth = m_activeBackgroundWidth;
+    const auto previousBackgroundHeight = m_activeBackgroundHeight;
+    const auto previousCharacterX = m_activeCharacterX;
+    const auto previousCharacterY = m_activeCharacterY;
+    const auto previousCharacterWidth = m_activeCharacterWidth;
+    const auto previousCharacterHeight = m_activeCharacterHeight;
+    const auto previousDialogueBoxX = m_activeDialogueBoxX;
+    const auto previousDialogueBoxY = m_activeDialogueBoxY;
+    const auto previousDialogueBoxWidth = m_activeDialogueBoxWidth;
+    const auto previousDialogueBoxHeight = m_activeDialogueBoxHeight;
+    const auto previousDialogueData = m_activeDialogueData;
+    const auto previousHasBackground = m_hasBackground;
+    const auto previousHasDialogueBox = m_hasDialogueBox;
+    const auto previousGameState = m_gameState;
+    const auto previousLuaVariables = m_luaSandbox ? m_luaSandbox->getAllVariables() : std::unordered_map<std::string, std::string>{};
+    const auto restorePreviousState = [&] {
+        m_activeCharacters = previousCharacters;
+        m_activeDialogues = previousDialogues;
+        m_activeChoiceButtons = previousChoices;
+        m_activeSpeaker = previousSpeaker;
+        m_activeDialogue = previousDialogue;
+        m_activeBackground = previousBackground;
+        m_activeCharacter = previousCharacter;
+        m_activeBackgroundX = previousBackgroundX;
+        m_activeBackgroundY = previousBackgroundY;
+        m_activeBackgroundWidth = previousBackgroundWidth;
+        m_activeBackgroundHeight = previousBackgroundHeight;
+        m_activeCharacterX = previousCharacterX;
+        m_activeCharacterY = previousCharacterY;
+        m_activeCharacterWidth = previousCharacterWidth;
+        m_activeCharacterHeight = previousCharacterHeight;
+        m_activeDialogueBoxX = previousDialogueBoxX;
+        m_activeDialogueBoxY = previousDialogueBoxY;
+        m_activeDialogueBoxWidth = previousDialogueBoxWidth;
+        m_activeDialogueBoxHeight = previousDialogueBoxHeight;
+        m_activeDialogueData = previousDialogueData;
+        m_hasBackground = previousHasBackground;
+        m_hasDialogueBox = previousHasDialogueBox;
+        m_gameState = previousGameState;
+        if (m_luaSandbox) {
+            m_luaSandbox->clearVariables();
+            for (const auto& [key, value] : previousLuaVariables) m_luaSandbox->setVariable(key, value);
+        }
+    };
     try {
         auto comps = nlohmann::json::parse(componentsJson);
         if (!comps.is_array()) return;
@@ -620,6 +673,7 @@ void Engine::updateSceneFromComponents(const std::string& componentsJson) {
                       (m_hasBackground ? "true" : "false") + ", HasDlg: " +
                       (m_hasDialogueBox ? "true" : "false"));
     } catch (const std::exception& e) {
+        restorePreviousState();
         ROWL_LOG_ERROR("Failed to parse components JSON: " + std::string(e.what()));
     }
 }

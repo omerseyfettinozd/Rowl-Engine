@@ -602,6 +602,15 @@ void test_native_c_api() {
     }
     TEST_PASS("C-API Component Schema Containment");
 
+    RowlEngine_UpdateSceneFromJson(handle,
+        R"([{"type":"character","data":{"sprite":"Margot.jpg","x":"not-a-number"}}])");
+    if (std::string(RowlEngine_GetSpeaker(handle)) != "Alice" ||
+        std::string(RowlEngine_GetDialogue(handle)).empty()) {
+        std::cerr << "Type-invalid component JSON did not roll back the active scene" << std::endl;
+        exit(1);
+    }
+    TEST_PASS("C-API Component Value-Type Transaction Rollback");
+
     // Multi-Dialogue Box Test (Two Simultaneous Chat Bubbles in Game Mode)
     const char* multiDlgJson = R"([
         {"type":"background","id":"b1","enabled":true,"data":{"texture":"Woman.png","x":0,"y":0,"width":1920,"height":1080,"scale":1}},
