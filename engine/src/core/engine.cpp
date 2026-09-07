@@ -602,14 +602,25 @@ void Engine::parseStoryGraphJson(const std::string& jsonContent) {
     if (jsonContent.empty()) return;
     try {
         auto data = nlohmann::json::parse(jsonContent);
+        if (!data.is_object() || !data.contains("nodes") || !data["nodes"].is_array()) {
+            ROWL_LOG_ERROR("Story graph must be an object containing a nodes array");
+            return;
+        }
         std::unordered_map<uint64_t, StoryNode> parsedNodes;
 
         uint64_t parsedStartId = data.value("start_node_id", static_cast<uint64_t>(101));
 
-        if (data.contains("nodes") && data["nodes"].is_array()) {
-            for (const auto& nodeJson : data["nodes"]) {
+        for (const auto& nodeJson : data["nodes"]) {
+            if (!nodeJson.is_object()) {
+                ROWL_LOG_ERROR("Story graph contains a non-object node");
+                return;
+            }
                 StoryNode n;
                 n.id              = nodeJson.value("id",               static_cast<uint64_t>(0));
+                if (n.id == 0 || parsedNodes.contains(n.id)) {
+                    ROWL_LOG_ERROR("Story graph contains a missing or duplicate node ID");
+                    return;
+                }
                 n.speaker         = nodeJson.value("speaker",          std::string{});
                 n.dialogue        = nodeJson.value("dialogue",         std::string{});
                 n.background      = nodeJson.value("background",       std::string{});
@@ -629,7 +640,15 @@ void Engine::parseStoryGraphJson(const std::string& jsonContent) {
                 n.dialogueBoxHeight=nodeJson.value("dialogue_box_height",180.0f);
 
                 if (nodeJson.contains("components")) {
+                    if (!nodeJson["components"].is_array()) {
+                        ROWL_LOG_ERROR("Story graph node components must be an array");
+                        return;
+                    }
                     for (const auto& compJson : nodeJson["components"]) {
+                        if (!compJson.is_object()) {
+                            ROWL_LOG_ERROR("Story graph contains a non-object component");
+                            return;
+                        }
                         ComponentData cd;
                         cd.type = compJson.value("type", "");
                         cd.id = compJson.value("id", "");
@@ -640,10 +659,26 @@ void Engine::parseStoryGraphJson(const std::string& jsonContent) {
                     }
                 }
                 // Graph v3/v4 stores components under Unity-style objects.
+                if (nodeJson.contains("objects") && !nodeJson["objects"].is_array()) {
+                    ROWL_LOG_ERROR("Story graph node objects must be an array");
+                    return;
+                }
                 if (nodeJson.contains("objects") && nodeJson["objects"].is_array()) {
                     for (const auto& objectJson : nodeJson["objects"]) {
+                        if (!objectJson.is_object()) {
+                            ROWL_LOG_ERROR("Story graph contains a non-object scene object");
+                            return;
+                        }
                         if (!objectJson.value("is_active", true) || !objectJson.contains("components")) continue;
+                        if (!objectJson["components"].is_array()) {
+                            ROWL_LOG_ERROR("Story graph object components must be an array");
+                            return;
+                        }
                         for (const auto& compJson : objectJson["components"]) {
+                            if (!compJson.is_object()) {
+                                ROWL_LOG_ERROR("Story graph contains a non-object component");
+                                return;
+                            }
                             ComponentData cd;
                             cd.type = compJson.value("type", "");
                             cd.id = compJson.value("id", "");
@@ -656,22 +691,50 @@ void Engine::parseStoryGraphJson(const std::string& jsonContent) {
 
                 if (nodeJson.contains("next_nodes") && nodeJson["next_nodes"].is_array()) {
                     for (const auto& nextJson : nodeJson["next_nodes"]) {
+                        if (!nextJson.is_object()) {
+                            ROWL_LOG_ERROR("Story graph contains a non-object edge");
+                            return;
+                        }
                         StoryNode::NextNode next;
                         next.nodeId = nextJson.value("id",    static_cast<uint64_t>(0));
                         next.label  = nextJson.value("label", std::string{});
                         next.optionId = nextJson.value("option_id", std::string{});
-                        if (next.nodeId != 0) n.nextNodes.push_back(next);
+                        if (next.nodeId == 0) {
+                            ROWL_LOG_ERROR("Story graph contains an edge with no target node ID");
+                            return;
+                        }
+                        n.nextNodes.push_back(next);
                     }
+                } else if (nodeJson.contains("next_nodes")) {
+                    ROWL_LOG_ERROR("Story graph node next_nodes must be an array");
+                    return;
                 } else if (nodeJson.contains("next_id")) {
                     uint64_t nextId = nodeJson.value("next_id", static_cast<uint64_t>(0));
                     if (nextId != 0) n.nextNodes.push_back({nextId, "", ""});
                 }
 
-                if (n.id != 0) parsedNodes[n.id] = n;
-            }
+                parsedNodes.emplace(n.id, std::move(n));
         }
 
-        if (!parsedNodes.empty()) {
+        if (parsedNodes.empty()) {
+            ROWL_LOG_ERROR("Story graph does not contain any valid nodes");
+            return;
+        }
+        for (const auto& [nodeId, node] : parsedNodes) {
+            for (const auto& next : node.nextNodes) {
+                if (!parsedNodes.contains(next.nodeId)) {
+                    ROWL_LOG_ERROR("Story graph node #" + std::to_string(nodeId) +
+                                   " references a missing node #" + std::to_string(next.nodeId));
+                    return;
+                }
+            }
+        }
+        if (data.contains("start_node_id") &&
+            (parsedStartId == 0 || !parsedNodes.contains(parsedStartId))) {
+            ROWL_LOG_ERROR("Story graph start_node_id does not reference a node");
+            return;
+        }
+
             m_storyNodes = std::move(parsedNodes);
             m_startNodeId = parsedStartId;
 
@@ -686,6 +749,12 @@ void Engine::parseStoryGraphJson(const std::string& jsonContent) {
                 m_startNodeId = minId;
                 m_currentNodeId = minId;
             }
+
+            // Loading a graph is a new story session. Keeping a previous
+            // graph's history here could make Save/Load or rewind jump to a
+            // node that belongs to a different graph.
+            m_gameState = Rowl::State::GameState::createInitialState(m_currentNodeId);
+            if (m_luaSandbox) m_luaSandbox->clearVariables();
 
             if (m_storyNodes.count(m_currentNodeId)) {
                 const auto& startNode = m_storyNodes[m_currentNodeId];
@@ -716,8 +785,6 @@ void Engine::parseStoryGraphJson(const std::string& jsonContent) {
                 ROWL_LOG_INFO("Story graph loaded: " + std::to_string(m_storyNodes.size()) +
                               " nodes. Start node #" + std::to_string(m_currentNodeId));
             }
-        }
-
     } catch (const nlohmann::json::parse_error& e) {
         ROWL_LOG_ERROR("Story graph JSON parse error: " + std::string(e.what()));
     } catch (const std::exception& e) {

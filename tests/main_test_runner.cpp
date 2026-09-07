@@ -624,8 +624,37 @@ void test_native_c_api() {
         std::cerr << "Unknown stable choice ID was accepted" << std::endl;
         exit(1);
     }
+
+    // A failed graph load must be transactional: the active graph, current
+    // node, and scene stay usable instead of being replaced by partial data.
+    const auto invalidGraphPath = std::filesystem::temp_directory_path() / "rowl_invalid_graph_test.json";
+    {
+        std::ofstream invalidGraph(invalidGraphPath);
+        invalidGraph << R"({"start_node_id":101,"nodes":[{"id":101,"next_nodes":[{"id":999}]}]})";
+    }
+    RowlEngine_LoadStoryGraph(handle, invalidGraphPath.string().c_str());
+    if (RowlEngine_GetCurrentNodeId(handle) != 103 ||
+        std::string(RowlEngine_GetSpeaker(handle)) != "Guide") {
+        std::cerr << "Invalid graph load replaced the active story" << std::endl;
+        exit(1);
+    }
+    std::filesystem::remove(invalidGraphPath);
+
+    // A successful reload starts a fresh story state and cannot carry script
+    // variables or rewind history over from the previously loaded graph.
+    RowlEngine_SetVariable(handle, "old_graph_variable", "stale");
+    RowlEngine_LoadStoryGraph(handle, graphPath.string().c_str());
+    if (RowlEngine_GetCurrentNodeId(handle) != 101 ||
+        !std::string(RowlEngine_GetVariable(handle, "old_graph_variable")).empty()) {
+        std::cerr << "Story graph reload retained state from the previous graph" << std::endl;
+        exit(1);
+    }
+    if (RowlEngine_SelectChoice(handle, "go_right") != 1 || RowlEngine_GetCurrentNodeId(handle) != 103) {
+        std::cerr << "Story graph was unusable after transactional reload" << std::endl;
+        exit(1);
+    }
     std::filesystem::remove(graphPath);
-    TEST_PASS("Story Graph v4 Stable Choice-ID Routing");
+    TEST_PASS("Story Graph Routing, Transactional Validation, and Fresh Reload State");
 
     // Audio C-API calls
     RowlEngine_PlayAudio(handle, "test_bgm.wav", 0, 1);
