@@ -645,6 +645,15 @@ void test_native_c_api() {
     }
     TEST_PASS("C-API Component Count Containment");
 
+    RowlEngine_SetVariable(handle, "finite_score", "5");
+    RowlEngine_UpdateSceneFromJson(handle,
+        R"([{"type":"variable","data":{"key":"finite_score","value":"nan","operation":"add"}}])");
+    if (std::string(RowlEngine_GetVariable(handle, "finite_score")) != "5") {
+        std::cerr << "Non-finite variable addition corrupted persistent game state" << std::endl;
+        exit(1);
+    }
+    TEST_PASS("C-API Non-Finite Variable Arithmetic Containment");
+
     RowlEngine_UpdateSceneFromJson(handle,
         R"([{"type":"character","data":{"sprite":"Margot.jpg","x":"not-a-number"}}])");
     if (std::string(RowlEngine_GetSpeaker(handle)) != "Alice" ||

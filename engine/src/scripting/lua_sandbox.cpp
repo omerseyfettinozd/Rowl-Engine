@@ -1,5 +1,6 @@
 #include "rowl/scripting/lua_sandbox.hpp"
 #include "rowl/core/logger.hpp"
+#include <cmath>
 #include <cstdint>
 
 extern "C" {
@@ -170,6 +171,10 @@ std::string LuaSandbox::getVariable(const std::string& key) const {
 }
 
 void LuaSandbox::setGlobalNumber(const std::string& key, double value) {
+    if (!std::isfinite(value)) {
+        ROWL_LOG_WARN("Lua Sandbox rejected non-finite numeric variable: '" + key + "'");
+        return;
+    }
     m_scriptVariables[key] = std::to_string(value);
     if (m_luaState) {
         lua_pushnumber(m_luaState, value);
@@ -184,14 +189,15 @@ double LuaSandbox::getGlobalNumber(const std::string& key, double defaultValue) 
         if (lua_isnumber(m_luaState, -1)) {
             double val = lua_tonumber(m_luaState, -1);
             lua_pop(m_luaState, 1);
-            return val;
+            return std::isfinite(val) ? val : defaultValue;
         }
         lua_pop(m_luaState, 1);
     }
     auto it = m_scriptVariables.find(key);
     if (it != m_scriptVariables.end()) {
         try {
-            return std::stod(it->second);
+            const double value = std::stod(it->second);
+            return std::isfinite(value) ? value : defaultValue;
         } catch (...) {}
     }
     return defaultValue;

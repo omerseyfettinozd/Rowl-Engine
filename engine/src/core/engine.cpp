@@ -665,9 +665,11 @@ void Engine::updateSceneFromComponents(const std::string& componentsJson) {
                 if (!varKey.empty()) {
                     if (op == "add" && m_luaSandbox) {
                         double cur = m_luaSandbox->getGlobalNumber(varKey, 0.0);
-                        double delta = 0.0;
-                        try { delta = std::stod(varVal); } catch (...) {}
+                        const double delta = std::stod(varVal);
                         double res = cur + delta;
+                        if (!std::isfinite(cur) || !std::isfinite(delta) || !std::isfinite(res)) {
+                            throw std::invalid_argument("Variable add requires finite numeric values");
+                        }
                         m_luaSandbox->setGlobalNumber(varKey, res);
                         if (m_gameState) {
                             m_gameState = Rowl::State::GameState::createNextState(m_gameState, m_currentNodeId, varKey, std::to_string(res));
