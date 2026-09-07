@@ -576,6 +576,14 @@ void test_native_c_api() {
     RowlEngine_UpdateSceneFromJson(handle, compJson);
     TEST_PASS("RowlEngine_UpdateSceneFromJson (Multi-Character + Multi-Line Dialogue)");
 
+    const std::string oversizedComponents(16 * 1024 * 1024 + 1, ' ');
+    RowlEngine_UpdateSceneFromJson(handle, oversizedComponents.c_str());
+    if (std::string(RowlEngine_GetSpeaker(handle)) != "Alice") {
+        std::cerr << "Oversized component JSON replaced the active scene" << std::endl;
+        exit(1);
+    }
+    TEST_PASS("C-API Oversized Component JSON Containment");
+
     // Invalid JSON is user-editable input. It must be contained inside the
     // native boundary and leave the last valid scene usable.
     RowlEngine_UpdateSceneFromJson(handle, "{ definitely-not-json");

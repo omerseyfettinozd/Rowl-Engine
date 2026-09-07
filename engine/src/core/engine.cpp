@@ -16,6 +16,7 @@ namespace Rowl::Core {
 
 Engine* Engine::s_instance = nullptr;
 constexpr uint32_t kMaxVirtualCanvasDimension = 16'384;
+constexpr uintmax_t kMaxStoryJsonBytes = 16 * 1024 * 1024;
 
 Engine::Engine() {
     s_instance = this;
@@ -384,6 +385,10 @@ void Engine::updateActiveScene(
 }
 
 void Engine::updateSceneFromComponents(const std::string& componentsJson) {
+    if (componentsJson.size() > kMaxStoryJsonBytes) {
+        ROWL_LOG_ERROR("Component JSON exceeds the maximum accepted size");
+        return;
+    }
     try {
         auto comps = nlohmann::json::parse(componentsJson);
         if (!comps.is_array()) return;
@@ -610,6 +615,10 @@ void Engine::updateSceneFromComponents(const std::string& componentsJson) {
 
 void Engine::parseStoryGraphJson(const std::string& jsonContent) {
     if (jsonContent.empty()) return;
+    if (jsonContent.size() > kMaxStoryJsonBytes) {
+        ROWL_LOG_ERROR("Story graph JSON exceeds the maximum accepted size");
+        return;
+    }
     try {
         auto data = nlohmann::json::parse(jsonContent);
         if (!data.is_object() || !data.contains("nodes") || !data["nodes"].is_array()) {
@@ -803,6 +812,13 @@ void Engine::parseStoryGraphJson(const std::string& jsonContent) {
 }
 
 void Engine::loadStoryGraphFromPath(const std::string& jsonPath) {
+    std::error_code fileError;
+    const std::filesystem::path graphPath(jsonPath);
+    if (!std::filesystem::is_regular_file(graphPath, fileError) || fileError ||
+        std::filesystem::file_size(graphPath, fileError) > kMaxStoryJsonBytes || fileError) {
+        ROWL_LOG_ERROR("Story graph is missing, not a regular file, or exceeds the size limit: " + jsonPath);
+        return;
+    }
     std::ifstream f(jsonPath);
     if (!f.is_open()) {
         ROWL_LOG_ERROR("Cannot open story graph: " + jsonPath);
@@ -838,7 +854,9 @@ void Engine::loadActiveStoryFile() {
     };
 
     for (const auto& path : searchPaths) {
-        if (std::filesystem::exists(path)) {
+        std::error_code fileError;
+        if (std::filesystem::is_regular_file(path, fileError) && !fileError &&
+            std::filesystem::file_size(path, fileError) <= kMaxStoryJsonBytes && !fileError) {
             std::ifstream f(path);
             if (f.is_open()) {
                 try {
