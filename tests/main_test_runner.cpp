@@ -552,6 +552,15 @@ void test_vfs_security() {
         exit(1);
     }
 
+    Rowl::VFS::RowlPkgEntryRaw decompressionBombEntry{fnv1a64(safePath), static_cast<uint32_t>(safePath.size()),
+                                                       headerSize, 1, 4'096, 1};
+    const auto decompressionBombPackage = writePackage("decompression_bomb.rowlpkg", validHeader,
+                                                       decompressionBombEntry, safePath);
+    if (Rowl::VFS::RowlPkgDataSource(decompressionBombPackage.string()).isValid()) {
+        std::cerr << "Package accepted an unreasonable decompression ratio" << std::endl;
+        exit(1);
+    }
+
     const auto overlappingPackage = testRoot / "overlapping.rowlpkg";
     const std::string firstPath = "first.txt";
     const std::string secondPath = "second.txt";

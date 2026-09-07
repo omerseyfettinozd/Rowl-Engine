@@ -14,6 +14,7 @@ namespace {
 constexpr uint16_t kSupportedPackageVersion = 1;
 constexpr uint64_t kMaxPackageEntryBytes = 128ULL * 1024 * 1024;
 constexpr uint32_t kMaxPackageFileCount = 100'000;
+constexpr uint64_t kMaxCompressionExpansionRatio = 1'024;
 
 std::optional<std::string> normalizePackagePath(std::string path) {
     if (path.empty() || path.find('\0') != std::string::npos) return std::nullopt;
@@ -152,6 +153,11 @@ bool RowlPkgDataSource::loadIndexTable() {
             (rawEntry.flags == 0 && rawEntry.compressedSize != rawEntry.uncompressedSize) ||
             (rawEntry.flags == 1 && (rawEntry.compressedSize == 0 || rawEntry.uncompressedSize == 0))) {
             ROWL_LOG_ERROR("Invalid compression metadata for package entry: " + relPath);
+            return false;
+        }
+        if (rawEntry.flags == 1 &&
+            rawEntry.uncompressedSize / rawEntry.compressedSize > kMaxCompressionExpansionRatio) {
+            ROWL_LOG_ERROR("Package entry compression ratio is too large: " + relPath);
             return false;
         }
 
