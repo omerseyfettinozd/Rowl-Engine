@@ -393,6 +393,17 @@ void Engine::updateSceneFromComponents(const std::string& componentsJson) {
         auto comps = nlohmann::json::parse(componentsJson);
         if (!comps.is_array()) return;
 
+        // Validate the complete external payload before clearing the active
+        // scene. A schema error must not leave the renderer half-updated.
+        for (const auto& comp : comps) {
+            if (!comp.is_object() || !comp.contains("type") || !comp.contains("data") ||
+                !comp["type"].is_string() || !comp["data"].is_object() ||
+                (comp.contains("enabled") && !comp["enabled"].is_boolean())) {
+                ROWL_LOG_ERROR("Component JSON contains an invalid component schema");
+                return;
+            }
+        }
+
         m_activeCharacters.clear();
         m_activeDialogues.clear();
         m_activeChoiceButtons.clear();

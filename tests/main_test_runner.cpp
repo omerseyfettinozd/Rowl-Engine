@@ -594,6 +594,14 @@ void test_native_c_api() {
     }
     TEST_PASS("C-API Malformed JSON Containment");
 
+    RowlEngine_UpdateSceneFromJson(handle, R"([{"type":42,"data":{}}])");
+    if (std::string(RowlEngine_GetSpeaker(handle)) != "Alice" ||
+        std::string(RowlEngine_GetDialogue(handle)).empty()) {
+        std::cerr << "Schema-invalid component JSON invalidated the active scene" << std::endl;
+        exit(1);
+    }
+    TEST_PASS("C-API Component Schema Containment");
+
     // Multi-Dialogue Box Test (Two Simultaneous Chat Bubbles in Game Mode)
     const char* multiDlgJson = R"([
         {"type":"background","id":"b1","enabled":true,"data":{"texture":"Woman.png","x":0,"y":0,"width":1920,"height":1080,"scale":1}},
