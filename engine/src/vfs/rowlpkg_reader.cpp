@@ -4,8 +4,31 @@
 #include <cstring>
 #include <filesystem>
 #include <mutex>
+#include <algorithm>
+#include <optional>
 
 namespace Rowl::VFS {
+
+namespace {
+
+constexpr uint16_t kSupportedPackageVersion = 1;
+
+std::optional<std::string> normalizePackagePath(std::string path) {
+    if (path.empty() || path.find('\0') != std::string::npos) return std::nullopt;
+
+    std::replace(path.begin(), path.end(), '\\', '/');
+    const std::filesystem::path normalized = std::filesystem::path(path).lexically_normal();
+    if (normalized.empty() || normalized.is_absolute() || normalized.has_root_name() ||
+        normalized.has_root_directory()) {
+        return std::nullopt;
+    }
+
+    const auto first = normalized.begin();
+    if (first == normalized.end() || *first == "..") return std::nullopt;
+    return normalized.generic_string();
+}
+
+} // namespace
 
 RowlPkgDataSource::RowlPkgDataSource(std::string pkgFilepath)
     : m_filepath(std::move(pkgFilepath)) {
@@ -47,13 +70,18 @@ bool RowlPkgDataSource::loadIndexTable() {
         return false;
     }
 
+    if (header.specVersion != kSupportedPackageVersion) {
+        ROWL_LOG_ERROR("Unsupported package version: " + std::to_string(header.specVersion));
+        return false;
+    }
+
     // Validate header values
     if (header.fileCount > 1000000) {  // Sanity check
         ROWL_LOG_ERROR("Package file count too large: " + std::to_string(header.fileCount));
         return false;
     }
 
-    if (header.indexOffset > archiveSize) {
+    if (header.indexOffset < sizeof(RowlPkgHeader) || header.indexOffset > archiveSize) {
         ROWL_LOG_ERROR("Package index offset suspiciously large: " + std::to_string(header.indexOffset));
         return false;
     }
@@ -65,6 +93,8 @@ bool RowlPkgDataSource::loadIndexTable() {
         return false;
     }
 
+    std::vector<std::pair<uint64_t, uint64_t>> payloadRanges;
+    payloadRanges.reserve(header.fileCount);
     for (uint32_t i = 0; i < header.fileCount; ++i) {
         RowlPkgEntryRaw rawEntry;
         m_fileStream.read(reinterpret_cast<char*>(&rawEntry), sizeof(RowlPkgEntryRaw));
@@ -87,32 +117,53 @@ bool RowlPkgDataSource::loadIndexTable() {
             return false;
         }
 
-        const std::filesystem::path normalizedPath = std::filesystem::path(relPath).lexically_normal();
-        if (normalizedPath.is_absolute() || normalizedPath.empty() ||
-            normalizedPath.begin() == normalizedPath.end() || *normalizedPath.begin() == "..") {
+        const auto normalizedPath = normalizePackagePath(relPath);
+        if (!normalizedPath) {
             ROWL_LOG_ERROR("Unsafe path in package entry: " + relPath);
             return false;
         }
+        // pathHash is deliberately not used as an authority boundary. Older
+        // package writers stored a 32-bit legacy hash here, while current
+        // writers use FNV-1a 64. The canonical path is the lookup key, and
+        // duplicate canonical paths are rejected below.
 
         // Validate sizes
         if (rawEntry.compressedSize > 1000000000ULL || rawEntry.uncompressedSize > 1000000000ULL) {
             ROWL_LOG_ERROR("Package entry size too large, possible corruption");
             return false;
         }
-        if (rawEntry.offset > archiveSize ||
-            rawEntry.compressedSize > archiveSize - rawEntry.offset) {
+        if (rawEntry.offset < sizeof(RowlPkgHeader) || rawEntry.offset > header.indexOffset ||
+            rawEntry.compressedSize > header.indexOffset - rawEntry.offset) {
             ROWL_LOG_ERROR("Package entry points outside archive: " + relPath);
+            return false;
+        }
+        if (rawEntry.flags > 1 ||
+            (rawEntry.flags == 0 && rawEntry.compressedSize != rawEntry.uncompressedSize) ||
+            (rawEntry.flags == 1 && (rawEntry.compressedSize == 0 || rawEntry.uncompressedSize == 0))) {
+            ROWL_LOG_ERROR("Invalid compression metadata for package entry: " + relPath);
             return false;
         }
 
         PackageEntry entry;
-        entry.relativePath = relPath;
+        entry.relativePath = *normalizedPath;
         entry.offset = rawEntry.offset;
         entry.compressedSize = rawEntry.compressedSize;
         entry.uncompressedSize = rawEntry.uncompressedSize;
         entry.flags = rawEntry.flags;
 
-        m_indexTable[relPath] = entry;
+        if (!m_indexTable.emplace(entry.relativePath, entry).second) {
+            ROWL_LOG_ERROR("Duplicate package path: " + entry.relativePath);
+            return false;
+        }
+        payloadRanges.emplace_back(entry.offset, entry.offset + entry.compressedSize);
+    }
+
+    std::sort(payloadRanges.begin(), payloadRanges.end());
+    for (size_t i = 1; i < payloadRanges.size(); ++i) {
+        if (payloadRanges[i].first < payloadRanges[i - 1].second) {
+            ROWL_LOG_ERROR("Overlapping payload ranges in package: " + m_filepath);
+            return false;
+        }
     }
 
     ROWL_LOG_INFO("Successfully loaded package index from '" + m_filepath + "' (" + std::to_string(header.fileCount) + " files)");
@@ -121,13 +172,16 @@ bool RowlPkgDataSource::loadIndexTable() {
 
 bool RowlPkgDataSource::exists(const std::string& path) {
     if (!m_isValid) return false;
-    return m_indexTable.find(path) != m_indexTable.end();
+    const auto normalizedPath = normalizePackagePath(path);
+    return normalizedPath && m_indexTable.find(*normalizedPath) != m_indexTable.end();
 }
 
 std::vector<uint8_t> RowlPkgDataSource::read(const std::string& path) {
     if (!m_isValid) return {};
 
-    auto it = m_indexTable.find(path);
+    const auto normalizedPath = normalizePackagePath(path);
+    if (!normalizedPath) return {};
+    auto it = m_indexTable.find(*normalizedPath);
     if (it == m_indexTable.end()) {
         return {};
     }

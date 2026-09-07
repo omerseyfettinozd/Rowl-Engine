@@ -86,9 +86,11 @@ void VFSManager::initialize() {
 
     ROWL_LOG_INFO("Initializing Hybrid Virtual File System (VFS)...");
 
-    std::vector<fs::path> candidateRoots = {
-        fs::current_path() / "Assets",
-        fs::current_path()
+    // A default runtime may only expose its asset root. Mounting the current
+    // directory here used to make unrelated project files readable through an
+    // empty VFS prefix whenever the engine was launched from a project root.
+    const std::vector<fs::path> candidateRoots = {
+        fs::current_path() / "Assets"
     };
 
     for (const auto& root : candidateRoots) {

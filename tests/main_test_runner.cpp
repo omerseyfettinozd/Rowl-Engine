@@ -332,6 +332,95 @@ void test_vfs_security() {
     }
     TEST_PASS("Package reader rejects out-of-bounds index offsets");
 
+    // Package metadata is an untrusted boundary. These cases ensure an archive
+    // cannot smuggle paths, corrupt payload ranges, or spoof an index entry.
+    const auto writePackage = [&](const std::string& name, Rowl::VFS::RowlPkgHeader header,
+                                  const Rowl::VFS::RowlPkgEntryRaw& entry,
+                                  const std::string& path, const std::string& payload = "x") {
+        const auto packagePath = testRoot / name;
+        std::ofstream output(packagePath, std::ios::binary);
+        output.write(reinterpret_cast<const char*>(&header), sizeof(header));
+        if (!payload.empty()) output.write(payload.data(), static_cast<std::streamsize>(payload.size()));
+        output.write(reinterpret_cast<const char*>(&entry), sizeof(entry));
+        output.write(path.data(), static_cast<std::streamsize>(path.size()));
+        return packagePath;
+    };
+    const auto fnv1a64 = [](const std::string& value) {
+        uint64_t hash = 14695981039346656037ULL;
+        for (const unsigned char byte : value) {
+            hash ^= byte;
+            hash *= 1099511628211ULL;
+        }
+        return hash;
+    };
+    constexpr uint64_t headerSize = sizeof(Rowl::VFS::RowlPkgHeader);
+    const std::string safePath = "dir/safe.txt";
+    const uint64_t indexOffset = headerSize + 1;
+    Rowl::VFS::RowlPkgHeader validHeader{{'R', 'O', 'W', 'L'}, 1, 1, indexOffset};
+    Rowl::VFS::RowlPkgEntryRaw validEntry{fnv1a64(safePath), static_cast<uint32_t>(safePath.size()),
+                                          headerSize, 1, 1, 0};
+
+    const auto validPackage = writePackage("valid.rowlpkg", validHeader, validEntry, safePath);
+    Rowl::VFS::RowlPkgDataSource validSource(validPackage.string());
+    if (!validSource.isValid() || validSource.read("dir\\safe.txt") != std::vector<uint8_t>{'x'} ||
+        !validSource.read(safePath).size()) {
+        std::cerr << "Valid package did not round-trip through normalized lookup" << std::endl;
+        exit(1);
+    }
+
+    const std::string traversalPath = "../outside.txt";
+    Rowl::VFS::RowlPkgEntryRaw traversalEntry{fnv1a64(traversalPath), static_cast<uint32_t>(traversalPath.size()),
+                                               headerSize, 1, 1, 0};
+    const auto traversalPackage = writePackage("traversal.rowlpkg", validHeader, traversalEntry, traversalPath);
+    Rowl::VFS::RowlPkgDataSource traversalSource(traversalPackage.string());
+    if (traversalSource.isValid()) {
+        std::cerr << "Package accepted a traversal path" << std::endl;
+        exit(1);
+    }
+
+    // Hash collisions/spoofing cannot redirect an asset: canonical path, not
+    // the legacy hash field, is the sole lookup key.
+    Rowl::VFS::RowlPkgEntryRaw badHashEntry{0, static_cast<uint32_t>(safePath.size()), headerSize, 1, 1, 0};
+    const auto badHashPackage = writePackage("bad_hash.rowlpkg", validHeader, badHashEntry, safePath);
+    Rowl::VFS::RowlPkgDataSource badHashSource(badHashPackage.string());
+    if (!badHashSource.isValid() || badHashSource.read(safePath) != std::vector<uint8_t>{'x'}) {
+        std::cerr << "Package path lookup incorrectly depends on legacy hash metadata" << std::endl;
+        exit(1);
+    }
+
+    Rowl::VFS::RowlPkgEntryRaw indexPayloadEntry{fnv1a64(safePath), static_cast<uint32_t>(safePath.size()),
+                                                  indexOffset, 1, 1, 0};
+    const auto indexPayloadPackage = writePackage("index_payload.rowlpkg", validHeader, indexPayloadEntry, safePath);
+    Rowl::VFS::RowlPkgDataSource indexPayloadSource(indexPayloadPackage.string());
+    if (indexPayloadSource.isValid()) {
+        std::cerr << "Package allowed an entry to read index bytes as payload" << std::endl;
+        exit(1);
+    }
+
+    const auto overlappingPackage = testRoot / "overlapping.rowlpkg";
+    const std::string firstPath = "first.txt";
+    const std::string secondPath = "second.txt";
+    Rowl::VFS::RowlPkgHeader overlappingHeader{{'R', 'O', 'W', 'L'}, 1, 2, headerSize + 2};
+    Rowl::VFS::RowlPkgEntryRaw firstEntry{fnv1a64(firstPath), static_cast<uint32_t>(firstPath.size()),
+                                          headerSize, 2, 2, 0};
+    Rowl::VFS::RowlPkgEntryRaw secondEntry{fnv1a64(secondPath), static_cast<uint32_t>(secondPath.size()),
+                                           headerSize + 1, 1, 1, 0};
+    {
+        std::ofstream output(overlappingPackage, std::ios::binary);
+        output.write(reinterpret_cast<const char*>(&overlappingHeader), sizeof(overlappingHeader));
+        output.write("xy", 2);
+        output.write(reinterpret_cast<const char*>(&firstEntry), sizeof(firstEntry));
+        output.write(firstPath.data(), static_cast<std::streamsize>(firstPath.size()));
+        output.write(reinterpret_cast<const char*>(&secondEntry), sizeof(secondEntry));
+        output.write(secondPath.data(), static_cast<std::streamsize>(secondPath.size()));
+    }
+    Rowl::VFS::RowlPkgDataSource overlappingSource(overlappingPackage.string());
+    if (overlappingSource.isValid()) {
+        std::cerr << "Package accepted overlapping payload ranges" << std::endl;
+        exit(1);
+    }
+    TEST_PASS("Package reader validates paths, compression metadata, and payload bounds");
+
     std::filesystem::remove_all(testRoot);
 }
 
