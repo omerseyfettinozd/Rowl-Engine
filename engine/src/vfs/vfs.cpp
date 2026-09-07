@@ -144,23 +144,23 @@ void VFSManager::remountProject(const std::string& projectRoot) {
 
     ROWL_LOG_INFO("Remounting VFS for isolated project root: " + root.string());
 
-    // 1. Mount project root
-    mountDirectory("", root.string());
-
-    // 2. Mount project Assets folder
+    // Only expose declared runtime content. Mounting the project root at the
+    // empty prefix would make project metadata and arbitrary source files
+    // readable through an asset lookup after a project switch.
+    // 1. Mount project Assets folder.
     fs::path assetsPath = root / "Assets";
     if (fs::exists(assetsPath) && fs::is_directory(assetsPath)) {
         mountDirectory("", assetsPath.string());
         mountDirectory("Assets", assetsPath.string());
 
-        // 3. Mount images
+        // 2. Mount images
         fs::path imgPath = assetsPath / "images";
         if (fs::exists(imgPath) && fs::is_directory(imgPath)) {
             mountDirectory("", imgPath.string());
             mountDirectory("images", imgPath.string());
         }
 
-        // 4. Mount packages
+        // 3. Mount packages
         fs::path pkgPath = assetsPath / "packages";
         if (fs::exists(pkgPath) && fs::is_directory(pkgPath)) {
             for (const auto& entry : fs::directory_iterator(pkgPath)) {
@@ -171,7 +171,7 @@ void VFSManager::remountProject(const std::string& projectRoot) {
         }
     }
 
-    // 5. Mount project mods folder if exists
+    // 4. Mount project mods folder if exists
     fs::path modsPath = root / "mods";
     if (fs::exists(modsPath) && fs::is_directory(modsPath)) {
         mountDirectory("mods", modsPath.string());

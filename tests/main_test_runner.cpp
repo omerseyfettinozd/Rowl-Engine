@@ -513,6 +513,23 @@ void test_vfs_security() {
     }
     TEST_PASS("Package reader validates paths, compression metadata, and payload bounds");
 
+    // A selected project is an asset boundary: source files and project
+    // metadata must not become readable merely because they share its root.
+    const auto isolatedProject = testRoot / "isolated_project";
+    std::filesystem::create_directories(isolatedProject / "Assets" / "images");
+    std::ofstream(isolatedProject / "project-secret.txt") << "not-an-asset";
+    std::ofstream(isolatedProject / "Assets" / "images" / "allowed.txt") << "asset";
+    auto& vfs = Rowl::VFS::VFSManager::instance();
+    vfs.remountProject(isolatedProject.string());
+    if (vfs.exists("project-secret.txt") || !vfs.readBytes("project-secret.txt").empty() ||
+        !vfs.exists("images/allowed.txt") ||
+        vfs.readString("Assets/images/allowed.txt") != "asset") {
+        std::cerr << "Project remount exposed non-asset files or hid declared assets" << std::endl;
+        exit(1);
+    }
+    vfs.remountProject(std::filesystem::current_path().string());
+    TEST_PASS("Project remount exposes Assets but not project-root files");
+
     std::filesystem::remove_all(testRoot);
 }
 
