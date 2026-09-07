@@ -611,6 +611,26 @@ void test_native_c_api() {
     }
     TEST_PASS("C-API Component Value-Type Transaction Rollback");
 
+    // Audio commands are device side effects, so a malformed component that
+    // follows an audio component must not partially apply its filter.
+    const auto* audioBeforeRollback = Rowl::Core::Engine::instance().getAudio();
+    if (!audioBeforeRollback ||
+        audioBeforeRollback->getActiveFilter() != Rowl::Audio::DSPFilterType::UnderwaterLowPass) {
+        std::cerr << "Expected the valid component scene to leave the Underwater DSP active" << std::endl;
+        exit(1);
+    }
+    RowlEngine_UpdateSceneFromJson(handle, R"([
+        {"type":"audio","data":{"dsp_filter":"Cave"}},
+        {"type":"character","data":{"sprite":"Margot.jpg","x":"not-a-number"}}
+    ])");
+    const auto* audioAfterRollback = Rowl::Core::Engine::instance().getAudio();
+    if (!audioAfterRollback ||
+        audioAfterRollback->getActiveFilter() != Rowl::Audio::DSPFilterType::UnderwaterLowPass) {
+        std::cerr << "Invalid component scene leaked a partial audio side effect" << std::endl;
+        exit(1);
+    }
+    TEST_PASS("C-API Deferred Audio Side Effects on Scene Rollback");
+
     // Multi-Dialogue Box Test (Two Simultaneous Chat Bubbles in Game Mode)
     const char* multiDlgJson = R"([
         {"type":"background","id":"b1","enabled":true,"data":{"texture":"Woman.png","x":0,"y":0,"width":1920,"height":1080,"scale":1}},

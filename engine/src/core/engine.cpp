@@ -467,6 +467,7 @@ void Engine::updateSceneFromComponents(const std::string& componentsJson) {
         m_activeDialogueData = {};
         m_hasBackground = false;
         m_hasDialogueBox = false;
+        std::vector<nlohmann::json> pendingAudioComponents;
 
         for (const auto& comp : comps) {
             if (!comp.contains("type") || !comp.contains("data")) continue;
@@ -573,32 +574,10 @@ void Engine::updateSceneFromComponents(const std::string& componentsJson) {
                     m_activeDialogues[0].hasDialogueBox = true;
                 }
             } else if (type == "audio") {
-                std::string dsp = data.value("dsp_filter", "Normal");
-                std::string bgm = data.value("bgm_track", "");
-                std::string sfx = data.value("sfx_track", "");
-                float vol = data.value("volume", 1.0f);
-
-                ROWL_LOG_INFO("[Audio] Applied DSP Filter from Component: " + dsp);
-                if (m_audio) {
-                    if (dsp == "Cave" || dsp == "CaveReverb") {
-                        m_audio->applyDspFilter(Rowl::Audio::DSPFilterType::CaveReverb);
-                    } else if (dsp == "Telephone") {
-                        m_audio->applyDspFilter(Rowl::Audio::DSPFilterType::Telephone);
-                    } else if (dsp == "Underwater" || dsp == "UnderwaterLowPass") {
-                        m_audio->applyDspFilter(Rowl::Audio::DSPFilterType::UnderwaterLowPass);
-                    } else {
-                        m_audio->applyDspFilter(Rowl::Audio::DSPFilterType::Normal);
-                    }
-
-                    m_audio->setBgmVolume(vol);
-
-                    if (!bgm.empty() && bgm != m_audio->getCurrentBgmPath()) {
-                        m_audio->playAudio(bgm, Rowl::Audio::AudioChannelType::Bgm);
-                    }
-                    if (!sfx.empty()) {
-                        m_audio->playAudio(sfx, Rowl::Audio::AudioChannelType::Sfx);
-                    }
-                }
+                // Defer device side effects until every component has been
+                // converted successfully; a later malformed field must not
+                // leave audio changed while the scene is rolled back.
+                pendingAudioComponents.push_back(data);
             } else if (type == "choice" && data.contains("options") && data["options"].is_array()) {
                 size_t index = 0;
                 for (const auto& option : data["options"]) {
@@ -665,6 +644,29 @@ void Engine::updateSceneFromComponents(const std::string& componentsJson) {
 
         if (m_activeDialogues.empty() && m_hasDialogueBox) {
             m_activeDialogues.push_back(m_activeDialogueData);
+        }
+
+        for (const auto& data : pendingAudioComponents) {
+            std::string dsp = data.value("dsp_filter", "Normal");
+            std::string bgm = data.value("bgm_track", "");
+            std::string sfx = data.value("sfx_track", "");
+            float vol = data.value("volume", 1.0f);
+            ROWL_LOG_INFO("[Audio] Applied DSP Filter from Component: " + dsp);
+            if (!m_audio) continue;
+            if (dsp == "Cave" || dsp == "CaveReverb") {
+                m_audio->applyDspFilter(Rowl::Audio::DSPFilterType::CaveReverb);
+            } else if (dsp == "Telephone") {
+                m_audio->applyDspFilter(Rowl::Audio::DSPFilterType::Telephone);
+            } else if (dsp == "Underwater" || dsp == "UnderwaterLowPass") {
+                m_audio->applyDspFilter(Rowl::Audio::DSPFilterType::UnderwaterLowPass);
+            } else {
+                m_audio->applyDspFilter(Rowl::Audio::DSPFilterType::Normal);
+            }
+            m_audio->setBgmVolume(vol);
+            if (!bgm.empty() && bgm != m_audio->getCurrentBgmPath()) {
+                m_audio->playAudio(bgm, Rowl::Audio::AudioChannelType::Bgm);
+            }
+            if (!sfx.empty()) m_audio->playAudio(sfx, Rowl::Audio::AudioChannelType::Sfx);
         }
 
         ROWL_LOG_INFO("Scene Updated (Components) → " + std::to_string(comps.size()) +
