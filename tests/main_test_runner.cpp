@@ -631,6 +631,20 @@ void test_native_c_api() {
     }
     TEST_PASS("C-API Component Schema Containment");
 
+    std::string tooManyComponents = "[";
+    for (std::size_t i = 0; i <= 2'048; ++i) {
+        if (i != 0) tooManyComponents += ',';
+        tooManyComponents += R"({"type":"speaker","data":{}})";
+    }
+    tooManyComponents += ']';
+    RowlEngine_UpdateSceneFromJson(handle, tooManyComponents.c_str());
+    if (std::string(RowlEngine_GetSpeaker(handle)) != "Alice" ||
+        std::string(RowlEngine_GetDialogue(handle)).empty()) {
+        std::cerr << "Over-count component JSON invalidated the active scene" << std::endl;
+        exit(1);
+    }
+    TEST_PASS("C-API Component Count Containment");
+
     RowlEngine_UpdateSceneFromJson(handle,
         R"([{"type":"character","data":{"sprite":"Margot.jpg","x":"not-a-number"}}])");
     if (std::string(RowlEngine_GetSpeaker(handle)) != "Alice" ||
@@ -735,6 +749,25 @@ void test_native_c_api() {
         exit(1);
     }
     std::filesystem::remove(invalidGraphPath);
+
+    const auto overCountGraphPath = std::filesystem::temp_directory_path() / "rowl_overcount_graph_test.json";
+    {
+        std::ofstream overCountGraph(overCountGraphPath);
+        overCountGraph << R"({"start_node_id":1000,"nodes":[)";
+        for (uint64_t nodeId = 1000; nodeId <= 11'000; ++nodeId) {
+            if (nodeId != 1000) overCountGraph << ',';
+            overCountGraph << R"({"id":)" << nodeId << '}';
+        }
+        overCountGraph << "]}";
+    }
+    RowlEngine_LoadStoryGraph(handle, overCountGraphPath.string().c_str());
+    if (RowlEngine_GetCurrentNodeId(handle) != 103 ||
+        std::string(RowlEngine_GetSpeaker(handle)) != "Guide") {
+        std::cerr << "Over-count graph load replaced the active story" << std::endl;
+        exit(1);
+    }
+    std::filesystem::remove(overCountGraphPath);
+    TEST_PASS("Story Graph Count Containment");
 
     // A successful reload starts a fresh story state and cannot carry script
     // variables or rewind history over from the previously loaded graph.

@@ -17,6 +17,14 @@ namespace Rowl::Core {
 Engine* Engine::s_instance = nullptr;
 constexpr uint32_t kMaxVirtualCanvasDimension = 16'384;
 constexpr uintmax_t kMaxStoryJsonBytes = 16 * 1024 * 1024;
+constexpr std::size_t kMaxComponentsPerScene = 2'048;
+constexpr std::size_t kMaxCharactersPerScene = 128;
+constexpr std::size_t kMaxDialoguesPerScene = 128;
+constexpr std::size_t kMaxChoiceButtonsPerScene = 256;
+constexpr std::size_t kMaxScriptsPerScene = 32;
+constexpr std::size_t kMaxAudioComponentsPerScene = 64;
+constexpr std::size_t kMaxStoryNodes = 10'000;
+constexpr std::size_t kMaxEdgesPerStoryNode = 4'096;
 
 Engine::Engine() {
     s_instance = this;
@@ -445,15 +453,53 @@ void Engine::updateSceneFromComponents(const std::string& componentsJson) {
     try {
         auto comps = nlohmann::json::parse(componentsJson);
         if (!comps.is_array()) return;
+        if (comps.size() > kMaxComponentsPerScene) {
+            ROWL_LOG_ERROR("Component JSON exceeds the maximum component count");
+            return;
+        }
 
         // Validate the complete external payload before clearing the active
         // scene. A schema error must not leave the renderer half-updated.
+        std::size_t dialogueCount = 0;
+        std::size_t characterCount = 0;
+        std::size_t choiceButtonCount = 0;
+        std::size_t scriptCount = 0;
+        std::size_t audioComponentCount = 0;
         for (const auto& comp : comps) {
             if (!comp.is_object() || !comp.contains("type") || !comp.contains("data") ||
                 !comp["type"].is_string() || !comp["data"].is_object() ||
                 (comp.contains("enabled") && !comp["enabled"].is_boolean())) {
                 ROWL_LOG_ERROR("Component JSON contains an invalid component schema");
                 return;
+            }
+            if (!comp.value("enabled", true)) continue;
+
+            const auto type = comp["type"].get<std::string>();
+            if (type == "dialogue" && ++dialogueCount > kMaxDialoguesPerScene) {
+                ROWL_LOG_ERROR("Component JSON exceeds the maximum dialogue count");
+                return;
+            }
+            if (type == "character" && ++characterCount > kMaxCharactersPerScene) {
+                ROWL_LOG_ERROR("Component JSON exceeds the maximum character count");
+                return;
+            }
+            if (type == "script" && ++scriptCount > kMaxScriptsPerScene) {
+                ROWL_LOG_ERROR("Component JSON exceeds the maximum script count");
+                return;
+            }
+            if (type == "audio" && ++audioComponentCount > kMaxAudioComponentsPerScene) {
+                ROWL_LOG_ERROR("Component JSON exceeds the maximum audio component count");
+                return;
+            }
+            if (type == "choice") {
+                const auto& options = comp["data"].value("options", nlohmann::json::array());
+                if (options.is_array()) {
+                    choiceButtonCount += options.size();
+                    if (choiceButtonCount > kMaxChoiceButtonsPerScene) {
+                        ROWL_LOG_ERROR("Component JSON exceeds the maximum choice button count");
+                        return;
+                    }
+                }
             }
         }
 
@@ -692,6 +738,10 @@ void Engine::parseStoryGraphJson(const std::string& jsonContent) {
             ROWL_LOG_ERROR("Story graph must be an object containing a nodes array");
             return;
         }
+        if (data["nodes"].size() > kMaxStoryNodes) {
+            ROWL_LOG_ERROR("Story graph exceeds the maximum node count");
+            return;
+        }
         std::unordered_map<uint64_t, StoryNode> parsedNodes;
 
         uint64_t parsedStartId = data.value("start_node_id", static_cast<uint64_t>(101));
@@ -731,6 +781,10 @@ void Engine::parseStoryGraphJson(const std::string& jsonContent) {
                         return;
                     }
                     for (const auto& compJson : nodeJson["components"]) {
+                        if (n.components.size() >= kMaxComponentsPerScene) {
+                            ROWL_LOG_ERROR("Story graph node exceeds the maximum component count");
+                            return;
+                        }
                         if (!compJson.is_object()) {
                             ROWL_LOG_ERROR("Story graph contains a non-object component");
                             return;
@@ -761,6 +815,10 @@ void Engine::parseStoryGraphJson(const std::string& jsonContent) {
                             return;
                         }
                         for (const auto& compJson : objectJson["components"]) {
+                            if (n.components.size() >= kMaxComponentsPerScene) {
+                                ROWL_LOG_ERROR("Story graph node exceeds the maximum component count");
+                                return;
+                            }
                             if (!compJson.is_object()) {
                                 ROWL_LOG_ERROR("Story graph contains a non-object component");
                                 return;
@@ -787,6 +845,10 @@ void Engine::parseStoryGraphJson(const std::string& jsonContent) {
                         next.optionId = nextJson.value("option_id", std::string{});
                         if (next.nodeId == 0) {
                             ROWL_LOG_ERROR("Story graph contains an edge with no target node ID");
+                            return;
+                        }
+                        if (n.nextNodes.size() >= kMaxEdgesPerStoryNode) {
+                            ROWL_LOG_ERROR("Story graph node exceeds the maximum edge count");
                             return;
                         }
                         n.nextNodes.push_back(next);
