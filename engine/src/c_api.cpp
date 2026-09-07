@@ -19,14 +19,24 @@
 #include <exception>
 #include <memory>
 #include <mutex>
-#include <unordered_set>
+#include <unordered_map>
 #include <utility>
+#include <vector>
 
 /* ── Internal helper ─────────────────────────────────────────────────────── */
 namespace {
 
 std::mutex g_handleMutex;
-std::unordered_set<RowlEngineHandle> g_liveHandles;
+
+// The opaque C handle is a stable record, not the Engine allocation itself.
+// Destroyed records are intentionally retained until process exit so an old
+// host callback can never become valid again if malloc reuses an Engine address.
+struct HandleRecord {
+    std::unique_ptr<Rowl::Core::Engine> engine;
+};
+
+std::unordered_map<RowlEngineHandle, Rowl::Core::Engine*> g_liveHandles;
+std::vector<std::unique_ptr<HandleRecord>> g_handleRecords;
 
 bool isLiveHandle(RowlEngineHandle handle) noexcept {
     if (!handle) return false;
@@ -34,19 +44,22 @@ bool isLiveHandle(RowlEngineHandle handle) noexcept {
     return g_liveHandles.contains(handle);
 }
 
-Rowl::Core::Engine* takeLiveHandle(RowlEngineHandle handle) noexcept {
-    if (!handle) return nullptr;
+std::unique_ptr<Rowl::Core::Engine> takeLiveHandle(RowlEngineHandle handle) noexcept {
+    if (!handle) return {};
     std::lock_guard<std::mutex> lock(g_handleMutex);
     const auto it = g_liveHandles.find(handle);
-    if (it == g_liveHandles.end()) return nullptr;
+    if (it == g_liveHandles.end()) return {};
+    auto* record = static_cast<HandleRecord*>(handle);
     g_liveHandles.erase(it);
-    return static_cast<Rowl::Core::Engine*>(handle);
+    return std::move(record->engine);
 }
 
 } // namespace
 
 static inline Rowl::Core::Engine* toEngine(RowlEngineHandle h) {
-    return static_cast<Rowl::Core::Engine*>(h);
+    std::lock_guard<std::mutex> lock(g_handleMutex);
+    const auto it = g_liveHandles.find(h);
+    return it != g_liveHandles.end() ? it->second : nullptr;
 }
 
 // A C++ exception crossing this ABI boundary is undefined behaviour and can
@@ -75,17 +88,25 @@ extern "C" {
 
 RowlEngineHandle RowlEngine_Create(void) {
     return invokeNoexcept<RowlEngineHandle>([] {
-        auto engine = std::make_unique<Rowl::Core::Engine>();
+        auto record = std::make_unique<HandleRecord>();
+        record->engine = std::make_unique<Rowl::Core::Engine>();
+        const auto handle = static_cast<RowlEngineHandle>(record.get());
         std::lock_guard<std::mutex> lock(g_handleMutex);
-        g_liveHandles.insert(engine.get());
-        return static_cast<RowlEngineHandle>(engine.release());
+        g_liveHandles.emplace(handle, record->engine.get());
+        try {
+            g_handleRecords.push_back(std::move(record));
+        } catch (...) {
+            g_liveHandles.erase(handle);
+            throw;
+        }
+        return handle;
     }, nullptr);
 }
 
 void RowlEngine_Destroy(RowlEngineHandle handle) {
-    auto* engine = takeLiveHandle(handle);
+    auto engine = takeLiveHandle(handle);
     if (!engine) return;
-    invokeNoexcept([&] { delete engine; });
+    invokeNoexcept([&] { engine.reset(); });
 }
 
 int RowlEngine_Init(RowlEngineHandle handle,

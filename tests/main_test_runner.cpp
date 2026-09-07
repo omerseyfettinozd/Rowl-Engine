@@ -925,6 +925,18 @@ void test_native_c_api() {
         std::cerr << "C-API accepted a stale or unknown engine handle" << std::endl;
         exit(1);
     }
+    RowlEngineHandle replacementHandle = RowlEngine_Create();
+    if (!replacementHandle || replacementHandle == handle ||
+        RowlEngine_Init(replacementHandle, 320, 180, 0) != 1) {
+        std::cerr << "C-API failed to create an isolated replacement handle" << std::endl;
+        exit(1);
+    }
+    RowlEngine_SetVariable(handle, "stale_callback", "must_not_reach_replacement");
+    if (!std::string(RowlEngine_GetVariable(replacementHandle, "stale_callback")).empty()) {
+        std::cerr << "Stale C-API handle targeted a replacement engine" << std::endl;
+        exit(1);
+    }
+    RowlEngine_Destroy(replacementHandle);
     TEST_PASS("RowlEngine_Shutdown & Destroy (Clean Resource Teardown)");
     TEST_PASS("C-API Stale and Unknown Handle Containment");
 }
