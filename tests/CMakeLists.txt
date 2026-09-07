@@ -31,3 +31,7 @@ target_link_libraries(rowl_tests PRIVATE
 )
 
 add_test(NAME rowl_native_tests COMMAND rowl_tests)
+set_tests_properties(rowl_native_tests PROPERTIES
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    ENVIRONMENT "SDL_AUDIODRIVER=dummy"
+)

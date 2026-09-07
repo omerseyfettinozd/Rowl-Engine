@@ -14,6 +14,8 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <atomic>
+#include <thread>
 #include <SDL3/SDL.h>
 
 #include "rowl/render/aspect_guardian.hpp"
@@ -437,6 +439,23 @@ void test_vfs_security() {
     if (!validSource.isValid() || validSource.read("dir\\safe.txt") != std::vector<uint8_t>{'x'} ||
         !validSource.read(safePath).size()) {
         std::cerr << "Valid package did not round-trip through normalized lookup" << std::endl;
+        exit(1);
+    }
+    std::atomic<bool> concurrentReadFailed{false};
+    std::vector<std::thread> readers;
+    for (int threadIndex = 0; threadIndex < 4; ++threadIndex) {
+        readers.emplace_back([&] {
+            for (int readIndex = 0; readIndex < 100; ++readIndex) {
+                if (validSource.read("dir\\safe.txt") != std::vector<uint8_t>{'x'}) {
+                    concurrentReadFailed.store(true);
+                    return;
+                }
+            }
+        });
+    }
+    for (auto& reader : readers) reader.join();
+    if (concurrentReadFailed.load()) {
+        std::cerr << "Concurrent package reads returned inconsistent data" << std::endl;
         exit(1);
     }
 
