@@ -32,29 +32,11 @@ namespace RowlEngine.Editor.ViewModels
         partial void OnSourceNodeChanged(NodeViewModel? value)
         {
             UpdatePoints();
-            // Subscribe to source node position changes
-            if (value != null)
-            {
-                value.PropertyChanged += (s, e) =>
-                {
-                    if (e.PropertyName == nameof(NodeViewModel.X) || e.PropertyName == nameof(NodeViewModel.Y))
-                        UpdatePoints();
-                };
-            }
         }
 
         partial void OnTargetNodeChanged(NodeViewModel? value)
         {
             UpdatePoints();
-            // Subscribe to target node position changes
-            if (value != null)
-            {
-                value.PropertyChanged += (s, e) =>
-                {
-                    if (e.PropertyName == nameof(NodeViewModel.X) || e.PropertyName == nameof(NodeViewModel.Y))
-                        UpdatePoints();
-                };
-            }
         }
 
         public void UpdatePoints()

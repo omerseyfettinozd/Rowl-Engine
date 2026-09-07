@@ -5,6 +5,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
+using RowlEngine.Editor.Services;
 using RowlEngine.Editor.ViewModels;
 using RowlEngine.Editor.ViewModels.Components;
 
@@ -41,7 +42,7 @@ namespace RowlEngine.Editor.Views.Components
             var dropBorder = this.FindControl<Border>("DropZoneBorder");
             if (dropBorder == null) return;
 
-            if (isOver && IsValidImageDrop(e.Data))
+            if (isOver && IsValidImageDrop(e.DataTransfer))
             {
                 dropBorder.BorderBrush = Brush.Parse("#00F0FF");
                 dropBorder.BorderThickness = new Thickness(2);
@@ -59,13 +60,13 @@ namespace RowlEngine.Editor.Views.Components
             }
         }
 
-        private bool IsValidImageDrop(IDataObject data)
+        private bool IsValidImageDrop(IDataTransfer data)
         {
-            if (data.Contains("AssetNode") || data.Contains("AssetFileName")) return true;
+            if (AssetDragData.Contains(data)) return true;
 
-            if (data.Contains(DataFormats.Files))
+            if (data.Contains(DataFormat.File))
             {
-                var files = data.GetFiles();
+                var files = data.TryGetFiles();
                 if (files != null && files.Any())
                 {
                     string ext = Path.GetExtension(files.First().Path.LocalPath).ToLowerInvariant();
@@ -73,9 +74,9 @@ namespace RowlEngine.Editor.Views.Components
                 }
             }
 
-            if (data.Contains(DataFormats.Text))
+            if (data.Contains(DataFormat.Text))
             {
-                string? text = data.GetText();
+                string? text = data.TryGetText();
                 if (!string.IsNullOrEmpty(text))
                 {
                     string ext = Path.GetExtension(text).ToLowerInvariant();
@@ -96,19 +97,15 @@ namespace RowlEngine.Editor.Views.Components
 
             string? importedFileName = null;
 
-            // 1. From internal AssetNode
-            if (e.Data.Get("AssetNode") is AssetNodeViewModel node)
-            {
-                importedFileName = node.Name;
-            }
-            else if (e.Data.Get("AssetFileName") is string fileName)
+            // 1. From the internal asset browser
+            if (AssetDragData.GetPath(e.DataTransfer) is string fileName)
             {
                 importedFileName = fileName;
             }
             // 2. From OS File or Full Path
-            else if (e.Data.Contains(DataFormats.Files))
+            else if (e.DataTransfer.Contains(DataFormat.File))
             {
-                var files = e.Data.GetFiles();
+                var files = e.DataTransfer.TryGetFiles();
                 if (files != null && files.Any())
                 {
                     string fullPath = files.First().Path.LocalPath;
@@ -119,9 +116,9 @@ namespace RowlEngine.Editor.Views.Components
                 }
             }
             // 3. From text
-            else if (e.Data.Contains(DataFormats.Text))
+            else if (e.DataTransfer.Contains(DataFormat.Text))
             {
-                string? text = e.Data.GetText();
+                string? text = e.DataTransfer.TryGetText();
                 if (!string.IsNullOrEmpty(text))
                     importedFileName = Path.GetFileName(text);
             }

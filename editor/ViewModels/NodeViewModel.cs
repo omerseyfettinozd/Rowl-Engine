@@ -118,7 +118,9 @@ namespace RowlEngine.Editor.ViewModels
             foreach (var comp in source.Components)
             {
                 var newComp = ComponentRegistry.Create(comp.TypeKey);
-                newComp.Deserialize(comp.Serialize());
+                newComp.Deserialize(comp.Serialize().ToDictionary(
+                    pair => pair.Key,
+                    pair => (object?)pair.Value));
                 newObj.AddComponent(newComp);
             }
             return newObj;

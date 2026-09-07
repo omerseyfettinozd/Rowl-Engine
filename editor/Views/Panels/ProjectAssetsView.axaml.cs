@@ -3,6 +3,7 @@ using System.IO;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using RowlEngine.Editor.Services;
 using RowlEngine.Editor.ViewModels;
 
 namespace RowlEngine.Editor.Views.Panels
@@ -59,19 +60,11 @@ namespace RowlEngine.Editor.Views.Panels
                 var node = _draggedNode;
                 _draggedNode = null;
 
-                var data = new DataObject();
-                data.Set("AssetNode", node);
                 // Preserve the path relative to Assets/ (e.g. ui/buttons/blue.png).
                 // File names alone are ambiguous and fail for nested asset folders.
                 string assetPath = node.RelativePath.Replace('\\', '/');
-                data.Set("AssetFileName", assetPath);
-                data.Set(DataFormats.Text, assetPath);
-                if (!string.IsNullOrEmpty(node.FullPath) && File.Exists(node.FullPath))
-                {
-                    data.Set(DataFormats.Files, new[] { node.FullPath });
-                }
-
-                await DragDrop.DoDragDrop(e, data, DragDropEffects.Copy | DragDropEffects.Link);
+                var data = AssetDragData.Create(assetPath);
+                await DragDrop.DoDragDropAsync(e, data, DragDropEffects.Copy | DragDropEffects.Link);
             }
         }
     }

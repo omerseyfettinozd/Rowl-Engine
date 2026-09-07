@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.IO;
 using Avalonia.Media.Imaging;
 using RowlEngine.Editor.ViewModels;
@@ -71,8 +72,10 @@ namespace RowlEngine.Editor.Services
         {
             if (string.IsNullOrWhiteSpace(filename)) return;
             string key = filename.Trim();
-            _cache.TryRemove(key, out _);
-            _cache.TryRemove(Path.GetFileName(filename), out _);
+            var removed = new HashSet<Bitmap>(ReferenceEqualityComparer.Instance);
+            if (_cache.TryRemove(key, out var cached) && cached != null) removed.Add(cached);
+            if (_cache.TryRemove(Path.GetFileName(filename), out cached) && cached != null) removed.Add(cached);
+            foreach (var bitmap in removed) bitmap.Dispose();
         }
 
         /// <summary>
@@ -80,7 +83,13 @@ namespace RowlEngine.Editor.Services
         /// </summary>
         public static void Clear()
         {
+            var bitmaps = new HashSet<Bitmap>(ReferenceEqualityComparer.Instance);
+            foreach (var bitmap in _cache.Values)
+            {
+                if (bitmap != null) bitmaps.Add(bitmap);
+            }
             _cache.Clear();
+            foreach (var bitmap in bitmaps) bitmap.Dispose();
         }
     }
 }

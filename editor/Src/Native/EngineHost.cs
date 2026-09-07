@@ -6,7 +6,7 @@
  * Responsibilities:
  *   - Creates / destroys the native engine handle (RowlEngine_Create / Destroy)
  *   - Drives the engine tick via Avalonia's DispatcherTimer (~60 FPS) in Play mode (Unity-style)
- *   - Copies offscreen RGBA32 framebuffer into an Avalonia WriteableBitmap (Zero-Copy)
+ *   - Copies the offscreen RGBA32 framebuffer into an Avalonia WriteableBitmap
  *   - Controls Play / Stop playback state and story resets
  */
 
@@ -146,11 +146,13 @@ namespace RowlEngine.Editor.Native
                         RenderTargetBitmap.PixelSize.Width != width ||
                         RenderTargetBitmap.PixelSize.Height != height)
                     {
+                        var previousBitmap = RenderTargetBitmap;
                         RenderTargetBitmap = new WriteableBitmap(
                             new PixelSize(width, height),
                             new Vector(96, 96),
                             PixelFormat.Rgba8888,
                             AlphaFormat.Opaque);
+                        previousBitmap?.Dispose();
                     }
 
                     using (var buf = RenderTargetBitmap.Lock())
@@ -349,7 +351,9 @@ namespace RowlEngine.Editor.Native
                 _handle = IntPtr.Zero;
             }
             IsPlaying = false;
+            var bitmap = RenderTargetBitmap;
             RenderTargetBitmap = null;
+            bitmap?.Dispose();
         }
     }
 }

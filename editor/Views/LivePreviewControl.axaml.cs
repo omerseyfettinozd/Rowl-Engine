@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using RowlEngine.Editor.ViewModels;
 using RowlEngine.Editor.ViewModels.Components;
+using RowlEngine.Editor.Services;
 using System;
 using System.Linq;
 using Avalonia.VisualTree;
@@ -89,7 +90,7 @@ namespace RowlEngine.Editor.Views
 
         private void OnCanvasDragOver(object? sender, DragEventArgs e)
         {
-            if (e.Data.Contains("AssetNode") || e.Data.Contains("AssetFileName") || e.Data.Contains(DataFormats.Files) || e.Data.Contains(DataFormats.Text))
+            if (AssetDragData.Contains(e.DataTransfer) || e.DataTransfer.Contains(DataFormat.File) || e.DataTransfer.Contains(DataFormat.Text))
             {
                 e.DragEffects = DragDropEffects.Copy;
                 e.Handled = true;
@@ -101,26 +102,22 @@ namespace RowlEngine.Editor.Views
             if (DataContext is not MainWindowViewModel mainVm || mainVm.SelectedNode == null) return;
 
             string? importedFileName = null;
-            if (e.Data.Get("AssetNode") is AssetNodeViewModel node)
-            {
-                importedFileName = node.RelativePath.Replace('\\', '/');
-            }
-            else if (e.Data.Get("AssetFileName") is string fileName)
+            if (AssetDragData.GetPath(e.DataTransfer) is string fileName)
             {
                 importedFileName = fileName;
             }
-            else if (e.Data.Contains(DataFormats.Files))
+            else if (e.DataTransfer.Contains(DataFormat.File))
             {
-                var files = e.Data.GetFiles();
+                var files = e.DataTransfer.TryGetFiles();
                 if (files != null && files.Any())
                 {
                     string fullPath = files.First().Path.LocalPath;
                     importedFileName = mainVm.ImportImageFileToProject(fullPath);
                 }
             }
-            else if (e.Data.Contains(DataFormats.Text))
+            else if (e.DataTransfer.Contains(DataFormat.Text))
             {
-                string? text = e.Data.GetText();
+                string? text = e.DataTransfer.TryGetText();
                 if (!string.IsNullOrEmpty(text))
                     importedFileName = System.IO.Path.GetFileName(text);
             }
@@ -181,7 +178,7 @@ namespace RowlEngine.Editor.Views
 
         private void OnChoiceButtonDragOver(object? sender, DragEventArgs e)
         {
-            if (e.Data.Contains("AssetNode") || e.Data.Contains("AssetFileName") || e.Data.Contains(DataFormats.Files))
+            if (AssetDragData.Contains(e.DataTransfer) || e.DataTransfer.Contains(DataFormat.File))
             {
                 e.DragEffects = DragDropEffects.Copy;
                 e.Handled = true;
@@ -191,12 +188,10 @@ namespace RowlEngine.Editor.Views
         private void OnChoiceButtonDrop(object? sender, DragEventArgs e)
         {
             if (sender is not Control { DataContext: ChoiceOptionViewModel option } || DataContext is not MainWindowViewModel mainVm) return;
-            string? fileName = e.Data.Get("AssetNode") is AssetNodeViewModel asset
-                ? asset.RelativePath.Replace('\\', '/')
-                : e.Data.Get("AssetFileName") as string;
-            if (string.IsNullOrEmpty(fileName) && e.Data.Contains(DataFormats.Files))
+            string? fileName = AssetDragData.GetPath(e.DataTransfer);
+            if (string.IsNullOrEmpty(fileName) && e.DataTransfer.Contains(DataFormat.File))
             {
-                var file = e.Data.GetFiles()?.FirstOrDefault();
+                var file = e.DataTransfer.TryGetFiles()?.FirstOrDefault();
                 if (file != null) fileName = mainVm.ImportImageFileToProject(file.Path.LocalPath);
             }
             if (string.IsNullOrEmpty(fileName)) return;

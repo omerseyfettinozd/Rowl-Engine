@@ -21,6 +21,7 @@ namespace RowlEngine.Editor.Views
             DataContext = vm;
             vm.TopLevelHint = this;
             KeyDown += MainWindow_KeyDown;
+            Closed += (_, _) => vm.Dispose();
         }
 
         private void MainWindow_KeyDown(object? sender, KeyEventArgs e)

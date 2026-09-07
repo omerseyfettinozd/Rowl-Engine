@@ -94,7 +94,8 @@ namespace RowlEngine.Editor.Views
                         mainVmUnplug.Connections.Remove(existingConn);
                         if (!string.IsNullOrEmpty(existingConn.OptionId))
                         {
-                            var option = sourceNode.GetComponent<ChoiceComponentViewModel>()?.Options
+                            var option = sourceNode.GetComponents<ChoiceComponentViewModel>()
+                                .SelectMany(choice => choice.Options)
                                 .FirstOrDefault(candidate => candidate.OptionId == existingConn.OptionId);
                             if (option != null) option.TargetNodeId = 0;
                         }

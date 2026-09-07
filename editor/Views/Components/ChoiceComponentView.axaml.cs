@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Input;
+using RowlEngine.Editor.Services;
 using RowlEngine.Editor.ViewModels;
 using RowlEngine.Editor.ViewModels.Components;
 
@@ -18,7 +19,7 @@ namespace RowlEngine.Editor.Views.Components
         private void OnAssetDragOver(object? sender, DragEventArgs e)
         {
             if (sender is not Border border) return;
-            string? assetPath = GetDraggedAssetPath(e.Data);
+            string? assetPath = GetDraggedAssetPath(e.DataTransfer);
             string extension = Path.GetExtension(assetPath ?? string.Empty).ToLowerInvariant();
             bool acceptsFont = string.Equals(border.Tag as string, "Font", StringComparison.Ordinal);
             bool valid = acceptsFont
@@ -33,7 +34,7 @@ namespace RowlEngine.Editor.Views.Components
         {
             if (sender is not Border { DataContext: ChoiceOptionViewModel option } border) return;
 
-            string? assetPath = GetDraggedAssetPath(e.Data);
+            string? assetPath = GetDraggedAssetPath(e.DataTransfer);
             if (string.IsNullOrWhiteSpace(assetPath)) return;
 
             var main = TopLevel.GetTopLevel(this)?.DataContext as MainWindowViewModel;
@@ -69,13 +70,10 @@ namespace RowlEngine.Editor.Views.Components
             e.Handled = true;
         }
 
-        private static string? GetDraggedAssetPath(IDataObject data)
+        private static string? GetDraggedAssetPath(IDataTransfer data)
         {
-            if (data.Get("AssetNode") is AssetNodeViewModel node && !node.IsDirectory)
-                return node.RelativePath.Replace('\\', '/');
-            if (data.Get("AssetFileName") is string relativePath)
-                return relativePath;
-            return data.GetFiles()?.FirstOrDefault()?.Path.LocalPath;
+            return AssetDragData.GetPath(data)
+                ?? data.TryGetFiles()?.FirstOrDefault()?.Path.LocalPath;
         }
     }
 }

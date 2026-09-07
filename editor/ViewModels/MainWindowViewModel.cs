@@ -21,8 +21,9 @@ using System.Threading.Tasks;
 
 namespace RowlEngine.Editor.ViewModels
 {
-    public partial class MainWindowViewModel : ViewModelBase
+    public partial class MainWindowViewModel : ViewModelBase, IDisposable
     {
+        private bool _disposed;
         // ── Centralized path helpers ──
         /// <summary>
         /// Resolves the real project root (where Assets/ and editor/ live) by
@@ -402,7 +403,7 @@ namespace RowlEngine.Editor.ViewModels
         {
         }
 
-        public MainWindowViewModel(string projectPath)
+        public MainWindowViewModel(string projectPath, bool connectEngine = true)
         {
             AssetBitmapCache.Clear();
 
@@ -452,7 +453,8 @@ namespace RowlEngine.Editor.ViewModels
             UpdateStartNodeState();
 
             // Embedded engine: initialize directly with isolated project VFS
-            _ = ConnectEngineAsync();
+            if (connectEngine)
+                _ = ConnectEngineAsync();
         }
 
         public void UpdateStartNodeState()
@@ -618,6 +620,8 @@ namespace RowlEngine.Editor.ViewModels
             foreach (var conn in toRemove)
             {
                 Connections.Remove(conn);
+                if (conn.SourceNode != null && !string.IsNullOrEmpty(conn.OptionId))
+                    SetChoiceTarget(conn.SourceNode, conn.OptionId, 0);
             }
             if (toRemove.Count > 0)
             {
@@ -632,8 +636,9 @@ namespace RowlEngine.Editor.ViewModels
             foreach (var conn in toRemove)
             {
                 Connections.Remove(conn);
+                if (conn.SourceNode != null && !string.IsNullOrEmpty(conn.OptionId))
+                    SetChoiceTarget(conn.SourceNode, conn.OptionId, 0);
             }
-            if (!string.IsNullOrEmpty(optionId)) SetChoiceTarget(node, optionId, 0);
             if (toRemove.Count > 0)
             {
                 AppendLog($"✂️ Disconnected {toRemove.Count} outgoing cable(s) from Node #{node.Id}");
@@ -642,7 +647,8 @@ namespace RowlEngine.Editor.ViewModels
 
         private static void SetChoiceTarget(NodeViewModel node, string optionId, ulong targetNodeId)
         {
-            var option = node.GetComponent<ChoiceComponentViewModel>()?.Options
+            var option = node.GetComponents<ChoiceComponentViewModel>()
+                .SelectMany(choice => choice.Options)
                 .FirstOrDefault(candidate => candidate.OptionId == optionId);
             if (option != null) option.TargetNodeId = targetNodeId;
         }
@@ -660,6 +666,8 @@ namespace RowlEngine.Editor.ViewModels
             foreach (var conn in toRemove)
             {
                 Connections.Remove(conn);
+                if (conn.SourceNode != null && !string.IsNullOrEmpty(conn.OptionId))
+                    SetChoiceTarget(conn.SourceNode, conn.OptionId, 0);
             }
             if (toRemove.Count > 0)
             {
@@ -708,14 +716,14 @@ namespace RowlEngine.Editor.ViewModels
         }
 
         [RelayCommand]
-        public async Task ConnectEngineAsync()
+        public Task ConnectEngineAsync()
         {
             StatusText = "Initializing embedded C++ Engine...";
             AppendLog("[Engine] Starting embedded RowlEngineCore library...");
 
-            // Initialize engine (standalone window mode; embedded NativeControlHost mode
-            // is set up separately by the view via InitializeEmbedded).
-            bool success = await Task.Run(() => EngineHost.Initialize(1920, 1080, true));
+            // Native engine calls, framebuffer access and the DispatcherTimer must
+            // remain on the UI thread for the lifetime of this host.
+            bool success = EngineHost.Initialize(1920, 1080, true);
             IsConnected = success;
 
             if (success)
@@ -733,6 +741,8 @@ namespace RowlEngine.Editor.ViewModels
                 StatusText = "Engine Init Failed — Check that libRowlEngineCore.so is built.";
                 AppendLog("[Engine] RowlEngineCore initialization failed. Run: cmake --build build");
             }
+
+            return Task.CompletedTask;
         }
 
         /// <summary>
@@ -751,25 +761,7 @@ namespace RowlEngine.Editor.ViewModels
             // and push via the component-aware API
             try
             {
-                var componentsList = new List<object>();
-                foreach (var comp in node.AllComponents)
-                {
-                    if (!comp.IsEnabled) continue;
-                    componentsList.Add(new
-                    {
-                        type = comp.TypeKey,
-                        id = comp.ComponentId,
-                        enabled = comp.IsEnabled,
-                        data = comp.Serialize()
-                    });
-                }
-
-                var options = new JsonSerializerOptions
-                {
-                    Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
-                };
-                string json = JsonSerializer.Serialize(componentsList, options);
-                EngineHost.UpdateSceneFromComponents(json);
+                EngineHost.UpdateSceneFromComponents(StoryGraphSerializer.SerializePreviewComponents(node));
             }
             catch
             {
@@ -796,19 +788,27 @@ namespace RowlEngine.Editor.ViewModels
         /// </summary>
         public bool LoadFullStoryGraphFile()
         {
-            string filePath = System.IO.Path.Combine(AssetsPath, "full_story_graph.json");
-            if (!System.IO.File.Exists(filePath))
+            if (!StoryGraphDocumentReader.TryRead(
+                    AssetsPath,
+                    AssetsJsonPath,
+                    out var document,
+                    out var filePath,
+                    out var readError))
             {
-                filePath = System.IO.Path.Combine(AssetsJsonPath, "full_story_graph.json");
-                if (!System.IO.File.Exists(filePath))
-                    return false;
+                if (!string.IsNullOrEmpty(readError))
+                    AppendLog($"⚠️ Failed to read story graph: {readError}");
+                return false;
             }
+
+            var previousNodes = Nodes.ToList();
+            var previousConnections = Connections.ToList();
 
             try
             {
-                string json = System.IO.File.ReadAllText(filePath);
-                using var doc = JsonDocument.Parse(json);
-                var root = doc.RootElement;
+                var parsedDocument = document!;
+                using (parsedDocument)
+                {
+                var root = parsedDocument.RootElement;
 
                 int formatVersion = 0;
                 if (root.TryGetProperty("format_version", out var fv))
@@ -826,16 +826,8 @@ namespace RowlEngine.Editor.ViewModels
 
                 foreach (var nodeJson in nodesArray.EnumerateArray())
                 {
-                    ulong nodeId = nodeJson.TryGetProperty("id", out var idProp) ? idProp.GetUInt64() : 0;
-                    string title = nodeJson.TryGetProperty("title", out var titleProp) ? titleProp.GetString() ?? $"Node #{nodeId}" : $"Node #{nodeId}";
-
-                    double posX = 60 + (nodeMap.Count % 5) * 280;
-                    double posY = 80 + (nodeMap.Count / 5) * 220;
-                    if (nodeJson.TryGetProperty("editor_x", out var exProp)) posX = exProp.GetDouble();
-                    if (nodeJson.TryGetProperty("editor_y", out var eyProp)) posY = eyProp.GetDouble();
-
-                    // Use "bare" constructor (no default objects) since we'll add them manually
-                    var node = new NodeViewModel(nodeId, title, posX, posY, bare: true);
+                    var node = StoryGraphNodeHydrator.CreateShell(nodeJson, nodeMap.Count);
+                    ulong nodeId = node.Id;
 
                     // ── V3 Format: Objects array (Unity GameObject style) ──
                     if (nodeJson.TryGetProperty("objects", out var objsArray) && objsArray.ValueKind == JsonValueKind.Array)
@@ -855,41 +847,13 @@ namespace RowlEngine.Editor.ViewModels
                             {
                                 foreach (var compJson in compsArray.EnumerateArray())
                                 {
-                                    string typeKey = compJson.TryGetProperty("type", out var typeProp) ? typeProp.GetString() ?? "" : "";
-                                    if (string.IsNullOrEmpty(typeKey)) continue;
-
-                                    try
+                                    if (StoryGraphComponentHydrator.TryCreate(compJson, out var component, out var unknownType))
                                     {
-                                        var component = ComponentRegistry.Create(typeKey);
-
-                                        if (compJson.TryGetProperty("id", out var cidProp))
-                                            component.ComponentId = cidProp.GetString() ?? component.ComponentId;
-
-                                        if (compJson.TryGetProperty("enabled", out var enabledProp))
-                                            component.IsEnabled = enabledProp.GetBoolean();
-
-                                        if (compJson.TryGetProperty("data", out var dataProp) && dataProp.ValueKind == JsonValueKind.Object)
-                                        {
-                                            var dataDict = new Dictionary<string, object?>();
-                                            foreach (var kvp in dataProp.EnumerateObject())
-                                            {
-                                                dataDict[kvp.Name] = kvp.Value.ValueKind switch
-                                                {
-                                                    JsonValueKind.String => kvp.Value.GetString(),
-                                                    JsonValueKind.Number => kvp.Value.GetDouble(),
-                                                    JsonValueKind.True => true,
-                                                    JsonValueKind.False => false,
-                                                    _ => kvp.Value.GetRawText()
-                                                };
-                                            }
-                                            component.Deserialize(dataDict);
-                                        }
-
-                                        frameObj.AddComponent(component);
+                                        frameObj.AddComponent(component!);
                                     }
-                                    catch (KeyNotFoundException)
+                                    else if (unknownType is not null)
                                     {
-                                        AppendLog($"⚠️ Unknown component type '{typeKey}' in Node #{nodeId}, skipping.");
+                                        AppendLog($"⚠️ Unknown component type '{unknownType}' in Node #{nodeId}, skipping.");
                                     }
                                 }
                             }
@@ -900,102 +864,25 @@ namespace RowlEngine.Editor.ViewModels
                     {
                         foreach (var compJson in compsArray.EnumerateArray())
                         {
-                            string typeKey = compJson.TryGetProperty("type", out var typeProp) ? typeProp.GetString() ?? "" : "";
-                            if (string.IsNullOrEmpty(typeKey)) continue;
-
-                            try
+                            if (StoryGraphComponentHydrator.TryCreate(compJson, out var component, out var unknownType))
                             {
-                                var component = ComponentRegistry.Create(typeKey);
-
-                                if (compJson.TryGetProperty("id", out var cidProp))
-                                    component.ComponentId = cidProp.GetString() ?? component.ComponentId;
-
-                                if (compJson.TryGetProperty("enabled", out var enabledProp))
-                                    component.IsEnabled = enabledProp.GetBoolean();
-
-                                if (compJson.TryGetProperty("data", out var dataProp) && dataProp.ValueKind == JsonValueKind.Object)
-                                {
-                                    var dataDict = new Dictionary<string, object?>();
-                                    foreach (var kvp in dataProp.EnumerateObject())
-                                    {
-                                        dataDict[kvp.Name] = kvp.Value.ValueKind switch
-                                        {
-                                            JsonValueKind.String => kvp.Value.GetString(),
-                                            JsonValueKind.Number => kvp.Value.GetDouble(),
-                                            JsonValueKind.True => true,
-                                            JsonValueKind.False => false,
-                                            _ => kvp.Value.GetRawText()
-                                        };
-                                    }
-                                    component.Deserialize(dataDict);
-                                }
-
-                                string objName = component.DisplayName;
+                                string objName = component!.DisplayName;
                                 var frameObj = node.CreateObject(objName);
                                 frameObj.AddComponent(component);
                             }
-                            catch (KeyNotFoundException)
+                            else if (unknownType is not null)
                             {
-                                AppendLog($"⚠️ Unknown component type '{typeKey}' in Node #{nodeId}, skipping.");
+                                AppendLog($"⚠️ Unknown component type '{unknownType}' in Node #{nodeId}, skipping.");
                             }
                         }
                     }
                     // ── V1 Format: Create objects & components from flat fields ──
                     else
                     {
-                        var dlgObj = node.CreateObject("Dialogue Box");
-                        var dlgComp = dlgObj.AddComponent<DialogueComponentViewModel>();
-                        if (nodeJson.TryGetProperty("speaker", out var spk))
-                            dlgComp.Speaker = spk.GetString() ?? "Evelyn";
-                        if (nodeJson.TryGetProperty("dialogue", out var dlg))
-                            dlgComp.DialogueText = dlg.GetString() ?? "";
-                        if (nodeJson.TryGetProperty("dialogue_box_x", out var dbx)) dlgComp.X = dbx.GetDouble();
-                        if (nodeJson.TryGetProperty("dialogue_box_y", out var dby)) dlgComp.Y = dby.GetDouble();
-                        if (nodeJson.TryGetProperty("dialogue_box_width", out var dbw)) dlgComp.Width = dbw.GetDouble();
-                        if (nodeJson.TryGetProperty("dialogue_box_height", out var dbh)) dlgComp.Height = dbh.GetDouble();
-
-                        var bgObj = node.CreateObject("Background");
-                        var bg = bgObj.AddComponent<BackgroundComponentViewModel>();
-                        if (nodeJson.TryGetProperty("background", out var bgTex))
-                            bg.Texture = bgTex.GetString() ?? "bg_beach_sunset.png";
-                        if (nodeJson.TryGetProperty("background_x", out var bgx)) bg.X = bgx.GetDouble();
-                        if (nodeJson.TryGetProperty("background_y", out var bgy)) bg.Y = bgy.GetDouble();
-                        if (nodeJson.TryGetProperty("background_width", out var bgw)) bg.Width = bgw.GetDouble();
-                        if (nodeJson.TryGetProperty("background_height", out var bgh)) bg.Height = bgh.GetDouble();
-
-                        var charObj = node.CreateObject("Evelyn");
-                        var ch = charObj.AddComponent<CharacterComponentViewModel>();
-                        if (nodeJson.TryGetProperty("character", out var chSpr))
-                            ch.Sprite = chSpr.GetString() ?? "spr_evelyn.png";
-                        if (nodeJson.TryGetProperty("character_pos", out var chPos))
-                            ch.Position = chPos.GetString() ?? "Right";
-                        if (nodeJson.TryGetProperty("character_x", out var chx)) ch.X = chx.GetDouble();
-                        if (nodeJson.TryGetProperty("character_y", out var chy)) ch.Y = chy.GetDouble();
-                        if (nodeJson.TryGetProperty("character_width", out var chw)) ch.Width = chw.GetDouble();
-                        if (nodeJson.TryGetProperty("character_height", out var chh)) ch.Height = chh.GetDouble();
-                        if (nodeJson.TryGetProperty("character_scale", out var chs)) ch.Scale = chs.GetDouble();
-
-                        var audioObj = node.CreateObject("Audio");
-                        var audio = audioObj.AddComponent<AudioComponentViewModel>();
-                        if (nodeJson.TryGetProperty("dsp", out var dsp))
-                            audio.DspFilter = dsp.GetString() ?? "Normal";
+                        StoryGraphNodeHydrator.PopulateLegacyFields(node, nodeJson);
                     }
 
-                    // If no objects were added at all (unexpected), add defaults
-                    if (node.Objects.Count == 0)
-                    {
-                        var bgObj = node.CreateObject("Background");
-                        bgObj.AddComponent<BackgroundComponentViewModel>();
-
-                        var charObj = node.CreateObject("Evelyn");
-                        charObj.AddComponent<CharacterComponentViewModel>();
-
-                        var dlgObj = node.CreateObject("Dialogue Box");
-                        dlgObj.AddComponent<DialogueComponentViewModel>();
-
-                        var audioObj = node.CreateObject("Audio");
-                        audioObj.AddComponent<AudioComponentViewModel>();
-                    }
+                    StoryGraphNodeHydrator.EnsureDefaultObjects(node);
 
                     node.RefreshBitmaps();
                     node.PropertyChanged += OnNodePropertyChanged;
@@ -1003,25 +890,8 @@ namespace RowlEngine.Editor.ViewModels
                     nodeMap[nodeId] = node;
                 }
 
-                // Rebuild connections from next_nodes
-                foreach (var nodeJson in nodesArray.EnumerateArray())
-                {
-                    ulong sourceId = nodeJson.TryGetProperty("id", out var srcIdProp) ? srcIdProp.GetUInt64() : 0;
-                    if (!nodeMap.ContainsKey(sourceId)) continue;
-
-                    if (nodeJson.TryGetProperty("next_nodes", out var nextArr) && nextArr.ValueKind == JsonValueKind.Array)
-                    {
-                        foreach (var nextJson in nextArr.EnumerateArray())
-                        {
-                            ulong targetId = nextJson.TryGetProperty("id", out var tidProp) ? tidProp.GetUInt64() : 0;
-                            if (targetId != 0 && nodeMap.ContainsKey(targetId))
-                            {
-                                string optionId = nextJson.TryGetProperty("option_id", out var optionProp) ? optionProp.GetString() ?? "" : "";
-                                Connections.Add(new ConnectionViewModel(nodeMap[sourceId], nodeMap[targetId], optionId));
-                            }
-                        }
-                    }
-                }
+                foreach (var connection in StoryGraphConnectionHydrator.Create(nodesArray, nodeMap))
+                    Connections.Add(connection);
                 EnforceSingleOutgoingWireRule();
 
                 var startNode = GetStartNode() ?? Nodes.FirstOrDefault();
@@ -1032,9 +902,17 @@ namespace RowlEngine.Editor.ViewModels
 
                 AppendLog($"📂 Loaded story graph from {filePath} ({Nodes.Count} nodes, {Connections.Count} connections, format v{formatVersion})");
                 return true;
+                }
             }
             catch (Exception ex)
             {
+                // Parsing is transactional from the user's perspective: a bad
+                // file must not replace the currently open graph with a partial one.
+                Nodes.Clear();
+                Connections.Clear();
+                foreach (var node in previousNodes) Nodes.Add(node);
+                foreach (var connection in previousConnections) Connections.Add(connection);
+                UpdateStartNodeState();
                 AppendLog($"⚠️ Failed to load story graph: {ex.Message}");
                 return false;
             }
@@ -1046,90 +924,10 @@ namespace RowlEngine.Editor.ViewModels
             {
                 System.IO.Directory.CreateDirectory(AssetsPath);
                 System.IO.Directory.CreateDirectory(AssetsJsonPath);
-
-                // Auto-detect Root / Start Node
-                var startNode = GetStartNode();
-                ulong startId = startNode != null ? startNode.Id : 101;
-
-                // Use System.Text.Json for proper escaping
-                var options = new JsonSerializerOptions
-                {
-                    WriteIndented = true,
-                    Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
-                };
-
-                var graph = new
-                {
-                    format_version = 4,
-                    start_node_id = startId,
-                    nodes = Nodes.Select(n =>
-                    {
-                        // Get all outgoing connections from this node
-                        var outgoingConns = Connections.Where(c => c.SourceNode == n && c.TargetNode != null).ToList();
-                        var choice = n.GetComponent<ChoiceComponentViewModel>();
-                        var nextNodes = choice != null
-                            ? choice.Options.Where(option => option.IsEnabled && option.TargetNodeId != 0).Select(option => new
-                            {
-                                id = option.TargetNodeId,
-                                label = option.Text,
-                                option_id = option.OptionId
-                            }).ToArray()
-                            : outgoingConns.Select(c => new
-                            {
-                                id = c.TargetNode!.Id,
-                                label = "",
-                                option_id = c.OptionId
-                            }).ToArray();
-
-                        // Serialize GameObjects with their attached components (Unity style)
-                        var objects = n.Objects.Select(obj => new
-                        {
-                            id = obj.Id,
-                            name = obj.Name,
-                            is_active = obj.IsActive,
-                            components = obj.Components.Select(comp => new
-                            {
-                                type = comp.TypeKey,
-                                id = comp.ComponentId,
-                                enabled = comp.IsEnabled,
-                                data = comp.Serialize()
-                            }).ToArray()
-                        }).ToArray();
-
-                        return new
-                        {
-                            id = n.Id,
-                            title = n.Title,
-                            editor_x = n.X,
-                            editor_y = n.Y,
-                            objects = objects,
-                            next_nodes = nextNodes,
-                            // Legacy flat fields for backward compatibility with engine
-                            speaker = n.Speaker,
-                            dialogue = n.DialogueText,
-                            background = n.BackgroundTexture,
-                            background_x = n.BackgroundX,
-                            background_y = n.BackgroundY,
-                            background_width = n.BackgroundWidth,
-                            background_height = n.BackgroundHeight,
-                            character = n.CharacterSprite,
-                            character_pos = n.CharacterPosition,
-                            character_x = n.CharacterX,
-                            character_y = n.CharacterY,
-                            character_width = n.CharacterWidth,
-                            character_height = n.CharacterHeight,
-                            character_scale = n.CharacterScale,
-                            dialogue_box_x = n.DialogueBoxX,
-                            dialogue_box_y = n.DialogueBoxY,
-                            dialogue_box_width = n.DialogueBoxWidth,
-                            dialogue_box_height = n.DialogueBoxHeight
-                        };
-                    }).ToArray()
-                };
-
-                string content = JsonSerializer.Serialize(graph, options);
-                System.IO.File.WriteAllText(System.IO.Path.Combine(AssetsPath, "full_story_graph.json"), content);
-                System.IO.File.WriteAllText(System.IO.Path.Combine(AssetsJsonPath, "full_story_graph.json"), content);
+                ulong startId = GetStartNode()?.Id ?? 101;
+                string content = StoryGraphSerializer.SerializeFullStoryGraph(Nodes, Connections, startId);
+                ProjectFileSystem.WriteAllTextAtomically(System.IO.Path.Combine(AssetsPath, "full_story_graph.json"), content);
+                ProjectFileSystem.WriteAllTextAtomically(System.IO.Path.Combine(AssetsJsonPath, "full_story_graph.json"), content);
             }
             catch (Exception ex)
             {
@@ -1145,51 +943,8 @@ namespace RowlEngine.Editor.ViewModels
                 if (node != null)
                 {
                     System.IO.Directory.CreateDirectory(AssetsJsonPath);
-
-                    // Serialize components for active story file
-                    var components = node.AllComponents.Select(comp => new
-                    {
-                        type = comp.TypeKey,
-                        id = comp.ComponentId,
-                        enabled = comp.IsEnabled,
-                        data = comp.Serialize()
-                    }).ToArray();
-
-                    var activeNode = new
-                    {
-                        format_version = 2,
-                        node_id = node.Id,
-                        components = components,
-                        // Legacy flat fields for backward compatibility with engine
-                        speaker = node.Speaker,
-                        dialogue = node.DialogueText,
-                        background = node.BackgroundTexture,
-                        background_x = node.BackgroundX,
-                        background_y = node.BackgroundY,
-                        background_width = node.BackgroundWidth,
-                        background_height = node.BackgroundHeight,
-                        character = node.CharacterSprite,
-                        character_pos = node.CharacterPosition,
-                        character_x = node.CharacterX,
-                        character_y = node.CharacterY,
-                        character_width = node.CharacterWidth,
-                        character_height = node.CharacterHeight,
-                        character_scale = node.CharacterScale,
-                        dialogue_box_x = node.DialogueBoxX,
-                        dialogue_box_y = node.DialogueBoxY,
-                        dialogue_box_width = node.DialogueBoxWidth,
-                        dialogue_box_height = node.DialogueBoxHeight,
-                        dsp = node.DspFilter
-                    };
-
-                    var options = new JsonSerializerOptions
-                    {
-                        WriteIndented = true,
-                        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
-                    };
-
-                    string json = JsonSerializer.Serialize(activeNode, options);
-                    System.IO.File.WriteAllText(System.IO.Path.Combine(AssetsJsonPath, "active_story.json"), json);
+                    string json = StoryGraphSerializer.SerializeActiveStory(node);
+                    ProjectFileSystem.WriteAllTextAtomically(System.IO.Path.Combine(AssetsJsonPath, "active_story.json"), json);
                 }
             }
             catch (Exception ex)
@@ -2392,67 +2147,36 @@ namespace RowlEngine.Editor.ViewModels
                 }
 
                 string selectedDir = folders[0].Path.LocalPath;
-
-                // Determine the project root:
-                // Case 1: Selected folder itself has Assets/ subfolder (project root)
-                // Case 2: Selected folder IS the Assets folder
-                // Case 3: Selected folder has full_story_graph.json directly (json subfolder selected)
-                string? projectRoot = null;
-                string? graphFile = null;
-
-                string assetsSubDir = Path.Combine(selectedDir, "Assets");
-                if (Directory.Exists(assetsSubDir))
-                {
-                    // Selected the project root folder
-                    projectRoot = selectedDir;
-                    graphFile = Path.Combine(assetsSubDir, "json", "full_story_graph.json");
-                    if (!File.Exists(graphFile))
-                        graphFile = Path.Combine(assetsSubDir, "full_story_graph.json");
-                }
-                else if (Path.GetFileName(selectedDir).Equals("Assets", StringComparison.OrdinalIgnoreCase))
-                {
-                    // Selected the Assets folder directly
-                    projectRoot = Path.GetDirectoryName(selectedDir);
-                    graphFile = Path.Combine(selectedDir, "json", "full_story_graph.json");
-                    if (!File.Exists(graphFile))
-                        graphFile = Path.Combine(selectedDir, "full_story_graph.json");
-                }
-                else
-                {
-                    // Try looking for full_story_graph.json in the selected folder
-                    string directGraph = Path.Combine(selectedDir, "full_story_graph.json");
-                    if (File.Exists(directGraph))
-                    {
-                        // Might be inside Assets/json/
-                        projectRoot = Path.GetFullPath(Path.Combine(selectedDir, "..", ".."));
-                        graphFile = directGraph;
-                    }
-                }
-
-                if (projectRoot == null || graphFile == null || !File.Exists(graphFile))
+                if (!ProjectOpenCoordinator.TryResolve(selectedDir, out var project))
                 {
                     AppendLog($"⚠️ Seçilen klasörde geçerli bir Rowl Engine projesi bulunamadı.");
                     AppendLog($"   Beklenen yapı: [KlasörAdı]/Assets/json/full_story_graph.json");
                     return;
                 }
 
-                // 1. Clear cached bitmaps so no old assets remain
-                AssetBitmapCache.Clear();
+                string previousProjectRoot = ProjectRoot;
+                string previousProjectPath = CurrentProjectPath;
 
-                // 2. Update project root and active project path
-                ProjectRoot = projectRoot;
-                CurrentProjectPath = projectRoot;
-
-                // 3. Remount native engine VFS to isolated project directory
-                EngineHost.SetProjectDirectory(projectRoot);
-
-                // 4. Load the story graph
-                bool loaded = LoadFullStoryGraphFile();
+                bool loaded = ProjectOpenCoordinator.Switch(
+                    project!,
+                    previousProjectRoot,
+                    previousProjectPath,
+                    AssetBitmapCache.Clear,
+                    (root, path) =>
+                    {
+                        ProjectRoot = root;
+                        CurrentProjectPath = path;
+                    },
+                    EngineHost.SetProjectDirectory,
+                    LoadFullStoryGraphFile,
+                    () =>
+                    {
+                        foreach (var node in Nodes) node.RefreshBitmaps();
+                    },
+                    AssetBrowserViewModel.RefreshAssets);
                 if (loaded)
                 {
-                    // 5. Refresh asset browser strictly from new project's Assets/
-                    AssetBrowserViewModel.RefreshAssets();
-                    AppendLog($"📂 [PROJE AÇILDI] {projectRoot}");
+                    AppendLog($"📂 [PROJE AÇILDI] {project!.RootPath}");
                     AppendLog($"   📊 {Nodes.Count} düğüm, {Connections.Count} bağlantı yüklendi.");
 
                     // Select first node if available
@@ -2461,7 +2185,7 @@ namespace RowlEngine.Editor.ViewModels
                 }
                 else
                 {
-                    AppendLog($"⚠️ Hikaye grafiği yüklenemedi: {graphFile}");
+                    AppendLog($"⚠️ Hikaye grafiği yüklenemedi: {project!.GraphFilePath}");
                 }
             }
             catch (Exception ex)
@@ -2525,7 +2249,7 @@ namespace RowlEngine.Editor.ViewModels
 
             // 2. Copy Assets directory
             string targetAssets = Path.Combine(targetDir, "Assets");
-            CopyDirectoryRecursive(MainWindowViewModel.AssetsPath, targetAssets);
+            ProjectFileSystem.CopyDirectory(MainWindowViewModel.AssetsPath, targetAssets);
 
             // 3. Write project metadata manifest
             string projectManifest = Path.Combine(targetDir, "project.rowlproj");
@@ -2611,7 +2335,7 @@ namespace RowlEngine.Editor.ViewModels
             // Step 2: Copy Assets folder
             AppendLog("[BUILD 2/5] 🖼️ Varlıklar (Assets) ve görseller paketleniyor...");
             string outAssets = Path.Combine(buildOutDir, "Assets");
-            CopyDirectoryRecursive(MainWindowViewModel.AssetsPath, outAssets);
+            ProjectFileSystem.CopyDirectory(MainWindowViewModel.AssetsPath, outAssets);
 
             // Step 3: Copy native binaries (rowl_engine & libRowlEngineCore.so)
             AppendLog("[BUILD 3/5] ⚙️ Yerel oyun motoru ikilileri (Rowl Engine Core) kopyalanıyor...");
@@ -2731,17 +2455,28 @@ namespace RowlEngine.Editor.ViewModels
                     var psi = new System.Diagnostics.ProcessStartInfo
                     {
                         FileName = "python3",
-                        Arguments = $"\"{scriptPath}\" \"{MainWindowViewModel.AssetsPath}\" \"{outPkg}\"",
                         RedirectStandardOutput = true,
                         RedirectStandardError = true,
                         UseShellExecute = false,
                         CreateNoWindow = true
                     };
+                    psi.ArgumentList.Add(scriptPath);
+                    psi.ArgumentList.Add(MainWindowViewModel.AssetsPath);
+                    psi.ArgumentList.Add(outPkg);
                     using var proc = System.Diagnostics.Process.Start(psi);
                     if (proc != null)
                     {
-                        proc.WaitForExit();
-                        string output = proc.StandardOutput.ReadToEnd();
+                        Task<string> outputTask = proc.StandardOutput.ReadToEndAsync();
+                        Task<string> errorTask = proc.StandardError.ReadToEndAsync();
+                        await proc.WaitForExitAsync();
+                        string output = await outputTask;
+                        string error = await errorTask;
+                        if (proc.ExitCode != 0 || !File.Exists(outPkg))
+                        {
+                            AppendLog($"⚠️ Paket oluşturma başarısız (çıkış kodu {proc.ExitCode}):\n{error}\n{output}");
+                            return;
+                        }
+
                         AppendLog($"📦 [VFS PAKET] .rowlpkg başarıyla oluşturuldu:\n  📁 Konum: {outPkg}\n{output}");
                         AssetBrowserViewModel.RefreshAssets();
                     }
@@ -2757,25 +2492,24 @@ namespace RowlEngine.Editor.ViewModels
             }
         }
 
-        /// <summary>
-        /// Recursively copies a directory to a target path.
-        /// </summary>
-        private static void CopyDirectoryRecursive(string sourceDir, string targetDir)
+        public void Dispose()
         {
-            if (!Directory.Exists(sourceDir)) return;
-            Directory.CreateDirectory(targetDir);
+            if (_disposed) return;
+            _disposed = true;
 
-            foreach (string file in Directory.GetFiles(sourceDir))
+            bool hasPendingSave = _saveDebounceTimer?.IsEnabled == true;
+            _saveDebounceTimer?.Stop();
+            _enginePreviewDebounceTimer?.Stop();
+            _smoothTimer.Stop();
+
+            if (hasPendingSave)
             {
-                string dest = Path.Combine(targetDir, Path.GetFileName(file));
-                File.Copy(file, dest, true);
+                SaveActiveStoryFile();
+                SaveFullStoryGraphFile();
             }
 
-            foreach (string subDir in Directory.GetDirectories(sourceDir))
-            {
-                string dest = Path.Combine(targetDir, Path.GetFileName(subDir));
-                CopyDirectoryRecursive(subDir, dest);
-            }
+            EngineHost.Dispose();
+            AssetBitmapCache.Clear();
         }
     }
 }
