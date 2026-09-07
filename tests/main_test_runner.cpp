@@ -330,6 +330,20 @@ void test_lua_sandbox() {
     if (!lua.executeString("if debug ~= nil then error('debug library is not sandboxed!') end")) exit(1);
     TEST_PASS("Security Sandbox Isolation (os, io, debug blacklisted)");
 
+    if (!lua.executeString(
+            "if dofile ~= nil or loadfile ~= nil or load ~= nil or collectgarbage ~= nil then "
+            "error('base library escape hatch is exposed') end")) {
+        std::cerr << "Lua base library escape hatch remained available" << std::endl;
+        exit(1);
+    }
+    if (!lua.executeString("rowl = 'overwritten'") ||
+        !lua.executeString("rowl.var_set('bridge_integrity', 'ok')") ||
+        lua.getVariable("bridge_integrity") != "ok") {
+        std::cerr << "Lua bridge was not restored after script global mutation" << std::endl;
+        exit(1);
+    }
+    TEST_PASS("Lua File/Runtime Load APIs Blocked and Bridge Restored");
+
     // Infinite loop protection (Instruction counter hook)
     if (lua.executeString("while true do local a = 1 end")) {
         std::cerr << "Lua infinite loop was not blocked!" << std::endl;

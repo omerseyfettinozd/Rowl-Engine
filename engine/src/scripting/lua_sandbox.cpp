@@ -111,6 +111,12 @@ bool LuaSandbox::initialize() {
     lua_pushnil(m_luaState); lua_setglobal(m_luaState, "os");
     lua_pushnil(m_luaState); lua_setglobal(m_luaState, "debug");
     lua_pushnil(m_luaState); lua_setglobal(m_luaState, "package");
+    // luaopen_base also exposes filesystem/dynamic-code helpers. Keeping
+    // those available would bypass the library blacklist above.
+    lua_pushnil(m_luaState); lua_setglobal(m_luaState, "dofile");
+    lua_pushnil(m_luaState); lua_setglobal(m_luaState, "loadfile");
+    lua_pushnil(m_luaState); lua_setglobal(m_luaState, "load");
+    lua_pushnil(m_luaState); lua_setglobal(m_luaState, "collectgarbage");
 
     // Set instruction count hook for infinite loop protection (every 100K instructions)
     lua_sethook(m_luaState, lua_instruction_hook, LUA_MASKCOUNT, 100000);
@@ -245,12 +251,14 @@ bool LuaSandbox::evaluateCondition(const std::string& conditionExpr) {
     if (callStatus != LUA_OK) {
         std::string err = lua_tostring(m_luaState, -1);
         lua_pop(m_luaState, 1);
+        bindEngineApis();
         ROWL_LOG_WARN("Lua Condition runtime error in '" + conditionExpr + "': " + err);
         return false;
     }
 
     bool result = lua_toboolean(m_luaState, -1) != 0;
     lua_pop(m_luaState, 1);
+    bindEngineApis();
     return result;
 }
 
@@ -288,10 +296,14 @@ bool LuaSandbox::executeString(const std::string& scriptCode) {
     if (callStatus != LUA_OK) {
         std::string err = lua_tostring(m_luaState, -1);
         lua_pop(m_luaState, 1);
+        bindEngineApis();
         ROWL_LOG_WARN("Lua Script Runtime Exception (Caught Safely): " + err);
         return false;
     }
 
+    // Scripts may create globals freely, but cannot permanently replace the
+    // engine bridge used by subsequent component scripts or conditions.
+    bindEngineApis();
     return true;
 }
 
