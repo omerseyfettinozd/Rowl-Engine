@@ -375,6 +375,25 @@ namespace RowlEngine.Editor
             if (negCacheMs > 500)
                 throw new Exception("Negative caching benchmark was too slow (>500ms)");
 
+            // Different editor fields often describe the same image with a
+            // bare filename or an images/ prefix. They must share one native
+            // Bitmap instead of decoding and retaining duplicates.
+            AssetBitmapCache.Clear();
+            var bareAsset = AssetBitmapCache.GetOrLoad("Woman.png");
+            var prefixedAsset = AssetBitmapCache.GetOrLoad("images/Woman.png");
+            var cacheStats = AssetBitmapCache.GetStats();
+            if (bareAsset == null || prefixedAsset == null ||
+                !ReferenceEquals(bareAsset, prefixedAsset) ||
+                cacheStats.BitmapCount != 1 || cacheStats.EstimatedRgbaBytes <= 0)
+            {
+                throw new Exception("Asset cache did not canonicalize aliases into one bitmap");
+            }
+            Console.WriteLine($"  ⚡ [BENCHMARK] AssetBitmapCache: {cacheStats.BitmapCount} unique bitmap, " +
+                              $"{cacheStats.EstimatedRgbaBytes:N0} estimated RGBA bytes");
+            AssetBitmapCache.Clear();
+            if (AssetBitmapCache.GetStats().BitmapCount != 0)
+                throw new Exception("Asset cache statistics did not clear with the cache");
+
             Console.WriteLine("  ✅ [PASS] AssetBitmapCache high-throughput negative caching & memory safety verified");
 
             // ── Test 9: Variable & Condition Components + Native State Slots ───────────

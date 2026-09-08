@@ -2,94 +2,153 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading;
 using Avalonia.Media.Imaging;
 using RowlEngine.Editor.ViewModels;
 
 namespace RowlEngine.Editor.Services
 {
+    public readonly record struct AssetBitmapCacheStats(
+        int BitmapCount,
+        long EstimatedRgbaBytes,
+        int NegativeEntryCount);
+
     /// <summary>
-    /// High-performance, centralized bitmap caching service with negative caching support.
-    /// Prevents repeated disk I/O, file locks, and redundant JPEG/PNG header decodes.
+    /// Centralized project-asset bitmap cache. Each decoded bitmap is keyed by
+    /// its canonical asset path, so aliases share one native allocation.
     /// </summary>
     public static class AssetBitmapCache
     {
-        private static readonly ConcurrentDictionary<string, Bitmap?> _cache = new(StringComparer.OrdinalIgnoreCase);
+        private const string MissingPrefix = "!missing:";
+        private static readonly ConcurrentDictionary<string, Lazy<Bitmap?>> _cache =
+            new(StringComparer.OrdinalIgnoreCase);
+        private static readonly ConcurrentDictionary<string, string> _requestToCacheKey =
+            new(StringComparer.OrdinalIgnoreCase);
 
-        /// <summary>
-        /// Retrieves a cached Bitmap or decodes it from the project assets directory.
-        /// If the file does not exist, caches null (negative caching) to prevent repeated disk queries.
-        /// </summary>
         public static Bitmap? GetOrLoad(string? filename)
         {
             if (string.IsNullOrWhiteSpace(filename)) return null;
 
-            string key = filename.Trim();
-            if (_cache.TryGetValue(key, out var cachedBitmap))
-            {
-                return cachedBitmap;
-            }
+            string requestKey = NormalizeRequest(filename);
+            if (_requestToCacheKey.TryGetValue(requestKey, out var cachedKey) &&
+                _cache.TryGetValue(cachedKey, out var cached))
+                return cached.Value;
 
-            string assetsPath = MainWindowViewModel.AssetsPath;
-            string projectRoot = MainWindowViewModel.ProjectRoot;
-            string fn = Path.GetFileName(filename);
-
-            string[] searchPaths = new[]
-            {
-                filename,
-                Path.Combine(projectRoot, filename),
-                Path.Combine(assetsPath, filename),
-                Path.Combine(assetsPath, "images", filename),
-                Path.Combine(assetsPath, "images", fn),
-                Path.Combine(projectRoot, "Assets", "images", fn)
-            };
-
-            Bitmap? loaded = null;
-            foreach (var p in searchPaths)
-            {
-                if (!string.IsNullOrWhiteSpace(p) && File.Exists(p))
-                {
-                    try
-                    {
-                        loaded = new Bitmap(p);
-                        break;
-                    }
-                    catch
-                    {
-                        // Ignore decode errors and continue fallback
-                    }
-                }
-            }
-
-            // Cache either the valid Bitmap or null (negative cache)
-            _cache[key] = loaded;
-            return loaded;
+            string cacheKey = ResolveProjectAsset(filename) ?? (MissingPrefix + requestKey);
+            var lazyBitmap = _cache.GetOrAdd(cacheKey, static key =>
+                new Lazy<Bitmap?>(() => DecodeBitmap(key), LazyThreadSafetyMode.ExecutionAndPublication));
+            _requestToCacheKey[requestKey] = cacheKey;
+            return lazyBitmap.Value;
         }
 
-        /// <summary>
-        /// Invalidates a specific cached image (e.g. when overwritten by user).
-        /// </summary>
+        public static AssetBitmapCacheStats GetStats()
+        {
+            int bitmapCount = 0;
+            int negativeEntryCount = 0;
+            long estimatedRgbaBytes = 0;
+            foreach (var pair in _cache)
+            {
+                if (pair.Key.StartsWith(MissingPrefix, StringComparison.Ordinal))
+                {
+                    negativeEntryCount++;
+                    continue;
+                }
+                if (!pair.Value.IsValueCreated) continue;
+                var bitmap = pair.Value.Value;
+                if (bitmap == null)
+                {
+                    negativeEntryCount++;
+                    continue;
+                }
+                bitmapCount++;
+                estimatedRgbaBytes += (long)bitmap.PixelSize.Width * bitmap.PixelSize.Height * 4L;
+            }
+            return new AssetBitmapCacheStats(bitmapCount, estimatedRgbaBytes, negativeEntryCount);
+        }
+
         public static void Invalidate(string? filename)
         {
             if (string.IsNullOrWhiteSpace(filename)) return;
-            string key = filename.Trim();
-            var removed = new HashSet<Bitmap>(ReferenceEqualityComparer.Instance);
-            if (_cache.TryRemove(key, out var cached) && cached != null) removed.Add(cached);
-            if (_cache.TryRemove(Path.GetFileName(filename), out cached) && cached != null) removed.Add(cached);
-            foreach (var bitmap in removed) bitmap.Dispose();
+
+            string requestKey = NormalizeRequest(filename);
+            string basename = Path.GetFileName(requestKey);
+            var cacheKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var pair in _requestToCacheKey)
+            {
+                if (string.Equals(pair.Key, requestKey, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(Path.GetFileName(pair.Key), basename, StringComparison.OrdinalIgnoreCase))
+                {
+                    if (_requestToCacheKey.TryRemove(pair.Key, out var removedKey))
+                        cacheKeys.Add(removedKey);
+                }
+            }
+
+            var resolved = ResolveProjectAsset(filename);
+            if (resolved != null) cacheKeys.Add(resolved);
+            cacheKeys.Add(MissingPrefix + requestKey);
+            DisposeEntries(cacheKeys);
         }
 
-        /// <summary>
-        /// Clears all cached bitmaps.
-        /// </summary>
         public static void Clear()
         {
-            var bitmaps = new HashSet<Bitmap>(ReferenceEqualityComparer.Instance);
-            foreach (var bitmap in _cache.Values)
+            var cacheKeys = new List<string>(_cache.Keys);
+            _requestToCacheKey.Clear();
+            DisposeEntries(cacheKeys);
+        }
+
+        private static void DisposeEntries(IEnumerable<string> cacheKeys)
+        {
+            var disposed = new HashSet<Bitmap>(ReferenceEqualityComparer.Instance);
+            foreach (var cacheKey in cacheKeys)
             {
-                if (bitmap != null) bitmaps.Add(bitmap);
+                if (_cache.TryRemove(cacheKey, out var lazyBitmap) && lazyBitmap.IsValueCreated)
+                {
+                    var bitmap = lazyBitmap.Value;
+                    if (bitmap != null && disposed.Add(bitmap)) bitmap.Dispose();
+                }
             }
-            _cache.Clear();
-            foreach (var bitmap in bitmaps) bitmap.Dispose();
+        }
+
+        private static Bitmap? DecodeBitmap(string cacheKey)
+        {
+            if (cacheKey.StartsWith(MissingPrefix, StringComparison.Ordinal)) return null;
+            try { return new Bitmap(cacheKey); }
+            catch { return null; }
+        }
+
+        private static string NormalizeRequest(string filename) => filename.Trim().Replace('\\', '/');
+
+        private static string? ResolveProjectAsset(string filename)
+        {
+            string assetsRoot = Path.GetFullPath(MainWindowViewModel.AssetsPath);
+            string normalized = filename.Trim();
+            string basename = Path.GetFileName(normalized);
+            var candidates = new List<string>();
+            if (Path.IsPathFullyQualified(normalized))
+                candidates.Add(normalized);
+            else
+            {
+                candidates.Add(Path.Combine(assetsRoot, normalized));
+                candidates.Add(Path.Combine(assetsRoot, "images", normalized));
+                candidates.Add(Path.Combine(assetsRoot, "images", basename));
+            }
+
+            foreach (var candidate in candidates)
+            {
+                string fullPath;
+                try { fullPath = Path.GetFullPath(candidate); }
+                catch { continue; }
+                if (!IsInsideAssetsRoot(assetsRoot, fullPath) || !File.Exists(fullPath)) continue;
+                return fullPath;
+            }
+            return null;
+        }
+
+        private static bool IsInsideAssetsRoot(string assetsRoot, string candidate)
+        {
+            string rootWithSeparator = assetsRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                + Path.DirectorySeparatorChar;
+            return candidate.StartsWith(rootWithSeparator, StringComparison.OrdinalIgnoreCase);
         }
     }
 }
