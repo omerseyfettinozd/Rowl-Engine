@@ -1333,7 +1333,16 @@ void test_native_performance_benchmarks() {
               << (jsonElapsedMs / JSON_ITERATIONS) << "ms/op)" << std::endl;
     TEST_PASS("Scene JSON Ingestion & Entity Synchronization Benchmark");
 
-    // 3. Native Frame Render Step Benchmark
+    // 3. Native Frame Render Step Benchmark. Asset decode/cache population is
+    // a startup cost, not a steady-state frame cost, so prime it before
+    // timing the normal render loop.
+    RowlEngine_Step(handle, 0.0f);
+    const auto warmTextureCount = RowlEngine_GetTextureCacheTextureCount(handle);
+    const auto warmTextureBytes = RowlEngine_GetTextureCacheBytes(handle);
+    if (warmTextureCount == 0 || warmTextureBytes == 0) {
+        std::cerr << "Texture cache warm-up did not load the benchmark assets" << std::endl;
+        exit(1);
+    }
     const int FRAME_ITERATIONS = 60;
     auto frameStart = std::chrono::high_resolution_clock::now();
     for (int i = 0; i < FRAME_ITERATIONS; ++i) {
@@ -1350,8 +1359,8 @@ void test_native_performance_benchmarks() {
 
     const auto cachedTextureCount = RowlEngine_GetTextureCacheTextureCount(handle);
     const auto cachedTextureBytes = RowlEngine_GetTextureCacheBytes(handle);
-    if (cachedTextureCount == 0 || cachedTextureBytes == 0) {
-        std::cerr << "Texture cache telemetry did not observe the benchmark assets" << std::endl;
+    if (cachedTextureCount != warmTextureCount || cachedTextureBytes != warmTextureBytes) {
+        std::cerr << "Steady-state render unexpectedly changed texture cache usage" << std::endl;
         exit(1);
     }
     std::cout << "  ⚡ [BENCHMARK] Texture Cache: " << cachedTextureCount << " unique textures, "
