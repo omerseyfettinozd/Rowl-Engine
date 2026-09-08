@@ -702,6 +702,24 @@ void test_native_c_api() {
     RowlEngine_UpdateSceneFromJson(handle, compJson);
     TEST_PASS("RowlEngine_UpdateSceneFromJson (Multi-Character + Multi-Line Dialogue)");
 
+    // The native renderer and SDL event loop are host-thread-affine. A
+    // second thread must not be able to mutate this handle or observe a
+    // running runtime through the C ABI.
+    std::atomic<bool> foreignThreadRejected{false};
+    std::thread foreignCaller([&] {
+        RowlEngine_UpdateSceneFromJson(handle,
+            R"([{"type":"speaker","data":{"speaker":"Foreign","dialogue":"must not apply"}}])");
+        foreignThreadRejected.store(
+            RowlEngine_IsRunning(handle) == 0 &&
+            std::strlen(RowlEngine_GetSpeaker(handle)) == 0);
+    });
+    foreignCaller.join();
+    if (!foreignThreadRejected.load() || std::string(RowlEngine_GetSpeaker(handle)) != "Alice") {
+        std::cerr << "C-API accepted a call from a non-owner thread" << std::endl;
+        exit(1);
+    }
+    TEST_PASS("C-API Rejects Non-Owner Thread Calls");
+
     const std::string oversizedComponents(16 * 1024 * 1024 + 1, ' ');
     RowlEngine_UpdateSceneFromJson(handle, oversizedComponents.c_str());
     if (std::string(RowlEngine_GetSpeaker(handle)) != "Alice") {

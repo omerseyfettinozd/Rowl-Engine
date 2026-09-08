@@ -19,6 +19,7 @@
 #include <exception>
 #include <memory>
 #include <mutex>
+#include <thread>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -33,6 +34,7 @@ std::mutex g_handleMutex;
 // host callback can never become valid again if malloc reuses an Engine address.
 struct HandleRecord {
     std::unique_ptr<Rowl::Core::Engine> engine;
+    std::thread::id ownerThread;
 };
 
 std::unordered_map<RowlEngineHandle, Rowl::Core::Engine*> g_liveHandles;
@@ -41,7 +43,25 @@ std::vector<std::unique_ptr<HandleRecord>> g_handleRecords;
 bool isLiveHandle(RowlEngineHandle handle) noexcept {
     if (!handle) return false;
     std::lock_guard<std::mutex> lock(g_handleMutex);
-    return g_liveHandles.contains(handle);
+    const auto it = g_liveHandles.find(handle);
+    if (it == g_liveHandles.end()) return false;
+    const auto* record = static_cast<const HandleRecord*>(handle);
+    return record->ownerThread == std::thread::id{} ||
+           record->ownerThread == std::this_thread::get_id();
+}
+
+bool claimHandleThread(RowlEngineHandle handle) noexcept {
+    if (!handle) return false;
+    std::lock_guard<std::mutex> lock(g_handleMutex);
+    const auto it = g_liveHandles.find(handle);
+    if (it == g_liveHandles.end()) return false;
+    auto* record = static_cast<HandleRecord*>(handle);
+    const auto callingThread = std::this_thread::get_id();
+    if (record->ownerThread == std::thread::id{}) {
+        record->ownerThread = callingThread;
+        return true;
+    }
+    return record->ownerThread == callingThread;
 }
 
 std::unique_ptr<Rowl::Core::Engine> takeLiveHandle(RowlEngineHandle handle) noexcept {
@@ -50,6 +70,10 @@ std::unique_ptr<Rowl::Core::Engine> takeLiveHandle(RowlEngineHandle handle) noex
     const auto it = g_liveHandles.find(handle);
     if (it == g_liveHandles.end()) return {};
     auto* record = static_cast<HandleRecord*>(handle);
+    if (record->ownerThread != std::thread::id{} &&
+        record->ownerThread != std::this_thread::get_id()) {
+        return {};
+    }
     g_liveHandles.erase(it);
     return std::move(record->engine);
 }
@@ -59,7 +83,10 @@ std::unique_ptr<Rowl::Core::Engine> takeLiveHandle(RowlEngineHandle handle) noex
 static inline Rowl::Core::Engine* toEngine(RowlEngineHandle h) {
     std::lock_guard<std::mutex> lock(g_handleMutex);
     const auto it = g_liveHandles.find(h);
-    return it != g_liveHandles.end() ? it->second : nullptr;
+    if (it == g_liveHandles.end()) return nullptr;
+    const auto* record = static_cast<const HandleRecord*>(h);
+    return (record->ownerThread == std::thread::id{} ||
+            record->ownerThread == std::this_thread::get_id()) ? it->second : nullptr;
 }
 
 // A C++ exception crossing this ABI boundary is undefined behaviour and can
@@ -117,7 +144,7 @@ int RowlEngine_Init(RowlEngineHandle handle,
                      uint32_t virtualWidth,
                      uint32_t virtualHeight,
                      int vsync) {
-    if (!isLiveHandle(handle)) return 0;
+    if (!claimHandleThread(handle)) return 0;
 
     return invokeNoexcept<int>([&] {
         Rowl::Core::EngineConfig cfg;
@@ -135,7 +162,7 @@ int RowlEngine_InitStandalone(RowlEngineHandle handle,
                                uint32_t virtualWidth,
                                uint32_t virtualHeight,
                                int vsync) {
-    if (!isLiveHandle(handle)) return 0;
+    if (!claimHandleThread(handle)) return 0;
 
     return invokeNoexcept<int>([&] {
         Rowl::Core::EngineConfig cfg;

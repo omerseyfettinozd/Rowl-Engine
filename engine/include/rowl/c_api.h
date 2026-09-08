@@ -58,6 +58,10 @@ ROWL_API void RowlEngine_Destroy(RowlEngineHandle handle);
  * @param virtualHeight Logical/virtual canvas height (e.g. 1080).
  * @param vsync         1 = enable vsync, 0 = disable.
  * @return 1 on success, 0 on failure.
+ *
+ * The thread that first calls Init becomes the handle owner. Every later
+ * call using this handle, including Destroy, must use that same host thread.
+ * A call from another thread is safely rejected (void calls do nothing).
  */
 ROWL_API int RowlEngine_Init(RowlEngineHandle handle,
                               uint32_t virtualWidth,
