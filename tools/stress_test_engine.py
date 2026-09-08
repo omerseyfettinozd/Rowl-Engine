@@ -3,8 +3,8 @@
 stress_test_engine.py -> High-Throughput Native Engine Stress & Fuzz Testing Suite.
 
 Executes:
-1. 5,000 rapid frame render steps to measure frame rendering latency & jitter.
-2. 500 rapid dynamic scene mutations with multi-character layout variations.
+1. A configurable number of rapid frame render steps (5,000 by default) to measure frame rendering latency & jitter.
+2. A configurable number of rapid dynamic scene mutations (500 by default) with multi-character layout variations.
 3. JSON Fuzzing: Sends malformed, truncated, and corrupt JSON payloads to verify crash resilience.
 4. Memory stability & leak verification.
 """
@@ -66,8 +66,8 @@ def run_stress_test(num_frames=5000, mutation_count=500):
     init_res = lib.RowlEngine_Init(handle, 1920, 1080, 0)
     assert init_res == 1, "Failed to init engine"
 
-    # --- Phase 1: High-Frequency Frame Rendering (5,000 frames) ---
-    print("\n[Phase 1]: Rendering 5,000 offscreen frames (1920x1080)...")
+    # --- Phase 1: High-Frequency Frame Rendering ---
+    print(f"\n[Phase 1]: Rendering {num_frames:,} offscreen frames (1920x1080)...")
     start_time = time.perf_counter()
     for i in range(num_frames):
         lib.RowlEngine_Step(handle, 0.0166)
