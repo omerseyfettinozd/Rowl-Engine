@@ -16,23 +16,26 @@ bool MsdfRenderer::loadAtlasMetadata(const std::string& jsonMetadata) {
         auto json = nlohmann::json::parse(jsonMetadata);
 
         m_glyphs.clear();
-        m_pixelRange = json.value("pixel_range", 4.0f);
-        m_atlasWidth = json.value("atlas_width", 512.0f);
-        m_atlasHeight = json.value("atlas_height", 512.0f);
+        const auto& atlas = json.contains("atlas") && json["atlas"].is_object() ? json["atlas"] : json;
+        m_pixelRange = atlas.value("distanceRange", json.value("pixel_range", 4.0f));
+        m_atlasWidth = atlas.value("width", json.value("atlas_width", 512.0f));
+        m_atlasHeight = atlas.value("height", json.value("atlas_height", 512.0f));
 
         if (json.contains("glyphs") && json["glyphs"].is_array()) {
             for (const auto& glyphJson : json["glyphs"]) {
                 MsdfGlyphMetrics glyph;
                 glyph.unicode = glyphJson.value("unicode", 0u);
                 glyph.advance = glyphJson.value("advance", 0.0f);
-                glyph.planeLeft = glyphJson.value("plane_left", 0.0f);
-                glyph.planeBottom = glyphJson.value("plane_bottom", 0.0f);
-                glyph.planeRight = glyphJson.value("plane_right", 0.0f);
-                glyph.planeTop = glyphJson.value("plane_top", 0.0f);
-                glyph.atlasLeft = glyphJson.value("atlas_left", 0.0f);
-                glyph.atlasBottom = glyphJson.value("atlas_bottom", 0.0f);
-                glyph.atlasRight = glyphJson.value("atlas_right", 0.0f);
-                glyph.atlasTop = glyphJson.value("atlas_top", 0.0f);
+                const auto& plane = glyphJson.contains("planeBounds") ? glyphJson["planeBounds"] : glyphJson;
+                const auto& bounds = glyphJson.contains("atlasBounds") ? glyphJson["atlasBounds"] : glyphJson;
+                glyph.planeLeft = plane.value("left", glyphJson.value("plane_left", 0.0f));
+                glyph.planeBottom = plane.value("bottom", glyphJson.value("plane_bottom", 0.0f));
+                glyph.planeRight = plane.value("right", glyphJson.value("plane_right", 0.0f));
+                glyph.planeTop = plane.value("top", glyphJson.value("plane_top", 0.0f));
+                glyph.atlasLeft = bounds.value("left", glyphJson.value("atlas_left", 0.0f));
+                glyph.atlasBottom = bounds.value("bottom", glyphJson.value("atlas_bottom", 0.0f));
+                glyph.atlasRight = bounds.value("right", glyphJson.value("atlas_right", 0.0f));
+                glyph.atlasTop = bounds.value("top", glyphJson.value("atlas_top", 0.0f));
 
                 if (glyph.unicode != 0) {
                     m_glyphs[glyph.unicode] = glyph;

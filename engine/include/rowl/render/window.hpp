@@ -7,11 +7,14 @@
 #include <unordered_map>
 #include <unordered_set>
 #include "rowl/render/font_renderer.hpp"
+#include "rowl/render/msdf_renderer.hpp"
 
 struct SDL_Window;
 struct SDL_Renderer;
 struct SDL_Texture;
 struct SDL_Surface;
+struct SDL_GPUShader;
+struct SDL_GPURenderState;
 
 namespace Rowl::Render {
 
@@ -177,9 +180,13 @@ public:
                     float opacity = 1.0f);
 
     SDL_Renderer* getRenderer() const { return m_sdlRenderer; }
+    bool isGpuMsdfAvailable() const { return m_msdfRenderState != nullptr; }
 
 private:
     void initFontRenderer();
+    void initGpuMsdfRenderer();
+    void shutdownGpuMsdfRenderer();
+    bool renderGpuMsdfText(const std::string&, float, float, float, SDL_Color);
 
     SDL_Window*   m_sdlWindow         = nullptr;
     SDL_Renderer* m_sdlRenderer       = nullptr;
@@ -188,6 +195,10 @@ private:
     std::unordered_map<SDL_Texture*, uint64_t> m_textureMemoryBytes;
     std::unordered_set<std::string> m_missingTextureCache;
     std::unique_ptr<FontRenderer> m_fontRenderer;
+    SDL_GPUShader* m_msdfFragmentShader = nullptr;
+    SDL_GPURenderState* m_msdfRenderState = nullptr;
+    std::unique_ptr<MsdfRenderer> m_msdfRenderer;
+    SDL_Texture* m_msdfAtlasTexture = nullptr;
     std::unordered_map<std::string, std::unique_ptr<FontRenderer>> m_buttonFontCache;
 
     uint32_t m_width       = 1920;

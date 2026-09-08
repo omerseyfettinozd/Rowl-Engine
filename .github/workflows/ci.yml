@@ -18,7 +18,7 @@ jobs:
       - name: Install native build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install --yes build-essential cmake curl ninja-build pkg-config liblua5.4-dev libzstd-dev
+          sudo apt-get install --yes build-essential cmake curl ninja-build pkg-config liblua5.4-dev libzstd-dev glslc mesa-vulkan-drivers xvfb
 
       - name: Build pinned SDL3 dependency
         run: |
@@ -28,7 +28,7 @@ jobs:
           tar --extract --gzip --file /tmp/SDL3-3.2.30.tar.gz --directory /tmp
           cmake -S /tmp/SDL3-3.2.30 -B /tmp/SDL3-build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release -DSDL_SHARED=ON -DSDL_STATIC=OFF \
-            -DSDL_TEST_LIBRARY=OFF -DSDL_GPU=OFF
+            -DSDL_TEST_LIBRARY=OFF -DSDL_GPU=ON
           cmake --build /tmp/SDL3-build --parallel 2 --verbose
           sudo cmake --install /tmp/SDL3-build
 

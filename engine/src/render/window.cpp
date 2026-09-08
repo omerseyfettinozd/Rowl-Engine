@@ -11,6 +11,11 @@
 #include <unordered_set>
 #include <algorithm>
 #include <string>
+#include <fstream>
+
+#ifndef ROWL_SHADER_DIR
+#define ROWL_SHADER_DIR ""
+#endif
 
 namespace Rowl::Render {
 
@@ -118,7 +123,13 @@ bool Window::initialize(const std::string& title, uint32_t width, uint32_t heigh
         return false;
     }
 
-    m_sdlRenderer = SDL_CreateRenderer(m_sdlWindow, nullptr);
+    // Keep SDL_Renderer command semantics for sprites/UI while using its GPU
+    // backend, which permits an MSDF fragment state only around text draws.
+    m_sdlRenderer = SDL_CreateGPURenderer(nullptr, m_sdlWindow);
+    if (!m_sdlRenderer) {
+        ROWL_LOG_WARN("GPU renderer unavailable; preserving standard SDL renderer fallback: " + std::string(SDL_GetError()));
+        m_sdlRenderer = SDL_CreateRenderer(m_sdlWindow, nullptr);
+    }
     if (!m_sdlRenderer) {
         ROWL_LOG_ERROR("SDL_CreateRenderer failed: " + std::string(SDL_GetError()));
         SDL_DestroyWindow(m_sdlWindow);
@@ -134,8 +145,68 @@ bool Window::initialize(const std::string& title, uint32_t width, uint32_t heigh
     m_isOpen = true;
     m_initialized = true;
 
+    initGpuMsdfRenderer();
+
     ROWL_LOG_INFO("SDL3 Window successfully created (" + std::to_string(width) + "x" + std::to_string(height) + ")");
     return true;
+}
+
+void Window::initGpuMsdfRenderer() {
+    if (!m_sdlRenderer || m_isOffscreen) return;
+    auto* device = SDL_GetGPURendererDevice(m_sdlRenderer);
+    if (!device || !(SDL_GetGPUShaderFormats(device) & SDL_GPU_SHADERFORMAT_SPIRV)) return;
+    std::ifstream shader(std::string(ROWL_SHADER_DIR) + "/msdf_text.frag.spv", std::ios::binary | std::ios::ate);
+    if (!shader) { ROWL_LOG_WARN("MSDF GPU shader artifact is unavailable; using font fallback"); return; }
+    const auto size = shader.tellg();
+    if (size <= 0) return;
+    std::vector<uint8_t> code(static_cast<size_t>(size));
+    shader.seekg(0);
+    shader.read(reinterpret_cast<char*>(code.data()), size);
+    SDL_GPUShaderCreateInfo info{};
+    info.code = code.data(); info.code_size = code.size(); info.entrypoint = "main";
+    info.format = SDL_GPU_SHADERFORMAT_SPIRV; info.stage = SDL_GPU_SHADERSTAGE_FRAGMENT;
+    info.num_samplers = 1;
+    m_msdfFragmentShader = SDL_CreateGPUShader(device, &info);
+    if (!m_msdfFragmentShader) { ROWL_LOG_WARN("MSDF GPU shader could not be created: " + std::string(SDL_GetError())); return; }
+    SDL_GPURenderStateCreateInfo stateInfo{};
+    stateInfo.fragment_shader = m_msdfFragmentShader;
+    m_msdfRenderState = SDL_CreateGPURenderState(m_sdlRenderer, &stateInfo);
+    if (!m_msdfRenderState) { ROWL_LOG_WARN("MSDF GPU render state could not be created: " + std::string(SDL_GetError())); SDL_ReleaseGPUShader(device, m_msdfFragmentShader); m_msdfFragmentShader = nullptr; }
+    if (!m_msdfRenderState) return;
+    const auto metadata = Rowl::VFS::VFSManager::instance().readString("fonts/msdf/default.json");
+    m_msdfRenderer = std::make_unique<MsdfRenderer>();
+    m_msdfAtlasTexture = loadTexture("fonts/msdf/default.png");
+    if (metadata.empty() || !m_msdfAtlasTexture || !m_msdfRenderer->loadAtlasMetadata(metadata)) {
+        m_msdfRenderer.reset(); m_msdfAtlasTexture = nullptr;
+        ROWL_LOG_WARN("MSDF atlas unavailable; using font fallback");
+    }
+}
+
+bool Window::renderGpuMsdfText(const std::string& text, float x, float baseline, float px, SDL_Color color) {
+    if (!m_msdfRenderState || !m_msdfRenderer || !m_msdfAtlasTexture) return false;
+    if (!SDL_SetGPURenderState(m_sdlRenderer, m_msdfRenderState)) return false;
+    float pen = x;
+    for (unsigned char c : text) {
+        const auto* glyph = m_msdfRenderer->findGlyph(c);
+        if (!glyph) { pen += px * .5f; continue; }
+        SDL_FRect src{glyph->atlasLeft, glyph->atlasTop, glyph->atlasRight-glyph->atlasLeft, glyph->atlasBottom-glyph->atlasTop};
+        SDL_FRect dst{pen + glyph->planeLeft*px, baseline + glyph->planeTop*px,
+                      (glyph->planeRight-glyph->planeLeft)*px, (glyph->planeBottom-glyph->planeTop)*px};
+        SDL_SetTextureColorMod(m_msdfAtlasTexture, color.r, color.g, color.b);
+        SDL_SetTextureAlphaMod(m_msdfAtlasTexture, color.a);
+        SDL_RenderTexture(m_sdlRenderer, m_msdfAtlasTexture, &src, &dst);
+        pen += glyph->advance*px;
+    }
+    SDL_SetGPURenderState(m_sdlRenderer, nullptr);
+    return true;
+}
+
+void Window::shutdownGpuMsdfRenderer() {
+    if (m_msdfRenderState) { SDL_DestroyGPURenderState(m_msdfRenderState); m_msdfRenderState = nullptr; }
+    if (m_msdfFragmentShader && m_sdlRenderer) {
+        if (auto* device = SDL_GetGPURendererDevice(m_sdlRenderer)) SDL_ReleaseGPUShader(device, m_msdfFragmentShader);
+        m_msdfFragmentShader = nullptr;
+    }
 }
 
 bool Window::initializeEmbedded(void* nativeHandle, uint32_t width, uint32_t height, bool vsync) {
@@ -203,6 +274,7 @@ bool Window::initializeEmbedded(void* nativeHandle, uint32_t width, uint32_t hei
 
 void Window::reloadFonts() {
     initFontRenderer();
+    if (!m_msdfRenderer) initGpuMsdfRenderer();
 }
 
 void Window::initFontRenderer() {
@@ -611,8 +683,10 @@ void Window::renderVisualNovelFrame(
 
             // Draw speaker name text
             if (!m_fontRenderer || !m_fontRenderer->isLoaded() || !m_offscreenSurface) {
-                SDL_SetRenderDrawColor(m_sdlRenderer, 255, 255, 255, 255);
-                SDL_RenderDebugText(m_sdlRenderer, tagX + (16.0f * metrics.scaleFactor), tagY + (tagH - 8.0f) / 2.0f, dlg.speaker.c_str());
+                if (!renderGpuMsdfText(dlg.speaker, tagX + 16.0f * metrics.scaleFactor, tagY + tagH * .72f, speakerFontPx, {255,255,255,255})) {
+                    SDL_SetRenderDrawColor(m_sdlRenderer, 255, 255, 255, 255);
+                    SDL_RenderDebugText(m_sdlRenderer, tagX + (16.0f * metrics.scaleFactor), tagY + (tagH - 8.0f) / 2.0f, dlg.speaker.c_str());
+                }
             }
         }
 
@@ -624,8 +698,10 @@ void Window::renderVisualNovelFrame(
             float paddingTop = 28.0f * metrics.scaleFactor;
 
             if (!m_fontRenderer || !m_fontRenderer->isLoaded() || !m_offscreenSurface) {
-                SDL_SetRenderDrawColor(m_sdlRenderer, textColor.r, textColor.g, textColor.b, textColor.a);
-                SDL_RenderDebugText(m_sdlRenderer, physBoxX + paddingLeft, physBoxY + paddingTop, dlg.dialogue.c_str());
+                if (!renderGpuMsdfText(dlg.dialogue, physBoxX + paddingLeft, physBoxY + paddingTop + dlg.fontSize * metrics.scaleFactor, dlg.fontSize * metrics.scaleFactor, textColor)) {
+                    SDL_SetRenderDrawColor(m_sdlRenderer, textColor.r, textColor.g, textColor.b, textColor.a);
+                    SDL_RenderDebugText(m_sdlRenderer, physBoxX + paddingLeft, physBoxY + paddingTop, dlg.dialogue.c_str());
+                }
             }
         }
     }
@@ -648,8 +724,12 @@ void Window::renderVisualNovelFrame(
         SDL_RenderRect(m_sdlRenderer, &rect);
         if (!m_fontRenderer || !m_fontRenderer->isLoaded() || !m_offscreenSurface) {
             SDL_Color text = parseHexColor(choice.textColor, 255);
-            SDL_SetRenderDrawColor(m_sdlRenderer, text.r, text.g, text.b, text.a);
-            SDL_RenderDebugText(m_sdlRenderer, px + 12.0f, py + rect.h * 0.5f - 4.0f, choice.text.c_str());
+            if (!renderGpuMsdfText(choice.text, px + 12.0f * metrics.scaleFactor,
+                                   py + rect.h * .5f + choice.fontSize * metrics.scaleFactor * .35f,
+                                   choice.fontSize * metrics.scaleFactor, text)) {
+                SDL_SetRenderDrawColor(m_sdlRenderer, text.r, text.g, text.b, text.a);
+                SDL_RenderDebugText(m_sdlRenderer, px + 12.0f, py + rect.h * 0.5f - 4.0f, choice.text.c_str());
+            }
         }
     }
 
@@ -811,6 +891,8 @@ void Window::shutdown() {
     m_textureCache.clear();
     m_textureMemoryBytes.clear();
     m_missingTextureCache.clear();
+
+    shutdownGpuMsdfRenderer();
 
     if (m_sdlRenderer) {
         SDL_DestroyRenderer(m_sdlRenderer);

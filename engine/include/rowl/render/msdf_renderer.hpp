@@ -29,6 +29,12 @@ public:
     bool isLoaded() const { return m_loaded && !m_atlasPixels.empty(); }
     bool hasMetadata() const { return m_loaded; }
     float getPixelRange() const { return m_pixelRange; }
+    float getAtlasWidth() const { return m_atlasWidth; }
+    float getAtlasHeight() const { return m_atlasHeight; }
+    const MsdfGlyphMetrics* findGlyph(uint32_t unicode) const {
+        const auto it = m_glyphs.find(unicode);
+        return it == m_glyphs.end() ? nullptr : &it->second;
+    }
     const std::unordered_map<uint32_t, MsdfGlyphMetrics>& getGlyphs() const { return m_glyphs; }
 
 private:

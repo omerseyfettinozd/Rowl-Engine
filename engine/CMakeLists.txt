@@ -1,6 +1,16 @@
 cmake_minimum_required(VERSION 3.25)
 project(RowlEngineCore VERSION 1.0.0 LANGUAGES CXX C)
 
+find_program(GLSLC_EXECUTABLE glslc REQUIRED)
+set(ROWL_SHADER_DIR "${CMAKE_BINARY_DIR}/shaders")
+file(MAKE_DIRECTORY "${ROWL_SHADER_DIR}")
+add_custom_command(OUTPUT "${ROWL_SHADER_DIR}/msdf_text.frag.spv"
+    COMMAND ${GLSLC_EXECUTABLE} -fshader-stage=frag
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/shaders/msdf_text.frag"
+        -o "${ROWL_SHADER_DIR}/msdf_text.frag.spv"
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/shaders/msdf_text.frag")
+add_custom_target(rowl_msdf_shader DEPENDS "${ROWL_SHADER_DIR}/msdf_text.frag.spv")
+
 # ── nlohmann/json (header-only JSON library) ──────────────────────────────
 include(FetchContent)
 FetchContent_Declare(
@@ -96,6 +106,8 @@ add_library(RowlEngineCore SHARED
     # C-API bridge (consumed by C# P/Invoke)
     src/c_api.cpp
 )
+add_dependencies(RowlEngineCore rowl_msdf_shader)
+target_compile_definitions(RowlEngineCore PRIVATE ROWL_SHADER_DIR="${ROWL_SHADER_DIR}")
 
 # Mark all C-API symbols as exported on all platforms
 target_compile_definitions(RowlEngineCore PRIVATE ROWL_BUILDING_DLL)

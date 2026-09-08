@@ -13,7 +13,6 @@ Son doğrulama: Linux Debug derlemesi, CTest ve editör headless testi geçiyor.
 
 ## Sonraki üretim işleri
 
-- SDL GPU backend ile MSDF atlasının oyuncu render yolunda çizilmesi; şu an MSDF CPU çekirdeği hazır, görsel çizim fallback fontta.
 - Birden fazla script component için callback isim alanı ve editor backlog paneli.
 - Android/iOS host projeleri ve fiziksel cihaz doğrulaması.
 

@@ -116,6 +116,17 @@ void test_msdf_renderer() {
         exit(1);
     }
     TEST_PASS("MSDF RGB Median Sampling and UTF-8 Glyph Metrics");
+
+    std::ifstream generatedAtlas("Assets/fonts/msdf/default.json");
+    const std::string generatedMetadata((std::istreambuf_iterator<char>(generatedAtlas)), {});
+    Rowl::Render::MsdfRenderer generated;
+    if (generatedMetadata.empty() || !generated.loadAtlasMetadata(generatedMetadata) ||
+        !generated.findGlyph('A') || generated.getAtlasWidth() != 1024.0f ||
+        generated.getPixelRange() != 4.0f) {
+        std::cerr << "Generated MSDF atlas metadata is not runtime-compatible" << std::endl;
+        exit(1);
+    }
+    TEST_PASS("Generated MSDF Atlas Metadata and Glyph Lookup");
 }
 
 void test_game_state() {
