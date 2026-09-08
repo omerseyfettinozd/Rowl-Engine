@@ -1362,8 +1362,16 @@ void test_hardening_and_reliability() {
         if (initOk) {
             auto* t1 = win.loadTexture("Woman.png");
             auto* t2 = win.loadTexture("Margot.jpg");
-            (void)t1; (void)t2;
+            if (!t1 || !t2 || win.getTextureCacheTextureCount() != 2 ||
+                win.getTextureCacheBytes() == 0) {
+                std::cerr << "Texture cache statistics did not report loaded textures" << std::endl;
+                exit(1);
+            }
             win.clearTextureCache(); // Must safely free unique textures only once
+            if (win.getTextureCacheTextureCount() != 0 || win.getTextureCacheBytes() != 0) {
+                std::cerr << "Texture cache statistics were not cleared" << std::endl;
+                exit(1);
+            }
             win.loadTexture("Woman.png");
             if (win.loadTexture("missing_texture_for_negative_cache.png") != nullptr ||
                 win.loadTexture("missing_texture_for_negative_cache.png") != nullptr ||
@@ -1388,11 +1396,19 @@ void test_hardening_and_reliability() {
                 std::ofstream oversizedTexture(oversizedTexturePath, std::ios::binary);
                 oversizedTexture.write(reinterpret_cast<const char*>(oversizedPngHeader), sizeof(oversizedPngHeader));
             }
-            if (win.loadTexture(oversizedTexturePath.string()) != nullptr) {
+            const auto textureProject = std::filesystem::temp_directory_path() / "rowl_texture_vfs_test_project";
+            const auto textureAssetDir = textureProject / "Assets" / "images";
+            std::filesystem::create_directories(textureAssetDir);
+            std::filesystem::copy_file(oversizedTexturePath, textureAssetDir / "oversized.png",
+                                       std::filesystem::copy_options::overwrite_existing);
+            Rowl::VFS::VFSManager::instance().remountProject(textureProject.string());
+            if (win.loadTexture("images/oversized.png") != nullptr) {
                 std::cerr << "Renderer decoded a texture with unsafe dimensions" << std::endl;
                 exit(1);
             }
             std::filesystem::remove(oversizedTexturePath);
+            std::filesystem::remove_all(textureProject);
+            Rowl::VFS::VFSManager::instance().remountProject(std::filesystem::current_path().string());
             win.shutdown();          // Must safely free unique textures only once
             TEST_PASS("Texture Cache Unique Teardown and Missing-Asset Negative Cache");
         }
