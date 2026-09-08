@@ -30,6 +30,10 @@ else()
     set(ZSTD_TARGET zstd::libzstd)
 endif()
 
+# ── Ogg/Vorbis ────────────────────────────────────────────────────────────
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(VORBISFILE REQUIRED IMPORTED_TARGET vorbisfile)
+
 # ── SDL3 ──────────────────────────────────────────────────────────────────
 find_package(SDL3 QUIET)
 if(NOT SDL3_FOUND)
@@ -109,6 +113,7 @@ target_include_directories(RowlEngineCore PUBLIC
 
 target_link_libraries(RowlEngineCore PUBLIC
     ${ZSTD_TARGET}
+    PkgConfig::VORBISFILE
     ${SDL3_TARGET}
     ${LUA_LIBRARIES}
     nlohmann_json::nlohmann_json

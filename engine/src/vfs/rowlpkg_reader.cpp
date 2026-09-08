@@ -7,6 +7,8 @@
 #include <algorithm>
 #include <optional>
 #include <sstream>
+#include <array>
+#include <streambuf>
 
 namespace Rowl::VFS {
 
@@ -16,6 +18,116 @@ constexpr uint16_t kSupportedPackageVersion = 1;
 constexpr uint64_t kMaxPackageEntryBytes = 128ULL * 1024 * 1024;
 constexpr uint32_t kMaxPackageFileCount = 100'000;
 constexpr uint64_t kMaxCompressionExpansionRatio = 1'024;
+constexpr size_t kCompressedReadChunkBytes = 64 * 1024;
+constexpr size_t kDecompressedReadChunkBytes = 64 * 1024;
+
+// A bounded, seekable decoder stream for a single Zstd package entry.  The
+// decoder retains only two fixed-size chunks; seeking rewinds and discards
+// bytes rather than materializing the entry in memory.
+class ZstdEntryStreamBuf final : public std::streambuf {
+public:
+    ZstdEntryStreamBuf(const std::string& filepath, const PackageEntry& entry)
+        : m_file(filepath, std::ios::binary), m_entry(entry),
+          m_dstream(ZSTD_createDStream()) {
+        setg(m_output.data(), m_output.data(), m_output.data());
+        if (!m_file || !m_dstream || !reset()) m_error = true;
+    }
+
+    ~ZstdEntryStreamBuf() override { ZSTD_freeDStream(m_dstream); }
+    bool valid() const { return m_file.is_open() && m_dstream && !m_error; }
+
+protected:
+    int_type underflow() override {
+        if (gptr() < egptr()) return traits_type::to_int_type(*gptr());
+        if (!fill()) return traits_type::eof();
+        return traits_type::to_int_type(*gptr());
+    }
+
+    std::streampos seekoff(std::streamoff offset, std::ios_base::seekdir direction,
+                           std::ios_base::openmode which) override {
+        if (!(which & std::ios_base::in)) return std::streampos(std::streamoff(-1));
+        const std::streamoff base = direction == std::ios_base::beg ? 0 :
+            direction == std::ios_base::cur ? static_cast<std::streamoff>(m_position - (egptr() - gptr())) :
+            direction == std::ios_base::end ? static_cast<std::streamoff>(m_entry.uncompressedSize) : -1;
+        if (base < 0 || offset < -base) return std::streampos(std::streamoff(-1));
+        return seekTo(static_cast<uint64_t>(base + offset));
+    }
+
+    std::streampos seekpos(std::streampos position, std::ios_base::openmode which) override {
+        if (!(which & std::ios_base::in) || position < 0) return std::streampos(std::streamoff(-1));
+        return seekTo(static_cast<uint64_t>(position));
+    }
+
+private:
+    bool reset() {
+        m_file.clear();
+        m_file.seekg(static_cast<std::streamoff>(m_entry.offset), std::ios::beg);
+        m_compressedRead = 0;
+        m_position = 0;
+        m_input = {nullptr, 0, 0};
+        setg(m_output.data(), m_output.data(), m_output.data());
+        m_error = !m_file || ZSTD_isError(ZSTD_initDStream(m_dstream));
+        return !m_error;
+    }
+
+    bool fill() {
+        if (m_error || m_position >= m_entry.uncompressedSize) return false;
+        ZSTD_outBuffer output{m_output.data(), m_output.size(), 0};
+        while (output.pos == 0) {
+            if (m_input.pos == m_input.size) {
+                if (m_compressedRead >= m_entry.compressedSize) { m_error = true; return false; }
+                const auto remaining = m_entry.compressedSize - m_compressedRead;
+                const auto bytes = static_cast<std::streamsize>(std::min<uint64_t>(remaining, m_inputBytes.size()));
+                m_file.read(reinterpret_cast<char*>(m_inputBytes.data()), bytes);
+                if (m_file.gcount() != bytes) { m_error = true; return false; }
+                m_compressedRead += static_cast<uint64_t>(bytes);
+                m_input = {m_inputBytes.data(), static_cast<size_t>(bytes), 0};
+            }
+            const size_t result = ZSTD_decompressStream(m_dstream, &output, &m_input);
+            if (ZSTD_isError(result)) { m_error = true; return false; }
+            if (output.pos == 0 && m_input.pos == m_input.size && m_compressedRead == m_entry.compressedSize) {
+                m_error = true;
+                return false;
+            }
+        }
+        if (output.pos > m_entry.uncompressedSize - m_position) { m_error = true; return false; }
+        m_position += output.pos;
+        setg(m_output.data(), m_output.data(), m_output.data() + output.pos);
+        return true;
+    }
+
+    std::streampos seekTo(uint64_t target) {
+        if (target > m_entry.uncompressedSize || !reset()) return std::streampos(std::streamoff(-1));
+        std::array<char, kDecompressedReadChunkBytes> discard{};
+        while (target > 0) {
+            const auto chunk = static_cast<std::streamsize>(std::min<uint64_t>(target, discard.size()));
+            const auto read = sgetn(discard.data(), chunk);
+            if (read != chunk) return std::streampos(std::streamoff(-1));
+            target -= static_cast<uint64_t>(read);
+        }
+        return std::streampos(static_cast<std::streamoff>(m_position - (egptr() - gptr())));
+    }
+
+    std::ifstream m_file;
+    PackageEntry m_entry;
+    ZSTD_DStream* m_dstream = nullptr;
+    std::array<uint8_t, kCompressedReadChunkBytes> m_inputBytes{};
+    std::array<char, kDecompressedReadChunkBytes> m_output{};
+    ZSTD_inBuffer m_input{nullptr, 0, 0};
+    uint64_t m_compressedRead = 0;
+    uint64_t m_position = 0;
+    bool m_error = false;
+};
+
+class ZstdEntryIStream final : public std::istream {
+public:
+    ZstdEntryIStream(const std::string& filepath, const PackageEntry& entry)
+        : std::istream(&m_buffer), m_buffer(filepath, entry) {
+        if (!m_buffer.valid()) setstate(std::ios::badbit);
+    }
+private:
+    ZstdEntryStreamBuf m_buffer;
+};
 
 std::optional<std::string> normalizePackagePath(std::string path) {
     if (path.empty() || path.find('\0') != std::string::npos) return std::nullopt;
@@ -252,14 +364,20 @@ std::vector<uint8_t> RowlPkgDataSource::read(const std::string& path) {
 }
 
 std::unique_ptr<std::istream> RowlPkgDataSource::openStream(const std::string& path) {
-    // Version 1 packages store one compressed block per entry. Decompression
-    // remains bounded by the validated entry limit; exposing an istream keeps
-    // consumer APIs uniform while a future package version can replace this
-    // with incremental Zstd decoding without changing callers.
+    if (!m_isValid) return nullptr;
+    const auto normalizedPath = normalizePackagePath(path);
+    if (!normalizedPath) return nullptr;
+    const auto it = m_indexTable.find(*normalizedPath);
+    if (it == m_indexTable.end()) return nullptr;
+    if (it->second.flags == 1) {
+        auto stream = std::make_unique<ZstdEntryIStream>(m_filepath, it->second);
+        return stream->good() ? std::move(stream) : nullptr;
+    }
+    // Raw entries remain bounded by package validation. They do not require a
+    // decoder, and read() preserves the existing contiguous-asset behavior.
     auto bytes = read(path);
     if (bytes.empty()) return nullptr;
-    auto buffer = std::string(reinterpret_cast<const char*>(bytes.data()), bytes.size());
-    return std::make_unique<std::istringstream>(std::move(buffer), std::ios::binary);
+    return std::make_unique<std::istringstream>(std::string(reinterpret_cast<const char*>(bytes.data()), bytes.size()), std::ios::binary);
 }
 
 } // namespace Rowl::VFS

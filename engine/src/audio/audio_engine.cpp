@@ -2,10 +2,15 @@
 #include "rowl/core/logger.hpp"
 #include "rowl/vfs/vfs.hpp"
 #include <SDL3/SDL.h>
+#include <vorbis/vorbisfile.h>
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <climits>
+#include <cstring>
+#include <istream>
 #include <vector>
+#include <cctype>
 
 namespace Rowl::Audio {
 
@@ -13,6 +18,82 @@ namespace {
 
 constexpr uintmax_t kMaxEncodedAudioBytes = 64ULL * 1024 * 1024;
 constexpr Uint32 kMaxDecodedAudioBytes = 64U * 1024 * 1024;
+
+size_t vorbisRead(void* pointer, size_t size, size_t count, void* datasource) {
+    auto* stream = static_cast<std::istream*>(datasource);
+    if (!stream || size == 0 || count == 0) return 0;
+    const auto requested = std::min<uint64_t>(
+        static_cast<uint64_t>(size) * count, kMaxEncodedAudioBytes);
+    stream->read(static_cast<char*>(pointer), static_cast<std::streamsize>(requested));
+    return static_cast<size_t>(stream->gcount()) / size;
+}
+
+int vorbisSeek(void* datasource, ogg_int64_t offset, int whence) {
+    auto* stream = static_cast<std::istream*>(datasource);
+    if (!stream) return -1;
+    std::ios_base::seekdir direction;
+    switch (whence) {
+        case SEEK_SET: direction = std::ios::beg; break;
+        case SEEK_CUR: direction = std::ios::cur; break;
+        case SEEK_END: direction = std::ios::end; break;
+        default: return -1;
+    }
+    stream->clear();
+    stream->seekg(static_cast<std::streamoff>(offset), direction);
+    return stream->fail() ? -1 : 0;
+}
+
+int vorbisClose(void*) { return 0; } // VFS retains ownership of the stream.
+
+long vorbisTell(void* datasource) {
+    auto* stream = static_cast<std::istream*>(datasource);
+    if (!stream) return -1;
+    const auto position = stream->tellg();
+    return position < 0 || position > LONG_MAX ? -1 : static_cast<long>(position);
+}
+
+bool hasOggExtension(const std::string& path) {
+    if (path.size() < 4) return false;
+    return std::tolower(static_cast<unsigned char>(path[path.size() - 4])) == '.' &&
+           std::tolower(static_cast<unsigned char>(path[path.size() - 3])) == 'o' &&
+           std::tolower(static_cast<unsigned char>(path[path.size() - 2])) == 'g' &&
+           std::tolower(static_cast<unsigned char>(path[path.size() - 1])) == 'g';
+}
+
+bool decodeOggVorbis(std::istream& stream, SDL_AudioSpec& spec, std::vector<uint8_t>& pcm,
+                     std::string& error) {
+    OggVorbis_File decoder{};
+    const ov_callbacks callbacks{vorbisRead, vorbisSeek, vorbisClose, vorbisTell};
+    if (ov_open_callbacks(&stream, &decoder, nullptr, 0, callbacks) < 0) {
+        error = "Ogg/Vorbis stream could not be opened";
+        return false;
+    }
+    const vorbis_info* info = ov_info(&decoder, -1);
+    if (!info || info->channels <= 0 || info->channels > 8 || info->rate <= 0) {
+        ov_clear(&decoder);
+        error = "Ogg/Vorbis stream has an unsupported audio format";
+        return false;
+    }
+    spec = {};
+    spec.format = SDL_AUDIO_S16;
+    spec.channels = static_cast<Uint8>(info->channels);
+    spec.freq = static_cast<int>(info->rate);
+    std::array<char, 32 * 1024> chunk{};
+    int bitstream = 0;
+    while (true) {
+        const long bytes = ov_read(&decoder, chunk.data(), static_cast<int>(chunk.size()), 0, 2, 1, &bitstream);
+        if (bytes == 0) break;
+        if (bytes < 0 || pcm.size() > kMaxDecodedAudioBytes - static_cast<size_t>(bytes)) {
+            ov_clear(&decoder);
+            error = bytes < 0 ? "Ogg/Vorbis stream is corrupt" : "Decoded Ogg/Vorbis audio exceeds the maximum accepted size";
+            return false;
+        }
+        pcm.insert(pcm.end(), chunk.begin(), chunk.begin() + bytes);
+    }
+    ov_clear(&decoder);
+    if (pcm.empty()) { error = "Ogg/Vorbis stream contains no PCM samples"; return false; }
+    return true;
+}
 
 void applyDspToFloatPcm(float* samples, size_t sampleCount, int channels,
                         int sampleRate, DSPFilterType filter) {
@@ -156,6 +237,20 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
     };
     for (const auto& candidate : vfsCandidates) {
         if (Rowl::VFS::VFSManager::instance().exists(candidate)) {
+            if (hasOggExtension(candidate)) {
+                auto stream = Rowl::VFS::VFSManager::instance().openReadStream(candidate);
+                if (stream && decodeOggVorbis(*stream, spec, bytes, m_lastError)) {
+                    audioBuf = static_cast<Uint8*>(SDL_malloc(bytes.size()));
+                    if (!audioBuf) { m_lastError = "Unable to allocate decoded Ogg/Vorbis PCM"; return; }
+                    std::memcpy(audioBuf, bytes.data(), bytes.size());
+                    audioLen = static_cast<Uint32>(bytes.size());
+                    loaded = true;
+                    break;
+                }
+                if (m_lastError.empty()) m_lastError = "Ogg/Vorbis stream could not be decoded";
+                ROWL_LOG_WARN("[AudioEngine] " + m_lastError + ": " + assetPath);
+                return;
+            }
             bytes = Rowl::VFS::VFSManager::instance().readBytes(candidate);
             if (!bytes.empty()) {
                 if (bytes.size() > kMaxEncodedAudioBytes) {
@@ -227,7 +322,7 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
         SDL_free(floatBuffer);
         SDL_free(audioBuf);
     } else {
-        m_lastError = "Audio file could not be decoded (WAV is currently supported): " + assetPath;
+        m_lastError = "Audio file could not be decoded (supported: WAV, OGG/Vorbis): " + assetPath;
         ROWL_LOG_WARN("[AudioEngine] " + m_lastError);
     }
 }

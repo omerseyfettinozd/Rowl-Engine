@@ -8,6 +8,7 @@
 #include <iostream>
 #include <cassert>
 #include <string>
+#include <string_view>
 #include <vector>
 #include <cmath>
 #include <limits>
@@ -17,7 +18,10 @@
 #include <fstream>
 #include <atomic>
 #include <thread>
+#include <array>
+#include <iterator>
 #include <SDL3/SDL.h>
+#include <zstd.h>
 
 #include "rowl/render/aspect_guardian.hpp"
 #include "rowl/render/msdf_renderer.hpp"
@@ -36,6 +40,26 @@
 
 #define TEST_PASS(name) std::cout << "  ✅ [PASS] " << name << std::endl
 #define TEST_SECTION(title) std::cout << "\n📌 === " << title << " ===" << std::endl
+
+std::vector<uint8_t> decodeBase64(const std::string_view input) {
+    static constexpr std::string_view alphabet =
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    std::vector<uint8_t> result;
+    uint32_t accumulator = 0;
+    int bits = -8;
+    for (const unsigned char character : input) {
+        if (character == '=') break;
+        const auto index = alphabet.find(character);
+        if (index == std::string_view::npos) return {};
+        accumulator = (accumulator << 6u) | static_cast<uint32_t>(index);
+        bits += 6;
+        if (bits >= 0) {
+            result.push_back(static_cast<uint8_t>((accumulator >> bits) & 0xFFu));
+            bits -= 8;
+        }
+    }
+    return result;
+}
 
 void test_aspect_guardian() {
     TEST_SECTION("AspectGuardian Subsystem");
@@ -304,18 +328,34 @@ void test_audio_engine() {
         std::cerr << "Audio BGM path mismatch" << std::endl;
         exit(1);
     }
+    // This small checked-in fixture is decoded through the VFS stream path,
+    // covering real OGG/Vorbis decoding independently from SDL's WAV loader.
+    const auto oggPath = audioAssetDir / "rowl_audio_test_tone.ogg";
+    const std::string oggAssetPath = "audio/rowl_audio_test_tone.ogg";
+    const auto oggData = decodeBase64(
+        "T2dnUwACAAAAAAAAAADGYfYSAAAAAAAR1BkBHgF2b3JiaXMAAAAAAUAfAAAAAAAAgFcAAAAAAACZAU9nZ1MAAAAAAAAAAAAAxmH2EgEAAADUJzrDCz7///////////+1A3ZvcmJpcwwAAABMYXZmNjMuMS4xMDEBAAAAHgAAAGVuY29kZXI9TGF2YzYzLjEuMTAxIGxpYnZvcmJpcwEFdm9yYmlzEkJDVgEAAAEADFIUISUZU0pjCJVSUikFHWNQW0cdY9Q5RiFkEFOISRmle08qlVhKyBFSWClFHVNMU0mVUpYpRR1jFFNIIVPWMWWhcxRLhkkJJWxNrnQWS+iZY5YxRh1jzlpKnWPWMUUdY1JSSaFzGDpmJWQUOkbF6GJ8MDqVokIovsfeUukthYpbir3XGlPrLYQYS2nBCGFz7bXV3EpqxRhjjDHGxeJTKILQkFUAAAEAAEAEAUJDVgEACgAAwlAMRVGA0JBVAEAGAIAAFEVxFMdxHEeSJMsCQkNWAQBAAAACAAAojuEokiNJkmRZlmVZlqZ5lqi5qi/7ri7rru3qug6EhqwEAMgAABiGIYfeScyQU5BJJilVzDkIofUOOeUUZNJSxphijFHOkFMMMQUxhtAphRDUTjmlDCIIQ0idZM4gSz3o4GLnOBAasiIAiAIAAIxBjCHGkHMMSgYhco5JyCBEzjkpnZRMSiittJZJCS2V1iLnnJROSialtBZSy6SU1kIrBQAABDgAAARYCIWGrAgAogAAEIOQUkgpxJRiTjGHlFKOKceQUsw5xZhyjDHoIFTMMcgchEgpxRhzTjnmIGQMKuYchAwyAQAAAQ4AAAEWQqEhKwKAOAEAgyRpmqVpomhpmih6pqiqoiiqquV5pumZpqp6oqmqpqq6rqmqrmx5nml6pqiqnimqqqmqrmuqquuKqmrLpqvatumqtuzKsm67sqzbnqrKtqm6sm6qrm27smzrrizbuuR5quqZput6pum6quvasuq6su2ZpuuKqivbpuvKsuvKtq3Ksq5rpum6oqvarqm6su3Krm27sqz7puvqturKuq7Ksu7btq77sq0Lu+i6tq7Krq6rsqzrsi3rtmzbQsnzVNUzTdf1TNN1Vde1bdV1bVszTdc1XVeWRdV1ZdWVdV11ZVv3TNN1TVeVZdNVZVmVZd12ZVeXRde1bVWWfV11ZV+Xbd33ZVnXfdN1dVuVZdtXZVn3ZV33hVm3fd1TVVs3XVfXTdfVfVvXfWG2bd8XXVfXVdnWhVWWdd/WfWWYdZ0wuq6uq7bs66os676u68Yw67owrLpt/K6tC8Or68ax676u3L6Patu+8Oq2Mby6bhy7sBu/7fvGsamqbZuuq+umK+u6bOu+b+u6cYyuq+uqLPu66sq+b+u68Ou+Lwyj6+q6Ksu6sNqyr8u6Lgy7rhvDatvC7tq6cMyyLgy37yvHrwtD1baF4dV1o6vbxm8Lw9I3dr4AAIABBwCAABPKQKEhKwKAOAEABiEIFWMQKsYghBBSCiGkVDEGIWMOSsYclBBKSSGU0irGIGSOScgckxBKaKmU0EoopaVQSkuhlNZSai2m1FoMobQUSmmtlNJaaim21FJsFWMQMuekZI5JKKW0VkppKXNMSsagpA5CKqWk0kpJrWXOScmgo9I5SKmk0lJJqbVQSmuhlNZKSrGl0kptrcUaSmktpNJaSam11FJtrbVaI8YgZIxByZyTUkpJqZTSWuaclA46KpmDkkopqZWSUqyYk9JBKCWDjEpJpbWSSiuhlNZKSrGFUlprrdWYUks1lJJaSanFUEprrbUaUys1hVBSC6W0FkpprbVWa2ottlBCa6GkFksqMbUWY22txRhKaa2kElspqcUWW42ttVhTSzWWkmJsrdXYSi051lprSi3W0lKMrbWYW0y5xVhrDSW0FkpprZTSWkqtxdZaraGU1koqsZWSWmyt1dhajDWU0mIpKbWQSmyttVhbbDWmlmJssdVYUosxxlhzS7XVlFqLrbVYSys1xhhrbjXlUgAAwIADAECACWWg0JCVAEAUAABgDGOMQWgUcsw5KY1SzjknJXMOQggpZc5BCCGlzjkIpbTUOQehlJRCKSmlFFsoJaXWWiwAAKDAAQAgwAZNicUBCg1ZCQBEAQAgxijFGITGIKUYg9AYoxRjECqlGHMOQqUUY85ByBhzzkEpGWPOQSclhBBCKaWEEEIopZQCAAAKHAAAAmzQlFgcoNCQFQFAFAAAYAxiDDGGIHRSOikRhExKJ6WREloLKWWWSoolxsxaia3E2EgJrYXWMmslxtJiRq3EWGIqAADswAEA7MBCKDRkJQCQBwBAGKMUY845ZxBizDkIITQIMeYchBAqxpxzDkIIFWPOOQchhM455yCEEELnnHMQQgihgxBCCKWU0kEIIYRSSukghBBCKaV0EEIIoZRSCgAAKnAAAAiwUWRzgpGgQkNWAgB5AACAMUo5JyWlRinGIKQUW6MUYxBSaq1iDEJKrcVYMQYhpdZi7CCk1FqMtXYQUmotxlpDSq3FWGvOIaXWYqw119RajLXm3HtqLcZac865AADcBQcAsAMbRTYnGAkqNGQlAJAHAEAgpBRjjDmHlGKMMeecQ0oxxphzzinGGHPOOecUY4w555xzjDHnnHPOOcaYc84555xzzjnnoIOQOeecc9BB6JxzzjkIIXTOOecchBAKAAAqcAAACLBRZHOCkaBCQ1YCAOEAAIAxlFJKKaWUUkqoo5RSSimllFICIaWUUkoppZRSSimllFJKKaWUUkoppZRSSimllFJKKaWUUkoppZRSSimllFJKKaWUUkoppZRSSimllFJKKaWUUkoppZRSSimllFJKKaWUUkoppZRSSimllFJKKaWUUkoppZRSSimllFJKKZVSSimllFJKKaWUUkoppQAg3woHAP8HG2dYSTorHA0uNGQlABAOAAAYwxiEjDknJaWGMQildE5KSSU1jEEopXMSUkopg9BaaqWk0lJKGYSUYgshlZRaCqW0VmspqbWUUigpxRpLSqml1jLnJKSSWkuttpg5B6Wk1lpqrcUQQkqxtdZSa7F1UlJJrbXWWm0tpJRaay3G1mJsJaWWWmupxdZaTKm1FltLLcbWYkutxdhiizHGGgsA4G5wAIBIsHGGlaSzwtHgQkNWAgAhAQAEMko555yDEEIIIVKKMeeggxBCCCFESjHmnIMQQgghhIwx5yCEEEIIoZSQMeYchBBCCCGEUjrnIIRQSgmllFJK5xyEEEIIpZRSSgkhhBBCKKWUUkopIYQQSimllFJKKSWEEEIopZRSSimlhBBCKKWUUkoppZQQQiillFJKKaWUEkIIoZRSSimllFJCCKWUUkoppZRSSighhFJKKaWUUkoJJZRSSimllFJKKSGUUkoppZRSSimlAACAAwcAgAAj6CSjyiJsNOHCAxAAAAACAAJMAIEBgoJRCAKEEQgAAAAAAAgA+AAASAqAiIho5gwOEBIUFhgaHB4gIiQAAAAAAAAAAAAAAAAET2dnUwAE8AAAAAAAAADGYfYSAgAAANQ93LoCFxaKlJlZ4RUA/GIyAAAQUkl4pdydXlvfEY6VmbOzXgHA3wkDAADYYGr9hZn5MwQ=");
+    {
+        std::ofstream ogg(oggPath, std::ios::binary);
+        ogg.write(reinterpret_cast<const char*>(oggData.data()), static_cast<std::streamsize>(oggData.size()));
+    }
+    audio.playAudio(oggAssetPath, Rowl::Audio::AudioChannelType::Bgm);
+    if (audio.getCurrentBgmPath() != oggAssetPath) {
+        std::cerr << "Ogg/Vorbis decode did not replace the BGM playback state" << std::endl;
+        exit(1);
+    }
+    TEST_PASS("BGM OGG/Vorbis Decode through VFS Stream");
     const auto oversizedAudioPath = audioAssetDir / "rowl_oversized_audio.wav";
     std::ofstream(oversizedAudioPath, std::ios::binary).close();
     std::filesystem::resize_file(oversizedAudioPath, 128ULL * 1024 * 1024 + 1);
     audio.playAudio("audio/rowl_oversized_audio.wav", Rowl::Audio::AudioChannelType::Bgm);
-    if (audio.getCurrentBgmPath() != toneAssetPath) {
+    if (audio.getCurrentBgmPath() != oggAssetPath) {
         std::cerr << "Oversized audio load replaced the current playback state" << std::endl;
         exit(1);
     }
     std::filesystem::remove(oversizedAudioPath);
     if (audio.isAudioDeviceAvailable()) {
         audio.playAudio("missing_theme.wav", Rowl::Audio::AudioChannelType::Bgm);
-        if (audio.getCurrentBgmPath() != toneAssetPath) {
+        if (audio.getCurrentBgmPath() != oggAssetPath) {
             std::cerr << "Failed BGM load replaced the current playback state" << std::endl;
             exit(1);
         }
@@ -585,6 +625,54 @@ void test_vfs_security() {
         std::cerr << "Concurrent package reads returned inconsistent data" << std::endl;
         exit(1);
     }
+
+    // Zstd entries are decoded on demand through openStream(). Exercise small
+    // reads and a backward seek so consumers such as Vorbis can parse package
+    // assets without first materializing the entire decompressed entry.
+    std::string streamingPayload(200'000, '\0');
+    for (size_t index = 0; index < streamingPayload.size(); ++index) {
+        streamingPayload[index] = static_cast<char>((index * 37u + index / 17u) % 251u);
+    }
+    std::vector<uint8_t> compressed(ZSTD_compressBound(streamingPayload.size()));
+    const size_t compressedSize = ZSTD_compress(compressed.data(), compressed.size(),
+                                                streamingPayload.data(), streamingPayload.size(), 1);
+    if (ZSTD_isError(compressedSize)) {
+        std::cerr << "Could not create Zstd package fixture" << std::endl;
+        exit(1);
+    }
+    compressed.resize(compressedSize);
+    const std::string streamingPath = "audio/streamed.ogg";
+    const uint64_t streamingIndexOffset = headerSize + compressed.size();
+    Rowl::VFS::RowlPkgHeader streamingHeader{{'R', 'O', 'W', 'L'}, 1, 1, streamingIndexOffset};
+    Rowl::VFS::RowlPkgEntryRaw streamingEntry{
+        fnv1a64(streamingPath), static_cast<uint32_t>(streamingPath.size()), headerSize,
+        compressed.size(), streamingPayload.size(), 1};
+    const auto streamingPackage = testRoot / "streaming.rowlpkg";
+    {
+        std::ofstream output(streamingPackage, std::ios::binary);
+        output.write(reinterpret_cast<const char*>(&streamingHeader), sizeof(streamingHeader));
+        output.write(reinterpret_cast<const char*>(compressed.data()), static_cast<std::streamsize>(compressed.size()));
+        output.write(reinterpret_cast<const char*>(&streamingEntry), sizeof(streamingEntry));
+        output.write(streamingPath.data(), static_cast<std::streamsize>(streamingPath.size()));
+    }
+    Rowl::VFS::RowlPkgDataSource streamingSource(streamingPackage.string());
+    auto streamingAsset = streamingSource.openStream(streamingPath);
+    std::array<char, 97> streamingChunk{};
+    const auto firstStreamingRead = streamingAsset ? streamingAsset->read(streamingChunk.data(), streamingChunk.size()).gcount() : 0;
+    if (!streamingSource.isValid() || !streamingAsset ||
+        firstStreamingRead != static_cast<std::streamsize>(streamingChunk.size()) ||
+        std::string_view(streamingChunk.data(), streamingChunk.size()) != std::string_view(streamingPayload.data(), streamingChunk.size())) {
+        std::cerr << "Incremental Zstd package stream did not decode its first chunk" << std::endl;
+        exit(1);
+    }
+    streamingAsset->seekg(150'000);
+    streamingAsset->read(streamingChunk.data(), streamingChunk.size());
+    if (!*streamingAsset || std::string_view(streamingChunk.data(), streamingChunk.size()) !=
+        std::string_view(streamingPayload.data() + 150'000, streamingChunk.size())) {
+        std::cerr << "Incremental Zstd package stream did not support seekable reads" << std::endl;
+        exit(1);
+    }
+    TEST_PASS("Package Zstd entries decode incrementally with seekable streams");
 
     const std::string traversalPath = "../outside.txt";
     Rowl::VFS::RowlPkgEntryRaw traversalEntry{fnv1a64(traversalPath), static_cast<uint32_t>(traversalPath.size()),
