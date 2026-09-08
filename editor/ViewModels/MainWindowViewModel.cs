@@ -285,6 +285,19 @@ namespace RowlEngine.Editor.ViewModels
         private bool _isHierarchyPanelVisible = true;
 
         /// <summary>
+        /// The bottom area remains available while either of its independent
+        /// tabs is enabled. Assets must not disappear merely because the log
+        /// panel was closed.
+        /// </summary>
+        public bool IsBottomPanelVisible => IsLogPanelVisible || IsAssetsPanelVisible;
+
+        partial void OnIsAssetsPanelVisibleChanged(bool value) =>
+            OnPropertyChanged(nameof(IsBottomPanelVisible));
+
+        partial void OnIsLogPanelVisibleChanged(bool value) =>
+            OnPropertyChanged(nameof(IsBottomPanelVisible));
+
+        /// <summary>
         /// Active tab index in the bottom panel: 0 = Log, 1 = Assets
         /// </summary>
         [ObservableProperty]
@@ -1185,9 +1198,15 @@ namespace RowlEngine.Editor.ViewModels
                     IsHierarchyPanelVisible = !IsHierarchyPanelVisible;
                     break;
                 case "Assets":
-                    // Assets is now a tab in the bottom panel — show bottom panel and switch to Assets tab
-                    IsLogPanelVisible = true;
-                    BottomPanelActiveTab = 1;
+                    if (IsAssetsPanelVisible && BottomPanelActiveTab == 1)
+                    {
+                        IsAssetsPanelVisible = false;
+                    }
+                    else
+                    {
+                        IsAssetsPanelVisible = true;
+                        BottomPanelActiveTab = 1;
+                    }
                     break;
                 case "Inspector":
                     IsInspectorPanelVisible = !IsInspectorPanelVisible;
@@ -1195,12 +1214,10 @@ namespace RowlEngine.Editor.ViewModels
                 case "Log":
                     if (IsLogPanelVisible && BottomPanelActiveTab == 0)
                     {
-                        // Already showing log tab — toggle panel off
-                        IsLogPanelVisible = !IsLogPanelVisible;
+                        IsLogPanelVisible = false;
                     }
                     else
                     {
-                        // Show bottom panel and switch to Log tab
                         IsLogPanelVisible = true;
                         BottomPanelActiveTab = 0;
                     }

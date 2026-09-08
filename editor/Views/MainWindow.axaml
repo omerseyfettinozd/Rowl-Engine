@@ -258,7 +258,7 @@
                 <GridSplitter Grid.Row="1" Background="{DynamicResource BorderColor}" ResizeDirection="Rows" Height="6"/>
 
                 <!-- Bottom: Log + Assets (Tabbed) -->
-                <Grid Grid.Row="2" IsVisible="{Binding IsLogPanelVisible}">
+                <Grid Grid.Row="2" IsVisible="{Binding IsBottomPanelVisible}">
                     <TabControl SelectedIndex="{Binding BottomPanelActiveTab}"
                                 Background="{DynamicResource PanelBackground}">
                         <TabControl.Styles>
@@ -268,10 +268,10 @@
                                 <Setter Property="Foreground" Value="{DynamicResource PrimaryText}"/>
                             </Style>
                         </TabControl.Styles>
-                        <TabItem Header="📝 Log">
+                        <TabItem Header="📝 Log" IsVisible="{Binding IsLogPanelVisible}">
                             <panels:OutputLogView/>
                         </TabItem>
-                        <TabItem Header="📁 Assets">
+                        <TabItem Header="📁 Assets" IsVisible="{Binding IsAssetsPanelVisible}">
                             <panels:ProjectAssetsView/>
                         </TabItem>
                     </TabControl>

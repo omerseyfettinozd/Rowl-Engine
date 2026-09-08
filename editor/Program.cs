@@ -125,6 +125,23 @@ namespace RowlEngine.Editor
             if (!mainVm.IsDarkMode) throw new Exception("Theme toggle should switch back to Dark mode");
             Console.WriteLine("  ✅ [PASS] Theme toggle (Dark <-> Light/Orange) verified");
 
+            // Bottom-panel tabs have independent visibility. Closing the log
+            // must leave Assets available instead of collapsing the entire
+            // area behind it.
+            mainVm.ShowPanel("Log");
+            if (mainVm.IsLogPanelVisible || !mainVm.IsAssetsPanelVisible || !mainVm.IsBottomPanelVisible)
+                throw new Exception("Closing Log incorrectly hid the Assets workspace");
+            mainVm.ShowPanel("Assets");
+            if (!mainVm.IsAssetsPanelVisible || mainVm.BottomPanelActiveTab != 1 || !mainVm.IsBottomPanelVisible)
+                throw new Exception("Assets panel could not become the active bottom workspace");
+            mainVm.ShowPanel("Assets");
+            if (mainVm.IsBottomPanelVisible)
+                throw new Exception("Bottom workspace remained visible after both tabs were closed");
+            mainVm.ShowPanel("Assets");
+            if (!mainVm.IsBottomPanelVisible || mainVm.BottomPanelActiveTab != 1)
+                throw new Exception("Assets panel did not restore independently");
+            Console.WriteLine("  ✅ [PASS] Bottom Log and Assets panel visibility is independent");
+
             // Test 3: ConnectionViewModel & Graph Topology
             Console.WriteLine("\n📌 [Test 3]: ConnectionViewModel & Single Outgoing Wire Rule...");
             var testConns = new System.Collections.ObjectModel.ObservableCollection<ConnectionViewModel>();
