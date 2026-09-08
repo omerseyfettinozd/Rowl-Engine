@@ -394,6 +394,22 @@ namespace RowlEngine.Editor
             if (AssetBitmapCache.GetStats().BitmapCount != 0)
                 throw new Exception("Asset cache statistics did not clear with the cache");
 
+            // Exercise the Lazy cache factory under actual simultaneous alias
+            // requests; every caller must receive the one shared Bitmap.
+            object?[] concurrentAssets = new object?[16];
+            Parallel.For(0, concurrentAssets.Length, i =>
+            {
+                concurrentAssets[i] = AssetBitmapCache.GetOrLoad(
+                    i % 2 == 0 ? "Woman.png" : "images/Woman.png");
+            });
+            if (concurrentAssets.Any(bitmap => bitmap == null) ||
+                concurrentAssets.Any(bitmap => !ReferenceEquals(bitmap, concurrentAssets[0])) ||
+                AssetBitmapCache.GetStats().BitmapCount != 1)
+            {
+                throw new Exception("Concurrent asset requests decoded duplicate bitmaps");
+            }
+            AssetBitmapCache.Clear();
+
             Console.WriteLine("  ✅ [PASS] AssetBitmapCache high-throughput negative caching & memory safety verified");
 
             // ── Test 9: Variable & Condition Components + Native State Slots ───────────
