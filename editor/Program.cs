@@ -121,6 +121,9 @@ namespace RowlEngine.Editor
             mainVm.SelectedNode = emptyHierarchyNode;
             if (mainVm.HierarchyViewModel.HasObjects)
                 throw new Exception("Hierarchy reported objects for an empty node");
+            emptyHierarchyNode.Title = "Renamed Empty Hierarchy";
+            if (mainVm.HierarchyViewModel.CurrentNodeTitle != "Renamed Empty Hierarchy")
+                throw new Exception("Hierarchy header did not update after the selected node was renamed");
             var hierarchyObject = emptyHierarchyNode.CreateObject("Temporary Object");
             if (!mainVm.HierarchyViewModel.HasObjects)
                 throw new Exception("Hierarchy empty state did not update after object creation");

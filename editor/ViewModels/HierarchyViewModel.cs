@@ -1,5 +1,6 @@
 using System;
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -17,6 +18,7 @@ namespace RowlEngine.Editor.ViewModels
     {
         public MainWindowViewModel MainViewModel { get; }
         private NodeViewModel? _observedNode;
+        private ObservableCollection<FrameObjectViewModel>? _observedObjects;
 
         public HierarchyViewModel(MainWindowViewModel main)
         {
@@ -151,15 +153,14 @@ namespace RowlEngine.Editor.ViewModels
             {
                 IsCreateObjectMenuOpen = false;
 
-                if (_observedNode != null)
-                {
-                    _observedNode.PropertyChanged -= OnCurrentNodePropertyChanged;
-                }
+                UnsubscribeCurrentNode();
 
                 _observedNode = CurrentNode;
                 if (_observedNode != null)
                 {
                     _observedNode.PropertyChanged += OnCurrentNodePropertyChanged;
+                    _observedObjects = _observedNode.Objects;
+                    _observedObjects.CollectionChanged += OnCurrentNodeObjectsChanged;
                 }
 
                 OnPropertyChanged(nameof(CurrentNode));
@@ -176,10 +177,38 @@ namespace RowlEngine.Editor.ViewModels
 
         private void OnCurrentNodePropertyChanged(object? sender, PropertyChangedEventArgs e)
         {
-            if (e.PropertyName == nameof(NodeViewModel.Objects))
+            if (e.PropertyName == nameof(NodeViewModel.Title))
+            {
+                OnPropertyChanged(nameof(CurrentNodeTitle));
+            }
+            else if (e.PropertyName == nameof(NodeViewModel.Id))
+            {
+                OnPropertyChanged(nameof(CurrentNodeId));
+            }
+            else if (e.PropertyName == nameof(NodeViewModel.Objects))
             {
                 OnPropertyChanged(nameof(HasObjects));
                 OnPropertyChanged(nameof(IsCurrentNodeEmpty));
+            }
+        }
+
+        private void OnCurrentNodeObjectsChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        {
+            OnPropertyChanged(nameof(HasObjects));
+            OnPropertyChanged(nameof(IsCurrentNodeEmpty));
+        }
+
+        private void UnsubscribeCurrentNode()
+        {
+            if (_observedNode != null)
+            {
+                _observedNode.PropertyChanged -= OnCurrentNodePropertyChanged;
+            }
+
+            if (_observedObjects != null)
+            {
+                _observedObjects.CollectionChanged -= OnCurrentNodeObjectsChanged;
+                _observedObjects = null;
             }
         }
     }
