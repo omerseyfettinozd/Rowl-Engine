@@ -1232,11 +1232,13 @@ namespace RowlEngine.Editor.ViewModels
                     IsPreviewActive = true;
                     IsNodeGraphActive = false;
                     IsEnginePreviewActive = false;
+                    SplitScreenMode = 0;
                     break;
                 case "EnginePreview":
                     IsEnginePreviewActive = true;
                     IsNodeGraphActive = false;
                     IsPreviewActive = false;
+                    SplitScreenMode = 0;
                     break;
                 case "SplitScreen":
                     SplitScreenMode = (SplitScreenMode + 1) % 3;

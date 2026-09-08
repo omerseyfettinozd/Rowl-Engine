@@ -142,6 +142,17 @@ namespace RowlEngine.Editor
                 throw new Exception("Assets panel did not restore independently");
             Console.WriteLine("  ✅ [PASS] Bottom Log and Assets panel visibility is independent");
 
+            mainVm.ShowPanel("SplitScreen");
+            mainVm.ShowPanel("Preview");
+            if (mainVm.SplitScreenMode != 0 || !mainVm.IsPreviewActive || mainVm.IsNodeGraphActive)
+                throw new Exception("Preview mode did not exit split screen cleanly");
+            mainVm.ShowPanel("SplitScreen");
+            mainVm.ShowPanel("EnginePreview");
+            if (mainVm.SplitScreenMode != 0 || !mainVm.IsEnginePreviewActive || mainVm.IsNodeGraphActive)
+                throw new Exception("Game preview mode did not exit split screen cleanly");
+            mainVm.ShowPanel("NodeGraph");
+            Console.WriteLine("  ✅ [PASS] Single preview modes exit split screen consistently");
+
             // Test 3: ConnectionViewModel & Graph Topology
             Console.WriteLine("\n📌 [Test 3]: ConnectionViewModel & Single Outgoing Wire Rule...");
             var testConns = new System.Collections.ObjectModel.ObservableCollection<ConnectionViewModel>();
