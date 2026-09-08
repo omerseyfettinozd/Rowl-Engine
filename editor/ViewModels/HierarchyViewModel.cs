@@ -45,6 +45,7 @@ namespace RowlEngine.Editor.ViewModels
         public string CurrentNodeId => CurrentNode != null ? $"Node #{CurrentNode.Id}" : "—";
         public bool HasCurrentNode => CurrentNode != null;
         public bool HasObjects => CurrentNode?.Objects.Count > 0;
+        public bool IsCurrentNodeEmpty => HasCurrentNode && !HasObjects;
 
         // ── Create Object Menu ──
 
@@ -166,6 +167,7 @@ namespace RowlEngine.Editor.ViewModels
                 OnPropertyChanged(nameof(CurrentNodeId));
                 OnPropertyChanged(nameof(HasCurrentNode));
                 OnPropertyChanged(nameof(HasObjects));
+                OnPropertyChanged(nameof(IsCurrentNodeEmpty));
 
                 // Auto-select first object or null
                 SelectedObject = CurrentNode?.Objects.FirstOrDefault();
@@ -177,6 +179,7 @@ namespace RowlEngine.Editor.ViewModels
             if (e.PropertyName == nameof(NodeViewModel.Objects))
             {
                 OnPropertyChanged(nameof(HasObjects));
+                OnPropertyChanged(nameof(IsCurrentNodeEmpty));
             }
         }
     }

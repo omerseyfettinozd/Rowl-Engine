@@ -127,6 +127,9 @@ namespace RowlEngine.Editor
             emptyHierarchyNode.RemoveObject(hierarchyObject);
             if (mainVm.HierarchyViewModel.HasObjects)
                 throw new Exception("Hierarchy empty state did not update after object deletion");
+            mainVm.SelectedNode = null;
+            if (mainVm.HierarchyViewModel.IsCurrentNodeEmpty)
+                throw new Exception("Hierarchy showed an empty-frame state without a selected node");
             Console.WriteLine("  ✅ [PASS] Hierarchy empty state tracks GameObject creation and deletion");
 
             // Test 2: Theme System (Light & Dark Mode)
