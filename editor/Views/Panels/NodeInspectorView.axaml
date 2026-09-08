@@ -135,8 +135,10 @@
             <!-- ── Engine Sync Button ── -->
             <Border Grid.Row="2" Padding="8,6,8,8" Background="{DynamicResource SurfaceBackground}"
                     BorderBrush="{DynamicResource BorderColor}" BorderThickness="0,1,0,0">
-                <Button Content="⚡ Sync Selected Node to Engine" 
+                <Button Content="⚡ Sync to Engine"
+                        ToolTip.Tip="Send the selected node to the running preview"
                         Command="{Binding PushHotReloadPacketCommand}" 
+                        IsEnabled="{Binding InspectorViewModel.HasSelectedObject}"
                         HorizontalAlignment="Stretch" 
                         HorizontalContentAlignment="Center"
                         Background="{DynamicResource AccentButtonBg}" 
