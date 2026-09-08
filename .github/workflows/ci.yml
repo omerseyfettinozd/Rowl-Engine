@@ -23,10 +23,10 @@ jobs:
       - name: Build pinned SDL3 dependency
         run: |
           curl --fail --location --silent --show-error \
-            https://github.com/libsdl-org/SDL/releases/download/release-3.2.30/SDL3-3.2.30.tar.gz \
-            --output /tmp/SDL3-3.2.30.tar.gz
-          tar --extract --gzip --file /tmp/SDL3-3.2.30.tar.gz --directory /tmp
-          cmake -S /tmp/SDL3-3.2.30 -B /tmp/SDL3-build -G Ninja \
+            https://github.com/libsdl-org/SDL/releases/download/release-3.4.16/SDL3-3.4.16.tar.gz \
+            --output /tmp/SDL3-3.4.16.tar.gz
+          tar --extract --gzip --file /tmp/SDL3-3.4.16.tar.gz --directory /tmp
+          cmake -S /tmp/SDL3-3.4.16 -B /tmp/SDL3-build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release -DSDL_SHARED=ON -DSDL_STATIC=OFF \
             -DSDL_TEST_LIBRARY=OFF -DSDL_GPU=ON
           cmake --build /tmp/SDL3-build --parallel 2 --verbose

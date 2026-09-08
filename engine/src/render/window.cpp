@@ -41,6 +41,30 @@ unsigned char* loadTextureMemorySafely(const uint8_t* bytes, int byteCount,
     return stbi_load_from_memory(bytes, byteCount, width, height, channels, 4);
 }
 
+std::vector<uint8_t> loadMsdfShaderCode() {
+    std::vector<std::filesystem::path> candidates;
+    if (const char* basePath = SDL_GetBasePath()) {
+        candidates.emplace_back(basePath);
+        candidates.back() /= "shaders/msdf_text.frag.spv";
+    }
+    if constexpr (sizeof(ROWL_SHADER_DIR) > 1) {
+        candidates.emplace_back(ROWL_SHADER_DIR);
+        candidates.back() /= "msdf_text.frag.spv";
+    }
+
+    for (const auto& path : candidates) {
+        std::ifstream shader(path, std::ios::binary | std::ios::ate);
+        if (!shader) continue;
+        const auto size = shader.tellg();
+        if (size <= 0) continue;
+        std::vector<uint8_t> code(static_cast<size_t>(size));
+        shader.seekg(0);
+        shader.read(reinterpret_cast<char*>(code.data()), size);
+        if (shader) return code;
+    }
+    return {};
+}
+
 } // namespace
 
 Window::Window() = default;
@@ -155,13 +179,8 @@ void Window::initGpuMsdfRenderer() {
     if (!m_sdlRenderer || m_isOffscreen) return;
     auto* device = SDL_GetGPURendererDevice(m_sdlRenderer);
     if (!device || !(SDL_GetGPUShaderFormats(device) & SDL_GPU_SHADERFORMAT_SPIRV)) return;
-    std::ifstream shader(std::string(ROWL_SHADER_DIR) + "/msdf_text.frag.spv", std::ios::binary | std::ios::ate);
-    if (!shader) { ROWL_LOG_WARN("MSDF GPU shader artifact is unavailable; using font fallback"); return; }
-    const auto size = shader.tellg();
-    if (size <= 0) return;
-    std::vector<uint8_t> code(static_cast<size_t>(size));
-    shader.seekg(0);
-    shader.read(reinterpret_cast<char*>(code.data()), size);
+    const auto code = loadMsdfShaderCode();
+    if (code.empty()) { ROWL_LOG_WARN("MSDF GPU shader artifact is unavailable; using font fallback"); return; }
     SDL_GPUShaderCreateInfo info{};
     info.code = code.data(); info.code_size = code.size(); info.entrypoint = "main";
     info.format = SDL_GPU_SHADERFORMAT_SPIRV; info.stage = SDL_GPU_SHADERSTAGE_FRAGMENT;
@@ -179,6 +198,8 @@ void Window::initGpuMsdfRenderer() {
     if (metadata.empty() || !m_msdfAtlasTexture || !m_msdfRenderer->loadAtlasMetadata(metadata)) {
         m_msdfRenderer.reset(); m_msdfAtlasTexture = nullptr;
         ROWL_LOG_WARN("MSDF atlas unavailable; using font fallback");
+    } else {
+        ROWL_LOG_INFO("MSDF GPU text renderer initialized");
     }
 }
 

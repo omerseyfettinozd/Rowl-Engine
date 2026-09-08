@@ -140,6 +140,12 @@ set_target_properties(rowl_player PROPERTIES
     BUILD_RPATH "$ORIGIN/../lib:$ORIGIN"
     INSTALL_RPATH "$ORIGIN/../lib:$ORIGIN"
 )
+add_custom_command(TARGET rowl_player POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:rowl_player>/shaders"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${ROWL_SHADER_DIR}/msdf_text.frag.spv"
+        "$<TARGET_FILE_DIR:rowl_player>/shaders/msdf_text.frag.spv"
+)
 
 # ── Install rules (optional but useful for packaging) ─────────────────────
 install(TARGETS RowlEngineCore rowl_player
@@ -148,5 +154,6 @@ install(TARGETS RowlEngineCore rowl_player
     ARCHIVE  DESTINATION lib
 )
 install(DIRECTORY include/ DESTINATION include)
+install(FILES "${ROWL_SHADER_DIR}/msdf_text.frag.spv" DESTINATION bin/shaders)
 
 message(STATUS "RowlEngineCore and rowl_player configured successfully.")

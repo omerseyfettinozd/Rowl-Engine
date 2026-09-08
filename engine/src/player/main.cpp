@@ -48,6 +48,7 @@ static void printHelp(const char* progName) {
               << "      --height <pixels>    Window height in pixels (default: 1080)\n"
               << "  -t, --title <name>       Window title (default: \"Rowl Game\")\n"
               << "      --no-vsync           Disable vertical sync\n\n"
+              << "      --gpu-smoke-test     Render one standalone frame, then exit (CI)\n\n"
               << "Controls:\n"
               << "  Space / Enter / Click    Advance to next dialogue line / select choice\n"
               << "  F5                       Quick Save (Slot 0)\n"
@@ -64,6 +65,7 @@ int main(int argc, char* argv[]) {
     uint32_t winWidth = 1920;
     uint32_t winHeight = 1080;
     bool vsync = true;
+    bool gpuSmokeTest = false;
 
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
@@ -90,6 +92,8 @@ int main(int argc, char* argv[]) {
             if (!requireOptionValue(i, argc, argv, arg, appTitle)) return 1;
         } else if (arg == "--no-vsync") {
             vsync = false;
+        } else if (arg == "--gpu-smoke-test") {
+            gpuSmokeTest = true;
         } else {
             std::cerr << "Unknown option: " << arg << "\n";
             printHelp(argv[0]);
@@ -152,8 +156,16 @@ int main(int argc, char* argv[]) {
                   << "  Starting with empty default scene...\n";
     }
 
-    // Start standalone interactive game loop
-    RowlEngine_Run(engine);
+    if (gpuSmokeTest) {
+        // This travels through the same standalone window, VFS-mounted atlas,
+        // and render path as the interactive player without leaving CI in a
+        // blocking event loop.
+        RowlEngine_Step(engine, 1.0F / 60.0F);
+        std::cout << "[Player] GPU MSDF smoke frame rendered.\n";
+    } else {
+        // Start standalone interactive game loop
+        RowlEngine_Run(engine);
+    }
 
     // Clean teardown
     RowlEngine_Destroy(engine);

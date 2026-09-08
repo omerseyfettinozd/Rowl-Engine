@@ -59,6 +59,33 @@ add_test(
     NAME rowl_player_cli_missing_option_value
     COMMAND $<TARGET_FILE:rowl_player> --project
 )
+
+# A real SDL window is needed to exercise SDL's GPU render-state path.  Keep
+# the test out of non-Linux and locally minimal configurations; CI installs
+# Xvfb and Mesa's Vulkan software driver for this gate.
+if(UNIX AND NOT APPLE)
+    find_program(XVFB_RUN_EXECUTABLE xvfb-run)
+    if(XVFB_RUN_EXECUTABLE)
+        add_test(
+            NAME rowl_player_gpu_msdf_smoke
+            COMMAND ${CMAKE_COMMAND} -E env
+                SDL_VIDEODRIVER=x11
+                LIBGL_ALWAYS_SOFTWARE=1
+                SDL_GPU_DRIVER=vulkan
+                ${XVFB_RUN_EXECUTABLE} -a
+                $<TARGET_FILE:rowl_player>
+                --project ${CMAKE_SOURCE_DIR}
+                --width 960 --height 540
+                --no-vsync
+                --gpu-smoke-test
+        )
+        set_tests_properties(rowl_player_gpu_msdf_smoke PROPERTIES
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+            TIMEOUT 30
+            PASS_REGULAR_EXPRESSION "MSDF GPU text renderer initialized"
+        )
+    endif()
+endif()
 set_tests_properties(
     rowl_player_cli_invalid_width
     rowl_player_cli_missing_option_value
