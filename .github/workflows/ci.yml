@@ -18,7 +18,18 @@ jobs:
       - name: Install native build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install --yes cmake ninja-build libsdl3-dev liblua5.4-dev libzstd-dev
+          sudo apt-get install --yes build-essential cmake curl ninja-build pkg-config liblua5.4-dev libzstd-dev
+
+      - name: Build pinned SDL3 dependency
+        run: |
+          curl --fail --location --silent --show-error \
+            https://github.com/libsdl-org/SDL/releases/download/release-3.2.30/SDL3-3.2.30.tar.gz \
+            --output /tmp/SDL3-3.2.30.tar.gz
+          tar --extract --gzip --file /tmp/SDL3-3.2.30.tar.gz --directory /tmp
+          cmake -S /tmp/SDL3-3.2.30 -B /tmp/SDL3-build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release -DSDL_SHARED=ON -DSDL_STATIC=OFF -DSDL_TEST_LIBRARY=OFF
+          cmake --build /tmp/SDL3-build --parallel
+          sudo cmake --install /tmp/SDL3-build
 
       - name: Set up .NET
         uses: actions/setup-dotnet@v4
