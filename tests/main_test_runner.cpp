@@ -244,7 +244,11 @@ void test_audio_engine() {
 
     // Audio playback uses a real, minimal PCM WAV rather than only recording
     // an intent string. This exercises SDL's decode and stream queue path.
-    const auto tonePath = std::filesystem::temp_directory_path() / "rowl_audio_test_tone.wav";
+    const auto audioProjectRoot = std::filesystem::temp_directory_path() / "rowl_audio_vfs_test_project";
+    const auto audioAssetDir = audioProjectRoot / "Assets" / "audio";
+    const auto tonePath = audioAssetDir / "rowl_audio_test_tone.wav";
+    const std::string toneAssetPath = "audio/rowl_audio_test_tone.wav";
+    std::filesystem::create_directories(audioAssetDir);
     const uint8_t wavData[] = {
         'R','I','F','F', 38,0,0,0, 'W','A','V','E',
         'f','m','t',' ', 16,0,0,0, 1,0, 1,0,
@@ -255,24 +259,25 @@ void test_audio_engine() {
         std::ofstream tone(tonePath, std::ios::binary);
         tone.write(reinterpret_cast<const char*>(wavData), sizeof(wavData));
     }
-    audio.playAudio(tonePath.string(), Rowl::Audio::AudioChannelType::Bgm);
+    Rowl::VFS::VFSManager::instance().remountProject(audioProjectRoot.string());
+    audio.playAudio(toneAssetPath, Rowl::Audio::AudioChannelType::Bgm);
     audio.update();
-    if (audio.getCurrentBgmPath() != tonePath.string()) {
+    if (audio.getCurrentBgmPath() != toneAssetPath) {
         std::cerr << "Audio BGM path mismatch" << std::endl;
         exit(1);
     }
-    const auto oversizedAudioPath = std::filesystem::temp_directory_path() / "rowl_oversized_audio.wav";
+    const auto oversizedAudioPath = audioAssetDir / "rowl_oversized_audio.wav";
     std::ofstream(oversizedAudioPath, std::ios::binary).close();
-    std::filesystem::resize_file(oversizedAudioPath, 64ULL * 1024 * 1024 + 1);
-    audio.playAudio(oversizedAudioPath.string(), Rowl::Audio::AudioChannelType::Bgm);
-    if (audio.getCurrentBgmPath() != tonePath.string()) {
+    std::filesystem::resize_file(oversizedAudioPath, 128ULL * 1024 * 1024 + 1);
+    audio.playAudio("audio/rowl_oversized_audio.wav", Rowl::Audio::AudioChannelType::Bgm);
+    if (audio.getCurrentBgmPath() != toneAssetPath) {
         std::cerr << "Oversized audio load replaced the current playback state" << std::endl;
         exit(1);
     }
     std::filesystem::remove(oversizedAudioPath);
     if (audio.isAudioDeviceAvailable()) {
         audio.playAudio("missing_theme.wav", Rowl::Audio::AudioChannelType::Bgm);
-        if (audio.getCurrentBgmPath() != tonePath.string()) {
+        if (audio.getCurrentBgmPath() != toneAssetPath) {
             std::cerr << "Failed BGM load replaced the current playback state" << std::endl;
             exit(1);
         }
@@ -283,7 +288,8 @@ void test_audio_engine() {
             exit(1);
         }
     }
-    std::filesystem::remove(tonePath);
+    std::filesystem::remove_all(audioProjectRoot);
+    Rowl::VFS::VFSManager::instance().remountProject(std::filesystem::current_path().string());
     TEST_PASS("BGM WAV Decode, Queueing, and Failed-Load State Preservation");
 
     audio.stopBgm();

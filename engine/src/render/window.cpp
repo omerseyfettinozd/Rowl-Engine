@@ -25,16 +25,6 @@ bool hasSafeTextureDimensions(int width, int height) {
            static_cast<uint64_t>(width) * static_cast<uint64_t>(height) <= kMaxTexturePixels;
 }
 
-unsigned char* loadTextureFileSafely(const std::string& path, int* width, int* height, int* channels) {
-    int infoWidth = 0, infoHeight = 0, infoChannels = 0;
-    if (!stbi_info(path.c_str(), &infoWidth, &infoHeight, &infoChannels)) return nullptr;
-    if (!hasSafeTextureDimensions(infoWidth, infoHeight)) {
-        ROWL_LOG_WARN("Rejected texture with unsafe dimensions: " + path);
-        return nullptr;
-    }
-    return stbi_load(path.c_str(), width, height, channels, 4);
-}
-
 unsigned char* loadTextureMemorySafely(const uint8_t* bytes, int byteCount,
                                        int* width, int* height, int* channels) {
     int infoWidth = 0, infoHeight = 0, infoChannels = 0;
@@ -242,56 +232,9 @@ void Window::initFontRenderer() {
         }
     }
 
-    // 2. Search active VFS mount directories directly on disk
-    const auto& mountPoints = Rowl::VFS::VFSManager::instance().getMountPoints();
-    for (const auto& [prefix, source] : mountPoints) {
-        if (auto loose = std::dynamic_pointer_cast<Rowl::VFS::LooseDirectorySource>(source)) {
-            fs::path baseDir(loose->getPhysicalPath());
-            std::vector<fs::path> diskCandidates = {
-                baseDir / "Assets" / "fonts" / "default.ttf",
-                baseDir / "Assets" / "fonts" / "default_bold.ttf",
-                baseDir / "fonts" / "default.ttf",
-                baseDir / "fonts" / "default_bold.ttf",
-                baseDir / "default.ttf"
-            };
-            for (const auto& dp : diskCandidates) {
-                if (fs::exists(dp) && fs::is_regular_file(dp)) {
-                    if (m_fontRenderer->loadFont(dp.string())) {
-                        ROWL_LOG_INFO("✅ Loaded Visual Novel Font from VFS Mount Disk: " + dp.string());
-                        return;
-                    }
-                }
-            }
-        }
-    }
-
-    // 3. Search relative paths from CWD and parent directory levels
-    fs::path cwd = fs::current_path();
-    std::vector<fs::path> relCandidates = {
-        cwd / "Assets" / "fonts" / "default.ttf",
-        cwd / "Assets" / "fonts" / "default_bold.ttf",
-        cwd / "fonts" / "default.ttf",
-        cwd / ".." / "Assets" / "fonts" / "default.ttf",
-        cwd / ".." / "Assets" / "fonts" / "default_bold.ttf",
-        cwd / ".." / "fonts" / "default.ttf",
-        cwd / ".." / ".." / "Assets" / "fonts" / "default.ttf",
-        "Assets/fonts/default.ttf",
-        "Assets/fonts/default_bold.ttf",
-        "fonts/default.ttf",
-        "../Assets/fonts/default.ttf",
-        "../../Assets/fonts/default.ttf"
-    };
-
-    for (const auto& p : relCandidates) {
-        if (fs::exists(p) && fs::is_regular_file(p)) {
-            if (m_fontRenderer->loadFont(p.string())) {
-                ROWL_LOG_INFO("✅ Loaded Visual Novel Font from Relative Path: " + p.string());
-                return;
-            }
-        }
-    }
-
-    // 4. Fallback to System Fonts (Linux, Windows, macOS)
+    // 2. System fonts are a non-project fallback for readable debug output.
+    // Project fonts must come through the VFS above, whose mount set is
+    // established from the selected project root.
     const std::vector<std::string> systemFontCandidates = {
         "/usr/share/fonts/liberation/LiberationSans-Regular.ttf",
         "/usr/share/fonts/Adwaita/AdwaitaSans-Regular.ttf",
@@ -406,8 +349,6 @@ void Window::clearTextureCache() {
 SDL_Texture* Window::loadTexture(const std::string& filename) {
     if (filename.empty() || !m_sdlRenderer) return nullptr;
 
-    namespace fs = std::filesystem;
-
     // Normalize slashes
     std::string normPath = filename;
     std::replace(normPath.begin(), normPath.end(), '\\', '/');
@@ -424,87 +365,29 @@ SDL_Texture* Window::loadTexture(const std::string& filename) {
     unsigned char* data = nullptr;
     std::string sourceInfo;
 
-    std::string bareName = fs::path(normPath).filename().string();
+    std::string bareName = std::filesystem::path(normPath).filename().string();
 
-    // 1. Direct absolute or relative filesystem check
-    if (fs::exists(normPath) && fs::is_regular_file(normPath)) {
-        data = loadTextureFileSafely(normPath, &width, &height, &channels);
-        if (data) {
-            sourceInfo = "Direct Path [" + normPath + "]";
-        }
-    }
+    // Asset paths are resolved only through the selected project's VFS.
+    // This prevents CWD, parent-directory, or arbitrary absolute paths from
+    // silently becoming runtime assets after a project switch.
+    std::vector<std::string> vfsCandidates = {
+        normPath,
+        bareName,
+        "images/" + bareName,
+        "images/" + normPath,
+        "Assets/images/" + bareName,
+        "Assets/images/" + normPath,
+        "Assets/" + bareName,
+        "Assets/" + normPath
+    };
 
-    // 2. Try VFS Manager candidates
-    if (!data) {
-        std::vector<std::string> vfsCandidates = {
-            normPath,
-            bareName,
-            "images/" + bareName,
-            "images/" + normPath,
-            "Assets/images/" + bareName,
-            "Assets/images/" + normPath,
-            "Assets/" + bareName,
-            "Assets/" + normPath
-        };
-
-        for (const auto& candidate : vfsCandidates) {
-            auto bytes = Rowl::VFS::VFSManager::instance().readBytes(candidate);
-            if (!bytes.empty()) {
-                data = loadTextureMemorySafely(bytes.data(), static_cast<int>(bytes.size()), &width, &height, &channels);
-                if (data) {
-                    sourceInfo = "VFS [" + candidate + "]";
-                    break;
-                }
-            }
-        }
-    }
-
-    // 3. Search all active VFS physical mount directories directly on disk
-    if (!data) {
-        const auto& mountPoints = Rowl::VFS::VFSManager::instance().getMountPoints();
-        for (const auto& [prefix, source] : mountPoints) {
-            if (auto loose = std::dynamic_pointer_cast<Rowl::VFS::LooseDirectorySource>(source)) {
-                fs::path baseDir(loose->getPhysicalPath());
-                std::vector<fs::path> diskCandidates = {
-                    baseDir / normPath,
-                    baseDir / bareName,
-                    baseDir / "images" / bareName,
-                    baseDir / "Assets" / "images" / bareName
-                };
-                for (const auto& dp : diskCandidates) {
-                    if (fs::exists(dp) && fs::is_regular_file(dp)) {
-                        data = loadTextureFileSafely(dp.string(), &width, &height, &channels);
-                        if (data) {
-                            sourceInfo = "VFS Mount Disk [" + dp.string() + "]";
-                            break;
-                        }
-                    }
-                }
-                if (data) break;
-            }
-        }
-    }
-
-    // 4. Fallback search relative to CWD
-    if (!data) {
-        fs::path cwd = fs::current_path();
-        std::vector<fs::path> searchPaths = {
-            cwd / normPath,
-            cwd / bareName,
-            cwd / "Assets" / "images" / bareName,
-            cwd / "Assets" / "images" / normPath,
-            cwd / "Assets" / bareName,
-            cwd / ".." / "Assets" / "images" / bareName,
-            cwd / ".." / "Assets" / bareName
-        };
-
-        for (const auto& p : searchPaths) {
-            if (fs::exists(p) && fs::is_regular_file(p)) {
-                data = loadTextureFileSafely(p.string(), &width, &height, &channels);
-                if (data) {
-                    sourceInfo = p.string();
-                    break;
-                }
+    for (const auto& candidate : vfsCandidates) {
+        auto bytes = Rowl::VFS::VFSManager::instance().readBytes(candidate);
+        if (!bytes.empty()) {
+            data = loadTextureMemorySafely(bytes.data(), static_cast<int>(bytes.size()), &width, &height, &channels);
+            if (data) {
+                sourceInfo = "VFS [" + candidate + "]";
+                break;
             }
         }
     }

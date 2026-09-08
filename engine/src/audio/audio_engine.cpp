@@ -5,10 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include <climits>
-#include <filesystem>
 #include <vector>
-
-namespace fs = std::filesystem;
 
 namespace Rowl::Audio {
 
@@ -72,17 +69,6 @@ bool AudioEngine::initialize() {
 void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType channel, DSPFilterType filter) {
     if (!m_initialized || assetPath.empty()) return;
 
-    // Avoid opening a locally supplied file that could force SDL to allocate
-    // an unbounded decode buffer. VFS sources have their own 128 MiB asset
-    // cap; audio remains intentionally stricter because BGM is retained for
-    // loop playback.
-    std::error_code fileSizeError;
-    if (fs::is_regular_file(assetPath, fileSizeError) && !fileSizeError &&
-        fs::file_size(assetPath, fileSizeError) > kMaxEncodedAudioBytes && !fileSizeError) {
-        ROWL_LOG_WARN("Audio file exceeds the maximum accepted size: " + assetPath);
-        return;
-    }
-
     std::string channelName = (channel == AudioChannelType::Bgm) ? "BGM (Streaming)" :
                               (channel == AudioChannelType::Voice) ? "Voice" : "SFX (Memory Pool)";
 
@@ -104,28 +90,27 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
     Uint32 audioLen = 0;
     bool loaded = false;
 
-    // 1. Try physical filesystem directly
-    if (fs::exists(assetPath) && fs::is_regular_file(assetPath)) {
-        loaded = SDL_LoadWAV(assetPath.c_str(), &spec, &audioBuf, &audioLen);
-    }
-
-    // 2. Try VFS lookup
-    if (!loaded) {
-        std::vector<std::string> vfsCandidates = {
-            assetPath,
-            "Assets/" + assetPath,
-            "Assets/audio/" + assetPath,
-            "audio/" + assetPath
-        };
-        for (const auto& candidate : vfsCandidates) {
-            if (Rowl::VFS::VFSManager::instance().exists(candidate)) {
-                bytes = Rowl::VFS::VFSManager::instance().readBytes(candidate);
-                if (!bytes.empty()) {
-                    SDL_IOStream* io = SDL_IOFromConstMem(bytes.data(), bytes.size());
-                    if (io) {
-                        loaded = SDL_LoadWAV_IO(io, true, &spec, &audioBuf, &audioLen);
-                        if (loaded) break;
-                    }
+    // Audio assets resolve only through the selected project's VFS. The VFS
+    // itself applies path-isolation and encoded-size limits before SDL sees
+    // any bytes.
+    std::vector<std::string> vfsCandidates = {
+        assetPath,
+        "Assets/" + assetPath,
+        "Assets/audio/" + assetPath,
+        "audio/" + assetPath
+    };
+    for (const auto& candidate : vfsCandidates) {
+        if (Rowl::VFS::VFSManager::instance().exists(candidate)) {
+            bytes = Rowl::VFS::VFSManager::instance().readBytes(candidate);
+            if (!bytes.empty()) {
+                if (bytes.size() > kMaxEncodedAudioBytes) {
+                    ROWL_LOG_WARN("Audio file exceeds the maximum accepted size: " + assetPath);
+                    return;
+                }
+                SDL_IOStream* io = SDL_IOFromConstMem(bytes.data(), bytes.size());
+                if (io) {
+                    loaded = SDL_LoadWAV_IO(io, true, &spec, &audioBuf, &audioLen);
+                    if (loaded) break;
                 }
             }
         }
