@@ -124,6 +124,10 @@
                                             Command="{Binding AddComponentByTypeCommand}" CommandParameter="choice"
                                             HorizontalAlignment="Stretch" Padding="8,6" FontSize="11"
                                             Background="Transparent" Foreground="{DynamicResource PrimaryText}" CornerRadius="4"/>
+                                    <Button Content="📜 Lua Script"
+                                            Command="{Binding AddComponentByTypeCommand}" CommandParameter="script"
+                                            HorizontalAlignment="Stretch" Padding="8,6" FontSize="11"
+                                            Background="Transparent" Foreground="{DynamicResource PrimaryText}" CornerRadius="4"/>
                                 </StackPanel>
                             </Border>
                         </StackPanel>

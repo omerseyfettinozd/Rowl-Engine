@@ -48,3 +48,35 @@ jobs:
 
       - name: Check managed dependencies for known vulnerabilities
         run: dotnet list editor/RowlEngine.Editor.csproj package --vulnerable --include-transitive
+
+  windows:
+    runs-on: windows-2025
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Install native dependencies
+        shell: pwsh
+        run: vcpkg install sdl3 zstd lua nlohmann-json --triplet x64-windows
+
+      - name: Configure
+        shell: pwsh
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake"
+
+      - name: Build
+        run: cmake --build build --parallel 2
+
+      - name: Test
+        shell: pwsh
+        run: |
+          $env:PATH = "$(Resolve-Path build/vcpkg_installed/x64-windows/debug/bin);$env:PATH"
+          ctest --test-dir build --output-on-failure
+
+      - name: Check managed dependencies for known vulnerabilities
+        run: dotnet list editor/RowlEngine.Editor.csproj package --vulnerable --include-transitive

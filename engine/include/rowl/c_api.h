@@ -254,6 +254,18 @@ ROWL_API void RowlEngine_SetBgmVolume(RowlEngineHandle handle, float volume);
 /** Triggers voice ducking attenuation on BGM (1 = voice active, 0 = restored). */
 ROWL_API void RowlEngine_TriggerVoiceDucking(RowlEngineHandle handle, int isVoiceActive);
 
+/** Returns 1 while a BGM track is active, 0 otherwise. */
+ROWL_API int RowlEngine_IsBgmPlaying(RowlEngineHandle handle);
+
+/** Returns 1 while voice playback is active, 0 otherwise. */
+ROWL_API int RowlEngine_IsVoicePlaying(RowlEngineHandle handle);
+
+/** Returns the currently active DSP filter (0 Normal, 1 Cave, 2 Telephone, 3 Underwater). */
+ROWL_API int RowlEngine_GetActiveDspFilter(RowlEngineHandle handle);
+
+/** Returns the most recent audio error. The pointer is engine-owned and valid until the next audio call. */
+ROWL_API const char* RowlEngine_GetLastAudioError(RowlEngineHandle handle);
+
 /* ── Save / Load Slots & History Rewind ───────────────────────────────────── */
 
 /** Saves the current game state to the specified slot (0 = quicksave). Returns 1 on success, 0 on failure. */

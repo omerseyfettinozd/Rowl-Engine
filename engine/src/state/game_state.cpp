@@ -5,6 +5,8 @@
 #include <fstream>
 #include <chrono>
 #include <system_error>
+#include <algorithm>
+#include <cmath>
 
 #if defined(_WIN32)
 #define NOMINMAX
@@ -15,7 +17,7 @@ namespace Rowl::State {
 
 namespace {
 
-constexpr uint32_t kSaveFormatVersion = 1;
+constexpr uint32_t kSaveFormatVersion = 2;
 constexpr int32_t kMinSaveSlot = 0;
 constexpr int32_t kMaxSaveSlot = 99;
 constexpr uintmax_t kMaxSaveFileBytes = 4 * 1024 * 1024;
@@ -82,6 +84,9 @@ std::shared_ptr<const GameState> GameState::createNextState(
     if (current) {
         nextState->activeBackground = current->activeBackground;
         nextState->dspFilter = current->dspFilter;
+        nextState->activeBgm = current->activeBgm;
+        nextState->bgmVolume = current->bgmVolume;
+        nextState->bgmPlaying = current->bgmPlaying;
     }
 
     // Structural sharing: only create new VariableMap if a variable actually changes
@@ -131,10 +136,34 @@ std::shared_ptr<const GameState> GameState::createNextStateWithVariables(
     if (current) {
         nextState->activeBackground = current->activeBackground;
         nextState->dspFilter = current->dspFilter;
+        nextState->activeBgm = current->activeBgm;
+        nextState->bgmVolume = current->bgmVolume;
+        nextState->bgmPlaying = current->bgmPlaying;
     }
     auto variableMap = std::make_shared<VariableMap>();
     variableMap->data = nextVariables;
     nextState->variables = std::move(variableMap);
+    return nextState;
+}
+
+std::shared_ptr<const GameState> GameState::createNextStateWithAudio(
+    const std::shared_ptr<const GameState>& current,
+    uint64_t activeNodeId,
+    const std::string& background,
+    const std::string& bgm,
+    float volume,
+    bool playing,
+    const std::string& filter) {
+    auto nextState = std::make_shared<GameState>();
+    nextState->stepId = current ? current->stepId + 1 : 1;
+    nextState->activeNodeId = activeNodeId;
+    nextState->previousState = current;
+    nextState->activeBackground = background;
+    nextState->activeBgm = bgm;
+    nextState->bgmVolume = std::clamp(volume, 0.0f, 1.0f);
+    nextState->bgmPlaying = playing;
+    nextState->dspFilter = filter;
+    nextState->variables = current ? current->variables : std::make_shared<VariableMap>();
     return nextState;
 }
 
@@ -161,6 +190,9 @@ std::string GameState::serializeJson() const {
     j["typewriter_index"] = typewriterIndex;
     j["active_background"] = activeBackground;
     j["dsp_filter"] = dspFilter;
+    j["active_bgm"] = activeBgm;
+    j["bgm_volume"] = bgmVolume;
+    j["bgm_playing"] = bgmPlaying;
 
     nlohmann::json varObj = nlohmann::json::object();
     if (variables) {
@@ -185,7 +217,7 @@ std::shared_ptr<const GameState> GameState::deserializeJson(const std::string& j
             return nullptr;
         }
         const auto version = j.value("version", kSaveFormatVersion);
-        if (version != kSaveFormatVersion) {
+        if (version != 1 && version != kSaveFormatVersion) {
             ROWL_LOG_ERROR("Unsupported GameState save version: " + std::to_string(version));
             return nullptr;
         }
@@ -196,6 +228,14 @@ std::shared_ptr<const GameState> GameState::deserializeJson(const std::string& j
         state->typewriterIndex = j.value("typewriter_index", static_cast<uint32_t>(0));
         state->activeBackground = j.value("active_background", "bg_beach_sunset.png");
         state->dspFilter = j.value("dsp_filter", "Normal");
+        state->activeBgm = j.value("active_bgm", "");
+        state->bgmVolume = j.value("bgm_volume", 1.0f);
+        state->bgmPlaying = j.value("bgm_playing", !state->activeBgm.empty());
+
+        if (!std::isfinite(state->bgmVolume) || state->bgmVolume < 0.0f || state->bgmVolume > 1.0f) {
+            ROWL_LOG_ERROR("GameState JSON contains an invalid BGM volume");
+            return nullptr;
+        }
 
         if (state->stepId == 0 || state->activeNodeId == 0) {
             ROWL_LOG_ERROR("GameState JSON contains an invalid step or node identifier");

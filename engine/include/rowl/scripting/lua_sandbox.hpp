@@ -15,6 +15,8 @@ public:
 
     bool initialize();
     bool executeString(const std::string& scriptCode);
+    /// Calls a global lifecycle callback when it exists. Missing callbacks are successful no-ops.
+    bool callOptionalFunction(const std::string& functionName, double deltaTime = 0.0);
     void shutdown();
 
     void setVariable(const std::string& key, const std::string& value);

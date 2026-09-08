@@ -340,6 +340,19 @@ namespace RowlEngine.Editor.Native
             => _handle == IntPtr.Zero ? 0
                : NativeBridge.RowlEngine_GetCurrentNodeId(_handle);
 
+        public bool IsBgmPlaying
+            => _handle != IntPtr.Zero && NativeBridge.RowlEngine_IsBgmPlaying(_handle) != 0;
+
+        public bool IsVoicePlaying
+            => _handle != IntPtr.Zero && NativeBridge.RowlEngine_IsVoicePlaying(_handle) != 0;
+
+        public int ActiveDspFilter
+            => _handle == IntPtr.Zero ? 0 : NativeBridge.RowlEngine_GetActiveDspFilter(_handle);
+
+        public string LastAudioError
+            => _handle == IntPtr.Zero ? string.Empty
+               : NativeBridge.PtrToString(NativeBridge.RowlEngine_GetLastAudioError(_handle));
+
         // ── Save / Load Slots & History Rewind ────────────────────────────────
 
         public bool SaveGameSlot(int slotIndex)

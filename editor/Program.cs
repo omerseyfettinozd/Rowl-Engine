@@ -99,6 +99,15 @@ namespace RowlEngine.Editor
             if (node.DialogueComponents.Count != 1)
                 throw new Exception("Dialogue removal failed");
 
+            var script = node.AddComponent<ScriptComponentViewModel>();
+            script.ScriptPath = "scripts/intro.lua";
+            script.InlineCode = "function on_enter() rowl.var_set('seen_intro', '1') end";
+            var scriptData = script.Serialize();
+            var restoredScript = new ScriptComponentViewModel();
+            restoredScript.Deserialize(scriptData.ToDictionary(pair => pair.Key, pair => (object?)pair.Value));
+            if (restoredScript.ScriptPath != script.ScriptPath || restoredScript.InlineCode != script.InlineCode)
+                throw new Exception("ScriptComponent serialization mismatch");
+
             // Test Trash Can (RemoveSelfCommand)
             secondChar.RemoveSelfCommand.Execute(null);
             if (node.Components.Count(c => c is CharacterComponentViewModel) != 1)
@@ -113,7 +122,7 @@ namespace RowlEngine.Editor
                     throw new Exception("Preview component serialization lost its engine contract");
                 }
             }
-            Console.WriteLine("  ✅ [PASS] Component addition, proxy sync, and Trash Can (RemoveSelfCommand) verified");
+            Console.WriteLine("  ✅ [PASS] Component addition, script serialization, proxy sync, and Trash Can (RemoveSelfCommand) verified");
 
             // Hierarchy must expose its empty state when the active node has no
             // GameObjects, then update immediately as objects are added/removed.

@@ -307,6 +307,35 @@ bool LuaSandbox::executeString(const std::string& scriptCode) {
     return true;
 }
 
+bool LuaSandbox::callOptionalFunction(const std::string& functionName, double deltaTime) {
+    if (!m_initialized || !m_luaState || functionName.empty()) return false;
+
+    lua_getglobal(m_luaState, functionName.c_str());
+    if (lua_isnil(m_luaState, -1)) {
+        lua_pop(m_luaState, 1);
+        return true;
+    }
+    if (!lua_isfunction(m_luaState, -1)) {
+        lua_pop(m_luaState, 1);
+        ROWL_LOG_WARN("Lua lifecycle callback is not a function: " + functionName);
+        return false;
+    }
+
+    lua_pushnumber(m_luaState, deltaTime);
+    lua_pushinteger(m_luaState, 0);
+    lua_setfield(m_luaState, LUA_REGISTRYINDEX, "_rowl_instruction_count");
+    if (lua_pcall(m_luaState, 1, 0, 0) != LUA_OK) {
+        const char* rawError = lua_tostring(m_luaState, -1);
+        const std::string error = rawError ? rawError : "unknown Lua error";
+        lua_pop(m_luaState, 1);
+        bindEngineApis();
+        ROWL_LOG_ERROR("Lua lifecycle callback '" + functionName + "' failed: " + error);
+        return false;
+    }
+    bindEngineApis();
+    return true;
+}
+
 void LuaSandbox::shutdown() {
     if (!m_initialized) return;
 

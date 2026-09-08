@@ -87,6 +87,14 @@ std::vector<uint8_t> LooseDirectorySource::read(const std::string& path) {
     return buffer;
 }
 
+std::unique_ptr<std::istream> LooseDirectorySource::openStream(const std::string& path) {
+    const auto fullPath = resolveInsideRoot(m_canonicalRoot, path);
+    if (!fullPath || !fs::is_regular_file(*fullPath)) return nullptr;
+    auto stream = std::make_unique<std::ifstream>(*fullPath, std::ios::binary);
+    if (!stream->is_open()) return nullptr;
+    return stream;
+}
+
 VFSManager& VFSManager::instance() {
     static VFSManager s_instance;
     return s_instance;
@@ -273,6 +281,25 @@ std::vector<uint8_t> VFSManager::readBytes(const std::string& vfsPath) {
 
     ROWL_LOG_WARN("VFS File not found: '" + cleanPath + "'");
     return {};
+}
+
+std::unique_ptr<std::istream> VFSManager::openReadStream(const std::string& vfsPath) {
+    if (vfsPath.empty()) return nullptr;
+    std::string cleanPath = vfsPath;
+    std::replace(cleanPath.begin(), cleanPath.end(), '\\', '/');
+    std::lock_guard<std::recursive_mutex> lock(m_mutex);
+    for (const auto& [prefix, source] : m_mountPoints) {
+        if (!prefix.empty() && cleanPath.size() > prefix.size() &&
+            cleanPath.compare(0, prefix.size(), prefix) == 0 && cleanPath[prefix.size()] == '/') {
+            const std::string stripped = cleanPath.substr(prefix.size() + 1);
+            if (source->exists(stripped)) return source->openStream(stripped);
+        }
+    }
+    for (const auto& [prefix, source] : m_mountPoints) {
+        (void)prefix;
+        if (source->exists(cleanPath)) return source->openStream(cleanPath);
+    }
+    return nullptr;
 }
 
 std::string VFSManager::readString(const std::string& vfsPath) {

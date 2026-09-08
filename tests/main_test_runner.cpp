@@ -20,6 +20,7 @@
 #include <SDL3/SDL.h>
 
 #include "rowl/render/aspect_guardian.hpp"
+#include "rowl/render/msdf_renderer.hpp"
 #include "rowl/state/game_state.hpp"
 #include "rowl/audio/audio_engine.hpp"
 #include "rowl/scripting/lua_sandbox.hpp"
@@ -73,6 +74,26 @@ void test_aspect_guardian() {
     TEST_PASS("Virtual to Physical Coordinate Projection");
 }
 
+void test_msdf_renderer() {
+    TEST_SECTION("MSDF Atlas Sampling & Metrics");
+    Rowl::Render::MsdfRenderer renderer;
+    if (!renderer.loadAtlasMetadata(R"({"pixel_range":4,"atlas_width":2,"atlas_height":2,"glyphs":[{"unicode":65,"advance":0.6}]})")) {
+        std::cerr << "MSDF metadata load failed" << std::endl;
+        exit(1);
+    }
+    std::vector<uint8_t> pixels = {
+        255, 255, 255, 255, 0, 0, 0, 255,
+        128, 128, 128, 255, 64, 64, 64, 255
+    };
+    if (!renderer.loadAtlasPixels(std::move(pixels), 2, 2) || !renderer.isLoaded() ||
+        renderer.sampleOpacity(0.0f, 0.0f) < 0.99f || renderer.sampleOpacity(1.0f, 0.0f) > 0.01f ||
+        std::abs(renderer.measureTextWidth("AA", 20.0f) - 24.0f) > 0.01f) {
+        std::cerr << "MSDF atlas sampling or metrics mismatch" << std::endl;
+        exit(1);
+    }
+    TEST_PASS("MSDF RGB Median Sampling and UTF-8 Glyph Metrics");
+}
+
 void test_game_state() {
     TEST_SECTION("GameState & Rewind Subsystem");
 
@@ -117,6 +138,23 @@ void test_game_state() {
         exit(1);
     }
     TEST_PASS("GameState JSON Serialization & Deserialization");
+
+    auto audioState = Rowl::State::GameState::createNextStateWithAudio(
+        s2, 102, "night.png", "audio/night.ogg", 0.65f, true, "Telephone");
+    auto restoredAudioState = Rowl::State::GameState::deserializeJson(audioState->serializeJson());
+    if (!restoredAudioState || restoredAudioState->activeBgm != "audio/night.ogg" ||
+        !restoredAudioState->bgmPlaying || std::abs(restoredAudioState->bgmVolume - 0.65f) > 0.001f ||
+        restoredAudioState->dspFilter != "Telephone") {
+        std::cerr << "GameState audio presentation serialization mismatch" << std::endl;
+        exit(1);
+    }
+    const auto legacyState = Rowl::State::GameState::deserializeJson(
+        R"({"version":1,"step_id":1,"active_node_id":101,"variables":{}})");
+    if (!legacyState || legacyState->bgmPlaying || !legacyState->activeBgm.empty()) {
+        std::cerr << "Legacy GameState save compatibility mismatch" << std::endl;
+        exit(1);
+    }
+    TEST_PASS("Versioned Audio Presentation Save State and v1 Compatibility");
 
     std::string testSaveDir = "build/test_saves";
     if (!Rowl::State::GameState::saveToSlot(s2, 1, testSaveDir)) {
@@ -349,6 +387,19 @@ void test_lua_sandbox() {
         exit(1);
     }
     TEST_PASS("Lua File/Runtime Load APIs Blocked and Bridge Restored");
+
+    if (!lua.executeString("function on_enter(dt) rowl.var_set('entered', tostring(dt)) end") ||
+        !lua.callOptionalFunction("on_enter", 0.25) || lua.getVariable("entered") != "0.25" ||
+        !lua.callOptionalFunction("missing_callback")) {
+        std::cerr << "Lua lifecycle callback dispatch failed" << std::endl;
+        exit(1);
+    }
+    if (!lua.executeString("function on_exit() error('isolated lifecycle error') end") ||
+        lua.callOptionalFunction("on_exit")) {
+        std::cerr << "Lua lifecycle error isolation failed" << std::endl;
+        exit(1);
+    }
+    TEST_PASS("Optional Lua Lifecycle Callback Dispatch and Error Isolation");
 
     // Infinite loop protection (Instruction counter hook)
     if (lua.executeString("while true do local a = 1 end")) {
@@ -1445,6 +1496,19 @@ void test_hardening_and_reliability() {
         TEST_PASS("VFS Cross-Platform Backslash (\\) Path Normalization");
     }
 
+    {
+        auto& vfs = Rowl::VFS::VFSManager::instance();
+        auto stream = vfs.openReadStream("images/Woman.png");
+        char signature[8]{};
+        if (stream && stream->read(signature, sizeof(signature)) &&
+            std::memcmp(signature, "\x89PNG\r\n\x1a\n", sizeof(signature)) == 0) {
+            TEST_PASS("VFS Read-Only Asset Stream (Loose File)");
+        } else if (vfs.exists("images/Woman.png")) {
+            std::cerr << "VFS failed to open an existing loose asset as a stream" << std::endl;
+            exit(1);
+        }
+    }
+
     // 3. GameState Step-by-Step Node Traversal & Rewind Integrity
     {
         const auto tempGraph = std::filesystem::temp_directory_path() / "rowl_rewind_chain_test.json";
@@ -1526,6 +1590,7 @@ int main() {
     std::cout << "=======================================================" << std::endl;
 
     test_aspect_guardian();
+    test_msdf_renderer();
     test_game_state();
     test_audio_engine();
     test_lua_sandbox();

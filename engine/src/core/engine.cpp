@@ -334,6 +334,10 @@ bool Engine::advanceToChoice(const std::string& optionId) {
         return false;
     }
 
+    if (m_hasActiveScript && m_luaSandbox) {
+        m_luaSandbox->callOptionalFunction("on_choice");
+    }
+
     const auto index = static_cast<uint32_t>(std::distance(options.begin(), optionIt));
     advanceToNextNode(index);
     return m_currentNodeId == optionIt->nodeId;
@@ -539,6 +543,11 @@ void Engine::updateSceneFromComponents(const std::string& componentsJson) {
         m_hasBackground = false;
         m_hasDialogueBox = false;
         std::vector<nlohmann::json> pendingAudioComponents;
+        std::vector<nlohmann::json> pendingScripts;
+
+        // The payload has passed schema validation, so the active script can
+        // be notified without a malformed update leaving the scene half-live.
+        deactivateScripts();
 
         for (const auto& comp : comps) {
             if (!comp.contains("type") || !comp.contains("data")) continue;
@@ -704,10 +713,7 @@ void Engine::updateSceneFromComponents(const std::string& componentsJson) {
                     }
                 }
             } else if (type == "script") {
-                std::string scriptCode = data.value("code", "");
-                if (!scriptCode.empty()) {
-                    executeScript(scriptCode);
-                }
+                pendingScripts.push_back(data);
             }
         }
 
@@ -740,6 +746,22 @@ void Engine::updateSceneFromComponents(const std::string& componentsJson) {
                 m_audio->playAudio(bgm, Rowl::Audio::AudioChannelType::Bgm);
             }
             if (!sfx.empty()) m_audio->playAudio(sfx, Rowl::Audio::AudioChannelType::Sfx);
+        }
+
+        activateScripts(pendingScripts);
+
+        if (m_audio && (!pendingAudioComponents.empty()) && m_gameState) {
+            std::string filter = "Normal";
+            switch (m_audio->getActiveFilter()) {
+                case Rowl::Audio::DSPFilterType::CaveReverb: filter = "CaveReverb"; break;
+                case Rowl::Audio::DSPFilterType::Telephone: filter = "Telephone"; break;
+                case Rowl::Audio::DSPFilterType::UnderwaterLowPass: filter = "UnderwaterLowPass"; break;
+                case Rowl::Audio::DSPFilterType::Normal: break;
+            }
+            m_gameState = Rowl::State::GameState::createNextStateWithAudio(
+                m_gameState, m_currentNodeId, m_activeBackground,
+                m_audio->getCurrentBgmPath(), m_audio->getBgmVolume(),
+                m_audio->isBgmPlaying(), filter);
         }
 
         ROWL_LOG_INFO("Scene Updated (Components) → " + std::to_string(comps.size()) +
@@ -1101,6 +1123,9 @@ void Engine::step(float deltaTime) {
     if (m_audio) {
         m_audio->update();
     }
+    if (m_hasActiveScript && m_luaSandbox) {
+        m_luaSandbox->callOptionalFunction("on_update", deltaTime);
+    }
 
     m_window->endFrame();
 }
@@ -1130,10 +1155,43 @@ void Engine::run() {
     shutdown();
 }
 
+void Engine::deactivateScripts() {
+    if (m_hasActiveScript && m_luaSandbox) {
+        m_luaSandbox->callOptionalFunction("on_exit");
+    }
+    m_hasActiveScript = false;
+}
+
+void Engine::activateScripts(const std::vector<nlohmann::json>& scripts) {
+    if (!m_luaSandbox) return;
+    for (const auto& script : scripts) {
+        std::string source = script.value("code", "");
+        const std::string path = script.value("path", "");
+        if (source.empty() && !path.empty()) {
+            source = Rowl::VFS::VFSManager::instance().readString(path);
+            if (source.empty()) {
+                ROWL_LOG_ERROR("Lua script asset could not be read: " + path);
+                continue;
+            }
+        }
+        if (source.empty()) continue;
+        if (!m_luaSandbox->executeString(source)) {
+            ROWL_LOG_ERROR("Lua script activation failed" + (path.empty() ? std::string{} : ": " + path));
+            continue;
+        }
+        m_hasActiveScript = true;
+        if (!m_luaSandbox->callOptionalFunction("on_enter")) {
+            ROWL_LOG_ERROR("Lua on_enter callback failed" + (path.empty() ? std::string{} : ": " + path));
+        }
+    }
+}
+
 void Engine::shutdown() {
     if (!m_initialized) return;
 
     ROWL_LOG_INFO("Shutting down Rowl Engine...");
+
+    deactivateScripts();
 
     if (m_scene) {
         m_scene->clear();
@@ -1214,6 +1272,7 @@ bool Engine::loadGameSlot(int32_t slotIndex) {
             );
         }
     }
+    restoreAudioStateFromGameState();
     ROWL_LOG_INFO("Loaded Game Slot #" + std::to_string(slotIndex) + " → Node #" + std::to_string(m_currentNodeId));
     return true;
 }
@@ -1269,7 +1328,29 @@ bool Engine::rewind(uint64_t steps) {
             );
         }
     }
+    restoreAudioStateFromGameState();
     return true;
+}
+
+void Engine::restoreAudioStateFromGameState() {
+    if (!m_audio || !m_gameState) return;
+    m_audio->setBgmVolume(m_gameState->bgmVolume);
+    if (m_gameState->dspFilter == "Cave" || m_gameState->dspFilter == "CaveReverb") {
+        m_audio->applyDspFilter(Rowl::Audio::DSPFilterType::CaveReverb);
+    } else if (m_gameState->dspFilter == "Telephone") {
+        m_audio->applyDspFilter(Rowl::Audio::DSPFilterType::Telephone);
+    } else if (m_gameState->dspFilter == "Underwater" || m_gameState->dspFilter == "UnderwaterLowPass") {
+        m_audio->applyDspFilter(Rowl::Audio::DSPFilterType::UnderwaterLowPass);
+    } else {
+        m_audio->applyDspFilter(Rowl::Audio::DSPFilterType::Normal);
+    }
+
+    if (m_gameState->bgmPlaying && !m_gameState->activeBgm.empty()) {
+        m_audio->playAudio(m_gameState->activeBgm, Rowl::Audio::AudioChannelType::Bgm,
+                           m_audio->getActiveFilter());
+    } else {
+        m_audio->stopBgm();
+    }
 }
 
 uint64_t Engine::getCurrentStepId() const {

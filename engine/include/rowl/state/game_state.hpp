@@ -26,6 +26,9 @@ struct GameState {
     // String members
     std::string activeBackground = "bg_beach_sunset.png";
     std::string dspFilter = "Normal";
+    std::string activeBgm;
+    float bgmVolume = 1.0f;
+    bool bgmPlaying = false;
 
     // Smart pointers last
     std::shared_ptr<const VariableMap> variables = std::make_shared<VariableMap>();
@@ -44,6 +47,15 @@ struct GameState {
         const std::shared_ptr<const GameState>& current,
         uint64_t nextNodeId,
         const std::unordered_map<std::string, std::string>& nextVariables
+    );
+    static std::shared_ptr<const GameState> createNextStateWithAudio(
+        const std::shared_ptr<const GameState>& current,
+        uint64_t activeNodeId,
+        const std::string& background,
+        const std::string& bgm,
+        float volume,
+        bool playing,
+        const std::string& filter
     );
 
     static std::shared_ptr<const GameState> rewind(

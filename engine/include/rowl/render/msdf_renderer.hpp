@@ -21,9 +21,13 @@ public:
     ~MsdfRenderer();
 
     bool loadAtlasMetadata(const std::string& jsonMetadata);
-    float calculateMedianDistance(float r, float g, float b);
+    bool loadAtlasPixels(std::vector<uint8_t> rgbaPixels, uint32_t width, uint32_t height);
+    float calculateMedianDistance(float r, float g, float b) const;
+    float sampleOpacity(float normalizedX, float normalizedY, float screenPixelRange = 1.0f) const;
+    float measureTextWidth(const std::string& utf8Text, float pixelHeight) const;
 
-    bool isLoaded() const { return m_loaded; }
+    bool isLoaded() const { return m_loaded && !m_atlasPixels.empty(); }
+    bool hasMetadata() const { return m_loaded; }
     float getPixelRange() const { return m_pixelRange; }
     const std::unordered_map<uint32_t, MsdfGlyphMetrics>& getGlyphs() const { return m_glyphs; }
 
@@ -32,6 +36,9 @@ private:
     float m_atlasWidth = 512.0f;
     float m_atlasHeight = 512.0f;
     std::unordered_map<uint32_t, MsdfGlyphMetrics> m_glyphs;
+    std::vector<uint8_t> m_atlasPixels;
+    uint32_t m_pixelWidth = 0;
+    uint32_t m_pixelHeight = 0;
     bool m_loaded = false;
 };
 

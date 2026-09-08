@@ -239,12 +239,16 @@ private:
     Rowl::Render::DialogueRenderData m_activeDialogueData;
     std::vector<Rowl::Render::DialogueRenderData> m_activeDialogues;
     std::vector<Rowl::Render::ChoiceButtonRenderData> m_activeChoiceButtons;
+    bool m_hasActiveScript = false;
 
     bool m_isRunning    = false;
     bool m_initialized  = false;
     bool m_isPlaying    = false;
 
     void parseStoryGraphJson(const std::string& jsonContent);
+    void restoreAudioStateFromGameState();
+    void deactivateScripts();
+    void activateScripts(const std::vector<nlohmann::json>& scripts);
 };
 
 } // namespace Rowl::Core

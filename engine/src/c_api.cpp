@@ -398,6 +398,47 @@ void RowlEngine_TriggerVoiceDucking(RowlEngineHandle handle, int isVoiceActive) 
     });
 }
 
+int RowlEngine_IsBgmPlaying(RowlEngineHandle handle) {
+    if (!isLiveHandle(handle)) return 0;
+    return invokeNoexcept<int>([&] {
+        const auto* audio = toEngine(handle)->getAudio();
+        return audio && audio->isBgmPlaying() ? 1 : 0;
+    }, 0);
+}
+
+int RowlEngine_IsVoicePlaying(RowlEngineHandle handle) {
+    if (!isLiveHandle(handle)) return 0;
+    return invokeNoexcept<int>([&] {
+        const auto* audio = toEngine(handle)->getAudio();
+        return audio && audio->isVoicePlaying() ? 1 : 0;
+    }, 0);
+}
+
+int RowlEngine_GetActiveDspFilter(RowlEngineHandle handle) {
+    if (!isLiveHandle(handle)) return 0;
+    return invokeNoexcept<int>([&] {
+        const auto* audio = toEngine(handle)->getAudio();
+        if (!audio) return 0;
+        switch (audio->getActiveFilter()) {
+            case Rowl::Audio::DSPFilterType::CaveReverb: return 1;
+            case Rowl::Audio::DSPFilterType::Telephone: return 2;
+            case Rowl::Audio::DSPFilterType::UnderwaterLowPass: return 3;
+            case Rowl::Audio::DSPFilterType::Normal: return 0;
+        }
+        return 0;
+    }, 0);
+}
+
+const char* RowlEngine_GetLastAudioError(RowlEngineHandle handle) {
+    if (!isLiveHandle(handle)) return "";
+    static thread_local std::string buffer;
+    return invokeNoexcept<const char*>([&] {
+        const auto* audio = toEngine(handle)->getAudio();
+        buffer = audio ? audio->getLastError() : "";
+        return buffer.c_str();
+    }, "");
+}
+
 int RowlEngine_SaveGameSlot(RowlEngineHandle handle, int32_t slotIndex) {
     if (!isLiveHandle(handle)) return 0;
     return invokeNoexcept<int>([&] {

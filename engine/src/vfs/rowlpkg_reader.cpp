@@ -6,6 +6,7 @@
 #include <mutex>
 #include <algorithm>
 #include <optional>
+#include <sstream>
 
 namespace Rowl::VFS {
 
@@ -248,6 +249,17 @@ std::vector<uint8_t> RowlPkgDataSource::read(const std::string& path) {
 
     ROWL_LOG_WARN("Unsupported compression flag for asset: " + path);
     return {};
+}
+
+std::unique_ptr<std::istream> RowlPkgDataSource::openStream(const std::string& path) {
+    // Version 1 packages store one compressed block per entry. Decompression
+    // remains bounded by the validated entry limit; exposing an istream keeps
+    // consumer APIs uniform while a future package version can replace this
+    // with incremental Zstd decoding without changing callers.
+    auto bytes = read(path);
+    if (bytes.empty()) return nullptr;
+    auto buffer = std::string(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+    return std::make_unique<std::istringstream>(std::move(buffer), std::ios::binary);
 }
 
 } // namespace Rowl::VFS

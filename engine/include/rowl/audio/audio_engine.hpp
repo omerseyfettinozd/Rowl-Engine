@@ -43,11 +43,15 @@ public:
     void setBgmLooping(bool loop) { m_bgmLoop = loop; }
 
     float getBgmGain() const { return m_bgmGain; }
+    float getBgmVolume() const { return m_bgmVolume; }
     DSPFilterType getActiveFilter() const { return m_activeFilter; }
     bool isInitialized() const { return m_initialized; }
     bool isDuckingActive() const { return m_isDuckingActive; }
     bool isAudioDeviceAvailable() const { return m_deviceAvailable; }
     const std::string& getCurrentBgmPath() const { return m_currentBgmPath; }
+    bool isBgmPlaying() const { return m_isBgmPlaying; }
+    bool isVoicePlaying() const { return m_isVoicePlaying; }
+    const std::string& getLastError() const { return m_lastError; }
 
     void shutdown();
 
@@ -63,7 +67,10 @@ private:
     bool m_bgmLoop = true;
 
     std::string m_currentBgmPath = "";
+    std::string m_lastError;
     std::vector<uint8_t> m_bgmData;
+    bool m_isBgmPlaying = false;
+    bool m_isVoicePlaying = false;
     SDL_AudioStream* m_bgmStream = nullptr;
     SDL_AudioStream* m_sfxStream = nullptr;
 };

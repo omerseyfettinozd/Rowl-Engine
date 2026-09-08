@@ -44,6 +44,7 @@ public:
 
     bool exists(const std::string& path) override;
     std::vector<uint8_t> read(const std::string& path) override;
+    std::unique_ptr<std::istream> openStream(const std::string& path) override;
     std::string getSourceName() const override { return "RowlPkgDataSource [" + m_filepath + "]"; }
 
     bool isValid() const { return m_isValid; }

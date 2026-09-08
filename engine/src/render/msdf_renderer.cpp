@@ -1,6 +1,7 @@
 #include "rowl/render/msdf_renderer.hpp"
 #include "rowl/core/logger.hpp"
 #include <algorithm>
+#include <cmath>
 #include <nlohmann/json.hpp>
 
 namespace Rowl::Render {
@@ -14,6 +15,7 @@ bool MsdfRenderer::loadAtlasMetadata(const std::string& jsonMetadata) {
     try {
         auto json = nlohmann::json::parse(jsonMetadata);
 
+        m_glyphs.clear();
         m_pixelRange = json.value("pixel_range", 4.0f);
         m_atlasWidth = json.value("atlas_width", 512.0f);
         m_atlasHeight = json.value("atlas_height", 512.0f);
@@ -38,6 +40,12 @@ bool MsdfRenderer::loadAtlasMetadata(const std::string& jsonMetadata) {
             }
         }
 
+        if (!std::isfinite(m_pixelRange) || m_pixelRange <= 0.0f ||
+            !std::isfinite(m_atlasWidth) || !std::isfinite(m_atlasHeight) ||
+            m_atlasWidth <= 0.0f || m_atlasHeight <= 0.0f) {
+            ROWL_LOG_ERROR("MSDF atlas metadata contains invalid dimensions");
+            return false;
+        }
         m_loaded = true;
         ROWL_LOG_INFO("MSDF Font Atlas loaded successfully. Pixel Range: " + std::to_string(m_pixelRange) + ", Glyphs: " + std::to_string(m_glyphs.size()));
         return true;
@@ -50,8 +58,50 @@ bool MsdfRenderer::loadAtlasMetadata(const std::string& jsonMetadata) {
     }
 }
 
-float MsdfRenderer::calculateMedianDistance(float r, float g, float b) {
+bool MsdfRenderer::loadAtlasPixels(std::vector<uint8_t> rgbaPixels, uint32_t width, uint32_t height) {
+    constexpr uint64_t kMaxAtlasPixels = 16ULL * 1024ULL * 1024ULL;
+    if (width == 0 || height == 0 || static_cast<uint64_t>(width) * height > kMaxAtlasPixels ||
+        rgbaPixels.size() != static_cast<size_t>(width) * height * 4) {
+        ROWL_LOG_ERROR("MSDF atlas pixel buffer has invalid dimensions");
+        return false;
+    }
+    m_atlasPixels = std::move(rgbaPixels);
+    m_pixelWidth = width;
+    m_pixelHeight = height;
+    return true;
+}
+
+float MsdfRenderer::calculateMedianDistance(float r, float g, float b) const {
     return std::max(std::min(r, g), std::min(std::max(r, g), b));
+}
+
+float MsdfRenderer::sampleOpacity(float normalizedX, float normalizedY, float screenPixelRange) const {
+    if (!isLoaded() || !std::isfinite(normalizedX) || !std::isfinite(normalizedY) ||
+        !std::isfinite(screenPixelRange)) return 0.0f;
+    const auto x = static_cast<uint32_t>(std::clamp(normalizedX, 0.0f, 1.0f) * static_cast<float>(m_pixelWidth - 1));
+    const auto y = static_cast<uint32_t>(std::clamp(normalizedY, 0.0f, 1.0f) * static_cast<float>(m_pixelHeight - 1));
+    const size_t offset = (static_cast<size_t>(y) * m_pixelWidth + x) * 4;
+    const float distance = calculateMedianDistance(m_atlasPixels[offset] / 255.0f,
+                                                    m_atlasPixels[offset + 1] / 255.0f,
+                                                    m_atlasPixels[offset + 2] / 255.0f);
+    const float range = std::max(0.001f, m_pixelRange * std::max(0.001f, screenPixelRange) / 16.0f);
+    return std::clamp((distance - 0.5f) / range + 0.5f, 0.0f, 1.0f);
+}
+
+float MsdfRenderer::measureTextWidth(const std::string& utf8Text, float pixelHeight) const {
+    if (!m_loaded || pixelHeight <= 0.0f || !std::isfinite(pixelHeight)) return 0.0f;
+    float width = 0.0f;
+    for (size_t index = 0; index < utf8Text.size();) {
+        const auto first = static_cast<uint8_t>(utf8Text[index++]);
+        uint32_t codepoint = first;
+        int remaining = first < 0x80 ? 0 : (first & 0xE0) == 0xC0 ? 1 : (first & 0xF0) == 0xE0 ? 2 : 3;
+        if (remaining > 0 && index + static_cast<size_t>(remaining) <= utf8Text.size()) {
+            codepoint = first & ((1u << (7 - remaining - 1)) - 1);
+            for (int i = 0; i < remaining; ++i) codepoint = (codepoint << 6) | (static_cast<uint8_t>(utf8Text[index++]) & 0x3Fu);
+        }
+        if (const auto glyph = m_glyphs.find(codepoint); glyph != m_glyphs.end()) width += glyph->second.advance * pixelHeight;
+    }
+    return width;
 }
 
 } // namespace Rowl::Render

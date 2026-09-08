@@ -1,0 +1,15 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:comp="using:RowlEngine.Editor.ViewModels.Components"
+             x:Class="RowlEngine.Editor.Views.Components.ScriptComponentView"
+             x:DataType="comp:ScriptComponentViewModel">
+  <Border Background="{DynamicResource CardBackground}" CornerRadius="6" Margin="0,4" Padding="10" BorderBrush="{DynamicResource CardBorderColor}" BorderThickness="1">
+    <StackPanel Spacing="6">
+      <TextBlock Text="📜 Lua Script" FontWeight="Bold" Foreground="{DynamicResource PrimaryText}" />
+      <TextBlock Text="Project-relative script path" FontSize="11" Foreground="{DynamicResource MutedText}" />
+      <TextBox Text="{Binding ScriptPath}" Watermark="scripts/example.lua" />
+      <TextBlock Text="Inline code (optional)" FontSize="11" Foreground="{DynamicResource MutedText}" />
+      <TextBox Text="{Binding InlineCode}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="72" Watermark="function on_enter() end" />
+    </StackPanel>
+  </Border>
+</UserControl>

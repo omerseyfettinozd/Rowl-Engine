@@ -14,6 +14,50 @@ namespace {
 constexpr uintmax_t kMaxEncodedAudioBytes = 64ULL * 1024 * 1024;
 constexpr Uint32 kMaxDecodedAudioBytes = 64U * 1024 * 1024;
 
+void applyDspToFloatPcm(float* samples, size_t sampleCount, int channels,
+                        int sampleRate, DSPFilterType filter) {
+    if (!samples || sampleCount == 0 || channels <= 0 || sampleRate <= 0 ||
+        filter == DSPFilterType::Normal) {
+        return;
+    }
+
+    const size_t channelCount = static_cast<size_t>(channels);
+    std::vector<float> lowPass(channelCount, 0.0f);
+    std::vector<float> highPass(channelCount, 0.0f);
+    constexpr float kTelephoneLowPassAlpha = 0.36f;
+    constexpr float kUnderwaterLowPassAlpha = 0.10f;
+
+    for (size_t sample = 0; sample < sampleCount; ++sample) {
+        const size_t channel = sample % channelCount;
+        const float input = samples[sample];
+        switch (filter) {
+            case DSPFilterType::Telephone: {
+                // Cascaded high/low-pass filtering keeps only the speech band.
+                lowPass[channel] += kTelephoneLowPassAlpha * (input - lowPass[channel]);
+                const float hp = lowPass[channel] - highPass[channel];
+                highPass[channel] = lowPass[channel];
+                samples[sample] = std::clamp(hp * 2.1f, -1.0f, 1.0f);
+                break;
+            }
+            case DSPFilterType::UnderwaterLowPass:
+                lowPass[channel] += kUnderwaterLowPassAlpha * (input - lowPass[channel]);
+                samples[sample] = lowPass[channel];
+                break;
+            case DSPFilterType::CaveReverb: {
+                // A short feedback tap is intentionally bounded below one second,
+                // so an untrusted clip can never allocate an unbounded delay line.
+                const size_t delayFrames = static_cast<size_t>(std::max(1, sampleRate / 8));
+                const size_t delaySamples = delayFrames * channelCount;
+                const float delayed = sample >= delaySamples ? samples[sample - delaySamples] : 0.0f;
+                samples[sample] = std::clamp(input + delayed * 0.28f, -1.0f, 1.0f);
+                break;
+            }
+            case DSPFilterType::Normal:
+                break;
+        }
+    }
+}
+
 } // namespace
 
 AudioEngine::AudioEngine() = default;
@@ -35,6 +79,9 @@ bool AudioEngine::initialize() {
     m_activeFilter = DSPFilterType::Normal;
     m_isDuckingActive = false;
     m_currentBgmPath = "";
+    m_lastError.clear();
+    m_isBgmPlaying = false;
+    m_isVoicePlaying = false;
     m_deviceAvailable = false;
 
     // Initialize SDL3 Audio subsystem
@@ -69,6 +116,8 @@ bool AudioEngine::initialize() {
 void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType channel, DSPFilterType filter) {
     if (!m_initialized || assetPath.empty()) return;
 
+    m_lastError.clear();
+
     std::string channelName = (channel == AudioChannelType::Bgm) ? "BGM (Streaming)" :
                               (channel == AudioChannelType::Voice) ? "Voice" : "SFX (Memory Pool)";
 
@@ -77,8 +126,14 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
     if (!m_deviceAvailable) {
         // Keep intended BGM state in headless/silent environments. This lets
         // scene transitions remain deterministic even when no device exists.
-        if (channel == AudioChannelType::Bgm) m_currentBgmPath = assetPath;
-        if (channel == AudioChannelType::Voice) triggerVoiceDucking(true);
+        if (channel == AudioChannelType::Bgm) {
+            m_currentBgmPath = assetPath;
+            m_isBgmPlaying = true;
+        }
+        if (channel == AudioChannelType::Voice) {
+            m_isVoicePlaying = true;
+            triggerVoiceDucking(true);
+        }
         if (filter != DSPFilterType::Normal) applyDspFilter(filter);
         ROWL_LOG_INFO("[AudioEngine] Audio play registered (silent fallback): " + assetPath);
         return;
@@ -122,32 +177,58 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
             SDL_free(audioBuf);
             return;
         }
+        SDL_AudioSpec floatSpec{};
+        floatSpec.format = SDL_AUDIO_F32;
+        floatSpec.channels = spec.channels;
+        floatSpec.freq = spec.freq;
+        Uint8* floatBuffer = nullptr;
+        int floatLength = 0;
+        if (!SDL_ConvertAudioSamples(&spec, audioBuf, static_cast<int>(audioLen),
+                                     &floatSpec, &floatBuffer, &floatLength) ||
+            !floatBuffer || floatLength <= 0) {
+            m_lastError = "Unable to convert decoded audio to float PCM: " + std::string(SDL_GetError());
+            ROWL_LOG_ERROR("[AudioEngine] " + m_lastError);
+            SDL_free(audioBuf);
+            return;
+        }
+        auto* samples = reinterpret_cast<float*>(floatBuffer);
+        applyDspToFloatPcm(samples, static_cast<size_t>(floatLength) / sizeof(float),
+                           floatSpec.channels, floatSpec.freq, filter);
+
         SDL_AudioStream* targetStream = (channel == AudioChannelType::Bgm) ? m_bgmStream : m_sfxStream;
         if (targetStream) {
             if (channel == AudioChannelType::Bgm) {
                 SDL_ClearAudioStream(m_bgmStream);
             }
-            if (!SDL_SetAudioStreamFormat(targetStream, &spec, nullptr) ||
-                !SDL_PutAudioStreamData(targetStream, audioBuf, static_cast<int>(audioLen))) {
+            if (!SDL_SetAudioStreamFormat(targetStream, &floatSpec, nullptr) ||
+                !SDL_PutAudioStreamData(targetStream, floatBuffer, floatLength)) {
                 ROWL_LOG_ERROR("[AudioEngine] Failed to queue decoded audio: " + std::string(SDL_GetError()));
+                m_lastError = "Unable to queue decoded audio: " + std::string(SDL_GetError());
+                SDL_free(floatBuffer);
                 SDL_free(audioBuf);
                 return;
             }
             // Device-facing effects are transactional with decode/queue: a
             // missing voice must not leave BGM ducked, and a failed filtered
             // SFX must not alter the active DSP state.
-            if (channel == AudioChannelType::Voice) triggerVoiceDucking(true);
-            if (filter != DSPFilterType::Normal) applyDspFilter(filter);
+            if (channel == AudioChannelType::Voice) {
+                m_isVoicePlaying = true;
+                triggerVoiceDucking(true);
+            }
+            applyDspFilter(filter);
             if (channel == AudioChannelType::Bgm) {
-                m_bgmData.assign(audioBuf, audioBuf + audioLen);
+                m_bgmData.assign(floatBuffer, floatBuffer + floatLength);
                 m_currentBgmPath = assetPath;
+                m_isBgmPlaying = true;
             }
             SDL_ResumeAudioStreamDevice(targetStream);
-            ROWL_LOG_INFO("[AudioEngine] Playback started: " + assetPath + " (" + std::to_string(audioLen) + " bytes)");
+            ROWL_LOG_INFO("[AudioEngine] Playback started: " + assetPath + " (" + std::to_string(floatLength) + " PCM bytes)");
         }
+        SDL_free(floatBuffer);
         SDL_free(audioBuf);
     } else {
-        ROWL_LOG_WARN("[AudioEngine] Audio file could not be loaded: '" + assetPath + "' (WAV format required)");
+        m_lastError = "Audio file could not be decoded (WAV is currently supported): " + assetPath;
+        ROWL_LOG_WARN("[AudioEngine] " + m_lastError);
     }
 }
 
@@ -158,6 +239,7 @@ void AudioEngine::stopBgm() {
     }
     m_currentBgmPath = "";
     m_bgmData.clear();
+    m_isBgmPlaying = false;
     ROWL_LOG_INFO("[AudioEngine] BGM stopped.");
 }
 
@@ -225,13 +307,20 @@ void AudioEngine::applyDspFilter(DSPFilterType filter) {
 }
 
 void AudioEngine::update() {
-    if (!m_initialized || !m_deviceAvailable || !m_bgmStream || m_bgmData.empty() || !m_bgmLoop) {
+    if (!m_initialized || !m_deviceAvailable) {
         return;
     }
-    int available = SDL_GetAudioStreamAvailable(m_bgmStream);
-    if (available <= 0) {
-        SDL_PutAudioStreamData(m_bgmStream, m_bgmData.data(), static_cast<int>(m_bgmData.size()));
-        SDL_ResumeAudioStreamDevice(m_bgmStream);
+    if (m_bgmStream && !m_bgmData.empty() && m_bgmLoop) {
+        int available = SDL_GetAudioStreamAvailable(m_bgmStream);
+        if (available <= 0) {
+            SDL_PutAudioStreamData(m_bgmStream, m_bgmData.data(), static_cast<int>(m_bgmData.size()));
+            SDL_ResumeAudioStreamDevice(m_bgmStream);
+        }
+    }
+
+    if (m_sfxStream && m_isVoicePlaying && SDL_GetAudioStreamQueued(m_sfxStream) <= 0) {
+        m_isVoicePlaying = false;
+        triggerVoiceDucking(false);
     }
 }
 

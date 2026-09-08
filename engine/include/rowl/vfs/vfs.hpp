@@ -7,6 +7,7 @@
 #include <utility>
 #include <mutex>
 #include <filesystem>
+#include <istream>
 
 namespace Rowl::VFS {
 
@@ -15,6 +16,7 @@ public:
     virtual ~IDataSource() = default;
     virtual bool exists(const std::string& path) = 0;
     virtual std::vector<uint8_t> read(const std::string& path) = 0;
+    virtual std::unique_ptr<std::istream> openStream(const std::string& path) = 0;
     virtual std::string getSourceName() const = 0;
 };
 
@@ -25,6 +27,7 @@ public:
 
     bool exists(const std::string& path) override;
     std::vector<uint8_t> read(const std::string& path) override;
+    std::unique_ptr<std::istream> openStream(const std::string& path) override;
     std::string getSourceName() const override { return "LooseDirectorySource [" + m_physicalPath + "]"; }
     const std::string& getPhysicalPath() const { return m_physicalPath; }
 
@@ -48,6 +51,8 @@ public:
 
     bool exists(const std::string& vfsPath);
     std::vector<uint8_t> readBytes(const std::string& vfsPath);
+    /// Opens a seekable, read-only asset stream. Callers own the returned stream.
+    std::unique_ptr<std::istream> openReadStream(const std::string& vfsPath);
     std::string readString(const std::string& vfsPath);
     std::vector<std::pair<std::string, std::shared_ptr<IDataSource>>> getMountPoints() const {
         std::lock_guard<std::recursive_mutex> lock(m_mutex);

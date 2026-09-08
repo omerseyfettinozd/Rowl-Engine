@@ -146,6 +146,18 @@ namespace RowlEngine.Editor.Native
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
         internal static extern void RowlEngine_TriggerVoiceDucking(IntPtr handle, int isVoiceActive);
 
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern int RowlEngine_IsBgmPlaying(IntPtr handle);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern int RowlEngine_IsVoicePlaying(IntPtr handle);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern int RowlEngine_GetActiveDspFilter(IntPtr handle);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern IntPtr RowlEngine_GetLastAudioError(IntPtr handle);
+
         // ── Save / Load Slots & History Rewind ────────────────────────────────
 
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
