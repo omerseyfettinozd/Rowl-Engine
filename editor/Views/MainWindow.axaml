@@ -10,6 +10,7 @@
         x:DataType="vm:MainWindowViewModel"
         Title="Rowl Engine Editor"
         Width="1600" Height="900"
+        MinWidth="1100" MinHeight="700"
         WindowStartupLocation="CenterScreen"
         Background="{DynamicResource AppBackground}">
 
@@ -199,7 +200,7 @@
         <!-- ══════════════════════════════════════════════════════════════════
              MAIN WORKSPACE
              ══════════════════════════════════════════════════════════════════ -->
-        <Grid Grid.Row="1" ColumnDefinitions="280, 6, *, 6, 320">
+        <Grid Grid.Row="1" ColumnDefinitions="240, 6, *, 6, 280">
 
             <!-- LEFT: Hierarchy Panel -->
             <Grid Grid.Column="0" IsVisible="{Binding IsHierarchyPanelVisible}">
@@ -208,7 +209,7 @@
             <GridSplitter Grid.Column="1" Background="{DynamicResource BorderColor}" ResizeDirection="Columns" Width="6"/>
 
             <!-- CENTER workspace -->
-            <Grid Grid.Column="2" RowDefinitions="*, 6, 220">
+            <Grid Grid.Column="2" MinWidth="520" RowDefinitions="*, 6, 180">
 
                 <Grid Grid.Row="0" ClipToBounds="True">
 
@@ -258,7 +259,7 @@
                 <GridSplitter Grid.Row="1" Background="{DynamicResource BorderColor}" ResizeDirection="Rows" Height="6"/>
 
                 <!-- Bottom: Log + Assets (Tabbed) -->
-                <Grid Grid.Row="2" IsVisible="{Binding IsBottomPanelVisible}">
+                <Grid Grid.Row="2" MinHeight="140" IsVisible="{Binding IsBottomPanelVisible}">
                     <TabControl SelectedIndex="{Binding BottomPanelActiveTab}"
                                 Background="{DynamicResource PanelBackground}">
                         <TabControl.Styles>
