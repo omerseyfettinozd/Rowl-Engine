@@ -20,3 +20,5 @@ Kullanıcı "Obsidian", "İkinci Beyin", "hafıza", "dökümanlar" veya "notlar"
 - **Editör Katmanı:** .NET 10, Avalonia 11 UI framework, CommunityToolkit.Mvvm.
 - **Köprü (Bridge):** `RowlEngineCore` paylaşımlı kütüphanesi ile P/Invoke (`c_api.h`).
 - **Bellek Güvenliği:** Ham işaretçiler yerine modern RAII ve akıllı işaretçiler (`std::unique_ptr`, `std::shared_ptr`).
+- **Git & GitHub Standardı:** Tüm commit ve push işlemlerinde sistemin hazır SSH anahtarı (`git@github.com:...`) ve doğrulanmış `Ömer Seyfettin <omerseyfettin.ozd@gmail.com>` kimliği kullanılır. Asla yerel e-posta (`.local` vb.) tanımlanmaz veya HTTP token aranmaz; doğrudan `git commit` ve `git push origin main` yapılır.
+
