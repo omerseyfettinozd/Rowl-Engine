@@ -439,7 +439,13 @@ void test_vfs_security() {
         std::cerr << "VFS allowed a parent-directory traversal" << std::endl;
         exit(1);
     }
-    TEST_PASS("Loose-directory mounts reject parent traversal");
+    std::error_code symlinkError;
+    std::filesystem::create_symlink(testRoot / "outside.txt", mountRoot / "linked-outside.txt", symlinkError);
+    if (symlinkError || source.exists("linked-outside.txt") || !source.read("linked-outside.txt").empty()) {
+        std::cerr << "VFS allowed a symlink to escape its mount root" << std::endl;
+        exit(1);
+    }
+    TEST_PASS("Loose-directory mounts reject parent traversal and symlink escapes");
 
     const auto oversizedLooseAsset = mountRoot / "oversized.bin";
     std::ofstream(oversizedLooseAsset, std::ios::binary).close();

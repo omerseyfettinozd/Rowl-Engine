@@ -14,7 +14,7 @@ namespace {
 
 constexpr uintmax_t kMaxLooseAssetBytes = 128ULL * 1024 * 1024;
 
-std::optional<fs::path> resolveInsideRoot(const std::string& physicalRoot,
+std::optional<fs::path> resolveInsideRoot(const fs::path& canonicalRoot,
                                           const std::string& relativePath) {
     if (relativePath.empty() || relativePath.find('\0') != std::string::npos) return std::nullopt;
 
@@ -27,12 +27,11 @@ std::optional<fs::path> resolveInsideRoot(const std::string& physicalRoot,
     }
 
     std::error_code error;
-    fs::path root = fs::weakly_canonical(fs::path(physicalRoot), error);
-    if (error) return std::nullopt;
-    fs::path candidate = fs::weakly_canonical(root / requested, error);
+    if (canonicalRoot.empty()) return std::nullopt;
+    fs::path candidate = fs::weakly_canonical(canonicalRoot / requested, error);
     if (error) return std::nullopt;
 
-    fs::path relative = candidate.lexically_relative(root);
+    fs::path relative = candidate.lexically_relative(canonicalRoot);
     if (relative.empty() || relative.is_absolute()) return std::nullopt;
     const auto first = relative.begin();
     if (first != relative.end() && *first == "..") return std::nullopt;
@@ -42,15 +41,22 @@ std::optional<fs::path> resolveInsideRoot(const std::string& physicalRoot,
 } // namespace
 
 LooseDirectorySource::LooseDirectorySource(std::string physicalPath)
-    : m_physicalPath(std::move(physicalPath)) {}
+    : m_physicalPath(std::move(physicalPath)) {
+    std::error_code error;
+    m_canonicalRoot = fs::weakly_canonical(m_physicalPath, error);
+    if (error) {
+        m_canonicalRoot.clear();
+        ROWL_LOG_WARN("VFS could not canonicalize mount root: " + m_physicalPath);
+    }
+}
 
 bool LooseDirectorySource::exists(const std::string& path) {
-    const auto fullPath = resolveInsideRoot(m_physicalPath, path);
+    const auto fullPath = resolveInsideRoot(m_canonicalRoot, path);
     return fullPath && fs::exists(*fullPath) && fs::is_regular_file(*fullPath);
 }
 
 std::vector<uint8_t> LooseDirectorySource::read(const std::string& path) {
-    const auto fullPath = resolveInsideRoot(m_physicalPath, path);
+    const auto fullPath = resolveInsideRoot(m_canonicalRoot, path);
     if (!fullPath) {
         ROWL_LOG_WARN("VFS rejected path outside mount root: " + path);
         return {};

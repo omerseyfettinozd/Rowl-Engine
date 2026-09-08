@@ -6,6 +6,7 @@
 #include <memory>
 #include <utility>
 #include <mutex>
+#include <filesystem>
 
 namespace Rowl::VFS {
 
@@ -29,6 +30,10 @@ public:
 
 private:
     std::string m_physicalPath;
+    // The mount root cannot change for the lifetime of a data source. Keep
+    // its canonical form so every asset lookup only needs to validate the
+    // requested child path (including its symlink boundary).
+    std::filesystem::path m_canonicalRoot;
 };
 
 class VFSManager {
