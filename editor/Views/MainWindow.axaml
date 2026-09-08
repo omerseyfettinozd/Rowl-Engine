@@ -39,10 +39,6 @@
                                     <MenuItem Header="🔍 Node Inspector" Command="{Binding ShowPanelCommand}" CommandParameter="Inspector"/>
                                     <MenuItem Header="📝 Output Log" Command="{Binding ShowPanelCommand}" CommandParameter="Log"/>
                                     <MenuItem Header="📁 Project Assets" Command="{Binding ShowPanelCommand}" CommandParameter="Assets"/>
-                                    <Separator/>
-                                    <MenuItem Header="🕸️ Node Graph" Command="{Binding ShowPanelCommand}" CommandParameter="NodeGraph"/>
-                                    <MenuItem Header="🎬 Edit Frame" Command="{Binding ShowPanelCommand}" CommandParameter="Preview"/>
-                                    <MenuItem Header="🎮 Game" Command="{Binding ShowPanelCommand}" CommandParameter="EnginePreview"/>
                                 </MenuItem>
                             </Menu>
                         </StackPanel>
