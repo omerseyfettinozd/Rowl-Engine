@@ -585,6 +585,33 @@ void test_vfs_security() {
     }
     TEST_PASS("Package reader validates paths, compression metadata, and payload bounds");
 
+    // Keep a small deterministic corpus of malformed binary inputs in the
+    // regular test gate. These are deliberately not saved as fixtures: the
+    // generator makes every run repeatable while covering many file lengths
+    // and byte arrangements that hand-written examples tend to miss.
+    uint32_t packageFuzzState = 0xC0FFEE42u;
+    const auto nextPackageFuzzByte = [&packageFuzzState] {
+        packageFuzzState = packageFuzzState * 1664525u + 1013904223u;
+        return static_cast<uint8_t>(packageFuzzState >> 24u);
+    };
+    for (uint32_t caseIndex = 0; caseIndex < 128; ++caseIndex) {
+        const auto fuzzPath = testRoot / ("fuzz_" + std::to_string(caseIndex) + ".rowlpkg");
+        std::vector<uint8_t> bytes(1 + (nextPackageFuzzByte() % 512));
+        for (auto& byte : bytes) byte = nextPackageFuzzByte();
+        // A deliberately broken magic value makes invalidity an invariant;
+        // the remaining bytes still exercise short and arbitrary-file paths.
+        bytes.front() = 'X';
+        std::ofstream output(fuzzPath, std::ios::binary);
+        output.write(reinterpret_cast<const char*>(bytes.data()),
+                     static_cast<std::streamsize>(bytes.size()));
+        output.close();
+        if (Rowl::VFS::RowlPkgDataSource(fuzzPath.string()).isValid()) {
+            std::cerr << "Malformed package fuzz input was accepted: case " << caseIndex << std::endl;
+            exit(1);
+        }
+    }
+    TEST_PASS("Deterministic malformed-package fuzz corpus is safely rejected");
+
     // A selected project is an asset boundary: source files and project
     // metadata must not become readable merely because they share its root.
     const auto isolatedProject = testRoot / "isolated_project";
@@ -736,6 +763,32 @@ void test_native_c_api() {
     }
     TEST_PASS("C-API Component Value-Type Transaction Rollback");
 
+    // Start from a known-good editor scene, then mutate it and append an
+    // invalid trailing byte. The suffix guarantees each generated payload is
+    // invalid while the mutations cover different parser and schema paths.
+    const std::string componentFuzzSeed = compJson;
+    uint32_t componentFuzzState = 0xA11CE55u;
+    const auto nextComponentFuzzByte = [&componentFuzzState] {
+        componentFuzzState = componentFuzzState * 1103515245u + 12345u;
+        return static_cast<char>('!' + ((componentFuzzState >> 16u) % 94u));
+    };
+    for (uint32_t caseIndex = 0; caseIndex < 96; ++caseIndex) {
+        std::string fuzzed = componentFuzzSeed;
+        const uint32_t mutationCount = 1 + (caseIndex % 6);
+        for (uint32_t mutation = 0; mutation < mutationCount; ++mutation) {
+            const size_t position = (static_cast<size_t>(caseIndex) * 37u + mutation * 53u) % fuzzed.size();
+            fuzzed[position] = nextComponentFuzzByte();
+        }
+        fuzzed.push_back('#');
+        RowlEngine_UpdateSceneFromJson(handle, fuzzed.c_str());
+        if (std::string(RowlEngine_GetSpeaker(handle)) != "Alice" ||
+            std::string(RowlEngine_GetDialogue(handle)).empty()) {
+            std::cerr << "Malformed component fuzz input replaced the active scene: case " << caseIndex << std::endl;
+            exit(1);
+        }
+    }
+    TEST_PASS("Deterministic malformed-component fuzz corpus preserves active scene");
+
     // Audio commands are device side effects, so a malformed component that
     // follows an audio component must not partially apply its filter.
     const auto* audioBeforeRollback = Rowl::Core::Engine::instance().getAudio();
@@ -831,6 +884,33 @@ void test_native_c_api() {
         exit(1);
     }
     std::filesystem::remove(invalidGraphPath);
+
+    const std::string graphFuzzSeed = R"({"start_node_id":101,"nodes":[{"id":101,"speaker":"Replacement"}]})";
+    uint32_t graphFuzzState = 0x51A7E123u;
+    const auto nextGraphFuzzByte = [&graphFuzzState] {
+        graphFuzzState = graphFuzzState * 22695477u + 1u;
+        return static_cast<char>('!' + ((graphFuzzState >> 16u) % 94u));
+    };
+    const auto graphFuzzPath = std::filesystem::temp_directory_path() / "rowl_graph_fuzz_test.json";
+    for (uint32_t caseIndex = 0; caseIndex < 64; ++caseIndex) {
+        std::string fuzzed = graphFuzzSeed;
+        for (uint32_t mutation = 0; mutation < 1 + (caseIndex % 5); ++mutation) {
+            const size_t position = (static_cast<size_t>(caseIndex) * 29u + mutation * 41u) % fuzzed.size();
+            fuzzed[position] = nextGraphFuzzByte();
+        }
+        fuzzed.push_back('#');
+        std::ofstream graph(graphFuzzPath, std::ios::binary);
+        graph.write(fuzzed.data(), static_cast<std::streamsize>(fuzzed.size()));
+        graph.close();
+        RowlEngine_LoadStoryGraph(handle, graphFuzzPath.string().c_str());
+        if (RowlEngine_GetCurrentNodeId(handle) != 103 ||
+            std::string(RowlEngine_GetSpeaker(handle)) != "Guide") {
+            std::cerr << "Malformed graph fuzz input replaced the active story: case " << caseIndex << std::endl;
+            exit(1);
+        }
+    }
+    std::filesystem::remove(graphFuzzPath);
+    TEST_PASS("Deterministic malformed-graph fuzz corpus preserves active story");
 
     const auto overCountGraphPath = std::filesystem::temp_directory_path() / "rowl_overcount_graph_test.json";
     {
