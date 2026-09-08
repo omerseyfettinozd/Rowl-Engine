@@ -291,11 +291,39 @@ namespace RowlEngine.Editor.ViewModels
         /// </summary>
         public bool IsBottomPanelVisible => IsLogPanelVisible || IsAssetsPanelVisible;
 
+        public GridLength HierarchyPanelWidth => IsHierarchyPanelVisible
+            ? new GridLength(240)
+            : new GridLength(0);
+
+        public GridLength HierarchySplitterWidth => IsHierarchyPanelVisible
+            ? new GridLength(6)
+            : new GridLength(0);
+
+        public GridLength InspectorPanelWidth => IsInspectorPanelVisible
+            ? new GridLength(280)
+            : new GridLength(0);
+
+        public GridLength InspectorSplitterWidth => IsInspectorPanelVisible
+            ? new GridLength(6)
+            : new GridLength(0);
+
         partial void OnIsAssetsPanelVisibleChanged(bool value) =>
             OnPropertyChanged(nameof(IsBottomPanelVisible));
 
         partial void OnIsLogPanelVisibleChanged(bool value) =>
             OnPropertyChanged(nameof(IsBottomPanelVisible));
+
+        partial void OnIsHierarchyPanelVisibleChanged(bool value)
+        {
+            OnPropertyChanged(nameof(HierarchyPanelWidth));
+            OnPropertyChanged(nameof(HierarchySplitterWidth));
+        }
+
+        partial void OnIsInspectorPanelVisibleChanged(bool value)
+        {
+            OnPropertyChanged(nameof(InspectorPanelWidth));
+            OnPropertyChanged(nameof(InspectorSplitterWidth));
+        }
 
         /// <summary>
         /// Active tab index in the bottom panel: 0 = Log, 1 = Assets

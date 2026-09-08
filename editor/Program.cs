@@ -142,6 +142,22 @@ namespace RowlEngine.Editor
             if (!mainVm.IsDarkMode) throw new Exception("Theme toggle should switch back to Dark mode");
             Console.WriteLine("  ✅ [PASS] Theme toggle (Dark <-> Light/Orange) verified");
 
+            // Hidden side panels must give their entire column, including the
+            // splitter, back to the central workspace.
+            mainVm.ShowPanel("Hierarchy");
+            if (mainVm.HierarchyPanelWidth.Value != 0 || mainVm.HierarchySplitterWidth.Value != 0)
+                throw new Exception("Hidden Hierarchy still reserved workspace width");
+            mainVm.ShowPanel("Hierarchy");
+            if (mainVm.HierarchyPanelWidth.Value != 240 || mainVm.HierarchySplitterWidth.Value != 6)
+                throw new Exception("Hierarchy did not restore its workspace width");
+            mainVm.ShowPanel("Inspector");
+            if (mainVm.InspectorPanelWidth.Value != 0 || mainVm.InspectorSplitterWidth.Value != 0)
+                throw new Exception("Hidden Inspector still reserved workspace width");
+            mainVm.ShowPanel("Inspector");
+            if (mainVm.InspectorPanelWidth.Value != 280 || mainVm.InspectorSplitterWidth.Value != 6)
+                throw new Exception("Inspector did not restore its workspace width");
+            Console.WriteLine("  ✅ [PASS] Hidden side panels release workspace width");
+
             // Bottom-panel tabs have independent visibility. Closing the log
             // must leave Assets available instead of collapsing the entire
             // area behind it.
