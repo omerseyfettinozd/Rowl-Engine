@@ -16,6 +16,7 @@ namespace RowlEngine.Editor.ViewModels
     public partial class HierarchyViewModel : ObservableObject
     {
         public MainWindowViewModel MainViewModel { get; }
+        private NodeViewModel? _observedNode;
 
         public HierarchyViewModel(MainWindowViewModel main)
         {
@@ -43,6 +44,7 @@ namespace RowlEngine.Editor.ViewModels
         public string CurrentNodeTitle => CurrentNode?.Title ?? "No Node Selected";
         public string CurrentNodeId => CurrentNode != null ? $"Node #{CurrentNode.Id}" : "—";
         public bool HasCurrentNode => CurrentNode != null;
+        public bool HasObjects => CurrentNode?.Objects.Count > 0;
 
         // ── Create Object Menu ──
 
@@ -148,13 +150,33 @@ namespace RowlEngine.Editor.ViewModels
             {
                 IsCreateObjectMenuOpen = false;
 
+                if (_observedNode != null)
+                {
+                    _observedNode.PropertyChanged -= OnCurrentNodePropertyChanged;
+                }
+
+                _observedNode = CurrentNode;
+                if (_observedNode != null)
+                {
+                    _observedNode.PropertyChanged += OnCurrentNodePropertyChanged;
+                }
+
                 OnPropertyChanged(nameof(CurrentNode));
                 OnPropertyChanged(nameof(CurrentNodeTitle));
                 OnPropertyChanged(nameof(CurrentNodeId));
                 OnPropertyChanged(nameof(HasCurrentNode));
+                OnPropertyChanged(nameof(HasObjects));
 
                 // Auto-select first object or null
                 SelectedObject = CurrentNode?.Objects.FirstOrDefault();
+            }
+        }
+
+        private void OnCurrentNodePropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(NodeViewModel.Objects))
+            {
+                OnPropertyChanged(nameof(HasObjects));
             }
         }
     }

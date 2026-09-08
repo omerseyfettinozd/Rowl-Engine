@@ -138,7 +138,7 @@
                 </ListBox>
 
                 <!-- Placeholder when node has no objects -->
-                <StackPanel IsVisible="{Binding SelectedNode.Objects.Count, Converter={x:Static ObjectConverters.IsNull}}"
+                <StackPanel IsVisible="{Binding !HierarchyViewModel.HasObjects}"
                             VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="6" Margin="16">
                     <TextBlock Text="📦" FontSize="28" HorizontalAlignment="Center" Foreground="{DynamicResource MutedText}"/>
                     <TextBlock Text="No GameObjects in this frame." FontSize="11" FontStyle="Italic"

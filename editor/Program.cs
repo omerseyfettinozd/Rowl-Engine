@@ -115,6 +115,20 @@ namespace RowlEngine.Editor
             }
             Console.WriteLine("  ✅ [PASS] Component addition, proxy sync, and Trash Can (RemoveSelfCommand) verified");
 
+            // Hierarchy must expose its empty state when the active node has no
+            // GameObjects, then update immediately as objects are added/removed.
+            var emptyHierarchyNode = new NodeViewModel(102, "Empty Hierarchy", 0, 0, bare: true);
+            mainVm.SelectedNode = emptyHierarchyNode;
+            if (mainVm.HierarchyViewModel.HasObjects)
+                throw new Exception("Hierarchy reported objects for an empty node");
+            var hierarchyObject = emptyHierarchyNode.CreateObject("Temporary Object");
+            if (!mainVm.HierarchyViewModel.HasObjects)
+                throw new Exception("Hierarchy empty state did not update after object creation");
+            emptyHierarchyNode.RemoveObject(hierarchyObject);
+            if (mainVm.HierarchyViewModel.HasObjects)
+                throw new Exception("Hierarchy empty state did not update after object deletion");
+            Console.WriteLine("  ✅ [PASS] Hierarchy empty state tracks GameObject creation and deletion");
+
             // Test 2: Theme System (Light & Dark Mode)
             Console.WriteLine("\n📌 [Test 2]: Dynamic Theming (Light/Orange-White & Dark/Black-White)...");
             if (!mainVm.IsDarkMode) throw new Exception("Default theme should be Dark mode");
