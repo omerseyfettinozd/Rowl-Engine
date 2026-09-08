@@ -7,8 +7,36 @@
              x:Class="RowlEngine.Editor.Views.Panels.ProjectAssetsView"
              x:DataType="vm:MainWindowViewModel">
     <Border Background="{DynamicResource PanelBackground}">
-        <Grid RowDefinitions="*">
-            <TreeView Grid.Row="0" 
+        <Grid RowDefinitions="Auto, *">
+            <Border Grid.Row="0" Background="{DynamicResource SurfaceBackground}"
+                    BorderBrush="{DynamicResource BorderColor}" BorderThickness="0,0,0,1"
+                    Padding="8,6">
+                <DockPanel LastChildFill="False">
+                    <TextBlock Text="Project Assets" FontWeight="Bold" FontSize="12"
+                               Foreground="{DynamicResource PrimaryText}" VerticalAlignment="Center"/>
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="4">
+                        <Button Content="New folder"
+                                ToolTip.Tip="Create a folder under the selected asset location"
+                                Command="{Binding AssetBrowserViewModel.CreateFolderCommand}"
+                                Background="Transparent" Foreground="{DynamicResource PrimaryText}"
+                                BorderBrush="{DynamicResource BorderColor}" BorderThickness="1"
+                                CornerRadius="4" Padding="6,3" FontSize="10"/>
+                        <Button Content="Import"
+                                ToolTip.Tip="Import a file into the project Assets folder"
+                                Command="{Binding ImportAssetCommand}"
+                                Background="{DynamicResource AccentButtonBg}" Foreground="White"
+                                CornerRadius="4" Padding="6,3" FontSize="10"/>
+                        <Button Content="↻"
+                                ToolTip.Tip="Refresh the asset list"
+                                Command="{Binding AssetBrowserViewModel.RefreshAssetsCommand}"
+                                Background="Transparent" Foreground="{DynamicResource PrimaryText}"
+                                BorderBrush="{DynamicResource BorderColor}" BorderThickness="1"
+                                CornerRadius="4" Padding="6,3" FontSize="12"/>
+                    </StackPanel>
+                </DockPanel>
+            </Border>
+
+            <TreeView Grid.Row="1"
                       Background="Transparent" 
                       ItemsSource="{Binding AssetBrowserViewModel.AssetTree}" 
                       SelectedItem="{Binding AssetBrowserViewModel.SelectedNode, Mode=TwoWay}" 
