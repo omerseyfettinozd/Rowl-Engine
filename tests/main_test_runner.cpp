@@ -1348,6 +1348,16 @@ void test_native_performance_benchmarks() {
               << static_cast<uint64_t>(equivalentFps) << " FPS equivalent)" << std::endl;
     TEST_PASS("Offscreen Software Render Pipeline Latency Benchmark");
 
+    const auto cachedTextureCount = RowlEngine_GetTextureCacheTextureCount(handle);
+    const auto cachedTextureBytes = RowlEngine_GetTextureCacheBytes(handle);
+    if (cachedTextureCount == 0 || cachedTextureBytes == 0) {
+        std::cerr << "Texture cache telemetry did not observe the benchmark assets" << std::endl;
+        exit(1);
+    }
+    std::cout << "  ⚡ [BENCHMARK] Texture Cache: " << cachedTextureCount << " unique textures, "
+              << cachedTextureBytes << " RGBA bytes" << std::endl;
+    TEST_PASS("Texture Cache Memory Telemetry");
+
     RowlEngine_Shutdown(handle);
     RowlEngine_Destroy(handle);
 }

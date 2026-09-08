@@ -145,6 +145,12 @@ ROWL_API void RowlEngine_ResizeViewport(RowlEngineHandle handle,
  */
 ROWL_API const uint8_t* RowlEngine_GetPixelBuffer(RowlEngineHandle handle, uint32_t* outW, uint32_t* outH);
 
+/** Returns the number of distinct decoded textures currently held in the runtime cache. */
+ROWL_API uint32_t RowlEngine_GetTextureCacheTextureCount(RowlEngineHandle handle);
+
+/** Returns the estimated RGBA byte footprint of distinct cached textures. */
+ROWL_API uint64_t RowlEngine_GetTextureCacheBytes(RowlEngineHandle handle);
+
 /**
  * Sets the playback state (1 = playing, 0 = stopped/editing).
  */

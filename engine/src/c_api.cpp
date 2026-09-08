@@ -226,6 +226,22 @@ const uint8_t* RowlEngine_GetPixelBuffer(RowlEngineHandle handle, uint32_t* outW
     return invokeNoexcept<const uint8_t*>([&] { return toEngine(handle)->getPixelBuffer(outW, outH); }, nullptr);
 }
 
+uint32_t RowlEngine_GetTextureCacheTextureCount(RowlEngineHandle handle) {
+    if (!isLiveHandle(handle)) return 0;
+    return invokeNoexcept<uint32_t>([&] {
+        const auto* window = toEngine(handle)->getWindow();
+        return window ? static_cast<uint32_t>(window->getTextureCacheTextureCount()) : 0;
+    }, 0);
+}
+
+uint64_t RowlEngine_GetTextureCacheBytes(RowlEngineHandle handle) {
+    if (!isLiveHandle(handle)) return 0;
+    return invokeNoexcept<uint64_t>([&] {
+        const auto* window = toEngine(handle)->getWindow();
+        return window ? window->getTextureCacheBytes() : 0;
+    }, 0);
+}
+
 void RowlEngine_SetPlayState(RowlEngineHandle handle, int isPlaying) {
     if (!isLiveHandle(handle)) return;
     invokeNoexcept([&] { toEngine(handle)->setPlayState(isPlaying != 0); });
