@@ -27,8 +27,9 @@ jobs:
             --output /tmp/SDL3-3.2.30.tar.gz
           tar --extract --gzip --file /tmp/SDL3-3.2.30.tar.gz --directory /tmp
           cmake -S /tmp/SDL3-3.2.30 -B /tmp/SDL3-build -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release -DSDL_SHARED=ON -DSDL_STATIC=OFF -DSDL_TEST_LIBRARY=OFF
-          cmake --build /tmp/SDL3-build --parallel
+            -DCMAKE_BUILD_TYPE=Release -DSDL_SHARED=ON -DSDL_STATIC=OFF \
+            -DSDL_TEST_LIBRARY=OFF -DSDL_GPU=OFF
+          cmake --build /tmp/SDL3-build --parallel 2 --verbose
           sudo cmake --install /tmp/SDL3-build
 
       - name: Set up .NET
