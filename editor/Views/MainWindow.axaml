@@ -213,7 +213,12 @@
                           Background="{DynamicResource BorderColor}" ResizeDirection="Columns" Width="6"/>
 
             <!-- CENTER workspace -->
-            <Grid Grid.Column="2" MinWidth="520" RowDefinitions="*, 6, 180">
+            <Grid Grid.Column="2" MinWidth="520">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="{Binding BottomSplitterHeight}"/>
+                    <RowDefinition Height="{Binding BottomPanelHeight}"/>
+                </Grid.RowDefinitions>
 
                 <Grid Grid.Row="0" ClipToBounds="True">
 
@@ -260,7 +265,8 @@
                     </Border>
                 </Grid>
 
-                <GridSplitter Grid.Row="1" Background="{DynamicResource BorderColor}" ResizeDirection="Rows" Height="6"/>
+                <GridSplitter Grid.Row="1" IsVisible="{Binding IsBottomPanelVisible}"
+                              Background="{DynamicResource BorderColor}" ResizeDirection="Rows" Height="6"/>
 
                 <!-- Bottom: Log + Assets (Tabbed) -->
                 <Grid Grid.Row="2" MinHeight="140" IsVisible="{Binding IsBottomPanelVisible}">

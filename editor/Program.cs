@@ -170,10 +170,13 @@ namespace RowlEngine.Editor
             mainVm.ShowPanel("Assets");
             if (mainVm.IsBottomPanelVisible)
                 throw new Exception("Bottom workspace remained visible after both tabs were closed");
+            if (mainVm.BottomPanelHeight.Value != 0 || mainVm.BottomSplitterHeight.Value != 0)
+                throw new Exception("Hidden bottom workspace still reserved height");
             mainVm.ShowPanel("Assets");
-            if (!mainVm.IsBottomPanelVisible || mainVm.BottomPanelActiveTab != 1)
+            if (!mainVm.IsBottomPanelVisible || mainVm.BottomPanelActiveTab != 1 ||
+                mainVm.BottomPanelHeight.Value != 180 || mainVm.BottomSplitterHeight.Value != 6)
                 throw new Exception("Assets panel did not restore independently");
-            Console.WriteLine("  ✅ [PASS] Bottom Log and Assets panel visibility is independent");
+            Console.WriteLine("  ✅ [PASS] Bottom Log and Assets panel visibility is independent and reclaims height");
 
             mainVm.ShowPanel("SplitScreen");
             mainVm.ShowPanel("Preview");

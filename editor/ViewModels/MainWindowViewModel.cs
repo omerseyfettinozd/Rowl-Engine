@@ -291,6 +291,14 @@ namespace RowlEngine.Editor.ViewModels
         /// </summary>
         public bool IsBottomPanelVisible => IsLogPanelVisible || IsAssetsPanelVisible;
 
+        public GridLength BottomPanelHeight => IsBottomPanelVisible
+            ? new GridLength(180)
+            : new GridLength(0);
+
+        public GridLength BottomSplitterHeight => IsBottomPanelVisible
+            ? new GridLength(6)
+            : new GridLength(0);
+
         public GridLength HierarchyPanelWidth => IsHierarchyPanelVisible
             ? new GridLength(240)
             : new GridLength(0);
@@ -308,10 +316,17 @@ namespace RowlEngine.Editor.ViewModels
             : new GridLength(0);
 
         partial void OnIsAssetsPanelVisibleChanged(bool value) =>
-            OnPropertyChanged(nameof(IsBottomPanelVisible));
+            NotifyBottomPanelLayoutChanged();
 
         partial void OnIsLogPanelVisibleChanged(bool value) =>
+            NotifyBottomPanelLayoutChanged();
+
+        private void NotifyBottomPanelLayoutChanged()
+        {
             OnPropertyChanged(nameof(IsBottomPanelVisible));
+            OnPropertyChanged(nameof(BottomPanelHeight));
+            OnPropertyChanged(nameof(BottomSplitterHeight));
+        }
 
         partial void OnIsHierarchyPanelVisibleChanged(bool value)
         {
