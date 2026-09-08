@@ -15,8 +15,16 @@ import time
 import json
 import ctypes
 import random
+import argparse
 
-def run_stress_test():
+def positive_int(value):
+    parsed = int(value)
+    if parsed <= 0:
+        raise argparse.ArgumentTypeError("value must be greater than zero")
+    return parsed
+
+
+def run_stress_test(num_frames=5000, mutation_count=500):
     so_paths = [
         "build/lib/libRowlEngineCore.so",
         "../build/lib/libRowlEngineCore.so",
@@ -61,7 +69,6 @@ def run_stress_test():
     # --- Phase 1: High-Frequency Frame Rendering (5,000 frames) ---
     print("\n[Phase 1]: Rendering 5,000 offscreen frames (1920x1080)...")
     start_time = time.perf_counter()
-    num_frames = 5000
     for i in range(num_frames):
         lib.RowlEngine_Step(handle, 0.0166)
     elapsed = time.perf_counter() - start_time
@@ -70,10 +77,10 @@ def run_stress_test():
     print(f"  ✅ Completed {num_frames} frames in {elapsed:.3f}s ({fps:.1f} FPS, {avg_ms:.3f}ms per frame)")
 
     # --- Phase 2: Dynamic Scene Mutation (500 rapid mutations) ---
-    print("\n[Phase 2]: Stress testing 500 dynamic scene & multi-character mutations...")
+    print(f"\n[Phase 2]: Stress testing {mutation_count} dynamic scene & multi-character mutations...")
     mutation_start = time.perf_counter()
     dsp_filters = ["Normal", "Cave", "Telephone", "Underwater"]
-    for i in range(500):
+    for i in range(mutation_count):
         scene = [
             {"type": "speaker", "id": f"s_{i}", "enabled": True, "data": {"speaker": f"Character_{i%5}", "dialogue": f"Stress test dialogue line #{i} with live updates."}},
             {"type": "background", "id": f"bg_{i}", "enabled": True, "data": {"texture": "Woman.png", "x": 0, "y": 0, "width": 1920, "height": 1080, "scale": 1.0}},
@@ -87,7 +94,7 @@ def run_stress_test():
         lib.RowlEngine_Step(handle, 0.0166)
 
     mut_elapsed = time.perf_counter() - mutation_start
-    print(f"  ✅ Completed 500 dynamic mutations in {mut_elapsed:.3f}s ({(500/mut_elapsed):.1f} mutations/sec)")
+    print(f"  ✅ Completed {mutation_count} dynamic mutations in {mut_elapsed:.3f}s ({(mutation_count/mut_elapsed):.1f} mutations/sec)")
 
     # --- Phase 3: JSON Fuzzing & Crash Resilience ---
     print("\n[Phase 3]: JSON Fuzzing (Injecting malformed, corrupt & unexpected payloads)...")
@@ -128,4 +135,10 @@ def run_stress_test():
     print("=" * 60 + "\n")
 
 if __name__ == '__main__':
-    run_stress_test()
+    parser = argparse.ArgumentParser(description="Run Rowl Engine render, mutation, and malformed-JSON stress checks.")
+    parser.add_argument("--frames", type=positive_int, default=5000,
+                        help="Number of render frames to execute (default: 5000).")
+    parser.add_argument("--mutations", type=positive_int, default=500,
+                        help="Number of dynamic scene mutations to execute (default: 500).")
+    options = parser.parse_args()
+    run_stress_test(options.frames, options.mutations)
