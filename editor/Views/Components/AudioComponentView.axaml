@@ -38,6 +38,19 @@
                         <x:String>UnderwaterLowPass</x:String>
                     </ComboBox>
                 </StackPanel>
+                <StackPanel Spacing="4">
+                    <TextBlock Text="BGM Geçişi" FontSize="11" Foreground="{DynamicResource MutedText}"/>
+                    <ComboBox SelectedItem="{Binding BgmTransition}" HorizontalAlignment="Stretch" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}">
+                        <x:String>project_default</x:String>
+                        <x:String>instant</x:String>
+                        <x:String>fade</x:String>
+                        <x:String>crossfade</x:String>
+                    </ComboBox>
+                </StackPanel>
+                <StackPanel Spacing="4">
+                    <TextBlock Text="BGM Geçiş Süresi (sn, 0 = proje varsayılanı)" FontSize="11" Foreground="{DynamicResource MutedText}"/>
+                    <NumericUpDown Minimum="0" Maximum="60" Increment="0.1" Value="{Binding BgmTransitionDurationSeconds}"/>
+                </StackPanel>
             </StackPanel>
         </StackPanel>
     </Border>

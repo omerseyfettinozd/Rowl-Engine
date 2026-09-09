@@ -112,6 +112,16 @@ namespace RowlEngine.Editor
             if (!script.HasRuntimeError || script.Serialize().ContainsKey("runtime_error"))
                 throw new Exception("Script runtime feedback leaked into story serialization");
 
+            var audioSettings = node.GetComponent<AudioComponentViewModel>();
+            if (audioSettings == null) throw new Exception("Audio component missing");
+            audioSettings.BgmTransition = "crossfade";
+            audioSettings.BgmTransitionDurationSeconds = 2.5f;
+            var serializedAudio = audioSettings.Serialize();
+            var restoredAudio = new AudioComponentViewModel();
+            restoredAudio.Deserialize(serializedAudio.ToDictionary(pair => pair.Key, pair => (object?)pair.Value));
+            if (restoredAudio.BgmTransition != "crossfade" || restoredAudio.BgmTransitionDurationSeconds != 2.5f)
+                throw new Exception("Audio transition settings serialization mismatch");
+
             // Test Trash Can (RemoveSelfCommand)
             secondChar.RemoveSelfCommand.Execute(null);
             if (node.Components.Count(c => c is CharacterComponentViewModel) != 1)
