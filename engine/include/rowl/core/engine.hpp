@@ -208,6 +208,7 @@ public:
     const std::vector<ScriptRuntimeStatus>& getScriptRuntimeStatuses() const {
         return m_scriptRuntimeStatuses;
     }
+    const std::vector<Rowl::State::DialogueHistoryEntry>& getDialogueHistory() const;
 
 private:
     static Engine* s_instance;
@@ -254,6 +255,7 @@ private:
     bool m_hasActiveScript = false;
     std::vector<std::string> m_activeScriptModuleIds;
     std::vector<ScriptRuntimeStatus> m_scriptRuntimeStatuses;
+    uint64_t m_lastRecordedDialogueNodeId = 0;
 
     bool m_isRunning    = false;
     bool m_initialized  = false;
@@ -265,6 +267,7 @@ private:
     void activateScripts(const std::vector<nlohmann::json>& scripts);
     void markScriptStatus(const std::string& moduleId, const std::string& sourcePath,
                           const std::string& state, const std::string& error = {});
+    void recordActiveDialogueHistory();
 };
 
 } // namespace Rowl::Core

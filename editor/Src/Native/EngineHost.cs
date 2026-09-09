@@ -76,6 +76,9 @@ namespace RowlEngine.Editor.Native
         public IReadOnlyList<ScriptRuntimeDiagnostic> ScriptRuntimeDiagnostics { get; private set; }
             = Array.Empty<ScriptRuntimeDiagnostic>();
 
+        public IReadOnlyList<DialogueHistoryEntry> DialogueHistory { get; private set; }
+            = Array.Empty<DialogueHistoryEntry>();
+
         /// <summary>
         /// Sets the decoded texture-cache ceiling for this runtime. Use a
         /// device-profile budget after Initialize; the native layer clamps
@@ -154,6 +157,7 @@ namespace RowlEngine.Editor.Native
             if (dt < 0.0f)  dt = 0.0f;
 
             NativeBridge.RowlEngine_Step(_handle, dt);
+            RefreshDialogueHistory();
             UpdatePixelBuffer();
         }
 
@@ -299,6 +303,22 @@ namespace RowlEngine.Editor.Native
                 ScriptRuntimeDiagnostics = Array.Empty<ScriptRuntimeDiagnostic>();
             }
             OnPropertyChanged(nameof(ScriptRuntimeDiagnostics));
+        }
+
+        public void RefreshDialogueHistory()
+        {
+            if (_handle == IntPtr.Zero) return;
+            try
+            {
+                string json = NativeBridge.PtrToString(NativeBridge.RowlEngine_GetDialogueHistoryJson(_handle));
+                DialogueHistory = JsonSerializer.Deserialize<List<DialogueHistoryEntry>>(json)
+                    ?? new List<DialogueHistoryEntry>();
+            }
+            catch (JsonException)
+            {
+                DialogueHistory = Array.Empty<DialogueHistoryEntry>();
+            }
+            OnPropertyChanged(nameof(DialogueHistory));
         }
 
         /// <summary>Loads (or reloads) a story graph JSON file into the engine.</summary>
@@ -470,5 +490,13 @@ namespace RowlEngine.Editor.Native
         public string path { get; set; } = string.Empty;
         public string state { get; set; } = string.Empty;
         public string error { get; set; } = string.Empty;
+    }
+
+    public sealed class DialogueHistoryEntry
+    {
+        public ulong node_id { get; set; }
+        public string speaker { get; set; } = string.Empty;
+        public string dialogue { get; set; } = string.Empty;
+        public bool read { get; set; }
     }
 }

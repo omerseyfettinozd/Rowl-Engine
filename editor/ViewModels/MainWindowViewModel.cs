@@ -282,6 +282,9 @@ namespace RowlEngine.Editor.ViewModels
         private bool _isLogPanelVisible = true;
 
         [ObservableProperty]
+        private bool _isBacklogPanelVisible = false;
+
+        [ObservableProperty]
         private bool _isHierarchyPanelVisible = true;
 
         /// <summary>
@@ -289,7 +292,7 @@ namespace RowlEngine.Editor.ViewModels
         /// tabs is enabled. Assets must not disappear merely because the log
         /// panel was closed.
         /// </summary>
-        public bool IsBottomPanelVisible => IsLogPanelVisible || IsAssetsPanelVisible;
+        public bool IsBottomPanelVisible => IsLogPanelVisible || IsAssetsPanelVisible || IsBacklogPanelVisible;
 
         public GridLength BottomPanelHeight => IsBottomPanelVisible
             ? new GridLength(180)
@@ -319,6 +322,9 @@ namespace RowlEngine.Editor.ViewModels
             NotifyBottomPanelLayoutChanged();
 
         partial void OnIsLogPanelVisibleChanged(bool value) =>
+            NotifyBottomPanelLayoutChanged();
+
+        partial void OnIsBacklogPanelVisibleChanged(bool value) =>
             NotifyBottomPanelLayoutChanged();
 
         private void NotifyBottomPanelLayoutChanged()
@@ -450,6 +456,7 @@ namespace RowlEngine.Editor.ViewModels
 
         public AssetBrowserViewModel AssetBrowserViewModel { get; }
         public OutputLogViewModel OutputLogViewModel { get; }
+        public BacklogViewModel BacklogViewModel { get; }
         public InspectorViewModel InspectorViewModel { get; }
         public NodeGraphViewModel NodeGraphViewModel { get; }
         public LivePreviewViewModel LivePreviewViewModel { get; }
@@ -477,6 +484,7 @@ namespace RowlEngine.Editor.ViewModels
 
             AssetBrowserViewModel = new AssetBrowserViewModel(this);
             OutputLogViewModel = new OutputLogViewModel(this);
+            BacklogViewModel = new BacklogViewModel(this);
             InspectorViewModel = new InspectorViewModel(this);
             NodeGraphViewModel = new NodeGraphViewModel(this);
             LivePreviewViewModel = new LivePreviewViewModel(this);
@@ -1279,6 +1287,17 @@ namespace RowlEngine.Editor.ViewModels
                     {
                         IsLogPanelVisible = true;
                         BottomPanelActiveTab = 0;
+                    }
+                    break;
+                case "Backlog":
+                    if (IsBacklogPanelVisible && BottomPanelActiveTab == 2)
+                    {
+                        IsBacklogPanelVisible = false;
+                    }
+                    else
+                    {
+                        IsBacklogPanelVisible = true;
+                        BottomPanelActiveTab = 2;
                     }
                     break;
                 case "NodeGraph":

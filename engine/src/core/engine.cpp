@@ -183,6 +183,7 @@ void Engine::resetToStartNode() {
 
     m_currentNodeId = m_startNodeId;
     m_gameState = Rowl::State::GameState::createInitialState(m_startNodeId);
+    m_lastRecordedDialogueNodeId = 0;
     auto it = m_storyNodes.find(m_currentNodeId);
     if (it != m_storyNodes.end()) {
         const auto& startNode = it->second;
@@ -420,6 +421,7 @@ void Engine::updateActiveScene(
 
     ROWL_LOG_INFO("Scene Updated (Legacy) → Speaker: '" + m_activeSpeaker + "', Dialogue: '" +
                   m_activeDialogue + "', BG: '" + m_activeBackground + "'");
+    recordActiveDialogueHistory();
 }
 
 void Engine::updateSceneFromComponents(const std::string& componentsJson) {
@@ -766,6 +768,8 @@ void Engine::updateSceneFromComponents(const std::string& componentsJson) {
                 m_audio->getCurrentBgmPath(), m_audio->getBgmVolume(),
                 m_audio->isBgmPlaying(), filter);
         }
+
+        recordActiveDialogueHistory();
 
         ROWL_LOG_INFO("Scene Updated (Components) → " + std::to_string(comps.size()) +
                       " comps, " + std::to_string(m_activeCharacters.size()) + " chars, " +
@@ -1223,6 +1227,29 @@ void Engine::markScriptStatus(const std::string& moduleId, const std::string& so
         return;
     }
     m_scriptRuntimeStatuses.push_back({moduleId, sourcePath, state, error});
+}
+
+const std::vector<Rowl::State::DialogueHistoryEntry>& Engine::getDialogueHistory() const {
+    static const std::vector<Rowl::State::DialogueHistoryEntry> empty;
+    return (m_gameState && m_gameState->dialogueHistory) ? *m_gameState->dialogueHistory : empty;
+}
+
+void Engine::recordActiveDialogueHistory() {
+    if (!m_isPlaying || !m_gameState || m_currentNodeId == 0 ||
+        m_lastRecordedDialogueNodeId == m_currentNodeId || m_activeDialogues.empty()) {
+        return;
+    }
+    std::vector<Rowl::State::DialogueHistoryEntry> entries;
+    entries.reserve(m_activeDialogues.size());
+    for (const auto& dialogue : m_activeDialogues) {
+        if (!dialogue.dialogue.empty()) {
+            entries.push_back({m_currentNodeId, dialogue.speaker, dialogue.dialogue, true});
+        }
+    }
+    if (!entries.empty()) {
+        m_gameState = Rowl::State::GameState::withDialogueHistory(m_gameState, entries);
+        m_lastRecordedDialogueNodeId = m_currentNodeId;
+    }
 }
 
 void Engine::shutdown() {

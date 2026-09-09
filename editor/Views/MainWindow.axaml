@@ -39,6 +39,7 @@
                                     <MenuItem Header="🔍 Node Inspector" Command="{Binding ShowPanelCommand}" CommandParameter="Inspector"/>
                                     <MenuItem Header="📝 Output Log" Command="{Binding ShowPanelCommand}" CommandParameter="Log"/>
                                     <MenuItem Header="📁 Project Assets" Command="{Binding ShowPanelCommand}" CommandParameter="Assets"/>
+                                    <MenuItem Header="💬 Dialogue Backlog" Command="{Binding ShowPanelCommand}" CommandParameter="Backlog"/>
                                 </MenuItem>
                             </Menu>
                         </StackPanel>
@@ -284,6 +285,9 @@
                         </TabItem>
                         <TabItem Header="📁 Assets" IsVisible="{Binding IsAssetsPanelVisible}">
                             <panels:ProjectAssetsView/>
+                        </TabItem>
+                        <TabItem Header="💬 Backlog" IsVisible="{Binding IsBacklogPanelVisible}">
+                            <panels:BacklogView DataContext="{Binding BacklogViewModel}"/>
                         </TabItem>
                     </TabControl>
                 </Grid>

@@ -192,6 +192,12 @@ namespace RowlEngine.Editor
             if (!mainVm.IsBottomPanelVisible || mainVm.BottomPanelActiveTab != 1 ||
                 mainVm.BottomPanelHeight.Value != 180 || mainVm.BottomSplitterHeight.Value != 6)
                 throw new Exception("Assets panel did not restore independently");
+            mainVm.ShowPanel("Backlog");
+            if (!mainVm.IsBacklogPanelVisible || mainVm.BottomPanelActiveTab != 2 || !mainVm.IsBottomPanelVisible)
+                throw new Exception("Dialogue backlog panel did not become an independent bottom workspace");
+            mainVm.ShowPanel("Backlog");
+            if (mainVm.IsBacklogPanelVisible)
+                throw new Exception("Dialogue backlog panel did not close independently");
             Console.WriteLine("  ✅ [PASS] Bottom Log and Assets panel visibility is independent and reclaims height");
 
             mainVm.ShowPanel("SplitScreen");

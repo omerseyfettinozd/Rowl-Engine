@@ -284,6 +284,9 @@ ROWL_API const char* RowlEngine_GetLastAudioError(RowlEngineHandle handle);
  */
 ROWL_API const char* RowlEngine_GetScriptRuntimeDiagnosticsJson(RowlEngineHandle handle);
 
+/** Returns the bounded player dialogue backlog as an engine-owned JSON array. */
+ROWL_API const char* RowlEngine_GetDialogueHistoryJson(RowlEngineHandle handle);
+
 /* ── Save / Load Slots & History Rewind ───────────────────────────────────── */
 
 /** Saves the current game state to the specified slot (0 = quicksave). Returns 1 on success, 0 on failure. */

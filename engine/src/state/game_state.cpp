@@ -17,13 +17,15 @@ namespace Rowl::State {
 
 namespace {
 
-constexpr uint32_t kSaveFormatVersion = 2;
+constexpr uint32_t kSaveFormatVersion = 3;
 constexpr int32_t kMinSaveSlot = 0;
 constexpr int32_t kMaxSaveSlot = 99;
 constexpr uintmax_t kMaxSaveFileBytes = 4 * 1024 * 1024;
 constexpr size_t kMaxSaveVariables = 10'000;
 constexpr size_t kMaxVariableKeyBytes = 256;
 constexpr size_t kMaxVariableValueBytes = 64 * 1024;
+constexpr size_t kMaxDialogueHistoryEntries = 500;
+constexpr size_t kMaxDialogueHistoryTextBytes = 64 * 1024;
 
 bool isValidSlotIndex(int32_t slotIndex) {
     return slotIndex >= kMinSaveSlot && slotIndex <= kMaxSaveSlot;
@@ -67,6 +69,7 @@ std::shared_ptr<const GameState> GameState::createInitialState(uint64_t startNod
     state->activeNodeId = startNodeId;
     state->previousState = nullptr;
     state->variables = std::make_shared<VariableMap>();
+    state->dialogueHistory = std::make_shared<std::vector<DialogueHistoryEntry>>();
     return state;
 }
 
@@ -87,6 +90,7 @@ std::shared_ptr<const GameState> GameState::createNextState(
         nextState->activeBgm = current->activeBgm;
         nextState->bgmVolume = current->bgmVolume;
         nextState->bgmPlaying = current->bgmPlaying;
+        nextState->dialogueHistory = current->dialogueHistory;
     }
 
     // Structural sharing: only create new VariableMap if a variable actually changes
@@ -139,6 +143,7 @@ std::shared_ptr<const GameState> GameState::createNextStateWithVariables(
         nextState->activeBgm = current->activeBgm;
         nextState->bgmVolume = current->bgmVolume;
         nextState->bgmPlaying = current->bgmPlaying;
+        nextState->dialogueHistory = current->dialogueHistory;
     }
     auto variableMap = std::make_shared<VariableMap>();
     variableMap->data = nextVariables;
@@ -164,6 +169,30 @@ std::shared_ptr<const GameState> GameState::createNextStateWithAudio(
     nextState->bgmPlaying = playing;
     nextState->dspFilter = filter;
     nextState->variables = current ? current->variables : std::make_shared<VariableMap>();
+    nextState->dialogueHistory = current ? current->dialogueHistory :
+        std::make_shared<std::vector<DialogueHistoryEntry>>();
+    return nextState;
+}
+
+std::shared_ptr<const GameState> GameState::withDialogueHistory(
+    const std::shared_ptr<const GameState>& current,
+    const std::vector<DialogueHistoryEntry>& entries) {
+    if (!current || entries.empty()) return current;
+    auto nextState = std::make_shared<GameState>(*current);
+    auto history = std::make_shared<std::vector<DialogueHistoryEntry>>(
+        current->dialogueHistory ? *current->dialogueHistory : std::vector<DialogueHistoryEntry>{});
+    for (const auto& entry : entries) {
+        if (entry.nodeId == 0 || entry.speaker.size() > kMaxDialogueHistoryTextBytes ||
+            entry.dialogue.size() > kMaxDialogueHistoryTextBytes) {
+            continue;
+        }
+        history->push_back(entry);
+    }
+    if (history->size() > kMaxDialogueHistoryEntries) {
+        history->erase(history->begin(), history->begin() +
+            static_cast<std::ptrdiff_t>(history->size() - kMaxDialogueHistoryEntries));
+    }
+    nextState->dialogueHistory = std::move(history);
     return nextState;
 }
 
@@ -193,6 +222,16 @@ std::string GameState::serializeJson() const {
     j["active_bgm"] = activeBgm;
     j["bgm_volume"] = bgmVolume;
     j["bgm_playing"] = bgmPlaying;
+    nlohmann::json history = nlohmann::json::array();
+    if (dialogueHistory) {
+        for (const auto& entry : *dialogueHistory) {
+            history.push_back({
+                {"node_id", entry.nodeId}, {"speaker", entry.speaker},
+                {"dialogue", entry.dialogue}, {"read", entry.read},
+            });
+        }
+    }
+    j["dialogue_history"] = std::move(history);
 
     nlohmann::json varObj = nlohmann::json::object();
     if (variables) {
@@ -217,7 +256,7 @@ std::shared_ptr<const GameState> GameState::deserializeJson(const std::string& j
             return nullptr;
         }
         const auto version = j.value("version", kSaveFormatVersion);
-        if (version != 1 && version != kSaveFormatVersion) {
+        if (version != 1 && version != 2 && version != kSaveFormatVersion) {
             ROWL_LOG_ERROR("Unsupported GameState save version: " + std::to_string(version));
             return nullptr;
         }
@@ -270,6 +309,32 @@ std::shared_ptr<const GameState> GameState::deserializeJson(const std::string& j
             return nullptr;
         }
         state->variables = varMap;
+        auto history = std::make_shared<std::vector<DialogueHistoryEntry>>();
+        if (j.contains("dialogue_history")) {
+            if (!j["dialogue_history"].is_array() ||
+                j["dialogue_history"].size() > kMaxDialogueHistoryEntries) {
+                ROWL_LOG_ERROR("GameState JSON dialogue history is invalid or too large");
+                return nullptr;
+            }
+            for (const auto& rawEntry : j["dialogue_history"]) {
+                if (!rawEntry.is_object()) {
+                    ROWL_LOG_ERROR("GameState JSON dialogue history entry must be an object");
+                    return nullptr;
+                }
+                DialogueHistoryEntry entry;
+                entry.nodeId = rawEntry.value("node_id", uint64_t{0});
+                entry.speaker = rawEntry.value("speaker", "");
+                entry.dialogue = rawEntry.value("dialogue", "");
+                entry.read = rawEntry.value("read", true);
+                if (entry.nodeId == 0 || entry.speaker.size() > kMaxDialogueHistoryTextBytes ||
+                    entry.dialogue.size() > kMaxDialogueHistoryTextBytes) {
+                    ROWL_LOG_ERROR("GameState JSON contains an invalid dialogue history entry");
+                    return nullptr;
+                }
+                history->push_back(std::move(entry));
+            }
+        }
+        state->dialogueHistory = std::move(history);
         state->previousState = nullptr;
         return state;
     } catch (const std::exception& e) {

@@ -481,6 +481,22 @@ const char* RowlEngine_GetScriptRuntimeDiagnosticsJson(RowlEngineHandle handle) 
     }, "[]");
 }
 
+const char* RowlEngine_GetDialogueHistoryJson(RowlEngineHandle handle) {
+    if (!isLiveHandle(handle)) return "[]";
+    static thread_local std::string buffer;
+    return invokeNoexcept<const char*>([&] {
+        nlohmann::json history = nlohmann::json::array();
+        for (const auto& entry : toEngine(handle)->getDialogueHistory()) {
+            history.push_back({
+                {"node_id", entry.nodeId}, {"speaker", entry.speaker},
+                {"dialogue", entry.dialogue}, {"read", entry.read},
+            });
+        }
+        buffer = history.dump();
+        return buffer.c_str();
+    }, "[]");
+}
+
 int RowlEngine_SaveGameSlot(RowlEngineHandle handle, int32_t slotIndex) {
     if (!isLiveHandle(handle)) return 0;
     return invokeNoexcept<int>([&] {

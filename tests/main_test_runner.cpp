@@ -174,6 +174,20 @@ void test_game_state() {
     }
     TEST_PASS("GameState JSON Serialization & Deserialization");
 
+    const auto withHistory = Rowl::State::GameState::withDialogueHistory(s2, {
+        {101, "Evelyn", "First remembered line", true},
+        {102, "Mina", "Second remembered line", true},
+    });
+    const auto restoredHistory = Rowl::State::GameState::deserializeJson(withHistory->serializeJson());
+    if (!restoredHistory || !restoredHistory->dialogueHistory ||
+        restoredHistory->dialogueHistory->size() != 2 ||
+        restoredHistory->dialogueHistory->at(1).speaker != "Mina" ||
+        restoredHistory->dialogueHistory->at(1).dialogue != "Second remembered line") {
+        std::cerr << "GameState dialogue history persistence mismatch" << std::endl;
+        exit(1);
+    }
+    TEST_PASS("Bounded Dialogue History Save Persistence and v2 Fallback");
+
     auto audioState = Rowl::State::GameState::createNextStateWithAudio(
         s2, 102, "night.png", "audio/night.ogg", 0.65f, true, "Telephone");
     auto restoredAudioState = Rowl::State::GameState::deserializeJson(audioState->serializeJson());
@@ -185,7 +199,10 @@ void test_game_state() {
     }
     const auto legacyState = Rowl::State::GameState::deserializeJson(
         R"({"version":1,"step_id":1,"active_node_id":101,"variables":{}})");
-    if (!legacyState || legacyState->bgmPlaying || !legacyState->activeBgm.empty()) {
+    const auto v2State = Rowl::State::GameState::deserializeJson(
+        R"({"version":2,"step_id":1,"active_node_id":101,"variables":{}})");
+    if (!legacyState || !v2State || legacyState->bgmPlaying || !legacyState->activeBgm.empty() ||
+        !v2State->dialogueHistory || !v2State->dialogueHistory->empty()) {
         std::cerr << "Legacy GameState save compatibility mismatch" << std::endl;
         exit(1);
     }
@@ -1775,6 +1792,13 @@ void test_hardening_and_reliability() {
         engine.advanceToNextNode();
         if (engine.getCurrentNodeId() != 203) {
             std::cerr << "Engine failed to advance to Node 203" << std::endl;
+            exit(1);
+        }
+
+        if (engine.getDialogueHistory().size() != 3 ||
+            engine.getDialogueHistory().front().dialogue != "Step 1" ||
+            engine.getDialogueHistory().back().dialogue != "Step 3") {
+            std::cerr << "Engine did not record dialogue history by active node" << std::endl;
             exit(1);
         }
 

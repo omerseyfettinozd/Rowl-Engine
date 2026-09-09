@@ -4,11 +4,21 @@
 #include <unordered_map>
 #include <memory>
 #include <cstdint>
+#include <vector>
 
 namespace Rowl::State {
 
 struct VariableMap {
     std::unordered_map<std::string, std::string> data;
+};
+
+/// A player-visible line kept independently from the rewind-chain internals.
+/// The bounded vector is structurally shared until a new line is appended.
+struct DialogueHistoryEntry {
+    uint64_t nodeId = 0;
+    std::string speaker;
+    std::string dialogue;
+    bool read = true;
 };
 
 // GCC 16 false positive -Warray-bounds with shared_ptr template internals
@@ -32,6 +42,8 @@ struct GameState {
 
     // Smart pointers last
     std::shared_ptr<const VariableMap> variables = std::make_shared<VariableMap>();
+    std::shared_ptr<const std::vector<DialogueHistoryEntry>> dialogueHistory =
+        std::make_shared<std::vector<DialogueHistoryEntry>>();
     std::shared_ptr<const GameState> previousState = nullptr;
 
     std::string getVariable(const std::string& key, const std::string& defaultValue = "") const;
@@ -61,6 +73,10 @@ struct GameState {
     static std::shared_ptr<const GameState> rewind(
         const std::shared_ptr<const GameState>& current,
         uint64_t stepsToRewind = 1
+    );
+    static std::shared_ptr<const GameState> withDialogueHistory(
+        const std::shared_ptr<const GameState>& current,
+        const std::vector<DialogueHistoryEntry>& entries
     );
 
     // Serialization & slot persistence
