@@ -155,6 +155,13 @@ namespace RowlEngine.Editor.Native
         internal static extern void RowlEngine_SetBgmVolume(IntPtr handle, float volume);
 
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern void RowlEngine_SetMasterVolume(IntPtr handle, float volume);
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern void RowlEngine_SetVoiceVolume(IntPtr handle, float volume);
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern void RowlEngine_SetSfxVolume(IntPtr handle, float volume);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
         internal static extern void RowlEngine_TriggerVoiceDucking(IntPtr handle, int isVoiceActive);
 
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]

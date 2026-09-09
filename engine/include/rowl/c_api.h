@@ -262,6 +262,12 @@ ROWL_API void RowlEngine_StopBgm(RowlEngineHandle handle);
 
 /** Sets BGM volume (0.0f - 1.0f). */
 ROWL_API void RowlEngine_SetBgmVolume(RowlEngineHandle handle, float volume);
+ROWL_API void RowlEngine_SetMasterVolume(RowlEngineHandle handle, float volume);
+ROWL_API void RowlEngine_SetVoiceVolume(RowlEngineHandle handle, float volume);
+ROWL_API void RowlEngine_SetSfxVolume(RowlEngineHandle handle, float volume);
+ROWL_API float RowlEngine_GetMasterVolume(RowlEngineHandle handle);
+ROWL_API float RowlEngine_GetVoiceVolume(RowlEngineHandle handle);
+ROWL_API float RowlEngine_GetSfxVolume(RowlEngineHandle handle);
 
 /** Triggers voice ducking attenuation on BGM (1 = voice active, 0 = restored). */
 ROWL_API void RowlEngine_TriggerVoiceDucking(RowlEngineHandle handle, int isVoiceActive);

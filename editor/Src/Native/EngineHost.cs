@@ -415,6 +415,21 @@ namespace RowlEngine.Editor.Native
             => _handle == IntPtr.Zero ? string.Empty
                : NativeBridge.PtrToString(NativeBridge.RowlEngine_GetLastAudioError(_handle));
 
+        public void SetMasterVolume(float volume)
+        {
+            if (_handle != IntPtr.Zero) NativeBridge.RowlEngine_SetMasterVolume(_handle, volume);
+        }
+
+        public void SetVoiceVolume(float volume)
+        {
+            if (_handle != IntPtr.Zero) NativeBridge.RowlEngine_SetVoiceVolume(_handle, volume);
+        }
+
+        public void SetSfxVolume(float volume)
+        {
+            if (_handle != IntPtr.Zero) NativeBridge.RowlEngine_SetSfxVolume(_handle, volume);
+        }
+
         // ── Save / Load Slots & History Rewind ────────────────────────────────
 
         public bool SaveGameSlot(int slotIndex)

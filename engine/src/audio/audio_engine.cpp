@@ -155,6 +155,8 @@ bool AudioEngine::initialize() {
     ROWL_LOG_INFO("Initializing Dual-Path SDL3 Audio Engine Subsystem...");
     m_masterVolume = 1.0f;
     m_bgmVolume = 1.0f;
+    m_voiceVolume = 1.0f;
+    m_sfxVolume = 1.0f;
     m_bgmGain = 1.0f;
     m_duckingFactor = 0.5f;
     m_activeFilter = DSPFilterType::Normal;
@@ -169,18 +171,20 @@ bool AudioEngine::initialize() {
     if (SDL_InitSubSystem(SDL_INIT_AUDIO)) {
         // Open default audio device stream for BGM
         m_bgmStream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr, nullptr, nullptr);
-        // Open separate audio device stream for SFX & Voice
+        // Voice has its own gain path so narration controls never affect SFX.
+        m_voiceStream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr, nullptr, nullptr);
+        // Open a third stream for short sound effects.
         m_sfxStream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr, nullptr, nullptr);
 
-        if (m_bgmStream && m_sfxStream) {
+        if (m_bgmStream && m_voiceStream && m_sfxStream) {
             m_deviceAvailable = true;
-            SDL_SetAudioStreamGain(m_bgmStream, m_bgmGain);
-            SDL_SetAudioStreamGain(m_sfxStream, 1.0f);
-            ROWL_LOG_INFO("[AudioEngine] Physical audio device initialized successfully (BGM & SFX streams active).");
+            applyChannelGains();
+            ROWL_LOG_INFO("[AudioEngine] Physical audio device initialized successfully (BGM, Voice & SFX streams active).");
         } else {
             ROWL_LOG_WARN("[AudioEngine] Audio streams could not be opened: " + std::string(SDL_GetError()) +
                           " — running in silent fallback mode.");
             if (m_bgmStream) { SDL_DestroyAudioStream(m_bgmStream); m_bgmStream = nullptr; }
+            if (m_voiceStream) { SDL_DestroyAudioStream(m_voiceStream); m_voiceStream = nullptr; }
             if (m_sfxStream) { SDL_DestroyAudioStream(m_sfxStream); m_sfxStream = nullptr; }
         }
     } else {
@@ -290,7 +294,8 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
         applyDspToFloatPcm(samples, static_cast<size_t>(floatLength) / sizeof(float),
                            floatSpec.channels, floatSpec.freq, filter);
 
-        SDL_AudioStream* targetStream = (channel == AudioChannelType::Bgm) ? m_bgmStream : m_sfxStream;
+        SDL_AudioStream* targetStream = (channel == AudioChannelType::Bgm) ? m_bgmStream :
+                                       (channel == AudioChannelType::Voice) ? m_voiceStream : m_sfxStream;
         if (targetStream) {
             if (channel == AudioChannelType::Bgm) {
                 SDL_ClearAudioStream(m_bgmStream);
@@ -354,9 +359,25 @@ void AudioEngine::setBgmVolume(float volume) {
     }
     m_bgmVolume = std::clamp(volume, 0.0f, 1.0f);
     m_bgmGain = m_isDuckingActive ? (m_bgmVolume * m_duckingFactor) : m_bgmVolume;
-    if (m_bgmStream) {
-        SDL_SetAudioStreamGain(m_bgmStream, m_bgmGain);
-    }
+    applyChannelGains();
+}
+
+void AudioEngine::setMasterVolume(float volume) {
+    if (!std::isfinite(volume)) return;
+    m_masterVolume = std::clamp(volume, 0.0f, 1.0f);
+    applyChannelGains();
+}
+
+void AudioEngine::setVoiceVolume(float volume) {
+    if (!std::isfinite(volume)) return;
+    m_voiceVolume = std::clamp(volume, 0.0f, 1.0f);
+    applyChannelGains();
+}
+
+void AudioEngine::setSfxVolume(float volume) {
+    if (!std::isfinite(volume)) return;
+    m_sfxVolume = std::clamp(volume, 0.0f, 1.0f);
+    applyChannelGains();
 }
 
 void AudioEngine::triggerVoiceDucking(bool isVoiceActive) {
@@ -368,9 +389,7 @@ void AudioEngine::triggerVoiceDucking(bool isVoiceActive) {
         m_bgmGain = m_bgmVolume;
         ROWL_LOG_INFO("Voice Finished -> BGM Restored to Full Volume (Gain: " + std::to_string(m_bgmGain) + ")");
     }
-    if (m_bgmStream) {
-        SDL_SetAudioStreamGain(m_bgmStream, m_bgmGain);
-    }
+    applyChannelGains();
 }
 
 void AudioEngine::setDuckingFactor(float factor) {
@@ -382,9 +401,7 @@ void AudioEngine::setDuckingFactor(float factor) {
     if (m_isDuckingActive) {
         m_bgmGain = m_bgmVolume * m_duckingFactor;
     }
-    if (m_bgmStream) {
-        SDL_SetAudioStreamGain(m_bgmStream, m_bgmGain);
-    }
+    applyChannelGains();
 }
 
 void AudioEngine::applyDspFilter(DSPFilterType filter) {
@@ -413,7 +430,7 @@ void AudioEngine::update() {
         }
     }
 
-    if (m_sfxStream && m_isVoicePlaying && SDL_GetAudioStreamQueued(m_sfxStream) <= 0) {
+    if (m_voiceStream && m_isVoicePlaying && SDL_GetAudioStreamQueued(m_voiceStream) <= 0) {
         m_isVoicePlaying = false;
         triggerVoiceDucking(false);
     }
@@ -430,6 +447,10 @@ void AudioEngine::shutdown() {
         SDL_DestroyAudioStream(m_bgmStream);
         m_bgmStream = nullptr;
     }
+    if (m_voiceStream) {
+        SDL_DestroyAudioStream(m_voiceStream);
+        m_voiceStream = nullptr;
+    }
     if (m_sfxStream) {
         SDL_DestroyAudioStream(m_sfxStream);
         m_sfxStream = nullptr;
@@ -441,6 +462,12 @@ void AudioEngine::shutdown() {
 
     m_initialized = false;
     ROWL_LOG_INFO("Audio Engine Subsystem Shutdown Complete.");
+}
+
+void AudioEngine::applyChannelGains() {
+    if (m_bgmStream) SDL_SetAudioStreamGain(m_bgmStream, m_masterVolume * m_bgmGain);
+    if (m_voiceStream) SDL_SetAudioStreamGain(m_voiceStream, m_masterVolume * m_voiceVolume);
+    if (m_sfxStream) SDL_SetAudioStreamGain(m_sfxStream, m_masterVolume * m_sfxVolume);
 }
 
 } // namespace Rowl::Audio

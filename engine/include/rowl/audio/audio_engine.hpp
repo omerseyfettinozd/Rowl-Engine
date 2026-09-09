@@ -34,6 +34,9 @@ public:
     void stopAll();
 
     void setBgmVolume(float volume);
+    void setMasterVolume(float volume);
+    void setVoiceVolume(float volume);
+    void setSfxVolume(float volume);
     void applyDspFilter(DSPFilterType filter);
     void triggerVoiceDucking(bool isVoiceActive);
     void setDuckingFactor(float factor);  // Configurable voice ducking attenuation (0.0-1.0)
@@ -44,6 +47,9 @@ public:
 
     float getBgmGain() const { return m_bgmGain; }
     float getBgmVolume() const { return m_bgmVolume; }
+    float getMasterVolume() const { return m_masterVolume; }
+    float getVoiceVolume() const { return m_voiceVolume; }
+    float getSfxVolume() const { return m_sfxVolume; }
     DSPFilterType getActiveFilter() const { return m_activeFilter; }
     bool isInitialized() const { return m_initialized; }
     bool isDuckingActive() const { return m_isDuckingActive; }
@@ -58,6 +64,8 @@ public:
 private:
     float m_masterVolume = 1.0f;
     float m_bgmVolume = 1.0f;
+    float m_voiceVolume = 1.0f;
+    float m_sfxVolume = 1.0f;
     float m_bgmGain = 1.0f;
     float m_duckingFactor = 0.5f;  // Configurable ducking factor (default -6dB = 0.5)
     DSPFilterType m_activeFilter = DSPFilterType::Normal;
@@ -72,7 +80,9 @@ private:
     bool m_isBgmPlaying = false;
     bool m_isVoicePlaying = false;
     SDL_AudioStream* m_bgmStream = nullptr;
+    SDL_AudioStream* m_voiceStream = nullptr;
     SDL_AudioStream* m_sfxStream = nullptr;
+    void applyChannelGains();
 };
 
 } // namespace Rowl::Audio

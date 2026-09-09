@@ -1857,6 +1857,17 @@ void test_hardening_and_reliability() {
             std::cerr << "setBgmLooping(false) failed" << std::endl;
             exit(1);
         }
+        audio.setMasterVolume(0.8f);
+        audio.setBgmVolume(0.7f);
+        audio.setVoiceVolume(0.6f);
+        audio.setSfxVolume(0.5f);
+        if (std::abs(audio.getMasterVolume() - 0.8f) > 0.001f ||
+            std::abs(audio.getBgmVolume() - 0.7f) > 0.001f ||
+            std::abs(audio.getVoiceVolume() - 0.6f) > 0.001f ||
+            std::abs(audio.getSfxVolume() - 0.5f) > 0.001f) {
+            std::cerr << "Independent audio channel volume configuration failed" << std::endl;
+            exit(1);
+        }
         TEST_PASS("Audio Engine BGM Looping Configuration");
     }
 }

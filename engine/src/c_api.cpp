@@ -414,6 +414,36 @@ void RowlEngine_SetBgmVolume(RowlEngineHandle handle, float volume) {
     });
 }
 
+void RowlEngine_SetMasterVolume(RowlEngineHandle handle, float volume) {
+    if (!isLiveHandle(handle)) return;
+    invokeNoexcept([&] { if (auto* audio = toEngine(handle)->getAudio()) audio->setMasterVolume(volume); });
+}
+
+void RowlEngine_SetVoiceVolume(RowlEngineHandle handle, float volume) {
+    if (!isLiveHandle(handle)) return;
+    invokeNoexcept([&] { if (auto* audio = toEngine(handle)->getAudio()) audio->setVoiceVolume(volume); });
+}
+
+void RowlEngine_SetSfxVolume(RowlEngineHandle handle, float volume) {
+    if (!isLiveHandle(handle)) return;
+    invokeNoexcept([&] { if (auto* audio = toEngine(handle)->getAudio()) audio->setSfxVolume(volume); });
+}
+
+float RowlEngine_GetMasterVolume(RowlEngineHandle handle) {
+    if (!isLiveHandle(handle)) return 0.0f;
+    return invokeNoexcept<float>([&] { const auto* audio = toEngine(handle)->getAudio(); return audio ? audio->getMasterVolume() : 0.0f; }, 0.0f);
+}
+
+float RowlEngine_GetVoiceVolume(RowlEngineHandle handle) {
+    if (!isLiveHandle(handle)) return 0.0f;
+    return invokeNoexcept<float>([&] { const auto* audio = toEngine(handle)->getAudio(); return audio ? audio->getVoiceVolume() : 0.0f; }, 0.0f);
+}
+
+float RowlEngine_GetSfxVolume(RowlEngineHandle handle) {
+    if (!isLiveHandle(handle)) return 0.0f;
+    return invokeNoexcept<float>([&] { const auto* audio = toEngine(handle)->getAudio(); return audio ? audio->getSfxVolume() : 0.0f; }, 0.0f);
+}
+
 void RowlEngine_TriggerVoiceDucking(RowlEngineHandle handle, int isVoiceActive) {
     if (!isLiveHandle(handle)) return;
     invokeNoexcept([&] {
