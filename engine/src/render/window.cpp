@@ -42,6 +42,9 @@ unsigned char* loadTextureMemorySafely(const uint8_t* bytes, int byteCount,
 }
 
 std::vector<uint8_t> loadMsdfShaderCode() {
+#if !ROWL_GPU_MSDF_SHADER_AVAILABLE
+    return {};
+#else
     std::vector<std::filesystem::path> candidates;
     if (const char* basePath = SDL_GetBasePath()) {
         candidates.emplace_back(basePath);
@@ -63,6 +66,7 @@ std::vector<uint8_t> loadMsdfShaderCode() {
         if (shader) return code;
     }
     return {};
+#endif
 }
 
 } // namespace

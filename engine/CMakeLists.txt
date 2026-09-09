@@ -1,25 +1,48 @@
 cmake_minimum_required(VERSION 3.25)
 project(RowlEngineCore VERSION 1.0.0 LANGUAGES CXX C)
 
-find_program(GLSLC_EXECUTABLE glslc REQUIRED)
-set(ROWL_SHADER_DIR "${CMAKE_BINARY_DIR}/shaders")
-file(MAKE_DIRECTORY "${ROWL_SHADER_DIR}")
-add_custom_command(OUTPUT "${ROWL_SHADER_DIR}/msdf_text.frag.spv"
-    COMMAND ${GLSLC_EXECUTABLE} -fshader-stage=frag
-        "${CMAKE_CURRENT_SOURCE_DIR}/src/shaders/msdf_text.frag"
-        -o "${ROWL_SHADER_DIR}/msdf_text.frag.spv"
-    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/shaders/msdf_text.frag")
-add_custom_target(rowl_msdf_shader DEPENDS "${ROWL_SHADER_DIR}/msdf_text.frag.spv")
+# The first GPU MSDF artifact is Linux/Vulkan SPIR-V.  Keep it optional so a
+# shader compiler or an unsupported shader format can never prevent another
+# platform from building the engine's SDL/font-renderer fallback.
+set(ROWL_GPU_MSDF_DEFAULT OFF)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    set(ROWL_GPU_MSDF_DEFAULT ON)
+endif()
+option(ROWL_ENABLE_GPU_MSDF "Build the GPU MSDF shader artifact when supported" ${ROWL_GPU_MSDF_DEFAULT})
+set(ROWL_GPU_MSDF_SHADER_AVAILABLE 0)
+
+if(ROWL_ENABLE_GPU_MSDF)
+    find_program(GLSLC_EXECUTABLE glslc)
+    if(GLSLC_EXECUTABLE)
+        set(ROWL_SHADER_DIR "${CMAKE_BINARY_DIR}/shaders")
+        file(MAKE_DIRECTORY "${ROWL_SHADER_DIR}")
+        add_custom_command(OUTPUT "${ROWL_SHADER_DIR}/msdf_text.frag.spv"
+            COMMAND ${GLSLC_EXECUTABLE} -fshader-stage=frag
+                "${CMAKE_CURRENT_SOURCE_DIR}/src/shaders/msdf_text.frag"
+                -o "${ROWL_SHADER_DIR}/msdf_text.frag.spv"
+            DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/shaders/msdf_text.frag")
+        add_custom_target(rowl_msdf_shader DEPENDS "${ROWL_SHADER_DIR}/msdf_text.frag.spv")
+        set(ROWL_GPU_MSDF_SHADER_AVAILABLE 1)
+    else()
+        message(WARNING "glslc was not found; GPU MSDF is disabled and the font renderer fallback will be used.")
+    endif()
+endif()
 
 # ── nlohmann/json (header-only JSON library) ──────────────────────────────
-include(FetchContent)
-FetchContent_Declare(
-    nlohmann_json
-    GIT_REPOSITORY https://github.com/nlohmann/json.git
-    GIT_TAG v3.11.3
-    GIT_SHALLOW TRUE
-)
-FetchContent_MakeAvailable(nlohmann_json)
+# Prefer a package supplied by the active toolchain (for example vcpkg or an
+# Android/iOS sysroot).  FetchContent remains a pinned desktop fallback, not a
+# requirement for a cross-build with an already provisioned dependency set.
+find_package(nlohmann_json 3.11.3 CONFIG QUIET)
+if(NOT TARGET nlohmann_json::nlohmann_json)
+    include(FetchContent)
+    FetchContent_Declare(
+        nlohmann_json
+        GIT_REPOSITORY https://github.com/nlohmann/json.git
+        GIT_TAG v3.11.3
+        GIT_SHALLOW TRUE
+    )
+    FetchContent_MakeAvailable(nlohmann_json)
+endif()
 
 # ── zstd ──────────────────────────────────────────────────────────────────
 find_package(zstd QUIET)
@@ -41,8 +64,26 @@ else()
 endif()
 
 # ── Ogg/Vorbis ────────────────────────────────────────────────────────────
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(VORBISFILE REQUIRED IMPORTED_TARGET vorbisfile)
+find_package(PkgConfig QUIET)
+if(PkgConfig_FOUND)
+    pkg_check_modules(VORBISFILE QUIET IMPORTED_TARGET vorbisfile)
+endif()
+if(TARGET PkgConfig::VORBISFILE)
+    set(VORBISFILE_TARGET PkgConfig::VORBISFILE)
+else()
+    find_library(VORBISFILE_LIBRARY NAMES vorbisfile libvorbisfile)
+    find_path(VORBISFILE_INCLUDE_DIR vorbis/vorbisfile.h)
+    if(VORBISFILE_LIBRARY AND VORBISFILE_INCLUDE_DIR)
+        add_library(Rowl::Vorbisfile UNKNOWN IMPORTED)
+        set_target_properties(Rowl::Vorbisfile PROPERTIES
+            IMPORTED_LOCATION "${VORBISFILE_LIBRARY}"
+            INTERFACE_INCLUDE_DIRECTORIES "${VORBISFILE_INCLUDE_DIR}"
+        )
+        set(VORBISFILE_TARGET Rowl::Vorbisfile)
+    else()
+        message(FATAL_ERROR "vorbisfile library not found. Supply it through pkg-config or the active toolchain.")
+    endif()
+endif()
 
 # ── SDL3 ──────────────────────────────────────────────────────────────────
 find_package(SDL3 QUIET)
@@ -106,8 +147,13 @@ add_library(RowlEngineCore SHARED
     # C-API bridge (consumed by C# P/Invoke)
     src/c_api.cpp
 )
-add_dependencies(RowlEngineCore rowl_msdf_shader)
-target_compile_definitions(RowlEngineCore PRIVATE ROWL_SHADER_DIR="${ROWL_SHADER_DIR}")
+if(TARGET rowl_msdf_shader)
+    add_dependencies(RowlEngineCore rowl_msdf_shader)
+endif()
+target_compile_definitions(RowlEngineCore PRIVATE
+    ROWL_GPU_MSDF_SHADER_AVAILABLE=${ROWL_GPU_MSDF_SHADER_AVAILABLE}
+    ROWL_SHADER_DIR="${ROWL_SHADER_DIR}"
+)
 
 # Mark all C-API symbols as exported on all platforms
 target_compile_definitions(RowlEngineCore PRIVATE ROWL_BUILDING_DLL)
@@ -125,7 +171,7 @@ target_include_directories(RowlEngineCore PUBLIC
 
 target_link_libraries(RowlEngineCore PUBLIC
     ${ZSTD_TARGET}
-    PkgConfig::VORBISFILE
+    ${VORBISFILE_TARGET}
     ${SDL3_TARGET}
     ${LUA_LIBRARIES}
     nlohmann_json::nlohmann_json
@@ -140,12 +186,14 @@ set_target_properties(rowl_player PROPERTIES
     BUILD_RPATH "$ORIGIN/../lib:$ORIGIN"
     INSTALL_RPATH "$ORIGIN/../lib:$ORIGIN"
 )
-add_custom_command(TARGET rowl_player POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:rowl_player>/shaders"
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${ROWL_SHADER_DIR}/msdf_text.frag.spv"
-        "$<TARGET_FILE_DIR:rowl_player>/shaders/msdf_text.frag.spv"
-)
+if(ROWL_GPU_MSDF_SHADER_AVAILABLE)
+    add_custom_command(TARGET rowl_player POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:rowl_player>/shaders"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${ROWL_SHADER_DIR}/msdf_text.frag.spv"
+            "$<TARGET_FILE_DIR:rowl_player>/shaders/msdf_text.frag.spv"
+    )
+endif()
 
 # ── Install rules (optional but useful for packaging) ─────────────────────
 install(TARGETS RowlEngineCore rowl_player
@@ -154,6 +202,8 @@ install(TARGETS RowlEngineCore rowl_player
     ARCHIVE  DESTINATION lib
 )
 install(DIRECTORY include/ DESTINATION include)
-install(FILES "${ROWL_SHADER_DIR}/msdf_text.frag.spv" DESTINATION bin/shaders)
+if(ROWL_GPU_MSDF_SHADER_AVAILABLE)
+    install(FILES "${ROWL_SHADER_DIR}/msdf_text.frag.spv" DESTINATION bin/shaders)
+endif()
 
 message(STATUS "RowlEngineCore and rowl_player configured successfully.")

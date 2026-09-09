@@ -46,6 +46,12 @@ jobs:
       - name: Test
         run: ctest --test-dir build --output-on-failure
 
+      - name: Verify shaderless fallback build
+        run: |
+          cmake -S . -B build-msdf-fallback -G Ninja -DCMAKE_BUILD_TYPE=Debug -DROWL_ENABLE_GPU_MSDF=OFF
+          cmake --build build-msdf-fallback --parallel
+          ctest --test-dir build-msdf-fallback --output-on-failure -E rowl_player_gpu_msdf_smoke
+
       - name: Check managed dependencies for known vulnerabilities
         run: dotnet list editor/RowlEngine.Editor.csproj package --vulnerable --include-transitive
 
@@ -63,7 +69,7 @@ jobs:
 
       - name: Install native dependencies
         shell: pwsh
-        run: vcpkg install sdl3 zstd lua nlohmann-json --triplet x64-windows
+        run: vcpkg install sdl3 zstd lua nlohmann-json libvorbis --triplet x64-windows
 
       - name: Configure
         shell: pwsh
