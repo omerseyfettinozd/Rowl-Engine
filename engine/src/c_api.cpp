@@ -429,6 +429,16 @@ void RowlEngine_SetSfxVolume(RowlEngineHandle handle, float volume) {
     invokeNoexcept([&] { if (auto* audio = toEngine(handle)->getAudio()) audio->setSfxVolume(volume); });
 }
 
+void RowlEngine_SetTextSpeedMultiplier(RowlEngineHandle handle, float multiplier) {
+    if (!isLiveHandle(handle)) return;
+    invokeNoexcept([&] { toEngine(handle)->setTextSpeedMultiplier(multiplier); });
+}
+
+void RowlEngine_SetAutoAdvanceDelayOffset(RowlEngineHandle handle, float seconds) {
+    if (!isLiveHandle(handle)) return;
+    invokeNoexcept([&] { toEngine(handle)->setAutoAdvanceDelayOffset(seconds); });
+}
+
 float RowlEngine_GetMasterVolume(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return 0.0f;
     return invokeNoexcept<float>([&] { const auto* audio = toEngine(handle)->getAudio(); return audio ? audio->getMasterVolume() : 0.0f; }, 0.0f);

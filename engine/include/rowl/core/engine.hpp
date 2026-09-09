@@ -165,6 +165,10 @@ public:
 
     // ── Playback & Offscreen buffer API ───────────────────────────────────
     void setPlayState(bool isPlaying);
+    /// Player-local accessibility preferences. They deliberately do not alter
+    /// the serialized story graph or save state.
+    void setTextSpeedMultiplier(float multiplier);
+    void setAutoAdvanceDelayOffset(float seconds);
     bool isPlaying() const { return m_isPlaying; }
     void resetToStartNode();
     const uint8_t* getPixelBuffer(uint32_t* outW, uint32_t* outH) const;
@@ -261,6 +265,8 @@ private:
     bool m_initialized  = false;
     bool m_isPlaying    = false;
     float m_autoAdvanceElapsed = 0.0f;
+    float m_textSpeedMultiplier = 1.0f;
+    float m_autoAdvanceDelayOffset = 0.0f;
 
     void parseStoryGraphJson(const std::string& jsonContent);
     void restoreAudioStateFromGameState();

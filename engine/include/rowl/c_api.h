@@ -265,6 +265,9 @@ ROWL_API void RowlEngine_SetBgmVolume(RowlEngineHandle handle, float volume);
 ROWL_API void RowlEngine_SetMasterVolume(RowlEngineHandle handle, float volume);
 ROWL_API void RowlEngine_SetVoiceVolume(RowlEngineHandle handle, float volume);
 ROWL_API void RowlEngine_SetSfxVolume(RowlEngineHandle handle, float volume);
+/** Applies player-local reading preferences without changing story data. */
+ROWL_API void RowlEngine_SetTextSpeedMultiplier(RowlEngineHandle handle, float multiplier);
+ROWL_API void RowlEngine_SetAutoAdvanceDelayOffset(RowlEngineHandle handle, float seconds);
 ROWL_API float RowlEngine_GetMasterVolume(RowlEngineHandle handle);
 ROWL_API float RowlEngine_GetVoiceVolume(RowlEngineHandle handle);
 ROWL_API float RowlEngine_GetSfxVolume(RowlEngineHandle handle);

@@ -197,7 +197,43 @@
                 </ScrollViewer>
             </TabItem>
 
-            <!-- ═══ SEKME 4: Kısayollar ═══ -->
+            <!-- ═══ SEKME 4: Oyuncu ═══ -->
+            <TabItem Header="🎮 Oyuncu">
+                <ScrollViewer Padding="24,16">
+                    <StackPanel Spacing="18">
+                        <TextBlock Text="Oyuncu Tercihleri" FontSize="15" FontWeight="Bold"
+                                   Foreground="{DynamicResource PrimaryText}"/>
+                        <TextBlock Text="Bu tercihler cihazda saklanır; proje dosyasına veya oyun kayıtlarına eklenmez."
+                                   TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource MutedText}"/>
+                        <StackPanel Spacing="6">
+                            <TextBlock Text="Ana Ses" Foreground="{DynamicResource SecondaryText}"/>
+                            <Slider Minimum="0" Maximum="1" Value="{Binding MasterVolume}"/>
+                        </StackPanel>
+                        <StackPanel Spacing="6">
+                            <TextBlock Text="Müzik" Foreground="{DynamicResource SecondaryText}"/>
+                            <Slider Minimum="0" Maximum="1" Value="{Binding BgmVolume}"/>
+                        </StackPanel>
+                        <StackPanel Spacing="6">
+                            <TextBlock Text="Konuşma" Foreground="{DynamicResource SecondaryText}"/>
+                            <Slider Minimum="0" Maximum="1" Value="{Binding VoiceVolume}"/>
+                        </StackPanel>
+                        <StackPanel Spacing="6">
+                            <TextBlock Text="Efekt" Foreground="{DynamicResource SecondaryText}"/>
+                            <Slider Minimum="0" Maximum="1" Value="{Binding SfxVolume}"/>
+                        </StackPanel>
+                        <StackPanel Spacing="6">
+                            <TextBlock Text="Metin Hızı Çarpanı" Foreground="{DynamicResource SecondaryText}"/>
+                            <Slider Minimum="0.25" Maximum="4" Value="{Binding TextSpeedMultiplier}"/>
+                        </StackPanel>
+                        <StackPanel Spacing="6">
+                            <TextBlock Text="Otomatik İlerleme Ek Gecikmesi (sn)" Foreground="{DynamicResource SecondaryText}"/>
+                            <Slider Minimum="0" Maximum="60" Value="{Binding AutoAdvanceDelay}"/>
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- ═══ SEKME 5: Kısayollar ═══ -->
             <TabItem Header="⌨️ Kısayollar">
                 <ScrollViewer Padding="24,16">
                     <StackPanel Spacing="12">

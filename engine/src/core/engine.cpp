@@ -1107,12 +1107,12 @@ void Engine::step(float deltaTime) {
     for (auto& dlg : m_activeDialogues) {
         dlg.isPlaying = m_isPlaying;
         if (m_isPlaying && dlg.typewriterEnabled) {
-            dlg.elapsedTypewriterTime += deltaTime;
+            dlg.elapsedTypewriterTime += deltaTime * m_textSpeedMultiplier;
         }
     }
     m_activeDialogueData.isPlaying = m_isPlaying;
     if (m_isPlaying && m_activeDialogueData.typewriterEnabled) {
-        m_activeDialogueData.elapsedTypewriterTime += deltaTime;
+        m_activeDialogueData.elapsedTypewriterTime += deltaTime * m_textSpeedMultiplier;
     }
 
     bool autoAdvanceEnabled = false;
@@ -1120,7 +1120,7 @@ void Engine::step(float deltaTime) {
     for (const auto& dialogue : m_activeDialogues) {
         if (dialogue.autoAdvance) {
             autoAdvanceEnabled = true;
-            autoAdvanceDelay = std::max(autoAdvanceDelay, dialogue.autoAdvanceDelay);
+            autoAdvanceDelay = std::max(autoAdvanceDelay, dialogue.autoAdvanceDelay + m_autoAdvanceDelayOffset);
         }
     }
     const auto activeNode = m_storyNodes.find(m_currentNodeId);
@@ -1164,6 +1164,14 @@ void Engine::step(float deltaTime) {
     }
 
     m_window->endFrame();
+}
+
+void Engine::setTextSpeedMultiplier(float multiplier) {
+    m_textSpeedMultiplier = std::clamp(multiplier, 0.25f, 4.0f);
+}
+
+void Engine::setAutoAdvanceDelayOffset(float seconds) {
+    m_autoAdvanceDelayOffset = std::clamp(seconds, 0.0f, 60.0f);
 }
 
 void Engine::run() {

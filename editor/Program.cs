@@ -570,6 +570,32 @@ namespace RowlEngine.Editor
 
             Console.WriteLine("  ✅ [PASS] Variable/Condition components, serialization, and P/Invoke Save/Load slots verified");
 
+            // ── Test 9b: Player-local settings profile ───────────────────────
+            Console.WriteLine("\n📌 [Test 9b]: Player settings profile persistence and bounds...");
+            string profilePath = Path.Combine(testProjectRoot, "player-settings.json");
+            var savedProfile = new PlayerSettingsProfile
+            {
+                MasterVolume = 0.8f,
+                BgmVolume = 0.7f,
+                VoiceVolume = 0.6f,
+                SfxVolume = 0.5f,
+                TextSpeedMultiplier = 1.5f,
+                AutoAdvanceDelay = 3.25f
+            };
+            savedProfile.Save(profilePath);
+            var restoredProfile = PlayerSettingsProfile.Load(profilePath);
+            if (restoredProfile.MasterVolume != 0.8f || restoredProfile.BgmVolume != 0.7f ||
+                restoredProfile.VoiceVolume != 0.6f || restoredProfile.SfxVolume != 0.5f ||
+                restoredProfile.TextSpeedMultiplier != 1.5f || restoredProfile.AutoAdvanceDelay != 3.25f)
+            {
+                throw new Exception("Player settings profile did not round-trip");
+            }
+            File.WriteAllText(profilePath, "not-json");
+            var fallbackProfile = PlayerSettingsProfile.Load(profilePath);
+            if (fallbackProfile.MasterVolume != 1 || fallbackProfile.TextSpeedMultiplier != 1)
+                throw new Exception("Invalid player settings profile did not fall back to defaults");
+            Console.WriteLine("  ✅ [PASS] Player-local settings profile persistence and invalid-file fallback verified");
+
             // ── Test 10: StoryGraphLoaderService Decoupled Hydration & Error Isolation ──
             Console.WriteLine("\n📌 [Test 10]: StoryGraphLoaderService Decoupled Hydration & Isolation...");
             string testGraphJson = """

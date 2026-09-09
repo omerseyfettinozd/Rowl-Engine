@@ -64,6 +64,15 @@ namespace RowlEngine.Editor.ViewModels
         [ObservableProperty]
         private int _selectedTabIndex = 0;
 
+        // ── Oyuncu tercihleri ───────────────────────────────────────────────
+        // Bunlar proje dosyasına değil, cihazdaki PlayerSettingsProfile'a yazılır.
+        [ObservableProperty] private float _masterVolume = 1;
+        [ObservableProperty] private float _bgmVolume = 1;
+        [ObservableProperty] private float _voiceVolume = 1;
+        [ObservableProperty] private float _sfxVolume = 1;
+        [ObservableProperty] private float _textSpeedMultiplier = 1;
+        [ObservableProperty] private float _autoAdvanceDelay = 2;
+
         // ── Tema Uygulama ───────────────────────────────────────────────────
         private static readonly Dictionary<string, Dictionary<string, Color>> ThemePalettes = new()
         {
@@ -193,6 +202,9 @@ namespace RowlEngine.Editor.ViewModels
             EditorLanguage = "Türkçe";
             DefaultBuildTarget = "Linux";
             DefaultExportPath = "";
+            MasterVolume = BgmVolume = VoiceVolume = SfxVolume = 1;
+            TextSpeedMultiplier = 1;
+            AutoAdvanceDelay = 2;
             ApplyTheme();
         }
     }

@@ -107,6 +107,9 @@ namespace RowlEngine.Editor.ViewModels
         public object? TopLevelHint { get; set; }
 
         public SettingsViewModel Settings { get; } = new();
+        private readonly string _playerSettingsPath = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "RowlEngine", "player-settings.json");
         public ToastService Toast => ToastService.Instance;
         public UndoRedoService UndoRedo => UndoRedoService.Instance;
 
@@ -470,6 +473,9 @@ namespace RowlEngine.Editor.ViewModels
         {
             AssetBitmapCache.Clear();
 
+            LoadPlayerSettings();
+            Settings.PropertyChanged += OnSettingsPropertyChanged;
+
             if (!string.IsNullOrWhiteSpace(projectPath) && Directory.Exists(projectPath))
             {
                 CurrentProjectPath = projectPath;
@@ -776,6 +782,7 @@ namespace RowlEngine.Editor.ViewModels
             if (success)
             {
                 EngineHost.SetProjectDirectory(ProjectRoot);
+                ApplyPlayerSettingsToEngine();
                 StatusText = "Engine Ready — Embedded C++ Runtime Active";
                 AppendLog($"[Engine] RowlEngineCore mounted isolated project: {ProjectRoot}");
 
@@ -790,6 +797,53 @@ namespace RowlEngine.Editor.ViewModels
             }
 
             return Task.CompletedTask;
+        }
+
+        private void LoadPlayerSettings()
+        {
+            var profile = PlayerSettingsProfile.Load(_playerSettingsPath);
+            Settings.MasterVolume = profile.MasterVolume;
+            Settings.BgmVolume = profile.BgmVolume;
+            Settings.VoiceVolume = profile.VoiceVolume;
+            Settings.SfxVolume = profile.SfxVolume;
+            Settings.TextSpeedMultiplier = profile.TextSpeedMultiplier;
+            Settings.AutoAdvanceDelay = profile.AutoAdvanceDelay;
+        }
+
+        private void OnSettingsPropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName is not (nameof(SettingsViewModel.MasterVolume) or nameof(SettingsViewModel.BgmVolume)
+                or nameof(SettingsViewModel.VoiceVolume) or nameof(SettingsViewModel.SfxVolume)
+                or nameof(SettingsViewModel.TextSpeedMultiplier) or nameof(SettingsViewModel.AutoAdvanceDelay))) return;
+
+            var profile = new PlayerSettingsProfile
+            {
+                MasterVolume = Settings.MasterVolume,
+                BgmVolume = Settings.BgmVolume,
+                VoiceVolume = Settings.VoiceVolume,
+                SfxVolume = Settings.SfxVolume,
+                TextSpeedMultiplier = Settings.TextSpeedMultiplier,
+                AutoAdvanceDelay = Settings.AutoAdvanceDelay
+            }.Sanitized();
+            profile.Save(_playerSettingsPath);
+            ApplyPlayerSettingsToEngine(profile);
+        }
+
+        private void ApplyPlayerSettingsToEngine(PlayerSettingsProfile? profile = null)
+        {
+            if (!EngineHost.IsInitialized) return;
+            profile ??= new PlayerSettingsProfile
+            {
+                MasterVolume = Settings.MasterVolume, BgmVolume = Settings.BgmVolume,
+                VoiceVolume = Settings.VoiceVolume, SfxVolume = Settings.SfxVolume,
+                TextSpeedMultiplier = Settings.TextSpeedMultiplier, AutoAdvanceDelay = Settings.AutoAdvanceDelay
+            }.Sanitized();
+            EngineHost.SetMasterVolume(profile.MasterVolume);
+            EngineHost.SetBgmVolume(profile.BgmVolume);
+            EngineHost.SetVoiceVolume(profile.VoiceVolume);
+            EngineHost.SetSfxVolume(profile.SfxVolume);
+            EngineHost.SetTextSpeedMultiplier(profile.TextSpeedMultiplier);
+            EngineHost.SetAutoAdvanceDelayOffset(profile.AutoAdvanceDelay);
         }
 
         /// <summary>

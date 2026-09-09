@@ -420,6 +420,11 @@ namespace RowlEngine.Editor.Native
             if (_handle != IntPtr.Zero) NativeBridge.RowlEngine_SetMasterVolume(_handle, volume);
         }
 
+        public void SetBgmVolume(float volume)
+        {
+            if (_handle != IntPtr.Zero) NativeBridge.RowlEngine_SetBgmVolume(_handle, volume);
+        }
+
         public void SetVoiceVolume(float volume)
         {
             if (_handle != IntPtr.Zero) NativeBridge.RowlEngine_SetVoiceVolume(_handle, volume);
@@ -428,6 +433,16 @@ namespace RowlEngine.Editor.Native
         public void SetSfxVolume(float volume)
         {
             if (_handle != IntPtr.Zero) NativeBridge.RowlEngine_SetSfxVolume(_handle, volume);
+        }
+
+        public void SetTextSpeedMultiplier(float multiplier)
+        {
+            if (_handle != IntPtr.Zero) NativeBridge.RowlEngine_SetTextSpeedMultiplier(_handle, multiplier);
+        }
+
+        public void SetAutoAdvanceDelayOffset(float seconds)
+        {
+            if (_handle != IntPtr.Zero) NativeBridge.RowlEngine_SetAutoAdvanceDelayOffset(_handle, seconds);
         }
 
         // ── Save / Load Slots & History Rewind ────────────────────────────────
