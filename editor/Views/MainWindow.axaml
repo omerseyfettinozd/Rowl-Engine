@@ -38,8 +38,9 @@
                                     <MenuItem Header="📋 Hierarchy" Command="{Binding ShowPanelCommand}" CommandParameter="Hierarchy"/>
                                     <MenuItem Header="🔍 Node Inspector" Command="{Binding ShowPanelCommand}" CommandParameter="Inspector"/>
                                     <MenuItem Header="📝 Output Log" Command="{Binding ShowPanelCommand}" CommandParameter="Log"/>
-                                    <MenuItem Header="📁 Project Assets" Command="{Binding ShowPanelCommand}" CommandParameter="Assets"/>
-                                    <MenuItem Header="💬 Dialogue Backlog" Command="{Binding ShowPanelCommand}" CommandParameter="Backlog"/>
+                                <MenuItem Header="📁 Project Assets" Command="{Binding ShowPanelCommand}" CommandParameter="Assets"/>
+                                <MenuItem Header="💬 Dialogue Backlog" Command="{Binding ShowPanelCommand}" CommandParameter="Backlog"/>
+                                <MenuItem Header="🔎 Analyze Story Graph" Command="{Binding AnalyzeStoryGraphCommand}"/>
                                 </MenuItem>
                             </Menu>
                         </StackPanel>

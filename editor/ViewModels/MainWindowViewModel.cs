@@ -1848,6 +1848,15 @@ namespace RowlEngine.Editor.ViewModels
                 AppendLog);
         }
 
+        [RelayCommand]
+        public void AnalyzeStoryGraph()
+        {
+            var issues = ProjectValidationService.Validate(Nodes, Connections, AssetsPath);
+            if (issues.Count == 0) AppendLog("✅ [GRAPH CHECK] No blocking asset or route issues found.");
+            foreach (var issue in issues)
+                AppendLog($"{(issue.IsError ? "❌" : "⚠️")} [GRAPH CHECK] {issue.Message}");
+        }
+
         /// <summary>
         /// Packages project assets into a single .rowlpkg binary archive file.
         /// Opens a folder picker so the user can choose the output directory.
