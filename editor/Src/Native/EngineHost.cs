@@ -63,6 +63,14 @@ namespace RowlEngine.Editor.Native
         /// <summary>Raw native engine pointer.</summary>
         public IntPtr Handle => _handle;
 
+        public ulong TextureCacheBudgetBytes => _handle == IntPtr.Zero
+            ? 0UL
+            : NativeBridge.RowlEngine_GetTextureCacheBudgetBytes(_handle);
+
+        public ulong TextureCacheEvictionCount => _handle == IntPtr.Zero
+            ? 0UL
+            : NativeBridge.RowlEngine_GetTextureCacheEvictionCount(_handle);
+
         /// <summary>
         /// Sets the decoded texture-cache ceiling for this runtime. Use a
         /// device-profile budget after Initialize; the native layer clamps

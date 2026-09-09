@@ -24,6 +24,7 @@ namespace {
 constexpr int kMaxTextureDimension = 8'192;
 constexpr uint64_t kMaxTexturePixels = 16ULL * 1024 * 1024;
 constexpr uint64_t kMinimumTextureCacheBytes = 1ULL * 1024ULL * 1024ULL;
+constexpr size_t kMaxMissingTextureCacheEntries = 512;
 
 bool hasSafeTextureDimensions(int width, int height) {
     return width > 0 && height > 0 &&
@@ -429,6 +430,7 @@ void Window::beginFrame() {
 }
 
 void Window::clearTextureCache() {
+    const bool hadMsdfAtlas = m_msdfAtlasTexture != nullptr;
     std::unordered_set<SDL_Texture*> uniqueTextures;
     for (auto& [name, tex] : m_textureCache) {
         if (tex) {
@@ -443,6 +445,13 @@ void Window::clearTextureCache() {
     m_textureLastUsed.clear();
     m_missingTextureCache.clear();
     m_buttonFontCache.clear();
+    m_textureCacheEvictionCount = 0;
+    m_textureUseClock = 0;
+    m_msdfAtlasTexture = nullptr;
+    if (hadMsdfAtlas) {
+        m_msdfRenderer.reset();
+        shutdownGpuMsdfRenderer();
+    }
     ROWL_LOG_INFO("Hardware Texture Cache Cleared (" + std::to_string(uniqueTextures.size()) + " unique textures freed).");
 }
 
@@ -464,6 +473,14 @@ uint64_t Window::getTextureCacheBytes() const {
 
 void Window::touchTexture(SDL_Texture* texture) {
     if (texture) m_textureLastUsed[texture] = ++m_textureUseClock;
+}
+
+void Window::rememberMissingTexture(std::string path) {
+    if (m_missingTextureCache.contains(path)) return;
+    if (m_missingTextureCache.size() >= kMaxMissingTextureCacheEntries) {
+        m_missingTextureCache.erase(m_missingTextureCache.begin());
+    }
+    m_missingTextureCache.insert(std::move(path));
 }
 
 void Window::destroyCachedTexture(SDL_Texture* texture) {
@@ -494,6 +511,7 @@ bool Window::evictTexturesToFit(uint64_t incomingBytes) {
         if (!leastRecentlyUsed) return false;
         ROWL_LOG_INFO("Evicting least-recently-used texture to respect cache budget");
         destroyCachedTexture(leastRecentlyUsed);
+        ++m_textureCacheEvictionCount;
     }
     return true;
 }
@@ -546,7 +564,7 @@ SDL_Texture* Window::loadTexture(const std::string& filename) {
     }
 
     if (!data) {
-        m_missingTextureCache.insert(normPath);
+        rememberMissingTexture(std::move(normPath));
         return nullptr;
     }
 
@@ -957,20 +975,7 @@ void Window::shutdown() {
 
     ROWL_LOG_INFO("Shutting down SDL3 Windowing & Graphics Subsystem...");
 
-    std::unordered_set<SDL_Texture*> uniqueTextures;
-    for (auto& [name, tex] : m_textureCache) {
-        if (tex) {
-            uniqueTextures.insert(tex);
-        }
-    }
-    for (auto* tex : uniqueTextures) {
-        SDL_DestroyTexture(tex);
-    }
-    m_textureCache.clear();
-    m_textureMemoryBytes.clear();
-    m_textureLastUsed.clear();
-    m_missingTextureCache.clear();
-
+    clearTextureCache();
     shutdownGpuMsdfRenderer();
 
     if (m_sdlRenderer) {

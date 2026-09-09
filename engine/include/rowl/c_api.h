@@ -151,6 +151,12 @@ ROWL_API uint32_t RowlEngine_GetTextureCacheTextureCount(RowlEngineHandle handle
 /** Returns the estimated RGBA byte footprint of distinct cached textures. */
 ROWL_API uint64_t RowlEngine_GetTextureCacheBytes(RowlEngineHandle handle);
 
+/** Returns the active decoded texture-cache ceiling in bytes. */
+ROWL_API uint64_t RowlEngine_GetTextureCacheBudgetBytes(RowlEngineHandle handle);
+
+/** Returns the number of LRU texture evictions since the last cache clear. */
+ROWL_API uint64_t RowlEngine_GetTextureCacheEvictionCount(RowlEngineHandle handle);
+
 /**
  * Sets the decoded texture-cache budget in bytes. Values below 1 MiB clamp to
  * 1 MiB; textures that cannot fit are rejected without disturbing live state.

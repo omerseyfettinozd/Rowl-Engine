@@ -55,3 +55,9 @@ A texture that cannot fit by itself is rejected without evicting live state.
 Hosts can select a lower device-profile budget through
 `RowlEngine_SetTextureCacheBudgetBytes` (values below 1 MiB clamp to 1 MiB).
 The MSDF atlas remains pinned while GPU text rendering is active.
+
+`RowlEngine_GetTextureCacheBudgetBytes` and
+`RowlEngine_GetTextureCacheEvictionCount` expose the active budget and the
+number of LRU evictions since the last cache clear. Missing-texture lookups are
+also capped at 512 cached paths, so malformed or generated content cannot grow
+the negative cache without bound.

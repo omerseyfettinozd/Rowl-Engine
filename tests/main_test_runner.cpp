@@ -1517,6 +1517,15 @@ void test_native_performance_benchmarks() {
               << cachedTextureBytes << " RGBA bytes" << std::endl;
     TEST_PASS("Texture Cache Memory Telemetry");
 
+    constexpr uint64_t kDefaultTextureCacheBudget = 64ULL * 1024ULL * 1024ULL;
+    RowlEngine_SetTextureCacheBudgetBytes(handle, kDefaultTextureCacheBudget);
+    if (RowlEngine_GetTextureCacheBudgetBytes(handle) != kDefaultTextureCacheBudget ||
+        RowlEngine_GetTextureCacheEvictionCount(handle) != 0) {
+        std::cerr << "C-API texture cache budget telemetry contract failed" << std::endl;
+        exit(1);
+    }
+    TEST_PASS("C-API Texture Cache Budget and Eviction Telemetry");
+
     RowlEngine_Shutdown(handle);
     RowlEngine_Destroy(handle);
 }
@@ -1550,14 +1559,16 @@ void test_hardening_and_reliability() {
             win.setTextureCacheBudgetBytes(kThirtyOneMiB);
             if (!win.loadTexture("Woman.png") || !win.loadTexture("Margot.jpg") ||
                 win.getTextureCacheTextureCount() != 1 ||
-                win.getTextureCacheBytes() > kThirtyOneMiB) {
+                win.getTextureCacheBytes() > kThirtyOneMiB ||
+                win.getTextureCacheEvictionCount() != 1) {
                 std::cerr << "Texture cache did not evict the least-recently-used texture" << std::endl;
                 exit(1);
             }
             win.setTextureCacheBudgetBytes(kOneMiB);
             if (win.getTextureCacheTextureCount() != 0 ||
                 win.loadTexture("Margot.jpg") != nullptr ||
-                win.getTextureCacheTextureCount() != 0) {
+                win.getTextureCacheTextureCount() != 0 ||
+                win.getTextureCacheEvictionCount() != 2) {
                 std::cerr << "Texture cache admitted an asset larger than its budget" << std::endl;
                 exit(1);
             }
@@ -1569,8 +1580,15 @@ void test_hardening_and_reliability() {
                 std::cerr << "Texture negative cache did not retain a missing asset lookup" << std::endl;
                 exit(1);
             }
+            for (int index = 0; index < 600; ++index) {
+                win.loadTexture("missing_texture_budget_" + std::to_string(index) + ".png");
+            }
+            if (win.getNegativeTextureCacheSize() > 512) {
+                std::cerr << "Texture negative cache exceeded its bounded entry count" << std::endl;
+                exit(1);
+            }
             win.clearTextureCache();
-            if (win.getNegativeTextureCacheSize() != 0) {
+            if (win.getNegativeTextureCacheSize() != 0 || win.getTextureCacheEvictionCount() != 0) {
                 std::cerr << "Texture negative cache was not cleared with the texture cache" << std::endl;
                 exit(1);
             }

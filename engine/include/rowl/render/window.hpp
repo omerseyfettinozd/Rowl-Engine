@@ -166,6 +166,7 @@ public:
     size_t getTextureCacheTextureCount() const { return m_textureMemoryBytes.size(); }
     uint64_t getTextureCacheBytes() const;
     uint64_t getTextureCacheBudgetBytes() const { return m_textureCacheBudgetBytes; }
+    uint64_t getTextureCacheEvictionCount() const { return m_textureCacheEvictionCount; }
     void setTextureCacheBudgetBytes(uint64_t bytes);
     FontRenderer* getFontRenderer() const { return m_fontRenderer.get(); }
     void reloadFonts();
@@ -192,6 +193,7 @@ private:
     bool evictTexturesToFit(uint64_t incomingBytes);
     void destroyCachedTexture(SDL_Texture* texture);
     void touchTexture(SDL_Texture* texture);
+    void rememberMissingTexture(std::string path);
 
     SDL_Window*   m_sdlWindow         = nullptr;
     SDL_Renderer* m_sdlRenderer       = nullptr;
@@ -211,6 +213,7 @@ private:
     uint32_t m_height      = 1080;
     uint64_t m_textureCacheBudgetBytes = 64ULL * 1024ULL * 1024ULL;
     uint64_t m_textureUseClock = 0;
+    uint64_t m_textureCacheEvictionCount = 0;
     bool m_isOpen          = false;
     bool m_initialized     = false;
     bool m_isEmbedded      = false; // true → rendering into host control
