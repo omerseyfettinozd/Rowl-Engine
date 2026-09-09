@@ -372,18 +372,38 @@ void test_audio_engine() {
         exit(1);
     }
     TEST_PASS("BGM OGG/Vorbis Decode through VFS Stream");
+
+    // The replacement track must be fully decoded and queued before a fade
+    // starts, so a bad transition can never silence the currently playing BGM.
+    audio.playBgm(toneAssetPath, Rowl::Audio::BgmTransitionKind::Crossfade, 0.1f);
+    if (audio.getCurrentBgmPath() != toneAssetPath) {
+        std::cerr << "BGM transition did not commit the replacement track" << std::endl;
+        exit(1);
+    }
+    if (audio.isAudioDeviceAvailable()) {
+        if (!audio.isBgmTransitionActive()) {
+            std::cerr << "Crossfade did not start on an available audio device" << std::endl;
+            exit(1);
+        }
+        audio.update(0.2f);
+        if (audio.isBgmTransitionActive()) {
+            std::cerr << "Crossfade did not complete after its configured duration" << std::endl;
+            exit(1);
+        }
+    }
+    TEST_PASS("BGM Transition Queueing and Silent Fallback Contract");
     const auto oversizedAudioPath = audioAssetDir / "rowl_oversized_audio.wav";
     std::ofstream(oversizedAudioPath, std::ios::binary).close();
     std::filesystem::resize_file(oversizedAudioPath, 128ULL * 1024 * 1024 + 1);
     audio.playAudio("audio/rowl_oversized_audio.wav", Rowl::Audio::AudioChannelType::Bgm);
-    if (audio.getCurrentBgmPath() != oggAssetPath) {
+    if (audio.getCurrentBgmPath() != toneAssetPath) {
         std::cerr << "Oversized audio load replaced the current playback state" << std::endl;
         exit(1);
     }
     std::filesystem::remove(oversizedAudioPath);
     if (audio.isAudioDeviceAvailable()) {
         audio.playAudio("missing_theme.wav", Rowl::Audio::AudioChannelType::Bgm);
-        if (audio.getCurrentBgmPath() != oggAssetPath) {
+        if (audio.getCurrentBgmPath() != toneAssetPath) {
             std::cerr << "Failed BGM load replaced the current playback state" << std::endl;
             exit(1);
         }

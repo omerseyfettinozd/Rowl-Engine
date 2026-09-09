@@ -16,6 +16,11 @@ Son doğrulama: Linux Debug derlemesi, CTest ve editör headless testi geçiyor.
 ## Sonraki üretim işleri
 
 - Script component'leri için editor tarafında hata/çalışma durumu görünürlüğü.
+- Node-bazlı BGM geçişleri: project varsayılanı, instant, fade ve crossfade
+  runtime'da uygulanır; yeni parçanın decode/queue işlemi başarısızsa çalışan
+  BGM korunur.
+- Audio component olay semantiği: preview refresh'lerinde SFX tekrarını önleme
+  ve node girişine bağlı oynatma.
 - Android/iOS host projeleri ve fiziksel cihaz doğrulaması.
 
 Bu dosya, hedef mimari belgelerindeki gelecek vaatleri ile test edilmiş kodun durumunu ayırmak için tutulur.

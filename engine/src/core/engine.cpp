@@ -50,6 +50,13 @@ bool isSafeComponentData(const nlohmann::json& value, std::size_t depth = 0) {
 
 } // namespace
 
+void Engine::setBgmTransitionDefaults(std::string kind, float durationSeconds) {
+    if (kind != "instant" && kind != "fade" && kind != "crossfade") kind = "instant";
+    m_defaultBgmTransition = std::move(kind);
+    m_defaultBgmTransitionDurationSeconds = std::isfinite(durationSeconds)
+        ? std::clamp(durationSeconds, 0.0f, 60.0f) : 1.0f;
+}
+
 Engine::Engine() {
     s_instance = this;
 }
@@ -752,7 +759,15 @@ void Engine::updateSceneFromComponents(const std::string& componentsJson) {
             }
             m_audio->setBgmVolume(vol);
             if (!bgm.empty() && bgm != m_audio->getCurrentBgmPath()) {
-                m_audio->playAudio(bgm, Rowl::Audio::AudioChannelType::Bgm);
+                std::string transition = data.value("bgm_transition", "project_default");
+                if (transition == "project_default") transition = m_defaultBgmTransition;
+                float duration = data.value("bgm_transition_duration_seconds", 0.0f);
+                if (!std::isfinite(duration) || duration < 0.0f || duration > 60.0f) duration = 0.0f;
+                if (duration == 0.0f) duration = m_defaultBgmTransitionDurationSeconds;
+                const auto kind = transition == "crossfade" ? Rowl::Audio::BgmTransitionKind::Crossfade :
+                                  transition == "fade" ? Rowl::Audio::BgmTransitionKind::Fade :
+                                                         Rowl::Audio::BgmTransitionKind::Instant;
+                m_audio->playBgm(bgm, kind, duration);
             }
             if (!sfx.empty()) m_audio->playAudio(sfx, Rowl::Audio::AudioChannelType::Sfx);
         }
@@ -1153,7 +1168,7 @@ void Engine::step(float deltaTime) {
     }
 
     if (m_audio) {
-        m_audio->update();
+        m_audio->update(deltaTime);
     }
     if (m_hasActiveScript && m_luaSandbox) {
         for (const auto& moduleId : m_activeScriptModuleIds) {

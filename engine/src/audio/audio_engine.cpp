@@ -166,17 +166,24 @@ bool AudioEngine::initialize() {
     m_isBgmPlaying = false;
     m_isVoicePlaying = false;
     m_deviceAvailable = false;
+    m_bgmTransitionActive = false;
+    m_bgmTransitionElapsedSeconds = 0.0f;
+    m_bgmTransitionDurationSeconds = 0.0f;
 
     // Initialize SDL3 Audio subsystem
     if (SDL_InitSubSystem(SDL_INIT_AUDIO)) {
         // Open default audio device stream for BGM
         m_bgmStream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr, nullptr, nullptr);
+        // A second BGM stream lets a new, already-decoded track be queued
+        // before the current track is touched. This is what makes transition
+        // failures transactional and enables a real crossfade.
+        m_transitionBgmStream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr, nullptr, nullptr);
         // Voice has its own gain path so narration controls never affect SFX.
         m_voiceStream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr, nullptr, nullptr);
         // Open a third stream for short sound effects.
         m_sfxStream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr, nullptr, nullptr);
 
-        if (m_bgmStream && m_voiceStream && m_sfxStream) {
+        if (m_bgmStream && m_transitionBgmStream && m_voiceStream && m_sfxStream) {
             m_deviceAvailable = true;
             applyChannelGains();
             ROWL_LOG_INFO("[AudioEngine] Physical audio device initialized successfully (BGM, Voice & SFX streams active).");
@@ -184,6 +191,7 @@ bool AudioEngine::initialize() {
             ROWL_LOG_WARN("[AudioEngine] Audio streams could not be opened: " + std::string(SDL_GetError()) +
                           " — running in silent fallback mode.");
             if (m_bgmStream) { SDL_DestroyAudioStream(m_bgmStream); m_bgmStream = nullptr; }
+            if (m_transitionBgmStream) { SDL_DestroyAudioStream(m_transitionBgmStream); m_transitionBgmStream = nullptr; }
             if (m_voiceStream) { SDL_DestroyAudioStream(m_voiceStream); m_voiceStream = nullptr; }
             if (m_sfxStream) { SDL_DestroyAudioStream(m_sfxStream); m_sfxStream = nullptr; }
         }
@@ -196,6 +204,17 @@ bool AudioEngine::initialize() {
     ROWL_LOG_INFO("Audio Engine Subsystem Initialized Successfully (Hardware Available: " +
                   std::string(m_deviceAvailable ? "YES" : "NO") + ").");
     return true;
+}
+
+void AudioEngine::playBgm(const std::string& assetPath, BgmTransitionKind transition, float durationSeconds) {
+    if (!std::isfinite(durationSeconds)) durationSeconds = 0.0f;
+    m_requestedBgmTransition = transition;
+    m_requestedBgmTransitionDurationSeconds = std::clamp(durationSeconds, 0.0f, 60.0f);
+    playAudio(assetPath, AudioChannelType::Bgm);
+    // playAudio consumes this request synchronously; never leak it into a
+    // later direct BGM call made by the legacy C API.
+    m_requestedBgmTransition = BgmTransitionKind::Instant;
+    m_requestedBgmTransitionDurationSeconds = 0.0f;
 }
 
 void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType channel, DSPFilterType filter) {
@@ -214,6 +233,7 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
         if (channel == AudioChannelType::Bgm) {
             m_currentBgmPath = assetPath;
             m_isBgmPlaying = true;
+            m_bgmTransitionActive = false;
         }
         if (channel == AudioChannelType::Voice) {
             m_isVoicePlaying = true;
@@ -294,11 +314,19 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
         applyDspToFloatPcm(samples, static_cast<size_t>(floatLength) / sizeof(float),
                            floatSpec.channels, floatSpec.freq, filter);
 
-        SDL_AudioStream* targetStream = (channel == AudioChannelType::Bgm) ? m_bgmStream :
+        const bool transitionRequested = channel == AudioChannelType::Bgm &&
+            m_isBgmPlaying && !m_currentBgmPath.empty() &&
+            m_requestedBgmTransition != BgmTransitionKind::Instant &&
+            m_requestedBgmTransitionDurationSeconds > 0.0f;
+        SDL_AudioStream* targetStream = (channel == AudioChannelType::Bgm)
+            ? (transitionRequested ? m_transitionBgmStream : m_bgmStream) :
                                        (channel == AudioChannelType::Voice) ? m_voiceStream : m_sfxStream;
         if (targetStream) {
-            if (channel == AudioChannelType::Bgm) {
+            if (channel == AudioChannelType::Bgm && !transitionRequested) {
                 SDL_ClearAudioStream(m_bgmStream);
+            }
+            if (transitionRequested) {
+                SDL_ClearAudioStream(m_transitionBgmStream);
             }
             if (!SDL_SetAudioStreamFormat(targetStream, &floatSpec, nullptr) ||
                 !SDL_PutAudioStreamData(targetStream, floatBuffer, floatLength)) {
@@ -317,7 +345,18 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
             }
             applyDspFilter(filter);
             if (channel == AudioChannelType::Bgm) {
-                m_bgmData.assign(floatBuffer, floatBuffer + floatLength);
+                if (transitionRequested) {
+                    // The old stream remains entirely intact until this queue
+                    // succeeds, so decode/format/device errors cannot stop it.
+                    m_transitionBgmData.assign(floatBuffer, floatBuffer + floatLength);
+                    m_activeBgmTransition = m_requestedBgmTransition;
+                    m_bgmTransitionDurationSeconds = m_requestedBgmTransitionDurationSeconds;
+                    m_bgmTransitionElapsedSeconds = 0.0f;
+                    m_bgmTransitionActive = true;
+                } else {
+                    m_bgmData.assign(floatBuffer, floatBuffer + floatLength);
+                    m_bgmTransitionActive = false;
+                }
                 m_currentBgmPath = assetPath;
                 m_isBgmPlaying = true;
             }
@@ -337,8 +376,14 @@ void AudioEngine::stopBgm() {
         SDL_ClearAudioStream(m_bgmStream);
         SDL_PauseAudioStreamDevice(m_bgmStream);
     }
+    if (m_transitionBgmStream) {
+        SDL_ClearAudioStream(m_transitionBgmStream);
+        SDL_PauseAudioStreamDevice(m_transitionBgmStream);
+    }
     m_currentBgmPath = "";
     m_bgmData.clear();
+    m_transitionBgmData.clear();
+    m_bgmTransitionActive = false;
     m_isBgmPlaying = false;
     ROWL_LOG_INFO("[AudioEngine] BGM stopped.");
 }
@@ -418,7 +463,7 @@ void AudioEngine::applyDspFilter(DSPFilterType filter) {
     ROWL_LOG_INFO("DSP Filter Applied -> " + filterName);
 }
 
-void AudioEngine::update() {
+void AudioEngine::update(float deltaSeconds) {
     if (!m_initialized || !m_deviceAvailable) {
         return;
     }
@@ -429,11 +474,41 @@ void AudioEngine::update() {
             SDL_ResumeAudioStreamDevice(m_bgmStream);
         }
     }
+    if (m_transitionBgmStream && !m_transitionBgmData.empty() && m_bgmLoop) {
+        if (SDL_GetAudioStreamAvailable(m_transitionBgmStream) <= 0) {
+            SDL_PutAudioStreamData(m_transitionBgmStream, m_transitionBgmData.data(), static_cast<int>(m_transitionBgmData.size()));
+            SDL_ResumeAudioStreamDevice(m_transitionBgmStream);
+        }
+    }
+    updateBgmTransition(std::isfinite(deltaSeconds) ? deltaSeconds : 0.0f);
 
     if (m_voiceStream && m_isVoicePlaying && SDL_GetAudioStreamQueued(m_voiceStream) <= 0) {
         m_isVoicePlaying = false;
         triggerVoiceDucking(false);
     }
+}
+
+void AudioEngine::updateBgmTransition(float deltaSeconds) {
+    if (!m_bgmTransitionActive || !m_bgmStream || !m_transitionBgmStream) return;
+    m_bgmTransitionElapsedSeconds += std::max(0.0f, deltaSeconds);
+    const float progress = std::clamp(m_bgmTransitionElapsedSeconds / m_bgmTransitionDurationSeconds, 0.0f, 1.0f);
+    float outgoing = 1.0f - progress;
+    float incoming = progress;
+    if (m_activeBgmTransition == BgmTransitionKind::Fade) {
+        outgoing = std::max(0.0f, 1.0f - progress * 2.0f);
+        incoming = std::max(0.0f, progress * 2.0f - 1.0f);
+    }
+    const float baseGain = m_masterVolume * (m_isDuckingActive ? m_bgmVolume * m_duckingFactor : m_bgmVolume);
+    SDL_SetAudioStreamGain(m_bgmStream, baseGain * outgoing);
+    SDL_SetAudioStreamGain(m_transitionBgmStream, baseGain * incoming);
+    if (progress < 1.0f) return;
+
+    SDL_ClearAudioStream(m_bgmStream);
+    SDL_PauseAudioStreamDevice(m_bgmStream);
+    std::swap(m_bgmStream, m_transitionBgmStream);
+    std::swap(m_bgmData, m_transitionBgmData);
+    m_bgmTransitionActive = false;
+    applyChannelGains();
 }
 
 void AudioEngine::shutdown() {
@@ -442,10 +517,15 @@ void AudioEngine::shutdown() {
     ROWL_LOG_INFO("Shutting down Audio Engine Subsystem...");
 
     m_bgmData.clear();
+    m_transitionBgmData.clear();
 
     if (m_bgmStream) {
         SDL_DestroyAudioStream(m_bgmStream);
         m_bgmStream = nullptr;
+    }
+    if (m_transitionBgmStream) {
+        SDL_DestroyAudioStream(m_transitionBgmStream);
+        m_transitionBgmStream = nullptr;
     }
     if (m_voiceStream) {
         SDL_DestroyAudioStream(m_voiceStream);
@@ -466,6 +546,7 @@ void AudioEngine::shutdown() {
 
 void AudioEngine::applyChannelGains() {
     if (m_bgmStream) SDL_SetAudioStreamGain(m_bgmStream, m_masterVolume * m_bgmGain);
+    if (m_transitionBgmStream) SDL_SetAudioStreamGain(m_transitionBgmStream, 0.0f);
     if (m_voiceStream) SDL_SetAudioStreamGain(m_voiceStream, m_masterVolume * m_voiceVolume);
     if (m_sfxStream) SDL_SetAudioStreamGain(m_sfxStream, m_masterVolume * m_sfxVolume);
 }

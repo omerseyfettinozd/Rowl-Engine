@@ -23,6 +23,14 @@ enum class DSPFilterType {
     UnderwaterLowPass
 };
 
+// Kept separate from component JSON so the audio engine has one bounded,
+// validated runtime contract irrespective of the host that requested it.
+enum class BgmTransitionKind {
+    Instant,
+    Fade,
+    Crossfade
+};
+
 class AudioEngine {
 public:
     AudioEngine();
@@ -30,6 +38,7 @@ public:
 
     bool initialize();
     void playAudio(const std::string& assetPath, AudioChannelType channel, DSPFilterType filter = DSPFilterType::Normal);
+    void playBgm(const std::string& assetPath, BgmTransitionKind transition, float durationSeconds);
     void stopBgm();
     void stopAll();
 
@@ -41,7 +50,7 @@ public:
     void triggerVoiceDucking(bool isVoiceActive);
     void setDuckingFactor(float factor);  // Configurable voice ducking attenuation (0.0-1.0)
 
-    void update();
+    void update(float deltaSeconds = 1.0f / 60.0f);
     bool isBgmLooping() const { return m_bgmLoop; }
     void setBgmLooping(bool loop) { m_bgmLoop = loop; }
 
@@ -57,6 +66,7 @@ public:
     const std::string& getCurrentBgmPath() const { return m_currentBgmPath; }
     bool isBgmPlaying() const { return m_isBgmPlaying; }
     bool isVoicePlaying() const { return m_isVoicePlaying; }
+    bool isBgmTransitionActive() const { return m_bgmTransitionActive; }
     const std::string& getLastError() const { return m_lastError; }
 
     void shutdown();
@@ -77,12 +87,21 @@ private:
     std::string m_currentBgmPath = "";
     std::string m_lastError;
     std::vector<uint8_t> m_bgmData;
+    std::vector<uint8_t> m_transitionBgmData;
     bool m_isBgmPlaying = false;
     bool m_isVoicePlaying = false;
     SDL_AudioStream* m_bgmStream = nullptr;
+    SDL_AudioStream* m_transitionBgmStream = nullptr;
     SDL_AudioStream* m_voiceStream = nullptr;
     SDL_AudioStream* m_sfxStream = nullptr;
+    BgmTransitionKind m_requestedBgmTransition = BgmTransitionKind::Instant;
+    float m_requestedBgmTransitionDurationSeconds = 0.0f;
+    bool m_bgmTransitionActive = false;
+    BgmTransitionKind m_activeBgmTransition = BgmTransitionKind::Instant;
+    float m_bgmTransitionElapsedSeconds = 0.0f;
+    float m_bgmTransitionDurationSeconds = 0.0f;
     void applyChannelGains();
+    void updateBgmTransition(float deltaSeconds);
 };
 
 } // namespace Rowl::Audio

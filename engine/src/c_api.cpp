@@ -16,6 +16,9 @@
 #include "rowl/vfs/vfs.hpp"
 
 #include <cstring>
+#include <fstream>
+#include <filesystem>
+#include <nlohmann/json.hpp>
 #include <exception>
 #include <memory>
 #include <mutex>
@@ -322,6 +325,22 @@ void RowlEngine_SetProjectDirectory(RowlEngineHandle handle, const char* project
         // embedded editor preview or another standalone game from sharing the
         // process-relative default "saves" directory.
         engine->setSaveDirectory((std::filesystem::path(projectRoot) / "saves").string());
+        // Project-owned defaults are read at the mount boundary so player and
+        // embedded editor preview resolve the same component contract.
+        std::string transition = "instant";
+        float transitionDuration = 1.0f;
+        const auto manifestPath = std::filesystem::path(projectRoot) / "project.rowlproj";
+        std::error_code manifestError;
+        if (std::filesystem::is_regular_file(manifestPath, manifestError) && !manifestError &&
+            std::filesystem::file_size(manifestPath, manifestError) <= 1024 * 1024 && !manifestError) {
+            try {
+                std::ifstream manifest(manifestPath);
+                const auto json = nlohmann::json::parse(manifest);
+                transition = json.value("default_bgm_transition", transition);
+                transitionDuration = json.value("default_bgm_transition_duration_seconds", transitionDuration);
+            } catch (...) { }
+        }
+        engine->setBgmTransitionDefaults(transition, transitionDuration);
         Rowl::VFS::VFSManager::instance().remountProject(projectRoot);
         auto* win = engine->getWindow();
         if (win) {

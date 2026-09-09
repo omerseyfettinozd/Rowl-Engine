@@ -201,6 +201,7 @@ public:
     uint64_t getCurrentStepId() const;
     void setSaveDirectory(const std::string& saveDir) { m_saveDirectory = saveDir; }
     std::string getSaveDirectory() const { return m_saveDirectory; }
+    void setBgmTransitionDefaults(std::string kind, float durationSeconds);
     std::shared_ptr<const Rowl::State::GameState> getGameState() const { return m_gameState; }
 
     // ── Scripting & Variable Evaluation ───────────────────────────────────
@@ -224,6 +225,8 @@ private:
     std::shared_ptr<const Rowl::State::GameState> m_gameState;
     std::unique_ptr<Rowl::Scripting::LuaSandbox>  m_luaSandbox;
     std::string m_saveDirectory = "saves";
+    std::string m_defaultBgmTransition = "instant";
+    float m_defaultBgmTransitionDurationSeconds = 1.0f;
 
     // External window handle (embedded / single-window mode)
     void*    m_externalWindowHandle = nullptr;
