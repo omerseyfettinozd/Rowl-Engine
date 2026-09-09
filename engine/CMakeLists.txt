@@ -178,29 +178,40 @@ target_link_libraries(RowlEngineCore PUBLIC
 )
 
 # ── Rowl Player — Standalone Desktop Executable ───────────────────────────
-add_executable(rowl_player src/player/main.cpp)
-target_link_libraries(rowl_player PRIVATE RowlEngineCore ${SDL3_TARGET})
-set_target_properties(rowl_player PROPERTIES
-    OUTPUT_NAME "rowl_player"
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
-    BUILD_RPATH "$ORIGIN/../lib:$ORIGIN"
-    INSTALL_RPATH "$ORIGIN/../lib:$ORIGIN"
-)
-if(ROWL_GPU_MSDF_SHADER_AVAILABLE)
-    add_custom_command(TARGET rowl_player POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:rowl_player>/shaders"
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${ROWL_SHADER_DIR}/msdf_text.frag.spv"
-            "$<TARGET_FILE_DIR:rowl_player>/shaders/msdf_text.frag.spv"
+set(ROWL_PLAYER_DEFAULT ON)
+if(CMAKE_CROSSCOMPILING OR ANDROID OR CMAKE_SYSTEM_NAME STREQUAL "iOS")
+    set(ROWL_PLAYER_DEFAULT OFF)
+endif()
+option(ROWL_BUILD_PLAYER "Build the standalone desktop player" ${ROWL_PLAYER_DEFAULT})
+
+if(ROWL_BUILD_PLAYER)
+    add_executable(rowl_player src/player/main.cpp)
+    target_link_libraries(rowl_player PRIVATE RowlEngineCore ${SDL3_TARGET})
+    set_target_properties(rowl_player PROPERTIES
+        OUTPUT_NAME "rowl_player"
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+        BUILD_RPATH "$ORIGIN/../lib:$ORIGIN"
+        INSTALL_RPATH "$ORIGIN/../lib:$ORIGIN"
     )
+    if(ROWL_GPU_MSDF_SHADER_AVAILABLE)
+        add_custom_command(TARGET rowl_player POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:rowl_player>/shaders"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${ROWL_SHADER_DIR}/msdf_text.frag.spv"
+                "$<TARGET_FILE_DIR:rowl_player>/shaders/msdf_text.frag.spv"
+        )
+    endif()
 endif()
 
 # ── Install rules (optional but useful for packaging) ─────────────────────
-install(TARGETS RowlEngineCore rowl_player
+install(TARGETS RowlEngineCore
     LIBRARY  DESTINATION lib
-    RUNTIME  DESTINATION bin   # Windows DLL and player exe go here
+    RUNTIME  DESTINATION bin
     ARCHIVE  DESTINATION lib
 )
+if(TARGET rowl_player)
+    install(TARGETS rowl_player RUNTIME DESTINATION bin)
+endif()
 install(DIRECTORY include/ DESTINATION include)
 if(ROWL_GPU_MSDF_SHADER_AVAILABLE)
     install(FILES "${ROWL_SHADER_DIR}/msdf_text.frag.spv" DESTINATION bin/shaders)

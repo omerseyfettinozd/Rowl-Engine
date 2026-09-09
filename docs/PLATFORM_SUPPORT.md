@@ -12,8 +12,8 @@ package and a real-device smoke test pass.
 | Linux desktop | Native CTest and GPU-MSDF smoke test in CI | Local standalone player test | Validated development target |
 | Windows desktop | vcpkg CMake/CTest CI job | Standalone package smoke test pending | Build gate configured |
 | macOS desktop | None yet | None yet | Planned |
-| Android arm64-v8a | NDK script exists | APK and physical-device test pending | Planned |
-| iOS | None yet | None yet | Planned |
+| Android arm64-v8a | Core-only NDK CMake script | APK and physical-device test pending | Build path prepared |
+| iOS | Core-only Xcode/CMake arm64 script | Signed app and physical-device test pending | Build path prepared |
 
 ## Renderer rule
 
