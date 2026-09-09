@@ -17,6 +17,8 @@ using Avalonia.Threading;
 using System;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using System.Text.Json;
+using System.Collections.Generic;
 
 namespace RowlEngine.Editor.Native
 {
@@ -70,6 +72,9 @@ namespace RowlEngine.Editor.Native
         public ulong TextureCacheEvictionCount => _handle == IntPtr.Zero
             ? 0UL
             : NativeBridge.RowlEngine_GetTextureCacheEvictionCount(_handle);
+
+        public IReadOnlyList<ScriptRuntimeDiagnostic> ScriptRuntimeDiagnostics { get; private set; }
+            = Array.Empty<ScriptRuntimeDiagnostic>();
 
         /// <summary>
         /// Sets the decoded texture-cache ceiling for this runtime. Use a
@@ -270,12 +275,30 @@ namespace RowlEngine.Editor.Native
             if (_handle == IntPtr.Zero || string.IsNullOrEmpty(componentsJson)) return;
 
             NativeBridge.RowlEngine_UpdateSceneFromJson(_handle, componentsJson);
+            RefreshScriptRuntimeDiagnostics();
 
             if (!IsPlaying)
             {
                 NativeBridge.RowlEngine_Step(_handle, 0.0f);
                 UpdatePixelBuffer();
             }
+        }
+
+        public void RefreshScriptRuntimeDiagnostics()
+        {
+            if (_handle == IntPtr.Zero) return;
+            try
+            {
+                string json = NativeBridge.PtrToString(
+                    NativeBridge.RowlEngine_GetScriptRuntimeDiagnosticsJson(_handle));
+                ScriptRuntimeDiagnostics = JsonSerializer.Deserialize<List<ScriptRuntimeDiagnostic>>(json)
+                    ?? new List<ScriptRuntimeDiagnostic>();
+            }
+            catch (JsonException)
+            {
+                ScriptRuntimeDiagnostics = Array.Empty<ScriptRuntimeDiagnostic>();
+            }
+            OnPropertyChanged(nameof(ScriptRuntimeDiagnostics));
         }
 
         /// <summary>Loads (or reloads) a story graph JSON file into the engine.</summary>
@@ -439,5 +462,13 @@ namespace RowlEngine.Editor.Native
             RenderTargetBitmap = null;
             bitmap?.Dispose();
         }
+    }
+
+    public sealed class ScriptRuntimeDiagnostic
+    {
+        public string module_id { get; set; } = string.Empty;
+        public string path { get; set; } = string.Empty;
+        public string state { get; set; } = string.Empty;
+        public string error { get; set; } = string.Empty;
     }
 }

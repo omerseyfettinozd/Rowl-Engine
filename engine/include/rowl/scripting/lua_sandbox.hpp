@@ -39,6 +39,11 @@ public:
 
     bool evaluateCondition(const std::string& conditionExpr);
 
+    /// The most recent module compile or lifecycle error. This is intentionally
+    /// diagnostic-only: callers must still use the boolean return value as the
+    /// authority for an operation's success.
+    const std::string& getLastError() const { return m_lastError; }
+
     const std::unordered_map<std::string, std::string>& getAllVariables() const { return m_scriptVariables; }
     void clearVariables();
 
@@ -50,6 +55,7 @@ private:
     lua_State* m_luaState = nullptr;
     std::unordered_map<std::string, std::string> m_scriptVariables;
     std::unordered_map<std::string, int> m_modules;
+    std::string m_lastError;
     bool m_initialized = false;
 };
 

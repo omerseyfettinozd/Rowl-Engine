@@ -10,6 +10,12 @@
       <TextBox Text="{Binding ScriptPath}" Watermark="scripts/example.lua" />
       <TextBlock Text="Inline code (optional)" FontSize="11" Foreground="{DynamicResource MutedText}" />
       <TextBox Text="{Binding InlineCode}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="72" Watermark="function on_enter() end" />
+      <Border Background="{DynamicResource SurfaceBackground}" CornerRadius="4" Padding="6">
+        <StackPanel Spacing="2">
+          <TextBlock Text="{Binding RuntimeState, StringFormat='Runtime: {0}'}" FontSize="11" Foreground="{DynamicResource MutedText}" />
+          <TextBlock Text="{Binding RuntimeError}" IsVisible="{Binding HasRuntimeError}" TextWrapping="Wrap" FontSize="11" Foreground="{DynamicResource ErrorColor}" />
+        </StackPanel>
+      </Border>
     </StackPanel>
   </Border>
 </UserControl>

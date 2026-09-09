@@ -549,6 +549,7 @@ void Engine::updateSceneFromComponents(const std::string& componentsJson) {
 
         // The payload has passed schema validation, so the active script can
         // be notified without a malformed update leaving the scene half-live.
+        m_scriptRuntimeStatuses.clear();
         deactivateScripts();
 
         for (const auto& comp : comps) {
@@ -1127,7 +1128,9 @@ void Engine::step(float deltaTime) {
     }
     if (m_hasActiveScript && m_luaSandbox) {
         for (const auto& moduleId : m_activeScriptModuleIds) {
-            m_luaSandbox->callOptionalModuleFunction(moduleId, "on_update", deltaTime);
+            if (!m_luaSandbox->callOptionalModuleFunction(moduleId, "on_update", deltaTime)) {
+                markScriptStatus(moduleId, {}, "failed", m_luaSandbox->getLastError());
+            }
         }
     }
 
@@ -1162,7 +1165,9 @@ void Engine::run() {
 void Engine::deactivateScripts() {
     if (m_hasActiveScript && m_luaSandbox) {
         for (auto it = m_activeScriptModuleIds.rbegin(); it != m_activeScriptModuleIds.rend(); ++it) {
-            m_luaSandbox->callOptionalModuleFunction(*it, "on_exit");
+            if (!m_luaSandbox->callOptionalModuleFunction(*it, "on_exit")) {
+                markScriptStatus(*it, {}, "failed", m_luaSandbox->getLastError());
+            }
             m_luaSandbox->unloadModule(*it);
         }
     }
@@ -1180,21 +1185,44 @@ void Engine::activateScripts(const std::vector<nlohmann::json>& scripts) {
             source = Rowl::VFS::VFSManager::instance().readString(path);
             if (source.empty()) {
                 ROWL_LOG_ERROR("Lua script asset could not be read: " + path);
+                markScriptStatus((path + "#" + std::to_string(scriptIndex)), path, "failed",
+                                 "Lua script asset could not be read");
                 continue;
             }
         }
-        if (source.empty()) continue;
+        if (source.empty()) {
+            markScriptStatus("inline#" + std::to_string(scriptIndex), path, "failed",
+                             "Lua script has no source code or asset path");
+            continue;
+        }
         const std::string moduleId = (path.empty() ? "inline" : path) + "#" + std::to_string(scriptIndex);
         if (!m_luaSandbox->loadModule(moduleId, source)) {
             ROWL_LOG_ERROR("Lua script activation failed" + (path.empty() ? std::string{} : ": " + path));
+            markScriptStatus(moduleId, path, "failed", m_luaSandbox->getLastError());
             continue;
         }
         m_activeScriptModuleIds.push_back(moduleId);
         m_hasActiveScript = true;
         if (!m_luaSandbox->callOptionalModuleFunction(moduleId, "on_enter")) {
             ROWL_LOG_ERROR("Lua on_enter callback failed" + (path.empty() ? std::string{} : ": " + path));
+            markScriptStatus(moduleId, path, "failed", m_luaSandbox->getLastError());
+        } else {
+            markScriptStatus(moduleId, path, "running");
         }
     }
+}
+
+void Engine::markScriptStatus(const std::string& moduleId, const std::string& sourcePath,
+                              const std::string& state, const std::string& error) {
+    const auto existing = std::find_if(m_scriptRuntimeStatuses.begin(), m_scriptRuntimeStatuses.end(),
+        [&](const ScriptRuntimeStatus& status) { return status.moduleId == moduleId; });
+    if (existing != m_scriptRuntimeStatuses.end()) {
+        if (!sourcePath.empty()) existing->sourcePath = sourcePath;
+        existing->state = state;
+        existing->lastError = error;
+        return;
+    }
+    m_scriptRuntimeStatuses.push_back({moduleId, sourcePath, state, error});
 }
 
 void Engine::shutdown() {

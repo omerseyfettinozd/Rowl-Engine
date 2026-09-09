@@ -16,6 +16,20 @@ namespace RowlEngine.Editor.ViewModels.Components
         [ObservableProperty]
         private string _inlineCode = "";
 
+        // Runtime-only editor feedback. These fields are never serialized into
+        // story JSON: they describe the latest preview execution, not authoring
+        // data.
+        [ObservableProperty]
+        private string _runtimeState = "Not run";
+
+        [ObservableProperty]
+        private string _runtimeError = "";
+
+        public bool HasRuntimeError => !string.IsNullOrWhiteSpace(RuntimeError);
+
+        partial void OnRuntimeErrorChanged(string value)
+            => OnPropertyChanged(nameof(HasRuntimeError));
+
         public override Dictionary<string, object> Serialize()
         {
             var data = new Dictionary<string, object>();

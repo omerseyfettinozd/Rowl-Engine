@@ -77,6 +77,15 @@ struct StoryNode {
     std::vector<ComponentData> components;
 };
 
+/// A bounded, editor-facing snapshot of one active Lua component. It contains
+/// no executable source and is safe to expose through the C API.
+struct ScriptRuntimeStatus {
+    std::string moduleId;
+    std::string sourcePath;
+    std::string state;
+    std::string lastError;
+};
+
 class Engine {
 public:
     Engine();
@@ -196,6 +205,9 @@ public:
     std::string getScriptVariable(const std::string& key) const;
     bool evaluateCondition(const std::string& conditionExpr);
     bool executeScript(const std::string& scriptCode);
+    const std::vector<ScriptRuntimeStatus>& getScriptRuntimeStatuses() const {
+        return m_scriptRuntimeStatuses;
+    }
 
 private:
     static Engine* s_instance;
@@ -241,6 +253,7 @@ private:
     std::vector<Rowl::Render::ChoiceButtonRenderData> m_activeChoiceButtons;
     bool m_hasActiveScript = false;
     std::vector<std::string> m_activeScriptModuleIds;
+    std::vector<ScriptRuntimeStatus> m_scriptRuntimeStatuses;
 
     bool m_isRunning    = false;
     bool m_initialized  = false;
@@ -250,6 +263,8 @@ private:
     void restoreAudioStateFromGameState();
     void deactivateScripts();
     void activateScripts(const std::vector<nlohmann::json>& scripts);
+    void markScriptStatus(const std::string& moduleId, const std::string& sourcePath,
+                          const std::string& state, const std::string& error = {});
 };
 
 } // namespace Rowl::Core

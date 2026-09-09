@@ -107,6 +107,10 @@ namespace RowlEngine.Editor
             restoredScript.Deserialize(scriptData.ToDictionary(pair => pair.Key, pair => (object?)pair.Value));
             if (restoredScript.ScriptPath != script.ScriptPath || restoredScript.InlineCode != script.InlineCode)
                 throw new Exception("ScriptComponent serialization mismatch");
+            script.RuntimeState = "failed";
+            script.RuntimeError = "syntax error";
+            if (!script.HasRuntimeError || script.Serialize().ContainsKey("runtime_error"))
+                throw new Exception("Script runtime feedback leaked into story serialization");
 
             // Test Trash Can (RemoveSelfCommand)
             secondChar.RemoveSelfCommand.Execute(null);

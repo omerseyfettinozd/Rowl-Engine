@@ -801,6 +801,7 @@ namespace RowlEngine.Editor.ViewModels
             try
             {
                 EngineHost.UpdateSceneFromComponents(StoryGraphSerializer.SerializePreviewComponents(node));
+                ApplyScriptRuntimeDiagnostics(node);
             }
             catch
             {
@@ -817,6 +818,21 @@ namespace RowlEngine.Editor.ViewModels
                     (float)node.DialogueBoxX,  (float)node.DialogueBoxY,
                     (float)node.DialogueBoxWidth, (float)node.DialogueBoxHeight
                 );
+            }
+        }
+
+        private void ApplyScriptRuntimeDiagnostics(NodeViewModel node)
+        {
+            var scripts = node.AllComponents.OfType<ScriptComponentViewModel>()
+                .Where(component => component.IsEnabled).ToList();
+            for (int index = 0; index < scripts.Count; index++)
+            {
+                var script = scripts[index];
+                var diagnostic = EngineHost.ScriptRuntimeDiagnostics.FirstOrDefault(item =>
+                    item.module_id.EndsWith("#" + index, StringComparison.Ordinal) &&
+                    (string.IsNullOrEmpty(item.path) || item.path == script.ScriptPath));
+                script.RuntimeState = diagnostic?.state ?? "Not run";
+                script.RuntimeError = diagnostic?.error ?? string.Empty;
             }
         }
 

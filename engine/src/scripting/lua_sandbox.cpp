@@ -325,8 +325,10 @@ bool LuaSandbox::executeString(const std::string& scriptCode) {
 }
 
 bool LuaSandbox::loadModule(const std::string& moduleId, const std::string& scriptCode) {
+    m_lastError.clear();
     if (!m_initialized || !m_luaState || moduleId.empty() ||
         moduleId.size() > kMaxModuleIdBytes || scriptCode.empty()) {
+        m_lastError = "Invalid Lua component module input";
         return false;
     }
 
@@ -334,7 +336,8 @@ bool LuaSandbox::loadModule(const std::string& moduleId, const std::string& scri
     // newly created scene cannot allocate an unbounded number of environments.
     const bool replacesExisting = m_modules.contains(moduleId);
     if (!replacesExisting && m_modules.size() >= kMaxLoadedModules) {
-        ROWL_LOG_ERROR("Lua component module limit exceeded (max 128)");
+        m_lastError = "Lua component module limit exceeded (max 128)";
+        ROWL_LOG_ERROR(m_lastError);
         return false;
     }
 
@@ -359,8 +362,8 @@ bool LuaSandbox::loadModule(const std::string& moduleId, const std::string& scri
                                             moduleId.c_str(), "t");
     if (loadStatus != LUA_OK) {
         const char* rawError = lua_tostring(m_luaState, -1);
-        ROWL_LOG_ERROR("Lua component syntax error in '" + moduleId + "': " +
-                       (rawError ? rawError : "unknown Lua error"));
+        m_lastError = rawError ? rawError : "unknown Lua error";
+        ROWL_LOG_ERROR("Lua component syntax error in '" + moduleId + "': " + m_lastError);
         lua_pop(m_luaState, 2); // error, environment
         return false;
     }
@@ -369,13 +372,14 @@ bool LuaSandbox::loadModule(const std::string& moduleId, const std::string& scri
     // globals declared by this source private to the component.
     lua_pushvalue(m_luaState, environmentIndex);
     if (lua_setupvalue(m_luaState, -2, 1) == nullptr) {
+        m_lastError = "Lua component could not bind its isolated environment";
         lua_pop(m_luaState, 2); // chunk, environment
         return false;
     }
     if (lua_pcall(m_luaState, 0, 0, 0) != LUA_OK) {
         const char* rawError = lua_tostring(m_luaState, -1);
-        ROWL_LOG_WARN("Lua component runtime exception in '" + moduleId + "': " +
-                      (rawError ? rawError : "unknown Lua error"));
+        m_lastError = rawError ? rawError : "unknown Lua error";
+        ROWL_LOG_WARN("Lua component runtime exception in '" + moduleId + "': " + m_lastError);
         lua_pop(m_luaState, 2); // error, environment
         bindEngineApis();
         return false;
@@ -394,9 +398,16 @@ bool LuaSandbox::loadModule(const std::string& moduleId, const std::string& scri
 bool LuaSandbox::callOptionalModuleFunction(const std::string& moduleId,
                                             const std::string& functionName,
                                             double deltaTime) {
-    if (!m_initialized || !m_luaState || functionName.empty()) return false;
+    m_lastError.clear();
+    if (!m_initialized || !m_luaState || functionName.empty()) {
+        m_lastError = "Lua sandbox is unavailable";
+        return false;
+    }
     const auto module = m_modules.find(moduleId);
-    if (module == m_modules.end()) return false;
+    if (module == m_modules.end()) {
+        m_lastError = "Lua component module is not loaded";
+        return false;
+    }
 
     lua_rawgeti(m_luaState, LUA_REGISTRYINDEX, module->second); // env
     lua_getfield(m_luaState, -1, functionName.c_str());
@@ -405,6 +416,7 @@ bool LuaSandbox::callOptionalModuleFunction(const std::string& moduleId,
         return true;
     }
     if (!lua_isfunction(m_luaState, -1)) {
+        m_lastError = "Lifecycle callback is not a function: " + functionName;
         lua_pop(m_luaState, 2);
         ROWL_LOG_WARN("Lua component lifecycle callback is not a function: " + moduleId + "." + functionName);
         return false;
@@ -413,8 +425,8 @@ bool LuaSandbox::callOptionalModuleFunction(const std::string& moduleId,
     resetInstructionCounter(m_luaState);
     if (lua_pcall(m_luaState, 1, 0, 0) != LUA_OK) {
         const char* rawError = lua_tostring(m_luaState, -1);
-        ROWL_LOG_ERROR("Lua component lifecycle callback '" + moduleId + "." + functionName + "' failed: " +
-                       (rawError ? rawError : "unknown Lua error"));
+        m_lastError = rawError ? rawError : "unknown Lua error";
+        ROWL_LOG_ERROR("Lua component lifecycle callback '" + moduleId + "." + functionName + "' failed: " + m_lastError);
         lua_pop(m_luaState, 2); // error, environment
         bindEngineApis();
         return false;

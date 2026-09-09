@@ -278,6 +278,12 @@ ROWL_API int RowlEngine_GetActiveDspFilter(RowlEngineHandle handle);
 /** Returns the most recent audio error. The pointer is engine-owned and valid until the next audio call. */
 ROWL_API const char* RowlEngine_GetLastAudioError(RowlEngineHandle handle);
 
+/**
+ * Returns a JSON array of current script-component diagnostics. The result is
+ * engine-owned and valid until the next diagnostics query on the same thread.
+ */
+ROWL_API const char* RowlEngine_GetScriptRuntimeDiagnosticsJson(RowlEngineHandle handle);
+
 /* ── Save / Load Slots & History Rewind ───────────────────────────────────── */
 
 /** Saves the current game state to the specified slot (0 = quicksave). Returns 1 on success, 0 on failure. */

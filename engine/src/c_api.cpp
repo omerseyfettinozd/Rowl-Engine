@@ -463,6 +463,24 @@ const char* RowlEngine_GetLastAudioError(RowlEngineHandle handle) {
     }, "");
 }
 
+const char* RowlEngine_GetScriptRuntimeDiagnosticsJson(RowlEngineHandle handle) {
+    if (!isLiveHandle(handle)) return "[]";
+    static thread_local std::string buffer;
+    return invokeNoexcept<const char*>([&] {
+        nlohmann::json diagnostics = nlohmann::json::array();
+        for (const auto& status : toEngine(handle)->getScriptRuntimeStatuses()) {
+            diagnostics.push_back({
+                {"module_id", status.moduleId},
+                {"path", status.sourcePath},
+                {"state", status.state},
+                {"error", status.lastError},
+            });
+        }
+        buffer = diagnostics.dump();
+        return buffer.c_str();
+    }, "[]");
+}
+
 int RowlEngine_SaveGameSlot(RowlEngineHandle handle, int32_t slotIndex) {
     if (!isLiveHandle(handle)) return 0;
     return invokeNoexcept<int>([&] {

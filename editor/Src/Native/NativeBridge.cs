@@ -169,6 +169,9 @@ namespace RowlEngine.Editor.Native
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
         internal static extern IntPtr RowlEngine_GetLastAudioError(IntPtr handle);
 
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern IntPtr RowlEngine_GetScriptRuntimeDiagnosticsJson(IntPtr handle);
+
         // ── Save / Load Slots & History Rewind ────────────────────────────────
 
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]

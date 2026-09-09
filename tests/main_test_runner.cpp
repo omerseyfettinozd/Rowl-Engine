@@ -928,8 +928,24 @@ void test_native_c_api() {
         std::cerr << "Script component teardown did not run in reverse activation order" << std::endl;
         exit(1);
     }
+
+    // Editor diagnostics must expose per-component status without leaking Lua
+    // source. A syntax error is contained to its component and reported through
+    // the same C ABI consumed by the Avalonia preview.
+    RowlEngine_UpdateSceneFromJson(handle, R"([
+        {"type":"script","id":"broken_script","data":{"code":"function on_enter( this is invalid end"}}
+    ])");
+    const auto diagnosticJson = nlohmann::json::parse(
+        std::string(RowlEngine_GetScriptRuntimeDiagnosticsJson(handle)));
+    if (!diagnosticJson.is_array() || diagnosticJson.size() != 1 ||
+        diagnosticJson[0].value("state", "") != "failed" ||
+        diagnosticJson[0].value("error", "").empty() ||
+        diagnosticJson[0].contains("source")) {
+        std::cerr << "Script runtime diagnostic contract failed" << std::endl;
+        exit(1);
+    }
     RowlEngine_UpdateSceneFromJson(handle, compJson);
-    TEST_PASS("C-API Multiple Script Components: Isolation, Update, and Reverse Teardown");
+    TEST_PASS("C-API Script Components: Isolation, Teardown, and Editor Diagnostics");
 
     // The native renderer and SDL event loop are host-thread-affine. A
     // second thread must not be able to mutate this handle or observe a
