@@ -1886,7 +1886,7 @@ namespace RowlEngine.Editor.ViewModels
             // removes transient canvas links already handled by save logic.
             SaveActiveStoryFile();
             SaveFullStoryGraphFile();
-            var validation = ProjectValidationService.Validate(Nodes, Connections, AssetsPath);
+            var validation = ProjectValidationService.Validate(Nodes, Connections, AssetsPath, GetStartNode()?.Id);
             foreach (var issue in validation)
                 AppendLog($"{(issue.IsError ? "❌" : "⚠️")} [BUILD CHECK] {issue.Message}");
             if (validation.Any(issue => issue.IsError))
@@ -1905,7 +1905,7 @@ namespace RowlEngine.Editor.ViewModels
         [RelayCommand]
         public void AnalyzeStoryGraph()
         {
-            var issues = ProjectValidationService.Validate(Nodes, Connections, AssetsPath);
+            var issues = ProjectValidationService.Validate(Nodes, Connections, AssetsPath, GetStartNode()?.Id);
             if (issues.Count == 0) AppendLog("✅ [GRAPH CHECK] No blocking asset or route issues found.");
             foreach (var issue in issues)
                 AppendLog($"{(issue.IsError ? "❌" : "⚠️")} [GRAPH CHECK] {issue.Message}");

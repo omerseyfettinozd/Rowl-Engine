@@ -228,11 +228,25 @@ namespace RowlEngine.Editor
             if (missingBackground != null) missingBackground.Texture = "missing_build_asset.png";
             var orphanNode = new NodeViewModel(902, "Orphan", 0, 0, bare: true);
             var validationIssues = ProjectValidationService.Validate(
-                new[] { validationNode, orphanNode }, Array.Empty<ConnectionViewModel>(), Path.Combine(testProjectRoot, "Assets"));
+                new[] { validationNode, orphanNode }, Array.Empty<ConnectionViewModel>(), Path.Combine(testProjectRoot, "Assets"), validationNode.Id);
             if (!validationIssues.Any(issue => issue.IsError && issue.Message.Contains("missing_build_asset.png")) ||
                 !validationIssues.Any(issue => !issue.IsError && issue.Message.Contains("unreachable")))
                 throw new Exception("Build validation did not report missing assets and unreachable nodes");
             Console.WriteLine("  ✅ [PASS] Build validation blocks missing assets and reports unreachable nodes");
+
+            var cycleConnections = new[]
+            {
+                new ConnectionViewModel(n3, n2), new ConnectionViewModel(n2, n3)
+            };
+            var graphIssues = ProjectValidationService.Validate(
+                new[] { n1, n2, n3 }, cycleConnections, Path.Combine(testProjectRoot, "Assets"), n3.Id);
+            var terminalIssues = ProjectValidationService.Validate(
+                new[] { n1, n2 }, new[] { new ConnectionViewModel(n1, n2) },
+                Path.Combine(testProjectRoot, "Assets"), n1.Id);
+            if (!graphIssues.Any(issue => !issue.IsError && issue.Message.Contains("cycle")) ||
+                !terminalIssues.Any(issue => !issue.IsError && issue.Message.Contains("terminal")))
+                throw new Exception("Graph analysis did not report reachable cycles and terminal nodes");
+            Console.WriteLine("  ✅ [PASS] Graph analysis uses the actual start node and reports cycles/terminal nodes");
 
             // Test 4: Story Graph File Serialization & Deserialization
             Console.WriteLine("\n📌 [Test 4]: Story Graph v4 Serialization & Coordinate Persistence...");

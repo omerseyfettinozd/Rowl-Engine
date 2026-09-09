@@ -14,7 +14,8 @@ internal static class ProjectValidationService
     private static readonly string[] AssetKeys = { "texture", "sprite", "bgm_track", "sfx_track", "path", "typewriter_sound", "custom_box_texture" };
 
     public static IReadOnlyList<ProjectValidationIssue> Validate(
-        IEnumerable<NodeViewModel> nodes, IEnumerable<ConnectionViewModel> connections, string assetsPath)
+        IEnumerable<NodeViewModel> nodes, IEnumerable<ConnectionViewModel> connections, string assetsPath,
+        ulong? startNodeId = null)
     {
         var nodeList = nodes.ToList();
         var issues = new List<ProjectValidationIssue>();
@@ -26,7 +27,12 @@ internal static class ProjectValidationService
                 !ids.Contains(connection.SourceNode.Id) || !ids.Contains(connection.TargetNode.Id))
                 issues.Add(new(true, "A graph connection has a missing source or target node."));
         }
-        var start = nodeList.MinBy(node => node.Id)!;
+        var start = startNodeId is { } requestedStart
+            ? nodeList.FirstOrDefault(node => node.Id == requestedStart)
+            : nodeList.FirstOrDefault(node => node.IsStartNode);
+        start ??= nodeList.MinBy(node => node.Id)!;
+        if (startNodeId is { } missingStart && start.Id != missingStart)
+            issues.Add(new(true, $"Configured start node #{missingStart} does not exist."));
         var reachable = new HashSet<ulong> { start.Id };
         var pending = new Queue<ulong>(); pending.Enqueue(start.Id);
         while (pending.TryDequeue(out var id))
@@ -34,6 +40,31 @@ internal static class ProjectValidationService
                 if (target != 0 && reachable.Add(target)) pending.Enqueue(target);
         foreach (var node in nodeList.Where(node => !reachable.Contains(node.Id)))
             issues.Add(new(false, $"Node #{node.Id} ('{node.Title}') is unreachable from the start node."));
+
+        foreach (var node in nodeList.Where(node => reachable.Contains(node.Id)))
+        {
+            var outgoing = connections.Where(connection => connection.SourceNode?.Id == node.Id)
+                .Select(connection => connection.TargetNode?.Id ?? 0)
+                .Where(id => ids.Contains(id)).ToList();
+            if (outgoing.Count == 0 && node.Id != start.Id)
+                issues.Add(new(false, $"Node #{node.Id} ('{node.Title}') is a terminal node."));
+        }
+
+        var visiting = new HashSet<ulong>();
+        var visited = new HashSet<ulong>();
+        bool HasCycle(ulong id)
+        {
+            if (!reachable.Contains(id)) return false;
+            if (!visiting.Add(id)) return true;
+            foreach (var target in connections.Where(connection => connection.SourceNode?.Id == id)
+                         .Select(connection => connection.TargetNode?.Id ?? 0))
+                if (target != 0 && HasCycle(target)) return true;
+            visiting.Remove(id);
+            visited.Add(id);
+            return false;
+        }
+        if (HasCycle(start.Id))
+            issues.Add(new(false, "Reachable story graph contains a cycle; confirm it has an intentional exit."));
 
         foreach (var node in nodeList)
         {
