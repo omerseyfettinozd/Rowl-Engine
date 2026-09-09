@@ -23,6 +23,7 @@ namespace {
 
 constexpr int kMaxTextureDimension = 8'192;
 constexpr uint64_t kMaxTexturePixels = 16ULL * 1024 * 1024;
+constexpr uint64_t kMinimumTextureCacheBytes = 1ULL * 1024ULL * 1024ULL;
 
 bool hasSafeTextureDimensions(int width, int height) {
     return width > 0 && height > 0 &&
@@ -439,9 +440,17 @@ void Window::clearTextureCache() {
     }
     m_textureCache.clear();
     m_textureMemoryBytes.clear();
+    m_textureLastUsed.clear();
     m_missingTextureCache.clear();
     m_buttonFontCache.clear();
     ROWL_LOG_INFO("Hardware Texture Cache Cleared (" + std::to_string(uniqueTextures.size()) + " unique textures freed).");
+}
+
+void Window::setTextureCacheBudgetBytes(uint64_t bytes) {
+    m_textureCacheBudgetBytes = std::max(bytes, kMinimumTextureCacheBytes);
+    if (!evictTexturesToFit(0)) {
+        ROWL_LOG_WARN("Texture cache budget cannot be met while the MSDF atlas is pinned");
+    }
 }
 
 uint64_t Window::getTextureCacheBytes() const {
@@ -451,6 +460,42 @@ uint64_t Window::getTextureCacheBytes() const {
         total += bytes;
     }
     return total;
+}
+
+void Window::touchTexture(SDL_Texture* texture) {
+    if (texture) m_textureLastUsed[texture] = ++m_textureUseClock;
+}
+
+void Window::destroyCachedTexture(SDL_Texture* texture) {
+    if (!texture) return;
+    for (auto it = m_textureCache.begin(); it != m_textureCache.end();) {
+        if (it->second == texture) {
+            it = m_textureCache.erase(it);
+        } else {
+            ++it;
+        }
+    }
+    m_textureMemoryBytes.erase(texture);
+    m_textureLastUsed.erase(texture);
+    SDL_DestroyTexture(texture);
+}
+
+bool Window::evictTexturesToFit(uint64_t incomingBytes) {
+    if (incomingBytes > m_textureCacheBudgetBytes) return false;
+    while (getTextureCacheBytes() > m_textureCacheBudgetBytes - incomingBytes) {
+        SDL_Texture* leastRecentlyUsed = nullptr;
+        uint64_t oldestUse = UINT64_MAX;
+        for (const auto& [texture, lastUsed] : m_textureLastUsed) {
+            if (texture != m_msdfAtlasTexture && lastUsed < oldestUse) {
+                leastRecentlyUsed = texture;
+                oldestUse = lastUsed;
+            }
+        }
+        if (!leastRecentlyUsed) return false;
+        ROWL_LOG_INFO("Evicting least-recently-used texture to respect cache budget");
+        destroyCachedTexture(leastRecentlyUsed);
+    }
+    return true;
 }
 
 SDL_Texture* Window::loadTexture(const std::string& filename) {
@@ -465,6 +510,7 @@ SDL_Texture* Window::loadTexture(const std::string& filename) {
     // Cache hit: only return valid textures
     auto it = m_textureCache.find(normPath);
     if (it != m_textureCache.end() && it->second != nullptr) {
+        touchTexture(it->second);
         return it->second;
     }
 
@@ -518,12 +564,19 @@ SDL_Texture* Window::loadTexture(const std::string& filename) {
     stbi_image_free(data);
 
     if (texture) {
+        const uint64_t textureBytes = static_cast<uint64_t>(width) *
+                                      static_cast<uint64_t>(height) * 4ULL;
+        if (!evictTexturesToFit(textureBytes)) {
+            SDL_DestroyTexture(texture);
+            ROWL_LOG_WARN("Texture exceeds the configured cache budget: " + filename);
+            return nullptr;
+        }
         m_missingTextureCache.erase(normPath);
         m_textureCache[filename] = texture;
         m_textureCache[normPath] = texture;
         m_textureCache[bareName] = texture;
-        m_textureMemoryBytes[texture] = static_cast<uint64_t>(width) *
-                                        static_cast<uint64_t>(height) * 4ULL;
+        m_textureMemoryBytes[texture] = textureBytes;
+        touchTexture(texture);
         ROWL_LOG_INFO("✅ Loaded Hardware Texture: " + filename + " (" + std::to_string(width) + "x" + std::to_string(height) + ") from " + sourceInfo);
     }
     return texture;
@@ -915,6 +968,7 @@ void Window::shutdown() {
     }
     m_textureCache.clear();
     m_textureMemoryBytes.clear();
+    m_textureLastUsed.clear();
     m_missingTextureCache.clear();
 
     shutdownGpuMsdfRenderer();

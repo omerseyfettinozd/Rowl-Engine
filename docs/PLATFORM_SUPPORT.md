@@ -46,3 +46,12 @@ budget on its lowest supported device:
 The native test executable prints repeatable VFS, JSON ingestion, render-frame,
 and texture-cache measurements. These numbers are baselines, not universal
 pass/fail thresholds; compare like-for-like Release builds on the same device.
+
+## Texture-cache rule
+
+The runtime uses a 64 MiB decoded-RGBA texture-cache budget by default. When a
+new texture needs space, it evicts least-recently-used non-atlas textures first.
+A texture that cannot fit by itself is rejected without evicting live state.
+Hosts can select a lower device-profile budget through
+`RowlEngine_SetTextureCacheBudgetBytes` (values below 1 MiB clamp to 1 MiB).
+The MSDF atlas remains pinned while GPU text rendering is active.

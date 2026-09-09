@@ -242,6 +242,14 @@ uint64_t RowlEngine_GetTextureCacheBytes(RowlEngineHandle handle) {
     }, 0);
 }
 
+void RowlEngine_SetTextureCacheBudgetBytes(RowlEngineHandle handle, uint64_t bytes) {
+    if (!isLiveHandle(handle)) return;
+    invokeNoexcept([&] {
+        auto* window = toEngine(handle)->getWindow();
+        if (window) window->setTextureCacheBudgetBytes(bytes);
+    });
+}
+
 void RowlEngine_SetPlayState(RowlEngineHandle handle, int isPlaying) {
     if (!isLiveHandle(handle)) return;
     invokeNoexcept([&] { toEngine(handle)->setPlayState(isPlaying != 0); });

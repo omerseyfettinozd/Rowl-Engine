@@ -64,6 +64,11 @@ namespace RowlEngine.Editor.Native
             out uint outH);
 
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern void RowlEngine_SetTextureCacheBudgetBytes(
+            IntPtr handle,
+            ulong bytes);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
         internal static extern void RowlEngine_SetPlayState(
             IntPtr handle,
             int isPlaying);

@@ -165,6 +165,8 @@ public:
     size_t getNegativeTextureCacheSize() const { return m_missingTextureCache.size(); }
     size_t getTextureCacheTextureCount() const { return m_textureMemoryBytes.size(); }
     uint64_t getTextureCacheBytes() const;
+    uint64_t getTextureCacheBudgetBytes() const { return m_textureCacheBudgetBytes; }
+    void setTextureCacheBudgetBytes(uint64_t bytes);
     FontRenderer* getFontRenderer() const { return m_fontRenderer.get(); }
     void reloadFonts();
 
@@ -187,12 +189,16 @@ private:
     void initGpuMsdfRenderer();
     void shutdownGpuMsdfRenderer();
     bool renderGpuMsdfText(const std::string&, float, float, float, SDL_Color);
+    bool evictTexturesToFit(uint64_t incomingBytes);
+    void destroyCachedTexture(SDL_Texture* texture);
+    void touchTexture(SDL_Texture* texture);
 
     SDL_Window*   m_sdlWindow         = nullptr;
     SDL_Renderer* m_sdlRenderer       = nullptr;
     SDL_Surface*  m_offscreenSurface  = nullptr;
     std::unordered_map<std::string, SDL_Texture*> m_textureCache;
     std::unordered_map<SDL_Texture*, uint64_t> m_textureMemoryBytes;
+    std::unordered_map<SDL_Texture*, uint64_t> m_textureLastUsed;
     std::unordered_set<std::string> m_missingTextureCache;
     std::unique_ptr<FontRenderer> m_fontRenderer;
     SDL_GPUShader* m_msdfFragmentShader = nullptr;
@@ -203,6 +209,8 @@ private:
 
     uint32_t m_width       = 1920;
     uint32_t m_height      = 1080;
+    uint64_t m_textureCacheBudgetBytes = 64ULL * 1024ULL * 1024ULL;
+    uint64_t m_textureUseClock = 0;
     bool m_isOpen          = false;
     bool m_initialized     = false;
     bool m_isEmbedded      = false; // true → rendering into host control

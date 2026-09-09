@@ -1541,6 +1541,27 @@ void test_hardening_and_reliability() {
                 std::cerr << "Texture cache statistics were not cleared" << std::endl;
                 exit(1);
             }
+
+            // A low-end target may not have room for every decoded asset. The
+            // cache must evict old textures before admitting a new one and
+            // reject a single oversized texture without retaining stale state.
+            constexpr uint64_t kThirtyOneMiB = 31ULL * 1024ULL * 1024ULL;
+            constexpr uint64_t kOneMiB = 1ULL * 1024ULL * 1024ULL;
+            win.setTextureCacheBudgetBytes(kThirtyOneMiB);
+            if (!win.loadTexture("Woman.png") || !win.loadTexture("Margot.jpg") ||
+                win.getTextureCacheTextureCount() != 1 ||
+                win.getTextureCacheBytes() > kThirtyOneMiB) {
+                std::cerr << "Texture cache did not evict the least-recently-used texture" << std::endl;
+                exit(1);
+            }
+            win.setTextureCacheBudgetBytes(kOneMiB);
+            if (win.getTextureCacheTextureCount() != 0 ||
+                win.loadTexture("Margot.jpg") != nullptr ||
+                win.getTextureCacheTextureCount() != 0) {
+                std::cerr << "Texture cache admitted an asset larger than its budget" << std::endl;
+                exit(1);
+            }
+            win.setTextureCacheBudgetBytes(64ULL * 1024ULL * 1024ULL);
             win.loadTexture("Woman.png");
             if (win.loadTexture("missing_texture_for_negative_cache.png") != nullptr ||
                 win.loadTexture("missing_texture_for_negative_cache.png") != nullptr ||

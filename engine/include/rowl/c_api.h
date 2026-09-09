@@ -152,6 +152,12 @@ ROWL_API uint32_t RowlEngine_GetTextureCacheTextureCount(RowlEngineHandle handle
 ROWL_API uint64_t RowlEngine_GetTextureCacheBytes(RowlEngineHandle handle);
 
 /**
+ * Sets the decoded texture-cache budget in bytes. Values below 1 MiB clamp to
+ * 1 MiB; textures that cannot fit are rejected without disturbing live state.
+ */
+ROWL_API void RowlEngine_SetTextureCacheBudgetBytes(RowlEngineHandle handle, uint64_t bytes);
+
+/**
  * Sets the playback state (1 = playing, 0 = stopped/editing).
  */
 ROWL_API void RowlEngine_SetPlayState(RowlEngineHandle handle, int isPlaying);
