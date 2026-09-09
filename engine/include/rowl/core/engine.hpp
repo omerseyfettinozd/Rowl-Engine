@@ -240,6 +240,7 @@ private:
     std::vector<Rowl::Render::DialogueRenderData> m_activeDialogues;
     std::vector<Rowl::Render::ChoiceButtonRenderData> m_activeChoiceButtons;
     bool m_hasActiveScript = false;
+    std::vector<std::string> m_activeScriptModuleIds;
 
     bool m_isRunning    = false;
     bool m_initialized  = false;

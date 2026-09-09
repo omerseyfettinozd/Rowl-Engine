@@ -2,6 +2,7 @@
 #include "rowl/core/logger.hpp"
 #include <cmath>
 #include <cstdint>
+#include <string_view>
 
 extern "C" {
 #include <lua.h>
@@ -13,6 +14,24 @@ namespace Rowl::Scripting {
 
 // Per-sandbox state stored in Lua registry
 static const char* SANDBOX_REGISTRY_KEY = "_rowl_sandbox_ptr";
+constexpr std::size_t kMaxLoadedModules = 128;
+constexpr std::size_t kMaxModuleIdBytes = 256;
+
+static void resetInstructionCounter(lua_State* state) {
+    lua_pushinteger(state, 0);
+    lua_setfield(state, LUA_REGISTRYINDEX, "_rowl_instruction_count");
+}
+
+// Component environments intentionally accept ordinary globals (their private
+// state), but the engine bridge itself must remain read-only. Keeping this at
+// the environment boundary also prevents `_G.rowl = ...` from breaking the
+// component later in the same callback.
+static int lua_module_newindex(lua_State* state) {
+    const char* key = lua_tostring(state, 2);
+    if (key && std::string_view(key) == "rowl") return 0;
+    lua_rawset(state, 1);
+    return 0;
+}
 
 static int lua_rowl_var_get(lua_State* L) {
     if (lua_gettop(L) >= 1 && lua_isstring(L, 1)) {
@@ -93,8 +112,7 @@ bool LuaSandbox::initialize() {
     lua_setfield(m_luaState, LUA_REGISTRYINDEX, SANDBOX_REGISTRY_KEY);
 
     // Initialize instruction counter
-    lua_pushinteger(m_luaState, 0);
-    lua_setfield(m_luaState, LUA_REGISTRYINDEX, "_rowl_instruction_count");
+    resetInstructionCounter(m_luaState);
 
     // Load safe standard libraries only
     luaL_requiref(m_luaState, "_G", luaopen_base, 1);
@@ -280,8 +298,7 @@ bool LuaSandbox::executeString(const std::string& scriptCode) {
     }
 
     // Reset instruction counter before each execution
-    lua_pushinteger(m_luaState, 0);
-    lua_setfield(m_luaState, LUA_REGISTRYINDEX, "_rowl_instruction_count");
+    resetInstructionCounter(m_luaState);
 
     int loadStatus = luaL_loadstring(m_luaState, scriptCode.c_str());
     if (loadStatus != LUA_OK) {
@@ -307,6 +324,124 @@ bool LuaSandbox::executeString(const std::string& scriptCode) {
     return true;
 }
 
+bool LuaSandbox::loadModule(const std::string& moduleId, const std::string& scriptCode) {
+    if (!m_initialized || !m_luaState || moduleId.empty() ||
+        moduleId.size() > kMaxModuleIdBytes || scriptCode.empty()) {
+        return false;
+    }
+
+    // Replacing a module is deliberate (e.g. editor hot scene update), but a
+    // newly created scene cannot allocate an unbounded number of environments.
+    const bool replacesExisting = m_modules.contains(moduleId);
+    if (!replacesExisting && m_modules.size() >= kMaxLoadedModules) {
+        ROWL_LOG_ERROR("Lua component module limit exceeded (max 128)");
+        return false;
+    }
+
+    // Each component owns an environment. It inherits only the sandbox's safe
+    // globals, keeps _G local, and hides the metatable so one component cannot
+    // mutate another component's lookup path.
+    lua_newtable(m_luaState);                         // env
+    const int environmentIndex = lua_gettop(m_luaState);
+    lua_pushvalue(m_luaState, environmentIndex);
+    lua_setfield(m_luaState, environmentIndex, "_G");
+    lua_newtable(m_luaState);                         // metatable
+    lua_pushglobaltable(m_luaState);
+    lua_setfield(m_luaState, -2, "__index");
+    lua_pushcfunction(m_luaState, lua_module_newindex);
+    lua_setfield(m_luaState, -2, "__newindex");
+    lua_pushboolean(m_luaState, 0);
+    lua_setfield(m_luaState, -2, "__metatable");
+    lua_setmetatable(m_luaState, environmentIndex);
+
+    resetInstructionCounter(m_luaState);
+    const int loadStatus = luaL_loadbufferx(m_luaState, scriptCode.data(), scriptCode.size(),
+                                            moduleId.c_str(), "t");
+    if (loadStatus != LUA_OK) {
+        const char* rawError = lua_tostring(m_luaState, -1);
+        ROWL_LOG_ERROR("Lua component syntax error in '" + moduleId + "': " +
+                       (rawError ? rawError : "unknown Lua error"));
+        lua_pop(m_luaState, 2); // error, environment
+        return false;
+    }
+
+    // The first upvalue of a Lua chunk is _ENV. Setting it before pcall makes
+    // globals declared by this source private to the component.
+    lua_pushvalue(m_luaState, environmentIndex);
+    if (lua_setupvalue(m_luaState, -2, 1) == nullptr) {
+        lua_pop(m_luaState, 2); // chunk, environment
+        return false;
+    }
+    if (lua_pcall(m_luaState, 0, 0, 0) != LUA_OK) {
+        const char* rawError = lua_tostring(m_luaState, -1);
+        ROWL_LOG_WARN("Lua component runtime exception in '" + moduleId + "': " +
+                      (rawError ? rawError : "unknown Lua error"));
+        lua_pop(m_luaState, 2); // error, environment
+        bindEngineApis();
+        return false;
+    }
+
+    if (replacesExisting) {
+        luaL_unref(m_luaState, LUA_REGISTRYINDEX, m_modules.at(moduleId));
+    }
+    lua_pushvalue(m_luaState, environmentIndex);
+    m_modules[moduleId] = luaL_ref(m_luaState, LUA_REGISTRYINDEX);
+    lua_pop(m_luaState, 1); // environment
+    bindEngineApis();
+    return true;
+}
+
+bool LuaSandbox::callOptionalModuleFunction(const std::string& moduleId,
+                                            const std::string& functionName,
+                                            double deltaTime) {
+    if (!m_initialized || !m_luaState || functionName.empty()) return false;
+    const auto module = m_modules.find(moduleId);
+    if (module == m_modules.end()) return false;
+
+    lua_rawgeti(m_luaState, LUA_REGISTRYINDEX, module->second); // env
+    lua_getfield(m_luaState, -1, functionName.c_str());
+    if (lua_isnil(m_luaState, -1)) {
+        lua_pop(m_luaState, 2);
+        return true;
+    }
+    if (!lua_isfunction(m_luaState, -1)) {
+        lua_pop(m_luaState, 2);
+        ROWL_LOG_WARN("Lua component lifecycle callback is not a function: " + moduleId + "." + functionName);
+        return false;
+    }
+    lua_pushnumber(m_luaState, deltaTime);
+    resetInstructionCounter(m_luaState);
+    if (lua_pcall(m_luaState, 1, 0, 0) != LUA_OK) {
+        const char* rawError = lua_tostring(m_luaState, -1);
+        ROWL_LOG_ERROR("Lua component lifecycle callback '" + moduleId + "." + functionName + "' failed: " +
+                       (rawError ? rawError : "unknown Lua error"));
+        lua_pop(m_luaState, 2); // error, environment
+        bindEngineApis();
+        return false;
+    }
+    lua_pop(m_luaState, 1); // environment
+    bindEngineApis();
+    return true;
+}
+
+bool LuaSandbox::unloadModule(const std::string& moduleId) {
+    const auto module = m_modules.find(moduleId);
+    if (module == m_modules.end()) return false;
+    if (m_luaState) luaL_unref(m_luaState, LUA_REGISTRYINDEX, module->second);
+    m_modules.erase(module);
+    return true;
+}
+
+void LuaSandbox::clearModules() {
+    if (m_luaState) {
+        for (const auto& [moduleId, reference] : m_modules) {
+            (void)moduleId;
+            luaL_unref(m_luaState, LUA_REGISTRYINDEX, reference);
+        }
+    }
+    m_modules.clear();
+}
+
 bool LuaSandbox::callOptionalFunction(const std::string& functionName, double deltaTime) {
     if (!m_initialized || !m_luaState || functionName.empty()) return false;
 
@@ -322,8 +457,7 @@ bool LuaSandbox::callOptionalFunction(const std::string& functionName, double de
     }
 
     lua_pushnumber(m_luaState, deltaTime);
-    lua_pushinteger(m_luaState, 0);
-    lua_setfield(m_luaState, LUA_REGISTRYINDEX, "_rowl_instruction_count");
+    resetInstructionCounter(m_luaState);
     if (lua_pcall(m_luaState, 1, 0, 0) != LUA_OK) {
         const char* rawError = lua_tostring(m_luaState, -1);
         const std::string error = rawError ? rawError : "unknown Lua error";
@@ -343,6 +477,7 @@ void LuaSandbox::shutdown() {
 
     // Clean up registry entries
     if (m_luaState) {
+        clearModules();
         lua_pushnil(m_luaState);
         lua_setfield(m_luaState, LUA_REGISTRYINDEX, SANDBOX_REGISTRY_KEY);
         lua_pushnil(m_luaState);

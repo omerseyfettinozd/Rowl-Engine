@@ -452,6 +452,50 @@ void test_lua_sandbox() {
     }
     TEST_PASS("Optional Lua Lifecycle Callback Dispatch and Error Isolation");
 
+    // Component modules keep their callbacks and globals separate. This lets a
+    // node own multiple script components without source order deciding which
+    // on_update/on_exit function survives.
+    if (!lua.loadModule("first", R"(
+        private_value = "first"
+        function on_enter() rowl.var_set("module_first_enter", private_value) end
+        function on_update(dt) rowl.var_set("module_first_update", tostring(dt)) end
+        function on_exit() rowl.var_set("module_exit_order", "first") end
+    )") ||
+        !lua.loadModule("second", R"(
+        private_value = "second"
+        function on_enter() rowl.var_set("module_second_enter", private_value) end
+        function on_update(dt) rowl.var_set("module_second_update", tostring(dt * 2)) end
+        function on_exit() rowl.var_set("module_exit_order", "second") end
+    )") || lua.getModuleCount() != 2 ||
+        !lua.callOptionalModuleFunction("first", "on_enter") ||
+        !lua.callOptionalModuleFunction("second", "on_enter") ||
+        lua.getVariable("module_first_enter") != "first" ||
+        lua.getVariable("module_second_enter") != "second" ||
+        !lua.callOptionalModuleFunction("first", "on_update", 0.25) ||
+        !lua.callOptionalModuleFunction("second", "on_update", 0.25) ||
+        lua.getVariable("module_first_update") != "0.25" ||
+        lua.getVariable("module_second_update") != "0.5") {
+        std::cerr << "Lua component module isolation or lifecycle dispatch failed" << std::endl;
+        exit(1);
+    }
+    if (!lua.loadModule("guarded", R"(
+        _G.rowl = "component-local overwrite"
+        if getmetatable(_G) ~= false then error("component environment is mutable") end
+        function on_enter() rowl.var_set("module_guarded", "ok") end
+    )") || !lua.callOptionalModuleFunction("guarded", "on_enter") ||
+        lua.getVariable("module_guarded") != "ok" || lua.getModuleCount() != 3 ||
+        !lua.unloadModule("second") || lua.getModuleCount() != 2 ||
+        lua.callOptionalModuleFunction("second", "on_enter")) {
+        std::cerr << "Lua component module boundary or unload failed" << std::endl;
+        exit(1);
+    }
+    lua.clearModules();
+    if (lua.getModuleCount() != 0) {
+        std::cerr << "Lua component module cleanup failed" << std::endl;
+        exit(1);
+    }
+    TEST_PASS("Isolated Lua Component Modules, Lifecycle Dispatch, and Cleanup");
+
     // Infinite loop protection (Instruction counter hook)
     if (lua.executeString("while true do local a = 1 end")) {
         std::cerr << "Lua infinite loop was not blocked!" << std::endl;
@@ -857,6 +901,35 @@ void test_native_c_api() {
 
     RowlEngine_UpdateSceneFromJson(handle, compJson);
     TEST_PASS("RowlEngine_UpdateSceneFromJson (Multi-Character + Multi-Line Dialogue)");
+
+    // Script components on the same node deliberately share lifecycle names.
+    // The runtime must dispatch both callbacks and tear them down in reverse
+    // activation order instead of letting the latter overwrite the former.
+    RowlEngine_UpdateSceneFromJson(handle, R"([
+        {"type":"script","id":"script_a","data":{"code":"private_value = 'first'; function on_enter() rowl.var_set('component_first_enter', private_value) end; function on_update(dt) rowl.var_set('component_first_update', tostring(dt)) end; function on_exit() rowl.var_set('component_exit_order', 'first') end"}},
+        {"type":"script","id":"script_b","data":{"code":"private_value = 'second'; function on_enter() rowl.var_set('component_second_enter', private_value) end; function on_update(dt) rowl.var_set('component_second_update', tostring(dt * 2)) end; function on_exit() rowl.var_set('component_exit_order', 'second') end"}}
+    ])");
+    auto* componentSandbox = Rowl::Core::Engine::instance().getLuaSandbox();
+    if (!componentSandbox || componentSandbox->getModuleCount() != 2 ||
+        Rowl::Core::Engine::instance().getScriptVariable("component_first_enter") != "first" ||
+        Rowl::Core::Engine::instance().getScriptVariable("component_second_enter") != "second") {
+        std::cerr << "Multiple script components did not activate independently" << std::endl;
+        exit(1);
+    }
+    RowlEngine_Step(handle, 0.25f);
+    if (Rowl::Core::Engine::instance().getScriptVariable("component_first_update") != "0.25" ||
+        Rowl::Core::Engine::instance().getScriptVariable("component_second_update") != "0.5") {
+        std::cerr << "Multiple script component update callbacks were not dispatched" << std::endl;
+        exit(1);
+    }
+    RowlEngine_UpdateSceneFromJson(handle, "[]");
+    if (componentSandbox->getModuleCount() != 0 ||
+        Rowl::Core::Engine::instance().getScriptVariable("component_exit_order") != "first") {
+        std::cerr << "Script component teardown did not run in reverse activation order" << std::endl;
+        exit(1);
+    }
+    RowlEngine_UpdateSceneFromJson(handle, compJson);
+    TEST_PASS("C-API Multiple Script Components: Isolation, Update, and Reverse Teardown");
 
     // The native renderer and SDL event loop are host-thread-affine. A
     // second thread must not be able to mutate this handle or observe a

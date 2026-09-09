@@ -3,6 +3,7 @@
 #include <string>
 #include <memory>
 #include <unordered_map>
+#include <vector>
 
 struct lua_State;
 
@@ -15,6 +16,18 @@ public:
 
     bool initialize();
     bool executeString(const std::string& scriptCode);
+    /// Loads a component script into an isolated environment. Global callback
+    /// names inside one component cannot overwrite another component's names.
+    bool loadModule(const std::string& moduleId, const std::string& scriptCode);
+    /// Calls a lifecycle callback from one loaded component module. Missing
+    /// callbacks are successful no-ops, matching callOptionalFunction().
+    bool callOptionalModuleFunction(const std::string& moduleId,
+                                    const std::string& functionName,
+                                    double deltaTime = 0.0);
+    /// Removes a loaded component module and releases its Lua registry entry.
+    bool unloadModule(const std::string& moduleId);
+    void clearModules();
+    std::size_t getModuleCount() const { return m_modules.size(); }
     /// Calls a global lifecycle callback when it exists. Missing callbacks are successful no-ops.
     bool callOptionalFunction(const std::string& functionName, double deltaTime = 0.0);
     void shutdown();
@@ -36,6 +49,7 @@ private:
 
     lua_State* m_luaState = nullptr;
     std::unordered_map<std::string, std::string> m_scriptVariables;
+    std::unordered_map<std::string, int> m_modules;
     bool m_initialized = false;
 };
 

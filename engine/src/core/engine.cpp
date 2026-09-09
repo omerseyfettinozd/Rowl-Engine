@@ -335,7 +335,9 @@ bool Engine::advanceToChoice(const std::string& optionId) {
     }
 
     if (m_hasActiveScript && m_luaSandbox) {
-        m_luaSandbox->callOptionalFunction("on_choice");
+        for (const auto& moduleId : m_activeScriptModuleIds) {
+            m_luaSandbox->callOptionalModuleFunction(moduleId, "on_choice");
+        }
     }
 
     const auto index = static_cast<uint32_t>(std::distance(options.begin(), optionIt));
@@ -1124,7 +1126,9 @@ void Engine::step(float deltaTime) {
         m_audio->update();
     }
     if (m_hasActiveScript && m_luaSandbox) {
-        m_luaSandbox->callOptionalFunction("on_update", deltaTime);
+        for (const auto& moduleId : m_activeScriptModuleIds) {
+            m_luaSandbox->callOptionalModuleFunction(moduleId, "on_update", deltaTime);
+        }
     }
 
     m_window->endFrame();
@@ -1157,14 +1161,19 @@ void Engine::run() {
 
 void Engine::deactivateScripts() {
     if (m_hasActiveScript && m_luaSandbox) {
-        m_luaSandbox->callOptionalFunction("on_exit");
+        for (auto it = m_activeScriptModuleIds.rbegin(); it != m_activeScriptModuleIds.rend(); ++it) {
+            m_luaSandbox->callOptionalModuleFunction(*it, "on_exit");
+            m_luaSandbox->unloadModule(*it);
+        }
     }
+    m_activeScriptModuleIds.clear();
     m_hasActiveScript = false;
 }
 
 void Engine::activateScripts(const std::vector<nlohmann::json>& scripts) {
     if (!m_luaSandbox) return;
-    for (const auto& script : scripts) {
+    for (std::size_t scriptIndex = 0; scriptIndex < scripts.size(); ++scriptIndex) {
+        const auto& script = scripts[scriptIndex];
         std::string source = script.value("code", "");
         const std::string path = script.value("path", "");
         if (source.empty() && !path.empty()) {
@@ -1175,12 +1184,14 @@ void Engine::activateScripts(const std::vector<nlohmann::json>& scripts) {
             }
         }
         if (source.empty()) continue;
-        if (!m_luaSandbox->executeString(source)) {
+        const std::string moduleId = (path.empty() ? "inline" : path) + "#" + std::to_string(scriptIndex);
+        if (!m_luaSandbox->loadModule(moduleId, source)) {
             ROWL_LOG_ERROR("Lua script activation failed" + (path.empty() ? std::string{} : ": " + path));
             continue;
         }
+        m_activeScriptModuleIds.push_back(moduleId);
         m_hasActiveScript = true;
-        if (!m_luaSandbox->callOptionalFunction("on_enter")) {
+        if (!m_luaSandbox->callOptionalModuleFunction(moduleId, "on_enter")) {
             ROWL_LOG_ERROR("Lua on_enter callback failed" + (path.empty() ? std::string{} : ": " + path));
         }
     }
