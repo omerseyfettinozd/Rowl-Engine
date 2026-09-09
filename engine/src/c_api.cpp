@@ -318,6 +318,10 @@ void RowlEngine_SetProjectDirectory(RowlEngineHandle handle, const char* project
     if (!isLiveHandle(handle) || !projectRoot || !*projectRoot) return;
     invokeNoexcept([&] {
         auto* engine = toEngine(handle);
+        // Save slots belong to the selected game/project. This prevents an
+        // embedded editor preview or another standalone game from sharing the
+        // process-relative default "saves" directory.
+        engine->setSaveDirectory((std::filesystem::path(projectRoot) / "saves").string());
         Rowl::VFS::VFSManager::instance().remountProject(projectRoot);
         auto* win = engine->getWindow();
         if (win) {

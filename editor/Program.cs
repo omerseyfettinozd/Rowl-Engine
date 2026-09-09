@@ -556,6 +556,7 @@ namespace RowlEngine.Editor
             }
             if (host.IsInitialized)
             {
+                host.SetProjectDirectory(testProjectRoot);
                 host.SetVariable("test_affinity", "99");
                 string readAffinity = host.GetVariable("test_affinity");
                 if (readAffinity != "99")
@@ -567,6 +568,9 @@ namespace RowlEngine.Editor
                 // Save & Load Slots
                 if (!host.SaveGameSlot(10))
                     throw new Exception("EngineHost.SaveGameSlot(10) failed");
+
+                if (!File.Exists(Path.Combine(testProjectRoot, "saves", "save_slot_10.json")))
+                    throw new Exception("Game save was not isolated under the selected project");
 
                 if (!host.HasSaveSlot(10))
                     throw new Exception("EngineHost.HasSaveSlot(10) failed");
