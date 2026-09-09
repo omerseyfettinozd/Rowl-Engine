@@ -161,6 +161,7 @@ bool Engine::initialize(const EngineConfig& config) {
 
 void Engine::setPlayState(bool isPlaying) {
     m_isPlaying = isPlaying;
+    m_autoAdvanceElapsed = 0.0f;
     m_activeDialogueData.isPlaying = isPlaying;
     if (isPlaying) {
         m_activeDialogueData.elapsedTypewriterTime = 0.0f;
@@ -230,6 +231,7 @@ const uint8_t* Engine::getPixelBuffer(uint32_t* outW, uint32_t* outH) const {
 
 void Engine::advanceToNextNode(uint32_t choiceIndex) {
     if (m_storyNodes.empty()) return;
+    m_autoAdvanceElapsed = 0.0f;
 
     // If typewriter is still typing out any line, clicking reveals the full text immediately
     bool anyTyping = false;
@@ -574,6 +576,8 @@ void Engine::updateSceneFromComponents(const std::string& componentsJson) {
                 dlgData.scale = data.value("scale", 1.0f);
                 dlgData.typewriterEnabled = data.value("typewriter_enabled", true);
                 dlgData.textSpeed = data.value("text_speed", 30);
+                dlgData.autoAdvance = data.value("auto_advance", false);
+                dlgData.autoAdvanceDelay = std::clamp(data.value("auto_advance_delay", 2.0f), 0.0f, 60.0f);
                 dlgData.fontSize = data.value("font_size", 24.0f);
                 dlgData.speakerFontSize = data.value("speaker_font_size", 20.0f);
                 dlgData.textColor = data.value("text_color", "#F1F5F9");
@@ -1111,6 +1115,27 @@ void Engine::step(float deltaTime) {
         m_activeDialogueData.elapsedTypewriterTime += deltaTime;
     }
 
+    bool autoAdvanceEnabled = false;
+    float autoAdvanceDelay = 0.0f;
+    for (const auto& dialogue : m_activeDialogues) {
+        if (dialogue.autoAdvance) {
+            autoAdvanceEnabled = true;
+            autoAdvanceDelay = std::max(autoAdvanceDelay, dialogue.autoAdvanceDelay);
+        }
+    }
+    const auto activeNode = m_storyNodes.find(m_currentNodeId);
+    if (m_isPlaying && autoAdvanceEnabled && m_activeChoiceButtons.empty() &&
+        activeNode != m_storyNodes.end() && !activeNode->second.nextNodes.empty() &&
+        areActiveDialoguesComplete()) {
+        m_autoAdvanceElapsed += deltaTime;
+        if (m_autoAdvanceElapsed >= autoAdvanceDelay) {
+            m_autoAdvanceElapsed = 0.0f;
+            advanceToNextNode();
+        }
+    } else {
+        m_autoAdvanceElapsed = 0.0f;
+    }
+
     m_window->renderVisualNovelFrame(
         m_hasBackground,
         m_activeBackground,
@@ -1250,6 +1275,17 @@ void Engine::recordActiveDialogueHistory() {
         m_gameState = Rowl::State::GameState::withDialogueHistory(m_gameState, entries);
         m_lastRecordedDialogueNodeId = m_currentNodeId;
     }
+}
+
+bool Engine::areActiveDialoguesComplete() const {
+    for (const auto& dialogue : m_activeDialogues) {
+        if (!dialogue.typewriterEnabled || dialogue.textSpeed <= 0) continue;
+        const auto total = Rowl::Render::FontRenderer::countCodepoints(dialogue.dialogue);
+        const auto visible = static_cast<std::size_t>(
+            (dialogue.elapsedTypewriterTime * 1000.0f) / static_cast<float>(dialogue.textSpeed));
+        if (visible < total) return false;
+    }
+    return true;
 }
 
 void Engine::shutdown() {

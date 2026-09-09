@@ -1821,6 +1821,32 @@ void test_hardening_and_reliability() {
 
     // 4. BGM Looping State & Configuration
     {
+        const auto autoGraph = std::filesystem::temp_directory_path() / "rowl_auto_advance_test.json";
+        {
+            std::ofstream f(autoGraph);
+            f << R"({
+                "format_version":4,"start_node_id":301,"nodes":[
+                  {"id":301,"components":[{"type":"dialogue","data":{"speaker":"A","dialogue":"Auto","typewriter_enabled":false,"auto_advance":true,"auto_advance_delay":0.0}}],"next_nodes":[{"id":302}]},
+                  {"id":302,"components":[{"type":"dialogue","data":{"speaker":"B","dialogue":"Arrived"}}],"next_nodes":[]}
+                ]
+            })";
+        }
+        Rowl::Core::Engine engine;
+        engine.initialize({});
+        engine.loadStoryGraphFromPath(autoGraph.string());
+        engine.setPlayState(true);
+        engine.resetToStartNode();
+        engine.step(0.05f);
+        if (engine.getCurrentNodeId() != 302) {
+            std::cerr << "Auto advance did not move after its configured delay" << std::endl;
+            exit(1);
+        }
+        engine.shutdown();
+        std::filesystem::remove(autoGraph);
+        TEST_PASS("Dialogue Auto Advance Waits for Completion and Uses Node Delay");
+    }
+
+    {
         Rowl::Audio::AudioEngine audio;
         if (!audio.isBgmLooping()) {
             std::cerr << "BGM looping expected to default to true" << std::endl;

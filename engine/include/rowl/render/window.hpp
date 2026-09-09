@@ -41,6 +41,8 @@ struct DialogueRenderData {
     bool isPlaying = false;
     int textSpeed = 30; // ms per char
     float elapsedTypewriterTime = 0.0f; // seconds
+    bool autoAdvance = false;
+    float autoAdvanceDelay = 2.0f;
 
     // Typography & Colors
     float fontSize = 24.0f;

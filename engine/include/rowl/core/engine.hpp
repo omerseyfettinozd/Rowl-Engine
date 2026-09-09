@@ -260,6 +260,7 @@ private:
     bool m_isRunning    = false;
     bool m_initialized  = false;
     bool m_isPlaying    = false;
+    float m_autoAdvanceElapsed = 0.0f;
 
     void parseStoryGraphJson(const std::string& jsonContent);
     void restoreAudioStateFromGameState();
@@ -268,6 +269,7 @@ private:
     void markScriptStatus(const std::string& moduleId, const std::string& sourcePath,
                           const std::string& state, const std::string& error = {});
     void recordActiveDialogueHistory();
+    bool areActiveDialoguesComplete() const;
 };
 
 } // namespace Rowl::Core
