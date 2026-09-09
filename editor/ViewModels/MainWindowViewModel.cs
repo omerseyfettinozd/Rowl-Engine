@@ -107,6 +107,7 @@ namespace RowlEngine.Editor.ViewModels
         public object? TopLevelHint { get; set; }
 
         public SettingsViewModel Settings { get; } = new();
+        internal ProjectRuntimeSettings ProjectRuntimeSettings { get; private set; } = new();
         private readonly string _playerSettingsPath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "RowlEngine", "player-settings.json");
@@ -487,6 +488,9 @@ namespace RowlEngine.Editor.ViewModels
                 ProjectRoot = ResolveProjectRoot();
                 CurrentProjectPath = ProjectRoot;
             }
+
+            ProjectRuntimeSettings = ProjectRuntimeSettingsService.Load(
+                Path.Combine(ProjectRoot, "project.rowlproj"));
 
             AssetBrowserViewModel = new AssetBrowserViewModel(this);
             OutputLogViewModel = new OutputLogViewModel(this);

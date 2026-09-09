@@ -467,6 +467,24 @@ namespace RowlEngine.Editor
 
             Console.WriteLine("  ✅ [PASS] Project Save, Save As (all assets + manifest) & Standalone Game Build verified");
 
+            // ── Test 7b: Project runtime settings migration ─────────────────
+            Console.WriteLine("\n📌 [Test 7b]: Project runtime settings migration...");
+            string manifestPath = Path.Combine(testProjectRoot, "runtime-settings.rowlproj");
+            File.WriteAllText(manifestPath, "{ \"name\": \"Legacy\" }");
+            var legacySettings = ProjectRuntimeSettingsService.Load(manifestPath);
+            if (legacySettings.SaveSlotCount != 10 || legacySettings.DefaultBgmTransition != "instant" ||
+                legacySettings.DefaultBgmTransitionDurationSeconds != 1)
+                throw new Exception("Legacy project settings did not receive safe defaults");
+            ProjectRuntimeSettingsService.Save(manifestPath, new ProjectRuntimeSettings
+            {
+                SaveSlotCount = 14, DefaultBgmTransition = "crossfade", DefaultBgmTransitionDurationSeconds = 2.5f
+            });
+            var savedSettings = ProjectRuntimeSettingsService.Load(manifestPath);
+            if (savedSettings.SaveSlotCount != 14 || savedSettings.DefaultBgmTransition != "crossfade" ||
+                savedSettings.DefaultBgmTransitionDurationSeconds != 2.5f)
+                throw new Exception("Project runtime settings did not round-trip");
+            Console.WriteLine("  ✅ [PASS] Project runtime settings migration and round-trip verified");
+
             // Test 8: Performance Benchmark & Cache Optimization Verification
             Console.WriteLine("\n📌 [Test 8]: Performance Benchmark & Cache Optimization Verification...");
             var sw = Stopwatch.StartNew();

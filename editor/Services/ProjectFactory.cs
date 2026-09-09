@@ -102,7 +102,10 @@ namespace RowlEngine.Editor.Services
                     createdAt = DateTime.UtcNow.ToString("o"),
                     savedAt = DateTime.UtcNow.ToString("o"),
                     nodeCount = 1,
-                    startNodeId = 101
+                    startNodeId = 101,
+                    save_slot_count = ProjectRuntimeSettings.DefaultSaveSlotCount,
+                    default_bgm_transition = ProjectRuntimeSettings.DefaultTransitionKind,
+                    default_bgm_transition_duration_seconds = ProjectRuntimeSettings.DefaultTransitionDurationSeconds
                 };
                 var opts = new JsonSerializerOptions { WriteIndented = true };
                 File.WriteAllText(Path.Combine(projectDir, "project.rowlproj"), JsonSerializer.Serialize(manifest, opts));
