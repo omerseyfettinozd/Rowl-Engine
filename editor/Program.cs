@@ -223,6 +223,17 @@ namespace RowlEngine.Editor
             if (testConns.Count != 2) throw new Exception("Initial test conns failed");
             Console.WriteLine("  ✅ [PASS] Wire topology & single outgoing rule verified without touching project files");
 
+            var validationNode = new NodeViewModel(901, "Validation", 0, 0, bare: false);
+            var missingBackground = validationNode.GetComponent<BackgroundComponentViewModel>();
+            if (missingBackground != null) missingBackground.Texture = "missing_build_asset.png";
+            var orphanNode = new NodeViewModel(902, "Orphan", 0, 0, bare: true);
+            var validationIssues = ProjectValidationService.Validate(
+                new[] { validationNode, orphanNode }, Array.Empty<ConnectionViewModel>(), Path.Combine(testProjectRoot, "Assets"));
+            if (!validationIssues.Any(issue => issue.IsError && issue.Message.Contains("missing_build_asset.png")) ||
+                !validationIssues.Any(issue => !issue.IsError && issue.Message.Contains("unreachable")))
+                throw new Exception("Build validation did not report missing assets and unreachable nodes");
+            Console.WriteLine("  ✅ [PASS] Build validation blocks missing assets and reports unreachable nodes");
+
             // Test 4: Story Graph File Serialization & Deserialization
             Console.WriteLine("\n📌 [Test 4]: Story Graph v4 Serialization & Coordinate Persistence...");
             bool loadOk = mainVm.LoadFullStoryGraphFile();
@@ -424,7 +435,7 @@ namespace RowlEngine.Editor
             mainVm.ExecuteBuildPipeline(testBuildDir);
 
             if (!File.Exists(Path.Combine(testBuildDir, "run_game.sh")))
-                throw new Exception("run_game.sh missing in standalone build output");
+                throw new Exception("run_game.sh missing in standalone build output: " + mainVm.LogOutput);
             if (!File.Exists(Path.Combine(testBuildDir, "run_game.bat")))
                 throw new Exception("run_game.bat missing in standalone build output");
             if (!File.Exists(Path.Combine(testBuildDir, "README.txt")))

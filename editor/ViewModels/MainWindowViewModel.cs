@@ -1828,10 +1828,18 @@ namespace RowlEngine.Editor.ViewModels
         /// </summary>
         public void ExecuteBuildPipeline(string buildOutDir)
         {
-            // Save latest story graphs
+            // Normalize and persist the current graph before analysing it. This
+            // removes transient canvas links already handled by save logic.
             SaveActiveStoryFile();
             SaveFullStoryGraphFile();
-
+            var validation = ProjectValidationService.Validate(Nodes, Connections, AssetsPath);
+            foreach (var issue in validation)
+                AppendLog($"{(issue.IsError ? "❌" : "⚠️")} [BUILD CHECK] {issue.Message}");
+            if (validation.Any(issue => issue.IsError))
+            {
+                AppendLog("⛔ Build cancelled: fix blocking project validation errors first.");
+                return;
+            }
             // Delegate export to ProjectBuildService
             ProjectBuildService.BuildStandalone(
                 MainWindowViewModel.ProjectRoot,
