@@ -397,6 +397,37 @@ ROWL_API const char* RowlEngine_GetLastResultTarget(RowlEngineHandle handle);
  */
 ROWL_API void RowlEngine_ClearLastResult(RowlEngineHandle handle);
 
+/**
+ * Starts a visual scene transition (e.g. "crossfade", "fade_black", "fade_white", "fade_color", "wipe_left", "wipe_right").
+ * durationSeconds: duration of the transition in seconds.
+ * colorHex: hex color string used if kind is "fade_color" (e.g. "#FF0000").
+ */
+ROWL_API void RowlEngine_StartTransition(RowlEngineHandle handle, const char* kind, float durationSeconds, const char* colorHex);
+
+/**
+ * Returns true if a visual scene transition is currently running.
+ */
+ROWL_API bool RowlEngine_IsTransitionActive(RowlEngineHandle handle);
+
+/**
+ * Sets 2D camera position and zoom factor.
+ * x, y: camera center coordinates in virtual canvas space (default: 960, 540).
+ * zoom: zoom factor (clamped between 0.1 and 10.0, default: 1.0).
+ */
+ROWL_API void RowlEngine_SetCamera(RowlEngineHandle handle, float x, float y, float zoom);
+
+/**
+ * Triggers camera screen shake with harmonic decay.
+ * intensity: maximum pixel displacement (clamped to 1000).
+ * durationSeconds: shake duration in seconds.
+ */
+ROWL_API void RowlEngine_TriggerCameraShake(RowlEngineHandle handle, float intensity, float durationSeconds);
+
+/**
+ * Resets 2D camera to default center (960, 540) and zoom 1.0.
+ */
+ROWL_API void RowlEngine_ResetCamera(RowlEngineHandle handle);
+
 #ifdef __cplusplus
 } /* extern "C" */
 #endif

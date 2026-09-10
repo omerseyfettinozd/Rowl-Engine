@@ -758,6 +758,29 @@ void Engine::updateSceneFromComponents(const std::string& componentsJson) {
                         setScriptVariable(varKey, varVal);
                     }
                 }
+            } else if (type == "camera") {
+                if (m_window && m_window->getCamera()) {
+                    float zoom = data.value("zoom", 1.0f);
+                    float x = data.value("x", 960.0f);
+                    float y = data.value("y", 540.0f);
+                    float rot = data.value("rotation", 0.0f);
+                    m_window->getCamera()->setPosition(x, y);
+                    m_window->getCamera()->setZoom(zoom);
+                    m_window->getCamera()->setRotation(rot);
+                    if (data.contains("shake_intensity") && data.contains("shake_duration")) {
+                        float intensity = data.value("shake_intensity", 0.0f);
+                        float duration = data.value("shake_duration", 0.0f);
+                        float freq = data.value("shake_frequency", 25.0f);
+                        m_window->getCamera()->shake(intensity, duration, freq);
+                    }
+                }
+            } else if (type == "transition") {
+                std::string kind = data.value("kind", "crossfade");
+                float duration = data.value("duration", 1.0f);
+                std::string colorHex = data.value("color", "#000000");
+                if (m_window) {
+                    m_window->startTransition(kind, duration, colorHex);
+                }
             } else if (type == "script") {
                 pendingScripts.push_back(data);
             }
@@ -1245,6 +1268,8 @@ void Engine::step(float deltaTime) {
         return;
     }
 
+    m_window->update(deltaTime);
+
     for (auto& dlg : m_activeDialogues) {
         dlg.isPlaying = m_isPlaying;
         if (m_isPlaying && dlg.typewriterEnabled) {
@@ -1313,6 +1338,12 @@ void Engine::setTextSpeedMultiplier(float multiplier) {
 
 void Engine::setAutoAdvanceDelayOffset(float seconds) {
     m_autoAdvanceDelayOffset = std::clamp(seconds, 0.0f, 60.0f);
+}
+
+void Engine::startTransition(const std::string& kind, float durationSeconds, const std::string& colorHex) {
+    if (m_window) {
+        m_window->startTransition(kind, durationSeconds, colorHex);
+    }
 }
 
 void Engine::run() {

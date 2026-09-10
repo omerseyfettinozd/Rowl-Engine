@@ -135,6 +135,10 @@ public:
     bool isRunning() const { return m_isRunning; }
     const EngineConfig& getConfig() const { return m_config; }
     Rowl::Render::Window* getWindow() const { return m_window.get(); }
+    Rowl::Render::Camera2D* getCamera() const { return m_window ? m_window->getCamera() : nullptr; }
+    Rowl::Render::TransitionManager* getTransitionManager() const { return m_window ? m_window->getTransitionManager() : nullptr; }
+    void startTransition(const std::string& kind, float durationSeconds, const std::string& colorHex = "");
+    bool isTransitionActive() const { return m_window && m_window->isTransitionActive(); }
 
     // ── Scene / story API ─────────────────────────────────────────────────
 

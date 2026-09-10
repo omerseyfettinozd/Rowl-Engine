@@ -27,6 +27,8 @@
 
 #include "rowl/render/aspect_guardian.hpp"
 #include "rowl/render/msdf_renderer.hpp"
+#include "rowl/render/camera2d.hpp"
+#include "rowl/render/transition_manager.hpp"
 #include "rowl/state/game_state.hpp"
 #include "rowl/audio/audio_engine.hpp"
 #include "rowl/scripting/lua_sandbox.hpp"
@@ -2511,6 +2513,246 @@ void test_hardening_and_reliability() {
     }
 }
 
+void test_camera_and_transition_pipeline() {
+    TEST_SECTION("2D Camera & Scene Transition Subsystem Tests");
+
+    // Test 1: Camera2D virtual projection & zoom identity
+    {
+        Rowl::Render::Camera2D camera(1920.0f, 1080.0f);
+        if (std::abs(camera.getPositionX() - 960.0f) > 0.001f ||
+            std::abs(camera.getPositionY() - 540.0f) > 0.001f ||
+            std::abs(camera.getZoom() - 1.0f) > 0.001f) {
+            std::cerr << "Camera2D default initialization failed" << std::endl;
+            exit(1);
+        }
+
+        float outX = 0, outY = 0, outW = 0, outH = 0;
+        camera.transformRect(100.0f, 200.0f, 300.0f, 400.0f, outX, outY, outW, outH);
+        if (std::abs(outX - 100.0f) > 0.001f || std::abs(outY - 200.0f) > 0.001f ||
+            std::abs(outW - 300.0f) > 0.001f || std::abs(outH - 400.0f) > 0.001f) {
+            std::cerr << "Camera2D identity transformation failed" << std::endl;
+            exit(1);
+        }
+
+        // Test 2: Camera2D Zoom clamping & center scaling
+        camera.setZoom(2.0f);
+        if (std::abs(camera.getZoom() - 2.0f) > 0.001f) {
+            std::cerr << "Camera2D setZoom failed" << std::endl;
+            exit(1);
+        }
+        camera.transformRect(960.0f, 540.0f, 100.0f, 100.0f, outX, outY, outW, outH);
+        if (std::abs(outX - 960.0f) > 0.001f || std::abs(outY - 540.0f) > 0.001f ||
+            std::abs(outW - 200.0f) > 0.001f || std::abs(outH - 200.0f) > 0.001f) {
+            std::cerr << "Camera2D zoom projection failed" << std::endl;
+            exit(1);
+        }
+
+        // Clamping test: negative zoom and excessive zoom
+        camera.setZoom(-5.0f);
+        if (camera.getZoom() < 0.1f) {
+            std::cerr << "Camera2D negative zoom clamp failed" << std::endl;
+            exit(1);
+        }
+        camera.setZoom(100.0f);
+        if (camera.getZoom() > 10.0f) {
+            std::cerr << "Camera2D max zoom clamp failed" << std::endl;
+            exit(1);
+        }
+
+        TEST_PASS("Camera2D Virtual Canvas Projection & Zoom Scaling");
+    }
+
+    // Test 3: Camera2D Screen Shake & Harmonic Decay
+    {
+        Rowl::Render::Camera2D camera(1920.0f, 1080.0f);
+        camera.shake(25.0f, 0.4f, 30.0f);
+        if (!camera.isShaking()) {
+            std::cerr << "Camera2D shake trigger failed" << std::endl;
+            exit(1);
+        }
+
+        camera.update(0.1f);
+        if (!camera.isShaking() || (camera.getShakeOffsetX() == 0.0f && camera.getShakeOffsetY() == 0.0f)) {
+            std::cerr << "Camera2D shake offset update failed" << std::endl;
+            exit(1);
+        }
+
+        // Advance past shake duration
+        camera.update(0.5f);
+        if (camera.isShaking() || camera.getShakeOffsetX() != 0.0f || camera.getShakeOffsetY() != 0.0f) {
+            std::cerr << "Camera2D shake decay to zero failed" << std::endl;
+            exit(1);
+        }
+
+        // Reset
+        camera.setPosition(1200.0f, 600.0f);
+        camera.setZoom(1.5f);
+        camera.reset();
+        if (std::abs(camera.getPositionX() - 960.0f) > 0.001f ||
+            std::abs(camera.getPositionY() - 540.0f) > 0.001f ||
+            std::abs(camera.getZoom() - 1.0f) > 0.001f) {
+            std::cerr << "Camera2D reset failed" << std::endl;
+            exit(1);
+        }
+
+        TEST_PASS("Camera2D Screen Shake Harmonic Decay & Reset");
+    }
+
+    // Test 4: TransitionManager Lifecycle & State Transitions
+    {
+        Rowl::Render::TransitionManager transition;
+        if (transition.isTransitionActive() || transition.getType() != Rowl::Render::TransitionType::None) {
+            std::cerr << "TransitionManager initial state should be None" << std::endl;
+            exit(1);
+        }
+
+        transition.startTransitionFromKind("crossfade", 0.5f);
+        if (!transition.isTransitionActive() || transition.getType() != Rowl::Render::TransitionType::CrossFade) {
+            std::cerr << "TransitionManager CrossFade start failed" << std::endl;
+            exit(1);
+        }
+
+        transition.update(0.25f);
+        if (std::abs(transition.getProgress() - 0.5f) > 0.01f || !transition.isTransitionActive()) {
+            std::cerr << "TransitionManager halfway progress failed" << std::endl;
+            exit(1);
+        }
+
+        transition.update(0.3f);
+        if (transition.isTransitionActive()) {
+            std::cerr << "TransitionManager completion failed" << std::endl;
+            exit(1);
+        }
+
+        // Test FadeToColor with custom hex
+        transition.startTransitionFromKind("fade_color", 1.0f, "#10B981");
+        if (!transition.isTransitionActive() || transition.getType() != Rowl::Render::TransitionType::FadeToColor) {
+            std::cerr << "TransitionManager FadeToColor start failed" << std::endl;
+            exit(1);
+        }
+
+        // Wipe transitions
+        transition.startTransitionFromKind("wipe_left", 0.8f);
+        if (!transition.isTransitionActive() || transition.getType() != Rowl::Render::TransitionType::WipeLeft) {
+            std::cerr << "TransitionManager WipeLeft start failed" << std::endl;
+            exit(1);
+        }
+
+        transition.reset();
+        if (transition.isTransitionActive()) {
+            std::cerr << "TransitionManager reset failed" << std::endl;
+            exit(1);
+        }
+
+        TEST_PASS("TransitionManager Lifecycle, Progress & Hex Parsing");
+    }
+
+    // Test 5: C API Integration for Camera & Transition
+    {
+        RowlEngineHandle handle = RowlEngine_Create();
+        if (!handle) {
+            std::cerr << "Failed to create RowlEngine handle" << std::endl;
+            exit(1);
+        }
+        if (!RowlEngine_Init(handle, 1920, 1080, 0)) {
+            std::cerr << "Failed to initialize offscreen engine" << std::endl;
+            exit(1);
+        }
+
+        RowlEngine_SetCamera(handle, 1000.0f, 500.0f, 1.25f);
+        RowlEngine_TriggerCameraShake(handle, 15.0f, 0.5f);
+        RowlEngine_Step(handle, 0.016f);
+
+        RowlEngine_StartTransition(handle, "crossfade", 0.4f, nullptr);
+        if (!RowlEngine_IsTransitionActive(handle)) {
+            std::cerr << "RowlEngine_IsTransitionActive expected true after start" << std::endl;
+            exit(1);
+        }
+
+        // Since Engine::step clamps dt to 0.25s maximum, step twice to advance 0.5s
+        RowlEngine_Step(handle, 0.25f);
+        RowlEngine_Step(handle, 0.25f);
+        if (RowlEngine_IsTransitionActive(handle)) {
+            std::cerr << "RowlEngine_IsTransitionActive expected false after completion" << std::endl;
+            exit(1);
+        }
+
+        RowlEngine_ResetCamera(handle);
+        RowlEngine_Destroy(handle);
+
+        TEST_PASS("C API Camera & Transition Integration");
+    }
+
+    // Test 6: Component JSON Ingestion for Camera & Transition
+    {
+        RowlEngineHandle handle = RowlEngine_Create();
+        RowlEngine_Init(handle, 1920, 1080, 0);
+
+        std::string componentJson = R"([
+            {
+                "type": "background",
+                "data": { "image": "bg_test.png", "x": 0, "y": 0, "width": 1920, "height": 1080 }
+            },
+            {
+                "type": "camera",
+                "data": { "x": 960, "y": 540, "zoom": 1.1, "shake_intensity": 10.0, "shake_duration": 0.3 }
+            },
+            {
+                "type": "transition",
+                "data": { "kind": "fade_black", "duration": 0.5 }
+            }
+        ])";
+
+        RowlEngine_UpdateSceneFromJson(handle, componentJson.c_str());
+        if (!RowlEngine_IsTransitionActive(handle)) {
+            std::cerr << "Transition was not activated from component JSON" << std::endl;
+            exit(1);
+        }
+
+        RowlEngine_Step(handle, 0.016f);
+        uint32_t bufW = 0, bufH = 0;
+        const uint8_t* buffer = RowlEngine_GetPixelBuffer(handle, &bufW, &bufH);
+        if (!buffer || bufW != 1920 || bufH != 1080) {
+            std::cerr << "Failed to retrieve pixel buffer with camera/transition active" << std::endl;
+            exit(1);
+        }
+
+        RowlEngine_Destroy(handle);
+        TEST_PASS("Scene JSON Camera & Transition Component Ingestion");
+    }
+
+    // Test 7: Active Transition Render Performance Benchmark
+    {
+        RowlEngineHandle handle = RowlEngine_Create();
+        RowlEngine_Init(handle, 1920, 1080, 0);
+
+        RowlEngine_StartTransition(handle, "crossfade", 2.0f, nullptr);
+
+        const int frameCount = 60;
+        const auto benchStart = std::chrono::high_resolution_clock::now();
+
+        for (int f = 0; f < frameCount; ++f) {
+            RowlEngine_Step(handle, 0.016f);
+        }
+
+        const auto benchEnd = std::chrono::high_resolution_clock::now();
+        double elapsedMs = std::chrono::duration<double, std::milli>(benchEnd - benchStart).count();
+        double fps = (frameCount / elapsedMs) * 1000.0;
+
+        std::cout << "  ⚡ [Benchmark] Active Transition Render: " << frameCount << " frames rendered in "
+                  << std::fixed << std::setprecision(2) << elapsedMs << "ms (~"
+                  << static_cast<int>(fps) << " FPS)" << std::endl;
+
+        if (fps < 30.0) {
+            std::cerr << "Transition render FPS is too low: " << fps << std::endl;
+            exit(1);
+        }
+
+        RowlEngine_Destroy(handle);
+        TEST_PASS("Active Scene Transition 60-Frame Render Performance");
+    }
+}
+
 int main(int argc, char* argv[]) {
     std::string benchmarkJsonPath;
     for (int index = 1; index < argc; ++index) {
@@ -2537,6 +2779,7 @@ int main(int argc, char* argv[]) {
     test_game_object_component_system();
     test_window_input_routing();
     test_runtime_context_and_diagnostics();
+    test_camera_and_transition_pipeline();
     test_native_performance_benchmarks(benchmarkJsonPath);
     test_hardening_and_reliability();
 

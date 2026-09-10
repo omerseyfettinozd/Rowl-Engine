@@ -792,4 +792,51 @@ void RowlEngine_ClearLastResult(RowlEngineHandle handle) {
     });
 }
 
+void RowlEngine_StartTransition(RowlEngineHandle handle, const char* kind, float durationSeconds, const char* colorHex) {
+    if (!isLiveHandle(handle)) return;
+    invokeNoexcept([&] {
+        std::string k = kind ? kind : "crossfade";
+        std::string c = colorHex ? colorHex : "";
+        toEngine(handle)->startTransition(k, durationSeconds, c);
+    });
+}
+
+bool RowlEngine_IsTransitionActive(RowlEngineHandle handle) {
+    if (!isLiveHandle(handle)) return false;
+    return invokeNoexcept<bool>([&] {
+        return toEngine(handle)->isTransitionActive();
+    }, false);
+}
+
+void RowlEngine_SetCamera(RowlEngineHandle handle, float x, float y, float zoom) {
+    if (!isLiveHandle(handle)) return;
+    invokeNoexcept([&] {
+        auto* cam = toEngine(handle)->getCamera();
+        if (cam) {
+            cam->setPosition(x, y);
+            cam->setZoom(zoom);
+        }
+    });
+}
+
+void RowlEngine_TriggerCameraShake(RowlEngineHandle handle, float intensity, float durationSeconds) {
+    if (!isLiveHandle(handle)) return;
+    invokeNoexcept([&] {
+        auto* cam = toEngine(handle)->getCamera();
+        if (cam) {
+            cam->shake(intensity, durationSeconds);
+        }
+    });
+}
+
+void RowlEngine_ResetCamera(RowlEngineHandle handle) {
+    if (!isLiveHandle(handle)) return;
+    invokeNoexcept([&] {
+        auto* cam = toEngine(handle)->getCamera();
+        if (cam) {
+            cam->reset();
+        }
+    });
+}
+
 } // extern "C"

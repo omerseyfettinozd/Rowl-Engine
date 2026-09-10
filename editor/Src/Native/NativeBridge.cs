@@ -264,6 +264,35 @@ namespace RowlEngine.Editor.Native
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
         internal static extern void RowlEngine_ClearLastResult(IntPtr handle);
 
+        // ── Camera & Transition Controls ─────────────────────────────────────
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern void RowlEngine_StartTransition(
+            IntPtr handle,
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string kind,
+            float durationSeconds,
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string? colorHex);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        [return: MarshalAs(UnmanagedType.I1)]
+        internal static extern bool RowlEngine_IsTransitionActive(IntPtr handle);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern void RowlEngine_SetCamera(
+            IntPtr handle,
+            float x,
+            float y,
+            float zoom);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern void RowlEngine_TriggerCameraShake(
+            IntPtr handle,
+            float intensity,
+            float durationSeconds);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern void RowlEngine_ResetCamera(IntPtr handle);
+
         // ── Helpers ──────────────────────────────────────────────────────────
 
         /// <summary>Converts a native C UTF-8 string pointer to a managed string safely.</summary>

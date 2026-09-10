@@ -9,6 +9,8 @@
 #include <unordered_set>
 #include "rowl/render/font_renderer.hpp"
 #include "rowl/render/msdf_renderer.hpp"
+#include "rowl/render/camera2d.hpp"
+#include "rowl/render/transition_manager.hpp"
 
 struct SDL_Window;
 struct SDL_Renderer;
@@ -208,6 +210,14 @@ public:
     SDL_Renderer* getRenderer() const { return m_sdlRenderer; }
     bool isGpuMsdfAvailable() const { return m_msdfRenderState != nullptr; }
 
+    Camera2D* getCamera() const { return m_camera.get(); }
+    TransitionManager* getTransitionManager() const { return m_transitionManager.get(); }
+
+    void startTransition(const std::string& kind, float durationSeconds, const std::string& colorHex = "");
+    bool isTransitionActive() const;
+
+    void update(float dt);
+
 private:
     void initFontRenderer();
     void initGpuMsdfRenderer();
@@ -250,6 +260,8 @@ private:
     std::function<void(const RuntimeInputEvent&)> m_inputHandler;
     Rowl::VFS::VFSManager* m_vfs = nullptr;
     std::shared_ptr<Rowl::VFS::VFSManager> m_ownedVfs;
+    std::unique_ptr<Camera2D> m_camera;
+    std::unique_ptr<TransitionManager> m_transitionManager;
     bool m_videoLeaseHeld = false;
     uint32_t m_eventWindowId = 0;
     Rowl::VFS::VFSManager& vfs() const;

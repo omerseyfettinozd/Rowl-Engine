@@ -8,6 +8,8 @@ add_executable(rowl_tests
     ${CMAKE_SOURCE_DIR}/engine/src/render/font_renderer.cpp
     ${CMAKE_SOURCE_DIR}/engine/src/render/msdf_renderer.cpp
     ${CMAKE_SOURCE_DIR}/engine/src/render/window.cpp
+    ${CMAKE_SOURCE_DIR}/engine/src/render/camera2d.cpp
+    ${CMAKE_SOURCE_DIR}/engine/src/render/transition_manager.cpp
     ${CMAKE_SOURCE_DIR}/engine/src/state/game_state.cpp
     ${CMAKE_SOURCE_DIR}/engine/src/audio/audio_engine.cpp
     ${CMAKE_SOURCE_DIR}/engine/src/scripting/lua_sandbox.cpp

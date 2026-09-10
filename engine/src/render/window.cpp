@@ -76,7 +76,9 @@ std::vector<uint8_t> loadMsdfShaderCode() {
 } // namespace
 
 Window::Window(Rowl::VFS::VFSManager* vfs)
-    : m_vfs(vfs) {
+    : m_vfs(vfs),
+      m_camera(std::make_unique<Camera2D>(1920.0f, 1080.0f)),
+      m_transitionManager(std::make_unique<TransitionManager>()) {
     if (!m_vfs) {
         m_ownedVfs = std::make_shared<Rowl::VFS::VFSManager>();
         m_vfs = m_ownedVfs.get();
@@ -427,6 +429,21 @@ void Window::setInputHandler(std::function<void(const RuntimeInputEvent&)> handl
     m_inputHandler = std::move(handler);
 }
 
+void Window::startTransition(const std::string& kind, float durationSeconds, const std::string& colorHex) {
+    if (!m_transitionManager) return;
+    m_transitionManager->captureSnapshot(m_offscreenSurface, m_sdlRenderer);
+    m_transitionManager->startTransitionFromKind(kind, durationSeconds, colorHex);
+}
+
+bool Window::isTransitionActive() const {
+    return m_transitionManager && m_transitionManager->isTransitionActive();
+}
+
+void Window::update(float dt) {
+    if (m_camera) m_camera->update(dt);
+    if (m_transitionManager) m_transitionManager->update(dt);
+}
+
 void Window::pollEvents(bool& outShouldQuit) {
     if (!m_initialized) return;
 
@@ -744,10 +761,14 @@ void Window::renderVisualNovelFrame(
 
     // 1. Render Background Texture or Fill into Virtual Viewport
     if (hasBackground && !background.empty()) {
+        float camBgX = bgX, camBgY = bgY, camBgW = bgW, camBgH = bgH;
+        if (m_camera) {
+            m_camera->transformRect(bgX, bgY, bgW, bgH, camBgX, camBgY, camBgW, camBgH);
+        }
         float physBgX, physBgY;
-        AspectGuardian::virtualToPhysical(bgX, bgY, metrics, physBgX, physBgY);
-        float scaledBgW = bgW * metrics.scaleFactor;
-        float scaledBgH = bgH * metrics.scaleFactor;
+        AspectGuardian::virtualToPhysical(camBgX, camBgY, metrics, physBgX, physBgY);
+        float scaledBgW = camBgW * metrics.scaleFactor;
+        float scaledBgH = camBgH * metrics.scaleFactor;
         SDL_FRect vpRect = { physBgX, physBgY, scaledBgW, scaledBgH };
 
         SDL_Texture* bgTex = loadTexture(background);
@@ -763,10 +784,15 @@ void Window::renderVisualNovelFrame(
     for (const auto& ch : characters) {
         if (ch.sprite.empty()) continue;
 
-        float scaledCharW = ch.width * metrics.scaleFactor;
-        float scaledCharH = ch.height * metrics.scaleFactor;
+        float camCharX = ch.x, camCharY = ch.y, camCharW = ch.width, camCharH = ch.height;
+        if (m_camera) {
+            m_camera->transformRect(ch.x, ch.y, ch.width, ch.height, camCharX, camCharY, camCharW, camCharH);
+        }
+
+        float scaledCharW = camCharW * metrics.scaleFactor;
+        float scaledCharH = camCharH * metrics.scaleFactor;
         float physCharX, physCharY;
-        AspectGuardian::virtualToPhysical(ch.x, ch.y, metrics, physCharX, physCharY);
+        AspectGuardian::virtualToPhysical(camCharX, camCharY, metrics, physCharX, physCharY);
 
         SDL_Texture* charTex = loadTexture(ch.sprite);
         if (charTex) {
@@ -809,6 +835,11 @@ void Window::renderVisualNovelFrame(
             SDL_SetRenderDrawColor(m_sdlRenderer, 56, 189, 248, 255);
             SDL_RenderDebugText(m_sdlRenderer, physCharX + 20.0f * metrics.scaleFactor, physCharY + (scaledCharH / 2.0f), charInfo.c_str());
         }
+    }
+
+    // Active Scene Transition (Crossfade, Fade to Color, Wipe) applied over scene
+    if (m_transitionManager && m_transitionManager->isTransitionActive()) {
+        m_transitionManager->renderTransition(m_sdlRenderer, metrics);
     }
 
     // 3. Render Dialogue Boxes (Supports 1 or multiple dialogue boxes simultaneously)
@@ -1112,11 +1143,15 @@ void Window::drawSprite(const std::string& filename,
     if (m_height < 10) m_height = 1080;
 
     ViewportMetrics metrics = AspectGuardian::calculateViewport(m_width, m_height, 1920, 1080);
+    float camX = virtualX, camY = virtualY, camW = virtualWidth, camH = virtualHeight;
+    if (m_camera) {
+        m_camera->transformRect(virtualX, virtualY, virtualWidth, virtualHeight, camX, camY, camW, camH);
+    }
     float physX = 0.0f, physY = 0.0f;
-    AspectGuardian::virtualToPhysical(virtualX, virtualY, metrics, physX, physY);
+    AspectGuardian::virtualToPhysical(camX, camY, metrics, physX, physY);
 
-    float scaledW = virtualWidth * metrics.scaleFactor;
-    float scaledH = virtualHeight * metrics.scaleFactor;
+    float scaledW = camW * metrics.scaleFactor;
+    float scaledH = camH * metrics.scaleFactor;
 
     SDL_Texture* tex = loadTexture(filename);
     if (tex) {
