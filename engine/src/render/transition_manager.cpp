@@ -11,7 +11,28 @@ constexpr float kMaxDuration = 60.0f;
 static void parseHexColor(const std::string& hex, uint8_t& r, uint8_t& g, uint8_t& b, uint8_t& a) {
     std::string clean = hex;
     if (!clean.empty() && clean[0] == '#') clean = clean.substr(1);
-    if (clean.size() == 6) {
+    if (clean.size() == 3) {
+        // #RGB -> #RRGGBB
+        uint32_t val = static_cast<uint32_t>(std::strtoul(clean.c_str(), nullptr, 16));
+        uint8_t r4 = static_cast<uint8_t>((val >> 8) & 0xF);
+        uint8_t g4 = static_cast<uint8_t>((val >> 4) & 0xF);
+        uint8_t b4 = static_cast<uint8_t>(val & 0xF);
+        r = static_cast<uint8_t>((r4 << 4) | r4);
+        g = static_cast<uint8_t>((g4 << 4) | g4);
+        b = static_cast<uint8_t>((b4 << 4) | b4);
+        a = 255;
+    } else if (clean.size() == 4) {
+        // #RGBA -> #RRGGBBAA
+        uint32_t val = static_cast<uint32_t>(std::strtoul(clean.c_str(), nullptr, 16));
+        uint8_t r4 = static_cast<uint8_t>((val >> 12) & 0xF);
+        uint8_t g4 = static_cast<uint8_t>((val >> 8) & 0xF);
+        uint8_t b4 = static_cast<uint8_t>((val >> 4) & 0xF);
+        uint8_t a4 = static_cast<uint8_t>(val & 0xF);
+        r = static_cast<uint8_t>((r4 << 4) | r4);
+        g = static_cast<uint8_t>((g4 << 4) | g4);
+        b = static_cast<uint8_t>((b4 << 4) | b4);
+        a = static_cast<uint8_t>((a4 << 4) | a4);
+    } else if (clean.size() == 6) {
         uint32_t val = static_cast<uint32_t>(std::strtoul(clean.c_str(), nullptr, 16));
         r = static_cast<uint8_t>((val >> 16) & 0xFF);
         g = static_cast<uint8_t>((val >> 8) & 0xFF);
@@ -139,6 +160,7 @@ void TransitionManager::renderTransition(SDL_Renderer* renderer, const ViewportM
         case TransitionType::FadeToWhite:
         case TransitionType::FadeToColor: {
             SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+            const float maxAlpha = static_cast<float>(m_colorA);
             if (m_progress < 0.5f) {
                 // First half: Old scene fading into target color
                 if (m_snapshotTexture) {
@@ -147,13 +169,13 @@ void TransitionManager::renderTransition(SDL_Renderer* renderer, const ViewportM
                     SDL_RenderTexture(renderer, m_snapshotTexture, nullptr, &dst);
                 }
                 float alphaFactor = m_progress / 0.5f;
-                Uint8 a = static_cast<Uint8>(std::clamp(alphaFactor * 255.0f, 0.0f, 255.0f));
+                Uint8 a = static_cast<Uint8>(std::clamp(alphaFactor * maxAlpha, 0.0f, 255.0f));
                 SDL_SetRenderDrawColor(renderer, m_colorR, m_colorG, m_colorB, a);
                 SDL_RenderFillRect(renderer, &dst);
             } else {
                 // Second half: New scene emerging from target color
                 float alphaFactor = 1.0f - ((m_progress - 0.5f) / 0.5f);
-                Uint8 a = static_cast<Uint8>(std::clamp(alphaFactor * 255.0f, 0.0f, 255.0f));
+                Uint8 a = static_cast<Uint8>(std::clamp(alphaFactor * maxAlpha, 0.0f, 255.0f));
                 SDL_SetRenderDrawColor(renderer, m_colorR, m_colorG, m_colorB, a);
                 SDL_RenderFillRect(renderer, &dst);
             }

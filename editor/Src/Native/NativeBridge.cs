@@ -274,8 +274,7 @@ namespace RowlEngine.Editor.Native
             [MarshalAs(UnmanagedType.LPUTF8Str)] string? colorHex);
 
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
-        [return: MarshalAs(UnmanagedType.I1)]
-        internal static extern bool RowlEngine_IsTransitionActive(IntPtr handle);
+        internal static extern int RowlEngine_IsTransitionActive(IntPtr handle);
 
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
         internal static extern void RowlEngine_SetCamera(

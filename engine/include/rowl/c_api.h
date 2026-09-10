@@ -405,9 +405,9 @@ ROWL_API void RowlEngine_ClearLastResult(RowlEngineHandle handle);
 ROWL_API void RowlEngine_StartTransition(RowlEngineHandle handle, const char* kind, float durationSeconds, const char* colorHex);
 
 /**
- * Returns true if a visual scene transition is currently running.
+ * Returns 1 if a visual scene transition is currently running, 0 otherwise.
  */
-ROWL_API bool RowlEngine_IsTransitionActive(RowlEngineHandle handle);
+ROWL_API int RowlEngine_IsTransitionActive(RowlEngineHandle handle);
 
 /**
  * Sets 2D camera position and zoom factor.

@@ -759,6 +759,10 @@ void Window::renderVisualNovelFrame(
     SDL_SetRenderDrawColor(m_sdlRenderer, 11, 15, 25, 255);
     SDL_RenderClear(m_sdlRenderer);
 
+    // Protect letterbox / pillarbox margins from camera zoom and shake bleed
+    SDL_Rect canvasClip = { metrics.x, metrics.y, metrics.width, metrics.height };
+    SDL_SetRenderClipRect(m_sdlRenderer, &canvasClip);
+
     // 1. Render Background Texture or Fill into Virtual Viewport
     if (hasBackground && !background.empty()) {
         float camBgX = bgX, camBgY = bgY, camBgW = bgW, camBgH = bgH;
@@ -941,6 +945,8 @@ void Window::renderVisualNovelFrame(
             }
         }
     }
+
+    SDL_SetRenderClipRect(m_sdlRenderer, nullptr);
 
     // In offscreen mode, flush SDL graphics pipeline to m_offscreenSurface BEFORE drawing direct TrueType text
     if (m_isOffscreen && m_sdlRenderer) {

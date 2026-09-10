@@ -801,11 +801,11 @@ void RowlEngine_StartTransition(RowlEngineHandle handle, const char* kind, float
     });
 }
 
-bool RowlEngine_IsTransitionActive(RowlEngineHandle handle) {
-    if (!isLiveHandle(handle)) return false;
-    return invokeNoexcept<bool>([&] {
-        return toEngine(handle)->isTransitionActive();
-    }, false);
+int RowlEngine_IsTransitionActive(RowlEngineHandle handle) {
+    if (!isLiveHandle(handle)) return 0;
+    return invokeNoexcept<int>([&] {
+        return toEngine(handle)->isTransitionActive() ? 1 : 0;
+    }, 0);
 }
 
 void RowlEngine_SetCamera(RowlEngineHandle handle, float x, float y, float zoom) {

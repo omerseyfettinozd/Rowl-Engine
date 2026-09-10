@@ -1292,7 +1292,7 @@ void Engine::step(float deltaTime) {
     const auto activeNode = m_storyNodes.find(m_currentNodeId);
     if (m_isPlaying && autoAdvanceEnabled && m_activeChoiceButtons.empty() &&
         activeNode != m_storyNodes.end() && !activeNode->second.nextNodes.empty() &&
-        areActiveDialoguesComplete()) {
+        areActiveDialoguesComplete() && (!m_window || !m_window->isTransitionActive())) {
         m_autoAdvanceElapsed += deltaTime;
         if (m_autoAdvanceElapsed >= autoAdvanceDelay) {
             m_autoAdvanceElapsed = 0.0f;
