@@ -22,7 +22,7 @@ internal sealed class EditorInteractionBenchmark
         var report = new
         {
             schema_version = 1,
-            fixture_id = "editor-headless-default-v1",
+            fixture_id = "editor-headless-default-v2",
             build = new
             {
                 type = Environment.GetEnvironmentVariable("ROWL_EDITOR_BENCHMARK_BUILD_TYPE") ?? "Debug",

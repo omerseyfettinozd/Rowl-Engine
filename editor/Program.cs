@@ -1910,6 +1910,8 @@ namespace RowlEngine.Editor
                 benchmark.Record("preview_native_update_ms", mainVm.EngineHost.LastSceneUpdateMilliseconds);
                 benchmark.Record("preview_step_ms", mainVm.EngineHost.LastPreviewStepMilliseconds);
                 benchmark.Record("preview_pixel_copy_ms", mainVm.EngineHost.LastPixelBufferCopyMilliseconds);
+                benchmark.Record("preview_texture_load_ms", mainVm.EngineHost.LastFrameTextureLoadMilliseconds);
+                benchmark.Record("preview_non_texture_render_ms", mainVm.EngineHost.LastFrameNonTextureRenderMilliseconds);
 
                 var cacheNode = new NodeViewModel(9901, "Cache benchmark", 0, 0, bare: true);
                 cacheNode.AddComponent<DialogueComponentViewModel>().DialogueText = "Unchanged preview";
