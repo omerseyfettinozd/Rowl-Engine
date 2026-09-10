@@ -273,6 +273,14 @@ double RowlEngine_GetLastFrameNonTextureRenderMilliseconds(RowlEngineHandle hand
     }, 0.0);
 }
 
+double RowlEngine_GetLastFrameTextRasterizationMilliseconds(RowlEngineHandle handle) {
+    if (!isLiveHandle(handle)) return 0.0;
+    return invokeNoexcept<double>([&] {
+        const auto* window = toEngine(handle)->getWindow();
+        return window ? window->getLastFrameTextRasterizationMilliseconds() : 0.0;
+    }, 0.0);
+}
+
 void RowlEngine_SetTextureCacheBudgetBytes(RowlEngineHandle handle, uint64_t bytes) {
     if (!isLiveHandle(handle)) return;
     invokeNoexcept([&] {

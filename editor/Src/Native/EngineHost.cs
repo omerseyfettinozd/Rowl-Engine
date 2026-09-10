@@ -85,6 +85,11 @@ namespace RowlEngine.Editor.Native
             ? 0.0
             : NativeBridge.RowlEngine_GetLastFrameNonTextureRenderMilliseconds(_handle);
 
+        /// <summary>TrueType rasterization work from the latest rendered frame.</summary>
+        public double LastFrameTextRasterizationMilliseconds => _handle == IntPtr.Zero
+            ? 0.0
+            : NativeBridge.RowlEngine_GetLastFrameTextRasterizationMilliseconds(_handle);
+
         public IReadOnlyList<ScriptRuntimeDiagnostic> ScriptRuntimeDiagnostics { get; private set; }
             = Array.Empty<ScriptRuntimeDiagnostic>();
 

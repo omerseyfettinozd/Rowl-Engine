@@ -195,6 +195,7 @@ public:
     uint64_t getTextureCacheEvictionCount() const { return m_textureCacheEvictionCount; }
     double getLastFrameTextureLoadMilliseconds() const { return m_lastFrameTextureLoadMilliseconds; }
     double getLastFrameNonTextureRenderMilliseconds() const { return m_lastFrameNonTextureRenderMilliseconds; }
+    double getLastFrameTextRasterizationMilliseconds() const { return m_lastFrameTextRasterizationMilliseconds; }
     void setTextureCacheBudgetBytes(uint64_t bytes);
     FontRenderer* getFontRenderer() const { return m_fontRenderer.get(); }
     void reloadFonts();
@@ -255,6 +256,7 @@ private:
     uint64_t m_textureCacheEvictionCount = 0;
     double m_lastFrameTextureLoadMilliseconds = 0.0;
     double m_lastFrameNonTextureRenderMilliseconds = 0.0;
+    double m_lastFrameTextRasterizationMilliseconds = 0.0;
     bool m_collectingFrameProfile = false;
     bool m_isOpen          = false;
     bool m_initialized     = false;

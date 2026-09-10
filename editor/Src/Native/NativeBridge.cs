@@ -81,6 +81,9 @@ namespace RowlEngine.Editor.Native
         internal static extern double RowlEngine_GetLastFrameNonTextureRenderMilliseconds(IntPtr handle);
 
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern double RowlEngine_GetLastFrameTextRasterizationMilliseconds(IntPtr handle);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
         internal static extern void RowlEngine_SetPlayState(
             IntPtr handle,
             int isPlaying);

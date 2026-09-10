@@ -169,6 +169,9 @@ ROWL_API double RowlEngine_GetLastFrameTextureLoadMilliseconds(RowlEngineHandle 
 /** Returns non-texture renderer work measured during the most recent rendered frame. */
 ROWL_API double RowlEngine_GetLastFrameNonTextureRenderMilliseconds(RowlEngineHandle handle);
 
+/** Returns the TrueType rasterization portion of the most recent rendered frame. */
+ROWL_API double RowlEngine_GetLastFrameTextRasterizationMilliseconds(RowlEngineHandle handle);
+
 /**
  * Sets the decoded texture-cache budget in bytes. Values below 1 MiB clamp to
  * 1 MiB; textures that cannot fit are rejected without disturbing live state.

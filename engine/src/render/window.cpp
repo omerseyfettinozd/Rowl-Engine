@@ -769,6 +769,7 @@ void Window::renderVisualNovelFrame(
     if (!m_initialized || !m_sdlRenderer) return;
     const auto frameRenderStarted = std::chrono::steady_clock::now();
     m_lastFrameTextureLoadMilliseconds = 0.0;
+    m_lastFrameTextRasterizationMilliseconds = 0.0;
     m_collectingFrameProfile = true;
 
     // Dynamically query physical size if standalone, or use host-provided size if embedded
@@ -987,6 +988,7 @@ void Window::renderVisualNovelFrame(
 
     // 4. Render High-Quality Anti-Aliased TrueType Text directly onto Offscreen Surface
     if (m_fontRenderer && m_fontRenderer->isLoaded() && m_offscreenSurface) {
+        const auto textRasterizationStarted = std::chrono::steady_clock::now();
         for (const auto& dlg : dialogues) {
             if (!dlg.hasDialogueBox) continue;
 
@@ -1074,6 +1076,8 @@ void Window::renderVisualNovelFrame(
                 py + (h - fontPx) * 0.5f, fontPx, parseHexColor(choice.textColor, 255),
                 w - 24.0f * metrics.scaleFactor, h, choice.textAlignment);
         }
+        m_lastFrameTextRasterizationMilliseconds = std::chrono::duration<double, std::milli>(
+            std::chrono::steady_clock::now() - textRasterizationStarted).count();
     }
 
     m_collectingFrameProfile = false;
