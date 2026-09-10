@@ -1147,33 +1147,8 @@ namespace RowlEngine.Editor.ViewModels
 
                 if (files != null && files.Count > 0)
                 {
-                    string dataPath = MainWindowViewModel.AssetsPath;
-                    System.IO.Directory.CreateDirectory(dataPath);
-
-                    foreach (var fileItem in files)
-                    {
-                        string fullPath = fileItem.Path.LocalPath;
-                        string fileName = System.IO.Path.GetFileName(fullPath);
-                        string ext = System.IO.Path.GetExtension(fileName).ToLowerInvariant();
-                        string subDir = ext switch
-                        {
-                            ".png" or ".jpg" or ".jpeg" or ".bmp" or ".webp" or ".tga" => "images",
-                            ".json" or ".lua" => "json",
-                            ".rowlpkg" => "packages",
-                            _ => ""
-                        };
-                        string targetDir = string.IsNullOrEmpty(subDir)
-                            ? MainWindowViewModel.AssetsPath
-                            : System.IO.Path.Combine(MainWindowViewModel.AssetsPath, subDir);
-                        System.IO.Directory.CreateDirectory(targetDir);
-
-                        string destPath = System.IO.Path.Combine(targetDir, fileName);
-                        if (!string.Equals(System.IO.Path.GetFullPath(fullPath), System.IO.Path.GetFullPath(destPath), StringComparison.OrdinalIgnoreCase))
-                        {
-                            System.IO.File.Copy(fullPath, destPath, true);
-                        }
-                        AppendLog($"📥 Imported Asset: {fileName} -> Assets/{(string.IsNullOrEmpty(subDir) ? "" : subDir + "/")}{fileName}");
-                    }
+                    var filePaths = files.Select(f => f.Path.LocalPath);
+                    EditorAssetImportService.ImportAssetFiles(filePaths, MainWindowViewModel.AssetsPath, AppendLog);
                     AssetBrowserViewModel.RefreshAssets();
                 }
             }
@@ -1403,18 +1378,7 @@ namespace RowlEngine.Editor.ViewModels
         /// </summary>
         public string ImportImageFileToProject(string fullPath)
         {
-            if (string.IsNullOrWhiteSpace(fullPath)) return string.Empty;
-            try
-            {
-                string fileName = EditorLayoutAssistService.ImportImageFileToProject(fullPath, MainWindowViewModel.AssetsPath);
-                AppendLog($"📥 Auto-imported image '{fileName}' into Assets/images/");
-                return fileName;
-            }
-            catch (Exception ex)
-            {
-                AppendLog($"⚠️ Failed to copy '{System.IO.Path.GetFileName(fullPath)}' to Assets/images: {ex.Message}");
-                return System.IO.Path.GetFileName(fullPath);
-            }
+            return EditorAssetImportService.ImportImageFile(fullPath, MainWindowViewModel.AssetsPath, AppendLog);
         }
 
         /// <summary>
@@ -1783,25 +1747,28 @@ namespace RowlEngine.Editor.ViewModels
                     }
                 }
 
-                // Create a subfolder inside the selected directory to keep all build files organized
-                string buildFolderName = $"RowlBuild_{DateTime.Now:yyyy-MM-dd_HH-mm}";
-                string finalBuildDir = Path.Combine(buildOutDir, buildFolderName);
-                SaveProject();
-                var validation = ProjectValidationService.Validate(Nodes, Connections, AssetsPath, GetStartNode()?.Id);
-                ProjectIssuesViewModel.SetIssues(validation);
-                if (validation.Any(issue => issue.IsError))
-                {
-                    AppendLog("⛔ Build cancelled: fix blocking project validation errors first.");
-                    IsProjectIssuesPanelVisible = true;
-                    BottomPanelActiveTab = 4;
-                    return;
-                }
                 IsBuilding = true;
                 _buildCancellation = new CancellationTokenSource();
-                var progress = new Progress<string>(message => { BuildProgress = message; AppendLog(message); });
-                var result = await ProjectBuildService.BuildStandaloneAsync(ProjectRoot, AssetsPath, finalBuildDir,
-                    progress, _buildCancellation.Token);
-                if (!result.Succeeded) AppendLog($"{(result.Cancelled ? "ℹ️" : "⚠️")} {result.Message}");
+                await EditorBuildCoordinator.BuildStandaloneGameAsync(
+                    ProjectRoot,
+                    AssetsPath,
+                    buildOutDir,
+                    Nodes,
+                    Connections,
+                    GetStartNode()?.Id,
+                    SaveProject,
+                    issues =>
+                    {
+                        ProjectIssuesViewModel.SetIssues(issues);
+                        if (issues.Any(issue => issue.IsError))
+                        {
+                            IsProjectIssuesPanelVisible = true;
+                            BottomPanelActiveTab = 4;
+                        }
+                    },
+                    AppendLog,
+                    msg => BuildProgress = msg,
+                    _buildCancellation.Token);
             }
             catch (Exception ex)
             {
@@ -1823,23 +1790,16 @@ namespace RowlEngine.Editor.ViewModels
         /// </summary>
         public void ExecuteBuildPipeline(string buildOutDir)
         {
-            // Normalize and persist the current graph before analysing it. This
-            // removes transient canvas links already handled by save logic.
-            SaveActiveStoryFile();
-            SaveFullStoryGraphFile();
-            var result = ProjectBuildService.ExecuteBuildPipeline(
+            EditorBuildCoordinator.ExecuteBuildPipeline(
                 MainWindowViewModel.ProjectRoot,
                 MainWindowViewModel.AssetsPath,
                 buildOutDir,
                 Nodes,
                 Connections,
                 GetStartNode()?.Id,
+                () => { SaveActiveStoryFile(); SaveFullStoryGraphFile(); },
                 ProjectIssuesViewModel.SetIssues,
                 AppendLog);
-            if (!result.Succeeded && !result.Cancelled)
-            {
-                AppendLog($"⚠️ {result.Message}");
-            }
         }
 
         [RelayCommand]
@@ -1884,25 +1844,15 @@ namespace RowlEngine.Editor.ViewModels
                     }
                     else
                     {
-                        // User cancelled the dialog
                         AppendLog("ℹ️ Paket oluşturma iptal edildi.");
                         return;
                     }
                 }
 
-                Directory.CreateDirectory(outDir);
-                string pkgFileName = $"game_data_{DateTime.Now:yyyy-MM-dd_HH-mm}.rowlpkg";
-                string outPkg = Path.Combine(outDir, pkgFileName);
-
-                var result = await ProjectBuildService.PackageAssetsAsync(MainWindowViewModel.AssetsPath, outPkg, AppendLog);
+                var result = await EditorBuildCoordinator.PackageAssetsAsync(MainWindowViewModel.AssetsPath, outDir, AppendLog);
                 if (result.Succeeded)
                 {
-                    AppendLog($"📦 [VFS PAKET] .rowlpkg başarıyla oluşturuldu:\n  📁 Konum: {result.PackagePath}\n{result.Output}");
                     AssetBrowserViewModel.RefreshAssets();
-                }
-                else
-                {
-                    AppendLog($"⚠️ Paket oluşturma başarısız: {result.Message}");
                 }
             }
             catch (Exception ex)
