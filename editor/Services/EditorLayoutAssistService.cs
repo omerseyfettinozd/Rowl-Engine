@@ -85,6 +85,26 @@ namespace RowlEngine.Editor.Services
                 dlg.X = (1920 - dlg.Width) / 2.0;
                 dlg.Y = (1080 - dlg.Height) / 2.0;
             }
+            else if (preset == "Square")
+            {
+                dlg.Width = 500;
+                dlg.Height = 500;
+            }
+            else if (preset == "Standard")
+            {
+                dlg.X = 80;
+                dlg.Y = 860;
+                dlg.Width = 1760;
+                dlg.Height = 180;
+            }
+        }
+
+        public static void ResetCharacterDimensions(NodeViewModel? node)
+        {
+            if (node == null) return;
+            node.CharacterWidth = 360.0;
+            node.CharacterHeight = 540.0;
+            node.CharacterScale = 1.0;
         }
 
         public static string ImportImageFileToProject(string fullPath, string projectAssetsPath)

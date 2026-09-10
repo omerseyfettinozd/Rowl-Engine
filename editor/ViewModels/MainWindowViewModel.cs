@@ -635,12 +635,7 @@ namespace RowlEngine.Editor.ViewModels
 
         public void EnforceSingleOutgoingWireRule()
         {
-            // Legacy name retained for bindings. Nodes are now multi-output
-            // decision points, so only exact duplicate edges are removed.
-            var duplicates = Connections.GroupBy(c => (c.SourceNode, c.TargetNode, c.OptionId))
-                .SelectMany(group => group.Skip(1)).ToList();
-            foreach (var duplicate in duplicates) Connections.Remove(duplicate);
-            UpdateStartNodeState();
+            StoryGraphCanvasService.EnforceSingleOutgoingWireRule(Connections, UpdateStartNodeState);
         }
 
         public void StartWireDrag(NodeViewModel sourceNode, Point pinPos, string optionId = "")
@@ -674,86 +669,50 @@ namespace RowlEngine.Editor.ViewModels
         public void EndWireDrag(Point releasePos)
         {
             if (!IsDraggingWire || _wireDragSourceNode == null) return;
-
             IsDraggingWire = false;
 
-            NodeViewModel? targetNode = null;
-            foreach (var node in Nodes)
-            {
-                if (node == _wireDragSourceNode) continue;
-                Point leftPinPos = new Point(node.X + 10, node.Y + 60);
-                double distance = Math.Sqrt(Math.Pow(releasePos.X - leftPinPos.X, 2) + Math.Pow(releasePos.Y - leftPinPos.Y, 2));
-                if (distance < 75)
-                {
-                    targetNode = node;
-                    break;
-                }
-            }
+            var newConn = StoryGraphCanvasService.TryConnectWire(
+                _wireDragSourceNode,
+                releasePos,
+                Nodes,
+                Connections,
+                _wireDragOptionId);
 
-            if (targetNode != null)
+            if (newConn != null)
             {
-                if (!string.IsNullOrEmpty(_wireDragOptionId))
-                {
-                    // A button has exactly one destination. Reconnecting it
-                    // replaces only that button's previous cable, never the
-                    // sibling decisions on the same node.
-                    foreach (var existing in Connections.Where(connection =>
-                        connection.SourceNode == _wireDragSourceNode && connection.OptionId == _wireDragOptionId).ToList())
-                    {
-                        Connections.Remove(existing);
-                    }
-                    SetChoiceTarget(_wireDragSourceNode, _wireDragOptionId, targetNode.Id);
-                }
-                Connections.Add(new ConnectionViewModel(_wireDragSourceNode, targetNode, _wireDragOptionId));
-                AppendLog($"✅ Connected Wire: Node #{_wireDragSourceNode.Id} ---> Node #{targetNode.Id} (Total cables: {Connections.Count})");
+                AppendLog($"✅ Connected Wire: Node #{_wireDragSourceNode.Id} ---> Node #{newConn.TargetNode?.Id} (Total cables: {Connections.Count})");
             }
             else
             {
                 AppendLog("✂️ Connection dropped in empty space (cable unplugged / removed).");
             }
 
-            EnforceSingleOutgoingWireRule();
+            UpdateStartNodeState();
             _wireDragSourceNode = null;
             _wireDragOptionId = string.Empty;
         }
 
         public void DisconnectNodeInputs(NodeViewModel node)
         {
-            var toRemove = Connections.Where(c => c.TargetNode == node).ToList();
-            foreach (var conn in toRemove)
+            int count = StoryGraphCanvasService.DisconnectNodeInputs(node, Connections);
+            if (count > 0)
             {
-                Connections.Remove(conn);
-                if (conn.SourceNode != null && !string.IsNullOrEmpty(conn.OptionId))
-                    SetChoiceTarget(conn.SourceNode, conn.OptionId, 0);
-            }
-            if (toRemove.Count > 0)
-            {
-                AppendLog($"✂️ Disconnected {toRemove.Count} incoming cable(s) from Node #{node.Id}");
+                AppendLog($"✂️ Disconnected {count} incoming cable(s) from Node #{node.Id}");
             }
         }
 
         public void DisconnectNodeOutputs(NodeViewModel node, string optionId = "")
         {
-            var toRemove = Connections.Where(c => c.SourceNode == node &&
-                (string.IsNullOrEmpty(optionId) || c.OptionId == optionId)).ToList();
-            foreach (var conn in toRemove)
+            int count = StoryGraphCanvasService.DisconnectNodeOutputs(node, Connections, optionId);
+            if (count > 0)
             {
-                Connections.Remove(conn);
-                if (conn.SourceNode != null && !string.IsNullOrEmpty(conn.OptionId))
-                    SetChoiceTarget(conn.SourceNode, conn.OptionId, 0);
-            }
-            if (toRemove.Count > 0)
-            {
-                AppendLog($"✂️ Disconnected {toRemove.Count} outgoing cable(s) from Node #{node.Id}");
+                AppendLog($"✂️ Disconnected {count} outgoing cable(s) from Node #{node.Id}");
             }
         }
 
         private static void SetChoiceTarget(NodeViewModel node, string optionId, ulong targetNodeId)
         {
-            var option = node.GetComponents<ChoiceComponentViewModel>()
-                .SelectMany(choice => choice.Options)
-                .FirstOrDefault(candidate => candidate.OptionId == optionId);
-            if (option != null) option.TargetNodeId = targetNodeId;
+            StoryGraphCanvasService.SetChoiceTarget(node, optionId, targetNodeId);
         }
 
         [RelayCommand]
@@ -1057,49 +1016,30 @@ namespace RowlEngine.Editor.ViewModels
 
         public bool SaveFullStoryGraphFile()
         {
-            try
-            {
-                System.IO.Directory.CreateDirectory(AssetsPath);
-                System.IO.Directory.CreateDirectory(AssetsJsonPath);
-                ulong startId = GetStartNode()?.Id ?? 101;
-                string content = StoryGraphSerializer.SerializeFullStoryGraph(Nodes, Connections, startId);
-                ProjectFileSystem.WriteAllTextAtomically(System.IO.Path.Combine(AssetsPath, "full_story_graph.json"), content);
-                ProjectFileSystem.WriteAllTextAtomically(System.IO.Path.Combine(AssetsJsonPath, "full_story_graph.json"), content);
-                return true;
-            }
-            catch (Exception ex)
-            {
-                AppendLog($"⚠️ Failed to save story graph: {ex.Message}");
-                return false;
-            }
+            ulong startId = GetStartNode()?.Id ?? 101;
+            return StoryGraphDocumentWriter.SaveFullStoryGraph(
+                AssetsPath,
+                AssetsJsonPath,
+                Nodes,
+                Connections,
+                startId,
+                msg => AppendLog(msg));
         }
 
         public bool SaveActiveStoryFile()
         {
-            try
-            {
-                var node = SelectedNode ?? Nodes.FirstOrDefault();
-                if (node != null)
-                {
-                    System.IO.Directory.CreateDirectory(AssetsJsonPath);
-                    string json = StoryGraphSerializer.SerializeActiveStory(node);
-                    ProjectFileSystem.WriteAllTextAtomically(System.IO.Path.Combine(AssetsJsonPath, "active_story.json"), json);
-                }
-                return true;
-            }
-            catch (Exception ex)
-            {
-                AppendLog($"⚠️ Failed to save active_story.json: {ex.Message}");
-                return false;
-            }
+            var node = SelectedNode ?? Nodes.FirstOrDefault();
+            return StoryGraphDocumentWriter.SaveActiveStory(
+                AssetsJsonPath,
+                node,
+                msg => AppendLog(msg));
         }
 
         [RelayCommand]
         public void SetSquareDialogueBox()
         {
             if (SelectedNode == null) return;
-            SelectedNode.DialogueBoxWidth = 500.0;
-            SelectedNode.DialogueBoxHeight = 500.0;
+            EditorLayoutAssistService.PresetDialogueBox(SelectedNode, "Square");
             AppendLog($"Set Dialogue Box to Square (500x500) for Node #{SelectedNode.Id}");
         }
 
@@ -1107,10 +1047,7 @@ namespace RowlEngine.Editor.ViewModels
         public void SetStandardDialogueBox()
         {
             if (SelectedNode == null) return;
-            SelectedNode.DialogueBoxWidth = 1760.0;
-            SelectedNode.DialogueBoxHeight = 180.0;
-            SelectedNode.DialogueBoxX = 80.0;
-            SelectedNode.DialogueBoxY = 860.0;
+            EditorLayoutAssistService.PresetDialogueBox(SelectedNode, "Standard");
             AppendLog($"Reset Dialogue Box to Standard Banner (1760x180) for Node #{SelectedNode.Id}");
         }
 
@@ -1118,10 +1055,7 @@ namespace RowlEngine.Editor.ViewModels
         public void ResetBackgroundDimensions()
         {
             if (SelectedNode == null) return;
-            SelectedNode.BackgroundX = 0.0;
-            SelectedNode.BackgroundY = 0.0;
-            SelectedNode.BackgroundWidth = 1920.0;
-            SelectedNode.BackgroundHeight = 1080.0;
+            EditorLayoutAssistService.FitBackgroundToScreen(SelectedNode);
             AppendLog($"Reset Background to Fullscreen Canvas (1920x1080) for Node #{SelectedNode.Id}");
         }
 
@@ -1129,9 +1063,7 @@ namespace RowlEngine.Editor.ViewModels
         public void ResetCharacterDimensions()
         {
             if (SelectedNode == null) return;
-            SelectedNode.CharacterWidth = 360.0;
-            SelectedNode.CharacterHeight = 540.0;
-            SelectedNode.CharacterScale = 1.0;
+            EditorLayoutAssistService.ResetCharacterDimensions(SelectedNode);
             AppendLog($"Reset Character Sprite size to Default (360x540) for Node #{SelectedNode.Id}");
         }
 
