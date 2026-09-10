@@ -16,6 +16,7 @@ using Avalonia.Platform;
 using Avalonia.Threading;
 using System;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Collections.Generic;
@@ -37,6 +38,7 @@ namespace RowlEngine.Editor.Native
         private IntPtr _handle = IntPtr.Zero;
         private DispatcherTimer? _tickTimer;
         private DateTime _lastTick = DateTime.UtcNow;
+        private string? _lastPreviewComponentsJson;
 
         /// <summary>True when Play mode is active (game loop running).</summary>
         public bool IsPlaying { get; private set; } = false;
@@ -89,6 +91,11 @@ namespace RowlEngine.Editor.Native
         public IReadOnlyList<DialogueHistoryEntry> DialogueHistory { get; private set; }
             = Array.Empty<DialogueHistoryEntry>();
 
+        /// <summary>Managed/native work split for the most recent editor preview delivery.</summary>
+        public double LastSceneUpdateMilliseconds { get; private set; }
+        public double LastPreviewStepMilliseconds { get; private set; }
+        public double LastPixelBufferCopyMilliseconds { get; private set; }
+
         /// <summary>
         /// Sets the decoded texture-cache ceiling for this runtime. Use a
         /// device-profile budget after Initialize; the native layer clamps
@@ -112,6 +119,7 @@ namespace RowlEngine.Editor.Native
 
             _handle = NativeBridge.RowlEngine_Create();
             if (_handle == IntPtr.Zero) return false;
+            _lastPreviewComponentsJson = null;
 
             int result = NativeBridge.RowlEngine_Init(
                 _handle, width, height, vsync ? 1 : 0);
@@ -175,6 +183,7 @@ namespace RowlEngine.Editor.Native
         {
             if (_handle == IntPtr.Zero) return;
 
+            var stopwatch = Stopwatch.StartNew();
             try
             {
                 IntPtr pixelPtr = NativeBridge.RowlEngine_GetPixelBuffer(_handle, out uint w, out uint h);
@@ -215,6 +224,11 @@ namespace RowlEngine.Editor.Native
             {
                 // Safe ignore if running in headless test without Avalonia render interface
             }
+            finally
+            {
+                stopwatch.Stop();
+                LastPixelBufferCopyMilliseconds = stopwatch.Elapsed.TotalMilliseconds;
+            }
         }
 
         // ── Playback & Engine State Control ──────────────────────────────────
@@ -244,6 +258,7 @@ namespace RowlEngine.Editor.Native
         {
             if (_handle != IntPtr.Zero)
             {
+                _lastPreviewComponentsJson = null;
                 NativeBridge.RowlEngine_ResetToStartNode(_handle);
                 NativeBridge.RowlEngine_Step(_handle, 0.0f);
                 UpdatePixelBuffer();
@@ -284,18 +299,28 @@ namespace RowlEngine.Editor.Native
         /// Pushes component-based scene data to the engine as a JSON string.
         /// This is the component-aware alternative to UpdateScene.
         /// </summary>
-        public void UpdateSceneFromComponents(string componentsJson)
+        public bool UpdateSceneFromComponents(string componentsJson, bool skipIfUnchanged = false)
         {
-            if (_handle == IntPtr.Zero || string.IsNullOrEmpty(componentsJson)) return;
+            if (_handle == IntPtr.Zero || string.IsNullOrEmpty(componentsJson)) return false;
+            if (skipIfUnchanged && !IsPlaying && string.Equals(_lastPreviewComponentsJson, componentsJson, StringComparison.Ordinal))
+                return false;
 
+            var stopwatch = Stopwatch.StartNew();
             NativeBridge.RowlEngine_UpdateSceneFromJson(_handle, componentsJson);
+            stopwatch.Stop();
+            LastSceneUpdateMilliseconds = stopwatch.Elapsed.TotalMilliseconds;
+            _lastPreviewComponentsJson = componentsJson;
             RefreshScriptRuntimeDiagnostics();
 
             if (!IsPlaying)
             {
+                stopwatch.Restart();
                 NativeBridge.RowlEngine_Step(_handle, 0.0f);
+                stopwatch.Stop();
+                LastPreviewStepMilliseconds = stopwatch.Elapsed.TotalMilliseconds;
                 UpdatePixelBuffer();
             }
+            return true;
         }
 
         public void RefreshScriptRuntimeDiagnostics()
@@ -367,6 +392,7 @@ namespace RowlEngine.Editor.Native
         {
             if (_handle != IntPtr.Zero && !string.IsNullOrEmpty(projectRoot))
             {
+                _lastPreviewComponentsJson = null;
                 NativeBridge.RowlEngine_SetProjectDirectory(_handle, projectRoot);
                 if (!IsPlaying)
                 {
@@ -564,6 +590,7 @@ namespace RowlEngine.Editor.Native
                 NativeBridge.RowlEngine_Destroy(_handle);
                 _handle = IntPtr.Zero;
             }
+            _lastPreviewComponentsJson = null;
             IsPlaying = false;
             var bitmap = RenderTargetBitmap;
             RenderTargetBitmap = null;

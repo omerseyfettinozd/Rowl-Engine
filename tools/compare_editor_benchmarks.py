@@ -1,0 +1,58 @@
+#!/usr/bin/env python3
+"""Compare two compatible Rowl editor interaction benchmark JSON reports."""
+
+import argparse
+import json
+import sys
+
+
+def load(path):
+    with open(path, encoding="utf-8") as source:
+        document = json.load(source)
+    if document.get("schema_version") != 1:
+        raise ValueError(f"{path} is not editor benchmark schema v1")
+    if not isinstance(document.get("metrics"), dict):
+        raise ValueError(f"{path} has no metrics object")
+    return document
+
+
+def compatibility_key(report):
+    return {
+        "fixture_id": report.get("fixture_id"),
+        "build.type": report.get("build", {}).get("type"),
+        "environment.os": report.get("environment", {}).get("os"),
+        "environment.machine": report.get("environment", {}).get("machine"),
+        "environment.cpu_count": report.get("environment", {}).get("cpu_count"),
+    }
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("baseline")
+    parser.add_argument("candidate")
+    args = parser.parse_args()
+    try:
+        baseline, candidate = load(args.baseline), load(args.candidate)
+        before, after = compatibility_key(baseline), compatibility_key(candidate)
+        mismatches = [key for key in before if before[key] != after[key]]
+        if mismatches:
+            raise ValueError("benchmark environments are incompatible: " + ", ".join(mismatches))
+        if set(baseline["metrics"]) != set(candidate["metrics"]):
+            raise ValueError("benchmark metric sets are incompatible")
+        print("[EditorBenchmarkCompare] Compatible benchmark reports")
+        for name in sorted(baseline["metrics"]):
+            old, new = baseline["metrics"][name], candidate["metrics"][name]
+            if not isinstance(old, (int, float)) or not isinstance(new, (int, float)) or old < 0 or new < 0:
+                raise ValueError("metric must be a non-negative number: " + name)
+            if old == 0:
+                print(f"  {name}: {old:.6f} -> {new:.6f} (n/a from zero baseline)")
+            else:
+                print(f"  {name}: {old:.6f} -> {new:.6f} ({(new - old) / old * 100:+.2f}%)")
+    except (OSError, ValueError, KeyError, json.JSONDecodeError) as error:
+        print("[EditorBenchmarkCompare] ERROR: " + str(error), file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

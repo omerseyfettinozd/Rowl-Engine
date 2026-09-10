@@ -23,7 +23,10 @@ namespace RowlEngine.Editor
             // If invoked with --test or --headless-test, run automated test suite and exit
             if (args != null && args.Any(a => a == "--test" || a == "--headless-test"))
             {
-                RunHeadlessTests();
+                int benchmarkIndex = Array.IndexOf(args, "--editor-benchmark-json");
+                string? benchmarkPath = benchmarkIndex >= 0 && benchmarkIndex + 1 < args.Length
+                    ? args[benchmarkIndex + 1] : null;
+                RunHeadlessTests(benchmarkPath);
                 return;
             }
 
@@ -53,7 +56,7 @@ namespace RowlEngine.Editor
             }
         }
 
-        private static void RunHeadlessTests()
+        private static void RunHeadlessTests(string? benchmarkPath = null)
         {
             Console.WriteLine("\n=======================================================");
             Console.WriteLine("🧪 ROWL ENGINE EDITOR HEADLESS TEST SUITE 🧪");
@@ -679,6 +682,32 @@ namespace RowlEngine.Editor
 
             Console.WriteLine("  ✅ [PASS] Variable/Condition components, serialization, and P/Invoke Save/Load slots + Structured Diagnostics verified");
 
+            // Preview coalescing may skip only a script-free scene whose exact
+            // payload is already rendered. Script components retain their
+            // existing execution/diagnostic refresh semantics.
+            var noOpPreviewNode = new NodeViewModel(9899, "Preview cache", 0, 0, bare: true);
+            noOpPreviewNode.AddComponent<DialogueComponentViewModel>().DialogueText = "Stable preview";
+            mainVm.SelectNodeQuiet(noOpPreviewNode);
+            mainVm.EngineHost.ResetToStartNode();
+            mainVm.ScheduleEnginePreviewUpdate(noOpPreviewNode);
+            if (!mainVm.DeliverScheduledEnginePreview())
+                throw new Exception("Initial script-free preview did not deliver");
+            mainVm.ScheduleEnginePreviewUpdate(noOpPreviewNode);
+            if (mainVm.DeliverScheduledEnginePreview())
+                throw new Exception("Unchanged script-free preview redrew unnecessarily");
+
+            var scriptedPreviewNode = new NodeViewModel(9900, "Script preview", 0, 0, bare: true);
+            scriptedPreviewNode.AddComponent<ScriptComponentViewModel>();
+            mainVm.SelectNodeQuiet(scriptedPreviewNode);
+            mainVm.EngineHost.ResetToStartNode();
+            mainVm.ScheduleEnginePreviewUpdate(scriptedPreviewNode);
+            if (!mainVm.DeliverScheduledEnginePreview())
+                throw new Exception("Initial script preview did not deliver");
+            mainVm.ScheduleEnginePreviewUpdate(scriptedPreviewNode);
+            if (!mainVm.DeliverScheduledEnginePreview())
+                throw new Exception("Script preview was incorrectly treated as a no-op");
+            Console.WriteLine("  ✅ [PASS] Preview no-op coalescing preserves script refresh behavior");
+
             // ── Test 9b: Player-local settings profile ───────────────────────
             Console.WriteLine("\n📌 [Test 9b]: Player settings profile persistence and bounds...");
             string profilePath = Path.Combine(testProjectRoot, "player-settings.json");
@@ -763,6 +792,78 @@ namespace RowlEngine.Editor
             }
 
             Console.WriteLine("  ✅ [PASS] StoryGraphLoaderService decoupled hydration, wire connections, and error isolation verified");
+
+            if (!string.IsNullOrWhiteSpace(benchmarkPath))
+            {
+                var benchmark = new EditorInteractionBenchmark();
+                var benchmarkNode = mainVm.Nodes.First();
+                const int iterations = 100;
+                var stopwatch = Stopwatch.StartNew();
+                for (int i = 0; i < iterations; i++)
+                {
+                    benchmarkNode.X += 1;
+                    benchmarkNode.Y -= 1;
+                }
+                stopwatch.Stop();
+                benchmark.Record("graph_drag_step_ms", stopwatch.Elapsed.TotalMilliseconds / iterations);
+
+                stopwatch.Restart();
+                for (int i = 0; i < iterations; i++) mainVm.SelectNodeQuiet(benchmarkNode);
+                stopwatch.Stop();
+                benchmark.Record("node_selection_ms", stopwatch.Elapsed.TotalMilliseconds / iterations);
+
+                stopwatch.Restart();
+                for (int i = 0; i < iterations; i++)
+                {
+                    var component = benchmarkNode.AddComponent<VariableComponentViewModel>();
+                    benchmarkNode.RemoveComponent(component);
+                }
+                stopwatch.Stop();
+                benchmark.Record("component_change_ms", stopwatch.Elapsed.TotalMilliseconds / iterations);
+
+                stopwatch.Restart();
+                for (int i = 0; i < iterations; i++)
+                    _ = StoryGraphSerializer.SerializePreviewComponents(benchmarkNode);
+                stopwatch.Stop();
+                benchmark.Record("preview_serialization_ms", stopwatch.Elapsed.TotalMilliseconds / iterations);
+
+                mainVm.EngineHost.ResetToStartNode();
+                mainVm.ScheduleEnginePreviewUpdate(benchmarkNode);
+                stopwatch.Restart();
+                bool delivered = mainVm.DeliverScheduledEnginePreview();
+                stopwatch.Stop();
+                if (!delivered) throw new Exception("Preview debounce did not deliver its selected node");
+                benchmark.Record("preview_delivery_ms", stopwatch.Elapsed.TotalMilliseconds);
+                benchmark.Record("preview_native_update_ms", mainVm.EngineHost.LastSceneUpdateMilliseconds);
+                benchmark.Record("preview_step_ms", mainVm.EngineHost.LastPreviewStepMilliseconds);
+                benchmark.Record("preview_pixel_copy_ms", mainVm.EngineHost.LastPixelBufferCopyMilliseconds);
+
+                var cacheNode = new NodeViewModel(9901, "Cache benchmark", 0, 0, bare: true);
+                cacheNode.AddComponent<DialogueComponentViewModel>().DialogueText = "Unchanged preview";
+                mainVm.SelectNodeQuiet(cacheNode);
+                mainVm.EngineHost.ResetToStartNode();
+                mainVm.ScheduleEnginePreviewUpdate(cacheNode);
+                if (!mainVm.DeliverScheduledEnginePreview())
+                    throw new Exception("Initial script-free preview did not deliver");
+                mainVm.ScheduleEnginePreviewUpdate(cacheNode);
+                stopwatch.Restart();
+                bool duplicateDelivered = mainVm.DeliverScheduledEnginePreview();
+                stopwatch.Stop();
+                if (duplicateDelivered) throw new Exception("Unchanged script-free preview should not redraw");
+                benchmark.Record("preview_duplicate_delivery_ms", stopwatch.Elapsed.TotalMilliseconds);
+
+                string saveAsBenchmarkDir = Path.Combine(Path.GetTempPath(), "RowlEditorBenchmark_SaveAs_" + Guid.NewGuid().ToString("N"));
+                stopwatch.Restart();
+                mainVm.SaveProjectToDirectory(saveAsBenchmarkDir);
+                stopwatch.Stop();
+                if (!File.Exists(Path.Combine(saveAsBenchmarkDir, "project.rowlproj")))
+                    throw new Exception("Save As benchmark did not publish its project manifest");
+                benchmark.Record("save_as_ms", stopwatch.Elapsed.TotalMilliseconds);
+                try { Directory.Delete(saveAsBenchmarkDir, true); } catch { }
+
+                benchmark.Write(benchmarkPath);
+                Console.WriteLine($"  ⚡ [BENCHMARK] Editor interaction report written: {benchmarkPath}");
+            }
 
             Console.WriteLine("\n=======================================================");
             Console.WriteLine("🎉 ALL EDITOR HEADLESS TESTS PASSED SUCCESSFULLY! 🎉");

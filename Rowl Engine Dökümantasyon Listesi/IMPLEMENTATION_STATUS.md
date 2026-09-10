@@ -28,18 +28,24 @@ içinden VFS graph yükleyen yerel standalone smoke testi geçiyor.
   callback'i üzerinden advance/save/load/rewind ve pointer olaylarını taşır.
 - Native benchmark JSON şeması ve aynı ortam/fixture için yüzde farkı raporlayan
   karşılaştırıcı hazırdır; ilk sonuçlar baseline olarak saklanır.
+- Editor headless benchmark JSON'u graph drag, seçim, component değişimi,
+  preview teslimi ve Save As maliyetlerini kimlikli fixture ile raporlar;
+  scriptsiz değişmeyen preview payload'ları native render'a yeniden gönderilmez.
 - Yaratıcı Hikâye Stüdyosu tasarım sistemi, Project Hub, boş durum, üst çalışma
   akışı ve ana panel yüzeylerinde uygulandı.
 
 ## Sonraki üretim işleri
 
-- Linux ve Windows CI release package smoke sonuçlarını ilk uzak çalıştırmada
-  doğrula; Windows sonucu gelene kadar platform desteği onaylanmış sayılmaz.
-- Aynı fiziksel makinede Release benchmark baseline'ları biriktir; gerçek
-  örnek sayısı yeterli olmadan fail eşiği koyma.
-- Node kartları ve component inspector için ayrı Yaratıcı Hikâye Stüdyosu
-  görsel dilimlerini uygula.
-- macOS desktop package kapısı; Android/iOS host projeleri ve fiziksel cihaz
-  doğrulaması daha sonraki platform kapsamındadır.
+- Yetkili Linux/Windows CI job stderr'ini al; gerçek hata satırı olmadan
+  workflow/dependency değişikliği yapma. Windows package smoke geçmeden
+  platform desteği onaylanmış sayılmaz.
+- Editor/native benchmark setlerini aynı fixture ile biriktir; yeterli örnek
+  oluşmadan otomatik performans-fail eşiği koyma. Native preview render ana
+  editor maliyetidir; geniş render değişikliği önce ayrı profil kanıtı ister.
+- C API tek canlı handle ve host-thread sözleşmesini açık test/diagnostic ve
+  public dokümantasyonla tamamla.
+- GUI erişimli oturumda node/inspector görsel smoke; macOS/Xcode host'unda
+  desktop staging/verifier/imzasız package smoke kapısını doğrula. Android/iOS
+  host projeleri ve fiziksel cihaz doğrulaması daha sonraki platform kapsamıdır.
 
 Bu dosya, hedef mimari belgelerindeki gelecek vaatleri ile test edilmiş kodun durumunu ayırmak için tutulur.

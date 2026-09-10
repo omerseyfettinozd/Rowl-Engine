@@ -924,16 +924,21 @@ namespace RowlEngine.Editor.ViewModels
         public Task ConnectIpcAsync() => ConnectEngineAsync();
 
         /// <summary>Sends the active node's scene data directly to the engine via P/Invoke.</summary>
-        public void PushSceneToEngine(NodeViewModel node)
+        public bool PushSceneToEngine(NodeViewModel node)
         {
-            if (!EngineHost.IsInitialized) return;
+            if (!EngineHost.IsInitialized) return false;
 
             // Serialize ALL components (including multiple characters) across all active objects as JSON
             // and push via the component-aware API
             try
             {
-                EngineHost.UpdateSceneFromComponents(StoryGraphSerializer.SerializePreviewComponents(node));
-                ApplyScriptRuntimeDiagnostics(node);
+                string componentsJson = StoryGraphSerializer.SerializePreviewComponents(node);
+                bool hasEnabledScripts = node.AllComponents.OfType<ScriptComponentViewModel>()
+                    .Any(component => component.IsEnabled);
+                bool updated = EngineHost.UpdateSceneFromComponents(componentsJson, skipIfUnchanged: !hasEnabledScripts);
+                if (updated)
+                    ApplyScriptRuntimeDiagnostics(node);
+                return updated;
             }
             catch
             {
@@ -950,6 +955,7 @@ namespace RowlEngine.Editor.ViewModels
                     (float)node.DialogueBoxX,  (float)node.DialogueBoxY,
                     (float)node.DialogueBoxWidth, (float)node.DialogueBoxHeight
                 );
+                return true;
             }
         }
 
@@ -1381,16 +1387,24 @@ namespace RowlEngine.Editor.ViewModels
                 _enginePreviewDebounceTimer.Tick += (_, _) =>
                 {
                     _enginePreviewDebounceTimer.Stop();
-                    var pending = _pendingEnginePreviewNode;
-                    bool requiresSelection = _pendingEnginePreviewRequiresSelection;
-                    _pendingEnginePreviewNode = null;
-                    if (!IsInteractivelyDragging && pending != null &&
-                        (!requiresSelection || pending == SelectedNode) && EngineHost.IsInitialized)
-                        PushSceneToEngine(pending);
+                    DeliverScheduledEnginePreview();
                 };
             }
             _enginePreviewDebounceTimer.Stop();
             _enginePreviewDebounceTimer.Start();
+        }
+
+        // Kept internal so the headless benchmark can measure the same delivery
+        // branch without sleeping on the UI dispatcher debounce interval.
+        internal bool DeliverScheduledEnginePreview()
+        {
+            var pending = _pendingEnginePreviewNode;
+            bool requiresSelection = _pendingEnginePreviewRequiresSelection;
+            _pendingEnginePreviewNode = null;
+            if (IsInteractivelyDragging || pending == null ||
+                (requiresSelection && pending != SelectedNode) || !EngineHost.IsInitialized)
+                return false;
+            return PushSceneToEngine(pending);
         }
 
         public void ScheduleSave()
