@@ -73,6 +73,13 @@ namespace RowlEngine.Editor
             Console.WriteLine("\n📌 [Test 1]: NodeViewModel & Modular Component Trash Can Button...");
             var node = new NodeViewModel(101, "Test Node", 100, 150, bare: false);
             if (node.Components.Count < 4) throw new Exception("Expected at least 4 default components");
+            node.IsStartNode = true;
+            if (node.BorderColor != "#10B981") throw new Exception("Start node visual state was not applied");
+            node.IsSelected = true;
+            if (node.BorderColor != "#F09A78") throw new Exception("Selected node visual state did not take priority");
+            node.IsSelected = false;
+            if (node.BorderColor != "#10B981" || !node.ComponentSummary.EndsWith("BİLEŞEN"))
+                throw new Exception("Node card visual summary state is inconsistent");
 
             var dlg = node.GetComponent<DialogueComponentViewModel>();
             if (dlg == null) throw new Exception("DialogueComponentViewModel missing");

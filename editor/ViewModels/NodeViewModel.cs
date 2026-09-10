@@ -39,9 +39,15 @@ namespace RowlEngine.Editor.ViewModels
         [ObservableProperty]
         private string _borderColor = "#2A2A3D";
 
-        partial void OnIsStartNodeChanged(bool value)
+        partial void OnIsStartNodeChanged(bool value) => RefreshBorderColor();
+
+        partial void OnIsSelectedChanged(bool value) => RefreshBorderColor();
+
+        private void RefreshBorderColor()
         {
-            BorderColor = value ? "#10B981" : "#2A2A3D";
+            // Selection takes priority so keyboard/pointer focus stays visible;
+            // the start badge still preserves the node's semantic role.
+            BorderColor = IsSelected ? "#F09A78" : IsStartNode ? "#10B981" : "#2A2A3D";
         }
 
         // ══════════════════════════════════════════════════════════════════════
@@ -142,6 +148,7 @@ namespace RowlEngine.Editor.ViewModels
             AllComponents.OfType<ChoiceComponentViewModel>().SelectMany(choice => choice.Options).ToList();
 
         public bool HasChoices => ChoiceOptions.Count > 0;
+        public string ComponentSummary => $"{Components.Count} BİLEŞEN";
         public double NodeCardHeight => Math.Max(120, 52 + (ChoiceOptions.Count * 30));
         public bool ChoiceDataChanged => true;
         public double GetOutputPortY(string optionId) => string.IsNullOrEmpty(optionId)
@@ -238,6 +245,7 @@ namespace RowlEngine.Editor.ViewModels
             OnPropertyChanged(nameof(HasBackground));
             OnPropertyChanged(nameof(ChoiceOptions));
             OnPropertyChanged(nameof(HasChoices));
+            OnPropertyChanged(nameof(ComponentSummary));
             OnPropertyChanged(nameof(NodeCardHeight));
 
             // Refresh proxy properties

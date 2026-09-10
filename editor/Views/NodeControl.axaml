@@ -8,11 +8,11 @@
     <Canvas Width="300" Height="{Binding NodeCardHeight}" Background="Transparent" ClipToBounds="False">
         <!-- Main Card Body -->
         <Border Canvas.Left="10" Canvas.Top="0" Width="240" Height="{Binding NodeCardHeight}"
-                Background="{DynamicResource NodeCardBg}" BorderBrush="{Binding BorderColor}" BorderThickness="1.5" CornerRadius="8"
+                Background="{DynamicResource NodeCardBg}" BorderBrush="{Binding BorderColor}" BorderThickness="1.5" CornerRadius="12"
                 BoxShadow="0 4 12 0 #30000000">
             <Grid RowDefinitions="36, *">
                 <!-- Node Header (ComfyUI Style Header Bar) -->
-                <Border Grid.Row="0" Background="{DynamicResource NodeHeaderBg}" CornerRadius="7,7,0,0" Padding="12,0">
+                <Border Grid.Row="0" Background="{DynamicResource NodeHeaderBg}" CornerRadius="11,11,0,0" Padding="12,0">
                     <DockPanel VerticalAlignment="Center">
                         <Border DockPanel.Dock="Left" Width="8" Height="8" CornerRadius="4" Background="{DynamicResource AccentColor}" Margin="0,0,8,0" VerticalAlignment="Center"/>
                         <Border IsVisible="{Binding IsStartNode}" Background="#10B981" CornerRadius="3" Padding="4,1" Margin="0,0,6,0" VerticalAlignment="Center" DockPanel.Dock="Right">
@@ -25,14 +25,21 @@
 
                 <!-- Node Body Content -->
                 <Border Grid.Row="1" Padding="12,8">
-                    <StackPanel Spacing="4">
+                    <StackPanel Spacing="6">
                         <StackPanel Orientation="Horizontal" Spacing="6">
                             <Border Background="{DynamicResource AccentButtonBg}" CornerRadius="3" Padding="4,1">
                                 <TextBlock Text="{Binding Speaker}" FontSize="10" Foreground="White" FontWeight="Bold"/>
                             </Border>
+                            <Border Background="#243D35" IsVisible="{Binding HasDialogueBox}" CornerRadius="3" Padding="4,1">
+                                <TextBlock Text="DİYALOG" FontSize="8" Foreground="#A7E3BE" FontWeight="Bold"/>
+                            </Border>
+                            <Border Background="#26394A" IsVisible="{Binding HasChoices}" CornerRadius="3" Padding="4,1">
+                                <TextBlock Text="SEÇİM" FontSize="8" Foreground="#B7DCF5" FontWeight="Bold"/>
+                            </Border>
                             <TextBlock Text="{Binding BackgroundTexture}" FontSize="10" Foreground="{DynamicResource MutedText}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                         </StackPanel>
                         <TextBlock Text="{Binding DialogueText}" FontSize="11" Foreground="{DynamicResource SecondaryText}" TextWrapping="Wrap" MaxLines="2" LineHeight="15"/>
+                        <TextBlock Text="{Binding ComponentSummary}" FontSize="9" Foreground="{DynamicResource DimText}" FontWeight="SemiBold"/>
                     </StackPanel>
                 </Border>
             </Grid>
