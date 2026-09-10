@@ -9,6 +9,16 @@ namespace RowlEngine.Editor.Services;
 /// </summary>
 internal static class ProjectFileSystem
 {
+    public static bool IsSameOrDescendant(string candidatePath, string rootPath)
+    {
+        string candidate = Path.GetFullPath(candidatePath)
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        string root = Path.GetFullPath(rootPath)
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        return string.Equals(candidate, root, StringComparison.OrdinalIgnoreCase) ||
+               candidate.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+    }
+
     public static void CopyDirectory(string sourceDirectory, string targetDirectory)
     {
         if (!Directory.Exists(sourceDirectory)) return;

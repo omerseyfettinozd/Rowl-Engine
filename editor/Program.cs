@@ -443,6 +443,12 @@ namespace RowlEngine.Editor
             // 1. Test SaveProjectCommand
             mainVm.SaveProject();
 
+            // Project-owned settings and unknown manifest fields must survive Save As.
+            File.WriteAllText(Path.Combine(testProjectRoot, "project.rowlproj"), "{ \"custom_release_field\": \"keep\" }");
+            mainVm.Settings.ProjectSaveSlotCount = 17;
+            mainVm.Settings.ProjectDefaultBgmTransition = "crossfade";
+            mainVm.Settings.ProjectDefaultBgmTransitionDurationSeconds = 2.5f;
+
             // 2. Test Save As (Farklı Kaydet)
             string testSaveAsDir = Path.Combine(Path.GetTempPath(), "RowlTestProject_SaveAs");
             mainVm.SaveProjectToDirectory(testSaveAsDir);
@@ -453,6 +459,13 @@ namespace RowlEngine.Editor
                 throw new Exception("full_story_graph.json missing in Save As target");
             if (!Directory.Exists(Path.Combine(testSaveAsDir, "Assets", "images")))
                 throw new Exception("Assets/images missing in Save As target");
+            using (var copiedManifest = JsonDocument.Parse(File.ReadAllText(Path.Combine(testSaveAsDir, "project.rowlproj"))))
+            {
+                if (copiedManifest.RootElement.GetProperty("custom_release_field").GetString() != "keep" ||
+                    copiedManifest.RootElement.GetProperty("startNodeId").GetUInt64() != mainVm.GetStartNode()!.Id ||
+                    copiedManifest.RootElement.GetProperty("save_slot_count").GetInt32() != 17)
+                    throw new Exception("Save As did not preserve project metadata and runtime settings");
+            }
 
             // 3. Test Build Game (Standalone Release Export)
             string testBuildDir = Path.Combine(Path.GetTempPath(), "RowlTest_Build_PC");
@@ -470,6 +483,9 @@ namespace RowlEngine.Editor
                 throw new Exception("libRowlEngineCore.so missing in standalone build output");
             if (!Directory.Exists(Path.Combine(testBuildDir, "Assets")))
                 throw new Exception("Assets directory missing in standalone build output");
+            var repeatBuild = ProjectBuildService.BuildStandalone(testProjectRoot, Path.Combine(testProjectRoot, "Assets"), testBuildDir);
+            if (repeatBuild.Succeeded || !File.Exists(Path.Combine(testBuildDir, "README.txt")))
+                throw new Exception("Build must preserve a published package when its output directory already exists");
 
             // Clean up temporary test directories
             try { Directory.Delete(testSaveAsDir, true); } catch {}
@@ -494,6 +510,13 @@ namespace RowlEngine.Editor
                 savedSettings.DefaultBgmTransitionDurationSeconds != 2.5f)
                 throw new Exception("Project runtime settings did not round-trip");
             Console.WriteLine("  ✅ [PASS] Project runtime settings migration and round-trip verified");
+
+            string editorProfilePath = Path.Combine(testProjectRoot, "editor-settings.json");
+            new EditorSettingsProfile { AutoSaveEnabled = false, AutoSaveIntervalSeconds = 1 }.Save(editorProfilePath);
+            var editorProfile = EditorSettingsProfile.Load(editorProfilePath);
+            if (editorProfile.AutoSaveEnabled || editorProfile.AutoSaveIntervalSeconds != 15)
+                throw new Exception("Editor settings profile did not persist and sanitize autosave behaviour");
+            Console.WriteLine("  ✅ [PASS] Editor-local autosave settings persistence and bounds verified");
 
             // Test 8: Performance Benchmark & Cache Optimization Verification
             Console.WriteLine("\n📌 [Test 8]: Performance Benchmark & Cache Optimization Verification...");

@@ -233,7 +233,33 @@
                 </ScrollViewer>
             </TabItem>
 
-            <!-- ═══ SEKME 5: Kısayollar ═══ -->
+            <!-- ═══ SEKME 5: Proje Runtime ═══ -->
+            <TabItem Header="📦 Proje">
+                <ScrollViewer Padding="24,16">
+                    <StackPanel Spacing="18">
+                        <TextBlock Text="Proje Runtime Ayarları" FontSize="15" FontWeight="Bold"
+                                   Foreground="{DynamicResource PrimaryText}"/>
+                        <TextBlock Text="Bu değerler açık projenin project.rowlproj dosyasına kaydedilir."
+                                   TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource MutedText}"/>
+                        <StackPanel Spacing="6">
+                            <TextBlock Text="Kayıt Slotu Sayısı" Foreground="{DynamicResource SecondaryText}"/>
+                            <NumericUpDown Minimum="1" Maximum="100" Value="{Binding ProjectSaveSlotCount}"/>
+                        </StackPanel>
+                        <StackPanel Spacing="6">
+                            <TextBlock Text="Varsayılan BGM Geçişi" Foreground="{DynamicResource SecondaryText}"/>
+                            <ComboBox ItemsSource="{Binding ProjectBgmTransitionOptions}"
+                                      SelectedItem="{Binding ProjectDefaultBgmTransition}"/>
+                        </StackPanel>
+                        <StackPanel Spacing="6">
+                            <TextBlock Text="Varsayılan Geçiş Süresi (sn)" Foreground="{DynamicResource SecondaryText}"/>
+                            <NumericUpDown Minimum="0" Maximum="60" Increment="0.1"
+                                           Value="{Binding ProjectDefaultBgmTransitionDurationSeconds}"/>
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- ═══ SEKME 6: Kısayollar ═══ -->
             <TabItem Header="⌨️ Kısayollar">
                 <ScrollViewer Padding="24,16">
                     <StackPanel Spacing="12">

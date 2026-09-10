@@ -17,6 +17,8 @@ namespace RowlEngine.Editor.ViewModels
 
         public IReadOnlyList<DialogueHistoryEntry> Entries => _main.EngineHost.DialogueHistory;
 
+        public void Refresh() => OnPropertyChanged(nameof(Entries));
+
         private void OnEnginePropertyChanged(object? sender, PropertyChangedEventArgs e)
         {
             if (e.PropertyName == nameof(EngineHost.DialogueHistory))

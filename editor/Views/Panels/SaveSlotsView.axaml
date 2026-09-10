@@ -1,0 +1,19 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:RowlEngine.Editor.ViewModels"
+             x:Class="RowlEngine.Editor.Views.Panels.SaveSlotsView"
+             x:DataType="vm:SaveSlotsViewModel" x:Name="Root">
+  <Border Background="{DynamicResource LogConsoleBg}" Padding="8">
+    <ScrollViewer VerticalScrollBarVisibility="Auto"><ItemsControl ItemsSource="{Binding Slots}"><ItemsControl.ItemTemplate><DataTemplate>
+      <Grid ColumnDefinitions="*,Auto,Auto,Auto" Margin="4" ColumnSpacing="6">
+        <TextBlock Text="{Binding Label}" Foreground="{DynamicResource PrimaryText}" VerticalAlignment="Center"/>
+        <TextBlock Grid.Column="1" Text="{Binding State}" Foreground="{DynamicResource MutedText}" VerticalAlignment="Center"/>
+        <Button Grid.Column="2" Content="Kaydet" Command="{Binding #Root.DataContext.SaveCommand}" CommandParameter="{Binding}"/>
+        <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="4">
+          <Button Content="Yükle" IsEnabled="{Binding IsOccupied}" Command="{Binding #Root.DataContext.LoadCommand}" CommandParameter="{Binding}"/>
+          <Button Content="Sil" IsEnabled="{Binding IsOccupied}" Command="{Binding #Root.DataContext.DeleteCommand}" CommandParameter="{Binding}"/>
+        </StackPanel>
+      </Grid>
+    </DataTemplate></ItemsControl.ItemTemplate></ItemsControl></ScrollViewer>
+  </Border>
+</UserControl>

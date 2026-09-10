@@ -21,8 +21,21 @@ namespace RowlEngine.Editor.Views
             DataContext = vm;
             vm.TopLevelHint = this;
             KeyDown += MainWindow_KeyDown;
+            Closing += async (_, e) =>
+            {
+                if (_allowClose) return;
+                if (!vm.IsProjectDirty) return;
+                e.Cancel = true;
+                if (await vm.ResolveUnsavedChangesAsync(this))
+                {
+                    _allowClose = true;
+                    Close();
+                }
+            };
             Closed += (_, _) => vm.Dispose();
         }
+
+        private bool _allowClose;
 
         private void MainWindow_KeyDown(object? sender, KeyEventArgs e)
         {

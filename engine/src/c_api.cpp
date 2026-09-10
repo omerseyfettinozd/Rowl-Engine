@@ -359,6 +359,11 @@ void RowlEngine_SetProjectDirectory(RowlEngineHandle handle, const char* project
     });
 }
 
+void RowlEngine_SetBgmTransitionDefaults(RowlEngineHandle handle, const char* transition, float durationSeconds) {
+    if (!isLiveHandle(handle)) return;
+    invokeNoexcept([&] { toEngine(handle)->setBgmTransitionDefaults(transition ? transition : "instant", durationSeconds); });
+}
+
 void RowlEngine_AdvanceNode(RowlEngineHandle handle, uint32_t choiceIndex) {
     if (!isLiveHandle(handle)) return;
     invokeNoexcept([&] { toEngine(handle)->advanceToNextNode(choiceIndex); });

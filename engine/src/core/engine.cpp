@@ -192,6 +192,7 @@ void Engine::resetToStartNode() {
     m_currentNodeId = m_startNodeId;
     m_gameState = Rowl::State::GameState::createInitialState(m_startNodeId);
     m_lastRecordedDialogueNodeId = 0;
+    m_lastSfxPlaybackNodeId = 0;
     auto it = m_storyNodes.find(m_currentNodeId);
     if (it != m_storyNodes.end()) {
         const auto& startNode = it->second;
@@ -769,8 +770,16 @@ void Engine::updateSceneFromComponents(const std::string& componentsJson) {
                                                          Rowl::Audio::BgmTransitionKind::Instant;
                 m_audio->playBgm(bgm, kind, duration);
             }
-            if (!sfx.empty()) m_audio->playAudio(sfx, Rowl::Audio::AudioChannelType::Sfx);
+            // SFX are node-entry events. Component updates also happen for
+            // editor preview refreshes, so playing here unconditionally made
+            // a property edit repeat the sound. A node may still play several
+            // SFX components, but only once for each entry.
+            if (!sfx.empty() && m_isPlaying && m_lastSfxPlaybackNodeId != m_currentNodeId)
+                m_audio->playAudio(sfx, Rowl::Audio::AudioChannelType::Sfx);
         }
+
+        if (m_isPlaying && !pendingAudioComponents.empty())
+            m_lastSfxPlaybackNodeId = m_currentNodeId;
 
         activateScripts(pendingScripts);
 
@@ -977,6 +986,7 @@ void Engine::parseStoryGraphJson(const std::string& jsonContent) {
             // graph's history here could make Save/Load or rewind jump to a
             // node that belongs to a different graph.
             m_gameState = Rowl::State::GameState::createInitialState(m_currentNodeId);
+            m_lastSfxPlaybackNodeId = 0;
             if (m_luaSandbox) m_luaSandbox->clearVariables();
 
             if (m_storyNodes.count(m_currentNodeId)) {
@@ -1359,6 +1369,8 @@ bool Engine::loadGameSlot(int32_t slotIndex) {
 
     m_gameState = loaded;
     m_currentNodeId = m_gameState->activeNodeId;
+    // Loading restores state; it is not a node-entry event and must not replay SFX.
+    m_lastSfxPlaybackNodeId = m_currentNodeId;
 
     // Sync variables to Lua sandbox
     if (m_luaSandbox && m_gameState->variables) {

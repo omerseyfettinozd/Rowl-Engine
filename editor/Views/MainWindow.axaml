@@ -40,6 +40,8 @@
                                     <MenuItem Header="📝 Output Log" Command="{Binding ShowPanelCommand}" CommandParameter="Log"/>
                                 <MenuItem Header="📁 Project Assets" Command="{Binding ShowPanelCommand}" CommandParameter="Assets"/>
                                 <MenuItem Header="💬 Dialogue Backlog" Command="{Binding ShowPanelCommand}" CommandParameter="Backlog"/>
+                                <MenuItem Header="💾 Save Slots" Command="{Binding ShowPanelCommand}" CommandParameter="SaveSlots"/>
+                                <MenuItem Header="⚠️ Project Issues" Command="{Binding ShowPanelCommand}" CommandParameter="ProjectIssues"/>
                                 <MenuItem Header="🔎 Analyze Story Graph" Command="{Binding AnalyzeStoryGraphCommand}"/>
                                 </MenuItem>
                             </Menu>
@@ -111,9 +113,12 @@
                             <Button Content="{Binding BuildButtonText}" 
                                     ToolTip.Tip="{Binding BuildButtonTooltip}" 
                                     Command="{Binding BuildGameCommand}" 
+                                    IsEnabled="{Binding !IsBuilding}"
                                     Background="{DynamicResource AccentButtonBg}" 
                                     Foreground="White" CornerRadius="6" Padding="12,5" 
                                     FontWeight="Bold" FontSize="11"/>
+                            <Button Content="İptal" IsVisible="{Binding IsBuilding}" Command="{Binding CancelBuildCommand}"
+                                    ToolTip.Tip="Build işlemini iptal et" Padding="8,5" FontSize="11"/>
 
                             <Border Width="1" Height="22" Background="{DynamicResource BorderColor}" Margin="2,0"/>
 
@@ -289,6 +294,12 @@
                         </TabItem>
                         <TabItem Header="💬 Backlog" IsVisible="{Binding IsBacklogPanelVisible}">
                             <panels:BacklogView DataContext="{Binding BacklogViewModel}"/>
+                        </TabItem>
+                        <TabItem Header="💾 Save Slots" IsVisible="{Binding IsSaveSlotsPanelVisible}">
+                            <panels:SaveSlotsView DataContext="{Binding SaveSlotsViewModel}"/>
+                        </TabItem>
+                        <TabItem Header="⚠️ Issues" IsVisible="{Binding IsProjectIssuesPanelVisible}">
+                            <panels:ProjectIssuesView DataContext="{Binding ProjectIssuesViewModel}"/>
                         </TabItem>
                     </TabControl>
                 </Grid>

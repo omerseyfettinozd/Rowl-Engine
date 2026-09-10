@@ -214,6 +214,11 @@ ROWL_API void RowlEngine_LoadStoryGraph(RowlEngineHandle handle,
 ROWL_API void RowlEngine_SetProjectDirectory(RowlEngineHandle handle,
                                              const char* projectRoot);
 
+/** Updates project-owned BGM defaults without remounting assets or resetting the active scene. */
+ROWL_API void RowlEngine_SetBgmTransitionDefaults(RowlEngineHandle handle,
+                                                  const char* transition,
+                                                  float durationSeconds);
+
 /**
  * Advances playback to the next story node.
  * @param choiceIndex Branch index (0 = first / only branch).

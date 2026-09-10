@@ -263,6 +263,10 @@ private:
     std::vector<std::string> m_activeScriptModuleIds;
     std::vector<ScriptRuntimeStatus> m_scriptRuntimeStatuses;
     uint64_t m_lastRecordedDialogueNodeId = 0;
+    // Audio components are applied while a scene is refreshed as well as when
+    // a story node is entered. Keep the entry marker separate so inspector
+    // preview refreshes cannot retrigger a one-shot SFX.
+    uint64_t m_lastSfxPlaybackNodeId = 0;
 
     bool m_isRunning    = false;
     bool m_initialized  = false;

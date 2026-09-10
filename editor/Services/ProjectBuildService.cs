@@ -1,182 +1,109 @@
 using System;
 using System.IO;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace RowlEngine.Editor.Services;
 
-/// <summary>
-/// Owns the standalone release export pipeline.
-/// Packages story assets, copies the native rowl_player binary and shared library,
-/// and produces cross-platform launcher scripts.
-/// </summary>
+public sealed record StandaloneBuildResult(bool Succeeded, bool Cancelled, string OutputDirectory, string Message);
+
+/// <summary>Creates complete standalone packages; a partial package is never published.</summary>
 public static class ProjectBuildService
 {
-    public static void BuildStandalone(
-        string projectRoot,
-        string assetsPath,
-        string buildOutDir,
-        Action<string>? log = null)
+    public static StandaloneBuildResult BuildStandalone(string projectRoot, string assetsPath, string buildOutDir, Action<string>? log = null)
+        => BuildStandaloneAsync(projectRoot, assetsPath, buildOutDir, null, CancellationToken.None, log).GetAwaiter().GetResult();
+
+    public static Task<StandaloneBuildResult> BuildStandaloneAsync(string projectRoot, string assetsPath, string buildOutDir,
+        IProgress<string>? progress, CancellationToken cancellationToken, Action<string>? log = null)
+        => Task.Run(() => Build(projectRoot, assetsPath, buildOutDir, progress, cancellationToken, log), cancellationToken);
+
+    private static StandaloneBuildResult Build(string projectRoot, string assetsPath, string buildOutDir,
+        IProgress<string>? progress, CancellationToken token, Action<string>? log)
     {
-        void Log(string message) => log?.Invoke(message);
+        void Report(string message) { log?.Invoke(message); progress?.Report(message); }
+        string root = Path.GetFullPath(projectRoot);
+        string output = Path.GetFullPath(buildOutDir);
+        if (!Directory.Exists(assetsPath)) return new(false, false, output, "Assets directory is missing.");
+        if (Directory.Exists(output) || File.Exists(output)) return new(false, false, output, "The build output directory already exists.");
 
-        Log("\n=======================================================");
-        Log("🚀 ROWL ENGINE STANDALONE BUILD PIPELINE BAŞLATILDI");
-        Log($"📦 Hedef Çıktı Dizini: {buildOutDir}");
-        Log("=======================================================");
-
-        Directory.CreateDirectory(buildOutDir);
-
-        // Step 1: Copy Assets folder
-        Log("[BUILD 1/4] 🖼️ Varlıklar (Assets) ve görseller paketleniyor...");
-        string outAssets = Path.Combine(buildOutDir, "Assets");
-        if (Directory.Exists(assetsPath))
-        {
-            ProjectFileSystem.CopyDirectory(assetsPath, outAssets);
-        }
-
-        // Step 2: Copy native binaries (rowl_player & libRowlEngineCore)
-        Log("[BUILD 2/4] ⚙️ Yerel oyun motoru ikilileri (rowl_player & RowlEngineCore) kopyalanıyor...");
         string baseDir = AppDomain.CurrentDomain.BaseDirectory;
-        string rootDir = Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", ".."));
+        string repoRoot = Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", ".."));
+        string[] playerCandidates = { Path.Combine(root, "build", "bin", "rowl_player"), Path.Combine(root, "build", "bin", "rowl_player.exe"), Path.Combine(repoRoot, "build", "bin", "rowl_player"), Path.Combine(repoRoot, "build", "bin", "rowl_player.exe"), Path.Combine(baseDir, "rowl_player"), Path.Combine(baseDir, "rowl_player.exe") };
+        string[] libraryCandidates = { Path.Combine(root, "build", "lib", "libRowlEngineCore.so"), Path.Combine(root, "build", "bin", "RowlEngineCore.dll"), Path.Combine(root, "build", "lib", "libRowlEngineCore.dylib"), Path.Combine(repoRoot, "build", "lib", "libRowlEngineCore.so"), Path.Combine(repoRoot, "build", "bin", "RowlEngineCore.dll"), Path.Combine(repoRoot, "build", "lib", "libRowlEngineCore.dylib"), Path.Combine(baseDir, "libRowlEngineCore.so"), Path.Combine(baseDir, "RowlEngineCore.dll"), Path.Combine(baseDir, "libRowlEngineCore.dylib") };
+        string? player = playerCandidates.FirstOrDefault(File.Exists);
+        string? library = libraryCandidates.FirstOrDefault(File.Exists);
+        if (player is null || library is null)
+            return new(false, false, output, "rowl_player or RowlEngineCore is missing; build the native runtime before export.");
 
-        string[] playerCandidates = {
-            Path.Combine(rootDir, "build", "bin", "rowl_player"),
-            Path.Combine(rootDir, "build", "bin", "rowl_player.exe"),
-            Path.Combine(baseDir, "rowl_player"),
-            Path.Combine(baseDir, "rowl_player.exe"),
-            Path.Combine(rootDir, "build", "bin", "rowl_engine"),
-            Path.Combine(rootDir, "build", "bin", "rowl_engine.exe")
-        };
-
-        string[] libCandidates = {
-            Path.Combine(rootDir, "build", "lib", "libRowlEngineCore.so"),
-            Path.Combine(rootDir, "build", "bin", "RowlEngineCore.dll"),
-            Path.Combine(rootDir, "build", "lib", "libRowlEngineCore.dylib"),
-            Path.Combine(baseDir, "libRowlEngineCore.so"),
-            Path.Combine(baseDir, "RowlEngineCore.dll"),
-            Path.Combine(baseDir, "libRowlEngineCore.dylib")
-        };
-
-        string? foundPlayer = null;
-        foreach (var candidate in playerCandidates)
-        {
-            if (File.Exists(candidate))
-            {
-                foundPlayer = candidate;
-                break;
-            }
-        }
-
-        string? foundLib = null;
-        foreach (var candidate in libCandidates)
-        {
-            if (File.Exists(candidate))
-            {
-                foundLib = candidate;
-                break;
-            }
-        }
-
-        string destExeName = OperatingSystem.IsWindows() ? "RowlGame.exe" : "RowlGame";
-        string destPlayerExe = Path.Combine(buildOutDir, destExeName);
-
-        if (foundPlayer != null)
-        {
-            File.Copy(foundPlayer, destPlayerExe, overwrite: true);
-            // Also copy as rowl_player for direct CLI invocation
-            string destAltName = OperatingSystem.IsWindows() ? "rowl_player.exe" : "rowl_player";
-            File.Copy(foundPlayer, Path.Combine(buildOutDir, destAltName), overwrite: true);
-
-            try
-            {
-                if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
-                {
-                    var mode = File.GetUnixFileMode(destPlayerExe);
-                    File.SetUnixFileMode(destPlayerExe, mode | UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute);
-                    string altPath = Path.Combine(buildOutDir, destAltName);
-                    File.SetUnixFileMode(altPath, mode | UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute);
-                }
-            }
-            catch { }
-            Log($"  ✅ Standalone runtime kopyalandı: {Path.GetFileName(foundPlayer)} -> {destExeName}");
-        }
-        else
-        {
-            Log("  ⚠️ UYARI: rowl_player çalıştırıcısı bulunamadı! Lütfen önce CMake ile projeyi derleyin (cmake --build build).");
-        }
-
-        if (foundLib != null)
-        {
-            string destLibName = Path.GetFileName(foundLib);
-            string destLib = Path.Combine(buildOutDir, destLibName);
-            File.Copy(foundLib, destLib, overwrite: true);
-            Log($"  ✅ Motor paylaşımlı kütüphanesi kopyalandı: {destLibName}");
-        }
-        else
-        {
-            Log("  ⚠️ UYARI: RowlEngineCore kütüphanesi bulunamadı!");
-        }
-
-        // Step 3: Create launcher scripts (run_game.sh and run_game.bat)
-        Log("[BUILD 3/4] 📜 Otomatik Başlatıcılar (run_game.sh & run_game.bat) oluşturuluyor...");
-        string shPath = Path.Combine(buildOutDir, "run_game.sh");
-        string shContent = "#!/bin/bash\n" +
-                           "SCRIPT_DIR=\"$(cd \"$(dirname \"${BASH_SOURCE[0]}\")\" && pwd)\"\n" +
-                           "export LD_LIBRARY_PATH=\"$SCRIPT_DIR:$LD_LIBRARY_PATH\"\n" +
-                           "cd \"$SCRIPT_DIR\"\n" +
-                           "if [ -f \"$SCRIPT_DIR/RowlGame\" ]; then\n" +
-                           "    exec \"$SCRIPT_DIR/RowlGame\" \"$@\"\n" +
-                           "elif [ -f \"$SCRIPT_DIR/rowl_player\" ]; then\n" +
-                           "    exec \"$SCRIPT_DIR/rowl_player\" \"$@\"\n" +
-                           "else\n" +
-                           "    echo \"Error: Game executable not found in $SCRIPT_DIR\"\n" +
-                           "    exit 1\n" +
-                           "fi\n";
-        File.WriteAllText(shPath, shContent);
-
+        string parent = Path.GetDirectoryName(output) ?? throw new InvalidOperationException("Build parent cannot be resolved.");
+        Directory.CreateDirectory(parent);
+        string staging = Path.Combine(parent, $".{Path.GetFileName(output)}.{Guid.NewGuid():N}.building");
         try
         {
+            token.ThrowIfCancellationRequested(); Directory.CreateDirectory(staging);
+            Report("[BUILD 1/4] Assets are being packaged...");
+            CopyDirectoryCancellable(assetsPath, Path.Combine(staging, "Assets"), token);
+            string sourceManifest = Path.Combine(root, "project.rowlproj");
+            if (File.Exists(sourceManifest)) File.Copy(sourceManifest, Path.Combine(staging, "project.rowlproj"));
+            token.ThrowIfCancellationRequested();
+
+            Report("[BUILD 2/4] Native runtime is being copied...");
+            string exe = OperatingSystem.IsWindows() ? "RowlGame.exe" : "RowlGame";
+            string targetPlayer = Path.Combine(staging, exe);
+            File.Copy(player, targetPlayer);
+            File.Copy(library, Path.Combine(staging, Path.GetFileName(library)));
             if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
             {
-                var mode = File.GetUnixFileMode(shPath);
-                File.SetUnixFileMode(shPath, mode | UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute);
+                var mode = File.GetUnixFileMode(targetPlayer);
+                File.SetUnixFileMode(targetPlayer, mode | UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute);
             }
+            token.ThrowIfCancellationRequested();
+
+            Report("[BUILD 3/4] Launchers are being created...");
+            ProjectFileSystem.WriteAllTextAtomically(Path.Combine(staging, "run_game.sh"), "#!/bin/bash\nSCRIPT_DIR=\"$(cd \"$(dirname \"${BASH_SOURCE[0]}\")\" && pwd)\"\nexport LD_LIBRARY_PATH=\"$SCRIPT_DIR:$LD_LIBRARY_PATH\"\nexec \"$SCRIPT_DIR/RowlGame\" \"$@\"\n");
+            ProjectFileSystem.WriteAllTextAtomically(Path.Combine(staging, "run_game.bat"), "@echo off\r\ncd /d \"%~dp0\"\r\nRowlGame.exe %*\r\n");
+            if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS()) File.SetUnixFileMode(Path.Combine(staging, "run_game.sh"), UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute | UnixFileMode.GroupRead | UnixFileMode.GroupExecute | UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
+            token.ThrowIfCancellationRequested();
+
+            Report("[BUILD 4/4] Release manifest is being verified...");
+            if (!File.Exists(Path.Combine(staging, "Assets", "full_story_graph.json")) && !File.Exists(Path.Combine(staging, "Assets", "json", "full_story_graph.json")))
+                throw new InvalidOperationException("The release package has no story graph.");
+            ProjectFileSystem.WriteAllTextAtomically(Path.Combine(staging, "README.txt"),
+                "ROWL ENGINE — STANDALONE GAME RELEASE\n\nRun ./run_game.sh on Linux/macOS or run_game.bat on Windows.\n");
+            Directory.Move(staging, output);
+            Report($"✅ Build complete: {output}");
+            return new(true, false, output, "Build complete.");
         }
-        catch { }
+        catch (OperationCanceledException)
+        {
+            return new(false, true, output, "Build cancelled.");
+        }
+        catch (Exception ex)
+        {
+            return new(false, false, output, ex.Message);
+        }
+        finally
+        {
+            if (Directory.Exists(staging)) { try { Directory.Delete(staging, true); } catch { } }
+        }
+    }
 
-        string batPath = Path.Combine(buildOutDir, "run_game.bat");
-        string batContent = "@echo off\r\n" +
-                            "setlocal\r\n" +
-                            "set SCRIPT_DIR=%~dp0\r\n" +
-                            "cd /d \"%SCRIPT_DIR%\"\r\n" +
-                            "if exist \"%SCRIPT_DIR%RowlGame.exe\" (\r\n" +
-                            "    \"%SCRIPT_DIR%RowlGame.exe\" %*\r\n" +
-                            ") else if exist \"%SCRIPT_DIR%rowl_player.exe\" (\r\n" +
-                            "    \"%SCRIPT_DIR%rowl_player.exe\" %*\r\n" +
-                            ") else (\r\n" +
-                            "    echo [Error] Game executable not found in %SCRIPT_DIR%!\r\n" +
-                            "    pause\r\n" +
-                            ")\r\n";
-        File.WriteAllText(batPath, batContent);
-
-        // Step 4: Create README instructions
-        Log("[BUILD 4/4] 📄 Dağıtım ve çalıştırma kılavuzu (README.txt) ekleniyor...");
-        string readmePath = Path.Combine(buildOutDir, "README.txt");
-        string readmeContent = "=======================================================\n" +
-                               "🎮 ROWL ENGINE — STANDALONE GAME RELEASE\n" +
-                               "=======================================================\n\n" +
-                               "Oyunu Başlatmak İçin:\n" +
-                               "  Linux / macOS : ./run_game.sh veya ./RowlGame\n" +
-                               "  Windows       : run_game.bat veya RowlGame.exe\n\n" +
-                               "Gereksinimler:\n" +
-                               "  - SDL3 kütüphanesi (sistem genelinde veya kütüphane yolunda)\n" +
-                               "  - Tüm görsel ve hikaye verileri Assets/ klasöründen yüklenir.\n\n" +
-                               "Paket Oluşturulma Tarihi: " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "\n";
-        File.WriteAllText(readmePath, readmeContent);
-
-        Log("\n=======================================================");
-        Log("🎉 [BUILD BAŞARILI] Oyun bağımsız dağıtım paketi oluşturuldu!");
-        Log($"📁 Konum: {buildOutDir}");
-        Log($"▶️ Çalıştırmak için: {shPath}");
-        Log("=======================================================\n");
+    private static void CopyDirectoryCancellable(string source, string target, CancellationToken token)
+    {
+        token.ThrowIfCancellationRequested();
+        Directory.CreateDirectory(target);
+        foreach (var file in Directory.GetFiles(source))
+        {
+            token.ThrowIfCancellationRequested();
+            if (new FileInfo(file).LinkTarget is null)
+                File.Copy(file, Path.Combine(target, Path.GetFileName(file)), true);
+        }
+        foreach (var child in Directory.GetDirectories(source))
+        {
+            token.ThrowIfCancellationRequested();
+            if (new DirectoryInfo(child).LinkTarget is null)
+                CopyDirectoryCancellable(child, Path.Combine(target, Path.GetFileName(child)), token);
+        }
     }
 }

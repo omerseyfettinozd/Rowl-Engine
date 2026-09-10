@@ -17,7 +17,9 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Threading.Tasks;
+using System.Threading;
 
 namespace RowlEngine.Editor.ViewModels
 {
@@ -111,11 +113,19 @@ namespace RowlEngine.Editor.ViewModels
         private readonly string _playerSettingsPath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "RowlEngine", "player-settings.json");
+        private readonly string _editorSettingsPath = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "RowlEngine", "editor-settings.json");
+        [ObservableProperty] private bool _isProjectDirty;
         public ToastService Toast => ToastService.Instance;
         public UndoRedoService UndoRedo => UndoRedoService.Instance;
 
         [ObservableProperty]
         private string _currentBuildTarget = "Linux";
+
+        [ObservableProperty] private bool _isBuilding;
+        [ObservableProperty] private string _buildProgress = "";
+        private CancellationTokenSource? _buildCancellation;
 
         public string BuildButtonText => $"🚀 {CurrentBuildTarget} Build";
         public string BuildButtonTooltip => $"{CurrentBuildTarget} için Bağımsız Oyun Çıktısı Üret (Ctrl+B)";
@@ -141,8 +151,9 @@ namespace RowlEngine.Editor.ViewModels
         }
 
         [RelayCommand]
-        public void OpenProjectHub()
+        public async Task OpenProjectHubAsync()
         {
+            if (TopLevelHint is Window currentWindow && !await ResolveUnsavedChangesAsync(currentWindow)) return;
             if (Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop)
             {
                 var hubVm = new ProjectHubViewModel();
@@ -289,6 +300,12 @@ namespace RowlEngine.Editor.ViewModels
         private bool _isBacklogPanelVisible = false;
 
         [ObservableProperty]
+        private bool _isSaveSlotsPanelVisible = false;
+
+        [ObservableProperty]
+        private bool _isProjectIssuesPanelVisible = false;
+
+        [ObservableProperty]
         private bool _isHierarchyPanelVisible = true;
 
         /// <summary>
@@ -296,7 +313,7 @@ namespace RowlEngine.Editor.ViewModels
         /// tabs is enabled. Assets must not disappear merely because the log
         /// panel was closed.
         /// </summary>
-        public bool IsBottomPanelVisible => IsLogPanelVisible || IsAssetsPanelVisible || IsBacklogPanelVisible;
+        public bool IsBottomPanelVisible => IsLogPanelVisible || IsAssetsPanelVisible || IsBacklogPanelVisible || IsSaveSlotsPanelVisible || IsProjectIssuesPanelVisible;
 
         public GridLength BottomPanelHeight => IsBottomPanelVisible
             ? new GridLength(180)
@@ -329,6 +346,12 @@ namespace RowlEngine.Editor.ViewModels
             NotifyBottomPanelLayoutChanged();
 
         partial void OnIsBacklogPanelVisibleChanged(bool value) =>
+            NotifyBottomPanelLayoutChanged();
+
+        partial void OnIsSaveSlotsPanelVisibleChanged(bool value) =>
+            NotifyBottomPanelLayoutChanged();
+
+        partial void OnIsProjectIssuesPanelVisibleChanged(bool value) =>
             NotifyBottomPanelLayoutChanged();
 
         private void NotifyBottomPanelLayoutChanged()
@@ -461,6 +484,8 @@ namespace RowlEngine.Editor.ViewModels
         public AssetBrowserViewModel AssetBrowserViewModel { get; }
         public OutputLogViewModel OutputLogViewModel { get; }
         public BacklogViewModel BacklogViewModel { get; }
+        public SaveSlotsViewModel SaveSlotsViewModel { get; }
+        public ProjectIssuesViewModel ProjectIssuesViewModel { get; }
         public InspectorViewModel InspectorViewModel { get; }
         public NodeGraphViewModel NodeGraphViewModel { get; }
         public LivePreviewViewModel LivePreviewViewModel { get; }
@@ -475,6 +500,7 @@ namespace RowlEngine.Editor.ViewModels
             AssetBitmapCache.Clear();
 
             LoadPlayerSettings();
+            LoadEditorSettings();
             Settings.PropertyChanged += OnSettingsPropertyChanged;
 
             if (!string.IsNullOrWhiteSpace(projectPath) && Directory.Exists(projectPath))
@@ -491,10 +517,13 @@ namespace RowlEngine.Editor.ViewModels
 
             ProjectRuntimeSettings = ProjectRuntimeSettingsService.Load(
                 Path.Combine(ProjectRoot, "project.rowlproj"));
+            LoadProjectRuntimeSettingsIntoEditor();
 
             AssetBrowserViewModel = new AssetBrowserViewModel(this);
             OutputLogViewModel = new OutputLogViewModel(this);
             BacklogViewModel = new BacklogViewModel(this);
+            SaveSlotsViewModel = new SaveSlotsViewModel(this);
+            ProjectIssuesViewModel = new ProjectIssuesViewModel(this);
             InspectorViewModel = new InspectorViewModel(this);
             NodeGraphViewModel = new NodeGraphViewModel(this);
             LivePreviewViewModel = new LivePreviewViewModel(this);
@@ -814,8 +843,45 @@ namespace RowlEngine.Editor.ViewModels
             Settings.AutoAdvanceDelay = profile.AutoAdvanceDelay;
         }
 
+        private void LoadEditorSettings()
+        {
+            var profile = EditorSettingsProfile.Load(_editorSettingsPath);
+            Settings.AutoSaveEnabled = profile.AutoSaveEnabled;
+            Settings.AutoSaveIntervalSeconds = profile.AutoSaveIntervalSeconds;
+        }
+
+        private void LoadProjectRuntimeSettingsIntoEditor()
+        {
+            Settings.ProjectSaveSlotCount = ProjectRuntimeSettings.SaveSlotCount;
+            Settings.ProjectDefaultBgmTransition = ProjectRuntimeSettings.DefaultBgmTransition;
+            Settings.ProjectDefaultBgmTransitionDurationSeconds = ProjectRuntimeSettings.DefaultBgmTransitionDurationSeconds;
+        }
+
         private void OnSettingsPropertyChanged(object? sender, PropertyChangedEventArgs e)
         {
+            if (e.PropertyName is nameof(SettingsViewModel.AutoSaveEnabled) or nameof(SettingsViewModel.AutoSaveIntervalSeconds))
+            {
+                new EditorSettingsProfile { AutoSaveEnabled = Settings.AutoSaveEnabled,
+                    AutoSaveIntervalSeconds = Settings.AutoSaveIntervalSeconds }.Save(_editorSettingsPath);
+                return;
+            }
+            if (e.PropertyName is nameof(SettingsViewModel.ProjectSaveSlotCount) or nameof(SettingsViewModel.ProjectDefaultBgmTransition)
+                or nameof(SettingsViewModel.ProjectDefaultBgmTransitionDurationSeconds))
+            {
+                ProjectRuntimeSettings = new ProjectRuntimeSettings
+                {
+                    SaveSlotCount = Settings.ProjectSaveSlotCount,
+                    DefaultBgmTransition = Settings.ProjectDefaultBgmTransition,
+                    DefaultBgmTransitionDurationSeconds = Settings.ProjectDefaultBgmTransitionDurationSeconds
+                }.Sanitized();
+                ProjectRuntimeSettingsService.Save(Path.Combine(ProjectRoot, "project.rowlproj"), ProjectRuntimeSettings);
+                LoadProjectRuntimeSettingsIntoEditor();
+                if (EngineHost.IsInitialized)
+                    EngineHost.SetBgmTransitionDefaults(ProjectRuntimeSettings.DefaultBgmTransition,
+                        ProjectRuntimeSettings.DefaultBgmTransitionDurationSeconds);
+                SaveSlotsViewModel?.Refresh();
+                return;
+            }
             if (e.PropertyName is not (nameof(SettingsViewModel.MasterVolume) or nameof(SettingsViewModel.BgmVolume)
                 or nameof(SettingsViewModel.VoiceVolume) or nameof(SettingsViewModel.SfxVolume)
                 or nameof(SettingsViewModel.TextSpeedMultiplier) or nameof(SettingsViewModel.AutoAdvanceDelay))) return;
@@ -983,7 +1049,7 @@ namespace RowlEngine.Editor.ViewModels
             }
         }
 
-        public void SaveFullStoryGraphFile()
+        public bool SaveFullStoryGraphFile()
         {
             try
             {
@@ -993,14 +1059,16 @@ namespace RowlEngine.Editor.ViewModels
                 string content = StoryGraphSerializer.SerializeFullStoryGraph(Nodes, Connections, startId);
                 ProjectFileSystem.WriteAllTextAtomically(System.IO.Path.Combine(AssetsPath, "full_story_graph.json"), content);
                 ProjectFileSystem.WriteAllTextAtomically(System.IO.Path.Combine(AssetsJsonPath, "full_story_graph.json"), content);
+                return true;
             }
             catch (Exception ex)
             {
                 AppendLog($"⚠️ Failed to save story graph: {ex.Message}");
+                return false;
             }
         }
 
-        public void SaveActiveStoryFile()
+        public bool SaveActiveStoryFile()
         {
             try
             {
@@ -1011,10 +1079,12 @@ namespace RowlEngine.Editor.ViewModels
                     string json = StoryGraphSerializer.SerializeActiveStory(node);
                     ProjectFileSystem.WriteAllTextAtomically(System.IO.Path.Combine(AssetsJsonPath, "active_story.json"), json);
                 }
+                return true;
             }
             catch (Exception ex)
             {
                 AppendLog($"⚠️ Failed to save active_story.json: {ex.Message}");
+                return false;
             }
         }
 
@@ -1210,6 +1280,31 @@ namespace RowlEngine.Editor.ViewModels
             AppendLog($"Selected Node #{node.Id} ({node.Title})");
         }
 
+        public void SyncEditorToRuntimeNode()
+        {
+            ulong nodeId = EngineHost.GetCurrentNodeId();
+            var node = Nodes.FirstOrDefault(item => item.Id == nodeId);
+            if (node != null) SelectNodeQuiet(node);
+        }
+
+        public async Task<bool> ConfirmDeleteSaveSlotAsync(int index)
+        {
+            if (TopLevelHint is not Window window) return false;
+            var dialog = new Views.Dialogs.ConfirmDialog("Kayıt Slotunu Sil",
+                $"Slot {index + 1} içindeki kayıt kalıcı olarak silinecek.", "Sil", true);
+            return await dialog.ShowDialog<bool?>(window) == true;
+        }
+
+        public async Task<bool> ResolveUnsavedChangesAsync(Window window)
+        {
+            if (!IsProjectDirty) return true;
+            var result = await new Views.Dialogs.UnsavedChangesDialog().ShowDialog<string?>(window);
+            if (result == "discard") { IsProjectDirty = false; return true; }
+            if (result != "save") return false;
+            SaveProject();
+            return !IsProjectDirty;
+        }
+
         [RelayCommand]
         public async Task ImportAssetAsync()
         {
@@ -1300,16 +1395,18 @@ namespace RowlEngine.Editor.ViewModels
 
         public void ScheduleSave()
         {
+            IsProjectDirty = true;
+            if (!Settings.AutoSaveEnabled) return;
             if (_saveDebounceTimer == null)
             {
-                _saveDebounceTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
+                _saveDebounceTimer = new DispatcherTimer();
                 _saveDebounceTimer.Tick += (s, e) =>
                 {
                     _saveDebounceTimer.Stop();
-                    SaveActiveStoryFile();
-                    SaveFullStoryGraphFile();
+                    SaveProject();
                 };
             }
+            _saveDebounceTimer.Interval = TimeSpan.FromSeconds(Settings.AutoSaveIntervalSeconds);
             _saveDebounceTimer.Stop();
             _saveDebounceTimer.Start();
         }
@@ -1357,6 +1454,18 @@ namespace RowlEngine.Editor.ViewModels
                         IsBacklogPanelVisible = true;
                         BottomPanelActiveTab = 2;
                     }
+                    break;
+                case "SaveSlots":
+                    IsSaveSlotsPanelVisible = !IsSaveSlotsPanelVisible;
+                    if (IsSaveSlotsPanelVisible)
+                    {
+                        SaveSlotsViewModel.Refresh();
+                        BottomPanelActiveTab = 3;
+                    }
+                    break;
+                case "ProjectIssues":
+                    IsProjectIssuesPanelVisible = !IsProjectIssuesPanelVisible;
+                    if (IsProjectIssuesPanelVisible) BottomPanelActiveTab = 4;
                     break;
                 case "NodeGraph":
                     IsNodeGraphActive = true;
@@ -1660,8 +1769,9 @@ namespace RowlEngine.Editor.ViewModels
         public void SaveProject()
         {
             _saveDebounceTimer?.Stop();
-            SaveActiveStoryFile();
-            SaveFullStoryGraphFile();
+            // The graph is authoritative. active_story is a derived preview file.
+            if (!SaveFullStoryGraphFile() || !SaveActiveStoryFile()) return;
+            IsProjectDirty = false;
             AppendLog($"💾 [PROJE KAYDEDİLDİ] {Nodes.Count} düğüm ve tüm bileşenler başarıyla kaydedildi ({DateTime.Now:HH:mm:ss})");
         }
 
@@ -1699,6 +1809,7 @@ namespace RowlEngine.Editor.ViewModels
             {
                 var window = (Avalonia.Application.Current?.ApplicationLifetime as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.MainWindow;
                 if (window == null) return;
+                if (!await ResolveUnsavedChangesAsync(window)) return;
 
                 var folders = await window.StorageProvider.OpenFolderPickerAsync(new Avalonia.Platform.Storage.FolderPickerOpenOptions
                 {
@@ -1742,6 +1853,9 @@ namespace RowlEngine.Editor.ViewModels
                     AssetBrowserViewModel.RefreshAssets);
                 if (loaded)
                 {
+                    ProjectRuntimeSettings = ProjectRuntimeSettingsService.Load(Path.Combine(ProjectRoot, "project.rowlproj"));
+                    LoadProjectRuntimeSettingsIntoEditor();
+                    SaveSlotsViewModel.Refresh();
                     AppendLog($"📂 [PROJE AÇILDI] {project!.RootPath}");
                     AppendLog($"   📊 {Nodes.Count} düğüm, {Connections.Count} bağlantı yüklendi.");
 
@@ -1807,11 +1921,12 @@ namespace RowlEngine.Editor.ViewModels
         /// </summary>
         public void SaveProjectToDirectory(string targetDir)
         {
+            if (ProjectFileSystem.IsSameOrDescendant(targetDir, ProjectRoot))
+                throw new InvalidOperationException("Farklı Kaydet hedefi açık projenin kendisi veya alt klasörü olamaz.");
             Directory.CreateDirectory(targetDir);
 
             // 1. Save current graph in memory to files
-            SaveActiveStoryFile();
-            SaveFullStoryGraphFile();
+            SaveProject();
 
             // 2. Copy Assets directory
             string targetAssets = Path.Combine(targetDir, "Assets");
@@ -1819,18 +1934,17 @@ namespace RowlEngine.Editor.ViewModels
 
             // 3. Write project metadata manifest
             string projectManifest = Path.Combine(targetDir, "project.rowlproj");
-            var manifestObj = new
-            {
-                name = "Rowl Engine Project",
-                version = "1.0.0",
-                engineVersion = "1.0.0",
-                savedAt = DateTime.UtcNow.ToString("o"),
-                nodeCount = Nodes.Count,
-                startNodeId = Nodes.FirstOrDefault()?.Id ?? 101,
-                virtualResolution = new { width = 1920, height = 1080 }
-            };
-            string manifestJson = JsonSerializer.Serialize(manifestObj, new JsonSerializerOptions { WriteIndented = true });
-            File.WriteAllText(projectManifest, manifestJson);
+            JsonObject manifest;
+            try { manifest = JsonNode.Parse(File.ReadAllText(Path.Combine(ProjectRoot, "project.rowlproj"))) as JsonObject ?? new(); }
+            catch { manifest = new JsonObject(); }
+            manifest["name"] ??= "Rowl Engine Project";
+            manifest["version"] ??= "1.0.0";
+            manifest["engineVersion"] ??= "1.0.0";
+            manifest["savedAt"] = DateTime.UtcNow.ToString("o");
+            manifest["nodeCount"] = Nodes.Count;
+            manifest["startNodeId"] = GetStartNode()?.Id ?? 101;
+            manifest["virtualResolution"] ??= JsonSerializer.SerializeToNode(new { width = 1920, height = 1080 });
+            ProjectFileSystem.WriteAllTextAtomically(projectManifest, manifest.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
         }
 
         /// <summary>
@@ -1840,6 +1954,7 @@ namespace RowlEngine.Editor.ViewModels
         [RelayCommand]
         public async Task BuildGameAsync()
         {
+            if (IsBuilding) return;
             try
             {
                 var window = (Avalonia.Application.Current?.ApplicationLifetime as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.MainWindow;
@@ -1871,15 +1986,37 @@ namespace RowlEngine.Editor.ViewModels
                 // Create a subfolder inside the selected directory to keep all build files organized
                 string buildFolderName = $"RowlBuild_{DateTime.Now:yyyy-MM-dd_HH-mm}";
                 string finalBuildDir = Path.Combine(buildOutDir, buildFolderName);
-                Directory.CreateDirectory(finalBuildDir);
-
-                ExecuteBuildPipeline(finalBuildDir);
+                SaveProject();
+                var validation = ProjectValidationService.Validate(Nodes, Connections, AssetsPath, GetStartNode()?.Id);
+                ProjectIssuesViewModel.SetIssues(validation);
+                if (validation.Any(issue => issue.IsError))
+                {
+                    AppendLog("⛔ Build cancelled: fix blocking project validation errors first.");
+                    IsProjectIssuesPanelVisible = true;
+                    BottomPanelActiveTab = 4;
+                    return;
+                }
+                IsBuilding = true;
+                _buildCancellation = new CancellationTokenSource();
+                var progress = new Progress<string>(message => { BuildProgress = message; AppendLog(message); });
+                var result = await ProjectBuildService.BuildStandaloneAsync(ProjectRoot, AssetsPath, finalBuildDir,
+                    progress, _buildCancellation.Token);
+                if (!result.Succeeded) AppendLog($"{(result.Cancelled ? "ℹ️" : "⚠️")} {result.Message}");
             }
             catch (Exception ex)
             {
                 AppendLog($"⚠️ Build işlemi sırasında hata oluştu: {ex.Message}");
             }
+            finally
+            {
+                _buildCancellation?.Dispose();
+                _buildCancellation = null;
+                IsBuilding = false;
+            }
         }
+
+        [RelayCommand]
+        public void CancelBuild() => _buildCancellation?.Cancel();
 
         /// <summary>
         /// Executes the complete standalone build pipeline.
@@ -1891,6 +2028,7 @@ namespace RowlEngine.Editor.ViewModels
             SaveActiveStoryFile();
             SaveFullStoryGraphFile();
             var validation = ProjectValidationService.Validate(Nodes, Connections, AssetsPath, GetStartNode()?.Id);
+            ProjectIssuesViewModel.SetIssues(validation);
             foreach (var issue in validation)
                 AppendLog($"{(issue.IsError ? "❌" : "⚠️")} [BUILD CHECK] {issue.Message}");
             if (validation.Any(issue => issue.IsError))
@@ -1899,17 +2037,21 @@ namespace RowlEngine.Editor.ViewModels
                 return;
             }
             // Delegate export to ProjectBuildService
-            ProjectBuildService.BuildStandalone(
+            var result = ProjectBuildService.BuildStandalone(
                 MainWindowViewModel.ProjectRoot,
                 MainWindowViewModel.AssetsPath,
                 buildOutDir,
                 AppendLog);
+            if (!result.Succeeded) AppendLog($"⚠️ {result.Message}");
         }
 
         [RelayCommand]
         public void AnalyzeStoryGraph()
         {
             var issues = ProjectValidationService.Validate(Nodes, Connections, AssetsPath, GetStartNode()?.Id);
+            ProjectIssuesViewModel.SetIssues(issues);
+            IsProjectIssuesPanelVisible = true;
+            BottomPanelActiveTab = 4;
             if (issues.Count == 0) AppendLog("✅ [GRAPH CHECK] No blocking asset or route issues found.");
             foreach (var issue in issues)
                 AppendLog($"{(issue.IsError ? "❌" : "⚠️")} [GRAPH CHECK] {issue.Message}");

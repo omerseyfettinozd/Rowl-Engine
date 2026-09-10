@@ -64,6 +64,12 @@ namespace RowlEngine.Editor.ViewModels
         [ObservableProperty]
         private int _selectedTabIndex = 0;
 
+        // ── Proje runtime ayarları ─────────────────────────────────────────
+        [ObservableProperty] private int _projectSaveSlotCount = 10;
+        [ObservableProperty] private string _projectDefaultBgmTransition = "instant";
+        [ObservableProperty] private float _projectDefaultBgmTransitionDurationSeconds = 1;
+        public List<string> ProjectBgmTransitionOptions { get; } = new() { "instant", "fade", "crossfade" };
+
         // ── Oyuncu tercihleri ───────────────────────────────────────────────
         // Bunlar proje dosyasına değil, cihazdaki PlayerSettingsProfile'a yazılır.
         [ObservableProperty] private float _masterVolume = 1;

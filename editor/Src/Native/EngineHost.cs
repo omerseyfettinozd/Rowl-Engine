@@ -349,6 +349,12 @@ namespace RowlEngine.Editor.Native
             }
         }
 
+        public void SetBgmTransitionDefaults(string transition, float durationSeconds)
+        {
+            if (_handle != IntPtr.Zero)
+                NativeBridge.RowlEngine_SetBgmTransitionDefaults(_handle, transition, durationSeconds);
+        }
+
         /// <summary>Forces an immediate single-step render and pixel buffer refresh (zero-latency UI update).</summary>
         public void ForceRenderFrame()
         {
