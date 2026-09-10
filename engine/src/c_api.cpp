@@ -407,14 +407,17 @@ void RowlEngine_SetProjectDirectory(RowlEngineHandle handle, const char* project
         if (win) {
             win->reloadFonts();
         }
-        // Try loading story graph from the newly mounted project directory
-        std::string graphPath = std::string(projectRoot) + "/Assets/json/full_story_graph.json";
-        if (std::filesystem::exists(graphPath)) {
-            engine->loadStoryGraphFromPath(graphPath);
-        } else {
-            std::string altGraphPath = std::string(projectRoot) + "/full_story_graph.json";
-            if (std::filesystem::exists(altGraphPath)) {
-                engine->loadStoryGraphFromPath(altGraphPath);
+        // Try loading story graph via VFS first (project Assets is now mounted)
+        engine->loadStoryGraphFile();
+        if (engine->getCurrentNodeId() == 0) {
+            std::string graphPath = std::string(projectRoot) + "/Assets/json/full_story_graph.json";
+            if (std::filesystem::exists(graphPath)) {
+                engine->loadStoryGraphFromPath(graphPath);
+            } else {
+                std::string altGraphPath = std::string(projectRoot) + "/full_story_graph.json";
+                if (std::filesystem::exists(altGraphPath)) {
+                    engine->loadStoryGraphFromPath(altGraphPath);
+                }
             }
         }
     });

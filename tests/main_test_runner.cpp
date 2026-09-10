@@ -944,8 +944,32 @@ void test_vfs_security() {
         RowlEngine_Destroy(packagedHandle);
         exit(1);
     }
-    RowlEngine_Destroy(packagedHandle);
     TEST_PASS("C API reports VFS graph load failures while preserving the active graph");
+
+    // Verify VFS-first resolution for story graphs and active story
+    const auto vfsProject = std::filesystem::temp_directory_path() / "rowl_vfs_story_project";
+    std::filesystem::remove_all(vfsProject);
+    std::filesystem::create_directories(vfsProject / "Assets" / "json");
+    {
+        std::ofstream graphOut(vfsProject / "Assets" / "json" / "full_story_graph.json");
+        graphOut << R"({"start_node_id":505,"nodes":[{"id":505,"speaker":"VFS","dialogue":"VFS Native Story"}]})";
+    }
+    {
+        std::ofstream activeOut(vfsProject / "Assets" / "json" / "active_story.json");
+        activeOut << R"({"node_id":506,"speaker":"ActiveVFS","dialogue":"Active VFS Story"})";
+    }
+    RowlEngineHandle vfsStoryHandle = RowlEngine_Create();
+    if (vfsStoryHandle && RowlEngine_Init(vfsStoryHandle, 320, 180, 0)) {
+        RowlEngine_SetProjectDirectory(vfsStoryHandle, vfsProject.string().c_str());
+        if (RowlEngine_GetCurrentNodeId(vfsStoryHandle) != 505) {
+            std::cerr << "VFS-first story graph auto-load failed, expected node 505, got: "
+                      << RowlEngine_GetCurrentNodeId(vfsStoryHandle) << std::endl;
+            exit(1);
+        }
+        RowlEngine_Destroy(vfsStoryHandle);
+    }
+    std::filesystem::remove_all(vfsProject);
+    TEST_PASS("VFS-first story graph auto-load upon project mount verified");
 
     vfs.remountProject(std::filesystem::current_path().string());
     TEST_PASS("Project remount exposes Assets but not project-root files");

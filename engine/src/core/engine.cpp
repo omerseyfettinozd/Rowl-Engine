@@ -1203,6 +1203,25 @@ bool Engine::loadStoryGraphFromVfs(const std::string& vfsPath) {
 }
 
 void Engine::loadStoryGraphFile() {
+    // 1. Try VFS resolution first (isolated project mounts, packages, or loose assets)
+    auto* vfsPtr = getVfs();
+    if (vfsPtr) {
+        const std::vector<std::string> vfsCandidates = {
+            "json/full_story_graph.json",
+            "full_story_graph.json",
+            "Assets/json/full_story_graph.json",
+            "Assets/full_story_graph.json"
+        };
+        for (const auto& candidate : vfsCandidates) {
+            if (vfsPtr->exists(candidate)) {
+                if (loadStoryGraphFromVfs(candidate)) {
+                    return;
+                }
+            }
+        }
+    }
+
+    // 2. Physical search path fallback
     std::vector<std::string> searchPaths = {
         "Assets/json/full_story_graph.json",
         "Assets/full_story_graph.json",
@@ -1219,6 +1238,57 @@ void Engine::loadStoryGraphFile() {
 }
 
 void Engine::loadActiveStoryFile() {
+    // 1. Try VFS resolution first
+    auto* vfsPtr = getVfs();
+    if (vfsPtr) {
+        const std::vector<std::string> vfsCandidates = {
+            "json/active_story.json",
+            "active_story.json",
+            "Assets/json/active_story.json",
+            "Assets/active_story.json"
+        };
+        for (const auto& candidate : vfsCandidates) {
+            if (vfsPtr->exists(candidate)) {
+                const std::string content = vfsPtr->readString(candidate);
+            if (!content.empty() && content.size() <= kMaxStoryJsonBytes) {
+                try {
+                    nlohmann::json data = nlohmann::json::parse(content);
+                    uint64_t nodeId = data.value("node_id", static_cast<uint64_t>(0));
+                    if (nodeId != 0) m_currentNodeId = nodeId;
+
+                    if (data.contains("components") && data["components"].is_array()) {
+                        updateSceneFromComponents(data["components"].dump());
+                    } else {
+                        updateActiveScene(
+                            data.value("speaker",          std::string{}),
+                            data.value("dialogue",         std::string{}),
+                            data.value("background",       std::string{}),
+                            data.value("background_x",     0.0f),
+                            data.value("background_y",     0.0f),
+                            data.value("background_width",  1920.0f),
+                            data.value("background_height", 1080.0f),
+                            data.value("character",        std::string{}),
+                            data.value("character_x",      1440.0f),
+                            data.value("character_y",      340.0f),
+                            data.value("character_width",  360.0f),
+                            data.value("character_height", 540.0f),
+                            data.value("dialogue_box_x",   80.0f),
+                            data.value("dialogue_box_y",   860.0f),
+                            data.value("dialogue_box_width",1760.0f),
+                            data.value("dialogue_box_height",180.0f)
+                        );
+                    }
+                    ROWL_LOG_INFO("Loaded active story from VFS: " + candidate);
+                    m_context->setSuccess("load_active_story_vfs", candidate);
+                    return;
+                } catch (const std::exception& e) {
+                    ROWL_LOG_ERROR("Active story load error from VFS " + candidate + ": " + e.what());
+                }
+            }
+        }
+    }
+}
+
     std::vector<std::string> searchPaths = {
         "Assets/json/active_story.json",
         "Assets/active_story.json",

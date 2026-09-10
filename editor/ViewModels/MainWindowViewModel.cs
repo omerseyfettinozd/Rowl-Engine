@@ -885,52 +885,12 @@ namespace RowlEngine.Editor.ViewModels
         /// <summary>Sends the active node's scene data directly to the engine via P/Invoke.</summary>
         public bool PushSceneToEngine(NodeViewModel node)
         {
-            if (!EngineHost.IsInitialized) return false;
-
-            // Serialize ALL components (including multiple characters) across all active objects as JSON
-            // and push via the component-aware API
-            try
-            {
-                string componentsJson = StoryGraphSerializer.SerializePreviewComponents(node);
-                bool hasEnabledScripts = node.AllComponents.OfType<ScriptComponentViewModel>()
-                    .Any(component => component.IsEnabled);
-                bool updated = EngineHost.UpdateSceneFromComponents(componentsJson, skipIfUnchanged: !hasEnabledScripts);
-                if (updated)
-                    ApplyScriptRuntimeDiagnostics(node);
-                return updated;
-            }
-            catch
-            {
-                // Fallback to legacy single-character API
-                EngineHost.UpdateScene(
-                    node.Speaker       ?? "",
-                    node.DialogueText  ?? "",
-                    node.BackgroundTexture ?? "",
-                    (float)node.BackgroundX,  (float)node.BackgroundY,
-                    (float)node.BackgroundWidth, (float)node.BackgroundHeight,
-                    node.CharacterSprite ?? "",
-                    (float)node.CharacterX,   (float)node.CharacterY,
-                    (float)node.CharacterWidth, (float)node.CharacterHeight,
-                    (float)node.DialogueBoxX,  (float)node.DialogueBoxY,
-                    (float)node.DialogueBoxWidth, (float)node.DialogueBoxHeight
-                );
-                return true;
-            }
+            return EditorSceneSyncService.PushSceneToEngine(EngineHost, node, msg => AppendLog(msg));
         }
 
         private void ApplyScriptRuntimeDiagnostics(NodeViewModel node)
         {
-            var scripts = node.AllComponents.OfType<ScriptComponentViewModel>()
-                .Where(component => component.IsEnabled).ToList();
-            for (int index = 0; index < scripts.Count; index++)
-            {
-                var script = scripts[index];
-                var diagnostic = EngineHost.ScriptRuntimeDiagnostics.FirstOrDefault(item =>
-                    item.module_id.EndsWith("#" + index, StringComparison.Ordinal) &&
-                    (string.IsNullOrEmpty(item.path) || item.path == script.ScriptPath));
-                script.RuntimeState = diagnostic?.state ?? "Not run";
-                script.RuntimeError = diagnostic?.error ?? string.Empty;
-            }
+            EditorSceneSyncService.ApplyScriptRuntimeDiagnostics(EngineHost, node);
         }
 
         /// <summary>
@@ -1129,73 +1089,51 @@ namespace RowlEngine.Editor.ViewModels
 
         private async void StartStandaloneGame()
         {
-            SaveActiveStoryFile();
-            SaveFullStoryGraphFile();
-            AppendLog("▶ Starting Offscreen Play Mode...");
-
-            if (!EngineHost.IsInitialized)
-            {
-                await ConnectEngineAsync();
-                if (!EngineHost.IsInitialized)
+            bool started = await EditorPlayModeCoordinator.StartPlayModeAsync(
+                EngineHost,
+                async () =>
                 {
-                    AppendLog("❌ Engine not initialized. Click 'Connect Engine' first.");
-                    return;
-                }
-            }
+                    await ConnectEngineAsync();
+                    return EngineHost.IsInitialized;
+                },
+                () => SaveActiveStoryFile() && SaveFullStoryGraphFile(),
+                node => SelectNodeQuiet(node),
+                node => PushSceneToEngine(node),
+                GetStartNode,
+                msg => AppendLog(msg),
+                () =>
+                {
+                    if (SplitScreenMode == 0)
+                    {
+                        IsEnginePreviewActive = true;
+                        IsPreviewActive = false;
+                        IsNodeGraphActive = false;
+                    }
+                },
+                AssetsJsonPath);
 
-            // Auto-switch to Game tab so the user sees the live playable game
-            if (SplitScreenMode == 0)
+            if (started)
             {
-                IsEnginePreviewActive = true;
-                IsPreviewActive = false;
-                IsNodeGraphActive = false;
+                IsPlayingStandalone = true;
+                PlayButtonText = "⏹ Stop";
+                PlayButtonColor = "#DC2626";
+                StatusText = "Offscreen Play Mode Active";
             }
-
-            // Reload the story graph into the running engine
-            string graphPath = System.IO.Path.Combine(AssetsJsonPath, "full_story_graph.json");
-            if (System.IO.File.Exists(graphPath))
-            {
-                EngineHost.LoadStoryGraph(graphPath);
-                AppendLog($"[Play] Story graph loaded from: {graphPath}");
-            }
-
-            // Activate engine play state FIRST
-            EngineHost.SetPlayState(true);
-
-            // Reset engine state to initial start node (first frame) with typewriter starting at 0
-            EngineHost.ResetToStartNode();
-
-            var startNode = GetStartNode();
-            if (startNode != null)
-            {
-                SelectNodeQuiet(startNode);
-                PushSceneToEngine(startNode);
-            }
-
-            IsPlayingStandalone = true;
-            PlayButtonText = "⏹ Stop";
-            PlayButtonColor = "#DC2626";
-            StatusText = "Offscreen Play Mode Active";
-            AppendLog("✅ Engine play state activated (Started from first frame).");
         }
 
         private void StopStandaloneGame()
         {
-            EngineHost.SetPlayState(false);
-            EngineHost.ResetToStartNode();
+            EditorPlayModeCoordinator.StopPlayMode(
+                EngineHost,
+                GetStartNode,
+                node => PushSceneToEngine(node),
+                node => SelectNode(node),
+                msg => AppendLog(msg));
 
             IsPlayingStandalone = false;
             PlayButtonText = "▶ Play";
             PlayButtonColor = "#16A34A";
             StatusText = "Engine Ready — Offscreen C++ Runtime Active";
-            AppendLog("⏹ Play mode stopped (Engine reset to first frame).");
-
-            var startNode = GetStartNode();
-            if (startNode != null)
-            {
-                PushSceneToEngine(startNode);
-                SelectNode(startNode);
-            }
         }
 
         public void SelectNode(NodeViewModel node)

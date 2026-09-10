@@ -265,6 +265,14 @@ namespace RowlEngine.Editor.Native
             }
         }
 
+        /// <summary>Advances engine simulation and rendering by the specified delta time.</summary>
+        public void Step(float dt = 0.0f)
+        {
+            if (_handle == IntPtr.Zero) return;
+            NativeBridge.RowlEngine_Step(_handle, dt);
+            UpdatePixelBuffer();
+        }
+
         // ── Scene / story control ────────────────────────────────────────────
 
         /// <summary>
