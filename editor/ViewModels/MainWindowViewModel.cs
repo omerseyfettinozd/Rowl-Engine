@@ -207,16 +207,13 @@ namespace RowlEngine.Editor.ViewModels
 
         partial void OnSearchQueryChanged(string value)
         {
-            if (string.IsNullOrWhiteSpace(value)) return;
-            var match = Nodes.FirstOrDefault(n => 
-                (n.Title?.Contains(value, StringComparison.OrdinalIgnoreCase) ?? false) ||
-                (n.Speaker?.Contains(value, StringComparison.OrdinalIgnoreCase) ?? false) ||
-                (n.DialogueText?.Contains(value, StringComparison.OrdinalIgnoreCase) ?? false));
+            var match = EditorWorkspaceLayoutService.FindMatchingNode(Nodes, value);
             if (match != null)
             {
                 SelectedNode = match;
-                TargetPanX = -match.X * ZoomScale + 300;
-                TargetPanY = -match.Y * ZoomScale + 200;
+                var (targetX, targetY) = EditorWorkspaceLayoutService.CalculatePanTargetForNode(match, ZoomScale);
+                TargetPanX = targetX;
+                TargetPanY = targetY;
                 StartSmoothViewAnimation();
             }
         }
@@ -314,30 +311,12 @@ namespace RowlEngine.Editor.ViewModels
         /// panel was closed.
         /// </summary>
         public bool IsBottomPanelVisible => IsLogPanelVisible || IsAssetsPanelVisible || IsBacklogPanelVisible || IsSaveSlotsPanelVisible || IsProjectIssuesPanelVisible;
-
-        public GridLength BottomPanelHeight => IsBottomPanelVisible
-            ? new GridLength(180)
-            : new GridLength(0);
-
-        public GridLength BottomSplitterHeight => IsBottomPanelVisible
-            ? new GridLength(6)
-            : new GridLength(0);
-
-        public GridLength HierarchyPanelWidth => IsHierarchyPanelVisible
-            ? new GridLength(240)
-            : new GridLength(0);
-
-        public GridLength HierarchySplitterWidth => IsHierarchyPanelVisible
-            ? new GridLength(6)
-            : new GridLength(0);
-
-        public GridLength InspectorPanelWidth => IsInspectorPanelVisible
-            ? new GridLength(280)
-            : new GridLength(0);
-
-        public GridLength InspectorSplitterWidth => IsInspectorPanelVisible
-            ? new GridLength(6)
-            : new GridLength(0);
+        public GridLength BottomPanelHeight => EditorWorkspaceLayoutService.CalculateBottomPanelHeight(IsBottomPanelVisible);
+        public GridLength BottomSplitterHeight => EditorWorkspaceLayoutService.CalculateBottomSplitterHeight(IsBottomPanelVisible);
+        public GridLength HierarchyPanelWidth => EditorWorkspaceLayoutService.CalculateHierarchyPanelWidth(IsHierarchyPanelVisible);
+        public GridLength HierarchySplitterWidth => EditorWorkspaceLayoutService.CalculateHierarchySplitterWidth(IsHierarchyPanelVisible);
+        public GridLength InspectorPanelWidth => EditorWorkspaceLayoutService.CalculateInspectorPanelWidth(IsInspectorPanelVisible);
+        public GridLength InspectorSplitterWidth => EditorWorkspaceLayoutService.CalculateInspectorSplitterWidth(IsInspectorPanelVisible);
 
         partial void OnIsAssetsPanelVisibleChanged(bool value) =>
             NotifyBottomPanelLayoutChanged();
@@ -450,21 +429,24 @@ namespace RowlEngine.Editor.ViewModels
 
         private void SmoothUpdateStep()
         {
-            double zoomDiff = TargetZoom - ZoomScale;
-            double panXDiff = TargetPanX - PanX;
-            double panYDiff = TargetPanY - PanY;
+            double currentZoom = ZoomScale;
+            double currentPanX = PanX;
+            double currentPanY = PanY;
 
-            if (Math.Abs(zoomDiff) > 0.0001 || Math.Abs(panXDiff) > 0.05 || Math.Abs(panYDiff) > 0.05)
+            bool finished = EditorWorkspaceLayoutService.ComputeSmoothStep(
+                ref currentZoom,
+                ref currentPanX,
+                ref currentPanY,
+                TargetZoom,
+                TargetPanX,
+                TargetPanY);
+
+            ZoomScale = currentZoom;
+            PanX = currentPanX;
+            PanY = currentPanY;
+
+            if (finished)
             {
-                ZoomScale += zoomDiff * 0.22;
-                PanX += panXDiff * 0.22;
-                PanY += panYDiff * 0.22;
-            }
-            else
-            {
-                ZoomScale = TargetZoom;
-                PanX = TargetPanX;
-                PanY = TargetPanY;
                 _smoothTimer.Stop();
             }
         }
@@ -562,13 +544,7 @@ namespace RowlEngine.Editor.ViewModels
 
         public void UpdateStartNodeState()
         {
-            var startNode = Nodes.FirstOrDefault(n => !Connections.Any(c => c.TargetNode == n))
-                            ?? Nodes.OrderBy(n => n.Id).FirstOrDefault();
-
-            foreach (var node in Nodes)
-            {
-                node.IsStartNode = (node == startNode);
-            }
+            StoryGraphLifecycleCoordinator.UpdateStartNodeState(Nodes, Connections);
         }
 
         private void OnNodePropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -850,99 +826,35 @@ namespace RowlEngine.Editor.ViewModels
         /// </summary>
         public bool LoadFullStoryGraphFile()
         {
-            if (!StoryGraphDocumentReader.TryRead(
-                    AssetsPath,
-                    AssetsJsonPath,
-                    out var document,
-                    out var filePath,
-                    out var readError))
-            {
-                if (!string.IsNullOrEmpty(readError))
-                    AppendLog($"⚠️ Failed to read story graph: {readError}");
-                return false;
-            }
-
-            var previousNodes = Nodes.ToList();
-            var previousConnections = Connections.ToList();
-
-            try
-            {
-                var parsedDocument = document!;
-                using (parsedDocument)
-                {
-                    var loadResult = StoryGraphLoaderService.Load(parsedDocument);
-                    if (!loadResult.Success)
-                    {
-                        if (!string.IsNullOrEmpty(loadResult.ErrorMessage))
-                            AppendLog($"⚠️ Failed to load story graph: {loadResult.ErrorMessage}");
-                        return false;
-                    }
-
-                    foreach (var warning in loadResult.Warnings)
-                    {
-                        AppendLog(warning);
-                    }
-
-                    Nodes.Clear();
-                    Connections.Clear();
-
-                    foreach (var node in loadResult.Nodes)
-                    {
-                        node.RefreshBitmaps();
-                        node.PropertyChanged += OnNodePropertyChanged;
-                        Nodes.Add(node);
-                    }
-
-                    foreach (var connection in loadResult.Connections)
-                    {
-                        Connections.Add(connection);
-                    }
-
-                    EnforceSingleOutgoingWireRule();
-
-                    var startNode = GetStartNode() ?? Nodes.FirstOrDefault();
-                    if (startNode != null)
-                    {
-                        SelectNodeQuiet(startNode);
-                    }
-
-                    AppendLog($"📂 Loaded story graph from {filePath} ({Nodes.Count} nodes, {Connections.Count} connections, format v{loadResult.FormatVersion})");
-                    return true;
-                }
-            }
-            catch (Exception ex)
-            {
-                // Parsing is transactional from the user's perspective: a bad
-                // file must not replace the currently open graph with a partial one.
-                Nodes.Clear();
-                Connections.Clear();
-                foreach (var node in previousNodes) Nodes.Add(node);
-                foreach (var connection in previousConnections) Connections.Add(connection);
-                UpdateStartNodeState();
-                AppendLog($"⚠️ Failed to load story graph: {ex.Message}");
-                return false;
-            }
-        }
-
-        public bool SaveFullStoryGraphFile()
-        {
-            ulong startId = GetStartNode()?.Id ?? 101;
-            return StoryGraphDocumentWriter.SaveFullStoryGraph(
+            return StoryGraphLifecycleCoordinator.LoadGraphWithRollback(
                 AssetsPath,
                 AssetsJsonPath,
                 Nodes,
                 Connections,
-                startId,
-                msg => AppendLog(msg));
+                OnNodePropertyChanged,
+                EnforceSingleOutgoingWireRule,
+                SelectNodeQuiet,
+                AppendLog);
+        }
+
+        public bool SaveFullStoryGraphFile()
+        {
+            return StoryGraphLifecycleCoordinator.SaveFullGraph(
+                AssetsPath,
+                AssetsJsonPath,
+                Nodes,
+                Connections,
+                GetStartNode()?.Id,
+                AppendLog);
         }
 
         public bool SaveActiveStoryFile()
         {
-            var node = SelectedNode ?? Nodes.FirstOrDefault();
-            return StoryGraphDocumentWriter.SaveActiveStory(
+            return StoryGraphLifecycleCoordinator.SaveActiveStory(
                 AssetsJsonPath,
-                node,
-                msg => AppendLog(msg));
+                SelectedNode,
+                Nodes,
+                AppendLog);
         }
 
         [RelayCommand]
@@ -1023,9 +935,7 @@ namespace RowlEngine.Editor.ViewModels
 
         public NodeViewModel? GetStartNode()
         {
-            return Nodes.FirstOrDefault(n => n.IsStartNode)
-                   ?? Nodes.FirstOrDefault(n => !Connections.Any(c => c.TargetNode == n))
-                   ?? Nodes.OrderBy(n => n.Id).FirstOrDefault();
+            return StoryGraphLifecycleCoordinator.ResolveStartNode(Nodes, Connections);
         }
 
         [RelayCommand]
@@ -1108,9 +1018,7 @@ namespace RowlEngine.Editor.ViewModels
 
         public void SyncEditorToRuntimeNode()
         {
-            ulong nodeId = EngineHost.GetCurrentNodeId();
-            var node = Nodes.FirstOrDefault(item => item.Id == nodeId);
-            if (node != null) SelectNodeQuiet(node);
+            StoryGraphLifecycleCoordinator.SyncEditorToRuntimeNode(EngineHost, Nodes, SelectNodeQuiet);
         }
 
         public async Task<bool> ConfirmDeleteSaveSlotAsync(int index)
@@ -1223,91 +1131,47 @@ namespace RowlEngine.Editor.ViewModels
         [RelayCommand]
         public void ShowPanel(string panelName)
         {
-            switch (panelName)
-            {
-                case "Hierarchy":
-                    IsHierarchyPanelVisible = !IsHierarchyPanelVisible;
-                    break;
-                case "Assets":
-                    if (IsAssetsPanelVisible && BottomPanelActiveTab == 1)
-                    {
-                        IsAssetsPanelVisible = false;
-                    }
-                    else
-                    {
-                        IsAssetsPanelVisible = true;
-                        BottomPanelActiveTab = 1;
-                    }
-                    break;
-                case "Inspector":
-                    IsInspectorPanelVisible = !IsInspectorPanelVisible;
-                    break;
-                case "Log":
-                    if (IsLogPanelVisible && BottomPanelActiveTab == 0)
-                    {
-                        IsLogPanelVisible = false;
-                    }
-                    else
-                    {
-                        IsLogPanelVisible = true;
-                        BottomPanelActiveTab = 0;
-                    }
-                    break;
-                case "Backlog":
-                    if (IsBacklogPanelVisible && BottomPanelActiveTab == 2)
-                    {
-                        IsBacklogPanelVisible = false;
-                    }
-                    else
-                    {
-                        IsBacklogPanelVisible = true;
-                        BottomPanelActiveTab = 2;
-                    }
-                    break;
-                case "SaveSlots":
-                    IsSaveSlotsPanelVisible = !IsSaveSlotsPanelVisible;
-                    if (IsSaveSlotsPanelVisible)
-                    {
-                        SaveSlotsViewModel.Refresh();
-                        BottomPanelActiveTab = 3;
-                    }
-                    break;
-                case "ProjectIssues":
-                    IsProjectIssuesPanelVisible = !IsProjectIssuesPanelVisible;
-                    if (IsProjectIssuesPanelVisible) BottomPanelActiveTab = 4;
-                    break;
-                case "NodeGraph":
-                    IsNodeGraphActive = true;
-                    IsPreviewActive = false;
-                    IsEnginePreviewActive = false;
-                    SplitScreenMode = 0; // Exits split screen mode to show full single Node Graph
-                    break;
-                case "Preview":
-                    IsPreviewActive = true;
-                    IsNodeGraphActive = false;
-                    IsEnginePreviewActive = false;
-                    SplitScreenMode = 0;
-                    break;
-                case "EnginePreview":
-                    IsEnginePreviewActive = true;
-                    IsNodeGraphActive = false;
-                    IsPreviewActive = false;
-                    SplitScreenMode = 0;
-                    break;
-                case "SplitScreen":
-                    SplitScreenMode = (SplitScreenMode + 1) % 3;
-                    if (SplitScreenMode > 0)
-                    {
-                        IsNodeGraphActive = true;
-                    }
-                    else
-                    {
-                        IsNodeGraphActive = true;
-                        IsEnginePreviewActive = false;
-                        IsPreviewActive = false;
-                    }
-                    break;
-            }
+            bool isHierarchy = IsHierarchyPanelVisible;
+            bool isAssets = IsAssetsPanelVisible;
+            bool isInspector = IsInspectorPanelVisible;
+            bool isLog = IsLogPanelVisible;
+            bool isBacklog = IsBacklogPanelVisible;
+            bool isSaveSlots = IsSaveSlotsPanelVisible;
+            bool isProjectIssues = IsProjectIssuesPanelVisible;
+            int bottomActiveTab = BottomPanelActiveTab;
+            bool isNodeGraph = IsNodeGraphActive;
+            bool isPreview = IsPreviewActive;
+            bool isEnginePreview = IsEnginePreviewActive;
+            int splitMode = SplitScreenMode;
+
+            EditorWorkspaceLayoutService.HandlePanelAction(
+                panelName,
+                ref isHierarchy,
+                ref isAssets,
+                ref isInspector,
+                ref isLog,
+                ref isBacklog,
+                ref isSaveSlots,
+                ref isProjectIssues,
+                ref bottomActiveTab,
+                ref isNodeGraph,
+                ref isPreview,
+                ref isEnginePreview,
+                ref splitMode,
+                () => SaveSlotsViewModel?.Refresh());
+
+            IsHierarchyPanelVisible = isHierarchy;
+            IsAssetsPanelVisible = isAssets;
+            IsInspectorPanelVisible = isInspector;
+            IsLogPanelVisible = isLog;
+            IsBacklogPanelVisible = isBacklog;
+            IsSaveSlotsPanelVisible = isSaveSlots;
+            IsProjectIssuesPanelVisible = isProjectIssues;
+            BottomPanelActiveTab = bottomActiveTab;
+            IsNodeGraphActive = isNodeGraph;
+            IsPreviewActive = isPreview;
+            IsEnginePreviewActive = isEnginePreview;
+            SplitScreenMode = splitMode;
         }
 
         // ══════════════════════════════════════════════════════════════════════
@@ -1551,8 +1415,16 @@ namespace RowlEngine.Editor.ViewModels
         public void SaveProject()
         {
             _saveDebounceTimer?.Stop();
-            // The graph is authoritative. active_story is a derived preview file.
-            if (!SaveFullStoryGraphFile() || !SaveActiveStoryFile()) return;
+            if (!StoryGraphLifecycleCoordinator.SaveProject(
+                    AssetsPath,
+                    AssetsJsonPath,
+                    Nodes,
+                    Connections,
+                    SelectedNode,
+                    GetStartNode()?.Id,
+                    AppendLog))
+                return;
+
             IsProjectDirty = false;
             AppendLog($"💾 [PROJE KAYDEDİLDİ] {Nodes.Count} düğüm ve tüm bileşenler başarıyla kaydedildi ({DateTime.Now:HH:mm:ss})");
         }
