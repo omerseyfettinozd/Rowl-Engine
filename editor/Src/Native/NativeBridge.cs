@@ -292,6 +292,24 @@ namespace RowlEngine.Editor.Native
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
         internal static extern void RowlEngine_ResetCamera(IntPtr handle);
 
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern void RowlEngine_CameraPanTo(
+            IntPtr handle,
+            float targetX,
+            float targetY,
+            float durationSeconds,
+            int easingType);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern void RowlEngine_CameraZoomTo(
+            IntPtr handle,
+            float targetZoom,
+            float durationSeconds,
+            int easingType);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern int RowlEngine_IsCameraMoving(IntPtr handle);
+
         // ── Helpers ──────────────────────────────────────────────────────────
 
         /// <summary>Converts a native C UTF-8 string pointer to a managed string safely.</summary>

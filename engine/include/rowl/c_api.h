@@ -428,6 +428,23 @@ ROWL_API void RowlEngine_TriggerCameraShake(RowlEngineHandle handle, float inten
  */
 ROWL_API void RowlEngine_ResetCamera(RowlEngineHandle handle);
 
+/**
+ * Smoothly pans camera to target center coordinates over durationSeconds.
+ * easingType: 0=Linear, 1=EaseIn, 2=EaseOut, 3=EaseInOutCubic, 4=SmoothStep.
+ */
+ROWL_API void RowlEngine_CameraPanTo(RowlEngineHandle handle, float targetX, float targetY, float durationSeconds, int easingType);
+
+/**
+ * Smoothly zooms camera to target scale factor over durationSeconds.
+ * easingType: 0=Linear, 1=EaseIn, 2=EaseOut, 3=EaseInOutCubic, 4=SmoothStep.
+ */
+ROWL_API void RowlEngine_CameraZoomTo(RowlEngineHandle handle, float targetZoom, float durationSeconds, int easingType);
+
+/**
+ * Returns 1 if the camera is currently panning, zooming, or shaking; 0 otherwise.
+ */
+ROWL_API int RowlEngine_IsCameraMoving(RowlEngineHandle handle);
+
 #ifdef __cplusplus
 } /* extern "C" */
 #endif

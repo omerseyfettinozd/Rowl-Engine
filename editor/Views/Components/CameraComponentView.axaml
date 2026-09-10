@@ -1,0 +1,77 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:comp="using:RowlEngine.Editor.ViewModels.Components"
+             x:Class="RowlEngine.Editor.Views.Components.CameraComponentView"
+             x:DataType="comp:CameraComponentViewModel">
+  <Border Background="{DynamicResource CardBackground}" CornerRadius="6" Margin="0,4" Padding="10" BorderBrush="{DynamicResource CardBorderColor}" BorderThickness="1">
+    <StackPanel Spacing="8">
+      <TextBlock Text="🎥 2D Camera" FontWeight="Bold" Foreground="{DynamicResource PrimaryText}" />
+
+      <!-- Position -->
+      <Grid ColumnDefinitions="*,8,*">
+        <StackPanel Grid.Column="0" Spacing="2">
+          <TextBlock Text="Focus X (Center)" FontSize="11" Foreground="{DynamicResource MutedText}" />
+          <NumericUpDown Value="{Binding X}" Increment="10" Minimum="-10000" Maximum="10000" />
+        </StackPanel>
+        <StackPanel Grid.Column="2" Spacing="2">
+          <TextBlock Text="Focus Y (Center)" FontSize="11" Foreground="{DynamicResource MutedText}" />
+          <NumericUpDown Value="{Binding Y}" Increment="10" Minimum="-10000" Maximum="10000" />
+        </StackPanel>
+      </Grid>
+
+      <!-- Zoom and Rotation -->
+      <Grid ColumnDefinitions="*,8,*">
+        <StackPanel Grid.Column="0" Spacing="2">
+          <TextBlock Text="Zoom Factor" FontSize="11" Foreground="{DynamicResource MutedText}" />
+          <NumericUpDown Value="{Binding Zoom}" Increment="0.1" Minimum="0.1" Maximum="10.0" FormatString="F2" />
+        </StackPanel>
+        <StackPanel Grid.Column="2" Spacing="2">
+          <TextBlock Text="Rotation (deg)" FontSize="11" Foreground="{DynamicResource MutedText}" />
+          <NumericUpDown Value="{Binding Rotation}" Increment="5" Minimum="-360" Maximum="360" />
+        </StackPanel>
+      </Grid>
+
+      <!-- Smooth Tweening -->
+      <Border Background="{DynamicResource SurfaceBackground}" CornerRadius="4" Padding="8">
+        <StackPanel Spacing="6">
+          <TextBlock Text="Smooth Tween (Seconds)" FontWeight="SemiBold" FontSize="11" Foreground="{DynamicResource PrimaryText}" />
+          <Grid ColumnDefinitions="*,8,*,8,*">
+            <StackPanel Grid.Column="0" Spacing="2">
+              <TextBlock Text="Pan Time" FontSize="10" Foreground="{DynamicResource MutedText}" />
+              <NumericUpDown Value="{Binding PanDuration}" Increment="0.25" Minimum="0" Maximum="60" FormatString="F2" />
+            </StackPanel>
+            <StackPanel Grid.Column="2" Spacing="2">
+              <TextBlock Text="Zoom Time" FontSize="10" Foreground="{DynamicResource MutedText}" />
+              <NumericUpDown Value="{Binding ZoomDuration}" Increment="0.25" Minimum="0" Maximum="60" FormatString="F2" />
+            </StackPanel>
+            <StackPanel Grid.Column="4" Spacing="2">
+              <TextBlock Text="Easing" FontSize="10" Foreground="{DynamicResource MutedText}" />
+              <TextBox Text="{Binding Easing}" Watermark="ease_in_out" />
+            </StackPanel>
+          </Grid>
+        </StackPanel>
+      </Border>
+
+      <!-- Screen Shake -->
+      <Border Background="{DynamicResource SurfaceBackground}" CornerRadius="4" Padding="8">
+        <StackPanel Spacing="6">
+          <TextBlock Text="Harmonic Screen Shake" FontWeight="SemiBold" FontSize="11" Foreground="{DynamicResource PrimaryText}" />
+          <Grid ColumnDefinitions="*,8,*,8,*">
+            <StackPanel Grid.Column="0" Spacing="2">
+              <TextBlock Text="Intensity (px)" FontSize="10" Foreground="{DynamicResource MutedText}" />
+              <NumericUpDown Value="{Binding ShakeIntensity}" Increment="5" Minimum="0" Maximum="1000" />
+            </StackPanel>
+            <StackPanel Grid.Column="2" Spacing="2">
+              <TextBlock Text="Duration (s)" FontSize="10" Foreground="{DynamicResource MutedText}" />
+              <NumericUpDown Value="{Binding ShakeDuration}" Increment="0.1" Minimum="0" Maximum="60" FormatString="F2" />
+            </StackPanel>
+            <StackPanel Grid.Column="4" Spacing="2">
+              <TextBlock Text="Freq (Hz)" FontSize="10" Foreground="{DynamicResource MutedText}" />
+              <NumericUpDown Value="{Binding ShakeFrequency}" Increment="5" Minimum="1" Maximum="100" />
+            </StackPanel>
+          </Grid>
+        </StackPanel>
+      </Border>
+    </StackPanel>
+  </Border>
+</UserControl>

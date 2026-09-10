@@ -1,0 +1,31 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:comp="using:RowlEngine.Editor.ViewModels.Components"
+             x:Class="RowlEngine.Editor.Views.Components.TransitionComponentView"
+             x:DataType="comp:TransitionComponentViewModel">
+  <Border Background="{DynamicResource CardBackground}" CornerRadius="6" Margin="0,4" Padding="10" BorderBrush="{DynamicResource CardBorderColor}" BorderThickness="1">
+    <StackPanel Spacing="8">
+      <TextBlock Text="🎬 Scene Transition" FontWeight="Bold" Foreground="{DynamicResource PrimaryText}" />
+
+      <!-- Transition Kind -->
+      <StackPanel Spacing="2">
+        <TextBlock Text="Transition Type" FontSize="11" Foreground="{DynamicResource MutedText}" />
+        <ComboBox ItemsSource="{x:Static comp:TransitionComponentViewModel.AvailableKinds}"
+                  SelectedItem="{Binding Kind}"
+                  HorizontalAlignment="Stretch" />
+      </StackPanel>
+
+      <!-- Duration and Color -->
+      <Grid ColumnDefinitions="*,8,*">
+        <StackPanel Grid.Column="0" Spacing="2">
+          <TextBlock Text="Duration (Seconds)" FontSize="11" Foreground="{DynamicResource MutedText}" />
+          <NumericUpDown Value="{Binding Duration}" Increment="0.25" Minimum="0.01" Maximum="60.0" FormatString="F2" />
+        </StackPanel>
+        <StackPanel Grid.Column="2" Spacing="2">
+          <TextBlock Text="Color Hex (Fade Color)" FontSize="11" Foreground="{DynamicResource MutedText}" />
+          <TextBox Text="{Binding ColorHex}" Watermark="#000000" />
+        </StackPanel>
+      </Grid>
+    </StackPanel>
+  </Border>
+</UserControl>

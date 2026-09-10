@@ -2598,6 +2598,42 @@ void test_camera_and_transition_pipeline() {
         TEST_PASS("Camera2D Screen Shake Harmonic Decay & Reset");
     }
 
+    // Test 3b: Camera2D Smooth Tweening & Easing (PanTo & ZoomTo)
+    {
+        Rowl::Render::Camera2D camera(1920.0f, 1080.0f);
+        camera.panTo(1200.0f, 600.0f, 1.0f, Rowl::Render::CameraEasing::EaseInOutCubic);
+        camera.zoomTo(2.0f, 1.0f, Rowl::Render::CameraEasing::EaseInOutCubic);
+
+        if (!camera.isPanning() || !camera.isZooming() || !camera.isMoving()) {
+            std::cerr << "Camera2D tween start query failed" << std::endl;
+            exit(1);
+        }
+
+        // Halfway step: 0.5s -> EaseInOutCubic factor = 0.5
+        camera.update(0.5f);
+        if (std::abs(camera.getPositionX() - 1080.0f) > 0.05f ||
+            std::abs(camera.getPositionY() - 570.0f) > 0.05f ||
+            std::abs(camera.getZoom() - 1.5f) > 0.05f) {
+            std::cerr << "Camera2D halfway tween interpolation failed" << std::endl;
+            exit(1);
+        }
+
+        // Complete step: 0.5s -> reaches target exactly
+        camera.update(0.5f);
+        if (std::abs(camera.getPositionX() - 1200.0f) > 0.01f ||
+            std::abs(camera.getPositionY() - 600.0f) > 0.01f ||
+            std::abs(camera.getZoom() - 2.0f) > 0.01f) {
+            std::cerr << "Camera2D tween target completion failed" << std::endl;
+            exit(1);
+        }
+        if (camera.isPanning() || camera.isZooming() || camera.isMoving()) {
+            std::cerr << "Camera2D tween end state query failed" << std::endl;
+            exit(1);
+        }
+
+        TEST_PASS("Camera2D Smooth Tweening & EaseInOutCubic Interpolation");
+    }
+
     // Test 4: TransitionManager Lifecycle & State Transitions
     {
         Rowl::Render::TransitionManager transition;
@@ -2663,6 +2699,14 @@ void test_camera_and_transition_pipeline() {
         RowlEngine_TriggerCameraShake(handle, 15.0f, 0.5f);
         RowlEngine_Step(handle, 0.016f);
 
+        // Smooth Panning and Zooming via C API
+        RowlEngine_CameraPanTo(handle, 1200.0f, 600.0f, 0.4f, 3);
+        RowlEngine_CameraZoomTo(handle, 1.75f, 0.4f, 3);
+        if (!RowlEngine_IsCameraMoving(handle)) {
+            std::cerr << "RowlEngine_IsCameraMoving expected true during pan/zoom" << std::endl;
+            exit(1);
+        }
+
         RowlEngine_StartTransition(handle, "crossfade", 0.4f, nullptr);
         if (!RowlEngine_IsTransitionActive(handle)) {
             std::cerr << "RowlEngine_IsTransitionActive expected true after start" << std::endl;
@@ -2674,6 +2718,10 @@ void test_camera_and_transition_pipeline() {
         RowlEngine_Step(handle, 0.25f);
         if (RowlEngine_IsTransitionActive(handle)) {
             std::cerr << "RowlEngine_IsTransitionActive expected false after completion" << std::endl;
+            exit(1);
+        }
+        if (RowlEngine_IsCameraMoving(handle)) {
+            std::cerr << "RowlEngine_IsCameraMoving expected false after completion" << std::endl;
             exit(1);
         }
 

@@ -22,6 +22,8 @@ namespace RowlEngine.Editor.Views.Components
                 AudioComponentViewModel      => new AudioComponentView(),
                 ChoiceComponentViewModel     => new ChoiceComponentView(),
                 ScriptComponentViewModel     => new ScriptComponentView(),
+                CameraComponentViewModel     => new CameraComponentView(),
+                TransitionComponentViewModel => new TransitionComponentView(),
                 _ => new TextBlock { Text = "Unknown Component" }
             };
         }

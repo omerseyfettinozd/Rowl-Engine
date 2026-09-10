@@ -6,6 +6,14 @@
 
 namespace Rowl::Render {
 
+enum class CameraEasing {
+    Linear,
+    EaseInQuad,
+    EaseOutQuad,
+    EaseInOutCubic,
+    SmoothStep
+};
+
 class Camera2D {
 public:
     explicit Camera2D(float virtualWidth = 1920.0f, float virtualHeight = 1080.0f);
@@ -19,9 +27,17 @@ public:
     float getPositionX() const { return m_posX; }
     float getPositionY() const { return m_posY; }
 
+    // Smooth Pan to target coordinates over durationSeconds
+    void panTo(float targetX, float targetY, float durationSeconds, CameraEasing easing = CameraEasing::EaseInOutCubic);
+    bool isPanning() const { return m_panTimer < m_panDuration; }
+
     // Zoom (scale factor: clamped between 0.1f and 10.0f, default: 1.0f)
     void setZoom(float zoom);
     float getZoom() const { return m_zoom; }
+
+    // Smooth Zoom to target scale factor over durationSeconds
+    void zoomTo(float targetZoom, float durationSeconds, CameraEasing easing = CameraEasing::EaseInOutCubic);
+    bool isZooming() const { return m_zoomTimer < m_zoomDuration; }
 
     // Rotation (degrees)
     void setRotation(float degrees);
@@ -34,7 +50,10 @@ public:
     float getShakeOffsetY() const { return m_shakeOffsetY; }
     float getShakeTimer() const { return m_shakeTimer; }
 
-    // Update with delta time (decays shake)
+    // Movement query
+    bool isMoving() const { return isPanning() || isZooming() || isShaking(); }
+
+    // Update with delta time (decays shake and advances tweens)
     void update(float dt);
 
     // Transform a virtual rectangle (x, y, w, h) through camera projection
@@ -55,6 +74,22 @@ private:
     float m_posY = 540.0f;
     float m_zoom = 1.0f;
     float m_rotation = 0.0f;
+
+    // Pan tween
+    float m_panStartX = 960.0f;
+    float m_panStartY = 540.0f;
+    float m_panTargetX = 960.0f;
+    float m_panTargetY = 540.0f;
+    float m_panDuration = 0.0f;
+    float m_panTimer = 0.0f;
+    CameraEasing m_panEasing = CameraEasing::EaseInOutCubic;
+
+    // Zoom tween
+    float m_zoomStart = 1.0f;
+    float m_zoomTarget = 1.0f;
+    float m_zoomDuration = 0.0f;
+    float m_zoomTimer = 0.0f;
+    CameraEasing m_zoomEasing = CameraEasing::EaseInOutCubic;
 
     // Shake state
     float m_shakeIntensity = 0.0f;

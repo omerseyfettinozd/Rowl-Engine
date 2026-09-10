@@ -839,4 +839,43 @@ void RowlEngine_ResetCamera(RowlEngineHandle handle) {
     });
 }
 
+static Rowl::Render::CameraEasing mapEasing(int easingType) {
+    switch (easingType) {
+        case 0: return Rowl::Render::CameraEasing::Linear;
+        case 1: return Rowl::Render::CameraEasing::EaseInQuad;
+        case 2: return Rowl::Render::CameraEasing::EaseOutQuad;
+        case 3: return Rowl::Render::CameraEasing::EaseInOutCubic;
+        case 4: return Rowl::Render::CameraEasing::SmoothStep;
+        default: return Rowl::Render::CameraEasing::EaseInOutCubic;
+    }
+}
+
+void RowlEngine_CameraPanTo(RowlEngineHandle handle, float targetX, float targetY, float durationSeconds, int easingType) {
+    if (!isLiveHandle(handle)) return;
+    invokeNoexcept([&] {
+        auto* cam = toEngine(handle)->getCamera();
+        if (cam) {
+            cam->panTo(targetX, targetY, durationSeconds, mapEasing(easingType));
+        }
+    });
+}
+
+void RowlEngine_CameraZoomTo(RowlEngineHandle handle, float targetZoom, float durationSeconds, int easingType) {
+    if (!isLiveHandle(handle)) return;
+    invokeNoexcept([&] {
+        auto* cam = toEngine(handle)->getCamera();
+        if (cam) {
+            cam->zoomTo(targetZoom, durationSeconds, mapEasing(easingType));
+        }
+    });
+}
+
+int RowlEngine_IsCameraMoving(RowlEngineHandle handle) {
+    if (!isLiveHandle(handle)) return 0;
+    return invokeNoexcept<int>([&] {
+        const auto* cam = toEngine(handle)->getCamera();
+        return (cam && cam->isMoving()) ? 1 : 0;
+    }, 0);
+}
+
 } // extern "C"

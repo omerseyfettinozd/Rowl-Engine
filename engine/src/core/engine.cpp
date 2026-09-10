@@ -764,8 +764,28 @@ void Engine::updateSceneFromComponents(const std::string& componentsJson) {
                     float x = data.value("x", 960.0f);
                     float y = data.value("y", 540.0f);
                     float rot = data.value("rotation", 0.0f);
-                    m_window->getCamera()->setPosition(x, y);
-                    m_window->getCamera()->setZoom(zoom);
+                    float panDuration = data.value("pan_duration", 0.0f);
+                    float zoomDuration = data.value("zoom_duration", 0.0f);
+                    std::string easingStr = data.value("easing", "ease_in_out");
+
+                    Rowl::Render::CameraEasing easing = Rowl::Render::CameraEasing::EaseInOutCubic;
+                    if (easingStr == "linear") easing = Rowl::Render::CameraEasing::Linear;
+                    else if (easingStr == "ease_in") easing = Rowl::Render::CameraEasing::EaseInQuad;
+                    else if (easingStr == "ease_out") easing = Rowl::Render::CameraEasing::EaseOutQuad;
+                    else if (easingStr == "smooth_step") easing = Rowl::Render::CameraEasing::SmoothStep;
+
+                    if (panDuration > 0.0f) {
+                        m_window->getCamera()->panTo(x, y, panDuration, easing);
+                    } else {
+                        m_window->getCamera()->setPosition(x, y);
+                    }
+
+                    if (zoomDuration > 0.0f) {
+                        m_window->getCamera()->zoomTo(zoom, zoomDuration, easing);
+                    } else {
+                        m_window->getCamera()->setZoom(zoom);
+                    }
+
                     m_window->getCamera()->setRotation(rot);
                     if (data.contains("shake_intensity") && data.contains("shake_duration")) {
                         float intensity = data.value("shake_intensity", 0.0f);
