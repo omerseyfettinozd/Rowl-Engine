@@ -154,10 +154,13 @@ public:
      * Loads a story graph from a specific file path.
      * Used by the C-API / embedded mode (no CWD search needed).
      */
-    void loadStoryGraphFromPath(const std::string& jsonPath);
+    /** Returns false and records a diagnostic when the graph is unavailable or invalid. */
+    bool loadStoryGraphFromPath(const std::string& jsonPath);
 
     /** Loads a story graph through the active virtual file system. */
     bool loadStoryGraphFromVfs(const std::string& vfsPath);
+
+    const std::string& getLastStoryGraphLoadError() const { return m_lastStoryGraphLoadError; }
 
     // choiceIndex: which branch to follow (0 = first). Default 0 for backward compat.
     void advanceToNextNode(uint32_t choiceIndex = 0);
@@ -277,6 +280,10 @@ private:
     float m_autoAdvanceElapsed = 0.0f;
     float m_textSpeedMultiplier = 1.0f;
     float m_autoAdvanceDelayOffset = 0.0f;
+    // Parsing is transactional. Increment only after a fully validated graph
+    // replaces active state so callers can distinguish rejection from success.
+    uint64_t m_storyGraphRevision = 0;
+    std::string m_lastStoryGraphLoadError;
 
     void parseStoryGraphJson(const std::string& jsonContent);
     void restoreAudioStateFromGameState();

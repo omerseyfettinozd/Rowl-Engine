@@ -909,6 +909,21 @@ void test_vfs_security() {
         output.write(reinterpret_cast<const char*>(&graphEntry), sizeof(graphEntry));
         output.write(graphVfsPath.data(), static_cast<std::streamsize>(graphVfsPath.size()));
     }
+    const std::string invalidGraphVfsPath = "json/invalid_story.json";
+    const std::string invalidGraphJson = "{";
+    const uint64_t invalidGraphIndexOffset = headerSize + invalidGraphJson.size();
+    Rowl::VFS::RowlPkgHeader invalidGraphHeader{{'R', 'O', 'W', 'L'}, 1, 1, invalidGraphIndexOffset};
+    Rowl::VFS::RowlPkgEntryRaw invalidGraphEntry{
+        fnv1a64(invalidGraphVfsPath), static_cast<uint32_t>(invalidGraphVfsPath.size()),
+        headerSize, invalidGraphJson.size(), invalidGraphJson.size(), 0};
+    const auto invalidGraphPackage = packagedProject / "Assets" / "packages" / "invalid_graph.rowlpkg";
+    {
+        std::ofstream output(invalidGraphPackage, std::ios::binary);
+        output.write(reinterpret_cast<const char*>(&invalidGraphHeader), sizeof(invalidGraphHeader));
+        output.write(invalidGraphJson.data(), static_cast<std::streamsize>(invalidGraphJson.size()));
+        output.write(reinterpret_cast<const char*>(&invalidGraphEntry), sizeof(invalidGraphEntry));
+        output.write(invalidGraphVfsPath.data(), static_cast<std::streamsize>(invalidGraphVfsPath.size()));
+    }
     RowlEngineHandle packagedHandle = RowlEngine_Create();
     if (!packagedHandle || !RowlEngine_Init(packagedHandle, 320, 180, 0)) {
         std::cerr << "Could not initialize engine for packaged graph test" << std::endl;
@@ -917,13 +932,17 @@ void test_vfs_security() {
     RowlEngine_SetProjectDirectory(packagedHandle, packagedProject.string().c_str());
     if (!RowlEngine_LoadStoryGraphFromVfs(packagedHandle, graphVfsPath.c_str()) ||
         RowlEngine_GetCurrentNodeId(packagedHandle) != 101 ||
-        RowlEngine_LoadStoryGraphFromVfs(packagedHandle, "json/missing.json")) {
+        RowlEngine_LoadStoryGraphFromVfs(packagedHandle, "json/missing.json") ||
+        std::string(RowlEngine_GetLastStoryGraphError(packagedHandle)).find("missing") == std::string::npos ||
+        RowlEngine_LoadStoryGraphFromVfs(packagedHandle, invalidGraphVfsPath.c_str()) ||
+        std::string(RowlEngine_GetLastStoryGraphError(packagedHandle)).find("rejected") == std::string::npos ||
+        RowlEngine_GetCurrentNodeId(packagedHandle) != 101) {
         std::cerr << "C API did not load the graph from the packaged VFS correctly" << std::endl;
         RowlEngine_Destroy(packagedHandle);
         exit(1);
     }
     RowlEngine_Destroy(packagedHandle);
-    TEST_PASS("C API loads the story graph directly from the packaged VFS");
+    TEST_PASS("C API reports VFS graph load failures while preserving the active graph");
 
     vfs.remountProject(std::filesystem::current_path().string());
     TEST_PASS("Project remount exposes Assets but not project-root files");

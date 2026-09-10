@@ -324,6 +324,14 @@ int RowlEngine_LoadStoryGraphFromVfs(RowlEngineHandle handle, const char* vfsPat
     return loaded;
 }
 
+const char* RowlEngine_GetLastStoryGraphError(RowlEngineHandle handle) {
+    static thread_local std::string buffer;
+    buffer.clear();
+    if (!isLiveHandle(handle)) return buffer.c_str();
+    invokeNoexcept([&] { buffer = toEngine(handle)->getLastStoryGraphLoadError(); });
+    return buffer.c_str();
+}
+
 void RowlEngine_SetProjectDirectory(RowlEngineHandle handle, const char* projectRoot) {
     if (!isLiveHandle(handle) || !projectRoot || !*projectRoot) return;
     invokeNoexcept([&] {

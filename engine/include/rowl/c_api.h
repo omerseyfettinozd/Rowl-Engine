@@ -211,6 +211,9 @@ ROWL_API void RowlEngine_LoadStoryGraph(RowlEngineHandle handle,
 ROWL_API int RowlEngine_LoadStoryGraphFromVfs(RowlEngineHandle handle,
                                               const char* vfsPath);
 
+/** Returns the diagnostic from the last file or VFS story graph load attempt. */
+ROWL_API const char* RowlEngine_GetLastStoryGraphError(RowlEngineHandle handle);
+
 /**
  * Sets the active project root directory, isolating VFS mounts to that project.
  * @param projectRoot Absolute or relative path to the active project folder.

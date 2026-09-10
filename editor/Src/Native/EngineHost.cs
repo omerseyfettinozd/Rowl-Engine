@@ -348,6 +348,10 @@ namespace RowlEngine.Editor.Native
             return loaded;
         }
 
+        public string LastStoryGraphError => _handle == IntPtr.Zero
+            ? string.Empty
+            : NativeBridge.PtrToString(NativeBridge.RowlEngine_GetLastStoryGraphError(_handle));
+
         /// <summary>Sets the active project root directory, isolating VFS mounts to that project.</summary>
         public void SetProjectDirectory(string projectRoot)
         {

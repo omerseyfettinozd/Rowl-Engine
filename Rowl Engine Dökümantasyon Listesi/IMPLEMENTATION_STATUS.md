@@ -22,6 +22,8 @@ içinden VFS graph yükleyen yerel standalone smoke testi geçiyor.
   dizinini taşır; aynı göreli mod yolu paket içeriğini geçersiz kılar.
 - C API ve player paket içindeki `json/full_story_graph.json` graph'ını VFS
   üzerinden yükler. `--package-smoke-test` tek offscreen frame render eder.
+- Story graph dosya/VFS yüklemeleri artık açık başarı sonucu üretir. Geçersiz
+  graph aktif hikâyeyi korur; C API/PInvoke son yükleme tanısını sorgulayabilir.
 - Native benchmark JSON şeması ve aynı ortam/fixture için yüzde farkı raporlayan
   karşılaştırıcı hazırdır; ilk sonuçlar baseline olarak saklanır.
 - Yaratıcı Hikâye Stüdyosu tasarım sistemi, Project Hub, boş durum, üst çalışma

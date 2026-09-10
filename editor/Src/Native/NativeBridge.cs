@@ -107,6 +107,9 @@ namespace RowlEngine.Editor.Native
             [MarshalAs(UnmanagedType.LPUTF8Str)] string vfsPath);
 
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern IntPtr RowlEngine_GetLastStoryGraphError(IntPtr handle);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
         internal static extern void RowlEngine_SetProjectDirectory(
             IntPtr handle,
             [MarshalAs(UnmanagedType.LPUTF8Str)] string projectRoot);

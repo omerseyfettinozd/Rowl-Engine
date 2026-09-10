@@ -1017,6 +1017,7 @@ void Engine::parseStoryGraphJson(const std::string& jsonContent) {
                 }
                 ROWL_LOG_INFO("Story graph loaded: " + std::to_string(m_storyNodes.size()) +
                               " nodes. Start node #" + std::to_string(m_currentNodeId));
+                ++m_storyGraphRevision;
             }
     } catch (const nlohmann::json::parse_error& e) {
         ROWL_LOG_ERROR("Story graph JSON parse error: " + std::string(e.what()));
@@ -1025,43 +1026,61 @@ void Engine::parseStoryGraphJson(const std::string& jsonContent) {
     }
 }
 
-void Engine::loadStoryGraphFromPath(const std::string& jsonPath) {
+bool Engine::loadStoryGraphFromPath(const std::string& jsonPath) {
+    m_lastStoryGraphLoadError.clear();
     std::error_code fileError;
     const std::filesystem::path graphPath(jsonPath);
     if (!std::filesystem::is_regular_file(graphPath, fileError) || fileError ||
         std::filesystem::file_size(graphPath, fileError) > kMaxStoryJsonBytes || fileError) {
-        ROWL_LOG_ERROR("Story graph is missing, not a regular file, or exceeds the size limit: " + jsonPath);
-        return;
+        m_lastStoryGraphLoadError = "Story graph is missing, not a regular file, or exceeds the size limit: " + jsonPath;
+        ROWL_LOG_ERROR(m_lastStoryGraphLoadError);
+        return false;
     }
     std::ifstream f(jsonPath);
     if (!f.is_open()) {
-        ROWL_LOG_ERROR("Cannot open story graph: " + jsonPath);
-        return;
+        m_lastStoryGraphLoadError = "Cannot open story graph: " + jsonPath;
+        ROWL_LOG_ERROR(m_lastStoryGraphLoadError);
+        return false;
     }
     std::string content((std::istreambuf_iterator<char>(f)),
                          std::istreambuf_iterator<char>());
+    const uint64_t revisionBeforeParse = m_storyGraphRevision;
     parseStoryGraphJson(content);
+    if (m_storyGraphRevision == revisionBeforeParse) {
+        m_lastStoryGraphLoadError = "Story graph JSON was rejected; the active graph was preserved.";
+        return false;
+    }
+    return true;
 }
 
 bool Engine::loadStoryGraphFromVfs(const std::string& vfsPath) {
+    m_lastStoryGraphLoadError.clear();
     if (vfsPath.empty()) {
-        ROWL_LOG_ERROR("Story graph VFS path is empty");
+        m_lastStoryGraphLoadError = "Story graph VFS path is empty";
+        ROWL_LOG_ERROR(m_lastStoryGraphLoadError);
         return false;
     }
 
     auto& vfs = Rowl::VFS::VFSManager::instance();
     if (!vfs.exists(vfsPath)) {
-        ROWL_LOG_ERROR("Story graph is missing from VFS: " + vfsPath);
+        m_lastStoryGraphLoadError = "Story graph is missing from VFS: " + vfsPath;
+        ROWL_LOG_ERROR(m_lastStoryGraphLoadError);
         return false;
     }
 
     const std::string content = vfs.readString(vfsPath);
     if (content.empty() || content.size() > kMaxStoryJsonBytes) {
-        ROWL_LOG_ERROR("Story graph VFS content is empty or exceeds the size limit: " + vfsPath);
+        m_lastStoryGraphLoadError = "Story graph VFS content is empty or exceeds the size limit: " + vfsPath;
+        ROWL_LOG_ERROR(m_lastStoryGraphLoadError);
         return false;
     }
 
+    const uint64_t revisionBeforeParse = m_storyGraphRevision;
     parseStoryGraphJson(content);
+    if (m_storyGraphRevision == revisionBeforeParse) {
+        m_lastStoryGraphLoadError = "Story graph JSON from VFS was rejected; the active graph was preserved.";
+        return false;
+    }
     return true;
 }
 
