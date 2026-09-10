@@ -1,5 +1,6 @@
 #include "rowl/audio/audio_engine.hpp"
 #include "rowl/core/logger.hpp"
+#include "rowl/platform/sdl_subsystem_lease.hpp"
 #include "rowl/vfs/vfs.hpp"
 #include <SDL3/SDL.h>
 #include <vorbis/vorbisfile.h>
@@ -142,7 +143,12 @@ void applyDspToFloatPcm(float* samples, size_t sampleCount, int channels,
 } // namespace
 
 AudioEngine::AudioEngine(Rowl::VFS::VFSManager* vfs)
-    : m_vfs(vfs) {}
+    : m_vfs(vfs) {
+    if (!m_vfs) {
+        m_ownedVfs = std::make_shared<Rowl::VFS::VFSManager>();
+        m_vfs = m_ownedVfs.get();
+    }
+}
 
 AudioEngine::~AudioEngine() {
     if (m_initialized) {
@@ -151,11 +157,17 @@ AudioEngine::~AudioEngine() {
 }
 
 void AudioEngine::setVfs(Rowl::VFS::VFSManager* vfs) {
-    m_vfs = vfs;
+    if (vfs) {
+        m_ownedVfs.reset();
+        m_vfs = vfs;
+    } else {
+        m_ownedVfs = std::make_shared<Rowl::VFS::VFSManager>();
+        m_vfs = m_ownedVfs.get();
+    }
 }
 
 Rowl::VFS::VFSManager& AudioEngine::vfs() const {
-    return m_vfs ? *m_vfs : Rowl::VFS::VFSManager::instance();
+    return *m_vfs;
 }
 
 bool AudioEngine::initialize() {
@@ -180,7 +192,8 @@ bool AudioEngine::initialize() {
     m_bgmTransitionDurationSeconds = 0.0f;
 
     // Initialize SDL3 Audio subsystem
-    if (SDL_InitSubSystem(SDL_INIT_AUDIO)) {
+    if (Rowl::Platform::SdlSubsystemLease::acquire(SDL_INIT_AUDIO)) {
+        m_audioLeaseHeld = true;
         // Open default audio device stream for BGM
         m_bgmStream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr, nullptr, nullptr);
         // A second BGM stream lets a new, already-decoded track be queued
@@ -544,10 +557,11 @@ void AudioEngine::shutdown() {
         SDL_DestroyAudioStream(m_sfxStream);
         m_sfxStream = nullptr;
     }
-    if (m_deviceAvailable) {
-        SDL_QuitSubSystem(SDL_INIT_AUDIO);
-        m_deviceAvailable = false;
+    if (m_audioLeaseHeld) {
+        Rowl::Platform::SdlSubsystemLease::release(SDL_INIT_AUDIO);
+        m_audioLeaseHeld = false;
     }
+    m_deviceAvailable = false;
 
     m_initialized = false;
     ROWL_LOG_INFO("Audio Engine Subsystem Shutdown Complete.");

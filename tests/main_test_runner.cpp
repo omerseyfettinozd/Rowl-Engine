@@ -282,7 +282,7 @@ void test_game_state() {
 void test_audio_engine() {
     TEST_SECTION("Audio Subsystem & DSP Filters");
 
-    Rowl::Audio::AudioEngine audio;
+    Rowl::Audio::AudioEngine audio(&Rowl::VFS::VFSManager::instance());
     if (!audio.initialize() || !audio.isInitialized()) {
         std::cerr << "Audio init failed" << std::endl;
         exit(1);
@@ -983,14 +983,34 @@ void test_native_c_api() {
 
     RowlEngineHandle handle = RowlEngine_Create();
     if (!handle) exit(1);
-    if (RowlEngine_Create() != nullptr) {
-        std::cerr << "C-API allowed more than one live singleton runtime" << std::endl;
-        exit(1);
-    }
 
     int initRes = RowlEngine_Init(handle, 1920, 1080, 0);
     if (initRes != 1 || RowlEngine_IsRunning(handle) != 1) exit(1);
     TEST_PASS("RowlEngine_Create & Init (1920x1080 Offscreen)");
+
+    // Every C API handle owns its runtime state. Destroying one must neither
+    // invalidate the other handle nor tear down its shared SDL subsystems.
+    RowlEngineHandle secondHandle = RowlEngine_Create();
+    if (!secondHandle || RowlEngine_Init(secondHandle, 320, 180, 0) != 1) {
+        std::cerr << "C-API failed to initialize a second concurrent runtime" << std::endl;
+        exit(1);
+    }
+    RowlEngine_UpdateSceneFromJson(handle,
+        R"([{"type":"speaker","data":{"speaker":"Runtime A","dialogue":"A"}}])");
+    RowlEngine_UpdateSceneFromJson(secondHandle,
+        R"([{"type":"speaker","data":{"speaker":"Runtime B","dialogue":"B"}}])");
+    if (std::string(RowlEngine_GetSpeaker(handle)) != "Runtime A" ||
+        std::string(RowlEngine_GetSpeaker(secondHandle)) != "Runtime B") {
+        std::cerr << "Concurrent C-API runtimes leaked scene state" << std::endl;
+        exit(1);
+    }
+    RowlEngine_Destroy(secondHandle);
+    RowlEngine_Step(handle, 0.016f);
+    if (RowlEngine_IsRunning(handle) != 1 || std::string(RowlEngine_GetSpeaker(handle)) != "Runtime A") {
+        std::cerr << "Destroying one C-API runtime damaged its sibling runtime" << std::endl;
+        exit(1);
+    }
+    TEST_PASS("C-API Concurrent Runtime Isolation and SDL Lease Retention");
 
     RowlEngine_Step(handle, std::numeric_limits<float>::quiet_NaN());
     RowlEngine_Step(handle, -1.0f);
@@ -1021,22 +1041,20 @@ void test_native_c_api() {
         {"type":"script","id":"script_a","data":{"code":"private_value = 'first'; function on_enter() rowl.var_set('component_first_enter', private_value) end; function on_update(dt) rowl.var_set('component_first_update', tostring(dt)) end; function on_exit() rowl.var_set('component_exit_order', 'first') end"}},
         {"type":"script","id":"script_b","data":{"code":"private_value = 'second'; function on_enter() rowl.var_set('component_second_enter', private_value) end; function on_update(dt) rowl.var_set('component_second_update', tostring(dt * 2)) end; function on_exit() rowl.var_set('component_exit_order', 'second') end"}}
     ])");
-    auto* componentSandbox = Rowl::Core::Engine::instance().getLuaSandbox();
-    if (!componentSandbox || componentSandbox->getModuleCount() != 2 ||
-        Rowl::Core::Engine::instance().getScriptVariable("component_first_enter") != "first" ||
-        Rowl::Core::Engine::instance().getScriptVariable("component_second_enter") != "second") {
+    if (std::string(RowlEngine_GetVariable(handle, "component_first_enter")) != "first" ||
+        std::string(RowlEngine_GetVariable(handle, "component_second_enter")) != "second") {
         std::cerr << "Multiple script components did not activate independently" << std::endl;
         exit(1);
     }
     RowlEngine_Step(handle, 0.25f);
-    if (Rowl::Core::Engine::instance().getScriptVariable("component_first_update") != "0.25" ||
-        Rowl::Core::Engine::instance().getScriptVariable("component_second_update") != "0.5") {
+    if (std::string(RowlEngine_GetVariable(handle, "component_first_update")) != "0.25" ||
+        std::string(RowlEngine_GetVariable(handle, "component_second_update")) != "0.5") {
         std::cerr << "Multiple script component update callbacks were not dispatched" << std::endl;
         exit(1);
     }
     RowlEngine_UpdateSceneFromJson(handle, "[]");
-    if (componentSandbox->getModuleCount() != 0 ||
-        Rowl::Core::Engine::instance().getScriptVariable("component_exit_order") != "first") {
+    if (std::string(RowlEngine_GetVariable(handle, "component_exit_order")) != "first" ||
+        std::string(RowlEngine_GetScriptRuntimeDiagnosticsJson(handle)) != "[]") {
         std::cerr << "Script component teardown did not run in reverse activation order" << std::endl;
         exit(1);
     }
@@ -1737,7 +1755,7 @@ void writeBenchmarkJson(const std::string& outputPath, double vfsElapsedMs, int 
 void test_window_input_routing() {
     TEST_SECTION("Runtime-Local Window Input Routing");
 
-    Rowl::Render::Window window;
+    Rowl::Render::Window window(&Rowl::VFS::VFSManager::instance());
     if (!window.initializeOffscreen(320, 180)) {
         std::cerr << "Could not initialize offscreen window for input routing test" << std::endl;
         exit(1);
@@ -2211,7 +2229,7 @@ void test_hardening_and_reliability() {
 
     // 1. Texture Cache Double-Free Safety
     {
-        Rowl::Render::Window win;
+        Rowl::Render::Window win(&Rowl::VFS::VFSManager::instance());
         bool initOk = win.initializeOffscreen(400, 300);
         if (initOk) {
             auto* t1 = win.loadTexture("Woman.png");
@@ -2421,7 +2439,7 @@ void test_hardening_and_reliability() {
     }
 
     {
-        Rowl::Audio::AudioEngine audio;
+        Rowl::Audio::AudioEngine audio(&Rowl::VFS::VFSManager::instance());
         if (!audio.isBgmLooping()) {
             std::cerr << "BGM looping expected to default to true" << std::endl;
             exit(1);

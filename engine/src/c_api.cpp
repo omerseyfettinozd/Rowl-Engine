@@ -119,10 +119,6 @@ extern "C" {
 RowlEngineHandle RowlEngine_Create(void) {
     return invokeNoexcept<RowlEngineHandle>([] {
         std::lock_guard<std::mutex> lock(g_handleMutex);
-        // The VFS and SDL lifecycle are process-owned, so the C ABI exposes
-        // one live runtime per process until those broader resources become
-        // independently owned. Window input itself is runtime-local.
-        if (!g_liveHandles.empty()) return static_cast<RowlEngineHandle>(nullptr);
         auto record = std::make_unique<HandleRecord>();
         record->engine = std::make_unique<Rowl::Core::Engine>();
         const auto handle = static_cast<RowlEngineHandle>(record.get());
@@ -407,7 +403,6 @@ void RowlEngine_SetProjectDirectory(RowlEngineHandle handle, const char* project
         if (engine->getVfs()) {
             engine->getVfs()->remountProject(projectRoot);
         }
-        Rowl::VFS::VFSManager::instance().remountProject(projectRoot);
         auto* win = engine->getWindow();
         if (win) {
             win->reloadFonts();

@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <string>
 #include <memory>
+#include <mutex>
 #include <unordered_map>
 #include <vector>
 #include <nlohmann/json.hpp>
@@ -96,6 +97,8 @@ public:
     Engine(const Engine&) = delete;
     Engine& operator=(const Engine&) = delete;
 
+    /// Legacy test-observability helper. Runtime code must use explicit
+    /// ownership and never depend on this process-wide convenience pointer.
     static Engine& instance();
 
     RuntimeContext* getContext() const { return m_context.get(); }
@@ -227,7 +230,8 @@ public:
     const std::vector<Rowl::State::DialogueHistoryEntry>& getDialogueHistory() const;
 
 private:
-    static Engine* s_instance;
+    static std::mutex s_legacyInstanceMutex;
+    static std::vector<Engine*> s_legacyInstances;
 
     std::shared_ptr<RuntimeContext> m_context;
     EngineConfig m_config;

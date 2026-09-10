@@ -249,6 +249,8 @@ private:
     bool m_isOffscreen     = false; // true → rendering to RGBA32 surface
     std::function<void(const RuntimeInputEvent&)> m_inputHandler;
     Rowl::VFS::VFSManager* m_vfs = nullptr;
+    std::shared_ptr<Rowl::VFS::VFSManager> m_ownedVfs;
+    bool m_videoLeaseHeld = false;
     Rowl::VFS::VFSManager& vfs() const;
 };
 

@@ -12,6 +12,7 @@ add_executable(rowl_tests
     ${CMAKE_SOURCE_DIR}/engine/src/audio/audio_engine.cpp
     ${CMAKE_SOURCE_DIR}/engine/src/scripting/lua_sandbox.cpp
     ${CMAKE_SOURCE_DIR}/engine/src/platform/mobile_input.cpp
+    ${CMAKE_SOURCE_DIR}/engine/src/platform/sdl_subsystem_lease.cpp
     ${CMAKE_SOURCE_DIR}/engine/src/vfs/vfs.cpp
     ${CMAKE_SOURCE_DIR}/engine/src/vfs/rowlpkg_reader.cpp
     ${CMAKE_SOURCE_DIR}/engine/src/core/engine.cpp

@@ -26,6 +26,10 @@ içinden VFS graph yükleyen yerel standalone smoke testi geçiyor.
   graph aktif hikâyeyi korur; C API/PInvoke son yükleme tanısını sorgulayabilir.
 - SDL pencere input'u render katmanından global engine'e ulaşmaz; kendi runtime
   callback'i üzerinden advance/save/load/rewind ve pointer olaylarını taşır.
+- C API artık aynı süreçte birden çok canlı handle destekler. Her runtime kendi
+  VFS örneğini taşır; Window/Audio varsayılanları da global VFS yerine bağlı
+  runtime VFS'sini kullanır. SDL video ve audio alt sistemleri process-safe
+  lease yönetimiyle son kullanıcı kapanana kadar açık tutulur.
 - Native benchmark JSON şeması ve aynı ortam/fixture için yüzde farkı raporlayan
   karşılaştırıcı hazırdır; ilk sonuçlar baseline olarak saklanır.
 - Editor headless benchmark JSON'u graph drag, seçim, component değişimi,
@@ -42,8 +46,9 @@ içinden VFS graph yükleyen yerel standalone smoke testi geçiyor.
 - Editor/native benchmark setlerini aynı fixture ile biriktir; yeterli örnek
   oluşmadan otomatik performans-fail eşiği koyma. Native preview render ana
   editor maliyetidir; geniş render değişikliği önce ayrı profil kanıtı ister.
-- C API tek canlı handle ve host-thread sözleşmesini açık test/diagnostic ve
-  public dokümantasyonla tamamla.
+- Çoklu görünür SDL pencere için process-genel event kuyruğunu runtime/pencere
+  bazında dağıtan ayrı dispatcher ekle; mevcut event callback'i runtime-yerel
+  olsa da kuyruk izolasyonu henüz bu dilimde kapsam dışıdır.
 - GUI erişimli oturumda node/inspector görsel smoke; macOS/Xcode host'unda
   desktop staging/verifier/imzasız package smoke kapısını doğrula. Android/iOS
   host projeleri ve fiziksel cihaz doğrulaması daha sonraki platform kapsamıdır.

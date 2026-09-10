@@ -110,6 +110,8 @@ private:
     void applyChannelGains();
     void updateBgmTransition(float deltaSeconds);
     Rowl::VFS::VFSManager* m_vfs = nullptr;
+    std::shared_ptr<Rowl::VFS::VFSManager> m_ownedVfs;
+    bool m_audioLeaseHeld = false;
     Rowl::VFS::VFSManager& vfs() const;
 };
 

@@ -3,6 +3,7 @@
 #include "rowl/render/window.hpp"
 #include "rowl/render/aspect_guardian.hpp"
 #include "rowl/core/logger.hpp"
+#include "rowl/platform/sdl_subsystem_lease.hpp"
 #include "rowl/vfs/vfs.hpp"
 #include <SDL3/SDL.h>
 #include <filesystem>
@@ -74,7 +75,12 @@ std::vector<uint8_t> loadMsdfShaderCode() {
 } // namespace
 
 Window::Window(Rowl::VFS::VFSManager* vfs)
-    : m_vfs(vfs) {}
+    : m_vfs(vfs) {
+    if (!m_vfs) {
+        m_ownedVfs = std::make_shared<Rowl::VFS::VFSManager>();
+        m_vfs = m_ownedVfs.get();
+    }
+}
 
 Window::~Window() {
     if (m_initialized) {
@@ -83,11 +89,17 @@ Window::~Window() {
 }
 
 void Window::setVfs(Rowl::VFS::VFSManager* vfs) {
-    m_vfs = vfs;
+    if (vfs) {
+        m_ownedVfs.reset();
+        m_vfs = vfs;
+    } else {
+        m_ownedVfs = std::make_shared<Rowl::VFS::VFSManager>();
+        m_vfs = m_ownedVfs.get();
+    }
 }
 
 Rowl::VFS::VFSManager& Window::vfs() const {
-    return m_vfs ? *m_vfs : Rowl::VFS::VFSManager::instance();
+    return *m_vfs;
 }
 
 bool Window::initializeOffscreen(uint32_t width, uint32_t height) {
@@ -96,10 +108,11 @@ bool Window::initializeOffscreen(uint32_t width, uint32_t height) {
     ROWL_LOG_INFO("Initializing SDL3 Offscreen Surface & Software Renderer (" +
                   std::to_string(width) + "x" + std::to_string(height) + ")...");
 
-    if (!SDL_Init(SDL_INIT_VIDEO)) {
+    if (!Rowl::Platform::SdlSubsystemLease::acquire(SDL_INIT_VIDEO)) {
         ROWL_LOG_ERROR("SDL_Init(SDL_INIT_VIDEO) failed: " + std::string(SDL_GetError()));
         return false;
     }
+    m_videoLeaseHeld = true;
 
     m_width = width;
     m_height = height;
@@ -107,7 +120,8 @@ bool Window::initializeOffscreen(uint32_t width, uint32_t height) {
     m_offscreenSurface = SDL_CreateSurface(static_cast<int>(width), static_cast<int>(height), SDL_PIXELFORMAT_RGBA32);
     if (!m_offscreenSurface) {
         ROWL_LOG_ERROR("SDL_CreateSurface (offscreen) failed: " + std::string(SDL_GetError()));
-        SDL_Quit();
+        Rowl::Platform::SdlSubsystemLease::release(SDL_INIT_VIDEO);
+        m_videoLeaseHeld = false;
         return false;
     }
 
@@ -116,7 +130,8 @@ bool Window::initializeOffscreen(uint32_t width, uint32_t height) {
         ROWL_LOG_ERROR("SDL_CreateSoftwareRenderer failed: " + std::string(SDL_GetError()));
         SDL_DestroySurface(m_offscreenSurface);
         m_offscreenSurface = nullptr;
-        SDL_Quit();
+        Rowl::Platform::SdlSubsystemLease::release(SDL_INIT_VIDEO);
+        m_videoLeaseHeld = false;
         return false;
     }
 
@@ -141,10 +156,11 @@ bool Window::initialize(const std::string& title, uint32_t width, uint32_t heigh
 
     ROWL_LOG_INFO("Initializing SDL3 Windowing & Hardware Graphics Subsystem...");
 
-    if (!SDL_Init(SDL_INIT_VIDEO)) {
+    if (!Rowl::Platform::SdlSubsystemLease::acquire(SDL_INIT_VIDEO)) {
         ROWL_LOG_ERROR("SDL_Init(SDL_INIT_VIDEO) failed: " + std::string(SDL_GetError()));
         return false;
     }
+    m_videoLeaseHeld = true;
 
     m_width = width;
     m_height = height;
@@ -158,10 +174,10 @@ bool Window::initialize(const std::string& title, uint32_t width, uint32_t heigh
 
     if (!m_sdlWindow) {
         ROWL_LOG_ERROR("SDL_CreateWindow failed: " + std::string(SDL_GetError()));
-        SDL_Quit();
+        Rowl::Platform::SdlSubsystemLease::release(SDL_INIT_VIDEO);
+        m_videoLeaseHeld = false;
         return false;
     }
-
     // Keep SDL_Renderer command semantics for sprites/UI while using its GPU
     // backend, which permits an MSDF fragment state only around text draws.
     m_sdlRenderer = SDL_CreateGPURenderer(nullptr, m_sdlWindow);
@@ -173,7 +189,8 @@ bool Window::initialize(const std::string& title, uint32_t width, uint32_t heigh
         ROWL_LOG_ERROR("SDL_CreateRenderer failed: " + std::string(SDL_GetError()));
         SDL_DestroyWindow(m_sdlWindow);
         m_sdlWindow = nullptr;
-        SDL_Quit();
+        Rowl::Platform::SdlSubsystemLease::release(SDL_INIT_VIDEO);
+        m_videoLeaseHeld = false;
         return false;
     }
 
@@ -255,10 +272,11 @@ bool Window::initializeEmbedded(void* nativeHandle, uint32_t width, uint32_t hei
     ROWL_LOG_INFO("Initializing SDL3 in Embedded mode (native handle: " +
                   std::to_string(reinterpret_cast<uintptr_t>(nativeHandle)) + ")");
 
-    if (!SDL_Init(SDL_INIT_VIDEO)) {
+    if (!Rowl::Platform::SdlSubsystemLease::acquire(SDL_INIT_VIDEO)) {
         ROWL_LOG_ERROR("SDL_Init(SDL_INIT_VIDEO) failed: " + std::string(SDL_GetError()));
         return false;
     }
+    m_videoLeaseHeld = true;
 
     m_width  = width;
     m_height = height;
@@ -283,16 +301,17 @@ bool Window::initializeEmbedded(void* nativeHandle, uint32_t width, uint32_t hei
 
     if (!m_sdlWindow) {
         ROWL_LOG_ERROR("SDL_CreateWindowWithProperties (embedded) failed: " + std::string(SDL_GetError()));
-        SDL_Quit();
+        Rowl::Platform::SdlSubsystemLease::release(SDL_INIT_VIDEO);
+        m_videoLeaseHeld = false;
         return false;
     }
-
     m_sdlRenderer = SDL_CreateRenderer(m_sdlWindow, nullptr);
     if (!m_sdlRenderer) {
         ROWL_LOG_ERROR("SDL_CreateRenderer (embedded) failed: " + std::string(SDL_GetError()));
         SDL_DestroyWindow(m_sdlWindow);
         m_sdlWindow = nullptr;
-        SDL_Quit();
+        Rowl::Platform::SdlSubsystemLease::release(SDL_INIT_VIDEO);
+        m_videoLeaseHeld = false;
         return false;
     }
 
@@ -1031,13 +1050,15 @@ void Window::shutdown() {
         SDL_DestroyWindow(m_sdlWindow);
         m_sdlWindow = nullptr;
     }
-
     if (m_offscreenSurface) {
         SDL_DestroySurface(m_offscreenSurface);
         m_offscreenSurface = nullptr;
     }
 
-    SDL_Quit();
+    if (m_videoLeaseHeld) {
+        Rowl::Platform::SdlSubsystemLease::release(SDL_INIT_VIDEO);
+        m_videoLeaseHeld = false;
+    }
 
     m_isOpen = false;
     m_initialized = false;
