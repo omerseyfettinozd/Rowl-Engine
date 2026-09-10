@@ -1921,6 +1921,23 @@ void test_runtime_context_and_diagnostics() {
         }
         fs::remove(corruptGraph);
 
+        // Story Graph semantic validation error (empty nodes array)
+        const auto invalidGraph = fs::temp_directory_path() / "invalid_graph.json";
+        {
+            std::ofstream f(invalidGraph);
+            f << "{\"nodes\": []}";
+        }
+        if (engine.loadStoryGraphFromPath(invalidGraph.string())) {
+            std::cerr << "loadStoryGraphFromPath on empty nodes should fail" << std::endl;
+            exit(1);
+        }
+        res = engine.getContext()->getLastResult();
+        if (res.code != Rowl::Core::RuntimeErrorCode::ValidationError) {
+            std::cerr << "loadStoryGraphFromPath semantic error did not set ValidationError (got " << res.rawCode() << ")" << std::endl;
+            exit(1);
+        }
+        fs::remove(invalidGraph);
+
         // Scripting invalid syntax
         if (engine.executeScript("this is definitely not lua syntax @#$!")) {
             std::cerr << "executeScript with bad syntax should fail" << std::endl;
@@ -1954,6 +1971,17 @@ void test_runtime_context_and_diagnostics() {
             exit(1);
         }
 
+        // Valid condition evaluating to false must NOT be contaminated by previous errors
+        if (engine.evaluateCondition("1 == 2")) {
+            std::cerr << "evaluateCondition(1 == 2) should return false" << std::endl;
+            exit(1);
+        }
+        res = engine.getContext()->getLastResult();
+        if (!res.isOk()) {
+            std::cerr << "evaluateCondition(1 == 2) contaminated with error: " << res.message << std::endl;
+            exit(1);
+        }
+
         engine.shutdown();
         fs::remove_all(saveDir);
         TEST_PASS("Engine Structured Results for Save, Load, Graph, and Scripting");
@@ -1984,6 +2012,25 @@ void test_runtime_context_and_diagnostics() {
         }
         if (!RowlEngine_Init(h, 320, 180, 0)) {
             std::cerr << "RowlEngine_Init failed in diagnostic test" << std::endl;
+            exit(1);
+        }
+
+        // Null string arguments to live handle must set InvalidArgument
+        if (RowlEngine_ExecuteScript(h, nullptr) != 0) {
+            std::cerr << "RowlEngine_ExecuteScript(h, nullptr) should return 0" << std::endl;
+            exit(1);
+        }
+        if (RowlEngine_GetLastResultCode(h) != 2) { // InvalidArgument = 2
+            std::cerr << "Expected InvalidArgument (2) on null script string, got: " << RowlEngine_GetLastResultCode(h) << std::endl;
+            exit(1);
+        }
+
+        if (RowlEngine_LoadStoryGraphFromVfs(h, nullptr) != 0) {
+            std::cerr << "RowlEngine_LoadStoryGraphFromVfs(h, nullptr) should return 0" << std::endl;
+            exit(1);
+        }
+        if (RowlEngine_GetLastResultCode(h) != 2) { // InvalidArgument = 2
+            std::cerr << "Expected InvalidArgument (2) on null VFS path, got: " << RowlEngine_GetLastResultCode(h) << std::endl;
             exit(1);
         }
 

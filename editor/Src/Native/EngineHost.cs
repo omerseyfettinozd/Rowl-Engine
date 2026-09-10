@@ -517,6 +517,30 @@ namespace RowlEngine.Editor.Native
         public bool ExecuteScript(string scriptCode)
             => _handle != IntPtr.Zero && NativeBridge.RowlEngine_ExecuteScript(_handle, scriptCode) != 0;
 
+        // ── Structured Runtime Results & Diagnostics ──────────────────────────
+
+        public RuntimeErrorCode LastResultCode => _handle == IntPtr.Zero
+            ? RuntimeErrorCode.InvalidHandle
+            : (RuntimeErrorCode)NativeBridge.RowlEngine_GetLastResultCode(_handle);
+
+        public string LastResultOperation => _handle == IntPtr.Zero
+            ? "none"
+            : NativeBridge.PtrToString(NativeBridge.RowlEngine_GetLastResultOperation(_handle));
+
+        public string LastResultMessage => _handle == IntPtr.Zero
+            ? "Invalid or uninitialized engine handle"
+            : NativeBridge.PtrToString(NativeBridge.RowlEngine_GetLastResultMessage(_handle));
+
+        public string LastResultTarget => _handle == IntPtr.Zero
+            ? string.Empty
+            : NativeBridge.PtrToString(NativeBridge.RowlEngine_GetLastResultTarget(_handle));
+
+        public void ClearLastResult()
+        {
+            if (_handle != IntPtr.Zero)
+                NativeBridge.RowlEngine_ClearLastResult(_handle);
+        }
+
         // ── Disposal ──────────────────────────────────────────────────────────
 
         public void Dispose()
@@ -535,6 +559,23 @@ namespace RowlEngine.Editor.Native
             RenderTargetBitmap = null;
             bitmap?.Dispose();
         }
+    }
+
+    public enum RuntimeErrorCode
+    {
+        Ok = 0,
+        InvalidHandle = 1,
+        InvalidArgument = 2,
+        FileNotFound = 3,
+        FileTooLarge = 4,
+        ParseError = 5,
+        ValidationError = 6,
+        IoError = 7,
+        ScriptSyntaxError = 8,
+        ScriptRuntimeError = 9,
+        AudioDecodeError = 10,
+        StateError = 11,
+        UnknownError = 99
     }
 
     public sealed class ScriptRuntimeDiagnostic

@@ -647,11 +647,28 @@ namespace RowlEngine.Editor
                 if (host.HasSaveSlot(10))
                     throw new Exception("EngineHost.DeleteSaveSlot(10) failed");
 
+                // Structured Diagnostics Verification via EngineHost
+                if (host.SaveGameSlot(-3))
+                    throw new Exception("SaveGameSlot(-3) should fail");
+                if (host.LastResultCode != RowlEngine.Editor.Native.RuntimeErrorCode.InvalidArgument ||
+                    host.LastResultOperation != "save_game_slot" ||
+                    host.LastResultTarget != "-3")
+                    throw new Exception($"Expected InvalidArgument diagnostic for slot -3, got {host.LastResultCode} ({host.LastResultOperation})");
+
+                if (host.LoadGameSlot(99))
+                    throw new Exception("LoadGameSlot(99) should fail");
+                if (host.LastResultCode != RowlEngine.Editor.Native.RuntimeErrorCode.FileNotFound)
+                    throw new Exception($"Expected FileNotFound diagnostic for slot 99, got {host.LastResultCode}");
+
+                host.ClearLastResult();
+                if (host.LastResultCode != RowlEngine.Editor.Native.RuntimeErrorCode.Ok)
+                    throw new Exception("ClearLastResult did not reset LastResultCode to Ok");
+
                 // Rewind
                 host.Rewind(1);
             }
 
-            Console.WriteLine("  ✅ [PASS] Variable/Condition components, serialization, and P/Invoke Save/Load slots verified");
+            Console.WriteLine("  ✅ [PASS] Variable/Condition components, serialization, and P/Invoke Save/Load slots + Structured Diagnostics verified");
 
             // ── Test 9b: Player-local settings profile ───────────────────────
             Console.WriteLine("\n📌 [Test 9b]: Player settings profile persistence and bounds...");

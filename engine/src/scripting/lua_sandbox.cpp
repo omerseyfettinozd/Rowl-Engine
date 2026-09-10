@@ -228,6 +228,7 @@ double LuaSandbox::getGlobalNumber(const std::string& key, double defaultValue) 
 }
 
 bool LuaSandbox::evaluateCondition(const std::string& conditionExpr) {
+    m_lastError.clear();
     if (conditionExpr.empty() || conditionExpr == "true" || conditionExpr == "1") {
         return true;
     }

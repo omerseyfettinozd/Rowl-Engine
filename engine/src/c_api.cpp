@@ -312,15 +312,47 @@ void RowlEngine_UpdateSceneFromJson(
 }
 
 void RowlEngine_LoadStoryGraph(RowlEngineHandle handle, const char* jsonPath) {
-    if (!isLiveHandle(handle) || !jsonPath) return;
+    if (!isLiveHandle(handle)) return;
+    if (!jsonPath || !*jsonPath) {
+        invokeNoexcept([&] {
+            if (auto* engine = toEngine(handle)) {
+                if (auto ctx = engine->getContext()) {
+                    ctx->setError(Rowl::Core::RuntimeErrorCode::InvalidArgument,
+                                  "Story graph path is null or empty",
+                                  "load_story_graph_path", "");
+                }
+            }
+        });
+        return;
+    }
     // Engine'in path'i geçici olarak override et ve graph'i yükle
-    invokeNoexcept([&] { toEngine(handle)->loadStoryGraphFromPath(jsonPath); });
+    invokeNoexcept([&] {
+        if (auto* engine = toEngine(handle)) {
+            engine->loadStoryGraphFromPath(jsonPath);
+        }
+    });
 }
 
 int RowlEngine_LoadStoryGraphFromVfs(RowlEngineHandle handle, const char* vfsPath) {
-    if (!isLiveHandle(handle) || !vfsPath || !*vfsPath) return 0;
+    if (!isLiveHandle(handle)) return 0;
+    if (!vfsPath || !*vfsPath) {
+        invokeNoexcept([&] {
+            if (auto* engine = toEngine(handle)) {
+                if (auto ctx = engine->getContext()) {
+                    ctx->setError(Rowl::Core::RuntimeErrorCode::InvalidArgument,
+                                  "Story graph VFS path is null or empty",
+                                  "load_story_graph_vfs", "");
+                }
+            }
+        });
+        return 0;
+    }
     int loaded = 0;
-    invokeNoexcept([&] { loaded = toEngine(handle)->loadStoryGraphFromVfs(vfsPath) ? 1 : 0; });
+    invokeNoexcept([&] {
+        if (auto* engine = toEngine(handle)) {
+            loaded = engine->loadStoryGraphFromVfs(vfsPath) ? 1 : 0;
+        }
+    });
     return loaded;
 }
 
@@ -429,9 +461,23 @@ void RowlEngine_PlayAudio(RowlEngineHandle handle,
                           const char* assetPath,
                           int channelType,
                           int filterType) {
-    if (!isLiveHandle(handle) || !assetPath) return;
+    if (!isLiveHandle(handle)) return;
+    if (!assetPath || !*assetPath) {
+        invokeNoexcept([&] {
+            if (auto* engine = toEngine(handle)) {
+                if (auto ctx = engine->getContext()) {
+                    ctx->setError(Rowl::Core::RuntimeErrorCode::InvalidArgument,
+                                  "Audio asset path is null or empty",
+                                  "play_audio", "");
+                }
+            }
+        });
+        return;
+    }
     invokeNoexcept([&] {
-        auto* audio = toEngine(handle)->getAudio();
+        auto* engine = toEngine(handle);
+        if (!engine) return;
+        auto* audio = engine->getAudio();
         if (!audio) return;
         auto channel = (channelType == 0) ? Rowl::Audio::AudioChannelType::Bgm :
                        (channelType == 1) ? Rowl::Audio::AudioChannelType::Voice :
@@ -441,6 +487,12 @@ void RowlEngine_PlayAudio(RowlEngineHandle handle,
                        (filterType == 3)  ? Rowl::Audio::DSPFilterType::UnderwaterLowPass :
                                             Rowl::Audio::DSPFilterType::Normal;
         audio->playAudio(assetPath, channel, filter);
+        if (!audio->getLastError().empty()) {
+            if (auto ctx = engine->getContext()) {
+                ctx->setError(Rowl::Core::RuntimeErrorCode::AudioDecodeError,
+                              audio->getLastError(), "play_audio", assetPath);
+            }
+        }
     });
 }
 
@@ -649,16 +701,31 @@ int RowlEngine_EvaluateCondition(RowlEngineHandle handle, const char* conditionE
 }
 
 int RowlEngine_ExecuteScript(RowlEngineHandle handle, const char* scriptCode) {
-    if (!isLiveHandle(handle) || !scriptCode) return 0;
+    if (!isLiveHandle(handle)) return 0;
+    if (!scriptCode) {
+        invokeNoexcept([&] {
+            if (auto* engine = toEngine(handle)) {
+                if (auto ctx = engine->getContext()) {
+                    ctx->setError(Rowl::Core::RuntimeErrorCode::InvalidArgument,
+                                  "Script code string pointer is null",
+                                  "execute_script", "");
+                }
+            }
+        });
+        return 0;
+    }
     return invokeNoexcept<int>([&] {
-        return toEngine(handle)->executeScript(scriptCode) ? 1 : 0;
+        auto* engine = toEngine(handle);
+        return (engine && engine->executeScript(scriptCode)) ? 1 : 0;
     }, 0);
 }
 
 int32_t RowlEngine_GetLastResultCode(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return static_cast<int32_t>(Rowl::Core::RuntimeErrorCode::InvalidHandle);
     return invokeNoexcept<int32_t>([&] {
-        return toEngine(handle)->getContext()->getLastResult().rawCode();
+        auto* engine = toEngine(handle);
+        if (!engine || !engine->getContext()) return static_cast<int32_t>(Rowl::Core::RuntimeErrorCode::UnknownError);
+        return engine->getContext()->getLastResult().rawCode();
     }, static_cast<int32_t>(Rowl::Core::RuntimeErrorCode::UnknownError));
 }
 
@@ -670,7 +737,9 @@ const char* RowlEngine_GetLastResultOperation(RowlEngineHandle handle) {
         return buf.c_str();
     }
     return invokeNoexcept<const char*>([&] {
-        buf = toEngine(handle)->getContext()->getLastResult().operation;
+        auto* engine = toEngine(handle);
+        if (!engine || !engine->getContext()) return "unknown";
+        buf = engine->getContext()->getLastResult().operation;
         return buf.c_str();
     }, "unknown");
 }
@@ -683,7 +752,9 @@ const char* RowlEngine_GetLastResultMessage(RowlEngineHandle handle) {
         return buf.c_str();
     }
     return invokeNoexcept<const char*>([&] {
-        buf = toEngine(handle)->getContext()->getLastResult().message;
+        auto* engine = toEngine(handle);
+        if (!engine || !engine->getContext()) return "Internal error occurred";
+        buf = engine->getContext()->getLastResult().message;
         return buf.c_str();
     }, "Internal error occurred");
 }
@@ -693,7 +764,9 @@ const char* RowlEngine_GetLastResultTarget(RowlEngineHandle handle) {
     buf.clear();
     if (!isLiveHandle(handle)) return buf.c_str();
     return invokeNoexcept<const char*>([&] {
-        buf = toEngine(handle)->getContext()->getLastResult().target;
+        auto* engine = toEngine(handle);
+        if (!engine || !engine->getContext()) return "";
+        buf = engine->getContext()->getLastResult().target;
         return buf.c_str();
     }, "");
 }
@@ -701,7 +774,10 @@ const char* RowlEngine_GetLastResultTarget(RowlEngineHandle handle) {
 void RowlEngine_ClearLastResult(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return;
     invokeNoexcept([&] {
-        toEngine(handle)->getContext()->clearResult();
+        auto* engine = toEngine(handle);
+        if (engine && engine->getContext()) {
+            engine->getContext()->clearResult();
+        }
     });
 }
 
