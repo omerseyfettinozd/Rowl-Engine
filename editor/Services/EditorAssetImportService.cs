@@ -87,4 +87,28 @@ public static class EditorAssetImportService
         log?.Invoke($"📥 Auto-imported image '{fileName}' into Assets/images/");
         return fileName;
     }
+
+    /// <summary>
+    /// Copies an external audio file into Assets/audio/ if not already present,
+    /// and returns the local relative filename.
+    /// </summary>
+    public static string ImportAudioFile(string fullPath, string assetsRoot, Action<string>? log = null)
+    {
+        if (string.IsNullOrWhiteSpace(fullPath) || string.IsNullOrWhiteSpace(assetsRoot)) return string.Empty;
+        if (!File.Exists(fullPath)) return string.Empty;
+
+        string audioDir = Path.Combine(assetsRoot, "audio");
+        Directory.CreateDirectory(audioDir);
+
+        string fileName = Path.GetFileName(fullPath);
+        string destPath = Path.Combine(audioDir, fileName);
+
+        if (!string.Equals(Path.GetFullPath(fullPath), Path.GetFullPath(destPath), StringComparison.OrdinalIgnoreCase))
+        {
+            File.Copy(fullPath, destPath, overwrite: true);
+        }
+
+        log?.Invoke($"📥 Auto-imported audio '{fileName}' into Assets/audio/");
+        return fileName;
+    }
 }

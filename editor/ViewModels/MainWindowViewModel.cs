@@ -143,39 +143,15 @@ namespace RowlEngine.Editor.ViewModels
         [RelayCommand]
         private async Task OpenSettings()
         {
-            var dialog = new Views.Dialogs.SettingsDialog(Settings);
-            if (TopLevelHint is Window parentWindow)
-                await dialog.ShowDialog(parentWindow);
-            else
-                dialog.Show();
+            await EditorModalDialogCoordinator.OpenSettingsAsync(Settings, TopLevelHint as Window);
         }
 
         [RelayCommand]
         public async Task OpenProjectHubAsync()
         {
-            if (TopLevelHint is Window currentWindow && !await ResolveUnsavedChangesAsync(currentWindow)) return;
-            if (Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop)
-            {
-                var hubVm = new ProjectHubViewModel();
-                var hubWin = new Views.ProjectHubWindow(hubVm);
-                hubVm.ProjectOpened += (path) =>
-                {
-                    var newMain = new Views.MainWindow(path);
-                    desktop.MainWindow = newMain;
-                    newMain.Show();
-                    hubWin.Close();
-                };
-                desktop.MainWindow = hubWin;
-                hubWin.Show();
-                if (TopLevelHint is Window curWin)
-                {
-                    curWin.Close();
-                }
-                else
-                {
-                    desktop.Windows.FirstOrDefault(w => w is Views.MainWindow)?.Close();
-                }
-            }
+            await EditorModalDialogCoordinator.OpenProjectHubAsync(
+                TopLevelHint as Window,
+                () => TopLevelHint is Window curWin ? ResolveUnsavedChangesAsync(curWin) : Task.FromResult(true));
         }
 
         [RelayCommand]
@@ -1242,6 +1218,15 @@ namespace RowlEngine.Editor.ViewModels
         }
 
         /// <summary>
+        /// Copies an external audio file into Assets/audio/ if it is not already in the project,
+        /// and returns the local relative filename.
+        /// </summary>
+        public string ImportAudioFileToProject(string fullPath)
+        {
+            return EditorAssetImportService.ImportAudioFile(fullPath, MainWindowViewModel.AssetsPath, AppendLog);
+        }
+
+        /// <summary>
         /// Opens an OS file picker dialog to let the user select an image file for a visual component.
         /// Automatically copies external images into Assets/images/ for project portability.
         /// </summary>
@@ -1261,6 +1246,25 @@ namespace RowlEngine.Editor.ViewModels
                     if (EngineHost.IsInitialized && SelectedNode != null)
                         PushSceneToEngine(SelectedNode);
                 },
+                AppendLog);
+        }
+
+        /// <summary>
+        /// Opens an OS file picker dialog to let the user select an audio file for an audio component.
+        /// Automatically copies external audio into Assets/audio/ for project portability.
+        /// </summary>
+        [RelayCommand]
+        public async Task SelectAudioForComponentAsync(AudioComponentViewModel? component)
+        {
+            var window = (Avalonia.Application.Current?.ApplicationLifetime as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.MainWindow;
+            await EditorAudioAssetPickerService.SelectAudioForComponentAsync(
+                component,
+                "bgm",
+                window,
+                MainWindowViewModel.AssetsPath,
+                ImportAudioFileToProject,
+                AssetBrowserViewModel.RefreshAssets,
+                ScheduleSave,
                 AppendLog);
         }
 

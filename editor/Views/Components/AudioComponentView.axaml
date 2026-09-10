@@ -29,6 +29,29 @@
 
             <!-- Component Body -->
             <StackPanel IsVisible="{Binding IsExpanded}" Spacing="8" Margin="10,8">
+                <!-- BGM Track -->
+                <StackPanel Spacing="4">
+                    <TextBlock Text="BGM Track (Arka Plan Müziği)" FontSize="11" Foreground="{DynamicResource MutedText}"/>
+                    <TextBox Text="{Binding BgmTrack}" Watermark="Örn: bgm_theme.ogg"
+                             Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}"/>
+                </StackPanel>
+
+                <!-- SFX Track -->
+                <StackPanel Spacing="4">
+                    <TextBlock Text="SFX Track (Ses Efekti)" FontSize="11" Foreground="{DynamicResource MutedText}"/>
+                    <TextBox Text="{Binding SfxTrack}" Watermark="Örn: sfx_click.wav"
+                             Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}"/>
+                </StackPanel>
+
+                <!-- Volume Slider -->
+                <StackPanel Spacing="4">
+                    <Grid ColumnDefinitions="*, Auto">
+                        <TextBlock Grid.Column="0" Text="Ses Seviyesi (Volume)" FontSize="11" Foreground="{DynamicResource MutedText}"/>
+                        <TextBlock Grid.Column="1" Text="{Binding Volume, StringFormat={}{0:P0}}" FontSize="11" Foreground="{DynamicResource MutedText}"/>
+                    </Grid>
+                    <Slider Minimum="0" Maximum="1" Value="{Binding Volume}" SmallChange="0.05" LargeChange="0.1"/>
+                </StackPanel>
+
                 <StackPanel Spacing="4">
                     <TextBlock Text="DSP Filter" FontSize="11" Foreground="{DynamicResource MutedText}"/>
                     <ComboBox SelectedItem="{Binding DspFilter}" HorizontalAlignment="Stretch" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}">
