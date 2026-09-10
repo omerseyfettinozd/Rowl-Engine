@@ -1023,20 +1023,16 @@ namespace RowlEngine.Editor.ViewModels
 
         public async Task<bool> ConfirmDeleteSaveSlotAsync(int index)
         {
-            if (TopLevelHint is not Window window) return false;
-            var dialog = new Views.Dialogs.ConfirmDialog("Kayıt Slotunu Sil",
-                $"Slot {index + 1} içindeki kayıt kalıcı olarak silinecek.", "Sil", true);
-            return await dialog.ShowDialog<bool?>(window) == true;
+            return await EditorProjectLifecycleCoordinator.ConfirmDeleteSaveSlotAsync(TopLevelHint as Window, index);
         }
 
         public async Task<bool> ResolveUnsavedChangesAsync(Window window)
         {
-            if (!IsProjectDirty) return true;
-            var result = await new Views.Dialogs.UnsavedChangesDialog().ShowDialog<string?>(window);
-            if (result == "discard") { IsProjectDirty = false; return true; }
-            if (result != "save") return false;
-            SaveProject();
-            return !IsProjectDirty;
+            return await EditorProjectLifecycleCoordinator.ResolveUnsavedChangesAsync(
+                window,
+                SaveProject,
+                () => IsProjectDirty,
+                dirty => IsProjectDirty = dirty);
         }
 
         [RelayCommand]
@@ -1252,59 +1248,20 @@ namespace RowlEngine.Editor.ViewModels
         [RelayCommand]
         public async Task SelectImageForComponentAsync(NodeComponentViewModel? component)
         {
-            if (component == null) return;
-
-            try
-            {
-                var window = (Avalonia.Application.Current?.ApplicationLifetime as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.MainWindow;
-                if (window == null) return;
-
-                string assetsImagesFolder = System.IO.Path.Combine(MainWindowViewModel.AssetsPath, "images");
-                System.IO.Directory.CreateDirectory(assetsImagesFolder);
-                var startFolder = await window.StorageProvider.TryGetFolderFromPathAsync(new Uri(assetsImagesFolder));
-
-                var files = await window.StorageProvider.OpenFilePickerAsync(new Avalonia.Platform.Storage.FilePickerOpenOptions
+            var window = (Avalonia.Application.Current?.ApplicationLifetime as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.MainWindow;
+            await EditorVisualAssetPickerService.SelectImageForComponentAsync(
+                component,
+                window,
+                MainWindowViewModel.AssetsPath,
+                ImportImageFileToProject,
+                AssetBrowserViewModel.RefreshAssets,
+                ScheduleSave,
+                () =>
                 {
-                    Title = "Select Image Asset (Will auto-copy to project Assets/images)",
-                    SuggestedStartLocation = startFolder,
-                    AllowMultiple = false,
-                    FileTypeFilter = new[]
-                    {
-                        new Avalonia.Platform.Storage.FilePickerFileType("Image Files (*.png, *.jpg, *.jpeg, *.bmp, *.webp, *.tga)")
-                        {
-                            Patterns = new[] { "*.png", "*.jpg", "*.jpeg", "*.bmp", "*.webp", "*.tga" }
-                        }
-                    }
-                });
-
-                if (files != null && files.Count > 0)
-                {
-                    string fullPath = files[0].Path.LocalPath;
-                    string fileName = ImportImageFileToProject(fullPath);
-
-                    if (component is CharacterComponentViewModel charComp)
-                    {
-                        charComp.Sprite = fileName;
-                        charComp.RefreshBitmap();
-                        AppendLog($"🖼️ Selected Sprite '{fileName}' for Character Component (Auto-copied to Assets/images)");
-                    }
-                    else if (component is BackgroundComponentViewModel bgComp)
-                    {
-                        bgComp.Texture = fileName;
-                        bgComp.RefreshBitmap();
-                        AppendLog($"🖼️ Selected Texture '{fileName}' for Background Component (Auto-copied to Assets/images)");
-                    }
-
-                    AssetBrowserViewModel.RefreshAssets();
-                    ScheduleSave();
                     if (EngineHost.IsInitialized && SelectedNode != null)
                         PushSceneToEngine(SelectedNode);
-                }
-            }
-            catch (Exception ex)
-            {
-                AppendLog($"⚠️ Failed to pick image file: {ex.Message}");
-            }
+                },
+                AppendLog);
         }
 
         /// <summary>
@@ -1435,21 +1392,7 @@ namespace RowlEngine.Editor.ViewModels
         [RelayCommand]
         public void OpenProjectFolder()
         {
-            try
-            {
-                string rootDir = ProjectRoot;
-                if (OperatingSystem.IsLinux())
-                    System.Diagnostics.Process.Start("xdg-open", rootDir);
-                else if (OperatingSystem.IsWindows())
-                    System.Diagnostics.Process.Start("explorer.exe", rootDir);
-                else if (OperatingSystem.IsMacOS())
-                    System.Diagnostics.Process.Start("open", rootDir);
-                AppendLog($"📂 Proje klasörü açıldı: {rootDir}");
-            }
-            catch (Exception ex)
-            {
-                AppendLog($"⚠️ Klasör açılamadı: {ex.Message}");
-            }
+            EditorProjectLifecycleCoordinator.OpenProjectFolder(ProjectRoot, AppendLog);
         }
 
         /// <summary>
@@ -1478,20 +1421,10 @@ namespace RowlEngine.Editor.ViewModels
                 }
 
                 string selectedDir = folders[0].Path.LocalPath;
-                if (!ProjectOpenCoordinator.TryResolve(selectedDir, out var project))
-                {
-                    AppendLog($"⚠️ Seçilen klasörde geçerli bir Rowl Engine projesi bulunamadı.");
-                    AppendLog($"   Beklenen yapı: [KlasörAdı]/Assets/json/full_story_graph.json");
-                    return;
-                }
-
-                string previousProjectRoot = ProjectRoot;
-                string previousProjectPath = CurrentProjectPath;
-
-                bool loaded = ProjectOpenCoordinator.Switch(
-                    project!,
-                    previousProjectRoot,
-                    previousProjectPath,
+                var result = EditorProjectLifecycleCoordinator.ExecuteOpenProject(
+                    selectedDir,
+                    ProjectRoot,
+                    CurrentProjectPath,
                     AssetBitmapCache.Clear,
                     (root, path) =>
                     {
@@ -1504,22 +1437,19 @@ namespace RowlEngine.Editor.ViewModels
                     {
                         foreach (var node in Nodes) node.RefreshBitmaps();
                     },
-                    AssetBrowserViewModel.RefreshAssets);
-                if (loaded)
+                    AssetBrowserViewModel.RefreshAssets,
+                    AppendLog);
+
+                if (result.Succeeded)
                 {
                     ProjectRuntimeSettings = ProjectRuntimeSettingsService.Load(Path.Combine(ProjectRoot, "project.rowlproj"));
                     LoadProjectRuntimeSettingsIntoEditor();
                     SaveSlotsViewModel.Refresh();
-                    AppendLog($"📂 [PROJE AÇILDI] {project!.RootPath}");
                     AppendLog($"   📊 {Nodes.Count} düğüm, {Connections.Count} bağlantı yüklendi.");
 
                     // Select first node if available
                     if (Nodes.Count > 0)
                         SelectedNode = Nodes[0];
-                }
-                else
-                {
-                    AppendLog($"⚠️ Hikaye grafiği yüklenemedi: {project!.GraphFilePath}");
                 }
             }
             catch (Exception ex)
@@ -1549,14 +1479,8 @@ namespace RowlEngine.Editor.ViewModels
                 if (folders != null && folders.Count > 0)
                 {
                     string selectedDir = folders[0].Path.LocalPath;
-
-                    // Create a timestamped subfolder inside the selected directory
-                    string saveFolderName = $"RowlProject_{DateTime.Now:yyyy-MM-dd_HH-mm}";
-                    string targetDir = Path.Combine(selectedDir, saveFolderName);
-                    Directory.CreateDirectory(targetDir);
-
+                    string targetDir = EditorProjectLifecycleCoordinator.GenerateSaveAsTargetDirectory(selectedDir);
                     SaveProjectToDirectory(targetDir);
-                    AppendLog($"💾 [FARKLI KAYDET] Proje başarıyla kopyalandı: {targetDir}");
                 }
                 else
                 {
@@ -1575,12 +1499,13 @@ namespace RowlEngine.Editor.ViewModels
         /// </summary>
         public void SaveProjectToDirectory(string targetDir)
         {
-            ProjectSaveAsCoordinator.SaveProjectCopy(
+            EditorProjectLifecycleCoordinator.ExecuteSaveAs(
                 ProjectRoot,
                 targetDir,
                 Nodes.Count,
                 GetStartNode()?.Id ?? 101,
-                SaveProject);
+                SaveProject,
+                AppendLog);
         }
 
         /// <summary>
