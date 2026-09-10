@@ -396,6 +396,11 @@ bool Engine::handlePointerDown(float physicalX, float physicalY) {
     const auto metrics = Rowl::Render::AspectGuardian::calculateViewport(
         m_window->getWidth(), m_window->getHeight(), 1920, 1080);
     if (metrics.scaleFactor <= 0.0f) return false;
+    // Letterbox/pillarbox margins are not story canvas. Consume input there so
+    // the caller does not turn a bezel tap into an accidental advance.
+    if (!Rowl::Render::AspectGuardian::containsPhysicalPoint(physicalX, physicalY, metrics)) {
+        return true;
+    }
     const float x = (physicalX - static_cast<float>(metrics.x)) / metrics.scaleFactor;
     const float y = (physicalY - static_cast<float>(metrics.y)) / metrics.scaleFactor;
     for (auto it = m_activeChoiceButtons.rbegin(); it != m_activeChoiceButtons.rend(); ++it) {

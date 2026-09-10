@@ -40,4 +40,12 @@ void AspectGuardian::virtualToPhysical(
     outPhysY = static_cast<float>(metrics.y) + (virtY * metrics.scaleFactor);
 }
 
+bool AspectGuardian::containsPhysicalPoint(
+    float physicalX, float physicalY, const ViewportMetrics& metrics) {
+    return physicalX >= static_cast<float>(metrics.x) &&
+           physicalY >= static_cast<float>(metrics.y) &&
+           physicalX < static_cast<float>(metrics.x + metrics.width) &&
+           physicalY < static_cast<float>(metrics.y + metrics.height);
+}
+
 } // namespace Rowl::Render

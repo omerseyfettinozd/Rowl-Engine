@@ -31,6 +31,12 @@ public:
         float virtX, float virtY, const ViewportMetrics& metrics,
         float& outPhysX, float& outPhysY
     );
+
+    /// Returns true only for coordinates inside the rendered virtual canvas,
+    /// excluding letterbox or pillarbox margins.
+    static bool containsPhysicalPoint(
+        float physicalX, float physicalY, const ViewportMetrics& metrics
+    );
 };
 
 } // namespace Rowl::Render

@@ -101,6 +101,14 @@ void test_aspect_guardian() {
         exit(1);
     }
     TEST_PASS("Virtual to Physical Coordinate Projection");
+
+    const auto portrait = Rowl::Render::AspectGuardian::calculateViewport(1080, 1920, 1920, 1080);
+    if (Rowl::Render::AspectGuardian::containsPhysicalPoint(540.0f, 100.0f, portrait) ||
+        !Rowl::Render::AspectGuardian::containsPhysicalPoint(540.0f, 960.0f, portrait)) {
+        std::cerr << "Portrait letterbox hit-test bounds mismatch" << std::endl;
+        exit(1);
+    }
+    TEST_PASS("Portrait Letterbox Input Bounds");
 }
 
 void test_msdf_renderer() {
@@ -1297,6 +1305,17 @@ void test_native_c_api() {
         std::cerr << "Choice button pointer hit-test routing failed" << std::endl;
         exit(1);
     }
+    RowlEngine_LoadStoryGraph(handle, graphPath.string().c_str());
+    RowlEngine_ResizeViewport(handle, 1080, 1920);
+    if (RowlEngine_PointerDown(handle, 540.0f, 100.0f) != 1 || RowlEngine_GetCurrentNodeId(handle) != 101) {
+        std::cerr << "Letterbox margin pointer advanced the story" << std::endl;
+        exit(1);
+    }
+    if (RowlEngine_PointerDown(handle, 394.0f, 1005.0f) != 1 || RowlEngine_GetCurrentNodeId(handle) != 103) {
+        std::cerr << "Portrait viewport pointer did not route to the choice" << std::endl;
+        exit(1);
+    }
+    RowlEngine_ResizeViewport(handle, 1920, 1080);
     RowlEngine_LoadStoryGraph(handle, graphPath.string().c_str());
     if (RowlEngine_SelectChoice(handle, "go_right") != 1 || RowlEngine_GetCurrentNodeId(handle) != 103) {
         std::cerr << "Stable choice ID routing failed" << std::endl;
