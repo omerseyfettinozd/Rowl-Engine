@@ -628,6 +628,8 @@ namespace RowlEngine.Editor
             }
             if (host.IsInitialized)
             {
+                if (host.LastFrameTextureLoadMilliseconds < 0 || host.LastFrameNonTextureRenderMilliseconds < 0)
+                    throw new Exception("Native first-frame profiling telemetry returned an invalid duration");
                 host.SetProjectDirectory(testProjectRoot);
                 host.SetVariable("test_affinity", "99");
                 string readAffinity = host.GetVariable("test_affinity");

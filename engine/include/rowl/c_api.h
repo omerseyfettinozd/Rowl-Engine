@@ -157,6 +157,12 @@ ROWL_API uint64_t RowlEngine_GetTextureCacheBudgetBytes(RowlEngineHandle handle)
 /** Returns the number of LRU texture evictions since the last cache clear. */
 ROWL_API uint64_t RowlEngine_GetTextureCacheEvictionCount(RowlEngineHandle handle);
 
+/** Returns texture decode/upload work measured during the most recent rendered frame. */
+ROWL_API double RowlEngine_GetLastFrameTextureLoadMilliseconds(RowlEngineHandle handle);
+
+/** Returns non-texture renderer work measured during the most recent rendered frame. */
+ROWL_API double RowlEngine_GetLastFrameNonTextureRenderMilliseconds(RowlEngineHandle handle);
+
 /**
  * Sets the decoded texture-cache budget in bytes. Values below 1 MiB clamp to
  * 1 MiB; textures that cannot fit are rejected without disturbing live state.

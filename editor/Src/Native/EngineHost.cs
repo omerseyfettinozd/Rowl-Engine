@@ -73,6 +73,16 @@ namespace RowlEngine.Editor.Native
             ? 0UL
             : NativeBridge.RowlEngine_GetTextureCacheEvictionCount(_handle);
 
+        /// <summary>Texture decode and upload work from the latest rendered frame.</summary>
+        public double LastFrameTextureLoadMilliseconds => _handle == IntPtr.Zero
+            ? 0.0
+            : NativeBridge.RowlEngine_GetLastFrameTextureLoadMilliseconds(_handle);
+
+        /// <summary>Non-texture renderer work from the latest rendered frame.</summary>
+        public double LastFrameNonTextureRenderMilliseconds => _handle == IntPtr.Zero
+            ? 0.0
+            : NativeBridge.RowlEngine_GetLastFrameNonTextureRenderMilliseconds(_handle);
+
         public IReadOnlyList<ScriptRuntimeDiagnostic> ScriptRuntimeDiagnostics { get; private set; }
             = Array.Empty<ScriptRuntimeDiagnostic>();
 

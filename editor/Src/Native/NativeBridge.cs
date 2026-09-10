@@ -75,6 +75,12 @@ namespace RowlEngine.Editor.Native
         internal static extern ulong RowlEngine_GetTextureCacheEvictionCount(IntPtr handle);
 
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern double RowlEngine_GetLastFrameTextureLoadMilliseconds(IntPtr handle);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern double RowlEngine_GetLastFrameNonTextureRenderMilliseconds(IntPtr handle);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
         internal static extern void RowlEngine_SetPlayState(
             IntPtr handle,
             int isPlaying);

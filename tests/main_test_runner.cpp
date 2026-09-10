@@ -1678,7 +1678,8 @@ uint64_t processMemoryBytes() {
 
 void writeBenchmarkJson(const std::string& outputPath, double vfsElapsedMs, int vfsIterations,
                         double jsonElapsedMs, int jsonIterations, double firstFrameMs,
-                        double steadyFrameMs, uint64_t textureCount, uint64_t textureBytes) {
+                        double steadyFrameMs, double textureLoadMs, double nonTextureRenderMs,
+                        uint64_t textureCount, uint64_t textureBytes) {
     const std::filesystem::path output(outputPath);
     if (!output.parent_path().empty()) std::filesystem::create_directories(output.parent_path());
     const std::filesystem::path temporary = output.string() + ".tmp";
@@ -1702,6 +1703,8 @@ void writeBenchmarkJson(const std::string& outputPath, double vfsElapsedMs, int 
            << "    \"json_update\": {\"iterations\": " << jsonIterations << ", \"total_ms\": " << jsonElapsedMs
            << ", \"avg_ms\": " << jsonElapsedMs / jsonIterations << "},\n"
            << "    \"first_frame_ms\": " << firstFrameMs << ",\n"
+           << "    \"startup_profile\": {\"texture_load_ms\": " << textureLoadMs
+           << ", \"non_texture_render_ms\": " << nonTextureRenderMs << "},\n"
            << "    \"steady_frame_ms\": " << steadyFrameMs << ",\n"
            << "    \"texture_cache\": {\"texture_count\": " << textureCount << ", \"bytes\": " << textureBytes << "},\n"
            << "    \"process_memory_bytes\": " << processMemoryBytes() << "\n"
@@ -2127,6 +2130,16 @@ void test_native_performance_benchmarks(const std::string& benchmarkJsonPath = "
     RowlEngine_Step(handle, 0.0f);
     auto firstFrameEnd = std::chrono::high_resolution_clock::now();
     const double firstFrameMs = std::chrono::duration<double, std::milli>(firstFrameEnd - firstFrameStart).count();
+    const double textureLoadMs = RowlEngine_GetLastFrameTextureLoadMilliseconds(handle);
+    const double nonTextureRenderMs = RowlEngine_GetLastFrameNonTextureRenderMilliseconds(handle);
+    if (textureLoadMs < 0.0 || nonTextureRenderMs < 0.0 ||
+        textureLoadMs + nonTextureRenderMs > firstFrameMs + 5.0) {
+        std::cerr << "First-frame profile timings are inconsistent" << std::endl;
+        exit(1);
+    }
+    std::cout << "  ⚡ [BENCHMARK] First Frame Profile: texture load " << textureLoadMs
+              << "ms, non-texture render " << nonTextureRenderMs << "ms" << std::endl;
+    TEST_PASS("First Frame Texture and Renderer Profile");
     const auto warmTextureCount = RowlEngine_GetTextureCacheTextureCount(handle);
     const auto warmTextureBytes = RowlEngine_GetTextureCacheBytes(handle);
     if (warmTextureCount == 0 || warmTextureBytes == 0) {
@@ -2159,7 +2172,8 @@ void test_native_performance_benchmarks(const std::string& benchmarkJsonPath = "
 
     if (!benchmarkJsonPath.empty()) {
         writeBenchmarkJson(benchmarkJsonPath, vfsElapsedMs, VFS_ITERATIONS, jsonElapsedMs, JSON_ITERATIONS,
-                           firstFrameMs, avgFrameMs, cachedTextureCount, cachedTextureBytes);
+                           firstFrameMs, avgFrameMs, textureLoadMs, nonTextureRenderMs,
+                           cachedTextureCount, cachedTextureBytes);
     }
 
     constexpr uint64_t kDefaultTextureCacheBudget = 64ULL * 1024ULL * 1024ULL;

@@ -261,6 +261,22 @@ uint64_t RowlEngine_GetTextureCacheEvictionCount(RowlEngineHandle handle) {
     }, 0);
 }
 
+double RowlEngine_GetLastFrameTextureLoadMilliseconds(RowlEngineHandle handle) {
+    if (!isLiveHandle(handle)) return 0.0;
+    return invokeNoexcept<double>([&] {
+        const auto* window = toEngine(handle)->getWindow();
+        return window ? window->getLastFrameTextureLoadMilliseconds() : 0.0;
+    }, 0.0);
+}
+
+double RowlEngine_GetLastFrameNonTextureRenderMilliseconds(RowlEngineHandle handle) {
+    if (!isLiveHandle(handle)) return 0.0;
+    return invokeNoexcept<double>([&] {
+        const auto* window = toEngine(handle)->getWindow();
+        return window ? window->getLastFrameNonTextureRenderMilliseconds() : 0.0;
+    }, 0.0);
+}
+
 void RowlEngine_SetTextureCacheBudgetBytes(RowlEngineHandle handle, uint64_t bytes) {
     if (!isLiveHandle(handle)) return;
     invokeNoexcept([&] {

@@ -9,6 +9,7 @@
 #include <vector>
 #include <unordered_set>
 #include <algorithm>
+#include <chrono>
 #include <string>
 #include <fstream>
 
@@ -543,6 +544,13 @@ SDL_Texture* Window::loadTexture(const std::string& filename) {
         return it->second;
     }
 
+    const auto loadStarted = std::chrono::steady_clock::now();
+    const auto recordLoadTime = [this, loadStarted] {
+        if (!m_collectingFrameProfile) return;
+        m_lastFrameTextureLoadMilliseconds += std::chrono::duration<double, std::milli>(
+            std::chrono::steady_clock::now() - loadStarted).count();
+    };
+
     int width = 0, height = 0, channels = 0;
     unsigned char* data = nullptr;
     std::string sourceInfo;
@@ -576,6 +584,7 @@ SDL_Texture* Window::loadTexture(const std::string& filename) {
 
     if (!data) {
         rememberMissingTexture(std::move(normPath));
+        recordLoadTime();
         return nullptr;
     }
 
@@ -585,6 +594,7 @@ SDL_Texture* Window::loadTexture(const std::string& filename) {
 
     if (!surface) {
         stbi_image_free(data);
+        recordLoadTime();
         return nullptr;
     }
 
@@ -598,6 +608,7 @@ SDL_Texture* Window::loadTexture(const std::string& filename) {
         if (!evictTexturesToFit(textureBytes)) {
             SDL_DestroyTexture(texture);
             ROWL_LOG_WARN("Texture exceeds the configured cache budget: " + filename);
+            recordLoadTime();
             return nullptr;
         }
         m_missingTextureCache.erase(normPath);
@@ -608,6 +619,7 @@ SDL_Texture* Window::loadTexture(const std::string& filename) {
         touchTexture(texture);
         ROWL_LOG_INFO("✅ Loaded Hardware Texture: " + filename + " (" + std::to_string(width) + "x" + std::to_string(height) + ") from " + sourceInfo);
     }
+    recordLoadTime();
     return texture;
 }
 
@@ -650,6 +662,9 @@ void Window::renderVisualNovelFrame(
     const std::vector<ChoiceButtonRenderData>& choices
 ) {
     if (!m_initialized || !m_sdlRenderer) return;
+    const auto frameRenderStarted = std::chrono::steady_clock::now();
+    m_lastFrameTextureLoadMilliseconds = 0.0;
+    m_collectingFrameProfile = true;
 
     // Dynamically query physical size if standalone, or use host-provided size if embedded
     if (!m_isEmbedded) {
@@ -935,6 +950,12 @@ void Window::renderVisualNovelFrame(
                 w - 24.0f * metrics.scaleFactor, h, choice.textAlignment);
         }
     }
+
+    m_collectingFrameProfile = false;
+    const double totalRenderMilliseconds = std::chrono::duration<double, std::milli>(
+        std::chrono::steady_clock::now() - frameRenderStarted).count();
+    m_lastFrameNonTextureRenderMilliseconds = std::max(
+        0.0, totalRenderMilliseconds - m_lastFrameTextureLoadMilliseconds);
 }
 
 void Window::renderVisualNovelFrame(
