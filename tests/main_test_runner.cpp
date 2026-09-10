@@ -1676,10 +1676,22 @@ uint64_t processMemoryBytes() {
     return 0;
 }
 
+uint64_t benchmarkTextureCacheBudgetBytes() {
+    const auto configured = environmentValue("ROWL_BENCHMARK_TEXTURE_CACHE_BYTES", "67108864");
+    try {
+        size_t parsed = 0;
+        const auto value = std::stoull(configured, &parsed);
+        return parsed == configured.size() ? value : 64ULL * 1024ULL * 1024ULL;
+    } catch (...) {
+        return 64ULL * 1024ULL * 1024ULL;
+    }
+}
+
 void writeBenchmarkJson(const std::string& outputPath, double vfsElapsedMs, int vfsIterations,
                         double jsonElapsedMs, int jsonIterations, double firstFrameMs,
                         double steadyFrameMs, double textureLoadMs, double nonTextureRenderMs,
-                        uint64_t textureCount, uint64_t textureBytes) {
+                        uint64_t textureCount, uint64_t textureBytes, uint64_t textureBudgetBytes,
+                        uint64_t textureEvictionCount) {
     const std::filesystem::path output(outputPath);
     if (!output.parent_path().empty()) std::filesystem::create_directories(output.parent_path());
     const std::filesystem::path temporary = output.string() + ".tmp";
@@ -1706,7 +1718,8 @@ void writeBenchmarkJson(const std::string& outputPath, double vfsElapsedMs, int 
            << "    \"startup_profile\": {\"texture_load_ms\": " << textureLoadMs
            << ", \"non_texture_render_ms\": " << nonTextureRenderMs << "},\n"
            << "    \"steady_frame_ms\": " << steadyFrameMs << ",\n"
-           << "    \"texture_cache\": {\"texture_count\": " << textureCount << ", \"bytes\": " << textureBytes << "},\n"
+           << "    \"texture_cache\": {\"texture_count\": " << textureCount << ", \"bytes\": " << textureBytes
+           << ", \"budget_bytes\": " << textureBudgetBytes << ", \"eviction_count\": " << textureEvictionCount << "},\n"
            << "    \"process_memory_bytes\": " << processMemoryBytes() << "\n"
            << "  }\n"
            << "}\n";
@@ -2101,6 +2114,8 @@ void test_native_performance_benchmarks(const std::string& benchmarkJsonPath = "
     // 2. Scene JSON Parse & Update Benchmark
     RowlEngineHandle handle = RowlEngine_Create();
     RowlEngine_Init(handle, 1920, 1080, 0);
+    const auto configuredTextureBudgetBytes = benchmarkTextureCacheBudgetBytes();
+    RowlEngine_SetTextureCacheBudgetBytes(handle, configuredTextureBudgetBytes);
 
     const std::string benchJson = R"([
         {"type":"speaker","id":"s1","enabled":true,"data":{"speaker":"Evelyn","dialogue":"Benchmark line"}},
@@ -2162,6 +2177,7 @@ void test_native_performance_benchmarks(const std::string& benchmarkJsonPath = "
 
     const auto cachedTextureCount = RowlEngine_GetTextureCacheTextureCount(handle);
     const auto cachedTextureBytes = RowlEngine_GetTextureCacheBytes(handle);
+    const auto textureEvictionCount = RowlEngine_GetTextureCacheEvictionCount(handle);
     if (cachedTextureCount != warmTextureCount || cachedTextureBytes != warmTextureBytes) {
         std::cerr << "Steady-state render unexpectedly changed texture cache usage" << std::endl;
         exit(1);
@@ -2173,13 +2189,14 @@ void test_native_performance_benchmarks(const std::string& benchmarkJsonPath = "
     if (!benchmarkJsonPath.empty()) {
         writeBenchmarkJson(benchmarkJsonPath, vfsElapsedMs, VFS_ITERATIONS, jsonElapsedMs, JSON_ITERATIONS,
                            firstFrameMs, avgFrameMs, textureLoadMs, nonTextureRenderMs,
-                           cachedTextureCount, cachedTextureBytes);
+                           cachedTextureCount, cachedTextureBytes, configuredTextureBudgetBytes,
+                           textureEvictionCount);
     }
 
     constexpr uint64_t kDefaultTextureCacheBudget = 64ULL * 1024ULL * 1024ULL;
-    RowlEngine_SetTextureCacheBudgetBytes(handle, kDefaultTextureCacheBudget);
-    if (RowlEngine_GetTextureCacheBudgetBytes(handle) != kDefaultTextureCacheBudget ||
-        RowlEngine_GetTextureCacheEvictionCount(handle) != 0) {
+    if (RowlEngine_GetTextureCacheBudgetBytes(handle) != configuredTextureBudgetBytes ||
+        (configuredTextureBudgetBytes == kDefaultTextureCacheBudget &&
+         RowlEngine_GetTextureCacheEvictionCount(handle) != 0)) {
         std::cerr << "C-API texture cache budget telemetry contract failed" << std::endl;
         exit(1);
     }
@@ -2232,6 +2249,10 @@ void test_hardening_and_reliability() {
                 exit(1);
             }
             win.setTextureCacheBudgetBytes(64ULL * 1024ULL * 1024ULL);
+            if (!win.loadTexture("Margot.jpg")) {
+                std::cerr << "Texture rejected by a smaller budget was not retried after budget growth" << std::endl;
+                exit(1);
+            }
             win.loadTexture("Woman.png");
             if (win.loadTexture("missing_texture_for_negative_cache.png") != nullptr ||
                 win.loadTexture("missing_texture_for_negative_cache.png") != nullptr ||

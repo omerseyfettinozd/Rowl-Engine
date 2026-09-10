@@ -456,6 +456,7 @@ void Window::clearTextureCache() {
     m_textureMemoryBytes.clear();
     m_textureLastUsed.clear();
     m_missingTextureCache.clear();
+    m_budgetRejectedTextureCache.clear();
     m_buttonFontCache.clear();
     m_textureCacheEvictionCount = 0;
     m_textureUseClock = 0;
@@ -468,7 +469,13 @@ void Window::clearTextureCache() {
 }
 
 void Window::setTextureCacheBudgetBytes(uint64_t bytes) {
+    const uint64_t previousBudget = m_textureCacheBudgetBytes;
     m_textureCacheBudgetBytes = std::max(bytes, kMinimumTextureCacheBytes);
+    if (m_textureCacheBudgetBytes > previousBudget) {
+        // A previously oversized asset may now fit; do not keep its fallback
+        // state after the host moves to a larger device profile.
+        m_budgetRejectedTextureCache.clear();
+    }
     if (!evictTexturesToFit(0)) {
         ROWL_LOG_WARN("Texture cache budget cannot be met while the MSDF atlas is pinned");
     }
@@ -536,6 +543,7 @@ SDL_Texture* Window::loadTexture(const std::string& filename) {
     std::replace(normPath.begin(), normPath.end(), '\\', '/');
 
     if (m_missingTextureCache.contains(normPath)) return nullptr;
+    if (m_budgetRejectedTextureCache.contains(normPath)) return nullptr;
 
     // Cache hit: only return valid textures
     auto it = m_textureCache.find(normPath);
@@ -607,6 +615,10 @@ SDL_Texture* Window::loadTexture(const std::string& filename) {
                                       static_cast<uint64_t>(height) * 4ULL;
         if (!evictTexturesToFit(textureBytes)) {
             SDL_DestroyTexture(texture);
+            if (m_budgetRejectedTextureCache.size() >= kMaxMissingTextureCacheEntries) {
+                m_budgetRejectedTextureCache.erase(m_budgetRejectedTextureCache.begin());
+            }
+            m_budgetRejectedTextureCache.insert(normPath);
             ROWL_LOG_WARN("Texture exceeds the configured cache budget: " + filename);
             recordLoadTime();
             return nullptr;

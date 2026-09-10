@@ -225,6 +225,9 @@ private:
     std::unordered_map<SDL_Texture*, uint64_t> m_textureMemoryBytes;
     std::unordered_map<SDL_Texture*, uint64_t> m_textureLastUsed;
     std::unordered_set<std::string> m_missingTextureCache;
+    // These assets exist but do not fit the active device budget. They are
+    // retried when the host raises that budget, unlike genuinely missing files.
+    std::unordered_set<std::string> m_budgetRejectedTextureCache;
     std::unique_ptr<FontRenderer> m_fontRenderer;
     SDL_GPUShader* m_msdfFragmentShader = nullptr;
     SDL_GPURenderState* m_msdfRenderState = nullptr;
