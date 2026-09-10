@@ -144,6 +144,26 @@ bool Engine::initialize(const EngineConfig& config) {
         return false;
     }
 
+    m_window->setInputHandler([this](const Rowl::Render::RuntimeInputEvent& event) {
+        switch (event.type) {
+            case Rowl::Render::RuntimeInputEvent::Type::Advance:
+                advanceToNextNode();
+                break;
+            case Rowl::Render::RuntimeInputEvent::Type::QuickSave:
+                saveGameSlot(0);
+                break;
+            case Rowl::Render::RuntimeInputEvent::Type::QuickLoad:
+                loadGameSlot(0);
+                break;
+            case Rowl::Render::RuntimeInputEvent::Type::Rewind:
+                rewind(1);
+                break;
+            case Rowl::Render::RuntimeInputEvent::Type::PointerDown:
+                if (!handlePointerDown(event.x, event.y)) advanceToNextNode();
+                break;
+        }
+    });
+
     // Initialize Entity-Component Scene Manager
     m_scene = std::make_unique<Rowl::Scene::Scene>();
 

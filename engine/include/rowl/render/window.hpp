@@ -3,6 +3,7 @@
 #include <string>
 #include <cstdint>
 #include <memory>
+#include <functional>
 #include <vector>
 #include <unordered_map>
 #include <unordered_set>
@@ -81,6 +82,15 @@ struct ChoiceButtonRenderData {
     bool enabled = true;
 };
 
+/// Input remains owned by the runtime that created the window. Window never
+/// reaches into a process-global Engine instance to handle a player action.
+struct RuntimeInputEvent {
+    enum class Type { Advance, QuickSave, QuickLoad, Rewind, PointerDown };
+    Type type;
+    float x = 0.0f;
+    float y = 0.0f;
+};
+
 class Window {
 public:
     Window();
@@ -122,6 +132,8 @@ public:
      * Notify the window of a viewport resize (e.g. host control resized).
      */
     void resizeViewport(uint32_t newWidth, uint32_t newHeight);
+
+    void setInputHandler(std::function<void(const RuntimeInputEvent&)> handler);
 
     void pollEvents(bool& outShouldQuit);
     void beginFrame();
@@ -220,6 +232,7 @@ private:
     bool m_initialized     = false;
     bool m_isEmbedded      = false; // true → rendering into host control
     bool m_isOffscreen     = false; // true → rendering to RGBA32 surface
+    std::function<void(const RuntimeInputEvent&)> m_inputHandler;
 };
 
 } // namespace Rowl::Render

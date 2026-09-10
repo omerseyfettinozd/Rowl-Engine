@@ -1718,6 +1718,50 @@ void writeBenchmarkJson(const std::string& outputPath, double vfsElapsedMs, int 
     std::cout << "  ⚡ [BENCHMARK] JSON report: " << outputPath << std::endl;
 }
 
+void test_window_input_routing() {
+    TEST_SECTION("Runtime-Local Window Input Routing");
+
+    Rowl::Render::Window window;
+    if (!window.initializeOffscreen(320, 180)) {
+        std::cerr << "Could not initialize offscreen window for input routing test" << std::endl;
+        exit(1);
+    }
+
+    std::vector<Rowl::Render::RuntimeInputEvent> received;
+    window.setInputHandler([&received](const Rowl::Render::RuntimeInputEvent& event) {
+        received.push_back(event);
+    });
+
+    SDL_Event keyEvent{};
+    keyEvent.type = SDL_EVENT_KEY_DOWN;
+    keyEvent.key.key = SDLK_F5;
+    if (!SDL_PushEvent(&keyEvent)) {
+        std::cerr << "Could not enqueue SDL key event for input routing test" << std::endl;
+        exit(1);
+    }
+    SDL_Event pointerEvent{};
+    pointerEvent.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+    pointerEvent.button.button = SDL_BUTTON_LEFT;
+    pointerEvent.button.x = 42.0f;
+    pointerEvent.button.y = 24.0f;
+    if (!SDL_PushEvent(&pointerEvent)) {
+        std::cerr << "Could not enqueue SDL pointer event for input routing test" << std::endl;
+        exit(1);
+    }
+
+    bool shouldQuit = false;
+    window.pollEvents(shouldQuit);
+    window.shutdown();
+    if (shouldQuit || received.size() != 2 ||
+        received[0].type != Rowl::Render::RuntimeInputEvent::Type::QuickSave ||
+        received[1].type != Rowl::Render::RuntimeInputEvent::Type::PointerDown ||
+        std::abs(received[1].x - 42.0f) > 0.001f || std::abs(received[1].y - 24.0f) > 0.001f) {
+        std::cerr << "Window did not route input through its runtime-local handler" << std::endl;
+        exit(1);
+    }
+    TEST_PASS("Window routes SDL input through runtime-local callbacks");
+}
+
 void test_native_performance_benchmarks(const std::string& benchmarkJsonPath = "") {
     TEST_SECTION("Performance & Profiling Benchmarks");
 
@@ -2076,6 +2120,7 @@ int main(int argc, char* argv[]) {
     test_vfs_security();
     test_native_c_api();
     test_game_object_component_system();
+    test_window_input_routing();
     test_native_performance_benchmarks(benchmarkJsonPath);
     test_hardening_and_reliability();
 

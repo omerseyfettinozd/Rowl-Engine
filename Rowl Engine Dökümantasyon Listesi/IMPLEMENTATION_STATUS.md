@@ -24,6 +24,8 @@ içinden VFS graph yükleyen yerel standalone smoke testi geçiyor.
   üzerinden yükler. `--package-smoke-test` tek offscreen frame render eder.
 - Story graph dosya/VFS yüklemeleri artık açık başarı sonucu üretir. Geçersiz
   graph aktif hikâyeyi korur; C API/PInvoke son yükleme tanısını sorgulayabilir.
+- SDL pencere input'u render katmanından global engine'e ulaşmaz; kendi runtime
+  callback'i üzerinden advance/save/load/rewind ve pointer olaylarını taşır.
 - Native benchmark JSON şeması ve aynı ortam/fixture için yüzde farkı raporlayan
   karşılaştırıcı hazırdır; ilk sonuçlar baseline olarak saklanır.
 - Yaratıcı Hikâye Stüdyosu tasarım sistemi, Project Hub, boş durum, üst çalışma

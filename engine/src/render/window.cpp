@@ -2,7 +2,6 @@
 #include "thirdparty/stb_image.h"
 #include "rowl/render/window.hpp"
 #include "rowl/render/aspect_guardian.hpp"
-#include "rowl/core/engine.hpp"
 #include "rowl/core/logger.hpp"
 #include "rowl/vfs/vfs.hpp"
 #include <SDL3/SDL.h>
@@ -370,6 +369,10 @@ void Window::resizeViewport(uint32_t newWidth, uint32_t newHeight) {
     ROWL_LOG_INFO("Viewport resized to " + std::to_string(newWidth) + "x" + std::to_string(newHeight));
 }
 
+void Window::setInputHandler(std::function<void(const RuntimeInputEvent&)> handler) {
+    m_inputHandler = std::move(handler);
+}
+
 void Window::pollEvents(bool& outShouldQuit) {
     if (!m_initialized) return;
 
@@ -386,23 +389,22 @@ void Window::pollEvents(bool& outShouldQuit) {
                     outShouldQuit = true;
                     m_isOpen = false;
                 } else if (event.key.key == SDLK_SPACE || event.key.key == SDLK_RETURN || event.key.key == SDLK_KP_ENTER) {
-                    Rowl::Core::Engine::instance().advanceToNextNode();
+                    if (m_inputHandler) m_inputHandler({RuntimeInputEvent::Type::Advance});
                 } else if (event.key.key == SDLK_F5) {
                     ROWL_LOG_INFO("[Player] F5 pressed: Quick Saving to Slot #0...");
-                    Rowl::Core::Engine::instance().saveGameSlot(0);
+                    if (m_inputHandler) m_inputHandler({RuntimeInputEvent::Type::QuickSave});
                 } else if (event.key.key == SDLK_F9) {
                     ROWL_LOG_INFO("[Player] F9 pressed: Quick Loading from Slot #0...");
-                    Rowl::Core::Engine::instance().loadGameSlot(0);
+                    if (m_inputHandler) m_inputHandler({RuntimeInputEvent::Type::QuickLoad});
                 } else if (event.key.key == SDLK_BACKSPACE || event.key.key == SDLK_Z) {
                     ROWL_LOG_INFO("[Player] Rewind key pressed: Rewinding 1 step...");
-                    Rowl::Core::Engine::instance().rewind(1);
+                    if (m_inputHandler) m_inputHandler({RuntimeInputEvent::Type::Rewind});
                 }
                 break;
             case SDL_EVENT_MOUSE_BUTTON_DOWN:
                 if (event.button.button == SDL_BUTTON_LEFT) {
-                    if (!Rowl::Core::Engine::instance().handlePointerDown(event.button.x, event.button.y)) {
-                        Rowl::Core::Engine::instance().advanceToNextNode();
-                    }
+                    if (m_inputHandler) m_inputHandler({RuntimeInputEvent::Type::PointerDown,
+                                                        event.button.x, event.button.y});
                 }
                 break;
             case SDL_EVENT_WINDOW_RESIZED:
