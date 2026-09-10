@@ -2,6 +2,7 @@
 
 #include "rowl/render/window.hpp"
 #include "rowl/state/game_state.hpp"
+#include "rowl/core/runtime_context.hpp"
 #include <cstdint>
 #include <string>
 #include <memory>
@@ -88,7 +89,7 @@ struct ScriptRuntimeStatus {
 
 class Engine {
 public:
-    Engine();
+    explicit Engine(std::shared_ptr<RuntimeContext> context = nullptr);
     ~Engine();
 
     // Disable copy/move
@@ -96,6 +97,10 @@ public:
     Engine& operator=(const Engine&) = delete;
 
     static Engine& instance();
+
+    RuntimeContext* getContext() const { return m_context.get(); }
+    std::shared_ptr<RuntimeContext> getContextShared() const { return m_context; }
+    Rowl::VFS::VFSManager* getVfs() const;
 
     // ── Lifecycle ──────────────────────────────────────────────────────────
 
@@ -224,6 +229,7 @@ public:
 private:
     static Engine* s_instance;
 
+    std::shared_ptr<RuntimeContext> m_context;
     EngineConfig m_config;
     std::unique_ptr<Rowl::Render::Window> m_window;
     std::unique_ptr<Rowl::Scene::Scene>   m_scene;

@@ -57,8 +57,13 @@ void Engine::setBgmTransitionDefaults(std::string kind, float durationSeconds) {
         ? std::clamp(durationSeconds, 0.0f, 60.0f) : 1.0f;
 }
 
-Engine::Engine() {
+Engine::Engine(std::shared_ptr<RuntimeContext> context)
+    : m_context(context ? std::move(context) : std::make_shared<RuntimeContext>()) {
     s_instance = this;
+}
+
+Rowl::VFS::VFSManager* Engine::getVfs() const {
+    return m_context ? m_context->getVfs().get() : nullptr;
 }
 
 Engine::~Engine() {
@@ -109,10 +114,13 @@ bool Engine::initialize(const EngineConfig& config) {
     ROWL_LOG_INFO("==================================================");
 
     // Initialize VFS Manager
+    if (getVfs()) {
+        getVfs()->initialize();
+    }
     Rowl::VFS::VFSManager::instance().initialize();
 
     // Initialize Render Window
-    m_window = std::make_unique<Rowl::Render::Window>();
+    m_window = std::make_unique<Rowl::Render::Window>(getVfs());
 
     bool windowOk = false;
     if (m_externalWindowHandle) {
@@ -168,7 +176,7 @@ bool Engine::initialize(const EngineConfig& config) {
     m_scene = std::make_unique<Rowl::Scene::Scene>();
 
     // Initialize Audio Engine Subsystem
-    m_audio = std::make_unique<Rowl::Audio::AudioEngine>();
+    m_audio = std::make_unique<Rowl::Audio::AudioEngine>(getVfs());
     m_audio->initialize();
 
     // Initialize Sandboxed Lua Scripting Environment
@@ -1054,12 +1062,14 @@ bool Engine::loadStoryGraphFromPath(const std::string& jsonPath) {
         std::filesystem::file_size(graphPath, fileError) > kMaxStoryJsonBytes || fileError) {
         m_lastStoryGraphLoadError = "Story graph is missing, not a regular file, or exceeds the size limit: " + jsonPath;
         ROWL_LOG_ERROR(m_lastStoryGraphLoadError);
+        m_context->setError(RuntimeErrorCode::FileNotFound, m_lastStoryGraphLoadError, "load_story_graph_path", jsonPath);
         return false;
     }
     std::ifstream f(jsonPath);
     if (!f.is_open()) {
         m_lastStoryGraphLoadError = "Cannot open story graph: " + jsonPath;
         ROWL_LOG_ERROR(m_lastStoryGraphLoadError);
+        m_context->setError(RuntimeErrorCode::IoError, m_lastStoryGraphLoadError, "load_story_graph_path", jsonPath);
         return false;
     }
     std::string content((std::istreambuf_iterator<char>(f)),
@@ -1068,8 +1078,10 @@ bool Engine::loadStoryGraphFromPath(const std::string& jsonPath) {
     parseStoryGraphJson(content);
     if (m_storyGraphRevision == revisionBeforeParse) {
         m_lastStoryGraphLoadError = "Story graph JSON was rejected; the active graph was preserved.";
+        m_context->setError(RuntimeErrorCode::ParseError, m_lastStoryGraphLoadError, "load_story_graph_path", jsonPath);
         return false;
     }
+    m_context->setSuccess("load_story_graph_path", jsonPath);
     return true;
 }
 
@@ -1078,13 +1090,16 @@ bool Engine::loadStoryGraphFromVfs(const std::string& vfsPath) {
     if (vfsPath.empty()) {
         m_lastStoryGraphLoadError = "Story graph VFS path is empty";
         ROWL_LOG_ERROR(m_lastStoryGraphLoadError);
+        m_context->setError(RuntimeErrorCode::FileNotFound, m_lastStoryGraphLoadError, "load_story_graph_vfs", vfsPath);
         return false;
     }
 
-    auto& vfs = Rowl::VFS::VFSManager::instance();
+    auto* vfsPtr = getVfs();
+    auto& vfs = vfsPtr ? *vfsPtr : Rowl::VFS::VFSManager::instance();
     if (!vfs.exists(vfsPath)) {
         m_lastStoryGraphLoadError = "Story graph is missing from VFS: " + vfsPath;
         ROWL_LOG_ERROR(m_lastStoryGraphLoadError);
+        m_context->setError(RuntimeErrorCode::FileNotFound, m_lastStoryGraphLoadError, "load_story_graph_vfs", vfsPath);
         return false;
     }
 
@@ -1092,6 +1107,7 @@ bool Engine::loadStoryGraphFromVfs(const std::string& vfsPath) {
     if (content.empty() || content.size() > kMaxStoryJsonBytes) {
         m_lastStoryGraphLoadError = "Story graph VFS content is empty or exceeds the size limit: " + vfsPath;
         ROWL_LOG_ERROR(m_lastStoryGraphLoadError);
+        m_context->setError(RuntimeErrorCode::FileTooLarge, m_lastStoryGraphLoadError, "load_story_graph_vfs", vfsPath);
         return false;
     }
 
@@ -1099,8 +1115,10 @@ bool Engine::loadStoryGraphFromVfs(const std::string& vfsPath) {
     parseStoryGraphJson(content);
     if (m_storyGraphRevision == revisionBeforeParse) {
         m_lastStoryGraphLoadError = "Story graph JSON from VFS was rejected; the active graph was preserved.";
+        m_context->setError(RuntimeErrorCode::ParseError, m_lastStoryGraphLoadError, "load_story_graph_vfs", vfsPath);
         return false;
     }
+    m_context->setSuccess("load_story_graph_vfs", vfsPath);
     return true;
 }
 
@@ -1305,7 +1323,8 @@ void Engine::activateScripts(const std::vector<nlohmann::json>& scripts) {
         std::string source = script.value("code", "");
         const std::string path = script.value("path", "");
         if (source.empty() && !path.empty()) {
-            source = Rowl::VFS::VFSManager::instance().readString(path);
+            auto* vfsPtr = getVfs();
+            source = vfsPtr ? vfsPtr->readString(path) : Rowl::VFS::VFSManager::instance().readString(path);
             if (source.empty()) {
                 ROWL_LOG_ERROR("Lua script asset could not be read: " + path);
                 markScriptStatus((path + "#" + std::to_string(scriptIndex)), path, "failed",
@@ -1415,18 +1434,49 @@ void Engine::shutdown() {
 }
 
 bool Engine::saveGameSlot(int32_t slotIndex) {
+    if (slotIndex < 0 || slotIndex > 100) {
+        m_context->setError(RuntimeErrorCode::InvalidArgument,
+                            "Invalid save slot index #" + std::to_string(slotIndex) + " (must be 0-100)",
+                            "save_game_slot", std::to_string(slotIndex));
+        return false;
+    }
     if (!m_gameState) {
         m_gameState = Rowl::State::GameState::createInitialState(m_currentNodeId);
     }
     if (m_gameState->activeNodeId != m_currentNodeId) {
         m_gameState = Rowl::State::GameState::createNextState(m_gameState, m_currentNodeId);
     }
-    return Rowl::State::GameState::saveToSlot(m_gameState, slotIndex, m_saveDirectory);
+    bool ok = Rowl::State::GameState::saveToSlot(m_gameState, slotIndex, m_saveDirectory);
+    if (!ok) {
+        m_context->setError(RuntimeErrorCode::IoError,
+                            "Failed to write save slot #" + std::to_string(slotIndex) + " to " + m_saveDirectory,
+                            "save_game_slot", std::to_string(slotIndex));
+        return false;
+    }
+    m_context->setSuccess("save_game_slot", std::to_string(slotIndex));
+    return true;
 }
 
 bool Engine::loadGameSlot(int32_t slotIndex) {
+    if (slotIndex < 0 || slotIndex > 100) {
+        m_context->setError(RuntimeErrorCode::InvalidArgument,
+                            "Invalid save slot index #" + std::to_string(slotIndex) + " (must be 0-100)",
+                            "load_game_slot", std::to_string(slotIndex));
+        return false;
+    }
+    if (!Rowl::State::GameState::hasSlot(slotIndex, m_saveDirectory)) {
+        m_context->setError(RuntimeErrorCode::FileNotFound,
+                            "Save slot #" + std::to_string(slotIndex) + " not found in " + m_saveDirectory,
+                            "load_game_slot", std::to_string(slotIndex));
+        return false;
+    }
     auto loaded = Rowl::State::GameState::loadFromSlot(slotIndex, m_saveDirectory);
-    if (!loaded) return false;
+    if (!loaded) {
+        m_context->setError(RuntimeErrorCode::ParseError,
+                            "Failed to parse or validate save slot #" + std::to_string(slotIndex),
+                            "load_game_slot", std::to_string(slotIndex));
+        return false;
+    }
 
     m_gameState = loaded;
     m_currentNodeId = m_gameState->activeNodeId;
@@ -1472,6 +1522,7 @@ bool Engine::loadGameSlot(int32_t slotIndex) {
     }
     restoreAudioStateFromGameState();
     ROWL_LOG_INFO("Loaded Game Slot #" + std::to_string(slotIndex) + " → Node #" + std::to_string(m_currentNodeId));
+    m_context->setSuccess("load_game_slot", std::to_string(slotIndex));
     return true;
 }
 
@@ -1480,7 +1531,27 @@ bool Engine::hasSaveSlot(int32_t slotIndex) const {
 }
 
 bool Engine::deleteSaveSlot(int32_t slotIndex) {
-    return Rowl::State::GameState::deleteSlot(slotIndex, m_saveDirectory);
+    if (slotIndex < 0 || slotIndex > 100) {
+        m_context->setError(RuntimeErrorCode::InvalidArgument,
+                            "Invalid save slot index #" + std::to_string(slotIndex) + " (must be 0-100)",
+                            "delete_save_slot", std::to_string(slotIndex));
+        return false;
+    }
+    if (!Rowl::State::GameState::hasSlot(slotIndex, m_saveDirectory)) {
+        m_context->setError(RuntimeErrorCode::FileNotFound,
+                            "Save slot #" + std::to_string(slotIndex) + " does not exist",
+                            "delete_save_slot", std::to_string(slotIndex));
+        return false;
+    }
+    bool ok = Rowl::State::GameState::deleteSlot(slotIndex, m_saveDirectory);
+    if (!ok) {
+        m_context->setError(RuntimeErrorCode::IoError,
+                            "Failed to delete save slot #" + std::to_string(slotIndex),
+                            "delete_save_slot", std::to_string(slotIndex));
+        return false;
+    }
+    m_context->setSuccess("delete_save_slot", std::to_string(slotIndex));
+    return true;
 }
 
 bool Engine::rewind(uint64_t steps) {
@@ -1576,14 +1647,28 @@ std::string Engine::getScriptVariable(const std::string& key) const {
 
 bool Engine::evaluateCondition(const std::string& conditionExpr) {
     if (m_luaSandbox) {
-        return m_luaSandbox->evaluateCondition(conditionExpr);
+        bool ok = m_luaSandbox->evaluateCondition(conditionExpr);
+        if (!ok && !m_luaSandbox->getLastError().empty()) {
+            m_context->setError(RuntimeErrorCode::ScriptSyntaxError,
+                                m_luaSandbox->getLastError(),
+                                "evaluate_condition", conditionExpr);
+            return false;
+        }
+        m_context->setSuccess("evaluate_condition", conditionExpr);
+        return ok;
     }
+    m_context->setSuccess("evaluate_condition", conditionExpr);
     return true;
 }
 
 bool Engine::executeScript(const std::string& scriptCode) {
     if (m_luaSandbox) {
-        if (!m_luaSandbox->executeString(scriptCode)) return false;
+        if (!m_luaSandbox->executeString(scriptCode)) {
+            m_context->setError(RuntimeErrorCode::ScriptRuntimeError,
+                                m_luaSandbox->getLastError().empty() ? "Script execution failed" : m_luaSandbox->getLastError(),
+                                "execute_script", "");
+            return false;
+        }
 
         // Scripts persist game data through rowl.var_set. Capture its complete
         // post-script snapshot as one immutable state transition so save/load
@@ -1592,8 +1677,10 @@ bool Engine::executeScript(const std::string& scriptCode) {
             m_gameState = Rowl::State::GameState::createNextStateWithVariables(
                 m_gameState, m_currentNodeId, m_luaSandbox->getAllVariables());
         }
+        m_context->setSuccess("execute_script", "");
         return true;
     }
+    m_context->setError(RuntimeErrorCode::StateError, "Lua sandbox is not initialized", "execute_script", "");
     return false;
 }
 

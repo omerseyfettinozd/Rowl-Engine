@@ -356,6 +356,9 @@ void RowlEngine_SetProjectDirectory(RowlEngineHandle handle, const char* project
             } catch (...) { }
         }
         engine->setBgmTransitionDefaults(transition, transitionDuration);
+        if (engine->getVfs()) {
+            engine->getVfs()->remountProject(projectRoot);
+        }
         Rowl::VFS::VFSManager::instance().remountProject(projectRoot);
         auto* win = engine->getWindow();
         if (win) {
@@ -650,6 +653,56 @@ int RowlEngine_ExecuteScript(RowlEngineHandle handle, const char* scriptCode) {
     return invokeNoexcept<int>([&] {
         return toEngine(handle)->executeScript(scriptCode) ? 1 : 0;
     }, 0);
+}
+
+int32_t RowlEngine_GetLastResultCode(RowlEngineHandle handle) {
+    if (!isLiveHandle(handle)) return static_cast<int32_t>(Rowl::Core::RuntimeErrorCode::InvalidHandle);
+    return invokeNoexcept<int32_t>([&] {
+        return toEngine(handle)->getContext()->getLastResult().rawCode();
+    }, static_cast<int32_t>(Rowl::Core::RuntimeErrorCode::UnknownError));
+}
+
+const char* RowlEngine_GetLastResultOperation(RowlEngineHandle handle) {
+    static thread_local std::string buf;
+    buf.clear();
+    if (!isLiveHandle(handle)) {
+        buf = "none";
+        return buf.c_str();
+    }
+    return invokeNoexcept<const char*>([&] {
+        buf = toEngine(handle)->getContext()->getLastResult().operation;
+        return buf.c_str();
+    }, "unknown");
+}
+
+const char* RowlEngine_GetLastResultMessage(RowlEngineHandle handle) {
+    static thread_local std::string buf;
+    buf.clear();
+    if (!isLiveHandle(handle)) {
+        buf = "Invalid or uninitialized engine handle";
+        return buf.c_str();
+    }
+    return invokeNoexcept<const char*>([&] {
+        buf = toEngine(handle)->getContext()->getLastResult().message;
+        return buf.c_str();
+    }, "Internal error occurred");
+}
+
+const char* RowlEngine_GetLastResultTarget(RowlEngineHandle handle) {
+    static thread_local std::string buf;
+    buf.clear();
+    if (!isLiveHandle(handle)) return buf.c_str();
+    return invokeNoexcept<const char*>([&] {
+        buf = toEngine(handle)->getContext()->getLastResult().target;
+        return buf.c_str();
+    }, "");
+}
+
+void RowlEngine_ClearLastResult(RowlEngineHandle handle) {
+    if (!isLiveHandle(handle)) return;
+    invokeNoexcept([&] {
+        toEngine(handle)->getContext()->clearResult();
+    });
 }
 
 } // extern "C"

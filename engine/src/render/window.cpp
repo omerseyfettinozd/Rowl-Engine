@@ -72,12 +72,21 @@ std::vector<uint8_t> loadMsdfShaderCode() {
 
 } // namespace
 
-Window::Window() = default;
+Window::Window(Rowl::VFS::VFSManager* vfs)
+    : m_vfs(vfs) {}
 
 Window::~Window() {
     if (m_initialized) {
         shutdown();
     }
+}
+
+void Window::setVfs(Rowl::VFS::VFSManager* vfs) {
+    m_vfs = vfs;
+}
+
+Rowl::VFS::VFSManager& Window::vfs() const {
+    return m_vfs ? *m_vfs : Rowl::VFS::VFSManager::instance();
 }
 
 bool Window::initializeOffscreen(uint32_t width, uint32_t height) {
@@ -197,7 +206,7 @@ void Window::initGpuMsdfRenderer() {
     m_msdfRenderState = SDL_CreateGPURenderState(m_sdlRenderer, &stateInfo);
     if (!m_msdfRenderState) { ROWL_LOG_WARN("MSDF GPU render state could not be created: " + std::string(SDL_GetError())); SDL_ReleaseGPUShader(device, m_msdfFragmentShader); m_msdfFragmentShader = nullptr; }
     if (!m_msdfRenderState) return;
-    const auto metadata = Rowl::VFS::VFSManager::instance().readString("fonts/msdf/default.json");
+    const auto metadata = vfs().readString("fonts/msdf/default.json");
     m_msdfRenderer = std::make_unique<MsdfRenderer>();
     m_msdfAtlasTexture = loadTexture("fonts/msdf/default.png");
     if (metadata.empty() || !m_msdfAtlasTexture || !m_msdfRenderer->loadAtlasMetadata(metadata)) {
@@ -321,7 +330,7 @@ void Window::initFontRenderer() {
     };
 
     for (const auto& vf : vfsFontCandidates) {
-        auto bytes = Rowl::VFS::VFSManager::instance().readBytes(vf);
+        auto bytes = vfs().readBytes(vf);
         if (!bytes.empty()) {
             if (m_fontRenderer->loadFontFromMemory(bytes.data(), bytes.size())) {
                 ROWL_LOG_INFO("✅ Loaded Visual Novel Font from VFS [" + vf + "]");
@@ -555,7 +564,7 @@ SDL_Texture* Window::loadTexture(const std::string& filename) {
     };
 
     for (const auto& candidate : vfsCandidates) {
-        auto bytes = Rowl::VFS::VFSManager::instance().readBytes(candidate);
+        auto bytes = vfs().readBytes(candidate);
         if (!bytes.empty()) {
             data = loadTextureMemorySafely(bytes.data(), static_cast<int>(bytes.size()), &width, &height, &channels);
             if (data) {
@@ -909,7 +918,7 @@ void Window::renderVisualNovelFrame(
                 auto found = m_buttonFontCache.find(choice.fontFamily);
                 if (found == m_buttonFontCache.end()) {
                     auto renderer = std::make_unique<FontRenderer>();
-                    auto bytes = Rowl::VFS::VFSManager::instance().readBytes(choice.fontFamily);
+                    auto bytes = vfs().readBytes(choice.fontFamily);
                     if (!bytes.empty() && renderer->loadFontFromMemory(bytes.data(), bytes.size())) {
                         found = m_buttonFontCache.emplace(choice.fontFamily, std::move(renderer)).first;
                     }

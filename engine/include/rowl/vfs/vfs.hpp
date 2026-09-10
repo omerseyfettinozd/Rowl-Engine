@@ -41,6 +41,12 @@ private:
 
 class VFSManager {
 public:
+    VFSManager() = default;
+    ~VFSManager() = default;
+
+    VFSManager(const VFSManager&) = delete;
+    VFSManager& operator=(const VFSManager&) = delete;
+
     static VFSManager& instance();
 
     void initialize();
@@ -60,9 +66,6 @@ public:
     }
 
 private:
-    VFSManager() = default;
-    ~VFSManager() = default;
-
     mutable std::recursive_mutex m_mutex;
     std::vector<std::pair<std::string, std::shared_ptr<IDataSource>>> m_mountPoints;
     bool m_initialized = false;

@@ -8,6 +8,10 @@
 
 struct SDL_AudioStream;
 
+namespace Rowl::VFS {
+class VFSManager;
+}
+
 namespace Rowl::Audio {
 
 enum class AudioChannelType {
@@ -33,8 +37,11 @@ enum class BgmTransitionKind {
 
 class AudioEngine {
 public:
-    AudioEngine();
+    explicit AudioEngine(Rowl::VFS::VFSManager* vfs = nullptr);
     ~AudioEngine();
+
+    void setVfs(Rowl::VFS::VFSManager* vfs);
+    Rowl::VFS::VFSManager* getVfs() const { return m_vfs; }
 
     bool initialize();
     void playAudio(const std::string& assetPath, AudioChannelType channel, DSPFilterType filter = DSPFilterType::Normal);
@@ -102,6 +109,8 @@ private:
     float m_bgmTransitionDurationSeconds = 0.0f;
     void applyChannelGains();
     void updateBgmTransition(float deltaSeconds);
+    Rowl::VFS::VFSManager* m_vfs = nullptr;
+    Rowl::VFS::VFSManager& vfs() const;
 };
 
 } // namespace Rowl::Audio

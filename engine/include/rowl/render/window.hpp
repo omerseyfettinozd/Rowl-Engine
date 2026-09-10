@@ -17,6 +17,10 @@ struct SDL_Surface;
 struct SDL_GPUShader;
 struct SDL_GPURenderState;
 
+namespace Rowl::VFS {
+class VFSManager;
+}
+
 namespace Rowl::Render {
 
 struct CharacterRenderData {
@@ -93,12 +97,15 @@ struct RuntimeInputEvent {
 
 class Window {
 public:
-    Window();
+    explicit Window(Rowl::VFS::VFSManager* vfs = nullptr);
     ~Window();
 
     // Disable copy/move
     Window(const Window&) = delete;
     Window& operator=(const Window&) = delete;
+
+    void setVfs(Rowl::VFS::VFSManager* vfs);
+    Rowl::VFS::VFSManager* getVfs() const { return m_vfs; }
 
     /**
      * Offscreen initialization: renders into an internal RGBA32 surface/buffer (e.g. 1920x1080)
@@ -233,6 +240,8 @@ private:
     bool m_isEmbedded      = false; // true → rendering into host control
     bool m_isOffscreen     = false; // true → rendering to RGBA32 surface
     std::function<void(const RuntimeInputEvent&)> m_inputHandler;
+    Rowl::VFS::VFSManager* m_vfs = nullptr;
+    Rowl::VFS::VFSManager& vfs() const;
 };
 
 } // namespace Rowl::Render

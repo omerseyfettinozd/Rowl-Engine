@@ -141,12 +141,21 @@ void applyDspToFloatPcm(float* samples, size_t sampleCount, int channels,
 
 } // namespace
 
-AudioEngine::AudioEngine() = default;
+AudioEngine::AudioEngine(Rowl::VFS::VFSManager* vfs)
+    : m_vfs(vfs) {}
 
 AudioEngine::~AudioEngine() {
     if (m_initialized) {
         shutdown();
     }
+}
+
+void AudioEngine::setVfs(Rowl::VFS::VFSManager* vfs) {
+    m_vfs = vfs;
+}
+
+Rowl::VFS::VFSManager& AudioEngine::vfs() const {
+    return m_vfs ? *m_vfs : Rowl::VFS::VFSManager::instance();
 }
 
 bool AudioEngine::initialize() {
@@ -260,9 +269,9 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
         "audio/" + assetPath
     };
     for (const auto& candidate : vfsCandidates) {
-        if (Rowl::VFS::VFSManager::instance().exists(candidate)) {
+        if (vfs().exists(candidate)) {
             if (hasOggExtension(candidate)) {
-                auto stream = Rowl::VFS::VFSManager::instance().openReadStream(candidate);
+                auto stream = vfs().openReadStream(candidate);
                 if (stream && decodeOggVorbis(*stream, spec, bytes, m_lastError)) {
                     audioBuf = static_cast<Uint8*>(SDL_malloc(bytes.size()));
                     if (!audioBuf) { m_lastError = "Unable to allocate decoded Ogg/Vorbis PCM"; return; }
@@ -275,7 +284,7 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
                 ROWL_LOG_WARN("[AudioEngine] " + m_lastError + ": " + assetPath);
                 return;
             }
-            bytes = Rowl::VFS::VFSManager::instance().readBytes(candidate);
+            bytes = vfs().readBytes(candidate);
             if (!bytes.empty()) {
                 if (bytes.size() > kMaxEncodedAudioBytes) {
                     ROWL_LOG_WARN("Audio file exceeds the maximum accepted size: " + assetPath);

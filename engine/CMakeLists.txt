@@ -121,6 +121,7 @@ find_package(Lua REQUIRED)
 add_library(RowlEngineCore SHARED
     # Core subsystems
     src/core/logger.cpp
+    src/core/runtime_context.cpp
     src/core/engine.cpp
     # Rendering
     src/render/window.cpp

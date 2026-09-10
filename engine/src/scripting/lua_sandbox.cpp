@@ -260,6 +260,7 @@ bool LuaSandbox::evaluateCondition(const std::string& conditionExpr) {
         if (loadStatus != LUA_OK) {
             std::string err = lua_tostring(m_luaState, -1);
             lua_pop(m_luaState, 1);
+            m_lastError = err;
             ROWL_LOG_WARN("Lua Condition syntax error in '" + conditionExpr + "': " + err);
             return false;
         }
@@ -269,6 +270,7 @@ bool LuaSandbox::evaluateCondition(const std::string& conditionExpr) {
     if (callStatus != LUA_OK) {
         std::string err = lua_tostring(m_luaState, -1);
         lua_pop(m_luaState, 1);
+        m_lastError = err;
         bindEngineApis();
         ROWL_LOG_WARN("Lua Condition runtime error in '" + conditionExpr + "': " + err);
         return false;
@@ -298,12 +300,14 @@ bool LuaSandbox::executeString(const std::string& scriptCode) {
     }
 
     // Reset instruction counter before each execution
+    m_lastError.clear();
     resetInstructionCounter(m_luaState);
 
     int loadStatus = luaL_loadstring(m_luaState, scriptCode.c_str());
     if (loadStatus != LUA_OK) {
         std::string err = lua_tostring(m_luaState, -1);
         lua_pop(m_luaState, 1);
+        m_lastError = err;
         ROWL_LOG_ERROR("Lua Script Syntax Error: " + err);
         return false;
     }
@@ -313,6 +317,7 @@ bool LuaSandbox::executeString(const std::string& scriptCode) {
     if (callStatus != LUA_OK) {
         std::string err = lua_tostring(m_luaState, -1);
         lua_pop(m_luaState, 1);
+        m_lastError = err;
         bindEngineApis();
         ROWL_LOG_WARN("Lua Script Runtime Exception (Caught Safely): " + err);
         return false;

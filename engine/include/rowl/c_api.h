@@ -342,6 +342,49 @@ ROWL_API int RowlEngine_EvaluateCondition(RowlEngineHandle handle, const char* c
 /** Executes a sandboxed Lua script string. Returns 1 on success, 0 on error. */
 ROWL_API int RowlEngine_ExecuteScript(RowlEngineHandle handle, const char* scriptCode);
 
+/* ── Structured Runtime Results & Diagnostics ────────────────────────────── */
+
+/**
+ * Returns the numeric error code of the last runtime operation on this handle.
+ * 0 = Success (OK), >0 = specific error code:
+ *   1 = InvalidHandle
+ *   2 = InvalidArgument
+ *   3 = FileNotFound
+ *   4 = FileTooLarge
+ *   5 = ParseError
+ *   6 = ValidationError
+ *   7 = IoError
+ *   8 = ScriptSyntaxError
+ *   9 = ScriptRuntimeError
+ *  10 = AudioDecodeError
+ *  11 = StateError
+ *  99 = UnknownError
+ */
+ROWL_API int32_t RowlEngine_GetLastResultCode(RowlEngineHandle handle);
+
+/**
+ * Returns the operation name of the last runtime call (e.g. "save_game_slot", "load_story_graph_vfs").
+ * Pointer is thread-local/engine-owned UTF-8 string.
+ */
+ROWL_API const char* RowlEngine_GetLastResultOperation(RowlEngineHandle handle);
+
+/**
+ * Returns the human-readable diagnostic message of the last runtime operation.
+ * Pointer is thread-local/engine-owned UTF-8 string.
+ */
+ROWL_API const char* RowlEngine_GetLastResultMessage(RowlEngineHandle handle);
+
+/**
+ * Returns the target identifier or path of the last runtime operation (e.g. slot index or file path).
+ * Pointer is thread-local/engine-owned UTF-8 string.
+ */
+ROWL_API const char* RowlEngine_GetLastResultTarget(RowlEngineHandle handle);
+
+/**
+ * Clears the last runtime result and resets it to OK/Success.
+ */
+ROWL_API void RowlEngine_ClearLastResult(RowlEngineHandle handle);
+
 #ifdef __cplusplus
 } /* extern "C" */
 #endif
