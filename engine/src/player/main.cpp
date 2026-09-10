@@ -49,6 +49,7 @@ static void printHelp(const char* progName) {
               << "  -t, --title <name>       Window title (default: \"Rowl Game\")\n"
               << "      --no-vsync           Disable vertical sync\n\n"
               << "      --gpu-smoke-test     Render one standalone frame, then exit (CI)\n\n"
+              << "      --package-smoke-test Load the packaged VFS graph, render one frame, then exit\n\n"
               << "Controls:\n"
               << "  Space / Enter / Click    Advance to next dialogue line / select choice\n"
               << "  F5                       Quick Save (Slot 0)\n"
@@ -66,6 +67,7 @@ int main(int argc, char* argv[]) {
     uint32_t winHeight = 1080;
     bool vsync = true;
     bool gpuSmokeTest = false;
+    bool packageSmokeTest = false;
 
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
@@ -94,6 +96,8 @@ int main(int argc, char* argv[]) {
             vsync = false;
         } else if (arg == "--gpu-smoke-test") {
             gpuSmokeTest = true;
+        } else if (arg == "--package-smoke-test") {
+            packageSmokeTest = true;
         } else {
             std::cerr << "Unknown option: " << arg << "\n";
             printHelp(argv[0]);
@@ -110,6 +114,10 @@ int main(int argc, char* argv[]) {
         std::cerr << "Story graph file does not exist or is not a regular file: " << storyGraphPath << "\n";
         return 1;
     }
+    if (packageSmokeTest && !storyGraphPath.empty()) {
+        std::cerr << "--package-smoke-test requires the graph to come from the packaged VFS; omit --story.\n";
+        return 1;
+    }
 
     // Allocate engine instance via C API
     RowlEngineHandle engine = RowlEngine_Create();
@@ -118,9 +126,14 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    // Initialize in standalone window mode
-    if (!RowlEngine_InitStandalone(engine, appTitle.c_str(), winWidth, winHeight, vsync ? 1 : 0)) {
-        std::cerr << "Failed to initialize Rowl Engine standalone window!" << std::endl;
+    // Package smoke uses the normal offscreen engine so it runs on desktop CI
+    // without opening a persistent native window. Interactive and GPU smoke
+    // modes retain the standalone path.
+    const int initialized = packageSmokeTest
+        ? RowlEngine_Init(engine, winWidth, winHeight, vsync ? 1 : 0)
+        : RowlEngine_InitStandalone(engine, appTitle.c_str(), winWidth, winHeight, vsync ? 1 : 0);
+    if (!initialized) {
+        std::cerr << "Failed to initialize Rowl Engine!" << std::endl;
         RowlEngine_Destroy(engine);
         return 1;
     }
@@ -128,8 +141,15 @@ int main(int argc, char* argv[]) {
     // Set project root directory (isolates and mounts project VFS)
     RowlEngine_SetProjectDirectory(engine, baseProj.string().c_str());
 
-    // Determine story graph path if not provided
-    if (storyGraphPath.empty()) {
+    // The release contract loads its graph through game.rowlpkg.  Physical
+    // --story and legacy loose-file discovery remain available for development.
+    if (packageSmokeTest) {
+        if (!RowlEngine_LoadStoryGraphFromVfs(engine, "json/full_story_graph.json")) {
+            std::cerr << "[Player] Package smoke failed: missing json/full_story_graph.json in VFS.\n";
+            RowlEngine_Destroy(engine);
+            return 1;
+        }
+    } else if (storyGraphPath.empty()) {
         std::vector<fs::path> candidates = {
             baseProj / "full_story_graph.json",
             baseProj / "Assets" / "full_story_graph.json",
@@ -146,9 +166,9 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    if (!storyGraphPath.empty() && fs::exists(storyGraphPath)) {
+    if (!packageSmokeTest && !storyGraphPath.empty() && fs::exists(storyGraphPath)) {
         RowlEngine_LoadStoryGraph(engine, storyGraphPath.c_str());
-    } else {
+    } else if (!packageSmokeTest) {
         std::cerr << "[Player] ⚠️  Warning: No story graph file found!\n"
                   << "  Searched in: " << baseProj.string() << "\n"
                   << "  Expected: full_story_graph.json (in project root or Assets/)\n"
@@ -156,7 +176,10 @@ int main(int argc, char* argv[]) {
                   << "  Starting with empty default scene...\n";
     }
 
-    if (gpuSmokeTest) {
+    if (packageSmokeTest) {
+        RowlEngine_Step(engine, 1.0F / 60.0F);
+        std::cout << "[Player] Package smoke frame rendered from VFS story graph.\n";
+    } else if (gpuSmokeTest) {
         // This travels through the same standalone window, VFS-mounted atlas,
         // and render path as the interactive player without leaving CI in a
         // blocking event loop.

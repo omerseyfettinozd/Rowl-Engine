@@ -7,6 +7,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using RowlEngine.Editor.Services;
 using RowlEngine.Editor.ViewModels;
@@ -481,8 +482,21 @@ namespace RowlEngine.Editor
                 throw new Exception("Standalone player executable missing in standalone build output");
             if (!File.Exists(Path.Combine(testBuildDir, "libRowlEngineCore.so")))
                 throw new Exception("libRowlEngineCore.so missing in standalone build output");
-            if (!Directory.Exists(Path.Combine(testBuildDir, "Assets")))
-                throw new Exception("Assets directory missing in standalone build output");
+            if (!File.Exists(Path.Combine(testBuildDir, "Assets", "packages", "game.rowlpkg")))
+                throw new Exception("game.rowlpkg missing in standalone build output");
+            if (!Directory.Exists(Path.Combine(testBuildDir, "mods")) ||
+                !File.Exists(Path.Combine(testBuildDir, "mods", "README.md")))
+                throw new Exception("mods override directory missing in standalone build output");
+            string cancelledBuildDir = Path.Combine(Path.GetTempPath(), "RowlTest_Build_Cancelled");
+            using (var cancellation = new CancellationTokenSource())
+            {
+                cancellation.Cancel();
+                var cancelledBuild = ProjectBuildService.BuildStandaloneAsync(
+                    testProjectRoot, Path.Combine(testProjectRoot, "Assets"), cancelledBuildDir,
+                    null, cancellation.Token).GetAwaiter().GetResult();
+                if (!cancelledBuild.Cancelled || Directory.Exists(cancelledBuildDir))
+                    throw new Exception("Cancelled standalone build published an output directory");
+            }
             var repeatBuild = ProjectBuildService.BuildStandalone(testProjectRoot, Path.Combine(testProjectRoot, "Assets"), testBuildDir);
             if (repeatBuild.Succeeded || !File.Exists(Path.Combine(testBuildDir, "README.txt")))
                 throw new Exception("Build must preserve a published package when its output directory already exists");

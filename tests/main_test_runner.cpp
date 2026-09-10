@@ -20,6 +20,8 @@
 #include <thread>
 #include <array>
 #include <iterator>
+#include <cstdlib>
+#include <iomanip>
 #include <SDL3/SDL.h>
 #include <zstd.h>
 
@@ -869,6 +871,60 @@ void test_vfs_security() {
         std::cerr << "Project remount exposed non-asset files or hid declared assets" << std::endl;
         exit(1);
     }
+
+    // A packaged release keeps its base content in game.rowlpkg, while mods
+    // may replace any entry at the same relative VFS path.  This verifies the
+    // ordinary lookup path rather than only the explicit mods/ namespace.
+    const auto packagedProject = testRoot / "packaged_project";
+    std::filesystem::create_directories(packagedProject / "Assets" / "packages");
+    std::filesystem::create_directories(packagedProject / "mods" / "dir");
+    std::filesystem::copy_file(validPackage,
+                               packagedProject / "Assets" / "packages" / "game.rowlpkg",
+                               std::filesystem::copy_options::overwrite_existing);
+    std::ofstream(packagedProject / "mods" / "dir" / "safe.txt") << "mod";
+    vfs.remountProject(packagedProject.string());
+    if (vfs.readString("dir/safe.txt") != "mod" ||
+        vfs.readString("mods/dir/safe.txt") != "mod") {
+        std::cerr << "Project mods did not override the matching package asset" << std::endl;
+        exit(1);
+    }
+    std::filesystem::remove(packagedProject / "mods" / "dir" / "safe.txt");
+    if (vfs.readString("dir/safe.txt") != "x") {
+        std::cerr << "Packaged base asset was unavailable after removing a mod override" << std::endl;
+        exit(1);
+    }
+    TEST_PASS("Mods override package assets at matching relative VFS paths");
+
+    const std::string graphVfsPath = "json/full_story_graph.json";
+    const std::string graphJson = R"({"start_node_id":101,"nodes":[{"id":101,"speaker":"Packaged","dialogue":"VFS graph"}]})";
+    const uint64_t graphIndexOffset = headerSize + graphJson.size();
+    Rowl::VFS::RowlPkgHeader graphHeader{{'R', 'O', 'W', 'L'}, 1, 1, graphIndexOffset};
+    Rowl::VFS::RowlPkgEntryRaw graphEntry{fnv1a64(graphVfsPath), static_cast<uint32_t>(graphVfsPath.size()),
+                                          headerSize, graphJson.size(), graphJson.size(), 0};
+    const auto graphPackage = packagedProject / "Assets" / "packages" / "graph.rowlpkg";
+    {
+        std::ofstream output(graphPackage, std::ios::binary);
+        output.write(reinterpret_cast<const char*>(&graphHeader), sizeof(graphHeader));
+        output.write(graphJson.data(), static_cast<std::streamsize>(graphJson.size()));
+        output.write(reinterpret_cast<const char*>(&graphEntry), sizeof(graphEntry));
+        output.write(graphVfsPath.data(), static_cast<std::streamsize>(graphVfsPath.size()));
+    }
+    RowlEngineHandle packagedHandle = RowlEngine_Create();
+    if (!packagedHandle || !RowlEngine_Init(packagedHandle, 320, 180, 0)) {
+        std::cerr << "Could not initialize engine for packaged graph test" << std::endl;
+        exit(1);
+    }
+    RowlEngine_SetProjectDirectory(packagedHandle, packagedProject.string().c_str());
+    if (!RowlEngine_LoadStoryGraphFromVfs(packagedHandle, graphVfsPath.c_str()) ||
+        RowlEngine_GetCurrentNodeId(packagedHandle) != 101 ||
+        RowlEngine_LoadStoryGraphFromVfs(packagedHandle, "json/missing.json")) {
+        std::cerr << "C API did not load the graph from the packaged VFS correctly" << std::endl;
+        RowlEngine_Destroy(packagedHandle);
+        exit(1);
+    }
+    RowlEngine_Destroy(packagedHandle);
+    TEST_PASS("C API loads the story graph directly from the packaged VFS");
+
     vfs.remountProject(std::filesystem::current_path().string());
     TEST_PASS("Project remount exposes Assets but not project-root files");
 
@@ -1566,7 +1622,84 @@ void test_game_object_component_system() {
     TEST_PASS("Safe GameObject Destruction & Scene Teardown");
 }
 
-void test_native_performance_benchmarks() {
+std::string jsonEscape(const std::string& value) {
+    std::string escaped;
+    escaped.reserve(value.size());
+    for (const unsigned char character : value) {
+        switch (character) {
+            case '\\': escaped += "\\\\"; break;
+            case '"': escaped += "\\\""; break;
+            case '\n': escaped += "\\n"; break;
+            case '\r': escaped += "\\r"; break;
+            case '\t': escaped += "\\t"; break;
+            default:
+                if (character < 0x20) escaped += "?";
+                else escaped += static_cast<char>(character);
+        }
+    }
+    return escaped;
+}
+
+std::string environmentValue(const char* name, const std::string& fallback) {
+    const char* value = std::getenv(name);
+    return value && *value ? value : fallback;
+}
+
+uint64_t processMemoryBytes() {
+    // Linux exposes resident pages here. Other hosts retain a valid JSON
+    // schema with zero when this portable fallback is unavailable.
+    std::ifstream statm("/proc/self/statm");
+    uint64_t pages = 0;
+    uint64_t residentPages = 0;
+    if (statm >> pages >> residentPages) {
+        return residentPages * 4096ULL;
+    }
+    return 0;
+}
+
+void writeBenchmarkJson(const std::string& outputPath, double vfsElapsedMs, int vfsIterations,
+                        double jsonElapsedMs, int jsonIterations, double firstFrameMs,
+                        double steadyFrameMs, uint64_t textureCount, uint64_t textureBytes) {
+    const std::filesystem::path output(outputPath);
+    if (!output.parent_path().empty()) std::filesystem::create_directories(output.parent_path());
+    const std::filesystem::path temporary = output.string() + ".tmp";
+    std::ofstream stream(temporary, std::ios::trunc);
+    if (!stream.is_open()) {
+        std::cerr << "Could not write benchmark JSON: " << outputPath << std::endl;
+        exit(1);
+    }
+    stream << std::fixed << std::setprecision(6)
+           << "{\n"
+           << "  \"schema_version\": 1,\n"
+           << "  \"build\": {\"id\": \"" << jsonEscape(environmentValue("ROWL_BENCHMARK_BUILD_ID", "unknown"))
+           << "\", \"type\": \"" << jsonEscape(environmentValue("ROWL_BENCHMARK_BUILD_TYPE", "unknown")) << "\"},\n"
+           << "  \"environment\": {\"os\": \"" << jsonEscape(SDL_GetPlatform())
+           << "\", \"cpu_count\": " << SDL_GetNumLogicalCPUCores()
+           << ", \"machine\": \"" << jsonEscape(environmentValue("ROWL_BENCHMARK_MACHINE", "unknown")) << "\"},\n"
+           << "  \"fixture_id\": \"" << jsonEscape(environmentValue("ROWL_BENCHMARK_FIXTURE", "native-default-v1")) << "\",\n"
+           << "  \"metrics\": {\n"
+           << "    \"vfs_io\": {\"iterations\": " << vfsIterations << ", \"total_ms\": " << vfsElapsedMs
+           << ", \"avg_ms\": " << vfsElapsedMs / vfsIterations << "},\n"
+           << "    \"json_update\": {\"iterations\": " << jsonIterations << ", \"total_ms\": " << jsonElapsedMs
+           << ", \"avg_ms\": " << jsonElapsedMs / jsonIterations << "},\n"
+           << "    \"first_frame_ms\": " << firstFrameMs << ",\n"
+           << "    \"steady_frame_ms\": " << steadyFrameMs << ",\n"
+           << "    \"texture_cache\": {\"texture_count\": " << textureCount << ", \"bytes\": " << textureBytes << "},\n"
+           << "    \"process_memory_bytes\": " << processMemoryBytes() << "\n"
+           << "  }\n"
+           << "}\n";
+    stream.close();
+    std::error_code replaceError;
+    std::filesystem::remove(output, replaceError);
+    std::filesystem::rename(temporary, output, replaceError);
+    if (replaceError) {
+        std::cerr << "Could not publish benchmark JSON: " << replaceError.message() << std::endl;
+        exit(1);
+    }
+    std::cout << "  ⚡ [BENCHMARK] JSON report: " << outputPath << std::endl;
+}
+
+void test_native_performance_benchmarks(const std::string& benchmarkJsonPath = "") {
     TEST_SECTION("Performance & Profiling Benchmarks");
 
     // 1. VFS Query & Read Latency Benchmark
@@ -1612,7 +1745,10 @@ void test_native_performance_benchmarks() {
     // 3. Native Frame Render Step Benchmark. Asset decode/cache population is
     // a startup cost, not a steady-state frame cost, so prime it before
     // timing the normal render loop.
+    auto firstFrameStart = std::chrono::high_resolution_clock::now();
     RowlEngine_Step(handle, 0.0f);
+    auto firstFrameEnd = std::chrono::high_resolution_clock::now();
+    const double firstFrameMs = std::chrono::duration<double, std::milli>(firstFrameEnd - firstFrameStart).count();
     const auto warmTextureCount = RowlEngine_GetTextureCacheTextureCount(handle);
     const auto warmTextureBytes = RowlEngine_GetTextureCacheBytes(handle);
     if (warmTextureCount == 0 || warmTextureBytes == 0) {
@@ -1642,6 +1778,11 @@ void test_native_performance_benchmarks() {
     std::cout << "  ⚡ [BENCHMARK] Texture Cache: " << cachedTextureCount << " unique textures, "
               << cachedTextureBytes << " RGBA bytes" << std::endl;
     TEST_PASS("Texture Cache Memory Telemetry");
+
+    if (!benchmarkJsonPath.empty()) {
+        writeBenchmarkJson(benchmarkJsonPath, vfsElapsedMs, VFS_ITERATIONS, jsonElapsedMs, JSON_ITERATIONS,
+                           firstFrameMs, avgFrameMs, cachedTextureCount, cachedTextureBytes);
+    }
 
     constexpr uint64_t kDefaultTextureCacheBudget = 64ULL * 1024ULL * 1024ULL;
     RowlEngine_SetTextureCacheBudgetBytes(handle, kDefaultTextureCacheBudget);
@@ -1892,7 +2033,17 @@ void test_hardening_and_reliability() {
     }
 }
 
-int main() {
+int main(int argc, char* argv[]) {
+    std::string benchmarkJsonPath;
+    for (int index = 1; index < argc; ++index) {
+        const std::string argument = argv[index];
+        if (argument == "--benchmark-json" && index + 1 < argc) {
+            benchmarkJsonPath = argv[++index];
+        } else {
+            std::cerr << "Usage: rowl_tests [--benchmark-json <output.json>]" << std::endl;
+            return 1;
+        }
+    }
     std::cout << "\n=======================================================" << std::endl;
     std::cout << "🚀 ROWL ENGINE COMPREHENSIVE NATIVE UNIT TEST SUITE 🚀" << std::endl;
     std::cout << "=======================================================" << std::endl;
@@ -1906,7 +2057,7 @@ int main() {
     test_vfs_security();
     test_native_c_api();
     test_game_object_component_system();
-    test_native_performance_benchmarks();
+    test_native_performance_benchmarks(benchmarkJsonPath);
     test_hardening_and_reliability();
 
     std::cout << "\n=======================================================" << std::endl;

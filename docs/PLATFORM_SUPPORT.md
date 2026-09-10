@@ -9,8 +9,8 @@ package and a real-device smoke test pass.
 
 | Target | Runtime build gate | Package/device gate | Status |
 | --- | --- | --- | --- |
-| Linux desktop | Native CTest and GPU-MSDF smoke test in CI | Local standalone player test | Validated development target |
-| Windows desktop | vcpkg CMake/CTest CI job | Standalone package smoke test pending | Build gate configured |
+| Linux desktop | Native CTest, shaderless fallback and GPU-MSDF smoke CI tests | Fresh `game.rowlpkg` plus VFS package smoke | Local package smoke validated; CI gate configured |
+| Windows desktop | vcpkg CMake/CTest CI job | Fresh standalone package, DLL and shaderless VFS smoke in CI | Gate configured; first CI result pending |
 | macOS desktop | None yet | None yet | Planned |
 | Android arm64-v8a | Core-only NDK CMake script | APK and physical-device test pending | Build path prepared |
 | iOS | Core-only Xcode/CMake arm64 script | Signed app and physical-device test pending | Build path prepared |
@@ -43,9 +43,13 @@ budget on its lowest supported device:
 | Startup | Story graph, core assets, and first frame load within the target-specific budget |
 | Assets | Missing/corrupt/oversized assets fail safely and do not leave stale render or audio state |
 
-The native test executable prints repeatable VFS, JSON ingestion, render-frame,
-and texture-cache measurements. These numbers are baselines, not universal
-pass/fail thresholds; compare like-for-like Release builds on the same device.
+`rowl_tests --benchmark-json <path>` writes a versioned JSON report containing
+build type, OS/device identity, fixture identity, VFS I/O, JSON update, first
+frame, steady frame, texture cache and process memory values.
+`tools/compare_benchmarks.py` rejects different OS/machine/CPU/build-type or
+fixture identities, then reports percentage deltas for compatible reports.
+These numbers are baselines, not universal pass/fail thresholds; compare
+like-for-like Release builds on the same device.
 
 ## Texture-cache rule
 

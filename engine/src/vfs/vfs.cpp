@@ -106,6 +106,13 @@ void VFSManager::initialize() {
 
     ROWL_LOG_INFO("Initializing Hybrid Virtual File System (VFS)...");
 
+    // A mod using an ordinary asset path overrides the packaged entry at the
+    // same path.  Preserve the explicit mods/ namespace for tooling too.
+    if (fs::exists("mods") && fs::is_directory("mods")) {
+        mountDirectory("", "mods");
+        mountDirectory("mods", "mods");
+    }
+
     // A default runtime may only expose its asset root. Mounting the current
     // directory here used to make unrelated project files readable through an
     // empty VFS prefix whenever the engine was launched from a project root.
@@ -135,10 +142,6 @@ void VFSManager::initialize() {
         }
     }
 
-    if (fs::exists("mods") && fs::is_directory("mods")) {
-        mountDirectory("mods", "mods");
-    }
-
     m_initialized = true;
     ROWL_LOG_INFO("VFS Initialization Complete (" + std::to_string(m_mountPoints.size()) + " mount points).");
 }
@@ -163,6 +166,14 @@ void VFSManager::remountProject(const std::string& projectRoot) {
     }
 
     ROWL_LOG_INFO("Remounting VFS for isolated project root: " + root.string());
+
+    // Mount mods first so a release can override package content without a
+    // second loose Assets tree.  The package remains the only base source.
+    fs::path modsPath = root / "mods";
+    if (fs::exists(modsPath) && fs::is_directory(modsPath)) {
+        mountDirectory("", modsPath.string());
+        mountDirectory("mods", modsPath.string());
+    }
 
     // Only expose declared runtime content. Mounting the project root at the
     // empty prefix would make project metadata and arbitrary source files
@@ -189,12 +200,6 @@ void VFSManager::remountProject(const std::string& projectRoot) {
                 }
             }
         }
-    }
-
-    // 4. Mount project mods folder if exists
-    fs::path modsPath = root / "mods";
-    if (fs::exists(modsPath) && fs::is_directory(modsPath)) {
-        mountDirectory("mods", modsPath.string());
     }
 
     ROWL_LOG_INFO("VFS Remount Complete for project '" + projectRoot + "' (" +

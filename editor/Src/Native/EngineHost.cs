@@ -335,6 +335,19 @@ namespace RowlEngine.Editor.Native
             }
         }
 
+        /// <summary>Loads a graph from the active project's VFS/package.</summary>
+        public bool LoadStoryGraphFromVfs(string vfsPath)
+        {
+            if (_handle == IntPtr.Zero || string.IsNullOrEmpty(vfsPath)) return false;
+            bool loaded = NativeBridge.RowlEngine_LoadStoryGraphFromVfs(_handle, vfsPath) != 0;
+            if (loaded && !IsPlaying)
+            {
+                NativeBridge.RowlEngine_Step(_handle, 0.0f);
+                UpdatePixelBuffer();
+            }
+            return loaded;
+        }
+
         /// <summary>Sets the active project root directory, isolating VFS mounts to that project.</summary>
         public void SetProjectDirectory(string projectRoot)
         {

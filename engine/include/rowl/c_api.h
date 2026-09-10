@@ -207,6 +207,10 @@ ROWL_API void RowlEngine_UpdateSceneFromJson(
 ROWL_API void RowlEngine_LoadStoryGraph(RowlEngineHandle handle,
                                          const char* jsonPath);
 
+/** Loads a story graph through the active VFS (for example a package entry). */
+ROWL_API int RowlEngine_LoadStoryGraphFromVfs(RowlEngineHandle handle,
+                                              const char* vfsPath);
+
 /**
  * Sets the active project root directory, isolating VFS mounts to that project.
  * @param projectRoot Absolute or relative path to the active project folder.

@@ -1,6 +1,7 @@
 # Uygulama Durumu
 
-Son doğrulama: Linux Debug derlemesi, CTest ve editör headless testi geçiyor.
+Son doğrulama: Linux Debug derlemesi, CTest, editör headless testi ve paket
+içinden VFS graph yükleyen yerel standalone smoke testi geçiyor.
 
 ## Hazır
 
@@ -12,15 +13,29 @@ Son doğrulama: Linux Debug derlemesi, CTest ve editör headless testi geçiyor.
 - WAV oynatma, PCM üzerinde Telephone/Underwater/Cave DSP, ducking durum sorguları ve ses hata sorgusu.
 - MSDF atlas meta verisi, RGB median örnekleme ve glyph ölçüm çekirdeği; atlas yoksa TrueType fallback.
 - VFS salt-okunur stream arayüzü; loose dosyalar doğrudan stream olarak açılır.
+- Script component çalışma/hata tanıları editör ve C API üzerinden görünür; Lua
+  component modülleri birbirinden izole kalır.
+- Node girişinde BGM instant/fade/crossfade geçişleri ve SFX'in preview refresh
+  sırasında yeniden tetiklenmesini engelleyen olay semantiği uygulanır.
+- `tools/package_assets.py` v1 `.rowlpkg` için tek kanonik üreticidir. Desktop
+  release yalnızca `Assets/packages/game.rowlpkg` ve boş `mods/` override
+  dizinini taşır; aynı göreli mod yolu paket içeriğini geçersiz kılar.
+- C API ve player paket içindeki `json/full_story_graph.json` graph'ını VFS
+  üzerinden yükler. `--package-smoke-test` tek offscreen frame render eder.
+- Native benchmark JSON şeması ve aynı ortam/fixture için yüzde farkı raporlayan
+  karşılaştırıcı hazırdır; ilk sonuçlar baseline olarak saklanır.
+- Yaratıcı Hikâye Stüdyosu tasarım sistemi, Project Hub, boş durum, üst çalışma
+  akışı ve ana panel yüzeylerinde uygulandı.
 
 ## Sonraki üretim işleri
 
-- Script component'leri için editor tarafında hata/çalışma durumu görünürlüğü.
-- Node-bazlı BGM geçişleri: project varsayılanı, instant, fade ve crossfade
-  runtime'da uygulanır; yeni parçanın decode/queue işlemi başarısızsa çalışan
-  BGM korunur.
-- Audio component olay semantiği: preview refresh'lerinde SFX tekrarını önleme
-  ve node girişine bağlı oynatma.
-- Android/iOS host projeleri ve fiziksel cihaz doğrulaması.
+- Linux ve Windows CI release package smoke sonuçlarını ilk uzak çalıştırmada
+  doğrula; Windows sonucu gelene kadar platform desteği onaylanmış sayılmaz.
+- Aynı fiziksel makinede Release benchmark baseline'ları biriktir; gerçek
+  örnek sayısı yeterli olmadan fail eşiği koyma.
+- Node kartları ve component inspector için ayrı Yaratıcı Hikâye Stüdyosu
+  görsel dilimlerini uygula.
+- macOS desktop package kapısı; Android/iOS host projeleri ve fiziksel cihaz
+  doğrulaması daha sonraki platform kapsamındadır.
 
 Bu dosya, hedef mimari belgelerindeki gelecek vaatleri ile test edilmiş kodun durumunu ayırmak için tutulur.

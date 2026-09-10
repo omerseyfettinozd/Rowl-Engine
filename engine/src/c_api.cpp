@@ -317,6 +317,13 @@ void RowlEngine_LoadStoryGraph(RowlEngineHandle handle, const char* jsonPath) {
     invokeNoexcept([&] { toEngine(handle)->loadStoryGraphFromPath(jsonPath); });
 }
 
+int RowlEngine_LoadStoryGraphFromVfs(RowlEngineHandle handle, const char* vfsPath) {
+    if (!isLiveHandle(handle) || !vfsPath || !*vfsPath) return 0;
+    int loaded = 0;
+    invokeNoexcept([&] { loaded = toEngine(handle)->loadStoryGraphFromVfs(vfsPath) ? 1 : 0; });
+    return loaded;
+}
+
 void RowlEngine_SetProjectDirectory(RowlEngineHandle handle, const char* projectRoot) {
     if (!isLiveHandle(handle) || !projectRoot || !*projectRoot) return;
     invokeNoexcept([&] {

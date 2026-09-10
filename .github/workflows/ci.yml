@@ -46,6 +46,37 @@ jobs:
       - name: Test
         run: ctest --test-dir build --output-on-failure
 
+      - name: Verify standalone package and VFS smoke
+        run: |
+          release_dir="$RUNNER_TEMP/rowl-release"
+          mkdir -p "$release_dir/Assets/packages" "$release_dir/mods"
+          python3 tools/package_assets.py Assets "$release_dir/Assets/packages/game.rowlpkg"
+          cp build/bin/rowl_player "$release_dir/RowlGame"
+          cp build/lib/libRowlEngineCore.so "$release_dir/"
+          printf '# Rowl Engine mods\n' > "$release_dir/mods/README.md"
+          printf 'ROWL ENGINE — STANDALONE GAME RELEASE\n' > "$release_dir/README.txt"
+          python3 tools/verify_release_package.py "$release_dir"
+          (
+            cd "$release_dir"
+            SDL_AUDIODRIVER=dummy LD_LIBRARY_PATH=. ./RowlGame --project . --package-smoke-test
+          )
+
+      - name: Record native benchmark baseline
+        run: |
+          mkdir -p benchmark-results
+          ROWL_BENCHMARK_BUILD_ID="$GITHUB_SHA" \
+          ROWL_BENCHMARK_BUILD_TYPE=Debug \
+          ROWL_BENCHMARK_MACHINE="$(uname -m)" \
+          SDL_AUDIODRIVER=dummy \
+          build/bin/rowl_tests --benchmark-json benchmark-results/linux-native.json
+          cat benchmark-results/linux-native.json >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload native benchmark baseline
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-native-benchmark
+          path: benchmark-results/linux-native.json
+
       - name: Verify shaderless fallback build
         run: |
           cmake -S . -B build-msdf-fallback -G Ninja -DCMAKE_BUILD_TYPE=Debug -DROWL_ENABLE_GPU_MSDF=OFF
@@ -83,6 +114,23 @@ jobs:
         run: |
           $env:PATH = "$(Resolve-Path build/vcpkg_installed/x64-windows/debug/bin);$env:PATH"
           ctest --test-dir build --output-on-failure
+
+      - name: Verify standalone package and VFS smoke
+        shell: pwsh
+        run: |
+          $release = Join-Path $env:RUNNER_TEMP 'rowl-release'
+          New-Item -ItemType Directory -Force -Path (Join-Path $release 'Assets/packages'), (Join-Path $release 'mods') | Out-Null
+          python tools/package_assets.py Assets (Join-Path $release 'Assets/packages/game.rowlpkg')
+          Copy-Item build/bin/rowl_player.exe (Join-Path $release 'RowlGame.exe')
+          Copy-Item build/bin/RowlEngineCore.dll $release
+          Copy-Item build/vcpkg_installed/x64-windows/debug/bin/*.dll $release
+          Set-Content -NoNewline (Join-Path $release 'mods/README.md') '# Rowl Engine mods'
+          Set-Content -NoNewline (Join-Path $release 'README.txt') 'ROWL ENGINE — STANDALONE GAME RELEASE'
+          python tools/verify_release_package.py $release
+          Push-Location $release
+          $env:SDL_AUDIODRIVER = 'dummy'
+          .\RowlGame.exe --project . --package-smoke-test
+          Pop-Location
 
       - name: Check managed dependencies for known vulnerabilities
         run: dotnet list editor/RowlEngine.Editor.csproj package --vulnerable --include-transitive

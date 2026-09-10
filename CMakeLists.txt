@@ -36,6 +36,18 @@ option(ROWL_BUILD_RUNTIME_TESTS "Build tests that execute on the build host" ${R
 if(ROWL_BUILD_RUNTIME_TESTS)
     add_subdirectory(tests)
 
+    find_package(Python3 COMPONENTS Interpreter)
+    if(Python3_Interpreter_FOUND)
+        add_test(
+            NAME rowl_benchmark_tool_tests
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/test_benchmark_tools.py
+        )
+        set_tests_properties(rowl_benchmark_tool_tests PROPERTIES
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+            TIMEOUT 15
+        )
+    endif()
+
     find_program(DOTNET_EXECUTABLE dotnet)
     if(DOTNET_EXECUTABLE)
         add_test(

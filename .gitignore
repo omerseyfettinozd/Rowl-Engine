@@ -2,6 +2,7 @@
 
 # C++ Build Output & CMake Artifacts
 build/
+/build-benchmarks*/
 bin/
 lib/
 CMakeFiles/
@@ -47,3 +48,6 @@ Thumbs.db
 __pycache__/
 *.py[cod]
 *$py.class
+
+# Local machine-specific performance baselines are CI artifacts, not source.
+/benchmark-results/

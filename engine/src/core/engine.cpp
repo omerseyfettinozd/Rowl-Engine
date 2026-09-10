@@ -1043,6 +1043,28 @@ void Engine::loadStoryGraphFromPath(const std::string& jsonPath) {
     parseStoryGraphJson(content);
 }
 
+bool Engine::loadStoryGraphFromVfs(const std::string& vfsPath) {
+    if (vfsPath.empty()) {
+        ROWL_LOG_ERROR("Story graph VFS path is empty");
+        return false;
+    }
+
+    auto& vfs = Rowl::VFS::VFSManager::instance();
+    if (!vfs.exists(vfsPath)) {
+        ROWL_LOG_ERROR("Story graph is missing from VFS: " + vfsPath);
+        return false;
+    }
+
+    const std::string content = vfs.readString(vfsPath);
+    if (content.empty() || content.size() > kMaxStoryJsonBytes) {
+        ROWL_LOG_ERROR("Story graph VFS content is empty or exceeds the size limit: " + vfsPath);
+        return false;
+    }
+
+    parseStoryGraphJson(content);
+    return true;
+}
+
 void Engine::loadStoryGraphFile() {
     std::vector<std::string> searchPaths = {
         "Assets/json/full_story_graph.json",

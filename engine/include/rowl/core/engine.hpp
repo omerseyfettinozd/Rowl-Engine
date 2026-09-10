@@ -156,6 +156,9 @@ public:
      */
     void loadStoryGraphFromPath(const std::string& jsonPath);
 
+    /** Loads a story graph through the active virtual file system. */
+    bool loadStoryGraphFromVfs(const std::string& vfsPath);
+
     // choiceIndex: which branch to follow (0 = first). Default 0 for backward compat.
     void advanceToNextNode(uint32_t choiceIndex = 0);
     /// Advances by the stable option ID stored in graph v4. Returns false for

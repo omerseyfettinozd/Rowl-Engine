@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -16,7 +17,9 @@ public static class ProjectBuildService
 
     public static Task<StandaloneBuildResult> BuildStandaloneAsync(string projectRoot, string assetsPath, string buildOutDir,
         IProgress<string>? progress, CancellationToken cancellationToken, Action<string>? log = null)
-        => Task.Run(() => Build(projectRoot, assetsPath, buildOutDir, progress, cancellationToken, log), cancellationToken);
+        // Build translates cancellation to a result and removes its staging
+        // directory. Do not let Task.Run short-circuit a pre-cancelled token.
+        => Task.Run(() => Build(projectRoot, assetsPath, buildOutDir, progress, cancellationToken, log));
 
     private static StandaloneBuildResult Build(string projectRoot, string assetsPath, string buildOutDir,
         IProgress<string>? progress, CancellationToken token, Action<string>? log)
@@ -43,7 +46,8 @@ public static class ProjectBuildService
         {
             token.ThrowIfCancellationRequested(); Directory.CreateDirectory(staging);
             Report("[BUILD 1/4] Assets are being packaged...");
-            CopyDirectoryCancellable(assetsPath, Path.Combine(staging, "Assets"), token);
+            string packagePath = Path.Combine(staging, "Assets", "packages", "game.rowlpkg");
+            RunCanonicalPackageTool(repoRoot, assetsPath, packagePath, token, Report);
             string sourceManifest = Path.Combine(root, "project.rowlproj");
             if (File.Exists(sourceManifest)) File.Copy(sourceManifest, Path.Combine(staging, "project.rowlproj"));
             token.ThrowIfCancellationRequested();
@@ -67,10 +71,12 @@ public static class ProjectBuildService
             token.ThrowIfCancellationRequested();
 
             Report("[BUILD 4/4] Release manifest is being verified...");
-            if (!File.Exists(Path.Combine(staging, "Assets", "full_story_graph.json")) && !File.Exists(Path.Combine(staging, "Assets", "json", "full_story_graph.json")))
-                throw new InvalidOperationException("The release package has no story graph.");
+            Directory.CreateDirectory(Path.Combine(staging, "mods"));
+            ProjectFileSystem.WriteAllTextAtomically(Path.Combine(staging, "mods", "README.md"),
+                "# Rowl Engine mods\n\nPlace an asset here using its package-relative path to override it. For example, `images/hero.png` overrides `images/hero.png` in `Assets/packages/game.rowlpkg`.\n");
             ProjectFileSystem.WriteAllTextAtomically(Path.Combine(staging, "README.txt"),
-                "ROWL ENGINE — STANDALONE GAME RELEASE\n\nRun ./run_game.sh on Linux/macOS or run_game.bat on Windows.\n");
+                "ROWL ENGINE — STANDALONE GAME RELEASE\n\nRun ./run_game.sh on Linux/macOS or run_game.bat on Windows.\n\nAssets/packages/game.rowlpkg is the canonical game content. Put an asset in mods/ with the same relative path to override it.\n");
+            RunReleaseVerifier(repoRoot, staging, token, Report);
             Directory.Move(staging, output);
             Report($"✅ Build complete: {output}");
             return new(true, false, output, "Build complete.");
@@ -89,21 +95,46 @@ public static class ProjectBuildService
         }
     }
 
-    private static void CopyDirectoryCancellable(string source, string target, CancellationToken token)
+    private static void RunCanonicalPackageTool(string repoRoot, string assetsPath, string packagePath,
+        CancellationToken token, Action<string> report)
     {
+        string tool = Path.Combine(repoRoot, "tools", "package_assets.py");
+        if (!File.Exists(tool)) throw new InvalidOperationException("Canonical package tool is missing: " + tool);
+        RunPythonTool(OperatingSystem.IsWindows() ? "python" : "python3", tool,
+            $"\"{assetsPath}\" \"{packagePath}\"", repoRoot, token, report);
+    }
+
+    private static void RunReleaseVerifier(string repoRoot, string releaseRoot,
+        CancellationToken token, Action<string> report)
+    {
+        string tool = Path.Combine(repoRoot, "tools", "verify_release_package.py");
+        if (!File.Exists(tool)) throw new InvalidOperationException("Release verifier is missing: " + tool);
+        RunPythonTool(OperatingSystem.IsWindows() ? "python" : "python3", tool,
+            $"\"{releaseRoot}\"", repoRoot, token, report);
+    }
+
+    private static void RunPythonTool(string executable, string script, string arguments, string workingDirectory,
+        CancellationToken token, Action<string> report)
+    {
+        using var process = new Process
+        {
+            StartInfo = new ProcessStartInfo(executable, $"\"{script}\" {arguments}")
+            {
+                WorkingDirectory = workingDirectory,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            }
+        };
+        using var registration = token.Register(() => { try { if (!process.HasExited) process.Kill(true); } catch { } });
+        if (!process.Start()) throw new InvalidOperationException("Could not start " + Path.GetFileName(script));
+        string stdout = process.StandardOutput.ReadToEnd();
+        string stderr = process.StandardError.ReadToEnd();
+        process.WaitForExit();
         token.ThrowIfCancellationRequested();
-        Directory.CreateDirectory(target);
-        foreach (var file in Directory.GetFiles(source))
-        {
-            token.ThrowIfCancellationRequested();
-            if (new FileInfo(file).LinkTarget is null)
-                File.Copy(file, Path.Combine(target, Path.GetFileName(file)), true);
-        }
-        foreach (var child in Directory.GetDirectories(source))
-        {
-            token.ThrowIfCancellationRequested();
-            if (new DirectoryInfo(child).LinkTarget is null)
-                CopyDirectoryCancellable(child, Path.Combine(target, Path.GetFileName(child)), token);
-        }
+        if (!string.IsNullOrWhiteSpace(stdout)) report(stdout.Trim());
+        if (process.ExitCode != 0)
+            throw new InvalidOperationException($"{Path.GetFileName(script)} failed: {stderr.Trim()}");
     }
 }

@@ -10,15 +10,15 @@
             <Grid RowDefinitions="Auto,Auto">
                 <!-- Üst satır: Logo + başlık -->
                 <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-                    <TextBlock Text="ROWL" FontWeight="Bold" FontSize="15" Foreground="{DynamicResource PrimaryText}" LetterSpacing="1.0" VerticalAlignment="Center"/>
-                    <TextBlock Text="ENGINE" FontSize="15" Foreground="{DynamicResource MutedText}" LetterSpacing="1.0" Margin="-6,0,0,0" VerticalAlignment="Center"/>
+                    <TextBlock Text="ROWL" FontWeight="Bold" FontSize="15" Foreground="{DynamicResource Accent}" LetterSpacing="1.0" VerticalAlignment="Center"/>
+                    <TextBlock Text="STORY STUDIO" FontSize="15" Foreground="{DynamicResource MutedText}" LetterSpacing="1.0" Margin="-6,0,0,0" VerticalAlignment="Center"/>
                     <Border Width="1" Height="16" Background="{DynamicResource BorderColor}" Margin="4,0" VerticalAlignment="Center"/>
                     <TextBlock Text="Projeler" FontSize="12" Foreground="{DynamicResource SecondaryText}" VerticalAlignment="Center"/>
                 </StackPanel>
                 <!-- Alt satır: Butonlar — sağa hizalı -->
                 <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" Margin="0,8,0,0">
-                    <Button Content="İçe Aktar" Command="{Binding ImportExistingCommand}" Background="Transparent" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1" CornerRadius="8" Padding="12,7" FontSize="12"/>
-                    <Button Content="Yeni Proje" Command="{Binding CreateProjectCommand}" Background="{DynamicResource AccentButtonBg}" Foreground="White" CornerRadius="8" Padding="14,7" FontSize="12" FontWeight="SemiBold"/>
+                    <Button Content="İçe Aktar" Command="{Binding ImportExistingCommand}" Background="{DynamicResource ToolbarButtonBg}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1" CornerRadius="8" Padding="12,7" FontSize="12"/>
+                    <Button Content="Yeni hikâye" Command="{Binding CreateProjectCommand}" Background="{DynamicResource AccentButtonBg}" Foreground="{DynamicResource PrimaryText}" BorderThickness="0" CornerRadius="8" Padding="14,7" FontSize="12" FontWeight="SemiBold"/>
                 </StackPanel>
             </Grid>
         </Border>
@@ -30,9 +30,9 @@
                 <Border Width="56" Height="56" CornerRadius="12" Background="{DynamicResource PanelBackground}" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1" HorizontalAlignment="Center">
                     <TextBlock Text="+" FontSize="28" Foreground="{DynamicResource MutedText}" HorizontalAlignment="Center" VerticalAlignment="Center" FontWeight="Light"/>
                 </Border>
-                <TextBlock Text="Henüz proje yok" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource PrimaryText}" HorizontalAlignment="Center"/>
-                <TextBlock Text="İlk projeni oluştur" Foreground="{DynamicResource MutedText}" FontSize="12" HorizontalAlignment="Center"/>
-                <Button Content="Yeni Proje Oluştur" Command="{Binding CreateProjectCommand}" Background="{DynamicResource AccentButtonBg}" Foreground="White" CornerRadius="8" Padding="20,10" HorizontalAlignment="Center" Margin="0,8,0,0" FontSize="12" FontWeight="SemiBold"/>
+                <TextBlock Text="İlk hikâyeni kur" FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource PrimaryText}" HorizontalAlignment="Center"/>
+                <TextBlock Text="Bir proje oluştur; sahneleri, seçimleri ve önizlemeyi sırayla kur." Foreground="{DynamicResource MutedText}" FontSize="12" Width="340" TextAlignment="Center" TextWrapping="Wrap" HorizontalAlignment="Center"/>
+                <Button Content="Yeni hikâye oluştur" Command="{Binding CreateProjectCommand}" Background="{DynamicResource AccentButtonBg}" Foreground="{DynamicResource PrimaryText}" BorderThickness="0" CornerRadius="8" Padding="20,10" HorizontalAlignment="Center" Margin="0,8,0,0" FontSize="12" FontWeight="SemiBold"/>
             </StackPanel>
 
             <!-- Proje listesi — Minecraft dünya şeritleri stili -->
