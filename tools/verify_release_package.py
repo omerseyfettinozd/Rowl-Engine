@@ -56,6 +56,17 @@ def read_package_entries(package_path):
     return paths
 
 
+def verify_mod_overrides(mods_root):
+    """Reject links and special files before a release exposes mods to the VFS."""
+    for current_root, directories, files in os.walk(mods_root, followlinks=False):
+        for name in directories + files:
+            candidate = os.path.join(current_root, name)
+            if os.path.islink(candidate):
+                fail("mods override contains a symbolic link: " + candidate)
+            if not os.path.isdir(candidate) and not os.path.isfile(candidate):
+                fail("mods override contains a non-regular entry: " + candidate)
+
+
 def verify(release_root):
     root = os.path.abspath(release_root)
     if not os.path.isdir(root):
@@ -66,7 +77,8 @@ def verify(release_root):
         fail("missing canonical package: Assets/packages/game.rowlpkg")
     if not os.path.isdir(os.path.join(root, "mods")):
         fail("missing mods override directory")
-    if not os.path.isfile(os.path.join(root, "mods", "README.md")):
+    mods_root = os.path.join(root, "mods")
+    if not os.path.isfile(os.path.join(mods_root, "README.md")):
         fail("missing mods override README")
     if not os.path.isfile(os.path.join(root, "README.txt")):
         fail("missing release README")
@@ -86,6 +98,7 @@ def verify(release_root):
     allowed_assets = {"packages"}
     if any(entry.name not in allowed_assets for entry in os.scandir(assets_root)):
         fail("release Assets contains loose content; game.rowlpkg must be canonical")
+    verify_mod_overrides(mods_root)
 
     print("[ReleaseVerifier] Valid release: game.rowlpkg contains "
           f"{len(entries)} entries including json/full_story_graph.json.")
