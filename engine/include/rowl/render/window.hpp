@@ -251,6 +251,7 @@ private:
     Rowl::VFS::VFSManager* m_vfs = nullptr;
     std::shared_ptr<Rowl::VFS::VFSManager> m_ownedVfs;
     bool m_videoLeaseHeld = false;
+    uint32_t m_eventWindowId = 0;
     Rowl::VFS::VFSManager& vfs() const;
 };
 

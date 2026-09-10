@@ -139,6 +139,7 @@ add_library(RowlEngineCore SHARED
     src/audio/audio_engine.cpp
     # Platform abstraction
     src/platform/mobile_input.cpp
+    src/platform/sdl_event_dispatcher.cpp
     src/platform/sdl_subsystem_lease.cpp
     # Entity-Component Scene System
     src/scene/component.cpp

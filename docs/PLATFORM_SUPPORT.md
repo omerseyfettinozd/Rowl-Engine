@@ -5,6 +5,16 @@ packages. A UI target or a successful cross-compile alone does **not** mean a
 platform is supported: a platform becomes supported only after its release
 package and a real-device smoke test pass.
 
+## Multi-runtime event contract
+
+Multiple C API handles may coexist with isolated VFS and runtime state. SDL
+video/audio lifetime is leased process-wide, while visible or embedded SDL
+windows are registered with one process UI/event thread. The dispatcher pumps
+SDL's shared queue once and routes key, pointer, resize, and close events by
+window ID; an SDL quit request is broadcast to every registered visible runtime.
+Offscreen handles remain independent under their existing per-handle owner
+thread contract.
+
 ## Current status
 
 | Target | Runtime build gate | Package/device gate | Status |

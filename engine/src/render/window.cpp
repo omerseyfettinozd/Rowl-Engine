@@ -3,6 +3,7 @@
 #include "rowl/render/window.hpp"
 #include "rowl/render/aspect_guardian.hpp"
 #include "rowl/core/logger.hpp"
+#include "rowl/platform/sdl_event_dispatcher.hpp"
 #include "rowl/platform/sdl_subsystem_lease.hpp"
 #include "rowl/vfs/vfs.hpp"
 #include <SDL3/SDL.h>
@@ -178,6 +179,16 @@ bool Window::initialize(const std::string& title, uint32_t width, uint32_t heigh
         m_videoLeaseHeld = false;
         return false;
     }
+    m_eventWindowId = SDL_GetWindowID(m_sdlWindow);
+    if (!Rowl::Platform::SdlEventDispatcher::registerWindow(m_eventWindowId)) {
+        ROWL_LOG_ERROR("Visible SDL windows must share one UI/event thread.");
+        SDL_DestroyWindow(m_sdlWindow);
+        m_sdlWindow = nullptr;
+        m_eventWindowId = 0;
+        Rowl::Platform::SdlSubsystemLease::release(SDL_INIT_VIDEO);
+        m_videoLeaseHeld = false;
+        return false;
+    }
     // Keep SDL_Renderer command semantics for sprites/UI while using its GPU
     // backend, which permits an MSDF fragment state only around text draws.
     m_sdlRenderer = SDL_CreateGPURenderer(nullptr, m_sdlWindow);
@@ -189,6 +200,8 @@ bool Window::initialize(const std::string& title, uint32_t width, uint32_t heigh
         ROWL_LOG_ERROR("SDL_CreateRenderer failed: " + std::string(SDL_GetError()));
         SDL_DestroyWindow(m_sdlWindow);
         m_sdlWindow = nullptr;
+        Rowl::Platform::SdlEventDispatcher::unregisterWindow(m_eventWindowId);
+        m_eventWindowId = 0;
         Rowl::Platform::SdlSubsystemLease::release(SDL_INIT_VIDEO);
         m_videoLeaseHeld = false;
         return false;
@@ -305,11 +318,23 @@ bool Window::initializeEmbedded(void* nativeHandle, uint32_t width, uint32_t hei
         m_videoLeaseHeld = false;
         return false;
     }
+    m_eventWindowId = SDL_GetWindowID(m_sdlWindow);
+    if (!Rowl::Platform::SdlEventDispatcher::registerWindow(m_eventWindowId)) {
+        ROWL_LOG_ERROR("Visible SDL windows must share one UI/event thread.");
+        SDL_DestroyWindow(m_sdlWindow);
+        m_sdlWindow = nullptr;
+        m_eventWindowId = 0;
+        Rowl::Platform::SdlSubsystemLease::release(SDL_INIT_VIDEO);
+        m_videoLeaseHeld = false;
+        return false;
+    }
     m_sdlRenderer = SDL_CreateRenderer(m_sdlWindow, nullptr);
     if (!m_sdlRenderer) {
         ROWL_LOG_ERROR("SDL_CreateRenderer (embedded) failed: " + std::string(SDL_GetError()));
         SDL_DestroyWindow(m_sdlWindow);
         m_sdlWindow = nullptr;
+        Rowl::Platform::SdlEventDispatcher::unregisterWindow(m_eventWindowId);
+        m_eventWindowId = 0;
         Rowl::Platform::SdlSubsystemLease::release(SDL_INIT_VIDEO);
         m_videoLeaseHeld = false;
         return false;
@@ -405,8 +430,8 @@ void Window::setInputHandler(std::function<void(const RuntimeInputEvent&)> handl
 void Window::pollEvents(bool& outShouldQuit) {
     if (!m_initialized) return;
 
-    SDL_Event event;
-    while (SDL_PollEvent(&event)) {
+    if (m_eventWindowId == 0) return;
+    for (const SDL_Event& event : Rowl::Platform::SdlEventDispatcher::takeEvents(m_eventWindowId)) {
         switch (event.type) {
             case SDL_EVENT_QUIT:
                 outShouldQuit = true;
@@ -1047,6 +1072,8 @@ void Window::shutdown() {
     }
 
     if (m_sdlWindow) {
+        Rowl::Platform::SdlEventDispatcher::unregisterWindow(m_eventWindowId);
+        m_eventWindowId = 0;
         SDL_DestroyWindow(m_sdlWindow);
         m_sdlWindow = nullptr;
     }

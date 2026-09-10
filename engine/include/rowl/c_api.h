@@ -76,6 +76,10 @@ ROWL_API int RowlEngine_Init(RowlEngineHandle handle,
  * @param virtualHeight Target logical height (e.g. 1080).
  * @param vsync         1 = enable vsync, 0 = disable.
  * @return 1 on success, 0 on failure.
+ *
+ * All visible/embedded runtimes in one process must be initialized and
+ * stepped from the same host UI/event thread. Offscreen runtimes retain the
+ * per-handle owner-thread contract described above.
  */
 ROWL_API int RowlEngine_InitStandalone(RowlEngineHandle handle,
                                         const char* appTitle,
@@ -92,6 +96,8 @@ ROWL_API void RowlEngine_Run(RowlEngineHandle handle);
  * Advances the engine by one frame.
  * Call this every frame from the host's render/tick loop.
  * @param deltaTime Elapsed time since the last call, in seconds.
+ * Visible/embedded handles share one process UI/event thread because SDL's
+ * native event queue is process-global.
  */
 ROWL_API void RowlEngine_Step(RowlEngineHandle handle, float deltaTime);
 
