@@ -807,10 +807,17 @@ namespace RowlEngine.Editor
                 stopwatch.Stop();
                 benchmark.Record("graph_drag_step_ms", stopwatch.Elapsed.TotalMilliseconds / iterations);
 
+                var selectionNodeA = new NodeViewModel(9897, "Selection A", 0, 0, bare: true);
+                selectionNodeA.AddComponent<DialogueComponentViewModel>().DialogueText = "Selection A";
+                var selectionNodeB = new NodeViewModel(9898, "Selection B", 0, 0, bare: true);
+                selectionNodeB.AddComponent<DialogueComponentViewModel>().DialogueText = "Selection B";
+                mainVm.EngineHost.ResetToStartNode();
+                mainVm.SelectNodeQuiet(selectionNodeA);
                 stopwatch.Restart();
-                for (int i = 0; i < iterations; i++) mainVm.SelectNodeQuiet(benchmarkNode);
+                for (int i = 0; i < iterations; i++)
+                    mainVm.SelectNodeQuiet(i % 2 == 0 ? selectionNodeB : selectionNodeA);
                 stopwatch.Stop();
-                benchmark.Record("node_selection_ms", stopwatch.Elapsed.TotalMilliseconds / iterations);
+                benchmark.Record("node_selection_with_preview_ms", stopwatch.Elapsed.TotalMilliseconds / iterations);
 
                 stopwatch.Restart();
                 for (int i = 0; i < iterations; i++)
@@ -827,6 +834,7 @@ namespace RowlEngine.Editor
                 stopwatch.Stop();
                 benchmark.Record("preview_serialization_ms", stopwatch.Elapsed.TotalMilliseconds / iterations);
 
+                mainVm.SelectNodeQuiet(benchmarkNode);
                 mainVm.EngineHost.ResetToStartNode();
                 mainVm.ScheduleEnginePreviewUpdate(benchmarkNode);
                 stopwatch.Restart();
