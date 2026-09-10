@@ -17,8 +17,12 @@
                     Padding="10,8">
                 <StackPanel Spacing="6">
                     <DockPanel>
-                        <TextBlock Text="🔍 Inspector" FontWeight="Bold" FontSize="13" 
-                                   Foreground="{DynamicResource PrimaryText}" VerticalAlignment="Center"/>
+                        <StackPanel Spacing="1">
+                            <TextBlock Text="INSPECTOR" FontWeight="Black" FontSize="11"
+                                       Foreground="{DynamicResource Accent}" VerticalAlignment="Center" LetterSpacing="0.6"/>
+                            <TextBlock Text="Seçili sahne nesnesi" FontSize="10"
+                                       Foreground="{DynamicResource MutedText}"/>
+                        </StackPanel>
                         <TextBlock DockPanel.Dock="Right" 
                                    Text="{Binding HierarchyViewModel.SelectedObject.Id, StringFormat='ID: {0}', FallbackValue=''}" 
                                    FontSize="10" Foreground="{DynamicResource MutedText}" 
@@ -72,6 +76,17 @@
                                    Margin="16,0"/>
                     </StackPanel>
 
+                    <Border IsVisible="{Binding InspectorViewModel.HasSelectedObject}"
+                            Background="{DynamicResource SurfaceBackground}" BorderBrush="{DynamicResource BorderSubtle}"
+                            BorderThickness="1" CornerRadius="8" Padding="10,7">
+                        <DockPanel>
+                            <TextBlock Text="BİLEŞENLER" FontSize="10" FontWeight="Black"
+                                       Foreground="{DynamicResource Accent}" LetterSpacing="0.5"/>
+                            <TextBlock DockPanel.Dock="Right" Text="{Binding HierarchyViewModel.SelectedObject.Components.Count, StringFormat='{}{0} etkin'}"
+                                       FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                        </DockPanel>
+                    </Border>
+
                     <!-- Attached Components Collection (Rendered via ComponentTemplateSelector) -->
                     <ItemsControl ItemsSource="{Binding HierarchyViewModel.SelectedObject.Components}"
                                   IsVisible="{Binding InspectorViewModel.HasSelectedObject}">
@@ -84,7 +99,7 @@
                          ➕ ADD COMPONENT BUTTON (Positioned Inside Inspector at the Bottom)
                          ══════════════════════════════════════════════════════════════════ -->
                     <StackPanel IsVisible="{Binding InspectorViewModel.HasSelectedObject}" Spacing="6" Margin="0,6,0,10">
-                        <Button Content="➕ Add Component"
+                        <Button Content="➕ Bileşen Ekle"
                                 Command="{Binding ShowAddComponentMenuCommand}"
                                 HorizontalAlignment="Stretch"
                                 Padding="12,9"
@@ -94,7 +109,7 @@
                                 Foreground="{DynamicResource PrimaryText}"
                                 BorderBrush="{DynamicResource BorderColor}"
                                 BorderThickness="1"
-                                CornerRadius="6"
+                                CornerRadius="8"
                                 HorizontalContentAlignment="Center"/>
 
                         <!-- Add Component Flyout List -->
@@ -102,7 +117,7 @@
                             <Border Background="{DynamicResource CardHeaderBackground}" CornerRadius="6" 
                                     Padding="4" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1">
                                 <StackPanel Spacing="2">
-                                    <TextBlock Text="Select Component to Attach" FontSize="11" 
+                                    <TextBlock Text="Eklenecek bileşeni seç" FontSize="11"
                                                Foreground="{DynamicResource MutedText}" Margin="8,4"/>
                                     <Button Content="💬 Dialogue &amp; Speaker"
                                             Command="{Binding AddComponentByTypeCommand}" CommandParameter="dialogue"
@@ -139,7 +154,7 @@
             <!-- ── Engine Sync Button ── -->
             <Border Grid.Row="2" Padding="8,6,8,8" Background="{DynamicResource SurfaceBackground}"
                     BorderBrush="{DynamicResource BorderColor}" BorderThickness="0,1,0,0">
-                <Button Content="⚡ Sync to Engine"
+                <Button Content="⚡ Önizlemeye Gönder"
                         ToolTip.Tip="Send the selected node to the running preview"
                         Command="{Binding PushHotReloadPacketCommand}" 
                         IsEnabled="{Binding InspectorViewModel.HasSelectedObject}"
