@@ -69,11 +69,16 @@ with tempfile.TemporaryDirectory() as directory:
     editor_candidate.write_text(json.dumps(editor_report()), encoding="utf-8")
     editor_incompatible.write_text(json.dumps(editor_report("different-machine")), encoding="utf-8")
 
+    editor_comparison_path = directory / "editor-comparison.json"
     editor_comparison = subprocess.run(
-        [sys.executable, str(EDITOR_COMPARE_TOOL), str(editor_baseline), str(editor_candidate)],
+        [sys.executable, str(EDITOR_COMPARE_TOOL), str(editor_baseline), str(editor_candidate),
+         "--output", str(editor_comparison_path)],
         capture_output=True, text=True, check=False)
     if editor_comparison.returncode != 0 or "+0.00%" not in editor_comparison.stdout:
         raise SystemExit("compatible editor benchmark reports were not compared")
+    editor_comparison_output = json.loads(editor_comparison_path.read_text(encoding="utf-8"))
+    if not editor_comparison_output.get("compatible") or len(editor_comparison_output.get("metrics", [])) != 2:
+        raise SystemExit("editor benchmark comparison JSON was not published")
 
     editor_rejected = subprocess.run(
         [sys.executable, str(EDITOR_COMPARE_TOOL), str(editor_baseline), str(editor_incompatible)],
