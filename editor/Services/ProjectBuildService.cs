@@ -1,17 +1,40 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using RowlEngine.Editor.ViewModels;
 
 namespace RowlEngine.Editor.Services;
 
 public sealed record StandaloneBuildResult(bool Succeeded, bool Cancelled, string OutputDirectory, string Message);
+public sealed record PackageBuildResult(bool Succeeded, bool Cancelled, string PackagePath, string Message, string Output);
+public sealed record PipelineExecutionResult(bool Succeeded, bool Cancelled, string OutputDirectory, string Message, IReadOnlyList<ProjectValidationIssue> Issues);
 
 /// <summary>Creates complete standalone packages; a partial package is never published.</summary>
 public static class ProjectBuildService
 {
+    public static string ResolveRepoRoot(string hintPath)
+    {
+        string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+        string[] candidates = {
+            hintPath,
+            Path.GetFullPath(Path.Combine(hintPath, "..")),
+            Path.GetFullPath(Path.Combine(hintPath, "..", "..")),
+            baseDir,
+            Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..")),
+            Path.GetFullPath(Path.Combine(baseDir, "..", "..", ".."))
+        };
+        foreach (var candidate in candidates)
+        {
+            if (File.Exists(Path.Combine(candidate, "tools", "package_assets.py")))
+                return candidate;
+        }
+        return candidates[4];
+    }
+
     public static StandaloneBuildResult BuildStandalone(string projectRoot, string assetsPath, string buildOutDir, Action<string>? log = null)
         => BuildStandaloneAsync(projectRoot, assetsPath, buildOutDir, null, CancellationToken.None, log).GetAwaiter().GetResult();
 
@@ -20,6 +43,121 @@ public static class ProjectBuildService
         // Build translates cancellation to a result and removes its staging
         // directory. Do not let Task.Run short-circuit a pre-cancelled token.
         => Task.Run(() => Build(projectRoot, assetsPath, buildOutDir, progress, cancellationToken, log));
+
+    public static PipelineExecutionResult ExecuteBuildPipeline(
+        string projectRoot,
+        string assetsPath,
+        string buildOutDir,
+        IEnumerable<NodeViewModel> nodes,
+        IEnumerable<ConnectionViewModel> connections,
+        ulong? startNodeId,
+        Action<IReadOnlyList<ProjectValidationIssue>>? onValidationIssues = null,
+        Action<string>? log = null)
+    {
+        var validation = ProjectValidationService.Validate(nodes, connections, assetsPath, startNodeId);
+        onValidationIssues?.Invoke(validation);
+        foreach (var issue in validation)
+            log?.Invoke($"{(issue.IsError ? "❌" : "⚠️")} [BUILD CHECK] {issue.Message}");
+
+        if (validation.Any(issue => issue.IsError))
+        {
+            string errorMsg = "Build cancelled: fix blocking project validation errors first.";
+            log?.Invoke($"⛔ {errorMsg}");
+            return new(false, false, buildOutDir, errorMsg, validation);
+        }
+
+        var result = BuildStandalone(projectRoot, assetsPath, buildOutDir, log);
+        return new(result.Succeeded, result.Cancelled, result.OutputDirectory, result.Message, validation);
+    }
+
+    public static PackageBuildResult PackageAssets(string assetsPath, string outputPackagePath, Action<string>? log = null)
+        => Package(assetsPath, outputPackagePath, CancellationToken.None, log);
+
+    public static Task<PackageBuildResult> PackageAssetsAsync(
+        string assetsPath,
+        string outputPackagePath,
+        Action<string>? log = null,
+        CancellationToken cancellationToken = default)
+        => Task.Run(() => Package(assetsPath, outputPackagePath, cancellationToken, log));
+
+    private static PackageBuildResult Package(
+        string assetsPath,
+        string outputPackagePath,
+        CancellationToken cancellationToken,
+        Action<string>? log)
+    {
+        void Report(string msg) => log?.Invoke(msg);
+
+        if (string.IsNullOrWhiteSpace(assetsPath) || !Directory.Exists(assetsPath))
+            return new(false, false, outputPackagePath, "Assets directory does not exist.", string.Empty);
+
+        string fullOutput = Path.GetFullPath(outputPackagePath);
+        string parentDir = Path.GetDirectoryName(fullOutput)
+            ?? throw new InvalidOperationException("Package output directory cannot be resolved.");
+        Directory.CreateDirectory(parentDir);
+
+        string stagingPackage = Path.Combine(parentDir, $".{Path.GetFileName(fullOutput)}.{Guid.NewGuid():N}.tmp");
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            string repoRoot = ResolveRepoRoot(assetsPath);
+            string tool = Path.Combine(repoRoot, "tools", "package_assets.py");
+            if (!File.Exists(tool))
+                return new(false, false, fullOutput, $"Canonical package tool missing: {tool}", string.Empty);
+
+            var psi = new ProcessStartInfo(OperatingSystem.IsWindows() ? "python" : "python3")
+            {
+                WorkingDirectory = repoRoot,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+            psi.ArgumentList.Add(tool);
+            psi.ArgumentList.Add(Path.GetFullPath(assetsPath));
+            psi.ArgumentList.Add(stagingPackage);
+
+            using var process = new Process { StartInfo = psi };
+            using var registration = cancellationToken.Register(() =>
+            {
+                try { if (!process.HasExited) process.Kill(true); } catch { }
+            });
+
+            if (!process.Start())
+                return new(false, false, fullOutput, "Failed to start python packaging process.", string.Empty);
+
+            string stdout = process.StandardOutput.ReadToEnd();
+            string stderr = process.StandardError.ReadToEnd();
+            process.WaitForExit();
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (process.ExitCode != 0 || !File.Exists(stagingPackage))
+            {
+                return new(false, false, fullOutput,
+                    $"Package creation failed (exit code {process.ExitCode}): {stderr.Trim()}", stdout);
+            }
+
+            File.Move(stagingPackage, fullOutput, overwrite: true);
+            Report($"📦 [VFS PAKET] .rowlpkg başarıyla oluşturuldu: {fullOutput}");
+            return new(true, false, fullOutput, "Package created successfully.", stdout);
+        }
+        catch (OperationCanceledException)
+        {
+            return new(false, true, fullOutput, "Package creation cancelled.", string.Empty);
+        }
+        catch (Exception ex)
+        {
+            return new(false, false, fullOutput, $"Package creation error: {ex.Message}", string.Empty);
+        }
+        finally
+        {
+            if (File.Exists(stagingPackage))
+            {
+                try { File.Delete(stagingPackage); } catch { }
+            }
+        }
+    }
 
     private static StandaloneBuildResult Build(string projectRoot, string assetsPath, string buildOutDir,
         IProgress<string>? progress, CancellationToken token, Action<string>? log)
@@ -31,7 +169,7 @@ public static class ProjectBuildService
         if (Directory.Exists(output) || File.Exists(output)) return new(false, false, output, "The build output directory already exists.");
 
         string baseDir = AppDomain.CurrentDomain.BaseDirectory;
-        string repoRoot = Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", ".."));
+        string repoRoot = ResolveRepoRoot(root);
         string[] playerCandidates = { Path.Combine(root, "build", "bin", "rowl_player"), Path.Combine(root, "build", "bin", "rowl_player.exe"), Path.Combine(repoRoot, "build", "bin", "rowl_player"), Path.Combine(repoRoot, "build", "bin", "rowl_player.exe"), Path.Combine(baseDir, "rowl_player"), Path.Combine(baseDir, "rowl_player.exe") };
         string[] libraryCandidates = { Path.Combine(root, "build", "lib", "libRowlEngineCore.so"), Path.Combine(root, "build", "bin", "RowlEngineCore.dll"), Path.Combine(root, "build", "lib", "libRowlEngineCore.dylib"), Path.Combine(repoRoot, "build", "lib", "libRowlEngineCore.so"), Path.Combine(repoRoot, "build", "bin", "RowlEngineCore.dll"), Path.Combine(repoRoot, "build", "lib", "libRowlEngineCore.dylib"), Path.Combine(baseDir, "libRowlEngineCore.so"), Path.Combine(baseDir, "RowlEngineCore.dll"), Path.Combine(baseDir, "libRowlEngineCore.dylib") };
         string? player = playerCandidates.FirstOrDefault(File.Exists);

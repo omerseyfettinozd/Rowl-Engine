@@ -1935,30 +1935,12 @@ namespace RowlEngine.Editor.ViewModels
         /// </summary>
         public void SaveProjectToDirectory(string targetDir)
         {
-            if (ProjectFileSystem.IsSameOrDescendant(targetDir, ProjectRoot))
-                throw new InvalidOperationException("Farklı Kaydet hedefi açık projenin kendisi veya alt klasörü olamaz.");
-            Directory.CreateDirectory(targetDir);
-
-            // 1. Save current graph in memory to files
-            SaveProject();
-
-            // 2. Copy Assets directory
-            string targetAssets = Path.Combine(targetDir, "Assets");
-            ProjectFileSystem.CopyDirectory(MainWindowViewModel.AssetsPath, targetAssets);
-
-            // 3. Write project metadata manifest
-            string projectManifest = Path.Combine(targetDir, "project.rowlproj");
-            JsonObject manifest;
-            try { manifest = JsonNode.Parse(File.ReadAllText(Path.Combine(ProjectRoot, "project.rowlproj"))) as JsonObject ?? new(); }
-            catch { manifest = new JsonObject(); }
-            manifest["name"] ??= "Rowl Engine Project";
-            manifest["version"] ??= "1.0.0";
-            manifest["engineVersion"] ??= "1.0.0";
-            manifest["savedAt"] = DateTime.UtcNow.ToString("o");
-            manifest["nodeCount"] = Nodes.Count;
-            manifest["startNodeId"] = GetStartNode()?.Id ?? 101;
-            manifest["virtualResolution"] ??= JsonSerializer.SerializeToNode(new { width = 1920, height = 1080 });
-            ProjectFileSystem.WriteAllTextAtomically(projectManifest, manifest.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+            ProjectSaveAsCoordinator.SaveProjectCopy(
+                ProjectRoot,
+                targetDir,
+                Nodes.Count,
+                GetStartNode()?.Id ?? 101,
+                SaveProject);
         }
 
         /// <summary>
@@ -2041,22 +2023,19 @@ namespace RowlEngine.Editor.ViewModels
             // removes transient canvas links already handled by save logic.
             SaveActiveStoryFile();
             SaveFullStoryGraphFile();
-            var validation = ProjectValidationService.Validate(Nodes, Connections, AssetsPath, GetStartNode()?.Id);
-            ProjectIssuesViewModel.SetIssues(validation);
-            foreach (var issue in validation)
-                AppendLog($"{(issue.IsError ? "❌" : "⚠️")} [BUILD CHECK] {issue.Message}");
-            if (validation.Any(issue => issue.IsError))
-            {
-                AppendLog("⛔ Build cancelled: fix blocking project validation errors first.");
-                return;
-            }
-            // Delegate export to ProjectBuildService
-            var result = ProjectBuildService.BuildStandalone(
+            var result = ProjectBuildService.ExecuteBuildPipeline(
                 MainWindowViewModel.ProjectRoot,
                 MainWindowViewModel.AssetsPath,
                 buildOutDir,
+                Nodes,
+                Connections,
+                GetStartNode()?.Id,
+                ProjectIssuesViewModel.SetIssues,
                 AppendLog);
-            if (!result.Succeeded) AppendLog($"⚠️ {result.Message}");
+            if (!result.Succeeded && !result.Cancelled)
+            {
+                AppendLog($"⚠️ {result.Message}");
+            }
         }
 
         [RelayCommand]
@@ -2081,10 +2060,6 @@ namespace RowlEngine.Editor.ViewModels
             try
             {
                 var window = (Avalonia.Application.Current?.ApplicationLifetime as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.MainWindow;
-
-                string baseDir = AppDomain.CurrentDomain.BaseDirectory;
-                string rootDir = Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", ".."));
-                string scriptPath = Path.Combine(rootDir, "tools", "package_assets.py");
 
                 // Default output directory
                 string defaultOutDir = Path.Combine(MainWindowViewModel.AssetsPath, "packages");
@@ -2115,40 +2090,15 @@ namespace RowlEngine.Editor.ViewModels
                 string pkgFileName = $"game_data_{DateTime.Now:yyyy-MM-dd_HH-mm}.rowlpkg";
                 string outPkg = Path.Combine(outDir, pkgFileName);
 
-                if (File.Exists(scriptPath))
+                var result = await ProjectBuildService.PackageAssetsAsync(MainWindowViewModel.AssetsPath, outPkg, AppendLog);
+                if (result.Succeeded)
                 {
-                    var psi = new System.Diagnostics.ProcessStartInfo
-                    {
-                        FileName = "python3",
-                        RedirectStandardOutput = true,
-                        RedirectStandardError = true,
-                        UseShellExecute = false,
-                        CreateNoWindow = true
-                    };
-                    psi.ArgumentList.Add(scriptPath);
-                    psi.ArgumentList.Add(MainWindowViewModel.AssetsPath);
-                    psi.ArgumentList.Add(outPkg);
-                    using var proc = System.Diagnostics.Process.Start(psi);
-                    if (proc != null)
-                    {
-                        Task<string> outputTask = proc.StandardOutput.ReadToEndAsync();
-                        Task<string> errorTask = proc.StandardError.ReadToEndAsync();
-                        await proc.WaitForExitAsync();
-                        string output = await outputTask;
-                        string error = await errorTask;
-                        if (proc.ExitCode != 0 || !File.Exists(outPkg))
-                        {
-                            AppendLog($"⚠️ Paket oluşturma başarısız (çıkış kodu {proc.ExitCode}):\n{error}\n{output}");
-                            return;
-                        }
-
-                        AppendLog($"📦 [VFS PAKET] .rowlpkg başarıyla oluşturuldu:\n  📁 Konum: {outPkg}\n{output}");
-                        AssetBrowserViewModel.RefreshAssets();
-                    }
+                    AppendLog($"📦 [VFS PAKET] .rowlpkg başarıyla oluşturuldu:\n  📁 Konum: {result.PackagePath}\n{result.Output}");
+                    AssetBrowserViewModel.RefreshAssets();
                 }
                 else
                 {
-                    AppendLog($"⚠️ Paket scripti bulunamadı: {scriptPath}");
+                    AppendLog($"⚠️ Paket oluşturma başarısız: {result.Message}");
                 }
             }
             catch (Exception ex)
