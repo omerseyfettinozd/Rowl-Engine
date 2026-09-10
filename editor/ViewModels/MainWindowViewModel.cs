@@ -793,86 +793,36 @@ namespace RowlEngine.Editor.ViewModels
 
         private void LoadPlayerSettings()
         {
-            var profile = PlayerSettingsProfile.Load(_playerSettingsPath);
-            Settings.MasterVolume = profile.MasterVolume;
-            Settings.BgmVolume = profile.BgmVolume;
-            Settings.VoiceVolume = profile.VoiceVolume;
-            Settings.SfxVolume = profile.SfxVolume;
-            Settings.TextSpeedMultiplier = profile.TextSpeedMultiplier;
-            Settings.AutoAdvanceDelay = profile.AutoAdvanceDelay;
+            EditorSettingsSyncService.LoadPlayerSettings(_playerSettingsPath, Settings);
         }
 
         private void LoadEditorSettings()
         {
-            var profile = EditorSettingsProfile.Load(_editorSettingsPath);
-            Settings.AutoSaveEnabled = profile.AutoSaveEnabled;
-            Settings.AutoSaveIntervalSeconds = profile.AutoSaveIntervalSeconds;
+            EditorSettingsSyncService.LoadEditorSettings(_editorSettingsPath, Settings);
         }
 
         private void LoadProjectRuntimeSettingsIntoEditor()
         {
-            Settings.ProjectSaveSlotCount = ProjectRuntimeSettings.SaveSlotCount;
-            Settings.ProjectDefaultBgmTransition = ProjectRuntimeSettings.DefaultBgmTransition;
-            Settings.ProjectDefaultBgmTransitionDurationSeconds = ProjectRuntimeSettings.DefaultBgmTransitionDurationSeconds;
+            EditorSettingsSyncService.LoadProjectRuntimeSettings(ProjectRuntimeSettings, Settings);
         }
 
         private void OnSettingsPropertyChanged(object? sender, PropertyChangedEventArgs e)
         {
-            if (e.PropertyName is nameof(SettingsViewModel.AutoSaveEnabled) or nameof(SettingsViewModel.AutoSaveIntervalSeconds))
-            {
-                new EditorSettingsProfile { AutoSaveEnabled = Settings.AutoSaveEnabled,
-                    AutoSaveIntervalSeconds = Settings.AutoSaveIntervalSeconds }.Save(_editorSettingsPath);
-                return;
-            }
-            if (e.PropertyName is nameof(SettingsViewModel.ProjectSaveSlotCount) or nameof(SettingsViewModel.ProjectDefaultBgmTransition)
-                or nameof(SettingsViewModel.ProjectDefaultBgmTransitionDurationSeconds))
-            {
-                ProjectRuntimeSettings = new ProjectRuntimeSettings
-                {
-                    SaveSlotCount = Settings.ProjectSaveSlotCount,
-                    DefaultBgmTransition = Settings.ProjectDefaultBgmTransition,
-                    DefaultBgmTransitionDurationSeconds = Settings.ProjectDefaultBgmTransitionDurationSeconds
-                }.Sanitized();
-                ProjectRuntimeSettingsService.Save(Path.Combine(ProjectRoot, "project.rowlproj"), ProjectRuntimeSettings);
-                LoadProjectRuntimeSettingsIntoEditor();
-                if (EngineHost.IsInitialized)
-                    EngineHost.SetBgmTransitionDefaults(ProjectRuntimeSettings.DefaultBgmTransition,
-                        ProjectRuntimeSettings.DefaultBgmTransitionDurationSeconds);
-                SaveSlotsViewModel?.Refresh();
-                return;
-            }
-            if (e.PropertyName is not (nameof(SettingsViewModel.MasterVolume) or nameof(SettingsViewModel.BgmVolume)
-                or nameof(SettingsViewModel.VoiceVolume) or nameof(SettingsViewModel.SfxVolume)
-                or nameof(SettingsViewModel.TextSpeedMultiplier) or nameof(SettingsViewModel.AutoAdvanceDelay))) return;
-
-            var profile = new PlayerSettingsProfile
-            {
-                MasterVolume = Settings.MasterVolume,
-                BgmVolume = Settings.BgmVolume,
-                VoiceVolume = Settings.VoiceVolume,
-                SfxVolume = Settings.SfxVolume,
-                TextSpeedMultiplier = Settings.TextSpeedMultiplier,
-                AutoAdvanceDelay = Settings.AutoAdvanceDelay
-            }.Sanitized();
-            profile.Save(_playerSettingsPath);
-            ApplyPlayerSettingsToEngine(profile);
+            EditorSettingsSyncService.HandleSettingsPropertyChanged(
+                e.PropertyName,
+                Settings,
+                _editorSettingsPath,
+                _playerSettingsPath,
+                ProjectRoot,
+                EngineHost,
+                () => ProjectRuntimeSettings,
+                updated => ProjectRuntimeSettings = updated,
+                () => SaveSlotsViewModel?.Refresh());
         }
 
         private void ApplyPlayerSettingsToEngine(PlayerSettingsProfile? profile = null)
         {
-            if (!EngineHost.IsInitialized) return;
-            profile ??= new PlayerSettingsProfile
-            {
-                MasterVolume = Settings.MasterVolume, BgmVolume = Settings.BgmVolume,
-                VoiceVolume = Settings.VoiceVolume, SfxVolume = Settings.SfxVolume,
-                TextSpeedMultiplier = Settings.TextSpeedMultiplier, AutoAdvanceDelay = Settings.AutoAdvanceDelay
-            }.Sanitized();
-            EngineHost.SetMasterVolume(profile.MasterVolume);
-            EngineHost.SetBgmVolume(profile.BgmVolume);
-            EngineHost.SetVoiceVolume(profile.VoiceVolume);
-            EngineHost.SetSfxVolume(profile.SfxVolume);
-            EngineHost.SetTextSpeedMultiplier(profile.TextSpeedMultiplier);
-            EngineHost.SetAutoAdvanceDelayOffset(profile.AutoAdvanceDelay);
+            EditorSettingsSyncService.ApplyPlayerSettingsToEngine(EngineHost, Settings, profile);
         }
 
         /// <summary>
@@ -1409,35 +1359,26 @@ namespace RowlEngine.Editor.ViewModels
             if (SelectedNode == null || string.IsNullOrEmpty(typeKey)) return;
 
             var targetObj = HierarchyViewModel?.SelectedObject ?? SelectedNode.Objects.FirstOrDefault();
-            if (targetObj == null)
+            bool targetCreated = (targetObj == null);
+
+            var component = EditorComponentService.AddComponent(
+                SelectedNode,
+                targetObj,
+                typeKey,
+                AppendLog);
+
+            if (component != null)
             {
-                targetObj = SelectedNode.CreateObject("GameObject");
-                if (HierarchyViewModel != null)
+                if (targetCreated && HierarchyViewModel != null && component.OwnerObject != null)
                 {
-                    HierarchyViewModel.SelectedObject = targetObj;
+                    HierarchyViewModel.SelectedObject = component.OwnerObject;
                 }
-            }
-
-            try
-            {
-                var component = ComponentRegistry.Create(typeKey);
-                targetObj.AddComponent(component);
-
-                // Refresh bitmap on visual components so the image loads immediately
-                if (component is BackgroundComponentViewModel bg) bg.RefreshBitmap();
-                else if (component is CharacterComponentViewModel ch) ch.RefreshBitmap();
-
                 IsAddComponentMenuOpen = false;
-                AppendLog($"➕ Added {component.DisplayName} component to '{targetObj.Name}' in Node #{SelectedNode.Id}");
                 ScheduleSave();
 
                 // Push updated scene to engine so changes are visible immediately
                 if (EngineHost.IsInitialized)
                     PushSceneToEngine(SelectedNode);
-            }
-            catch (KeyNotFoundException)
-            {
-                AppendLog($"⚠️ Unknown component type: {typeKey}");
             }
         }
 
@@ -1448,21 +1389,12 @@ namespace RowlEngine.Editor.ViewModels
         public void RemoveComponent(NodeComponentViewModel? component)
         {
             if (SelectedNode == null || component == null) return;
-            string name = component.DisplayName;
-
-            if (component.OwnerObject != null)
+            if (EditorComponentService.RemoveComponent(SelectedNode, component, AppendLog))
             {
-                component.OwnerObject.RemoveComponent(component);
+                ScheduleSave();
+                if (EngineHost.IsInitialized)
+                    PushSceneToEngine(SelectedNode);
             }
-            else
-            {
-                SelectedNode.RemoveComponent(component);
-            }
-
-            AppendLog($"🗑️ Removed {name} component from Node #{SelectedNode.Id}");
-            ScheduleSave();
-            if (EngineHost.IsInitialized)
-                PushSceneToEngine(SelectedNode);
         }
 
         /// <summary>
@@ -1553,9 +1485,10 @@ namespace RowlEngine.Editor.ViewModels
         [RelayCommand]
         public void MoveComponentUp(NodeComponentViewModel? component)
         {
-            if (SelectedNode == null || component == null) return;
-            SelectedNode.MoveComponentUp(component);
-            ScheduleSave();
+            if (EditorComponentService.MoveComponentUp(SelectedNode, component))
+            {
+                ScheduleSave();
+            }
         }
 
         /// <summary>
@@ -1564,9 +1497,10 @@ namespace RowlEngine.Editor.ViewModels
         [RelayCommand]
         public void MoveComponentDown(NodeComponentViewModel? component)
         {
-            if (SelectedNode == null || component == null) return;
-            SelectedNode.MoveComponentDown(component);
-            ScheduleSave();
+            if (EditorComponentService.MoveComponentDown(SelectedNode, component))
+            {
+                ScheduleSave();
+            }
         }
 
         [ObservableProperty]

@@ -5,7 +5,7 @@ using System.Text.Json;
 namespace RowlEngine.Editor.Services;
 
 /// <summary>Machine-local editor behaviour. It deliberately never travels with a game project.</summary>
-internal sealed class EditorSettingsProfile
+public sealed class EditorSettingsProfile
 {
     public bool AutoSaveEnabled { get; set; } = true;
     public int AutoSaveIntervalSeconds { get; set; } = 60;

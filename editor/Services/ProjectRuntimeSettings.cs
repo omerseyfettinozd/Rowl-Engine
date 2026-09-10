@@ -6,7 +6,7 @@ using System.Text.Json.Nodes;
 namespace RowlEngine.Editor.Services;
 
 /// <summary>Project-owned release settings, deliberately separate from player preferences.</summary>
-internal sealed class ProjectRuntimeSettings
+public sealed class ProjectRuntimeSettings
 {
     public const int DefaultSaveSlotCount = 10;
     public const string DefaultTransitionKind = "instant";
@@ -29,7 +29,7 @@ internal sealed class ProjectRuntimeSettings
     }
 }
 
-internal static class ProjectRuntimeSettingsService
+public static class ProjectRuntimeSettingsService
 {
     public static ProjectRuntimeSettings Load(string manifestPath)
     {

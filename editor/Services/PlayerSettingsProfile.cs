@@ -5,7 +5,7 @@ using System.Text.Json;
 namespace RowlEngine.Editor.Services;
 
 /// <summary>Save-slot independent player preferences with atomic local persistence.</summary>
-internal sealed class PlayerSettingsProfile
+public sealed class PlayerSettingsProfile
 {
     public float MasterVolume { get; set; } = 1;
     public float BgmVolume { get; set; } = 1;
