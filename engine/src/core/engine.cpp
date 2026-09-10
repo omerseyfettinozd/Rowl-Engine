@@ -170,6 +170,12 @@ bool Engine::initialize(const EngineConfig& config) {
             case Rowl::Render::RuntimeInputEvent::Type::PointerDown:
                 if (!handlePointerDown(event.x, event.y)) advanceToNextNode();
                 break;
+            case Rowl::Render::RuntimeInputEvent::Type::SwipeForward:
+                advanceToNextNode();
+                break;
+            case Rowl::Render::RuntimeInputEvent::Type::SwipeBack:
+                rewind(1);
+                break;
         }
     });
 

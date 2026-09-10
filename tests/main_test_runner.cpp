@@ -601,6 +601,17 @@ void test_mobile_input() {
         exit(1);
     }
     TEST_PASS("SDL3 Touch Coordinate Normalization to 1920x1080 Canvas");
+
+    if (Rowl::Platform::MobileInput::classifyTouchGesture(900.0f, 540.0f, 700.0f, 540.0f, 1920.0f, 1080.0f)
+            != Rowl::Platform::InputEventType::SwipeForward ||
+        Rowl::Platform::MobileInput::classifyTouchGesture(700.0f, 540.0f, 900.0f, 540.0f, 1920.0f, 1080.0f)
+            != Rowl::Platform::InputEventType::SwipeBack ||
+        Rowl::Platform::MobileInput::classifyTouchGesture(900.0f, 540.0f, 920.0f, 550.0f, 1920.0f, 1080.0f)
+            != Rowl::Platform::InputEventType::Tap) {
+        std::cerr << "Touch gesture classification mismatch" << std::endl;
+        exit(1);
+    }
+    TEST_PASS("Touch Tap and Horizontal Swipe Classification");
 }
 
 void test_vfs_security() {
@@ -1824,6 +1835,17 @@ void test_window_input_routing() {
         exit(1);
     }
 
+    SDL_Event touchEvent{};
+    touchEvent.type = SDL_EVENT_FINGER_DOWN;
+    touchEvent.tfinger.windowID = windowB;
+    touchEvent.tfinger.fingerID = 77;
+    touchEvent.tfinger.x = 0.5f;
+    touchEvent.tfinger.y = 0.25f;
+    if (!SDL_PushEvent(&touchEvent)) {
+        std::cerr << "Could not enqueue SDL touch event for input routing test" << std::endl;
+        exit(1);
+    }
+
     SDL_Event resizeEvent{};
     resizeEvent.type = SDL_EVENT_WINDOW_RESIZED;
     resizeEvent.window.windowID = windowB;
@@ -1839,8 +1861,9 @@ void test_window_input_routing() {
     const auto eventsA = Rowl::Platform::SdlEventDispatcher::takeEvents(windowA);
     const auto eventsB = Rowl::Platform::SdlEventDispatcher::takeEvents(windowB);
     if (eventsA.size() != 2 || eventsA[0].type != SDL_EVENT_KEY_DOWN ||
-        eventsA[1].type != SDL_EVENT_WINDOW_CLOSE_REQUESTED || eventsB.size() != 2 ||
-        eventsB[0].type != SDL_EVENT_MOUSE_BUTTON_DOWN || eventsB[1].type != SDL_EVENT_WINDOW_RESIZED ||
+        eventsA[1].type != SDL_EVENT_WINDOW_CLOSE_REQUESTED || eventsB.size() != 3 ||
+        eventsB[0].type != SDL_EVENT_MOUSE_BUTTON_DOWN || eventsB[1].type != SDL_EVENT_FINGER_DOWN ||
+        eventsB[2].type != SDL_EVENT_WINDOW_RESIZED ||
         std::abs(eventsB[0].button.x - 42.0f) > 0.001f || std::abs(eventsB[0].button.y - 24.0f) > 0.001f) {
         std::cerr << "SDL dispatcher did not isolate target window events" << std::endl;
         exit(1);

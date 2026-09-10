@@ -91,7 +91,10 @@ struct ChoiceButtonRenderData {
 /// Input remains owned by the runtime that created the window. Window never
 /// reaches into a process-global Engine instance to handle a player action.
 struct RuntimeInputEvent {
-    enum class Type { Advance, QuickSave, QuickLoad, Rewind, PointerDown };
+    /// PointerDown is a completed pointing gesture. Touch input waits for its
+    /// corresponding finger-up event so a horizontal swipe cannot also advance
+    /// the story as a tap.
+    enum class Type { Advance, QuickSave, QuickLoad, Rewind, PointerDown, SwipeForward, SwipeBack };
     Type type;
     float x = 0.0f;
     float y = 0.0f;
@@ -258,6 +261,7 @@ private:
     bool m_isEmbedded      = false; // true → rendering into host control
     bool m_isOffscreen     = false; // true → rendering to RGBA32 surface
     std::function<void(const RuntimeInputEvent&)> m_inputHandler;
+    std::unordered_map<int64_t, std::pair<float, float>> m_touchStarts;
     Rowl::VFS::VFSManager* m_vfs = nullptr;
     std::shared_ptr<Rowl::VFS::VFSManager> m_ownedVfs;
     std::unique_ptr<Camera2D> m_camera;

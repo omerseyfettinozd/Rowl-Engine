@@ -4,6 +4,7 @@
 #include "rowl/render/aspect_guardian.hpp"
 #include "rowl/core/logger.hpp"
 #include "rowl/platform/sdl_event_dispatcher.hpp"
+#include "rowl/platform/mobile_input.hpp"
 #include "rowl/platform/sdl_subsystem_lease.hpp"
 #include "rowl/vfs/vfs.hpp"
 #include <SDL3/SDL.h>
@@ -27,6 +28,9 @@ constexpr int kMaxTextureDimension = 8'192;
 constexpr uint64_t kMaxTexturePixels = 16ULL * 1024 * 1024;
 constexpr uint64_t kMinimumTextureCacheBytes = 1ULL * 1024ULL * 1024ULL;
 constexpr size_t kMaxMissingTextureCacheEntries = 512;
+float touchCoordinateToPhysical(float normalized, uint32_t extent) {
+    return std::clamp(normalized, 0.0f, 1.0f) * static_cast<float>(extent);
+}
 
 bool hasSafeTextureDimensions(int width, int height) {
     return width > 0 && height > 0 &&
@@ -477,6 +481,34 @@ void Window::pollEvents(bool& outShouldQuit) {
                     if (m_inputHandler) m_inputHandler({RuntimeInputEvent::Type::PointerDown,
                                                         event.button.x, event.button.y});
                 }
+                break;
+            case SDL_EVENT_FINGER_DOWN: {
+                const float x = touchCoordinateToPhysical(event.tfinger.x, m_width);
+                const float y = touchCoordinateToPhysical(event.tfinger.y, m_height);
+                m_touchStarts[event.tfinger.fingerID] = {x, y};
+                break;
+            }
+            case SDL_EVENT_FINGER_UP: {
+                const auto start = m_touchStarts.find(event.tfinger.fingerID);
+                if (start == m_touchStarts.end()) break;
+
+                const float x = touchCoordinateToPhysical(event.tfinger.x, m_width);
+                const float y = touchCoordinateToPhysical(event.tfinger.y, m_height);
+                const auto gesture = Rowl::Platform::MobileInput::classifyTouchGesture(
+                    start->second.first, start->second.second, x, y,
+                    static_cast<float>(m_width), static_cast<float>(m_height));
+                m_touchStarts.erase(start);
+                if (gesture == Rowl::Platform::InputEventType::SwipeForward) {
+                    if (m_inputHandler) m_inputHandler({RuntimeInputEvent::Type::SwipeForward, x, y});
+                } else if (gesture == Rowl::Platform::InputEventType::SwipeBack) {
+                    if (m_inputHandler) m_inputHandler({RuntimeInputEvent::Type::SwipeBack, x, y});
+                } else if (m_inputHandler) {
+                    m_inputHandler({RuntimeInputEvent::Type::PointerDown, x, y});
+                }
+                break;
+            }
+            case SDL_EVENT_FINGER_CANCELED:
+                m_touchStarts.erase(event.tfinger.fingerID);
                 break;
             case SDL_EVENT_WINDOW_RESIZED:
             case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
