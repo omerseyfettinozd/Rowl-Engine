@@ -31,7 +31,7 @@ internal sealed class EditorInteractionBenchmark
             environment = new
             {
                 os = RuntimeInformation.OSDescription,
-                machine = Environment.MachineName,
+                machine = Environment.GetEnvironmentVariable("ROWL_EDITOR_BENCHMARK_MACHINE") ?? Environment.MachineName,
                 cpu_count = Environment.ProcessorCount
             },
             metrics = _metrics

@@ -77,6 +77,22 @@ jobs:
           name: linux-native-benchmark
           path: benchmark-results/linux-native.json
 
+      - name: Record editor benchmark baseline
+        run: |
+          mkdir -p benchmark-results
+          ROWL_EDITOR_BENCHMARK_BUILD_ID="$GITHUB_SHA" \
+          ROWL_EDITOR_BENCHMARK_BUILD_TYPE=Debug \
+          ROWL_EDITOR_BENCHMARK_MACHINE="$(uname -m)" \
+          dotnet run --project editor/RowlEngine.Editor.csproj -- \
+            --headless-test --editor-benchmark-json benchmark-results/linux-editor.json
+          cat benchmark-results/linux-editor.json >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload editor benchmark baseline
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-editor-benchmark
+          path: benchmark-results/linux-editor.json
+
       - name: Verify shaderless fallback build
         run: |
           cmake -S . -B build-msdf-fallback -G Ninja -DCMAKE_BUILD_TYPE=Debug -DROWL_ENABLE_GPU_MSDF=OFF
