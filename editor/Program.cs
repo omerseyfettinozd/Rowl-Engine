@@ -634,7 +634,7 @@ namespace RowlEngine.Editor
             if (host.IsInitialized)
             {
                 if (host.LastFrameTextureLoadMilliseconds < 0 || host.LastFrameNonTextureRenderMilliseconds < 0 ||
-                    host.LastFrameTextRasterizationMilliseconds < 0)
+                    host.LastFrameTextRasterizationMilliseconds < 0 || host.LastFrameRendererFlushMilliseconds < 0)
                     throw new Exception("Native first-frame profiling telemetry returned an invalid duration");
                 host.SetProjectDirectory(testProjectRoot);
                 host.SetVariable("test_affinity", "99");
@@ -1914,6 +1914,7 @@ namespace RowlEngine.Editor
                 benchmark.Record("preview_texture_load_ms", mainVm.EngineHost.LastFrameTextureLoadMilliseconds);
                 benchmark.Record("preview_non_texture_render_ms", mainVm.EngineHost.LastFrameNonTextureRenderMilliseconds);
                 benchmark.Record("preview_text_rasterization_ms", mainVm.EngineHost.LastFrameTextRasterizationMilliseconds);
+                benchmark.Record("preview_renderer_flush_ms", mainVm.EngineHost.LastFrameRendererFlushMilliseconds);
 
                 var cacheNode = new NodeViewModel(9901, "Cache benchmark", 0, 0, bare: true);
                 cacheNode.AddComponent<DialogueComponentViewModel>().DialogueText = "Unchanged preview";

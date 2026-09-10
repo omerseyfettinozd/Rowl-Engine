@@ -770,6 +770,7 @@ void Window::renderVisualNovelFrame(
     const auto frameRenderStarted = std::chrono::steady_clock::now();
     m_lastFrameTextureLoadMilliseconds = 0.0;
     m_lastFrameTextRasterizationMilliseconds = 0.0;
+    m_lastFrameRendererFlushMilliseconds = 0.0;
     m_collectingFrameProfile = true;
 
     // Dynamically query physical size if standalone, or use host-provided size if embedded
@@ -983,7 +984,10 @@ void Window::renderVisualNovelFrame(
 
     // In offscreen mode, flush SDL graphics pipeline to m_offscreenSurface BEFORE drawing direct TrueType text
     if (m_isOffscreen && m_sdlRenderer) {
+        const auto rendererFlushStarted = std::chrono::steady_clock::now();
         SDL_RenderPresent(m_sdlRenderer);
+        m_lastFrameRendererFlushMilliseconds = std::chrono::duration<double, std::milli>(
+            std::chrono::steady_clock::now() - rendererFlushStarted).count();
     }
 
     // 4. Render High-Quality Anti-Aliased TrueType Text directly onto Offscreen Surface

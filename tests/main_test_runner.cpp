@@ -2281,15 +2281,17 @@ void test_native_performance_benchmarks(const std::string& benchmarkJsonPath = "
     const double textureLoadMs = RowlEngine_GetLastFrameTextureLoadMilliseconds(handle);
     const double nonTextureRenderMs = RowlEngine_GetLastFrameNonTextureRenderMilliseconds(handle);
     const double textRasterizationMs = RowlEngine_GetLastFrameTextRasterizationMilliseconds(handle);
-    if (textureLoadMs < 0.0 || nonTextureRenderMs < 0.0 || textRasterizationMs < 0.0 ||
-        textRasterizationMs > nonTextureRenderMs + 0.1 ||
+    const double rendererFlushMs = RowlEngine_GetLastFrameRendererFlushMilliseconds(handle);
+    if (textureLoadMs < 0.0 || nonTextureRenderMs < 0.0 || textRasterizationMs < 0.0 || rendererFlushMs < 0.0 ||
+        textRasterizationMs > nonTextureRenderMs + 0.1 || rendererFlushMs > nonTextureRenderMs + 0.1 ||
         textureLoadMs + nonTextureRenderMs > firstFrameMs + 5.0) {
         std::cerr << "First-frame profile timings are inconsistent" << std::endl;
         exit(1);
     }
     std::cout << "  ⚡ [BENCHMARK] First Frame Profile: texture load " << textureLoadMs
               << "ms, non-texture render " << nonTextureRenderMs
-              << "ms, text rasterization " << textRasterizationMs << "ms" << std::endl;
+              << "ms, text rasterization " << textRasterizationMs
+              << "ms, renderer flush " << rendererFlushMs << "ms" << std::endl;
     TEST_PASS("First Frame Texture and Renderer Profile");
     const auto warmTextureCount = RowlEngine_GetTextureCacheTextureCount(handle);
     const auto warmTextureBytes = RowlEngine_GetTextureCacheBytes(handle);

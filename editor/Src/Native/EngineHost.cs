@@ -90,6 +90,11 @@ namespace RowlEngine.Editor.Native
             ? 0.0
             : NativeBridge.RowlEngine_GetLastFrameTextRasterizationMilliseconds(_handle);
 
+        /// <summary>SDL command flush work from the latest rendered frame.</summary>
+        public double LastFrameRendererFlushMilliseconds => _handle == IntPtr.Zero
+            ? 0.0
+            : NativeBridge.RowlEngine_GetLastFrameRendererFlushMilliseconds(_handle);
+
         public IReadOnlyList<ScriptRuntimeDiagnostic> ScriptRuntimeDiagnostics { get; private set; }
             = Array.Empty<ScriptRuntimeDiagnostic>();
 

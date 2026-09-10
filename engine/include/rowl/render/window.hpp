@@ -196,6 +196,7 @@ public:
     double getLastFrameTextureLoadMilliseconds() const { return m_lastFrameTextureLoadMilliseconds; }
     double getLastFrameNonTextureRenderMilliseconds() const { return m_lastFrameNonTextureRenderMilliseconds; }
     double getLastFrameTextRasterizationMilliseconds() const { return m_lastFrameTextRasterizationMilliseconds; }
+    double getLastFrameRendererFlushMilliseconds() const { return m_lastFrameRendererFlushMilliseconds; }
     void setTextureCacheBudgetBytes(uint64_t bytes);
     FontRenderer* getFontRenderer() const { return m_fontRenderer.get(); }
     void reloadFonts();
@@ -257,6 +258,7 @@ private:
     double m_lastFrameTextureLoadMilliseconds = 0.0;
     double m_lastFrameNonTextureRenderMilliseconds = 0.0;
     double m_lastFrameTextRasterizationMilliseconds = 0.0;
+    double m_lastFrameRendererFlushMilliseconds = 0.0;
     bool m_collectingFrameProfile = false;
     bool m_isOpen          = false;
     bool m_initialized     = false;
