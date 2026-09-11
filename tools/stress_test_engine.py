@@ -25,7 +25,10 @@ def positive_int(value):
 
 
 def run_stress_test(num_frames=5000, mutation_count=500):
+    # Script-anchored lookup first so dev tools never depend on the launch CWD.
+    script_root = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
     so_paths = [
+        os.path.join(script_root, "build", "lib", "libRowlEngineCore.so"),
         "build/lib/libRowlEngineCore.so",
         "../build/lib/libRowlEngineCore.so",
         "editor/bin/Debug/net10.0/libRowlEngineCore.so"
