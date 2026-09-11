@@ -1693,7 +1693,8 @@ namespace RowlEngine.Editor
                 Console.WriteLine("    [Step 18.3]: GenerateSaveAsTargetDirectory & ExecuteSaveAs...");
                 var testTime = new DateTime(2026, 9, 11, 15, 45, 0);
                 string generatedDir = EditorProjectLifecycleCoordinator.GenerateSaveAsTargetDirectory("/tmp/parent", testTime);
-                if (generatedDir != "/tmp/parent/RowlProject_2026-09-11_15-45")
+                string expectedDir = Path.Combine("/tmp/parent", "RowlProject_2026-09-11_15-45");
+                if (generatedDir != expectedDir)
                     throw new Exception($"GenerateSaveAsTargetDirectory generated unexpected path: {generatedDir}");
 
                 string saveAsTargetDir = Path.Combine(Path.GetTempPath(), $"RowlTestSaveAs_{Guid.NewGuid():N}");
