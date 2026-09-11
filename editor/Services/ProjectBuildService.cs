@@ -175,7 +175,9 @@ public static class ProjectBuildService
         string? player = playerCandidates.FirstOrDefault(File.Exists);
         string? library = libraryCandidates.FirstOrDefault(File.Exists);
         if (player is null || library is null)
-            return new(false, false, output, "rowl_player or RowlEngineCore is missing; build the native runtime before export.");
+            return new(false, false, output,
+                "rowl_player or RowlEngineCore is missing; build the native runtime before export. " +
+                $"Searched projectRoot='{root}', repoRoot='{repoRoot}', appBase='{baseDir}'.");
 
         string parent = Path.GetDirectoryName(output) ?? throw new InvalidOperationException("Build parent cannot be resolved.");
         Directory.CreateDirectory(parent);

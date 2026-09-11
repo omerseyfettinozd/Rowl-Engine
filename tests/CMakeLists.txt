@@ -35,11 +35,18 @@ target_link_libraries(rowl_tests PRIVATE
     RowlEngineCore
 )
 
-# rowl_tests intentionally compiles the engine sources directly (the C++
-# classes are internal/hidden and not exported from the shared library), so
-# on MSVC its objects duplicate the symbols in RowlEngineCore.lib. The
-# duplicates are byte-identical (same sources), so allow the linker to keep
-# the first definition instead of failing with LNK2005.
+# rowl_tests compiles the engine sources directly (the C++ classes are
+# internal/hidden and not exported from the shared library). Build its
+# objects as the exporting side so every engine call inside the test
+# binary — C++ and C API alike — binds to the test binary's own copies.
+# Without this, MSVC binds the C API (declared dllimport here) to
+# RowlEngineCore.dll while the C++ calls stay local, splitting static
+# state in two (e.g. the SDL event dispatcher) and breaking event tests.
+target_compile_definitions(rowl_tests PRIVATE ROWL_BUILDING_DLL)
+
+# The objects above duplicate the symbols in RowlEngineCore.lib (linked
+# only for its transitive third-party deps). Keep the first — local —
+# definition instead of failing with LNK2005.
 if(MSVC)
     target_link_options(rowl_tests PRIVATE /FORCE:MULTIPLE)
 endif()
