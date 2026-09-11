@@ -1,7 +1,8 @@
 # Uygulama Durumu
 
-Son doğrulama: Linux Debug derlemesi, CTest, editör headless testi ve paket
-içinden VFS graph yükleyen yerel standalone smoke testi geçiyor.
+Son doğrulama (2026-09-11): Linux Debug derlemesi, 7/7 CTest, editör
+headless testi ve paket içinden VFS graph yükleyen yerel standalone smoke
+testi geçiyor.
 
 ## Hazır
 
@@ -40,6 +41,10 @@ içinden VFS graph yükleyen yerel standalone smoke testi geçiyor.
   scriptsiz değişmeyen preview payload'ları native render'a yeniden gönderilmez.
 - Yaratıcı Hikâye Stüdyosu tasarım sistemi, Project Hub, boş durum, üst çalışma
   akışı ve ana panel yüzeylerinde uygulandı.
+- Milestone 20--26 editör ve runtime zinciri yeşil: çoklu seçim/batch işlemler,
+  diagnostic toast'lar, transform gizmo, DSP/VU telemetry, parallax, typewriter
+  voice blip'leri ve sinematik kamera shake/screen FX, editor serileştirme,
+  P/Invoke ve native offscreen testleriyle kapsanıyor.
 
 ## Sonraki üretim işleri
 
