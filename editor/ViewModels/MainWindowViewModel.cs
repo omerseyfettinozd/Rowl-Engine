@@ -512,6 +512,42 @@ namespace RowlEngine.Editor.ViewModels
             };
             _smoothTimer.Tick += (s, e) => SmoothUpdateStep();
 
+            AudioComponentViewModel.GlobalPreviewAudioAction = (assetPath, channelType, filterType) =>
+            {
+                EngineHost.PlayAudio(assetPath, channelType, filterType);
+                AppendLog($"🔊 Ses önizlemesi başlatıldı: '{assetPath}' (Kanal: {channelType}, Filtre: {filterType})");
+            };
+
+            AudioComponentViewModel.GlobalStopAudioAction = () =>
+            {
+                EngineHost.StopBgm();
+                AppendLog("⏹ Ses önizlemesi durduruldu.");
+            };
+
+            EngineHost.AudioTelemetryPolled += (pL, pR, rL, rR) =>
+            {
+                LivePreviewViewModel.UpdateAudioTelemetry(pL, pR, rL, rR);
+
+                if (SelectedNode != null)
+                {
+                    var audioComp = SelectedNode.Components.OfType<AudioComponentViewModel>().FirstOrDefault();
+                    if (audioComp != null)
+                    {
+                        float bgmPL = EngineHost.GetAudioChannelPeak(0, 0);
+                        float bgmPR = EngineHost.GetAudioChannelPeak(0, 1);
+                        float bgmRL = EngineHost.GetAudioChannelRms(0, 0);
+                        float bgmRR = EngineHost.GetAudioChannelRms(0, 1);
+                        audioComp.UpdateAudioTelemetry(bgmPL, bgmPR, bgmRL, bgmRR, isSfx: false);
+
+                        float sfxPL = EngineHost.GetAudioChannelPeak(2, 0);
+                        float sfxPR = EngineHost.GetAudioChannelPeak(2, 1);
+                        float sfxRL = EngineHost.GetAudioChannelRms(2, 0);
+                        float sfxRR = EngineHost.GetAudioChannelRms(2, 1);
+                        audioComp.UpdateAudioTelemetry(sfxPL, sfxPR, sfxRL, sfxRR, isSfx: true);
+                    }
+                }
+            };
+
             // Try loading saved story graph from project root
             if (!LoadFullStoryGraphFile())
             {

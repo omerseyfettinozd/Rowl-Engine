@@ -1105,6 +1105,19 @@ void test_native_c_api() {
     RowlEngine_Step(handle, 0.016f);
     TEST_PASS("Milestone 22: RowlEngine_UpdateSceneEx & UpdateSceneFromJson Rotation / Scale Controls");
 
+    // Milestone 23: Real-Time Audio Telemetry, Peak/RMS & Spectrum C-API Verification
+    float peakBgm = RowlEngine_GetAudioChannelPeak(handle, 0, 0);
+    float rmsBgm = RowlEngine_GetAudioChannelRms(handle, 0, 0);
+    float bands[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+    RowlEngine_GetAudioSpectrum(handle, bands, 4);
+    if (peakBgm < 0.0f || peakBgm > 1.0f || rmsBgm < 0.0f || rmsBgm > 1.0f) {
+        std::cerr << "RowlEngine_GetAudioChannelPeak / Rms returned out-of-range value" << std::endl;
+        exit(1);
+    }
+    RowlEngine_Step(handle, 0.016f);
+    RowlEngine_GetAudioSpectrum(handle, bands, 4);
+    TEST_PASS("Milestone 23: RowlEngine_GetAudioChannelPeak, Rms & Spectrum Telemetry C-API");
+
     // Script components on the same node deliberately share lifecycle names.
     // The runtime must dispatch both callbacks and tear them down in reverse
     // activation order instead of letting the latter overwrite the former.

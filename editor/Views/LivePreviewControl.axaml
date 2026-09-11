@@ -252,6 +252,30 @@
                     </Canvas>
                 </Border>
             </Viewbox>
+
+            <!-- Professional Stereo VU Meter HUD Badge (Bottom Right) -->
+            <Border HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                    Margin="14" Padding="8,5" CornerRadius="4"
+                    Background="#D90F172A" BorderBrush="#334155" BorderThickness="1"
+                    IsHitTestVisible="False" Opacity="0.9">
+                <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                    <TextBlock Text="🔊" FontSize="11" Foreground="#94A3B8" VerticalAlignment="Center"/>
+                    <StackPanel Spacing="2" VerticalAlignment="Center">
+                        <!-- Left Channel -->
+                        <StackPanel Orientation="Horizontal" Spacing="3">
+                            <TextBlock Text="L" FontSize="9" Width="10" Foreground="#64748B" VerticalAlignment="Center"/>
+                            <ProgressBar Minimum="0" Maximum="1" Value="{Binding LivePreviewViewModel.MasterPeakL}" Width="64" Height="4"
+                                         Foreground="#10B981" Background="#1E293B"/>
+                        </StackPanel>
+                        <!-- Right Channel -->
+                        <StackPanel Orientation="Horizontal" Spacing="3">
+                            <TextBlock Text="R" FontSize="9" Width="10" Foreground="#64748B" VerticalAlignment="Center"/>
+                            <ProgressBar Minimum="0" Maximum="1" Value="{Binding LivePreviewViewModel.MasterPeakR}" Width="64" Height="4"
+                                         Foreground="#10B981" Background="#1E293B"/>
+                        </StackPanel>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
         </Grid>
     </Border>
 </UserControl>

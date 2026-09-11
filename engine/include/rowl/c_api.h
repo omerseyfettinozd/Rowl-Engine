@@ -337,6 +337,15 @@ ROWL_API int RowlEngine_GetActiveDspFilter(RowlEngineHandle handle);
 /** Returns the most recent audio error. The pointer is engine-owned and valid until the next audio call. */
 ROWL_API const char* RowlEngine_GetLastAudioError(RowlEngineHandle handle);
 
+/** Returns the peak level (0.0f - 1.0f) for a channel (0: Bgm, 1: Voice, 2: Sfx, 3: Master) and channelIndex (0: Left, 1: Right). */
+ROWL_API float RowlEngine_GetAudioChannelPeak(RowlEngineHandle handle, int channelType, int channelIndex);
+
+/** Returns the RMS level (0.0f - 1.0f) for a channel (0: Bgm, 1: Voice, 2: Sfx, 3: Master) and channelIndex (0: Left, 1: Right). */
+ROWL_API float RowlEngine_GetAudioChannelRms(RowlEngineHandle handle, int channelType, int channelIndex);
+
+/** Fills outBands with up to bandCount frequency band estimates (0: Bass, 1: Mid-Low, 2: Mid-High, 3: Treble). */
+ROWL_API void RowlEngine_GetAudioSpectrum(RowlEngineHandle handle, float* outBands, int bandCount);
+
 /**
  * Returns a JSON array of current script-component diagnostics. The result is
  * engine-owned and valid until the next diagnostics query on the same thread.

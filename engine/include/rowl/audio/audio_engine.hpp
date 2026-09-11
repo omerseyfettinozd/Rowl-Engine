@@ -2,6 +2,7 @@
 
 #include <string>
 #include <vector>
+#include <array>
 #include <cstdint>
 #include <memory>
 #include <unordered_map>
@@ -76,6 +77,11 @@ public:
     bool isBgmTransitionActive() const { return m_bgmTransitionActive; }
     const std::string& getLastError() const { return m_lastError; }
 
+    // Real-Time Audio Telemetry & VU Metering
+    float getChannelPeak(int channelType, int channelIndex = 0) const;
+    float getChannelRms(int channelType, int channelIndex = 0) const;
+    void getSpectrumBands(float* outBands, int bandCount) const;
+
     void shutdown();
 
 private:
@@ -109,6 +115,24 @@ private:
     float m_bgmTransitionDurationSeconds = 0.0f;
     void applyChannelGains();
     void updateBgmTransition(float deltaSeconds);
+    void updateTelemetry(float deltaSeconds);
+
+    struct ChannelTelemetry {
+        float peakL = 0.0f;
+        float peakR = 0.0f;
+        float rmsL = 0.0f;
+        float rmsR = 0.0f;
+    };
+    ChannelTelemetry m_telemetryBgm;
+    ChannelTelemetry m_telemetryVoice;
+    ChannelTelemetry m_telemetrySfx;
+    ChannelTelemetry m_telemetryMaster;
+    std::array<float, 4> m_spectrumBands{0.0f, 0.0f, 0.0f, 0.0f};
+    size_t m_bgmSampleOffset = 0;
+    std::vector<uint8_t> m_lastSfxData;
+    size_t m_sfxSampleOffset = 0;
+    bool m_isSfxPlaying = false;
+
     Rowl::VFS::VFSManager* m_vfs = nullptr;
     std::shared_ptr<Rowl::VFS::VFSManager> m_ownedVfs;
     bool m_audioLeaseHeld = false;

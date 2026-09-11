@@ -190,6 +190,15 @@ bool AudioEngine::initialize() {
     m_bgmTransitionActive = false;
     m_bgmTransitionElapsedSeconds = 0.0f;
     m_bgmTransitionDurationSeconds = 0.0f;
+    m_telemetryBgm = {};
+    m_telemetryVoice = {};
+    m_telemetrySfx = {};
+    m_telemetryMaster = {};
+    m_spectrumBands.fill(0.0f);
+    m_bgmSampleOffset = 0;
+    m_sfxSampleOffset = 0;
+    m_isSfxPlaying = false;
+    m_lastSfxData.clear();
 
     // Initialize SDL3 Audio subsystem
     if (Rowl::Platform::SdlSubsystemLease::acquire(SDL_INIT_AUDIO)) {
@@ -381,9 +390,30 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
                 }
                 m_currentBgmPath = assetPath;
                 m_isBgmPlaying = true;
+                m_bgmSampleOffset = 0;
+            } else if (channel == AudioChannelType::Sfx) {
+                m_lastSfxData.assign(floatBuffer, floatBuffer + floatLength);
+                m_isSfxPlaying = true;
+                m_sfxSampleOffset = 0;
             }
             SDL_ResumeAudioStreamDevice(targetStream);
             ROWL_LOG_INFO("[AudioEngine] Playback started: " + assetPath + " (" + std::to_string(floatLength) + " PCM bytes)");
+        } else {
+            // Headless / fallback playback without physical stream
+            if (channel == AudioChannelType::Bgm) {
+                m_bgmData.assign(floatBuffer, floatBuffer + floatLength);
+                m_currentBgmPath = assetPath;
+                m_isBgmPlaying = true;
+                m_bgmSampleOffset = 0;
+            } else if (channel == AudioChannelType::Sfx) {
+                m_lastSfxData.assign(floatBuffer, floatBuffer + floatLength);
+                m_isSfxPlaying = true;
+                m_sfxSampleOffset = 0;
+            } else if (channel == AudioChannelType::Voice) {
+                m_isVoicePlaying = true;
+                triggerVoiceDucking(true);
+            }
+            applyDspFilter(filter);
         }
         SDL_free(floatBuffer);
         SDL_free(audioBuf);
@@ -407,6 +437,7 @@ void AudioEngine::stopBgm() {
     m_transitionBgmData.clear();
     m_bgmTransitionActive = false;
     m_isBgmPlaying = false;
+    m_bgmSampleOffset = 0;
     ROWL_LOG_INFO("[AudioEngine] BGM stopped.");
 }
 
@@ -416,6 +447,11 @@ void AudioEngine::stopAll() {
         SDL_ClearAudioStream(m_sfxStream);
         SDL_PauseAudioStreamDevice(m_sfxStream);
     }
+    m_lastSfxData.clear();
+    m_sfxSampleOffset = 0;
+    m_isSfxPlaying = false;
+    m_isVoicePlaying = false;
+    triggerVoiceDucking(false);
     ROWL_LOG_INFO("[AudioEngine] All audio channels stopped.");
 }
 
@@ -486,28 +522,31 @@ void AudioEngine::applyDspFilter(DSPFilterType filter) {
 }
 
 void AudioEngine::update(float deltaSeconds) {
-    if (!m_initialized || !m_deviceAvailable) {
+    if (!m_initialized) {
         return;
     }
-    if (m_bgmStream && !m_bgmData.empty() && m_bgmLoop) {
-        int available = SDL_GetAudioStreamAvailable(m_bgmStream);
-        if (available <= 0) {
-            SDL_PutAudioStreamData(m_bgmStream, m_bgmData.data(), static_cast<int>(m_bgmData.size()));
-            SDL_ResumeAudioStreamDevice(m_bgmStream);
+    if (m_deviceAvailable) {
+        if (m_bgmStream && !m_bgmData.empty() && m_bgmLoop) {
+            int available = SDL_GetAudioStreamAvailable(m_bgmStream);
+            if (available <= 0) {
+                SDL_PutAudioStreamData(m_bgmStream, m_bgmData.data(), static_cast<int>(m_bgmData.size()));
+                SDL_ResumeAudioStreamDevice(m_bgmStream);
+            }
         }
-    }
-    if (m_transitionBgmStream && !m_transitionBgmData.empty() && m_bgmLoop) {
-        if (SDL_GetAudioStreamAvailable(m_transitionBgmStream) <= 0) {
-            SDL_PutAudioStreamData(m_transitionBgmStream, m_transitionBgmData.data(), static_cast<int>(m_transitionBgmData.size()));
-            SDL_ResumeAudioStreamDevice(m_transitionBgmStream);
+        if (m_transitionBgmStream && !m_transitionBgmData.empty() && m_bgmLoop) {
+            if (SDL_GetAudioStreamAvailable(m_transitionBgmStream) <= 0) {
+                SDL_PutAudioStreamData(m_transitionBgmStream, m_transitionBgmData.data(), static_cast<int>(m_transitionBgmData.size()));
+                SDL_ResumeAudioStreamDevice(m_transitionBgmStream);
+            }
         }
-    }
-    updateBgmTransition(std::isfinite(deltaSeconds) ? deltaSeconds : 0.0f);
+        updateBgmTransition(std::isfinite(deltaSeconds) ? deltaSeconds : 0.0f);
 
-    if (m_voiceStream && m_isVoicePlaying && SDL_GetAudioStreamQueued(m_voiceStream) <= 0) {
-        m_isVoicePlaying = false;
-        triggerVoiceDucking(false);
+        if (m_voiceStream && m_isVoicePlaying && SDL_GetAudioStreamQueued(m_voiceStream) <= 0) {
+            m_isVoicePlaying = false;
+            triggerVoiceDucking(false);
+        }
     }
+    updateTelemetry(std::isfinite(deltaSeconds) ? deltaSeconds : (1.0f / 60.0f));
 }
 
 void AudioEngine::updateBgmTransition(float deltaSeconds) {
@@ -540,6 +579,15 @@ void AudioEngine::shutdown() {
 
     m_bgmData.clear();
     m_transitionBgmData.clear();
+    m_lastSfxData.clear();
+    m_telemetryBgm = {};
+    m_telemetryVoice = {};
+    m_telemetrySfx = {};
+    m_telemetryMaster = {};
+    m_spectrumBands.fill(0.0f);
+    m_bgmSampleOffset = 0;
+    m_sfxSampleOffset = 0;
+    m_isSfxPlaying = false;
 
     if (m_bgmStream) {
         SDL_DestroyAudioStream(m_bgmStream);
@@ -572,6 +620,173 @@ void AudioEngine::applyChannelGains() {
     if (m_transitionBgmStream) SDL_SetAudioStreamGain(m_transitionBgmStream, 0.0f);
     if (m_voiceStream) SDL_SetAudioStreamGain(m_voiceStream, m_masterVolume * m_voiceVolume);
     if (m_sfxStream) SDL_SetAudioStreamGain(m_sfxStream, m_masterVolume * m_sfxVolume);
+}
+
+void AudioEngine::updateTelemetry(float deltaSeconds) {
+    constexpr float kSampleRate = 44100.0f;
+    constexpr float kDecayRate = 2.8f; // ~350ms smooth analog VU decay
+    const float dt = (std::isfinite(deltaSeconds) && deltaSeconds > 0.0f) ? std::min(deltaSeconds, 0.1f) : (1.0f / 60.0f);
+
+    auto decayVal = [dt, kDecayRate](float current, float target) {
+        if (target >= current) return target;
+        return std::max(target, current - kDecayRate * dt);
+    };
+
+    // 1. BGM Telemetry
+    float targetBgmL = 0.0f;
+    float targetBgmR = 0.0f;
+    float targetBgmRmsL = 0.0f;
+    float targetBgmRmsR = 0.0f;
+
+    if (m_isBgmPlaying && !m_bgmData.empty()) {
+        const float* samples = reinterpret_cast<const float*>(m_bgmData.data());
+        const size_t totalFloats = m_bgmData.size() / sizeof(float);
+        if (totalFloats >= 2) {
+            const size_t windowSize = std::min<size_t>(1024, totalFloats);
+            size_t start = m_bgmSampleOffset % totalFloats;
+            float maxL = 0.0f, maxR = 0.0f;
+            float sumSqL = 0.0f, sumSqR = 0.0f;
+            size_t frames = 0;
+
+            for (size_t i = 0; i < windowSize && (start + i + 1) < totalFloats; i += 2) {
+                float sL = std::abs(samples[start + i]);
+                float sR = std::abs(samples[start + i + 1]);
+                if (sL > maxL) maxL = sL;
+                if (sR > maxR) maxR = sR;
+                sumSqL += sL * sL;
+                sumSqR += sR * sR;
+                frames++;
+            }
+            if (frames > 0) {
+                const float gain = m_masterVolume * m_bgmGain;
+                targetBgmL = std::clamp(maxL * gain, 0.0f, 1.0f);
+                targetBgmR = std::clamp(maxR * gain, 0.0f, 1.0f);
+                targetBgmRmsL = std::clamp(std::sqrt(sumSqL / static_cast<float>(frames)) * gain, 0.0f, 1.0f);
+                targetBgmRmsR = std::clamp(std::sqrt(sumSqR / static_cast<float>(frames)) * gain, 0.0f, 1.0f);
+            }
+            m_bgmSampleOffset = (m_bgmSampleOffset + static_cast<size_t>(dt * kSampleRate * 2)) % totalFloats;
+        }
+    }
+
+    m_telemetryBgm.peakL = decayVal(m_telemetryBgm.peakL, targetBgmL);
+    m_telemetryBgm.peakR = decayVal(m_telemetryBgm.peakR, targetBgmR);
+    m_telemetryBgm.rmsL = decayVal(m_telemetryBgm.rmsL, targetBgmRmsL);
+    m_telemetryBgm.rmsR = decayVal(m_telemetryBgm.rmsR, targetBgmRmsR);
+
+    // 2. SFX Telemetry
+    float targetSfxL = 0.0f;
+    float targetSfxR = 0.0f;
+    float targetSfxRmsL = 0.0f;
+    float targetSfxRmsR = 0.0f;
+
+    if (m_isSfxPlaying && !m_lastSfxData.empty()) {
+        const float* samples = reinterpret_cast<const float*>(m_lastSfxData.data());
+        const size_t totalFloats = m_lastSfxData.size() / sizeof(float);
+        if (totalFloats >= 2 && m_sfxSampleOffset < totalFloats) {
+            const size_t windowSize = std::min<size_t>(1024, totalFloats - m_sfxSampleOffset);
+            size_t start = m_sfxSampleOffset;
+            float maxL = 0.0f, maxR = 0.0f;
+            float sumSqL = 0.0f, sumSqR = 0.0f;
+            size_t frames = 0;
+
+            for (size_t i = 0; i < windowSize && (start + i + 1) < totalFloats; i += 2) {
+                float sL = std::abs(samples[start + i]);
+                float sR = std::abs(samples[start + i + 1]);
+                if (sL > maxL) maxL = sL;
+                if (sR > maxR) maxR = sR;
+                sumSqL += sL * sL;
+                sumSqR += sR * sR;
+                frames++;
+            }
+            if (frames > 0) {
+                const float gain = m_masterVolume * m_sfxVolume;
+                targetSfxL = std::clamp(maxL * gain, 0.0f, 1.0f);
+                targetSfxR = std::clamp(maxR * gain, 0.0f, 1.0f);
+                targetSfxRmsL = std::clamp(std::sqrt(sumSqL / static_cast<float>(frames)) * gain, 0.0f, 1.0f);
+                targetSfxRmsR = std::clamp(std::sqrt(sumSqR / static_cast<float>(frames)) * gain, 0.0f, 1.0f);
+            }
+            m_sfxSampleOffset += static_cast<size_t>(dt * kSampleRate * 2);
+            if (m_sfxSampleOffset >= totalFloats) {
+                m_isSfxPlaying = false;
+            }
+        } else {
+            m_isSfxPlaying = false;
+        }
+    }
+
+    m_telemetrySfx.peakL = decayVal(m_telemetrySfx.peakL, targetSfxL);
+    m_telemetrySfx.peakR = decayVal(m_telemetrySfx.peakR, targetSfxR);
+    m_telemetrySfx.rmsL = decayVal(m_telemetrySfx.rmsL, targetSfxRmsL);
+    m_telemetrySfx.rmsR = decayVal(m_telemetrySfx.rmsR, targetSfxRmsR);
+
+    // 3. Voice Telemetry
+    float targetVoiceL = 0.0f;
+    float targetVoiceR = 0.0f;
+    if (m_isVoicePlaying) {
+        const float gain = m_masterVolume * m_voiceVolume;
+        targetVoiceL = gain * 0.85f;
+        targetVoiceR = gain * 0.85f;
+    }
+    m_telemetryVoice.peakL = decayVal(m_telemetryVoice.peakL, targetVoiceL);
+    m_telemetryVoice.peakR = decayVal(m_telemetryVoice.peakR, targetVoiceR);
+    m_telemetryVoice.rmsL = decayVal(m_telemetryVoice.rmsL, targetVoiceL * 0.7f);
+    m_telemetryVoice.rmsR = decayVal(m_telemetryVoice.rmsR, targetVoiceR * 0.7f);
+
+    // 4. Master Telemetry (Combined peaks and RMS)
+    m_telemetryMaster.peakL = std::clamp(std::max({m_telemetryBgm.peakL, m_telemetrySfx.peakL, m_telemetryVoice.peakL}), 0.0f, 1.0f);
+    m_telemetryMaster.peakR = std::clamp(std::max({m_telemetryBgm.peakR, m_telemetrySfx.peakR, m_telemetryVoice.peakR}), 0.0f, 1.0f);
+    m_telemetryMaster.rmsL = std::clamp(std::sqrt(m_telemetryBgm.rmsL * m_telemetryBgm.rmsL +
+                                                  m_telemetrySfx.rmsL * m_telemetrySfx.rmsL +
+                                                  m_telemetryVoice.rmsL * m_telemetryVoice.rmsL), 0.0f, 1.0f);
+    m_telemetryMaster.rmsR = std::clamp(std::sqrt(m_telemetryBgm.rmsR * m_telemetryBgm.rmsR +
+                                                  m_telemetrySfx.rmsR * m_telemetrySfx.rmsR +
+                                                  m_telemetryVoice.rmsR * m_telemetryVoice.rmsR), 0.0f, 1.0f);
+
+    // 5. 4-Band Spectrum Estimation
+    const float masterEnergy = (m_telemetryMaster.peakL + m_telemetryMaster.peakR) * 0.5f;
+    float targetBands[4] = {
+        masterEnergy * 0.95f,
+        masterEnergy * 0.80f,
+        masterEnergy * 0.65f,
+        masterEnergy * 0.50f
+    };
+    if (m_activeFilter == DSPFilterType::UnderwaterLowPass) {
+        targetBands[0] *= 1.2f; targetBands[1] *= 0.5f; targetBands[2] *= 0.1f; targetBands[3] *= 0.02f;
+    } else if (m_activeFilter == DSPFilterType::Telephone) {
+        targetBands[0] *= 0.1f; targetBands[1] *= 1.1f; targetBands[2] *= 1.0f; targetBands[3] *= 0.15f;
+    }
+    for (size_t b = 0; b < 4; ++b) {
+        m_spectrumBands[b] = decayVal(m_spectrumBands[b], std::clamp(targetBands[b], 0.0f, 1.0f));
+    }
+}
+
+float AudioEngine::getChannelPeak(int channelType, int channelIndex) const {
+    const ChannelTelemetry* tel = nullptr;
+    switch (channelType) {
+        case 0: tel = &m_telemetryBgm; break;
+        case 1: tel = &m_telemetryVoice; break;
+        case 2: tel = &m_telemetrySfx; break;
+        case 3: default: tel = &m_telemetryMaster; break;
+    }
+    return (channelIndex == 1) ? tel->peakR : tel->peakL;
+}
+
+float AudioEngine::getChannelRms(int channelType, int channelIndex) const {
+    const ChannelTelemetry* tel = nullptr;
+    switch (channelType) {
+        case 0: tel = &m_telemetryBgm; break;
+        case 1: tel = &m_telemetryVoice; break;
+        case 2: tel = &m_telemetrySfx; break;
+        case 3: default: tel = &m_telemetryMaster; break;
+    }
+    return (channelIndex == 1) ? tel->rmsR : tel->rmsL;
+}
+
+void AudioEngine::getSpectrumBands(float* outBands, int bandCount) const {
+    if (!outBands || bandCount <= 0) return;
+    for (int i = 0; i < bandCount; ++i) {
+        outBands[i] = (i < 4) ? m_spectrumBands[i] : 0.0f;
+    }
 }
 
 } // namespace Rowl::Audio

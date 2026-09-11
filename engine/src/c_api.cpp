@@ -664,6 +664,34 @@ const char* RowlEngine_GetLastAudioError(RowlEngineHandle handle) {
     }, "");
 }
 
+float RowlEngine_GetAudioChannelPeak(RowlEngineHandle handle, int channelType, int channelIndex) {
+    if (!isLiveHandle(handle)) return 0.0f;
+    return invokeNoexcept<float>([&] {
+        const auto* audio = toEngine(handle)->getAudio();
+        return audio ? audio->getChannelPeak(channelType, channelIndex) : 0.0f;
+    }, 0.0f);
+}
+
+float RowlEngine_GetAudioChannelRms(RowlEngineHandle handle, int channelType, int channelIndex) {
+    if (!isLiveHandle(handle)) return 0.0f;
+    return invokeNoexcept<float>([&] {
+        const auto* audio = toEngine(handle)->getAudio();
+        return audio ? audio->getChannelRms(channelType, channelIndex) : 0.0f;
+    }, 0.0f);
+}
+
+void RowlEngine_GetAudioSpectrum(RowlEngineHandle handle, float* outBands, int bandCount) {
+    if (!isLiveHandle(handle) || !outBands || bandCount <= 0) return;
+    invokeNoexcept([&] {
+        const auto* audio = toEngine(handle)->getAudio();
+        if (audio) {
+            audio->getSpectrumBands(outBands, bandCount);
+        } else {
+            for (int i = 0; i < bandCount; ++i) outBands[i] = 0.0f;
+        }
+    });
+}
+
 const char* RowlEngine_GetScriptRuntimeDiagnosticsJson(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return "[]";
     static thread_local std::string buffer;

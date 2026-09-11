@@ -32,15 +32,47 @@
                 <!-- BGM Track -->
                 <StackPanel Spacing="4">
                     <TextBlock Text="BGM Track (Arka Plan Müziği)" FontSize="11" Foreground="{DynamicResource MutedText}"/>
-                    <TextBox Text="{Binding BgmTrack}" Watermark="Örn: bgm_theme.ogg"
-                             Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}"/>
+                    <Grid ColumnDefinitions="*, Auto">
+                        <TextBox Grid.Column="0" Text="{Binding BgmTrack}" Watermark="Örn: bgm_theme.ogg"
+                                 Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}"/>
+                        <Button Grid.Column="1" Command="{Binding ToggleBgmPreviewCommand}" Margin="4,0,0,0" Padding="8,4"
+                                ToolTip.Tip="BGM Önizleme Çal / Durdur">
+                            <Panel>
+                                <TextBlock Text="▶" IsVisible="{Binding !IsPreviewingBgm}" FontSize="11" Foreground="#10B981"/>
+                                <TextBlock Text="⏹" IsVisible="{Binding IsPreviewingBgm}" FontSize="11" Foreground="#EF4444"/>
+                            </Panel>
+                        </Button>
+                    </Grid>
+                    <!-- BGM Stereo VU Meter -->
+                    <Grid ColumnDefinitions="Auto, *" RowDefinitions="Auto, Auto" Margin="0,2,0,2">
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="L" FontSize="9" Width="12" Foreground="{DynamicResource MutedText}" VerticalAlignment="Center"/>
+                        <ProgressBar Grid.Row="0" Grid.Column="1" Minimum="0" Maximum="1" Value="{Binding BgmPeakL}" Height="4" Foreground="#10B981" Background="#262626" Margin="0,1"/>
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="R" FontSize="9" Width="12" Foreground="{DynamicResource MutedText}" VerticalAlignment="Center"/>
+                        <ProgressBar Grid.Row="1" Grid.Column="1" Minimum="0" Maximum="1" Value="{Binding BgmPeakR}" Height="4" Foreground="#10B981" Background="#262626" Margin="0,1"/>
+                    </Grid>
                 </StackPanel>
 
                 <!-- SFX Track -->
                 <StackPanel Spacing="4">
                     <TextBlock Text="SFX Track (Ses Efekti)" FontSize="11" Foreground="{DynamicResource MutedText}"/>
-                    <TextBox Text="{Binding SfxTrack}" Watermark="Örn: sfx_click.wav"
-                             Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}"/>
+                    <Grid ColumnDefinitions="*, Auto">
+                        <TextBox Grid.Column="0" Text="{Binding SfxTrack}" Watermark="Örn: sfx_click.wav"
+                                 Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}"/>
+                        <Button Grid.Column="1" Command="{Binding ToggleSfxPreviewCommand}" Margin="4,0,0,0" Padding="8,4"
+                                ToolTip.Tip="SFX Önizleme Çal / Durdur">
+                            <Panel>
+                                <TextBlock Text="▶" IsVisible="{Binding !IsPreviewingSfx}" FontSize="11" Foreground="#3B82F6"/>
+                                <TextBlock Text="⏹" IsVisible="{Binding IsPreviewingSfx}" FontSize="11" Foreground="#EF4444"/>
+                            </Panel>
+                        </Button>
+                    </Grid>
+                    <!-- SFX Stereo VU Meter -->
+                    <Grid ColumnDefinitions="Auto, *" RowDefinitions="Auto, Auto" Margin="0,2,0,2">
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="L" FontSize="9" Width="12" Foreground="{DynamicResource MutedText}" VerticalAlignment="Center"/>
+                        <ProgressBar Grid.Row="0" Grid.Column="1" Minimum="0" Maximum="1" Value="{Binding SfxPeakL}" Height="4" Foreground="#3B82F6" Background="#262626" Margin="0,1"/>
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="R" FontSize="9" Width="12" Foreground="{DynamicResource MutedText}" VerticalAlignment="Center"/>
+                        <ProgressBar Grid.Row="1" Grid.Column="1" Minimum="0" Maximum="1" Value="{Binding SfxPeakR}" Height="4" Foreground="#3B82F6" Background="#262626" Margin="0,1"/>
+                    </Grid>
                 </StackPanel>
 
                 <!-- Volume Slider -->

@@ -169,12 +169,16 @@ namespace RowlEngine.Editor.Native
             _tickTimer.Start();
         }
 
+        public float MasterPeakL { get; private set; }
+        public float MasterPeakR { get; private set; }
+        public float MasterRmsL { get; private set; }
+        public float MasterRmsR { get; private set; }
+
+        public event Action<float, float, float, float>? AudioTelemetryPolled;
+
         private void OnTick(object? sender, EventArgs e)
         {
             if (_handle == IntPtr.Zero) return;
-
-            // Unity-style PlayMode check: Live gameplay loop runs ONLY when IsPlaying is true!
-            if (!IsPlaying) return;
 
             var now = DateTime.UtcNow;
             float dt = (float)(now - _lastTick).TotalSeconds;
@@ -184,9 +188,29 @@ namespace RowlEngine.Editor.Native
             if (dt > 0.25f) dt = 0.25f;
             if (dt < 0.0f)  dt = 0.0f;
 
-            NativeBridge.RowlEngine_Step(_handle, dt);
-            RefreshDialogueHistory();
-            UpdatePixelBuffer();
+            if (IsPlaying)
+            {
+                NativeBridge.RowlEngine_Step(_handle, dt);
+                RefreshDialogueHistory();
+                UpdatePixelBuffer();
+            }
+            else
+            {
+                NativeBridge.RowlEngine_Step(_handle, 0.0f);
+            }
+
+            PollAudioTelemetry();
+        }
+
+        private void PollAudioTelemetry()
+        {
+            if (_handle == IntPtr.Zero) return;
+            MasterPeakL = NativeBridge.RowlEngine_GetAudioChannelPeak(_handle, 3, 0);
+            MasterPeakR = NativeBridge.RowlEngine_GetAudioChannelPeak(_handle, 3, 1);
+            MasterRmsL = NativeBridge.RowlEngine_GetAudioChannelRms(_handle, 3, 0);
+            MasterRmsR = NativeBridge.RowlEngine_GetAudioChannelRms(_handle, 3, 1);
+
+            AudioTelemetryPolled?.Invoke(MasterPeakL, MasterPeakR, MasterRmsL, MasterRmsR);
         }
 
         private void UpdatePixelBuffer()
@@ -553,6 +577,30 @@ namespace RowlEngine.Editor.Native
         public void SetAutoAdvanceDelayOffset(float seconds)
         {
             if (_handle != IntPtr.Zero) NativeBridge.RowlEngine_SetAutoAdvanceDelayOffset(_handle, seconds);
+        }
+
+        public void PlayAudio(string assetPath, int channelType = 0, int filterType = 0)
+        {
+            if (_handle != IntPtr.Zero && !string.IsNullOrEmpty(assetPath))
+                NativeBridge.RowlEngine_PlayAudio(_handle, assetPath, channelType, filterType);
+        }
+
+        public void StopBgm()
+        {
+            if (_handle != IntPtr.Zero)
+                NativeBridge.RowlEngine_StopBgm(_handle);
+        }
+
+        public float GetAudioChannelPeak(int channelType, int channelIndex = 0)
+            => _handle == IntPtr.Zero ? 0.0f : NativeBridge.RowlEngine_GetAudioChannelPeak(_handle, channelType, channelIndex);
+
+        public float GetAudioChannelRms(int channelType, int channelIndex = 0)
+            => _handle == IntPtr.Zero ? 0.0f : NativeBridge.RowlEngine_GetAudioChannelRms(_handle, channelType, channelIndex);
+
+        public void GetAudioSpectrum(float[] outBands)
+        {
+            if (_handle != IntPtr.Zero && outBands != null && outBands.Length > 0)
+                NativeBridge.RowlEngine_GetAudioSpectrum(_handle, outBands, outBands.Length);
         }
 
         // ── Save / Load Slots & History Rewind ────────────────────────────────

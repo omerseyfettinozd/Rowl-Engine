@@ -33,6 +33,118 @@ namespace RowlEngine.Editor.ViewModels.Components
         [ObservableProperty]
         private float _bgmTransitionDurationSeconds = 0.0f;
 
+        [ObservableProperty]
+        private bool _isPreviewingBgm = false;
+
+        [ObservableProperty]
+        private bool _isPreviewingSfx = false;
+
+        [ObservableProperty]
+        private float _bgmPeakL = 0.0f;
+
+        [ObservableProperty]
+        private float _bgmPeakR = 0.0f;
+
+        [ObservableProperty]
+        private float _bgmRmsL = 0.0f;
+
+        [ObservableProperty]
+        private float _bgmRmsR = 0.0f;
+
+        [ObservableProperty]
+        private float _sfxPeakL = 0.0f;
+
+        [ObservableProperty]
+        private float _sfxPeakR = 0.0f;
+
+        [ObservableProperty]
+        private float _sfxRmsL = 0.0f;
+
+        [ObservableProperty]
+        private float _sfxRmsR = 0.0f;
+
+        public static Action<string, int, int>? GlobalPreviewAudioAction { get; set; }
+        public static Action? GlobalStopAudioAction { get; set; }
+
+        public int GetFilterIndex() => DspFilter switch
+        {
+            "CaveReverb" => 1,
+            "Telephone" => 2,
+            "UnderwaterLowPass" => 3,
+            _ => 0
+        };
+
+        [CommunityToolkit.Mvvm.Input.RelayCommand]
+        public void ToggleBgmPreview()
+        {
+            if (IsPreviewingBgm)
+            {
+                StopAllPreview();
+            }
+            else
+            {
+                if (string.IsNullOrWhiteSpace(BgmTrack)) return;
+                StopAllPreview();
+                IsPreviewingBgm = true;
+                GlobalPreviewAudioAction?.Invoke(BgmTrack, 0, GetFilterIndex());
+            }
+        }
+
+        [CommunityToolkit.Mvvm.Input.RelayCommand]
+        public void ToggleSfxPreview()
+        {
+            if (IsPreviewingSfx)
+            {
+                StopAllPreview();
+            }
+            else
+            {
+                if (string.IsNullOrWhiteSpace(SfxTrack)) return;
+                StopAllPreview();
+                IsPreviewingSfx = true;
+                GlobalPreviewAudioAction?.Invoke(SfxTrack, 2, GetFilterIndex());
+            }
+        }
+
+        [CommunityToolkit.Mvvm.Input.RelayCommand]
+        public void StopAllPreview()
+        {
+            IsPreviewingBgm = false;
+            IsPreviewingSfx = false;
+            GlobalStopAudioAction?.Invoke();
+            ResetTelemetry();
+        }
+
+        public void ResetTelemetry()
+        {
+            BgmPeakL = 0.0f;
+            BgmPeakR = 0.0f;
+            BgmRmsL = 0.0f;
+            BgmRmsR = 0.0f;
+            SfxPeakL = 0.0f;
+            SfxPeakR = 0.0f;
+            SfxRmsL = 0.0f;
+            SfxRmsR = 0.0f;
+        }
+
+        public void UpdateAudioTelemetry(float peakL, float peakR, float rmsL, float rmsR, bool isSfx = false)
+        {
+            if (isSfx)
+            {
+                SfxPeakL = peakL;
+                SfxPeakR = peakR;
+                SfxRmsL = rmsL;
+                SfxRmsR = rmsR;
+            }
+            else
+            {
+                BgmPeakL = peakL;
+                BgmPeakR = peakR;
+                BgmRmsL = rmsL;
+                BgmRmsR = rmsR;
+            }
+        }
+
         public override Dictionary<string, object> Serialize()
         {
             return new Dictionary<string, object>
