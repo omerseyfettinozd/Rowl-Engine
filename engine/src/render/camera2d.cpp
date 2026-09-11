@@ -97,7 +97,11 @@ void Camera2D::shake(float intensity, float durationSeconds, float frequency) {
 }
 
 void Camera2D::shakeWithProfile(CameraShakePreset preset, float intensity, float durationSeconds, float frequency, float damping, float dirX, float dirY) {
-    if (!std::isfinite(intensity) || !std::isfinite(durationSeconds)) return;
+    // This is a public C API boundary. Reject an invalid profile as a whole so
+    // a malformed direction cannot poison the active camera transform or
+    // partially replace an already-running shake.
+    if (!std::isfinite(intensity) || !std::isfinite(durationSeconds) ||
+        !std::isfinite(dirX) || !std::isfinite(dirY)) return;
     if (intensity <= 0.0f || durationSeconds <= 0.0f) {
         m_shakePreset = preset;
         m_shakeIntensity = 0.0f;

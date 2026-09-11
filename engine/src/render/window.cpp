@@ -487,7 +487,8 @@ void Window::update(float dt) {
 }
 
 void Window::triggerScreenFlash(uint8_t r, uint8_t g, uint8_t b, float durationSeconds, float intensity) {
-    if (!std::isfinite(durationSeconds) || durationSeconds <= 0.0f) {
+    if (!std::isfinite(durationSeconds) || !std::isfinite(intensity)) return;
+    if (durationSeconds <= 0.0f) {
         m_screenFx.flashActive = false;
         m_screenFx.flashDuration = 0.0f;
         m_screenFx.flashElapsed = 0.0f;
@@ -517,7 +518,8 @@ float Window::getScreenFlashProgress() const {
 }
 
 void Window::setScreenTint(uint8_t r, uint8_t g, uint8_t b, float opacity) {
-    if (!std::isfinite(opacity) || opacity <= 0.001f) {
+    if (!std::isfinite(opacity)) return;
+    if (opacity <= 0.001f) {
         clearScreenTint();
         return;
     }
@@ -551,7 +553,8 @@ bool Window::hasScreenTint() const {
 }
 
 void Window::setVignette(float intensity, float radius, const std::string& colorHex) {
-    if (!std::isfinite(intensity) || intensity <= 0.001f) {
+    if (!std::isfinite(intensity) || !std::isfinite(radius)) return;
+    if (intensity <= 0.001f) {
         m_screenFx.vignetteEnabled = false;
         m_screenFx.vignetteIntensity = 0.0f;
         return;

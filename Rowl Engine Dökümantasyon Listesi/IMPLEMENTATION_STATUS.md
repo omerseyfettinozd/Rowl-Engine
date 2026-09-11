@@ -45,6 +45,9 @@ testi geçiyor.
   diagnostic toast'lar, transform gizmo, DSP/VU telemetry, parallax, typewriter
   voice blip'leri ve sinematik kamera shake/screen FX, editor serileştirme,
   P/Invoke ve native offscreen testleriyle kapsanıyor.
+- Sinematik C API sınırı non-finite shake yönü, flash intensity, tint opacity ve
+  vignette radius girdilerini no-op olarak reddeder; aktif geçerli efekt/profil
+  korunur ve `std::clamp` üzerinden NaN'ın render state'e ulaşması engellenir.
 
 ## Sonraki üretim işleri
 

@@ -3130,6 +3130,16 @@ void test_camera_and_transition_pipeline() {
             exit(1);
         }
 
+        // std::clamp does not sanitize NaN. Invalid direction values must
+        // leave the active profile untouched rather than reaching projection.
+        cam.shakeWithProfile(Rowl::Render::CameraShakePreset::Custom, 99.0f, 9.0f, 30.0f, 1.5f,
+                             std::numeric_limits<float>::quiet_NaN(), 0.4f);
+        if (!std::isfinite(cam.getShakeDirX()) || !std::isfinite(cam.getShakeDirY()) ||
+            std::abs(cam.getShakeDirX() - 0.8f) > 0.01f || std::abs(cam.getShakeDirY() - 0.4f) > 0.01f) {
+            std::cerr << "Non-finite camera shake direction corrupted active profile" << std::endl;
+            exit(1);
+        }
+
         cam.reset();
         if (cam.isShaking() || cam.isMoving() || cam.getShakeOffsetX() != 0.0f || cam.getShakeOffsetY() != 0.0f) {
             std::cerr << "Camera reset failed to clear shake state" << std::endl;
@@ -3177,10 +3187,33 @@ void test_camera_and_transition_pipeline() {
             exit(1);
         }
 
+        RowlEngine_SetScreenTintHex(handle, "#0A183D", 0.45f);
+        RowlEngine_SetScreenTintHex(handle, "#FFFFFF", std::numeric_limits<float>::quiet_NaN());
+        if (!std::isfinite(RowlEngine_GetScreenTintOpacity(handle)) ||
+            std::abs(RowlEngine_GetScreenTintOpacity(handle) - 0.45f) > 0.01f) {
+            std::cerr << "Non-finite screen tint opacity corrupted active tint" << std::endl;
+            exit(1);
+        }
+
         // Set Vignette
         RowlEngine_SetVignette(handle, 0.70f, 0.8f, "#000000");
         if (std::abs(RowlEngine_GetVignetteIntensity(handle) - 0.70f) > 0.01f) {
             std::cerr << "RowlEngine_GetVignetteIntensity mismatch" << std::endl;
+            exit(1);
+        }
+        RowlEngine_SetVignette(handle, 0.95f, std::numeric_limits<float>::quiet_NaN(), "#FFFFFF");
+        if (!std::isfinite(RowlEngine_GetVignetteIntensity(handle)) ||
+            std::abs(RowlEngine_GetVignetteIntensity(handle) - 0.70f) > 0.01f) {
+            std::cerr << "Non-finite vignette radius corrupted active effect" << std::endl;
+            exit(1);
+        }
+
+        RowlEngine_TriggerScreenFlashHex(handle, "#FFFFFF", 0.4f, 0.5f);
+        RowlEngine_TriggerScreenFlashHex(handle, "#FFFFFF", 60.0f, std::numeric_limits<float>::quiet_NaN());
+        RowlEngine_Step(handle, 0.25f);
+        RowlEngine_Step(handle, 0.25f);
+        if (RowlEngine_IsScreenFlashActive(handle)) {
+            std::cerr << "Non-finite screen flash intensity extended active effect" << std::endl;
             exit(1);
         }
         RowlEngine_Step(handle, 0.016f);
