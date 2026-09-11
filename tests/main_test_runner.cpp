@@ -1118,6 +1118,27 @@ void test_native_c_api() {
     RowlEngine_GetAudioSpectrum(handle, bands, 4);
     TEST_PASS("Milestone 23: RowlEngine_GetAudioChannelPeak, Rms & Spectrum Telemetry C-API");
 
+    // Milestone 24: Parallax Depth Background C-API Verification
+    RowlEngine_SetBackgroundParallax(handle, 0.4f, 0.6f);
+    if (std::abs(RowlEngine_GetBackgroundParallaxX(handle) - 0.4f) > 0.001f ||
+        std::abs(RowlEngine_GetBackgroundParallaxY(handle) - 0.6f) > 0.001f) {
+        std::cerr << "RowlEngine_SetBackgroundParallax failed" << std::endl;
+        exit(1);
+    }
+
+    const char* compJsonParallax = R"([
+        {"type":"background","id":"bg_parallax","enabled":true,"data":{"texture":"Woman.png","x":0,"y":0,"width":1920,"height":1080,"parallax_x":0.25,"parallax_y":0.5,"opacity":0.85}}
+    ])";
+    RowlEngine_UpdateSceneFromJson(handle, compJsonParallax);
+    if (std::abs(RowlEngine_GetBackgroundParallaxX(handle) - 0.25f) > 0.001f ||
+        std::abs(RowlEngine_GetBackgroundParallaxY(handle) - 0.5f) > 0.001f ||
+        std::abs(RowlEngine_GetBackgroundOpacity(handle) - 0.85f) > 0.001f) {
+        std::cerr << "RowlEngine_UpdateSceneFromJson failed to parse parallax and opacity" << std::endl;
+        exit(1);
+    }
+    RowlEngine_Step(handle, 0.016f);
+    TEST_PASS("Milestone 24: RowlEngine_SetBackgroundParallax & Background Parallax/Opacity C-API");
+
     // Script components on the same node deliberately share lifecycle names.
     // The runtime must dispatch both callbacks and tear them down in reverse
     // activation order instead of letting the latter overwrite the former.

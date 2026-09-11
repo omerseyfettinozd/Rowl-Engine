@@ -290,6 +290,18 @@ ROWL_API uint64_t RowlEngine_GetCurrentNodeId(RowlEngineHandle handle);
 /** Returns the rotation angle (degrees) of the active background. */
 ROWL_API float RowlEngine_GetBackgroundRotation(RowlEngineHandle handle);
 
+/** Sets the parallax factor (default 1.0f) for the background in X and Y dimensions. */
+ROWL_API void RowlEngine_SetBackgroundParallax(RowlEngineHandle handle, float parallaxX, float parallaxY);
+
+/** Returns the active background parallax factor in X. */
+ROWL_API float RowlEngine_GetBackgroundParallaxX(RowlEngineHandle handle);
+
+/** Returns the active background parallax factor in Y. */
+ROWL_API float RowlEngine_GetBackgroundParallaxY(RowlEngineHandle handle);
+
+/** Returns the active background opacity (0.0f - 1.0f). */
+ROWL_API float RowlEngine_GetBackgroundOpacity(RowlEngineHandle handle);
+
 /** Returns the rotation angle (degrees) of the active character. */
 ROWL_API float RowlEngine_GetCharacterRotation(RowlEngineHandle handle);
 

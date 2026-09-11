@@ -42,6 +42,15 @@ namespace RowlEngine.Editor.ViewModels.Components
         private double _rotation = 0.0;
 
         [ObservableProperty]
+        private double _parallaxFactorX = 1.0;
+
+        [ObservableProperty]
+        private double _parallaxFactorY = 1.0;
+
+        [ObservableProperty]
+        private double _opacity = 1.0;
+
+        [ObservableProperty]
         private Bitmap? _textureBitmap;
 
         // ── Scale → Width/Height sync ──
@@ -73,6 +82,9 @@ namespace RowlEngine.Editor.ViewModels.Components
             Height = DefaultHeight;
             Scale = 1.0;
             Rotation = 0.0;
+            ParallaxFactorX = 1.0;
+            ParallaxFactorY = 1.0;
+            Opacity = 1.0;
         }
 
         public void ResetRotation()
@@ -90,7 +102,10 @@ namespace RowlEngine.Editor.ViewModels.Components
                 ["width"] = Width,
                 ["height"] = Height,
                 ["scale"] = Scale,
-                ["rotation"] = Rotation
+                ["rotation"] = Rotation,
+                ["parallax_x"] = ParallaxFactorX,
+                ["parallax_y"] = ParallaxFactorY,
+                ["opacity"] = Opacity
             };
         }
 
@@ -104,6 +119,11 @@ namespace RowlEngine.Editor.ViewModels.Components
             if (data.TryGetValue("height", out var hv)) Height = Convert.ToDouble(hv);
             if (data.TryGetValue("scale", out var sv)) Scale = Convert.ToDouble(sv);
             if (data.TryGetValue("rotation", out var rv)) Rotation = Convert.ToDouble(rv);
+            if (data.TryGetValue("parallax_x", out var px)) ParallaxFactorX = Convert.ToDouble(px);
+            else if (data.TryGetValue("parallaxFactorX", out var pfx)) ParallaxFactorX = Convert.ToDouble(pfx);
+            if (data.TryGetValue("parallax_y", out var py)) ParallaxFactorY = Convert.ToDouble(py);
+            else if (data.TryGetValue("parallaxFactorY", out var pfy)) ParallaxFactorY = Convert.ToDouble(pfy);
+            if (data.TryGetValue("opacity", out var op)) Opacity = Convert.ToDouble(op);
             RefreshBitmap();
         }
     }

@@ -169,6 +169,21 @@ void Camera2D::transformRect(float inX, float inY, float inW, float inH,
     outH = inH * m_zoom;
 }
 
+void Camera2D::transformRectParallax(float inX, float inY, float inW, float inH,
+                                    float parallaxX, float parallaxY,
+                                    float& outX, float& outY, float& outW, float& outH) const {
+    const float cx = m_virtualWidth * 0.5f;
+    const float cy = m_virtualHeight * 0.5f;
+
+    const float effectivePosX = cx + (m_posX - cx) * parallaxX;
+    const float effectivePosY = cy + (m_posY - cy) * parallaxY;
+
+    outX = cx + (inX - effectivePosX) * m_zoom + m_shakeOffsetX * parallaxX;
+    outY = cy + (inY - effectivePosY) * m_zoom + m_shakeOffsetY * parallaxY;
+    outW = inW * m_zoom;
+    outH = inH * m_zoom;
+}
+
 void Camera2D::transformPoint(float inX, float inY, float& outX, float& outY) const {
     const float cx = m_virtualWidth * 0.5f;
     const float cy = m_virtualHeight * 0.5f;

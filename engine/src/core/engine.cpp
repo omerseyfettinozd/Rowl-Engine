@@ -683,6 +683,9 @@ void Engine::updateSceneFromComponents(const std::string& componentsJson) {
                 m_activeBackgroundWidth = data.value("width", 1920.0f);
                 m_activeBackgroundHeight = data.value("height", 1080.0f);
                 m_activeBackgroundRotation = data.value("rotation", 0.0f);
+                m_activeBackgroundParallaxX = data.value("parallax_x", 1.0f);
+                m_activeBackgroundParallaxY = data.value("parallax_y", 1.0f);
+                m_activeBackgroundOpacity = std::clamp(data.value("opacity", 1.0f), 0.0f, 1.0f);
                 m_hasBackground = !m_activeBackground.empty();
             } else if (type == "character") {
                 CharacterRenderData cd;
@@ -1426,7 +1429,10 @@ void Engine::step(float deltaTime) {
         m_activeCharacters,
         m_activeDialogues,
         m_activeChoiceButtons,
-        m_activeBackgroundRotation
+        m_activeBackgroundRotation,
+        m_activeBackgroundParallaxX,
+        m_activeBackgroundParallaxY,
+        m_activeBackgroundOpacity
     );
 
     // Update & Render Entity-Component Scene

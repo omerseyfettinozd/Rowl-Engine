@@ -204,6 +204,10 @@ public:
     float getActiveCharacterHeight()    const { return m_activeCharacterHeight; }
     float getActiveCharacterRotation()  const { return m_activeCharacterRotation; }
     float getActiveBackgroundRotation() const { return m_activeBackgroundRotation; }
+    float getActiveBackgroundParallaxX() const { return m_activeBackgroundParallaxX; }
+    float getActiveBackgroundParallaxY() const { return m_activeBackgroundParallaxY; }
+    float getActiveBackgroundOpacity()   const { return m_activeBackgroundOpacity; }
+    void setBackgroundParallax(float px, float py) { m_activeBackgroundParallaxX = px; m_activeBackgroundParallaxY = py; }
     float getActiveDialogueBoxX()       const { return m_activeDialogueData.x; }
     float getActiveDialogueBoxY()       const { return m_activeDialogueData.y; }
     float getActiveDialogueBoxWidth()   const { return m_activeDialogueData.width; }
@@ -271,6 +275,9 @@ private:
     float m_activeBackgroundWidth  = 1920.0f;
     float m_activeBackgroundHeight = 1080.0f;
     float m_activeBackgroundRotation = 0.0f;
+    float m_activeBackgroundParallaxX = 1.0f;
+    float m_activeBackgroundParallaxY = 1.0f;
+    float m_activeBackgroundOpacity   = 1.0f;
     std::string m_activeCharacter  = "spr_evelyn.png";
     float m_activeCharacterX       = 1440.0f;
     float m_activeCharacterY       = 340.0f;

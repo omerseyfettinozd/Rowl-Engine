@@ -98,6 +98,26 @@
                     </StackPanel>
                 </Grid>
 
+                <!-- 2.5D Parallax Depth & Opacity -->
+                <Grid ColumnDefinitions="*, *" Margin="0,2">
+                    <StackPanel Grid.Column="0" Spacing="4" Margin="0,0,4,0">
+                        <TextBlock Text="🌌 Parallax X" FontSize="11" Foreground="{DynamicResource AccentColor}" FontWeight="SemiBold"/>
+                        <NumericUpDown Value="{Binding ParallaxFactorX}" Minimum="0.0" Maximum="3.0" Increment="0.1" FormatString="0.00x" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Spacing="4" Margin="4,0,0,0">
+                        <TextBlock Text="🌌 Parallax Y" FontSize="11" Foreground="{DynamicResource AccentColor}" FontWeight="SemiBold"/>
+                        <NumericUpDown Value="{Binding ParallaxFactorY}" Minimum="0.0" Maximum="3.0" Increment="0.1" FormatString="0.00x" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}"/>
+                    </StackPanel>
+                </Grid>
+
+                <StackPanel Spacing="4" Margin="0,2">
+                    <Grid ColumnDefinitions="*, Auto">
+                        <TextBlock Grid.Column="0" Text="✨ Layer Opacity" FontSize="11" Foreground="{DynamicResource MutedText}"/>
+                        <TextBlock Grid.Column="1" Text="{Binding Opacity, StringFormat={}{0:P0}}" FontSize="11" Foreground="{DynamicResource PrimaryText}"/>
+                    </Grid>
+                    <Slider Value="{Binding Opacity}" Minimum="0.0" Maximum="1.0" SmallChange="0.05" LargeChange="0.1"/>
+                </StackPanel>
+
                 <!-- OBS Quick Assist Buttons -->
                 <StackPanel Spacing="4" Margin="0,4,0,0">
                     <TextBlock Text="🧲 OBS Hızlı Hizalama (Assist)" FontSize="10" Foreground="{DynamicResource MutedText}" FontWeight="SemiBold"/>

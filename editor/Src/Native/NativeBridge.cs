@@ -178,6 +178,18 @@ namespace RowlEngine.Editor.Native
         internal static extern float RowlEngine_GetBackgroundRotation(IntPtr handle);
 
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern void RowlEngine_SetBackgroundParallax(IntPtr handle, float parallaxX, float parallaxY);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern float RowlEngine_GetBackgroundParallaxX(IntPtr handle);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern float RowlEngine_GetBackgroundParallaxY(IntPtr handle);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern float RowlEngine_GetBackgroundOpacity(IntPtr handle);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
         internal static extern float RowlEngine_GetCharacterRotation(IntPtr handle);
 
         // ── Audio Control ───────────────────────────────────────────────────

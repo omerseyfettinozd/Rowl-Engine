@@ -44,6 +44,9 @@ internal static class StoryGraphNodeHydrator
         background.X = Number(value, "background_x", background.X); background.Y = Number(value, "background_y", background.Y);
         background.Width = Number(value, "background_width", background.Width); background.Height = Number(value, "background_height", background.Height);
         background.Rotation = Number(value, "background_rotation", background.Rotation);
+        background.ParallaxFactorX = Number(value, "background_parallax_x", background.ParallaxFactorX);
+        background.ParallaxFactorY = Number(value, "background_parallax_y", background.ParallaxFactorY);
+        background.Opacity = Number(value, "background_opacity", background.Opacity);
 
         var character = node.CreateObject("Evelyn").AddComponent<CharacterComponentViewModel>();
         character.Sprite = Text(value, "character", "spr_evelyn.png");

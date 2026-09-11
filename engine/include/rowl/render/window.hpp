@@ -160,7 +160,10 @@ public:
         const std::vector<CharacterRenderData>& characters,
         const std::vector<DialogueRenderData>& dialogues,
         const std::vector<ChoiceButtonRenderData>& choices = {},
-        float bgRotation = 0.0f
+        float bgRotation = 0.0f,
+        float bgParallaxX = 1.0f,
+        float bgParallaxY = 1.0f,
+        float bgOpacity = 1.0f
     );
 
     void renderVisualNovelFrame(

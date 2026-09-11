@@ -60,6 +60,11 @@ public:
     void transformRect(float inX, float inY, float inW, float inH,
                        float& outX, float& outY, float& outW, float& outH) const;
 
+    // Transform a rectangle with independent X/Y parallax scaling factors (1.0 = standard, 0.0 = static/sky)
+    void transformRectParallax(float inX, float inY, float inW, float inH,
+                               float parallaxX, float parallaxY,
+                               float& outX, float& outY, float& outW, float& outH) const;
+
     // Transform a point
     void transformPoint(float inX, float inY, float& outX, float& outY) const;
 

@@ -397,6 +397,15 @@ namespace RowlEngine.Editor.ViewModels
                     case nameof(BackgroundComponentViewModel.Rotation):
                         OnPropertyChanged(nameof(BackgroundRotation));
                         break;
+                    case nameof(BackgroundComponentViewModel.ParallaxFactorX):
+                        OnPropertyChanged(nameof(BackgroundParallaxX));
+                        break;
+                    case nameof(BackgroundComponentViewModel.ParallaxFactorY):
+                        OnPropertyChanged(nameof(BackgroundParallaxY));
+                        break;
+                    case nameof(BackgroundComponentViewModel.Opacity):
+                        OnPropertyChanged(nameof(BackgroundOpacity));
+                        break;
                     case nameof(BackgroundComponentViewModel.TextureBitmap):
                         OnPropertyChanged(nameof(BackgroundBitmap));
                         break;
@@ -511,6 +520,24 @@ namespace RowlEngine.Editor.ViewModels
         {
             get => GetComponent<BackgroundComponentViewModel>()?.Rotation ?? 0.0;
             set { var c = GetComponent<BackgroundComponentViewModel>(); if (c != null) c.Rotation = value; }
+        }
+
+        public double BackgroundParallaxX
+        {
+            get => GetComponent<BackgroundComponentViewModel>()?.ParallaxFactorX ?? 1.0;
+            set { var c = GetComponent<BackgroundComponentViewModel>(); if (c != null) c.ParallaxFactorX = value; }
+        }
+
+        public double BackgroundParallaxY
+        {
+            get => GetComponent<BackgroundComponentViewModel>()?.ParallaxFactorY ?? 1.0;
+            set { var c = GetComponent<BackgroundComponentViewModel>(); if (c != null) c.ParallaxFactorY = value; }
+        }
+
+        public double BackgroundOpacity
+        {
+            get => GetComponent<BackgroundComponentViewModel>()?.Opacity ?? 1.0;
+            set { var c = GetComponent<BackgroundComponentViewModel>(); if (c != null) c.Opacity = value; }
         }
 
         public Bitmap? BackgroundBitmap => GetComponent<BackgroundComponentViewModel>()?.TextureBitmap;

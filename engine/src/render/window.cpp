@@ -765,7 +765,10 @@ void Window::renderVisualNovelFrame(
     const std::vector<CharacterRenderData>& characters,
     const std::vector<DialogueRenderData>& dialogues,
     const std::vector<ChoiceButtonRenderData>& choices,
-    float bgRotation
+    float bgRotation,
+    float bgParallaxX,
+    float bgParallaxY,
+    float bgOpacity
 ) {
     if (!m_initialized || !m_sdlRenderer) return;
     const auto frameRenderStarted = std::chrono::steady_clock::now();
@@ -802,7 +805,7 @@ void Window::renderVisualNovelFrame(
     if (hasBackground && !background.empty()) {
         float camBgX = bgX, camBgY = bgY, camBgW = bgW, camBgH = bgH;
         if (m_camera) {
-            m_camera->transformRect(bgX, bgY, bgW, bgH, camBgX, camBgY, camBgW, camBgH);
+            m_camera->transformRectParallax(bgX, bgY, bgW, bgH, bgParallaxX, bgParallaxY, camBgX, camBgY, camBgW, camBgH);
         }
         float physBgX, physBgY;
         AspectGuardian::virtualToPhysical(camBgX, camBgY, metrics, physBgX, physBgY);
@@ -812,13 +815,16 @@ void Window::renderVisualNovelFrame(
 
         SDL_Texture* bgTex = loadTexture(background);
         if (bgTex) {
+            Uint8 alpha = static_cast<Uint8>(std::clamp(bgOpacity, 0.0f, 1.0f) * 255.0f);
+            SDL_SetTextureAlphaMod(bgTex, alpha);
             if (std::abs(bgRotation) > 1e-4f) {
                 SDL_RenderTextureRotated(m_sdlRenderer, bgTex, nullptr, &vpRect, static_cast<double>(bgRotation), nullptr, SDL_FLIP_NONE);
             } else {
                 SDL_RenderTexture(m_sdlRenderer, bgTex, nullptr, &vpRect);
             }
+            SDL_SetTextureAlphaMod(bgTex, 255);
         } else {
-            SDL_SetRenderDrawColor(m_sdlRenderer, 20, 24, 38, 255);
+            SDL_SetRenderDrawColor(m_sdlRenderer, 20, 24, 38, static_cast<Uint8>(std::clamp(bgOpacity, 0.0f, 1.0f) * 255.0f));
             SDL_RenderFillRect(m_sdlRenderer, &vpRect);
         }
     }

@@ -515,6 +515,26 @@ float RowlEngine_GetBackgroundRotation(RowlEngineHandle handle) {
     return invokeNoexcept<float>([&] { return toEngine(handle)->getActiveBackgroundRotation(); }, 0.0f);
 }
 
+void RowlEngine_SetBackgroundParallax(RowlEngineHandle handle, float parallaxX, float parallaxY) {
+    if (!isLiveHandle(handle)) return;
+    invokeNoexcept([&] { toEngine(handle)->setBackgroundParallax(parallaxX, parallaxY); });
+}
+
+float RowlEngine_GetBackgroundParallaxX(RowlEngineHandle handle) {
+    if (!isLiveHandle(handle)) return 1.0f;
+    return invokeNoexcept<float>([&] { return toEngine(handle)->getActiveBackgroundParallaxX(); }, 1.0f);
+}
+
+float RowlEngine_GetBackgroundParallaxY(RowlEngineHandle handle) {
+    if (!isLiveHandle(handle)) return 1.0f;
+    return invokeNoexcept<float>([&] { return toEngine(handle)->getActiveBackgroundParallaxY(); }, 1.0f);
+}
+
+float RowlEngine_GetBackgroundOpacity(RowlEngineHandle handle) {
+    if (!isLiveHandle(handle)) return 1.0f;
+    return invokeNoexcept<float>([&] { return toEngine(handle)->getActiveBackgroundOpacity(); }, 1.0f);
+}
+
 float RowlEngine_GetCharacterRotation(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return 0.0f;
     return invokeNoexcept<float>([&] { return toEngine(handle)->getActiveCharacterRotation(); }, 0.0f);

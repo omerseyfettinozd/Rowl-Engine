@@ -533,6 +533,21 @@ namespace RowlEngine.Editor.Native
         public float GetBackgroundRotation()
             => _handle == IntPtr.Zero ? 0.0f : NativeBridge.RowlEngine_GetBackgroundRotation(_handle);
 
+        public void SetBackgroundParallax(float parallaxX, float parallaxY)
+        {
+            if (_handle != IntPtr.Zero)
+                NativeBridge.RowlEngine_SetBackgroundParallax(_handle, parallaxX, parallaxY);
+        }
+
+        public float GetBackgroundParallaxX()
+            => _handle == IntPtr.Zero ? 1.0f : NativeBridge.RowlEngine_GetBackgroundParallaxX(_handle);
+
+        public float GetBackgroundParallaxY()
+            => _handle == IntPtr.Zero ? 1.0f : NativeBridge.RowlEngine_GetBackgroundParallaxY(_handle);
+
+        public float GetBackgroundOpacity()
+            => _handle == IntPtr.Zero ? 1.0f : NativeBridge.RowlEngine_GetBackgroundOpacity(_handle);
+
         public float GetCharacterRotation()
             => _handle == IntPtr.Zero ? 0.0f : NativeBridge.RowlEngine_GetCharacterRotation(_handle);
 
