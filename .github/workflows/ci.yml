@@ -78,7 +78,7 @@ jobs:
           python3 tools/verify_release_package.py "$release_dir"
           (
             cd "$release_dir"
-            SDL_AUDIODRIVER=dummy LD_LIBRARY_PATH=. ./RowlGame --project . --package-smoke-test
+            SDL_AUDIODRIVER=dummy LD_LIBRARY_PATH=. xvfb-run -a ./RowlGame --project . --package-smoke-test
           )
 
       - name: Record native benchmark baseline
