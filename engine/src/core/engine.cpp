@@ -969,17 +969,29 @@ void Engine::updateSceneFromComponents(const std::string& componentsJson) {
                 m_audio->isBgmPlaying(), filter);
         }
 
-        // Sync voice blip default settings from character if dialogue sound is empty
+        // Sync voice blip default settings from character if dialogue sound is empty or uses defaults
         for (auto& dlg : m_activeDialogues) {
-            if (dlg.typewriterSound.empty()) {
-                for (const auto& ch : m_activeCharacters) {
-                    if (!ch.voiceBlipSound.empty()) {
+            for (const auto& ch : m_activeCharacters) {
+                // Match if single character in scene or speaker matches character sprite
+                bool speakerMatch = (m_activeCharacters.size() == 1) ||
+                    (!dlg.speaker.empty() && !ch.sprite.empty() &&
+                     (ch.sprite.find(dlg.speaker) != std::string::npos ||
+                      dlg.speaker.find(ch.sprite) != std::string::npos));
+
+                if (speakerMatch) {
+                    if (dlg.typewriterSound.empty() && !ch.voiceBlipSound.empty()) {
                         dlg.typewriterSound = ch.voiceBlipSound;
-                        dlg.voiceBlipPitch = ch.voiceBlipPitch;
-                        dlg.voiceBlipPitchVariance = ch.voiceBlipPitchVariance;
-                        dlg.voiceBlipCadence = ch.voiceBlipCadence;
-                        break;
                     }
+                    if (dlg.voiceBlipPitch == 1.0f && ch.voiceBlipPitch != 1.0f) {
+                        dlg.voiceBlipPitch = ch.voiceBlipPitch;
+                    }
+                    if (dlg.voiceBlipPitchVariance == 0.08f && ch.voiceBlipPitchVariance != 0.08f) {
+                        dlg.voiceBlipPitchVariance = ch.voiceBlipPitchVariance;
+                    }
+                    if (dlg.voiceBlipCadence == 1 && ch.voiceBlipCadence != 1) {
+                        dlg.voiceBlipCadence = ch.voiceBlipCadence;
+                    }
+                    break;
                 }
             }
         }
@@ -1525,39 +1537,44 @@ void Engine::step(float deltaTime) {
     }
     m_activeDialogueData.isPlaying = m_isPlaying;
     if (m_isPlaying && m_activeDialogueData.typewriterEnabled && m_activeDialogueData.textSpeed > 0) {
-        m_activeDialogueData.elapsedTypewriterTime += deltaTime * m_textSpeedMultiplier;
-        if (m_activeDialogues.empty() && m_audio) {
-            size_t totalCodepoints = Rowl::Render::FontRenderer::countCodepoints(m_activeDialogueData.dialogue);
-            float msPerChar = static_cast<float>(m_activeDialogueData.textSpeed);
-            float elapsedMs = m_activeDialogueData.elapsedTypewriterTime * 1000.0f;
-            size_t currentVisible = static_cast<size_t>(elapsedMs / msPerChar);
-            if (currentVisible > totalCodepoints) currentVisible = totalCodepoints;
+        if (!m_activeDialogues.empty()) {
+            m_activeDialogueData.elapsedTypewriterTime = m_activeDialogues[0].elapsedTypewriterTime;
+            m_activeDialogueData.lastBlipCodepointIndex = m_activeDialogues[0].lastBlipCodepointIndex;
+        } else {
+            m_activeDialogueData.elapsedTypewriterTime += deltaTime * m_textSpeedMultiplier;
+            if (m_audio) {
+                size_t totalCodepoints = Rowl::Render::FontRenderer::countCodepoints(m_activeDialogueData.dialogue);
+                float msPerChar = static_cast<float>(m_activeDialogueData.textSpeed);
+                float elapsedMs = m_activeDialogueData.elapsedTypewriterTime * 1000.0f;
+                size_t currentVisible = static_cast<size_t>(elapsedMs / msPerChar);
+                if (currentVisible > totalCodepoints) currentVisible = totalCodepoints;
 
-            if (currentVisible > m_activeDialogueData.lastBlipCodepointIndex) {
-                size_t startChar = m_activeDialogueData.lastBlipCodepointIndex;
-                size_t endChar = currentVisible;
-                m_activeDialogueData.lastBlipCodepointIndex = currentVisible;
+                if (currentVisible > m_activeDialogueData.lastBlipCodepointIndex) {
+                    size_t startChar = m_activeDialogueData.lastBlipCodepointIndex;
+                    size_t endChar = currentVisible;
+                    m_activeDialogueData.lastBlipCodepointIndex = currentVisible;
 
-                for (size_t charIdx = startChar; charIdx < endChar; ++charIdx) {
-                    if (m_activeDialogueData.voiceBlipCadence > 1 && (charIdx % m_activeDialogueData.voiceBlipCadence) != 0) {
-                        continue;
+                    for (size_t charIdx = startChar; charIdx < endChar; ++charIdx) {
+                        if (m_activeDialogueData.voiceBlipCadence > 1 && (charIdx % m_activeDialogueData.voiceBlipCadence) != 0) {
+                            continue;
+                        }
+                        size_t byteIdx = 0;
+                        uint32_t cp = 0;
+                        for (size_t c = 0; c <= charIdx && byteIdx < m_activeDialogueData.dialogue.length(); ++c) {
+                            cp = Rowl::Render::FontRenderer::getNextCodepoint(m_activeDialogueData.dialogue, byteIdx);
+                        }
+                        if (m_activeDialogueData.voiceBlipSkipPunctuation && isPunctuationOrWhitespace(cp)) {
+                            continue;
+                        }
+                        float hash = static_cast<float>(((charIdx * 2654435761u) ^ (cp * 2246822519u)) % 1000) / 1000.0f;
+                        float pitchMod = m_activeDialogueData.voiceBlipPitch + (hash * 2.0f - 1.0f) * m_activeDialogueData.voiceBlipPitchVariance;
+                        pitchMod = std::clamp(pitchMod, 0.25f, 4.0f);
+                        Rowl::Audio::AudioChannelType ch = (m_activeDialogueData.voiceBlipChannel == 2)
+                            ? Rowl::Audio::AudioChannelType::Sfx
+                            : Rowl::Audio::AudioChannelType::Voice;
+                        m_audio->playVoiceBlip(m_activeDialogueData.typewriterSound, pitchMod, m_activeDialogueData.voiceBlipVolume, ch);
+                        break;
                     }
-                    size_t byteIdx = 0;
-                    uint32_t cp = 0;
-                    for (size_t c = 0; c <= charIdx && byteIdx < m_activeDialogueData.dialogue.length(); ++c) {
-                        cp = Rowl::Render::FontRenderer::getNextCodepoint(m_activeDialogueData.dialogue, byteIdx);
-                    }
-                    if (m_activeDialogueData.voiceBlipSkipPunctuation && isPunctuationOrWhitespace(cp)) {
-                        continue;
-                    }
-                    float hash = static_cast<float>(((charIdx * 2654435761u) ^ (cp * 2246822519u)) % 1000) / 1000.0f;
-                    float pitchMod = m_activeDialogueData.voiceBlipPitch + (hash * 2.0f - 1.0f) * m_activeDialogueData.voiceBlipPitchVariance;
-                    pitchMod = std::clamp(pitchMod, 0.25f, 4.0f);
-                    Rowl::Audio::AudioChannelType ch = (m_activeDialogueData.voiceBlipChannel == 2)
-                        ? Rowl::Audio::AudioChannelType::Sfx
-                        : Rowl::Audio::AudioChannelType::Voice;
-                    m_audio->playVoiceBlip(m_activeDialogueData.typewriterSound, pitchMod, m_activeDialogueData.voiceBlipVolume, ch);
-                    break;
                 }
             }
         }

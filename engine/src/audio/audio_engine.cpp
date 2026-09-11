@@ -810,6 +810,11 @@ void AudioEngine::playVoiceBlip(const std::string& assetPath, float pitch, float
     tel.rmsL = std::max(tel.rmsL, effectiveVol * 0.707f);
     tel.rmsR = std::max(tel.rmsR, effectiveVol * 0.707f);
 
+    m_telemetryMaster.peakL = std::clamp(std::max(m_telemetryMaster.peakL, tel.peakL), 0.0f, 1.0f);
+    m_telemetryMaster.peakR = std::clamp(std::max(m_telemetryMaster.peakR, tel.peakR), 0.0f, 1.0f);
+    m_telemetryMaster.rmsL = std::clamp(std::max(m_telemetryMaster.rmsL, tel.rmsL), 0.0f, 1.0f);
+    m_telemetryMaster.rmsR = std::clamp(std::max(m_telemetryMaster.rmsR, tel.rmsR), 0.0f, 1.0f);
+
     if (!m_deviceAvailable) {
         return;
     }
@@ -864,11 +869,21 @@ void AudioEngine::playVoiceBlip(const std::string& assetPath, float pitch, float
                     if (SDL_ConvertAudioSamples(&spec, audioBuf, static_cast<int>(audioLen),
                                                 &floatSpec, &floatBuffer, &floatLength) &&
                         floatBuffer && floatLength > 0) {
+                        float* samples = reinterpret_cast<float*>(floatBuffer);
+                        size_t sampleCount = static_cast<size_t>(floatLength) / sizeof(float);
+                        for (size_t s = 0; s < sampleCount; ++s) {
+                            samples[s] *= volume;
+                        }
                         SDL_ClearAudioStream(targetStream);
                         SDL_SetAudioStreamFormat(targetStream, &floatSpec, nullptr);
                         SDL_SetAudioStreamFrequencyRatio(targetStream, pitch);
                         SDL_PutAudioStreamData(targetStream, floatBuffer, floatLength);
                         SDL_ResumeAudioStreamDevice(targetStream);
+                        if (channel == AudioChannelType::Voice) {
+                            m_isVoicePlaying = true;
+                        } else if (channel == AudioChannelType::Sfx) {
+                            m_isSfxPlaying = true;
+                        }
                         SDL_free(floatBuffer);
                         assetPlayed = true;
                     }
@@ -920,6 +935,8 @@ void AudioEngine::playVoiceBlip(const std::string& assetPath, float pitch, float
                                  reinterpret_cast<const uint8_t*>(blipPcm.data() + blipPcm.size()));
             m_isSfxPlaying = true;
             m_sfxSampleOffset = 0;
+        } else if (channel == AudioChannelType::Voice) {
+            m_isVoicePlaying = true;
         }
     }
 }

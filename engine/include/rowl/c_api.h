@@ -384,6 +384,12 @@ ROWL_API int RowlEngine_GetDialogueVoiceBlipSkipPunctuation(RowlEngineHandle han
 /** Returns active dialogue voice blip audio channel (1 = Voice, 2 = Sfx). */
 ROWL_API int RowlEngine_GetDialogueVoiceBlipChannel(RowlEngineHandle handle);
 
+/** Returns active dialogue voice blip volume (0.0 - 1.0). */
+ROWL_API float RowlEngine_GetDialogueVoiceBlipVolume(RowlEngineHandle handle);
+
+/** Sets active dialogue voice blip volume (0.0 - 1.0). */
+ROWL_API void RowlEngine_SetDialogueVoiceBlipVolume(RowlEngineHandle handle, float volume);
+
 /** Returns cumulative total of voice blips triggered by the engine. */
 ROWL_API uint32_t RowlEngine_GetVoiceBlipCount(RowlEngineHandle handle);
 

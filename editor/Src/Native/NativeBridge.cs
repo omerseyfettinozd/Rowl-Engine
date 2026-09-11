@@ -281,6 +281,12 @@ namespace RowlEngine.Editor.Native
         internal static extern int RowlEngine_GetDialogueVoiceBlipChannel(IntPtr handle);
 
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern float RowlEngine_GetDialogueVoiceBlipVolume(IntPtr handle);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern void RowlEngine_SetDialogueVoiceBlipVolume(IntPtr handle, float volume);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
         internal static extern uint RowlEngine_GetVoiceBlipCount(IntPtr handle);
 
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]

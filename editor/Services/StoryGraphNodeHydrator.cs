@@ -64,6 +64,10 @@ internal static class StoryGraphNodeHydrator
         character.Rotation = Number(value, "character_rotation", character.Rotation);
         character.ScaleX = Number(value, "character_scale_x", character.ScaleX);
         character.ScaleY = Number(value, "character_scale_y", character.ScaleY);
+        character.VoiceBlipSound = Text(value, "character_voice_blip_sound", character.VoiceBlipSound);
+        character.VoiceBlipPitch = Number(value, "character_voice_blip_pitch", character.VoiceBlipPitch);
+        character.VoiceBlipVariance = Number(value, "character_voice_blip_variance", character.VoiceBlipVariance);
+        character.VoiceBlipCadence = value.TryGetProperty("character_voice_blip_cadence", out var cvbc) && cvbc.TryGetInt32(out var cvbci) ? cvbci : character.VoiceBlipCadence;
 
         node.CreateObject("Audio").AddComponent<AudioComponentViewModel>().DspFilter = Text(value, "dsp", "Normal");
     }

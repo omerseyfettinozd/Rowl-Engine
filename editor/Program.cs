@@ -2486,6 +2486,78 @@ namespace RowlEngine.Editor
                     throw new Exception("Typewriter dialogue playback did not trigger any voice blips in EngineHost");
                 mainVm.EngineHost.SetPlayState(false);
 
+                // Step 25.7: EngineHost Dialogue Voice Blip Volume Getter/Setter
+                Console.WriteLine("    [Step 25.7]: EngineHost Voice Blip Volume Getter/Setter...");
+                mainVm.EngineHost.SetDialogueVoiceBlipVolume(0.42f);
+                if (Math.Abs(mainVm.EngineHost.GetDialogueVoiceBlipVolume() - 0.42f) > 0.001f)
+                    throw new Exception("EngineHost SetDialogueVoiceBlipVolume / GetDialogueVoiceBlipVolume failed");
+
+                // Step 25.8: Character Default Voice Blip Fallback Inheritance in EngineHost
+                Console.WriteLine("    [Step 25.8]: Character Voice Blip Fallback Inheritance in EngineHost...");
+                string inheritJson = """
+                [
+                    {
+                        "type": "character",
+                        "enabled": true,
+                        "data": {
+                            "sprite": "spr_evelyn.png",
+                            "voice_blip_sound": "",
+                            "voice_blip_pitch": 1.65,
+                            "voice_blip_cadence": 3
+                        }
+                    },
+                    {
+                        "type": "dialogue",
+                        "enabled": true,
+                        "data": {
+                            "speaker": "Evelyn",
+                            "dialogue": "Inheriting voice pitch from character!",
+                            "typewriter_enabled": true,
+                            "typewriter_speed": 40.0
+                        }
+                    }
+                ]
+                """;
+                mainVm.EngineHost.UpdateSceneFromComponents(inheritJson);
+                if (Math.Abs(mainVm.EngineHost.GetDialogueVoiceBlipPitch() - 1.65f) > 0.001f ||
+                    mainVm.EngineHost.GetDialogueVoiceBlipCadence() != 3)
+                {
+                    throw new Exception("EngineHost failed to inherit procedural voice blip pitch/cadence from character");
+                }
+
+                // Step 25.9: Punctuation Skipping Defense
+                Console.WriteLine("    [Step 25.9]: Punctuation-Only Fast-Forward Suppression...");
+                string punctuationOnlyJson = """
+                [
+                    {
+                        "type": "dialogue",
+                        "enabled": true,
+                        "data": {
+                            "speaker": "Evelyn",
+                            "dialogue": "......",
+                            "typewriter_enabled": true,
+                            "typewriter_speed": 20.0,
+                            "voice_blip_skip_punctuation": true
+                        }
+                    }
+                ]
+                """;
+                mainVm.EngineHost.SetPlayState(true);
+                mainVm.EngineHost.ResetVoiceBlipCount();
+                mainVm.EngineHost.UpdateSceneFromComponents(punctuationOnlyJson);
+                mainVm.EngineHost.Step(0.2f);
+                if (mainVm.EngineHost.GetVoiceBlipCount() != 0)
+                    throw new Exception("EngineHost triggered voice blips on punctuation-only dialogue when skip_punctuation was enabled");
+                mainVm.EngineHost.SetPlayState(false);
+
+                // Step 25.10: StoryGraphSerializer Active Story JSON Serialization
+                Console.WriteLine("    [Step 25.10]: StoryGraphSerializer.SerializeActiveStory Voice Blip Round-Trip...");
+                string activeStoryJson = StoryGraphSerializer.SerializeActiveStory(testNode);
+                if (!activeStoryJson.Contains("\"voice_blip_pitch\": 1.45") && !activeStoryJson.Contains("\"voice_blip_pitch\":1.45"))
+                    throw new Exception("SerializeActiveStory did not include voice_blip_pitch");
+                if (!activeStoryJson.Contains("\"voice_blip_volume\": 0.7") && !activeStoryJson.Contains("\"voice_blip_volume\":0.7"))
+                    throw new Exception("SerializeActiveStory did not include voice_blip_volume");
+
                 Console.WriteLine("  ✅ [PASS] Typewriter Character Voice Blips & Dialogue Audio Effects verified");
             }
 

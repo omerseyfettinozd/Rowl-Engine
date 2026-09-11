@@ -458,9 +458,27 @@ void test_audio_engine() {
         exit(1);
     }
 
-    // Verify telemetry deflection from voice blip
+    // Verify telemetry deflection from voice blip (both individual channels and Master)
     if (audio.getChannelPeak(1) <= 0.0f && audio.getChannelPeak(2) <= 0.0f) {
         std::cerr << "Voice blip should deflect audio channel peak telemetry" << std::endl;
+        exit(1);
+    }
+    if (audio.getChannelPeak(3) <= 0.0f) {
+        std::cerr << "Voice blip should immediately deflect Master peak telemetry" << std::endl;
+        exit(1);
+    }
+
+    // Edge Case: Invalid / non-existent / 0-byte asset path falls back to procedural synth cleanly
+    audio.playVoiceBlip("corrupt_or_missing_audio.wav", 1.5f, 0.75f, Rowl::Audio::AudioChannelType::Voice);
+    if (audio.getVoiceBlipCount() != 3 || std::abs(audio.getLastVoiceBlipPitch() - 1.5f) > 0.001f) {
+        std::cerr << "Fallback to procedural synth for missing/corrupt asset failed" << std::endl;
+        exit(1);
+    }
+
+    // Edge Case: Extreme pitch and volume values get safely clamped
+    audio.playVoiceBlip("", 99.0f, -2.0f, Rowl::Audio::AudioChannelType::Voice);
+    if (audio.getLastVoiceBlipPitch() > 4.0f || audio.getVoiceBlipCount() != 4) {
+        std::cerr << "Clamping of extreme voice blip pitch/volume failed" << std::endl;
         exit(1);
     }
 
@@ -469,7 +487,7 @@ void test_audio_engine() {
         std::cerr << "Reset voice blip count failed" << std::endl;
         exit(1);
     }
-    TEST_PASS("Typewriter Character Voice Blips, Pitch Modulation & Telemetry");
+    TEST_PASS("Typewriter Character Voice Blips, Master Telemetry & Fallback Synthesis");
 
     audio.shutdown();
     if (audio.isInitialized()) exit(1);
@@ -1214,18 +1232,67 @@ void test_native_c_api() {
     if (std::string(RowlEngine_GetSpeaker(handle)) != "Evelyn" ||
         RowlEngine_GetDialogueVoiceBlipCadence(handle) != 1 ||
         RowlEngine_GetDialogueVoiceBlipSkipPunctuation(handle) != 1 ||
-        std::abs(RowlEngine_GetDialogueVoiceBlipPitch(handle) - 1.2f) > 0.001f) {
+        std::abs(RowlEngine_GetDialogueVoiceBlipPitch(handle) - 1.2f) > 0.001f ||
+        std::abs(RowlEngine_GetDialogueVoiceBlipVolume(handle) - 0.8f) > 0.001f) {
         std::cerr << "RowlEngine_UpdateSceneFromJson failed to parse voice blip configuration" << std::endl;
         exit(1);
     }
+    // Test Volume C API setter and getter
+    RowlEngine_SetDialogueVoiceBlipVolume(handle, 0.45f);
+    if (std::abs(RowlEngine_GetDialogueVoiceBlipVolume(handle) - 0.45f) > 0.001f) {
+        std::cerr << "RowlEngine_SetDialogueVoiceBlipVolume failed" << std::endl;
+        exit(1);
+    }
+
     // Step forward 100ms to reveal characters and trigger voice blips
     RowlEngine_Step(handle, 0.1f);
     if (RowlEngine_GetVoiceBlipCount(handle) == 0) {
         std::cerr << "Typewriter progression did not trigger voice blips" << std::endl;
         exit(1);
     }
+
+    // Deep Verification: Character Default Voice Blip Inheritance (Procedural Pitch & Cadence)
+    const char* compJsonInherit = R"([
+        {"type":"character","id":"c_evelyn","enabled":true,"data":{
+            "sprite":"spr_evelyn.png",
+            "voice_blip_sound":"",
+            "voice_blip_pitch":1.45,
+            "voice_blip_cadence":2
+        }},
+        {"type":"dialogue","id":"d_inherit","enabled":true,"data":{
+            "speaker":"Evelyn",
+            "dialogue":"Hello world!",
+            "typewriter_enabled":true,
+            "typewriter_speed":40.0
+        }}
+    ])";
+    RowlEngine_UpdateSceneFromJson(handle, compJsonInherit);
+    if (std::abs(RowlEngine_GetDialogueVoiceBlipPitch(handle) - 1.45f) > 0.001f ||
+        RowlEngine_GetDialogueVoiceBlipCadence(handle) != 2) {
+        std::cerr << "Dialogue failed to inherit character procedural voice blip pitch/cadence" << std::endl;
+        exit(1);
+    }
+
+    // Deep Verification: Punctuation-Only Dialogue Triggers 0 Blips When SkipPunctuation is Enabled
+    const char* compJsonPunctuation = R"([
+        {"type":"dialogue","id":"d_punct","enabled":true,"data":{
+            "speaker":"Evelyn",
+            "dialogue":"......",
+            "typewriter_enabled":true,
+            "typewriter_speed":30.0,
+            "voice_blip_skip_punctuation":true
+        }}
+    ])";
+    RowlEngine_ResetVoiceBlipCount(handle);
+    RowlEngine_UpdateSceneFromJson(handle, compJsonPunctuation);
+    RowlEngine_Step(handle, 0.2f);
+    if (RowlEngine_GetVoiceBlipCount(handle) != 0) {
+        std::cerr << "Punctuation skipping failed: voice blips were triggered on punctuation-only text" << std::endl;
+        exit(1);
+    }
+
     RowlEngine_SetPlayState(handle, 0);
-    TEST_PASS("Milestone 25: Typewriter Voice Blips & Dialogue Audio Effects C-API");
+    TEST_PASS("Milestone 25: Typewriter Voice Blips, Volume C-API, Character Inheritance & Punctuation Defense");
 
 
     // Script components on the same node deliberately share lifecycle names.

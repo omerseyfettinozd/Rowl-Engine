@@ -226,6 +226,13 @@ public:
     int getDialogueVoiceBlipCadence() const { return m_activeDialogueData.voiceBlipCadence; }
     bool getDialogueVoiceBlipSkipPunctuation() const { return m_activeDialogueData.voiceBlipSkipPunctuation; }
     int getDialogueVoiceBlipChannel() const { return m_activeDialogueData.voiceBlipChannel; }
+    float getDialogueVoiceBlipVolume() const { return m_activeDialogueData.voiceBlipVolume; }
+    void setDialogueVoiceBlipVolume(float volume) {
+        m_activeDialogueData.voiceBlipVolume = std::clamp(volume, 0.0f, 1.0f);
+        for (auto& dlg : m_activeDialogues) {
+            dlg.voiceBlipVolume = m_activeDialogueData.voiceBlipVolume;
+        }
+    }
     void playVoiceBlip(const std::string& soundPath, float pitch = 1.0f, float volume = 0.85f, int channelType = 1);
     uint32_t getVoiceBlipCount() const;
     void resetVoiceBlipCount();

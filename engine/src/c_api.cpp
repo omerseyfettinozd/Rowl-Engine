@@ -770,6 +770,20 @@ int RowlEngine_GetDialogueVoiceBlipChannel(RowlEngineHandle handle) {
     }, 1);
 }
 
+float RowlEngine_GetDialogueVoiceBlipVolume(RowlEngineHandle handle) {
+    if (!isLiveHandle(handle)) return 0.85f;
+    return invokeNoexcept<float>([&] {
+        return toEngine(handle)->getDialogueVoiceBlipVolume();
+    }, 0.85f);
+}
+
+void RowlEngine_SetDialogueVoiceBlipVolume(RowlEngineHandle handle, float volume) {
+    if (!isLiveHandle(handle)) return;
+    invokeNoexcept([&] {
+        toEngine(handle)->setDialogueVoiceBlipVolume(volume);
+    });
+}
+
 uint32_t RowlEngine_GetVoiceBlipCount(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return 0;
     return invokeNoexcept<uint32_t>([&] {

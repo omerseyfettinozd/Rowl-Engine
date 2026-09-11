@@ -73,6 +73,13 @@ internal static class StoryGraphSerializer
             dialogue_box_y = node.DialogueBoxY,
             dialogue_box_width = node.DialogueBoxWidth,
             dialogue_box_height = node.DialogueBoxHeight,
+            voice_blip_sound = node.VoiceBlipSound,
+            voice_blip_pitch = node.VoiceBlipPitch,
+            voice_blip_variance = node.VoiceBlipVariance,
+            voice_blip_cadence = node.VoiceBlipCadence,
+            voice_blip_skip_punctuation = node.VoiceBlipSkipPunctuation,
+            voice_blip_volume = node.VoiceBlipVolume,
+            voice_blip_channel = node.VoiceBlipChannel == "Sfx" ? 2 : 1,
             dsp = node.DspFilter
         };
 

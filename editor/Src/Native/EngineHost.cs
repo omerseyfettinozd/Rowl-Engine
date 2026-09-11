@@ -650,6 +650,15 @@ namespace RowlEngine.Editor.Native
         public int GetDialogueVoiceBlipChannel()
             => _handle == IntPtr.Zero ? 1 : NativeBridge.RowlEngine_GetDialogueVoiceBlipChannel(_handle);
 
+        public float GetDialogueVoiceBlipVolume()
+            => _handle == IntPtr.Zero ? 0.85f : NativeBridge.RowlEngine_GetDialogueVoiceBlipVolume(_handle);
+
+        public void SetDialogueVoiceBlipVolume(float volume)
+        {
+            if (_handle != IntPtr.Zero)
+                NativeBridge.RowlEngine_SetDialogueVoiceBlipVolume(_handle, volume);
+        }
+
         public uint GetVoiceBlipCount()
             => _handle == IntPtr.Zero ? 0u : NativeBridge.RowlEngine_GetVoiceBlipCount(_handle);
 
