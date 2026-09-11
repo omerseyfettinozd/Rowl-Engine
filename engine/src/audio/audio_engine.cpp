@@ -187,6 +187,7 @@ bool AudioEngine::initialize() {
     m_isBgmPlaying = false;
     m_isVoicePlaying = false;
     m_deviceAvailable = false;
+    m_outputSuspended = false;
     m_bgmTransitionActive = false;
     m_bgmTransitionElapsedSeconds = 0.0f;
     m_bgmTransitionDurationSeconds = 0.0f;
@@ -398,7 +399,7 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
                 m_isSfxPlaying = true;
                 m_sfxSampleOffset = 0;
             }
-            SDL_ResumeAudioStreamDevice(targetStream);
+            if (!m_outputSuspended) SDL_ResumeAudioStreamDevice(targetStream);
             ROWL_LOG_INFO("[AudioEngine] Playback started: " + assetPath + " (" + std::to_string(floatLength) + " PCM bytes)");
         } else {
             // Headless / fallback playback without physical stream
@@ -532,13 +533,13 @@ void AudioEngine::update(float deltaSeconds) {
             int available = SDL_GetAudioStreamAvailable(m_bgmStream);
             if (available <= 0) {
                 SDL_PutAudioStreamData(m_bgmStream, m_bgmData.data(), static_cast<int>(m_bgmData.size()));
-                SDL_ResumeAudioStreamDevice(m_bgmStream);
+                if (!m_outputSuspended) SDL_ResumeAudioStreamDevice(m_bgmStream);
             }
         }
         if (m_transitionBgmStream && !m_transitionBgmData.empty() && m_bgmLoop) {
             if (SDL_GetAudioStreamAvailable(m_transitionBgmStream) <= 0) {
                 SDL_PutAudioStreamData(m_transitionBgmStream, m_transitionBgmData.data(), static_cast<int>(m_transitionBgmData.size()));
-                SDL_ResumeAudioStreamDevice(m_transitionBgmStream);
+                if (!m_outputSuspended) SDL_ResumeAudioStreamDevice(m_transitionBgmStream);
             }
         }
         updateBgmTransition(std::isfinite(deltaSeconds) ? deltaSeconds : 0.0f);
@@ -615,6 +616,82 @@ void AudioEngine::shutdown() {
 
     m_initialized = false;
     ROWL_LOG_INFO("Audio Engine Subsystem Shutdown Complete.");
+}
+
+void AudioEngine::handleDeviceEvent(uint32_t sdlEventType) {
+    if (!m_initialized) return;
+    switch (sdlEventType) {
+        case SDL_EVENT_AUDIO_DEVICE_REMOVED:
+        case SDL_EVENT_AUDIO_DEVICE_FORMAT_CHANGED:
+            ROWL_LOG_WARN("[AudioEngine] Audio device change detected; rebuilding output streams.");
+            reopenDeviceStreams();
+            break;
+        case SDL_EVENT_AUDIO_DEVICE_ADDED:
+            if (!m_deviceAvailable) {
+                ROWL_LOG_INFO("[AudioEngine] Audio device added; retrying output stream open.");
+                reopenDeviceStreams();
+            }
+            break;
+        default:
+            break;
+    }
+}
+
+bool AudioEngine::reopenDeviceStreams() {
+    if (!m_initialized) return false;
+    // Playback intent (BGM path/loop buffer, volumes, filter, ducking) lives
+    // in member state, so only the device-bound streams are rebuilt. The BGM
+    // loop feed in update() re-queues m_bgmData into a fresh stream on its
+    // own, which is also what resumes playback after a device loss.
+    if (m_bgmStream) { SDL_DestroyAudioStream(m_bgmStream); m_bgmStream = nullptr; }
+    if (m_transitionBgmStream) { SDL_DestroyAudioStream(m_transitionBgmStream); m_transitionBgmStream = nullptr; }
+    if (m_voiceStream) { SDL_DestroyAudioStream(m_voiceStream); m_voiceStream = nullptr; }
+    if (m_sfxStream) { SDL_DestroyAudioStream(m_sfxStream); m_sfxStream = nullptr; }
+    m_deviceAvailable = false;
+
+    if (!m_audioLeaseHeld && !Rowl::Platform::SdlSubsystemLease::acquire(SDL_INIT_AUDIO)) {
+        m_lastError = "Audio subsystem unavailable while reopening device streams";
+        ROWL_LOG_WARN("[AudioEngine] " + m_lastError);
+        return false;
+    }
+    m_audioLeaseHeld = true;
+
+    m_bgmStream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr, nullptr, nullptr);
+    m_transitionBgmStream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr, nullptr, nullptr);
+    m_voiceStream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr, nullptr, nullptr);
+    m_sfxStream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr, nullptr, nullptr);
+    if (m_bgmStream && m_transitionBgmStream && m_voiceStream && m_sfxStream) {
+        m_deviceAvailable = true;
+        applyChannelGains();
+        applyDspFilter(m_activeFilter);
+        if (m_outputSuspended) setOutputSuspended(true);
+        ROWL_LOG_INFO("[AudioEngine] Output streams rebuilt after device change (BGM intent preserved).");
+        return true;
+    }
+    ROWL_LOG_WARN("[AudioEngine] Output stream rebuild failed: " + std::string(SDL_GetError()) +
+                  " — keeping silent fallback with playback intent.");
+    m_lastError = "Audio output stream rebuild failed: " + std::string(SDL_GetError());
+    if (m_bgmStream) { SDL_DestroyAudioStream(m_bgmStream); m_bgmStream = nullptr; }
+    if (m_transitionBgmStream) { SDL_DestroyAudioStream(m_transitionBgmStream); m_transitionBgmStream = nullptr; }
+    if (m_voiceStream) { SDL_DestroyAudioStream(m_voiceStream); m_voiceStream = nullptr; }
+    if (m_sfxStream) { SDL_DestroyAudioStream(m_sfxStream); m_sfxStream = nullptr; }
+    return false;
+}
+
+void AudioEngine::setOutputSuspended(bool suspended) {
+    if (!m_initialized) return;
+    m_outputSuspended = suspended;
+    if (!m_deviceAvailable) return;
+    SDL_AudioStream* streams[] = {m_bgmStream, m_transitionBgmStream, m_voiceStream, m_sfxStream};
+    for (SDL_AudioStream* stream : streams) {
+        if (!stream) continue;
+        if (suspended) {
+            SDL_PauseAudioStreamDevice(stream);
+        } else {
+            SDL_ResumeAudioStreamDevice(stream);
+        }
+    }
+    ROWL_LOG_INFO(std::string("[AudioEngine] Output ") + (suspended ? "suspended." : "resumed."));
 }
 
 void AudioEngine::applyChannelGains() {

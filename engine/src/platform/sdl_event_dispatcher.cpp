@@ -12,6 +12,21 @@ namespace {
 std::mutex g_eventMutex;
 std::optional<std::thread::id> g_eventThread;
 std::unordered_map<uint32_t, std::deque<SDL_Event>> g_windowEvents;
+std::deque<SDL_Event> g_globalEvents;
+
+bool isGlobalEvent(uint32_t type) {
+    switch (type) {
+        case SDL_EVENT_AUDIO_DEVICE_ADDED:
+        case SDL_EVENT_AUDIO_DEVICE_REMOVED:
+        case SDL_EVENT_AUDIO_DEVICE_FORMAT_CHANGED:
+        case SDL_EVENT_WINDOW_MINIMIZED:
+        case SDL_EVENT_WINDOW_MAXIMIZED:
+        case SDL_EVENT_WINDOW_RESTORED:
+            return true;
+        default:
+            return false;
+    }
+}
 
 std::optional<uint32_t> targetWindowId(const SDL_Event& event) {
     switch (event.type) {
@@ -44,6 +59,10 @@ void routeEvent(const SDL_Event& event) {
     std::lock_guard<std::mutex> lock(g_eventMutex);
     if (event.type == SDL_EVENT_QUIT) {
         for (auto& [_, queue] : g_windowEvents) queue.push_back(event);
+        return;
+    }
+    if (isGlobalEvent(event.type)) {
+        g_globalEvents.push_back(event);
         return;
     }
     const auto target = targetWindowId(event);
@@ -88,6 +107,19 @@ std::vector<SDL_Event> SdlEventDispatcher::takeEvents(uint32_t windowId) {
     while (!it->second.empty()) {
         events.push_back(it->second.front());
         it->second.pop_front();
+    }
+    return events;
+}
+
+std::vector<SDL_Event> SdlEventDispatcher::takeGlobalEvents() {
+    if (!isDispatchThread()) return {};
+    pumpEvents();
+    std::lock_guard<std::mutex> lock(g_eventMutex);
+    std::vector<SDL_Event> events;
+    events.reserve(g_globalEvents.size());
+    while (!g_globalEvents.empty()) {
+        events.push_back(g_globalEvents.front());
+        g_globalEvents.pop_front();
     }
     return events;
 }

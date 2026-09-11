@@ -349,6 +349,12 @@ ROWL_API int RowlEngine_GetActiveDspFilter(RowlEngineHandle handle);
 /** Returns the most recent audio error. The pointer is engine-owned and valid until the next audio call. */
 ROWL_API const char* RowlEngine_GetLastAudioError(RowlEngineHandle handle);
 
+/** Returns 1 when a physical audio output device is open, 0 while in silent fallback. */
+ROWL_API int RowlEngine_IsAudioDeviceAvailable(RowlEngineHandle handle);
+
+/** Returns 1 while audio output is suspended (minimized window), 0 otherwise. */
+ROWL_API int RowlEngine_IsAudioOutputSuspended(RowlEngineHandle handle);
+
 /** Returns the peak level (0.0f - 1.0f) for a channel (0: Bgm, 1: Voice, 2: Sfx, 3: Master) and channelIndex (0: Left, 1: Right). */
 ROWL_API float RowlEngine_GetAudioChannelPeak(RowlEngineHandle handle, int channelType, int channelIndex);
 

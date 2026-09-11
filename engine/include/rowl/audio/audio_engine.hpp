@@ -71,6 +71,20 @@ public:
     bool isInitialized() const { return m_initialized; }
     bool isDuckingActive() const { return m_isDuckingActive; }
     bool isAudioDeviceAvailable() const { return m_deviceAvailable; }
+
+    // Audio-device hotplug recovery. Call with an SDL audio-device event type
+    // (SDL_EVENT_AUDIO_DEVICE_ADDED/REMOVED/FORMAT_CHANGED). Removal or format
+    // changes rebuild the output streams while preserving playback intent
+    // (BGM path/loop buffer, gains, filter, ducking); addition retries a
+    // previously failed device open. Safe to call with no device present.
+    void handleDeviceEvent(uint32_t sdlEventType);
+    bool reopenDeviceStreams();
+
+    // Window visibility policy. While suspended, all output streams stay
+    // paused; playback intent (BGM position/state, gains) is preserved and
+    // resumes automatically. Orthogonal to device availability.
+    void setOutputSuspended(bool suspended);
+    bool isOutputSuspended() const { return m_outputSuspended; }
     const std::string& getCurrentBgmPath() const { return m_currentBgmPath; }
     bool isBgmPlaying() const { return m_isBgmPlaying; }
     bool isVoicePlaying() const { return m_isVoicePlaying; }
@@ -103,6 +117,7 @@ private:
     bool m_isDuckingActive = false;
     bool m_initialized = false;
     bool m_deviceAvailable = false;
+    bool m_outputSuspended = false;
     bool m_bgmLoop = true;
 
     std::string m_currentBgmPath = "";

@@ -684,6 +684,22 @@ const char* RowlEngine_GetLastAudioError(RowlEngineHandle handle) {
     }, "");
 }
 
+int RowlEngine_IsAudioDeviceAvailable(RowlEngineHandle handle) {
+    if (!isLiveHandle(handle)) return 0;
+    return invokeNoexcept<int>([&] {
+        const auto* audio = toEngine(handle)->getAudio();
+        return (audio && audio->isAudioDeviceAvailable()) ? 1 : 0;
+    }, 0);
+}
+
+int RowlEngine_IsAudioOutputSuspended(RowlEngineHandle handle) {
+    if (!isLiveHandle(handle)) return 0;
+    return invokeNoexcept<int>([&] {
+        const auto* audio = toEngine(handle)->getAudio();
+        return (audio && audio->isOutputSuspended()) ? 1 : 0;
+    }, 0);
+}
+
 float RowlEngine_GetAudioChannelPeak(RowlEngineHandle handle, int channelType, int channelIndex) {
     if (!isLiveHandle(handle)) return 0.0f;
     return invokeNoexcept<float>([&] {

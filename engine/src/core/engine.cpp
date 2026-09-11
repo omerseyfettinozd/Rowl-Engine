@@ -6,6 +6,7 @@
 #include "rowl/scripting/lua_sandbox.hpp"
 #include "rowl/render/aspect_guardian.hpp"
 #include "rowl/render/font_renderer.hpp"
+#include "rowl/platform/sdl_event_dispatcher.hpp"
 #include <chrono>
 #include <thread>
 #include <cmath>
@@ -1536,6 +1537,30 @@ void Engine::step(float deltaTime) {
     if (shouldQuit) {
         m_isRunning = false;
         return;
+    }
+
+    // Process-wide events the per-window dispatcher collected: audio-device
+    // hotplug rebuilds output streams, minimize suspends output, restore
+    // resumes it. Playback intent is preserved in all three cases.
+    if (m_audio) {
+        for (const SDL_Event& event : Rowl::Platform::SdlEventDispatcher::takeGlobalEvents()) {
+            switch (event.type) {
+                case SDL_EVENT_AUDIO_DEVICE_ADDED:
+                case SDL_EVENT_AUDIO_DEVICE_REMOVED:
+                case SDL_EVENT_AUDIO_DEVICE_FORMAT_CHANGED:
+                    m_audio->handleDeviceEvent(event.type);
+                    break;
+                case SDL_EVENT_WINDOW_MINIMIZED:
+                    m_audio->setOutputSuspended(true);
+                    break;
+                case SDL_EVENT_WINDOW_MAXIMIZED:
+                case SDL_EVENT_WINDOW_RESTORED:
+                    m_audio->setOutputSuspended(false);
+                    break;
+                default:
+                    break;
+            }
+        }
     }
 
     m_window->update(deltaTime);

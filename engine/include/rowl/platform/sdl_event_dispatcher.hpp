@@ -16,6 +16,12 @@ public:
 
     /// Pumps SDL once on the dispatch thread and returns only this window's events.
     static std::vector<SDL_Event> takeEvents(uint32_t windowId);
+
+    /// Pumps SDL once on the dispatch thread and returns process-wide events
+    /// that belong to no window (audio-device add/remove/format changes and
+    /// window minimize/maximize/restore). Window-targeted events and QUIT are
+    /// never included here; QUIT keeps its existing per-window fan-out.
+    static std::vector<SDL_Event> takeGlobalEvents();
 };
 
 } // namespace Rowl::Platform
