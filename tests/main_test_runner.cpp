@@ -3242,10 +3242,18 @@ void test_camera_and_transition_pipeline() {
                   << std::fixed << std::setprecision(2) << elapsedMs << "ms (~"
                   << static_cast<int>(fps) << " FPS)" << std::endl;
 
+        // A wall-clock FPS floor is meaningless under sanitizer
+        // instrumentation (2-5x slowdown is the tool, not the engine), so it
+        // is enforced only on clean builds. Frame correctness above is
+        // asserted unconditionally.
+#if defined(__SANITIZE_ADDRESS__) || defined(__SANITIZE_THREAD__) || defined(__SANITIZE_UNDEFINED__)
+        std::cout << "  (sanitizer build: 30 FPS floor reported, not enforced)" << std::endl;
+#else
         if (fps < 30.0) {
             std::cerr << "Transition render FPS is too low: " << fps << std::endl;
             exit(1);
         }
+#endif
 
         RowlEngine_Destroy(handle);
         TEST_PASS("Active Scene Transition 60-Frame Render Performance");
