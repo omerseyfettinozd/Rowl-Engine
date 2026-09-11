@@ -2864,6 +2864,12 @@ namespace RowlEngine.Editor
                 if (deviceOnce != deviceTwice)
                     throw new Exception("Device observer must report stable values across polls");
 
+                // Step 27.6: save-slot failure path runs diagnostics without crashing.
+                Console.WriteLine("    [Step 27.6]: Save-slot failure diagnostics path...");
+                mainVm.SaveSlotsViewModel.SaveCommand.Execute(new SaveSlotEntry(999, false));
+                if (!mainVm.LogOutput.Contains("kaydedilemedi"))
+                    throw new Exception("Save failure did not log the expected message");
+
                 Console.WriteLine("  ✅ [PASS] Audio device status observer & edge-triggered toasts verified");
             }
 
