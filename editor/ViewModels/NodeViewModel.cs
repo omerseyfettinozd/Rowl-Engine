@@ -394,6 +394,9 @@ namespace RowlEngine.Editor.ViewModels
                     case nameof(BackgroundComponentViewModel.Scale):
                         OnPropertyChanged(nameof(BackgroundScale));
                         break;
+                    case nameof(BackgroundComponentViewModel.Rotation):
+                        OnPropertyChanged(nameof(BackgroundRotation));
+                        break;
                     case nameof(BackgroundComponentViewModel.TextureBitmap):
                         OnPropertyChanged(nameof(BackgroundBitmap));
                         break;
@@ -423,6 +426,18 @@ namespace RowlEngine.Editor.ViewModels
                         break;
                     case nameof(CharacterComponentViewModel.Scale):
                         OnPropertyChanged(nameof(CharacterScale));
+                        break;
+                    case nameof(CharacterComponentViewModel.Rotation):
+                        OnPropertyChanged(nameof(CharacterRotation));
+                        break;
+                    case nameof(CharacterComponentViewModel.ScaleX):
+                        OnPropertyChanged(nameof(CharacterScaleX));
+                        break;
+                    case nameof(CharacterComponentViewModel.ScaleY):
+                        OnPropertyChanged(nameof(CharacterScaleY));
+                        break;
+                    case nameof(CharacterComponentViewModel.MaintainAspectRatio):
+                        OnPropertyChanged(nameof(CharacterMaintainAspectRatio));
                         break;
                     case nameof(CharacterComponentViewModel.SpriteBitmap):
                         OnPropertyChanged(nameof(CharacterBitmap));
@@ -492,6 +507,12 @@ namespace RowlEngine.Editor.ViewModels
             set { var c = GetComponent<BackgroundComponentViewModel>(); if (c != null) c.Scale = value; }
         }
 
+        public double BackgroundRotation
+        {
+            get => GetComponent<BackgroundComponentViewModel>()?.Rotation ?? 0.0;
+            set { var c = GetComponent<BackgroundComponentViewModel>(); if (c != null) c.Rotation = value; }
+        }
+
         public Bitmap? BackgroundBitmap => GetComponent<BackgroundComponentViewModel>()?.TextureBitmap;
 
         public string CharacterSprite
@@ -534,6 +555,30 @@ namespace RowlEngine.Editor.ViewModels
         {
             get => GetComponent<CharacterComponentViewModel>()?.Scale ?? 1.0;
             set { var c = GetComponent<CharacterComponentViewModel>(); if (c != null) c.Scale = value; }
+        }
+
+        public double CharacterRotation
+        {
+            get => GetComponent<CharacterComponentViewModel>()?.Rotation ?? 0.0;
+            set { var c = GetComponent<CharacterComponentViewModel>(); if (c != null) c.Rotation = value; }
+        }
+
+        public double CharacterScaleX
+        {
+            get => GetComponent<CharacterComponentViewModel>()?.ScaleX ?? 1.0;
+            set { var c = GetComponent<CharacterComponentViewModel>(); if (c != null) c.ScaleX = value; }
+        }
+
+        public double CharacterScaleY
+        {
+            get => GetComponent<CharacterComponentViewModel>()?.ScaleY ?? 1.0;
+            set { var c = GetComponent<CharacterComponentViewModel>(); if (c != null) c.ScaleY = value; }
+        }
+
+        public bool CharacterMaintainAspectRatio
+        {
+            get => GetComponent<CharacterComponentViewModel>()?.MaintainAspectRatio ?? true;
+            set { var c = GetComponent<CharacterComponentViewModel>(); if (c != null) c.MaintainAspectRatio = value; }
         }
 
         public Bitmap? CharacterBitmap => GetComponent<CharacterComponentViewModel>()?.SpriteBitmap;

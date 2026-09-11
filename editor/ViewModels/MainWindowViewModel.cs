@@ -1544,6 +1544,22 @@ namespace RowlEngine.Editor.ViewModels
             if (EngineHost.IsInitialized)
                 PushSceneToEngine(SelectedNode);
         }
+
+        [RelayCommand]
+        public void ResetRotation()
+        {
+            if (SelectedNode == null) return;
+            var bg = SelectedNode.GetComponent<BackgroundComponentViewModel>();
+            if (bg != null) bg.ResetRotation();
+            foreach (var ch in SelectedNode.CharacterComponents)
+            {
+                ch.ResetRotation();
+            }
+            ScheduleSave();
+            if (EngineHost.IsInitialized)
+                PushSceneToEngine(SelectedNode);
+            AppendLog("🔄 OBS Assist: Sahne rotasyonları sıfırlandı (Rotation Reset)");
+        }
         // ── PROJECT MANAGEMENT & BUILD EXPORT PIPELINE ──────────────────────
 
         /// <summary>

@@ -31,6 +31,9 @@ struct CharacterRenderData {
     float y = 340.0f;
     float width = 360.0f;
     float height = 540.0f;
+    float rotation = 0.0f;
+    float scaleX = 1.0f;
+    float scaleY = 1.0f;
 };
 
 struct DialogueRenderData {
@@ -156,7 +159,8 @@ public:
         float bgX,   float bgY,   float bgW,   float bgH,
         const std::vector<CharacterRenderData>& characters,
         const std::vector<DialogueRenderData>& dialogues,
-        const std::vector<ChoiceButtonRenderData>& choices = {}
+        const std::vector<ChoiceButtonRenderData>& choices = {},
+        float bgRotation = 0.0f
     );
 
     void renderVisualNovelFrame(

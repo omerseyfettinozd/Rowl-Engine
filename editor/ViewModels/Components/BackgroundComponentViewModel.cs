@@ -39,6 +39,9 @@ namespace RowlEngine.Editor.ViewModels.Components
         private double _scale = 1.0;
 
         [ObservableProperty]
+        private double _rotation = 0.0;
+
+        [ObservableProperty]
         private Bitmap? _textureBitmap;
 
         // ── Scale → Width/Height sync ──
@@ -69,6 +72,12 @@ namespace RowlEngine.Editor.ViewModels.Components
             Width = DefaultWidth;
             Height = DefaultHeight;
             Scale = 1.0;
+            Rotation = 0.0;
+        }
+
+        public void ResetRotation()
+        {
+            Rotation = 0.0;
         }
 
         public override Dictionary<string, object> Serialize()
@@ -80,7 +89,8 @@ namespace RowlEngine.Editor.ViewModels.Components
                 ["y"] = Y,
                 ["width"] = Width,
                 ["height"] = Height,
-                ["scale"] = Scale
+                ["scale"] = Scale,
+                ["rotation"] = Rotation
             };
         }
 
@@ -93,6 +103,7 @@ namespace RowlEngine.Editor.ViewModels.Components
             if (data.TryGetValue("width", out var wv)) Width = Convert.ToDouble(wv);
             if (data.TryGetValue("height", out var hv)) Height = Convert.ToDouble(hv);
             if (data.TryGetValue("scale", out var sv)) Scale = Convert.ToDouble(sv);
+            if (data.TryGetValue("rotation", out var rv)) Rotation = Convert.ToDouble(rv);
             RefreshBitmap();
         }
     }

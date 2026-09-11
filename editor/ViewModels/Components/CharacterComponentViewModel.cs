@@ -17,6 +17,8 @@ namespace RowlEngine.Editor.ViewModels.Components
         private const double DefaultWidth = 360.0;
         private const double DefaultHeight = 540.0;
 
+        private bool _isUpdatingDimensions = false;
+
         public override string DisplayName => "Character Sprite";
         public override string Icon => "👤";
         public override string TypeKey => "character";
@@ -43,14 +45,126 @@ namespace RowlEngine.Editor.ViewModels.Components
         private double _scale = 1.0;
 
         [ObservableProperty]
+        private double _scaleX = 1.0;
+
+        [ObservableProperty]
+        private double _scaleY = 1.0;
+
+        [ObservableProperty]
+        private double _rotation = 0.0;
+
+        [ObservableProperty]
+        private bool _maintainAspectRatio = true;
+
+        [ObservableProperty]
         private Bitmap? _spriteBitmap;
 
-        // ── Scale → Width/Height sync ──
+        // ── Scale & Dimension Sync ──
         partial void OnScaleChanged(double value)
         {
-            if (value <= 0) return;
-            Width = DefaultWidth * value;
-            Height = DefaultHeight * value;
+            if (_isUpdatingDimensions || value <= 0) return;
+            _isUpdatingDimensions = true;
+            try
+            {
+                ScaleX = value;
+                ScaleY = value;
+                Width = DefaultWidth * value;
+                Height = DefaultHeight * value;
+            }
+            finally
+            {
+                _isUpdatingDimensions = false;
+            }
+        }
+
+        partial void OnScaleXChanged(double value)
+        {
+            if (_isUpdatingDimensions || value <= 0) return;
+            _isUpdatingDimensions = true;
+            try
+            {
+                if (MaintainAspectRatio)
+                {
+                    ScaleY = value;
+                    Scale = value;
+                    Width = DefaultWidth * value;
+                    Height = DefaultHeight * value;
+                }
+                else
+                {
+                    Width = DefaultWidth * value;
+                }
+            }
+            finally
+            {
+                _isUpdatingDimensions = false;
+            }
+        }
+
+        partial void OnScaleYChanged(double value)
+        {
+            if (_isUpdatingDimensions || value <= 0) return;
+            _isUpdatingDimensions = true;
+            try
+            {
+                if (MaintainAspectRatio)
+                {
+                    ScaleX = value;
+                    Scale = value;
+                    Width = DefaultWidth * value;
+                    Height = DefaultHeight * value;
+                }
+                else
+                {
+                    Height = DefaultHeight * value;
+                }
+            }
+            finally
+            {
+                _isUpdatingDimensions = false;
+            }
+        }
+
+        partial void OnWidthChanged(double value)
+        {
+            if (_isUpdatingDimensions || value <= 0) return;
+            _isUpdatingDimensions = true;
+            try
+            {
+                double sx = value / DefaultWidth;
+                ScaleX = Math.Round(sx, 3);
+                if (MaintainAspectRatio)
+                {
+                    Scale = ScaleX;
+                    ScaleY = ScaleX;
+                    Height = DefaultHeight * ScaleX;
+                }
+            }
+            finally
+            {
+                _isUpdatingDimensions = false;
+            }
+        }
+
+        partial void OnHeightChanged(double value)
+        {
+            if (_isUpdatingDimensions || value <= 0) return;
+            _isUpdatingDimensions = true;
+            try
+            {
+                double sy = value / DefaultHeight;
+                ScaleY = Math.Round(sy, 3);
+                if (MaintainAspectRatio)
+                {
+                    Scale = ScaleY;
+                    ScaleX = ScaleY;
+                    Width = DefaultWidth * ScaleY;
+                }
+            }
+            finally
+            {
+                _isUpdatingDimensions = false;
+            }
         }
 
         partial void OnSpriteChanged(string value) => RefreshBitmap();
@@ -68,9 +182,29 @@ namespace RowlEngine.Editor.ViewModels.Components
         /// </summary>
         public void ResetDimensions()
         {
-            Width = DefaultWidth;
-            Height = DefaultHeight;
-            Scale = 1.0;
+            _isUpdatingDimensions = true;
+            try
+            {
+                Width = DefaultWidth;
+                Height = DefaultHeight;
+                Scale = 1.0;
+                ScaleX = 1.0;
+                ScaleY = 1.0;
+                Rotation = 0.0;
+                MaintainAspectRatio = true;
+            }
+            finally
+            {
+                _isUpdatingDimensions = false;
+            }
+        }
+
+        /// <summary>
+        /// Resets only the rotation angle back to 0 (upright).
+        /// </summary>
+        public void ResetRotation()
+        {
+            Rotation = 0.0;
         }
 
         public override Dictionary<string, object> Serialize()
@@ -83,21 +217,39 @@ namespace RowlEngine.Editor.ViewModels.Components
                 ["y"] = Y,
                 ["width"] = Width,
                 ["height"] = Height,
-                ["scale"] = Scale
+                ["scale"] = Scale,
+                ["scale_x"] = ScaleX,
+                ["scale_y"] = ScaleY,
+                ["rotation"] = Rotation,
+                ["maintain_aspect_ratio"] = MaintainAspectRatio
             };
         }
 
         public override void Deserialize(Dictionary<string, object?> data)
         {
-            if (data.TryGetValue("sprite", out var s) && s is string sprite)
-                Sprite = sprite;
-            if (data.TryGetValue("position", out var p) && p is string pos)
-                Position = pos;
-            if (data.TryGetValue("x", out var xv)) X = Convert.ToDouble(xv);
-            if (data.TryGetValue("y", out var yv)) Y = Convert.ToDouble(yv);
-            if (data.TryGetValue("width", out var wv)) Width = Convert.ToDouble(wv);
-            if (data.TryGetValue("height", out var hv)) Height = Convert.ToDouble(hv);
-            if (data.TryGetValue("scale", out var sv)) Scale = Convert.ToDouble(sv);
+            _isUpdatingDimensions = true;
+            try
+            {
+                if (data.TryGetValue("sprite", out var s) && s is string sprite)
+                    Sprite = sprite;
+                if (data.TryGetValue("position", out var p) && p is string pos)
+                    Position = pos;
+                if (data.TryGetValue("x", out var xv)) X = Convert.ToDouble(xv);
+                if (data.TryGetValue("y", out var yv)) Y = Convert.ToDouble(yv);
+                if (data.TryGetValue("width", out var wv)) Width = Convert.ToDouble(wv);
+                if (data.TryGetValue("height", out var hv)) Height = Convert.ToDouble(hv);
+                if (data.TryGetValue("scale", out var sv)) Scale = Convert.ToDouble(sv);
+                if (data.TryGetValue("scale_x", out var sxv)) ScaleX = Convert.ToDouble(sxv);
+                else ScaleX = Scale;
+                if (data.TryGetValue("scale_y", out var syv)) ScaleY = Convert.ToDouble(syv);
+                else ScaleY = Scale;
+                if (data.TryGetValue("rotation", out var rv)) Rotation = Convert.ToDouble(rv);
+                if (data.TryGetValue("maintain_aspect_ratio", out var marv)) MaintainAspectRatio = Convert.ToBoolean(marv);
+            }
+            finally
+            {
+                _isUpdatingDimensions = false;
+            }
             RefreshBitmap();
         }
     }

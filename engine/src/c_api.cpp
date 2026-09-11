@@ -331,6 +331,29 @@ void RowlEngine_UpdateScene(
     ); });
 }
 
+void RowlEngine_UpdateSceneEx(
+    RowlEngineHandle handle,
+    const char* speaker,
+    const char* dialogue,
+    const char* background,
+    float bgX,   float bgY,   float bgW,   float bgH,   float bgRot,
+    const char* character,
+    float charX, float charY, float charW, float charH, float charRot,
+    float dlgX,  float dlgY,  float dlgW,  float dlgH)
+{
+    if (!isLiveHandle(handle)) return;
+    invokeNoexcept([&] { toEngine(handle)->updateActiveScene(
+        speaker    ? speaker    : "",
+        dialogue   ? dialogue   : "",
+        background ? background : "",
+        bgX, bgY, bgW, bgH,
+        character  ? character  : "",
+        charX, charY, charW, charH,
+        dlgX,  dlgY,  dlgW,  dlgH,
+        bgRot, charRot
+    ); });
+}
+
 void RowlEngine_UpdateSceneFromJson(
     RowlEngineHandle handle,
     const char* componentsJson)
@@ -485,6 +508,16 @@ const char* RowlEngine_GetDialogue(RowlEngineHandle handle) {
 uint64_t RowlEngine_GetCurrentNodeId(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return 0;
     return invokeNoexcept<uint64_t>([&] { return toEngine(handle)->getCurrentNodeId(); }, 0);
+}
+
+float RowlEngine_GetBackgroundRotation(RowlEngineHandle handle) {
+    if (!isLiveHandle(handle)) return 0.0f;
+    return invokeNoexcept<float>([&] { return toEngine(handle)->getActiveBackgroundRotation(); }, 0.0f);
+}
+
+float RowlEngine_GetCharacterRotation(RowlEngineHandle handle) {
+    if (!isLiveHandle(handle)) return 0.0f;
+    return invokeNoexcept<float>([&] { return toEngine(handle)->getActiveCharacterRotation(); }, 0.0f);
 }
 
 void RowlEngine_PlayAudio(RowlEngineHandle handle,

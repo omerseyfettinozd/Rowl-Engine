@@ -314,6 +314,33 @@ namespace RowlEngine.Editor.Native
         }
 
         /// <summary>
+        /// Extended legacy scene update with rotation angles for background and character.
+        /// </summary>
+        public void UpdateSceneEx(
+            string speaker,   string dialogue,  string background,
+            float  bgX,       float  bgY,       float  bgW,       float  bgH,       float bgRot,
+            string character,
+            float  charX,     float  charY,     float  charW,     float  charH,     float charRot,
+            float  dlgX,      float  dlgY,      float  dlgW,      float  dlgH)
+        {
+            if (_handle == IntPtr.Zero) return;
+
+            NativeBridge.RowlEngine_UpdateSceneEx(
+                _handle,
+                speaker ?? "", dialogue ?? "", background ?? "",
+                bgX, bgY, bgW, bgH, bgRot,
+                character ?? "",
+                charX, charY, charW, charH, charRot,
+                dlgX,  dlgY,  dlgW,  dlgH);
+
+            if (!IsPlaying)
+            {
+                NativeBridge.RowlEngine_Step(_handle, 0.0f);
+                UpdatePixelBuffer();
+            }
+        }
+
+        /// <summary>
         /// Pushes component-based scene data to the engine as a JSON string.
         /// This is the component-aware alternative to UpdateScene.
         /// </summary>
@@ -478,6 +505,12 @@ namespace RowlEngine.Editor.Native
         public ulong GetCurrentNodeId()
             => _handle == IntPtr.Zero ? 0
                : NativeBridge.RowlEngine_GetCurrentNodeId(_handle);
+
+        public float GetBackgroundRotation()
+            => _handle == IntPtr.Zero ? 0.0f : NativeBridge.RowlEngine_GetBackgroundRotation(_handle);
+
+        public float GetCharacterRotation()
+            => _handle == IntPtr.Zero ? 0.0f : NativeBridge.RowlEngine_GetCharacterRotation(_handle);
 
         public bool IsBgmPlaying
             => _handle != IntPtr.Zero && NativeBridge.RowlEngine_IsBgmPlaying(_handle) != 0;

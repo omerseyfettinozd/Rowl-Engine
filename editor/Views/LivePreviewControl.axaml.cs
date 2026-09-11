@@ -43,6 +43,15 @@ namespace RowlEngine.Editor.Views
 
         private CharacterComponentViewModel? _draggedCharacterComponent;
 
+        // Rotation Gizmo state
+        private bool _isRotatingBackground = false;
+        private bool _isRotatingCharacter = false;
+        private CharacterComponentViewModel? _rotatingCharacterComponent;
+        private BackgroundComponentViewModel? _rotatingBackgroundComponent;
+        private Point _rotationCenter;
+        private double _initialRotationAngle;
+        private double _initialPointerAngle;
+
         // Individual Dialogue Box drag & resize state
         private bool _isResizingDialogue = false;
         private DialogueComponentViewModel? _resizingDialogueComponent;
@@ -218,7 +227,7 @@ namespace RowlEngine.Editor.Views
         }
 
         private bool HasActiveOperation =>
-            _isResizing || _isResizingCharacter || _isResizingDialogue || _isDraggingCharacter || _isDraggingDialogueBox || _isDraggingBackground || _isDraggingChoice || _isResizingChoice;
+            _isResizing || _isResizingCharacter || _isResizingDialogue || _isDraggingCharacter || _isDraggingDialogueBox || _isDraggingBackground || _isDraggingChoice || _isResizingChoice || _isRotatingCharacter || _isRotatingBackground;
 
         private void EndAllOperations(IPointer? pointer)
         {
@@ -240,6 +249,10 @@ namespace RowlEngine.Editor.Views
             _isResizingChoice = false;
             _draggedChoiceOption = null;
             _resizingChoiceOption = null;
+            _isRotatingCharacter = false;
+            _rotatingCharacterComponent = null;
+            _isRotatingBackground = false;
+            _rotatingBackgroundComponent = null;
 
             pointer?.Capture(null);
 
@@ -301,6 +314,42 @@ namespace RowlEngine.Editor.Views
             {
                 _resizingChoiceOption.Width = Math.Clamp(_dragStartStartWidth + deltaX, 48, VirtualCanvasWidth - _resizingChoiceOption.X);
                 _resizingChoiceOption.Height = Math.Clamp(_dragStartStartHeight + deltaY, 48, VirtualCanvasHeight - _resizingChoiceOption.Y);
+                return;
+            }
+
+            if (_isRotatingCharacter && _rotatingCharacterComponent != null)
+            {
+                double curAngle = Math.Atan2(currentPointerPos.Y - _rotationCenter.Y, currentPointerPos.X - _rotationCenter.X) * (180.0 / Math.PI);
+                double deltaAngle = curAngle - _initialPointerAngle;
+                double newRot = (_initialRotationAngle + deltaAngle) % 360.0;
+                if (newRot < 0) newRot += 360.0;
+
+                if (e.KeyModifiers.HasFlag(KeyModifiers.Shift))
+                {
+                    newRot = Math.Round(newRot / 15.0) * 15.0;
+                    if (newRot >= 360.0) newRot = 0.0;
+                }
+
+                _rotatingCharacterComponent.Rotation = Math.Round(newRot, 1);
+                e.Handled = true;
+                return;
+            }
+
+            if (_isRotatingBackground && _rotatingBackgroundComponent != null)
+            {
+                double curAngle = Math.Atan2(currentPointerPos.Y - _rotationCenter.Y, currentPointerPos.X - _rotationCenter.X) * (180.0 / Math.PI);
+                double deltaAngle = curAngle - _initialPointerAngle;
+                double newRot = (_initialRotationAngle + deltaAngle) % 360.0;
+                if (newRot < 0) newRot += 360.0;
+
+                if (e.KeyModifiers.HasFlag(KeyModifiers.Shift))
+                {
+                    newRot = Math.Round(newRot / 15.0) * 15.0;
+                    if (newRot >= 360.0) newRot = 0.0;
+                }
+
+                _rotatingBackgroundComponent.Rotation = Math.Round(newRot, 1);
+                e.Handled = true;
                 return;
             }
 
@@ -399,8 +448,16 @@ namespace RowlEngine.Editor.Views
             {
                 double charDeltaX = currentPointerPos.X - _charResizeStartPointerCanvasPos.X;
                 double charDeltaY = currentPointerPos.Y - _charResizeStartPointerCanvasPos.Y;
-                _resizingCharacterComponent.Width = Math.Max(60, _charResizeStartWidth + charDeltaX);
-                _resizingCharacterComponent.Height = Math.Max(60, _charResizeStartHeight + charDeltaY);
+                double newW = Math.Max(60, _charResizeStartWidth + charDeltaX);
+                double newH = Math.Max(60, _charResizeStartHeight + charDeltaY);
+                if (_resizingCharacterComponent.MaintainAspectRatio && _charResizeStartWidth > 0 && _charResizeStartHeight > 0)
+                {
+                    double scale = Math.Max(newW / _charResizeStartWidth, newH / _charResizeStartHeight);
+                    newW = Math.Max(60, _charResizeStartWidth * scale);
+                    newH = Math.Max(60, _charResizeStartHeight * scale);
+                }
+                _resizingCharacterComponent.Width = newW;
+                _resizingCharacterComponent.Height = newH;
                 e.Handled = true;
                 return;
             }
@@ -720,6 +777,48 @@ namespace RowlEngine.Editor.Views
             }
         }
 
+        public void OnBgRotateHandlePointerPressed(object? sender, PointerPressedEventArgs e)
+        {
+            if (HasActiveOperation) return;
+            if (DataContext is not MainWindowViewModel mainVm || mainVm.SelectedNode == null) return;
+
+            var bgComp = mainVm.SelectedNode.GetComponent<BackgroundComponentViewModel>();
+            if (bgComp == null) return;
+
+            if (e.GetCurrentPoint(this).Properties.IsRightButtonPressed)
+            {
+                bgComp.ResetRotation();
+                mainVm.PushSceneToEngine(mainVm.SelectedNode);
+                mainVm.ScheduleSave();
+                e.Handled = true;
+                return;
+            }
+
+            var canvas = GetViewportCanvas();
+            if (canvas == null) return;
+
+            if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+            {
+                _isRotatingBackground = true;
+                _rotatingBackgroundComponent = bgComp;
+                double centerX = mainVm.SelectedNode.BackgroundX + mainVm.SelectedNode.BackgroundWidth / 2.0;
+                double centerY = mainVm.SelectedNode.BackgroundY + mainVm.SelectedNode.BackgroundHeight / 2.0;
+                _rotationCenter = new Point(centerX, centerY);
+                _initialRotationAngle = bgComp.Rotation;
+                var pointerPos = e.GetPosition(canvas);
+                _initialPointerAngle = Math.Atan2(pointerPos.Y - centerY, pointerPos.X - centerX) * (180.0 / Math.PI);
+
+                mainVm.IsInteractivelyDragging = true;
+                if (bgComp.OwnerObject != null && mainVm.HierarchyViewModel != null)
+                {
+                    mainVm.HierarchyViewModel.SelectedObject = bgComp.OwnerObject;
+                }
+
+                e.Pointer.Capture(this);
+                e.Handled = true;
+            }
+        }
+
         public void OnCharacterPointerPressed(object? sender, PointerPressedEventArgs e)
         {
             if (HasActiveOperation) return;
@@ -767,6 +866,54 @@ namespace RowlEngine.Editor.Views
                     _charResizeStartPointerCanvasPos = e.GetPosition(canvas);
                     _charResizeStartWidth = charComp.Width;
                     _charResizeStartHeight = charComp.Height;
+
+                    if (DataContext is MainWindowViewModel mainVm)
+                    {
+                        mainVm.IsInteractivelyDragging = true;
+                        if (charComp.OwnerObject != null && mainVm.HierarchyViewModel != null)
+                        {
+                            mainVm.HierarchyViewModel.SelectedObject = charComp.OwnerObject;
+                        }
+                    }
+
+                    e.Pointer.Capture(this);
+                    e.Handled = true;
+                }
+            }
+        }
+
+        public void OnCharRotateHandlePointerPressed(object? sender, PointerPressedEventArgs e)
+        {
+            if (HasActiveOperation) return;
+            if (sender is Control ctrl && ctrl.DataContext is CharacterComponentViewModel charComp)
+            {
+                if (!charComp.IsEnabled) return;
+
+                if (e.GetCurrentPoint(this).Properties.IsRightButtonPressed)
+                {
+                    charComp.ResetRotation();
+                    if (DataContext is MainWindowViewModel mainVm && mainVm.SelectedNode != null)
+                    {
+                        mainVm.PushSceneToEngine(mainVm.SelectedNode);
+                        mainVm.ScheduleSave();
+                    }
+                    e.Handled = true;
+                    return;
+                }
+
+                var canvas = GetViewportCanvas();
+                if (canvas == null) return;
+
+                if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+                {
+                    _isRotatingCharacter = true;
+                    _rotatingCharacterComponent = charComp;
+                    double centerX = charComp.X + charComp.Width / 2.0;
+                    double centerY = charComp.Y + charComp.Height / 2.0;
+                    _rotationCenter = new Point(centerX, centerY);
+                    _initialRotationAngle = charComp.Rotation;
+                    var pointerPos = e.GetPosition(canvas);
+                    _initialPointerAngle = Math.Atan2(pointerPos.Y - centerY, pointerPos.X - centerX) * (180.0 / Math.PI);
 
                     if (DataContext is MainWindowViewModel mainVm)
                     {

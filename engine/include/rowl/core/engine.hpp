@@ -152,7 +152,9 @@ public:
         float charX = 1440.0f, float charY = 340.0f,
         float charW = 360.0f,  float charH = 540.0f,
         float dlgX = 80.0f,  float dlgY = 860.0f,
-        float dlgW = 1760.0f, float dlgH = 180.0f
+        float dlgW = 1760.0f, float dlgH = 180.0f,
+        float bgRot = 0.0f,
+        float charRot = 0.0f
     );
 
     /// Updates the scene from a JSON string containing component data.
@@ -200,6 +202,8 @@ public:
     float getActiveCharacterY()         const { return m_activeCharacterY; }
     float getActiveCharacterWidth()     const { return m_activeCharacterWidth; }
     float getActiveCharacterHeight()    const { return m_activeCharacterHeight; }
+    float getActiveCharacterRotation()  const { return m_activeCharacterRotation; }
+    float getActiveBackgroundRotation() const { return m_activeBackgroundRotation; }
     float getActiveDialogueBoxX()       const { return m_activeDialogueData.x; }
     float getActiveDialogueBoxY()       const { return m_activeDialogueData.y; }
     float getActiveDialogueBoxWidth()   const { return m_activeDialogueData.width; }
@@ -266,11 +270,13 @@ private:
     float m_activeBackgroundY      = 0.0f;
     float m_activeBackgroundWidth  = 1920.0f;
     float m_activeBackgroundHeight = 1080.0f;
+    float m_activeBackgroundRotation = 0.0f;
     std::string m_activeCharacter  = "spr_evelyn.png";
     float m_activeCharacterX       = 1440.0f;
     float m_activeCharacterY       = 340.0f;
     float m_activeCharacterWidth   = 360.0f;
     float m_activeCharacterHeight  = 540.0f;
+    float m_activeCharacterRotation = 0.0f;
     std::vector<CharacterRenderData> m_activeCharacters;
     float m_activeDialogueBoxX     = 80.0f;
     float m_activeDialogueBoxY     = 860.0f;

@@ -25,6 +25,7 @@
                                 <MenuItem Header="🎯 Diyalog Kutusunu Ortala" Command="{Binding PresetDialogueBoxCommand}" CommandParameter="Center"/>
                                 <Separator/>
                                 <MenuItem Header="🧲 Manyetik Snap Kılavuzları (Snap Assist)" Command="{Binding ToggleSnapAssistCommand}"/>
+                                <MenuItem Header="🔄 Rotasyonu Sıfırla (Reset Rotation)" Command="{Binding ResetRotationCommand}"/>
                             </ContextMenu>
                         </Canvas.ContextMenu>
 
@@ -35,7 +36,11 @@
                                 Canvas.Top="{Binding SelectedNode.BackgroundY}" 
                                 Width="{Binding SelectedNode.BackgroundWidth}" 
                                 Height="{Binding SelectedNode.BackgroundHeight}" 
+                                RenderTransformOrigin="50%,50%"
                                 Background="#1A2035" BorderBrush="#3B82F6" BorderThickness="1.5">
+                            <Border.RenderTransform>
+                                <RotateTransform Angle="{Binding SelectedNode.BackgroundRotation}"/>
+                            </Border.RenderTransform>
                             <Grid>
                                 <!-- Actual Bitmap Image Render (HitTest disabled so container handles drag) -->
                                 <Image Source="{Binding SelectedNode.BackgroundBitmap}" Stretch="Fill" 
@@ -47,6 +52,12 @@
                                            IsVisible="{Binding SelectedNode.BackgroundBitmap, Converter={x:Static ObjectConverters.IsNull}}"
                                            Foreground="#64748B" FontSize="20" FontWeight="Bold" Margin="40,90" HorizontalAlignment="Left"
                                            IsHitTestVisible="False"/>
+
+                                <!-- Background Rotate Handle (Top-Center) -->
+                                <Border Name="BgRotateHandle" Width="18" Height="18" HorizontalAlignment="Center" VerticalAlignment="Top" 
+                                        Background="#A855F7" BorderBrush="White" BorderThickness="2" CornerRadius="9" Cursor="Hand" Margin="0,-27,0,0"
+                                        PointerPressed="OnBgRotateHandlePointerPressed"
+                                        ToolTip.Tip="Rotate Background (Drag to Rotate, Right-Click to Reset)"/>
 
                                 <!-- Background Resize Handles -->
                                 <Border Name="BgHandleBR" Width="18" Height="18" HorizontalAlignment="Right" VerticalAlignment="Bottom" 
@@ -73,8 +84,12 @@
                                     <Border Width="{Binding Width}" 
                                             Height="{Binding Height}" Cursor="Hand"
                                             IsVisible="{Binding IsEnabled}"
+                                            RenderTransformOrigin="50%,50%"
                                             Background="#2A374A" BorderBrush="#00F0FF" BorderThickness="2" CornerRadius="8" BoxShadow="0 10 30 0 #000000"
                                             PointerPressed="OnCharacterPointerPressed">
+                                        <Border.RenderTransform>
+                                            <RotateTransform Angle="{Binding Rotation}"/>
+                                        </Border.RenderTransform>
                                         <Grid>
                                             <!-- Bitmap Image Render for Character (Exact full-bleed bounding box with Uniform stretch) -->
                                             <Image Source="{Binding SpriteBitmap}" Stretch="Uniform" IsHitTestVisible="False"/>
@@ -94,8 +109,15 @@
                                                     <TextBlock Text="{Binding Width, StringFormat='({0:0}'}" Foreground="#94A3B8" FontSize="9"/>
                                                     <TextBlock Text="x" Foreground="#94A3B8" FontSize="9"/>
                                                     <TextBlock Text="{Binding Height, StringFormat='{}{0:0})'}" Foreground="#94A3B8" FontSize="9"/>
+                                                    <TextBlock Text="{Binding Rotation, StringFormat='{} {0:0}°'}" Foreground="#A855F7" FontSize="9"/>
                                                 </StackPanel>
                                             </Border>
+
+                                            <!-- Character Rotate Handle (Top-Center) -->
+                                            <Border Width="18" Height="18" HorizontalAlignment="Center" VerticalAlignment="Top"
+                                                    Background="#A855F7" BorderBrush="White" BorderThickness="2" CornerRadius="9" Cursor="Hand" Margin="0,-27,0,0"
+                                                    PointerPressed="OnCharRotateHandlePointerPressed"
+                                                    ToolTip.Tip="Rotate Character (Drag to Rotate, Right-Click to Reset)"/>
 
                                             <!-- Character Resize Handle (Bottom-Right) -->
                                             <Border Width="18" Height="18" HorizontalAlignment="Right" VerticalAlignment="Bottom"

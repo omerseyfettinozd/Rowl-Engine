@@ -422,7 +422,8 @@ void Engine::updateActiveScene(
     float bgX, float bgY, float bgW, float bgH,
     const std::string& character,
     float charX, float charY, float charW, float charH,
-    float dlgX, float dlgY, float dlgW, float dlgH
+    float dlgX, float dlgY, float dlgW, float dlgH,
+    float bgRot, float charRot
 ) {
     m_activeChoiceButtons.clear();
     m_hasBackground = !background.empty();
@@ -437,6 +438,7 @@ void Engine::updateActiveScene(
     m_activeBackgroundY      = bgY;
     m_activeBackgroundWidth  = bgW;
     m_activeBackgroundHeight = bgH;
+    m_activeBackgroundRotation = bgRot;
 
     m_activeCharacters.clear();
     if (!character.empty()) {
@@ -445,9 +447,11 @@ void Engine::updateActiveScene(
         m_activeCharacterY       = charY;
         m_activeCharacterWidth   = charW;
         m_activeCharacterHeight  = charH;
-        m_activeCharacters.push_back({character, charX, charY, charW, charH});
+        m_activeCharacterRotation = charRot;
+        m_activeCharacters.push_back({character, charX, charY, charW, charH, charRot, 1.0f, 1.0f});
     } else {
         m_activeCharacter = "";
+        m_activeCharacterRotation = 0.0f;
     }
 
     m_activeDialogueBoxX     = dlgX;
@@ -490,10 +494,12 @@ void Engine::updateSceneFromComponents(const std::string& componentsJson) {
     const auto previousBackgroundY = m_activeBackgroundY;
     const auto previousBackgroundWidth = m_activeBackgroundWidth;
     const auto previousBackgroundHeight = m_activeBackgroundHeight;
+    const auto previousBackgroundRotation = m_activeBackgroundRotation;
     const auto previousCharacterX = m_activeCharacterX;
     const auto previousCharacterY = m_activeCharacterY;
     const auto previousCharacterWidth = m_activeCharacterWidth;
     const auto previousCharacterHeight = m_activeCharacterHeight;
+    const auto previousCharacterRotation = m_activeCharacterRotation;
     const auto previousDialogueBoxX = m_activeDialogueBoxX;
     const auto previousDialogueBoxY = m_activeDialogueBoxY;
     const auto previousDialogueBoxWidth = m_activeDialogueBoxWidth;
@@ -515,10 +521,12 @@ void Engine::updateSceneFromComponents(const std::string& componentsJson) {
         m_activeBackgroundY = previousBackgroundY;
         m_activeBackgroundWidth = previousBackgroundWidth;
         m_activeBackgroundHeight = previousBackgroundHeight;
+        m_activeBackgroundRotation = previousBackgroundRotation;
         m_activeCharacterX = previousCharacterX;
         m_activeCharacterY = previousCharacterY;
         m_activeCharacterWidth = previousCharacterWidth;
         m_activeCharacterHeight = previousCharacterHeight;
+        m_activeCharacterRotation = previousCharacterRotation;
         m_activeDialogueBoxX = previousDialogueBoxX;
         m_activeDialogueBoxY = previousDialogueBoxY;
         m_activeDialogueBoxWidth = previousDialogueBoxWidth;
@@ -593,6 +601,8 @@ void Engine::updateSceneFromComponents(const std::string& componentsJson) {
         m_activeDialogue.clear();
         m_activeBackground.clear();
         m_activeCharacter.clear();
+        m_activeBackgroundRotation = 0.0f;
+        m_activeCharacterRotation = 0.0f;
         m_activeDialogueData = {};
         m_hasBackground = false;
         m_hasDialogueBox = false;
@@ -672,6 +682,7 @@ void Engine::updateSceneFromComponents(const std::string& componentsJson) {
                 m_activeBackgroundY = data.value("y", 0.0f);
                 m_activeBackgroundWidth = data.value("width", 1920.0f);
                 m_activeBackgroundHeight = data.value("height", 1080.0f);
+                m_activeBackgroundRotation = data.value("rotation", 0.0f);
                 m_hasBackground = !m_activeBackground.empty();
             } else if (type == "character") {
                 CharacterRenderData cd;
@@ -681,6 +692,9 @@ void Engine::updateSceneFromComponents(const std::string& componentsJson) {
                     cd.y = data.value("y", 340.0f);
                     cd.width = data.value("width", 360.0f);
                     cd.height = data.value("height", 540.0f);
+                    cd.rotation = data.value("rotation", 0.0f);
+                    cd.scaleX = data.value("scale_x", data.value("scale", 1.0f));
+                    cd.scaleY = data.value("scale_y", data.value("scale", 1.0f));
                     m_activeCharacters.push_back(cd);
 
                     // Set legacy single-character fallback to first character
@@ -690,6 +704,7 @@ void Engine::updateSceneFromComponents(const std::string& componentsJson) {
                         m_activeCharacterY = cd.y;
                         m_activeCharacterWidth = cd.width;
                         m_activeCharacterHeight = cd.height;
+                        m_activeCharacterRotation = cd.rotation;
                     }
                 }
             } else if (type == "dialogue_box") {
@@ -1410,7 +1425,8 @@ void Engine::step(float deltaTime) {
         m_activeBackgroundWidth, m_activeBackgroundHeight,
         m_activeCharacters,
         m_activeDialogues,
-        m_activeChoiceButtons
+        m_activeChoiceButtons,
+        m_activeBackgroundRotation
     );
 
     // Update & Render Entity-Component Scene

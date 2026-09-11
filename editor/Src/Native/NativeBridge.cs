@@ -109,6 +109,17 @@ namespace RowlEngine.Editor.Native
             float dlgX,  float dlgY,  float dlgW,  float dlgH);
 
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern void RowlEngine_UpdateSceneEx(
+            IntPtr handle,
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string speaker,
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string dialogue,
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string background,
+            float bgX,   float bgY,   float bgW,   float bgH,   float bgRot,
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string character,
+            float charX, float charY, float charW, float charH, float charRot,
+            float dlgX,  float dlgY,  float dlgW,  float dlgH);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
         internal static extern void RowlEngine_LoadStoryGraph(
             IntPtr handle,
             [MarshalAs(UnmanagedType.LPUTF8Str)] string jsonPath);
@@ -162,6 +173,12 @@ namespace RowlEngine.Editor.Native
 
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
         internal static extern ulong RowlEngine_GetCurrentNodeId(IntPtr handle);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern float RowlEngine_GetBackgroundRotation(IntPtr handle);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern float RowlEngine_GetCharacterRotation(IntPtr handle);
 
         // ── Audio Control ───────────────────────────────────────────────────
 

@@ -43,6 +43,7 @@ internal static class StoryGraphNodeHydrator
         background.Texture = Text(value, "background", "bg_beach_sunset.png");
         background.X = Number(value, "background_x", background.X); background.Y = Number(value, "background_y", background.Y);
         background.Width = Number(value, "background_width", background.Width); background.Height = Number(value, "background_height", background.Height);
+        background.Rotation = Number(value, "background_rotation", background.Rotation);
 
         var character = node.CreateObject("Evelyn").AddComponent<CharacterComponentViewModel>();
         character.Sprite = Text(value, "character", "spr_evelyn.png");
@@ -50,6 +51,9 @@ internal static class StoryGraphNodeHydrator
         character.X = Number(value, "character_x", character.X); character.Y = Number(value, "character_y", character.Y);
         character.Width = Number(value, "character_width", character.Width); character.Height = Number(value, "character_height", character.Height);
         character.Scale = Number(value, "character_scale", character.Scale);
+        character.Rotation = Number(value, "character_rotation", character.Rotation);
+        character.ScaleX = Number(value, "character_scale_x", character.ScaleX);
+        character.ScaleY = Number(value, "character_scale_y", character.ScaleY);
 
         node.CreateObject("Audio").AddComponent<AudioComponentViewModel>().DspFilter = Text(value, "dsp", "Normal");
     }

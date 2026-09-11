@@ -764,7 +764,8 @@ void Window::renderVisualNovelFrame(
     float bgX, float bgY, float bgW, float bgH,
     const std::vector<CharacterRenderData>& characters,
     const std::vector<DialogueRenderData>& dialogues,
-    const std::vector<ChoiceButtonRenderData>& choices
+    const std::vector<ChoiceButtonRenderData>& choices,
+    float bgRotation
 ) {
     if (!m_initialized || !m_sdlRenderer) return;
     const auto frameRenderStarted = std::chrono::steady_clock::now();
@@ -811,7 +812,11 @@ void Window::renderVisualNovelFrame(
 
         SDL_Texture* bgTex = loadTexture(background);
         if (bgTex) {
-            SDL_RenderTexture(m_sdlRenderer, bgTex, nullptr, &vpRect);
+            if (std::abs(bgRotation) > 1e-4f) {
+                SDL_RenderTextureRotated(m_sdlRenderer, bgTex, nullptr, &vpRect, static_cast<double>(bgRotation), nullptr, SDL_FLIP_NONE);
+            } else {
+                SDL_RenderTexture(m_sdlRenderer, bgTex, nullptr, &vpRect);
+            }
         } else {
             SDL_SetRenderDrawColor(m_sdlRenderer, 20, 24, 38, 255);
             SDL_RenderFillRect(m_sdlRenderer, &vpRect);
@@ -857,10 +862,18 @@ void Window::renderVisualNovelFrame(
                 }
 
                 SDL_FRect dstRect = { drawX, drawY, drawW, drawH };
-                SDL_RenderTexture(m_sdlRenderer, charTex, nullptr, &dstRect);
+                if (std::abs(ch.rotation) > 1e-4f) {
+                    SDL_RenderTextureRotated(m_sdlRenderer, charTex, nullptr, &dstRect, static_cast<double>(ch.rotation), nullptr, SDL_FLIP_NONE);
+                } else {
+                    SDL_RenderTexture(m_sdlRenderer, charTex, nullptr, &dstRect);
+                }
             } else {
                 SDL_FRect charBox = { physCharX, physCharY, scaledCharW, scaledCharH };
-                SDL_RenderTexture(m_sdlRenderer, charTex, nullptr, &charBox);
+                if (std::abs(ch.rotation) > 1e-4f) {
+                    SDL_RenderTextureRotated(m_sdlRenderer, charTex, nullptr, &charBox, static_cast<double>(ch.rotation), nullptr, SDL_FLIP_NONE);
+                } else {
+                    SDL_RenderTexture(m_sdlRenderer, charTex, nullptr, &charBox);
+                }
             }
         } else {
             SDL_FRect charBox = { physCharX, physCharY, scaledCharW, scaledCharH };

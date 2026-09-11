@@ -1080,6 +1080,31 @@ void test_native_c_api() {
     RowlEngine_UpdateSceneFromJson(handle, compJson);
     TEST_PASS("RowlEngine_UpdateSceneFromJson (Multi-Character + Multi-Line Dialogue)");
 
+    // Milestone 22: Visual Transform Gizmo & Rotation/Scale Controls C-API Verification
+    RowlEngine_UpdateSceneEx(handle, "Evelyn", "Rotated scene test", "bg_beach_sunset.png",
+                            0.0f, 0.0f, 1920.0f, 1080.0f, 45.0f,
+                            "spr_evelyn.png", 1440.0f, 340.0f, 360.0f, 540.0f, -15.0f,
+                            80.0f, 860.0f, 1760.0f, 180.0f);
+    if (std::abs(RowlEngine_GetBackgroundRotation(handle) - 45.0f) > 0.001f ||
+        std::abs(RowlEngine_GetCharacterRotation(handle) - (-15.0f)) > 0.001f) {
+        std::cerr << "RowlEngine_UpdateSceneEx failed to set background/character rotation" << std::endl;
+        exit(1);
+    }
+    RowlEngine_Step(handle, 0.016f);
+
+    const char* compJsonRot = R"([
+        {"type":"background","id":"b1","enabled":true,"data":{"texture":"Woman.png","x":0,"y":0,"width":1920,"height":1080,"scale":1,"rotation":90.0}},
+        {"type":"character","id":"c1","enabled":true,"data":{"sprite":"Margot.jpg","x":300,"y":200,"width":360,"height":540,"scale":1,"scale_x":1.2,"scale_y":0.8,"rotation":180.0}}
+    ])";
+    RowlEngine_UpdateSceneFromJson(handle, compJsonRot);
+    if (std::abs(RowlEngine_GetBackgroundRotation(handle) - 90.0f) > 0.001f ||
+        std::abs(RowlEngine_GetCharacterRotation(handle) - 180.0f) > 0.001f) {
+        std::cerr << "RowlEngine_UpdateSceneFromJson failed to parse background/character rotation" << std::endl;
+        exit(1);
+    }
+    RowlEngine_Step(handle, 0.016f);
+    TEST_PASS("Milestone 22: RowlEngine_UpdateSceneEx & UpdateSceneFromJson Rotation / Scale Controls");
+
     // Script components on the same node deliberately share lifecycle names.
     // The runtime must dispatch both callbacks and tear them down in reverse
     // activation order instead of letting the latter overwrite the former.

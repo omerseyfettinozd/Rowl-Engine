@@ -31,16 +31,18 @@ public static class EditorSceneSyncService
         catch (Exception ex)
         {
             log?.Invoke($"⚠️ Component-based scene sync failed, falling back to legacy: {ex.Message}");
-            // Fallback to legacy single-character API
-            host.UpdateScene(
+            // Fallback to legacy single-character API with rotation
+            host.UpdateSceneEx(
                 node.Speaker ?? "",
                 node.DialogueText ?? "",
                 node.BackgroundTexture ?? "",
                 (float)node.BackgroundX, (float)node.BackgroundY,
                 (float)node.BackgroundWidth, (float)node.BackgroundHeight,
+                (float)node.BackgroundRotation,
                 node.CharacterSprite ?? "",
                 (float)node.CharacterX, (float)node.CharacterY,
                 (float)node.CharacterWidth, (float)node.CharacterHeight,
+                (float)node.CharacterRotation,
                 (float)node.DialogueBoxX, (float)node.DialogueBoxY,
                 (float)node.DialogueBoxWidth, (float)node.DialogueBoxHeight
             );

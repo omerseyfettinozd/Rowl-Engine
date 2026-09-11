@@ -209,6 +209,20 @@ ROWL_API void RowlEngine_UpdateScene(
 );
 
 /**
+ * Extended scene update supporting rotation angles for background and character (in degrees).
+ */
+ROWL_API void RowlEngine_UpdateSceneEx(
+    RowlEngineHandle handle,
+    const char* speaker,
+    const char* dialogue,
+    const char* background,
+    float bgX,   float bgY,   float bgW,   float bgH,   float bgRot,
+    const char* character,
+    float charX, float charY, float charW, float charH, float charRot,
+    float dlgX,  float dlgY,  float dlgW,  float dlgH
+);
+
+/**
  * Updates the scene from a JSON string containing component data.
  * This is the component-based alternative to RowlEngine_UpdateScene.
  * The JSON should be an array of component objects with 'type', 'enabled', and 'data' fields.
@@ -272,6 +286,12 @@ ROWL_API const char* RowlEngine_GetDialogue(RowlEngineHandle handle);
 
 /** Returns the ID of the currently active story node. */
 ROWL_API uint64_t RowlEngine_GetCurrentNodeId(RowlEngineHandle handle);
+
+/** Returns the rotation angle (degrees) of the active background. */
+ROWL_API float RowlEngine_GetBackgroundRotation(RowlEngineHandle handle);
+
+/** Returns the rotation angle (degrees) of the active character. */
+ROWL_API float RowlEngine_GetCharacterRotation(RowlEngineHandle handle);
 
 /* ── Audio Control (Host → Engine) ───────────────────────────────────────── */
 
