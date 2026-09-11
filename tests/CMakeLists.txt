@@ -1,7 +1,23 @@
 cmake_minimum_required(VERSION 3.25)
 
 add_executable(rowl_tests
-    main_test_runner.cpp
+    test_main.cpp
+    test_logger.cpp
+    test_aspect_guardian.cpp
+    test_msdf_renderer.cpp
+    test_game_state.cpp
+    test_audio_engine.cpp
+    test_audio_device_recovery.cpp
+    test_lua_sandbox.cpp
+    test_mobile_input.cpp
+    test_vfs_security.cpp
+    test_native_c_api.cpp
+    test_game_object_component_system.cpp
+    test_window_input_routing.cpp
+    test_runtime_context_and_diagnostics.cpp
+    test_native_performance_benchmarks.cpp
+    test_hardening_and_reliability.cpp
+    test_camera_and_transition_pipeline.cpp
     ${CMAKE_SOURCE_DIR}/engine/src/core/logger.cpp
     ${CMAKE_SOURCE_DIR}/engine/src/core/runtime_context.cpp
     ${CMAKE_SOURCE_DIR}/engine/src/render/aspect_guardian.cpp
