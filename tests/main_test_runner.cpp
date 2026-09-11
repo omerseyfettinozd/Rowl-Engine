@@ -653,6 +653,12 @@ void test_audio_device_recovery() {
         std::cerr << "Device event leaked into suspend state" << std::endl;
         exit(1);
     }
+    // CTest pins SDL_AUDIODRIVER=dummy, so the reopen must have restored a
+    // live device here rather than silently falling back.
+    if (RowlEngine_IsAudioDeviceAvailable(stepHandle) != 1) {
+        std::cerr << "Device removal did not reopen the dummy audio device" << std::endl;
+        exit(1);
+    }
     RowlEngine_Destroy(stepHandle);
     Rowl::Platform::SdlEventDispatcher::unregisterWindow(0xE2E0);
     if (!eventsAlreadyInit) SDL_QuitSubSystem(SDL_INIT_EVENTS);

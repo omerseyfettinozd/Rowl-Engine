@@ -857,7 +857,7 @@ namespace RowlEngine.Editor.ViewModels
             return updated;
         }
 
-        public void CheckEngineDiagnostics(string? context = null)
+        public void CheckEngineDiagnostics()
         {
             if (!EngineHost.IsInitialized) return;
             CheckAudioDeviceStatus(EngineHost.IsAudioDeviceAvailable);
