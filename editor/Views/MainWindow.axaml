@@ -338,21 +338,22 @@
         <!-- ══════════════════════════════════════════════════════════════════
              TOAST NOTIFICATION OVERLAY (Sağ Alt)
              ══════════════════════════════════════════════════════════════════ -->
-        <Border Grid.Row="1" Grid.RowSpan="2"
-                IsVisible="{Binding Toast.IsVisible}"
-                HorizontalAlignment="Right" VerticalAlignment="Bottom"
-                Margin="0,0,20,40" ZIndex="200"
-                Background="{Binding Toast.ToastBackground}" 
-                CornerRadius="8" Padding="16,10"
-                MinWidth="260" MaxWidth="420"
-                BoxShadow="0 4 16 0 #80000000">
-            <StackPanel Orientation="Horizontal" Spacing="10">
-                <TextBlock Text="{Binding Toast.ToastIcon}" FontSize="18" VerticalAlignment="Center"/>
-                <TextBlock Text="{Binding Toast.Message}" 
-                           Foreground="White" FontSize="13" FontWeight="SemiBold"
-                           VerticalAlignment="Center" TextWrapping="Wrap"/>
-            </StackPanel>
-        </Border>
+        <StackPanel Grid.Row="1" Grid.RowSpan="2"
+                    HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                    Margin="0,0,20,40" ZIndex="200" Spacing="8">
+            <Border IsVisible="{Binding Toast.IsVisible}"
+                    Background="{Binding Toast.ToastBackground}" 
+                    CornerRadius="8" Padding="16,10"
+                    MinWidth="260" MaxWidth="420"
+                    BoxShadow="0 4 16 0 #80000000">
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                    <TextBlock Text="{Binding Toast.ToastIcon}" FontSize="18" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding Toast.Message}" 
+                               Foreground="White" FontSize="13" FontWeight="SemiBold"
+                               VerticalAlignment="Center" TextWrapping="Wrap"/>
+                </StackPanel>
+            </Border>
+        </StackPanel>
 
     </Grid>
 </Window>

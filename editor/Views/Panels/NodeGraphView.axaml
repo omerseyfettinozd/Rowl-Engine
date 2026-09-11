@@ -65,6 +65,17 @@
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
+
+            <!-- Marquee Selection Box Layer -->
+            <Rectangle Canvas.Left="{Binding SelectionBoxX}"
+                       Canvas.Top="{Binding SelectionBoxY}"
+                       Width="{Binding SelectionBoxWidth}"
+                       Height="{Binding SelectionBoxHeight}"
+                       IsVisible="{Binding IsSelectingBox}"
+                       Fill="#333B82F6"
+                       Stroke="#3B82F6"
+                       StrokeThickness="1.5"
+                       StrokeDashArray="4,2"/>
         </Canvas>
 
         <!-- Canvas Viewport Controls Overlay (Zoom badge & Reset (0,0) Button) -->

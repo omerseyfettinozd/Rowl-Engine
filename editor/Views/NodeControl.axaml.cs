@@ -136,7 +136,15 @@ namespace RowlEngine.Editor.Views
 
                 if (VisualRoot is MainWindow mainWindowSelect && mainWindowSelect.DataContext is MainWindowViewModel mainVmSelect)
                 {
-                    mainVmSelect.SelectNode(vm);
+                    bool isToggle = e.KeyModifiers.HasFlag(KeyModifiers.Control) || e.KeyModifiers.HasFlag(KeyModifiers.Shift);
+                    if (isToggle)
+                    {
+                        mainVmSelect.SelectNode(vm, addToSelection: true);
+                    }
+                    else if (!mainVmSelect.SelectedNodes.Contains(vm))
+                    {
+                        mainVmSelect.SelectNode(vm, addToSelection: false);
+                    }
                 }
                 e.Handled = true;
             }
@@ -160,11 +168,20 @@ namespace RowlEngine.Editor.Views
             else if (_isDraggingNode)
             {
                 var currentPointerPos = e.GetPosition(canvasToUse);
-                double deltaX = currentPointerPos.X - _dragStartPointerPos.X;
-                double deltaY = currentPointerPos.Y - _dragStartPointerPos.Y;
+                double stepDeltaX = currentPointerPos.X - _dragStartPointerPos.X;
+                double stepDeltaY = currentPointerPos.Y - _dragStartPointerPos.Y;
+                _dragStartPointerPos = currentPointerPos;
 
-                vm.X = _dragStartNodePos.X + deltaX;
-                vm.Y = _dragStartNodePos.Y + deltaY;
+                if (VisualRoot is MainWindow mainWindowDrag && mainWindowDrag.DataContext is MainWindowViewModel mainVmDrag &&
+                    mainVmDrag.SelectedNodes.Contains(vm) && mainVmDrag.SelectedNodes.Count > 1)
+                {
+                    mainVmDrag.BatchMoveSelectedNodes(stepDeltaX, stepDeltaY);
+                }
+                else
+                {
+                    vm.X += stepDeltaX;
+                    vm.Y += stepDeltaY;
+                }
                 e.Handled = true;
             }
         }

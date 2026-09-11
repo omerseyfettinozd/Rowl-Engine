@@ -1,3 +1,4 @@
+using System;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -8,7 +9,10 @@ namespace RowlEngine.Editor.Views.Panels
     public partial class NodeGraphView : UserControl
     {
         private bool _isPanningGraph = false;
+        private bool _isBoxSelecting = false;
         private Point _panStartPointerPos;
+        private Point _boxStartCanvasPos;
+        private Point _pressStartPos;
 
         public NodeGraphView()
         {
@@ -24,27 +28,54 @@ namespace RowlEngine.Editor.Views.Panels
             }
         }
 
+        private Point GetCanvasPoint(Point containerPos, MainWindowViewModel vm)
+        {
+            double zoom = vm.ZoomScale > 0 ? vm.ZoomScale : 1.0;
+            return new Point((containerPos.X - vm.PanX) / zoom, (containerPos.Y - vm.PanY) / zoom);
+        }
+
         private void NodeGraphContainer_PointerPressed(object? sender, PointerPressedEventArgs e)
         {
-            var pProps = e.GetCurrentPoint(sender as Control).Properties;
-            // Left, Middle or Right button for panning on background - left click is for node/wire interaction when hitting a node
-            if (pProps.IsMiddleButtonPressed || pProps.IsRightButtonPressed || pProps.IsLeftButtonPressed)
+            if (DataContext is not MainWindowViewModel vm) return;
+            var control = sender as Control;
+            if (control == null) return;
+
+            var pProps = e.GetCurrentPoint(control).Properties;
+            bool isBackground = e.Source is Grid || e.Source is Canvas || e.Source is Avalonia.Controls.Shapes.Rectangle;
+
+            if (!isBackground) return;
+
+            _pressStartPos = e.GetPosition(control);
+
+            if (pProps.IsMiddleButtonPressed || pProps.IsRightButtonPressed)
             {
-                if (e.Source is Grid || e.Source is Canvas || e.Source is Avalonia.Controls.Shapes.Rectangle)
-                {
-                    _isPanningGraph = true;
-                    _panStartPointerPos = e.GetPosition(sender as Control);
-                    e.Pointer.Capture(sender as Control);
-                    e.Handled = true;
-                }
+                // Middle or Right click drags canvas (Pan)
+                _isPanningGraph = true;
+                _panStartPointerPos = _pressStartPos;
+                e.Pointer.Capture(control);
+                e.Handled = true;
+            }
+            else if (pProps.IsLeftButtonPressed)
+            {
+                // Left click on empty canvas initiates box/marquee selection
+                _isBoxSelecting = true;
+                _boxStartCanvasPos = GetCanvasPoint(_pressStartPos, vm);
+                vm.StartSelectionBox(_boxStartCanvasPos);
+                e.Pointer.Capture(control);
+                e.Handled = true;
             }
         }
 
         private void NodeGraphContainer_PointerMoved(object? sender, PointerEventArgs e)
         {
-            if (_isPanningGraph && DataContext is MainWindowViewModel vm)
+            if (DataContext is not MainWindowViewModel vm) return;
+            var control = sender as Control;
+            if (control == null) return;
+
+            Point currentPos = e.GetPosition(control);
+
+            if (_isPanningGraph)
             {
-                Point currentPos = e.GetPosition(sender as Control);
                 double deltaX = currentPos.X - _panStartPointerPos.X;
                 double deltaY = currentPos.Y - _panStartPointerPos.Y;
 
@@ -56,15 +87,42 @@ namespace RowlEngine.Editor.Views.Panels
                 _panStartPointerPos = currentPos;
                 e.Handled = true;
             }
+            else if (_isBoxSelecting)
+            {
+                Point currentCanvasPos = GetCanvasPoint(currentPos, vm);
+                bool append = e.KeyModifiers.HasFlag(KeyModifiers.Shift) || e.KeyModifiers.HasFlag(KeyModifiers.Control);
+                vm.UpdateSelectionBox(_boxStartCanvasPos, currentCanvasPos, append);
+                e.Handled = true;
+            }
         }
 
         private void NodeGraphContainer_PointerReleased(object? sender, PointerReleasedEventArgs e)
         {
-            if (_isPanningGraph)
+            if (DataContext is MainWindowViewModel vm)
             {
-                _isPanningGraph = false;
-                e.Pointer.Capture(null);
-                e.Handled = true;
+                var control = sender as Control;
+                Point currentPos = control != null ? e.GetPosition(control) : _pressStartPos;
+                double dist = Math.Sqrt(Math.Pow(currentPos.X - _pressStartPos.X, 2) + Math.Pow(currentPos.Y - _pressStartPos.Y, 2));
+
+                if (_isBoxSelecting)
+                {
+                    _isBoxSelecting = false;
+                    vm.EndSelectionBox();
+
+                    // If simple click on empty background with no drag (< 5px) and no modifier, clear selection
+                    if (dist < 5.0 && !e.KeyModifiers.HasFlag(KeyModifiers.Shift) && !e.KeyModifiers.HasFlag(KeyModifiers.Control))
+                    {
+                        vm.ClearNodeSelection();
+                    }
+                    e.Pointer.Capture(null);
+                    e.Handled = true;
+                }
+                else if (_isPanningGraph)
+                {
+                    _isPanningGraph = false;
+                    e.Pointer.Capture(null);
+                    e.Handled = true;
+                }
             }
         }
 

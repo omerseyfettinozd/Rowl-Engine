@@ -221,6 +221,10 @@ namespace RowlEngine.Editor.ViewModels
         [ObservableProperty]
         private string _logOutput = "[System] Rowl Engine Editor initialized.\n";
 
+        public ObservableCollection<NodeViewModel> SelectedNodes { get; } = new();
+
+        public EditorNotificationService NotificationService { get; } = new();
+
         [ObservableProperty]
         private NodeViewModel? _selectedNode;
 
@@ -242,6 +246,21 @@ namespace RowlEngine.Editor.ViewModels
         private bool _isDraggingWire = false;
 
         private string _wireDragOptionId = string.Empty;
+
+        [ObservableProperty]
+        private double _selectionBoxX = 0;
+
+        [ObservableProperty]
+        private double _selectionBoxY = 0;
+
+        [ObservableProperty]
+        private double _selectionBoxWidth = 0;
+
+        [ObservableProperty]
+        private double _selectionBoxHeight = 0;
+
+        [ObservableProperty]
+        private bool _isSelectingBox = false;
 
         [ObservableProperty]
         private double _panX = 0;
@@ -787,7 +806,32 @@ namespace RowlEngine.Editor.ViewModels
         /// <summary>Sends the active node's scene data directly to the engine via P/Invoke.</summary>
         public bool PushSceneToEngine(NodeViewModel node)
         {
-            return EditorSceneSyncService.PushSceneToEngine(EngineHost, node, msg => AppendLog(msg));
+            bool updated = EditorSceneSyncService.PushSceneToEngine(EngineHost, node, msg => AppendLog(msg));
+            CheckEngineDiagnostics();
+            return updated;
+        }
+
+        public void CheckEngineDiagnostics(string? context = null)
+        {
+            if (!EngineHost.IsInitialized) return;
+            var code = EngineHost.LastResultCode;
+            if (code != RowlEngine.Editor.Native.RuntimeErrorCode.Ok)
+            {
+                string msg = string.IsNullOrEmpty(EngineHost.LastResultMessage)
+                    ? $"Engine Diagnostic ({code}): {EngineHost.LastResultOperation}"
+                    : $"[{code}] {EngineHost.LastResultMessage}";
+
+                var toastType = code switch
+                {
+                    RowlEngine.Editor.Native.RuntimeErrorCode.FileNotFound => ToastType.Warning,
+                    RowlEngine.Editor.Native.RuntimeErrorCode.InvalidArgument => ToastType.Warning,
+                    _ => ToastType.Error
+                };
+
+                Toast.Show(msg, toastType, 4000);
+                NotificationService.Show(msg, toastType == ToastType.Warning ? NotificationType.Warning : NotificationType.Error, "Motor Uyarısı", 4000);
+                AppendLog($"⚠️ [Motor Tanı] {code} — {EngineHost.LastResultOperation}: {EngineHost.LastResultMessage} ({EngineHost.LastResultTarget})");
+            }
         }
 
         private void ApplyScriptRuntimeDiagnostics(NodeViewModel node)
@@ -809,7 +853,7 @@ namespace RowlEngine.Editor.ViewModels
                 Connections,
                 OnNodePropertyChanged,
                 EnforceSingleOutgoingWireRule,
-                SelectNodeQuiet,
+                node => SelectNodeQuiet(node),
                 AppendLog);
         }
 
@@ -972,29 +1016,162 @@ namespace RowlEngine.Editor.ViewModels
             StatusText = "Engine Ready — Offscreen C++ Runtime Active";
         }
 
-        public void SelectNode(NodeViewModel node)
+        public void SelectNode(NodeViewModel node, bool addToSelection = false)
         {
-            if (SelectedNode != null) SelectedNode.IsSelected = false;
-            SelectedNode = node;
-            SelectedNode.IsSelected = true;
+            EditorSelectionCoordinator.SelectNode(node, addToSelection, Nodes, SelectedNodes, p => SelectedNode = p);
             ScheduleSave();
-            AppendLog($"Selected Node #{node.Id} ({node.Title})");
+            AppendLog($"Selected Node #{node.Id} ({node.Title}) [Total: {SelectedNodes.Count}]");
         }
 
         /// <summary>
         /// Selects a node without triggering debounced file saves (used during gameplay for zero-latency node advance).
         /// </summary>
-        public void SelectNodeQuiet(NodeViewModel node)
+        public void SelectNodeQuiet(NodeViewModel node, bool addToSelection = false)
         {
-            if (SelectedNode != null) SelectedNode.IsSelected = false;
-            SelectedNode = node;
-            SelectedNode.IsSelected = true;
+            EditorSelectionCoordinator.SelectNode(node, addToSelection, Nodes, SelectedNodes, p => SelectedNode = p);
             AppendLog($"Selected Node #{node.Id} ({node.Title})");
         }
 
+        [RelayCommand]
+        public void SelectAllNodes()
+        {
+            EditorSelectionCoordinator.SelectAllNodes(Nodes, SelectedNodes, p => SelectedNode = p);
+            AppendLog($"Selected all {SelectedNodes.Count} node(s)");
+        }
+
+        [RelayCommand]
+        public void ClearNodeSelection()
+        {
+            EditorSelectionCoordinator.ClearNodeSelection(Nodes, SelectedNodes, p => SelectedNode = p);
+            AppendLog("Cleared node selection");
+        }
+
+        [RelayCommand]
+        public void InvertNodeSelection()
+        {
+            EditorSelectionCoordinator.InvertNodeSelection(Nodes, SelectedNodes, p => SelectedNode = p);
+            AppendLog($"Inverted node selection [Now selected: {SelectedNodes.Count}]");
+        }
+
+        public void StartSelectionBox(Point startPoint)
+        {
+            SelectionBoxX = startPoint.X;
+            SelectionBoxY = startPoint.Y;
+            SelectionBoxWidth = 0;
+            SelectionBoxHeight = 0;
+            IsSelectingBox = true;
+        }
+
+        public void UpdateSelectionBox(Point startPoint, Point currentPoint, bool append = false)
+        {
+            double minX = Math.Min(startPoint.X, currentPoint.X);
+            double minY = Math.Min(startPoint.Y, currentPoint.Y);
+            double width = Math.Abs(currentPoint.X - startPoint.X);
+            double height = Math.Abs(currentPoint.Y - startPoint.Y);
+
+            SelectionBoxX = minX;
+            SelectionBoxY = minY;
+            SelectionBoxWidth = width;
+            SelectionBoxHeight = height;
+
+            var boxRect = new Rect(minX, minY, width, height);
+            EditorSelectionCoordinator.SelectNodesInBox(boxRect, Nodes, SelectedNodes, p => SelectedNode = p, append);
+        }
+
+        public void EndSelectionBox()
+        {
+            IsSelectingBox = false;
+            SelectionBoxWidth = 0;
+            SelectionBoxHeight = 0;
+            ScheduleSave();
+        }
+
+        public void BatchMoveSelectedNodes(double deltaX, double deltaY)
+        {
+            if (SelectedNodes.Count == 0 && SelectedNode != null)
+            {
+                SelectedNodes.Add(SelectedNode);
+            }
+            EditorBatchOperationService.BatchMoveNodes(SelectedNodes, deltaX, deltaY);
+        }
+
+        [RelayCommand]
+        public void DeleteSelectedNodes()
+        {
+            var targets = SelectedNodes.Count > 0 ? SelectedNodes.ToList() : (SelectedNode != null ? new List<NodeViewModel> { SelectedNode } : new List<NodeViewModel>());
+            if (targets.Count == 0) return;
+
+            int deletedCount = EditorBatchOperationService.BatchDeleteNodes(
+                targets, Nodes, Connections, SetChoiceTarget, UpdateStartNodeState);
+
+            SelectedNodes.Clear();
+            SelectedNode = Nodes.FirstOrDefault();
+            if (SelectedNode != null)
+            {
+                SelectedNode.IsSelected = true;
+                SelectedNodes.Add(SelectedNode);
+            }
+            UpdateStartNodeState();
+            ScheduleSave();
+            AppendLog($"🗑️ Batch deleted {deletedCount} node(s)");
+        }
+
+        [RelayCommand]
+        public void DuplicateSelectedNodes()
+        {
+            var targets = SelectedNodes.Count > 0 ? SelectedNodes.ToList() : (SelectedNode != null ? new List<NodeViewModel> { SelectedNode } : new List<NodeViewModel>());
+            if (targets.Count == 0) return;
+
+            var clones = EditorBatchOperationService.BatchDuplicateNodes(
+                targets, Nodes, Connections, 40.0, 40.0, UpdateStartNodeState);
+
+            foreach (var n in Nodes) n.IsSelected = false;
+            SelectedNodes.Clear();
+            foreach (var clone in clones)
+            {
+                clone.IsSelected = true;
+                SelectedNodes.Add(clone);
+            }
+            SelectedNode = clones.LastOrDefault();
+            UpdateStartNodeState();
+            ScheduleSave();
+            AppendLog($"📋 Batch duplicated {clones.Count} node(s) with internal wires preserved");
+        }
+
+        [RelayCommand]
+        public void AlignSelectedNodes(string alignmentStr)
+        {
+            if (Enum.TryParse<BatchAlignment>(alignmentStr, true, out var alignment))
+            {
+                var targets = SelectedNodes.Count > 1 ? SelectedNodes.ToList() : Nodes.Where(n => n.IsSelected).ToList();
+                if (targets.Count < 2) return;
+                EditorBatchOperationService.BatchAlignNodes(targets, alignment);
+                ScheduleSave();
+                AppendLog($"📐 Aligned {targets.Count} node(s) to {alignment}");
+            }
+        }
+
+        [RelayCommand]
+        public void DistributeSelectedNodes(string distributionStr)
+        {
+            if (Enum.TryParse<BatchDistribution>(distributionStr, true, out var distribution))
+            {
+                var targets = SelectedNodes.Count > 2 ? SelectedNodes.ToList() : Nodes.Where(n => n.IsSelected).ToList();
+                if (targets.Count < 3) return;
+                EditorBatchOperationService.BatchDistributeNodes(targets, distribution);
+                ScheduleSave();
+                AppendLog($"📊 Distributed {targets.Count} node(s) {distribution}");
+            }
+        }
+
+        public void NotifyInfo(string message, string? title = null) => NotificationService.ShowInfo(message, title);
+        public void NotifySuccess(string message, string? title = null) => NotificationService.ShowSuccess(message, title);
+        public void NotifyWarning(string message, string? title = null) => NotificationService.ShowWarning(message, title);
+        public void NotifyError(string message, string? title = null) => NotificationService.ShowError(message, title);
+
         public void SyncEditorToRuntimeNode()
         {
-            StoryGraphLifecycleCoordinator.SyncEditorToRuntimeNode(EngineHost, Nodes, SelectNodeQuiet);
+            StoryGraphLifecycleCoordinator.SyncEditorToRuntimeNode(EngineHost, Nodes, node => SelectNodeQuiet(node));
         }
 
         public async Task<bool> ConfirmDeleteSaveSlotAsync(int index)

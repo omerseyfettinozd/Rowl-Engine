@@ -5,6 +5,7 @@ using System.ComponentModel;
 using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using RowlEngine.Editor.Services;
 using RowlEngine.Editor.ViewModels.Components;
 
 namespace RowlEngine.Editor.ViewModels
@@ -28,6 +29,8 @@ namespace RowlEngine.Editor.ViewModels
 
         // ── Selected GameObject (drives the Inspector) ──
 
+        public ObservableCollection<FrameObjectViewModel> SelectedObjects { get; } = new();
+
         /// <summary>
         /// The GameObject currently selected in the Hierarchy.
         /// The Inspector displays this GameObject's properties and components.
@@ -38,6 +41,22 @@ namespace RowlEngine.Editor.ViewModels
         partial void OnSelectedObjectChanged(FrameObjectViewModel? value)
         {
             MainViewModel.InspectorViewModel?.NotifySelectedObjectChanged();
+        }
+
+        public void SelectObject(FrameObjectViewModel obj, bool addToSelection = false)
+        {
+            if (CurrentNode == null) return;
+            EditorSelectionCoordinator.SelectObject(
+                obj,
+                addToSelection,
+                CurrentNode.Objects,
+                SelectedObjects,
+                p => SelectedObject = p);
+        }
+
+        public void ClearObjectSelection()
+        {
+            EditorSelectionCoordinator.ClearObjectSelection(SelectedObjects, p => SelectedObject = p);
         }
 
         // ── Current Node Info (displayed at top of Hierarchy) ──
@@ -145,6 +164,46 @@ namespace RowlEngine.Editor.ViewModels
             MainViewModel.ScheduleSave();
         }
 
+        [RelayCommand]
+        public void BatchDeleteSelectedObjects()
+        {
+            if (CurrentNode == null) return;
+            var targets = SelectedObjects.Count > 0 ? SelectedObjects.ToList() : (SelectedObject != null ? new System.Collections.Generic.List<FrameObjectViewModel> { SelectedObject } : new System.Collections.Generic.List<FrameObjectViewModel>());
+            if (targets.Count == 0) return;
+
+            int count = EditorBatchOperationService.BatchDeleteObjects(targets, CurrentNode);
+            SelectedObjects.Clear();
+            SelectedObject = CurrentNode.Objects.FirstOrDefault();
+            MainViewModel.AppendLog($"🗑️ Batch deleted {count} object(s) from Node #{CurrentNode.Id}");
+            MainViewModel.ScheduleSave();
+        }
+
+        [RelayCommand]
+        public void BatchDuplicateSelectedObjects()
+        {
+            if (CurrentNode == null) return;
+            var targets = SelectedObjects.Count > 0 ? SelectedObjects.ToList() : (SelectedObject != null ? new System.Collections.Generic.List<FrameObjectViewModel> { SelectedObject } : new System.Collections.Generic.List<FrameObjectViewModel>());
+            if (targets.Count == 0) return;
+
+            var copies = EditorBatchOperationService.BatchDuplicateObjects(targets, CurrentNode);
+            SelectedObjects.Clear();
+            foreach (var copy in copies) SelectedObjects.Add(copy);
+            SelectedObject = copies.LastOrDefault();
+            MainViewModel.AppendLog($"📋 Batch duplicated {copies.Count} object(s) in Node #{CurrentNode.Id}");
+            MainViewModel.ScheduleSave();
+        }
+
+        [RelayCommand]
+        public void BatchToggleActiveSelectedObjects()
+        {
+            var targets = SelectedObjects.Count > 0 ? SelectedObjects.ToList() : (SelectedObject != null ? new System.Collections.Generic.List<FrameObjectViewModel> { SelectedObject } : new System.Collections.Generic.List<FrameObjectViewModel>());
+            if (targets.Count == 0) return;
+
+            int count = EditorBatchOperationService.BatchToggleActiveObjects(targets);
+            MainViewModel.AppendLog($"👁️ Batch toggled visibility of {count} object(s)");
+            MainViewModel.ScheduleSave();
+        }
+
         // ── Event Handling ──
 
         private void OnMainViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -152,6 +211,7 @@ namespace RowlEngine.Editor.ViewModels
             if (e.PropertyName == nameof(MainWindowViewModel.SelectedNode))
             {
                 IsCreateObjectMenuOpen = false;
+                SelectedObjects.Clear();
 
                 UnsubscribeCurrentNode();
 
