@@ -2848,6 +2848,22 @@ namespace RowlEngine.Editor
                 if (mainVm.NotificationService.Notifications.Count != 2)
                     throw new Exception("Steady available polls must not toast");
 
+                // Step 27.5: native P/Invoke observers resolve and report fresh state.
+                // IsAudioOutputSuspended must be false on a fresh runtime; the
+                // device flag is environment-dependent (dummy vs real driver),
+                // so only resolution stability is asserted for it.
+                Console.WriteLine("    [Step 27.5]: Native audio observer P/Invoke...");
+                if (!mainVm.EngineHost.IsInitialized)
+                    throw new Exception("EngineHost must be initialized before observer check");
+                bool suspendedOnce = mainVm.EngineHost.IsAudioOutputSuspended;
+                bool suspendedTwice = mainVm.EngineHost.IsAudioOutputSuspended;
+                bool deviceOnce = mainVm.EngineHost.IsAudioDeviceAvailable;
+                bool deviceTwice = mainVm.EngineHost.IsAudioDeviceAvailable;
+                if (suspendedOnce || suspendedTwice)
+                    throw new Exception("Fresh runtime must not report suspended output");
+                if (deviceOnce != deviceTwice)
+                    throw new Exception("Device observer must report stable values across polls");
+
                 Console.WriteLine("  ✅ [PASS] Audio device status observer & edge-triggered toasts verified");
             }
 
