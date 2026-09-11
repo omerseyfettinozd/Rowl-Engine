@@ -618,6 +618,47 @@ namespace RowlEngine.Editor.Native
                 NativeBridge.RowlEngine_GetAudioSpectrum(_handle, outBands, outBands.Length);
         }
 
+        // ── Typewriter Voice Blips & Audio Effects (Milestone 25) ─────────────
+
+        public void PlayVoiceBlip(string soundPath, float pitch = 1.0f, float volume = 0.85f, int channelType = 1)
+        {
+            if (_handle != IntPtr.Zero)
+                NativeBridge.RowlEngine_PlayVoiceBlip(_handle, soundPath, pitch, volume, channelType);
+        }
+
+        public void SetDialogueVoiceBlip(string soundPath, float basePitch, float pitchVariance, int cadence, bool skipPunctuation, int channelType)
+        {
+            if (_handle != IntPtr.Zero)
+                NativeBridge.RowlEngine_SetDialogueVoiceBlip(_handle, soundPath, basePitch, pitchVariance, cadence, skipPunctuation ? 1 : 0, channelType);
+        }
+
+        public string GetDialogueVoiceBlipSound()
+            => _handle == IntPtr.Zero ? string.Empty : NativeBridge.PtrToString(NativeBridge.RowlEngine_GetDialogueVoiceBlipSound(_handle));
+
+        public float GetDialogueVoiceBlipPitch()
+            => _handle == IntPtr.Zero ? 1.0f : NativeBridge.RowlEngine_GetDialogueVoiceBlipPitch(_handle);
+
+        public float GetDialogueVoiceBlipVariance()
+            => _handle == IntPtr.Zero ? 0.08f : NativeBridge.RowlEngine_GetDialogueVoiceBlipVariance(_handle);
+
+        public int GetDialogueVoiceBlipCadence()
+            => _handle == IntPtr.Zero ? 1 : NativeBridge.RowlEngine_GetDialogueVoiceBlipCadence(_handle);
+
+        public bool GetDialogueVoiceBlipSkipPunctuation()
+            => _handle != IntPtr.Zero && NativeBridge.RowlEngine_GetDialogueVoiceBlipSkipPunctuation(_handle) != 0;
+
+        public int GetDialogueVoiceBlipChannel()
+            => _handle == IntPtr.Zero ? 1 : NativeBridge.RowlEngine_GetDialogueVoiceBlipChannel(_handle);
+
+        public uint GetVoiceBlipCount()
+            => _handle == IntPtr.Zero ? 0u : NativeBridge.RowlEngine_GetVoiceBlipCount(_handle);
+
+        public void ResetVoiceBlipCount()
+        {
+            if (_handle != IntPtr.Zero)
+                NativeBridge.RowlEngine_ResetVoiceBlipCount(_handle);
+        }
+
         // ── Save / Load Slots & History Rewind ────────────────────────────────
 
         public bool SaveGameSlot(int slotIndex)

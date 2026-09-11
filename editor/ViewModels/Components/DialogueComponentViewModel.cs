@@ -45,7 +45,35 @@ namespace RowlEngine.Editor.ViewModels.Components
         private int _textSpeed = 30; // Milliseconds per character (10 - 100)
 
         [ObservableProperty]
-        private string _typewriterSound = string.Empty; // Optional click sfx path
+        private string _typewriterSound = string.Empty; // Optional click/blip sfx path in VFS
+
+        // Typewriter Voice Blips & Audio Effects (Milestone 25)
+        [ObservableProperty]
+        private double _voiceBlipPitch = 1.0; // Base pitch multiplier (0.25 - 4.0, default 1.0)
+
+        [ObservableProperty]
+        private double _voiceBlipVariance = 0.08; // Pitch variance / frequency modulation (0.0 - 0.5)
+
+        [ObservableProperty]
+        private int _voiceBlipCadence = 1; // Play sound every N characters (1 - 5)
+
+        [ObservableProperty]
+        private bool _voiceBlipSkipPunctuation = true; // Skip punctuation and whitespace
+
+        [ObservableProperty]
+        private string _voiceBlipChannel = "Voice"; // "Voice" or "Sfx"
+
+        [ObservableProperty]
+        private double _voiceBlipVolume = 0.85; // Volume (0.0 - 1.0)
+
+        public static Action<string, float, float, int>? GlobalPreviewVoiceBlipAction { get; set; }
+
+        [CommunityToolkit.Mvvm.Input.RelayCommand]
+        public void PreviewVoiceBlip()
+        {
+            int channelType = VoiceBlipChannel == "Sfx" ? 2 : 1;
+            GlobalPreviewVoiceBlipAction?.Invoke(TypewriterSound, (float)VoiceBlipPitch, (float)VoiceBlipVolume, channelType);
+        }
 
         [ObservableProperty]
         private bool _autoAdvance = false;
@@ -205,6 +233,13 @@ namespace RowlEngine.Editor.ViewModels.Components
                 ["typewriter_enabled"] = TypewriterEnabled,
                 ["text_speed"] = TextSpeed,
                 ["typewriter_sound"] = TypewriterSound,
+                ["voice_blip_pitch"] = VoiceBlipPitch,
+                ["voice_blip_variance"] = VoiceBlipVariance,
+                ["voice_blip_cadence"] = VoiceBlipCadence,
+                ["voice_blip_skip_punctuation"] = VoiceBlipSkipPunctuation,
+                ["voice_blip_channel_name"] = VoiceBlipChannel,
+                ["voice_blip_channel"] = VoiceBlipChannel == "Sfx" ? 2 : 1,
+                ["voice_blip_volume"] = VoiceBlipVolume,
                 ["auto_advance"] = AutoAdvance,
                 ["auto_advance_delay"] = AutoAdvanceDelay,
                 ["font_size"] = FontSize,
@@ -265,6 +300,26 @@ namespace RowlEngine.Editor.ViewModels.Components
 
             if (data.TryGetValue("typewriter_sound", out var tws) && tws is string sTws)
                 TypewriterSound = sTws;
+
+            if (data.TryGetValue("voice_blip_pitch", out var vbPitch) && vbPitch != null)
+                VoiceBlipPitch = Convert.ToDouble(vbPitch);
+
+            if (data.TryGetValue("voice_blip_variance", out var vbVar) && vbVar != null)
+                VoiceBlipVariance = Convert.ToDouble(vbVar);
+
+            if (data.TryGetValue("voice_blip_cadence", out var vbCad) && vbCad != null)
+                VoiceBlipCadence = Convert.ToInt32(vbCad);
+
+            if (data.TryGetValue("voice_blip_skip_punctuation", out var vbSkip) && vbSkip != null)
+                VoiceBlipSkipPunctuation = Convert.ToBoolean(vbSkip);
+
+            if (data.TryGetValue("voice_blip_channel_name", out var vbChName) && vbChName is string chn)
+                VoiceBlipChannel = chn;
+            else if (data.TryGetValue("voice_blip_channel", out var vbCh) && vbCh != null)
+                VoiceBlipChannel = Convert.ToInt32(vbCh) == 2 ? "Sfx" : "Voice";
+
+            if (data.TryGetValue("voice_blip_volume", out var vbVol) && vbVol != null)
+                VoiceBlipVolume = Convert.ToDouble(vbVol);
 
             if (data.TryGetValue("auto_advance", out var aadv) && aadv is bool bAadv)
                 AutoAdvance = bAadv;

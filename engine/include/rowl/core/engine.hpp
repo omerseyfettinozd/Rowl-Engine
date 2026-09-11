@@ -218,6 +218,18 @@ public:
     Rowl::Scene::Scene* getScene()       const { return m_scene.get(); }
     Rowl::Audio::AudioEngine* getAudio() const { return m_audio.get(); }
 
+    // ── Voice Blips & Audio Effects (Milestone 25) ────────────────────────
+    void setDialogueVoiceBlip(const std::string& soundPath, float basePitch, float pitchVariance, int cadence, bool skipPunctuation, int channelType);
+    const std::string& getDialogueVoiceBlipSound() const { return m_activeDialogueData.typewriterSound; }
+    float getDialogueVoiceBlipPitch() const { return m_activeDialogueData.voiceBlipPitch; }
+    float getDialogueVoiceBlipVariance() const { return m_activeDialogueData.voiceBlipPitchVariance; }
+    int getDialogueVoiceBlipCadence() const { return m_activeDialogueData.voiceBlipCadence; }
+    bool getDialogueVoiceBlipSkipPunctuation() const { return m_activeDialogueData.voiceBlipSkipPunctuation; }
+    int getDialogueVoiceBlipChannel() const { return m_activeDialogueData.voiceBlipChannel; }
+    void playVoiceBlip(const std::string& soundPath, float pitch = 1.0f, float volume = 0.85f, int channelType = 1);
+    uint32_t getVoiceBlipCount() const;
+    void resetVoiceBlipCount();
+
     // ── Save / Load Slots & State Persistence ──────────────────────────────
     bool saveGameSlot(int32_t slotIndex);
     bool loadGameSlot(int32_t slotIndex);

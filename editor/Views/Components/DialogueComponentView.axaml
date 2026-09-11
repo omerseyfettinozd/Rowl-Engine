@@ -83,6 +83,72 @@
                                 <Slider Value="{Binding AutoAdvanceDelay}" Minimum="0.5" Maximum="10.0" SmallChange="0.5"/>
                             </StackPanel>
                         </Grid>
+
+                        <!-- Voice Blip Sound Asset & Preview -->
+                        <Border Background="{DynamicResource CardHeaderBackground}" CornerRadius="4" Padding="6" Margin="0,4,0,0">
+                            <StackPanel Spacing="6">
+                                <Grid ColumnDefinitions="*, Auto">
+                                    <TextBlock Grid.Column="0" Text="🎵 Character Voice Blip (Sound FX)" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource AccentColor}" VerticalAlignment="Center"/>
+                                    <Button Grid.Column="1" Content="▶ Önizle (Test Blip)" Command="{Binding PreviewVoiceBlipCommand}"
+                                            ToolTip.Tip="Test character voice blip sound"
+                                            FontSize="10" Padding="6,2" Background="{DynamicResource AccentButtonBg}" Foreground="{DynamicResource AccentButtonFg}" CornerRadius="4"/>
+                                </Grid>
+                                
+                                <StackPanel Spacing="2">
+                                    <TextBlock Text="Sound Asset (.wav / .ogg - boşsa synth blip)" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                                    <TextBox Text="{Binding TypewriterSound, Mode=TwoWay}" Watermark="Örn: blip_voice.wav veya boş (prosedürel synth)"
+                                             Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}" FontSize="11"/>
+                                </StackPanel>
+
+                                <Grid ColumnDefinitions="*, *">
+                                    <!-- Base Pitch -->
+                                    <StackPanel Grid.Column="0" Spacing="2" Margin="0,0,4,0">
+                                        <Grid ColumnDefinitions="*, Auto">
+                                            <TextBlock Grid.Column="0" Text="Base Pitch" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding VoiceBlipPitch, StringFormat='{}{0:F2}x'}" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource PrimaryText}"/>
+                                        </Grid>
+                                        <Slider Value="{Binding VoiceBlipPitch}" Minimum="0.5" Maximum="2.0" SmallChange="0.05" LargeChange="0.1"/>
+                                    </StackPanel>
+
+                                    <!-- Pitch Variance -->
+                                    <StackPanel Grid.Column="1" Spacing="2" Margin="4,0,0,0">
+                                        <Grid ColumnDefinitions="*, Auto">
+                                            <TextBlock Grid.Column="0" Text="Modulation (±)" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding VoiceBlipVariance, StringFormat='{}{0:F2}'}" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource PrimaryText}"/>
+                                        </Grid>
+                                        <Slider Value="{Binding VoiceBlipVariance}" Minimum="0.0" Maximum="0.30" SmallChange="0.01" LargeChange="0.05"/>
+                                    </StackPanel>
+                                </Grid>
+
+                                <Grid ColumnDefinitions="*, *">
+                                    <!-- Cadence (every N characters) -->
+                                    <StackPanel Grid.Column="0" Spacing="2" Margin="0,0,4,0">
+                                        <Grid ColumnDefinitions="*, Auto">
+                                            <TextBlock Grid.Column="0" Text="Cadence (Her N Karakter)" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding VoiceBlipCadence, StringFormat='{}Her {0}.'}" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource PrimaryText}"/>
+                                        </Grid>
+                                        <Slider Value="{Binding VoiceBlipCadence}" Minimum="1" Maximum="5" SmallChange="1" LargeChange="1"/>
+                                    </StackPanel>
+
+                                    <!-- Blip Volume -->
+                                    <StackPanel Grid.Column="1" Spacing="2" Margin="4,0,0,0">
+                                        <Grid ColumnDefinitions="*, Auto">
+                                            <TextBlock Grid.Column="0" Text="Blip Volume" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding VoiceBlipVolume, StringFormat='{}{0:P0}'}" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource PrimaryText}"/>
+                                        </Grid>
+                                        <Slider Value="{Binding VoiceBlipVolume}" Minimum="0.0" Maximum="1.0" SmallChange="0.05" LargeChange="0.1"/>
+                                    </StackPanel>
+                                </Grid>
+
+                                <Grid ColumnDefinitions="*, *">
+                                    <CheckBox Grid.Column="0" IsChecked="{Binding VoiceBlipSkipPunctuation}" Content="Noktalama/Boşluk Atla" FontSize="10" Foreground="{DynamicResource PrimaryText}"/>
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                        <TextBlock Text="Kanal:" FontSize="10" Foreground="{DynamicResource MutedText}" VerticalAlignment="Center"/>
+                                        <TextBox Text="{Binding VoiceBlipChannel, Mode=TwoWay}" Width="70" FontSize="10" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}"/>
+                                    </StackPanel>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
                     </StackPanel>
                 </Border>
 

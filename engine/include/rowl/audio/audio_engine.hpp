@@ -82,9 +82,17 @@ public:
     float getChannelRms(int channelType, int channelIndex = 0) const;
     void getSpectrumBands(float* outBands, int bandCount) const;
 
+    // Typewriter Character Voice Blips & Audio Effects (Milestone 25)
+    void playVoiceBlip(const std::string& assetPath = "", float pitch = 1.0f, float volume = 1.0f, AudioChannelType channel = AudioChannelType::Voice);
+    uint32_t getVoiceBlipCount() const { return m_voiceBlipCount; }
+    void resetVoiceBlipCount() { m_voiceBlipCount = 0; }
+    float getLastVoiceBlipPitch() const { return m_lastVoiceBlipPitch; }
+
     void shutdown();
 
 private:
+    uint32_t m_voiceBlipCount = 0;
+    float m_lastVoiceBlipPitch = 1.0f;
     float m_masterVolume = 1.0f;
     float m_bgmVolume = 1.0f;
     float m_voiceVolume = 1.0f;

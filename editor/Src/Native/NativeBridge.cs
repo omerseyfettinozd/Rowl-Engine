@@ -242,6 +242,50 @@ namespace RowlEngine.Editor.Native
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
         internal static extern void RowlEngine_GetAudioSpectrum(IntPtr handle, [Out] float[] outBands, int bandCount);
 
+        // ── Typewriter Voice Blips & Audio Effects (Milestone 25) ─────────────
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern void RowlEngine_PlayVoiceBlip(
+            IntPtr handle,
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string? soundPath,
+            float pitch,
+            float volume,
+            int channelType);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern void RowlEngine_SetDialogueVoiceBlip(
+            IntPtr handle,
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string? soundPath,
+            float basePitch,
+            float pitchVariance,
+            int cadence,
+            int skipPunctuation,
+            int channelType);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern IntPtr RowlEngine_GetDialogueVoiceBlipSound(IntPtr handle);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern float RowlEngine_GetDialogueVoiceBlipPitch(IntPtr handle);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern float RowlEngine_GetDialogueVoiceBlipVariance(IntPtr handle);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern int RowlEngine_GetDialogueVoiceBlipCadence(IntPtr handle);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern int RowlEngine_GetDialogueVoiceBlipSkipPunctuation(IntPtr handle);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern int RowlEngine_GetDialogueVoiceBlipChannel(IntPtr handle);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern uint RowlEngine_GetVoiceBlipCount(IntPtr handle);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern void RowlEngine_ResetVoiceBlipCount(IntPtr handle);
+
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
         internal static extern IntPtr RowlEngine_GetScriptRuntimeDiagnosticsJson(IntPtr handle);
 

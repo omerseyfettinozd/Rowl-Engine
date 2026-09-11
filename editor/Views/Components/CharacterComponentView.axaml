@@ -115,6 +115,42 @@
                                 Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" FontSize="10" Padding="4,4" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Margin="2,0,0,0" CornerRadius="4"/>
                     </Grid>
                 </StackPanel>
+
+                <!-- Character Default Voice Blip Settings -->
+                <Border Background="{DynamicResource SurfaceBackground}" CornerRadius="4" Padding="8" Margin="0,4,0,0">
+                    <StackPanel Spacing="6">
+                        <Grid ColumnDefinitions="*, Auto">
+                            <TextBlock Grid.Column="0" Text="🎵 KARAKTER SES TONU (VOICE BLIP)" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource AccentColor}" VerticalAlignment="Center"/>
+                            <Button Grid.Column="1" Content="▶ Önizle" Command="{Binding PreviewVoiceBlipCommand}"
+                                    ToolTip.Tip="Karakter ses tonunu test et"
+                                    FontSize="10" Padding="6,2" Background="{DynamicResource AccentButtonBg}" Foreground="{DynamicResource AccentButtonFg}" CornerRadius="4"/>
+                        </Grid>
+
+                        <StackPanel Spacing="2">
+                            <TextBlock Text="Varsayılan Ses Dosyası (.wav / .ogg - boşsa synth)" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                            <TextBox Text="{Binding VoiceBlipSound, Mode=TwoWay}" Watermark="Örn: voice_evelyn.wav veya boş"
+                                     Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}" FontSize="11"/>
+                        </StackPanel>
+
+                        <Grid ColumnDefinitions="*, *">
+                            <StackPanel Grid.Column="0" Spacing="2" Margin="0,0,4,0">
+                                <Grid ColumnDefinitions="*, Auto">
+                                    <TextBlock Grid.Column="0" Text="Base Pitch" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                                    <TextBlock Grid.Column="1" Text="{Binding VoiceBlipPitch, StringFormat='{}{0:F2}x'}" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource PrimaryText}"/>
+                                </Grid>
+                                <Slider Value="{Binding VoiceBlipPitch}" Minimum="0.5" Maximum="2.0" SmallChange="0.05" LargeChange="0.1"/>
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="1" Spacing="2" Margin="4,0,0,0">
+                                <Grid ColumnDefinitions="*, Auto">
+                                    <TextBlock Grid.Column="0" Text="Cadence" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                                    <TextBlock Grid.Column="1" Text="{Binding VoiceBlipCadence, StringFormat='{}Her {0}.'}" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource PrimaryText}"/>
+                                </Grid>
+                                <Slider Value="{Binding VoiceBlipCadence}" Minimum="1" Maximum="5" SmallChange="1" LargeChange="1"/>
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
+                </Border>
             </StackPanel>
         </StackPanel>
     </Border>

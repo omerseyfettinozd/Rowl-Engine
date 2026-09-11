@@ -438,6 +438,39 @@ void test_audio_engine() {
     }
     TEST_PASS("BGM Stop & Track Reset");
 
+    // Typewriter Voice Blips & Audio Effects (Milestone 25)
+    audio.resetVoiceBlipCount();
+    if (audio.getVoiceBlipCount() != 0) {
+        std::cerr << "Initial voice blip count should be zero" << std::endl;
+        exit(1);
+    }
+
+    // Trigger procedural voice blips with different pitches
+    audio.playVoiceBlip("", 1.0f, 0.85f, Rowl::Audio::AudioChannelType::Voice);
+    if (audio.getVoiceBlipCount() != 1 || std::abs(audio.getLastVoiceBlipPitch() - 1.0f) > 0.001f) {
+        std::cerr << "Voice blip count or pitch mismatch after first blip" << std::endl;
+        exit(1);
+    }
+
+    audio.playVoiceBlip("", 1.35f, 0.90f, Rowl::Audio::AudioChannelType::Sfx);
+    if (audio.getVoiceBlipCount() != 2 || std::abs(audio.getLastVoiceBlipPitch() - 1.35f) > 0.001f) {
+        std::cerr << "Voice blip count or pitch mismatch after second blip" << std::endl;
+        exit(1);
+    }
+
+    // Verify telemetry deflection from voice blip
+    if (audio.getChannelPeak(1) <= 0.0f && audio.getChannelPeak(2) <= 0.0f) {
+        std::cerr << "Voice blip should deflect audio channel peak telemetry" << std::endl;
+        exit(1);
+    }
+
+    audio.resetVoiceBlipCount();
+    if (audio.getVoiceBlipCount() != 0) {
+        std::cerr << "Reset voice blip count failed" << std::endl;
+        exit(1);
+    }
+    TEST_PASS("Typewriter Character Voice Blips, Pitch Modulation & Telemetry");
+
     audio.shutdown();
     if (audio.isInitialized()) exit(1);
     TEST_PASS("Audio Engine Clean Shutdown");
@@ -1138,6 +1171,62 @@ void test_native_c_api() {
     }
     RowlEngine_Step(handle, 0.016f);
     TEST_PASS("Milestone 24: RowlEngine_SetBackgroundParallax & Background Parallax/Opacity C-API");
+
+    // Milestone 25: Typewriter Voice Blips & Dialogue Audio Effects C-API Verification
+    RowlEngine_ResetVoiceBlipCount(handle);
+    if (RowlEngine_GetVoiceBlipCount(handle) != 0) {
+        std::cerr << "RowlEngine_ResetVoiceBlipCount failed" << std::endl;
+        exit(1);
+    }
+    RowlEngine_PlayVoiceBlip(handle, "", 1.25f, 0.8f, 1);
+    if (RowlEngine_GetVoiceBlipCount(handle) != 1) {
+        std::cerr << "RowlEngine_PlayVoiceBlip failed to increment blip count" << std::endl;
+        exit(1);
+    }
+    RowlEngine_SetDialogueVoiceBlip(handle, "blip.wav", 1.15f, 0.08f, 2, 1, 1);
+    if (std::string(RowlEngine_GetDialogueVoiceBlipSound(handle)) != "blip.wav" ||
+        std::abs(RowlEngine_GetDialogueVoiceBlipPitch(handle) - 1.15f) > 0.001f ||
+        std::abs(RowlEngine_GetDialogueVoiceBlipVariance(handle) - 0.08f) > 0.001f ||
+        RowlEngine_GetDialogueVoiceBlipCadence(handle) != 2 ||
+        RowlEngine_GetDialogueVoiceBlipSkipPunctuation(handle) != 1) {
+        std::cerr << "RowlEngine_SetDialogueVoiceBlip failed to set dialogue voice blip parameters" << std::endl;
+        exit(1);
+    }
+
+    const char* compJsonVoiceBlip = R"([
+        {"type":"dialogue","id":"d_voice","enabled":true,"data":{
+            "speaker":"Evelyn",
+            "dialogue":"Testing typewriter voice blip effects! Amazing...",
+            "typewriter_enabled":true,
+            "typewriter_speed":50.0,
+            "voice_blip_sound":"",
+            "voice_blip_pitch":1.2,
+            "voice_blip_variance":0.05,
+            "voice_blip_cadence":1,
+            "voice_blip_skip_punctuation":true,
+            "voice_blip_volume":0.8,
+            "voice_blip_channel":1
+        }}
+    ])";
+    RowlEngine_SetPlayState(handle, 1);
+    RowlEngine_ResetVoiceBlipCount(handle);
+    RowlEngine_UpdateSceneFromJson(handle, compJsonVoiceBlip);
+    if (std::string(RowlEngine_GetSpeaker(handle)) != "Evelyn" ||
+        RowlEngine_GetDialogueVoiceBlipCadence(handle) != 1 ||
+        RowlEngine_GetDialogueVoiceBlipSkipPunctuation(handle) != 1 ||
+        std::abs(RowlEngine_GetDialogueVoiceBlipPitch(handle) - 1.2f) > 0.001f) {
+        std::cerr << "RowlEngine_UpdateSceneFromJson failed to parse voice blip configuration" << std::endl;
+        exit(1);
+    }
+    // Step forward 100ms to reveal characters and trigger voice blips
+    RowlEngine_Step(handle, 0.1f);
+    if (RowlEngine_GetVoiceBlipCount(handle) == 0) {
+        std::cerr << "Typewriter progression did not trigger voice blips" << std::endl;
+        exit(1);
+    }
+    RowlEngine_SetPlayState(handle, 0);
+    TEST_PASS("Milestone 25: Typewriter Voice Blips & Dialogue Audio Effects C-API");
+
 
     // Script components on the same node deliberately share lifecycle names.
     // The runtime must dispatch both callbacks and tear them down in reverse

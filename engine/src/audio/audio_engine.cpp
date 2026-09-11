@@ -199,6 +199,8 @@ bool AudioEngine::initialize() {
     m_sfxSampleOffset = 0;
     m_isSfxPlaying = false;
     m_lastSfxData.clear();
+    m_voiceBlipCount = 0;
+    m_lastVoiceBlipPitch = 1.0f;
 
     // Initialize SDL3 Audio subsystem
     if (Rowl::Platform::SdlSubsystemLease::acquire(SDL_INIT_AUDIO)) {
@@ -786,6 +788,139 @@ void AudioEngine::getSpectrumBands(float* outBands, int bandCount) const {
     if (!outBands || bandCount <= 0) return;
     for (int i = 0; i < bandCount; ++i) {
         outBands[i] = (i < 4) ? m_spectrumBands[i] : 0.0f;
+    }
+}
+
+void AudioEngine::playVoiceBlip(const std::string& assetPath, float pitch, float volume, AudioChannelType channel) {
+    if (!m_initialized) return;
+
+    if (!std::isfinite(pitch) || pitch <= 0.01f) pitch = 1.0f;
+    if (!std::isfinite(volume)) volume = 0.85f;
+    volume = std::clamp(volume, 0.0f, 1.0f);
+    pitch = std::clamp(pitch, 0.25f, 4.0f);
+
+    m_voiceBlipCount++;
+    m_lastVoiceBlipPitch = pitch;
+
+    // Immediately deflect channel telemetry so VU meters and telemetry readers reflect the blip
+    float effectiveVol = volume * m_masterVolume * (channel == AudioChannelType::Sfx ? m_sfxVolume : m_voiceVolume);
+    ChannelTelemetry& tel = (channel == AudioChannelType::Sfx) ? m_telemetrySfx : m_telemetryVoice;
+    tel.peakL = std::max(tel.peakL, effectiveVol);
+    tel.peakR = std::max(tel.peakR, effectiveVol);
+    tel.rmsL = std::max(tel.rmsL, effectiveVol * 0.707f);
+    tel.rmsR = std::max(tel.rmsR, effectiveVol * 0.707f);
+
+    if (!m_deviceAvailable) {
+        return;
+    }
+
+    SDL_AudioStream* targetStream = (channel == AudioChannelType::Sfx) ? m_sfxStream : m_voiceStream;
+    if (!targetStream) return;
+
+    // 1. Try loading custom audio asset if provided
+    bool assetPlayed = false;
+    if (!assetPath.empty()) {
+        std::vector<std::string> vfsCandidates = {
+            assetPath,
+            "Assets/" + assetPath,
+            "Assets/audio/" + assetPath,
+            "audio/" + assetPath
+        };
+        for (const auto& candidate : vfsCandidates) {
+            if (vfs().exists(candidate)) {
+                std::vector<uint8_t> bytes;
+                SDL_AudioSpec spec{};
+                Uint8* audioBuf = nullptr;
+                Uint32 audioLen = 0;
+                bool loaded = false;
+
+                if (hasOggExtension(candidate)) {
+                    auto stream = vfs().openReadStream(candidate);
+                    if (stream && decodeOggVorbis(*stream, spec, bytes, m_lastError)) {
+                        audioBuf = static_cast<Uint8*>(SDL_malloc(bytes.size()));
+                        if (audioBuf) {
+                            std::memcpy(audioBuf, bytes.data(), bytes.size());
+                            audioLen = static_cast<Uint32>(bytes.size());
+                            loaded = true;
+                        }
+                    }
+                } else {
+                    bytes = vfs().readBytes(candidate);
+                    if (!bytes.empty() && bytes.size() <= kMaxEncodedAudioBytes) {
+                        SDL_IOStream* io = SDL_IOFromConstMem(bytes.data(), bytes.size());
+                        if (io) {
+                            loaded = SDL_LoadWAV_IO(io, true, &spec, &audioBuf, &audioLen);
+                        }
+                    }
+                }
+
+                if (loaded && audioBuf && audioLen > 0) {
+                    SDL_AudioSpec floatSpec{};
+                    floatSpec.format = SDL_AUDIO_F32;
+                    floatSpec.channels = spec.channels;
+                    floatSpec.freq = spec.freq;
+                    Uint8* floatBuffer = nullptr;
+                    int floatLength = 0;
+                    if (SDL_ConvertAudioSamples(&spec, audioBuf, static_cast<int>(audioLen),
+                                                &floatSpec, &floatBuffer, &floatLength) &&
+                        floatBuffer && floatLength > 0) {
+                        SDL_ClearAudioStream(targetStream);
+                        SDL_SetAudioStreamFormat(targetStream, &floatSpec, nullptr);
+                        SDL_SetAudioStreamFrequencyRatio(targetStream, pitch);
+                        SDL_PutAudioStreamData(targetStream, floatBuffer, floatLength);
+                        SDL_ResumeAudioStreamDevice(targetStream);
+                        SDL_free(floatBuffer);
+                        assetPlayed = true;
+                    }
+                    SDL_free(audioBuf);
+                    break;
+                }
+            }
+        }
+    }
+
+    // 2. If no asset played, generate procedural synthesis voice blip
+    if (!assetPlayed) {
+        constexpr int kBlipSampleRate = 48000;
+        constexpr float kBlipDuration = 0.040f; // 40ms short expressive blip
+        const size_t totalSamples = static_cast<size_t>(kBlipSampleRate * kBlipDuration);
+        std::vector<float> blipPcm(totalSamples);
+        const float baseFreq = 440.0f * pitch;
+        constexpr float kAttackDuration = 0.005f; // 5ms attack
+        const size_t attackSamples = static_cast<size_t>(kBlipSampleRate * kAttackDuration);
+
+        for (size_t i = 0; i < totalSamples; ++i) {
+            float t = static_cast<float>(i) / static_cast<float>(kBlipSampleRate);
+            float envelope = 1.0f;
+            if (i < attackSamples) {
+                envelope = static_cast<float>(i) / static_cast<float>(attackSamples);
+            } else {
+                float decayProgress = static_cast<float>(i - attackSamples) / static_cast<float>(totalSamples - attackSamples);
+                envelope = std::exp(-5.0f * decayProgress);
+            }
+            float phase = 2.0f * 3.14159265358979323846f * baseFreq * t;
+            // Warm voice blip synthesis (sine fundamental + 2nd harmonic)
+            float sample = (std::sin(phase) * 0.75f + std::sin(phase * 2.0f) * 0.25f) * envelope * volume;
+            blipPcm[i] = std::clamp(sample, -1.0f, 1.0f);
+        }
+
+        SDL_AudioSpec blipSpec{};
+        blipSpec.format = SDL_AUDIO_F32;
+        blipSpec.channels = 1;
+        blipSpec.freq = kBlipSampleRate;
+
+        SDL_ClearAudioStream(targetStream);
+        SDL_SetAudioStreamFormat(targetStream, &blipSpec, nullptr);
+        SDL_SetAudioStreamFrequencyRatio(targetStream, 1.0f);
+        SDL_PutAudioStreamData(targetStream, blipPcm.data(), static_cast<int>(blipPcm.size() * sizeof(float)));
+        SDL_ResumeAudioStreamDevice(targetStream);
+
+        if (channel == AudioChannelType::Sfx) {
+            m_lastSfxData.assign(reinterpret_cast<const uint8_t*>(blipPcm.data()),
+                                 reinterpret_cast<const uint8_t*>(blipPcm.data() + blipPcm.size()));
+            m_isSfxPlaying = true;
+            m_sfxSampleOffset = 0;
+        }
     }
 }
 

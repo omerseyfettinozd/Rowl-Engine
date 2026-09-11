@@ -59,6 +59,25 @@ namespace RowlEngine.Editor.ViewModels.Components
         [ObservableProperty]
         private Bitmap? _spriteBitmap;
 
+        // Character Default Voice Blip Settings (Milestone 25)
+        [ObservableProperty]
+        private string _voiceBlipSound = string.Empty;
+
+        [ObservableProperty]
+        private double _voiceBlipPitch = 1.0;
+
+        [ObservableProperty]
+        private double _voiceBlipVariance = 0.08;
+
+        [ObservableProperty]
+        private int _voiceBlipCadence = 1;
+
+        [CommunityToolkit.Mvvm.Input.RelayCommand]
+        public void PreviewVoiceBlip()
+        {
+            DialogueComponentViewModel.GlobalPreviewVoiceBlipAction?.Invoke(VoiceBlipSound, (float)VoiceBlipPitch, 0.85f, 1);
+        }
+
         // ── Scale & Dimension Sync ──
         partial void OnScaleChanged(double value)
         {
@@ -192,6 +211,10 @@ namespace RowlEngine.Editor.ViewModels.Components
                 ScaleY = 1.0;
                 Rotation = 0.0;
                 MaintainAspectRatio = true;
+                VoiceBlipSound = string.Empty;
+                VoiceBlipPitch = 1.0;
+                VoiceBlipVariance = 0.08;
+                VoiceBlipCadence = 1;
             }
             finally
             {
@@ -221,7 +244,11 @@ namespace RowlEngine.Editor.ViewModels.Components
                 ["scale_x"] = ScaleX,
                 ["scale_y"] = ScaleY,
                 ["rotation"] = Rotation,
-                ["maintain_aspect_ratio"] = MaintainAspectRatio
+                ["maintain_aspect_ratio"] = MaintainAspectRatio,
+                ["voice_blip_sound"] = VoiceBlipSound,
+                ["voice_blip_pitch"] = VoiceBlipPitch,
+                ["voice_blip_variance"] = VoiceBlipVariance,
+                ["voice_blip_cadence"] = VoiceBlipCadence
             };
         }
 
@@ -245,6 +272,16 @@ namespace RowlEngine.Editor.ViewModels.Components
                 else ScaleY = Scale;
                 if (data.TryGetValue("rotation", out var rv)) Rotation = Convert.ToDouble(rv);
                 if (data.TryGetValue("maintain_aspect_ratio", out var marv)) MaintainAspectRatio = Convert.ToBoolean(marv);
+                if (data.TryGetValue("voice_blip_sound", out var vbs) && vbs is string vbSound)
+                    VoiceBlipSound = vbSound;
+                else if (data.TryGetValue("typewriter_sound", out var tws) && tws is string twSound)
+                    VoiceBlipSound = twSound;
+                if (data.TryGetValue("voice_blip_pitch", out var vbp) && vbp != null)
+                    VoiceBlipPitch = Convert.ToDouble(vbp);
+                if (data.TryGetValue("voice_blip_variance", out var vbv) && vbv != null)
+                    VoiceBlipVariance = Convert.ToDouble(vbv);
+                if (data.TryGetValue("voice_blip_cadence", out var vbc) && vbc != null)
+                    VoiceBlipCadence = Convert.ToInt32(vbc);
             }
             finally
             {

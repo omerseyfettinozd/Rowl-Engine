@@ -34,6 +34,12 @@ struct CharacterRenderData {
     float rotation = 0.0f;
     float scaleX = 1.0f;
     float scaleY = 1.0f;
+
+    // Character Default Voice Blip Settings (Milestone 25)
+    std::string voiceBlipSound = "";
+    float voiceBlipPitch = 1.0f;
+    float voiceBlipPitchVariance = 0.08f;
+    int voiceBlipCadence = 1;
 };
 
 struct DialogueRenderData {
@@ -53,6 +59,16 @@ struct DialogueRenderData {
     float elapsedTypewriterTime = 0.0f; // seconds
     bool autoAdvance = false;
     float autoAdvanceDelay = 2.0f;
+
+    // Typewriter Voice Blips & Audio Effects (Milestone 25)
+    std::string typewriterSound = "";
+    float voiceBlipPitch = 1.0f;
+    float voiceBlipPitchVariance = 0.08f;
+    int voiceBlipCadence = 1;
+    bool voiceBlipSkipPunctuation = true;
+    int voiceBlipChannel = 1; // 0 = Bgm, 1 = Voice, 2 = Sfx
+    float voiceBlipVolume = 0.85f;
+    size_t lastBlipCodepointIndex = 0;
 
     // Typography & Colors
     float fontSize = 24.0f;

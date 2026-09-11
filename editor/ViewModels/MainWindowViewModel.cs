@@ -524,6 +524,12 @@ namespace RowlEngine.Editor.ViewModels
                 AppendLog("⏹ Ses önizlemesi durduruldu.");
             };
 
+            DialogueComponentViewModel.GlobalPreviewVoiceBlipAction = (soundPath, pitch, volume, channelType) =>
+            {
+                EngineHost.PlayVoiceBlip(soundPath, pitch, volume, channelType);
+                AppendLog($"💬 Karakter ses blip önizlemesi: '{soundPath}' (Pitch: {pitch:F2}x, Vol: {volume:P0}, Kanal: {channelType})");
+            };
+
             EngineHost.AudioTelemetryPolled += (pL, pR, rL, rR) =>
             {
                 LivePreviewViewModel.UpdateAudioTelemetry(pL, pR, rL, rR);

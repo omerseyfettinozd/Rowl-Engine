@@ -358,6 +358,38 @@ ROWL_API float RowlEngine_GetAudioChannelRms(RowlEngineHandle handle, int channe
 /** Fills outBands with up to bandCount frequency band estimates (0: Bass, 1: Mid-Low, 2: Mid-High, 3: Treble). */
 ROWL_API void RowlEngine_GetAudioSpectrum(RowlEngineHandle handle, float* outBands, int bandCount);
 
+/* ── Typewriter Voice Blips & Audio Effects (Milestone 25) ───────────────── */
+
+/** Plays a voice blip preview or trigger. If soundPath is NULL or empty, generates procedural synth blip. */
+ROWL_API void RowlEngine_PlayVoiceBlip(RowlEngineHandle handle, const char* soundPath, float pitch, float volume, int channelType);
+
+/** Configures dialogue typewriter voice blip parameters on active scene dialogue. */
+ROWL_API void RowlEngine_SetDialogueVoiceBlip(RowlEngineHandle handle, const char* soundPath, float basePitch, float pitchVariance, int cadence, int skipPunctuation, int channelType);
+
+/** Returns active dialogue voice blip sound path (engine-owned string). */
+ROWL_API const char* RowlEngine_GetDialogueVoiceBlipSound(RowlEngineHandle handle);
+
+/** Returns active dialogue voice blip base pitch multiplier. */
+ROWL_API float RowlEngine_GetDialogueVoiceBlipPitch(RowlEngineHandle handle);
+
+/** Returns active dialogue voice blip pitch variance. */
+ROWL_API float RowlEngine_GetDialogueVoiceBlipVariance(RowlEngineHandle handle);
+
+/** Returns active dialogue voice blip cadence (characters per blip). */
+ROWL_API int RowlEngine_GetDialogueVoiceBlipCadence(RowlEngineHandle handle);
+
+/** Returns 1 if dialogue voice blips skip punctuation and whitespace, 0 otherwise. */
+ROWL_API int RowlEngine_GetDialogueVoiceBlipSkipPunctuation(RowlEngineHandle handle);
+
+/** Returns active dialogue voice blip audio channel (1 = Voice, 2 = Sfx). */
+ROWL_API int RowlEngine_GetDialogueVoiceBlipChannel(RowlEngineHandle handle);
+
+/** Returns cumulative total of voice blips triggered by the engine. */
+ROWL_API uint32_t RowlEngine_GetVoiceBlipCount(RowlEngineHandle handle);
+
+/** Resets cumulative voice blip counter to zero. */
+ROWL_API void RowlEngine_ResetVoiceBlipCount(RowlEngineHandle handle);
+
 /**
  * Returns a JSON array of current script-component diagnostics. The result is
  * engine-owned and valid until the next diagnostics query on the same thread.

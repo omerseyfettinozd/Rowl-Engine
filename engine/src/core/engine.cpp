@@ -5,6 +5,7 @@
 #include "rowl/audio/audio_engine.hpp"
 #include "rowl/scripting/lua_sandbox.hpp"
 #include "rowl/render/aspect_guardian.hpp"
+#include "rowl/render/font_renderer.hpp"
 #include <chrono>
 #include <thread>
 #include <cmath>
@@ -32,6 +33,28 @@ constexpr std::size_t kMaxComponentDataDepth = 32;
 constexpr double kMaxComponentNumericMagnitude = 1'000'000.0;
 
 namespace {
+
+bool isPunctuationOrWhitespace(uint32_t cp) {
+    if (cp <= 32) return true; // Whitespace & control characters
+    switch (cp) {
+        case '.': case ',': case '!': case '?': case ';': case ':':
+        case '-': case '_': case '"': case '\'': case '`': case '~':
+        case '(': case ')': case '[': case ']': case '{': case '}':
+        case '<': case '>': case '/': case '\\': case '|': case '@':
+        case '#': case '$': case '%': case '^': case '&': case '*':
+        case '+': case '=':
+        case 0x2026: // …
+        case 0x2014: // —
+        case 0x2013: // –
+        case 0x201C: // “
+        case 0x201D: // ”
+        case 0x2018: // ‘
+        case 0x2019: // ’
+            return true;
+        default:
+            return false;
+    }
+}
 
 bool isSafeComponentData(const nlohmann::json& value, std::size_t depth = 0) {
     if (depth > kMaxComponentDataDepth) return false;
@@ -207,8 +230,18 @@ void Engine::setPlayState(bool isPlaying) {
     m_activeDialogueData.isPlaying = isPlaying;
     if (isPlaying) {
         m_activeDialogueData.elapsedTypewriterTime = 0.0f;
+        m_activeDialogueData.lastBlipCodepointIndex = 0;
+        for (auto& dlg : m_activeDialogues) {
+            dlg.elapsedTypewriterTime = 0.0f;
+            dlg.lastBlipCodepointIndex = 0;
+        }
     } else {
         m_activeDialogueData.elapsedTypewriterTime = 9999.0f;
+        m_activeDialogueData.lastBlipCodepointIndex = 99999;
+        for (auto& dlg : m_activeDialogues) {
+            dlg.elapsedTypewriterTime = 9999.0f;
+            dlg.lastBlipCodepointIndex = 99999;
+        }
     }
     ROWL_LOG_INFO("Engine Play State set to: " + std::string(isPlaying ? "PLAYING" : "STOPPED"));
 }
@@ -256,11 +289,19 @@ void Engine::resetToStartNode() {
             );
         }
         if (m_isPlaying) {
-            for (auto& dlg : m_activeDialogues) dlg.elapsedTypewriterTime = 0.0f;
+            for (auto& dlg : m_activeDialogues) {
+                dlg.elapsedTypewriterTime = 0.0f;
+                dlg.lastBlipCodepointIndex = 0;
+            }
             m_activeDialogueData.elapsedTypewriterTime = 0.0f;
+            m_activeDialogueData.lastBlipCodepointIndex = 0;
         } else {
-            for (auto& dlg : m_activeDialogues) dlg.elapsedTypewriterTime = 9999.0f;
+            for (auto& dlg : m_activeDialogues) {
+                dlg.elapsedTypewriterTime = 9999.0f;
+                dlg.lastBlipCodepointIndex = 99999;
+            }
             m_activeDialogueData.elapsedTypewriterTime = 9999.0f;
+            m_activeDialogueData.lastBlipCodepointIndex = 99999;
         }
         ROWL_LOG_INFO("Engine Reset to Start Node #" + std::to_string(m_currentNodeId));
     }
@@ -301,8 +342,12 @@ void Engine::advanceToNextNode(uint32_t choiceIndex) {
     }
 
     if (anyTyping) {
-        for (auto& dlg : m_activeDialogues) dlg.elapsedTypewriterTime = 9999.0f;
+        for (auto& dlg : m_activeDialogues) {
+            dlg.elapsedTypewriterTime = 9999.0f;
+            dlg.lastBlipCodepointIndex = 99999;
+        }
         m_activeDialogueData.elapsedTypewriterTime = 9999.0f;
+        m_activeDialogueData.lastBlipCodepointIndex = 99999;
         return;
     }
 
@@ -353,11 +398,19 @@ void Engine::advanceToNextNode(uint32_t choiceIndex) {
                 );
             }
             if (m_isPlaying) {
-                for (auto& dlg : m_activeDialogues) dlg.elapsedTypewriterTime = 0.0f;
+                for (auto& dlg : m_activeDialogues) {
+                    dlg.elapsedTypewriterTime = 0.0f;
+                    dlg.lastBlipCodepointIndex = 0;
+                }
                 m_activeDialogueData.elapsedTypewriterTime = 0.0f;
+                m_activeDialogueData.lastBlipCodepointIndex = 0;
             } else {
-                for (auto& dlg : m_activeDialogues) dlg.elapsedTypewriterTime = 9999.0f;
+                for (auto& dlg : m_activeDialogues) {
+                    dlg.elapsedTypewriterTime = 9999.0f;
+                    dlg.lastBlipCodepointIndex = 99999;
+                }
                 m_activeDialogueData.elapsedTypewriterTime = 9999.0f;
+                m_activeDialogueData.lastBlipCodepointIndex = 99999;
             }
             ROWL_LOG_INFO("▶ Active Node #" + std::to_string(m_currentNodeId) +
                           " (" + nextNode.speaker + "): " + nextNode.dialogue);
@@ -647,11 +700,25 @@ void Engine::updateSceneFromComponents(const std::string& componentsJson) {
                 dlgData.borderThickness = data.value("border_thickness", 2.0f);
                 dlgData.cornerRadius = data.value("corner_radius", 8.0f);
                 dlgData.customBoxTexture = data.value("custom_box_texture", "");
+                dlgData.typewriterSound = data.value("typewriter_sound", data.value("voice_blip_sound", ""));
+                dlgData.voiceBlipPitch = data.value("voice_blip_pitch", 1.0f);
+                dlgData.voiceBlipPitchVariance = data.value("voice_blip_variance", 0.08f);
+                dlgData.voiceBlipCadence = std::max(1, data.value("voice_blip_cadence", 1));
+                dlgData.voiceBlipSkipPunctuation = data.value("voice_blip_skip_punctuation", true);
+                std::string blipChanStr = data.value("voice_blip_channel_name", "");
+                if (blipChanStr == "Sfx" || blipChanStr == "sfx") {
+                    dlgData.voiceBlipChannel = 2;
+                } else {
+                    dlgData.voiceBlipChannel = data.value("voice_blip_channel", 1);
+                }
+                dlgData.voiceBlipVolume = data.value("voice_blip_volume", 0.85f);
                 dlgData.isPlaying = m_isPlaying;
                 if (m_isPlaying) {
                     dlgData.elapsedTypewriterTime = 0.0f;
+                    dlgData.lastBlipCodepointIndex = 0;
                 } else {
                     dlgData.elapsedTypewriterTime = 9999.0f;
+                    dlgData.lastBlipCodepointIndex = 99999;
                 }
 
                 m_activeDialogues.push_back(dlgData);
@@ -698,6 +765,10 @@ void Engine::updateSceneFromComponents(const std::string& componentsJson) {
                     cd.rotation = data.value("rotation", 0.0f);
                     cd.scaleX = data.value("scale_x", data.value("scale", 1.0f));
                     cd.scaleY = data.value("scale_y", data.value("scale", 1.0f));
+                    cd.voiceBlipSound = data.value("voice_blip_sound", data.value("typewriter_sound", ""));
+                    cd.voiceBlipPitch = data.value("voice_blip_pitch", 1.0f);
+                    cd.voiceBlipPitchVariance = data.value("voice_blip_variance", 0.08f);
+                    cd.voiceBlipCadence = std::max(1, data.value("voice_blip_cadence", 1));
                     m_activeCharacters.push_back(cd);
 
                     // Set legacy single-character fallback to first character
@@ -896,6 +967,24 @@ void Engine::updateSceneFromComponents(const std::string& componentsJson) {
                 m_gameState, m_currentNodeId, m_activeBackground,
                 m_audio->getCurrentBgmPath(), m_audio->getBgmVolume(),
                 m_audio->isBgmPlaying(), filter);
+        }
+
+        // Sync voice blip default settings from character if dialogue sound is empty
+        for (auto& dlg : m_activeDialogues) {
+            if (dlg.typewriterSound.empty()) {
+                for (const auto& ch : m_activeCharacters) {
+                    if (!ch.voiceBlipSound.empty()) {
+                        dlg.typewriterSound = ch.voiceBlipSound;
+                        dlg.voiceBlipPitch = ch.voiceBlipPitch;
+                        dlg.voiceBlipPitchVariance = ch.voiceBlipPitchVariance;
+                        dlg.voiceBlipCadence = ch.voiceBlipCadence;
+                        break;
+                    }
+                }
+            }
+        }
+        if (!m_activeDialogues.empty()) {
+            m_activeDialogueData = m_activeDialogues[0];
         }
 
         recordActiveDialogueHistory();
@@ -1391,13 +1480,87 @@ void Engine::step(float deltaTime) {
 
     for (auto& dlg : m_activeDialogues) {
         dlg.isPlaying = m_isPlaying;
-        if (m_isPlaying && dlg.typewriterEnabled) {
+        if (m_isPlaying && dlg.typewriterEnabled && dlg.textSpeed > 0) {
             dlg.elapsedTypewriterTime += deltaTime * m_textSpeedMultiplier;
+
+            size_t totalCodepoints = Rowl::Render::FontRenderer::countCodepoints(dlg.dialogue);
+            float msPerChar = static_cast<float>(dlg.textSpeed);
+            float elapsedMs = dlg.elapsedTypewriterTime * 1000.0f;
+            size_t currentVisible = static_cast<size_t>(elapsedMs / msPerChar);
+            if (currentVisible > totalCodepoints) currentVisible = totalCodepoints;
+
+            if (currentVisible > dlg.lastBlipCodepointIndex && m_audio) {
+                size_t startChar = dlg.lastBlipCodepointIndex;
+                size_t endChar = currentVisible;
+                dlg.lastBlipCodepointIndex = currentVisible;
+
+                for (size_t charIdx = startChar; charIdx < endChar; ++charIdx) {
+                    if (dlg.voiceBlipCadence > 1 && (charIdx % dlg.voiceBlipCadence) != 0) {
+                        continue;
+                    }
+
+                    size_t byteIdx = 0;
+                    uint32_t cp = 0;
+                    for (size_t c = 0; c <= charIdx && byteIdx < dlg.dialogue.length(); ++c) {
+                        cp = Rowl::Render::FontRenderer::getNextCodepoint(dlg.dialogue, byteIdx);
+                    }
+
+                    if (dlg.voiceBlipSkipPunctuation && isPunctuationOrWhitespace(cp)) {
+                        continue;
+                    }
+
+                    float hash = static_cast<float>(((charIdx * 2654435761u) ^ (cp * 2246822519u)) % 1000) / 1000.0f;
+                    float pitchMod = dlg.voiceBlipPitch + (hash * 2.0f - 1.0f) * dlg.voiceBlipPitchVariance;
+                    pitchMod = std::clamp(pitchMod, 0.25f, 4.0f);
+
+                    Rowl::Audio::AudioChannelType ch = (dlg.voiceBlipChannel == 2)
+                        ? Rowl::Audio::AudioChannelType::Sfx
+                        : Rowl::Audio::AudioChannelType::Voice;
+
+                    m_audio->playVoiceBlip(dlg.typewriterSound, pitchMod, dlg.voiceBlipVolume, ch);
+                    break;
+                }
+            }
         }
     }
     m_activeDialogueData.isPlaying = m_isPlaying;
-    if (m_isPlaying && m_activeDialogueData.typewriterEnabled) {
+    if (m_isPlaying && m_activeDialogueData.typewriterEnabled && m_activeDialogueData.textSpeed > 0) {
         m_activeDialogueData.elapsedTypewriterTime += deltaTime * m_textSpeedMultiplier;
+        if (m_activeDialogues.empty() && m_audio) {
+            size_t totalCodepoints = Rowl::Render::FontRenderer::countCodepoints(m_activeDialogueData.dialogue);
+            float msPerChar = static_cast<float>(m_activeDialogueData.textSpeed);
+            float elapsedMs = m_activeDialogueData.elapsedTypewriterTime * 1000.0f;
+            size_t currentVisible = static_cast<size_t>(elapsedMs / msPerChar);
+            if (currentVisible > totalCodepoints) currentVisible = totalCodepoints;
+
+            if (currentVisible > m_activeDialogueData.lastBlipCodepointIndex) {
+                size_t startChar = m_activeDialogueData.lastBlipCodepointIndex;
+                size_t endChar = currentVisible;
+                m_activeDialogueData.lastBlipCodepointIndex = currentVisible;
+
+                for (size_t charIdx = startChar; charIdx < endChar; ++charIdx) {
+                    if (m_activeDialogueData.voiceBlipCadence > 1 && (charIdx % m_activeDialogueData.voiceBlipCadence) != 0) {
+                        continue;
+                    }
+                    size_t byteIdx = 0;
+                    uint32_t cp = 0;
+                    for (size_t c = 0; c <= charIdx && byteIdx < m_activeDialogueData.dialogue.length(); ++c) {
+                        cp = Rowl::Render::FontRenderer::getNextCodepoint(m_activeDialogueData.dialogue, byteIdx);
+                    }
+                    if (m_activeDialogueData.voiceBlipSkipPunctuation && isPunctuationOrWhitespace(cp)) {
+                        continue;
+                    }
+                    float hash = static_cast<float>(((charIdx * 2654435761u) ^ (cp * 2246822519u)) % 1000) / 1000.0f;
+                    float pitchMod = m_activeDialogueData.voiceBlipPitch + (hash * 2.0f - 1.0f) * m_activeDialogueData.voiceBlipPitchVariance;
+                    pitchMod = std::clamp(pitchMod, 0.25f, 4.0f);
+                    Rowl::Audio::AudioChannelType ch = (m_activeDialogueData.voiceBlipChannel == 2)
+                        ? Rowl::Audio::AudioChannelType::Sfx
+                        : Rowl::Audio::AudioChannelType::Voice;
+                    m_audio->playVoiceBlip(m_activeDialogueData.typewriterSound, pitchMod, m_activeDialogueData.voiceBlipVolume, ch);
+                    break;
+                }
+            }
+        }
     }
 
     bool autoAdvanceEnabled = false;
@@ -1878,6 +2041,42 @@ bool Engine::executeScript(const std::string& scriptCode) {
     }
     m_context->setError(RuntimeErrorCode::StateError, "Lua sandbox is not initialized", "execute_script", "");
     return false;
+}
+
+void Engine::setDialogueVoiceBlip(const std::string& soundPath, float basePitch, float pitchVariance, int cadence, bool skipPunctuation, int channelType) {
+    m_activeDialogueData.typewriterSound = soundPath;
+    m_activeDialogueData.voiceBlipPitch = std::clamp(basePitch, 0.25f, 4.0f);
+    m_activeDialogueData.voiceBlipPitchVariance = std::clamp(pitchVariance, 0.0f, 1.0f);
+    m_activeDialogueData.voiceBlipCadence = std::max(1, cadence);
+    m_activeDialogueData.voiceBlipSkipPunctuation = skipPunctuation;
+    m_activeDialogueData.voiceBlipChannel = (channelType == 2) ? 2 : 1;
+    for (auto& dlg : m_activeDialogues) {
+        dlg.typewriterSound = m_activeDialogueData.typewriterSound;
+        dlg.voiceBlipPitch = m_activeDialogueData.voiceBlipPitch;
+        dlg.voiceBlipPitchVariance = m_activeDialogueData.voiceBlipPitchVariance;
+        dlg.voiceBlipCadence = m_activeDialogueData.voiceBlipCadence;
+        dlg.voiceBlipSkipPunctuation = m_activeDialogueData.voiceBlipSkipPunctuation;
+        dlg.voiceBlipChannel = m_activeDialogueData.voiceBlipChannel;
+    }
+}
+
+void Engine::playVoiceBlip(const std::string& soundPath, float pitch, float volume, int channelType) {
+    if (m_audio) {
+        Rowl::Audio::AudioChannelType ch = (channelType == 2)
+            ? Rowl::Audio::AudioChannelType::Sfx
+            : Rowl::Audio::AudioChannelType::Voice;
+        m_audio->playVoiceBlip(soundPath, pitch, volume, ch);
+    }
+}
+
+uint32_t Engine::getVoiceBlipCount() const {
+    return m_audio ? m_audio->getVoiceBlipCount() : 0;
+}
+
+void Engine::resetVoiceBlipCount() {
+    if (m_audio) {
+        m_audio->resetVoiceBlipCount();
+    }
 }
 
 } // namespace Rowl::Core

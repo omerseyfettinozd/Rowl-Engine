@@ -36,6 +36,9 @@ public:
     /// Returns total number of UTF-8 codepoints in the string.
     static size_t countCodepoints(const std::string& utf8Text);
 
+    /// Extracts the next UTF-8 codepoint from the string and advances byteIndex.
+    static uint32_t getNextCodepoint(const std::string& str, size_t& byteIndex);
+
     /// Renders UTF-8 text directly to SDL_Surface with anti-aliasing, wrapping, alignment, and typewriter limit.
     void renderText(
         SDL_Surface* targetSurface,
@@ -50,7 +53,6 @@ public:
     );
 
 private:
-    static uint32_t getNextCodepoint(const std::string& str, size_t& byteIndex);
     const Glyph* getGlyph(uint32_t codepoint, int pixelHeight);
 
     std::vector<uint8_t> m_fontBuffer;

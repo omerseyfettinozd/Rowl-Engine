@@ -712,6 +712,78 @@ void RowlEngine_GetAudioSpectrum(RowlEngineHandle handle, float* outBands, int b
     });
 }
 
+void RowlEngine_PlayVoiceBlip(RowlEngineHandle handle, const char* soundPath, float pitch, float volume, int channelType) {
+    if (!isLiveHandle(handle)) return;
+    invokeNoexcept([&] {
+        toEngine(handle)->playVoiceBlip(soundPath ? soundPath : "", pitch, volume, channelType);
+    });
+}
+
+void RowlEngine_SetDialogueVoiceBlip(RowlEngineHandle handle, const char* soundPath, float basePitch, float pitchVariance, int cadence, int skipPunctuation, int channelType) {
+    if (!isLiveHandle(handle)) return;
+    invokeNoexcept([&] {
+        toEngine(handle)->setDialogueVoiceBlip(soundPath ? soundPath : "", basePitch, pitchVariance, cadence, skipPunctuation != 0, channelType);
+    });
+}
+
+const char* RowlEngine_GetDialogueVoiceBlipSound(RowlEngineHandle handle) {
+    if (!isLiveHandle(handle)) return "";
+    static thread_local std::string buffer;
+    return invokeNoexcept<const char*>([&] {
+        buffer = toEngine(handle)->getDialogueVoiceBlipSound();
+        return buffer.c_str();
+    }, "");
+}
+
+float RowlEngine_GetDialogueVoiceBlipPitch(RowlEngineHandle handle) {
+    if (!isLiveHandle(handle)) return 1.0f;
+    return invokeNoexcept<float>([&] {
+        return toEngine(handle)->getDialogueVoiceBlipPitch();
+    }, 1.0f);
+}
+
+float RowlEngine_GetDialogueVoiceBlipVariance(RowlEngineHandle handle) {
+    if (!isLiveHandle(handle)) return 0.08f;
+    return invokeNoexcept<float>([&] {
+        return toEngine(handle)->getDialogueVoiceBlipVariance();
+    }, 0.08f);
+}
+
+int RowlEngine_GetDialogueVoiceBlipCadence(RowlEngineHandle handle) {
+    if (!isLiveHandle(handle)) return 1;
+    return invokeNoexcept<int>([&] {
+        return toEngine(handle)->getDialogueVoiceBlipCadence();
+    }, 1);
+}
+
+int RowlEngine_GetDialogueVoiceBlipSkipPunctuation(RowlEngineHandle handle) {
+    if (!isLiveHandle(handle)) return 1;
+    return invokeNoexcept<int>([&] {
+        return toEngine(handle)->getDialogueVoiceBlipSkipPunctuation() ? 1 : 0;
+    }, 1);
+}
+
+int RowlEngine_GetDialogueVoiceBlipChannel(RowlEngineHandle handle) {
+    if (!isLiveHandle(handle)) return 1;
+    return invokeNoexcept<int>([&] {
+        return toEngine(handle)->getDialogueVoiceBlipChannel();
+    }, 1);
+}
+
+uint32_t RowlEngine_GetVoiceBlipCount(RowlEngineHandle handle) {
+    if (!isLiveHandle(handle)) return 0;
+    return invokeNoexcept<uint32_t>([&] {
+        return toEngine(handle)->getVoiceBlipCount();
+    }, 0);
+}
+
+void RowlEngine_ResetVoiceBlipCount(RowlEngineHandle handle) {
+    if (!isLiveHandle(handle)) return;
+    invokeNoexcept([&] {
+        toEngine(handle)->resetVoiceBlipCount();
+    });
+}
+
 const char* RowlEngine_GetScriptRuntimeDiagnosticsJson(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return "[]";
     static thread_local std::string buffer;

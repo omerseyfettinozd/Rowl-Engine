@@ -370,6 +370,27 @@ namespace RowlEngine.Editor.ViewModels
                     case nameof(DialogueComponentViewModel.Scale):
                         OnPropertyChanged(nameof(DialogueBoxScale));
                         break;
+                    case nameof(DialogueComponentViewModel.TypewriterSound):
+                        OnPropertyChanged(nameof(VoiceBlipSound));
+                        break;
+                    case nameof(DialogueComponentViewModel.VoiceBlipPitch):
+                        OnPropertyChanged(nameof(VoiceBlipPitch));
+                        break;
+                    case nameof(DialogueComponentViewModel.VoiceBlipVariance):
+                        OnPropertyChanged(nameof(VoiceBlipVariance));
+                        break;
+                    case nameof(DialogueComponentViewModel.VoiceBlipCadence):
+                        OnPropertyChanged(nameof(VoiceBlipCadence));
+                        break;
+                    case nameof(DialogueComponentViewModel.VoiceBlipSkipPunctuation):
+                        OnPropertyChanged(nameof(VoiceBlipSkipPunctuation));
+                        break;
+                    case nameof(DialogueComponentViewModel.VoiceBlipChannel):
+                        OnPropertyChanged(nameof(VoiceBlipChannel));
+                        break;
+                    case nameof(DialogueComponentViewModel.VoiceBlipVolume):
+                        OnPropertyChanged(nameof(VoiceBlipVolume));
+                        break;
                 }
             }
             else if (sender is BackgroundComponentViewModel)
@@ -700,6 +721,48 @@ namespace RowlEngine.Editor.ViewModels
         {
             get => PrimaryDialogueComponent?.TextAlignment ?? "Left";
             set { var d = PrimaryDialogueComponent; if (d != null) d.TextAlignment = value; }
+        }
+
+        public string VoiceBlipSound
+        {
+            get => PrimaryDialogueComponent?.TypewriterSound ?? string.Empty;
+            set { var d = PrimaryDialogueComponent; if (d != null) d.TypewriterSound = value; }
+        }
+
+        public double VoiceBlipPitch
+        {
+            get => PrimaryDialogueComponent?.VoiceBlipPitch ?? 1.0;
+            set { var d = PrimaryDialogueComponent; if (d != null) d.VoiceBlipPitch = value; }
+        }
+
+        public double VoiceBlipVariance
+        {
+            get => PrimaryDialogueComponent?.VoiceBlipVariance ?? 0.08;
+            set { var d = PrimaryDialogueComponent; if (d != null) d.VoiceBlipVariance = value; }
+        }
+
+        public int VoiceBlipCadence
+        {
+            get => PrimaryDialogueComponent?.VoiceBlipCadence ?? 1;
+            set { var d = PrimaryDialogueComponent; if (d != null) d.VoiceBlipCadence = value; }
+        }
+
+        public bool VoiceBlipSkipPunctuation
+        {
+            get => PrimaryDialogueComponent?.VoiceBlipSkipPunctuation ?? true;
+            set { var d = PrimaryDialogueComponent; if (d != null) d.VoiceBlipSkipPunctuation = value; }
+        }
+
+        public string VoiceBlipChannel
+        {
+            get => PrimaryDialogueComponent?.VoiceBlipChannel ?? "Voice";
+            set { var d = PrimaryDialogueComponent; if (d != null) d.VoiceBlipChannel = value; }
+        }
+
+        public double VoiceBlipVolume
+        {
+            get => PrimaryDialogueComponent?.VoiceBlipVolume ?? 0.85;
+            set { var d = PrimaryDialogueComponent; if (d != null) d.VoiceBlipVolume = value; }
         }
 
         public string DspFilter

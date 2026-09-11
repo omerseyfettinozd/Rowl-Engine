@@ -38,6 +38,13 @@ internal static class StoryGraphNodeHydrator
         dialogue.DialogueText = Text(value, "dialogue", string.Empty);
         dialogue.X = Number(value, "dialogue_box_x", dialogue.X); dialogue.Y = Number(value, "dialogue_box_y", dialogue.Y);
         dialogue.Width = Number(value, "dialogue_box_width", dialogue.Width); dialogue.Height = Number(value, "dialogue_box_height", dialogue.Height);
+        dialogue.TypewriterSound = Text(value, "voice_blip_sound", dialogue.TypewriterSound);
+        dialogue.VoiceBlipPitch = Number(value, "voice_blip_pitch", dialogue.VoiceBlipPitch);
+        dialogue.VoiceBlipVariance = Number(value, "voice_blip_variance", dialogue.VoiceBlipVariance);
+        dialogue.VoiceBlipCadence = value.TryGetProperty("voice_blip_cadence", out var vbc) && vbc.TryGetInt32(out var vbci) ? vbci : dialogue.VoiceBlipCadence;
+        dialogue.VoiceBlipSkipPunctuation = value.TryGetProperty("voice_blip_skip_punctuation", out var vbsp) && vbsp.ValueKind == JsonValueKind.False ? false : dialogue.VoiceBlipSkipPunctuation;
+        dialogue.VoiceBlipVolume = Number(value, "voice_blip_volume", dialogue.VoiceBlipVolume);
+        dialogue.VoiceBlipChannel = value.TryGetProperty("voice_blip_channel", out var vbch) && vbch.TryGetInt32(out var vbchi) && vbchi == 2 ? "Sfx" : "Voice";
 
         var background = node.CreateObject("Background").AddComponent<BackgroundComponentViewModel>();
         background.Texture = Text(value, "background", "bg_beach_sunset.png");
