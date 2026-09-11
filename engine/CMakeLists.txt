@@ -46,6 +46,17 @@ endif()
 
 # ── zstd ──────────────────────────────────────────────────────────────────
 find_package(zstd QUIET)
+if(zstd_FOUND AND NOT TARGET zstd::libzstd)
+    # Debian/Ubuntu's libzstd-dev only ships versioned targets
+    # (zstd::libzstd_shared / zstd::libzstd_static).
+    if(TARGET zstd::libzstd_shared)
+        add_library(zstd::libzstd ALIAS zstd::libzstd_shared)
+    elseif(TARGET zstd::libzstd_static)
+        add_library(zstd::libzstd ALIAS zstd::libzstd_static)
+    else()
+        set(zstd_FOUND FALSE)
+    endif()
+endif()
 if(NOT zstd_FOUND)
     find_library(ZSTD_LIBRARY NAMES zstd zstd_static)
     find_path(ZSTD_INCLUDE_DIR zstd.h)
