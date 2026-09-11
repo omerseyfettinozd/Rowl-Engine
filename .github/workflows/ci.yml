@@ -148,7 +148,9 @@ jobs:
           $debugBin = 'build/vcpkg_installed/x64-windows/debug/bin'
           if (-not (Test-Path $debugBin)) { $debugBin = "$env:VCPKG_INSTALLATION_ROOT/installed/x64-windows/debug/bin" }
           $env:PATH = "$((Resolve-Path $debugBin).Path);$env:PATH"
-          ctest --test-dir build --output-on-failure
+          # Per-test timeout turns a hung test into a fast pointer with output
+          # instead of burning the whole 20-minute job timeout silently.
+          ctest --test-dir build --output-on-failure --timeout 300
 
       - name: Verify standalone package and VFS smoke
         shell: pwsh

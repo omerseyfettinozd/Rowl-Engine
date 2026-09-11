@@ -19,6 +19,15 @@ public static class ProjectBuildService
     public static string ResolveRepoRoot(string hintPath)
     {
         string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+        // Walk up from the app directory first: fixed depths break under
+        // RID/platform-specific output layouts (e.g. bin/x64/Debug/net10.0).
+        string? dir = baseDir;
+        for (int i = 0; i < 10 && dir is not null; i++)
+        {
+            if (File.Exists(Path.Combine(dir, "tools", "package_assets.py")))
+                return dir;
+            dir = Path.GetDirectoryName(dir);
+        }
         string[] candidates = {
             hintPath,
             Path.GetFullPath(Path.Combine(hintPath, "..")),

@@ -67,6 +67,10 @@ if(ROWL_BUILD_RUNTIME_TESTS)
         set_tests_properties(rowl_editor_headless_tests PROPERTIES
             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
             TIMEOUT 120
+            # The editor drives the native engine for audio-observer checks;
+            # without a dummy driver headless machines report no device and
+            # edge-triggered device tests observe a stale transition.
+            ENVIRONMENT "SDL_AUDIODRIVER=dummy"
         )
     endif()
 endif()
