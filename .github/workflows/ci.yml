@@ -103,6 +103,7 @@ jobs:
           ROWL_EDITOR_BENCHMARK_BUILD_ID="$GITHUB_SHA" \
           ROWL_EDITOR_BENCHMARK_BUILD_TYPE=Debug \
           ROWL_EDITOR_BENCHMARK_MACHINE="$(uname -m)" \
+          SDL_AUDIODRIVER=dummy \
           xvfb-run -a dotnet run --project editor/RowlEngine.Editor.csproj -- \
             --headless-test --editor-benchmark-json benchmark-results/linux-editor.json
           cat benchmark-results/linux-editor.json >> "$GITHUB_STEP_SUMMARY"
