@@ -1,5 +1,6 @@
 #include "rowl/core/logger.hpp"
 #include <chrono>
+#include <ctime>
 #include <iomanip>
 #include <sstream>
 #include <iostream>
@@ -60,7 +61,11 @@ std::string Logger::formatTimestamp() {
 
     std::stringstream ss;
     std::tm tmBuf{};
+#ifdef _WIN32
+    localtime_s(&tmBuf, &in_time_t);
+#else
     localtime_r(&in_time_t, &tmBuf);
+#endif
     ss << std::put_time(&tmBuf, "%Y-%m-%d %H:%M:%S")
        << '.' << std::setfill('0') << std::setw(3) << ms.count();
     return ss.str();
