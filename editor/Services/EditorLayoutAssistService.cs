@@ -107,6 +107,17 @@ namespace RowlEngine.Editor.Services
             node.CharacterScale = 1.0;
         }
 
+        public static void ResetSceneRotation(NodeViewModel? node)
+        {
+            if (node == null) return;
+            var bg = node.GetComponent<BackgroundComponentViewModel>();
+            if (bg != null) bg.ResetRotation();
+            foreach (var ch in node.CharacterComponents)
+            {
+                ch.ResetRotation();
+            }
+        }
+
         public static string ImportImageFileToProject(string fullPath, string projectAssetsPath)
         {
             string fileName = Path.GetFileName(fullPath);

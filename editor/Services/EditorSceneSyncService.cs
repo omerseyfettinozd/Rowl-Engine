@@ -51,6 +51,31 @@ public static class EditorSceneSyncService
     }
 
     /// <summary>
+    /// Routes one polled audio-telemetry sample to the live preview HUD and the
+    /// selected node's audio component. The event sample carries master-bus
+    /// levels (native channel 3); per-channel BGM (0) and SFX/Voice (2) levels
+    /// are polled via delegates. Pure routing over delegates so the mapping is
+    /// unit-testable without a native handle.
+    /// </summary>
+    public static void RouteAudioTelemetry(
+        float masterPeakL,
+        float masterPeakR,
+        float masterRmsL,
+        float masterRmsR,
+        Func<int, int, float>? getPeak,
+        Func<int, int, float>? getRms,
+        Action<float, float, float, float>? updatePreview,
+        AudioComponentViewModel? selectedAudio)
+    {
+        updatePreview?.Invoke(masterPeakL, masterPeakR, masterRmsL, masterRmsR);
+        if (selectedAudio == null || getPeak == null || getRms == null) return;
+        selectedAudio.UpdateAudioTelemetry(
+            getPeak(0, 0), getPeak(0, 1), getRms(0, 0), getRms(0, 1), isSfx: false);
+        selectedAudio.UpdateAudioTelemetry(
+            getPeak(2, 0), getPeak(2, 1), getRms(2, 0), getRms(2, 1), isSfx: true);
+    }
+
+    /// <summary>
     /// Synchronizes native script runtime diagnostic state (errors, execution state) back into ScriptComponentViewModels.
     /// </summary>
     public static void ApplyScriptRuntimeDiagnostics(EngineHost host, NodeViewModel? node)

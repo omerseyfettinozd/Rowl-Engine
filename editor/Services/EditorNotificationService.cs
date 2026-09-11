@@ -5,6 +5,8 @@ using System.Threading.Tasks;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using RowlEngine.Editor.Models;
+using RowlEngine.Editor.Native;
+using RowlEngine.Editor.ViewModels;
 
 namespace RowlEngine.Editor.Services
 {
@@ -87,6 +89,62 @@ namespace RowlEngine.Editor.Services
                     Notifications.Clear();
                 }
             });
+        }
+
+        // Edge-trigger state for audio-device transitions: toast once per
+        // change instead of on every diagnostics poll.
+        private bool _lastAudioDeviceAvailable = true;
+
+        /// <summary>
+        /// Routes a native runtime diagnostic into toast + inline notification + log.
+        /// No-op when <paramref name="code"/> is <see cref="RuntimeErrorCode.Ok"/>.
+        /// </summary>
+        public void ReportEngineDiagnostic(
+            RuntimeErrorCode code,
+            string operation,
+            string message,
+            string target,
+            Action<string>? log = null)
+        {
+            if (code == RuntimeErrorCode.Ok) return;
+
+            string msg = string.IsNullOrEmpty(message)
+                ? $"Engine Diagnostic ({code}): {operation}"
+                : $"[{code}] {message}";
+
+            bool isWarning = code == RuntimeErrorCode.FileNotFound
+                || code == RuntimeErrorCode.InvalidArgument;
+            var toastType = isWarning ? ToastType.Warning : ToastType.Error;
+
+            ToastService.Instance.Show(msg, toastType, 4000);
+            Show(msg, isWarning ? NotificationType.Warning : NotificationType.Error, "Motor Uyarısı", 4000);
+            log?.Invoke($"⚠️ [Motor Tanı] {code} — {operation}: {message} ({target})");
+        }
+
+        /// <summary>
+        /// Edge-triggered audio-device observer: toasts only on transitions so a
+        /// missing device does not spam on every diagnostics poll.
+        /// Returns true when a transition was reported.
+        /// </summary>
+        public bool ReportAudioDeviceTransition(bool deviceAvailable, Action<string>? log = null)
+        {
+            if (deviceAvailable == _lastAudioDeviceAvailable) return false;
+            _lastAudioDeviceAvailable = deviceAvailable;
+            if (!deviceAvailable)
+            {
+                const string msg = "Ses cihazı kayboldu — sessiz moda geçildi, çalma niyeti korunuyor.";
+                ToastService.Instance.Show(msg, ToastType.Warning, 4000);
+                ShowWarning(msg, "Ses Cihazı");
+                log?.Invoke("⚠️ [Ses] Cihaz kaybı algılandı; motor sessiz fallback + niyet korumasında.");
+            }
+            else
+            {
+                const string msg = "Ses cihazı geri geldi — çıkış yeniden açıldı.";
+                ToastService.Instance.Show(msg, ToastType.Success, 4000);
+                ShowSuccess(msg, "Ses Cihazı");
+                log?.Invoke("✅ [Ses] Cihaz geri geldi; çıkış akışları yeniden kuruldu.");
+            }
+            return true;
         }
 
         private static void RunOnUIThread(Action action)

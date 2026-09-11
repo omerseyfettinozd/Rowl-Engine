@@ -107,6 +107,20 @@ namespace RowlEngine.Editor.Services
             onPrimarySelectedChanged(selectedNodes.LastOrDefault());
         }
 
+        /// <summary>
+        /// Normalizes a drag from <paramref name="startPoint"/> to
+        /// <paramref name="currentPoint"/> into a positive-size box rect,
+        /// regardless of drag direction.
+        /// </summary>
+        public static Rect ComputeSelectionRect(Point startPoint, Point currentPoint)
+        {
+            double minX = Math.Min(startPoint.X, currentPoint.X);
+            double minY = Math.Min(startPoint.Y, currentPoint.Y);
+            double width = Math.Abs(currentPoint.X - startPoint.X);
+            double height = Math.Abs(currentPoint.Y - startPoint.Y);
+            return new Rect(minX, minY, width, height);
+        }
+
         public static int SelectNodesInBox(
             Rect selectionBox,
             ObservableCollection<NodeViewModel> allNodes,

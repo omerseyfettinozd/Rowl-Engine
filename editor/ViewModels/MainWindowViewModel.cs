@@ -218,10 +218,6 @@ namespace RowlEngine.Editor.ViewModels
         [ObservableProperty]
         private bool _isConnected = false;
 
-        // Last observed native audio-device state. Edge-triggered so a lost
-        // device toasts once instead of on every diagnostics poll.
-        private bool _lastAudioDeviceAvailable = true;
-
         [ObservableProperty]
         private string _logOutput = "[System] Rowl Engine Editor initialized.\n";
 
@@ -536,26 +532,13 @@ namespace RowlEngine.Editor.ViewModels
 
             EngineHost.AudioTelemetryPolled += (pL, pR, rL, rR) =>
             {
-                LivePreviewViewModel.UpdateAudioTelemetry(pL, pR, rL, rR);
-
-                if (SelectedNode != null)
-                {
-                    var audioComp = SelectedNode.Components.OfType<AudioComponentViewModel>().FirstOrDefault();
-                    if (audioComp != null)
-                    {
-                        float bgmPL = EngineHost.GetAudioChannelPeak(0, 0);
-                        float bgmPR = EngineHost.GetAudioChannelPeak(0, 1);
-                        float bgmRL = EngineHost.GetAudioChannelRms(0, 0);
-                        float bgmRR = EngineHost.GetAudioChannelRms(0, 1);
-                        audioComp.UpdateAudioTelemetry(bgmPL, bgmPR, bgmRL, bgmRR, isSfx: false);
-
-                        float sfxPL = EngineHost.GetAudioChannelPeak(2, 0);
-                        float sfxPR = EngineHost.GetAudioChannelPeak(2, 1);
-                        float sfxRL = EngineHost.GetAudioChannelRms(2, 0);
-                        float sfxRR = EngineHost.GetAudioChannelRms(2, 1);
-                        audioComp.UpdateAudioTelemetry(sfxPL, sfxPR, sfxRL, sfxRR, isSfx: true);
-                    }
-                }
+                var audioComp = SelectedNode?.Components.OfType<AudioComponentViewModel>().FirstOrDefault();
+                EditorSceneSyncService.RouteAudioTelemetry(
+                    pL, pR, rL, rR,
+                    EngineHost.GetAudioChannelPeak,
+                    EngineHost.GetAudioChannelRms,
+                    LivePreviewViewModel.UpdateAudioTelemetry,
+                    audioComp);
             };
 
             // Try loading saved story graph from project root
@@ -861,24 +844,12 @@ namespace RowlEngine.Editor.ViewModels
         {
             if (!EngineHost.IsInitialized) return;
             CheckAudioDeviceStatus(EngineHost.IsAudioDeviceAvailable);
-            var code = EngineHost.LastResultCode;
-            if (code != RowlEngine.Editor.Native.RuntimeErrorCode.Ok)
-            {
-                string msg = string.IsNullOrEmpty(EngineHost.LastResultMessage)
-                    ? $"Engine Diagnostic ({code}): {EngineHost.LastResultOperation}"
-                    : $"[{code}] {EngineHost.LastResultMessage}";
-
-                var toastType = code switch
-                {
-                    RowlEngine.Editor.Native.RuntimeErrorCode.FileNotFound => ToastType.Warning,
-                    RowlEngine.Editor.Native.RuntimeErrorCode.InvalidArgument => ToastType.Warning,
-                    _ => ToastType.Error
-                };
-
-                Toast.Show(msg, toastType, 4000);
-                NotificationService.Show(msg, toastType == ToastType.Warning ? NotificationType.Warning : NotificationType.Error, "Motor Uyarısı", 4000);
-                AppendLog($"⚠️ [Motor Tanı] {code} — {EngineHost.LastResultOperation}: {EngineHost.LastResultMessage} ({EngineHost.LastResultTarget})");
-            }
+            NotificationService.ReportEngineDiagnostic(
+                EngineHost.LastResultCode,
+                EngineHost.LastResultOperation,
+                EngineHost.LastResultMessage,
+                EngineHost.LastResultTarget,
+                AppendLog);
         }
 
         /// <summary>
@@ -889,22 +860,7 @@ namespace RowlEngine.Editor.ViewModels
         /// </summary>
         public void CheckAudioDeviceStatus(bool deviceAvailable)
         {
-            if (deviceAvailable == _lastAudioDeviceAvailable) return;
-            _lastAudioDeviceAvailable = deviceAvailable;
-            if (!deviceAvailable)
-            {
-                const string msg = "Ses cihazı kayboldu — sessiz moda geçildi, çalma niyeti korunuyor.";
-                Toast.Show(msg, ToastType.Warning, 4000);
-                NotificationService.ShowWarning(msg, "Ses Cihazı");
-                AppendLog("⚠️ [Ses] Cihaz kaybı algılandı; motor sessiz fallback + niyet korumasında.");
-            }
-            else
-            {
-                const string msg = "Ses cihazı geri geldi — çıkış yeniden açıldı.";
-                Toast.Show(msg, ToastType.Success, 4000);
-                NotificationService.ShowSuccess(msg, "Ses Cihazı");
-                AppendLog("✅ [Ses] Cihaz geri geldi; çıkış akışları yeniden kuruldu.");
-            }
+            NotificationService.ReportAudioDeviceTransition(deviceAvailable, AppendLog);
         }
 
         private void ApplyScriptRuntimeDiagnostics(NodeViewModel node)
@@ -1137,17 +1093,13 @@ namespace RowlEngine.Editor.ViewModels
 
         public void UpdateSelectionBox(Point startPoint, Point currentPoint, bool append = false)
         {
-            double minX = Math.Min(startPoint.X, currentPoint.X);
-            double minY = Math.Min(startPoint.Y, currentPoint.Y);
-            double width = Math.Abs(currentPoint.X - startPoint.X);
-            double height = Math.Abs(currentPoint.Y - startPoint.Y);
+            var boxRect = EditorSelectionCoordinator.ComputeSelectionRect(startPoint, currentPoint);
 
-            SelectionBoxX = minX;
-            SelectionBoxY = minY;
-            SelectionBoxWidth = width;
-            SelectionBoxHeight = height;
+            SelectionBoxX = boxRect.X;
+            SelectionBoxY = boxRect.Y;
+            SelectionBoxWidth = boxRect.Width;
+            SelectionBoxHeight = boxRect.Height;
 
-            var boxRect = new Rect(minX, minY, width, height);
             EditorSelectionCoordinator.SelectNodesInBox(boxRect, Nodes, SelectedNodes, p => SelectedNode = p, append);
         }
 
@@ -1622,12 +1574,7 @@ namespace RowlEngine.Editor.ViewModels
         public void ResetRotation()
         {
             if (SelectedNode == null) return;
-            var bg = SelectedNode.GetComponent<BackgroundComponentViewModel>();
-            if (bg != null) bg.ResetRotation();
-            foreach (var ch in SelectedNode.CharacterComponents)
-            {
-                ch.ResetRotation();
-            }
+            EditorLayoutAssistService.ResetSceneRotation(SelectedNode);
             ScheduleSave();
             if (EngineHost.IsInitialized)
                 PushSceneToEngine(SelectedNode);

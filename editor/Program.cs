@@ -2877,6 +2877,100 @@ namespace RowlEngine.Editor
                 Console.WriteLine("  ✅ [PASS] Audio device status observer & edge-triggered toasts verified");
             }
 
+            // Test 28: Faz 1.1 ViewModel thinning — extracted service behavior equivalence
+            {
+                Console.WriteLine("\n📌 [Test 28]: ViewModel Thinning Equivalence (Rotation, Selection-Rect, Diagnostics, Telemetry Routing)...");
+
+                // Step 28.1: ComputeSelectionRect normalization (both drag directions)
+                Console.WriteLine("    [Step 28.1]: Selection-rect normalization...");
+                var fwd = EditorSelectionCoordinator.ComputeSelectionRect(new Point(10, 20), new Point(110, 120));
+                if (fwd.X != 10 || fwd.Y != 20 || fwd.Width != 100 || fwd.Height != 100)
+                    throw new Exception($"Forward rect mismatch: {fwd}");
+                var rev = EditorSelectionCoordinator.ComputeSelectionRect(new Point(110, 120), new Point(10, 20));
+                if (rev.X != 10 || rev.Y != 20 || rev.Width != 100 || rev.Height != 100)
+                    throw new Exception($"Reverse rect mismatch: {rev}");
+
+                // Step 28.2: ResetSceneRotation service (null-safe + resets bg/char)
+                Console.WriteLine("    [Step 28.2]: Scene rotation reset service...");
+                EditorLayoutAssistService.ResetSceneRotation(null); // must not throw
+                var rotNode = new NodeViewModel(2801, "Rotation Service Node", 0, 0, bare: false);
+                rotNode.BackgroundRotation = 90.0;
+                rotNode.CharacterRotation = 270.0;
+                EditorLayoutAssistService.ResetSceneRotation(rotNode);
+                if (Math.Abs(rotNode.BackgroundRotation) > 0.001 || Math.Abs(rotNode.CharacterRotation) > 0.001)
+                    throw new Exception("ResetSceneRotation failed to zero bg/char rotations");
+
+                // Step 28.3: VM ResetRotation still routes through the service
+                Console.WriteLine("    [Step 28.3]: MainWindowViewModel.ResetRotation equivalence...");
+                mainVm.SelectNodeQuiet(rotNode);
+                rotNode.BackgroundRotation = 45.0;
+                rotNode.CharacterRotation = 135.0;
+                mainVm.ResetRotation();
+                if (Math.Abs(rotNode.BackgroundRotation) > 0.001 || Math.Abs(rotNode.CharacterRotation) > 0.001)
+                    throw new Exception("MainWindowViewModel.ResetRotation lost behavior after thinning");
+
+                // Step 28.4: ReportEngineDiagnostic routing (Ok no-op, warning vs error severity, log format)
+                Console.WriteLine("    [Step 28.4]: Engine diagnostic routing...");
+                var diagService = new EditorNotificationService();
+                var diagLogs = new List<string>();
+                diagService.ReportEngineDiagnostic(RuntimeErrorCode.Ok, "op", "msg", "tgt", diagLogs.Add);
+                if (diagService.Notifications.Count != 0 || diagLogs.Count != 0)
+                    throw new Exception("Ok diagnostic must be a no-op");
+                diagService.ReportEngineDiagnostic(RuntimeErrorCode.FileNotFound, "LoadGraph", "", "graph.json", diagLogs.Add);
+                if (diagService.Notifications.Count != 1 || diagService.Notifications[0].Type != NotificationType.Warning)
+                    throw new Exception("FileNotFound must route to a warning notification");
+                if (diagLogs.Count != 1 || !diagLogs[0].Contains("LoadGraph"))
+                    throw new Exception("Diagnostic log format mismatch");
+                diagService.ReportEngineDiagnostic(RuntimeErrorCode.ParseError, "Parse", "bad json", "story.json", diagLogs.Add);
+                if (diagService.Notifications.Count != 2 || diagService.Notifications[1].Type != NotificationType.Error)
+                    throw new Exception("ParseError must route to an error notification");
+
+                // Step 28.5: ReportAudioDeviceTransition edge-triggering at service level
+                Console.WriteLine("    [Step 28.5]: Audio-device transition edge-triggering...");
+                var audioSvc = new EditorNotificationService();
+                var audioLogs = new List<string>();
+                if (audioSvc.ReportAudioDeviceTransition(false, audioLogs.Add) != true)
+                    throw new Exception("Loss transition must report true");
+                if (audioSvc.Notifications.Count != 1 || audioSvc.Notifications[0].Type != NotificationType.Warning)
+                    throw new Exception("Loss transition must toast a warning");
+                if (audioSvc.ReportAudioDeviceTransition(false, audioLogs.Add) != false)
+                    throw new Exception("Repeated loss poll must report false");
+                if (audioSvc.Notifications.Count != 1)
+                    throw new Exception("Repeated loss poll must stay silent");
+                if (audioSvc.ReportAudioDeviceTransition(true, audioLogs.Add) != true)
+                    throw new Exception("Recovery transition must report true");
+                if (audioSvc.Notifications.Count != 2 || audioSvc.Notifications[1].Type != NotificationType.Success)
+                    throw new Exception("Recovery transition must toast a success");
+
+                // Step 28.6: RouteAudioTelemetry fan-out with fake polls
+                Console.WriteLine("    [Step 28.6]: Audio telemetry routing...");
+                float peakBy(int ch, int idx) => ch * 10 + idx + 0.5f;
+                float rmsBy(int ch, int idx) => ch * 10 + idx + 0.25f;
+                float gotPL = -1, gotPR = -1, gotRL = -1, gotRR = -1;
+                var routedAudio = new AudioComponentViewModel();
+                EditorSceneSyncService.RouteAudioTelemetry(
+                    0.7f, 0.8f, 0.5f, 0.6f,
+                    peakBy, rmsBy,
+                    (pL, pR, rL, rR) => { gotPL = pL; gotPR = pR; gotRL = rL; gotRR = rR; },
+                    routedAudio);
+                if (Math.Abs(gotPL - 0.7f) > 0.001 || Math.Abs(gotPR - 0.8f) > 0.001 ||
+                    Math.Abs(gotRL - 0.5f) > 0.001 || Math.Abs(gotRR - 0.6f) > 0.001)
+                    throw new Exception("Master sample must reach the preview updater unchanged");
+                if (Math.Abs(routedAudio.BgmPeakL - 0.5f) > 0.001 || Math.Abs(routedAudio.BgmPeakR - 1.5f) > 0.001 ||
+                    Math.Abs(routedAudio.BgmRmsL - 0.25f) > 0.001 || Math.Abs(routedAudio.BgmRmsR - 1.25f) > 0.001)
+                    throw new Exception("BGM channel mapping mismatch");
+                if (Math.Abs(routedAudio.SfxPeakL - 20.5f) > 0.001 || Math.Abs(routedAudio.SfxPeakR - 21.5f) > 0.001 ||
+                    Math.Abs(routedAudio.SfxRmsL - 20.25f) > 0.001 || Math.Abs(routedAudio.SfxRmsR - 21.25f) > 0.001)
+                    throw new Exception("SFX channel mapping mismatch");
+
+                // Step 28.7: null-tolerant routing (no audio selected / no delegates)
+                Console.WriteLine("    [Step 28.7]: Null-tolerant routing...");
+                EditorSceneSyncService.RouteAudioTelemetry(0, 0, 0, 0, peakBy, rmsBy, null, null);
+                EditorSceneSyncService.RouteAudioTelemetry(0, 0, 0, 0, null, null, null, routedAudio);
+
+                Console.WriteLine("  ✅ [PASS] ViewModel thinning equivalence verified");
+            }
+
             Console.WriteLine("\n=======================================================");
             Console.WriteLine("🎉 ALL EDITOR HEADLESS TESTS PASSED SUCCESSFULLY! 🎉");
             Console.WriteLine("=======================================================\n");
