@@ -491,10 +491,13 @@ namespace RowlEngine.Editor
                 throw new Exception("run_game.bat missing in standalone build output");
             if (!File.Exists(Path.Combine(testBuildDir, "README.txt")))
                 throw new Exception("README.txt missing in standalone build output");
-            if (!File.Exists(Path.Combine(testBuildDir, "RowlGame")) && !File.Exists(Path.Combine(testBuildDir, "rowl_player")))
-                throw new Exception("Standalone player executable missing in standalone build output");
-            if (!File.Exists(Path.Combine(testBuildDir, "libRowlEngineCore.so")))
-                throw new Exception("libRowlEngineCore.so missing in standalone build output");
+            string expectedPlayer = OperatingSystem.IsWindows() ? "RowlGame.exe" : "RowlGame";
+            if (!File.Exists(Path.Combine(testBuildDir, expectedPlayer)) && !File.Exists(Path.Combine(testBuildDir, OperatingSystem.IsWindows() ? "rowl_player.exe" : "rowl_player")))
+                throw new Exception($"Standalone player executable missing ({expectedPlayer}) in standalone build output");
+            string expectedLib = OperatingSystem.IsWindows() ? "RowlEngineCore.dll"
+                : OperatingSystem.IsMacOS() ? "libRowlEngineCore.dylib" : "libRowlEngineCore.so";
+            if (!File.Exists(Path.Combine(testBuildDir, expectedLib)))
+                throw new Exception($"{expectedLib} missing in standalone build output");
             if (!File.Exists(Path.Combine(testBuildDir, "Assets", "packages", "game.rowlpkg")))
                 throw new Exception("game.rowlpkg missing in standalone build output");
             if (!Directory.Exists(Path.Combine(testBuildDir, "mods")) ||
