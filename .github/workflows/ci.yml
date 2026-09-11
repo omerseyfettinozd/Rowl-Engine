@@ -20,16 +20,28 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes build-essential cmake curl ninja-build pkg-config liblua5.4-dev libzstd-dev glslc mesa-vulkan-drivers xvfb
 
-      - name: Build pinned SDL3 dependency
+      - name: Fetch pinned SDL3 tarball
         run: |
           curl --fail --location --silent --show-error \
             https://github.com/libsdl-org/SDL/releases/download/release-3.4.16/SDL3-3.4.16.tar.gz \
             --output /tmp/SDL3-3.4.16.tar.gz
+
+      - name: Extract SDL3 sources
+        run: |
           tar --extract --gzip --file /tmp/SDL3-3.4.16.tar.gz --directory /tmp
+
+      - name: Configure SDL3 dependency
+        run: |
           cmake -S /tmp/SDL3-3.4.16 -B /tmp/SDL3-build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release -DSDL_SHARED=ON -DSDL_STATIC=OFF \
             -DSDL_TEST_LIBRARY=OFF -DSDL_GPU=ON
+
+      - name: Build pinned SDL3 dependency
+        run: |
           cmake --build /tmp/SDL3-build --parallel 2 --verbose
+
+      - name: Install SDL3 dependency
+        run: |
           sudo cmake --install /tmp/SDL3-build
 
       - name: Set up .NET
