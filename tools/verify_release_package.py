@@ -85,6 +85,9 @@ def verify(release_root):
     if not (os.path.isfile(os.path.join(root, "RowlGame")) or
             os.path.isfile(os.path.join(root, "RowlGame.exe"))):
         fail("missing standalone player executable")
+    launchers = [os.path.join(root, name) for name in ("run_game.sh", "run_game.bat")]
+    if not any(os.path.isfile(path) and os.path.getsize(path) > 0 for path in launchers):
+        fail("missing release launcher (run_game.sh or run_game.bat)")
     if not any(name.startswith(("libRowlEngineCore", "RowlEngineCore"))
                for name in os.listdir(root)):
         fail("missing native RowlEngineCore runtime library")

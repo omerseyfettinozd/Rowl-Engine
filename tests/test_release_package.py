@@ -36,10 +36,16 @@ with tempfile.TemporaryDirectory() as directory:
     (release / "README.txt").write_text("release\n", encoding="utf-8")
     (release / "RowlGame").write_bytes(b"player")
     (release / "libRowlEngineCore.so").write_bytes(b"runtime")
+    (release / "run_game.sh").write_text("#!/bin/sh\nexec ./RowlGame \"$@\"\n", encoding="utf-8")
 
     valid = run_verifier(release)
     if valid.returncode != 0 or "Valid release" not in valid.stdout:
         raise SystemExit("valid release package was rejected: " + valid.stderr)
+
+    missing_launcher = root / "missing-launcher"
+    shutil.copytree(release, missing_launcher)
+    (missing_launcher / "run_game.sh").unlink()
+    require_rejection(missing_launcher, "missing release launcher")
 
     missing_runtime = root / "missing-runtime"
     shutil.copytree(release, missing_runtime)
