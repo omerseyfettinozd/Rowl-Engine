@@ -88,7 +88,7 @@ jobs:
           ROWL_BENCHMARK_BUILD_TYPE=Debug \
           ROWL_BENCHMARK_MACHINE="$(uname -m)" \
           SDL_AUDIODRIVER=dummy \
-          build/bin/rowl_tests --benchmark-json benchmark-results/linux-native.json
+          xvfb-run -a build/bin/rowl_tests --benchmark-json benchmark-results/linux-native.json
           cat benchmark-results/linux-native.json >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload native benchmark baseline
@@ -103,7 +103,7 @@ jobs:
           ROWL_EDITOR_BENCHMARK_BUILD_ID="$GITHUB_SHA" \
           ROWL_EDITOR_BENCHMARK_BUILD_TYPE=Debug \
           ROWL_EDITOR_BENCHMARK_MACHINE="$(uname -m)" \
-          dotnet run --project editor/RowlEngine.Editor.csproj -- \
+          xvfb-run -a dotnet run --project editor/RowlEngine.Editor.csproj -- \
             --headless-test --editor-benchmark-json benchmark-results/linux-editor.json
           cat benchmark-results/linux-editor.json >> "$GITHUB_STEP_SUMMARY"
 
@@ -117,7 +117,7 @@ jobs:
         run: |
           cmake -S . -B build-msdf-fallback -G Ninja -DCMAKE_BUILD_TYPE=Debug -DROWL_ENABLE_GPU_MSDF=OFF
           cmake --build build-msdf-fallback --parallel
-          ctest --test-dir build-msdf-fallback --output-on-failure -E rowl_player_gpu_msdf_smoke
+          xvfb-run -a ctest --test-dir build-msdf-fallback --output-on-failure -E rowl_player_gpu_msdf_smoke
 
       - name: Check managed dependencies for known vulnerabilities
         run: dotnet list editor/RowlEngine.Editor.csproj package --vulnerable --include-transitive
