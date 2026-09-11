@@ -1252,7 +1252,15 @@ void test_vfs_security() {
     vfs.remountProject(std::filesystem::current_path().string());
     TEST_PASS("Project remount exposes Assets but not project-root files");
 
+    // DIAGNOSE-WIN-HANG: the next section header never prints on Windows CI
+    // (3/3 runs stall here). Prime suspect is this tree delete (contains a
+    // file symlink + 128 MB sparse fixture). Skipped on Windows for one
+    // cycle to prove or rule it out; temp dirs are unique per run.
+#ifdef _WIN32
+    (void)testRoot;
+#else
     std::filesystem::remove_all(testRoot);
+#endif
 }
 
 void test_native_c_api() {
