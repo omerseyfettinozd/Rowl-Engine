@@ -234,6 +234,12 @@ namespace RowlEngine.Editor.Native
         internal static extern IntPtr RowlEngine_GetLastAudioError(IntPtr handle);
 
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern int RowlEngine_IsAudioDeviceAvailable(IntPtr handle);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern int RowlEngine_IsAudioOutputSuspended(IntPtr handle);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
         internal static extern float RowlEngine_GetAudioChannelPeak(IntPtr handle, int channelType, int channelIndex);
 
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]

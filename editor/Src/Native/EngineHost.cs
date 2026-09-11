@@ -564,6 +564,12 @@ namespace RowlEngine.Editor.Native
             => _handle == IntPtr.Zero ? string.Empty
                : NativeBridge.PtrToString(NativeBridge.RowlEngine_GetLastAudioError(_handle));
 
+        public bool IsAudioDeviceAvailable
+            => _handle != IntPtr.Zero && NativeBridge.RowlEngine_IsAudioDeviceAvailable(_handle) != 0;
+
+        public bool IsAudioOutputSuspended
+            => _handle != IntPtr.Zero && NativeBridge.RowlEngine_IsAudioOutputSuspended(_handle) != 0;
+
         public void SetMasterVolume(float volume)
         {
             if (_handle != IntPtr.Zero) NativeBridge.RowlEngine_SetMasterVolume(_handle, volume);

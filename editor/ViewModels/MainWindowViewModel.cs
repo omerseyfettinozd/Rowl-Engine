@@ -218,6 +218,10 @@ namespace RowlEngine.Editor.ViewModels
         [ObservableProperty]
         private bool _isConnected = false;
 
+        // Last observed native audio-device state. Edge-triggered so a lost
+        // device toasts once instead of on every diagnostics poll.
+        private bool _lastAudioDeviceAvailable = true;
+
         [ObservableProperty]
         private string _logOutput = "[System] Rowl Engine Editor initialized.\n";
 
@@ -856,6 +860,7 @@ namespace RowlEngine.Editor.ViewModels
         public void CheckEngineDiagnostics(string? context = null)
         {
             if (!EngineHost.IsInitialized) return;
+            CheckAudioDeviceStatus(EngineHost.IsAudioDeviceAvailable);
             var code = EngineHost.LastResultCode;
             if (code != RowlEngine.Editor.Native.RuntimeErrorCode.Ok)
             {
@@ -873,6 +878,32 @@ namespace RowlEngine.Editor.ViewModels
                 Toast.Show(msg, toastType, 4000);
                 NotificationService.Show(msg, toastType == ToastType.Warning ? NotificationType.Warning : NotificationType.Error, "Motor Uyarısı", 4000);
                 AppendLog($"⚠️ [Motor Tanı] {code} — {EngineHost.LastResultOperation}: {EngineHost.LastResultMessage} ({EngineHost.LastResultTarget})");
+            }
+        }
+
+        /// <summary>
+        /// Edge-triggered audio-device observer. Call with the polled native
+        /// device state; toasts only on transitions so a missing device does
+        /// not spam on every diagnostics poll. Public and parameter-driven so
+        /// headless tests can drive it without a native handle.
+        /// </summary>
+        public void CheckAudioDeviceStatus(bool deviceAvailable)
+        {
+            if (deviceAvailable == _lastAudioDeviceAvailable) return;
+            _lastAudioDeviceAvailable = deviceAvailable;
+            if (!deviceAvailable)
+            {
+                const string msg = "Ses cihazı kayboldu — sessiz moda geçildi, çalma niyeti korunuyor.";
+                Toast.Show(msg, ToastType.Warning, 4000);
+                NotificationService.ShowWarning(msg, "Ses Cihazı");
+                AppendLog("⚠️ [Ses] Cihaz kaybı algılandı; motor sessiz fallback + niyet korumasında.");
+            }
+            else
+            {
+                const string msg = "Ses cihazı geri geldi — çıkış yeniden açıldı.";
+                Toast.Show(msg, ToastType.Success, 4000);
+                NotificationService.ShowSuccess(msg, "Ses Cihazı");
+                AppendLog("✅ [Ses] Cihaz geri geldi; çıkış akışları yeniden kuruldu.");
             }
         }
 

@@ -2814,6 +2814,43 @@ namespace RowlEngine.Editor
                 Console.WriteLine($"  ⚡ [BENCHMARK] Editor interaction report written: {benchmarkPath}");
             }
 
+            // Test 27: Audio device status observer (edge-triggered toasts)
+            {
+                Console.WriteLine("\n📌 [Test 27]: Audio Device Status Observer & Edge-Triggered Toasts...");
+                mainVm.NotificationService.ClearAll();
+
+                // Step 27.1: loss transition toasts once
+                Console.WriteLine("    [Step 27.1]: Device-loss transition...");
+                mainVm.CheckAudioDeviceStatus(false);
+                if (mainVm.NotificationService.Notifications.Count != 1)
+                    throw new Exception($"Device loss should toast exactly once, count={mainVm.NotificationService.Notifications.Count}");
+                if (mainVm.NotificationService.Notifications[0].Type != NotificationType.Warning)
+                    throw new Exception("Device-loss toast must be a warning");
+
+                // Step 27.2: repeated loss polls stay silent (no spam)
+                Console.WriteLine("    [Step 27.2]: Repeated loss polls stay silent...");
+                mainVm.CheckAudioDeviceStatus(false);
+                mainVm.CheckAudioDeviceStatus(false);
+                if (mainVm.NotificationService.Notifications.Count != 1)
+                    throw new Exception($"Repeated loss polls must not re-toast, count={mainVm.NotificationService.Notifications.Count}");
+
+                // Step 27.3: recovery transition toasts once
+                Console.WriteLine("    [Step 27.3]: Device-recovery transition...");
+                mainVm.CheckAudioDeviceStatus(true);
+                if (mainVm.NotificationService.Notifications.Count != 2)
+                    throw new Exception($"Device recovery should toast exactly once, count={mainVm.NotificationService.Notifications.Count}");
+                if (mainVm.NotificationService.Notifications[1].Type != NotificationType.Success)
+                    throw new Exception("Device-recovery toast must be a success");
+
+                // Step 27.4: steady available polls stay silent
+                Console.WriteLine("    [Step 27.4]: Steady polls stay silent...");
+                mainVm.CheckAudioDeviceStatus(true);
+                if (mainVm.NotificationService.Notifications.Count != 2)
+                    throw new Exception("Steady available polls must not toast");
+
+                Console.WriteLine("  ✅ [PASS] Audio device status observer & edge-triggered toasts verified");
+            }
+
             Console.WriteLine("\n=======================================================");
             Console.WriteLine("🎉 ALL EDITOR HEADLESS TESTS PASSED SUCCESSFULLY! 🎉");
             Console.WriteLine("=======================================================\n");
