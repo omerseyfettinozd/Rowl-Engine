@@ -3,6 +3,7 @@
 #include <cmath>
 #include <cstdint>
 #include <algorithm>
+#include <string>
 
 namespace Rowl::Render {
 
@@ -12,6 +13,14 @@ enum class CameraEasing {
     EaseOutQuad,
     EaseInOutCubic,
     SmoothStep
+};
+
+enum class CameraShakePreset {
+    Custom = 0,
+    Subtle = 1,
+    Earthquake = 2,
+    Explosion = 3,
+    Heartbeat = 4
 };
 
 class Camera2D {
@@ -45,10 +54,18 @@ public:
 
     // Screen Shake: triggers decaying harmonic vibration
     void shake(float intensity, float durationSeconds, float frequency = 25.0f);
+    void shakePreset(CameraShakePreset preset, float intensityMultiplier = 1.0f, float durationOverride = 0.0f);
+    void shakePreset(const std::string& presetName, float intensityMultiplier = 1.0f, float durationOverride = 0.0f);
+    void shakeWithProfile(CameraShakePreset preset, float intensity, float durationSeconds, float frequency, float damping = 1.0f, float dirX = 1.0f, float dirY = 1.0f);
+
     bool isShaking() const { return m_shakeTimer > 0.0f; }
     float getShakeOffsetX() const { return m_shakeOffsetX; }
     float getShakeOffsetY() const { return m_shakeOffsetY; }
     float getShakeTimer() const { return m_shakeTimer; }
+    CameraShakePreset getShakePreset() const { return m_shakePreset; }
+    float getShakeDamping() const { return m_shakeDamping; }
+    float getShakeDirX() const { return m_shakeDirX; }
+    float getShakeDirY() const { return m_shakeDirY; }
 
     // Movement query
     bool isMoving() const { return isPanning() || isZooming() || isShaking(); }
@@ -97,10 +114,14 @@ private:
     CameraEasing m_zoomEasing = CameraEasing::EaseInOutCubic;
 
     // Shake state
+    CameraShakePreset m_shakePreset = CameraShakePreset::Custom;
     float m_shakeIntensity = 0.0f;
     float m_shakeDuration = 0.0f;
     float m_shakeTimer = 0.0f;
     float m_shakeFrequency = 25.0f;
+    float m_shakeDamping = 1.0f;
+    float m_shakeDirX = 1.0f;
+    float m_shakeDirY = 1.0f;
     float m_shakeOffsetX = 0.0f;
     float m_shakeOffsetY = 0.0f;
 };

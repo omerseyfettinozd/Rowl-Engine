@@ -3085,6 +3085,183 @@ void test_camera_and_transition_pipeline() {
         RowlEngine_Destroy(handle);
         TEST_PASS("Active Scene Transition 60-Frame Render Performance");
     }
+
+    // Test 8: Cinematic Camera Shake Presets & Directional Profiles
+    {
+        Rowl::Render::Camera2D cam(1920.0f, 1080.0f);
+
+        // Earthquake preset: predominantly horizontal (X-axis heavy, dirX=1.0, dirY=0.2)
+        cam.shakePreset(Rowl::Render::CameraShakePreset::Earthquake);
+        if (cam.getShakePreset() != Rowl::Render::CameraShakePreset::Earthquake ||
+            std::abs(cam.getShakeDirX() - 1.0f) > 0.01f ||
+            std::abs(cam.getShakeDirY() - 0.2f) > 0.01f ||
+            std::abs(cam.getShakeDamping() - 0.7f) > 0.01f) {
+            std::cerr << "Camera Earthquake preset attributes mismatch" << std::endl;
+            exit(1);
+        }
+        cam.update(0.05f);
+        if (!cam.isShaking() || !cam.isMoving()) {
+            std::cerr << "Camera should be shaking during earthquake" << std::endl;
+            exit(1);
+        }
+
+        // Explosion preset: rapid damping (2.2) and high frequency
+        cam.shakePreset(Rowl::Render::CameraShakePreset::Explosion, 1.5f);
+        if (cam.getShakePreset() != Rowl::Render::CameraShakePreset::Explosion ||
+            std::abs(cam.getShakeDamping() - 2.2f) > 0.01f) {
+            std::cerr << "Camera Explosion preset damping mismatch" << std::endl;
+            exit(1);
+        }
+
+        // Heartbeat / Pulse preset: string overload
+        cam.shakePreset("heartbeat");
+        if (cam.getShakePreset() != Rowl::Render::CameraShakePreset::Heartbeat ||
+            std::abs(cam.getShakeDirX() - 0.15f) > 0.01f ||
+            std::abs(cam.getShakeDirY() - 1.0f) > 0.01f) {
+            std::cerr << "Camera Heartbeat preset directional profile mismatch" << std::endl;
+            exit(1);
+        }
+
+        // Custom profile with full parameters
+        cam.shakeWithProfile(Rowl::Render::CameraShakePreset::Custom, 20.0f, 0.5f, 30.0f, 1.5f, 0.8f, 0.4f);
+        if (std::abs(cam.getShakeDirX() - 0.8f) > 0.01f || std::abs(cam.getShakeDirY() - 0.4f) > 0.01f ||
+            std::abs(cam.getShakeDamping() - 1.5f) > 0.01f) {
+            std::cerr << "Camera shakeWithProfile parameters mismatch" << std::endl;
+            exit(1);
+        }
+
+        cam.reset();
+        if (cam.isShaking() || cam.isMoving() || cam.getShakeOffsetX() != 0.0f || cam.getShakeOffsetY() != 0.0f) {
+            std::cerr << "Camera reset failed to clear shake state" << std::endl;
+            exit(1);
+        }
+
+        TEST_PASS("Camera2D Cinematic Shake Presets & Directional Profiles");
+    }
+
+    // Test 9: Screen Visual FX Pipeline (Flash, Tint, Vignette) via C API
+    {
+        RowlEngineHandle handle = RowlEngine_Create();
+        if (!RowlEngine_Init(handle, 1920, 1080, 0)) {
+            std::cerr << "Failed to init offscreen engine for screen FX test" << std::endl;
+            exit(1);
+        }
+
+        // Trigger Screen Flash
+        RowlEngine_TriggerScreenFlashHex(handle, "#FFFFFF", 0.4f, 1.0f);
+        if (!RowlEngine_IsScreenFlashActive(handle)) {
+            std::cerr << "RowlEngine_IsScreenFlashActive expected true after trigger" << std::endl;
+            exit(1);
+        }
+
+        // Advance 0.5s via two steps (clamped at 0.25s)
+        RowlEngine_Step(handle, 0.25f);
+        RowlEngine_Step(handle, 0.25f);
+        if (RowlEngine_IsScreenFlashActive(handle)) {
+            std::cerr << "RowlEngine_IsScreenFlashActive expected false after duration" << std::endl;
+            exit(1);
+        }
+
+        // Set Screen Tint
+        RowlEngine_SetScreenTintHex(handle, "#0A183D", 0.45f);
+        if (std::abs(RowlEngine_GetScreenTintOpacity(handle) - 0.45f) > 0.01f) {
+            std::cerr << "RowlEngine_GetScreenTintOpacity mismatch" << std::endl;
+            exit(1);
+        }
+        RowlEngine_Step(handle, 0.016f);
+
+        // Clear Screen Tint
+        RowlEngine_ClearScreenTint(handle);
+        if (RowlEngine_GetScreenTintOpacity(handle) != 0.0f) {
+            std::cerr << "RowlEngine_ClearScreenTint failed" << std::endl;
+            exit(1);
+        }
+
+        // Set Vignette
+        RowlEngine_SetVignette(handle, 0.70f, 0.8f, "#000000");
+        if (std::abs(RowlEngine_GetVignetteIntensity(handle) - 0.70f) > 0.01f) {
+            std::cerr << "RowlEngine_GetVignetteIntensity mismatch" << std::endl;
+            exit(1);
+        }
+        RowlEngine_Step(handle, 0.016f);
+
+        // Verify pixel buffer with active vignette
+        uint32_t bufW = 0, bufH = 0;
+        const uint8_t* buffer = RowlEngine_GetPixelBuffer(handle, &bufW, &bufH);
+        if (!buffer || bufW != 1920 || bufH != 1080) {
+            std::cerr << "Failed to retrieve pixel buffer with vignette active" << std::endl;
+            exit(1);
+        }
+
+        RowlEngine_Destroy(handle);
+        TEST_PASS("Screen Visual FX Pipeline (Flash, Tint, Vignette) via C API");
+    }
+
+    // Test 10: Scene JSON Ingestion for Shake Presets & Screen Visual FX
+    {
+        RowlEngineHandle handle = RowlEngine_Create();
+        RowlEngine_Init(handle, 1920, 1080, 0);
+
+        std::string componentJson = R"([
+            {
+                "type": "background",
+                "data": { "image": "bg_test.png", "x": 0, "y": 0, "width": 1920, "height": 1080 }
+            },
+            {
+                "type": "camera",
+                "data": { "x": 960, "y": 540, "zoom": 1.0, "shake_preset": "earthquake", "shake_intensity_multiplier": 1.2 }
+            },
+            {
+                "type": "transition",
+                "data": {
+                    "kind": "crossfade",
+                    "duration": 0.5,
+                    "flash_enabled": true,
+                    "flash_color": "#FFEEEE",
+                    "flash_duration": 0.4,
+                    "tint_enabled": true,
+                    "tint_color": "#102040",
+                    "tint_opacity": 0.3,
+                    "vignette_enabled": true,
+                    "vignette_intensity": 0.5
+                }
+            }
+        ])";
+
+        RowlEngine_UpdateSceneFromJson(handle, componentJson.c_str());
+
+        if (!RowlEngine_IsTransitionActive(handle)) {
+            std::cerr << "Scene transition was not activated from JSON" << std::endl;
+            exit(1);
+        }
+        if (!RowlEngine_IsScreenFlashActive(handle)) {
+            std::cerr << "Screen flash was not activated from JSON" << std::endl;
+            exit(1);
+        }
+        if (std::abs(RowlEngine_GetScreenTintOpacity(handle) - 0.3f) > 0.01f) {
+            std::cerr << "Screen tint opacity was not applied from JSON" << std::endl;
+            exit(1);
+        }
+        if (std::abs(RowlEngine_GetVignetteIntensity(handle) - 0.5f) > 0.01f) {
+            std::cerr << "Vignette intensity was not applied from JSON" << std::endl;
+            exit(1);
+        }
+        if (!RowlEngine_IsCameraMoving(handle)) {
+            std::cerr << "Camera was not shaking from earthquake preset JSON" << std::endl;
+            exit(1);
+        }
+
+        RowlEngine_Step(handle, 0.016f);
+        uint32_t bufW = 0, bufH = 0;
+        const uint8_t* buffer = RowlEngine_GetPixelBuffer(handle, &bufW, &bufH);
+        if (!buffer || bufW != 1920 || bufH != 1080) {
+            std::cerr << "Failed to retrieve pixel buffer with JSON shake & visual FX active" << std::endl;
+            exit(1);
+        }
+
+        RowlEngine_Destroy(handle);
+        TEST_PASS("Scene JSON Shake Presets & Screen Visual FX Ingestion");
+    }
 }
 
 int main(int argc, char* argv[]) {

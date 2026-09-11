@@ -26,6 +26,64 @@
           <TextBox Text="{Binding ColorHex}" Watermark="#000000" />
         </StackPanel>
       </Grid>
+
+      <!-- Screen Flash FX -->
+      <Border Background="{DynamicResource SurfaceBackground}" CornerRadius="4" Padding="8">
+        <StackPanel Spacing="6">
+          <CheckBox IsChecked="{Binding FlashEnabled}" Content="⚡ Screen Flash FX" FontWeight="SemiBold" FontSize="11" />
+          <Grid ColumnDefinitions="*,8,*,8,*" IsVisible="{Binding FlashEnabled}">
+            <StackPanel Grid.Column="0" Spacing="2">
+              <TextBlock Text="Color Hex" FontSize="10" Foreground="{DynamicResource MutedText}" />
+              <TextBox Text="{Binding FlashColorHex}" Watermark="#FFFFFF" />
+            </StackPanel>
+            <StackPanel Grid.Column="2" Spacing="2">
+              <TextBlock Text="Duration (s)" FontSize="10" Foreground="{DynamicResource MutedText}" />
+              <NumericUpDown Value="{Binding FlashDuration}" Increment="0.1" Minimum="0.01" Maximum="60.0" FormatString="F2" />
+            </StackPanel>
+            <StackPanel Grid.Column="4" Spacing="2">
+              <TextBlock Text="Intensity" FontSize="10" Foreground="{DynamicResource MutedText}" />
+              <NumericUpDown Value="{Binding FlashIntensity}" Increment="0.1" Minimum="0.0" Maximum="1.0" FormatString="F2" />
+            </StackPanel>
+          </Grid>
+        </StackPanel>
+      </Border>
+
+      <!-- Color Tint & Vignette FX -->
+      <Border Background="{DynamicResource SurfaceBackground}" CornerRadius="4" Padding="8">
+        <StackPanel Spacing="6">
+          <TextBlock Text="🎨 Post-Process Color Tint &amp; Vignette" FontWeight="SemiBold" FontSize="11" Foreground="{DynamicResource PrimaryText}" />
+
+          <!-- Tint -->
+          <CheckBox IsChecked="{Binding TintEnabled}" Content="Screen Color Tint Overlay" FontSize="11" />
+          <Grid ColumnDefinitions="*,8,*" IsVisible="{Binding TintEnabled}">
+            <StackPanel Grid.Column="0" Spacing="2">
+              <TextBlock Text="Tint Color Hex" FontSize="10" Foreground="{DynamicResource MutedText}" />
+              <TextBox Text="{Binding TintColorHex}" Watermark="#0A183D" />
+            </StackPanel>
+            <StackPanel Grid.Column="2" Spacing="2">
+              <TextBlock Text="Tint Opacity (0-1)" FontSize="10" Foreground="{DynamicResource MutedText}" />
+              <NumericUpDown Value="{Binding TintOpacity}" Increment="0.05" Minimum="0.0" Maximum="1.0" FormatString="F2" />
+            </StackPanel>
+          </Grid>
+
+          <!-- Vignette -->
+          <CheckBox IsChecked="{Binding VignetteEnabled}" Content="Cinematic Vignette Darkening" FontSize="11" />
+          <Grid ColumnDefinitions="*,8,*,8,*" IsVisible="{Binding VignetteEnabled}">
+            <StackPanel Grid.Column="0" Spacing="2">
+              <TextBlock Text="Intensity" FontSize="10" Foreground="{DynamicResource MutedText}" />
+              <NumericUpDown Value="{Binding VignetteIntensity}" Increment="0.1" Minimum="0.0" Maximum="1.0" FormatString="F2" />
+            </StackPanel>
+            <StackPanel Grid.Column="2" Spacing="2">
+              <TextBlock Text="Radius" FontSize="10" Foreground="{DynamicResource MutedText}" />
+              <NumericUpDown Value="{Binding VignetteRadius}" Increment="0.05" Minimum="0.1" Maximum="1.0" FormatString="F2" />
+            </StackPanel>
+            <StackPanel Grid.Column="4" Spacing="2">
+              <TextBlock Text="Color Hex" FontSize="10" Foreground="{DynamicResource MutedText}" />
+              <TextBox Text="{Binding VignetteColorHex}" Watermark="#000000" />
+            </StackPanel>
+          </Grid>
+        </StackPanel>
+      </Border>
     </StackPanel>
   </Border>
 </UserControl>

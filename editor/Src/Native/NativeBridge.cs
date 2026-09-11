@@ -404,6 +404,78 @@ namespace RowlEngine.Editor.Native
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
         internal static extern int RowlEngine_IsCameraMoving(IntPtr handle);
 
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern void RowlEngine_TriggerCameraShakePreset(
+            IntPtr handle,
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string presetName,
+            float intensityMultiplier,
+            float durationSeconds);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern void RowlEngine_TriggerCameraShakeProfile(
+            IntPtr handle,
+            float intensity,
+            float durationSeconds,
+            float frequency,
+            float damping,
+            float dirX,
+            float dirY);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern float RowlEngine_GetCameraShakeOffsetX(IntPtr handle);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern float RowlEngine_GetCameraShakeOffsetY(IntPtr handle);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern void RowlEngine_TriggerScreenFlash(
+            IntPtr handle,
+            byte r,
+            byte g,
+            byte b,
+            float durationSeconds,
+            float intensity);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern void RowlEngine_TriggerScreenFlashHex(
+            IntPtr handle,
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string colorHex,
+            float durationSeconds,
+            float intensity);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern int RowlEngine_IsScreenFlashActive(IntPtr handle);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern void RowlEngine_SetScreenTint(
+            IntPtr handle,
+            byte r,
+            byte g,
+            byte b,
+            float opacity);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern void RowlEngine_SetScreenTintHex(
+            IntPtr handle,
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string colorHex,
+            float opacity);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern void RowlEngine_ClearScreenTint(IntPtr handle);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern float RowlEngine_GetScreenTintOpacity(IntPtr handle);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern void RowlEngine_SetVignette(
+            IntPtr handle,
+            float intensity,
+            float radius,
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string? colorHex);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern float RowlEngine_GetVignetteIntensity(IntPtr handle);
+
         // ── Helpers ──────────────────────────────────────────────────────────
 
         /// <summary>Converts a native C UTF-8 string pointer to a managed string safely.</summary>

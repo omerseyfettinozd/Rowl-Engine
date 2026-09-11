@@ -244,6 +244,22 @@ public:
     void startTransition(const std::string& kind, float durationSeconds, const std::string& colorHex = "");
     bool isTransitionActive() const;
 
+    // Screen Visual FX Pipeline (Tint, Flash, Vignette Post-Process)
+    void triggerScreenFlash(uint8_t r, uint8_t g, uint8_t b, float durationSeconds, float intensity = 1.0f);
+    void triggerScreenFlashHex(const std::string& colorHex, float durationSeconds, float intensity = 1.0f);
+    bool isScreenFlashActive() const;
+    float getScreenFlashProgress() const;
+
+    void setScreenTint(uint8_t r, uint8_t g, uint8_t b, float opacity);
+    void setScreenTintHex(const std::string& colorHex, float opacity);
+    void clearScreenTint();
+    float getScreenTintOpacity() const;
+    bool hasScreenTint() const;
+
+    void setVignette(float intensity, float radius = 0.75f, const std::string& colorHex = "#000000");
+    float getVignetteIntensity() const;
+    bool isVignetteActive() const;
+
     void update(float dt);
 
 private:
@@ -293,6 +309,33 @@ private:
     std::shared_ptr<Rowl::VFS::VFSManager> m_ownedVfs;
     std::unique_ptr<Camera2D> m_camera;
     std::unique_ptr<TransitionManager> m_transitionManager;
+    struct ScreenFxState {
+        bool flashActive = false;
+        uint8_t flashR = 255;
+        uint8_t flashG = 255;
+        uint8_t flashB = 255;
+        float flashDuration = 0.0f;
+        float flashElapsed = 0.0f;
+        float flashIntensity = 1.0f;
+
+        bool hasTint = false;
+        uint8_t tintR = 0;
+        uint8_t tintG = 0;
+        uint8_t tintB = 0;
+        float tintOpacity = 0.0f;
+
+        bool vignetteEnabled = false;
+        float vignetteIntensity = 0.0f;
+        float vignetteRadius = 0.75f;
+        uint8_t vignetteR = 0;
+        uint8_t vignetteG = 0;
+        uint8_t vignetteB = 0;
+    };
+    ScreenFxState m_screenFx;
+    SDL_Texture* m_vignetteTexture = nullptr;
+    void ensureVignetteTexture();
+    void renderScreenEffects(const ViewportMetrics& metrics);
+
     bool m_videoLeaseHeld = false;
     uint32_t m_eventWindowId = 0;
     Rowl::VFS::VFSManager& vfs() const;

@@ -530,6 +530,43 @@ ROWL_API void RowlEngine_CameraZoomTo(RowlEngineHandle handle, float targetZoom,
  */
 ROWL_API int RowlEngine_IsCameraMoving(RowlEngineHandle handle);
 
+/**
+ * Triggers camera screen shake using a cinematic preset ("subtle", "earthquake", "explosion", "heartbeat"/"pulse").
+ */
+ROWL_API void RowlEngine_TriggerCameraShakePreset(RowlEngineHandle handle, const char* presetName, float intensityMultiplier, float durationSeconds);
+
+/**
+ * Triggers camera screen shake with full harmonic profile parameters (frequency, damping, directional constraints).
+ */
+ROWL_API void RowlEngine_TriggerCameraShakeProfile(RowlEngineHandle handle, float intensity, float durationSeconds, float frequency, float damping, float dirX, float dirY);
+
+/**
+ * Returns current camera shake offset in virtual canvas pixels.
+ */
+ROWL_API float RowlEngine_GetCameraShakeOffsetX(RowlEngineHandle handle);
+ROWL_API float RowlEngine_GetCameraShakeOffsetY(RowlEngineHandle handle);
+
+/**
+ * Triggers screen flash effect decaying over durationSeconds.
+ */
+ROWL_API void RowlEngine_TriggerScreenFlash(RowlEngineHandle handle, uint8_t r, uint8_t g, uint8_t b, float durationSeconds, float intensity);
+ROWL_API void RowlEngine_TriggerScreenFlashHex(RowlEngineHandle handle, const char* colorHex, float durationSeconds, float intensity);
+ROWL_API int RowlEngine_IsScreenFlashActive(RowlEngineHandle handle);
+
+/**
+ * Sets persistent screen color tint overlay (opacity 0..1).
+ */
+ROWL_API void RowlEngine_SetScreenTint(RowlEngineHandle handle, uint8_t r, uint8_t g, uint8_t b, float opacity);
+ROWL_API void RowlEngine_SetScreenTintHex(RowlEngineHandle handle, const char* colorHex, float opacity);
+ROWL_API void RowlEngine_ClearScreenTint(RowlEngineHandle handle);
+ROWL_API float RowlEngine_GetScreenTintOpacity(RowlEngineHandle handle);
+
+/**
+ * Configures cinematic vignette darkening effect.
+ */
+ROWL_API void RowlEngine_SetVignette(RowlEngineHandle handle, float intensity, float radius, const char* colorHex);
+ROWL_API float RowlEngine_GetVignetteIntensity(RowlEngineHandle handle);
+
 #ifdef __cplusplus
 } /* extern "C" */
 #endif

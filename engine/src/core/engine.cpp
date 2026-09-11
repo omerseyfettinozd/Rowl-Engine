@@ -594,7 +594,11 @@ void Engine::updateSceneFromComponents(const std::string& componentsJson) {
         }
     };
     try {
-        auto comps = nlohmann::json::parse(componentsJson);
+        auto root = nlohmann::json::parse(componentsJson);
+        nlohmann::json comps = root;
+        if (root.is_object() && root.contains("components") && root["components"].is_array()) {
+            comps = root["components"];
+        }
         if (!comps.is_array()) return;
         if (comps.size() > kMaxComponentsPerScene) {
             ROWL_LOG_ERROR("Component JSON exceeds the maximum component count");
@@ -887,19 +891,67 @@ void Engine::updateSceneFromComponents(const std::string& componentsJson) {
                     }
 
                     m_window->getCamera()->setRotation(rot);
-                    if (data.contains("shake_intensity") && data.contains("shake_duration")) {
+                    if (data.contains("shake_preset") && !data["shake_preset"].get<std::string>().empty() && data["shake_preset"].get<std::string>() != "none") {
+                        std::string preset = data["shake_preset"].get<std::string>();
+                        float mult = data.value("shake_intensity_multiplier", 1.0f);
+                        float durOverride = data.value("shake_duration_override", 0.0f);
+                        if (data.contains("shake_intensity") && data.value("shake_intensity", 0.0f) > 0.0f) {
+                            float intensity = data.value("shake_intensity", 0.0f);
+                            float duration = data.value("shake_duration", 0.5f);
+                            float freq = data.value("shake_frequency", 25.0f);
+                            float damping = data.value("shake_damping", 1.0f);
+                            float dirX = data.value("shake_dir_x", 1.0f);
+                            float dirY = data.value("shake_dir_y", 1.0f);
+                            Rowl::Render::CameraShakePreset presetEnum = Rowl::Render::CameraShakePreset::Custom;
+                            if (preset == "subtle") presetEnum = Rowl::Render::CameraShakePreset::Subtle;
+                            else if (preset == "earthquake") presetEnum = Rowl::Render::CameraShakePreset::Earthquake;
+                            else if (preset == "explosion") presetEnum = Rowl::Render::CameraShakePreset::Explosion;
+                            else if (preset == "heartbeat" || preset == "pulse") presetEnum = Rowl::Render::CameraShakePreset::Heartbeat;
+                            m_window->getCamera()->shakeWithProfile(presetEnum, intensity, duration, freq, damping, dirX, dirY);
+                        } else {
+                            m_window->getCamera()->shakePreset(preset, mult, durOverride);
+                        }
+                    } else if (data.contains("shake_intensity") && data.contains("shake_duration")) {
                         float intensity = data.value("shake_intensity", 0.0f);
                         float duration = data.value("shake_duration", 0.0f);
                         float freq = data.value("shake_frequency", 25.0f);
-                        m_window->getCamera()->shake(intensity, duration, freq);
+                        float damping = data.value("shake_damping", 2.0f);
+                        float dirX = data.value("shake_dir_x", 1.0f);
+                        float dirY = data.value("shake_dir_y", 1.0f);
+                        m_window->getCamera()->shakeWithProfile(Rowl::Render::CameraShakePreset::Custom, intensity, duration, freq, damping, dirX, dirY);
                     }
                 }
-            } else if (type == "transition") {
-                std::string kind = data.value("kind", "crossfade");
-                float duration = data.value("duration", 1.0f);
-                std::string colorHex = data.value("color", "#000000");
+            } else if (type == "transition" || type == "screen_fx" || type == "visual_fx") {
+                if (data.contains("kind")) {
+                    std::string kind = data.value("kind", "crossfade");
+                    float duration = data.value("duration", 1.0f);
+                    std::string colorHex = data.value("color", "#000000");
+                    if (m_window && kind != "none") {
+                        m_window->startTransition(kind, duration, colorHex);
+                    }
+                }
                 if (m_window) {
-                    m_window->startTransition(kind, duration, colorHex);
+                    if (data.value("flash_enabled", false) || (data.contains("flash_duration") && data.value("flash_duration", 0.0f) > 0.0f)) {
+                        std::string flashColor = data.value("flash_color", "#FFFFFF");
+                        float flashDuration = data.value("flash_duration", 0.5f);
+                        float flashIntensity = data.value("flash_intensity", 1.0f);
+                        m_window->triggerScreenFlashHex(flashColor, flashDuration, flashIntensity);
+                    }
+                    if (data.value("tint_enabled", false) || data.contains("tint_color") || data.contains("tint_opacity")) {
+                        std::string tintColor = data.value("tint_color", "#000000");
+                        float tintOpacity = data.value("tint_opacity", 0.0f);
+                        if (tintOpacity > 0.001f) {
+                            m_window->setScreenTintHex(tintColor, tintOpacity);
+                        } else {
+                            m_window->clearScreenTint();
+                        }
+                    }
+                    if (data.value("vignette_enabled", false) || data.contains("vignette_intensity")) {
+                        float vIntensity = data.value("vignette_intensity", 0.0f);
+                        float vRadius = data.value("vignette_radius", 0.75f);
+                        std::string vColor = data.value("vignette_color", "#000000");
+                        m_window->setVignette(vIntensity, vRadius, vColor);
+                    }
                 }
             } else if (type == "script") {
                 pendingScripts.push_back(data);
@@ -1647,6 +1699,74 @@ void Engine::startTransition(const std::string& kind, float durationSeconds, con
     if (m_window) {
         m_window->startTransition(kind, durationSeconds, colorHex);
     }
+}
+
+void Engine::triggerCameraShakePreset(const std::string& preset, float intensityMultiplier, float durationOverride) {
+    if (m_window && m_window->getCamera()) {
+        m_window->getCamera()->shakePreset(preset, intensityMultiplier, durationOverride);
+    }
+}
+
+void Engine::triggerCameraShakeProfile(float intensity, float durationSeconds, float frequency, float damping, float dirX, float dirY) {
+    if (m_window && m_window->getCamera()) {
+        m_window->getCamera()->shakeWithProfile(Rowl::Render::CameraShakePreset::Custom, intensity, durationSeconds, frequency, damping, dirX, dirY);
+    }
+}
+
+float Engine::getCameraShakeOffsetX() const {
+    return (m_window && m_window->getCamera()) ? m_window->getCamera()->getShakeOffsetX() : 0.0f;
+}
+
+float Engine::getCameraShakeOffsetY() const {
+    return (m_window && m_window->getCamera()) ? m_window->getCamera()->getShakeOffsetY() : 0.0f;
+}
+
+void Engine::triggerScreenFlash(uint8_t r, uint8_t g, uint8_t b, float durationSeconds, float intensity) {
+    if (m_window) {
+        m_window->triggerScreenFlash(r, g, b, durationSeconds, intensity);
+    }
+}
+
+void Engine::triggerScreenFlashHex(const std::string& colorHex, float durationSeconds, float intensity) {
+    if (m_window) {
+        m_window->triggerScreenFlashHex(colorHex, durationSeconds, intensity);
+    }
+}
+
+bool Engine::isScreenFlashActive() const {
+    return m_window ? m_window->isScreenFlashActive() : false;
+}
+
+void Engine::setScreenTint(uint8_t r, uint8_t g, uint8_t b, float opacity) {
+    if (m_window) {
+        m_window->setScreenTint(r, g, b, opacity);
+    }
+}
+
+void Engine::setScreenTintHex(const std::string& colorHex, float opacity) {
+    if (m_window) {
+        m_window->setScreenTintHex(colorHex, opacity);
+    }
+}
+
+void Engine::clearScreenTint() {
+    if (m_window) {
+        m_window->clearScreenTint();
+    }
+}
+
+float Engine::getScreenTintOpacity() const {
+    return m_window ? m_window->getScreenTintOpacity() : 0.0f;
+}
+
+void Engine::setVignette(float intensity, float radius, const std::string& colorHex) {
+    if (m_window) {
+        m_window->setVignette(intensity, radius, colorHex);
+    }
+}
+
+float Engine::getVignetteIntensity() const {
+    return m_window ? m_window->getVignetteIntensity() : 0.0f;
 }
 
 void Engine::run() {

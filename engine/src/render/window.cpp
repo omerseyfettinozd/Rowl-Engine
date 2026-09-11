@@ -24,6 +24,36 @@ namespace Rowl::Render {
 
 namespace {
 
+static SDL_Color parseHexColor(const std::string& hex, uint8_t defaultA = 255) {
+    if (hex.empty()) return {255, 255, 255, defaultA};
+    std::string clean = hex;
+    if (clean[0] == '#') clean = clean.substr(1);
+
+    uint32_t val = 0;
+    try {
+        val = std::stoul(clean, nullptr, 16);
+    } catch (...) {
+        return {255, 255, 255, defaultA};
+    }
+
+    if (clean.length() == 6) {
+        return {
+            static_cast<uint8_t>((val >> 16) & 0xFF),
+            static_cast<uint8_t>((val >> 8) & 0xFF),
+            static_cast<uint8_t>(val & 0xFF),
+            defaultA
+        };
+    } else if (clean.length() == 8) {
+        return {
+            static_cast<uint8_t>((val >> 24) & 0xFF),
+            static_cast<uint8_t>((val >> 16) & 0xFF),
+            static_cast<uint8_t>((val >> 8) & 0xFF),
+            static_cast<uint8_t>(val & 0xFF)
+        };
+    }
+    return {255, 255, 255, defaultA};
+}
+
 constexpr int kMaxTextureDimension = 8'192;
 constexpr uint64_t kMaxTexturePixels = 16ULL * 1024 * 1024;
 constexpr uint64_t kMinimumTextureCacheBytes = 1ULL * 1024ULL * 1024ULL;
@@ -446,6 +476,180 @@ bool Window::isTransitionActive() const {
 void Window::update(float dt) {
     if (m_camera) m_camera->update(dt);
     if (m_transitionManager) m_transitionManager->update(dt);
+
+    if (m_screenFx.flashActive) {
+        m_screenFx.flashElapsed += dt;
+        if (m_screenFx.flashElapsed >= m_screenFx.flashDuration) {
+            m_screenFx.flashActive = false;
+            m_screenFx.flashElapsed = 0.0f;
+        }
+    }
+}
+
+void Window::triggerScreenFlash(uint8_t r, uint8_t g, uint8_t b, float durationSeconds, float intensity) {
+    if (!std::isfinite(durationSeconds) || durationSeconds <= 0.0f) {
+        m_screenFx.flashActive = false;
+        m_screenFx.flashDuration = 0.0f;
+        m_screenFx.flashElapsed = 0.0f;
+        return;
+    }
+    m_screenFx.flashActive = true;
+    m_screenFx.flashR = r;
+    m_screenFx.flashG = g;
+    m_screenFx.flashB = b;
+    m_screenFx.flashDuration = std::clamp(durationSeconds, 0.01f, 60.0f);
+    m_screenFx.flashElapsed = 0.0f;
+    m_screenFx.flashIntensity = std::clamp(intensity, 0.0f, 1.0f);
+}
+
+void Window::triggerScreenFlashHex(const std::string& colorHex, float durationSeconds, float intensity) {
+    SDL_Color c = parseHexColor(colorHex, 255);
+    triggerScreenFlash(c.r, c.g, c.b, durationSeconds, intensity);
+}
+
+bool Window::isScreenFlashActive() const {
+    return m_screenFx.flashActive;
+}
+
+float Window::getScreenFlashProgress() const {
+    if (!m_screenFx.flashActive || m_screenFx.flashDuration <= 0.0f) return 1.0f;
+    return std::clamp(m_screenFx.flashElapsed / m_screenFx.flashDuration, 0.0f, 1.0f);
+}
+
+void Window::setScreenTint(uint8_t r, uint8_t g, uint8_t b, float opacity) {
+    if (!std::isfinite(opacity) || opacity <= 0.001f) {
+        clearScreenTint();
+        return;
+    }
+    m_screenFx.hasTint = true;
+    m_screenFx.tintR = r;
+    m_screenFx.tintG = g;
+    m_screenFx.tintB = b;
+    m_screenFx.tintOpacity = std::clamp(opacity, 0.0f, 1.0f);
+}
+
+void Window::setScreenTintHex(const std::string& colorHex, float opacity) {
+    if (colorHex.empty()) {
+        clearScreenTint();
+        return;
+    }
+    SDL_Color c = parseHexColor(colorHex, 255);
+    setScreenTint(c.r, c.g, c.b, opacity);
+}
+
+void Window::clearScreenTint() {
+    m_screenFx.hasTint = false;
+    m_screenFx.tintOpacity = 0.0f;
+}
+
+float Window::getScreenTintOpacity() const {
+    return m_screenFx.hasTint ? m_screenFx.tintOpacity : 0.0f;
+}
+
+bool Window::hasScreenTint() const {
+    return m_screenFx.hasTint && m_screenFx.tintOpacity > 0.001f;
+}
+
+void Window::setVignette(float intensity, float radius, const std::string& colorHex) {
+    if (!std::isfinite(intensity) || intensity <= 0.001f) {
+        m_screenFx.vignetteEnabled = false;
+        m_screenFx.vignetteIntensity = 0.0f;
+        return;
+    }
+    m_screenFx.vignetteEnabled = true;
+    m_screenFx.vignetteIntensity = std::clamp(intensity, 0.0f, 1.0f);
+    m_screenFx.vignetteRadius = std::clamp(radius, 0.0f, 1.0f);
+    SDL_Color c = parseHexColor(colorHex, 255);
+    m_screenFx.vignetteR = c.r;
+    m_screenFx.vignetteG = c.g;
+    m_screenFx.vignetteB = c.b;
+}
+
+float Window::getVignetteIntensity() const {
+    return m_screenFx.vignetteEnabled ? m_screenFx.vignetteIntensity : 0.0f;
+}
+
+bool Window::isVignetteActive() const {
+    return m_screenFx.vignetteEnabled && m_screenFx.vignetteIntensity > 0.001f;
+}
+
+void Window::ensureVignetteTexture() {
+    if (m_vignetteTexture || !m_sdlRenderer) return;
+
+    constexpr int kVignetteSize = 256;
+    SDL_Surface* surface = SDL_CreateSurface(kVignetteSize, kVignetteSize, SDL_PIXELFORMAT_RGBA32);
+    if (!surface) return;
+
+    uint32_t* pixels = static_cast<uint32_t*>(surface->pixels);
+    const float center = (kVignetteSize - 1) * 0.5f;
+    const float maxRadius = center * 1.41421356f;
+    const float innerRadius = center * m_screenFx.vignetteRadius;
+
+    for (int y = 0; y < kVignetteSize; ++y) {
+        for (int x = 0; x < kVignetteSize; ++x) {
+            float dx = static_cast<float>(x) - center;
+            float dy = static_cast<float>(y) - center;
+            float dist = std::sqrt(dx * dx + dy * dy);
+
+            float alpha = 0.0f;
+            if (dist > innerRadius) {
+                float norm = (dist - innerRadius) / (maxRadius - innerRadius);
+                norm = std::clamp(norm, 0.0f, 1.0f);
+                alpha = norm * norm * (3.0f - 2.0f * norm); // smoothstep
+            }
+            uint8_t a = static_cast<uint8_t>(std::clamp(alpha * 255.0f, 0.0f, 255.0f));
+            pixels[y * kVignetteSize + x] = SDL_MapRGBA(SDL_GetPixelFormatDetails(surface->format), nullptr, 255, 255, 255, a);
+        }
+    }
+
+    m_vignetteTexture = SDL_CreateTextureFromSurface(m_sdlRenderer, surface);
+    SDL_DestroySurface(surface);
+}
+
+void Window::renderScreenEffects(const ViewportMetrics& metrics) {
+    if (!m_sdlRenderer) return;
+
+    SDL_FRect canvasRect = {
+        static_cast<float>(metrics.x),
+        static_cast<float>(metrics.y),
+        static_cast<float>(metrics.width),
+        static_cast<float>(metrics.height)
+    };
+
+    // 1. Color Tint Overlay
+    if (m_screenFx.hasTint && m_screenFx.tintOpacity > 0.001f) {
+        Uint8 alpha = static_cast<Uint8>(std::clamp(m_screenFx.tintOpacity, 0.0f, 1.0f) * 255.0f);
+        if (alpha > 0) {
+            SDL_SetRenderDrawBlendMode(m_sdlRenderer, SDL_BLENDMODE_BLEND);
+            SDL_SetRenderDrawColor(m_sdlRenderer, m_screenFx.tintR, m_screenFx.tintG, m_screenFx.tintB, alpha);
+            SDL_RenderFillRect(m_sdlRenderer, &canvasRect);
+        }
+    }
+
+    // 2. Vignette Post-Process
+    if (m_screenFx.vignetteEnabled && m_screenFx.vignetteIntensity > 0.001f) {
+        ensureVignetteTexture();
+        if (m_vignetteTexture) {
+            Uint8 vAlpha = static_cast<Uint8>(std::clamp(m_screenFx.vignetteIntensity, 0.0f, 1.0f) * 255.0f);
+            SDL_SetTextureBlendMode(m_vignetteTexture, SDL_BLENDMODE_BLEND);
+            SDL_SetTextureColorMod(m_vignetteTexture, m_screenFx.vignetteR, m_screenFx.vignetteG, m_screenFx.vignetteB);
+            SDL_SetTextureAlphaMod(m_vignetteTexture, vAlpha);
+            SDL_RenderTexture(m_sdlRenderer, m_vignetteTexture, nullptr, &canvasRect);
+        }
+    }
+
+    // 3. Screen Flash (quadratic decay for sudden hit/lightning)
+    if (m_screenFx.flashActive && m_screenFx.flashDuration > 0.0f) {
+        float progress = std::clamp(m_screenFx.flashElapsed / m_screenFx.flashDuration, 0.0f, 1.0f);
+        float decay = 1.0f - progress;
+        float alphaFactor = decay * decay * m_screenFx.flashIntensity;
+        Uint8 alpha = static_cast<Uint8>(std::clamp(alphaFactor, 0.0f, 1.0f) * 255.0f);
+        if (alpha > 0) {
+            SDL_SetRenderDrawBlendMode(m_sdlRenderer, SDL_BLENDMODE_BLEND);
+            SDL_SetRenderDrawColor(m_sdlRenderer, m_screenFx.flashR, m_screenFx.flashG, m_screenFx.flashB, alpha);
+            SDL_RenderFillRect(m_sdlRenderer, &canvasRect);
+        }
+    }
 }
 
 void Window::pollEvents(bool& outShouldQuit) {
@@ -728,36 +932,6 @@ SDL_Texture* Window::loadTexture(const std::string& filename) {
     return texture;
 }
 
-static SDL_Color parseHexColor(const std::string& hex, uint8_t defaultA = 255) {
-    if (hex.empty()) return {255, 255, 255, defaultA};
-    std::string clean = hex;
-    if (clean[0] == '#') clean = clean.substr(1);
-
-    uint32_t val = 0;
-    try {
-        val = std::stoul(clean, nullptr, 16);
-    } catch (...) {
-        return {255, 255, 255, defaultA};
-    }
-
-    if (clean.length() == 6) {
-        return {
-            static_cast<uint8_t>((val >> 16) & 0xFF),
-            static_cast<uint8_t>((val >> 8) & 0xFF),
-            static_cast<uint8_t>(val & 0xFF),
-            defaultA
-        };
-    } else if (clean.length() == 8) {
-        return {
-            static_cast<uint8_t>((val >> 24) & 0xFF),
-            static_cast<uint8_t>((val >> 16) & 0xFF),
-            static_cast<uint8_t>((val >> 8) & 0xFF),
-            static_cast<uint8_t>(val & 0xFF)
-        };
-    }
-    return {255, 255, 255, defaultA};
-}
-
 void Window::renderVisualNovelFrame(
     bool hasBackground,
     const std::string& background,
@@ -898,6 +1072,9 @@ void Window::renderVisualNovelFrame(
     if (m_transitionManager && m_transitionManager->isTransitionActive()) {
         m_transitionManager->renderTransition(m_sdlRenderer, metrics);
     }
+
+    // Screen Visual FX Pipeline (Screen Tint, Screen Flash, Vignette Post-Process)
+    renderScreenEffects(metrics);
 
     // 3. Render Dialogue Boxes (Supports 1 or multiple dialogue boxes simultaneously)
     for (const auto& dlg : dialogues) {
@@ -1161,6 +1338,11 @@ void Window::shutdown() {
 
     clearTextureCache();
     shutdownGpuMsdfRenderer();
+
+    if (m_vignetteTexture) {
+        SDL_DestroyTexture(m_vignetteTexture);
+        m_vignetteTexture = nullptr;
+    }
 
     if (m_sdlRenderer) {
         SDL_DestroyRenderer(m_sdlRenderer);

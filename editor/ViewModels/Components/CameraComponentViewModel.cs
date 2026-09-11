@@ -44,6 +44,68 @@ namespace RowlEngine.Editor.ViewModels.Components
         [ObservableProperty]
         private double _shakeFrequency = 25.0;
 
+        [ObservableProperty]
+        private string _shakePreset = "None";
+
+        [ObservableProperty]
+        private double _shakeDamping = 1.0;
+
+        [ObservableProperty]
+        private double _shakeDirectionX = 1.0;
+
+        [ObservableProperty]
+        private double _shakeDirectionY = 1.0;
+
+        public static IReadOnlyList<string> AvailableShakePresets { get; } = new[]
+        {
+            "None",
+            "Subtle",
+            "Earthquake",
+            "Explosion",
+            "Heartbeat",
+            "Custom"
+        };
+
+        partial void OnShakePresetChanged(string value)
+        {
+            switch (value?.ToLowerInvariant())
+            {
+                case "subtle":
+                    ShakeIntensity = 6.0;
+                    ShakeDuration = 0.5;
+                    ShakeFrequency = 16.0;
+                    ShakeDamping = 1.0;
+                    ShakeDirectionX = 0.7;
+                    ShakeDirectionY = 0.7;
+                    break;
+                case "earthquake":
+                    ShakeIntensity = 18.0;
+                    ShakeDuration = 1.5;
+                    ShakeFrequency = 12.0;
+                    ShakeDamping = 0.8;
+                    ShakeDirectionX = 1.0;
+                    ShakeDirectionY = 0.2;
+                    break;
+                case "explosion":
+                    ShakeIntensity = 35.0;
+                    ShakeDuration = 0.8;
+                    ShakeFrequency = 32.0;
+                    ShakeDamping = 2.5;
+                    ShakeDirectionX = 1.0;
+                    ShakeDirectionY = 1.0;
+                    break;
+                case "heartbeat":
+                case "pulse":
+                    ShakeIntensity = 12.0;
+                    ShakeDuration = 1.5;
+                    ShakeFrequency = 2.0;
+                    ShakeDamping = 0.5;
+                    ShakeDirectionX = 0.15;
+                    ShakeDirectionY = 1.0;
+                    break;
+            }
+        }
+
         public static IReadOnlyList<string> AvailableEasings { get; } = new[]
         {
             "linear",
@@ -61,9 +123,13 @@ namespace RowlEngine.Editor.ViewModels.Components
             Rotation = 0.0;
             PanDuration = 0.0;
             ZoomDuration = 0.0;
+            ShakePreset = "None";
             ShakeIntensity = 0.0;
             ShakeDuration = 0.0;
             ShakeFrequency = 25.0;
+            ShakeDamping = 1.0;
+            ShakeDirectionX = 1.0;
+            ShakeDirectionY = 1.0;
         }
 
         public override Dictionary<string, object> Serialize()
@@ -79,11 +145,19 @@ namespace RowlEngine.Editor.ViewModels.Components
                 ["easing"] = Easing
             };
 
+            if (!string.IsNullOrEmpty(ShakePreset) && ShakePreset != "None")
+            {
+                dict["shake_preset"] = ShakePreset.ToLowerInvariant();
+            }
+
             if (ShakeIntensity > 0.0 && ShakeDuration > 0.0)
             {
                 dict["shake_intensity"] = ShakeIntensity;
                 dict["shake_duration"] = ShakeDuration;
                 dict["shake_frequency"] = ShakeFrequency;
+                dict["shake_damping"] = ShakeDamping;
+                dict["shake_dir_x"] = ShakeDirectionX;
+                dict["shake_dir_y"] = ShakeDirectionY;
             }
 
             return dict;
@@ -98,9 +172,13 @@ namespace RowlEngine.Editor.ViewModels.Components
             if (data.TryGetValue("pan_duration", out var pdv)) PanDuration = Convert.ToDouble(pdv);
             if (data.TryGetValue("zoom_duration", out var zdv)) ZoomDuration = Convert.ToDouble(zdv);
             if (data.TryGetValue("easing", out var ev) && ev is string es) Easing = es;
+            if (data.TryGetValue("shake_preset", out var spv) && spv is string sps) ShakePreset = sps;
             if (data.TryGetValue("shake_intensity", out var siv)) ShakeIntensity = Convert.ToDouble(siv);
             if (data.TryGetValue("shake_duration", out var sdv)) ShakeDuration = Convert.ToDouble(sdv);
             if (data.TryGetValue("shake_frequency", out var sfv)) ShakeFrequency = Convert.ToDouble(sfv);
+            if (data.TryGetValue("shake_damping", out var sdpv)) ShakeDamping = Convert.ToDouble(sdpv);
+            if (data.TryGetValue("shake_dir_x", out var sdxv)) ShakeDirectionX = Convert.ToDouble(sdxv);
+            if (data.TryGetValue("shake_dir_y", out var sdyv)) ShakeDirectionY = Convert.ToDouble(sdyv);
         }
     }
 }

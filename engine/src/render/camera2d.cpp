@@ -1,4 +1,5 @@
 #include "rowl/render/camera2d.hpp"
+#include <cctype>
 
 namespace Rowl::Render {
 
@@ -92,8 +93,13 @@ void Camera2D::setRotation(float degrees) {
 }
 
 void Camera2D::shake(float intensity, float durationSeconds, float frequency) {
+    shakeWithProfile(CameraShakePreset::Custom, intensity, durationSeconds, frequency, 2.0f, 1.0f, 1.0f);
+}
+
+void Camera2D::shakeWithProfile(CameraShakePreset preset, float intensity, float durationSeconds, float frequency, float damping, float dirX, float dirY) {
     if (!std::isfinite(intensity) || !std::isfinite(durationSeconds)) return;
     if (intensity <= 0.0f || durationSeconds <= 0.0f) {
+        m_shakePreset = preset;
         m_shakeIntensity = 0.0f;
         m_shakeDuration = 0.0f;
         m_shakeTimer = 0.0f;
@@ -101,10 +107,62 @@ void Camera2D::shake(float intensity, float durationSeconds, float frequency) {
         m_shakeOffsetY = 0.0f;
         return;
     }
+    m_shakePreset = preset;
     m_shakeIntensity = std::clamp(intensity, 0.0f, kMaxShakeIntensity);
     m_shakeDuration = std::clamp(durationSeconds, 0.0f, kMaxShakeDuration);
     m_shakeTimer = m_shakeDuration;
     m_shakeFrequency = (frequency > 0.1f && std::isfinite(frequency)) ? frequency : 25.0f;
+    m_shakeDamping = (damping > 0.01f && std::isfinite(damping)) ? damping : 1.0f;
+    m_shakeDirX = std::clamp(dirX, 0.0f, 1.0f);
+    m_shakeDirY = std::clamp(dirY, 0.0f, 1.0f);
+}
+
+void Camera2D::shakePreset(CameraShakePreset preset, float intensityMultiplier, float durationOverride) {
+    float mult = (intensityMultiplier > 0.0f && std::isfinite(intensityMultiplier)) ? intensityMultiplier : 1.0f;
+    switch (preset) {
+        case CameraShakePreset::Subtle: {
+            float dur = (durationOverride > 0.0f && std::isfinite(durationOverride)) ? durationOverride : 0.4f;
+            shakeWithProfile(CameraShakePreset::Subtle, 5.0f * mult, dur, 16.0f, 1.0f, 0.7f, 0.7f);
+            break;
+        }
+        case CameraShakePreset::Earthquake: {
+            float dur = (durationOverride > 0.0f && std::isfinite(durationOverride)) ? durationOverride : 1.2f;
+            shakeWithProfile(CameraShakePreset::Earthquake, 16.0f * mult, dur, 11.0f, 0.7f, 1.0f, 0.2f);
+            break;
+        }
+        case CameraShakePreset::Explosion: {
+            float dur = (durationOverride > 0.0f && std::isfinite(durationOverride)) ? durationOverride : 0.7f;
+            shakeWithProfile(CameraShakePreset::Explosion, 32.0f * mult, dur, 30.0f, 2.2f, 1.0f, 1.0f);
+            break;
+        }
+        case CameraShakePreset::Heartbeat: {
+            float dur = (durationOverride > 0.0f && std::isfinite(durationOverride)) ? durationOverride : 1.5f;
+            shakeWithProfile(CameraShakePreset::Heartbeat, 12.0f * mult, dur, 2.0f, 0.5f, 0.15f, 1.0f);
+            break;
+        }
+        case CameraShakePreset::Custom:
+        default: {
+            float dur = (durationOverride > 0.0f && std::isfinite(durationOverride)) ? durationOverride : 0.5f;
+            shakeWithProfile(CameraShakePreset::Custom, 10.0f * mult, dur, 25.0f, 2.0f, 1.0f, 1.0f);
+            break;
+        }
+    }
+}
+
+void Camera2D::shakePreset(const std::string& presetName, float intensityMultiplier, float durationOverride) {
+    std::string lower = presetName;
+    std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    if (lower == "subtle") {
+        shakePreset(CameraShakePreset::Subtle, intensityMultiplier, durationOverride);
+    } else if (lower == "earthquake") {
+        shakePreset(CameraShakePreset::Earthquake, intensityMultiplier, durationOverride);
+    } else if (lower == "explosion") {
+        shakePreset(CameraShakePreset::Explosion, intensityMultiplier, durationOverride);
+    } else if (lower == "heartbeat" || lower == "pulse") {
+        shakePreset(CameraShakePreset::Heartbeat, intensityMultiplier, durationOverride);
+    } else {
+        shakePreset(CameraShakePreset::Custom, intensityMultiplier, durationOverride);
+    }
 }
 
 void Camera2D::update(float dt) {
@@ -144,13 +202,29 @@ void Camera2D::update(float dt) {
             m_shakeOffsetX = 0.0f;
             m_shakeOffsetY = 0.0f;
         } else {
-            // Quadratic decay for natural shock absorption
             float progress = std::clamp(m_shakeTimer / m_shakeDuration, 0.0f, 1.0f);
-            float currentIntensity = m_shakeIntensity * (progress * progress);
-            float phase = (m_shakeDuration - m_shakeTimer) * m_shakeFrequency;
+            float elapsed = m_shakeDuration - m_shakeTimer;
 
-            m_shakeOffsetX = currentIntensity * std::sin(phase * 6.283185307f);
-            m_shakeOffsetY = currentIntensity * std::cos(phase * 4.712388980f);
+            if (m_shakePreset == CameraShakePreset::Heartbeat) {
+                // Rhythmic physiological lub-dub pulse
+                float beatPhase = std::fmod(elapsed * m_shakeFrequency, 1.0f);
+                float pulse = 0.0f;
+                if (beatPhase < 0.22f) {
+                    pulse = std::sin(beatPhase / 0.22f * 3.14159265f);
+                } else if (beatPhase >= 0.28f && beatPhase < 0.48f) {
+                    pulse = 0.65f * std::sin((beatPhase - 0.28f) / 0.20f * 3.14159265f);
+                }
+                float currentIntensity = m_shakeIntensity * std::pow(progress, m_shakeDamping) * pulse;
+                m_shakeOffsetX = currentIntensity * m_shakeDirX * 0.4f * std::sin(elapsed * 15.0f);
+                m_shakeOffsetY = currentIntensity * m_shakeDirY * (pulse > 0.01f ? 1.0f : 0.0f);
+            } else {
+                float decay = std::pow(progress, m_shakeDamping);
+                float currentIntensity = m_shakeIntensity * decay;
+                float phase = elapsed * m_shakeFrequency;
+
+                m_shakeOffsetX = currentIntensity * m_shakeDirX * std::sin(phase * 6.283185307f);
+                m_shakeOffsetY = currentIntensity * m_shakeDirY * std::cos(phase * 4.712388980f);
+            }
         }
     } else {
         m_shakeOffsetX = 0.0f;
@@ -201,9 +275,14 @@ void Camera2D::reset() {
     m_panTimer = 0.0f;
     m_zoomDuration = 0.0f;
     m_zoomTimer = 0.0f;
+    m_shakePreset = CameraShakePreset::Custom;
     m_shakeIntensity = 0.0f;
     m_shakeDuration = 0.0f;
     m_shakeTimer = 0.0f;
+    m_shakeFrequency = 25.0f;
+    m_shakeDamping = 1.0f;
+    m_shakeDirX = 1.0f;
+    m_shakeDirY = 1.0f;
     m_shakeOffsetX = 0.0f;
     m_shakeOffsetY = 0.0f;
 }

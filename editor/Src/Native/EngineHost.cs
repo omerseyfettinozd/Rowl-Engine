@@ -741,6 +741,129 @@ namespace RowlEngine.Editor.Native
                 NativeBridge.RowlEngine_ClearLastResult(_handle);
         }
 
+        // ── 2D Camera & Screen Shake Controls ──────────────────────────────────
+
+        public void SetCamera(float x, float y, float zoom)
+        {
+            if (_handle != IntPtr.Zero)
+                NativeBridge.RowlEngine_SetCamera(_handle, x, y, zoom);
+        }
+
+        public void ResetCamera()
+        {
+            if (_handle != IntPtr.Zero)
+                NativeBridge.RowlEngine_ResetCamera(_handle);
+        }
+
+        public void CameraPanTo(float targetX, float targetY, float durationSeconds, int easingType = 3)
+        {
+            if (_handle != IntPtr.Zero)
+                NativeBridge.RowlEngine_CameraPanTo(_handle, targetX, targetY, durationSeconds, easingType);
+        }
+
+        public void CameraZoomTo(float targetZoom, float durationSeconds, int easingType = 3)
+        {
+            if (_handle != IntPtr.Zero)
+                NativeBridge.RowlEngine_CameraZoomTo(_handle, targetZoom, durationSeconds, easingType);
+        }
+
+        public bool IsCameraMoving()
+        {
+            return _handle != IntPtr.Zero && NativeBridge.RowlEngine_IsCameraMoving(_handle) == 1;
+        }
+
+        public void TriggerCameraShake(float intensity, float durationSeconds)
+        {
+            if (_handle != IntPtr.Zero)
+                NativeBridge.RowlEngine_TriggerCameraShake(_handle, intensity, durationSeconds);
+        }
+
+        public void TriggerCameraShakePreset(string presetName, float intensityMultiplier = 1.0f, float durationSeconds = 0.0f)
+        {
+            if (_handle != IntPtr.Zero)
+                NativeBridge.RowlEngine_TriggerCameraShakePreset(_handle, presetName, intensityMultiplier, durationSeconds);
+        }
+
+        public void TriggerCameraShakeProfile(float intensity, float durationSeconds, float frequency, float damping, float dirX, float dirY)
+        {
+            if (_handle != IntPtr.Zero)
+                NativeBridge.RowlEngine_TriggerCameraShakeProfile(_handle, intensity, durationSeconds, frequency, damping, dirX, dirY);
+        }
+
+        public float GetCameraShakeOffsetX()
+        {
+            return _handle != IntPtr.Zero ? NativeBridge.RowlEngine_GetCameraShakeOffsetX(_handle) : 0.0f;
+        }
+
+        public float GetCameraShakeOffsetY()
+        {
+            return _handle != IntPtr.Zero ? NativeBridge.RowlEngine_GetCameraShakeOffsetY(_handle) : 0.0f;
+        }
+
+        // ── Screen Visual FX (Flash, Tint, Vignette, Transitions) ────────────
+
+        public void StartTransition(string kind, float durationSeconds, string? colorHex = null)
+        {
+            if (_handle != IntPtr.Zero)
+                NativeBridge.RowlEngine_StartTransition(_handle, kind, durationSeconds, colorHex);
+        }
+
+        public bool IsTransitionActive()
+        {
+            return _handle != IntPtr.Zero && NativeBridge.RowlEngine_IsTransitionActive(_handle) == 1;
+        }
+
+        public void TriggerScreenFlash(byte r, byte g, byte b, float durationSeconds, float intensity = 1.0f)
+        {
+            if (_handle != IntPtr.Zero)
+                NativeBridge.RowlEngine_TriggerScreenFlash(_handle, r, g, b, durationSeconds, intensity);
+        }
+
+        public void TriggerScreenFlashHex(string colorHex, float durationSeconds, float intensity = 1.0f)
+        {
+            if (_handle != IntPtr.Zero)
+                NativeBridge.RowlEngine_TriggerScreenFlashHex(_handle, colorHex, durationSeconds, intensity);
+        }
+
+        public bool IsScreenFlashActive()
+        {
+            return _handle != IntPtr.Zero && NativeBridge.RowlEngine_IsScreenFlashActive(_handle) == 1;
+        }
+
+        public void SetScreenTint(byte r, byte g, byte b, float opacity)
+        {
+            if (_handle != IntPtr.Zero)
+                NativeBridge.RowlEngine_SetScreenTint(_handle, r, g, b, opacity);
+        }
+
+        public void SetScreenTintHex(string colorHex, float opacity)
+        {
+            if (_handle != IntPtr.Zero)
+                NativeBridge.RowlEngine_SetScreenTintHex(_handle, colorHex, opacity);
+        }
+
+        public void ClearScreenTint()
+        {
+            if (_handle != IntPtr.Zero)
+                NativeBridge.RowlEngine_ClearScreenTint(_handle);
+        }
+
+        public float GetScreenTintOpacity()
+        {
+            return _handle != IntPtr.Zero ? NativeBridge.RowlEngine_GetScreenTintOpacity(_handle) : 0.0f;
+        }
+
+        public void SetVignette(float intensity, float radius = 0.75f, string? colorHex = null)
+        {
+            if (_handle != IntPtr.Zero)
+                NativeBridge.RowlEngine_SetVignette(_handle, intensity, radius, colorHex);
+        }
+
+        public float GetVignetteIntensity()
+        {
+            return _handle != IntPtr.Zero ? NativeBridge.RowlEngine_GetVignetteIntensity(_handle) : 0.0f;
+        }
+
         // ── Disposal ──────────────────────────────────────────────────────────
 
         public void Dispose()

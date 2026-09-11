@@ -140,6 +140,25 @@ public:
     void startTransition(const std::string& kind, float durationSeconds, const std::string& colorHex = "");
     bool isTransitionActive() const { return m_window && m_window->isTransitionActive(); }
 
+    // Camera Shake Presets & Profiles
+    void triggerCameraShakePreset(const std::string& preset, float intensityMultiplier = 1.0f, float durationOverride = 0.0f);
+    void triggerCameraShakeProfile(float intensity, float durationSeconds, float frequency, float damping, float dirX, float dirY);
+    float getCameraShakeOffsetX() const;
+    float getCameraShakeOffsetY() const;
+
+    // Screen Visual FX Pipeline (Flash, Tint, Vignette)
+    void triggerScreenFlash(uint8_t r, uint8_t g, uint8_t b, float durationSeconds, float intensity = 1.0f);
+    void triggerScreenFlashHex(const std::string& colorHex, float durationSeconds, float intensity = 1.0f);
+    bool isScreenFlashActive() const;
+
+    void setScreenTint(uint8_t r, uint8_t g, uint8_t b, float opacity);
+    void setScreenTintHex(const std::string& colorHex, float opacity);
+    void clearScreenTint();
+    float getScreenTintOpacity() const;
+
+    void setVignette(float intensity, float radius = 0.75f, const std::string& colorHex = "#000000");
+    float getVignetteIntensity() const;
+
     // ── Scene / story API ─────────────────────────────────────────────────
 
     void updateActiveScene(

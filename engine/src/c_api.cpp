@@ -1064,4 +1064,95 @@ int RowlEngine_IsCameraMoving(RowlEngineHandle handle) {
     }, 0);
 }
 
+void RowlEngine_TriggerCameraShakePreset(RowlEngineHandle handle, const char* presetName, float intensityMultiplier, float durationSeconds) {
+    if (!isLiveHandle(handle)) return;
+    invokeNoexcept([&] {
+        toEngine(handle)->triggerCameraShakePreset(presetName ? presetName : "subtle", intensityMultiplier, durationSeconds);
+    });
+}
+
+void RowlEngine_TriggerCameraShakeProfile(RowlEngineHandle handle, float intensity, float durationSeconds, float frequency, float damping, float dirX, float dirY) {
+    if (!isLiveHandle(handle)) return;
+    invokeNoexcept([&] {
+        toEngine(handle)->triggerCameraShakeProfile(intensity, durationSeconds, frequency, damping, dirX, dirY);
+    });
+}
+
+float RowlEngine_GetCameraShakeOffsetX(RowlEngineHandle handle) {
+    if (!isLiveHandle(handle)) return 0.0f;
+    return invokeNoexcept<float>([&] {
+        return toEngine(handle)->getCameraShakeOffsetX();
+    }, 0.0f);
+}
+
+float RowlEngine_GetCameraShakeOffsetY(RowlEngineHandle handle) {
+    if (!isLiveHandle(handle)) return 0.0f;
+    return invokeNoexcept<float>([&] {
+        return toEngine(handle)->getCameraShakeOffsetY();
+    }, 0.0f);
+}
+
+void RowlEngine_TriggerScreenFlash(RowlEngineHandle handle, uint8_t r, uint8_t g, uint8_t b, float durationSeconds, float intensity) {
+    if (!isLiveHandle(handle)) return;
+    invokeNoexcept([&] {
+        toEngine(handle)->triggerScreenFlash(r, g, b, durationSeconds, intensity);
+    });
+}
+
+void RowlEngine_TriggerScreenFlashHex(RowlEngineHandle handle, const char* colorHex, float durationSeconds, float intensity) {
+    if (!isLiveHandle(handle)) return;
+    invokeNoexcept([&] {
+        toEngine(handle)->triggerScreenFlashHex(colorHex ? colorHex : "#FFFFFF", durationSeconds, intensity);
+    });
+}
+
+int RowlEngine_IsScreenFlashActive(RowlEngineHandle handle) {
+    if (!isLiveHandle(handle)) return 0;
+    return invokeNoexcept<int>([&] {
+        return toEngine(handle)->isScreenFlashActive() ? 1 : 0;
+    }, 0);
+}
+
+void RowlEngine_SetScreenTint(RowlEngineHandle handle, uint8_t r, uint8_t g, uint8_t b, float opacity) {
+    if (!isLiveHandle(handle)) return;
+    invokeNoexcept([&] {
+        toEngine(handle)->setScreenTint(r, g, b, opacity);
+    });
+}
+
+void RowlEngine_SetScreenTintHex(RowlEngineHandle handle, const char* colorHex, float opacity) {
+    if (!isLiveHandle(handle)) return;
+    invokeNoexcept([&] {
+        toEngine(handle)->setScreenTintHex(colorHex ? colorHex : "", opacity);
+    });
+}
+
+void RowlEngine_ClearScreenTint(RowlEngineHandle handle) {
+    if (!isLiveHandle(handle)) return;
+    invokeNoexcept([&] {
+        toEngine(handle)->clearScreenTint();
+    });
+}
+
+float RowlEngine_GetScreenTintOpacity(RowlEngineHandle handle) {
+    if (!isLiveHandle(handle)) return 0.0f;
+    return invokeNoexcept<float>([&] {
+        return toEngine(handle)->getScreenTintOpacity();
+    }, 0.0f);
+}
+
+void RowlEngine_SetVignette(RowlEngineHandle handle, float intensity, float radius, const char* colorHex) {
+    if (!isLiveHandle(handle)) return;
+    invokeNoexcept([&] {
+        toEngine(handle)->setVignette(intensity, radius, colorHex ? colorHex : "#000000");
+    });
+}
+
+float RowlEngine_GetVignetteIntensity(RowlEngineHandle handle) {
+    if (!isLiveHandle(handle)) return 0.0f;
+    return invokeNoexcept<float>([&] {
+        return toEngine(handle)->getVignetteIntensity();
+    }, 0.0f);
+}
+
 } // extern "C"
