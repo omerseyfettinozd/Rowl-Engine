@@ -1403,12 +1403,11 @@ void Engine::loadStoryGraphFile() {
         }
     }
 
-    // 2. Physical search path fallback
+    // 2. Physical search path fallback (explicit asset root only; no parent traversal).
+    // Editor and player resolve the project via RowlEngine_SetProjectDirectory/VFS.
     std::vector<std::string> searchPaths = {
         "Assets/json/full_story_graph.json",
-        "Assets/full_story_graph.json",
-        "../Assets/json/full_story_graph.json",
-        "../Assets/full_story_graph.json"
+        "Assets/full_story_graph.json"
     };
     for (const auto& p : searchPaths) {
         if (std::filesystem::exists(p)) {
@@ -1471,11 +1470,10 @@ void Engine::loadActiveStoryFile() {
     }
 }
 
+    // Explicit asset root only; no parent traversal (see loadStoryGraphFile).
     std::vector<std::string> searchPaths = {
         "Assets/json/active_story.json",
-        "Assets/active_story.json",
-        "../Assets/json/active_story.json",
-        "../Assets/active_story.json"
+        "Assets/active_story.json"
     };
 
     for (const auto& path : searchPaths) {

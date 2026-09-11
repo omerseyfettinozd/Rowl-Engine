@@ -150,13 +150,12 @@ int main(int argc, char* argv[]) {
             return 1;
         }
     } else if (storyGraphPath.empty()) {
+        // Explicit project root only; never resolve from the launch CWD.
         std::vector<fs::path> candidates = {
             baseProj / "full_story_graph.json",
             baseProj / "Assets" / "full_story_graph.json",
             baseProj / "Assets" / "json" / "full_story_graph.json",
-            baseProj / "story_graph.json",
-            fs::current_path() / "full_story_graph.json",
-            fs::current_path() / "Assets" / "full_story_graph.json"
+            baseProj / "story_graph.json"
         };
         for (const auto& candidate : candidates) {
             if (fs::exists(candidate) && fs::is_regular_file(candidate)) {
