@@ -35,6 +35,15 @@ target_link_libraries(rowl_tests PRIVATE
     RowlEngineCore
 )
 
+# rowl_tests intentionally compiles the engine sources directly (the C++
+# classes are internal/hidden and not exported from the shared library), so
+# on MSVC its objects duplicate the symbols in RowlEngineCore.lib. The
+# duplicates are byte-identical (same sources), so allow the linker to keep
+# the first definition instead of failing with LNK2005.
+if(MSVC)
+    target_link_options(rowl_tests PRIVATE /FORCE:MULTIPLE)
+endif()
+
 add_test(NAME rowl_native_tests COMMAND rowl_tests)
 set_tests_properties(rowl_native_tests PROPERTIES
     WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
