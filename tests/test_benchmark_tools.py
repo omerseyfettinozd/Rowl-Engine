@@ -25,6 +25,7 @@ def report(machine="test-machine"):
             "json_update": {"avg_ms": 2.0},
             "first_frame_ms": 3.0,
             "steady_frame_ms": 4.0,
+            "transition_fps": 60.0,
             "process_memory_bytes": 5.0,
         },
     }
@@ -61,6 +62,22 @@ with tempfile.TemporaryDirectory() as directory:
                               capture_output=True, text=True, check=False)
     if rejected.returncode == 0 or "incompatible" not in rejected.stderr:
         raise SystemExit("different benchmark environments were not rejected")
+
+    regressed = directory / "regressed.json"
+    regressed_report = report()
+    regressed_report["metrics"]["steady_frame_ms"] = 8.0
+    regressed_report["metrics"]["transition_fps"] = 30.0
+    regressed.write_text(json.dumps(regressed_report), encoding="utf-8")
+    warned = subprocess.run([sys.executable, str(TOOL), str(baseline), str(regressed),
+                             "--warn-percent", "20"],
+                            capture_output=True, text=True, check=False)
+    if warned.returncode != 0 or "WARNING" not in warned.stdout:
+        raise SystemExit("regressed benchmark reports were not warned about")
+    gated = subprocess.run([sys.executable, str(TOOL), str(baseline), str(regressed),
+                            "--fail-percent", "20"],
+                           capture_output=True, text=True, check=False)
+    if gated.returncode == 0 or "threshold breached" not in gated.stderr:
+        raise SystemExit("regressed benchmark reports did not breach the fail gate")
 
     editor_baseline = directory / "editor-baseline.json"
     editor_candidate = directory / "editor-candidate.json"

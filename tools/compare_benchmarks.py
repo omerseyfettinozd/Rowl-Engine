@@ -6,12 +6,15 @@ import json
 import sys
 
 
+# name -> (document path, higher_is_better). Wall-clock costs regress upward;
+# throughput-style gauges such as FPS regress downward.
 METRICS = {
-    "first_frame_ms": ("metrics", "first_frame_ms"),
-    "steady_frame_ms": ("metrics", "steady_frame_ms"),
-    "vfs_io.avg_ms": ("metrics", "vfs_io", "avg_ms"),
-    "json_update.avg_ms": ("metrics", "json_update", "avg_ms"),
-    "process_memory_bytes": ("metrics", "process_memory_bytes"),
+    "first_frame_ms": (("metrics", "first_frame_ms"), False),
+    "steady_frame_ms": (("metrics", "steady_frame_ms"), False),
+    "transition_fps": (("metrics", "transition_fps"), True),
+    "vfs_io.avg_ms": (("metrics", "vfs_io", "avg_ms"), False),
+    "json_update.avg_ms": (("metrics", "json_update", "avg_ms"), False),
+    "process_memory_bytes": (("metrics", "process_memory_bytes"), False),
 }
 
 
@@ -26,7 +29,11 @@ def load(path):
 def value_at(document, path):
     value = document
     for part in path:
+        if not isinstance(value, dict) or part not in value:
+            return None
         value = value[part]
+    if value is None:
+        return None
     if not isinstance(value, (int, float)):
         raise ValueError("metric is not numeric: " + ".".join(path))
     return value
@@ -53,14 +60,22 @@ def compare(baseline, candidate):
         raise ValueError("benchmark environments are incompatible: " + details)
 
     rows = []
-    for name, path in METRICS.items():
+    skipped = []
+    for name, (path, higher_is_better) in METRICS.items():
         before = value_at(baseline, path)
         after = value_at(candidate, path)
+        if before is None or after is None:
+            skipped.append(name)
+            continue
         if before == 0:
             raise ValueError("cannot calculate percentage from zero baseline: " + name)
+        delta_percent = ((after - before) / before) * 100.0
+        # Regression points the wrong way per metric direction.
+        regression = delta_percent if not higher_is_better else -delta_percent
         rows.append({"metric": name, "baseline": before, "candidate": after,
-                     "delta_percent": ((after - before) / before) * 100.0})
-    return {"compatible": True, "environment": base_key, "metrics": rows}
+                     "delta_percent": delta_percent, "regression_percent": regression})
+    return {"compatible": True, "environment": base_key, "metrics": rows,
+            "skipped": skipped}
 
 
 def main():
@@ -68,6 +83,10 @@ def main():
     parser.add_argument("baseline")
     parser.add_argument("candidate")
     parser.add_argument("--output", help="write the machine-readable comparison JSON here")
+    parser.add_argument("--warn-percent", type=float, default=20.0,
+                        help="print a WARNING for regressions beyond this percent (default: 20)")
+    parser.add_argument("--fail-percent", type=float, default=None,
+                        help="exit nonzero when any regression exceeds this percent (default: off)")
     args = parser.parse_args()
     try:
         result = compare(load(args.baseline), load(args.candidate))
@@ -83,6 +102,21 @@ def main():
     for row in result["metrics"]:
         print(f"  {row['metric']}: {row['baseline']:.6f} -> {row['candidate']:.6f} "
               f"({row['delta_percent']:+.2f}%)")
+    for name in result["skipped"]:
+        print(f"  {name}: not present on both sides, skipped")
+    breached = [row for row in result["metrics"]
+                if row["regression_percent"] > args.warn_percent]
+    for row in breached:
+        print(f"[BenchmarkCompare] WARNING: {row['metric']} regressed "
+              f"{row['regression_percent']:.2f}% (warn at {args.warn_percent:.2f}%)")
+    if args.fail_percent is not None:
+        failures = [row for row in result["metrics"]
+                    if row["regression_percent"] > args.fail_percent]
+        if failures:
+            names = ", ".join(row["metric"] for row in failures)
+            print(f"[BenchmarkCompare] ERROR: regression threshold breached: {names}",
+                  file=sys.stderr)
+            return 2
     return 0
 
 

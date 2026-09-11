@@ -6,6 +6,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   linux:
@@ -96,6 +97,34 @@ jobs:
         with:
           name: linux-native-benchmark
           path: benchmark-results/linux-native.json
+
+      - name: Compare native benchmark with previous baseline
+        # Warn-only gate: never fails the job. Skips gracefully when no prior
+        # baseline exists or environments are not comparable.
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -u
+          PREV_ID=$(gh run list --workflow ci.yml --branch main --status success \
+            --limit 1 --json databaseId --jq '.[0].databaseId // empty')
+          if [ -z "$PREV_ID" ]; then
+            echo "[BenchmarkCompare] no previous successful run; skipping comparison."
+            exit 0
+          fi
+          rm -rf /tmp/prev-bench && mkdir -p /tmp/prev-bench
+          if ! gh run download "$PREV_ID" -n linux-native-benchmark -D /tmp/prev-bench; then
+            echo "[BenchmarkCompare] previous baseline artifact unavailable; skipping."
+            exit 0
+          fi
+          PREV_JSON=$(find /tmp/prev-bench -name '*.json' | head -n 1)
+          if [ -z "$PREV_JSON" ]; then
+            echo "[BenchmarkCompare] empty baseline artifact; skipping."
+            exit 0
+          fi
+          python3 tools/compare_benchmarks.py "$PREV_JSON" \
+            benchmark-results/linux-native.json --warn-percent 20 \
+            || echo "[BenchmarkCompare] environments differ; skipping."
 
       - name: Record editor benchmark baseline
         run: |

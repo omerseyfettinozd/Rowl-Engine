@@ -2193,6 +2193,10 @@ uint64_t benchmarkTextureCacheBudgetBytes() {
     }
 }
 
+// Transition FPS measured by test_camera_and_transition_pipeline(), which runs
+// before the benchmark writer. Negative means unmeasured (e.g. reordered runs).
+double g_transitionFps = -1.0;
+
 void writeBenchmarkJson(const std::string& outputPath, double vfsElapsedMs, int vfsIterations,
                         double jsonElapsedMs, int jsonIterations, double firstFrameMs,
                         double steadyFrameMs, double textureLoadMs, double nonTextureRenderMs,
@@ -2223,8 +2227,13 @@ void writeBenchmarkJson(const std::string& outputPath, double vfsElapsedMs, int 
            << "    \"first_frame_ms\": " << firstFrameMs << ",\n"
            << "    \"startup_profile\": {\"texture_load_ms\": " << textureLoadMs
            << ", \"non_texture_render_ms\": " << nonTextureRenderMs << "},\n"
-           << "    \"steady_frame_ms\": " << steadyFrameMs << ",\n"
-           << "    \"texture_cache\": {\"texture_count\": " << textureCount << ", \"bytes\": " << textureBytes
+           << "    \"steady_frame_ms\": " << steadyFrameMs << ",\n";
+    if (g_transitionFps < 0.0) {
+        stream << "    \"transition_fps\": null,\n";
+    } else {
+        stream << "    \"transition_fps\": " << g_transitionFps << ",\n";
+    }
+    stream << "    \"texture_cache\": {\"texture_count\": " << textureCount << ", \"bytes\": " << textureBytes
            << ", \"budget_bytes\": " << textureBudgetBytes << ", \"eviction_count\": " << textureEvictionCount << "},\n"
            << "    \"process_memory_bytes\": " << processMemoryBytes() << "\n"
            << "  }\n"
@@ -3292,6 +3301,7 @@ void test_camera_and_transition_pipeline() {
         std::cout << "  ⚡ [Benchmark] Active Transition Render: " << frameCount << " frames rendered in "
                   << std::fixed << std::setprecision(2) << elapsedMs << "ms (~"
                   << static_cast<int>(fps) << " FPS)" << std::endl;
+        g_transitionFps = fps;
 
         // A wall-clock FPS floor is meaningless under sanitizer
         // instrumentation (2-5x slowdown is the tool, not the engine), so it
