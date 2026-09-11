@@ -65,6 +65,14 @@ jobs:
           python3 tools/package_assets.py Assets "$release_dir/Assets/packages/game.rowlpkg"
           cp build/bin/rowl_player "$release_dir/RowlGame"
           cp build/lib/libRowlEngineCore.so "$release_dir/"
+          cat > "$release_dir/run_game.sh" <<'EOF'
+          #!/bin/bash
+          SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+          export LD_LIBRARY_PATH="$SCRIPT_DIR:$LD_LIBRARY_PATH"
+          exec "$SCRIPT_DIR/RowlGame" "$@"
+          EOF
+          chmod +x "$release_dir/run_game.sh"
+          printf '@echo off\r\ncd /d "%%~dp0"\r\nRowlGame.exe %%*\r\n' > "$release_dir/run_game.bat"
           printf '# Rowl Engine mods\n' > "$release_dir/mods/README.md"
           printf 'ROWL ENGINE — STANDALONE GAME RELEASE\n' > "$release_dir/README.txt"
           python3 tools/verify_release_package.py "$release_dir"
