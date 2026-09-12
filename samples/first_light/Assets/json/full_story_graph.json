@@ -1,0 +1,200 @@
+{
+  "format_version": 4,
+  "start_node_id": 1,
+  "nodes": [
+    {
+      "id": 1,
+      "title": "The Crossroads",
+      "objects": [
+        {
+          "id": "bg1",
+          "name": "Background Layer",
+          "is_active": true,
+          "components": [
+            {
+              "type": "background",
+              "id": "bg1c",
+              "enabled": true,
+              "data": {
+                "texture": "meadow.jpg",
+                "x": 0,
+                "y": 0,
+                "width": 1920,
+                "height": 1080,
+                "scale": 1
+              }
+            }
+          ]
+        },
+        {
+          "id": "ch1",
+          "name": "Guide",
+          "is_active": true,
+          "components": [
+            {
+              "type": "character",
+              "id": "ch1c",
+              "enabled": true,
+              "data": {
+                "sprite": "margot.jpg",
+                "x": 1440,
+                "y": 340,
+                "width": 360,
+                "height": 540,
+                "scale": 1
+              }
+            }
+          ]
+        },
+        {
+          "id": "dlg1",
+          "name": "Dialogue",
+          "is_active": true,
+          "components": [
+            {
+              "type": "dialogue",
+              "id": "dlg1c",
+              "enabled": true,
+              "data": {
+                "speaker": "Evelyn",
+                "dialogue": "Dawn breaks over the valley. Two paths lie ahead — which one calls to you?",
+                "x": 80,
+                "y": 860,
+                "width": 1760,
+                "height": 180,
+                "scale": 1,
+                "typewriter_enabled": true,
+                "text_speed": 30,
+                "auto_advance": false,
+                "font_size": 24
+              }
+            },
+            {
+              "type": "choice",
+              "id": "chc1",
+              "enabled": true,
+              "data": {
+                "options": [
+                  {
+                    "option_id": "go_meadow",
+                    "text": "Wander into the meadow"
+                  },
+                  {
+                    "option_id": "go_ridge",
+                    "text": "Climb the ridge"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "next_nodes": [
+        { "id": 2, "label": "Wander into the meadow", "option_id": "go_meadow" },
+        { "id": 3, "label": "Climb the ridge", "option_id": "go_ridge" }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Meadow Ending",
+      "objects": [
+        {
+          "id": "bg2",
+          "name": "Background Layer",
+          "is_active": true,
+          "components": [
+            {
+              "type": "background",
+              "id": "bg2c",
+              "enabled": true,
+              "data": {
+                "texture": "meadow.jpg",
+                "x": 0,
+                "y": 0,
+                "width": 1920,
+                "height": 1080,
+                "scale": 1
+              }
+            }
+          ]
+        },
+        {
+          "id": "dlg2",
+          "name": "Dialogue",
+          "is_active": true,
+          "components": [
+            {
+              "type": "dialogue",
+              "id": "dlg2c",
+              "enabled": true,
+              "data": {
+                "speaker": "Evelyn",
+                "dialogue": "Wildflowers brush your boots. The meadow keeps its quiet promise. The end.",
+                "x": 80,
+                "y": 860,
+                "width": 1760,
+                "height": 180,
+                "scale": 1,
+                "typewriter_enabled": true,
+                "text_speed": 30,
+                "auto_advance": false,
+                "font_size": 24
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Ridge Ending",
+      "objects": [
+        {
+          "id": "bg3",
+          "name": "Background Layer",
+          "is_active": true,
+          "components": [
+            {
+              "type": "background",
+              "id": "bg3c",
+              "enabled": true,
+              "data": {
+                "texture": "margot.jpg",
+                "x": 0,
+                "y": 0,
+                "width": 1920,
+                "height": 1080,
+                "scale": 1
+              }
+            }
+          ]
+        },
+        {
+          "id": "dlg3",
+          "name": "Dialogue",
+          "is_active": true,
+          "components": [
+            {
+              "type": "dialogue",
+              "id": "dlg3c",
+              "enabled": true,
+              "data": {
+                "speaker": "Margot",
+                "dialogue": "From the ridge the whole valley burns gold. Worth every step. The end.",
+                "x": 80,
+                "y": 860,
+                "width": 1760,
+                "height": 180,
+                "scale": 1,
+                "typewriter_enabled": true,
+                "text_speed": 30,
+                "auto_advance": false,
+                "font_size": 24
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

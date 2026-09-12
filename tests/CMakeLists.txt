@@ -19,6 +19,7 @@ add_executable(rowl_tests
     test_hardening_and_reliability.cpp
     test_camera_and_transition_pipeline.cpp
     test_single_engine_image.cpp
+    test_demo_first_light.cpp
 )
 
 target_include_directories(rowl_tests PRIVATE
