@@ -10,6 +10,7 @@
 #include "rowl/platform/sdl_event_dispatcher.hpp"
 #include <chrono>
 #include <thread>
+#include <array>
 #include <cmath>
 #include <fstream>
 #include <filesystem>
@@ -84,6 +85,54 @@ Rowl::VFS::VFSManager* Engine::getVfs() const {
     return m_context ? m_context->getVfs().get() : nullptr;
 }
 
+std::shared_ptr<Rowl::Platform::PlatformHost> Engine::getPlatformHost() const {
+    return m_context ? m_context->getPlatformHost() : nullptr;
+}
+
+std::string Engine::getSaveDirectory() const {
+    if (!m_saveDirectoryOverride.empty()) return m_saveDirectoryOverride;
+    if (const auto host = getPlatformHost()) {
+        const auto path = host->writableSavePath();
+        if (!path.empty()) return path.string();
+    }
+    return "saves";
+}
+
+void Engine::handleRuntimeInput(const Rowl::Platform::RuntimeInputEvent& event) {
+    switch (event.type) {
+        case Rowl::Platform::RuntimeInputEvent::Type::Advance:
+            advanceToNextNode();
+            break;
+        case Rowl::Platform::RuntimeInputEvent::Type::QuickSave:
+            saveGameSlot(0);
+            break;
+        case Rowl::Platform::RuntimeInputEvent::Type::QuickLoad:
+            loadGameSlot(0);
+            break;
+        case Rowl::Platform::RuntimeInputEvent::Type::Rewind:
+            rewind(1);
+            break;
+        case Rowl::Platform::RuntimeInputEvent::Type::PointerDown:
+            if (!handlePointerDown(event.x, event.y)) advanceToNextNode();
+            break;
+        case Rowl::Platform::RuntimeInputEvent::Type::SwipeForward:
+            advanceToNextNode();
+            break;
+        case Rowl::Platform::RuntimeInputEvent::Type::SwipeBack:
+            rewind(1);
+            break;
+    }
+}
+
+void Engine::applyAudioSuspension(
+    const std::shared_ptr<Rowl::Platform::PlatformHost>& host) {
+    if (!m_audio) return;
+    const bool hostSuspended = host &&
+        (host->lifecycleState() != Rowl::Platform::LifecycleState::Active ||
+         host->audioFocus() != Rowl::Platform::AudioFocus::Granted);
+    m_audio->setOutputSuspended(m_windowAudioSuspended || hostSuspended);
+}
+
 Engine::~Engine() {
     if (m_initialized) {
         shutdown();
@@ -112,13 +161,20 @@ bool Engine::initialize(const EngineConfig& config) {
     }
 
     m_config = config;
+    m_windowAudioSuspended = false;
     Logger::init();
 
     ROWL_LOG_INFO("==================================================");
     ROWL_LOG_INFO("Initializing Rowl Engine v1.0.0 (Embedded Library Mode)");
     ROWL_LOG_INFO("App Name: " + m_config.appName);
     ROWL_LOG_INFO("Target Virtual Canvas: " + std::to_string(m_config.virtualWidth) + "x" + std::to_string(m_config.virtualHeight));
-    ROWL_LOG_INFO("Mode: " + std::string(m_externalWindowHandle ? "EMBEDDED (Single-Window)" : "STANDALONE"));
+    const auto platformHost = getPlatformHost();
+    const auto hostSurface = platformHost
+        ? platformHost->renderSurface()
+        : Rowl::Platform::RenderSurface{};
+    const bool hasNativeSurface = m_externalWindowHandle ||
+        (hostSurface.kind == Rowl::Platform::RenderSurfaceKind::Native && hostSurface.nativeHandle);
+    ROWL_LOG_INFO("Mode: " + std::string(hasNativeSurface ? "EMBEDDED (Single-Window)" : "STANDALONE"));
     ROWL_LOG_INFO("==================================================");
 
     // Initialize VFS Manager
@@ -130,13 +186,23 @@ bool Engine::initialize(const EngineConfig& config) {
     m_window = std::make_unique<Rowl::Render::Window>(getVfs());
 
     bool windowOk = false;
-    if (m_externalWindowHandle) {
+    if (hasNativeSurface) {
         // ── Legacy embedded mode: render into host native surface ──
+        void* nativeHandle = m_externalWindowHandle ? m_externalWindowHandle : hostSurface.nativeHandle;
+        const uint32_t surfaceWidth = m_externalWindowHandle
+            ? m_externalWindowWidth : hostSurface.width;
+        const uint32_t surfaceHeight = m_externalWindowHandle
+            ? m_externalWindowHeight : hostSurface.height;
         windowOk = m_window->initializeEmbedded(
-            m_externalWindowHandle,
-            m_externalWindowWidth  > 0 ? m_externalWindowWidth  : m_config.virtualWidth,
-            m_externalWindowHeight > 0 ? m_externalWindowHeight : m_config.virtualHeight,
+            nativeHandle,
+            surfaceWidth  > 0 ? surfaceWidth  : m_config.virtualWidth,
+            surfaceHeight > 0 ? surfaceHeight : m_config.virtualHeight,
             m_config.vsync
+        );
+    } else if (hostSurface.kind == Rowl::Platform::RenderSurfaceKind::Offscreen) {
+        windowOk = m_window->initializeOffscreen(
+            hostSurface.width > 0 ? hostSurface.width : m_config.virtualWidth,
+            hostSurface.height > 0 ? hostSurface.height : m_config.virtualHeight
         );
     } else if (m_config.standaloneWindow) {
         // ── Standalone window mode: top-level SDL3 desktop window ──
@@ -159,30 +225,8 @@ bool Engine::initialize(const EngineConfig& config) {
         return false;
     }
 
-    m_window->setInputHandler([this](const Rowl::Render::RuntimeInputEvent& event) {
-        switch (event.type) {
-            case Rowl::Render::RuntimeInputEvent::Type::Advance:
-                advanceToNextNode();
-                break;
-            case Rowl::Render::RuntimeInputEvent::Type::QuickSave:
-                saveGameSlot(0);
-                break;
-            case Rowl::Render::RuntimeInputEvent::Type::QuickLoad:
-                loadGameSlot(0);
-                break;
-            case Rowl::Render::RuntimeInputEvent::Type::Rewind:
-                rewind(1);
-                break;
-            case Rowl::Render::RuntimeInputEvent::Type::PointerDown:
-                if (!handlePointerDown(event.x, event.y)) advanceToNextNode();
-                break;
-            case Rowl::Render::RuntimeInputEvent::Type::SwipeForward:
-                advanceToNextNode();
-                break;
-            case Rowl::Render::RuntimeInputEvent::Type::SwipeBack:
-                rewind(1);
-                break;
-        }
+    m_window->setInputHandler([this](const Rowl::Platform::RuntimeInputEvent& event) {
+        handleRuntimeInput(event);
     });
 
     // Initialize Entity-Component Scene Manager
@@ -1158,31 +1202,51 @@ bool Engine::loadStoryGraphFromVfs(const std::string& vfsPath) {
         return false;
     }
 
-    auto* vfsPtr = getVfs();
-    if (!vfsPtr) {
-        m_lastStoryGraphLoadError = "Runtime VFS is unavailable";
+    const auto host = getPlatformHost();
+    if (!host) {
+        m_lastStoryGraphLoadError = "Runtime platform host is unavailable";
         m_context->setError(RuntimeErrorCode::StateError, m_lastStoryGraphLoadError, "load_story_graph_vfs", vfsPath);
         return false;
     }
-    auto& vfs = *vfsPtr;
-    if (!vfs.exists(vfsPath)) {
+    auto stream = host->openAssetStream(vfsPath);
+    if (!stream) {
         m_lastStoryGraphLoadError = "Story graph is missing from VFS: " + vfsPath;
         ROWL_LOG_ERROR(m_lastStoryGraphLoadError);
         m_context->setError(RuntimeErrorCode::FileNotFound, m_lastStoryGraphLoadError, "load_story_graph_vfs", vfsPath);
         return false;
     }
 
-    const std::string content = vfs.readString(vfsPath);
-    if (content.size() > kMaxStoryJsonBytes) {
-        m_lastStoryGraphLoadError = "Story graph VFS content exceeds the size limit: " + vfsPath;
+    return loadStoryGraphFromAssetStream(vfsPath, std::move(stream));
+}
+
+bool Engine::loadStoryGraphFromAssetStream(
+    const std::string& assetPath,
+    std::unique_ptr<std::istream> stream) {
+    std::string content;
+    content.reserve(64 * 1024);
+    std::array<char, 8192> buffer{};
+    while (*stream) {
+        stream->read(buffer.data(), static_cast<std::streamsize>(buffer.size()));
+        const auto bytesRead = stream->gcount();
+        if (bytesRead <= 0) break;
+        content.append(buffer.data(), static_cast<std::size_t>(bytesRead));
+        if (content.size() > kMaxStoryJsonBytes) {
+            m_lastStoryGraphLoadError = "Story graph VFS content exceeds the size limit: " + assetPath;
+            ROWL_LOG_ERROR(m_lastStoryGraphLoadError);
+            m_context->setError(RuntimeErrorCode::FileTooLarge, m_lastStoryGraphLoadError, "load_story_graph_vfs", assetPath);
+            return false;
+        }
+    }
+    if (stream->bad()) {
+        m_lastStoryGraphLoadError = "Story graph VFS stream could not be read: " + assetPath;
         ROWL_LOG_ERROR(m_lastStoryGraphLoadError);
-        m_context->setError(RuntimeErrorCode::FileTooLarge, m_lastStoryGraphLoadError, "load_story_graph_vfs", vfsPath);
+        m_context->setError(RuntimeErrorCode::IoError, m_lastStoryGraphLoadError, "load_story_graph_vfs", assetPath);
         return false;
     }
     if (content.empty()) {
-        m_lastStoryGraphLoadError = "Story graph VFS content is empty: " + vfsPath;
+        m_lastStoryGraphLoadError = "Story graph VFS content is empty: " + assetPath;
         ROWL_LOG_ERROR(m_lastStoryGraphLoadError);
-        m_context->setError(RuntimeErrorCode::ParseError, m_lastStoryGraphLoadError, "load_story_graph_vfs", vfsPath);
+        m_context->setError(RuntimeErrorCode::ParseError, m_lastStoryGraphLoadError, "load_story_graph_vfs", assetPath);
         return false;
     }
 
@@ -1193,17 +1257,16 @@ bool Engine::loadStoryGraphFromVfs(const std::string& vfsPath) {
         RuntimeErrorCode errCode = (m_lastStoryGraphLoadError.find("parse error") != std::string::npos)
             ? RuntimeErrorCode::ParseError
             : RuntimeErrorCode::ValidationError;
-        m_context->setError(errCode, m_lastStoryGraphLoadError, "load_story_graph_vfs", vfsPath);
+        m_context->setError(errCode, m_lastStoryGraphLoadError, "load_story_graph_vfs", assetPath);
         return false;
     }
-    m_context->setSuccess("load_story_graph_vfs", vfsPath);
+    m_context->setSuccess("load_story_graph_vfs", assetPath);
     return true;
 }
 
 void Engine::loadStoryGraphFile() {
     // 1. Try VFS resolution first (isolated project mounts, packages, or loose assets)
-    auto* vfsPtr = getVfs();
-    if (vfsPtr) {
+    if (const auto host = getPlatformHost()) {
         const std::vector<std::string> vfsCandidates = {
             "json/full_story_graph.json",
             "full_story_graph.json",
@@ -1211,10 +1274,9 @@ void Engine::loadStoryGraphFile() {
             "Assets/full_story_graph.json"
         };
         for (const auto& candidate : vfsCandidates) {
-            if (vfsPtr->exists(candidate)) {
-                if (loadStoryGraphFromVfs(candidate)) {
-                    return;
-                }
+            auto stream = host->openAssetStream(candidate);
+            if (stream && loadStoryGraphFromAssetStream(candidate, std::move(stream))) {
+                return;
             }
         }
     }
@@ -1347,6 +1409,22 @@ void Engine::step(float deltaTime) {
         deltaTime = 0.25f;
     }
 
+    const auto platformHost = getPlatformHost();
+    if (platformHost && platformHost->lifecycleState() == Rowl::Platform::LifecycleState::Stopping) {
+        applyAudioSuspension(platformHost);
+        m_isRunning = false;
+        return;
+    }
+    applyAudioSuspension(platformHost);
+    if (platformHost && platformHost->lifecycleState() == Rowl::Platform::LifecycleState::Suspended) {
+        return;
+    }
+    if (platformHost) {
+        for (const auto& event : platformHost->takeInputEvents()) {
+            handleRuntimeInput(event);
+        }
+    }
+
     bool shouldQuit = false;
     m_window->pollEvents(shouldQuit);
     if (shouldQuit) {
@@ -1366,16 +1444,17 @@ void Engine::step(float deltaTime) {
                     m_audio->handleDeviceEvent(event.type);
                     break;
                 case SDL_EVENT_WINDOW_MINIMIZED:
-                    m_audio->setOutputSuspended(true);
+                    m_windowAudioSuspended = true;
                     break;
                 case SDL_EVENT_WINDOW_MAXIMIZED:
                 case SDL_EVENT_WINDOW_RESTORED:
-                    m_audio->setOutputSuspended(false);
+                    m_windowAudioSuspended = false;
                     break;
                 default:
                     break;
             }
         }
+        applyAudioSuspension(platformHost);
     }
 
     m_window->update(deltaTime);
@@ -1781,10 +1860,11 @@ bool Engine::saveGameSlot(int32_t slotIndex) {
     if (m_gameState->activeNodeId != m_currentNodeId) {
         m_gameState = Rowl::State::GameState::createNextState(m_gameState, m_currentNodeId);
     }
-    bool ok = Rowl::State::GameState::saveToSlot(m_gameState, slotIndex, m_saveDirectory);
+    const std::string saveDirectory = getSaveDirectory();
+    bool ok = Rowl::State::GameState::saveToSlot(m_gameState, slotIndex, saveDirectory);
     if (!ok) {
         m_context->setError(RuntimeErrorCode::IoError,
-                            "Failed to write save slot #" + std::to_string(slotIndex) + " to " + m_saveDirectory,
+                            "Failed to write save slot #" + std::to_string(slotIndex) + " to " + saveDirectory,
                             "save_game_slot", std::to_string(slotIndex));
         return false;
     }
@@ -1799,13 +1879,14 @@ bool Engine::loadGameSlot(int32_t slotIndex) {
                             "load_game_slot", std::to_string(slotIndex));
         return false;
     }
-    if (!Rowl::State::GameState::hasSlot(slotIndex, m_saveDirectory)) {
+    const std::string saveDirectory = getSaveDirectory();
+    if (!Rowl::State::GameState::hasSlot(slotIndex, saveDirectory)) {
         m_context->setError(RuntimeErrorCode::FileNotFound,
-                            "Save slot #" + std::to_string(slotIndex) + " not found in " + m_saveDirectory,
+                            "Save slot #" + std::to_string(slotIndex) + " not found in " + saveDirectory,
                             "load_game_slot", std::to_string(slotIndex));
         return false;
     }
-    auto loaded = Rowl::State::GameState::loadFromSlot(slotIndex, m_saveDirectory);
+    auto loaded = Rowl::State::GameState::loadFromSlot(slotIndex, saveDirectory);
     if (!loaded) {
         m_context->setError(RuntimeErrorCode::ParseError,
                             "Failed to parse or validate save slot #" + std::to_string(slotIndex),
@@ -1862,7 +1943,7 @@ bool Engine::loadGameSlot(int32_t slotIndex) {
 }
 
 bool Engine::hasSaveSlot(int32_t slotIndex) const {
-    return Rowl::State::GameState::hasSlot(slotIndex, m_saveDirectory);
+    return Rowl::State::GameState::hasSlot(slotIndex, getSaveDirectory());
 }
 
 bool Engine::deleteSaveSlot(int32_t slotIndex) {
@@ -1872,13 +1953,14 @@ bool Engine::deleteSaveSlot(int32_t slotIndex) {
                             "delete_save_slot", std::to_string(slotIndex));
         return false;
     }
-    if (!Rowl::State::GameState::hasSlot(slotIndex, m_saveDirectory)) {
+    const std::string saveDirectory = getSaveDirectory();
+    if (!Rowl::State::GameState::hasSlot(slotIndex, saveDirectory)) {
         m_context->setError(RuntimeErrorCode::FileNotFound,
                             "Save slot #" + std::to_string(slotIndex) + " does not exist",
                             "delete_save_slot", std::to_string(slotIndex));
         return false;
     }
-    bool ok = Rowl::State::GameState::deleteSlot(slotIndex, m_saveDirectory);
+    bool ok = Rowl::State::GameState::deleteSlot(slotIndex, saveDirectory);
     if (!ok) {
         m_context->setError(RuntimeErrorCode::IoError,
                             "Failed to delete save slot #" + std::to_string(slotIndex),

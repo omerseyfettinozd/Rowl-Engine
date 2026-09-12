@@ -10,6 +10,7 @@ add_executable(rowl_tests
     test_audio_device_recovery.cpp
     test_lua_sandbox.cpp
     test_mobile_input.cpp
+    test_platform_host.cpp
     test_vfs_security.cpp
     test_native_c_api.cpp
     test_game_object_component_system.cpp

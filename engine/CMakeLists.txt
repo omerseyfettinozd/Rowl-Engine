@@ -150,6 +150,7 @@ set(ROWL_ENGINE_SOURCES
     # Audio
     src/audio/audio_engine.cpp
     # Platform abstraction
+    src/platform/platform_host.cpp
     src/platform/mobile_input.cpp
     src/platform/sdl_event_dispatcher.cpp
     src/platform/sdl_subsystem_lease.cpp

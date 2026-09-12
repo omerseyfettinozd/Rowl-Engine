@@ -459,7 +459,7 @@ void Window::resizeViewport(uint32_t newWidth, uint32_t newHeight) {
     ROWL_LOG_INFO("Viewport resized to " + std::to_string(newWidth) + "x" + std::to_string(newHeight));
 }
 
-void Window::setInputHandler(std::function<void(const RuntimeInputEvent&)> handler) {
+void Window::setInputHandler(std::function<void(const Rowl::Platform::RuntimeInputEvent&)> handler) {
     m_inputHandler = std::move(handler);
 }
 
@@ -671,21 +671,21 @@ void Window::pollEvents(bool& outShouldQuit) {
                     outShouldQuit = true;
                     m_isOpen = false;
                 } else if (event.key.key == SDLK_SPACE || event.key.key == SDLK_RETURN || event.key.key == SDLK_KP_ENTER) {
-                    if (m_inputHandler) m_inputHandler({RuntimeInputEvent::Type::Advance});
+                    if (m_inputHandler) m_inputHandler({Rowl::Platform::RuntimeInputEvent::Type::Advance});
                 } else if (event.key.key == SDLK_F5) {
                     ROWL_LOG_INFO("[Player] F5 pressed: Quick Saving to Slot #0...");
-                    if (m_inputHandler) m_inputHandler({RuntimeInputEvent::Type::QuickSave});
+                    if (m_inputHandler) m_inputHandler({Rowl::Platform::RuntimeInputEvent::Type::QuickSave});
                 } else if (event.key.key == SDLK_F9) {
                     ROWL_LOG_INFO("[Player] F9 pressed: Quick Loading from Slot #0...");
-                    if (m_inputHandler) m_inputHandler({RuntimeInputEvent::Type::QuickLoad});
+                    if (m_inputHandler) m_inputHandler({Rowl::Platform::RuntimeInputEvent::Type::QuickLoad});
                 } else if (event.key.key == SDLK_BACKSPACE || event.key.key == SDLK_Z) {
                     ROWL_LOG_INFO("[Player] Rewind key pressed: Rewinding 1 step...");
-                    if (m_inputHandler) m_inputHandler({RuntimeInputEvent::Type::Rewind});
+                    if (m_inputHandler) m_inputHandler({Rowl::Platform::RuntimeInputEvent::Type::Rewind});
                 }
                 break;
             case SDL_EVENT_MOUSE_BUTTON_DOWN:
                 if (event.button.button == SDL_BUTTON_LEFT) {
-                    if (m_inputHandler) m_inputHandler({RuntimeInputEvent::Type::PointerDown,
+                    if (m_inputHandler) m_inputHandler({Rowl::Platform::RuntimeInputEvent::Type::PointerDown,
                                                         event.button.x, event.button.y});
                 }
                 break;
@@ -706,11 +706,11 @@ void Window::pollEvents(bool& outShouldQuit) {
                     static_cast<float>(m_width), static_cast<float>(m_height));
                 m_touchStarts.erase(start);
                 if (gesture == Rowl::Platform::InputEventType::SwipeForward) {
-                    if (m_inputHandler) m_inputHandler({RuntimeInputEvent::Type::SwipeForward, x, y});
+                    if (m_inputHandler) m_inputHandler({Rowl::Platform::RuntimeInputEvent::Type::SwipeForward, x, y});
                 } else if (gesture == Rowl::Platform::InputEventType::SwipeBack) {
-                    if (m_inputHandler) m_inputHandler({RuntimeInputEvent::Type::SwipeBack, x, y});
+                    if (m_inputHandler) m_inputHandler({Rowl::Platform::RuntimeInputEvent::Type::SwipeBack, x, y});
                 } else if (m_inputHandler) {
-                    m_inputHandler({RuntimeInputEvent::Type::PointerDown, x, y});
+                    m_inputHandler({Rowl::Platform::RuntimeInputEvent::Type::PointerDown, x, y});
                 }
                 break;
             }

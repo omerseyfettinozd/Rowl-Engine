@@ -325,8 +325,8 @@ struct StoryNode {
 
 #### Class Methods & Logic
 
-- **Constructor / Destructor**: Takes explicit ownership of a `RuntimeContext` (default-constructed when omitted). There is no process-global `Engine` registry; tests observe a handle's engine through the test-only `testEngineFromHandle` bridge. Destructor safely invokes `shutdown()` when initialized.
-- **`initialize(const EngineConfig&)`**: Initializes `Logger`, initializes the context-owned VFS, allocates `Rowl::Render::Window`, and activates either `initializeOffscreen()` (default) or `initializeEmbedded()` if an OS handle was injected. Automatically searches disk for story graph files.
+- **Constructor / Destructor**: Takes explicit ownership of a `RuntimeContext` (default-constructed when omitted). The context owns both the runtime-local VFS and injected `PlatformHost`. There is no process-global `Engine` registry; tests observe a handle's engine through the test-only `testEngineFromHandle` bridge. Destructor safely invokes `shutdown()` when initialized.
+- **`initialize(const EngineConfig&)`**: Initializes `Logger`, initializes the context-owned VFS, allocates `Rowl::Render::Window`, and chooses the injected host's native/offscreen render surface before falling back to the legacy C API handle or desktop config. Story graph assets are opened through `PlatformHost::openAssetStream()`.
 - **`setPlayState(bool isPlaying)`**: Toggles playback mode flag.
 - **`resetToStartNode()`**: Resets `m_currentNodeId` to `m_startNodeId` (or minimum key in `m_storyNodes`), deserializes its component list or legacy fields, and triggers a scene refresh.
 - **`advanceToNextNode(uint32_t choiceIndex)`**: Inspects `m_storyNodes[m_currentNodeId].nextNodes`. If `choiceIndex` is within bounds, sets `m_currentNodeId = nextNodes[choiceIndex].nodeId` and refreshes scene state.
@@ -336,7 +336,7 @@ struct StoryNode {
 - **`loadStoryGraphFromPath(const std::string& path)`**: Opens `std::ifstream`, reads entire content into `std::string`, and calls `parseStoryGraphJson()`.
 - **`loadStoryGraphFile()`**: Iterates candidate paths (`Assets/json/full_story_graph.json`, `Assets/full_story_graph.json`, `../Assets/...`). Falls back to `loadActiveStoryFile()`.
 - **`loadActiveStoryFile()`**: Loads single-node `active_story.json` fallback.
-- **`step(float deltaTime)`**: Calls `m_window->pollEvents(shouldQuit)`, executes `m_window->renderVisualNovelFrame(...)` passing all active characters and background/dialogue parameters, and calls `m_window->endFrame()`.
+- **`step(float deltaTime)`**: Applies host lifecycle and audio-focus state, consumes host input, calls `m_window->pollEvents(shouldQuit)`, executes `m_window->renderVisualNovelFrame(...)`, and calls `m_window->endFrame()`. Suspended hosts preserve state without advancing or rendering; stopping hosts end the run loop.
 - **`run()`**: Standalone blocking game loop calculating `dt` via `std::chrono::high_resolution_clock` and clamping `dt` between `0.0f` and `0.25f`.
 - **`shutdown()`**: Tears down `m_window` and resets runtime flags.
 
@@ -778,7 +778,22 @@ struct InputEvent {
 
 ---
 
-### 3.13 [`engine/include/thirdparty/stb_image.h`](file:///home/chaple/Belgeler/Rowl%20Engine/engine/include/thirdparty/stb_image.h)
+### 3.13 `engine/include/rowl/platform/platform_host.hpp` & `engine/src/platform/platform_host.cpp`
+
+`PlatformHost` is the minimum native-shell boundary and deliberately exposes
+only six host-owned capabilities: read-only asset streams, writable save path,
+lifecycle state, queued runtime input, render-surface description, and audio
+focus. `RuntimeContext` owns the injected host. `DefaultPlatformHost` preserves
+desktop behavior by adapting the context VFS, the relative `saves` directory,
+active lifecycle, automatic render selection, and granted audio focus.
+
+`Engine` consumes every capability: graph assets use the bounded stream path,
+save slots default to the host path while explicit C API project paths retain
+precedence, host input shares the same runtime action dispatcher as SDL window
+input, render initialization honors native/offscreen surface descriptors, and
+lifecycle/audio focus combine with SDL minimize/restore suspension.
+
+### 3.14 [`engine/include/thirdparty/stb_image.h`](file:///home/chaple/Belgeler/Rowl%20Engine/engine/include/thirdparty/stb_image.h)
 - Public domain header-only image loader (v2.30) by Sean Barrett.
 - Instantiated in [`engine/src/render/window.cpp`](file:///home/chaple/Belgeler/Rowl%20Engine/engine/src/render/window.cpp) via `#define STB_IMAGE_IMPLEMENTATION`.
 - Provides decoding for PNG, JPEG, BMP, TGA, PSD, GIF into 32-bit RGBA pixel arrays via `stbi_load` and `stbi_load_from_memory`.

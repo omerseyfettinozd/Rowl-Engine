@@ -35,6 +35,7 @@
 #include "rowl/audio/audio_engine.hpp"
 #include "rowl/scripting/lua_sandbox.hpp"
 #include "rowl/platform/mobile_input.hpp"
+#include "rowl/platform/platform_host.hpp"
 #include "rowl/platform/sdl_event_dispatcher.hpp"
 #include "rowl/vfs/vfs.hpp"
 #include "rowl/vfs/rowlpkg_reader.hpp"
@@ -86,6 +87,7 @@ void test_audio_engine();
 void test_audio_device_recovery();
 void test_lua_sandbox();
 void test_mobile_input();
+void test_platform_host();
 void test_vfs_security();
 void test_native_c_api();
 void test_single_engine_image();

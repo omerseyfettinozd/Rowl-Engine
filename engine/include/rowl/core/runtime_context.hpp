@@ -9,6 +9,10 @@ namespace Rowl::VFS {
 class VFSManager;
 }
 
+namespace Rowl::Platform {
+class PlatformHost;
+}
+
 namespace Rowl::Core {
 
 enum class RuntimeErrorCode : int32_t {
@@ -49,6 +53,8 @@ class RuntimeContext {
 public:
     RuntimeContext();
     explicit RuntimeContext(std::shared_ptr<Rowl::VFS::VFSManager> vfs);
+    RuntimeContext(std::shared_ptr<Rowl::VFS::VFSManager> vfs,
+                   std::shared_ptr<Rowl::Platform::PlatformHost> platformHost);
     ~RuntimeContext();
 
     RuntimeContext(const RuntimeContext&) = delete;
@@ -56,6 +62,8 @@ public:
 
     std::shared_ptr<Rowl::VFS::VFSManager> getVfs() const;
     void setVfs(std::shared_ptr<Rowl::VFS::VFSManager> vfs);
+    std::shared_ptr<Rowl::Platform::PlatformHost> getPlatformHost() const;
+    void setPlatformHost(std::shared_ptr<Rowl::Platform::PlatformHost> platformHost);
 
     void setResult(const RuntimeResult& result);
     void setSuccess(const std::string& operation = "", const std::string& target = "");
@@ -68,6 +76,7 @@ public:
 private:
     mutable std::mutex m_mutex;
     std::shared_ptr<Rowl::VFS::VFSManager> m_vfs;
+    std::shared_ptr<Rowl::Platform::PlatformHost> m_platformHost;
     RuntimeResult m_lastResult;
 };
 

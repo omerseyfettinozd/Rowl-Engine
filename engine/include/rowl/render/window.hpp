@@ -7,6 +7,7 @@
 #include <vector>
 #include <unordered_map>
 #include <unordered_set>
+#include "rowl/platform/platform_host.hpp"
 #include "rowl/render/font_renderer.hpp"
 #include "rowl/render/msdf_renderer.hpp"
 #include "rowl/render/camera2d.hpp"
@@ -107,18 +108,6 @@ struct ChoiceButtonRenderData {
     bool enabled = true;
 };
 
-/// Input remains owned by the runtime that created the window. Window never
-/// reaches into a process-global Engine instance to handle a player action.
-struct RuntimeInputEvent {
-    /// PointerDown is a completed pointing gesture. Touch input waits for its
-    /// corresponding finger-up event so a horizontal swipe cannot also advance
-    /// the story as a tap.
-    enum class Type { Advance, QuickSave, QuickLoad, Rewind, PointerDown, SwipeForward, SwipeBack };
-    Type type;
-    float x = 0.0f;
-    float y = 0.0f;
-};
-
 class Window {
 public:
     explicit Window(Rowl::VFS::VFSManager* vfs = nullptr);
@@ -164,7 +153,7 @@ public:
      */
     void resizeViewport(uint32_t newWidth, uint32_t newHeight);
 
-    void setInputHandler(std::function<void(const RuntimeInputEvent&)> handler);
+    void setInputHandler(std::function<void(const Rowl::Platform::RuntimeInputEvent&)> handler);
 
     void pollEvents(bool& outShouldQuit);
     void beginFrame();
@@ -303,7 +292,7 @@ private:
     bool m_initialized     = false;
     bool m_isEmbedded      = false; // true → rendering into host control
     bool m_isOffscreen     = false; // true → rendering to RGBA32 surface
-    std::function<void(const RuntimeInputEvent&)> m_inputHandler;
+    std::function<void(const Rowl::Platform::RuntimeInputEvent&)> m_inputHandler;
     std::unordered_map<int64_t, std::pair<float, float>> m_touchStarts;
     Rowl::VFS::VFSManager* m_vfs = nullptr;
     std::shared_ptr<Rowl::VFS::VFSManager> m_ownedVfs;

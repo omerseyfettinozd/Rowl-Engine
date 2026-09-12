@@ -82,6 +82,12 @@ testi geçiyor.
   içinde xUnit/VSTest tarafından keşfedilen ayrı test assembly'sine bağlandı.
   Kanonik kapı `dotnet test editor/Tests/RowlEngine.Editor.Tests.csproj
   --configuration Debug`; CTest ve Linux benchmark CI aynı projeyi çalıştırır.
+- Minimum native-shell sınırı `PlatformHost` ile asset stream, writable save
+  path, lifecycle, input, render surface ve audio focus alanlarına indirildi.
+  `RuntimeContext` hostu runtime-lokal tutar; varsayılan adapter mevcut VFS/
+  desktop davranışını korur. `test_platform_host` bu altı sinyalin Engine
+  tarafından gerçekten tüketildiğini; mevcut structured-diagnostics testi de
+  explicit save-directory override davranışının korunduğunu doğrular.
 
 ## Sonraki üretim işleri
 

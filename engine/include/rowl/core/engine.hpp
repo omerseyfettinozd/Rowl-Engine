@@ -1,6 +1,7 @@
 #pragma once
 
 #include "rowl/render/window.hpp"
+#include "rowl/platform/platform_host.hpp"
 #include "rowl/state/game_state.hpp"
 #include "rowl/core/runtime_context.hpp"
 #include "rowl/core/story_graph.hpp"
@@ -61,6 +62,7 @@ public:
     RuntimeContext* getContext() const { return m_context.get(); }
     std::shared_ptr<RuntimeContext> getContextShared() const { return m_context; }
     Rowl::VFS::VFSManager* getVfs() const;
+    std::shared_ptr<Rowl::Platform::PlatformHost> getPlatformHost() const;
 
     // ── Lifecycle ──────────────────────────────────────────────────────────
 
@@ -221,8 +223,8 @@ public:
     bool deleteSaveSlot(int32_t slotIndex);
     bool rewind(uint64_t steps = 1);
     uint64_t getCurrentStepId() const;
-    void setSaveDirectory(const std::string& saveDir) { m_saveDirectory = saveDir; }
-    std::string getSaveDirectory() const { return m_saveDirectory; }
+    void setSaveDirectory(const std::string& saveDir) { m_saveDirectoryOverride = saveDir; }
+    std::string getSaveDirectory() const;
     void setBgmTransitionDefaults(std::string kind, float durationSeconds);
     std::shared_ptr<const Rowl::State::GameState> getGameState() const { return m_gameState; }
 
@@ -245,7 +247,7 @@ private:
     std::unique_ptr<Rowl::Audio::AudioEngine> m_audio;
     std::shared_ptr<const Rowl::State::GameState> m_gameState;
     std::unique_ptr<Rowl::Scripting::LuaSandbox>  m_luaSandbox;
-    std::string m_saveDirectory = "saves";
+    std::string m_saveDirectoryOverride;
     std::string m_defaultBgmTransition = "instant";
     float m_defaultBgmTransitionDurationSeconds = 1.0f;
 
@@ -297,6 +299,7 @@ private:
     bool m_isRunning    = false;
     bool m_initialized  = false;
     bool m_isPlaying    = false;
+    bool m_windowAudioSuspended = false;
     float m_autoAdvanceElapsed = 0.0f;
     float m_textSpeedMultiplier = 1.0f;
     float m_autoAdvanceDelayOffset = 0.0f;
@@ -306,6 +309,10 @@ private:
     std::string m_lastStoryGraphLoadError;
 
     bool parseStoryGraphJson(const std::string& jsonContent);
+    bool loadStoryGraphFromAssetStream(const std::string& assetPath,
+                                       std::unique_ptr<std::istream> stream);
+    void handleRuntimeInput(const Rowl::Platform::RuntimeInputEvent& event);
+    void applyAudioSuspension(const std::shared_ptr<Rowl::Platform::PlatformHost>& host);
     void restoreAudioStateFromGameState();
     void deactivateScripts(bool callOnExit = true);
     void activateScripts(const std::vector<nlohmann::json>& scripts,
