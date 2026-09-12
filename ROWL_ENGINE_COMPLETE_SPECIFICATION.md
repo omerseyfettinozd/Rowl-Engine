@@ -86,7 +86,7 @@ graph TD
 
     subgraph NativeCore ["RowlEngineCore Shared Library (C++20)"]
         CAPI["C-API Export Layer (c_api.h / c_api.cpp)"]
-        ENG["Core::Engine (Singleton / Coordinator)"]
+        ENG["Core::Engine (Explicit-ownership Coordinator)"]
         WIN["Render::Window (SDL3 Software / Embedded / Native)"]
         AG["Render::AspectGuardian (Pillarbox/Letterbox Projection)"]
         MSDF["Render::MsdfRenderer (Multichannel Signed Distance Field)"]
@@ -151,11 +151,13 @@ graph TD
   - `zstd` (Discovered via `find_package(zstd)` or fallback to `find_library(zstd)` + `find_path(zstd.h)`)
   - `SDL3` (Discovered via `find_package(SDL3)` or fallback to `find_library(SDL3)` + `find_path(SDL3/SDL.h)`)
   - `Lua 5.4` (`find_package(Lua REQUIRED)`)
+- **Single compilation**: all engine translation units are listed once in `ROWL_ENGINE_SOURCES` and compiled into the `rowl_engine_objects` OBJECT library, which both `RowlEngineCore` and `rowl_tests` consume. There is exactly one copy of every process-wide static per binary (no double compilation, no `/FORCE:MULTIPLE` workaround).
+- **Third-party reuse**: `rowl_engine_thirdparty` (INTERFACE) carries the third-party include/link requirements so the test binary links dependencies without linking the shared library.
 
 ### 2.3 Unit & Integration Tests CMake Configuration
 - **File**: [`tests/CMakeLists.txt`](file:///home/chaple/Belgeler/Rowl%20Engine/tests/CMakeLists.txt)
 - **Target**: `rowl_tests` (`EXECUTABLE`)
-- **Direct Source Compilation**: Compiles [`tests/main_test_runner.cpp`](file:///home/chaple/Belgeler/Rowl%20Engine/tests/main_test_runner.cpp) along with all engine source units and links against `RowlEngineCore`.
+- **Single engine image**: `rowl_tests` consumes the shared `rowl_engine_objects` OBJECT library plus `rowl_engine_thirdparty`; it links neither a second copy of the engine sources nor `RowlEngineCore` itself, so C++ and C-API calls share one copy of every process-wide static (e.g. the SDL event dispatcher).
 
 ---
 
@@ -191,11 +193,11 @@ The C API provides an `extern "C"` ABI boundary for dynamic binding across langu
 
 1. [`RowlEngineHandle RowlEngine_Create(void)`](file:///home/chaple/Belgeler/Rowl%20Engine/engine/src/c_api.cpp#L27-L29)
    - **Returns**: Opaque pointer `RowlEngineHandle` to newly allocated `new Rowl::Core::Engine()`.
-   - **Logic**: Instantiates the engine instance on the heap and assigns `s_instance`.
+   - **Logic**: Allocates a `HandleRecord` owning a heap `Rowl::Core::Engine` and registers the opaque handle in the live-handle map (thread ownership claimed on first use).
 
 2. [`void RowlEngine_Destroy(RowlEngineHandle handle)`](file:///home/chaple/Belgeler/Rowl%20Engine/engine/src/c_api.cpp#L31-L34)
    - **Parameters**: `RowlEngineHandle handle`
-   - **Logic**: Null-checked cast to `Rowl::Core::Engine*` followed by `delete`. Destructor automatically executes clean subsystem shutdown.
+   - **Logic**: Takes the live `Engine` out of the handle map (engine shuts down and is freed); the spent record is retained until process exit so a stale handle can never validate again.
 
 3. [`int RowlEngine_Init(RowlEngineHandle handle, uint32_t virtualWidth, uint32_t virtualHeight, int vsync)`](file:///home/chaple/Belgeler/Rowl%20Engine/engine/src/c_api.cpp#L36-L50)
    - **Parameters**:
@@ -323,8 +325,8 @@ struct StoryNode {
 
 #### Class Methods & Logic
 
-- **Constructor / Destructor**: Assigns singleton pointer `s_instance = this`. Destructor safely invokes `shutdown()` and resets `s_instance`.
-- **`initialize(const EngineConfig&)`**: Initializes `Logger`, `VFSManager::instance().initialize()`, allocates `Rowl::Render::Window`, and activates either `initializeOffscreen()` (default) or `initializeEmbedded()` if an OS handle was injected. Automatically searches disk for story graph files.
+- **Constructor / Destructor**: Takes explicit ownership of a `RuntimeContext` (default-constructed when omitted). There is no process-global `Engine` registry; tests observe a handle's engine through the test-only `testEngineFromHandle` bridge. Destructor safely invokes `shutdown()` when initialized.
+- **`initialize(const EngineConfig&)`**: Initializes `Logger`, initializes the context-owned VFS, allocates `Rowl::Render::Window`, and activates either `initializeOffscreen()` (default) or `initializeEmbedded()` if an OS handle was injected. Automatically searches disk for story graph files.
 - **`setPlayState(bool isPlaying)`**: Toggles playback mode flag.
 - **`resetToStartNode()`**: Resets `m_currentNodeId` to `m_startNodeId` (or minimum key in `m_storyNodes`), deserializes its component list or legacy fields, and triggers a scene refresh.
 - **`advanceToNextNode(uint32_t choiceIndex)`**: Inspects `m_storyNodes[m_currentNodeId].nextNodes`. If `choiceIndex` is within bounds, sets `m_currentNodeId = nextNodes[choiceIndex].nodeId` and refreshes scene state.
@@ -500,7 +502,7 @@ struct TextWrapCache {
 
 4. **`loadTexture(const std::string& filename)`**:
    - Checks `m_textureCache[filename]` for instantaneous hit.
-   - **VFS Resolution**: Queries `VFSManager::instance().readBytes()` with prefixes (`""`, `"images/"`, `"Assets/images/"`, `"Assets/"`).
+   - **VFS Resolution**: Queries the injected `VFSManager`'s `readBytes()` with prefixes (`""`, `"images/"`, `"Assets/images/"`, `"Assets/"`).
    - If found in VFS, decodes via `stbi_load_from_memory(bytes.data(), bytes.size(), &w, &h, &channels, 4)`.
    - **Direct Disk Fallback**: If not found in VFS, searches local filesystem relative paths with `stbi_load(path, &w, &h, &channels, 4)`.
    - Converts raw pixels to `SDL_Surface` via `SDL_CreateSurfaceFrom()`, builds `SDL_Texture` with `SDL_CreateTextureFromSurface()`, and releases CPU image buffers with `stbi_image_free()`.
@@ -520,7 +522,7 @@ struct TextWrapCache {
 6. **`pollEvents(bool& outShouldQuit)`**:
    - Iterates `SDL_PollEvent()`.
    - `SDL_EVENT_QUIT` or `SDLK_ESCAPE`: Triggers clean exit.
-   - `SDLK_SPACE`, `SDLK_RETURN`, `SDLK_KP_ENTER`, or Left Mouse Click: Calls `Engine::instance().advanceToNextNode()`.
+   - `SDLK_SPACE`, `SDLK_RETURN`, `SDLK_KP_ENTER`, or Left Mouse Click: The owning `Engine` advances the story via its own `advanceToNextNode()` while pumping these events.
    - `SDL_EVENT_WINDOW_RESIZED`: Updates physical dimensions.
 
 7. **`shutdown()`**:
@@ -557,7 +559,7 @@ public:
 - **`read(const std::string& path)`**: Opens binary stream with `std::ios::ate`, reads complete byte payload into `std::vector<uint8_t>`.
 
 ##### [`Rowl::VFS::VFSManager`](file:///home/chaple/Belgeler/Rowl%20Engine/engine/include/rowl/vfs/vfs.hpp#L32-L50)
-- Singleton managing an ordered vector of mount points: `std::vector<std::pair<std::string, std::shared_ptr<IDataSource>>> m_mountPoints;`.
+- Explicitly owned manager (no process-global instance) holding an ordered vector of mount points: `std::vector<std::pair<std::string, std::shared_ptr<IDataSource>>> m_mountPoints;`.
 - **`initialize()`**: Discovers root asset folders (`Assets`, `images`, `packages/*.rowlpkg`, `mods/`) and registers mount points.
 - **`mountDirectory(prefix, physicalPath)`**: Appends `LooseDirectorySource`.
 - **`mountPackage(prefix, pkgPath)`**: Appends `RowlPkgDataSource` if valid.
@@ -843,7 +845,7 @@ private void UpdatePixelBuffer() {
 
 ## 5. Native Test Suite Analysis
 
-- **File**: [`tests/main_test_runner.cpp`](file:///home/chaple/Belgeler/Rowl%20Engine/tests/main_test_runner.cpp)
+- **Files**: [`tests/test_main.cpp`](file:///home/chaple/Belgeler/Rowl%20Engine/tests/test_main.cpp) (runner) plus one `tests/test_<subsystem>.cpp` unit per subsystem, sharing [`tests/rowl_test_harness.hpp`](file:///home/chaple/Belgeler/Rowl%20Engine/tests/rowl_test_harness.hpp).
 - **Compilation**: Built via [`tests/CMakeLists.txt`](file:///home/chaple/Belgeler/Rowl%20Engine/tests/CMakeLists.txt) into `rowl_tests`.
 
 ### Test Sections & Verification Coverage
@@ -856,6 +858,17 @@ private void UpdatePixelBuffer() {
 | `test_lua_sandbox()` | LuaSandbox | 1. Sandboxed runtime initialization.<br>2. Standard math & arithmetic execution.<br>3. Engine variable bridge (`rowl.var_set` / `getVariable`).<br>4. Security sandbox blacklist verification (`os == nil`, `io == nil`, `debug == nil`).<br>5. Infinite loop defense (10M instruction hook termination). |
 | `test_mobile_input()` | MobileInput | 1. Mobile touch target size validation ($\ge 48\times 48\text{ dp}$).<br>2. SDL3 normalized touch coordinate conversion to 1920x1080 virtual canvas coordinates. |
 | `test_native_c_api()` | C API & Render Loop | 1. `RowlEngine_Create` and `RowlEngine_Init` (1920x1080 offscreen).<br>2. `RowlEngine_UpdateSceneFromJson` with multi-character JSON payload.<br>3. 60-frame simulation loop step execution.<br>4. Pixel buffer validation (1920x1080 RGBA32 pointer).<br>5. `RowlEngine_Shutdown` and `RowlEngine_Destroy`. |
+| `test_demo_first_light()` | Sample project: First Light | 1. Project mount auto-loads node #1 with speaker/dialogue.<br>2. Stepping renders a frame with background/character textures loaded.<br>3. Invalid choice rejected; `SelectChoice` reaches the ridge ending. |
+| `test_demo_second_signal()` | Sample project: Second Signal | 1. Story-set Lua variable readable without C-API setters.<br>2. BGM playback and rendered frame.<br>3. Lua-gated choice (`signal_count >= 1`) reaches the code ending. |
+
+### Sample game projects (`samples/`)
+
+Self-contained playable projects in the standard layout (`project.rowlproj` + `Assets/`) proving the engine against real game content. Each sample is validated twice: offscreen end-to-end play inside `rowl_tests`, and packaged release-contract play via `tests/test_demo_packaged.py` (`game.rowlpkg` + `rowl_player --package-smoke-test`, registered as `rowl_demo_*_packaged` ctests).
+
+| Sample | Content | Pipeline coverage |
+| :--- | :--- | :--- |
+| `samples/first_light/` | 3-node branching visual novel: background, character, typewriter dialogue, 2-option choice. | Mount, story load, step, render, choice input, packaged release. |
+| `samples/second_signal/` | 4-node branching story: BGM audio component (shipped synthetic tone), story-driven Lua variables (`set`/`add`), Lua-conditioned choice, two endings. | Mount, audio playback, Lua state/conditions, gated choice, packaged release. |
 
 ---
 
@@ -2705,9 +2718,9 @@ The repository layout spans the native C++ engine core, Avalonia editor, command
 | `tools/test_ipc_sync.py` | 4,425 B | Native C-API in-process integration test runner using Python `ctypes` |
 | `tools/stress_test_engine.py` | 6,233 B | Native engine stress test & JSON fuzzer (5000 frames, 500 mutations) |
 | `tests/CMakeLists.txt` | 905 B | Test suite build specification |
-| `tests/main_test_runner.cpp` | 11,347 B | C++ unit & integration test runner (VFS, DSP, Lua, Aspect, C-API) |
-| `engine/CMakeLists.txt` | 4,330 B | Engine CMake build script for `RowlEngineCore` shared library |
-| `engine/include/rowl/c_api.h` | 2,750 B | Exported C-API headers (`RowlEngine_*`) for P/Invoke interop |
+| `tests/test_main.cpp` | 1,777 B | Native test runner entry point (per-subsystem `test_*.cpp` units) |
+| `engine/CMakeLists.txt` | 11,155 B | Engine CMake build script: `rowl_engine_objects` + `RowlEngineCore` shared library |
+| `engine/include/rowl/c_api.h` | 26,832 B | Exported C-API headers (`RowlEngine_*`) for P/Invoke interop |
 | `engine/include/rowl/core/engine.hpp` | 3,600 B | Main `rowl::RowlEngine` coordinator class header |
 | `engine/include/rowl/core/logger.hpp` | 1,500 B | Thread-safe logging subsystem |
 | `engine/include/rowl/render/window.hpp` | 2,800 B | SDL3 Window, offscreen framebuffer, and software surface renderer |
@@ -2825,8 +2838,8 @@ The repository layout spans the native C++ engine core, Avalonia editor, command
 ### 3.3 Test Suite `tests/CMakeLists.txt`
 - **Location:** [`/home/chaple/Belgeler/Rowl Engine/tests/CMakeLists.txt`](file:///home/chaple/Belgeler/Rowl%20Engine/tests/CMakeLists.txt)
 - **Target Name:** `rowl_tests` (Executable)
-- **Main Runner:** `main_test_runner.cpp`
-- **Linked Engine Target:** Links against `RowlEngineCore` shared library.
+- **Main Runner:** `test_main.cpp` (one `test_*.cpp` unit per subsystem)
+- **Linked Engine Target:** Links the shared `rowl_engine_objects` OBJECT library plus `rowl_engine_thirdparty`; `RowlEngineCore` itself is not linked.
 - **Includes:** `${CMAKE_SOURCE_DIR}/engine/include`
 
 ---
