@@ -118,18 +118,16 @@ endif()
 # ── Lua ───────────────────────────────────────────────────────────────────
 find_package(Lua REQUIRED)
 
-# ── RowlEngineCore — SHARED library (DLL / .so / .dylib) ─────────────────
+# ── Engine sources — compiled exactly once ──────────────────────────────────
 #
-#   This is the primary build target. The engine is no longer a standalone
-#   executable; it is a shared library consumed by the C# Avalonia editor
-#   via P/Invoke (DllImport) and by native mobile host apps.
+#   Every engine translation unit lives in the rowl_engine_objects OBJECT
+#   library. RowlEngineCore (SHARED) and rowl_tests both consume these same
+#   objects, so process-wide static state (e.g. the SDL event dispatcher)
+#   exists exactly once per binary. Compiling the sources a second time
+#   inside the test binary used to split that state in two and was only
+#   papered over with /FORCE:MULTIPLE on MSVC.
 #
-#   Output names per platform:
-#     Linux/Android : libRowlEngineCore.so
-#     Windows       : RowlEngineCore.dll
-#     macOS/iOS     : libRowlEngineCore.dylib
-#
-add_library(RowlEngineCore SHARED
+set(ROWL_ENGINE_SOURCES
     # Core subsystems
     src/core/logger.cpp
     src/core/runtime_context.cpp
@@ -163,34 +161,69 @@ add_library(RowlEngineCore SHARED
     # C-API bridge (consumed by C# P/Invoke)
     src/c_api.cpp
 )
-if(TARGET rowl_msdf_shader)
-    add_dependencies(RowlEngineCore rowl_msdf_shader)
-endif()
-target_compile_definitions(RowlEngineCore PRIVATE
-    ROWL_GPU_MSDF_SHADER_AVAILABLE=${ROWL_GPU_MSDF_SHADER_AVAILABLE}
-    ROWL_SHADER_DIR="${ROWL_SHADER_DIR}"
-)
-
-# Mark all C-API symbols as exported on all platforms
-target_compile_definitions(RowlEngineCore PRIVATE ROWL_BUILDING_DLL)
-
-# Symbol visibility: only explicitly marked symbols are exported
-if(NOT MSVC)
-    target_compile_options(RowlEngineCore PRIVATE -fvisibility=hidden)
-endif()
-
-target_include_directories(RowlEngineCore PUBLIC
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-    $<INSTALL_INTERFACE:include>
-    ${LUA_INCLUDE_DIR}
-)
-
-target_link_libraries(RowlEngineCore PUBLIC
+# ── Third-party dependencies as a reusable INTERFACE target ───────────────
+# Both RowlEngineCore and rowl_tests link this; it carries the include/link
+# usage requirements without dragging the shared library into the test binary.
+add_library(rowl_engine_thirdparty INTERFACE)
+target_link_libraries(rowl_engine_thirdparty INTERFACE
     ${ZSTD_TARGET}
     ${VORBISFILE_TARGET}
     ${SDL3_TARGET}
     ${LUA_LIBRARIES}
     nlohmann_json::nlohmann_json
+)
+target_include_directories(rowl_engine_thirdparty INTERFACE
+    ${LUA_INCLUDE_DIR}
+)
+
+add_library(rowl_engine_objects OBJECT ${ROWL_ENGINE_SOURCES})
+# The objects also feed the SHARED library, so they must be PIC even though
+# an OBJECT target does not enable it by default.
+set_target_properties(rowl_engine_objects PROPERTIES POSITION_INDEPENDENT_CODE ON)
+# Usage requirements (notably third-party headers) flow to every consumer.
+target_link_libraries(rowl_engine_objects PUBLIC rowl_engine_thirdparty)
+target_compile_definitions(rowl_engine_objects PRIVATE
+    ROWL_GPU_MSDF_SHADER_AVAILABLE=${ROWL_GPU_MSDF_SHADER_AVAILABLE}
+    ROWL_SHADER_DIR="${ROWL_SHADER_DIR}"
+)
+
+# Mark all C-API symbols as exported on all platforms
+target_compile_definitions(rowl_engine_objects PRIVATE ROWL_BUILDING_DLL)
+
+# Symbol visibility: only explicitly marked symbols are exported
+if(NOT MSVC)
+    target_compile_options(rowl_engine_objects PRIVATE -fvisibility=hidden)
+endif()
+
+target_include_directories(rowl_engine_objects PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
+    ${LUA_INCLUDE_DIR}
+)
+
+# ── RowlEngineCore — SHARED library (DLL / .so / .dylib) ─────────────────
+#
+#   This is the primary build target. The engine is no longer a standalone
+#   executable; it is a shared library consumed by the C# Avalonia editor
+#   via P/Invoke (DllImport) and by native mobile host apps.
+#
+#   Output names per platform:
+#     Linux/Android : libRowlEngineCore.so
+#     Windows       : RowlEngineCore.dll
+#     macOS/iOS     : libRowlEngineCore.dylib
+#
+add_library(RowlEngineCore SHARED)
+target_link_libraries(RowlEngineCore PUBLIC
+    rowl_engine_objects
+    rowl_engine_thirdparty
+)
+if(TARGET rowl_msdf_shader)
+    add_dependencies(RowlEngineCore rowl_msdf_shader)
+endif()
+
+target_include_directories(RowlEngineCore PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
 )
 
 # ── Rowl Player — Standalone Desktop Executable ───────────────────────────

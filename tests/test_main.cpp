@@ -29,6 +29,7 @@ int main(int argc, char* argv[]) {
     test_mobile_input();
     test_vfs_security();
     test_native_c_api();
+    test_single_engine_image();
     test_game_object_component_system();
     test_window_input_routing();
     test_runtime_context_and_diagnostics();

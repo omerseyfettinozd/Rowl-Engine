@@ -88,6 +88,7 @@ void test_lua_sandbox();
 void test_mobile_input();
 void test_vfs_security();
 void test_native_c_api();
+void test_single_engine_image();
 void test_game_object_component_system();
 void test_window_input_routing();
 void test_runtime_context_and_diagnostics();
