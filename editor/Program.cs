@@ -401,22 +401,7 @@ namespace RowlEngine.Editor
             Console.WriteLine("  ✅ [PASS] Malformed graph loading preserves the current in-memory project");
 
             // Test 5: Asset Auto-Copy & Project Portability
-            Console.WriteLine("\n📌 [Test 5]: Asset Auto-Copy & Project Portability (External Image Import)...");
-            string tempExternalFile = Path.Combine(Path.GetTempPath(), "test_external_character_sprite.png");
-            File.WriteAllBytes(tempExternalFile, new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A }); // PNG header
-            
-            string importedName = mainVm.ImportImageFileToProject(tempExternalFile);
-            if (importedName != "test_external_character_sprite.png")
-                throw new Exception($"ImportImageFileToProject returned unexpected name: {importedName}");
-            
-            string destExpected = Path.Combine(MainWindowViewModel.AssetsPath, "images", "test_external_character_sprite.png");
-            if (!File.Exists(destExpected))
-                throw new Exception($"Imported file was not found at expected project path: {destExpected}");
-            
-            // Clean up test files
-            try { File.Delete(tempExternalFile); } catch {}
-            try { File.Delete(destExpected); } catch {}
-            Console.WriteLine("  ✅ [PASS] External file automatically copied into project Assets/images/ and linked via relative filename");
+            EditorAssetPortabilityTests.Run(mainVm);
 
             // Test 6: OBS Assist & Magnetic Snapping System
             EditorLayoutAssistTests.Run(mainVm);
