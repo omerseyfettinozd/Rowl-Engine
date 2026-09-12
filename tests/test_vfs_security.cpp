@@ -4,6 +4,8 @@
  */
 #include "rowl_test_harness.hpp"
 
+#include <future>
+
 void test_vfs_security() {
     TEST_SECTION("VFS Isolation & Package Validation");
 
@@ -375,12 +377,35 @@ void test_vfs_security() {
     // No global-restore remount: vfs is function-local.
     TEST_PASS("Project remount exposes Assets but not project-root files");
 
-    // Windows CI stalls for minutes deleting this tree (file symlink plus a
-    // 128 MB sparse fixture inside), hanging the suite with no output; the
-    // same delete is instant elsewhere. Temp dirs are unique per run and
-    // OS-cleaned, so skip the delete on Windows rather than risk the stall.
+    // Windows CI stalls for minutes deleting this tree (~140 small files, one
+    // file symlink, one 128 MB fixture), hanging the suite with no output;
+    // the same delete is instant elsewhere. Prime suspects, ranked: (1) AV /
+    // Defender real-time scan of the 128 MB file on delete, (2) the 128 MB
+    // resize_file landing non-sparse on NTFS, (3) symlink reparse-point
+    // handling. Open handles are ruled out: they would fail fast, not hang.
+    // This block deletes on a detached worker with a 60 s watchdog. On
+    // timeout the suite proceeds (temp dirs are unique per run and OS-cleaned)
+    // and the log names the tree contents, so the next Windows run pinpoints
+    // the stalling entry instead of hanging silently.
 #ifdef _WIN32
-    (void)testRoot;
+    {
+        std::packaged_task<void()> cleanup([root = testRoot] {
+            std::error_code ec;
+            std::filesystem::remove_all(root, ec);
+        });
+        std::future<void> finished = cleanup.get_future();
+        std::thread(std::move(cleanup)).detach();
+        if (finished.wait_for(std::chrono::seconds(60)) != std::future_status::ready) {
+            std::cerr << "VFS test tree delete exceeded 60 s; continuing, OS will "
+                         "reclaim the temp dir. Top-level entries:";
+            std::error_code listEc;
+            for (const auto& entry :
+                 std::filesystem::directory_iterator(testRoot, listEc)) {
+                std::cerr << " [" << entry.path().filename().string() << "]";
+            }
+            std::cerr << std::endl;
+        }
+    }
 #else
     std::filesystem::remove_all(testRoot);
 #endif
