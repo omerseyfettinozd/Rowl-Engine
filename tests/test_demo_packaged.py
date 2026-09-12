@@ -28,6 +28,19 @@ def run(*args, env=None):
                           text=True, check=False, env=env)
 
 
+# Fixture checksums are canonical LF (see .gitattributes). A Windows CRLF
+# checkout must still verify, so text entries are normalized before hashing.
+# This bit CI runs 34694768878/34694916995/34695172306, where project.rowlproj
+# hashed as CRLF and failed rowl_demo_second_signal_packaged on Windows only.
+TEXT_CHECKSUM_SUFFIXES = frozenset({".json", ".rowlproj"})
+
+
+def canonical_checksum_bytes(relative, data):
+    if pathlib.PurePosixPath(relative).suffix.lower() in TEXT_CHECKSUM_SUFFIXES:
+        return data.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+    return data
+
+
 def validate_golden_manifest(sample_dir):
     """Reject accidental fixture drift before comparing platform results."""
     manifest_path = sample_dir / "golden_project.json"
@@ -47,7 +60,9 @@ def validate_golden_manifest(sample_dir):
             candidate = sample_dir.joinpath(*relative_path.parts)
             if not candidate.is_file():
                 raise ValueError(f"missing Golden Project file: {relative}")
-            actual = hashlib.sha256(candidate.read_bytes()).hexdigest()
+            actual = hashlib.sha256(
+                canonical_checksum_bytes(relative, candidate.read_bytes())
+            ).hexdigest()
             if actual != expected:
                 raise ValueError(
                     f"Golden Project checksum mismatch for {relative}: {actual}"

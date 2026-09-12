@@ -62,6 +62,14 @@ if(ROWL_BUILD_RUNTIME_TESTS)
             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
             TIMEOUT 15
         )
+        add_test(
+            NAME rowl_golden_manifest_tests
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/test_golden_manifest.py
+        )
+        set_tests_properties(rowl_golden_manifest_tests PROPERTIES
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+            TIMEOUT 15
+        )
     endif()
 
     find_program(DOTNET_EXECUTABLE dotnet)

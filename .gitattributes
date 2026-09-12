@@ -1,0 +1,8 @@
+# Golden Project sha256 values in samples/*/golden_project.json are canonical LF.
+# A Windows CRLF checkout rewrote project.rowlproj and broke
+# rowl_demo_second_signal_packaged (CI runs 34694768878/34694916995/34695172306:
+# "checksum mismatch for project.rowlproj"). Force LF so every platform hashes
+# the same bytes. tests/test_demo_packaged.py additionally normalizes line
+# endings before hashing, so pre-existing CRLF checkouts still verify.
+*.rowlproj text eol=lf
+*.json text eol=lf
