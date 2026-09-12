@@ -7,6 +7,8 @@ runs the standalone player --package-smoke-test against it: one real frame
 rendered from the packaged story graph, offscreen, on every platform.
 """
 
+import hashlib
+import json
 import os
 import pathlib
 import shutil
@@ -26,6 +28,34 @@ def run(*args, env=None):
                           text=True, check=False, env=env)
 
 
+def validate_golden_manifest(sample_dir):
+    """Reject accidental fixture drift before comparing platform results."""
+    manifest_path = sample_dir / "golden_project.json"
+    if not manifest_path.is_file():
+        return
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        if manifest.get("schema_version") != 1 or not manifest.get("fixture_id"):
+            raise ValueError("unsupported or missing Golden Project identity")
+        checksums = manifest.get("sha256")
+        if not isinstance(checksums, dict) or not checksums:
+            raise ValueError("Golden Project has no checksum map")
+        for relative, expected in checksums.items():
+            relative_path = pathlib.PurePosixPath(relative)
+            if relative_path.is_absolute() or ".." in relative_path.parts:
+                raise ValueError(f"unsafe Golden Project path: {relative}")
+            candidate = sample_dir.joinpath(*relative_path.parts)
+            if not candidate.is_file():
+                raise ValueError(f"missing Golden Project file: {relative}")
+            actual = hashlib.sha256(candidate.read_bytes()).hexdigest()
+            if actual != expected:
+                raise ValueError(
+                    f"Golden Project checksum mismatch for {relative}: {actual}"
+                )
+    except (OSError, ValueError, json.JSONDecodeError) as error:
+        raise RuntimeError(f"invalid Golden Project manifest: {error}") from error
+
+
 def main():
     if len(sys.argv) != 4:
         print(f"usage: {sys.argv[0]} <player-bin> <engine-lib> <sample-dir>",
@@ -39,6 +69,11 @@ def main():
         if not path.is_file():
             print(f"missing input: {path}", file=sys.stderr)
             return 2
+    try:
+        validate_golden_manifest(sample_dir)
+    except RuntimeError as error:
+        print(str(error), file=sys.stderr)
+        return 2
 
     with tempfile.TemporaryDirectory(prefix="rowl-demo-packaged-") as directory:
         release = pathlib.Path(directory) / "release"

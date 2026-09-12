@@ -135,7 +135,8 @@ public:
 
     /// Updates the scene from a JSON string containing component data.
     /// Used by the editor's component-based architecture.
-    void updateSceneFromComponents(const std::string& componentsJson);
+    void updateSceneFromComponents(const std::string& componentsJson,
+                                   bool replayEntryEffects = true);
 
     void loadActiveStoryFile();
     void loadStoryGraphFile();
@@ -306,8 +307,9 @@ private:
 
     bool parseStoryGraphJson(const std::string& jsonContent);
     void restoreAudioStateFromGameState();
-    void deactivateScripts();
-    void activateScripts(const std::vector<nlohmann::json>& scripts);
+    void deactivateScripts(bool callOnExit = true);
+    void activateScripts(const std::vector<nlohmann::json>& scripts,
+                         bool callOnEnter = true);
     void markScriptStatus(const std::string& moduleId, const std::string& sourcePath,
                           const std::string& state, const std::string& error = {});
     void recordActiveDialogueHistory();

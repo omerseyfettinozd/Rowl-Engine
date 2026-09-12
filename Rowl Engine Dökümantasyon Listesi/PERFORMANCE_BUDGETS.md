@@ -2,6 +2,12 @@
 
 > **Objective:** Define numerical engineering targets so every optimization decision can be measured against hard numbers. All targets enforce the *"Tost Makinesi"* (Zero Waste) principle.
 
+> **Status (2026-09-12): Target catalog, not measured release evidence.** The
+> normative current contract is `../docs/PLATFORM_SUPPORT.md`. Values below
+> become release gates only after a compatible Release benchmark series exists
+> for the named target device. Legacy FlatBuffers/IPC targets have been replaced
+> by the current in-process P/Invoke preview boundary.
+
 ---
 
 ## 1. FRAME BUDGET & RENDERING TARGETS
@@ -26,7 +32,7 @@
 | Memory Category | Budget (Desktop) | Budget (Mobile) | Notes |
 | :--- | :--- | :--- | :--- |
 | **Engine Core + Lua VM** | 64 MB | 48 MB | Fixed overhead on startup. |
-| **Texture Atlas Cache (LRU)** | 512 MB | 256 MB | Configurable via engine config file. |
+| **Texture Cache (LRU)** | 64 MiB default | Host-selected profile, minimum 1 MiB | Current runtime default and `RowlEngine_SetTextureCacheBudgetBytes`; device value requires measurement. |
 | **Audio Buffer Pool (SFX)** | 64 MB | 32 MB | Pre-decoded WAV / short Ogg. |
 | **BGM Streaming Buffer** | 2 MB | 1 MB | Ring buffer for ongoing playback. |
 | **State History (Rewind Stack)** | 5 MB | 2 MB | Persistent structures; scales with gameplay length. |
@@ -54,25 +60,25 @@ bgm_ram_per_track = STREAMING_RING_BUFFER_SIZE = 2 MB (constant)
 | Phase | Desktop Target | Mobile Target | Notes |
 | :--- | :--- | :--- | :--- |
 | **Engine Splash → First Frame** | **≤ 1.5 seconds** | **≤ 2.5 seconds** | Includes VFS index load + font atlas init. |
-| **Editor Cold Start** | **≤ 3.0 seconds** | N/A | Avalonia shell + FlatBuffers schema compile. |
+| **Editor Cold Start** | **≤ 3.0 seconds** | N/A | Avalonia shell + in-process native host initialization. |
 | **Level / Node Switch** | **≤ 200 ms** | **≤ 300 ms** | From node script execution to first render frame. |
 
 ---
 
-## 5. SHELL LATENCY TARGETS (IPC & LIVE PREVIEW)
+## 5. EDITOR/NATIVE LIVE PREVIEW TARGETS
 
 | Operation | Target Latency | Measurement Point |
 | :--- | :--- | :--- |
-| **Editor → Runtime IPC Push** | **< 1 ms** | End-to-end from Avalonia event to C++ queue consume. |
+| **Editor → Runtime Preview Push** | **< 1 ms target** | End-to-end from Avalonia change delivery through the in-process P/Invoke boundary. |
 | **Runtime State Snapshot (Rewind)** | **< 0.5 ms** | Pointer swap + audio/visual diff apply. |
-| **FlatBuffer Serialization** | **< 0.1 ms** | Single node property update payload. |
+| **Preview JSON Serialization** | Baseline required | Single node preview payload using the current versioned benchmark fixture. |
 
 ---
 
 ## 6. BATTERY & THERMAL TARGETS (MOBILE)
 
-- **Battery Drain:** ≤ 3% per 15 minutes of gameplay on a mid-range Android device (e.g., Snapdragon 778G).
-- **Thermal Throttling Temperature Threshold:** Engine must self-regulate to 60 FPS minimum before device hits 45°C junction.
+- **Battery Drain target:** ≤ 3% per 15 minutes on the selected reference Android device; not yet validated.
+- **Thermal target:** Establish from physical-device profiling before adopting a release threshold.
 - **Background Behavior:** When app is backgrounded, pause all audio, Lua timers, and render loop within 100 ms to comply with OS power policies.
 
 ---

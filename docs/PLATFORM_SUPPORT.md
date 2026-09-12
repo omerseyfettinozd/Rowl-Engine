@@ -19,8 +19,8 @@ thread contract.
 
 | Target | Runtime build gate | Package/device gate | Status |
 | --- | --- | --- | --- |
-| Linux desktop | Native CTest, shaderless fallback and GPU-MSDF smoke CI tests | Fresh `game.rowlpkg` plus VFS package smoke | Local package smoke validated; CI gate configured |
-| Windows desktop | vcpkg CMake/CTest CI job | Fresh standalone package, DLL and shaderless VFS smoke in CI | Gate configured; first CI result pending |
+| Linux desktop | Native CTest, shaderless fallback and GPU-MSDF smoke CI tests | Fresh `game.rowlpkg` plus VFS package smoke | Local and CI build/test/package gates passed; interactive GUI proof pending |
+| Windows desktop | vcpkg CMake/CTest CI job | Fresh standalone package, DLL and shaderless VFS smoke in CI | CI build/test/package gate passed on run 34689084748; interactive GUI/input/audio device proof pending |
 | macOS desktop | None yet | None yet | Planned |
 | Android arm64-v8a | Core-only NDK CMake script | APK and physical-device test pending | Build path prepared |
 | iOS | Core-only Xcode/CMake arm64 script | Signed app and physical-device test pending | Build path prepared |

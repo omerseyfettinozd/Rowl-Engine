@@ -128,26 +128,29 @@ ninja
 
 ## 5. PACKAGING & DISTRIBUTION
 
-### A. Desktop Packaging
+> **Current contract (2026-09-12):** Desktop release staging is defined by the
+> Linux/Windows jobs in `.github/workflows/ci.yml` and validated with
+> `tools/verify_release_package.py`. The Android and iOS commands below are
+> historical target syntax; current scripts build native runtime libraries only
+> and do not yet produce APK/AAB/IPA packages. Use
+> `python3 tools/export_game.py android|ios` for the honest native-only status.
+
+### A. Desktop Developer Staging
 ```bash
-# From repository root
-python tools/export_game.py pc \
-  --asset-path data/game_data.rowlpkg \
-  --output build/RowlGame_Windows_x64.zip
+# From repository root; this is not the verified standalone release pipeline.
+python3 tools/export_game.py pc
 ```
 
-### B. Android Packaging (APK)
+### B. Android Native Runtime (APK host pending)
 ```bash
-cd packaging/android
-bash build.sh --asset-path ../../data/game_data.rowlpkg --signing-key release.jks
-# Output: build/outputs/apk/game-release.apk
+python3 tools/export_game.py android
+# Output: build/android-arm64-v8a/lib/libRowlEngineCore.so
 ```
 
-### C. iOS Packaging (IPA)
+### C. iOS Native Runtime (app host/signing pending)
 ```bash
-cd packaging/ios
-bash build.sh --asset-path ../../data/game_data.rowlpkg --signing-cert "iPhone Distribution: Your Name"
-# Output: build/RowlGame.ipa
+python3 tools/export_game.py ios
+# Output: a native RowlEngineCore artifact under build/ios-arm64/
 ```
 
 ---

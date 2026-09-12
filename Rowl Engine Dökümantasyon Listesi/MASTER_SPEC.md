@@ -1,5 +1,10 @@
 # 📌 MASTER BLUEPRINT: THE ULTIMATE VISUAL NOVEL ENGINE & EDITOR
 
+> **Status (2026-09-12): Historical product vision.** Technology descriptions
+> such as .NET 8, FlatBuffers and process IPC are not the current implementation
+> contract. Verified code state is maintained in `IMPLEMENTATION_STATUS.md`,
+> while release-platform evidence is maintained in `../docs/PLATFORM_SUPPORT.md`.
+
 > **Core Philosophy:** *"Zero-Code Visual Creation, Blender-Grade Modularity, ComfyUI-Style Flow, Sandboxed Lua Extensibility, and Peak Performance at the Sweet Spot ('Tost Makinesi' Principle)."*
 
 ---

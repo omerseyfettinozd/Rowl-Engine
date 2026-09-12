@@ -290,10 +290,10 @@ void test_camera_and_transition_pipeline() {
 #if defined(__SANITIZE_ADDRESS__) || defined(__SANITIZE_THREAD__) || defined(__SANITIZE_UNDEFINED__)
         std::cout << "  (sanitizer build: 30 FPS floor reported, not enforced)" << std::endl;
 #else
-        // Shared runners on software rasterizers cannot sustain the floor
-        // either; ROWL_PERF_FLOOR=report keeps the number visible without
-        // failing the run. Anything else (including unset) enforces it.
-        const bool perfFloorEnforced = environmentValue("ROWL_PERF_FLOOR", "enforced") == "enforced";
+        // A universal wall-clock gate is not valid until a compatible baseline
+        // exists for the exact machine/build/fixture. Report by default; a
+        // controlled performance host may opt in with ROWL_PERF_FLOOR=enforced.
+        const bool perfFloorEnforced = environmentValue("ROWL_PERF_FLOOR", "report") == "enforced";
         if (perfFloorEnforced && fps < 30.0) {
             std::cerr << "Transition render FPS is too low: " << fps << std::endl;
             exit(1);

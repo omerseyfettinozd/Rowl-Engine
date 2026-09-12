@@ -1,6 +1,6 @@
 # Uygulama Durumu
 
-Son doğrulama (2026-09-12): Linux Debug derlemesi, 9/9 CTest, editör
+Son doğrulama (2026-09-12): Linux Debug derlemesi, 10/10 CTest, editör
 headless testi ve paket içinden VFS graph yükleyen yerel standalone smoke
 testi geçiyor.
 
@@ -52,17 +52,31 @@ testi geçiyor.
 - Sinematik C API sınırı non-finite shake yönü, flash intensity, tint opacity ve
   vignette radius girdilerini no-op olarak reddeder; aktif geçerli efekt/profil
   korunur ve `std::clamp` üzerinden NaN'ın render state'e ulaşması engellenir.
+- Mobil export yardımcısı native runtime derlemesi ile gerçek APK/IPA üretimini
+  ayırır. Alt süreç veya beklenen native artefakt başarısızsa hata kodunu taşır;
+  henüz var olmayan APK/AAB/IPA çıktısını başarılı göstermez.
+- GitHub Actions `34689084748` üzerinde Linux ve Windows build/test kapıları ile
+  iki platformun standalone package/VFS smoke adımları `0f0b092` için geçti.
+- `samples/second_signal`, checksum'lı `rowl-golden-project-v1` fixture'ıdır;
+  ayrılan/birleşen graph, görsel/ses/sinematik/script component'leri ile
+  save/load/restart/rewind sözleşmesini gerçek C API ve paketli VFS yolunda sınar.
+- Save/load ve rewind sunumu yeniden kurarken node-entry yan etkilerini tekrar
+  çalıştırmaz. Variable `add`, script `on_enter`, transition/shake ve dialogue
+  history kaydı restore sırasında ikinci kez uygulanmaz; kaydedilmiş state korunur.
+- Duvar-saati transition ölçümü varsayılan olarak raporlanır. Yalnız aynı
+  makine/build/fixture için kontrol edilen performans hostu açıkça
+  `ROWL_PERF_FLOOR=enforced` verdiğinde 30 FPS eşiği test kapısı olur.
 
 ## Sonraki üretim işleri
 
-- Yetkili Linux/Windows CI job stderr'ini al; gerçek hata satırı olmadan
-  workflow/dependency değişikliği yapma. Windows package smoke geçmeden
-  platform desteği onaylanmış sayılmaz.
+- Windows CI build/test/package kapısı yeşildir; gerçek Windows GUI, input,
+  audio, Unicode yol ve save dizini doğrulanmadan tam platform desteği ilan etme.
 - Editor/native benchmark setlerini aynı fixture ile biriktir; yeterli örnek
   oluşmadan otomatik performans-fail eşiği koyma. Native preview render ana
   editor maliyetidir; geniş render değişikliği önce ayrı profil kanıtı ister.
-- GUI erişimli oturumda node/inspector görsel smoke; macOS/Xcode host'unda
-  desktop staging/verifier/imzasız package smoke kapısını doğrula. Android/iOS
-  host projeleri ve fiziksel cihaz doğrulaması daha sonraki platform kapsamıdır.
+- Golden Project'i GUI erişimli oturumda Project Hub'dan paketlemeye kadar üret
+  ve node/inspector görsel smoke yap. macOS/Xcode host'unda desktop package,
+  Android'de gerçek APK ve iOS'ta development-signed app yürüyen iskeletlerini
+  büyük mimari refactorlardan önce doğrula.
 
 Bu dosya, hedef mimari belgelerindeki gelecek vaatleri ile test edilmiş kodun durumunu ayırmak için tutulur.

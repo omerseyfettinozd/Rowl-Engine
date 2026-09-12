@@ -1,5 +1,11 @@
 # 🚀 PHASE 5 EXECUTION PLAN: MOBILE EXPORT (ANDROID & IOS)
 
+> **Status (2026-09-12): Target design, not current package evidence.** The
+> checked acceptance criteria at the end of this document remain future work.
+> Current scripts build native runtime libraries only; `tools/export_game.py`
+> deliberately reports that no APK/AAB/IPA was produced. Current evidence is
+> tracked in `../../docs/PLATFORM_SUPPORT.md`.
+
 > **Phase Objective:** Complete the "Write Once, Run Everywhere" pipeline by integrating Android (APK/AAB) and iOS (IPA) cross-compilation, touch input abstraction, responsive mobile UI, and automated packaging toolchains.
 
 ---

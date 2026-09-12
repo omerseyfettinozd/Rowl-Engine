@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "fixture_id": "rowl-golden-project-v1",
+  "description": "Cross-platform 1.0 release contract fixture",
+  "capabilities": [
+    "branch_and_rejoin",
+    "background",
+    "character",
+    "dialogue",
+    "audio",
+    "camera",
+    "transition",
+    "script",
+    "variable",
+    "conditional_choice",
+    "save_load_restart",
+    "rewind",
+    "packaged_vfs"
+  ],
+  "sha256": {
+    "project.rowlproj": "db421f35c2605ee8bf38c47acfa2bebcccc8f0f4bffba4d10300ee0a9ea97c24",
+    "Assets/json/full_story_graph.json": "c063f390642390f7c6fa1b082b9d822dc57893fd965a4c3513429b2b2eb5a70e",
+    "Assets/audio/signal_tone.wav": "806428b710ac89547038e9ce1a45fb5a705f162dfcb35c36b5b9eb5db087a987",
+    "Assets/fonts/default.ttf": "baccc64becc3eb7d104b7c84d99f5314a0a1f896e2b3ea6c2f22fc08d2003bee",
+    "Assets/images/operator.jpg": "360a335f223f86a3bf2f308f2a97c8e6142af16f91b359d62f07b19fc5e9cdfc",
+    "Assets/images/relay.jpg": "cd9d2270e0be94888809331ede6f9bed32930d18ecda5c85be13d595115afc42"
+  }
+}

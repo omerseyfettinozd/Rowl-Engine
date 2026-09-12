@@ -71,6 +71,36 @@
               }
             },
             {
+              "type": "camera",
+              "id": "cam1",
+              "enabled": true,
+              "data": {
+                "x": 960,
+                "y": 540,
+                "zoom": 1.0,
+                "shake_preset": "subtle",
+                "shake_intensity_multiplier": 0.35,
+                "shake_duration_override": 0.2
+              }
+            },
+            {
+              "type": "transition",
+              "id": "trans1",
+              "enabled": true,
+              "data": {
+                "kind": "fade_black",
+                "duration": 0.2
+              }
+            },
+            {
+              "type": "script",
+              "id": "script1",
+              "enabled": true,
+              "data": {
+                "code": "function on_enter() rowl.var_set('golden_script_entered', 'yes') end"
+              }
+            },
+            {
               "type": "dialogue",
               "id": "dlg1c",
               "enabled": true,
@@ -237,9 +267,25 @@
                 "auto_advance": false,
                 "font_size": 24
               }
+            },
+            {
+              "type": "choice",
+              "id": "chc3",
+              "enabled": true,
+              "data": {
+                "options": [
+                  {
+                    "option_id": "go_join",
+                    "text": "Check the coordinates after all"
+                  }
+                ]
+              }
             }
           ]
         }
+      ],
+      "next_nodes": [
+        { "id": 4, "label": "Check the coordinates after all", "option_id": "go_join" }
       ]
     },
     {

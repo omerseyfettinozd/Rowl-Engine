@@ -514,7 +514,8 @@ void Engine::updateActiveScene(
     recordActiveDialogueHistory();
 }
 
-void Engine::updateSceneFromComponents(const std::string& componentsJson) {
+void Engine::updateSceneFromComponents(const std::string& componentsJson,
+                                       bool replayEntryEffects) {
     if (componentsJson.size() > kMaxStoryJsonBytes) {
         ROWL_LOG_ERROR("Component JSON exceeds the maximum accepted size");
         return;
@@ -652,7 +653,7 @@ void Engine::updateSceneFromComponents(const std::string& componentsJson) {
         // The payload has passed schema validation, so the active script can
         // be notified without a malformed update leaving the scene half-live.
         m_scriptRuntimeStatuses.clear();
-        deactivateScripts();
+        deactivateScripts(replayEntryEffects);
 
         for (const auto& comp : comps) {
             if (!comp.contains("type") || !comp.contains("data")) continue;
@@ -826,6 +827,10 @@ void Engine::updateSceneFromComponents(const std::string& componentsJson) {
                     ++index;
                 }
             } else if (type == "variable") {
+                // Restore paths already carry the materialized variables in
+                // GameState. Replaying set/add components would apply node
+                // entry side effects a second time.
+                if (!replayEntryEffects) continue;
                 std::string varKey = data.value("key", "");
                 std::string varVal = data.value("value", "");
                 std::string op = data.value("operation", "set");
@@ -874,7 +879,7 @@ void Engine::updateSceneFromComponents(const std::string& componentsJson) {
                     }
 
                     m_window->getCamera()->setRotation(rot);
-                    if (data.contains("shake_preset") && !data["shake_preset"].get<std::string>().empty() && data["shake_preset"].get<std::string>() != "none") {
+                    if (replayEntryEffects && data.contains("shake_preset") && !data["shake_preset"].get<std::string>().empty() && data["shake_preset"].get<std::string>() != "none") {
                         std::string preset = data["shake_preset"].get<std::string>();
                         float mult = data.value("shake_intensity_multiplier", 1.0f);
                         float durOverride = data.value("shake_duration_override", 0.0f);
@@ -894,7 +899,7 @@ void Engine::updateSceneFromComponents(const std::string& componentsJson) {
                         } else {
                             m_window->getCamera()->shakePreset(preset, mult, durOverride);
                         }
-                    } else if (data.contains("shake_intensity") && data.contains("shake_duration")) {
+                    } else if (replayEntryEffects && data.contains("shake_intensity") && data.contains("shake_duration")) {
                         float intensity = data.value("shake_intensity", 0.0f);
                         float duration = data.value("shake_duration", 0.0f);
                         float freq = data.value("shake_frequency", 25.0f);
@@ -905,6 +910,7 @@ void Engine::updateSceneFromComponents(const std::string& componentsJson) {
                     }
                 }
             } else if (type == "transition" || type == "screen_fx" || type == "visual_fx") {
+                if (!replayEntryEffects) continue;
                 if (data.contains("kind")) {
                     std::string kind = data.value("kind", "crossfade");
                     float duration = data.value("duration", 1.0f);
@@ -950,6 +956,7 @@ void Engine::updateSceneFromComponents(const std::string& componentsJson) {
         }
 
         for (const auto& data : pendingAudioComponents) {
+            if (!replayEntryEffects) continue;
             std::string dsp = data.value("dsp_filter", "Normal");
             std::string bgm = data.value("bgm_track", "");
             std::string sfx = data.value("sfx_track", "");
@@ -988,9 +995,9 @@ void Engine::updateSceneFromComponents(const std::string& componentsJson) {
         if (m_isPlaying && !pendingAudioComponents.empty())
             m_lastSfxPlaybackNodeId = m_currentNodeId;
 
-        activateScripts(pendingScripts);
+        activateScripts(pendingScripts, replayEntryEffects);
 
-        if (m_audio && (!pendingAudioComponents.empty()) && m_gameState) {
+        if (replayEntryEffects && m_audio && (!pendingAudioComponents.empty()) && m_gameState) {
             std::string filter = "Normal";
             switch (m_audio->getActiveFilter()) {
                 case Rowl::Audio::DSPFilterType::CaveReverb: filter = "CaveReverb"; break;
@@ -1034,7 +1041,7 @@ void Engine::updateSceneFromComponents(const std::string& componentsJson) {
             m_activeDialogueData = m_activeDialogues[0];
         }
 
-        recordActiveDialogueHistory();
+        if (replayEntryEffects) recordActiveDialogueHistory();
 
         ROWL_LOG_INFO("Scene Updated (Components) → " + std::to_string(comps.size()) +
                       " comps, " + std::to_string(m_activeCharacters.size()) + " chars, " +
@@ -1625,10 +1632,10 @@ void Engine::run() {
     shutdown();
 }
 
-void Engine::deactivateScripts() {
+void Engine::deactivateScripts(bool callOnExit) {
     if (m_hasActiveScript && m_luaSandbox) {
         for (auto it = m_activeScriptModuleIds.rbegin(); it != m_activeScriptModuleIds.rend(); ++it) {
-            if (!m_luaSandbox->callOptionalModuleFunction(*it, "on_exit")) {
+            if (callOnExit && !m_luaSandbox->callOptionalModuleFunction(*it, "on_exit")) {
                 markScriptStatus(*it, {}, "failed", m_luaSandbox->getLastError());
             }
             m_luaSandbox->unloadModule(*it);
@@ -1638,7 +1645,8 @@ void Engine::deactivateScripts() {
     m_hasActiveScript = false;
 }
 
-void Engine::activateScripts(const std::vector<nlohmann::json>& scripts) {
+void Engine::activateScripts(const std::vector<nlohmann::json>& scripts,
+                             bool callOnEnter) {
     if (!m_luaSandbox) return;
     for (std::size_t scriptIndex = 0; scriptIndex < scripts.size(); ++scriptIndex) {
         const auto& script = scripts[scriptIndex];
@@ -1672,7 +1680,7 @@ void Engine::activateScripts(const std::vector<nlohmann::json>& scripts) {
         }
         m_activeScriptModuleIds.push_back(moduleId);
         m_hasActiveScript = true;
-        if (!m_luaSandbox->callOptionalModuleFunction(moduleId, "on_enter")) {
+        if (callOnEnter && !m_luaSandbox->callOptionalModuleFunction(moduleId, "on_enter")) {
             ROWL_LOG_ERROR("Lua on_enter callback failed" + (path.empty() ? std::string{} : ": " + path));
             markScriptStatus(moduleId, path, "failed", m_luaSandbox->getLastError());
         } else {
@@ -1832,7 +1840,7 @@ bool Engine::loadGameSlot(int32_t slotIndex) {
                     {"data", c.data}
                 });
             }
-            updateSceneFromComponents(compsJson.dump());
+            updateSceneFromComponents(compsJson.dump(), false);
         } else {
             updateActiveScene(
                 nextNode.speaker, nextNode.dialogue,
@@ -1909,7 +1917,7 @@ bool Engine::rewind(uint64_t steps) {
                     {"data", c.data}
                 });
             }
-            updateSceneFromComponents(compsJson.dump());
+            updateSceneFromComponents(compsJson.dump(), false);
         } else {
             updateActiveScene(
                 nextNode.speaker, nextNode.dialogue,

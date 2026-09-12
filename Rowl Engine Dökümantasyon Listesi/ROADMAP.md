@@ -1,5 +1,12 @@
 # 🗺️ ROWL ENGINE: MASTER ROADMAP & PHENOMENAL PHASES
 
+> **Status (2026-09-12): Historical target document.** This file describes the
+> original phase vision and is not evidence of the current implementation.
+> Verified current behavior lives in `IMPLEMENTATION_STATUS.md`; platform
+> support claims live in `../docs/PLATFORM_SUPPORT.md`; execution order is
+> tracked in the Second Brain note
+> `300-Projects/Rowl-Engine-1.0-Yol-Haritasi-2026-09-12.md`.
+
 > **Strategy:** *"PC-First, Mobile-Ready, Zero Compromise, Rock-Solid Stability."*
 
 This document outlines the macro roadmap for developing **Rowl Engine**. To ensure maximum quality and zero architectural debt, development is split into 5 sequential phases. No phase begins until the previous phase's deliverables are fully functional and verified.
