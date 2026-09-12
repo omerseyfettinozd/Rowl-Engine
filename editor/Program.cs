@@ -419,38 +419,7 @@ namespace RowlEngine.Editor
             Console.WriteLine("  ✅ [PASS] External file automatically copied into project Assets/images/ and linked via relative filename");
 
             // Test 6: OBS Assist & Magnetic Snapping System
-            Console.WriteLine("\n📌 [Test 6]: OBS Assist Transform & Alignment System...");
-            if (mainVm.SelectedNode == null && mainVm.Nodes.Count > 0)
-            {
-                mainVm.SelectNode(mainVm.Nodes[0]);
-            }
-            if (mainVm.SelectedNode != null)
-            {
-                // 1. Fit Background to Screen (1920x1080)
-                mainVm.FitBackgroundToScreen();
-                if (mainVm.SelectedNode.BackgroundX != 0 || mainVm.SelectedNode.BackgroundY != 0 || 
-                    mainVm.SelectedNode.BackgroundWidth != 1920 || mainVm.SelectedNode.BackgroundHeight != 1080)
-                    throw new Exception("FitBackgroundToScreen failed");
-
-                // 2. Center Element
-                mainVm.CenterSelectedElement();
-                var charComp = mainVm.SelectedNode.GetComponent<CharacterComponentViewModel>();
-                if (charComp != null && charComp.X != (1920 - charComp.Width) / 2.0)
-                    throw new Exception("CenterSelectedElement failed for Character");
-
-                // 3. Align to Bottom
-                mainVm.AlignCharacterToBottom();
-                if (charComp != null && charComp.Y != 1080 - charComp.Height - 20)
-                    throw new Exception("AlignCharacterToBottom failed");
-
-                // 4. Snap Assist Toggle
-                bool initialSnap = mainVm.IsSnapAssistEnabled;
-                mainVm.ToggleSnapAssist();
-                if (mainVm.IsSnapAssistEnabled == initialSnap)
-                    throw new Exception("ToggleSnapAssist failed to flip boolean state");
-                mainVm.ToggleSnapAssist();
-            }
-            Console.WriteLine("  ✅ [PASS] OBS Assist (Fit 1080p, Center, Ground Baseline, Snap Toggle) verified");
+            EditorLayoutAssistTests.Run(mainVm);
 
             // Test 7/7b: Project save/build and runtime settings
             EditorProjectPersistenceTests.Run(mainVm, testProjectRoot);
