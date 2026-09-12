@@ -107,7 +107,8 @@ void test_native_performance_benchmarks(const std::string& benchmarkJsonPath = "
     TEST_SECTION("Performance & Profiling Benchmarks");
 
     // 1. VFS Query & Read Latency Benchmark
-    auto& vfs = Rowl::VFS::VFSManager::instance();
+    Rowl::VFS::VFSManager vfs;
+    vfs.remountProject(std::filesystem::current_path().string());
     const int VFS_ITERATIONS = 5000;
     auto vfsStart = std::chrono::high_resolution_clock::now();
     for (int i = 0; i < VFS_ITERATIONS; ++i) {

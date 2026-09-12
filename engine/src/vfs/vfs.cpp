@@ -95,11 +95,6 @@ std::unique_ptr<std::istream> LooseDirectorySource::openStream(const std::string
     return stream;
 }
 
-VFSManager& VFSManager::instance() {
-    static VFSManager s_instance;
-    return s_instance;
-}
-
 void VFSManager::initialize() {
     std::lock_guard<std::recursive_mutex> lock(m_mutex);
     if (m_initialized) return;

@@ -16,8 +16,6 @@
 
 namespace Rowl::Core {
 
-std::mutex Engine::s_legacyInstanceMutex;
-std::vector<Engine*> Engine::s_legacyInstances;
 constexpr uint32_t kMaxVirtualCanvasDimension = 16'384;
 constexpr uintmax_t kMaxStoryJsonBytes = 16 * 1024 * 1024;
 constexpr std::size_t kMaxComponentsPerScene = 2'048;
@@ -83,10 +81,7 @@ void Engine::setBgmTransitionDefaults(std::string kind, float durationSeconds) {
 }
 
 Engine::Engine(std::shared_ptr<RuntimeContext> context)
-    : m_context(context ? std::move(context) : std::make_shared<RuntimeContext>()) {
-    std::lock_guard<std::mutex> lock(s_legacyInstanceMutex);
-    s_legacyInstances.push_back(this);
-}
+    : m_context(context ? std::move(context) : std::make_shared<RuntimeContext>()) {}
 
 Rowl::VFS::VFSManager* Engine::getVfs() const {
     return m_context ? m_context->getVfs().get() : nullptr;
@@ -96,16 +91,6 @@ Engine::~Engine() {
     if (m_initialized) {
         shutdown();
     }
-    std::lock_guard<std::mutex> lock(s_legacyInstanceMutex);
-    std::erase(s_legacyInstances, this);
-}
-
-Engine& Engine::instance() {
-    std::lock_guard<std::mutex> lock(s_legacyInstanceMutex);
-    if (s_legacyInstances.empty()) {
-        throw std::runtime_error("Engine not initialized");
-    }
-    return *s_legacyInstances.back();
 }
 
 void Engine::setExternalWindowHandle(void* nativeHandle, uint32_t w, uint32_t h) {

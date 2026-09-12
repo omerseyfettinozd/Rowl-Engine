@@ -92,6 +92,16 @@ static inline Rowl::Core::Engine* toEngine(RowlEngineHandle h) {
             record->ownerThread == std::this_thread::get_id()) ? it->second : nullptr;
 }
 
+namespace Rowl::Core {
+// Test-only bridge (declared in tests/rowl_test_harness.hpp). Exposes the
+// explicit Engine behind a C-API handle so tests observe exact ownership
+// instead of the removed Engine::instance() process global. Production code
+// must use handles, never this.
+Engine* testEngineFromHandle(RowlEngineHandle handle) {
+    return toEngine(handle);
+}
+} // namespace Rowl::Core
+
 // A C++ exception crossing this ABI boundary is undefined behaviour and can
 // terminate the .NET host. Every exported entry point must degrade safely.
 template <typename Return, typename Fn>

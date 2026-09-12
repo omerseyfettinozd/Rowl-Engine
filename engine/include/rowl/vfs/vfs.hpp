@@ -47,8 +47,6 @@ public:
     VFSManager(const VFSManager&) = delete;
     VFSManager& operator=(const VFSManager&) = delete;
 
-    static VFSManager& instance();
-
     void initialize();
     void remountProject(const std::string& projectRoot);
     void clearMountPoints();

@@ -7,9 +7,14 @@
 void test_hardening_and_reliability() {
     TEST_SECTION("Hardening & Lifecycle Reliability");
 
+    // One explicit VFS owned by this test, mounted at the repo root — the
+    // state the removed process-global singleton carried here.
+    Rowl::VFS::VFSManager vfs;
+    vfs.remountProject(std::filesystem::current_path().string());
+
     // 1. Texture Cache Double-Free Safety
     {
-        Rowl::Render::Window win(&Rowl::VFS::VFSManager::instance());
+        Rowl::Render::Window win(&vfs);
         bool initOk = win.initializeOffscreen(400, 300);
         if (initOk) {
             auto* t1 = win.loadTexture("Woman.png");
@@ -87,14 +92,14 @@ void test_hardening_and_reliability() {
             std::filesystem::create_directories(textureAssetDir);
             std::filesystem::copy_file(oversizedTexturePath, textureAssetDir / "oversized.png",
                                        std::filesystem::copy_options::overwrite_existing);
-            Rowl::VFS::VFSManager::instance().remountProject(textureProject.string());
+            vfs.remountProject(textureProject.string());
             if (win.loadTexture("images/oversized.png") != nullptr) {
                 std::cerr << "Renderer decoded a texture with unsafe dimensions" << std::endl;
                 exit(1);
             }
             std::filesystem::remove(oversizedTexturePath);
             std::filesystem::remove_all(textureProject);
-            Rowl::VFS::VFSManager::instance().remountProject(std::filesystem::current_path().string());
+            vfs.remountProject(std::filesystem::current_path().string());
             win.shutdown();          // Must safely free unique textures only once
             TEST_PASS("Texture Cache Unique Teardown and Missing-Asset Negative Cache");
         }
@@ -102,7 +107,6 @@ void test_hardening_and_reliability() {
 
     // 2. VFS Cross-Platform Path Normalization (Windows Backslashes)
     {
-        auto& vfs = Rowl::VFS::VFSManager::instance();
         bool existsSlash = vfs.exists("images/Woman.png");
         bool existsBackslash = vfs.exists("images\\Woman.png");
         if (existsSlash && !existsBackslash) {
@@ -113,7 +117,6 @@ void test_hardening_and_reliability() {
     }
 
     {
-        auto& vfs = Rowl::VFS::VFSManager::instance();
         auto stream = vfs.openReadStream("images/Woman.png");
         char signature[8]{};
         if (stream && stream->read(signature, sizeof(signature)) &&
@@ -219,7 +222,7 @@ void test_hardening_and_reliability() {
     }
 
     {
-        Rowl::Audio::AudioEngine audio(&Rowl::VFS::VFSManager::instance());
+        Rowl::Audio::AudioEngine audio(&vfs);
         if (!audio.isBgmLooping()) {
             std::cerr << "BGM looping expected to default to true" << std::endl;
             exit(1);

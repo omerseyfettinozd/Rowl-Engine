@@ -42,6 +42,14 @@ void test_native_c_api() {
     if (initRes != 1 || RowlEngine_IsRunning(handle) != 1) exit(1);
     TEST_PASS("RowlEngine_Create & Init (1920x1080 Offscreen)");
 
+    // Explicit ownership: observe this handle's Engine through the test-only
+    // bridge, never through a process global.
+    Rowl::Core::Engine* cApiEngine = Rowl::Core::testEngineFromHandle(handle);
+    if (!cApiEngine) {
+        std::cerr << "Test bridge could not resolve the C-API engine" << std::endl;
+        exit(1);
+    }
+
     // Every C API handle owns its runtime state. Destroying one must neither
     // invalidate the other handle nor tear down its shared SDL subsystems.
     RowlEngineHandle secondHandle = RowlEngine_Create();
@@ -408,7 +416,7 @@ void test_native_c_api() {
 
     // Audio commands are device side effects, so a malformed component that
     // follows an audio component must not partially apply its filter.
-    const auto* audioBeforeRollback = Rowl::Core::Engine::instance().getAudio();
+    const auto* audioBeforeRollback = cApiEngine->getAudio();
     if (!audioBeforeRollback ||
         audioBeforeRollback->getActiveFilter() != Rowl::Audio::DSPFilterType::UnderwaterLowPass) {
         std::cerr << "Expected the valid component scene to leave the Underwater DSP active" << std::endl;
@@ -418,7 +426,7 @@ void test_native_c_api() {
         {"type":"audio","data":{"dsp_filter":"Cave"}},
         {"type":"character","data":{"sprite":"Margot.jpg","x":"not-a-number"}}
     ])");
-    const auto* audioAfterRollback = Rowl::Core::Engine::instance().getAudio();
+    const auto* audioAfterRollback = cApiEngine->getAudio();
     if (!audioAfterRollback ||
         audioAfterRollback->getActiveFilter() != Rowl::Audio::DSPFilterType::UnderwaterLowPass) {
         std::cerr << "Invalid component scene leaked a partial audio side effect" << std::endl;
@@ -433,8 +441,8 @@ void test_native_c_api() {
         {"type":"dialogue","id":"d2","enabled":true,"data":{"speaker":"Bob","dialogue":"Second simultaneous dialogue bubble!","x":120,"y":660,"width":1760,"height":180}}
     ])";
     RowlEngine_UpdateSceneFromJson(handle, multiDlgJson);
-    if (Rowl::Core::Engine::instance().getActiveDialogues().size() != 2) {
-        std::cerr << "Expected 2 active dialogues in Engine, got: " << Rowl::Core::Engine::instance().getActiveDialogues().size() << std::endl;
+    if (cApiEngine->getActiveDialogues().size() != 2) {
+        std::cerr << "Expected 2 active dialogues in Engine, got: " << cApiEngine->getActiveDialogues().size() << std::endl;
         exit(1);
     }
     TEST_PASS("RowlEngine_UpdateSceneFromJson (Simultaneous Multi-Dialogue Boxes)");
@@ -444,7 +452,7 @@ void test_native_c_api() {
     RowlEngine_UpdateSceneFromJson(handle, "[]");
     if (std::strlen(RowlEngine_GetSpeaker(handle)) != 0 ||
         std::strlen(RowlEngine_GetDialogue(handle)) != 0 ||
-        !Rowl::Core::Engine::instance().getActiveDialogues().empty()) {
+        !cApiEngine->getActiveDialogues().empty()) {
         std::cerr << "Empty component scene retained stale dialogue state" << std::endl;
         exit(1);
     }
@@ -579,9 +587,9 @@ void test_native_c_api() {
     RowlEngine_PlayAudio(handle, "test_bgm.wav", 0, 1);
     RowlEngine_SetBgmVolume(handle, 0.8f);
     RowlEngine_SetBgmVolume(handle, std::numeric_limits<float>::quiet_NaN());
-    if (!Rowl::Core::Engine::instance().getAudio() ||
-        !std::isfinite(Rowl::Core::Engine::instance().getAudio()->getBgmGain()) ||
-        std::abs(Rowl::Core::Engine::instance().getAudio()->getBgmGain() - 0.8f) > 0.001f) {
+    if (!cApiEngine->getAudio() ||
+        !std::isfinite(cApiEngine->getAudio()->getBgmGain()) ||
+        std::abs(cApiEngine->getAudio()->getBgmGain() - 0.8f) > 0.001f) {
         std::cerr << "C-API accepted a non-finite BGM volume" << std::endl;
         exit(1);
     }

@@ -97,10 +97,6 @@ public:
     Engine(const Engine&) = delete;
     Engine& operator=(const Engine&) = delete;
 
-    /// Legacy test-observability helper. Runtime code must use explicit
-    /// ownership and never depend on this process-wide convenience pointer.
-    static Engine& instance();
-
     RuntimeContext* getContext() const { return m_context.get(); }
     std::shared_ptr<RuntimeContext> getContextShared() const { return m_context; }
     Rowl::VFS::VFSManager* getVfs() const;
@@ -280,9 +276,6 @@ public:
     const std::vector<Rowl::State::DialogueHistoryEntry>& getDialogueHistory() const;
 
 private:
-    static std::mutex s_legacyInstanceMutex;
-    static std::vector<Engine*> s_legacyInstances;
-
     std::shared_ptr<RuntimeContext> m_context;
     EngineConfig m_config;
     std::unique_ptr<Rowl::Render::Window> m_window;

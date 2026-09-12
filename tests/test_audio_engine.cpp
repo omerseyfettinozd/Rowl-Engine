@@ -7,7 +7,8 @@
 void test_audio_engine() {
     TEST_SECTION("Audio Subsystem & DSP Filters");
 
-    Rowl::Audio::AudioEngine audio(&Rowl::VFS::VFSManager::instance());
+    Rowl::VFS::VFSManager vfs;
+    Rowl::Audio::AudioEngine audio(&vfs);
     if (!audio.initialize() || !audio.isInitialized()) {
         std::cerr << "Audio init failed" << std::endl;
         exit(1);
@@ -76,7 +77,7 @@ void test_audio_engine() {
         std::ofstream tone(tonePath, std::ios::binary);
         tone.write(reinterpret_cast<const char*>(wavData), sizeof(wavData));
     }
-    Rowl::VFS::VFSManager::instance().remountProject(audioProjectRoot.string());
+    vfs.remountProject(audioProjectRoot.string());
     audio.playAudio(toneAssetPath, Rowl::Audio::AudioChannelType::Bgm);
     audio.update();
     if (audio.getCurrentBgmPath() != toneAssetPath) {
@@ -142,7 +143,8 @@ void test_audio_engine() {
         }
     }
     std::filesystem::remove_all(audioProjectRoot);
-    Rowl::VFS::VFSManager::instance().remountProject(std::filesystem::current_path().string());
+    // No global-restore remount: vfs is function-local, so nothing leaks into
+    // later tests.
     TEST_PASS("BGM WAV Decode, Queueing, and Failed-Load State Preservation");
 
     audio.stopBgm();

@@ -7,7 +7,11 @@
 void test_window_input_routing() {
     TEST_SECTION("SDL Visible-Window Event Dispatching");
 
-    Rowl::Render::Window window(&Rowl::VFS::VFSManager::instance());
+    // Explicit local VFS mounted at the repo root, mirroring what the removed
+    // process-global singleton carried at this point in the suite.
+    Rowl::VFS::VFSManager routingVfs;
+    routingVfs.remountProject(std::filesystem::current_path().string());
+    Rowl::Render::Window window(&routingVfs);
     if (!window.initializeOffscreen(320, 180)) {
         std::cerr << "Could not initialize offscreen window for input routing test" << std::endl;
         exit(1);

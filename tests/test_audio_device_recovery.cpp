@@ -54,7 +54,8 @@ void test_audio_device_recovery() {
 
     // 2. Device rebuild preserves playback intent; suspend tracking works
     // with or without a physical device.
-    Rowl::Audio::AudioEngine recovery(&Rowl::VFS::VFSManager::instance());
+    Rowl::VFS::VFSManager recoveryVfs;
+    Rowl::Audio::AudioEngine recovery(&recoveryVfs);
     if (!recovery.initialize() || !recovery.isInitialized()) {
         std::cerr << "Recovery audio init failed" << std::endl;
         exit(1);
@@ -75,7 +76,7 @@ void test_audio_device_recovery() {
             std::ofstream tone(recoveryTone, std::ios::binary);
             tone.write(reinterpret_cast<const char*>(recoveryWav), sizeof(recoveryWav));
         }
-        Rowl::VFS::VFSManager::instance().remountProject(recoveryRoot.string());
+        recoveryVfs.remountProject(recoveryRoot.string());
         recovery.playAudio(recoveryToneAsset, Rowl::Audio::AudioChannelType::Bgm);
         recovery.update();
         if (recovery.getCurrentBgmPath() != recoveryToneAsset || !recovery.isBgmPlaying()) {
@@ -102,7 +103,7 @@ void test_audio_device_recovery() {
         TEST_PASS("Audio device rebuild preserves BGM intent, gains, and filter");
 
         std::filesystem::remove_all(recoveryRoot);
-        Rowl::VFS::VFSManager::instance().remountProject(std::filesystem::current_path().string());
+        // No global-restore remount: recoveryVfs is function-local.
     }
     recovery.handleDeviceEvent(SDL_EVENT_AUDIO_DEVICE_ADDED);
     recovery.setOutputSuspended(true);

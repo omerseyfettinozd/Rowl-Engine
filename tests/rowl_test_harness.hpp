@@ -89,6 +89,12 @@ void test_mobile_input();
 void test_vfs_security();
 void test_native_c_api();
 void test_single_engine_image();
+
+// Defined in engine/src/c_api.cpp. Test-only bridge resolving the explicit
+// Engine behind a C-API handle; production code must never use it.
+namespace Rowl::Core {
+Engine* testEngineFromHandle(RowlEngineHandle handle);
+}
 void test_game_object_component_system();
 void test_window_input_routing();
 void test_runtime_context_and_diagnostics();

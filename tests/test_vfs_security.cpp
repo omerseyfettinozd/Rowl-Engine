@@ -267,7 +267,7 @@ void test_vfs_security() {
     std::filesystem::create_directories(isolatedProject / "Assets" / "images");
     std::ofstream(isolatedProject / "project-secret.txt") << "not-an-asset";
     std::ofstream(isolatedProject / "Assets" / "images" / "allowed.txt") << "asset";
-    auto& vfs = Rowl::VFS::VFSManager::instance();
+    Rowl::VFS::VFSManager vfs;
     vfs.remountProject(isolatedProject.string());
     if (vfs.exists("project-secret.txt") || !vfs.readBytes("project-secret.txt").empty() ||
         !vfs.exists("images/allowed.txt") ||
@@ -372,7 +372,7 @@ void test_vfs_security() {
     std::filesystem::remove_all(vfsProject);
     TEST_PASS("VFS-first story graph auto-load upon project mount verified");
 
-    vfs.remountProject(std::filesystem::current_path().string());
+    // No global-restore remount: vfs is function-local.
     TEST_PASS("Project remount exposes Assets but not project-root files");
 
     // Windows CI stalls for minutes deleting this tree (file symlink plus a
