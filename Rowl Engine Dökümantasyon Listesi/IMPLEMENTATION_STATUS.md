@@ -66,6 +66,10 @@ testi geçiyor.
 - Duvar-saati transition ölçümü varsayılan olarak raporlanır. Yalnız aynı
   makine/build/fixture için kontrol edilen performans hostu açıkça
   `ROWL_PERF_FLOOR=enforced` verdiğinde 30 FPS eşiği test kapısı olur.
+- Editör headless paketinin ViewModel inceltme/eşdeğerlik grubu üretim giriş
+  noktası `Program.cs` dışındaki `EditorViewModelThinningTests` modülüne taşındı;
+  `--headless-test` davranışı ve Test 28 çıktısı korunur. Kalan test gruplarının
+  domain dosyalarına ayrılması sürüyor.
 
 ## Sonraki üretim işleri
 
