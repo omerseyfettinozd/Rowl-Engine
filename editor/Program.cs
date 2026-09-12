@@ -549,60 +549,7 @@ namespace RowlEngine.Editor
             Console.WriteLine("  ✅ [PASS] Editor-local autosave settings persistence and bounds verified");
 
             // Test 8: Performance Benchmark & Cache Optimization Verification
-            Console.WriteLine("\n📌 [Test 8]: Performance Benchmark & Cache Optimization Verification...");
-            var sw = Stopwatch.StartNew();
-
-            // Benchmark 1: Negative caching for missing files (10,000 lookups)
-            const int lookupIterations = 10000;
-            for (int i = 0; i < lookupIterations; i++)
-            {
-                var bmp = AssetBitmapCache.GetOrLoad("non_existent_placeholder_image.png");
-                if (bmp != null) throw new Exception("Expected null for non-existent image");
-            }
-            sw.Stop();
-            double negCacheMs = sw.Elapsed.TotalMilliseconds;
-            double negCacheIops = (lookupIterations / negCacheMs) * 1000.0;
-            Console.WriteLine($"  ⚡ [BENCHMARK] AssetBitmapCache Negative Lookups: {lookupIterations:N0} queries in {negCacheMs:F2}ms ({negCacheIops:N0} queries/sec)");
-
-            if (negCacheMs > 500)
-                throw new Exception("Negative caching benchmark was too slow (>500ms)");
-
-            // Different editor fields often describe the same image with a
-            // bare filename or an images/ prefix. They must share one native
-            // Bitmap instead of decoding and retaining duplicates.
-            AssetBitmapCache.Clear();
-            var bareAsset = AssetBitmapCache.GetOrLoad("Woman.png");
-            var prefixedAsset = AssetBitmapCache.GetOrLoad("images/Woman.png");
-            var cacheStats = AssetBitmapCache.GetStats();
-            if (bareAsset == null || prefixedAsset == null ||
-                !ReferenceEquals(bareAsset, prefixedAsset) ||
-                cacheStats.BitmapCount != 1 || cacheStats.EstimatedRgbaBytes <= 0)
-            {
-                throw new Exception("Asset cache did not canonicalize aliases into one bitmap");
-            }
-            Console.WriteLine($"  ⚡ [BENCHMARK] AssetBitmapCache: {cacheStats.BitmapCount} unique bitmap, " +
-                              $"{cacheStats.EstimatedRgbaBytes:N0} estimated RGBA bytes");
-            AssetBitmapCache.Clear();
-            if (AssetBitmapCache.GetStats().BitmapCount != 0)
-                throw new Exception("Asset cache statistics did not clear with the cache");
-
-            // Exercise the Lazy cache factory under actual simultaneous alias
-            // requests; every caller must receive the one shared Bitmap.
-            object?[] concurrentAssets = new object?[16];
-            Parallel.For(0, concurrentAssets.Length, i =>
-            {
-                concurrentAssets[i] = AssetBitmapCache.GetOrLoad(
-                    i % 2 == 0 ? "Woman.png" : "images/Woman.png");
-            });
-            if (concurrentAssets.Any(bitmap => bitmap == null) ||
-                concurrentAssets.Any(bitmap => !ReferenceEquals(bitmap, concurrentAssets[0])) ||
-                AssetBitmapCache.GetStats().BitmapCount != 1)
-            {
-                throw new Exception("Concurrent asset requests decoded duplicate bitmaps");
-            }
-            AssetBitmapCache.Clear();
-
-            Console.WriteLine("  ✅ [PASS] AssetBitmapCache high-throughput negative caching & memory safety verified");
+            EditorAssetCacheTests.Run();
 
             // ── Test 9: Variable & Condition Components + Native State Slots ───────────
             EditorRuntimeStateTests.Run(mainVm, testProjectRoot);
