@@ -66,16 +66,17 @@ testi geçiyor.
 - Duvar-saati transition ölçümü varsayılan olarak raporlanır. Yalnız aynı
   makine/build/fixture için kontrol edilen performans hostu açıkça
   `ROWL_PERF_FLOOR=enforced` verdiğinde 30 FPS eşiği test kapısı olur.
-- Editör headless paketinin settings-sync/component-service,
-  asset-import/build-coordinator, story-lifecycle/workspace-layout,
-  project-lifecycle/visual-picker, audio-picker/modal, selection/batch-ops,
-  notification/diagnostics, transform-gizmo, audio-DSP/VU-meter,
-  parallax/2.5D-camera, typewriter/dialogue-audio, cinematic camera/screen-FX,
-  audio-device observer/diagnostic ve ViewModel inceltme/eşdeğerlik grupları
-  üretim giriş noktası `Program.cs` dışındaki domain test modüllerine taşındı;
-  `--headless-test` davranışı ile Test 15–28 çıktısı korunur (Test 15/16/18/19,
-  paylaşılan test proje kökünü parametre olarak alır). Kalan test gruplarının
-  ayrılması sürüyor.
+- Editör headless paketinin scene-sync/play-mode, settings-sync/
+  component-service, asset-import/build-coordinator,
+  story-lifecycle/workspace-layout, project-lifecycle/visual-picker,
+  audio-picker/modal, selection/batch-ops, notification/diagnostics,
+  transform-gizmo, audio-DSP/VU-meter, parallax/2.5D-camera,
+  typewriter/dialogue-audio, cinematic camera/screen-FX, audio-device
+  observer/diagnostic ve ViewModel inceltme/eşdeğerlik grupları üretim giriş
+  noktası `Program.cs` dışındaki domain test modüllerine taşındı;
+  `--headless-test` davranışı ile Test 14–28 çıktısı korunur (Test 14/15/16/
+  18/19, paylaşılan test proje kökünü parametre olarak alır). Kalan test
+  gruplarının ayrılması sürüyor.
 
 ## Sonraki üretim işleri
 
