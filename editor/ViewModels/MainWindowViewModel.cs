@@ -38,13 +38,23 @@ namespace RowlEngine.Editor.ViewModels
         private static string ResolveProjectRoot()
         {
             // Start from the directory of the executing assembly (bin/Debug/netX.Y)
-            string dir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? ".";
+            string assemblyDirectory = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? ".";
+            return ResolveProjectRootFrom(assemblyDirectory);
+        }
+
+        internal static string ResolveProjectRootFrom(string startDirectory)
+        {
+            string dir = startDirectory;
             // Walk up to 6 levels looking for the canonical project root.
             // Strategy: prefer the parent that contains BOTH Assets/ AND editor/.
             // editor/ itself may also have an Assets/ stub, so skip up if Assets/
             // appears inside editor/ sub-tree.
             string? best = null;
-            for (int i = 0; i < 6; i++)
+            // Windows RID/platform output adds an extra x64 directory
+            // (Tests/bin/x64/Debug/netX), so six parents stop at editor/.
+            // Keep the search bounded while allowing the repository root to
+            // be reached from both portable and platform-specific layouts.
+            for (int i = 0; i < 12; i++)
             {
                 bool hasAssets = Directory.Exists(Path.Combine(dir, "Assets"));
                 bool hasEditor = Directory.Exists(Path.Combine(dir, "editor")) ||
@@ -63,8 +73,8 @@ namespace RowlEngine.Editor.ViewModels
             // Fallback: any dir with Assets/ found along the way
             if (best == null)
             {
-                dir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? ".";
-                for (int i = 0; i < 6; i++)
+                dir = startDirectory;
+                for (int i = 0; i < 12; i++)
                 {
                     if (Directory.Exists(Path.Combine(dir, "Assets")))
                         return dir;
@@ -73,7 +83,7 @@ namespace RowlEngine.Editor.ViewModels
                     dir = parent.FullName;
                 }
             }
-            return best ?? Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? ".";
+            return best ?? startDirectory;
         }
 
         /// <summary>

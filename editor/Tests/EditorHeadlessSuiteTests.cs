@@ -18,6 +18,7 @@ internal static class EditorHeadlessTestSuite
             Console.WriteLine("=======================================================");
 
             Program.BuildAvaloniaApp().SetupWithoutStarting();
+            VerifyPlatformSpecificProjectRootResolution();
             string sourceAssets = MainWindowViewModel.AssetsPath;
             string testProjectRoot = Path.Combine(
                 Path.GetTempPath(), $"RowlEditorTests_{Guid.NewGuid():N}");
@@ -245,6 +246,27 @@ internal static class EditorHeadlessTestSuite
                 CopyDirectoryForTests(
                     subDirectory,
                     Path.Combine(targetDir, Path.GetFileName(subDirectory)));
+            }
+        }
+
+        private static void VerifyPlatformSpecificProjectRootResolution()
+        {
+            string fixtureRoot = Path.Combine(
+                Path.GetTempPath(), $"RowlProjectRootFixture_{Guid.NewGuid():N}");
+            string nestedOutput = Path.Combine(
+                fixtureRoot, "editor", "Tests", "bin", "x64", "Debug", "net10.0");
+            try
+            {
+                Directory.CreateDirectory(Path.Combine(fixtureRoot, "Assets"));
+                Directory.CreateDirectory(nestedOutput);
+                File.WriteAllText(Path.Combine(fixtureRoot, "CMakeLists.txt"), "# fixture");
+                string resolved = MainWindowViewModel.ResolveProjectRootFrom(nestedOutput);
+                if (!string.Equals(resolved, fixtureRoot, StringComparison.Ordinal))
+                    throw new Exception($"Platform-specific output root resolved to '{resolved}'");
+            }
+            finally
+            {
+                try { Directory.Delete(fixtureRoot, true); } catch { }
             }
         }
 
