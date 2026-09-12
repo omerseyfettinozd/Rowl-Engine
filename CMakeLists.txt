@@ -94,6 +94,23 @@ if(ROWL_BUILD_RUNTIME_TESTS AND TARGET rowl_player)
         COMMAND $<TARGET_FILE:rowl_player> --project
     )
 
+    # The First Light sample packaged as a portable release and played
+    # through the release contract (packaged VFS, offscreen smoke frame).
+    # Runs everywhere: no window, no GPU, no installed toolchain needed.
+    if(Python3_Interpreter_FOUND)
+        add_test(
+            NAME rowl_demo_first_light_packaged
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/test_demo_packaged.py
+                $<TARGET_FILE:rowl_player>
+                $<TARGET_FILE:RowlEngineCore>
+                ${CMAKE_SOURCE_DIR}/samples/first_light
+        )
+        set_tests_properties(rowl_demo_first_light_packaged PROPERTIES
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+            TIMEOUT 120
+        )
+    endif()
+
     # A real SDL window is needed to exercise SDL's GPU render-state path.  Keep
     # the test out of non-Linux and locally minimal configurations; CI installs
     # Xvfb and Mesa's Vulkan software driver for this gate.
