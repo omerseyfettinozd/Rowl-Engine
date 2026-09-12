@@ -15,6 +15,7 @@ add_executable(rowl_tests
     test_game_object_component_system.cpp
     test_window_input_routing.cpp
     test_runtime_context_and_diagnostics.cpp
+    test_story_graph_parser.cpp
     test_native_performance_benchmarks.cpp
     test_hardening_and_reliability.cpp
     test_camera_and_transition_pipeline.cpp

@@ -1,6 +1,6 @@
 # Uygulama Durumu
 
-Son doğrulama (2026-09-11): Linux Debug derlemesi, 7/7 CTest, editör
+Son doğrulama (2026-09-12): Linux Debug derlemesi, 9/9 CTest, editör
 headless testi ve paket içinden VFS graph yükleyen yerel standalone smoke
 testi geçiyor.
 
@@ -25,6 +25,10 @@ testi geçiyor.
   üzerinden yükler. `--package-smoke-test` tek offscreen frame render eder.
 - Story graph dosya/VFS yüklemeleri artık açık başarı sonucu üretir. Geçersiz
   graph aktif hikâyeyi korur; C API/PInvoke son yükleme tanısını sorgulayabilir.
+- Story graph veri modeli ile JSON parse/semantic doğrulaması `Engine` sınıfından
+  ayrılmış saf `StoryGraphParser` modülündedir. Parser canlı runtime state'ine
+  dokunmaz; yalnız tam doğrulanmış belge `Engine` tarafından transactional olarak
+  uygulanır ve syntax/validation hataları ayrı test edilir.
 - SDL pencere input'u render katmanından global engine'e ulaşmaz; kendi runtime
   callback'i üzerinden advance/save/load/rewind ve pointer olaylarını taşır.
 - C API artık aynı süreçte birden çok canlı handle destekler. Her runtime kendi

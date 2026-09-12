@@ -1,5 +1,6 @@
 #include "rowl/core/engine.hpp"
 #include "rowl/core/logger.hpp"
+#include "rowl/core/story_graph_parser.hpp"
 #include "rowl/vfs/vfs.hpp"
 #include "rowl/scene/scene.hpp"
 #include "rowl/audio/audio_engine.hpp"
@@ -17,15 +18,11 @@
 namespace Rowl::Core {
 
 constexpr uint32_t kMaxVirtualCanvasDimension = 16'384;
-constexpr uintmax_t kMaxStoryJsonBytes = 16 * 1024 * 1024;
-constexpr std::size_t kMaxComponentsPerScene = 2'048;
 constexpr std::size_t kMaxCharactersPerScene = 128;
 constexpr std::size_t kMaxDialoguesPerScene = 128;
 constexpr std::size_t kMaxChoiceButtonsPerScene = 256;
 constexpr std::size_t kMaxScriptsPerScene = 32;
 constexpr std::size_t kMaxAudioComponentsPerScene = 64;
-constexpr std::size_t kMaxStoryNodes = 10'000;
-constexpr std::size_t kMaxEdgesPerStoryNode = 4'096;
 constexpr std::size_t kMaxComponentStringBytes = 64 * 1024;
 constexpr std::size_t kMaxNestedComponentValues = 4'096;
 constexpr std::size_t kMaxComponentDataDepth = 32;
@@ -1050,230 +1047,60 @@ void Engine::updateSceneFromComponents(const std::string& componentsJson) {
     }
 }
 
-void Engine::parseStoryGraphJson(const std::string& jsonContent) {
-    if (jsonContent.empty()) return;
-    if (jsonContent.size() > kMaxStoryJsonBytes) {
-        m_lastStoryGraphLoadError = "Story graph JSON exceeds the maximum accepted size; rejected";
+bool Engine::parseStoryGraphJson(const std::string& jsonContent) {
+    auto parseResult = StoryGraphParser::parse(jsonContent);
+    if (!parseResult.succeeded()) {
+        m_lastStoryGraphLoadError = std::move(parseResult.message);
         ROWL_LOG_ERROR(m_lastStoryGraphLoadError);
-        return;
+        return false;
     }
-    try {
-        auto data = nlohmann::json::parse(jsonContent);
-        if (!data.is_object() || !data.contains("nodes") || !data["nodes"].is_array()) {
-            m_lastStoryGraphLoadError = "Story graph must be an object containing a nodes array; rejected";
-            ROWL_LOG_ERROR(m_lastStoryGraphLoadError);
-            return;
-        }
-        if (data["nodes"].size() > kMaxStoryNodes) {
-            m_lastStoryGraphLoadError = "Story graph exceeds the maximum node count; rejected";
-            ROWL_LOG_ERROR(m_lastStoryGraphLoadError);
-            return;
-        }
-        std::unordered_map<uint64_t, StoryNode> parsedNodes;
 
-        uint64_t parsedStartId = data.value("start_node_id", static_cast<uint64_t>(101));
-
-        for (const auto& nodeJson : data["nodes"]) {
-            if (!nodeJson.is_object()) {
-                m_lastStoryGraphLoadError = "Story graph contains a non-object node; rejected";
-                ROWL_LOG_ERROR(m_lastStoryGraphLoadError);
-                return;
-            }
-                StoryNode n;
-                n.id              = nodeJson.value("id",               static_cast<uint64_t>(0));
-                if (n.id == 0 || parsedNodes.contains(n.id)) {
-                    m_lastStoryGraphLoadError = "Story graph contains a missing or duplicate node ID; rejected";
-                    ROWL_LOG_ERROR(m_lastStoryGraphLoadError);
-                    return;
-                }
-                n.speaker         = nodeJson.value("speaker",          std::string{});
-                n.dialogue        = nodeJson.value("dialogue",         std::string{});
-                n.background      = nodeJson.value("background",       std::string{});
-                n.backgroundX     = nodeJson.value("background_x",     0.0f);
-                n.backgroundY     = nodeJson.value("background_y",     0.0f);
-                n.backgroundWidth = nodeJson.value("background_width",  1920.0f);
-                n.backgroundHeight= nodeJson.value("background_height", 1080.0f);
-                n.character       = nodeJson.value("character",         std::string{});
-                n.characterX      = nodeJson.value("character_x",       1440.0f);
-                n.characterY      = nodeJson.value("character_y",       340.0f);
-                n.characterWidth  = nodeJson.value("character_width",   360.0f);
-                n.characterHeight = nodeJson.value("character_height",  540.0f);
-                n.characterScale  = nodeJson.value("character_scale",   1.0f);
-                n.dialogueBoxX    = nodeJson.value("dialogue_box_x",    80.0f);
-                n.dialogueBoxY    = nodeJson.value("dialogue_box_y",    860.0f);
-                n.dialogueBoxWidth= nodeJson.value("dialogue_box_width",1760.0f);
-                n.dialogueBoxHeight=nodeJson.value("dialogue_box_height",180.0f);
-
-                if (nodeJson.contains("components")) {
-                    if (!nodeJson["components"].is_array()) {
-                        ROWL_LOG_ERROR("Story graph node components must be an array");
-                        return;
-                    }
-                    for (const auto& compJson : nodeJson["components"]) {
-                        if (n.components.size() >= kMaxComponentsPerScene) {
-                            ROWL_LOG_ERROR("Story graph node exceeds the maximum component count");
-                            return;
-                        }
-                        if (!compJson.is_object()) {
-                            ROWL_LOG_ERROR("Story graph contains a non-object component");
-                            return;
-                        }
-                        ComponentData cd;
-                        cd.type = compJson.value("type", "");
-                        cd.id = compJson.value("id", "");
-                        cd.enabled = compJson.value("enabled", true);
-                        if (compJson.contains("data"))
-                            cd.data = compJson["data"];
-                        n.components.push_back(cd);
-                    }
-                }
-                // Graph v3/v4 stores components under Unity-style objects.
-                if (nodeJson.contains("objects") && !nodeJson["objects"].is_array()) {
-                    ROWL_LOG_ERROR("Story graph node objects must be an array");
-                    return;
-                }
-                if (nodeJson.contains("objects") && nodeJson["objects"].is_array()) {
-                    for (const auto& objectJson : nodeJson["objects"]) {
-                        if (!objectJson.is_object()) {
-                            ROWL_LOG_ERROR("Story graph contains a non-object scene object");
-                            return;
-                        }
-                        if (!objectJson.value("is_active", true) || !objectJson.contains("components")) continue;
-                        if (!objectJson["components"].is_array()) {
-                            ROWL_LOG_ERROR("Story graph object components must be an array");
-                            return;
-                        }
-                        for (const auto& compJson : objectJson["components"]) {
-                            if (n.components.size() >= kMaxComponentsPerScene) {
-                                ROWL_LOG_ERROR("Story graph node exceeds the maximum component count");
-                                return;
-                            }
-                            if (!compJson.is_object()) {
-                                ROWL_LOG_ERROR("Story graph contains a non-object component");
-                                return;
-                            }
-                            ComponentData cd;
-                            cd.type = compJson.value("type", "");
-                            cd.id = compJson.value("id", "");
-                            cd.enabled = compJson.value("enabled", true);
-                            if (compJson.contains("data")) cd.data = compJson["data"];
-                            if (!cd.type.empty()) n.components.push_back(std::move(cd));
-                        }
-                    }
-                }
-
-                if (nodeJson.contains("next_nodes") && nodeJson["next_nodes"].is_array()) {
-                    for (const auto& nextJson : nodeJson["next_nodes"]) {
-                        if (!nextJson.is_object()) {
-                            ROWL_LOG_ERROR("Story graph contains a non-object edge");
-                            return;
-                        }
-                        StoryNode::NextNode next;
-                        next.nodeId = nextJson.value("id",    static_cast<uint64_t>(0));
-                        next.label  = nextJson.value("label", std::string{});
-                        next.optionId = nextJson.value("option_id", std::string{});
-                        if (next.nodeId == 0) {
-                            ROWL_LOG_ERROR("Story graph contains an edge with no target node ID");
-                            return;
-                        }
-                        if (n.nextNodes.size() >= kMaxEdgesPerStoryNode) {
-                            ROWL_LOG_ERROR("Story graph node exceeds the maximum edge count");
-                            return;
-                        }
-                        n.nextNodes.push_back(next);
-                    }
-                } else if (nodeJson.contains("next_nodes")) {
-                    ROWL_LOG_ERROR("Story graph node next_nodes must be an array");
-                    return;
-                } else if (nodeJson.contains("next_id")) {
-                    uint64_t nextId = nodeJson.value("next_id", static_cast<uint64_t>(0));
-                    if (nextId != 0) n.nextNodes.push_back({nextId, "", ""});
-                }
-
-                parsedNodes.emplace(n.id, std::move(n));
-        }
-
-        if (parsedNodes.empty()) {
-            m_lastStoryGraphLoadError = "Story graph does not contain any valid nodes; rejected";
-            ROWL_LOG_ERROR(m_lastStoryGraphLoadError);
-            return;
-        }
-        for (const auto& [nodeId, node] : parsedNodes) {
-            for (const auto& next : node.nextNodes) {
-                if (!parsedNodes.contains(next.nodeId)) {
-                    m_lastStoryGraphLoadError = "Story graph node #" + std::to_string(nodeId) +
-                                   " references a missing node #" + std::to_string(next.nodeId) + "; rejected";
-                    ROWL_LOG_ERROR(m_lastStoryGraphLoadError);
-                    return;
-                }
-            }
-        }
-        if (data.contains("start_node_id") &&
-            (parsedStartId == 0 || !parsedNodes.contains(parsedStartId))) {
-            m_lastStoryGraphLoadError = "Story graph start_node_id does not reference a node; rejected";
-            ROWL_LOG_ERROR(m_lastStoryGraphLoadError);
-            return;
-        }
-
-            m_storyNodes = std::move(parsedNodes);
-            m_startNodeId = parsedStartId;
-
-            // Start at the defined start node
-            if (m_startNodeId != 0 && m_storyNodes.count(m_startNodeId)) {
-                m_currentNodeId = m_startNodeId;
-            } else {
-                uint64_t minId = UINT64_MAX;
-                for (const auto& [id, _] : m_storyNodes) {
-                    if (id < minId) minId = id;
-                }
-                m_startNodeId = minId;
-                m_currentNodeId = minId;
-            }
-
-            // Loading a graph is a new story session. Keeping a previous
-            // graph's history here could make Save/Load or rewind jump to a
-            // node that belongs to a different graph.
-            m_gameState = Rowl::State::GameState::createInitialState(m_currentNodeId);
-            m_lastSfxPlaybackNodeId = 0;
-            if (m_luaSandbox) m_luaSandbox->clearVariables();
-
-            if (m_storyNodes.count(m_currentNodeId)) {
-                const auto& startNode = m_storyNodes[m_currentNodeId];
-                if (!startNode.components.empty()) {
-                    nlohmann::json compsJson = nlohmann::json::array();
-                    for (const auto& c : startNode.components) {
-                        compsJson.push_back({
-                            {"type", c.type},
-                            {"id", c.id},
-                            {"enabled", c.enabled},
-                            {"data", c.data}
-                        });
-                    }
-                    updateSceneFromComponents(compsJson.dump());
-                } else {
-                    updateActiveScene(
-                        startNode.speaker, startNode.dialogue,
-                        startNode.background,
-                        startNode.backgroundX,  startNode.backgroundY,
-                        startNode.backgroundWidth, startNode.backgroundHeight,
-                        startNode.character,
-                        startNode.characterX,   startNode.characterY,
-                        startNode.characterWidth, startNode.characterHeight,
-                        startNode.dialogueBoxX, startNode.dialogueBoxY,
-                        startNode.dialogueBoxWidth, startNode.dialogueBoxHeight
-                    );
-                }
-                ROWL_LOG_INFO("Story graph loaded: " + std::to_string(m_storyNodes.size()) +
-                              " nodes. Start node #" + std::to_string(m_currentNodeId));
-                ++m_storyGraphRevision;
-            }
-    } catch (const nlohmann::json::parse_error& e) {
-        m_lastStoryGraphLoadError = "Story graph JSON parse error: " + std::string(e.what()) + "; rejected";
+    if (!parseResult.document.nodes.contains(parseResult.document.startNodeId)) {
+        m_lastStoryGraphLoadError =
+            "Story graph parser returned an invalid start node; the active graph was preserved.";
         ROWL_LOG_ERROR(m_lastStoryGraphLoadError);
-    } catch (const std::exception& e) {
-        m_lastStoryGraphLoadError = "Story graph load error: " + std::string(e.what()) + "; rejected";
-        ROWL_LOG_ERROR(m_lastStoryGraphLoadError);
+        return false;
     }
+
+    // Parsing is deliberately transactional. Only a complete, validated
+    // document can replace the currently playable graph.
+    m_storyNodes = std::move(parseResult.document.nodes);
+    m_startNodeId = parseResult.document.startNodeId;
+    m_currentNodeId = m_startNodeId;
+
+    // Loading a graph is a new story session. Keeping a previous graph's
+    // history here could make Save/Load or rewind jump into another graph.
+    m_gameState = Rowl::State::GameState::createInitialState(m_currentNodeId);
+    m_lastSfxPlaybackNodeId = 0;
+    if (m_luaSandbox) m_luaSandbox->clearVariables();
+
+    const auto& startNode = m_storyNodes.at(m_currentNodeId);
+    if (!startNode.components.empty()) {
+        nlohmann::json componentsJson = nlohmann::json::array();
+        for (const auto& component : startNode.components) {
+            componentsJson.push_back({
+                {"type", component.type},
+                {"id", component.id},
+                {"enabled", component.enabled},
+                {"data", component.data}
+            });
+        }
+        updateSceneFromComponents(componentsJson.dump());
+    } else {
+        updateActiveScene(
+            startNode.speaker, startNode.dialogue, startNode.background,
+            startNode.backgroundX, startNode.backgroundY,
+            startNode.backgroundWidth, startNode.backgroundHeight,
+            startNode.character, startNode.characterX, startNode.characterY,
+            startNode.characterWidth, startNode.characterHeight,
+            startNode.dialogueBoxX, startNode.dialogueBoxY,
+            startNode.dialogueBoxWidth, startNode.dialogueBoxHeight);
+    }
+
+    ROWL_LOG_INFO("Story graph loaded: " + std::to_string(m_storyNodes.size()) +
+                  " nodes. Start node #" + std::to_string(m_currentNodeId));
+    ++m_storyGraphRevision;
+    return true;
 }
 
 bool Engine::loadStoryGraphFromPath(const std::string& jsonPath) {
@@ -1301,9 +1128,7 @@ bool Engine::loadStoryGraphFromPath(const std::string& jsonPath) {
     }
     std::string content((std::istreambuf_iterator<char>(f)),
                          std::istreambuf_iterator<char>());
-    const uint64_t revisionBeforeParse = m_storyGraphRevision;
-    parseStoryGraphJson(content);
-    if (m_storyGraphRevision == revisionBeforeParse) {
+    if (!parseStoryGraphJson(content)) {
         if (m_lastStoryGraphLoadError.empty()) {
             m_lastStoryGraphLoadError = "Story graph JSON was rejected; the active graph was preserved.";
         }
@@ -1354,9 +1179,7 @@ bool Engine::loadStoryGraphFromVfs(const std::string& vfsPath) {
         return false;
     }
 
-    const uint64_t revisionBeforeParse = m_storyGraphRevision;
-    parseStoryGraphJson(content);
-    if (m_storyGraphRevision == revisionBeforeParse) {
+    if (!parseStoryGraphJson(content)) {
         if (m_lastStoryGraphLoadError.empty()) {
             m_lastStoryGraphLoadError = "Story graph JSON from VFS was rejected; the active graph was preserved.";
         }

@@ -3,6 +3,7 @@
 #include "rowl/render/window.hpp"
 #include "rowl/state/game_state.hpp"
 #include "rowl/core/runtime_context.hpp"
+#include "rowl/core/story_graph.hpp"
 #include <cstdint>
 #include <string>
 #include <memory>
@@ -25,14 +26,6 @@ class LuaSandbox;
 
 namespace Rowl::Core {
 
-/// Component data container for the component-based node architecture.
-struct ComponentData {
-    std::string type;       // "speaker", "background", "character", "dialogue_box", "audio"
-    std::string id;         // Unique component instance ID
-    bool enabled = true;
-    nlohmann::json data;    // Component-specific JSON payload
-};
-
 using Rowl::Render::CharacterRenderData;
 using Rowl::Render::DialogueRenderData;
 using Rowl::Render::ChoiceButtonRenderData;
@@ -45,38 +38,6 @@ struct EngineConfig {
     std::string pipeId      = "";    // Legacy field — ignored in embedded mode
     bool vsync              = true;
     bool standaloneWindow   = false; // When true, creates a visible top-level SDL3 window
-};
-
-struct StoryNode {
-    uint64_t id = 0;
-    std::string speaker;
-    std::string dialogue;
-    std::string background;
-    float backgroundX      = 0.0f;
-    float backgroundY      = 0.0f;
-    float backgroundWidth  = 1920.0f;
-    float backgroundHeight = 1080.0f;
-    std::string character;
-    float characterX       = 1440.0f;
-    float characterY       = 340.0f;
-    float characterWidth   = 360.0f;
-    float characterHeight  = 540.0f;
-    float characterScale   = 1.0f;
-    float dialogueBoxX     = 80.0f;
-    float dialogueBoxY     = 860.0f;
-    float dialogueBoxWidth = 1760.0f;
-    float dialogueBoxHeight = 180.0f;
-
-    // Branching: multiple next nodes with optional choice labels
-    struct NextNode {
-        uint64_t nodeId = 0;
-        std::string label;    // e.g. "Option A", "Accept", "Refuse"
-        std::string optionId; // Stable ID; never use display order as identity.
-    };
-    std::vector<NextNode> nextNodes;
-
-    // Component-based data (v2 format)
-    std::vector<ComponentData> components;
 };
 
 /// A bounded, editor-facing snapshot of one active Lua component. It contains
@@ -343,7 +304,7 @@ private:
     uint64_t m_storyGraphRevision = 0;
     std::string m_lastStoryGraphLoadError;
 
-    void parseStoryGraphJson(const std::string& jsonContent);
+    bool parseStoryGraphJson(const std::string& jsonContent);
     void restoreAudioStateFromGameState();
     void deactivateScripts();
     void activateScripts(const std::vector<nlohmann::json>& scripts);

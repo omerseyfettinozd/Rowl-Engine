@@ -100,6 +100,7 @@ Engine* testEngineFromHandle(RowlEngineHandle handle);
 void test_game_object_component_system();
 void test_window_input_routing();
 void test_runtime_context_and_diagnostics();
+void test_story_graph_parser();
 void test_native_performance_benchmarks(const std::string& benchmarkJsonPath);
 void test_hardening_and_reliability();
 void test_camera_and_transition_pipeline();
