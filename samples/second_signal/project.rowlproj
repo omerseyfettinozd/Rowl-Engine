@@ -1,0 +1,11 @@
+{
+  "name": "Second Signal",
+  "version": "1.0.0",
+  "engineVersion": "1.0.0",
+  "nodeCount": 4,
+  "startNodeId": 1,
+  "virtualResolution": {
+    "width": 1920,
+    "height": 1080
+  }
+}

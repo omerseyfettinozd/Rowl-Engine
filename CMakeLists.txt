@@ -109,6 +109,17 @@ if(ROWL_BUILD_RUNTIME_TESTS AND TARGET rowl_player)
             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
             TIMEOUT 120
         )
+        add_test(
+            NAME rowl_demo_second_signal_packaged
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/test_demo_packaged.py
+                $<TARGET_FILE:rowl_player>
+                $<TARGET_FILE:RowlEngineCore>
+                ${CMAKE_SOURCE_DIR}/samples/second_signal
+        )
+        set_tests_properties(rowl_demo_second_signal_packaged PROPERTIES
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+            TIMEOUT 120
+        )
     endif()
 
     # A real SDL window is needed to exercise SDL's GPU render-state path.  Keep

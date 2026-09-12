@@ -1,0 +1,297 @@
+{
+  "format_version": 4,
+  "start_node_id": 1,
+  "nodes": [
+    {
+      "id": 1,
+      "title": "Static",
+      "objects": [
+        {
+          "id": "bg1",
+          "name": "Background Layer",
+          "is_active": true,
+          "components": [
+            {
+              "type": "background",
+              "id": "bg1c",
+              "enabled": true,
+              "data": {
+                "texture": "relay.jpg",
+                "x": 0,
+                "y": 0,
+                "width": 1920,
+                "height": 1080,
+                "scale": 1
+              }
+            }
+          ]
+        },
+        {
+          "id": "ch1",
+          "name": "Operator",
+          "is_active": true,
+          "components": [
+            {
+              "type": "character",
+              "id": "ch1c",
+              "enabled": true,
+              "data": {
+                "sprite": "operator.jpg",
+                "x": 1440,
+                "y": 340,
+                "width": 360,
+                "height": 540,
+                "scale": 1
+              }
+            }
+          ]
+        },
+        {
+          "id": "dlg1",
+          "name": "Dialogue",
+          "is_active": true,
+          "components": [
+            {
+              "type": "variable",
+              "id": "var1",
+              "enabled": true,
+              "data": {
+                "key": "station_awake",
+                "value": "yes",
+                "operation": "set"
+              }
+            },
+            {
+              "type": "audio",
+              "id": "aud1",
+              "enabled": true,
+              "data": {
+                "bgm_track": "audio/signal_tone.wav",
+                "volume": 0.8
+              }
+            },
+            {
+              "type": "dialogue",
+              "id": "dlg1c",
+              "enabled": true,
+              "data": {
+                "speaker": "Margot",
+                "dialogue": "The relay crackles awake. A signal rises out of the static — do you answer it?",
+                "x": 80,
+                "y": 860,
+                "width": 1760,
+                "height": 180,
+                "scale": 1,
+                "typewriter_enabled": true,
+                "text_speed": 30,
+                "auto_advance": false,
+                "font_size": 24
+              }
+            },
+            {
+              "type": "choice",
+              "id": "chc1",
+              "enabled": true,
+              "data": {
+                "options": [
+                  {
+                    "option_id": "go_answer",
+                    "text": "Answer the signal"
+                  },
+                  {
+                    "option_id": "go_silent",
+                    "text": "Let it fade"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "next_nodes": [
+        { "id": 2, "label": "Answer the signal", "option_id": "go_answer" },
+        { "id": 3, "label": "Let it fade", "option_id": "go_silent" }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "The Answer",
+      "objects": [
+        {
+          "id": "bg2",
+          "name": "Background Layer",
+          "is_active": true,
+          "components": [
+            {
+              "type": "background",
+              "id": "bg2c",
+              "enabled": true,
+              "data": {
+                "texture": "relay.jpg",
+                "x": 0,
+                "y": 0,
+                "width": 1920,
+                "height": 1080,
+                "scale": 1
+              }
+            }
+          ]
+        },
+        {
+          "id": "dlg2",
+          "name": "Dialogue",
+          "is_active": true,
+          "components": [
+            {
+              "type": "variable",
+              "id": "var2",
+              "enabled": true,
+              "data": {
+                "key": "signal_count",
+                "value": "1",
+                "operation": "add"
+              }
+            },
+            {
+              "type": "dialogue",
+              "id": "dlg2c",
+              "enabled": true,
+              "data": {
+                "speaker": "Voice",
+                "dialogue": "You pick up the receiver. Numbers, slow and deliberate — a code meant for you.",
+                "x": 80,
+                "y": 860,
+                "width": 1760,
+                "height": 180,
+                "scale": 1,
+                "typewriter_enabled": true,
+                "text_speed": 30,
+                "auto_advance": false,
+                "font_size": 24
+              }
+            },
+            {
+              "type": "choice",
+              "id": "chc2",
+              "enabled": true,
+              "data": {
+                "options": [
+                  {
+                    "option_id": "go_code",
+                    "text": "Write down the code",
+                    "condition": "signal_count >= 1"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "next_nodes": [
+        { "id": 4, "label": "Write down the code", "option_id": "go_code" }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Silence",
+      "objects": [
+        {
+          "id": "bg3",
+          "name": "Background Layer",
+          "is_active": true,
+          "components": [
+            {
+              "type": "background",
+              "id": "bg3c",
+              "enabled": true,
+              "data": {
+                "texture": "operator.jpg",
+                "x": 0,
+                "y": 0,
+                "width": 1920,
+                "height": 1080,
+                "scale": 1
+              }
+            }
+          ]
+        },
+        {
+          "id": "dlg3",
+          "name": "Dialogue",
+          "is_active": true,
+          "components": [
+            {
+              "type": "dialogue",
+              "id": "dlg3c",
+              "enabled": true,
+              "data": {
+                "speaker": "Margot",
+                "dialogue": "You let the dial fall silent. Some signals are not yours to answer. The end.",
+                "x": 80,
+                "y": 860,
+                "width": 1760,
+                "height": 180,
+                "scale": 1,
+                "typewriter_enabled": true,
+                "text_speed": 30,
+                "auto_advance": false,
+                "font_size": 24
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "The Code",
+      "objects": [
+        {
+          "id": "bg4",
+          "name": "Background Layer",
+          "is_active": true,
+          "components": [
+            {
+              "type": "background",
+              "id": "bg4c",
+              "enabled": true,
+              "data": {
+                "texture": "operator.jpg",
+                "x": 0,
+                "y": 0,
+                "width": 1920,
+                "height": 1080,
+                "scale": 1
+              }
+            }
+          ]
+        },
+        {
+          "id": "dlg4",
+          "name": "Dialogue",
+          "is_active": true,
+          "components": [
+            {
+              "type": "dialogue",
+              "id": "dlg4c",
+              "enabled": true,
+              "data": {
+                "speaker": "Margot",
+                "dialogue": "The numbers resolve into coordinates. Dawn shift just got interesting. The end.",
+                "x": 80,
+                "y": 860,
+                "width": 1760,
+                "height": 180,
+                "scale": 1,
+                "typewriter_enabled": true,
+                "text_speed": 30,
+                "auto_advance": false,
+                "font_size": 24
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

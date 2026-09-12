@@ -90,6 +90,7 @@ void test_vfs_security();
 void test_native_c_api();
 void test_single_engine_image();
 void test_demo_first_light();
+void test_demo_second_signal();
 
 // Defined in engine/src/c_api.cpp. Test-only bridge resolving the explicit
 // Engine behind a C-API handle; production code must never use it.

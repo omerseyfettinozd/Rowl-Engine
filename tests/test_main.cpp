@@ -37,6 +37,7 @@ int main(int argc, char* argv[]) {
     test_native_performance_benchmarks(benchmarkJsonPath);
     test_hardening_and_reliability();
     test_demo_first_light();
+    test_demo_second_signal();
 
     std::cout << "\n=======================================================" << std::endl;
     std::cout << "🎉 ALL UNIT & INTEGRATION TESTS PASSED SUCCESSFULLY! 🎉" << std::endl;
