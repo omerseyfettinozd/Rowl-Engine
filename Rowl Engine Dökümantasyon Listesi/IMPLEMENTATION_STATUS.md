@@ -76,7 +76,7 @@ testi geçiyor.
   typewriter/dialogue-audio, cinematic camera/screen-FX, audio-device
   observer/diagnostic ve ViewModel inceltme/eşdeğerlik grupları üretim giriş
   noktası `Program.cs` dışındaki domain test modüllerine taşındı;
-  `--headless-test` davranışı ile Test 8–28 çıktısı korunur (Test 9/12/14/15/16/
+  `--headless-test` davranışı ile Test 7–28 çıktısı korunur (Test 7/9/12/14/15/16/
   18/19, paylaşılan test proje kökünü parametre olarak alır). Kalan test
   gruplarının ayrılması sürüyor.
 
