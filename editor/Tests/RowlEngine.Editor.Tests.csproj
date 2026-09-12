@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <AssemblyName>RowlEngine.Editor.Tests</AssemblyName>
+
+    <RowlNativeLibWin1>$(MSBuildThisFileDirectory)..\..\build\bin\RowlEngineCore.dll</RowlNativeLibWin1>
+    <RowlNativeLibWin2>$(MSBuildThisFileDirectory)..\..\build\bin\Release\RowlEngineCore.dll</RowlNativeLibWin2>
+    <RowlNativeLibWin3>$(MSBuildThisFileDirectory)..\..\build\lib\Release\RowlEngineCore.dll</RowlNativeLibWin3>
+    <RowlNativeLibWin4>$(MSBuildThisFileDirectory)..\..\build\lib\RowlEngineCore.dll</RowlNativeLibWin4>
+    <RowlNativeLibLinux>$(MSBuildThisFileDirectory)..\..\build\lib\libRowlEngineCore.so</RowlNativeLibLinux>
+    <RowlNativeLibMac>$(MSBuildThisFileDirectory)..\..\build\lib\libRowlEngineCore.dylib</RowlNativeLibMac>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.4" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../RowlEngine.Editor.csproj" />
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <Target Name="CopyNativeLib" AfterTargets="Build">
+    <ItemGroup>
+      <NativeLibs Include="$(RowlNativeLibLinux)" Condition="Exists('$(RowlNativeLibLinux)')" />
+      <NativeLibs Include="$(RowlNativeLibMac)" Condition="Exists('$(RowlNativeLibMac)')" />
+      <NativeLibs Include="$(RowlNativeLibWin1)" Condition="Exists('$(RowlNativeLibWin1)')" />
+      <NativeLibs Include="$(RowlNativeLibWin2)" Condition="Exists('$(RowlNativeLibWin2)')" />
+      <NativeLibs Include="$(RowlNativeLibWin3)" Condition="Exists('$(RowlNativeLibWin3)')" />
+      <NativeLibs Include="$(RowlNativeLibWin4)" Condition="Exists('$(RowlNativeLibWin4)')" />
+    </ItemGroup>
+    <Copy SourceFiles="@(NativeLibs)"
+          DestinationFolder="$(OutputPath)"
+          SkipUnchangedFiles="true"
+          Condition="'@(NativeLibs)' != ''" />
+  </Target>
+</Project>

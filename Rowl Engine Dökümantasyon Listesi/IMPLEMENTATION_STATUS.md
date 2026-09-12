@@ -66,7 +66,9 @@ testi geçiyor.
 - Duvar-saati transition ölçümü varsayılan olarak raporlanır. Yalnız aynı
   makine/build/fixture için kontrol edilen performans hostu açıkça
   `ROWL_PERF_FLOOR=enforced` verdiğinde 30 FPS eşiği test kapısı olur.
-- Editör headless paketinin variable/condition/native-state ve preview-coalescing,
+- Editör headless paketinin component/hierarchy, theme/workspace, graph-
+  validation/persistence, asset portability, layout assist, project persistence,
+  asset cache, variable/condition/native-state ve preview-coalescing,
   story-graph loader/hydration, camera/transition-lifecycle, save-as/build-pipeline,
   document-writer/canvas-service, scene-sync/play-mode, settings-sync/
   component-service, asset-import/build-coordinator,
@@ -75,10 +77,11 @@ testi geçiyor.
   transform-gizmo, audio-DSP/VU-meter, parallax/2.5D-camera,
   typewriter/dialogue-audio, cinematic camera/screen-FX, audio-device
   observer/diagnostic ve ViewModel inceltme/eşdeğerlik grupları üretim giriş
-  noktası `Program.cs` dışındaki domain test modüllerine taşındı;
-  `--headless-test` davranışı ile Test 1–28 çıktısı korunur (Test 3/4/5/7/9/12/14/15/16/
-  18/19, paylaşılan test proje kökünü parametre olarak alır). Kalan test
-  gruplarının ayrılması sürüyor.
+  noktası `Program.cs` dışındaki domain test modüllerine taşındı. Test kaynakları
+  üretim assembly'sinden çıkarıldı ve `editor/Tests/RowlEngine.Editor.Tests.csproj`
+  içinde xUnit/VSTest tarafından keşfedilen ayrı test assembly'sine bağlandı.
+  Kanonik kapı `dotnet test editor/Tests/RowlEngine.Editor.Tests.csproj
+  --configuration Debug`; CTest ve Linux benchmark CI aynı projeyi çalıştırır.
 
 ## Sonraki üretim işleri
 

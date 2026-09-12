@@ -1995,26 +1995,21 @@ The **Rowl Engine Editor** is a visual novel and interactive storytelling develo
 
 ---
 
-## 2. Application Entry Point & Headless Test Harness
-**File Path**: [`editor/Program.cs`](file:///home/chaple/Belgeler/Rowl%20Engine/editor/Program.cs)
+## 2. Application Entry Point & Headless Test Project
+**File Paths**: [`editor/Program.cs`](file:///home/chaple/Belgeler/Rowl%20Engine/editor/Program.cs), [`editor/Tests/RowlEngine.Editor.Tests.csproj`](file:///home/chaple/Belgeler/Rowl%20Engine/editor/Tests/RowlEngine.Editor.Tests.csproj)
 
 ### Architecture & Responsibilities:
 - **`[STAThread] Main(string[] args)`**:
-  - Handles command-line arguments. If `--test` or `--headless-test` is detected, skips UI initialization and immediately executes `RunHeadlessTests()`.
   - Configures global unhandled exception filters on `TaskScheduler.UnobservedTaskException` and `AppDomain.CurrentDomain.UnhandledException` to safely observe and ignore `TaskCanceledException` on normal process teardown.
   - Launches the desktop application lifetime: `BuildAvaloniaApp().StartWithClassicDesktopLifetime(args)`.
 - **`BuildAvaloniaApp()`**:
   - Returns `AppBuilder.Configure<App>().UsePlatformDetect().WithInterFont().LogToTrace()`.
-- **Headless Test Suite (`RunHeadlessTests()`)**:
-  Executes 8 automated regression, model, and benchmark tests:
-  1. *Test 1*: `NodeViewModel` modular component lifecycle, proxy property synchronization (`Speaker`, `DialogueText`, `DialogueBoxX`, `DialogueBoxY`), and `RemoveSelfCommand` (trash can button).
-  2. *Test 2*: Dynamic theme swapping between Dark Mode and Light (Orange-White) Mode.
-  3. *Test 3*: Graph topology validation and single outgoing wire rule verification.
-  4. *Test 4*: Story Graph v2 JSON serialization, deserialization, and node coordinate persistence.
-  5. *Test 5*: Asset auto-copy and portability: importing external image files into `<ProjectRoot>/Assets/images/` and resolving relative paths.
-  6. *Test 6*: OBS Assist alignment & magnetic snapping system (1080p fit, screen center, ground baseline, snap toggle).
-  7. *Test 7*: Project Save, Save As (`project.rowlproj`, `full_story_graph.json`, asset folders), and Standalone Game Build release packaging (`run_game.sh`, `README.txt`, `Assets/`).
-  8. *Test 8*: High-throughput negative bitmap cache lookup benchmark (10,000 queries verified in <500ms).
+- **Dedicated Headless Test Assembly**:
+  - `editor/Tests/*.cs` is excluded from the production editor assembly.
+  - xUnit/VSTest discovers `EditorHeadlessSuiteTests`; its ordered Test 1–28
+    matrix preserves the shared project/runtime fixture contracts.
+  - Canonical command: `dotnet test editor/Tests/RowlEngine.Editor.Tests.csproj --configuration Debug`.
+  - `ROWL_EDITOR_BENCHMARK_JSON=<path>` enables the editor interaction benchmark report.
 
 ---
 
@@ -2863,10 +2858,10 @@ The repository layout spans the native C++ engine core, Avalonia editor, command
   - `CopyNativeLib`: Runs after `Build`. Checks if `../build/lib/libRowlEngineCore.so` exists, and automatically copies it to `$(OutputPath)`.
   - `WarnNativeLibMissing`: Emits a build warning if `libRowlEngineCore.so` has not been compiled yet.
 
-### 4.2 `editor/Program.cs` & Headless Test Suite
-- **Location:** [`/home/chaple/Belgeler/Rowl Engine/editor/Program.cs`](file:///home/chaple/Belgeler/Rowl%20Engine/editor/Program.cs)
-- **Headless Mode Flag:** Invocation with `--test` or `--headless-test` executes `RunHeadlessTests()` and exits cleanly without initializing the GUI window.
-- **Automated Test Matrix (8 Phases):**
+### 4.2 `editor/Tests/RowlEngine.Editor.Tests.csproj` & Headless Test Suite
+- **Location:** [`/home/chaple/Belgeler/Rowl Engine/editor/Tests/RowlEngine.Editor.Tests.csproj`](file:///home/chaple/Belgeler/Rowl%20Engine/editor/Tests/RowlEngine.Editor.Tests.csproj)
+- **Test Entry Point:** xUnit/VSTest discovers the ordered headless suite with `dotnet test`; production `Program.cs` contains only application startup.
+- **Automated Test Matrix (Test 1–28; selected foundational phases):**
   1. **NodeViewModel & Component Model**: Verifies multi-character component additions, proxy property synchronization, and trash can deletion (`RemoveSelfCommand`).
   2. **Dynamic Theming**: Validates toggle between dark mode and light/orange mode.
   3. **Connection Topology**: Confirms single outgoing wire rules and Bézier graph integrity.
@@ -2875,6 +2870,11 @@ The repository layout spans the native C++ engine core, Avalonia editor, command
   6. **OBS Assist & Magnetic Snapping**: Tests 1080p background fitting, horizontal element centering, baseline grounding, and snap toggles.
   7. **Project Save & Standalone Build Pipeline**: Executes full release export simulation, generating `run_game.sh`, `README.txt`, and asset directories.
   8. **Performance Benchmark**: Benchmarks `AssetBitmapCache` with 10,000 negative lookups for missing assets (must finish in < 500 ms; runs at > 50,000 queries/sec).
+
+The remaining phases cover runtime state, loader hydration, camera/transition,
+build coordination, scene/settings/project lifecycle, diagnostics, transform,
+audio DSP/device recovery, parallax, typewriter audio, cinematic FX, and
+ViewModel-thinning equivalence.
 
 ---
 

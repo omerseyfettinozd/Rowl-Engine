@@ -27,6 +27,11 @@
     <PackageReference Include="Tmds.DBus.Protocol" Version="0.21.3" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Test sources and their generated output belong only to the dedicated test assembly. -->
+    <Compile Remove="Tests/**/*.cs" />
+  </ItemGroup>
+
   <!-- Auto-copy native library to output directory after build across all platforms -->
   <Target Name="CopyNativeLib" AfterTargets="Build">
     <ItemGroup>

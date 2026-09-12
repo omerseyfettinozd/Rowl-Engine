@@ -76,9 +76,10 @@ if(ROWL_BUILD_RUNTIME_TESTS)
     if(DOTNET_EXECUTABLE)
         add_test(
             NAME rowl_editor_headless_tests
-            COMMAND ${DOTNET_EXECUTABLE} run
-                --project ${CMAKE_SOURCE_DIR}/editor/RowlEngine.Editor.csproj
-                -- --headless-test
+            COMMAND ${DOTNET_EXECUTABLE} test
+                ${CMAKE_SOURCE_DIR}/editor/Tests/RowlEngine.Editor.Tests.csproj
+                --configuration Debug
+                --logger "console;verbosity=normal"
         )
         set_tests_properties(rowl_editor_headless_tests PROPERTIES
             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
