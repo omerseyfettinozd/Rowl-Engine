@@ -54,9 +54,11 @@ void test_demo_second_signal() {
     }
     // Node 2 adds signal_count via a variable component; the gated choice on
     // this node requires signal_count >= 1 in Lua.
-    // The add operation stores engine-canonical double formatting; compare
-    // numerically, not textually.
-    if (std::stod(RowlEngine_GetVariable(handle, "signal_count")) != 1.0 ||
+    // Contract lock: the add operation stores engine-canonical double
+    // formatting ("1.000000", never "1"); numeric consumers must compare
+    // numerically. See RowlEngine_GetVariable docs.
+    if (std::string(RowlEngine_GetVariable(handle, "signal_count")) != "1.000000" ||
+        std::stod(RowlEngine_GetVariable(handle, "signal_count")) != 1.0 ||
         RowlEngine_EvaluateCondition(handle, "signal_count >= 1") != 1) {
         std::cerr << "Second demo answer node did not accumulate Lua state" << std::endl;
         exit(1);

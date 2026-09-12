@@ -436,7 +436,15 @@ ROWL_API uint64_t RowlEngine_GetCurrentStepId(RowlEngineHandle handle);
 /** Sets a string variable in the scripting environment and game state. */
 ROWL_API void RowlEngine_SetVariable(RowlEngineHandle handle, const char* key, const char* value);
 
-/** Gets a variable string by key. The returned pointer is owned by the engine. */
+/**
+ * Gets a variable string by key. The returned pointer is owned by the engine.
+ *
+ * Contract: values set explicitly (SetVariable, variable components with
+ * operation "set") come back verbatim. Values produced by numeric operations
+ * (variable components with operation "add") come back in engine-canonical
+ * double formatting (e.g. "1.000000", never "1"). Compare numerically when
+ * the producer may be arithmetic.
+ */
 ROWL_API const char* RowlEngine_GetVariable(RowlEngineHandle handle, const char* key);
 
 /** Evaluates a Lua condition expression (e.g. "gold >= 50"). Returns 1 for true, 0 for false. */
