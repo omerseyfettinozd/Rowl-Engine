@@ -19,11 +19,17 @@ thread contract.
 
 | Target | Runtime build gate | Package/device gate | Status |
 | --- | --- | --- | --- |
-| Linux desktop | Native CTest, shaderless fallback and GPU-MSDF smoke CI tests | Fresh `game.rowlpkg` plus VFS package smoke | Local and CI build/test/package gates passed; interactive GUI proof pending |
-| Windows desktop | vcpkg CMake/CTest CI job | Fresh standalone package, DLL and shaderless VFS smoke in CI | CI build/test/package gate passed on run 34689084748; interactive GUI/input/audio device proof pending |
-| macOS desktop | None yet | None yet | Planned |
-| Android arm64-v8a | Core-only NDK CMake script | APK and physical-device test pending | Build path prepared |
-| iOS | Core-only Xcode/CMake arm64 script | Signed app and physical-device test pending | Build path prepared |
+| Linux desktop x86_64 | Native CTest, shaderless fallback and GPU-MSDF smoke CI tests | Fresh deterministic `game.rowlpkg` (embedded manifest, license inventory) plus VFS package smoke | CI build/test/package gates green, incl. run 34744730099; interactive GUI proof pending |
+| Windows desktop x64 | vcpkg CMake/CTest CI job | Fresh standalone package, DLL and shaderless VFS smoke in CI | CI build/test/package gates green, incl. run 34744730099; interactive GUI/input/audio device proof pending |
+| macOS desktop | None — never built or tested; no host hardware available | None yet | Skeleton only (dylib resolve paths); evidence-blocked, not supported |
+| Android arm64-v8a | Core-only NDK CMake script, never executed here | No APK/AAB is produced; physical-device test pending | Host skeleton only (`EngineActivity`, manifest); evidence-blocked, not supported |
+| iOS | Core-only Xcode/CMake arm64 script, never executed here | No signed app is produced; physical-device test pending | Host skeleton only (`Info.plist`, build script); evidence-blocked, not supported |
+
+macOS, Android, and iOS stay **evidence-blocked**: their host skeletons
+exist so the architecture has somewhere to land, but without host
+hardware, SDKs, signing, or a physical device there is no build, package,
+or smoke proof to claim. A target leaves this state only through the
+contract at the top of this file.
 
 ## Renderer rule
 

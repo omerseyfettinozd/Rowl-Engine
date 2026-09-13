@@ -46,7 +46,7 @@ Node-Oyun-Motoru/
 
 ### A. Cross-Compilation Setup (SDL3 + CMake)
 
-Android builds require the Android NDK (Native Development Kit) to compile the C++20 engine as a native shared library (`librowl_engine.so`) loaded by a lightweight Java/Kotlin activity.
+Android builds require the Android NDK (Native Development Kit) to compile the C++20 engine as a native shared library (`libRowlEngineCore.so`) loaded by a lightweight Java/Kotlin activity.
 
 ```bash
 # Set Android NDK path

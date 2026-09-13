@@ -78,14 +78,14 @@ Rowl Engine is a high-performance, cross-platform Visual Novel and 2D narrative 
 
 ```mermaid
 graph TD
-    subgraph Host ["Avalonia C# Editor Host (.NET 8)"]
+    subgraph Host ["Avalonia C# Editor Host (.NET 10)"]
         EH["EngineHost.cs (DispatcherTimer ~60 FPS)"]
         NB["NativeBridge.cs (P/Invoke DllImport)"]
         WB["WriteableBitmap (RGBA32 Buffer Lock)"]
     end
 
     subgraph NativeCore ["RowlEngineCore Shared Library (C++20)"]
-        CAPI["C-API Export Layer (c_api.h / c_api.cpp)"]
+        CAPI["C-API Export Layer (c_api.h + 5 TUs)"]
         ENG["Core::Engine (Explicit-ownership Coordinator)"]
         WIN["Render::Window (SDL3 Software / Embedded / Native)"]
         AG["Render::AspectGuardian (Pillarbox/Letterbox Projection)"]
@@ -163,13 +163,37 @@ graph TD
 
 ## 3. Detailed File-by-File Technical Documentation
 
-### 3.1 [`engine/include/rowl/c_api.h`](file:///home/chaple/Belgeler/Rowl%20Engine/engine/include/rowl/c_api.h) & [`engine/src/c_api.cpp`](file:///home/chaple/Belgeler/Rowl%20Engine/engine/src/c_api.cpp)
+### 3.1 `engine/include/rowl/c_api.h` & `engine/src/c_api_*.cpp` (5 translation units)
 
 The C API provides an `extern "C"` ABI boundary for dynamic binding across language runtimes. It enforces strict decoupling: no C++ classes, standard library containers, templates, or exceptions cross this layer.
 
+The former monolithic `engine/src/c_api.cpp` no longer exists. Since the TU
+split, the public contract is `rowl/c_api.h` alone (~100 `ROWL_API` exports);
+definitions live in five domain units sharing the source-local
+`engine/src/c_api_internal.hpp` (never installed, hidden visibility, so the
+split adds no dynamic symbols):
+
+| Translation unit | Domain |
+|---|---|
+| `c_api_lifecycle.cpp` | Handle registry (defined once here), create/destroy, init, step, run, shutdown |
+| `c_api_story.cpp` | Scene/story control, graph loading, project directory, playback state |
+| `c_api_render.cpp` | Viewport/pixel buffer, texture cache, camera, transitions, screen FX |
+| `c_api_audio.cpp` | Channels, volumes, voice blips, DSP filters, audio telemetry |
+| `c_api_state.cpp` | Save slots, rewind, variables, scripts, structured result diagnostics |
+
+`ROWL_API` is `__declspec(dllexport/dllimport)` on Windows and default
+visibility on GCC/Clang (the library builds with `-fvisibility=hidden`).
+Every entry point runs inside `invokeNoexcept` guards: a C++ exception
+degrades to a fallback return and can never cross into the .NET host.
+Handles are registry records, not raw `Engine` pointers — destroyed records
+are retained until process exit so a stale handle can never validate again,
+the first-`Init` thread owns the handle, and `Destroy` is idempotent. The C#
+editor binds the subset it uses (`editor/Src/Native/NativeBridge.cs`,
+~80 entry points) via P/Invoke.
+
 #### Includes & Dependencies
-- [`engine/include/rowl/c_api.h`](file:///home/chaple/Belgeler/Rowl%20Engine/engine/include/rowl/c_api.h): `<stdint.h>`
-- [`engine/src/c_api.cpp`](file:///home/chaple/Belgeler/Rowl%20Engine/engine/src/c_api.cpp): [`rowl/c_api.h`](file:///home/chaple/Belgeler/Rowl%20Engine/engine/include/rowl/c_api.h), [`rowl/core/engine.hpp`](file:///home/chaple/Belgeler/Rowl%20Engine/engine/include/rowl/core/engine.hpp), [`rowl/core/logger.hpp`](file:///home/chaple/Belgeler/Rowl%20Engine/engine/include/rowl/core/logger.hpp), `<cstring>`
+- `engine/include/rowl/c_api.h`: `<stdint.h>`
+- `engine/src/c_api_*.cpp` + `engine/src/c_api_internal.hpp`: `rowl/c_api.h`, `rowl/core/engine.hpp`, `<exception>`, `<memory>`, `<mutex>`, `<string>`, `<thread>`, `<unordered_map>`, `<vector>`
 
 #### Macros & Preprocessor Definitions
 ```c
@@ -191,15 +215,15 @@ The C API provides an `extern "C"` ABI boundary for dynamic binding across langu
 
 #### Function Signatures, Parameters, Returns, & Internal Logic
 
-1. [`RowlEngineHandle RowlEngine_Create(void)`](file:///home/chaple/Belgeler/Rowl%20Engine/engine/src/c_api.cpp#L27-L29)
+1. `RowlEngineHandle RowlEngine_Create(void)`
    - **Returns**: Opaque pointer `RowlEngineHandle` to newly allocated `new Rowl::Core::Engine()`.
    - **Logic**: Allocates a `HandleRecord` owning a heap `Rowl::Core::Engine` and registers the opaque handle in the live-handle map (thread ownership claimed on first use).
 
-2. [`void RowlEngine_Destroy(RowlEngineHandle handle)`](file:///home/chaple/Belgeler/Rowl%20Engine/engine/src/c_api.cpp#L31-L34)
+2. `void RowlEngine_Destroy(RowlEngineHandle handle)`
    - **Parameters**: `RowlEngineHandle handle`
    - **Logic**: Takes the live `Engine` out of the handle map (engine shuts down and is freed); the spent record is retained until process exit so a stale handle can never validate again.
 
-3. [`int RowlEngine_Init(RowlEngineHandle handle, uint32_t virtualWidth, uint32_t virtualHeight, int vsync)`](file:///home/chaple/Belgeler/Rowl%20Engine/engine/src/c_api.cpp#L36-L50)
+3. `int RowlEngine_Init(RowlEngineHandle handle, uint32_t virtualWidth, uint32_t virtualHeight, int vsync)`
    - **Parameters**:
      - `handle`: Pointer to engine instance.
      - `virtualWidth`: Virtual canvas width (e.g., 1920).
@@ -208,61 +232,61 @@ The C API provides an `extern "C"` ABI boundary for dynamic binding across langu
    - **Returns**: `1` on success, `0` on failure or null handle.
    - **Logic**: Builds a `Rowl::Core::EngineConfig` structure (`appName = "Rowl Engine"`, `isIpcMode = false`) and invokes `Engine::initialize(cfg)`.
 
-4. [`void RowlEngine_Step(RowlEngineHandle handle, float deltaTime)`](file:///home/chaple/Belgeler/Rowl%20Engine/engine/src/c_api.cpp#L52-L55)
+4. `void RowlEngine_Step(RowlEngineHandle handle, float deltaTime)`
    - **Parameters**: `RowlEngineHandle handle`, `float deltaTime`
    - **Logic**: Advances the engine simulation, polls input events, and performs rendering for one frame via `Engine::step(deltaTime)`.
 
-5. [`void RowlEngine_Shutdown(RowlEngineHandle handle)`](file:///home/chaple/Belgeler/Rowl%20Engine/engine/src/c_api.cpp#L57-L60)
+5. `void RowlEngine_Shutdown(RowlEngineHandle handle)`
    - **Parameters**: `RowlEngineHandle handle`
    - **Logic**: Invokes `Engine::shutdown()`, releasing SDL3 surfaces, renderers, and texture caches.
 
-6. [`int RowlEngine_IsRunning(RowlEngineHandle handle)`](file:///home/chaple/Belgeler/Rowl%20Engine/engine/src/c_api.cpp#L62-L65)
+6. `int RowlEngine_IsRunning(RowlEngineHandle handle)`
    - **Parameters**: `RowlEngineHandle handle`
    - **Returns**: `1` if engine is active and quit was not requested; otherwise `0`.
 
-7. [`void RowlEngine_SetExternalWindowHandle(RowlEngineHandle handle, void* nativeWindowHandle, uint32_t width, uint32_t height)`](file:///home/chaple/Belgeler/Rowl%20Engine/engine/src/c_api.cpp#L69-L75)
+7. `void RowlEngine_SetExternalWindowHandle(RowlEngineHandle handle, void* nativeWindowHandle, uint32_t width, uint32_t height)`
    - **Parameters**: `RowlEngineHandle handle`, `void* nativeWindowHandle` (HWND / NSView / X11 Window ID), `uint32_t width`, `uint32_t height`.
    - **Logic**: Configures external OS window embedding before `RowlEngine_Init()`.
 
-8. [`void RowlEngine_ResizeViewport(RowlEngineHandle handle, uint32_t newWidth, uint32_t newHeight)`](file:///home/chaple/Belgeler/Rowl%20Engine/engine/src/c_api.cpp#L77-L83)
+8. `void RowlEngine_ResizeViewport(RowlEngineHandle handle, uint32_t newWidth, uint32_t newHeight)`
    - **Parameters**: `RowlEngineHandle handle`, `uint32_t newWidth`, `uint32_t newHeight`.
    - **Logic**: Delegates to `Rowl::Render::Window::resizeViewport()` to resize the display target.
 
-9. [`const uint8_t* RowlEngine_GetPixelBuffer(RowlEngineHandle handle, uint32_t* outW, uint32_t* outH)`](file:///home/chaple/Belgeler/Rowl%20Engine/engine/src/c_api.cpp#L87-L94)
+9. `const uint8_t* RowlEngine_GetPixelBuffer(RowlEngineHandle handle, uint32_t* outW, uint32_t* outH)`
    - **Parameters**: `RowlEngineHandle handle`, `uint32_t* outW` (output width), `uint32_t* outH` (output height).
    - **Returns**: Direct pointer to offscreen RGBA32 raw byte buffer (`SDL_Surface::pixels`), or `nullptr`.
 
-10. [`void RowlEngine_SetPlayState(RowlEngineHandle handle, int isPlaying)`](file:///home/chaple/Belgeler/Rowl%20Engine/engine/src/c_api.cpp#L96-L99)
+10. `void RowlEngine_SetPlayState(RowlEngineHandle handle, int isPlaying)`
     - **Parameters**: `RowlEngineHandle handle`, `int isPlaying` (`1` = active play, `0` = editor edit mode).
     - **Logic**: Invokes `Engine::setPlayState(bool)`.
 
-11. [`void RowlEngine_ResetToStartNode(RowlEngineHandle handle)`](file:///home/chaple/Belgeler/Rowl%20Engine/engine/src/c_api.cpp#L101-L104)
+11. `void RowlEngine_ResetToStartNode(RowlEngineHandle handle)`
     - **Parameters**: `RowlEngineHandle handle`
     - **Logic**: Resets story node cursor to `m_startNodeId` (or minimum discovered node ID) and reloads component/legacy properties.
 
-12. [`void RowlEngine_UpdateScene(RowlEngineHandle handle, const char* speaker, const char* dialogue, const char* background, float bgX, float bgY, float bgW, float bgH, const char* character, float charX, float charY, float charW, float charH, float dlgX, float dlgY, float dlgW, float dlgH)`](file:///home/chaple/Belgeler/Rowl%20Engine/engine/src/c_api.cpp#L108-L128)
+12. `void RowlEngine_UpdateScene(RowlEngineHandle handle, const char* speaker, const char* dialogue, const char* background, float bgX, float bgY, float bgW, float bgH, const char* character, float charX, float charY, float charW, float charH, float dlgX, float dlgY, float dlgW, float dlgH)`
     - **Parameters**: Handle, UTF-8 strings for speaker, dialogue, background, character, along with explicit float coordinates and bounding dimensions for background, character, and dialogue box.
     - **Logic**: Null-safe wrapper forwarding parameters to `Engine::updateActiveScene()`.
 
-13. [`void RowlEngine_UpdateSceneFromJson(RowlEngineHandle handle, const char* componentsJson)`](file:///home/chaple/Belgeler/Rowl%20Engine/engine/src/c_api.cpp#L130-L136)
+13. `void RowlEngine_UpdateSceneFromJson(RowlEngineHandle handle, const char* componentsJson)`
     - **Parameters**: `RowlEngineHandle handle`, `const char* componentsJson` (UTF-8 JSON array).
     - **Logic**: Forwards JSON payload to `Engine::updateSceneFromComponents()`.
 
-14. [`void RowlEngine_LoadStoryGraph(RowlEngineHandle handle, const char* jsonPath)`](file:///home/chaple/Belgeler/Rowl%20Engine/engine/src/c_api.cpp#L138-L142)
+14. `void RowlEngine_LoadStoryGraph(RowlEngineHandle handle, const char* jsonPath)`
     - **Parameters**: `RowlEngineHandle handle`, `const char* jsonPath` (path to story graph JSON on disk).
     - **Logic**: Reads file into string and executes `Engine::loadStoryGraphFromPath()`.
 
-15. [`void RowlEngine_AdvanceNode(RowlEngineHandle handle, uint32_t choiceIndex)`](file:///home/chaple/Belgeler/Rowl%20Engine/engine/src/c_api.cpp#L144-L147)
+15. `void RowlEngine_AdvanceNode(RowlEngineHandle handle, uint32_t choiceIndex)`
     - **Parameters**: `RowlEngineHandle handle`, `uint32_t choiceIndex` (0-indexed branch choice).
     - **Logic**: Advances the story graph to the destination node associated with the specified branch.
 
-16. [`const char* RowlEngine_GetSpeaker(RowlEngineHandle handle)`](file:///home/chaple/Belgeler/Rowl%20Engine/engine/src/c_api.cpp#L151-L157)
+16. `const char* RowlEngine_GetSpeaker(RowlEngineHandle handle)`
     - **Returns**: UTF-8 pointer stored in thread-local storage `thread_local std::string buf` to ensure pointer validity across FFI call lifetime.
 
-17. [`const char* RowlEngine_GetDialogue(RowlEngineHandle handle)`](file:///home/chaple/Belgeler/Rowl%20Engine/engine/src/c_api.cpp#L159-L165)
+17. `const char* RowlEngine_GetDialogue(RowlEngineHandle handle)`
     - **Returns**: Thread-local UTF-8 pointer to current active dialogue string.
 
-18. [`uint64_t RowlEngine_GetCurrentNodeId(RowlEngineHandle handle)`](file:///home/chaple/Belgeler/Rowl%20Engine/engine/src/c_api.cpp#L166-L169)
+18. `uint64_t RowlEngine_GetCurrentNodeId(RowlEngineHandle handle)`
     - **Returns**: 64-bit integer ID of the currently active story node.
 
 ---
@@ -1698,11 +1722,15 @@ ulong  RowlEngine_GetCurrentNodeId(IntPtr handle);
 
 ## 9. File Formats, Serializations & Binary Specifications
 
-### 9.1 `full_story_graph.json` (Format Version 2)
-Stored at `[ProjectRoot]/Assets/full_story_graph.json` and `[ProjectRoot]/Assets/json/full_story_graph.json`.
+### 9.1 `full_story_graph.json` (Format Version 4; readers migrate v1–v3)
+Stored at `[ProjectRoot]/Assets/json/full_story_graph.json`. The current
+writer emits `format_version = 4` with per-node `objects[]` and
+`next_nodes[]` edges carrying stable `option_id` values; older shapes
+(flat v1 fields, bare v2 `components[]`, scalar `next_id`) still load via
+the migration rules in `docs/DATA_FORMATS_AND_MIGRATION.md`.
 ```json
 {
-  "format_version": 2,
+  "format_version": 4,
   "start_node_id": 101,
   "nodes": [
     {
@@ -1764,7 +1792,8 @@ Stored at `[ProjectRoot]/Assets/full_story_graph.json` and `[ProjectRoot]/Assets
       "next_nodes": [
         {
           "id": 102,
-          "label": ""
+          "label": "",
+          "option_id": "go_onward"
         }
       ],
       "speaker": "Evelyn",
@@ -1866,6 +1895,8 @@ Stored at `[ProjectRoot]/Assets/json/active_story.json`. Represents the currentl
 
 ### 9.3 `project.rowlproj`
 Project manifest descriptor saved in the root folder of each project.
+Presence marks a project root (registry/discovery, Save-As, standalone
+build); readers treat it as informational and tolerate missing/extra fields.
 ```json
 {
   "name": "MyVisualNovel",
@@ -1880,6 +1911,9 @@ Project manifest descriptor saved in the root folder of each project.
   }
 }
 ```
+Current `ProjectFactory` output additionally emits `createdAt`,
+`save_slot_count`, and `default_bgm_transition*` runtime defaults, and may
+omit `virtualResolution`; the example above remains load-compatible.
 
 ### 9.4 `projects.json` (Global Project Registry)
 Saved at `%APPDATA%/RowlEngine/projects.json` (Windows) or `~/.config/RowlEngine/projects.json` (Linux).
@@ -1920,20 +1954,33 @@ Saved at `%APPDATA%/RowlEngine/projects.json` (Windows) or `~/.config/RowlEngine
 ## 10. Build & Distribution Pipelines
 
 ### 10.1 Standalone PC Game Export (`ExecuteBuildPipeline`)
-Triggered via `BuildGameCommand` / `Ctrl+B`.
-1. **Stage 1 (Graph Compilation)**: Serializes memory state to `active_story.json` and `full_story_graph.json`.
-2. **Stage 2 (Asset Packaging)**: Recursively copies `Assets/` (images, audio, json, packages) to `[BuildDir]/Assets/`.
-3. **Stage 3 (Engine Binary Distribution)**:
-   - Copies `build/bin/rowl_engine` to `[BuildDir]/RowlGame`.
-   - Copies `build/lib/libRowlEngineCore.so` to `[BuildDir]/libRowlEngineCore.so`.
-   - Applies POSIX executable permissions (`UserExecute | GroupExecute | OtherExecute`) via `File.SetUnixFileMode`.
-4. **Stage 4 (Auto Launcher)**: Generates bash launcher `run_game.sh` configuring `LD_LIBRARY_PATH="$SCRIPT_DIR:$LD_LIBRARY_PATH"`.
-5. **Stage 5 (Documentation)**: Generates `README.txt` with platform startup instructions.
+Triggered via `BuildGameCommand` / `Ctrl+B` (`EditorBuildCoordinator` →
+`ProjectBuildService`). Validation errors block the build before anything
+is published; a partial package is never published.
+1. **Stage 1 (Persist + Validate)**: Saves the project, then
+   `ProjectValidationService` gates on blocking graph errors.
+2. **Stage 2 (Canonical packaging)**: `tools/package_assets.py` packs
+   `Assets/` into staging `Assets/packages/game.rowlpkg` (deterministic,
+   embedded manifest; see 6.2).
+3. **Stage 3 (Manifests + Runtime)**: Copies `project.rowlproj` and
+   `packaging/THIRD_PARTY_NOTICES.md` into staging; copies the built
+   player (`rowl_player` → `RowlGame` / `RowlGame.exe`) and the
+   `RowlEngineCore` native library; applies POSIX execute bits on
+   Linux/macOS.
+4. **Stage 4 (Launchers + Docs)**: Generates `run_game.sh` / `run_game.bat`,
+   `mods/README.md`, and `README.txt`.
+5. **Stage 5 (Verify + Commit)**: `tools/verify_release_package.py` must
+   accept the staging tree (package contract, manifest, license
+   inventory, no loose `Assets/`); only then is staging moved to the
+   final `RowlBuild_yyyy-MM-dd_HH-mm` directory.
 
-### 10.2 VFS Archive Compilation (`BuildPackageCommand`)
-1. Executes `tools/package_assets.py` via `python3` process invocation or calls `RowlPackageBuilder.BuildPackageFromDirectory()`.
-2. Scans project `Assets/`, computes 64-bit FNV-1a hashes, and packages assets into `Assets/packages/game_data_yyyy-MM-dd_HH-mm.rowlpkg`.
-3. Refreshes `AssetBrowserViewModel`.
+### 10.2 VFS Archive Compilation (`ProjectBuildService.PackageAssetsAsync`)
+1. Executes the canonical `tools/package_assets.py` via a `python3`
+   process (cancellation kills the child; staging files are cleaned up).
+2. Packs project `Assets/` into a timestamped
+   `game_data_yyyy-MM-dd_HH-mm.rowlpkg` at the chosen output directory.
+3. There is no C# packer: `RowlPackageBuilder` / `BuildPackageCommand`
+   do not exist; older documents naming them are stale.
 ---
 ---
 
@@ -2930,22 +2977,41 @@ ViewModel-thinning equivalence.
 ## 6. Python Tooling & CLI Utilities
 
 ### 6.1 `tools/export_game.py`
-- **Location:** [`/home/chaple/Belgeler/Rowl Engine/tools/export_game.py`](file:///home/chaple/Belgeler/Rowl%20Engine/tools/export_game.py)
+- **Location:** `tools/export_game.py`
 - **CLI Syntax:** `python3 tools/export_game.py [pc|android|ios]`
+- **Honest scope:** the Android/iOS host projects are not complete package
+  producers, so no command below reports an APK, AAB, or IPA — those files
+  are only claimed when they actually exist.
 - **Modes:**
-  - `export_pc()`: Copies `build/bin/rowl_engine`, `build/lib/libRowlEngineCore.so`, and recursive `Assets/` tree into `build/export_pc/`.
-  - `export_android()`: Invokes `packaging/android/build.sh --asset-path data/game_data.rowlpkg`.
-  - `export_ios()`: Invokes `packaging/ios/build.sh --asset-path data/game_data.rowlpkg`.
+  - `export_pc()`: Creates the developer staging directory `build/export_pc/`
+    with the built `rowl_player` and `RowlEngineCore` runtime. This is
+    explicitly *not* a verified standalone release package (see 10.1).
+  - `export_android()`: Builds and verifies the Android arm64-v8a native
+    runtime only (`packaging/android/build.sh`); no APK/AAB is produced.
+  - `export_ios()`: Builds and verifies the iOS arm64 native runtime
+    artifact only (`packaging/ios/build.sh`); no IPA is produced and
+    signing is pending.
 
-### 6.2 `tools/package_assets.py`
-- **Location:** [`/home/chaple/Belgeler/Rowl Engine/tools/package_assets.py`](file:///home/chaple/Belgeler/Rowl%20Engine/tools/package_assets.py)
+### 6.2 `tools/package_assets.py` (canonical deterministic writer)
+- **Location:** `tools/package_assets.py`
 - **CLI Syntax:** `python3 tools/package_assets.py <input_dir> <output_rowlpkg>`
-- **Functionality:**
-  - Scans `input_dir` recursively.
-  - Compresses each file using `zstandard.ZstdCompressor(level=3)` (if `zstandard` is installed; falls back to raw storage).
-  - Computes path CRC32 / FNV-1a hash.
-  - Packs payload sequentially, followed by the index record table.
-  - Writes the 18-byte `ROWL` master header with index offset pointer.
+- **Functionality (the single supported writer; no C# packer exists):**
+  - Scans `input_dir` recursively and processes entries in canonical
+    byte-wise rel-path order; the archive carries no timestamps, so the
+    same tree always yields byte-identical output (same SHA-256).
+  - Compresses each file using `zstandard.ZstdCompressor(level=3)` (if
+    `zstandard` is installed; falls back to raw storage).
+  - Computes the 64-bit FNV-1a hash of the canonical UTF-8 rel path
+    (advisory; the path itself is the lookup key).
+  - Validates early with structured `[Packer][ERROR][code]` failures
+    (exit 2, no output published): missing input dir, dangling or
+    root-escaping symlinks, zero-byte files, unreadable files, and the
+    reserved `rowl/manifest.json` path.
+  - Embeds an uncompressed `rowl/manifest.json` entry (canonical JSON:
+    `format = 1`, per-file path/size/SHA-256 over uncompressed bytes).
+  - Packs payload sequentially, followed by the index record table, writes
+    the 18-byte `ROWL` master header with index offset pointer, and
+    publishes atomically (temp file + rename).
 
 ### 6.3 `tools/test_ipc_sync.py`
 - **Location:** [`/home/chaple/Belgeler/Rowl Engine/tools/test_ipc_sync.py`](file:///home/chaple/Belgeler/Rowl%20Engine/tools/test_ipc_sync.py)
@@ -3026,7 +3092,18 @@ struct RowlPkgEntryRaw {
 #pragma pack(pop)
 ```
 
-### 7.3 FlatBuffers IPC Schema (`shared/rowl_ipc.fbs`)
+Every v1 package also carries an uncompressed `rowl/manifest.json` entry
+(canonical JSON: `format = 1`, `files[]` of `{ path, size, sha256,
+compressed_size, flags }` over uncompressed bytes, sorted by path).
+`tools/verify_release_package.py` requires the manifest and cross-checks it
+against the index. Determinism contract: canonical entry order, no
+timestamps, fixed compression settings, atomic publish — repacking the same
+tree yields byte-identical output (`rowl_package_determinism_tests`).
+
+### 7.3 FlatBuffers IPC Schema (`shared/rowl_ipc.fbs`, legacy — unused)
+> The schema file remains in the tree, but **no engine, editor, tool, or
+> test code references it**: the editor drives the engine in-process via
+> P/Invoke (`NativeBridge`), not over IPC. The record below is historical.
 - **Namespace:** `Rowl.IPC`
 - **Root Type:** `MessageEnvelope`
 - **`MessageType` Enum (Byte):**
@@ -3069,27 +3146,44 @@ struct RowlPkgEntryRaw {
 }
 ```
 
-### 8.2 Story Graph v2 Schema
-- **Locations:** [`/home/chaple/Belgeler/Rowl Engine/Assets/full_story_graph.json`](file:///home/chaple/Belgeler/Rowl%20Engine/Assets/full_story_graph.json), [`/home/chaple/Belgeler/Rowl Engine/Assets/json/full_story_graph.json`](file:///home/chaple/Belgeler/Rowl%20Engine/Assets/json/full_story_graph.json)
+### 8.2 Story Graph v4 Schema (readers migrate v1–v3)
+- **Locations:** `Assets/json/full_story_graph.json` (canonical; an older
+  `Assets/full_story_graph.json` path is also recognized)
 - **Root Fields:**
-  - `format_version` (integer): `2`
+  - `format_version` (integer): `4` from the current writer
+    (`StoryGraphSerializer`); loading is structural, not version-gated.
   - `start_node_id` (integer): ID of first executed node (e.g. `101`).
   - `nodes` (array of Node objects).
-- **Node Object Fields:**
+- **v4 Node Object Fields:**
   - `id` (uint64): Unique node identifier.
   - `title` (string): Node card header in editor.
   - `editor_x`, `editor_y` (float): Canvas workspace coordinates.
-  - `components` (array of Component objects):
-    - `type` ("background" | "character" | "dialogue" | "audio")
+  - `objects` (array of GameObject-style objects): each has `id`, `name`,
+    `is_active`, and `components` (array of Component objects):
+    - `type` ("background" | "character" | "dialogue" | "audio" | …)
     - `id` (hex string)
     - `enabled` (boolean)
     - `data` (component-specific properties):
       - *Background*: `texture`, `x`, `y`, `width`, `height`, `scale`
       - *Character*: `sprite`, `position`, `x`, `y`, `width`, `height`, `scale`
       - *Dialogue*: `speaker`, `dialogue`, `x`, `y`, `width`, `height`, `scale`
-      - *Audio*: `dsp_filter` ("Normal" | "Telephone" | "CaveReverb" | "UnderwaterLowPass")
-  - `next_nodes` (array of branch targets): `[ { "id": 102, "label": "Choice Option" } ]`
-  - Legacy proxy compatibility fields: `speaker`, `dialogue`, `background`, `background_x`, `background_y`, `background_width`, `background_height`, `character`, `character_pos`, `character_x`, `character_y`, `character_width`, `character_height`, `character_scale`, `dialogue_box_x`, `dialogue_box_y`, `dialogue_box_width`, `dialogue_box_height`, `dsp`.
+      - *Audio*: `dsp_filter` ("Normal" | "Telephone" | "Cave"/"CaveReverb" | "Underwater"/"UnderwaterLowPass")
+  - `next_nodes` (array of branch targets):
+    `[ { "id": 102, "label": "Choice Option", "option_id": "go_quiet" } ]`
+    (`option_id` is the stable branch identity for `RowlEngine_SelectChoice`).
+  - Flat proxy fields are still accepted: `speaker`, `dialogue`,
+    `background`, `background_x`, `background_y`, `background_width`,
+    `background_height`, `character`, `character_pos`, `character_x`,
+    `character_y`, `character_width`, `character_height`,
+    `character_scale`, `dialogue_box_x`, `dialogue_box_y`,
+    `dialogue_box_width`, `dialogue_box_height`, `dsp`.
+- **Migration on load** (`StoryGraphLoaderService` + native
+  `StoryGraphParser`): `objects[]` used directly (v3/v4); bare
+  `components[]` wrapped into objects (v2); flat fields rebuilt into
+  objects/components (v1); scalar `next_id` becomes one unlabeled edge.
+  Unknown component types warn and skip (editor); over-limit graphs and
+  dangling edges/start IDs are rejected (native).
+- Full contract: `docs/DATA_FORMATS_AND_MIGRATION.md`.
 
 ### 8.3 Active Scene Runtime Schema (`Assets/json/active_story.json`)
 - **Location:** [`/home/chaple/Belgeler/Rowl Engine/Assets/json/active_story.json`](file:///home/chaple/Belgeler/Rowl%20Engine/Assets/json/active_story.json)
@@ -3131,16 +3225,22 @@ struct RowlPkgEntryRaw {
 
 ## 9. Mobile Packaging & Export Pipelines
 
-### 9.1 Android NDK & Activity Configuration
-- **Build Script:** [`packaging/android/build.sh`](file:///home/chaple/Belgeler/Rowl%20Engine/packaging/android/build.sh)
+### 9.1 Android NDK & Activity Configuration (host skeleton — no APK)
+- **Build Script:** `packaging/android/build.sh`
 - **Target ABI:** ARM64-v8a, minimum Android API 21.
-- **Manifest:** [`packaging/android/AndroidManifest.xml`](file:///home/chaple/Belgeler/Rowl%20Engine/packaging/android/AndroidManifest.xml) specifies `Theme.NoTitleBar.Fullscreen`, `sensorLandscape` orientation lock, and permissions (`VIBRATE`, `INTERNET`).
-- **Activity:** [`packaging/android/EngineActivity.kt`](file:///home/chaple/Belgeler/Rowl%20Engine/packaging/android/EngineActivity.kt) extends `SDLActivity`, returning `"librowl_engine.so"`.
+- **Manifest:** `packaging/android/AndroidManifest.xml` specifies `Theme.NoTitleBar.Fullscreen`, `sensorLandscape` orientation lock, and permissions (`VIBRATE`, `INTERNET`).
+- **Activity:** `packaging/android/EngineActivity.kt` extends `SDLActivity`, returning `"libRowlEngineCore.so"`.
+- **Honest status:** the script builds the native runtime only; no APK/AAB
+  is produced and no physical-device test has run (evidence-blocked, see
+  `docs/PLATFORM_SUPPORT.md`).
 
-### 9.2 iOS Cross-Compilation & Bundle Specification
-- **Build Script:** [`packaging/ios/build.sh`](file:///home/chaple/Belgeler/Rowl%20Engine/packaging/ios/build.sh)
+### 9.2 iOS Cross-Compilation & Bundle Specification (host skeleton — no IPA)
+- **Build Script:** `packaging/ios/build.sh`
 - **Target:** iOS ARM64 Physical Device (iPhone / iPad).
-- **Bundle Property List:** [`packaging/ios/Info.plist`](file:///home/chaple/Belgeler/Rowl%20Engine/packaging/ios/Info.plist) locks interface orientation to `UIInterfaceOrientationLandscapeLeft` and `UIInterfaceOrientationLandscapeRight` with bundle type `APPL`.
+- **Bundle Property List:** `packaging/ios/Info.plist` locks interface orientation to `UIInterfaceOrientationLandscapeLeft` and `UIInterfaceOrientationLandscapeRight` with bundle type `APPL`.
+- **Honest status:** the script builds a native runtime artifact only; no
+  signed app is produced and no device test has run (evidence-blocked, see
+  `docs/PLATFORM_SUPPORT.md`).
 
 ---
 
@@ -3150,7 +3250,7 @@ The master reference document [`ROWL_ENGINE_MASTER_BLUEPRINT_AND_ARCHIVE.md`](fi
 
 1. **64-bit FNV-1a Hash Alignment**: Resolved fatal corruption where C# `BinaryWriter` emitted 4-byte hashes against C++ expecting 8-byte uint64 headers.
 2. **Strict VFS Isolation**: Removed directory climbing (`../../`) to prevent projects from accessing out-of-workspace resources during package exports.
-3. **Dedicated Build Pipelines**: Decoupled platform selectors from immediate build triggers, establishing a dedicated "🔨 Build Game" action with full release bundling (ELF/EXE, library dependencies, `steam_appid.txt`, `run_game.sh`, and documentation).
+3. **Dedicated Build Pipelines**: Decoupled platform selectors from immediate build triggers, establishing a dedicated "🔨 Build Game" action with full release bundling (player executable, native library dependencies, canonical `game.rowlpkg`, `THIRD_PARTY_NOTICES.md`, `run_game.sh`/`run_game.bat`, and documentation). No `steam_appid.txt` is produced.
 4. **Theme Dynamic Resource System**: Implemented four high-contrast design themes (Cyber Dark, Midnight OLED, Unreal Slate, Nordic Emerald) using Avalonia `DynamicResource` palettes.
 5. **Zero-Latency In-Process Preview**: Replaced inter-process sockets with in-memory offscreen framebuffers blitted at 60 FPS directly into Avalonia controls.
 
@@ -3158,11 +3258,16 @@ The master reference document [`ROWL_ENGINE_MASTER_BLUEPRINT_AND_ARCHIVE.md`](fi
 
 ## 11. Package Hash Implementation Nuances & Complete Documentation Index
 
-### 11.1 `.rowlpkg` Path Hashing Implementations
-Across the Rowl Engine ecosystem, two complementary hashing implementations exist for `.rowlpkg` index table generation:
-- **C# Editor Service (`RowlPackageBuilder.cs`)**: Uses canonical 64-bit **FNV-1a** algorithm (`offsetBasis = 14695981039346656037UL`, `prime = 1099511628211UL`).
-- **Python CLI Tool (`tools/package_assets.py`)**: Uses **CRC32** zero-extended to an 8-byte `uint64_t` field (`zlib.crc32(path_bytes) & 0xFFFFFFFF`, packed with `<Q`).
-- **C++ Native VFS (`RowlPkgDataSource.cpp`)**: Resolves virtual files by string relative path matching against `m_indexTable` entries, ensuring compatibility with packages produced by either toolchain.
+### 11.1 `.rowlpkg` Path Hashing Implementation
+There is exactly one package writer: `tools/package_assets.py`. It stores
+the canonical 64-bit **FNV-1a** hash of the UTF-8 rel path
+(`offsetBasis = 14695981039346656037`, `prime = 1099511628211`) in the
+index record. The hash is advisory only: the C++ reader
+(`RowlPkgDataSource` in `engine/src/vfs/rowlpkg_reader.cpp`) resolves
+entries by canonical path string and rejects duplicates, so packages stay
+readable even where a historic writer disagrees. (Older revisions of this
+document named a C# `RowlPackageBuilder` and a CRC32 writer — neither
+exists in the tree; that record was wrong and is superseded by this one.)
 
 ### 11.2 Auxiliary Documentation & Specification File Index
 The repository includes a comprehensive set of modular sub-specifications and phase guides located under `Rowl Engine Dökümantasyon Listesi/`:
