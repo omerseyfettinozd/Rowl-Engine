@@ -585,6 +585,14 @@ ROWL_API void RowlEngine_StartTransition(RowlEngineHandle handle, const char* ki
 ROWL_API int RowlEngine_IsTransitionActive(RowlEngineHandle handle);
 
 /**
+ * MS-4 dirty-frame query: returns 1 when the next rendered frame cannot differ
+ * from the presented one (no transition, flash, camera motion, incomplete
+ * typewriter, active scripts, or scene entities), 0 otherwise. Hosts skip the
+ * pixel-buffer copy on 1. Conservative by design; errors report 0 (copy).
+ */
+ROWL_API int RowlEngine_IsPreviewFrameStatic(RowlEngineHandle handle);
+
+/**
  * Sets 2D camera position and zoom factor.
  * x, y: camera center coordinates in virtual canvas space (default: 960, 540).
  * zoom: zoom factor (clamped between 0.1 and 10.0, default: 1.0).

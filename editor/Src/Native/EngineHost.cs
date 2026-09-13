@@ -161,6 +161,7 @@ namespace RowlEngine.Editor.Native
         private void StartTickTimer()
         {
             _lastTick = DateTime.UtcNow;
+            _lastIdleUpkeep = _lastTick;
             _tickTimer = new DispatcherTimer(DispatcherPriority.Render)
             {
                 Interval = TimeSpan.FromMilliseconds(16) // ~60 FPS
@@ -179,6 +180,41 @@ namespace RowlEngine.Editor.Native
         private ulong _lastDialogueStepId = ulong.MaxValue;
         private bool _dialogueHistoryDirty = true;
         private float _telemetryAccumulator;
+
+        // ── MS-4 dirty-frame & idle-diet state ──────────────────────────────
+        // Pause upkeep cadence: device events, audio suspension and quit
+        // polling stay alive while the 60 Hz Step(0)+render loop sleeps.
+        private const double IdleUpkeepIntervalMilliseconds = 500.0;
+        private DateTime _lastIdleUpkeep = DateTime.UtcNow;
+        private ulong _lastCopiedStepId = ulong.MaxValue;
+        private bool _lastTickFrameActive = true;
+
+        /// <summary>Pixel copies skipped because the frame was provably static.</summary>
+        public ulong SkippedPixelBufferCopies { get; private set; }
+        /// <summary>Pixel-buffer copy attempts that threw (see debug log).</summary>
+        public ulong PixelBufferCopyErrorCount { get; private set; }
+        /// <summary>Script-diagnostics JSON parses that failed (see debug log).</summary>
+        public ulong DiagnosticsParseErrorCount { get; private set; }
+        /// <summary>Dialogue-history JSON parses that failed (see debug log).</summary>
+        public ulong DialogueHistoryParseErrorCount { get; private set; }
+
+        /// <summary>
+        /// Pure copy-gate decision behind the dirty-frame optimization, kept
+        /// static so the headless suite can pin its truth table without a
+        /// native handle. Copies when the frame is active, when activity just
+        /// ended (settle the final frame), or when the story step advanced.
+        /// </summary>
+        internal static bool ShouldCopyFrame(
+            bool frameActive, bool lastTickFrameActive, ulong stepId, ulong lastCopiedStepId)
+        {
+            if (frameActive) return true;
+            if (lastTickFrameActive) return true;
+            return stepId != lastCopiedStepId;
+        }
+
+        /// <summary>MS-4 native dirty-frame query (true = copy can be skipped).</summary>
+        public bool IsPreviewFrameStatic()
+            => _handle != IntPtr.Zero && NativeBridge.RowlEngine_IsPreviewFrameStatic(_handle) != 0;
 
         /// <summary>
         /// Marks the cached dialogue history stale. Called by state-changing
@@ -202,11 +238,19 @@ namespace RowlEngine.Editor.Native
             {
                 NativeBridge.RowlEngine_Step(_handle, dt);
                 RefreshDialogueHistoryIfStale();
-                UpdatePixelBuffer();
+                CopyPixelBufferIfDirty();
             }
-            else
+            else if ((now - _lastIdleUpkeep).TotalMilliseconds >= IdleUpkeepIntervalMilliseconds)
             {
+                // MS-4 idle diet: the paused 60 Hz Step(0)+render loop is
+                // asleep. A 2 Hz upkeep keeps SDL quit polling, audio-device
+                // hotplug and suspension alive; the refresh below is a safety
+                // net for setters that mutate without an explicit copy.
+                // Mutating entry points (scene/story/choice/viewport) already
+                // copy synchronously, so interaction latency is unchanged.
+                _lastIdleUpkeep = now;
                 NativeBridge.RowlEngine_Step(_handle, 0.0f);
+                UpdatePixelBuffer();
             }
 
             // MS-2: audio meters at 10 Hz, not per-frame. Four P/Invokes per
@@ -232,6 +276,28 @@ namespace RowlEngine.Editor.Native
             _lastDialogueStepId = stepId;
             _dialogueHistoryDirty = false;
             RefreshDialogueHistory();
+        }
+
+        /// <summary>
+        /// MS-4 dirty-frame gate: copies the ~8.3 MB frame only when the
+        /// native static query, the activity latch, or the story step says the
+        /// presented pixels may be stale. Gameplay stepping is untouched — only
+        /// the copy is gated, so a conservative native "not static" can only
+        /// cost a copy, never a frozen frame.
+        /// </summary>
+        private void CopyPixelBufferIfDirty()
+        {
+            ulong stepId = NativeBridge.RowlEngine_GetCurrentStepId(_handle);
+            bool frameActive = !IsPreviewFrameStatic();
+            bool shouldCopy = ShouldCopyFrame(frameActive, _lastTickFrameActive, stepId, _lastCopiedStepId);
+            _lastTickFrameActive = frameActive;
+            if (!shouldCopy)
+            {
+                SkippedPixelBufferCopies++;
+                return;
+            }
+            UpdatePixelBuffer();
+            _lastCopiedStepId = stepId;
         }
 
         private void PollAudioTelemetry()
@@ -319,9 +385,13 @@ namespace RowlEngine.Editor.Native
                     FrameUpdated?.Invoke();
                 }
             }
-            catch
+            catch (Exception ex)
             {
-                // Safe ignore if running in headless test without Avalonia render interface
+                // MS-4: counted instead of silent — headless runs without an
+                // Avalonia render interface land here; real failures stay
+                // visible in the debug log with a running total.
+                PixelBufferCopyErrorCount++;
+                Debug.WriteLine($"EngineHost pixel buffer copy failed ({PixelBufferCopyErrorCount}): {ex.Message}");
             }
             finally
             {
@@ -338,6 +408,7 @@ namespace RowlEngine.Editor.Native
             if (IsPlaying == isPlaying) return;
             IsPlaying = isPlaying;
             _lastTick = DateTime.UtcNow;
+            _lastIdleUpkeep = _lastTick;
 
             if (_handle != IntPtr.Zero)
             {
@@ -468,8 +539,11 @@ namespace RowlEngine.Editor.Native
                 ScriptRuntimeDiagnostics = JsonSerializer.Deserialize<List<ScriptRuntimeDiagnostic>>(json)
                     ?? new List<ScriptRuntimeDiagnostic>();
             }
-            catch (JsonException)
+            catch (JsonException ex)
             {
+                // MS-4: counted instead of silent.
+                DiagnosticsParseErrorCount++;
+                Debug.WriteLine($"EngineHost script diagnostics parse failed ({DiagnosticsParseErrorCount}): {ex.Message}");
                 ScriptRuntimeDiagnostics = Array.Empty<ScriptRuntimeDiagnostic>();
             }
             OnPropertyChanged(nameof(ScriptRuntimeDiagnostics));
@@ -485,8 +559,11 @@ namespace RowlEngine.Editor.Native
                 DialogueHistory = JsonSerializer.Deserialize<List<DialogueHistoryEntry>>(json)
                     ?? new List<DialogueHistoryEntry>();
             }
-            catch (JsonException)
+            catch (JsonException ex)
             {
+                // MS-4: counted instead of silent.
+                DialogueHistoryParseErrorCount++;
+                Debug.WriteLine($"EngineHost dialogue history parse failed ({DialogueHistoryParseErrorCount}): {ex.Message}");
                 DialogueHistory = Array.Empty<DialogueHistoryEntry>();
             }
             OnPropertyChanged(nameof(DialogueHistory));
@@ -580,8 +657,15 @@ namespace RowlEngine.Editor.Native
         /// <summary>Notifies the engine that the render area was resized.</summary>
         public void ResizeViewport(uint newWidth, uint newHeight)
         {
-            if (_handle != IntPtr.Zero)
-                NativeBridge.RowlEngine_ResizeViewport(_handle, newWidth, newHeight);
+            if (_handle == IntPtr.Zero) return;
+            NativeBridge.RowlEngine_ResizeViewport(_handle, newWidth, newHeight);
+            // MS-4: paused ticks no longer copy every frame, so refresh
+            // synchronously here; while playing the next tick covers it.
+            if (!IsPlaying)
+            {
+                NativeBridge.RowlEngine_Step(_handle, 0.0f);
+                UpdatePixelBuffer();
+            }
         }
 
         // ── State queries ─────────────────────────────────────────────────────

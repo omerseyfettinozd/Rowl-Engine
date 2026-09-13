@@ -386,6 +386,9 @@ namespace RowlEngine.Editor.Native
         internal static extern int RowlEngine_IsTransitionActive(IntPtr handle);
 
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern int RowlEngine_IsPreviewFrameStatic(IntPtr handle);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
         internal static extern void RowlEngine_SetCamera(
             IntPtr handle,
             float x,

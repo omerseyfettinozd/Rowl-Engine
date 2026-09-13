@@ -223,6 +223,67 @@ void test_camera_and_transition_pipeline() {
         TEST_PASS("C API Camera & Transition Integration");
     }
 
+    // MS-4: the preview-frame static query behind the host dirty-frame gate.
+    // Settled -> 1 (copy can be skipped); transition/shake -> 0; dead
+    // handle -> 0 so hosts fall back to copying.
+    {
+        if (RowlEngine_IsPreviewFrameStatic(nullptr) != 0) {
+            std::cerr << "MS-4: dead handle must report not-static" << std::endl;
+            exit(1);
+        }
+
+        RowlEngineHandle handle = RowlEngine_Create();
+        if (!handle) {
+            std::cerr << "Failed to create RowlEngine handle" << std::endl;
+            exit(1);
+        }
+        if (!RowlEngine_Init(handle, 960, 540, 0)) {
+            std::cerr << "Failed to initialize offscreen engine" << std::endl;
+            exit(1);
+        }
+
+        // An empty component scene leaves no dialogue, script, or entity
+        // behind, so the frame is provably still.
+        RowlEngine_UpdateSceneFromJson(handle, "[]");
+        RowlEngine_Step(handle, 0.0f);
+        if (RowlEngine_IsPreviewFrameStatic(handle) != 1) {
+            std::cerr << "MS-4: settled frame must report static" << std::endl;
+            exit(1);
+        }
+
+        RowlEngine_StartTransition(handle, "crossfade", 0.4f, nullptr);
+        if (RowlEngine_IsPreviewFrameStatic(handle) != 0) {
+            std::cerr << "MS-4: active transition must report not-static" << std::endl;
+            exit(1);
+        }
+        RowlEngine_Step(handle, 0.25f);
+        RowlEngine_Step(handle, 0.25f);
+        if (RowlEngine_IsTransitionActive(handle)) {
+            std::cerr << "MS-4: transition did not complete after 0.5s of steps" << std::endl;
+            exit(1);
+        }
+        if (RowlEngine_IsPreviewFrameStatic(handle) != 1) {
+            std::cerr << "MS-4: completed transition must settle back to static" << std::endl;
+            exit(1);
+        }
+
+        RowlEngine_TriggerCameraShake(handle, 15.0f, 0.5f);
+        if (RowlEngine_IsPreviewFrameStatic(handle) != 0) {
+            std::cerr << "MS-4: camera shake must report not-static" << std::endl;
+            exit(1);
+        }
+        RowlEngine_Step(handle, 0.25f);
+        RowlEngine_Step(handle, 0.25f);
+        RowlEngine_Step(handle, 0.25f);
+        if (RowlEngine_IsPreviewFrameStatic(handle) != 1) {
+            std::cerr << "MS-4: completed shake must settle back to static" << std::endl;
+            exit(1);
+        }
+
+        RowlEngine_Destroy(handle);
+        TEST_PASS("MS-4 Preview-Frame Static Query (Dirty-Frame Gate)");
+    }
+
     // Test 6: Component JSON Ingestion for Camera & Transition
     {
         RowlEngineHandle handle = RowlEngine_Create();

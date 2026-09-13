@@ -147,6 +147,15 @@ int RowlEngine_IsTransitionActive(RowlEngineHandle handle) {
     }, 0);
 }
 
+int RowlEngine_IsPreviewFrameStatic(RowlEngineHandle handle) {
+    // Fail-closed toward copying: every error path reports not-static (0) so
+    // hosts fall back to the pre-MS-4 copy-every-frame behavior.
+    if (!isLiveHandle(handle)) return 0;
+    return invokeNoexcept<int>([&] {
+        return toEngine(handle)->isPreviewFrameStatic() ? 1 : 0;
+    }, 0);
+}
+
 void RowlEngine_SetCamera(RowlEngineHandle handle, float x, float y, float zoom) {
     if (!isLiveHandle(handle)) return;
     invokeNoexcept([&] {

@@ -236,6 +236,9 @@ internal static class EditorHeadlessTestSuite
             // Test 29: End-to-end editor flow (Hub create → open → nodes → inspector → import → preview → save → build → package)
             EditorEndToEndFlowTests.Run(testProjectRoot);
 
+            // Test 30: MS-4 dirty-frame copy gate & idle-diet counters
+            EditorFrameSkippingTests.Run();
+
             Console.WriteLine("\n=======================================================");
             Console.WriteLine("🎉 ALL EDITOR HEADLESS TESTS PASSED SUCCESSFULLY! 🎉");
             Console.WriteLine("=======================================================\n");

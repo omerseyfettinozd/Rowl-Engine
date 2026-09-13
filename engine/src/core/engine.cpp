@@ -1837,6 +1837,23 @@ bool Engine::areActiveDialoguesComplete() const {
     return true;
 }
 
+bool Engine::isPreviewFrameStatic() const {
+    // Conservative: without a window there is no frame to reason about, so
+    // report activity and let the host attempt the (harmless no-op) copy.
+    if (!m_window) return false;
+    if (m_window->isTransitionActive()) return false;
+    if (m_window->isScreenFlashActive()) return false;
+    if (const auto* camera = m_window->getCamera()) {
+        if (camera->isMoving()) return false;
+    }
+    if (!areActiveDialoguesComplete()) return false;
+    // Entity scripts and component on_update callbacks can mutate visuals at
+    // any tick; only a script/scene-free runtime is provably still.
+    if (m_hasActiveScript) return false;
+    if (m_scene && m_scene->getObjectCount() > 0) return false;
+    return true;
+}
+
 void Engine::shutdown() {
     if (!m_initialized) return;
 

@@ -323,6 +323,13 @@ private:
                           const std::string& state, const std::string& error = {});
     void recordActiveDialogueHistory();
     bool areActiveDialoguesComplete() const;
+public:
+    /// MS-4 dirty-frame query: true when the next rendered frame cannot differ
+    /// from the currently presented one (no transition, flash, camera motion,
+    /// incomplete typewriter, active scripts, or scene entities). Hosts use it
+    /// to skip the ~8.3 MB pixel copy; conservative by design — any doubt
+    /// reports not-static so the host copies.
+    bool isPreviewFrameStatic() const;
 };
 
 } // namespace Rowl::Core
