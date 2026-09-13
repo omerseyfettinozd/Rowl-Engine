@@ -19,6 +19,7 @@ add_executable(rowl_tests
     test_story_graph_parser.cpp
     test_native_performance_benchmarks.cpp
     test_hardening_and_reliability.cpp
+    test_rc_soak_and_data_safety.cpp
     test_camera_and_transition_pipeline.cpp
     test_single_engine_image.cpp
     test_demo_first_light.cpp

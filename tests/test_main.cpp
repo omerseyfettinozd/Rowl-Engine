@@ -43,6 +43,7 @@ int main(int argc, char* argv[]) {
     test_native_performance_benchmarks(benchmarkJsonPath);
     test_golden_project_benchmarks(goldenJsonPath);
     test_hardening_and_reliability();
+    test_rc_soak_and_data_safety();
     test_demo_first_light();
     test_demo_second_signal();
 
