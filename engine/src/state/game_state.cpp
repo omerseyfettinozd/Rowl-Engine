@@ -10,7 +10,6 @@ namespace Rowl::State {
 
 namespace {
 
-constexpr uint32_t kSaveFormatVersion = 3;
 constexpr uintmax_t kMaxSaveFileBytes = 4 * 1024 * 1024;
 constexpr size_t kMaxSaveVariables = 10'000;
 constexpr size_t kMaxVariableKeyBytes = 256;
@@ -179,7 +178,7 @@ std::shared_ptr<const GameState> GameState::rewind(
 
 std::string GameState::serializeJson() const {
     nlohmann::json j;
-    j["version"] = kSaveFormatVersion;
+    j["version"] = CurrentSaveFormatVersion;
     j["step_id"] = stepId;
     j["active_node_id"] = activeNodeId;
     j["typewriter_index"] = typewriterIndex;
@@ -213,18 +212,22 @@ std::string GameState::serializeJson() const {
     return j.dump(2);
 }
 
-std::shared_ptr<const GameState> GameState::deserializeJson(const std::string& jsonStr) {
-    if (jsonStr.empty() || jsonStr.size() > kMaxSaveFileBytes) return nullptr;
+GameStateDecodeResult GameState::decodeJson(const std::string& jsonStr) {
+    if (jsonStr.empty() || jsonStr.size() > kMaxSaveFileBytes) return {};
     try {
         auto j = nlohmann::json::parse(jsonStr);
         if (!j.is_object()) {
             ROWL_LOG_ERROR("GameState JSON root must be an object");
-            return nullptr;
+            return {};
         }
-        const auto version = j.value("version", kSaveFormatVersion);
-        if (version != 1 && version != 2 && version != kSaveFormatVersion) {
+        if (j.contains("version") && !j["version"].is_number_unsigned()) {
+            ROWL_LOG_ERROR("GameState JSON version must be an unsigned integer");
+            return {};
+        }
+        const auto version = j.value("version", CurrentSaveFormatVersion);
+        if (version != 1 && version != 2 && version != CurrentSaveFormatVersion) {
             ROWL_LOG_ERROR("Unsupported GameState save version: " + std::to_string(version));
-            return nullptr;
+            return {nullptr, GameStateDecodeStatus::UnsupportedVersion, version};
         }
 
         auto state = std::make_shared<GameState>();
@@ -239,24 +242,24 @@ std::shared_ptr<const GameState> GameState::deserializeJson(const std::string& j
 
         if (!std::isfinite(state->bgmVolume) || state->bgmVolume < 0.0f || state->bgmVolume > 1.0f) {
             ROWL_LOG_ERROR("GameState JSON contains an invalid BGM volume");
-            return nullptr;
+            return {nullptr, GameStateDecodeStatus::InvalidData, version};
         }
 
         if (state->stepId == 0 || state->activeNodeId == 0) {
             ROWL_LOG_ERROR("GameState JSON contains an invalid step or node identifier");
-            return nullptr;
+            return {nullptr, GameStateDecodeStatus::InvalidData, version};
         }
 
         auto varMap = std::make_shared<VariableMap>();
         if (j.contains("variables") && j["variables"].is_object()) {
             if (j["variables"].size() > kMaxSaveVariables) {
                 ROWL_LOG_ERROR("GameState JSON has too many variables");
-                return nullptr;
+                return {nullptr, GameStateDecodeStatus::InvalidData, version};
             }
             for (auto& el : j["variables"].items()) {
                 if (el.key().empty() || el.key().size() > kMaxVariableKeyBytes) {
                     ROWL_LOG_ERROR("GameState JSON contains an invalid variable key");
-                    return nullptr;
+                    return {nullptr, GameStateDecodeStatus::InvalidData, version};
                 }
                 std::string value;
                 if (el.value().is_string()) {
@@ -266,13 +269,13 @@ std::shared_ptr<const GameState> GameState::deserializeJson(const std::string& j
                 }
                 if (value.size() > kMaxVariableValueBytes) {
                     ROWL_LOG_ERROR("GameState JSON contains an oversized variable value");
-                    return nullptr;
+                    return {nullptr, GameStateDecodeStatus::InvalidData, version};
                 }
                 varMap->data[el.key()] = std::move(value);
             }
         } else if (j.contains("variables")) {
             ROWL_LOG_ERROR("GameState JSON variables must be an object");
-            return nullptr;
+            return {nullptr, GameStateDecodeStatus::InvalidData, version};
         }
         state->variables = varMap;
         auto history = std::make_shared<std::vector<DialogueHistoryEntry>>();
@@ -280,12 +283,12 @@ std::shared_ptr<const GameState> GameState::deserializeJson(const std::string& j
             if (!j["dialogue_history"].is_array() ||
                 j["dialogue_history"].size() > kMaxDialogueHistoryEntries) {
                 ROWL_LOG_ERROR("GameState JSON dialogue history is invalid or too large");
-                return nullptr;
+                return {nullptr, GameStateDecodeStatus::InvalidData, version};
             }
             for (const auto& rawEntry : j["dialogue_history"]) {
                 if (!rawEntry.is_object()) {
                     ROWL_LOG_ERROR("GameState JSON dialogue history entry must be an object");
-                    return nullptr;
+                    return {nullptr, GameStateDecodeStatus::InvalidData, version};
                 }
                 DialogueHistoryEntry entry;
                 entry.nodeId = rawEntry.value("node_id", uint64_t{0});
@@ -295,18 +298,25 @@ std::shared_ptr<const GameState> GameState::deserializeJson(const std::string& j
                 if (entry.nodeId == 0 || entry.speaker.size() > kMaxDialogueHistoryTextBytes ||
                     entry.dialogue.size() > kMaxDialogueHistoryTextBytes) {
                     ROWL_LOG_ERROR("GameState JSON contains an invalid dialogue history entry");
-                    return nullptr;
+                    return {nullptr, GameStateDecodeStatus::InvalidData, version};
                 }
                 history->push_back(std::move(entry));
             }
         }
         state->dialogueHistory = std::move(history);
         state->previousState = nullptr;
-        return state;
+        const auto status = version == CurrentSaveFormatVersion
+            ? GameStateDecodeStatus::Loaded
+            : GameStateDecodeStatus::Migrated;
+        return {std::move(state), status, version};
     } catch (const std::exception& e) {
         ROWL_LOG_ERROR("Failed to deserialize GameState JSON: " + std::string(e.what()));
-        return nullptr;
+        return {};
     }
+}
+
+std::shared_ptr<const GameState> GameState::deserializeJson(const std::string& jsonStr) {
+    return decodeJson(jsonStr).state;
 }
 
 bool GameState::saveToSlot(const std::shared_ptr<const GameState>& state,

@@ -13,7 +13,9 @@ testi geçiyor.
   `GameState` veri modelinden ayırır. Mevcut `GameState::save/load/has/delete`
   girişleri davranış uyumluluğu için bu sınıra delegasyon yapar; `Engine` ise
   explicit save override/PlatformHost önceliğini koruyan kendi runtime-lokal
-  `SessionPersistence` örneğini kullanır.
+  `SessionPersistence` örneğini kullanır. Ayrıntılı load sonucu güncel v3 ile
+  migrate edilen v1/v2 save'leri ve future-version/bozuk/IO/boyut hatalarını
+  ayırır; migration bilgisi mevcut structured-result C ABI'sında görünür.
 - Lua sandbox ve birbirinden izole script component modülleri: her component kendi
   `on_enter`, `on_update`, `on_choice` ve `on_exit` callback'ini taşır; aynı
   callback isimleri başka component'leri ezmez.

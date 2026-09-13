@@ -8,6 +8,25 @@ namespace Rowl::State {
 
 struct GameState;
 
+enum class SessionLoadStatus {
+    Loaded,
+    Migrated,
+    NotFound,
+    FileTooLarge,
+    IoError,
+    InvalidData,
+    UnsupportedVersion,
+};
+
+struct SessionLoadResult {
+    std::shared_ptr<const GameState> state;
+    SessionLoadStatus status = SessionLoadStatus::InvalidData;
+    uint32_t sourceVersion = 0;
+
+    bool succeeded() const { return state != nullptr; }
+    bool migrated() const { return status == SessionLoadStatus::Migrated; }
+};
+
 /// Filesystem boundary for versioned session save slots.
 ///
 /// GameState remains the immutable data model; this class owns slot paths,
@@ -17,6 +36,7 @@ public:
     explicit SessionPersistence(std::string saveDirectory = "saves");
 
     bool saveSlot(const std::shared_ptr<const GameState>& state, int32_t slotIndex) const;
+    SessionLoadResult loadSlotDetailed(int32_t slotIndex) const;
     std::shared_ptr<const GameState> loadSlot(int32_t slotIndex) const;
     bool hasSlot(int32_t slotIndex) const;
     bool deleteSlot(int32_t slotIndex) const;

@@ -1897,21 +1897,37 @@ bool Engine::loadGameSlot(int32_t slotIndex) {
     }
     auto& persistence = sessionPersistence();
     const std::string saveDirectory = persistence.saveDirectory();
-    if (!persistence.hasSlot(slotIndex)) {
-        m_context->setError(RuntimeErrorCode::FileNotFound,
-                            "Save slot #" + std::to_string(slotIndex) + " not found in " + saveDirectory,
-                            "load_game_slot", std::to_string(slotIndex));
-        return false;
-    }
-    auto loaded = persistence.loadSlot(slotIndex);
-    if (!loaded) {
-        m_context->setError(RuntimeErrorCode::ParseError,
-                            "Failed to parse or validate save slot #" + std::to_string(slotIndex),
-                            "load_game_slot", std::to_string(slotIndex));
+    const auto loadResult = persistence.loadSlotDetailed(slotIndex);
+    if (!loadResult.succeeded()) {
+        RuntimeErrorCode errorCode = RuntimeErrorCode::ParseError;
+        std::string message = "Failed to parse or validate save slot #" + std::to_string(slotIndex);
+        switch (loadResult.status) {
+            case Rowl::State::SessionLoadStatus::NotFound:
+                errorCode = RuntimeErrorCode::FileNotFound;
+                message = "Save slot #" + std::to_string(slotIndex) + " not found in " + saveDirectory;
+                break;
+            case Rowl::State::SessionLoadStatus::FileTooLarge:
+                errorCode = RuntimeErrorCode::FileTooLarge;
+                message = "Save slot #" + std::to_string(slotIndex) + " exceeds the read limit";
+                break;
+            case Rowl::State::SessionLoadStatus::IoError:
+                errorCode = RuntimeErrorCode::IoError;
+                message = "Failed to read save slot #" + std::to_string(slotIndex);
+                break;
+            case Rowl::State::SessionLoadStatus::UnsupportedVersion:
+                errorCode = RuntimeErrorCode::ValidationError;
+                message = "Unsupported save format version " +
+                    std::to_string(loadResult.sourceVersion) + " in slot #" +
+                    std::to_string(slotIndex);
+                break;
+            default:
+                break;
+        }
+        m_context->setError(errorCode, message, "load_game_slot", std::to_string(slotIndex));
         return false;
     }
 
-    m_gameState = loaded;
+    m_gameState = loadResult.state;
     m_storyRuntime.setCurrentNodeId(m_gameState->activeNodeId);
     // Loading restores state; it is not a node-entry event and must not replay SFX.
     m_lastSfxPlaybackNodeId = m_storyRuntime.currentNodeId();
@@ -1955,7 +1971,14 @@ bool Engine::loadGameSlot(int32_t slotIndex) {
     restoreAudioStateFromGameState();
     ROWL_LOG_INFO("Loaded Game Slot #" + std::to_string(slotIndex) +
                   " → Node #" + std::to_string(m_storyRuntime.currentNodeId()));
-    m_context->setSuccess("load_game_slot", std::to_string(slotIndex));
+    if (loadResult.migrated()) {
+        m_context->setResult({RuntimeErrorCode::Ok, "load_game_slot",
+            "Migrated save format version " + std::to_string(loadResult.sourceVersion) +
+                " to version " + std::to_string(Rowl::State::GameState::CurrentSaveFormatVersion),
+            std::to_string(slotIndex)});
+    } else {
+        m_context->setSuccess("load_game_slot", std::to_string(slotIndex));
+    }
     return true;
 }
 

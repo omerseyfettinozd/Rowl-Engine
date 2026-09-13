@@ -84,6 +84,25 @@ void test_game_state() {
     }
     TEST_PASS("Versioned Audio Presentation Save State and v1 Compatibility");
 
+    const auto currentDecode = Rowl::State::GameState::decodeJson(serialized);
+    const auto v1Decode = Rowl::State::GameState::decodeJson(
+        R"({"version":1,"step_id":1,"active_node_id":101,"variables":{}})");
+    const auto v2Decode = Rowl::State::GameState::decodeJson(
+        R"({"version":2,"step_id":1,"active_node_id":101,"variables":{}})");
+    const auto futureDecode = Rowl::State::GameState::decodeJson(
+        R"({"version":999,"step_id":1,"active_node_id":101,"variables":{}})");
+    if (!currentDecode.succeeded() || currentDecode.migrated() ||
+        currentDecode.sourceVersion != Rowl::State::GameState::CurrentSaveFormatVersion ||
+        !v1Decode.migrated() || v1Decode.sourceVersion != 1 ||
+        !v2Decode.migrated() || v2Decode.sourceVersion != 2 ||
+        futureDecode.succeeded() ||
+        futureDecode.status != Rowl::State::GameStateDecodeStatus::UnsupportedVersion ||
+        futureDecode.sourceVersion != 999) {
+        std::cerr << "GameState version migration result mismatch" << std::endl;
+        exit(1);
+    }
+    TEST_PASS("Explicit GameState v1/v2 Migration and Future-Version Result");
+
     std::string testSaveDir = "build/test_saves";
     Rowl::State::SessionPersistence persistence(testSaveDir);
     if (!persistence.saveSlot(s2, 1)) {
@@ -122,6 +141,16 @@ void test_game_state() {
     }
     TEST_PASS("SessionPersistence Atomic Slots and GameState Compatibility Delegates");
 
+    std::ofstream(std::filesystem::path(testSaveDir) / "save_slot_5.json")
+        << R"({"version":1,"step_id":1,"active_node_id":101,"variables":{}})";
+    const auto migratedSlot = persistence.loadSlotDetailed(5);
+    if (!migratedSlot.migrated() || migratedSlot.sourceVersion != 1 ||
+        !migratedSlot.state || migratedSlot.state->activeNodeId != 101) {
+        std::cerr << "SessionPersistence did not expose v1 migration result" << std::endl;
+        exit(1);
+    }
+    TEST_PASS("SessionPersistence Exposes Versioned Migration Result");
+
     // Save files are user-controlled input once they reach disk. Reject
     // malformed, unsupported, and structurally invalid content safely.
     {
@@ -132,8 +161,11 @@ void test_game_state() {
         }
         std::ofstream(std::filesystem::path(testSaveDir) / "save_slot_3.json")
             << R"({"version":999,"step_id":1,"active_node_id":101,"variables":{}})";
-        if (persistence.loadSlot(3)) {
-            std::cerr << "Future GameState save version was accepted" << std::endl;
+        const auto futureSlot = persistence.loadSlotDetailed(3);
+        if (futureSlot.succeeded() ||
+            futureSlot.status != Rowl::State::SessionLoadStatus::UnsupportedVersion ||
+            futureSlot.sourceVersion != 999) {
+            std::cerr << "Future GameState save version result mismatch" << std::endl;
             exit(1);
         }
         std::ofstream(std::filesystem::path(testSaveDir) / "save_slot_4.json")

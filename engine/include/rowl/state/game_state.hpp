@@ -8,6 +8,24 @@
 
 namespace Rowl::State {
 
+struct GameState;
+
+enum class GameStateDecodeStatus {
+    Loaded,
+    Migrated,
+    InvalidData,
+    UnsupportedVersion,
+};
+
+struct GameStateDecodeResult {
+    std::shared_ptr<const GameState> state;
+    GameStateDecodeStatus status = GameStateDecodeStatus::InvalidData;
+    uint32_t sourceVersion = 0;
+
+    bool succeeded() const { return state != nullptr; }
+    bool migrated() const { return status == GameStateDecodeStatus::Migrated; }
+};
+
 struct VariableMap {
     std::unordered_map<std::string, std::string> data;
 };
@@ -28,6 +46,8 @@ struct DialogueHistoryEntry {
 #endif
 
 struct GameState {
+    static constexpr uint32_t CurrentSaveFormatVersion = 3;
+
     // POD members first
     uint64_t stepId = 0;
     uint64_t activeNodeId = 101;
@@ -81,6 +101,7 @@ struct GameState {
 
     // Serialization & slot persistence
     std::string serializeJson() const;
+    static GameStateDecodeResult decodeJson(const std::string& jsonStr);
     static std::shared_ptr<const GameState> deserializeJson(const std::string& jsonStr);
 
     static bool saveToSlot(const std::shared_ptr<const GameState>& state, int32_t slotIndex, const std::string& saveDir = "saves");

@@ -124,6 +124,36 @@ void test_runtime_context_and_diagnostics() {
             exit(1);
         }
 
+        {
+            std::ofstream(saveDir / "save_slot_2.json")
+                << R"({"version":1,"step_id":1,"active_node_id":101,"variables":{}})";
+        }
+        if (!engine.loadGameSlot(2)) {
+            std::cerr << "loadGameSlot(2) failed to migrate v1 save" << std::endl;
+            exit(1);
+        }
+        res = engine.getContext()->getLastResult();
+        if (!res.isOk() || res.operation != "load_game_slot" ||
+            res.message.find("version 1 to version 3") == std::string::npos) {
+            std::cerr << "loadGameSlot(2) did not expose migration result" << std::endl;
+            exit(1);
+        }
+
+        {
+            std::ofstream(saveDir / "save_slot_3.json")
+                << R"({"version":999,"step_id":1,"active_node_id":101,"variables":{}})";
+        }
+        if (engine.loadGameSlot(3)) {
+            std::cerr << "loadGameSlot(3) accepted a future save version" << std::endl;
+            exit(1);
+        }
+        res = engine.getContext()->getLastResult();
+        if (res.code != Rowl::Core::RuntimeErrorCode::ValidationError ||
+            res.message.find("version 999") == std::string::npos) {
+            std::cerr << "loadGameSlot(3) did not expose unsupported version result" << std::endl;
+            exit(1);
+        }
+
         // Delete slot valid
         if (!engine.deleteSaveSlot(1)) {
             std::cerr << "deleteSaveSlot(1) failed" << std::endl;
