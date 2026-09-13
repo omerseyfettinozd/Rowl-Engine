@@ -507,7 +507,14 @@ ROWL_API const char* RowlEngine_GetVariable(RowlEngineHandle handle, const char*
 /** Length-reporting variant of GetVariable (see lifetime contract). */
 ROWL_API const char* RowlEngine_GetVariableWithLength(RowlEngineHandle handle, const char* key, uint32_t* outLen);
 
-/** Evaluates a Lua condition expression (e.g. "gold >= 50"). Returns 1 for true, 0 for false. */
+/**
+ * Evaluates a Lua condition expression (e.g. "gold >= 50"). Returns 1 for true, 0 for false.
+ *
+ * Fail-closed contract: any error — dead/invalid handle, null expression, or
+ * uninitialized/broken sandbox — returns 0 and records a result code readable
+ * via RowlEngine_GetLastResultCode() (InvalidHandle, InvalidArgument, or the
+ * script error). A null expression never passes a branch.
+ */
 ROWL_API int RowlEngine_EvaluateCondition(RowlEngineHandle handle, const char* conditionExpr);
 
 /** Executes a sandboxed Lua script string. Returns 1 on success, 0 on error. */

@@ -835,10 +835,11 @@ void Engine::updateSceneFromComponents(const std::string& componentsJson,
                     button.text = option.value("text", "Choice");
                     button.enabled = option.value("enabled", true);
 
-                    // Lua condition check
+                    // Lua condition check (fail-closed: without a sandbox the
+                    // gated choice stays disabled rather than opening).
                     std::string condition = option.value("condition", "");
                     if (!condition.empty() && condition != "true" && condition != "1") {
-                        if (m_luaSandbox && !m_luaSandbox->evaluateCondition(condition)) {
+                        if (!m_luaSandbox || !m_luaSandbox->evaluateCondition(condition)) {
                             button.enabled = false;
                         }
                     }
@@ -2105,19 +2106,23 @@ std::string Engine::getScriptVariable(const std::string& key) const {
 }
 
 bool Engine::evaluateCondition(const std::string& conditionExpr) {
-    if (m_luaSandbox) {
-        bool ok = m_luaSandbox->evaluateCondition(conditionExpr);
-        if (!ok && !m_luaSandbox->getLastError().empty()) {
-            m_context->setError(RuntimeErrorCode::ScriptSyntaxError,
-                                m_luaSandbox->getLastError(),
-                                "evaluate_condition", conditionExpr);
-            return false;
-        }
-        m_context->setSuccess("evaluate_condition", conditionExpr);
-        return ok;
+    // Fail-closed: without a live sandbox no branch may be taken. The error is
+    // recorded so RowlEngine_GetLastResultCode() reflects the failure to hosts.
+    if (!m_luaSandbox) {
+        m_context->setError(RuntimeErrorCode::ScriptRuntimeError,
+                            "Lua sandbox is unavailable; failing closed on condition evaluation",
+                            "evaluate_condition", conditionExpr);
+        return false;
+    }
+    bool ok = m_luaSandbox->evaluateCondition(conditionExpr);
+    if (!ok && !m_luaSandbox->getLastError().empty()) {
+        m_context->setError(RuntimeErrorCode::ScriptSyntaxError,
+                            m_luaSandbox->getLastError(),
+                            "evaluate_condition", conditionExpr);
+        return false;
     }
     m_context->setSuccess("evaluate_condition", conditionExpr);
-    return true;
+    return ok;
 }
 
 bool Engine::executeScript(const std::string& scriptCode) {

@@ -1,8 +1,13 @@
 #include "rowl/scripting/lua_sandbox.hpp"
 #include "rowl/core/logger.hpp"
+#include <charconv>
 #include <cmath>
 #include <cstdint>
+#include <string>
 #include <string_view>
+#include <system_error>
+#include <unordered_set>
+#include <vector>
 
 extern "C" {
 #include <lua.h>
@@ -88,6 +93,34 @@ static void lua_instruction_hook(lua_State* L, lua_Debug* ar) {
     lua_setfield(L, LUA_REGISTRYINDEX, "_rowl_instruction_count");
 }
 
+// Names owned by the sandbox bridge or the Lua standard libraries. A script
+// must never replace these through the variable API; direct global assignment
+// inside a script is additionally repaired by bindEngineApis().
+bool LuaSandbox::isReservedVariableName(const std::string& key) {
+    static const std::unordered_set<std::string_view> kReserved = {
+        "rowl", "_G", "_ENV",
+        "math", "string", "table", "coroutine", "utf8",
+        "package", "io", "os", "debug",
+        "dofile", "loadfile", "load", "collectgarbage", "require", "module",
+    };
+    return key.empty() || kReserved.find(key) != kReserved.end();
+}
+
+// Locale-independent number detection: only '.' is a decimal separator, so a
+// comma-decimal locale (e.g. tr_TR) can never change what a script value
+// means. std::from_chars never consults the global C/C++ locale.
+static bool parseSandboxNumber(const std::string& text, double& out) {
+    if (text.empty()) return false;
+    const char* first = text.data();
+    const char* last = first + text.size();
+    double value = 0.0;
+    const auto result = std::from_chars(first, last, value);
+    if (result.ec != std::errc() || result.ptr != last) return false;
+    if (!std::isfinite(value)) return false;
+    out = value;
+    return true;
+}
+
 LuaSandbox::LuaSandbox() = default;
 
 LuaSandbox::~LuaSandbox() {
@@ -140,10 +173,27 @@ bool LuaSandbox::initialize() {
     lua_sethook(m_luaState, lua_instruction_hook, LUA_MASKCOUNT, 100000);
 
     bindEngineApis();
+    snapshotInitialGlobals();
 
     m_initialized = true;
     ROWL_LOG_INFO("Sandboxed Lua Environment Initialized Successfully.");
     return true;
+}
+
+void LuaSandbox::snapshotInitialGlobals() {
+    m_initialGlobals.clear();
+    if (!m_luaState) return;
+    lua_pushglobaltable(m_luaState);
+    lua_pushnil(m_luaState);
+    while (lua_next(m_luaState, -2) != 0) {
+        if (lua_type(m_luaState, -2) == LUA_TSTRING) {
+            if (const char* name = lua_tostring(m_luaState, -2)) {
+                m_initialGlobals.emplace(name);
+            }
+        }
+        lua_pop(m_luaState, 1);
+    }
+    lua_pop(m_luaState, 1);
 }
 
 void LuaSandbox::bindEngineApis() {
@@ -163,11 +213,14 @@ void LuaSandbox::bindEngineApis() {
 }
 
 void LuaSandbox::setVariable(const std::string& key, const std::string& value) {
+    if (isReservedVariableName(key)) {
+        ROWL_LOG_WARN("Lua Sandbox rejected reserved variable name: '" + key + "'");
+        return;
+    }
     m_scriptVariables[key] = value;
     if (m_luaState) {
-        char* end = nullptr;
-        double num = std::strtod(value.c_str(), &end);
-        if (end != value.c_str() && *end == '\0') {
+        double num = 0.0;
+        if (parseSandboxNumber(value, num)) {
             lua_pushnumber(m_luaState, num);
         } else {
             lua_pushstring(m_luaState, value.c_str());
@@ -195,6 +248,10 @@ std::string LuaSandbox::getVariable(const std::string& key) const {
 }
 
 void LuaSandbox::setGlobalNumber(const std::string& key, double value) {
+    if (isReservedVariableName(key)) {
+        ROWL_LOG_WARN("Lua Sandbox rejected reserved variable name: '" + key + "'");
+        return;
+    }
     if (!std::isfinite(value)) {
         ROWL_LOG_WARN("Lua Sandbox rejected non-finite numeric variable: '" + key + "'");
         return;
@@ -229,15 +286,19 @@ double LuaSandbox::getGlobalNumber(const std::string& key, double defaultValue) 
 
 bool LuaSandbox::evaluateCondition(const std::string& conditionExpr) {
     m_lastError.clear();
+    // Fail-closed: an uninitialized or broken sandbox must never open a
+    // conditional branch. This check stays above the literal fast-path so even
+    // "true" cannot pass on a dead sandbox.
+    if (!m_initialized || !m_luaState) {
+        m_lastError = "Lua sandbox is not initialized; failing closed on condition evaluation";
+        ROWL_LOG_WARN("Lua Sandbox evaluateCondition called without initialization. Failing closed (false).");
+        return false;
+    }
     if (conditionExpr.empty() || conditionExpr == "true" || conditionExpr == "1") {
         return true;
     }
     if (conditionExpr == "false" || conditionExpr == "0") {
         return false;
-    }
-    if (!m_initialized || !m_luaState) {
-        ROWL_LOG_WARN("Lua Sandbox evaluateCondition called without initialization. Defaulting to true.");
-        return true;
     }
 
     // Reset instruction counter
@@ -285,17 +346,42 @@ bool LuaSandbox::evaluateCondition(const std::string& conditionExpr) {
 
 void LuaSandbox::clearVariables() {
     if (m_luaState) {
+        // Scripts can create arbitrary globals (x = 1, function on_enter...).
+        // Only sandbox-owned names survive a session boundary; lua_next cannot
+        // tolerate mutation mid-iteration, so collect first, then clear.
+        std::vector<std::string> strayGlobals;
+        lua_pushglobaltable(m_luaState);
+        lua_pushnil(m_luaState);
+        while (lua_next(m_luaState, -2) != 0) {
+            if (lua_type(m_luaState, -2) == LUA_TSTRING) {
+                if (const char* name = lua_tostring(m_luaState, -2)) {
+                    if (m_initialGlobals.find(name) == m_initialGlobals.end()) {
+                        strayGlobals.emplace_back(name);
+                    }
+                }
+            }
+            lua_pop(m_luaState, 1);
+        }
+        lua_pop(m_luaState, 1);
+        for (const auto& name : strayGlobals) {
+            lua_pushnil(m_luaState);
+            lua_setglobal(m_luaState, name.c_str());
+        }
         for (const auto& [key, value] : m_scriptVariables) {
             (void)value;
             lua_pushnil(m_luaState);
             lua_setglobal(m_luaState, key.c_str());
         }
+        // A script may have assigned `rowl = ...` directly; restore the bridge
+        // so the next session starts from a known-good namespace.
+        bindEngineApis();
     }
     m_scriptVariables.clear();
 }
 
 bool LuaSandbox::executeString(const std::string& scriptCode) {
     if (!m_initialized || !m_luaState) {
+        m_lastError = "Lua sandbox is not initialized; cannot execute script";
         ROWL_LOG_ERROR("Lua Sandbox executeString called without initialization!");
         return false;
     }
@@ -505,6 +591,8 @@ void LuaSandbox::shutdown() {
         m_luaState = nullptr;
     }
 
+    m_scriptVariables.clear();
+    m_initialGlobals.clear();
     m_initialized = false;
     ROWL_LOG_INFO("Lua Environment Shutdown Complete.");
 }

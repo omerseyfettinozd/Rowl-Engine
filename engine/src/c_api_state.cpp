@@ -123,10 +123,25 @@ const char* RowlEngine_GetVariableWithLength(RowlEngineHandle handle, const char
 }
 
 int RowlEngine_EvaluateCondition(RowlEngineHandle handle, const char* conditionExpr) {
-    if (!isLiveHandle(handle) || !conditionExpr) return 1;
+    // Fail-closed: every error path reports false (0). A dead handle surfaces
+    // as InvalidHandle through RowlEngine_GetLastResultCode(); a null
+    // expression records InvalidArgument on the handle's context.
+    if (!isLiveHandle(handle)) return 0;
+    if (!conditionExpr) {
+        invokeNoexcept([&] {
+            if (auto* engine = toEngine(handle)) {
+                if (auto ctx = engine->getContext()) {
+                    ctx->setError(Rowl::Core::RuntimeErrorCode::InvalidArgument,
+                                  "Condition expression pointer is null; failing closed",
+                                  "evaluate_condition", "");
+                }
+            }
+        });
+        return 0;
+    }
     return invokeNoexcept<int>([&] {
         return toEngine(handle)->evaluateCondition(conditionExpr) ? 1 : 0;
-    }, 1);
+    }, 0);
 }
 
 int RowlEngine_ExecuteScript(RowlEngineHandle handle, const char* scriptCode) {

@@ -3,6 +3,7 @@
 #include <string>
 #include <memory>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 struct lua_State;
@@ -51,10 +52,18 @@ public:
 
 private:
     void bindEngineApis();
+    /// Records the global names owned by the sandbox itself (safe libraries,
+    /// base functions, engine bridge). clearVariables() removes every other
+    /// global so script-created names cannot leak across sessions.
+    void snapshotInitialGlobals();
+    /// Bridge and standard-library names a script must never overwrite via
+    /// setVariable()/setGlobalNumber().
+    static bool isReservedVariableName(const std::string& key);
 
     lua_State* m_luaState = nullptr;
     std::unordered_map<std::string, std::string> m_scriptVariables;
     std::unordered_map<std::string, int> m_modules;
+    std::unordered_set<std::string> m_initialGlobals;
     std::string m_lastError;
     bool m_initialized = false;
 };
