@@ -13,11 +13,21 @@ internal static class EditorHeadlessTestSuite
 {
         internal static void Run(string? benchmarkPath = null)
         {
+            // The suite must run without a display or audio server (CI,
+            // sandbox). The offscreen engine only needs SDL's dummy drivers;
+            // explicit environment overrides (e.g. from CTest) win when set.
+            // NOTE: this must go through libc (NativeEnvironment), because a
+            // managed SetEnvironmentVariable never reaches SDL's getenv here.
+            NativeEnvironment.EnsureDisplayFreeDrivers();
+
             Console.WriteLine("\n=======================================================");
             Console.WriteLine("🧪 ROWL ENGINE EDITOR HEADLESS TEST SUITE 🧪");
             Console.WriteLine("=======================================================");
 
-            Program.BuildAvaloniaApp().SetupWithoutStarting();
+            // Display-free platform: the suite is named "headless" and must run
+            // on CI/sandbox machines without an X server. Interactive desktop
+            // startup (Program.Main without flags) still uses UsePlatformDetect.
+            Program.BuildAvaloniaAppHeadless().SetupWithoutStarting();
             VerifyPlatformSpecificProjectRootResolution();
             string sourceAssets = MainWindowViewModel.AssetsPath;
             string testProjectRoot = Path.Combine(

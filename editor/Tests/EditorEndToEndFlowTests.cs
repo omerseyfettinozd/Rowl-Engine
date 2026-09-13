@@ -97,8 +97,9 @@ internal static class EditorEndToEndFlowTests
             if (!flowVm.DeliverScheduledEnginePreview())
                 throw new Exception("Edited preview did not deliver the selected node");
 
-            // Step 29.7: Save and Save As.
-            flowVm.SaveProject();
+            // Step 29.7: Save and Save As. MS-2: SaveProject is fire-and-
+            // forget; flows that assert on the file need SaveProjectNow.
+            flowVm.SaveProjectNow();
             string savedGraph = Path.Combine(e2eRoot, "Assets", "json", "full_story_graph.json");
             if (!File.Exists(savedGraph))
                 throw new Exception("Save did not publish full_story_graph.json");
@@ -120,7 +121,7 @@ internal static class EditorEndToEndFlowTests
                 flowVm.Nodes,
                 flowVm.Connections,
                 flowVm.GetStartNode()?.Id,
-                () => flowVm.SaveProject(),
+                () => { flowVm.SaveProjectNow(); },
                 issues => reportedIssues = string.Join(" | ", issues.Select(i => (i.IsError ? "ERR " : "WARN ") + i.Message)),
                 msg => { }).GetAwaiter().GetResult();
             if (!buildResult.Succeeded || !Directory.Exists(buildResult.OutputDirectory))

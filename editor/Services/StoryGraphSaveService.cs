@@ -353,12 +353,43 @@ internal static class StoryGraphSaveService
                 ProjectFileSystem.WriteAllTextAtomically(
                     Path.Combine(assetsJsonPath, "active_story.json"), activeJson);
             }
+
+            RemoveStaleLegacyCopy(assetsJsonPath, log);
             return sequence == latestSequence();
         }
         catch (Exception ex)
         {
             log?.Invoke($"⚠️ Failed to save story graph: {ex.Message}");
             return false;
+        }
+    }
+
+    /// <summary>
+    /// Best-effort removal of a stale `Assets/full_story_graph.json` left by
+    /// pre-MS-2 writers. Writes go to the canonical `Assets/json/` address
+    /// only; a lingering legacy copy must never shadow it. Mirrors the
+    /// cleanup in <see cref="StoryGraphDocumentWriter"/> for the sync path.
+    /// </summary>
+    private static void RemoveStaleLegacyCopy(string assetsJsonPath, Action<string>? log)
+    {
+        try
+        {
+            if (!string.Equals(Path.GetFileName(assetsJsonPath), "json", StringComparison.OrdinalIgnoreCase))
+                return;
+            string? assetsPath = Path.GetDirectoryName(assetsJsonPath);
+            if (string.IsNullOrEmpty(assetsPath))
+                return;
+            string legacyPath = Path.Combine(assetsPath, "full_story_graph.json");
+            string canonicalPath = Path.Combine(assetsJsonPath, "full_story_graph.json");
+            if (!string.Equals(legacyPath, canonicalPath, StringComparison.OrdinalIgnoreCase) &&
+                File.Exists(legacyPath))
+            {
+                File.Delete(legacyPath);
+            }
+        }
+        catch (Exception ex)
+        {
+            log?.Invoke($"ℹ️ Legacy graph copy could not be removed: {ex.Message}");
         }
     }
 }

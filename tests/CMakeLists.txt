@@ -49,5 +49,7 @@ target_compile_definitions(rowl_tests PRIVATE ROWL_BUILDING_DLL)
 add_test(NAME rowl_native_tests COMMAND rowl_tests)
 set_tests_properties(rowl_native_tests PROPERTIES
     WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
-    ENVIRONMENT "SDL_AUDIODRIVER=dummy"
+    # Dummy drivers keep the suite display-/audio-server free on headless
+    # CI and sandbox machines; the offscreen engine needs neither.
+    ENVIRONMENT "SDL_AUDIODRIVER=dummy;SDL_VIDEODRIVER=dummy"
 )

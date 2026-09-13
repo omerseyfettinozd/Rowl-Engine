@@ -13,7 +13,9 @@ internal static class EditorProjectPersistenceTests
     public static void Run(MainWindowViewModel mainVm, string testProjectRoot)
     {
         Console.WriteLine("\n📌 [Test 7]: Project Save, Save As & Standalone Build Pipeline...");
-        mainVm.SaveProject();
+        // MS-2: SaveProject is fire-and-forget; the Save As below must copy
+        // a completed save, so wait for it synchronously here.
+        mainVm.SaveProjectNow();
 
         // Project-owned settings and unknown manifest fields must survive Save As.
         File.WriteAllText(
@@ -28,7 +30,9 @@ internal static class EditorProjectPersistenceTests
 
         if (!File.Exists(Path.Combine(testSaveAsDir, "project.rowlproj")))
             throw new Exception("project.rowlproj was not created in Save As target");
-        if (!File.Exists(Path.Combine(testSaveAsDir, "Assets", "full_story_graph.json")))
+        // MS-2: saves are canonical-only (Assets/json/); the legacy
+        // Assets/ copy is never written.
+        if (!File.Exists(Path.Combine(testSaveAsDir, "Assets", "json", "full_story_graph.json")))
             throw new Exception("full_story_graph.json missing in Save As target");
         if (!Directory.Exists(Path.Combine(testSaveAsDir, "Assets", "images")))
             throw new Exception("Assets/images missing in Save As target");

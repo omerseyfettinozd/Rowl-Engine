@@ -94,8 +94,10 @@ if(ROWL_BUILD_RUNTIME_TESTS)
             TIMEOUT 120
             # The editor drives the native engine for audio-observer checks;
             # without a dummy driver headless machines report no device and
-            # edge-triggered device tests observe a stale transition.
-            ENVIRONMENT "SDL_AUDIODRIVER=dummy"
+            # edge-triggered device tests observe a stale transition. The
+            # video driver is forced for the same reason: the offscreen
+            # engine must initialise with no display server present.
+            ENVIRONMENT "SDL_AUDIODRIVER=dummy;SDL_VIDEODRIVER=dummy"
         )
     endif()
 endif()
@@ -133,6 +135,8 @@ if(ROWL_BUILD_RUNTIME_TESTS AND TARGET rowl_player)
         set_tests_properties(rowl_demo_first_light_packaged PROPERTIES
             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
             TIMEOUT 120
+            # Offscreen smoke frame: must initialise with no display server.
+            ENVIRONMENT "SDL_AUDIODRIVER=dummy;SDL_VIDEODRIVER=dummy"
         )
         add_test(
             NAME rowl_demo_second_signal_packaged
@@ -144,6 +148,8 @@ if(ROWL_BUILD_RUNTIME_TESTS AND TARGET rowl_player)
         set_tests_properties(rowl_demo_second_signal_packaged PROPERTIES
             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
             TIMEOUT 120
+            # Offscreen smoke frame: must initialise with no display server.
+            ENVIRONMENT "SDL_AUDIODRIVER=dummy;SDL_VIDEODRIVER=dummy"
         )
     endif()
 

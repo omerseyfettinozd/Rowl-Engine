@@ -19,13 +19,17 @@ internal static class EditorSaveAsBuildTests
             testCoordSaveAsDir,
             mainVm.Nodes.Count,
             mainVm.GetStartNode()?.Id ?? 101,
-            mainVm.SaveProject);
+            // MS-2: SaveProject is fire-and-forget; Save As must copy a
+            // completed save, so use the synchronous completion point.
+            () => { mainVm.SaveProjectNow(); });
 
         if (!saveAsResult.Succeeded || !Directory.Exists(testCoordSaveAsDir))
             throw new Exception("ProjectSaveAsCoordinator failed to copy project");
         if (!File.Exists(Path.Combine(testCoordSaveAsDir, "project.rowlproj")))
             throw new Exception("ProjectSaveAsCoordinator failed to produce project.rowlproj");
-        if (!File.Exists(Path.Combine(testCoordSaveAsDir, "Assets", "full_story_graph.json")))
+        // MS-2: saves are canonical-only (Assets/json/); the legacy
+        // Assets/ copy is never written.
+        if (!File.Exists(Path.Combine(testCoordSaveAsDir, "Assets", "json", "full_story_graph.json")))
             throw new Exception("ProjectSaveAsCoordinator failed to copy story graph");
 
         // 2. ProjectSaveAsCoordinator Descendant / Self Rejection

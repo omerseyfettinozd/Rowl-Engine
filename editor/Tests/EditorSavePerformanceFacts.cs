@@ -89,6 +89,11 @@ public sealed class EditorSavePerformanceFacts
             var snapshot = StoryGraphSaveService.Capture(nodes, conns, 101, nodes[0]);
             Assert.Equal(NodeCount, snapshot.Nodes.Count);
 
+            // A stale pre-MS-2 legacy copy must be removed by the save; only
+            // the canonical address may survive it.
+            Directory.CreateDirectory(Path.Combine(root, "Assets"));
+            File.WriteAllText(Path.Combine(root, "Assets", "full_story_graph.json"), "{stale}");
+
             long seq = 1;
             Assert.True(StoryGraphSaveService.TryWriteSnapshot(
                 snapshot, jsonDir, seq, () => seq));
