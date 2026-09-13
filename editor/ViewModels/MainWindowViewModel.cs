@@ -1,7 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Documents;
-using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using RowlEngine.Editor.Native;
@@ -43,48 +42,7 @@ namespace RowlEngine.Editor.ViewModels
         }
 
         internal static string ResolveProjectRootFrom(string startDirectory)
-        {
-            string dir = startDirectory;
-            // Walk up to 6 levels looking for the canonical project root.
-            // Strategy: prefer the parent that contains BOTH Assets/ AND editor/.
-            // editor/ itself may also have an Assets/ stub, so skip up if Assets/
-            // appears inside editor/ sub-tree.
-            string? best = null;
-            // Windows RID/platform output adds an extra x64 directory
-            // (Tests/bin/x64/Debug/netX), so six parents stop at editor/.
-            // Keep the search bounded while allowing the repository root to
-            // be reached from both portable and platform-specific layouts.
-            for (int i = 0; i < 12; i++)
-            {
-                bool hasAssets = Directory.Exists(Path.Combine(dir, "Assets"));
-                bool hasEditor = Directory.Exists(Path.Combine(dir, "editor")) ||
-                                 File.Exists(Path.Combine(dir, "CMakeLists.txt"));
-                // Prefer the directory that has BOTH Assets and editor/ or CMakeLists.txt
-                if (hasAssets && hasEditor)
-                {
-                    best = dir;
-                    // Keep going up — parent may also qualify (repo root is the highest match)
-                }
-
-                var parent = Directory.GetParent(dir);
-                if (parent == null) break;
-                dir = parent.FullName;
-            }
-            // Fallback: any dir with Assets/ found along the way
-            if (best == null)
-            {
-                dir = startDirectory;
-                for (int i = 0; i < 12; i++)
-                {
-                    if (Directory.Exists(Path.Combine(dir, "Assets")))
-                        return dir;
-                    var parent = Directory.GetParent(dir);
-                    if (parent == null) break;
-                    dir = parent.FullName;
-                }
-            }
-            return best ?? startDirectory;
-        }
+            => ProjectFileSystem.ResolveProjectRootFrom(startDirectory);
 
         /// <summary>
         /// Returns the assets directory (ProjectRoot/Assets).
@@ -421,7 +379,7 @@ namespace RowlEngine.Editor.ViewModels
             AppendLog($"🎨 Tema değiştirildi: {(IsDarkMode ? "Karanlık Mod (Siyah-Beyaz)" : "Aydınlık Mod (Turuncu-Beyaz, Siyah Yazı)")}");
         }
 
-        private readonly DispatcherTimer _smoothTimer;
+        private readonly EditorUiTimer _smoothTimer;
 
         private NodeViewModel? _wireDragSourceNode;
         public void StartSmoothViewAnimation()
@@ -516,11 +474,10 @@ namespace RowlEngine.Editor.ViewModels
             LivePreviewViewModel = new LivePreviewViewModel(this);
             HierarchyViewModel = new HierarchyViewModel(this);
 
-            _smoothTimer = new DispatcherTimer
-            {
-                Interval = TimeSpan.FromMilliseconds(16)
-            };
-            _smoothTimer.Tick += (s, e) => SmoothUpdateStep();
+            _smoothTimer = new EditorUiTimer(
+                TimeSpan.FromMilliseconds(16),
+                SmoothUpdateStep,
+                autoReset: true);
 
             AudioComponentViewModel.GlobalPreviewAudioAction = (assetPath, channelType, filterType) =>
             {
@@ -975,9 +932,7 @@ namespace RowlEngine.Editor.ViewModels
             PushSceneToEngine(SelectedNode);
 
             // Also reload the full graph so the engine picks up connection changes
-            string graphPath = System.IO.Path.Combine(AssetsJsonPath, "full_story_graph.json");
-            if (System.IO.File.Exists(graphPath))
-                EngineHost.LoadStoryGraph(graphPath);
+            EditorSceneSyncService.ReloadStoryGraphIntoEngine(EngineHost, AssetsJsonPath);
 
             AppendLog($"[Hot-Reload] Scene pushed directly to engine (P/Invoke) — Node #{SelectedNode.Id}");
             IsConnected = true;
@@ -1228,14 +1183,9 @@ namespace RowlEngine.Editor.ViewModels
         {
             try
             {
-                var window = (Avalonia.Application.Current?.ApplicationLifetime as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.MainWindow;
-                if (window == null) return;
+                if (EditorDialogService.GetMainWindow() == null) return;
 
-                var files = await window.StorageProvider.OpenFilePickerAsync(new Avalonia.Platform.Storage.FilePickerOpenOptions
-                {
-                    Title = "Import Asset Files into Rowl Engine Project",
-                    AllowMultiple = true
-                });
+                var files = await EditorDialogService.PickAssetFilesAsync();
 
                 if (files != null && files.Count > 0)
                 {
@@ -1256,8 +1206,8 @@ namespace RowlEngine.Editor.ViewModels
         }
 
         // Debounced save to avoid disk thrashing during drag operations
-        private DispatcherTimer? _saveDebounceTimer;
-        private DispatcherTimer? _enginePreviewDebounceTimer;
+        private EditorUiTimer? _saveDebounceTimer;
+        private EditorUiTimer? _enginePreviewDebounceTimer;
         private NodeViewModel? _pendingEnginePreviewNode;
         private bool _pendingEnginePreviewRequiresSelection = true;
 
@@ -1267,17 +1217,10 @@ namespace RowlEngine.Editor.ViewModels
             _pendingEnginePreviewRequiresSelection = requireSelectedNode;
             if (_enginePreviewDebounceTimer == null)
             {
-                _enginePreviewDebounceTimer = new DispatcherTimer
-                {
-                    Interval = TimeSpan.FromMilliseconds(80)
-                };
-                _enginePreviewDebounceTimer.Tick += (_, _) =>
-                {
-                    _enginePreviewDebounceTimer.Stop();
-                    DeliverScheduledEnginePreview();
-                };
+                _enginePreviewDebounceTimer = new EditorUiTimer(
+                    TimeSpan.FromMilliseconds(80),
+                    () => DeliverScheduledEnginePreview());
             }
-            _enginePreviewDebounceTimer.Stop();
             _enginePreviewDebounceTimer.Start();
         }
 
@@ -1300,15 +1243,11 @@ namespace RowlEngine.Editor.ViewModels
             if (!Settings.AutoSaveEnabled) return;
             if (_saveDebounceTimer == null)
             {
-                _saveDebounceTimer = new DispatcherTimer();
-                _saveDebounceTimer.Tick += (s, e) =>
-                {
-                    _saveDebounceTimer.Stop();
-                    SaveProject();
-                };
+                _saveDebounceTimer = new EditorUiTimer(
+                    TimeSpan.FromSeconds(Settings.AutoSaveIntervalSeconds),
+                    SaveProject);
             }
             _saveDebounceTimer.Interval = TimeSpan.FromSeconds(Settings.AutoSaveIntervalSeconds);
-            _saveDebounceTimer.Stop();
             _saveDebounceTimer.Start();
         }
 
@@ -1631,23 +1570,19 @@ namespace RowlEngine.Editor.ViewModels
         {
             try
             {
-                var window = (Avalonia.Application.Current?.ApplicationLifetime as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.MainWindow;
+                var window = EditorDialogService.GetMainWindow();
                 if (window == null) return;
                 if (!await ResolveUnsavedChangesAsync(window)) return;
 
-                var folders = await window.StorageProvider.OpenFolderPickerAsync(new Avalonia.Platform.Storage.FolderPickerOpenOptions
-                {
-                    Title = "Proje Klasörünü Seçin (Assets/ içeren klasör)",
-                    AllowMultiple = false
-                });
+                string? selectedDir = await EditorDialogService.PickFolderAsync(
+                    "Proje Klasörünü Seçin (Assets/ içeren klasör)");
 
-                if (folders == null || folders.Count == 0)
+                if (selectedDir == null)
                 {
                     AppendLog("ℹ️ Proje açma iptal edildi.");
                     return;
                 }
 
-                string selectedDir = folders[0].Path.LocalPath;
                 var result = EditorProjectLifecycleCoordinator.ExecuteOpenProject(
                     selectedDir,
                     ProjectRoot,
@@ -1694,18 +1629,13 @@ namespace RowlEngine.Editor.ViewModels
         {
             try
             {
-                var window = (Avalonia.Application.Current?.ApplicationLifetime as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.MainWindow;
-                if (window == null) return;
+                if (EditorDialogService.GetMainWindow() == null) return;
 
-                var folders = await window.StorageProvider.OpenFolderPickerAsync(new Avalonia.Platform.Storage.FolderPickerOpenOptions
-                {
-                    Title = "Projeyi Farklı Kaydet (Hedef Klasör Seçin)",
-                    AllowMultiple = false
-                });
+                string? selectedDir = await EditorDialogService.PickFolderAsync(
+                    "Projeyi Farklı Kaydet (Hedef Klasör Seçin)");
 
-                if (folders != null && folders.Count > 0)
+                if (selectedDir != null)
                 {
-                    string selectedDir = folders[0].Path.LocalPath;
                     string targetDir = EditorProjectLifecycleCoordinator.GenerateSaveAsTargetDirectory(selectedDir);
                     SaveProjectToDirectory(targetDir);
                 }
@@ -1745,24 +1675,19 @@ namespace RowlEngine.Editor.ViewModels
             if (IsBuilding) return;
             try
             {
-                var window = (Avalonia.Application.Current?.ApplicationLifetime as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.MainWindow;
-                
-                string baseDir = AppDomain.CurrentDomain.BaseDirectory;
-                string rootDir = Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", ".."));
-                string defaultBuildDir = Path.Combine(rootDir, "Builds", "Standalone_PC");
+                var window = EditorDialogService.GetMainWindow();
+
+                string defaultBuildDir = ProjectFileSystem.GetDefaultBuildDirectory();
 
                 string buildOutDir = defaultBuildDir;
                 if (window != null)
                 {
-                    var folders = await window.StorageProvider.OpenFolderPickerAsync(new Avalonia.Platform.Storage.FolderPickerOpenOptions
-                    {
-                        Title = "Build Al: Dağıtım / Çıktı Klasörünü Seçin",
-                        AllowMultiple = false
-                    });
+                    string? pickedDir = await EditorDialogService.PickFolderAsync(
+                        "Build Al: Dağıtım / Çıktı Klasörünü Seçin");
 
-                    if (folders != null && folders.Count > 0)
+                    if (pickedDir != null)
                     {
-                        buildOutDir = folders[0].Path.LocalPath;
+                        buildOutDir = pickedDir;
                     }
                     else
                     {

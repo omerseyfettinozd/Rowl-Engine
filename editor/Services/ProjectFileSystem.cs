@@ -39,6 +39,66 @@ internal static class ProjectFileSystem
         }
     }
 
+    /// <summary>
+    /// Walks up from a start directory looking for the canonical project root
+    /// (a directory containing both Assets/ and editor/ or CMakeLists.txt).
+    /// Prefers the highest match; falls back to any Assets/ ancestor.
+    /// </summary>
+    public static string ResolveProjectRootFrom(string startDirectory)
+    {
+        string dir = startDirectory;
+        // Walk up to 6 levels looking for the canonical project root.
+        // Strategy: prefer the parent that contains BOTH Assets/ AND editor/.
+        // editor/ itself may also have an Assets/ stub, so skip up if Assets/
+        // appears inside editor/ sub-tree.
+        string? best = null;
+        // Windows RID/platform output adds an extra x64 directory
+        // (Tests/bin/x64/Debug/netX), so six parents stop at editor/.
+        // Keep the search bounded while allowing the repository root to
+        // be reached from both portable and platform-specific layouts.
+        for (int i = 0; i < 12; i++)
+        {
+            bool hasAssets = Directory.Exists(Path.Combine(dir, "Assets"));
+            bool hasEditor = Directory.Exists(Path.Combine(dir, "editor")) ||
+                             File.Exists(Path.Combine(dir, "CMakeLists.txt"));
+            // Prefer the directory that has BOTH Assets and editor/ or CMakeLists.txt
+            if (hasAssets && hasEditor)
+            {
+                best = dir;
+                // Keep going up — parent may also qualify (repo root is the highest match)
+            }
+
+            var parent = Directory.GetParent(dir);
+            if (parent == null) break;
+            dir = parent.FullName;
+        }
+        // Fallback: any dir with Assets/ found along the way
+        if (best == null)
+        {
+            dir = startDirectory;
+            for (int i = 0; i < 12; i++)
+            {
+                if (Directory.Exists(Path.Combine(dir, "Assets")))
+                    return dir;
+                var parent = Directory.GetParent(dir);
+                if (parent == null) break;
+                dir = parent.FullName;
+            }
+        }
+        return best ?? startDirectory;
+    }
+
+    /// <summary>
+    /// Resolves the default standalone build output directory by walking up
+    /// from the executing assembly location to the repository root.
+    /// </summary>
+    public static string GetDefaultBuildDirectory()
+    {
+        string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+        string rootDir = Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", ".."));
+        return Path.Combine(rootDir, "Builds", "Standalone_PC");
+    }
+
     public static void WriteAllTextAtomically(string filePath, string content)
     {
         string directory = Path.GetDirectoryName(filePath)

@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Linq;
 using RowlEngine.Editor.Native;
 using RowlEngine.Editor.ViewModels;
@@ -73,6 +74,17 @@ public static class EditorSceneSyncService
             getPeak(0, 0), getPeak(0, 1), getRms(0, 0), getRms(0, 1), isSfx: false);
         selectedAudio.UpdateAudioTelemetry(
             getPeak(2, 0), getPeak(2, 1), getRms(2, 0), getRms(2, 1), isSfx: true);
+    }
+
+    /// <summary>
+    /// Reloads the full story graph into the native engine when the file is
+    /// present, so hot-reload picks up connection changes alongside the scene.
+    /// </summary>
+    public static void ReloadStoryGraphIntoEngine(EngineHost host, string assetsJsonPath)
+    {
+        string graphPath = Path.Combine(assetsJsonPath, "full_story_graph.json");
+        if (File.Exists(graphPath))
+            host.LoadStoryGraph(graphPath);
     }
 
     /// <summary>

@@ -107,6 +107,11 @@ testi geçiyor.
   `ComposedFrame` tüketimi ve physical→virtual tap eşlemesini sahiplenir;
   `Engine` sahne state'ini paketleyip choice hit-testini yürütür, C ABI
   değişmedi.
+- `MainWindowViewModel` dialog, timer ve path yan etkilerini dış servislere
+  verir: `EditorDialogService` (pencere/picker), `EditorUiTimer` (debounce/
+  periyodik), `ProjectFileSystem` (kök/build dizini) ve mevcut
+  `EditorSceneSyncService` (hot-reload graph). Binding/komut ve Test 1–28
+  sözleşmeleri korunur.
 
 ## Sonraki üretim işleri
 
