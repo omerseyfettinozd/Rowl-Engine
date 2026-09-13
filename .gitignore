@@ -2,6 +2,7 @@
 
 # C++ Build Output & CMake Artifacts
 build/
+/build-release/
 /build-benchmarks*/
 bin/
 lib/
