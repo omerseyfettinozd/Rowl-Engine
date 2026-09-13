@@ -163,7 +163,11 @@ set(ROWL_ENGINE_SOURCES
     src/scene/game_object.cpp
     src/scene/scene.cpp
     # C-API bridge (consumed by C# P/Invoke)
-    src/c_api.cpp
+    src/c_api_lifecycle.cpp
+    src/c_api_story.cpp
+    src/c_api_render.cpp
+    src/c_api_audio.cpp
+    src/c_api_state.cpp
 )
 # ── Third-party dependencies as a reusable INTERFACE target ───────────────
 # Both RowlEngineCore and rowl_tests link this; it carries the include/link

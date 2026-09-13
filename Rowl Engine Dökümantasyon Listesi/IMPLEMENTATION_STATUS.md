@@ -112,6 +112,9 @@ testi geçiyor.
   periyodik), `ProjectFileSystem` (kök/build dizini) ve mevcut
   `EditorSceneSyncService` (hot-reload graph). Binding/komut ve Test 1–28
   sözleşmeleri korunur.
+- C API gövdeleri lifecycle/story/render/audio/state translation unit'lerine
+  ayrıdır (`c_api_internal.hpp` guard'larıyla); `c_api.h`, export sembolleri
+  ve P/Invoke sözleşmesi aynıdır.
 
 ## Sonraki üretim işleri
 
