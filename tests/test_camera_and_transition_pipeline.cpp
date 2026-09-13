@@ -564,4 +564,65 @@ void test_camera_and_transition_pipeline() {
         window.shutdown();
         TEST_PASS("ComposedFrame Forwards Byte-Identical Pixels to Render Boundary");
     }
+
+    // Test: identical frames reuse cached pixels; any content change
+    // re-renders deterministically.
+    {
+        Rowl::VFS::VFSManager cacheVfs;
+        cacheVfs.remountProject(std::filesystem::current_path().string());
+        Rowl::Render::Window window(&cacheVfs);
+        if (!window.initializeOffscreen(320, 180)) {
+            std::cerr << "Could not initialize offscreen window for frame-cache test" << std::endl;
+            exit(1);
+        }
+        Rowl::Render::ComposedFrame frameA;
+        frameA.hasBackground = false;
+        window.renderComposedFrame(frameA);
+        window.endFrame();
+        if (window.lastFrameReusedCache() ||
+            window.getLastFrameRendererFlushMilliseconds() <= 0.0) {
+            std::cerr << "First identical frame did not render" << std::endl;
+            exit(1);
+        }
+        const uint32_t pixelBytes = window.getWidth() * window.getHeight() * 4u;
+        const std::vector<uint8_t> snapshotA(
+            window.getPixelBuffer(), window.getPixelBuffer() + pixelBytes);
+
+        window.renderComposedFrame(frameA);
+        window.endFrame();
+        if (!window.lastFrameReusedCache() ||
+            window.getLastFrameRendererFlushMilliseconds() != 0.0 ||
+            window.getLastFrameNonTextureRenderMilliseconds() != 0.0 ||
+            window.getLastFrameTextureLoadMilliseconds() != 0.0) {
+            std::cerr << "Identical frame did not reuse the pixel cache" << std::endl;
+            exit(1);
+        }
+        if (std::memcmp(window.getPixelBuffer(), snapshotA.data(), pixelBytes) != 0) {
+            std::cerr << "Cached frame pixels differ from the rendered frame" << std::endl;
+            exit(1);
+        }
+
+        Rowl::Render::ComposedFrame frameB = frameA;
+        frameB.dialogues.emplace_back();
+        window.renderComposedFrame(frameB);
+        window.endFrame();
+        if (window.lastFrameReusedCache()) {
+            std::cerr << "Changed frame incorrectly reused the pixel cache" << std::endl;
+            exit(1);
+        }
+        if (std::memcmp(window.getPixelBuffer(), snapshotA.data(), pixelBytes) == 0) {
+            std::cerr << "Changed frame did not produce new pixels" << std::endl;
+            exit(1);
+        }
+
+        window.renderComposedFrame(frameA);
+        window.endFrame();
+        if (window.lastFrameReusedCache() ||
+            std::memcmp(window.getPixelBuffer(), snapshotA.data(), pixelBytes) != 0) {
+            std::cerr << "Restored frame did not re-render deterministically" << std::endl;
+            exit(1);
+        }
+        window.shutdown();
+        TEST_PASS("Identical Frames Reuse Cached Pixels; Changes Re-render");
+    }
 }

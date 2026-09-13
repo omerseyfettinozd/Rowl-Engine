@@ -83,7 +83,9 @@ public:
     // Window visibility policy. While suspended, all output streams stay
     // paused; playback intent (BGM position/state, gains) is preserved and
     // resumes automatically. Orthogonal to device availability.
-    void setOutputSuspended(bool suspended);
+    // Edge-triggered: repeat calls with the same state are no-ops so the
+    // per-frame call from Engine::step costs nothing once settled.
+    void setOutputSuspended(bool suspended, bool force = false);
     bool isOutputSuspended() const { return m_outputSuspended; }
     const std::string& getCurrentBgmPath() const { return m_currentBgmPath; }
     bool isBgmPlaying() const { return m_isBgmPlaying; }

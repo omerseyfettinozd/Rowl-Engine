@@ -208,6 +208,11 @@ public:
     /// overload above; the render boundary owns how a frame becomes pixels.
     void renderComposedFrame(const ComposedFrame& frame);
     void endFrame();
+
+    /// Last-frame profile accessors also report a cache hit: when an identical
+    /// frame is skipped all four read back as 0.0 for that frame.
+    uint64_t lastFrameContentHash() const { return m_lastFrameContentHash; }
+    bool lastFrameReusedCache() const { return m_lastFrameReusedCache; }
     void shutdown();
 
     bool isOpen()          const { return m_isOpen; }
@@ -316,6 +321,22 @@ private:
     std::shared_ptr<Rowl::VFS::VFSManager> m_ownedVfs;
     std::unique_ptr<Camera2D> m_camera;
     std::unique_ptr<TransitionManager> m_transitionManager;
+    // Identical-frame cache: when the packed content and all dynamic render
+    // state hash equal to the last presented frame — and no camera move,
+    // transition or flash is in flight — the re-render is skipped and the
+    // readable pixel surface keeps the previous identical pixels.
+    uint64_t m_lastFrameContentHash = 0;
+    bool m_frameCacheValid = false;
+    bool m_lastFrameReusedCache = false;
+    uint64_t hashFrameContent(bool hasBackground, const std::string& background,
+                              float bgX, float bgY, float bgW, float bgH,
+                              const std::vector<CharacterRenderData>& characters,
+                              const std::vector<DialogueRenderData>& dialogues,
+                              const std::vector<ChoiceButtonRenderData>& choices,
+                              float bgRotation, float bgParallaxX, float bgParallaxY,
+                              float bgOpacity) const;
+    void invalidateFrameCache() { m_frameCacheValid = false; }
+
     struct ScreenFxState {
         bool flashActive = false;
         uint8_t flashR = 255;

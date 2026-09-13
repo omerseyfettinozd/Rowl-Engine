@@ -121,6 +121,9 @@ testi geçiyor.
   startup/first/steady-frame, VFS, texture ve bellek; frozen Golden Project
   (`rowl-golden-project-v1`) serisi `benchmark-results/golden-baseline.json`
   yazar. Sonuçlar makineye özgü olduğundan gitignore dışındadır.
+- Sıcak yol: eş içerikli kareler FNV hash ile atlanır (kamera/transition/flash
+  sürerken her kare çizilir; font/texture/VFS değişimi önbelleği bozar),
+  audio suspend kenar-tetiklemelidir. Golden steady 12,60→5,07 ms.
 
 ## Sonraki üretim işleri
 

@@ -205,6 +205,20 @@ void test_audio_engine() {
     }
     TEST_PASS("Typewriter Character Voice Blips, Master Telemetry & Fallback Synthesis");
 
+    audio.setOutputSuspended(true);
+    audio.setOutputSuspended(true);
+    if (!audio.isOutputSuspended()) {
+        std::cerr << "Output suspend did not latch" << std::endl;
+        exit(1);
+    }
+    audio.setOutputSuspended(false);
+    audio.setOutputSuspended(false);
+    if (audio.isOutputSuspended()) {
+        std::cerr << "Output resume did not latch" << std::endl;
+        exit(1);
+    }
+    TEST_PASS("Output Suspend Edge-Triggering (Repeat Calls Are No-Ops)");
+
     audio.shutdown();
     if (audio.isInitialized()) exit(1);
     TEST_PASS("Audio Engine Clean Shutdown");

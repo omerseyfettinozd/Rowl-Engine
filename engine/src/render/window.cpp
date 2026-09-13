@@ -14,6 +14,7 @@
 #include <unordered_set>
 #include <algorithm>
 #include <chrono>
+#include <cstring>
 #include <string>
 #include <fstream>
 
@@ -24,6 +25,43 @@
 namespace Rowl::Render {
 
 namespace {
+
+constexpr uint64_t kFnvOffsetBasis = 14695981039346656037ULL;
+constexpr uint64_t kFnvPrime = 1099511628211ULL;
+
+void fnvMixBytes(uint64_t& hash, const void* data, size_t size) {
+    const auto* bytes = static_cast<const uint8_t*>(data);
+    for (size_t i = 0; i < size; ++i) {
+        hash ^= static_cast<uint64_t>(bytes[i]);
+        hash *= kFnvPrime;
+    }
+}
+
+void fnvMixString(uint64_t& hash, const std::string& value) {
+    fnvMixBytes(hash, value.data(), value.size());
+    uint64_t terminator = 0xFFULL;
+    fnvMixBytes(hash, &terminator, sizeof(terminator));
+}
+
+void fnvMixF32(uint64_t& hash, float value) {
+    uint32_t bits = 0;
+    std::memcpy(&bits, &value, sizeof(bits));
+    fnvMixBytes(hash, &bits, sizeof(bits));
+}
+
+void fnvMixBool(uint64_t& hash, bool value) {
+    const uint8_t byte = value ? 1u : 0u;
+    fnvMixBytes(hash, &byte, sizeof(byte));
+}
+
+void fnvMixI32(uint64_t& hash, int value) {
+    const auto bits = static_cast<int32_t>(value);
+    fnvMixBytes(hash, &bits, sizeof(bits));
+}
+
+void fnvMixU64(uint64_t& hash, uint64_t value) {
+    fnvMixBytes(hash, &value, sizeof(value));
+}
 
 static SDL_Color parseHexColor(const std::string& hex, uint8_t defaultA = 255) {
     if (hex.empty()) return {255, 255, 255, defaultA};
@@ -127,6 +165,7 @@ Window::~Window() {
 }
 
 void Window::setVfs(Rowl::VFS::VFSManager* vfs) {
+    invalidateFrameCache();
     if (vfs) {
         m_ownedVfs.reset();
         m_vfs = vfs;
@@ -390,6 +429,7 @@ bool Window::initializeEmbedded(void* nativeHandle, uint32_t width, uint32_t hei
 }
 
 void Window::reloadFonts() {
+    invalidateFrameCache();
     initFontRenderer();
     if (!m_msdfRenderer) initGpuMsdfRenderer();
 }
@@ -764,6 +804,7 @@ void Window::beginFrame() {
 }
 
 void Window::clearTextureCache() {
+    invalidateFrameCache();
     const bool hadMsdfAtlas = m_msdfAtlasTexture != nullptr;
     std::unordered_set<SDL_Texture*> uniqueTextures;
     for (auto& [name, tex] : m_textureCache) {
@@ -970,6 +1011,25 @@ void Window::renderVisualNovelFrame(
     float bgOpacity
 ) {
     if (!m_initialized || !m_sdlRenderer) return;
+    // Identical-frame fast path: any in-flight camera move, transition or
+    // flash forces a re-render; otherwise equal content hashes reuse the
+    // readable surface pixels from the previous identical frame.
+    const bool dynamicsInFlight =
+        (m_camera && m_camera->isMoving()) ||
+        (m_transitionManager && m_transitionManager->isTransitionActive()) ||
+        m_screenFx.flashActive;
+    const uint64_t contentHash = hashFrameContent(
+        hasBackground, background, bgX, bgY, bgW, bgH, characters,
+        dialogues, choices, bgRotation, bgParallaxX, bgParallaxY, bgOpacity);
+    if (m_frameCacheValid && !dynamicsInFlight && contentHash == m_lastFrameContentHash) {
+        m_lastFrameTextureLoadMilliseconds = 0.0;
+        m_lastFrameTextRasterizationMilliseconds = 0.0;
+        m_lastFrameRendererFlushMilliseconds = 0.0;
+        m_lastFrameNonTextureRenderMilliseconds = 0.0;
+        m_lastFrameReusedCache = true;
+        return;
+    }
+    m_lastFrameReusedCache = false;
     const auto frameRenderStarted = std::chrono::steady_clock::now();
     m_lastFrameTextureLoadMilliseconds = 0.0;
     m_lastFrameTextRasterizationMilliseconds = 0.0;
@@ -1310,6 +1370,8 @@ void Window::renderVisualNovelFrame(
         std::chrono::steady_clock::now() - frameRenderStarted).count();
     m_lastFrameNonTextureRenderMilliseconds = std::max(
         0.0, totalRenderMilliseconds - m_lastFrameTextureLoadMilliseconds);
+    m_lastFrameContentHash = contentHash;
+    m_frameCacheValid = true;
 }
 
 void Window::renderVisualNovelFrame(
@@ -1348,6 +1410,113 @@ void Window::renderVisualNovelFrame(
     renderVisualNovelFrame(hasBackground, background, bgX, bgY, bgW, bgH, characters, dlg);
 }
 
+uint64_t Window::hashFrameContent(bool hasBackground, const std::string& background,
+                              float bgX, float bgY, float bgW, float bgH,
+                              const std::vector<CharacterRenderData>& characters,
+                              const std::vector<DialogueRenderData>& dialogues,
+                              const std::vector<ChoiceButtonRenderData>& choices,
+                              float bgRotation, float bgParallaxX, float bgParallaxY,
+                              float bgOpacity) const {
+    uint64_t hash = kFnvOffsetBasis;
+    fnvMixBool(hash, hasBackground);
+    fnvMixString(hash, background);
+    fnvMixF32(hash, bgX);
+    fnvMixF32(hash, bgY);
+    fnvMixF32(hash, bgW);
+    fnvMixF32(hash, bgH);
+    fnvMixF32(hash, bgRotation);
+    fnvMixF32(hash, bgParallaxX);
+    fnvMixF32(hash, bgParallaxY);
+    fnvMixF32(hash, bgOpacity);
+    fnvMixU64(hash, characters.size());
+    for (const auto& ch : characters) {
+        fnvMixString(hash, ch.sprite);
+        fnvMixF32(hash, ch.x);
+        fnvMixF32(hash, ch.y);
+        fnvMixF32(hash, ch.width);
+        fnvMixF32(hash, ch.height);
+        fnvMixF32(hash, ch.rotation);
+        fnvMixF32(hash, ch.scaleX);
+        fnvMixF32(hash, ch.scaleY);
+        fnvMixString(hash, ch.voiceBlipSound);
+        fnvMixF32(hash, ch.voiceBlipPitch);
+        fnvMixF32(hash, ch.voiceBlipPitchVariance);
+        fnvMixI32(hash, ch.voiceBlipCadence);
+    }
+    fnvMixU64(hash, dialogues.size());
+    for (const auto& dlg : dialogues) {
+        fnvMixBool(hash, dlg.hasDialogueBox);
+        fnvMixString(hash, dlg.speaker);
+        fnvMixString(hash, dlg.dialogue);
+        fnvMixF32(hash, dlg.x);
+        fnvMixF32(hash, dlg.y);
+        fnvMixF32(hash, dlg.width);
+        fnvMixF32(hash, dlg.height);
+        fnvMixF32(hash, dlg.scale);
+        fnvMixBool(hash, dlg.typewriterEnabled);
+        fnvMixBool(hash, dlg.isPlaying);
+        fnvMixI32(hash, dlg.textSpeed);
+        fnvMixF32(hash, dlg.elapsedTypewriterTime);
+        fnvMixBool(hash, dlg.autoAdvance);
+        fnvMixF32(hash, dlg.autoAdvanceDelay);
+        fnvMixString(hash, dlg.typewriterSound);
+        fnvMixF32(hash, dlg.voiceBlipPitch);
+        fnvMixF32(hash, dlg.voiceBlipPitchVariance);
+        fnvMixI32(hash, dlg.voiceBlipCadence);
+        fnvMixBool(hash, dlg.voiceBlipSkipPunctuation);
+        fnvMixI32(hash, dlg.voiceBlipChannel);
+        fnvMixF32(hash, dlg.voiceBlipVolume);
+        fnvMixU64(hash, dlg.lastBlipCodepointIndex);
+        fnvMixF32(hash, dlg.fontSize);
+        fnvMixF32(hash, dlg.speakerFontSize);
+        fnvMixString(hash, dlg.textColor);
+        fnvMixString(hash, dlg.speakerColor);
+        fnvMixString(hash, dlg.textAlignment);
+        fnvMixF32(hash, dlg.boxOpacity);
+        fnvMixString(hash, dlg.boxColor);
+        fnvMixString(hash, dlg.borderColor);
+        fnvMixF32(hash, dlg.borderThickness);
+        fnvMixF32(hash, dlg.cornerRadius);
+        fnvMixString(hash, dlg.customBoxTexture);
+    }
+    fnvMixU64(hash, choices.size());
+    for (const auto& choice : choices) {
+        fnvMixString(hash, choice.optionId);
+        fnvMixString(hash, choice.text);
+        fnvMixString(hash, choice.backgroundImage);
+        fnvMixF32(hash, choice.x);
+        fnvMixF32(hash, choice.y);
+        fnvMixF32(hash, choice.width);
+        fnvMixF32(hash, choice.height);
+        fnvMixF32(hash, choice.fontSize);
+        fnvMixF32(hash, choice.opacity);
+        fnvMixF32(hash, choice.borderThickness);
+        fnvMixF32(hash, choice.cornerRadius);
+        fnvMixString(hash, choice.textColor);
+        fnvMixString(hash, choice.backgroundColor);
+        fnvMixString(hash, choice.hoverColor);
+        fnvMixString(hash, choice.borderColor);
+        fnvMixString(hash, choice.textAlignment);
+        fnvMixString(hash, choice.fontFamily);
+        fnvMixBool(hash, choice.enabled);
+    }
+    // Dynamic render state that is not part of the packed frame.
+    fnvMixF32(hash, m_camera ? m_camera->getShakeOffsetX() : 0.0f);
+    fnvMixF32(hash, m_camera ? m_camera->getShakeOffsetY() : 0.0f);
+    fnvMixBool(hash, m_transitionManager && m_transitionManager->isTransitionActive());
+    fnvMixBool(hash, m_screenFx.flashActive);
+    fnvMixF32(hash, m_screenFx.flashElapsed);
+    fnvMixBool(hash, m_screenFx.hasTint);
+    fnvMixBytes(hash, &m_screenFx.tintR, 3);
+    fnvMixF32(hash, m_screenFx.tintOpacity);
+    fnvMixBool(hash, m_screenFx.vignetteEnabled);
+    fnvMixF32(hash, m_screenFx.vignetteIntensity);
+    fnvMixF32(hash, m_screenFx.vignetteRadius);
+    fnvMixBytes(hash, &m_screenFx.vignetteR, 3);
+    fnvMixU64(hash, (static_cast<uint64_t>(m_width) << 32) | m_height);
+    return hash;
+}
+
 void Window::renderComposedFrame(const ComposedFrame& frame) {
     renderVisualNovelFrame(
         frame.hasBackground,
@@ -1374,6 +1543,7 @@ void Window::endFrame() {
 
 void Window::shutdown() {
     if (!m_initialized) return;
+    invalidateFrameCache();
 
     ROWL_LOG_INFO("Shutting down SDL3 Windowing & Graphics Subsystem...");
 

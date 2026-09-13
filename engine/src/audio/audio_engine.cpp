@@ -664,7 +664,7 @@ bool AudioEngine::reopenDeviceStreams() {
         m_deviceAvailable = true;
         applyChannelGains();
         applyDspFilter(m_activeFilter);
-        if (m_outputSuspended) setOutputSuspended(true);
+        if (m_outputSuspended) setOutputSuspended(true, true);
         ROWL_LOG_INFO("[AudioEngine] Output streams rebuilt after device change (BGM intent preserved).");
         return true;
     }
@@ -678,8 +678,9 @@ bool AudioEngine::reopenDeviceStreams() {
     return false;
 }
 
-void AudioEngine::setOutputSuspended(bool suspended) {
+void AudioEngine::setOutputSuspended(bool suspended, bool force) {
     if (!m_initialized) return;
+    if (!force && suspended == m_outputSuspended) return;
     m_outputSuspended = suspended;
     if (!m_deviceAvailable) return;
     SDL_AudioStream* streams[] = {m_bgmStream, m_transitionBgmStream, m_voiceStream, m_sfxStream};
