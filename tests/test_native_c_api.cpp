@@ -83,6 +83,39 @@ void test_native_c_api() {
     }
     TEST_PASS("C-API Frame Delta NaN, Negative, and Spike Containment");
 
+    // Hostile-input matrix: extreme dimensions, null outputs, infinities and
+    // NaN coordinates must degrade safely without crashing or corrupting state.
+    {
+        RowlEngineHandle extremeHandle = RowlEngine_Create();
+        if (!extremeHandle ||
+            RowlEngine_Init(extremeHandle, 0xFFFFFFFFu, 0xFFFFFFFFu, 0) != 0 ||
+            RowlEngine_Init(extremeHandle, 1920, 1080, 0) != 1) {
+            std::cerr << "C-API extreme dimensions were not rejected with retry intact" << std::endl;
+            exit(1);
+        }
+        RowlEngine_Destroy(extremeHandle);
+        if (RowlEngine_GetPixelBuffer(handle, nullptr, nullptr) == nullptr) {
+            std::cerr << "C-API pixel buffer rejected null dimension outputs" << std::endl;
+            exit(1);
+        }
+        RowlEngine_Step(handle, std::numeric_limits<float>::infinity());
+        const uint64_t nodeBeforeNaN = RowlEngine_GetCurrentNodeId(handle);
+        RowlEngine_PointerDown(handle, std::numeric_limits<float>::quiet_NaN(),
+                               std::numeric_limits<float>::quiet_NaN());
+        RowlEngine_Step(handle, 0.016f);
+        if (RowlEngine_IsRunning(handle) != 1 ||
+            RowlEngine_GetCurrentNodeId(handle) != nodeBeforeNaN) {
+            std::cerr << "C-API infinity step or NaN pointer destabilized the engine" << std::endl;
+            exit(1);
+        }
+        if (RowlEngine_SelectChoice(handle, nullptr) != 0 ||
+            RowlEngine_SelectChoice(handle, "") != 0) {
+            std::cerr << "C-API null or empty choice was not rejected" << std::endl;
+            exit(1);
+        }
+    }
+    TEST_PASS("C-API Hostile Input Matrix Degrades Without Crash or Corruption");
+
     // Component JSON Scene Push
     const char* compJson = R"([
         {"type":"speaker","id":"s1","enabled":true,"data":{"speaker":"Alice","dialogue":"Automated C++ Unit Test Dialogue\nWith second line."}},

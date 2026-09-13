@@ -115,6 +115,8 @@ testi geçiyor.
 - C API gövdeleri lifecycle/story/render/audio/state translation unit'lerine
   ayrıdır (`c_api_internal.hpp` guard'larıyla); `c_api.h`, export sembolleri
   ve P/Invoke sözleşmesi aynıdır.
+- Bozuk girdi matrisi graph/save/package/C-API eksenlerinde regresyonla
+  sabitlenmiştir; tam süit ASan+UBSan+leak-detect altında raporsuz geçer.
 
 ## Sonraki üretim işleri
 

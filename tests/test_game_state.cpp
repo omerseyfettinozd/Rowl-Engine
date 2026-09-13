@@ -195,6 +195,47 @@ void test_game_state() {
     }
     TEST_PASS("SessionPersistence Exposes Versioned Migration Result");
 
+    // Malformed save matrix: empty files, oversized payloads and mistyped
+    // versions must classify safely without crashing.
+    {
+        std::ofstream(std::filesystem::path(testSaveDir) / "save_slot_6.json").close();
+        const auto emptySlot = persistence.loadSlotDetailed(6);
+        if (emptySlot.succeeded() ||
+            emptySlot.status != Rowl::State::SessionLoadStatus::InvalidData) {
+            std::cerr << "Zero-byte save slot was not InvalidData" << std::endl;
+            exit(1);
+        }
+        {
+            std::ofstream large(std::filesystem::path(testSaveDir) / "save_slot_7.json",
+                                std::ios::binary);
+            const std::string chunk(1024 * 1024, 'x');
+            for (int i = 0; i < 5; ++i) large << chunk;
+        }
+        const auto largeSlot = persistence.loadSlotDetailed(7);
+        if (largeSlot.succeeded() ||
+            largeSlot.status != Rowl::State::SessionLoadStatus::FileTooLarge) {
+            std::cerr << "Oversized save slot was not FileTooLarge" << std::endl;
+            exit(1);
+        }
+        const auto stringVersion = Rowl::State::GameState::decodeJson(
+            R"({"version":"3","step_id":1,"active_node_id":101,"variables":{}})");
+        if (stringVersion.succeeded() ||
+            stringVersion.status != Rowl::State::GameStateDecodeStatus::InvalidData) {
+            std::cerr << "String save version was not InvalidData" << std::endl;
+            exit(1);
+        }
+        const auto missingVersion = Rowl::State::GameState::decodeJson(
+            R"({"step_id":1,"active_node_id":101,"variables":{}})");
+        if (!missingVersion.succeeded() || missingVersion.migrated() ||
+            missingVersion.sourceVersion != Rowl::State::GameState::CurrentSaveFormatVersion) {
+            std::cerr << "Versionless save was not treated as the current format" << std::endl;
+            exit(1);
+        }
+        persistence.deleteSlot(6);
+        persistence.deleteSlot(7);
+    }
+    TEST_PASS("Malformed save matrix classifies empty, oversized and mistyped saves");
+
     // Save files are user-controlled input once they reach disk. Reject
     // malformed, unsupported, and structurally invalid content safely.
     {

@@ -263,6 +263,37 @@ void test_vfs_security() {
     }
     TEST_PASS("Deterministic malformed-package fuzz corpus is safely rejected");
 
+    // A valid magic prefix must not rescue a truncated archive, and a forged
+    // zstd entry must fail decode safely instead of crashing the reader.
+    {
+        const auto truncatedMagic = testRoot / "truncated_magic.rowlpkg";
+        {
+            std::ofstream output(truncatedMagic, std::ios::binary);
+            output.write("ROWL", 4);
+            output.put(static_cast<char>(0x01));
+        }
+        if (Rowl::VFS::RowlPkgDataSource(truncatedMagic.string()).isValid()) {
+            std::cerr << "Truncated package with valid magic was accepted" << std::endl;
+            exit(1);
+        }
+        const std::string fakePath = "audio/fake.ogg";
+        const std::string fakePayload("NOT-ZSTD-DATA-AT-ALL........");
+        Rowl::VFS::RowlPkgHeader fakeHeader{{'R', 'O', 'W', 'L'}, 1, 1,
+                                            headerSize + fakePayload.size()};
+        Rowl::VFS::RowlPkgEntryRaw fakeEntry{fnv1a64(fakePath),
+                                             static_cast<uint32_t>(fakePath.size()),
+                                             headerSize, fakePayload.size(),
+                                             fakePayload.size(), 1};
+        const auto fakePackage = writePackage("fake_zstd.rowlpkg", fakeHeader, fakeEntry,
+                                              fakePath, fakePayload);
+        Rowl::VFS::RowlPkgDataSource fakeSource(fakePackage.string());
+        if (!fakeSource.read(fakePath).empty()) {
+            std::cerr << "Forged zstd payload decoded instead of failing safely" << std::endl;
+            exit(1);
+        }
+    }
+    TEST_PASS("Truncated archives and forged zstd payloads fail safely");
+
     // A selected project is an asset boundary: source files and project
     // metadata must not become readable merely because they share its root.
     const auto isolatedProject = testRoot / "isolated_project";

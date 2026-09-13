@@ -134,4 +134,56 @@ void test_story_graph_parser() {
         exit(1);
     }
     TEST_PASS("StoryRuntime owns reset and graph-load diagnostics");
+
+    // Malformed-input matrix: truncation, wrong types, duplicates and bad
+    // start references must classify safely without crashing.
+    const auto truncated = StoryGraphParser::parse(
+        R"({"start_node_id":101,"nodes":[{"id":101,"dialogue":"cut)");
+    if (truncated.succeeded() || truncated.errorKind != StoryGraphParseErrorKind::Parse) {
+        std::cerr << "Truncated graph JSON was not a parse error" << std::endl;
+        exit(1);
+    }
+    const auto nodesNotArray = StoryGraphParser::parse(
+        R"({"start_node_id":101,"nodes":{"id":101}})");
+    if (nodesNotArray.succeeded() ||
+        nodesNotArray.errorKind != StoryGraphParseErrorKind::Validation) {
+        std::cerr << "Non-array nodes were not a validation error" << std::endl;
+        exit(1);
+    }
+    const auto idWrongType = StoryGraphParser::parse(
+        R"({"start_node_id":101,"nodes":[{"id":"101"}]})");
+    if (idWrongType.succeeded() ||
+        idWrongType.errorKind != StoryGraphParseErrorKind::Validation) {
+        std::cerr << "String node ID was not a validation error" << std::endl;
+        exit(1);
+    }
+    const auto duplicateIds = StoryGraphParser::parse(
+        R"({"start_node_id":101,"nodes":[{"id":101},{"id":101}]})");
+    if (duplicateIds.succeeded() ||
+        duplicateIds.errorKind != StoryGraphParseErrorKind::Validation) {
+        std::cerr << "Duplicate node IDs were not a validation error" << std::endl;
+        exit(1);
+    }
+    const auto badStart = StoryGraphParser::parse(
+        R"({"start_node_id":999,"nodes":[{"id":101}]})");
+    if (badStart.succeeded() ||
+        badStart.errorKind != StoryGraphParseErrorKind::Validation) {
+        std::cerr << "Missing start node was not a validation error" << std::endl;
+        exit(1);
+    }
+    // Cycles are legal story shapes; the loader must accept them and the
+    // runtime must keep a stable cursor on them.
+    auto selfLoop = StoryGraphParser::parse(
+        R"({"start_node_id":101,"nodes":[{"id":101,"next_nodes":[{"id":101}]}]})");
+    if (!selfLoop.succeeded()) {
+        std::cerr << "Self-loop graph was rejected: " << selfLoop.message << std::endl;
+        exit(1);
+    }
+    StoryRuntime loopRuntime;
+    if (!loopRuntime.commit(std::move(selfLoop.document)) ||
+        loopRuntime.currentNodeId() != 101) {
+        std::cerr << "Self-loop graph did not commit at its start node" << std::endl;
+        exit(1);
+    }
+    TEST_PASS("Malformed graph matrix classifies safely; cycles stay loadable");
 }
