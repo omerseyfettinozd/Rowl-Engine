@@ -241,7 +241,7 @@ bool Engine::initialize(const EngineConfig& config) {
     m_luaSandbox->initialize();
 
     // Initialize GameState Subsystem (Root Step #1)
-    m_gameState = Rowl::State::GameState::createInitialState(m_startNodeId);
+    m_gameState = Rowl::State::GameState::createInitialState(m_storyRuntime.currentNodeId());
 
     // Load story graph from disk
     loadStoryGraphFile();
@@ -274,22 +274,13 @@ void Engine::setPlayState(bool isPlaying) {
 }
 
 void Engine::resetToStartNode() {
-    if (m_storyNodes.empty()) return;
+    if (!m_storyRuntime.resetToStart()) return;
 
-    if (m_storyNodes.find(m_startNodeId) == m_storyNodes.end()) {
-        uint64_t minId = UINT64_MAX;
-        for (const auto& [id, _] : m_storyNodes) {
-            if (id < minId) minId = id;
-        }
-        m_startNodeId = minId;
-    }
-
-    m_currentNodeId = m_startNodeId;
-    m_gameState = Rowl::State::GameState::createInitialState(m_startNodeId);
+    m_gameState = Rowl::State::GameState::createInitialState(m_storyRuntime.startNodeId());
     m_lastRecordedDialogueNodeId = 0;
     m_lastSfxPlaybackNodeId = 0;
-    auto it = m_storyNodes.find(m_currentNodeId);
-    if (it != m_storyNodes.end()) {
+    auto it = m_storyRuntime.nodes().find(m_storyRuntime.currentNodeId());
+    if (it != m_storyRuntime.nodes().end()) {
         const auto& startNode = it->second;
         if (!startNode.components.empty()) {
             nlohmann::json compsJson = nlohmann::json::array();
@@ -330,7 +321,7 @@ void Engine::resetToStartNode() {
             m_activeDialogueData.elapsedTypewriterTime = 9999.0f;
             m_activeDialogueData.lastBlipCodepointIndex = 99999;
         }
-        ROWL_LOG_INFO("Engine Reset to Start Node #" + std::to_string(m_currentNodeId));
+        ROWL_LOG_INFO("Engine Reset to Start Node #" + std::to_string(m_storyRuntime.currentNodeId()));
     }
 }
 
@@ -341,7 +332,7 @@ const uint8_t* Engine::getPixelBuffer(uint32_t* outW, uint32_t* outH) const {
 }
 
 void Engine::advanceToNextNode(uint32_t choiceIndex) {
-    if (m_storyNodes.empty()) return;
+    if (m_storyRuntime.empty()) return;
     m_autoAdvanceElapsed = 0.0f;
 
     // If typewriter is still typing out any line, clicking reveals the full text immediately
@@ -378,27 +369,27 @@ void Engine::advanceToNextNode(uint32_t choiceIndex) {
         return;
     }
 
-    auto it = m_storyNodes.find(m_currentNodeId);
-    if (it != m_storyNodes.end()) {
+    auto it = m_storyRuntime.nodes().find(m_storyRuntime.currentNodeId());
+    if (it != m_storyRuntime.nodes().end()) {
         const auto& node = it->second;
         if (!node.nextNodes.empty() && choiceIndex < node.nextNodes.size()) {
             uint64_t nextId = node.nextNodes[choiceIndex].nodeId;
-            if (nextId != 0 && m_storyNodes.find(nextId) != m_storyNodes.end()) {
-                m_currentNodeId = nextId;
+            if (nextId != 0 && m_storyRuntime.nodes().find(nextId) != m_storyRuntime.nodes().end()) {
+                m_storyRuntime.setCurrentNodeId(nextId);
                 if (m_gameState) {
-                    m_gameState = Rowl::State::GameState::createNextState(m_gameState, m_currentNodeId);
+                    m_gameState = Rowl::State::GameState::createNextState(m_gameState, m_storyRuntime.currentNodeId());
                 }
             } else {
                 return; // End of story chain
             }
         } else {
             // End of story chain: stay on last frame (do not loop back)
-            ROWL_LOG_INFO("End of story chain reached on Node #" + std::to_string(m_currentNodeId));
+            ROWL_LOG_INFO("End of story chain reached on Node #" + std::to_string(m_storyRuntime.currentNodeId()));
             return;
         }
 
-        auto nextIt = m_storyNodes.find(m_currentNodeId);
-        if (nextIt != m_storyNodes.end()) {
+        auto nextIt = m_storyRuntime.nodes().find(m_storyRuntime.currentNodeId());
+        if (nextIt != m_storyRuntime.nodes().end()) {
             const auto& nextNode = nextIt->second;
             if (!nextNode.components.empty()) {
                 nlohmann::json compsJson = nlohmann::json::array();
@@ -439,7 +430,7 @@ void Engine::advanceToNextNode(uint32_t choiceIndex) {
                 m_activeDialogueData.elapsedTypewriterTime = 9999.0f;
                 m_activeDialogueData.lastBlipCodepointIndex = 99999;
             }
-            ROWL_LOG_INFO("▶ Active Node #" + std::to_string(m_currentNodeId) +
+            ROWL_LOG_INFO("▶ Active Node #" + std::to_string(m_storyRuntime.currentNodeId()) +
                           " (" + nextNode.speaker + "): " + nextNode.dialogue);
         }
     } else {
@@ -449,14 +440,14 @@ void Engine::advanceToNextNode(uint32_t choiceIndex) {
 
 bool Engine::advanceToChoice(const std::string& optionId) {
     if (optionId.empty()) return false;
-    const auto nodeIt = m_storyNodes.find(m_currentNodeId);
-    if (nodeIt == m_storyNodes.end()) return false;
+    const auto nodeIt = m_storyRuntime.nodes().find(m_storyRuntime.currentNodeId());
+    if (nodeIt == m_storyRuntime.nodes().end()) return false;
 
     const auto& options = nodeIt->second.nextNodes;
     const auto optionIt = std::find_if(options.begin(), options.end(),
         [&optionId](const StoryNode::NextNode& option) { return option.optionId == optionId; });
     if (optionIt == options.end()) {
-        ROWL_LOG_WARN("Choice option not found on Node #" + std::to_string(m_currentNodeId) + ": " + optionId);
+        ROWL_LOG_WARN("Choice option not found on Node #" + std::to_string(m_storyRuntime.currentNodeId()) + ": " + optionId);
         return false;
     }
 
@@ -468,7 +459,7 @@ bool Engine::advanceToChoice(const std::string& optionId) {
 
     const auto index = static_cast<uint32_t>(std::distance(options.begin(), optionIt));
     advanceToNextNode(index);
-    return m_currentNodeId == optionIt->nodeId;
+    return m_storyRuntime.currentNodeId() == optionIt->nodeId;
 }
 
 bool Engine::handlePointerDown(float physicalX, float physicalY) {
@@ -888,7 +879,9 @@ void Engine::updateSceneFromComponents(const std::string& componentsJson,
                         }
                         m_luaSandbox->setGlobalNumber(varKey, res);
                         if (m_gameState) {
-                            m_gameState = Rowl::State::GameState::createNextState(m_gameState, m_currentNodeId, varKey, std::to_string(res));
+                            m_gameState = Rowl::State::GameState::createNextState(
+                                m_gameState, m_storyRuntime.currentNodeId(), varKey,
+                                std::to_string(res));
                         }
                     } else {
                         setScriptVariable(varKey, varVal);
@@ -1032,12 +1025,13 @@ void Engine::updateSceneFromComponents(const std::string& componentsJson,
             // editor preview refreshes, so playing here unconditionally made
             // a property edit repeat the sound. A node may still play several
             // SFX components, but only once for each entry.
-            if (!sfx.empty() && m_isPlaying && m_lastSfxPlaybackNodeId != m_currentNodeId)
+            if (!sfx.empty() && m_isPlaying &&
+                m_lastSfxPlaybackNodeId != m_storyRuntime.currentNodeId())
                 m_audio->playAudio(sfx, Rowl::Audio::AudioChannelType::Sfx);
         }
 
         if (m_isPlaying && !pendingAudioComponents.empty())
-            m_lastSfxPlaybackNodeId = m_currentNodeId;
+            m_lastSfxPlaybackNodeId = m_storyRuntime.currentNodeId();
 
         activateScripts(pendingScripts, replayEntryEffects);
 
@@ -1050,7 +1044,7 @@ void Engine::updateSceneFromComponents(const std::string& componentsJson,
                 case Rowl::Audio::DSPFilterType::Normal: break;
             }
             m_gameState = Rowl::State::GameState::createNextStateWithAudio(
-                m_gameState, m_currentNodeId, m_activeBackground,
+                m_gameState, m_storyRuntime.currentNodeId(), m_activeBackground,
                 m_audio->getCurrentBgmPath(), m_audio->getBgmVolume(),
                 m_audio->isBgmPlaying(), filter);
         }
@@ -1115,17 +1109,20 @@ bool Engine::parseStoryGraphJson(const std::string& jsonContent) {
 
     // Parsing is deliberately transactional. Only a complete, validated
     // document can replace the currently playable graph.
-    m_storyNodes = std::move(parseResult.document.nodes);
-    m_startNodeId = parseResult.document.startNodeId;
-    m_currentNodeId = m_startNodeId;
+    if (!m_storyRuntime.commit(std::move(parseResult.document))) {
+        m_lastStoryGraphLoadError =
+            "Story runtime rejected an invalid graph document; the active graph was preserved.";
+        ROWL_LOG_ERROR(m_lastStoryGraphLoadError);
+        return false;
+    }
 
     // Loading a graph is a new story session. Keeping a previous graph's
     // history here could make Save/Load or rewind jump into another graph.
-    m_gameState = Rowl::State::GameState::createInitialState(m_currentNodeId);
+    m_gameState = Rowl::State::GameState::createInitialState(m_storyRuntime.currentNodeId());
     m_lastSfxPlaybackNodeId = 0;
     if (m_luaSandbox) m_luaSandbox->clearVariables();
 
-    const auto& startNode = m_storyNodes.at(m_currentNodeId);
+    const auto& startNode = m_storyRuntime.nodes().at(m_storyRuntime.currentNodeId());
     if (!startNode.components.empty()) {
         nlohmann::json componentsJson = nlohmann::json::array();
         for (const auto& component : startNode.components) {
@@ -1148,8 +1145,8 @@ bool Engine::parseStoryGraphJson(const std::string& jsonContent) {
             startNode.dialogueBoxWidth, startNode.dialogueBoxHeight);
     }
 
-    ROWL_LOG_INFO("Story graph loaded: " + std::to_string(m_storyNodes.size()) +
-                  " nodes. Start node #" + std::to_string(m_currentNodeId));
+    ROWL_LOG_INFO("Story graph loaded: " + std::to_string(m_storyRuntime.size()) +
+                  " nodes. Start node #" + std::to_string(m_storyRuntime.currentNodeId()));
     ++m_storyGraphRevision;
     return true;
 }
@@ -1313,7 +1310,7 @@ void Engine::loadActiveStoryFile() {
                 try {
                     nlohmann::json data = nlohmann::json::parse(content);
                     uint64_t nodeId = data.value("node_id", static_cast<uint64_t>(0));
-                    if (nodeId != 0) m_currentNodeId = nodeId;
+                    if (nodeId != 0) m_storyRuntime.setCurrentNodeId(nodeId);
 
                     if (data.contains("components") && data["components"].is_array()) {
                         updateSceneFromComponents(data["components"].dump());
@@ -1363,7 +1360,7 @@ void Engine::loadActiveStoryFile() {
                 try {
                     nlohmann::json data = nlohmann::json::parse(f);
                     uint64_t nodeId = data.value("node_id", static_cast<uint64_t>(0));
-                    if (nodeId != 0) m_currentNodeId = nodeId;
+                    if (nodeId != 0) m_storyRuntime.setCurrentNodeId(nodeId);
 
                     if (data.contains("components") && data["components"].is_array()) {
                         updateSceneFromComponents(data["components"].dump());
@@ -1388,7 +1385,7 @@ void Engine::loadActiveStoryFile() {
                         );
                     }
                     ROWL_LOG_INFO("Loaded active story node #" +
-                                  std::to_string(m_currentNodeId) + " from: " + path);
+                                  std::to_string(m_storyRuntime.currentNodeId()) + " from: " + path);
                     return;
                 } catch (const std::exception& e) {
                     ROWL_LOG_ERROR("Active story load error in " + path + ": " + e.what());
@@ -1557,9 +1554,9 @@ void Engine::step(float deltaTime) {
             autoAdvanceDelay = std::max(autoAdvanceDelay, dialogue.autoAdvanceDelay + m_autoAdvanceDelayOffset);
         }
     }
-    const auto activeNode = m_storyNodes.find(m_currentNodeId);
+    const auto activeNode = m_storyRuntime.nodes().find(m_storyRuntime.currentNodeId());
     if (m_isPlaying && autoAdvanceEnabled && m_activeChoiceButtons.empty() &&
-        activeNode != m_storyNodes.end() && !activeNode->second.nextNodes.empty() &&
+        activeNode != m_storyRuntime.nodes().end() && !activeNode->second.nextNodes.empty() &&
         areActiveDialoguesComplete() && (!m_window || !m_window->isTransitionActive())) {
         m_autoAdvanceElapsed += deltaTime;
         if (m_autoAdvanceElapsed >= autoAdvanceDelay) {
@@ -1787,20 +1784,22 @@ const std::vector<Rowl::State::DialogueHistoryEntry>& Engine::getDialogueHistory
 }
 
 void Engine::recordActiveDialogueHistory() {
-    if (!m_isPlaying || !m_gameState || m_currentNodeId == 0 ||
-        m_lastRecordedDialogueNodeId == m_currentNodeId || m_activeDialogues.empty()) {
+    if (!m_isPlaying || !m_gameState || m_storyRuntime.currentNodeId() == 0 ||
+        m_lastRecordedDialogueNodeId == m_storyRuntime.currentNodeId() ||
+        m_activeDialogues.empty()) {
         return;
     }
     std::vector<Rowl::State::DialogueHistoryEntry> entries;
     entries.reserve(m_activeDialogues.size());
     for (const auto& dialogue : m_activeDialogues) {
         if (!dialogue.dialogue.empty()) {
-            entries.push_back({m_currentNodeId, dialogue.speaker, dialogue.dialogue, true});
+            entries.push_back(
+                {m_storyRuntime.currentNodeId(), dialogue.speaker, dialogue.dialogue, true});
         }
     }
     if (!entries.empty()) {
         m_gameState = Rowl::State::GameState::withDialogueHistory(m_gameState, entries);
-        m_lastRecordedDialogueNodeId = m_currentNodeId;
+        m_lastRecordedDialogueNodeId = m_storyRuntime.currentNodeId();
     }
 }
 
@@ -1855,10 +1854,11 @@ bool Engine::saveGameSlot(int32_t slotIndex) {
         return false;
     }
     if (!m_gameState) {
-        m_gameState = Rowl::State::GameState::createInitialState(m_currentNodeId);
+        m_gameState = Rowl::State::GameState::createInitialState(m_storyRuntime.currentNodeId());
     }
-    if (m_gameState->activeNodeId != m_currentNodeId) {
-        m_gameState = Rowl::State::GameState::createNextState(m_gameState, m_currentNodeId);
+    if (m_gameState->activeNodeId != m_storyRuntime.currentNodeId()) {
+        m_gameState = Rowl::State::GameState::createNextState(
+            m_gameState, m_storyRuntime.currentNodeId());
     }
     const std::string saveDirectory = getSaveDirectory();
     bool ok = Rowl::State::GameState::saveToSlot(m_gameState, slotIndex, saveDirectory);
@@ -1895,9 +1895,9 @@ bool Engine::loadGameSlot(int32_t slotIndex) {
     }
 
     m_gameState = loaded;
-    m_currentNodeId = m_gameState->activeNodeId;
+    m_storyRuntime.setCurrentNodeId(m_gameState->activeNodeId);
     // Loading restores state; it is not a node-entry event and must not replay SFX.
-    m_lastSfxPlaybackNodeId = m_currentNodeId;
+    m_lastSfxPlaybackNodeId = m_storyRuntime.currentNodeId();
 
     // Sync variables to Lua sandbox
     if (m_luaSandbox && m_gameState->variables) {
@@ -1908,8 +1908,8 @@ bool Engine::loadGameSlot(int32_t slotIndex) {
     }
 
     // Synchronize scene to loaded node
-    auto it = m_storyNodes.find(m_currentNodeId);
-    if (it != m_storyNodes.end()) {
+    auto it = m_storyRuntime.nodes().find(m_storyRuntime.currentNodeId());
+    if (it != m_storyRuntime.nodes().end()) {
         const auto& nextNode = it->second;
         if (!nextNode.components.empty()) {
             nlohmann::json compsJson = nlohmann::json::array();
@@ -1937,7 +1937,8 @@ bool Engine::loadGameSlot(int32_t slotIndex) {
         }
     }
     restoreAudioStateFromGameState();
-    ROWL_LOG_INFO("Loaded Game Slot #" + std::to_string(slotIndex) + " → Node #" + std::to_string(m_currentNodeId));
+    ROWL_LOG_INFO("Loaded Game Slot #" + std::to_string(slotIndex) +
+                  " → Node #" + std::to_string(m_storyRuntime.currentNodeId()));
     m_context->setSuccess("load_game_slot", std::to_string(slotIndex));
     return true;
 }
@@ -1977,7 +1978,7 @@ bool Engine::rewind(uint64_t steps) {
     if (!rewound || rewound == m_gameState) return false;
 
     m_gameState = rewound;
-    m_currentNodeId = m_gameState->activeNodeId;
+    m_storyRuntime.setCurrentNodeId(m_gameState->activeNodeId);
 
     if (m_luaSandbox && m_gameState->variables) {
         m_luaSandbox->clearVariables();
@@ -1986,8 +1987,8 @@ bool Engine::rewind(uint64_t steps) {
         }
     }
 
-    auto it = m_storyNodes.find(m_currentNodeId);
-    if (it != m_storyNodes.end()) {
+    auto it = m_storyRuntime.nodes().find(m_storyRuntime.currentNodeId());
+    if (it != m_storyRuntime.nodes().end()) {
         const auto& nextNode = it->second;
         if (!nextNode.components.empty()) {
             nlohmann::json compsJson = nlohmann::json::array();
@@ -2048,7 +2049,8 @@ void Engine::setScriptVariable(const std::string& key, const std::string& value)
         m_luaSandbox->setVariable(key, value);
     }
     if (m_gameState) {
-        m_gameState = Rowl::State::GameState::createNextState(m_gameState, m_currentNodeId, key, value);
+        m_gameState = Rowl::State::GameState::createNextState(
+            m_gameState, m_storyRuntime.currentNodeId(), key, value);
     }
 }
 
@@ -2092,7 +2094,8 @@ bool Engine::executeScript(const std::string& scriptCode) {
         // and rewind cannot lose a multi-variable script update.
         if (m_gameState) {
             m_gameState = Rowl::State::GameState::createNextStateWithVariables(
-                m_gameState, m_currentNodeId, m_luaSandbox->getAllVariables());
+                m_gameState, m_storyRuntime.currentNodeId(),
+                m_luaSandbox->getAllVariables());
         }
         m_context->setSuccess("execute_script", "");
         return true;

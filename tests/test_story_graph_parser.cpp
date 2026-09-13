@@ -3,10 +3,14 @@
  */
 #include "rowl_test_harness.hpp"
 #include "rowl/core/story_graph_parser.hpp"
+#include "rowl/core/story_runtime.hpp"
+
+#include <utility>
 
 void test_story_graph_parser() {
     using Rowl::Core::StoryGraphParseErrorKind;
     using Rowl::Core::StoryGraphParser;
+    using Rowl::Core::StoryRuntime;
 
     TEST_SECTION("Story Graph Parser Isolation");
 
@@ -68,4 +72,32 @@ void test_story_graph_parser() {
         exit(1);
     }
     TEST_PASS("Syntax failures remain distinct from validation failures");
+
+    StoryRuntime runtime;
+    auto initialDocument = StoryGraphParser::parse(
+        R"({"start_node_id":101,"nodes":[{"id":101},{"id":202}]})");
+    if (!initialDocument.succeeded() ||
+        !runtime.commit(std::move(initialDocument.document))) {
+        std::cerr << "Valid document was not committed to StoryRuntime" << std::endl;
+        exit(1);
+    }
+    runtime.setCurrentNodeId(202);
+
+    Rowl::Core::StoryGraphDocument invalidDocument;
+    invalidDocument.startNodeId = 999;
+    Rowl::Core::StoryNode invalidNode;
+    invalidNode.id = 303;
+    invalidDocument.nodes.emplace(invalidNode.id, std::move(invalidNode));
+    if (runtime.commit(std::move(invalidDocument)) || runtime.size() != 2 ||
+        runtime.startNodeId() != 101 || runtime.currentNodeId() != 202) {
+        std::cerr << "Rejected document changed committed StoryRuntime state" << std::endl;
+        exit(1);
+    }
+    TEST_PASS("StoryRuntime commits graph ownership transactionally");
+
+    if (!runtime.resetToStart() || runtime.currentNodeId() != 101) {
+        std::cerr << "StoryRuntime did not restore the committed start node" << std::endl;
+        exit(1);
+    }
+    TEST_PASS("StoryRuntime owns the start and current node cursor");
 }

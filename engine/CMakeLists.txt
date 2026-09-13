@@ -132,6 +132,7 @@ set(ROWL_ENGINE_SOURCES
     src/core/logger.cpp
     src/core/runtime_context.cpp
     src/core/story_graph_parser.cpp
+    src/core/story_runtime.cpp
     src/core/engine.cpp
     # Rendering
     src/render/window.cpp

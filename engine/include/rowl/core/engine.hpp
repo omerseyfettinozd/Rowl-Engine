@@ -5,6 +5,7 @@
 #include "rowl/state/game_state.hpp"
 #include "rowl/core/runtime_context.hpp"
 #include "rowl/core/story_graph.hpp"
+#include "rowl/core/story_runtime.hpp"
 #include <cstdint>
 #include <string>
 #include <memory>
@@ -193,7 +194,7 @@ public:
     float getActiveDialogueBoxHeight()  const { return m_activeDialogueData.height; }
     const Rowl::Render::DialogueRenderData& getActiveDialogueData() const { return m_activeDialogueData; }
     const std::vector<Rowl::Render::DialogueRenderData>& getActiveDialogues() const { return m_activeDialogues; }
-    uint64_t getCurrentNodeId()         const { return m_currentNodeId; }
+    uint64_t getCurrentNodeId()         const { return m_storyRuntime.currentNodeId(); }
     Rowl::Scene::Scene* getScene()       const { return m_scene.get(); }
     Rowl::Audio::AudioEngine* getAudio() const { return m_audio.get(); }
 
@@ -256,9 +257,7 @@ private:
     uint32_t m_externalWindowWidth  = 0;
     uint32_t m_externalWindowHeight = 0;
 
-    std::unordered_map<uint64_t, StoryNode> m_storyNodes;
-    uint64_t m_startNodeId   = 101;
-    uint64_t m_currentNodeId = 101;
+    StoryRuntime m_storyRuntime;
 
     bool m_hasBackground   = true;
     bool m_hasDialogueBox  = true;
