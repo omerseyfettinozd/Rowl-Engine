@@ -36,6 +36,7 @@ int main(int argc, char* argv[]) {
     test_native_c_api();
     test_single_engine_image();
     test_game_object_component_system();
+    test_pixel_pitch();
     test_window_input_routing();
     test_runtime_context_and_diagnostics();
     test_story_graph_parser();

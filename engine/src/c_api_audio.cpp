@@ -8,6 +8,7 @@
 
 #include "c_api_internal.hpp"
 #include "rowl/audio/audio_engine.hpp"
+#include "cstring"
 extern "C" {
 /* ── Audio control & voice blips ──────────────────────────────────────────────── */
 
@@ -155,6 +156,12 @@ const char* RowlEngine_GetLastAudioError(RowlEngineHandle handle) {
     }, "");
 }
 
+const char* RowlEngine_GetLastAudioErrorWithLength(RowlEngineHandle handle, uint32_t* outLen) {
+    const char* value = RowlEngine_GetLastAudioError(handle);
+    if (outLen) *outLen = static_cast<uint32_t>(std::strlen(value));
+    return value;
+}
+
 int RowlEngine_IsAudioDeviceAvailable(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return 0;
     return invokeNoexcept<int>([&] {
@@ -220,6 +227,12 @@ const char* RowlEngine_GetDialogueVoiceBlipSound(RowlEngineHandle handle) {
         buffer = toEngine(handle)->getDialogueVoiceBlipSound();
         return buffer.c_str();
     }, "");
+}
+
+const char* RowlEngine_GetDialogueVoiceBlipSoundWithLength(RowlEngineHandle handle, uint32_t* outLen) {
+    const char* value = RowlEngine_GetDialogueVoiceBlipSound(handle);
+    if (outLen) *outLen = static_cast<uint32_t>(std::strlen(value));
+    return value;
 }
 
 float RowlEngine_GetDialogueVoiceBlipPitch(RowlEngineHandle handle) {

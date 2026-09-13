@@ -32,12 +32,19 @@ void RowlEngine_ResizeViewport(RowlEngineHandle handle,
 /* ── Offscreen Framebuffer & Playback Control ────────────────────────────── */
 
 const uint8_t* RowlEngine_GetPixelBuffer(RowlEngineHandle handle, uint32_t* outW, uint32_t* outH) {
+    return RowlEngine_GetPixelBufferEx(handle, outW, outH, nullptr);
+}
+
+const uint8_t* RowlEngine_GetPixelBufferEx(RowlEngineHandle handle,
+                                            uint32_t* outW, uint32_t* outH,
+                                            uint32_t* outPitch) {
     if (!isLiveHandle(handle)) {
         if (outW) *outW = 0;
         if (outH) *outH = 0;
+        if (outPitch) *outPitch = 0;
         return nullptr;
     }
-    return invokeNoexcept<const uint8_t*>([&] { return toEngine(handle)->getPixelBuffer(outW, outH); }, nullptr);
+    return invokeNoexcept<const uint8_t*>([&] { return toEngine(handle)->getPixelBuffer(outW, outH, outPitch); }, nullptr);
 }
 
 uint32_t RowlEngine_GetTextureCacheTextureCount(RowlEngineHandle handle) {

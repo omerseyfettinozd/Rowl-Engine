@@ -63,6 +63,15 @@ namespace RowlEngine.Editor.Native
             out uint outW,
             out uint outH);
 
+        // MS-0 pitch contract: outPitch is the surface row stride in bytes,
+        // always >= outW*4 on success. Null-handle fallback zeroes all outs.
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern IntPtr RowlEngine_GetPixelBufferEx(
+            IntPtr handle,
+            out uint outW,
+            out uint outH,
+            out uint outPitch);
+
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
         internal static extern void RowlEngine_SetTextureCacheBudgetBytes(
             IntPtr handle,
@@ -488,5 +497,51 @@ namespace RowlEngine.Editor.Native
         internal static string PtrToString(IntPtr ptr)
             => ptr == IntPtr.Zero ? string.Empty
                                   : Marshal.PtrToStringUTF8(ptr) ?? string.Empty;
+
+        /// <summary>
+        /// Length-aware variant for the MS-0 `...WithLength` getters. Copies exactly
+        /// byteLength bytes, so the result never depends on NUL scanning.
+        /// </summary>
+        internal static string PtrToString(IntPtr ptr, uint byteLength)
+            => ptr == IntPtr.Zero || byteLength == 0 ? string.Empty
+                : Marshal.PtrToStringUTF8(ptr, (int)byteLength) ?? string.Empty;
+
+        // ── MS-0 length-reporting string getters (see lifetime contract in c_api.h) ──
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern IntPtr RowlEngine_GetSpeakerWithLength(IntPtr handle, out uint outLen);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern IntPtr RowlEngine_GetDialogueWithLength(IntPtr handle, out uint outLen);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern IntPtr RowlEngine_GetLastStoryGraphErrorWithLength(IntPtr handle, out uint outLen);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern IntPtr RowlEngine_GetLastAudioErrorWithLength(IntPtr handle, out uint outLen);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern IntPtr RowlEngine_GetDialogueVoiceBlipSoundWithLength(IntPtr handle, out uint outLen);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern IntPtr RowlEngine_GetScriptRuntimeDiagnosticsJsonWithLength(IntPtr handle, out uint outLen);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern IntPtr RowlEngine_GetDialogueHistoryJsonWithLength(IntPtr handle, out uint outLen);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern IntPtr RowlEngine_GetVariableWithLength(
+            IntPtr handle,
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string key,
+            out uint outLen);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern IntPtr RowlEngine_GetLastResultOperationWithLength(IntPtr handle, out uint outLen);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern IntPtr RowlEngine_GetLastResultMessageWithLength(IntPtr handle, out uint outLen);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern IntPtr RowlEngine_GetLastResultTargetWithLength(IntPtr handle, out uint outLen);
     }
 }

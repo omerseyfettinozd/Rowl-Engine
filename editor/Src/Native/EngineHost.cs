@@ -213,6 +213,9 @@ namespace RowlEngine.Editor.Native
             AudioTelemetryPolled?.Invoke(MasterPeakL, MasterPeakR, MasterRmsL, MasterRmsR);
         }
 
+        /// <summary>Frames skipped because the native pitch was unusable (see MS-0 contract).</summary>
+        public ulong PixelBufferPitchMismatchCount { get; private set; }
+
         private void UpdatePixelBuffer()
         {
             if (_handle == IntPtr.Zero) return;
@@ -220,11 +223,21 @@ namespace RowlEngine.Editor.Native
             var stopwatch = Stopwatch.StartNew();
             try
             {
-                IntPtr pixelPtr = NativeBridge.RowlEngine_GetPixelBuffer(_handle, out uint w, out uint h);
+                IntPtr pixelPtr = NativeBridge.RowlEngine_GetPixelBufferEx(
+                    _handle, out uint w, out uint h, out uint pitch);
                 if (pixelPtr != IntPtr.Zero && w > 0 && h > 0)
                 {
                     int width = (int)w;
                     int height = (int)h;
+
+                    // MS-0 pitch contract: stride by the reported pitch, never by
+                    // width*4. A pitch below one tight row means a broken surface:
+                    // skip the frame and count it instead of copying garbage.
+                    if (pitch < w * 4)
+                    {
+                        PixelBufferPitchMismatchCount++;
+                        return;
+                    }
 
                     if (RenderTargetBitmap == null ||
                         RenderTargetBitmap.PixelSize.Width != width ||
@@ -243,11 +256,31 @@ namespace RowlEngine.Editor.Native
                     {
                         unsafe
                         {
-                            Buffer.MemoryCopy(
-                                (void*)pixelPtr,
-                                (void*)buf.Address,
-                                buf.RowBytes * height,
-                                width * height * 4);
+                            uint destRowBytes = (uint)buf.RowBytes;
+                            uint tightRowBytes = w * 4;
+                            if (pitch == tightRowBytes && destRowBytes == tightRowBytes)
+                            {
+                                Buffer.MemoryCopy(
+                                    (void*)pixelPtr,
+                                    (void*)buf.Address,
+                                    destRowBytes * h,
+                                    tightRowBytes * h);
+                            }
+                            else
+                            {
+                                uint copyRowBytes = tightRowBytes;
+                                if (copyRowBytes > destRowBytes) copyRowBytes = destRowBytes;
+                                byte* src = (byte*)pixelPtr;
+                                byte* dst = (byte*)buf.Address;
+                                for (uint y = 0; y < h; y++)
+                                {
+                                    Buffer.MemoryCopy(
+                                        src + y * pitch,
+                                        dst + y * destRowBytes,
+                                        destRowBytes,
+                                        copyRowBytes);
+                                }
+                            }
                         }
                     }
                     OnPropertyChanged(nameof(RenderTargetBitmap));
@@ -398,7 +431,7 @@ namespace RowlEngine.Editor.Native
             try
             {
                 string json = NativeBridge.PtrToString(
-                    NativeBridge.RowlEngine_GetScriptRuntimeDiagnosticsJson(_handle));
+                    NativeBridge.RowlEngine_GetScriptRuntimeDiagnosticsJsonWithLength(_handle, out uint diagLen), diagLen);
                 ScriptRuntimeDiagnostics = JsonSerializer.Deserialize<List<ScriptRuntimeDiagnostic>>(json)
                     ?? new List<ScriptRuntimeDiagnostic>();
             }
@@ -414,7 +447,8 @@ namespace RowlEngine.Editor.Native
             if (_handle == IntPtr.Zero) return;
             try
             {
-                string json = NativeBridge.PtrToString(NativeBridge.RowlEngine_GetDialogueHistoryJson(_handle));
+                string json = NativeBridge.PtrToString(
+                    NativeBridge.RowlEngine_GetDialogueHistoryJsonWithLength(_handle, out uint histLen), histLen);
                 DialogueHistory = JsonSerializer.Deserialize<List<DialogueHistoryEntry>>(json)
                     ?? new List<DialogueHistoryEntry>();
             }
@@ -454,7 +488,7 @@ namespace RowlEngine.Editor.Native
 
         public string LastStoryGraphError => _handle == IntPtr.Zero
             ? string.Empty
-            : NativeBridge.PtrToString(NativeBridge.RowlEngine_GetLastStoryGraphError(_handle));
+            : NativeBridge.PtrToString(NativeBridge.RowlEngine_GetLastStoryGraphErrorWithLength(_handle, out uint sgLen), sgLen);
 
         /// <summary>Sets the active project root directory, isolating VFS mounts to that project.</summary>
         public void SetProjectDirectory(string projectRoot)
@@ -520,11 +554,11 @@ namespace RowlEngine.Editor.Native
 
         public string GetSpeaker()
             => _handle == IntPtr.Zero ? string.Empty
-               : NativeBridge.PtrToString(NativeBridge.RowlEngine_GetSpeaker(_handle));
+               : NativeBridge.PtrToString(NativeBridge.RowlEngine_GetSpeakerWithLength(_handle, out uint spkLen), spkLen);
 
         public string GetDialogue()
             => _handle == IntPtr.Zero ? string.Empty
-               : NativeBridge.PtrToString(NativeBridge.RowlEngine_GetDialogue(_handle));
+               : NativeBridge.PtrToString(NativeBridge.RowlEngine_GetDialogueWithLength(_handle, out uint dlgLen), dlgLen);
 
         public ulong GetCurrentNodeId()
             => _handle == IntPtr.Zero ? 0
@@ -562,7 +596,7 @@ namespace RowlEngine.Editor.Native
 
         public string LastAudioError
             => _handle == IntPtr.Zero ? string.Empty
-               : NativeBridge.PtrToString(NativeBridge.RowlEngine_GetLastAudioError(_handle));
+               : NativeBridge.PtrToString(NativeBridge.RowlEngine_GetLastAudioErrorWithLength(_handle, out uint audLen), audLen);
 
         public bool IsAudioDeviceAvailable
             => _handle != IntPtr.Zero && NativeBridge.RowlEngine_IsAudioDeviceAvailable(_handle) != 0;
@@ -639,7 +673,7 @@ namespace RowlEngine.Editor.Native
         }
 
         public string GetDialogueVoiceBlipSound()
-            => _handle == IntPtr.Zero ? string.Empty : NativeBridge.PtrToString(NativeBridge.RowlEngine_GetDialogueVoiceBlipSound(_handle));
+            => _handle == IntPtr.Zero ? string.Empty : NativeBridge.PtrToString(NativeBridge.RowlEngine_GetDialogueVoiceBlipSoundWithLength(_handle, out uint blipLen), blipLen);
 
         public float GetDialogueVoiceBlipPitch()
             => _handle == IntPtr.Zero ? 1.0f : NativeBridge.RowlEngine_GetDialogueVoiceBlipPitch(_handle);
@@ -714,7 +748,7 @@ namespace RowlEngine.Editor.Native
 
         public string GetVariable(string key)
             => _handle != IntPtr.Zero && !string.IsNullOrEmpty(key)
-               ? NativeBridge.PtrToString(NativeBridge.RowlEngine_GetVariable(_handle, key))
+               ? NativeBridge.PtrToString(NativeBridge.RowlEngine_GetVariableWithLength(_handle, key, out uint varLen), varLen)
                : string.Empty;
 
         public bool EvaluateCondition(string conditionExpr)
@@ -731,15 +765,15 @@ namespace RowlEngine.Editor.Native
 
         public string LastResultOperation => _handle == IntPtr.Zero
             ? "none"
-            : NativeBridge.PtrToString(NativeBridge.RowlEngine_GetLastResultOperation(_handle));
+            : NativeBridge.PtrToString(NativeBridge.RowlEngine_GetLastResultOperationWithLength(_handle, out uint opLen), opLen);
 
         public string LastResultMessage => _handle == IntPtr.Zero
             ? "Invalid or uninitialized engine handle"
-            : NativeBridge.PtrToString(NativeBridge.RowlEngine_GetLastResultMessage(_handle));
+            : NativeBridge.PtrToString(NativeBridge.RowlEngine_GetLastResultMessageWithLength(_handle, out uint msgLen), msgLen);
 
         public string LastResultTarget => _handle == IntPtr.Zero
             ? string.Empty
-            : NativeBridge.PtrToString(NativeBridge.RowlEngine_GetLastResultTarget(_handle));
+            : NativeBridge.PtrToString(NativeBridge.RowlEngine_GetLastResultTargetWithLength(_handle, out uint tgtLen), tgtLen);
 
         public void ClearLastResult()
         {

@@ -228,6 +228,11 @@ const uint8_t* Window::getPixelBuffer() const {
     return static_cast<const uint8_t*>(m_offscreenSurface->pixels);
 }
 
+uint32_t Window::getPixelPitch() const {
+    if (!m_offscreenSurface) return 0;
+    return static_cast<uint32_t>(m_offscreenSurface->pitch);
+}
+
 bool Window::initialize(const std::string& title, uint32_t width, uint32_t height, bool vsync) {
     if (m_initialized) return true;
 

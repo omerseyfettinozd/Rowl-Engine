@@ -175,6 +175,9 @@ public:
     bool isPlaying() const { return m_isPlaying; }
     void resetToStartNode();
     const uint8_t* getPixelBuffer(uint32_t* outW, uint32_t* outH) const;
+    /// Pitch-aware overload (MS-0 contract). outPitch receives the surface
+    /// row stride in bytes; may exceed (*outW)*4. Any out-param may be null.
+    const uint8_t* getPixelBuffer(uint32_t* outW, uint32_t* outH, uint32_t* outPitch) const;
 
     // ── Active scene getters ───────────────────────────────────────────────
     std::string getActiveSpeaker()      const { return m_activeSpeaker; }

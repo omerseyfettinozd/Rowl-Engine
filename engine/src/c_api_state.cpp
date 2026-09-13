@@ -8,6 +8,7 @@
 
 #include "c_api_internal.hpp"
 #include "nlohmann/json.hpp"
+#include "cstring"
 extern "C" {
 /* ── Scripting, session state & structured results ────────────────────────── */
 
@@ -43,6 +44,18 @@ const char* RowlEngine_GetDialogueHistoryJson(RowlEngineHandle handle) {
         buffer = history.dump();
         return buffer.c_str();
     }, "[]");
+}
+
+const char* RowlEngine_GetScriptRuntimeDiagnosticsJsonWithLength(RowlEngineHandle handle, uint32_t* outLen) {
+    const char* value = RowlEngine_GetScriptRuntimeDiagnosticsJson(handle);
+    if (outLen) *outLen = static_cast<uint32_t>(std::strlen(value));
+    return value;
+}
+
+const char* RowlEngine_GetDialogueHistoryJsonWithLength(RowlEngineHandle handle, uint32_t* outLen) {
+    const char* value = RowlEngine_GetDialogueHistoryJson(handle);
+    if (outLen) *outLen = static_cast<uint32_t>(std::strlen(value));
+    return value;
 }
 
 int RowlEngine_SaveGameSlot(RowlEngineHandle handle, int32_t slotIndex) {
@@ -101,6 +114,12 @@ const char* RowlEngine_GetVariable(RowlEngineHandle handle, const char* key) {
         buf = toEngine(handle)->getScriptVariable(key);
         return buf.c_str();
     }, "");
+}
+
+const char* RowlEngine_GetVariableWithLength(RowlEngineHandle handle, const char* key, uint32_t* outLen) {
+    const char* value = RowlEngine_GetVariable(handle, key);
+    if (outLen) *outLen = static_cast<uint32_t>(std::strlen(value));
+    return value;
 }
 
 int RowlEngine_EvaluateCondition(RowlEngineHandle handle, const char* conditionExpr) {
@@ -179,6 +198,24 @@ const char* RowlEngine_GetLastResultTarget(RowlEngineHandle handle) {
         buf = engine->getContext()->getLastResult().target;
         return buf.c_str();
     }, "");
+}
+
+const char* RowlEngine_GetLastResultOperationWithLength(RowlEngineHandle handle, uint32_t* outLen) {
+    const char* value = RowlEngine_GetLastResultOperation(handle);
+    if (outLen) *outLen = static_cast<uint32_t>(std::strlen(value));
+    return value;
+}
+
+const char* RowlEngine_GetLastResultMessageWithLength(RowlEngineHandle handle, uint32_t* outLen) {
+    const char* value = RowlEngine_GetLastResultMessage(handle);
+    if (outLen) *outLen = static_cast<uint32_t>(std::strlen(value));
+    return value;
+}
+
+const char* RowlEngine_GetLastResultTargetWithLength(RowlEngineHandle handle, uint32_t* outLen) {
+    const char* value = RowlEngine_GetLastResultTarget(handle);
+    if (outLen) *outLen = static_cast<uint32_t>(std::strlen(value));
+    return value;
 }
 
 void RowlEngine_ClearLastResult(RowlEngineHandle handle) {

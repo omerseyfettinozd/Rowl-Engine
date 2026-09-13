@@ -148,8 +148,25 @@ ROWL_API void RowlEngine_ResizeViewport(RowlEngineHandle handle,
 
 /**
  * Returns a pointer to the offscreen RGBA32 pixel buffer and populates width/height.
+ *
+ * MS-0 pitch contract: the surface row stride may exceed width*4. Hosts must
+ * NOT assume tight packing. Prefer RowlEngine_GetPixelBufferEx and stride
+ * copies by the reported pitch. This entry point is a thin wrapper that
+ * discards the pitch (equivalent to calling Ex with outPitch = NULL).
+ * The returned pointer is borrowed: valid until the next Step/resize/shutdown
+ * on this handle. Never free it; copy out what you need during the call frame.
  */
 ROWL_API const uint8_t* RowlEngine_GetPixelBuffer(RowlEngineHandle handle, uint32_t* outW, uint32_t* outH);
+
+/**
+ * Pitch-aware framebuffer access (MS-0 contract).
+ * outPitch receives the surface row stride in bytes and is always >= (*outW)*4
+ * on success. Any out-parameter may be NULL. Null-handle fallback: returns NULL
+ * and zeroes every provided out-parameter.
+ */
+ROWL_API const uint8_t* RowlEngine_GetPixelBufferEx(RowlEngineHandle handle,
+                                                    uint32_t* outW, uint32_t* outH,
+                                                    uint32_t* outPitch);
 
 /** Returns the number of distinct decoded textures currently held in the runtime cache. */
 ROWL_API uint32_t RowlEngine_GetTextureCacheTextureCount(RowlEngineHandle handle);
@@ -246,6 +263,9 @@ ROWL_API int RowlEngine_LoadStoryGraphFromVfs(RowlEngineHandle handle,
 /** Returns the diagnostic from the last file or VFS story graph load attempt. */
 ROWL_API const char* RowlEngine_GetLastStoryGraphError(RowlEngineHandle handle);
 
+/** Length-reporting variant of GetLastStoryGraphError (see lifetime contract). */
+ROWL_API const char* RowlEngine_GetLastStoryGraphErrorWithLength(RowlEngineHandle handle, uint32_t* outLen);
+
 /**
  * Sets the active project root directory, isolating VFS mounts to that project.
  * @param projectRoot Absolute or relative path to the active project folder.
@@ -272,17 +292,42 @@ ROWL_API int RowlEngine_SelectChoice(RowlEngineHandle handle,
 /** Sends a pointer/touch press in virtual-canvas coordinates. */
 ROWL_API int RowlEngine_PointerDown(RowlEngineHandle handle, float x, float y);
 
+/* ── Engine-owned string lifetime contract (MS-0) ─────────────────────────
+ * Every `const char*` getter below returns a BORROWED pointer:
+ *  - Owned by the engine: never free it, never store it past the call frame.
+ *  - A second call to the SAME getter on the same thread overwrites the
+ *    previous result (per-getter thread_local buffer). Copy first, call later.
+ *  - Different getters use different buffers, so reading speaker then dialogue
+ *    back-to-back is safe as long as each is copied before its getter repeats.
+ *  - Content is NUL-terminated UTF-8 WITHOUT embedded NULs; plain getters stop
+ *    at the first NUL. When exact byte length matters, use the `...WithLength`
+ *    variant, which reports the length that was copied.
+ *  - Hosts must copy synchronously (e.g. Marshal.PtrToStringUTF8 at the call
+ *    site). Holding the raw pointer across Step/resize/shutdown is a
+ *    use-after-free.
+ * ─────────────────────────────────────────────────────────────────────────── */
+
 /* ── State queries (Engine → Editor) ─────────────────────────────────────── */
 
 /**
  * Returns a pointer to the active speaker name string.
  * The returned pointer is owned by the engine — do NOT free it.
  * It is valid until the next RowlEngine_UpdateScene / RowlEngine_Step call.
+ * See the lifetime contract above; prefer GetSpeakerWithLength for exact bytes.
  */
 ROWL_API const char* RowlEngine_GetSpeaker(RowlEngineHandle handle);
 
+/**
+ * Length-reporting variant of GetSpeaker. Returns the same pointer and writes
+ * its byte length (excluding NUL) to outLen when outLen is non-NULL.
+ */
+ROWL_API const char* RowlEngine_GetSpeakerWithLength(RowlEngineHandle handle, uint32_t* outLen);
+
 /** Same ownership rules as RowlEngine_GetSpeaker. */
 ROWL_API const char* RowlEngine_GetDialogue(RowlEngineHandle handle);
+
+/** Length-reporting variant of GetDialogue (see lifetime contract above). */
+ROWL_API const char* RowlEngine_GetDialogueWithLength(RowlEngineHandle handle, uint32_t* outLen);
 
 /** Returns the ID of the currently active story node. */
 ROWL_API uint64_t RowlEngine_GetCurrentNodeId(RowlEngineHandle handle);
@@ -349,6 +394,9 @@ ROWL_API int RowlEngine_GetActiveDspFilter(RowlEngineHandle handle);
 /** Returns the most recent audio error. The pointer is engine-owned and valid until the next audio call. */
 ROWL_API const char* RowlEngine_GetLastAudioError(RowlEngineHandle handle);
 
+/** Length-reporting variant of GetLastAudioError (see lifetime contract). */
+ROWL_API const char* RowlEngine_GetLastAudioErrorWithLength(RowlEngineHandle handle, uint32_t* outLen);
+
 /** Returns 1 when a physical audio output device is open, 0 while in silent fallback. */
 ROWL_API int RowlEngine_IsAudioDeviceAvailable(RowlEngineHandle handle);
 
@@ -374,6 +422,9 @@ ROWL_API void RowlEngine_SetDialogueVoiceBlip(RowlEngineHandle handle, const cha
 
 /** Returns active dialogue voice blip sound path (engine-owned string). */
 ROWL_API const char* RowlEngine_GetDialogueVoiceBlipSound(RowlEngineHandle handle);
+
+/** Length-reporting variant of GetDialogueVoiceBlipSound (see lifetime contract). */
+ROWL_API const char* RowlEngine_GetDialogueVoiceBlipSoundWithLength(RowlEngineHandle handle, uint32_t* outLen);
 
 /** Returns active dialogue voice blip base pitch multiplier. */
 ROWL_API float RowlEngine_GetDialogueVoiceBlipPitch(RowlEngineHandle handle);
@@ -408,8 +459,14 @@ ROWL_API void RowlEngine_ResetVoiceBlipCount(RowlEngineHandle handle);
  */
 ROWL_API const char* RowlEngine_GetScriptRuntimeDiagnosticsJson(RowlEngineHandle handle);
 
+/** Length-reporting variant of GetScriptRuntimeDiagnosticsJson (see lifetime contract). */
+ROWL_API const char* RowlEngine_GetScriptRuntimeDiagnosticsJsonWithLength(RowlEngineHandle handle, uint32_t* outLen);
+
 /** Returns the bounded player dialogue backlog as an engine-owned JSON array. */
 ROWL_API const char* RowlEngine_GetDialogueHistoryJson(RowlEngineHandle handle);
+
+/** Length-reporting variant of GetDialogueHistoryJson (see lifetime contract). */
+ROWL_API const char* RowlEngine_GetDialogueHistoryJsonWithLength(RowlEngineHandle handle, uint32_t* outLen);
 
 /* ── Save / Load Slots & History Rewind ───────────────────────────────────── */
 
@@ -447,6 +504,9 @@ ROWL_API void RowlEngine_SetVariable(RowlEngineHandle handle, const char* key, c
  */
 ROWL_API const char* RowlEngine_GetVariable(RowlEngineHandle handle, const char* key);
 
+/** Length-reporting variant of GetVariable (see lifetime contract). */
+ROWL_API const char* RowlEngine_GetVariableWithLength(RowlEngineHandle handle, const char* key, uint32_t* outLen);
+
 /** Evaluates a Lua condition expression (e.g. "gold >= 50"). Returns 1 for true, 0 for false. */
 ROWL_API int RowlEngine_EvaluateCondition(RowlEngineHandle handle, const char* conditionExpr);
 
@@ -479,17 +539,26 @@ ROWL_API int32_t RowlEngine_GetLastResultCode(RowlEngineHandle handle);
  */
 ROWL_API const char* RowlEngine_GetLastResultOperation(RowlEngineHandle handle);
 
+/** Length-reporting variant of GetLastResultOperation (see lifetime contract). */
+ROWL_API const char* RowlEngine_GetLastResultOperationWithLength(RowlEngineHandle handle, uint32_t* outLen);
+
 /**
  * Returns the human-readable diagnostic message of the last runtime operation.
  * Pointer is thread-local/engine-owned UTF-8 string.
  */
 ROWL_API const char* RowlEngine_GetLastResultMessage(RowlEngineHandle handle);
 
+/** Length-reporting variant of GetLastResultMessage (see lifetime contract). */
+ROWL_API const char* RowlEngine_GetLastResultMessageWithLength(RowlEngineHandle handle, uint32_t* outLen);
+
 /**
  * Returns the target identifier or path of the last runtime operation (e.g. slot index or file path).
  * Pointer is thread-local/engine-owned UTF-8 string.
  */
 ROWL_API const char* RowlEngine_GetLastResultTarget(RowlEngineHandle handle);
+
+/** Length-reporting variant of GetLastResultTarget (see lifetime contract). */
+ROWL_API const char* RowlEngine_GetLastResultTargetWithLength(RowlEngineHandle handle, uint32_t* outLen);
 
 /**
  * Clears the last runtime result and resets it to OK/Success.

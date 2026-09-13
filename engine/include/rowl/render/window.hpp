@@ -134,6 +134,14 @@ public:
     const uint8_t* getPixelBuffer() const;
 
     /**
+     * Returns the offscreen surface row pitch in bytes (bytes per scanline).
+     * May exceed width*4 when the backend pads rows; hosts must stride by
+     * this value instead of assuming tight packing. Returns 0 when no
+     * offscreen surface exists. MS-0 pitch contract.
+     */
+    uint32_t getPixelPitch() const;
+
+    /**
      * Standard initialization: creates an SDL3 top-level window.
      * Used in standalone / runtime-only mode.
      */

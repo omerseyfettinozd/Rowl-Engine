@@ -330,8 +330,13 @@ void Engine::resetToStartNode() {
 }
 
 const uint8_t* Engine::getPixelBuffer(uint32_t* outW, uint32_t* outH) const {
+    return getPixelBuffer(outW, outH, nullptr);
+}
+
+const uint8_t* Engine::getPixelBuffer(uint32_t* outW, uint32_t* outH, uint32_t* outPitch) const {
     if (outW) *outW = m_window ? m_window->getWidth() : 0;
     if (outH) *outH = m_window ? m_window->getHeight() : 0;
+    if (outPitch) *outPitch = m_window ? m_window->getPixelPitch() : 0;
     return m_window ? m_window->getPixelBuffer() : nullptr;
 }
 

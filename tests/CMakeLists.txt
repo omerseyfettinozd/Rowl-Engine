@@ -14,6 +14,7 @@ add_executable(rowl_tests
     test_vfs_security.cpp
     test_native_c_api.cpp
     test_game_object_component_system.cpp
+    test_pixel_pitch.cpp
     test_window_input_routing.cpp
     test_runtime_context_and_diagnostics.cpp
     test_story_graph_parser.cpp

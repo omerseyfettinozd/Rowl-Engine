@@ -8,6 +8,7 @@
 
 #include "c_api_internal.hpp"
 #include "rowl/vfs/vfs.hpp"
+#include "cstring"
 #include "fstream"
 #include "filesystem"
 #include "nlohmann/json.hpp"
@@ -120,6 +121,12 @@ const char* RowlEngine_GetLastStoryGraphError(RowlEngineHandle handle) {
     return buffer.c_str();
 }
 
+const char* RowlEngine_GetLastStoryGraphErrorWithLength(RowlEngineHandle handle, uint32_t* outLen) {
+    const char* value = RowlEngine_GetLastStoryGraphError(handle);
+    if (outLen) *outLen = static_cast<uint32_t>(std::strlen(value));
+    return value;
+}
+
 void RowlEngine_SetProjectDirectory(RowlEngineHandle handle, const char* projectRoot) {
     if (!isLiveHandle(handle) || !projectRoot || !*projectRoot) return;
     invokeNoexcept([&] {
@@ -208,6 +215,18 @@ const char* RowlEngine_GetDialogue(RowlEngineHandle handle) {
         buf = toEngine(handle)->getActiveDialogue();
         return buf.c_str();
     }, "");
+}
+
+const char* RowlEngine_GetSpeakerWithLength(RowlEngineHandle handle, uint32_t* outLen) {
+    const char* value = RowlEngine_GetSpeaker(handle);
+    if (outLen) *outLen = static_cast<uint32_t>(std::strlen(value));
+    return value;
+}
+
+const char* RowlEngine_GetDialogueWithLength(RowlEngineHandle handle, uint32_t* outLen) {
+    const char* value = RowlEngine_GetDialogue(handle);
+    if (outLen) *outLen = static_cast<uint32_t>(std::strlen(value));
+    return value;
 }
 
 uint64_t RowlEngine_GetCurrentNodeId(RowlEngineHandle handle) {
