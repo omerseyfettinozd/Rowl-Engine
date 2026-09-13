@@ -120,6 +120,10 @@ if(ROWL_BUILD_RUNTIME_TESTS AND TARGET rowl_player)
         NAME rowl_player_cli_missing_option_value
         COMMAND $<TARGET_FILE:rowl_player> --project
     )
+    add_test(
+        NAME rowl_player_cli_invalid_slot
+        COMMAND $<TARGET_FILE:rowl_player> --slot 99
+    )
 
     # The First Light sample packaged as a portable release and played
     # through the release contract (packaged VFS, offscreen smoke frame).
@@ -182,6 +186,7 @@ if(ROWL_BUILD_RUNTIME_TESTS AND TARGET rowl_player)
     set_tests_properties(
         rowl_player_cli_invalid_width
         rowl_player_cli_missing_option_value
+        rowl_player_cli_invalid_slot
         PROPERTIES
             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
             WILL_FAIL TRUE

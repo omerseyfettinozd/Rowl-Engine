@@ -1,6 +1,7 @@
 #pragma once
 
 #include "rowl/render/window.hpp"
+#include "rowl/core/pause_menu.hpp"
 #include "rowl/platform/platform_host.hpp"
 #include "rowl/state/game_state.hpp"
 #include "rowl/state/session_persistence.hpp"
@@ -226,6 +227,30 @@ public:
     // ── Save / Load Slots & State Persistence ──────────────────────────────
     bool saveGameSlot(int32_t slotIndex);
     bool loadGameSlot(int32_t slotIndex);
+    /// MS-6: F5/F9 operate on this slot (kPauseMenuQuickSlotMin..Max).
+    /// Out-of-range requests are rejected; the active slot is unchanged.
+    bool setQuickSaveSlot(int32_t slotIndex);
+    int32_t getQuickSaveSlot() const { return m_activeQuickSlot; }
+    /// MS-6: quick save/load through the active slot (player F5/F9 path).
+    bool quickSave();
+    bool quickLoad();
+    // ── MS-6 Pause Menu ──────────────────────────────────────────────────
+    /// Opens/closes the pause menu. Opening resets navigation to the main
+    /// page; closing resumes the simulation. Never quits the game — quitting
+    /// requires the menu's two-step exit confirmation.
+    void setPaused(bool paused);
+    void togglePause() { setPaused(!m_paused); }
+    bool isPaused() const { return m_paused; }
+    /// Keyboard-equivalent menu navigation (window arrows / C API / tests).
+    /// Confirm activates the selected row; Back leaves sub-pages, disarms the
+    /// exit confirmation, or resumes from the main page.
+    void pauseMenuCommand(PauseMenuCommand command);
+    /// Pointer-equivalent menu input in virtual 1920x1080 coordinates.
+    /// Selecting and activating follow the same helpers as keyboard input.
+    void pauseMenuClick(float virtualX, float virtualY);
+    /// Editor-facing snapshot for the overlay renderer and the C API.
+    PauseMenuView getPauseMenuView() const;
+    std::string getPauseMenuJson() const;
     bool hasSaveSlot(int32_t slotIndex) const;
     bool deleteSaveSlot(int32_t slotIndex);
     bool rewind(uint64_t steps = 1);
@@ -305,6 +330,12 @@ private:
     bool m_isRunning    = false;
     bool m_initialized  = false;
     bool m_isPlaying    = false;
+    // MS-6 player shell: pause menu + active quick-save slot.
+    bool m_paused = false;
+    bool m_pauseConfirmQuit = false;
+    PauseMenuMode m_pauseMode = PauseMenuMode::Main;
+    int m_pauseSelected = 0;
+    int32_t m_activeQuickSlot = 0;
     bool m_windowAudioSuspended = false;
     float m_autoAdvanceElapsed = 0.0f;
     float m_textSpeedMultiplier = 1.0f;
@@ -314,6 +345,19 @@ private:
     bool loadStoryGraphFromAssetStream(const std::string& assetPath,
                                        std::unique_ptr<std::istream> stream);
     void handleRuntimeInput(const Rowl::Platform::RuntimeInputEvent& event);
+    /// MS-6: completes every typing line and reports whether any was typing.
+    /// Pure elapsed-time predicate — no play-state gate — so keyboard,
+    /// pointer, swipe, and choice inputs share one click-to-complete path.
+    bool completeTypewriterIfTyping();
+    // MS-6 pause-menu internals: keyboard and pointer funnels share these.
+    int pauseMenuRowCount() const;
+    void pauseMenuMoveSelection(int direction);
+    void pauseMenuAdjustSelected(int direction);
+    void menuActivateSelected();
+    void menuChooseSlot(int32_t slotIndex);
+    void menuBack();
+    float pauseMenuVolume(int row) const;
+    void setPauseMenuVolume(int row, float volume);
     void applyAudioSuspension(const std::shared_ptr<Rowl::Platform::PlatformHost>& host);
     void restoreAudioStateFromGameState();
     void deactivateScripts(bool callOnExit = true);

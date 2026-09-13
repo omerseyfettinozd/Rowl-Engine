@@ -145,4 +145,44 @@ void test_window_input_routing() {
     TEST_PASS("Render Boundary Maps Canvas Taps and Reports Bezel Hits");
     window.shutdown();
     TEST_PASS("SDL dispatcher isolates visible runtime events and broadcasts process quit");
+
+    // MS-6: SDL-key to player-action translation is a pure function, pinned
+    // here without a visible window. Escape/P pause (never quit), digits pick
+    // quick slots, arrows drive menu nav, Space/Enter advance.
+    {
+        using Event = Rowl::Platform::RuntimeInputEvent;
+        using Type = Rowl::Platform::RuntimeInputEvent::Type;
+        auto expect = [&](uint32_t key, Type type, int32_t slot = 0) {
+            Event event{Type::Advance};
+            event.slot = -1;
+            if (!Rowl::Render::Window::mapKeyToRuntimeInput(key, event) ||
+                event.type != type || event.slot != slot) {
+                std::cerr << "MS-6: key mapping mismatch for key " << key << std::endl;
+                exit(1);
+            }
+        };
+        expect(SDLK_ESCAPE, Type::PauseToggle);
+        expect(SDLK_P, Type::PauseToggle);
+        expect(SDLK_SPACE, Type::Advance);
+        expect(SDLK_RETURN, Type::Advance);
+        expect(SDLK_KP_ENTER, Type::Advance);
+        expect(SDLK_UP, Type::MenuUp);
+        expect(SDLK_DOWN, Type::MenuDown);
+        expect(SDLK_LEFT, Type::MenuLeft);
+        expect(SDLK_RIGHT, Type::MenuRight);
+        expect(SDLK_F5, Type::QuickSave);
+        expect(SDLK_F9, Type::QuickLoad);
+        expect(SDLK_BACKSPACE, Type::Rewind);
+        expect(SDLK_Z, Type::Rewind);
+        expect(SDLK_0, Type::SelectSlot, 0);
+        expect(SDLK_3, Type::SelectSlot, 3);
+        expect(SDLK_9, Type::SelectSlot, 9);
+        Event unmapped{Type::Advance};
+        if (Rowl::Render::Window::mapKeyToRuntimeInput(SDLK_F1, unmapped) ||
+            Rowl::Render::Window::mapKeyToRuntimeInput(SDLK_A, unmapped)) {
+            std::cerr << "MS-6: unrelated keys must not map to player actions" << std::endl;
+            exit(1);
+        }
+    }
+    TEST_PASS("MS-6 Player Key Map (pause, slots, menu nav, advance)");
 }

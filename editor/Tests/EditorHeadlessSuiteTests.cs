@@ -242,6 +242,9 @@ internal static class EditorHeadlessTestSuite
             // Test 31: MS-5 editor UX — drag cancel, keyboard tour, asset watcher
             EditorMs5UxTests.Run(mainVm, testProjectRoot);
 
+            // Test 32: MS-6 preview click-to-complete (paused engine contract)
+            EditorMs6PlayerTests.Run();
+
             Console.WriteLine("\n=======================================================");
             Console.WriteLine("🎉 ALL EDITOR HEADLESS TESTS PASSED SUCCESSFULLY! 🎉");
             Console.WriteLine("=======================================================\n");

@@ -65,6 +65,13 @@ void test_demo_second_signal() {
     }
     TEST_PASS("Second demo plays BGM and renders its opening frame");
 
+    // MS-6: real-dt steps leave the presented line mid-typing even while
+    // paused, and an explicit choice while typing is consumed by
+    // click-to-complete (documented advanceToChoice contract). Settle the
+    // line first so the assertions below verify story flow, not typing.
+    // 24 x 0.25 s covers any demo line at 30 ms/char; auto-advance is off.
+    for (int settle = 0; settle < 24; ++settle) RowlEngine_Step(handle, 0.25f);
+
     if (RowlEngine_SelectChoice(handle, "go_answer") != 1 ||
         RowlEngine_GetCurrentNodeId(handle) != 2) {
         std::cerr << "Second demo choice did not reach the answer node" << std::endl;
@@ -85,6 +92,8 @@ void test_demo_second_signal() {
         std::cerr << "Second demo answer node did not accumulate Lua state" << std::endl;
         exit(1);
     }
+    // MS-6: node 2 re-presents (and re-arms) its line on entry — settle again.
+    for (int settle = 0; settle < 24; ++settle) RowlEngine_Step(handle, 0.25f);
     if (RowlEngine_SelectChoice(handle, "go_code") != 1 ||
         RowlEngine_GetCurrentNodeId(handle) != 4 ||
         std::string(RowlEngine_GetSpeaker(handle)) != "Margot") {
@@ -108,6 +117,8 @@ void test_demo_second_signal() {
         std::cerr << "Golden Project did not restore its saved state after process restart" << std::endl;
         exit(1);
     }
+    // MS-6: loading a slot re-presents (and re-arms) the line — settle again.
+    for (int settle = 0; settle < 24; ++settle) RowlEngine_Step(handle, 0.25f);
     if (RowlEngine_SelectChoice(handle, "go_code") != 1 ||
         RowlEngine_Rewind(handle, 1) != 1 ||
         RowlEngine_GetCurrentNodeId(handle) != 2) {

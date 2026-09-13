@@ -47,12 +47,25 @@ struct RuntimeInputEvent {
         Rewind,
         PointerDown,
         SwipeForward,
-        SwipeBack
+        SwipeBack,
+        // MS-6 player shell: pause menu + quick-slot selection. Keyboard and
+        // pointer hosts emit these; Engine routes by pause state, so unpaused
+        // games ignore menu nav and paused games ignore story advance.
+        PauseToggle,
+        MenuUp,
+        MenuDown,
+        MenuLeft,
+        MenuRight,
+        MenuBack,
+        SelectSlot
     };
 
     Type type;
     float x = 0.0f;
     float y = 0.0f;
+    /// Meaningful only for SelectSlot: the requested quick-save slot
+    /// (kPauseMenuQuickSlotMin..kPauseMenuQuickSlotMax).
+    int32_t slot = 0;
 };
 
 /// Minimum host boundary shared by desktop and future mobile shells. Keep this

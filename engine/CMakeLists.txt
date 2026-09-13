@@ -168,6 +168,7 @@ set(ROWL_ENGINE_SOURCES
     src/c_api_render.cpp
     src/c_api_audio.cpp
     src/c_api_state.cpp
+    src/c_api_pause.cpp
 )
 # ── Third-party dependencies as a reusable INTERFACE target ───────────────
 # Both RowlEngineCore and rowl_tests link this; it carries the include/link

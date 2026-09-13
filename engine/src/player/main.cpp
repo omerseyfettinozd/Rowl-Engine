@@ -32,6 +32,16 @@ bool requireOptionValue(int& index, int argc, char* argv[], const std::string& o
     return true;
 }
 
+bool parseQuickSlot(std::string_view text, int32_t& output) {
+    int parsed = -1;
+    const auto [end, error] = std::from_chars(text.data(), text.data() + text.size(), parsed);
+    if (error != std::errc{} || end != text.data() + text.size() || parsed < 0 || parsed > 9) {
+        return false;
+    }
+    output = static_cast<int32_t>(parsed);
+    return true;
+}
+
 } // namespace
 
 static void printHelp(const char* progName) {
@@ -47,15 +57,22 @@ static void printHelp(const char* progName) {
               << "  -w, --width <pixels>     Window width in pixels (default: 1920)\n"
               << "      --height <pixels>    Window height in pixels (default: 1080)\n"
               << "  -t, --title <name>       Window title (default: \"Rowl Game\")\n"
+              << "      --slot <N>           Active quick-save slot 0-9 for F5/F9 (default: 0)\n"
               << "      --no-vsync           Disable vertical sync\n\n"
               << "      --gpu-smoke-test     Render one standalone frame, then exit (CI)\n\n"
               << "      --package-smoke-test Load the packaged VFS graph, render one frame, then exit\n\n"
               << "Controls:\n"
               << "  Space / Enter / Click    Advance to next dialogue line / select choice\n"
-              << "  F5                       Quick Save (Slot 0)\n"
-              << "  F9                       Quick Load (Slot 0)\n"
+              << "  F5                       Quick Save (active slot)\n"
+              << "  F9                       Quick Load (active slot)\n"
+              << "  0-9                      Select the active quick-save slot\n"
               << "  Backspace / Z            Rewind 1 step back in history\n"
-              << "  Escape                   Exit the game\n"
+              << "  Escape / P               Pause menu (save/load slots, volumes,\n"
+              << "                           text speed, exit confirmation)\n"
+              << "Pause menu:\n"
+              << "  Up / Down / Click        Select item    Left / Right  Adjust value\n"
+              << "  Enter / Space / Click    Confirm        Escape        Back / resume\n"
+              << "  Exit needs a second confirmation so a stray Escape never quits.\n"
               << "=========================================================================\n";
 }
 
@@ -68,6 +85,7 @@ int main(int argc, char* argv[]) {
     bool vsync = true;
     bool gpuSmokeTest = false;
     bool packageSmokeTest = false;
+    int32_t quickSlot = 0;
 
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
@@ -94,6 +112,13 @@ int main(int argc, char* argv[]) {
             if (!requireOptionValue(i, argc, argv, arg, appTitle)) return 1;
         } else if (arg == "--no-vsync") {
             vsync = false;
+        } else if (arg == "--slot") {
+            std::string slotText;
+            if (!requireOptionValue(i, argc, argv, arg, slotText)) return 1;
+            if (!parseQuickSlot(slotText, quickSlot)) {
+                std::cerr << "Invalid " << arg << " value '" << slotText << "' (expected 0-9)\n";
+                return 1;
+            }
         } else if (arg == "--gpu-smoke-test") {
             gpuSmokeTest = true;
         } else if (arg == "--package-smoke-test") {
@@ -134,6 +159,13 @@ int main(int argc, char* argv[]) {
         : RowlEngine_InitStandalone(engine, appTitle.c_str(), winWidth, winHeight, vsync ? 1 : 0);
     if (!initialized) {
         std::cerr << "Failed to initialize Rowl Engine!" << std::endl;
+        RowlEngine_Destroy(engine);
+        return 1;
+    }
+
+    // MS-6: active quick-save slot for F5/F9 (default 0, or --slot N).
+    if (RowlEngine_SetQuickSaveSlot(engine, quickSlot) != 1) {
+        std::cerr << "Failed to select quick-save slot " << quickSlot << "\n";
         RowlEngine_Destroy(engine);
         return 1;
     }

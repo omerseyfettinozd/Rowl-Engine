@@ -292,6 +292,296 @@ void test_native_c_api() {
     RowlEngine_SetPlayState(handle, 0);
     TEST_PASS("Milestone 25: Typewriter Voice Blips, Volume C-API, Character Inheritance & Punctuation Defense");
 
+    // MS-6: click-to-complete is a property of the presented line, not of the
+    // play state. A non-playing (preview-like) engine must complete a typing
+    // line on the first advance request and move on only on the second one.
+    // Keyboard (AdvanceNode) and pointer (PointerDown on empty canvas) share
+    // the single advanceToNextNode funnel, so both behave identically.
+    {
+        const auto typeGraphPath = std::filesystem::temp_directory_path() / "rowl_ms6_typewriter_graph.json";
+        {
+            std::ofstream graph(typeGraphPath);
+            graph << R"({"format_version":4,"start_node_id":101,"nodes":[
+              {"id":101,"speaker":"Evelyn","dialogue":"Typed.","components":[
+                {"type":"dialogue","id":"d_ms6","enabled":true,"data":{
+                  "speaker":"Evelyn",
+                  "dialogue":"This line is long enough that a short step leaves it mid-typing.",
+                  "typewriter_enabled":true,"text_speed":30}}],
+               "next_nodes":[{"id":102}]},
+              {"id":102,"speaker":"Evelyn","dialogue":"Second."}]})";
+        }
+        RowlEngine_LoadStoryGraph(handle, typeGraphPath.string().c_str());
+        RowlEngine_Step(handle, 0.0f);
+        if (RowlEngine_GetCurrentNodeId(handle) != 101) {
+            std::cerr << "MS-6: typewriter fixture did not present node 101" << std::endl;
+            exit(1);
+        }
+        if (cApiEngine->getActiveDialogues().empty() ||
+            cApiEngine->getActiveDialogues()[0].elapsedTypewriterTime != 0.0f) {
+            std::cerr << "MS-6: presenting a line must arm its typewriter even while paused" << std::endl;
+            exit(1);
+        }
+        // Paused presentation still renders full text and reports a static
+        // frame (MS-4 dirty-frame gate preserved).
+        if (RowlEngine_IsPreviewFrameStatic(handle) != 1) {
+            std::cerr << "MS-6: paused typewriter presentation must report a static frame" << std::endl;
+            exit(1);
+        }
+        RowlEngine_Step(handle, 0.2f);
+        const float elapsedMid = cApiEngine->getActiveDialogues()[0].elapsedTypewriterTime;
+        if (!(elapsedMid > 0.0f)) {
+            std::cerr << "MS-6: typewriter did not progress on a real-dt step while paused" << std::endl;
+            exit(1);
+        }
+        // First keyboard advance completes the line; the node must not move.
+        RowlEngine_AdvanceNode(handle, 0);
+        if (RowlEngine_GetCurrentNodeId(handle) != 101) {
+            std::cerr << "MS-6: mid-typing AdvanceNode skipped the node instead of completing it" << std::endl;
+            exit(1);
+        }
+        // Second advance moves on.
+        RowlEngine_AdvanceNode(handle, 0);
+        if (RowlEngine_GetCurrentNodeId(handle) != 102) {
+            std::cerr << "MS-6: completed line did not advance on the second request" << std::endl;
+            exit(1);
+        }
+        // Pointer parity: reload, step mid-typing, click empty canvas. The
+        // C-API PointerDown reports choice hits only; hosts compose it with
+        // AdvanceNode exactly like the player event loop and the editor
+        // preview do, so the test mirrors that composition.
+        auto clickEmptyCanvas = [&] {
+            if (RowlEngine_PointerDown(handle, 960.0f, 100.0f) != 0) return;
+            RowlEngine_AdvanceNode(handle, 0);
+        };
+        RowlEngine_LoadStoryGraph(handle, typeGraphPath.string().c_str());
+        RowlEngine_Step(handle, 0.0f);
+        RowlEngine_Step(handle, 0.2f);
+        clickEmptyCanvas();
+        if (RowlEngine_GetCurrentNodeId(handle) != 101) {
+            std::cerr << "MS-6: mid-typing pointer click skipped the node instead of completing it" << std::endl;
+            exit(1);
+        }
+        clickEmptyCanvas();
+        if (RowlEngine_GetCurrentNodeId(handle) != 102) {
+            std::cerr << "MS-6: completed line did not advance on the second pointer click" << std::endl;
+            exit(1);
+        }
+        // NOTE: typeGraphPath is reused by the slot/pause blocks below and
+        // removed at the end of the pause-menu tour.
+        TEST_PASS("MS-6 Preview Click-to-Complete & Keyboard/Pointer Parity");
+    }
+
+    // MS-6: quick slots 0-9, active-slot quick save/load wiring, and the
+    // pause-menu skeleton (nav, values, slot pages, exit confirmation).
+    {
+        const auto typeGraphPath = std::filesystem::temp_directory_path() / "rowl_ms6_typewriter_graph.json";
+        if (RowlEngine_GetQuickSaveSlot(handle) != 0) {
+            std::cerr << "MS-6: default quick slot must be 0" << std::endl;
+            exit(1);
+        }
+        if (RowlEngine_SetQuickSaveSlot(handle, 11) != 0 ||
+            RowlEngine_SetQuickSaveSlot(handle, -1) != 0 ||
+            RowlEngine_GetQuickSaveSlot(handle) != 0) {
+            std::cerr << "MS-6: out-of-range quick slot must be rejected" << std::endl;
+            exit(1);
+        }
+        if (RowlEngine_SetQuickSaveSlot(handle, 4) != 1 ||
+            RowlEngine_GetQuickSaveSlot(handle) != 4) {
+            std::cerr << "MS-6: quick slot selection failed" << std::endl;
+            exit(1);
+        }
+        // The fixture left node 102 current; quick-save pins it to slot 4.
+        if (RowlEngine_QuickSave(handle) != 1 || RowlEngine_HasSaveSlot(handle, 4) != 1) {
+            std::cerr << "MS-6: QuickSave did not persist the active slot" << std::endl;
+            exit(1);
+        }
+        if (RowlEngine_SaveGameSlot(handle, 7) != 1 || RowlEngine_HasSaveSlot(handle, 7) != 1) {
+            std::cerr << "MS-6: extended slot 7 round-trip failed" << std::endl;
+            exit(1);
+        }
+        RowlEngine_LoadStoryGraph(handle, typeGraphPath.string().c_str());
+        if (RowlEngine_GetCurrentNodeId(handle) != 101) {
+            std::cerr << "MS-6: fixture reload did not rewind to node 101" << std::endl;
+            exit(1);
+        }
+        if (RowlEngine_QuickLoad(handle) != 1 || RowlEngine_GetCurrentNodeId(handle) != 102) {
+            std::cerr << "MS-6: QuickLoad did not restore the active slot" << std::endl;
+            exit(1);
+        }
+        RowlEngine_DeleteSaveSlot(handle, 4);
+        RowlEngine_DeleteSaveSlot(handle, 7);
+        RowlEngine_SetQuickSaveSlot(handle, 0);
+        if (RowlEngine_HasSaveSlot(handle, 4) != 0 || RowlEngine_HasSaveSlot(handle, 7) != 0) {
+            std::cerr << "MS-6: slot cleanup failed" << std::endl;
+            exit(1);
+        }
+        TEST_PASS("MS-6 Quick Slots 0-9 & Active-Slot Quick Save/Load");
+    }
+
+    // MS-6: pause-menu tour on the live handle (volumes deltas are relative:
+    // earlier blocks set BGM to 0.8 on this handle).
+    {
+        const auto typeGraphPath = std::filesystem::temp_directory_path() / "rowl_ms6_typewriter_graph.json";
+        if (RowlEngine_IsPaused(handle) != 0) {
+            std::cerr << "MS-6: menu must start closed" << std::endl;
+            exit(1);
+        }
+        RowlEngine_SetPaused(handle, 1);
+        if (RowlEngine_IsPaused(handle) != 1) {
+            std::cerr << "MS-6: SetPaused did not open the menu" << std::endl;
+            exit(1);
+        }
+        auto menuJson = [&] {
+            return nlohmann::json::parse(RowlEngine_GetPauseMenuJson(handle));
+        };
+        nlohmann::json menu = menuJson();
+        if (!menu["open"].get<bool>() || menu["mode"].get<int>() != 0 ||
+            menu["selected"].get<int>() != 0 || menu["rows"].size() != 9 ||
+            menu["rows"][0]["label"].get<std::string>() != "Devam Et") {
+            std::cerr << "MS-6: freshly opened menu snapshot mismatch" << std::endl;
+            exit(1);
+        }
+        // Freeze: real-dt steps while paused must not progress the sim.
+        RowlEngine_LoadStoryGraph(handle, typeGraphPath.string().c_str());
+        RowlEngine_Step(handle, 0.0f);
+        RowlEngine_Step(handle, 0.2f);
+        if (cApiEngine->getActiveDialogues().empty() ||
+            cApiEngine->getActiveDialogues()[0].elapsedTypewriterTime != 0.0f) {
+            std::cerr << "MS-6: paused steps progressed the typewriter" << std::endl;
+            exit(1);
+        }
+        if (RowlEngine_GetCurrentNodeId(handle) != 101) {
+            std::cerr << "MS-6: node moved while paused" << std::endl;
+            exit(1);
+        }
+        RowlEngine_AdvanceNode(handle, 0);
+        if (RowlEngine_GetCurrentNodeId(handle) != 101) {
+            std::cerr << "MS-6: direct advance escaped the modal pause menu" << std::endl;
+            exit(1);
+        }
+        // Down -> row 1 ("Oyunu Kaydet"), Confirm -> save slot page.
+        RowlEngine_PauseMenuCommand(handle, ROWL_PAUSE_MENU_DOWN);
+        RowlEngine_PauseMenuCommand(handle, ROWL_PAUSE_MENU_CONFIRM);
+        menu = menuJson();
+        if (menu["mode"].get<int>() != 1 || menu["rows"].size() != 10 ||
+            menu["title"].get<std::string>() != "Kayit Yuvasi Sec") {
+            std::cerr << "MS-6: save slot page did not open" << std::endl;
+            exit(1);
+        }
+        // Down -> slot 1, Confirm -> save current node (101) there.
+        RowlEngine_PauseMenuCommand(handle, ROWL_PAUSE_MENU_DOWN);
+        RowlEngine_PauseMenuCommand(handle, ROWL_PAUSE_MENU_CONFIRM);
+        if (RowlEngine_HasSaveSlot(handle, 1) != 1) {
+            std::cerr << "MS-6: menu save to slot 1 failed" << std::endl;
+            exit(1);
+        }
+        menu = menuJson();
+        if (menu["rows"][1]["value"].get<std::string>() != "dolu" ||
+            menu["rows"][2]["value"].get<std::string>() != "bos") {
+            std::cerr << "MS-6: slot occupancy did not refresh in the menu" << std::endl;
+            exit(1);
+        }
+        if (RowlEngine_IsPaused(handle) != 1) {
+            std::cerr << "MS-6: menu save must stay paused" << std::endl;
+            exit(1);
+        }
+        // Back -> main page, selection reset.
+        RowlEngine_PauseMenuCommand(handle, ROWL_PAUSE_MENU_BACK);
+        menu = menuJson();
+        if (menu["mode"].get<int>() != 0 || menu["selected"].get<int>() != 0) {
+            std::cerr << "MS-6: Back did not return to the main page" << std::endl;
+            exit(1);
+        }
+        // Down x3 -> Master volume; Left/Right adjust in 0.05 steps.
+        const float masterBefore = RowlEngine_GetMasterVolume(handle);
+        RowlEngine_PauseMenuCommand(handle, ROWL_PAUSE_MENU_DOWN);
+        RowlEngine_PauseMenuCommand(handle, ROWL_PAUSE_MENU_DOWN);
+        RowlEngine_PauseMenuCommand(handle, ROWL_PAUSE_MENU_DOWN);
+        RowlEngine_PauseMenuCommand(handle, ROWL_PAUSE_MENU_LEFT);
+        if (std::abs(RowlEngine_GetMasterVolume(handle) - (masterBefore - 0.05f)) > 0.001f) {
+            std::cerr << "MS-6: master volume did not step down" << std::endl;
+            exit(1);
+        }
+        RowlEngine_PauseMenuCommand(handle, ROWL_PAUSE_MENU_RIGHT);
+        if (std::abs(RowlEngine_GetMasterVolume(handle) - masterBefore) > 0.001f) {
+            std::cerr << "MS-6: master volume did not step back up" << std::endl;
+            exit(1);
+        }
+        // Down x4 more -> text speed row (7); Left steps 1.00x -> 0.75x.
+        for (int i = 0; i < 4; ++i) RowlEngine_PauseMenuCommand(handle, ROWL_PAUSE_MENU_DOWN);
+        menu = menuJson();
+        if (menu["selected"].get<int>() != 7 ||
+            menu["rows"][7]["value"].get<std::string>() != "1.00x") {
+            std::cerr << "MS-6: text-speed row mismatch" << std::endl;
+            exit(1);
+        }
+        RowlEngine_PauseMenuCommand(handle, ROWL_PAUSE_MENU_LEFT);
+        menu = menuJson();
+        if (menu["rows"][7]["value"].get<std::string>() != "0.75x") {
+            std::cerr << "MS-6: text speed did not step to 0.75x" << std::endl;
+            exit(1);
+        }
+        RowlEngine_PauseMenuCommand(handle, ROWL_PAUSE_MENU_RIGHT);
+        // Pointer parity: click row 0 (resume) middle band -> resumes.
+        // Row 0 spans virtual y [290, 346); click its center.
+        if (RowlEngine_PointerDown(handle, 960.0f, 318.0f) != 1 ||
+            RowlEngine_IsPaused(handle) != 0) {
+            std::cerr << "MS-6: pointer click on resume did not close the menu" << std::endl;
+            exit(1);
+        }
+        RowlEngine_DeleteSaveSlot(handle, 1);
+        std::filesystem::remove(typeGraphPath);
+        TEST_PASS("MS-6 Pause Menu Tour (nav, values, slots, freeze, pointer)");
+    }
+
+    // MS-6: exit needs two-step confirmation on an isolated handle, and a
+    // single Escape-equivalent Back press must never quit.
+    {
+        RowlEngineHandle quitHandle = RowlEngine_Create();
+        if (!quitHandle || RowlEngine_Init(quitHandle, 640, 360, 0) != 1) {
+            std::cerr << "MS-6: quit-confirm fixture init failed" << std::endl;
+            exit(1);
+        }
+        RowlEngine_SetPaused(quitHandle, 1);
+        // Up from row 0 wraps to the last row (exit).
+        RowlEngine_PauseMenuCommand(quitHandle, ROWL_PAUSE_MENU_UP);
+        nlohmann::json quitMenu = nlohmann::json::parse(RowlEngine_GetPauseMenuJson(quitHandle));
+        if (quitMenu["selected"].get<int>() != 8) {
+            std::cerr << "MS-6: menu selection did not wrap to exit" << std::endl;
+            exit(1);
+        }
+        RowlEngine_PauseMenuCommand(quitHandle, ROWL_PAUSE_MENU_CONFIRM);
+        if (RowlEngine_IsRunning(quitHandle) != 1) {
+            std::cerr << "MS-6: first exit confirm quit without the second step" << std::endl;
+            exit(1);
+        }
+        quitMenu = nlohmann::json::parse(RowlEngine_GetPauseMenuJson(quitHandle));
+        if (!quitMenu["confirm_quit"].get<bool>()) {
+            std::cerr << "MS-6: exit confirmation was not armed" << std::endl;
+            exit(1);
+        }
+        // Back disarms instead of quitting.
+        RowlEngine_PauseMenuCommand(quitHandle, ROWL_PAUSE_MENU_BACK);
+        if (RowlEngine_IsRunning(quitHandle) != 1) {
+            std::cerr << "MS-6: Back quit the game" << std::endl;
+            exit(1);
+        }
+        quitMenu = nlohmann::json::parse(RowlEngine_GetPauseMenuJson(quitHandle));
+        if (quitMenu["confirm_quit"].get<bool>()) {
+            std::cerr << "MS-6: Back did not disarm the exit confirmation" << std::endl;
+            exit(1);
+        }
+        RowlEngine_PauseMenuCommand(quitHandle, ROWL_PAUSE_MENU_CONFIRM);
+        RowlEngine_PauseMenuCommand(quitHandle, ROWL_PAUSE_MENU_CONFIRM);
+        if (RowlEngine_IsRunning(quitHandle) != 0) {
+            std::cerr << "MS-6: double-confirmed exit did not stop the engine" << std::endl;
+            exit(1);
+        }
+        RowlEngine_Shutdown(quitHandle);
+        RowlEngine_Destroy(quitHandle);
+        TEST_PASS("MS-6 Exit Confirmation (two-step, Back disarms)");
+    }
+
 
     // Script components on the same node deliberately share lifecycle names.
     // The runtime must dispatch both callbacks and tear them down in reverse

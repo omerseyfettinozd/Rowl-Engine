@@ -9,6 +9,7 @@
 #include "rowl/render/font_renderer.hpp"
 #include "rowl/platform/sdl_event_dispatcher.hpp"
 #include <chrono>
+#include <cstdio>
 #include <thread>
 #include <array>
 #include <cmath>
@@ -104,27 +105,57 @@ Rowl::State::SessionPersistence& Engine::sessionPersistence() const {
 }
 
 void Engine::handleRuntimeInput(const Rowl::Platform::RuntimeInputEvent& event) {
+    using Type = Rowl::Platform::RuntimeInputEvent::Type;
     switch (event.type) {
-        case Rowl::Platform::RuntimeInputEvent::Type::Advance:
-            advanceToNextNode();
+        case Type::PauseToggle:
+            togglePause();
             break;
-        case Rowl::Platform::RuntimeInputEvent::Type::QuickSave:
-            saveGameSlot(0);
+        case Type::MenuUp:
+            if (m_paused) pauseMenuCommand(PauseMenuCommand::Up);
             break;
-        case Rowl::Platform::RuntimeInputEvent::Type::QuickLoad:
-            loadGameSlot(0);
+        case Type::MenuDown:
+            if (m_paused) pauseMenuCommand(PauseMenuCommand::Down);
             break;
-        case Rowl::Platform::RuntimeInputEvent::Type::Rewind:
-            rewind(1);
+        case Type::MenuLeft:
+            if (m_paused) pauseMenuCommand(PauseMenuCommand::Left);
             break;
-        case Rowl::Platform::RuntimeInputEvent::Type::PointerDown:
+        case Type::MenuRight:
+            if (m_paused) pauseMenuCommand(PauseMenuCommand::Right);
+            break;
+        case Type::MenuBack:
+            if (m_paused) pauseMenuCommand(PauseMenuCommand::Back);
+            break;
+        case Type::SelectSlot:
+            if (m_paused) {
+                if (m_pauseMode != PauseMenuMode::Main) menuChooseSlot(event.slot);
+            } else {
+                setQuickSaveSlot(event.slot);
+            }
+            break;
+        case Type::Advance:
+            // MS-6: Space/Enter confirm the menu selection while paused and
+            // advance the story otherwise — one key, pause-routed.
+            if (m_paused) menuActivateSelected();
+            else advanceToNextNode();
+            break;
+        case Type::QuickSave:
+            if (!m_paused) quickSave();
+            break;
+        case Type::QuickLoad:
+            if (!m_paused) quickLoad();
+            break;
+        case Type::Rewind:
+            if (!m_paused) rewind(1);
+            break;
+        case Type::PointerDown:
             if (!handlePointerDown(event.x, event.y)) advanceToNextNode();
             break;
-        case Rowl::Platform::RuntimeInputEvent::Type::SwipeForward:
-            advanceToNextNode();
+        case Type::SwipeForward:
+            if (m_paused) menuActivateSelected();
+            else advanceToNextNode();
             break;
-        case Rowl::Platform::RuntimeInputEvent::Type::SwipeBack:
-            rewind(1);
+        case Type::SwipeBack:
+            if (!m_paused) rewind(1);
             break;
     }
 }
@@ -310,21 +341,15 @@ void Engine::resetToStartNode() {
                 startNode.dialogueBoxWidth, startNode.dialogueBoxHeight
             );
         }
-        if (m_isPlaying) {
-            for (auto& dlg : m_activeDialogues) {
-                dlg.elapsedTypewriterTime = 0.0f;
-                dlg.lastBlipCodepointIndex = 0;
-            }
-            m_activeDialogueData.elapsedTypewriterTime = 0.0f;
-            m_activeDialogueData.lastBlipCodepointIndex = 0;
-        } else {
-            for (auto& dlg : m_activeDialogues) {
-                dlg.elapsedTypewriterTime = 9999.0f;
-                dlg.lastBlipCodepointIndex = 99999;
-            }
-            m_activeDialogueData.elapsedTypewriterTime = 9999.0f;
-            m_activeDialogueData.lastBlipCodepointIndex = 99999;
+        // MS-6: presenting the start node arms its typewriter regardless of
+        // play state. Paused hosts still render full text (the renderer keys
+        // visibility off the per-line playing flag) and report static frames.
+        for (auto& dlg : m_activeDialogues) {
+            dlg.elapsedTypewriterTime = 0.0f;
+            dlg.lastBlipCodepointIndex = 0;
         }
+        m_activeDialogueData.elapsedTypewriterTime = 0.0f;
+        m_activeDialogueData.lastBlipCodepointIndex = 0;
         ROWL_LOG_INFO("Engine Reset to Start Node #" + std::to_string(m_storyRuntime.currentNodeId()));
     }
 }
@@ -340,14 +365,14 @@ const uint8_t* Engine::getPixelBuffer(uint32_t* outW, uint32_t* outH, uint32_t* 
     return m_window ? m_window->getPixelBuffer() : nullptr;
 }
 
-void Engine::advanceToNextNode(uint32_t choiceIndex) {
-    if (m_storyRuntime.empty()) return;
-    m_autoAdvanceElapsed = 0.0f;
-
-    // If typewriter is still typing out any line, clicking reveals the full text immediately
+bool Engine::completeTypewriterIfTyping() {
+    // MS-6: click-to-complete is a property of the presented line, not of the
+    // play state. A typing line completes on the first advance request from
+    // ANY input (keyboard, pointer, swipe, choice) in both player and
+    // preview; only a settled line advances the story.
     bool anyTyping = false;
     for (const auto& dlg : m_activeDialogues) {
-        if (m_isPlaying && dlg.typewriterEnabled && dlg.textSpeed > 0) {
+        if (dlg.typewriterEnabled && dlg.textSpeed > 0) {
             size_t totalCodepoints = Rowl::Render::FontRenderer::countCodepoints(dlg.dialogue);
             float msPerChar = static_cast<float>(dlg.textSpeed);
             float elapsedMs = dlg.elapsedTypewriterTime * 1000.0f;
@@ -358,7 +383,7 @@ void Engine::advanceToNextNode(uint32_t choiceIndex) {
             }
         }
     }
-    if (!anyTyping && m_isPlaying && m_activeDialogueData.typewriterEnabled && m_activeDialogueData.textSpeed > 0) {
+    if (!anyTyping && m_activeDialogueData.typewriterEnabled && m_activeDialogueData.textSpeed > 0) {
         size_t totalCodepoints = Rowl::Render::FontRenderer::countCodepoints(m_activeDialogueData.dialogue);
         float msPerChar = static_cast<float>(m_activeDialogueData.textSpeed);
         float elapsedMs = m_activeDialogueData.elapsedTypewriterTime * 1000.0f;
@@ -375,8 +400,21 @@ void Engine::advanceToNextNode(uint32_t choiceIndex) {
         }
         m_activeDialogueData.elapsedTypewriterTime = 9999.0f;
         m_activeDialogueData.lastBlipCodepointIndex = 99999;
-        return;
     }
+    return anyTyping;
+}
+
+void Engine::advanceToNextNode(uint32_t choiceIndex) {
+    if (m_storyRuntime.empty()) return;
+    // MS-6: the pause menu is modal — story advance is suspended until resume.
+    // (Paused Advance/Pointer inputs are rerouted to menu actions before
+    // reaching here; this guard seals direct API calls too.)
+    if (m_paused) return;
+    m_autoAdvanceElapsed = 0.0f;
+
+    // If typewriter is still typing out any line, the request reveals the
+    // full text immediately instead of advancing (MS-6 unified contract).
+    if (completeTypewriterIfTyping()) return;
 
     const auto advanceResult = m_storyRuntime.advance(choiceIndex);
     if (advanceResult == StoryRuntime::AdvanceResult::CurrentNodeMissing) {
@@ -422,21 +460,14 @@ void Engine::advanceToNextNode(uint32_t choiceIndex) {
                 nextNode.dialogueBoxWidth, nextNode.dialogueBoxHeight
             );
         }
-        if (m_isPlaying) {
-            for (auto& dlg : m_activeDialogues) {
-                dlg.elapsedTypewriterTime = 0.0f;
-                dlg.lastBlipCodepointIndex = 0;
-            }
-            m_activeDialogueData.elapsedTypewriterTime = 0.0f;
-            m_activeDialogueData.lastBlipCodepointIndex = 0;
-        } else {
-            for (auto& dlg : m_activeDialogues) {
-                dlg.elapsedTypewriterTime = 9999.0f;
-                dlg.lastBlipCodepointIndex = 99999;
-            }
-            m_activeDialogueData.elapsedTypewriterTime = 9999.0f;
-            m_activeDialogueData.lastBlipCodepointIndex = 99999;
+        // MS-6: presenting the next node arms its typewriter regardless of
+        // play state (same contract as resetToStartNode above).
+        for (auto& dlg : m_activeDialogues) {
+            dlg.elapsedTypewriterTime = 0.0f;
+            dlg.lastBlipCodepointIndex = 0;
         }
+        m_activeDialogueData.elapsedTypewriterTime = 0.0f;
+        m_activeDialogueData.lastBlipCodepointIndex = 0;
         ROWL_LOG_INFO("▶ Active Node #" + std::to_string(m_storyRuntime.currentNodeId()) +
                       " (" + nextNode.speaker + "): " + nextNode.dialogue);
     }
@@ -463,12 +494,20 @@ bool Engine::advanceToChoice(const std::string& optionId) {
 }
 
 bool Engine::handlePointerDown(float physicalX, float physicalY) {
-    if (!m_window || m_activeChoiceButtons.empty()) return false;
+    if (!m_window) return false;
     float x = 0.0f, y = 0.0f;
     bool bezelTap = false;
     if (!m_window->mapPhysicalToVirtual(physicalX, physicalY, 1920, 1080, x, y, bezelTap)) {
         return false;
     }
+    // MS-6: the pause menu is modal — every canvas tap feeds it, so composed
+    // hosts (click = PointerDown, else AdvanceNode) can never advance the
+    // story behind the menu.
+    if (m_paused) {
+        if (!bezelTap) pauseMenuClick(x, y);
+        return true;
+    }
+    if (m_activeChoiceButtons.empty()) return false;
     // Letterbox/pillarbox margins are not story canvas. Consume input there so
     // the caller does not turn a bezel tap into an accidental advance.
     if (bezelTap) {
@@ -736,13 +775,11 @@ void Engine::updateSceneFromComponents(const std::string& componentsJson,
                 }
                 dlgData.voiceBlipVolume = data.value("voice_blip_volume", 0.85f);
                 dlgData.isPlaying = m_isPlaying;
-                if (m_isPlaying) {
-                    dlgData.elapsedTypewriterTime = 0.0f;
-                    dlgData.lastBlipCodepointIndex = 0;
-                } else {
-                    dlgData.elapsedTypewriterTime = 9999.0f;
-                    dlgData.lastBlipCodepointIndex = 99999;
-                }
+                // MS-6: hydrating a line arms its typewriter regardless of play
+                // state. Paused hosts still render full text (visibility keys
+                // off isPlaying above) and report static frames.
+                dlgData.elapsedTypewriterTime = 0.0f;
+                dlgData.lastBlipCodepointIndex = 0;
 
                 m_activeDialogues.push_back(dlgData);
                 m_hasDialogueBox = true;
@@ -1477,9 +1514,16 @@ void Engine::step(float deltaTime) {
 
     m_window->update(deltaTime);
 
+    // MS-6: pause freezes story simulation (typewriter, auto-advance,
+    // scripts, entities). Rendering, audio upkeep, and the menu overlay below
+    // keep running so the pause screen stays alive.
+    if (!m_paused) {
     for (auto& dlg : m_activeDialogues) {
         dlg.isPlaying = m_isPlaying;
-        if (m_isPlaying && dlg.typewriterEnabled && dlg.textSpeed > 0) {
+        // MS-6: typewriter progression follows presentation + real dt, not the
+        // play state, so preview stepping animates elapsed too. Audible blips
+        // stay play-gated so paused previews remain silent.
+        if (dlg.typewriterEnabled && dlg.textSpeed > 0) {
             dlg.elapsedTypewriterTime += deltaTime * m_textSpeedMultiplier;
 
             size_t totalCodepoints = Rowl::Render::FontRenderer::countCodepoints(dlg.dialogue);
@@ -1516,14 +1560,17 @@ void Engine::step(float deltaTime) {
                         ? Rowl::Audio::AudioChannelType::Sfx
                         : Rowl::Audio::AudioChannelType::Voice;
 
-                    m_audio->playVoiceBlip(dlg.typewriterSound, pitchMod, dlg.voiceBlipVolume, ch);
+                    // MS-6: blip bookkeeping advances in every mode, but paused
+                    // previews stay silent.
+                    if (m_isPlaying) m_audio->playVoiceBlip(dlg.typewriterSound, pitchMod, dlg.voiceBlipVolume, ch);
                     break;
                 }
             }
         }
     }
     m_activeDialogueData.isPlaying = m_isPlaying;
-    if (m_isPlaying && m_activeDialogueData.typewriterEnabled && m_activeDialogueData.textSpeed > 0) {
+    // MS-6: legacy single-dialogue progression follows the same decoupled rule.
+    if (m_activeDialogueData.typewriterEnabled && m_activeDialogueData.textSpeed > 0) {
         if (!m_activeDialogues.empty()) {
             m_activeDialogueData.elapsedTypewriterTime = m_activeDialogues[0].elapsedTypewriterTime;
             m_activeDialogueData.lastBlipCodepointIndex = m_activeDialogues[0].lastBlipCodepointIndex;
@@ -1559,7 +1606,8 @@ void Engine::step(float deltaTime) {
                         Rowl::Audio::AudioChannelType ch = (m_activeDialogueData.voiceBlipChannel == 2)
                             ? Rowl::Audio::AudioChannelType::Sfx
                             : Rowl::Audio::AudioChannelType::Voice;
-                        m_audio->playVoiceBlip(m_activeDialogueData.typewriterSound, pitchMod, m_activeDialogueData.voiceBlipVolume, ch);
+                        // MS-6: paused previews stay silent (see dialogues loop).
+                        if (m_isPlaying) m_audio->playVoiceBlip(m_activeDialogueData.typewriterSound, pitchMod, m_activeDialogueData.voiceBlipVolume, ch);
                         break;
                     }
                 }
@@ -1587,6 +1635,7 @@ void Engine::step(float deltaTime) {
     } else {
         m_autoAdvanceElapsed = 0.0f;
     }
+    } // end MS-6 pause freeze of story simulation
 
     Rowl::Render::ComposedFrame frame;
     frame.hasBackground = m_hasBackground;
@@ -1604,21 +1653,26 @@ void Engine::step(float deltaTime) {
     frame.backgroundOpacity = m_activeBackgroundOpacity;
     m_window->renderComposedFrame(frame);
 
-    // Update & Render Entity-Component Scene
+    // Update & Render Entity-Component Scene (frozen while paused)
     if (m_scene) {
-        m_scene->update(deltaTime);
+        if (!m_paused) m_scene->update(deltaTime);
         m_scene->render(m_window.get());
     }
 
     if (m_audio) {
         m_audio->update(deltaTime);
     }
-    if (m_hasActiveScript && m_luaSandbox) {
+    if (!m_paused && m_hasActiveScript && m_luaSandbox) {
         for (const auto& moduleId : m_activeScriptModuleIds) {
             if (!m_luaSandbox->callOptionalModuleFunction(moduleId, "on_update", deltaTime)) {
                 markScriptStatus(moduleId, {}, "failed", m_luaSandbox->getLastError());
             }
         }
+    }
+
+    // MS-6: pause-menu overlay draws last so it sits above story + entities.
+    if (m_paused) {
+        m_window->renderPauseMenuOverlay(getPauseMenuView());
     }
 
     m_window->endFrame();
@@ -1827,6 +1881,13 @@ void Engine::recordActiveDialogueHistory() {
 }
 
 bool Engine::areActiveDialoguesComplete() const {
+    // MS-6: a paused line renders full text (visibility keys off the per-line
+    // playing flag) with frozen elapsed time, so for frame-staticity purposes
+    // it counts as complete. This preserves the MS-4 dirty-frame gate for
+    // paused previews. The advance path uses raw elapsed time instead, so
+    // click-to-complete still applies to armed lines (see
+    // completeTypewriterIfTyping).
+    if (!m_isPlaying) return true;
     for (const auto& dialogue : m_activeDialogues) {
         if (!dialogue.typewriterEnabled || dialogue.textSpeed <= 0) continue;
         const auto total = Rowl::Render::FontRenderer::countCodepoints(dialogue.dialogue);
@@ -2000,6 +2061,274 @@ bool Engine::loadGameSlot(int32_t slotIndex) {
         m_context->setSuccess("load_game_slot", std::to_string(slotIndex));
     }
     return true;
+}
+
+// ── MS-6 quick slots & pause menu ─────────────────────────────────────────
+bool Engine::setQuickSaveSlot(int32_t slotIndex) {
+    if (slotIndex < kPauseMenuQuickSlotMin || slotIndex > kPauseMenuQuickSlotMax) {
+        m_context->setError(RuntimeErrorCode::InvalidArgument,
+                            "Invalid quick-save slot #" + std::to_string(slotIndex) +
+                                " (must be 0-9)",
+                            "set_quick_save_slot", std::to_string(slotIndex));
+        return false;
+    }
+    m_activeQuickSlot = slotIndex;
+    m_context->setSuccess("set_quick_save_slot", std::to_string(slotIndex));
+    ROWL_LOG_INFO("[Player] Active quick-save slot set to #" + std::to_string(slotIndex) +
+                  " (F5/F9).");
+    return true;
+}
+
+bool Engine::quickSave() {
+    ROWL_LOG_INFO("[Player] Quick Saving to Slot #" + std::to_string(m_activeQuickSlot) + "...");
+    return saveGameSlot(m_activeQuickSlot);
+}
+
+bool Engine::quickLoad() {
+    ROWL_LOG_INFO("[Player] Quick Loading from Slot #" + std::to_string(m_activeQuickSlot) + "...");
+    return loadGameSlot(m_activeQuickSlot);
+}
+
+void Engine::setPaused(bool paused) {
+    if (m_paused == paused) return;
+    m_paused = paused;
+    // Opening always lands on a predictable main page; closing resumes.
+    // Pausing never quits — exit requires the two-step menu confirmation.
+    m_pauseMode = PauseMenuMode::Main;
+    m_pauseSelected = 0;
+    m_pauseConfirmQuit = false;
+    ROWL_LOG_INFO(paused ? "[Player] Paused — menu open (Esc/P to resume)."
+                         : "[Player] Resumed.");
+}
+
+int Engine::pauseMenuRowCount() const {
+    return m_pauseMode == PauseMenuMode::Main ? PauseMenuLayout::kMainRows
+                                             : PauseMenuLayout::kSlotRows;
+}
+
+void Engine::pauseMenuMoveSelection(int direction) {
+    const int count = pauseMenuRowCount();
+    if (count <= 0) return;
+    m_pauseSelected = (m_pauseSelected + direction + count) % count;
+    m_pauseConfirmQuit = false;
+}
+
+float Engine::pauseMenuVolume(int row) const {
+    if (!m_audio) return 1.0f;
+    switch (row) {
+        case 3: return m_audio->getMasterVolume();
+        case 4: return m_audio->getBgmVolume();
+        case 5: return m_audio->getSfxVolume();
+        case 6: return m_audio->getVoiceVolume();
+        default: return 1.0f;
+    }
+}
+
+void Engine::setPauseMenuVolume(int row, float volume) {
+    if (!m_audio) return;
+    volume = std::clamp(volume, 0.0f, 1.0f);
+    switch (row) {
+        case 3: m_audio->setMasterVolume(volume); break;
+        case 4: m_audio->setBgmVolume(volume); break;
+        case 5: m_audio->setSfxVolume(volume); break;
+        case 6: m_audio->setVoiceVolume(volume); break;
+        default: break;
+    }
+}
+
+void Engine::pauseMenuAdjustSelected(int direction) {
+    if (m_pauseMode != PauseMenuMode::Main) return;
+    const int row = m_pauseSelected;
+    if (row >= 3 && row <= 6) {
+        setPauseMenuVolume(row, pauseMenuVolume(row) + direction * 0.05f);
+    } else if (row == 7) {
+        setTextSpeedMultiplier(m_textSpeedMultiplier + direction * 0.25f);
+    }
+    m_pauseConfirmQuit = false;
+}
+
+void Engine::menuChooseSlot(int32_t slotIndex) {
+    if (m_pauseMode == PauseMenuMode::Main) return;
+    if (slotIndex < kPauseMenuQuickSlotMin || slotIndex > kPauseMenuQuickSlotMax) return;
+    if (m_pauseMode == PauseMenuMode::SaveSlots) {
+        if (saveGameSlot(slotIndex)) {
+            ROWL_LOG_INFO("[Player] Saved to slot #" + std::to_string(slotIndex) + " from pause menu.");
+        }
+    } else {
+        if (loadGameSlot(slotIndex)) {
+            ROWL_LOG_INFO("[Player] Loaded slot #" + std::to_string(slotIndex) + " from pause menu.");
+        }
+    }
+    // Stay paused on the slot page so occupancy refreshes visibly.
+}
+
+void Engine::menuActivateSelected() {
+    if (!m_paused) return;
+    if (m_pauseMode != PauseMenuMode::Main) {
+        menuChooseSlot(static_cast<int32_t>(m_pauseSelected));
+        return;
+    }
+    switch (m_pauseSelected) {
+        case 0: setPaused(false); break;
+        case 1: m_pauseMode = PauseMenuMode::SaveSlots; m_pauseSelected = 0; m_pauseConfirmQuit = false; break;
+        case 2: m_pauseMode = PauseMenuMode::LoadSlots; m_pauseSelected = 0; m_pauseConfirmQuit = false; break;
+        case 8:
+            if (m_pauseConfirmQuit) {
+                ROWL_LOG_INFO("[Player] Exit confirmed from pause menu.");
+                m_isRunning = false;
+            } else {
+                m_pauseConfirmQuit = true;
+            }
+            break;
+        default:
+            // Value rows (3-7) have no activation of their own; keyboard
+            // Confirm still steps them up like Right for parity with clicks.
+            pauseMenuAdjustSelected(+1);
+            break;
+    }
+}
+
+void Engine::menuBack() {
+    if (!m_paused) return;
+    if (m_pauseConfirmQuit) {
+        m_pauseConfirmQuit = false;
+        return;
+    }
+    if (m_pauseMode != PauseMenuMode::Main) {
+        m_pauseMode = PauseMenuMode::Main;
+        m_pauseSelected = 0;
+        return;
+    }
+    setPaused(false);
+}
+
+void Engine::pauseMenuCommand(PauseMenuCommand command) {
+    if (!m_paused) return;
+    switch (command) {
+        case PauseMenuCommand::Up: pauseMenuMoveSelection(-1); break;
+        case PauseMenuCommand::Down: pauseMenuMoveSelection(+1); break;
+        case PauseMenuCommand::Left: pauseMenuAdjustSelected(-1); break;
+        case PauseMenuCommand::Right: pauseMenuAdjustSelected(+1); break;
+        case PauseMenuCommand::Back: menuBack(); break;
+        case PauseMenuCommand::Confirm: menuActivateSelected(); break;
+    }
+}
+
+void Engine::pauseMenuClick(float virtualX, float virtualY) {
+    if (!m_paused) return;
+    const int row = PauseMenuLayout::rowAt(virtualX, virtualY, pauseMenuRowCount());
+    if (row < 0) return; // gaps and outside miss; selection is kept
+    const bool alreadySelected = (row == m_pauseSelected);
+    m_pauseSelected = row;
+    if (m_pauseMode == PauseMenuMode::Main && row >= 3 && row <= 7) {
+        const int dir = PauseMenuLayout::adjustDirection(virtualX);
+        if (dir != 0) {
+            pauseMenuAdjustSelected(dir);
+            return;
+        }
+        // Middle band only selects (a second tap confirms).
+        if (!alreadySelected) {
+            m_pauseConfirmQuit = false;
+            return;
+        }
+    }
+    menuActivateSelected();
+}
+
+static std::string pauseMenuPercent(float volume) {
+    return std::to_string(static_cast<int>(volume * 100.0f + 0.5f)) + "%";
+}
+
+static std::string pauseMenuSpeedText(float multiplier) {
+    const int quarters = static_cast<int>(multiplier * 4.0f + 0.5f);
+    const int whole = quarters / 4;
+    const int frac = (quarters % 4) * 25;
+    return std::to_string(whole) + "." + (frac < 10 ? "0" : "") + std::to_string(frac) + "x";
+}
+
+PauseMenuView Engine::getPauseMenuView() const {
+    PauseMenuView view;
+    view.open = m_paused;
+    if (!m_paused) return view;
+    view.selected = m_pauseSelected;
+    if (m_pauseMode == PauseMenuMode::Main) {
+        view.title = "Duraklatildi";
+        view.rows = {
+            {"Devam Et", "", false},
+            {"Oyunu Kaydet", "yuva sec >", false},
+            {"Oyunu Yukle", "yuva sec >", false},
+            {"Ana Ses", pauseMenuPercent(pauseMenuVolume(3)), true},
+            {"Muzik", pauseMenuPercent(pauseMenuVolume(4)), true},
+            {"SFX", pauseMenuPercent(pauseMenuVolume(5)), true},
+            {"Seslendirme", pauseMenuPercent(pauseMenuVolume(6)), true},
+            {"Metin Hizi", pauseMenuSpeedText(m_textSpeedMultiplier), true},
+            {"Cikis", m_pauseConfirmQuit ? "emin misin?" : "", false},
+        };
+        view.hint = m_pauseConfirmQuit
+            ? "ENTER: cikisi onayla   ESC: vazgec"
+            : "YUKARI/ASAGI: sec   SOL/SAG: ayar   ENTER: tamam   ESC: devam et";
+    } else {
+        const bool saving = (m_pauseMode == PauseMenuMode::SaveSlots);
+        view.title = saving ? "Kayit Yuvasi Sec" : "Yukleme Yuvasi Sec";
+        for (int32_t slot = kPauseMenuQuickSlotMin; slot <= kPauseMenuQuickSlotMax; ++slot) {
+            PauseMenuRow row;
+            row.label = "Yuva " + std::to_string(slot);
+            row.value = hasSaveSlot(slot) ? "dolu" : "bos";
+            view.rows.push_back(row);
+        }
+        view.hint = "ENTER/tik: sec   0-9: dogrudan sec   ESC: geri";
+    }
+    return view;
+}
+
+static void appendPauseMenuJsonString(std::string& out, const std::string& text) {
+    out.push_back('"');
+    for (char c : text) {
+        switch (c) {
+            case '"': out += "\\\""; break;
+            case '\\': out += "\\\\"; break;
+            default:
+                if (static_cast<unsigned char>(c) < 0x20) {
+                    char buf[7];
+                    std::snprintf(buf, sizeof(buf), "\\u%04x", c);
+                    out += buf;
+                } else {
+                    out.push_back(c);
+                }
+        }
+    }
+    out.push_back('"');
+}
+
+std::string Engine::getPauseMenuJson() const {
+    const PauseMenuView view = getPauseMenuView();
+    std::string out = "{\"open\":";
+    out += view.open ? "true" : "false";
+    out += ",\"mode\":";
+    out += std::to_string(static_cast<int>(m_pauseMode));
+    out += ",\"selected\":";
+    out += std::to_string(view.selected);
+    out += ",\"confirm_quit\":";
+    out += m_pauseConfirmQuit ? "true" : "false";
+    out += ",\"quick_slot\":";
+    out += std::to_string(m_activeQuickSlot);
+    out += ",\"title\":";
+    appendPauseMenuJsonString(out, view.title);
+    out += ",\"hint\":";
+    appendPauseMenuJsonString(out, view.hint);
+    out += ",\"rows\":[";
+    for (size_t i = 0; i < view.rows.size(); ++i) {
+        if (i > 0) out.push_back(',');
+        out += "{\"label\":";
+        appendPauseMenuJsonString(out, view.rows[i].label);
+        out += ",\"value\":";
+        appendPauseMenuJsonString(out, view.rows[i].value);
+        out += ",\"selected\":";
+        out += (static_cast<int>(i) == view.selected) ? "true" : "false";
+        out.push_back('}');
+    }
+    out += "]}";
+    return out;
 }
 
 bool Engine::hasSaveSlot(int32_t slotIndex) const {

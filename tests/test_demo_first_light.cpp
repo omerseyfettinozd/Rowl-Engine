@@ -49,6 +49,13 @@ void test_demo_first_light() {
     }
     TEST_PASS("Demo opening node steps and renders a frame");
 
+    // MS-6: real-dt steps leave the presented line mid-typing even while
+    // paused, and an explicit choice while typing is consumed by
+    // click-to-complete (documented advanceToChoice contract). Settle the
+    // line first so the assertions below verify story flow, not typing.
+    // 24 x 0.25 s covers any demo line at 30 ms/char; auto-advance is off.
+    for (int settle = 0; settle < 24; ++settle) RowlEngine_Step(handle, 0.25f);
+
     // An unknown choice must be rejected without leaving the node.
     if (RowlEngine_SelectChoice(handle, "go_nowhere") != 0 ||
         RowlEngine_GetCurrentNodeId(handle) != 1) {

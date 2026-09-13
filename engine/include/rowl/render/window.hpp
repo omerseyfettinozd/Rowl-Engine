@@ -24,6 +24,10 @@ namespace Rowl::VFS {
 class VFSManager;
 }
 
+namespace Rowl::Core {
+struct PauseMenuView;
+}
+
 namespace Rowl::Render {
 
 struct CharacterRenderData {
@@ -178,6 +182,11 @@ public:
 
     void setInputHandler(std::function<void(const Rowl::Platform::RuntimeInputEvent&)> handler);
 
+    /// MS-6: pure SDL-key → player-action translation behind pollEvents.
+    /// Returns false for unmapped keys. Public and static so headless tests
+    /// can pin the Esc/P/digit/arrow contract without a visible window.
+    static bool mapKeyToRuntimeInput(uint32_t sdlKey, Rowl::Platform::RuntimeInputEvent& outEvent);
+
     void pollEvents(bool& outShouldQuit);
     void beginFrame();
 
@@ -215,6 +224,9 @@ public:
     /// Renders a pre-packed frame. Forwards member-wise to the canonical
     /// overload above; the render boundary owns how a frame becomes pixels.
     void renderComposedFrame(const ComposedFrame& frame);
+    /// MS-6: pause-menu overlay (dim + panel + rows + hint) in virtual
+    /// 1920x1080 layout. No-op unless view.open; safe on offscreen surfaces.
+    void renderPauseMenuOverlay(const Rowl::Core::PauseMenuView& view);
     void endFrame();
 
     /// Last-frame profile accessors also report a cache hit: when an identical

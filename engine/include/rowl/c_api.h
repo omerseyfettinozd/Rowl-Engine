@@ -488,6 +488,59 @@ ROWL_API int RowlEngine_Rewind(RowlEngineHandle handle, uint32_t steps);
 /** Returns the current history step ID. */
 ROWL_API uint64_t RowlEngine_GetCurrentStepId(RowlEngineHandle handle);
 
+/* ── MS-6 Quick Slots & Pause Menu ────────────────────────────────────────── */
+
+/**
+ * Sets the active quick-save slot (0-9) used by F5/F9 and the QuickSave /
+ * QuickLoad calls below. Returns 1 on success, 0 for an out-of-range slot
+ * (see RowlEngine_GetLastResultCode for InvalidArgument details).
+ */
+ROWL_API int RowlEngine_SetQuickSaveSlot(RowlEngineHandle handle, int32_t slotIndex);
+
+/** Returns the active quick-save slot (default 0), or -1 for a dead handle. */
+ROWL_API int32_t RowlEngine_GetQuickSaveSlot(RowlEngineHandle handle);
+
+/** Saves through the active quick-save slot. Returns 1 on success, 0 on failure. */
+ROWL_API int RowlEngine_QuickSave(RowlEngineHandle handle);
+
+/** Loads through the active quick-save slot. Returns 1 on success, 0 on failure. */
+ROWL_API int RowlEngine_QuickLoad(RowlEngineHandle handle);
+
+/**
+ * Opens (nonzero) or closes (zero) the pause menu. Opening resets navigation
+ * to the main page; closing resumes the simulation. Never quits the game.
+ */
+ROWL_API void RowlEngine_SetPaused(RowlEngineHandle handle, int paused);
+
+/** Returns 1 while the pause menu is open, 0 otherwise. */
+ROWL_API int RowlEngine_IsPaused(RowlEngineHandle handle);
+
+/** Pause-menu navigation commands for RowlEngine_PauseMenuCommand. */
+enum RowlPauseMenuCommand {
+    ROWL_PAUSE_MENU_UP = 0,
+    ROWL_PAUSE_MENU_DOWN = 1,
+    ROWL_PAUSE_MENU_LEFT = 2,
+    ROWL_PAUSE_MENU_RIGHT = 3,
+    ROWL_PAUSE_MENU_BACK = 4,
+    ROWL_PAUSE_MENU_CONFIRM = 5
+};
+
+/**
+ * Drives pause-menu navigation (arrow-key equivalent). Unknown commands are
+ * ignored. No-op unless the menu is open.
+ */
+ROWL_API void RowlEngine_PauseMenuCommand(RowlEngineHandle handle, int command);
+
+/**
+ * Pause-menu snapshot JSON: open, mode (0=main,1=save,2=load), selected row,
+ * confirm_quit arm, quick_slot, title, hint, and rows[] with label/value.
+ * Same ownership rules as RowlEngine_GetDialogueHistoryJson.
+ */
+ROWL_API const char* RowlEngine_GetPauseMenuJson(RowlEngineHandle handle);
+
+/** Same ownership rules as RowlEngine_GetDialogueHistoryJsonWithLength. */
+ROWL_API const char* RowlEngine_GetPauseMenuJsonWithLength(RowlEngineHandle handle, uint32_t* outLen);
+
 /* ── Scripting & Variable Evaluation ─────────────────────────────────────── */
 
 /** Sets a string variable in the scripting environment and game state. */
