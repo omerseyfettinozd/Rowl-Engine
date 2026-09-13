@@ -4,6 +4,7 @@
 
 #include <cstdint>
 #include <optional>
+#include <string>
 #include <string_view>
 
 namespace Rowl::Core {
@@ -38,6 +39,10 @@ public:
     uint64_t startNodeId() const { return m_document.startNodeId; }
     uint64_t currentNodeId() const { return m_currentNodeId; }
     void setCurrentNodeId(uint64_t nodeId) { m_currentNodeId = nodeId; }
+    uint64_t revision() const { return m_revision; }
+    const std::string& lastLoadError() const { return m_lastLoadError; }
+    void clearLoadError() { m_lastLoadError.clear(); }
+    void recordLoadFailure(std::string error);
 
     AdvanceResult advance(uint32_t choiceIndex = 0);
     std::optional<ChoiceSelection> resolveChoice(std::string_view optionId) const;
@@ -48,6 +53,8 @@ public:
 private:
     StoryGraphDocument m_document;
     uint64_t m_currentNodeId = 101;
+    uint64_t m_revision = 0;
+    std::string m_lastLoadError;
 };
 
 } // namespace Rowl::Core

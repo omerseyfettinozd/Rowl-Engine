@@ -1085,24 +1085,22 @@ void Engine::updateSceneFromComponents(const std::string& componentsJson,
 bool Engine::parseStoryGraphJson(const std::string& jsonContent) {
     auto parseResult = StoryGraphParser::parse(jsonContent);
     if (!parseResult.succeeded()) {
-        m_lastStoryGraphLoadError = std::move(parseResult.message);
-        ROWL_LOG_ERROR(m_lastStoryGraphLoadError);
+        m_storyRuntime.recordLoadFailure(std::move(parseResult.message));
+        ROWL_LOG_ERROR(m_storyRuntime.lastLoadError());
         return false;
     }
 
     if (!parseResult.document.nodes.contains(parseResult.document.startNodeId)) {
-        m_lastStoryGraphLoadError =
-            "Story graph parser returned an invalid start node; the active graph was preserved.";
-        ROWL_LOG_ERROR(m_lastStoryGraphLoadError);
+        m_storyRuntime.recordLoadFailure(
+            "Story graph parser returned an invalid start node; the active graph was preserved.");
+        ROWL_LOG_ERROR(m_storyRuntime.lastLoadError());
         return false;
     }
 
     // Parsing is deliberately transactional. Only a complete, validated
     // document can replace the currently playable graph.
     if (!m_storyRuntime.commit(std::move(parseResult.document))) {
-        m_lastStoryGraphLoadError =
-            "Story runtime rejected an invalid graph document; the active graph was preserved.";
-        ROWL_LOG_ERROR(m_lastStoryGraphLoadError);
+        ROWL_LOG_ERROR(m_storyRuntime.lastLoadError());
         return false;
     }
 
@@ -1137,43 +1135,50 @@ bool Engine::parseStoryGraphJson(const std::string& jsonContent) {
 
     ROWL_LOG_INFO("Story graph loaded: " + std::to_string(m_storyRuntime.size()) +
                   " nodes. Start node #" + std::to_string(m_storyRuntime.currentNodeId()));
-    ++m_storyGraphRevision;
     return true;
 }
 
 bool Engine::loadStoryGraphFromPath(const std::string& jsonPath) {
-    m_lastStoryGraphLoadError.clear();
+    m_storyRuntime.clearLoadError();
     std::error_code fileError;
     const std::filesystem::path graphPath(jsonPath);
     if (!std::filesystem::exists(graphPath, fileError) || !std::filesystem::is_regular_file(graphPath, fileError) || fileError) {
-        m_lastStoryGraphLoadError = "Story graph is missing or not a regular file: " + jsonPath;
-        ROWL_LOG_ERROR(m_lastStoryGraphLoadError);
-        m_context->setError(RuntimeErrorCode::FileNotFound, m_lastStoryGraphLoadError, "load_story_graph_path", jsonPath);
+        m_storyRuntime.recordLoadFailure(
+            "Story graph is missing or not a regular file: " + jsonPath);
+        ROWL_LOG_ERROR(m_storyRuntime.lastLoadError());
+        m_context->setError(RuntimeErrorCode::FileNotFound,
+                            m_storyRuntime.lastLoadError(), "load_story_graph_path", jsonPath);
         return false;
     }
     if (std::filesystem::file_size(graphPath, fileError) > kMaxStoryJsonBytes || fileError) {
-        m_lastStoryGraphLoadError = "Story graph exceeds the maximum size limit: " + jsonPath;
-        ROWL_LOG_ERROR(m_lastStoryGraphLoadError);
-        m_context->setError(RuntimeErrorCode::FileTooLarge, m_lastStoryGraphLoadError, "load_story_graph_path", jsonPath);
+        m_storyRuntime.recordLoadFailure(
+            "Story graph exceeds the maximum size limit: " + jsonPath);
+        ROWL_LOG_ERROR(m_storyRuntime.lastLoadError());
+        m_context->setError(RuntimeErrorCode::FileTooLarge,
+                            m_storyRuntime.lastLoadError(), "load_story_graph_path", jsonPath);
         return false;
     }
     std::ifstream f(jsonPath);
     if (!f.is_open()) {
-        m_lastStoryGraphLoadError = "Cannot open story graph: " + jsonPath;
-        ROWL_LOG_ERROR(m_lastStoryGraphLoadError);
-        m_context->setError(RuntimeErrorCode::IoError, m_lastStoryGraphLoadError, "load_story_graph_path", jsonPath);
+        m_storyRuntime.recordLoadFailure("Cannot open story graph: " + jsonPath);
+        ROWL_LOG_ERROR(m_storyRuntime.lastLoadError());
+        m_context->setError(RuntimeErrorCode::IoError,
+                            m_storyRuntime.lastLoadError(), "load_story_graph_path", jsonPath);
         return false;
     }
     std::string content((std::istreambuf_iterator<char>(f)),
                          std::istreambuf_iterator<char>());
     if (!parseStoryGraphJson(content)) {
-        if (m_lastStoryGraphLoadError.empty()) {
-            m_lastStoryGraphLoadError = "Story graph JSON was rejected; the active graph was preserved.";
+        if (m_storyRuntime.lastLoadError().empty()) {
+            m_storyRuntime.recordLoadFailure(
+                "Story graph JSON was rejected; the active graph was preserved.");
         }
-        RuntimeErrorCode errCode = (m_lastStoryGraphLoadError.find("parse error") != std::string::npos)
+        RuntimeErrorCode errCode =
+            (m_storyRuntime.lastLoadError().find("parse error") != std::string::npos)
             ? RuntimeErrorCode::ParseError
             : RuntimeErrorCode::ValidationError;
-        m_context->setError(errCode, m_lastStoryGraphLoadError, "load_story_graph_path", jsonPath);
+        m_context->setError(errCode, m_storyRuntime.lastLoadError(),
+                            "load_story_graph_path", jsonPath);
         return false;
     }
     m_context->setSuccess("load_story_graph_path", jsonPath);
@@ -1181,25 +1186,28 @@ bool Engine::loadStoryGraphFromPath(const std::string& jsonPath) {
 }
 
 bool Engine::loadStoryGraphFromVfs(const std::string& vfsPath) {
-    m_lastStoryGraphLoadError.clear();
+    m_storyRuntime.clearLoadError();
     if (vfsPath.empty()) {
-        m_lastStoryGraphLoadError = "Story graph VFS path is empty";
-        ROWL_LOG_ERROR(m_lastStoryGraphLoadError);
-        m_context->setError(RuntimeErrorCode::FileNotFound, m_lastStoryGraphLoadError, "load_story_graph_vfs", vfsPath);
+        m_storyRuntime.recordLoadFailure("Story graph VFS path is empty");
+        ROWL_LOG_ERROR(m_storyRuntime.lastLoadError());
+        m_context->setError(RuntimeErrorCode::FileNotFound,
+                            m_storyRuntime.lastLoadError(), "load_story_graph_vfs", vfsPath);
         return false;
     }
 
     const auto host = getPlatformHost();
     if (!host) {
-        m_lastStoryGraphLoadError = "Runtime platform host is unavailable";
-        m_context->setError(RuntimeErrorCode::StateError, m_lastStoryGraphLoadError, "load_story_graph_vfs", vfsPath);
+        m_storyRuntime.recordLoadFailure("Runtime platform host is unavailable");
+        m_context->setError(RuntimeErrorCode::StateError,
+                            m_storyRuntime.lastLoadError(), "load_story_graph_vfs", vfsPath);
         return false;
     }
     auto stream = host->openAssetStream(vfsPath);
     if (!stream) {
-        m_lastStoryGraphLoadError = "Story graph is missing from VFS: " + vfsPath;
-        ROWL_LOG_ERROR(m_lastStoryGraphLoadError);
-        m_context->setError(RuntimeErrorCode::FileNotFound, m_lastStoryGraphLoadError, "load_story_graph_vfs", vfsPath);
+        m_storyRuntime.recordLoadFailure("Story graph is missing from VFS: " + vfsPath);
+        ROWL_LOG_ERROR(m_storyRuntime.lastLoadError());
+        m_context->setError(RuntimeErrorCode::FileNotFound,
+                            m_storyRuntime.lastLoadError(), "load_story_graph_vfs", vfsPath);
         return false;
     }
 
@@ -1218,33 +1226,45 @@ bool Engine::loadStoryGraphFromAssetStream(
         if (bytesRead <= 0) break;
         content.append(buffer.data(), static_cast<std::size_t>(bytesRead));
         if (content.size() > kMaxStoryJsonBytes) {
-            m_lastStoryGraphLoadError = "Story graph VFS content exceeds the size limit: " + assetPath;
-            ROWL_LOG_ERROR(m_lastStoryGraphLoadError);
-            m_context->setError(RuntimeErrorCode::FileTooLarge, m_lastStoryGraphLoadError, "load_story_graph_vfs", assetPath);
+            m_storyRuntime.recordLoadFailure(
+                "Story graph VFS content exceeds the size limit: " + assetPath);
+            ROWL_LOG_ERROR(m_storyRuntime.lastLoadError());
+            m_context->setError(RuntimeErrorCode::FileTooLarge,
+                                m_storyRuntime.lastLoadError(),
+                                "load_story_graph_vfs", assetPath);
             return false;
         }
     }
     if (stream->bad()) {
-        m_lastStoryGraphLoadError = "Story graph VFS stream could not be read: " + assetPath;
-        ROWL_LOG_ERROR(m_lastStoryGraphLoadError);
-        m_context->setError(RuntimeErrorCode::IoError, m_lastStoryGraphLoadError, "load_story_graph_vfs", assetPath);
+        m_storyRuntime.recordLoadFailure(
+            "Story graph VFS stream could not be read: " + assetPath);
+        ROWL_LOG_ERROR(m_storyRuntime.lastLoadError());
+        m_context->setError(RuntimeErrorCode::IoError,
+                            m_storyRuntime.lastLoadError(),
+                            "load_story_graph_vfs", assetPath);
         return false;
     }
     if (content.empty()) {
-        m_lastStoryGraphLoadError = "Story graph VFS content is empty: " + assetPath;
-        ROWL_LOG_ERROR(m_lastStoryGraphLoadError);
-        m_context->setError(RuntimeErrorCode::ParseError, m_lastStoryGraphLoadError, "load_story_graph_vfs", assetPath);
+        m_storyRuntime.recordLoadFailure(
+            "Story graph VFS content is empty: " + assetPath);
+        ROWL_LOG_ERROR(m_storyRuntime.lastLoadError());
+        m_context->setError(RuntimeErrorCode::ParseError,
+                            m_storyRuntime.lastLoadError(),
+                            "load_story_graph_vfs", assetPath);
         return false;
     }
 
     if (!parseStoryGraphJson(content)) {
-        if (m_lastStoryGraphLoadError.empty()) {
-            m_lastStoryGraphLoadError = "Story graph JSON from VFS was rejected; the active graph was preserved.";
+        if (m_storyRuntime.lastLoadError().empty()) {
+            m_storyRuntime.recordLoadFailure(
+                "Story graph JSON from VFS was rejected; the active graph was preserved.");
         }
-        RuntimeErrorCode errCode = (m_lastStoryGraphLoadError.find("parse error") != std::string::npos)
+        RuntimeErrorCode errCode =
+            (m_storyRuntime.lastLoadError().find("parse error") != std::string::npos)
             ? RuntimeErrorCode::ParseError
             : RuntimeErrorCode::ValidationError;
-        m_context->setError(errCode, m_lastStoryGraphLoadError, "load_story_graph_vfs", assetPath);
+        m_context->setError(errCode, m_storyRuntime.lastLoadError(),
+                            "load_story_graph_vfs", assetPath);
         return false;
     }
     m_context->setSuccess("load_story_graph_vfs", assetPath);

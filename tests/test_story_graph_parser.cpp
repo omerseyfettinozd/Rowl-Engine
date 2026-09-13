@@ -94,6 +94,10 @@ void test_story_graph_parser() {
         std::cerr << "Rejected document changed committed StoryRuntime state" << std::endl;
         exit(1);
     }
+    if (runtime.revision() != 1 || runtime.lastLoadError().empty()) {
+        std::cerr << "StoryRuntime diagnostics changed revision on a rejected commit" << std::endl;
+        exit(1);
+    }
     TEST_PASS("StoryRuntime commits graph ownership transactionally");
 
     if (!runtime.resetToStart() || runtime.currentNodeId() != 101) {
@@ -116,4 +120,18 @@ void test_story_graph_parser() {
         exit(1);
     }
     TEST_PASS("StoryRuntime owns advance and stable choice resolution");
+
+    StoryRuntime emptyRuntime;
+    emptyRuntime.recordLoadFailure("missing graph");
+    if (emptyRuntime.resetToStart() || emptyRuntime.lastLoadError() != "missing graph" ||
+        emptyRuntime.revision() != 0) {
+        std::cerr << "Empty StoryRuntime reset corrupted load diagnostics" << std::endl;
+        exit(1);
+    }
+    emptyRuntime.clearLoadError();
+    if (!emptyRuntime.lastLoadError().empty()) {
+        std::cerr << "StoryRuntime load diagnostic did not clear" << std::endl;
+        exit(1);
+    }
+    TEST_PASS("StoryRuntime owns reset and graph-load diagnostics");
 }

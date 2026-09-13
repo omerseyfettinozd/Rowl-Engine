@@ -9,12 +9,20 @@ namespace Rowl::Core {
 bool StoryRuntime::commit(StoryGraphDocument document) {
     if (document.nodes.empty() ||
         document.nodes.find(document.startNodeId) == document.nodes.end()) {
+        recordLoadFailure(
+            "Story runtime rejected an invalid graph document; the active graph was preserved.");
         return false;
     }
 
     m_document = std::move(document);
     m_currentNodeId = m_document.startNodeId;
+    m_lastLoadError.clear();
+    ++m_revision;
     return true;
+}
+
+void StoryRuntime::recordLoadFailure(std::string error) {
+    m_lastLoadError = std::move(error);
 }
 
 const StoryNode* StoryRuntime::node(uint64_t nodeId) const {

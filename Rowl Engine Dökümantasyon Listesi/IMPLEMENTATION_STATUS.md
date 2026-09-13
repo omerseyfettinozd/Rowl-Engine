@@ -27,8 +27,11 @@ testi geçiyor.
   graph aktif hikâyeyi korur; C API/PInvoke son yükleme tanısını sorgulayabilir.
 - Story graph veri modeli ile JSON parse/semantic doğrulaması `Engine` sınıfından
   ayrılmış saf `StoryGraphParser` modülündedir. Parser canlı runtime state'ine
-  dokunmaz; yalnız tam doğrulanmış belge `Engine` tarafından transactional olarak
-  uygulanır ve syntax/validation hataları ayrı test edilir.
+  dokunmaz; yalnız tam doğrulanmış belge `StoryRuntime` tarafından transactional
+  olarak uygulanır. Graph/start/current sahipliği, advance/choice çözümlemesi,
+  start reseti, graph revision ve son yükleme tanısı bu sınırdadır; `Engine`
+  sunum ile node-entry yan etkilerini yürütür. Syntax/validation hataları ve
+  reddedilen commit'in aktif state/revision'ı koruması ayrı test edilir.
 - SDL pencere input'u render katmanından global engine'e ulaşmaz; kendi runtime
   callback'i üzerinden advance/save/load/rewind ve pointer olaylarını taşır.
 - C API artık aynı süreçte birden çok canlı handle destekler. Her runtime kendi

@@ -154,7 +154,9 @@ public:
     /** Loads a story graph through the active virtual file system. */
     bool loadStoryGraphFromVfs(const std::string& vfsPath);
 
-    const std::string& getLastStoryGraphLoadError() const { return m_lastStoryGraphLoadError; }
+    const std::string& getLastStoryGraphLoadError() const {
+        return m_storyRuntime.lastLoadError();
+    }
 
     // choiceIndex: which branch to follow (0 = first). Default 0 for backward compat.
     void advanceToNextNode(uint32_t choiceIndex = 0);
@@ -302,11 +304,6 @@ private:
     float m_autoAdvanceElapsed = 0.0f;
     float m_textSpeedMultiplier = 1.0f;
     float m_autoAdvanceDelayOffset = 0.0f;
-    // Parsing is transactional. Increment only after a fully validated graph
-    // replaces active state so callers can distinguish rejection from success.
-    uint64_t m_storyGraphRevision = 0;
-    std::string m_lastStoryGraphLoadError;
-
     bool parseStoryGraphJson(const std::string& jsonContent);
     bool loadStoryGraphFromAssetStream(const std::string& assetPath,
                                        std::unique_ptr<std::istream> stream);
