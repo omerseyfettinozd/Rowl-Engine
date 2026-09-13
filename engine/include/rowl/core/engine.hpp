@@ -3,6 +3,7 @@
 #include "rowl/render/window.hpp"
 #include "rowl/platform/platform_host.hpp"
 #include "rowl/state/game_state.hpp"
+#include "rowl/state/session_persistence.hpp"
 #include "rowl/core/runtime_context.hpp"
 #include "rowl/core/story_graph.hpp"
 #include "rowl/core/story_runtime.hpp"
@@ -249,6 +250,7 @@ private:
     std::unique_ptr<Rowl::Scene::Scene>   m_scene;
     std::unique_ptr<Rowl::Audio::AudioEngine> m_audio;
     std::shared_ptr<const Rowl::State::GameState> m_gameState;
+    mutable Rowl::State::SessionPersistence m_sessionPersistence;
     std::unique_ptr<Rowl::Scripting::LuaSandbox>  m_luaSandbox;
     std::string m_saveDirectoryOverride;
     std::string m_defaultBgmTransition = "instant";
@@ -305,6 +307,7 @@ private:
     float m_textSpeedMultiplier = 1.0f;
     float m_autoAdvanceDelayOffset = 0.0f;
     bool parseStoryGraphJson(const std::string& jsonContent);
+    Rowl::State::SessionPersistence& sessionPersistence() const;
     bool loadStoryGraphFromAssetStream(const std::string& assetPath,
                                        std::unique_ptr<std::istream> stream);
     void handleRuntimeInput(const Rowl::Platform::RuntimeInputEvent& event);

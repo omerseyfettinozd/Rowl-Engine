@@ -47,6 +47,10 @@ bool replaceFileAtomically(const std::filesystem::path& temporaryPath,
 SessionPersistence::SessionPersistence(std::string saveDirectory)
     : m_saveDirectory(saveDirectory.empty() ? "saves" : std::move(saveDirectory)) {}
 
+void SessionPersistence::setSaveDirectory(std::string saveDirectory) {
+    m_saveDirectory = saveDirectory.empty() ? "saves" : std::move(saveDirectory);
+}
+
 bool SessionPersistence::saveSlot(
     const std::shared_ptr<const GameState>& state, int32_t slotIndex) const {
     if (!state || !isValidSlotIndex(slotIndex)) {

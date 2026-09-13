@@ -54,9 +54,20 @@ void test_runtime_context_and_diagnostics() {
             exit(1);
         }
 
+        const auto saveA = tempA / "saves";
+        const auto saveB = tempB / "saves";
+        engineA.setSaveDirectory(saveA.string());
+        engineB.setSaveDirectory(saveB.string());
+        if (!engineA.saveGameSlot(0) || !engineB.saveGameSlot(0) ||
+            !fs::is_regular_file(saveA / "save_slot_0.json") ||
+            !fs::is_regular_file(saveB / "save_slot_0.json")) {
+            std::cerr << "Engine session persistence instances are not isolated" << std::endl;
+            exit(1);
+        }
+
         fs::remove_all(tempA);
         fs::remove_all(tempB);
-        TEST_PASS("Independent Engine and RuntimeContext VFS Isolation");
+        TEST_PASS("Independent Engine RuntimeContext and Session Persistence Isolation");
     }
 
     // 2. Structured Diagnostics on Engine Save/Load/Graph/Script

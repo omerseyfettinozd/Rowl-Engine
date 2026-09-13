@@ -22,6 +22,7 @@ public:
     bool deleteSlot(int32_t slotIndex) const;
 
     const std::string& saveDirectory() const { return m_saveDirectory; }
+    void setSaveDirectory(std::string saveDirectory);
 
 private:
     std::string m_saveDirectory;
