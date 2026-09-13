@@ -117,6 +117,10 @@ testi geçiyor.
   ve P/Invoke sözleşmesi aynıdır.
 - Bozuk girdi matrisi graph/save/package/C-API eksenlerinde regresyonla
   sabitlenmiştir; tam süit ASan+UBSan+leak-detect altında raporsuz geçer.
+- Release benchmark baselineri `tools/run_native_benchmarks.sh` ile üretilir:
+  startup/first/steady-frame, VFS, texture ve bellek; frozen Golden Project
+  (`rowl-golden-project-v1`) serisi `benchmark-results/golden-baseline.json`
+  yazar. Sonuçlar makineye özgü olduğundan gitignore dışındadır.
 
 ## Sonraki üretim işleri
 

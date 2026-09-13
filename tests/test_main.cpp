@@ -6,12 +6,16 @@
 
 int main(int argc, char* argv[]) {
     std::string benchmarkJsonPath;
+    std::string goldenJsonPath;
     for (int index = 1; index < argc; ++index) {
         const std::string argument = argv[index];
         if (argument == "--benchmark-json" && index + 1 < argc) {
             benchmarkJsonPath = argv[++index];
+        } else if (argument == "--golden-benchmark-json" && index + 1 < argc) {
+            goldenJsonPath = argv[++index];
         } else {
-            std::cerr << "Usage: rowl_tests [--benchmark-json <output.json>]" << std::endl;
+            std::cerr << "Usage: rowl_tests [--benchmark-json <output.json>] [--golden-benchmark-json <output.json>]"
+                      << std::endl;
             return 1;
         }
     }
@@ -37,6 +41,7 @@ int main(int argc, char* argv[]) {
     test_story_graph_parser();
     test_camera_and_transition_pipeline();
     test_native_performance_benchmarks(benchmarkJsonPath);
+    test_golden_project_benchmarks(goldenJsonPath);
     test_hardening_and_reliability();
     test_demo_first_light();
     test_demo_second_signal();
