@@ -55,6 +55,14 @@ if(ROWL_BUILD_RUNTIME_TESTS)
             TIMEOUT 30
         )
         add_test(
+            NAME rowl_package_determinism_tests
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/test_package_determinism.py
+        )
+        set_tests_properties(rowl_package_determinism_tests PROPERTIES
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+            TIMEOUT 60
+        )
+        add_test(
             NAME rowl_export_tool_tests
             COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/test_export_game.py
         )

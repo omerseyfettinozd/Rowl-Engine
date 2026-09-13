@@ -34,6 +34,8 @@ with tempfile.TemporaryDirectory() as directory:
     (release / "mods").mkdir()
     (release / "mods" / "README.md").write_text("# mods\n", encoding="utf-8")
     (release / "README.txt").write_text("release\n", encoding="utf-8")
+    shutil.copy2(ROOT / "packaging" / "THIRD_PARTY_NOTICES.md",
+                 release / "THIRD_PARTY_NOTICES.md")
     (release / "RowlGame").write_bytes(b"player")
     (release / "libRowlEngineCore.so").write_bytes(b"runtime")
     (release / "run_game.sh").write_text("#!/bin/sh\nexec ./RowlGame \"$@\"\n", encoding="utf-8")

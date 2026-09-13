@@ -125,6 +125,9 @@ internal static class EditorEndToEndFlowTests
                 msg => { }).GetAwaiter().GetResult();
             if (!buildResult.Succeeded || !Directory.Exists(buildResult.OutputDirectory))
                 throw new Exception($"Standalone build failed: {buildResult.Message} [{reportedIssues}]");
+            string buildNotices = Path.Combine(buildResult.OutputDirectory, "THIRD_PARTY_NOTICES.md");
+            if (!File.Exists(buildNotices) || new FileInfo(buildNotices).Length == 0)
+                throw new Exception("Standalone build did not publish its third-party license inventory");
 
             // Step 29.9: .rowlpkg packaging of the edited project.
             packageOutDir = Path.Combine(Path.GetTempPath(), $"RowlE2E_Pkg_{Guid.NewGuid():N}");

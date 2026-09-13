@@ -2,6 +2,8 @@
 """Validate the portable Rowl desktop release layout and its v1 package index."""
 
 import argparse
+import hashlib
+import json
 import os
 import struct
 import sys
@@ -10,6 +12,7 @@ import sys
 HEADER = struct.Struct("<4sHIQ")
 ENTRY = struct.Struct("<QIQQQI")
 MAX_ENTRIES = 100_000
+MANIFEST_PATH = "rowl/manifest.json"
 
 
 def fail(message):
@@ -31,12 +34,12 @@ def read_package_entries(package_path):
             fail("package index offset is outside the archive")
 
         package.seek(index_offset)
-        paths = set()
+        entries = {}
         for _ in range(count):
             raw = package.read(ENTRY.size)
             if len(raw) != ENTRY.size:
                 fail("package index ends before all entries were read")
-            _, path_length, offset, compressed_size, _, _ = ENTRY.unpack(raw)
+            _, path_length, offset, compressed_size, uncompressed_size, flags = ENTRY.unpack(raw)
             if path_length == 0 or path_length > 16 * 1024:
                 fail("package contains an invalid path length")
             path_bytes = package.read(path_length)
@@ -48,12 +51,62 @@ def read_package_entries(package_path):
                 fail("package entry path is not UTF-8: " + str(error))
             normalized = path.replace("\\", "/")
             if (normalized.startswith("/") or normalized.startswith("../") or
-                    "/../" in normalized or normalized in paths):
+                    "/../" in normalized or normalized in entries):
                 fail("package contains an unsafe or duplicate entry path: " + path)
             if offset < HEADER.size or offset + compressed_size > index_offset:
                 fail("package entry payload points outside the payload area: " + path)
-            paths.add(normalized)
-    return paths
+            entries[normalized] = (offset, compressed_size, uncompressed_size, flags)
+
+        if MANIFEST_PATH not in entries:
+            fail("package is missing its embedded manifest: " + MANIFEST_PATH)
+        verify_embedded_manifest(package, entries)
+    return set(entries)
+
+
+def read_payload(package, offset, size):
+    package.seek(offset)
+    payload = package.read(size)
+    if len(payload) != size:
+        fail("package entry payload is truncated")
+    return payload
+
+
+def verify_embedded_manifest(package, entries):
+    """Cross-check the embedded manifest against the v1 index table."""
+    offset, compressed_size, uncompressed_size, flags = entries[MANIFEST_PATH]
+    if flags != 0 or compressed_size != uncompressed_size:
+        fail("embedded manifest must be stored uncompressed")
+    try:
+        manifest = json.loads(read_payload(package, offset, compressed_size).decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        fail("embedded manifest is not valid JSON: " + str(error))
+    if manifest.get("format") != 1 or not isinstance(manifest.get("files"), list):
+        fail("embedded manifest has an unsupported shape")
+    records = manifest["files"]
+    manifest_paths = [record.get("path") for record in records]
+    if any(not isinstance(path, str) for path in manifest_paths):
+        fail("embedded manifest contains a non-string path")
+    if manifest_paths != sorted(manifest_paths):
+        fail("embedded manifest file list is not in canonical order")
+    if set(manifest_paths) != set(entries) - {MANIFEST_PATH}:
+        fail("embedded manifest file list does not match the package index")
+    for record in records:
+        entry = entries[record["path"]]
+        if record.get("size") != entry[2]:
+            fail("embedded manifest size mismatch for: " + record["path"])
+        digest = record.get("sha256")
+        if not isinstance(digest, str) or len(digest) != 64:
+            fail("embedded manifest checksum mismatch for: " + record["path"])
+        try:
+            bytes.fromhex(digest)
+        except ValueError:
+            fail("embedded manifest checksum mismatch for: " + record["path"])
+        # Raw payloads are re-hashed with the standard library; compressed
+        # entries are covered byte-for-byte by the determinism gate instead.
+        if entry[3] == 0:
+            actual = hashlib.sha256(read_payload(package, entry[0], entry[1])).hexdigest()
+            if actual != digest:
+                fail("embedded manifest checksum mismatch for: " + record["path"])
 
 
 def verify_mod_overrides(mods_root):
@@ -82,6 +135,9 @@ def verify(release_root):
         fail("missing mods override README")
     if not os.path.isfile(os.path.join(root, "README.txt")):
         fail("missing release README")
+    notices_path = os.path.join(root, "THIRD_PARTY_NOTICES.md")
+    if not os.path.isfile(notices_path) or os.path.getsize(notices_path) == 0:
+        fail("missing third-party license inventory: THIRD_PARTY_NOTICES.md")
     if not (os.path.isfile(os.path.join(root, "RowlGame")) or
             os.path.isfile(os.path.join(root, "RowlGame.exe"))):
         fail("missing standalone player executable")

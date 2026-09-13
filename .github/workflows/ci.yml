@@ -76,6 +76,7 @@ jobs:
           printf '@echo off\r\ncd /d "%%~dp0"\r\nRowlGame.exe %%*\r\n' > "$release_dir/run_game.bat"
           printf '# Rowl Engine mods\n' > "$release_dir/mods/README.md"
           printf 'ROWL ENGINE — STANDALONE GAME RELEASE\n' > "$release_dir/README.txt"
+          cp packaging/THIRD_PARTY_NOTICES.md "$release_dir/THIRD_PARTY_NOTICES.md"
           python3 tools/verify_release_package.py "$release_dir"
           (
             cd "$release_dir"
@@ -209,6 +210,7 @@ jobs:
           Copy-Item (Join-Path $dllSrc '*.dll') $release
           Set-Content -NoNewline (Join-Path $release 'mods/README.md') '# Rowl Engine mods'
           Set-Content -NoNewline (Join-Path $release 'README.txt') 'ROWL ENGINE — STANDALONE GAME RELEASE'
+          Copy-Item packaging/THIRD_PARTY_NOTICES.md $release
           python tools/verify_release_package.py $release
           Push-Location $release
           $env:SDL_AUDIODRIVER = 'dummy'

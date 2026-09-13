@@ -199,6 +199,10 @@ public static class ProjectBuildService
             RunCanonicalPackageTool(repoRoot, assetsPath, packagePath, token, Report);
             string sourceManifest = Path.Combine(root, "project.rowlproj");
             if (File.Exists(sourceManifest)) File.Copy(sourceManifest, Path.Combine(staging, "project.rowlproj"));
+            string noticesSource = Path.Combine(repoRoot, "packaging", "THIRD_PARTY_NOTICES.md");
+            if (!File.Exists(noticesSource))
+                throw new InvalidOperationException("Third-party license inventory is missing: " + noticesSource);
+            File.Copy(noticesSource, Path.Combine(staging, "THIRD_PARTY_NOTICES.md"));
             token.ThrowIfCancellationRequested();
 
             Report("[BUILD 2/4] Native runtime is being copied...");

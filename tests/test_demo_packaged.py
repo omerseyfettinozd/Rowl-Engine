@@ -108,6 +108,8 @@ def main():
         (release / "mods" / "README.md").write_text("# Rowl Engine mods\n", encoding="utf-8")
         (release / "README.txt").write_text(
             "ROWL ENGINE - FIRST LIGHT SAMPLE RELEASE\n", encoding="utf-8")
+        shutil.copy2(ROOT / "packaging" / "THIRD_PARTY_NOTICES.md",
+                     release / "THIRD_PARTY_NOTICES.md")
         (release / "run_game.sh").write_text(
             "#!/bin/sh\nexec ./%s \"$@\"\n" % player_name, encoding="utf-8")
 
