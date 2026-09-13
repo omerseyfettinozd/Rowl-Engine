@@ -279,9 +279,8 @@ void Engine::resetToStartNode() {
     m_gameState = Rowl::State::GameState::createInitialState(m_storyRuntime.startNodeId());
     m_lastRecordedDialogueNodeId = 0;
     m_lastSfxPlaybackNodeId = 0;
-    auto it = m_storyRuntime.nodes().find(m_storyRuntime.currentNodeId());
-    if (it != m_storyRuntime.nodes().end()) {
-        const auto& startNode = it->second;
+    if (const StoryNode* activeNode = m_storyRuntime.currentNode()) {
+        const auto& startNode = *activeNode;
         if (!startNode.components.empty()) {
             nlohmann::json compsJson = nlohmann::json::array();
             for (const auto& c : startNode.components) {
@@ -369,85 +368,77 @@ void Engine::advanceToNextNode(uint32_t choiceIndex) {
         return;
     }
 
-    auto it = m_storyRuntime.nodes().find(m_storyRuntime.currentNodeId());
-    if (it != m_storyRuntime.nodes().end()) {
-        const auto& node = it->second;
-        if (!node.nextNodes.empty() && choiceIndex < node.nextNodes.size()) {
-            uint64_t nextId = node.nextNodes[choiceIndex].nodeId;
-            if (nextId != 0 && m_storyRuntime.nodes().find(nextId) != m_storyRuntime.nodes().end()) {
-                m_storyRuntime.setCurrentNodeId(nextId);
-                if (m_gameState) {
-                    m_gameState = Rowl::State::GameState::createNextState(m_gameState, m_storyRuntime.currentNodeId());
-                }
-            } else {
-                return; // End of story chain
-            }
-        } else {
-            // End of story chain: stay on last frame (do not loop back)
-            ROWL_LOG_INFO("End of story chain reached on Node #" + std::to_string(m_storyRuntime.currentNodeId()));
-            return;
-        }
-
-        auto nextIt = m_storyRuntime.nodes().find(m_storyRuntime.currentNodeId());
-        if (nextIt != m_storyRuntime.nodes().end()) {
-            const auto& nextNode = nextIt->second;
-            if (!nextNode.components.empty()) {
-                nlohmann::json compsJson = nlohmann::json::array();
-                for (const auto& c : nextNode.components) {
-                    compsJson.push_back({
-                        {"type", c.type},
-                        {"id", c.id},
-                        {"enabled", c.enabled},
-                        {"data", c.data}
-                    });
-                }
-                updateSceneFromComponents(compsJson.dump());
-            } else {
-                updateActiveScene(
-                    nextNode.speaker, nextNode.dialogue,
-                    nextNode.background,
-                    nextNode.backgroundX, nextNode.backgroundY,
-                    nextNode.backgroundWidth, nextNode.backgroundHeight,
-                    nextNode.character,
-                    nextNode.characterX, nextNode.characterY,
-                    nextNode.characterWidth, nextNode.characterHeight,
-                    nextNode.dialogueBoxX, nextNode.dialogueBoxY,
-                    nextNode.dialogueBoxWidth, nextNode.dialogueBoxHeight
-                );
-            }
-            if (m_isPlaying) {
-                for (auto& dlg : m_activeDialogues) {
-                    dlg.elapsedTypewriterTime = 0.0f;
-                    dlg.lastBlipCodepointIndex = 0;
-                }
-                m_activeDialogueData.elapsedTypewriterTime = 0.0f;
-                m_activeDialogueData.lastBlipCodepointIndex = 0;
-            } else {
-                for (auto& dlg : m_activeDialogues) {
-                    dlg.elapsedTypewriterTime = 9999.0f;
-                    dlg.lastBlipCodepointIndex = 99999;
-                }
-                m_activeDialogueData.elapsedTypewriterTime = 9999.0f;
-                m_activeDialogueData.lastBlipCodepointIndex = 99999;
-            }
-            ROWL_LOG_INFO("▶ Active Node #" + std::to_string(m_storyRuntime.currentNodeId()) +
-                          " (" + nextNode.speaker + "): " + nextNode.dialogue);
-        }
-    } else {
+    const auto advanceResult = m_storyRuntime.advance(choiceIndex);
+    if (advanceResult == StoryRuntime::AdvanceResult::CurrentNodeMissing) {
         resetToStartNode();
+        return;
+    }
+    if (advanceResult == StoryRuntime::AdvanceResult::ChoiceUnavailable) {
+        // End of story chain: stay on last frame (do not loop back)
+        ROWL_LOG_INFO("End of story chain reached on Node #" +
+                      std::to_string(m_storyRuntime.currentNodeId()));
+        return;
+    }
+    if (advanceResult != StoryRuntime::AdvanceResult::Advanced) return;
+
+    if (m_gameState) {
+        m_gameState = Rowl::State::GameState::createNextState(
+            m_gameState, m_storyRuntime.currentNodeId());
+    }
+
+    if (const StoryNode* activeNode = m_storyRuntime.currentNode()) {
+        const auto& nextNode = *activeNode;
+        if (!nextNode.components.empty()) {
+            nlohmann::json compsJson = nlohmann::json::array();
+            for (const auto& c : nextNode.components) {
+                compsJson.push_back({
+                    {"type", c.type},
+                    {"id", c.id},
+                    {"enabled", c.enabled},
+                    {"data", c.data}
+                });
+            }
+            updateSceneFromComponents(compsJson.dump());
+        } else {
+            updateActiveScene(
+                nextNode.speaker, nextNode.dialogue,
+                nextNode.background,
+                nextNode.backgroundX, nextNode.backgroundY,
+                nextNode.backgroundWidth, nextNode.backgroundHeight,
+                nextNode.character,
+                nextNode.characterX, nextNode.characterY,
+                nextNode.characterWidth, nextNode.characterHeight,
+                nextNode.dialogueBoxX, nextNode.dialogueBoxY,
+                nextNode.dialogueBoxWidth, nextNode.dialogueBoxHeight
+            );
+        }
+        if (m_isPlaying) {
+            for (auto& dlg : m_activeDialogues) {
+                dlg.elapsedTypewriterTime = 0.0f;
+                dlg.lastBlipCodepointIndex = 0;
+            }
+            m_activeDialogueData.elapsedTypewriterTime = 0.0f;
+            m_activeDialogueData.lastBlipCodepointIndex = 0;
+        } else {
+            for (auto& dlg : m_activeDialogues) {
+                dlg.elapsedTypewriterTime = 9999.0f;
+                dlg.lastBlipCodepointIndex = 99999;
+            }
+            m_activeDialogueData.elapsedTypewriterTime = 9999.0f;
+            m_activeDialogueData.lastBlipCodepointIndex = 99999;
+        }
+        ROWL_LOG_INFO("▶ Active Node #" + std::to_string(m_storyRuntime.currentNodeId()) +
+                      " (" + nextNode.speaker + "): " + nextNode.dialogue);
     }
 }
 
 bool Engine::advanceToChoice(const std::string& optionId) {
     if (optionId.empty()) return false;
-    const auto nodeIt = m_storyRuntime.nodes().find(m_storyRuntime.currentNodeId());
-    if (nodeIt == m_storyRuntime.nodes().end()) return false;
-
-    const auto& options = nodeIt->second.nextNodes;
-    const auto optionIt = std::find_if(options.begin(), options.end(),
-        [&optionId](const StoryNode::NextNode& option) { return option.optionId == optionId; });
-    if (optionIt == options.end()) {
-        ROWL_LOG_WARN("Choice option not found on Node #" + std::to_string(m_storyRuntime.currentNodeId()) + ": " + optionId);
+    if (!m_storyRuntime.currentNode()) return false;
+    const auto choice = m_storyRuntime.resolveChoice(optionId);
+    if (!choice) {
+        ROWL_LOG_WARN("Choice option not found on Node #" +
+                      std::to_string(m_storyRuntime.currentNodeId()) + ": " + optionId);
         return false;
     }
 
@@ -457,9 +448,8 @@ bool Engine::advanceToChoice(const std::string& optionId) {
         }
     }
 
-    const auto index = static_cast<uint32_t>(std::distance(options.begin(), optionIt));
-    advanceToNextNode(index);
-    return m_storyRuntime.currentNodeId() == optionIt->nodeId;
+    advanceToNextNode(choice->index);
+    return m_storyRuntime.currentNodeId() == choice->targetNodeId;
 }
 
 bool Engine::handlePointerDown(float physicalX, float physicalY) {
@@ -1122,7 +1112,7 @@ bool Engine::parseStoryGraphJson(const std::string& jsonContent) {
     m_lastSfxPlaybackNodeId = 0;
     if (m_luaSandbox) m_luaSandbox->clearVariables();
 
-    const auto& startNode = m_storyRuntime.nodes().at(m_storyRuntime.currentNodeId());
+    const auto& startNode = *m_storyRuntime.currentNode();
     if (!startNode.components.empty()) {
         nlohmann::json componentsJson = nlohmann::json::array();
         for (const auto& component : startNode.components) {
@@ -1554,9 +1544,9 @@ void Engine::step(float deltaTime) {
             autoAdvanceDelay = std::max(autoAdvanceDelay, dialogue.autoAdvanceDelay + m_autoAdvanceDelayOffset);
         }
     }
-    const auto activeNode = m_storyRuntime.nodes().find(m_storyRuntime.currentNodeId());
+    const StoryNode* activeNode = m_storyRuntime.currentNode();
     if (m_isPlaying && autoAdvanceEnabled && m_activeChoiceButtons.empty() &&
-        activeNode != m_storyRuntime.nodes().end() && !activeNode->second.nextNodes.empty() &&
+        activeNode && !activeNode->nextNodes.empty() &&
         areActiveDialoguesComplete() && (!m_window || !m_window->isTransitionActive())) {
         m_autoAdvanceElapsed += deltaTime;
         if (m_autoAdvanceElapsed >= autoAdvanceDelay) {
@@ -1908,9 +1898,8 @@ bool Engine::loadGameSlot(int32_t slotIndex) {
     }
 
     // Synchronize scene to loaded node
-    auto it = m_storyRuntime.nodes().find(m_storyRuntime.currentNodeId());
-    if (it != m_storyRuntime.nodes().end()) {
-        const auto& nextNode = it->second;
+    if (const StoryNode* activeNode = m_storyRuntime.currentNode()) {
+        const auto& nextNode = *activeNode;
         if (!nextNode.components.empty()) {
             nlohmann::json compsJson = nlohmann::json::array();
             for (const auto& c : nextNode.components) {
@@ -1987,9 +1976,8 @@ bool Engine::rewind(uint64_t steps) {
         }
     }
 
-    auto it = m_storyRuntime.nodes().find(m_storyRuntime.currentNodeId());
-    if (it != m_storyRuntime.nodes().end()) {
-        const auto& nextNode = it->second;
+    if (const StoryNode* activeNode = m_storyRuntime.currentNode()) {
+        const auto& nextNode = *activeNode;
         if (!nextNode.components.empty()) {
             nlohmann::json compsJson = nlohmann::json::array();
             for (const auto& c : nextNode.components) {

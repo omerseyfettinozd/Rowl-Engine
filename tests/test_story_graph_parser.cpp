@@ -75,7 +75,8 @@ void test_story_graph_parser() {
 
     StoryRuntime runtime;
     auto initialDocument = StoryGraphParser::parse(
-        R"({"start_node_id":101,"nodes":[{"id":101},{"id":202}]})");
+        R"({"start_node_id":101,"nodes":[{"id":101,"next_nodes":[)"
+        R"({"id":202,"option_id":"next"}]},{"id":202}]})");
     if (!initialDocument.succeeded() ||
         !runtime.commit(std::move(initialDocument.document))) {
         std::cerr << "Valid document was not committed to StoryRuntime" << std::endl;
@@ -100,4 +101,19 @@ void test_story_graph_parser() {
         exit(1);
     }
     TEST_PASS("StoryRuntime owns the start and current node cursor");
+
+    const auto choice = runtime.resolveChoice("next");
+    if (!choice || choice->index != 0 || choice->targetNodeId != 202 ||
+        runtime.advance(choice->index) != StoryRuntime::AdvanceResult::Advanced ||
+        runtime.currentNodeId() != choice->targetNodeId) {
+        std::cerr << "StoryRuntime did not resolve and advance the selected choice" << std::endl;
+        exit(1);
+    }
+    const auto terminalNodeId = runtime.currentNodeId();
+    if (runtime.advance() != StoryRuntime::AdvanceResult::ChoiceUnavailable ||
+        runtime.currentNodeId() != terminalNodeId || runtime.resolveChoice("missing")) {
+        std::cerr << "Unavailable navigation changed the StoryRuntime cursor" << std::endl;
+        exit(1);
+    }
+    TEST_PASS("StoryRuntime owns advance and stable choice resolution");
 }
