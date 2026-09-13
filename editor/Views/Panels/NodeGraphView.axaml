@@ -61,7 +61,7 @@
                 </ItemsControl.Styles>
                 <ItemsControl.ItemTemplate>
                     <DataTemplate DataType="vm:NodeViewModel">
-                        <views:NodeControl />
+                        <views:NodeControl HostCanvas="{Binding #OuterCanvas}" />
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
             </ItemsControl>

@@ -42,6 +42,8 @@ internal static class HeadlessSmoke
             if (File.Exists(legacy))
                 throw new Exception($"Legacy graph copy must not be written: {legacy}");
 
+            RunMs5Tour(vm, tempRoot);
+
             if (!string.IsNullOrWhiteSpace(benchmarkPath))
                 Console.WriteLine($"[headless-test] Benchmark output requested at '{benchmarkPath}' (skipped in CLI smoke).");
 
@@ -60,6 +62,69 @@ internal static class HeadlessSmoke
                 try { Directory.Delete(tempRoot, true); }
                 catch { }
             }
+        }
+    }
+
+    // MS-5 gate for the `--headless-test` run mode: drag-cancel default,
+    // keyboard-tour undo round-trip, and the missing-asset badge.
+    private static void RunMs5Tour(MainWindowViewModel vm, string projectRoot)
+    {
+        var undo = Services.UndoRedoService.Instance;
+        var a = new NodeViewModel(9201, "MS5 Smoke A", 100, 100, bare: true);
+        var b = new NodeViewModel(9202, "MS5 Smoke B", 600, 100, bare: true);
+        vm.Nodes.Add(a);
+        vm.Nodes.Add(b);
+        try
+        {
+            bool canUndoBefore = undo.CanUndo;
+            string descBefore = undo.UndoDescription;
+
+            vm.SelectNodeQuiet(a);
+            double x0 = a.X, y0 = a.Y;
+            vm.BeginNodeDragSnapshot();
+            a.X += 99; a.Y += 88;
+            vm.CancelNodeDrag();
+            if (a.X != x0 || a.Y != y0)
+                throw new Exception("MS-5: CancelNodeDrag did not restore start pos.");
+            if (undo.CanUndo != canUndoBefore || undo.UndoDescription != descBefore)
+                throw new Exception("MS-5: cancelled drag recorded undo.");
+
+            vm.SelectNodeQuiet(a);
+            vm.CopySelectedNodesCommand.Execute(null);
+            if (vm.ClipboardNodeCount != 1)
+                throw new Exception("MS-5: copy did not fill the clipboard.");
+            int nodesBefore = vm.Nodes.Count;
+            vm.PasteClipboardNodesCommand.Execute(null);
+            if (vm.Nodes.Count != nodesBefore + 1)
+                throw new Exception("MS-5: paste did not add one node.");
+            vm.NudgeSelectedNodes(2, 2);
+            undo.Undo(); // nudge
+            undo.Undo(); // paste
+            if (vm.Nodes.Count != nodesBefore)
+                throw new Exception("MS-5: undo of paste/nudge did not restore node count.");
+            if (undo.CanUndo != canUndoBefore || undo.UndoDescription != descBefore)
+                throw new Exception("MS-5: keyboard tour left stray undo records.");
+
+            string probe = Path.Combine(projectRoot, "Assets", "ms5_smoke.txt");
+            File.WriteAllText(probe, "ms5");
+            vm.AssetBrowserViewModel.RefreshAssets();
+            File.Delete(probe);
+            vm.AssetBrowserViewModel.RefreshAssets();
+            if (vm.AssetBrowserViewModel.MissingAssetCount != 1)
+                throw new Exception("MS-5: missing-asset badge was not raised.");
+            File.WriteAllText(probe, "ms5");
+            vm.AssetBrowserViewModel.RefreshAssets();
+            if (vm.AssetBrowserViewModel.MissingAssetCount != 0)
+                throw new Exception("MS-5: missing-asset badge did not clear.");
+            File.Delete(probe);
+            vm.AssetBrowserViewModel.RefreshAssets();
+
+            Console.WriteLine("[headless-test] PASS: MS-5 tour ok (drag-cancel, keyboard undo, missing badge).");
+        }
+        finally
+        {
+            vm.Nodes.Remove(a);
+            vm.Nodes.Remove(b);
         }
     }
 

@@ -694,6 +694,55 @@ namespace RowlEngine.Editor.ViewModels
         }
 
         /// <summary>
+        /// MS-5: cancels an in-flight wire gesture (Escape / capture loss / focus loss).
+        /// A previously unplugged cable is restored silently: no undo record is
+        /// produced because the gesture never committed.
+        /// Safe to call when no wire drag is active (no-op).
+        /// </summary>
+        public void CancelWireDrag()
+        {
+            if (!IsDraggingWire && _wireDragSourceNode == null && _wireDragRemovedConn == null) return;
+            IsDraggingWire = false;
+
+            var unplugged = _wireDragRemovedConn;
+            if (unplugged != null && !Connections.Contains(unplugged))
+            {
+                Connections.Add(unplugged);
+                UndoChoiceTarget.RestoreFor(new[] { unplugged });
+            }
+
+            _wireDragSourceNode = null;
+            _wireDragOptionId = string.Empty;
+            _wireDragRemovedConn = null;
+            UpdateStartNodeState();
+            AppendLog("✂️ Kablo çekme iptal edildi (değişiklik yok).");
+        }
+
+        /// <summary>
+        /// MS-5: cancels an in-flight node drag (Escape / capture loss / focus loss).
+        /// Positions revert to <see cref="BeginNodeDragSnapshot"/> state and no
+        /// undo record is produced because the gesture never committed.
+        /// Safe to call when no drag snapshot exists (no-op).
+        /// </summary>
+        public void CancelNodeDrag()
+        {
+            var snapshot = _nodeDragSnapshot;
+            _nodeDragSnapshot = null;
+            if (snapshot == null || snapshot.Count == 0) return;
+
+            foreach (var (node, pos) in snapshot)
+            {
+                if (!Nodes.Contains(node)) continue;
+                node.X = pos.X;
+                node.Y = pos.Y;
+            }
+            AppendLog("↩ Sürükleme iptal edildi, düğümler başlangıç konumuna döndü.");
+        }
+
+        /// <summary>MS-5: true while a drag snapshot is pending commit or cancel.</summary>
+        public bool HasPendingNodeDrag => _nodeDragSnapshot != null && _nodeDragSnapshot.Count > 0;
+
+        /// <summary>
         /// Snapshots drag-affected node positions. Call on pointer-press before any move.
         /// </summary>
         public void BeginNodeDragSnapshot()
@@ -1225,6 +1274,80 @@ namespace RowlEngine.Editor.ViewModels
             UpdateStartNodeState();
             ScheduleSave();
             AppendLog($"📋 Batch duplicated {clones.Count} node(s) with internal wires preserved");
+        }
+
+        // ── MS-5: canvas clipboard (Ctrl+C / Ctrl+V) ──────────────────────
+        private readonly List<NodeViewModel> _nodeClipboard = new();
+        private double _pasteOffsetX = 40.0;
+        private double _pasteOffsetY = 40.0;
+
+        /// <summary>MS-5: number of nodes currently held in the canvas clipboard.</summary>
+        public int ClipboardNodeCount => _nodeClipboard.Count;
+
+        /// <summary>
+        /// MS-5: copies the current selection into the canvas clipboard.
+        /// Stores references; paste clones them with fresh ids via the batch
+        /// duplicate path, so undo integrity (MS-1) is preserved.
+        /// </summary>
+        [RelayCommand]
+        public void CopySelectedNodes()
+        {
+            _nodeClipboard.Clear();
+            var targets = SelectedNodes.Count > 0 ? SelectedNodes.ToList()
+                : (SelectedNode != null ? new List<NodeViewModel> { SelectedNode } : new List<NodeViewModel>());
+            _nodeClipboard.AddRange(targets);
+            _pasteOffsetX = 40.0;
+            _pasteOffsetY = 40.0;
+            if (_nodeClipboard.Count > 0)
+                AppendLog($"📋 Copied {_nodeClipboard.Count} node(s) to clipboard");
+        }
+
+        /// <summary>
+        /// MS-5: pastes clipboard nodes with a cascading offset. Each paste is
+        /// one atomic undo step (BatchDuplicateNodesUndoAction).
+        /// </summary>
+        [RelayCommand]
+        public void PasteClipboardNodes()
+        {
+            var sources = _nodeClipboard.Where(n => n != null).ToList();
+            if (sources.Count == 0) return;
+
+            var clones = EditorBatchOperationService.BatchDuplicateNodes(
+                sources, Nodes, Connections, _pasteOffsetX, _pasteOffsetY, UpdateStartNodeState);
+
+            foreach (var n in Nodes) n.IsSelected = false;
+            SelectedNodes.Clear();
+            foreach (var clone in clones)
+            {
+                clone.IsSelected = true;
+                SelectedNodes.Add(clone);
+            }
+            SelectedNode = clones.LastOrDefault();
+
+            _pasteOffsetX += 20.0;
+            _pasteOffsetY += 20.0;
+
+            UpdateStartNodeState();
+            ScheduleSave();
+            AppendLog($"📋 Pasted {clones.Count} node(s) from clipboard");
+        }
+
+        // ── MS-5: arrow-key nudge ─────────────────────────────────────────
+        /// <summary>
+        /// MS-5: moves the selection by a small delta as one atomic undo step.
+        /// Used by arrow keys (1px, 10px with Shift).
+        /// </summary>
+        public void NudgeSelectedNodes(double deltaX, double deltaY)
+        {
+            var targets = SelectedNodes.Count > 0 ? SelectedNodes.ToList()
+                : (SelectedNode != null ? new List<NodeViewModel> { SelectedNode } : new List<NodeViewModel>());
+            if (targets.Count == 0) return;
+            if (deltaX == 0 && deltaY == 0) return;
+
+            var before = SnapshotNodePositions(targets);
+            EditorBatchOperationService.BatchMoveNodes(targets, deltaX, deltaY);
+            UndoRedoService.Instance.RecordAction(new MoveNodesAction(before, SnapshotNodePositions(targets)));
+            ScheduleSave();
         }
 
         [RelayCommand]
@@ -2029,6 +2152,7 @@ namespace RowlEngine.Editor.ViewModels
 
             EngineHost.Dispose();
             AssetBitmapCache.Clear();
+            try { AssetBrowserViewModel.Dispose(); } catch { }
         }
     }
 }

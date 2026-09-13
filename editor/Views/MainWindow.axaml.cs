@@ -44,6 +44,9 @@ namespace RowlEngine.Editor.Views
             bool ctrl = e.KeyModifiers.HasFlag(KeyModifiers.Control);
             bool shift = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
 
+            // MS-5: canvas shortcuts must not steal keystrokes from text inputs.
+            bool isTextInput = e.Source is Avalonia.Controls.TextBox;
+
             // ── Undo / Redo ──────────────────────────────────────────
             if (ctrl && !shift && e.Key == Key.Z)
             {
@@ -72,6 +75,34 @@ namespace RowlEngine.Editor.Views
             else if (ctrl && e.Key == Key.N)
             {
                 vm.AddNodeCommand.Execute(null);
+                e.Handled = true;
+            }
+            else if (ctrl && !isTextInput && e.Key == Key.A)
+            {
+                vm.SelectAllNodesCommand.Execute(null);
+                e.Handled = true;
+            }
+            else if (ctrl && !isTextInput && e.Key == Key.C)
+            {
+                vm.CopySelectedNodesCommand.Execute(null);
+                e.Handled = true;
+            }
+            else if (ctrl && !isTextInput && e.Key == Key.V)
+            {
+                vm.PasteClipboardNodesCommand.Execute(null);
+                e.Handled = true;
+            }
+            else if (ctrl && !isTextInput && e.Key == Key.D)
+            {
+                vm.DuplicateSelectedNodesCommand.Execute(null);
+                e.Handled = true;
+            }
+            else if (!ctrl && !isTextInput && (e.Key == Key.Left || e.Key == Key.Right || e.Key == Key.Up || e.Key == Key.Down))
+            {
+                double step = shift ? 10.0 : 1.0;
+                double dx = e.Key == Key.Left ? -step : e.Key == Key.Right ? step : 0.0;
+                double dy = e.Key == Key.Up ? -step : e.Key == Key.Down ? step : 0.0;
+                vm.NudgeSelectedNodes(dx, dy);
                 e.Handled = true;
             }
             else if (e.Key == Key.Delete)
@@ -118,6 +149,11 @@ namespace RowlEngine.Editor.Views
             else if (ctrl && e.Key == Key.F)
             {
                 vm.ToggleSearchCommand.Execute(null);
+                e.Handled = true;
+            }
+            else if (e.Key == Key.Escape && vm.IsDraggingWire)
+            {
+                vm.CancelWireDrag();
                 e.Handled = true;
             }
             else if (e.Key == Key.Escape && vm.IsSearchVisible)

@@ -10,20 +10,45 @@ namespace RowlEngine.Editor.Views
 {
     public partial class NodeControl : UserControl
     {
+        /// <summary>
+        /// MS-5: injected canvas coordinate space. Bound from NodeGraphView
+        /// (OuterCanvas); falls back to a visual-tree search when unset.
+        /// </summary>
+        public static readonly StyledProperty<Canvas?> HostCanvasProperty =
+            AvaloniaProperty.Register<NodeControl, Canvas?>(nameof(HostCanvas));
+
+        public Canvas? HostCanvas
+        {
+            get => GetValue(HostCanvasProperty);
+            set => SetValue(HostCanvasProperty, value);
+        }
+
         private bool _isDraggingNode = false;
         private bool _isDraggingWire = false;
         private Point _dragStartNodePos;
         private Point _dragStartPointerPos;
+        private IPointer? _capturedPointer;
 
         public NodeControl()
         {
             InitializeComponent();
+            Focusable = true;
             PointerPressed += OnPointerPressed;
             PointerMoved += OnPointerMoved;
             PointerReleased += OnPointerReleased;
+            PointerCaptureLost += OnPointerCaptureLost;
+            KeyDown += OnControlKeyDown;
         }
 
-        private Canvas? GetRootCanvas()
+        private Canvas? GetRootCanvas() => GetEffectiveCanvas();
+
+        private Canvas? GetEffectiveCanvas()
+        {
+            if (HostCanvas != null) return HostCanvas;
+            return FindCanvasFallback();
+        }
+
+        private Canvas? FindCanvasFallback()
         {
             Visual? current = this;
             while (current != null)
@@ -35,6 +60,52 @@ namespace RowlEngine.Editor.Views
                 current = current.GetVisualParent();
             }
             return null;
+        }
+
+        /// <summary>
+        /// MS-5: pointer capture loss (Alt+Tab, focus loss, leaving the window)
+        /// must never leave a drag hanging: revert to a stable state with no
+        /// undo record, since the gesture never committed.
+        /// </summary>
+        private void OnPointerCaptureLost(object? sender, PointerCaptureLostEventArgs e)
+        {
+            if (!_isDraggingNode && !_isDraggingWire) return;
+
+            if (DataContext is NodeViewModel && VisualRoot is MainWindow mw && mw.DataContext is MainWindowViewModel mainVm)
+            {
+                if (_isDraggingWire)
+                    mainVm.CancelWireDrag();
+                if (_isDraggingNode)
+                    mainVm.CancelNodeDrag();
+                mainVm.IsInteractivelyDragging = false;
+            }
+            _isDraggingNode = false;
+            _isDraggingWire = false;
+            _capturedPointer = null;
+        }
+
+        /// <summary>
+        /// MS-5: Escape cancels the in-flight gesture and restores the
+        /// pre-gesture state without producing an undo record.
+        /// </summary>
+        private void OnControlKeyDown(object? sender, KeyEventArgs e)
+        {
+            if (e.Key != Key.Escape) return;
+            if (!_isDraggingNode && !_isDraggingWire) return;
+
+            if (VisualRoot is MainWindow mw && mw.DataContext is MainWindowViewModel mainVm)
+            {
+                if (_isDraggingWire)
+                    mainVm.CancelWireDrag();
+                if (_isDraggingNode)
+                    mainVm.CancelNodeDrag();
+                mainVm.IsInteractivelyDragging = false;
+            }
+            _isDraggingNode = false;
+            _isDraggingWire = false;
+            _capturedPointer?.Capture(null);
+            _capturedPointer = null;
+            e.Handled = true;
         }
 
         private static string GetChoiceOptionId(object? source)
@@ -102,6 +173,7 @@ namespace RowlEngine.Editor.Views
 
                         _isDraggingWire = true;
                         e.Pointer.Capture(this);
+                        _capturedPointer = e.Pointer;
                         var mouseCanvasPos = e.GetPosition(canvasToUse);
                         mainVmUnplug.StartUnplugWireDrag(sourceNode, mouseCanvasPos, existingConn.OptionId, existingConn);
                         e.Handled = true;
@@ -116,6 +188,7 @@ namespace RowlEngine.Editor.Views
             {
                 _isDraggingWire = true;
                 e.Pointer.Capture(this);
+                        _capturedPointer = e.Pointer;
 
                 if (VisualRoot is MainWindow mainWindow && mainWindow.DataContext is MainWindowViewModel mainVm)
                 {
@@ -133,6 +206,7 @@ namespace RowlEngine.Editor.Views
                 _dragStartNodePos = new Point(vm.X, vm.Y);
                 _dragStartPointerPos = e.GetPosition(canvasToUse);
                 e.Pointer.Capture(this);
+                        _capturedPointer = e.Pointer;
 
                 if (VisualRoot is MainWindow mainWindowSelect && mainWindowSelect.DataContext is MainWindowViewModel mainVmSelect)
                 {
@@ -148,6 +222,7 @@ namespace RowlEngine.Editor.Views
                     // Snapshot positions BEFORE the gesture mutates them so the
                     // release can record one atomic MoveNodesAction (MS-1).
                     mainVmSelect.BeginNodeDragSnapshot();
+                    mainVmSelect.IsInteractivelyDragging = true;
                 }
                 e.Handled = true;
             }
@@ -197,7 +272,8 @@ namespace RowlEngine.Editor.Views
             if (_isDraggingWire)
             {
                 _isDraggingWire = false;
-                e.Pointer.Capture(null);
+                _capturedPointer?.Capture(null);
+                _capturedPointer = null;
 
                 if (VisualRoot is MainWindow mainWindow && mainWindow.DataContext is MainWindowViewModel mainVm)
                 {
@@ -209,9 +285,11 @@ namespace RowlEngine.Editor.Views
             else if (_isDraggingNode)
             {
                 _isDraggingNode = false;
-                e.Pointer.Capture(null);
+                _capturedPointer?.Capture(null);
+                _capturedPointer = null;
                 if (VisualRoot is MainWindow mainWindowEnd && mainWindowEnd.DataContext is MainWindowViewModel mainVmEnd)
                 {
+                    mainVmEnd.IsInteractivelyDragging = false;
                     mainVmEnd.EndNodeDragSnapshot();
                 }
                 e.Handled = true;

@@ -239,6 +239,9 @@ internal static class EditorHeadlessTestSuite
             // Test 30: MS-4 dirty-frame copy gate & idle-diet counters
             EditorFrameSkippingTests.Run();
 
+            // Test 31: MS-5 editor UX — drag cancel, keyboard tour, asset watcher
+            EditorMs5UxTests.Run(mainVm, testProjectRoot);
+
             Console.WriteLine("\n=======================================================");
             Console.WriteLine("🎉 ALL EDITOR HEADLESS TESTS PASSED SUCCESSFULLY! 🎉");
             Console.WriteLine("=======================================================\n");

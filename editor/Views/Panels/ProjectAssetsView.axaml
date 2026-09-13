@@ -82,9 +82,16 @@
                             
                             <TextBlock Text="{Binding Name}" 
                                        IsVisible="{Binding !IsEditing}" 
-                                       Foreground="{DynamicResource PrimaryText}" 
+                                       Foreground="{DynamicResource PrimaryText}"
                                        FontSize="12" 
                                        VerticalAlignment="Center"/>
+
+                            <!-- MS-5: kayıp dosya rozeti (diskten silinen varlık) -->
+                            <Border IsVisible="{Binding IsMissing}"
+                                    Background="#7F3030" CornerRadius="3" Padding="4,1"
+                                    VerticalAlignment="Center">
+                                <TextBlock Text="⚠️ KAYIP" FontSize="9" Foreground="#FCA5A5" FontWeight="Bold"/>
+                            </Border>
 
                             <TextBox Text="{Binding EditingName, Mode=TwoWay}" 
                                      IsVisible="{Binding IsEditing}" 
