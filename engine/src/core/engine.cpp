@@ -1868,13 +1868,8 @@ bool Engine::saveGameSlot(int32_t slotIndex) {
                             "save_game_slot", std::to_string(slotIndex));
         return false;
     }
-    if (!m_gameState) {
-        m_gameState = Rowl::State::GameState::createInitialState(m_storyRuntime.currentNodeId());
-    }
-    if (m_gameState->activeNodeId != m_storyRuntime.currentNodeId()) {
-        m_gameState = Rowl::State::GameState::createNextState(
-            m_gameState, m_storyRuntime.currentNodeId());
-    }
+    m_gameState = Rowl::State::SessionPersistence::checkpoint(
+        m_gameState, m_storyRuntime.currentNodeId());
     auto& persistence = sessionPersistence();
     const std::string saveDirectory = persistence.saveDirectory();
     bool ok = persistence.saveSlot(m_gameState, slotIndex);
@@ -2013,9 +2008,8 @@ bool Engine::deleteSaveSlot(int32_t slotIndex) {
 }
 
 bool Engine::rewind(uint64_t steps) {
-    if (!m_gameState) return false;
-    auto rewound = Rowl::State::GameState::rewind(m_gameState, steps);
-    if (!rewound || rewound == m_gameState) return false;
+    auto rewound = Rowl::State::SessionPersistence::rewind(m_gameState, steps);
+    if (!rewound) return false;
 
     m_gameState = rewound;
     m_storyRuntime.setCurrentNodeId(m_gameState->activeNodeId);

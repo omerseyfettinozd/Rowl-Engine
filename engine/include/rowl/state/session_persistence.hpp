@@ -30,10 +30,22 @@ struct SessionLoadResult {
 /// Filesystem boundary for versioned session save slots.
 ///
 /// GameState remains the immutable data model; this class owns slot paths,
-/// bounded reads and atomic replacement writes.
+/// bounded reads, atomic replacement writes, plus the checkpoint/rewind
+/// chain stepping over the immutable history.
 class SessionPersistence {
 public:
     explicit SessionPersistence(std::string saveDirectory = "saves");
+
+    /// Aligns a history chain with the live story cursor before a save.
+    /// Null input yields a fresh initial state; a node mismatch appends one
+    /// checkpoint step; an aligned chain is returned unchanged.
+    static std::shared_ptr<const GameState> checkpoint(
+        const std::shared_ptr<const GameState>& current, uint64_t currentNodeId);
+
+    /// Steps back over the immutable history chain. Returns nullptr when
+    /// there is no movement (null input, zero steps, or already at root).
+    static std::shared_ptr<const GameState> rewind(
+        const std::shared_ptr<const GameState>& current, uint64_t steps);
 
     bool saveSlot(const std::shared_ptr<const GameState>& state, int32_t slotIndex) const;
     SessionLoadResult loadSlotDetailed(int32_t slotIndex) const;

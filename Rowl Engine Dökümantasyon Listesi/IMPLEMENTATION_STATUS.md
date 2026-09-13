@@ -16,6 +16,9 @@ testi geçiyor.
   `SessionPersistence` örneğini kullanır. Ayrıntılı load sonucu güncel v3 ile
   migrate edilen v1/v2 save'leri ve future-version/bozuk/IO/boyut hatalarını
   ayırır; migration bilgisi mevcut structured-result C ABI'sında görünür.
+  Checkpoint hizalama ve rewind adımlama `SessionPersistence` sınırındadır;
+  `Engine` save öncesi hizalama ve geri alma için bu sınıra delege eder, C ABI
+  değişmedi.
 - Lua sandbox ve birbirinden izole script component modülleri: her component kendi
   `on_enter`, `on_update`, `on_choice` ve `on_exit` callback'ini taşır; aynı
   callback isimleri başka component'leri ezmez.

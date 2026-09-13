@@ -40,6 +40,50 @@ void test_game_state() {
     }
     TEST_PASS("Multi-Step Historical Rewind (Step 3 -> Step 1)");
 
+    // SessionPersistence owns checkpoint alignment and rewind stepping over
+    // the immutable chain; Engine delegates to these without changing behavior.
+    {
+        auto fresh = Rowl::State::SessionPersistence::checkpoint(nullptr, 101);
+        if (!fresh || fresh->stepId != 1 || fresh->activeNodeId != 101) {
+            std::cerr << "SessionPersistence checkpoint from null mismatch" << std::endl;
+            exit(1);
+        }
+        auto aligned = Rowl::State::SessionPersistence::checkpoint(s3, 103);
+        if (aligned != s3) {
+            std::cerr << "SessionPersistence checkpoint must reuse an aligned chain" << std::endl;
+            exit(1);
+        }
+        auto advanced = Rowl::State::SessionPersistence::checkpoint(s3, 104);
+        if (!advanced || advanced->activeNodeId != 104 || advanced->stepId != s3->stepId + 1 ||
+            advanced->getVariable("player_name") != "Evelyn" || advanced->previousState != s3) {
+            std::cerr << "SessionPersistence checkpoint node-mismatch mismatch" << std::endl;
+            exit(1);
+        }
+        if (Rowl::State::SessionPersistence::rewind(nullptr, 1)) {
+            std::cerr << "SessionPersistence rewind of null must report no movement" << std::endl;
+            exit(1);
+        }
+        if (Rowl::State::SessionPersistence::rewind(s3, 0)) {
+            std::cerr << "SessionPersistence rewind of zero steps must report no movement" << std::endl;
+            exit(1);
+        }
+        auto stepped = Rowl::State::SessionPersistence::rewind(s3, 2);
+        if (stepped != s1) {
+            std::cerr << "SessionPersistence rewind chain mismatch" << std::endl;
+            exit(1);
+        }
+        auto clamped = Rowl::State::SessionPersistence::rewind(s3, 99);
+        if (!clamped || clamped->stepId != 1) {
+            std::cerr << "SessionPersistence rewind must clamp at the history root" << std::endl;
+            exit(1);
+        }
+        if (Rowl::State::SessionPersistence::rewind(s1, 1)) {
+            std::cerr << "SessionPersistence rewind at root must report no movement" << std::endl;
+            exit(1);
+        }
+    }
+    TEST_PASS("SessionPersistence Checkpoint and Rewind Chain Ownership");
+
     // JSON Serialization & Slot Persistence
     std::string serialized = s2->serializeJson();
     auto deserialized = Rowl::State::GameState::deserializeJson(serialized);

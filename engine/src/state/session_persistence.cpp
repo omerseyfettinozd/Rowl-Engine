@@ -47,6 +47,25 @@ bool replaceFileAtomically(const std::filesystem::path& temporaryPath,
 SessionPersistence::SessionPersistence(std::string saveDirectory)
     : m_saveDirectory(saveDirectory.empty() ? "saves" : std::move(saveDirectory)) {}
 
+std::shared_ptr<const GameState> SessionPersistence::checkpoint(
+    const std::shared_ptr<const GameState>& current, uint64_t currentNodeId) {
+    if (!current) {
+        return GameState::createInitialState(currentNodeId);
+    }
+    if (current->activeNodeId != currentNodeId) {
+        return GameState::createNextState(current, currentNodeId);
+    }
+    return current;
+}
+
+std::shared_ptr<const GameState> SessionPersistence::rewind(
+    const std::shared_ptr<const GameState>& current, uint64_t steps) {
+    if (!current || steps == 0) return nullptr;
+    auto target = GameState::rewind(current, steps);
+    if (!target || target == current) return nullptr;
+    return target;
+}
+
 void SessionPersistence::setSaveDirectory(std::string saveDirectory) {
     m_saveDirectory = saveDirectory.empty() ? "saves" : std::move(saveDirectory);
 }
