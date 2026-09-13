@@ -8,6 +8,10 @@ testi geçiyor.
 
 - C++20 çekirdek, SDL3 framebuffer/player, P/Invoke editör köprüsü ve graph tabanlı hikâye oynatımı.
 - Sürümlü save dosyaları; değişken, sahne arka planı, BGM yolu/volümü/aktiflik ve DSP bilgisi.
+- `SessionPersistence`, save-slot yolu, 4 MiB bounded read, bozuk/versioned
+  içerik yükleme ve `.tmp` üzerinden platforma uygun atomik replace yazımını
+  `GameState` veri modelinden ayırır. Mevcut `GameState::save/load/has/delete`
+  girişleri davranış uyumluluğu için bu sınıra delegasyon yapar.
 - Lua sandbox ve birbirinden izole script component modülleri: her component kendi
   `on_enter`, `on_update`, `on_choice` ve `on_exit` callback'ini taşır; aynı
   callback isimleri başka component'leri ezmez.

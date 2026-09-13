@@ -3,6 +3,7 @@
  * Split from main_test_runner.cpp; behavior unchanged.
  */
 #include "rowl_test_harness.hpp"
+#include "rowl/state/session_persistence.hpp"
 
 void test_game_state() {
     TEST_SECTION("GameState & Rewind Subsystem");
@@ -84,68 +85,74 @@ void test_game_state() {
     TEST_PASS("Versioned Audio Presentation Save State and v1 Compatibility");
 
     std::string testSaveDir = "build/test_saves";
-    if (!Rowl::State::GameState::saveToSlot(s2, 1, testSaveDir)) {
-        std::cerr << "GameState saveToSlot failed" << std::endl;
+    Rowl::State::SessionPersistence persistence(testSaveDir);
+    if (!persistence.saveSlot(s2, 1)) {
+        std::cerr << "SessionPersistence saveSlot failed" << std::endl;
         exit(1);
     }
     if (std::filesystem::exists(std::filesystem::path(testSaveDir) / "save_slot_1.json.tmp")) {
         std::cerr << "GameState atomic save left a temporary file behind" << std::endl;
         exit(1);
     }
-    if (!Rowl::State::GameState::hasSlot(1, testSaveDir)) {
-        std::cerr << "GameState hasSlot failed" << std::endl;
+    if (!persistence.hasSlot(1)) {
+        std::cerr << "SessionPersistence hasSlot failed" << std::endl;
         exit(1);
     }
-    auto loadedSlot = Rowl::State::GameState::loadFromSlot(1, testSaveDir);
+    auto loadedSlot = persistence.loadSlot(1);
     if (!loadedSlot || loadedSlot->activeNodeId != 102 || loadedSlot->getVariable("player_name") != "Evelyn") {
         std::cerr << "GameState loadFromSlot content mismatch" << std::endl;
         exit(1);
     }
     const auto replacementState = Rowl::State::GameState::createNextState(s2, 303, "player_name", "Mina");
-    if (!Rowl::State::GameState::saveToSlot(replacementState, 1, testSaveDir)) {
-        std::cerr << "GameState atomic slot replacement failed" << std::endl;
+    if (!persistence.saveSlot(replacementState, 1)) {
+        std::cerr << "SessionPersistence atomic slot replacement failed" << std::endl;
         exit(1);
     }
-    const auto replacedSlot = Rowl::State::GameState::loadFromSlot(1, testSaveDir);
+    const auto replacedSlot = persistence.loadSlot(1);
     if (!replacedSlot || replacedSlot->activeNodeId != 303 || replacedSlot->getVariable("player_name") != "Mina" ||
         std::filesystem::exists(std::filesystem::path(testSaveDir) / "save_slot_1.json.tmp")) {
         std::cerr << "GameState atomic slot replacement produced inconsistent data" << std::endl;
         exit(1);
     }
-    TEST_PASS("GameState Slot File Persistence (saveToSlot / loadFromSlot / hasSlot)");
+    if (!Rowl::State::GameState::hasSlot(1, testSaveDir) ||
+        !Rowl::State::GameState::loadFromSlot(1, testSaveDir)) {
+        std::cerr << "GameState compatibility delegates did not reach SessionPersistence"
+                  << std::endl;
+        exit(1);
+    }
+    TEST_PASS("SessionPersistence Atomic Slots and GameState Compatibility Delegates");
 
     // Save files are user-controlled input once they reach disk. Reject
     // malformed, unsupported, and structurally invalid content safely.
     {
         std::ofstream(std::filesystem::path(testSaveDir) / "save_slot_2.json") << "{ not valid json";
-        if (Rowl::State::GameState::loadFromSlot(2, testSaveDir)) {
+        if (persistence.loadSlot(2)) {
             std::cerr << "Malformed GameState save was accepted" << std::endl;
             exit(1);
         }
         std::ofstream(std::filesystem::path(testSaveDir) / "save_slot_3.json")
             << R"({"version":999,"step_id":1,"active_node_id":101,"variables":{}})";
-        if (Rowl::State::GameState::loadFromSlot(3, testSaveDir)) {
+        if (persistence.loadSlot(3)) {
             std::cerr << "Future GameState save version was accepted" << std::endl;
             exit(1);
         }
         std::ofstream(std::filesystem::path(testSaveDir) / "save_slot_4.json")
             << R"({"version":1,"step_id":0,"active_node_id":101,"variables":[]})";
-        if (Rowl::State::GameState::loadFromSlot(4, testSaveDir)) {
+        if (persistence.loadSlot(4)) {
             std::cerr << "Structurally invalid GameState save was accepted" << std::endl;
             exit(1);
         }
-        if (Rowl::State::GameState::saveToSlot(s2, -1, testSaveDir) ||
-            Rowl::State::GameState::hasSlot(-1, testSaveDir) ||
-            Rowl::State::GameState::deleteSlot(-1, testSaveDir)) {
+        if (persistence.saveSlot(s2, -1) || persistence.hasSlot(-1) ||
+            persistence.deleteSlot(-1)) {
             std::cerr << "Negative GameState save slot was accepted" << std::endl;
             exit(1);
         }
     }
     TEST_PASS("GameState Save Corruption, Version, and Slot-Bounds Containment");
 
-    Rowl::State::GameState::deleteSlot(1, testSaveDir);
-    if (Rowl::State::GameState::hasSlot(1, testSaveDir)) {
-        std::cerr << "GameState deleteSlot failed" << std::endl;
+    persistence.deleteSlot(1);
+    if (persistence.hasSlot(1)) {
+        std::cerr << "SessionPersistence deleteSlot failed" << std::endl;
         exit(1);
     }
     TEST_PASS("GameState Slot Cleanup (deleteSlot)");
