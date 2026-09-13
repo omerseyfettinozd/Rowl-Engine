@@ -5,7 +5,7 @@
 #include "rowl/scene/scene.hpp"
 #include "rowl/audio/audio_engine.hpp"
 #include "rowl/scripting/lua_sandbox.hpp"
-#include "rowl/render/aspect_guardian.hpp"
+#include "rowl/render/frame_composition.hpp"
 #include "rowl/render/font_renderer.hpp"
 #include "rowl/platform/sdl_event_dispatcher.hpp"
 #include <chrono>
@@ -459,16 +459,16 @@ bool Engine::advanceToChoice(const std::string& optionId) {
 
 bool Engine::handlePointerDown(float physicalX, float physicalY) {
     if (!m_window || m_activeChoiceButtons.empty()) return false;
-    const auto metrics = Rowl::Render::AspectGuardian::calculateViewport(
-        m_window->getWidth(), m_window->getHeight(), 1920, 1080);
-    if (metrics.scaleFactor <= 0.0f) return false;
+    float x = 0.0f, y = 0.0f;
+    bool bezelTap = false;
+    if (!m_window->mapPhysicalToVirtual(physicalX, physicalY, 1920, 1080, x, y, bezelTap)) {
+        return false;
+    }
     // Letterbox/pillarbox margins are not story canvas. Consume input there so
     // the caller does not turn a bezel tap into an accidental advance.
-    if (!Rowl::Render::AspectGuardian::containsPhysicalPoint(physicalX, physicalY, metrics)) {
+    if (bezelTap) {
         return true;
     }
-    const float x = (physicalX - static_cast<float>(metrics.x)) / metrics.scaleFactor;
-    const float y = (physicalY - static_cast<float>(metrics.y)) / metrics.scaleFactor;
     for (auto it = m_activeChoiceButtons.rbegin(); it != m_activeChoiceButtons.rend(); ++it) {
         const auto& button = *it;
         if (!button.enabled) continue;
@@ -1582,19 +1582,21 @@ void Engine::step(float deltaTime) {
         m_autoAdvanceElapsed = 0.0f;
     }
 
-    m_window->renderVisualNovelFrame(
-        m_hasBackground,
-        m_activeBackground,
-        m_activeBackgroundX,  m_activeBackgroundY,
-        m_activeBackgroundWidth, m_activeBackgroundHeight,
-        m_activeCharacters,
-        m_activeDialogues,
-        m_activeChoiceButtons,
-        m_activeBackgroundRotation,
-        m_activeBackgroundParallaxX,
-        m_activeBackgroundParallaxY,
-        m_activeBackgroundOpacity
-    );
+    Rowl::Render::ComposedFrame frame;
+    frame.hasBackground = m_hasBackground;
+    frame.background = m_activeBackground;
+    frame.backgroundX = m_activeBackgroundX;
+    frame.backgroundY = m_activeBackgroundY;
+    frame.backgroundWidth = m_activeBackgroundWidth;
+    frame.backgroundHeight = m_activeBackgroundHeight;
+    frame.characters = m_activeCharacters;
+    frame.dialogues = m_activeDialogues;
+    frame.choices = m_activeChoiceButtons;
+    frame.backgroundRotation = m_activeBackgroundRotation;
+    frame.backgroundParallaxX = m_activeBackgroundParallaxX;
+    frame.backgroundParallaxY = m_activeBackgroundParallaxY;
+    frame.backgroundOpacity = m_activeBackgroundOpacity;
+    m_window->renderComposedFrame(frame);
 
     // Update & Render Entity-Component Scene
     if (m_scene) {

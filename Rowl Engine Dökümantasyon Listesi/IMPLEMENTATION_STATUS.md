@@ -102,6 +102,11 @@ testi geçiyor.
   desktop davranışını korur. `test_platform_host` bu altı sinyalin Engine
   tarafından gerçekten tüketildiğini; mevcut structured-diagnostics testi de
   explicit save-directory override davranışının korunduğunu doğrular.
+- Frame composition ve viewport eşlemesi render sınırındadır: `Window`
+  texture/cache, SDL surface, piksel buffer ve frame profiliyle birlikte
+  `ComposedFrame` tüketimi ve physical→virtual tap eşlemesini sahiplenir;
+  `Engine` sahne state'ini paketleyip choice hit-testini yürütür, C ABI
+  değişmedi.
 
 ## Sonraki üretim işleri
 

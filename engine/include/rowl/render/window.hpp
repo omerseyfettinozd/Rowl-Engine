@@ -87,6 +87,8 @@ struct DialogueRenderData {
     std::string customBoxTexture;
 };
 
+struct ComposedFrame;
+
 struct ChoiceButtonRenderData {
     std::string optionId;
     std::string text;
@@ -153,6 +155,19 @@ public:
      */
     void resizeViewport(uint32_t newWidth, uint32_t newHeight);
 
+    /**
+     * Maps a physical-surface tap into story-canvas coordinates.
+     *
+     * Returns false only when the viewport itself is degenerate. Otherwise
+     * outBezelTap reports whether the point landed in the letterbox/pillarbox
+     * margins (mapped outputs are zeroed then); a canvas hit fills
+     * outVirtualX/outVirtualY and clears outBezelTap.
+     */
+    bool mapPhysicalToVirtual(float physicalX, float physicalY,
+                              uint32_t virtualWidth, uint32_t virtualHeight,
+                              float& outVirtualX, float& outVirtualY,
+                              bool& outBezelTap) const;
+
     void setInputHandler(std::function<void(const Rowl::Platform::RuntimeInputEvent&)> handler);
 
     void pollEvents(bool& outShouldQuit);
@@ -189,6 +204,9 @@ public:
         const std::string& dialogue,
         float dlgX,  float dlgY,  float dlgW,  float dlgH
     );
+    /// Renders a pre-packed frame. Forwards member-wise to the canonical
+    /// overload above; the render boundary owns how a frame becomes pixels.
+    void renderComposedFrame(const ComposedFrame& frame);
     void endFrame();
     void shutdown();
 

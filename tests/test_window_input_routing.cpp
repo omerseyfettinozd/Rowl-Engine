@@ -106,6 +106,43 @@ void test_window_input_routing() {
         exit(1);
     }
     Rowl::Platform::SdlEventDispatcher::unregisterWindow(windowA);
+
+    // Viewport mapping lives on the render boundary: canvas taps resolve to
+    // story coordinates, margin taps report a bezel hit for the caller to
+    // consume without advancing the story.
+    {
+        float vx = 0.0f, vy = 0.0f;
+        bool bezel = true;
+        if (!window.mapPhysicalToVirtual(160.0f, 90.0f, 1920, 1080, vx, vy, bezel) || bezel) {
+            std::cerr << "Offscreen canvas center was not mapped to the story canvas" << std::endl;
+            exit(1);
+        }
+        if (std::abs(vx - 960.0f) > 0.5f || std::abs(vy - 540.0f) > 0.5f) {
+            std::cerr << "Canvas center mapping mismatch: got (" << vx << ", " << vy << ")" << std::endl;
+            exit(1);
+        }
+
+        float bx = -1.0f, by = -1.0f;
+        bool bezelHit = false;
+        if (!window.mapPhysicalToVirtual(5.0f, 90.0f, 1080, 1920, bx, by, bezelHit) || !bezelHit) {
+            std::cerr << "Pillarbox margin tap was not reported as a bezel hit" << std::endl;
+            exit(1);
+        }
+
+        float px = 0.0f, py = 0.0f;
+        bool pillarBezel = true;
+        if (!window.mapPhysicalToVirtual(160.0f, 90.0f, 1080, 1920, px, py, pillarBezel) || pillarBezel) {
+            std::cerr << "Pillarbox canvas tap was misclassified as a bezel hit" << std::endl;
+            exit(1);
+        }
+        // Integer-truncated pillarbox: width int(180 * 1080/1920) = 101,
+        // x = (320 - 101) / 2 = 109, scale 180/1920 → (160-109)/scale = 544.
+        if (std::abs(px - 544.0f) > 0.5f || std::abs(py - 960.0f) > 0.5f) {
+            std::cerr << "Pillarbox canvas mapping mismatch: got (" << px << ", " << py << ")" << std::endl;
+            exit(1);
+        }
+    }
+    TEST_PASS("Render Boundary Maps Canvas Taps and Reports Bezel Hits");
     window.shutdown();
     TEST_PASS("SDL dispatcher isolates visible runtime events and broadcasts process quit");
 }

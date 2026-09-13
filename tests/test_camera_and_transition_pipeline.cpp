@@ -3,6 +3,7 @@
  * Split from main_test_runner.cpp; behavior unchanged.
  */
 #include "rowl_test_harness.hpp"
+#include "rowl/render/frame_composition.hpp"
 
 void test_camera_and_transition_pipeline() {
     TEST_SECTION("2D Camera & Scene Transition Subsystem Tests");
@@ -515,5 +516,52 @@ void test_camera_and_transition_pipeline() {
 
         RowlEngine_Destroy(handle);
         TEST_PASS("Scene JSON Shake Presets & Screen Visual FX Ingestion");
+    }
+
+    // Test: ComposedFrame renders byte-identical pixels to the legacy call.
+    {
+        Rowl::VFS::VFSManager frameVfs;
+        frameVfs.remountProject(std::filesystem::current_path().string());
+        Rowl::Render::Window window(&frameVfs);
+        if (!window.initializeOffscreen(320, 180)) {
+            std::cerr << "Could not initialize offscreen window for composed-frame test" << std::endl;
+            exit(1);
+        }
+        const std::vector<Rowl::Render::CharacterRenderData> noCharacters;
+        const std::vector<Rowl::Render::DialogueRenderData> noDialogues;
+        const std::vector<Rowl::Render::ChoiceButtonRenderData> noChoices;
+        window.renderVisualNovelFrame(false, "", 0.0f, 0.0f, 1920.0f, 1080.0f,
+                                      noCharacters, noDialogues, noChoices,
+                                      0.0f, 1.0f, 1.0f, 1.0f);
+        window.endFrame();
+        const uint32_t pixelBytes = window.getWidth() * window.getHeight() * 4u;
+        const uint8_t* legacyPixels = window.getPixelBuffer();
+        if (!legacyPixels || pixelBytes == 0) {
+            std::cerr << "Legacy frame produced no pixel buffer" << std::endl;
+            exit(1);
+        }
+        const std::vector<uint8_t> legacyCopy(legacyPixels, legacyPixels + pixelBytes);
+
+        Rowl::Render::ComposedFrame frame;
+        frame.hasBackground = false;
+        frame.background = "";
+        frame.backgroundX = 0.0f;
+        frame.backgroundY = 0.0f;
+        frame.backgroundWidth = 1920.0f;
+        frame.backgroundHeight = 1080.0f;
+        frame.backgroundRotation = 0.0f;
+        frame.backgroundParallaxX = 1.0f;
+        frame.backgroundParallaxY = 1.0f;
+        frame.backgroundOpacity = 1.0f;
+        window.renderComposedFrame(frame);
+        window.endFrame();
+        const uint8_t* composedPixels = window.getPixelBuffer();
+        if (!composedPixels ||
+            std::memcmp(composedPixels, legacyCopy.data(), pixelBytes) != 0) {
+            std::cerr << "ComposedFrame pixels differ from the legacy frame call" << std::endl;
+            exit(1);
+        }
+        window.shutdown();
+        TEST_PASS("ComposedFrame Forwards Byte-Identical Pixels to Render Boundary");
     }
 }

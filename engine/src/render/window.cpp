@@ -1,6 +1,7 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "thirdparty/stb_image.h"
 #include "rowl/render/window.hpp"
+#include "rowl/render/frame_composition.hpp"
 #include "rowl/render/aspect_guardian.hpp"
 #include "rowl/core/logger.hpp"
 #include "rowl/platform/sdl_event_dispatcher.hpp"
@@ -457,6 +458,27 @@ void Window::resizeViewport(uint32_t newWidth, uint32_t newHeight) {
         SDL_SetWindowSize(m_sdlWindow, static_cast<int>(newWidth), static_cast<int>(newHeight));
     }
     ROWL_LOG_INFO("Viewport resized to " + std::to_string(newWidth) + "x" + std::to_string(newHeight));
+}
+
+bool Window::mapPhysicalToVirtual(float physicalX, float physicalY,
+                                  uint32_t virtualWidth, uint32_t virtualHeight,
+                                  float& outVirtualX, float& outVirtualY,
+                                  bool& outBezelTap) const {
+    outBezelTap = false;
+    outVirtualX = 0.0f;
+    outVirtualY = 0.0f;
+    const ViewportMetrics metrics =
+        AspectGuardian::calculateViewport(m_width, m_height, virtualWidth, virtualHeight);
+    if (metrics.scaleFactor <= 0.0f) return false;
+    // Letterbox/pillarbox margins are not story canvas. Report them so the
+    // caller can consume the tap without advancing the story.
+    if (!AspectGuardian::containsPhysicalPoint(physicalX, physicalY, metrics)) {
+        outBezelTap = true;
+        return true;
+    }
+    outVirtualX = (physicalX - static_cast<float>(metrics.x)) / metrics.scaleFactor;
+    outVirtualY = (physicalY - static_cast<float>(metrics.y)) / metrics.scaleFactor;
+    return true;
 }
 
 void Window::setInputHandler(std::function<void(const Rowl::Platform::RuntimeInputEvent&)> handler) {
@@ -1324,6 +1346,22 @@ void Window::renderVisualNovelFrame(
     dlg.height = dlgH;
     dlg.typewriterEnabled = false; // Legacy direct call has typewriter disabled by default
     renderVisualNovelFrame(hasBackground, background, bgX, bgY, bgW, bgH, characters, dlg);
+}
+
+void Window::renderComposedFrame(const ComposedFrame& frame) {
+    renderVisualNovelFrame(
+        frame.hasBackground,
+        frame.background,
+        frame.backgroundX, frame.backgroundY,
+        frame.backgroundWidth, frame.backgroundHeight,
+        frame.characters,
+        frame.dialogues,
+        frame.choices,
+        frame.backgroundRotation,
+        frame.backgroundParallaxX,
+        frame.backgroundParallaxY,
+        frame.backgroundOpacity
+    );
 }
 
 void Window::endFrame() {
