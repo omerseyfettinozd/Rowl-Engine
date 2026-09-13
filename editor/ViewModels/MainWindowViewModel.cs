@@ -820,34 +820,41 @@ namespace RowlEngine.Editor.ViewModels
         }
 
         [RelayCommand]
-        public Task ConnectEngineAsync()
+        public async Task ConnectEngineAsync()
         {
             StatusText = "Initializing embedded C++ Engine...";
             AppendLog("[Engine] Starting embedded RowlEngineCore library...");
+            // Let the status text paint before the blocking native init below.
+            await Task.Yield();
 
             // Native engine calls, framebuffer access and the DispatcherTimer must
-            // remain on the UI thread for the lifetime of this host.
+            // remain on the UI thread for the lifetime of this host (the C-API
+            // handle is thread-claimed at Init: see claimHandleThread in
+            // c_api_lifecycle.cpp). Every await below resumes on the UI thread,
+            // so ownership never migrates.
             bool success = EngineHost.Initialize(1920, 1080, true);
             IsConnected = success;
-
-            if (success)
-            {
-                EngineHost.SetProjectDirectory(ProjectRoot);
-                ApplyPlayerSettingsToEngine();
-                StatusText = "Engine Ready — Embedded C++ Runtime Active";
-                AppendLog($"[Engine] RowlEngineCore mounted isolated project: {ProjectRoot}");
-
-                // Push the currently selected node to the engine immediately
-                if (SelectedNode != null)
-                    PushSceneToEngine(SelectedNode);
-            }
-            else
+            if (!success)
             {
                 StatusText = "Engine Init Failed — Check that libRowlEngineCore.so is built.";
                 AppendLog("[Engine] RowlEngineCore initialization failed. Run: cmake --build build");
+                return;
             }
 
-            return Task.CompletedTask;
+            StatusText = "Mounting project VFS...";
+            await Task.Yield();
+            EngineHost.SetProjectDirectory(ProjectRoot);
+
+            StatusText = "Applying player settings...";
+            await Task.Yield();
+            ApplyPlayerSettingsToEngine();
+
+            StatusText = "Engine Ready — Embedded C++ Runtime Active";
+            AppendLog($"[Engine] RowlEngineCore mounted isolated project: {ProjectRoot}");
+
+            // Push the currently selected node to the engine immediately
+            if (SelectedNode != null)
+                PushSceneToEngine(SelectedNode);
         }
 
         private void LoadPlayerSettings()
@@ -1269,7 +1276,7 @@ namespace RowlEngine.Editor.ViewModels
         {
             return await EditorProjectLifecycleCoordinator.ResolveUnsavedChangesAsync(
                 window,
-                SaveProject,
+                () => SaveProjectNow(),
                 () => IsProjectDirty,
                 dirty => IsProjectDirty = dirty);
         }
@@ -1642,23 +1649,109 @@ namespace RowlEngine.Editor.ViewModels
         /// <summary>
         /// Explicitly saves the current project (graphs, node layouts, and configs).
         /// </summary>
+        // MS-2 save sequencing: every save (sync or background) takes the next
+        // monotonic number. A background write aborts when a newer save was
+        // scheduled meanwhile, so an old save can never overwrite a new one.
+        // Only the completion of the LATEST sequence clears the dirty flag.
+        private long _saveSequence;
+        private long _saveCompletedSequence;
+
+        /// <summary>
+        /// UI-thread save entry point (toolbar command, autosave timer). Captures
+        /// a detached snapshot synchronously, then serializes and writes off the
+        /// UI thread. Never blocks the caller.
+        /// </summary>
         [RelayCommand]
         public void SaveProject()
         {
             _saveDebounceTimer?.Stop();
-            if (!StoryGraphLifecycleCoordinator.SaveProject(
-                    AssetsPath,
-                    AssetsJsonPath,
-                    Nodes,
-                    Connections,
-                    SelectedNode,
-                    GetStartNode()?.Id,
-                    AppendLog))
-                return;
-
-            IsProjectDirty = false;
-            AppendLog($"💾 [PROJE KAYDEDİLDİ] {Nodes.Count} düğüm ve tüm bileşenler başarıyla kaydedildi ({DateTime.Now:HH:mm:ss})");
+            _ = SaveProjectAsync();
         }
+
+        /// <summary>
+        /// Synchronous save for flows that require completion (build, save-as,
+        /// unsaved-changes resolve, shutdown). Runs capture + write inline.
+        /// </summary>
+        public bool SaveProjectNow()
+        {
+            _saveDebounceTimer?.Stop();
+            long sequence = Interlocked.Increment(ref _saveSequence);
+            StoryGraphSaveSnapshot snapshot;
+            try
+            {
+                snapshot = StoryGraphSaveService.Capture(
+                    Nodes, Connections, GetStartNode()?.Id ?? 101, SelectedNode);
+            }
+            catch (Exception ex)
+            {
+                AppendLog($"⚠️ Kayıt anlık görüntüsü alınamadı: {ex.Message}");
+                return false;
+            }
+
+            bool written = StoryGraphSaveService.TryWriteSnapshot(
+                snapshot, AssetsJsonPath, sequence, () => Volatile.Read(ref _saveSequence), AppendLog);
+            if (written && sequence == Volatile.Read(ref _saveSequence))
+            {
+                Volatile.Write(ref _saveCompletedSequence, sequence);
+                IsProjectDirty = false;
+                AppendLog($"💾 [PROJE KAYDEDİLDİ] {Nodes.Count} düğüm ve tüm bileşenler başarıyla kaydedildi ({DateTime.Now:HH:mm:ss})");
+            }
+            return written;
+        }
+
+        /// <summary>
+        /// Background save. The snapshot read MUST stay on the UI thread (live
+        /// view models); only serialization + disk I/O leave it.
+        /// </summary>
+        public Task SaveProjectAsync()
+        {
+            StoryGraphSaveSnapshot snapshot;
+            try
+            {
+                snapshot = StoryGraphSaveService.Capture(
+                    Nodes, Connections, GetStartNode()?.Id ?? 101, SelectedNode);
+            }
+            catch (Exception ex)
+            {
+                AppendLog($"⚠️ Kayıt anlık görüntüsü alınamadı: {ex.Message}");
+                return Task.CompletedTask;
+            }
+
+            long sequence = Interlocked.Increment(ref _saveSequence);
+            int nodeCount = Nodes.Count;
+            string assetsJsonPath = AssetsJsonPath;
+            return Task.Run(() =>
+            {
+                bool written = false;
+                try
+                {
+                    written = StoryGraphSaveService.TryWriteSnapshot(
+                        snapshot, assetsJsonPath, sequence, () => Volatile.Read(ref _saveSequence), null);
+                }
+                catch (Exception ex)
+                {
+                    string message = ex.Message;
+                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                        AppendLog($"⚠️ Arka plan kayıt başarısız: {message}"));
+                    return;
+                }
+                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                {
+                    if (sequence != Volatile.Read(ref _saveSequence))
+                        return; // superseded: a newer save owns the dirty flag now
+                    if (sequence > Volatile.Read(ref _saveCompletedSequence))
+                        Volatile.Write(ref _saveCompletedSequence, sequence);
+                    if (written)
+                    {
+                        IsProjectDirty = false;
+                        AppendLog($"💾 [PROJE KAYDEDİLDİ] {nodeCount} düğüm ve tüm bileşenler başarıyla kaydedildi ({DateTime.Now:HH:mm:ss})");
+                    }
+                });
+            });
+        }
+
+        /// <summary>Test hook: latest scheduled save sequence (monotonic).</summary>
+        internal long SaveSequenceForTests => Volatile.Read(ref _saveSequence);
 
         /// <summary>
         /// Opens the project root folder in the system file manager.
@@ -1769,7 +1862,7 @@ namespace RowlEngine.Editor.ViewModels
                 targetDir,
                 Nodes.Count,
                 GetStartNode()?.Id ?? 101,
-                SaveProject,
+                () => SaveProjectNow(),
                 AppendLog);
         }
 
@@ -1813,7 +1906,7 @@ namespace RowlEngine.Editor.ViewModels
                     Nodes,
                     Connections,
                     GetStartNode()?.Id,
-                    SaveProject,
+                    () => SaveProjectNow(),
                     issues =>
                     {
                         ProjectIssuesViewModel.SetIssues(issues);

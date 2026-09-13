@@ -19,12 +19,13 @@ internal static class StoryGraphDocumentReader
         out string? error)
     {
         document = null;
-        filePath = Path.Combine(assetsPath, "full_story_graph.json");
+        // Canonical location first; legacy Assets/ copy is a read fallback only.
+        filePath = Path.Combine(assetsJsonPath, "full_story_graph.json");
         error = null;
 
         if (!File.Exists(filePath))
         {
-            filePath = Path.Combine(assetsJsonPath, "full_story_graph.json");
+            filePath = Path.Combine(assetsPath, "full_story_graph.json");
             if (!File.Exists(filePath))
                 return false;
         }

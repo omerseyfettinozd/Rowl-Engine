@@ -32,12 +32,15 @@ internal static class EditorDocumentCanvasTests
         if (!fullSaved)
             throw new Exception("StoryGraphDocumentWriter.SaveFullStoryGraph returned false");
 
-        string fullGraphPath1 = Path.Combine(testWriterAssetsDir, "full_story_graph.json");
-        string fullGraphPath2 = Path.Combine(testWriterJsonDir, "full_story_graph.json");
-        if (!File.Exists(fullGraphPath1) || !File.Exists(fullGraphPath2))
-            throw new Exception("StoryGraphDocumentWriter did not produce full_story_graph.json in both target directories");
+        // Canonical location is Assets/json/; the legacy Assets/ copy must not be written.
+        string canonicalGraphPath = Path.Combine(testWriterJsonDir, "full_story_graph.json");
+        string legacyGraphPath = Path.Combine(testWriterAssetsDir, "full_story_graph.json");
+        if (!File.Exists(canonicalGraphPath))
+            throw new Exception("StoryGraphDocumentWriter did not produce full_story_graph.json in the canonical json directory");
+        if (File.Exists(legacyGraphPath))
+            throw new Exception("StoryGraphDocumentWriter must not write the legacy Assets/ graph copy");
 
-        string fullGraphContent = File.ReadAllText(fullGraphPath1);
+        string fullGraphContent = File.ReadAllText(canonicalGraphPath);
         if (!fullGraphContent.Contains("\"start_node_id\": 101") || !fullGraphContent.Contains("\"Writer Node A\""))
             throw new Exception("full_story_graph.json content verification failed");
 

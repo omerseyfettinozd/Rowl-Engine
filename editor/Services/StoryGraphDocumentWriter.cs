@@ -20,11 +20,26 @@ public static class StoryGraphDocumentWriter
     {
         try
         {
-            Directory.CreateDirectory(assetsPath);
+            // Canonical location is Assets/json/. The legacy Assets/ copy is no
+            // longer written; a stale one is removed best-effort so readers can
+            // never disagree about which graph is current.
             Directory.CreateDirectory(assetsJsonPath);
             string content = StoryGraphSerializer.SerializeFullStoryGraph(nodes, connections, startId);
-            ProjectFileSystem.WriteAllTextAtomically(Path.Combine(assetsPath, "full_story_graph.json"), content);
             ProjectFileSystem.WriteAllTextAtomically(Path.Combine(assetsJsonPath, "full_story_graph.json"), content);
+            try
+            {
+                string legacyPath = Path.Combine(assetsPath, "full_story_graph.json");
+                string canonicalPath = Path.Combine(assetsJsonPath, "full_story_graph.json");
+                if (!string.Equals(legacyPath, canonicalPath, StringComparison.OrdinalIgnoreCase) &&
+                    File.Exists(legacyPath))
+                {
+                    File.Delete(legacyPath);
+                }
+            }
+            catch (Exception cleanupEx)
+            {
+                log?.Invoke($"ℹ️ Legacy graph copy could not be removed: {cleanupEx.Message}");
+            }
             return true;
         }
         catch (Exception ex)

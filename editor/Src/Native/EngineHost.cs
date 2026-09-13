@@ -176,6 +176,16 @@ namespace RowlEngine.Editor.Native
 
         public event Action<float, float, float, float>? AudioTelemetryPolled;
 
+        private ulong _lastDialogueStepId = ulong.MaxValue;
+        private bool _dialogueHistoryDirty = true;
+        private float _telemetryAccumulator;
+
+        /// <summary>
+        /// Marks the cached dialogue history stale. Called by state-changing
+        /// operations (advance, choice, load, reset) so the next tick re-pulls.
+        /// </summary>
+        public void InvalidateDialogueHistory() => _dialogueHistoryDirty = true;
+
         private void OnTick(object? sender, EventArgs e)
         {
             if (_handle == IntPtr.Zero) return;
@@ -191,7 +201,7 @@ namespace RowlEngine.Editor.Native
             if (IsPlaying)
             {
                 NativeBridge.RowlEngine_Step(_handle, dt);
-                RefreshDialogueHistory();
+                RefreshDialogueHistoryIfStale();
                 UpdatePixelBuffer();
             }
             else
@@ -199,7 +209,29 @@ namespace RowlEngine.Editor.Native
                 NativeBridge.RowlEngine_Step(_handle, 0.0f);
             }
 
-            PollAudioTelemetry();
+            // MS-2: audio meters at 10 Hz, not per-frame. Four P/Invokes per
+            // tick at 60 FPS was pure overhead for a ~100 ms human display.
+            _telemetryAccumulator += dt;
+            if (_telemetryAccumulator >= 0.1f)
+            {
+                _telemetryAccumulator = 0.0f;
+                PollAudioTelemetry();
+            }
+        }
+
+        /// <summary>
+        /// Pulls dialogue history only when the runtime step advanced or an
+        /// explicit invalidation happened. Skips the per-tick JSON
+        /// deserialize that used to run 60×/second on an unchanged backlog.
+        /// </summary>
+        private void RefreshDialogueHistoryIfStale()
+        {
+            ulong stepId = NativeBridge.RowlEngine_GetCurrentStepId(_handle);
+            if (!_dialogueHistoryDirty && stepId == _lastDialogueStepId)
+                return;
+            _lastDialogueStepId = stepId;
+            _dialogueHistoryDirty = false;
+            RefreshDialogueHistory();
         }
 
         private void PollAudioTelemetry()
@@ -328,6 +360,7 @@ namespace RowlEngine.Editor.Native
                 _lastPreviewComponentsJson = null;
                 NativeBridge.RowlEngine_ResetToStartNode(_handle);
                 NativeBridge.RowlEngine_Step(_handle, 0.0f);
+                InvalidateDialogueHistory();
                 UpdatePixelBuffer();
             }
         }
@@ -528,6 +561,7 @@ namespace RowlEngine.Editor.Native
             {
                 NativeBridge.RowlEngine_AdvanceNode(_handle, choiceIndex);
                 NativeBridge.RowlEngine_Step(_handle, 0.0f);
+                InvalidateDialogueHistory();
                 UpdatePixelBuffer();
             }
         }
@@ -717,6 +751,7 @@ namespace RowlEngine.Editor.Native
         {
             if (_handle == IntPtr.Zero) return false;
             bool success = NativeBridge.RowlEngine_LoadGameSlot(_handle, slotIndex) != 0;
+            if (success) InvalidateDialogueHistory();
             if (success) ForceRenderFrame();
             return success;
         }
@@ -731,6 +766,7 @@ namespace RowlEngine.Editor.Native
         {
             if (_handle == IntPtr.Zero) return false;
             bool success = NativeBridge.RowlEngine_Rewind(_handle, steps) != 0;
+            if (success) InvalidateDialogueHistory();
             if (success) ForceRenderFrame();
             return success;
         }

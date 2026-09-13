@@ -126,7 +126,7 @@ internal static class EditorGraphPersistenceTests
         mainVm.DeleteNode(deletedTarget);
         mainVm.SaveFullStoryGraphFile();
         using (var savedGraph = JsonDocument.Parse(File.ReadAllText(
-                   Path.Combine(MainWindowViewModel.AssetsPath, "full_story_graph.json"))))
+                   Path.Combine(MainWindowViewModel.AssetsJsonPath, "full_story_graph.json"))))
         {
             var savedSource = savedGraph.RootElement.GetProperty("nodes")
                 .EnumerateArray().First(item => item.GetProperty("id").GetUInt64() == 9001);
@@ -139,7 +139,7 @@ internal static class EditorGraphPersistenceTests
         Console.WriteLine("  ✅ [PASS] Deleting a target node removes its persisted choice route");
 
         string graphPath = Path.Combine(
-            MainWindowViewModel.AssetsPath, "full_story_graph.json");
+            MainWindowViewModel.AssetsJsonPath, "full_story_graph.json");
         string validGraph = File.ReadAllText(graphPath);
         var nodeIdsBeforeFailedLoad = mainVm.Nodes.Select(item => item.Id).ToArray();
         File.WriteAllText(graphPath, "{\"nodes\":[{\"id\":9999},");
