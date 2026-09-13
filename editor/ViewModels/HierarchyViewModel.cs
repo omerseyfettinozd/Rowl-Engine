@@ -171,7 +171,15 @@ namespace RowlEngine.Editor.ViewModels
             var targets = SelectedObjects.Count > 0 ? SelectedObjects.ToList() : (SelectedObject != null ? new System.Collections.Generic.List<FrameObjectViewModel> { SelectedObject } : new System.Collections.Generic.List<FrameObjectViewModel>());
             if (targets.Count == 0) return;
 
+            var removedWithIndex = targets
+                .Select(obj => (Obj: obj, Index: CurrentNode.Objects.IndexOf(obj)))
+                .Where(pair => pair.Index >= 0)
+                .ToList();
             int count = EditorBatchOperationService.BatchDeleteObjects(targets, CurrentNode);
+            if (count > 0)
+            {
+                UndoRedoService.Instance.RecordAction(new ObjectDeleteAction(CurrentNode, removedWithIndex));
+            }
             SelectedObjects.Clear();
             SelectedObject = CurrentNode.Objects.FirstOrDefault();
             MainViewModel.AppendLog($"🗑️ Batch deleted {count} object(s) from Node #{CurrentNode.Id}");
@@ -186,6 +194,11 @@ namespace RowlEngine.Editor.ViewModels
             if (targets.Count == 0) return;
 
             var copies = EditorBatchOperationService.BatchDuplicateObjects(targets, CurrentNode);
+            if (copies.Count > 0)
+            {
+                UndoRedoService.Instance.RecordAction(new ObjectDuplicateAction(CurrentNode,
+                    copies.Select(copy => (Obj: copy, Index: CurrentNode.Objects.IndexOf(copy)))));
+            }
             SelectedObjects.Clear();
             foreach (var copy in copies) SelectedObjects.Add(copy);
             SelectedObject = copies.LastOrDefault();
@@ -200,6 +213,10 @@ namespace RowlEngine.Editor.ViewModels
             if (targets.Count == 0) return;
 
             int count = EditorBatchOperationService.BatchToggleActiveObjects(targets);
+            if (count > 0)
+            {
+                UndoRedoService.Instance.RecordAction(new ObjectToggleAction(targets));
+            }
             MainViewModel.AppendLog($"👁️ Batch toggled visibility of {count} object(s)");
             MainViewModel.ScheduleSave();
         }

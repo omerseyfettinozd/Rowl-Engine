@@ -382,6 +382,8 @@ namespace RowlEngine.Editor.ViewModels
         private readonly EditorUiTimer _smoothTimer;
 
         private NodeViewModel? _wireDragSourceNode;
+        private ConnectionViewModel? _wireDragRemovedConn;
+        private Dictionary<NodeViewModel, (double X, double Y)>? _nodeDragSnapshot;
         public void StartSmoothViewAnimation()
         {
             if (!_smoothTimer.IsEnabled)
@@ -609,16 +611,18 @@ namespace RowlEngine.Editor.ViewModels
         {
             _wireDragSourceNode = sourceNode;
             _wireDragOptionId = optionId;
+            _wireDragRemovedConn = null;
             WireStartPoint = new Point(sourceNode.X + 265, sourceNode.Y + sourceNode.GetOutputPortY(optionId));
             WireEndPoint = pinPos;
             IsDraggingWire = true;
             AppendLog($"Started drawing wire from Green Output Pin of Node #{sourceNode.Id}...");
         }
 
-        public void StartUnplugWireDrag(NodeViewModel sourceNode, Point mousePos, string optionId = "")
+        public void StartUnplugWireDrag(NodeViewModel sourceNode, Point mousePos, string optionId = "", ConnectionViewModel? removedConn = null)
         {
             _wireDragSourceNode = sourceNode;
             _wireDragOptionId = optionId;
+            _wireDragRemovedConn = removedConn;
             WireStartPoint = new Point(sourceNode.X + 265, sourceNode.Y + sourceNode.GetOutputPortY(optionId));
             WireEndPoint = mousePos;
             IsDraggingWire = true;
@@ -638,16 +642,44 @@ namespace RowlEngine.Editor.ViewModels
             if (!IsDraggingWire || _wireDragSourceNode == null) return;
             IsDraggingWire = false;
 
+            var sourceNode = _wireDragSourceNode;
+            var optionId = _wireDragOptionId;
+            var unplugged = _wireDragRemovedConn;
+
+            var replacedBefore = Connections
+                .Where(c => c.SourceNode == sourceNode &&
+                    (string.IsNullOrEmpty(optionId) || c.OptionId == optionId))
+                .ToList();
+            ulong targetBefore = StoryGraphCanvasService.GetChoiceTarget(sourceNode, optionId);
+
             var newConn = StoryGraphCanvasService.TryConnectWire(
-                _wireDragSourceNode,
+                sourceNode,
                 releasePos,
                 Nodes,
                 Connections,
-                _wireDragOptionId);
+                optionId);
 
             if (newConn != null)
             {
-                AppendLog($"✅ Connected Wire: Node #{_wireDragSourceNode.Id} ---> Node #{newConn.TargetNode?.Id} (Total cables: {Connections.Count})");
+                var replaced = replacedBefore.Where(c => !Connections.Contains(c)).ToList();
+                if (unplugged != null && !replaced.Contains(unplugged))
+                    replaced.Insert(0, unplugged);
+                var changes = new List<ChoiceTargetChange>();
+                if (!string.IsNullOrEmpty(optionId))
+                {
+                    changes.Add(new ChoiceTargetChange(
+                        sourceNode, optionId, targetBefore,
+                        newConn.TargetNode?.Id ?? 0));
+                }
+                UndoRedoService.Instance.RecordAction(new ConnectWireAction(
+                    Connections, newConn, replaced, changes, UpdateStartNodeState));
+                AppendLog($"✅ Connected Wire: Node #{sourceNode.Id} ---> Node #{newConn.TargetNode?.Id} (Total cables: {Connections.Count})");
+            }
+            else if (unplugged != null)
+            {
+                UndoRedoService.Instance.RecordAction(
+                    new DisconnectCablesUndoAction(Connections, new List<ConnectionViewModel> { unplugged }, UpdateStartNodeState));
+                AppendLog("✂️ Connection dropped in empty space (cable unplugged / removed).");
             }
             else
             {
@@ -655,24 +687,76 @@ namespace RowlEngine.Editor.ViewModels
             }
 
             UpdateStartNodeState();
+            ScheduleSave();
             _wireDragSourceNode = null;
             _wireDragOptionId = string.Empty;
+            _wireDragRemovedConn = null;
+        }
+
+        /// <summary>
+        /// Snapshots drag-affected node positions. Call on pointer-press before any move.
+        /// </summary>
+        public void BeginNodeDragSnapshot()
+        {
+            IEnumerable<NodeViewModel> affected = SelectedNodes.Count > 0
+                ? SelectedNodes.ToList()
+                : (SelectedNode != null ? new[] { SelectedNode } : Enumerable.Empty<NodeViewModel>());
+            _nodeDragSnapshot = affected.ToDictionary(n => n, n => (n.X, n.Y));
+        }
+
+        /// <summary>
+        /// Records one atomic MoveNodesAction when the gesture actually moved nodes.
+        /// </summary>
+        public void EndNodeDragSnapshot()
+        {
+            var snapshot = _nodeDragSnapshot;
+            _nodeDragSnapshot = null;
+            if (snapshot == null || snapshot.Count == 0) return;
+
+            var before = new List<NodePosition>();
+            var after = new List<NodePosition>();
+            foreach (var (node, pos) in snapshot)
+            {
+                if (!Nodes.Contains(node)) continue;
+                if (node.X != pos.X || node.Y != pos.Y)
+                {
+                    before.Add(new NodePosition(node, pos.X, pos.Y));
+                    after.Add(new NodePosition(node, node.X, node.Y));
+                }
+            }
+            if (before.Count > 0)
+            {
+                UndoRedoService.Instance.RecordAction(new MoveNodesAction(before, after));
+                ScheduleSave();
+            }
+        }
+
+        private List<NodePosition> SnapshotNodePositions(IEnumerable<NodeViewModel> nodes)
+        {
+            return nodes.Select(n => new NodePosition(n, n.X, n.Y)).ToList();
         }
 
         public void DisconnectNodeInputs(NodeViewModel node)
         {
+            var removed = Connections.Where(c => c.TargetNode == node).ToList();
             int count = StoryGraphCanvasService.DisconnectNodeInputs(node, Connections);
             if (count > 0)
             {
+                UndoRedoService.Instance.RecordAction(new DisconnectCablesUndoAction(Connections, removed, UpdateStartNodeState));
+                ScheduleSave();
                 AppendLog($"✂️ Disconnected {count} incoming cable(s) from Node #{node.Id}");
             }
         }
 
         public void DisconnectNodeOutputs(NodeViewModel node, string optionId = "")
         {
+            var removed = Connections.Where(c => c.SourceNode == node &&
+                (string.IsNullOrEmpty(optionId) || c.OptionId == optionId)).ToList();
             int count = StoryGraphCanvasService.DisconnectNodeOutputs(node, Connections, optionId);
             if (count > 0)
             {
+                UndoRedoService.Instance.RecordAction(new DisconnectCablesUndoAction(Connections, removed, UpdateStartNodeState));
+                ScheduleSave();
                 AppendLog($"✂️ Disconnected {count} outgoing cable(s) from Node #{node.Id}");
             }
         }
@@ -691,9 +775,12 @@ namespace RowlEngine.Editor.ViewModels
 
         public void DisconnectAllNodeCables(NodeViewModel node)
         {
+            var removed = Connections.Where(c => c.SourceNode == node || c.TargetNode == node).ToList();
             int count = StoryGraphCanvasService.DisconnectAllNodeCables(node, Connections, SetChoiceTarget);
             if (count > 0)
             {
+                UndoRedoService.Instance.RecordAction(new DisconnectCablesUndoAction(Connections, removed, UpdateStartNodeState));
+                ScheduleSave();
                 AppendLog($"✂️ Disconnected all {count} cable(s) attached to Node #{node.Id}");
             }
         }
@@ -707,7 +794,11 @@ namespace RowlEngine.Editor.ViewModels
 
         public void DeleteNode(NodeViewModel node)
         {
+            var attached = Connections
+                .Where(c => c.SourceNode == node || c.TargetNode == node)
+                .ToList();
             StoryGraphCanvasService.DeleteNode(node, Nodes, Connections, SetChoiceTarget);
+            UndoRedoService.Instance.RecordAction(new DeleteNodeUndoAction(this, node, attached));
             AppendLog($"🗑️ Deleted Node #{node.Id} ({node.Title})");
             SelectedNode = Nodes.FirstOrDefault();
             UpdateStartNodeState();
@@ -723,6 +814,7 @@ namespace RowlEngine.Editor.ViewModels
             newNode.PropertyChanged += OnNodePropertyChanged;
             Nodes.Add(newNode);
             SelectedNode = newNode;
+            UndoRedoService.Instance.RecordAction(new AddNodeUndoAction(this, newNode));
             UpdateStartNodeState();
             AppendLog($"✨ Added new node #{nextId} at visible screen center ({spawnX:F0}, {spawnY:F0})");
         }
@@ -1135,7 +1227,9 @@ namespace RowlEngine.Editor.ViewModels
             {
                 var targets = SelectedNodes.Count > 1 ? SelectedNodes.ToList() : Nodes.Where(n => n.IsSelected).ToList();
                 if (targets.Count < 2) return;
+                var before = SnapshotNodePositions(targets);
                 EditorBatchOperationService.BatchAlignNodes(targets, alignment);
+                UndoRedoService.Instance.RecordAction(new MoveNodesAction(before, SnapshotNodePositions(targets)));
                 ScheduleSave();
                 AppendLog($"📐 Aligned {targets.Count} node(s) to {alignment}");
             }
@@ -1148,7 +1242,9 @@ namespace RowlEngine.Editor.ViewModels
             {
                 var targets = SelectedNodes.Count > 2 ? SelectedNodes.ToList() : Nodes.Where(n => n.IsSelected).ToList();
                 if (targets.Count < 3) return;
+                var before = SnapshotNodePositions(targets);
                 EditorBatchOperationService.BatchDistributeNodes(targets, distribution);
+                UndoRedoService.Instance.RecordAction(new MoveNodesAction(before, SnapshotNodePositions(targets)));
                 ScheduleSave();
                 AppendLog($"📊 Distributed {targets.Count} node(s) {distribution}");
             }
@@ -1335,6 +1431,12 @@ namespace RowlEngine.Editor.ViewModels
                 {
                     HierarchyViewModel.SelectedObject = component.OwnerObject;
                 }
+                if (component.OwnerObject != null)
+                {
+                    UndoRedoService.Instance.RecordAction(new ComponentAddAction(
+                        component.OwnerObject, component,
+                        component.OwnerObject.Components.IndexOf(component)));
+                }
                 IsAddComponentMenuOpen = false;
                 ScheduleSave();
 
@@ -1351,8 +1453,14 @@ namespace RowlEngine.Editor.ViewModels
         public void RemoveComponent(NodeComponentViewModel? component)
         {
             if (SelectedNode == null || component == null) return;
+            var owner = component.OwnerObject;
+            int index = owner?.Components.IndexOf(component) ?? -1;
             if (EditorComponentService.RemoveComponent(SelectedNode, component, AppendLog))
             {
+                if (owner != null && index >= 0)
+                {
+                    UndoRedoService.Instance.RecordAction(new ComponentRemoveAction(owner, component, index));
+                }
                 ScheduleSave();
                 if (EngineHost.IsInitialized)
                     PushSceneToEngine(SelectedNode);

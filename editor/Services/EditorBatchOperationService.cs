@@ -61,6 +61,7 @@ namespace RowlEngine.Editor.Services
                 if (!_allConnections.Contains(conn))
                     _allConnections.Add(conn);
             }
+            UndoChoiceTarget.RestoreFor(_deletedConnections);
 
             _updateStartNode?.Invoke();
         }

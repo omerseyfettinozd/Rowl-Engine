@@ -84,6 +84,15 @@ namespace RowlEngine.Editor.Services
             if (option != null) option.TargetNodeId = targetNodeId;
         }
 
+        public static ulong GetChoiceTarget(NodeViewModel node, string optionId)
+        {
+            if (node == null || string.IsNullOrEmpty(optionId)) return 0;
+            var option = node.GetComponents<ChoiceComponentViewModel>()
+                .SelectMany(choice => choice.Options)
+                .FirstOrDefault(candidate => candidate.OptionId == optionId);
+            return option?.TargetNodeId ?? 0;
+        }
+
         public static int DisconnectNodeInputs(
             NodeViewModel node,
             ObservableCollection<ConnectionViewModel> connections)

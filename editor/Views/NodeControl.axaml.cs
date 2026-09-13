@@ -103,7 +103,7 @@ namespace RowlEngine.Editor.Views
                         _isDraggingWire = true;
                         e.Pointer.Capture(this);
                         var mouseCanvasPos = e.GetPosition(canvasToUse);
-                        mainVmUnplug.StartUnplugWireDrag(sourceNode, mouseCanvasPos, existingConn.OptionId);
+                        mainVmUnplug.StartUnplugWireDrag(sourceNode, mouseCanvasPos, existingConn.OptionId, existingConn);
                         e.Handled = true;
                         return;
                     }
@@ -145,6 +145,9 @@ namespace RowlEngine.Editor.Views
                     {
                         mainVmSelect.SelectNode(vm, addToSelection: false);
                     }
+                    // Snapshot positions BEFORE the gesture mutates them so the
+                    // release can record one atomic MoveNodesAction (MS-1).
+                    mainVmSelect.BeginNodeDragSnapshot();
                 }
                 e.Handled = true;
             }
@@ -207,6 +210,10 @@ namespace RowlEngine.Editor.Views
             {
                 _isDraggingNode = false;
                 e.Pointer.Capture(null);
+                if (VisualRoot is MainWindow mainWindowEnd && mainWindowEnd.DataContext is MainWindowViewModel mainVmEnd)
+                {
+                    mainVmEnd.EndNodeDragSnapshot();
+                }
                 e.Handled = true;
             }
         }
