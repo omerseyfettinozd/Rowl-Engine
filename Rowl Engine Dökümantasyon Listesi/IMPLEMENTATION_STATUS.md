@@ -124,6 +124,9 @@ testi geçiyor.
 - Sıcak yol: eş içerikli kareler FNV hash ile atlanır (kamera/transition/flash
   sürerken her kare çizilir; font/texture/VFS değişimi önbelleği bozar),
   audio suspend kenar-tetiklemelidir. Golden steady 12,60→5,07 ms.
+- Uçtan uca editör akışı `EditorEndToEndFlowTests` (Test 29) ile headless
+  kanıtlanır: Hub create, open, node/connection, inspector, import, preview
+  coalescing, save/save-as, standalone build ve `.rowlpkg` paketi.
 
 ## Sonraki üretim işleri
 

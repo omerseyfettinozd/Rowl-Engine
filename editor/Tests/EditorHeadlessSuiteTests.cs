@@ -223,6 +223,9 @@ internal static class EditorHeadlessTestSuite
             // Test 28: Faz 1.1 ViewModel thinning — extracted service behavior equivalence
             EditorViewModelThinningTests.Run(mainVm);
 
+            // Test 29: End-to-end editor flow (Hub create → open → nodes → inspector → import → preview → save → build → package)
+            EditorEndToEndFlowTests.Run(testProjectRoot);
+
             Console.WriteLine("\n=======================================================");
             Console.WriteLine("🎉 ALL EDITOR HEADLESS TESTS PASSED SUCCESSFULLY! 🎉");
             Console.WriteLine("=======================================================\n");
