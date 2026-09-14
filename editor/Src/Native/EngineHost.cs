@@ -4,8 +4,8 @@
  * High-level manager for the embedded C++ Engine lifetime.
  *
  * Responsibilities:
- *   - Creates / destroys the native engine handle (RowlEngine_Create / Destroy)
- *   - Drives the engine tick via Avalonia's DispatcherTimer (~60 FPS) in Play mode (Unity-style)
+ *   - Owns the editor-only offscreen engine on a dedicated worker thread
+ *   - Queues the Avalonia DispatcherTimer tick onto that owner thread (~60 FPS)
  *   - Copies the offscreen RGBA32 framebuffer into an Avalonia WriteableBitmap
  *   - Controls Play / Stop playback state and story resets
  */
@@ -15,9 +15,11 @@ using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
 using System;
+using System.Buffers;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Collections.Generic;
 
@@ -35,7 +37,7 @@ namespace RowlEngine.Editor.Native
 
         // ── State ────────────────────────────────────────────────────────────
 
-        private IntPtr _handle = IntPtr.Zero;
+        private OffscreenRuntimeWorker? _runtime;
         private DispatcherTimer? _tickTimer;
         private DateTime _lastTick = DateTime.UtcNow;
         private string? _lastPreviewComponentsJson;
@@ -58,42 +60,54 @@ namespace RowlEngine.Editor.Native
         }
 
         /// <summary>True while the engine is initialised and not requesting quit.</summary>
-        public bool IsRunning =>
-            _handle != IntPtr.Zero && NativeBridge.RowlEngine_IsRunning(_handle) != 0;
+        public bool IsRunning => InvokeNative(
+            handle => NativeBridge.RowlEngine_IsRunning(handle) != 0, false);
 
         /// <summary>True after a successful Initialize() call.</summary>
-        public bool IsInitialized => _handle != IntPtr.Zero;
+        public bool IsInitialized => _runtime?.IsAvailable == true;
 
-        /// <summary>Raw native engine pointer.</summary>
-        public IntPtr Handle => _handle;
+        /// <summary>
+        /// Raw native engine pointer retained for compatibility. Calls that use
+        /// this pointer must still be dispatched through the offscreen worker.
+        /// </summary>
+        public IntPtr Handle => _runtime?.Handle ?? IntPtr.Zero;
 
-        public ulong TextureCacheBudgetBytes => _handle == IntPtr.Zero
-            ? 0UL
-            : NativeBridge.RowlEngine_GetTextureCacheBudgetBytes(_handle);
+        internal int RuntimeWorkerThreadId => _runtime?.ManagedThreadId ?? 0;
 
-        public ulong TextureCacheEvictionCount => _handle == IntPtr.Zero
-            ? 0UL
-            : NativeBridge.RowlEngine_GetTextureCacheEvictionCount(_handle);
+        private T InvokeNative<T>(Func<IntPtr, T> command, T fallback)
+        {
+            OffscreenRuntimeWorker? runtime = _runtime;
+            return runtime?.IsAvailable == true ? runtime.Invoke(command) : fallback;
+        }
+
+        private void InvokeNative(Action<IntPtr> command)
+        {
+            OffscreenRuntimeWorker? runtime = _runtime;
+            if (runtime?.IsAvailable == true)
+                runtime.Invoke(command);
+        }
+
+        public ulong TextureCacheBudgetBytes => InvokeNative(
+            NativeBridge.RowlEngine_GetTextureCacheBudgetBytes, 0UL);
+
+        public ulong TextureCacheEvictionCount => InvokeNative(
+            NativeBridge.RowlEngine_GetTextureCacheEvictionCount, 0UL);
 
         /// <summary>Texture decode and upload work from the latest rendered frame.</summary>
-        public double LastFrameTextureLoadMilliseconds => _handle == IntPtr.Zero
-            ? 0.0
-            : NativeBridge.RowlEngine_GetLastFrameTextureLoadMilliseconds(_handle);
+        public double LastFrameTextureLoadMilliseconds => InvokeNative(
+            NativeBridge.RowlEngine_GetLastFrameTextureLoadMilliseconds, 0.0);
 
         /// <summary>Non-texture renderer work from the latest rendered frame.</summary>
-        public double LastFrameNonTextureRenderMilliseconds => _handle == IntPtr.Zero
-            ? 0.0
-            : NativeBridge.RowlEngine_GetLastFrameNonTextureRenderMilliseconds(_handle);
+        public double LastFrameNonTextureRenderMilliseconds => InvokeNative(
+            NativeBridge.RowlEngine_GetLastFrameNonTextureRenderMilliseconds, 0.0);
 
         /// <summary>TrueType rasterization work from the latest rendered frame.</summary>
-        public double LastFrameTextRasterizationMilliseconds => _handle == IntPtr.Zero
-            ? 0.0
-            : NativeBridge.RowlEngine_GetLastFrameTextRasterizationMilliseconds(_handle);
+        public double LastFrameTextRasterizationMilliseconds => InvokeNative(
+            NativeBridge.RowlEngine_GetLastFrameTextRasterizationMilliseconds, 0.0);
 
         /// <summary>SDL command flush work from the latest rendered frame.</summary>
-        public double LastFrameRendererFlushMilliseconds => _handle == IntPtr.Zero
-            ? 0.0
-            : NativeBridge.RowlEngine_GetLastFrameRendererFlushMilliseconds(_handle);
+        public double LastFrameRendererFlushMilliseconds => InvokeNative(
+            NativeBridge.RowlEngine_GetLastFrameRendererFlushMilliseconds, 0.0);
 
         public IReadOnlyList<ScriptRuntimeDiagnostic> ScriptRuntimeDiagnostics { get; private set; }
             = Array.Empty<ScriptRuntimeDiagnostic>();
@@ -113,8 +127,7 @@ namespace RowlEngine.Editor.Native
         /// </summary>
         public void SetTextureCacheBudgetBytes(ulong bytes)
         {
-            if (_handle != IntPtr.Zero)
-                NativeBridge.RowlEngine_SetTextureCacheBudgetBytes(_handle, bytes);
+            InvokeNative(handle => NativeBridge.RowlEngine_SetTextureCacheBudgetBytes(handle, bytes));
         }
 
         // ── Initialisation ───────────────────────────────────────────────────
@@ -124,15 +137,27 @@ namespace RowlEngine.Editor.Native
         /// </summary>
         public bool Initialize(uint width = 1920, uint height = 1080, bool vsync = true)
         {
-            if (_handle != IntPtr.Zero)
+            if (IsInitialized)
                 return true; // Already initialised
 
-            _handle = NativeBridge.RowlEngine_Create();
-            if (_handle == IntPtr.Zero) return false;
+            try
+            {
+                _runtime = new OffscreenRuntimeWorker();
+            }
+            catch (InvalidOperationException)
+            {
+                _runtime = null;
+                return false;
+            }
+            if (!IsInitialized)
+            {
+                Dispose();
+                return false;
+            }
             _lastPreviewComponentsJson = null;
 
-            int result = NativeBridge.RowlEngine_Init(
-                _handle, width, height, vsync ? 1 : 0);
+            int result = InvokeNative(handle => NativeBridge.RowlEngine_Init(
+                handle, width, height, vsync ? 1 : 0), 0);
 
             if (result == 0)
             {
@@ -141,7 +166,7 @@ namespace RowlEngine.Editor.Native
             }
 
             // Initial static frame render
-            NativeBridge.RowlEngine_Step(_handle, 0.0f);
+            InvokeNative(handle => NativeBridge.RowlEngine_Step(handle, 0.0f));
             UpdatePixelBuffer();
 
             StartTickTimer();
@@ -214,7 +239,7 @@ namespace RowlEngine.Editor.Native
 
         /// <summary>MS-4 native dirty-frame query (true = copy can be skipped).</summary>
         public bool IsPreviewFrameStatic()
-            => _handle != IntPtr.Zero && NativeBridge.RowlEngine_IsPreviewFrameStatic(_handle) != 0;
+            => InvokeNative(handle => NativeBridge.RowlEngine_IsPreviewFrameStatic(handle) != 0, false);
 
         /// <summary>
         /// Marks the cached dialogue history stale. Called by state-changing
@@ -224,7 +249,7 @@ namespace RowlEngine.Editor.Native
 
         private void OnTick(object? sender, EventArgs e)
         {
-            if (_handle == IntPtr.Zero) return;
+            if (!IsInitialized) return;
 
             var now = DateTime.UtcNow;
             float dt = (float)(now - _lastTick).TotalSeconds;
@@ -236,7 +261,7 @@ namespace RowlEngine.Editor.Native
 
             if (IsPlaying)
             {
-                NativeBridge.RowlEngine_Step(_handle, dt);
+                InvokeNative(handle => NativeBridge.RowlEngine_Step(handle, dt));
                 RefreshDialogueHistoryIfStale();
                 CopyPixelBufferIfDirty();
             }
@@ -249,7 +274,7 @@ namespace RowlEngine.Editor.Native
                 // Mutating entry points (scene/story/choice/viewport) already
                 // copy synchronously, so interaction latency is unchanged.
                 _lastIdleUpkeep = now;
-                NativeBridge.RowlEngine_Step(_handle, 0.0f);
+                InvokeNative(handle => NativeBridge.RowlEngine_Step(handle, 0.0f));
                 UpdatePixelBuffer();
             }
 
@@ -270,7 +295,7 @@ namespace RowlEngine.Editor.Native
         /// </summary>
         private void RefreshDialogueHistoryIfStale()
         {
-            ulong stepId = NativeBridge.RowlEngine_GetCurrentStepId(_handle);
+            ulong stepId = InvokeNative(NativeBridge.RowlEngine_GetCurrentStepId, 0UL);
             if (!_dialogueHistoryDirty && stepId == _lastDialogueStepId)
                 return;
             _lastDialogueStepId = stepId;
@@ -287,7 +312,7 @@ namespace RowlEngine.Editor.Native
         /// </summary>
         private void CopyPixelBufferIfDirty()
         {
-            ulong stepId = NativeBridge.RowlEngine_GetCurrentStepId(_handle);
+            ulong stepId = InvokeNative(NativeBridge.RowlEngine_GetCurrentStepId, 0UL);
             bool frameActive = !IsPreviewFrameStatic();
             bool shouldCopy = ShouldCopyFrame(frameActive, _lastTickFrameActive, stepId, _lastCopiedStepId);
             _lastTickFrameActive = frameActive;
@@ -302,11 +327,13 @@ namespace RowlEngine.Editor.Native
 
         private void PollAudioTelemetry()
         {
-            if (_handle == IntPtr.Zero) return;
-            MasterPeakL = NativeBridge.RowlEngine_GetAudioChannelPeak(_handle, 3, 0);
-            MasterPeakR = NativeBridge.RowlEngine_GetAudioChannelPeak(_handle, 3, 1);
-            MasterRmsL = NativeBridge.RowlEngine_GetAudioChannelRms(_handle, 3, 0);
-            MasterRmsR = NativeBridge.RowlEngine_GetAudioChannelRms(_handle, 3, 1);
+            if (!IsInitialized) return;
+            (MasterPeakL, MasterPeakR, MasterRmsL, MasterRmsR) = InvokeNative(handle => (
+                NativeBridge.RowlEngine_GetAudioChannelPeak(handle, 3, 0),
+                NativeBridge.RowlEngine_GetAudioChannelPeak(handle, 3, 1),
+                NativeBridge.RowlEngine_GetAudioChannelRms(handle, 3, 0),
+                NativeBridge.RowlEngine_GetAudioChannelRms(handle, 3, 1)),
+                (0.0f, 0.0f, 0.0f, 0.0f));
 
             AudioTelemetryPolled?.Invoke(MasterPeakL, MasterPeakR, MasterRmsL, MasterRmsR);
         }
@@ -316,26 +343,44 @@ namespace RowlEngine.Editor.Native
 
         private void UpdatePixelBuffer()
         {
-            if (_handle == IntPtr.Zero) return;
+            if (!IsInitialized) return;
 
             var stopwatch = Stopwatch.StartNew();
+            byte[]? rentedPixels = null;
             try
             {
-                IntPtr pixelPtr = NativeBridge.RowlEngine_GetPixelBufferEx(
-                    _handle, out uint w, out uint h, out uint pitch);
-                if (pixelPtr != IntPtr.Zero && w > 0 && h > 0)
+                var snapshot = InvokeNative(handle =>
                 {
-                    int width = (int)w;
-                    int height = (int)h;
+                    IntPtr pixelPtr = NativeBridge.RowlEngine_GetPixelBufferEx(
+                        handle, out uint width, out uint height, out uint pitch);
+                    if (pixelPtr == IntPtr.Zero || width == 0 || height == 0)
+                        return (Pixels: (byte[]?)null, Width: 0u, Height: 0u, PitchMismatch: false);
 
-                    // MS-0 pitch contract: stride by the reported pitch, never by
-                    // width*4. A pitch below one tight row means a broken surface:
-                    // skip the frame and count it instead of copying garbage.
-                    if (pitch < w * 4)
+                    uint tightRowBytes = checked(width * 4);
+                    if (pitch < tightRowBytes)
+                        return (Pixels: (byte[]?)null, Width: width, Height: height, PitchMismatch: true);
+
+                    int rowLength = checked((int)tightRowBytes);
+                    byte[] pixels = ArrayPool<byte>.Shared.Rent(checked(rowLength * (int)height));
+                    rentedPixels = pixels;
+                    for (uint y = 0; y < height; y++)
                     {
-                        PixelBufferPitchMismatchCount++;
-                        return;
+                        IntPtr row = IntPtr.Add(pixelPtr, checked((int)(y * pitch)));
+                        Marshal.Copy(row, pixels, checked((int)y * rowLength), rowLength);
                     }
+                    return (Pixels: (byte[]?)pixels, Width: width, Height: height, PitchMismatch: false);
+                }, (Pixels: (byte[]?)null, Width: 0u, Height: 0u, PitchMismatch: false));
+
+                if (snapshot.PitchMismatch)
+                {
+                    PixelBufferPitchMismatchCount++;
+                    return;
+                }
+
+                if (snapshot.Pixels != null)
+                {
+                    int width = checked((int)snapshot.Width);
+                    int height = checked((int)snapshot.Height);
 
                     if (RenderTargetBitmap == null ||
                         RenderTargetBitmap.PixelSize.Width != width ||
@@ -352,33 +397,15 @@ namespace RowlEngine.Editor.Native
 
                     using (var buf = RenderTargetBitmap.Lock())
                     {
-                        unsafe
+                        int tightRowBytes = checked(width * 4);
+                        int copyRowBytes = Math.Min(tightRowBytes, buf.RowBytes);
+                        for (int y = 0; y < height; y++)
                         {
-                            uint destRowBytes = (uint)buf.RowBytes;
-                            uint tightRowBytes = w * 4;
-                            if (pitch == tightRowBytes && destRowBytes == tightRowBytes)
-                            {
-                                Buffer.MemoryCopy(
-                                    (void*)pixelPtr,
-                                    (void*)buf.Address,
-                                    destRowBytes * h,
-                                    tightRowBytes * h);
-                            }
-                            else
-                            {
-                                uint copyRowBytes = tightRowBytes;
-                                if (copyRowBytes > destRowBytes) copyRowBytes = destRowBytes;
-                                byte* src = (byte*)pixelPtr;
-                                byte* dst = (byte*)buf.Address;
-                                for (uint y = 0; y < h; y++)
-                                {
-                                    Buffer.MemoryCopy(
-                                        src + y * pitch,
-                                        dst + y * destRowBytes,
-                                        destRowBytes,
-                                        copyRowBytes);
-                                }
-                            }
+                            Marshal.Copy(
+                                snapshot.Pixels,
+                                y * tightRowBytes,
+                                IntPtr.Add(buf.Address, y * buf.RowBytes),
+                                copyRowBytes);
                         }
                     }
                     OnPropertyChanged(nameof(RenderTargetBitmap));
@@ -395,6 +422,8 @@ namespace RowlEngine.Editor.Native
             }
             finally
             {
+                if (rentedPixels != null)
+                    ArrayPool<byte>.Shared.Return(rentedPixels);
                 stopwatch.Stop();
                 LastPixelBufferCopyMilliseconds = stopwatch.Elapsed.TotalMilliseconds;
             }
@@ -410,13 +439,13 @@ namespace RowlEngine.Editor.Native
             _lastTick = DateTime.UtcNow;
             _lastIdleUpkeep = _lastTick;
 
-            if (_handle != IntPtr.Zero)
+            if (IsInitialized)
             {
-                NativeBridge.RowlEngine_SetPlayState(_handle, isPlaying ? 1 : 0);
+                InvokeNative(handle => NativeBridge.RowlEngine_SetPlayState(handle, isPlaying ? 1 : 0));
                 if (!isPlaying)
                 {
                     // Render static frame when stopping
-                    NativeBridge.RowlEngine_Step(_handle, 0.0f);
+                    InvokeNative(handle => NativeBridge.RowlEngine_Step(handle, 0.0f));
                     UpdatePixelBuffer();
                 }
             }
@@ -426,11 +455,14 @@ namespace RowlEngine.Editor.Native
         /// <summary>Resets the C++ engine story state back to the starting node.</summary>
         public void ResetToStartNode()
         {
-            if (_handle != IntPtr.Zero)
+            if (IsInitialized)
             {
                 _lastPreviewComponentsJson = null;
-                NativeBridge.RowlEngine_ResetToStartNode(_handle);
-                NativeBridge.RowlEngine_Step(_handle, 0.0f);
+                InvokeNative(handle =>
+                {
+                    NativeBridge.RowlEngine_ResetToStartNode(handle);
+                    NativeBridge.RowlEngine_Step(handle, 0.0f);
+                });
                 InvalidateDialogueHistory();
                 UpdatePixelBuffer();
             }
@@ -439,8 +471,8 @@ namespace RowlEngine.Editor.Native
         /// <summary>Advances engine simulation and rendering by the specified delta time.</summary>
         public void Step(float dt = 0.0f)
         {
-            if (_handle == IntPtr.Zero) return;
-            NativeBridge.RowlEngine_Step(_handle, dt);
+            if (!IsInitialized) return;
+            InvokeNative(handle => NativeBridge.RowlEngine_Step(handle, dt));
             UpdatePixelBuffer();
         }
 
@@ -448,7 +480,7 @@ namespace RowlEngine.Editor.Native
 
         /// <summary>
         /// Pushes a complete visual novel scene update to the engine.
-        /// This is a direct in-process call — zero serialisation overhead.
+        /// The in-process call is serialized on the offscreen owner thread.
         /// </summary>
         public void UpdateScene(
             string speaker,   string dialogue,  string background,
@@ -457,19 +489,16 @@ namespace RowlEngine.Editor.Native
             float  charX,     float  charY,     float  charW,     float  charH,
             float  dlgX,      float  dlgY,      float  dlgW,      float  dlgH)
         {
-            if (_handle == IntPtr.Zero) return;
+            if (!IsInitialized) return;
 
-            NativeBridge.RowlEngine_UpdateScene(
-                _handle,
-                speaker ?? "", dialogue ?? "", background ?? "",
-                bgX, bgY, bgW, bgH,
-                character ?? "",
-                charX, charY, charW, charH,
-                dlgX,  dlgY,  dlgW,  dlgH);
+            InvokeNative(handle => NativeBridge.RowlEngine_UpdateScene(
+                handle, speaker ?? "", dialogue ?? "", background ?? "",
+                bgX, bgY, bgW, bgH, character ?? "",
+                charX, charY, charW, charH, dlgX, dlgY, dlgW, dlgH));
 
             if (!IsPlaying)
             {
-                NativeBridge.RowlEngine_Step(_handle, 0.0f);
+                InvokeNative(handle => NativeBridge.RowlEngine_Step(handle, 0.0f));
                 UpdatePixelBuffer();
             }
         }
@@ -484,19 +513,16 @@ namespace RowlEngine.Editor.Native
             float  charX,     float  charY,     float  charW,     float  charH,     float charRot,
             float  dlgX,      float  dlgY,      float  dlgW,      float  dlgH)
         {
-            if (_handle == IntPtr.Zero) return;
+            if (!IsInitialized) return;
 
-            NativeBridge.RowlEngine_UpdateSceneEx(
-                _handle,
-                speaker ?? "", dialogue ?? "", background ?? "",
-                bgX, bgY, bgW, bgH, bgRot,
-                character ?? "",
-                charX, charY, charW, charH, charRot,
-                dlgX,  dlgY,  dlgW,  dlgH);
+            InvokeNative(handle => NativeBridge.RowlEngine_UpdateSceneEx(
+                handle, speaker ?? "", dialogue ?? "", background ?? "",
+                bgX, bgY, bgW, bgH, bgRot, character ?? "",
+                charX, charY, charW, charH, charRot, dlgX, dlgY, dlgW, dlgH));
 
             if (!IsPlaying)
             {
-                NativeBridge.RowlEngine_Step(_handle, 0.0f);
+                InvokeNative(handle => NativeBridge.RowlEngine_Step(handle, 0.0f));
                 UpdatePixelBuffer();
             }
         }
@@ -507,12 +533,12 @@ namespace RowlEngine.Editor.Native
         /// </summary>
         public bool UpdateSceneFromComponents(string componentsJson, bool skipIfUnchanged = false)
         {
-            if (_handle == IntPtr.Zero || string.IsNullOrEmpty(componentsJson)) return false;
+            if (!IsInitialized || string.IsNullOrEmpty(componentsJson)) return false;
             if (skipIfUnchanged && !IsPlaying && string.Equals(_lastPreviewComponentsJson, componentsJson, StringComparison.Ordinal))
                 return false;
 
             var stopwatch = Stopwatch.StartNew();
-            NativeBridge.RowlEngine_UpdateSceneFromJson(_handle, componentsJson);
+            InvokeNative(handle => NativeBridge.RowlEngine_UpdateSceneFromJson(handle, componentsJson));
             stopwatch.Stop();
             LastSceneUpdateMilliseconds = stopwatch.Elapsed.TotalMilliseconds;
             _lastPreviewComponentsJson = componentsJson;
@@ -521,7 +547,7 @@ namespace RowlEngine.Editor.Native
             if (!IsPlaying)
             {
                 stopwatch.Restart();
-                NativeBridge.RowlEngine_Step(_handle, 0.0f);
+                InvokeNative(handle => NativeBridge.RowlEngine_Step(handle, 0.0f));
                 stopwatch.Stop();
                 LastPreviewStepMilliseconds = stopwatch.Elapsed.TotalMilliseconds;
                 UpdatePixelBuffer();
@@ -531,11 +557,11 @@ namespace RowlEngine.Editor.Native
 
         public void RefreshScriptRuntimeDiagnostics()
         {
-            if (_handle == IntPtr.Zero) return;
+            if (!IsInitialized) return;
             try
             {
-                string json = NativeBridge.PtrToString(
-                    NativeBridge.RowlEngine_GetScriptRuntimeDiagnosticsJsonWithLength(_handle, out uint diagLen), diagLen);
+                string json = InvokeNative(handle => NativeBridge.PtrToString(
+                    NativeBridge.RowlEngine_GetScriptRuntimeDiagnosticsJsonWithLength(handle, out uint diagLen), diagLen), string.Empty);
                 ScriptRuntimeDiagnostics = JsonSerializer.Deserialize<List<ScriptRuntimeDiagnostic>>(json)
                     ?? new List<ScriptRuntimeDiagnostic>();
             }
@@ -551,11 +577,11 @@ namespace RowlEngine.Editor.Native
 
         public void RefreshDialogueHistory()
         {
-            if (_handle == IntPtr.Zero) return;
+            if (!IsInitialized) return;
             try
             {
-                string json = NativeBridge.PtrToString(
-                    NativeBridge.RowlEngine_GetDialogueHistoryJsonWithLength(_handle, out uint histLen), histLen);
+                string json = InvokeNative(handle => NativeBridge.PtrToString(
+                    NativeBridge.RowlEngine_GetDialogueHistoryJsonWithLength(handle, out uint histLen), histLen), string.Empty);
                 DialogueHistory = JsonSerializer.Deserialize<List<DialogueHistoryEntry>>(json)
                     ?? new List<DialogueHistoryEntry>();
             }
@@ -572,12 +598,12 @@ namespace RowlEngine.Editor.Native
         /// <summary>Loads (or reloads) a story graph JSON file into the engine.</summary>
         public void LoadStoryGraph(string jsonPath)
         {
-            if (_handle != IntPtr.Zero && !string.IsNullOrEmpty(jsonPath))
+            if (IsInitialized && !string.IsNullOrEmpty(jsonPath))
             {
-                NativeBridge.RowlEngine_LoadStoryGraph(_handle, jsonPath);
+                InvokeNative(handle => NativeBridge.RowlEngine_LoadStoryGraph(handle, jsonPath));
                 if (!IsPlaying)
                 {
-                    NativeBridge.RowlEngine_Step(_handle, 0.0f);
+                    InvokeNative(handle => NativeBridge.RowlEngine_Step(handle, 0.0f));
                     UpdatePixelBuffer();
                 }
             }
@@ -586,30 +612,30 @@ namespace RowlEngine.Editor.Native
         /// <summary>Loads a graph from the active project's VFS/package.</summary>
         public bool LoadStoryGraphFromVfs(string vfsPath)
         {
-            if (_handle == IntPtr.Zero || string.IsNullOrEmpty(vfsPath)) return false;
-            bool loaded = NativeBridge.RowlEngine_LoadStoryGraphFromVfs(_handle, vfsPath) != 0;
+            if (!IsInitialized || string.IsNullOrEmpty(vfsPath)) return false;
+            bool loaded = InvokeNative(
+                handle => NativeBridge.RowlEngine_LoadStoryGraphFromVfs(handle, vfsPath) != 0, false);
             if (loaded && !IsPlaying)
             {
-                NativeBridge.RowlEngine_Step(_handle, 0.0f);
+                InvokeNative(handle => NativeBridge.RowlEngine_Step(handle, 0.0f));
                 UpdatePixelBuffer();
             }
             return loaded;
         }
 
-        public string LastStoryGraphError => _handle == IntPtr.Zero
-            ? string.Empty
-            : NativeBridge.PtrToString(NativeBridge.RowlEngine_GetLastStoryGraphErrorWithLength(_handle, out uint sgLen), sgLen);
+        public string LastStoryGraphError => InvokeNative(handle => NativeBridge.PtrToString(
+            NativeBridge.RowlEngine_GetLastStoryGraphErrorWithLength(handle, out uint sgLen), sgLen), string.Empty);
 
         /// <summary>Sets the active project root directory, isolating VFS mounts to that project.</summary>
         public void SetProjectDirectory(string projectRoot)
         {
-            if (_handle != IntPtr.Zero && !string.IsNullOrEmpty(projectRoot))
+            if (IsInitialized && !string.IsNullOrEmpty(projectRoot))
             {
                 _lastPreviewComponentsJson = null;
-                NativeBridge.RowlEngine_SetProjectDirectory(_handle, projectRoot);
+                InvokeNative(handle => NativeBridge.RowlEngine_SetProjectDirectory(handle, projectRoot));
                 if (!IsPlaying)
                 {
-                    NativeBridge.RowlEngine_Step(_handle, 0.0f);
+                    InvokeNative(handle => NativeBridge.RowlEngine_Step(handle, 0.0f));
                     UpdatePixelBuffer();
                 }
             }
@@ -617,16 +643,15 @@ namespace RowlEngine.Editor.Native
 
         public void SetBgmTransitionDefaults(string transition, float durationSeconds)
         {
-            if (_handle != IntPtr.Zero)
-                NativeBridge.RowlEngine_SetBgmTransitionDefaults(_handle, transition, durationSeconds);
+            InvokeNative(handle => NativeBridge.RowlEngine_SetBgmTransitionDefaults(handle, transition, durationSeconds));
         }
 
         /// <summary>Forces an immediate single-step render and pixel buffer refresh (zero-latency UI update).</summary>
         public void ForceRenderFrame()
         {
-            if (_handle != IntPtr.Zero)
+            if (IsInitialized)
             {
-                NativeBridge.RowlEngine_Step(_handle, 0.0f);
+                InvokeNative(handle => NativeBridge.RowlEngine_Step(handle, 0.0f));
                 UpdatePixelBuffer();
             }
         }
@@ -634,10 +659,13 @@ namespace RowlEngine.Editor.Native
         /// <summary>Advances the story to the next node on the given branch.</summary>
         public void AdvanceNode(uint choiceIndex = 0)
         {
-            if (_handle != IntPtr.Zero)
+            if (IsInitialized)
             {
-                NativeBridge.RowlEngine_AdvanceNode(_handle, choiceIndex);
-                NativeBridge.RowlEngine_Step(_handle, 0.0f);
+                InvokeNative(handle =>
+                {
+                    NativeBridge.RowlEngine_AdvanceNode(handle, choiceIndex);
+                    NativeBridge.RowlEngine_Step(handle, 0.0f);
+                });
                 InvalidateDialogueHistory();
                 UpdatePixelBuffer();
             }
@@ -645,9 +673,13 @@ namespace RowlEngine.Editor.Native
 
         public bool PointerDown(float virtualX, float virtualY)
         {
-            if (_handle == IntPtr.Zero) return false;
-            bool consumed = NativeBridge.RowlEngine_PointerDown(_handle, virtualX, virtualY) != 0;
-            NativeBridge.RowlEngine_Step(_handle, 0.0f);
+            if (!IsInitialized) return false;
+            bool consumed = InvokeNative(handle =>
+            {
+                bool handled = NativeBridge.RowlEngine_PointerDown(handle, virtualX, virtualY) != 0;
+                NativeBridge.RowlEngine_Step(handle, 0.0f);
+                return handled;
+            }, false);
             UpdatePixelBuffer();
             return consumed;
         }
@@ -657,13 +689,13 @@ namespace RowlEngine.Editor.Native
         /// <summary>Notifies the engine that the render area was resized.</summary>
         public void ResizeViewport(uint newWidth, uint newHeight)
         {
-            if (_handle == IntPtr.Zero) return;
-            NativeBridge.RowlEngine_ResizeViewport(_handle, newWidth, newHeight);
+            if (!IsInitialized) return;
+            InvokeNative(handle => NativeBridge.RowlEngine_ResizeViewport(handle, newWidth, newHeight));
             // MS-4: paused ticks no longer copy every frame, so refresh
             // synchronously here; while playing the next tick covers it.
             if (!IsPlaying)
             {
-                NativeBridge.RowlEngine_Step(_handle, 0.0f);
+                InvokeNative(handle => NativeBridge.RowlEngine_Step(handle, 0.0f));
                 UpdatePixelBuffer();
             }
         }
@@ -671,357 +703,337 @@ namespace RowlEngine.Editor.Native
         // ── State queries ─────────────────────────────────────────────────────
 
         public string GetSpeaker()
-            => _handle == IntPtr.Zero ? string.Empty
-               : NativeBridge.PtrToString(NativeBridge.RowlEngine_GetSpeakerWithLength(_handle, out uint spkLen), spkLen);
+            => InvokeNative(handle => NativeBridge.PtrToString(
+                NativeBridge.RowlEngine_GetSpeakerWithLength(handle, out uint spkLen), spkLen), string.Empty);
 
         public string GetDialogue()
-            => _handle == IntPtr.Zero ? string.Empty
-               : NativeBridge.PtrToString(NativeBridge.RowlEngine_GetDialogueWithLength(_handle, out uint dlgLen), dlgLen);
+            => InvokeNative(handle => NativeBridge.PtrToString(
+                NativeBridge.RowlEngine_GetDialogueWithLength(handle, out uint dlgLen), dlgLen), string.Empty);
 
         public ulong GetCurrentNodeId()
-            => _handle == IntPtr.Zero ? 0
-               : NativeBridge.RowlEngine_GetCurrentNodeId(_handle);
+            => InvokeNative(NativeBridge.RowlEngine_GetCurrentNodeId, 0UL);
 
         public float GetBackgroundRotation()
-            => _handle == IntPtr.Zero ? 0.0f : NativeBridge.RowlEngine_GetBackgroundRotation(_handle);
+            => InvokeNative(NativeBridge.RowlEngine_GetBackgroundRotation, 0.0f);
 
         public void SetBackgroundParallax(float parallaxX, float parallaxY)
         {
-            if (_handle != IntPtr.Zero)
-                NativeBridge.RowlEngine_SetBackgroundParallax(_handle, parallaxX, parallaxY);
+            InvokeNative(handle => NativeBridge.RowlEngine_SetBackgroundParallax(handle, parallaxX, parallaxY));
         }
 
         public float GetBackgroundParallaxX()
-            => _handle == IntPtr.Zero ? 1.0f : NativeBridge.RowlEngine_GetBackgroundParallaxX(_handle);
+            => InvokeNative(NativeBridge.RowlEngine_GetBackgroundParallaxX, 1.0f);
 
         public float GetBackgroundParallaxY()
-            => _handle == IntPtr.Zero ? 1.0f : NativeBridge.RowlEngine_GetBackgroundParallaxY(_handle);
+            => InvokeNative(NativeBridge.RowlEngine_GetBackgroundParallaxY, 1.0f);
 
         public float GetBackgroundOpacity()
-            => _handle == IntPtr.Zero ? 1.0f : NativeBridge.RowlEngine_GetBackgroundOpacity(_handle);
+            => InvokeNative(NativeBridge.RowlEngine_GetBackgroundOpacity, 1.0f);
 
         public float GetCharacterRotation()
-            => _handle == IntPtr.Zero ? 0.0f : NativeBridge.RowlEngine_GetCharacterRotation(_handle);
+            => InvokeNative(NativeBridge.RowlEngine_GetCharacterRotation, 0.0f);
 
         public bool IsBgmPlaying
-            => _handle != IntPtr.Zero && NativeBridge.RowlEngine_IsBgmPlaying(_handle) != 0;
+            => InvokeNative(handle => NativeBridge.RowlEngine_IsBgmPlaying(handle) != 0, false);
 
         public bool IsVoicePlaying
-            => _handle != IntPtr.Zero && NativeBridge.RowlEngine_IsVoicePlaying(_handle) != 0;
+            => InvokeNative(handle => NativeBridge.RowlEngine_IsVoicePlaying(handle) != 0, false);
 
         public int ActiveDspFilter
-            => _handle == IntPtr.Zero ? 0 : NativeBridge.RowlEngine_GetActiveDspFilter(_handle);
+            => InvokeNative(NativeBridge.RowlEngine_GetActiveDspFilter, 0);
 
         public string LastAudioError
-            => _handle == IntPtr.Zero ? string.Empty
-               : NativeBridge.PtrToString(NativeBridge.RowlEngine_GetLastAudioErrorWithLength(_handle, out uint audLen), audLen);
+            => InvokeNative(handle => NativeBridge.PtrToString(
+                NativeBridge.RowlEngine_GetLastAudioErrorWithLength(handle, out uint audLen), audLen), string.Empty);
 
         public bool IsAudioDeviceAvailable
-            => _handle != IntPtr.Zero && NativeBridge.RowlEngine_IsAudioDeviceAvailable(_handle) != 0;
+            => InvokeNative(handle => NativeBridge.RowlEngine_IsAudioDeviceAvailable(handle) != 0, false);
 
         public bool IsAudioOutputSuspended
-            => _handle != IntPtr.Zero && NativeBridge.RowlEngine_IsAudioOutputSuspended(_handle) != 0;
+            => InvokeNative(handle => NativeBridge.RowlEngine_IsAudioOutputSuspended(handle) != 0, false);
 
         public void SetMasterVolume(float volume)
         {
-            if (_handle != IntPtr.Zero) NativeBridge.RowlEngine_SetMasterVolume(_handle, volume);
+            InvokeNative(handle => NativeBridge.RowlEngine_SetMasterVolume(handle, volume));
         }
 
         public void SetBgmVolume(float volume)
         {
-            if (_handle != IntPtr.Zero) NativeBridge.RowlEngine_SetBgmVolume(_handle, volume);
+            InvokeNative(handle => NativeBridge.RowlEngine_SetBgmVolume(handle, volume));
         }
 
         public void SetVoiceVolume(float volume)
         {
-            if (_handle != IntPtr.Zero) NativeBridge.RowlEngine_SetVoiceVolume(_handle, volume);
+            InvokeNative(handle => NativeBridge.RowlEngine_SetVoiceVolume(handle, volume));
         }
 
         public void SetSfxVolume(float volume)
         {
-            if (_handle != IntPtr.Zero) NativeBridge.RowlEngine_SetSfxVolume(_handle, volume);
+            InvokeNative(handle => NativeBridge.RowlEngine_SetSfxVolume(handle, volume));
         }
 
         public void SetTextSpeedMultiplier(float multiplier)
         {
-            if (_handle != IntPtr.Zero) NativeBridge.RowlEngine_SetTextSpeedMultiplier(_handle, multiplier);
+            InvokeNative(handle => NativeBridge.RowlEngine_SetTextSpeedMultiplier(handle, multiplier));
         }
 
         public void SetAutoAdvanceDelayOffset(float seconds)
         {
-            if (_handle != IntPtr.Zero) NativeBridge.RowlEngine_SetAutoAdvanceDelayOffset(_handle, seconds);
+            InvokeNative(handle => NativeBridge.RowlEngine_SetAutoAdvanceDelayOffset(handle, seconds));
         }
 
         public void PlayAudio(string assetPath, int channelType = 0, int filterType = 0)
         {
-            if (_handle != IntPtr.Zero && !string.IsNullOrEmpty(assetPath))
-                NativeBridge.RowlEngine_PlayAudio(_handle, assetPath, channelType, filterType);
+            if (IsInitialized && !string.IsNullOrEmpty(assetPath))
+                InvokeNative(handle => NativeBridge.RowlEngine_PlayAudio(handle, assetPath, channelType, filterType));
         }
 
         public void StopBgm()
         {
-            if (_handle != IntPtr.Zero)
-                NativeBridge.RowlEngine_StopBgm(_handle);
+            InvokeNative(NativeBridge.RowlEngine_StopBgm);
         }
 
         public float GetAudioChannelPeak(int channelType, int channelIndex = 0)
-            => _handle == IntPtr.Zero ? 0.0f : NativeBridge.RowlEngine_GetAudioChannelPeak(_handle, channelType, channelIndex);
+            => InvokeNative(handle => NativeBridge.RowlEngine_GetAudioChannelPeak(handle, channelType, channelIndex), 0.0f);
 
         public float GetAudioChannelRms(int channelType, int channelIndex = 0)
-            => _handle == IntPtr.Zero ? 0.0f : NativeBridge.RowlEngine_GetAudioChannelRms(_handle, channelType, channelIndex);
+            => InvokeNative(handle => NativeBridge.RowlEngine_GetAudioChannelRms(handle, channelType, channelIndex), 0.0f);
 
         public void GetAudioSpectrum(float[] outBands)
         {
-            if (_handle != IntPtr.Zero && outBands != null && outBands.Length > 0)
-                NativeBridge.RowlEngine_GetAudioSpectrum(_handle, outBands, outBands.Length);
+            if (IsInitialized && outBands != null && outBands.Length > 0)
+                InvokeNative(handle => NativeBridge.RowlEngine_GetAudioSpectrum(handle, outBands, outBands.Length));
         }
 
         // ── Typewriter Voice Blips & Audio Effects (Milestone 25) ─────────────
 
         public void PlayVoiceBlip(string soundPath, float pitch = 1.0f, float volume = 0.85f, int channelType = 1)
         {
-            if (_handle != IntPtr.Zero)
-                NativeBridge.RowlEngine_PlayVoiceBlip(_handle, soundPath, pitch, volume, channelType);
+            InvokeNative(handle => NativeBridge.RowlEngine_PlayVoiceBlip(handle, soundPath, pitch, volume, channelType));
         }
 
         public void SetDialogueVoiceBlip(string soundPath, float basePitch, float pitchVariance, int cadence, bool skipPunctuation, int channelType)
         {
-            if (_handle != IntPtr.Zero)
-                NativeBridge.RowlEngine_SetDialogueVoiceBlip(_handle, soundPath, basePitch, pitchVariance, cadence, skipPunctuation ? 1 : 0, channelType);
+            InvokeNative(handle => NativeBridge.RowlEngine_SetDialogueVoiceBlip(
+                handle, soundPath, basePitch, pitchVariance, cadence, skipPunctuation ? 1 : 0, channelType));
         }
 
         public string GetDialogueVoiceBlipSound()
-            => _handle == IntPtr.Zero ? string.Empty : NativeBridge.PtrToString(NativeBridge.RowlEngine_GetDialogueVoiceBlipSoundWithLength(_handle, out uint blipLen), blipLen);
+            => InvokeNative(handle => NativeBridge.PtrToString(
+                NativeBridge.RowlEngine_GetDialogueVoiceBlipSoundWithLength(handle, out uint blipLen), blipLen), string.Empty);
 
         public float GetDialogueVoiceBlipPitch()
-            => _handle == IntPtr.Zero ? 1.0f : NativeBridge.RowlEngine_GetDialogueVoiceBlipPitch(_handle);
+            => InvokeNative(NativeBridge.RowlEngine_GetDialogueVoiceBlipPitch, 1.0f);
 
         public float GetDialogueVoiceBlipVariance()
-            => _handle == IntPtr.Zero ? 0.08f : NativeBridge.RowlEngine_GetDialogueVoiceBlipVariance(_handle);
+            => InvokeNative(NativeBridge.RowlEngine_GetDialogueVoiceBlipVariance, 0.08f);
 
         public int GetDialogueVoiceBlipCadence()
-            => _handle == IntPtr.Zero ? 1 : NativeBridge.RowlEngine_GetDialogueVoiceBlipCadence(_handle);
+            => InvokeNative(NativeBridge.RowlEngine_GetDialogueVoiceBlipCadence, 1);
 
         public bool GetDialogueVoiceBlipSkipPunctuation()
-            => _handle != IntPtr.Zero && NativeBridge.RowlEngine_GetDialogueVoiceBlipSkipPunctuation(_handle) != 0;
+            => InvokeNative(handle => NativeBridge.RowlEngine_GetDialogueVoiceBlipSkipPunctuation(handle) != 0, false);
 
         public int GetDialogueVoiceBlipChannel()
-            => _handle == IntPtr.Zero ? 1 : NativeBridge.RowlEngine_GetDialogueVoiceBlipChannel(_handle);
+            => InvokeNative(NativeBridge.RowlEngine_GetDialogueVoiceBlipChannel, 1);
 
         public float GetDialogueVoiceBlipVolume()
-            => _handle == IntPtr.Zero ? 0.85f : NativeBridge.RowlEngine_GetDialogueVoiceBlipVolume(_handle);
+            => InvokeNative(NativeBridge.RowlEngine_GetDialogueVoiceBlipVolume, 0.85f);
 
         public void SetDialogueVoiceBlipVolume(float volume)
         {
-            if (_handle != IntPtr.Zero)
-                NativeBridge.RowlEngine_SetDialogueVoiceBlipVolume(_handle, volume);
+            InvokeNative(handle => NativeBridge.RowlEngine_SetDialogueVoiceBlipVolume(handle, volume));
         }
 
         public uint GetVoiceBlipCount()
-            => _handle == IntPtr.Zero ? 0u : NativeBridge.RowlEngine_GetVoiceBlipCount(_handle);
+            => InvokeNative(NativeBridge.RowlEngine_GetVoiceBlipCount, 0u);
 
         public void ResetVoiceBlipCount()
         {
-            if (_handle != IntPtr.Zero)
-                NativeBridge.RowlEngine_ResetVoiceBlipCount(_handle);
+            InvokeNative(NativeBridge.RowlEngine_ResetVoiceBlipCount);
         }
 
         // ── Save / Load Slots & History Rewind ────────────────────────────────
 
         public bool SaveGameSlot(int slotIndex)
-            => _handle != IntPtr.Zero && NativeBridge.RowlEngine_SaveGameSlot(_handle, slotIndex) != 0;
+            => InvokeNative(handle => NativeBridge.RowlEngine_SaveGameSlot(handle, slotIndex) != 0, false);
 
         public bool LoadGameSlot(int slotIndex)
         {
-            if (_handle == IntPtr.Zero) return false;
-            bool success = NativeBridge.RowlEngine_LoadGameSlot(_handle, slotIndex) != 0;
+            if (!IsInitialized) return false;
+            bool success = InvokeNative(handle => NativeBridge.RowlEngine_LoadGameSlot(handle, slotIndex) != 0, false);
             if (success) InvalidateDialogueHistory();
             if (success) ForceRenderFrame();
             return success;
         }
 
         public bool HasSaveSlot(int slotIndex)
-            => _handle != IntPtr.Zero && NativeBridge.RowlEngine_HasSaveSlot(_handle, slotIndex) != 0;
+            => InvokeNative(handle => NativeBridge.RowlEngine_HasSaveSlot(handle, slotIndex) != 0, false);
 
         public bool DeleteSaveSlot(int slotIndex)
-            => _handle != IntPtr.Zero && NativeBridge.RowlEngine_DeleteSaveSlot(_handle, slotIndex) != 0;
+            => InvokeNative(handle => NativeBridge.RowlEngine_DeleteSaveSlot(handle, slotIndex) != 0, false);
 
         public bool Rewind(uint steps = 1)
         {
-            if (_handle == IntPtr.Zero) return false;
-            bool success = NativeBridge.RowlEngine_Rewind(_handle, steps) != 0;
+            if (!IsInitialized) return false;
+            bool success = InvokeNative(handle => NativeBridge.RowlEngine_Rewind(handle, steps) != 0, false);
             if (success) InvalidateDialogueHistory();
             if (success) ForceRenderFrame();
             return success;
         }
 
         public ulong GetCurrentStepId()
-            => _handle != IntPtr.Zero ? NativeBridge.RowlEngine_GetCurrentStepId(_handle) : 0;
+            => InvokeNative(NativeBridge.RowlEngine_GetCurrentStepId, 0UL);
 
         // ── Scripting & Dynamic Variables ─────────────────────────────────────
 
         public void SetVariable(string key, string value)
         {
-            if (_handle != IntPtr.Zero && !string.IsNullOrEmpty(key))
-                NativeBridge.RowlEngine_SetVariable(_handle, key, value ?? string.Empty);
+            if (IsInitialized && !string.IsNullOrEmpty(key))
+                InvokeNative(handle => NativeBridge.RowlEngine_SetVariable(handle, key, value ?? string.Empty));
         }
 
         public string GetVariable(string key)
-            => _handle != IntPtr.Zero && !string.IsNullOrEmpty(key)
-               ? NativeBridge.PtrToString(NativeBridge.RowlEngine_GetVariableWithLength(_handle, key, out uint varLen), varLen)
+            => IsInitialized && !string.IsNullOrEmpty(key)
+               ? InvokeNative(handle => NativeBridge.PtrToString(
+                   NativeBridge.RowlEngine_GetVariableWithLength(handle, key, out uint varLen), varLen), string.Empty)
                : string.Empty;
 
         public bool EvaluateCondition(string conditionExpr)
-            => _handle != IntPtr.Zero && NativeBridge.RowlEngine_EvaluateCondition(_handle, conditionExpr) != 0;
+            => InvokeNative(handle => NativeBridge.RowlEngine_EvaluateCondition(handle, conditionExpr) != 0, false);
 
         public bool ExecuteScript(string scriptCode)
-            => _handle != IntPtr.Zero && NativeBridge.RowlEngine_ExecuteScript(_handle, scriptCode) != 0;
+            => InvokeNative(handle => NativeBridge.RowlEngine_ExecuteScript(handle, scriptCode) != 0, false);
 
         // ── Structured Runtime Results & Diagnostics ──────────────────────────
 
-        public RuntimeErrorCode LastResultCode => _handle == IntPtr.Zero
-            ? RuntimeErrorCode.InvalidHandle
-            : (RuntimeErrorCode)NativeBridge.RowlEngine_GetLastResultCode(_handle);
+        public RuntimeErrorCode LastResultCode => InvokeNative(
+            handle => (RuntimeErrorCode)NativeBridge.RowlEngine_GetLastResultCode(handle),
+            RuntimeErrorCode.InvalidHandle);
 
-        public string LastResultOperation => _handle == IntPtr.Zero
-            ? "none"
-            : NativeBridge.PtrToString(NativeBridge.RowlEngine_GetLastResultOperationWithLength(_handle, out uint opLen), opLen);
+        public string LastResultOperation => InvokeNative(handle => NativeBridge.PtrToString(
+            NativeBridge.RowlEngine_GetLastResultOperationWithLength(handle, out uint opLen), opLen), "none");
 
-        public string LastResultMessage => _handle == IntPtr.Zero
-            ? "Invalid or uninitialized engine handle"
-            : NativeBridge.PtrToString(NativeBridge.RowlEngine_GetLastResultMessageWithLength(_handle, out uint msgLen), msgLen);
+        public string LastResultMessage => InvokeNative(handle => NativeBridge.PtrToString(
+            NativeBridge.RowlEngine_GetLastResultMessageWithLength(handle, out uint msgLen), msgLen),
+            "Invalid or uninitialized engine handle");
 
-        public string LastResultTarget => _handle == IntPtr.Zero
-            ? string.Empty
-            : NativeBridge.PtrToString(NativeBridge.RowlEngine_GetLastResultTargetWithLength(_handle, out uint tgtLen), tgtLen);
+        public string LastResultTarget => InvokeNative(handle => NativeBridge.PtrToString(
+            NativeBridge.RowlEngine_GetLastResultTargetWithLength(handle, out uint tgtLen), tgtLen), string.Empty);
 
         public void ClearLastResult()
         {
-            if (_handle != IntPtr.Zero)
-                NativeBridge.RowlEngine_ClearLastResult(_handle);
+            InvokeNative(NativeBridge.RowlEngine_ClearLastResult);
         }
 
         // ── 2D Camera & Screen Shake Controls ──────────────────────────────────
 
         public void SetCamera(float x, float y, float zoom)
         {
-            if (_handle != IntPtr.Zero)
-                NativeBridge.RowlEngine_SetCamera(_handle, x, y, zoom);
+            InvokeNative(handle => NativeBridge.RowlEngine_SetCamera(handle, x, y, zoom));
         }
 
         public void ResetCamera()
         {
-            if (_handle != IntPtr.Zero)
-                NativeBridge.RowlEngine_ResetCamera(_handle);
+            InvokeNative(NativeBridge.RowlEngine_ResetCamera);
         }
 
         public void CameraPanTo(float targetX, float targetY, float durationSeconds, int easingType = 3)
         {
-            if (_handle != IntPtr.Zero)
-                NativeBridge.RowlEngine_CameraPanTo(_handle, targetX, targetY, durationSeconds, easingType);
+            InvokeNative(handle => NativeBridge.RowlEngine_CameraPanTo(handle, targetX, targetY, durationSeconds, easingType));
         }
 
         public void CameraZoomTo(float targetZoom, float durationSeconds, int easingType = 3)
         {
-            if (_handle != IntPtr.Zero)
-                NativeBridge.RowlEngine_CameraZoomTo(_handle, targetZoom, durationSeconds, easingType);
+            InvokeNative(handle => NativeBridge.RowlEngine_CameraZoomTo(handle, targetZoom, durationSeconds, easingType));
         }
 
         public bool IsCameraMoving()
         {
-            return _handle != IntPtr.Zero && NativeBridge.RowlEngine_IsCameraMoving(_handle) == 1;
+            return InvokeNative(handle => NativeBridge.RowlEngine_IsCameraMoving(handle) == 1, false);
         }
 
         public void TriggerCameraShake(float intensity, float durationSeconds)
         {
-            if (_handle != IntPtr.Zero)
-                NativeBridge.RowlEngine_TriggerCameraShake(_handle, intensity, durationSeconds);
+            InvokeNative(handle => NativeBridge.RowlEngine_TriggerCameraShake(handle, intensity, durationSeconds));
         }
 
         public void TriggerCameraShakePreset(string presetName, float intensityMultiplier = 1.0f, float durationSeconds = 0.0f)
         {
-            if (_handle != IntPtr.Zero)
-                NativeBridge.RowlEngine_TriggerCameraShakePreset(_handle, presetName, intensityMultiplier, durationSeconds);
+            InvokeNative(handle => NativeBridge.RowlEngine_TriggerCameraShakePreset(handle, presetName, intensityMultiplier, durationSeconds));
         }
 
         public void TriggerCameraShakeProfile(float intensity, float durationSeconds, float frequency, float damping, float dirX, float dirY)
         {
-            if (_handle != IntPtr.Zero)
-                NativeBridge.RowlEngine_TriggerCameraShakeProfile(_handle, intensity, durationSeconds, frequency, damping, dirX, dirY);
+            InvokeNative(handle => NativeBridge.RowlEngine_TriggerCameraShakeProfile(
+                handle, intensity, durationSeconds, frequency, damping, dirX, dirY));
         }
 
         public float GetCameraShakeOffsetX()
         {
-            return _handle != IntPtr.Zero ? NativeBridge.RowlEngine_GetCameraShakeOffsetX(_handle) : 0.0f;
+            return InvokeNative(NativeBridge.RowlEngine_GetCameraShakeOffsetX, 0.0f);
         }
 
         public float GetCameraShakeOffsetY()
         {
-            return _handle != IntPtr.Zero ? NativeBridge.RowlEngine_GetCameraShakeOffsetY(_handle) : 0.0f;
+            return InvokeNative(NativeBridge.RowlEngine_GetCameraShakeOffsetY, 0.0f);
         }
 
         // ── Screen Visual FX (Flash, Tint, Vignette, Transitions) ────────────
 
         public void StartTransition(string kind, float durationSeconds, string? colorHex = null)
         {
-            if (_handle != IntPtr.Zero)
-                NativeBridge.RowlEngine_StartTransition(_handle, kind, durationSeconds, colorHex);
+            InvokeNative(handle => NativeBridge.RowlEngine_StartTransition(handle, kind, durationSeconds, colorHex));
         }
 
         public bool IsTransitionActive()
         {
-            return _handle != IntPtr.Zero && NativeBridge.RowlEngine_IsTransitionActive(_handle) == 1;
+            return InvokeNative(handle => NativeBridge.RowlEngine_IsTransitionActive(handle) == 1, false);
         }
 
         public void TriggerScreenFlash(byte r, byte g, byte b, float durationSeconds, float intensity = 1.0f)
         {
-            if (_handle != IntPtr.Zero)
-                NativeBridge.RowlEngine_TriggerScreenFlash(_handle, r, g, b, durationSeconds, intensity);
+            InvokeNative(handle => NativeBridge.RowlEngine_TriggerScreenFlash(handle, r, g, b, durationSeconds, intensity));
         }
 
         public void TriggerScreenFlashHex(string colorHex, float durationSeconds, float intensity = 1.0f)
         {
-            if (_handle != IntPtr.Zero)
-                NativeBridge.RowlEngine_TriggerScreenFlashHex(_handle, colorHex, durationSeconds, intensity);
+            InvokeNative(handle => NativeBridge.RowlEngine_TriggerScreenFlashHex(handle, colorHex, durationSeconds, intensity));
         }
 
         public bool IsScreenFlashActive()
         {
-            return _handle != IntPtr.Zero && NativeBridge.RowlEngine_IsScreenFlashActive(_handle) == 1;
+            return InvokeNative(handle => NativeBridge.RowlEngine_IsScreenFlashActive(handle) == 1, false);
         }
 
         public void SetScreenTint(byte r, byte g, byte b, float opacity)
         {
-            if (_handle != IntPtr.Zero)
-                NativeBridge.RowlEngine_SetScreenTint(_handle, r, g, b, opacity);
+            InvokeNative(handle => NativeBridge.RowlEngine_SetScreenTint(handle, r, g, b, opacity));
         }
 
         public void SetScreenTintHex(string colorHex, float opacity)
         {
-            if (_handle != IntPtr.Zero)
-                NativeBridge.RowlEngine_SetScreenTintHex(_handle, colorHex, opacity);
+            InvokeNative(handle => NativeBridge.RowlEngine_SetScreenTintHex(handle, colorHex, opacity));
         }
 
         public void ClearScreenTint()
         {
-            if (_handle != IntPtr.Zero)
-                NativeBridge.RowlEngine_ClearScreenTint(_handle);
+            InvokeNative(NativeBridge.RowlEngine_ClearScreenTint);
         }
 
         public float GetScreenTintOpacity()
         {
-            return _handle != IntPtr.Zero ? NativeBridge.RowlEngine_GetScreenTintOpacity(_handle) : 0.0f;
+            return InvokeNative(NativeBridge.RowlEngine_GetScreenTintOpacity, 0.0f);
         }
 
         public void SetVignette(float intensity, float radius = 0.75f, string? colorHex = null)
         {
-            if (_handle != IntPtr.Zero)
-                NativeBridge.RowlEngine_SetVignette(_handle, intensity, radius, colorHex);
+            InvokeNative(handle => NativeBridge.RowlEngine_SetVignette(handle, intensity, radius, colorHex));
         }
 
         public float GetVignetteIntensity()
         {
-            return _handle != IntPtr.Zero ? NativeBridge.RowlEngine_GetVignetteIntensity(_handle) : 0.0f;
+            return InvokeNative(NativeBridge.RowlEngine_GetVignetteIntensity, 0.0f);
         }
 
         // ── Disposal ──────────────────────────────────────────────────────────
@@ -1031,12 +1043,9 @@ namespace RowlEngine.Editor.Native
             _tickTimer?.Stop();
             _tickTimer = null;
 
-            if (_handle != IntPtr.Zero)
-            {
-                NativeBridge.RowlEngine_Shutdown(_handle);
-                NativeBridge.RowlEngine_Destroy(_handle);
-                _handle = IntPtr.Zero;
-            }
+            OffscreenRuntimeWorker? runtime = _runtime;
+            _runtime = null;
+            runtime?.Dispose();
             _lastPreviewComponentsJson = null;
             IsPlaying = false;
             var bitmap = RenderTargetBitmap;

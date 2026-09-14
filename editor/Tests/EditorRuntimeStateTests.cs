@@ -43,6 +43,12 @@ internal static class EditorRuntimeStateTests
         }
         if (host.IsInitialized)
         {
+            if (host.RuntimeWorkerThreadId == 0 ||
+                host.RuntimeWorkerThreadId == Environment.CurrentManagedThreadId)
+                throw new Exception("Editor offscreen runtime was not isolated on its worker thread");
+            if (NativeBridge.RowlEngine_IsRunning(host.Handle) != 0 || !host.IsRunning)
+                throw new Exception("EngineHost did not preserve native owner-thread affinity");
+
             if (host.LastFrameTextureLoadMilliseconds < 0 || host.LastFrameNonTextureRenderMilliseconds < 0 ||
                 host.LastFrameTextRasterizationMilliseconds < 0 || host.LastFrameRendererFlushMilliseconds < 0)
                 throw new Exception("Native first-frame profiling telemetry returned an invalid duration");
