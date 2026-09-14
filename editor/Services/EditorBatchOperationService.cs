@@ -225,6 +225,10 @@ namespace RowlEngine.Editor.Services
                         compCopy.Deserialize(comp.Serialize().ToDictionary(
                             pair => pair.Key,
                             pair => (object?)pair.Value));
+                        // Cloned dialogues are new content: never reuse the
+                        // source content_id (duplicates block the build).
+                        if (compCopy is DialogueComponentViewModel copiedDialogue)
+                            copiedDialogue.ContentId = ContentIdService.NewContentId();
                         clonedObj.AddComponent(compCopy);
                     }
                 }

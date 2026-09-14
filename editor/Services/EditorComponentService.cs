@@ -45,6 +45,12 @@ public static class EditorComponentService
         try
         {
             var component = ComponentRegistry.Create(typeKey);
+            // A user-added dialogue is new content: it owns a fresh identity.
+            // (Hydrated legacy dialogues bypass this service and stay empty
+            // until one-time UUIDv5 migration.)
+            if (component is DialogueComponentViewModel freshDialogue &&
+                string.IsNullOrWhiteSpace(freshDialogue.ContentId))
+                freshDialogue.ContentId = ContentIdService.NewContentId();
             resolvedTarget.AddComponent(component);
 
             // Refresh bitmap on visual components so the image loads immediately

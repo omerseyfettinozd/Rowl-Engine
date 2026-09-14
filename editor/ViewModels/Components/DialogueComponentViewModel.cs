@@ -15,6 +15,13 @@ namespace RowlEngine.Editor.ViewModels.Components
         public override string Icon => "💬";
         public override string TypeKey => "dialogue";
 
+        /// <summary>
+        /// Persistent Faz 2 content identity (UUID form). Empty means the
+        /// dialogue predates migration; see <see cref="Services.ContentIdService"/>.
+        /// </summary>
+        [ObservableProperty]
+        private string _contentId = string.Empty;
+
         [ObservableProperty]
         private string _speaker = "Evelyn";
 
@@ -221,7 +228,7 @@ namespace RowlEngine.Editor.ViewModels.Components
 
         public override Dictionary<string, object> Serialize()
         {
-            return new Dictionary<string, object>
+            var rendered = new Dictionary<string, object>
             {
                 ["speaker"] = Speaker,
                 ["dialogue"] = DialogueText,
@@ -254,10 +261,18 @@ namespace RowlEngine.Editor.ViewModels.Components
                 ["corner_radius"] = CornerRadius,
                 ["custom_box_texture"] = CustomBoxTexture
             };
+            // Omitted (not null) while unassigned so pre-migration v4
+            // documents stay byte-stable; the native parser ignores it.
+            if (!string.IsNullOrWhiteSpace(ContentId))
+                rendered[Services.ContentIdService.StorageKey] = ContentId;
+            return rendered;
         }
 
         public override void Deserialize(Dictionary<string, object?> data)
         {
+            if (data.TryGetValue(Services.ContentIdService.StorageKey, out var cid) && cid is string sCid)
+                ContentId = sCid;
+
             if (data.TryGetValue("speaker", out var spk) && spk is string s)
                 Speaker = s;
 

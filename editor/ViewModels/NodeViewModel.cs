@@ -134,6 +134,10 @@ namespace RowlEngine.Editor.ViewModels
                 newComp.Deserialize(comp.Serialize().ToDictionary(
                     pair => pair.Key,
                     pair => (object?)pair.Value));
+                // A duplicated dialogue is new content: it must not reuse the
+                // source content_id (the validator rejects duplicates).
+                if (newComp is DialogueComponentViewModel copiedDialogue)
+                    copiedDialogue.ContentId = Services.ContentIdService.NewContentId();
                 newObj.AddComponent(newComp);
             }
             return newObj;
@@ -811,7 +815,9 @@ namespace RowlEngine.Editor.ViewModels
             charObj.AddComponent<CharacterComponentViewModel>();
 
             var dlgObj = CreateObject("Dialogue Box");
-            dlgObj.AddComponent<DialogueComponentViewModel>();
+            // Brand-new dialogue content gets a fresh persistent identity.
+            dlgObj.AddComponent<DialogueComponentViewModel>().ContentId =
+                Services.ContentIdService.NewContentId();
 
             var audioObj = CreateObject("Audio");
             audioObj.AddComponent<AudioComponentViewModel>();
@@ -838,7 +844,11 @@ namespace RowlEngine.Editor.ViewModels
                 charObj.AddComponent<CharacterComponentViewModel>();
 
                 var dlgObj = CreateObject("Dialogue Box");
-                dlgObj.AddComponent<DialogueComponentViewModel>();
+                // Brand-new dialogue content gets a fresh persistent identity.
+                // The loader always passes bare: true, so hydrated legacy
+                // dialogues keep an empty id until one-time UUIDv5 migration.
+                dlgObj.AddComponent<DialogueComponentViewModel>().ContentId =
+                    Services.ContentIdService.NewContentId();
 
                 var audioObj = CreateObject("Audio");
                 audioObj.AddComponent<AudioComponentViewModel>();

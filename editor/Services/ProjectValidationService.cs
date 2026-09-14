@@ -54,6 +54,10 @@ internal static class ProjectValidationService
             if (colour == 0) { colours[target] = 1; stack.Push((target, 0)); }
         }
         if (hasCycle) issues.Add(new(false, "Reachable story graph contains a cycle; confirm it has an intentional exit.", start.Id));
+        // Faz 2 Dilim 1: persistent dialogue content identity. Duplicate or
+        // malformed content_id values are build-blocking errors; empty ids
+        // (pre-migration v4 content) are valid and ignored here.
+        issues.AddRange(CheckContentIds(nodeList, reachable));
         // Faz 1 Dilim 1: disk dizini bir kez çıkarılır; hem çakışma denetimi hem de
         // birebir (Ordinal) referans çözümleme aynı dizini kullanır. Dosya sistemi
         // büyük/küçük harf duyarsız olsa bile karşılaştırma Ordinal yapılır, çünkü
@@ -86,6 +90,41 @@ internal static class ProjectValidationService
             issues.AddRange(GraphStructureValidator.Validate(nodeList, structureConnections, structure));
         }
         return issues;
+    }
+
+    private static IEnumerable<ProjectValidationIssue> CheckContentIds(
+        List<NodeViewModel> nodeList, HashSet<ulong> reachable)
+    {
+        var seen = new Dictionary<string, ulong>(StringComparer.OrdinalIgnoreCase);
+        foreach (var node in nodeList.Where(node => reachable.Contains(node.Id)))
+        {
+            foreach (var dialogue in ContentIdService.EnumerateDialogues(node))
+            {
+                if (!dialogue.IsEnabled)
+                    continue;
+                string raw = dialogue.ContentId ?? string.Empty;
+                if (string.IsNullOrWhiteSpace(raw))
+                    continue;
+                string? normalized = ContentIdService.Normalize(raw);
+                if (normalized is null)
+                {
+                    yield return new(true,
+                        $"Node #{node.Id}: dialogue component '{dialogue.ComponentId}' has an invalid content_id '{raw}'; expected UUID form (8-4-4-4-12). Run content migration or assign a fresh id.",
+                        node.Id);
+                    continue;
+                }
+                if (seen.TryGetValue(normalized, out ulong firstNodeId))
+                {
+                    yield return new(true,
+                        $"Story graph contains a duplicate content_id '{normalized}' (nodes #{firstNodeId} and #{node.Id}); rejected.",
+                        node.Id);
+                }
+                else
+                {
+                    seen[normalized] = node.Id;
+                }
+            }
+        }
     }
 
     private sealed record DiskIndex(HashSet<string> ExactPaths, Dictionary<string, string> InsensitivePaths, string? ScanError);

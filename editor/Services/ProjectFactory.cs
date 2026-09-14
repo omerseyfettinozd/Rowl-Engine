@@ -94,11 +94,13 @@ namespace RowlEngine.Editor.Services
                 File.WriteAllText(Path.Combine(jsonDir, "active_story.json"), starterActive);
 
                 // project.rowlproj
+                // project_uuid namespaces deterministic content_id migration.
                 var manifest = new
                 {
                     name = name,
                     version = "1.0.0",
                     engineVersion = "1.0.0",
+                    project_uuid = Guid.NewGuid().ToString("D").ToLowerInvariant(),
                     createdAt = DateTime.UtcNow.ToString("o"),
                     savedAt = DateTime.UtcNow.ToString("o"),
                     nodeCount = 1,
