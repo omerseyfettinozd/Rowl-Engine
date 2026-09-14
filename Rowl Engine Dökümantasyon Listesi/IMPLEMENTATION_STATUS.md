@@ -4,6 +4,15 @@ Son doğrulama (2026-09-12): Linux Debug derlemesi, 11/11 CTest, editör
 headless testi ve paket içinden VFS graph yükleyen yerel standalone smoke
 testi geçiyor.
 
+## Aktif ürünleşme programı
+
+- MS-0..MS-6 sonrası aktif kaynak: `docs/PRODUCTIZATION_BASELINE.md` ve
+  İkinci Beyin'deki `300-Projects/Rowl-Engine-Urunlesme-Yol-Haritasi.md`.
+- Faz 0 başladı: test edilmiş/kısmi/eksik/dış kanıt durumları ile kapalı beta,
+  desktop 1.0 ve 1.x kabul matrisi ayrıldı.
+- Benchmark schema v2, OS/makineye ek olarak CPU mimarisi ve modelini kimliğe
+  dahil eder. Tarihsel schema-v1 raporları yalnız birbirleriyle kıyaslanır.
+
 ## Hazır
 
 - C++20 çekirdek, SDL3 framebuffer/player, P/Invoke editör köprüsü ve graph tabanlı hikâye oynatımı.

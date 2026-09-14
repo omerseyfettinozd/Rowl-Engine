@@ -10,14 +10,21 @@ import sys
 def load(path):
     with open(path, encoding="utf-8") as source:
         report = json.load(source)
-    if report.get("schema_version") != 1 or not isinstance(report.get("metrics"), dict):
-        raise ValueError(f"{path} is not editor benchmark schema v1")
+    schema_version = report.get("schema_version")
+    if schema_version not in (1, 2) or not isinstance(report.get("metrics"), dict):
+        raise ValueError(f"{path} is not editor benchmark schema v1 or v2")
+    if schema_version == 2:
+        environment = report.get("environment", {})
+        for field in ("architecture", "cpu_model"):
+            if not isinstance(environment.get(field), str) or not environment[field].strip():
+                raise ValueError(f"{path} has no environment.{field}")
     return report
 
 
 def key(report):
-    return (report.get("fixture_id"), report.get("build", {}).get("type"),
+    return (report.get("schema_version"), report.get("fixture_id"), report.get("build", {}).get("type"),
             report.get("environment", {}).get("os"), report.get("environment", {}).get("machine"),
+            report.get("environment", {}).get("architecture"), report.get("environment", {}).get("cpu_model"),
             report.get("environment", {}).get("cpu_count"))
 
 

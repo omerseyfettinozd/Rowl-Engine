@@ -10,7 +10,7 @@ build_id="${ROWL_EDITOR_BENCHMARK_BUILD_ID:-$(git -C "$project_root" rev-parse -
 
 ROWL_EDITOR_BENCHMARK_BUILD_ID="$build_id" \
 ROWL_EDITOR_BENCHMARK_BUILD_TYPE="${ROWL_EDITOR_BENCHMARK_BUILD_TYPE:-Debug}" \
-ROWL_EDITOR_BENCHMARK_MACHINE="${ROWL_EDITOR_BENCHMARK_MACHINE:-$(uname -m)}" \
+ROWL_EDITOR_BENCHMARK_MACHINE="${ROWL_EDITOR_BENCHMARK_MACHINE:-$(uname -n)}" \
 ROWL_EDITOR_BENCHMARK_JSON="$output_json" \
 SDL_AUDIODRIVER="${SDL_AUDIODRIVER:-dummy}" \
 dotnet test "$project_root/editor/Tests/RowlEngine.Editor.Tests.csproj" \

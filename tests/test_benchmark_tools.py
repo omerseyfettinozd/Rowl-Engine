@@ -14,11 +14,12 @@ EDITOR_COMPARE_TOOL = ROOT / "tools" / "compare_editor_benchmarks.py"
 EDITOR_SUMMARY_TOOL = ROOT / "tools" / "summarize_editor_benchmarks.py"
 
 
-def report(machine="test-machine"):
+def report(machine="test-machine", architecture="x86_64", cpu_model="Test CPU"):
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "build": {"id": "abc", "type": "Release"},
-        "environment": {"os": "Linux", "cpu_count": 8, "machine": machine},
+        "environment": {"os": "Linux", "architecture": architecture, "cpu_model": cpu_model,
+                        "cpu_count": 8, "machine": machine},
         "fixture_id": "native-default-v1",
         "metrics": {
             "vfs_io": {"avg_ms": 1.0},
@@ -31,11 +32,12 @@ def report(machine="test-machine"):
     }
 
 
-def editor_report(machine="test-machine"):
+def editor_report(machine="test-machine", architecture="x86_64", cpu_model="Test CPU"):
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "build": {"id": "abc", "type": "Debug"},
-        "environment": {"os": "Linux", "cpu_count": 8, "machine": machine},
+        "environment": {"os": "Linux", "architecture": architecture, "cpu_model": cpu_model,
+                        "cpu_count": 8, "machine": machine},
         "fixture_id": "editor-headless-default-v1",
         "metrics": {
             "graph_drag_step_ms": 1.0,
@@ -62,6 +64,26 @@ with tempfile.TemporaryDirectory() as directory:
                               capture_output=True, text=True, check=False)
     if rejected.returncode == 0 or "incompatible" not in rejected.stderr:
         raise SystemExit("different benchmark environments were not rejected")
+
+    wrong_architecture = directory / "wrong-architecture.json"
+    wrong_architecture.write_text(json.dumps(report(architecture="arm64")), encoding="utf-8")
+    architecture_rejected = subprocess.run(
+        [sys.executable, str(TOOL), str(baseline), str(wrong_architecture)],
+        capture_output=True, text=True, check=False)
+    if architecture_rejected.returncode == 0 or "environment.architecture" not in architecture_rejected.stderr:
+        raise SystemExit("different benchmark architectures were not rejected")
+
+    legacy = directory / "legacy-v1.json"
+    legacy_report = report()
+    legacy_report["schema_version"] = 1
+    legacy_report["environment"].pop("architecture")
+    legacy_report["environment"].pop("cpu_model")
+    legacy.write_text(json.dumps(legacy_report), encoding="utf-8")
+    legacy_comparison = subprocess.run(
+        [sys.executable, str(TOOL), str(legacy), str(legacy)],
+        capture_output=True, text=True, check=False)
+    if legacy_comparison.returncode != 0:
+        raise SystemExit("legacy benchmark schema v1 reports were not preserved")
 
     regressed = directory / "regressed.json"
     regressed_report = report()
@@ -102,6 +124,14 @@ with tempfile.TemporaryDirectory() as directory:
         capture_output=True, text=True, check=False)
     if editor_rejected.returncode == 0 or "incompatible" not in editor_rejected.stderr:
         raise SystemExit("different editor benchmark environments were not rejected")
+
+    editor_wrong_cpu = directory / "editor-wrong-cpu.json"
+    editor_wrong_cpu.write_text(json.dumps(editor_report(cpu_model="Other CPU")), encoding="utf-8")
+    editor_cpu_rejected = subprocess.run(
+        [sys.executable, str(EDITOR_COMPARE_TOOL), str(editor_baseline), str(editor_wrong_cpu)],
+        capture_output=True, text=True, check=False)
+    if editor_cpu_rejected.returncode == 0 or "environment.cpu_model" not in editor_cpu_rejected.stderr:
+        raise SystemExit("different editor benchmark CPU models were not rejected")
 
     editor_summary = subprocess.run(
         [sys.executable, str(EDITOR_SUMMARY_TOOL), str(editor_baseline), str(editor_candidate)],

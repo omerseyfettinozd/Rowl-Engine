@@ -5,6 +5,65 @@
  */
 #include "rowl_test_harness.hpp"
 
+std::string jsonEscape(const std::string& value);
+
+namespace {
+
+std::string trimBenchmarkValue(std::string value) {
+    const auto first = value.find_first_not_of(" \t\r\n");
+    if (first == std::string::npos) return {};
+    const auto last = value.find_last_not_of(" \t\r\n");
+    return value.substr(first, last - first + 1);
+}
+
+std::string benchmarkArchitecture() {
+    const auto override = environmentValue("ROWL_BENCHMARK_ARCHITECTURE", "");
+    if (!override.empty()) return override;
+#if defined(__aarch64__) || defined(_M_ARM64)
+    return "arm64";
+#elif defined(__x86_64__) || defined(_M_X64)
+    return "x86_64";
+#elif defined(__arm__) || defined(_M_ARM)
+    return "arm";
+#elif defined(__i386__) || defined(_M_IX86)
+    return "x86";
+#else
+    return "unknown";
+#endif
+}
+
+std::string benchmarkCpuModel() {
+    const auto override = environmentValue("ROWL_BENCHMARK_CPU_MODEL", "");
+    if (!override.empty()) return override;
+#if defined(__linux__)
+    std::ifstream cpuInfo("/proc/cpuinfo");
+    std::string line;
+    while (std::getline(cpuInfo, line)) {
+        const auto separator = line.find(':');
+        if (separator == std::string::npos) continue;
+        const auto key = trimBenchmarkValue(line.substr(0, separator));
+        if (key == "model name" || key == "Hardware" || key == "Processor") {
+            const auto model = trimBenchmarkValue(line.substr(separator + 1));
+            if (!model.empty()) return model;
+        }
+    }
+#elif defined(_WIN32)
+    const auto processor = environmentValue("PROCESSOR_IDENTIFIER", "");
+    if (!processor.empty()) return processor;
+#endif
+    return "unknown";
+}
+
+void writeBenchmarkEnvironment(std::ostream& stream) {
+    stream << "  \"environment\": {\"os\": \"" << jsonEscape(SDL_GetPlatform())
+           << "\", \"architecture\": \"" << jsonEscape(benchmarkArchitecture())
+           << "\", \"cpu_model\": \"" << jsonEscape(benchmarkCpuModel())
+           << "\", \"cpu_count\": " << SDL_GetNumLogicalCPUCores()
+           << ", \"machine\": \"" << jsonEscape(environmentValue("ROWL_BENCHMARK_MACHINE", "unknown")) << "\"},\n";
+}
+
+} // namespace
+
 std::string jsonEscape(const std::string& value) {
     std::string escaped;
     escaped.reserve(value.size());
@@ -66,13 +125,11 @@ void writeBenchmarkJson(const std::string& outputPath, double startupMs, double 
     }
     stream << std::fixed << std::setprecision(6)
            << "{\n"
-           << "  \"schema_version\": 1,\n"
+           << "  \"schema_version\": 2,\n"
            << "  \"build\": {\"id\": \"" << jsonEscape(environmentValue("ROWL_BENCHMARK_BUILD_ID", "unknown"))
-           << "\", \"type\": \"" << jsonEscape(environmentValue("ROWL_BENCHMARK_BUILD_TYPE", "unknown")) << "\"},\n"
-           << "  \"environment\": {\"os\": \"" << jsonEscape(SDL_GetPlatform())
-           << "\", \"cpu_count\": " << SDL_GetNumLogicalCPUCores()
-           << ", \"machine\": \"" << jsonEscape(environmentValue("ROWL_BENCHMARK_MACHINE", "unknown")) << "\"},\n"
-           << "  \"fixture_id\": \"" << jsonEscape(environmentValue("ROWL_BENCHMARK_FIXTURE", "native-default-v1")) << "\",\n"
+           << "\", \"type\": \"" << jsonEscape(environmentValue("ROWL_BENCHMARK_BUILD_TYPE", "unknown")) << "\"},\n";
+    writeBenchmarkEnvironment(stream);
+    stream << "  \"fixture_id\": \"" << jsonEscape(environmentValue("ROWL_BENCHMARK_FIXTURE", "native-default-v1")) << "\",\n"
            << "  \"metrics\": {\n"
            << "    \"startup_ms\": " << startupMs << ",\n"
            << "    \"vfs_io\": {\"iterations\": " << vfsIterations << ", \"total_ms\": " << vfsElapsedMs
@@ -119,13 +176,11 @@ void writeGoldenBenchmarkJson(const std::string& outputPath, double startupMs, d
     }
     stream << std::fixed << std::setprecision(6)
            << "{\n"
-           << "  \"schema_version\": 1,\n"
+           << "  \"schema_version\": 2,\n"
            << "  \"build\": {\"id\": \"" << jsonEscape(environmentValue("ROWL_BENCHMARK_BUILD_ID", "unknown"))
-           << "\", \"type\": \"" << jsonEscape(environmentValue("ROWL_BENCHMARK_BUILD_TYPE", "unknown")) << "\"},\n"
-           << "  \"environment\": {\"os\": \"" << jsonEscape(SDL_GetPlatform())
-           << "\", \"cpu_count\": " << SDL_GetNumLogicalCPUCores()
-           << ", \"machine\": \"" << jsonEscape(environmentValue("ROWL_BENCHMARK_MACHINE", "unknown")) << "\"},\n"
-           << "  \"fixture_id\": \"rowl-golden-project-v1\",\n"
+           << "\", \"type\": \"" << jsonEscape(environmentValue("ROWL_BENCHMARK_BUILD_TYPE", "unknown")) << "\"},\n";
+    writeBenchmarkEnvironment(stream);
+    stream << "  \"fixture_id\": \"rowl-golden-project-v1\",\n"
            << "  \"metrics\": {\n"
            << "    \"startup_ms\": " << startupMs << ",\n"
            << "    \"project_load_ms\": " << projectLoadMs << ",\n"

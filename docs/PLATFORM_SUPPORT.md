@@ -60,7 +60,7 @@ budget on its lowest supported device:
 | Assets | Missing/corrupt/oversized assets fail safely and do not leave stale render or audio state |
 
 `rowl_tests --benchmark-json <path>` writes a versioned JSON report containing
-build type, OS/device identity, fixture identity, VFS I/O, JSON update, first
+build type, OS/device identity, CPU architecture/model, fixture identity, VFS I/O, JSON update, first
 frame, steady frame, texture cache and process memory values.
 `tools/compare_benchmarks.py` rejects different OS/machine/CPU/build-type or
 fixture identities, then reports percentage deltas for compatible reports.

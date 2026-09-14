@@ -33,7 +33,7 @@ cmake --build "$build_dir" --parallel 4
 ROWL_BENCHMARK_BUILD_ID="$build_id" \
 ROWL_BENCHMARK_BUILD_TYPE=Release \
 ROWL_BENCHMARK_FIXTURE=native-default-v1 \
-ROWL_BENCHMARK_MACHINE="$(uname -m)" \
+ROWL_BENCHMARK_MACHINE="${ROWL_BENCHMARK_MACHINE:-$(uname -n)}" \
 SDL_AUDIODRIVER=dummy "$build_dir/bin/rowl_tests" --benchmark-json "$output_json" \
     --golden-benchmark-json "$golden_output_json"
 echo "Wrote baseline: $output_json"
