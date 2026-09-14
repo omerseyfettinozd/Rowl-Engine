@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using RowlEngine.Editor.Services;
 using RowlEngine.Editor.ViewModels;
@@ -169,23 +170,33 @@ public sealed class EditorSavePerformanceFacts
     }
 
     [Fact]
-    public async Task SnapshotSave_RunsOffCallingThread()
+    public async Task SnapshotSave_RunsWithoutBlockingCallingThread()
     {
         var (nodes, conns) = BuildGraph();
         string root = Path.Combine(Path.GetTempPath(), "RowlMs2Bg_" + Guid.NewGuid().ToString("N"));
         string jsonDir = Path.Combine(root, "Assets", "json");
         try
         {
-            int callingThread = Environment.CurrentManagedThreadId;
-            int workerThread = callingThread;
             var snapshot = StoryGraphSaveService.Capture(nodes, conns, 101, nodes[0]);
             long seq = 1;
-            await Task.Run(() =>
+            using var workerStarted = new ManualResetEventSlim();
+            using var releaseWorker = new ManualResetEventSlim();
+            Task saveTask = Task.Run(() =>
             {
-                workerThread = Environment.CurrentManagedThreadId;
+                workerStarted.Set();
+                Assert.True(releaseWorker.Wait(TimeSpan.FromSeconds(5)));
                 Assert.True(StoryGraphSaveService.TryWriteSnapshot(snapshot, jsonDir, seq, () => seq));
             });
-            Assert.NotEqual(callingThread, workerThread);
+            Assert.True(workerStarted.Wait(TimeSpan.FromSeconds(5)));
+            try
+            {
+                Assert.False(saveTask.IsCompleted);
+            }
+            finally
+            {
+                releaseWorker.Set();
+            }
+            await saveTask;
             Assert.True(File.Exists(Path.Combine(jsonDir, "full_story_graph.json")));
         }
         finally

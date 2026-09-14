@@ -9,9 +9,10 @@ PCM ses fixture'ı taşır. Katalogların runtime seçimi Faz 3'ün kabul kapıs
 bu fixture şimdiden veri sözleşmesini ve paket bütünlüğünü dondurur.
 
 Kısa ses dosyası (`Assets/audio/signal_tone.wav`) sentetik 0,4 saniyelik,
-uzun ses dosyası (`Assets/audio/long_signal_60s.wav`) sentetik 60 saniyelik
-PCM sinüstür; ikisi de depoya kayıtlıdır ve harici çalışma zamanı bağımlılığı
-yoktur.
+uzun ses dosyası (`Assets/audio/long_signal_60s.wav`) sabit seed ile üretilmiş
+sentetik 60 saniyelik düşük genlikli PCM gürültüdür. Uzun fixture bilerek
+paket güvenlik sınırını tetikleyen aşırı sıkıştırılabilir sessizlik/sinüs
+taşımaz; ikisi de depoya kayıtlıdır ve harici çalışma zamanı bağımlılığı yoktur.
 
 ## Oynama
 
