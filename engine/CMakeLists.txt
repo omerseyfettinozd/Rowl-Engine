@@ -167,9 +167,12 @@ set(ROWL_ENGINE_SOURCES
     src/scene/scene.cpp
     # Internationalization (Faz 3 Dilim 1: manifest locales + catalogs)
     src/i18n/localization_manager.cpp
+    # Rich text (Faz 3 Dilim 2: markup parser + token stream)
+    src/text/markup_parser.cpp
     # C-API bridge (consumed by C# P/Invoke)
     src/c_api_contract.cpp
     src/c_api_i18n.cpp
+    src/c_api_markup.cpp
     src/c_api_lifecycle.cpp
     src/c_api_story.cpp
     src/c_api_render.cpp

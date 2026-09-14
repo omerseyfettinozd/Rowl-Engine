@@ -72,6 +72,7 @@ typedef struct RowlEngine_ApiVersion {
 #define ROWL_ENGINE_CAPABILITY_SAVE_METADATA         UINT64_C(32)
 #define ROWL_ENGINE_CAPABILITY_PLAYER_CHOICES        UINT64_C(64)
 #define ROWL_ENGINE_CAPABILITY_LOCALIZATION          UINT64_C(128)
+#define ROWL_ENGINE_CAPABILITY_RICH_TEXT_MARKUP      UINT64_C(256)
 
 /** Current additive C API version. This query does not require an engine handle. */
 ROWL_API RowlEngine_ResultCode RowlEngine_GetApiVersion(
@@ -456,6 +457,40 @@ ROWL_API RowlEngine_ResultCode RowlEngine_GetLocale(
  */
 ROWL_API RowlEngine_ResultCode RowlEngine_GetSupportedLocalesJson(
     RowlEngineHandle handle, char* buffer, uint32_t bufferSize,
+    uint32_t* outRequiredSize);
+
+/**
+ * Rich-text markup (ROWL_ENGINE_CAPABILITY_RICH_TEXT_MARKUP, Faz 3 Dilim 2).
+ *
+ * Handle-free pure helpers: no engine instance, no thread affinity, no file
+ * I/O. The tag contract (supported tags, value ranges, fail-closed literal
+ * fallback) lives in docs/RICH_TEXT_MARKUP_CONTRACT.md; the rules in
+ * rowl/text/markup_parser.hpp are the source of truth.
+ */
+
+/**
+ * Parses rich-text markup and copies the result document as UTF-8 JSON into
+ * caller-owned memory. The JSON carries `plain_text`, the per-character
+ * `chars` token stream, `diagnostics` warnings, `char_count`,
+ * `trailing_pause` and `omitted_diagnostics` (see the contract for the
+ * exact schema). Follows the caller-buffer contract: a null buffer with a
+ * zero size is a size query, and an undersized buffer is cleared and
+ * returns ROWL_RESULT_BUFFER_TOO_SMALL with the required size written out.
+ * A null markup pointer, a null outRequiredSize, or an input larger than
+ * 256 KiB returns ROWL_RESULT_INVALID_ARGUMENT. Older entry points are
+ * untouched.
+ */
+ROWL_API RowlEngine_ResultCode RowlEngine_ParseMarkup(
+    const char* markupUtf8, char* buffer, uint32_t bufferSize,
+    uint32_t* outRequiredSize);
+
+/**
+ * Copies only the stripped plain text of rich-text markup into
+ * caller-owned memory. Same input validation and caller-buffer contract
+ * as RowlEngine_ParseMarkup. Older entry points are untouched.
+ */
+ROWL_API RowlEngine_ResultCode RowlEngine_StripMarkup(
+    const char* markupUtf8, char* buffer, uint32_t bufferSize,
     uint32_t* outRequiredSize);
 
 /** Sends a pointer/touch press in virtual-canvas coordinates. */

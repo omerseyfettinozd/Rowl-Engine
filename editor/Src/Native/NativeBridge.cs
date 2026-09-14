@@ -260,6 +260,27 @@ namespace RowlEngine.Editor.Native
             uint bufferSize,
             out uint outRequiredSize);
 
+        // ── Faz 3 Dilim 2 rich-text markup (CAPABILITY_RICH_TEXT_MARKUP) ──
+        //
+        // Handle-free pure helpers: no engine instance, no thread affinity.
+        // Fail-closed: null markup, oversized input (>256 KiB) and bad
+        // caller buffers report InvalidArgument; undersized buffers report
+        // BufferTooSmall with the required size.
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_ParseMarkup(
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string? markupUtf8,
+            IntPtr buffer,
+            uint bufferSize,
+            out uint outRequiredSize);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_StripMarkup(
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string? markupUtf8,
+            IntPtr buffer,
+            uint bufferSize,
+            out uint outRequiredSize);
+
         // ── Faz 2 player-loop read tracking (CAPABILITY_PLAYER_LOOP) ────────
 
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
