@@ -145,7 +145,7 @@ internal static class EditorHeadlessTestSuite
 
             if (!string.IsNullOrWhiteSpace(benchmarkPath))
             {
-                var benchmark = new EditorInteractionBenchmark();
+                var benchmark = new EditorInteractionBenchmark(EditorScaleBenchmark.FixtureId);
                 var benchmarkNode = mainVm.Nodes.First();
                 const int iterations = 100;
                 var stopwatch = Stopwatch.StartNew();
@@ -222,6 +222,9 @@ internal static class EditorHeadlessTestSuite
                     throw new Exception("Save As benchmark did not publish its project manifest");
                 benchmark.Record("save_as_ms", stopwatch.Elapsed.TotalMilliseconds);
                 try { Directory.Delete(saveAsBenchmarkDir, true); } catch { }
+
+                string benchmarkProjectRoot = ProjectFileSystem.ResolveProjectRootFrom(AppContext.BaseDirectory);
+                EditorScaleBenchmark.Record(benchmark, benchmarkProjectRoot);
 
                 benchmark.Write(benchmarkPath);
                 Console.WriteLine($"  ⚡ [BENCHMARK] Editor interaction report written: {benchmarkPath}");

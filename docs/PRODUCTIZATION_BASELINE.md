@@ -80,7 +80,9 @@ same build and fixture.
 - Expand Product Golden Project with TR/EN catalogs, Unicode paths, long audio and corrupt-asset cases as their owning formats land.
 - Generate the deterministic 2,000-node/6,000-edge editor fixture with
   `tools/generate_editor_scale_fixture.py`; its identity/count/determinism
-  contract is enforced by CTest. Record search, save, input-latency and memory
-  metrics against it.
+  contract is enforced by CTest. The schema-v2 editor series measures its real
+  parse/hydration, ViewModel population, worst-case search, selection input,
+  full serialization, atomic save and managed-memory paths under the dedicated
+  `editor-productization-scale-v1` fixture identity.
 - Record Linux and Windows reference-machine series; do not infer real GUI/device support from headless results.
 - Add compile-only `arm64` gates without making unavailable ARM hardware block the first proven `x86_64` release.

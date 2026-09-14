@@ -11,6 +11,7 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 GENERATOR = ROOT / "tools" / "generate_editor_scale_fixture.py"
+CANONICAL = ROOT / "editor" / "Tests" / "Fixtures" / "editor_scale_2000.json"
 
 
 with tempfile.TemporaryDirectory() as directory:
@@ -29,6 +30,8 @@ with tempfile.TemporaryDirectory() as directory:
 
     if hashlib.sha256(first.read_bytes()).digest() != hashlib.sha256(second.read_bytes()).digest():
         raise SystemExit("scale fixture generation is not deterministic")
+    if not CANONICAL.exists() or hashlib.sha256(first.read_bytes()).digest() != hashlib.sha256(CANONICAL.read_bytes()).digest():
+        raise SystemExit("canonical scale fixture is stale; regenerate it with the fixture generator")
 
     document = json.loads(first.read_text(encoding="utf-8"))
     nodes = document.get("nodes", [])

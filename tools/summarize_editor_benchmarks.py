@@ -28,6 +28,10 @@ def key(report):
             report.get("environment", {}).get("cpu_count"))
 
 
+def metric_unit(name):
+    return "bytes" if name.endswith("_bytes") else "ms"
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("reports", nargs="+", help="at least two report paths")
@@ -47,7 +51,8 @@ def main():
             values = [report["metrics"][name] for report in reports]
             if any(not isinstance(value, (int, float)) or value < 0 for value in values):
                 raise ValueError("metric must be a non-negative number: " + name)
-            print(f"  {name}: min {min(values):.6f} ms, median {statistics.median(values):.6f} ms, max {max(values):.6f} ms")
+            unit = metric_unit(name)
+            print(f"  {name}: min {min(values):.6f} {unit}, median {statistics.median(values):.6f} {unit}, max {max(values):.6f} {unit}")
     except (OSError, ValueError, KeyError, json.JSONDecodeError) as error:
         print("[EditorBenchmarkSummary] ERROR: " + str(error), file=sys.stderr)
         return 1

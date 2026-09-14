@@ -9,12 +9,20 @@ namespace RowlEngine.Editor.Services;
 internal sealed class EditorInteractionBenchmark
 {
     private readonly Dictionary<string, double> _metrics = new(StringComparer.Ordinal);
+    private readonly string _fixtureId;
 
-    public void Record(string name, double milliseconds)
+    public EditorInteractionBenchmark(string fixtureId = "editor-headless-default-v3")
     {
-        if (milliseconds < 0 || double.IsNaN(milliseconds) || double.IsInfinity(milliseconds))
-            throw new ArgumentOutOfRangeException(nameof(milliseconds));
-        _metrics[name] = milliseconds;
+        _fixtureId = string.IsNullOrWhiteSpace(fixtureId)
+            ? throw new ArgumentException("Fixture ID is required.", nameof(fixtureId))
+            : fixtureId;
+    }
+
+    public void Record(string name, double value)
+    {
+        if (value < 0 || double.IsNaN(value) || double.IsInfinity(value))
+            throw new ArgumentOutOfRangeException(nameof(value));
+        _metrics[name] = value;
     }
 
     public void Write(string path)
@@ -22,7 +30,7 @@ internal sealed class EditorInteractionBenchmark
         var report = new
         {
             schema_version = 2,
-            fixture_id = "editor-headless-default-v3",
+            fixture_id = _fixtureId,
             build = new
             {
                 type = Environment.GetEnvironmentVariable("ROWL_EDITOR_BENCHMARK_BUILD_TYPE") ?? "Debug",
