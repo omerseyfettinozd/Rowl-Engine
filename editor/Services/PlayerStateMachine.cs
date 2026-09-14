@@ -105,9 +105,18 @@ public sealed class PlayerStateMachine
     private PlayerTransition RequestFromTitle(PlayerIntent intent, PlayerState from) =>
         intent switch
         {
-            PlayerIntent.NewGame or PlayerIntent.Continue => Move(from, PlayerState.Playing),
+            PlayerIntent.NewGame or PlayerIntent.Continue => StartPlaying(from),
+            PlayerIntent.OpenLoad => PushOverlay(from, PlayerState.Load),
+            PlayerIntent.OpenPreferences => PushOverlay(from, PlayerState.Preferences),
+            PlayerIntent.RequestExitToApp => EnterConfirmExit(from, PlayerExitTarget.Application),
             _ => Deny(from, from, $"Intent '{intent}' is not available on the title screen."),
         };
+
+    private PlayerTransition StartPlaying(PlayerState from)
+    {
+        _returnStack.Clear();
+        return Move(from, PlayerState.Playing);
+    }
 
     private PlayerTransition RequestFromPlaying(PlayerIntent intent, PlayerState from) =>
         intent switch

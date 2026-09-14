@@ -70,6 +70,7 @@ typedef struct RowlEngine_ApiVersion {
 #define ROWL_ENGINE_CAPABILITY_GRAPH_VNEXT           UINT64_C(8)
 #define ROWL_ENGINE_CAPABILITY_PLAYER_LOOP           UINT64_C(16)
 #define ROWL_ENGINE_CAPABILITY_SAVE_METADATA         UINT64_C(32)
+#define ROWL_ENGINE_CAPABILITY_PLAYER_CHOICES        UINT64_C(64)
 
 /** Current additive C API version. This query does not require an engine handle. */
 ROWL_API RowlEngine_ResultCode RowlEngine_GetApiVersion(
@@ -397,6 +398,22 @@ ROWL_API void RowlEngine_AdvanceNode(RowlEngineHandle handle,
 /** Advances a branch using its stable option ID (graph format v4). */
 ROWL_API int RowlEngine_SelectChoice(RowlEngineHandle handle,
                                       const char* optionId);
+
+/**
+ * Presented choice buttons (ROWL_ENGINE_CAPABILITY_PLAYER_CHOICES).
+ * Count reports how many options await manual input (0 = none);
+ * label-at copies the button text for building selection UI and follows
+ * the caller-buffer contract (out-of-range index reports
+ * ROWL_RESULT_INVALID_ARGUMENT). Older entry points are untouched.
+ */
+ROWL_API uint32_t RowlEngine_GetChoiceCount(RowlEngineHandle handle);
+ROWL_API RowlEngine_ResultCode RowlEngine_GetChoiceLabelAtUtf8(
+    RowlEngineHandle handle, uint32_t index, char* buffer,
+    uint32_t bufferSize, uint32_t* outRequiredSize);
+/** Copies the stable option id of a presented choice button (same contract). */
+ROWL_API RowlEngine_ResultCode RowlEngine_GetChoiceOptionIdAtUtf8(
+    RowlEngineHandle handle, uint32_t index, char* buffer,
+    uint32_t bufferSize, uint32_t* outRequiredSize);
 
 /** Sends a pointer/touch press in virtual-canvas coordinates. */
 ROWL_API int RowlEngine_PointerDown(RowlEngineHandle handle, float x, float y);

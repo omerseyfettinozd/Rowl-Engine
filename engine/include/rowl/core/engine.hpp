@@ -201,6 +201,9 @@ public:
     float getActiveDialogueBoxHeight()  const { return m_activeDialogueData.height; }
     const Rowl::Render::DialogueRenderData& getActiveDialogueData() const { return m_activeDialogueData; }
     const std::vector<Rowl::Render::DialogueRenderData>& getActiveDialogues() const { return m_activeDialogues; }
+    const std::vector<Rowl::Render::ChoiceButtonRenderData>& getActiveChoiceButtons() const {
+        return m_activeChoiceButtons;
+    }
     uint64_t getCurrentNodeId()         const { return m_storyRuntime.currentNodeId(); }
     std::string getCurrentChapterId() const { return m_storyRuntime.currentChapterId(); }
     const StoryGraphDocument& getStoryGraphDocument() const { return m_storyRuntime.document(); }

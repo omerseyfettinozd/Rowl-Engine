@@ -142,6 +142,41 @@ namespace RowlEngine.Editor.Native
             int isPlaying);
 
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern void RowlEngine_SetPaused(
+            IntPtr handle,
+            int paused);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern int RowlEngine_IsPaused(IntPtr handle);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern uint RowlEngine_GetChoiceCount(IntPtr handle);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_GetChoiceLabelAtUtf8(
+            IntPtr handle,
+            uint index,
+            IntPtr buffer,
+            uint bufferSize,
+            out uint outRequiredSize);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_GetChoiceOptionIdAtUtf8(
+            IntPtr handle,
+            uint index,
+            IntPtr buffer,
+            uint bufferSize,
+            out uint outRequiredSize);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_GetSaveSlotMetadataJson(
+            IntPtr handle,
+            int slotIndex,
+            IntPtr buffer,
+            uint bufferSize,
+            out uint outRequiredSize);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
         internal static extern void RowlEngine_ResetToStartNode(
             IntPtr handle);
 

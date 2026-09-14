@@ -1,0 +1,52 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:RowlEngine.Editor.ViewModels.Player"
+             xmlns:services="using:RowlEngine.Editor.Services"
+             x:Class="RowlEngine.Editor.Views.Player.PlayerPreferencesView"
+             x:DataType="vm:PlayerViewModel">
+  <ScrollViewer VerticalScrollBarVisibility="Auto">
+    <StackPanel Spacing="10" MaxWidth="480" Margin="0,8">
+      <TextBlock Text="Tercihler" FontSize="24" FontWeight="Bold" HorizontalAlignment="Center" />
+      <StackPanel Orientation="Horizontal" Spacing="8">
+        <TextBlock Text="Dil:" Width="140" VerticalAlignment="Center" />
+        <ComboBox ItemsSource="{Binding AvailableLanguages}" SelectedItem="{Binding Profile.Language}" Width="200" />
+      </StackPanel>
+      <StackPanel Orientation="Horizontal" Spacing="8">
+        <TextBlock Text="Ana Ses:" Width="140" VerticalAlignment="Center" />
+        <Slider Minimum="0" Maximum="1" Value="{Binding Profile.MasterVolume}" Width="200" />
+      </StackPanel>
+      <StackPanel Orientation="Horizontal" Spacing="8">
+        <TextBlock Text="Müzik:" Width="140" VerticalAlignment="Center" />
+        <Slider Minimum="0" Maximum="1" Value="{Binding Profile.BgmVolume}" Width="200" />
+      </StackPanel>
+      <StackPanel Orientation="Horizontal" Spacing="8">
+        <TextBlock Text="Seslendirme:" Width="140" VerticalAlignment="Center" />
+        <Slider Minimum="0" Maximum="1" Value="{Binding Profile.VoiceVolume}" Width="200" />
+      </StackPanel>
+      <StackPanel Orientation="Horizontal" Spacing="8">
+        <TextBlock Text="Efekt:" Width="140" VerticalAlignment="Center" />
+        <Slider Minimum="0" Maximum="1" Value="{Binding Profile.SfxVolume}" Width="200" />
+      </StackPanel>
+      <StackPanel Orientation="Horizontal" Spacing="8">
+        <TextBlock Text="Metin Hızı:" Width="140" VerticalAlignment="Center" />
+        <Slider Minimum="0.25" Maximum="4" Value="{Binding Profile.TextSpeedMultiplier}" Width="200" />
+      </StackPanel>
+      <StackPanel Orientation="Horizontal" Spacing="8">
+        <TextBlock Text="Otomatik Geçiş:" Width="140" VerticalAlignment="Center" />
+        <CheckBox IsChecked="{Binding Profile.AutoEnabled}" Content="Auto açık" />
+      </StackPanel>
+      <StackPanel Orientation="Horizontal" Spacing="8">
+        <TextBlock Text="Skip Modu:" Width="140" VerticalAlignment="Center" />
+        <ComboBox ItemsSource="{Binding AvailableSkipModes}" SelectedItem="{Binding Profile.SkipMode}" Width="200" />
+      </StackPanel>
+      <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="12" Margin="0,8,0,0">
+        <Button Content="Kaydet" Command="{Binding SavePreferencesCommand}" Width="120" Padding="0,8" />
+        <Button Content="Geri"
+                Command="{Binding RequestIntentCommand}"
+                CommandParameter="{x:Static services:PlayerIntent.CloseOverlay}"
+                Width="120" Padding="0,8" />
+      </StackPanel>
+      <TextBlock Text="{Binding LastError}" Foreground="Red" HorizontalAlignment="Center" TextWrapping="Wrap" />
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

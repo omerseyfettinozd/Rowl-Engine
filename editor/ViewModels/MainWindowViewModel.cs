@@ -1099,6 +1099,23 @@ namespace RowlEngine.Editor.ViewModels
                 StartStandaloneGame();
         }
 
+        /// <summary>
+        /// Faz 2 standalone player shell entry point. Builds the session
+        /// player stack (profile → loop service → view-model) over the
+        /// shared engine host and opens the player window; every later
+        /// decision lives in <see cref="ViewModels.Player.PlayerViewModel"/>.
+        /// </summary>
+        [RelayCommand]
+        public void OpenPlayerWindow()
+        {
+            var loop = Services.PlayerLoopService.Load(
+                PlayerProfileStore.ResolveDefaultProfileDirectory());
+            var player = new ViewModels.Player.PlayerViewModel(
+                new ViewModels.Player.EngineHostPlayerAdapter(EngineHost), loop);
+            var window = new Views.Player.PlayerWindow(player);
+            window.Show();
+        }
+
         private async void StartStandaloneGame()
         {
             bool started = await EditorPlayModeCoordinator.StartPlayModeAsync(

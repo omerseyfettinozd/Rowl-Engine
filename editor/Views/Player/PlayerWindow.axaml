@@ -1,0 +1,11 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:RowlEngine.Editor.ViewModels.Player"
+        xmlns:player="using:RowlEngine.Editor.Views.Player"
+        x:Class="RowlEngine.Editor.Views.Player.PlayerWindow"
+        x:DataType="vm:PlayerViewModel"
+        Title="Rowl — Oyuncu"
+        Width="1280" Height="800"
+        WindowStartupLocation="CenterOwner">
+  <player:PlayerShellView />
+</Window>

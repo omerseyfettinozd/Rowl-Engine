@@ -72,7 +72,8 @@ void test_c_api_contract() {
         (capabilities & ROWL_ENGINE_CAPABILITY_USER_DATA_DIRECTORIES) == 0 ||
         (capabilities & ROWL_ENGINE_CAPABILITY_GRAPH_VNEXT) == 0 ||
         (capabilities & ROWL_ENGINE_CAPABILITY_PLAYER_LOOP) == 0 ||
-        (capabilities & ROWL_ENGINE_CAPABILITY_SAVE_METADATA) == 0) {
+        (capabilities & ROWL_ENGINE_CAPABILITY_SAVE_METADATA) == 0 ||
+        (capabilities & ROWL_ENGINE_CAPABILITY_PLAYER_CHOICES) == 0) {
         std::cerr << "API version/capability negotiation failed" << std::endl;
         exit(1);
     }
@@ -349,6 +350,52 @@ void test_c_api_contract() {
         RowlEngine_SetPlayState(handle, 0);
         if (RowlEngine_GetCurrentNodeId(handle) != 101) {
             std::cerr << "Metadata query must not disturb the live story" << std::endl;
+            exit(1);
+        }
+    }
+
+    // Faz 2 Dilim 5: presented choice buttons are queryable for selection UI.
+    {
+        if (RowlEngine_GetChoiceCount(nullptr) != 0) {
+            std::cerr << "Choice count null-handle contract failed" << std::endl;
+            exit(1);
+        }
+        if (RowlEngine_GetChoiceLabelAtUtf8(
+                nullptr, 0, nullptr, 0, &required) != ROWL_RESULT_INVALID_HANDLE) {
+            std::cerr << "Choice label null-handle contract failed" << std::endl;
+            exit(1);
+        }
+        RowlEngine_UpdateSceneFromJson(handle, R"([
+            {"type": "choice", "enabled": true, "data": {"options": [
+                {"option_id": "left", "text": "Go left"},
+                {"option_id": "right", "text": "Go right"}
+            ]}}
+        ])");
+        if (RowlEngine_GetChoiceCount(handle) != 2) {
+            std::cerr << "Presented choice count mismatch" << std::endl;
+            exit(1);
+        }
+        const std::string firstLabel = readDirectory(
+            handle,
+            [](RowlEngineHandle h, char* buffer, uint32_t size, uint32_t* outRequired) {
+                return RowlEngine_GetChoiceLabelAtUtf8(h, 0, buffer, size, outRequired);
+            });
+        if (firstLabel != "Go left") {
+            std::cerr << "Presented choice label mismatch: " << firstLabel << std::endl;
+            exit(1);
+        }
+        const std::string firstOption = readDirectory(
+            handle,
+            [](RowlEngineHandle h, char* buffer, uint32_t size, uint32_t* outRequired) {
+                return RowlEngine_GetChoiceOptionIdAtUtf8(h, 0, buffer, size, outRequired);
+            });
+        if (firstOption != "left") {
+            std::cerr << "Presented choice option id mismatch: " << firstOption << std::endl;
+            exit(1);
+        }
+        if (RowlEngine_GetChoiceLabelAtUtf8(
+                handle, 7, nullptr, 0, &required) != ROWL_RESULT_INVALID_ARGUMENT) {
+            std::cerr << "Choice label range contract failed" << std::endl;
             exit(1);
         }
     }

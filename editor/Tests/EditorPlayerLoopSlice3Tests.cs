@@ -96,6 +96,25 @@ public sealed class EditorPlayerLoopSlice3Tests
     }
 
     [Fact]
+    public void Machine_TitleOpensLoadPreferencesAndExit()
+    {
+        var machine = new PlayerStateMachine();
+        Assert.True(machine.Request(PlayerIntent.OpenLoad).Allowed);
+        Assert.Equal(PlayerState.Load, machine.Current);
+        Assert.True(machine.Request(PlayerIntent.CloseOverlay).Allowed);
+        Assert.Equal(PlayerState.Title, machine.Current);
+
+        Assert.True(machine.Request(PlayerIntent.OpenPreferences).Allowed);
+        Assert.Equal(PlayerState.Preferences, machine.Current);
+        Assert.True(machine.Request(PlayerIntent.CloseOverlay).Allowed);
+
+        Assert.True(machine.Request(PlayerIntent.RequestExitToApp).Allowed);
+        Assert.Equal(PlayerState.ConfirmExit, machine.Current);
+        Assert.True(machine.Request(PlayerIntent.ConfirmExit).Allowed);
+        Assert.True(machine.ExitConfirmed);
+    }
+
+    [Fact]
     public void Machine_ChoicesPendingBlocksNoTransition()
     {
         var machine = new PlayerStateMachine();

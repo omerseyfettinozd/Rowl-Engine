@@ -1,0 +1,38 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:RowlEngine.Editor.ViewModels.Player"
+             x:Class="RowlEngine.Editor.Views.Player.PlayerHudView"
+             x:DataType="vm:PlayerViewModel">
+  <Grid RowDefinitions="Auto, *, Auto, Auto">
+    <!-- Top control strip -->
+    <StackPanel Grid.Row="0" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="6" Margin="8">
+      <Button Content="Auto" Command="{Binding ToggleAutoCommand}" Padding="10,4" />
+      <Button Content="Skip" Command="{Binding ToggleSkipCommand}" Padding="10,4" />
+      <Button Content="Log" Command="{Binding OpenPlayerBacklogCommand}" Padding="10,4" />
+      <Button Content="Save" Command="{Binding QuickSaveCommand}" Padding="10,4" />
+      <Button Content="Load" Command="{Binding QuickLoadCommand}" Padding="10,4" />
+      <Button Content="Menu" Command="{Binding OpenPauseCommand}" Padding="10,4" />
+    </StackPanel>
+    <Border Grid.Row="1" />
+    <!-- Dialogue box -->
+    <Border Grid.Row="2" Margin="48,8,48,4" Padding="16,10" CornerRadius="10"
+            Background="#AA0F172A" BorderBrush="#38BDF8" BorderThickness="1">
+      <StackPanel Spacing="4">
+        <TextBlock Text="{Binding Speaker}" FontWeight="Bold" FontSize="15" />
+        <TextBlock Text="{Binding Dialogue}" FontSize="14" TextWrapping="Wrap" MinHeight="44" />
+      </StackPanel>
+    </Border>
+    <!-- Choices -->
+    <ItemsControl Grid.Row="3" ItemsSource="{Binding Choices}" Margin="0,0,0,16"
+                  HorizontalAlignment="Center">
+      <ItemsControl.ItemTemplate>
+        <DataTemplate>
+          <Button Content="{Binding Label}"
+                  Command="{Binding $parent[UserControl].DataContext.SelectChoiceCommand}"
+                  CommandParameter="{Binding OptionId}"
+                  MinWidth="420" Margin="0,3" Padding="0,8" />
+        </DataTemplate>
+      </ItemsControl.ItemTemplate>
+    </ItemsControl>
+  </Grid>
+</UserControl>

@@ -1,0 +1,42 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:RowlEngine.Editor.ViewModels.Player"
+             xmlns:player="using:RowlEngine.Editor.Views.Player"
+             xmlns:services="using:RowlEngine.Editor.Services"
+             x:Class="RowlEngine.Editor.Views.Player.PlayerShellView"
+             x:DataType="vm:PlayerViewModel"
+             Focusable="True">
+  <Grid>
+    <!-- Render surface host fills the background; states overlay it. -->
+    <player:TitleScreenView IsVisible="{Binding IsTitle}" />
+    <player:PlayerHudView IsVisible="{Binding IsPlaying}" />
+    <Border IsVisible="{Binding IsPause}" Background="#CC000000" Padding="32">
+      <player:PauseMenuView HorizontalAlignment="Center" VerticalAlignment="Center" />
+    </Border>
+    <Border IsVisible="{Binding IsBacklog}" Background="#CC000000" Padding="32">
+      <player:PlayerBacklogView />
+    </Border>
+    <Border IsVisible="{Binding IsSave}" Background="#CC000000" Padding="32">
+      <player:PlayerSaveLoadView />
+    </Border>
+    <Border IsVisible="{Binding IsLoad}" Background="#CC000000" Padding="32">
+      <player:PlayerSaveLoadView />
+    </Border>
+    <Border IsVisible="{Binding IsPreferences}" Background="#CC000000" Padding="32">
+      <player:PlayerPreferencesView MaxWidth="560" />
+    </Border>
+    <Border IsVisible="{Binding IsConfirmExit}" Background="#CC000000" Padding="32">
+      <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8">
+        <TextBlock Text="Çıkmak istiyor musunuz?" FontSize="20" HorizontalAlignment="Center" />
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="12">
+          <Button Content="Evet" Width="120" Padding="0,8"
+                  Command="{Binding RequestIntentCommand}"
+                  CommandParameter="{x:Static services:PlayerIntent.ConfirmExit}" />
+          <Button Content="Vazgeç" Width="120" Padding="0,8"
+                  Command="{Binding RequestIntentCommand}"
+                  CommandParameter="{x:Static services:PlayerIntent.CancelExit}" />
+        </StackPanel>
+      </StackPanel>
+    </Border>
+  </Grid>
+</UserControl>

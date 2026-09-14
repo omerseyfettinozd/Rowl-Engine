@@ -110,6 +110,14 @@
                                     Foreground="White" FontWeight="Bold" 
                                     CornerRadius="6" Padding="12,5" FontSize="11"/>
 
+                            <!-- Player (Faz 2 standalone player shell) -->
+                            <Button Content="🎮 Oyuncu"
+                                    Command="{Binding OpenPlayerWindowCommand}"
+                                    ToolTip.Tip="Bağımsız oyuncu penceresi"
+                                    Background="Transparent"
+                                    Foreground="{DynamicResource MutedText}"
+                                    CornerRadius="6" Padding="12,5" FontSize="11"/>
+
                             <Border Width="1" Height="22" Background="{DynamicResource BorderColor}" Margin="2,0"/>
 
                             <!-- ⚙️ Ayarlar -->

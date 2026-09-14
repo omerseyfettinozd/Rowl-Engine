@@ -189,6 +189,43 @@ RowlEngine_ResultCode RowlEngine_GetChapterIdAtUtf8(
     }, ROWL_RESULT_UNKNOWN_ERROR);
 }
 
+uint32_t RowlEngine_GetChoiceCount(RowlEngineHandle handle) {
+    if (!isLiveHandle(handle)) return 0;
+    return invokeNoexcept<uint32_t>([&] {
+        auto* engine = toEngine(handle);
+        if (!engine) return static_cast<uint32_t>(0);
+        return static_cast<uint32_t>(engine->getActiveChoiceButtons().size());
+    }, 0);
+}
+
+RowlEngine_ResultCode RowlEngine_GetChoiceLabelAtUtf8(
+    RowlEngineHandle handle, uint32_t index, char* buffer,
+    uint32_t bufferSize, uint32_t* outRequiredSize) {
+    if (!isLiveHandle(handle)) return ROWL_RESULT_INVALID_HANDLE;
+    return invokeNoexcept<RowlEngine_ResultCode>([&] {
+        auto* engine = toEngine(handle);
+        if (!engine) return ROWL_RESULT_INVALID_HANDLE;
+        const auto& buttons = engine->getActiveChoiceButtons();
+        if (index >= buttons.size()) return ROWL_RESULT_INVALID_ARGUMENT;
+        return copyUtf8ToCaller(buttons[index].text, buffer, bufferSize,
+                                outRequiredSize);
+    }, ROWL_RESULT_UNKNOWN_ERROR);
+}
+
+RowlEngine_ResultCode RowlEngine_GetChoiceOptionIdAtUtf8(
+    RowlEngineHandle handle, uint32_t index, char* buffer,
+    uint32_t bufferSize, uint32_t* outRequiredSize) {
+    if (!isLiveHandle(handle)) return ROWL_RESULT_INVALID_HANDLE;
+    return invokeNoexcept<RowlEngine_ResultCode>([&] {
+        auto* engine = toEngine(handle);
+        if (!engine) return ROWL_RESULT_INVALID_HANDLE;
+        const auto& buttons = engine->getActiveChoiceButtons();
+        if (index >= buttons.size()) return ROWL_RESULT_INVALID_ARGUMENT;
+        return copyUtf8ToCaller(buttons[index].optionId, buffer, bufferSize,
+                                outRequiredSize);
+    }, ROWL_RESULT_UNKNOWN_ERROR);
+}
+
 RowlEngine_ResultCode RowlEngine_GetActiveDialogueContentIdsJson(
     RowlEngineHandle handle, char* buffer, uint32_t bufferSize,
     uint32_t* outRequiredSize) {

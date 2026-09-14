@@ -225,6 +225,8 @@ namespace RowlEngine.Editor.Native
         public ulong DialogueHistoryParseErrorCount { get; private set; }
         /// <summary>Active content-id JSON parses that failed (see debug log).</summary>
         public ulong ActiveContentIdsParseErrorCount { get; private set; }
+        /// <summary>Slot metadata JSON parses that failed (see debug log).</summary>
+        public ulong SlotMetadataParseErrorCount { get; private set; }
 
         /// <summary>
         /// Pure copy-gate decision behind the dirty-frame optimization, kept
@@ -454,6 +456,17 @@ namespace RowlEngine.Editor.Native
             }
             OnPropertyChanged(nameof(IsPlaying));
         }
+
+        /// <summary>Freezes (or resumes) story simulation for player pause menus.</summary>
+        public void SetPaused(bool paused)
+        {
+            if (IsInitialized)
+                InvokeNative(handle => NativeBridge.RowlEngine_SetPaused(handle, paused ? 1 : 0));
+        }
+
+        /// <summary>Reports the native pause flag (false when uninitialized).</summary>
+        public bool IsPaused()
+            => InvokeNative(NativeBridge.RowlEngine_IsPaused, 0) != 0;
 
         /// <summary>Resets the C++ engine story state back to the starting node.</summary>
         public void ResetToStartNode()
@@ -705,6 +718,100 @@ namespace RowlEngine.Editor.Native
             return loop.TrySkipStep(() => GetActiveDialogueContentIds(), hasChoices, AdvanceNode, out saveError);
         }
 
+        /// <summary>How many choice buttons await manual input (0 = none).</summary>
+        public uint GetChoiceCount()
+            => InvokeNative(NativeBridge.RowlEngine_GetChoiceCount, 0u);
+
+        /// <summary>True while at least one choice button awaits manual input.</summary>
+        public bool HasChoices() => GetChoiceCount() > 0;
+
+        /// <summary>
+        /// Resolves a presented choice by stable option id (tracked like an
+        /// advance by player-loop callers). Returns false when uninitialized
+        /// or when the engine rejects the id.
+        /// </summary>
+        public bool SelectChoice(string optionId)
+        {
+            if (!IsInitialized || string.IsNullOrWhiteSpace(optionId)) return false;
+            bool ok = InvokeNative(
+                handle => NativeBridge.RowlEngine_SelectChoice(handle, optionId) != 0, false);
+            if (ok)
+            {
+                InvalidateDialogueHistory();
+                UpdatePixelBuffer();
+            }
+            return ok;
+        }
+
+        /// <summary>Stable option ids parallel to <see cref="GetChoiceLabels"/>.</summary>
+        public IReadOnlyList<string> GetChoiceOptionIds()
+        {
+            var ids = new List<string>();
+            if (!IsInitialized) return ids;
+            uint count = GetChoiceCount();
+            for (uint index = 0; index < count; index++)
+            {
+                uint current = index;
+                string id = InvokeNative(handle =>
+                {
+                    if (NativeBridge.RowlEngine_GetChoiceOptionIdAtUtf8(
+                            handle, current, IntPtr.Zero, 0, out uint required) != NativeBridge.ResultCode.Ok ||
+                        required == 0)
+                        return string.Empty;
+                    IntPtr buffer = Marshal.AllocHGlobal((int)required);
+                    try
+                    {
+                        if (NativeBridge.RowlEngine_GetChoiceOptionIdAtUtf8(
+                                handle, current, buffer, required, out _) != NativeBridge.ResultCode.Ok)
+                            return string.Empty;
+                        return Marshal.PtrToStringUTF8(buffer) ?? string.Empty;
+                    }
+                    finally
+                    {
+                        Marshal.FreeHGlobal(buffer);
+                    }
+                }, string.Empty);
+                ids.Add(id);
+            }
+            return ids;
+        }
+
+        /// <summary>
+        /// Presented choice button labels for selection UI (empty when
+        /// uninitialized). Follows the caller-buffer contract per label.
+        /// </summary>
+        public IReadOnlyList<string> GetChoiceLabels()
+        {
+            var labels = new List<string>();
+            if (!IsInitialized) return labels;
+            uint count = GetChoiceCount();
+            for (uint index = 0; index < count; index++)
+            {
+                uint current = index;
+                string label = InvokeNative(handle =>
+                {
+                    if (NativeBridge.RowlEngine_GetChoiceLabelAtUtf8(
+                            handle, current, IntPtr.Zero, 0, out uint required) != NativeBridge.ResultCode.Ok ||
+                        required == 0)
+                        return string.Empty;
+                    IntPtr buffer = Marshal.AllocHGlobal((int)required);
+                    try
+                    {
+                        if (NativeBridge.RowlEngine_GetChoiceLabelAtUtf8(
+                                handle, current, buffer, required, out _) != NativeBridge.ResultCode.Ok)
+                            return string.Empty;
+                        return Marshal.PtrToStringUTF8(buffer) ?? string.Empty;
+                    }
+                    finally
+                    {
+                        Marshal.FreeHGlobal(buffer);
+                    }
+                }, string.Empty);
+                labels.Add(label);
+            }
+            return labels;
+        }
+
         /// <summary>
         /// Content ids of the currently presented dialogues (Faz 2 read
         /// tracking). Empty when uninitialized or unparsable; legacy lines
@@ -947,6 +1054,47 @@ namespace RowlEngine.Editor.Native
         public bool DeleteSaveSlot(int slotIndex)
             => InvokeNative(handle => NativeBridge.RowlEngine_DeleteSaveSlot(handle, slotIndex) != 0, false);
 
+        /// <summary>
+        /// Display metadata for one save slot without loading it into the
+        /// live story (Faz 2 Dilim 4/5 slot picker). Null when the slot is
+        /// missing, unreadable or unparsable; failures are counted, not
+        /// thrown. The thumbnail stays base64 here; views decode it lazily.
+        /// </summary>
+        public SaveSlotMetadata? GetSaveSlotMetadata(int slotIndex)
+        {
+            if (!IsInitialized) return null;
+            try
+            {
+                string json = InvokeNative(handle =>
+                {
+                    if (NativeBridge.RowlEngine_GetSaveSlotMetadataJson(
+                            handle, slotIndex, IntPtr.Zero, 0, out uint required) != NativeBridge.ResultCode.Ok ||
+                        required == 0)
+                        return string.Empty;
+                    IntPtr buffer = Marshal.AllocHGlobal((int)required);
+                    try
+                    {
+                        if (NativeBridge.RowlEngine_GetSaveSlotMetadataJson(
+                                handle, slotIndex, buffer, required, out _) != NativeBridge.ResultCode.Ok)
+                            return string.Empty;
+                        return Marshal.PtrToStringUTF8(buffer) ?? string.Empty;
+                    }
+                    finally
+                    {
+                        Marshal.FreeHGlobal(buffer);
+                    }
+                }, string.Empty);
+                if (string.IsNullOrWhiteSpace(json)) return null;
+                return SaveSlotMetadata.FromJson(slotIndex, json);
+            }
+            catch (JsonException ex)
+            {
+                SlotMetadataParseErrorCount++;
+                Debug.WriteLine($"EngineHost slot metadata parse failed ({SlotMetadataParseErrorCount}): {ex.Message}");
+                return null;
+            }
+        }
+
         public bool Rewind(uint steps = 1)
         {
             if (!IsInitialized) return false;
@@ -1164,5 +1312,43 @@ namespace RowlEngine.Editor.Native
         /// presented line predates content_id migration.
         /// </summary>
         public string content_id { get; set; } = string.Empty;
+    }
+
+    /// <summary>
+    /// Display-only save-slot metadata (Faz 2 Dilim 4/5 slot picker).
+    /// Parsed from <c>RowlEngine_GetSaveSlotMetadataJson</c>; malformed
+    /// payloads throw <see cref="JsonException"/> for the caller to count.
+    /// </summary>
+    public sealed class SaveSlotMetadata
+    {
+        public int Slot { get; set; }
+        public string SavedAt { get; set; } = string.Empty;
+        public double PlaytimeSeconds { get; set; }
+        public string ChapterId { get; set; } = string.Empty;
+        public string ChapterTitle { get; set; } = string.Empty;
+        public string Summary { get; set; } = string.Empty;
+        public uint ThumbnailWidth { get; set; }
+        public uint ThumbnailHeight { get; set; }
+        public bool HasThumbnail { get; set; }
+        public string ThumbnailPngBase64 { get; set; } = string.Empty;
+
+        public static SaveSlotMetadata FromJson(int slot, string json)
+        {
+            using var document = JsonDocument.Parse(json);
+            var root = document.RootElement;
+            return new SaveSlotMetadata
+            {
+                Slot = slot,
+                SavedAt = root.GetProperty("saved_at").GetString() ?? string.Empty,
+                PlaytimeSeconds = root.GetProperty("playtime_seconds").GetDouble(),
+                ChapterId = root.GetProperty("chapter_id").GetString() ?? string.Empty,
+                ChapterTitle = root.GetProperty("chapter_title").GetString() ?? string.Empty,
+                Summary = root.GetProperty("summary").GetString() ?? string.Empty,
+                ThumbnailWidth = root.GetProperty("thumbnail_width").GetUInt32(),
+                ThumbnailHeight = root.GetProperty("thumbnail_height").GetUInt32(),
+                HasThumbnail = root.GetProperty("has_thumbnail").GetBoolean(),
+                ThumbnailPngBase64 = root.GetProperty("thumbnail_png_base64").GetString() ?? string.Empty,
+            };
+        }
     }
 }

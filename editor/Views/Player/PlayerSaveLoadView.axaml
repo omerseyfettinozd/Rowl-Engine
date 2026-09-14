@@ -1,0 +1,52 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:RowlEngine.Editor.ViewModels.Player"
+             xmlns:services="using:RowlEngine.Editor.Services"
+             xmlns:player="using:RowlEngine.Editor.Views.Player"
+             x:Class="RowlEngine.Editor.Views.Player.PlayerSaveLoadView"
+             x:DataType="vm:PlayerViewModel">
+  <Grid RowDefinitions="Auto, *, Auto">
+    <StackPanel Grid.Row="0" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="8" Margin="0,0,0,8">
+      <Button Content="Geri"
+              Command="{Binding RequestIntentCommand}"
+              CommandParameter="{x:Static services:PlayerIntent.CloseOverlay}" />
+      <Button Content="◀" Command="{Binding SlotsPreviousPageCommand}" />
+      <Button Content="▶" Command="{Binding SlotsNextPageCommand}" />
+    </StackPanel>
+    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+      <ItemsControl ItemsSource="{Binding Slots.Entries}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate>
+            <Border Margin="4" Padding="8" CornerRadius="8" BorderBrush="Gray" BorderThickness="1">
+              <Grid ColumnDefinitions="96, *, Auto">
+                <Image Grid.Column="0" Width="96" Height="54"
+                       Source="{Binding ThumbnailPng, Converter={x:Static player:PngBytesToBitmapConverter.Instance}}"
+                       Stretch="UniformToFill" />
+                <StackPanel Grid.Column="1" Margin="8,0" Spacing="2">
+                  <TextBlock Text="{Binding Label}" FontWeight="Bold" />
+                  <TextBlock Text="{Binding State}" Opacity="0.7" />
+                  <TextBlock Text="{Binding SavedAt}" Opacity="0.7" FontSize="12" />
+                  <TextBlock Text="{Binding Chapter}" FontSize="12" />
+                  <TextBlock Text="{Binding Summary}" TextWrapping="Wrap" FontSize="12" MaxLines="2" />
+                </StackPanel>
+                <StackPanel Grid.Column="2" VerticalAlignment="Center" Spacing="6">
+                  <Button Content="Kaydet"
+                          Command="{Binding $parent[UserControl].DataContext.SaveToSlotCommand}"
+                          CommandParameter="{Binding Index}"
+                          IsVisible="{Binding $parent[UserControl].DataContext.IsSave}" />
+                  <Button Content="Yükle"
+                          Command="{Binding $parent[UserControl].DataContext.LoadFromSlotCommand}"
+                          CommandParameter="{Binding Index}"
+                          IsVisible="{Binding $parent[UserControl].DataContext.IsLoad}"
+                          IsEnabled="{Binding Occupied}" />
+                </StackPanel>
+              </Grid>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </ScrollViewer>
+    <TextBlock Grid.Row="2" Text="{Binding LastError}" Foreground="Red"
+               HorizontalAlignment="Center" Margin="0,8,0,0" />
+  </Grid>
+</UserControl>

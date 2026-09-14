@@ -26,6 +26,9 @@ public sealed class PlayerLoopService
 {
     public PlayerProfile Profile { get; }
 
+    /// <summary>Directory the profile persists to.</summary>
+    public string ProfileDirectory => _profileDirectory;
+
     private readonly string _profileDirectory;
     private bool _dirty;
 
