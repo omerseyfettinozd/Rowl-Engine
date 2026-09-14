@@ -31,6 +31,73 @@ MANIFEST_PATH = "rowl/manifest.json"
 MANIFEST_FORMAT = 1
 SKIP_SUFFIXES = (".rowlpkg", ".tmp", ".gitkeep")
 
+# Faz 1 Dilim 1: MVP medya format sözleşmesi. C# tarafındaki tek tablonun
+# (editor/Services/MediaFormatCatalog.cs) aynasıdır; iki tarafın kümeleri
+# tests/test_media_format_gate.py ile kilitlenir. Yorum satırlarındaki
+# CONTRACT etiketleri o testin parse ettiği blokları işaretler.
+# CONTRACT(accepted-image)
+ACCEPTED_IMAGE_EXTS = frozenset({
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".bmp",
+    ".tga",
+})
+# CONTRACT(accepted-audio)
+ACCEPTED_AUDIO_EXTS = frozenset({
+    ".wav",
+    ".ogg",
+})
+# CONTRACT(accepted-font)
+ACCEPTED_FONT_EXTS = frozenset({
+    ".ttf",
+    ".otf",
+})
+# CONTRACT(converter-pending)
+# Faz 5 dönüştürücü (MP3/FLAC -> OGG Vorbis, WebP -> PNG) gelene kadar reddedilir.
+CONVERTER_PENDING_EXTS = frozenset({
+    ".mp3",
+    ".flac",
+    ".webp",
+})
+# CONTRACT(known-unsupported)
+# Bilinen ama MVP dışında kalan medya uzantıları (GIF dahil).
+KNOWN_UNSUPPORTED_MEDIA_EXTS = frozenset({
+    ".gif",
+    ".psd",
+    ".hdr",
+    ".aiff",
+    ".aif",
+    ".m4a",
+    ".wma",
+    ".aac",
+    ".opus",
+    ".woff",
+    ".woff2",
+    ".eot",
+})
+
+ACCEPTED_MEDIA_EXTS = ACCEPTED_IMAGE_EXTS | ACCEPTED_AUDIO_EXTS | ACCEPTED_FONT_EXTS
+
+_CONVERTER_HINT = ("needs the Faz 5 media converter (MP3/FLAC -> OGG, WebP -> PNG) "
+                   "and is rejected until then. Accepted: PNG/JPEG/BMP/TGA, WAV/OGG, TTF/OTF.")
+
+
+def check_media_format(rel_path):
+    """Returns an issue tuple when rel_path violates the MVP media contract, else None."""
+    _, ext = os.path.splitext(rel_path)
+    ext = ext.lower()
+    if not ext or ext in ACCEPTED_MEDIA_EXTS:
+        return None
+    if ext in CONVERTER_PENDING_EXTS:
+        return ("converter-required", rel_path,
+                f"'{ext}' {_CONVERTER_HINT}")
+    if ext in KNOWN_UNSUPPORTED_MEDIA_EXTS:
+        return ("unsupported-media-format", rel_path,
+                f"'{ext}' is not an accepted media format. "
+                "Accepted: PNG/JPEG/BMP/TGA, WAV/OGG, TTF/OTF.")
+    return None
+
 
 def fnv1a64(data):
     value = 14695981039346656037
@@ -73,6 +140,10 @@ def collect_files(input_dir):
                 issues.append(("duplicate-path", rel_path, "same relative path collected twice"))
                 continue
             seen.add(rel_path)
+            format_issue = check_media_format(rel_path)
+            if format_issue is not None:
+                issues.append(format_issue)
+                continue
             if rel_path == MANIFEST_PATH:
                 issues.append(("reserved-path", rel_path,
                                f"'{MANIFEST_PATH}' is reserved for the embedded package manifest"))

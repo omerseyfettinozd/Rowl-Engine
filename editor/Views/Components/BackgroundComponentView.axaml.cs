@@ -70,7 +70,7 @@ namespace RowlEngine.Editor.Views.Components
                 if (files != null && files.Any())
                 {
                     string ext = Path.GetExtension(files.First().Path.LocalPath).ToLowerInvariant();
-                    return ext is ".png" or ".jpg" or ".jpeg" or ".bmp" or ".webp" or ".tga";
+                    return MediaFormatCatalog.IsSupportedImageExtension(ext);
                 }
             }
 
@@ -80,7 +80,7 @@ namespace RowlEngine.Editor.Views.Components
                 if (!string.IsNullOrEmpty(text))
                 {
                     string ext = Path.GetExtension(text).ToLowerInvariant();
-                    return ext is ".png" or ".jpg" or ".jpeg" or ".bmp" or ".webp" or ".tga";
+                    return MediaFormatCatalog.IsSupportedImageExtension(ext);
                 }
             }
 

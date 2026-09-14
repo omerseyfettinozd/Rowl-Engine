@@ -135,14 +135,14 @@ namespace RowlEngine.Editor.Views
             {
                 string ext = System.IO.Path.GetExtension(importedFileName).ToLowerInvariant();
                 var droppedChoice = FindChoiceOption(e.Source);
-                if (droppedChoice != null && ext is ".ttf" or ".otf")
+                if (droppedChoice != null && MediaFormatCatalog.IsSupportedFontExtension(ext))
                 {
                     droppedChoice.FontFamily = importedFileName;
                     mainVm.ScheduleSave();
                     e.Handled = true;
                     return;
                 }
-                if (ext is ".png" or ".jpg" or ".jpeg" or ".bmp" or ".webp" or ".tga")
+                if (MediaFormatCatalog.IsSupportedImageExtension(ext))
                 {
                     var choiceOption = droppedChoice;
                     if (choiceOption != null)
@@ -205,7 +205,7 @@ namespace RowlEngine.Editor.Views
             }
             if (string.IsNullOrEmpty(fileName)) return;
             var extension = System.IO.Path.GetExtension(fileName).ToLowerInvariant();
-            if (extension is not (".png" or ".jpg" or ".jpeg" or ".bmp" or ".webp" or ".tga")) return;
+            if (!MediaFormatCatalog.IsSupportedImageExtension(extension)) return;
             option.BackgroundImage = fileName;
             mainVm.AssetBrowserViewModel.RefreshAssets();
             mainVm.ScheduleSave();

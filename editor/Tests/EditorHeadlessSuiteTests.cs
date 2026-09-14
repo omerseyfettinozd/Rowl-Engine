@@ -248,6 +248,9 @@ internal static class EditorHeadlessTestSuite
             // Test 32: MS-6 preview click-to-complete (paused engine contract)
             EditorMs6PlayerTests.Run();
 
+            // Test 33: Faz 1 media format contract (catalog + import + validation audits)
+            EditorMediaFormatCatalogTests.Run(mainVm, testProjectRoot);
+
             Console.WriteLine("\n=======================================================");
             Console.WriteLine("🎉 ALL EDITOR HEADLESS TESTS PASSED SUCCESSFULLY! 🎉");
             Console.WriteLine("=======================================================\n");

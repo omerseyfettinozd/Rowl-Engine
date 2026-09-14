@@ -162,9 +162,9 @@ namespace RowlEngine.Editor.ViewModels
                 AllowMultiple = false,
                 FileTypeFilter = new[]
                 {
-                    new FilePickerFileType("Resim Dosyaları (*.png;*.jpg;*.jpeg;*.webp)")
+                    new FilePickerFileType("Resim Dosyaları (*.png;*.jpg;*.jpeg;*.bmp;*.tga)")
                     {
-                        Patterns = new[] { "*.png", "*.jpg", "*.jpeg", "*.webp" }
+                        Patterns = new[] { "*.png", "*.jpg", "*.jpeg", "*.bmp", "*.tga" }
                     }
                 }
             });
@@ -172,6 +172,11 @@ namespace RowlEngine.Editor.ViewModels
             if (files.Count == 0) return;
 
             string src = files[0].Path.LocalPath;
+            if (MediaFormatCatalog.RequiresExplicitRejection(src))
+            {
+                StatusText = $"⚠️ Kapak reddedildi: {MediaFormatCatalog.RejectionMessage(Path.GetFileName(src))}";
+                return;
+            }
             try
             {
                 string ext = Path.GetExtension(src);

@@ -61,7 +61,7 @@ public static class EditorAudioAssetPickerService
     }
 
     /// <summary>
-    /// Opens an OS file picker dialog to let the user select an audio file (.ogg, .wav, .mp3)
+    /// Opens an OS file picker dialog to let the user select an audio file (.ogg, .wav)
     /// for an audio component, automatically copies it into Assets/audio, and updates the component.
     /// </summary>
     public static async Task SelectAudioForComponentAsync(
@@ -88,9 +88,9 @@ public static class EditorAudioAssetPickerService
                 AllowMultiple = false,
                 FileTypeFilter = new[]
                 {
-                    new FilePickerFileType("Audio Files (*.ogg, *.wav, *.mp3, *.flac)")
+                    new FilePickerFileType(MediaFormatCatalog.AudioPickerLabel)
                     {
-                        Patterns = new[] { "*.ogg", "*.wav", "*.mp3", "*.flac" }
+                        Patterns = MediaFormatCatalog.AudioPickerPatterns
                     }
                 }
             });

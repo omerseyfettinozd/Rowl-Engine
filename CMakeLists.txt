@@ -63,6 +63,14 @@ if(ROWL_BUILD_RUNTIME_TESTS)
             TIMEOUT 60
         )
         add_test(
+            NAME rowl_media_format_gate_tests
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/test_media_format_gate.py
+        )
+        set_tests_properties(rowl_media_format_gate_tests PROPERTIES
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+            TIMEOUT 60
+        )
+        add_test(
             NAME rowl_export_tool_tests
             COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/test_export_game.py
         )

@@ -49,12 +49,12 @@ namespace RowlEngine.Editor.ViewModels
             else
             {
                 string ext = System.IO.Path.GetExtension(name).ToLowerInvariant();
-                if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp" || ext == ".webp" || ext == ".gif")
+                if (Services.MediaFormatCatalog.IsSupportedImageExtension(ext))
                 {
                     Icon = "🖼️";
                     IconColor = "#38BDF8";
                 }
-                else if (ext == ".mp3" || ext == ".wav" || ext == ".ogg" || ext == ".flac")
+                else if (Services.MediaFormatCatalog.IsSupportedAudioExtension(ext))
                 {
                     Icon = "🎵";
                     IconColor = "#A855F7";
@@ -164,12 +164,12 @@ namespace RowlEngine.Editor.ViewModels
         {
             Name = path;
             string ext = System.IO.Path.GetExtension(path).ToLowerInvariant();
-            if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp" || ext == ".webp" || ext == ".gif")
+            if (Services.MediaFormatCatalog.IsSupportedImageExtension(ext))
             {
                 Icon = "🖼️";
                 IconColor = "#38BDF8";
             }
-            else if (ext == ".mp3" || ext == ".wav" || ext == ".ogg" || ext == ".flac")
+            else if (Services.MediaFormatCatalog.IsSupportedAudioExtension(ext))
             {
                 Icon = "🎵";
                 IconColor = "#A855F7";

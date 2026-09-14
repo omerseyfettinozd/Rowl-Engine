@@ -13,9 +13,6 @@ namespace RowlEngine.Editor.Views.Components
     {
         public ChoiceComponentView() => InitializeComponent();
 
-        private static readonly string[] ImageExtensions =
-            [".png", ".jpg", ".jpeg", ".bmp", ".webp", ".tga"];
-
         private void OnAssetDragOver(object? sender, DragEventArgs e)
         {
             if (sender is not Border border) return;
@@ -23,8 +20,8 @@ namespace RowlEngine.Editor.Views.Components
             string extension = Path.GetExtension(assetPath ?? string.Empty).ToLowerInvariant();
             bool acceptsFont = string.Equals(border.Tag as string, "Font", StringComparison.Ordinal);
             bool valid = acceptsFont
-                ? extension is ".ttf" or ".otf"
-                : ImageExtensions.Contains(extension);
+                ? MediaFormatCatalog.IsSupportedFontExtension(extension)
+                : MediaFormatCatalog.IsSupportedImageExtension(extension);
 
             e.DragEffects = valid ? DragDropEffects.Copy : DragDropEffects.None;
             e.Handled = true;
@@ -42,21 +39,23 @@ namespace RowlEngine.Editor.Views.Components
             {
                 // External image drops are copied into the project. Internal
                 // Assets-tree drops already carry a portable Assets-relative path.
-                if (ImageExtensions.Contains(Path.GetExtension(assetPath).ToLowerInvariant()) && main != null)
+                // Import itself rejects converter-pending/unsupported formats.
+                if (MediaFormatCatalog.IsSupportedImageExtension(assetPath) && main != null)
                     assetPath = main.ImportImageFileToProject(assetPath);
                 else
                     return;
+                if (string.IsNullOrEmpty(assetPath)) return;
             }
 
             assetPath = assetPath.Replace('\\', '/');
             switch (border.Tag as string)
             {
                 case "Font":
-                    if (Path.GetExtension(assetPath).ToLowerInvariant() is not (".ttf" or ".otf")) return;
+                    if (!MediaFormatCatalog.IsSupportedFontExtension(assetPath)) return;
                     option.FontFamily = assetPath;
                     break;
                 case "Normal":
-                    if (!ImageExtensions.Contains(Path.GetExtension(assetPath).ToLowerInvariant())) return;
+                    if (!MediaFormatCatalog.IsSupportedImageExtension(assetPath)) return;
                     option.NormalImage = assetPath;
                     option.BackgroundImage = assetPath;
                     break;

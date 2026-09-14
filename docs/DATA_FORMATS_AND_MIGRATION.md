@@ -146,3 +146,33 @@ assets, default policy) until a native shell injects its own host. Event
 translation belongs to the host/window adapter; story and session
 behavior never leave `Engine`. See `docs/PLATFORM_SUPPORT.md` for the
 honest per-platform support matrix.
+
+## 7. MVP media formats (Faz 1 Dilim 1)
+
+Single capability table, consumed by every chain — import
+(`EditorAssetImportService`), pickers/preview (`EditorVisualAssetPickerService`,
+`EditorAudioAssetPickerService`, `AssetBrowserViewModel`, component drop
+filters), linter (`ProjectValidationService`), and the packager
+(`tools/package_assets.py`). Native decoders already match: `stb_image`
+(PNG/JPEG/BMP/TGA), `SDL_LoadWAV_IO` + libvorbis (WAV/OGG), `stb_truetype`
+(TTF/OTF).
+
+| Kind | Accepted | Rejected with explicit error |
+|---|---|---|
+| Image | `.png` `.jpg` `.jpeg` `.bmp` `.tga` | `.webp` (converter-pending), `.gif` `.psd` `.hdr` (unsupported) |
+| Audio | `.wav` `.ogg` | `.mp3` `.flac` (converter-pending), `.aiff` `.aif` `.m4a` `.wma` `.aac` `.opus` (unsupported) |
+| Font | `.ttf` `.otf` | `.woff` `.woff2` `.eot` (unsupported) |
+
+- Extension matching is case-insensitive; asset *references* stay
+  case-sensitive (Linux runtime and `.rowlpkg` lookup).
+- MP3/FLAC/WebP carry the `converter-required` reason: they need the Faz 5
+  converter (MP3/FLAC → OGG Vorbis, WebP → PNG) and are rejected until then.
+- Enforcement: import skips rejected files with an explicit log (signatures
+  unchanged); validation emits build-blocking `error` issues (bad format,
+  `Asset name collision`, case-only mismatch, `outside the project`);
+  the packager fails fast (exit 2, `[converter-required]` /
+  `[unsupported-media-format]`, no output published).
+- Mirror rule: the C# sets in `editor/Services/MediaFormatCatalog.cs`
+  (`CONTRACT(...)` blocks) and the Python frozensets in
+  `tools/package_assets.py` must stay identical; `tests/test_media_format_gate.py`
+  parses both and fails on drift.

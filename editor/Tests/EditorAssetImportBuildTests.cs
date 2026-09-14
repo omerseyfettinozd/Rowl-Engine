@@ -14,13 +14,16 @@ internal static class EditorAssetImportBuildTests
         // 1. EditorAssetImportService Extension Subdirectory Resolution
         Console.WriteLine("    [Step 16.1]: Extension Subdirectory Resolution...");
         if (EditorAssetImportService.DetermineSubdirectory("test.png") != "images" ||
-            EditorAssetImportService.DetermineSubdirectory("sprite.webp") != "images" ||
             EditorAssetImportService.DetermineSubdirectory("story.json") != "json" ||
             EditorAssetImportService.DetermineSubdirectory("script.lua") != "json" ||
             EditorAssetImportService.DetermineSubdirectory("bgm.ogg") != "audio" ||
             EditorAssetImportService.DetermineSubdirectory("font.ttf") != "fonts" ||
             EditorAssetImportService.DetermineSubdirectory("archive.rowlpkg") != "packages" ||
-            EditorAssetImportService.DetermineSubdirectory("unknown.xyz") != "")
+            EditorAssetImportService.DetermineSubdirectory("unknown.xyz") != "" ||
+            EditorAssetImportService.DetermineSubdirectory("sprite.webp") != "" ||
+            EditorAssetImportService.DetermineSubdirectory("track.mp3") != "" ||
+            EditorAssetImportService.DetermineSubdirectory("voice.flac") != "" ||
+            EditorAssetImportService.DetermineSubdirectory("fun.gif") != "")
         {
             throw new Exception("EditorAssetImportService.DetermineSubdirectory returned incorrect subfolder mappings");
         }

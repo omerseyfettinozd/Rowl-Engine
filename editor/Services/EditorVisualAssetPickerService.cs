@@ -82,9 +82,9 @@ public static class EditorVisualAssetPickerService
                 AllowMultiple = false,
                 FileTypeFilter = new[]
                 {
-                    new FilePickerFileType("Image Files (*.png, *.jpg, *.jpeg, *.bmp, *.webp, *.tga)")
+                    new FilePickerFileType(MediaFormatCatalog.ImagePickerLabel)
                     {
-                        Patterns = new[] { "*.png", "*.jpg", "*.jpeg", "*.bmp", "*.webp", "*.tga" }
+                        Patterns = MediaFormatCatalog.ImagePickerPatterns
                     }
                 }
             });

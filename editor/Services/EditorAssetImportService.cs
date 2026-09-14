@@ -12,16 +12,19 @@ public static class EditorAssetImportService
 {
     /// <summary>
     /// Determines the standard asset subdirectory (under Assets/) based on file extension.
+    /// Media mapping comes from <see cref="MediaFormatCatalog"/>; rejected formats
+    /// (MP3/FLAC/WebP and other unsupported media) have no subdirectory.
     /// </summary>
     public static string DetermineSubdirectory(string fileNameOrExt)
     {
+        if (MediaFormatCatalog.TryGetAssetSubdirectory(fileNameOrExt, out string mediaDir))
+            return mediaDir;
+        if (MediaFormatCatalog.RequiresExplicitRejection(fileNameOrExt))
+            return string.Empty;
         string ext = Path.GetExtension(fileNameOrExt).ToLowerInvariant();
         return ext switch
         {
-            ".png" or ".jpg" or ".jpeg" or ".bmp" or ".webp" or ".tga" => "images",
             ".json" or ".lua" => "json",
-            ".wav" or ".ogg" or ".mp3" => "audio",
-            ".ttf" or ".otf" => "fonts",
             ".rowlpkg" => "packages",
             _ => ""
         };
@@ -43,6 +46,11 @@ public static class EditorAssetImportService
             if (string.IsNullOrWhiteSpace(fullPath) || !File.Exists(fullPath)) continue;
 
             string fileName = Path.GetFileName(fullPath);
+            if (MediaFormatCatalog.RequiresExplicitRejection(fileName))
+            {
+                log?.Invoke($"❌ Import rejected: {MediaFormatCatalog.RejectionMessage(fileName)}");
+                continue;
+            }
             string subDir = DetermineSubdirectory(fileName);
             string targetDir = string.IsNullOrEmpty(subDir)
                 ? assetsRoot
@@ -72,6 +80,11 @@ public static class EditorAssetImportService
     {
         if (string.IsNullOrWhiteSpace(fullPath) || string.IsNullOrWhiteSpace(assetsRoot)) return string.Empty;
         if (!File.Exists(fullPath)) return string.Empty;
+        if (MediaFormatCatalog.RequiresExplicitRejection(fullPath))
+        {
+            log?.Invoke($"❌ Import rejected: {MediaFormatCatalog.RejectionMessage(Path.GetFileName(fullPath))}");
+            return string.Empty;
+        }
 
         string imagesDir = Path.Combine(assetsRoot, "images");
         Directory.CreateDirectory(imagesDir);
@@ -96,6 +109,11 @@ public static class EditorAssetImportService
     {
         if (string.IsNullOrWhiteSpace(fullPath) || string.IsNullOrWhiteSpace(assetsRoot)) return string.Empty;
         if (!File.Exists(fullPath)) return string.Empty;
+        if (MediaFormatCatalog.RequiresExplicitRejection(fullPath))
+        {
+            log?.Invoke($"❌ Import rejected: {MediaFormatCatalog.RejectionMessage(Path.GetFileName(fullPath))}");
+            return string.Empty;
+        }
 
         string audioDir = Path.Combine(assetsRoot, "audio");
         Directory.CreateDirectory(audioDir);
