@@ -12,6 +12,7 @@ public sealed class StoryGraphLoadResult
     public int FormatVersion { get; set; }
     public List<NodeViewModel> Nodes { get; set; } = new();
     public List<ConnectionViewModel> Connections { get; set; } = new();
+    public GraphStructureDocument Structure { get; set; } = new();
     public string? ErrorMessage { get; set; }
     public List<string> Warnings { get; set; } = new();
 }
@@ -107,6 +108,17 @@ public static class StoryGraphLoaderService
             {
                 result.Connections.Add(connection);
             }
+
+            // vNext structure sections are optional (absent in v4); shape
+            // violations fail the load so a half-parsed contract can never
+            // hydrate the canvas.
+            if (!GraphStructureHydrator.TryParse(root, out var structure, out var structureErrors))
+            {
+                result.Success = false;
+                result.ErrorMessage = string.Join(" ", structureErrors);
+                return result;
+            }
+            result.Structure = structure;
 
             result.Success = true;
             return result;

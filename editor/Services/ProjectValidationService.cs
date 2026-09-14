@@ -14,6 +14,13 @@ internal static class ProjectValidationService
     private static readonly string[] AssetKeys = { "texture", "sprite", "bgm_track", "sfx_track", "path", "typewriter_sound", "custom_box_texture" };
 
     public static IReadOnlyList<ProjectValidationIssue> Validate(IEnumerable<NodeViewModel> nodes, IEnumerable<ConnectionViewModel> connections, string assetsPath, ulong? startNodeId = null)
+        => Validate(nodes, connections, assetsPath, startNodeId, structure: null);
+
+    /// <summary>
+    /// Validates the graph plus the optional Graph vNext structure contract
+    /// (groups, subgraphs, chapters). A null structure skips structure checks.
+    /// </summary>
+    public static IReadOnlyList<ProjectValidationIssue> Validate(IEnumerable<NodeViewModel> nodes, IEnumerable<ConnectionViewModel> connections, string assetsPath, ulong? startNodeId, GraphStructureDocument? structure)
     {
         var nodeList = nodes.ToList(); var issues = new List<ProjectValidationIssue>();
         if (nodeList.Count == 0) { issues.Add(new(true, "Graph has no nodes.")); return issues; }
@@ -64,6 +71,19 @@ internal static class ProjectValidationService
             var asset = (string)pair.Value;
             if (string.IsNullOrWhiteSpace(asset)) continue;
             ValidateSingleAssetReference(node.Id, component.DisplayName, asset, diskIndex, issues);
+        }
+        // Faz 1 Dilim 5: Graph vNext structure contract. Connections are
+        // re-materialized from the validated adjacency above so the structure
+        // validator sees exactly the edges the graph checks accepted.
+        if (structure is not null && !structure.IsEmpty)
+        {
+            var structureConnections = new List<ConnectionViewModel>();
+            foreach (var node in nodeList)
+            {
+                foreach (ulong targetId in adjacency[node.Id])
+                    structureConnections.Add(new ConnectionViewModel(node, byId[targetId]));
+            }
+            issues.AddRange(GraphStructureValidator.Validate(nodeList, structureConnections, structure));
         }
         return issues;
     }

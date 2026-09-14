@@ -38,6 +38,12 @@ public:
 
     uint64_t startNodeId() const { return m_document.startNodeId; }
     uint64_t currentNodeId() const { return m_currentNodeId; }
+    /// Chapter id of the current node; empty when unassigned (v4 graphs).
+    std::string currentChapterId() const {
+        const StoryNode* active = currentNode();
+        return active != nullptr ? active->chapterId : std::string{};
+    }
+    const StoryGraphDocument& document() const { return m_document; }
     void setCurrentNodeId(uint64_t nodeId) { m_currentNodeId = nodeId; }
     uint64_t revision() const { return m_revision; }
     const std::string& lastLoadError() const { return m_lastLoadError; }

@@ -8,6 +8,8 @@
 
 #include <nlohmann/json.hpp>
 
+#include "rowl/core/story_graph_vnext.hpp"
+
 namespace Rowl::Core {
 
 inline constexpr std::size_t kMaxStoryJsonBytes = 16 * 1024 * 1024;
@@ -26,6 +28,8 @@ struct ComponentData {
 /// Runtime-neutral representation produced by StoryGraphParser.
 struct StoryNode {
     uint64_t id = 0;
+    /// Owning vNext chapter id; empty when the node is unassigned (v4 graphs).
+    std::string chapterId;
     std::string speaker;
     std::string dialogue;
     std::string background;
@@ -56,6 +60,10 @@ struct StoryNode {
 struct StoryGraphDocument {
     std::unordered_map<uint64_t, StoryNode> nodes;
     uint64_t startNodeId = 0;
+    /// vNext structure contract; empty for format v4 documents.
+    std::vector<GraphGroup> groups;
+    std::vector<GraphSubgraph> subgraphs;
+    std::vector<GraphChapter> chapters;
 };
 
 } // namespace Rowl::Core

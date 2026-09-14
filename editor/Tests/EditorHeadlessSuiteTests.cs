@@ -251,6 +251,9 @@ internal static class EditorHeadlessTestSuite
             // Test 33: Faz 1 media format contract (catalog + import + validation audits)
             EditorMediaFormatCatalogTests.Run(mainVm, testProjectRoot);
 
+            // Test 34: Faz 1 Graph vNext contract (v5 round-trip + structure validation)
+            EditorGraphVNextHeadlessTests.Run();
+
             Console.WriteLine("\n=======================================================");
             Console.WriteLine("🎉 ALL EDITOR HEADLESS TESTS PASSED SUCCESSFULLY! 🎉");
             Console.WriteLine("=======================================================\n");

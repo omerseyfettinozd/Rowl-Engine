@@ -41,6 +41,7 @@ int main(int argc, char* argv[]) {
     test_window_input_routing();
     test_runtime_context_and_diagnostics();
     test_story_graph_parser();
+    test_graph_vnext();
     test_camera_and_transition_pipeline();
     test_native_performance_benchmarks(benchmarkJsonPath);
     test_golden_project_benchmarks(goldenJsonPath);

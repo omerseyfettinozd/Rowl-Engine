@@ -202,6 +202,8 @@ public:
     const Rowl::Render::DialogueRenderData& getActiveDialogueData() const { return m_activeDialogueData; }
     const std::vector<Rowl::Render::DialogueRenderData>& getActiveDialogues() const { return m_activeDialogues; }
     uint64_t getCurrentNodeId()         const { return m_storyRuntime.currentNodeId(); }
+    std::string getCurrentChapterId() const { return m_storyRuntime.currentChapterId(); }
+    const StoryGraphDocument& getStoryGraphDocument() const { return m_storyRuntime.document(); }
     Rowl::Scene::Scene* getScene()       const { return m_scene.get(); }
     Rowl::Audio::AudioEngine* getAudio() const { return m_audio.get(); }
 

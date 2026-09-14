@@ -9,10 +9,12 @@
 #include "c_api_internal.hpp"
 #include "rowl/platform/user_data_directories.hpp"
 #include "rowl/vfs/vfs.hpp"
+#include "algorithm"
 #include "cstring"
 #include "fstream"
 #include "filesystem"
 #include "nlohmann/json.hpp"
+#include "vector"
 extern "C" {
 /* ── Scene / story control ───────────────────────────────────────────────── */
 
@@ -126,6 +128,65 @@ const char* RowlEngine_GetLastStoryGraphErrorWithLength(RowlEngineHandle handle,
     const char* value = RowlEngine_GetLastStoryGraphError(handle);
     if (outLen) *outLen = static_cast<uint32_t>(std::strlen(value));
     return value;
+}
+
+/* ── Graph vNext chapter queries ─────────────────────────────────────── */
+
+namespace {
+
+std::vector<const Rowl::Core::GraphChapter*> orderedChapters(const Rowl::Core::Engine* engine) {
+    std::vector<const Rowl::Core::GraphChapter*> ordered;
+    if (engine == nullptr) return ordered;
+    for (const auto& chapter : engine->getStoryGraphDocument().chapters) {
+        ordered.push_back(&chapter);
+    }
+    std::sort(ordered.begin(), ordered.end(),
+              [](const Rowl::Core::GraphChapter* left, const Rowl::Core::GraphChapter* right) {
+                  if (left->order != right->order) return left->order < right->order;
+                  return left->id < right->id;
+              });
+    return ordered;
+}
+
+} // namespace
+
+RowlEngine_ResultCode RowlEngine_GetCurrentChapterIdUtf8(
+    RowlEngineHandle handle, char* buffer, uint32_t bufferSize,
+    uint32_t* outRequiredSize) {
+    if (!isLiveHandle(handle)) return ROWL_RESULT_INVALID_HANDLE;
+    return invokeNoexcept<RowlEngine_ResultCode>([&] {
+        auto* engine = toEngine(handle);
+        if (!engine) return ROWL_RESULT_INVALID_HANDLE;
+        return copyUtf8ToCaller(engine->getCurrentChapterId(), buffer,
+                                bufferSize, outRequiredSize);
+    }, ROWL_RESULT_UNKNOWN_ERROR);
+}
+
+RowlEngine_ResultCode RowlEngine_GetChapterCount(
+    RowlEngineHandle handle, uint32_t* outCount) {
+    if (!isLiveHandle(handle)) return ROWL_RESULT_INVALID_HANDLE;
+    if (!outCount) return ROWL_RESULT_INVALID_ARGUMENT;
+    return invokeNoexcept<RowlEngine_ResultCode>([&] {
+        auto* engine = toEngine(handle);
+        if (!engine) return ROWL_RESULT_INVALID_HANDLE;
+        const auto chapters = engine->getStoryGraphDocument().chapters.size();
+        *outCount = static_cast<uint32_t>(chapters);
+        return ROWL_RESULT_OK;
+    }, ROWL_RESULT_UNKNOWN_ERROR);
+}
+
+RowlEngine_ResultCode RowlEngine_GetChapterIdAtUtf8(
+    RowlEngineHandle handle, uint32_t index, char* buffer,
+    uint32_t bufferSize, uint32_t* outRequiredSize) {
+    if (!isLiveHandle(handle)) return ROWL_RESULT_INVALID_HANDLE;
+    return invokeNoexcept<RowlEngine_ResultCode>([&] {
+        auto* engine = toEngine(handle);
+        if (!engine) return ROWL_RESULT_INVALID_HANDLE;
+        const auto ordered = orderedChapters(engine);
+        if (index >= ordered.size()) return ROWL_RESULT_INVALID_ARGUMENT;
+        return copyUtf8ToCaller(ordered[index]->id, buffer, bufferSize,
+                                outRequiredSize);
+    }, ROWL_RESULT_UNKNOWN_ERROR);
 }
 
 void RowlEngine_SetProjectDirectory(RowlEngineHandle handle, const char* projectRoot) {

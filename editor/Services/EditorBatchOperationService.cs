@@ -212,6 +212,7 @@ namespace RowlEngine.Editor.Services
                     src.X + offsetX,
                     src.Y + offsetY,
                     bare: true);
+                clone.ChapterId = src.ChapterId;
 
                 // Clone FrameObjects & Components
                 foreach (var obj in src.Objects)

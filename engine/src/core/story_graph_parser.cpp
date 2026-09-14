@@ -68,6 +68,17 @@ StoryGraphParseResult StoryGraphParser::parse(std::string_view jsonContent) {
                 return validationFailure(
                     "Story graph contains a missing or duplicate node ID; rejected");
             }
+            if (nodeJson.contains("chapter_id")) {
+                if (!nodeJson["chapter_id"].is_string()) {
+                    return validationFailure(
+                        "Story graph node chapter_id must be a string; rejected");
+                }
+                node.chapterId = nodeJson["chapter_id"].get<std::string>();
+                if (node.chapterId.size() > kMaxGraphIdChars) {
+                    return validationFailure(
+                        "Story graph node chapter_id exceeds its length limit; rejected");
+                }
+            }
             node.speaker = nodeJson.value("speaker", std::string{});
             node.dialogue = nodeJson.value("dialogue", std::string{});
             node.background = nodeJson.value("background", std::string{});
@@ -166,6 +177,17 @@ StoryGraphParseResult StoryGraphParser::parse(std::string_view jsonContent) {
         if (parsedNodes.empty()) {
             return validationFailure(
                 "Story graph does not contain any valid nodes; rejected");
+        }
+        {
+            std::string structureError;
+            if (!parseGraphStructure(data, result.document, structureError)) {
+                return validationFailure(structureError);
+            }
+            // parsedNodes aliases result.document.nodes; structure parsing only
+            // appended groups/subgraphs/chapters, so references stay valid.
+            if (!validateGraphStructure(result.document, structureError)) {
+                return validationFailure(structureError);
+            }
         }
         for (const auto& [nodeId, node] : parsedNodes) {
             for (const auto& next : node.nextNodes) {

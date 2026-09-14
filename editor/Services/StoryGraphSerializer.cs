@@ -23,17 +23,72 @@ internal static class StoryGraphSerializer
     public static string SerializeFullStoryGraph(
         IEnumerable<NodeViewModel> nodes,
         IEnumerable<ConnectionViewModel> connections,
-        ulong startNodeId)
+        ulong startNodeId,
+        GraphStructureDocument? structure = null)
     {
         var connectionList = connections.ToList();
-        var graph = new
+        var nodeList = nodes.ToList();
+        // v5 is written only when the document actually carries vNext
+        // structure; otherwise the output stays byte-stable format v4.
+        bool hasStructure = structure is not null && !structure.IsEmpty;
+        bool hasChapterAssignments = nodeList.Any(node => !string.IsNullOrEmpty(node.ChapterId));
+        int formatVersion = hasStructure || hasChapterAssignments
+            ? GraphStructureLimits.CurrentVersion
+            : GraphStructureLimits.LegacyVersion;
+        // Sections are dictionaries so absent vNext keys are omitted rather
+        // than written as null (the native parser rejects explicit nulls).
+        var graph = new Dictionary<string, object?>
         {
-            format_version = 4,
-            start_node_id = startNodeId,
-            nodes = nodes.Select(node => SerializeNode(node, connectionList)).ToArray()
+            ["format_version"] = formatVersion,
+            ["start_node_id"] = startNodeId,
+            ["nodes"] = nodeList.Select(node => SerializeNode(node, connectionList)).ToArray()
         };
+        if (hasStructure)
+        {
+            if (structure!.Groups.Count != 0)
+                graph["groups"] = structure.Groups.Select(SerializeGroup).ToArray();
+            if (structure.Subgraphs.Count != 0)
+                graph["subgraphs"] = structure.Subgraphs.Select(SerializeSubgraph).ToArray();
+            if (structure.Chapters.Count != 0)
+                graph["chapters"] = structure.Chapters.Select(SerializeChapter).ToArray();
+        }
 
         return JsonSerializer.Serialize(graph, IndentedOptions);
+    }
+
+    private static object SerializeGroup(CanvasGroup group) => new
+    {
+        id = group.Id,
+        title = group.Title,
+        color = group.Color,
+        x = group.X,
+        y = group.Y,
+        width = group.Width,
+        height = group.Height,
+        node_ids = group.NodeIds.ToArray()
+    };
+
+    private static object SerializeSubgraph(SubgraphDefinition subgraph) => new
+    {
+        id = subgraph.Id,
+        title = subgraph.Title,
+        entry_node_id = subgraph.EntryNodeId,
+        exit_node_ids = subgraph.ExitNodeIds.ToArray(),
+        node_ids = subgraph.NodeIds.ToArray()
+    };
+
+    private static object SerializeChapter(ChapterDefinition chapter)
+    {
+        var rendered = new Dictionary<string, object?>
+        {
+            ["id"] = chapter.Id,
+            ["title"] = chapter.Title,
+            ["order"] = chapter.Order,
+            ["summary"] = chapter.Summary
+        };
+        if (chapter.StartNodeId is { } startNodeId)
+            rendered["start_node_id"] = startNodeId;
+        return rendered;
     }
 
     public static string SerializeActiveStory(NodeViewModel node)
@@ -146,39 +201,43 @@ internal static class StoryGraphSerializer
             }).ToArray()
         }).ToArray();
 
-        return new
+        // Dictionary so chapter_id is omitted (not null) when unassigned.
+        var rendered = new Dictionary<string, object?>
         {
-            id = node.Id,
-            title = node.Title,
-            editor_x = node.X,
-            editor_y = node.Y,
-            objects,
-            next_nodes = nextNodes,
-            speaker = node.Speaker,
-            dialogue = node.DialogueText,
-            background = node.BackgroundTexture,
-            background_x = node.BackgroundX,
-            background_y = node.BackgroundY,
-            background_width = node.BackgroundWidth,
-            background_height = node.BackgroundHeight,
-            background_rotation = node.BackgroundRotation,
-            background_parallax_x = node.BackgroundParallaxX,
-            background_parallax_y = node.BackgroundParallaxY,
-            background_opacity = node.BackgroundOpacity,
-            character = node.CharacterSprite,
-            character_pos = node.CharacterPosition,
-            character_x = node.CharacterX,
-            character_y = node.CharacterY,
-            character_width = node.CharacterWidth,
-            character_height = node.CharacterHeight,
-            character_scale = node.CharacterScale,
-            character_rotation = node.CharacterRotation,
-            character_scale_x = node.CharacterScaleX,
-            character_scale_y = node.CharacterScaleY,
-            dialogue_box_x = node.DialogueBoxX,
-            dialogue_box_y = node.DialogueBoxY,
-            dialogue_box_width = node.DialogueBoxWidth,
-            dialogue_box_height = node.DialogueBoxHeight
+            ["id"] = node.Id,
+            ["title"] = node.Title,
+            ["editor_x"] = node.X,
+            ["editor_y"] = node.Y,
+            ["objects"] = objects,
+            ["next_nodes"] = nextNodes,
+            ["speaker"] = node.Speaker,
+            ["dialogue"] = node.DialogueText,
+            ["background"] = node.BackgroundTexture,
+            ["background_x"] = node.BackgroundX,
+            ["background_y"] = node.BackgroundY,
+            ["background_width"] = node.BackgroundWidth,
+            ["background_height"] = node.BackgroundHeight,
+            ["background_rotation"] = node.BackgroundRotation,
+            ["background_parallax_x"] = node.BackgroundParallaxX,
+            ["background_parallax_y"] = node.BackgroundParallaxY,
+            ["background_opacity"] = node.BackgroundOpacity,
+            ["character"] = node.CharacterSprite,
+            ["character_pos"] = node.CharacterPosition,
+            ["character_x"] = node.CharacterX,
+            ["character_y"] = node.CharacterY,
+            ["character_width"] = node.CharacterWidth,
+            ["character_height"] = node.CharacterHeight,
+            ["character_scale"] = node.CharacterScale,
+            ["character_rotation"] = node.CharacterRotation,
+            ["character_scale_x"] = node.CharacterScaleX,
+            ["character_scale_y"] = node.CharacterScaleY,
+            ["dialogue_box_x"] = node.DialogueBoxX,
+            ["dialogue_box_y"] = node.DialogueBoxY,
+            ["dialogue_box_width"] = node.DialogueBoxWidth,
+            ["dialogue_box_height"] = node.DialogueBoxHeight
         };
+        if (!string.IsNullOrEmpty(node.ChapterId))
+            rendered["chapter_id"] = node.ChapterId;
+        return rendered;
     }
 }

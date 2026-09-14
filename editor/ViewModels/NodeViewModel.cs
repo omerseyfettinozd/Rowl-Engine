@@ -36,6 +36,13 @@ namespace RowlEngine.Editor.ViewModels
         [ObservableProperty]
         private bool _isStartNode;
 
+        /// <summary>
+        /// Owning Graph vNext chapter id. Empty when the node is unassigned
+        /// (every format v4 node); chapters are resolved by id at load time.
+        /// </summary>
+        [ObservableProperty]
+        private string _chapterId = string.Empty;
+
         [ObservableProperty]
         private string _borderColor = "#2A2A3D";
 

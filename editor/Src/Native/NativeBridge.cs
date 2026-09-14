@@ -182,6 +182,28 @@ namespace RowlEngine.Editor.Native
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
         internal static extern IntPtr RowlEngine_GetLastStoryGraphError(IntPtr handle);
 
+        // ── Graph vNext chapter queries (CAPABILITY_GRAPH_VNEXT) ─────────────
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_GetCurrentChapterIdUtf8(
+            IntPtr handle,
+            IntPtr buffer,
+            uint bufferSize,
+            out uint outRequiredSize);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_GetChapterCount(
+            IntPtr handle,
+            out uint outCount);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_GetChapterIdAtUtf8(
+            IntPtr handle,
+            uint index,
+            IntPtr buffer,
+            uint bufferSize,
+            out uint outRequiredSize);
+
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
         internal static extern void RowlEngine_SetProjectDirectory(
             IntPtr handle,

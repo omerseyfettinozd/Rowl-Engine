@@ -69,7 +69,8 @@ void test_c_api_contract() {
         RowlEngine_GetCapabilities(&capabilities) != ROWL_RESULT_OK ||
         (capabilities & ROWL_ENGINE_CAPABILITY_RESULT_CODES) == 0 ||
         (capabilities & ROWL_ENGINE_CAPABILITY_CALLER_BUFFERS) == 0 ||
-        (capabilities & ROWL_ENGINE_CAPABILITY_USER_DATA_DIRECTORIES) == 0) {
+        (capabilities & ROWL_ENGINE_CAPABILITY_USER_DATA_DIRECTORIES) == 0 ||
+        (capabilities & ROWL_ENGINE_CAPABILITY_GRAPH_VNEXT) == 0) {
         std::cerr << "API version/capability negotiation failed" << std::endl;
         exit(1);
     }
@@ -124,6 +125,119 @@ void test_c_api_contract() {
     if (wrongThreadResult != ROWL_RESULT_INVALID_HANDLE) {
         std::cerr << "Result-coded API did not reject a wrong-thread handle" << std::endl;
         exit(1);
+    }
+
+    // Graph vNext chapter surface: empty on a graph-free engine, populated
+    // after a v5 load. Uses its own temp document so save-slot fixtures below
+    // keep their pristine engine state.
+    {
+        uint32_t chapterCount = 77;
+        if (RowlEngine_GetChapterCount(nullptr, &chapterCount) != ROWL_RESULT_INVALID_HANDLE ||
+            RowlEngine_GetChapterCount(handle, nullptr) != ROWL_RESULT_INVALID_ARGUMENT ||
+            RowlEngine_GetCurrentChapterIdUtf8(nullptr, nullptr, 0, &required) !=
+                ROWL_RESULT_INVALID_HANDLE ||
+            RowlEngine_GetChapterIdAtUtf8(nullptr, 0, nullptr, 0, &required) !=
+                ROWL_RESULT_INVALID_HANDLE) {
+            std::cerr << "Chapter query null-handle contract failed" << std::endl;
+            exit(1);
+        }
+        if (RowlEngine_GetChapterCount(handle, &chapterCount) != ROWL_RESULT_OK ||
+            chapterCount != 0) {
+            std::cerr << "Graph-free engine must report zero chapters" << std::endl;
+            exit(1);
+        }
+        uint32_t currentRequired = 0;
+        if (RowlEngine_GetCurrentChapterIdUtf8(handle, nullptr, 0, &currentRequired) !=
+                ROWL_RESULT_OK ||
+            currentRequired != 1) {
+            std::cerr << "Graph-free engine must report an empty current chapter" << std::endl;
+            exit(1);
+        }
+        if (RowlEngine_GetChapterIdAtUtf8(handle, 0, nullptr, 0, &currentRequired) !=
+            ROWL_RESULT_INVALID_ARGUMENT) {
+            std::cerr << "Chapter index over an empty table must be invalid" << std::endl;
+            exit(1);
+        }
+
+        const std::filesystem::path chapterGraph = unicodeRoot / "vnext_graph.json";
+        {
+            std::error_code dirError;
+            std::filesystem::create_directories(unicodeRoot, dirError);
+            if (dirError) {
+                std::cerr << "Chapter fixture directory could not be created" << std::endl;
+                exit(1);
+            }
+            std::ofstream graphFile(chapterGraph);
+            graphFile << R"({
+                "format_version": 5, "start_node_id": 101,
+                "nodes": [
+                    {"id": 101, "chapter_id": "ch1", "next_nodes": [{"id": 102}]},
+                    {"id": 102, "chapter_id": "ch1", "next_nodes": [{"id": 103}]},
+                    {"id": 103, "chapter_id": "ch2"}
+                ],
+                "subgraphs": [
+                    {"id": "sg1", "entry_node_id": 101,
+                     "exit_node_ids": [102], "node_ids": [101, 102]}
+                ],
+                "chapters": [
+                    {"id": "ch1", "title": "Arrivals", "order": 1},
+                    {"id": "ch2", "title": "Departures", "order": 0}
+                ]
+            })";
+        }
+        RowlEngine_LoadStoryGraph(handle, chapterGraph.string().c_str());
+        if (RowlEngine_GetChapterCount(handle, &chapterCount) != ROWL_RESULT_OK ||
+            chapterCount != 2) {
+            std::cerr << "Loaded v5 graph must report two chapters" << std::endl;
+            exit(1);
+        }
+        // Order-sorted: ch2 (order 0) precedes ch1 (order 1).
+        {
+            uint32_t atRequired = 0;
+            if (RowlEngine_GetChapterIdAtUtf8(handle, 0, nullptr, 0, &atRequired) !=
+                    ROWL_RESULT_OK ||
+                atRequired != 4) {
+                std::cerr << "Chapter index size query failed" << std::endl;
+                exit(1);
+            }
+            std::vector<char> tiny(2, 'x');
+            uint32_t tinyRequired = 0;
+            if (RowlEngine_GetChapterIdAtUtf8(handle, 0, tiny.data(), 2, &tinyRequired) !=
+                    ROWL_RESULT_BUFFER_TOO_SMALL ||
+                tinyRequired != 4 || tiny.front() != '\0') {
+                std::cerr << "Chapter index undersized contract failed" << std::endl;
+                exit(1);
+            }
+            std::vector<char> slot(atRequired, '\0');
+            uint32_t slotRequired = 0;
+            if (RowlEngine_GetChapterIdAtUtf8(handle, 0, slot.data(),
+                                              static_cast<uint32_t>(slot.size()),
+                                              &slotRequired) != ROWL_RESULT_OK ||
+                std::string(slot.data()) != "ch2") {
+                std::cerr << "Chapter order sorting failed at the C ABI" << std::endl;
+                exit(1);
+            }
+            if (RowlEngine_GetChapterIdAtUtf8(handle, 1, slot.data(),
+                                              static_cast<uint32_t>(slot.size()),
+                                              &slotRequired) != ROWL_RESULT_OK ||
+                std::string(slot.data()) != "ch1") {
+                std::cerr << "Chapter index 1 did not resolve" << std::endl;
+                exit(1);
+            }
+            if (RowlEngine_GetCurrentChapterIdUtf8(handle, slot.data(),
+                                                   static_cast<uint32_t>(slot.size()),
+                                                   &slotRequired) != ROWL_RESULT_OK ||
+                std::string(slot.data()) != "ch1") {
+                std::cerr << "Current chapter must follow the start node" << std::endl;
+                exit(1);
+            }
+            if (RowlEngine_GetChapterIdAtUtf8(handle, 2, slot.data(),
+                                              static_cast<uint32_t>(slot.size()),
+                                              &slotRequired) != ROWL_RESULT_INVALID_ARGUMENT) {
+                std::cerr << "Out-of-range chapter index must be invalid" << std::endl;
+                exit(1);
+            }
+        }
     }
 
     if (RowlEngine_SaveGameSlotResult(handle, 0) != ROWL_RESULT_OK ||

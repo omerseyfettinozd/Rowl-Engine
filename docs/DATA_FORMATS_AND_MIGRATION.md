@@ -9,10 +9,14 @@ Conventions: JSON files are UTF-8, LF line endings (enforced by
 `.gitattributes` for `*.rowlproj`/`*.json`). Readers tolerate missing
 optional fields and ignore unknown fields unless stated otherwise.
 
-## 1. Story graph (`full_story_graph.json`) — writer v4, readers v1–v4
+## 1. Story graph (`full_story_graph.json`) — writer v4/v5, readers v1–v5
 
 - **Writer:** `StoryGraphSerializer.SerializeFullStoryGraph` emits
-  `format_version = 4`, `start_node_id`, and `nodes[]`.
+  `format_version = 4`, `start_node_id`, and `nodes[]`; when the document
+  carries Graph vNext structure (groups, subgraphs, chapters, or node
+  chapter assignments) it emits `format_version = 5` plus the non-empty
+  sections. See `docs/GRAPH_VNEXT_CONTRACT.md` for the v5 schema, rules,
+  limits, and the runtime/C API surface.
 - **v4 node:** `id`, `title`, `objects[]` (Unity GameObject style: each
   object has `id`, `name`, `is_active`, and `components[]` with `type`,
   `id`, `enabled`, `data`), plus `next_nodes[]` edges of

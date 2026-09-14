@@ -67,6 +67,7 @@ typedef struct RowlEngine_ApiVersion {
 #define ROWL_ENGINE_CAPABILITY_RESULT_CODES          UINT64_C(1)
 #define ROWL_ENGINE_CAPABILITY_CALLER_BUFFERS        UINT64_C(2)
 #define ROWL_ENGINE_CAPABILITY_USER_DATA_DIRECTORIES UINT64_C(4)
+#define ROWL_ENGINE_CAPABILITY_GRAPH_VNEXT           UINT64_C(8)
 
 /** Current additive C API version. This query does not require an engine handle. */
 ROWL_API RowlEngine_ResultCode RowlEngine_GetApiVersion(
@@ -322,6 +323,40 @@ ROWL_API const char* RowlEngine_GetLastStoryGraphError(RowlEngineHandle handle);
 
 /** Length-reporting variant of GetLastStoryGraphError (see lifetime contract). */
 ROWL_API const char* RowlEngine_GetLastStoryGraphErrorWithLength(RowlEngineHandle handle, uint32_t* outLen);
+
+/**
+ * Graph vNext chapter queries (ROWL_ENGINE_CAPABILITY_GRAPH_VNEXT).
+ *
+ * Chapters are the runtime section markers of format v5 graphs: save/load
+ * boundaries, backlog clustering and profile progress resolve through them.
+ * Format v4 graphs predate chapters, so a v4 graph reports zero chapters and
+ * an empty current chapter id. All three calls are additive and leave every
+ * older entry point untouched.
+ */
+
+/**
+ * Copies the chapter id of the current story node into caller-owned memory.
+ * Unassigned nodes (including every v4 node) yield an empty string with
+ * ROWL_RESULT_OK. Follows the caller-buffer contract: a null buffer with a
+ * zero size is a size query, and an undersized buffer returns
+ * ROWL_RESULT_BUFFER_TOO_SMALL with the required size written out.
+ */
+ROWL_API RowlEngine_ResultCode RowlEngine_GetCurrentChapterIdUtf8(
+    RowlEngineHandle handle, char* buffer, uint32_t bufferSize,
+    uint32_t* outRequiredSize);
+
+/** Writes how many chapters the loaded graph defines (0 for v4 graphs). */
+ROWL_API RowlEngine_ResultCode RowlEngine_GetChapterCount(
+    RowlEngineHandle handle, uint32_t* outCount);
+
+/**
+ * Copies the chapter id at an order-sorted position (order, then id) into
+ * caller-owned memory. An out-of-range index returns
+ * ROWL_RESULT_INVALID_ARGUMENT.
+ */
+ROWL_API RowlEngine_ResultCode RowlEngine_GetChapterIdAtUtf8(
+    RowlEngineHandle handle, uint32_t index, char* buffer,
+    uint32_t bufferSize, uint32_t* outRequiredSize);
 
 /**
  * Sets the active project root directory, isolating VFS mounts to that project.

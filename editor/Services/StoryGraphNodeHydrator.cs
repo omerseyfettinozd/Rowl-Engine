@@ -19,7 +19,13 @@ internal static class StoryGraphNodeHydrator
         double y = nodeJson.TryGetProperty("editor_y", out var yValue)
             ? yValue.GetDouble()
             : 80 + (nodeIndex / 5) * 220;
-        return new NodeViewModel(nodeId, title, x, y, bare: true);
+        var shell = new NodeViewModel(nodeId, title, x, y, bare: true);
+        if (nodeJson.TryGetProperty("chapter_id", out var chapterElement) &&
+            chapterElement.ValueKind == JsonValueKind.String)
+        {
+            shell.ChapterId = chapterElement.GetString() ?? string.Empty;
+        }
+        return shell;
     }
 
     public static void EnsureDefaultObjects(NodeViewModel node)

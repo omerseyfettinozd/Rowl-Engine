@@ -20,7 +20,8 @@ constexpr RowlEngine_ApiVersion kApiVersion{
 constexpr uint64_t kCapabilities =
     ROWL_ENGINE_CAPABILITY_RESULT_CODES |
     ROWL_ENGINE_CAPABILITY_CALLER_BUFFERS |
-    ROWL_ENGINE_CAPABILITY_USER_DATA_DIRECTORIES;
+    ROWL_ENGINE_CAPABILITY_USER_DATA_DIRECTORIES |
+    ROWL_ENGINE_CAPABILITY_GRAPH_VNEXT;
 
 RowlEngine_ResultCode copyHostPath(
     RowlEngineHandle handle, char* buffer, uint32_t bufferSize,
