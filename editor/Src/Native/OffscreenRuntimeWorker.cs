@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -87,7 +88,13 @@ namespace RowlEngine.Editor.Native
             return _commands.TryAdd(handle =>
             {
                 try { command(handle); }
-                catch { /* Async callers own diagnostics; keep the worker alive. */ }
+                catch (Exception error)
+                {
+                    // Async callers own diagnostics and the worker must stay
+                    // alive, but record the failure so posted commands cannot
+                    // fail silently.
+                    Debug.WriteLine($"[OffscreenRuntimeWorker] TryPost command failed: {error}");
+                }
             });
         }
 

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Text;
 using System.Threading;
@@ -23,6 +24,9 @@ public sealed record ExternalToolResult(int ExitCode, string StandardOutput, str
 /// </summary>
 public static class ExternalToolRunner
 {
+    /// <summary>Upper bound for post-kill settle and stream drain waits.</summary>
+    private static readonly TimeSpan KillSettleTimeout = TimeSpan.FromMilliseconds(3000);
+
     public static async Task<ExternalToolResult> RunAsync(
         ProcessStartInfo startInfo,
         Action<ExternalToolLine>? output = null,
@@ -30,14 +34,17 @@ public static class ExternalToolRunner
     {
         ArgumentNullException.ThrowIfNull(startInfo);
         cancellationToken.ThrowIfCancellationRequested();
-        startInfo.UseShellExecute = false;
-        startInfo.RedirectStandardOutput = true;
-        startInfo.RedirectStandardError = true;
-        startInfo.CreateNoWindow = true;
+        // Clone instead of mutating the caller's instance: the runner requires
+        // redirected streams, and applying that to shared state is surprising.
+        ProcessStartInfo launchInfo = CloneStartInfo(startInfo);
+        launchInfo.UseShellExecute = false;
+        launchInfo.RedirectStandardOutput = true;
+        launchInfo.RedirectStandardError = true;
+        launchInfo.CreateNoWindow = true;
 
-        using var process = new Process { StartInfo = startInfo };
+        using var process = new Process { StartInfo = launchInfo };
         if (!process.Start())
-            throw new InvalidOperationException($"Could not start external tool '{startInfo.FileName}'.");
+            throw new InvalidOperationException($"Could not start external tool '{launchInfo.FileName}'.");
 
         var stdout = new StringBuilder();
         var stderr = new StringBuilder();
@@ -59,8 +66,17 @@ public static class ExternalToolRunner
         catch (OperationCanceledException)
         {
             TryKillProcessTree(process);
-            await process.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false);
-            await Task.WhenAll(stdoutTask, stderrTask).ConfigureAwait(false);
+            using var settleTimeout = new CancellationTokenSource(KillSettleTimeout);
+            try
+            {
+                await process.WaitForExitAsync(settleTimeout.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                // The tree did not settle in time; fall through to a bounded
+                // drain so a stuck child cannot block the pipeline forever.
+            }
+            await DrainWithTimeoutAsync(stdoutTask, stderrTask).ConfigureAwait(false);
             throw;
         }
 
@@ -92,5 +108,57 @@ public static class ExternalToolRunner
         {
             // The process exited between HasExited and Kill.
         }
+        catch (System.ComponentModel.Win32Exception)
+        {
+            // Access denied or otherwise unkillable; the bounded settle wait
+            // still prevents an unbounded block below.
+        }
+        catch (Exception)
+        {
+            // Best effort: never let a kill failure mask the caller's cancellation.
+        }
+    }
+
+    private static ProcessStartInfo CloneStartInfo(ProcessStartInfo source)
+    {
+        var clone = new ProcessStartInfo
+        {
+            FileName = source.FileName,
+            Arguments = source.Arguments,
+            WorkingDirectory = source.WorkingDirectory,
+            UseShellExecute = source.UseShellExecute,
+            RedirectStandardOutput = source.RedirectStandardOutput,
+            RedirectStandardError = source.RedirectStandardError,
+            RedirectStandardInput = source.RedirectStandardInput,
+            CreateNoWindow = source.CreateNoWindow,
+            StandardOutputEncoding = source.StandardOutputEncoding,
+            StandardErrorEncoding = source.StandardErrorEncoding,
+            StandardInputEncoding = source.StandardInputEncoding,
+            WindowStyle = source.WindowStyle,
+            ErrorDialog = source.ErrorDialog,
+            Verb = source.Verb,
+        };
+        foreach (string argument in source.ArgumentList)
+            clone.ArgumentList.Add(argument);
+        foreach (KeyValuePair<string, string?> variable in source.Environment)
+        {
+            if (variable.Value is string value)
+                clone.Environment[variable.Key] = value;
+        }
+        return clone;
+    }
+
+    private static async Task DrainWithTimeoutAsync(Task stdoutTask, Task stderrTask)
+    {
+        Task drain = Task.WhenAll(stdoutTask, stderrTask);
+        Task completed = await Task.WhenAny(drain, Task.Delay(KillSettleTimeout)).ConfigureAwait(false);
+        if (ReferenceEquals(completed, drain))
+        {
+            await drain.ConfigureAwait(false);
+            return;
+        }
+        // Leave the pumps to finish in the background once the pipes close;
+        // awaiting them here would reintroduce the unbounded block.
+        _ = drain.ContinueWith(static task => _ = task.Exception, TaskScheduler.Default);
     }
 }

@@ -52,6 +52,8 @@ internal static class ProjectValidationService
         // büyük/küçük harf duyarsız olsa bile karşılaştırma Ordinal yapılır, çünkü
         // Linux runtime ve .rowlpkg araması case-sensitive'dir.
         var diskIndex = BuildDiskIndex(assetsPath);
+        if (diskIndex.ScanError is { } scanError)
+            issues.Add(new(false, $"Asset disk scan incomplete: {scanError} Some asset references may be reported as missing.", null, null));
         foreach (var collision in FindCaseCollisions(diskIndex.ExactPaths))
             issues.Add(new(true, collision, null, null));
 
@@ -66,16 +68,16 @@ internal static class ProjectValidationService
         return issues;
     }
 
-    private sealed record DiskIndex(HashSet<string> ExactPaths, Dictionary<string, string> InsensitivePaths);
+    private sealed record DiskIndex(HashSet<string> ExactPaths, Dictionary<string, string> InsensitivePaths, string? ScanError);
 
     private static DiskIndex BuildDiskIndex(string assetsPath)
     {
         var exact = new HashSet<string>(StringComparer.Ordinal);
         var insensitive = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (string.IsNullOrWhiteSpace(assetsPath) || !Directory.Exists(assetsPath))
+            return new(exact, insensitive, null);
         try
         {
-            if (string.IsNullOrWhiteSpace(assetsPath) || !Directory.Exists(assetsPath))
-                return new(exact, insensitive);
             string root = Path.GetFullPath(assetsPath);
             foreach (string file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
             {
@@ -84,8 +86,13 @@ internal static class ProjectValidationService
                 insensitive.TryAdd(rel, rel);
             }
         }
-        catch { }
-        return new(exact, insensitive);
+        catch (Exception error)
+        {
+            // Surface the failure instead of returning a silently partial
+            // index: callers add it as a validation warning (see Validate).
+            return new(exact, insensitive, $"'{assetsPath}' could not be fully scanned ({error.GetType().Name}: {error.Message}).");
+        }
+        return new(exact, insensitive, null);
     }
 
     private static IEnumerable<string> FindCaseCollisions(HashSet<string> exactPaths)
