@@ -388,6 +388,18 @@ namespace RowlEngine.Editor.Native
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
         internal static extern void RowlEngine_SetTextSpeedMultiplier(IntPtr handle, float multiplier);
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern void RowlEngine_SetTextScale(IntPtr handle, float scale);
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern void RowlEngine_SetHighContrast(IntPtr handle, int enabled);
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern void RowlEngine_SetReducedMotion(IntPtr handle, int enabled);
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern float RowlEngine_GetTextScale(IntPtr handle);
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern int RowlEngine_IsHighContrast(IntPtr handle);
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern int RowlEngine_IsReducedMotion(IntPtr handle);
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
         internal static extern void RowlEngine_SetAutoAdvanceDelayOffset(IntPtr handle, float seconds);
 
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]

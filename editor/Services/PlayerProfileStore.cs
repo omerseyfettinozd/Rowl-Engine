@@ -120,6 +120,9 @@ public static class PlayerProfileStore
             profile.AutoAdvanceDelay = ReadSingle(root, "auto_advance_delay", 2);
             profile.SkipMode = ReadSkipMode(root, notes);
             profile.AutoEnabled = ReadBool(root, "auto_enabled", false);
+            profile.TextScale = ReadSingle(root, "text_scale", 1);
+            profile.HighContrast = ReadBool(root, "high_contrast", false);
+            profile.ReducedMotion = ReadBool(root, "reduced_motion", false);
             int dropped = ReadContentIds(root, profile, notes);
             int sanitized = profile.Sanitized();
             if (sanitized > 0)
@@ -154,6 +157,9 @@ public static class PlayerProfileStore
                 ["sfx_volume"] = profile.SfxVolume,
                 ["text_speed_multiplier"] = profile.TextSpeedMultiplier,
                 ["auto_advance_delay"] = profile.AutoAdvanceDelay,
+                ["text_scale"] = profile.TextScale,
+                ["high_contrast"] = profile.HighContrast,
+                ["reduced_motion"] = profile.ReducedMotion,
                 ["skip_mode"] = SkipModeToString(profile.SkipMode),
                 ["auto_enabled"] = profile.AutoEnabled,
             };

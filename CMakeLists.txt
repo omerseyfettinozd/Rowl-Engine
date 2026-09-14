@@ -94,6 +94,14 @@ if(ROWL_BUILD_RUNTIME_TESTS)
             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
             TIMEOUT 30
         )
+        add_test(
+            NAME rowl_font_license_glyph_tests
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/test_font_license_glyph.py
+        )
+        set_tests_properties(rowl_font_license_glyph_tests PROPERTIES
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+            TIMEOUT 60
+        )
     endif()
 
     find_program(DOTNET_EXECUTABLE dotnet)

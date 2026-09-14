@@ -28,6 +28,16 @@ public:
     bool loadFontFromMemory(const uint8_t* data, size_t size);
     bool isLoaded() const { return m_loaded; }
 
+    /// Faz 3 Dilim 5 — accessibility display settings. Text scale
+    /// multiplies every shaping/measurement/render font size (dialogue,
+    /// typewriter and HUD text apply it with no call-site changes);
+    /// high contrast adds a dark outline behind every glyph so author
+    /// colors stay readable on any background.
+    void setTextScale(float scale);
+    float textScale() const { return m_textScale; }
+    void setHighContrast(bool enabled);
+    bool highContrast() const { return m_highContrast; }
+
     /// Measures the total pixel width of a single line of UTF-8 text at given font size.
     float measureTextWidth(const std::string& utf8Text, float fontSize);
 
@@ -71,6 +81,7 @@ public:
 
 private:
     const Glyph* getGlyph(uint32_t codepoint, int pixelHeight);
+    float effectiveFontSize(float fontSize) const { return fontSize * m_textScale; }
 
     std::vector<uint8_t> m_fontBuffer;
     void* m_fontInfo = nullptr; // stbtt_fontinfo pointer
@@ -80,11 +91,14 @@ private:
         std::string markup;
         float fontSize = 0.0f;
         float maxWidth = 0.0f;
+        float textScale = 1.0f;
         std::shared_ptr<const Rowl::Text::ShapedText> layout;
     };
     mutable std::vector<ShapeCacheEntry> m_shapeCache;
     Rowl::Text::TextShaper m_textShaper;
     bool m_loaded = false;
+    float m_textScale = 1.0f;
+    bool m_highContrast = false;
 };
 
 } // namespace Rowl::Render

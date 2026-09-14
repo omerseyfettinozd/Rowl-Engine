@@ -31,6 +31,9 @@ public sealed class PlayerProfile
     /// <summary>Supported UI locale codes (Faz 3 grows this list).</summary>
     public static readonly IReadOnlyList<string> SupportedLanguages = new[] { "en", "tr" };
 
+    /// <summary>Faz 3 Dilim 5 — offered text-size steps (1.0x, 1.25x, 1.5x).</summary>
+    public static readonly IReadOnlyList<float> AllowedTextScales = new[] { 1f, 1.25f, 1.5f };
+
     /// <summary>Default locale for fresh profiles.</summary>
     public const string DefaultLanguage = "en";
 
@@ -47,6 +50,18 @@ public sealed class PlayerProfile
     public float SfxVolume { get; set; } = 1;
     public float TextSpeedMultiplier { get; set; } = 1;
     public float AutoAdvanceDelay { get; set; } = 2;
+
+    /// <summary>
+    /// Faz 3 Dilim 5 — accessibility. Dialogue/typewriter/HUD text size
+    /// multiplier. Sanitized onto <see cref="AllowedTextScales"/>.
+    /// </summary>
+    public float TextScale { get; set; } = 1;
+
+    /// <summary>Faz 3 Dilim 5 — dark glyph outline pass for readability.</summary>
+    public bool HighContrast { get; set; } = false;
+
+    /// <summary>Faz 3 Dilim 5 — disables camera shake and screen flash.</summary>
+    public bool ReducedMotion { get; set; } = false;
 
     public PlayerSkipMode SkipMode { get; set; } = PlayerSkipMode.ReadOnly;
     public bool AutoEnabled { get; set; } = false;
@@ -82,6 +97,7 @@ public sealed class PlayerProfile
         SfxVolume = Math.Clamp(SfxVolume, 0, 1);
         TextSpeedMultiplier = Math.Clamp(TextSpeedMultiplier, 0.25f, 4);
         AutoAdvanceDelay = Math.Clamp(AutoAdvanceDelay, 0, 60);
+        TextScale = SnapTextScale(TextScale);
         if (!Enum.IsDefined(SkipMode))
             SkipMode = PlayerSkipMode.ReadOnly;
         int before = ReadContentIds.Count;
@@ -91,6 +107,25 @@ public sealed class PlayerProfile
                 .Where(id => id is not null)!,
             StringComparer.OrdinalIgnoreCase);
         return before - ReadContentIds.Count;
+    }
+
+    /// <summary>Snaps any value onto the nearest allowed text-scale step.</summary>
+    public static float SnapTextScale(float value)
+    {
+        if (!float.IsFinite(value))
+            return 1f;
+        float best = AllowedTextScales[0];
+        float bestDistance = Math.Abs(value - best);
+        foreach (float step in AllowedTextScales)
+        {
+            float distance = Math.Abs(value - step);
+            if (distance < bestDistance)
+            {
+                best = step;
+                bestDistance = distance;
+            }
+        }
+        return best;
     }
 
     internal static string NormalizeLanguage(string? language)

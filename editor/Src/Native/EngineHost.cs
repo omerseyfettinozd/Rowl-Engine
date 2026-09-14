@@ -958,6 +958,25 @@ namespace RowlEngine.Editor.Native
             InvokeNative(handle => NativeBridge.RowlEngine_SetTextSpeedMultiplier(handle, multiplier));
         }
 
+        /// <summary>
+        /// Faz 3 Dilim 5 — applies the accessibility display settings to the
+        /// native renderer/camera. Dead handles stay silent (fail closed).
+        /// </summary>
+        public void SetTextScale(float scale)
+        {
+            InvokeNative(handle => NativeBridge.RowlEngine_SetTextScale(handle, scale));
+        }
+
+        public void SetHighContrast(bool enabled)
+        {
+            InvokeNative(handle => NativeBridge.RowlEngine_SetHighContrast(handle, enabled ? 1 : 0));
+        }
+
+        public void SetReducedMotion(bool enabled)
+        {
+            InvokeNative(handle => NativeBridge.RowlEngine_SetReducedMotion(handle, enabled ? 1 : 0));
+        }
+
         public void SetAutoAdvanceDelayOffset(float seconds)
         {
             InvokeNative(handle => NativeBridge.RowlEngine_SetAutoAdvanceDelayOffset(handle, seconds));

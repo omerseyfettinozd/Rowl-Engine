@@ -9,8 +9,44 @@
 
 namespace Rowl::Render {
 
+namespace {
+
+// Single blended glyph texel onto an RGBA32 surface. Bounds-checked so
+// outline stamps can overshoot glyph boxes safely.
+void blendTexel(SDL_Surface* target, int x, int y, SDL_Color color, uint8_t coverage) {
+    if (!target || coverage == 0 || x < 0 || y < 0 || x >= target->w || y >= target->h)
+        return;
+    const uint8_t finalAlpha = static_cast<uint8_t>(
+        static_cast<int>(coverage) * color.a / 255);
+    if (!finalAlpha) return;
+    auto* pixel = static_cast<uint8_t*>(target->pixels) +
+                  y * target->pitch + x * 4;
+    const float sourceAlpha = finalAlpha / 255.0f;
+    const float inverse = 1.0f - sourceAlpha;
+    pixel[0] = static_cast<uint8_t>(color.r * sourceAlpha + pixel[0] * inverse);
+    pixel[1] = static_cast<uint8_t>(color.g * sourceAlpha + pixel[1] * inverse);
+    pixel[2] = static_cast<uint8_t>(color.b * sourceAlpha + pixel[2] * inverse);
+    pixel[3] = std::max(pixel[3], finalAlpha);
+}
+
+constexpr SDL_Color kContrastOutline{0, 0, 0, 255};
+
+} // namespace
+
 FontRenderer::FontRenderer() {
     m_fontInfo = new stbtt_fontinfo();
+}
+
+void FontRenderer::setTextScale(float scale) {
+    const float clamped = std::isfinite(scale) ? std::clamp(scale, 1.0f, 2.0f) : 1.0f;
+    if (clamped != m_textScale) {
+        m_textScale = clamped;
+        m_shapeCache.clear();
+    }
+}
+
+void FontRenderer::setHighContrast(bool enabled) {
+    m_highContrast = enabled;
 }
 
 FontRenderer::~FontRenderer() {
@@ -48,9 +84,20 @@ bool FontRenderer::loadFontFromMemory(const uint8_t* data, size_t size) {
 
     auto* info = static_cast<stbtt_fontinfo*>(m_fontInfo);
     if (!stbtt_InitFont(info, m_fontBuffer.data(), 0)) {
-        ROWL_LOG_ERROR("stbtt_InitFont failed to parse font buffer!");
-        m_loaded = false;
-        return false;
+        // Font collection (.ttc/.ttf with several faces): stb_truetype
+        // needs the byte offset of a face, so probe each face in order.
+        bool collectionOk = false;
+        const int faces = stbtt_GetNumberOfFonts(m_fontBuffer.data());
+        for (int face = 0; face < faces && !collectionOk; ++face) {
+            const int offset = stbtt_GetFontOffsetForIndex(m_fontBuffer.data(), face);
+            if (offset >= 0)
+                collectionOk = stbtt_InitFont(info, m_fontBuffer.data(), offset) != 0;
+        }
+        if (!collectionOk) {
+            ROWL_LOG_ERROR("stbtt_InitFont failed to parse font buffer!");
+            m_loaded = false;
+            return false;
+        }
     }
 
     m_glyphCache.clear();
@@ -155,7 +202,7 @@ float FontRenderer::measureTextWidth(const std::string& utf8Text, float fontSize
     }
 
     const std::string plainText = Rowl::Text::stripMarkup(utf8Text);
-    int pixelHeight = static_cast<int>(std::round(fontSize));
+    int pixelHeight = static_cast<int>(std::round(effectiveFontSize(fontSize)));
     if (pixelHeight < 8) pixelHeight = 8;
 
     float totalWidth = 0.0f;
@@ -180,15 +227,16 @@ std::shared_ptr<const Rowl::Text::ShapedText> FontRenderer::shapeTextShared(
     const std::string& markup, float fontSize, float maxWidth) const {
     for (const auto& cached : m_shapeCache) {
         if (cached.markup == markup && cached.fontSize == fontSize &&
-            cached.maxWidth == maxWidth) return cached.layout;
+            cached.maxWidth == maxWidth && cached.textScale == m_textScale)
+            return cached.layout;
     }
     Rowl::Text::ShapeOptions options;
-    options.fontSize = fontSize;
+    options.fontSize = effectiveFontSize(fontSize);
     options.maxWidth = maxWidth;
     auto layout = std::make_shared<Rowl::Text::ShapedText>(
         m_textShaper.shapeMarkup(markup, options));
     if (m_shapeCache.size() >= 16) m_shapeCache.erase(m_shapeCache.begin());
-    m_shapeCache.push_back({markup, fontSize, maxWidth, layout});
+    m_shapeCache.push_back({markup, fontSize, maxWidth, m_textScale, layout});
     return layout;
 }
 
@@ -219,8 +267,8 @@ void FontRenderer::renderShapedText(
              index < line.firstGlyph + line.glyphCount; ++index) {
             const auto& shapedGlyph = shaped.glyphs[index];
             if (shapedGlyph.revealIndex >= maxVisibleRevealUnits) continue;
-            const float glyphSize = shapedGlyph.style.hasSize
-                ? shapedGlyph.style.size : fontSize;
+            const float glyphSize = effectiveFontSize(shapedGlyph.style.hasSize
+                ? shapedGlyph.style.size : fontSize);
             const int pixelHeight = std::max(1, static_cast<int>(std::round(glyphSize)));
             const uint64_t key = (static_cast<uint64_t>(pixelHeight) << 32) |
                                  shapedGlyph.glyphIndex;
@@ -247,23 +295,20 @@ void FontRenderer::renderShapedText(
             const int drawY = static_cast<int>(std::round(
                 startY + shapedGlyph.y - shapedGlyph.yOffset + glyph.yoff));
             for (int gy = 0; gy < glyph.height; ++gy) {
-                const int dstY = drawY + gy;
-                if (dstY < 0 || dstY >= targetSurface->h) continue;
                 for (int gx = 0; gx < glyph.width; ++gx) {
-                    const int dstX = drawX + gx;
-                    if (dstX < 0 || dstX >= targetSurface->w) continue;
                     const uint8_t alpha = glyph.bitmap[gy * glyph.width + gx];
-                    const uint8_t finalAlpha = static_cast<uint8_t>(
-                        static_cast<int>(alpha) * glyphColor.a / 255);
-                    if (!finalAlpha) continue;
-                    auto* pixel = static_cast<uint8_t*>(targetSurface->pixels) +
-                                  dstY * targetSurface->pitch + dstX * 4;
-                    const float sourceAlpha = finalAlpha / 255.0f;
-                    const float inverse = 1.0f - sourceAlpha;
-                    pixel[0] = static_cast<uint8_t>(glyphColor.r * sourceAlpha + pixel[0] * inverse);
-                    pixel[1] = static_cast<uint8_t>(glyphColor.g * sourceAlpha + pixel[1] * inverse);
-                    pixel[2] = static_cast<uint8_t>(glyphColor.b * sourceAlpha + pixel[2] * inverse);
-                    pixel[3] = std::max(pixel[3], finalAlpha);
+                    if (!alpha) continue;
+                    if (m_highContrast) {
+                        // Dark halo first: 8-neighbourhood outline.
+                        for (int oy = -1; oy <= 1; ++oy)
+                            for (int ox = -1; ox <= 1; ++ox) {
+                                if (ox == 0 && oy == 0) continue;
+                                blendTexel(targetSurface, drawX + gx + ox,
+                                           drawY + gy + oy, kContrastOutline, alpha);
+                            }
+                    }
+                    blendTexel(targetSurface, drawX + gx, drawY + gy,
+                               glyphColor, alpha);
                 }
             }
         }
@@ -405,7 +450,7 @@ void FontRenderer::renderText(
         mustUnlock = true;
     }
 
-    int pixelHeight = static_cast<int>(std::round(fontSize));
+    int pixelHeight = static_cast<int>(std::round(effectiveFontSize(fontSize)));
     if (pixelHeight < 8) pixelHeight = 8;
 
     auto* info = static_cast<stbtt_fontinfo*>(m_fontInfo);
@@ -452,28 +497,18 @@ void FontRenderer::renderText(
 
                 // Direct alpha blending onto RGBA32 surface
                 for (int gy = 0; gy < g->height; ++gy) {
-                    int dstY = drawY + gy;
-                    if (dstY < 0 || dstY >= targetSurface->h) continue;
-
                     for (int gx = 0; gx < g->width; ++gx) {
-                        int dstX = drawX + gx;
-                        if (dstX < 0 || dstX >= targetSurface->w) continue;
-
                         uint8_t alpha = g->bitmap[gy * g->width + gx];
                         if (alpha == 0) continue;
-
-                        uint8_t finalAlpha = static_cast<uint8_t>((static_cast<int>(alpha) * static_cast<int>(color.a)) / 255);
-                        if (finalAlpha == 0) continue;
-
-                        uint8_t* pixel = static_cast<uint8_t*>(targetSurface->pixels) + dstY * targetSurface->pitch + dstX * 4;
-                        float srcA = finalAlpha / 255.0f;
-                        float invA = 1.0f - srcA;
-
-                        // RGBA32 blending
-                        pixel[0] = static_cast<uint8_t>(color.r * srcA + pixel[0] * invA);
-                        pixel[1] = static_cast<uint8_t>(color.g * srcA + pixel[1] * invA);
-                        pixel[2] = static_cast<uint8_t>(color.b * srcA + pixel[2] * invA);
-                        pixel[3] = std::max(pixel[3], finalAlpha);
+                        if (m_highContrast) {
+                            for (int oy = -1; oy <= 1; ++oy)
+                                for (int ox = -1; ox <= 1; ++ox) {
+                                    if (ox == 0 && oy == 0) continue;
+                                    blendTexel(targetSurface, drawX + gx + ox,
+                                               drawY + gy + oy, kContrastOutline, alpha);
+                                }
+                        }
+                        blendTexel(targetSurface, drawX + gx, drawY + gy, color, alpha);
                     }
                 }
             }

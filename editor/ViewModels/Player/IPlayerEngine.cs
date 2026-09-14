@@ -35,4 +35,7 @@ public interface IPlayerEngine
     void SetBgmVolume(float value);
     void SetVoiceVolume(float value);
     void SetSfxVolume(float value);
+    void SetTextScale(float value);
+    void SetHighContrast(bool enabled);
+    void SetReducedMotion(bool enabled);
 }

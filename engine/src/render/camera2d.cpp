@@ -92,6 +92,18 @@ void Camera2D::setRotation(float degrees) {
     }
 }
 
+void Camera2D::setReducedMotion(bool enabled) {
+    m_reducedMotion = enabled;
+    if (enabled) {
+        // Stop any in-flight shake immediately: offsets freeze at zero.
+        m_shakeIntensity = 0.0f;
+        m_shakeDuration = 0.0f;
+        m_shakeTimer = 0.0f;
+        m_shakeOffsetX = 0.0f;
+        m_shakeOffsetY = 0.0f;
+    }
+}
+
 void Camera2D::shake(float intensity, float durationSeconds, float frequency) {
     shakeWithProfile(CameraShakePreset::Custom, intensity, durationSeconds, frequency, 2.0f, 1.0f, 1.0f);
 }
@@ -102,6 +114,16 @@ void Camera2D::shakeWithProfile(CameraShakePreset preset, float intensity, float
     // partially replace an already-running shake.
     if (!std::isfinite(intensity) || !std::isfinite(durationSeconds) ||
         !std::isfinite(dirX) || !std::isfinite(dirY)) return;
+    if (m_reducedMotion) {
+        // Accessibility: sudden camera motion is disabled; keep the
+        // camera exactly where it is.
+        m_shakeIntensity = 0.0f;
+        m_shakeDuration = 0.0f;
+        m_shakeTimer = 0.0f;
+        m_shakeOffsetX = 0.0f;
+        m_shakeOffsetY = 0.0f;
+        return;
+    }
     if (intensity <= 0.0f || durationSeconds <= 0.0f) {
         m_shakePreset = preset;
         m_shakeIntensity = 0.0f;

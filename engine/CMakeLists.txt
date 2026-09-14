@@ -212,6 +212,7 @@ set(ROWL_ENGINE_SOURCES
     # Unicode shaping (Faz 3 Dilim 3; optional advanced backend)
     src/text/text_shaper.cpp
     # C-API bridge (consumed by C# P/Invoke)
+    src/c_api_accessibility.cpp
     src/c_api_contract.cpp
     src/c_api_i18n.cpp
     src/c_api_markup.cpp

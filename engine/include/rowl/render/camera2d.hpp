@@ -53,6 +53,13 @@ public:
     float getRotation() const { return m_rotation; }
 
     // Screen Shake: triggers decaying harmonic vibration
+    //
+    // Faz 3 Dilim 5 — reduced motion: while enabled, every shake entry
+    // point is a no-op (offsets stay zero, isShaking() stays false) so
+    // story presets, C-API triggers and gameplay shakes all soften at
+    // once with no call-site changes.
+    void setReducedMotion(bool enabled);
+    bool reducedMotion() const { return m_reducedMotion; }
     void shake(float intensity, float durationSeconds, float frequency = 25.0f);
     void shakePreset(CameraShakePreset preset, float intensityMultiplier = 1.0f, float durationOverride = 0.0f);
     void shakePreset(const std::string& presetName, float intensityMultiplier = 1.0f, float durationOverride = 0.0f);
@@ -124,6 +131,7 @@ private:
     float m_shakeDirY = 1.0f;
     float m_shakeOffsetX = 0.0f;
     float m_shakeOffsetY = 0.0f;
+    bool m_reducedMotion = false;
 };
 
 } // namespace Rowl::Render

@@ -74,6 +74,7 @@ typedef struct RowlEngine_ApiVersion {
 #define ROWL_ENGINE_CAPABILITY_LOCALIZATION          UINT64_C(128)
 #define ROWL_ENGINE_CAPABILITY_RICH_TEXT_MARKUP      UINT64_C(256)
 #define ROWL_ENGINE_CAPABILITY_TEXT_SHAPING          UINT64_C(512)
+#define ROWL_ENGINE_CAPABILITY_ACCESSIBILITY         UINT64_C(1024)
 
 /** Current additive C API version. This query does not require an engine handle. */
 ROWL_API RowlEngine_ResultCode RowlEngine_GetApiVersion(
@@ -597,6 +598,20 @@ ROWL_API void RowlEngine_SetVoiceVolume(RowlEngineHandle handle, float volume);
 ROWL_API void RowlEngine_SetSfxVolume(RowlEngineHandle handle, float volume);
 /** Applies player-local reading preferences without changing story data. */
 ROWL_API void RowlEngine_SetTextSpeedMultiplier(RowlEngineHandle handle, float multiplier);
+/**
+ * Faz 3 Dilim 5 — accessibility display settings
+ * (ROWL_ENGINE_CAPABILITY_ACCESSIBILITY). Text scale multiplies every
+ * shaped/measured/rendered font size (clamped to [1.0, 2.0], non-finite
+ * resets to 1.0); high contrast outlines glyphs for readability;
+ * reduced motion disables camera shake and screen flash. All apply
+ * instantly; dead handles are ignored (fail closed).
+ */
+ROWL_API void RowlEngine_SetTextScale(RowlEngineHandle handle, float scale);
+ROWL_API void RowlEngine_SetHighContrast(RowlEngineHandle handle, int enabled);
+ROWL_API void RowlEngine_SetReducedMotion(RowlEngineHandle handle, int enabled);
+ROWL_API float RowlEngine_GetTextScale(RowlEngineHandle handle);
+ROWL_API int RowlEngine_IsHighContrast(RowlEngineHandle handle);
+ROWL_API int RowlEngine_IsReducedMotion(RowlEngineHandle handle);
 ROWL_API void RowlEngine_SetAutoAdvanceDelayOffset(RowlEngineHandle handle, float seconds);
 ROWL_API float RowlEngine_GetMasterVolume(RowlEngineHandle handle);
 ROWL_API float RowlEngine_GetVoiceVolume(RowlEngineHandle handle);

@@ -254,9 +254,18 @@ float RowlEngine_GetCameraShakeOffsetY(RowlEngineHandle handle) {
     }, 0.0f);
 }
 
+// Faz 3 Dilim 5 — reduced motion suppresses sudden full-screen effects.
+// The camera owns the flag; both flash entry points consult it here so
+// engine.cpp and window.cpp stay untouched.
+static bool reducedMotionActive(RowlEngineHandle handle) {
+    const auto* cam = toEngine(handle)->getCamera();
+    return cam && cam->reducedMotion();
+}
+
 void RowlEngine_TriggerScreenFlash(RowlEngineHandle handle, uint8_t r, uint8_t g, uint8_t b, float durationSeconds, float intensity) {
     if (!isLiveHandle(handle)) return;
     invokeNoexcept([&] {
+        if (reducedMotionActive(handle)) return;
         toEngine(handle)->triggerScreenFlash(r, g, b, durationSeconds, intensity);
     });
 }
@@ -264,6 +273,7 @@ void RowlEngine_TriggerScreenFlash(RowlEngineHandle handle, uint8_t r, uint8_t g
 void RowlEngine_TriggerScreenFlashHex(RowlEngineHandle handle, const char* colorHex, float durationSeconds, float intensity) {
     if (!isLiveHandle(handle)) return;
     invokeNoexcept([&] {
+        if (reducedMotionActive(handle)) return;
         toEngine(handle)->triggerScreenFlashHex(colorHex ? colorHex : "#FFFFFF", durationSeconds, intensity);
     });
 }

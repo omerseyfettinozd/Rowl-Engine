@@ -55,4 +55,7 @@ public sealed class EngineHostPlayerAdapter : IPlayerEngine
     public void SetBgmVolume(float value) => _host.SetBgmVolume(value);
     public void SetVoiceVolume(float value) => _host.SetVoiceVolume(value);
     public void SetSfxVolume(float value) => _host.SetSfxVolume(value);
+    public void SetTextScale(float value) => _host.SetTextScale(value);
+    public void SetHighContrast(bool enabled) => _host.SetHighContrast(enabled);
+    public void SetReducedMotion(bool enabled) => _host.SetReducedMotion(enabled);
 }

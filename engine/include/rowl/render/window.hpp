@@ -257,6 +257,13 @@ public:
     double getLastFrameRendererFlushMilliseconds() const { return m_lastFrameRendererFlushMilliseconds; }
     void setTextureCacheBudgetBytes(uint64_t bytes);
     FontRenderer* getFontRenderer() const { return m_fontRenderer.get(); }
+    /// Faz 3 Dilim 5 — visits the main renderer and every cached button
+    /// renderer so accessibility display settings apply uniformly.
+    template <typename Fn> void forEachFontRenderer(Fn&& fn) {
+        if (m_fontRenderer) fn(*m_fontRenderer);
+        for (auto& entry : m_buttonFontCache)
+            if (entry.second) fn(*entry.second);
+    }
     void reloadFonts();
 
     /**

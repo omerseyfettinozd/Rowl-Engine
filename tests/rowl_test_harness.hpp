@@ -110,6 +110,7 @@ void test_graph_vnext();
 void test_localization();
 void test_markup_parser();
 void test_text_shaping();
+void test_accessibility();
 void test_native_performance_benchmarks(const std::string& benchmarkJsonPath);
 void test_golden_project_benchmarks(const std::string& goldenJsonPath);
 void test_hardening_and_reliability();

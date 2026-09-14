@@ -55,6 +55,7 @@ public sealed partial class PlayerViewModel : ViewModelBase
         Bindings = PlayerInputBindings.Default();
         Slots = new PlayerSaveSlotsViewModel(engine);
         ApplyVolumes();
+        ApplyAccessibility();
     }
 
     public PlayerStateMachine Machine { get; }
@@ -96,11 +97,17 @@ public sealed partial class PlayerViewModel : ViewModelBase
 
     public Array AvailableSkipModes => Enum.GetValues(typeof(PlayerSkipMode));
     public IReadOnlyList<string> AvailableLanguages => PlayerProfile.SupportedLanguages;
+    public IReadOnlyList<float> AvailableTextScales => PlayerProfile.AllowedTextScales;
+
+    /// <summary>Faz 3 Dilim 5 — pushes profile accessibility to the engine.</summary>
+    public void ApplyAccessibility() =>
+        AccessibilityService.ApplyToEngine(_engine, Profile);
 
     [RelayCommand]
     public void SavePreferences()
     {
         ApplyVolumes();
+        ApplyAccessibility();
         PersistProfile();
         OnPropertyChanged(nameof(IsAutoOn));
         OnPropertyChanged(nameof(SkipModeLabel));
@@ -192,6 +199,16 @@ public sealed partial class PlayerViewModel : ViewModelBase
                 };
                 PersistProfile();
                 OnPropertyChanged(nameof(SkipModeLabel));
+                break;
+            case PlayerInputCommand.CycleTextScale:
+                Profile.TextScale = AccessibilityService.CycleTextScale(Profile.TextScale);
+                ApplyAccessibility();
+                PersistProfile();
+                break;
+            case PlayerInputCommand.ToggleHighContrast:
+                Profile.HighContrast = !Profile.HighContrast;
+                ApplyAccessibility();
+                PersistProfile();
                 break;
             case PlayerInputCommand.OpenBacklog:
                 if (IsPlaying || IsPause)

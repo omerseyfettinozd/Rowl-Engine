@@ -93,6 +93,12 @@ public sealed class EditorPlayerLoopSlice5Tests
         public void SetBgmVolume(float value) => BgmVolume = value;
         public void SetVoiceVolume(float value) => VoiceVolume = value;
         public void SetSfxVolume(float value) => SfxVolume = value;
+        public float TextScale { get; private set; } = 1f;
+        public bool HighContrast { get; private set; }
+        public bool ReducedMotion { get; private set; }
+        public void SetTextScale(float value) => TextScale = value;
+        public void SetHighContrast(bool enabled) => HighContrast = enabled;
+        public void SetReducedMotion(bool enabled) => ReducedMotion = enabled;
     }
 
     private static (PlayerViewModel ViewModel, FakePlayerEngine Engine, string Directory) CreateShell(

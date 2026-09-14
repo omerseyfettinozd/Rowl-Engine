@@ -12,6 +12,8 @@ public enum PlayerInputCommand
     TogglePause,
     ToggleAuto,
     ToggleSkip,
+    CycleTextScale,
+    ToggleHighContrast,
     OpenBacklog,
     QuickSave,
     QuickLoad,
@@ -77,6 +79,8 @@ public sealed class PlayerInputBindings
         Keys[Key.P] = PlayerInputCommand.TogglePause;
         Keys[Key.A] = PlayerInputCommand.ToggleAuto;
         Keys[Key.S] = PlayerInputCommand.ToggleSkip;
+        Keys[Key.T] = PlayerInputCommand.CycleTextScale;
+        Keys[Key.H] = PlayerInputCommand.ToggleHighContrast;
         Keys[Key.B] = PlayerInputCommand.OpenBacklog;
         Keys[Key.F5] = PlayerInputCommand.QuickSave;
         Keys[Key.F9] = PlayerInputCommand.QuickLoad;
