@@ -108,6 +108,41 @@ void test_game_state() {
     }
     TEST_PASS("Bounded Dialogue History Save Persistence and v2 Fallback");
 
+    // Faz 2: backlog entries round-trip their content ids; legacy payloads
+    // without the key decode to "" and stay loadable, while hostile ids are
+    // rejected instead of persisted.
+    const auto withIds = Rowl::State::GameState::withDialogueHistory(s2, {
+        {201, "Evelyn", "Tracked line", true, "11111111-2222-3333-4444-555555555555"},
+        {202, "Mina", "Legacy line", true, ""},
+    });
+    const auto restoredIds = Rowl::State::GameState::deserializeJson(withIds->serializeJson());
+    if (!restoredIds || !restoredIds->dialogueHistory ||
+        restoredIds->dialogueHistory->size() != 2 ||
+        restoredIds->dialogueHistory->at(0).contentId !=
+            "11111111-2222-3333-4444-555555555555" ||
+        !restoredIds->dialogueHistory->at(1).contentId.empty()) {
+        std::cerr << "GameState dialogue history content_id round-trip mismatch" << std::endl;
+        exit(1);
+    }
+    const auto legacyHistory = Rowl::State::GameState::deserializeJson(
+        R"({"version":3,"step_id":1,"active_node_id":201,"variables":{},"dialogue_history":[
+            {"node_id":201,"speaker":"Evelyn","dialogue":"Old line","read":true}]})");
+    if (!legacyHistory || !legacyHistory->dialogueHistory ||
+        legacyHistory->dialogueHistory->size() != 1 ||
+        !legacyHistory->dialogueHistory->at(0).contentId.empty()) {
+        std::cerr << "Legacy history entries must decode with an empty content_id" << std::endl;
+        exit(1);
+    }
+    const std::string hostileId(2048, 'x');
+    const auto hostile = Rowl::State::GameState::decodeJson(
+        std::string(R"({"version":3,"step_id":1,"active_node_id":201,"variables":{},"dialogue_history":[)") +
+        R"({"node_id":201,"speaker":"E","dialogue":"H","read":true,"content_id":")" + hostileId + "\"}]}");
+    if (hostile.status != Rowl::State::GameStateDecodeStatus::InvalidData || hostile.state) {
+        std::cerr << "Oversized history content_id must be rejected" << std::endl;
+        exit(1);
+    }
+    TEST_PASS("Dialogue History content_id Round-Trip, Legacy Fallback, and Hostile Rejection");
+
     auto audioState = Rowl::State::GameState::createNextStateWithAudio(
         s2, 102, "night.png", "audio/night.ogg", 0.65f, true, "Telephone");
     auto restoredAudioState = Rowl::State::GameState::deserializeJson(audioState->serializeJson());

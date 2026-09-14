@@ -189,6 +189,22 @@ RowlEngine_ResultCode RowlEngine_GetChapterIdAtUtf8(
     }, ROWL_RESULT_UNKNOWN_ERROR);
 }
 
+RowlEngine_ResultCode RowlEngine_GetActiveDialogueContentIdsJson(
+    RowlEngineHandle handle, char* buffer, uint32_t bufferSize,
+    uint32_t* outRequiredSize) {
+    if (!isLiveHandle(handle)) return ROWL_RESULT_INVALID_HANDLE;
+    return invokeNoexcept<RowlEngine_ResultCode>([&] {
+        auto* engine = toEngine(handle);
+        if (!engine) return ROWL_RESULT_INVALID_HANDLE;
+        nlohmann::json ids = nlohmann::json::array();
+        for (const auto& dialogue : engine->getActiveDialogues()) {
+            ids.push_back(dialogue.contentId);
+        }
+        return copyUtf8ToCaller(ids.dump(), buffer, bufferSize,
+                                outRequiredSize);
+    }, ROWL_RESULT_UNKNOWN_ERROR);
+}
+
 void RowlEngine_SetProjectDirectory(RowlEngineHandle handle, const char* projectRoot) {
     if (!isLiveHandle(handle) || !projectRoot || !*projectRoot) return;
     invokeNoexcept([&] {

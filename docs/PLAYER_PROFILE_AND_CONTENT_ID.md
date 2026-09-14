@@ -90,3 +90,33 @@ small object; multi-MB profiles are a Faz 5 concern.
   missing/corrupt/unsupported-version fallbacks, sanitizer ranges.
 - Untouched gates stay green: full xUnit suite, headless Test 34/35,
   native CTest, `git diff --check`.
+
+## 7. Dilim 2 — runtime tracking, backlog ids, skip gate
+
+- Native dialogue payloads flow `content_id` into
+  `DialogueRenderData.contentId` (`updateSceneFromComponents`); graph-file
+  loads already carried it verbatim through `StoryNode.components[].data`.
+- Backlog entries (`DialogueHistoryEntry.contentId`) are recorded at
+  presentation, serialized into `GetDialogueHistoryJson` as `content_id`
+  and into save-slot `dialogue_history` (same key). Decode is tolerant:
+  missing → `""`, oversized (>1024 B) → `InvalidData`. No save-format
+  version bump (old readers ignore the key, new readers default it).
+- New additive C API `RowlEngine_GetActiveDialogueContentIdsJson`
+  (caller-buffer contract) returns the presented dialogues' ids as a JSON
+  array; legacy lines contribute `""` so hosts fail closed. Gated by
+  `ROWL_ENGINE_CAPABILITY_PLAYER_LOOP (16)`.
+- Managed side: `DialogueHistoryEntry.content_id` flows into
+  `BacklogViewModel` via the existing history pull; `SkipGate` is the pure
+  Off/ReadOnly/All decision (choices always stop; empty/malformed ids never
+  count as read); `PlayerLoopService` snapshots the departed line
+  *before* advancing, marks it read, and atomically persists
+  (`AdvanceAndTrack`, `TrySkipStep` single-step).
+- `EngineHost` gained only seams: `GetActiveDialogueContentIds`,
+  `AdvancePlayerLoop`, `TrySkipPlayerLoopStep`. Plain `AdvanceNode` stays
+  preview-side and untracked. The continuous auto-skip driver belongs to
+  the Faz 2 Playing-state loop (later dilim); this slice delivers the
+  tested single step it will call per tick.
+- Tests: native contract (capability + null-handle + ids/history payload),
+  native save codec (round-trip, legacy fallback, hostile rejection),
+  xUnit `EditorPlayerLoopSlice2Tests` (10): gate matrix, track-on-advance,
+  query-failure abort, flush no-op, skip-step allow/stop, backlog parse.

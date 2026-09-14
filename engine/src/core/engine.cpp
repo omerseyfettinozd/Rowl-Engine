@@ -763,6 +763,7 @@ void Engine::updateSceneFromComponents(const std::string& componentsJson,
                 dlgData.hasDialogueBox = true;
                 dlgData.speaker = data.value("speaker", "Evelyn");
                 dlgData.dialogue = data.value("dialogue", "");
+                dlgData.contentId = data.value("content_id", "");
                 dlgData.x = data.value("x", 80.0f);
                 dlgData.y = data.value("y", 860.0f);
                 dlgData.width = data.value("width", 1760.0f);
@@ -1892,7 +1893,8 @@ void Engine::recordActiveDialogueHistory() {
     for (const auto& dialogue : m_activeDialogues) {
         if (!dialogue.dialogue.empty()) {
             entries.push_back(
-                {m_storyRuntime.currentNodeId(), dialogue.speaker, dialogue.dialogue, true});
+                {m_storyRuntime.currentNodeId(), dialogue.speaker, dialogue.dialogue, true,
+                 dialogue.contentId});
         }
     }
     if (!entries.empty()) {

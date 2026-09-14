@@ -70,7 +70,8 @@ void test_c_api_contract() {
         (capabilities & ROWL_ENGINE_CAPABILITY_RESULT_CODES) == 0 ||
         (capabilities & ROWL_ENGINE_CAPABILITY_CALLER_BUFFERS) == 0 ||
         (capabilities & ROWL_ENGINE_CAPABILITY_USER_DATA_DIRECTORIES) == 0 ||
-        (capabilities & ROWL_ENGINE_CAPABILITY_GRAPH_VNEXT) == 0) {
+        (capabilities & ROWL_ENGINE_CAPABILITY_GRAPH_VNEXT) == 0 ||
+        (capabilities & ROWL_ENGINE_CAPABILITY_PLAYER_LOOP) == 0) {
         std::cerr << "API version/capability negotiation failed" << std::endl;
         exit(1);
     }
@@ -247,6 +248,41 @@ void test_c_api_contract() {
         !std::filesystem::is_regular_file(host->savePath / "save_slot_1.json")) {
         std::cerr << "Unicode result-coded save/load or legacy success wrapper failed" << std::endl;
         exit(1);
+    }
+
+    // Faz 2 player loop: the presented dialogues expose their content ids
+    // for read tracking, and the backlog carries them per entry. Legacy
+    // lines without an id contribute an empty string (fail-closed hosts
+    // never treat "" as read).
+    {
+        if (RowlEngine_GetActiveDialogueContentIdsJson(
+                nullptr, nullptr, 0, &required) != ROWL_RESULT_INVALID_HANDLE) {
+            std::cerr << "Active content ids null-handle contract failed" << std::endl;
+            exit(1);
+        }
+        RowlEngine_SetPlayState(handle, 1);
+        RowlEngine_UpdateSceneFromJson(handle, R"([
+            {"type": "dialogue", "enabled": true, "data": {
+                "speaker": "Evelyn", "dialogue": "Remember me.",
+                "content_id": "11111111-2222-3333-4444-555555555555"}},
+            {"type": "dialogue", "enabled": true, "data": {
+                "speaker": "Mina", "dialogue": "Legacy line without an id."}}
+        ])");
+        const std::string activeIds =
+            readDirectory(handle, RowlEngine_GetActiveDialogueContentIdsJson);
+        if (activeIds != "[\"11111111-2222-3333-4444-555555555555\",\"\"]") {
+            std::cerr << "Active dialogue content ids mismatch: " << activeIds << std::endl;
+            exit(1);
+        }
+        const char* historyJson = RowlEngine_GetDialogueHistoryJson(handle);
+        const std::string history = historyJson ? historyJson : "";
+        if (history.find("\"content_id\":\"11111111-2222-3333-4444-555555555555\"") ==
+                std::string::npos ||
+            history.find("Legacy line without an id.") == std::string::npos) {
+            std::cerr << "Backlog entries must carry their content ids: " << history << std::endl;
+            exit(1);
+        }
+        RowlEngine_SetPlayState(handle, 0);
     }
 
     if (RowlEngine_SaveGameSlotResult(nullptr, 0) != ROWL_RESULT_INVALID_HANDLE ||

@@ -16,6 +16,8 @@ constexpr size_t kMaxVariableKeyBytes = 256;
 constexpr size_t kMaxVariableValueBytes = 64 * 1024;
 constexpr size_t kMaxDialogueHistoryEntries = 500;
 constexpr size_t kMaxDialogueHistoryTextBytes = 64 * 1024;
+// Faz 2 content ids are UUIDs (36 chars); the cap only bounds hostile input.
+constexpr size_t kMaxContentIdBytes = 1024;
 
 } // namespace
 
@@ -148,7 +150,8 @@ std::shared_ptr<const GameState> GameState::withDialogueHistory(
         current->dialogueHistory ? *current->dialogueHistory : std::vector<DialogueHistoryEntry>{});
     for (const auto& entry : entries) {
         if (entry.nodeId == 0 || entry.speaker.size() > kMaxDialogueHistoryTextBytes ||
-            entry.dialogue.size() > kMaxDialogueHistoryTextBytes) {
+            entry.dialogue.size() > kMaxDialogueHistoryTextBytes ||
+            entry.contentId.size() > kMaxContentIdBytes) {
             continue;
         }
         history->push_back(entry);
@@ -193,6 +196,7 @@ std::string GameState::serializeJson() const {
             history.push_back({
                 {"node_id", entry.nodeId}, {"speaker", entry.speaker},
                 {"dialogue", entry.dialogue}, {"read", entry.read},
+                {"content_id", entry.contentId},
             });
         }
     }
@@ -295,8 +299,10 @@ GameStateDecodeResult GameState::decodeJson(const std::string& jsonStr) {
                 entry.speaker = rawEntry.value("speaker", "");
                 entry.dialogue = rawEntry.value("dialogue", "");
                 entry.read = rawEntry.value("read", true);
+                entry.contentId = rawEntry.value("content_id", "");
                 if (entry.nodeId == 0 || entry.speaker.size() > kMaxDialogueHistoryTextBytes ||
-                    entry.dialogue.size() > kMaxDialogueHistoryTextBytes) {
+                    entry.dialogue.size() > kMaxDialogueHistoryTextBytes ||
+                    entry.contentId.size() > kMaxContentIdBytes) {
                     ROWL_LOG_ERROR("GameState JSON contains an invalid dialogue history entry");
                     return {nullptr, GameStateDecodeStatus::InvalidData, version};
                 }

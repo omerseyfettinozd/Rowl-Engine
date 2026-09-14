@@ -68,6 +68,7 @@ typedef struct RowlEngine_ApiVersion {
 #define ROWL_ENGINE_CAPABILITY_CALLER_BUFFERS        UINT64_C(2)
 #define ROWL_ENGINE_CAPABILITY_USER_DATA_DIRECTORIES UINT64_C(4)
 #define ROWL_ENGINE_CAPABILITY_GRAPH_VNEXT           UINT64_C(8)
+#define ROWL_ENGINE_CAPABILITY_PLAYER_LOOP           UINT64_C(16)
 
 /** Current additive C API version. This query does not require an engine handle. */
 ROWL_API RowlEngine_ResultCode RowlEngine_GetApiVersion(
@@ -357,6 +358,21 @@ ROWL_API RowlEngine_ResultCode RowlEngine_GetChapterCount(
 ROWL_API RowlEngine_ResultCode RowlEngine_GetChapterIdAtUtf8(
     RowlEngineHandle handle, uint32_t index, char* buffer,
     uint32_t bufferSize, uint32_t* outRequiredSize);
+
+/**
+ * Player-loop read tracking (ROWL_ENGINE_CAPABILITY_PLAYER_LOOP).
+ *
+ * Copies the content ids of the currently presented dialogues as a UTF-8
+ * JSON array of strings (for example `["uuid-1","uuid-2"]`). Lines that
+ * predate content_id migration contribute an empty string, so hosts can
+ * fail closed (an empty id is never treated as read). Follows the
+ * caller-buffer contract: a null buffer with a zero size is a size query,
+ * and an undersized buffer returns ROWL_RESULT_BUFFER_TOO_SMALL with the
+ * required size written out. All older entry points are untouched.
+ */
+ROWL_API RowlEngine_ResultCode RowlEngine_GetActiveDialogueContentIdsJson(
+    RowlEngineHandle handle, char* buffer, uint32_t bufferSize,
+    uint32_t* outRequiredSize);
 
 /**
  * Sets the active project root directory, isolating VFS mounts to that project.

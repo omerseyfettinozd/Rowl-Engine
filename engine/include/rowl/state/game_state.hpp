@@ -37,6 +37,9 @@ struct DialogueHistoryEntry {
     std::string speaker;
     std::string dialogue;
     bool read = true;
+    /// Persistent Faz 2 content identity (UUID form); empty when the
+    /// presented line predates content_id migration.
+    std::string contentId;
 };
 
 // GCC 16 false positive -Warray-bounds with shared_ptr template internals

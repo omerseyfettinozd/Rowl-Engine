@@ -55,6 +55,10 @@ optional fields and ignore unknown fields unless stated otherwise.
 - **Slot files:** `save_slot_<n>.json`, `n = 0..99` (slot 0 is quicksave),
   under the save directory (`saves/` by default,
   `PlatformHost::writableSavePath()` on hosted platforms).
+- **`dialogue_history` entries** carry an optional `content_id` (Faz 2
+  Dilim 2, UUID form, `""` for pre-migration lines). Decode defaults a
+  missing key to `""` and rejects entries over 1024 bytes; no format
+  version bump — old readers ignore the key, new readers default it.
 - **Atomicity:** `SessionPersistence::saveSlot` writes a `.tmp` sibling
   and atomically renames over the final path; readers never observe a
   half-written slot.

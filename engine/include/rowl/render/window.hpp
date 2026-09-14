@@ -51,6 +51,9 @@ struct DialogueRenderData {
     bool hasDialogueBox = true;
     std::string speaker;
     std::string dialogue;
+    /// Persistent Faz 2 content identity (UUID form); empty for legacy
+    /// payloads that predate migration. Never interpreted by the renderer.
+    std::string contentId;
     float x = 80.0f;
     float y = 860.0f;
     float width = 1760.0f;

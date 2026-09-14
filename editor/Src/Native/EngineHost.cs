@@ -22,6 +22,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Collections.Generic;
+using RowlEngine.Editor.Services;
 
 namespace RowlEngine.Editor.Native
 {
@@ -222,6 +223,8 @@ namespace RowlEngine.Editor.Native
         public ulong DiagnosticsParseErrorCount { get; private set; }
         /// <summary>Dialogue-history JSON parses that failed (see debug log).</summary>
         public ulong DialogueHistoryParseErrorCount { get; private set; }
+        /// <summary>Active content-id JSON parses that failed (see debug log).</summary>
+        public ulong ActiveContentIdsParseErrorCount { get; private set; }
 
         /// <summary>
         /// Pure copy-gate decision behind the dirty-frame optimization, kept
@@ -671,6 +674,77 @@ namespace RowlEngine.Editor.Native
             }
         }
 
+        /// <summary>
+        /// Faz 2 player-loop advance: snapshots the presented content ids,
+        /// advances, marks the departed line read in <paramref name="loop"/>,
+        /// and atomically persists the profile. Plain <see cref="AdvanceNode"/>
+        /// stays preview-side and untracked. Returns a save error or null.
+        /// </summary>
+        public string? AdvancePlayerLoop(PlayerLoopService loop, uint choiceIndex = 0)
+        {
+            ArgumentNullException.ThrowIfNull(loop);
+            if (!IsInitialized)
+                return "Engine is not initialized; player-loop advance aborted.";
+            return loop.AdvanceAndTrack(() => GetActiveDialogueContentIds(), AdvanceNode, choiceIndex);
+        }
+
+        /// <summary>
+        /// Faz 2 single skip step: evaluates the profile skip gate against the
+        /// current presentation and advances once when allowed. The continuous
+        /// auto-skip driver belongs to the Playing-state loop; this is the
+        /// step it will call per tick. Returns true when an advance happened.
+        /// </summary>
+        public bool TrySkipPlayerLoopStep(
+            PlayerLoopService loop, Func<bool> hasChoices, out string? saveError)
+        {
+            ArgumentNullException.ThrowIfNull(loop);
+            ArgumentNullException.ThrowIfNull(hasChoices);
+            saveError = null;
+            if (!IsInitialized)
+                return false;
+            return loop.TrySkipStep(() => GetActiveDialogueContentIds(), hasChoices, AdvanceNode, out saveError);
+        }
+
+        /// <summary>
+        /// Content ids of the currently presented dialogues (Faz 2 read
+        /// tracking). Empty when uninitialized or unparsable; legacy lines
+        /// contribute "" and must never count as read.
+        /// </summary>
+        public IReadOnlyList<string> GetActiveDialogueContentIds()
+        {
+            if (!IsInitialized) return Array.Empty<string>();
+            try
+            {
+                return InvokeNative(handle =>
+                {
+                    if (NativeBridge.RowlEngine_GetActiveDialogueContentIdsJson(
+                            handle, IntPtr.Zero, 0, out uint required) != NativeBridge.ResultCode.Ok ||
+                        required == 0)
+                        return new List<string>();
+                    IntPtr buffer = Marshal.AllocHGlobal((int)required);
+                    try
+                    {
+                        if (NativeBridge.RowlEngine_GetActiveDialogueContentIdsJson(
+                                handle, buffer, required, out _) != NativeBridge.ResultCode.Ok)
+                            return new List<string>();
+                        string json = Marshal.PtrToStringUTF8(buffer) ?? "[]";
+                        return JsonSerializer.Deserialize<List<string>>(json) ?? new List<string>();
+                    }
+                    finally
+                    {
+                        Marshal.FreeHGlobal(buffer);
+                    }
+                }, new List<string>());
+            }
+            catch (JsonException ex)
+            {
+                // Counted instead of silent (MS-4 rule).
+                ActiveContentIdsParseErrorCount++;
+                Debug.WriteLine($"EngineHost active content ids parse failed ({ActiveContentIdsParseErrorCount}): {ex.Message}");
+                return Array.Empty<string>();
+            }
+        }
+
         public bool PointerDown(float virtualX, float virtualY)
         {
             if (!IsInitialized) return false;
@@ -1085,5 +1159,10 @@ namespace RowlEngine.Editor.Native
         public string speaker { get; set; } = string.Empty;
         public string dialogue { get; set; } = string.Empty;
         public bool read { get; set; }
+        /// <summary>
+        /// Persistent Faz 2 content identity (UUID form); empty when the
+        /// presented line predates content_id migration.
+        /// </summary>
+        public string content_id { get; set; } = string.Empty;
     }
 }

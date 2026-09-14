@@ -39,6 +39,7 @@ const char* RowlEngine_GetDialogueHistoryJson(RowlEngineHandle handle) {
             history.push_back({
                 {"node_id", entry.nodeId}, {"speaker", entry.speaker},
                 {"dialogue", entry.dialogue}, {"read", entry.read},
+                {"content_id", entry.contentId},
             });
         }
         buffer = history.dump();
