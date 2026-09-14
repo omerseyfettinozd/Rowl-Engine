@@ -20,6 +20,7 @@ thread contract.
 | Target | Runtime build gate | Package/device gate | Status |
 | --- | --- | --- | --- |
 | Linux desktop x86_64 | Native CTest, shaderless fallback and GPU-MSDF smoke CI tests | Fresh deterministic `game.rowlpkg` (embedded manifest, license inventory) plus VFS package smoke | CI build/test/package gates green, incl. run 34744730099; interactive GUI proof pending |
+| Linux desktop arm64 | Native `ubuntu-24.04-arm` compile job with ELF AArch64 artifact checks | No release package or GUI/device run in this gate | Compile portability only; package and device validation pending |
 | Windows desktop x64 | vcpkg CMake/CTest CI job | Fresh standalone package, DLL and shaderless VFS smoke in CI | CI build/test/package gates green, incl. run 34744730099; interactive GUI/input/audio device proof pending |
 | macOS desktop | None — never built or tested; no host hardware available | None yet | Skeleton only (dylib resolve paths); evidence-blocked, not supported |
 | Android arm64-v8a | Core-only NDK CMake script, never executed here | No APK/AAB is produced; physical-device test pending | Host skeleton only (`EngineActivity`, manifest); evidence-blocked, not supported |

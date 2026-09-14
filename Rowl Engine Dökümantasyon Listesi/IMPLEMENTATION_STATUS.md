@@ -12,6 +12,9 @@ testi geçiyor.
   desktop 1.0 ve 1.x kabul matrisi ayrıldı.
 - Benchmark schema v2, OS/makineye ek olarak CPU mimarisi ve modelini kimliğe
   dahil eder. Tarihsel schema-v1 raporları yalnız birbirleriyle kıyaslanır.
+- Linux `arm64` taşınabilirliği native `ubuntu-24.04-arm` CI derlemesi ve
+  ELF AArch64 core/player/test artefakt denetimiyle kapıdadır; bu compile-only
+  kanıt GUI, ses cihazı veya fiziksel cihaz desteği sayılmaz.
 
 ## Hazır
 

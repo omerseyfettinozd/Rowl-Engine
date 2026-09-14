@@ -156,6 +156,58 @@ jobs:
           dotnet list editor/RowlEngine.Editor.csproj package --vulnerable --include-transitive
           dotnet list editor/Tests/RowlEngine.Editor.Tests.csproj package --vulnerable --include-transitive
 
+  linux-arm64-compile:
+    # Compile-only portability gate. It does not claim GUI, audio-device or
+    # physical-device validation for an eventual ARM64 product package.
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Assert native ARM64 runner
+        run: |
+          test "$(uname -m)" = "aarch64"
+          uname -a
+
+      - name: Install native build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes build-essential cmake curl file ninja-build pkg-config liblua5.4-dev libzstd-dev libvorbis-dev libogg-dev libvulkan-dev glslc libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev libxinerama-dev libxxf86vm-dev libxkbcommon-dev libxss-dev libxtst-dev libxfixes-dev libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev libwayland-dev wayland-protocols libdbus-1-dev libibus-1.0-dev libudev-dev
+
+      - name: Fetch and build pinned SDL3 dependency
+        run: |
+          curl --fail --location --silent --show-error \
+            https://github.com/libsdl-org/SDL/releases/download/release-3.4.16/SDL3-3.4.16.tar.gz \
+            --output "$RUNNER_TEMP/SDL3-3.4.16.tar.gz"
+          tar --extract --gzip --file "$RUNNER_TEMP/SDL3-3.4.16.tar.gz" --directory "$RUNNER_TEMP"
+          cmake -S "$RUNNER_TEMP/SDL3-3.4.16" -B "$RUNNER_TEMP/SDL3-build" -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release -DSDL_SHARED=ON -DSDL_STATIC=OFF \
+            -DSDL_TEST_LIBRARY=OFF -DSDL_GPU=ON
+          cmake --build "$RUNNER_TEMP/SDL3-build" --parallel 2
+          sudo cmake --install "$RUNNER_TEMP/SDL3-build"
+
+      - name: Compile native runtime and tests
+        run: |
+          cmake -S . -B build-arm64 -G Ninja -DCMAKE_BUILD_TYPE=Debug
+          cmake --build build-arm64 --parallel 2
+
+      - name: Verify ARM64 artifacts
+        run: |
+          file build-arm64/lib/libRowlEngineCore.so build-arm64/bin/rowl_player build-arm64/bin/rowl_tests
+          file build-arm64/lib/libRowlEngineCore.so | grep -q 'ARM aarch64'
+          file build-arm64/bin/rowl_player | grep -q 'ARM aarch64'
+          file build-arm64/bin/rowl_tests | grep -q 'ARM aarch64'
+
+      - name: Upload ARM64 compile evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-arm64-compile-artifacts
+          path: |
+            build-arm64/lib/libRowlEngineCore.so
+            build-arm64/bin/rowl_player
+            build-arm64/bin/rowl_tests
+
   windows:
     runs-on: windows-2025
     timeout-minutes: 20

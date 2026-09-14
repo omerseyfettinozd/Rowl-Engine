@@ -90,4 +90,9 @@ same build and fixture.
   full serialization, atomic save and managed-memory paths under the dedicated
   `editor-productization-scale-v1` fixture identity.
 - Record Linux and Windows reference-machine series; do not infer real GUI/device support from headless results.
-- Add compile-only `arm64` gates without making unavailable ARM hardware block the first proven `x86_64` release.
+- The `linux-arm64-compile` CI job runs on GitHub's native
+  `ubuntu-24.04-arm` runner, compiles the core/player/native tests and rejects
+  artifacts that are not ELF AArch64. This remains compile evidence only: it
+  does not claim GUI, audio-device or physical-device validation and cannot
+  block an otherwise proven first `x86_64` package solely for missing device
+  coverage.
