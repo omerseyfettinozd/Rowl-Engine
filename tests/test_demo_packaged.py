@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Package the First Light sample and run it through the release contract.
+"""Package a sample project and run it through the release contract.
 
-Builds a portable release layout from samples/first_light (packaged VFS,
+Builds a portable release layout from the selected sample (packaged VFS,
 no loose Assets), validates it with tools/verify_release_package.py, then
 runs the standalone player --package-smoke-test against it: one real frame
 rendered from the packaged story graph, offscreen, on every platform.
@@ -15,6 +15,8 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import uuid
+import wave
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -41,6 +43,99 @@ def canonical_checksum_bytes(relative, data):
     return data
 
 
+def manifest_file(sample_dir, relative):
+    relative_path = pathlib.PurePosixPath(relative)
+    if relative_path.is_absolute() or ".." in relative_path.parts:
+        raise ValueError(f"unsafe Golden Project path: {relative}")
+    return sample_dir.joinpath(*relative_path.parts)
+
+
+def validate_productization_cases(sample_dir, manifest, checksums):
+    """Validate the v2 fixture data contract without claiming runtime locale support."""
+    cases = manifest.get("productization_cases")
+    if cases is None:
+        return
+    if not isinstance(cases, dict):
+        raise ValueError("Golden Project productization cases must be an object")
+
+    project = json.loads((sample_dir / "project.rowlproj").read_text(encoding="utf-8"))
+    graph = json.loads(
+        (sample_dir / "Assets" / "json" / "full_story_graph.json").read_text(encoding="utf-8")
+    )
+    content_ids = []
+    for node in graph.get("nodes", []):
+        for game_object in node.get("objects", []):
+            for component in game_object.get("components", []):
+                if component.get("type") != "dialogue":
+                    continue
+                content_id = component.get("data", {}).get("content_id")
+                if not isinstance(content_id, str):
+                    raise ValueError("Golden Project dialogue is missing content_id")
+                try:
+                    uuid.UUID(content_id)
+                except ValueError as error:
+                    raise ValueError(f"invalid dialogue content_id: {content_id}") from error
+                content_ids.append(content_id)
+    if not content_ids or len(content_ids) != len(set(content_ids)):
+        raise ValueError("Golden Project dialogue content_ids must be present and unique")
+
+    localization = cases.get("localization")
+    if not isinstance(localization, dict):
+        raise ValueError("Golden Project localization case is missing")
+    default_locale = localization.get("default_locale")
+    supported_locales = localization.get("supported_locales")
+    catalogs = localization.get("catalogs")
+    if (not isinstance(default_locale, str) or not isinstance(supported_locales, list)
+            or default_locale not in supported_locales or not isinstance(catalogs, dict)):
+        raise ValueError("invalid Golden Project localization declaration")
+    if project.get("defaultLocale") != default_locale or project.get("supportedLocales") != supported_locales:
+        raise ValueError("project locale declaration differs from Golden Project contract")
+    for locale in supported_locales:
+        relative = catalogs.get(locale)
+        if not isinstance(relative, str) or relative not in checksums:
+            raise ValueError(f"locale catalog is not checksummed: {locale}")
+        catalog = json.loads(manifest_file(sample_dir, relative).read_text(encoding="utf-8"))
+        entries = catalog.get("entries")
+        if catalog.get("schema_version") != 1 or catalog.get("locale") != locale or not isinstance(entries, dict):
+            raise ValueError(f"invalid locale catalog: {locale}")
+        missing = sorted(set(content_ids) - set(entries))
+        if missing:
+            raise ValueError(f"locale catalog {locale} misses content_ids: {', '.join(missing)}")
+        for content_id in content_ids:
+            entry = entries[content_id]
+            if not isinstance(entry, dict) or not isinstance(entry.get("speaker"), str) \
+                    or not isinstance(entry.get("text"), str) or not isinstance(entry.get("alt_text"), str):
+                raise ValueError(f"invalid locale entry: {locale}/{content_id}")
+
+    long_audio = cases.get("long_audio")
+    if not isinstance(long_audio, dict):
+        raise ValueError("Golden Project long-audio case is missing")
+    audio_relative = long_audio.get("path")
+    minimum_duration = long_audio.get("minimum_duration_seconds")
+    if not isinstance(audio_relative, str) or audio_relative not in checksums \
+            or not isinstance(minimum_duration, (int, float)) or minimum_duration <= 0:
+        raise ValueError("invalid Golden Project long-audio declaration")
+    with wave.open(str(manifest_file(sample_dir, audio_relative)), "rb") as audio:
+        frame_width = audio.getnchannels() * audio.getsampwidth()
+        actual_frames = len(audio.readframes(audio.getnframes())) // frame_width
+        duration = actual_frames / audio.getframerate()
+    if duration < minimum_duration:
+        raise ValueError(f"Golden Project long audio is only {duration:.3f} seconds")
+
+    unicode_case = cases.get("unicode_path")
+    unicode_relative = unicode_case.get("path") if isinstance(unicode_case, dict) else None
+    if not isinstance(unicode_relative, str) or not any(ord(char) > 127 for char in unicode_relative) \
+            or unicode_relative not in checksums or not manifest_file(sample_dir, unicode_relative).is_file():
+        raise ValueError("invalid Golden Project Unicode-path declaration")
+
+    corrupt_case = cases.get("corrupt_asset")
+    corrupt_source = corrupt_case.get("source_path") if isinstance(corrupt_case, dict) else None
+    if not isinstance(corrupt_source, str) or corrupt_source not in checksums \
+            or corrupt_case.get("mutation") != "truncate_to_16_bytes" \
+            or corrupt_case.get("expected_diagnostic") != "asset_decode_error":
+        raise ValueError("invalid Golden Project corrupt-asset case")
+
+
 def validate_golden_manifest(sample_dir):
     """Reject accidental fixture drift before comparing platform results."""
     manifest_path = sample_dir / "golden_project.json"
@@ -54,10 +149,7 @@ def validate_golden_manifest(sample_dir):
         if not isinstance(checksums, dict) or not checksums:
             raise ValueError("Golden Project has no checksum map")
         for relative, expected in checksums.items():
-            relative_path = pathlib.PurePosixPath(relative)
-            if relative_path.is_absolute() or ".." in relative_path.parts:
-                raise ValueError(f"unsafe Golden Project path: {relative}")
-            candidate = sample_dir.joinpath(*relative_path.parts)
+            candidate = manifest_file(sample_dir, relative)
             if not candidate.is_file():
                 raise ValueError(f"missing Golden Project file: {relative}")
             actual = hashlib.sha256(
@@ -67,7 +159,8 @@ def validate_golden_manifest(sample_dir):
                 raise ValueError(
                     f"Golden Project checksum mismatch for {relative}: {actual}"
                 )
-    except (OSError, ValueError, json.JSONDecodeError) as error:
+        validate_productization_cases(sample_dir, manifest, checksums)
+    except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError, wave.Error) as error:
         raise RuntimeError(f"invalid Golden Project manifest: {error}") from error
 
 
@@ -128,7 +221,7 @@ def main():
                   f"{smoke.stdout}{smoke.stderr}", file=sys.stderr)
             return 1
 
-    print("[DemoPackaged] First Light release packages, verifies, and renders.")
+    print(f"[DemoPackaged] {sample_dir.name} release packages, verifies, and renders.")
     return 0
 
 

@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "locale": "tr",
+  "entries": {
+    "e3421d4a-c61f-5f2b-8dd0-1984d5c4e911": {
+      "speaker": "Margot",
+      "text": "Röle cızırtıyla uyanıyor. Parazitin içinden bir sinyal yükseliyor — cevap verecek misin?",
+      "alt_text": "Bir telsiz operatörü ışıklı rölenin yanında bekliyor."
+    },
+    "35dce5af-9522-58ef-a7af-7306f0fb7dbd": {
+      "speaker": "Ses",
+      "text": "Ahizeyi kaldırıyorsun. Yavaş ve kararlı sayılar — senin için gönderilmiş bir şifre.",
+      "alt_text": ""
+    },
+    "705a525d-b6e2-500b-b3d6-93a97465c4ce": {
+      "speaker": "Margot",
+      "text": "Kadranın sessizliğe gömülmesine izin veriyorsun. Bazı sinyaller sana ait değildir. Son.",
+      "alt_text": ""
+    },
+    "76aefd60-fef8-5f91-a1a7-8b62aa6ba85a": {
+      "speaker": "Margot",
+      "text": "Sayılar koordinatlara dönüşüyor. Şafak vardiyası birden ilginçleşti. Son.",
+      "alt_text": ""
+    }
+  }
+}

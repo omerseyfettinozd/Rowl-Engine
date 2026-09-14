@@ -77,7 +77,12 @@ same build and fixture.
 
 ## Phase 0 remaining proof artifacts
 
-- Expand Product Golden Project with TR/EN catalogs, Unicode paths, long audio and corrupt-asset cases as their owning formats land.
+- Product Golden Project v2 freezes stable dialogue `content_id` values, EN/TR
+  catalogs, a packaged Unicode image path, a 60-second PCM audio fixture and a
+  reproducible corrupt-image recipe. Its manifest validator checks catalog
+  coverage/identity, Unicode path integrity and real decoded audio duration;
+  runtime locale selection and corrupt-asset diagnostics remain assigned to
+  their Faz 3 and Faz 1 owners respectively.
 - Generate the deterministic 2,000-node/6,000-edge editor fixture with
   `tools/generate_editor_scale_fixture.py`; its identity/count/determinism
   contract is enforced by CTest. The schema-v2 editor series measures its real

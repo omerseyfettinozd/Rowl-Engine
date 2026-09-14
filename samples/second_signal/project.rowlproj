@@ -4,6 +4,8 @@
   "engineVersion": "1.0.0",
   "nodeCount": 4,
   "startNodeId": 1,
+  "defaultLocale": "en",
+  "supportedLocales": ["en", "tr"],
   "virtualResolution": {
     "width": 1920,
     "height": 1080

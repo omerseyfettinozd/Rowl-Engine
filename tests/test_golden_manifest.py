@@ -9,6 +9,7 @@ import hashlib
 import importlib.util
 import json
 import pathlib
+import shutil
 import tempfile
 
 
@@ -67,4 +68,29 @@ with tempfile.TemporaryDirectory() as directory:
         )
     )
 
-print("Golden manifest checksum tests passed.")
+    product_fixture = ROOT / "samples" / "second_signal"
+    expect_ok(product_fixture)
+
+    missing_translation = pathlib.Path(directory) / "missing-translation"
+    shutil.copytree(product_fixture, missing_translation)
+    tr_path = missing_translation / "Assets" / "locales" / "tr.json"
+    tr_catalog = json.loads(tr_path.read_text(encoding="utf-8"))
+    tr_catalog["entries"].pop(next(iter(tr_catalog["entries"])))
+    tr_path.write_text(json.dumps(tr_catalog, ensure_ascii=False), encoding="utf-8")
+    manifest_path = missing_translation / "golden_project.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["sha256"]["Assets/locales/tr.json"] = hashlib.sha256(tr_path.read_bytes()).hexdigest()
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    expect_rejected(missing_translation)
+
+    short_audio = pathlib.Path(directory) / "short-audio"
+    shutil.copytree(product_fixture, short_audio)
+    audio_path = short_audio / "Assets" / "audio" / "long_signal_60s.wav"
+    audio_path.write_bytes(audio_path.read_bytes()[:16044])
+    manifest_path = short_audio / "golden_project.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["sha256"]["Assets/audio/long_signal_60s.wav"] = hashlib.sha256(audio_path.read_bytes()).hexdigest()
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    expect_rejected(short_audio)
+
+print("Golden manifest checksum and productization contract tests passed.")

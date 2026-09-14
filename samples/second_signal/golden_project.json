@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "fixture_id": "rowl-golden-project-v1",
-  "description": "Cross-platform 1.0 release contract fixture",
+  "fixture_id": "rowl-golden-project-v2",
+  "description": "Productization and cross-platform release contract fixture",
   "capabilities": [
     "branch_and_rejoin",
     "background",
@@ -15,14 +15,47 @@
     "conditional_choice",
     "save_load_restart",
     "rewind",
-    "packaged_vfs"
+    "packaged_vfs",
+    "stable_content_ids",
+    "localization_catalog_contract",
+    "unicode_asset_path",
+    "long_audio_fixture",
+    "corrupt_asset_negative_case"
   ],
+  "productization_cases": {
+    "localization": {
+      "default_locale": "en",
+      "supported_locales": ["en", "tr"],
+      "catalogs": {
+        "en": "Assets/locales/en.json",
+        "tr": "Assets/locales/tr.json"
+      },
+      "runtime_selection_phase": 3
+    },
+    "long_audio": {
+      "path": "Assets/audio/long_signal_60s.wav",
+      "minimum_duration_seconds": 60
+    },
+    "unicode_path": {
+      "path": "Assets/images/ışıklı_röle.jpg"
+    },
+    "corrupt_asset": {
+      "source_path": "Assets/images/ışıklı_röle.jpg",
+      "mutation": "truncate_to_16_bytes",
+      "expected_diagnostic": "asset_decode_error",
+      "enforcement_phase": 1
+    }
+  },
   "sha256": {
-    "project.rowlproj": "db421f35c2605ee8bf38c47acfa2bebcccc8f0f4bffba4d10300ee0a9ea97c24",
-    "Assets/json/full_story_graph.json": "c063f390642390f7c6fa1b082b9d822dc57893fd965a4c3513429b2b2eb5a70e",
+    "project.rowlproj": "51c14e26e6644ec4a0817784509f6293005a6be1d5c9c5becf97d84dae6a55ea",
+    "Assets/json/full_story_graph.json": "aa29715c284228d32201699d96cd3587ecc32373ee08637efa4613358876ff78",
     "Assets/audio/signal_tone.wav": "806428b710ac89547038e9ce1a45fb5a705f162dfcb35c36b5b9eb5db087a987",
+    "Assets/audio/long_signal_60s.wav": "0e03376b5b3a1311843d847768335c1859b18cd19fcc3cc6c7521f0af05b9407",
     "Assets/fonts/default.ttf": "baccc64becc3eb7d104b7c84d99f5314a0a1f896e2b3ea6c2f22fc08d2003bee",
     "Assets/images/operator.jpg": "360a335f223f86a3bf2f308f2a97c8e6142af16f91b359d62f07b19fc5e9cdfc",
-    "Assets/images/relay.jpg": "cd9d2270e0be94888809331ede6f9bed32930d18ecda5c85be13d595115afc42"
+    "Assets/images/relay.jpg": "cd9d2270e0be94888809331ede6f9bed32930d18ecda5c85be13d595115afc42",
+    "Assets/images/ışıklı_röle.jpg": "cd9d2270e0be94888809331ede6f9bed32930d18ecda5c85be13d595115afc42",
+    "Assets/locales/en.json": "67f2f75fe2838ff1b8b623d7bd447e3592a6c49aa21aa2a4e0f7b2cce36ce4e6",
+    "Assets/locales/tr.json": "f40fe0d6ca3b60d078c2102c9ec9f86609e0e855adccaa0c866b59467ccf5f2c"
   }
 }

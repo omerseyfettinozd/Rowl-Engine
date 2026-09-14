@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "locale": "en",
+  "entries": {
+    "e3421d4a-c61f-5f2b-8dd0-1984d5c4e911": {
+      "speaker": "Margot",
+      "text": "The relay crackles awake. A signal rises out of the static — do you answer it?",
+      "alt_text": "A radio operator waits beside a glowing relay."
+    },
+    "35dce5af-9522-58ef-a7af-7306f0fb7dbd": {
+      "speaker": "Voice",
+      "text": "You pick up the receiver. Numbers, slow and deliberate — a code meant for you.",
+      "alt_text": ""
+    },
+    "705a525d-b6e2-500b-b3d6-93a97465c4ce": {
+      "speaker": "Margot",
+      "text": "You let the dial fall silent. Some signals are not yours to answer. The end.",
+      "alt_text": ""
+    },
+    "76aefd60-fef8-5f91-a1a7-8b62aa6ba85a": {
+      "speaker": "Margot",
+      "text": "The numbers resolve into coordinates. Dawn shift just got interesting. The end.",
+      "alt_text": ""
+    }
+  }
+}

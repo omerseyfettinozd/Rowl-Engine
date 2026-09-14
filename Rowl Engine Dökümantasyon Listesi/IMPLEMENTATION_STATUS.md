@@ -80,9 +80,12 @@ testi geçiyor.
   henüz var olmayan APK/AAB/IPA çıktısını başarılı göstermez.
 - GitHub Actions `34689084748` üzerinde Linux ve Windows build/test kapıları ile
   iki platformun standalone package/VFS smoke adımları `0f0b092` için geçti.
-- `samples/second_signal`, checksum'lı `rowl-golden-project-v1` fixture'ıdır;
+- `samples/second_signal`, checksum'lı `rowl-golden-project-v2` fixture'ıdır;
   ayrılan/birleşen graph, görsel/ses/sinematik/script component'leri ile
-  save/load/restart/rewind sözleşmesini gerçek C API ve paketli VFS yolunda sınar.
+  save/load/restart/rewind sözleşmesini gerçek C API ve paketli VFS yolunda
+  sınar. Faz 0 ürün kapsamı kalıcı diyalog kimlikleri, eksiksiz EN/TR katalog
+  sözleşmesi, Unicode görsel yolu, gerçek 60 saniyelik PCM fixture ve Faz 1'de
+  tanıya bağlanacak deterministik bozuk-görsel reçetesini de içerir.
 - Save/load ve rewind sunumu yeniden kurarken node-entry yan etkilerini tekrar
   çalıştırmaz. Variable `add`, script `on_enter`, transition/shake ve dialogue
   history kaydı restore sırasında ikinci kez uygulanmaz; kaydedilmiş state korunur.

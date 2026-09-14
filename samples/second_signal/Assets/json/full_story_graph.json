@@ -16,7 +16,7 @@
               "id": "bg1c",
               "enabled": true,
               "data": {
-                "texture": "relay.jpg",
+                "texture": "ışıklı_röle.jpg",
                 "x": 0,
                 "y": 0,
                 "width": 1920,
@@ -66,7 +66,7 @@
               "id": "aud1",
               "enabled": true,
               "data": {
-                "bgm_track": "audio/signal_tone.wav",
+                "bgm_track": "audio/long_signal_60s.wav",
                 "volume": 0.8
               }
             },
@@ -105,6 +105,7 @@
               "id": "dlg1c",
               "enabled": true,
               "data": {
+                "content_id": "e3421d4a-c61f-5f2b-8dd0-1984d5c4e911",
                 "speaker": "Margot",
                 "dialogue": "The relay crackles awake. A signal rises out of the static — do you answer it?",
                 "x": 80,
@@ -187,6 +188,7 @@
               "id": "dlg2c",
               "enabled": true,
               "data": {
+                "content_id": "35dce5af-9522-58ef-a7af-7306f0fb7dbd",
                 "speaker": "Voice",
                 "dialogue": "You pick up the receiver. Numbers, slow and deliberate — a code meant for you.",
                 "x": 80,
@@ -255,6 +257,7 @@
               "id": "dlg3c",
               "enabled": true,
               "data": {
+                "content_id": "705a525d-b6e2-500b-b3d6-93a97465c4ce",
                 "speaker": "Margot",
                 "dialogue": "You let the dial fall silent. Some signals are not yours to answer. The end.",
                 "x": 80,
@@ -322,6 +325,7 @@
               "id": "dlg4c",
               "enabled": true,
               "data": {
+                "content_id": "76aefd60-fef8-5f91-a1a7-8b62aa6ba85a",
                 "speaker": "Margot",
                 "dialogue": "The numbers resolve into coordinates. Dawn shift just got interesting. The end.",
                 "x": 80,

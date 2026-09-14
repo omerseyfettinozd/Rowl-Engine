@@ -180,7 +180,7 @@ void writeGoldenBenchmarkJson(const std::string& outputPath, double startupMs, d
            << "  \"build\": {\"id\": \"" << jsonEscape(environmentValue("ROWL_BENCHMARK_BUILD_ID", "unknown"))
            << "\", \"type\": \"" << jsonEscape(environmentValue("ROWL_BENCHMARK_BUILD_TYPE", "unknown")) << "\"},\n";
     writeBenchmarkEnvironment(stream);
-    stream << "  \"fixture_id\": \"rowl-golden-project-v1\",\n"
+    stream << "  \"fixture_id\": \"rowl-golden-project-v2\",\n"
            << "  \"metrics\": {\n"
            << "    \"startup_ms\": " << startupMs << ",\n"
            << "    \"project_load_ms\": " << projectLoadMs << ",\n"
