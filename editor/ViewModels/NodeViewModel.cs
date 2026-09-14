@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using RowlEngine.Editor.ViewModels.Components;
@@ -50,11 +52,67 @@ namespace RowlEngine.Editor.ViewModels
 
         partial void OnIsSelectedChanged(bool value) => RefreshBorderColor();
 
+        partial void OnIsSearchHighlightedChanged(bool value) => RefreshBorderColor();
+
         private void RefreshBorderColor()
         {
-            // Selection takes priority so keyboard/pointer focus stays visible;
-            // the start badge still preserves the node's semantic role.
-            BorderColor = IsSelected ? "#F09A78" : IsStartNode ? "#10B981" : "#2A2A3D";
+            // Temporary search-jump highlight wins so the focused card is
+            // unmistakable; selection stays second, start badge last.
+            BorderColor = IsSearchHighlighted ? "#FACC15"
+                : IsSelected ? "#F09A78"
+                : IsStartNode ? "#10B981" : "#2A2A3D";
+        }
+
+        // ── Faz 4 Dilim 2 — color tags & search visuals ──
+
+        /// <summary>
+        /// Visual color tag (normalized lowercase palette name, empty = none).
+        /// Persisted as <c>metadata.color_tag</c>; unknown values are kept.
+        /// </summary>
+        [ObservableProperty]
+        private string _colorTag = string.Empty;
+
+        partial void OnColorTagChanged(string value)
+        {
+            string normalized = Services.Search.NodeColorTags.Normalize(value);
+            if (!string.Equals(normalized, value, StringComparison.Ordinal))
+            {
+                ColorTag = normalized;
+                return;
+            }
+            RefreshTagVisuals();
+        }
+
+        /// <summary>Free-form category labels (<c>metadata.tags</c>).</summary>
+        public ObservableCollection<string> Tags { get; } = new();
+
+        /// <summary>
+        /// Canvas dimming applied by the search filter bar (1.0 = normal,
+        /// 0.25 = filtered out). Bound by the card and the minimap; never
+        /// affects culling, save or the search index.
+        /// </summary>
+        [ObservableProperty]
+        private double _filterOpacity = 1.0;
+
+        /// <summary>
+        /// Temporary jump-to highlight (amber border). Set by
+        /// <c>SearchViewModel</c>, auto-cleared shortly after.
+        /// </summary>
+        [ObservableProperty]
+        private bool _isSearchHighlighted;
+
+        [ObservableProperty]
+        private IBrush _colorTagBrush = Brushes.Transparent;
+
+        [ObservableProperty]
+        private bool _hasColorTag;
+
+        private void RefreshTagVisuals()
+        {
+            HasColorTag = !string.IsNullOrEmpty(ColorTag);
+            ColorTagBrush = HasColorTag
+                ? Services.Search.NodeColorTags.GetBrush(ColorTag)
+                : Brushes.Transparent;
         }
 
         // ══════════════════════════════════════════════════════════════════════

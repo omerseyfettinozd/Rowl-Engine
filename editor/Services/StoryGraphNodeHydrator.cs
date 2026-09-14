@@ -25,6 +25,7 @@ internal static class StoryGraphNodeHydrator
         {
             shell.ChapterId = chapterElement.GetString() ?? string.Empty;
         }
+        HydrateMetadata(shell, nodeJson);
         return shell;
     }
 
@@ -76,6 +77,40 @@ internal static class StoryGraphNodeHydrator
         character.VoiceBlipCadence = value.TryGetProperty("character_voice_blip_cadence", out var cvbc) && cvbc.TryGetInt32(out var cvbci) ? cvbci : character.VoiceBlipCadence;
 
         node.CreateObject("Audio").AddComponent<AudioComponentViewModel>().DspFilter = Text(value, "dsp", "Normal");
+    }
+
+    /// <summary>
+    /// Faz 4 Dilim 2 — reads the optional editor <c>metadata</c> section
+    /// (<c>color_tag</c> string + <c>tags</c> string array). Absent or
+    /// malformed metadata loads as untagged (fail-soft); entries that are
+    /// not strings, blank, overlong or beyond the per-node cap are skipped
+    /// without failing the node.
+    /// </summary>
+    public static void HydrateMetadata(NodeViewModel node, JsonElement nodeJson)
+    {
+        if (!nodeJson.TryGetProperty("metadata", out var metadata) ||
+            metadata.ValueKind != JsonValueKind.Object)
+            return;
+        if (metadata.TryGetProperty("color_tag", out var colorTag) &&
+            colorTag.ValueKind == JsonValueKind.String)
+        {
+            node.ColorTag = colorTag.GetString() ?? string.Empty;
+        }
+        if (metadata.TryGetProperty("tags", out var tags) &&
+            tags.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var entry in tags.EnumerateArray())
+            {
+                if (entry.ValueKind != JsonValueKind.String)
+                    continue;
+                string? normalized = Search.NodeColorTags.NormalizeListTag(entry.GetString());
+                if (normalized is null ||
+                    node.Tags.Count >= Search.NodeColorTags.MaxTagsPerNode ||
+                    node.Tags.Contains(normalized))
+                    continue;
+                node.Tags.Add(normalized);
+            }
+        }
     }
 
     private static string Text(JsonElement value, string property, string fallback) =>

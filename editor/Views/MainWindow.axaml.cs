@@ -145,10 +145,25 @@ namespace RowlEngine.Editor.Views
                 e.Handled = true;
             }
 
-            // ── Arama ───────────────────────────────────────────────
+            // ── Arama (Faz 4 Dilim 2: sonuç listesi + filtreler) ─────
             else if (ctrl && e.Key == Key.F)
             {
                 vm.ToggleSearchCommand.Execute(null);
+                e.Handled = true;
+            }
+            else if (vm.IsSearchVisible && isTextInput && e.Key == Key.Down)
+            {
+                vm.Search.MoveSelection(1);
+                e.Handled = true;
+            }
+            else if (vm.IsSearchVisible && isTextInput && e.Key == Key.Up)
+            {
+                vm.Search.MoveSelection(-1);
+                e.Handled = true;
+            }
+            else if (vm.IsSearchVisible && e.Key == Key.Enter && !vm.IsPlayingStandalone)
+            {
+                vm.Search.JumpToSelectedCommand.Execute(null);
                 e.Handled = true;
             }
             else if (e.Key == Key.Escape && vm.IsDraggingWire)
@@ -160,6 +175,7 @@ namespace RowlEngine.Editor.Views
             {
                 vm.IsSearchVisible = false;
                 vm.SearchQuery = "";
+                vm.Search.ClearHighlight();
                 e.Handled = true;
             }
 

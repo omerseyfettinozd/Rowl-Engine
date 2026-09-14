@@ -4,6 +4,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
+using RowlEngine.Editor.Services.Search;
 using RowlEngine.Editor.ViewModels;
 
 namespace RowlEngine.Editor.Controls
@@ -62,6 +63,58 @@ namespace RowlEngine.Editor.Controls
                 BoundsProperty, BackgroundProperty);
         }
 
+        protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+        {
+            base.OnPropertyChanged(change);
+            if (change.Property != NodesSourceProperty)
+                return;
+            if (change.OldValue is System.Collections.Specialized.INotifyCollectionChanged oldCollection)
+                oldCollection.CollectionChanged -= OnNodesCollectionChanged;
+            UnhookNodeBrushes(change.OldValue as System.Collections.IEnumerable);
+            if (change.NewValue is System.Collections.Specialized.INotifyCollectionChanged newCollection)
+                newCollection.CollectionChanged += OnNodesCollectionChanged;
+            HookNodeBrushes(change.NewValue as System.Collections.IEnumerable);
+            InvalidateVisual();
+        }
+
+        private void OnNodesCollectionChanged(
+            object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
+        {
+            UnhookNodeBrushes(e.OldItems);
+            HookNodeBrushes(e.NewItems);
+            InvalidateVisual();
+        }
+
+        private void HookNodeBrushes(System.Collections.IEnumerable? items)
+        {
+            if (items is null)
+                return;
+            foreach (var item in items)
+            {
+                if (item is NodeViewModel node)
+                    node.PropertyChanged += OnNodeBrushPropertyChanged;
+            }
+        }
+
+        private void UnhookNodeBrushes(System.Collections.IEnumerable? items)
+        {
+            if (items is null)
+                return;
+            foreach (var item in items)
+            {
+                if (item is NodeViewModel node)
+                    node.PropertyChanged -= OnNodeBrushPropertyChanged;
+            }
+        }
+
+        private void OnNodeBrushPropertyChanged(
+            object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(NodeViewModel.ColorTag) ||
+                e.PropertyName == nameof(NodeViewModel.FilterOpacity))
+                InvalidateVisual();
+        }
+
         public override void Render(DrawingContext context)
         {
             base.Render(context);
@@ -91,7 +144,13 @@ namespace RowlEngine.Editor.Controls
                         offsetY + (node.Y - world.Y) * scale,
                         Math.Max(2.0, 308.0 * scale),
                         Math.Max(2.0, height * scale));
-                    context.FillRectangle(s_nodeBrush, dot);
+                    // Faz 4 Dilim 2 — tagged nodes keep their card color;
+                    // filtered-out nodes render dimmed, like on the canvas.
+                    bool dimmed = node.FilterOpacity < 0.99;
+                    IBrush brush = string.IsNullOrEmpty(node.ColorTag)
+                        ? (dimmed ? s_nodeDimBrush : s_nodeBrush)
+                        : NodeColorTags.GetBrush(node.ColorTag, dimmed);
+                    context.FillRectangle(brush, dot);
                 }
             }
 
@@ -146,6 +205,9 @@ namespace RowlEngine.Editor.Controls
 
         private static readonly IBrush s_nodeBrush =
             new SolidColorBrush(Color.FromArgb(160, 56, 189, 248));
+
+        private static readonly IBrush s_nodeDimBrush =
+            new SolidColorBrush(Color.FromArgb(48, 56, 189, 248));
 
         private static readonly IPen s_viewportPen =
             new Pen(new SolidColorBrush(Color.FromArgb(255, 0, 240, 255)), 1.5);

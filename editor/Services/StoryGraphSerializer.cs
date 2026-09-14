@@ -238,6 +238,25 @@ internal static class StoryGraphSerializer
         };
         if (!string.IsNullOrEmpty(node.ChapterId))
             rendered["chapter_id"] = node.ChapterId;
+        // Faz 4 Dilim 2 — editor metadata is omitted (not null) while the
+        // node is untagged, so legacy v4 documents stay byte-stable and the
+        // native parser (which ignores unknown keys) keeps loading them.
+        var cleanTags = node.Tags
+            .Select(tag => Services.Search.NodeColorTags.NormalizeListTag(tag))
+            .Where(tag => tag is not null)
+            .Distinct()
+            .Take(Services.Search.NodeColorTags.MaxTagsPerNode)
+            .ToArray();
+        bool hasColorTag = !string.IsNullOrEmpty(node.ColorTag);
+        if (hasColorTag || cleanTags.Length > 0)
+        {
+            var metadata = new Dictionary<string, object?>();
+            if (hasColorTag)
+                metadata["color_tag"] = node.ColorTag;
+            if (cleanTags.Length > 0)
+                metadata["tags"] = cleanTags;
+            rendered["metadata"] = metadata;
+        }
         return rendered;
     }
 }

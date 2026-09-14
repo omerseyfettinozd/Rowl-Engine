@@ -3,6 +3,8 @@
         xmlns:vm="using:RowlEngine.Editor.ViewModels"
         xmlns:views="using:RowlEngine.Editor.Views"
         xmlns:panels="using:RowlEngine.Editor.Views.Panels"
+        xmlns:search="using:RowlEngine.Editor.Services.Search"
+        xmlns:conv="using:Avalonia.Data.Converters"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d" d:DesignWidth="1600" d:DesignHeight="900"
@@ -246,19 +248,54 @@
                         </Grid>
                     </Grid>
 
-                    <!-- 🔍 QUICK SEARCH OVERLAY -->
-                    <Border IsVisible="{Binding IsSearchVisible}" 
+                    <!-- 🔍 GLOBAL SEARCH OVERLAY (Faz 4 Dilim 2) -->
+                    <Border IsVisible="{Binding IsSearchVisible}"
                             VerticalAlignment="Top" HorizontalAlignment="Center"
                             Margin="0,12,0,0" ZIndex="100"
-                            Background="{DynamicResource SurfaceBackground}" 
+                            Background="{DynamicResource SurfaceBackground}"
                             BorderBrush="{DynamicResource Accent}" BorderThickness="1"
-                            CornerRadius="8" Padding="4" MinWidth="400"
+                            CornerRadius="8" Padding="10" Width="520"
                             BoxShadow="0 8 24 0 #60000000">
-                        <TextBox Text="{Binding SearchQuery}" 
-                                 Watermark="🔍 Node veya asset ara... (Esc ile kapat)"
-                                 Background="{DynamicResource InputBackground}" 
-                                 Foreground="{DynamicResource PrimaryText}"
-                                 BorderThickness="0" Padding="12,8" FontSize="14"/>
+                        <StackPanel Spacing="8">
+                            <TextBox Text="{Binding SearchQuery}"
+                                     Watermark="🔍 Ara: başlık, konuşmacı, metin, speaker:Evelyn, type:choice… (Esc kapat)"
+                                     Background="{DynamicResource InputBackground}"
+                                     Foreground="{DynamicResource PrimaryText}"
+                                     BorderThickness="0" Padding="12,8" FontSize="14"/>
+                            <!-- Filtre çubuğu: tür / konuşmacı / renk etiketi -->
+                            <Grid ColumnDefinitions="Auto,*,Auto,*,Auto,*" VerticalAlignment="Center">
+                                <TextBlock Grid.Column="0" Text="Tür:" Foreground="{DynamicResource MutedText}" FontSize="11" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                <ComboBox Grid.Column="1" ItemsSource="{Binding Search.AvailableNodeKinds}" SelectedItem="{Binding Search.SelectedNodeKind}" FontSize="11" Margin="0,0,8,0"/>
+                                <TextBlock Grid.Column="2" Text="Konuşmacı:" Foreground="{DynamicResource MutedText}" FontSize="11" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                <ComboBox Grid.Column="3" ItemsSource="{Binding Search.AvailableSpeakers}" SelectedItem="{Binding Search.SelectedSpeaker}" FontSize="11" Margin="0,0,8,0"/>
+                                <TextBlock Grid.Column="4" Text="Renk:" Foreground="{DynamicResource MutedText}" FontSize="11" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                <ComboBox Grid.Column="5" ItemsSource="{Binding Search.AvailableColorTags}" SelectedItem="{Binding Search.SelectedColorTag}" FontSize="11"/>
+                            </Grid>
+                            <!-- Sonuç listesi: başlık + alan rozeti + metin kesiti -->
+                            <ListBox ItemsSource="{Binding Search.Results}"
+                                     SelectedItem="{Binding Search.SelectedResult}"
+                                     MaxHeight="300"
+                                     Background="{DynamicResource InputBackground}"
+                                     BorderThickness="0" CornerRadius="6">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate x:DataType="search:NodeSearchHit">
+                                        <StackPanel Spacing="2" Margin="0,4">
+                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                                <TextBlock Text="{Binding NodeTitle}" FontWeight="Bold" Foreground="{DynamicResource PrimaryText}" FontSize="12"/>
+                                                <TextBlock Text="{Binding NodeId, StringFormat='#{0}'}" Foreground="{DynamicResource MutedText}" FontSize="11" VerticalAlignment="Center"/>
+                                                <Border Background="{DynamicResource AccentButtonBg}" CornerRadius="3" Padding="5,1" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding FieldLabel}" FontSize="9" Foreground="White" FontWeight="Bold"/>
+                                                </Border>
+                                            </StackPanel>
+                                            <TextBlock Text="{Binding Snippet}" FontSize="11" Foreground="{DynamicResource SecondaryText}" TextWrapping="Wrap" MaxLines="2"/>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                            <TextBlock Text="{Binding Search.StatusText}"
+                                       Foreground="{DynamicResource MutedText}" FontSize="11"
+                                       HorizontalAlignment="Right" IsVisible="{Binding Search.StatusText, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}"/>
+                        </StackPanel>
                     </Border>
                 </Grid>
 

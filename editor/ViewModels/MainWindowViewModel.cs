@@ -133,7 +133,9 @@ namespace RowlEngine.Editor.ViewModels
             }
         }
 
-        // ── Hızlı Arama (Quick Search) ───────────────────────────────
+        // ── Hızlı Arama (Quick Search, Faz 4 Dilim 2) ───────────────
+        // The box text lives here for XAML/shortcut compatibility; every
+        // query, filter, result and jump decision lives in SearchViewModel.
         [ObservableProperty]
         private bool _isSearchVisible = false;
 
@@ -142,15 +144,7 @@ namespace RowlEngine.Editor.ViewModels
 
         partial void OnSearchQueryChanged(string value)
         {
-            var match = EditorWorkspaceLayoutService.FindMatchingNode(Nodes, value);
-            if (match != null)
-            {
-                SelectedNode = match;
-                var (targetX, targetY) = EditorWorkspaceLayoutService.CalculatePanTargetForNode(match, ZoomScale);
-                TargetPanX = targetX;
-                TargetPanY = targetY;
-                StartSmoothViewAnimation();
-            }
+            Search?.SetQuery(value);
         }
 
         [RelayCommand]
@@ -158,6 +152,7 @@ namespace RowlEngine.Editor.ViewModels
         {
             IsSearchVisible = !IsSearchVisible;
             if (!IsSearchVisible) SearchQuery = "";
+            else Search?.Refresh();
         }
 
         // ── Tam Ekran ─────────────────────────────────────────────────
@@ -426,6 +421,8 @@ namespace RowlEngine.Editor.ViewModels
         public ProjectIssuesViewModel ProjectIssuesViewModel { get; }
         public InspectorViewModel InspectorViewModel { get; }
         public NodeGraphViewModel NodeGraphViewModel { get; }
+        /// <summary>Faz 4 Dilim 2 — global search + filter bar owner.</summary>
+        public SearchViewModel Search { get; }
         public LivePreviewViewModel LivePreviewViewModel { get; }
         public HierarchyViewModel HierarchyViewModel { get; }
 
@@ -464,6 +461,7 @@ namespace RowlEngine.Editor.ViewModels
             ProjectIssuesViewModel = new ProjectIssuesViewModel(this);
             InspectorViewModel = new InspectorViewModel(this);
             NodeGraphViewModel = new NodeGraphViewModel(this);
+            Search = new SearchViewModel(this);
             LivePreviewViewModel = new LivePreviewViewModel(this);
             HierarchyViewModel = new HierarchyViewModel(this);
 

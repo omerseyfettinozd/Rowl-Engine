@@ -4,6 +4,8 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="using:RowlEngine.Editor.ViewModels"
              xmlns:comp="using:RowlEngine.Editor.ViewModels.Components"
+             xmlns:search="using:RowlEngine.Editor.Services.Search"
+             xmlns:conv="using:Avalonia.Data.Converters"
              xmlns:views="using:RowlEngine.Editor.Views.Components"
              mc:Ignorable="d" d:DesignWidth="320" d:DesignHeight="700"
              x:Class="RowlEngine.Editor.Views.Panels.NodeInspectorView"
@@ -43,13 +45,37 @@
                                  FontSize="12" Padding="8,5" Margin="0,0,8,0"/>
 
                         <!-- Active Toggle -->
-                        <CheckBox Grid.Column="1" 
-                                  IsChecked="{Binding HierarchyViewModel.SelectedObject.IsActive}" 
+                        <CheckBox Grid.Column="1"
+                                  IsChecked="{Binding HierarchyViewModel.SelectedObject.IsActive}"
                                   ToolTip.Tip="Toggle GameObject Active State"
                                   Content="Active"
                                   FontSize="11"
                                   Foreground="{DynamicResource PrimaryText}"
                                   VerticalAlignment="Center"/>
+                    </Grid>
+
+                    <!-- Düğüm renk etiketi (Faz 4 Dilim 2) -->
+                    <Grid ColumnDefinitions="Auto,*"
+                          IsVisible="{Binding SelectedNode, Converter={x:Static conv:ObjectConverters.IsNotNull}}">
+                        <TextBlock Grid.Column="0" Text="🏷 Etiket:"
+                                   FontSize="11" Foreground="{DynamicResource MutedText}"
+                                   VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <ComboBox Grid.Column="1"
+                                  ItemsSource="{Binding Search.ColorTagAssignmentOptions}"
+                                  SelectedValue="{Binding SelectedNode.ColorTag}"
+                                  SelectedValueBinding="{Binding Value}"
+                                  ToolTip.Tip="Düğüme renk etiketi ata (kart şeridi + minimap)"
+                                  FontSize="11" HorizontalAlignment="Stretch">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="search:ColorTagOption">
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <Border Width="12" Height="12" CornerRadius="6"
+                                                Background="{Binding Brush}" VerticalAlignment="Center"/>
+                                        <TextBlock Text="{Binding Label}" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
                     </Grid>
                 </StackPanel>
             </Border>

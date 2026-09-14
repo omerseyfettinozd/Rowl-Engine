@@ -5,7 +5,10 @@
              x:Class="RowlEngine.Editor.Views.NodeControl"
              x:DataType="vm:NodeViewModel">
 
-    <Canvas Width="300" Height="{Binding NodeCardHeight}" Background="Transparent" ClipToBounds="False">
+    <Canvas Width="300" Height="{Binding NodeCardHeight}" Background="Transparent" ClipToBounds="False" Opacity="{Binding FilterOpacity}">
+        <!-- Faz 4 Dilim 2 — renk etiketi şeridi (yoksa gizli, yerleşimi kaydırmaz) -->
+        <Border Canvas.Left="10" Canvas.Top="0" ZIndex="5" Width="240" Height="5"
+                CornerRadius="11,11,0,0" Background="{Binding ColorTagBrush}" IsVisible="{Binding HasColorTag}"/>
         <!-- Main Card Body -->
         <Border Canvas.Left="10" Canvas.Top="0" Width="240" Height="{Binding NodeCardHeight}"
                 Background="{DynamicResource NodeCardBg}" BorderBrush="{Binding BorderColor}" BorderThickness="1.5" CornerRadius="12"
