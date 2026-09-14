@@ -58,10 +58,10 @@ def main():
     parser.add_argument("output", type=Path)
     args = parser.parse_args()
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(
-        json.dumps(build_fixture(), ensure_ascii=False, separators=(",", ":")) + "\n",
-        encoding="utf-8",
-    )
+    # newline="\n" prevents Windows text mode from turning the canonical LF
+    # fixture into CRLF while the checked-in file is pinned to LF.
+    with args.output.open("w", encoding="utf-8", newline="\n") as output:
+        output.write(json.dumps(build_fixture(), ensure_ascii=False, separators=(",", ":")) + "\n")
 
 
 if __name__ == "__main__":

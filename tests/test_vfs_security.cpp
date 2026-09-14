@@ -26,6 +26,16 @@ void test_vfs_security() {
         std::cerr << "VFS failed to read a valid in-root asset" << std::endl;
         exit(1);
     }
+    const std::string unicodeRelative =
+        "\xC4\xB1\xC5\x9F\xC4\xB1\x6B\x6C\xC4\xB1\x5F\x72\xC3\xB6\x6C\x65\x2E\x6A\x70\x67";
+    const auto unicodeNativePath = mountRoot /
+        std::filesystem::path(std::u8string(unicodeRelative.begin(), unicodeRelative.end()));
+    std::ofstream(unicodeNativePath, std::ios::binary) << "unicode";
+    if (!source.exists(unicodeRelative) || source.read(unicodeRelative) !=
+            std::vector<uint8_t>{'u', 'n', 'i', 'c', 'o', 'd', 'e'}) {
+        std::cerr << "VFS failed to resolve a UTF-8 in-root asset name" << std::endl;
+        exit(1);
+    }
     if (source.exists("../outside.txt") || !source.read("../outside.txt").empty()) {
         std::cerr << "VFS allowed a parent-directory traversal" << std::endl;
         exit(1);
@@ -36,7 +46,7 @@ void test_vfs_security() {
         std::cerr << "VFS allowed a symlink to escape its mount root" << std::endl;
         exit(1);
     }
-    TEST_PASS("Loose-directory mounts reject parent traversal and symlink escapes");
+    TEST_PASS("Loose-directory mounts preserve UTF-8 names and reject traversal/symlink escapes");
 
     const auto oversizedLooseAsset = mountRoot / "oversized.bin";
     std::ofstream(oversizedLooseAsset, std::ios::binary).close();

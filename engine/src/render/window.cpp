@@ -1057,7 +1057,12 @@ SDL_Texture* Window::loadTexture(const std::string& filename) {
     unsigned char* data = nullptr;
     std::string sourceInfo;
 
-    std::string bareName = std::filesystem::path(normPath).filename().string();
+    // normPath is a UTF-8 virtual path, not a native filesystem path. Keep it
+    // byte-preserving on Windows instead of round-tripping through its code page.
+    const size_t lastSlash = normPath.find_last_of('/');
+    std::string bareName = lastSlash == std::string::npos
+        ? normPath
+        : normPath.substr(lastSlash + 1);
 
     // Asset paths are resolved only through the selected project's VFS.
     // This prevents CWD, parent-directory, or arbitrary absolute paths from

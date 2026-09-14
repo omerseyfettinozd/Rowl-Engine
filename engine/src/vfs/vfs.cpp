@@ -14,6 +14,10 @@ namespace {
 
 constexpr uintmax_t kMaxLooseAssetBytes = 128ULL * 1024 * 1024;
 
+fs::path pathFromUtf8(const std::string& utf8) {
+    return fs::path(std::u8string(utf8.begin(), utf8.end()));
+}
+
 std::optional<fs::path> resolveInsideRoot(const fs::path& canonicalRoot,
                                           const std::string& relativePath) {
     if (relativePath.empty() || relativePath.find('\0') != std::string::npos) return std::nullopt;
@@ -21,7 +25,9 @@ std::optional<fs::path> resolveInsideRoot(const fs::path& canonicalRoot,
     std::string normalizedRel = relativePath;
     std::replace(normalizedRel.begin(), normalizedRel.end(), '\\', '/');
 
-    fs::path requested(normalizedRel);
+    // All graph, package and C-API paths are UTF-8. The narrow path
+    // constructor uses the active Windows code page and loses valid names.
+    fs::path requested = pathFromUtf8(normalizedRel);
     if (requested.is_absolute() || requested.has_root_name() || requested.has_root_directory()) {
         return std::nullopt;
     }
