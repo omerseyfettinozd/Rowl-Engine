@@ -1450,19 +1450,17 @@ void Window::renderVisualNovelFrame(
                 float maxDialogueHeight = scaledDlgH - (36.0f * metrics.scaleFactor);
                 float fontPx = dlg.fontSize * metrics.scaleFactor;
 
-                // Calculate visible codepoints based on typewriter progression
-                size_t totalCodepoints = FontRenderer::countCodepoints(dlg.dialogue);
-                size_t visibleCodepoints = totalCodepoints;
+                const auto shaped = m_fontRenderer->shapeTextShared(
+                    dlg.dialogue, fontPx, maxLineWidth);
+                size_t visibleUnits = shaped->revealUnits.size();
                 if (dlg.isPlaying && dlg.typewriterEnabled && dlg.textSpeed > 0) {
-                    float msPerChar = static_cast<float>(dlg.textSpeed);
-                    float elapsedMs = dlg.elapsedTypewriterTime * 1000.0f;
-                    visibleCodepoints = static_cast<size_t>(elapsedMs / msPerChar);
-                    if (visibleCodepoints > totalCodepoints) visibleCodepoints = totalCodepoints;
+                    visibleUnits = Rowl::Text::evaluateReveal(
+                        *shaped, dlg.elapsedTypewriterTime, dlg.textSpeed).visibleUnits;
                 }
 
-                m_fontRenderer->renderText(
+                m_fontRenderer->renderShapedText(
                     m_offscreenSurface,
-                    dlg.dialogue,
+                    *shaped,
                     physBoxX + paddingLeft,
                     physBoxY + paddingTop,
                     fontPx,
@@ -1470,7 +1468,7 @@ void Window::renderVisualNovelFrame(
                     maxLineWidth,
                     maxDialogueHeight,
                     dlg.textAlignment,
-                    visibleCodepoints
+                    visibleUnits
                 );
             }
         }

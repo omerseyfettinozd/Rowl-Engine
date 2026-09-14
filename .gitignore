@@ -4,6 +4,7 @@
 build/
 /build-release/
 /build-benchmarks*/
+/build-*/
 bin/
 lib/
 CMakeFiles/

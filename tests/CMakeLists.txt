@@ -23,6 +23,7 @@ add_executable(rowl_tests
     test_graph_vnext.cpp
     test_localization.cpp
     test_markup_parser.cpp
+    test_text_shaping.cpp
     test_native_performance_benchmarks.cpp
     test_hardening_and_reliability.cpp
     test_rc_soak_and_data_safety.cpp

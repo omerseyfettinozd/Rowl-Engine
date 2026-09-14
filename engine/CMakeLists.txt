@@ -32,15 +32,37 @@ endif()
 # Prefer a package supplied by the active toolchain (for example vcpkg or an
 # Android/iOS sysroot).  FetchContent remains a pinned desktop fallback, not a
 # requirement for a cross-build with an already provisioned dependency set.
+#
+# Offline builds (notably a -DROWL_ENABLE_TEXT_SHAPING=OFF fallback configure
+# without network access) must not re-download the dependency: reuse the
+# source tree already populated by the primary build directory before
+# falling back to the network.  (The FetchContent build directory's
+# generated config is deliberately NOT used here: it is only complete
+# after the sub-build finishes.)
+if(NOT TARGET nlohmann_json::nlohmann_json
+    AND NOT DEFINED FETCHCONTENT_SOURCE_DIR_NLOHMANN_JSON)
+    set(_rowl_json_local_src "${CMAKE_SOURCE_DIR}/build/_deps/nlohmann_json-src")
+    if(EXISTS "${_rowl_json_local_src}/CMakeLists.txt")
+        set(FETCHCONTENT_SOURCE_DIR_NLOHMANN_JSON "${_rowl_json_local_src}"
+            CACHE PATH "Local nlohmann/json source reused for offline builds")
+        message(STATUS "Reusing local nlohmann/json source: ${FETCHCONTENT_SOURCE_DIR_NLOHMANN_JSON}")
+    endif()
+    unset(_rowl_json_local_src)
+endif()
 find_package(nlohmann_json 3.11.3 CONFIG QUIET)
 if(NOT TARGET nlohmann_json::nlohmann_json)
     include(FetchContent)
-    FetchContent_Declare(
-        nlohmann_json
-        GIT_REPOSITORY https://github.com/nlohmann/json.git
-        GIT_TAG v3.11.3
-        GIT_SHALLOW TRUE
-    )
+    if(DEFINED FETCHCONTENT_SOURCE_DIR_NLOHMANN_JSON)
+        FetchContent_Declare(nlohmann_json
+            SOURCE_DIR "${FETCHCONTENT_SOURCE_DIR_NLOHMANN_JSON}")
+    else()
+        FetchContent_Declare(
+            nlohmann_json
+            GIT_REPOSITORY https://github.com/nlohmann/json.git
+            GIT_TAG v3.11.3
+            GIT_SHALLOW TRUE
+        )
+    endif()
     FetchContent_MakeAvailable(nlohmann_json)
 endif()
 
@@ -78,6 +100,24 @@ endif()
 find_package(PkgConfig QUIET)
 if(PkgConfig_FOUND)
     pkg_check_modules(VORBISFILE QUIET IMPORTED_TARGET vorbisfile)
+endif()
+
+# ── Unicode text shaping (optional, stb_truetype remains the fallback) ─────
+option(ROWL_ENABLE_TEXT_SHAPING
+    "Enable FreeType/HarfBuzz/FriBidi/libunibreak text shaping" ON)
+set(ROWL_TEXT_SHAPING_AVAILABLE 0)
+if(ROWL_ENABLE_TEXT_SHAPING AND PkgConfig_FOUND)
+    pkg_check_modules(ROWL_TEXT_SHAPING QUIET IMPORTED_TARGET
+        freetype2 harfbuzz fribidi libunibreak)
+    if(TARGET PkgConfig::ROWL_TEXT_SHAPING)
+        set(ROWL_TEXT_SHAPING_AVAILABLE 1)
+    else()
+        message(WARNING
+            "FreeType/HarfBuzz/FriBidi/libunibreak were not all found; "
+            "the safe stb_truetype text fallback will be used.")
+    endif()
+elseif(ROWL_ENABLE_TEXT_SHAPING)
+    message(WARNING "pkg-config unavailable; using the stb_truetype text fallback.")
 endif()
 if(TARGET PkgConfig::VORBISFILE)
     set(VORBISFILE_TARGET PkgConfig::VORBISFILE)
@@ -169,10 +209,13 @@ set(ROWL_ENGINE_SOURCES
     src/i18n/localization_manager.cpp
     # Rich text (Faz 3 Dilim 2: markup parser + token stream)
     src/text/markup_parser.cpp
+    # Unicode shaping (Faz 3 Dilim 3; optional advanced backend)
+    src/text/text_shaper.cpp
     # C-API bridge (consumed by C# P/Invoke)
     src/c_api_contract.cpp
     src/c_api_i18n.cpp
     src/c_api_markup.cpp
+    src/c_api_text_shaping.cpp
     src/c_api_lifecycle.cpp
     src/c_api_story.cpp
     src/c_api_render.cpp
@@ -191,6 +234,10 @@ target_link_libraries(rowl_engine_thirdparty INTERFACE
     ${LUA_LIBRARIES}
     nlohmann_json::nlohmann_json
 )
+if(ROWL_TEXT_SHAPING_AVAILABLE)
+    target_link_libraries(rowl_engine_thirdparty INTERFACE
+        PkgConfig::ROWL_TEXT_SHAPING)
+endif()
 if(WIN32)
     target_link_libraries(rowl_engine_thirdparty INTERFACE shell32 ole32)
 endif()
@@ -206,6 +253,7 @@ set_target_properties(rowl_engine_objects PROPERTIES POSITION_INDEPENDENT_CODE O
 target_link_libraries(rowl_engine_objects PUBLIC rowl_engine_thirdparty)
 target_compile_definitions(rowl_engine_objects PRIVATE
     ROWL_GPU_MSDF_SHADER_AVAILABLE=${ROWL_GPU_MSDF_SHADER_AVAILABLE}
+    ROWL_TEXT_SHAPING_AVAILABLE=${ROWL_TEXT_SHAPING_AVAILABLE}
     ROWL_SHADER_DIR="${ROWL_SHADER_DIR}"
 )
 

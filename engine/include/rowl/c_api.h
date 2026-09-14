@@ -73,6 +73,7 @@ typedef struct RowlEngine_ApiVersion {
 #define ROWL_ENGINE_CAPABILITY_PLAYER_CHOICES        UINT64_C(64)
 #define ROWL_ENGINE_CAPABILITY_LOCALIZATION          UINT64_C(128)
 #define ROWL_ENGINE_CAPABILITY_RICH_TEXT_MARKUP      UINT64_C(256)
+#define ROWL_ENGINE_CAPABILITY_TEXT_SHAPING          UINT64_C(512)
 
 /** Current additive C API version. This query does not require an engine handle. */
 ROWL_API RowlEngine_ResultCode RowlEngine_GetApiVersion(
@@ -492,6 +493,24 @@ ROWL_API RowlEngine_ResultCode RowlEngine_ParseMarkup(
 ROWL_API RowlEngine_ResultCode RowlEngine_StripMarkup(
     const char* markupUtf8, char* buffer, uint32_t bufferSize,
     uint32_t* outRequiredSize);
+
+/**
+ * Shapes rich markup using caller-owned font bytes and returns a deterministic
+ * UTF-8 JSON layout. The result contains visual-order glyphs, logical scalar
+ * and reveal indices, advances/offsets, wrapped lines, bounds and timing
+ * metadata. fontData remains caller-owned and is only read during this call.
+ * maxWidth <= 0 disables automatic wrapping. languageUtf8 may be NULL.
+ *
+ * When the optional advanced dependencies are unavailable, the call remains
+ * supported and reports the safe `stb_fallback` backend. Markup is limited to
+ * 256 KiB and fontDataSize to 32 MiB. Output follows the caller-buffer query,
+ * undersized-buffer and trailing-NUL rules used by RowlEngine_ParseMarkup.
+ */
+ROWL_API RowlEngine_ResultCode RowlEngine_ShapeMarkup(
+    const char* markupUtf8,
+    const uint8_t* fontData, uint32_t fontDataSize,
+    float fontSize, float maxWidth, const char* languageUtf8,
+    char* buffer, uint32_t bufferSize, uint32_t* outRequiredSize);
 
 /** Sends a pointer/touch press in virtual-canvas coordinates. */
 ROWL_API int RowlEngine_PointerDown(RowlEngineHandle handle, float x, float y);

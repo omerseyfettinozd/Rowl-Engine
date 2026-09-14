@@ -76,7 +76,7 @@ struct DialogueRenderData {
     bool voiceBlipSkipPunctuation = true;
     int voiceBlipChannel = 1; // 0 = Bgm, 1 = Voice, 2 = Sfx
     float voiceBlipVolume = 0.85f;
-    size_t lastBlipCodepointIndex = 0;
+    size_t lastBlipCodepointIndex = 0; // reveal-unit index (legacy field name)
 
     // Typography & Colors
     float fontSize = 24.0f;

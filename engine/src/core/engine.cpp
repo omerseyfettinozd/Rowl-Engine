@@ -56,6 +56,24 @@ bool isPunctuationOrWhitespace(uint32_t cp) {
     }
 }
 
+std::shared_ptr<const Rowl::Text::ShapedText> shapeDialogue(
+    const Rowl::Render::FontRenderer* renderer,
+    const Rowl::Render::DialogueRenderData& dialogue) {
+    if (renderer) return renderer->shapeTextShared(dialogue.dialogue, dialogue.fontSize);
+    Rowl::Text::TextShaper fallback;
+    Rowl::Text::ShapeOptions options;
+    options.fontSize = dialogue.fontSize;
+    return std::make_shared<Rowl::Text::ShapedText>(
+        fallback.shapeMarkup(dialogue.dialogue, options));
+}
+
+Rowl::Text::RevealState dialogueReveal(
+    const Rowl::Render::FontRenderer* renderer,
+    const Rowl::Render::DialogueRenderData& dialogue) {
+    return Rowl::Text::evaluateReveal(*shapeDialogue(renderer, dialogue),
+        dialogue.elapsedTypewriterTime, dialogue.textSpeed);
+}
+
 bool isSafeComponentData(const nlohmann::json& value, std::size_t depth = 0) {
     if (depth > kMaxComponentDataDepth) return false;
     if (value.is_string()) return value.get_ref<const std::string&>().size() <= kMaxComponentStringBytes;
@@ -392,27 +410,17 @@ bool Engine::completeTypewriterIfTyping() {
     // play state. A typing line completes on the first advance request from
     // ANY input (keyboard, pointer, swipe, choice) in both player and
     // preview; only a settled line advances the story.
+    const auto* fontRenderer = m_window ? m_window->getFontRenderer() : nullptr;
     bool anyTyping = false;
     for (const auto& dlg : m_activeDialogues) {
-        if (dlg.typewriterEnabled && dlg.textSpeed > 0) {
-            size_t totalCodepoints = Rowl::Render::FontRenderer::countCodepoints(dlg.dialogue);
-            float msPerChar = static_cast<float>(dlg.textSpeed);
-            float elapsedMs = dlg.elapsedTypewriterTime * 1000.0f;
-            size_t visibleCodepoints = static_cast<size_t>(elapsedMs / msPerChar);
-            if (visibleCodepoints < totalCodepoints) {
-                anyTyping = true;
-                break;
-            }
+        if (dlg.typewriterEnabled && dlg.textSpeed > 0 &&
+            !dialogueReveal(fontRenderer, dlg).complete) {
+            anyTyping = true;
+            break;
         }
     }
     if (!anyTyping && m_activeDialogueData.typewriterEnabled && m_activeDialogueData.textSpeed > 0) {
-        size_t totalCodepoints = Rowl::Render::FontRenderer::countCodepoints(m_activeDialogueData.dialogue);
-        float msPerChar = static_cast<float>(m_activeDialogueData.textSpeed);
-        float elapsedMs = m_activeDialogueData.elapsedTypewriterTime * 1000.0f;
-        size_t visibleCodepoints = static_cast<size_t>(elapsedMs / msPerChar);
-        if (visibleCodepoints < totalCodepoints) {
-            anyTyping = true;
-        }
+        anyTyping = !dialogueReveal(fontRenderer, m_activeDialogueData).complete;
     }
 
     if (anyTyping) {
@@ -1545,6 +1553,7 @@ void Engine::step(float deltaTime) {
     // scripts, entities). Rendering, audio upkeep, and the menu overlay below
     // keep running so the pause screen stays alive.
     if (!m_paused) {
+    const auto* fontRenderer = m_window->getFontRenderer();
     for (auto& dlg : m_activeDialogues) {
         dlg.isPlaying = m_isPlaying;
         // MS-6: typewriter progression follows presentation + real dt, not the
@@ -1553,11 +1562,9 @@ void Engine::step(float deltaTime) {
         if (dlg.typewriterEnabled && dlg.textSpeed > 0) {
             dlg.elapsedTypewriterTime += deltaTime * m_textSpeedMultiplier;
 
-            size_t totalCodepoints = Rowl::Render::FontRenderer::countCodepoints(dlg.dialogue);
-            float msPerChar = static_cast<float>(dlg.textSpeed);
-            float elapsedMs = dlg.elapsedTypewriterTime * 1000.0f;
-            size_t currentVisible = static_cast<size_t>(elapsedMs / msPerChar);
-            if (currentVisible > totalCodepoints) currentVisible = totalCodepoints;
+            const auto shaped = shapeDialogue(fontRenderer, dlg);
+            const size_t currentVisible = Rowl::Text::evaluateReveal(
+                *shaped, dlg.elapsedTypewriterTime, dlg.textSpeed).visibleUnits;
 
             if (currentVisible > dlg.lastBlipCodepointIndex && m_audio) {
                 size_t startChar = dlg.lastBlipCodepointIndex;
@@ -1569,11 +1576,7 @@ void Engine::step(float deltaTime) {
                         continue;
                     }
 
-                    size_t byteIdx = 0;
-                    uint32_t cp = 0;
-                    for (size_t c = 0; c <= charIdx && byteIdx < dlg.dialogue.length(); ++c) {
-                        cp = Rowl::Render::FontRenderer::getNextCodepoint(dlg.dialogue, byteIdx);
-                    }
+                    const uint32_t cp = shaped->revealUnits[charIdx].representativeCodepoint;
 
                     if (dlg.voiceBlipSkipPunctuation && isPunctuationOrWhitespace(cp)) {
                         continue;
@@ -1604,11 +1607,10 @@ void Engine::step(float deltaTime) {
         } else {
             m_activeDialogueData.elapsedTypewriterTime += deltaTime * m_textSpeedMultiplier;
             if (m_audio) {
-                size_t totalCodepoints = Rowl::Render::FontRenderer::countCodepoints(m_activeDialogueData.dialogue);
-                float msPerChar = static_cast<float>(m_activeDialogueData.textSpeed);
-                float elapsedMs = m_activeDialogueData.elapsedTypewriterTime * 1000.0f;
-                size_t currentVisible = static_cast<size_t>(elapsedMs / msPerChar);
-                if (currentVisible > totalCodepoints) currentVisible = totalCodepoints;
+                const auto shaped = shapeDialogue(fontRenderer, m_activeDialogueData);
+                const size_t currentVisible = Rowl::Text::evaluateReveal(
+                    *shaped, m_activeDialogueData.elapsedTypewriterTime,
+                    m_activeDialogueData.textSpeed).visibleUnits;
 
                 if (currentVisible > m_activeDialogueData.lastBlipCodepointIndex) {
                     size_t startChar = m_activeDialogueData.lastBlipCodepointIndex;
@@ -1619,11 +1621,7 @@ void Engine::step(float deltaTime) {
                         if (m_activeDialogueData.voiceBlipCadence > 1 && (charIdx % m_activeDialogueData.voiceBlipCadence) != 0) {
                             continue;
                         }
-                        size_t byteIdx = 0;
-                        uint32_t cp = 0;
-                        for (size_t c = 0; c <= charIdx && byteIdx < m_activeDialogueData.dialogue.length(); ++c) {
-                            cp = Rowl::Render::FontRenderer::getNextCodepoint(m_activeDialogueData.dialogue, byteIdx);
-                        }
+                        const uint32_t cp = shaped->revealUnits[charIdx].representativeCodepoint;
                         if (m_activeDialogueData.voiceBlipSkipPunctuation && isPunctuationOrWhitespace(cp)) {
                             continue;
                         }

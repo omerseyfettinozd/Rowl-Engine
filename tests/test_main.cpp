@@ -44,6 +44,7 @@ int main(int argc, char* argv[]) {
     test_graph_vnext();
     test_localization();
     test_markup_parser();
+    test_text_shaping();
     test_camera_and_transition_pipeline();
     test_native_performance_benchmarks(benchmarkJsonPath);
     test_golden_project_benchmarks(goldenJsonPath);

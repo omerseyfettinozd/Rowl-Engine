@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <climits>
 #include <SDL3/SDL.h>
+#include "rowl/text/text_shaper.hpp"
 
 namespace Rowl::Render {
 
@@ -39,6 +40,22 @@ public:
     /// Extracts the next UTF-8 codepoint from the string and advances byteIndex.
     static uint32_t getNextCodepoint(const std::string& str, size_t& byteIndex);
 
+    /// Shapes markup once for consumers that need the exact render/reveal
+    /// layout. The returned glyph vector is the measurement authority too.
+    Rowl::Text::ShapedText shapeText(const std::string& markup, float fontSize,
+                                     float maxWidth = 0.0f) const;
+    std::shared_ptr<const Rowl::Text::ShapedText> shapeTextShared(
+        const std::string& markup, float fontSize, float maxWidth = 0.0f) const;
+
+    size_t countRevealUnits(const std::string& markup, float fontSize) const;
+
+    void renderShapedText(SDL_Surface* targetSurface,
+                          const Rowl::Text::ShapedText& shaped,
+                          float x, float y, float fontSize, SDL_Color color,
+                          float maxWidth = 0.0f, float maxHeight = 0.0f,
+                          const std::string& alignment = "Left",
+                          size_t maxVisibleRevealUnits = SIZE_MAX);
+
     /// Renders UTF-8 text directly to SDL_Surface with anti-aliasing, wrapping, alignment, and typewriter limit.
     void renderText(
         SDL_Surface* targetSurface,
@@ -49,7 +66,7 @@ public:
         float maxWidth = 0.0f,
         float maxHeight = 0.0f,
         const std::string& alignment = "Left",
-        size_t maxVisibleCodepoints = SIZE_MAX
+        size_t maxVisibleRevealUnits = SIZE_MAX
     );
 
 private:
@@ -58,6 +75,15 @@ private:
     std::vector<uint8_t> m_fontBuffer;
     void* m_fontInfo = nullptr; // stbtt_fontinfo pointer
     std::unordered_map<uint64_t, Glyph> m_glyphCache; // key = ((uint64_t)pixelHeight << 32) | codepoint
+    std::unordered_map<uint64_t, Glyph> m_shapedGlyphCache;
+    struct ShapeCacheEntry {
+        std::string markup;
+        float fontSize = 0.0f;
+        float maxWidth = 0.0f;
+        std::shared_ptr<const Rowl::Text::ShapedText> layout;
+    };
+    mutable std::vector<ShapeCacheEntry> m_shapeCache;
+    Rowl::Text::TextShaper m_textShaper;
     bool m_loaded = false;
 };
 

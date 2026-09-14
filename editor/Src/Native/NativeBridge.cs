@@ -281,6 +281,20 @@ namespace RowlEngine.Editor.Native
             uint bufferSize,
             out uint outRequiredSize);
 
+        // ── Faz 3 Dilim 3 text shaping (CAPABILITY_TEXT_SHAPING) ────────
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_ShapeMarkup(
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string markupUtf8,
+            IntPtr fontData,
+            uint fontDataSize,
+            float fontSize,
+            float maxWidth,
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string? languageUtf8,
+            IntPtr buffer,
+            uint bufferSize,
+            out uint outRequiredSize);
+
         // ── Faz 2 player-loop read tracking (CAPABILITY_PLAYER_LOOP) ────────
 
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
