@@ -28,8 +28,8 @@
             <!-- Infinite Grid Visual Background Surface -->
             <Rectangle Width="400000" Height="400000" Canvas.Left="-200000" Canvas.Top="-200000" Fill="{DynamicResource GraphCanvasBg}"/>
 
-            <!-- Connection Wires Layer -->
-            <ItemsControl ItemsSource="{Binding Connections}" ClipToBounds="False">
+            <!-- Connection Wires Layer (culled: visible rect only) -->
+            <ItemsControl ItemsSource="{Binding NodeGraphViewModel.VisibleConnections}" ClipToBounds="False">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
                         <Canvas ClipToBounds="False"/>
@@ -45,8 +45,8 @@
             <!-- Active Drag Wire Layer -->
             <controls:BezierWireRenderer StartPoint="{Binding WireStartPoint}" EndPoint="{Binding WireEndPoint}" IsVisible="{Binding IsDraggingWire}" WireBrush="{DynamicResource AccentColor}" WireThickness="3.5"/>
 
-            <!-- Node Cards Layer -->
-            <ItemsControl ItemsSource="{Binding Nodes}" ClipToBounds="False">
+            <!-- Node Cards Layer (culled: visible rect only) -->
+            <ItemsControl ItemsSource="{Binding NodeGraphViewModel.VisibleNodes}" ClipToBounds="False">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
                         <Canvas ClipToBounds="False"/>
@@ -77,6 +77,25 @@
                        StrokeThickness="1.5"
                        StrokeDashArray="4,2"/>
         </Canvas>
+
+        <!-- Minimap (bird's-eye, drag to pan) -->
+        <Border HorizontalAlignment="Right" VerticalAlignment="Top" Margin="16"
+                Background="{DynamicResource SurfaceBackground}" BorderBrush="{DynamicResource BorderColor}"
+                BorderThickness="1" CornerRadius="6" Padding="6">
+            <StackPanel Spacing="4">
+                <controls:MinimapControl x:Name="CanvasMinimap" Width="220" Height="150"
+                                         Background="{DynamicResource GraphCanvasBg}"
+                                         NodesSource="{Binding NodeGraphViewModel.Nodes}"
+                                         WorldBounds="{Binding NodeGraphViewModel.WorldBounds}"
+                                         ViewportRect="{Binding NodeGraphViewModel.ViewportRect}"/>
+                <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center">
+                    <Button Content="🎯 Seçim" Command="{Binding NodeGraphViewModel.FitToSelectionCommand}"
+                            Padding="6,2" FontSize="11" ToolTip.Tip="Seçili düğüme odaklan (F)"/>
+                    <Button Content="🗺 Sığdır" Command="{Binding NodeGraphViewModel.ZoomToFitCommand}"
+                            Padding="6,2" FontSize="11" ToolTip.Tip="Tüm grafı ekrana sığdır"/>
+                </StackPanel>
+            </StackPanel>
+        </Border>
 
         <!-- Canvas Viewport Controls Overlay (Zoom badge & Reset (0,0) Button) -->
         <Border HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="16" Background="{DynamicResource SurfaceBackground}" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1" CornerRadius="6" Padding="8,4">

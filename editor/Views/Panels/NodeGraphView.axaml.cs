@@ -25,6 +25,42 @@ namespace RowlEngine.Editor.Views.Panels
                 container.PointerMoved += NodeGraphContainer_PointerMoved;
                 container.PointerReleased += NodeGraphContainer_PointerReleased;
                 container.PointerWheelChanged += NodeGraphContainer_PointerWheelChanged;
+                container.LayoutUpdated += NodeGraphContainer_LayoutUpdated;
+            }
+
+            var minimap = this.FindControl<Controls.MinimapControl>("CanvasMinimap");
+            if (minimap != null)
+            {
+                minimap.ViewportRequested += (_, canvasPoint) =>
+                {
+                    if (DataContext is MainWindowViewModel vm)
+                        vm.NodeGraphViewModel.PanTo(canvasPoint.X, canvasPoint.Y);
+                };
+            }
+
+            KeyDown += NodeGraphView_KeyDown;
+            Focusable = true;
+        }
+
+        private void NodeGraphContainer_LayoutUpdated(object? sender, EventArgs e)
+        {
+            if (DataContext is not MainWindowViewModel vm) return;
+            if (sender is not Control control) return;
+            var graph = vm.NodeGraphViewModel;
+            if (control.Bounds.Width > 0)
+                graph.ViewportWidth = control.Bounds.Width;
+            if (control.Bounds.Height > 0)
+                graph.ViewportHeight = control.Bounds.Height;
+        }
+
+        private void NodeGraphView_KeyDown(object? sender, KeyEventArgs e)
+        {
+            if (e.KeyModifiers != KeyModifiers.None) return;
+            if (DataContext is not MainWindowViewModel vm) return;
+            if (e.Key == Key.F)
+            {
+                vm.NodeGraphViewModel.FitToSelectionCommand.Execute(null);
+                e.Handled = true;
             }
         }
 

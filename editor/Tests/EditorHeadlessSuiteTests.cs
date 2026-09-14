@@ -304,6 +304,7 @@ internal static class EditorHeadlessTestSuite
 
 }
 
+[Collection("StaticRootSequential")]
 public sealed class EditorHeadlessSuiteTests
 {
     [Fact]
