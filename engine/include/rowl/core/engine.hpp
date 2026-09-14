@@ -1,6 +1,7 @@
 #pragma once
 
 #include "rowl/render/window.hpp"
+#include "rowl/i18n/localization_manager.hpp"
 #include "rowl/core/pause_menu.hpp"
 #include "rowl/platform/platform_host.hpp"
 #include "rowl/state/game_state.hpp"
@@ -210,6 +211,15 @@ public:
     Rowl::Scene::Scene* getScene()       const { return m_scene.get(); }
     Rowl::Audio::AudioEngine* getAudio() const { return m_audio.get(); }
 
+    // ── Localization (Faz 3 Dilim 1) ─────────────────────────────────────
+    // The manager owns every locale rule; the Engine only hosts it, so
+    // engine.cpp gains no logic. Catalogs load on project mount
+    // (see Rowl::I18n::applyProjectLocalesToEngine).
+    Rowl::I18n::LocalizationManager& getLocalization() { return m_localization; }
+    const Rowl::I18n::LocalizationManager& getLocalization() const {
+        return m_localization;
+    }
+
     // ── Voice Blips & Audio Effects (Milestone 25) ────────────────────────
     void setDialogueVoiceBlip(const std::string& soundPath, float basePitch, float pitchVariance, int cadence, bool skipPunctuation, int channelType);
     const std::string& getDialogueVoiceBlipSound() const { return m_activeDialogueData.typewriterSound; }
@@ -288,6 +298,8 @@ private:
     std::shared_ptr<const Rowl::State::GameState> m_gameState;
     mutable Rowl::State::SessionPersistence m_sessionPersistence;
     std::unique_ptr<Rowl::Scripting::LuaSandbox>  m_luaSandbox;
+    // Faz 3 Dilim 1: manifest locales + content_id catalogs + fallback chain.
+    Rowl::I18n::LocalizationManager m_localization;
     std::filesystem::path m_saveDirectoryOverride;
     std::string m_defaultBgmTransition = "instant";
     float m_defaultBgmTransitionDurationSeconds = 1.0f;

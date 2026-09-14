@@ -239,6 +239,27 @@ namespace RowlEngine.Editor.Native
             uint bufferSize,
             out uint outRequiredSize);
 
+        // ── Faz 3 Dilim 1 runtime localization (CAPABILITY_LOCALIZATION) ────
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_SetLocale(
+            IntPtr handle,
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string locale);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_GetLocale(
+            IntPtr handle,
+            IntPtr buffer,
+            uint bufferSize,
+            out uint outRequiredSize);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_GetSupportedLocalesJson(
+            IntPtr handle,
+            IntPtr buffer,
+            uint bufferSize,
+            out uint outRequiredSize);
+
         // ── Faz 2 player-loop read tracking (CAPABILITY_PLAYER_LOOP) ────────
 
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]

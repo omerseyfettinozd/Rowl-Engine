@@ -71,6 +71,7 @@ typedef struct RowlEngine_ApiVersion {
 #define ROWL_ENGINE_CAPABILITY_PLAYER_LOOP           UINT64_C(16)
 #define ROWL_ENGINE_CAPABILITY_SAVE_METADATA         UINT64_C(32)
 #define ROWL_ENGINE_CAPABILITY_PLAYER_CHOICES        UINT64_C(64)
+#define ROWL_ENGINE_CAPABILITY_LOCALIZATION          UINT64_C(128)
 
 /** Current additive C API version. This query does not require an engine handle. */
 ROWL_API RowlEngine_ResultCode RowlEngine_GetApiVersion(
@@ -414,6 +415,48 @@ ROWL_API RowlEngine_ResultCode RowlEngine_GetChoiceLabelAtUtf8(
 ROWL_API RowlEngine_ResultCode RowlEngine_GetChoiceOptionIdAtUtf8(
     RowlEngineHandle handle, uint32_t index, char* buffer,
     uint32_t bufferSize, uint32_t* outRequiredSize);
+
+/**
+ * Runtime localization (ROWL_ENGINE_CAPABILITY_LOCALIZATION, Faz 3 Dilim 1).
+ *
+ * The manifest locale declaration (project.rowlproj "default_locale" /
+ * "supported_locales", camelCase spellings accepted) loads when a project
+ * is mounted; projects without locale keys keep the "en" fallback.
+ * Catalogs at Assets/locales/<locale>.json map content_id to
+ * speaker/text/alt_text. Resolution falls back from the active locale to
+ * the default locale and finally to the node's original text, so unknown
+ * keys never surface as errors. All three calls are additive and leave
+ * every older entry point untouched.
+ */
+
+/**
+ * Switches the active locale. Returns ROWL_RESULT_OK on success,
+ * ROWL_RESULT_INVALID_HANDLE for a dead handle, and
+ * ROWL_RESULT_INVALID_ARGUMENT for a null/empty/unsupported code.
+ * A rejected call leaves the active locale unchanged. Locale tags are
+ * normalized ("tr-TR" selects "tr").
+ */
+ROWL_API RowlEngine_ResultCode RowlEngine_SetLocale(
+    RowlEngineHandle handle, const char* locale);
+
+/**
+ * Copies the active locale code (for example "en") into caller-owned
+ * memory. Follows the caller-buffer contract: a null buffer with a zero
+ * size is a size query, and an undersized buffer returns
+ * ROWL_RESULT_BUFFER_TOO_SMALL with the required size written out.
+ */
+ROWL_API RowlEngine_ResultCode RowlEngine_GetLocale(
+    RowlEngineHandle handle, char* buffer, uint32_t bufferSize,
+    uint32_t* outRequiredSize);
+
+/**
+ * Copies the manifest supported locales as a UTF-8 JSON array of strings
+ * (for example `["en","tr"]`) into caller-owned memory. Same
+ * caller-buffer contract as RowlEngine_GetLocale.
+ */
+ROWL_API RowlEngine_ResultCode RowlEngine_GetSupportedLocalesJson(
+    RowlEngineHandle handle, char* buffer, uint32_t bufferSize,
+    uint32_t* outRequiredSize);
 
 /** Sends a pointer/touch press in virtual-canvas coordinates. */
 ROWL_API int RowlEngine_PointerDown(RowlEngineHandle handle, float x, float y);

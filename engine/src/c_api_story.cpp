@@ -7,6 +7,7 @@
  */
 
 #include "c_api_internal.hpp"
+#include "rowl/i18n/localization_manager.hpp"
 #include "rowl/platform/user_data_directories.hpp"
 #include "rowl/vfs/vfs.hpp"
 #include "algorithm"
@@ -268,6 +269,9 @@ void RowlEngine_SetProjectDirectory(RowlEngineHandle handle, const char* project
             } catch (...) { }
         }
         engine->setBgmTransitionDefaults(transition, transitionDuration);
+        // Faz 3 Dilim 1: manifest locales + catalogs load on project mount.
+        // Legacy projects without locale keys keep the "en" fallback.
+        Rowl::I18n::applyProjectLocalesToEngine(*engine, projectRoot);
         if (engine->getVfs()) {
             engine->getVfs()->remountProject(projectRoot);
         }
