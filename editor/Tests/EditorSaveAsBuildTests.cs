@@ -65,8 +65,9 @@ internal static class EditorSaveAsBuildTests
         var badPkgResult = ProjectBuildService.PackageAssetsAsync(
             Path.Combine(Path.GetTempPath(), "NonExistentAssetsDir_12345"),
             testPackageOut).GetAwaiter().GetResult();
-        if (badPkgResult.Succeeded)
-            throw new Exception("PackageAssetsAsync should fail when assets directory is missing");
+        if (badPkgResult.Succeeded || badPkgResult.Diagnostic?.Code != BuildDiagnosticCode.InvalidInput ||
+            badPkgResult.Diagnostic.Operation != "package_assets")
+            throw new Exception("PackageAssetsAsync should return a structured invalid-input diagnostic");
 
         // 5. ProjectBuildService.PackageAssetsAsync Cancellation Containment
         string cancelPackageOut = Path.Combine(Path.GetTempPath(), $"cancelled_{Guid.NewGuid():N}.rowlpkg");
@@ -78,8 +79,9 @@ internal static class EditorSaveAsBuildTests
                 cancelPackageOut,
                 null,
                 pkgCts.Token).GetAwaiter().GetResult();
-            if (!cancelledPkgResult.Cancelled || File.Exists(cancelPackageOut))
-                throw new Exception("Cancelled package creation should not produce an output file");
+            if (!cancelledPkgResult.Cancelled || File.Exists(cancelPackageOut) ||
+                cancelledPkgResult.Diagnostic?.Code != BuildDiagnosticCode.Cancelled)
+                throw new Exception("Cancelled package creation should return a diagnostic without an output file");
         }
 
         // 6. ProjectBuildService.ExecuteBuildPipeline Error Blocking
@@ -95,8 +97,9 @@ internal static class EditorSaveAsBuildTests
             null,
             null);
 
-        if (pipeResultWithErrors.Succeeded)
-            throw new Exception("ExecuteBuildPipeline should fail when graph validation has blocking errors");
+        if (pipeResultWithErrors.Succeeded ||
+            pipeResultWithErrors.Diagnostic?.Code != BuildDiagnosticCode.ValidationFailed)
+            throw new Exception("ExecuteBuildPipeline should return a structured validation diagnostic");
         if (Directory.Exists(pipeResultWithErrors.OutputDirectory))
             throw new Exception("ExecuteBuildPipeline created output directory despite blocking errors");
 

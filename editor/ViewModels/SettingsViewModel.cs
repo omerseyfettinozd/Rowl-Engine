@@ -21,18 +21,6 @@ namespace RowlEngine.Editor.ViewModels
             "Nordic Emerald"
         };
 
-        // ── Build & Dışa Aktarım ────────────────────────────────────────────
-        [ObservableProperty]
-        private string _defaultBuildTarget = "Linux";
-
-        [ObservableProperty]
-        private string _defaultExportPath = "";
-
-        public List<string> BuildTargetOptions { get; } = new()
-        {
-            "Windows", "Linux", "macOS", "Android", "iOS", "PackageOnly"
-        };
-
         // ── Genel Editör Ayarları ───────────────────────────────────────────
         [ObservableProperty]
         private bool _autoSaveEnabled = true;
@@ -41,25 +29,6 @@ namespace RowlEngine.Editor.ViewModels
         private int _autoSaveIntervalSeconds = 60;
 
         public List<int> AutoSaveIntervals { get; } = new() { 15, 30, 60, 120, 300 };
-
-        [ObservableProperty]
-        private bool _showFpsOverlay = false;
-
-        [ObservableProperty]
-        private bool _gridSnapping = false;
-
-        [ObservableProperty]
-        private string _cableStyle = "Bezier";
-
-        public List<string> CableStyleOptions { get; } = new() { "Bezier", "Düz Çizgi" };
-
-        [ObservableProperty]
-        private bool _showNodeMinimap = false;
-
-        [ObservableProperty]
-        private string _editorLanguage = "Türkçe";
-
-        public List<string> LanguageOptions { get; } = new() { "Türkçe", "English" };
 
         [ObservableProperty]
         private int _selectedTabIndex = 0;
@@ -201,13 +170,6 @@ namespace RowlEngine.Editor.ViewModels
             SelectedTheme = "Rowl Cyber Dark";
             AutoSaveEnabled = true;
             AutoSaveIntervalSeconds = 60;
-            ShowFpsOverlay = false;
-            GridSnapping = false;
-            CableStyle = "Bezier";
-            ShowNodeMinimap = false;
-            EditorLanguage = "Türkçe";
-            DefaultBuildTarget = "Linux";
-            DefaultExportPath = "";
             MasterVolume = BgmVolume = VoiceVolume = SfxVolume = 1;
             TextSpeedMultiplier = 1;
             AutoAdvanceDelay = 2;

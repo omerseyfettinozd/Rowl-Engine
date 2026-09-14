@@ -88,25 +88,15 @@ namespace RowlEngine.Editor.ViewModels
         public ToastService Toast => ToastService.Instance;
         public UndoRedoService UndoRedo => UndoRedoService.Instance;
 
-        [ObservableProperty]
-        private string _currentBuildTarget = "Linux";
-
         [ObservableProperty] private bool _isBuilding;
         [ObservableProperty] private string _buildProgress = "";
         private CancellationTokenSource? _buildCancellation;
 
+        public string CurrentBuildTarget => OperatingSystem.IsWindows() ? "Windows"
+            : OperatingSystem.IsMacOS() ? "macOS"
+            : "Linux";
         public string BuildButtonText => $"🚀 {CurrentBuildTarget} Build";
-        public string BuildButtonTooltip => $"{CurrentBuildTarget} için Bağımsız Oyun Çıktısı Üret (Ctrl+B)";
-        public string BuildTargetDisplayText => $"🎯 {CurrentBuildTarget} ▾";
-
-        [RelayCommand]
-        private void SetBuildTarget(string target)
-        {
-            CurrentBuildTarget = target;
-            OnPropertyChanged(nameof(BuildButtonText));
-            OnPropertyChanged(nameof(BuildButtonTooltip));
-            OnPropertyChanged(nameof(BuildTargetDisplayText));
-        }
+        public string BuildButtonTooltip => $"Bu host için bağımsız oyun çıktısı üret (Ctrl+B)";
 
         [RelayCommand]
         private async Task OpenSettings()
@@ -1428,6 +1418,11 @@ namespace RowlEngine.Editor.ViewModels
 
         public void AppendLog(string message)
         {
+            if (!Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
+            {
+                Avalonia.Threading.Dispatcher.UIThread.Post(() => AppendLog(message));
+                return;
+            }
             LogOutput += $"[{DateTime.Now:HH:mm:ss}] {message}\n";
         }
 
@@ -2041,7 +2036,8 @@ namespace RowlEngine.Editor.ViewModels
                     },
                     AppendLog,
                     msg => BuildProgress = msg,
-                    _buildCancellation.Token);
+                    _buildCancellation.Token,
+                    diagnostic => NotificationService.ReportBuildDiagnostic(diagnostic, AppendLog));
             }
             catch (Exception ex)
             {
@@ -2072,7 +2068,8 @@ namespace RowlEngine.Editor.ViewModels
                 GetStartNode()?.Id,
                 () => { SaveActiveStoryFile(); SaveFullStoryGraphFile(); },
                 ProjectIssuesViewModel.SetIssues,
-                AppendLog);
+                AppendLog,
+                diagnostic => NotificationService.ReportBuildDiagnostic(diagnostic, AppendLog));
         }
 
         [RelayCommand]
@@ -2094,6 +2091,7 @@ namespace RowlEngine.Editor.ViewModels
         [RelayCommand]
         public async Task BuildPackageAsync()
         {
+            if (IsBuilding) return;
             try
             {
                 var window = (Avalonia.Application.Current?.ApplicationLifetime as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.MainWindow;
@@ -2122,15 +2120,36 @@ namespace RowlEngine.Editor.ViewModels
                     }
                 }
 
-                var result = await EditorBuildCoordinator.PackageAssetsAsync(MainWindowViewModel.AssetsPath, outDir, AppendLog);
+                IsBuilding = true;
+                BuildProgress = "Paketleme başlatılıyor...";
+                _buildCancellation = new CancellationTokenSource();
+                var result = await EditorBuildCoordinator.PackageAssetsAsync(
+                    MainWindowViewModel.AssetsPath,
+                    outDir,
+                    AppendLog,
+                    _buildCancellation.Token,
+                    diagnostic => NotificationService.ReportBuildDiagnostic(diagnostic, AppendLog));
                 if (result.Succeeded)
                 {
                     AssetBrowserViewModel.RefreshAssets();
+                    NotificationService.ShowSuccess("Asset paketi başarıyla oluşturuldu.", "Paketleme");
                 }
             }
             catch (Exception ex)
             {
-                AppendLog($"⚠️ Paket oluşturma hatası: {ex.Message}");
+                NotificationService.ReportBuildDiagnostic(new BuildDiagnostic(
+                    BuildDiagnosticCode.IoFailure,
+                    BuildDiagnosticSeverity.Error,
+                    "package_assets",
+                    ex.Message,
+                    MainWindowViewModel.AssetsPath,
+                    Detail: ex.ToString()), AppendLog);
+            }
+            finally
+            {
+                _buildCancellation?.Dispose();
+                _buildCancellation = null;
+                IsBuilding = false;
             }
         }
 

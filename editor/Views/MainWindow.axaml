@@ -90,23 +90,6 @@
 
                         <!-- Sağ: Build + Play + Ayarlar -->
                         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                            <!-- Platform Seçici -->
-                            <Button Content="{Binding BuildTargetDisplayText}" 
-                                    ToolTip.Tip="Build Hedef Platformu Seçin"
-                                    Background="{DynamicResource ToolbarButtonBg}" 
-                                    Foreground="{DynamicResource PrimaryText}" 
-                                    BorderBrush="{DynamicResource Accent}" BorderThickness="1" 
-                                    CornerRadius="6" Padding="10,5" FontWeight="SemiBold" FontSize="11">
-                                <Button.Flyout>
-                                    <MenuFlyout>
-                                        <MenuItem Header="🪟 Windows" Command="{Binding SetBuildTargetCommand}" CommandParameter="Windows"/>
-                                        <MenuItem Header="🐧 Linux" Command="{Binding SetBuildTargetCommand}" CommandParameter="Linux"/>
-                                        <MenuItem Header="🍎 macOS" Command="{Binding SetBuildTargetCommand}" CommandParameter="macOS"/>
-                                        <Separator/>
-                                        <MenuItem Header="📦 Sadece .rowlpkg" Command="{Binding SetBuildTargetCommand}" CommandParameter="PackageOnly"/>
-                                    </MenuFlyout>
-                                </Button.Flyout>
-                            </Button>
                             <!-- Build Al -->
                             <Button Content="{Binding BuildButtonText}" 
                                     ToolTip.Tip="{Binding BuildButtonTooltip}" 

@@ -83,8 +83,9 @@ internal static class EditorAssetImportBuildTests
             issues => { },
             msg => { }).GetAwaiter().GetResult();
 
-        if (blockedResult.Succeeded || !persistInvoked)
-            throw new Exception("EditorBuildCoordinator should have blocked build with missing connection target");
+        if (blockedResult.Succeeded || !persistInvoked ||
+            blockedResult.Diagnostic?.Code != BuildDiagnosticCode.ValidationFailed)
+            throw new Exception("EditorBuildCoordinator should expose a structured validation failure");
 
         bool pipePersistInvoked = false;
         var pipeResult = EditorBuildCoordinator.ExecuteBuildPipeline(

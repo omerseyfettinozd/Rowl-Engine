@@ -9,9 +9,42 @@ using RowlEngine.Editor.ViewModels;
 
 namespace RowlEngine.Editor.Services;
 
-public sealed record StandaloneBuildResult(bool Succeeded, bool Cancelled, string OutputDirectory, string Message);
-public sealed record PackageBuildResult(bool Succeeded, bool Cancelled, string PackagePath, string Message, string Output);
-public sealed record PipelineExecutionResult(bool Succeeded, bool Cancelled, string OutputDirectory, string Message, IReadOnlyList<ProjectValidationIssue> Issues);
+public enum BuildDiagnosticSeverity { Info, Warning, Error }
+public enum BuildDiagnosticCode
+{
+    InvalidInput,
+    ValidationFailed,
+    MissingDependency,
+    ProcessStartFailed,
+    ToolFailed,
+    Cancelled,
+    IoFailure,
+    CleanupFailed
+}
+
+public sealed record BuildDiagnostic(
+    BuildDiagnosticCode Code,
+    BuildDiagnosticSeverity Severity,
+    string Operation,
+    string Message,
+    string Target,
+    int? ExitCode = null,
+    string Detail = "");
+
+public sealed record StandaloneBuildResult(bool Succeeded, bool Cancelled, string OutputDirectory, string Message)
+{
+    public BuildDiagnostic? Diagnostic { get; init; }
+}
+
+public sealed record PackageBuildResult(bool Succeeded, bool Cancelled, string PackagePath, string Message, string Output)
+{
+    public BuildDiagnostic? Diagnostic { get; init; }
+}
+
+public sealed record PipelineExecutionResult(bool Succeeded, bool Cancelled, string OutputDirectory, string Message, IReadOnlyList<ProjectValidationIssue> Issues)
+{
+    public BuildDiagnostic? Diagnostic { get; init; }
+}
 
 /// <summary>Creates complete standalone packages; a partial package is never published.</summary>
 public static class ProjectBuildService
@@ -48,10 +81,11 @@ public static class ProjectBuildService
         => BuildStandaloneAsync(projectRoot, assetsPath, buildOutDir, null, CancellationToken.None, log).GetAwaiter().GetResult();
 
     public static Task<StandaloneBuildResult> BuildStandaloneAsync(string projectRoot, string assetsPath, string buildOutDir,
-        IProgress<string>? progress, CancellationToken cancellationToken, Action<string>? log = null)
+        IProgress<string>? progress, CancellationToken cancellationToken, Action<string>? log = null,
+        Action<BuildDiagnostic>? reportDiagnostic = null)
         // Build translates cancellation to a result and removes its staging
         // directory. Do not let Task.Run short-circuit a pre-cancelled token.
-        => Task.Run(() => Build(projectRoot, assetsPath, buildOutDir, progress, cancellationToken, log));
+        => Task.Run(() => Build(projectRoot, assetsPath, buildOutDir, progress, cancellationToken, log, reportDiagnostic));
 
     public static PipelineExecutionResult ExecuteBuildPipeline(
         string projectRoot,
@@ -72,48 +106,81 @@ public static class ProjectBuildService
         {
             string errorMsg = "Build cancelled: fix blocking project validation errors first.";
             log?.Invoke($"⛔ {errorMsg}");
-            return new(false, false, buildOutDir, errorMsg, validation);
+            return new(false, false, buildOutDir, errorMsg, validation)
+            {
+                Diagnostic = new BuildDiagnostic(
+                    BuildDiagnosticCode.ValidationFailed,
+                    BuildDiagnosticSeverity.Error,
+                    "build_validation",
+                    errorMsg,
+                    buildOutDir)
+            };
         }
 
         var result = BuildStandalone(projectRoot, assetsPath, buildOutDir, log);
-        return new(result.Succeeded, result.Cancelled, result.OutputDirectory, result.Message, validation);
+        return new(result.Succeeded, result.Cancelled, result.OutputDirectory, result.Message, validation)
+        {
+            Diagnostic = result.Diagnostic
+        };
     }
 
     public static PackageBuildResult PackageAssets(string assetsPath, string outputPackagePath, Action<string>? log = null)
-        => Package(assetsPath, outputPackagePath, CancellationToken.None, log);
+        => PackageAssetsAsync(assetsPath, outputPackagePath, log).GetAwaiter().GetResult();
 
     public static Task<PackageBuildResult> PackageAssetsAsync(
         string assetsPath,
         string outputPackagePath,
         Action<string>? log = null,
-        CancellationToken cancellationToken = default)
-        => Task.Run(() => Package(assetsPath, outputPackagePath, cancellationToken, log));
+        CancellationToken cancellationToken = default,
+        Action<BuildDiagnostic>? reportDiagnostic = null)
+        => PackageAsync(assetsPath, outputPackagePath, cancellationToken, log, reportDiagnostic);
 
-    private static PackageBuildResult Package(
+    private static async Task<PackageBuildResult> PackageAsync(
         string assetsPath,
         string outputPackagePath,
         CancellationToken cancellationToken,
-        Action<string>? log)
+        Action<string>? log,
+        Action<BuildDiagnostic>? reportDiagnostic)
     {
         void Report(string msg) => log?.Invoke(msg);
+        string fullOutput = outputPackagePath;
+        string stagingPackage = string.Empty;
+        PackageBuildResult Fail(
+            BuildDiagnosticCode code,
+            BuildDiagnosticSeverity severity,
+            string message,
+            string target,
+            int? exitCode = null,
+            string detail = "",
+            string output = "")
+        {
+            var diagnostic = new BuildDiagnostic(
+                code, severity, "package_assets", message, target, exitCode, detail);
+            reportDiagnostic?.Invoke(diagnostic);
+            return new(false, code == BuildDiagnosticCode.Cancelled, fullOutput, message, output)
+            {
+                Diagnostic = diagnostic
+            };
+        }
 
         if (string.IsNullOrWhiteSpace(assetsPath) || !Directory.Exists(assetsPath))
-            return new(false, false, outputPackagePath, "Assets directory does not exist.", string.Empty);
+            return Fail(BuildDiagnosticCode.InvalidInput, BuildDiagnosticSeverity.Error,
+                "Assets directory does not exist.", assetsPath);
 
-        string fullOutput = Path.GetFullPath(outputPackagePath);
-        string parentDir = Path.GetDirectoryName(fullOutput)
-            ?? throw new InvalidOperationException("Package output directory cannot be resolved.");
-        Directory.CreateDirectory(parentDir);
-
-        string stagingPackage = Path.Combine(parentDir, $".{Path.GetFileName(fullOutput)}.{Guid.NewGuid():N}.tmp");
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
+            fullOutput = Path.GetFullPath(outputPackagePath);
+            string parentDir = Path.GetDirectoryName(fullOutput)
+                ?? throw new InvalidOperationException("Package output directory cannot be resolved.");
+            Directory.CreateDirectory(parentDir);
+            stagingPackage = Path.Combine(parentDir, $".{Path.GetFileName(fullOutput)}.{Guid.NewGuid():N}.tmp");
 
             string repoRoot = ResolveRepoRoot(assetsPath);
             string tool = Path.Combine(repoRoot, "tools", "package_assets.py");
             if (!File.Exists(tool))
-                return new(false, false, fullOutput, $"Canonical package tool missing: {tool}", string.Empty);
+                return Fail(BuildDiagnosticCode.MissingDependency, BuildDiagnosticSeverity.Error,
+                    $"Canonical package tool missing: {tool}", tool);
 
             var psi = new ProcessStartInfo(OperatingSystem.IsWindows() ? "python" : "python3")
             {
@@ -127,55 +194,85 @@ public static class ProjectBuildService
             psi.ArgumentList.Add(Path.GetFullPath(assetsPath));
             psi.ArgumentList.Add(stagingPackage);
 
-            using var process = new Process { StartInfo = psi };
-            using var registration = cancellationToken.Register(() =>
+            ExternalToolResult processResult = await ExternalToolRunner.RunAsync(
+                psi,
+                line => Report($"[{(line.Stream == ExternalToolStream.StandardOutput ? "stdout" : "stderr")}] {line.Text}"),
+                cancellationToken).ConfigureAwait(false);
+
+            if (processResult.ExitCode != 0 || !File.Exists(stagingPackage))
             {
-                try { if (!process.HasExited) process.Kill(true); } catch { }
-            });
-
-            if (!process.Start())
-                return new(false, false, fullOutput, "Failed to start python packaging process.", string.Empty);
-
-            string stdout = process.StandardOutput.ReadToEnd();
-            string stderr = process.StandardError.ReadToEnd();
-            process.WaitForExit();
-            cancellationToken.ThrowIfCancellationRequested();
-
-            if (process.ExitCode != 0 || !File.Exists(stagingPackage))
-            {
-                return new(false, false, fullOutput,
-                    $"Package creation failed (exit code {process.ExitCode}): {stderr.Trim()}", stdout);
+                string message = $"Package creation failed (exit code {processResult.ExitCode}).";
+                return Fail(BuildDiagnosticCode.ToolFailed, BuildDiagnosticSeverity.Error,
+                    message, tool, processResult.ExitCode, processResult.StandardError.Trim(),
+                    processResult.StandardOutput);
             }
 
             File.Move(stagingPackage, fullOutput, overwrite: true);
             Report($"📦 [VFS PAKET] .rowlpkg başarıyla oluşturuldu: {fullOutput}");
-            return new(true, false, fullOutput, "Package created successfully.", stdout);
+            return new(true, false, fullOutput, "Package created successfully.", processResult.StandardOutput);
         }
         catch (OperationCanceledException)
         {
-            return new(false, true, fullOutput, "Package creation cancelled.", string.Empty);
+            return Fail(BuildDiagnosticCode.Cancelled, BuildDiagnosticSeverity.Info,
+                "Package creation cancelled.", fullOutput);
         }
         catch (Exception ex)
         {
-            return new(false, false, fullOutput, $"Package creation error: {ex.Message}", string.Empty);
+            BuildDiagnosticCode code = ex is System.ComponentModel.Win32Exception
+                ? BuildDiagnosticCode.ProcessStartFailed
+                : BuildDiagnosticCode.IoFailure;
+            return Fail(code, BuildDiagnosticSeverity.Error,
+                $"Package creation error: {ex.Message}", fullOutput, detail: ex.ToString());
         }
         finally
         {
-            if (File.Exists(stagingPackage))
+            if (!string.IsNullOrEmpty(stagingPackage) && File.Exists(stagingPackage))
             {
-                try { File.Delete(stagingPackage); } catch { }
+                try { File.Delete(stagingPackage); }
+                catch (Exception cleanupError)
+                {
+                    reportDiagnostic?.Invoke(new BuildDiagnostic(
+                        BuildDiagnosticCode.CleanupFailed,
+                        BuildDiagnosticSeverity.Warning,
+                        "package_cleanup",
+                        cleanupError.Message,
+                        stagingPackage,
+                        Detail: cleanupError.ToString()));
+                }
             }
         }
     }
 
     private static StandaloneBuildResult Build(string projectRoot, string assetsPath, string buildOutDir,
-        IProgress<string>? progress, CancellationToken token, Action<string>? log)
+        IProgress<string>? progress, CancellationToken token, Action<string>? log,
+        Action<BuildDiagnostic>? reportDiagnostic)
     {
         void Report(string message) { log?.Invoke(message); progress?.Report(message); }
         string root = Path.GetFullPath(projectRoot);
         string output = Path.GetFullPath(buildOutDir);
-        if (!Directory.Exists(assetsPath)) return new(false, false, output, "Assets directory is missing.");
-        if (Directory.Exists(output) || File.Exists(output)) return new(false, false, output, "The build output directory already exists.");
+        StandaloneBuildResult Fail(
+            BuildDiagnosticCode code,
+            BuildDiagnosticSeverity severity,
+            string operation,
+            string message,
+            string target,
+            int? exitCode = null,
+            string detail = "")
+        {
+            var diagnostic = new BuildDiagnostic(code, severity, operation, message, target, exitCode, detail);
+            reportDiagnostic?.Invoke(diagnostic);
+            return new(false, code == BuildDiagnosticCode.Cancelled, output, message)
+            {
+                Diagnostic = diagnostic
+            };
+        }
+
+        if (!Directory.Exists(assetsPath))
+            return Fail(BuildDiagnosticCode.InvalidInput, BuildDiagnosticSeverity.Error,
+                "build_standalone", "Assets directory is missing.", assetsPath);
+        if (Directory.Exists(output) || File.Exists(output))
+            return Fail(BuildDiagnosticCode.InvalidInput, BuildDiagnosticSeverity.Error,
+                "build_standalone", "The build output directory already exists.", output);
 
         string baseDir = AppDomain.CurrentDomain.BaseDirectory;
         string repoRoot = ResolveRepoRoot(root);
@@ -184,9 +281,11 @@ public static class ProjectBuildService
         string? player = playerCandidates.FirstOrDefault(File.Exists);
         string? library = libraryCandidates.FirstOrDefault(File.Exists);
         if (player is null || library is null)
-            return new(false, false, output,
+            return Fail(BuildDiagnosticCode.MissingDependency, BuildDiagnosticSeverity.Error,
+                "build_standalone",
                 "rowl_player or RowlEngineCore is missing; build the native runtime before export. " +
-                $"Searched projectRoot='{root}', repoRoot='{repoRoot}', appBase='{baseDir}'.");
+                $"Searched projectRoot='{root}', repoRoot='{repoRoot}', appBase='{baseDir}'.",
+                output);
 
         string parent = Path.GetDirectoryName(output) ?? throw new InvalidOperationException("Build parent cannot be resolved.");
         Directory.CreateDirectory(parent);
@@ -201,7 +300,7 @@ public static class ProjectBuildService
             if (File.Exists(sourceManifest)) File.Copy(sourceManifest, Path.Combine(staging, "project.rowlproj"));
             string noticesSource = Path.Combine(repoRoot, "packaging", "THIRD_PARTY_NOTICES.md");
             if (!File.Exists(noticesSource))
-                throw new InvalidOperationException("Third-party license inventory is missing: " + noticesSource);
+                throw new MissingDependencyException("Third-party license inventory is missing: " + noticesSource);
             File.Copy(noticesSource, Path.Combine(staging, "THIRD_PARTY_NOTICES.md"));
             token.ThrowIfCancellationRequested();
 
@@ -236,15 +335,39 @@ public static class ProjectBuildService
         }
         catch (OperationCanceledException)
         {
-            return new(false, true, output, "Build cancelled.");
+            return Fail(BuildDiagnosticCode.Cancelled, BuildDiagnosticSeverity.Info,
+                "build_standalone", "Build cancelled.", output);
         }
         catch (Exception ex)
         {
-            return new(false, false, output, ex.Message);
+            BuildDiagnosticCode code = ex switch
+            {
+                ToolFailedException => BuildDiagnosticCode.ToolFailed,
+                MissingDependencyException => BuildDiagnosticCode.MissingDependency,
+                System.ComponentModel.Win32Exception => BuildDiagnosticCode.ProcessStartFailed,
+                _ => BuildDiagnosticCode.IoFailure
+            };
+            int? exitCode = ex is ToolFailedException toolFailure ? toolFailure.ExitCode : null;
+            string detail = ex is ToolFailedException failed ? failed.Detail : ex.ToString();
+            return Fail(code, BuildDiagnosticSeverity.Error,
+                "build_standalone", ex.Message, output, exitCode, detail);
         }
         finally
         {
-            if (Directory.Exists(staging)) { try { Directory.Delete(staging, true); } catch { } }
+            if (Directory.Exists(staging))
+            {
+                try { Directory.Delete(staging, true); }
+                catch (Exception cleanupError)
+                {
+                    reportDiagnostic?.Invoke(new BuildDiagnostic(
+                        BuildDiagnosticCode.CleanupFailed,
+                        BuildDiagnosticSeverity.Warning,
+                        "build_cleanup",
+                        cleanupError.Message,
+                        staging,
+                        Detail: cleanupError.ToString()));
+                }
+            }
         }
     }
 
@@ -252,42 +375,49 @@ public static class ProjectBuildService
         CancellationToken token, Action<string> report)
     {
         string tool = Path.Combine(repoRoot, "tools", "package_assets.py");
-        if (!File.Exists(tool)) throw new InvalidOperationException("Canonical package tool is missing: " + tool);
+        if (!File.Exists(tool)) throw new MissingDependencyException("Canonical package tool is missing: " + tool);
         RunPythonTool(OperatingSystem.IsWindows() ? "python" : "python3", tool,
-            $"\"{assetsPath}\" \"{packagePath}\"", repoRoot, token, report);
+            new[] { assetsPath, packagePath }, repoRoot, token, report);
     }
 
     private static void RunReleaseVerifier(string repoRoot, string releaseRoot,
         CancellationToken token, Action<string> report)
     {
         string tool = Path.Combine(repoRoot, "tools", "verify_release_package.py");
-        if (!File.Exists(tool)) throw new InvalidOperationException("Release verifier is missing: " + tool);
+        if (!File.Exists(tool)) throw new MissingDependencyException("Release verifier is missing: " + tool);
         RunPythonTool(OperatingSystem.IsWindows() ? "python" : "python3", tool,
-            $"\"{releaseRoot}\"", repoRoot, token, report);
+            new[] { releaseRoot }, repoRoot, token, report);
     }
 
-    private static void RunPythonTool(string executable, string script, string arguments, string workingDirectory,
+    private static void RunPythonTool(string executable, string script, IReadOnlyList<string> arguments, string workingDirectory,
         CancellationToken token, Action<string> report)
     {
-        using var process = new Process
+        var startInfo = new ProcessStartInfo(executable)
         {
-            StartInfo = new ProcessStartInfo(executable, $"\"{script}\" {arguments}")
-            {
-                WorkingDirectory = workingDirectory,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            }
+            WorkingDirectory = workingDirectory
         };
-        using var registration = token.Register(() => { try { if (!process.HasExited) process.Kill(true); } catch { } });
-        if (!process.Start()) throw new InvalidOperationException("Could not start " + Path.GetFileName(script));
-        string stdout = process.StandardOutput.ReadToEnd();
-        string stderr = process.StandardError.ReadToEnd();
-        process.WaitForExit();
-        token.ThrowIfCancellationRequested();
-        if (!string.IsNullOrWhiteSpace(stdout)) report(stdout.Trim());
-        if (process.ExitCode != 0)
-            throw new InvalidOperationException($"{Path.GetFileName(script)} failed: {stderr.Trim()}");
+        startInfo.ArgumentList.Add(script);
+        foreach (string argument in arguments)
+            startInfo.ArgumentList.Add(argument);
+
+        ExternalToolResult result = ExternalToolRunner.RunAsync(
+            startInfo,
+            line => report($"[{(line.Stream == ExternalToolStream.StandardOutput ? "stdout" : "stderr")}] {line.Text}"),
+            token).GetAwaiter().GetResult();
+        if (result.ExitCode != 0)
+            throw new ToolFailedException(
+                $"{Path.GetFileName(script)} failed with exit code {result.ExitCode}.",
+                result.ExitCode,
+                result.StandardError.Trim());
+    }
+
+    private sealed class ToolFailedException(string message, int exitCode, string detail) : Exception(message)
+    {
+        public int ExitCode { get; } = exitCode;
+        public string Detail { get; } = detail;
+    }
+
+    private sealed class MissingDependencyException(string message) : Exception(message)
+    {
     }
 }

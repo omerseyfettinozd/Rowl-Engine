@@ -121,6 +121,45 @@ namespace RowlEngine.Editor.Services
             log?.Invoke($"⚠️ [Motor Tanı] {code} — {operation}: {message} ({target})");
         }
 
+        /// <summary>Publishes structured build/package failures to toast, notification list and log.</summary>
+        public void ReportBuildDiagnostic(BuildDiagnostic diagnostic, Action<string>? log = null)
+        {
+            ArgumentNullException.ThrowIfNull(diagnostic);
+            string detail = string.IsNullOrWhiteSpace(diagnostic.Detail)
+                ? string.Empty
+                : $" — {diagnostic.Detail}";
+            string message = $"[{diagnostic.Code}] {diagnostic.Message}";
+            string logLine = $"[Build Tanı] {diagnostic.Code} — {diagnostic.Operation}: {diagnostic.Message} " +
+                $"(hedef: {diagnostic.Target}{(diagnostic.ExitCode.HasValue ? $", çıkış: {diagnostic.ExitCode}" : string.Empty)}){detail}";
+
+            RunOnUIThread(() =>
+            {
+                switch (diagnostic.Severity)
+                {
+                    case BuildDiagnosticSeverity.Info:
+                        ToastService.Instance.Show(message, ToastType.Info, 3500);
+                        ShowInfo(message, "Build", 3500);
+                        break;
+                    case BuildDiagnosticSeverity.Warning:
+                        ToastService.Instance.Show(message, ToastType.Warning, 5000);
+                        ShowWarning(message, "Build Uyarısı", 5000);
+                        break;
+                    default:
+                        ToastService.Instance.Show(message, ToastType.Error, 7000);
+                        ShowError(message, "Build Hatası", 7000);
+                        break;
+                }
+            });
+
+            string prefix = diagnostic.Severity switch
+            {
+                BuildDiagnosticSeverity.Info => "ℹ️",
+                BuildDiagnosticSeverity.Warning => "⚠️",
+                _ => "❌"
+            };
+            log?.Invoke($"{prefix} {logLine}");
+        }
+
         /// <summary>
         /// Edge-triggered audio-device observer: toasts only on transitions so a
         /// missing device does not spam on every diagnostics poll.

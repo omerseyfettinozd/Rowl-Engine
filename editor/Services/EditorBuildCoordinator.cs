@@ -26,7 +26,8 @@ public static class EditorBuildCoordinator
         ulong? startNodeId,
         Action persistFiles,
         Action<IReadOnlyList<ProjectValidationIssue>> reportIssues,
-        Action<string>? log = null)
+        Action<string>? log = null,
+        Action<BuildDiagnostic>? reportDiagnostic = null)
     {
         persistFiles();
         var result = ProjectBuildService.ExecuteBuildPipeline(
@@ -41,7 +42,10 @@ public static class EditorBuildCoordinator
 
         if (!result.Succeeded && !result.Cancelled)
         {
-            log?.Invoke($"⚠️ {result.Message}");
+            if (result.Diagnostic != null)
+                reportDiagnostic?.Invoke(result.Diagnostic);
+            if (reportDiagnostic == null)
+                log?.Invoke($"⚠️ {result.Message}");
         }
 
         return result;
@@ -61,7 +65,8 @@ public static class EditorBuildCoordinator
         Action<IReadOnlyList<ProjectValidationIssue>> reportIssues,
         Action<string>? log = null,
         Action<string>? reportProgress = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        Action<BuildDiagnostic>? reportDiagnostic = null)
     {
         persistFiles();
         var validation = ProjectValidationService.Validate(nodes, connections, assetsPath, startNodeId);
@@ -70,8 +75,18 @@ public static class EditorBuildCoordinator
         if (validation.Any(issue => issue.IsError))
         {
             string errorMsg = "⛔ Build cancelled: fix blocking project validation errors first.";
-            log?.Invoke(errorMsg);
-            return new StandaloneBuildResult(false, false, baseOutDir, errorMsg);
+            var diagnostic = new BuildDiagnostic(
+                BuildDiagnosticCode.ValidationFailed,
+                BuildDiagnosticSeverity.Error,
+                "build_validation",
+                errorMsg,
+                baseOutDir);
+            reportDiagnostic?.Invoke(diagnostic);
+            if (reportDiagnostic == null) log?.Invoke(errorMsg);
+            return new StandaloneBuildResult(false, false, baseOutDir, errorMsg)
+            {
+                Diagnostic = diagnostic
+            };
         }
 
         string buildFolderName = $"RowlBuild_{DateTime.Now:yyyy-MM-dd_HH-mm}";
@@ -88,11 +103,13 @@ public static class EditorBuildCoordinator
             assetsPath,
             finalBuildDir,
             progress,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken,
+            reportDiagnostic: reportDiagnostic).ConfigureAwait(false);
 
         if (!result.Succeeded)
         {
-            log?.Invoke($"{(result.Cancelled ? "ℹ️" : "⚠️")} {result.Message}");
+            if (reportDiagnostic == null)
+                log?.Invoke($"{(result.Cancelled ? "ℹ️" : "⚠️")} {result.Message}");
         }
 
         return result;
@@ -105,18 +122,20 @@ public static class EditorBuildCoordinator
         string assetsPath,
         string outputDirectory,
         Action<string>? log = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        Action<BuildDiagnostic>? reportDiagnostic = null)
     {
         Directory.CreateDirectory(outputDirectory);
         string pkgFileName = $"game_data_{DateTime.Now:yyyy-MM-dd_HH-mm}.rowlpkg";
         string outPkg = Path.Combine(outputDirectory, pkgFileName);
 
-        var result = await ProjectBuildService.PackageAssetsAsync(assetsPath, outPkg, log, cancellationToken).ConfigureAwait(false);
+        var result = await ProjectBuildService.PackageAssetsAsync(
+            assetsPath, outPkg, log, cancellationToken, reportDiagnostic).ConfigureAwait(false);
         if (result.Succeeded)
         {
-            log?.Invoke($"📦 [VFS PAKET] .rowlpkg başarıyla oluşturuldu:\n  📁 Konum: {result.PackagePath}\n{result.Output}");
+            log?.Invoke($"📦 [VFS PAKET] .rowlpkg başarıyla oluşturuldu:\n  📁 Konum: {result.PackagePath}");
         }
-        else
+        else if (reportDiagnostic == null)
         {
             log?.Invoke($"⚠️ Paket oluşturma başarısız: {result.Message}");
         }

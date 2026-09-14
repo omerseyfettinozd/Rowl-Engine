@@ -17,6 +17,17 @@ internal static class EditorSettingsSyncTests
         string testPlayerSettingsPath = Path.Combine(testProjectRoot, "test_player_settings.json");
         var testSettingsVm = new SettingsViewModel();
 
+        string[] removedNoOpSettings =
+        {
+            "DefaultBuildTarget", "DefaultExportPath", "ShowFpsOverlay",
+            "GridSnapping", "CableStyle", "ShowNodeMinimap", "EditorLanguage"
+        };
+        foreach (string property in removedNoOpSettings)
+        {
+            if (typeof(SettingsViewModel).GetProperty(property) != null)
+                throw new Exception($"Non-functional editor setting '{property}' was exposed again.");
+        }
+
         var syncEditorProfile = new EditorSettingsProfile { AutoSaveEnabled = false, AutoSaveIntervalSeconds = 120 };
         syncEditorProfile.Save(testEditorSettingsPath);
         EditorSettingsSyncService.LoadEditorSettings(testEditorSettingsPath, testSettingsVm);

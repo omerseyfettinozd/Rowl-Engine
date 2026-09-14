@@ -45,8 +45,24 @@ internal static class EditorNotificationTests
         if (notifService.Notifications.Count != 0)
             throw new Exception("ClearAll failed to empty notifications.");
 
-        // Step 21.4: CheckEngineDiagnostics Integration
-        Console.WriteLine("    [Step 21.4]: MainWindowViewModel CheckEngineDiagnostics...");
+        // Step 21.4: Structured build diagnostics surface as user notifications.
+        string buildLog = string.Empty;
+        notifService.ReportBuildDiagnostic(new BuildDiagnostic(
+            BuildDiagnosticCode.ToolFailed,
+            BuildDiagnosticSeverity.Error,
+            "package_assets",
+            "Packager failed.",
+            "game.rowlpkg",
+            7,
+            "invalid archive"), line => buildLog = line);
+        if (notifService.Notifications.Count != 1 ||
+            notifService.Notifications[0].Type != NotificationType.Error ||
+            !buildLog.Contains("ToolFailed", StringComparison.Ordinal) ||
+            !buildLog.Contains("çıkış: 7", StringComparison.Ordinal))
+            throw new Exception("Structured build diagnostic did not reach notification and log surfaces.");
+
+        // Step 21.5: CheckEngineDiagnostics Integration
+        Console.WriteLine("    [Step 21.5]: MainWindowViewModel CheckEngineDiagnostics...");
         mainVm.CheckEngineDiagnostics(); // In test environment without native handle, should be graceful no-op
 
         Console.WriteLine("  ✅ [PASS] EditorNotificationService & Diagnostics Integration verified");
