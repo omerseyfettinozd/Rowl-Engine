@@ -78,6 +78,9 @@ same build and fixture.
 ## Phase 0 remaining proof artifacts
 
 - Expand Product Golden Project with TR/EN catalogs, Unicode paths, long audio and corrupt-asset cases as their owning formats land.
-- Add the deterministic 2,000-node/6,000-edge editor fixture and record search, save, input-latency and memory metrics.
+- Generate the deterministic 2,000-node/6,000-edge editor fixture with
+  `tools/generate_editor_scale_fixture.py`; its identity/count/determinism
+  contract is enforced by CTest. Record search, save, input-latency and memory
+  metrics against it.
 - Record Linux and Windows reference-machine series; do not infer real GUI/device support from headless results.
 - Add compile-only `arm64` gates without making unavailable ARM hardware block the first proven `x86_64` release.
