@@ -42,6 +42,7 @@
                                 <MenuItem Header="💬 Dialogue Backlog" Command="{Binding ShowPanelCommand}" CommandParameter="Backlog"/>
                                 <MenuItem Header="💾 Save Slots" Command="{Binding ShowPanelCommand}" CommandParameter="SaveSlots"/>
                                 <MenuItem Header="⚠️ Project Issues" Command="{Binding ShowPanelCommand}" CommandParameter="ProjectIssues"/>
+                                <MenuItem Header="🌐 Çeviri Masası" Command="{Binding OpenLocalizationDeskCommand}"/>
                                 <MenuItem Header="🔎 Analyze Story Graph" Command="{Binding AnalyzeStoryGraphCommand}"/>
                                 </MenuItem>
                             </Menu>

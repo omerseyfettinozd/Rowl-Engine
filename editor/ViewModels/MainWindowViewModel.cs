@@ -5,6 +5,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using RowlEngine.Editor.Native;
 using RowlEngine.Editor.Services;
+using RowlEngine.Editor.Services.Localization;
 using RowlEngine.Editor.Models;
 using RowlEngine.Editor.ViewModels.Components;
 using System;
@@ -2088,6 +2089,14 @@ namespace RowlEngine.Editor.ViewModels
                 AppendLog,
                 diagnostic => NotificationService.ReportBuildDiagnostic(diagnostic, AppendLog));
         }
+
+        /// <summary>
+        /// Faz 3 Dilim 4 — opens the Translation Desk. One-line delegation;
+        /// all desk logic lives in the Localization services and ViewModel.
+        /// </summary>
+        [RelayCommand]
+        public void OpenLocalizationDesk() =>
+            LocalizationDeskCoordinator.OpenDesk(ProjectRoot);
 
         [RelayCommand]
         public void AnalyzeStoryGraph()

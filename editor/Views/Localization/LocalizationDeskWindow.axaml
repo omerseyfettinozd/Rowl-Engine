@@ -1,0 +1,117 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:RowlEngine.Editor.ViewModels.Localization"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        x:Class="RowlEngine.Editor.Views.Localization.LocalizationDeskWindow"
+        x:DataType="vm:LocalizationDeskViewModel"
+        Title="🌐 Çeviri Masası — Rowl Engine"
+        Width="1060" Height="680"
+        MinWidth="860" MinHeight="520"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource AppBackground}"
+        CanResize="True">
+
+    <Grid RowDefinitions="Auto, Auto, *, Auto, Auto">
+
+        <!-- ── Başlık ─────────────────────────────────────────────── -->
+        <Border Grid.Row="0" Background="{DynamicResource SurfaceBackground}"
+                BorderBrush="{DynamicResource BorderColor}" BorderThickness="0,0,0,1" Padding="16,10">
+            <StackPanel Orientation="Horizontal" Spacing="10">
+                <TextBlock Text="🌐" FontSize="18" VerticalAlignment="Center"/>
+                <TextBlock Text="Çeviri Masası" FontSize="16" FontWeight="Bold"
+                           Foreground="{DynamicResource PrimaryText}" VerticalAlignment="Center"/>
+                <TextBlock Text="{Binding StatusLine}" FontSize="11"
+                           Foreground="{DynamicResource MutedText}" VerticalAlignment="Center"
+                           TextWrapping="Wrap"/>
+            </StackPanel>
+        </Border>
+
+        <!-- ── Dil / Filtre / Arama ───────────────────────────────── -->
+        <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="10" Margin="16,10">
+            <StackPanel Spacing="2">
+                <TextBlock Text="Kaynak" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                <ComboBox ItemsSource="{Binding AvailableLocales}" SelectedItem="{Binding SourceLocale}" Width="110"/>
+            </StackPanel>
+            <StackPanel Spacing="2">
+                <TextBlock Text="Hedef" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                <ComboBox ItemsSource="{Binding AvailableLocales}" SelectedItem="{Binding TargetLocale}" Width="110"/>
+            </StackPanel>
+            <StackPanel Spacing="2">
+                <TextBlock Text="Filtre" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                <ComboBox SelectedIndex="{Binding SelectedFilterIndex}" Width="170">
+                    <ComboBoxItem Content="Tümü"/>
+                    <ComboBoxItem Content="Yalnızca Eksikler"/>
+                    <ComboBoxItem Content="Yalnızca Değişenler"/>
+                </ComboBox>
+            </StackPanel>
+            <StackPanel Spacing="2">
+                <TextBlock Text="Ara (konuşmacı / metin / id)" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                <TextBox Text="{Binding SearchText}" Width="260" Watermark="örn. Margot ya da relay"/>
+            </StackPanel>
+            <Button Content="🔄 Yenile" Command="{Binding RefreshCommand}"
+                    VerticalAlignment="Bottom" Padding="12,6"/>
+        </StackPanel>
+
+        <!-- ── Satır listesi ──────────────────────────────────────── -->
+        <ListBox Grid.Row="2" ItemsSource="{Binding FilteredRows}" SelectedItem="{Binding SelectedRow}"
+                 Margin="16,0" Background="Transparent">
+            <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <Border BorderBrush="{DynamicResource BorderColor}" BorderThickness="0,0,0,1" Padding="6,4">
+                        <StackPanel Spacing="2">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <TextBlock Text="{Binding State}" FontSize="11" FontWeight="Bold"
+                                           Foreground="{DynamicResource Accent}"/>
+                                <TextBlock Text="{Binding Speaker}" FontSize="12" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource PrimaryText}"/>
+                                <TextBlock Text="{Binding ContentId}" FontSize="10"
+                                           Foreground="{DynamicResource MutedText}"/>
+                            </StackPanel>
+                            <TextBlock Text="{Binding SourceText}" FontSize="11"
+                                       Foreground="{DynamicResource MutedText}"
+                                       TextWrapping="Wrap" MaxLines="2"/>
+                            <TextBlock Text="{Binding TranslatedText}" FontSize="12"
+                                       Foreground="{DynamicResource PrimaryText}"
+                                       TextWrapping="Wrap" MaxLines="2"/>
+                        </StackPanel>
+                    </Border>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+
+        <!-- ── Satır düzenleyici ──────────────────────────────────── -->
+        <Border Grid.Row="3" Background="{DynamicResource SurfaceBackground}"
+                BorderBrush="{DynamicResource BorderColor}" BorderThickness="0,1,0,0" Padding="16,10">
+            <Grid ColumnDefinitions="*, *" RowDefinitions="Auto, Auto, Auto, Auto">
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="Konuşmacı (çeviri)" FontSize="10"
+                           Foreground="{DynamicResource MutedText}"/>
+                <TextBlock Grid.Row="0" Grid.Column="1" Text="Alternatif metin (alt_text)" FontSize="10"
+                           Foreground="{DynamicResource MutedText}" Margin="8,0,0,0"/>
+                <TextBox Grid.Row="1" Grid.Column="0" Text="{Binding EditSpeaker}" Margin="0,2,8,6"/>
+                <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding EditAltText}" Margin="8,2,0,6"/>
+                <TextBlock Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2" Text="Çeviri" FontSize="10"
+                           Foreground="{DynamicResource MutedText}"/>
+                <TextBox Grid.Row="3" Grid.Column="0" Text="{Binding EditTranslation}"
+                         Margin="0,2,8,0" AcceptsReturn="True" MinHeight="44"/>
+                <Button Grid.Row="3" Grid.Column="1" Content="💾 Satırı Kaydet"
+                        Command="{Binding SaveCommand}" Padding="12,6" Margin="8,2,0,0"
+                        HorizontalAlignment="Right" VerticalAlignment="Bottom"/>
+            </Grid>
+        </Border>
+
+        <!-- ── Alt çubuk: değişim ─────────────────────────────────── -->
+        <Border Grid.Row="4" Padding="16,8">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button Content="⬆ CSV Dışa Aktar" Name="ExportCsvButton" Padding="10,5" FontSize="11"/>
+                <Button Content="⬇ CSV İçe Aktar" Name="ImportCsvButton" Padding="10,5" FontSize="11"/>
+                <Button Content="📦 JSON Dışa Aktar" Name="ExportJsonButton" Padding="10,5" FontSize="11"/>
+                <Button Content="🔤 Pseudo Üret" Command="{Binding GeneratePseudoCatalogCommand}"
+                        Padding="10,5" FontSize="11"
+                        ToolTip.Tip="Taşma testi için Assets/locales/qps-ploc.json üretir"/>
+            </StackPanel>
+        </Border>
+
+    </Grid>
+</Window>
