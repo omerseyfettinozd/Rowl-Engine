@@ -345,6 +345,10 @@ private:
     float m_autoAdvanceElapsed = 0.0f;
     float m_textSpeedMultiplier = 1.0f;
     float m_autoAdvanceDelayOffset = 0.0f;
+    // Faz 2 Dilim 4 total playtime: accumulated in step while playing and
+    // unpaused, stamped into save metadata, restored on load.
+    double m_playtimeSeconds = 0.0;
+    Rowl::State::SaveMetadata buildSaveMetadata() const;
     bool parseStoryGraphJson(const std::string& jsonContent);
     Rowl::State::SessionPersistence& sessionPersistence() const;
     bool loadStoryGraphFromAssetStream(const std::string& assetPath,

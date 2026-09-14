@@ -1,5 +1,6 @@
 #include "rowl/state/game_state.hpp"
 #include "rowl/core/logger.hpp"
+#include "rowl/state/save_metadata.hpp"
 #include "rowl/state/session_persistence.hpp"
 #include <nlohmann/json.hpp>
 #include <chrono>
@@ -18,6 +19,9 @@ constexpr size_t kMaxDialogueHistoryEntries = 500;
 constexpr size_t kMaxDialogueHistoryTextBytes = 64 * 1024;
 // Faz 2 content ids are UUIDs (36 chars); the cap only bounds hostile input.
 constexpr size_t kMaxContentIdBytes = 1024;
+// Faz 2 Dilim 4: downscaled thumbnails stay far below this; the cap only
+// bounds hostile slot files (the 4 MiB slot cap still applies first).
+constexpr size_t kMaxThumbnailBase64Bytes = 1024 * 1024;
 
 } // namespace
 
@@ -164,6 +168,24 @@ std::shared_ptr<const GameState> GameState::withDialogueHistory(
     return nextState;
 }
 
+std::shared_ptr<const GameState> GameState::withSaveMetadata(
+    const std::shared_ptr<const GameState>& current,
+    const SaveMetadata& metadata) {
+    if (!current) return nullptr;
+    auto nextState = std::make_shared<GameState>(*current);
+    nextState->playtimeSeconds =
+        (std::isfinite(metadata.playtimeSeconds) && metadata.playtimeSeconds >= 0.0)
+        ? metadata.playtimeSeconds
+        : 0.0;
+    nextState->chapterId = metadata.chapterId;
+    nextState->chapterTitle = metadata.chapterTitle;
+    nextState->summary = metadata.summary;
+    nextState->thumbnailPng = metadata.thumbnailPng;
+    nextState->thumbnailWidth = metadata.thumbnailWidth;
+    nextState->thumbnailHeight = metadata.thumbnailHeight;
+    return nextState;
+}
+
 std::shared_ptr<const GameState> GameState::rewind(
     const std::shared_ptr<const GameState>& current,
     uint64_t stepsToRewind) {
@@ -212,6 +234,18 @@ std::string GameState::serializeJson() const {
     j["timestamp"] = std::chrono::duration_cast<std::chrono::seconds>(
         std::chrono::system_clock::now().time_since_epoch()
     ).count();
+    // Faz 2 Dilim 4 display-only save metadata (optional on decode).
+    j["saved_at"] = Rowl::State::iso8601UtcNow();
+    j["playtime_seconds"] = playtimeSeconds;
+    j["chapter_id"] = chapterId;
+    j["chapter_title"] = chapterTitle;
+    j["summary"] = summary;
+    j["thumbnail_width"] = thumbnailWidth;
+    j["thumbnail_height"] = thumbnailHeight;
+    j["thumbnail_png_base64"] =
+        Rowl::State::base64Encode(
+            reinterpret_cast<const uint8_t*>(thumbnailPng.data()),
+            static_cast<uint32_t>(thumbnailPng.size()));
 
     return j.dump(2);
 }
@@ -282,6 +316,37 @@ GameStateDecodeResult GameState::decodeJson(const std::string& jsonStr) {
             return {nullptr, GameStateDecodeStatus::InvalidData, version};
         }
         state->variables = varMap;
+
+        // Faz 2 Dilim 4 display metadata: all optional, legacy saves decode
+        // to empty/zero. playtime must be finite and non-negative.
+        state->savedAt = j.value("saved_at", "");
+        state->playtimeSeconds = j.value("playtime_seconds", 0.0);
+        if (!std::isfinite(state->playtimeSeconds) || state->playtimeSeconds < 0.0) {
+            ROWL_LOG_ERROR("GameState JSON contains an invalid playtime");
+            return {nullptr, GameStateDecodeStatus::InvalidData, version};
+        }
+        state->chapterId = j.value("chapter_id", "");
+        state->chapterTitle = j.value("chapter_title", "");
+        state->summary = j.value("summary", "");
+        if (state->chapterId.size() > 1024 || state->chapterTitle.size() > 1024 ||
+            state->summary.size() > 4096) {
+            ROWL_LOG_ERROR("GameState JSON contains oversized save metadata");
+            return {nullptr, GameStateDecodeStatus::InvalidData, version};
+        }
+        state->thumbnailWidth = j.value("thumbnail_width", static_cast<uint32_t>(0));
+        state->thumbnailHeight = j.value("thumbnail_height", static_cast<uint32_t>(0));
+        const std::string thumbnailBase64 = j.value("thumbnail_png_base64", "");
+        if (thumbnailBase64.size() > kMaxThumbnailBase64Bytes) {
+            ROWL_LOG_ERROR("GameState JSON contains an oversized thumbnail");
+            return {nullptr, GameStateDecodeStatus::InvalidData, version};
+        }
+        state->thumbnailPng.clear();
+        if (!thumbnailBase64.empty() &&
+            !Rowl::State::base64Decode(thumbnailBase64, state->thumbnailPng)) {
+            ROWL_LOG_ERROR("GameState JSON contains a malformed thumbnail");
+            return {nullptr, GameStateDecodeStatus::InvalidData, version};
+        }
+
         auto history = std::make_shared<std::vector<DialogueHistoryEntry>>();
         if (j.contains("dialogue_history")) {
             if (!j["dialogue_history"].is_array() ||

@@ -7,6 +7,9 @@
  */
 
 #include "c_api_internal.hpp"
+#include "rowl/platform/user_data_directories.hpp"
+#include "rowl/state/game_state.hpp"
+#include "rowl/state/save_metadata.hpp"
 #include "nlohmann/json.hpp"
 #include "cstring"
 extern "C" {
@@ -121,6 +124,39 @@ uint64_t RowlEngine_GetCurrentStepId(RowlEngineHandle handle) {
     return invokeNoexcept<uint64_t>([&] {
         return toEngine(handle)->getCurrentStepId();
     }, 0);
+}
+
+RowlEngine_ResultCode RowlEngine_GetSaveSlotMetadataJson(
+    RowlEngineHandle handle, int32_t slotIndex, char* buffer,
+    uint32_t bufferSize, uint32_t* outRequiredSize) {
+    if (!isLiveHandle(handle)) return ROWL_RESULT_INVALID_HANDLE;
+    if (slotIndex < 0 || slotIndex > 100) return ROWL_RESULT_INVALID_ARGUMENT;
+    return invokeNoexcept<RowlEngine_ResultCode>([&] {
+        auto* engine = toEngine(handle);
+        if (!engine) return ROWL_RESULT_INVALID_HANDLE;
+        // Display-only read: the live story is never touched.
+        if (!engine->hasSaveSlot(slotIndex)) return ROWL_RESULT_FILE_NOT_FOUND;
+        const auto state = Rowl::State::GameState::loadFromSlot(
+            slotIndex,
+            Rowl::Platform::pathToUtf8(engine->getSaveDirectoryPath()));
+        if (!state) return ROWL_RESULT_PARSE_ERROR;
+        const nlohmann::json metadata = {
+            {"slot", slotIndex},
+            {"saved_at", state->savedAt},
+            {"playtime_seconds", state->playtimeSeconds},
+            {"chapter_id", state->chapterId},
+            {"chapter_title", state->chapterTitle},
+            {"summary", state->summary},
+            {"thumbnail_width", state->thumbnailWidth},
+            {"thumbnail_height", state->thumbnailHeight},
+            {"has_thumbnail", !state->thumbnailPng.empty()},
+            {"thumbnail_png_base64", Rowl::State::base64Encode(
+                reinterpret_cast<const uint8_t*>(state->thumbnailPng.data()),
+                static_cast<uint32_t>(state->thumbnailPng.size()))},
+        };
+        return copyUtf8ToCaller(metadata.dump(), buffer, bufferSize,
+                                outRequiredSize);
+    }, ROWL_RESULT_UNKNOWN_ERROR);
 }
 
 void RowlEngine_SetVariable(RowlEngineHandle handle, const char* key, const char* value) {

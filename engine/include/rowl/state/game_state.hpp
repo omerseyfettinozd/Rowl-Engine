@@ -30,6 +30,21 @@ struct VariableMap {
     std::unordered_map<std::string, std::string> data;
 };
 
+/// Display-only save-slot metadata stamped at save time (Faz 2 Dilim 4).
+/// Never affects simulation, rewind or migration: all fields are optional
+/// on decode and default to empty/zero for legacy saves.
+struct SaveMetadata {
+    double playtimeSeconds = 0.0;
+    std::string chapterId;
+    std::string chapterTitle;
+    /// Last presented dialogue line, truncated for slot listings.
+    std::string summary;
+    /// Downscaled PNG bytes (empty when no framebuffer was available).
+    std::string thumbnailPng;
+    uint32_t thumbnailWidth = 0;
+    uint32_t thumbnailHeight = 0;
+};
+
 /// A player-visible line kept independently from the rewind-chain internals.
 /// The bounded vector is structurally shared until a new line is appended.
 struct DialogueHistoryEntry {
@@ -62,6 +77,17 @@ struct GameState {
     std::string activeBgm;
     float bgmVolume = 1.0f;
     bool bgmPlaying = false;
+
+    // Faz 2 Dilim 4 display-only save metadata (see SaveMetadata).
+    // savedAt is the ISO-8601 stamp written by serializeJson ("saved_at").
+    std::string savedAt;
+    double playtimeSeconds = 0.0;
+    std::string chapterId;
+    std::string chapterTitle;
+    std::string summary;
+    std::string thumbnailPng;
+    uint32_t thumbnailWidth = 0;
+    uint32_t thumbnailHeight = 0;
 
     // Smart pointers last
     std::shared_ptr<const VariableMap> variables = std::make_shared<VariableMap>();
@@ -100,6 +126,12 @@ struct GameState {
     static std::shared_ptr<const GameState> withDialogueHistory(
         const std::shared_ptr<const GameState>& current,
         const std::vector<DialogueHistoryEntry>& entries
+    );
+
+    /// Returns a structurally shared copy carrying fresh save metadata.
+    static std::shared_ptr<const GameState> withSaveMetadata(
+        const std::shared_ptr<const GameState>& current,
+        const SaveMetadata& metadata
     );
 
     // Serialization & slot persistence

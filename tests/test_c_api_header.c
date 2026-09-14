@@ -5,6 +5,7 @@ _Static_assert(ROWL_RESULT_OK == 0, "ResultCode ABI changed");
 _Static_assert(ROWL_RESULT_BUFFER_TOO_SMALL == 12, "ResultCode ABI changed");
 _Static_assert(ROWL_ENGINE_CAPABILITY_GRAPH_VNEXT == 8, "Capability ABI changed");
 _Static_assert(ROWL_ENGINE_CAPABILITY_PLAYER_LOOP == 16, "Capability ABI changed");
+_Static_assert(ROWL_ENGINE_CAPABILITY_SAVE_METADATA == 32, "Capability ABI changed");
 _Static_assert(ROWL_ENGINE_C_API_VERSION_MAJOR == 1u, "C API major changed");
 _Static_assert(sizeof(RowlEngine_ApiVersion) == sizeof(uint32_t) * 3,
                "ApiVersion layout changed");

@@ -147,6 +147,7 @@ set(ROWL_ENGINE_SOURCES
     src/vfs/rowlpkg_reader.cpp
     # Game state
     src/state/game_state.cpp
+    src/state/save_metadata.cpp
     src/state/session_persistence.cpp
     # Scripting
     src/scripting/lua_sandbox.cpp

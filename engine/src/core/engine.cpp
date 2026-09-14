@@ -1,4 +1,5 @@
 #include "rowl/core/engine.hpp"
+#include "rowl/state/save_metadata.hpp"
 #include "rowl/platform/user_data_directories.hpp"
 #include "rowl/core/logger.hpp"
 #include "rowl/core/story_graph_parser.hpp"
@@ -1496,6 +1497,10 @@ void Engine::step(float deltaTime) {
     if (platformHost && platformHost->lifecycleState() == Rowl::Platform::LifecycleState::Suspended) {
         return;
     }
+    // Faz 2 Dilim 4 total playtime: only live, unpaused play counts.
+    if (m_isPlaying && !m_paused) {
+        m_playtimeSeconds += deltaTime;
+    }
     if (platformHost) {
         for (const auto& event : platformHost->takeInputEvents()) {
             handleRuntimeInput(event);
@@ -1970,6 +1975,32 @@ void Engine::shutdown() {
     ROWL_LOG_INFO("Engine shutdown complete.");
 }
 
+Rowl::State::SaveMetadata Engine::buildSaveMetadata() const {
+    Rowl::State::SaveMetadata metadata;
+    metadata.playtimeSeconds = m_playtimeSeconds;
+    metadata.chapterId = getCurrentChapterId();
+    for (const auto& chapter : m_storyRuntime.document().chapters) {
+        if (chapter.id == metadata.chapterId) {
+            metadata.chapterTitle = chapter.title;
+            break;
+        }
+    }
+    if (m_gameState && m_gameState->dialogueHistory && !m_gameState->dialogueHistory->empty()) {
+        metadata.summary = Rowl::State::truncateSummary(
+            m_gameState->dialogueHistory->back().dialogue);
+    }
+    uint32_t width = 0, height = 0, pitch = 0;
+    const uint8_t* pixels = getPixelBuffer(&width, &height, &pitch);
+    if (pixels && width > 0 && height > 0) {
+        const auto thumbnail =
+            Rowl::State::encodeThumbnailPng(pixels, width, height, pitch);
+        metadata.thumbnailPng = std::move(thumbnail.png);
+        metadata.thumbnailWidth = thumbnail.width;
+        metadata.thumbnailHeight = thumbnail.height;
+    }
+    return metadata;
+}
+
 bool Engine::saveGameSlot(int32_t slotIndex) {
     if (slotIndex < 0 || slotIndex > 100) {
         m_context->setError(RuntimeErrorCode::InvalidArgument,
@@ -1979,6 +2010,10 @@ bool Engine::saveGameSlot(int32_t slotIndex) {
     }
     m_gameState = Rowl::State::SessionPersistence::checkpoint(
         m_gameState, m_storyRuntime.currentNodeId());
+    if (m_gameState) {
+        m_gameState = Rowl::State::GameState::withSaveMetadata(
+            m_gameState, buildSaveMetadata());
+    }
     auto& persistence = sessionPersistence();
     const std::string saveDirectory =
         Rowl::Platform::pathToUtf8(persistence.saveDirectory());
@@ -2034,6 +2069,7 @@ bool Engine::loadGameSlot(int32_t slotIndex) {
     }
 
     m_gameState = loadResult.state;
+    m_playtimeSeconds = m_gameState ? m_gameState->playtimeSeconds : 0.0;
     m_storyRuntime.setCurrentNodeId(m_gameState->activeNodeId);
     // Loading restores state; it is not a node-entry event and must not replay SFX.
     m_lastSfxPlaybackNodeId = m_storyRuntime.currentNodeId();

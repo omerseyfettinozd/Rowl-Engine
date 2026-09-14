@@ -71,7 +71,8 @@ void test_c_api_contract() {
         (capabilities & ROWL_ENGINE_CAPABILITY_CALLER_BUFFERS) == 0 ||
         (capabilities & ROWL_ENGINE_CAPABILITY_USER_DATA_DIRECTORIES) == 0 ||
         (capabilities & ROWL_ENGINE_CAPABILITY_GRAPH_VNEXT) == 0 ||
-        (capabilities & ROWL_ENGINE_CAPABILITY_PLAYER_LOOP) == 0) {
+        (capabilities & ROWL_ENGINE_CAPABILITY_PLAYER_LOOP) == 0 ||
+        (capabilities & ROWL_ENGINE_CAPABILITY_SAVE_METADATA) == 0) {
         std::cerr << "API version/capability negotiation failed" << std::endl;
         exit(1);
     }
@@ -292,6 +293,64 @@ void test_c_api_contract() {
         RowlEngine_GetLastResultCode(handle) != ROWL_RESULT_INVALID_ARGUMENT) {
         std::cerr << "Result-coded save/load or legacy wrapper contract failed" << std::endl;
         exit(1);
+    }
+
+    // Faz 2 Dilim 4: slot display metadata reads the file without loading
+    // it into the live story.
+    {
+        if (RowlEngine_GetSaveSlotMetadataJson(
+                nullptr, 0, nullptr, 0, &required) != ROWL_RESULT_INVALID_HANDLE ||
+            RowlEngine_GetSaveSlotMetadataJson(
+                handle, -1, nullptr, 0, &required) != ROWL_RESULT_INVALID_ARGUMENT ||
+            RowlEngine_GetSaveSlotMetadataJson(
+                handle, 101, nullptr, 0, &required) != ROWL_RESULT_INVALID_ARGUMENT ||
+            RowlEngine_GetSaveSlotMetadataJson(
+                handle, 77, nullptr, 0, &required) != ROWL_RESULT_FILE_NOT_FOUND) {
+            std::cerr << "Slot metadata error contract failed" << std::endl;
+            exit(1);
+        }
+        RowlEngine_SetPlayState(handle, 1);
+        RowlEngine_UpdateSceneFromJson(handle, R"([
+            {"type": "dialogue", "enabled": true, "data": {
+                "speaker": "Evelyn", "dialogue": "Hi.",
+                "content_id": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"}}
+        ])");
+        RowlEngine_Step(handle, 1.0f / 60.0f);
+        if (RowlEngine_SaveGameSlot(handle, 7) != 1) {
+            std::cerr << "Metadata fixture slot could not be saved" << std::endl;
+            exit(1);
+        }
+        uint32_t metaRequired = 0;
+        if (RowlEngine_GetSaveSlotMetadataJson(handle, 7, nullptr, 0, &metaRequired) !=
+            ROWL_RESULT_OK) {
+            std::cerr << "Slot metadata size query failed" << std::endl;
+            exit(1);
+        }
+        std::vector<char> metaBuffer(metaRequired, '\0');
+        uint32_t metaRepeated = 0;
+        if (RowlEngine_GetSaveSlotMetadataJson(
+                handle, 7, metaBuffer.data(),
+                static_cast<uint32_t>(metaBuffer.size()), &metaRepeated) != ROWL_RESULT_OK) {
+            std::cerr << "Slot metadata fetch failed" << std::endl;
+            exit(1);
+        }
+        const std::string meta(metaBuffer.data());
+        if (meta.find("\"chapter_id\":\"ch1\"") == std::string::npos ||
+            meta.find("\"chapter_title\":\"Arrivals\"") == std::string::npos ||
+            meta.find("\"summary\":\"Legacy line without an id.\"") == std::string::npos ||
+            meta.find("\"saved_at\":\"20") == std::string::npos ||
+            meta.find("\"playtime_seconds\":") == std::string::npos ||
+            meta.find("\"has_thumbnail\":true") == std::string::npos ||
+            meta.find("\"thumbnail_width\":64") == std::string::npos ||
+            meta.find("\"thumbnail_png_base64\":\"iVBOR") == std::string::npos) {
+            std::cerr << "Slot metadata payload mismatch: " << meta.substr(0, 400) << std::endl;
+            exit(1);
+        }
+        RowlEngine_SetPlayState(handle, 0);
+        if (RowlEngine_GetCurrentNodeId(handle) != 101) {
+            std::cerr << "Metadata query must not disturb the live story" << std::endl;
+            exit(1);
+        }
     }
 
     RowlEngine_Destroy(handle);

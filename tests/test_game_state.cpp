@@ -3,7 +3,9 @@
  * Split from main_test_runner.cpp; behavior unchanged.
  */
 #include "rowl_test_harness.hpp"
+#include "rowl/state/save_metadata.hpp"
 #include "rowl/state/session_persistence.hpp"
+#include <vector>
 
 void test_game_state() {
     TEST_SECTION("GameState & Rewind Subsystem");
@@ -95,8 +97,8 @@ void test_game_state() {
     TEST_PASS("GameState JSON Serialization & Deserialization");
 
     const auto withHistory = Rowl::State::GameState::withDialogueHistory(s2, {
-        {101, "Evelyn", "First remembered line", true},
-        {102, "Mina", "Second remembered line", true},
+        {101, "Evelyn", "First remembered line", true, ""},
+        {102, "Mina", "Second remembered line", true, ""},
     });
     const auto restoredHistory = Rowl::State::GameState::deserializeJson(withHistory->serializeJson());
     if (!restoredHistory || !restoredHistory->dialogueHistory ||
@@ -142,6 +144,93 @@ void test_game_state() {
         exit(1);
     }
     TEST_PASS("Dialogue History content_id Round-Trip, Legacy Fallback, and Hostile Rejection");
+
+    // Faz 2 Dilim 4: display-only save metadata round-trips; legacy saves
+    // decode to defaults; malformed/oversized payloads are rejected.
+    {
+        const auto meta = Rowl::State::GameState::withSaveMetadata(s2, {
+            3723.5, "ch7", "The Crossing", "Evelyn: Dawn breaks.",
+            std::string("\x89PNG\r\n\x1a\n", 8) + "fake-bytes", 320, 180,
+        });
+        const auto restoredMeta =
+            Rowl::State::GameState::deserializeJson(meta->serializeJson());
+        if (!restoredMeta || restoredMeta->playtimeSeconds != 3723.5 ||
+            restoredMeta->chapterId != "ch7" ||
+            restoredMeta->chapterTitle != "The Crossing" ||
+            restoredMeta->summary != "Evelyn: Dawn breaks." ||
+            restoredMeta->thumbnailPng != meta->thumbnailPng ||
+            restoredMeta->thumbnailWidth != 320 || restoredMeta->thumbnailHeight != 180) {
+            std::cerr << "Save metadata round-trip mismatch" << std::endl;
+            exit(1);
+        }
+        const auto legacyMeta = Rowl::State::GameState::deserializeJson(
+            R"({"version":3,"step_id":1,"active_node_id":101,"variables":{}})");
+        if (!legacyMeta || legacyMeta->playtimeSeconds != 0.0 ||
+            !legacyMeta->chapterId.empty() || !legacyMeta->summary.empty() ||
+            !legacyMeta->thumbnailPng.empty() || legacyMeta->thumbnailWidth != 0) {
+            std::cerr << "Legacy saves must decode with default metadata" << std::endl;
+            exit(1);
+        }
+        const auto badThumb = Rowl::State::GameState::decodeJson(
+            R"({"version":3,"step_id":1,"active_node_id":101,"variables":{},)"
+            R"("thumbnail_png_base64":"!!!not-base64!!!"})");
+        if (badThumb.status != Rowl::State::GameStateDecodeStatus::InvalidData) {
+            std::cerr << "Malformed thumbnail base64 must be rejected" << std::endl;
+            exit(1);
+        }
+        const auto badPlaytime = Rowl::State::GameState::decodeJson(
+            R"({"version":3,"step_id":1,"active_node_id":101,"variables":{},)"
+            R"("playtime_seconds":-5})");
+        if (badPlaytime.status != Rowl::State::GameStateDecodeStatus::InvalidData) {
+            std::cerr << "Negative playtime must be rejected" << std::endl;
+            exit(1);
+        }
+    }
+    TEST_PASS("Save Metadata Round-Trip, Legacy Defaults, and Hostile Rejection");
+
+    // Thumbnail encoder: PNG magic, downscale cap, base64 round-trip.
+    {
+        std::vector<uint8_t> rgba(640 * 480 * 4, 128);
+        const auto thumb = Rowl::State::encodeThumbnailPng(
+            rgba.data(), 640, 480, 640 * 4);
+        if (thumb.png.size() < 8 ||
+            thumb.png.compare(0, 8, std::string("\x89PNG\r\n\x1a\n", 8)) != 0 ||
+            thumb.width != 320 || thumb.height != 240) {
+            std::cerr << "Thumbnail encoder must emit capped PNG bytes" << std::endl;
+            exit(1);
+        }
+        std::string decoded;
+        if (!Rowl::State::base64Decode(
+                Rowl::State::base64Encode(
+                    reinterpret_cast<const uint8_t*>(thumb.png.data()),
+                    static_cast<uint32_t>(thumb.png.size())),
+                decoded) ||
+            decoded != thumb.png) {
+            std::cerr << "Thumbnail base64 round-trip mismatch" << std::endl;
+            exit(1);
+        }
+        if (Rowl::State::base64Decode("!!!", decoded)) {
+            std::cerr << "Malformed base64 must be rejected" << std::endl;
+            exit(1);
+        }
+        const auto empty = Rowl::State::encodeThumbnailPng(nullptr, 0, 0, 0);
+        if (!empty.png.empty() || empty.width != 0) {
+            std::cerr << "Degenerate pixels must yield an empty thumbnail" << std::endl;
+            exit(1);
+        }
+        const std::string clock = Rowl::State::iso8601UtcNow();
+        if (clock.size() != 20 || clock[4] != '-' || clock[10] != 'T' || clock.back() != 'Z') {
+            std::cerr << "ISO-8601 clock malformed: " << clock << std::endl;
+            exit(1);
+        }
+        if (Rowl::State::truncateSummary("abc", 10) != "abc" ||
+            Rowl::State::truncateSummary("abcdef", 4) != "abcd" ||
+            Rowl::State::truncateSummary("a\xc3\xa9" "cdef", 3) != "a\xc3\xa9") {
+            std::cerr << "Summary truncation must respect UTF-8 boundaries" << std::endl;
+            exit(1);
+        }
+    }
+    TEST_PASS("Thumbnail PNG Encode, Base64 Codec, Clock, and Truncation");
 
     auto audioState = Rowl::State::GameState::createNextStateWithAudio(
         s2, 102, "night.png", "audio/night.ogg", 0.65f, true, "Telephone");

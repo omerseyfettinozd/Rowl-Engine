@@ -69,6 +69,7 @@ typedef struct RowlEngine_ApiVersion {
 #define ROWL_ENGINE_CAPABILITY_USER_DATA_DIRECTORIES UINT64_C(4)
 #define ROWL_ENGINE_CAPABILITY_GRAPH_VNEXT           UINT64_C(8)
 #define ROWL_ENGINE_CAPABILITY_PLAYER_LOOP           UINT64_C(16)
+#define ROWL_ENGINE_CAPABILITY_SAVE_METADATA         UINT64_C(32)
 
 /** Current additive C API version. This query does not require an engine handle. */
 ROWL_API RowlEngine_ResultCode RowlEngine_GetApiVersion(
@@ -606,6 +607,22 @@ ROWL_API int RowlEngine_Rewind(RowlEngineHandle handle, uint32_t steps);
 
 /** Returns the current history step ID. */
 ROWL_API uint64_t RowlEngine_GetCurrentStepId(RowlEngineHandle handle);
+
+/**
+ * Save-slot display metadata (ROWL_ENGINE_CAPABILITY_SAVE_METADATA).
+ *
+ * Copies a UTF-8 JSON object describing a save slot without loading it
+ * into the live story: slot, saved_at (ISO-8601, "" for legacy saves),
+ * playtime_seconds, chapter_id, chapter_title, summary, thumbnail_width,
+ * thumbnail_height, has_thumbnail and thumbnail_png_base64 ("" when the
+ * save captured no framebuffer). Follows the caller-buffer contract.
+ * Missing slots report ROWL_RESULT_FILE_NOT_FOUND; unreadable slots
+ * report ROWL_RESULT_PARSE_ERROR; out-of-range indices report
+ * ROWL_RESULT_INVALID_ARGUMENT. Older entry points are untouched.
+ */
+ROWL_API RowlEngine_ResultCode RowlEngine_GetSaveSlotMetadataJson(
+    RowlEngineHandle handle, int32_t slotIndex, char* buffer,
+    uint32_t bufferSize, uint32_t* outRequiredSize);
 
 /* ── MS-6 Quick Slots & Pause Menu ────────────────────────────────────────── */
 
