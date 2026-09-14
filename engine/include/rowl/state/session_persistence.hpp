@@ -1,8 +1,8 @@
 #pragma once
 
 #include <cstdint>
+#include <filesystem>
 #include <memory>
-#include <string>
 
 namespace Rowl::State {
 
@@ -34,7 +34,7 @@ struct SessionLoadResult {
 /// chain stepping over the immutable history.
 class SessionPersistence {
 public:
-    explicit SessionPersistence(std::string saveDirectory = "saves");
+    explicit SessionPersistence(std::filesystem::path saveDirectory = "saves");
 
     /// Aligns a history chain with the live story cursor before a save.
     /// Null input yields a fresh initial state; a node mismatch appends one
@@ -53,11 +53,11 @@ public:
     bool hasSlot(int32_t slotIndex) const;
     bool deleteSlot(int32_t slotIndex) const;
 
-    const std::string& saveDirectory() const { return m_saveDirectory; }
-    void setSaveDirectory(std::string saveDirectory);
+    const std::filesystem::path& saveDirectory() const { return m_saveDirectory; }
+    void setSaveDirectory(std::filesystem::path saveDirectory);
 
 private:
-    std::string m_saveDirectory;
+    std::filesystem::path m_saveDirectory;
 };
 
 } // namespace Rowl::State

@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.25)
 
 add_executable(rowl_tests
+    test_c_api_header.c
     test_main.cpp
     test_logger.cpp
     test_aspect_guardian.cpp
@@ -11,6 +12,7 @@ add_executable(rowl_tests
     test_lua_sandbox.cpp
     test_mobile_input.cpp
     test_platform_host.cpp
+    test_c_api_contract.cpp
     test_vfs_security.cpp
     test_native_c_api.cpp
     test_game_object_component_system.cpp

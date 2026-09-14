@@ -34,6 +34,63 @@ extern "C" {
 /* ── Opaque engine handle ────────────────────────────────────────────────── */
 typedef void* RowlEngineHandle;
 
+/* ── Versioned, result-coded API contract ───────────────────────────────── */
+
+typedef enum RowlEngine_ResultCode {
+    ROWL_RESULT_OK = 0,
+    ROWL_RESULT_INVALID_HANDLE = 1,
+    ROWL_RESULT_INVALID_ARGUMENT = 2,
+    ROWL_RESULT_FILE_NOT_FOUND = 3,
+    ROWL_RESULT_FILE_TOO_LARGE = 4,
+    ROWL_RESULT_PARSE_ERROR = 5,
+    ROWL_RESULT_VALIDATION_ERROR = 6,
+    ROWL_RESULT_IO_ERROR = 7,
+    ROWL_RESULT_SCRIPT_SYNTAX_ERROR = 8,
+    ROWL_RESULT_SCRIPT_RUNTIME_ERROR = 9,
+    ROWL_RESULT_AUDIO_DECODE_ERROR = 10,
+    ROWL_RESULT_STATE_ERROR = 11,
+    ROWL_RESULT_BUFFER_TOO_SMALL = 12,
+    ROWL_RESULT_UNSUPPORTED = 13,
+    ROWL_RESULT_UNKNOWN_ERROR = 99
+} RowlEngine_ResultCode;
+
+typedef struct RowlEngine_ApiVersion {
+    uint32_t major;
+    uint32_t minor;
+    uint32_t patch;
+} RowlEngine_ApiVersion;
+
+#define ROWL_ENGINE_C_API_VERSION_MAJOR 1u
+#define ROWL_ENGINE_C_API_VERSION_MINOR 0u
+#define ROWL_ENGINE_C_API_VERSION_PATCH 0u
+
+#define ROWL_ENGINE_CAPABILITY_RESULT_CODES          UINT64_C(1)
+#define ROWL_ENGINE_CAPABILITY_CALLER_BUFFERS        UINT64_C(2)
+#define ROWL_ENGINE_CAPABILITY_USER_DATA_DIRECTORIES UINT64_C(4)
+
+/** Current additive C API version. This query does not require an engine handle. */
+ROWL_API RowlEngine_ResultCode RowlEngine_GetApiVersion(
+    RowlEngine_ApiVersion* outVersion);
+
+/** Bitwise OR of ROWL_ENGINE_CAPABILITY_* flags supported by this library. */
+ROWL_API RowlEngine_ResultCode RowlEngine_GetCapabilities(
+    uint64_t* outCapabilities);
+
+/**
+ * Copies the active UTF-8 save directory into caller-owned memory.
+ * outRequiredSize includes the trailing NUL. Passing NULL/0 for the buffer is
+ * the supported size-query form. An undersized non-NULL buffer is cleared and
+ * returns ROWL_RESULT_BUFFER_TOO_SMALL.
+ */
+ROWL_API RowlEngine_ResultCode RowlEngine_GetSaveDirectoryUtf8(
+    RowlEngineHandle handle, char* buffer, uint32_t bufferSize,
+    uint32_t* outRequiredSize);
+
+/** Same caller-buffer contract as RowlEngine_GetSaveDirectoryUtf8. */
+ROWL_API RowlEngine_ResultCode RowlEngine_GetProfileDirectoryUtf8(
+    RowlEngineHandle handle, char* buffer, uint32_t bufferSize,
+    uint32_t* outRequiredSize);
+
 /* ── Lifecycle ───────────────────────────────────────────────────────────── */
 
 /**
@@ -470,10 +527,21 @@ ROWL_API const char* RowlEngine_GetDialogueHistoryJsonWithLength(RowlEngineHandl
 
 /* ── Save / Load Slots & History Rewind ───────────────────────────────────── */
 
-/** Saves the current game state to the specified slot (0 = quicksave). Returns 1 on success, 0 on failure. */
+/** Result-coded save entry point for new hosts. */
+ROWL_API RowlEngine_ResultCode RowlEngine_SaveGameSlotResult(
+    RowlEngineHandle handle, int32_t slotIndex);
+
+/**
+ * Legacy compatibility wrapper around RowlEngine_SaveGameSlotResult.
+ * Returns 1 on success, 0 on failure.
+ */
 ROWL_API int RowlEngine_SaveGameSlot(RowlEngineHandle handle, int32_t slotIndex);
 
-/** Loads game state from the specified slot. Returns 1 on success, 0 on failure. */
+/** Result-coded load entry point for new hosts. */
+ROWL_API RowlEngine_ResultCode RowlEngine_LoadGameSlotResult(
+    RowlEngineHandle handle, int32_t slotIndex);
+
+/** Legacy compatibility wrapper around RowlEngine_LoadGameSlotResult. */
 ROWL_API int RowlEngine_LoadGameSlot(RowlEngineHandle handle, int32_t slotIndex);
 
 /** Returns 1 if the specified save slot exists, 0 otherwise. */
@@ -589,6 +657,8 @@ ROWL_API int RowlEngine_ExecuteScript(RowlEngineHandle handle, const char* scrip
  *   9 = ScriptRuntimeError
  *  10 = AudioDecodeError
  *  11 = StateError
+ *  12 = BufferTooSmall
+ *  13 = Unsupported
  *  99 = UnknownError
  */
 ROWL_API int32_t RowlEngine_GetLastResultCode(RowlEngineHandle handle);

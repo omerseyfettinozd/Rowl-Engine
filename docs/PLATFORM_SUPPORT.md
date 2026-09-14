@@ -15,6 +15,21 @@ window ID; an SDL quit request is broadcast to every registered visible runtime.
 Offscreen handles remain independent under their existing per-handle owner
 thread contract.
 
+## User data directory contract
+
+The default `PlatformHost` keeps save files and future player profiles outside
+the installation/project directory. Linux uses
+`$XDG_DATA_HOME/rowl-engine/{saves,profiles}` when `XDG_DATA_HOME` is absolute,
+otherwise `~/.local/share/rowl-engine/{saves,profiles}`. Windows uses the
+Unicode LocalAppData Known Folder and appends
+`rowl-engine\\{saves,profiles}`. Native filesystem paths remain wide on Windows;
+the C ABI exposes them as UTF-8 through a required-size query followed by a
+caller-owned buffer copy. An explicit editor/project save override continues
+to take precedence for backward compatibility.
+
+This is an implemented path and ABI contract, not a Windows device result.
+Interactive Windows Unicode save/load remains part of the real-device gate.
+
 ## Current status
 
 | Target | Runtime build gate | Package/device gate | Status |

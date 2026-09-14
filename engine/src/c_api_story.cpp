@@ -7,6 +7,7 @@
  */
 
 #include "c_api_internal.hpp"
+#include "rowl/platform/user_data_directories.hpp"
 #include "rowl/vfs/vfs.hpp"
 #include "cstring"
 #include "fstream"
@@ -134,12 +135,14 @@ void RowlEngine_SetProjectDirectory(RowlEngineHandle handle, const char* project
         // Save slots belong to the selected game/project. This prevents an
         // embedded editor preview or another standalone game from sharing the
         // process-relative default "saves" directory.
-        engine->setSaveDirectory((std::filesystem::path(projectRoot) / "saves").string());
+        const auto projectPath = Rowl::Platform::pathFromUtf8(projectRoot);
+        const auto savePath = projectPath / "saves";
+        engine->setSaveDirectory(Rowl::Platform::pathToUtf8(savePath));
         // Project-owned defaults are read at the mount boundary so player and
         // embedded editor preview resolve the same component contract.
         std::string transition = "instant";
         float transitionDuration = 1.0f;
-        const auto manifestPath = std::filesystem::path(projectRoot) / "project.rowlproj";
+        const auto manifestPath = projectPath / "project.rowlproj";
         std::error_code manifestError;
         if (std::filesystem::is_regular_file(manifestPath, manifestError) && !manifestError &&
             std::filesystem::file_size(manifestPath, manifestError) <= 1024 * 1024 && !manifestError) {

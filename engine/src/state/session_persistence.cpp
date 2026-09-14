@@ -44,7 +44,7 @@ bool replaceFileAtomically(const std::filesystem::path& temporaryPath,
 
 } // namespace
 
-SessionPersistence::SessionPersistence(std::string saveDirectory)
+SessionPersistence::SessionPersistence(std::filesystem::path saveDirectory)
     : m_saveDirectory(saveDirectory.empty() ? "saves" : std::move(saveDirectory)) {}
 
 std::shared_ptr<const GameState> SessionPersistence::checkpoint(
@@ -66,7 +66,7 @@ std::shared_ptr<const GameState> SessionPersistence::rewind(
     return target;
 }
 
-void SessionPersistence::setSaveDirectory(std::string saveDirectory) {
+void SessionPersistence::setSaveDirectory(std::filesystem::path saveDirectory) {
     m_saveDirectory = saveDirectory.empty() ? "saves" : std::move(saveDirectory);
 }
 
@@ -79,7 +79,7 @@ bool SessionPersistence::saveSlot(
     }
     try {
         namespace fs = std::filesystem;
-        const fs::path finalPath = fs::path(m_saveDirectory) /
+        const fs::path finalPath = m_saveDirectory /
             ("save_slot_" + std::to_string(slotIndex) + ".json");
         fs::create_directories(finalPath.parent_path());
         fs::path temporaryPath = finalPath;
@@ -125,7 +125,7 @@ SessionLoadResult SessionPersistence::loadSlotDetailed(int32_t slotIndex) const 
     if (!isValidSlotIndex(slotIndex)) return {};
     try {
         namespace fs = std::filesystem;
-        const fs::path filePath = fs::path(m_saveDirectory) /
+        const fs::path filePath = m_saveDirectory /
             ("save_slot_" + std::to_string(slotIndex) + ".json");
 
         if (!fs::exists(filePath) || !fs::is_regular_file(filePath)) {
@@ -177,7 +177,7 @@ std::shared_ptr<const GameState> SessionPersistence::loadSlot(int32_t slotIndex)
 
 bool SessionPersistence::hasSlot(int32_t slotIndex) const {
     if (!isValidSlotIndex(slotIndex)) return false;
-    const std::filesystem::path filePath = std::filesystem::path(m_saveDirectory) /
+    const std::filesystem::path filePath = m_saveDirectory /
         ("save_slot_" + std::to_string(slotIndex) + ".json");
     return std::filesystem::exists(filePath) && std::filesystem::is_regular_file(filePath);
 }
@@ -185,7 +185,7 @@ bool SessionPersistence::hasSlot(int32_t slotIndex) const {
 bool SessionPersistence::deleteSlot(int32_t slotIndex) const {
     if (!isValidSlotIndex(slotIndex)) return false;
     try {
-        const std::filesystem::path filePath = std::filesystem::path(m_saveDirectory) /
+        const std::filesystem::path filePath = m_saveDirectory /
             ("save_slot_" + std::to_string(slotIndex) + ".json");
         return std::filesystem::exists(filePath) && std::filesystem::remove(filePath);
     } catch (const std::exception& error) {

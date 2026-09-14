@@ -17,9 +17,12 @@
 #include "rowl/core/engine.hpp"
 
 #include <exception>
+#include <cstring>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <unordered_map>
 #include <utility>
@@ -68,4 +71,30 @@ static void invokeNoexcept(Fn&& operation) noexcept {
     } catch (...) {
         // No logging here: logging itself must not become another exception path.
     }
+}
+
+/// Shared contract for every new variable-size UTF-8 C API output. Required
+/// size includes NUL; NULL/0 queries size; an undersized buffer is cleared.
+inline RowlEngine_ResultCode copyUtf8ToCaller(
+    std::string_view value, char* buffer, uint32_t bufferSize,
+    uint32_t* outRequiredSize) noexcept {
+    if (!outRequiredSize || (!buffer && bufferSize != 0)) {
+        return ROWL_RESULT_INVALID_ARGUMENT;
+    }
+    if (value.size() >= std::numeric_limits<uint32_t>::max()) {
+        *outRequiredSize = 0;
+        return ROWL_RESULT_UNKNOWN_ERROR;
+    }
+
+    const auto required = static_cast<uint32_t>(value.size() + 1);
+    *outRequiredSize = required;
+    if (!buffer) return ROWL_RESULT_OK;
+    if (bufferSize < required) {
+        if (bufferSize > 0) buffer[0] = '\0';
+        return ROWL_RESULT_BUFFER_TOO_SMALL;
+    }
+
+    if (!value.empty()) std::memcpy(buffer, value.data(), value.size());
+    buffer[value.size()] = '\0';
+    return ROWL_RESULT_OK;
 }

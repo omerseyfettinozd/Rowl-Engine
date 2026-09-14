@@ -58,18 +58,40 @@ const char* RowlEngine_GetDialogueHistoryJsonWithLength(RowlEngineHandle handle,
     return value;
 }
 
+RowlEngine_ResultCode RowlEngine_SaveGameSlotResult(
+    RowlEngineHandle handle, int32_t slotIndex) {
+    if (!isLiveHandle(handle)) return ROWL_RESULT_INVALID_HANDLE;
+    return invokeNoexcept<RowlEngine_ResultCode>([&] {
+        auto* engine = toEngine(handle);
+        if (!engine) return ROWL_RESULT_INVALID_HANDLE;
+        engine->saveGameSlot(slotIndex);
+        const auto context = engine->getContext();
+        return context
+            ? static_cast<RowlEngine_ResultCode>(context->getLastResult().rawCode())
+            : ROWL_RESULT_UNKNOWN_ERROR;
+    }, ROWL_RESULT_UNKNOWN_ERROR);
+}
+
 int RowlEngine_SaveGameSlot(RowlEngineHandle handle, int32_t slotIndex) {
-    if (!isLiveHandle(handle)) return 0;
-    return invokeNoexcept<int>([&] {
-        return toEngine(handle)->saveGameSlot(slotIndex) ? 1 : 0;
-    }, 0);
+    return RowlEngine_SaveGameSlotResult(handle, slotIndex) == ROWL_RESULT_OK ? 1 : 0;
+}
+
+RowlEngine_ResultCode RowlEngine_LoadGameSlotResult(
+    RowlEngineHandle handle, int32_t slotIndex) {
+    if (!isLiveHandle(handle)) return ROWL_RESULT_INVALID_HANDLE;
+    return invokeNoexcept<RowlEngine_ResultCode>([&] {
+        auto* engine = toEngine(handle);
+        if (!engine) return ROWL_RESULT_INVALID_HANDLE;
+        engine->loadGameSlot(slotIndex);
+        const auto context = engine->getContext();
+        return context
+            ? static_cast<RowlEngine_ResultCode>(context->getLastResult().rawCode())
+            : ROWL_RESULT_UNKNOWN_ERROR;
+    }, ROWL_RESULT_UNKNOWN_ERROR);
 }
 
 int RowlEngine_LoadGameSlot(RowlEngineHandle handle, int32_t slotIndex) {
-    if (!isLiveHandle(handle)) return 0;
-    return invokeNoexcept<int>([&] {
-        return toEngine(handle)->loadGameSlot(slotIndex) ? 1 : 0;
-    }, 0);
+    return RowlEngine_LoadGameSlotResult(handle, slotIndex) == ROWL_RESULT_OK ? 1 : 0;
 }
 
 int RowlEngine_HasSaveSlot(RowlEngineHandle handle, int32_t slotIndex) {

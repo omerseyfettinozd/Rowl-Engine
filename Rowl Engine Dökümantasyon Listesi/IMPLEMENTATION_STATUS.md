@@ -112,11 +112,20 @@ testi geçiyor.
   Kanonik kapı `dotnet test editor/Tests/RowlEngine.Editor.Tests.csproj
   --configuration Debug`; CTest ve Linux benchmark CI aynı projeyi çalıştırır.
 - Minimum native-shell sınırı `PlatformHost` ile asset stream, writable save
-  path, lifecycle, input, render surface ve audio focus alanlarına indirildi.
+  ve profile path, lifecycle, input, render surface ve audio focus alanlarına
+  indirildi.
   `RuntimeContext` hostu runtime-lokal tutar; varsayılan adapter mevcut VFS/
-  desktop davranışını korur. `test_platform_host` bu altı sinyalin Engine
+  desktop davranışını korur. `test_platform_host` bu capability'lerin Engine
   tarafından gerçekten tüketildiğini; mevcut structured-diagnostics testi de
   explicit save-directory override davranışının korunduğunu doğrular.
+- Varsayılan host Linux'ta `XDG_DATA_HOME`/kullanıcı home dizinini, Windows'ta
+  Unicode `LocalAppData` Known Folder yolunu temel alarak ayrı `saves` ve
+  `profiles` dizinleri üretir. Save yolu `SessionPersistence` içinde native
+  `filesystem::path` olarak korunur. C ABI 1.0.0; sabit `ResultCode` değerleri,
+  capability bitleri ve save/profile yolları için gerekli-boyut + çağıran
+  tamponu modeli sunar. Yeni save/load girişleri sonuç kodludur; eski `int`
+  girişleri aynı davranışı koruyan sarmalayıcılardır. Saf C header derleme ve
+  UTF-8/null/undersized-buffer regresyonları sözleşmeyi sabitler.
 - Frame composition ve viewport eşlemesi render sınırındadır: `Window`
   texture/cache, SDL surface, piksel buffer ve frame profiliyle birlikte
   `ComposedFrame` tüketimi ve physical→virtual tap eşlemesini sahiplenir;

@@ -1,4 +1,5 @@
 #include "rowl/core/engine.hpp"
+#include "rowl/platform/user_data_directories.hpp"
 #include "rowl/core/logger.hpp"
 #include "rowl/core/story_graph_parser.hpp"
 #include "rowl/vfs/vfs.hpp"
@@ -91,16 +92,36 @@ std::shared_ptr<Rowl::Platform::PlatformHost> Engine::getPlatformHost() const {
 }
 
 std::string Engine::getSaveDirectory() const {
+    return Rowl::Platform::pathToUtf8(getSaveDirectoryPath());
+}
+
+void Engine::setSaveDirectory(const std::string& saveDir) {
+    m_saveDirectoryOverride = Rowl::Platform::pathFromUtf8(saveDir);
+}
+
+std::filesystem::path Engine::getSaveDirectoryPath() const {
     if (!m_saveDirectoryOverride.empty()) return m_saveDirectoryOverride;
     if (const auto host = getPlatformHost()) {
         const auto path = host->writableSavePath();
-        if (!path.empty()) return path.string();
+        if (!path.empty()) return path;
     }
     return "saves";
 }
 
+std::string Engine::getProfileDirectory() const {
+    return Rowl::Platform::pathToUtf8(getProfileDirectoryPath());
+}
+
+std::filesystem::path Engine::getProfileDirectoryPath() const {
+    if (const auto host = getPlatformHost()) {
+        const auto path = host->writableProfilePath();
+        if (!path.empty()) return path;
+    }
+    return "profiles";
+}
+
 Rowl::State::SessionPersistence& Engine::sessionPersistence() const {
-    m_sessionPersistence.setSaveDirectory(getSaveDirectory());
+    m_sessionPersistence.setSaveDirectory(getSaveDirectoryPath());
     return m_sessionPersistence;
 }
 
@@ -1957,7 +1978,8 @@ bool Engine::saveGameSlot(int32_t slotIndex) {
     m_gameState = Rowl::State::SessionPersistence::checkpoint(
         m_gameState, m_storyRuntime.currentNodeId());
     auto& persistence = sessionPersistence();
-    const std::string saveDirectory = persistence.saveDirectory();
+    const std::string saveDirectory =
+        Rowl::Platform::pathToUtf8(persistence.saveDirectory());
     bool ok = persistence.saveSlot(m_gameState, slotIndex);
     if (!ok) {
         m_context->setError(RuntimeErrorCode::IoError,
@@ -1977,7 +1999,8 @@ bool Engine::loadGameSlot(int32_t slotIndex) {
         return false;
     }
     auto& persistence = sessionPersistence();
-    const std::string saveDirectory = persistence.saveDirectory();
+    const std::string saveDirectory =
+        Rowl::Platform::pathToUtf8(persistence.saveDirectory());
     const auto loadResult = persistence.loadSlotDetailed(slotIndex);
     if (!loadResult.succeeded()) {
         RuntimeErrorCode errorCode = RuntimeErrorCode::ParseError;
@@ -2343,7 +2366,8 @@ bool Engine::deleteSaveSlot(int32_t slotIndex) {
         return false;
     }
     auto& persistence = sessionPersistence();
-    const std::string saveDirectory = persistence.saveDirectory();
+    const std::string saveDirectory =
+        Rowl::Platform::pathToUtf8(persistence.saveDirectory());
     if (!persistence.hasSlot(slotIndex)) {
         m_context->setError(RuntimeErrorCode::FileNotFound,
                             "Save slot #" + std::to_string(slotIndex) + " does not exist",

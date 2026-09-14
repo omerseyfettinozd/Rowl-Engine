@@ -52,6 +52,28 @@ public:
 void test_platform_host() {
     TEST_SECTION("Minimum PlatformHost Boundary");
 
+    const std::string unicodeRootUtf8 = "/tmp/Rowl-Çağrı-玩家";
+    const auto unicodePath = Rowl::Platform::pathFromUtf8(unicodeRootUtf8);
+    const auto unicodeLayout = Rowl::Platform::makeUserDataDirectories(unicodePath);
+    if (unicodeLayout.saves.filename() != "saves" ||
+        unicodeLayout.profiles.filename() != "profiles" ||
+        unicodeLayout.saves.parent_path() != unicodeLayout.profiles.parent_path() ||
+        Rowl::Platform::pathToUtf8(unicodePath) != unicodeRootUtf8 ||
+        !Rowl::Platform::pathFromUtf8("").empty()) {
+        std::cerr << "Unicode user-data layout was not preserved" << std::endl;
+        exit(1);
+    }
+    auto defaultVfs = std::make_shared<Rowl::VFS::VFSManager>();
+    Rowl::Platform::DefaultPlatformHost defaultHost(defaultVfs);
+    if (defaultHost.writableSavePath().empty() ||
+        defaultHost.writableProfilePath().empty() ||
+        !defaultHost.writableSavePath().is_absolute() ||
+        !defaultHost.writableProfilePath().is_absolute() ||
+        defaultHost.writableSavePath() == defaultHost.writableProfilePath()) {
+        std::cerr << "Default host did not resolve distinct absolute user directories" << std::endl;
+        exit(1);
+    }
+
     const auto saveRoot = std::filesystem::temp_directory_path() /
         ("rowl_platform_host_" + std::to_string(
             std::chrono::steady_clock::now().time_since_epoch().count()));

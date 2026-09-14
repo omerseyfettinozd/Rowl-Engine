@@ -28,6 +28,8 @@ enum class RuntimeErrorCode : int32_t {
     ScriptRuntimeError = 9,
     AudioDecodeError = 10,
     StateError = 11,
+    BufferTooSmall = 12,
+    Unsupported = 13,
     UnknownError = 99
 };
 

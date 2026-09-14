@@ -32,6 +32,7 @@ int main(int argc, char* argv[]) {
     test_lua_sandbox();
     test_mobile_input();
     test_platform_host();
+    test_c_api_contract();
     test_vfs_security();
     test_native_c_api();
     test_single_engine_image();

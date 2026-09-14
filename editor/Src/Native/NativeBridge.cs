@@ -16,6 +16,47 @@ namespace RowlEngine.Editor.Native
     {
         private const string Lib = "RowlEngineCore";
 
+        internal enum ResultCode
+        {
+            Ok = 0,
+            InvalidHandle = 1,
+            InvalidArgument = 2,
+            FileNotFound = 3,
+            FileTooLarge = 4,
+            ParseError = 5,
+            ValidationError = 6,
+            IoError = 7,
+            ScriptSyntaxError = 8,
+            ScriptRuntimeError = 9,
+            AudioDecodeError = 10,
+            StateError = 11,
+            BufferTooSmall = 12,
+            Unsupported = 13,
+            UnknownError = 99,
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        internal struct ApiVersion
+        {
+            internal uint Major;
+            internal uint Minor;
+            internal uint Patch;
+        }
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_GetApiVersion(out ApiVersion version);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_GetCapabilities(out ulong capabilities);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_GetSaveDirectoryUtf8(
+            IntPtr handle, IntPtr buffer, uint bufferSize, out uint requiredSize);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_GetProfileDirectoryUtf8(
+            IntPtr handle, IntPtr buffer, uint bufferSize, out uint requiredSize);
+
         // ── Lifecycle ────────────────────────────────────────────────────────
 
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
@@ -319,7 +360,13 @@ namespace RowlEngine.Editor.Native
         internal static extern int RowlEngine_SaveGameSlot(IntPtr handle, int slotIndex);
 
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_SaveGameSlotResult(IntPtr handle, int slotIndex);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
         internal static extern int RowlEngine_LoadGameSlot(IntPtr handle, int slotIndex);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_LoadGameSlotResult(IntPtr handle, int slotIndex);
 
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
         internal static extern int RowlEngine_HasSaveSlot(IntPtr handle, int slotIndex);

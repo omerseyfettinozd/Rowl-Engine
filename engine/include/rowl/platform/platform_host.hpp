@@ -76,6 +76,13 @@ public:
 
     virtual std::unique_ptr<std::istream> openAssetStream(const std::string& path) = 0;
     virtual std::filesystem::path writableSavePath() const = 0;
+    /// Player-profile storage belongs to the same per-user data capability as
+    /// saves. The default keeps existing injected hosts source-compatible.
+    virtual std::filesystem::path writableProfilePath() const {
+        const auto savePath = writableSavePath();
+        return savePath.empty() ? std::filesystem::path("profiles")
+                                : savePath.parent_path() / "profiles";
+    }
     virtual LifecycleState lifecycleState() const = 0;
     virtual std::vector<RuntimeInputEvent> takeInputEvents() = 0;
     virtual RenderSurface renderSurface() const = 0;
@@ -91,6 +98,7 @@ public:
 
     std::unique_ptr<std::istream> openAssetStream(const std::string& path) override;
     std::filesystem::path writableSavePath() const override;
+    std::filesystem::path writableProfilePath() const override;
     LifecycleState lifecycleState() const override;
     std::vector<RuntimeInputEvent> takeInputEvents() override;
     RenderSurface renderSurface() const override;
@@ -100,6 +108,8 @@ public:
 
 private:
     std::shared_ptr<Rowl::VFS::VFSManager> m_vfs;
+    std::filesystem::path m_savePath;
+    std::filesystem::path m_profilePath;
 };
 
 } // namespace Rowl::Platform

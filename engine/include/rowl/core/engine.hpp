@@ -255,8 +255,11 @@ public:
     bool deleteSaveSlot(int32_t slotIndex);
     bool rewind(uint64_t steps = 1);
     uint64_t getCurrentStepId() const;
-    void setSaveDirectory(const std::string& saveDir) { m_saveDirectoryOverride = saveDir; }
+    void setSaveDirectory(const std::string& saveDir);
     std::string getSaveDirectory() const;
+    std::filesystem::path getSaveDirectoryPath() const;
+    std::string getProfileDirectory() const;
+    std::filesystem::path getProfileDirectoryPath() const;
     void setBgmTransitionDefaults(std::string kind, float durationSeconds);
     std::shared_ptr<const Rowl::State::GameState> getGameState() const { return m_gameState; }
 
@@ -280,7 +283,7 @@ private:
     std::shared_ptr<const Rowl::State::GameState> m_gameState;
     mutable Rowl::State::SessionPersistence m_sessionPersistence;
     std::unique_ptr<Rowl::Scripting::LuaSandbox>  m_luaSandbox;
-    std::string m_saveDirectoryOverride;
+    std::filesystem::path m_saveDirectoryOverride;
     std::string m_defaultBgmTransition = "instant";
     float m_defaultBgmTransitionDurationSeconds = 1.0f;
 

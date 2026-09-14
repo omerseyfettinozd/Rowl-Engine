@@ -113,7 +113,7 @@ if(ROWL_BUILD_RUNTIME_TESTS)
             # edge-triggered device tests observe a stale transition. The
             # video driver is forced for the same reason: the offscreen
             # engine must initialise with no display server present.
-            ENVIRONMENT "SDL_AUDIODRIVER=dummy;SDL_VIDEODRIVER=dummy"
+            ENVIRONMENT "SDL_AUDIODRIVER=dummy;SDL_VIDEODRIVER=dummy;MSBuildEnableWorkloadResolver=false"
         )
     endif()
 endif()

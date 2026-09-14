@@ -153,6 +153,7 @@ set(ROWL_ENGINE_SOURCES
     src/audio/audio_engine.cpp
     # Platform abstraction
     src/platform/platform_host.cpp
+    src/platform/user_data_directories.cpp
     src/platform/mobile_input.cpp
     src/platform/sdl_event_dispatcher.cpp
     src/platform/sdl_subsystem_lease.cpp
@@ -163,6 +164,7 @@ set(ROWL_ENGINE_SOURCES
     src/scene/game_object.cpp
     src/scene/scene.cpp
     # C-API bridge (consumed by C# P/Invoke)
+    src/c_api_contract.cpp
     src/c_api_lifecycle.cpp
     src/c_api_story.cpp
     src/c_api_render.cpp
@@ -181,6 +183,9 @@ target_link_libraries(rowl_engine_thirdparty INTERFACE
     ${LUA_LIBRARIES}
     nlohmann_json::nlohmann_json
 )
+if(WIN32)
+    target_link_libraries(rowl_engine_thirdparty INTERFACE shell32 ole32)
+endif()
 target_include_directories(rowl_engine_thirdparty INTERFACE
     ${LUA_INCLUDE_DIR}
 )
