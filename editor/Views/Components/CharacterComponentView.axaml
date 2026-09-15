@@ -3,6 +3,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:comp="using:RowlEngine.Editor.ViewModels.Components"
+             xmlns:ctrl="using:RowlEngine.Editor.Controls"
              xmlns:vm="using:RowlEngine.Editor.ViewModels"
              mc:Ignorable="d"
              x:Class="RowlEngine.Editor.Views.Components.CharacterComponentView"
@@ -41,11 +42,13 @@
                         <StackPanel Spacing="6">
                             <Grid ColumnDefinitions="*, Auto">
                                 <TextBox Grid.Column="0" Text="{Binding Sprite}" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}" Margin="0,0,4,0"/>
-                                <Button Grid.Column="1" Content="📁 Browse..." 
+                                <Button Grid.Column="1" Content="📁 Browse..."
                                         Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).SelectImageForComponentCommand}"
                                         CommandParameter="{Binding}"
                                         Background="{DynamicResource AccentButtonBg}" Foreground="{DynamicResource AccentButtonFg}" FontSize="11" Padding="8,4" CornerRadius="4"/>
                             </Grid>
+                            <ctrl:FieldValidationBadge Validation="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).InspectorViewModel.Validation}"
+                                                       NodeId="{Binding Node.Id}" FieldKey="character.sprite"/>
                             <!-- Sprite Preview Thumbnail / Drop Area -->
                             <Border Background="{DynamicResource CardHeaderBackground}" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1" CornerRadius="4" Padding="4" MinHeight="65" MaxHeight="130">
                                 <Panel>
@@ -128,8 +131,9 @@
 
                         <StackPanel Spacing="2">
                             <TextBlock Text="Varsayılan Ses Dosyası (.wav / .ogg - boşsa synth)" FontSize="10" Foreground="{DynamicResource MutedText}"/>
-                            <TextBox Text="{Binding VoiceBlipSound, Mode=TwoWay}" Watermark="Örn: voice_evelyn.wav veya boş"
-                                     Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}" FontSize="11"/>
+                            <ctrl:AssetPickerControl AssetPath="{Binding VoiceBlipSound, Mode=TwoWay}" Watermark="Örn: voice_evelyn.wav veya boş"/>
+                            <ctrl:FieldValidationBadge Validation="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).InspectorViewModel.Validation}"
+                                                       NodeId="{Binding Node.Id}" FieldKey="character.voice_blip"/>
                         </StackPanel>
 
                         <Grid ColumnDefinitions="*, *">

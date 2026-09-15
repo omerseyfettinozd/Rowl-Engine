@@ -3,6 +3,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:comp="using:RowlEngine.Editor.ViewModels.Components"
+             xmlns:ctrl="using:RowlEngine.Editor.Controls"
              xmlns:vm="using:RowlEngine.Editor.ViewModels"
              mc:Ignorable="d"
              x:Class="RowlEngine.Editor.Views.Components.AudioComponentView"
@@ -43,6 +44,8 @@
                             </Panel>
                         </Button>
                     </Grid>
+                    <ctrl:FieldValidationBadge Validation="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).InspectorViewModel.Validation}"
+                                               NodeId="{Binding Node.Id}" FieldKey="audio.bgm_track"/>
                     <!-- BGM Stereo VU Meter -->
                     <Grid ColumnDefinitions="Auto, *" RowDefinitions="Auto, Auto" Margin="0,2,0,2">
                         <TextBlock Grid.Row="0" Grid.Column="0" Text="L" FontSize="9" Width="12" Foreground="{DynamicResource MutedText}" VerticalAlignment="Center"/>
@@ -66,6 +69,8 @@
                             </Panel>
                         </Button>
                     </Grid>
+                    <ctrl:FieldValidationBadge Validation="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).InspectorViewModel.Validation}"
+                                               NodeId="{Binding Node.Id}" FieldKey="audio.sfx_track"/>
                     <!-- SFX Stereo VU Meter -->
                     <Grid ColumnDefinitions="Auto, *" RowDefinitions="Auto, Auto" Margin="0,2,0,2">
                         <TextBlock Grid.Row="0" Grid.Column="0" Text="L" FontSize="9" Width="12" Foreground="{DynamicResource MutedText}" VerticalAlignment="Center"/>

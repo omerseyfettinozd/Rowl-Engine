@@ -465,14 +465,15 @@ namespace RowlEngine.Editor.ViewModels
             BacklogViewModel = new BacklogViewModel(this);
             SaveSlotsViewModel = new SaveSlotsViewModel(this);
             ProjectIssuesViewModel = new ProjectIssuesViewModel(this);
-            InspectorViewModel = new InspectorViewModel(this);
-            NodeGraphViewModel = new NodeGraphViewModel(this);
-            Search = new SearchViewModel(this);
-            // Faz 4 Dilim 3 — session structure services. Logic lives in the
-            // services; here is only construction + thin wiring.
+            // Structure services precede the Inspector (Dilim 4): its
+            // validation + chapter/group assignment bind to them in its ctor.
             Groups = new GroupService();
             Subgraphs = new SubgraphNavigationService();
             Chapters = new ChapterStorageService();
+            InspectorViewModel = new InspectorViewModel(this);
+            NodeGraphViewModel = new NodeGraphViewModel(this);
+            Search = new SearchViewModel(this);
+            // Faz 4 Dilim 3 — session structure wiring (logic in services).
             Groups.Attach(Nodes);
             Subgraphs.Attach(Nodes);
             NodeGraphViewModel.AttachGroups(Groups.Groups);

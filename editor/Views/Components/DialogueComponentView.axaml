@@ -4,6 +4,7 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:comp="using:RowlEngine.Editor.ViewModels.Components"
              xmlns:vm="using:RowlEngine.Editor.ViewModels"
+             xmlns:ctrl="using:RowlEngine.Editor.Controls"
              mc:Ignorable="d"
              x:Class="RowlEngine.Editor.Views.Components.DialogueComponentView"
              x:DataType="comp:DialogueComponentViewModel">
@@ -38,14 +39,16 @@
                             <StackPanel Grid.Column="0" Spacing="2">
                                 <TextBlock Text="Speaker Name" FontSize="10" Foreground="{DynamicResource MutedText}"/>
                                 <TextBox Text="{Binding Speaker, Mode=TwoWay}" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}" FontSize="12"/>
+                                <ctrl:FieldValidationBadge Validation="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).InspectorViewModel.Validation}"
+                                                           NodeId="{Binding Node.Id}" FieldKey="dialogue.speaker"/>
                             </StackPanel>
                             <StackPanel Grid.Column="1" Spacing="2" Margin="6,0,0,0">
                                 <TextBlock Text="Title Font (px)" FontSize="10" Foreground="{DynamicResource MutedText}"/>
-                                <NumericUpDown Value="{Binding SpeakerFontSize}" Width="85" Minimum="10" Maximum="64" Increment="2" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}"/>
+                                <ctrl:RangedNumberControl Value="{Binding SpeakerFontSize}" Minimum="10" Maximum="64" Step="2" Width="150"/>
                             </StackPanel>
                             <StackPanel Grid.Column="2" Spacing="2" Margin="6,0,0,0">
                                 <TextBlock Text="Title Color" FontSize="10" Foreground="{DynamicResource MutedText}"/>
-                                <TextBox Text="{Binding SpeakerColor, Mode=TwoWay}" Width="80" Background="{DynamicResource InputBackground}" Foreground="{Binding SpeakerColor}" BorderBrush="{DynamicResource BorderColor}" FontSize="11" FontWeight="Bold"/>
+                                <ctrl:ColorPickerControl Mode="Hex" SelectedValue="{Binding SpeakerColor, Mode=TwoWay}"/>
                             </StackPanel>
                         </Grid>
 
@@ -53,6 +56,21 @@
                             <TextBlock Text="Dialogue Content" FontSize="10" Foreground="{DynamicResource MutedText}"/>
                             <TextBox Text="{Binding DialogueText, Mode=TwoWay}" AcceptsReturn="True" Height="64"
                                      TextWrapping="Wrap" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}" FontSize="12"/>
+                            <ctrl:FieldValidationBadge Validation="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).InspectorViewModel.Validation}"
+                                                       NodeId="{Binding Node.Id}" FieldKey="dialogue.dialogue_text"/>
+                        </StackPanel>
+
+                        <StackPanel Spacing="2" Margin="0,2,0,0">
+                            <TextBlock Text="Content ID (kalıcı kimlik)" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                            <Grid ColumnDefinitions="*,Auto">
+                                <TextBox Grid.Column="0" Text="{Binding ContentId, Mode=TwoWay}" FontFamily="Monospace" FontSize="10"
+                                         Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}"/>
+                                <Button Grid.Column="1" Content="↻" Margin="4,0,0,0" Padding="8,2" FontSize="11"
+                                        ToolTip.Tip="Yeni tekil kimlik üret"
+                                        Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).InspectorViewModel.RegenerateSelectedContentIdCommand}"/>
+                            </Grid>
+                            <ctrl:FieldValidationBadge Validation="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).InspectorViewModel.Validation}"
+                                                       NodeId="{Binding Node.Id}" FieldKey="dialogue.content_id"/>
                         </StackPanel>
                     </StackPanel>
                 </Border>
@@ -96,8 +114,9 @@
                                 
                                 <StackPanel Spacing="2">
                                     <TextBlock Text="Sound Asset (.wav / .ogg - boşsa synth blip)" FontSize="10" Foreground="{DynamicResource MutedText}"/>
-                                    <TextBox Text="{Binding TypewriterSound, Mode=TwoWay}" Watermark="Örn: blip_voice.wav veya boş (prosedürel synth)"
-                                             Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}" FontSize="11"/>
+                                    <ctrl:AssetPickerControl AssetPath="{Binding TypewriterSound, Mode=TwoWay}" Watermark="Örn: blip_voice.wav veya boş (prosedürel synth)"/>
+                                    <ctrl:FieldValidationBadge Validation="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).InspectorViewModel.Validation}"
+                                                               NodeId="{Binding Node.Id}" FieldKey="dialogue.blip_sound"/>
                                 </StackPanel>
 
                                 <Grid ColumnDefinitions="*, *">
@@ -160,11 +179,11 @@
                         <Grid ColumnDefinitions="*, *">
                             <StackPanel Grid.Column="0" Spacing="2" Margin="0,0,4,0">
                                 <TextBlock Text="Font Size (px)" FontSize="10" Foreground="{DynamicResource MutedText}"/>
-                                <NumericUpDown Value="{Binding FontSize}" Minimum="12" Maximum="64" Increment="2" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}"/>
+                                <ctrl:RangedNumberControl Value="{Binding FontSize}" Minimum="12" Maximum="64" Step="2"/>
                             </StackPanel>
                             <StackPanel Grid.Column="1" Spacing="2" Margin="4,0,0,0">
                                 <TextBlock Text="Text Color (HEX)" FontSize="10" Foreground="{DynamicResource MutedText}"/>
-                                <TextBox Text="{Binding TextColor, Mode=TwoWay}" Background="{DynamicResource InputBackground}" Foreground="{Binding TextColor}" BorderBrush="{DynamicResource BorderColor}" FontSize="11" FontWeight="Bold"/>
+                                <ctrl:ColorPickerControl Mode="Hex" SelectedValue="{Binding TextColor, Mode=TwoWay}"/>
                             </StackPanel>
                         </Grid>
 
@@ -187,7 +206,7 @@
                         <Grid ColumnDefinitions="*, *">
                             <StackPanel Grid.Column="0" Spacing="2" Margin="0,0,4,0">
                                 <TextBlock Text="Box Color (HEX)" FontSize="10" Foreground="{DynamicResource MutedText}"/>
-                                <TextBox Text="{Binding BoxColor}" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}" FontSize="11"/>
+                                <ctrl:ColorPickerControl Mode="Hex" SelectedValue="{Binding BoxColor, Mode=TwoWay}"/>
                             </StackPanel>
                             <StackPanel Grid.Column="1" Spacing="2" Margin="4,0,0,0">
                                 <TextBlock Text="Border Color (HEX)" FontSize="10" Foreground="{DynamicResource MutedText}"/>

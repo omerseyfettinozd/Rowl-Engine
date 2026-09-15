@@ -7,6 +7,7 @@
              xmlns:search="using:RowlEngine.Editor.Services.Search"
              xmlns:conv="using:Avalonia.Data.Converters"
              xmlns:views="using:RowlEngine.Editor.Views.Components"
+             xmlns:ctrl="using:RowlEngine.Editor.Controls"
              mc:Ignorable="d" d:DesignWidth="320" d:DesignHeight="700"
              x:Class="RowlEngine.Editor.Views.Panels.NodeInspectorView"
              x:DataType="vm:MainWindowViewModel">
@@ -54,29 +55,89 @@
                                   VerticalAlignment="Center"/>
                     </Grid>
 
-                    <!-- Düğüm renk etiketi (Faz 4 Dilim 2) -->
-                    <Grid ColumnDefinitions="Auto,*"
-                          IsVisible="{Binding SelectedNode, Converter={x:Static conv:ObjectConverters.IsNotNull}}">
-                        <TextBlock Grid.Column="0" Text="🏷 Etiket:"
-                                   FontSize="11" Foreground="{DynamicResource MutedText}"
-                                   VerticalAlignment="Center" Margin="0,0,8,0"/>
-                        <ComboBox Grid.Column="1"
-                                  ItemsSource="{Binding Search.ColorTagAssignmentOptions}"
-                                  SelectedValue="{Binding SelectedNode.ColorTag}"
-                                  SelectedValueBinding="{Binding Value}"
-                                  ToolTip.Tip="Düğüme renk etiketi ata (kart şeridi + minimap)"
-                                  FontSize="11" HorizontalAlignment="Stretch">
-                            <ComboBox.ItemTemplate>
-                                <DataTemplate x:DataType="search:ColorTagOption">
-                                    <StackPanel Orientation="Horizontal" Spacing="6">
-                                        <Border Width="12" Height="12" CornerRadius="6"
-                                                Background="{Binding Brush}" VerticalAlignment="Center"/>
-                                        <TextBlock Text="{Binding Label}" VerticalAlignment="Center"/>
-                                    </StackPanel>
-                                </DataTemplate>
-                            </ComboBox.ItemTemplate>
-                        </ComboBox>
-                    </Grid>
+                    <!-- Düğüm bölümü (Faz 4 Dilim 4: başlık + bölüm + gruplar + renk) -->
+                    <StackPanel Spacing="6"
+                                IsVisible="{Binding SelectedNode, Converter={x:Static conv:ObjectConverters.IsNotNull}}">
+                        <TextBlock Text="🔷 DÜĞÜM" FontSize="10" FontWeight="Black"
+                                   Foreground="{DynamicResource Accent}" LetterSpacing="0.5"/>
+                        <StackPanel Spacing="2">
+                            <TextBlock Text="Başlık" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                            <TextBox Text="{Binding SelectedNode.Title}"
+                                     Watermark="Düğüm başlığı"
+                                     Background="{DynamicResource InputBackground}"
+                                     Foreground="{DynamicResource PrimaryText}"
+                                     BorderBrush="{DynamicResource BorderColor}" FontSize="12"/>
+                            <ctrl:FieldValidationBadge Validation="{Binding InspectorViewModel.Validation}"
+                                                       NodeId="{Binding SelectedNode.Id}"
+                                                       FieldKey="node.title"/>
+                        </StackPanel>
+                        <Grid ColumnDefinitions="Auto,*">
+                            <TextBlock Grid.Column="0" Text="📚 Bölüm:"
+                                       FontSize="11" Foreground="{DynamicResource MutedText}"
+                                       VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <ComboBox Grid.Column="1"
+                                      ItemsSource="{Binding InspectorViewModel.ChapterAssignmentOptions}"
+                                      SelectedItem="{Binding InspectorViewModel.SelectedChapterOption}"
+                                      ToolTip.Tip="Kayıt/yükleme sınırı (Yok = tanımsız)"
+                                      FontSize="11" HorizontalAlignment="Stretch"/>
+                        </Grid>
+                        <StackPanel Spacing="2">
+                            <TextBlock Text="🗂 Gruplar" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                            <ItemsControl ItemsSource="{Binding InspectorViewModel.MemberGroups}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel Orientation="Horizontal"/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:CanvasGroupViewModel">
+                                        <Border Background="{DynamicResource CardHeaderBackground}"
+                                                BorderBrush="{DynamicResource BorderColor}" BorderThickness="1"
+                                                CornerRadius="4" Padding="6,2" Margin="0,0,4,4">
+                                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                                <TextBlock Text="{Binding Title}" FontSize="10"
+                                                           Foreground="{DynamicResource PrimaryText}"
+                                                           VerticalAlignment="Center"/>
+                                                <Button Content="×" FontSize="10" Padding="4,0"
+                                                        Command="{Binding $parent[UserControl].DataContext.InspectorViewModel.RemoveSelectedNodeFromGroupCommand}"
+                                                        CommandParameter="{Binding GroupId}"
+                                                        ToolTip.Tip="Gruptan çıkar (grup silinmez)"
+                                                        Background="Transparent" Foreground="{DynamicResource MutedText}"
+                                                        BorderThickness="0" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <Grid ColumnDefinitions="*,Auto">
+                                <ComboBox Grid.Column="0"
+                                          ItemsSource="{Binding InspectorViewModel.JoinableGroups}"
+                                          SelectedItem="{Binding InspectorViewModel.SelectedJoinGroup}"
+                                          PlaceholderText="Gruba ekle…"
+                                          FontSize="11" HorizontalAlignment="Stretch" Margin="0,0,4,0">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:CanvasGroupViewModel">
+                                            <TextBlock Text="{Binding Title}"/>
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+                                <Button Grid.Column="1" Content="＋ Ekle"
+                                        Command="{Binding InspectorViewModel.JoinSelectedJoinGroupCommand}"
+                                        FontSize="11" Padding="8,4"/>
+                            </Grid>
+                        </StackPanel>
+                        <StackPanel Spacing="2" Orientation="Horizontal">
+                            <TextBlock Text="🏷 Etiket:" FontSize="11"
+                                       Foreground="{DynamicResource MutedText}"
+                                       VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <ctrl:ColorPickerControl Mode="Palette"
+                                                     SelectedValue="{Binding SelectedNode.ColorTag, Mode=TwoWay}"
+                                                     ToolTip.Tip="Düğüme renk etiketi ata (kart şeridi + minimap)"/>
+                        </StackPanel>
+                        <TextBlock Text="{Binding InspectorViewModel.SelectedNodeIssues.Count, StringFormat='{}{0} sorun'}"
+                                   IsVisible="{Binding InspectorViewModel.SelectedNodeHasErrors}"
+                                   FontSize="10" FontWeight="Bold" Foreground="#EF4444"/>
+                    </StackPanel>
                 </StackPanel>
             </Border>
 

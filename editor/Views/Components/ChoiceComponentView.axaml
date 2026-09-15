@@ -1,6 +1,8 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:comp="using:RowlEngine.Editor.ViewModels.Components"
+             xmlns:vm="using:RowlEngine.Editor.ViewModels"
+             xmlns:ctrl="using:RowlEngine.Editor.Controls"
              x:Class="RowlEngine.Editor.Views.Components.ChoiceComponentView"
              x:DataType="comp:ChoiceComponentViewModel">
   <Border Background="{DynamicResource CardBackground}" CornerRadius="6" Margin="0,4" Padding="10" BorderBrush="{DynamicResource CardBorderColor}" BorderThickness="1">
@@ -83,6 +85,8 @@
           </DataTemplate>
         </ItemsControl.ItemTemplate>
       </ItemsControl>
+      <ctrl:FieldValidationBadge Validation="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).InspectorViewModel.Validation}"
+                                         NodeId="{Binding Node.Id}" FieldKey="choice.option_target" />
       <Button Content="＋ Add choice" Command="{Binding AddOptionCommand}" HorizontalAlignment="Left"/>
       <TextBlock Text="Each option has a stable ID and a target node. Use the graph cables to visualize routes; the target ID is the source of truth." TextWrapping="Wrap" FontSize="10" Foreground="{DynamicResource MutedText}"/>
     </StackPanel>
