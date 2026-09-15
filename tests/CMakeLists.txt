@@ -19,6 +19,7 @@ add_executable(rowl_tests
     test_pixel_pitch.cpp
     test_window_input_routing.cpp
     test_runtime_context_and_diagnostics.cpp
+    test_save_slot_and_package_fuzz.cpp
     test_story_graph_parser.cpp
     test_graph_vnext.cpp
     test_localization.cpp

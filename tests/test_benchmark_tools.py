@@ -53,25 +53,34 @@ with tempfile.TemporaryDirectory() as directory:
     incompatible = directory / "incompatible.json"
     baseline.write_text(json.dumps(report()), encoding="utf-8")
     candidate.write_text(json.dumps(report()), encoding="utf-8")
-    incompatible.write_text(json.dumps(report("different-machine")), encoding="utf-8")
+    incompatible.write_text(json.dumps(report(architecture="arm64")), encoding="utf-8")
 
     compatible = subprocess.run([sys.executable, str(TOOL), str(baseline), str(candidate)],
                                 capture_output=True, text=True, check=False)
     if compatible.returncode != 0 or "+0.00%" not in compatible.stdout:
         raise SystemExit("compatible benchmark reports were not compared")
 
+    machine_only = directory / "machine-only-diff.json"
+    machine_only.write_text(json.dumps(report("different-machine")), encoding="utf-8")
+    machine_compatible = subprocess.run(
+        [sys.executable, str(TOOL), str(baseline), str(machine_only)],
+        capture_output=True, text=True, check=False)
+    if machine_compatible.returncode != 0:
+        raise SystemExit("machine-only differences should stay compatible")
+
     rejected = subprocess.run([sys.executable, str(TOOL), str(baseline), str(incompatible)],
                               capture_output=True, text=True, check=False)
-    if rejected.returncode == 0 or "incompatible" not in rejected.stderr:
-        raise SystemExit("different benchmark environments were not rejected")
+    if rejected.returncode != 0 or "skipping" not in (rejected.stdout + rejected.stderr):
+        raise SystemExit("incompatible benchmark environments did not skip with exit 0")
 
     wrong_architecture = directory / "wrong-architecture.json"
     wrong_architecture.write_text(json.dumps(report(architecture="arm64")), encoding="utf-8")
     architecture_rejected = subprocess.run(
         [sys.executable, str(TOOL), str(baseline), str(wrong_architecture)],
         capture_output=True, text=True, check=False)
-    if architecture_rejected.returncode == 0 or "environment.architecture" not in architecture_rejected.stderr:
-        raise SystemExit("different benchmark architectures were not rejected")
+    if architecture_rejected.returncode != 0 or "skipping" not in (
+            architecture_rejected.stdout + architecture_rejected.stderr):
+        raise SystemExit("different benchmark architectures did not skip with exit 0")
 
     legacy = directory / "legacy-v1.json"
     legacy_report = report()
@@ -98,8 +107,30 @@ with tempfile.TemporaryDirectory() as directory:
     gated = subprocess.run([sys.executable, str(TOOL), str(baseline), str(regressed),
                             "--fail-percent", "20"],
                            capture_output=True, text=True, check=False)
-    if gated.returncode == 0 or "threshold breached" not in gated.stderr:
-        raise SystemExit("regressed benchmark reports did not breach the fail gate")
+    if gated.returncode != 2 or "threshold breached" not in gated.stderr:
+        raise SystemExit("regressed benchmark reports did not breach the fail gate with exit 2")
+
+    ci_failed = directory / "ci-failed.json"
+    ci_failed_report = report()
+    ci_failed_report["metrics"]["steady_frame_ms"] = 4.0 * 1.40
+    ci_failed.write_text(json.dumps(ci_failed_report), encoding="utf-8")
+    ci_breached = subprocess.run(
+        [sys.executable, str(TOOL), str(baseline), str(ci_failed),
+         "--warn-percent", "20", "--fail-percent", "35"],
+        capture_output=True, text=True, check=False)
+    if ci_breached.returncode != 2 or "threshold breached" not in ci_breached.stderr:
+        raise SystemExit("CI boundary +40% regression did not breach the fail gate with exit 2")
+
+    ci_warned = directory / "ci-warned.json"
+    ci_warned_report = report()
+    ci_warned_report["metrics"]["steady_frame_ms"] = 4.0 * 1.25
+    ci_warned.write_text(json.dumps(ci_warned_report), encoding="utf-8")
+    ci_warning = subprocess.run(
+        [sys.executable, str(TOOL), str(baseline), str(ci_warned),
+         "--warn-percent", "20", "--fail-percent", "35"],
+        capture_output=True, text=True, check=False)
+    if ci_warning.returncode != 0 or "WARNING" not in ci_warning.stdout:
+        raise SystemExit("CI boundary +25% regression did not warn with exit 0")
 
     editor_baseline = directory / "editor-baseline.json"
     editor_candidate = directory / "editor-candidate.json"

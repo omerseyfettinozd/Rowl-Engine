@@ -47,6 +47,14 @@ if(ROWL_BUILD_RUNTIME_TESTS)
             TIMEOUT 15
         )
         add_test(
+            NAME rowl_abi_tool_tests
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/test_abi_tools.py
+        )
+        set_tests_properties(rowl_abi_tool_tests PROPERTIES
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+            TIMEOUT 15
+        )
+        add_test(
             NAME rowl_release_package_tool_tests
             COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/test_release_package.py
         )

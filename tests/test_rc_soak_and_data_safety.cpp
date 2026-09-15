@@ -156,7 +156,16 @@ void test_rc_soak_and_data_safety() {
             exit(1);
         }
         if (firstRss > 0) {
+            // Under ASan the allocator (quarantine, arenas) moves RSS by
+            // tens of MB on its own, so the tight 8MB production tolerance
+            // is meaningless there; leak detection under sanitizers is
+            // LSan's job (currently out of scope), not this gauge's.
+#if defined(__SANITIZE_ADDRESS__) || \
+    (defined(__has_feature) && __has_feature(address_sanitizer))
+            constexpr uint64_t kTolerance = 64ULL * 1024ULL * 1024ULL;
+#else
             constexpr uint64_t kTolerance = 8ULL * 1024ULL * 1024ULL;
+#endif
             if (maxRss < minRss || maxRss - minRss > kTolerance) {
                 std::cerr << "Soak RSS drifted: min=" << minRss << " max=" << maxRss << std::endl;
                 exit(1);

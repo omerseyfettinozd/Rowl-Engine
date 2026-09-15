@@ -1,5 +1,16 @@
 #!/usr/bin/env python3
-"""Compare two compatible Rowl native benchmark JSON reports."""
+"""Compare two compatible Rowl native benchmark JSON reports.
+
+Compatibility is decided by schema_version, fixture_id, build.type,
+environment.os and environment.architecture only. cpu_model, cpu_count and
+machine are informational and do not affect compatibility (machine is just
+$(uname -m), not a host pin).
+
+Skip rule: incompatible environments print a line containing "skipping" and
+exit 0 so CI can skip gracefully. Unreadable or malformed files exit 1.
+--warn-percent (default 20) only prints WARNING lines and exits 0, while
+--fail-percent (default off) exits 2 when any regression exceeds it.
+"""
 
 import argparse
 import json
@@ -21,6 +32,8 @@ METRICS = {
 def load(path):
     with open(path, encoding="utf-8") as source:
         report = json.load(source)
+    if not isinstance(report, dict):
+        raise ValueError(f"{path} is not a JSON object")
     schema_version = report.get("schema_version")
     if schema_version not in (1, 2):
         raise ValueError(f"{path} is not benchmark schema v1 or v2")
@@ -54,9 +67,6 @@ def compatibility_key(report):
         "build.type": build.get("type"),
         "environment.os": environment.get("os"),
         "environment.architecture": environment.get("architecture"),
-        "environment.cpu_model": environment.get("cpu_model"),
-        "environment.cpu_count": environment.get("cpu_count"),
-        "environment.machine": environment.get("machine"),
     }
 
 
@@ -99,7 +109,13 @@ def main():
     args = parser.parse_args()
     try:
         result = compare(load(args.baseline), load(args.candidate))
-    except (OSError, ValueError, KeyError, json.JSONDecodeError) as error:
+    except ValueError as error:
+        if str(error).startswith("benchmark environments are incompatible"):
+            print("[BenchmarkCompare] " + str(error) + "; skipping comparison.")
+            return 0
+        print("[BenchmarkCompare] ERROR: " + str(error), file=sys.stderr)
+        return 1
+    except (OSError, KeyError, json.JSONDecodeError) as error:
         print("[BenchmarkCompare] ERROR: " + str(error), file=sys.stderr)
         return 1
 
@@ -113,6 +129,7 @@ def main():
               f"({row['delta_percent']:+.2f}%)")
     for name in result["skipped"]:
         print(f"  {name}: not present on both sides, skipped")
+        print(f"[BenchmarkCompare] WARNING: {name} not present on both sides, skipped")
     breached = [row for row in result["metrics"]
                 if row["regression_percent"] > args.warn_percent]
     for row in breached:

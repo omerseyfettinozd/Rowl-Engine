@@ -51,6 +51,7 @@ int main(int argc, char* argv[]) {
     test_golden_project_benchmarks(goldenJsonPath);
     test_hardening_and_reliability();
     test_rc_soak_and_data_safety();
+    test_save_slot_and_package_fuzz();
     test_demo_first_light();
     test_demo_second_signal();
 
