@@ -3,6 +3,75 @@
  * Split from main_test_runner.cpp; behavior unchanged.
  */
 #include "rowl_test_harness.hpp"
+#include "rowl/audio/long_audio_contract.hpp"
+
+#if defined(_WIN32)
+#include <windows.h>
+#include <psapi.h>
+#else
+#include <sys/resource.h>
+#endif
+
+namespace {
+
+// Minimal PCM WAV builders for header-probe fixtures. Claim sizes are the
+// signal: a header may advertise seconds of PCM without carrying them, which
+// is exactly how the over-threshold intent is detected without a decode.
+void appendU16LE(std::vector<uint8_t>& out, uint16_t value) {
+    out.push_back(static_cast<uint8_t>(value & 0xFFu));
+    out.push_back(static_cast<uint8_t>((value >> 8) & 0xFFu));
+}
+
+void appendU32LE(std::vector<uint8_t>& out, uint32_t value) {
+    out.push_back(static_cast<uint8_t>(value & 0xFFu));
+    out.push_back(static_cast<uint8_t>((value >> 8) & 0xFFu));
+    out.push_back(static_cast<uint8_t>((value >> 16) & 0xFFu));
+    out.push_back(static_cast<uint8_t>((value >> 24) & 0xFFu));
+}
+
+std::vector<uint8_t> makeWavHeader(uint32_t sampleRateHz, uint16_t channels,
+                                   uint16_t bitsPerSample,
+                                   uint32_t claimedDataBytes) {
+    const uint32_t byteRate =
+        sampleRateHz * channels * (bitsPerSample / 8u);
+    const uint16_t blockAlign =
+        static_cast<uint16_t>(channels * (bitsPerSample / 8u));
+    std::vector<uint8_t> out;
+    out.insert(out.end(), {'R', 'I', 'F', 'F'});
+    appendU32LE(out, 36u + claimedDataBytes);
+    out.insert(out.end(), {'W', 'A', 'V', 'E'});
+    out.insert(out.end(), {'f', 'm', 't', ' '});
+    appendU32LE(out, 16u);
+    appendU16LE(out, 1u); // PCM
+    appendU16LE(out, channels);
+    appendU32LE(out, sampleRateHz);
+    appendU32LE(out, byteRate);
+    appendU16LE(out, blockAlign);
+    appendU16LE(out, bitsPerSample);
+    out.insert(out.end(), {'d', 'a', 't', 'a'});
+    appendU32LE(out, claimedDataBytes);
+    return out;
+}
+
+uint64_t currentRssKb() {
+#if defined(_WIN32)
+    // GetProcessWorkingSetSize reports quota LIMITS, not usage, so it can
+    // never observe growth; WorkingSetSize is the real resident figure.
+    // (psapi link is added in tests/CMakeLists.txt, WIN32-only.)
+    PROCESS_MEMORY_COUNTERS counters{};
+    if (GetProcessMemoryInfo(GetCurrentProcess(), &counters,
+                             sizeof(counters)) == 0) {
+        return 0;
+    }
+    return static_cast<uint64_t>(counters.WorkingSetSize / 1024u);
+#else
+    struct rusage usage{};
+    if (getrusage(RUSAGE_SELF, &usage) != 0) return 0;
+    return static_cast<uint64_t>(usage.ru_maxrss); // KiB on Linux.
+#endif
+}
+
+} // namespace
 
 void test_audio_engine() {
     TEST_SECTION("Audio Subsystem & DSP Filters");
@@ -218,6 +287,254 @@ void test_audio_engine() {
         exit(1);
     }
     TEST_PASS("Output Suspend Edge-Triggering (Repeat Calls Are No-Ops)");
+
+    // Faz 4.5 Dilim 3 — long-audio threshold formula. Expected values are
+    // HARD-CODED literals (64 MiB / rate*channels*bytes): retuning the
+    // budget constant must fail this test, by design.
+    if (Rowl::Audio::kLongAudioBudgetBytes != 67108864ULL) {
+        std::cerr << "Long-audio budget is no longer 64 MiB" << std::endl;
+        exit(1);
+    }
+    struct ThresholdVector {
+        uint32_t rateHz;
+        uint32_t channels;
+        uint32_t bytesPerSample;
+        double expectedSeconds;
+    };
+    const ThresholdVector thresholdVectors[] = {
+        {44100, 2, 2, 380.43573696145125},
+        {48000, 2, 2, 349.5253333333333},
+        {44100, 1, 2, 760.8714739229025},
+        {48000, 8, 4, 43.690666666666665},
+        {8000, 1, 1, 8388.608},
+    };
+    for (const auto& vector : thresholdVectors) {
+        const double got = Rowl::Audio::longAudioThresholdSeconds(
+            vector.rateHz, vector.channels, vector.bytesPerSample);
+        if (std::abs(got - vector.expectedSeconds) >
+            1e-9 * vector.expectedSeconds) {
+            std::cerr << "Threshold formula mismatch for " << vector.rateHz
+                      << "Hz/" << vector.channels << "ch: got " << got
+                      << ", want " << vector.expectedSeconds << std::endl;
+            exit(1);
+        }
+    }
+    // Degenerate inputs fail closed: unknown audio never claims a threshold.
+    if (Rowl::Audio::longAudioThresholdSeconds(0, 2, 2) != 0.0 ||
+        Rowl::Audio::longAudioThresholdSeconds(44100, 0, 2) != 0.0 ||
+        Rowl::Audio::longAudioThresholdSeconds(44100, 2, 0) != 0.0) {
+        std::cerr << "Threshold formula did not fail closed on degenerate input"
+                  << std::endl;
+        exit(1);
+    }
+    TEST_PASS("Long-Audio Threshold Formula (64 MiB vectors + degenerate inputs)");
+
+    // Header-probe durations: exact WAV fixture (1.0 s silence, 44100 Hz
+    // mono 16-bit) probed from memory and from a real file, the checked-in
+    // OGG fixture probed from its bytes, and garbage staying unknown/silent.
+    {
+        auto wav = makeWavHeader(44100, 1, 16, 88200);
+        wav.insert(wav.end(), 88200, 0);
+        const auto memInfo = Rowl::Audio::probeAudioHeaderDuration(
+            wav.data(), wav.size());
+        if (!memInfo.known || memInfo.sampleRateHz != 44100 ||
+            memInfo.channelCount != 1 || memInfo.bytesPerSample != 2 ||
+            std::abs(memInfo.durationSeconds - 1.0) > 1e-9) {
+            std::cerr << "WAV header probe mismatch (memory buffer)" << std::endl;
+            exit(1);
+        }
+        const auto probeRoot =
+            std::filesystem::temp_directory_path() / "rowl_audio_probe_test";
+        const auto probeDir = probeRoot / "Assets" / "audio";
+        std::filesystem::create_directories(probeDir);
+        {
+            std::ofstream fixture(probeDir / "probe_tone.wav", std::ios::binary);
+            fixture.write(reinterpret_cast<const char*>(wav.data()),
+                          static_cast<std::streamsize>(wav.size()));
+        }
+        std::vector<uint8_t> fromDisk;
+        {
+            std::ifstream fixture(probeDir / "probe_tone.wav", std::ios::binary);
+            fromDisk.assign(std::istreambuf_iterator<char>(fixture),
+                            std::istreambuf_iterator<char>());
+        }
+        const auto diskInfo = Rowl::Audio::probeAudioHeaderDuration(
+            fromDisk.data(), fromDisk.size());
+        std::filesystem::remove_all(probeRoot);
+        if (!diskInfo.known ||
+            std::abs(diskInfo.durationSeconds - 1.0) > 1e-9 ||
+            diskInfo.sampleRateHz != 44100 || diskInfo.channelCount != 1) {
+            std::cerr << "WAV header probe mismatch (on-disk fixture)" << std::endl;
+            exit(1);
+        }
+        // The OGG bytes decoded above carry real Vorbis headers; the probe
+        // must recover format + a positive duration without decoding.
+        const auto oggInfo = Rowl::Audio::probeAudioHeaderDuration(
+            oggData.data(), oggData.size());
+        if (!oggInfo.known || oggInfo.sampleRateHz == 0 ||
+            oggInfo.channelCount == 0 || oggInfo.channelCount > 8 ||
+            oggInfo.bytesPerSample != 2 ||
+            !(oggInfo.durationSeconds > 0.0)) {
+            std::cerr << "OGG header probe did not recover format/duration"
+                      << std::endl;
+            exit(1);
+        }
+        const uint8_t junk[] = {'N', 'O', 'P', 'E'};
+        if (Rowl::Audio::probeAudioHeaderDuration(junk, sizeof(junk)).known ||
+            Rowl::Audio::probeAndAssessLongAudio(junk, sizeof(junk),
+                                                 "junk.bin")
+                .exceedsThreshold) {
+            std::cerr << "Unknown header must stay unknown and silent" << std::endl;
+            exit(1);
+        }
+    }
+    TEST_PASS("Header-Probe Durations (WAV memory/disk fixture, OGG fixture, unknown silent)");
+
+    // Boundary: header-claimed 29 s stays silent, exactly 30 s stays silent
+    // (strictly-greater semantics), 31 s warns — against a fixed 30 s
+    // contract point. The production threshold comes from the formula above;
+    // 30 s is the test's fixed boundary proving the comparison operator.
+    {
+        constexpr uint32_t kCdByteRate = 44100u * 2u * 2u;
+        const auto under = makeWavHeader(44100, 2, 16, 29u * kCdByteRate);
+        const auto over = makeWavHeader(44100, 2, 16, 31u * kCdByteRate);
+        const auto underInfo = Rowl::Audio::probeAudioHeaderDuration(
+            under.data(), under.size());
+        const auto overInfo = Rowl::Audio::probeAudioHeaderDuration(
+            over.data(), over.size());
+        if (!underInfo.known ||
+            std::abs(underInfo.durationSeconds - 29.0) > 1e-9 ||
+            !overInfo.known ||
+            std::abs(overInfo.durationSeconds - 31.0) > 1e-9) {
+            std::cerr << "Boundary fixture probe mismatch" << std::endl;
+            exit(1);
+        }
+        const auto silent29 = Rowl::Audio::assessLongAudio(
+            underInfo.durationSeconds, 30.0, "boundary_29s.wav");
+        const auto silent30 =
+            Rowl::Audio::assessLongAudio(30.0, 30.0, "boundary_30s.wav");
+        const auto warns31 = Rowl::Audio::assessLongAudio(
+            overInfo.durationSeconds, 30.0, "boundary_31s.wav");
+        if (silent29.exceedsThreshold || silent30.exceedsThreshold ||
+            !warns31.exceedsThreshold) {
+            std::cerr << "29 s / 30 s / 31 s boundary semantics broken" << std::endl;
+            exit(1);
+        }
+        // Unknown durations and degenerate thresholds stay silent (closed).
+        if (Rowl::Audio::assessLongAudio(-1.0, 30.0, "unknown.wav")
+                .exceedsThreshold ||
+            Rowl::Audio::assessLongAudio(31.0, 0.0, "no_threshold.wav")
+                .exceedsThreshold) {
+            std::cerr << "Assessment did not fail closed" << std::endl;
+            exit(1);
+        }
+    }
+    // Over-threshold fixture: the header claims 100 MiB of CD-quality PCM
+    // (no 100 MiB ever allocated or decoded); the assessment must warn WITH
+    // the computed seconds on both sides of the comparison.
+    {
+        auto big = makeWavHeader(44100, 2, 16, 100u * 1024u * 1024u);
+        const auto verdict = Rowl::Audio::probeAndAssessLongAudio(
+            big.data(), big.size(), "over_threshold.wav");
+        constexpr double kWantDuration = 594.4308390022676; // 100 MiB / 176400
+        constexpr double kWantThreshold = 380.43573696145125; // 64 MiB / 176400
+        if (!verdict.exceedsThreshold ||
+            std::abs(verdict.durationSeconds - kWantDuration) >
+                1e-9 * kWantDuration ||
+            std::abs(verdict.thresholdSeconds - kWantThreshold) >
+                1e-9 * kWantThreshold) {
+            std::cerr << "Over-threshold fixture did not warn with computed seconds"
+                      << std::endl;
+            exit(1);
+        }
+    }
+    TEST_PASS("Long-Audio Boundary (29 s silent / 30 s silent / 31 s warns; over-threshold warns)");
+
+    // Long-audio soak on a VIRTUAL clock: 360 x update(1.0 s) == 6 simulated
+    // minutes over a tiny real looped BGM. CI pays milliseconds, not minutes,
+    // while the loop-feed, telemetry windows, and stream state traverse the
+    // same code as wall-clock playback. Mid-soak device events perturb the
+    // run; device-switch routing itself stays covered by
+    // test_audio_device_recovery.cpp and is not duplicated here.
+    {
+        Rowl::VFS::VFSManager soakVfs;
+        Rowl::Audio::AudioEngine soak(&soakVfs);
+        const auto soakRoot =
+            std::filesystem::temp_directory_path() / "rowl_audio_long_soak";
+        const auto soakDir = soakRoot / "Assets" / "audio";
+        std::filesystem::create_directories(soakDir);
+        auto soakWav = makeWavHeader(44100, 1, 16, 8820); // 0.1 s loop
+        soakWav.insert(soakWav.end(), 8820, 0);
+        {
+            std::ofstream loop(soakDir / "soak_loop.wav", std::ios::binary);
+            loop.write(reinterpret_cast<const char*>(soakWav.data()),
+                       static_cast<std::streamsize>(soakWav.size()));
+        }
+        const std::string soakAsset = "audio/soak_loop.wav";
+        soakVfs.remountProject(soakRoot.string());
+        if (!soak.initialize() || !soak.isInitialized()) {
+            std::cerr << "Soak audio init failed" << std::endl;
+            exit(1);
+        }
+        soak.playAudio(soakAsset, Rowl::Audio::AudioChannelType::Bgm);
+        soak.update();
+        if (!soak.isBgmPlaying() || soak.getCurrentBgmPath() != soakAsset) {
+            std::cerr << "Soak BGM setup failed" << std::endl;
+            exit(1);
+        }
+        const bool deviceWasAvailable = soak.isAudioDeviceAvailable();
+        const uint64_t rssBefore = currentRssKb();
+        for (int tick = 0; tick < 360; ++tick) {
+            soak.update(1.0f);
+            if (tick == 120) {
+                soak.handleDeviceEvent(SDL_EVENT_AUDIO_DEVICE_REMOVED);
+            }
+            if (tick == 121) {
+                if (!soak.isBgmPlaying() ||
+                    soak.getCurrentBgmPath() != soakAsset) {
+                    std::cerr << "Soak BGM did not resume after device removal"
+                              << std::endl;
+                    exit(1);
+                }
+                if (deviceWasAvailable && !soak.isAudioDeviceAvailable()) {
+                    std::cerr << "Soak device was not reopened after removal"
+                              << std::endl;
+                    exit(1);
+                }
+            }
+            if (tick == 240) {
+                soak.handleDeviceEvent(SDL_EVENT_AUDIO_DEVICE_FORMAT_CHANGED);
+            }
+            if (tick == 241) {
+                if (!soak.isBgmPlaying() ||
+                    soak.getCurrentBgmPath() != soakAsset) {
+                    std::cerr << "Soak BGM did not continue after format change"
+                              << std::endl;
+                    exit(1);
+                }
+            }
+        }
+        const uint64_t rssAfter = currentRssKb();
+        soak.shutdown();
+        std::filesystem::remove_all(soakRoot);
+        if (rssBefore > 0 && rssAfter > rssBefore + 8192) {
+            std::cerr << "Soak RSS grew unboundedly: " << rssBefore << " KiB -> "
+                      << rssAfter << " KiB" << std::endl;
+            exit(1);
+        }
+    }
+    TEST_PASS("Long-Audio Soak (6 virtual minutes: RSS stable, device-removed resume, format-changed continuation)");
+
+    {
+        uint64_t capabilities = 0;
+        if (RowlEngine_GetCapabilities(&capabilities) != ROWL_RESULT_OK ||
+            (capabilities & ROWL_ENGINE_CAPABILITY_LONG_AUDIO_CONTRACT) == 0) {
+            std::cerr << "ROWL_ENGINE_CAPABILITY_LONG_AUDIO_CONTRACT (2048) missing"
+                      << std::endl;
+            exit(1);
+        }
+    }
+    TEST_PASS("Capability LONG_AUDIO_CONTRACT (2048) advertised");
 
     audio.shutdown();
     if (audio.isInitialized()) exit(1);

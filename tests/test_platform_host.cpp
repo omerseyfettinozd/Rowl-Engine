@@ -52,6 +52,22 @@ public:
 void test_platform_host() {
     TEST_SECTION("Minimum PlatformHost Boundary");
 
+    // Faz 4.5 Dilim 4: the base carries safe desktop defaults (no pure
+    // virtuals), so an unknown/future host degrades instead of failing to link.
+    {
+        Rowl::Platform::PlatformHost bare;
+        if (bare.openAssetStream("anything") != nullptr ||
+            !bare.writableSavePath().empty() ||
+            bare.lifecycleState() != Rowl::Platform::LifecycleState::Active ||
+            !bare.takeInputEvents().empty() ||
+            bare.renderSurface().kind != Rowl::Platform::RenderSurfaceKind::Automatic ||
+            bare.audioFocus() != Rowl::Platform::AudioFocus::Granted) {
+            std::cerr << "Bare PlatformHost did not degrade into safe defaults" << std::endl;
+            exit(1);
+        }
+    }
+    TEST_PASS("Bare PlatformHost Degrades Into Safe Desktop Defaults");
+
     const std::string unicodeRootUtf8 = "/tmp/Rowl-Çağrı-玩家";
     const auto unicodePath = Rowl::Platform::pathFromUtf8(unicodeRootUtf8);
     const auto unicodeLayout = Rowl::Platform::makeUserDataDirectories(unicodePath);

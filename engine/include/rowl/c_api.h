@@ -75,7 +75,8 @@ typedef struct RowlEngine_ApiVersion {
 #define ROWL_ENGINE_CAPABILITY_RICH_TEXT_MARKUP      UINT64_C(256)
 #define ROWL_ENGINE_CAPABILITY_TEXT_SHAPING          UINT64_C(512)
 #define ROWL_ENGINE_CAPABILITY_ACCESSIBILITY         UINT64_C(1024)
-/* NOTE: bit 2048 is reserved for Dilim 3 (audio). Do not reuse. */
+/* Faz 4.5 Dilim 3: long-audio threshold contract (header probe + warning; decode path untouched). */
+#define ROWL_ENGINE_CAPABILITY_LONG_AUDIO_CONTRACT UINT64_C(2048)
 #define ROWL_ENGINE_CAPABILITY_CAMERA_ROTATION_IGNORED UINT64_C(4096)
 
 /** Current additive C API version. This query does not require an engine handle. */
@@ -191,7 +192,8 @@ ROWL_API int RowlEngine_IsRunning(RowlEngineHandle handle);
  * @param nativeWindowHandle  Platform native handle:
  *   - Windows : HWND
  *   - Linux X11: Window (unsigned long) cast to void*
- *   - Linux Wayland: wl_surface* (SDL3 fallback)
+ *   - Linux Wayland: explicitly UNSUPPORTED (fail-closed error, no fallback;
+ *     real support is Faz 5, see docs/PLATFORM_SUPPORT.md)
  *   - macOS   : NSView*
  *   - Android : ANativeWindow*
  *   - iOS     : UIView*

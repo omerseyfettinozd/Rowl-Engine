@@ -1,6 +1,10 @@
 /**
  * test_mobile_input.cpp — Mobile touch-input mapping.
- * Split from main_test_runner.cpp; behavior unchanged.
+ * Split from main_test_runner.cpp; Faz 4.5 Dilim 4: the dead stateless
+ * processSdlEvent SDL switch is deleted, so this TU pins the single live
+ * touch path (viewport-relative classification + touch-target validity).
+ * Per-event DOWN/UP pairing lives in Window::pollEvents and is covered by
+ * test_window_input_routing.cpp's dispatcher isolation test.
  */
 #include "rowl_test_harness.hpp"
 
@@ -13,22 +17,8 @@ void test_mobile_input() {
     if (Rowl::Platform::MobileInput::isTouchTargetValid(32.0f, 48.0f)) exit(1);
     TEST_PASS("Mobile Accessibility Minimum Touch Target (>= 48x48 dp)");
 
-    // Simulated SDL3 Touch Event Processing
-    SDL_Event touchEvent;
-    touchEvent.type = SDL_EVENT_FINGER_DOWN;
-    touchEvent.tfinger.x = 0.5f; // 50% of 1920 = 960
-    touchEvent.tfinger.y = 0.5f; // 50% of 1080 = 540
-    touchEvent.tfinger.fingerID = 10;
-
-    Rowl::Platform::InputEvent outEvent;
-    bool procOk = Rowl::Platform::MobileInput::processSdlEvent(touchEvent, outEvent);
-    if (!procOk || outEvent.type != Rowl::Platform::InputEventType::TapDown ||
-        std::abs(outEvent.x - 960.0f) > 0.01f || std::abs(outEvent.y - 540.0f) > 0.01f) {
-        std::cerr << "Touch event processing mismatch" << std::endl;
-        exit(1);
-    }
-    TEST_PASS("SDL3 Touch Coordinate Normalization to 1920x1080 Canvas");
-
+    // Single live path: gesture classification in physical pixels, threshold
+    // viewport-relative (max 48px, 5% of the short edge).
     if (Rowl::Platform::MobileInput::classifyTouchGesture(900.0f, 540.0f, 700.0f, 540.0f, 1920.0f, 1080.0f)
             != Rowl::Platform::InputEventType::SwipeForward ||
         Rowl::Platform::MobileInput::classifyTouchGesture(700.0f, 540.0f, 900.0f, 540.0f, 1920.0f, 1080.0f)
@@ -39,4 +29,18 @@ void test_mobile_input() {
         exit(1);
     }
     TEST_PASS("Touch Tap and Horizontal Swipe Classification");
+
+    // Threshold scales with the viewport (mobile-sized surface): 5% of 360 is
+    // 18px, so the 48px floor governs — a 40px flick stays a Tap, 60px swipes.
+    if (Rowl::Platform::MobileInput::classifyTouchGesture(100.0f, 200.0f, 140.0f, 200.0f, 360.0f, 640.0f)
+            != Rowl::Platform::InputEventType::Tap ||
+        Rowl::Platform::MobileInput::classifyTouchGesture(100.0f, 200.0f, 160.0f, 200.0f, 360.0f, 640.0f)
+            != Rowl::Platform::InputEventType::SwipeBack ||
+        // Vertical drift beats horizontal: not a swipe, stays a Tap.
+        Rowl::Platform::MobileInput::classifyTouchGesture(100.0f, 200.0f, 160.0f, 400.0f, 360.0f, 640.0f)
+            != Rowl::Platform::InputEventType::Tap) {
+        std::cerr << "Viewport-relative touch threshold mismatch" << std::endl;
+        exit(1);
+    }
+    TEST_PASS("Touch Threshold Scales Viewport-Relatively (Mobile-Sized Surface)");
 }

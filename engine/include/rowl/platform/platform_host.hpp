@@ -70,12 +70,18 @@ struct RuntimeInputEvent {
 
 /// Minimum host boundary shared by desktop and future mobile shells. Keep this
 /// contract restricted to resources and signals that genuinely differ by host.
+///
+/// Faz 4.5 Dilim 4: every member is a defaulted virtual — there are NO pure
+/// virtuals, so a future mobile shell adopts this base incrementally and an
+/// unknown host degrades into safe desktop defaults instead of failing to
+/// link. Real mobile end-to-end injection (native host + touch-path proof) is
+/// gated on Faz 6/7; see docs/PLATFORM_SUPPORT.md "Mobile host gate (Faz 6/7)".
 class PlatformHost {
 public:
     virtual ~PlatformHost() = default;
 
-    virtual std::unique_ptr<std::istream> openAssetStream(const std::string& path) = 0;
-    virtual std::filesystem::path writableSavePath() const = 0;
+    virtual std::unique_ptr<std::istream> openAssetStream(const std::string& path);
+    virtual std::filesystem::path writableSavePath() const;
     /// Player-profile storage belongs to the same per-user data capability as
     /// saves. The default keeps existing injected hosts source-compatible.
     virtual std::filesystem::path writableProfilePath() const {
@@ -83,10 +89,10 @@ public:
         return savePath.empty() ? std::filesystem::path("profiles")
                                 : savePath.parent_path() / "profiles";
     }
-    virtual LifecycleState lifecycleState() const = 0;
-    virtual std::vector<RuntimeInputEvent> takeInputEvents() = 0;
-    virtual RenderSurface renderSurface() const = 0;
-    virtual AudioFocus audioFocus() const = 0;
+    virtual LifecycleState lifecycleState() const;
+    virtual std::vector<RuntimeInputEvent> takeInputEvents();
+    virtual RenderSurface renderSurface() const;
+    virtual AudioFocus audioFocus() const;
 };
 
 /// Behavior-preserving desktop/default adapter. SDL window events continue to

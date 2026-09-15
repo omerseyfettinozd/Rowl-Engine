@@ -7,6 +7,32 @@
 
 namespace Rowl::Platform {
 
+// Faz 4.5 Dilim 4: safe desktop defaults so unknown/future hosts (mobile
+// shells before their Faz 6/7 gate) degrade instead of failing to link.
+std::unique_ptr<std::istream> PlatformHost::openAssetStream(const std::string&) {
+    return nullptr;
+}
+
+std::filesystem::path PlatformHost::writableSavePath() const {
+    return {};
+}
+
+LifecycleState PlatformHost::lifecycleState() const {
+    return LifecycleState::Active;
+}
+
+std::vector<RuntimeInputEvent> PlatformHost::takeInputEvents() {
+    return {};
+}
+
+RenderSurface PlatformHost::renderSurface() const {
+    return {};
+}
+
+AudioFocus PlatformHost::audioFocus() const {
+    return AudioFocus::Granted;
+}
+
 DefaultPlatformHost::DefaultPlatformHost(std::shared_ptr<Rowl::VFS::VFSManager> vfs)
     : m_vfs(std::move(vfs)) {
     const auto directories = resolveUserDataDirectories();

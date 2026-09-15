@@ -47,6 +47,40 @@ hardware, SDKs, signing, or a physical device there is no build, package,
 or smoke proof to claim. A target leaves this state only through the
 contract at the top of this file.
 
+## Faz 4.5 — Wayland explicitly unsupported (release note)
+
+Wayland sessions are **not supported** and fail closed, never silently:
+
+- `Window::initializeEmbedded` rejects a Wayland SDL video driver up front
+  (`SDL_GetCurrentVideoDriver() == "wayland"` → log + video-lease cleanup +
+  `return false`). No crash, no silent X11-handle fallback.
+- The Linux embedded path compiles X11 handle semantics only under
+  `#elif defined(__linux__)`; any other platform hits a final `#else` that
+  logs, releases the video lease, and returns `false`.
+- Real Wayland support is a **Faz 5** item whose prerequisite is
+  Avalonia-handle detection on the editor side (docs-only in this slice:
+  `EngineHost.cs` / `MainWindowViewModel.cs` / `editor/` untouched).
+
+## Mobile host gate (Faz 6/7)
+
+Desktop hardening in Faz 4.5 is mobile-safe by construction and blocks no
+future mobile integration:
+
+- `PlatformHost` exposes defaulted virtuals only (no pure virtuals), so a
+  future Android/iOS shell adopts the base incrementally and degrades into
+  safe desktop defaults (Active lifecycle, granted audio focus, empty input).
+- Touch input has exactly one live path: `Window::pollEvents` pairs
+  `FINGER_DOWN/UP` per finger, maps viewport-relatively, and classifies via
+  `MobileInput::classifyTouchGesture`. The dead stateless `processSdlEvent`
+  SDL switch was deleted in Faz 4.5 Dilim 4 (it duplicated normalization with
+  a hardcoded 1920x1080 canvas).
+- The `/system/fonts` mount is an optional, exists()-guarded, list-only
+  fallback that resolves strictly after the project VFS; absent directories
+  skip silently.
+- The Faz 6/7 gate for claiming mobile support: a native host injecting a
+  real `PlatformHost` + touch end-to-end proof on a physical device, through
+  the contract at the top of this file.
+
 ## Renderer rule
 
 The SDL/font renderer fallback is the baseline renderer. GPU-MSDF is an

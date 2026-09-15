@@ -1,10 +1,5 @@
 #pragma once
 
-#include <cstdint>
-#include <string>
-
-union SDL_Event;
-
 namespace Rowl::Platform {
 
 enum class InputEventType {
@@ -16,18 +11,23 @@ enum class InputEventType {
     SwipeBack
 };
 
-struct InputEvent {
-    InputEventType type;
-    float x = 0.0f;
-    float y = 0.0f;
-    float deltaX = 0.0f;
-    float deltaY = 0.0f;
-    uint32_t touchId = 0;
-};
-
+/// Faz 4.5 Dilim 4 touch decision: DELETE the dead path.
+/// The former MobileInput::processSdlEvent per-event SDL switch (plus its
+/// InputEvent payload) was dead — no shipping code called it; the only caller
+/// was the unit test — and it duplicated coordinate normalization with a
+/// hardcoded 1920x1080 canvas, so a future mobile integration calling it on
+/// any other surface would have mis-mapped every touch. It is deleted rather
+/// than unified because the live path below already owns DOWN/UP pairing and
+/// viewport-relative mapping (Window::pollEvents + touchCoordinateToPhysical);
+/// merging a stateless per-event translator into it would have recreated the
+/// second path under a shared name.
+/// Single live touch path: Window::pollEvents pairs FINGER_DOWN/UP per
+/// fingerID, maps to physical pixels viewport-relatively, then classifies here.
+/// The TapDown/TapUp/DragMotion enumerators stay as stable vocabulary for the
+/// Faz 6/7 mobile host gate (see docs/PLATFORM_SUPPORT.md); they cost nothing
+/// and block no future integration.
 class MobileInput {
 public:
-    static bool processSdlEvent(const SDL_Event& sdlEvent, InputEvent& outEvent);
     static bool isTouchTargetValid(float widthDp, float heightDp);
     /// Classifies a completed touch in physical window coordinates. Horizontal
     /// swipes deliberately win over taps, so a story never advances twice.

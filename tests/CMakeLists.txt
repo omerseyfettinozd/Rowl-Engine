@@ -50,6 +50,11 @@ target_link_libraries(rowl_tests PRIVATE
     rowl_engine_thirdparty
 )
 
+if(WIN32)
+    # Audio soak RSS gauge uses GetProcessMemoryInfo on Windows.
+    target_link_libraries(rowl_tests PRIVATE psapi)
+endif()
+
 # The test binary is the exporting side of its own engine objects, matching
 # how RowlEngineCore builds them.
 target_compile_definitions(rowl_tests PRIVATE ROWL_BUILDING_DLL)

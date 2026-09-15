@@ -19,6 +19,7 @@
 #include <cstring>
 #include <string>
 #include <fstream>
+#include <system_error>
 
 #ifndef ROWL_SHADER_DIR
 #define ROWL_SHADER_DIR ""
@@ -359,16 +360,40 @@ bool Window::initializeEmbedded(void* nativeHandle, uint32_t width, uint32_t hei
     m_width  = width;
     m_height = height;
 
+    // Faz 4.5 Dilim 4: Wayland is explicitly unsupported. Reject it here with
+    // a diagnostic (fail-closed error path, never a crash or silent fallback);
+    // real Wayland support is a Faz 5 item with Avalonia-handle detection as
+    // its prerequisite (see docs/PLATFORM_SUPPORT.md).
+    if (const char* videoDriver = SDL_GetCurrentVideoDriver();
+        videoDriver && std::strcmp(videoDriver, "wayland") == 0) {
+        ROWL_LOG_ERROR("initializeEmbedded: Wayland sessions are explicitly unsupported "
+                       "(Faz 4.5); use X11 or offscreen rendering.");
+        Rowl::Platform::SdlSubsystemLease::release(SDL_INIT_VIDEO);
+        m_videoLeaseHeld = false;
+        return false;
+    }
+
     // SDL3 native handle embedding via properties
     SDL_PropertiesID props = SDL_CreateProperties();
 #if defined(_WIN32)
     SDL_SetPointerProperty(props, SDL_PROP_WINDOW_CREATE_WIN32_HWND_POINTER, nativeHandle);
 #elif defined(__APPLE__)
     SDL_SetPointerProperty(props, SDL_PROP_WINDOW_CREATE_COCOA_WINDOW_POINTER, nativeHandle);
-#else
-    // X11 Window XID
+#elif defined(__linux__)
+    // Faz 4.5 Dilim 4: Linux desktop embeds X11 only. The previous naked
+    // '#else' X11-assumption is gone on purpose: unknown platforms must fail
+    // closed below instead of silently compiling X11 handle semantics.
     SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_X11_WINDOW_NUMBER,
                           static_cast<Sint64>(reinterpret_cast<uintptr_t>(nativeHandle)));
+#else
+    // Unknown platform: fail closed with a diagnostic. The video lease
+    // acquired above is released so a rejected embed never leaks SDL lifetime.
+    SDL_DestroyProperties(props);
+    ROWL_LOG_ERROR("initializeEmbedded: unsupported platform for native embedding "
+                   "(Windows/X11/Cocoa only; Wayland explicitly unsupported).");
+    Rowl::Platform::SdlSubsystemLease::release(SDL_INIT_VIDEO);
+    m_videoLeaseHeld = false;
+    return false;
 #endif
     SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_BORDERLESS_BOOLEAN, true);
     SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_WIDTH_NUMBER,  static_cast<Sint64>(width));
@@ -472,6 +497,34 @@ void Window::initFontRenderer() {
             if (m_fontRenderer->loadFont(path)) {
                 ROWL_LOG_INFO("✅ Loaded Visual Novel TTF Font from System: " + path);
                 return;
+            }
+        }
+    }
+
+    // Faz 4.5 Dilim 4: optional /system/fonts mount (Android-style). Resolves
+    // strictly AFTER the project VFS and the desktop candidates above, and is
+    // list-only plus exists()-guarded: an absent directory (every desktop/CI
+    // machine) skips silently via error_code paths, never probing or throwing.
+    {
+        std::error_code dirError;
+        const fs::path systemFontDir("/system/fonts");
+        if (fs::exists(systemFontDir, dirError) && !dirError &&
+            fs::is_directory(systemFontDir, dirError) && !dirError) {
+            std::error_code iterError;
+            fs::directory_iterator it(systemFontDir,
+                                      fs::directory_options::skip_permission_denied,
+                                      iterError);
+            const fs::directory_iterator end;
+            for (; it != end && !iterError; it.increment(iterError)) {
+                std::error_code entryError;
+                if (!it->is_regular_file(entryError) || entryError) continue;
+                const std::string ext = it->path().extension().string();
+                if (ext != ".ttf" && ext != ".otf" && ext != ".ttc") continue;
+                if (m_fontRenderer->loadFont(it->path().string())) {
+                    ROWL_LOG_INFO("Loaded Visual Novel TTF Font from /system/fonts: " +
+                                  it->path().string());
+                    return;
+                }
             }
         }
     }

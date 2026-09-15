@@ -774,6 +774,12 @@ enum class DSPFilterType {
 
 Mobile input abstraction translating SDL3 normalized multi-touch events to virtual canvas coordinates and enforcing touch accessibility targets.
 
+> **Faz 4.5 Dilim 4 (2026-09-16) — `processSdlEvent`/`InputEvent` REMOVED.**
+> The dead switch (zero shipping callers, hardcoded 1920x1080 normalization)
+> was deleted; the live single path is `Window::pollEvents` DOWN/UP pairing +
+> `classifyTouchGesture`. `isTouchTargetValid` is unchanged. The structures
+> and logic quoted below are historical — do not call them.
+
 #### Includes & Dependencies
 - [`engine/include/rowl/platform/mobile_input.hpp`](file:///home/chaple/Belgeler/Rowl%20Engine/engine/include/rowl/platform/mobile_input.hpp): `<cstdint>`, `<string>`, forward declaration `union SDL_Event`.
 - [`engine/src/platform/mobile_input.cpp`](file:///home/chaple/Belgeler/Rowl%20Engine/engine/src/platform/mobile_input.cpp): `<SDL3/SDL.h>`, [`rowl/core/logger.hpp`](file:///home/chaple/Belgeler/Rowl%20Engine/engine/include/rowl/core/logger.hpp)
@@ -937,8 +943,8 @@ Self-contained playable projects in the standard layout (`project.rowlproj` + `A
 | [`engine/src/scripting/lua_sandbox.cpp`](file:///home/chaple/Belgeler/Rowl%20Engine/engine/src/scripting/lua_sandbox.cpp) | Lua Implementation | - | Sandboxed standard libraries, instruction hook (10M cap), C callback bridge |
 | [`engine/include/rowl/audio/audio_engine.hpp`](file:///home/chaple/Belgeler/Rowl%20Engine/engine/include/rowl/audio/audio_engine.hpp) | Audio Subsystem | `AudioChannelType`, `DSPFilterType`, `AudioEngine` | `initialize`, `playAudio`, `setBgmVolume`, `applyDspFilter`, `triggerVoiceDucking`, `setDuckingFactor` |
 | [`engine/src/audio/audio_engine.cpp`](file:///home/chaple/Belgeler/Rowl%20Engine/engine/src/audio/audio_engine.cpp) | Audio Implementation | - | Voice ducking gain attenuation (-6dB), DSP filter profiles |
-| [`engine/include/rowl/platform/mobile_input.hpp`](file:///home/chaple/Belgeler/Rowl%20Engine/engine/include/rowl/platform/mobile_input.hpp) | Input Abstraction | `InputEventType`, `InputEvent`, `MobileInput` | `processSdlEvent`, `isTouchTargetValid` |
-| [`engine/src/platform/mobile_input.cpp`](file:///home/chaple/Belgeler/Rowl%20Engine/engine/src/platform/mobile_input.cpp) | Input Implementation | - | Multi-touch normalization to 1920x1080 canvas, 48dp minimum target verification |
+| [`engine/include/rowl/platform/mobile_input.hpp`](file:///home/chaple/Belgeler/Rowl%20Engine/engine/include/rowl/platform/mobile_input.hpp) | Input Abstraction | `classifyTouchGesture`, `isTouchTargetValid` (**`processSdlEvent`/`InputEvent` removed in Faz 4.5 Dilim 4**) | `classifyTouchGesture`, `isTouchTargetValid` |
+| [`engine/src/platform/mobile_input.cpp`](file:///home/chaple/Belgeler/Rowl%20Engine/engine/src/platform/mobile_input.cpp) | Input Implementation | - | Single touch path (`Window::pollEvents` pairing + `classifyTouchGesture`), 48dp minimum target verification |
 | [`engine/include/thirdparty/stb_image.h`](file:///home/chaple/Belgeler/Rowl%20Engine/engine/include/thirdparty/stb_image.h) | 3rd Party Loader | - | Image file / memory buffer decoding to RGBA32 |
 
 ---
