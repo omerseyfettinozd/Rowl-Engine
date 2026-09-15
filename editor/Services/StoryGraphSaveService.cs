@@ -19,12 +19,24 @@ internal sealed class StoryGraphSaveSnapshot
     public List<SnapshotNode> Nodes { get; init; } = new();
     public SnapshotNode? ActiveNode { get; init; }
 
+    /// <summary>
+    /// Faz 4 Dilim 3 — vNext structure (groups / subgraphs / chapters).
+    /// Empty by default so tagless/chapterless graphs stay byte-stable v4.
+    /// </summary>
+    public GraphStructureDocument Structure { get; init; } = new();
+
     public sealed class SnapshotNode
     {
         public ulong Id { get; init; }
         public string Title { get; init; } = string.Empty;
         public double X { get; init; }
         public double Y { get; init; }
+        /// <summary>Owning chapter id (empty = unassigned, v4 case).</summary>
+        public string ChapterId { get; init; } = string.Empty;
+        /// <summary>Visual color tag (empty = none).</summary>
+        public string ColorTag { get; init; } = string.Empty;
+        /// <summary>Free-form category labels.</summary>
+        public List<string> Tags { get; init; } = new();
         public string Speaker { get; init; } = string.Empty;
         public string DialogueText { get; init; } = string.Empty;
         public string BackgroundTexture { get; init; } = string.Empty;
@@ -106,7 +118,8 @@ internal static class StoryGraphSaveService
         IEnumerable<NodeViewModel> nodes,
         IEnumerable<ConnectionViewModel> connections,
         ulong startNodeId,
-        NodeViewModel? activeNode)
+        NodeViewModel? activeNode,
+        GraphStructureDocument? structure = null)
     {
         var nodeList = nodes.ToList();
         var connectionList = connections.ToList();
@@ -122,7 +135,8 @@ internal static class StoryGraphSaveService
         {
             StartNodeId = startNodeId,
             Nodes = snapshotNodes,
-            ActiveNode = active
+            ActiveNode = active,
+            Structure = structure ?? new GraphStructureDocument(),
         };
     }
 
@@ -162,6 +176,9 @@ internal static class StoryGraphSaveService
             Title = node.Title,
             X = node.X,
             Y = node.Y,
+            ChapterId = node.ChapterId ?? string.Empty,
+            ColorTag = node.ColorTag ?? string.Empty,
+            Tags = node.Tags.ToList(),
             Speaker = node.Speaker,
             DialogueText = node.DialogueText,
             BackgroundTexture = node.BackgroundTexture,
@@ -214,63 +231,143 @@ internal static class StoryGraphSaveService
 
     public static string SerializeFullGraph(StoryGraphSaveSnapshot snapshot)
     {
-        var graph = new
+        // v5 is written only when the document carries vNext structure or
+        // chapter assignments; otherwise output stays byte-stable v4.
+        var structure = snapshot.Structure ?? new GraphStructureDocument();
+        bool hasStructure = !structure.IsEmpty;
+        bool hasChapterAssignments = snapshot.Nodes.Any(n => !string.IsNullOrEmpty(n.ChapterId));
+        int formatVersion = hasStructure || hasChapterAssignments
+            ? GraphStructureLimits.CurrentVersion
+            : GraphStructureLimits.LegacyVersion;
+        var graph = new Dictionary<string, object?>
         {
-            format_version = 4,
-            start_node_id = snapshot.StartNodeId,
-            nodes = snapshot.Nodes.Select(n => new
-            {
-                id = n.Id,
-                title = n.Title,
-                editor_x = n.X,
-                editor_y = n.Y,
-                objects = n.Objects.Select(o => new
-                {
-                    id = o.Id,
-                    name = o.Name,
-                    is_active = o.IsActive,
-                    components = o.Components.Select(c => new
-                    {
-                        type = c.Type,
-                        id = c.Id,
-                        enabled = c.Enabled,
-                        data = c.Data
-                    }).ToArray()
-                }).ToArray(),
-                next_nodes = n.NextNodes.Select(x => new
-                {
-                    id = x.Id,
-                    label = x.Label,
-                    option_id = x.OptionId
-                }).ToArray(),
-                speaker = n.Speaker,
-                dialogue = n.DialogueText,
-                background = n.BackgroundTexture,
-                background_x = n.BackgroundX,
-                background_y = n.BackgroundY,
-                background_width = n.BackgroundWidth,
-                background_height = n.BackgroundHeight,
-                background_rotation = n.BackgroundRotation,
-                background_parallax_x = n.BackgroundParallaxX,
-                background_parallax_y = n.BackgroundParallaxY,
-                background_opacity = n.BackgroundOpacity,
-                character = n.CharacterSprite,
-                character_pos = n.CharacterPosition,
-                character_x = n.CharacterX,
-                character_y = n.CharacterY,
-                character_width = n.CharacterWidth,
-                character_height = n.CharacterHeight,
-                character_scale = n.CharacterScale,
-                character_rotation = n.CharacterRotation,
-                character_scale_x = n.CharacterScaleX,
-                character_scale_y = n.CharacterScaleY,
-                dialogue_box_x = n.DialogueBoxX,
-                dialogue_box_y = n.DialogueBoxY,
-                dialogue_box_width = n.DialogueBoxWidth,
-                dialogue_box_height = n.DialogueBoxHeight
-            }).ToArray()
+            ["format_version"] = formatVersion,
+            ["start_node_id"] = snapshot.StartNodeId,
+            ["nodes"] = snapshot.Nodes.Select(RenderSnapshotNode).ToArray(),
         };
+        if (hasStructure)
+        {
+            if (structure.Groups.Count != 0)
+                graph["groups"] = structure.Groups.Select(RenderGroup).ToArray();
+            if (structure.Subgraphs.Count != 0)
+                graph["subgraphs"] = structure.Subgraphs.Select(RenderSubgraph).ToArray();
+            if (structure.Chapters.Count != 0)
+                graph["chapters"] = structure.Chapters.Select(RenderChapter).ToArray();
+        }
         return JsonSerializer.Serialize(graph, IndentedOptions);
+    }
+
+    private static object RenderGroup(CanvasGroup group) => new
+    {
+        id = group.Id,
+        title = group.Title,
+        color = group.Color,
+        x = group.X,
+        y = group.Y,
+        width = group.Width,
+        height = group.Height,
+        node_ids = group.NodeIds.ToArray()
+    };
+
+    private static object RenderSubgraph(SubgraphDefinition subgraph) => new
+    {
+        id = subgraph.Id,
+        title = subgraph.Title,
+        entry_node_id = subgraph.EntryNodeId,
+        exit_node_ids = subgraph.ExitNodeIds.ToArray(),
+        node_ids = subgraph.NodeIds.ToArray()
+    };
+
+    private static object RenderChapter(ChapterDefinition chapter)
+    {
+        var rendered = new Dictionary<string, object?>
+        {
+            ["id"] = chapter.Id,
+            ["title"] = chapter.Title,
+            ["order"] = chapter.Order,
+            ["summary"] = chapter.Summary
+        };
+        if (chapter.StartNodeId is { } startNodeId)
+            rendered["start_node_id"] = startNodeId;
+        return rendered;
+    }
+
+    private static object RenderSnapshotNode(StoryGraphSaveSnapshot.SnapshotNode n)
+    {
+        // Dictionary so chapter_id / metadata are omitted (not null) when
+        // unassigned — mirroring StoryGraphSerializer node-for-node.
+        var rendered = new Dictionary<string, object?>
+        {
+            ["id"] = n.Id,
+            ["title"] = n.Title,
+            ["editor_x"] = n.X,
+            ["editor_y"] = n.Y,
+            ["objects"] = n.Objects.Select(o => new
+            {
+                id = o.Id,
+                name = o.Name,
+                is_active = o.IsActive,
+                components = o.Components.Select(c => new
+                {
+                    type = c.Type,
+                    id = c.Id,
+                    enabled = c.Enabled,
+                    data = c.Data
+                }).ToArray()
+            }).ToArray(),
+            ["next_nodes"] = n.NextNodes.Select(x => new
+            {
+                id = x.Id,
+                label = x.Label,
+                option_id = x.OptionId
+            }).ToArray(),
+            ["speaker"] = n.Speaker,
+            ["dialogue"] = n.DialogueText,
+            ["background"] = n.BackgroundTexture,
+            ["background_x"] = n.BackgroundX,
+            ["background_y"] = n.BackgroundY,
+            ["background_width"] = n.BackgroundWidth,
+            ["background_height"] = n.BackgroundHeight,
+            ["background_rotation"] = n.BackgroundRotation,
+            ["background_parallax_x"] = n.BackgroundParallaxX,
+            ["background_parallax_y"] = n.BackgroundParallaxY,
+            ["background_opacity"] = n.BackgroundOpacity,
+            ["character"] = n.CharacterSprite,
+            ["character_pos"] = n.CharacterPosition,
+            ["character_x"] = n.CharacterX,
+            ["character_y"] = n.CharacterY,
+            ["character_width"] = n.CharacterWidth,
+            ["character_height"] = n.CharacterHeight,
+            ["character_scale"] = n.CharacterScale,
+            ["character_rotation"] = n.CharacterRotation,
+            ["character_scale_x"] = n.CharacterScaleX,
+            ["character_scale_y"] = n.CharacterScaleY,
+            ["dialogue_box_x"] = n.DialogueBoxX,
+            ["dialogue_box_y"] = n.DialogueBoxY,
+            ["dialogue_box_width"] = n.DialogueBoxWidth,
+            ["dialogue_box_height"] = n.DialogueBoxHeight,
+        };
+        if (!string.IsNullOrEmpty(n.ChapterId))
+            rendered["chapter_id"] = n.ChapterId;
+        // Same omission rule as StoryGraphSerializer: untagged nodes carry no
+        // metadata key, so legacy v4 documents stay byte-stable.
+        var cleanTags = (n.Tags ?? new List<string>())
+            .Select(tag => Services.Search.NodeColorTags.NormalizeListTag(tag))
+            .Where(tag => tag is not null)
+            .Distinct()
+            .Take(Services.Search.NodeColorTags.MaxTagsPerNode)
+            .ToArray();
+        bool hasColorTag = !string.IsNullOrEmpty(n.ColorTag);
+        if (hasColorTag || cleanTags.Length > 0)
+        {
+            var metadata = new Dictionary<string, object?>();
+            if (hasColorTag)
+                metadata["color_tag"] = n.ColorTag;
+            if (cleanTags.Length > 0)
+                metadata["tags"] = cleanTags;
+            rendered["metadata"] = metadata;
+        }
+        return rendered;
     }
 
     public static string? SerializeActiveStory(StoryGraphSaveSnapshot snapshot)

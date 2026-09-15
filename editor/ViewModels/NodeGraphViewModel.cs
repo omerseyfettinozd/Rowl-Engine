@@ -39,6 +39,14 @@ namespace RowlEngine.Editor.ViewModels
         private readonly Dictionary<ulong, List<ConnectionViewModel>> _incident = new();
         private ulong _nextKey = 1;
 
+        // ── Faz 4 Dilim 3 — groups & navigation scope ──
+        private readonly CanvasSpatialIndex _groupIndex = new();
+        private readonly Dictionary<CanvasGroupViewModel, ulong> _groupKeys = new();
+        private readonly Dictionary<ulong, CanvasGroupViewModel> _groupsByKey = new();
+        private ulong _nextGroupKey = 1;
+        private ObservableCollection<CanvasGroupViewModel>? _groups;
+        private readonly Dictionary<ulong, NodeViewModel> _nodeById = new();
+
         public NodeGraphViewModel(MainWindowViewModel main)
         {
             MainViewModel = main ?? throw new ArgumentNullException(nameof(main));
@@ -57,6 +65,47 @@ namespace RowlEngine.Editor.ViewModels
         /// <summary>Culled projections bound by the canvas (diff-synced).</summary>
         public ObservableCollection<NodeViewModel> VisibleNodes { get; } = new();
         public ObservableCollection<ConnectionViewModel> VisibleConnections { get; } = new();
+
+        /// <summary>
+        /// Faz 4 Dilim 3 — culled group frames bound by the canvas layer
+        /// behind the nodes (diff-synced, master order).
+        /// </summary>
+        public ObservableCollection<CanvasGroupViewModel> VisibleGroups { get; } = new();
+
+        /// <summary>
+        /// Faz 4 Dilim 3 — navigation scope predicate (subgraph depth +
+        /// chapter filter). Null means every node passes (root, unfiltered).
+        /// Owned by <c>SubgraphNavigationService</c>; this view model only
+        /// applies it before culling.
+        /// </summary>
+        public Func<NodeViewModel, bool>? ScopePredicate { get; set; }
+
+        /// <summary>Re-applies scope + culling (navigation changed depth).</summary>
+        public void RefreshScope() => RefreshVisible();
+
+        /// <summary>
+        /// Attaches the session group frames for culling. Safe to call once;
+        /// re-attaching swaps the subscription.
+        /// </summary>
+        public void AttachGroups(ObservableCollection<CanvasGroupViewModel> groups)
+        {
+            if (_groups is not null)
+                _groups.CollectionChanged -= OnGroupsChanged;
+            foreach (var tracked in _groupKeys.Keys.ToList())
+                tracked.PropertyChanged -= OnGroupPropertyChanged;
+            _groupKeys.Clear();
+            _groupsByKey.Clear();
+            _groupIndex.Clear();
+            _groups = groups;
+            if (_groups is not null)
+            {
+                _groups.CollectionChanged += OnGroupsChanged;
+                foreach (var group in _groups)
+                    TrackGroup(group);
+            }
+            if (_suspendCount == 0)
+                RefreshVisible();
+        }
 
         private double _viewportWidth = 1280.0;
         private double _viewportHeight = 800.0;
@@ -118,6 +167,7 @@ namespace RowlEngine.Editor.ViewModels
         {
             _index.Clear();
             _nodesByKey.Clear();
+            _nodeById.Clear();
             double minX = double.PositiveInfinity, minY = double.PositiveInfinity;
             double maxX = double.NegativeInfinity, maxY = double.NegativeInfinity;
             foreach (var node in MainViewModel.Nodes)
@@ -128,6 +178,7 @@ namespace RowlEngine.Editor.ViewModels
                     _keys[node] = key;
                 }
                 _nodesByKey[key] = node;
+                _nodeById[node.Id] = node;
                 var (x, y, w, h) = NodeBounds(node);
                 _index.Add(key, x, y, w, h);
                 minX = Math.Min(minX, x);
@@ -157,18 +208,74 @@ namespace RowlEngine.Editor.ViewModels
             var visible = new HashSet<ulong>(_index.Query(
                 view.X - CullMargin, view.Y - CullMargin,
                 view.Width + CullMargin * 2, view.Height + CullMargin * 2));
+            // Faz 4 Dilim 3 — navigation scope applies before culling: a node
+            // outside the current subgraph depth / chapter filter never
+            // materializes, no matter the viewport.
+            var scope = ScopePredicate;
+            var scopePass = scope is null
+                ? null
+                : new HashSet<NodeViewModel>(MainViewModel.Nodes.Where(scope));
             SyncCollection(VisibleNodes,
                 MainViewModel.Nodes.Where(node =>
+                    (scopePass is null || scopePass.Contains(node)) &&
                     _keys.TryGetValue(node, out ulong key) && visible.Contains(key)));
             var visibleEdges = new HashSet<ConnectionViewModel>();
             foreach (ulong key in visible)
             {
-                if (_incident.TryGetValue(key, out var edges))
-                    foreach (var edge in edges)
-                        visibleEdges.Add(edge);
+                if (!_incident.TryGetValue(key, out var edges))
+                    continue;
+                foreach (var edge in edges)
+                {
+                    // Scoped-out endpoints hide the wire even when the other
+                    // end is visible; unscoped behavior is unchanged.
+                    if (scopePass is not null &&
+                        (edge.SourceNode is null || edge.TargetNode is null ||
+                         !scopePass.Contains(edge.SourceNode) ||
+                         !scopePass.Contains(edge.TargetNode)))
+                        continue;
+                    visibleEdges.Add(edge);
+                }
             }
             SyncCollection(VisibleConnections,
                 MainViewModel.Connections.Where(visibleEdges.Contains));
+            RefreshVisibleGroups(view, scopePass);
+        }
+
+        private void RefreshVisibleGroups(Rect view, HashSet<NodeViewModel>? scopePass)
+        {
+            if (_groups is null)
+            {
+                if (VisibleGroups.Count > 0)
+                    VisibleGroups.Clear();
+                return;
+            }
+            var hit = new HashSet<ulong>(_groupIndex.Query(
+                view.X - CullMargin, view.Y - CullMargin,
+                view.Width + CullMargin * 2, view.Height + CullMargin * 2));
+            SyncCollection(VisibleGroups,
+                _groups.Where(group =>
+                    _groupKeys.TryGetValue(group, out ulong key) &&
+                    hit.Contains(key) &&
+                    GroupPassesScope(group, scopePass)));
+        }
+
+        private bool GroupPassesScope(CanvasGroupViewModel group, HashSet<NodeViewModel>? scopePass)
+        {
+            // Groups are editor metadata: unscoped canvases always show them.
+            // Under an active scope a group stays only while at least one live
+            // member passes (empty frames stay so they remain editable).
+            if (scopePass is null)
+                return true;
+            bool hasLiveMember = false;
+            foreach (ulong memberId in group.MemberNodeIds)
+            {
+                if (!_nodeById.TryGetValue(memberId, out var node))
+                    continue;
+                hasLiveMember = true;
+                if (scopePass.Contains(node))
+                    return true;
+            }
+            return !hasLiveMember;
         }
 
         /// <summary>Centers the viewport on a canvas point (minimap drag).</summary>
@@ -258,9 +365,81 @@ namespace RowlEngine.Editor.ViewModels
                 return;
             _keys.Remove(node);
             _nodesByKey.Remove(key);
+            _nodeById.Remove(node.Id);
             _incident.Remove(key);
             _index.Remove(key);
             node.PropertyChanged -= OnNodePropertyChanged;
+        }
+
+        // ── Group frame tracking (same index machinery, own key space) ──
+
+        public static (double x, double y, double w, double h) GroupBounds(CanvasGroupViewModel group) =>
+            (group.X, group.Y,
+             group.Width > 0 ? group.Width : CanvasGroupViewModel.MinWidth,
+             group.Height > 0 ? group.Height : CanvasGroupViewModel.MinHeight);
+
+        private void TrackGroup(CanvasGroupViewModel group)
+        {
+            if (group is null || _groupKeys.ContainsKey(group))
+                return;
+            ulong key = _nextGroupKey++;
+            _groupKeys[group] = key;
+            _groupsByKey[key] = group;
+            var (x, y, w, h) = GroupBounds(group);
+            _groupIndex.Add(key, x, y, w, h);
+            group.PropertyChanged += OnGroupPropertyChanged;
+        }
+
+        private void UntrackGroup(CanvasGroupViewModel group)
+        {
+            if (group is null || !_groupKeys.TryGetValue(group, out ulong key))
+                return;
+            _groupKeys.Remove(group);
+            _groupsByKey.Remove(key);
+            _groupIndex.Remove(key);
+            group.PropertyChanged -= OnGroupPropertyChanged;
+        }
+
+        private void OnGroupsChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        {
+            if (e.OldItems is not null)
+                foreach (CanvasGroupViewModel group in e.OldItems)
+                    UntrackGroup(group);
+            if (e.NewItems is not null)
+                foreach (CanvasGroupViewModel group in e.NewItems)
+                    TrackGroup(group);
+            if (e.Action == NotifyCollectionChangedAction.Reset)
+            {
+                foreach (var group in _groupKeys.Keys.ToList())
+                    group.PropertyChanged -= OnGroupPropertyChanged;
+                _groupKeys.Clear();
+                _groupsByKey.Clear();
+                _groupIndex.Clear();
+                if (_groups is not null)
+                    foreach (var group in _groups)
+                        TrackGroup(group);
+            }
+            if (_suspendCount == 0)
+                RefreshVisible();
+        }
+
+        private void OnGroupPropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (sender is not CanvasGroupViewModel group)
+                return;
+            if ((e.PropertyName == nameof(CanvasGroupViewModel.X) ||
+                e.PropertyName == nameof(CanvasGroupViewModel.Y) ||
+                e.PropertyName == nameof(CanvasGroupViewModel.Width) ||
+                e.PropertyName == nameof(CanvasGroupViewModel.Height)) &&
+                _suspendCount == 0)
+            {
+                if (_groupKeys.TryGetValue(group, out ulong key))
+                {
+                    var (x, y, w, h) = GroupBounds(group);
+                    _groupIndex.Move(key, x, y, w, h);
+                }
+                RefreshVisible();
+            }
         }
 
         private static void SyncCollection<T>(

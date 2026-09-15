@@ -2,6 +2,7 @@ using System;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.VisualTree;
 using RowlEngine.Editor.ViewModels;
 
 namespace RowlEngine.Editor.Views.Panels
@@ -13,6 +14,14 @@ namespace RowlEngine.Editor.Views.Panels
         private Point _panStartPointerPos;
         private Point _boxStartCanvasPos;
         private Point _pressStartPos;
+
+        // ── Faz 4 Dilim 3 — group frame gestures ──
+        private CanvasGroupViewModel? _groupDrag;
+        private string? _groupDragKind;
+        private Point _groupLastCanvasPos;
+        private double _groupResizeStartW;
+        private double _groupResizeStartH;
+        private Point _groupResizeStartPos;
 
         public NodeGraphView()
         {
@@ -26,6 +35,17 @@ namespace RowlEngine.Editor.Views.Panels
                 container.PointerReleased += NodeGraphContainer_PointerReleased;
                 container.PointerWheelChanged += NodeGraphContainer_PointerWheelChanged;
                 container.LayoutUpdated += NodeGraphContainer_LayoutUpdated;
+                // Group gestures run on tunnel so a header/resize press never
+                // reaches the marquee/pan bubble handlers below.
+                container.AddHandler(
+                    InputElement.PointerPressedEvent, GroupGesturePressed,
+                    Avalonia.Interactivity.RoutingStrategies.Tunnel);
+                container.AddHandler(
+                    InputElement.PointerMovedEvent, GroupGestureMoved,
+                    Avalonia.Interactivity.RoutingStrategies.Tunnel);
+                container.AddHandler(
+                    InputElement.PointerReleasedEvent, GroupGestureReleased,
+                    Avalonia.Interactivity.RoutingStrategies.Tunnel);
             }
 
             var minimap = this.FindControl<Controls.MinimapControl>("CanvasMinimap");
@@ -68,6 +88,91 @@ namespace RowlEngine.Editor.Views.Panels
         {
             double zoom = vm.ZoomScale > 0 ? vm.ZoomScale : 1.0;
             return new Point((containerPos.X - vm.PanX) / zoom, (containerPos.Y - vm.PanY) / zoom);
+        }
+
+        // ── Faz 4 Dilim 3 — group frame gestures (tunnel handlers) ──
+
+        private static (CanvasGroupViewModel? group, string? kind) FindGroupGesture(object? source)
+        {
+            Avalonia.Visual? current = source as Avalonia.Visual;
+            while (current != null)
+            {
+                if (current is Control control && control.Tag is string tag &&
+                    (tag == "GroupHeader" || tag == "GroupResize" || tag == "GroupDelete") &&
+                    control.DataContext is CanvasGroupViewModel group)
+                    return (group, tag);
+                current = current.GetVisualParent();
+            }
+            return (null, null);
+        }
+
+        private void GroupGesturePressed(object? sender, PointerPressedEventArgs e)
+        {
+            if (DataContext is not MainWindowViewModel vm) return;
+            var (group, kind) = FindGroupGesture(e.Source);
+            if (group is null || kind is null) return;
+            if (!e.GetCurrentPoint(sender as Control).Properties.IsLeftButtonPressed) return;
+
+            if (kind == "GroupDelete")
+            {
+                vm.Groups.Delete(group.GroupId);
+                e.Handled = true;
+                return;
+            }
+            if (kind == "GroupHeader" && e.ClickCount >= 2)
+            {
+                vm.Groups.FrameToMembers(group.GroupId);
+                e.Handled = true;
+                return;
+            }
+            var container = sender as Control;
+            if (container is null) return;
+            Point canvasPos = GetCanvasPoint(e.GetPosition(container), vm);
+            _groupDrag = group;
+            _groupDragKind = kind;
+            _groupLastCanvasPos = canvasPos;
+            _groupResizeStartPos = canvasPos;
+            _groupResizeStartW = group.Width;
+            _groupResizeStartH = group.Height;
+            e.Handled = true;
+        }
+
+        private void GroupGestureMoved(object? sender, PointerEventArgs e)
+        {
+            if (_groupDrag is null || _groupDragKind is null) return;
+            if (DataContext is not MainWindowViewModel vm)
+            {
+                _groupDrag = null;
+                return;
+            }
+            if (!e.GetCurrentPoint(sender as Control).Properties.IsLeftButtonPressed) return;
+            var container = sender as Control;
+            if (container is null) return;
+            Point canvasPos = GetCanvasPoint(e.GetPosition(container), vm);
+            if (_groupDragKind == "GroupHeader")
+            {
+                vm.Groups.MoveGroup(
+                    _groupDrag.GroupId,
+                    canvasPos.X - _groupLastCanvasPos.X,
+                    canvasPos.Y - _groupLastCanvasPos.Y);
+                _groupLastCanvasPos = canvasPos;
+            }
+            else if (_groupDragKind == "GroupResize")
+            {
+                vm.Groups.ResizeGroup(
+                    _groupDrag.GroupId,
+                    _groupResizeStartW + (canvasPos.X - _groupResizeStartPos.X),
+                    _groupResizeStartH + (canvasPos.Y - _groupResizeStartPos.Y));
+            }
+            e.Handled = true;
+        }
+
+        private void GroupGestureReleased(object? sender, PointerReleasedEventArgs e)
+        {
+            if (_groupDrag is null) return;
+            _groupDrag = null;
+            _groupDragKind = null;
+            e.Handled = true;
         }
 
         private void NodeGraphContainer_PointerPressed(object? sender, PointerPressedEventArgs e)

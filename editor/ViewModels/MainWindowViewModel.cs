@@ -423,6 +423,12 @@ namespace RowlEngine.Editor.ViewModels
         public NodeGraphViewModel NodeGraphViewModel { get; }
         /// <summary>Faz 4 Dilim 2 — global search + filter bar owner.</summary>
         public SearchViewModel Search { get; }
+        /// <summary>Faz 4 Dilim 3 — visual canvas groups (editor metadata).</summary>
+        public GroupService Groups { get; }
+        /// <summary>Faz 4 Dilim 3 — subgraph depth stack + breadcrumb scope.</summary>
+        public SubgraphNavigationService Subgraphs { get; }
+        /// <summary>Faz 4 Dilim 3 — chapter definitions + split/merge files.</summary>
+        public ChapterStorageService Chapters { get; }
         public LivePreviewViewModel LivePreviewViewModel { get; }
         public HierarchyViewModel HierarchyViewModel { get; }
 
@@ -462,6 +468,17 @@ namespace RowlEngine.Editor.ViewModels
             InspectorViewModel = new InspectorViewModel(this);
             NodeGraphViewModel = new NodeGraphViewModel(this);
             Search = new SearchViewModel(this);
+            // Faz 4 Dilim 3 — session structure services. Logic lives in the
+            // services; here is only construction + thin wiring.
+            Groups = new GroupService();
+            Subgraphs = new SubgraphNavigationService();
+            Chapters = new ChapterStorageService();
+            Groups.Attach(Nodes);
+            Subgraphs.Attach(Nodes);
+            NodeGraphViewModel.AttachGroups(Groups.Groups);
+            NodeGraphViewModel.ScopePredicate = node =>
+                Subgraphs.IsNodeVisibleInScope(node.Id, node.ChapterId ?? string.Empty);
+            Subgraphs.ScopeChanged += (_, _) => NodeGraphViewModel.RefreshScope();
             LivePreviewViewModel = new LivePreviewViewModel(this);
             HierarchyViewModel = new HierarchyViewModel(this);
 
@@ -987,7 +1004,8 @@ namespace RowlEngine.Editor.ViewModels
                 OnNodePropertyChanged,
                 EnforceSingleOutgoingWireRule,
                 node => SelectNodeQuiet(node),
-                AppendLog);
+                AppendLog,
+                ApplyLoadedStructure);
         }
 
         public bool SaveFullStoryGraphFile()
@@ -998,7 +1016,135 @@ namespace RowlEngine.Editor.ViewModels
                 Nodes,
                 Connections,
                 GetStartNode()?.Id,
-                AppendLog);
+                AppendLog,
+                CurrentStructure());
+        }
+
+        // ── Faz 4 Dilim 3 — session structure (groups / subgraphs / chapters) ──
+        // The parsed vNext document lands here on load and is composed back on
+        // every save path; all frame/stack/file logic lives in the services.
+
+        /// <summary>Applies a parsed vNext structure to the session services.</summary>
+        public void ApplyLoadedStructure(GraphStructureDocument structure)
+        {
+            var safe = structure ?? new GraphStructureDocument();
+            Groups.LoadFrom(safe.Groups);
+            Subgraphs.LoadDefinitions(safe.Subgraphs);
+            Chapters.LoadDefinitions(safe.Chapters);
+            Subgraphs.SetAvailableChapters(
+                Chapters.EffectiveChapters(Nodes.Select(n => n.ChapterId)));
+            NodeGraphViewModel.RefreshScope();
+        }
+
+        /// <summary>Composes the session services back into one vNext document.</summary>
+        public GraphStructureDocument CurrentStructure()
+        {
+            var document = new GraphStructureDocument();
+            document.Groups.AddRange(Groups.ToRecords());
+            document.Subgraphs.AddRange(Subgraphs.Definitions);
+            document.Chapters.AddRange(Chapters.ToRecords());
+            return document;
+        }
+
+        /// <summary>Creates a group framing the current selection (or node).</summary>
+        [RelayCommand]
+        public void CreateGroupFromSelection()
+        {
+            var picked = SelectedNodes.Count > 0
+                ? SelectedNodes.ToList()
+                : (SelectedNode is not null
+                    ? new List<NodeViewModel> { SelectedNode }
+                    : new List<NodeViewModel>());
+            if (picked.Count == 0)
+            {
+                AppendLog("ℹ️ Grup için önce düğüm seçin.");
+                return;
+            }
+            var group = Groups.CreateFromNodes(
+                $"Grup {Groups.Groups.Count + 1}", "#3B82F6", picked);
+            AppendLog($"🗂 Grup oluşturuldu: '{group.Title}' ({picked.Count} düğüm).");
+        }
+
+        /// <summary>Enters the subgraph owning the selected node.</summary>
+        [RelayCommand]
+        public void EnterSelectedSubgraph()
+        {
+            if (SelectedNode is null)
+                return;
+            EnterSubgraphForNode(SelectedNode.Id);
+        }
+
+        /// <summary>Enters the subgraph owning the node (double-click path).</summary>
+        public bool EnterSubgraphForNode(ulong nodeId)
+        {
+            if (!Subgraphs.TryEnterForNode(nodeId))
+                return false;
+            if (Subgraphs.TryGetEntry(Subgraphs.CurrentSubgraphId ?? string.Empty, out ulong entryId) &&
+                Nodes.FirstOrDefault(n => n.Id == entryId) is { } entry)
+            {
+                var (x, y, w, h) = NodeGraphViewModel.NodeBounds(entry);
+                NodeGraphViewModel.PanTo(x + w / 2, y + h / 2);
+            }
+            return true;
+        }
+
+        /// <summary>Leaves the innermost subgraph (breadcrumb "up").</summary>
+        [RelayCommand]
+        public void ExitSubgraph()
+        {
+            Subgraphs.Exit();
+        }
+
+        /// <summary>Returns to root scope (clears depth + chapter filter).</summary>
+        [RelayCommand]
+        public void GoToRootScope()
+        {
+            Subgraphs.GoToRoot();
+        }
+
+        /// <summary>Navigates the breadcrumb to a depth (0 = root).</summary>
+        [RelayCommand]
+        public void GoToScopeDepth(int depth)
+        {
+            Subgraphs.GoToDepth(depth);
+        }
+
+        /// <summary>Splits the live graph into per-chapter files.</summary>
+        [RelayCommand]
+        public void SplitChaptersToFiles()
+        {
+            try
+            {
+                string json = StoryGraphSerializer.SerializeFullStoryGraph(
+                    Nodes, Connections, GetStartNode()?.Id ?? 101, CurrentStructure());
+                var written = ChapterStorageService.Split(
+                    json, Path.Combine(AssetsJsonPath, "chapters"));
+                AppendLog($"📚 Bölümlere ayrıldı: {string.Join(", ", written)}.");
+            }
+            catch (Exception ex)
+            {
+                AppendLog($"⚠️ Bölümlere ayırma başarısız: {ex.Message}");
+            }
+        }
+
+        /// <summary>Merges per-chapter files back into the full graph file.</summary>
+        [RelayCommand]
+        public void MergeChaptersFromFiles()
+        {
+            try
+            {
+                string merged = ChapterStorageService.Merge(
+                    Path.Combine(AssetsJsonPath, "chapters"));
+                Directory.CreateDirectory(AssetsJsonPath);
+                ProjectFileSystem.WriteAllTextAtomically(
+                    Path.Combine(AssetsJsonPath, "full_story_graph.json"), merged);
+                if (LoadFullStoryGraphFile())
+                    AppendLog("📚 Bölümler birleştirildi ve tuval yenilendi.");
+            }
+            catch (Exception ex)
+            {
+                AppendLog($"⚠️ Bölüm birleştirme başarısız: {ex.Message}");
+            }
         }
 
         public bool SaveActiveStoryFile()
@@ -1814,7 +1960,8 @@ namespace RowlEngine.Editor.ViewModels
             try
             {
                 snapshot = StoryGraphSaveService.Capture(
-                    Nodes, Connections, GetStartNode()?.Id ?? 101, SelectedNode);
+                    Nodes, Connections, GetStartNode()?.Id ?? 101, SelectedNode,
+                    CurrentStructure());
             }
             catch (Exception ex)
             {
@@ -1843,7 +1990,8 @@ namespace RowlEngine.Editor.ViewModels
             try
             {
                 snapshot = StoryGraphSaveService.Capture(
-                    Nodes, Connections, GetStartNode()?.Id ?? 101, SelectedNode);
+                    Nodes, Connections, GetStartNode()?.Id ?? 101, SelectedNode,
+                    CurrentStructure());
             }
             catch (Exception ex)
             {

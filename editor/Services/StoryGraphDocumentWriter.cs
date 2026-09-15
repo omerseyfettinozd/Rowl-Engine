@@ -16,7 +16,8 @@ public static class StoryGraphDocumentWriter
         IEnumerable<NodeViewModel> nodes,
         IEnumerable<ConnectionViewModel> connections,
         ulong startId = 101,
-        Action<string>? log = null)
+        Action<string>? log = null,
+        GraphStructureDocument? structure = null)
     {
         try
         {
@@ -24,7 +25,7 @@ public static class StoryGraphDocumentWriter
             // longer written; a stale one is removed best-effort so readers can
             // never disagree about which graph is current.
             Directory.CreateDirectory(assetsJsonPath);
-            string content = StoryGraphSerializer.SerializeFullStoryGraph(nodes, connections, startId);
+            string content = StoryGraphSerializer.SerializeFullStoryGraph(nodes, connections, startId, structure);
             ProjectFileSystem.WriteAllTextAtomically(Path.Combine(assetsJsonPath, "full_story_graph.json"), content);
             try
             {

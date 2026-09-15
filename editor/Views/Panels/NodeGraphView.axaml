@@ -28,6 +28,50 @@
             <!-- Infinite Grid Visual Background Surface -->
             <Rectangle Width="400000" Height="400000" Canvas.Left="-200000" Canvas.Top="-200000" Fill="{DynamicResource GraphCanvasBg}"/>
 
+            <!-- Group Frames Layer (Faz 4 Dilim 3, culled: visible rect only, behind wires) -->
+            <ItemsControl ItemsSource="{Binding NodeGraphViewModel.VisibleGroups}" ClipToBounds="False">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <Canvas ClipToBounds="False"/>
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.Styles>
+                    <Style Selector="ItemsControl > ContentPresenter" x:DataType="vm:CanvasGroupViewModel">
+                        <Setter Property="Canvas.Left" Value="{Binding X}"/>
+                        <Setter Property="Canvas.Top" Value="{Binding Y}"/>
+                        <Setter Property="ClipToBounds" Value="False"/>
+                    </Style>
+                </ItemsControl.Styles>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="vm:CanvasGroupViewModel">
+                        <Border Width="{Binding Width}" Height="{Binding Height}"
+                                CornerRadius="8" BorderThickness="1.5"
+                                BorderBrush="{Binding Color}" Background="Transparent">
+                            <Grid RowDefinitions="28,*,16">
+                                <!-- Header: drag moves the frame + its members; double-click reframes -->
+                                <Border Tag="GroupHeader" Background="{Binding Color}" CornerRadius="6,6,0,0"
+                                        Cursor="Hand" ToolTip.Tip="Sürükle: grupla taşı • Çift tık: üyelere sar">
+                                    <DockPanel Margin="10,0,6,0" VerticalAlignment="Center">
+                                        <TextBlock Tag="GroupDelete" DockPanel.Dock="Right" Text="×" FontSize="14"
+                                                   FontWeight="Bold" Foreground="White" VerticalAlignment="Center"
+                                                   Cursor="Hand" ToolTip.Tip="Grubu sil (düğümler kalır)"/>
+                                        <TextBlock Text="{Binding Title}" FontWeight="Bold" Foreground="White"
+                                                   FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                    </DockPanel>
+                                </Border>
+                                <!-- Translucent body tint (hit-test off: clicks fall to canvas) -->
+                                <Rectangle Grid.Row="1" Fill="{Binding Color}" Opacity="0.10" IsHitTestVisible="False"/>
+                                <!-- Resize thumb -->
+                                <Rectangle Grid.Row="2" Tag="GroupResize" Width="16" Height="14"
+                                           HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                                           Fill="{Binding Color}" Opacity="0.7" RadiusX="3" RadiusY="3"
+                                           Cursor="SizeNorthwestSoutheast" ToolTip.Tip="Yeniden boyutlandır"/>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
             <!-- Connection Wires Layer (culled: visible rect only) -->
             <ItemsControl ItemsSource="{Binding NodeGraphViewModel.VisibleConnections}" ClipToBounds="False">
                 <ItemsControl.ItemsPanel>
@@ -86,6 +130,7 @@
                 <controls:MinimapControl x:Name="CanvasMinimap" Width="220" Height="150"
                                          Background="{DynamicResource GraphCanvasBg}"
                                          NodesSource="{Binding NodeGraphViewModel.Nodes}"
+                                         GroupsSource="{Binding Groups.Groups}"
                                          WorldBounds="{Binding NodeGraphViewModel.WorldBounds}"
                                          ViewportRect="{Binding NodeGraphViewModel.ViewportRect}"/>
                 <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center">

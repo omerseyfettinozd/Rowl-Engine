@@ -38,6 +38,22 @@ namespace RowlEngine.Editor.Views
             PointerReleased += OnPointerReleased;
             PointerCaptureLost += OnPointerCaptureLost;
             KeyDown += OnControlKeyDown;
+            DoubleTapped += OnControlDoubleTapped;
+        }
+
+        /// <summary>
+        /// Faz 4 Dilim 3 — boundary node double-click enters its subgraph.
+        /// Plain nodes ignore the gesture entirely.
+        /// </summary>
+        private void OnControlDoubleTapped(object? sender, Avalonia.Input.TappedEventArgs e)
+        {
+            if (DataContext is not NodeViewModel vm || !vm.IsSubgraphBoundary)
+                return;
+            if (VisualRoot is MainWindow mw && mw.DataContext is MainWindowViewModel mainVm)
+            {
+                if (mainVm.EnterSubgraphForNode(vm.Id))
+                    e.Handled = true;
+            }
         }
 
         private Canvas? GetRootCanvas() => GetEffectiveCanvas();

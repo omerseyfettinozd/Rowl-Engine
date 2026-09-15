@@ -31,6 +31,8 @@ public sealed class NodeSearchService
         nameof(NodeViewModel.IsSearchHighlighted),
         nameof(NodeViewModel.ColorTagBrush),
         nameof(NodeViewModel.HasColorTag),
+        nameof(NodeViewModel.IsSubgraphBoundary),
+        nameof(NodeViewModel.SubgraphBadge),
         nameof(NodeViewModel.NodeCardHeight),
         nameof(NodeViewModel.ComponentSummary),
         nameof(NodeViewModel.ChoiceDataChanged),

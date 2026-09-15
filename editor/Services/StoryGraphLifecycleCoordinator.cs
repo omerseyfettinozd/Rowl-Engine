@@ -27,7 +27,8 @@ namespace RowlEngine.Editor.Services
             PropertyChangedEventHandler onNodePropertyChanged,
             Action enforceSingleOutgoingWireRule,
             Action<NodeViewModel> selectNodeQuiet,
-            Action<string>? log = null)
+            Action<string>? log = null,
+            Action<GraphStructureDocument>? onStructureLoaded = null)
         {
             if (!StoryGraphDocumentReader.TryRead(
                     assetsPath,
@@ -79,6 +80,18 @@ namespace RowlEngine.Editor.Services
 
                     enforceSingleOutgoingWireRule();
 
+                    // Faz 4 Dilim 3 — hand the parsed vNext structure to the
+                    // session services (groups / subgraphs / chapters). A null
+                    // callback keeps the legacy fire-and-forget behavior.
+                    try
+                    {
+                        onStructureLoaded?.Invoke(loadResult.Structure);
+                    }
+                    catch (Exception structureEx)
+                    {
+                        log?.Invoke($"⚠️ Structure state could not be applied: {structureEx.Message}");
+                    }
+
                     var startNode = ResolveStartNode(nodes, connections);
                     if (startNode != null)
                     {
@@ -111,7 +124,8 @@ namespace RowlEngine.Editor.Services
             IEnumerable<NodeViewModel> nodes,
             IEnumerable<ConnectionViewModel> connections,
             ulong? startNodeId = null,
-            Action<string>? log = null)
+            Action<string>? log = null,
+            GraphStructureDocument? structure = null)
         {
             ulong effectiveStartId = startNodeId ?? ResolveStartNode(nodes, connections)?.Id ?? 101;
             return StoryGraphDocumentWriter.SaveFullStoryGraph(
@@ -120,7 +134,8 @@ namespace RowlEngine.Editor.Services
                 nodes,
                 connections,
                 effectiveStartId,
-                log);
+                log,
+                structure);
         }
 
         /// <summary>
@@ -149,9 +164,10 @@ namespace RowlEngine.Editor.Services
             IEnumerable<ConnectionViewModel> connections,
             NodeViewModel? selectedNode,
             ulong? startNodeId = null,
-            Action<string>? log = null)
+            Action<string>? log = null,
+            GraphStructureDocument? structure = null)
         {
-            bool fullSaved = SaveFullGraph(assetsPath, assetsJsonPath, nodes, connections, startNodeId, log);
+            bool fullSaved = SaveFullGraph(assetsPath, assetsJsonPath, nodes, connections, startNodeId, log, structure);
             bool activeSaved = SaveActiveStory(assetsJsonPath, selectedNode, nodes, log);
             return fullSaved && activeSaved;
         }

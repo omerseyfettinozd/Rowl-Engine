@@ -101,6 +101,23 @@ namespace RowlEngine.Editor.ViewModels
         [ObservableProperty]
         private bool _isSearchHighlighted;
 
+        // ── Faz 4 Dilim 3 — subgraph boundary display (service-owned) ──
+
+        /// <summary>
+        /// Display-only flag set by <c>SubgraphNavigationService</c>: true for
+        /// subgraph entry/exit nodes (boundary pins). Never affects save,
+        /// validation, search or runtime semantics.
+        /// </summary>
+        [ObservableProperty]
+        private bool _isSubgraphBoundary;
+
+        /// <summary>
+        /// Display-only badge text for boundary nodes (e.g. "◧ Trial").
+        /// Empty for interior and plain nodes.
+        /// </summary>
+        [ObservableProperty]
+        private string _subgraphBadge = string.Empty;
+
         [ObservableProperty]
         private IBrush _colorTagBrush = Brushes.Transparent;
 

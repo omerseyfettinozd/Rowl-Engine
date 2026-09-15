@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -29,6 +30,13 @@ namespace RowlEngine.Editor.Controls
         public static readonly StyledProperty<IBrush?> BackgroundProperty =
             AvaloniaProperty.Register<MinimapControl, IBrush?>(nameof(Background));
 
+        /// <summary>
+        /// Faz 4 Dilim 3 — group frames rendered as translucent backdrop
+        /// boxes behind the node dots (editor metadata, same projection).
+        /// </summary>
+        public static readonly StyledProperty<IEnumerable?> GroupsSourceProperty =
+            AvaloniaProperty.Register<MinimapControl, IEnumerable?>(nameof(GroupsSource));
+
         public IEnumerable? NodesSource
         {
             get => GetValue(NodesSourceProperty);
@@ -53,28 +61,86 @@ namespace RowlEngine.Editor.Controls
             set => SetValue(BackgroundProperty, value);
         }
 
+        public IEnumerable? GroupsSource
+        {
+            get => GetValue(GroupsSourceProperty);
+            set => SetValue(GroupsSourceProperty, value);
+        }
+
         /// <summary>Raised with canvas coordinates while the user drags.</summary>
         public event EventHandler<Point>? ViewportRequested;
 
         static MinimapControl()
         {
             AffectsRender<MinimapControl>(
-                NodesSourceProperty, WorldBoundsProperty, ViewportRectProperty,
-                BoundsProperty, BackgroundProperty);
+                NodesSourceProperty, GroupsSourceProperty, WorldBoundsProperty,
+                ViewportRectProperty, BoundsProperty, BackgroundProperty);
         }
 
         protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
         {
             base.OnPropertyChanged(change);
-            if (change.Property != NodesSourceProperty)
-                return;
-            if (change.OldValue is System.Collections.Specialized.INotifyCollectionChanged oldCollection)
-                oldCollection.CollectionChanged -= OnNodesCollectionChanged;
-            UnhookNodeBrushes(change.OldValue as System.Collections.IEnumerable);
-            if (change.NewValue is System.Collections.Specialized.INotifyCollectionChanged newCollection)
-                newCollection.CollectionChanged += OnNodesCollectionChanged;
-            HookNodeBrushes(change.NewValue as System.Collections.IEnumerable);
+            if (change.Property == NodesSourceProperty)
+            {
+                if (change.OldValue is System.Collections.Specialized.INotifyCollectionChanged oldCollection)
+                    oldCollection.CollectionChanged -= OnNodesCollectionChanged;
+                UnhookNodeBrushes(change.OldValue as System.Collections.IEnumerable);
+                if (change.NewValue is System.Collections.Specialized.INotifyCollectionChanged newCollection)
+                    newCollection.CollectionChanged += OnNodesCollectionChanged;
+                HookNodeBrushes(change.NewValue as System.Collections.IEnumerable);
+                InvalidateVisual();
+            }
+            else if (change.Property == GroupsSourceProperty)
+            {
+                if (change.OldValue is System.Collections.Specialized.INotifyCollectionChanged oldGroups)
+                    oldGroups.CollectionChanged -= OnGroupsCollectionChanged;
+                UnhookGroupBoxes(change.OldValue as System.Collections.IEnumerable);
+                if (change.NewValue is System.Collections.Specialized.INotifyCollectionChanged newGroups)
+                    newGroups.CollectionChanged += OnGroupsCollectionChanged;
+                HookGroupBoxes(change.NewValue as System.Collections.IEnumerable);
+                InvalidateVisual();
+            }
+        }
+
+        private void OnGroupsCollectionChanged(
+            object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
+        {
+            UnhookGroupBoxes(e.OldItems);
+            HookGroupBoxes(e.NewItems);
             InvalidateVisual();
+        }
+
+        private void HookGroupBoxes(System.Collections.IEnumerable? items)
+        {
+            if (items is null)
+                return;
+            foreach (var item in items)
+            {
+                if (item is ViewModels.CanvasGroupViewModel group)
+                    group.PropertyChanged += OnGroupBoxPropertyChanged;
+            }
+        }
+
+        private void UnhookGroupBoxes(System.Collections.IEnumerable? items)
+        {
+            if (items is null)
+                return;
+            foreach (var item in items)
+            {
+                if (item is ViewModels.CanvasGroupViewModel group)
+                    group.PropertyChanged -= OnGroupBoxPropertyChanged;
+            }
+        }
+
+        private void OnGroupBoxPropertyChanged(
+            object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(ViewModels.CanvasGroupViewModel.X) ||
+                e.PropertyName == nameof(ViewModels.CanvasGroupViewModel.Y) ||
+                e.PropertyName == nameof(ViewModels.CanvasGroupViewModel.Width) ||
+                e.PropertyName == nameof(ViewModels.CanvasGroupViewModel.Height) ||
+                e.PropertyName == nameof(ViewModels.CanvasGroupViewModel.Color))
+                InvalidateVisual();
         }
 
         private void OnNodesCollectionChanged(
@@ -131,6 +197,22 @@ namespace RowlEngine.Editor.Controls
                 return;
             double offsetX = (bounds.Width - world.Width * scale) / 2;
             double offsetY = (bounds.Height - world.Height * scale) / 2;
+
+            // Faz 4 Dilim 3 — translucent group backdrops first (behind dots).
+            if (GroupsSource is not null)
+            {
+                foreach (var item in GroupsSource)
+                {
+                    if (item is not ViewModels.CanvasGroupViewModel group)
+                        continue;
+                    var box = new Rect(
+                        offsetX + (group.X - world.X) * scale,
+                        offsetY + (group.Y - world.Y) * scale,
+                        Math.Max(3.0, group.Width * scale),
+                        Math.Max(3.0, group.Height * scale));
+                    context.FillRectangle(GroupBrushFor(group.Color), box);
+                }
+            }
 
             if (NodesSource is not null)
             {
@@ -211,5 +293,25 @@ namespace RowlEngine.Editor.Controls
 
         private static readonly IPen s_viewportPen =
             new Pen(new SolidColorBrush(Color.FromArgb(255, 0, 240, 255)), 1.5);
+
+        private static readonly Dictionary<string, IBrush> s_groupBrushes = new(StringComparer.OrdinalIgnoreCase);
+
+        private static readonly IBrush s_groupFallbackBrush =
+            new SolidColorBrush(Color.FromArgb(40, 100, 116, 139));
+
+        /// <summary>Translucent backdrop brush for a group color (slate fallback).</summary>
+        internal static IBrush GroupBrushFor(string? color)
+        {
+            string key = string.IsNullOrWhiteSpace(color) ? "fallback" : color.Trim();
+            if (s_groupBrushes.TryGetValue(key, out IBrush? cached))
+                return cached;
+            IBrush brush = s_groupFallbackBrush;
+            if (Color.TryParse(key, out Color parsed))
+                brush = new SolidColorBrush(Color.FromArgb(40, parsed.R, parsed.G, parsed.B));
+            if (s_groupBrushes.Count >= 64)
+                s_groupBrushes.Clear();
+            s_groupBrushes[key] = brush;
+            return brush;
+        }
     }
 }

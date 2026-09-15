@@ -21,6 +21,9 @@ namespace RowlEngine.Editor.Views
             DataContext = vm;
             vm.TopLevelHint = this;
             KeyDown += MainWindow_KeyDown;
+            // Faz 4 Dilim 3 — breadcrumb navigation (Tag="CrumbNav" buttons).
+            AddHandler(Button.ClickEvent, OnCrumbButtonClick,
+                Avalonia.Interactivity.RoutingStrategies.Bubble);
             Closing += async (_, e) =>
             {
                 if (_allowClose) return;
@@ -36,6 +39,27 @@ namespace RowlEngine.Editor.Views
         }
 
         private bool _allowClose;
+
+        /// <summary>
+        /// Faz 4 Dilim 3 — breadcrumb click navigates the subgraph depth
+        /// stack (the button's DataContext is the crumb). Other buttons pass
+        /// through untouched.
+        /// </summary>
+        private void OnCrumbButtonClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+        {
+            if (e.Source is not Button button ||
+                !string.Equals(button.Tag as string, "CrumbNav", System.StringComparison.Ordinal))
+                return;
+            if (button.DataContext is not Services.NavCrumb crumb)
+                return;
+            if (DataContext is not MainWindowViewModel vm)
+                return;
+            if (string.Equals(crumb.Kind, "root", System.StringComparison.Ordinal))
+                vm.Subgraphs.GoToRoot();
+            else
+                vm.Subgraphs.GoToDepth(crumb.Depth);
+            e.Handled = true;
+        }
 
         private void MainWindow_KeyDown(object? sender, KeyEventArgs e)
         {
