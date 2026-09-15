@@ -11,7 +11,7 @@ public sealed record ProjectValidationIssue(bool IsError, string Message, ulong?
 /// <summary>Pure graph checks shared by export and the editor's issue panel.</summary>
 internal static class ProjectValidationService
 {
-    private static readonly string[] AssetKeys = { "texture", "sprite", "bgm_track", "sfx_track", "path", "typewriter_sound", "custom_box_texture" };
+    internal static readonly string[] AssetKeys = { "texture", "sprite", "bgm_track", "sfx_track", "path", "typewriter_sound", "custom_box_texture" };
 
     public static IReadOnlyList<ProjectValidationIssue> Validate(IEnumerable<NodeViewModel> nodes, IEnumerable<ConnectionViewModel> connections, string assetsPath, ulong? startNodeId = null)
         => Validate(nodes, connections, assetsPath, startNodeId, structure: null);
@@ -21,6 +21,19 @@ internal static class ProjectValidationService
     /// (groups, subgraphs, chapters). A null structure skips structure checks.
     /// </summary>
     public static IReadOnlyList<ProjectValidationIssue> Validate(IEnumerable<NodeViewModel> nodes, IEnumerable<ConnectionViewModel> connections, string assetsPath, ulong? startNodeId, GraphStructureDocument? structure)
+    {
+        // Faz 4 Dilim 5 — the disk is scanned once here; the shared-index
+        // overload below lets the batch linter reuse the same scan.
+        var diskIndex = BuildDiskIndex(assetsPath);
+        return Validate(nodes, connections, assetsPath, startNodeId, structure, diskIndex);
+    }
+
+    /// <summary>
+    /// Core validation over a caller-supplied disk index. Same rules as the
+    /// public overload; <see cref="ProjectLintService"/> passes the index it
+    /// already built so Validate+Lint share a single directory scan.
+    /// </summary>
+    internal static IReadOnlyList<ProjectValidationIssue> Validate(IEnumerable<NodeViewModel> nodes, IEnumerable<ConnectionViewModel> connections, string assetsPath, ulong? startNodeId, GraphStructureDocument? structure, DiskIndex diskIndex)
     {
         var nodeList = nodes.ToList(); var issues = new List<ProjectValidationIssue>();
         if (nodeList.Count == 0) { issues.Add(new(true, "Graph has no nodes.")); return issues; }
@@ -58,11 +71,10 @@ internal static class ProjectValidationService
         // malformed content_id values are build-blocking errors; empty ids
         // (pre-migration v4 content) are valid and ignored here.
         issues.AddRange(CheckContentIds(nodeList, reachable));
-        // Faz 1 Dilim 1: disk dizini bir kez çıkarılır; hem çakışma denetimi hem de
-        // birebir (Ordinal) referans çözümleme aynı dizini kullanır. Dosya sistemi
-        // büyük/küçük harf duyarsız olsa bile karşılaştırma Ordinal yapılır, çünkü
-        // Linux runtime ve .rowlpkg araması case-sensitive'dir.
-        var diskIndex = BuildDiskIndex(assetsPath);
+        // Faz 1 Dilim 1: the caller-supplied disk index backs both the
+        // collision check and the Ordinal reference resolution. Comparison
+        // stays Ordinal even on case-insensitive filesystems, because the
+        // Linux runtime and .rowlpkg lookup are case-sensitive.
         if (diskIndex.ScanError is { } scanError)
             issues.Add(new(false, $"Asset disk scan incomplete: {scanError} Some asset references may be reported as missing.", null, null));
         foreach (var collision in FindCaseCollisions(diskIndex.ExactPaths))
@@ -127,9 +139,9 @@ internal static class ProjectValidationService
         }
     }
 
-    private sealed record DiskIndex(HashSet<string> ExactPaths, Dictionary<string, string> InsensitivePaths, string? ScanError);
+    internal sealed record DiskIndex(HashSet<string> ExactPaths, Dictionary<string, string> InsensitivePaths, string? ScanError);
 
-    private static DiskIndex BuildDiskIndex(string assetsPath)
+    internal static DiskIndex BuildDiskIndex(string assetsPath)
     {
         var exact = new HashSet<string>(StringComparer.Ordinal);
         var insensitive = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);

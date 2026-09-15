@@ -83,13 +83,23 @@ namespace RowlEngine.Editor.Services
                     // Faz 4 Dilim 3 — hand the parsed vNext structure to the
                     // session services (groups / subgraphs / chapters). A null
                     // callback keeps the legacy fire-and-forget behavior.
+                    // Faz 4 Dilim 5 — a failing structure apply rolls the whole
+                    // load back: continuing with the new nodes but an empty
+                    // structure would let the next save silently downgrade a
+                    // v5 document to v4, dropping groups/subgraphs/chapters.
                     try
                     {
                         onStructureLoaded?.Invoke(loadResult.Structure);
                     }
                     catch (Exception structureEx)
                     {
-                        log?.Invoke($"⚠️ Structure state could not be applied: {structureEx.Message}");
+                        nodes.Clear();
+                        connections.Clear();
+                        foreach (var node in previousNodes) nodes.Add(node);
+                        foreach (var connection in previousConnections) connections.Add(connection);
+                        UpdateStartNodeState(nodes, connections);
+                        log?.Invoke($"⚠️ Structure state could not be applied, load rolled back: {structureEx.Message}");
+                        return false;
                     }
 
                     var startNode = ResolveStartNode(nodes, connections);

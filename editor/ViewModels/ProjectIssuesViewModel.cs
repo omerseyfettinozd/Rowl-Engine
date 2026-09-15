@@ -14,8 +14,8 @@ public sealed partial class ProjectIssuesViewModel : ViewModelBase
     [RelayCommand]
     private void Focus(ProjectValidationIssue? issue)
     {
-        if (issue?.NodeId is not ulong id) return;
-        var node = System.Linq.Enumerable.FirstOrDefault(_main.Nodes, item => item.Id == id);
-        if (node != null) _main.SelectNodeQuiet(node);
+        // Faz 4 Dilim 5 — deep-nav lives in MainWindowViewModel (scope sync
+        // + pan + amber highlight); null/global issues are a silent no-op.
+        _main.FocusIssueNode(issue?.NodeId);
     }
 }

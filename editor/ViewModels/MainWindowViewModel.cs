@@ -431,6 +431,17 @@ namespace RowlEngine.Editor.ViewModels
         public ChapterStorageService Chapters { get; }
         public LivePreviewViewModel LivePreviewViewModel { get; }
         public HierarchyViewModel HierarchyViewModel { get; }
+        /// <summary>Faz 4 Dilim 5 — background scan worker (lint + prefetch).</summary>
+        internal AssetScanWorker AssetScanner { get; } = new();
+
+        private RestoreOffer? _pendingRecoveryOffer;
+
+        /// <summary>Faz 4 Dilim 5 — user-approved crash-restore candidate (null = none).</summary>
+        internal RestoreOffer? PendingRecoveryOffer
+        {
+            get => _pendingRecoveryOffer;
+            set => SetProperty(ref _pendingRecoveryOffer, value);
+        }
 
         public MainWindowViewModel() : this(string.Empty)
         {
@@ -537,9 +548,62 @@ namespace RowlEngine.Editor.ViewModels
             SelectedNode = Nodes.FirstOrDefault();
             UpdateStartNodeState();
 
+            // Faz 4 Dilim 5 — crash-recovery check (read-only; never overwrites).
+            CheckCrashRecoveryAtStartup();
+
             // Embedded engine: initialize directly with isolated project VFS
             if (connectEngine)
                 _ = ConnectEngineAsync();
+        }
+
+        /// <summary>
+        /// Faz 4 Dilim 5 — startup recovery probe. Clears a stale dirty flag
+        /// when the canonical document is healthy; otherwise stages a
+        /// user-approved restore offer (never an automatic overwrite).
+        /// </summary>
+        private void CheckCrashRecoveryAtStartup()
+        {
+            RecoveryStatus status;
+            try
+            {
+                status = CrashRecoveryService.CheckAtStartup(AssetsPath, AssetsJsonPath);
+            }
+            catch
+            {
+                return;
+            }
+            if (status.DirtyFlagPresent && status.CanonicalOk)
+            {
+                CrashRecoveryService.ClearDirty(AssetsJsonPath);
+                AppendLog("ℹ️ Önceki oturum kaydedilmeden kapandı; son tamamlanan kayıt sağlam.");
+            }
+            else if (!status.CanonicalOk && (status.HasLastGood || status.JournalEntries > 0))
+            {
+                if (CrashRecoveryService.TryBuildRestoreOffer(AssetsPath, AssetsJsonPath, out var offer, out _) &&
+                    offer is not null)
+                {
+                    PendingRecoveryOffer = offer;
+                    AppendLog($"⚠️ Proje dosyası bozuk/eksik ({status.CanonicalError}); kurtarma hazır ({offer.Source}, {offer.NodeCount} düğüm). RestoreFromRecovery ile geri yükleyin.");
+                }
+            }
+        }
+
+        /// <summary>Faz 4 Dilim 5 — applies the staged crash-restore offer (explicit only).</summary>
+        [RelayCommand]
+        public void RestoreFromRecovery()
+        {
+            if (PendingRecoveryOffer is null)
+                return;
+            if (CrashRecoveryService.RestoreOfferToCanonical(AssetsJsonPath, PendingRecoveryOffer) &&
+                LoadFullStoryGraphFile())
+            {
+                AppendLog($"✅ Kurtarma uygulandı ({PendingRecoveryOffer.Source}, {PendingRecoveryOffer.NodeCount} düğüm).");
+                PendingRecoveryOffer = null;
+            }
+            else
+            {
+                AppendLog("⚠️ Kurtarma uygulanamadı.");
+            }
         }
 
         public void UpdateStartNodeState()
@@ -1073,6 +1137,20 @@ namespace RowlEngine.Editor.ViewModels
             if (SelectedNode is null)
                 return;
             EnterSubgraphForNode(SelectedNode.Id);
+        }
+
+        /// <summary>
+        /// Faz 4 Dilim 5 — deep-nav issue focus (delegation only; all logic
+        /// lives in SubgraphNavigationService + SearchViewModel). Scope
+        /// first (breadcrumb sync), then pan: panning before the scope opens
+        /// would highlight a still-culled card.
+        /// </summary>
+        public void FocusIssueNode(ulong? nodeId)
+        {
+            if (nodeId is not ulong id) return;
+            if (Nodes.FirstOrDefault(n => n.Id == id) is not { } node) return;
+            Subgraphs.TryEnterForNode(id);
+            Search.JumpTo(node);
         }
 
         /// <summary>Enters the subgraph owning the node (double-click path).</summary>
@@ -1624,6 +1702,7 @@ namespace RowlEngine.Editor.ViewModels
         public void ScheduleSave()
         {
             IsProjectDirty = true;
+            CrashRecoveryService.MarkDirty(AssetsJsonPath);
             if (!Settings.AutoSaveEnabled) return;
             if (_saveDebounceTimer == null)
             {
@@ -1970,7 +2049,7 @@ namespace RowlEngine.Editor.ViewModels
                 return false;
             }
 
-            bool written = StoryGraphSaveService.TryWriteSnapshot(
+            bool written = CrashRecoveryService.TryWriteSnapshotWithRecovery(
                 snapshot, AssetsJsonPath, sequence, () => Volatile.Read(ref _saveSequence), AppendLog);
             if (written && sequence == Volatile.Read(ref _saveSequence))
             {
@@ -2008,7 +2087,7 @@ namespace RowlEngine.Editor.ViewModels
                 bool written = false;
                 try
                 {
-                    written = StoryGraphSaveService.TryWriteSnapshot(
+                    written = CrashRecoveryService.TryWriteSnapshotWithRecovery(
                         snapshot, assetsJsonPath, sequence, () => Volatile.Read(ref _saveSequence), null);
                 }
                 catch (Exception ex)
@@ -2245,10 +2324,38 @@ namespace RowlEngine.Editor.ViewModels
         public void OpenLocalizationDesk() =>
             LocalizationDeskCoordinator.OpenDesk(ProjectRoot);
 
+        /// <summary>
+        /// Faz 4 Dilim 5 — runs Validate+Lint off the UI thread (single disk
+        /// scan, worker-serialized) and posts the merged issues back. The
+        /// dirty flag is untouched: analysis never schedules a save.
+        /// </summary>
         [RelayCommand]
         public void AnalyzeStoryGraph()
         {
-            var issues = ProjectValidationService.Validate(Nodes, Connections, AssetsPath, GetStartNode()?.Id);
+            var nodes = Nodes.ToList();
+            var connections = Connections.ToList();
+            var startId = GetStartNode()?.Id;
+            var structure = CurrentStructure();
+            string assetsPath = AssetsPath;
+            AppendLog("🔍 [GRAPH LINT] Arka plan taraması başladı...");
+            _ = Task.Run(() =>
+            {
+                IReadOnlyList<ProjectValidationIssue> issues;
+                try
+                {
+                    issues = AssetScanner.Invoke(() =>
+                        ProjectLintService.Lint(nodes, connections, assetsPath, startId, structure));
+                }
+                catch (Exception ex)
+                {
+                    issues = new[] { new ProjectValidationIssue(false, $"Lint kesintiye uğradı: {ex.Message}") };
+                }
+                Avalonia.Threading.Dispatcher.UIThread.Post(() => ApplyLintResults(issues));
+            });
+        }
+
+        private void ApplyLintResults(IReadOnlyList<ProjectValidationIssue> issues)
+        {
             ProjectIssuesViewModel.SetIssues(issues);
             IsProjectIssuesPanelVisible = true;
             BottomPanelActiveTab = 4;
@@ -2331,19 +2438,27 @@ namespace RowlEngine.Editor.ViewModels
             if (_disposed) return;
             _disposed = true;
 
-            bool hasPendingSave = _saveDebounceTimer?.IsEnabled == true;
+            // Faz 4 Dilim 5 — a pending debounce save OR a crash-flag left by
+            // ScheduleSave means unsaved edits exist; flush them synchronously.
+            bool hasPendingSave = _saveDebounceTimer?.IsEnabled == true ||
+                CrashRecoveryService.IsDirty(AssetsJsonPath);
             _saveDebounceTimer?.Stop();
             _enginePreviewDebounceTimer?.Stop();
             _smoothTimer.Stop();
 
             if (hasPendingSave)
             {
-                SaveActiveStoryFile();
-                SaveFullStoryGraphFile();
+                // Dirty-flag flush (replaces the old IsEnabled-only save):
+                // only a fully written pair clears the crash marker.
+                bool activeSaved = SaveActiveStoryFile();
+                bool fullSaved = SaveFullStoryGraphFile();
+                if (activeSaved && fullSaved)
+                    CrashRecoveryService.ClearDirty(AssetsJsonPath);
             }
 
             EngineHost.Dispose();
             AssetBitmapCache.Clear();
+            try { AssetScanner.Dispose(); } catch { }
             try { AssetBrowserViewModel.Dispose(); } catch { }
         }
     }
