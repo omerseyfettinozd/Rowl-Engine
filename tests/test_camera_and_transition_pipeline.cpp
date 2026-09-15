@@ -4,6 +4,71 @@
  */
 #include "rowl_test_harness.hpp"
 #include "rowl/render/frame_composition.hpp"
+#include "rowl/text/hex_color.hpp"
+
+namespace {
+
+// Faz 4.5 Dilim 2 — HEX BIRLESTIRME: gecis yedegi siyahtir (0,0,0,255).
+// Birlesik baslik uzerinden gecerli-alfa/bos/bozuk matrisi + davranissal
+// startTransitionFromKind dumani. TransitionManager renk okuyucu sunmadigi
+// icin renk altinlari paylasilan cozucu API'sinda sabitlenir (uretim
+// kullanim yolu ayni fonksiyondur).
+void testTransitionHexUnification() {
+    TEST_SECTION("Hex Parser Unification (transition black-fallback flavor)");
+    using Rowl::Text::HexColor;
+    using Rowl::Text::parseHexColor;
+
+    const HexColor kBlack{0, 0, 0, 255};
+    auto expectParsed = [&](const char* input, uint8_t r, uint8_t g,
+                            uint8_t b, uint8_t a) {
+        bool ok = false;
+        const HexColor resolved = parseHexColor(input, kBlack, &ok);
+        if (!ok || resolved.r != r || resolved.g != g || resolved.b != b ||
+            resolved.a != a) {
+            std::cerr << "Transition hex golden failed: '" << input << "'"
+                      << std::endl;
+            exit(1);
+        }
+    };
+    auto expectFallback = [&](const char* input) {
+        bool ok = true;
+        const HexColor resolved = parseHexColor(input, kBlack, &ok);
+        if (ok || !(resolved == kBlack)) {
+            std::cerr << "Transition hex must fall back to black + failure: '"
+                      << input << "'" << std::endl;
+            exit(1);
+        }
+    };
+
+    expectParsed("#FFF", 255, 255, 255, 255);
+    expectParsed("#10B981", 0x10, 0xB9, 0x81, 255);
+    expectParsed("10B981", 0x10, 0xB9, 0x81, 255);
+    expectParsed("#F008", 255, 0, 0, 0x88);
+    expectParsed("#10B981CC", 0x10, 0xB9, 0x81, 0xCC);
+    TEST_PASS("Transition flavor parses #FFF, #RRGGBB and alpha forms");
+
+    expectFallback("");
+    expectFallback("#GGG");
+    expectFallback("#12");
+    expectFallback("#12345");
+    expectFallback("#FF00GG");
+    TEST_PASS("Transition flavor rejects empty/malformed hex to black + failure");
+
+    // Davranissal duman: her hex sinifi FadeToColor'u kazasiz baslatir.
+    for (const char* hex : {"#FFF", "#10B981", "#F008", "#GGG", "", "#12"}) {
+        Rowl::Render::TransitionManager transition;
+        transition.startTransitionFromKind("fade_color", 1.0f, hex);
+        if (!transition.isTransitionActive() ||
+            transition.getType() != Rowl::Render::TransitionType::FadeToColor) {
+            std::cerr << "fade_color did not start for hex '" << hex << "'"
+                      << std::endl;
+            exit(1);
+        }
+    }
+    TEST_PASS("fade_color starts for valid, alpha, empty and malformed hex");
+}
+
+}  // namespace
 
 void test_camera_and_transition_pipeline() {
     TEST_SECTION("2D Camera & Scene Transition Subsystem Tests");
@@ -124,6 +189,62 @@ void test_camera_and_transition_pipeline() {
         }
 
         TEST_PASS("Camera2D Smooth Tweening & EaseInOutCubic Interpolation");
+    }
+
+    // Faz 4.5 Dilim 2: Camera2D::setRotation is a capability-gated no-op.
+    // The angle is ignored, rotation stays 0.0f, and the 4096 capability
+    // bit is advertised. getRotation() is unchanged (ABI preserved).
+    {
+        Rowl::Render::Camera2D camera(1920.0f, 1080.0f);
+        camera.setRotation(45.0f);
+        if (std::abs(camera.getRotation() - 0.0f) > 0.0001f) {
+            std::cerr << "Camera2D setRotation(45) was not ignored" << std::endl;
+            exit(1);
+        }
+        camera.setRotation(-30.0f);
+        if (std::abs(camera.getRotation() - 0.0f) > 0.0001f) {
+            std::cerr << "Camera2D setRotation(-30) was not ignored" << std::endl;
+            exit(1);
+        }
+        camera.setRotation(std::numeric_limits<float>::quiet_NaN());
+        if (std::abs(camera.getRotation() - 0.0f) > 0.0001f) {
+            std::cerr << "Camera2D setRotation(NaN) was not ignored" << std::endl;
+            exit(1);
+        }
+        camera.reset();
+        if (std::abs(camera.getRotation() - 0.0f) > 0.0001f) {
+            std::cerr << "Camera2D reset did not leave rotation at 0" << std::endl;
+            exit(1);
+        }
+
+        uint64_t capabilities = 0;
+        if (RowlEngine_GetCapabilities(&capabilities) != ROWL_RESULT_OK ||
+            (capabilities & ROWL_ENGINE_CAPABILITY_CAMERA_ROTATION_IGNORED) == 0) {
+            std::cerr << "ROWL_ENGINE_CAPABILITY_CAMERA_ROTATION_IGNORED (4096) missing from capabilities" << std::endl;
+            exit(1);
+        }
+
+        // A nonzero camera "rotation" in scene JSON stays
+        // behavior-preserving: ignored, frame still renders.
+        RowlEngineHandle handle = RowlEngine_Create();
+        RowlEngine_Init(handle, 1920, 1080, 0);
+        std::string rotationJson = R"([
+            {
+                "type": "camera",
+                "data": { "x": 960, "y": 540, "zoom": 1.0, "rotation": 45.0 }
+            }
+        ])";
+        RowlEngine_UpdateSceneFromJson(handle, rotationJson.c_str());
+        RowlEngine_Step(handle, 0.016f);
+        uint32_t rotW = 0, rotH = 0;
+        const uint8_t* rotBuffer = RowlEngine_GetPixelBuffer(handle, &rotW, &rotH);
+        if (!rotBuffer || rotW != 1920 || rotH != 1080) {
+            std::cerr << "Pixel buffer invalid after ignored camera rotation JSON" << std::endl;
+            exit(1);
+        }
+        RowlEngine_Destroy(handle);
+
+        TEST_PASS("Camera2D setRotation Ignored (Stays 0.0f, Bit 4096 Present)");
     }
 
     // Test 4: TransitionManager Lifecycle & State Transitions
@@ -686,4 +807,6 @@ void test_camera_and_transition_pipeline() {
         window.shutdown();
         TEST_PASS("Identical Frames Reuse Cached Pixels; Changes Re-render");
     }
+
+    testTransitionHexUnification();
 }

@@ -189,3 +189,26 @@ filters), linter (`ProjectValidationService`), and the packager
   (`CONTRACT(...)` blocks) and the Python frozensets in
   `tools/package_assets.py` must stay identical; `tests/test_media_format_gate.py`
   parses both and fails on drift.
+
+## 8. Camera rotation no-op (Faz 4.5 Dilim 2)
+
+- **Decision (locked):** `Camera2D::setRotation` is a capability-gated
+  no-op — NO deletion, NO C ABI removal or signature change.
+  `m_rotation` stays `0.0f`; `getRotation()` is unchanged (ABI preserved,
+  returns 0). A nonzero request logs one WARN per process; `rotation: 0`
+  (the default for camera components without a `rotation` key) is silent.
+- **Why behavior-preserving:** nothing in the render pipeline ever read
+  the stored angle (`transformRect`/`transformRectParallax`/`transformPoint`
+  use position/zoom/shake only), so nonzero `rotation` values in existing
+  story JSON never affected a pixel. The no-op only makes the previous
+  silent dead-store explicit and loud.
+- **Capability bit:** `ROWL_ENGINE_CAPABILITY_CAMERA_ROTATION_IGNORED =
+  UINT64_C(4096)`, included in the `RowlEngine_GetCapabilities` OR mask.
+  Bit 2048 stays reserved for Dilim 3 (audio). Hosts must treat a set
+  bit as "rotation requests are ignored, rotation reads 0".
+- **Migration:** existing `camera` components with a nonzero `rotation`
+  key keep loading (unknown/missing keys were already tolerated) and
+  render exactly as before; no file rewrite is required. The editor
+  disables the Camera Rotation control with a tooltip pointing at the
+  no-op. Character/Background object `rotation` is unaffected (separate
+  object-rotation path, out of scope).

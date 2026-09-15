@@ -7,6 +7,7 @@
  * rowl/text/markup_parser'dadir.
  */
 #include "rowl_test_harness.hpp"
+#include "rowl/text/hex_color.hpp"
 #include "rowl/text/markup_parser.hpp"
 
 #include <nlohmann/json.hpp>
@@ -552,6 +553,138 @@ void testCabiSurface() {
     TEST_PASS("Markup caller buffers, Strip text and Parse JSON schema");
 }
 
+// Faz 4.5 Dilim 2 — HEX BIRLESTIRME: birlesik cozucu (rowl/text/hex_color.hpp)
+// altın matris + markup alt-kume kapısı (#RGB/#RRGGBB, alfa yok).
+void testHexColorUnification() {
+    TEST_SECTION("Hex Parser Unification (superset header + markup subset gate)");
+    using Rowl::Text::HexColor;
+    using Rowl::Text::parseHexColor;
+    using Rowl::Text::parseMarkup;
+
+    auto expectParsed = [](const char* input, uint8_t r, uint8_t g,
+                           uint8_t b, uint8_t a) {
+        HexColor out{0, 0, 0, 0};
+        if (!Rowl::Text::tryParseHexColor(input, out)) {
+            fail(std::string("Unified parser rejected valid hex: ") + input);
+        }
+        if (out.r != r || out.g != g || out.b != b || out.a != a) {
+            fail(std::string("Unified parser misparsed: ") + input);
+        }
+    };
+    auto expectRejected = [](const char* input) {
+        // Basarisizlikta `out` degistirilmez (nöbetçi korunur).
+        HexColor sentinel{1, 2, 3, 4};
+        if (Rowl::Text::tryParseHexColor(input, sentinel)) {
+            fail(std::string("Unified parser accepted malformed hex: '") +
+                 input + "'");
+        }
+        if (!(sentinel == HexColor{1, 2, 3, 4})) {
+            fail(std::string("Rejected hex mutated the output: '") + input +
+                 "'");
+        }
+        // Acik-yedekli sarmalayici: yedek + basarisizlik sinyali birlikte.
+        const HexColor fallback{9, 8, 7, 6};
+        bool ok = true;
+        const HexColor resolved = parseHexColor(input, fallback, &ok);
+        if (ok || !(resolved == fallback)) {
+            fail(std::string("Fallback wrapper mishandled: '") + input +
+                 "'");
+        }
+    };
+
+    // Gecerli birlesim: #RGB (bilerek-boz capasi: #FFF -> beyaz).
+    expectParsed("#FFF", 255, 255, 255, 255);
+    expectParsed("#fff", 255, 255, 255, 255);
+    expectParsed("FFF", 255, 255, 255, 255);
+    expectParsed("#F00", 255, 0, 0, 255);
+    expectParsed("#000", 0, 0, 0, 255);
+    // Gecerli birlesim: #RRGGBB (harf buyuklugu duyarsiz, #'siz de olur).
+    expectParsed("#10B981", 0x10, 0xB9, 0x81, 255);
+    expectParsed("#ff00ff", 255, 0, 255, 255);
+    expectParsed("10B981", 0x10, 0xB9, 0x81, 255);
+    // Gecerli birlesim: alfa bicimleri (#RGBA, #RRGGBBAA).
+    expectParsed("#F008", 255, 0, 0, 0x88);
+    expectParsed("#10B981CC", 0x10, 0xB9, 0x81, 0xCC);
+    expectParsed("#00000000", 0, 0, 0, 0);
+    TEST_PASS("Unified header parses #FFF, #RRGGBB and alpha forms");
+
+    // Bozuk girdiler: bos, kesik, basamak-disi, one-kisim copu.
+    expectRejected("");
+    expectRejected("#");
+    expectRejected("#GGG");
+    expectRejected("#12");
+    expectRejected("#12345");
+    expectRejected("#1234567");
+    expectRejected("#123456789");
+    expectRejected("#FF00GG");
+    expectRejected("0xFF00FF");
+    expectRejected("##FFF");
+    expectRejected("#F F");
+    expectRejected("red");
+    TEST_PASS("Unified header rejects empty/truncated/malformed hex to fallback");
+
+    // Sarmalayici basari yolu: cozumlenmis renk + ok=true.
+    {
+        bool ok = false;
+        const HexColor resolved =
+            parseHexColor("#FFF", HexColor{0, 0, 0, 255}, &ok);
+        if (!ok || !(resolved == HexColor{255, 255, 255, 255})) {
+            fail("Fallback wrapper failed the '#FFF' golden case");
+        }
+    }
+    TEST_PASS("Explicit-fallback wrapper reports success and failure");
+
+    // Markup duzeyi: #RGB/#RRGGBB gecerli, alfa bicimleri sozlesme geregi
+    // literal + uyari (RICH_TEXT_MARKUP_CONTRACT §2.2, alfa hep 255).
+    {
+        const MarkupDocument doc = parseMarkup("<color=#F008>x</color>");
+        if (doc.plainText.find("<color=#F008>") == std::string::npos ||
+            doc.diagnostics.empty()) {
+            fail("Markup must keep <color=#F008> (alpha) literal + warning");
+        }
+        for (const auto& ch : doc.chars) {
+            if (ch.hasColor) {
+                fail("Alpha literal must not enable color styling");
+            }
+        }
+    }
+    {
+        const MarkupDocument doc = parseMarkup("<color=#10B981CC>x</color>");
+        if (doc.plainText.find("<color=#10B981CC>") == std::string::npos ||
+            doc.diagnostics.empty()) {
+            fail("Markup must keep <color=#10B981CC> literal + warning");
+        }
+    }
+    {
+        const MarkupDocument doc = parseMarkup("<color=#12345>x</color>");
+        if (doc.plainText.find("<color=#12345>") == std::string::npos ||
+            doc.diagnostics.empty()) {
+            fail("Markup must keep truncated <color=#12345> literal");
+        }
+    }
+    {
+        const MarkupDocument doc = parseMarkup("<color=>x</color>");
+        if (doc.plainText.find("<color=") == std::string::npos ||
+            doc.diagnostics.empty()) {
+            fail("Markup must keep empty <color=> literal + warning");
+        }
+    }
+    {
+        // Gecerli markup renkleri birlesmeden sonra da ayni cozulur.
+        const MarkupDocument doc = parseMarkup(
+            "<color=#FFF>a</color><color=#10B981>b</color>");
+        if (doc.plainText != "ab" || doc.chars.size() != 2 ||
+            !doc.diagnostics.empty() || !doc.chars[0].hasColor ||
+            doc.chars[0].color.r != 255 || doc.chars[0].color.g != 255 ||
+            doc.chars[0].color.b != 255 || doc.chars[0].color.a != 255 ||
+            !doc.chars[1].hasColor || doc.chars[1].color.r != 0x10 ||
+            doc.chars[1].color.g != 0xB9 || doc.chars[1].color.b != 0x81) {
+            fail("Markup #FFF/#RRGGBB golden parse changed after unification");
+        }
+    }
+    TEST_PASS("Markup subset gate: #FFF/#RRGGBB parse, alpha/empty/truncated stay literal");
+}
+
 }  // namespace
 
 void test_markup_parser() {
@@ -562,4 +695,5 @@ void test_markup_parser() {
     testErrorTolerance();
     testUnicodeAndRobustness();
     testCabiSurface();
+    testHexColorUnification();
 }

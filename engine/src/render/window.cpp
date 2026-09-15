@@ -1,6 +1,7 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "thirdparty/stb_image.h"
 #include "rowl/render/window.hpp"
+#include "rowl/text/hex_color.hpp"
 #include "rowl/core/pause_menu.hpp"
 #include "rowl/render/frame_composition.hpp"
 #include "rowl/render/aspect_guardian.hpp"
@@ -65,33 +66,15 @@ void fnvMixU64(uint64_t& hash, uint64_t value) {
 }
 
 static SDL_Color parseHexColor(const std::string& hex, uint8_t defaultA = 255) {
-    if (hex.empty()) return {255, 255, 255, defaultA};
-    std::string clean = hex;
-    if (clean[0] == '#') clean = clean.substr(1);
-
-    uint32_t val = 0;
-    try {
-        val = std::stoul(clean, nullptr, 16);
-    } catch (...) {
-        return {255, 255, 255, defaultA};
-    }
-
-    if (clean.length() == 6) {
-        return {
-            static_cast<uint8_t>((val >> 16) & 0xFF),
-            static_cast<uint8_t>((val >> 8) & 0xFF),
-            static_cast<uint8_t>(val & 0xFF),
-            defaultA
-        };
-    } else if (clean.length() == 8) {
-        return {
-            static_cast<uint8_t>((val >> 24) & 0xFF),
-            static_cast<uint8_t>((val >> 16) & 0xFF),
-            static_cast<uint8_t>((val >> 8) & 0xFF),
-            static_cast<uint8_t>(val & 0xFF)
-        };
-    }
-    return {255, 255, 255, defaultA};
+    // Faz 4.5 Dilim 2: tek birlesik cozucu (rowl/text/hex_color.hpp).
+    // Pencere yedegi tarihsel beyazdir; bozuk girdi yedege duser ve
+    // basarisizlik ok ile gozlenebilir — sessiz cop renk uretilmez.
+    const Rowl::Text::HexColor fallback{255, 255, 255, defaultA};
+    bool ok = false;
+    const Rowl::Text::HexColor parsed =
+        Rowl::Text::parseHexColor(hex, fallback, &ok);
+    (void)ok;
+    return {parsed.r, parsed.g, parsed.b, parsed.a};
 }
 
 constexpr int kMaxTextureDimension = 8'192;

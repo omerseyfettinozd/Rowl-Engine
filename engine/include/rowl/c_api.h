@@ -75,6 +75,8 @@ typedef struct RowlEngine_ApiVersion {
 #define ROWL_ENGINE_CAPABILITY_RICH_TEXT_MARKUP      UINT64_C(256)
 #define ROWL_ENGINE_CAPABILITY_TEXT_SHAPING          UINT64_C(512)
 #define ROWL_ENGINE_CAPABILITY_ACCESSIBILITY         UINT64_C(1024)
+/* NOTE: bit 2048 is reserved for Dilim 3 (audio). Do not reuse. */
+#define ROWL_ENGINE_CAPABILITY_CAMERA_ROTATION_IGNORED UINT64_C(4096)
 
 /** Current additive C API version. This query does not require an engine handle. */
 ROWL_API RowlEngine_ResultCode RowlEngine_GetApiVersion(

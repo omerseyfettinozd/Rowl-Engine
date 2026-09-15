@@ -127,7 +127,9 @@ std::string colorToHex(const Rgba& color) noexcept;
 /// Adlandirilmis renk cozumlemesi (kucuk harfe duyarsiz). Bilinmeyende false.
 bool tryParseNamedColor(std::string_view name, Rgba& out) noexcept;
 
-/// "#RGB" / "#RRGGBB" cozumlemesi (basinda '#', tirnaklar ayiklanmis olmali).
+/// "#RGB" / "#RRGGBB" cozumlemesi (basinda '#' zorunlu, alfa her zaman 255;
+/// #RGBA / #RRGGBBAA sozlesme disidir ve false doner). Basamak dogrulamasi
+/// birlesik rowl/text/hex_color.hpp cozucusunu kullanir.
 bool tryParseHexColor(std::string_view value, Rgba& out) noexcept;
 
 }  // namespace Rowl::Text

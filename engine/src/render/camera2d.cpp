@@ -1,4 +1,6 @@
 #include "rowl/render/camera2d.hpp"
+#include "rowl/core/logger.hpp"
+#include <atomic>
 #include <cctype>
 
 namespace Rowl::Render {
@@ -87,8 +89,28 @@ void Camera2D::zoomTo(float targetZoom, float durationSeconds, CameraEasing easi
 }
 
 void Camera2D::setRotation(float degrees) {
-    if (std::isfinite(degrees)) {
-        m_rotation = degrees;
+    // Faz 4.5 Dilim 2 (locked decision: NO deletion — ABI break).
+    // Camera rotation is a capability-gated no-op: m_rotation was written
+    // here but never read by any render path (transformRect,
+    // transformRectParallax and transformPoint use position/zoom/shake
+    // only), so the stored angle never affected a pixel. Keep m_rotation
+    // pinned at 0.0f; hosts detect the no-op via
+    // ROWL_ENGINE_CAPABILITY_CAMERA_ROTATION_IGNORED (4096).
+    // getRotation() is intentionally unchanged (ABI preserved, returns 0).
+    m_rotation = 0.0f;
+    if (!std::isfinite(degrees) || degrees == 0.0f) {
+        return;
+    }
+    // Loud but spam-free: the scene-component path (Engine::applyComponents,
+    // engine.cpp) forwards the JSON "rotation" key on every node entry, and
+    // nonzero values are reachable from story data — so a nonzero request
+    // warns once per process instead of once per call.
+    static std::atomic<bool> s_rotationIgnoredLogged{false};
+    if (!s_rotationIgnoredLogged.exchange(true)) {
+        ROWL_LOG_WARN(std::string("Camera2D::setRotation(") + std::to_string(degrees) +
+                      std::string(") ignored: camera rotation is a no-op "
+                                  "(ROWL_ENGINE_CAPABILITY_CAMERA_ROTATION_IGNORED); "
+                                  "rotation stays 0.0"));
     }
 }
 

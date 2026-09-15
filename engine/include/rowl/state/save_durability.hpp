@@ -1,0 +1,48 @@
+#pragma once
+
+#include <filesystem>
+#include <string>
+
+namespace Rowl::State {
+
+/// Save durability: crash-safe atomic slot writes (Faz 4.5 Dilim 2).
+///
+/// Protocol: serialize -> write temp file (<slot>.json.tmp) -> rename over
+/// the target. A crash mid-write can only leave a stray .tmp; the previous
+/// good slot file is never truncated in place, so load always sees either
+/// the old or the new complete payload — never a half slot.
+///
+/// FSYNC DECISION: fsync is OFF in this slice (documented, deliberate).
+/// Rationale: the write path uses std::ofstream for portability across
+/// Linux/Windows/macOS and the atomicity guarantee comes from the rename
+/// (POSIX rename / Windows MoveFileEx WRITE_THROUGH for metadata), not from
+/// forcing payload bytes to stable storage. That covers process-crash
+/// mid-write (the slice goal). Power-loss / OS-crash durability (file-data
+/// fdatasync + directory fsync on POSIX) is explicitly out of scope and can
+/// be added later inside writeSlotFileAtomically without touching callers.
+std::filesystem::path saveTempPathFor(const std::filesystem::path& finalPath);
+
+/// Atomically replaces finalPath with content. Returns true on success;
+/// on failure returns false, sets *errorOut (when non-null), removes the
+/// stray .tmp (best effort), and leaves any pre-existing finalPath
+/// byte-identical. Never throws.
+bool writeSlotFileAtomically(const std::filesystem::path& finalPath,
+                             const std::string& content,
+                             std::string* errorOut = nullptr);
+
+/// Best-effort removal of a stray "<slot>.json.tmp" left by an interrupted
+/// write. Called on the load path so a half-tmp beside a good slot is
+/// ignored and cleaned. Never throws.
+void cleanupStraySlotTemp(const std::filesystem::path& finalPath);
+
+// Test-only ENOSPC (disk-full) injection hook. Production default is OFF:
+// injection is active only after setSaveDurabilityInjectEnospc(true) or when
+// the ROWL_SAVE_INJECT_ENOSPC environment variable is set to "1" at call
+// time (env-var trigger is compiled out under NDEBUG so a stray variable in
+// a shipped environment can never break saves; the setter works everywhere).
+// When active, writeSlotFileAtomically fails closed mid-write with an
+// ENOSPC error and preserves any pre-existing target file.
+void setSaveDurabilityInjectEnospc(bool inject);
+bool saveDurabilityInjectEnospc();
+
+} // namespace Rowl::State

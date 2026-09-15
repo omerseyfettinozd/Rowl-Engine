@@ -10,6 +10,8 @@
  * unit (declaration in rowl_test_harness.hpp).
  */
 #include "rowl_test_harness.hpp"
+#include "rowl/state/save_durability.hpp"
+#include "rowl/state/session_persistence.hpp"
 
 #include <climits>
 #include <cstdint>
@@ -201,7 +203,7 @@ void test_save_slot_and_package_fuzz() {
     }
     TEST_PASS("Truncated, corrupted, and garbage save payloads stay fail-closed");
 
-    // (2) Out-of-range slot indexes through the engine validation path.
+    // (2) Out-of-range slot indexes through the persistence validation path.
     {
         Rowl::State::SessionPersistence persistence(testRoot / "saves");
         const auto state = Rowl::State::GameState::createInitialState(101);
@@ -247,6 +249,62 @@ void test_save_slot_and_package_fuzz() {
         }
     }
     TEST_PASS("Out-of-range slot indexes rejected on every entry point, boundaries intact");
+
+    // (2b) Engine-level canonical range (0..99, rowl/state/save_slots.hpp).
+    // Slot 100 must be rejected with InvalidArgument before touching
+    // persistence (it used to fall through to IoError/FileNotFound);
+    // hasSaveSlot has no result code to surface, so it only answers false.
+    {
+        Rowl::Core::Engine engine;
+        engine.setSaveDirectory((testRoot / "engine_saves").string());
+        if (!engine.initialize({})) {
+            failCase("Engine-level slot-range test could not initialize offscreen");
+        }
+        const auto lastCode = [&] {
+            return engine.getContext()->getLastResult().code;
+        };
+        for (const int32_t slot : {100, -1, 101, INT_MAX, INT_MIN}) {
+            const std::string label = "slot " + std::to_string(slot);
+            if (engine.saveGameSlot(slot)) {
+                failCase("Engine saveGameSlot accepted out-of-range " + label);
+            }
+            if (lastCode() != Rowl::Core::RuntimeErrorCode::InvalidArgument) {
+                failCase("Engine saveGameSlot did not report InvalidArgument for " + label);
+            }
+            if (engine.loadGameSlot(slot)) {
+                failCase("Engine loadGameSlot accepted out-of-range " + label);
+            }
+            if (lastCode() != Rowl::Core::RuntimeErrorCode::InvalidArgument) {
+                failCase("Engine loadGameSlot did not report InvalidArgument for " + label);
+            }
+            if (engine.hasSaveSlot(slot)) {
+                failCase("Engine hasSaveSlot reported out-of-range " + label);
+            }
+            if (engine.deleteSaveSlot(slot)) {
+                failCase("Engine deleteSaveSlot accepted out-of-range " + label);
+            }
+            if (lastCode() != Rowl::Core::RuntimeErrorCode::InvalidArgument) {
+                failCase("Engine deleteSaveSlot did not report InvalidArgument for " + label);
+            }
+            const auto stray =
+                testRoot / "engine_saves" / ("save_slot_" + std::to_string(slot) + ".json");
+            if (std::filesystem::exists(stray)) {
+                failCase("Engine out-of-range slot left a file behind: " + stray.string());
+            }
+        }
+        // Boundary slots 0 and 99 round-trip through the Engine entry points.
+        for (const int32_t slot : {0, 99}) {
+            if (!engine.saveGameSlot(slot) || !engine.hasSaveSlot(slot) ||
+                !engine.loadGameSlot(slot)) {
+                failCase("Engine boundary slot rejected: " + std::to_string(slot));
+            }
+            if (!engine.deleteSaveSlot(slot) || engine.hasSaveSlot(slot)) {
+                failCase("Engine boundary slot delete failed: " + std::to_string(slot));
+            }
+        }
+        engine.shutdown();
+    }
+    TEST_PASS("Engine rejects slot 100 (and -1/101) with InvalidArgument, boundaries 0/99 round-trip");
 
     // (3) Malformed .rowlpkg headers and magic values.
     constexpr size_t kHeaderSize = sizeof(Rowl::VFS::RowlPkgHeader);
@@ -353,6 +411,100 @@ void test_save_slot_and_package_fuzz() {
         }
     }
     TEST_PASS("Malformed package headers, magic, and sizes rejected fail-closed");
+
+    // (4) Save durability: atomic write, ENOSPC fail-closed, stray-.tmp cleanup.
+    {
+        Rowl::State::SessionPersistence persistence(testRoot / "durability");
+        const int32_t slot = 7;
+        const auto goodState = Rowl::State::GameState::createInitialState(101);
+        if (!persistence.saveSlot(goodState, slot)) {
+            failCase("Durability baseline save failed");
+        }
+        const auto slotPath =
+            testRoot / "durability" / ("save_slot_" + std::to_string(slot) + ".json");
+        const auto tmpPath = Rowl::State::saveTempPathFor(slotPath);
+        auto readBytes = [](const std::filesystem::path& path) {
+            std::ifstream input(path, std::ios::binary);
+            return std::string((std::istreambuf_iterator<char>(input)),
+                               std::istreambuf_iterator<char>());
+        };
+        const std::string baselineBytes = readBytes(slotPath);
+        if (baselineBytes.empty()) {
+            failCase("Durability baseline slot file is empty");
+        }
+
+        // ENOSPC injection (test bridge): save must fail closed and the
+        // previous good slot file must be preserved byte-identical.
+        Rowl::State::setSaveDurabilityInjectEnospc(true);
+        const auto nextState =
+            Rowl::State::GameState::createNextState(goodState, 202);
+        const bool injectedOk = persistence.saveSlot(nextState, slot);
+        Rowl::State::setSaveDurabilityInjectEnospc(false);
+        if (injectedOk) {
+            failCase("ENOSPC-injected save unexpectedly succeeded");
+        }
+        if (readBytes(slotPath) != baselineBytes) {
+            failCase("ENOSPC-injected save modified the previous good slot");
+        }
+        if (std::filesystem::exists(tmpPath)) {
+            failCase("ENOSPC-injected save left a stray temp file behind");
+        }
+        {
+            const auto loaded = persistence.loadSlot(slot);
+            if (loaded == nullptr || loaded->activeNodeId != 101) {
+                failCase("Load after ENOSPC did not return the previous good slot");
+            }
+        }
+
+        // Env-var injection path (production default off): with the variable
+        // set the save fails the same way; unset, it succeeds again.
+        ::setenv("ROWL_SAVE_INJECT_ENOSPC", "1", 1);
+        if (persistence.saveSlot(nextState, slot)) {
+            ::unsetenv("ROWL_SAVE_INJECT_ENOSPC");
+            Rowl::State::setSaveDurabilityInjectEnospc(false);
+            failCase("Env-var ENOSPC-injected save unexpectedly succeeded");
+        }
+        ::unsetenv("ROWL_SAVE_INJECT_ENOSPC");
+        if (readBytes(slotPath) != baselineBytes) {
+            failCase("Env-var ENOSPC-injected save modified the previous good slot");
+        }
+        if (!persistence.saveSlot(nextState, slot)) {
+            failCase("Save after clearing ENOSPC injection failed");
+        }
+        const std::string updatedBytes = readBytes(slotPath);
+        if (updatedBytes == baselineBytes) {
+            failCase("Save after clearing injection did not advance the slot");
+        }
+        // Restore the baseline so the stray-tmp check below reads known-good data.
+        if (!persistence.saveSlot(goodState, slot)) {
+            failCase("Could not restore durability baseline slot");
+        }
+
+        // Simulated half-tmp: a stray "<slot>.json.tmp" beside the good slot
+        // must be ignored by load, which still reads the good slot and
+        // removes the stray.
+        {
+            std::ofstream stray(tmpPath, std::ios::binary | std::ios::trunc);
+            stray << baselineBytes.substr(0, baselineBytes.size() / 2);
+            stray.close();
+        }
+        if (!std::filesystem::exists(tmpPath)) {
+            failCase("Could not plant stray temp file for durability test");
+        }
+        {
+            const auto loaded = persistence.loadSlot(slot);
+            if (loaded == nullptr || loaded->activeNodeId != 101) {
+                failCase("Load with stray temp did not return the good slot");
+            }
+        }
+        if (std::filesystem::exists(tmpPath)) {
+            failCase("Load did not clean up the stray temp file");
+        }
+        if (readBytes(slotPath) != baselineBytes) {
+            failCase("Stray-temp cleanup modified the good slot");
+        }
+    }
+    TEST_PASS("Atomic save survives ENOSPC fail-closed and stray-.tmp cleanup");
 
     std::filesystem::remove_all(testRoot, cleanupError);
 }

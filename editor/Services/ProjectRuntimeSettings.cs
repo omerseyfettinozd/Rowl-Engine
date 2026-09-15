@@ -9,6 +9,10 @@ namespace RowlEngine.Editor.Services;
 public sealed class ProjectRuntimeSettings
 {
     public const int DefaultSaveSlotCount = 10;
+    // Canonical save-slot range (Faz 4.5 Dilim 2): slot indexes 0..99, i.e. at most 100 slots.
+    public const int MinSaveSlotIndex = 0;
+    public const int MaxSaveSlotIndex = 99;
+    public const int MaxSaveSlotCount = MaxSaveSlotIndex + 1;
     public const string DefaultTransitionKind = "instant";
     public const float DefaultTransitionDurationSeconds = 1.0f;
 
@@ -18,7 +22,7 @@ public sealed class ProjectRuntimeSettings
 
     public ProjectRuntimeSettings Sanitized()
     {
-        SaveSlotCount = Math.Clamp(SaveSlotCount, 1, 100);
+        SaveSlotCount = Math.Clamp(SaveSlotCount, 1, MaxSaveSlotCount);
         if (DefaultBgmTransition is not ("instant" or "fade" or "crossfade"))
             DefaultBgmTransition = DefaultTransitionKind;
         if (!float.IsFinite(DefaultBgmTransitionDurationSeconds))

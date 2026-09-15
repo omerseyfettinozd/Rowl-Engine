@@ -1,4 +1,5 @@
 #include "rowl/render/transition_manager.hpp"
+#include "rowl/text/hex_color.hpp"
 #include <SDL3/SDL.h>
 #include <cstdlib>
 #include <cmath>
@@ -9,44 +10,17 @@ constexpr float kMinDuration = 0.01f;
 constexpr float kMaxDuration = 60.0f;
 
 static void parseHexColor(const std::string& hex, uint8_t& r, uint8_t& g, uint8_t& b, uint8_t& a) {
-    std::string clean = hex;
-    if (!clean.empty() && clean[0] == '#') clean = clean.substr(1);
-    if (clean.size() == 3) {
-        // #RGB -> #RRGGBB
-        uint32_t val = static_cast<uint32_t>(std::strtoul(clean.c_str(), nullptr, 16));
-        uint8_t r4 = static_cast<uint8_t>((val >> 8) & 0xF);
-        uint8_t g4 = static_cast<uint8_t>((val >> 4) & 0xF);
-        uint8_t b4 = static_cast<uint8_t>(val & 0xF);
-        r = static_cast<uint8_t>((r4 << 4) | r4);
-        g = static_cast<uint8_t>((g4 << 4) | g4);
-        b = static_cast<uint8_t>((b4 << 4) | b4);
-        a = 255;
-    } else if (clean.size() == 4) {
-        // #RGBA -> #RRGGBBAA
-        uint32_t val = static_cast<uint32_t>(std::strtoul(clean.c_str(), nullptr, 16));
-        uint8_t r4 = static_cast<uint8_t>((val >> 12) & 0xF);
-        uint8_t g4 = static_cast<uint8_t>((val >> 8) & 0xF);
-        uint8_t b4 = static_cast<uint8_t>((val >> 4) & 0xF);
-        uint8_t a4 = static_cast<uint8_t>(val & 0xF);
-        r = static_cast<uint8_t>((r4 << 4) | r4);
-        g = static_cast<uint8_t>((g4 << 4) | g4);
-        b = static_cast<uint8_t>((b4 << 4) | b4);
-        a = static_cast<uint8_t>((a4 << 4) | a4);
-    } else if (clean.size() == 6) {
-        uint32_t val = static_cast<uint32_t>(std::strtoul(clean.c_str(), nullptr, 16));
-        r = static_cast<uint8_t>((val >> 16) & 0xFF);
-        g = static_cast<uint8_t>((val >> 8) & 0xFF);
-        b = static_cast<uint8_t>(val & 0xFF);
-        a = 255;
-    } else if (clean.size() == 8) {
-        uint32_t val = static_cast<uint32_t>(std::strtoul(clean.c_str(), nullptr, 16));
-        r = static_cast<uint8_t>((val >> 24) & 0xFF);
-        g = static_cast<uint8_t>((val >> 16) & 0xFF);
-        b = static_cast<uint8_t>((val >> 8) & 0xFF);
-        a = static_cast<uint8_t>(val & 0xFF);
-    } else {
-        r = 0; g = 0; b = 0; a = 255;
-    }
+    // Faz 4.5 Dilim 2: tek birlesik cozucu (rowl/text/hex_color.hpp).
+    // Gecis yedegi tarihsel siyahtir (0,0,0,255); bozuk girdi yedege duser
+    // ve basarisizlik ok ile gozlenebilir — sessiz cop renk uretilmez.
+    bool ok = false;
+    const Rowl::Text::HexColor parsed = Rowl::Text::parseHexColor(
+        hex, Rowl::Text::HexColor{0, 0, 0, 255}, &ok);
+    (void)ok;
+    r = parsed.r;
+    g = parsed.g;
+    b = parsed.b;
+    a = parsed.a;
 }
 
 TransitionManager::TransitionManager() = default;

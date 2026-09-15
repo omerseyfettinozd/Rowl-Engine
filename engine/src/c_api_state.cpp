@@ -10,6 +10,7 @@
 #include "rowl/platform/user_data_directories.hpp"
 #include "rowl/state/game_state.hpp"
 #include "rowl/state/save_metadata.hpp"
+#include "rowl/state/save_slots.hpp"
 #include "nlohmann/json.hpp"
 #include "cstring"
 extern "C" {
@@ -130,7 +131,7 @@ RowlEngine_ResultCode RowlEngine_GetSaveSlotMetadataJson(
     RowlEngineHandle handle, int32_t slotIndex, char* buffer,
     uint32_t bufferSize, uint32_t* outRequiredSize) {
     if (!isLiveHandle(handle)) return ROWL_RESULT_INVALID_HANDLE;
-    if (slotIndex < 0 || slotIndex > 100) return ROWL_RESULT_INVALID_ARGUMENT;
+    if (!Rowl::State::isValidSlot(slotIndex)) return ROWL_RESULT_INVALID_ARGUMENT;
     return invokeNoexcept<RowlEngine_ResultCode>([&] {
         auto* engine = toEngine(handle);
         if (!engine) return ROWL_RESULT_INVALID_HANDLE;

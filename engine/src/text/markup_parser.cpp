@@ -7,6 +7,7 @@
  */
 
 #include "rowl/text/markup_parser.hpp"
+#include "rowl/text/hex_color.hpp"
 
 #include <algorithm>
 #include <array>
@@ -125,13 +126,6 @@ std::optional<float> parseAsciiFloat(std::string_view text) {
 
 bool inRange(float value, float lo, float hi) {
     return std::isfinite(value) && value >= lo && value <= hi;
-}
-
-int hexNibble(char c) {
-    if (c >= '0' && c <= '9') return c - '0';
-    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
-    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
-    return -1;
 }
 
 void appendCodePointUtf8(std::string& out, uint32_t codePoint) {
@@ -991,39 +985,21 @@ bool tryParseNamedColor(std::string_view name, Rgba& out) noexcept {
 }
 
 bool tryParseHexColor(std::string_view value, Rgba& out) noexcept {
-    std::string hex(trimView(value));
-    if (hex.empty() || hex.front() != '#') return false;
-    hex.erase(hex.begin());
-    auto nibbles = [&](std::size_t at, std::size_t count,
-                       uint8_t& byte) -> bool {
-        if (count == 1) {
-            const int hi = hexNibble(hex[at]);
-            if (hi < 0) return false;
-            byte = static_cast<uint8_t>((hi << 4) | hi);
-            return true;
-        }
-        const int hi = hexNibble(hex[at]);
-        const int lo = hexNibble(hex[at + 1]);
-        if (hi < 0 || lo < 0) return false;
-        byte = static_cast<uint8_t>((hi << 4) | lo);
-        return true;
-    };
-    Rgba color{};
-    color.a = 255;
-    if (hex.size() == 3) {
-        if (!nibbles(0, 1, color.r) || !nibbles(1, 1, color.g) ||
-            !nibbles(2, 1, color.b)) {
-            return false;
-        }
-    } else if (hex.size() == 6) {
-        if (!nibbles(0, 2, color.r) || !nibbles(2, 2, color.g) ||
-            !nibbles(4, 2, color.b)) {
-            return false;
-        }
-    } else {
-        return false;
-    }
-    out = color;
+    // Sozlesme alt kumesi (docs/RICH_TEXT_MARKUP_CONTRACT.md bolum 2.2):
+    // basinda '#' zorunlu, yalnizca #RGB / #RRGGBB, alfa her zaman 255.
+    // Basamak dogrulamasi birlesik cozucudadir (rowl/text/hex_color.hpp);
+    // burada yalnizca alt-kume kapisi uygulanir. Basarisizlikta `out`
+    // degistirilmez.
+    const std::string_view text = trimView(value);
+    if (text.empty() || text.front() != '#') return false;
+    const std::string_view digits = text.substr(1);
+    if (digits.size() != 3u && digits.size() != 6u) return false;
+    HexColor parsed;
+    if (!tryParseHexColor(text, parsed)) return false;
+    out.r = parsed.r;
+    out.g = parsed.g;
+    out.b = parsed.b;
+    out.a = 255;
     return true;
 }
 

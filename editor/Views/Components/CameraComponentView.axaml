@@ -25,9 +25,11 @@
           <TextBlock Text="Zoom Factor" FontSize="11" Foreground="{DynamicResource MutedText}" />
           <NumericUpDown Value="{Binding Zoom}" Increment="0.1" Minimum="0.1" Maximum="10.0" FormatString="F2" />
         </StackPanel>
-        <StackPanel Grid.Column="2" Spacing="2">
-          <TextBlock Text="Rotation (deg)" FontSize="11" Foreground="{DynamicResource MutedText}" />
-          <NumericUpDown Value="{Binding Rotation}" Increment="5" Minimum="-360" Maximum="360" />
+        <StackPanel Grid.Column="2" Spacing="2"
+                    ToolTip.Tip="Camera rotation is ignored by the engine (Faz 4.5 Dilim 2 no-op, capability ROWL_ENGINE_CAPABILITY_CAMERA_ROTATION_IGNORED). Value stays 0.">
+          <TextBlock Text="Rotation (deg) — ignored" FontSize="11" Foreground="{DynamicResource MutedText}" />
+          <NumericUpDown Value="{Binding Rotation}" Increment="5" Minimum="-360" Maximum="360" IsEnabled="False" />
+          <TextBlock Text="Engine no-op: camera rotation has no render effect." FontSize="10" Foreground="{DynamicResource MutedText}" TextWrapping="Wrap" />
         </StackPanel>
       </Grid>
 

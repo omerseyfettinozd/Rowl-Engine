@@ -2,6 +2,8 @@
 
 #include "rowl/core/logger.hpp"
 #include "rowl/state/game_state.hpp"
+#include "rowl/state/save_durability.hpp"
+#include "rowl/state/save_slots.hpp"
 
 #include <filesystem>
 #include <fstream>
@@ -9,38 +11,13 @@
 #include <system_error>
 #include <utility>
 
-#if defined(_WIN32)
-#define NOMINMAX
-#include <windows.h>
-#endif
-
 namespace Rowl::State {
 
 namespace {
 
-constexpr int32_t kMinSaveSlot = 0;
-constexpr int32_t kMaxSaveSlot = 99;
 constexpr uintmax_t kMaxSaveFileBytes = 4 * 1024 * 1024;
 
-bool isValidSlotIndex(int32_t slotIndex) {
-    return slotIndex >= kMinSaveSlot && slotIndex <= kMaxSaveSlot;
-}
-
-bool replaceFileAtomically(const std::filesystem::path& temporaryPath,
-                           const std::filesystem::path& finalPath,
-                           std::error_code& error) {
-#if defined(_WIN32)
-    if (MoveFileExW(temporaryPath.c_str(), finalPath.c_str(),
-                    MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
-        return true;
-    }
-    error = std::error_code(static_cast<int>(GetLastError()), std::system_category());
-    return false;
-#else
-    std::filesystem::rename(temporaryPath, finalPath, error);
-    return !error;
-#endif
-}
+using Rowl::State::isValidSlot;
 
 } // namespace
 
@@ -72,7 +49,7 @@ void SessionPersistence::setSaveDirectory(std::filesystem::path saveDirectory) {
 
 bool SessionPersistence::saveSlot(
     const std::shared_ptr<const GameState>& state, int32_t slotIndex) const {
-    if (!state || !isValidSlotIndex(slotIndex)) {
+    if (!state || !isValidSlot(slotIndex)) {
         ROWL_LOG_ERROR("Cannot save GameState to invalid or null slot #" +
                        std::to_string(slotIndex));
         return false;
@@ -82,33 +59,12 @@ bool SessionPersistence::saveSlot(
         const fs::path finalPath = m_saveDirectory /
             ("save_slot_" + std::to_string(slotIndex) + ".json");
         fs::create_directories(finalPath.parent_path());
-        fs::path temporaryPath = finalPath;
-        temporaryPath += ".tmp";
 
         const std::string json = state->serializeJson();
-        {
-            std::ofstream output(temporaryPath, std::ios::out | std::ios::trunc);
-            if (!output.is_open()) {
-                ROWL_LOG_ERROR("Failed to open save slot temp file for writing: " +
-                               temporaryPath.string());
-                return false;
-            }
-            output << json;
-            output.flush();
-            if (!output.good()) {
-                ROWL_LOG_ERROR("Failed to write complete save slot temp file: " +
-                               temporaryPath.string());
-                output.close();
-                fs::remove(temporaryPath);
-                return false;
-            }
-        }
-
-        std::error_code replaceError;
-        if (!replaceFileAtomically(temporaryPath, finalPath, replaceError)) {
-            fs::remove(temporaryPath);
-            ROWL_LOG_ERROR("Failed to atomically replace save slot file: " +
-                           replaceError.message());
+        std::string writeError;
+        if (!writeSlotFileAtomically(finalPath, json, &writeError)) {
+            ROWL_LOG_ERROR("Failed to durably save slot #" +
+                           std::to_string(slotIndex) + ": " + writeError);
             return false;
         }
         ROWL_LOG_INFO("Successfully saved GameState to Slot #" +
@@ -122,11 +78,16 @@ bool SessionPersistence::saveSlot(
 }
 
 SessionLoadResult SessionPersistence::loadSlotDetailed(int32_t slotIndex) const {
-    if (!isValidSlotIndex(slotIndex)) return {};
+    if (!isValidSlot(slotIndex)) return {};
     try {
         namespace fs = std::filesystem;
         const fs::path filePath = m_saveDirectory /
             ("save_slot_" + std::to_string(slotIndex) + ".json");
+
+        // A crash mid-write leaves only a stray "<slot>.json.tmp"; the good
+        // slot beside it stays complete. Ignore and best-effort clean it so
+        // load always answers from the last good slot.
+        cleanupStraySlotTemp(filePath);
 
         if (!fs::exists(filePath) || !fs::is_regular_file(filePath)) {
             ROWL_LOG_WARN("Save slot #" + std::to_string(slotIndex) +
@@ -176,17 +137,20 @@ std::shared_ptr<const GameState> SessionPersistence::loadSlot(int32_t slotIndex)
 }
 
 bool SessionPersistence::hasSlot(int32_t slotIndex) const {
-    if (!isValidSlotIndex(slotIndex)) return false;
+    if (!isValidSlot(slotIndex)) return false;
     const std::filesystem::path filePath = m_saveDirectory /
         ("save_slot_" + std::to_string(slotIndex) + ".json");
     return std::filesystem::exists(filePath) && std::filesystem::is_regular_file(filePath);
 }
 
 bool SessionPersistence::deleteSlot(int32_t slotIndex) const {
-    if (!isValidSlotIndex(slotIndex)) return false;
+    if (!isValidSlot(slotIndex)) return false;
     try {
         const std::filesystem::path filePath = m_saveDirectory /
             ("save_slot_" + std::to_string(slotIndex) + ".json");
+        // A crash mid-save can leave "<slot>.json.tmp" behind; deleting the
+        // slot removes its stray temp as well so no orphan lingers.
+        cleanupStraySlotTemp(filePath);
         return std::filesystem::exists(filePath) && std::filesystem::remove(filePath);
     } catch (const std::exception& error) {
         ROWL_LOG_ERROR("Exception while deleting save slot #" +

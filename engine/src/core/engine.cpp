@@ -1,5 +1,6 @@
 #include "rowl/core/engine.hpp"
 #include "rowl/state/save_metadata.hpp"
+#include "rowl/state/save_slots.hpp"
 #include "rowl/platform/user_data_directories.hpp"
 #include "rowl/core/logger.hpp"
 #include "rowl/core/story_graph_parser.hpp"
@@ -31,6 +32,12 @@ constexpr std::size_t kMaxComponentStringBytes = 64 * 1024;
 constexpr std::size_t kMaxNestedComponentValues = 4'096;
 constexpr std::size_t kMaxComponentDataDepth = 32;
 constexpr double kMaxComponentNumericMagnitude = 1'000'000.0;
+
+// The quick-save / pause-menu slot window must stay inside the canonical
+// save-slot range (rowl/state/save_slots.hpp: 0..99).
+static_assert(kPauseMenuQuickSlotMin >= Rowl::State::kMinSaveSlot &&
+              kPauseMenuQuickSlotMax <= Rowl::State::kMaxSaveSlot,
+              "Quick-save slots must stay within the canonical 0..99 range");
 
 namespace {
 
@@ -2000,9 +2007,9 @@ Rowl::State::SaveMetadata Engine::buildSaveMetadata() const {
 }
 
 bool Engine::saveGameSlot(int32_t slotIndex) {
-    if (slotIndex < 0 || slotIndex > 100) {
+    if (!Rowl::State::isValidSlot(slotIndex)) {
         m_context->setError(RuntimeErrorCode::InvalidArgument,
-                            "Invalid save slot index #" + std::to_string(slotIndex) + " (must be 0-100)",
+                            "Invalid save slot index #" + std::to_string(slotIndex) + " (must be 0-99)",
                             "save_game_slot", std::to_string(slotIndex));
         return false;
     }
@@ -2027,9 +2034,9 @@ bool Engine::saveGameSlot(int32_t slotIndex) {
 }
 
 bool Engine::loadGameSlot(int32_t slotIndex) {
-    if (slotIndex < 0 || slotIndex > 100) {
+    if (!Rowl::State::isValidSlot(slotIndex)) {
         m_context->setError(RuntimeErrorCode::InvalidArgument,
-                            "Invalid save slot index #" + std::to_string(slotIndex) + " (must be 0-100)",
+                            "Invalid save slot index #" + std::to_string(slotIndex) + " (must be 0-99)",
                             "load_game_slot", std::to_string(slotIndex));
         return false;
     }
@@ -2391,13 +2398,14 @@ std::string Engine::getPauseMenuJson() const {
 }
 
 bool Engine::hasSaveSlot(int32_t slotIndex) const {
+    if (!Rowl::State::isValidSlot(slotIndex)) return false;
     return sessionPersistence().hasSlot(slotIndex);
 }
 
 bool Engine::deleteSaveSlot(int32_t slotIndex) {
-    if (slotIndex < 0 || slotIndex > 100) {
+    if (!Rowl::State::isValidSlot(slotIndex)) {
         m_context->setError(RuntimeErrorCode::InvalidArgument,
-                            "Invalid save slot index #" + std::to_string(slotIndex) + " (must be 0-100)",
+                            "Invalid save slot index #" + std::to_string(slotIndex) + " (must be 0-99)",
                             "delete_save_slot", std::to_string(slotIndex));
         return false;
     }

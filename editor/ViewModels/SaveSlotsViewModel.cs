@@ -1,6 +1,8 @@
+using System;
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using RowlEngine.Editor.Services;
 
 namespace RowlEngine.Editor.ViewModels;
 
@@ -23,7 +25,10 @@ public sealed partial class SaveSlotsViewModel : ViewModelBase
     public void Refresh()
     {
         Slots.Clear();
-        for (int index = 0; index < _main.ProjectRuntimeSettings.SaveSlotCount; index++)
+        // Canonical slot indexes are 0..99; never query beyond MaxSaveSlotIndex.
+        var count = Math.Clamp(_main.ProjectRuntimeSettings.SaveSlotCount, 1,
+            ProjectRuntimeSettings.MaxSaveSlotCount);
+        for (int index = 0; index < count; index++)
             Slots.Add(new SaveSlotEntry(index, _main.EngineHost.HasSaveSlot(index)));
     }
 
