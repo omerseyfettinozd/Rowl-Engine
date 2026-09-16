@@ -1,4 +1,4 @@
-# KNOWN ISSUES — Rowl Engine (Faz 6 Dilim 8, IS 2/2)
+# KNOWN ISSUES — Rowl Engine (Faz 7 Dilim 1, IS 2/2)
 
 Açık P0/P1 YOK (2026-09-16, tüm CTest yeşil).
 
@@ -12,5 +12,6 @@ Açık P0/P1 YOK (2026-09-16, tüm CTest yeşil).
 | KI-06 | xUnit çevresi `sudo dotnet workload repair` istiyor (makine-çevre, kod dışı) | P2 | açık | editör test çevresi | second-brain daily 2026-09-16.md:392 | takip |
 | KI-07 | Rewind geçmişi sınırsız/budamasız (ölçüm D8 stres testinde). Dosya ~60B/adım yavaş büyür (ölçüldü), RAM `previousState` zinciri sınırsız büyür (budama yok). | P3 | kabul-edildi | GameState rewind zinciri | engine/src/state/game_state.cpp:189-202 | — (ölçüm D8 stres testinde) |
 | KI-08 | stres-suit ~156sn/1000-iter (thumbnail PNG-encode+base64 her save'de, ~310KB/slot) | P3 | kabul-edildi | test süresi | tests/test_rc_soak_and_data_safety.cpp yeni stres bölümü + eşik <240sn | Faz 7 |
+| KI-09 | macOS derleme-kapısı CI-only (`macos-arm64-compile`), cihaz/imza-kanıtı yok; Darwin `#else` HOME-fallback ve GPU-smoke-dışı D2'ye | P2 | açık | macOS derleme kapısı | .github/workflows/ci.yml (`macos-arm64-compile`); docs/PLATFORM_SUPPORT.md (Faz 7 D1 bölümü); engine/src/platform/user_data_directories.cpp:80-83 | Faz 7 |
 
 Kapsam-dışı (bilinçli yazılmadı): flag-drift `--help` (kodda dosya-yazma yok, şüphe düştü), `tail -n +N` kullanımı (tutarlı, şüphe yok).

@@ -37,15 +37,36 @@ Interactive Windows Unicode save/load remains part of the real-device gate.
 | Linux desktop x86_64 | Native CTest, shaderless fallback and GPU-MSDF smoke CI tests | Fresh deterministic `game.rowlpkg` (embedded manifest, license inventory) plus VFS package smoke | CI build/test/package gates green, incl. run 34744730099; interactive GUI proof pending |
 | Linux desktop arm64 | Native `ubuntu-24.04-arm` compile job with ELF AArch64 artifact checks | No release package or GUI/device run in this gate | Compile portability only; package and device validation pending |
 | Windows desktop x64 | vcpkg CMake/CTest CI job | Fresh standalone package, DLL and shaderless VFS smoke in CI | CI build/test/package gates green, incl. run 34744730099; interactive GUI/input/audio device proof pending |
-| macOS desktop | None — never built or tested; no host hardware available | None yet | Skeleton only (dylib resolve paths); evidence-blocked, not supported |
+| macOS desktop arm64 | Native `macos-15` compile job `macos-arm64-compile` (pinned SDL3 3.4.16, Mach-O arm64 `file` checks, artifact upload; no CTest) | No signed package or device run in this gate | D1 compile-gate only; package, signing and device validation pending |
 | Android arm64-v8a | Core-only NDK CMake script, never executed here | No APK/AAB is produced; physical-device test pending | Host skeleton only (`EngineActivity`, manifest); evidence-blocked, not supported |
 | iOS | Core-only Xcode/CMake arm64 script, never executed here | No signed app is produced; physical-device test pending | Host skeleton only (`Info.plist`, build script); evidence-blocked, not supported |
 
-macOS, Android, and iOS stay **evidence-blocked**: their host skeletons
+Android and iOS stay **evidence-blocked**: their host skeletons
 exist so the architecture has somewhere to land, but without host
 hardware, SDKs, signing, or a physical device there is no build, package,
-or smoke proof to claim. A target leaves this state only through the
-contract at the top of this file.
+or smoke proof to claim. macOS left compile-blocked through the Faz 7 D1
+gate below but remains device-blocked under the same rule. A target leaves
+this state only through the contract at the top of this file.
+
+### Faz 7 D1 — macOS compile gate (CI-only, no device proof)
+
+`.github/workflows/ci.yml` gains `macos-arm64-compile` (`runs-on: macos-15`,
+arm64): Homebrew deps plus the same pinned SDL3 3.4.16 tarball as the
+`linux-arm64-compile` precedent, plain CMake configure/build,
+`file ... | grep -q 'Mach-O.*arm64'` verification and artifact upload. CTest
+is deliberately absent (no display server, no code signature on the hosted
+runner) — the job name says "compile" on purpose.
+
+Known Darwin gaps, recorded here and NOT fixed in D1 (adaptor skeleton is D2):
+- `engine/src/platform/user_data_directories.cpp:80-83` — the `#else`
+  HOME-fallback (`~/.local/share/...`) also catches Apple builds and violates
+  the Apple convention (`~/Library/Application Support/...`). D2 item, untouched.
+- Root `CMakeLists.txt:253` — `if(UNIX AND NOT APPLE)` keeps the GPU-MSDF
+  smoke test Linux-only. Irrelevant to the D1 job (no CTest runs there), but
+  any future macOS device gate must define the macOS GPU/smoke story.
+
+D2 preview: the macOS adaptor skeleton (user-data directory, packaging and
+signing shape) lands in D2; production code stays untouched in D1.
 
 ## Faz 4.5 — Wayland explicitly unsupported (release note)
 

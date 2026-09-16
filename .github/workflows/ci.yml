@@ -263,6 +263,58 @@ jobs:
             build-arm64/bin/rowl_player
             build-arm64/bin/rowl_tests
 
+  macos-arm64-compile:
+    # Compile-only gate (D1). No CTest here: no display server and no code
+    # signature on the hosted runner, so this job proves the native macOS
+    # arm64 build only — not GUI, audio-device or signed-package validation.
+    runs-on: macos-15
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Assert native ARM64 runner
+        run: |
+          test "$(uname -m)" = "arm64"
+          uname -a
+
+      - name: Install native build dependencies
+        run: |
+          brew install lua zstd libvorbis pkg-config cmake ninja
+
+      - name: Fetch and build pinned SDL3 dependency
+        run: |
+          curl --fail --location --silent --show-error \
+            https://github.com/libsdl-org/SDL/releases/download/release-3.4.16/SDL3-3.4.16.tar.gz \
+            --output "$RUNNER_TEMP/SDL3-3.4.16.tar.gz"
+          tar --extract --gzip --file "$RUNNER_TEMP/SDL3-3.4.16.tar.gz" --directory "$RUNNER_TEMP"
+          cmake -S "$RUNNER_TEMP/SDL3-3.4.16" -B "$RUNNER_TEMP/SDL3-build" -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release -DSDL_SHARED=ON -DSDL_STATIC=OFF \
+            -DSDL_TEST_LIBRARY=OFF -DSDL_GPU=ON
+          cmake --build "$RUNNER_TEMP/SDL3-build" --parallel 2
+          sudo cmake --install "$RUNNER_TEMP/SDL3-build"
+
+      - name: Compile native runtime and tests
+        run: |
+          cmake -S . -B build-macos-arm64 -G Ninja -DCMAKE_BUILD_TYPE=Debug
+          cmake --build build-macos-arm64 --parallel 2
+
+      - name: Verify ARM64 Mach-O artifacts
+        run: |
+          file build-macos-arm64/lib/libRowlEngineCore.dylib build-macos-arm64/bin/rowl_player build-macos-arm64/bin/rowl_tests
+          file build-macos-arm64/lib/libRowlEngineCore.dylib | grep -q 'Mach-O.*arm64'
+          file build-macos-arm64/bin/rowl_player | grep -q 'Mach-O.*arm64'
+          file build-macos-arm64/bin/rowl_tests | grep -q 'Mach-O.*arm64'
+
+      - name: Upload macOS ARM64 compile evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-arm64-compile-artifacts
+          path: |
+            build-macos-arm64/lib/libRowlEngineCore.dylib
+            build-macos-arm64/bin/rowl_player
+            build-macos-arm64/bin/rowl_tests
+
   windows:
     runs-on: windows-2025
     timeout-minutes: 20
