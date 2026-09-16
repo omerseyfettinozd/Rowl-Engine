@@ -25,6 +25,12 @@ void refreshCrashSnapshot(RowlEngineHandle engine) {
 
 constexpr uint32_t kMaxWindowDimension = 16'384;
 
+// Faz 6 Dilim 10: oyuncu sürümünün tek kaynağı. help başlığı ile --version
+// aynı sabiti kullanır; CMake-üretimli header'a çevrilmedi — player
+// CMakeLists project() VERSION alanını okumuyor ve ayrı bir üretilmiş
+// başlık bu dilimin kapsamını büyütür; literal tek-kaynak yeterlidir.
+constexpr std::string_view kPlayerVersion = "1.0.0";
+
 bool parseWindowDimension(std::string_view text, uint32_t& output) {
     uint32_t parsed = 0;
     const auto [end, error] = std::from_chars(text.data(), text.data() + text.size(), parsed);
@@ -59,7 +65,7 @@ bool parseQuickSlot(std::string_view text, int32_t& output) {
 
 static void printHelp(const char* progName) {
     std::cout << "=======================================================\n"
-              << "🎮 ROWL ENGINE — Standalone Desktop Player v1.0.0\n"
+              << "🎮 ROWL ENGINE — Standalone Desktop Player v" << kPlayerVersion << "\n"
               << "=======================================================\n\n"
               << "Usage: " << progName << " [options]\n\n"
               << "Options:\n"
@@ -117,7 +123,7 @@ int main(int argc, char* argv[]) {
             printHelp(argv[0]);
             return 0;
         } else if (arg == "-v" || arg == "--version") {
-            std::cout << "Rowl Engine Standalone Player v1.0.0\n";
+            std::cout << "Rowl Engine Standalone Player v" << kPlayerVersion << "\n";
             return 0;
         } else if (arg == "-p" || arg == "--project") {
             if (!requireOptionValue(i, argc, argv, arg, projectDir)) return 1;

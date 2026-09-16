@@ -105,6 +105,17 @@ def main():
     help_proc = run([str(PLAYER_BIN), "--help"])
     if help_proc.returncode != 0:
         raise SystemExit(f"{PLAYER_BIN} --help exited {help_proc.returncode}")
+    # Sürüm-içerik kilidi (Faz 6 Dilim 10): --version çıktısı beklenen
+    # sürüm dizgisini içermeli. Beklenen değer teste elle yazılır (main.cpp
+    # parse edilmez); sabit drift ederse bu test kızarır — bu istenendir.
+    version_proc = run([str(PLAYER_BIN), "--version"])
+    if version_proc.returncode != 0:
+        raise SystemExit(
+            f"{PLAYER_BIN} --version exited {version_proc.returncode}")
+    if "1.0.0" not in version_proc.stdout:
+        raise SystemExit(
+            "player --version lost its 1.0.0 content lock: "
+            f"stdout={version_proc.stdout!r}")
     help_flags = set(LONG_FLAG_RE.findall(help_proc.stdout))
     guide_player_lines = [line for line in guide_text.splitlines()
                           if "rowl_player" in line
