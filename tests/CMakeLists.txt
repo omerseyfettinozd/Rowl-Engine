@@ -9,6 +9,7 @@ add_executable(rowl_tests
     test_game_state.cpp
     test_audio_engine.cpp
     test_audio_device_recovery.cpp
+    test_audio_streaming.cpp
     test_lua_sandbox.cpp
     test_mobile_input.cpp
     test_platform_host.cpp

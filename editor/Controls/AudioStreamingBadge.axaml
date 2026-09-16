@@ -1,0 +1,7 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="RowlEngine.Editor.Controls.AudioStreamingBadge">
+    <Border x:Name="BadgeBorder" CornerRadius="4" Padding="6,2" Margin="0,2,0,0">
+        <TextBlock x:Name="BadgeLabel" FontSize="10" FontWeight="SemiBold" TextWrapping="Wrap"/>
+    </Border>
+</UserControl>

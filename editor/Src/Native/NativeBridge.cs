@@ -385,6 +385,42 @@ namespace RowlEngine.Editor.Native
         internal static extern void RowlEngine_SetVoiceVolume(IntPtr handle, float volume);
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
         internal static extern void RowlEngine_SetSfxVolume(IntPtr handle, float volume);
+
+        // ── Faz 5 Dilim 1 audio streaming (CAPABILITY_AUDIO_STREAMING) ────
+        //
+        // IsStreaming reports the live BGM routing decision (1 = stream,
+        // 0 = memory / unknown / no-BGM / dead handle). GetStreamInfoJson
+        // follows the caller-buffer contract (NULL/0 size query,
+        // BUFFER_TOO_SMALL + required size, INVALID_HANDLE on dead
+        // handles); the JSON schema is mode/duration_seconds/
+        // threshold_seconds/threshold_bytes/buffered_seconds/reason/
+        // channel/asset. Volume setters clamp to [0,1] and ignore
+        // non-finite input; dead-handle getters return 0.0f.
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern int RowlEngine_IsStreaming(IntPtr handle);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_GetStreamInfoJson(
+            IntPtr handle,
+            IntPtr buffer,
+            uint bufferSize,
+            out uint outRequiredSize);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern float RowlEngine_GetBgmVolume(IntPtr handle);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern void RowlEngine_SetAmbienceVolume(IntPtr handle, float volume);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern float RowlEngine_GetAmbienceVolume(IntPtr handle);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern void RowlEngine_SetUiVolume(IntPtr handle, float volume);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern float RowlEngine_GetUiVolume(IntPtr handle);
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
         internal static extern void RowlEngine_SetTextSpeedMultiplier(IntPtr handle, float multiplier);
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]

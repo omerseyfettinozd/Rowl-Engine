@@ -78,6 +78,8 @@ typedef struct RowlEngine_ApiVersion {
 /* Faz 4.5 Dilim 3: long-audio threshold contract (header probe + warning; decode path untouched). */
 #define ROWL_ENGINE_CAPABILITY_LONG_AUDIO_CONTRACT UINT64_C(2048)
 #define ROWL_ENGINE_CAPABILITY_CAMERA_ROTATION_IGNORED UINT64_C(4096)
+/* Faz 5 Dilim 1: OGG streaming core + mixer bus skeleton + decision observability. */
+#define ROWL_ENGINE_CAPABILITY_AUDIO_STREAMING UINT64_C(8192)
 
 /** Current additive C API version. This query does not require an engine handle. */
 ROWL_API RowlEngine_ResultCode RowlEngine_GetApiVersion(
@@ -584,7 +586,8 @@ ROWL_API float RowlEngine_GetCharacterRotation(RowlEngineHandle handle);
  * Plays an audio asset on the specified channel with an optional DSP filter.
  * @param handle      Engine handle from RowlEngine_Create().
  * @param assetPath   Path to WAV audio file (relative to VFS or physical).
- * @param channelType 0 = Bgm, 1 = Voice, 2 = Sfx.
+ * @param channelType 0 = Bgm, 1 = Voice, 2 = Sfx, 3 = Ambience (loop),
+ *   4 = Ui (one-shot). Any other value falls back to the Sfx branch.
  * @param filterType  0 = Normal, 1 = Cave, 2 = Telephone, 3 = Underwater.
  */
 ROWL_API void RowlEngine_PlayAudio(RowlEngineHandle handle,
@@ -620,6 +623,31 @@ ROWL_API void RowlEngine_SetAutoAdvanceDelayOffset(RowlEngineHandle handle, floa
 ROWL_API float RowlEngine_GetMasterVolume(RowlEngineHandle handle);
 ROWL_API float RowlEngine_GetVoiceVolume(RowlEngineHandle handle);
 ROWL_API float RowlEngine_GetSfxVolume(RowlEngineHandle handle);
+
+/**
+ * Faz 5 Dilim 1 — OGG streaming observability + volume matrix completion
+ * (ROWL_ENGINE_CAPABILITY_AUDIO_STREAMING). All additive; older entry
+ * points are untouched.
+ *
+ * IsStreaming returns 1 while the current BGM decision is stream, 0 for
+ * memory / unknown / no-BGM / dead handle (fail closed). GetStreamInfoJson
+ * follows the caller-buffer contract of RowlEngine_GetLocale (NULL/0 size
+ * query, undersized buffer clears + BUFFER_TOO_SMALL + outRequiredSize,
+ * dead handle INVALID_HANDLE); the JSON schema is
+ * mode/duration_seconds/threshold_seconds/threshold_bytes/
+ * buffered_seconds/reason/channel/asset. Volume setters clamp to [0,1]
+ * and ignore non-finite input (last valid value kept); dead-handle
+ * getters return 0.0f.
+ */
+ROWL_API int RowlEngine_IsStreaming(RowlEngineHandle handle);
+ROWL_API RowlEngine_ResultCode RowlEngine_GetStreamInfoJson(
+    RowlEngineHandle handle, char* buffer, uint32_t bufferSize,
+    uint32_t* outRequiredSize);
+ROWL_API float RowlEngine_GetBgmVolume(RowlEngineHandle handle);
+ROWL_API void RowlEngine_SetAmbienceVolume(RowlEngineHandle handle, float volume);
+ROWL_API float RowlEngine_GetAmbienceVolume(RowlEngineHandle handle);
+ROWL_API void RowlEngine_SetUiVolume(RowlEngineHandle handle, float volume);
+ROWL_API float RowlEngine_GetUiVolume(RowlEngineHandle handle);
 
 /** Triggers voice ducking attenuation on BGM (1 = voice active, 0 = restored). */
 ROWL_API void RowlEngine_TriggerVoiceDucking(RowlEngineHandle handle, int isVoiceActive);

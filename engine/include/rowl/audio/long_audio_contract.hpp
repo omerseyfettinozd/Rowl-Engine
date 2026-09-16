@@ -268,4 +268,25 @@ inline LongAudioAssessment probeAndAssessLongAudio(const uint8_t* data,
     return assessLongAudio(info.durationSeconds, threshold, assetPathOrNull);
 }
 
+/** Faz 5 Dilim 1 — streaming yönlendirme kararı.
+ *  probeAndAssessLongAudio'nun saf sarmalayıcısıdır; formül kopyası
+ *  YOKTUR. `stream`, duration > threshold (strict) ise true olur;
+ *  unknown/fail-closed girdilerde false kalır (RAM yolu). */
+struct StreamDecision {
+    bool stream = false;
+    double durationSeconds = -1.0;
+    double thresholdSeconds = 0.0;
+};
+
+inline StreamDecision decideStream(const uint8_t* data, size_t size,
+                                   const char* assetPathOrNull = nullptr) {
+    StreamDecision decision;
+    const LongAudioAssessment assessment =
+        probeAndAssessLongAudio(data, size, assetPathOrNull);
+    decision.stream = assessment.exceedsThreshold;
+    decision.durationSeconds = assessment.durationSeconds;
+    decision.thresholdSeconds = assessment.thresholdSeconds;
+    return decision;
+}
+
 } // namespace Rowl::Audio

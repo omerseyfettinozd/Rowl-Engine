@@ -400,6 +400,87 @@ void test_c_api_contract() {
         }
     }
 
+    // Faz 5 Dilim 1: audio-streaming observability + volume matrix (additive).
+    // Capability bit, dead-handle fail-closed vectors, and the GetLocale-style
+    // caller-buffer contract (NULL/0 size query, undersized BUFFER_TOO_SMALL).
+    {
+        uint64_t streamingCaps = 0;
+        if (RowlEngine_GetCapabilities(&streamingCaps) != ROWL_RESULT_OK ||
+            (streamingCaps & ROWL_ENGINE_CAPABILITY_AUDIO_STREAMING) == 0 ||
+            ROWL_ENGINE_CAPABILITY_AUDIO_STREAMING != UINT64_C(8192)) {
+            std::cerr << "AUDIO_STREAMING capability bit 8192 must be advertised" << std::endl;
+            exit(1);
+        }
+        if (RowlEngine_IsStreaming(nullptr) != 0 ||
+            RowlEngine_GetStreamInfoJson(nullptr, nullptr, 0, &required) !=
+                ROWL_RESULT_INVALID_HANDLE ||
+            RowlEngine_GetBgmVolume(nullptr) != 0.0f ||
+            RowlEngine_GetAmbienceVolume(nullptr) != 0.0f ||
+            RowlEngine_GetUiVolume(nullptr) != 0.0f) {
+            std::cerr << "Streaming null-handle contract failed" << std::endl;
+            exit(1);
+        }
+        RowlEngine_SetAmbienceVolume(nullptr, 0.5f);
+        RowlEngine_SetUiVolume(nullptr, 0.5f);
+        uint32_t streamRequired = 0;
+        if (RowlEngine_GetStreamInfoJson(handle, nullptr, 0, &streamRequired) !=
+                ROWL_RESULT_OK ||
+            streamRequired < 2) {
+            std::cerr << "StreamInfo size query failed" << std::endl;
+            exit(1);
+        }
+        std::vector<char> streamTiny(streamRequired - 1, 'x');
+        uint32_t streamRepeated = 0;
+        if (RowlEngine_GetStreamInfoJson(
+                handle, streamTiny.data(),
+                static_cast<uint32_t>(streamTiny.size()),
+                &streamRepeated) != ROWL_RESULT_BUFFER_TOO_SMALL ||
+            streamRepeated != streamRequired || streamTiny.front() != '\0') {
+            std::cerr << "StreamInfo undersized contract failed" << std::endl;
+            exit(1);
+        }
+        std::vector<char> streamBuffer(streamRequired, '\0');
+        if (RowlEngine_GetStreamInfoJson(
+                handle, streamBuffer.data(),
+                static_cast<uint32_t>(streamBuffer.size()),
+                &streamRepeated) != ROWL_RESULT_OK ||
+            streamRepeated != streamRequired || streamBuffer.back() != '\0') {
+            std::cerr << "StreamInfo exact-size copy failed" << std::endl;
+            exit(1);
+        }
+        const std::string streamJson(streamBuffer.data());
+        if (streamJson.find("\"mode\":") == std::string::npos ||
+            streamJson.find("\"reason\":") == std::string::npos) {
+            std::cerr << "StreamInfo JSON schema mismatch: " << streamJson << std::endl;
+            exit(1);
+        }
+        if (RowlEngine_IsStreaming(handle) != 0) {
+            std::cerr << "Stream-free engine must report IsStreaming==0" << std::endl;
+            exit(1);
+        }
+        RowlEngine_SetAmbienceVolume(handle, 0.5f);
+        RowlEngine_SetUiVolume(handle, 0.25f);
+        if (std::abs(RowlEngine_GetAmbienceVolume(handle) - 0.5f) > 1e-6 ||
+            std::abs(RowlEngine_GetUiVolume(handle) - 0.25f) > 1e-6) {
+            std::cerr << "Ambience/Ui volume round-trip failed" << std::endl;
+            exit(1);
+        }
+        RowlEngine_SetAmbienceVolume(handle, -2.0f);
+        RowlEngine_SetUiVolume(handle, 7.0f);
+        if (std::abs(RowlEngine_GetAmbienceVolume(handle) - 0.0f) > 1e-6 ||
+            std::abs(RowlEngine_GetUiVolume(handle) - 1.0f) > 1e-6) {
+            std::cerr << "Volume clamp contract failed" << std::endl;
+            exit(1);
+        }
+        RowlEngine_SetAmbienceVolume(handle, std::numeric_limits<float>::quiet_NaN());
+        RowlEngine_SetUiVolume(handle, std::numeric_limits<float>::infinity());
+        if (std::abs(RowlEngine_GetAmbienceVolume(handle) - 0.0f) > 1e-6 ||
+            std::abs(RowlEngine_GetUiVolume(handle) - 1.0f) > 1e-6) {
+            std::cerr << "Non-finite volume input must be ignored" << std::endl;
+            exit(1);
+        }
+    }
+
     RowlEngine_Destroy(handle);
     std::error_code cleanupError;
     std::filesystem::remove_all(unicodeRoot, cleanupError);

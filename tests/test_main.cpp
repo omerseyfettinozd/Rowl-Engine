@@ -29,6 +29,7 @@ int main(int argc, char* argv[]) {
     test_game_state();
     test_audio_engine();
     test_audio_device_recovery();
+    test_audio_streaming();
     test_lua_sandbox();
     test_mobile_input();
     test_platform_host();

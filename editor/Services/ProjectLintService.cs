@@ -63,6 +63,8 @@ internal static class ProjectLintService
             RunRule(issues, () => CheckDialogueText(nodeList, assetsPath, issues, options));
         if (options.CheckUnusedAssets)
             RunRule(issues, () => CheckUnusedAssets(nodeList, disk, issues, options));
+        if (options.CheckLongAudio)
+            RunRule(issues, () => CheckLongAudioStreaming(nodeList, assetsPath, disk, issues, options));
 
         return issues;
     }
@@ -564,6 +566,81 @@ internal static class ProjectLintService
         return result;
     }
 
+    // ── Rule 5: long-audio streaming budget ─────────────────────────────
+    // Faz 5 Dilim 1: BGM tracks whose on-disk size exceeds the 64 MiB
+    // decoded-PCM budget take the OGG streaming path (header-probed
+    // duration over threshold); over-budget non-OGG assets fall back to
+    // the RAM decode path and its cap. Advisory warnings only (batch-only,
+    // never merged into the inline inspector). Missing files are skipped
+    // (Validate owns missing-asset errors).
+
+    private const long LongAudioBudgetBytes = 64L * 1024 * 1024;
+
+    private static void CheckLongAudioStreaming(
+        List<NodeViewModel> nodeList,
+        string assetsPath,
+        ProjectValidationService.DiskIndex disk,
+        List<ProjectValidationIssue> issues,
+        ProjectLintOptions options)
+    {
+        string root;
+        try
+        {
+            root = Path.GetFullPath(assetsPath);
+        }
+        catch (Exception)
+        {
+            return;
+        }
+        int added = 0;
+        foreach (var node in nodeList)
+        {
+            foreach (var audio in node.AllComponents.OfType<AudioComponentViewModel>())
+            {
+                if (added >= options.MaxIssuesPerRule)
+                {
+                    issues.Add(new(false,
+                        $"Long-audio scan capped at {options.MaxIssuesPerRule} entries; remaining BGM tracks unchecked."));
+                    return;
+                }
+                if (!audio.IsEnabled || string.IsNullOrWhiteSpace(audio.BgmTrack))
+                    continue;
+                string? rel = ResolveDiskRelative(audio.BgmTrack, root, disk);
+                if (rel is null)
+                    continue;
+                string full;
+                try
+                {
+                    full = Path.GetFullPath(Path.Combine(root, rel));
+                    if (!ProjectFileSystem.IsSameOrDescendant(full, root) || !File.Exists(full))
+                        continue;
+                }
+                catch (Exception)
+                {
+                    continue;
+                }
+                long length;
+                try
+                {
+                    length = new FileInfo(full).Length;
+                }
+                catch (Exception)
+                {
+                    continue; // Unreadable here; the disk-scan warning already covers IO failures.
+                }
+                if (length <= LongAudioBudgetBytes)
+                    continue;
+                bool isOgg = rel.EndsWith(".ogg", StringComparison.OrdinalIgnoreCase);
+                issues.Add(new(false,
+                    isOgg
+                        ? $"BGM '{rel}' (node #{node.Id}) is {length / (1024 * 1024)} MiB (over 64 MiB); it takes the OGG streaming path."
+                        : $"BGM '{rel}' (node #{node.Id}) is {length / (1024 * 1024)} MiB (over 64 MiB); only OGG streams, so this asset falls back to the RAM decode path. Convert to OGG to stream it.",
+                    node.Id, rel));
+                added++;
+            }
+        }
+    }
+
     // ── Rule 4: unused assets ────────────────────────────────────────
     // ExactPaths MINUS the referenced-asset candidate set (normalized +
     // images/audio/fonts/scripts prefixes, mirroring batch resolution) =
@@ -650,5 +727,6 @@ internal sealed record ProjectLintOptions(
     bool CheckTranslations = true,
     bool CheckGlyphCoverage = true,
     bool CheckUnusedAssets = true,
+    bool CheckLongAudio = true,
     long MaxLuaBytes = 256 * 1024,
     int MaxIssuesPerRule = 200);

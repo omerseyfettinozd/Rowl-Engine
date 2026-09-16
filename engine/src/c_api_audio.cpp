@@ -34,14 +34,14 @@ void RowlEngine_PlayAudio(RowlEngineHandle handle,
         if (!engine) return;
         auto* audio = engine->getAudio();
         if (!audio) return;
-        auto channel = (channelType == 0) ? Rowl::Audio::AudioChannelType::Bgm :
-                       (channelType == 1) ? Rowl::Audio::AudioChannelType::Voice :
-                                            Rowl::Audio::AudioChannelType::Sfx;
+        // Faz 5 Dilim 1: ham kanal int'i korunur (0=Bgm,1=Voice,2=Sfx,
+        // 3=Ambience,4=Ui; diğerleri Sfx'e düşer); snapshot kanal sadakati
+        // için playAudioInt kullanılır.
         auto filter  = (filterType == 1)  ? Rowl::Audio::DSPFilterType::CaveReverb :
                        (filterType == 2)  ? Rowl::Audio::DSPFilterType::Telephone :
                        (filterType == 3)  ? Rowl::Audio::DSPFilterType::UnderwaterLowPass :
                                             Rowl::Audio::DSPFilterType::Normal;
-        audio->playAudio(assetPath, channel, filter);
+        audio->playAudioInt(assetPath, channelType, filter);
         if (!audio->getLastError().empty()) {
             if (auto ctx = engine->getContext()) {
                 ctx->setError(Rowl::Core::RuntimeErrorCode::AudioDecodeError,
@@ -296,6 +296,68 @@ void RowlEngine_ResetVoiceBlipCount(RowlEngineHandle handle) {
     invokeNoexcept([&] {
         toEngine(handle)->resetVoiceBlipCount();
     });
+}
+
+// ── Faz 5 Dilim 1: streaming observability + volume matrix ──────────────
+
+int RowlEngine_IsStreaming(RowlEngineHandle handle) {
+    if (!isLiveHandle(handle)) return 0;
+    return invokeNoexcept<int>([&] {
+        const auto* audio = toEngine(handle)->getAudio();
+        return audio && audio->isStreaming() ? 1 : 0;
+    }, 0);
+}
+
+RowlEngine_ResultCode RowlEngine_GetStreamInfoJson(
+    RowlEngineHandle handle, char* buffer, uint32_t bufferSize,
+    uint32_t* outRequiredSize) {
+    if (!isLiveHandle(handle)) return ROWL_RESULT_INVALID_HANDLE;
+    return invokeNoexcept<RowlEngine_ResultCode>([&] {
+        auto* engine = toEngine(handle);
+        if (!engine) return ROWL_RESULT_INVALID_HANDLE;
+        const auto* audio = engine->getAudio();
+        if (!audio) return ROWL_RESULT_INVALID_HANDLE;
+        return copyUtf8ToCaller(audio->streamInfoJson(), buffer,
+                                bufferSize, outRequiredSize);
+    }, ROWL_RESULT_UNKNOWN_ERROR);
+}
+
+float RowlEngine_GetBgmVolume(RowlEngineHandle handle) {
+    if (!isLiveHandle(handle)) return 0.0f;
+    return invokeNoexcept<float>([&] {
+        const auto* audio = toEngine(handle)->getAudio();
+        return audio ? audio->getBgmVolume() : 0.0f;
+    }, 0.0f);
+}
+
+void RowlEngine_SetAmbienceVolume(RowlEngineHandle handle, float volume) {
+    if (!isLiveHandle(handle)) return;
+    invokeNoexcept([&] {
+        if (auto* audio = toEngine(handle)->getAudio()) audio->setAmbienceVolume(volume);
+    });
+}
+
+float RowlEngine_GetAmbienceVolume(RowlEngineHandle handle) {
+    if (!isLiveHandle(handle)) return 0.0f;
+    return invokeNoexcept<float>([&] {
+        const auto* audio = toEngine(handle)->getAudio();
+        return audio ? audio->getAmbienceVolume() : 0.0f;
+    }, 0.0f);
+}
+
+void RowlEngine_SetUiVolume(RowlEngineHandle handle, float volume) {
+    if (!isLiveHandle(handle)) return;
+    invokeNoexcept([&] {
+        if (auto* audio = toEngine(handle)->getAudio()) audio->setUiVolume(volume);
+    });
+}
+
+float RowlEngine_GetUiVolume(RowlEngineHandle handle) {
+    if (!isLiveHandle(handle)) return 0.0f;
+    return invokeNoexcept<float>([&] {
+        const auto* audio = toEngine(handle)->getAudio();
+        return audio ? audio->getUiVolume() : 0.0f;
+    }, 0.0f);
 }
 
 } // extern "C"

@@ -7,6 +7,9 @@
 #include <memory>
 #include <unordered_map>
 
+#include "rowl/audio/audio_streaming.hpp"
+#include "rowl/audio/ogg_stream_source.hpp"
+
 struct SDL_AudioStream;
 
 namespace Rowl::VFS {
@@ -18,7 +21,11 @@ namespace Rowl::Audio {
 enum class AudioChannelType {
     Bgm,
     Voice,
-    Sfx
+    Sfx,
+    // Faz 5 Dilim 1 ekleri (mevcut 0/1/2 değerleri aynen korunur):
+    // 3 = Ambience (loop RAM), 4 = Ui (one-shot, fiziksel sfxStream).
+    Ambience,
+    Ui
 };
 
 enum class DSPFilterType {
@@ -47,6 +54,11 @@ public:
     bool initialize();
     void playAudio(const std::string& assetPath, AudioChannelType channel, DSPFilterType filter = DSPFilterType::Normal);
     void playBgm(const std::string& assetPath, BgmTransitionKind transition, float durationSeconds);
+    // Faz 5 Dilim 1: ham kanal int'iyle giriş (0=Bgm,1=Voice,2=Sfx,
+    // 3=Ambience loop, 4=Ui one-shot; diğerleri mevcut else-Sfx dalına
+    // düşer). StreamInfo snapshot kanalını da kaydeder.
+    void playAudioInt(const std::string& assetPath, int channelInt,
+                      DSPFilterType filter = DSPFilterType::Normal);
     void stopBgm();
     void stopAll();
 
@@ -54,6 +66,10 @@ public:
     void setMasterVolume(float volume);
     void setVoiceVolume(float volume);
     void setSfxVolume(float volume);
+    // Faz 5 Dilim 1 — volume matrisi tamamlamaları ([0,1] clamp +
+    // non-finite ignore, son geçerli değer korunur).
+    void setAmbienceVolume(float volume);
+    void setUiVolume(float volume);
     void applyDspFilter(DSPFilterType filter);
     void triggerVoiceDucking(bool isVoiceActive);
     void setDuckingFactor(float factor);  // Configurable voice ducking attenuation (0.0-1.0)
@@ -67,6 +83,9 @@ public:
     float getMasterVolume() const { return m_masterVolume; }
     float getVoiceVolume() const { return m_voiceVolume; }
     float getSfxVolume() const { return m_sfxVolume; }
+    // Faz 5 Dilim 1 ekleri.
+    float getAmbienceVolume() const { return m_ambienceVolume; }
+    float getUiVolume() const { return m_uiVolume; }
     DSPFilterType getActiveFilter() const { return m_activeFilter; }
     bool isInitialized() const { return m_initialized; }
     bool isDuckingActive() const { return m_isDuckingActive; }
@@ -92,6 +111,25 @@ public:
     bool isVoicePlaying() const { return m_isVoicePlaying; }
     bool isBgmTransitionActive() const { return m_bgmTransitionActive; }
     const std::string& getLastError() const { return m_lastError; }
+
+    // ── Faz 5 Dilim 1: OGG streaming çekirdek gözlemlenebilirliği ──
+    // 1 = o anki BGM kararı stream, 0 = memory / unknown / yok (fail-closed).
+    bool isStreaming() const { return m_isBgmStreamed; }
+    // Ring refill: update() içinden senkron çağrılır (thread YOKTUR).
+    void pumpBgmStream();
+    // Kaynağı kapatır, ring indekslerini sıfırlar (intent korunur).
+    void closeBgmStream();
+    // Saf yönlendirme operatörü: assessLongAudio ile aynı strict `>`
+    // semantiği; unknown/fail-closed girdilerde false (sessiz).
+    static bool shouldStreamRoute(double durationSeconds,
+                                  double thresholdSeconds);
+    // Tek karar kaynağından üretilmiş StreamInfo JSON'u (caller-buffer
+    // modeliyle C API üzerinden makine-tüketilebilir).
+    std::string streamInfoJson() const;
+    // Ring'de kuyruklu çözülmüş saniye (oynatmayı etkilemez).
+    double bgmStreamBufferedSeconds() const;
+    bool isAmbiencePlaying() const { return m_isAmbiencePlaying; }
+    const std::string& getCurrentAmbiencePath() const { return m_currentAmbiencePath; }
 
     // Real-Time Audio Telemetry & VU Metering
     float getChannelPeak(int channelType, int channelIndex = 0) const;
@@ -162,6 +200,45 @@ private:
     std::shared_ptr<Rowl::VFS::VFSManager> m_ownedVfs;
     bool m_audioLeaseHeld = false;
     Rowl::VFS::VFSManager& vfs() const;
+
+    // ── Faz 5 Dilim 1 ekleri (mevcut üye/imza/sıra/formül değişmez) ──
+    std::unique_ptr<OggStreamSource> m_bgmStreamSource;
+    // 4x4096 frame sabit üst bant, heap'te bir kez ayrılır (interleaved
+    // float; kapasite kanal sayısından bağımsız üst bantla tutulur).
+    std::vector<float> m_bgmRing;
+    uint64_t m_bgmRingWriteFrames = 0; // üretici (decode frontier sayacı)
+    uint64_t m_bgmRingReadFrames = 0;  // tüketici sayacı (telemetri penceresi)
+    uint64_t m_bgmStreamPcmPos = 0;    // kaynaktan çözülen toplam frame
+    bool m_isBgmStreamed = false;
+    bool m_bgmStreamEos = false;
+    DSPFilterType m_bgmStreamFilter = DSPFilterType::Normal;
+    float m_ambienceVolume = 1.0f;
+    float m_uiVolume = 1.0f;
+    SDL_AudioStream* m_ambienceStream = nullptr;
+    std::vector<uint8_t> m_ambienceData; // float PCM, loop RAM
+    size_t m_ambienceSampleOffset = 0;
+    bool m_isAmbiencePlaying = false;
+    std::string m_currentAmbiencePath;
+    std::vector<uint8_t> m_uiData; // float PCM, one-shot (fiziksel sfxStream)
+    size_t m_uiSampleOffset = 0;
+    bool m_isUiPlaying = false;
+    ChannelTelemetry m_telemetryAmbience;
+    ChannelTelemetry m_telemetryUi;
+    StreamInfo m_streamInfo; // snapshot: tek karar kaynağı
+    int m_streamChannel = 0; // PlayAudio'ya verilen son int
+    bool m_streamChannelFresh = false; // playAudioInt'ten taze kanal
+    uint32_t m_bgmRingChannels = 2;
+    uint32_t m_bgmStreamRateHz = 0;
+    std::vector<float> m_bgmPumpScratch; // sabit chunk-cap scratch
+    void queueStreamChunkToDevice(const float* samples, size_t frames,
+                                  uint32_t channels, uint32_t sampleRate);
+    void resetStreamInfoNoBgm();
+    bool findBgmStreamCandidate(const std::string& assetPath,
+                                std::string& candidateOut,
+                                std::vector<uint8_t>& headerBytesOut);
+    bool openBgmStream(const std::string& candidate,
+                       const std::string& assetPath, int snapshotChannel,
+                       DSPFilterType filter);
 };
 
 } // namespace Rowl::Audio

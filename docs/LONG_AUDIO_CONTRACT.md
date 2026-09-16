@@ -82,3 +82,20 @@ Owner: `tests/test_audio_engine.cpp` (existing TU, no new TU).
 - RSS stability: process RSS sampled before/after the loop must not grow
   beyond an 8 MiB slack (POSIX `getrusage`; Windows
   `GetProcessWorkingSetSize`, kernel32 only so no extra link dep).
+
+## 5. Streaming handoff (Faz 5 Dilim 1)
+
+The contract above is unchanged (code wins on any disagreement) and now
+feeds one more consumer: the OGG streaming router. `decideStream` is a
+pure wrapper over `probeAndAssessLongAudio` (no formula copy); only a BGM
+asset whose header-probed duration is strictly over threshold takes the
+streaming path, and only when it is OGG. Over-threshold WAV keeps the RAM
+path (the decode cap rejects it fail-closed). Details, the C API
+observability surface (`ROWL_ENGINE_CAPABILITY_AUDIO_STREAMING = 8192`,
+`IsStreaming`, `GetStreamInfoJson`, BGM/Ambience/Ui volumes) and the
+mixer bus skeletons live in `docs/LONG_AUDIO_STREAMING.md`.
+
+Wire-format note: non-finite StreamInfo doubles are emitted as JSON `null`
+(never bare `NaN`/`Infinity`); the editor maps explicit `null` to
+`double.NaN` via nullable-double reads and `IsStream` stays `mode == stream`
++ strict finite `duration > threshold`, so null-wire never streams.

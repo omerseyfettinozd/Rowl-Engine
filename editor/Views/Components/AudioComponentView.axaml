@@ -78,6 +78,8 @@
                         <TextBlock Grid.Row="1" Grid.Column="0" Text="R" FontSize="9" Width="12" Foreground="{DynamicResource MutedText}" VerticalAlignment="Center"/>
                         <ProgressBar Grid.Row="1" Grid.Column="1" Minimum="0" Maximum="1" Value="{Binding SfxPeakR}" Height="4" Foreground="#3B82F6" Background="#262626" Margin="0,1"/>
                     </Grid>
+                    <!-- Faz 5 Dilim 1: OGG streaming karar rozeti -->
+                    <ctrl:AudioStreamingBadge Mode="{Binding StreamMode}" BadgeText="{Binding StreamBadgeText}"/>
                 </StackPanel>
 
                 <!-- Volume Slider -->

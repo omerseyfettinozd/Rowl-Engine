@@ -202,6 +202,30 @@ bool AudioEngine::initialize() {
     m_lastSfxData.clear();
     m_voiceBlipCount = 0;
     m_lastVoiceBlipPitch = 1.0f;
+    // Faz 5 Dilim 1 ekleri: hacim matrisi varsayılanları + stream durumu.
+    m_ambienceVolume = 1.0f;
+    m_uiVolume = 1.0f;
+    m_bgmStreamSource.reset();
+    m_bgmRingWriteFrames = 0;
+    m_bgmRingReadFrames = 0;
+    m_bgmStreamPcmPos = 0;
+    m_isBgmStreamed = false;
+    m_bgmStreamEos = false;
+    m_bgmStreamFilter = DSPFilterType::Normal;
+    m_bgmRingChannels = 2;
+    m_bgmStreamRateHz = 0;
+    m_ambienceData.clear();
+    m_ambienceSampleOffset = 0;
+    m_isAmbiencePlaying = false;
+    m_currentAmbiencePath.clear();
+    m_uiData.clear();
+    m_uiSampleOffset = 0;
+    m_isUiPlaying = false;
+    m_telemetryAmbience = {};
+    m_telemetryUi = {};
+    m_streamInfo = StreamInfo{};
+    m_streamChannel = 0;
+    m_streamChannelFresh = false;
 
     // Initialize SDL3 Audio subsystem
     if (Rowl::Platform::SdlSubsystemLease::acquire(SDL_INIT_AUDIO)) {
@@ -216,8 +240,11 @@ bool AudioEngine::initialize() {
         m_voiceStream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr, nullptr, nullptr);
         // Open a third stream for short sound effects.
         m_sfxStream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr, nullptr, nullptr);
+        // Faz 5 Dilim 1: Ambience loop RAM için kendi akışı (karışım yok,
+        // yalnızca bağımsız gain + loop besleme).
+        m_ambienceStream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr, nullptr, nullptr);
 
-        if (m_bgmStream && m_transitionBgmStream && m_voiceStream && m_sfxStream) {
+        if (m_bgmStream && m_transitionBgmStream && m_voiceStream && m_sfxStream && m_ambienceStream) {
             m_deviceAvailable = true;
             applyChannelGains();
             ROWL_LOG_INFO("[AudioEngine] Physical audio device initialized successfully (BGM, Voice & SFX streams active).");
@@ -228,6 +255,7 @@ bool AudioEngine::initialize() {
             if (m_transitionBgmStream) { SDL_DestroyAudioStream(m_transitionBgmStream); m_transitionBgmStream = nullptr; }
             if (m_voiceStream) { SDL_DestroyAudioStream(m_voiceStream); m_voiceStream = nullptr; }
             if (m_sfxStream) { SDL_DestroyAudioStream(m_sfxStream); m_sfxStream = nullptr; }
+            if (m_ambienceStream) { SDL_DestroyAudioStream(m_ambienceStream); m_ambienceStream = nullptr; }
         }
     } else {
         ROWL_LOG_WARN("[AudioEngine] SDL_InitSubSystem(SDL_INIT_AUDIO) failed: " + std::string(SDL_GetError()) +
@@ -252,12 +280,42 @@ void AudioEngine::playBgm(const std::string& assetPath, BgmTransitionKind transi
 }
 
 void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType channel, DSPFilterType filter) {
+    // Bilinçli muafiyet: bu guard hiçbir state'e dokunmayan saf no-op'tur
+    // (m_lastError.clear() bile çalışmaz); snapshot son tamamlanmış play
+    // çağrısına aittir, o yüzden reset YOKTUR.
     if (!m_initialized || assetPath.empty()) return;
 
     m_lastError.clear();
 
+    // ── Faz 5 Dilim 1: snapshot kanalı + Bgm header probe (RAM bloğu öncesi) ──
+    // Karar operatörü long_audio_contract'tır (strict `>`); burada formül
+    // YOKTUR. Kısa-ses RAM decode bloğu aşağıda satır satır aynen korunur.
+    int snapshotChannel = (channel == AudioChannelType::Bgm) ? 0 :
+                          (channel == AudioChannelType::Voice) ? 1 :
+                          (channel == AudioChannelType::Sfx) ? 2 :
+                          (channel == AudioChannelType::Ambience) ? 3 : 4;
+    if (m_streamChannelFresh) {
+        snapshotChannel = m_streamChannel;
+        m_streamChannelFresh = false;
+    }
+    m_streamChannel = snapshotChannel;
+    StreamInfo probedInfo;
+    bool probedForBgm = false;
+    std::string probeCandidate;
+    if (channel == AudioChannelType::Bgm) {
+        std::vector<uint8_t> probeBytes;
+        if (findBgmStreamCandidate(assetPath, probeCandidate, probeBytes)) {
+            probedInfo = makeStreamInfoFromHeader(probeBytes.data(),
+                                                  probeBytes.size(),
+                                                  snapshotChannel, assetPath);
+            probedForBgm = true;
+        }
+    }
+
     std::string channelName = (channel == AudioChannelType::Bgm) ? "BGM (Streaming)" :
-                              (channel == AudioChannelType::Voice) ? "Voice" : "SFX (Memory Pool)";
+                              (channel == AudioChannelType::Voice) ? "Voice" :
+                              (channel == AudioChannelType::Ambience) ? "Ambience (Loop)" :
+                              (channel == AudioChannelType::Ui) ? "Ui (One-Shot)" : "SFX (Memory Pool)";
 
     ROWL_LOG_INFO("Audio Play -> Asset: '" + assetPath + "' on Channel: " + channelName);
 
@@ -265,9 +323,30 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
         // Keep intended BGM state in headless/silent environments. This lets
         // scene transitions remain deterministic even when no device exists.
         if (channel == AudioChannelType::Bgm) {
+            // Sessiz yedek akış açmaz: önceki kaynak kapatılır, karar
+            // memory/unknown olarak kayda geçer (fail-closed).
+            closeBgmStream();
             m_currentBgmPath = assetPath;
             m_isBgmPlaying = true;
             m_bgmTransitionActive = false;
+            if (probedForBgm) {
+                m_streamInfo = probedInfo;
+                if (m_streamInfo.mode == StreamMode::Stream) {
+                    m_streamInfo.mode = StreamMode::Memory;
+                    // Sessiz yedekte RAM'e indirgenen over-threshold kararı:
+                    // reason da memory ile tutarlı yazılır (bilinen header).
+                    m_streamInfo.reason = "under_threshold";
+                }
+                m_streamInfo.bufferedSeconds = 0.0;
+            } else {
+                // Probe yoksa eski snapshot korunamaz (IsStreaming/JSON
+                // diverge olur): karar unknown olarak kayda geçer.
+                resetStreamInfoNoBgm();
+            }
+        }
+        if (channel == AudioChannelType::Ambience) {
+            m_currentAmbiencePath = assetPath;
+            m_isAmbiencePlaying = true;
         }
         if (channel == AudioChannelType::Voice) {
             m_isVoicePlaying = true;
@@ -276,6 +355,28 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
         if (filter != DSPFilterType::Normal) applyDspFilter(filter);
         ROWL_LOG_INFO("[AudioEngine] Audio play registered (silent fallback): " + assetPath);
         return;
+    }
+
+    // ── Faz 5 Dilim 1: streaming taahhüdü (yalnız Bgm + OGG + over-threshold).
+    // Başarıda RAM bloğuna girmeden döner; akış açılamazsa closeBgmStream
+    // + resetStreamInfoNoBgm ile fail-closed kapanır (hata kayda geçer).
+    if (channel == AudioChannelType::Bgm && probedForBgm &&
+        probedInfo.mode == StreamMode::Stream) {
+        if (hasOggExtension(probeCandidate)) {
+            if (openBgmStream(probeCandidate, assetPath, snapshotChannel,
+                              filter)) {
+                return;
+            }
+            if (m_lastError.empty()) {
+                m_lastError = "Ogg/Vorbis stream could not be opened: " + assetPath;
+            }
+            ROWL_LOG_WARN("[AudioEngine] " + m_lastError);
+            closeBgmStream();
+            resetStreamInfoNoBgm();
+            return;
+        }
+        // Over-threshold ama akışlanamayan konteyner (WAV): mevcut RAM yolu
+        // aynen denenir (decode cap fail-closed reddeder).
     }
 
     std::vector<uint8_t> bytes;
@@ -299,7 +400,14 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
                 auto stream = vfs().openReadStream(candidate);
                 if (stream && decodeOggVorbis(*stream, spec, bytes, m_lastError)) {
                     audioBuf = static_cast<Uint8*>(SDL_malloc(bytes.size()));
-                    if (!audioBuf) { m_lastError = "Unable to allocate decoded Ogg/Vorbis PCM"; return; }
+                    if (!audioBuf) {
+                        m_lastError = "Unable to allocate decoded Ogg/Vorbis PCM";
+                        if (channel == AudioChannelType::Bgm) {
+                            closeBgmStream();
+                            resetStreamInfoNoBgm();
+                        }
+                        return;
+                    }
                     std::memcpy(audioBuf, bytes.data(), bytes.size());
                     audioLen = static_cast<Uint32>(bytes.size());
                     loaded = true;
@@ -307,12 +415,20 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
                 }
                 if (m_lastError.empty()) m_lastError = "Ogg/Vorbis stream could not be decoded";
                 ROWL_LOG_WARN("[AudioEngine] " + m_lastError + ": " + assetPath);
+                // Stale stream kararı korunmaz: RAM-decode başarısızlığında
+                // önceki akış kapatılıp snapshot no_bgm/unknown'a sıfırlanır.
+                closeBgmStream();
+                resetStreamInfoNoBgm();
                 return;
             }
             bytes = vfs().readBytes(candidate);
             if (!bytes.empty()) {
                 if (bytes.size() > kMaxEncodedAudioBytes) {
                     ROWL_LOG_WARN("Audio file exceeds the maximum accepted size: " + assetPath);
+                    if (channel == AudioChannelType::Bgm) {
+                        closeBgmStream();
+                        resetStreamInfoNoBgm();
+                    }
                     return;
                 }
                 SDL_IOStream* io = SDL_IOFromConstMem(bytes.data(), bytes.size());
@@ -328,6 +444,10 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
         if (audioLen > kMaxDecodedAudioBytes || audioLen > static_cast<Uint32>(INT_MAX)) {
             ROWL_LOG_WARN("Decoded audio exceeds the maximum accepted size: " + assetPath);
             SDL_free(audioBuf);
+            if (channel == AudioChannelType::Bgm) {
+                closeBgmStream();
+                resetStreamInfoNoBgm();
+            }
             return;
         }
         SDL_AudioSpec floatSpec{};
@@ -342,11 +462,21 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
             m_lastError = "Unable to convert decoded audio to float PCM: " + std::string(SDL_GetError());
             ROWL_LOG_ERROR("[AudioEngine] " + m_lastError);
             SDL_free(audioBuf);
+            if (channel == AudioChannelType::Bgm) {
+                closeBgmStream();
+                resetStreamInfoNoBgm();
+            }
             return;
         }
         auto* samples = reinterpret_cast<float*>(floatBuffer);
         applyDspToFloatPcm(samples, static_cast<size_t>(floatLength) / sizeof(float),
                            floatSpec.channels, floatSpec.freq, filter);
+        // Faz 5 Dilim 1: Ui one-shot kazancı örneklere işlenir; fiziksel
+        // akış kazancı (master*sfx zinciri) aynen kalır.
+        if (channel == AudioChannelType::Ui) {
+            const size_t uiSamples = static_cast<size_t>(floatLength) / sizeof(float);
+            for (size_t i = 0; i < uiSamples; ++i) samples[i] *= m_uiVolume;
+        }
 
         const bool transitionRequested = channel == AudioChannelType::Bgm &&
             m_isBgmPlaying && !m_currentBgmPath.empty() &&
@@ -354,7 +484,8 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
             m_requestedBgmTransitionDurationSeconds > 0.0f;
         SDL_AudioStream* targetStream = (channel == AudioChannelType::Bgm)
             ? (transitionRequested ? m_transitionBgmStream : m_bgmStream) :
-                                       (channel == AudioChannelType::Voice) ? m_voiceStream : m_sfxStream;
+                                       (channel == AudioChannelType::Voice) ? m_voiceStream :
+                                       (channel == AudioChannelType::Ambience) ? m_ambienceStream : m_sfxStream;
         if (targetStream) {
             if (channel == AudioChannelType::Bgm && !transitionRequested) {
                 SDL_ClearAudioStream(m_bgmStream);
@@ -362,12 +493,25 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
             if (transitionRequested) {
                 SDL_ClearAudioStream(m_transitionBgmStream);
             }
+            // Faz 5 Dilim 1: Ambience loop beslemesi kendi akışında baştan
+            // kuyruğa girer; Ui one-shot fiziksel sfxStream'i devralır
+            // (tek ses sözleşmesi aynen).
+            if (channel == AudioChannelType::Ambience && m_ambienceStream) {
+                SDL_ClearAudioStream(m_ambienceStream);
+            }
+            if (channel == AudioChannelType::Ui && m_sfxStream) {
+                SDL_ClearAudioStream(m_sfxStream);
+            }
             if (!SDL_SetAudioStreamFormat(targetStream, &floatSpec, nullptr) ||
                 !SDL_PutAudioStreamData(targetStream, floatBuffer, floatLength)) {
                 ROWL_LOG_ERROR("[AudioEngine] Failed to queue decoded audio: " + std::string(SDL_GetError()));
                 m_lastError = "Unable to queue decoded audio: " + std::string(SDL_GetError());
                 SDL_free(floatBuffer);
                 SDL_free(audioBuf);
+                if (channel == AudioChannelType::Bgm) {
+                    closeBgmStream();
+                    resetStreamInfoNoBgm();
+                }
                 return;
             }
             // Device-facing effects are transactional with decode/queue: a
@@ -391,13 +535,39 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
                     m_bgmData.assign(floatBuffer, floatBuffer + floatLength);
                     m_bgmTransitionActive = false;
                 }
+                // Faz 5 Dilim 1: RAM taahhüdü snapshot'ı (önceki stream
+                // kaynağı kapanır; over-threshold WAV köşesinde karar
+                // memory'e indirgenir, buffered sıfırlanır).
+                closeBgmStream();
+                if (probedForBgm) {
+                    m_streamInfo = probedInfo;
+                    if (m_streamInfo.mode == StreamMode::Stream) {
+                        m_streamInfo.mode = StreamMode::Memory;
+                        // Over-threshold WAV köşesinde RAM'e indirgenen karar:
+                        // reason da memory ile tutarlı yazılır.
+                        m_streamInfo.reason = "under_threshold";
+                    }
+                    m_streamInfo.bufferedSeconds = 0.0;
+                }
                 m_currentBgmPath = assetPath;
                 m_isBgmPlaying = true;
                 m_bgmSampleOffset = 0;
+            } else if (channel == AudioChannelType::Ambience) {
+                // Faz 5 Dilim 1: Ambience loop RAM (stream-ready iskelet;
+                // bu dilimde tam decode + loop besleme).
+                m_ambienceData.assign(floatBuffer, floatBuffer + floatLength);
+                m_isAmbiencePlaying = true;
+                m_ambienceSampleOffset = 0;
+                m_currentAmbiencePath = assetPath;
             } else if (channel == AudioChannelType::Sfx) {
                 m_lastSfxData.assign(floatBuffer, floatBuffer + floatLength);
                 m_isSfxPlaying = true;
                 m_sfxSampleOffset = 0;
+            } else if (channel == AudioChannelType::Ui) {
+                // Faz 5 Dilim 1: Ui one-shot (fiziksel sfxStream RAM).
+                m_uiData.assign(floatBuffer, floatBuffer + floatLength);
+                m_isUiPlaying = true;
+                m_uiSampleOffset = 0;
             }
             if (!m_outputSuspended) SDL_ResumeAudioStreamDevice(targetStream);
             ROWL_LOG_INFO("[AudioEngine] Playback started: " + assetPath + " (" + std::to_string(floatLength) + " PCM bytes)");
@@ -408,6 +578,27 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
                 m_currentBgmPath = assetPath;
                 m_isBgmPlaying = true;
                 m_bgmSampleOffset = 0;
+                // Faz 5 Dilim 1: akışsız yedekte RAM snapshot'ı.
+                closeBgmStream();
+                if (probedForBgm) {
+                    m_streamInfo = probedInfo;
+                    if (m_streamInfo.mode == StreamMode::Stream) {
+                        m_streamInfo.mode = StreamMode::Memory;
+                        // Akışsız yedekte RAM'e indirgenen karar: reason da
+                        // memory ile tutarlı yazılır (bilinen header).
+                        m_streamInfo.reason = "under_threshold";
+                    }
+                    m_streamInfo.bufferedSeconds = 0.0;
+                }
+            } else if (channel == AudioChannelType::Ambience) {
+                m_ambienceData.assign(floatBuffer, floatBuffer + floatLength);
+                m_currentAmbiencePath = assetPath;
+                m_isAmbiencePlaying = true;
+                m_ambienceSampleOffset = 0;
+            } else if (channel == AudioChannelType::Ui) {
+                m_uiData.assign(floatBuffer, floatBuffer + floatLength);
+                m_isUiPlaying = true;
+                m_uiSampleOffset = 0;
             } else if (channel == AudioChannelType::Sfx) {
                 m_lastSfxData.assign(floatBuffer, floatBuffer + floatLength);
                 m_isSfxPlaying = true;
@@ -423,6 +614,9 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
     } else {
         m_lastError = "Audio file could not be decoded (supported: WAV, OGG/Vorbis): " + assetPath;
         ROWL_LOG_WARN("[AudioEngine] " + m_lastError);
+        // Stale stream kararı korunmaz (yukarıdaki OGG dalıyla aynı).
+        closeBgmStream();
+        resetStreamInfoNoBgm();
     }
 }
 
@@ -435,6 +629,9 @@ void AudioEngine::stopBgm() {
         SDL_ClearAudioStream(m_transitionBgmStream);
         SDL_PauseAudioStreamDevice(m_transitionBgmStream);
     }
+    // Faz 5 Dilim 1: stream kolları (kaynak kapanır, snapshot no_bgm'e döner).
+    closeBgmStream();
+    resetStreamInfoNoBgm();
     m_currentBgmPath = "";
     m_bgmData.clear();
     m_transitionBgmData.clear();
@@ -450,9 +647,20 @@ void AudioEngine::stopAll() {
         SDL_ClearAudioStream(m_sfxStream);
         SDL_PauseAudioStreamDevice(m_sfxStream);
     }
+    if (m_ambienceStream) {
+        SDL_ClearAudioStream(m_ambienceStream);
+        SDL_PauseAudioStreamDevice(m_ambienceStream);
+    }
     m_lastSfxData.clear();
     m_sfxSampleOffset = 0;
     m_isSfxPlaying = false;
+    m_ambienceData.clear();
+    m_ambienceSampleOffset = 0;
+    m_isAmbiencePlaying = false;
+    m_currentAmbiencePath.clear();
+    m_uiData.clear();
+    m_uiSampleOffset = 0;
+    m_isUiPlaying = false;
     m_isVoicePlaying = false;
     triggerVoiceDucking(false);
     ROWL_LOG_INFO("[AudioEngine] All audio channels stopped.");
@@ -483,6 +691,20 @@ void AudioEngine::setVoiceVolume(float volume) {
 void AudioEngine::setSfxVolume(float volume) {
     if (!std::isfinite(volume)) return;
     m_sfxVolume = std::clamp(volume, 0.0f, 1.0f);
+    applyChannelGains();
+}
+
+// Faz 5 Dilim 1 — volume matrisi tamamlamaları: [0,1] clamp +
+// non-finite ignore, son geçerli değer korunur (fail-closed).
+void AudioEngine::setAmbienceVolume(float volume) {
+    if (!std::isfinite(volume)) return;
+    m_ambienceVolume = std::clamp(volume, 0.0f, 1.0f);
+    applyChannelGains();
+}
+
+void AudioEngine::setUiVolume(float volume) {
+    if (!std::isfinite(volume)) return;
+    m_uiVolume = std::clamp(volume, 0.0f, 1.0f);
     applyChannelGains();
 }
 
@@ -542,6 +764,16 @@ void AudioEngine::update(float deltaSeconds) {
                 if (!m_outputSuspended) SDL_ResumeAudioStreamDevice(m_transitionBgmStream);
             }
         }
+        // Faz 5 Dilim 1: stream refill update-thread'de senkron çalışır
+        // (prefetch thread'i YOKTUR); Ambience loop RAM beslemesi.
+        pumpBgmStream();
+        if (m_ambienceStream && !m_ambienceData.empty() && m_isAmbiencePlaying) {
+            int ambAvailable = SDL_GetAudioStreamAvailable(m_ambienceStream);
+            if (ambAvailable <= 0) {
+                SDL_PutAudioStreamData(m_ambienceStream, m_ambienceData.data(), static_cast<int>(m_ambienceData.size()));
+                if (!m_outputSuspended) SDL_ResumeAudioStreamDevice(m_ambienceStream);
+            }
+        }
         updateBgmTransition(std::isfinite(deltaSeconds) ? deltaSeconds : 0.0f);
 
         if (m_voiceStream && m_isVoicePlaying && SDL_GetAudioStreamQueued(m_voiceStream) <= 0) {
@@ -583,6 +815,18 @@ void AudioEngine::shutdown() {
     m_bgmData.clear();
     m_transitionBgmData.clear();
     m_lastSfxData.clear();
+    // Faz 5 Dilim 1 ekleri.
+    closeBgmStream();
+    resetStreamInfoNoBgm();
+    m_ambienceData.clear();
+    m_ambienceSampleOffset = 0;
+    m_isAmbiencePlaying = false;
+    m_currentAmbiencePath.clear();
+    m_uiData.clear();
+    m_uiSampleOffset = 0;
+    m_isUiPlaying = false;
+    m_telemetryAmbience = {};
+    m_telemetryUi = {};
     m_telemetryBgm = {};
     m_telemetryVoice = {};
     m_telemetrySfx = {};
@@ -607,6 +851,10 @@ void AudioEngine::shutdown() {
     if (m_sfxStream) {
         SDL_DestroyAudioStream(m_sfxStream);
         m_sfxStream = nullptr;
+    }
+    if (m_ambienceStream) {
+        SDL_DestroyAudioStream(m_ambienceStream);
+        m_ambienceStream = nullptr;
     }
     if (m_audioLeaseHeld) {
         Rowl::Platform::SdlSubsystemLease::release(SDL_INIT_AUDIO);
@@ -647,6 +895,7 @@ bool AudioEngine::reopenDeviceStreams() {
     if (m_transitionBgmStream) { SDL_DestroyAudioStream(m_transitionBgmStream); m_transitionBgmStream = nullptr; }
     if (m_voiceStream) { SDL_DestroyAudioStream(m_voiceStream); m_voiceStream = nullptr; }
     if (m_sfxStream) { SDL_DestroyAudioStream(m_sfxStream); m_sfxStream = nullptr; }
+    if (m_ambienceStream) { SDL_DestroyAudioStream(m_ambienceStream); m_ambienceStream = nullptr; }
     m_deviceAvailable = false;
 
     if (!m_audioLeaseHeld && !Rowl::Platform::SdlSubsystemLease::acquire(SDL_INIT_AUDIO)) {
@@ -660,10 +909,41 @@ bool AudioEngine::reopenDeviceStreams() {
     m_transitionBgmStream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr, nullptr, nullptr);
     m_voiceStream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr, nullptr, nullptr);
     m_sfxStream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr, nullptr, nullptr);
-    if (m_bgmStream && m_transitionBgmStream && m_voiceStream && m_sfxStream) {
+    m_ambienceStream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr, nullptr, nullptr);
+    if (m_bgmStream && m_transitionBgmStream && m_voiceStream && m_sfxStream && m_ambienceStream) {
         m_deviceAvailable = true;
         applyChannelGains();
         applyDspFilter(m_activeFilter);
+        // Faz 5 Dilim 1: stream intent korunur — kaynak VFS düzeyinde açık
+        // kalır; ring'deki çözülmüş pencere taze akışa geri kuyruğa girer
+        // (granule konumu + path korunur, baştan başlama YOKTUR).
+        if (m_isBgmStreamed && m_bgmStreamSource &&
+            m_bgmStreamSource->isOpen() && m_bgmRingChannels > 0) {
+            SDL_ClearAudioStream(m_bgmStream);
+            const size_t streamCh = m_bgmRingChannels;
+            const size_t ringFloats = kStreamRingCapacityFrames * streamCh;
+            const uint64_t validFrames = std::min<uint64_t>(
+                m_bgmStreamPcmPos, kStreamRingCapacityFrames);
+            const size_t validFloats = static_cast<size_t>(validFrames) * streamCh;
+            if (validFloats > 0 && m_bgmRing.size() >= ringFloats) {
+                SDL_AudioSpec floatSpec{};
+                floatSpec.format = SDL_AUDIO_F32;
+                floatSpec.channels = static_cast<Uint8>(streamCh);
+                floatSpec.freq = static_cast<int>(m_bgmStreamRateHz);
+                std::vector<float> restore(validFloats);
+                const uint64_t firstFrame =
+                    m_bgmRingWriteFrames - validFrames;
+                for (size_t i = 0; i < validFloats; ++i) {
+                    restore[i] = m_bgmRing[static_cast<size_t>(
+                        ((firstFrame * streamCh) + i) % ringFloats)];
+                }
+                if (SDL_SetAudioStreamFormat(m_bgmStream, &floatSpec, nullptr)) {
+                    SDL_PutAudioStreamData(m_bgmStream, restore.data(),
+                                           static_cast<int>(validFloats * sizeof(float)));
+                }
+            }
+            if (!m_outputSuspended) SDL_ResumeAudioStreamDevice(m_bgmStream);
+        }
         if (m_outputSuspended) setOutputSuspended(true, true);
         ROWL_LOG_INFO("[AudioEngine] Output streams rebuilt after device change (BGM intent preserved).");
         return true;
@@ -675,6 +955,7 @@ bool AudioEngine::reopenDeviceStreams() {
     if (m_transitionBgmStream) { SDL_DestroyAudioStream(m_transitionBgmStream); m_transitionBgmStream = nullptr; }
     if (m_voiceStream) { SDL_DestroyAudioStream(m_voiceStream); m_voiceStream = nullptr; }
     if (m_sfxStream) { SDL_DestroyAudioStream(m_sfxStream); m_sfxStream = nullptr; }
+    if (m_ambienceStream) { SDL_DestroyAudioStream(m_ambienceStream); m_ambienceStream = nullptr; }
     return false;
 }
 
@@ -683,7 +964,7 @@ void AudioEngine::setOutputSuspended(bool suspended, bool force) {
     if (!force && suspended == m_outputSuspended) return;
     m_outputSuspended = suspended;
     if (!m_deviceAvailable) return;
-    SDL_AudioStream* streams[] = {m_bgmStream, m_transitionBgmStream, m_voiceStream, m_sfxStream};
+    SDL_AudioStream* streams[] = {m_bgmStream, m_transitionBgmStream, m_voiceStream, m_sfxStream, m_ambienceStream};
     for (SDL_AudioStream* stream : streams) {
         if (!stream) continue;
         if (suspended) {
@@ -700,6 +981,8 @@ void AudioEngine::applyChannelGains() {
     if (m_transitionBgmStream) SDL_SetAudioStreamGain(m_transitionBgmStream, 0.0f);
     if (m_voiceStream) SDL_SetAudioStreamGain(m_voiceStream, m_masterVolume * m_voiceVolume);
     if (m_sfxStream) SDL_SetAudioStreamGain(m_sfxStream, m_masterVolume * m_sfxVolume);
+    // Faz 5 Dilim 1 eki: ortak gain zinciri (master * ambience).
+    if (m_ambienceStream) SDL_SetAudioStreamGain(m_ambienceStream, m_masterVolume * m_ambienceVolume);
 }
 
 void AudioEngine::updateTelemetry(float deltaSeconds) {
@@ -718,8 +1001,47 @@ void AudioEngine::updateTelemetry(float deltaSeconds) {
     float targetBgmRmsL = 0.0f;
     float targetBgmRmsR = 0.0f;
 
-    if (m_isBgmPlaying && !m_bgmData.empty()) {
-        const float* samples = reinterpret_cast<const float*>(m_bgmData.data());
+    // Faz 5 Dilim 1: stream telemetrisi ring penceresinden okunur (RAM
+    // bloğu aşağıda aynen korunur; stream aktifken RAM dalı atlanır).
+    const bool bgmStreamActive =
+        m_isBgmStreamed && m_isBgmPlaying && m_bgmRingWriteFrames > 0 &&
+        m_bgmRingChannels > 0 && !m_bgmRing.empty();
+    if (bgmStreamActive) {
+        const size_t streamCh = m_bgmRingChannels;
+        const size_t ringFloats = kStreamRingCapacityFrames * streamCh;
+        const uint64_t validFrames = std::min<uint64_t>(
+            m_bgmStreamPcmPos, kStreamRingCapacityFrames);
+        const size_t windowFrames = std::min<size_t>(
+            static_cast<size_t>(validFrames), 512);
+        if (windowFrames > 0 && m_bgmRing.size() >= ringFloats) {
+            float maxL = 0.0f, maxR = 0.0f;
+            float sumSqL = 0.0f, sumSqR = 0.0f;
+            for (size_t f = 0; f < windowFrames; ++f) {
+                const uint64_t frameIdx =
+                    m_bgmRingWriteFrames - windowFrames + f;
+                const size_t base = static_cast<size_t>(
+                    ((frameIdx * streamCh) % ringFloats));
+                const float sL = std::abs(m_bgmRing[base]);
+                const float sR = (streamCh > 1)
+                    ? std::abs(m_bgmRing[(base + 1) % ringFloats]) : sL;
+                if (sL > maxL) maxL = sL;
+                if (sR > maxR) maxR = sR;
+                sumSqL += sL * sL;
+                sumSqR += sR * sR;
+            }
+            const float gain = m_masterVolume * m_bgmGain;
+            targetBgmL = std::clamp(maxL * gain, 0.0f, 1.0f);
+            targetBgmR = std::clamp(maxR * gain, 0.0f, 1.0f);
+            targetBgmRmsL = std::clamp(
+                std::sqrt(sumSqL / static_cast<float>(windowFrames)) * gain,
+                0.0f, 1.0f);
+            targetBgmRmsR = std::clamp(
+                std::sqrt(sumSqR / static_cast<float>(windowFrames)) * gain,
+                0.0f, 1.0f);
+        }
+    }
+
+    if (!bgmStreamActive && m_isBgmPlaying && !m_bgmData.empty()) {
         const size_t totalFloats = m_bgmData.size() / sizeof(float);
         if (totalFloats >= 2) {
             const size_t windowSize = std::min<size_t>(1024, totalFloats);
@@ -729,8 +1051,11 @@ void AudioEngine::updateTelemetry(float deltaSeconds) {
             size_t frames = 0;
 
             for (size_t i = 0; i < windowSize && (start + i + 1) < totalFloats; i += 2) {
-                float sL = std::abs(samples[start + i]);
-                float sR = std::abs(samples[start + i + 1]);
+                float rawL = 0.0f, rawR = 0.0f;
+                std::memcpy(&rawL, m_bgmData.data() + (start + i) * sizeof(float), sizeof(float));
+                std::memcpy(&rawR, m_bgmData.data() + (start + i + 1) * sizeof(float), sizeof(float));
+                float sL = std::abs(rawL);
+                float sR = std::abs(rawR);
                 if (sL > maxL) maxL = sL;
                 if (sR > maxR) maxR = sR;
                 sumSqL += sL * sL;
@@ -760,7 +1085,6 @@ void AudioEngine::updateTelemetry(float deltaSeconds) {
     float targetSfxRmsR = 0.0f;
 
     if (m_isSfxPlaying && !m_lastSfxData.empty()) {
-        const float* samples = reinterpret_cast<const float*>(m_lastSfxData.data());
         const size_t totalFloats = m_lastSfxData.size() / sizeof(float);
         if (totalFloats >= 2 && m_sfxSampleOffset < totalFloats) {
             const size_t windowSize = std::min<size_t>(1024, totalFloats - m_sfxSampleOffset);
@@ -770,8 +1094,11 @@ void AudioEngine::updateTelemetry(float deltaSeconds) {
             size_t frames = 0;
 
             for (size_t i = 0; i < windowSize && (start + i + 1) < totalFloats; i += 2) {
-                float sL = std::abs(samples[start + i]);
-                float sR = std::abs(samples[start + i + 1]);
+                float rawL = 0.0f, rawR = 0.0f;
+                std::memcpy(&rawL, m_lastSfxData.data() + (start + i) * sizeof(float), sizeof(float));
+                std::memcpy(&rawR, m_lastSfxData.data() + (start + i + 1) * sizeof(float), sizeof(float));
+                float sL = std::abs(rawL);
+                float sR = std::abs(rawR);
                 if (sL > maxL) maxL = sL;
                 if (sR > maxR) maxR = sR;
                 sumSqL += sL * sL;
@@ -799,6 +1126,97 @@ void AudioEngine::updateTelemetry(float deltaSeconds) {
     m_telemetrySfx.rmsL = decayVal(m_telemetrySfx.rmsL, targetSfxRmsL);
     m_telemetrySfx.rmsR = decayVal(m_telemetrySfx.rmsR, targetSfxRmsR);
 
+    // 2b. Ambience Telemetry (loop RAM; SFX deseniyle aynı pencere)
+    float targetAmbL = 0.0f;
+    float targetAmbR = 0.0f;
+    float targetAmbRmsL = 0.0f;
+    float targetAmbRmsR = 0.0f;
+
+    if (m_isAmbiencePlaying && !m_ambienceData.empty()) {
+        const size_t totalFloats = m_ambienceData.size() / sizeof(float);
+        if (totalFloats >= 2) {
+            const size_t windowSize = std::min<size_t>(1024, totalFloats);
+            size_t start = m_ambienceSampleOffset % totalFloats;
+            float maxL = 0.0f, maxR = 0.0f;
+            float sumSqL = 0.0f, sumSqR = 0.0f;
+            size_t frames = 0;
+
+            for (size_t i = 0; i < windowSize && (start + i + 1) < totalFloats; i += 2) {
+                float rawL = 0.0f, rawR = 0.0f;
+                std::memcpy(&rawL, m_ambienceData.data() + (start + i) * sizeof(float), sizeof(float));
+                std::memcpy(&rawR, m_ambienceData.data() + (start + i + 1) * sizeof(float), sizeof(float));
+                float sL = std::abs(rawL);
+                float sR = std::abs(rawR);
+                if (sL > maxL) maxL = sL;
+                if (sR > maxR) maxR = sR;
+                sumSqL += sL * sL;
+                sumSqR += sR * sR;
+                frames++;
+            }
+            if (frames > 0) {
+                const float gain = m_masterVolume * m_ambienceVolume;
+                targetAmbL = std::clamp(maxL * gain, 0.0f, 1.0f);
+                targetAmbR = std::clamp(maxR * gain, 0.0f, 1.0f);
+                targetAmbRmsL = std::clamp(std::sqrt(sumSqL / static_cast<float>(frames)) * gain, 0.0f, 1.0f);
+                targetAmbRmsR = std::clamp(std::sqrt(sumSqR / static_cast<float>(frames)) * gain, 0.0f, 1.0f);
+            }
+            m_ambienceSampleOffset = (m_ambienceSampleOffset + static_cast<size_t>(dt * kSampleRate * 2)) % totalFloats;
+        }
+    }
+
+    m_telemetryAmbience.peakL = decayVal(m_telemetryAmbience.peakL, targetAmbL);
+    m_telemetryAmbience.peakR = decayVal(m_telemetryAmbience.peakR, targetAmbR);
+    m_telemetryAmbience.rmsL = decayVal(m_telemetryAmbience.rmsL, targetAmbRmsL);
+    m_telemetryAmbience.rmsR = decayVal(m_telemetryAmbience.rmsR, targetAmbRmsR);
+
+    // 2c. Ui Telemetry (one-shot drain; SFX deseniyle aynı pencere)
+    float targetUiL = 0.0f;
+    float targetUiR = 0.0f;
+    float targetUiRmsL = 0.0f;
+    float targetUiRmsR = 0.0f;
+
+    if (m_isUiPlaying && !m_uiData.empty()) {
+        const size_t totalFloats = m_uiData.size() / sizeof(float);
+        if (totalFloats >= 2 && m_uiSampleOffset < totalFloats) {
+            const size_t windowSize = std::min<size_t>(1024, totalFloats - m_uiSampleOffset);
+            size_t start = m_uiSampleOffset;
+            float maxL = 0.0f, maxR = 0.0f;
+            float sumSqL = 0.0f, sumSqR = 0.0f;
+            size_t frames = 0;
+
+            for (size_t i = 0; i < windowSize && (start + i + 1) < totalFloats; i += 2) {
+                float rawL = 0.0f, rawR = 0.0f;
+                std::memcpy(&rawL, m_uiData.data() + (start + i) * sizeof(float), sizeof(float));
+                std::memcpy(&rawR, m_uiData.data() + (start + i + 1) * sizeof(float), sizeof(float));
+                float sL = std::abs(rawL);
+                float sR = std::abs(rawR);
+                if (sL > maxL) maxL = sL;
+                if (sR > maxR) maxR = sR;
+                sumSqL += sL * sL;
+                sumSqR += sR * sR;
+                frames++;
+            }
+            if (frames > 0) {
+                const float gain = m_masterVolume * m_sfxVolume;
+                targetUiL = std::clamp(maxL * gain, 0.0f, 1.0f);
+                targetUiR = std::clamp(maxR * gain, 0.0f, 1.0f);
+                targetUiRmsL = std::clamp(std::sqrt(sumSqL / static_cast<float>(frames)) * gain, 0.0f, 1.0f);
+                targetUiRmsR = std::clamp(std::sqrt(sumSqR / static_cast<float>(frames)) * gain, 0.0f, 1.0f);
+            }
+            m_uiSampleOffset += static_cast<size_t>(dt * kSampleRate * 2);
+            if (m_uiSampleOffset >= totalFloats) {
+                m_isUiPlaying = false;
+            }
+        } else {
+            m_isUiPlaying = false;
+        }
+    }
+
+    m_telemetryUi.peakL = decayVal(m_telemetryUi.peakL, targetUiL);
+    m_telemetryUi.peakR = decayVal(m_telemetryUi.peakR, targetUiR);
+    m_telemetryUi.rmsL = decayVal(m_telemetryUi.rmsL, targetUiRmsL);
+    m_telemetryUi.rmsR = decayVal(m_telemetryUi.rmsR, targetUiRmsR);
+
     // 3. Voice Telemetry
     float targetVoiceL = 0.0f;
     float targetVoiceR = 0.0f;
@@ -812,15 +1230,20 @@ void AudioEngine::updateTelemetry(float deltaSeconds) {
     m_telemetryVoice.rmsL = decayVal(m_telemetryVoice.rmsL, targetVoiceL * 0.7f);
     m_telemetryVoice.rmsR = decayVal(m_telemetryVoice.rmsR, targetVoiceR * 0.7f);
 
-    // 4. Master Telemetry (Combined peaks and RMS)
-    m_telemetryMaster.peakL = std::clamp(std::max({m_telemetryBgm.peakL, m_telemetrySfx.peakL, m_telemetryVoice.peakL}), 0.0f, 1.0f);
-    m_telemetryMaster.peakR = std::clamp(std::max({m_telemetryBgm.peakR, m_telemetrySfx.peakR, m_telemetryVoice.peakR}), 0.0f, 1.0f);
+    // 4. Master Telemetry (Combined peaks and RMS; Faz 5 Dilim 1: 4/5
+    // Ambience/Ui de karışıma dahildir, 3=Master numarası korunur).
+    m_telemetryMaster.peakL = std::clamp(std::max({m_telemetryBgm.peakL, m_telemetrySfx.peakL, m_telemetryVoice.peakL, m_telemetryAmbience.peakL, m_telemetryUi.peakL}), 0.0f, 1.0f);
+    m_telemetryMaster.peakR = std::clamp(std::max({m_telemetryBgm.peakR, m_telemetrySfx.peakR, m_telemetryVoice.peakR, m_telemetryAmbience.peakR, m_telemetryUi.peakR}), 0.0f, 1.0f);
     m_telemetryMaster.rmsL = std::clamp(std::sqrt(m_telemetryBgm.rmsL * m_telemetryBgm.rmsL +
                                                   m_telemetrySfx.rmsL * m_telemetrySfx.rmsL +
-                                                  m_telemetryVoice.rmsL * m_telemetryVoice.rmsL), 0.0f, 1.0f);
+                                                  m_telemetryVoice.rmsL * m_telemetryVoice.rmsL +
+                                                  m_telemetryAmbience.rmsL * m_telemetryAmbience.rmsL +
+                                                  m_telemetryUi.rmsL * m_telemetryUi.rmsL), 0.0f, 1.0f);
     m_telemetryMaster.rmsR = std::clamp(std::sqrt(m_telemetryBgm.rmsR * m_telemetryBgm.rmsR +
                                                   m_telemetrySfx.rmsR * m_telemetrySfx.rmsR +
-                                                  m_telemetryVoice.rmsR * m_telemetryVoice.rmsR), 0.0f, 1.0f);
+                                                  m_telemetryVoice.rmsR * m_telemetryVoice.rmsR +
+                                                  m_telemetryAmbience.rmsR * m_telemetryAmbience.rmsR +
+                                                  m_telemetryUi.rmsR * m_telemetryUi.rmsR), 0.0f, 1.0f);
 
     // 5. 4-Band Spectrum Estimation
     const float masterEnergy = (m_telemetryMaster.peakL + m_telemetryMaster.peakR) * 0.5f;
@@ -846,7 +1269,10 @@ float AudioEngine::getChannelPeak(int channelType, int channelIndex) const {
         case 0: tel = &m_telemetryBgm; break;
         case 1: tel = &m_telemetryVoice; break;
         case 2: tel = &m_telemetrySfx; break;
-        case 3: default: tel = &m_telemetryMaster; break;
+        case 3: tel = &m_telemetryMaster; break;
+        case 4: tel = &m_telemetryAmbience; break;
+        case 5: tel = &m_telemetryUi; break;
+        default: tel = &m_telemetryMaster; break;
     }
     return (channelIndex == 1) ? tel->peakR : tel->peakL;
 }
@@ -857,7 +1283,10 @@ float AudioEngine::getChannelRms(int channelType, int channelIndex) const {
         case 0: tel = &m_telemetryBgm; break;
         case 1: tel = &m_telemetryVoice; break;
         case 2: tel = &m_telemetrySfx; break;
-        case 3: default: tel = &m_telemetryMaster; break;
+        case 3: tel = &m_telemetryMaster; break;
+        case 4: tel = &m_telemetryAmbience; break;
+        case 5: tel = &m_telemetryUi; break;
+        default: tel = &m_telemetryMaster; break;
     }
     return (channelIndex == 1) ? tel->rmsR : tel->rmsL;
 }
@@ -1017,6 +1446,277 @@ void AudioEngine::playVoiceBlip(const std::string& assetPath, float pitch, float
             m_isVoicePlaying = true;
         }
     }
+}
+
+// ── Faz 5 Dilim 1: OGG streaming çekirdek + gözlemlenebilirlik ──────────────
+
+void AudioEngine::playAudioInt(const std::string& assetPath, int channelInt,
+                               DSPFilterType filter) {
+    m_streamChannel = channelInt;
+    m_streamChannelFresh = true;
+    AudioChannelType channel = AudioChannelType::Sfx;
+    if (channelInt == 0) channel = AudioChannelType::Bgm;
+    else if (channelInt == 1) channel = AudioChannelType::Voice;
+    else if (channelInt == 3) channel = AudioChannelType::Ambience;
+    else if (channelInt == 4) channel = AudioChannelType::Ui;
+    playAudio(assetPath, channel, filter);
+}
+
+bool AudioEngine::shouldStreamRoute(double durationSeconds,
+                                    double thresholdSeconds) {
+    // assessLongAudio ile aynı strict `>` operatörü; sessizdir (warn YOK).
+    if (!(durationSeconds >= 0.0) || !std::isfinite(durationSeconds)) {
+        return false;
+    }
+    if (!(thresholdSeconds > 0.0) || !std::isfinite(thresholdSeconds)) {
+        return false;
+    }
+    return durationSeconds > thresholdSeconds;
+}
+
+bool AudioEngine::findBgmStreamCandidate(
+    const std::string& assetPath, std::string& candidateOut,
+    std::vector<uint8_t>& headerBytesOut) {
+    // RAM decode bloğundaki aday sırasıyla birebir aynıdır.
+    const std::vector<std::string> vfsCandidates = {
+        assetPath,
+        "Assets/" + assetPath,
+        "Assets/audio/" + assetPath,
+        "audio/" + assetPath
+    };
+    for (const auto& candidate : vfsCandidates) {
+        if (!vfs().exists(candidate)) continue;
+        auto stream = vfs().openReadStream(candidate);
+        if (!stream || !(*stream)) continue;
+        // OGG granule kuyrukta: tüm dosya gerekir (cap'li). WAV fmt/data
+        // başta: ilk 1 MiB probe için yeterlidir (clamp'li okuma, OOB yok).
+        const bool isOgg = hasOggExtension(candidate);
+        const size_t cap = isOgg
+            ? static_cast<size_t>(kMaxEncodedAudioBytes) + 1
+            : static_cast<size_t>(1024 * 1024);
+        std::vector<uint8_t> buffer;
+        buffer.reserve(std::min<size_t>(cap, 65536));
+        std::array<char, 32768> chunk{};
+        size_t total = 0;
+        while (total < cap && stream->good()) {
+            const size_t want = std::min<size_t>(chunk.size(), cap - total);
+            stream->read(chunk.data(), static_cast<std::streamsize>(want));
+            const std::streamsize got = stream->gcount();
+            if (got <= 0) break;
+            buffer.insert(buffer.end(), chunk.data(), chunk.data() + got);
+            total += static_cast<size_t>(got);
+        }
+        if (buffer.empty()) continue;
+        candidateOut = candidate;
+        headerBytesOut = std::move(buffer);
+        return true;
+    }
+    return false;
+}
+
+bool AudioEngine::openBgmStream(const std::string& candidate,
+                                const std::string& assetPath,
+                                int snapshotChannel, DSPFilterType filter) {
+    closeBgmStream();
+    auto source = std::make_unique<OggStreamSource>();
+    std::string error;
+    if (!source->open(vfs(), candidate, error)) {
+        m_lastError = error.empty()
+            ? "Ogg/Vorbis stream could not be opened: " + assetPath : error;
+        return false;
+    }
+    const uint32_t rate = source->sampleRateHz();
+    const uint32_t channels = source->channelCount();
+    if (rate == 0 || channels == 0 || channels > 8) {
+        m_lastError = "Ogg/Vorbis stream has an unsupported audio format: " + assetPath;
+        return false;
+    }
+    // Ring 4x4096 frame sabit üst bant: heap'te bir kez ayrılır, akışlar
+    // arasında yeniden kullanılır (kanal üst bandı 8).
+    const size_t ringFloats = kStreamRingCapacityFrames * 8;
+    if (m_bgmRing.size() < ringFloats) {
+        m_bgmRing.assign(ringFloats, 0.0f);
+    }
+    if (m_bgmPumpScratch.size() < kStreamRingChunkFrames * 8) {
+        m_bgmPumpScratch.assign(kStreamRingChunkFrames * 8, 0.0f);
+    }
+    m_bgmStreamSource = std::move(source);
+    m_bgmRingChannels = channels;
+    m_bgmStreamRateHz = rate;
+    m_bgmRingWriteFrames = 0;
+    m_bgmRingReadFrames = 0;
+    m_bgmStreamPcmPos = 0;
+    m_bgmStreamEos = false;
+    m_bgmStreamFilter = filter;
+    m_bgmTransitionActive = false;
+    m_currentBgmPath = assetPath;
+    m_isBgmPlaying = true;
+    m_bgmSampleOffset = 0;
+    m_isBgmStreamed = true;
+    if (m_bgmStream) {
+        SDL_ClearAudioStream(m_bgmStream);
+        SDL_AudioSpec floatSpec{};
+        floatSpec.format = SDL_AUDIO_F32;
+        floatSpec.channels = static_cast<Uint8>(channels);
+        floatSpec.freq = static_cast<int>(rate);
+        SDL_SetAudioStreamFormat(m_bgmStream, &floatSpec, nullptr);
+    }
+    const double threshold =
+        longAudioThresholdSeconds(rate, channels, 2);
+    // ov_pcm_total bilinmiyorsa duration negatiftir; mode=Stream DEĞİL,
+    // fail-closed Unknown + unknown_header. Tek paylaşılan predicate
+    // shouldStreamRoute'dur: m_isBgmStreamed (IsStreaming) ile C# IsStream
+    // (mode==stream && duration>threshold) aynı kararı verir, diverge olmaz.
+    const double streamDuration = m_bgmStreamSource->durationSeconds();
+    m_streamInfo.durationSeconds = streamDuration;
+    m_streamInfo.thresholdSeconds = threshold;
+    m_streamInfo.bufferedSeconds = 0.0;
+    if (streamDuration < 0.0 || !shouldStreamRoute(streamDuration, threshold)) {
+        m_streamInfo.mode = StreamMode::Unknown;
+        m_streamInfo.reason = "unknown_header";
+        m_isBgmStreamed = false;
+    } else {
+        m_streamInfo.mode = StreamMode::Stream;
+        m_streamInfo.reason = "over_threshold";
+        m_isBgmStreamed = true;
+    }
+    m_streamInfo.channel = snapshotChannel;
+    m_streamInfo.asset = assetPath;
+    applyChannelGains();
+    pumpBgmStream();
+    if (m_bgmStream && m_deviceAvailable && !m_outputSuspended) {
+        SDL_ResumeAudioStreamDevice(m_bgmStream);
+    }
+    ROWL_LOG_INFO("[AudioEngine] Streaming playback started: " + assetPath);
+    return true;
+}
+
+void AudioEngine::queueStreamChunkToDevice(const float* samples, size_t frames,
+                                           uint32_t channels,
+                                           uint32_t sampleRate) {
+    (void)channels;
+    (void)sampleRate;
+    if (!samples || frames == 0 || !m_bgmStream || !m_deviceAvailable) return;
+    SDL_PutAudioStreamData(m_bgmStream, samples,
+                           static_cast<int>(frames * channels * sizeof(float)));
+    if (!m_outputSuspended) SDL_ResumeAudioStreamDevice(m_bgmStream);
+}
+
+void AudioEngine::pumpBgmStream() {
+    if (!m_initialized || !m_isBgmStreamed || !m_bgmStreamSource ||
+        !m_bgmStreamSource->isOpen()) {
+        return;
+    }
+    // Suspended iken konum korunur: decode ilerlemez, kuyruk tüketilmez.
+    if (m_outputSuspended) return;
+    const uint32_t rate = m_bgmStreamRateHz;
+    const uint32_t channels = m_bgmRingChannels;
+    if (rate == 0 || channels == 0 || channels > 8) return;
+    if (m_bgmPumpScratch.size() < kStreamRingChunkFrames * 8) {
+        m_bgmPumpScratch.assign(kStreamRingChunkFrames * 8, 0.0f);
+    }
+    if (m_bgmStreamEos && !m_bgmLoop) {
+        if (!m_bgmStream ||
+            SDL_GetAudioStreamAvailable(m_bgmStream) <= 0) {
+            m_isBgmPlaying = false;
+        }
+        return;
+    }
+    const bool haveDevice = (m_bgmStream != nullptr) && m_deviceAvailable;
+    const int targetQueued =
+        static_cast<int>(rate * channels * sizeof(float)) / 2; // ~0.5 sn
+    int chunks = 0;
+    int emptyWraps = 0;
+    while (chunks < 4) {
+        if (haveDevice && m_bgmStreamPcmPos > 0 &&
+            SDL_GetAudioStreamAvailable(m_bgmStream) >= targetQueued) {
+            break;
+        }
+        bool eos = false;
+        const size_t got = m_bgmStreamSource->readFloatFrames(
+            m_bgmPumpScratch.data(), kStreamRingChunkFrames, eos);
+        if (got > 0) {
+            applyDspToFloatPcm(m_bgmPumpScratch.data(), got * channels,
+                               static_cast<int>(channels),
+                               static_cast<int>(rate), m_bgmStreamFilter);
+            const size_t ringFloats = kStreamRingCapacityFrames * channels;
+            const size_t floats = got * channels;
+            if (m_bgmRing.size() >= ringFloats) {
+                for (size_t i = 0; i < floats; ++i) {
+                    m_bgmRing[static_cast<size_t>(
+                        ((m_bgmRingWriteFrames * channels) + i) % ringFloats)] =
+                        m_bgmPumpScratch[i];
+                }
+            }
+            queueStreamChunkToDevice(m_bgmPumpScratch.data(), got, channels,
+                                     rate);
+            m_bgmRingWriteFrames += got;
+            m_bgmRingReadFrames += got;
+            m_bgmStreamPcmPos += got;
+            ++chunks;
+        }
+        if (eos) {
+            // Corrupt-mid-stream: ov_read<0 ara-akışta loop açık olsa bile
+            // sonsuz seek(0) döngüsüne girme; fail-closed hata + stop/close
+            // (decode-yolu corrupt davranışıyla tutarlı).
+            const std::string& srcError = m_bgmStreamSource->lastError();
+            const bool midStreamCorrupt =
+                !srcError.empty() && srcError.find("corrupt") != std::string::npos;
+            if (midStreamCorrupt) {
+                m_lastError = srcError;
+                ROWL_LOG_WARN("[AudioEngine] " + m_lastError);
+                stopBgm();
+                break;
+            }
+            if (m_bgmLoop && m_bgmStreamSource->seekPcmFrame(0)) {
+                // Loop-wrap: yeni turun konumu sıfırdan başlar; ring write
+                // sayaçları ve pcm konumu sıfırlanır. bufferedSeconds tanımı
+                // korunur: min(pcmPos,kapasite)/rate.
+                m_bgmStreamPcmPos = 0;
+                m_bgmRingWriteFrames = 0;
+                m_bgmRingReadFrames = 0;
+                if (got == 0 && ++emptyWraps >= 2) break;
+                continue;
+            }
+            m_bgmStreamEos = true;
+            break;
+        }
+        if (got == 0) break;
+    }
+}
+
+void AudioEngine::closeBgmStream() {
+    if (m_bgmStreamSource) {
+        m_bgmStreamSource->close();
+        m_bgmStreamSource.reset();
+    }
+    m_isBgmStreamed = false;
+    m_bgmStreamEos = false;
+    m_bgmStreamPcmPos = 0;
+    m_bgmRingWriteFrames = 0;
+    m_bgmRingReadFrames = 0;
+}
+
+void AudioEngine::resetStreamInfoNoBgm() {
+    m_streamInfo = StreamInfo{};
+}
+
+std::string AudioEngine::streamInfoJson() const {
+    StreamInfo info = m_streamInfo;
+    if (m_isBgmStreamed) {
+        info.bufferedSeconds = bgmStreamBufferedSeconds();
+    } else {
+        info.bufferedSeconds = 0.0;
+    }
+    return streamInfoToJson(info);
+}
+
+double AudioEngine::bgmStreamBufferedSeconds() const {
+    if (!m_isBgmStreamed || m_bgmStreamRateHz == 0) return 0.0;
+    const uint64_t valid =
+        std::min<uint64_t>(m_bgmStreamPcmPos, kStreamRingCapacityFrames);
+    return static_cast<double>(valid) /
+           static_cast<double>(m_bgmStreamRateHz);
 }
 
 } // namespace Rowl::Audio

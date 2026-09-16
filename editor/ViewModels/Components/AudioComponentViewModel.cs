@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using CommunityToolkit.Mvvm.ComponentModel;
+using RowlEngine.Editor.Services;
 
 namespace RowlEngine.Editor.ViewModels.Components
 {
@@ -62,6 +63,33 @@ namespace RowlEngine.Editor.ViewModels.Components
 
         [ObservableProperty]
         private float _sfxRmsR = 0.0f;
+
+        /// <summary>Faz 5 Dilim 1 — StreamInfo mode (stream/memory/unknown).</summary>
+        [ObservableProperty]
+        private string _streamMode = "unknown";
+
+        /// <summary>Faz 5 Dilim 1 — rozet metni (stream dışında boş).</summary>
+        [ObservableProperty]
+        private string _streamBadgeText = "";
+
+        /// <summary>Rozet yalnızca IsStream kararında görünür (fail-closed).</summary>
+        [ObservableProperty]
+        private bool _isStreamBadgeVisible;
+
+        /// <summary>
+        /// Faz 5 Dilim 1 — StreamInfo JSON snapshot'ını rozet props'larına
+        /// yansıtır. Bozuk JSON fail-closed kapanır (gizli rozet).
+        /// Görünürlük ham Mode'a değil Describe.Visible kararına bağlıdır:
+        /// tutarsız stream iddiası (mode=stream + null/eksik süre) rozeti
+        /// gizler.
+        /// </summary>
+        public void UpdateStreamingBadge(string? streamInfoJson)
+        {
+            var description = AudioStreamingBadgeService.Describe(streamInfoJson);
+            StreamMode = description.Mode;
+            StreamBadgeText = description.Text;
+            IsStreamBadgeVisible = description.Visible;
+        }
 
         public static Action<string, int, int>? GlobalPreviewAudioAction { get; set; }
         public static Action? GlobalStopAudioAction { get; set; }
