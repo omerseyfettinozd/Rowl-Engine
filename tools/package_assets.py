@@ -13,6 +13,26 @@ Layout (unchanged v1 format, readable by RowlPkgDataSource):
 Plus one synthetic entry, `rowl/manifest.json`, listing every packed file
 with its uncompressed size and SHA-256. The manifest entry itself is always
 stored uncompressed so auditors can parse it with the standard library only.
+
+Sidecar + verify (Faz 6 Dilim 2): every successful pack also writes
+`<output>.sha256` in canonical `sha256sum` format
+(`<hash><two-spaces><basename>\\n`), and `verify` re-checks the sidecar
+digest plus the embedded manifest / per-file hashes:
+
+  python3 tools/package_assets.py <input_dir> <output_rowlpkg>
+  python3 tools/package_assets.py verify <package_rowlpkg> [--json]
+
+Exit codes for `verify`: 0 OK, 1 corrupt/missing, 2 usage error.
+`--json` prints one line with keys `ok, package, sha256, sidecar
+(ok|mismatch|missing|malformed), entries, error`.
+
+Relationship with tools/verify_release_package.py: both live. The `verify`
+subcommand here is the *distribution gate* (is this single .rowlpkg file
+intact?). verify_release_package.py is the separate *CI gate* for the full
+portable release layout (launchers, runtime lib, mods, notices). The deep
+manifest/file-hash check is NOT duplicated: `verify` imports
+`read_package_entries` from verify_release_package (single source of truth,
+lazy import so `pack` never pays for it and no import cycle exists).
 """
 
 import hashlib
@@ -332,11 +352,151 @@ def pack_directory(input_dir, output_pkg):
         package_sha256 = hashlib.sha256(finished.read()).hexdigest()
     print(f"[Packer] Package creation successful! Total files: {file_count}, Output size: {os.path.getsize(output_pkg)} bytes")
     print(f"[Packer] SHA256: {package_sha256}")
+    write_sha256_sidecar(output_pkg, package_sha256)
+
+
+def write_sha256_sidecar(output_pkg, package_sha256):
+    """Write `<output>.sha256` in canonical sha256sum-compatible format.
+
+    Exactly `<hash><two-spaces><basename>\\n`; the basename (not the full
+    path) keeps the file relocatable and `sha256sum -c` compatible.
+    Atomic commit, mirroring the package write above.
+    """
+    sidecar_path = output_pkg + ".sha256"
+    content = f"{package_sha256}  {os.path.basename(output_pkg)}\n"
+    temporary_sidecar = f"{sidecar_path}.tmp-{os.getpid()}"
+    try:
+        with open(temporary_sidecar, "w", encoding="utf-8", newline="\n") as out_f:
+            out_f.write(content)
+            out_f.flush()
+            os.fsync(out_f.fileno())
+        os.replace(temporary_sidecar, sidecar_path)
+    finally:
+        if os.path.exists(temporary_sidecar):
+            os.unlink(temporary_sidecar)
+    print(f"[Packer] SHA256 sidecar: {sidecar_path}")
+
+
+def _load_release_verifier():
+    """Import read_package_entries from verify_release_package (single source).
+
+    Lazy + sys.path-tolerant: works both as `python3 tools/package_assets.py`
+    (script dir already on sys.path) and via `import package_assets` from the
+    repo root (test_media_format_gate does the latter). verify_release_package
+    has no CLI side effects on import (guarded by `__main__`) and never
+    imports package_assets, so no cycle is possible.
+    """
+    try:
+        from verify_release_package import read_package_entries
+        return read_package_entries
+    except ImportError:
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        if script_dir not in sys.path:
+            sys.path.insert(0, script_dir)
+        from verify_release_package import read_package_entries
+        return read_package_entries
+
+
+def verify_package(package_path, as_json=False):
+    """Verify one .rowlpkg file: sidecar digest + embedded manifest/file hashes.
+
+    Missing-sidecar decision (fail-closed distribution gate): verification
+    CONTINUES into the embedded manifest check for diagnostics, but the
+    result is still FAIL with exit 1 — an artifact that left the signed
+    pipeline without its checksum must not pass as OK.
+
+    Returns a process exit code: 0 OK, 1 corrupt/missing.
+    Prints exactly one human-readable line (stdout), or one JSON object line
+    with --json.
+    """
+    package_abs = os.path.abspath(package_path)
+    name = os.path.basename(package_abs)
+    sidecar_path = package_abs + ".sha256"
+
+    def emit(ok, sidecar_state, actual, entries, error):
+        if as_json:
+            print(json.dumps({"ok": ok, "package": name, "sha256": actual,
+                              "sidecar": sidecar_state, "entries": entries,
+                              "error": error}, sort_keys=True))
+        elif ok:
+            print(f"[Packer][verify] OK: {name} ({entries} entries, sha256 {actual[:16]}...)")
+        else:
+            print(f"[Packer][verify] FAIL: {name}: {error}")
+
+    if not os.path.isfile(package_abs):
+        emit(False, "missing", None, None, "package file does not exist")
+        return 1
+    try:
+        with open(package_abs, "rb") as f:
+            actual = hashlib.sha256(f.read()).hexdigest()
+    except OSError as error:
+        emit(False, "missing", None, None, f"package is unreadable: {error}")
+        return 1
+
+    if os.path.isfile(sidecar_path):
+        try:
+            with open(sidecar_path, "r", encoding="utf-8") as f:
+                content = f.read()
+        except (OSError, ValueError) as error:
+            emit(False, "malformed", actual, None,
+                 f".sha256 sidecar is unreadable: {error}")
+            return 1
+        parts = content.split()
+        if (len(parts) != 2 or len(parts[0]) != 64 or parts[1] != name):
+            emit(False, "malformed", actual, None,
+                 ".sha256 sidecar is malformed (want '<hash>  <basename>')")
+            return 1
+        try:
+            bytes.fromhex(parts[0])
+        except ValueError:
+            emit(False, "malformed", actual, None,
+                 ".sha256 sidecar is malformed (want '<hash>  <basename>')")
+            return 1
+        if parts[0] != actual:
+            emit(False, "mismatch", actual, None,
+                 "package digest does not match .sha256 sidecar")
+            return 1
+        sidecar_state = "ok"
+        missing_sidecar = False
+    else:
+        sidecar_state = "missing"
+        missing_sidecar = True
+
+    try:
+        read_package_entries = _load_release_verifier()
+        entries = read_package_entries(package_abs)
+    except (OSError, ValueError) as error:
+        emit(False, sidecar_state, actual, None,
+             f"embedded manifest/file-hash check failed: {error}")
+        return 1
+
+    count = len(entries)
+    if missing_sidecar:
+        emit(False, sidecar_state, actual, count,
+             ".sha256 sidecar is missing (package itself is internally consistent)")
+        return 1
+    emit(True, sidecar_state, actual, count, None)
+    return 0
+
+
+def _print_usage():
+    print("Usage:")
+    print("  python3 tools/package_assets.py <input_dir> <output_rowlpkg>")
+    print("  python3 tools/package_assets.py verify <package_rowlpkg> [--json]")
 
 
 if __name__ == "__main__":
+    if len(sys.argv) >= 2 and sys.argv[1] == "verify":
+        rest = sys.argv[2:]
+        as_json = "--json" in rest
+        positional = [arg for arg in rest if arg != "--json"]
+        if len(positional) != 1:
+            _print_usage()
+            sys.exit(2)
+        sys.exit(verify_package(positional[0], as_json=as_json))
+
     if len(sys.argv) < 3:
-        print("Usage: python3 tools/package_assets.py <input_dir> <output_rowlpkg>")
+        _print_usage()
         sys.exit(1)
 
     input_dir = sys.argv[1]
