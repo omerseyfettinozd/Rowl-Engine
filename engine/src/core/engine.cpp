@@ -880,6 +880,7 @@ void Engine::updateSceneFromComponents(const std::string& componentsJson,
                         for (const auto& draw : staged.toSpriteDraws(cd.x, cd.y, cd.width, cd.height)) {
                             CharacterRenderData layered = cd;
                             layered.sprite = draw.asset;
+                            layered.opacity = draw.opacity;
                             m_activeCharacters.push_back(layered);
                         }
                     } else {

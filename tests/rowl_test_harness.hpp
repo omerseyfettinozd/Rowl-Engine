@@ -114,6 +114,7 @@ void test_markup_parser();
 void test_text_shaping();
 void test_accessibility();
 void test_character_layers();
+void test_character_layer_benchmarks();
 void test_prefetch_chapters();
 void test_converter_provenance();
 void test_native_performance_benchmarks(const std::string& benchmarkJsonPath);

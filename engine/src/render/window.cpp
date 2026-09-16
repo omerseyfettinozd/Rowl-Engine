@@ -1276,6 +1276,9 @@ void Window::renderVisualNovelFrame(
 
         SDL_Texture* charTex = loadTexture(ch.sprite);
         if (charTex) {
+            // Faz 5 Dilim 6: katman opakligi; bg hattindaki desenin aynisi
+            // (AlphaMod kur + ciz + 255'e geri al; doku onbellegi paylasimli).
+            SDL_SetTextureAlphaMod(charTex, static_cast<Uint8>(std::clamp(ch.opacity, 0.0f, 1.0f) * 255.0f));
             float texW = 0.0f, texH = 0.0f;
             if (SDL_GetTextureSize(charTex, &texW, &texH) && texW > 0.0f && texH > 0.0f && scaledCharW > 0.0f && scaledCharH > 0.0f) {
                 // Exact Uniform Proportional Fit inside (physCharX, physCharY, scaledCharW, scaledCharH)
@@ -1312,6 +1315,7 @@ void Window::renderVisualNovelFrame(
                     SDL_RenderTexture(m_sdlRenderer, charTex, nullptr, &charBox);
                 }
             }
+            SDL_SetTextureAlphaMod(charTex, 255);
         } else {
             SDL_FRect charBox = { physCharX, physCharY, scaledCharW, scaledCharH };
             SDL_SetRenderDrawColor(m_sdlRenderer, 30, 41, 59, 220);
@@ -1608,6 +1612,7 @@ uint64_t Window::hashFrameContent(bool hasBackground, const std::string& backgro
         fnvMixF32(hash, ch.rotation);
         fnvMixF32(hash, ch.scaleX);
         fnvMixF32(hash, ch.scaleY);
+        fnvMixF32(hash, ch.opacity);
         fnvMixString(hash, ch.voiceBlipSound);
         fnvMixF32(hash, ch.voiceBlipPitch);
         fnvMixF32(hash, ch.voiceBlipPitchVariance);

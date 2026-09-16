@@ -39,6 +39,9 @@ struct CharacterRenderData {
     float rotation = 0.0f;
     float scaleX = 1.0f;
     float scaleY = 1.0f;
+    // Faz 5 Dilim 6: katman opakligi (toSpriteDraws -> engine -> render hatti).
+    // Yoklugu (legacy) 1.0 sayilir; fail-closed eski davranis korunur.
+    float opacity = 1.0f;
 
     // Character Default Voice Blip Settings (Milestone 25)
     std::string voiceBlipSound = "";

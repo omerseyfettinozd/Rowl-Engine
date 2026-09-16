@@ -53,6 +53,7 @@ int main(int argc, char* argv[]) {
     test_converter_provenance();
     test_camera_and_transition_pipeline();
     test_native_performance_benchmarks(benchmarkJsonPath);
+    test_character_layer_benchmarks();
     test_golden_project_benchmarks(goldenJsonPath);
     test_hardening_and_reliability();
     test_rc_soak_and_data_safety();

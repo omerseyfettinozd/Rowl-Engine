@@ -29,6 +29,7 @@ add_executable(rowl_tests
     test_text_shaping.cpp
     test_accessibility.cpp
     test_character_layers.cpp
+    test_character_layer_benchmarks.cpp
     test_prefetch_chapters.cpp
     test_converter_provenance.cpp
     test_native_performance_benchmarks.cpp
