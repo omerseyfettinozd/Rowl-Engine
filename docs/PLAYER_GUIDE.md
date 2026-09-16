@@ -152,3 +152,5 @@ boşalan prefix dizini de kaldırılır:
 sh "$GUIDE_WORK/install-rowl-guide.sh" uninstall --prefix "$GUIDE_WORK/prefix"
 test ! -e "$GUIDE_WORK/prefix"
 ```
+
+Üçüncü taraf lisans envanteri için bkz. `THIRD_PARTY_LICENSES.md` (repo kökü).

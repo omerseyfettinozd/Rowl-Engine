@@ -160,6 +160,14 @@ if(ROWL_BUILD_RUNTIME_TESTS)
             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
             TIMEOUT 60
         )
+        add_test(
+            NAME rowl_third_party_license_tests
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/test_third_party_licenses.py
+        )
+        set_tests_properties(rowl_third_party_license_tests PROPERTIES
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+            TIMEOUT 120
+        )
     endif()
 
     find_program(DOTNET_EXECUTABLE dotnet)

@@ -270,3 +270,5 @@ python3 tools/package_assets.py verify "$AUTHOR_WORK/tampered.rowlpkg"
   aç (bozuk dosyayla devam etme); disk dolarsa kurulum
   `cannot install ...` ile durur — yer açıp aynı komutu baştan çalıştır;
   bu kurulumcu Linux-only POSIX `sh`'tir.
+
+Üçüncü taraf lisans envanteri için bkz. `THIRD_PARTY_LICENSES.md` (repo kökü).
