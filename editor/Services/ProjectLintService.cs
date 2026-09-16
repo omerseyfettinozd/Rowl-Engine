@@ -69,6 +69,8 @@ internal static class ProjectLintService
             RunRule(issues, () => CheckCharacterLayers(nodeList, assetsPath, disk, issues, options));
         if (options.CheckPrefetch)
             RunRule(issues, () => CheckPrefetchAssets(nodeList, assetsPath, disk, issues, options));
+        if (options.CheckConvertedFreshness)
+            RunRule(issues, () => CheckConvertedFreshness(assetsPath, disk, issues, options));
 
         return issues;
     }
@@ -788,6 +790,171 @@ internal static class ProjectLintService
         }
     }
 
+    // ── Rule 7 (Faz 5 Dilim 5): dönüştürülmüş asset tazeliği ────
+    // Her <c>&lt;çıktı&gt;.rowlconv.json</c> sidecar için iki hash karşılaştırılır:
+    // sidecar'daki output_sha256 vs diskteki çıktı, sidecar'daki source_sha256
+    // vs kaynak (SourceAssets/ altında gövde-adı+eşleşen kaynak uzantıyla
+    // aranır; bulunamazsa kaynak kolu sessiz geçilir). Sözleşme
+    // (docs/MEDIA_CONVERTERS_CONTRACT.md): OGG sidecar'daki source_sha256,
+    // decode edilmiş PCM baytlarının hash'idir — ses kolu kaynağı harici
+    // ffmpeg ile çözüp PCM hash'ini karşılaştırır (ham MP3/FLAC hash'i DEĞİL);
+    // decode edilemezse kol sessiz geçilir (fail-open). WebP kolu dosya
+    // baytlarını kullanır (araç girdisi doğrudan .webp dosyasıdır).
+    // Uyuşmazlık advisory WARNING'dir (fail değil). Bozuk sidecar da warning
+    // verir (error YOK). Batch-only: inline inspector'a karışmaz.
+
+    private static void CheckConvertedFreshness(
+        string assetsPath,
+        ProjectValidationService.DiskIndex disk,
+        List<ProjectValidationIssue> issues,
+        ProjectLintOptions options)
+    {
+        string root;
+        string? sourceRoot;
+        try
+        {
+            root = Path.GetFullPath(assetsPath);
+            if (!Directory.Exists(root))
+                return;
+            string? projectRoot = Path.GetDirectoryName(root.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+            sourceRoot = projectRoot is null ? null : Path.Combine(projectRoot, "SourceAssets");
+        }
+        catch (Exception)
+        {
+            return;
+        }
+        int added = 0;
+        foreach (string rel in disk.ExactPaths.OrderBy(p => p, StringComparer.Ordinal))
+        {
+            if (added >= options.MaxIssuesPerRule)
+            {
+                issues.Add(new(false,
+                    $"Converted-asset scan capped at {options.MaxIssuesPerRule} entries; remaining sidecars unchecked."));
+                return;
+            }
+            if (!rel.EndsWith(MediaConverterService.SidecarSuffix, StringComparison.Ordinal))
+                continue;
+            string outputRel = rel[..^MediaConverterService.SidecarSuffix.Length];
+            string outputFull = Path.Combine(root, outputRel);
+            MediaConversionProvenance? provenance;
+            try
+            {
+                provenance = MediaConversionProvenance.TryReadFile(outputFull + MediaConverterService.SidecarSuffix);
+            }
+            catch (Exception)
+            {
+                provenance = null;
+            }
+            if (provenance is null)
+            {
+                issues.Add(new(false,
+                    $"Converted asset '{outputRel}' has an unreadable sidecar ('{rel}'); reconvert to restore provenance.",
+                    null, outputRel));
+                added++;
+                continue;
+            }
+            string outputHash;
+            try
+            {
+                if (!File.Exists(outputFull))
+                    continue; // Missing-file sahipliği Validate'dedir.
+                outputHash = MediaConverterService.ComputeFileSha256(outputFull);
+            }
+            catch (Exception)
+            {
+                continue; // Unreadable burada; disk-scan uyarısı IO'yu kapsar.
+            }
+            if (!string.Equals(provenance.OutputSha256, outputHash, StringComparison.OrdinalIgnoreCase))
+            {
+                issues.Add(new(false,
+                    $"Converted asset '{outputRel}' changed on disk (output hash mismatch with '{rel}'); reconvert to refresh it.",
+                    null, outputRel));
+                added++;
+                continue;
+            }
+            string? sourceFull = FindConversionSource(outputRel, sourceRoot, provenance.SourcePath);
+            if (sourceFull is null)
+                continue; // Kaynak bulunamadı: yargısız sessiz.
+            string? sourceHash;
+            try
+            {
+                if (string.Equals(Path.GetExtension(outputRel), ".ogg", StringComparison.OrdinalIgnoreCase))
+                {
+                    // Ses: sidecar source_sha256 = decode PCM hash'i.
+                    sourceHash = MediaConverterService.TryDecodeSourceHashAsync(
+                        sourceFull, options.ConverterOptions ?? new MediaConverterService.ConverterOptions())
+                        .GetAwaiter().GetResult();
+                    if (sourceHash is null)
+                        continue; // Decode yoksa yargısız sessiz (fail-open).
+                }
+                else
+                {
+                    sourceHash = MediaConverterService.ComputeFileSha256(sourceFull);
+                }
+            }
+            catch (Exception)
+            {
+                continue;
+            }
+            if (!string.Equals(provenance.SourceSha256, sourceHash, StringComparison.OrdinalIgnoreCase))
+            {
+                issues.Add(new(false,
+                    $"Converted asset '{outputRel}' source changed (source hash mismatch with '{rel}'); reconvert to refresh it.",
+                    null, outputRel));
+                added++;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Çıktı yolundan kaynak dosyayı bulur: önce sidecar'daki source_path
+    /// (SourceAssets-göreli), sonra gövde-adı + kaynak uzantı araması.
+    /// </summary>
+    internal static string? FindConversionSource(
+        string outputRel, string? sourceRoot, string? provenanceSourcePath = null)
+    {
+        if (string.IsNullOrWhiteSpace(sourceRoot) || !Directory.Exists(sourceRoot))
+            return null;
+        if (!string.IsNullOrWhiteSpace(provenanceSourcePath))
+        {
+            try
+            {
+                string candidate = Path.GetFullPath(Path.Combine(sourceRoot, provenanceSourcePath.Replace('\\', '/')));
+                if (ProjectFileSystem.IsSameOrDescendant(candidate, Path.GetFullPath(sourceRoot))
+                    && File.Exists(candidate))
+                    return candidate;
+            }
+            catch (Exception)
+            {
+                // Düşer: gövde-adı aramasına.
+            }
+        }
+        string stem = Path.GetFileNameWithoutExtension(outputRel).Replace('\\', '/');
+        string outputExt = Path.GetExtension(outputRel).ToLowerInvariant();
+        string[] sourceExts = outputExt switch
+        {
+            ".ogg" => new[] { ".mp3", ".flac" },
+            ".png" => new[] { ".webp" },
+            _ => Array.Empty<string>(),
+        };
+        foreach (string sourceExt in sourceExts)
+        {
+            string[] hits;
+            try
+            {
+                hits = Directory.GetFiles(sourceRoot, stem + sourceExt, SearchOption.AllDirectories);
+            }
+            catch (Exception)
+            {
+                continue;
+            }
+            Array.Sort(hits, StringComparer.Ordinal);
+            if (hits.Length > 0)
+                return hits[0];
+        }
+        return null;
+    }
+
     // ── Rule 4: unused assets ────────────────────────────────────────
     // ExactPaths MINUS the referenced-asset candidate set (normalized +
     // images/audio/fonts/scripts prefixes, mirroring batch resolution) =
@@ -904,5 +1071,7 @@ internal sealed record ProjectLintOptions(
     bool CheckLongAudio = true,
     bool CheckCharacterLayers = true,
     bool CheckPrefetch = true,
+    bool CheckConvertedFreshness = true,
+    MediaConverterService.ConverterOptions? ConverterOptions = null,
     long MaxLuaBytes = 256 * 1024,
     int MaxIssuesPerRule = 200);

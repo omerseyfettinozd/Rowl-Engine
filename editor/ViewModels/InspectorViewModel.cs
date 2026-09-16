@@ -45,6 +45,8 @@ namespace RowlEngine.Editor.ViewModels
                     OnPropertyChanged(nameof(HasSelectedObject));
                     OnPropertyChanged(nameof(SelectedNodeIssues));
                     OnPropertyChanged(nameof(SelectedNodeHasErrors));
+                    OnPropertyChanged(nameof(SelectedAssetProvenance));
+                    OnPropertyChanged(nameof(HasSelectedAssetProvenance));
                     OnPropertyChanged(nameof(SelectedChapterOption));
                     OnPropertyChanged(nameof(MemberGroups));
                     OnPropertyChanged(nameof(JoinableGroups));
@@ -83,6 +85,58 @@ namespace RowlEngine.Editor.ViewModels
 
         public bool SelectedNodeHasErrors =>
             SelectedNodeIssues.Any(issue => issue.IsError);
+
+        // ── Faz 5 Dilim 5 — dönüştürülmüş asset provenance (salt-okunur) ──
+
+        /// <summary>
+        /// Yalnızca testler için native enjeksiyonu (prod'da null; prod ucu
+        /// <see cref="ActiveProvenanceEndpoint"/> ile engine'den çözülür).
+        /// </summary>
+        internal AssetProvenanceService.ProvenanceNativeCall? TestProvenanceNativeCall { get; set; }
+
+        internal IntPtr TestProvenanceEngineHandle { get; set; }
+
+        /// <summary>
+        /// Seçili düğümün dönüştürülmüş asset referansları için sidecar'dan
+        /// okunan salt-okunur provenance satırları (dönüştürücü adı/sürümü +
+        /// kısa kaynak/çıktı hash'leri). Okuma sırası native-önce/disk-sonra:
+        /// engine canlıysa gerçek DllImport delegesi verilir, native başarısızsa
+        /// disk sidecar'a düşülür (davranış değişmez, yalnızca ölü yol canlanır).
+        /// Dönüştürülmemiş referanslar sessiz geçilir; boş liste = gösterilecek
+        /// provenance yok.
+        /// </summary>
+        public IReadOnlyList<string> SelectedAssetProvenance
+        {
+            get
+            {
+                if (SelectedNode is null)
+                    return Array.Empty<string>();
+                var (nativeCall, engineHandle) = ActiveProvenanceEndpoint();
+                return AssetProvenanceService.FormatSelectedNodeProvenance(
+                    SelectedNode, MainWindowViewModel.AssetsPath, nativeCall, engineHandle);
+            }
+        }
+
+        /// <summary>
+        /// Rozet görünürlüğü: sidecar yoksa false (fail-closed gizli rozet).
+        /// </summary>
+        public bool HasSelectedAssetProvenance => SelectedAssetProvenance.Count > 0;
+
+        /// <summary>
+        /// Prod native ucu: test enjeksiyonu varsa o, yoksa canlı engine
+        /// (handle + <see cref="AssetProvenanceService.ProductionNativeCall"/>),
+        /// engine ölüyse disk-only (null delege). <c>EngineHost</c>'a dokunmaz
+        /// (salt-okunur <c>IsInitialized</c>/<c>Handle</c> okuması).
+        /// </summary>
+        internal (AssetProvenanceService.ProvenanceNativeCall? Call, IntPtr Handle) ActiveProvenanceEndpoint()
+        {
+            if (TestProvenanceNativeCall is not null)
+                return (TestProvenanceNativeCall, TestProvenanceEngineHandle);
+            var host = MainViewModel.EngineHost;
+            if (host.IsInitialized && host.Handle != IntPtr.Zero)
+                return (AssetProvenanceService.ProductionNativeCall, host.Handle);
+            return (null, IntPtr.Zero);
+        }
 
         // ── Faz 4 Dilim 4 — chapter assignment ──
 

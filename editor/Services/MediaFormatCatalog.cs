@@ -8,7 +8,9 @@ namespace RowlEngine.Editor.Services;
 /// Faz 1 Dilim 1: MVP medya format sözleşmesinin editör tarafındaki tek kaynağı.
 ///
 /// Kabul edilen: PNG/JPEG/BMP/TGA (görsel), WAV/OGG (ses), TTF/OTF (font).
-/// MP3, FLAC ve WebP, Faz 5 dönüştürücü gelene kadar açık hatayla reddedilir.
+/// MP3, FLAC ve WebP Faz 5 Dilim 5 dönüştürücü hattıyla kabul-dönüştürülür
+/// (SourceAssets/ → Assets/ + .rowlconv.json sidecar); gerçek destek-dışı
+/// formatlar (GIF ve diğerleri) hâlâ açık hatayla reddedilir.
 /// Import, picker/preview, linter (ProjectValidationService) ve bu katalogun
 /// Python aynası (tools/package_assets.py) aynı kümeleri kullanır; yeni bir
 /// zincir eklenirken buraya danışmayan uzantı listesi yazılmaz.
@@ -41,7 +43,7 @@ public static class MediaFormatCatalog
     };
 
     // CONTRACT(converter-pending): mirrored by tools/package_assets.py CONVERTER_PENDING_EXTS.
-    // Faz 5 dönüştürücü (MP3/FLAC -> OGG Vorbis, WebP -> PNG) gelene kadar reddedilir.
+    // Faz 5 Dilim 5 dönüştürücü (MP3/FLAC -> OGG Vorbis, WebP -> PNG) hattıyla kabul-dönüştürülür.
     public static IReadOnlySet<string> ConverterPendingExtensions { get; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
         ".mp3",
@@ -110,9 +112,13 @@ public static class MediaFormatCatalog
     public static bool IsKnownUnsupportedMediaExtension(string? fileNameOrExt)
         => KnownUnsupportedMediaExtensions.Contains(NormalizeExtension(fileNameOrExt));
 
-    /// <summary>Açık red gerektiren uzantı: dönüştürücü bekleyen veya bilinen-desteklenmeyen medya.</summary>
+    /// <summary>
+    /// Açık red gerektiren uzantı: YALNIZCA bilinen-desteklenmeyen medya.
+    /// Dönüştürücü bekleyen (MP3/FLAC/WebP) uzantılar Faz 5 Dilim 5'ten beri
+    /// reddedilmez; kabul-dönüştürülür (<see cref="IsConverterPendingExtension"/>).
+    /// </summary>
     public static bool RequiresExplicitRejection(string? fileNameOrExt)
-        => IsConverterPendingExtension(fileNameOrExt) || IsKnownUnsupportedMediaExtension(fileNameOrExt);
+        => IsKnownUnsupportedMediaExtension(fileNameOrExt);
 
     /// <summary>Kabul edilen medya için standart alt dizini verir (images/audio/fonts).</summary>
     public static bool TryGetAssetSubdirectory(string fileNameOrExt, out string subdirectory)
@@ -125,14 +131,18 @@ public static class MediaFormatCatalog
         return false;
     }
 
-    /// <summary>Reddedilen dosya için kullanıcıya gösterilecek açık mesajı üretir.</summary>
+    /// <summary>
+    /// Reddedilen dosya için kullanıcıya gösterilecek açık mesajı üretir.
+    /// Dönüştürülebilir kaynaklar reddedilmediği için onlara kabul-dönüştür
+    /// bilgisi döner (import hattı bu mesajı loglar, engellemez).
+    /// </summary>
     public static string RejectionMessage(string? fileNameOrExt)
     {
         string name = string.IsNullOrWhiteSpace(fileNameOrExt) ? "(unnamed file)" : fileNameOrExt.Trim();
         string ext = NormalizeExtension(fileNameOrExt);
         const string accepted = "Accepted: PNG/JPEG/BMP/TGA, WAV/OGG, TTF/OTF.";
         if (ConverterPendingExtensions.Contains(ext))
-            return $"'{name}' uses '{ext}', which needs the Faz 5 media converter (MP3/FLAC -> OGG, WebP -> PNG) and is rejected until then. {accepted}";
+            return $"'{name}' uses '{ext}', which is accepted via the Faz 5 media converter (MP3/FLAC -> OGG, WebP -> PNG) and converted on import. {accepted}";
         return $"'{name}' uses unsupported format '{ext}'. {accepted}";
     }
 }

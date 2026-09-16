@@ -54,7 +54,10 @@ ACCEPTED_FONT_EXTS = frozenset({
     ".otf",
 })
 # CONTRACT(converter-pending)
-# Faz 5 dönüştürücü (MP3/FLAC -> OGG Vorbis, WebP -> PNG) gelene kadar reddedilir.
+# Faz 5 Dilim 5 dönüştürücü hattı (MP3/FLAC -> OGG Vorbis, WebP -> PNG) ile
+# kabul-dönüştürülür: kaynaklar paketlenmez, dönüştürülmüş .ogg/.png çıktıları
+# normal asset olarak paketlenir; yanındaki .rowlconv.json sidecar varsa
+# manifest kaydına converted_from (kaynak yol + hash) yazılır.
 CONVERTER_PENDING_EXTS = frozenset({
     ".mp3",
     ".flac",
@@ -79,8 +82,10 @@ KNOWN_UNSUPPORTED_MEDIA_EXTS = frozenset({
 
 ACCEPTED_MEDIA_EXTS = ACCEPTED_IMAGE_EXTS | ACCEPTED_AUDIO_EXTS | ACCEPTED_FONT_EXTS
 
-_CONVERTER_HINT = ("needs the Faz 5 media converter (MP3/FLAC -> OGG, WebP -> PNG) "
-                   "and is rejected until then. Accepted: PNG/JPEG/BMP/TGA, WAV/OGG, TTF/OTF.")
+# Faz 5 Dilim 5: dönüştürücü kaynakları (MP3/FLAC/WebP) doğrudan paketlenmez
+# ama reddedilmez de (kabul-dönüştürerek): import hattı bunları .ogg/.png'ye
+# çevirir ve dönüştürülmüş çıktılar yukarıdaki kabul kümeleriyle paketlenir
+# (.ogg/.png zaten ACCEPTED_* kümelerindedir; ayrı kümeye gerek yok).
 
 
 def check_media_format(rel_path):
@@ -90,13 +95,44 @@ def check_media_format(rel_path):
     if not ext or ext in ACCEPTED_MEDIA_EXTS:
         return None
     if ext in CONVERTER_PENDING_EXTS:
-        return ("converter-required", rel_path,
-                f"'{ext}' {_CONVERTER_HINT}")
+        # Kabul-dönüştürerek: ham kaynak görülürse reddetmek yerine uyarısız
+        # geçilir (dönüştürülmüş çıktı zaten kabul kümelerindedir). Ham
+        # kaynağın pakete girmesi import hattının sorumluluğundadır.
+        return None
     if ext in KNOWN_UNSUPPORTED_MEDIA_EXTS:
         return ("unsupported-media-format", rel_path,
                 f"'{ext}' is not an accepted media format. "
                 "Accepted: PNG/JPEG/BMP/TGA, WAV/OGG, TTF/OTF.")
     return None
+
+
+def read_sidecar_converted_from(full_path):
+    """Adjacent <file>.rowlconv.json sidecar -> converted_from record, else None."""
+    sidecar_path = full_path + ".rowlconv.json"
+    try:
+        if not os.path.isfile(sidecar_path):
+            return None
+        with open(sidecar_path, "r", encoding="utf-8") as f:
+            sidecar = json.load(f)
+    except (OSError, ValueError):
+        return None
+    if not isinstance(sidecar, dict):
+        return None
+    source_sha = sidecar.get("source_sha256")
+    if not source_sha:
+        return None
+    settings = sidecar.get("settings") if isinstance(sidecar.get("settings"), dict) else {}
+    source_path = (sidecar.get("source_path") or settings.get("source_path")
+                   or settings.get("source"))
+    converter = " ".join(part for part in
+                         (sidecar.get("converter_name"), sidecar.get("converter_version"))
+                         if part).strip()
+    record = {"source_sha256": source_sha}
+    if source_path:
+        record["path"] = source_path
+    if converter:
+        record["converter"] = converter
+    return record
 
 
 def fnv1a64(data):
@@ -230,6 +266,7 @@ def pack_directory(input_dir, output_pkg):
             "sha256": digest,
             "compressed_size": compressed_size,
             "flags": flags,
+            **({"converted_from": converted_from} if (converted_from := read_sidecar_converted_from(full_path)) else {}),
         })
 
         payload_bytes.extend(compressed_data)

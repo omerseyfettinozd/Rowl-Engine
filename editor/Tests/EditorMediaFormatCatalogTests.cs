@@ -20,7 +20,16 @@ internal static class EditorMediaFormatCatalogTests
             if (!MediaFormatCatalog.IsAcceptedMediaExtension(accepted) || MediaFormatCatalog.RequiresExplicitRejection(accepted))
                 throw new Exception($"MediaFormatCatalog should accept '{accepted}'.");
         }
-        foreach (string rejected in new[] { "theme.mp3", "voice.flac", "hero.webp", "fun.gif", "THEME.MP3", "PHOTO.WEBP" })
+        // Faz 5 Dilim 5: dönüştürülebilir kaynaklar kabul-dönüştürülür —
+        // reddedilmez, doğrudan kabul de edilmez.
+        foreach (string convertible in new[] { "theme.mp3", "voice.flac", "hero.webp", "THEME.MP3", "PHOTO.WEBP" })
+        {
+            if (!MediaFormatCatalog.IsConverterPendingExtension(convertible)
+                || MediaFormatCatalog.RequiresExplicitRejection(convertible)
+                || MediaFormatCatalog.IsAcceptedMediaExtension(convertible))
+                throw new Exception($"MediaFormatCatalog should convert-accept '{convertible}'.");
+        }
+        foreach (string rejected in new[] { "fun.gif", "clip.psd", "take.aiff", "song.m4a" })
         {
             if (!MediaFormatCatalog.RequiresExplicitRejection(rejected) || MediaFormatCatalog.IsAcceptedMediaExtension(rejected))
                 throw new Exception($"MediaFormatCatalog should reject '{rejected}'.");
@@ -36,32 +45,50 @@ internal static class EditorMediaFormatCatalogTests
         if (!MediaFormatCatalog.ImagePickerPatterns.All(p => p != "*.webp" && p != "*.gif")
             || !MediaFormatCatalog.AudioPickerPatterns.All(p => p != "*.mp3" && p != "*.flac"))
             throw new Exception("Picker patterns must not offer converter-pending formats.");
-        if (!MediaFormatCatalog.RejectionMessage("theme.mp3").Contains("Faz 5")
+        if (!MediaFormatCatalog.RejectionMessage("theme.mp3").Contains("converted")
             || MediaFormatCatalog.RejectionMessage("fun.gif").Contains("Faz 5"))
-            throw new Exception("Only converter-pending formats may promise the Faz 5 converter.");
+            throw new Exception("Only converter sources may promise conversion; true rejects must not.");
 
-        // Step 33.2: import refuses rejected formats with an explicit log
-        Console.WriteLine("    [Step 33.2]: ImportAssetFiles rejection...");
+        // Step 33.2: import converts converter sources (fake tools), rejects gif
+        Console.WriteLine("    [Step 33.2]: ImportAssetFiles convert-accept...");
         string importSrc = Path.Combine(Path.GetTempPath(), $"RowlFormatImportSrc_{Guid.NewGuid():N}");
         string importAssets = Path.Combine(Path.GetTempPath(), $"RowlFormatImportAssets_{Guid.NewGuid():N}");
         string rejectionLog = string.Empty;
+        string? savedOggPath = Environment.GetEnvironmentVariable("ROWL_OGGENC_PATH");
+        string? savedWebpPath = Environment.GetEnvironmentVariable("ROWL_WEBP2PNG_PATH");
+        string? savedFfmpegPath = Environment.GetEnvironmentVariable("FFMPEG_PATH");
         try
         {
             Directory.CreateDirectory(importSrc);
             File.WriteAllBytes(Path.Combine(importSrc, "ok.png"), new byte[] { 0x89, 0x50, 0x4E, 0x47 });
             File.WriteAllBytes(Path.Combine(importSrc, "theme.mp3"), new byte[] { 0x49, 0x44, 0x33 });
             File.WriteAllBytes(Path.Combine(importSrc, "hero.webp"), new byte[] { 0x52, 0x49, 0x46, 0x46 });
+            File.WriteAllBytes(Path.Combine(importSrc, "fun.gif"), new byte[] { 0x47, 0x49, 0x46 });
+            string fakeOgg = WriteFakeConverterScript("rowl_oggenc");
+            string fakeWebp = WriteFakeConverterScript("rowl_webp2png");
+            string fakeFfmpeg = WriteFakeConverterScript("ffmpeg");
+            Environment.SetEnvironmentVariable("ROWL_OGGENC_PATH", fakeOgg);
+            Environment.SetEnvironmentVariable("ROWL_WEBP2PNG_PATH", fakeWebp);
+            Environment.SetEnvironmentVariable("FFMPEG_PATH", fakeFfmpeg);
             var imported = EditorAssetImportService.ImportAssetFiles(
                 Directory.GetFiles(importSrc), importAssets, msg => rejectionLog += msg + "\n");
-            if (imported.Count != 1 || !imported[0].EndsWith("ok.png"))
-                throw new Exception($"Expected only ok.png imported, got [{string.Join(",", imported)}].");
-            if (!rejectionLog.Contains("theme.mp3") || !rejectionLog.Contains("hero.webp") || !rejectionLog.Contains("Faz 5"))
-                throw new Exception("Import rejection log must name the rejected files and the converter.");
-            if (Directory.EnumerateFiles(importAssets, "*", SearchOption.AllDirectories).Any(f => f.EndsWith(".mp3") || f.EndsWith(".webp")))
-                throw new Exception("Rejected formats must not be copied into the project.");
+            if (!imported.Any(p => p.EndsWith("ok.png"))
+                || !imported.Any(p => p == "audio/theme.ogg")
+                || !imported.Any(p => p == "images/hero.png"))
+                throw new Exception($"Expected ok.png + converted outputs, got [{string.Join(",", imported)}].");
+            if (!rejectionLog.Contains("fun.gif"))
+                throw new Exception("Import rejection log must name the truly-unsupported file.");
+            if (!File.Exists(Path.Combine(importAssets, "audio", "theme.ogg.rowlconv.json"))
+                || !File.Exists(Path.Combine(importAssets, "images", "hero.png.rowlconv.json")))
+                throw new Exception("Converted outputs must ship adjacent .rowlconv.json sidecars.");
+            if (Directory.EnumerateFiles(importAssets, "*", SearchOption.AllDirectories).Any(f => f.EndsWith(".gif") || f.EndsWith(".mp3") || f.EndsWith(".webp")))
+                throw new Exception("Raw sources and rejected formats must not be copied into the project.");
         }
         finally
         {
+            Environment.SetEnvironmentVariable("ROWL_OGGENC_PATH", savedOggPath);
+            Environment.SetEnvironmentVariable("ROWL_WEBP2PNG_PATH", savedWebpPath);
+            Environment.SetEnvironmentVariable("FFMPEG_PATH", savedFfmpegPath);
             try { Directory.Delete(importSrc, true); } catch { }
             try { Directory.Delete(importAssets, true); } catch { }
         }
@@ -86,9 +113,9 @@ internal static class EditorMediaFormatCatalogTests
             if (okIssues.Any(issue => issue.IsError))
                 throw new Exception("Accepted MVP references must not produce errors: " + string.Join("; ", okIssues.Select(i => i.Message)));
 
-            // 33.3b converter-pending references are build-blocking errors
-            AssertSingleError(scenarioRoot, "theme.mp3", "Faz 5");
-            AssertSingleError(scenarioRoot, "sprite.webp", "Faz 5");
+            // 33.3b converter sources warn (never block), true rejects error
+            AssertSingleWarning(scenarioRoot, "theme.mp3", "converted");
+            AssertSingleWarning(scenarioRoot, "sprite.webp", "converted");
             AssertSingleError(scenarioRoot, "fun.gif", "unsupported format");
 
             // 33.3c outside-project paths are build-blocking errors
@@ -122,6 +149,85 @@ internal static class EditorMediaFormatCatalogTests
         }
 
         Console.WriteLine("  ✅ [PASS] Media format contract, import rejection and validation audits verified");
+    }
+
+    private static void AssertSingleWarning(string scenarioRoot, string assetRef, string expectedFragment)
+    {
+        string assets = Path.Combine(scenarioRoot, $"ref_{Guid.NewGuid():N}", "Assets");
+        Directory.CreateDirectory(Path.Combine(assets, "images"));
+        var node = new NodeViewModel(9611, "Ref", 0, 0, bare: true);
+        node.AddComponent<BackgroundComponentViewModel>().Texture = assetRef;
+        var issues = ProjectValidationService.Validate(new[] { node }, Array.Empty<ConnectionViewModel>(), assets, node.Id);
+        if (issues.Any(issue => issue.IsError && issue.Message.Contains(assetRef)))
+            throw new Exception($"Reference '{assetRef}' must never be a build-blocking error.");
+        if (!issues.Any(issue => !issue.IsError && issue.Message.Contains(assetRef) && issue.Message.Contains(expectedFragment)))
+            throw new Exception($"Reference '{assetRef}' must be an advisory warning containing '{expectedFragment}'.");
+    }
+
+    /// <summary>
+    /// Headless-suite fake araçları (sözleşme CLI sırasını doğrular):
+    /// <c>ffmpeg</c> sahtesi decode eder (<c>-hide_banner -loglevel error -i
+    /// IN -ar 44100 -ac 2 -sample_fmt s16 -f s16le OUT.pcm</c> →
+    /// <c>b'PCM:' + girdi</c>); <c>rowl_oggenc</c> sahtesi PCM'i okuyup OGG +
+    /// sidecar yazar (<c>--rate 44100 --channels 2 -o OUT --sidecar FILE
+    /// IN.pcm</c>, source_sha256 = PCM hash'i); <c>rowl_webp2png</c> sahtesi
+    /// <c>-o OUT --sidecar FILE IN.webp</c> yazar (source_sha256 = dosya
+    /// hash'i). Çalıştırılabilir sarmalayıcı yolu döner (Unix sh + exec biti,
+    /// Windows cmd).
+    /// </summary>
+    private static string WriteFakeConverterScript(string toolName)
+    {
+        string kind = toolName.Contains("ffmpeg", StringComparison.OrdinalIgnoreCase) ? "ffmpeg"
+            : toolName.Contains("webp", StringComparison.OrdinalIgnoreCase) ? "webp" : "ogg";
+        string script = Path.Combine(Path.GetTempPath(), $"RowlFakeConv_{Guid.NewGuid():N}.py");
+        File.WriteAllText(script,
+            "import hashlib, json, sys\n" +
+            "kind = '" + kind + "'\n" +
+            "tool = '" + toolName + "'\n" +
+            "a = sys.argv[1:]\n" +
+            "if kind == 'ffmpeg':\n" +
+            "    assert a[0] == '-hide_banner' and a[1] == '-loglevel' and a[2] == 'error' and a[3] == '-i', a\n" +
+            "    assert a[5] == '-ar' and a[7] == '-ac' and a[9] == '-sample_fmt' and a[10] == 's16', a\n" +
+            "    assert a[11] == '-f' and a[12] == 's16le', a\n" +
+            "    data = open(a[4], 'rb').read()\n" +
+            "    open(a[13], 'wb').write(b'PCM:' + data)\n" +
+            "else:\n" +
+            "    o = a.index('-o'); s = a.index('--sidecar')\n" +
+            "    assert a[o + 2] == '--sidecar' if kind == 'webp' else (a[o - 4] == '--rate' and s == o + 2), a\n" +
+            "    out, sidecar, src = a[o + 1], a[s + 1], a[-1]\n" +
+            "    assert sidecar.endswith('.rowlconv.json'), a\n" +
+            "    data = open(src, 'rb').read()\n" +
+            "    blob = b'FAKE:' + data\n" +
+            "    open(out, 'wb').write(blob)\n" +
+            "    json.dump({" +
+            "'source_sha256': hashlib.sha256(data).hexdigest(), " +
+            "'converter_name': tool, " +
+            "'converter_version': '0.0-headless', " +
+            "'settings': {}, " +
+            "'output_sha256': hashlib.sha256(blob).hexdigest(), " +
+            "'created_by': tool + ' --sidecar'}, " +
+            "open(sidecar, 'w'))\n");
+        if (OperatingSystem.IsWindows())
+        {
+            string wrapper = Path.ChangeExtension(script, ".cmd");
+            File.WriteAllText(wrapper, "@echo off\r\npython \"%~dp0" + Path.GetFileName(script) + "\" %*\r\n");
+            return wrapper;
+        }
+        string shWrapper = script + ".sh";
+        File.WriteAllText(shWrapper,
+            "#!/bin/sh\nexec python3 \"" + script + "\" \"$@\"\n");
+        try
+        {
+            File.SetUnixFileMode(shWrapper,
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute
+                | UnixFileMode.GroupRead | UnixFileMode.GroupExecute
+                | UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
+        }
+        catch (Exception)
+        {
+            // Exec biti verilemezse çalıştırma hatası testte fail olarak görülür.
+        }
+        return shWrapper;
     }
 
     private static void AssertSingleError(string scenarioRoot, string assetRef, string expectedFragment)

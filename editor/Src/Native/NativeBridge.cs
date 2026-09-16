@@ -929,6 +929,25 @@ namespace RowlEngine.Editor.Native
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
         internal static extern float RowlEngine_GetVignetteIntensity(IntPtr handle);
 
+        // ── Faz 5 Dilim 5 asset provenance (CAPABILITY_ASSET_PROVENANCE = 131072) ──
+        //
+        // 1:1 Cdecl mirror of the additive entry documented in
+        // engine/include/rowl/c_api.h:
+        // RowlEngine_GetAssetProvenanceJson(handle, assetPathUtf8, buffer,
+        // bufferSize, outRequiredSize). Caller-buffer contract (NULL/0 size
+        // query, undersized buffer clears + BufferTooSmall, missing sidecar
+        // reports FileNotFound). Callers go through AssetProvenanceService,
+        // which falls back to the on-disk <output>.rowlconv.json sidecar when
+        // the export is absent.
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_GetAssetProvenanceJson(
+            IntPtr handle,
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string assetPathUtf8,
+            IntPtr buffer,
+            uint bufferSize,
+            out uint outRequiredSize);
+
         // ── Helpers ──────────────────────────────────────────────────────────
 
         /// <summary>Converts a native C UTF-8 string pointer to a managed string safely.</summary>

@@ -31,7 +31,26 @@ namespace RowlEngine.Editor.Services.Inspector
                 return $"Varlık '{reference}' proje Assets dizini dışını gösteriyor; Assets-göreli yol kullanın.";
             string ext = Path.GetExtension(reference.Replace('\\', '/'));
             if (MediaFormatCatalog.IsConverterPendingExtension(ext))
-                return $"Varlık '{reference}' {ext.ToLowerInvariant()} dönüştürücü bekliyor (Faz 5'e kadar reddedilir). Kabul: PNG/JPEG/BMP/TGA, WAV/OGG, TTF/OTF.";
+            {
+                // Faz 5 Dilim 5: dönüştürülebilir kaynak kabul-dönüştürülür.
+                // Dönüştürülmüş çıktı çözülüyorsa sessiz (ham kaynak + çıktı
+                // adaylarının tamamı denenir); yoksa inline error (dosya
+                // runtime'da gerçekten kullanılamaz; build tarafı warning verir).
+                foreach (string converted in MediaConverterService.ConvertedOutputCandidates(reference))
+                {
+                    string convertedNormalized = converted.Replace('\\', '/');
+                    string[] convertedCandidates =
+                    {
+                        convertedNormalized, "images/" + convertedNormalized, "audio/" + convertedNormalized,
+                        "fonts/" + convertedNormalized, "scripts/" + convertedNormalized,
+                    };
+                    if (convertedCandidates.Any(exactPaths.Contains))
+                        return null;
+                }
+                if (TryResolveOnDisk(reference, assetsRoot, MediaConverterService.ConvertedOutputCandidates(reference)))
+                    return null;
+                return $"Varlık '{reference}' {ext.ToLowerInvariant()} dönüştürülmeyi bekliyor (çıktı diskte yok; import sırasında dönüştürülür).";
+            }
             if (MediaFormatCatalog.IsKnownUnsupportedMediaExtension(ext))
                 return $"Varlık '{reference}' desteklenmeyen '{ext.ToLowerInvariant()}' biçiminde. Kabul: PNG/JPEG/BMP/TGA, WAV/OGG, TTF/OTF.";
             string normalized = reference.Replace('\\', '/');
@@ -48,23 +67,53 @@ namespace RowlEngine.Editor.Services.Inspector
                 return $"Varlık '{reference}' birebir eşleşmiyor ('{insensitiveHit}' farklı harf büyüklüğünde bulundu). Yollar büyük/küçük harfe duyarlıdır.";
             // Fallback for files added after the last index refresh (import
             // mid-session): a direct hit clears the badge without a rescan.
-            if (!string.IsNullOrWhiteSpace(assetsRoot) && Directory.Exists(assetsRoot))
+            if (TryResolveOnDisk(assetsRoot, candidates))
+                return null;
+            return $"Varlık '{reference}' bulunamadı.";
+        }
+
+        private static bool TryResolveOnDisk(string? assetsRoot, IEnumerable<string> candidates)
+        {
+            if (string.IsNullOrWhiteSpace(assetsRoot) || !Directory.Exists(assetsRoot))
+                return false;
+            string full;
+            try
             {
-                string full = Path.GetFullPath(assetsRoot);
-                foreach (string candidate in candidates)
+                full = Path.GetFullPath(assetsRoot);
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+            foreach (string candidate in candidates)
+            {
+                try
                 {
-                    try
-                    {
-                        if (File.Exists(Path.Combine(full, candidate)))
-                            return null;
-                    }
-                    catch (Exception)
-                    {
-                        break;
-                    }
+                    if (File.Exists(Path.Combine(full, candidate)))
+                        return true;
+                }
+                catch (Exception)
+                {
+                    break;
                 }
             }
-            return $"Varlık '{reference}' bulunamadı.";
+            return false;
+        }
+
+        private static bool TryResolveOnDisk(
+            string? reference, string? assetsRoot, IEnumerable<string> extraRefs)
+        {
+            var candidates = new List<string>();
+            foreach (string extra in extraRefs)
+            {
+                string extraNormalized = extra.Replace('\\', '/');
+                candidates.Add(extraNormalized);
+                candidates.Add("images/" + extraNormalized);
+                candidates.Add("audio/" + extraNormalized);
+                candidates.Add("fonts/" + extraNormalized);
+                candidates.Add("scripts/" + extraNormalized);
+            }
+            return TryResolveOnDisk(assetsRoot, candidates);
         }
 
         internal static bool IsOutsideProjectPath(string asset)

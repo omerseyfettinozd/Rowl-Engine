@@ -50,6 +50,7 @@ int main(int argc, char* argv[]) {
     test_accessibility();
     test_character_layers();
     test_prefetch_chapters();
+    test_converter_provenance();
     test_camera_and_transition_pipeline();
     test_native_performance_benchmarks(benchmarkJsonPath);
     test_golden_project_benchmarks(goldenJsonPath);

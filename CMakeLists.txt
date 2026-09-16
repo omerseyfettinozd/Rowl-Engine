@@ -32,6 +32,11 @@ if(CMAKE_CROSSCOMPILING)
     set(ROWL_RUNTIME_TESTS_DEFAULT OFF)
 endif()
 option(ROWL_BUILD_RUNTIME_TESTS "Build tests that execute on the build host" ${ROWL_RUNTIME_TESTS_DEFAULT})
+option(ROWL_BUILD_TOOLS "Build host converter tools (rowl_oggenc, rowl_webp2png)" ${ROWL_RUNTIME_TESTS_DEFAULT})
+
+if(ROWL_BUILD_TOOLS)
+    add_subdirectory(tools)
+endif()
 
 if(ROWL_BUILD_RUNTIME_TESTS)
     add_subdirectory(tests)
@@ -86,6 +91,18 @@ if(ROWL_BUILD_RUNTIME_TESTS)
             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
             TIMEOUT 60
         )
+        if(ROWL_BUILD_TOOLS)
+            add_test(
+                NAME rowl_converter_tool_tests
+                COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/test_converters.py
+                    $<TARGET_FILE:rowl_oggenc>
+                    $<TARGET_FILE:rowl_webp2png>
+            )
+            set_tests_properties(rowl_converter_tool_tests PROPERTIES
+                WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+                TIMEOUT 180
+            )
+        endif()
         add_test(
             NAME rowl_export_tool_tests
             COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/test_export_game.py

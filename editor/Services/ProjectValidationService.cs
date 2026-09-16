@@ -233,7 +233,15 @@ internal static class ProjectValidationService
         string ext = Path.GetExtension(asset.Replace('\\', '/'));
         if (MediaFormatCatalog.IsConverterPendingExtension(ext))
         {
-            issues.Add(new(true, $"Node #{nodeId}: asset '{asset}' ({componentName}) {ConverterHint(ext)}", nodeId, asset));
+            // Faz 5 Dilim 5: dönüştürülebilir kaynaklar build'i engellemez
+            // (kabul-dönüştürerek). Dönüştürülmüş çıktı diskteyse sessiz;
+            // yoksa import sırasında üretileceğini söyleyen advisory warning.
+            foreach (string candidate in MediaConverterService.ConvertedOutputCandidates(asset))
+            {
+                if (disk.ExactPaths.Contains(candidate))
+                    return;
+            }
+            issues.Add(new(false, $"Node #{nodeId}: asset '{asset}' ({componentName}) uses '{ext.ToLowerInvariant()}', which is converted to {ConvertedOutputHint(ext)} on import; no converted output found on disk yet.", nodeId, asset));
             return;
         }
         if (MediaFormatCatalog.IsKnownUnsupportedMediaExtension(ext))
@@ -253,8 +261,11 @@ internal static class ProjectValidationService
             issues.Add(new(true, $"Node #{nodeId}: missing asset '{asset}' ({componentName}).", nodeId, asset));
     }
 
-    private static string ConverterHint(string ext)
-        => $"uses '{ext.ToLowerInvariant()}', which needs the Faz 5 media converter (MP3/FLAC -> OGG, WebP -> PNG) and is rejected until then. Accepted: PNG/JPEG/BMP/TGA, WAV/OGG, TTF/OTF.";
+    private static string ConvertedOutputHint(string ext)
+        => MediaConverterService.TryGetConversionTarget(
+                ext, out string outExt, out string outDir, out _)
+            ? $"'{outExt}' under '{outDir}/' (Faz 5 converter: MP3/FLAC -> OGG, WebP -> PNG)"
+            : "its converted form";
 
     private static bool IsOutsideProjectPath(string asset)
     {

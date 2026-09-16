@@ -16,6 +16,7 @@ RowlEngine_GetActiveDspFilter
 RowlEngine_GetAmbienceBedVolume
 RowlEngine_GetAmbienceVolume
 RowlEngine_GetApiVersion
+RowlEngine_GetAssetProvenanceJson
 RowlEngine_GetAudioChannelPeak
 RowlEngine_GetAudioChannelRms
 RowlEngine_GetAudioSpectrum

@@ -30,6 +30,7 @@ add_executable(rowl_tests
     test_accessibility.cpp
     test_character_layers.cpp
     test_prefetch_chapters.cpp
+    test_converter_provenance.cpp
     test_native_performance_benchmarks.cpp
     test_hardening_and_reliability.cpp
     test_rc_soak_and_data_safety.cpp

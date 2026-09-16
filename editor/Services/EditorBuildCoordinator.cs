@@ -30,6 +30,11 @@ public static class EditorBuildCoordinator
         Action<BuildDiagnostic>? reportDiagnostic = null)
     {
         persistFiles();
+        // Faz 5 Dilim 5 fix: SourceAssets süpürmesi build'e bağlıdır (ölü-yüzey
+        // kapanışı). Dönüştürülebilir kaynaklar doğrulama öncesi tazelenir;
+        // SourceAssets yoksa no-op, araç yoksa fail-safe atlanır.
+        MediaConverterService.ImportConvertedSourceAssetsAsync(
+            Path.Combine(projectRoot, "SourceAssets"), assetsPath, null, log).GetAwaiter().GetResult();
         var result = ProjectBuildService.ExecuteBuildPipeline(
             projectRoot,
             assetsPath,
@@ -69,6 +74,10 @@ public static class EditorBuildCoordinator
         Action<BuildDiagnostic>? reportDiagnostic = null)
     {
         persistFiles();
+        // Faz 5 Dilim 5 fix: SourceAssets süpürmesi (ölü-yüzey kapanışı) —
+        // doğrulama öncesi tazele; yoksa no-op, araç yoksa fail-safe atlanır.
+        await MediaConverterService.ImportConvertedSourceAssetsAsync(
+            Path.Combine(projectRoot, "SourceAssets"), assetsPath, null, log, cancellationToken).ConfigureAwait(false);
         var validation = ProjectValidationService.Validate(nodes, connections, assetsPath, startNodeId);
         reportIssues(validation);
 

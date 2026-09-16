@@ -86,6 +86,8 @@ typedef struct RowlEngine_ApiVersion {
 #define ROWL_ENGINE_CAPABILITY_CHARACTER_LAYERS UINT64_C(32768)
 /* Faz 5 Dilim 4: budgeted asset prefetch + chapter-windowed loading. */
 #define ROWL_ENGINE_CAPABILITY_PREFETCH_CHAPTERS UINT64_C(65536)
+/* Faz 5 Dilim 5: converter provenance sidecars (rowl_oggenc / rowl_webp2png). */
+#define ROWL_ENGINE_CAPABILITY_CONVERTER_PROVENANCE UINT64_C(131072)
 
 /** Current additive C API version. This query does not require an engine handle. */
 ROWL_API RowlEngine_ResultCode RowlEngine_GetApiVersion(
@@ -1166,6 +1168,27 @@ ROWL_API int RowlEngine_PumpPrefetch(RowlEngineHandle handle, float maxMilliseco
 ROWL_API RowlEngine_ResultCode RowlEngine_GetPrefetchProgressJson(
     RowlEngineHandle handle, char* buffer, uint32_t bufferSize,
     uint32_t* outRequiredSize);
+
+/**
+ * Faz 5 Dilim 5 — converter provenance sidecars
+ * (ROWL_ENGINE_CAPABILITY_CONVERTER_PROVENANCE). Additive; older entry
+ * points are untouched.
+ *
+ * Copies the `<path>.rowlconv.json` sidecar written by rowl_oggenc /
+ * rowl_webp2png (see docs/MEDIA_CONVERTERS_CONTRACT.md) through the active
+ * VFS into caller-owned memory. The JSON carries source_sha256,
+ * converter_name, converter_version, settings, output_sha256 and
+ * created_by. Follows the caller-buffer contract of RowlEngine_GetLocale
+ * (NULL/0 size query, undersized buffer clears + BUFFER_TOO_SMALL +
+ * outRequiredSize). A missing sidecar is a NORMAL condition for assets
+ * that were never converter-produced and reports ROWL_RESULT_FILE_NOT_FOUND
+ * (not an error in the asset itself). A present-but-unparseable sidecar
+ * reports ROWL_RESULT_PARSE_ERROR. Asset paths are bounded (NUL within
+ * 256 KiB + 1) and rejected with ROWL_RESULT_INVALID_ARGUMENT above that.
+ */
+ROWL_API RowlEngine_ResultCode RowlEngine_GetAssetProvenanceJson(
+    RowlEngineHandle handle, const char* assetPathUtf8, char* buffer,
+    uint32_t bufferSize, uint32_t* outRequiredSize);
 
 #ifdef __cplusplus
 } /* extern "C" */

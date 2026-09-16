@@ -228,6 +228,7 @@ set(ROWL_ENGINE_SOURCES
     src/c_api_audio.cpp
     src/c_api_character_layers.cpp
     src/c_api_prefetch_chapters.cpp
+    src/c_api_provenance.cpp
     src/c_api_state.cpp
     src/c_api_pause.cpp
 )
