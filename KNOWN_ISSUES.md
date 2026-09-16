@@ -1,6 +1,6 @@
 # KNOWN ISSUES — Rowl Engine (Faz 7 Dilim 1, IS 2/2)
 
-Açık P0/P1 YOK (2026-09-16, tüm CTest yeşil).
+Açık P0 YOK. Açık P1: KI-10 (CI configure borcu — linux/sanitizer/arm64/windows adverse koşulları kırmızı, yerel kapılar yeşil; fix bu committe, kanıt CI koşusunda).
 
 | ID | Başlık | Şiddet (P0-P3) | Durum (açık/kabul-edildi) | Etkilenen alan | Kaynak (dosya:satır) | Hedef dilim |
 |---|---|---|---|---|---|---|
@@ -13,5 +13,6 @@ Açık P0/P1 YOK (2026-09-16, tüm CTest yeşil).
 | KI-07 | Rewind geçmişi sınırsız/budamasız (ölçüm D8 stres testinde). Dosya ~60B/adım yavaş büyür (ölçüldü), RAM `previousState` zinciri sınırsız büyür (budama yok). | P3 | kabul-edildi | GameState rewind zinciri | engine/src/state/game_state.cpp:189-202 | — (ölçüm D8 stres testinde) |
 | KI-08 | stres-suit ~156sn/1000-iter (thumbnail PNG-encode+base64 her save'de, ~310KB/slot) | P3 | kabul-edildi | test süresi | tests/test_rc_soak_and_data_safety.cpp yeni stres bölümü + eşik <240sn | Faz 7 |
 | KI-09 | macOS derleme-kapısı CI-only (`macos-arm64-compile`), cihaz/imza-kanıtı yok; Darwin `#else` HOME-fallback ve GPU-smoke-dışı D2'ye | P2 | açık | macOS derleme kapısı | .github/workflows/ci.yml (`macos-arm64-compile`); docs/PLATFORM_SUPPORT.md (Faz 7 D1 bölümü); engine/src/platform/user_data_directories.cpp:80-83 | Faz 7 |
+| KI-10 | CI configure borcu (Faz 5 D5'ten beri tüm koşular kırmızı): `tools/CMakeLists.txt` `libpng`+`libwebpdecoder` istiyor, CI imajlarında yoktu (Linux apt listesinde yok, Windows'ta pkg-config hiç yok, macOS brew satırında yok). Yerel kapılar hep yeşildi — kod değil çevre borcu. Fix: apt+brew satırlarına ekleme, Windows'ta vcpkg portları + pkgconfiglite + PKG_CONFIG_PATH | P1 | açık | CI (linux/sanitizer/arm64/windows/macos configure) | .github/workflows/ci.yml (Install adımları + windows Configure); tools/CMakeLists.txt:9-11 | Faz 7 D1 fix turu |
 
 Kapsam-dışı (bilinçli yazılmadı): flag-drift `--help` (kodda dosya-yazma yok, şüphe düştü), `tail -n +N` kullanımı (tutarlı, şüphe yok).

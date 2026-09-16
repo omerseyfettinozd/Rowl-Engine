@@ -19,7 +19,7 @@ jobs:
       - name: Install native build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install --yes build-essential cmake curl ninja-build pkg-config liblua5.4-dev libzstd-dev libvorbis-dev libogg-dev libvulkan-dev glslc mesa-vulkan-drivers xvfb libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev libxinerama-dev libxxf86vm-dev libxkbcommon-dev libxss-dev libxtst-dev libxfixes-dev libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev libwayland-dev wayland-protocols libdbus-1-dev libibus-1.0-dev libudev-dev
+          sudo apt-get install --yes build-essential cmake curl ninja-build pkg-config liblua5.4-dev libzstd-dev libvorbis-dev libogg-dev libpng-dev libwebp-dev libvulkan-dev glslc mesa-vulkan-drivers xvfb libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev libxinerama-dev libxxf86vm-dev libxkbcommon-dev libxss-dev libxtst-dev libxfixes-dev libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev libwayland-dev wayland-protocols libdbus-1-dev libibus-1.0-dev libudev-dev
 
       - name: Fetch pinned SDL3 tarball
         run: |
@@ -169,7 +169,7 @@ jobs:
       - name: Install native build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install --yes build-essential cmake curl ninja-build pkg-config liblua5.4-dev libzstd-dev libvorbis-dev libogg-dev libvulkan-dev glslc mesa-vulkan-drivers xvfb libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev libxinerama-dev libxxf86vm-dev libxkbcommon-dev libxss-dev libxtst-dev libxfixes-dev libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev libwayland-dev wayland-protocols libdbus-1-dev libibus-1.0-dev libudev-dev
+          sudo apt-get install --yes build-essential cmake curl ninja-build pkg-config liblua5.4-dev libzstd-dev libvorbis-dev libogg-dev libpng-dev libwebp-dev libvulkan-dev glslc mesa-vulkan-drivers xvfb libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev libxinerama-dev libxxf86vm-dev libxkbcommon-dev libxss-dev libxtst-dev libxfixes-dev libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev libwayland-dev wayland-protocols libdbus-1-dev libibus-1.0-dev libudev-dev
 
       - name: Fetch pinned SDL3 tarball
         run: |
@@ -228,7 +228,7 @@ jobs:
       - name: Install native build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install --yes build-essential cmake curl file ninja-build pkg-config liblua5.4-dev libzstd-dev libvorbis-dev libogg-dev libvulkan-dev glslc libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev libxinerama-dev libxxf86vm-dev libxkbcommon-dev libxss-dev libxtst-dev libxfixes-dev libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev libwayland-dev wayland-protocols libdbus-1-dev libibus-1.0-dev libudev-dev
+          sudo apt-get install --yes build-essential cmake curl file ninja-build pkg-config liblua5.4-dev libzstd-dev libvorbis-dev libogg-dev libpng-dev libwebp-dev libvulkan-dev glslc libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev libxinerama-dev libxxf86vm-dev libxkbcommon-dev libxss-dev libxtst-dev libxfixes-dev libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev libwayland-dev wayland-protocols libdbus-1-dev libibus-1.0-dev libudev-dev
 
       - name: Fetch and build pinned SDL3 dependency
         run: |
@@ -280,7 +280,7 @@ jobs:
 
       - name: Install native build dependencies
         run: |
-          brew install lua zstd libvorbis pkg-config cmake ninja
+          brew install lua zstd libvorbis libogg libpng webp pkg-config cmake ninja
 
       - name: Fetch and build pinned SDL3 dependency
         run: |
@@ -328,8 +328,14 @@ jobs:
           dotnet-version: 10.0.x
 
       - name: Install native dependencies
+        # libogg/libpng/libwebp: host converter tools (tools/CMakeLists.txt)
+        # resolve them via pkg-config, exactly like the Linux/macOS jobs.
         shell: pwsh
-        run: vcpkg install sdl3 zstd lua nlohmann-json libvorbis --triplet x64-windows
+        run: vcpkg install sdl3 zstd lua nlohmann-json libogg libvorbis libpng libwebp --triplet x64-windows
+
+      - name: Install pkg-config for host tools
+        shell: pwsh
+        run: choco install pkgconfiglite -y --no-progress
 
       - name: Set up MSVC environment
         uses: ilammy/msvc-dev-cmd@v1
@@ -338,7 +344,15 @@ jobs:
 
       - name: Configure
         shell: pwsh
-        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake"
+        run: |
+          # Point pkg-config at the vcpkg .pc files (classic or manifest
+          # layout) before CMake's FindPkgConfig runs for tools/.
+          # The pre-flight check fails fast with a clear log if a module
+          # is missing, instead of a bare CMake configure error.
+          $pcDirs = @("$env:VCPKG_INSTALLATION_ROOT/installed/x64-windows/lib/pkgconfig", "build/vcpkg_installed/x64-windows/lib/pkgconfig")
+          $env:PKG_CONFIG_PATH = ($pcDirs -join ';')
+          pkg-config --modversion vorbisenc vorbis ogg libwebpdecoder libpng
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake"
 
       - name: Build
         run: cmake --build build --parallel 2
