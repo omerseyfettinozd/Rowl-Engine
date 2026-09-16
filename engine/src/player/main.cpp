@@ -1,6 +1,8 @@
 #include "rowl/c_api.h"
+#include "rowl/platform/crash_handler.hpp"
 #include <iostream>
 #include <string>
+#include <system_error>
 #include <vector>
 #include <filesystem>
 #include <charconv>
@@ -9,6 +11,17 @@
 namespace fs = std::filesystem;
 
 namespace {
+
+// Crash snapshot refreshed only at safe points in normal control flow; the
+// crash path itself never calls into the engine (see crash_handler.hpp).
+void refreshCrashSnapshot(RowlEngineHandle engine) {
+    if (engine == nullptr || !Rowl::Platform::RowlCrash_IsInstalled()) {
+        return;
+    }
+    Rowl::Platform::RowlCrash_RefreshSnapshot(RowlEngine_GetLastResultCode(engine),
+                                              RowlEngine_GetLastResultOperation(engine),
+                                              RowlEngine_GetLastResultTarget(engine));
+}
 
 constexpr uint32_t kMaxWindowDimension = 16'384;
 
@@ -77,6 +90,17 @@ static void printHelp(const char* progName) {
 }
 
 int main(int argc, char* argv[]) {
+    // Faz 6 Dilim 1: crash-log kurulumu argüman ayrıştırmadan ÖNCE yapılır, o
+    // yüzden sonraki her crash yakalanır. Best-effort: dizin açılamazsa
+    // sessizce vazgeçilir, normal akış asla kırılmaz.
+    {
+        std::error_code dirEc;
+        std::filesystem::create_directories("crash-logs", dirEc);
+        if (!dirEc) {
+            Rowl::Platform::RowlCrash_Install("crash-logs", argc, argv);
+        }
+    }
+
     std::string projectDir = ".";
     std::string storyGraphPath = "";
     std::string appTitle = "Rowl Game";
@@ -172,6 +196,7 @@ int main(int argc, char* argv[]) {
 
     // Set project root directory (isolates and mounts project VFS)
     RowlEngine_SetProjectDirectory(engine, baseProj.string().c_str());
+    refreshCrashSnapshot(engine);
 
     // The release contract loads its graph through game.rowlpkg.  Physical
     // --story and legacy loose-file discovery remain available for development.
@@ -206,6 +231,7 @@ int main(int argc, char* argv[]) {
                   << "  Use --story <path> to specify manually, or --help for usage.\n"
                   << "  Starting with empty default scene...\n";
     }
+    refreshCrashSnapshot(engine);
 
     if (packageSmokeTest) {
         RowlEngine_Step(engine, 1.0F / 60.0F);

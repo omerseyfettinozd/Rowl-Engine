@@ -42,6 +42,7 @@ int main(int argc, char* argv[]) {
     test_pixel_pitch();
     test_window_input_routing();
     test_runtime_context_and_diagnostics();
+    test_crash_log();
     test_story_graph_parser();
     test_graph_vnext();
     test_localization();

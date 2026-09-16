@@ -198,6 +198,7 @@ set(ROWL_ENGINE_SOURCES
     src/audio/audio_engine.cpp
     src/audio/ogg_stream_source.cpp
     # Platform abstraction
+    src/platform/crash_handler.cpp
     src/platform/platform_host.cpp
     src/platform/user_data_directories.cpp
     src/platform/mobile_input.cpp
