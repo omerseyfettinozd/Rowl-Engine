@@ -13,6 +13,7 @@
 #include "rowl/state/save_durability.hpp"
 #include "rowl/state/session_persistence.hpp"
 
+#include <cerrno>
 #include <climits>
 #include <cstdint>
 #include <exception>
@@ -505,6 +506,207 @@ void test_save_slot_and_package_fuzz() {
         }
     }
     TEST_PASS("Atomic save survives ENOSPC fail-closed and stray-.tmp cleanup");
+
+    // (5) Errno-parametric injection + durability edges (Faz 6 Dilim 7, IS 1/2).
+    // Root-safe: injection + file plants only, no chmod. Every sub-case
+    // closes its injection before the next one starts.
+    {
+        Rowl::State::SessionPersistence persistence(testRoot / "durability_errno");
+        const auto goodState = Rowl::State::GameState::createInitialState(101);
+        auto readBytes = [](const std::filesystem::path& path) {
+            std::ifstream input(path, std::ios::binary);
+            return std::string((std::istreambuf_iterator<char>(input)),
+                               std::istreambuf_iterator<char>());
+        };
+        const auto slotPathFor = [&](int32_t slot) {
+            return testRoot / "durability_errno" /
+                ("save_slot_" + std::to_string(slot) + ".json");
+        };
+        const auto requireFailClosedMatrix =
+            [&](int32_t slot, const std::string& baselineBytes, const char* caseName) {
+                const auto slotPath = slotPathFor(slot);
+                const auto tmpPath = Rowl::State::saveTempPathFor(slotPath);
+                if (readBytes(slotPath) != baselineBytes) {
+                    failCase(std::string(caseName) + ": slot modified by failed save");
+                }
+                if (std::filesystem::exists(tmpPath)) {
+                    failCase(std::string(caseName) + ": stray temp left behind");
+                }
+                const auto loaded = persistence.loadSlot(slot);
+                if (loaded == nullptr || loaded->activeNodeId != 101) {
+                    failCase(std::string(caseName) +
+                             ": load after failed save lost the good slot");
+                }
+            };
+
+        // (5a) EACCES-injected save: false + EACCES in errorOut + matrix.
+        {
+            const int32_t slot = 3;
+            if (!persistence.saveSlot(goodState, slot)) {
+                failCase("EACCES durability baseline save failed");
+            }
+            const auto slotPath = slotPathFor(slot);
+            const std::string baselineBytes = readBytes(slotPath);
+            const auto nextState =
+                Rowl::State::GameState::createNextState(goodState, 202);
+            Rowl::State::setSaveDurabilityInjectErrno(EACCES);
+            std::string directError;
+            const bool directOk = Rowl::State::writeSlotFileAtomically(
+                slotPath, nextState->serializeJson(), &directError);
+            const bool injectedOk = persistence.saveSlot(nextState, slot);
+            Rowl::State::setSaveDurabilityInjectErrno(0);
+            Rowl::State::setSaveDurabilityInjectEnospc(false);
+            if (directOk || injectedOk) {
+                failCase("EACCES-injected save unexpectedly succeeded");
+            }
+            if (directError.find("EACCES") == std::string::npos) {
+                failCase("EACCES-injected save errorOut missing EACCES: " + directError);
+            }
+            requireFailClosedMatrix(slot, baselineBytes, "EACCES injection");
+        }
+
+        // (5b) EROFS-injected save: same fail-closed matrix with EROFS code.
+        {
+            const int32_t slot = 4;
+            if (!persistence.saveSlot(goodState, slot)) {
+                failCase("EROFS durability baseline save failed");
+            }
+            const auto slotPath = slotPathFor(slot);
+            const std::string baselineBytes = readBytes(slotPath);
+            const auto nextState =
+                Rowl::State::GameState::createNextState(goodState, 202);
+            Rowl::State::setSaveDurabilityInjectErrno(EROFS);
+            std::string directError;
+            const bool directOk = Rowl::State::writeSlotFileAtomically(
+                slotPath, nextState->serializeJson(), &directError);
+            const bool injectedOk = persistence.saveSlot(nextState, slot);
+            Rowl::State::setSaveDurabilityInjectErrno(0);
+            Rowl::State::setSaveDurabilityInjectEnospc(false);
+            if (directOk || injectedOk) {
+                failCase("EROFS-injected save unexpectedly succeeded");
+            }
+            if (directError.find("EROFS") == std::string::npos) {
+                failCase("EROFS-injected save errorOut missing EROFS: " + directError);
+            }
+            requireFailClosedMatrix(slot, baselineBytes, "EROFS injection");
+        }
+
+        // (5c) Truncated final .json plant: InvalidData, no crash, no stale data.
+        {
+            const int32_t slot = 5;
+            if (!persistence.saveSlot(goodState, slot)) {
+                failCase("Truncated-final baseline save failed");
+            }
+            const auto slotPath = slotPathFor(slot);
+            const std::string baselineBytes = readBytes(slotPath);
+            if (baselineBytes.size() < 16) {
+                failCase("Truncated-final baseline slot unexpectedly tiny");
+            }
+            {
+                std::ofstream plant(slotPath, std::ios::binary | std::ios::trunc);
+                plant << baselineBytes.substr(0, baselineBytes.size() / 2);
+                plant.close();
+            }
+            Rowl::State::SessionLoadResult result;
+            try {
+                result = persistence.loadSlotDetailed(slot);
+            } catch (...) {
+                failCase("Load of truncated final slot threw instead of InvalidData");
+            }
+            if (result.succeeded() || result.state != nullptr ||
+                result.status != Rowl::State::SessionLoadStatus::InvalidData) {
+                failCase("Truncated final slot did not answer InvalidData");
+            }
+            Rowl::State::setSaveDurabilityInjectErrno(0);
+            Rowl::State::setSaveDurabilityInjectEnospc(false);
+        }
+
+        // (5d) Rename-fail: empty directory planted at the slot path.
+        {
+            const int32_t slot = 8;
+            const auto slotPath = slotPathFor(slot);
+            const auto tmpPath = Rowl::State::saveTempPathFor(slotPath);
+            std::error_code setupError;
+            std::filesystem::remove_all(slotPath, setupError);
+            std::filesystem::create_directories(slotPath, setupError);
+            if (!std::filesystem::is_directory(slotPath)) {
+                failCase("Could not plant directory probe for rename-fail test");
+            }
+            // The probe must genuinely fail: save into the planted directory
+            // path has to answer false (D6 chmod-555 lesson — never assume).
+            const bool probeOk = persistence.saveSlot(goodState, slot);
+            Rowl::State::setSaveDurabilityInjectErrno(0);
+            Rowl::State::setSaveDurabilityInjectEnospc(false);
+            if (probeOk) {
+                std::filesystem::remove_all(slotPath, setupError);
+                failCase("Rename-fail probe unexpectedly succeeded; directory plant "
+                         "does not fail on this platform");
+            }
+            if (!std::filesystem::is_directory(slotPath)) {
+                failCase("Rename-fail save removed the planted directory");
+            }
+            if (std::filesystem::exists(tmpPath)) {
+                failCase("Rename-fail save left a stray temp file behind");
+            }
+            std::filesystem::remove_all(slotPath, setupError);
+        }
+
+        // (5e) Unsupported errno normalizes to ENOSPC; legacy bool wrapper
+        // stays equivalent and leaves no injection behind.
+        {
+            Rowl::State::setSaveDurabilityInjectErrno(9999);
+            if (Rowl::State::saveDurabilityInjectErrno() != ENOSPC) {
+                Rowl::State::setSaveDurabilityInjectErrno(0);
+                failCase("Unsupported injected errno did not normalize to ENOSPC");
+            }
+            std::string normalizedError;
+            const bool normalizedOk = Rowl::State::writeSlotFileAtomically(
+                slotPathFor(6), goodState->serializeJson(), &normalizedError);
+            Rowl::State::setSaveDurabilityInjectErrno(0);
+            Rowl::State::setSaveDurabilityInjectEnospc(false);
+            if (normalizedOk) {
+                failCase("Normalized-ENOSPC save unexpectedly succeeded");
+            }
+            if (normalizedError.find("ENOSPC") == std::string::npos) {
+                failCase("Normalized-ENOSPC errorOut missing ENOSPC: " + normalizedError);
+            }
+            Rowl::State::setSaveDurabilityInjectEnospc(true);
+            if (Rowl::State::saveDurabilityInjectErrno() != ENOSPC ||
+                !Rowl::State::saveDurabilityInjectEnospc()) {
+                Rowl::State::setSaveDurabilityInjectEnospc(false);
+                failCase("Legacy ENOSPC wrapper diverged from errno-parametric hook");
+            }
+            Rowl::State::setSaveDurabilityInjectEnospc(false);
+            if (Rowl::State::saveDurabilityInjectErrno() != 0) {
+                failCase("Injection leaked past cleanup");
+            }
+        }
+
+        // (5f) errno-0 tolerance on the real open-fail path: iostream need
+        // not set errno, so a stale 0 must never render "[...(0): Success]".
+        {
+            const auto blocker = testRoot / "durability_errno" / "blocker_file";
+            {
+                std::ofstream out(blocker, std::ios::binary | std::ios::trunc);
+                out << "x";
+            }
+            const auto slotPath = blocker / "save_slot_9.json";
+            errno = 0;  // tolerate a platform that leaves errno untouched
+            std::string openError;
+            const bool openOk = Rowl::State::writeSlotFileAtomically(
+                slotPath, goodState->serializeJson(), &openError);
+            Rowl::State::setSaveDurabilityInjectErrno(0);
+            Rowl::State::setSaveDurabilityInjectEnospc(false);
+            if (openOk) {
+                failCase("Open-fail probe unexpectedly succeeded");
+            }
+            if (openError.find("(0)") != std::string::npos) {
+                failCase("Open-fail error carries a misleading errno-0 tag: " +
+                         openError);
+            }
+        }
+    }
+    TEST_PASS("Errno-parametric injection (EACCES/EROFS/normalize), truncated-final InvalidData, rename-fail closed");
 
     std::filesystem::remove_all(testRoot, cleanupError);
 }

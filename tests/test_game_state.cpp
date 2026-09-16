@@ -391,6 +391,68 @@ void test_game_state() {
     }
     TEST_PASS("GameState Save Corruption, Version, and Slot-Bounds Containment");
 
+    // Faz 6 Dilim 7 IS 2/2: save-format sürüm karar kilidi. Davranış değişikliği
+    // yok — decodeJson sürümsüz JSON'u Loaded-olarak-3 kabul eder (game_state.cpp:265),
+    // v1/v2 pasif Migrated toleransıdır (:379-381, dönüşüm kodu yok), bilinmeyen
+    // sürümler reddedilir (:261-268). Bu matris kararı kilitler.
+    {
+        struct VersionExpectation {
+            const char* label;
+            const char* payload;
+            Rowl::State::GameStateDecodeStatus status;
+            uint32_t sourceVersion;
+            bool success;
+            bool migrated;
+        };
+        const VersionExpectation matrix[] = {
+            {"missing-version", R"({"step_id":1,"active_node_id":101,"variables":{}})",
+             Rowl::State::GameStateDecodeStatus::Loaded, 3, true, false},
+            {"v1", R"({"version":1,"step_id":1,"active_node_id":101,"variables":{}})",
+             Rowl::State::GameStateDecodeStatus::Migrated, 1, true, true},
+            {"v2", R"({"version":2,"step_id":1,"active_node_id":101,"variables":{}})",
+             Rowl::State::GameStateDecodeStatus::Migrated, 2, true, true},
+            {"v3", R"({"version":3,"step_id":1,"active_node_id":101,"variables":{}})",
+             Rowl::State::GameStateDecodeStatus::Loaded, 3, true, false},
+            {"v4", R"({"version":4,"step_id":1,"active_node_id":101,"variables":{}})",
+             Rowl::State::GameStateDecodeStatus::UnsupportedVersion, 4, false, false},
+            {"v999", R"({"version":999,"step_id":1,"active_node_id":101,"variables":{}})",
+             Rowl::State::GameStateDecodeStatus::UnsupportedVersion, 999, false, false},
+            {"string-version", R"({"version":"3","step_id":1,"active_node_id":101,"variables":{}})",
+             Rowl::State::GameStateDecodeStatus::InvalidData, 0, false, false},
+            {"negative-version", R"({"version":-1,"step_id":1,"active_node_id":101,"variables":{}})",
+             Rowl::State::GameStateDecodeStatus::InvalidData, 0, false, false},
+            {"float-version", R"({"version":3.5,"step_id":1,"active_node_id":101,"variables":{}})",
+             Rowl::State::GameStateDecodeStatus::InvalidData, 0, false, false},
+            {"object-version", R"({"version":{},"step_id":1,"active_node_id":101,"variables":{}})",
+             Rowl::State::GameStateDecodeStatus::InvalidData, 0, false, false},
+        };
+        for (const auto& c : matrix) {
+            const auto r = Rowl::State::GameState::decodeJson(c.payload);
+            if (r.status != c.status || r.sourceVersion != c.sourceVersion ||
+                r.succeeded() != c.success || r.migrated() != c.migrated ||
+                (c.success != (r.state != nullptr))) {
+                std::cerr << "Save-format version lock mismatch: " << c.label << std::endl;
+                exit(1);
+            }
+        }
+        // v999 decode-seviyesinde reddedilir; engine eşlemesi (engine.cpp:2068-2096,
+        // ValidationError + red) mevcut e2e ile kilitlidir
+        // (test_runtime_context_and_diagnostics.cpp:129-153), burada tekrarlanmaz.
+        // Bilinmeyen sürümün slot katmanındaki karşılığı (session_persistence.cpp:120-127)
+        // v4 üzerinden doğrulanır:
+        std::ofstream(std::filesystem::path(testSaveDir) / "save_slot_8.json")
+            << R"({"version":4,"step_id":1,"active_node_id":101,"variables":{}})";
+        const auto v4Slot = persistence.loadSlotDetailed(8);
+        if (v4Slot.succeeded() ||
+            v4Slot.status != Rowl::State::SessionLoadStatus::UnsupportedVersion ||
+            v4Slot.sourceVersion != 4) {
+            std::cerr << "v4 save slot was not UnsupportedVersion" << std::endl;
+            exit(1);
+        }
+        persistence.deleteSlot(8);
+    }
+    TEST_PASS("Save-Format Version Matrix Lock (Loaded/Migrated/UnsupportedVersion/InvalidData)");
+
     persistence.deleteSlot(1);
     if (persistence.hasSlot(1)) {
         std::cerr << "SessionPersistence deleteSlot failed" << std::endl;

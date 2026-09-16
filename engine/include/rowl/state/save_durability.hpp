@@ -45,4 +45,19 @@ void cleanupStraySlotTemp(const std::filesystem::path& finalPath);
 void setSaveDurabilityInjectEnospc(bool inject);
 bool saveDurabilityInjectEnospc();
 
+// Test-only errno-parametric injection hook (Faz 6 Dilim 7, IS 1/2).
+// Generalizes the ENOSPC hook above: 0 disables injection; ENOSPC, EACCES
+// and EROFS are supported failure codes. Any other non-zero value is
+// normalized to ENOSPC (documented choice: fail closed as disk-full rather
+// than silently accepting an unknown probe). The active code is staged as a
+// mid-write failure exactly like the ENOSPC hook and reported in *errorOut
+// with a "[<NAME> (<code>): <strerror>] ..." prefix so UI/telemetry can
+// distinguish EACCES/EROFS from ENOSPC.
+// setSaveDurabilityInjectEnospc(true) is a thin wrapper over
+// setSaveDurabilityInjectErrno(ENOSPC) and preserves the ENOSPC message
+// verbatim as a prefix; setSaveDurabilityInjectEnospc(false) clears any
+// active errno injection.
+void setSaveDurabilityInjectErrno(int errnoValue);
+int saveDurabilityInjectErrno();
+
 } // namespace Rowl::State

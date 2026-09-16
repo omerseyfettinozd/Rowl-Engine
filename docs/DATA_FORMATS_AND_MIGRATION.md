@@ -66,7 +66,11 @@ optional fields and ignore unknown fields unless stated otherwise.
   version bump — old readers ignore the key, new readers default it.
 - **Atomicity:** `SessionPersistence::saveSlot` writes a `.tmp` sibling
   and atomically renames over the final path; readers never observe a
-  half-written slot.
+  half-written slot. The ENOSPC injection message is prefix-compatible, not
+  byte-identical (legacy sentence kept verbatim as a prefix with an
+  `[ENOSPC (28): …]` tag appended), so downstream exact-match checks must
+  compare by prefix. On Windows, rename-failure text resolves the
+  GetLastError-domain value through strerror, so the wording is approximate.
 - **Load reporting:** `SessionPersistence::loadSlotDetailed` returns
   `SessionLoadResult` (`Loaded`, `Migrated`, `NotFound`, `FileTooLarge`,
   `IoError`, `InvalidData`, `UnsupportedVersion`) with `sourceVersion`.
@@ -75,6 +79,38 @@ optional fields and ignore unknown fields unless stated otherwise.
   `SessionPersistence::checkpoint` aligns the chain with the live cursor
   before a save, and `rewind` steps back over it (surfaced as
   `RowlEngine_Rewind`).
+- **Sürüm karar kilidi (Faz 6 Dilim 7 IS 2/2):** yazıcı her zaman
+  `j["version"] = 3` yazar (`engine/src/state/game_state.cpp:206`;
+  `CurrentSaveFormatVersion = 3` — `engine/include/rowl/state/game_state.hpp:67`).
+  Okuyucu karar matrisi (`game_state.cpp:261-268, 379-381`):
+  | Girdi | Sonuç | `sourceVersion` |
+  |---|---|---|
+  | `version` yok | `Loaded` (3 varsayılır, `:265`) | 3 |
+  | 1 / 2 | `Migrated` (pasif tolerans — dönüşüm kodu yok, eksik alanlar varsayılana döner) | 1 / 2 |
+  | 3 | `Loaded` | 3 |
+  | 4, 999, … (bilinmeyen unsigned) | `UnsupportedVersion` + red | gelen değer |
+  | string / negatif / float / obje (unsigned değil) | `InvalidData` | 0 |
+  v1/v2 tarihsel okur-uyumluluğudur; sürümler arası gerçek dönüşüm kodu yoktur,
+  tek yol aynı varsayılan-doldurmadır. Bilinmeyen sürüm asla sessizce kabul edilmez:
+  `loadSlotDetailed` birebir eşler (`engine/src/state/session_persistence.cpp:120-127`),
+  engine `loadGameSlot` reddedip `ValidationError` + `Unsupported save format version <v>`
+  raporlar (`engine/src/core/engine.cpp:2068-2096`).
+- **Sürümsüz JSON kararı:** `Loaded`-olarak-3. Gerekçe: sürüm alanı 1.0 öncesi alan
+  verisinde hiç yoktur, sürümsüz kaydın sürüme-özgü şekli de yoktur; güncel varsaymak
+  güvenlidir. `Migrated` yapmak `loadSlotDetailed`/engine raporunu çevirirdi ve
+  `tests/test_game_state.cpp` (~351-357) ile kilitli davranışı bozardı — bu yüzden
+  davranış değiştirilmedi, sürüm-matrisi testiyle kilitlendi
+  (`TEST_PASS("Save-Format Version Matrix Lock …")`, `tests/test_game_state.cpp`).
+- **v4'te yapılacaklar:** `CurrentSaveFormatVersion` bump edilir ve sürüme-özgü
+  dönüştürücü `GameState::decodeJson` içindeki sürüm kabul/red bloğuna
+  (`game_state.cpp:261-268` ve sonrası doldurma yolu) yazılır; her eski sürüm için
+  ayrı dal + matris testine yeni satır eklenir. Gerekmedikçe yeni anahtar tek başına
+  sürüm yükseltmez (`content_id` ve display metadata v3'te kaldı — eski okur bilmediği
+  anahtarı yok sayar, yeni okur varsayılana döner).
+- **Checksum yok kararı:** bütünlük denetimi JSON ayrıştırma + sınır/şema doğrulaması
+  (`kMaxSaveFileBytes`, id/volume/playtime sınırları) ile sağlanır; ayrı checksum alanı
+  yoktur. Hash/MAC follow-up adayı olarak bırakıldı.
+- **Kapsam dışı:** C# katmanı save version metadata taşımaz ve göstermez, editör bu karardan etkilenmez.
 
 ## 3. Asset package (`.rowlpkg`) — v1 + embedded manifest
 

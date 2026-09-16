@@ -3,9 +3,11 @@
 #include "rowl/core/logger.hpp"
 
 #include <atomic>
+#include <cerrno>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
+#include <string>
 #include <system_error>
 
 #if defined(_WIN32)
@@ -26,7 +28,7 @@ namespace {
 // out of scope here. If that is ever required, add it here — inside this
 // module — without touching the SessionPersistence save path.
 
-std::atomic<bool> g_injectEnospc{false};
+std::atomic<int> g_injectErrno{0};
 
 bool envEnospcRequested() {
 #ifdef NDEBUG
@@ -39,6 +41,45 @@ bool envEnospcRequested() {
     const char* value = std::getenv("ROWL_SAVE_INJECT_ENOSPC");
     return value != nullptr && std::strcmp(value, "1") == 0;
 #endif
+}
+
+bool isSupportedInjectErrno(int code) {
+    return code == ENOSPC || code == EACCES || code == EROFS;
+}
+
+const char* errnoShortName(int code) {
+    switch (code) {
+        case ENOSPC: return "ENOSPC";
+        case EACCES: return "EACCES";
+        case EROFS: return "EROFS";
+        default: return nullptr;
+    }
+}
+
+// "[<NAME> (<code>): <strerror>] " prefix; unknown codes render as
+// "[ERRNO<code> (<code>): <strerror>] " so the numeric value is never lost.
+std::string errnoPrefix(int code) {
+    const char* name = errnoShortName(code);
+    const char* description = std::strerror(code);
+    std::string prefix = "[";
+    if (name != nullptr) {
+        prefix += name;
+    } else {
+        prefix += "ERRNO" + std::to_string(code);
+    }
+    prefix += " (" + std::to_string(code) + "): ";
+    prefix += (description != nullptr ? description : "unknown error");
+    prefix += "] ";
+    return prefix;
+}
+
+// Effective injected errno: explicit setter wins, env-var trigger degrades
+// to ENOSPC (legacy behavior).
+int effectiveInjectErrno() {
+    const int code = g_injectErrno.load(std::memory_order_relaxed);
+    if (code != 0) return code;
+    if (envEnospcRequested()) return ENOSPC;
+    return 0;
 }
 
 bool replaceFileAtomically(const std::filesystem::path& temporaryPath,
@@ -77,11 +118,11 @@ bool writeSlotFileAtomically(const std::filesystem::path& finalPath,
 
     const fs::path temporaryPath = saveTempPathFor(finalPath);
 
-    // Test-only ENOSPC injection (production default off): simulate a
-    // disk-full failure mid-write. A partial .tmp is staged so the failure
+    // Test-only errno injection (production default off): simulate a
+    // mid-write filesystem failure. A partial .tmp is staged so the failure
     // looks like a real interrupted write, then removed; the pre-existing
     // target file is never touched.
-    if (g_injectEnospc.load(std::memory_order_relaxed) || envEnospcRequested()) {
+    if (const int injectedErrno = effectiveInjectErrno(); injectedErrno != 0) {
         try {
             {
                 std::ofstream partial(temporaryPath, std::ios::out | std::ios::trunc);
@@ -93,15 +134,34 @@ bool writeSlotFileAtomically(const std::filesystem::path& finalPath,
             fs::remove(temporaryPath);
         } catch (...) {
         }
-        return fail("No space left on device (injected ENOSPC) while writing " +
-                    temporaryPath.string());
+        // The ENOSPC sentence is kept verbatim as a prefix (legacy message
+        // compatibility); the errno tag is appended for UI/telemetry.
+        if (injectedErrno == ENOSPC) {
+            return fail("No space left on device (injected ENOSPC) while writing " +
+                        temporaryPath.string() + " " + errnoPrefix(ENOSPC));
+        }
+        if (injectedErrno == EACCES) {
+            return fail("Permission denied (injected EACCES) while writing " +
+                        temporaryPath.string() + " " + errnoPrefix(EACCES));
+        }
+        return fail("Read-only file system (injected EROFS) while writing " +
+                    temporaryPath.string() + " " + errnoPrefix(EROFS));
     }
 
     {
         std::ofstream output(temporaryPath, std::ios::out | std::ios::trunc);
         if (!output.is_open()) {
-            return fail("Failed to open save slot temp file for writing: " +
-                        temporaryPath.string());
+            // iostream does not guarantee errno on open failure: a stale 0
+            // would render a misleading "[ERRNO0 (0): Success]" tag, so fall
+            // back to the generic message when no errno was captured.
+            const int openErrno = errno;
+            if (openErrno == 0) {
+                return fail("Failed to open save slot temp file for writing: " +
+                            temporaryPath.string());
+            }
+            return fail(errnoPrefix(openErrno) +
+                        "Failed to open save slot temp file for writing: " +
+                        temporaryPath.string() + ": " + std::strerror(openErrno));
         }
         output << content;
         output.flush();
@@ -118,8 +178,10 @@ bool writeSlotFileAtomically(const std::filesystem::path& finalPath,
     if (!replaceFileAtomically(temporaryPath, finalPath, replaceError)) {
         std::error_code removeError;
         fs::remove(temporaryPath, removeError);
-        return fail("Failed to atomically replace save slot file: " +
-                    replaceError.message());
+        return fail(errnoPrefix(replaceError.value()) +
+                    "Failed to atomically replace save slot file: " +
+                    replaceError.message() + " (" + temporaryPath.string() +
+                    " -> " + finalPath.string() + ")");
     }
     return true;
 }
@@ -132,12 +194,26 @@ void cleanupStraySlotTemp(const std::filesystem::path& finalPath) {
     }
 }
 
+void setSaveDurabilityInjectErrno(int errnoValue) {
+    if (errnoValue == 0) {
+        g_injectErrno.store(0, std::memory_order_relaxed);
+        return;
+    }
+    // Documented choice: unsupported codes fail closed as ENOSPC.
+    g_injectErrno.store(isSupportedInjectErrno(errnoValue) ? errnoValue : ENOSPC,
+                        std::memory_order_relaxed);
+}
+
+int saveDurabilityInjectErrno() {
+    return effectiveInjectErrno();
+}
+
 void setSaveDurabilityInjectEnospc(bool inject) {
-    g_injectEnospc.store(inject, std::memory_order_relaxed);
+    setSaveDurabilityInjectErrno(inject ? ENOSPC : 0);
 }
 
 bool saveDurabilityInjectEnospc() {
-    return g_injectEnospc.load(std::memory_order_relaxed) || envEnospcRequested();
+    return effectiveInjectErrno() == ENOSPC;
 }
 
 } // namespace Rowl::State
