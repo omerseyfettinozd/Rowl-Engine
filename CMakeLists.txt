@@ -129,6 +129,14 @@ if(ROWL_BUILD_RUNTIME_TESTS)
             ENVIRONMENT "SDL_AUDIODRIVER=dummy;SDL_VIDEODRIVER=dummy"
         )
         add_test(
+            NAME rowl_author_guide_tests
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/test_author_guide.py
+        )
+        set_tests_properties(rowl_author_guide_tests PROPERTIES
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+            TIMEOUT 180
+        )
+        add_test(
             NAME rowl_golden_manifest_tests
             COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/test_golden_manifest.py
         )

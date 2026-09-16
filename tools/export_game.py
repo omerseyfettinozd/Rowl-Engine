@@ -52,8 +52,8 @@ self-extracting (Faz 6 Dilim 4) — Linux POSIX `.sh` self-extracting installer:
   file runnable as `sh install-rowl-<ver>.sh [--prefix DIR] [install]` /
   `sh ... uninstall [--prefix DIR]` (default prefix `./rowl-game`).
   The stub is pure POSIX shell (`#!/bin/sh` + `set -u`); install time needs
-  only tail, base64, sha256sum, unzip, mkdir, rm, mktemp, chmod, cp, rmdir
-  — python3 is NOT required to install.
+  only tail, base64, sha256sum, unzip, mkdir, rm, mktemp, chmod, cp, mv,
+  rmdir — python3 is NOT required to install.
 
   Verification (before anything is written to the target):
     1. the embedded base64 payload is decoded into a temp dir,
@@ -62,9 +62,21 @@ self-extracting (Faz 6 Dilim 4) — Linux POSIX `.sh` self-extracting installer:
     3. the zip is unpacked and its inner SHA256SUMS is re-checked
        (`sha256sum -c`), and only then are files copied into --prefix with
        rowl_player made executable.
-  Uninstall deletes exactly the build-time file list (explicit names, no
-  globs — user files are never touched) and removes the prefix dir when
-  left empty.
+  Receipt: after every copy plus chmod succeeds, `$prefix/.rowl-receipt`
+  is written atomically (tmp file + `mv`) as `ROWL_SDE_VERSION=<ver>`,
+  `PAYLOAD_SHA256=<sha>`, then one installed name per line.
+  Rollback: any copy/chmod/receipt-write failure removes the files copied
+  so far (`rm -f`) and exits 1; the temp dir is guarded by a single
+  `trap 'rm -rf "$tmpdir"' EXIT` (cancelled on success, no double-free).
+  Uninstall deletes exactly the receipt-listed names when
+  `$prefix/.rowl-receipt` exists, else falls back to the embedded FILES
+  list (legacy prefixes), then removes the receipt itself and rmdirs the
+  prefix when left empty (user files are never touched). Receipt lines
+  are validated before anything is deleted: absolute paths, `..`
+  segments and backslashes fail closed (exit 1, nothing removed).
+  Tags and entry names must match `^[A-Za-z0-9._-]+$` or generation
+  fails with `ValueError` (this also gates the default tag derived from
+  the zip VERSION content).
 
   Determinism: the stub template is fixed; only payload-derived values
   (hash, file list, payload start line) vary, so the same input zip yields
@@ -72,7 +84,7 @@ self-extracting (Faz 6 Dilim 4) — Linux POSIX `.sh` self-extracting installer:
 
   Costs and limits: base64 inflates the installer by ~33% over the zip;
   install requires tail, base64, sha256sum, unzip, mkdir, rm, mktemp,
-  chmod, cp, rmdir (a missing tool fails with the corresponding gate
+  chmod, cp, mv, rmdir (a missing tool fails with the corresponding gate
   message, not a stack trace). Input zips with non-flat or unsafe entry
   names (absolute paths, `..` segments) are rejected at build time.
 
@@ -86,6 +98,7 @@ import datetime
 import hashlib
 import os
 import pathlib
+import re
 import shutil
 import subprocess
 import sys
@@ -357,10 +370,16 @@ _SDE_DEFAULT_INPUT = pathlib.Path("build") / "rowl-portable.zip"
 _SDE_PAYLOAD_MARKER = ("# __ROWL_PAYLOAD_B64_BELOW__: base64(portable-zip); "
                        "decoded and hash-verified at install time.\n")
 
+# Shell-safe token: version tags and payload entry names must match this
+# (the tag lands inside a double-quoted shell string, names inside an
+# unquoted $FILES word-split — anything else is a generation-time error).
+_SDE_SAFE_TOKEN = re.compile(r"^[A-Za-z0-9._-]+$")
+
 # Fixed POSIX sh installer stub. Only @@...@@ placeholders vary, and only
 # with payload-derived values (hash, file list, payload start line), so the
 # same input zip always renders byte-identical output. Install time needs
-# tail, base64, sha256sum, unzip, mkdir, rm, mktemp, chmod, cp, rmdir only.
+# tail, base64, sha256sum, unzip, mkdir, rm, mktemp, chmod, cp, mv, rmdir
+# only.
 _SDE_STUB_TEMPLATE = """#!/bin/sh
 # Rowl Engine self-extracting installer (Faz 6 Dilim 4).
 #
@@ -376,13 +395,22 @@ _SDE_STUB_TEMPLATE = """#!/bin/sh
 #   3. the zip is unpacked and its inner SHA256SUMS is re-checked with
 #      `sha256sum -c`; only then are files copied into --prefix (default
 #      ./rowl-game) and the launcher made executable.
+#   4. after every copy plus chmod succeeds, $prefix/.rowl-receipt is
+#      written atomically (tmp file + mv) as ROWL_SDE_VERSION=<ver>,
+#      PAYLOAD_SHA256=<sha>, then one installed name per line; a receipt
+#      failure fails the install and rolls back the copied files.
+#   Any copy/chmod/receipt failure removes the files copied so far and
+#   exits 1; the temp dir is guarded by a single trap on EXIT.
 #
-# Uninstall deletes exactly the FILES listed below (explicit names, no
-# globs, so user files are never touched) and removes the prefix
-# directory when it is left empty.
+# Uninstall deletes exactly the receipt-listed names when
+# $prefix/.rowl-receipt exists, else the FILES listed below (legacy
+# prefixes, no globs, so user files are never touched), then removes the
+# receipt itself and the prefix directory when it is left empty. Every
+# receipt line is validated BEFORE anything is deleted (absolute paths,
+# `..` segments and backslashes fail closed with exit 1, nothing removed).
 #
 # Needs only: tail, base64, sha256sum, unzip, mkdir, rm, mktemp, chmod,
-# cp, rmdir. No python3 at install time, no root privileges.
+# cp, mv, rmdir. No python3 at install time, no root privileges.
 # Windows NSIS/WiX installers are a separate, later concern; this slice
 # deliberately ships no .exe installer.
 set -u
@@ -406,46 +434,64 @@ do_install() {
   prefix="$1"
   [ -n "$prefix" ] || fail "empty --prefix (wont install into /)"
   tmpdir="$(mktemp -d "${TMPDIR:-/tmp}/rowl-install-XXXXXX")" || fail "cannot create temp dir"
+  trap 'rm -rf "$tmpdir"' EXIT
   payload="$tmpdir/payload.zip"
   staged="$tmpdir/staged"
   if ! tail -n +"$PAYLOAD_LINE" "$0" | base64 -d > "$payload" 2>/dev/null; then
-    rm -rf "$tmpdir"
     fail "cannot decode embedded payload"
   fi
   digest="$(sha256sum "$payload")"
   actual="${digest%% *}"
   if [ "$actual" != "$PAYLOAD_SHA256" ]; then
-    rm -rf "$tmpdir"
     fail "payload hash mismatch (expected $PAYLOAD_SHA256, got $actual)"
   fi
-  mkdir -p "$staged" || {
-    rm -rf "$tmpdir"
-    fail "cannot create staging dir"
-  }
+  mkdir -p "$staged" || fail "cannot create staging dir"
   if ! unzip -q "$payload" -d "$staged" 2>/dev/null; then
-    rm -rf "$tmpdir"
     fail "cannot unpack verified payload"
   fi
   if ! (cd "$staged" && sha256sum -c SHA256SUMS); then
-    rm -rf "$tmpdir"
     fail "inner SHA256SUMS check failed"
   fi
-  mkdir -p "$prefix" || {
-    rm -rf "$tmpdir"
-    fail "cannot create target directory $prefix"
-  }
+  mkdir -p "$prefix" || fail "cannot create target directory $prefix"
+  installed=""
   for name in $FILES; do
     if ! cp "$staged/$name" "$prefix/$name"; then
-      rm -rf "$tmpdir"
+      for f in $installed; do
+        rm -f "$prefix/$f"
+      done
       fail "cannot install $name into $prefix"
     fi
+    installed="$installed $name"
   done
   if [ -n "$PLAYER" ]; then
-    chmod +x "$prefix/$PLAYER" || {
-      rm -rf "$tmpdir"
+    if ! chmod +x "$prefix/$PLAYER"; then
+      for f in $installed; do
+        rm -f "$prefix/$f"
+      done
       fail "cannot make $PLAYER executable"
-    }
+    fi
   fi
+  if ! {
+    echo "ROWL_SDE_VERSION=$ROWL_SDE_VERSION"
+    echo "PAYLOAD_SHA256=$PAYLOAD_SHA256"
+    for name in $FILES; do
+      echo "$name"
+    done
+  } > "$prefix/.rowl-receipt.tmp"; then
+    for f in $installed; do
+      rm -f "$prefix/$f"
+    done
+    rm -f "$prefix/.rowl-receipt.tmp"
+    fail "cannot write receipt into $prefix"
+  fi
+  if ! mv "$prefix/.rowl-receipt.tmp" "$prefix/.rowl-receipt"; then
+    for f in $installed; do
+      rm -f "$prefix/$f"
+    done
+    rm -f "$prefix/.rowl-receipt.tmp"
+    fail "cannot write receipt into $prefix"
+  fi
+  trap - EXIT
   rm -rf "$tmpdir"
   echo "rowl-installer: installed $ROWL_SDE_VERSION into $prefix"
 }
@@ -457,9 +503,21 @@ do_uninstall() {
     echo "rowl-installer: nothing to remove ($prefix absent)"
     return 0
   fi
-  for name in $FILES; do
+  uninstall_list="$FILES"
+  if [ -f "$prefix/.rowl-receipt" ]; then
+    uninstall_list="$(tail -n +3 "$prefix/.rowl-receipt" 2>/dev/null)"
+  fi
+  for name in $uninstall_list; do
+    case "$name" in
+      "") continue ;;
+      /*|../*|*/../*|*/..|..|*\\*)
+        fail "unsafe entry in install receipt: $name" ;;
+    esac
+  done
+  for name in $uninstall_list; do
     rm -f "$prefix/$name"
   done
+  rm -f "$prefix/.rowl-receipt"
   rmdir "$prefix" 2>/dev/null || true
   echo "rowl-installer: uninstalled $prefix"
 }
@@ -575,7 +633,8 @@ def export_self_extracting(input=None, output=None, version=None):
             for name in names:
                 parts = name.split("/")
                 if (not name or name.startswith("/") or "\\" in name
-                        or any(part in ("", ".", "..") for part in parts)):
+                        or any(part in ("", ".", "..") for part in parts)
+                        or _SDE_SAFE_TOKEN.match(name) is None):
                     raise ValueError(
                         f"Self-extracting input has an unsafe entry name: {name!r}"
                     )
@@ -585,6 +644,10 @@ def export_self_extracting(input=None, output=None, version=None):
         ) from error
 
     tag = version if version is not None else _sde_default_tag(version_raw)
+    if _SDE_SAFE_TOKEN.match(tag) is None:
+        raise ValueError(
+            f"Self-extracting version tag has unsafe characters: {tag!r}"
+        )
     player = next(
         (name for name in sorted(names) if name.startswith("rowl_player")), ""
     )
