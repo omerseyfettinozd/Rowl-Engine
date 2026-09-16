@@ -1,4 +1,5 @@
 RowlEngine_AdvanceNode
+RowlEngine_AppendChapterFileJson
 RowlEngine_ApplyCharacterExpression
 RowlEngine_CameraPanTo
 RowlEngine_CameraZoomTo
@@ -70,12 +71,14 @@ RowlEngine_GetLastResultTarget
 RowlEngine_GetLastResultTargetWithLength
 RowlEngine_GetLastStoryGraphError
 RowlEngine_GetLastStoryGraphErrorWithLength
+RowlEngine_GetLoadedChaptersJson
 RowlEngine_GetLocale
 RowlEngine_GetMasterVolume
 RowlEngine_GetPauseMenuJson
 RowlEngine_GetPauseMenuJsonWithLength
 RowlEngine_GetPixelBuffer
 RowlEngine_GetPixelBufferEx
+RowlEngine_GetPrefetchProgressJson
 RowlEngine_GetProfileDirectoryUtf8
 RowlEngine_GetQuickSaveSlot
 RowlEngine_GetSaveDirectoryUtf8
@@ -111,6 +114,7 @@ RowlEngine_IsAudioDeviceAvailable
 RowlEngine_IsAudioOutputSuspended
 RowlEngine_IsBgmPlaying
 RowlEngine_IsCameraMoving
+RowlEngine_IsChapterBoundaryNode
 RowlEngine_IsCharacterSlotVisible
 RowlEngine_IsHighContrast
 RowlEngine_IsPaused
@@ -121,6 +125,8 @@ RowlEngine_IsScreenFlashActive
 RowlEngine_IsStreaming
 RowlEngine_IsTransitionActive
 RowlEngine_IsVoicePlaying
+RowlEngine_LoadChapter
+RowlEngine_LoadChapterIndexJson
 RowlEngine_LoadGameSlot
 RowlEngine_LoadGameSlotResult
 RowlEngine_LoadStoryGraph
@@ -131,6 +137,8 @@ RowlEngine_PlayAmbienceBed
 RowlEngine_PlayAudio
 RowlEngine_PlayVoiceBlip
 RowlEngine_PointerDown
+RowlEngine_PrefetchChapterAssets
+RowlEngine_PumpPrefetch
 RowlEngine_QuickLoad
 RowlEngine_QuickSave
 RowlEngine_RegisterCharacterPreset
@@ -189,6 +197,7 @@ RowlEngine_TriggerCameraShakeProfile
 RowlEngine_TriggerScreenFlash
 RowlEngine_TriggerScreenFlashHex
 RowlEngine_TriggerVoiceDucking
+RowlEngine_UnloadChapter
 RowlEngine_UpdateScene
 RowlEngine_UpdateSceneEx
 RowlEngine_UpdateSceneFromJson

@@ -576,6 +576,70 @@ namespace RowlEngine.Editor.Native
             uint bufferSize,
             out uint outRequiredSize);
 
+        // ── Faz 5 Dilim 4 budgeted asset prefetch + chapter-windowed loading
+        // (CAPABILITY_PREFETCH_CHAPTERS = 65536) ────
+        //
+        // 1:1 Cdecl mirror of the 9 additive entries documented in
+        // engine/include/rowl/c_api.h. Prefetch: active + next scene assets,
+        // byte-budgeted (0 = 32 MiB default, clamped to 128 MiB) +
+        // time-budgeted synchronous pump (<= 0/non-finite = ~4 ms, clamped to
+        // 50 ms, no threads). Chapters: index (editor chapter_index.json
+        // schema) + per-chapter files (editor LoadChapterFile schema); only
+        // active +-1 stay resident. String inputs are bounded (256 KiB
+        // carrier; 16 MiB for chapter files); JSON outputs follow the
+        // caller-buffer contract (NULL/0 size query, undersized buffer clears
+        // + BufferTooSmall).
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_LoadChapterIndexJson(
+            IntPtr handle,
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string indexJsonUtf8);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_AppendChapterFileJson(
+            IntPtr handle,
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string chapterJsonUtf8);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_LoadChapter(
+            IntPtr handle,
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string chapterIdUtf8);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_UnloadChapter(
+            IntPtr handle,
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string chapterIdUtf8);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_GetLoadedChaptersJson(
+            IntPtr handle,
+            IntPtr buffer,
+            uint bufferSize,
+            out uint outRequiredSize);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern int RowlEngine_IsChapterBoundaryNode(
+            IntPtr handle,
+            ulong nodeId);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_PrefetchChapterAssets(
+            IntPtr handle,
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string? chapterIdUtf8,
+            ulong budgetBytes);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern int RowlEngine_PumpPrefetch(
+            IntPtr handle,
+            float maxMilliseconds);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_GetPrefetchProgressJson(
+            IntPtr handle,
+            IntPtr buffer,
+            uint bufferSize,
+            out uint outRequiredSize);
+
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
         internal static extern void RowlEngine_SetTextSpeedMultiplier(IntPtr handle, float multiplier);        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
         internal static extern void RowlEngine_SetTextScale(IntPtr handle, float scale);

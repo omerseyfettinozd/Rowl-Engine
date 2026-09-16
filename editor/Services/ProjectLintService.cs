@@ -67,6 +67,8 @@ internal static class ProjectLintService
             RunRule(issues, () => CheckLongAudioStreaming(nodeList, assetsPath, disk, issues, options));
         if (options.CheckCharacterLayers)
             RunRule(issues, () => CheckCharacterLayers(nodeList, assetsPath, disk, issues, options));
+        if (options.CheckPrefetch)
+            RunRule(issues, () => CheckPrefetchAssets(nodeList, assetsPath, disk, issues, options));
 
         return issues;
     }
@@ -715,6 +717,77 @@ internal static class ProjectLintService
         }
     }
 
+    // ── Rule 6 (Faz 5 Dilim 4): eksik prefetch asset'i ───────────────
+    // Prefetch penceresi (aktif + sonraki sahne) üst-seviye image/audio
+    // yollarını kuyruğa alır; dosyası diskte olmayan bir asset kuyruğu
+    // durdurmaz ama missing sayılır + tanı bırakır. Bu kural eksik
+    // dosyayı erken advisory WARNING ile işaretler (error YOK).
+    // Missing-file sahipliği Validate'dedir (orası error verir); katman
+    // assetleri CheckCharacterLayers'a aittir (çift rapor engellenir:
+    // burada yalnız üst-seviye AssetKeys taranır). Boş yollar sessizdir.
+    // Batch-only: inline inspector'a karışmaz.
+
+    private static void CheckPrefetchAssets(
+        List<NodeViewModel> nodeList,
+        string assetsPath,
+        ProjectValidationService.DiskIndex disk,
+        List<ProjectValidationIssue> issues,
+        ProjectLintOptions options)
+    {
+        string root;
+        try
+        {
+            root = Path.GetFullPath(assetsPath);
+        }
+        catch (Exception)
+        {
+            return;
+        }
+        int added = 0;
+        foreach (var node in nodeList)
+        {
+            foreach (var component in node.AllComponents)
+            {
+                if (added >= options.MaxIssuesPerRule)
+                {
+                    issues.Add(new(false,
+                        $"Prefetch scan capped at {options.MaxIssuesPerRule} entries; remaining assets unchecked."));
+                    return;
+                }
+                if (!component.IsEnabled)
+                    continue;
+                Dictionary<string, object> data;
+                try
+                {
+                    data = component.Serialize();
+                }
+                catch (Exception)
+                {
+                    continue;
+                }
+                foreach (var pair in data)
+                {
+                    if (added >= options.MaxIssuesPerRule)
+                    {
+                        issues.Add(new(false,
+                            $"Prefetch scan capped at {options.MaxIssuesPerRule} entries; remaining assets unchecked."));
+                        return;
+                    }
+                    if (!ProjectValidationService.AssetKeys.Contains(pair.Key) || pair.Value is not string asset)
+                        continue;
+                    if (string.IsNullOrWhiteSpace(asset))
+                        continue;
+                    if (ResolveDiskRelative(asset, root, disk) is not null)
+                        continue;
+                    issues.Add(new(false,
+                        $"Prefetch asset '{asset}' (node #{node.Id}) is missing on disk; chapter prefetch will count it missing and continue.",
+                        node.Id, asset));
+                    added++;
+                }
+            }
+        }
+    }
+
     // ── Rule 4: unused assets ────────────────────────────────────────
     // ExactPaths MINUS the referenced-asset candidate set (normalized +
     // images/audio/fonts/scripts prefixes, mirroring batch resolution) =
@@ -777,6 +850,13 @@ internal static class ProjectLintService
 
         // Faz 5 Dilim 2 fix turu 1: per-node BedB kaldırıldı; kullanılmayan
         // ambience dosyaları normal unused-asset kuralına tabidir.
+        // Faz 5 Dilim 4: chapter dosyaları (chapters/) paket asset
+        // listesindedir — referans kümesine eklenir, yeni format yok
+        // (mevcut chapter_index.json + LoadChapterFile şeması). Diskte
+        // duran ama hiçbir node'un referans vermediği chapter JSON'ları
+        // kullanılmayan sayılmaz.
+        foreach (string chapterRef in PrefetchChaptersService.CollectChapterPackageRefs(disk.ExactPaths))
+            referenced.Add(chapterRef);
         int added = 0;
         foreach (string rel in disk.ExactPaths.OrderBy(p => p, StringComparer.Ordinal))
         {
@@ -823,5 +903,6 @@ internal sealed record ProjectLintOptions(
     bool CheckUnusedAssets = true,
     bool CheckLongAudio = true,
     bool CheckCharacterLayers = true,
+    bool CheckPrefetch = true,
     long MaxLuaBytes = 256 * 1024,
     int MaxIssuesPerRule = 200);

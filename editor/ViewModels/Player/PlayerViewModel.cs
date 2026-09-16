@@ -79,6 +79,17 @@ public sealed partial class PlayerViewModel : ViewModelBase
     [ObservableProperty]
     private bool _exitRequested;
 
+    /// <summary>Faz 5 Dilim 4 — prefetch rozet metni (hazır/eksik/byte; gizliyken boş).</summary>
+    [ObservableProperty]
+    private string _prefetchBadgeText = string.Empty;
+
+    /// <summary>Rozet yalnızca geçerli ve toplam-sıfır-olmayan ilerlemede görünür (fail-closed).</summary>
+    [ObservableProperty]
+    private bool _isPrefetchBadgeVisible;
+
+    private string? _lastPrefetchChapter;
+    private DateTime _lastPrefetchPollUtc = DateTime.MinValue;
+
     public ObservableCollection<PlayerChoiceOption> Choices { get; } = new();
 
     public IReadOnlyList<DialogueHistoryEntry> HistoryEntries => _engine.History;
@@ -298,11 +309,17 @@ public sealed partial class PlayerViewModel : ViewModelBase
             _lastTickDialogue = text;
             _stableTicks = 0;
             AutoDriver.BeginLine(text.Length, 0.0f, Profile);
+            // Faz 5 Dilim 4 — satır değişimi olası chapter geçişidir: aktif +
+            // sonraki sahne prefetch'i sessizce tetiklenir (fail-closed).
+            CheckChapterPrefetch();
         }
         else
         {
             _stableTicks++;
         }
+        // Faz 5 Dilim 4 — prefetch rozeti aynı per-frame slotta tazelenir;
+        // kadans servis eşiğiyle ≤4 Hz'e kısılır (fail-closed sessiz).
+        RefreshPrefetchBadge();
 
         bool hasChoices = _engine.HasChoices();
         Machine.SetChoicesPending(hasChoices);
@@ -396,6 +413,78 @@ public sealed partial class PlayerViewModel : ViewModelBase
         }
         if (error is not null)
             Fail(error);
+    }
+
+    // ── Faz 5 Dilim 4 prefetch hattı ─────────────────────────────
+    //
+    // Rozet + chapter-geçiş tetikleme aynı player dikişi (_engine) üzerinden
+    // akar; kararlar PrefetchChaptersService'tedir (saf + fail-closed). Fake
+    // motorlarda dikiş varsayılanları sessizdir, akışlar etkilenmez.
+
+    /// <summary>
+    /// İlerleme JSON snapshot'ını rozet props'larına yansıtır. Bozuk JSON ve
+    /// sıfır-toplam fail-closed kapanır (gizli rozet). Görünürlük ham
+    /// sayaca değil Describe.Visible kararına bağlıdır.
+    /// </summary>
+    public void UpdatePrefetchBadge(string? progressJson)
+    {
+        var description = PrefetchChaptersService.Describe(progressJson);
+        PrefetchBadgeText = description.Text;
+        IsPrefetchBadgeVisible = description.Visible;
+    }
+
+    /// <summary>
+    /// Prefetch rozetini motor dikişinden tazeler. Yoklama
+    /// <see cref="PrefetchChaptersService.PollInterval"/> eşiğiyle ≤4 Hz'e
+    /// kısılır (<paramref name="force"/> eşiği atlar); ölü dikiş/throw
+    /// sessizce gizli rozete iner.
+    /// </summary>
+    public void RefreshPrefetchBadge(bool force = false)
+    {
+        DateTime now = DateTime.UtcNow;
+        if (!force && now - _lastPrefetchPollUtc < PrefetchChaptersService.PollInterval)
+            return;
+        _lastPrefetchPollUtc = now;
+        string progressJson;
+        try
+        {
+            progressJson = _engine.GetPrefetchProgressJson() ?? string.Empty;
+        }
+        catch (Exception)
+        {
+            progressJson = string.Empty;
+        }
+        UpdatePrefetchBadge(progressJson);
+    }
+
+    /// <summary>
+    /// Chapter-değişiminde aktif + sonraki sahne prefetch'ini tetikler
+    /// (bütçe default, fail-closed sessiz). Aynı chapter'da ve geçersiz/
+    /// boş chapter-id'de tetik yoktur.
+    /// </summary>
+    public void CheckChapterPrefetch()
+    {
+        string current;
+        try
+        {
+            current = _engine.GetCurrentChapterId() ?? string.Empty;
+        }
+        catch (Exception)
+        {
+            return;
+        }
+        if (!PrefetchChaptersService.IsChapterIdValid(current) ||
+            string.Equals(_lastPrefetchChapter, current, StringComparison.Ordinal))
+            return;
+        _lastPrefetchChapter = current;
+        try
+        {
+            _engine.PrefetchChapterAssets(current, PrefetchChaptersService.DefaultBudgetBytes);
+        }
+        catch (Exception)
+        {
+            // Ölü handle / kapalı native: sessiz fail-closed.
+        }
     }
 
     // ── Internals ────────────────────────────────────────────────

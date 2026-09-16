@@ -174,6 +174,8 @@ set(ROWL_ENGINE_SOURCES
     src/core/story_graph_parser.cpp
     src/core/story_graph_vnext.cpp
     src/core/story_runtime.cpp
+    src/core/prefetch.cpp
+    src/core/chapter_loader.cpp
     src/core/engine.cpp
     # Rendering
     src/render/window.cpp
@@ -225,6 +227,7 @@ set(ROWL_ENGINE_SOURCES
     src/c_api_render.cpp
     src/c_api_audio.cpp
     src/c_api_character_layers.cpp
+    src/c_api_prefetch_chapters.cpp
     src/c_api_state.cpp
     src/c_api_pause.cpp
 )

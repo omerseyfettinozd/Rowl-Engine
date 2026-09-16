@@ -84,6 +84,8 @@ typedef struct RowlEngine_ApiVersion {
 #define ROWL_ENGINE_CAPABILITY_AUDIO_MIXER_POLYPHONY UINT64_C(16384)
 /* Faz 5 Dilim 3: layered character slots + expression presets + per-handle diagnostics. */
 #define ROWL_ENGINE_CAPABILITY_CHARACTER_LAYERS UINT64_C(32768)
+/* Faz 5 Dilim 4: budgeted asset prefetch + chapter-windowed loading. */
+#define ROWL_ENGINE_CAPABILITY_PREFETCH_CHAPTERS UINT64_C(65536)
 
 /** Current additive C API version. This query does not require an engine handle. */
 ROWL_API RowlEngine_ResultCode RowlEngine_GetApiVersion(
@@ -1097,6 +1099,73 @@ ROWL_API float RowlEngine_GetScreenTintOpacity(RowlEngineHandle handle);
  */
 ROWL_API void RowlEngine_SetVignette(RowlEngineHandle handle, float intensity, float radius, const char* colorHex);
 ROWL_API float RowlEngine_GetVignetteIntensity(RowlEngineHandle handle);
+
+/**
+ * Faz 5 Dilim 4 — butceli asset prefetch + chapter-sinirli yukleme
+ * (ROWL_ENGINE_CAPABILITY_PREFETCH_CHAPTERS). All additive; older entry
+ * points are untouched.
+ *
+ * Prefetch: active + next scene asset list (node component image/audio
+ * paths: sprite/texture, bgm/voice/sfx/ambience, character slot assets),
+ * byte-budgeted (default 32 MiB, clamped to 128 MiB) + time-budgeted
+ * (~4 ms per pump, deferred past the deadline) synchronous pump over VFS.
+ * No threads: the host update thread drives RowlEngine_PumpPrefetch.
+ * Progress is observable (ready/missing counters + bytes). Missing assets
+ * never stop the queue (counted + diagnosed).
+ *
+ * Chapters: index ({format_version?, start_node_id?, chapters[]}, the editor
+ * chapters/chapter_index.json schema) + per-chapter files ({chapter_id,
+ * nodes[]}, the editor LoadChapterFile schema). Only the active chapter and
+ * its +-1 neighbors stay resident; distant chapters unload; access to an
+ * unloaded node transparently reloads it + records a diagnostic. Legacy
+ * single-file graphs keep working (one implicit chapter, no windowing).
+ *
+ * Fail-closed: dead/null handle -> INVALID_HANDLE (0/"" carriers); unknown
+ * chapter -> INVALID_ARGUMENT; budget clamped, never rejected; oversized
+ * input (no NUL within 256 KiB + 1; 16 MiB + 1 for chapter files) rejected
+ * with INVALID_ARGUMENT. JSON outputs follow the caller-buffer contract of
+ * RowlEngine_GetLocale (NULL/0 size query, undersized buffer clears +
+ * BUFFER_TOO_SMALL + outRequiredSize).
+ */
+
+/** Feeds the chapter index (editor chapter_index.json schema). Replaces prior loader state. */
+ROWL_API RowlEngine_ResultCode RowlEngine_LoadChapterIndexJson(
+    RowlEngineHandle handle, const char* indexJsonUtf8);
+/** Appends one chapter file (editor LoadChapterFile schema); re-feeding a chapter replaces it. */
+ROWL_API RowlEngine_ResultCode RowlEngine_AppendChapterFileJson(
+    RowlEngineHandle handle, const char* chapterJsonUtf8);
+/** Marks one chapter resident (widens the window, active unchanged). Unknown id -> INVALID_ARGUMENT. */
+ROWL_API RowlEngine_ResultCode RowlEngine_LoadChapter(
+    RowlEngineHandle handle, const char* chapterIdUtf8);
+/** Unloads one chapter. Refuses the active chapter and unknown ids with INVALID_ARGUMENT. */
+ROWL_API RowlEngine_ResultCode RowlEngine_UnloadChapter(
+    RowlEngineHandle handle, const char* chapterIdUtf8);
+/** Copies {active, loaded[], neighbors[], node_counts{}, resident_nodes, total_nodes,
+ * legacy_single_graph, last_diagnostic} as UTF-8 JSON. */
+ROWL_API RowlEngine_ResultCode RowlEngine_GetLoadedChaptersJson(
+    RowlEngineHandle handle, char* buffer, uint32_t bufferSize,
+    uint32_t* outRequiredSize);
+/** Returns 1 when the node starts a chapter or has a successor in another chapter; 0 otherwise
+ * (unknown node and dead handle are 0, fail closed). */
+ROWL_API int RowlEngine_IsChapterBoundaryNode(RowlEngineHandle handle, uint64_t nodeId);
+/**
+ * Triggers a prefetch for the requested chapter window (chapter + its
+ * successor; null/empty selects the active chapter: loader-active, else the
+ * engine current chapter, else the current node + successors for legacy
+ * single-file graphs). budgetBytes 0 selects the 32 MiB default; larger
+ * values clamp to 128 MiB. Runs one synchronous ~4 ms pump before returning;
+ * further progress via RowlEngine_PumpPrefetch.
+ */
+ROWL_API RowlEngine_ResultCode RowlEngine_PrefetchChapterAssets(
+    RowlEngineHandle handle, const char* chapterIdUtf8, uint64_t budgetBytes);
+/** Pumps the prefetch queue for at most maxMilliseconds (<= 0 or non-finite
+ * selects ~4 ms; clamped to 50 ms). Returns newly-ready assets (0 fail closed). */
+ROWL_API int RowlEngine_PumpPrefetch(RowlEngineHandle handle, float maxMilliseconds);
+/** Copies {total_assets, ready_assets, missing_assets, queued_assets,
+ * ready_bytes, budget_bytes, complete, missing_paths[], last_diagnostic} as UTF-8 JSON. */
+ROWL_API RowlEngine_ResultCode RowlEngine_GetPrefetchProgressJson(
+    RowlEngineHandle handle, char* buffer, uint32_t bufferSize,
+    uint32_t* outRequiredSize);
 
 #ifdef __cplusplus
 } /* extern "C" */

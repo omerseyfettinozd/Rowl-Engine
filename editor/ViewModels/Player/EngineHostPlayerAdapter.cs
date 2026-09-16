@@ -207,6 +207,169 @@ public sealed class EngineHostPlayerAdapter : IPlayerEngine
     private IntPtr LiveHandle() =>
         _host.IsInitialized ? _host.Handle : IntPtr.Zero;
 
+    // Faz 5 Dilim 4 — EngineHost SIFIR-DIFF: bütçeli prefetch + chapter
+    // penceresi hattı da adaptör-forward'dır. Servis aynası önden doğrular
+    // (bilinmeyen chapter-id, boş JSON forward edilmez); ölü handle no-op,
+    // throw sessiz fail-closed. Bütçe clamp'lenir (0 = 32 MiB default),
+    // pump süresi clamp'lenir (non-finite/<=0 = ~4 ms). String girdiler
+    // native bounded taramaya girer; sözleşme
+    // docs/PREFETCH_AND_CHAPTERS_CONTRACT.md'dedir.
+    public void LoadChapterIndexJson(string indexJson)
+    {
+        if (string.IsNullOrWhiteSpace(indexJson))
+            return;
+        IntPtr handle = LiveHandle();
+        if (handle == IntPtr.Zero)
+            return;
+        try
+        {
+            NativeBridge.RowlEngine_LoadChapterIndexJson(handle, indexJson);
+        }
+        catch (Exception)
+        {
+            // Ölü handle / kapalı native: sessiz fail-closed.
+        }
+    }
+
+    public void AppendChapterFileJson(string chapterJson)
+    {
+        if (string.IsNullOrWhiteSpace(chapterJson))
+            return;
+        IntPtr handle = LiveHandle();
+        if (handle == IntPtr.Zero)
+            return;
+        try
+        {
+            NativeBridge.RowlEngine_AppendChapterFileJson(handle, chapterJson);
+        }
+        catch (Exception)
+        {
+            // Ölü handle / kapalı native: sessiz fail-closed.
+        }
+    }
+
+    public void LoadChapter(string chapterId)
+    {
+        if (!PrefetchChaptersService.IsChapterIdValid(chapterId))
+            return;
+        ForwardChapterId(NativeBridge.RowlEngine_LoadChapter, chapterId);
+    }
+
+    public void UnloadChapter(string chapterId)
+    {
+        if (!PrefetchChaptersService.IsChapterIdValid(chapterId))
+            return;
+        ForwardChapterId(NativeBridge.RowlEngine_UnloadChapter, chapterId);
+    }
+
+    public string GetLoadedChaptersJson() =>
+        ReadCallerJson(NativeBridge.RowlEngine_GetLoadedChaptersJson);
+
+    public string GetPrefetchProgressJson() =>
+        ReadCallerJson(NativeBridge.RowlEngine_GetPrefetchProgressJson);
+
+    public string GetCurrentChapterId() =>
+        ReadCallerJson(NativeBridge.RowlEngine_GetCurrentChapterIdUtf8);
+
+    public bool IsChapterBoundaryNode(ulong nodeId)
+    {
+        IntPtr handle = LiveHandle();
+        if (handle == IntPtr.Zero)
+            return false;
+        try
+        {
+            return NativeBridge.RowlEngine_IsChapterBoundaryNode(handle, nodeId) != 0;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
+    public void PrefetchChapterAssets(string? chapterId, ulong budgetBytes)
+    {
+        if (!string.IsNullOrEmpty(chapterId) &&
+            !PrefetchChaptersService.IsChapterIdValid(chapterId))
+            return;
+        IntPtr handle = LiveHandle();
+        if (handle == IntPtr.Zero)
+            return;
+        try
+        {
+            NativeBridge.RowlEngine_PrefetchChapterAssets(
+                handle,
+                string.IsNullOrEmpty(chapterId) ? null : chapterId,
+                PrefetchChaptersService.ClampBudgetBytes(budgetBytes));
+        }
+        catch (Exception)
+        {
+            // Ölü handle / kapalı native: sessiz fail-closed.
+        }
+    }
+
+    public int PumpPrefetch(float maxMilliseconds)
+    {
+        IntPtr handle = LiveHandle();
+        if (handle == IntPtr.Zero)
+            return 0;
+        try
+        {
+            double clamped = PrefetchChaptersService.ClampPumpMilliseconds(maxMilliseconds);
+            return Math.Max(0, NativeBridge.RowlEngine_PumpPrefetch(handle, (float)clamped));
+        }
+        catch (Exception)
+        {
+            return 0;
+        }
+    }
+
+    private void ForwardChapterId(
+        Func<IntPtr, string, NativeBridge.ResultCode> write, string chapterId)
+    {
+        IntPtr handle = LiveHandle();
+        if (handle == IntPtr.Zero)
+            return;
+        try
+        {
+            write(handle, chapterId);
+        }
+        catch (Exception)
+        {
+            // Ölü handle / kapalı native: sessiz fail-closed.
+        }
+    }
+
+    private delegate NativeBridge.ResultCode CallerJsonReader(
+        IntPtr handle, IntPtr buffer, uint bufferSize, out uint required);
+
+    private string ReadCallerJson(CallerJsonReader read)
+    {
+        IntPtr handle = LiveHandle();
+        if (handle == IntPtr.Zero)
+            return string.Empty;
+        try
+        {
+            if (read(handle, IntPtr.Zero, 0, out uint required) != NativeBridge.ResultCode.Ok ||
+                required == 0)
+                return string.Empty;
+            IntPtr buffer = Marshal.AllocHGlobal((int)required);
+            try
+            {
+                if (read(handle, buffer, required, out _) != NativeBridge.ResultCode.Ok)
+                    return string.Empty;
+                return Marshal.PtrToStringUTF8(buffer) ?? string.Empty;
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(buffer);
+            }
+        }
+        catch (Exception)
+        {
+            return string.Empty;
+        }
+    }
+
     private void ForwardVolume(Action<IntPtr, float> write, float value)
     {
         if (!float.IsFinite(value) || !_host.IsInitialized)

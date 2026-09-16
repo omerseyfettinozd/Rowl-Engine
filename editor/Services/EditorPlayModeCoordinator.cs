@@ -42,6 +42,8 @@ public static class EditorPlayModeCoordinator
         {
             host.LoadStoryGraph(graphPath);
             log($"[Play] Story graph loaded from: {graphPath}");
+            int fedChapters = PrefetchChapterFeedService.FeedFromAssetsDir(host, assetsJsonPath, log);
+            log($"[Play] Chapter feed: {fedChapters} payload beslendi.");
         }
 
         // Activate engine play state

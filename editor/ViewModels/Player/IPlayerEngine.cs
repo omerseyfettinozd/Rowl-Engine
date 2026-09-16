@@ -69,6 +69,28 @@ public interface IPlayerEngine
     void RegisterCharacterPreset(string name, string expressionJson) { }
     void ApplyCharacterExpression(string name) { }
     string GetLastCharacterError() => string.Empty;
+
+    /// <summary>
+    /// Faz 5 Dilim 4 — bütçeli prefetch + chapter penceresi dikişi: chapter
+    /// index/dosya besleme, resident yükleme/boşaltma, chapter-sınır sorgusu,
+    /// prefetch tetikleme + pump ve ilerleme/yüklü-chapter JSON okumaları.
+    /// Varsayılan no-op'tur (fail-closed); prod adaptör
+    /// <see cref="EngineHostPlayerAdapter"/> canlı handle üzerinden
+    /// NativeBridge'e forward eder (EngineHost diffsiz). Boş chapter-id
+    /// prefetch'te aktif chapter demektir; geçersiz id ve boş JSON forward
+    /// edilmeden yoksayılır (native reddi aynası). Sözleşme
+    /// docs/PREFETCH_AND_CHAPTERS_CONTRACT.md'dedir.
+    /// </summary>
+    void LoadChapterIndexJson(string indexJson) { }
+    void AppendChapterFileJson(string chapterJson) { }
+    void LoadChapter(string chapterId) { }
+    void UnloadChapter(string chapterId) { }
+    string GetLoadedChaptersJson() => string.Empty;
+    bool IsChapterBoundaryNode(ulong nodeId) => false;
+    string GetCurrentChapterId() => string.Empty;
+    void PrefetchChapterAssets(string? chapterId, ulong budgetBytes) { }
+    int PumpPrefetch(float maxMilliseconds) => 0;
+    string GetPrefetchProgressJson() => string.Empty;
     void SetTextScale(float value);
     void SetHighContrast(bool enabled);
     void SetReducedMotion(bool enabled);
