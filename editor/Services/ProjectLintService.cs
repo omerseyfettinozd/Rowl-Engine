@@ -65,6 +65,8 @@ internal static class ProjectLintService
             RunRule(issues, () => CheckUnusedAssets(nodeList, disk, issues, options));
         if (options.CheckLongAudio)
             RunRule(issues, () => CheckLongAudioStreaming(nodeList, assetsPath, disk, issues, options));
+        if (options.CheckCharacterLayers)
+            RunRule(issues, () => CheckCharacterLayers(nodeList, assetsPath, disk, issues, options));
 
         return issues;
     }
@@ -641,6 +643,78 @@ internal static class ProjectLintService
         }
     }
 
+    // ── Rule 5 (Faz 5 Dilim 3): eksik katman asset'i ────────────────
+    // Katman slotu dolu ama dosyası diskte yoksa advisory WARNING verilir
+    // (error YOK). Missing-file sahipliği Validate'dedir (orası error
+    // verir); bu kural yalnızca erken uyarıdır. Boş slotlar sessizdir.
+    // Batch-only: inline inspector'a karışmaz.
+
+    private static void CheckCharacterLayers(
+        List<NodeViewModel> nodeList,
+        string assetsPath,
+        ProjectValidationService.DiskIndex disk,
+        List<ProjectValidationIssue> issues,
+        ProjectLintOptions options)
+    {
+        string root;
+        try
+        {
+            root = Path.GetFullPath(assetsPath);
+        }
+        catch (Exception)
+        {
+            return;
+        }
+        int added = 0;
+        foreach (var node in nodeList)
+        {
+            foreach (var character in node.AllComponents.OfType<CharacterComponentViewModel>())
+            {
+                if (added >= options.MaxIssuesPerRule)
+                {
+                    issues.Add(new(false,
+                        $"Character-layers scan capped at {options.MaxIssuesPerRule} entries; remaining layers unchecked."));
+                    return;
+                }
+                if (!character.IsEnabled)
+                    continue;
+                Dictionary<string, object> data;
+                try
+                {
+                    data = character.Serialize();
+                }
+                catch (Exception)
+                {
+                    continue;
+                }
+                IReadOnlyList<CharacterLayerAssetRef> refs;
+                try
+                {
+                    refs = CharacterLayersService.CollectAssetRefs(data);
+                }
+                catch (Exception)
+                {
+                    continue;
+                }
+                foreach (var assetRef in refs)
+                {
+                    if (added >= options.MaxIssuesPerRule)
+                    {
+                        issues.Add(new(false,
+                            $"Character-layers scan capped at {options.MaxIssuesPerRule} entries; remaining layers unchecked."));
+                        return;
+                    }
+                    if (ResolveDiskRelative(assetRef.Asset, root, disk) is not null)
+                        continue;
+                    issues.Add(new(false,
+                        $"Character {assetRef.Location} slot '{assetRef.Slot}' asset '{assetRef.Asset}' (node #{node.Id}) is missing on disk; preview falls back silently.",
+                        node.Id, assetRef.Asset));
+                    added++;
+                }
+            }
+        }
+    }
+
     // ── Rule 4: unused assets ────────────────────────────────────────
     // ExactPaths MINUS the referenced-asset candidate set (normalized +
     // images/audio/fonts/scripts prefixes, mirroring batch resolution) =
@@ -679,6 +753,24 @@ internal static class ProjectLintService
                     string normalized = asset.Replace('\\', '/');
                     foreach (string prefix in AssetPrefixes)
                         referenced.Add(prefix + normalized);
+                }
+                // Faz 5 Dilim 3: katmanlı karakter referansları (layers +
+                // expressions) iç-içe anahtarlardadır; kullanılmayan sayılmamaları
+                // ve pakete dahil bilinmeleri için aynı kümeye eklenir.
+                try
+                {
+                    foreach (var nested in CharacterLayersService.CollectAssetRefs(data))
+                    {
+                        if (string.IsNullOrWhiteSpace(nested.Asset))
+                            continue;
+                        string nestedNormalized = nested.Asset.Replace('\\', '/');
+                        foreach (string prefix in AssetPrefixes)
+                            referenced.Add(prefix + nestedNormalized);
+                    }
+                }
+                catch (Exception)
+                {
+                    // Bozuk katman datası unused taramasını düşürmez.
                 }
             }
         }
@@ -730,5 +822,6 @@ internal sealed record ProjectLintOptions(
     bool CheckGlyphCoverage = true,
     bool CheckUnusedAssets = true,
     bool CheckLongAudio = true,
+    bool CheckCharacterLayers = true,
     long MaxLuaBytes = 256 * 1024,
     int MaxIssuesPerRule = 200);

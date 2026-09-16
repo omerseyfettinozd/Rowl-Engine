@@ -53,6 +53,22 @@ public interface IPlayerEngine
     /// </summary>
     void SetFadeCurve(int curve) { }
     void SetSfxPoolDepth(int depth) { }
+
+    /// <summary>
+    /// Faz 5 Dilim 3 — katmanlı karakter dikişi: slot asset/opaklık/
+    /// görünürlük, expression preset kaydı + uygulaması ve son karakter
+    /// tanısı. Varsayılan no-op'tur (fail-closed); prod adaptör
+    /// <see cref="EngineHostPlayerAdapter"/> canlı handle üzerinden
+    /// NativeBridge'e forward eder (EngineHost diffsiz). Bilinmeyen slot,
+    /// bozuk asset/preset adı ve aşırı girdi forward edilmeden yoksayılır
+    /// (native reddi aynası).
+    /// </summary>
+    void SetCharacterSlotAsset(string slot, string asset) { }
+    void SetCharacterSlotOpacity(string slot, float opacity) { }
+    void SetCharacterSlotVisible(string slot, bool visible) { }
+    void RegisterCharacterPreset(string name, string expressionJson) { }
+    void ApplyCharacterExpression(string name) { }
+    string GetLastCharacterError() => string.Empty;
     void SetTextScale(float value);
     void SetHighContrast(bool enabled);
     void SetReducedMotion(bool enabled);

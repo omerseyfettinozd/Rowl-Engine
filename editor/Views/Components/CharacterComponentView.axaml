@@ -76,6 +76,34 @@
                     </StackPanel>
                 </Grid>
 
+                <!-- Faz 5 Dilim 3: katmanlı karakter kütüphanesi (body/face/outfit/accessory) -->
+                <Border Background="{DynamicResource SurfaceBackground}" CornerRadius="4" Padding="8" Margin="0,4,0,0">
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="KATMANLAR (LAYERS — body &lt; face &lt; outfit &lt; accessory)" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource AccentColor}"/>
+                        <StackPanel Spacing="2">
+                            <TextBlock Text="Body (boşsa üstteki sprite kullanılır)" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                            <TextBox Text="{Binding LayerBodyAsset}" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}"/>
+                        </StackPanel>
+                        <StackPanel Spacing="2">
+                            <TextBlock Text="Face" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                            <TextBox Text="{Binding LayerFaceAsset}" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}"/>
+                        </StackPanel>
+                        <StackPanel Spacing="2">
+                            <TextBlock Text="Outfit" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                            <TextBox Text="{Binding LayerOutfitAsset}" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}"/>
+                        </StackPanel>
+                        <StackPanel Spacing="2">
+                            <TextBlock Text="Accessory" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                            <TextBox Text="{Binding LayerAccessoryAsset}" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}"/>
+                        </StackPanel>
+                        <StackPanel Spacing="2">
+                            <TextBlock Text="Expression (seçim önizlemeye atomik uygulanır)" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                            <ComboBox ItemsSource="{Binding ExpressionNames}" SelectedItem="{Binding SelectedExpressionName, Mode=TwoWay}" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}" HorizontalAlignment="Stretch"/>
+                        </StackPanel>
+                        <TextBlock Text="{Binding LayersBadgeText}" IsVisible="{Binding IsLayersBadgeVisible}" FontSize="10" Foreground="#F59E0B" TextWrapping="Wrap"/>
+                    </StackPanel>
+                </Border>
+
                 <Grid ColumnDefinitions="*, *" Margin="0,2">
                     <StackPanel Grid.Column="0" Spacing="4" Margin="0,0,4,0">
                         <TextBlock Text="Width" FontSize="11" Foreground="{DynamicResource MutedText}"/>

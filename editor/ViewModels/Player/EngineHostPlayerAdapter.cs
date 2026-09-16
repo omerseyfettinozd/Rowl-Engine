@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 using RowlEngine.Editor.Native;
+using RowlEngine.Editor.Services;
 
 namespace RowlEngine.Editor.ViewModels.Player;
 
@@ -78,6 +80,132 @@ public sealed class EngineHostPlayerAdapter : IPlayerEngine
 
     public void SetSfxPoolDepth(int depth) =>
         ForwardSetting(NativeBridge.RowlEngine_SetSfxPoolDepth, Math.Clamp(depth, 1, 16));
+
+    // Faz 5 Dilim 3 — EngineHost SIFIR-DIFF: katmanlı karakter hattı da
+    // adaptör-forward'dır. Servis aynası önden doğrular (bilinmeyen slot,
+    // bozuk/aşırı asset, geçersiz preset adı forward edilmez); ölü handle
+    // no-op, throw sessiz fail-closed. String girdiler native bounded
+    // taramaya girer; sözleşme docs/CHARACTER_LAYERS_CONTRACT.md'dedir.
+    public void SetCharacterSlotAsset(string slot, string asset)
+    {
+        if (!CharacterLayersService.IsKnownSlot(slot) ||
+            !CharacterLayersService.IsAssetPathSyntaxValid(asset))
+            return;
+        IntPtr handle = LiveHandle();
+        if (handle == IntPtr.Zero)
+            return;
+        try
+        {
+            NativeBridge.RowlEngine_SetCharacterSlotAsset(handle, slot, asset ?? string.Empty);
+        }
+        catch (Exception)
+        {
+            // Ölü handle / kapalı native: sessiz fail-closed.
+        }
+    }
+
+    public void SetCharacterSlotOpacity(string slot, float opacity)
+    {
+        if (!CharacterLayersService.IsKnownSlot(slot) || !float.IsFinite(opacity))
+            return;
+        IntPtr handle = LiveHandle();
+        if (handle == IntPtr.Zero)
+            return;
+        try
+        {
+            NativeBridge.RowlEngine_SetCharacterSlotOpacity(
+                handle, slot, Math.Clamp(opacity, 0.0f, 1.0f));
+        }
+        catch (Exception)
+        {
+            // Ölü handle / kapalı native: sessiz fail-closed.
+        }
+    }
+
+    public void SetCharacterSlotVisible(string slot, bool visible)
+    {
+        if (!CharacterLayersService.IsKnownSlot(slot))
+            return;
+        IntPtr handle = LiveHandle();
+        if (handle == IntPtr.Zero)
+            return;
+        try
+        {
+            NativeBridge.RowlEngine_SetCharacterSlotVisible(handle, slot, visible ? 1 : 0);
+        }
+        catch (Exception)
+        {
+            // Ölü handle / kapalı native: sessiz fail-closed.
+        }
+    }
+
+    public void RegisterCharacterPreset(string name, string expressionJson)
+    {
+        if (!CharacterLayersService.IsPresetNameValid(name) ||
+            !CharacterLayersService.TryParsePreset(expressionJson, out _))
+            return;
+        IntPtr handle = LiveHandle();
+        if (handle == IntPtr.Zero)
+            return;
+        try
+        {
+            NativeBridge.RowlEngine_RegisterCharacterPreset(handle, name, expressionJson);
+        }
+        catch (Exception)
+        {
+            // Ölü handle / kapalı native: sessiz fail-closed.
+        }
+    }
+
+    public void ApplyCharacterExpression(string name)
+    {
+        if (!CharacterLayersService.IsPresetNameValid(name))
+            return;
+        IntPtr handle = LiveHandle();
+        if (handle == IntPtr.Zero)
+            return;
+        try
+        {
+            NativeBridge.RowlEngine_ApplyCharacterExpression(handle, name);
+        }
+        catch (Exception)
+        {
+            // Ölü handle / kapalı native: sessiz fail-closed.
+        }
+    }
+
+    public string GetLastCharacterError()
+    {
+        IntPtr handle = LiveHandle();
+        if (handle == IntPtr.Zero)
+            return string.Empty;
+        try
+        {
+            if (NativeBridge.RowlEngine_GetLastCharacterErrorUtf8(
+                    handle, IntPtr.Zero, 0, out uint required) != NativeBridge.ResultCode.Ok ||
+                required == 0)
+                return string.Empty;
+            IntPtr buffer = Marshal.AllocHGlobal((int)required);
+            try
+            {
+                if (NativeBridge.RowlEngine_GetLastCharacterErrorUtf8(
+                        handle, buffer, required, out _) != NativeBridge.ResultCode.Ok)
+                    return string.Empty;
+                return Marshal.PtrToStringUTF8(buffer) ?? string.Empty;
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(buffer);
+            }
+        }
+        catch (Exception)
+        {
+            return string.Empty;
+        }
+    }
+
+    private IntPtr LiveHandle() =>
+        _host.IsInitialized ? _host.Handle : IntPtr.Zero;
 
     private void ForwardVolume(Action<IntPtr, float> write, float value)
     {

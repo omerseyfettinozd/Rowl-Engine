@@ -205,6 +205,7 @@ set(ROWL_ENGINE_SOURCES
     src/scene/component.cpp
     src/scene/transform_component.cpp
     src/scene/sprite_component.cpp
+    src/scene/character_layers.cpp
     src/scene/game_object.cpp
     src/scene/scene.cpp
     # Internationalization (Faz 3 Dilim 1: manifest locales + catalogs)
@@ -223,6 +224,7 @@ set(ROWL_ENGINE_SOURCES
     src/c_api_story.cpp
     src/c_api_render.cpp
     src/c_api_audio.cpp
+    src/c_api_character_layers.cpp
     src/c_api_state.cpp
     src/c_api_pause.cpp
 )

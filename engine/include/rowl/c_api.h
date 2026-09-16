@@ -82,6 +82,8 @@ typedef struct RowlEngine_ApiVersion {
 #define ROWL_ENGINE_CAPABILITY_AUDIO_STREAMING UINT64_C(8192)
 /* Faz 5 Dilim 2: native mixer + SFX polyphony + fade curves + ambience beds + pump observability. */
 #define ROWL_ENGINE_CAPABILITY_AUDIO_MIXER_POLYPHONY UINT64_C(16384)
+/* Faz 5 Dilim 3: layered character slots + expression presets + per-handle diagnostics. */
+#define ROWL_ENGINE_CAPABILITY_CHARACTER_LAYERS UINT64_C(32768)
 
 /** Current additive C API version. This query does not require an engine handle. */
 ROWL_API RowlEngine_ResultCode RowlEngine_GetApiVersion(
@@ -685,6 +687,48 @@ ROWL_API RowlEngine_ResultCode RowlEngine_GetBgmPumpStatsJson(
     RowlEngineHandle handle, char* buffer, uint32_t bufferSize,
     uint32_t* outRequiredSize);
 ROWL_API uint64_t RowlEngine_GetBgmPumpAvgMicroseconds(RowlEngineHandle handle);
+
+/**
+ * Faz 5 Dilim 3 — katmanli karakter slotlari + expression presetleri
+ * (ROWL_ENGINE_CAPABILITY_CHARACTER_LAYERS). All additive; older entry
+ * points are untouched.
+ *
+ * Slotlar: "body" < "face" < "outfit" < "accessory" (sabit cizim sirasi).
+ * Bos asset slotu temizler; opaklik [0,1]'e clamp'lenir (non-finite red);
+ * gorunurlukte nonzero = visible. Preset listesi bellekte tutulur
+ * (kalicilik C# tarafinda JSON). Expression uygulamasi atomiktir: biri
+ * bozuk/eksikse HICBIRI degismez + GetLastCharacterErrorUtf8 tani verir.
+ * Tum string girisler 256 KiB tasiyici siniriyla bounded taranir; uzeri
+ * INVALID_ARGUMENT ile reddedilir. JSON ciktilar caller-buffer sozlesmesini
+ * izler (NULL/0 boyut-sorgu, dar tampon clears + BUFFER_TOO_SMALL).
+ */
+ROWL_API RowlEngine_ResultCode RowlEngine_SetCharacterSlotAsset(
+    RowlEngineHandle handle, const char* slotName, const char* assetPath);
+ROWL_API RowlEngine_ResultCode RowlEngine_GetCharacterSlotAssetUtf8(
+    RowlEngineHandle handle, const char* slotName, char* buffer,
+    uint32_t bufferSize, uint32_t* outRequiredSize);
+ROWL_API RowlEngine_ResultCode RowlEngine_SetCharacterSlotOpacity(
+    RowlEngineHandle handle, const char* slotName, float opacity);
+ROWL_API RowlEngine_ResultCode RowlEngine_GetCharacterSlotOpacity(
+    RowlEngineHandle handle, const char* slotName, float* outOpacity);
+ROWL_API RowlEngine_ResultCode RowlEngine_SetCharacterSlotVisible(
+    RowlEngineHandle handle, const char* slotName, int visible);
+ROWL_API int RowlEngine_IsCharacterSlotVisible(
+    RowlEngineHandle handle, const char* slotName);
+ROWL_API RowlEngine_ResultCode RowlEngine_RegisterCharacterPreset(
+    RowlEngineHandle handle, const char* presetName,
+    const char* expressionJsonUtf8);
+ROWL_API RowlEngine_ResultCode RowlEngine_ApplyCharacterExpression(
+    RowlEngineHandle handle, const char* presetName);
+ROWL_API RowlEngine_ResultCode RowlEngine_GetCharacterPresetListJson(
+    RowlEngineHandle handle, char* buffer, uint32_t bufferSize,
+    uint32_t* outRequiredSize);
+ROWL_API RowlEngine_ResultCode RowlEngine_GetCharacterDrawListJson(
+    RowlEngineHandle handle, char* buffer, uint32_t bufferSize,
+    uint32_t* outRequiredSize);
+ROWL_API RowlEngine_ResultCode RowlEngine_GetLastCharacterErrorUtf8(
+    RowlEngineHandle handle, char* buffer, uint32_t bufferSize,
+    uint32_t* outRequiredSize);
 
 /** Triggers voice ducking attenuation on BGM (1 = voice active, 0 = restored). */
 ROWL_API void RowlEngine_TriggerVoiceDucking(RowlEngineHandle handle, int isVoiceActive);

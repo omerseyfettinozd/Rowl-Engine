@@ -88,6 +88,46 @@ internal static class ProjectValidationService
             if (string.IsNullOrWhiteSpace(asset)) continue;
             ValidateSingleAssetReference(node.Id, component.DisplayName, asset, diskIndex, issues);
         }
+        // Faz 5 Dilim 3: katmanlı karakter assetleri (layers + expressions)
+        // iç-içe anahtarlardadır; missing-file sahipliği buradadır (error).
+        // Linter aynı dosyaya yalnızca advisory warning verir.
+        foreach (var node in nodeList.Where(node => reachable.Contains(node.Id)))
+        foreach (var component in node.AllComponents.Where(component => component.IsEnabled))
+        {
+            Dictionary<string, object> data;
+            try
+            {
+                data = component.Serialize();
+            }
+            catch (Exception)
+            {
+                continue;
+            }
+            IReadOnlyList<CharacterLayerAssetRef> refs;
+            try
+            {
+                refs = CharacterLayersService.CollectAssetRefs(data);
+            }
+            catch (Exception)
+            {
+                continue;
+            }
+            // Aynı component'in üst-seviye anahtarıyla aynı dosya iki kez
+            // raporlanmaz (legacy sprite == layers.body durumu).
+            var covered = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var pair in data)
+            {
+                if (AssetKeys.Contains(pair.Key) && pair.Value is string top &&
+                    !string.IsNullOrWhiteSpace(top))
+                    covered.Add(top);
+            }
+            foreach (var assetRef in refs)
+            {
+                if (string.IsNullOrWhiteSpace(assetRef.Asset)) continue;
+                if (!covered.Add(assetRef.Asset)) continue;
+                ValidateSingleAssetReference(node.Id, component.DisplayName, assetRef.Asset, diskIndex, issues);
+            }
+        }
         // Faz 1 Dilim 5: Graph vNext structure contract. Connections are
         // re-materialized from the validated adjacency above so the structure
         // validator sees exactly the edges the graph checks accepted.

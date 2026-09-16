@@ -9,6 +9,7 @@
 #include "rowl/audio/audio_engine.hpp"
 #include "rowl/scripting/lua_sandbox.hpp"
 #include "rowl/render/frame_composition.hpp"
+#include "rowl/scene/character_layers.hpp"
 #include "rowl/render/font_renderer.hpp"
 #include "rowl/platform/sdl_event_dispatcher.hpp"
 #include <chrono>
@@ -855,29 +856,49 @@ void Engine::updateSceneFromComponents(const std::string& componentsJson,
             } else if (type == "character") {
                 CharacterRenderData cd;
                 cd.sprite = data.value("sprite", "");
-                if (!cd.sprite.empty()) {
-                    cd.x = data.value("x", 1440.0f);
-                    cd.y = data.value("y", 340.0f);
-                    cd.width = data.value("width", 360.0f);
-                    cd.height = data.value("height", 540.0f);
-                    cd.rotation = data.value("rotation", 0.0f);
-                    cd.scaleX = data.value("scale_x", data.value("scale", 1.0f));
-                    cd.scaleY = data.value("scale_y", data.value("scale", 1.0f));
-                    cd.voiceBlipSound = data.value("voice_blip_sound", data.value("typewriter_sound", ""));
-                    cd.voiceBlipPitch = data.value("voice_blip_pitch", 1.0f);
-                    cd.voiceBlipPitchVariance = data.value("voice_blip_variance", 0.08f);
-                    cd.voiceBlipCadence = std::max(1, data.value("voice_blip_cadence", 1));
-                    m_activeCharacters.push_back(cd);
-
-                    // Set legacy single-character fallback to first character
-                    if (m_activeCharacters.size() == 1) {
-                        m_activeCharacter = cd.sprite;
-                        m_activeCharacterX = cd.x;
-                        m_activeCharacterY = cd.y;
-                        m_activeCharacterWidth = cd.width;
-                        m_activeCharacterHeight = cd.height;
-                        m_activeCharacterRotation = cd.rotation;
+                cd.x = data.value("x", 1440.0f);
+                cd.y = data.value("y", 340.0f);
+                cd.width = data.value("width", 360.0f);
+                cd.height = data.value("height", 540.0f);
+                cd.rotation = data.value("rotation", 0.0f);
+                cd.scaleX = data.value("scale_x", data.value("scale", 1.0f));
+                cd.scaleY = data.value("scale_y", data.value("scale", 1.0f));
+                cd.voiceBlipSound = data.value("voice_blip_sound", data.value("typewriter_sound", ""));
+                cd.voiceBlipPitch = data.value("voice_blip_pitch", 1.0f);
+                cd.voiceBlipPitchVariance = data.value("voice_blip_variance", 0.08f);
+                cd.voiceBlipCadence = std::max(1, data.value("voice_blip_cadence", 1));
+                // Faz 5 Dilim 3 fix: `layers` varsa parse+compose yolu cizilir,
+                // yoksa legacy sprite yolu aynen calisir. Parse basarisizsa
+                // legacy sprite'a dusulur (fail-closed).
+                bool layeredHandled = false;
+                const bool hadCharacters = !m_activeCharacters.empty();
+                if (data.contains("layers")) {
+                    Rowl::Scene::CharacterLayers staged;
+                    std::string layersError;
+                    if (Rowl::Scene::CharacterLayers::parseComponentData(data, staged, layersError)) {
+                        layeredHandled = true;
+                        for (const auto& draw : staged.toSpriteDraws(cd.x, cd.y, cd.width, cd.height)) {
+                            CharacterRenderData layered = cd;
+                            layered.sprite = draw.asset;
+                            m_activeCharacters.push_back(layered);
+                        }
+                    } else {
+                        ROWL_LOG_WARN("character layers ignored, legacy sprite kept (" + layersError + ")");
                     }
+                }
+                if (!layeredHandled && !cd.sprite.empty()) {
+                    m_activeCharacters.push_back(cd);
+                }
+
+                // Set legacy single-character fallback to first character
+                if (!hadCharacters && !m_activeCharacters.empty()) {
+                    const auto& first = m_activeCharacters.front();
+                    m_activeCharacter = first.sprite;
+                    m_activeCharacterX = first.x;
+                    m_activeCharacterY = first.y;
+                    m_activeCharacterWidth = first.width;
+                    m_activeCharacterHeight = first.height;
+                    m_activeCharacterRotation = first.rotation;
                 }
             } else if (type == "dialogue_box") {
                 m_activeDialogueBoxX = data.value("x", m_activeDialogueBoxX);

@@ -494,6 +494,88 @@ namespace RowlEngine.Editor.Native
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
         internal static extern ulong RowlEngine_GetBgmPumpAvgMicroseconds(IntPtr handle);
 
+        // ── Faz 5 Dilim 3 layered character slots + expression presets
+        // (CAPABILITY_CHARACTER_LAYERS = 32768) ────
+        //
+        // 1:1 Cdecl mirror of the 11 additive entries documented in
+        // engine/include/rowl/c_api.h. Slots: "body" < "face" < "outfit" <
+        // "accessory" (fixed draw order, case-sensitive). Empty asset
+        // clears the slot; opacity clamps to [0,1] (non-finite rejected);
+        // nonzero visible = shown. Expression apply is atomic server-side
+        // (any broken slot leaves every slot untouched + diagnosis via
+        // GetLastCharacterErrorUtf8). String inputs are bounded (256 KiB
+        // carrier); JSON outputs follow the caller-buffer contract (NULL/0
+        // size query, undersized buffer clears + BufferTooSmall).
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_SetCharacterSlotAsset(
+            IntPtr handle,
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string slotName,
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string assetPath);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_GetCharacterSlotAssetUtf8(
+            IntPtr handle,
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string slotName,
+            IntPtr buffer,
+            uint bufferSize,
+            out uint outRequiredSize);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_SetCharacterSlotOpacity(
+            IntPtr handle,
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string slotName,
+            float opacity);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_GetCharacterSlotOpacity(
+            IntPtr handle,
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string slotName,
+            out float outOpacity);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_SetCharacterSlotVisible(
+            IntPtr handle,
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string slotName,
+            int visible);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern int RowlEngine_IsCharacterSlotVisible(
+            IntPtr handle,
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string slotName);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_RegisterCharacterPreset(
+            IntPtr handle,
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string presetName,
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string expressionJsonUtf8);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_ApplyCharacterExpression(
+            IntPtr handle,
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string presetName);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_GetCharacterPresetListJson(
+            IntPtr handle,
+            IntPtr buffer,
+            uint bufferSize,
+            out uint outRequiredSize);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_GetCharacterDrawListJson(
+            IntPtr handle,
+            IntPtr buffer,
+            uint bufferSize,
+            out uint outRequiredSize);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_GetLastCharacterErrorUtf8(
+            IntPtr handle,
+            IntPtr buffer,
+            uint bufferSize,
+            out uint outRequiredSize);
+
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
         internal static extern void RowlEngine_SetTextSpeedMultiplier(IntPtr handle, float multiplier);        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
         internal static extern void RowlEngine_SetTextScale(IntPtr handle, float scale);

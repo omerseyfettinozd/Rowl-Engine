@@ -202,6 +202,7 @@ public:
     float getActiveDialogueBoxHeight()  const { return m_activeDialogueData.height; }
     const Rowl::Render::DialogueRenderData& getActiveDialogueData() const { return m_activeDialogueData; }
     const std::vector<Rowl::Render::DialogueRenderData>& getActiveDialogues() const { return m_activeDialogues; }
+    const std::vector<Rowl::Render::CharacterRenderData>& getActiveCharacters() const { return m_activeCharacters; }
     const std::vector<Rowl::Render::ChoiceButtonRenderData>& getActiveChoiceButtons() const {
         return m_activeChoiceButtons;
     }
