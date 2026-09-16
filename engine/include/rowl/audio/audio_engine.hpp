@@ -8,9 +8,13 @@
 #include <unordered_map>
 
 #include "rowl/audio/audio_streaming.hpp"
+#include "rowl/audio/fade_curves.hpp"
 #include "rowl/audio/ogg_stream_source.hpp"
+#include "rowl/audio/sfx_polyphony.hpp"
+#include "rowl/audio/stream_mixer.hpp"
 
 struct SDL_AudioStream;
+struct SDL_AudioSpec; // yalnızca referansla kullanılır (tanım SDL3 başlığında)
 
 namespace Rowl::VFS {
 class VFSManager;
@@ -131,6 +135,39 @@ public:
     bool isAmbiencePlaying() const { return m_isAmbiencePlaying; }
     const std::string& getCurrentAmbiencePath() const { return m_currentAmbiencePath; }
 
+    // ── Faz 5 Dilim 2: mixer / polyphony / eğriler / bed'ler / pump ──
+    // StreamMixer applyChannelGains'in tek kazanç kaynağıdır (salt okuma).
+    const StreamMixer& mixer() const { return m_mixer; }
+    void setFadeCurve(FadeCurve curve) { m_fadeCurve = curve; }
+    FadeCurve fadeCurve() const { return m_fadeCurve; }
+    // SFX havuzu: derinlik [1,16], varsayılan 8; derinlik 1 = eski davranış.
+    void setSfxPoolDepth(int depth);
+    size_t sfxPoolDepth() const { return m_sfxPool.depth(); }
+    size_t sfxActiveVoices() const { return m_sfxPool.activeCount(); }
+    std::vector<std::string> sfxActivePaths() const;
+    // Ambience bed'leri: 0 = BedA (miras tek-bed yolu), 1 = BedB (yeni).
+    // Geçersiz bed: bool=false / no-op / 0.0f / "" (fail-closed).
+    bool playAmbienceBed(int bed, const std::string& assetPath);
+    void stopAmbienceBed(int bed);
+    void setAmbienceBedVolume(int bed, float volume);
+    float ambienceBedVolume(int bed) const;
+    bool isAmbienceBedPlaying(int bed) const;
+    std::string ambienceBedPath(int bed) const;
+    // Bed'ler arası crossfade (süre<=0 anlık geçiş = bugünkü davranış).
+    bool crossfadeAmbienceTo(const std::string& assetPath,
+                             float durationSeconds, FadeCurve curve);
+    bool isAmbienceCrossfadeActive() const { return m_ambCrossActive; }
+    // Bed efektif kazancı: master*bedVol (* crossfade ölçeği).
+    float ambienceBedGain(int bed) const;
+    // pumpBgmStream maliyet gözlemlenebilirliği (fail kapısı YOK):
+    // son-64 pump penceresi + sayaç. Suspend altında pump çalışmaz,
+    // örnek de üretilmez.
+    uint64_t bgmPumpSampleCount() const { return m_pumpCount; }
+    uint64_t bgmPumpLastMicroseconds() const { return m_pumpLastUs; }
+    uint64_t bgmPumpAvgMicroseconds() const;
+    uint64_t bgmPumpMaxMicroseconds() const { return m_pumpMaxUs; }
+    std::string bgmPumpStatsJson() const;
+
     // Real-Time Audio Telemetry & VU Metering
     float getChannelPeak(int channelType, int channelIndex = 0) const;
     float getChannelRms(int channelType, int channelIndex = 0) const;
@@ -169,7 +206,11 @@ private:
     SDL_AudioStream* m_bgmStream = nullptr;
     SDL_AudioStream* m_transitionBgmStream = nullptr;
     SDL_AudioStream* m_voiceStream = nullptr;
-    SDL_AudioStream* m_sfxStream = nullptr;
+    // Faz 5 Dilim 2: SFX tek-stream (m_sfxStream) yerine havuzu; her slotun
+    // kendi fiziksel akışı vardır (derinlik 1 = eski tek-stream davranış).
+    // Ui one-shot için ayrı tekil akış (havuz dışı; telemetri ayrıdır).
+    std::vector<SDL_AudioStream*> m_sfxPoolStreams;
+    SDL_AudioStream* m_uiStream = nullptr;
     BgmTransitionKind m_requestedBgmTransition = BgmTransitionKind::Instant;
     float m_requestedBgmTransitionDurationSeconds = 0.0f;
     bool m_bgmTransitionActive = false;
@@ -192,9 +233,9 @@ private:
     ChannelTelemetry m_telemetryMaster;
     std::array<float, 4> m_spectrumBands{0.0f, 0.0f, 0.0f, 0.0f};
     size_t m_bgmSampleOffset = 0;
-    std::vector<uint8_t> m_lastSfxData;
-    size_t m_sfxSampleOffset = 0;
-    bool m_isSfxPlaying = false;
+    // Faz 5 Dilim 2: SFX durumu havuzdadır (slot başına PCM + offset +
+    // playing). m_lastSfxData/m_sfxSampleOffset/m_isSfxPlaying kaldırıldı.
+    SfxVoicePool m_sfxPool;
 
     Rowl::VFS::VFSManager* m_vfs = nullptr;
     std::shared_ptr<Rowl::VFS::VFSManager> m_ownedVfs;
@@ -219,7 +260,7 @@ private:
     size_t m_ambienceSampleOffset = 0;
     bool m_isAmbiencePlaying = false;
     std::string m_currentAmbiencePath;
-    std::vector<uint8_t> m_uiData; // float PCM, one-shot (fiziksel sfxStream)
+    std::vector<uint8_t> m_uiData; // float PCM, one-shot (m_uiStream)
     size_t m_uiSampleOffset = 0;
     bool m_isUiPlaying = false;
     ChannelTelemetry m_telemetryAmbience;
@@ -239,6 +280,53 @@ private:
     bool openBgmStream(const std::string& candidate,
                        const std::string& assetPath, int snapshotChannel,
                        DSPFilterType filter);
+
+    // ── Faz 5 Dilim 2 üyeleri (mevcut üye/imza/sıra/formül değişmez) ──
+    StreamMixer m_mixer; // applyChannelGains'in TEK kazanç kaynağı
+    FadeCurve m_fadeCurve = FadeCurve::Linear; // BGM transition + amb cross
+    // Ambience BedB (BedA miras üyelerdedir).
+    SDL_AudioStream* m_ambienceStreamB = nullptr;
+    std::vector<uint8_t> m_ambienceDataB;
+    size_t m_ambienceSampleOffsetB = 0;
+    bool m_isAmbiencePlayingB = false;
+    std::string m_currentAmbiencePathB;
+    float m_ambienceVolumeB = 1.0f;
+    // Bed float formatı (reopen sonrası geri-kuyruk için; queue anında kayda
+    // geçer; varsayılan 2ch/48kHz yalnızca format hiç görülmediyse kullanılır).
+    int m_ambienceBedChannels[2] = {2, 2};
+    int m_ambienceBedRateHz[2] = {48000, 48000};
+    // Bed'ler arası crossfade durumu.
+    bool m_ambCrossActive = false;
+    int m_ambCrossFrom = 0;
+    int m_ambCrossTo = 1;
+    float m_ambCrossElapsed = 0.0f;
+    float m_ambCrossDuration = 0.0f;
+    FadeCurve m_ambCrossCurve = FadeCurve::Linear;
+    // pumpBgmStream maliyet penceresi (son 64 örnek + sayaç/maks).
+    uint64_t m_pumpCount = 0;
+    uint64_t m_pumpLastUs = 0;
+    uint64_t m_pumpMaxUs = 0;
+    std::array<uint64_t, 64> m_pumpWindow{};
+    size_t m_pumpWindowPos = 0;
+    void recordPumpSample(uint64_t microseconds);
+    static bool isValidAmbienceBed(int bed) { return bed == 0 || bed == 1; }
+    SDL_AudioStream* ambienceBedStream(int bed) const;
+    void clearAmbienceBed(int bed);
+    void cancelAmbienceCrossfade();
+    void updateAmbienceCrossfade(float deltaSeconds);
+    float ambienceCrossScale(int bed, float progress) const;
+    void queueAmbienceBed(int bed, const SDL_AudioSpec& floatSpec,
+                          const uint8_t* floatBytes, size_t byteCount,
+                          const std::string& assetPath);
+    void ensureSfxPoolStreams();
+    void destroySfxPoolStreams();
+    // playAudio decode bloğunun birebir çıkarımı (kısa-ses full-decode
+    // byte-identical; eski satır-içi kod bu yordamı çağırır).
+    bool decodeAssetToFloatPcm(const std::string& assetPath,
+                               DSPFilterType filter, bool applyUiGain,
+                               bool channelIsBgm,
+                               SDL_AudioSpec& specOut,
+                               std::vector<uint8_t>& floatPcmOut);
 };
 
 } // namespace Rowl::Audio

@@ -5,6 +5,10 @@
  * YOKTUR). applyChannelGains matematiği birebir taşınır; SDL çağrıları
  * değişmez. Motor bu iskeleti henüz KULLANMAZ; tek kaynak
  * AudioEngine::applyChannelGains olarak kalır.
+ *
+ * Faz 5 Dilim 2 NOTU: motor StreamMixer'ı (stream_mixer.hpp) tek kazanç
+ * kaynağı olarak kullanır; bu iskelet referans/parity amacıyla durur,
+ * üretim yolunda KULLANILMAZ.
  */
 
 #pragma once

@@ -376,6 +376,14 @@ public sealed partial class PlayerViewModel : ViewModelBase
         _engine.SetBgmVolume(Profile.BgmVolume);
         _engine.SetVoiceVolume(Profile.VoiceVolume);
         _engine.SetSfxVolume(Profile.SfxVolume);
+        // Faz 5 Dilim 2 — mixer masası: iki yeni bus aynı setter
+        // yolundan akar (servis clamp'li; dikiş fail-closed no-op).
+        _engine.SetAmbienceVolume(AudioMixerService.AcceptBedVolume(1.0f, Profile.AmbienceVolume));
+        _engine.SetUiVolume(AudioMixerService.AcceptBedVolume(1.0f, Profile.UiVolume));
+        // Faz 5 Dilim 2 fix turu 1 — global mixer config aynı playback-start
+        // yolundan native'e ulaşır (profil tek kaynak; Linear/8 fail-closed).
+        _engine.SetFadeCurve((int)AudioMixerService.ParseFadeCurve(Profile.MixerFadeCurve));
+        _engine.SetSfxPoolDepth(AudioMixerService.ClampPoolDepth(Profile.SfxPoolDepth));
     }
 
     public void PersistProfile()

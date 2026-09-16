@@ -76,6 +76,27 @@ namespace RowlEngine.Editor.ViewModels.Components
         [ObservableProperty]
         private bool _isStreamBadgeVisible;
 
+        /// <summary>Faz 5 Dilim 2 — pump rozet metni (örneklenmemişse boş).</summary>
+        [ObservableProperty]
+        private string _pumpBadgeText = "";
+
+        /// <summary>Pump rozeti yalnızca örneklenmiş sayaçta görünür (fail-closed).</summary>
+        [ObservableProperty]
+        private bool _isPumpBadgeVisible;
+
+        /// <summary>
+        /// Faz 5 Dilim 2 — pump JSON snapshot'ını rozet props'larına
+        /// yansıtır. Bozuk JSON ve sıfır-sayaç fail-closed kapanır
+        /// (gizli rozet). Görünürlük ham sayaca değil
+        /// Describe.Visible kararına bağlıdır.
+        /// </summary>
+        public void UpdateMixerBadge(string? pumpStatsJson)
+        {
+            var description = MixerBadgeService.Describe(pumpStatsJson);
+            PumpBadgeText = description.Text;
+            IsPumpBadgeVisible = description.Visible;
+        }
+
         /// <summary>
         /// Faz 5 Dilim 1 — StreamInfo JSON snapshot'ını rozet props'larına
         /// yansıtır. Bozuk JSON fail-closed kapanır (gizli rozet).

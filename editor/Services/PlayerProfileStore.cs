@@ -116,10 +116,14 @@ public static class PlayerProfileStore
             profile.BgmVolume = ReadSingle(root, "bgm_volume", 1);
             profile.VoiceVolume = ReadSingle(root, "voice_volume", 1);
             profile.SfxVolume = ReadSingle(root, "sfx_volume", 1);
+            profile.AmbienceVolume = ReadSingle(root, "ambience_volume", 1);
+            profile.UiVolume = ReadSingle(root, "ui_volume", 1);
             profile.TextSpeedMultiplier = ReadSingle(root, "text_speed_multiplier", 1);
             profile.AutoAdvanceDelay = ReadSingle(root, "auto_advance_delay", 2);
             profile.SkipMode = ReadSkipMode(root, notes);
             profile.AutoEnabled = ReadBool(root, "auto_enabled", false);
+            profile.MixerFadeCurve = ReadString(root, "mixer_fade_curve", "Linear");
+            profile.SfxPoolDepth = ReadInt(root, "sfx_pool_depth", 8);
             profile.TextScale = ReadSingle(root, "text_scale", 1);
             profile.HighContrast = ReadBool(root, "high_contrast", false);
             profile.ReducedMotion = ReadBool(root, "reduced_motion", false);
@@ -155,6 +159,8 @@ public static class PlayerProfileStore
                 ["bgm_volume"] = profile.BgmVolume,
                 ["voice_volume"] = profile.VoiceVolume,
                 ["sfx_volume"] = profile.SfxVolume,
+                ["ambience_volume"] = profile.AmbienceVolume,
+                ["ui_volume"] = profile.UiVolume,
                 ["text_speed_multiplier"] = profile.TextSpeedMultiplier,
                 ["auto_advance_delay"] = profile.AutoAdvanceDelay,
                 ["text_scale"] = profile.TextScale,
@@ -162,6 +168,8 @@ public static class PlayerProfileStore
                 ["reduced_motion"] = profile.ReducedMotion,
                 ["skip_mode"] = SkipModeToString(profile.SkipMode),
                 ["auto_enabled"] = profile.AutoEnabled,
+                ["mixer_fade_curve"] = profile.MixerFadeCurve,
+                ["sfx_pool_depth"] = profile.SfxPoolDepth,
             };
             string json = JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });
             ProjectFileSystem.WriteAllTextAtomically(path, json);
@@ -212,6 +220,20 @@ public static class PlayerProfileStore
         (element.ValueKind == JsonValueKind.True || element.ValueKind == JsonValueKind.False)
             ? element.GetBoolean()
             : fallback;
+
+    private static int ReadInt(JsonElement root, string key, int fallback)
+    {
+        if (!root.TryGetProperty(key, out var element))
+            return fallback;
+        if (element.ValueKind == JsonValueKind.Number)
+        {
+            if (element.TryGetInt32(out int direct))
+                return direct;
+            if (element.TryGetDouble(out double real) && double.IsFinite(real))
+                return (int)real;
+        }
+        return fallback;
+    }
 
     private static PlayerSkipMode ReadSkipMode(JsonElement root, List<string> notes)
     {

@@ -113,6 +113,14 @@
                     <TextBlock Text="BGM Geçiş Süresi (sn, 0 = proje varsayılanı)" FontSize="11" Foreground="{DynamicResource MutedText}"/>
                     <NumericUpDown Minimum="0" Maximum="60" Increment="0.1" Value="{Binding BgmTransitionDurationSeconds}"/>
                 </StackPanel>
+                <!-- Faz 5 Dilim 2 fix turu 1: per-node fade/BedB/crossfade
+                     kontrolleri kaldırıldı — global mixer config profil
+                     kaynağından playback-start yolunda uygulanır
+                     (AUDIO_MIXER_CONTRACT §7). -->
+                <!-- Faz 5 Dilim 2: pump maliyeti rozeti (örneklenmemişse gizli) -->
+                <Border IsVisible="{Binding IsPumpBadgeVisible}" Background="#12283B" CornerRadius="4" Padding="6,3" BorderBrush="#0EA5E9" BorderThickness="1">
+                    <TextBlock Text="{Binding PumpBadgeText}" FontSize="10" FontWeight="Bold" Foreground="#7DD3FC"/>
+                </Border>
             </StackPanel>
         </StackPanel>
     </Border>

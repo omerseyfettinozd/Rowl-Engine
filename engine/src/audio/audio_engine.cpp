@@ -6,6 +6,7 @@
 #include <vorbis/vorbisfile.h>
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cmath>
 #include <climits>
 #include <cstring>
@@ -197,9 +198,11 @@ bool AudioEngine::initialize() {
     m_telemetryMaster = {};
     m_spectrumBands.fill(0.0f);
     m_bgmSampleOffset = 0;
-    m_sfxSampleOffset = 0;
-    m_isSfxPlaying = false;
-    m_lastSfxData.clear();
+    // Faz 5 Dilim 2: havuz + mixer + eğri + bedB + crossfade + pump sıfırlanır.
+    m_sfxPool = SfxVoicePool{};
+    destroySfxPoolStreams();
+    m_mixer = StreamMixer{};
+    m_fadeCurve = FadeCurve::Linear;
     m_voiceBlipCount = 0;
     m_lastVoiceBlipPitch = 1.0f;
     // Faz 5 Dilim 1 ekleri: hacim matrisi varsayılanları + stream durumu.
@@ -218,6 +221,18 @@ bool AudioEngine::initialize() {
     m_ambienceSampleOffset = 0;
     m_isAmbiencePlaying = false;
     m_currentAmbiencePath.clear();
+    // Faz 5 Dilim 2: BedB + crossfade + pump sayacı sıfırlanır.
+    m_ambienceVolumeB = 1.0f;
+    m_ambienceDataB.clear();
+    m_ambienceSampleOffsetB = 0;
+    m_isAmbiencePlayingB = false;
+    m_currentAmbiencePathB.clear();
+    cancelAmbienceCrossfade();
+    m_pumpCount = 0;
+    m_pumpLastUs = 0;
+    m_pumpMaxUs = 0;
+    m_pumpWindow.fill(0);
+    m_pumpWindowPos = 0;
     m_uiData.clear();
     m_uiSampleOffset = 0;
     m_isUiPlaying = false;
@@ -238,24 +253,44 @@ bool AudioEngine::initialize() {
         m_transitionBgmStream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr, nullptr, nullptr);
         // Voice has its own gain path so narration controls never affect SFX.
         m_voiceStream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr, nullptr, nullptr);
-        // Open a third stream for short sound effects.
-        m_sfxStream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr, nullptr, nullptr);
+        // Faz 5 Dilim 2: SFX havuz akışları (slot başına bir akış).
+        ensureSfxPoolStreams();
         // Faz 5 Dilim 1: Ambience loop RAM için kendi akışı (karışım yok,
         // yalnızca bağımsız gain + loop besleme).
+        // Faz 5 Dilim 2: BedB için ikinci ambience akışı.
         m_ambienceStream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr, nullptr, nullptr);
+        m_ambienceStreamB = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr, nullptr, nullptr);
+        // Faz 5 Dilim 2: Ui one-shot ayrı tekil akış (havuz dışı kalır).
+        m_uiStream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr, nullptr, nullptr);
 
-        if (m_bgmStream && m_transitionBgmStream && m_voiceStream && m_sfxStream && m_ambienceStream) {
-            m_deviceAvailable = true;
-            applyChannelGains();
-            ROWL_LOG_INFO("[AudioEngine] Physical audio device initialized successfully (BGM, Voice & SFX streams active).");
+        if (m_bgmStream && m_transitionBgmStream && m_voiceStream && m_ambienceStream && m_ambienceStreamB && m_uiStream && !m_sfxPoolStreams.empty()) {
+            bool sfxReady = true;
+            for (SDL_AudioStream* stream : m_sfxPoolStreams) sfxReady = sfxReady && (stream != nullptr);
+            if (!sfxReady) {
+                ROWL_LOG_WARN("[AudioEngine] SFX pool streams could not be opened: " + std::string(SDL_GetError()) +
+                              " — running in silent fallback mode.");
+                if (m_bgmStream) { SDL_DestroyAudioStream(m_bgmStream); m_bgmStream = nullptr; }
+                if (m_transitionBgmStream) { SDL_DestroyAudioStream(m_transitionBgmStream); m_transitionBgmStream = nullptr; }
+                if (m_voiceStream) { SDL_DestroyAudioStream(m_voiceStream); m_voiceStream = nullptr; }
+                destroySfxPoolStreams();
+                if (m_ambienceStream) { SDL_DestroyAudioStream(m_ambienceStream); m_ambienceStream = nullptr; }
+                if (m_ambienceStreamB) { SDL_DestroyAudioStream(m_ambienceStreamB); m_ambienceStreamB = nullptr; }
+                if (m_uiStream) { SDL_DestroyAudioStream(m_uiStream); m_uiStream = nullptr; }
+            } else {
+                m_deviceAvailable = true;
+                applyChannelGains();
+                ROWL_LOG_INFO("[AudioEngine] Physical audio device initialized successfully (BGM, Voice & SFX streams active).");
+            }
         } else {
             ROWL_LOG_WARN("[AudioEngine] Audio streams could not be opened: " + std::string(SDL_GetError()) +
                           " — running in silent fallback mode.");
             if (m_bgmStream) { SDL_DestroyAudioStream(m_bgmStream); m_bgmStream = nullptr; }
             if (m_transitionBgmStream) { SDL_DestroyAudioStream(m_transitionBgmStream); m_transitionBgmStream = nullptr; }
             if (m_voiceStream) { SDL_DestroyAudioStream(m_voiceStream); m_voiceStream = nullptr; }
-            if (m_sfxStream) { SDL_DestroyAudioStream(m_sfxStream); m_sfxStream = nullptr; }
+            destroySfxPoolStreams();
             if (m_ambienceStream) { SDL_DestroyAudioStream(m_ambienceStream); m_ambienceStream = nullptr; }
+            if (m_ambienceStreamB) { SDL_DestroyAudioStream(m_ambienceStreamB); m_ambienceStreamB = nullptr; }
+            if (m_uiStream) { SDL_DestroyAudioStream(m_uiStream); m_uiStream = nullptr; }
         }
     } else {
         ROWL_LOG_WARN("[AudioEngine] SDL_InitSubSystem(SDL_INIT_AUDIO) failed: " + std::string(SDL_GetError()) +
@@ -266,6 +301,131 @@ bool AudioEngine::initialize() {
     ROWL_LOG_INFO("Audio Engine Subsystem Initialized Successfully (Hardware Available: " +
                   std::string(m_deviceAvailable ? "YES" : "NO") + ").");
     return true;
+}
+
+// ── Faz 5 Dilim 2: playAudio decode bloğunun birebir çıkarımı ─────────────
+// Kısa-ses full-decode yolu byte-identical korunur; eski satır-içi kod ile
+// bu yordam aynı baytları üretir (VFS aday sırası, OGG/WAV dalları, cap
+// kontrolleri, float dönüşümü, DSP, Ui gain bake aynen). channelIsBgm
+// true iken BGM hata yollarındaki closeBgmStream+resetStreamInfoNoBgm
+// davranışı da aynen korunur.
+bool AudioEngine::decodeAssetToFloatPcm(const std::string& assetPath,
+                                        DSPFilterType filter, bool applyUiGain,
+                                        bool channelIsBgm,
+                                        SDL_AudioSpec& specOut,
+                                        std::vector<uint8_t>& floatPcmOut) {
+    std::vector<uint8_t> bytes;
+    SDL_AudioSpec spec;
+    Uint8* audioBuf = nullptr;
+    Uint32 audioLen = 0;
+    bool loaded = false;
+
+    // Audio assets resolve only through the selected project's VFS. The VFS
+    // itself applies path-isolation and encoded-size limits before SDL sees
+    // any bytes.
+    std::vector<std::string> vfsCandidates = {
+        assetPath,
+        "Assets/" + assetPath,
+        "Assets/audio/" + assetPath,
+        "audio/" + assetPath
+    };
+    for (const auto& candidate : vfsCandidates) {
+        if (vfs().exists(candidate)) {
+            if (hasOggExtension(candidate)) {
+                auto stream = vfs().openReadStream(candidate);
+                if (stream && decodeOggVorbis(*stream, spec, bytes, m_lastError)) {
+                    audioBuf = static_cast<Uint8*>(SDL_malloc(bytes.size()));
+                    if (!audioBuf) {
+                        m_lastError = "Unable to allocate decoded Ogg/Vorbis PCM";
+                        if (channelIsBgm) {
+                            closeBgmStream();
+                            resetStreamInfoNoBgm();
+                        }
+                        return false;
+                    }
+                    std::memcpy(audioBuf, bytes.data(), bytes.size());
+                    audioLen = static_cast<Uint32>(bytes.size());
+                    loaded = true;
+                    break;
+                }
+                if (m_lastError.empty()) m_lastError = "Ogg/Vorbis stream could not be decoded";
+                ROWL_LOG_WARN("[AudioEngine] " + m_lastError + ": " + assetPath);
+                // Stale stream kararı korunmaz: RAM-decode başarısızlığında
+                // önceki akış kapatılıp snapshot no_bgm/unknown'a sıfırlanır.
+                // (Miras davranış: kanal ne olursa olsun koşulsuzdur.)
+                closeBgmStream();
+                resetStreamInfoNoBgm();
+                return false;
+            }
+            bytes = vfs().readBytes(candidate);
+            if (!bytes.empty()) {
+                if (bytes.size() > kMaxEncodedAudioBytes) {
+                    ROWL_LOG_WARN("Audio file exceeds the maximum accepted size: " + assetPath);
+                    if (channelIsBgm) {
+                        closeBgmStream();
+                        resetStreamInfoNoBgm();
+                    }
+                    return false;
+                }
+                SDL_IOStream* io = SDL_IOFromConstMem(bytes.data(), bytes.size());
+                if (io) {
+                    loaded = SDL_LoadWAV_IO(io, true, &spec, &audioBuf, &audioLen);
+                    if (loaded) break;
+                }
+            }
+        }
+    }
+
+    if (loaded && audioBuf && audioLen > 0) {
+        if (audioLen > kMaxDecodedAudioBytes || audioLen > static_cast<Uint32>(INT_MAX)) {
+            ROWL_LOG_WARN("Decoded audio exceeds the maximum accepted size: " + assetPath);
+            SDL_free(audioBuf);
+            if (channelIsBgm) {
+                closeBgmStream();
+                resetStreamInfoNoBgm();
+            }
+            return false;
+        }
+        SDL_AudioSpec floatSpec{};
+        floatSpec.format = SDL_AUDIO_F32;
+        floatSpec.channels = spec.channels;
+        floatSpec.freq = spec.freq;
+        Uint8* floatBuffer = nullptr;
+        int floatLength = 0;
+        if (!SDL_ConvertAudioSamples(&spec, audioBuf, static_cast<int>(audioLen),
+                                     &floatSpec, &floatBuffer, &floatLength) ||
+            !floatBuffer || floatLength <= 0) {
+            m_lastError = "Unable to convert decoded audio to float PCM: " + std::string(SDL_GetError());
+            ROWL_LOG_ERROR("[AudioEngine] " + m_lastError);
+            SDL_free(audioBuf);
+            if (channelIsBgm) {
+                closeBgmStream();
+                resetStreamInfoNoBgm();
+            }
+            return false;
+        }
+        auto* samples = reinterpret_cast<float*>(floatBuffer);
+        applyDspToFloatPcm(samples, static_cast<size_t>(floatLength) / sizeof(float),
+                           floatSpec.channels, floatSpec.freq, filter);
+        // Faz 5 Dilim 1: Ui one-shot kazancı örneklere işlenir; fiziksel
+        // akış kazancı (master*sfx zinciri) aynen kalır.
+        if (applyUiGain) {
+            const size_t uiSamples = static_cast<size_t>(floatLength) / sizeof(float);
+            for (size_t i = 0; i < uiSamples; ++i) samples[i] *= m_uiVolume;
+        }
+        specOut = floatSpec;
+        floatPcmOut.assign(floatBuffer, floatBuffer + floatLength);
+        SDL_free(floatBuffer);
+        SDL_free(audioBuf);
+        return true;
+    }
+    m_lastError = "Audio file could not be decoded (supported: WAV, OGG/Vorbis): " + assetPath;
+    ROWL_LOG_WARN("[AudioEngine] " + m_lastError);
+    // Stale stream kararı korunmaz (yukarıdaki OGG dalıyla aynı).
+    // (Miras davranış: kanal ne olursa olsun koşulsuzdur.)
+    closeBgmStream();
+    resetStreamInfoNoBgm();
+    return false;
 }
 
 void AudioEngine::playBgm(const std::string& assetPath, BgmTransitionKind transition, float durationSeconds) {
@@ -482,10 +642,25 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
             m_isBgmPlaying && !m_currentBgmPath.empty() &&
             m_requestedBgmTransition != BgmTransitionKind::Instant &&
             m_requestedBgmTransitionDurationSeconds > 0.0f;
+        // Faz 5 Dilim 2: SFX havuz slotu decode SONRASI seçilir (slotun
+        // fiziksel akışı hedef olur); PCM cihaza BAŞARILI kuyruklanırsa
+        // slota yazılır (kuyruk-başarısızlığı atomikliği korunur).
+        // Ui ayrı tekil akışa kuyruğa girer.
+        // Derinlik 1 iken slot 0'ın davranışı eski tek-stream ile aynıdır.
+        size_t sfxSlot = 0;
+        if (channel == AudioChannelType::Sfx) {
+            ensureSfxPoolStreams();
+            sfxSlot = m_sfxPool.pickSlot();
+        }
+        SDL_AudioStream* sfxTargetStream =
+            (channel == AudioChannelType::Sfx && sfxSlot < m_sfxPoolStreams.size())
+                ? m_sfxPoolStreams[sfxSlot]
+                : nullptr;
         SDL_AudioStream* targetStream = (channel == AudioChannelType::Bgm)
             ? (transitionRequested ? m_transitionBgmStream : m_bgmStream) :
                                        (channel == AudioChannelType::Voice) ? m_voiceStream :
-                                       (channel == AudioChannelType::Ambience) ? m_ambienceStream : m_sfxStream;
+                                       (channel == AudioChannelType::Ambience) ? m_ambienceStream :
+                                       (channel == AudioChannelType::Ui) ? m_uiStream : sfxTargetStream;
         if (targetStream) {
             if (channel == AudioChannelType::Bgm && !transitionRequested) {
                 SDL_ClearAudioStream(m_bgmStream);
@@ -494,13 +669,17 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
                 SDL_ClearAudioStream(m_transitionBgmStream);
             }
             // Faz 5 Dilim 1: Ambience loop beslemesi kendi akışında baştan
-            // kuyruğa girer; Ui one-shot fiziksel sfxStream'i devralır
-            // (tek ses sözleşmesi aynen).
+            // kuyruğa girer.
+            // Faz 5 Dilim 2: Ui one-shot ayrı tekil akışa kuyruğa girer
+            // (havuz dışı; telemetri ayrıdır).
             if (channel == AudioChannelType::Ambience && m_ambienceStream) {
                 SDL_ClearAudioStream(m_ambienceStream);
             }
-            if (channel == AudioChannelType::Ui && m_sfxStream) {
-                SDL_ClearAudioStream(m_sfxStream);
+            if (channel == AudioChannelType::Ui && m_uiStream) {
+                SDL_ClearAudioStream(m_uiStream);
+            }
+            if (channel == AudioChannelType::Sfx && sfxTargetStream) {
+                SDL_ClearAudioStream(sfxTargetStream);
             }
             if (!SDL_SetAudioStreamFormat(targetStream, &floatSpec, nullptr) ||
                 !SDL_PutAudioStreamData(targetStream, floatBuffer, floatLength)) {
@@ -560,11 +739,14 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
                 m_ambienceSampleOffset = 0;
                 m_currentAmbiencePath = assetPath;
             } else if (channel == AudioChannelType::Sfx) {
-                m_lastSfxData.assign(floatBuffer, floatBuffer + floatLength);
-                m_isSfxPlaying = true;
-                m_sfxSampleOffset = 0;
+                // Faz 5 Dilim 2: PCM havuz slotuna yazılır (cihaz kuyruğu
+                // yukarıda başarılı; derinlik 1 = eski tek-ses davranışı).
+                m_sfxPool.playInto(sfxSlot,
+                                   reinterpret_cast<const uint8_t*>(floatBuffer),
+                                   static_cast<size_t>(floatLength), assetPath,
+                                   floatSpec.channels, floatSpec.freq);
             } else if (channel == AudioChannelType::Ui) {
-                // Faz 5 Dilim 1: Ui one-shot (fiziksel sfxStream RAM).
+                // Faz 5 Dilim 1: Ui one-shot (ayrı tekil akış RAM).
                 m_uiData.assign(floatBuffer, floatBuffer + floatLength);
                 m_isUiPlaying = true;
                 m_uiSampleOffset = 0;
@@ -600,9 +782,12 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
                 m_isUiPlaying = true;
                 m_uiSampleOffset = 0;
             } else if (channel == AudioChannelType::Sfx) {
-                m_lastSfxData.assign(floatBuffer, floatBuffer + floatLength);
-                m_isSfxPlaying = true;
-                m_sfxSampleOffset = 0;
+                // Faz 5 Dilim 2: akışsız yedekte de havuz durumu kayda geçer
+                // (format geri-kuyruk için saklanır).
+                m_sfxPool.playInto(m_sfxPool.pickSlot(),
+                                   reinterpret_cast<const uint8_t*>(floatBuffer),
+                                   static_cast<size_t>(floatLength), assetPath,
+                                   floatSpec.channels, floatSpec.freq);
             } else if (channel == AudioChannelType::Voice) {
                 m_isVoicePlaying = true;
                 triggerVoiceDucking(true);
@@ -643,21 +828,36 @@ void AudioEngine::stopBgm() {
 
 void AudioEngine::stopAll() {
     stopBgm();
-    if (m_sfxStream) {
-        SDL_ClearAudioStream(m_sfxStream);
-        SDL_PauseAudioStreamDevice(m_sfxStream);
+    // Faz 5 Dilim 2: havuzdaki TÜM sesler + BedB + Ui durdurulur.
+    for (SDL_AudioStream* stream : m_sfxPoolStreams) {
+        if (stream) {
+            SDL_ClearAudioStream(stream);
+            SDL_PauseAudioStreamDevice(stream);
+        }
     }
+    m_sfxPool.stopAll();
     if (m_ambienceStream) {
         SDL_ClearAudioStream(m_ambienceStream);
         SDL_PauseAudioStreamDevice(m_ambienceStream);
     }
-    m_lastSfxData.clear();
-    m_sfxSampleOffset = 0;
-    m_isSfxPlaying = false;
+    if (m_ambienceStreamB) {
+        SDL_ClearAudioStream(m_ambienceStreamB);
+        SDL_PauseAudioStreamDevice(m_ambienceStreamB);
+    }
+    if (m_uiStream) {
+        SDL_ClearAudioStream(m_uiStream);
+        SDL_PauseAudioStreamDevice(m_uiStream);
+    }
+    cancelAmbienceCrossfade();
     m_ambienceData.clear();
     m_ambienceSampleOffset = 0;
     m_isAmbiencePlaying = false;
     m_currentAmbiencePath.clear();
+    // Faz 5 Dilim 2: BedB durumu da sıfırlanır.
+    m_ambienceDataB.clear();
+    m_ambienceSampleOffsetB = 0;
+    m_isAmbiencePlayingB = false;
+    m_currentAmbiencePathB.clear();
     m_uiData.clear();
     m_uiSampleOffset = 0;
     m_isUiPlaying = false;
@@ -673,38 +873,43 @@ void AudioEngine::setBgmVolume(float volume) {
     }
     m_bgmVolume = std::clamp(volume, 0.0f, 1.0f);
     m_bgmGain = m_isDuckingActive ? (m_bgmVolume * m_duckingFactor) : m_bgmVolume;
+    // Faz 5 Dilim 2: üye + mixer çift-yön senkron (tek kaynak okumada mixer).
+    m_mixer.setUserVolume(StreamBusId::Bgm, m_bgmVolume);
     applyChannelGains();
 }
 
 void AudioEngine::setMasterVolume(float volume) {
     if (!std::isfinite(volume)) return;
     m_masterVolume = std::clamp(volume, 0.0f, 1.0f);
+    m_mixer.setUserVolume(StreamBusId::Master, m_masterVolume);
     applyChannelGains();
 }
 
 void AudioEngine::setVoiceVolume(float volume) {
     if (!std::isfinite(volume)) return;
     m_voiceVolume = std::clamp(volume, 0.0f, 1.0f);
+    m_mixer.setUserVolume(StreamBusId::Voice, m_voiceVolume);
     applyChannelGains();
 }
 
 void AudioEngine::setSfxVolume(float volume) {
     if (!std::isfinite(volume)) return;
     m_sfxVolume = std::clamp(volume, 0.0f, 1.0f);
+    m_mixer.setUserVolume(StreamBusId::Sfx, m_sfxVolume);
     applyChannelGains();
 }
 
 // Faz 5 Dilim 1 — volume matrisi tamamlamaları: [0,1] clamp +
 // non-finite ignore, son geçerli değer korunur (fail-closed).
+// Faz 5 Dilim 2: miras tek-bed yolu BedA'ya delege eder.
 void AudioEngine::setAmbienceVolume(float volume) {
-    if (!std::isfinite(volume)) return;
-    m_ambienceVolume = std::clamp(volume, 0.0f, 1.0f);
-    applyChannelGains();
+    setAmbienceBedVolume(0, volume);
 }
 
 void AudioEngine::setUiVolume(float volume) {
     if (!std::isfinite(volume)) return;
     m_uiVolume = std::clamp(volume, 0.0f, 1.0f);
+    m_mixer.setUserVolume(StreamBusId::Ui, m_uiVolume);
     applyChannelGains();
 }
 
@@ -717,6 +922,9 @@ void AudioEngine::triggerVoiceDucking(bool isVoiceActive) {
         m_bgmGain = m_bgmVolume;
         ROWL_LOG_INFO("Voice Finished -> BGM Restored to Full Volume (Gain: " + std::to_string(m_bgmGain) + ")");
     }
+    // Faz 5 Dilim 2: duck mixer'e bağlanır (mixer gainFor(Bgm) ==
+    // master*m_bgmGain birebir korunur).
+    m_mixer.setBgmDuckGain(isVoiceActive ? m_duckingFactor : 1.0f);
     applyChannelGains();
 }
 
@@ -728,6 +936,7 @@ void AudioEngine::setDuckingFactor(float factor) {
     m_duckingFactor = std::clamp(factor, 0.0f, 1.0f);
     if (m_isDuckingActive) {
         m_bgmGain = m_bgmVolume * m_duckingFactor;
+        m_mixer.setBgmDuckGain(m_duckingFactor);
     }
     applyChannelGains();
 }
@@ -766,6 +975,7 @@ void AudioEngine::update(float deltaSeconds) {
         }
         // Faz 5 Dilim 1: stream refill update-thread'de senkron çalışır
         // (prefetch thread'i YOKTUR); Ambience loop RAM beslemesi.
+        // Faz 5 Dilim 2: iki bed bağımsız beslenir + crossfade ilerler.
         pumpBgmStream();
         if (m_ambienceStream && !m_ambienceData.empty() && m_isAmbiencePlaying) {
             int ambAvailable = SDL_GetAudioStreamAvailable(m_ambienceStream);
@@ -774,7 +984,15 @@ void AudioEngine::update(float deltaSeconds) {
                 if (!m_outputSuspended) SDL_ResumeAudioStreamDevice(m_ambienceStream);
             }
         }
+        if (m_ambienceStreamB && !m_ambienceDataB.empty() && m_isAmbiencePlayingB) {
+            int ambAvailableB = SDL_GetAudioStreamAvailable(m_ambienceStreamB);
+            if (ambAvailableB <= 0) {
+                SDL_PutAudioStreamData(m_ambienceStreamB, m_ambienceDataB.data(), static_cast<int>(m_ambienceDataB.size()));
+                if (!m_outputSuspended) SDL_ResumeAudioStreamDevice(m_ambienceStreamB);
+            }
+        }
         updateBgmTransition(std::isfinite(deltaSeconds) ? deltaSeconds : 0.0f);
+        updateAmbienceCrossfade(std::isfinite(deltaSeconds) ? deltaSeconds : 0.0f);
 
         if (m_voiceStream && m_isVoicePlaying && SDL_GetAudioStreamQueued(m_voiceStream) <= 0) {
             m_isVoicePlaying = false;
@@ -788,13 +1006,18 @@ void AudioEngine::updateBgmTransition(float deltaSeconds) {
     if (!m_bgmTransitionActive || !m_bgmStream || !m_transitionBgmStream) return;
     m_bgmTransitionElapsedSeconds += std::max(0.0f, deltaSeconds);
     const float progress = std::clamp(m_bgmTransitionElapsedSeconds / m_bgmTransitionDurationSeconds, 0.0f, 1.0f);
-    float outgoing = 1.0f - progress;
-    float incoming = progress;
+    // Faz 5 Dilim 2: eğri seçimi. Linear kolu mevcut formüllerle
+    // bit-identicaldir (varsayılan; golden'lar kırılmaz).
+    float outgoing = 0.0f;
+    float incoming = 0.0f;
     if (m_activeBgmTransition == BgmTransitionKind::Fade) {
-        outgoing = std::max(0.0f, 1.0f - progress * 2.0f);
-        incoming = std::max(0.0f, progress * 2.0f - 1.0f);
+        outgoing = fadeKindOutgoing(m_fadeCurve, progress);
+        incoming = fadeKindIncoming(m_fadeCurve, progress);
+    } else {
+        outgoing = fadeCurveOutgoing(m_fadeCurve, progress);
+        incoming = fadeCurveIncoming(m_fadeCurve, progress);
     }
-    const float baseGain = m_masterVolume * (m_isDuckingActive ? m_bgmVolume * m_duckingFactor : m_bgmVolume);
+    const float baseGain = m_mixer.gainFor(StreamBusId::Bgm);
     SDL_SetAudioStreamGain(m_bgmStream, baseGain * outgoing);
     SDL_SetAudioStreamGain(m_transitionBgmStream, baseGain * incoming);
     if (progress < 1.0f) return;
@@ -814,7 +1037,9 @@ void AudioEngine::shutdown() {
 
     m_bgmData.clear();
     m_transitionBgmData.clear();
-    m_lastSfxData.clear();
+    // Faz 5 Dilim 2: havuz + BedB + crossfade + pump sayacı temizlenir.
+    m_sfxPool.stopAll();
+    destroySfxPoolStreams();
     // Faz 5 Dilim 1 ekleri.
     closeBgmStream();
     resetStreamInfoNoBgm();
@@ -822,6 +1047,16 @@ void AudioEngine::shutdown() {
     m_ambienceSampleOffset = 0;
     m_isAmbiencePlaying = false;
     m_currentAmbiencePath.clear();
+    m_ambienceDataB.clear();
+    m_ambienceSampleOffsetB = 0;
+    m_isAmbiencePlayingB = false;
+    m_currentAmbiencePathB.clear();
+    cancelAmbienceCrossfade();
+    m_pumpCount = 0;
+    m_pumpLastUs = 0;
+    m_pumpMaxUs = 0;
+    m_pumpWindow.fill(0);
+    m_pumpWindowPos = 0;
     m_uiData.clear();
     m_uiSampleOffset = 0;
     m_isUiPlaying = false;
@@ -833,8 +1068,6 @@ void AudioEngine::shutdown() {
     m_telemetryMaster = {};
     m_spectrumBands.fill(0.0f);
     m_bgmSampleOffset = 0;
-    m_sfxSampleOffset = 0;
-    m_isSfxPlaying = false;
 
     if (m_bgmStream) {
         SDL_DestroyAudioStream(m_bgmStream);
@@ -848,13 +1081,18 @@ void AudioEngine::shutdown() {
         SDL_DestroyAudioStream(m_voiceStream);
         m_voiceStream = nullptr;
     }
-    if (m_sfxStream) {
-        SDL_DestroyAudioStream(m_sfxStream);
-        m_sfxStream = nullptr;
-    }
+    // Faz 5 Dilim 2: havuz akışları zaten destroySfxPoolStreams ile yıkıldı.
     if (m_ambienceStream) {
         SDL_DestroyAudioStream(m_ambienceStream);
         m_ambienceStream = nullptr;
+    }
+    if (m_ambienceStreamB) {
+        SDL_DestroyAudioStream(m_ambienceStreamB);
+        m_ambienceStreamB = nullptr;
+    }
+    if (m_uiStream) {
+        SDL_DestroyAudioStream(m_uiStream);
+        m_uiStream = nullptr;
     }
     if (m_audioLeaseHeld) {
         Rowl::Platform::SdlSubsystemLease::release(SDL_INIT_AUDIO);
@@ -894,8 +1132,12 @@ bool AudioEngine::reopenDeviceStreams() {
     if (m_bgmStream) { SDL_DestroyAudioStream(m_bgmStream); m_bgmStream = nullptr; }
     if (m_transitionBgmStream) { SDL_DestroyAudioStream(m_transitionBgmStream); m_transitionBgmStream = nullptr; }
     if (m_voiceStream) { SDL_DestroyAudioStream(m_voiceStream); m_voiceStream = nullptr; }
-    if (m_sfxStream) { SDL_DestroyAudioStream(m_sfxStream); m_sfxStream = nullptr; }
+    // Faz 5 Dilim 2: havuz + BedB + Ui akışları da yeniden kurulur
+    // (havuz ses PCM'leri üyede durur; kalan baytlar geri kuyruğa girer).
+    destroySfxPoolStreams();
     if (m_ambienceStream) { SDL_DestroyAudioStream(m_ambienceStream); m_ambienceStream = nullptr; }
+    if (m_ambienceStreamB) { SDL_DestroyAudioStream(m_ambienceStreamB); m_ambienceStreamB = nullptr; }
+    if (m_uiStream) { SDL_DestroyAudioStream(m_uiStream); m_uiStream = nullptr; }
     m_deviceAvailable = false;
 
     if (!m_audioLeaseHeld && !Rowl::Platform::SdlSubsystemLease::acquire(SDL_INIT_AUDIO)) {
@@ -908,9 +1150,13 @@ bool AudioEngine::reopenDeviceStreams() {
     m_bgmStream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr, nullptr, nullptr);
     m_transitionBgmStream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr, nullptr, nullptr);
     m_voiceStream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr, nullptr, nullptr);
-    m_sfxStream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr, nullptr, nullptr);
+    ensureSfxPoolStreams();
     m_ambienceStream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr, nullptr, nullptr);
-    if (m_bgmStream && m_transitionBgmStream && m_voiceStream && m_sfxStream && m_ambienceStream) {
+    m_ambienceStreamB = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr, nullptr, nullptr);
+    m_uiStream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr, nullptr, nullptr);
+    bool sfxStreamsReady = !m_sfxPoolStreams.empty();
+    for (SDL_AudioStream* stream : m_sfxPoolStreams) sfxStreamsReady = sfxStreamsReady && (stream != nullptr);
+    if (m_bgmStream && m_transitionBgmStream && m_voiceStream && sfxStreamsReady && m_ambienceStream && m_ambienceStreamB && m_uiStream) {
         m_deviceAvailable = true;
         applyChannelGains();
         applyDspFilter(m_activeFilter);
@@ -944,6 +1190,49 @@ bool AudioEngine::reopenDeviceStreams() {
             }
             if (!m_outputSuspended) SDL_ResumeAudioStreamDevice(m_bgmStream);
         }
+        // Faz 5 Dilim 2: havuz sesleri kalan baytlarıyla geri kuyruğa girer
+        // (offset korunur, baştan başlama YOKTUR); bed'ler loop niyetiyle
+        // tam PCM'leriyle geri kuyruğa girer (format queue anında saklanır).
+        // Ui one-shot + Voice geçicidir: niyet bayrakları korunur, kuyruk
+        // update() akışına bırakılır (Dilim 1 davranışı).
+        {
+            auto& voices = m_sfxPool.voices();
+            for (size_t i = 0; i < voices.size() && i < m_sfxPoolStreams.size(); ++i) {
+                SfxVoice& voice = voices[i];
+                SDL_AudioStream* poolStream = m_sfxPoolStreams[i];
+                if (!poolStream || !voice.playing || voice.pcm.empty()) continue;
+                SDL_AudioSpec voiceSpec{};
+                voiceSpec.format = SDL_AUDIO_F32;
+                voiceSpec.channels = static_cast<Uint8>(std::clamp(voice.channels, 1, 8));
+                voiceSpec.freq = (voice.sampleRate > 0) ? voice.sampleRate : 48000;
+                const size_t totalFloats = voice.pcm.size() / sizeof(float);
+                const size_t off = (totalFloats > 0) ? (voice.sampleOffset % totalFloats) : 0;
+                const size_t remBytes = voice.pcm.size() - off * sizeof(float);
+                if (remBytes == 0) continue;
+                SDL_ClearAudioStream(poolStream);
+                SDL_SetAudioStreamGain(poolStream, m_mixer.gainFor(StreamBusId::Sfx));
+                if (SDL_SetAudioStreamFormat(poolStream, &voiceSpec, nullptr)) {
+                    SDL_PutAudioStreamData(poolStream, voice.pcm.data() + off * sizeof(float),
+                                           static_cast<int>(remBytes));
+                }
+            }
+        }
+        for (int bed = 0; bed < 2; ++bed) {
+            SDL_AudioStream* bedStream = ambienceBedStream(bed);
+            if (!bedStream) continue;
+            const bool playing = (bed == 0) ? m_isAmbiencePlaying : m_isAmbiencePlayingB;
+            const std::vector<uint8_t>& data = (bed == 0) ? m_ambienceData : m_ambienceDataB;
+            if (!playing || data.empty()) continue;
+            SDL_AudioSpec bedSpec{};
+            bedSpec.format = SDL_AUDIO_F32;
+            bedSpec.channels = static_cast<Uint8>(std::clamp(m_ambienceBedChannels[bed], 1, 8));
+            bedSpec.freq = (m_ambienceBedRateHz[bed] > 0) ? m_ambienceBedRateHz[bed] : 48000;
+            SDL_ClearAudioStream(bedStream);
+            SDL_SetAudioStreamGain(bedStream, ambienceBedGain(bed));
+            if (SDL_SetAudioStreamFormat(bedStream, &bedSpec, nullptr)) {
+                SDL_PutAudioStreamData(bedStream, data.data(), static_cast<int>(data.size()));
+            }
+        }
         if (m_outputSuspended) setOutputSuspended(true, true);
         ROWL_LOG_INFO("[AudioEngine] Output streams rebuilt after device change (BGM intent preserved).");
         return true;
@@ -954,8 +1243,10 @@ bool AudioEngine::reopenDeviceStreams() {
     if (m_bgmStream) { SDL_DestroyAudioStream(m_bgmStream); m_bgmStream = nullptr; }
     if (m_transitionBgmStream) { SDL_DestroyAudioStream(m_transitionBgmStream); m_transitionBgmStream = nullptr; }
     if (m_voiceStream) { SDL_DestroyAudioStream(m_voiceStream); m_voiceStream = nullptr; }
-    if (m_sfxStream) { SDL_DestroyAudioStream(m_sfxStream); m_sfxStream = nullptr; }
+    destroySfxPoolStreams();
     if (m_ambienceStream) { SDL_DestroyAudioStream(m_ambienceStream); m_ambienceStream = nullptr; }
+    if (m_ambienceStreamB) { SDL_DestroyAudioStream(m_ambienceStreamB); m_ambienceStreamB = nullptr; }
+    if (m_uiStream) { SDL_DestroyAudioStream(m_uiStream); m_uiStream = nullptr; }
     return false;
 }
 
@@ -964,7 +1255,9 @@ void AudioEngine::setOutputSuspended(bool suspended, bool force) {
     if (!force && suspended == m_outputSuspended) return;
     m_outputSuspended = suspended;
     if (!m_deviceAvailable) return;
-    SDL_AudioStream* streams[] = {m_bgmStream, m_transitionBgmStream, m_voiceStream, m_sfxStream, m_ambienceStream};
+    // Faz 5 Dilim 2: havuzdaki TÜM sesler + BedB + Ui askıya alınır/devam eder.
+    std::vector<SDL_AudioStream*> streams = {m_bgmStream, m_transitionBgmStream, m_voiceStream, m_ambienceStream, m_ambienceStreamB, m_uiStream};
+    for (SDL_AudioStream* poolStream : m_sfxPoolStreams) streams.push_back(poolStream);
     for (SDL_AudioStream* stream : streams) {
         if (!stream) continue;
         if (suspended) {
@@ -977,12 +1270,18 @@ void AudioEngine::setOutputSuspended(bool suspended, bool force) {
 }
 
 void AudioEngine::applyChannelGains() {
-    if (m_bgmStream) SDL_SetAudioStreamGain(m_bgmStream, m_masterVolume * m_bgmGain);
+    // Faz 5 Dilim 2: TEK kazanç kaynağı StreamMixer'dır (matematik birebir:
+    // master*bus, duck yalnız BGM; bed başına master*bedVol).
+    if (m_bgmStream) SDL_SetAudioStreamGain(m_bgmStream, m_mixer.gainFor(StreamBusId::Bgm));
     if (m_transitionBgmStream) SDL_SetAudioStreamGain(m_transitionBgmStream, 0.0f);
-    if (m_voiceStream) SDL_SetAudioStreamGain(m_voiceStream, m_masterVolume * m_voiceVolume);
-    if (m_sfxStream) SDL_SetAudioStreamGain(m_sfxStream, m_masterVolume * m_sfxVolume);
-    // Faz 5 Dilim 1 eki: ortak gain zinciri (master * ambience).
-    if (m_ambienceStream) SDL_SetAudioStreamGain(m_ambienceStream, m_masterVolume * m_ambienceVolume);
+    if (m_voiceStream) SDL_SetAudioStreamGain(m_voiceStream, m_mixer.gainFor(StreamBusId::Voice));
+    const float sfxGain = m_mixer.gainFor(StreamBusId::Sfx);
+    for (SDL_AudioStream* stream : m_sfxPoolStreams) {
+        if (stream) SDL_SetAudioStreamGain(stream, sfxGain);
+    }
+    if (m_uiStream) SDL_SetAudioStreamGain(m_uiStream, m_mixer.gainFor(StreamBusId::Sfx));
+    if (m_ambienceStream) SDL_SetAudioStreamGain(m_ambienceStream, ambienceBedGain(0));
+    if (m_ambienceStreamB) SDL_SetAudioStreamGain(m_ambienceStreamB, ambienceBedGain(1));
 }
 
 void AudioEngine::updateTelemetry(float deltaSeconds) {
@@ -1078,47 +1377,55 @@ void AudioEngine::updateTelemetry(float deltaSeconds) {
     m_telemetryBgm.rmsL = decayVal(m_telemetryBgm.rmsL, targetBgmRmsL);
     m_telemetryBgm.rmsR = decayVal(m_telemetryBgm.rmsR, targetBgmRmsR);
 
-    // 2. SFX Telemetry
+    // 2. SFX Telemetry (Faz 5 Dilim 2: havuz TOPLAMINDAN okunur; tek ses
+    // iken eski tek-stream formülüyle birebir aynıdır).
     float targetSfxL = 0.0f;
     float targetSfxR = 0.0f;
     float targetSfxRmsL = 0.0f;
     float targetSfxRmsR = 0.0f;
 
-    if (m_isSfxPlaying && !m_lastSfxData.empty()) {
-        const size_t totalFloats = m_lastSfxData.size() / sizeof(float);
-        if (totalFloats >= 2 && m_sfxSampleOffset < totalFloats) {
-            const size_t windowSize = std::min<size_t>(1024, totalFloats - m_sfxSampleOffset);
-            size_t start = m_sfxSampleOffset;
-            float maxL = 0.0f, maxR = 0.0f;
-            float sumSqL = 0.0f, sumSqR = 0.0f;
-            size_t frames = 0;
+    {
+        const float gain = m_masterVolume * m_sfxVolume;
+        for (SfxVoice& voice : m_sfxPool.voices()) {
+            if (!voice.playing || voice.pcm.empty()) continue;
+            const size_t totalFloats = voice.pcm.size() / sizeof(float);
+            if (totalFloats >= 2 && voice.sampleOffset < totalFloats) {
+                const size_t windowSize = std::min<size_t>(1024, totalFloats - voice.sampleOffset);
+                size_t start = voice.sampleOffset;
+                float maxL = 0.0f, maxR = 0.0f;
+                float sumSqL = 0.0f, sumSqR = 0.0f;
+                size_t frames = 0;
 
-            for (size_t i = 0; i < windowSize && (start + i + 1) < totalFloats; i += 2) {
-                float rawL = 0.0f, rawR = 0.0f;
-                std::memcpy(&rawL, m_lastSfxData.data() + (start + i) * sizeof(float), sizeof(float));
-                std::memcpy(&rawR, m_lastSfxData.data() + (start + i + 1) * sizeof(float), sizeof(float));
-                float sL = std::abs(rawL);
-                float sR = std::abs(rawR);
-                if (sL > maxL) maxL = sL;
-                if (sR > maxR) maxR = sR;
-                sumSqL += sL * sL;
-                sumSqR += sR * sR;
-                frames++;
+                for (size_t i = 0; i < windowSize && (start + i + 1) < totalFloats; i += 2) {
+                    float rawL = 0.0f, rawR = 0.0f;
+                    std::memcpy(&rawL, voice.pcm.data() + (start + i) * sizeof(float), sizeof(float));
+                    std::memcpy(&rawR, voice.pcm.data() + (start + i + 1) * sizeof(float), sizeof(float));
+                    float sL = std::abs(rawL);
+                    float sR = std::abs(rawR);
+                    if (sL > maxL) maxL = sL;
+                    if (sR > maxR) maxR = sR;
+                    sumSqL += sL * sL;
+                    sumSqR += sR * sR;
+                    frames++;
+                }
+                if (frames > 0) {
+                    targetSfxL += maxL * gain;
+                    targetSfxR += maxR * gain;
+                    targetSfxRmsL += std::sqrt(sumSqL / static_cast<float>(frames)) * gain;
+                    targetSfxRmsR += std::sqrt(sumSqR / static_cast<float>(frames)) * gain;
+                }
+                voice.sampleOffset += static_cast<size_t>(dt * kSampleRate * 2);
+                if (voice.sampleOffset >= totalFloats) {
+                    voice.playing = false;
+                }
+            } else {
+                voice.playing = false;
             }
-            if (frames > 0) {
-                const float gain = m_masterVolume * m_sfxVolume;
-                targetSfxL = std::clamp(maxL * gain, 0.0f, 1.0f);
-                targetSfxR = std::clamp(maxR * gain, 0.0f, 1.0f);
-                targetSfxRmsL = std::clamp(std::sqrt(sumSqL / static_cast<float>(frames)) * gain, 0.0f, 1.0f);
-                targetSfxRmsR = std::clamp(std::sqrt(sumSqR / static_cast<float>(frames)) * gain, 0.0f, 1.0f);
-            }
-            m_sfxSampleOffset += static_cast<size_t>(dt * kSampleRate * 2);
-            if (m_sfxSampleOffset >= totalFloats) {
-                m_isSfxPlaying = false;
-            }
-        } else {
-            m_isSfxPlaying = false;
         }
+        targetSfxL = std::clamp(targetSfxL, 0.0f, 1.0f);
+        targetSfxR = std::clamp(targetSfxR, 0.0f, 1.0f);
+        targetSfxRmsL = std::clamp(targetSfxRmsL, 0.0f, 1.0f);
+        targetSfxRmsR = std::clamp(targetSfxRmsR, 0.0f, 1.0f);
     }
 
     m_telemetrySfx.peakL = decayVal(m_telemetrySfx.peakL, targetSfxL);
@@ -1126,25 +1433,30 @@ void AudioEngine::updateTelemetry(float deltaSeconds) {
     m_telemetrySfx.rmsL = decayVal(m_telemetrySfx.rmsL, targetSfxRmsL);
     m_telemetrySfx.rmsR = decayVal(m_telemetrySfx.rmsR, targetSfxRmsR);
 
-    // 2b. Ambience Telemetry (loop RAM; SFX deseniyle aynı pencere)
+    // 2b. Ambience Telemetry (Faz 5 Dilim 2: iki bed TOPLAMI; tek bed +
+    // crossfade'siz durumda eski formülle birebir aynıdır).
     float targetAmbL = 0.0f;
     float targetAmbR = 0.0f;
     float targetAmbRmsL = 0.0f;
     float targetAmbRmsR = 0.0f;
 
-    if (m_isAmbiencePlaying && !m_ambienceData.empty()) {
-        const size_t totalFloats = m_ambienceData.size() / sizeof(float);
+    for (int bed = 0; bed < 2; ++bed) {
+        const bool playing = (bed == 0) ? m_isAmbiencePlaying : m_isAmbiencePlayingB;
+        const std::vector<uint8_t>& data = (bed == 0) ? m_ambienceData : m_ambienceDataB;
+        size_t& offset = (bed == 0) ? m_ambienceSampleOffset : m_ambienceSampleOffsetB;
+        if (!playing || data.empty()) continue;
+        const size_t totalFloats = data.size() / sizeof(float);
         if (totalFloats >= 2) {
             const size_t windowSize = std::min<size_t>(1024, totalFloats);
-            size_t start = m_ambienceSampleOffset % totalFloats;
+            size_t start = offset % totalFloats;
             float maxL = 0.0f, maxR = 0.0f;
             float sumSqL = 0.0f, sumSqR = 0.0f;
             size_t frames = 0;
 
             for (size_t i = 0; i < windowSize && (start + i + 1) < totalFloats; i += 2) {
                 float rawL = 0.0f, rawR = 0.0f;
-                std::memcpy(&rawL, m_ambienceData.data() + (start + i) * sizeof(float), sizeof(float));
-                std::memcpy(&rawR, m_ambienceData.data() + (start + i + 1) * sizeof(float), sizeof(float));
+                std::memcpy(&rawL, data.data() + (start + i) * sizeof(float), sizeof(float));
+                std::memcpy(&rawR, data.data() + (start + i + 1) * sizeof(float), sizeof(float));
                 float sL = std::abs(rawL);
                 float sR = std::abs(rawR);
                 if (sL > maxL) maxL = sL;
@@ -1154,15 +1466,19 @@ void AudioEngine::updateTelemetry(float deltaSeconds) {
                 frames++;
             }
             if (frames > 0) {
-                const float gain = m_masterVolume * m_ambienceVolume;
-                targetAmbL = std::clamp(maxL * gain, 0.0f, 1.0f);
-                targetAmbR = std::clamp(maxR * gain, 0.0f, 1.0f);
-                targetAmbRmsL = std::clamp(std::sqrt(sumSqL / static_cast<float>(frames)) * gain, 0.0f, 1.0f);
-                targetAmbRmsR = std::clamp(std::sqrt(sumSqR / static_cast<float>(frames)) * gain, 0.0f, 1.0f);
+                const float gain = ambienceBedGain(bed);
+                targetAmbL += maxL * gain;
+                targetAmbR += maxR * gain;
+                targetAmbRmsL += std::sqrt(sumSqL / static_cast<float>(frames)) * gain;
+                targetAmbRmsR += std::sqrt(sumSqR / static_cast<float>(frames)) * gain;
             }
-            m_ambienceSampleOffset = (m_ambienceSampleOffset + static_cast<size_t>(dt * kSampleRate * 2)) % totalFloats;
+            offset = (offset + static_cast<size_t>(dt * kSampleRate * 2)) % totalFloats;
         }
     }
+    targetAmbL = std::clamp(targetAmbL, 0.0f, 1.0f);
+    targetAmbR = std::clamp(targetAmbR, 0.0f, 1.0f);
+    targetAmbRmsL = std::clamp(targetAmbRmsL, 0.0f, 1.0f);
+    targetAmbRmsR = std::clamp(targetAmbRmsR, 0.0f, 1.0f);
 
     m_telemetryAmbience.peakL = decayVal(m_telemetryAmbience.peakL, targetAmbL);
     m_telemetryAmbience.peakR = decayVal(m_telemetryAmbience.peakR, targetAmbR);
@@ -1326,7 +1642,17 @@ void AudioEngine::playVoiceBlip(const std::string& assetPath, float pitch, float
         return;
     }
 
-    SDL_AudioStream* targetStream = (channel == AudioChannelType::Sfx) ? m_sfxStream : m_voiceStream;
+    // Faz 5 Dilim 2: SFX blip havuz slotuna gider (slotun fiziksel akışı
+    // hedef olur; derinlik 1 = eski tek-stream davranışı).
+    size_t blipSfxSlot = 0;
+    SDL_AudioStream* targetStream = m_voiceStream;
+    if (channel == AudioChannelType::Sfx) {
+        ensureSfxPoolStreams();
+        blipSfxSlot = m_sfxPool.pickSlot();
+        targetStream = (blipSfxSlot < m_sfxPoolStreams.size())
+            ? m_sfxPoolStreams[blipSfxSlot]
+            : nullptr;
+    }
     if (!targetStream) return;
 
     // 1. Try loading custom audio asset if provided
@@ -1389,7 +1715,11 @@ void AudioEngine::playVoiceBlip(const std::string& assetPath, float pitch, float
                         if (channel == AudioChannelType::Voice) {
                             m_isVoicePlaying = true;
                         } else if (channel == AudioChannelType::Sfx) {
-                            m_isSfxPlaying = true;
+                            // Faz 5 Dilim 2: blip PCM'i havuz slotuna yazılır
+                            // (cihaz kuyruğu yukarıda başarılı).
+                            m_sfxPool.playInto(blipSfxSlot, floatBuffer,
+                                               static_cast<size_t>(floatLength),
+                                               assetPath, spec.channels, spec.freq);
                         }
                         SDL_free(floatBuffer);
                         assetPlayed = true;
@@ -1438,10 +1768,12 @@ void AudioEngine::playVoiceBlip(const std::string& assetPath, float pitch, float
         SDL_ResumeAudioStreamDevice(targetStream);
 
         if (channel == AudioChannelType::Sfx) {
-            m_lastSfxData.assign(reinterpret_cast<const uint8_t*>(blipPcm.data()),
-                                 reinterpret_cast<const uint8_t*>(blipPcm.data() + blipPcm.size()));
-            m_isSfxPlaying = true;
-            m_sfxSampleOffset = 0;
+            // Faz 5 Dilim 2: prosedürel blip de havuz slotuna yazılır
+            // (mono 48kHz float; kuyruk-başarısızlığı atomikliği korunur).
+            m_sfxPool.playInto(blipSfxSlot,
+                               reinterpret_cast<const uint8_t*>(blipPcm.data()),
+                               blipPcm.size() * sizeof(float), assetPath, 1,
+                               kBlipSampleRate);
         } else if (channel == AudioChannelType::Voice) {
             m_isVoicePlaying = true;
         }
@@ -1609,6 +1941,15 @@ void AudioEngine::pumpBgmStream() {
     }
     // Suspended iken konum korunur: decode ilerlemez, kuyruk tüketilmez.
     if (m_outputSuspended) return;
+    // Faz 5 Dilim 2: maliyet gözlemlenebilirliği (fail kapısı YOKTUR).
+    // Koruma/suspend dönüşleri örnek üretmez; gövdeye giren her çağrı
+    // (erken-eos dönüşü dahil) pencereye bir örnek yazar.
+    const auto pumpStart = std::chrono::steady_clock::now();
+    auto recordElapsed = [&]() {
+        const auto elapsed = std::chrono::steady_clock::now() - pumpStart;
+        recordPumpSample(static_cast<uint64_t>(
+            std::chrono::duration_cast<std::chrono::microseconds>(elapsed).count()));
+    };
     const uint32_t rate = m_bgmStreamRateHz;
     const uint32_t channels = m_bgmRingChannels;
     if (rate == 0 || channels == 0 || channels > 8) return;
@@ -1620,6 +1961,7 @@ void AudioEngine::pumpBgmStream() {
             SDL_GetAudioStreamAvailable(m_bgmStream) <= 0) {
             m_isBgmPlaying = false;
         }
+        recordElapsed();
         return;
     }
     const bool haveDevice = (m_bgmStream != nullptr) && m_deviceAvailable;
@@ -1683,6 +2025,7 @@ void AudioEngine::pumpBgmStream() {
         }
         if (got == 0) break;
     }
+    recordElapsed();
 }
 
 void AudioEngine::closeBgmStream() {
@@ -1717,6 +2060,259 @@ double AudioEngine::bgmStreamBufferedSeconds() const {
         std::min<uint64_t>(m_bgmStreamPcmPos, kStreamRingCapacityFrames);
     return static_cast<double>(valid) /
            static_cast<double>(m_bgmStreamRateHz);
+}
+
+// ── Faz 5 Dilim 2: mixer / polyphony / eğriler / bed'ler / pump ─────────────
+
+void AudioEngine::setSfxPoolDepth(int depth) {
+    const size_t want = SfxVoicePool::clampDepth(depth);
+    if (want == m_sfxPool.depth()) return;
+    // Daraltmada düşen slotların cihaz kuyrukları da yıkılır (sesi keser).
+    destroySfxPoolStreams();
+    m_sfxPool.setDepth(static_cast<int>(want));
+    if (m_initialized && m_audioLeaseHeld) {
+        ensureSfxPoolStreams();
+        applyChannelGains();
+    }
+}
+
+std::vector<std::string> AudioEngine::sfxActivePaths() const {
+    std::vector<std::string> paths;
+    for (const auto& voice : m_sfxPool.voices()) {
+        if (voice.playing && !voice.pcm.empty()) paths.push_back(voice.assetPath);
+    }
+    return paths;
+}
+
+void AudioEngine::ensureSfxPoolStreams() {
+    const size_t want = m_sfxPool.depth();
+    if (m_sfxPoolStreams.size() != want) {
+        destroySfxPoolStreams();
+        m_sfxPoolStreams.assign(want, nullptr);
+    }
+    if (!m_audioLeaseHeld) return; // headless: havuz durumu korunur, akış yok
+    const float gain = m_mixer.gainFor(StreamBusId::Sfx);
+    for (size_t i = 0; i < want; ++i) {
+        if (!m_sfxPoolStreams[i]) {
+            m_sfxPoolStreams[i] = SDL_OpenAudioDeviceStream(
+                SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr, nullptr, nullptr);
+            if (m_sfxPoolStreams[i]) {
+                SDL_SetAudioStreamGain(m_sfxPoolStreams[i], gain);
+            }
+        }
+    }
+}
+
+void AudioEngine::destroySfxPoolStreams() {
+    for (SDL_AudioStream* stream : m_sfxPoolStreams) {
+        if (stream) SDL_DestroyAudioStream(stream);
+    }
+    m_sfxPoolStreams.clear();
+}
+
+SDL_AudioStream* AudioEngine::ambienceBedStream(int bed) const {
+    if (bed == 0) return m_ambienceStream;
+    if (bed == 1) return m_ambienceStreamB;
+    return nullptr;
+}
+
+void AudioEngine::clearAmbienceBed(int bed) {
+    if (!isValidAmbienceBed(bed)) return;
+    SDL_AudioStream* stream = ambienceBedStream(bed);
+    if (stream) {
+        SDL_ClearAudioStream(stream);
+        SDL_PauseAudioStreamDevice(stream);
+    }
+    if (bed == 0) {
+        m_ambienceData.clear();
+        m_ambienceSampleOffset = 0;
+        m_isAmbiencePlaying = false;
+        m_currentAmbiencePath.clear();
+    } else {
+        m_ambienceDataB.clear();
+        m_ambienceSampleOffsetB = 0;
+        m_isAmbiencePlayingB = false;
+        m_currentAmbiencePathB.clear();
+    }
+}
+
+void AudioEngine::queueAmbienceBed(int bed, const SDL_AudioSpec& floatSpec,
+                                  const uint8_t* floatBytes, size_t byteCount,
+                                  const std::string& assetPath) {
+    if (!isValidAmbienceBed(bed) || !floatBytes || byteCount == 0) return;
+    std::vector<uint8_t>& data = (bed == 0) ? m_ambienceData : m_ambienceDataB;
+    size_t& offset = (bed == 0) ? m_ambienceSampleOffset : m_ambienceSampleOffsetB;
+    bool& playing = (bed == 0) ? m_isAmbiencePlaying : m_isAmbiencePlayingB;
+    std::string& path = (bed == 0) ? m_currentAmbiencePath : m_currentAmbiencePathB;
+    data.assign(floatBytes, floatBytes + byteCount);
+    offset = 0;
+    playing = true;
+    path = assetPath;
+    m_ambienceBedChannels[bed] =
+        (floatSpec.channels >= 1 && floatSpec.channels <= 8) ? floatSpec.channels : 2;
+    m_ambienceBedRateHz[bed] = (floatSpec.freq > 0) ? floatSpec.freq : 48000;
+    SDL_AudioStream* stream = ambienceBedStream(bed);
+    if (stream && m_deviceAvailable) {
+        SDL_ClearAudioStream(stream);
+        if (SDL_SetAudioStreamFormat(stream, &floatSpec, nullptr) &&
+            SDL_PutAudioStreamData(stream, floatBytes, static_cast<int>(byteCount))) {
+            if (!m_outputSuspended) SDL_ResumeAudioStreamDevice(stream);
+        }
+    }
+}
+
+bool AudioEngine::playAmbienceBed(int bed, const std::string& assetPath) {
+    if (!m_initialized || !isValidAmbienceBed(bed) || assetPath.empty()) return false;
+    SDL_AudioSpec spec{};
+    std::vector<uint8_t> pcm;
+    if (!decodeAssetToFloatPcm(assetPath, DSPFilterType::Normal, false, false, spec, pcm)) {
+        return false;
+    }
+    cancelAmbienceCrossfade();
+    queueAmbienceBed(bed, spec, pcm.data(), pcm.size(), assetPath);
+    applyChannelGains();
+    return true;
+}
+
+void AudioEngine::stopAmbienceBed(int bed) {
+    if (!isValidAmbienceBed(bed)) return;
+    if (m_ambCrossActive && (bed == m_ambCrossFrom || bed == m_ambCrossTo)) {
+        cancelAmbienceCrossfade();
+    }
+    clearAmbienceBed(bed);
+    applyChannelGains();
+}
+
+void AudioEngine::setAmbienceBedVolume(int bed, float volume) {
+    if (!isValidAmbienceBed(bed) || !std::isfinite(volume)) return;
+    volume = std::clamp(volume, 0.0f, 1.0f);
+    if (bed == 0) {
+        // Miras tek-bed üyesi BedA ile çift-yön senkron tutulur.
+        m_ambienceVolume = volume;
+        m_mixer.setUserVolume(StreamBusId::Ambience, volume);
+    } else {
+        m_ambienceVolumeB = volume;
+    }
+    m_mixer.setAmbienceBedVolume(bed, volume);
+    applyChannelGains();
+}
+
+float AudioEngine::ambienceBedVolume(int bed) const {
+    if (!isValidAmbienceBed(bed)) return 0.0f;
+    return (bed == 0) ? m_ambienceVolume : m_ambienceVolumeB;
+}
+
+bool AudioEngine::isAmbienceBedPlaying(int bed) const {
+    if (!isValidAmbienceBed(bed)) return false;
+    return (bed == 0) ? m_isAmbiencePlaying : m_isAmbiencePlayingB;
+}
+
+std::string AudioEngine::ambienceBedPath(int bed) const {
+    if (!isValidAmbienceBed(bed)) return "";
+    return (bed == 0) ? m_currentAmbiencePath : m_currentAmbiencePathB;
+}
+
+bool AudioEngine::crossfadeAmbienceTo(const std::string& assetPath,
+                                     float durationSeconds, FadeCurve curve) {
+    if (!m_initialized || assetPath.empty()) return false;
+    if (!std::isfinite(durationSeconds) || durationSeconds < 0.0f) durationSeconds = 0.0f;
+    durationSeconds = std::min(durationSeconds, 60.0f);
+    SDL_AudioSpec spec{};
+    std::vector<uint8_t> pcm;
+    if (!decodeAssetToFloatPcm(assetPath, DSPFilterType::Normal, false, false, spec, pcm)) {
+        return false;
+    }
+    const int from = m_isAmbiencePlaying ? 0 : (m_isAmbiencePlayingB ? 1 : 0);
+    const int to = 1 - from;
+    if (durationSeconds <= 0.0f) {
+        // Anlık geçiş = bugünkü davranış: çalan bed yerinde değişir,
+        // diğer bed susar (hiçbir şey çalmıyorsa BedA = miras yolu).
+        cancelAmbienceCrossfade();
+        clearAmbienceBed(to);
+        queueAmbienceBed(from, spec, pcm.data(), pcm.size(), assetPath);
+        applyChannelGains();
+        return true;
+    }
+    queueAmbienceBed(to, spec, pcm.data(), pcm.size(), assetPath);
+    m_ambCrossActive = true;
+    m_ambCrossFrom = from;
+    m_ambCrossTo = to;
+    m_ambCrossElapsed = 0.0f;
+    m_ambCrossDuration = durationSeconds;
+    m_ambCrossCurve = curve;
+    // İlk kare: from tam kazançta, to sessiz (eğri uçları snap'lenir).
+    SDL_AudioStream* fromStream = ambienceBedStream(from);
+    if (fromStream) SDL_SetAudioStreamGain(fromStream, ambienceBedGain(from));
+    SDL_AudioStream* toStream = ambienceBedStream(to);
+    if (toStream) SDL_SetAudioStreamGain(toStream, ambienceBedGain(to));
+    return true;
+}
+
+void AudioEngine::cancelAmbienceCrossfade() {
+    m_ambCrossActive = false;
+    m_ambCrossFrom = 0;
+    m_ambCrossTo = 1;
+    m_ambCrossElapsed = 0.0f;
+    m_ambCrossDuration = 0.0f;
+}
+
+void AudioEngine::updateAmbienceCrossfade(float deltaSeconds) {
+    if (!m_ambCrossActive) return;
+    m_ambCrossElapsed += std::max(0.0f, deltaSeconds);
+    SDL_AudioStream* fromStream = ambienceBedStream(m_ambCrossFrom);
+    if (fromStream) SDL_SetAudioStreamGain(fromStream, ambienceBedGain(m_ambCrossFrom));
+    SDL_AudioStream* toStream = ambienceBedStream(m_ambCrossTo);
+    if (toStream) SDL_SetAudioStreamGain(toStream, ambienceBedGain(m_ambCrossTo));
+    const float progress = (m_ambCrossDuration > 0.0f)
+        ? std::clamp(m_ambCrossElapsed / m_ambCrossDuration, 0.0f, 1.0f)
+        : 1.0f;
+    if (progress >= 1.0f) {
+        clearAmbienceBed(m_ambCrossFrom);
+        m_ambCrossActive = false;
+        applyChannelGains();
+    }
+}
+
+float AudioEngine::ambienceCrossScale(int bed, float progress) const {
+    if (!m_ambCrossActive) return 1.0f;
+    const float p = std::clamp(progress, 0.0f, 1.0f);
+    if (bed == m_ambCrossFrom) return fadeCurveOutgoing(m_ambCrossCurve, p);
+    if (bed == m_ambCrossTo) return fadeCurveIncoming(m_ambCrossCurve, p);
+    return 1.0f;
+}
+
+float AudioEngine::ambienceBedGain(int bed) const {
+    if (!isValidAmbienceBed(bed)) return 0.0f;
+    const float base = m_mixer.gainForAmbienceBed(bed);
+    if (!m_ambCrossActive) return base;
+    const float progress = (m_ambCrossDuration > 0.0f)
+        ? std::clamp(m_ambCrossElapsed / m_ambCrossDuration, 0.0f, 1.0f)
+        : 1.0f;
+    return base * ambienceCrossScale(bed, progress);
+}
+
+void AudioEngine::recordPumpSample(uint64_t microseconds) {
+    m_pumpWindow[m_pumpWindowPos % m_pumpWindow.size()] = microseconds;
+    ++m_pumpWindowPos;
+    ++m_pumpCount;
+    m_pumpLastUs = microseconds;
+    if (microseconds > m_pumpMaxUs) m_pumpMaxUs = microseconds;
+}
+
+uint64_t AudioEngine::bgmPumpAvgMicroseconds() const {
+    const size_t filled =
+        static_cast<size_t>(std::min<uint64_t>(m_pumpCount, m_pumpWindow.size()));
+    if (filled == 0) return 0;
+    uint64_t sum = 0;
+    for (size_t i = 0; i < filled; ++i) sum += m_pumpWindow[i];
+    return sum / static_cast<uint64_t>(filled);
+}
+
+std::string AudioEngine::bgmPumpStatsJson() const {
+    return std::string("{\"count\":") + std::to_string(m_pumpCount) +
+           ",\"last_us\":" + std::to_string(m_pumpLastUs) +
+           ",\"avg_us\":" + std::to_string(bgmPumpAvgMicroseconds()) +
+           ",\"max_us\":" + std::to_string(m_pumpMaxUs) + "}";
 }
 
 } // namespace Rowl::Audio

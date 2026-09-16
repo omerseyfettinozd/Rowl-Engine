@@ -683,6 +683,8 @@ internal static class ProjectLintService
             }
         }
 
+        // Faz 5 Dilim 2 fix turu 1: per-node BedB kaldırıldı; kullanılmayan
+        // ambience dosyaları normal unused-asset kuralına tabidir.
         int added = 0;
         foreach (string rel in disk.ExactPaths.OrderBy(p => p, StringComparer.Ordinal))
         {

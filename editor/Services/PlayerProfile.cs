@@ -48,6 +48,24 @@ public sealed class PlayerProfile
     public float BgmVolume { get; set; } = 1;
     public float VoiceVolume { get; set; } = 1;
     public float SfxVolume { get; set; } = 1;
+
+    /// <summary>
+    /// Faz 5 Dilim 2 — mixer masası: ambience + arayüz bus hacimleri.
+    /// Native yazımı <see cref="AudioMixerService"/> delegeleri üzerinden
+    /// akar; sanitize [0,1] clamp + non-finite ignore uygular.
+    /// </summary>
+    public float AmbienceVolume { get; set; } = 1;
+    public float UiVolume { get; set; } = 1;
+
+    /// <summary>
+    /// Faz 5 Dilim 2 fix turu 1 — global mixer config (tek kaynak):
+    /// fade eğrisi adı ("Linear"/"EqualPower", fail-closed Linear) ve
+    /// SFX havuz derinliği ([1,16], varsayılan 8). Prod playback
+    /// başında <c>PlayerViewModel.ApplyVolumes</c> üzerinden native'e
+    /// uygulanır.
+    /// </summary>
+    public string MixerFadeCurve { get; set; } = "Linear";
+    public int SfxPoolDepth { get; set; } = 8;
     public float TextSpeedMultiplier { get; set; } = 1;
     public float AutoAdvanceDelay { get; set; } = 2;
 
@@ -95,6 +113,10 @@ public sealed class PlayerProfile
         BgmVolume = Math.Clamp(BgmVolume, 0, 1);
         VoiceVolume = Math.Clamp(VoiceVolume, 0, 1);
         SfxVolume = Math.Clamp(SfxVolume, 0, 1);
+        AmbienceVolume = AudioMixerService.AcceptBedVolume(1, AmbienceVolume);
+        UiVolume = AudioMixerService.AcceptBedVolume(1, UiVolume);
+        MixerFadeCurve = AudioMixerService.FadeCurveName((int)AudioMixerService.ParseFadeCurve(MixerFadeCurve));
+        SfxPoolDepth = AudioMixerService.ClampPoolDepth(SfxPoolDepth);
         TextSpeedMultiplier = Math.Clamp(TextSpeedMultiplier, 0.25f, 4);
         AutoAdvanceDelay = Math.Clamp(AutoAdvanceDelay, 0, 60);
         TextScale = SnapTextScale(TextScale);

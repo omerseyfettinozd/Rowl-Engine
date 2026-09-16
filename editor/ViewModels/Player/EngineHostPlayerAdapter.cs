@@ -55,6 +55,63 @@ public sealed class EngineHostPlayerAdapter : IPlayerEngine
     public void SetBgmVolume(float value) => _host.SetBgmVolume(value);
     public void SetVoiceVolume(float value) => _host.SetVoiceVolume(value);
     public void SetSfxVolume(float value) => _host.SetSfxVolume(value);
+
+    // Faz 5 Dilim 2 fix turu 1 — EngineHost SIFIR-DIFF: bu iki bus için
+    // EngineHost'ta wrapper YOKTUR; adaptör canlı handle'a mevcut public
+    // yüzeyden (IsInitialized + Handle) erişip NativeBridge delegesini
+    // doğrudan çağırır. Ölü handle no-op, clamp [0,1], non-finite ignore
+    // (AudioMixerService.AcceptBedVolume semantiği).
+    public void SetAmbienceVolume(float value) =>
+        ForwardVolume(NativeBridge.RowlEngine_SetAmbienceVolume, value);
+
+    public void SetUiVolume(float value) =>
+        ForwardVolume(NativeBridge.RowlEngine_SetUiVolume, value);
+
+    // Faz 5 Dilim 2 fix turu 1 — global mixer config aynı fail-closed
+    // yoldan akar: eğri 0/1 dışı ignore, derinlik [1,16] clamp.
+    public void SetFadeCurve(int curve)
+    {
+        if (curve != 0 && curve != 1)
+            return;
+        ForwardSetting(NativeBridge.RowlEngine_SetFadeCurve, curve);
+    }
+
+    public void SetSfxPoolDepth(int depth) =>
+        ForwardSetting(NativeBridge.RowlEngine_SetSfxPoolDepth, Math.Clamp(depth, 1, 16));
+
+    private void ForwardVolume(Action<IntPtr, float> write, float value)
+    {
+        if (!float.IsFinite(value) || !_host.IsInitialized)
+            return;
+        IntPtr handle = _host.Handle;
+        if (handle == IntPtr.Zero)
+            return;
+        try
+        {
+            write(handle, Math.Clamp(value, 0.0f, 1.0f));
+        }
+        catch (Exception)
+        {
+            // Ölü handle / kapalı native: sessiz fail-closed.
+        }
+    }
+
+    private void ForwardSetting(Action<IntPtr, int> write, int value)
+    {
+        if (!_host.IsInitialized)
+            return;
+        IntPtr handle = _host.Handle;
+        if (handle == IntPtr.Zero)
+            return;
+        try
+        {
+            write(handle, value);
+        }
+        catch (Exception)
+        {
+            // Ölü handle / kapalı native: sessiz fail-closed.
+        }
+    }
     public void SetTextScale(float value) => _host.SetTextScale(value);
     public void SetHighContrast(bool enabled) => _host.SetHighContrast(enabled);
     public void SetReducedMotion(bool enabled) => _host.SetReducedMotion(enabled);

@@ -421,9 +421,81 @@ namespace RowlEngine.Editor.Native
 
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
         internal static extern float RowlEngine_GetUiVolume(IntPtr handle);
+
+        // ── Faz 5 Dilim 2 mixer + SFX polyphony + fade curves + ambience
+        // beds + pump observability (CAPABILITY_AUDIO_MIXER_POLYPHONY) ────
+        //
+        // 1:1 Cdecl mirror of the 15 additive entries documented in
+        // engine/include/rowl/c_api.h (capability 16384). FadeCurve: 0 =
+        // Linear (default), 1 = EqualPower; setters ignore any other value.
+        // Pool depth clamps to [1,16] (default 8). Ambience beds: 0 = BedA
+        // (legacy), 1 = BedB; invalid bed is fail-closed. Crossfade
+        // duration <= 0 (or non-finite) is an instant switch. JSON getters
+        // follow the caller-buffer contract; pump stats are observability
+        // only (no fail gate).
+
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
-        internal static extern void RowlEngine_SetTextSpeedMultiplier(IntPtr handle, float multiplier);
+        internal static extern void RowlEngine_SetFadeCurve(IntPtr handle, int curve);
+
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern int RowlEngine_GetFadeCurve(IntPtr handle);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern void RowlEngine_SetSfxPoolDepth(IntPtr handle, int depth);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern int RowlEngine_GetSfxPoolDepth(IntPtr handle);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern int RowlEngine_GetSfxActiveVoices(IntPtr handle);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_GetSfxActivePaths(
+            IntPtr handle,
+            IntPtr buffer,
+            uint bufferSize,
+            out uint outRequiredSize);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern int RowlEngine_PlayAmbienceBed(
+            IntPtr handle,
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string assetPath,
+            int bed);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern void RowlEngine_StopAmbienceBed(IntPtr handle, int bed);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern void RowlEngine_SetAmbienceBedVolume(IntPtr handle, int bed, float volume);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern float RowlEngine_GetAmbienceBedVolume(IntPtr handle, int bed);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern int RowlEngine_IsAmbienceBedPlaying(IntPtr handle, int bed);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern int RowlEngine_CrossfadeAmbienceTo(
+            IntPtr handle,
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string assetPath,
+            float durationSeconds,
+            int curve);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern int RowlEngine_IsAmbienceCrossfadeActive(IntPtr handle);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_GetBgmPumpStatsJson(
+            IntPtr handle,
+            IntPtr buffer,
+            uint bufferSize,
+            out uint outRequiredSize);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ulong RowlEngine_GetBgmPumpAvgMicroseconds(IntPtr handle);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern void RowlEngine_SetTextSpeedMultiplier(IntPtr handle, float multiplier);        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
         internal static extern void RowlEngine_SetTextScale(IntPtr handle, float scale);
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
         internal static extern void RowlEngine_SetHighContrast(IntPtr handle, int enabled);

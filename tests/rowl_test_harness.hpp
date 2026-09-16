@@ -87,6 +87,7 @@ void test_game_state();
 void test_audio_engine();
 void test_audio_device_recovery();
 void test_audio_streaming();
+void test_audio_mixer();
 void test_lua_sandbox();
 void test_mobile_input();
 void test_platform_host();

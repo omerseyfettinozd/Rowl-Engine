@@ -30,6 +30,7 @@ int main(int argc, char* argv[]) {
     test_audio_engine();
     test_audio_device_recovery();
     test_audio_streaming();
+    test_audio_mixer();
     test_lua_sandbox();
     test_mobile_input();
     test_platform_host();

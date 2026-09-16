@@ -28,6 +28,14 @@
         <Slider Minimum="0" Maximum="1" Value="{Binding Profile.SfxVolume}" Width="200" />
       </StackPanel>
       <StackPanel Orientation="Horizontal" Spacing="8">
+        <TextBlock Text="Ortam:" Width="140" VerticalAlignment="Center" />
+        <Slider Minimum="0" Maximum="1" Value="{Binding Profile.AmbienceVolume}" Width="200" />
+      </StackPanel>
+      <StackPanel Orientation="Horizontal" Spacing="8">
+        <TextBlock Text="Arayüz:" Width="140" VerticalAlignment="Center" />
+        <Slider Minimum="0" Maximum="1" Value="{Binding Profile.UiVolume}" Width="200" />
+      </StackPanel>
+      <StackPanel Orientation="Horizontal" Spacing="8">
         <TextBlock Text="Metin Hızı:" Width="140" VerticalAlignment="Center" />
         <Slider Minimum="0.25" Maximum="4" Value="{Binding Profile.TextSpeedMultiplier}" Width="200" />
       </StackPanel>

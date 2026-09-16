@@ -4,12 +4,14 @@ RowlEngine_CameraZoomTo
 RowlEngine_ClearLastResult
 RowlEngine_ClearScreenTint
 RowlEngine_Create
+RowlEngine_CrossfadeAmbienceTo
 RowlEngine_DeleteSaveSlot
 RowlEngine_Destroy
 RowlEngine_EvaluateCondition
 RowlEngine_ExecuteScript
 RowlEngine_GetActiveDialogueContentIdsJson
 RowlEngine_GetActiveDspFilter
+RowlEngine_GetAmbienceBedVolume
 RowlEngine_GetAmbienceVolume
 RowlEngine_GetApiVersion
 RowlEngine_GetAudioChannelPeak
@@ -19,6 +21,8 @@ RowlEngine_GetBackgroundOpacity
 RowlEngine_GetBackgroundParallaxX
 RowlEngine_GetBackgroundParallaxY
 RowlEngine_GetBackgroundRotation
+RowlEngine_GetBgmPumpAvgMicroseconds
+RowlEngine_GetBgmPumpStatsJson
 RowlEngine_GetBgmVolume
 RowlEngine_GetCameraShakeOffsetX
 RowlEngine_GetCameraShakeOffsetY
@@ -44,6 +48,7 @@ RowlEngine_GetDialogueVoiceBlipSoundWithLength
 RowlEngine_GetDialogueVoiceBlipVariance
 RowlEngine_GetDialogueVoiceBlipVolume
 RowlEngine_GetDialogueWithLength
+RowlEngine_GetFadeCurve
 RowlEngine_GetLastAudioError
 RowlEngine_GetLastAudioErrorWithLength
 RowlEngine_GetLastFrameNonTextureRenderMilliseconds
@@ -72,6 +77,9 @@ RowlEngine_GetSaveSlotMetadataJson
 RowlEngine_GetScreenTintOpacity
 RowlEngine_GetScriptRuntimeDiagnosticsJson
 RowlEngine_GetScriptRuntimeDiagnosticsJsonWithLength
+RowlEngine_GetSfxActivePaths
+RowlEngine_GetSfxActiveVoices
+RowlEngine_GetSfxPoolDepth
 RowlEngine_GetSfxVolume
 RowlEngine_GetSpeaker
 RowlEngine_GetSpeakerWithLength
@@ -91,6 +99,8 @@ RowlEngine_GetVoiceVolume
 RowlEngine_HasSaveSlot
 RowlEngine_Init
 RowlEngine_InitStandalone
+RowlEngine_IsAmbienceBedPlaying
+RowlEngine_IsAmbienceCrossfadeActive
 RowlEngine_IsAudioDeviceAvailable
 RowlEngine_IsAudioOutputSuspended
 RowlEngine_IsBgmPlaying
@@ -110,6 +120,7 @@ RowlEngine_LoadStoryGraph
 RowlEngine_LoadStoryGraphFromVfs
 RowlEngine_ParseMarkup
 RowlEngine_PauseMenuCommand
+RowlEngine_PlayAmbienceBed
 RowlEngine_PlayAudio
 RowlEngine_PlayVoiceBlip
 RowlEngine_PointerDown
@@ -124,6 +135,7 @@ RowlEngine_Run
 RowlEngine_SaveGameSlot
 RowlEngine_SaveGameSlotResult
 RowlEngine_SelectChoice
+RowlEngine_SetAmbienceBedVolume
 RowlEngine_SetAmbienceVolume
 RowlEngine_SetAutoAdvanceDelayOffset
 RowlEngine_SetBackgroundParallax
@@ -133,6 +145,7 @@ RowlEngine_SetCamera
 RowlEngine_SetDialogueVoiceBlip
 RowlEngine_SetDialogueVoiceBlipVolume
 RowlEngine_SetExternalWindowHandle
+RowlEngine_SetFadeCurve
 RowlEngine_SetHighContrast
 RowlEngine_SetLocale
 RowlEngine_SetMasterVolume
@@ -143,6 +156,7 @@ RowlEngine_SetQuickSaveSlot
 RowlEngine_SetReducedMotion
 RowlEngine_SetScreenTint
 RowlEngine_SetScreenTintHex
+RowlEngine_SetSfxPoolDepth
 RowlEngine_SetSfxVolume
 RowlEngine_SetTextScale
 RowlEngine_SetTextSpeedMultiplier
@@ -155,6 +169,7 @@ RowlEngine_ShapeMarkup
 RowlEngine_Shutdown
 RowlEngine_StartTransition
 RowlEngine_Step
+RowlEngine_StopAmbienceBed
 RowlEngine_StopBgm
 RowlEngine_StripMarkup
 RowlEngine_TriggerCameraShake

@@ -9,6 +9,7 @@
 #include "c_api_internal.hpp"
 #include "rowl/audio/audio_engine.hpp"
 #include "cstring"
+#include <cstdio>
 extern "C" {
 /* ── Audio control & voice blips ──────────────────────────────────────────────── */
 
@@ -358,6 +359,229 @@ float RowlEngine_GetUiVolume(RowlEngineHandle handle) {
         const auto* audio = toEngine(handle)->getAudio();
         return audio ? audio->getUiVolume() : 0.0f;
     }, 0.0f);
+}
+
+// ── Faz 5 Dilim 2: mixer / polyphony / eğriler / bed'ler / pump ─────────────
+
+void RowlEngine_SetFadeCurve(RowlEngineHandle handle, int curve) {
+    if (!isLiveHandle(handle)) return;
+    invokeNoexcept([&] {
+        auto* audio = toEngine(handle)->getAudio();
+        if (!audio) return;
+        // Geçersiz eğri yoksayılır (son geçerli değer korunur).
+        if (curve == static_cast<int>(Rowl::Audio::FadeCurve::Linear)) {
+            audio->setFadeCurve(Rowl::Audio::FadeCurve::Linear);
+        } else if (curve == static_cast<int>(Rowl::Audio::FadeCurve::EqualPower)) {
+            audio->setFadeCurve(Rowl::Audio::FadeCurve::EqualPower);
+        }
+    });
+}
+
+int RowlEngine_GetFadeCurve(RowlEngineHandle handle) {
+    if (!isLiveHandle(handle)) return 0;
+    return invokeNoexcept<int>([&] {
+        const auto* audio = toEngine(handle)->getAudio();
+        return audio ? static_cast<int>(audio->fadeCurve()) : 0;
+    }, 0);
+}
+
+void RowlEngine_SetSfxPoolDepth(RowlEngineHandle handle, int depth) {
+    if (!isLiveHandle(handle)) return;
+    invokeNoexcept([&] {
+        if (auto* audio = toEngine(handle)->getAudio()) audio->setSfxPoolDepth(depth);
+    });
+}
+
+int RowlEngine_GetSfxPoolDepth(RowlEngineHandle handle) {
+    if (!isLiveHandle(handle)) return 0;
+    return invokeNoexcept<int>([&] {
+        const auto* audio = toEngine(handle)->getAudio();
+        return audio ? static_cast<int>(audio->sfxPoolDepth()) : 0;
+    }, 0);
+}
+
+int RowlEngine_GetSfxActiveVoices(RowlEngineHandle handle) {
+    if (!isLiveHandle(handle)) return 0;
+    return invokeNoexcept<int>([&] {
+        const auto* audio = toEngine(handle)->getAudio();
+        return audio ? static_cast<int>(audio->sfxActiveVoices()) : 0;
+    }, 0);
+}
+
+namespace {
+
+std::string escapeJsonString(const std::string& value) {
+    std::string out;
+    out.reserve(value.size() + 2);
+    for (char ch : value) {
+        switch (ch) {
+            case '"': out += "\\\""; break;
+            case '\\': out += "\\\\"; break;
+            case '\n': out += "\\n"; break;
+            case '\r': out += "\\r"; break;
+            case '\t': out += "\\t"; break;
+            default:
+                if (static_cast<unsigned char>(ch) < 0x20) {
+                    char hex[7];
+                    std::snprintf(hex, sizeof(hex), "\\u%04x", ch);
+                    out += hex;
+                } else {
+                    out += ch;
+                }
+                break;
+        }
+    }
+    return out;
+}
+
+} // namespace
+
+RowlEngine_ResultCode RowlEngine_GetSfxActivePaths(
+    RowlEngineHandle handle, char* buffer, uint32_t bufferSize,
+    uint32_t* outRequiredSize) {
+    if (!isLiveHandle(handle)) return ROWL_RESULT_INVALID_HANDLE;
+    return invokeNoexcept<RowlEngine_ResultCode>([&] {
+        auto* engine = toEngine(handle);
+        if (!engine) return ROWL_RESULT_INVALID_HANDLE;
+        const auto* audio = engine->getAudio();
+        if (!audio) return ROWL_RESULT_INVALID_HANDLE;
+        std::string json = "[";
+        bool first = true;
+        for (const auto& path : audio->sfxActivePaths()) {
+            if (!first) json += ",";
+            first = false;
+            json += "\"" + escapeJsonString(path) + "\"";
+        }
+        json += "]";
+        return copyUtf8ToCaller(json, buffer, bufferSize, outRequiredSize);
+    }, ROWL_RESULT_UNKNOWN_ERROR);
+}
+
+int RowlEngine_PlayAmbienceBed(RowlEngineHandle handle, const char* assetPath, int bed) {
+    if (!isLiveHandle(handle)) return 0;
+    if (!assetPath || !*assetPath) {
+        invokeNoexcept([&] {
+            if (auto* engine = toEngine(handle)) {
+                if (auto ctx = engine->getContext()) {
+                    ctx->setError(Rowl::Core::RuntimeErrorCode::InvalidArgument,
+                                  "Ambience asset path is null or empty",
+                                  "play_ambience_bed", "");
+                }
+            }
+        });
+        return 0;
+    }
+    return invokeNoexcept<int>([&] {
+        auto* engine = toEngine(handle);
+        if (!engine) return 0;
+        auto* audio = engine->getAudio();
+        if (!audio) return 0;
+        const bool ok = audio->playAmbienceBed(bed, assetPath);
+        if (!ok && !audio->getLastError().empty()) {
+            if (auto ctx = engine->getContext()) {
+                ctx->setError(Rowl::Core::RuntimeErrorCode::AudioDecodeError,
+                              audio->getLastError(), "play_ambience_bed", assetPath);
+            }
+        }
+        return ok ? 1 : 0;
+    }, 0);
+}
+
+void RowlEngine_StopAmbienceBed(RowlEngineHandle handle, int bed) {
+    if (!isLiveHandle(handle)) return;
+    invokeNoexcept([&] {
+        if (auto* audio = toEngine(handle)->getAudio()) audio->stopAmbienceBed(bed);
+    });
+}
+
+void RowlEngine_SetAmbienceBedVolume(RowlEngineHandle handle, int bed, float volume) {
+    if (!isLiveHandle(handle)) return;
+    invokeNoexcept([&] {
+        if (auto* audio = toEngine(handle)->getAudio()) audio->setAmbienceBedVolume(bed, volume);
+    });
+}
+
+float RowlEngine_GetAmbienceBedVolume(RowlEngineHandle handle, int bed) {
+    if (!isLiveHandle(handle)) return 0.0f;
+    return invokeNoexcept<float>([&] {
+        const auto* audio = toEngine(handle)->getAudio();
+        return audio ? audio->ambienceBedVolume(bed) : 0.0f;
+    }, 0.0f);
+}
+
+int RowlEngine_IsAmbienceBedPlaying(RowlEngineHandle handle, int bed) {
+    if (!isLiveHandle(handle)) return 0;
+    return invokeNoexcept<int>([&] {
+        const auto* audio = toEngine(handle)->getAudio();
+        return audio && audio->isAmbienceBedPlaying(bed) ? 1 : 0;
+    }, 0);
+}
+
+int RowlEngine_CrossfadeAmbienceTo(RowlEngineHandle handle, const char* assetPath,
+                                  float durationSeconds, int curve) {
+    if (!isLiveHandle(handle)) return 0;
+    if (!assetPath || !*assetPath) {
+        invokeNoexcept([&] {
+            if (auto* engine = toEngine(handle)) {
+                if (auto ctx = engine->getContext()) {
+                    ctx->setError(Rowl::Core::RuntimeErrorCode::InvalidArgument,
+                                  "Ambience asset path is null or empty",
+                                  "crossfade_ambience_to", "");
+                }
+            }
+        });
+        return 0;
+    }
+    return invokeNoexcept<int>([&] {
+        auto* engine = toEngine(handle);
+        if (!engine) return 0;
+        auto* audio = engine->getAudio();
+        if (!audio) return 0;
+        Rowl::Audio::FadeCurve fade = audio->fadeCurve();
+        if (curve == static_cast<int>(Rowl::Audio::FadeCurve::Linear)) {
+            fade = Rowl::Audio::FadeCurve::Linear;
+        } else if (curve == static_cast<int>(Rowl::Audio::FadeCurve::EqualPower)) {
+            fade = Rowl::Audio::FadeCurve::EqualPower;
+        }
+        const bool ok = audio->crossfadeAmbienceTo(assetPath, durationSeconds, fade);
+        if (!ok && !audio->getLastError().empty()) {
+            if (auto ctx = engine->getContext()) {
+                ctx->setError(Rowl::Core::RuntimeErrorCode::AudioDecodeError,
+                              audio->getLastError(), "crossfade_ambience_to", assetPath);
+            }
+        }
+        return ok ? 1 : 0;
+    }, 0);
+}
+
+int RowlEngine_IsAmbienceCrossfadeActive(RowlEngineHandle handle) {
+    if (!isLiveHandle(handle)) return 0;
+    return invokeNoexcept<int>([&] {
+        const auto* audio = toEngine(handle)->getAudio();
+        return audio && audio->isAmbienceCrossfadeActive() ? 1 : 0;
+    }, 0);
+}
+
+RowlEngine_ResultCode RowlEngine_GetBgmPumpStatsJson(
+    RowlEngineHandle handle, char* buffer, uint32_t bufferSize,
+    uint32_t* outRequiredSize) {
+    if (!isLiveHandle(handle)) return ROWL_RESULT_INVALID_HANDLE;
+    return invokeNoexcept<RowlEngine_ResultCode>([&] {
+        auto* engine = toEngine(handle);
+        if (!engine) return ROWL_RESULT_INVALID_HANDLE;
+        const auto* audio = engine->getAudio();
+        if (!audio) return ROWL_RESULT_INVALID_HANDLE;
+        return copyUtf8ToCaller(audio->bgmPumpStatsJson(), buffer,
+                                bufferSize, outRequiredSize);
+    }, ROWL_RESULT_UNKNOWN_ERROR);
+}
+
+uint64_t RowlEngine_GetBgmPumpAvgMicroseconds(RowlEngineHandle handle) {
+    if (!isLiveHandle(handle)) return 0;
+    return invokeNoexcept<uint64_t>([&] {
+        const auto* audio = toEngine(handle)->getAudio();
+        return audio ? audio->bgmPumpAvgMicroseconds() : 0;
+    }, 0);
 }
 
 } // extern "C"

@@ -35,6 +35,24 @@ public interface IPlayerEngine
     void SetBgmVolume(float value);
     void SetVoiceVolume(float value);
     void SetSfxVolume(float value);
+
+    /// <summary>
+    /// Faz 5 Dilim 2 — mixer masası dikişi: ambience + arayüz bus
+    /// hacimleri. Varsayılan no-op'tur (fail-closed); prod adaptör
+    /// <see cref="EngineHostPlayerAdapter"/> canlı handle üzerinden
+    /// NativeBridge'e forward eder (EngineHost diffsiz).
+    /// </summary>
+    void SetAmbienceVolume(float value) { }
+    void SetUiVolume(float value) { }
+
+    /// <summary>
+    /// Faz 5 Dilim 2 fix turu 1 — global mixer config: fade eğrisi
+    /// (0 = Linear, 1 = EqualPower; diğer değerler ignore) ve SFX
+    /// havuz derinliği ([1,16] clamp). Varsayılan no-op'tur
+    /// (fail-closed); prod adaptör NativeBridge'e forward eder.
+    /// </summary>
+    void SetFadeCurve(int curve) { }
+    void SetSfxPoolDepth(int depth) { }
     void SetTextScale(float value);
     void SetHighContrast(bool enabled);
     void SetReducedMotion(bool enabled);

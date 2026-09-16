@@ -2,6 +2,8 @@
  * rowl/audio/stream_mixer.hpp
  *
  * Faz 5 Dilim 1 — 6-bus gain zinciri (header-only iskelet).
+ * Faz 5 Dilim 2 — AKTİF: AudioEngine::applyChannelGains'in tek kazanç
+ * kaynağıdır (matematik birebir: master*bus, duck yalnız BGM).
  *
  * mixer_buses.hpp üzerindeki 4 bus'ı Ambience + Ui ile genişletir;
  * AudioEngine'in mevcut hacim üyelerini BOZMAZ (motor bu dilimde kendi
@@ -69,6 +71,29 @@ public:
         return m_master * busVolume;
     }
 
+    // ── Faz 5 Dilim 2: ambience ikinci bed (BedA=0 miras, BedB=1 yeni).
+    // setUserVolume(Ambience)/userVolume(Ambience) BedA ile eşlenir;
+    // BedB bağımsız tutulur. İki bed için de formül master*bed'dir.
+    void setAmbienceBedVolume(int bed, float volume) {
+        if (!std::isfinite(volume)) return;
+        volume = std::clamp(volume, 0.0f, 1.0f);
+        if (bed == 0) {
+            m_ambience = volume;
+        } else if (bed == 1) {
+            m_ambienceBedB = volume;
+        }
+    }
+
+    float ambienceBedVolume(int bed) const {
+        if (bed == 0) return m_ambience;
+        if (bed == 1) return m_ambienceBedB;
+        return 1.0f;
+    }
+
+    float gainForAmbienceBed(int bed) const {
+        return m_master * ambienceBedVolume(bed);
+    }
+
     /// Ortak gain zincirini interleaved float PCM'e uygular (yerinde).
     void applyChain(float* samples, size_t frameCount, StreamBusId bus) const {
         if (!samples || frameCount == 0 || bus == StreamBusId::Master) return;
@@ -108,6 +133,7 @@ private:
     float m_voice = 1.0f;
     float m_sfx = 1.0f;
     float m_ambience = 1.0f;
+    float m_ambienceBedB = 1.0f; // Faz 5 Dilim 2: ikinci ambience bed'i
     float m_ui = 1.0f;
     float m_duckGain = 1.0f;
     size_t m_bgmChannels = 2;

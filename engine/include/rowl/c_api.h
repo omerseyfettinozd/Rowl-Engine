@@ -80,6 +80,8 @@ typedef struct RowlEngine_ApiVersion {
 #define ROWL_ENGINE_CAPABILITY_CAMERA_ROTATION_IGNORED UINT64_C(4096)
 /* Faz 5 Dilim 1: OGG streaming core + mixer bus skeleton + decision observability. */
 #define ROWL_ENGINE_CAPABILITY_AUDIO_STREAMING UINT64_C(8192)
+/* Faz 5 Dilim 2: native mixer + SFX polyphony + fade curves + ambience beds + pump observability. */
+#define ROWL_ENGINE_CAPABILITY_AUDIO_MIXER_POLYPHONY UINT64_C(16384)
 
 /** Current additive C API version. This query does not require an engine handle. */
 ROWL_API RowlEngine_ResultCode RowlEngine_GetApiVersion(
@@ -648,6 +650,41 @@ ROWL_API void RowlEngine_SetAmbienceVolume(RowlEngineHandle handle, float volume
 ROWL_API float RowlEngine_GetAmbienceVolume(RowlEngineHandle handle);
 ROWL_API void RowlEngine_SetUiVolume(RowlEngineHandle handle, float volume);
 ROWL_API float RowlEngine_GetUiVolume(RowlEngineHandle handle);
+
+/**
+ * Faz 5 Dilim 2 — native mixer + SFX polyphony + fade curves + ambience
+ * beds + pump observability (ROWL_ENGINE_CAPABILITY_AUDIO_MIXER_POLYPHONY).
+ * All additive; older entry points are untouched.
+ *
+ * FadeCurve: 0 = Linear (default, bit-identical legacy math), 1 = EqualPower.
+ * SetFadeCurve ignores any other value (last valid kept); dead-handle
+ * GetFadeCurve returns 0. Pool depth is clamped to [1,16] (default 8);
+ * depth 1 is the legacy single-voice behavior. Ambience beds: 0 = BedA
+ * (legacy single-bed path), 1 = BedB; invalid bed is fail-closed
+ * (0 / 0.0f / "" / no-op). Crossfade duration <= 0 (or non-finite) is an
+ * instant switch — identical to the legacy single-bed replace. JSON getters
+ * follow the caller-buffer contract of RowlEngine_GetLocale. Pump stats carry
+ * no fail gate (observability only; compare on the same device).
+ */
+ROWL_API void RowlEngine_SetFadeCurve(RowlEngineHandle handle, int curve);
+ROWL_API int RowlEngine_GetFadeCurve(RowlEngineHandle handle);
+ROWL_API void RowlEngine_SetSfxPoolDepth(RowlEngineHandle handle, int depth);
+ROWL_API int RowlEngine_GetSfxPoolDepth(RowlEngineHandle handle);
+ROWL_API int RowlEngine_GetSfxActiveVoices(RowlEngineHandle handle);
+ROWL_API RowlEngine_ResultCode RowlEngine_GetSfxActivePaths(
+    RowlEngineHandle handle, char* buffer, uint32_t bufferSize,
+    uint32_t* outRequiredSize);
+ROWL_API int RowlEngine_PlayAmbienceBed(RowlEngineHandle handle, const char* assetPath, int bed);
+ROWL_API void RowlEngine_StopAmbienceBed(RowlEngineHandle handle, int bed);
+ROWL_API void RowlEngine_SetAmbienceBedVolume(RowlEngineHandle handle, int bed, float volume);
+ROWL_API float RowlEngine_GetAmbienceBedVolume(RowlEngineHandle handle, int bed);
+ROWL_API int RowlEngine_IsAmbienceBedPlaying(RowlEngineHandle handle, int bed);
+ROWL_API int RowlEngine_CrossfadeAmbienceTo(RowlEngineHandle handle, const char* assetPath, float durationSeconds, int curve);
+ROWL_API int RowlEngine_IsAmbienceCrossfadeActive(RowlEngineHandle handle);
+ROWL_API RowlEngine_ResultCode RowlEngine_GetBgmPumpStatsJson(
+    RowlEngineHandle handle, char* buffer, uint32_t bufferSize,
+    uint32_t* outRequiredSize);
+ROWL_API uint64_t RowlEngine_GetBgmPumpAvgMicroseconds(RowlEngineHandle handle);
 
 /** Triggers voice ducking attenuation on BGM (1 = voice active, 0 = restored). */
 ROWL_API void RowlEngine_TriggerVoiceDucking(RowlEngineHandle handle, int isVoiceActive);
