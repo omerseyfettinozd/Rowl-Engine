@@ -42,9 +42,46 @@ portable-zip (Faz 6 Dilim 3) — deterministic portable release archive:
     3. THIRD_PARTY_NOTICES.md and VERSION are present.
 
   NSIS/WiX/installer are explicitly out of scope for this slice (dilim-disi).
+
+self-extracting (Faz 6 Dilim 4) — Linux POSIX `.sh` self-extracting installer:
+
+  python3 tools/export_game.py self-extracting [--input ZIP] [--output SH]
+      [--version VER]
+
+  Wraps a portable-zip (Dilim 3 output) in a single `install-rowl-<ver>.sh`
+  file runnable as `sh install-rowl-<ver>.sh [--prefix DIR] [install]` /
+  `sh ... uninstall [--prefix DIR]` (default prefix `./rowl-game`).
+  The stub is pure POSIX shell (`#!/bin/sh` + `set -u`); install time needs
+  only tail, base64, sha256sum, unzip, mkdir, rm, mktemp, chmod, cp, rmdir
+  — python3 is NOT required to install.
+
+  Verification (before anything is written to the target):
+    1. the embedded base64 payload is decoded into a temp dir,
+    2. its SHA-256 must equal the build-time PAYLOAD_SHA256 (mismatch:
+       exit 1, the target directory is never created),
+    3. the zip is unpacked and its inner SHA256SUMS is re-checked
+       (`sha256sum -c`), and only then are files copied into --prefix with
+       rowl_player made executable.
+  Uninstall deletes exactly the build-time file list (explicit names, no
+  globs — user files are never touched) and removes the prefix dir when
+  left empty.
+
+  Determinism: the stub template is fixed; only payload-derived values
+  (hash, file list, payload start line) vary, so the same input zip yields
+  a byte-identical `.sh`.
+
+  Costs and limits: base64 inflates the installer by ~33% over the zip;
+  install requires tail, base64, sha256sum, unzip, mkdir, rm, mktemp,
+  chmod, cp, rmdir (a missing tool fails with the corresponding gate
+  message, not a stack trace). Input zips with non-flat or unsafe entry
+  names (absolute paths, `..` segments) are rejected at build time.
+
+  NSIS/WiX note: those Windows installer stacks stay out of scope — this
+  slice ships the Linux `.sh` installer only, no `.exe` installer.
 """
 
 import argparse
+import base64
 import datetime
 import hashlib
 import os
@@ -316,18 +353,289 @@ def export_portable_zip(output=None, player=None, runtime=None, package=None):
     return out_path
 
 
+_SDE_DEFAULT_INPUT = pathlib.Path("build") / "rowl-portable.zip"
+_SDE_PAYLOAD_MARKER = ("# __ROWL_PAYLOAD_B64_BELOW__: base64(portable-zip); "
+                       "decoded and hash-verified at install time.\n")
+
+# Fixed POSIX sh installer stub. Only @@...@@ placeholders vary, and only
+# with payload-derived values (hash, file list, payload start line), so the
+# same input zip always renders byte-identical output. Install time needs
+# tail, base64, sha256sum, unzip, mkdir, rm, mktemp, chmod, cp, rmdir only.
+_SDE_STUB_TEMPLATE = """#!/bin/sh
+# Rowl Engine self-extracting installer (Faz 6 Dilim 4).
+#
+# Linux-only POSIX sh wrapper around an embedded portable-zip payload.
+#
+#   sh install-rowl-<ver>.sh [--prefix DIR] [install]
+#   sh install-rowl-<ver>.sh uninstall [--prefix DIR]
+#
+# Install verifies BEFORE touching the target directory:
+#   1. the base64 payload below is decoded into a temporary directory,
+#   2. its SHA-256 must equal PAYLOAD_SHA256 (mismatch: exit 1, the target
+#      directory is never created),
+#   3. the zip is unpacked and its inner SHA256SUMS is re-checked with
+#      `sha256sum -c`; only then are files copied into --prefix (default
+#      ./rowl-game) and the launcher made executable.
+#
+# Uninstall deletes exactly the FILES listed below (explicit names, no
+# globs, so user files are never touched) and removes the prefix
+# directory when it is left empty.
+#
+# Needs only: tail, base64, sha256sum, unzip, mkdir, rm, mktemp, chmod,
+# cp, rmdir. No python3 at install time, no root privileges.
+# Windows NSIS/WiX installers are a separate, later concern; this slice
+# deliberately ships no .exe installer.
+set -u
+ROWL_SDE_VERSION="@@VERSION@@"
+PAYLOAD_SHA256="@@PAYLOAD_SHA256@@"
+PAYLOAD_LINE=@@PAYLOAD_LINE@@
+FILES="@@FILES@@"
+PLAYER="@@PLAYER@@"
+
+usage() {
+  echo "usage: sh $0 [--prefix DIR] [install|uninstall]" >&2
+  echo "       default prefix: ./rowl-game" >&2
+}
+
+fail() {
+  echo "rowl-installer: $1" >&2
+  exit "${2:-1}"
+}
+
+do_install() {
+  prefix="$1"
+  [ -n "$prefix" ] || fail "empty --prefix (wont install into /)"
+  tmpdir="$(mktemp -d "${TMPDIR:-/tmp}/rowl-install-XXXXXX")" || fail "cannot create temp dir"
+  payload="$tmpdir/payload.zip"
+  staged="$tmpdir/staged"
+  if ! tail -n +"$PAYLOAD_LINE" "$0" | base64 -d > "$payload" 2>/dev/null; then
+    rm -rf "$tmpdir"
+    fail "cannot decode embedded payload"
+  fi
+  digest="$(sha256sum "$payload")"
+  actual="${digest%% *}"
+  if [ "$actual" != "$PAYLOAD_SHA256" ]; then
+    rm -rf "$tmpdir"
+    fail "payload hash mismatch (expected $PAYLOAD_SHA256, got $actual)"
+  fi
+  mkdir -p "$staged" || {
+    rm -rf "$tmpdir"
+    fail "cannot create staging dir"
+  }
+  if ! unzip -q "$payload" -d "$staged" 2>/dev/null; then
+    rm -rf "$tmpdir"
+    fail "cannot unpack verified payload"
+  fi
+  if ! (cd "$staged" && sha256sum -c SHA256SUMS); then
+    rm -rf "$tmpdir"
+    fail "inner SHA256SUMS check failed"
+  fi
+  mkdir -p "$prefix" || {
+    rm -rf "$tmpdir"
+    fail "cannot create target directory $prefix"
+  }
+  for name in $FILES; do
+    if ! cp "$staged/$name" "$prefix/$name"; then
+      rm -rf "$tmpdir"
+      fail "cannot install $name into $prefix"
+    fi
+  done
+  if [ -n "$PLAYER" ]; then
+    chmod +x "$prefix/$PLAYER" || {
+      rm -rf "$tmpdir"
+      fail "cannot make $PLAYER executable"
+    }
+  fi
+  rm -rf "$tmpdir"
+  echo "rowl-installer: installed $ROWL_SDE_VERSION into $prefix"
+}
+
+do_uninstall() {
+  prefix="$1"
+  [ -n "$prefix" ] || fail "empty --prefix (wont touch /)"
+  if [ ! -d "$prefix" ]; then
+    echo "rowl-installer: nothing to remove ($prefix absent)"
+    return 0
+  fi
+  for name in $FILES; do
+    rm -f "$prefix/$name"
+  done
+  rmdir "$prefix" 2>/dev/null || true
+  echo "rowl-installer: uninstalled $prefix"
+}
+
+prefix="./rowl-game"
+action="install"
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --prefix)
+      if [ $# -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      prefix="$2"
+      shift 2
+      ;;
+    --prefix=*)
+      prefix="${1#--prefix=}"
+      shift
+      ;;
+    install)
+      action="install"
+      shift
+      ;;
+    uninstall)
+      action="uninstall"
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      usage
+      exit 2
+      ;;
+  esac
+done
+
+if [ "$action" = "uninstall" ]; then
+  do_uninstall "$prefix"
+else
+  do_install "$prefix"
+fi
+# Stop here: everything below this line is the base64 payload, not shell.
+exit 0
+"""
+
+
+def _sde_parse_sums(text):
+    """Parse canonical `sha256sum` output into {name: digest} (strict)."""
+    covered = {}
+    for line in text.splitlines():
+        if not line.strip():
+            continue
+        digest, sep, name = line.partition("  ")
+        if not sep or len(digest) != 64 or not name:
+            raise ValueError(
+                "Self-extracting input has a malformed SHA256SUMS line: "
+                f"{line!r}"
+            )
+        covered[name] = digest
+    return covered
+
+
+def _sde_default_tag(version_text):
+    """Derive the default release tag from the zip's VERSION content."""
+    commit = "unknown"
+    date = "unknown"
+    for line in version_text.splitlines():
+        if line.startswith("commit "):
+            commit = line.split(None, 1)[1].strip() or "unknown"
+        elif line.startswith("date "):
+            date = line.split(None, 1)[1].strip() or "unknown"
+    return f"{date}-{commit}"
+
+
+def export_self_extracting(input=None, output=None, version=None):
+    """Wrap a portable-zip in a POSIX sh self-extracting installer.
+
+    The input zip is verified against its own SHA256SUMS first (fail fast
+    on corrupt input). Returns the installer path.
+    """
+    print("[Export Tool] Building self-extracting installer...")
+    in_path = (pathlib.Path(input) if input is not None
+               else ROOT / _SDE_DEFAULT_INPUT)
+    blob = _require_file(in_path, "Self-extracting input portable-zip").read_bytes()
+    try:
+        with zipfile.ZipFile(str(in_path)) as archive:
+            names = archive.namelist()
+            if sorted(names) != list(names):
+                raise ValueError(
+                    "Self-extracting input zip entries are not in sorted order"
+                )
+            try:
+                sums_raw = archive.read("SHA256SUMS").decode("utf-8")
+                version_raw = archive.read("VERSION").decode("utf-8")
+            except KeyError as error:
+                raise ValueError(
+                    f"Self-extracting input zip is missing {error}"
+                ) from error
+            covered = _sde_parse_sums(sums_raw)
+            if set(covered) != set(names) - {"SHA256SUMS"}:
+                raise ValueError(
+                    "Self-extracting input SHA256SUMS does not cover every entry"
+                )
+            for name, digest in covered.items():
+                actual = hashlib.sha256(archive.read(name)).hexdigest()
+                if actual != digest:
+                    raise ValueError(
+                        f"Self-extracting input fails its own SHA256SUMS: {name}"
+                    )
+            for name in names:
+                parts = name.split("/")
+                if (not name or name.startswith("/") or "\\" in name
+                        or any(part in ("", ".", "..") for part in parts)):
+                    raise ValueError(
+                        f"Self-extracting input has an unsafe entry name: {name!r}"
+                    )
+    except zipfile.BadZipFile as error:
+        raise ValueError(
+            f"Self-extracting input is not a readable zip: {error}"
+        ) from error
+
+    tag = version if version is not None else _sde_default_tag(version_raw)
+    player = next(
+        (name for name in sorted(names) if name.startswith("rowl_player")), ""
+    )
+    stub = (_SDE_STUB_TEMPLATE
+            .replace("@@VERSION@@", tag)
+            .replace("@@PAYLOAD_SHA256@@", hashlib.sha256(blob).hexdigest())
+            .replace("@@FILES@@", " ".join(sorted(names)))
+            .replace("@@PLAYER@@", player))
+    header = stub + _SDE_PAYLOAD_MARKER
+    payload_line = header.count("\n") + 1  # first base64 line (1-based)
+    header = header.replace("@@PAYLOAD_LINE@@", str(payload_line))
+
+    out_path = (pathlib.Path(output) if output is not None
+                else ROOT / "build" / f"install-rowl-{tag}.sh")
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = out_path.with_name(f"{out_path.name}.tmp-{os.getpid()}")
+    try:
+        with open(temporary, "wb") as handle:
+            handle.write(header.encode("utf-8"))
+            handle.write(base64.encodebytes(blob))
+        os.chmod(temporary, 0o755)
+        os.replace(temporary, out_path)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+
+    print(f"[Export Tool] Self-extracting installer created: {out_path}")
+    return out_path
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("target", nargs="?", default="pc",
-                        choices=("pc", "android", "ios", "portable-zip"))
+                        choices=("pc", "android", "ios", "portable-zip",
+                                 "self-extracting"))
     parser.add_argument("--output", default=None,
-                        help="portable-zip output path (default: build/rowl-portable.zip)")
+                        help="portable-zip output path (default: build/rowl-portable.zip); "
+                             "self-extracting output path "
+                             "(default: build/install-rowl-<ver>.sh)")
     parser.add_argument("--player", default=None,
                         help="portable-zip launcher binary override")
     parser.add_argument("--runtime", default=None, action="append",
                         help="portable-zip runtime library override (repeatable)")
     parser.add_argument("--package", default=None,
                         help="portable-zip demo .rowlpkg override")
+    parser.add_argument("--input", default=None,
+                        help="self-extracting input portable-zip "
+                             "(default: build/rowl-portable.zip)")
+    parser.add_argument("--version", default=None,
+                        help="self-extracting release tag override "
+                             "(default: <date>-<commit> from the zip VERSION)")
     args = parser.parse_args(argv)
 
     exporters = {
@@ -337,17 +645,31 @@ def main(argv=None):
     }
     try:
         if args.target == "portable-zip":
+            if args.input is not None or args.version is not None:
+                print("[Export Tool] ERROR: --input/--version "
+                      "apply only to the self-extracting target", file=sys.stderr)
+                return 2
             export_portable_zip(output=args.output, player=args.player,
                                 runtime=args.runtime, package=args.package)
+        elif args.target == "self-extracting":
+            if args.player is not None or args.runtime is not None \
+                    or args.package is not None:
+                print("[Export Tool] ERROR: --player/--runtime/--package "
+                      "apply only to the portable-zip target", file=sys.stderr)
+                return 2
+            export_self_extracting(input=args.input, output=args.output,
+                                   version=args.version)
         else:
             if args.output is not None or args.player is not None \
-                    or args.runtime is not None or args.package is not None:
-                print("[Export Tool] ERROR: --output/--player/--runtime/--package "
-                      "apply only to the portable-zip target", file=sys.stderr)
+                    or args.runtime is not None or args.package is not None \
+                    or args.input is not None or args.version is not None:
+                print("[Export Tool] ERROR: --output/--player/--runtime/--package/--input/--version "
+                      "apply only to the portable-zip/self-extracting targets",
+                      file=sys.stderr)
                 return 2
             exporters[args.target]()
     except (FileNotFoundError, FileExistsError, OSError,
-            subprocess.CalledProcessError) as error:
+            subprocess.CalledProcessError, ValueError) as error:
         print(f"[Export Tool] ERROR: {error}", file=sys.stderr)
         return error.returncode if isinstance(error, subprocess.CalledProcessError) else 1
     return 0

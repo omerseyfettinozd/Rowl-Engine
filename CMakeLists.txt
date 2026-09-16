@@ -112,6 +112,14 @@ if(ROWL_BUILD_RUNTIME_TESTS)
             TIMEOUT 15
         )
         add_test(
+            NAME rowl_self_extracting_installer_tests
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/test_self_extracting_installer.py
+        )
+        set_tests_properties(rowl_self_extracting_installer_tests PROPERTIES
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+            TIMEOUT 120
+        )
+        add_test(
             NAME rowl_golden_manifest_tests
             COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/test_golden_manifest.py
         )
