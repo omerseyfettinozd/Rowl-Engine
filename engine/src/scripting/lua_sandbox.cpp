@@ -3,6 +3,7 @@
 #include "rowl/util/locale_independent_parse.hpp"
 #include <cmath>
 #include <cstdint>
+#include <cstdlib>
 #include <string>
 #include <string_view>
 #include <unordered_set>
@@ -20,6 +21,19 @@ namespace Rowl::Scripting {
 static const char* SANDBOX_REGISTRY_KEY = "_rowl_sandbox_ptr";
 constexpr std::size_t kMaxLoadedModules = 128;
 constexpr std::size_t kMaxModuleIdBytes = 256;
+// A1: sandbox resource budgets (H24/H25). Instruction hook trips at 10M;
+// poisoned sessions refuse further runs until clearVariables(). Memory quota
+// is enforced by quotaAlloc; oversized source is rejected at entry.
+constexpr std::size_t kMaxLuaMemoryBytes = 64u * 1024u * 1024u;
+constexpr std::size_t kMaxScriptBytes = 256u * 1024u;
+
+// A1 (H27): every lua_tostring→std::string site must go through here. A
+// script-controlled non-string error value (e.g. error({})) makes
+// lua_tostring return nullptr, and std::string(nullptr) is UB/crash.
+static std::string takeLuaError(lua_State* state) {
+    const char* rawError = lua_tostring(state, -1);
+    return rawError ? rawError : "unknown Lua error";
+}
 
 static void resetInstructionCounter(lua_State* state) {
     lua_pushinteger(state, 0);
@@ -83,6 +97,14 @@ static void lua_instruction_hook(lua_State* L, lua_Debug* ar) {
     count += 100000; // Called every 100K instructions
 
     if (count > 10000000) { // 10M total instruction limit
+        // A1 (H24): the limit error is catchable by a script-side pcall, so a
+        // hostile script could catch-and-respin forever. Poison the session:
+        // entry points refuse further runs until clearVariables() resets it.
+        lua_getfield(L, LUA_REGISTRYINDEX, SANDBOX_REGISTRY_KEY);
+        if (LuaSandbox* sandbox = static_cast<LuaSandbox*>(lua_touserdata(L, -1))) {
+            sandbox->tripInstructionLimit();
+        }
+        lua_pop(L, 1);
         lua_pushstring(L, "Lua sandbox instruction limit exceeded (max 10,000,000 instructions). Possible infinite loop detected!");
         lua_error(L);
         return;
@@ -90,6 +112,39 @@ static void lua_instruction_hook(lua_State* L, lua_Debug* ar) {
 
     lua_pushinteger(L, static_cast<lua_Integer>(count));
     lua_setfield(L, LUA_REGISTRYINDEX, "_rowl_instruction_count");
+}
+
+// A1 (H25): allocation quota. Replaces the default allocator; requests that
+// would push live Lua memory past kMaxLuaMemoryBytes fail with a catchable
+// "not enough memory" error instead of OOM-killing the process.
+void* LuaSandbox::quotaAlloc(void* ud, void* ptr, size_t osize, size_t nsize) {
+    auto* sandbox = static_cast<LuaSandbox*>(ud);
+    if (nsize == 0) {
+        if (sandbox && osize <= sandbox->m_bytesAllocated) sandbox->m_bytesAllocated -= osize;
+        else if (sandbox) sandbox->m_bytesAllocated = 0;
+        free(ptr);
+        return nullptr;
+    }
+    const size_t grown = (nsize > osize) ? (nsize - osize) : 0;
+    if (sandbox && sandbox->m_bytesAllocated + grown > kMaxLuaMemoryBytes) return nullptr;
+    void* resized = realloc(ptr, nsize);
+    if (resized && sandbox) sandbox->m_bytesAllocated += grown;
+    return resized;
+}
+
+// A1 (H24/H25): fail-closed entry gate for every code-loading path.
+bool LuaSandbox::checkRunAllowed(const char* what, std::size_t codeBytes) {
+    if (m_limitTripped) {
+        m_lastError = "Lua sandbox instruction budget exhausted; session poisoned until clearVariables()";
+        ROWL_LOG_ERROR(m_lastError);
+        return false;
+    }
+    if (codeBytes > kMaxScriptBytes) {
+        m_lastError = std::string("Lua script too large for ") + what + " (max 256 KiB)";
+        ROWL_LOG_ERROR(m_lastError);
+        return false;
+    }
+    return true;
 }
 
 // Names owned by the sandbox bridge or the Lua standard libraries. A script
@@ -137,6 +192,13 @@ bool LuaSandbox::initialize() {
         ROWL_LOG_ERROR("Failed to create Lua state!");
         return false;
     }
+
+    // A1 (H25): cap total Lua allocations so one hostile chunk cannot OOM the
+    // process (e.g. string.rep building a multi-GB block in a single call,
+    // which the instruction hook never sees).
+    m_bytesAllocated = 0;
+    m_limitTripped = false;
+    lua_setallocf(m_luaState, &LuaSandbox::quotaAlloc, this);
 
     // Store this sandbox pointer in Lua registry for C callback access
     lua_pushlightuserdata(m_luaState, this);
@@ -311,6 +373,8 @@ bool LuaSandbox::evaluateCondition(const std::string& conditionExpr) {
         code = "return (" + conditionExpr + ")";
     }
 
+    if (!checkRunAllowed("condition", code.size())) return false;
+
     int loadStatus = luaL_loadstring(m_luaState, code.c_str());
     if (loadStatus != LUA_OK) {
         // Pop error and try raw expression with return prefix
@@ -318,7 +382,7 @@ bool LuaSandbox::evaluateCondition(const std::string& conditionExpr) {
         code = "return " + conditionExpr;
         loadStatus = luaL_loadstring(m_luaState, code.c_str());
         if (loadStatus != LUA_OK) {
-            std::string err = lua_tostring(m_luaState, -1);
+            std::string err = takeLuaError(m_luaState);
             lua_pop(m_luaState, 1);
             m_lastError = err;
             ROWL_LOG_WARN("Lua Condition syntax error in '" + conditionExpr + "': " + err);
@@ -328,7 +392,7 @@ bool LuaSandbox::evaluateCondition(const std::string& conditionExpr) {
 
     int callStatus = lua_pcall(m_luaState, 0, 1, 0);
     if (callStatus != LUA_OK) {
-        std::string err = lua_tostring(m_luaState, -1);
+        std::string err = takeLuaError(m_luaState);
         lua_pop(m_luaState, 1);
         m_lastError = err;
         bindEngineApis();
@@ -375,6 +439,8 @@ void LuaSandbox::clearVariables() {
         bindEngineApis();
     }
     m_scriptVariables.clear();
+    // A1 (H24): a new session boundary lifts the instruction-limit poison.
+    m_limitTripped = false;
 }
 
 bool LuaSandbox::executeString(const std::string& scriptCode) {
@@ -386,11 +452,12 @@ bool LuaSandbox::executeString(const std::string& scriptCode) {
 
     // Reset instruction counter before each execution
     m_lastError.clear();
+    if (!checkRunAllowed("executeString", scriptCode.size())) return false;
     resetInstructionCounter(m_luaState);
 
     int loadStatus = luaL_loadstring(m_luaState, scriptCode.c_str());
     if (loadStatus != LUA_OK) {
-        std::string err = lua_tostring(m_luaState, -1);
+        std::string err = takeLuaError(m_luaState);
         lua_pop(m_luaState, 1);
         m_lastError = err;
         ROWL_LOG_ERROR("Lua Script Syntax Error: " + err);
@@ -400,7 +467,7 @@ bool LuaSandbox::executeString(const std::string& scriptCode) {
     // Protected call (lua_pcall) prevents script crashes from killing engine process
     int callStatus = lua_pcall(m_luaState, 0, 0, 0);
     if (callStatus != LUA_OK) {
-        std::string err = lua_tostring(m_luaState, -1);
+        std::string err = takeLuaError(m_luaState);
         lua_pop(m_luaState, 1);
         m_lastError = err;
         bindEngineApis();
@@ -430,6 +497,7 @@ bool LuaSandbox::loadModule(const std::string& moduleId, const std::string& scri
         ROWL_LOG_ERROR(m_lastError);
         return false;
     }
+    if (!checkRunAllowed("loadModule", scriptCode.size())) return false;
 
     // Each component owns an environment. It inherits only the sandbox's safe
     // globals, keeps _G local, and hides the metatable so one component cannot

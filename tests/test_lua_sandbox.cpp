@@ -114,6 +114,10 @@ void test_lua_sandbox() {
     }
     TEST_PASS("Infinite Loop Defense (10M Instruction Limit Hook)");
 
+    // A1 (H24): tripping the instruction limit poisons the session — a hostile
+    // script must not catch-and-respin. A new session boundary lifts it.
+    lua.clearVariables();
+
     // Hostile: a memory bomb (string.rep far past MAXSIZE) must fail closed
     // inside pcall — no abort, no hang — and the sandbox stays usable.
     if (lua.executeString("string.rep('x', 2^40)")) {

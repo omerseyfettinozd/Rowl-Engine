@@ -50,7 +50,15 @@ public:
 
     bool isInitialized() const { return m_initialized; }
 
+    /// Marks the instruction budget as exhausted. Called by the instruction
+    /// hook when a script trips the limit; entry points refuse further runs
+    /// until clearVariables() resets the session. Internal (hook access).
+    void tripInstructionLimit() { m_limitTripped = true; }
+
 private:
+    static void* quotaAlloc(void* ud, void* ptr, size_t osize, size_t nsize);
+    /// Fail-closed entry gate: refuses poisoned sessions and oversized code.
+    bool checkRunAllowed(const char* what, std::size_t codeBytes);
     void bindEngineApis();
     /// Records the global names owned by the sandbox itself (safe libraries,
     /// base functions, engine bridge). clearVariables() removes every other
@@ -66,6 +74,9 @@ private:
     std::unordered_set<std::string> m_initialGlobals;
     std::string m_lastError;
     bool m_initialized = false;
+    // A1: instruction-limit poison (H24) + allocation quota (H25) state.
+    bool m_limitTripped = false;
+    std::size_t m_bytesAllocated = 0;
 };
 
 } // namespace Rowl::Scripting
