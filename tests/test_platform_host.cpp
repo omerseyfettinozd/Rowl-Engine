@@ -79,6 +79,16 @@ void test_platform_host() {
         std::cerr << "Unicode user-data layout was not preserved" << std::endl;
         exit(1);
     }
+    // The C ABI UTF-8 contract is lossless for backslash names on every
+    // platform: Linux keeps '\' literally, Windows keeps it natively
+    // (u8string round-trips the separator byte).
+    const std::string backslashUtf8 = "/tmp/Rowl-Çağrı-玩家\\alt";
+    if (Rowl::Platform::pathToUtf8(
+            Rowl::Platform::pathFromUtf8(backslashUtf8)) != backslashUtf8) {
+        std::cerr << "Backslash UTF-8 path roundtrip was lossy" << std::endl;
+        exit(1);
+    }
+    TEST_PASS("Backslash Unicode Path Roundtrip Preserves UTF-8");
     auto defaultVfs = std::make_shared<Rowl::VFS::VFSManager>();
     Rowl::Platform::DefaultPlatformHost defaultHost(defaultVfs);
     if (defaultHost.writableSavePath().empty() ||

@@ -81,6 +81,7 @@ inline std::string environmentValue(const char* name, const std::string& fallbac
 extern double g_transitionFps;
 
 void test_logger_timestamp();
+void test_logger_concurrency();
 void test_aspect_guardian();
 void test_msdf_renderer();
 void test_game_state();

@@ -391,7 +391,10 @@ void test_vfs_security() {
     TEST_PASS("C API reports VFS graph load failures while preserving the active graph");
 
     // Verify VFS-first resolution for story graphs and active story
-    const auto vfsProject = std::filesystem::temp_directory_path() / "rowl_vfs_story_project";
+    // T0b: fixed temp name replaced with the run-unique suffix so parallel
+    // runs can never mount each other's project dir.
+    const auto vfsProject = std::filesystem::temp_directory_path() /
+        ("rowl_vfs_story_project_" + uniqueSuffix);
     std::filesystem::remove_all(vfsProject);
     std::filesystem::create_directories(vfsProject / "Assets" / "json");
     {
@@ -425,19 +428,23 @@ void test_vfs_security() {
     // resize_file landing non-sparse on NTFS, (3) symlink reparse-point
     // handling. Open handles are ruled out: they would fail fast, not hang.
     // This block deletes on a detached worker with a 60 s watchdog. On
-    // timeout the suite proceeds (temp dirs are unique per run and OS-cleaned)
+    // timeout the suite FAILS (T0b: a stuck delete no longer passes green)
     // and the log names the tree contents, so the next Windows run pinpoints
     // the stalling entry instead of hanging silently.
 #ifdef _WIN32
     {
-        std::packaged_task<void()> cleanup([root = testRoot] {
-            std::error_code ec;
-            std::filesystem::remove_all(root, ec);
+        // T0b: the watchdog no longer masks a stuck delete — on timeout the
+        // suite fails with the tree contents named, so the next Windows run
+        // pinpoints the stalling entry instead of passing green silently.
+        // Fast-path errors are checked too (the error_code was swallowed).
+        std::error_code cleanupEc;
+        std::packaged_task<void()> cleanup([root = testRoot, &cleanupEc] {
+            std::filesystem::remove_all(root, cleanupEc);
         });
         std::future<void> finished = cleanup.get_future();
         std::thread(std::move(cleanup)).detach();
         if (finished.wait_for(std::chrono::seconds(60)) != std::future_status::ready) {
-            std::cerr << "VFS test tree delete exceeded 60 s; continuing, OS will "
+            std::cerr << "VFS test tree delete exceeded 60 s; failing, OS will "
                          "reclaim the temp dir. Top-level entries:";
             std::error_code listEc;
             for (const auto& entry :
@@ -445,9 +452,23 @@ void test_vfs_security() {
                 std::cerr << " [" << entry.path().filename().string() << "]";
             }
             std::cerr << std::endl;
+            exit(1);
+        }
+        if (cleanupEc) {
+            std::cerr << "VFS test tree delete failed: " << cleanupEc.message()
+                      << std::endl;
+            exit(1);
         }
     }
 #else
-    std::filesystem::remove_all(testRoot);
+    {
+        std::error_code cleanupEc;
+        std::filesystem::remove_all(testRoot, cleanupEc);
+        if (cleanupEc) {
+            std::cerr << "VFS test tree delete failed: " << cleanupEc.message()
+                      << std::endl;
+            exit(1);
+        }
+    }
 #endif
 }

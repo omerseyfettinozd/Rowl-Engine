@@ -114,6 +114,40 @@ void test_lua_sandbox() {
     }
     TEST_PASS("Infinite Loop Defense (10M Instruction Limit Hook)");
 
+    // Hostile: a memory bomb (string.rep far past MAXSIZE) must fail closed
+    // inside pcall — no abort, no hang — and the sandbox stays usable.
+    if (lua.executeString("string.rep('x', 2^40)")) {
+        std::cerr << "Lua memory bomb was not blocked!" << std::endl;
+        exit(1);
+    }
+    if (lua.getLastError().empty()) {
+        std::cerr << "Lua memory bomb recorded no error" << std::endl;
+        exit(1);
+    }
+    if (!lua.executeString("rowl.var_set('ms3_after_bomb', 'ok')") ||
+        lua.getVariable("ms3_after_bomb") != "ok") {
+        std::cerr << "Lua sandbox unusable after memory bomb" << std::endl;
+        exit(1);
+    }
+    TEST_PASS("Lua Memory-Bomb Fails Closed, Sandbox Reusable");
+
+    // Hostile: unbounded non-tail recursion must fail closed (stack
+    // overflow), then the sandbox must serve the next script normally.
+    if (lua.executeString("local function f() return 1 + f() end f()")) {
+        std::cerr << "Lua stack overflow was not blocked!" << std::endl;
+        exit(1);
+    }
+    if (lua.getLastError().empty()) {
+        std::cerr << "Lua stack overflow recorded no error" << std::endl;
+        exit(1);
+    }
+    if (!lua.executeString("rowl.var_set('ms3_after_recursion', 'ok')") ||
+        lua.getVariable("ms3_after_recursion") != "ok") {
+        std::cerr << "Lua sandbox unusable after stack overflow" << std::endl;
+        exit(1);
+    }
+    TEST_PASS("Lua Stack-Overflow Fails Closed, Sandbox Reusable");
+
     // Lua Condition Evaluation
     lua.setGlobalNumber("player_gold", 75.0);
     if (!lua.evaluateCondition("player_gold >= 50")) {

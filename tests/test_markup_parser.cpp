@@ -9,6 +9,7 @@
 #include "rowl_test_harness.hpp"
 #include "rowl/text/hex_color.hpp"
 #include "rowl/text/markup_parser.hpp"
+#include "rowl/util/locale_independent_parse.hpp"
 
 #include <nlohmann/json.hpp>
 
@@ -200,8 +201,35 @@ void testStructureAndTiming() {
                 !doc.diagnostics.empty()) {
                 fail("Markup numbers must ignore a comma-decimal process locale");
             }
+        } else {
+            std::cout << "  SKIP comma-locale check: "
+                         "no comma-decimal system locale installed"
+                      << std::endl;
         }
         std::setlocale(LC_NUMERIC, previous.c_str());
+    }
+    {
+        // Hermetik virgul reddi (T0b): sistem locale'u ne olursa olsun
+        // virgül ondalık asla sayı değildir — bu blok locale kurulumu
+        // gerektirmez, her makinede strict çalışır.
+        double commaValue = 0.0;
+        const char* commaText = "3,14";
+        if (Rowl::Util::parseAsciiDouble(
+                commaText, commaText + std::strlen(commaText), commaValue))
+            fail("parseAsciiDouble accepted a comma decimal");
+        double dotValue = 0.0;
+        const char* dotText = "3.14";
+        if (!Rowl::Util::parseAsciiDouble(
+                dotText, dotText + std::strlen(dotText), dotValue) ||
+            dotValue != 3.14)
+            fail("parseAsciiDouble rejected a dot decimal");
+        // Markup katmanı da virgülü 3.5 sayısına dönüştüremez: etiket ya
+        // varsayılan hızla düşer ya da tanı koyar, ama asla virgülü
+        // ondalık okumaz.
+        const MarkupDocument commaDoc = parseMarkup("<speed=3,5>x");
+        if (!commaDoc.chars.empty() &&
+            near(commaDoc.chars[0].speed, 3.5f))
+            fail("Markup parsed a comma decimal as 3.5");
     }
     {
         const MarkupDocument doc = parseMarkup("a<pause=1.5>b<pause=0.5>c");

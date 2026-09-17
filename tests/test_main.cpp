@@ -89,6 +89,7 @@ int main(int argc, char* argv[]) {
     std::cout << "=======================================================" << std::endl;
 
     test_logger_timestamp();
+    test_logger_concurrency();
     test_aspect_guardian();
     test_msdf_renderer();
     test_game_state();

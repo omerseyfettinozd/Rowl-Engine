@@ -121,6 +121,31 @@ void test_text_shaping() {
     }
 
     {
+        // Hermetic ligature-shape contract (T0b): with the BUNDLED test font
+        // (no Arabic glyphs — tofu path) lam+alef must still shape into a
+        // well-formed reveal structure on ANY backend: every scalar covered
+        // exactly once, every glyph pointing at a live reveal unit. This runs
+        // everywhere the system-font probe above skips.
+        const auto tofu = shaper.shapeMarkup(
+            "\xD9\x84\xD8\xA7", shapeOptions(28.0f));
+        if (tofu.revealUnits.empty())
+            shapingFail("bundled-font lam+alef produced zero reveal units");
+        size_t coveredScalars = 0;
+        for (const auto& unit : tofu.revealUnits) {
+            if (unit.scalarCount == 0)
+                shapingFail("bundled-font lam+alef has an empty reveal unit");
+            coveredScalars += unit.scalarCount;
+        }
+        if (coveredScalars != 2)
+            shapingFail("bundled-font lam+alef reveal coverage != 2 scalars: " +
+                std::to_string(coveredScalars));
+        for (const auto& glyph : tofu.glyphs) {
+            if (glyph.revealIndex >= tofu.revealUnits.size())
+                shapingFail("bundled-font lam+alef glyph escaped its reveal cluster");
+        }
+    }
+
+    {
         const auto unwrapped = shaper.shapeMarkup("one two three four",
                                                   shapeOptions(24.0f));
         const auto wrapped = shaper.shapeMarkup("one two three four",

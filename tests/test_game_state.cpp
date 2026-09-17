@@ -271,7 +271,24 @@ void test_game_state() {
     }
     TEST_PASS("Explicit GameState v1/v2 Migration and Future-Version Result");
 
-    std::string testSaveDir = "build/test_saves";
+    // T0b: CWD-relative "build/test_saves" is now a hermetic per-run temp
+    // dir — parallel runs and foreign CWDs can never collide or pollute
+    // the repo.
+    const std::string testSaveDir =
+        (std::filesystem::temp_directory_path() /
+         ("rowl_game_state_" +
+          std::to_string(
+              std::chrono::steady_clock::now().time_since_epoch().count())))
+            .string();
+    {
+        std::error_code hermeticEc;
+        std::filesystem::create_directories(testSaveDir, hermeticEc);
+        if (hermeticEc) {
+            std::cerr << "GameState hermetic save dir could not be created: "
+                      << hermeticEc.message() << std::endl;
+            exit(1);
+        }
+    }
     Rowl::State::SessionPersistence persistence(testSaveDir);
     if (!persistence.saveSlot(s2, 1)) {
         std::cerr << "SessionPersistence saveSlot failed" << std::endl;
@@ -459,5 +476,15 @@ void test_game_state() {
         exit(1);
     }
     TEST_PASS("GameState Slot Cleanup (deleteSlot)");
-    std::filesystem::remove_all(testSaveDir);
+    // T0b: hermetic dir cleanup is strict — a leftover must fail loudly,
+    // never silently pollute the temp dir across reruns.
+    {
+        std::error_code cleanupEc;
+        std::filesystem::remove_all(testSaveDir, cleanupEc);
+        if (cleanupEc) {
+            std::cerr << "GameState hermetic save dir cleanup failed: "
+                      << cleanupEc.message() << std::endl;
+            exit(1);
+        }
+    }
 }
