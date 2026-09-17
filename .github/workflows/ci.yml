@@ -3,6 +3,9 @@ name: Build and test
 on:
   push:
   pull_request:
+  schedule:
+    # Sanitizer tam-süit (soak/stres dahil) nightly; PR/push'ta hızlı alt-küme (T0).
+    - cron: '23 2 * * *'
 
 permissions:
   contents: read
@@ -15,6 +18,11 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Portability lint
+        # T0 tripwire: tek-satırlık __has_feature + tests/'te guardsız
+        # POSIX include. Ürün derlemez değil, kapı kızarır.
+        run: bash tools/check_portability.sh
 
       - name: Install native build dependencies
         # ffmpeg: converter/author-guide fixture generation (test-only,
@@ -165,6 +173,8 @@ jobs:
           dotnet list editor/Tests/RowlEngine.Editor.Tests.csproj package --vulnerable --include-transitive
 
   sanitizer:
+    # PR/push'ta hızlı alt-küme (T0 katmanlama): soak/stres nightly'dadır.
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-24.04
     timeout-minutes: 25
 
@@ -211,10 +221,62 @@ jobs:
         # Build only the rowl_tests subset to keep the sanitizer job fast and focused on native tests.
         run: cmake --build build-sanitizer --target rowl_tests --parallel 2
 
-      - name: Test under ASan and UBSan
+      - name: Test under ASan and UBSan (fast subset)
         # GPU smoke is excluded: it needs a real GPU/display and is unreliable under sanitizers.
+        # ROWL_SKIP_LONG_TESTS: soak/stres bölümü nightly süite aittir (T0).
+        env:
+          ROWL_SKIP_LONG_TESTS: '1'
         run: |
           ASAN_OPTIONS=halt_on_error=1:print_stacktrace=1:detect_leaks=0 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 ctest --test-dir build-sanitizer -R "rowl_native_tests|rowl_benchmark_tool_tests" --output-on-failure --timeout 600
+
+  sanitizer-nightly:
+    # Tam süit (soak/stres dahil), yalnızca schedule'da koşar (T0).
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install native build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes build-essential cmake curl ninja-build pkg-config liblua5.4-dev libzstd-dev libvorbis-dev libogg-dev libpng-dev libwebp-dev libvulkan-dev glslc mesa-vulkan-drivers xvfb libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev libxinerama-dev libxxf86vm-dev libxkbcommon-dev libxss-dev libxtst-dev libxfixes-dev libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev libwayland-dev wayland-protocols libdbus-1-dev libibus-1.0-dev libudev-dev
+
+      - name: Fetch pinned SDL3 tarball
+        run: |
+          curl --fail --location --silent --show-error \
+            https://github.com/libsdl-org/SDL/releases/download/release-3.4.16/SDL3-3.4.16.tar.gz \
+            --output /tmp/SDL3-3.4.16.tar.gz
+
+      - name: Extract SDL3 sources
+        run: |
+          tar --extract --gzip --file /tmp/SDL3-3.4.16.tar.gz --directory /tmp
+
+      - name: Configure SDL3 dependency
+        run: |
+          cmake -S /tmp/SDL3-3.4.16 -B /tmp/SDL3-build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release -DSDL_SHARED=ON -DSDL_STATIC=OFF \
+            -DSDL_TEST_LIBRARY=OFF -DSDL_GPU=ON
+
+      - name: Build pinned SDL3 dependency
+        run: |
+          cmake --build /tmp/SDL3-build --parallel 2 --verbose
+
+      - name: Install SDL3 dependency
+        run: |
+          sudo cmake --install /tmp/SDL3-build
+
+      - name: Configure with sanitizers
+        run: |
+          cmake -S . -B build-sanitizer -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined" -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=address,undefined"
+
+      - name: Build native tests only
+        run: cmake --build build-sanitizer --target rowl_tests --parallel 2
+
+      - name: Test under ASan and UBSan (full suite)
+        run: |
+          ASAN_OPTIONS=halt_on_error=1:print_stacktrace=1:detect_leaks=0 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 ctest --test-dir build-sanitizer -R "rowl_native_tests|rowl_benchmark_tool_tests" --output-on-failure --timeout 900
 
   linux-arm64-compile:
     # Compile-only portability gate. It does not claim GUI, audio-device or
