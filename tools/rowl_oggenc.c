@@ -27,6 +27,12 @@
 #if defined(_WIN32)
 #include <fcntl.h>
 #include <io.h>
+// Tur-8: host tools run headless (CI, pipelines). Never park on a GUI
+// fault dialog — fail fast with an exit code instead.
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
 #endif
 
 #define ROWL_OGGENC_VERSION "1.0.0"
@@ -95,6 +101,9 @@ static uint8_t* read_all(FILE* in, size_t* outLen, const char* what) {
 }
 
 int main(int argc, char** argv) {
+#if defined(_WIN32)
+    SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
+#endif
     long rate = 44100;
     long channels = 2;
     const char* outputPath = NULL;

@@ -41,6 +41,15 @@ if TOOLS_DIR not in sys.path:
 import package_assets  # noqa: E402
 
 
+# Tur-8: the sealed-env probes hardcoded /usr/bin/sh, which does not exist
+# on Windows (Git Bash provides sh on PATH, not at that absolute path),
+# so they died with FileNotFoundError. Resolve once, use the absolute path
+# in EVERY probe (absolute also bypasses the sealed PATH farm by design).
+SH = shutil.which("sh")
+if SH is None:
+    raise SystemExit("no POSIX sh on PATH (Git Bash required on Windows)")
+
+
 def run(arguments, **kwargs):
     return subprocess.run(arguments, capture_output=True, text=True,
                           check=False, **kwargs)
@@ -156,13 +165,13 @@ with tempfile.TemporaryDirectory() as directory:
             raise SystemExit("self-extracting output is not byte-identical")
 
         # The stub must be valid shell.
-        syntax = run(["sh", "-n", str(first)])
+        syntax = run([SH, "-n", str(first)])
         if syntax.returncode != 0:
             raise SystemExit(f"`sh -n` rejected the stub: {syntax.stderr}")
 
         # Real install into a clean directory.
         prefix = fake_root / "game-install"
-        installed = run(["sh", str(first), "--prefix", str(prefix)])
+        installed = run([SH, str(first), "--prefix", str(prefix)])
         if installed.returncode != 0:
             raise SystemExit(f"installer failed: {installed.stderr}")
         if not prefix.is_dir():
@@ -217,15 +226,15 @@ with tempfile.TemporaryDirectory() as directory:
         # Default-prefix form: bare `sh installer` installs ./rowl-game.
         default_cwd = fake_root / "default-cwd"
         default_cwd.mkdir()
-        bare = run(["sh", str(first)], cwd=default_cwd)
+        bare = run([SH, str(first)], cwd=default_cwd)
         if bare.returncode != 0 or not (default_cwd / "rowl-game").is_dir():
             raise SystemExit("default-prefix install failed")
-        bare_un = run(["sh", str(first), "uninstall"], cwd=default_cwd)
+        bare_un = run([SH, str(first), "uninstall"], cwd=default_cwd)
         if bare_un.returncode != 0 or (default_cwd / "rowl-game").exists():
             raise SystemExit("default-prefix uninstall left leftovers")
 
         # Uninstall: no leftovers, prefix dir removed when empty.
-        uninstalled = run(["sh", str(first), "uninstall",
+        uninstalled = run([SH, str(first), "uninstall",
                            "--prefix", str(prefix)])
         if uninstalled.returncode != 0:
             raise SystemExit(f"uninstall failed: {uninstalled.stderr}")
@@ -238,12 +247,12 @@ with tempfile.TemporaryDirectory() as directory:
         prefix.mkdir()
         keep = prefix / "my-save.txt"
         keep.write_text("mine\n", encoding="utf-8")
-        reinstall = run(["sh", str(first), "--prefix", str(prefix)])
+        reinstall = run([SH, str(first), "--prefix", str(prefix)])
         if reinstall.returncode != 0:
             raise SystemExit(f"reinstall failed: {reinstall.stderr}")
         if not (prefix / ".rowl-receipt").is_file():
             raise SystemExit("reinstall wrote no .rowl-receipt")
-        guarded = run(["sh", str(first), "uninstall",
+        guarded = run([SH, str(first), "uninstall",
                        "--prefix", str(prefix)])
         if guarded.returncode != 0 or not keep.is_file():
             raise SystemExit("uninstall touched a user file")
@@ -259,13 +268,13 @@ with tempfile.TemporaryDirectory() as directory:
         # (c) Legacy uninstall: receipt deleted by hand falls back to the
         # embedded FILES list, still exits 0 with no leftovers.
         legacy_prefix = fake_root / "legacy-install"
-        legacy_install = run(["sh", str(first), "--prefix",
+        legacy_install = run([SH, str(first), "--prefix",
                               str(legacy_prefix)])
         if legacy_install.returncode != 0:
             raise SystemExit(f"legacy setup install failed: "
                              f"{legacy_install.stderr}")
         (legacy_prefix / ".rowl-receipt").unlink()
-        legacy_un = run(["sh", str(first), "uninstall",
+        legacy_un = run([SH, str(first), "uninstall",
                          "--prefix", str(legacy_prefix)])
         if legacy_un.returncode != 0:
             raise SystemExit(f"legacy uninstall failed: {legacy_un.stderr}")
@@ -288,7 +297,7 @@ with tempfile.TemporaryDirectory() as directory:
         half_prefix.mkdir()
         blocker = half_prefix / blocker_name
         block_install_dir(blocker)
-        half = run(["sh", str(first), "--prefix", str(half_prefix)])
+        half = run([SH, str(first), "--prefix", str(half_prefix)])
         if half.returncode == 0:
             unblock_install_dir(blocker)
             raise SystemExit(
@@ -314,7 +323,7 @@ with tempfile.TemporaryDirectory() as directory:
         corrupt = fake_root / "install-corrupt.sh"
         flip_first_payload_byte(first, corrupt)
         bad_prefix = fake_root / "must-not-exist"
-        rejected = run(["sh", str(corrupt), "--prefix", str(bad_prefix)])
+        rejected = run([SH, str(corrupt), "--prefix", str(bad_prefix)])
         if rejected.returncode == 0:
             raise SystemExit("corrupt-payload install was accepted")
         if bad_prefix.exists():
@@ -330,16 +339,16 @@ with tempfile.TemporaryDirectory() as directory:
                 raise SystemExit(f"cannot build no-python PATH farm: {tool}")
             os.symlink(found, farm / tool)
         sealed_env = {"PATH": str(farm), "TMPDIR": str(fake_root)}
-        probe = run(["/usr/bin/sh", "-c", "command -v python3"],
+        probe = run([SH, "-c", "command -v python3"],
                     env=sealed_env)
         if probe.returncode == 0:
             raise SystemExit("no-python PATH farm still finds python3")
         sealed_prefix = fake_root / "sealed-install"
-        sealed = run(["/usr/bin/sh", str(first), "--prefix",
+        sealed = run([SH, str(first), "--prefix",
                       str(sealed_prefix)], env=sealed_env)
         if sealed.returncode != 0 or not sealed_prefix.is_dir():
             raise SystemExit(f"python3-free install failed: {sealed.stderr}")
-        sealed_un = run(["/usr/bin/sh", str(first), "uninstall",
+        sealed_un = run([SH, str(first), "uninstall",
                          "--prefix", str(sealed_prefix)], env=sealed_env)
         if sealed_un.returncode != 0 or sealed_prefix.exists():
             raise SystemExit("python3-free uninstall left leftovers")
@@ -406,7 +415,7 @@ with tempfile.TemporaryDirectory() as directory:
         # fail-closed: exit non-zero, the outside canary survives, and
         # nothing inside the prefix is deleted either.
         esc_prefix = fake_root / "escape-test"
-        esc_install = run(["sh", str(first), "--prefix", str(esc_prefix)])
+        esc_install = run([SH, str(first), "--prefix", str(esc_prefix)])
         if esc_install.returncode != 0:
             raise SystemExit(f"escape setup install failed: "
                              f"{esc_install.stderr}")
@@ -415,7 +424,7 @@ with tempfile.TemporaryDirectory() as directory:
         with (esc_prefix / ".rowl-receipt").open("a",
                                                  encoding="utf-8") as handle:
             handle.write("../escape.txt\n")
-        esc_un = run(["sh", str(first), "uninstall",
+        esc_un = run([SH, str(first), "uninstall",
                       "--prefix", str(esc_prefix)])
         if esc_un.returncode == 0:
             raise SystemExit("poisoned-receipt uninstall was accepted")

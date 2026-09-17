@@ -28,3 +28,19 @@ if(NOT MSVC)
     target_compile_options(rowl_oggenc PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(rowl_webp2png PRIVATE -Wall -Wextra -Wpedantic)
 endif()
+
+# Tur-8 (Windows CI: converter/author TIMEOUT): the tools link vcpkg DLLs
+# (libwebp/libpng/zlib, vorbis/ogg). When those DLLs are not on PATH, the
+# Windows loader parks on a missing-DLL dialog and the headless CI run
+# hangs with zero output until the ctest timeout kills it. Host tools must
+# be self-contained (the same rule test_converters.py enforces on their
+# sources), so stage every runtime DLL next to the exe at build time.
+if(WIN32)
+    foreach(ROWL_TOOL rowl_oggenc rowl_webp2png)
+        add_custom_command(TARGET ${ROWL_TOOL} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "$<TARGET_RUNTIME_DLLS:${ROWL_TOOL}>"
+                "$<TARGET_FILE_DIR:${ROWL_TOOL}>"
+            COMMAND_EXPAND_LISTS)
+    endforeach()
+endif()

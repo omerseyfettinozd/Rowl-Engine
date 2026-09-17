@@ -193,10 +193,25 @@ void test_c_api_contract() {
                 ]
             })";
         }
-        // Narrow-path observability: on Windows path::string() encodes in
-        // the ANSI codepage, so a unicode fixture dir may not round-trip.
-        // Log the byte size + existence BEFORE the load call.
-        const std::string chapterNarrow = chapterGraph.string();
+        // Narrow-path reality: on Windows path::string() encodes in the
+        // ANSI codepage, so the CJK fixture dir is unrepresentable and the
+        // conversion THROWS (tur-8: this exact uncaught throw killed
+        // Windows CI as SEH 0xE06D7363 between phase 2 and 2b). UTF-8
+        // bytes never throw — the engine must still survive them
+        // gracefully (no load, zero chapters, readable story-graph
+        // error), which is exactly what the narrowThrew branch asserts.
+        bool narrowThrew = false;
+        std::string chapterNarrow;
+        try {
+            chapterNarrow = chapterGraph.string();
+        } catch (const std::exception& narrowError) {
+            std::cerr << "[contract] phase 2b-note: narrow conversion threw ("
+                      << narrowError.what() << "); using UTF-8 bytes" << std::endl;
+            narrowThrew = true;
+            const std::u8string utf8narrow = chapterGraph.u8string();
+            chapterNarrow.assign(
+                reinterpret_cast<const char*>(utf8narrow.data()), utf8narrow.size());
+        }
         {
             std::error_code probeEc;
             std::cerr << "[contract] phase 2b: graph narrow bytes=" << chapterNarrow.size()
@@ -205,13 +220,30 @@ void test_c_api_contract() {
         }
         RowlEngine_LoadStoryGraph(handle, chapterNarrow.c_str());
         std::cerr << "[contract] phase 3: vnext load returned" << std::endl;
-        if (RowlEngine_GetChapterCount(handle, &chapterCount) != ROWL_RESULT_OK ||
+        if (narrowThrew) {
+            // The UTF-8 bytes name no file the ANSI fopen can open, so the
+            // graceful contract is: zero chapters and an observable error.
+            uint32_t gracefulCount = 77;
+            if (RowlEngine_GetChapterCount(handle, &gracefulCount) != ROWL_RESULT_OK ||
+                gracefulCount != 0) {
+                std::cerr << "Unrepresentable graph path must leave zero chapters" << std::endl;
+                exit(1);
+            }
+            const char* graphError = RowlEngine_GetLastStoryGraphError(handle);
+            if (!graphError || !graphError[0]) {
+                std::cerr << "Unrepresentable graph path must report a story-graph error" << std::endl;
+                exit(1);
+            }
+            std::cerr << "[contract] phase 3b: unrepresentable path handled gracefully" << std::endl;
+        } else if (RowlEngine_GetChapterCount(handle, &chapterCount) != ROWL_RESULT_OK ||
             chapterCount != 2) {
             std::cerr << "Loaded v5 graph must report two chapters" << std::endl;
             exit(1);
         }
         // Order-sorted: ch2 (order 0) precedes ch1 (order 1).
-        {
+        // Skipped when the path was unrepresentable (no graph loaded —
+        // the graceful branch above already asserted that state).
+        if (!narrowThrew) {
             uint32_t atRequired = 0;
             if (RowlEngine_GetChapterIdAtUtf8(handle, 0, nullptr, 0, &atRequired) !=
                     ROWL_RESULT_OK ||

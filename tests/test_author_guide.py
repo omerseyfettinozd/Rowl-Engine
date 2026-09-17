@@ -13,6 +13,7 @@ Production code is only CALLED (converters, package_assets, export_game),
 never modified.
 """
 
+import os
 import pathlib
 import re
 import shutil
@@ -85,6 +86,24 @@ def main():
                       pathlib.Path("build") / "bin" / "rowl_oggenc")
     resolve_converter("ROWL_WEBP2PNG_PATH",
                       pathlib.Path("build") / "bin" / "rowl_webp2png")
+    # Tur-8 pre-flight: prove both converter loaders resolve before the
+    # guide blocks run. A parked tool fails here naming the binary instead
+    # of hanging block 5 into a mystery ctest TIMEOUT (Windows CI tur-7).
+    for var in ("ROWL_OGGENC_PATH", "ROWL_WEBP2PNG_PATH"):
+        binary = os.environ[var]
+        try:
+            smoke = subprocess.run([binary, "--version"], capture_output=True,
+                                   text=True, timeout=30)
+        except subprocess.TimeoutExpired:
+            raise SystemExit(
+                f"author pre-flight hung: {var}={binary} never exited "
+                "(missing DLL? loader dialog?)")
+        if smoke.returncode != 0:
+            raise SystemExit(
+                f"author pre-flight failed: {var}={binary} "
+                f"exit={smoke.returncode}")
+        print(f"[AuthorGuide] pre-flight {var}={binary}: "
+              f"{(smoke.stdout or '').strip() or '(no stdout)'}")
 
     guide_text = GUIDE.read_text(encoding="utf-8")
     blocks = extract_sh_blocks(guide_text)
@@ -122,7 +141,16 @@ def main():
         before = (set(crash_dir.iterdir()) if crash_dir.is_dir() else None)
         try:
             for index, (mode, block) in enumerate(probed):
-                proc = run(["sh", "-c", block], cwd=ROOT, env=env)
+                # Tur-8: bound each block so a parked converter fails naming
+                # the block instead of burning the ctest TIMEOUT silently.
+                try:
+                    proc = run(["sh", "-c", block], cwd=ROOT, env=env,
+                               timeout=150)
+                except subprocess.TimeoutExpired:
+                    raise SystemExit(
+                        f"guide sh block {index} ({mode}) hung >150s "
+                        f"(converter tool parked? missing DLL dialog?)\n"
+                        f"--- block ---\n{block}")
                 ok = proc.returncode == 0 if mode == "expect-ok" \
                     else proc.returncode != 0
                 if not ok:

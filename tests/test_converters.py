@@ -41,13 +41,24 @@ RATE = 44100
 CHANNELS = 2
 SECONDS = 2
 
+# Tur-8: per-invocation bound so a parked tool fails naming itself.
+TOOL_TIMEOUT = 120
+
 
 def fail(message):
     raise SystemExit(f"[Converters] FAIL: {message}")
 
 
 def run(*args, input_bytes=None):
-    proc = subprocess.run(list(args), input=input_bytes, capture_output=True)
+    # Tur-8: a hung tool (Windows CI: webp2png parked on a missing-DLL
+    # loader dialog) used to burn the whole ctest TIMEOUT with zero output.
+    # Bound every invocation: a hang still fails the gate, but names it.
+    try:
+        proc = subprocess.run(list(args), input=input_bytes,
+                              capture_output=True, timeout=TOOL_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        fail(f"{args[0]} hung >{TOOL_TIMEOUT}s without exiting "
+             f"(missing-DLL loader dialog? unflushed fatal error?)")
     if proc.returncode != 0:
         fail(f"{args[0]} exit={proc.returncode}: {proc.stderr.decode(errors='replace')[:500]}")
     return proc
@@ -100,6 +111,21 @@ if OGGENC is None or WEBP2PNG is None:
 for tool in (OGGENC, WEBP2PNG):
     if not tool.is_file():
         fail(f"tool not found: {tool}")
+# Tur-8 pre-flight: a --version smoke with a tight timeout proves the
+# loader resolves every DLL BEFORE fixtures run. A loader hang fails here
+# naming the exact binary instead of surfacing as a mystery TIMEOUT in
+# some later section (Windows CI tur-6/tur-7).
+for tool in (OGGENC, WEBP2PNG):
+    try:
+        smoke = subprocess.run([str(tool), "--version"], capture_output=True,
+                               text=True, timeout=30)
+    except subprocess.TimeoutExpired:
+        fail(f"pre-flight hung: {tool} --version never exited (missing DLL?)")
+    if smoke.returncode != 0:
+        fail(f"pre-flight failed: {tool} --version exit={smoke.returncode}: "
+             f"{(smoke.stderr or '')[:300]}")
+    print(f"[Converters] pre-flight {tool.name}: "
+          f"{(smoke.stdout or '').strip() or '(no stdout)'}", flush=True)
 if shutil.which("ffmpeg") is None:
     fail("ffmpeg is required on PATH for fixture generation")
 

@@ -254,6 +254,31 @@ namespace RowlEngine.Editor.ViewModels
             }
         }
 
+        /// <summary>
+        /// Tur-8: true when <paramref name="path"/> lives under one of the
+        /// current project mounts (prefix comparison, case-insensitive).
+        /// Existence is NOT required — a deleted file under the current
+        /// root is still "ours" (a genuine ghost), while a path from a
+        /// previous project root is stale knowledge to evict.
+        /// </summary>
+        private static bool IsUnderAnyMount(string path, List<(string displayName, string path)> mountPoints)
+        {
+            string full;
+            try { full = Path.GetFullPath(path); }
+            catch { return false; }
+            foreach (var (_, mountPath) in mountPoints)
+            {
+                string mountFull;
+                try { mountFull = Path.GetFullPath(mountPath); }
+                catch { continue; }
+                if (!mountFull.EndsWith(Path.DirectorySeparatorChar))
+                    mountFull += Path.DirectorySeparatorChar;
+                if (full.StartsWith(mountFull, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+            return false;
+        }
+
         private void RefreshAssetsCore()
         {
             AssetTree.Clear();
@@ -266,7 +291,6 @@ namespace RowlEngine.Editor.ViewModels
                 ("Assets", MainWindowViewModel.AssetsPath),
                 ("Mods", Path.Combine(MainWindowViewModel.ProjectRoot, "mods"))
             };
-
             var currentFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             foreach (var mountPoint in mountPoints)
@@ -285,6 +309,13 @@ namespace RowlEngine.Editor.ViewModels
             }
 
             // MS-5: previously seen files that vanished from disk become ghosts.
+            // Tur-8: knowledge is scoped to the current project mounts. The
+            // suite reuses one browser across project roots (E2E temp root,
+            // then the MS5 temp root); entries from a previous root are
+            // stale — not missing. Without this, a deleted foreign root
+            // badges the current project (Windows CI: 3 E2E ghosts + the
+            // real probe = count 4).
+            _knownAssetFiles.RemoveWhere(known => !IsUnderAnyMount(known, mountPoints));
             var missing = _knownAssetFiles.Where(p => !currentFiles.Contains(p)).OrderBy(p => p).ToList();
             _knownAssetFiles.UnionWith(currentFiles);
 

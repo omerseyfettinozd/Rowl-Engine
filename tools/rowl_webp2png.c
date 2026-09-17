@@ -20,6 +20,15 @@
 #include <stdlib.h>
 #include <string.h>
 
+#if defined(_WIN32)
+// Tur-8: host tools run headless (CI, pipelines). Never park on a GUI
+// fault dialog — fail fast with an exit code instead.
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#endif
+
 #include "rowl_sha256.h"
 
 #define ROWL_WEBP2PNG_VERSION "1.0.0"
@@ -87,6 +96,9 @@ static void png_flush_data(png_structp png) {
 }
 
 int main(int argc, char** argv) {
+#if defined(_WIN32)
+    SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
+#endif
     const char* outputPath = NULL;
     const char* sidecarPath = NULL;
     const char* inputPath = NULL;
