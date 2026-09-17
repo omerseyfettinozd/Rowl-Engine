@@ -1,6 +1,7 @@
 #include "rowl/state/save_durability.hpp"
 
 #include "rowl/core/logger.hpp"
+#include "rowl/platform/user_data_directories.hpp"
 
 #include <atomic>
 #include <cerrno>
@@ -138,14 +139,14 @@ bool writeSlotFileAtomically(const std::filesystem::path& finalPath,
         // compatibility); the errno tag is appended for UI/telemetry.
         if (injectedErrno == ENOSPC) {
             return fail("No space left on device (injected ENOSPC) while writing " +
-                        temporaryPath.string() + " " + errnoPrefix(ENOSPC));
+                        Rowl::Platform::pathToUtf8(temporaryPath) + " " + errnoPrefix(ENOSPC));
         }
         if (injectedErrno == EACCES) {
             return fail("Permission denied (injected EACCES) while writing " +
-                        temporaryPath.string() + " " + errnoPrefix(EACCES));
+                        Rowl::Platform::pathToUtf8(temporaryPath) + " " + errnoPrefix(EACCES));
         }
         return fail("Read-only file system (injected EROFS) while writing " +
-                    temporaryPath.string() + " " + errnoPrefix(EROFS));
+                    Rowl::Platform::pathToUtf8(temporaryPath) + " " + errnoPrefix(EROFS));
     }
 
     {
@@ -157,11 +158,11 @@ bool writeSlotFileAtomically(const std::filesystem::path& finalPath,
             const int openErrno = errno;
             if (openErrno == 0) {
                 return fail("Failed to open save slot temp file for writing: " +
-                            temporaryPath.string());
+                            Rowl::Platform::pathToUtf8(temporaryPath));
             }
             return fail(errnoPrefix(openErrno) +
                         "Failed to open save slot temp file for writing: " +
-                        temporaryPath.string() + ": " + std::strerror(openErrno));
+                        Rowl::Platform::pathToUtf8(temporaryPath) + ": " + std::strerror(openErrno));
         }
         output << content;
         output.flush();
@@ -170,7 +171,7 @@ bool writeSlotFileAtomically(const std::filesystem::path& finalPath,
             std::error_code removeError;
             fs::remove(temporaryPath, removeError);
             return fail("Failed to write complete save slot temp file: " +
-                        temporaryPath.string());
+                        Rowl::Platform::pathToUtf8(temporaryPath));
         }
     }
 
@@ -180,8 +181,8 @@ bool writeSlotFileAtomically(const std::filesystem::path& finalPath,
         fs::remove(temporaryPath, removeError);
         return fail(errnoPrefix(replaceError.value()) +
                     "Failed to atomically replace save slot file: " +
-                    replaceError.message() + " (" + temporaryPath.string() +
-                    " -> " + finalPath.string() + ")");
+                    replaceError.message() + " (" + Rowl::Platform::pathToUtf8(temporaryPath) +
+                    " -> " + Rowl::Platform::pathToUtf8(finalPath) + ")");
     }
     return true;
 }

@@ -133,15 +133,29 @@ internal static class EditorMediaFormatCatalogTests
             if (!caseIssues.Any(issue => issue.IsError && issue.Message.Contains("different letter case") && issue.Message.Contains("Hero.png")))
                 throw new Exception("Case-only mismatch must report the on-disk spelling, not a plain missing asset.");
 
-            // 33.3e case collisions on disk are build-blocking errors
+            // 33.3e case collisions on disk are build-blocking errors.
+            // Tur-10: on a case-insensitive filesystem (Windows/NTFS) the
+            // second WriteAllBytes just overwrites the first, so two
+            // case-only-distinct files are unstageable and the validator
+            // cannot see a collision. Probe the FS and skip staging there;
+            // the validator logic is unchanged and stays fully covered on
+            // case-sensitive filesystems.
             string collisionAssets = Path.Combine(scenarioRoot, "collision", "Assets");
-            Directory.CreateDirectory(Path.Combine(collisionAssets, "images"));
-            File.WriteAllBytes(Path.Combine(collisionAssets, "images", "Hero.png"), new byte[] { 4 });
-            File.WriteAllBytes(Path.Combine(collisionAssets, "images", "hero.png"), new byte[] { 5 });
-            var collisionNode = new NodeViewModel(9603, "Collision", 0, 0, bare: true);
-            var collisionIssues = ProjectValidationService.Validate(new[] { collisionNode }, Array.Empty<ConnectionViewModel>(), collisionAssets, collisionNode.Id);
-            if (!collisionIssues.Any(issue => issue.IsError && issue.Message.Contains("collision")))
-                throw new Exception("Case-only duplicate files must be reported as a name collision.");
+            string collisionImages = Path.Combine(collisionAssets, "images");
+            Directory.CreateDirectory(collisionImages);
+            if (IsFileSystemCaseSensitive(collisionImages))
+            {
+                File.WriteAllBytes(Path.Combine(collisionImages, "Hero.png"), new byte[] { 4 });
+                File.WriteAllBytes(Path.Combine(collisionImages, "hero.png"), new byte[] { 5 });
+                var collisionNode = new NodeViewModel(9603, "Collision", 0, 0, bare: true);
+                var collisionIssues = ProjectValidationService.Validate(new[] { collisionNode }, Array.Empty<ConnectionViewModel>(), collisionAssets, collisionNode.Id);
+                if (!collisionIssues.Any(issue => issue.IsError && issue.Message.Contains("collision")))
+                    throw new Exception("Case-only duplicate files must be reported as a name collision.");
+            }
+            else
+            {
+                Console.WriteLine("    [Step 33.3e]: skipped (filesystem is case-insensitive; case-only duplicates unstageable).");
+            }
         }
         finally
         {
@@ -149,6 +163,34 @@ internal static class EditorMediaFormatCatalogTests
         }
 
         Console.WriteLine("  ✅ [PASS] Media format contract, import rejection and validation audits verified");
+    }
+
+    /// <summary>
+    /// Tur-10: true when <paramref name="directory"/> lives on a
+    /// case-sensitive filesystem (two names differing only by case can
+    /// coexist). Probes with a temp file; fails open (returns true) so a
+    /// probe failure can never silently skip the collision audit.
+    /// </summary>
+    private static bool IsFileSystemCaseSensitive(string directory)
+    {
+        string probe = Path.Combine(directory, "RowlCaseProbe.tmp");
+        string upper = Path.Combine(directory, "ROWLCASEPROBE.tmp");
+        try
+        {
+            File.WriteAllBytes(probe, new byte[] { 0 });
+            try
+            {
+                return !File.Exists(upper);
+            }
+            finally
+            {
+                try { File.Delete(probe); } catch { }
+            }
+        }
+        catch
+        {
+            return true;
+        }
     }
 
     private static void AssertSingleWarning(string scenarioRoot, string assetRef, string expectedFragment)

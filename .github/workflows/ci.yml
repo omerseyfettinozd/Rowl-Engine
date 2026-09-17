@@ -381,7 +381,18 @@ jobs:
         run: |
           $debugBin = 'build/vcpkg_installed/x64-windows/debug/bin'
           if (-not (Test-Path $debugBin)) { $debugBin = "$env:VCPKG_INSTALLATION_ROOT/installed/x64-windows/debug/bin" }
-          $env:PATH = "$((Resolve-Path $debugBin).Path);$env:PATH"
+          # Tur-10: host tools link the RELEASE pkg-config libs
+          # (PKG_CONFIG_PATH points at .../lib/pkgconfig) while the Debug
+          # engine needs debug/bin. vorbis/ogg debug DLLs keep release
+          # names, so rowl_oggenc always resolved; libpng/zlib rename
+          # theirs (libpng16d/zd), leaving rowl_webp2png's release
+          # libpng16.dll/zlib1.dll unresolvable -- the loader parked
+          # pre-main on a missing-DLL dialog (CI-9 pre-flight hang).
+          # Release bin goes SECOND so debug-linked binaries keep
+          # resolving their debug DLLs first; it only fills the gaps.
+          $releaseBin = 'build/vcpkg_installed/x64-windows/bin'
+          if (-not (Test-Path $releaseBin)) { $releaseBin = "$env:VCPKG_INSTALLATION_ROOT/installed/x64-windows/bin" }
+          $env:PATH = "$((Resolve-Path $debugBin).Path);$((Resolve-Path $releaseBin).Path);$env:PATH"
           # test_converters.py shells out to pkg-config itself; the
           # Configure-step PKG_CONFIG_PATH does not persist across steps,
           # so re-export it here (tur-6: empty cflags -> missing

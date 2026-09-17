@@ -1,6 +1,7 @@
 #include "rowl/state/session_persistence.hpp"
 
 #include "rowl/core/logger.hpp"
+#include "rowl/platform/user_data_directories.hpp"
 #include "rowl/state/game_state.hpp"
 #include "rowl/state/save_durability.hpp"
 #include "rowl/state/save_slots.hpp"
@@ -67,8 +68,13 @@ bool SessionPersistence::saveSlot(
                            std::to_string(slotIndex) + ": " + writeError);
             return false;
         }
+        // Tur-10: log/display rendering must use the lossless UTF-8
+        // helper, never path::string(): the ANSI codepage conversion
+        // throws on non-ASCII directories (Windows CI CJK temp root),
+        // turning a successful save into a red contract test.
         ROWL_LOG_INFO("Successfully saved GameState to Slot #" +
-                      std::to_string(slotIndex) + " (" + finalPath.string() + ")");
+                      std::to_string(slotIndex) + " (" +
+                      Rowl::Platform::pathToUtf8(finalPath) + ")");
         return true;
     } catch (const std::exception& error) {
         ROWL_LOG_ERROR("Exception while saving GameState to slot #" +
@@ -91,20 +97,23 @@ SessionLoadResult SessionPersistence::loadSlotDetailed(int32_t slotIndex) const 
 
         if (!fs::exists(filePath) || !fs::is_regular_file(filePath)) {
             ROWL_LOG_WARN("Save slot #" + std::to_string(slotIndex) +
-                          " does not exist at: " + filePath.string());
+                          " does not exist at: " +
+                          Rowl::Platform::pathToUtf8(filePath));
             return {nullptr, SessionLoadStatus::NotFound, 0};
         }
         std::error_code sizeError;
         const auto fileSize = fs::file_size(filePath, sizeError);
         if (sizeError || fileSize > kMaxSaveFileBytes) {
-            ROWL_LOG_ERROR("Save slot file is too large or unreadable: " + filePath.string());
+            ROWL_LOG_ERROR("Save slot file is too large or unreadable: " +
+                             Rowl::Platform::pathToUtf8(filePath));
             return {nullptr, sizeError ? SessionLoadStatus::IoError
                                        : SessionLoadStatus::FileTooLarge, 0};
         }
 
         std::ifstream input(filePath);
         if (!input.is_open()) {
-            ROWL_LOG_ERROR("Failed to open save slot file for reading: " + filePath.string());
+            ROWL_LOG_ERROR("Failed to open save slot file for reading: " +
+                             Rowl::Platform::pathToUtf8(filePath));
             return {nullptr, SessionLoadStatus::IoError, 0};
         }
 
