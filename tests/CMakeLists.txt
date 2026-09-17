@@ -57,6 +57,12 @@ target_link_libraries(rowl_tests PRIVATE
     rowl_engine_thirdparty
 )
 
+# test_c_api_header.c uses _Static_assert (C11): MSVC only provides the
+# keyword in an explicit C11 mode (default C mode rejects it with C2143),
+# while GCC/Clang accept it as an extension. tools/ targets already pin
+# C_STANDARD 11 for the same reason; keep the test binary on the same rule.
+set_target_properties(rowl_tests PROPERTIES C_STANDARD 11)
+
 if(WIN32)
     # Audio soak RSS gauge uses GetProcessMemoryInfo on Windows.
     target_link_libraries(rowl_tests PRIVATE psapi)

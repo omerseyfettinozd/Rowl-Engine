@@ -130,13 +130,17 @@ with tempfile.TemporaryDirectory() as directory:
     if sidecar_a.read_bytes() != sidecar_before or pkg_a.read_bytes() != package_before:
         raise SystemExit("deterministic pack produced different bytes")
 
-    # 1 flipped byte -> exit 1 (stale sidecar mismatch).
+    # 1 flipped byte -> exit 1 (stale sidecar mismatch). The flip targets the
+    # LAST byte (index-table tail: the manifest entry path), never the payload:
+    # payload bytes of zstd-compressed entries are not re-hashed by verify
+    # (see KI-11), so a payload flip is red in raw mode but green when the
+    # `zstandard` module is present. The index tail is covered in both modes.
     pkg_corrupt = root / "corrupt.rowlpkg"
     shutil.copy2(pkg_a, pkg_corrupt)
     pathlib.Path(str(pkg_corrupt) + ".sha256").write_text(
         f"{package_digest}  {pkg_corrupt.name}\n", encoding="utf-8")
     raw = bytearray(pkg_corrupt.read_bytes())
-    raw[25] ^= 1
+    raw[-1] ^= 1
     pkg_corrupt.write_bytes(bytes(raw))
     require_verify(pkg_corrupt, 1, "does not match")
 

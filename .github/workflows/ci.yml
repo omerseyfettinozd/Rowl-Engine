@@ -17,9 +17,14 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install native build dependencies
+        # ffmpeg: converter/author-guide fixture generation (test-only,
+        # call-only; production encode ban in MEDIA_CONVERTERS_CONTRACT.md
+        # is untouched). freetype/harfbuzz/fribidi/unibreak: native text
+        # shaping backend (without them the build falls back to stb and the
+        # shaping xUnit contract goes red).
         run: |
           sudo apt-get update
-          sudo apt-get install --yes build-essential cmake curl ninja-build pkg-config liblua5.4-dev libzstd-dev libvorbis-dev libogg-dev libpng-dev libwebp-dev libvulkan-dev glslc mesa-vulkan-drivers xvfb libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev libxinerama-dev libxxf86vm-dev libxkbcommon-dev libxss-dev libxtst-dev libxfixes-dev libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev libwayland-dev wayland-protocols libdbus-1-dev libibus-1.0-dev libudev-dev
+          sudo apt-get install --yes build-essential cmake curl ninja-build pkg-config liblua5.4-dev libzstd-dev libvorbis-dev libogg-dev libpng-dev libwebp-dev ffmpeg libfreetype-dev libharfbuzz-dev libfribidi-dev libunibreak-dev libvulkan-dev glslc mesa-vulkan-drivers xvfb libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev libxinerama-dev libxxf86vm-dev libxkbcommon-dev libxss-dev libxtst-dev libxfixes-dev libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev libwayland-dev wayland-protocols libdbus-1-dev libibus-1.0-dev libudev-dev
 
       - name: Fetch pinned SDL3 tarball
         run: |
@@ -331,11 +336,11 @@ jobs:
         # libogg/libpng/libwebp: host converter tools (tools/CMakeLists.txt)
         # resolve them via pkg-config, exactly like the Linux/macOS jobs.
         shell: pwsh
-        run: vcpkg install sdl3 zstd lua nlohmann-json libogg libvorbis libpng libwebp --triplet x64-windows
+        run: vcpkg install sdl3 zstd lua nlohmann-json libogg libvorbis libpng libwebp freetype harfbuzz fribidi libunibreak --triplet x64-windows
 
-      - name: Install pkg-config for host tools
+      - name: Install pkg-config and ffmpeg for host tools
         shell: pwsh
-        run: choco install pkgconfiglite -y --no-progress
+        run: choco install pkgconfiglite ffmpeg -y --no-progress
 
       - name: Set up MSVC environment
         uses: ilammy/msvc-dev-cmd@v1
@@ -351,7 +356,7 @@ jobs:
           # is missing, instead of a bare CMake configure error.
           $pcDirs = @("$env:VCPKG_INSTALLATION_ROOT/installed/x64-windows/lib/pkgconfig", "build/vcpkg_installed/x64-windows/lib/pkgconfig")
           $env:PKG_CONFIG_PATH = ($pcDirs -join ';')
-          pkg-config --modversion vorbisenc vorbis ogg libwebpdecoder libpng
+          pkg-config --modversion vorbisenc vorbis ogg libwebpdecoder libpng freetype2 harfbuzz fribidi libunibreak
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake"
 
       - name: Build
