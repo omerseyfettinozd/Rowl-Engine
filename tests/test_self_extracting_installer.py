@@ -50,6 +50,36 @@ def sha256_of(path):
     return hashlib.sha256(pathlib.Path(path).read_bytes()).hexdigest()
 
 
+def block_install_dir(path):
+    """Make `path` (a directory) uncopyable-into so a copy fails with EACCES.
+
+    POSIX uses chmod 555; Windows ignores chmod on directories, so the
+    faithful equivalent is an explicit deny-write ACL (icacls, in-box
+    since Vista). Either way the copy must fail and the installer must
+    roll back; unblock_install_dir restores the directory.
+    """
+    if os.name == "nt":
+        proc = subprocess.run(
+            ["icacls", str(path), "/deny", "*S-1-1-0:(W)"],
+            capture_output=True, text=True)
+        if proc.returncode != 0:
+            raise SystemExit(
+                "icacls deny failed: "
+                f"{proc.stderr.strip()[:300]}")
+    else:
+        os.chmod(path, 0o555)
+
+
+def unblock_install_dir(path):
+    """Undo block_install_dir (also best-effort: never mask the real error)."""
+    if os.name == "nt":
+        subprocess.run(
+            ["icacls", str(path), "/remove:d", "*S-1-1-0"],
+            capture_output=True, text=True)
+    else:
+        os.chmod(path, 0o755)
+
+
 def write_fixture(fake_root):
     (fake_root / "build" / "bin").mkdir(parents=True)
     (fake_root / "build" / "lib").mkdir(parents=True)
@@ -239,31 +269,32 @@ with tempfile.TemporaryDirectory() as directory:
         # then the copy fails. Install must exit non-zero and leave no
         # newly copied file and no receipt behind.
         # (cp of a file onto a plain directory would succeed by copying
-        # inside it, so the blocker is chmod-555 to force EACCES.)
+        # inside it, so the blocker forces EACCES — chmod-555 on POSIX,
+        # a deny-write ACL on Windows where chmod is a no-op on dirs.)
         blocker_name = stub_files[-1]
         half_prefix = fake_root / "half-install"
         half_prefix.mkdir()
         blocker = half_prefix / blocker_name
         blocker.mkdir(parents=True)
-        os.chmod(blocker, 0o555)
+        block_install_dir(blocker)
         half = run(["sh", str(first), "--prefix", str(half_prefix)])
         if half.returncode == 0:
-            os.chmod(blocker, 0o755)
+            unblock_install_dir(blocker)
             raise SystemExit("blocked install was accepted")
         if (half_prefix / ".rowl-receipt").exists() or \
                 (half_prefix / ".rowl-receipt.tmp").exists():
-            os.chmod(blocker, 0o755)
+            unblock_install_dir(blocker)
             raise SystemExit("failed install left a receipt behind")
         leftovers = sorted(
             p.name for p in half_prefix.iterdir() if p.name != blocker_name)
         if leftovers:
-            os.chmod(blocker, 0o755)
+            unblock_install_dir(blocker)
             raise SystemExit(f"rollback left files behind: {leftovers}")
         nested = list(blocker.iterdir())
         if nested:
-            os.chmod(blocker, 0o755)
+            unblock_install_dir(blocker)
             raise SystemExit(f"blocked copy wrote inside blocker: {nested}")
-        os.chmod(blocker, 0o755)
+        unblock_install_dir(blocker)
         shutil.rmtree(half_prefix, ignore_errors=True)
 
         # Corrupt payload (1 byte flip): rejected, target never created.

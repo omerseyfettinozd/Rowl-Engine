@@ -220,7 +220,7 @@ int main(int argc, char** argv) {
     return got == total ? 0 : 1;
 }
 """)
-checker = directory / "ogg_check"
+checker = directory / ("ogg_check.exe" if sys.platform == "win32" else "ogg_check")
 cflags = subprocess.run(["pkg-config", "--cflags", "vorbisfile"], capture_output=True, text=True)
 libs = subprocess.run(["pkg-config", "--libs", "vorbisfile"], capture_output=True, text=True)
 compile_proc = subprocess.run(

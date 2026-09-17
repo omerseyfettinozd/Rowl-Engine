@@ -126,7 +126,16 @@ public static class MediaConverterService
     /// </summary>
     public static string BuildConvertedOutputFullPath(
         string assetsRoot, string outputSubdirectory, string sourceRelativePath)
-        => Path.Combine(assetsRoot, outputSubdirectory, sourceRelativePath.Replace('\\', '/'));
+    {
+        // Path.Combine does NOT split embedded separators: "sfx/theme.ogg"
+        // would glue into "...\audio\sfx/theme.ogg" on Windows. Normalize
+        // to the OS separator first (no-op on Linux) so bulk and
+        // single-import outputs are identical full paths (tur-6).
+        string file = sourceRelativePath
+            .Replace('\\', Path.DirectorySeparatorChar)
+            .Replace('/', Path.DirectorySeparatorChar);
+        return Path.Combine(assetsRoot, outputSubdirectory, file);
+    }
 
     /// <summary>
     /// Tool sidecar'ı yazdıktan sonra C# <c>source_path</c>'i damgalar (Faz 5

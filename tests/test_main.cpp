@@ -3,8 +3,35 @@
  * Split from main_test_runner.cpp; behavior unchanged.
  */
 #include "rowl_test_harness.hpp"
+#ifdef _WIN32
+// Debug CRT + loader faults park on a modal dialog by default; on headless
+// CI that burns the whole ctest timeout with zero output (tur-6). Route
+// every report to stderr and disable the fault dialog instead.
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#include <crtdbg.h>
+#endif
 
 int main(int argc, char* argv[]) {
+#ifdef _WIN32
+    _CrtSetReportMode(_CRT_WARN, _CRTDBG_MODE_FILE);
+    _CrtSetReportFile(_CRT_WARN, _CRTDBG_FILE_STDERR);
+    _CrtSetReportMode(_CRT_ERROR, _CRTDBG_MODE_FILE);
+    _CrtSetReportFile(_CRT_ERROR, _CRTDBG_FILE_STDERR);
+    _CrtSetReportMode(_CRT_ASSERT, _CRTDBG_MODE_FILE);
+    _CrtSetReportFile(_CRT_ASSERT, _CRTDBG_FILE_STDERR);
+    SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
+#endif
+    // Flush every insertion: on a timeout kill, ctest prints what the pipe
+    // captured, so progressive output turns a zero-output kill into a
+    // pointer at the hanging section.
+    std::cout << std::unitbuf;
+    std::cerr << std::unitbuf;
     std::string benchmarkJsonPath;
     std::string goldenJsonPath;
     for (int index = 1; index < argc; ++index) {

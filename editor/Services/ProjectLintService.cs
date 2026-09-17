@@ -189,7 +189,14 @@ internal static class ProjectLintService
         ProjectLintOptions options)
     {
         string root = Path.GetFullPath(assetsPath);
-        var seenFiles = new HashSet<string>(StringComparer.Ordinal);
+        // The Scripts/ sweep probes both "Scripts" and "scripts" spellings.
+        // On a case-insensitive filesystem (Windows) both resolve to the
+        // same directory, so the same physical file must dedupe to one
+        // issue; on case-sensitive systems the spellings are distinct files
+        // and stay distinct (tur-6: duplicate outside-Assets error on Windows).
+        var seenFiles = new HashSet<string>(OperatingSystem.IsWindows()
+            ? StringComparer.OrdinalIgnoreCase
+            : StringComparer.Ordinal);
         int added = 0;
 
         void ScanLuaFile(string relPath, ulong? nodeId, string display)

@@ -26,8 +26,24 @@ import tempfile
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 GUIDE = ROOT / "docs" / "PLAYER_GUIDE.md"
-PLAYER_BIN = pathlib.Path(__import__("os").environ.get(
-    "ROWL_PLAYER_BIN", ROOT / "build" / "bin" / "rowl_player"))
+
+
+def _with_windows_exe(candidate):
+    """Append `.exe` on Windows when the suffixed binary is the real one.
+
+    The repo builds to build/bin on every host; only the suffix differs.
+    An explicit env override that already names the file wins untouched.
+    """
+    import os
+    candidate = pathlib.Path(candidate)
+    if (os.name == "nt" and candidate.suffix == ""
+            and candidate.with_suffix(".exe").is_file()):
+        return candidate.with_suffix(".exe")
+    return candidate
+
+
+PLAYER_BIN = _with_windows_exe(pathlib.Path(__import__("os").environ.get(
+    "ROWL_PLAYER_BIN", ROOT / "build" / "bin" / "rowl_player")))
 
 TAG_RE = re.compile(r"^#\s*guide-probe:\s*(expect-ok|expect-fail)\s*$")
 FENCE_RE = re.compile(r"^```(\w*)\s*$")

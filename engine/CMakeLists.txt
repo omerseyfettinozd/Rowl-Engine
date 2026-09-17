@@ -106,18 +106,150 @@ endif()
 option(ROWL_ENABLE_TEXT_SHAPING
     "Enable FreeType/HarfBuzz/FriBidi/libunibreak text shaping" ON)
 set(ROWL_TEXT_SHAPING_AVAILABLE 0)
+set(ROWL_TEXT_SHAPING_TARGET "")
 if(ROWL_ENABLE_TEXT_SHAPING AND PkgConfig_FOUND)
     pkg_check_modules(ROWL_TEXT_SHAPING QUIET IMPORTED_TARGET
         freetype2 harfbuzz fribidi libunibreak)
     if(TARGET PkgConfig::ROWL_TEXT_SHAPING)
-        set(ROWL_TEXT_SHAPING_AVAILABLE 1)
-    else()
-        message(WARNING
-            "FreeType/HarfBuzz/FriBidi/libunibreak were not all found; "
-            "the safe stb_truetype text fallback will be used.")
+        set(ROWL_TEXT_SHAPING_TARGET PkgConfig::ROWL_TEXT_SHAPING)
     endif()
-elseif(ROWL_ENABLE_TEXT_SHAPING)
-    message(WARNING "pkg-config unavailable; using the stb_truetype text fallback.")
+endif()
+if(ROWL_ENABLE_TEXT_SHAPING AND NOT ROWL_TEXT_SHAPING_TARGET)
+    # Per-library fallback for the umbrella above: a single module without
+    # a .pc file sinks the whole stack — vcpkg's libunibreak port ships
+    # none, which left Windows on the stb_truetype fallback while the other
+    # three resolved (tur-6). Each library resolves independently
+    # (pkg-config module first, then find_library/find_path) and the
+    # winners combine into one interface target. vcpkg's default triplet
+    # is dynamic, so these are DLL import libraries: safe to link into any
+    # CRT configuration (static triplets would need per-config selection
+    # and are out of scope).
+    set(_rowl_shaping_tgts "")
+    set(_rowl_shaping_libs "")
+    set(_rowl_shaping_incs "")
+
+    # FreeType (<ft2build.h> + FT_FREETYPE_H): the two headers live in
+    # different prefixes on some layouts (Debian: freetype2/; upstream or
+    # vcpkg: include/ + include/freetype2/), so both join the interface.
+    if(PkgConfig_FOUND)
+        pkg_check_modules(ROWL_SHAPING_FT QUIET IMPORTED_TARGET freetype2)
+    endif()
+    if(TARGET PkgConfig::ROWL_SHAPING_FT)
+        list(APPEND _rowl_shaping_tgts PkgConfig::ROWL_SHAPING_FT)
+        set(_ROWL_SHAPING_FREETYPE_OK TRUE)
+    else()
+        find_library(ROWL_SHAPING_FREETYPE_LIB NAMES freetype libfreetype)
+        find_path(ROWL_SHAPING_FT2_DIR NAMES ft2build.h)
+        find_path(ROWL_SHAPING_FT_H_DIR NAMES freetype/freetype.h)
+        if(ROWL_SHAPING_FREETYPE_LIB AND ROWL_SHAPING_FT2_DIR
+                AND ROWL_SHAPING_FT_H_DIR)
+            list(APPEND _rowl_shaping_libs "${ROWL_SHAPING_FREETYPE_LIB}")
+            list(APPEND _rowl_shaping_incs
+                "${ROWL_SHAPING_FT2_DIR}" "${ROWL_SHAPING_FT_H_DIR}")
+            set(_ROWL_SHAPING_FREETYPE_OK TRUE)
+        else()
+            set(_ROWL_SHAPING_FREETYPE_OK FALSE)
+        endif()
+    endif()
+
+    # HarfBuzz (<harfbuzz/hb.h> + <harfbuzz/hb-ft.h>, the latter used by
+    # text_shaper.cpp for the FreeType bridge).
+    if(PkgConfig_FOUND)
+        pkg_check_modules(ROWL_SHAPING_HB QUIET IMPORTED_TARGET harfbuzz)
+    endif()
+    if(TARGET PkgConfig::ROWL_SHAPING_HB)
+        list(APPEND _rowl_shaping_tgts PkgConfig::ROWL_SHAPING_HB)
+        set(_ROWL_SHAPING_HARFBUZZ_OK TRUE)
+    else()
+        find_library(ROWL_SHAPING_HARFBUZZ_LIB NAMES harfbuzz libharfbuzz)
+        find_path(ROWL_SHAPING_HARFBUZZ_DIR NAMES harfbuzz/hb.h)
+        if(ROWL_SHAPING_HARFBUZZ_LIB AND ROWL_SHAPING_HARFBUZZ_DIR
+                AND EXISTS "${ROWL_SHAPING_HARFBUZZ_DIR}/harfbuzz/hb-ft.h")
+            list(APPEND _rowl_shaping_libs "${ROWL_SHAPING_HARFBUZZ_LIB}")
+            list(APPEND _rowl_shaping_incs "${ROWL_SHAPING_HARFBUZZ_DIR}")
+            set(_ROWL_SHAPING_HARFBUZZ_OK TRUE)
+        else()
+            set(_ROWL_SHAPING_HARFBUZZ_OK FALSE)
+        endif()
+    endif()
+
+    # FriBidi (<fribidi.h>): shipped as fribidi/fribidi.h on most layouts
+    # (with the fribidi subdir on the path) or top-level elsewhere; both
+    # spellings are probed and every existing prefix joins the interface.
+    if(PkgConfig_FOUND)
+        pkg_check_modules(ROWL_SHAPING_FR QUIET IMPORTED_TARGET fribidi)
+    endif()
+    if(TARGET PkgConfig::ROWL_SHAPING_FR)
+        list(APPEND _rowl_shaping_tgts PkgConfig::ROWL_SHAPING_FR)
+        set(_ROWL_SHAPING_FRIBIDI_OK TRUE)
+    else()
+        find_library(ROWL_SHAPING_FRIBIDI_LIB NAMES fribidi libfribidi)
+        find_path(ROWL_SHAPING_FRIBIDI_DIR NAMES fribidi/fribidi.h fribidi.h)
+        if(ROWL_SHAPING_FRIBIDI_LIB AND ROWL_SHAPING_FRIBIDI_DIR)
+            list(APPEND _rowl_shaping_libs "${ROWL_SHAPING_FRIBIDI_LIB}")
+            list(APPEND _rowl_shaping_incs "${ROWL_SHAPING_FRIBIDI_DIR}")
+            if(EXISTS "${ROWL_SHAPING_FRIBIDI_DIR}/fribidi")
+                list(APPEND _rowl_shaping_incs
+                    "${ROWL_SHAPING_FRIBIDI_DIR}/fribidi")
+            endif()
+            set(_ROWL_SHAPING_FRIBIDI_OK TRUE)
+        else()
+            set(_ROWL_SHAPING_FRIBIDI_OK FALSE)
+        endif()
+    endif()
+
+    # libunibreak (<graphemebreak.h> + <linebreak.h>): ships no .pc file on
+    # several distributions, so the manual path is the common one here.
+    if(PkgConfig_FOUND)
+        pkg_check_modules(ROWL_SHAPING_UB QUIET IMPORTED_TARGET libunibreak)
+    endif()
+    if(TARGET PkgConfig::ROWL_SHAPING_UB)
+        list(APPEND _rowl_shaping_tgts PkgConfig::ROWL_SHAPING_UB)
+        set(_ROWL_SHAPING_UNIBREAK_OK TRUE)
+    else()
+        find_library(ROWL_SHAPING_UNIBREAK_LIB NAMES unibreak libunibreak)
+        find_path(ROWL_SHAPING_UNIBREAK_DIR
+            NAMES unibreak/graphemebreak.h graphemebreak.h)
+        set(_ROWL_SHAPING_UNIBREAK_OK FALSE)
+        if(ROWL_SHAPING_UNIBREAK_LIB AND ROWL_SHAPING_UNIBREAK_DIR)
+            set(_rowl_ub_incs "${ROWL_SHAPING_UNIBREAK_DIR}")
+            if(EXISTS "${ROWL_SHAPING_UNIBREAK_DIR}/unibreak")
+                list(APPEND _rowl_ub_incs
+                    "${ROWL_SHAPING_UNIBREAK_DIR}/unibreak")
+            endif()
+            # Both headers ship in the same directory upstream; confirm the
+            # co-header resolves from the chosen prefixes so the build —
+            # not configure — is never the first to complain.
+            foreach(_rowl_ub_dir IN LISTS _rowl_ub_incs)
+                if(EXISTS "${_rowl_ub_dir}/linebreak.h")
+                    list(APPEND _rowl_shaping_libs
+                        "${ROWL_SHAPING_UNIBREAK_LIB}")
+                    list(APPEND _rowl_shaping_incs ${_rowl_ub_incs})
+                    set(_ROWL_SHAPING_UNIBREAK_OK TRUE)
+                    break()
+                endif()
+            endforeach()
+        endif()
+    endif()
+
+    if(_ROWL_SHAPING_FREETYPE_OK AND _ROWL_SHAPING_HARFBUZZ_OK
+            AND _ROWL_SHAPING_FRIBIDI_OK AND _ROWL_SHAPING_UNIBREAK_OK)
+        list(REMOVE_DUPLICATES _rowl_shaping_incs)
+        set(_rowl_shaping_link ${_rowl_shaping_tgts} ${_rowl_shaping_libs})
+        add_library(RowlShapingFallback INTERFACE IMPORTED)
+        set_target_properties(RowlShapingFallback PROPERTIES
+            INTERFACE_INCLUDE_DIRECTORIES "${_rowl_shaping_incs}"
+            INTERFACE_LINK_LIBRARIES "${_rowl_shaping_link}")
+        set(ROWL_TEXT_SHAPING_TARGET RowlShapingFallback)
+    endif()
+endif()
+if(ROWL_ENABLE_TEXT_SHAPING AND NOT ROWL_TEXT_SHAPING_TARGET)
+    message(WARNING
+        "FreeType/HarfBuzz/FriBidi/libunibreak were not all found; "
+        "the safe stb_truetype text fallback will be used.")
+endif()
+if(ROWL_TEXT_SHAPING_TARGET)
+    set(ROWL_TEXT_SHAPING_AVAILABLE 1)
 endif()
 if(TARGET PkgConfig::VORBISFILE)
     set(VORBISFILE_TARGET PkgConfig::VORBISFILE)
@@ -244,9 +376,12 @@ target_link_libraries(rowl_engine_thirdparty INTERFACE
     ${LUA_LIBRARIES}
     nlohmann_json::nlohmann_json
 )
+# Set exactly when the target below names something real: the umbrella
+# PkgConfig target on pkg-config hosts, the per-library RowlShapingFallback
+# interface where individual modules lack .pc files (vcpkg/Windows).
 if(ROWL_TEXT_SHAPING_AVAILABLE)
     target_link_libraries(rowl_engine_thirdparty INTERFACE
-        PkgConfig::ROWL_TEXT_SHAPING)
+        ${ROWL_TEXT_SHAPING_TARGET})
 endif()
 if(WIN32)
     target_link_libraries(rowl_engine_thirdparty INTERFACE shell32 ole32)

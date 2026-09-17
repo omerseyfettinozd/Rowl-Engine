@@ -79,3 +79,11 @@ set_tests_properties(rowl_native_tests PROPERTIES
     # CI and sandbox machines; the offscreen engine needs neither.
     ENVIRONMENT "SDL_AUDIODRIVER=dummy;SDL_VIDEODRIVER=dummy"
 )
+if(WIN32)
+    # MSVC Debug runs the full native suite far slower than optimized
+    # compilers; the CI --timeout 300 turns that into a zero-output kill.
+    # 1500 gives a Debug run room to finish while staying a fast pointer
+    # on a real hang (assert dialogs are suppressed in test_main.cpp).
+    # Other hosts keep the CLI default: do not touch, they are green.
+    set_tests_properties(rowl_native_tests PROPERTIES TIMEOUT 1500)
+endif()

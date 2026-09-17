@@ -322,10 +322,10 @@ jobs:
 
   windows:
     runs-on: windows-2025
-    # MSVC derlemesi + tam native suite + xUnit 20 dakikaya sigmiyor
-    # (gozlem: tur-4'te 20:00'da job-timeout kurbani); 35 dakika gercekci
-    # tavan, T0 katmanlamasi kalici cozumu getirecek.
-    timeout-minutes: 35
+    # MSVC derlemesi + tam native suite + xUnit 35 dakikaya sigmiyor
+    # (gozlem: tur-5'te native suite 300s timeout + Debug yavasligi);
+    # 60 dakika gercekci tavan, T0 katmanlamasi kalici cozumu getirecek.
+    timeout-minutes: 60
 
     steps:
       - uses: actions/checkout@v4
@@ -353,13 +353,24 @@ jobs:
       - name: Configure
         shell: pwsh
         run: |
+          # Native (non-zero) exit must stop the step: without this pwsh
+          # logs a failed pre-flight and configures anyway (tur-6: the
+          # missing libunibreak module scrolled by unnoticed).
+          $ErrorActionPreference = "Stop"
           # Point pkg-config at the vcpkg .pc files (classic or manifest
           # layout) before CMake's FindPkgConfig runs for tools/.
           # The pre-flight check fails fast with a clear log if a module
           # is missing, instead of a bare CMake configure error.
+          # Shaping modules are INTENTIONALLY absent here: every one of
+          # them has a per-library cmake fallback (pkg-config module, else
+          # find_library/find_path — libunibreak ships no .pc file at all)
+          # and the EditorTextShapingSlice3 backend assertion is that gate.
+          # A strict pre-flight entry would false-red exactly the case the
+          # fallback exists for (tur-6 lesson). vorbisfile IS listed:
+          # test_converters.py has no fallback.
           $pcDirs = @("$env:VCPKG_INSTALLATION_ROOT/installed/x64-windows/lib/pkgconfig", "build/vcpkg_installed/x64-windows/lib/pkgconfig")
           $env:PKG_CONFIG_PATH = ($pcDirs -join ';')
-          pkg-config --modversion vorbisenc vorbis ogg libwebpdecoder libpng freetype2 harfbuzz fribidi libunibreak
+          pkg-config --modversion vorbisenc vorbis vorbisfile ogg libwebpdecoder libpng
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake"
 
       - name: Build
@@ -371,11 +382,19 @@ jobs:
           $debugBin = 'build/vcpkg_installed/x64-windows/debug/bin'
           if (-not (Test-Path $debugBin)) { $debugBin = "$env:VCPKG_INSTALLATION_ROOT/installed/x64-windows/debug/bin" }
           $env:PATH = "$((Resolve-Path $debugBin).Path);$env:PATH"
+          # test_converters.py shells out to pkg-config itself; the
+          # Configure-step PKG_CONFIG_PATH does not persist across steps,
+          # so re-export it here (tur-6: empty cflags -> missing
+          # vorbis/vorbisfile.h).
+          $pcDirs = @("$env:VCPKG_INSTALLATION_ROOT/installed/x64-windows/lib/pkgconfig", "build/vcpkg_installed/x64-windows/lib/pkgconfig")
+          $env:PKG_CONFIG_PATH = ($pcDirs -join ';')
           # Software rasterizer on the hosted runner cannot sustain the
           # transition-benchmark FPS floor; report there, enforce on dev hw.
           $env:ROWL_PERF_FLOOR = "report"
           # Per-test timeout turns a hung test into a fast pointer with output
-          # instead of burning the whole 35-minute job timeout silently.
+          # instead of burning the whole 60-minute job timeout silently.
+          # (rowl_native_tests carries its own TIMEOUT 1500 on Windows for
+          # MSVC-Debug slowness; everything else stays on this 300 default.)
           ctest --test-dir build --output-on-failure --timeout 300
 
       - name: Verify standalone package and VFS smoke

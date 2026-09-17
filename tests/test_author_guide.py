@@ -41,10 +41,17 @@ def require_tools(*names):
 def resolve_converter(env_name, default_rel):
     import os
     candidate = pathlib.Path(os.environ.get(env_name, ROOT / default_rel))
+    # Windows builds the same binary with a `.exe` suffix; resolve it so
+    # the is_file gate and the guide blocks (which read this env var)
+    # use the exact path instead of relying on shell suffix magic.
+    if (os.name == "nt" and candidate.suffix == ""
+            and candidate.with_suffix(".exe").is_file()):
+        candidate = candidate.with_suffix(".exe")
     if not candidate.is_file():
         raise SystemExit(
             f"converter binary missing: {candidate} "
             f"(build it, or set {env_name})")
+    os.environ[env_name] = str(candidate)
     return candidate
 
 
