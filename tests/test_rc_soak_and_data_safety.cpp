@@ -433,14 +433,30 @@ void test_rc_soak_and_data_safety() {
         // dialogue_history'nin her advance'te bir kayit uzamasindan gelir,
         // ~60B/adim; tabanin tamami 320x180 thumbnail base64'tir).
         // Ust-sinir ~2x payla 768KB, sure ~2x payla save <= 150ms, load <= 300ms.
+        // Sanitizer derlemelerinde enstrumantasyon vergisi ~2.1x (CI gozlemi:
+        // ASan+UBSan altinda load 316ms); N-stres kilidindeki ayni olcek
+        // burada da gecerli, yoksa kilit gercek regresyonla yavaslamayi
+        // ayirt edemez.
+#if defined(__SANITIZE_ADDRESS__) || defined(__SANITIZE_UNDEFINED__)
+        constexpr double kGrowthTimeScale = 2.0;
+#elif defined(__has_feature)
+#if __has_feature(address_sanitizer) || __has_feature(undefined_behavior_sanitizer)
+        constexpr double kGrowthTimeScale = 2.0;
+#else
+        constexpr double kGrowthTimeScale = 1.0;
+#endif
+#else
+        constexpr double kGrowthTimeScale = 1.0;
+#endif
         if (grownBytes > 768ULL * 1024ULL) {
             std::cerr << "History growth exceeded the locked upper bound: "
                       << grownBytes << "B" << std::endl;
             exit(1);
         }
-        if (saveMs > 150.0 || loadMs > 300.0) {
-            std::cerr << "Post-growth save/load exceeded the locked time bound: save="
-                      << saveMs << "ms load=" << loadMs << "ms" << std::endl;
+        if (saveMs > 150.0 * kGrowthTimeScale || loadMs > 300.0 * kGrowthTimeScale) {
+            std::cerr << "Post-growth save/load exceeded the locked time bound (save<="
+                      << 150.0 * kGrowthTimeScale << "ms load<=" << 300.0 * kGrowthTimeScale
+                      << "ms): save=" << saveMs << "ms load=" << loadMs << "ms" << std::endl;
             exit(1);
         }
         TEST_PASS("1200-advance history growth stays within the locked size/time bound");

@@ -297,6 +297,15 @@ public sealed class EditorGlobalSearchSlice2Tests
         double worst = 0;
         double total = 0;
         const int repeats = 3;
+        // Isinma turu: ilk cagrilardaki JIT/soguk-onbellek gurultusunu olcme
+        // disinda tutar. Kilit kararli-hal sorgu maliyetini korur (butce 50 ms
+        // aynen); aksi halde paylasimli CI kosucusundaki soguk-baslangic
+        // sivri degeri (gozlem: ilk sorguda ~70 ms, ortalama 3 ms) kilidi
+        // cevresel-gurultuden kirmiziya cevirir.
+        foreach (string query in queries)
+        {
+            service.Search(query);
+        }
         foreach (string query in queries)
         {
             for (int i = 0; i < repeats; i++)
