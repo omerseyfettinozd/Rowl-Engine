@@ -15,10 +15,20 @@
 #include "rowl/vfs/vfs.hpp"
 
 #include <nlohmann/json.hpp>
+#ifdef _WIN32
+#include <process.h>  // _getpid: MSVC'de unistd.h/getpid yok.
+#else
 #include <unistd.h>
+#endif
 #include <unordered_map>
 
 namespace {
+
+#ifdef _WIN32
+int currentProcessId() { return _getpid(); }
+#else
+int currentProcessId() { return static_cast<int>(::getpid()); }
+#endif
 
 void failPrefetch(const std::string& message) {
     std::cerr << "prefetch_chapters FAILED: " << message << std::endl;
@@ -31,7 +41,7 @@ void checkPrefetch(bool condition, const std::string& message) {
 
 std::string makeTempDir(const std::string& name) {
     const auto base = std::filesystem::temp_directory_path() /
-                      ("rowl_prefetch_" + name + "_" + std::to_string(::getpid()));
+                      ("rowl_prefetch_" + name + "_" + std::to_string(currentProcessId()));
     std::error_code error;
     std::filesystem::remove_all(base, error);
     std::filesystem::create_directories(base, error);

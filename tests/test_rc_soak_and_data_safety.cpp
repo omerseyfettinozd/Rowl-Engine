@@ -350,19 +350,29 @@ void test_rc_soak_and_data_safety() {
         // Sanitizer derlemelerinde ayni is ~2.1x surer (CI gozlemi: 330.8 sn
         // ASan+UBSan altinda); enstrumantasyon yavaslamasini gercek
         // regresyondan ayirmak icin kilit sanitizer altinda 2 katina cikar.
-#if defined(__SANITIZE_ADDRESS__) || defined(__SANITIZE_UNDEFINED__) || \
-    (defined(__has_feature) && \
-     (__has_feature(address_sanitizer) || __has_feature(undefined_behavior_sanitizer)))
+        // __has_feature Clang'a ozgu oldugundan dogrudan #if icinde
+        // sorgulanamaz (GCC "missing binary operator" hatasi verir); once
+        // #elif defined ile varligi ayiklanir, icteki #if yalnizca
+        // __has_feature tanimliyken degerlendirilir. GCC'nin __SANITIZE_*
+        // makrolari CI sanitizer isini, __has_feature dali Clang sanitizer
+        // derlemelerini kapsar.
+#if defined(__SANITIZE_ADDRESS__) || defined(__SANITIZE_UNDEFINED__)
+        constexpr double kStressBudgetSecs = 600.0;
+#elif defined(__has_feature)
+#if __has_feature(address_sanitizer) || __has_feature(undefined_behavior_sanitizer)
         constexpr double kStressBudgetSecs = 600.0;
 #else
         constexpr double kStressBudgetSecs = 300.0;
 #endif
+#else
+        constexpr double kStressBudgetSecs = 300.0;
+#endif
         if (stressSecs >= kStressBudgetSecs) {
-            std::cerr << "N-stress exceeded the locked 300s observation budget: "
-                      << stressSecs << "s" << std::endl;
+            std::cerr << "N-stress exceeded the locked observation budget ("
+                      << kStressBudgetSecs << "s): " << stressSecs << "s" << std::endl;
             exit(1);
         }
-        TEST_PASS("1000-iteration save/load round-robin preserves node-id under 4MB/300s");
+        TEST_PASS("1000-iteration save/load round-robin preserves node-id under 4MB within budget");
     }
 
     // 6. Tarihce-buyume olcumu: budama OLMADIGI icin (previousState sinirsiz
