@@ -5,7 +5,9 @@
  * Kapsam:
  *  a) Atlas guard benchmark: urun-tavani konfigurasyon (4 karakter x 4 slot =
  *     16 draw) steady render + 4/40/80-draw stres noktalari (kayit) + soguk
- *     first-frame + texture_load_ms. Esik: 16-draw steady <= 8 ms.
+ *     first-frame + texture_load_ms. Esik: 16-draw steady <= 8 ms
+ *     (ROWL_PERF_FLOOR=report modunda raporlanir, zorlanmaz; fail kapisi
+ *     Linux-only — Faz 4.5 D1).
  *  b) Opaklik tasiyici: layers opacity -> CharacterRenderData.opacity +
  *     offscreen piksel probu (fail-closed: opaklik yoksa eski davranis).
  *
@@ -152,11 +154,25 @@ void testLayerAtlasBenchmark() {
 
     // Muhurlu esik: yalnizca urun-tavani (16 draw) assert edilir. Stres
     // noktalari makineye gore degisir, sadece kaydedilir.
+    // Tur-13: Faz 4.5 D1 karari — fail kapisi Linux-only. Windows CI
+    // ROWL_PERF_FLOOR=report ile kosar (hosted software rasterizer 16-draw
+    // tavanini tutamaz: CI-12'de 9.26ms > 8ms). test_camera desenindeki
+    // ayni kapi; default enforced oldugu icin Linux CI + yerel davranis
+    // birebir korunur.
     constexpr double kProductCeilingThresholdMs = 8.0;
-    checkLayerBench(
-        draws16Ms <= kProductCeilingThresholdMs,
-        "product-ceiling 16-draw steady " + std::to_string(draws16Ms) +
-            "ms exceeds " + std::to_string(kProductCeilingThresholdMs) + "ms");
+    const bool perfFloorEnforced =
+        environmentValue("ROWL_PERF_FLOOR", "enforced") == "enforced";
+    if (perfFloorEnforced) {
+        checkLayerBench(
+            draws16Ms <= kProductCeilingThresholdMs,
+            "product-ceiling 16-draw steady " + std::to_string(draws16Ms) +
+                "ms exceeds " + std::to_string(kProductCeilingThresholdMs) + "ms");
+    } else if (draws16Ms > kProductCeilingThresholdMs) {
+        std::cout << "  (ROWL_PERF_FLOOR=report: 16-draw ceiling "
+                  << draws16Ms << "ms > "
+                  << kProductCeilingThresholdMs
+                  << "ms, reported not enforced)" << std::endl;
+    }
     TEST_PASS("layer product-ceiling (16 draws) <= 8ms");
 
     maybeWriteLayerBenchmarkJson(firstFrameMs, textureLoadMs, draws4Ms,
