@@ -1,5 +1,6 @@
 #include "rowl/state/game_state.hpp"
 #include "rowl/core/logger.hpp"
+#include "rowl/platform/user_data_directories.hpp"
 #include "rowl/state/save_metadata.hpp"
 #include "rowl/state/session_persistence.hpp"
 #include <nlohmann/json.hpp>
@@ -392,20 +393,27 @@ std::shared_ptr<const GameState> GameState::deserializeJson(const std::string& j
 
 bool GameState::saveToSlot(const std::shared_ptr<const GameState>& state,
                            int32_t slotIndex, const std::string& saveDir) {
-    return SessionPersistence(saveDir).saveSlot(state, slotIndex);
+    // Tur-11: saveDir is UTF-8 (C ABI contract). The implicit
+    // path-from-string ctor would reinterpret it in the ANSI codepage on
+    // Windows (CI-10: CJK temp root mojibake -> "slot does not exist").
+    return SessionPersistence(Rowl::Platform::pathFromUtf8(saveDir))
+        .saveSlot(state, slotIndex);
 }
 
 std::shared_ptr<const GameState> GameState::loadFromSlot(
     int32_t slotIndex, const std::string& saveDir) {
-    return SessionPersistence(saveDir).loadSlot(slotIndex);
+    return SessionPersistence(Rowl::Platform::pathFromUtf8(saveDir))
+        .loadSlot(slotIndex);
 }
 
 bool GameState::hasSlot(int32_t slotIndex, const std::string& saveDir) {
-    return SessionPersistence(saveDir).hasSlot(slotIndex);
+    return SessionPersistence(Rowl::Platform::pathFromUtf8(saveDir))
+        .hasSlot(slotIndex);
 }
 
 bool GameState::deleteSlot(int32_t slotIndex, const std::string& saveDir) {
-    return SessionPersistence(saveDir).deleteSlot(slotIndex);
+    return SessionPersistence(Rowl::Platform::pathFromUtf8(saveDir))
+        .deleteSlot(slotIndex);
 }
 
 } // namespace Rowl::State
