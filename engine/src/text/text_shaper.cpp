@@ -268,6 +268,18 @@ ShapedText TextShaper::shapeMarkup(std::string_view markup,
 #if ROWL_TEXT_SHAPING_AVAILABLE
         if (isAdvancedBackendActive()) {
             ensureUnibreakInitialized();
+            // Pin the FreeType pixel size before any hb_shape call. hb-ft
+            // resolves advances through FT_Get_Advance without NO_SCALE, so
+            // with no size set the advances fold to zero on HarfBuzz <= 8.x
+            // (CI: 8.3.0; newer HarfBuzz is size-independent, unaffected).
+            // hb_ft_font_changed clears the glyph-keyed advance cache, which
+            // would otherwise serve the previous call's pixel size.
+            if (m_impl->face != nullptr) {
+                const auto pixels = static_cast<FT_UInt>(
+                    std::max(1.0f, std::round(fontSize)));
+                if (FT_Set_Pixel_Sizes(m_impl->face, 0, pixels) == 0)
+                    hb_ft_font_changed(m_impl->font);
+            }
             std::vector<FriBidiChar> cps(scalars.size());
             for (std::size_t i = 0; i < scalars.size(); ++i) cps[i] = scalars[i].codepoint;
             std::vector<char> graphemeBreaks(scalars.size(), GRAPHEMEBREAK_BREAK);

@@ -347,7 +347,17 @@ void test_rc_soak_and_data_safety() {
         // (engine.cpp:2031-2100 duz sirali yol) — iterasyon basi ~150ms
         // buradan gelir. KNOWN_ISSUES adayi: save thumbnail'ini
         // atlama/azaltma secenegi. Kilit: <300 sn (gozlemin ~1.9x'i).
-        if (stressSecs >= 300.0) {
+        // Sanitizer derlemelerinde ayni is ~2.1x surer (CI gozlemi: 330.8 sn
+        // ASan+UBSan altinda); enstrumantasyon yavaslamasini gercek
+        // regresyondan ayirmak icin kilit sanitizer altinda 2 katina cikar.
+#if defined(__SANITIZE_ADDRESS__) || defined(__SANITIZE_UNDEFINED__) || \
+    (defined(__has_feature) && \
+     (__has_feature(address_sanitizer) || __has_feature(undefined_behavior_sanitizer)))
+        constexpr double kStressBudgetSecs = 600.0;
+#else
+        constexpr double kStressBudgetSecs = 300.0;
+#endif
+        if (stressSecs >= kStressBudgetSecs) {
             std::cerr << "N-stress exceeded the locked 300s observation budget: "
                       << stressSecs << "s" << std::endl;
             exit(1);

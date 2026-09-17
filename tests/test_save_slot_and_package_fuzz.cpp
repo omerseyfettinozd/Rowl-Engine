@@ -16,11 +16,31 @@
 #include <cerrno>
 #include <climits>
 #include <cstdint>
+#include <cstdlib>
 #include <exception>
 
 namespace {
 
 uint32_t g_fuzzState = 0x5EEDF00Du;
+
+// Portable env-var injection: MSVC has no POSIX setenv/unsetenv.
+// _putenv_s manipulates the same CRT block std::getenv reads, and
+// _putenv_s(name, "") removes the variable (unsetenv equivalent).
+void setTestEnv(const char* name, const char* value) {
+#ifdef _WIN32
+    if (value == nullptr) {
+        _putenv_s(name, "");
+    } else {
+        _putenv_s(name, value);
+    }
+#else
+    if (value == nullptr) {
+        ::unsetenv(name);
+    } else {
+        ::setenv(name, value, 1);
+    }
+#endif
+}
 
 uint8_t nextFuzzByte() {
     g_fuzzState = g_fuzzState * 1664525u + 1013904223u;
@@ -459,13 +479,13 @@ void test_save_slot_and_package_fuzz() {
 
         // Env-var injection path (production default off): with the variable
         // set the save fails the same way; unset, it succeeds again.
-        ::setenv("ROWL_SAVE_INJECT_ENOSPC", "1", 1);
+        setTestEnv("ROWL_SAVE_INJECT_ENOSPC", "1");
         if (persistence.saveSlot(nextState, slot)) {
-            ::unsetenv("ROWL_SAVE_INJECT_ENOSPC");
+            setTestEnv("ROWL_SAVE_INJECT_ENOSPC", nullptr);
             Rowl::State::setSaveDurabilityInjectEnospc(false);
             failCase("Env-var ENOSPC-injected save unexpectedly succeeded");
         }
-        ::unsetenv("ROWL_SAVE_INJECT_ENOSPC");
+        setTestEnv("ROWL_SAVE_INJECT_ENOSPC", nullptr);
         if (readBytes(slotPath) != baselineBytes) {
             failCase("Env-var ENOSPC-injected save modified the previous good slot");
         }
