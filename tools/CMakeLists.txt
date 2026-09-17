@@ -29,18 +29,11 @@ if(NOT MSVC)
     target_compile_options(rowl_webp2png PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
-# Tur-8 (Windows CI: converter/author TIMEOUT): the tools link vcpkg DLLs
-# (libwebp/libpng/zlib, vorbis/ogg). When those DLLs are not on PATH, the
-# Windows loader parks on a missing-DLL dialog and the headless CI run
-# hangs with zero output until the ctest timeout kills it. Host tools must
-# be self-contained (the same rule test_converters.py enforces on their
-# sources), so stage every runtime DLL next to the exe at build time.
-if(WIN32)
-    foreach(ROWL_TOOL rowl_oggenc rowl_webp2png)
-        add_custom_command(TARGET ${ROWL_TOOL} POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                "$<TARGET_RUNTIME_DLLS:${ROWL_TOOL}>"
-                "$<TARGET_FILE_DIR:${ROWL_TOOL}>"
-            COMMAND_EXPAND_LISTS)
-    endforeach()
-endif()
+# Tur-8 note (reverted in tur-9): a TARGET_RUNTIME_DLLS POST_BUILD was
+# tried here, but it expands to an empty list for PkgConfig IMPORTED
+# targets and broke the Windows build with a `cmake -E copy_if_different`
+# usage error. It is also unnecessary: the vcpkg toolchain applocal
+# already stages the DLLs next to the exe (CI-8 log shows
+# `vorbisenc.dll -> build\bin ... done`). The hang armor stays: the
+# SetErrorMode guards in the tool mains plus the timeout/pre-flight
+# wrappers in the tests.

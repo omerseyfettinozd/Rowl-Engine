@@ -130,7 +130,6 @@ def main():
         raise SystemExit("guide lost its uninstall coverage")
 
     with tempfile.TemporaryDirectory(prefix="rowl-author-guide-") as work:
-        import os
         env = dict(os.environ, AUTHOR_WORK=work)
         # Blocks run with cwd=ROOT (guide commands use repo-relative paths).
         # Snapshot crash-logs/ and remove ONLY what this run created --
