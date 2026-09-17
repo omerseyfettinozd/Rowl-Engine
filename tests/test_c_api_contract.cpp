@@ -221,29 +221,45 @@ void test_c_api_contract() {
         RowlEngine_LoadStoryGraph(handle, chapterNarrow.c_str());
         std::cerr << "[contract] phase 3: vnext load returned" << std::endl;
         if (narrowThrew) {
-            // The UTF-8 bytes name no file the ANSI fopen can open, so the
-            // graceful contract is: zero chapters and an observable error.
+            // Tur-12: the engine resolves the UTF-8 C ABI path losslessly
+            // (pathFromUtf8), so the CJK graph loads on Windows exactly
+            // like on Linux — a non-ASCII project dir is a supported
+            // product case, not a graceful-failure case.
+            uint32_t narrowCount = 77;
+            if (RowlEngine_GetChapterCount(handle, &narrowCount) != ROWL_RESULT_OK ||
+                narrowCount != 2) {
+                std::cerr << "UTF-8 graph path must load two chapters" << std::endl;
+                exit(1);
+            }
+            // The graceful contract survives for genuinely-missing files:
+            // the active graph is preserved and an error stays observable.
+            const std::u8string missingU8 =
+                (unicodeRoot / "rowl-missing-graph.json").u8string();
+            const std::string missingNarrow(
+                reinterpret_cast<const char*>(missingU8.data()), missingU8.size());
+            RowlEngine_LoadStoryGraph(handle, missingNarrow.c_str());
             uint32_t gracefulCount = 77;
             if (RowlEngine_GetChapterCount(handle, &gracefulCount) != ROWL_RESULT_OK ||
-                gracefulCount != 0) {
-                std::cerr << "Unrepresentable graph path must leave zero chapters" << std::endl;
+                gracefulCount != 2) {
+                std::cerr << "Missing graph path must preserve the active graph" << std::endl;
                 exit(1);
             }
             const char* graphError = RowlEngine_GetLastStoryGraphError(handle);
             if (!graphError || !graphError[0]) {
-                std::cerr << "Unrepresentable graph path must report a story-graph error" << std::endl;
+                std::cerr << "Missing graph path must report a story-graph error" << std::endl;
                 exit(1);
             }
-            std::cerr << "[contract] phase 3b: unrepresentable path handled gracefully" << std::endl;
+            std::cerr << "[contract] phase 3b: UTF-8 path loaded, missing path handled gracefully"
+                      << std::endl;
         } else if (RowlEngine_GetChapterCount(handle, &chapterCount) != ROWL_RESULT_OK ||
             chapterCount != 2) {
             std::cerr << "Loaded v5 graph must report two chapters" << std::endl;
             exit(1);
         }
         // Order-sorted: ch2 (order 0) precedes ch1 (order 1).
-        // Skipped when the path was unrepresentable (no graph loaded —
-        // the graceful branch above already asserted that state).
-        if (!narrowThrew) {
+        // Tur-12: the graph loads on every platform now (UTF-8 path),
+        // so this block always runs.
+        {
             uint32_t atRequired = 0;
             if (RowlEngine_GetChapterIdAtUtf8(handle, 0, nullptr, 0, &atRequired) !=
                     ROWL_RESULT_OK ||

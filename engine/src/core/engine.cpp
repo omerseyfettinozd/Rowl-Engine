@@ -1249,7 +1249,11 @@ bool Engine::parseStoryGraphJson(const std::string& jsonContent) {
 bool Engine::loadStoryGraphFromPath(const std::string& jsonPath) {
     m_storyRuntime.clearLoadError();
     std::error_code fileError;
-    const std::filesystem::path graphPath(jsonPath);
+    // Tur-12: jsonPath is UTF-8 (C ABI contract). The implicit
+    // path-from-string ctor would reinterpret it in the ANSI codepage on
+    // Windows, so a graph under a non-ASCII directory silently missed
+    // (CI-11: CJK fixture unloaded -> metadata fixture empty).
+    const std::filesystem::path graphPath = Rowl::Platform::pathFromUtf8(jsonPath);
     if (!std::filesystem::exists(graphPath, fileError) || !std::filesystem::is_regular_file(graphPath, fileError) || fileError) {
         m_storyRuntime.recordLoadFailure(
             "Story graph is missing or not a regular file: " + jsonPath);
@@ -1266,7 +1270,9 @@ bool Engine::loadStoryGraphFromPath(const std::string& jsonPath) {
                             m_storyRuntime.lastLoadError(), "load_story_graph_path", jsonPath);
         return false;
     }
-    std::ifstream f(jsonPath);
+    // Tur-12: open via the wide path, never the narrow bytes (ANSI
+    // fopen cannot name non-ASCII directories on Windows).
+    std::ifstream f(graphPath);
     if (!f.is_open()) {
         m_storyRuntime.recordLoadFailure("Cannot open story graph: " + jsonPath);
         ROWL_LOG_ERROR(m_storyRuntime.lastLoadError());
