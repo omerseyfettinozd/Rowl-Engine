@@ -126,12 +126,36 @@ def main():
                 ok = proc.returncode == 0 if mode == "expect-ok" \
                     else proc.returncode != 0
                 if not ok:
+                    # Tur-7: a bare exit code never names the culprit (e.g.
+                    # block 5 failed on Windows with empty stdout/stderr, so
+                    # the tool-vs-test -s split was invisible). Dump the
+                    # work tree (relpath + size) plus tool identities so the
+                    # next red run shows WHAT is missing, not just THAT.
+                    tree_lines = []
+                    for path in sorted(pathlib.Path(work).rglob("*")):
+                        try:
+                            rel = path.relative_to(work)
+                            size = path.stat().st_size if path.is_file() else -1
+                            tree_lines.append(f"{rel} ({size}b)")
+                        except OSError:
+                            tree_lines.append(f"{path} (stat-failed)")
+                    tool_lines = []
+                    for var in ("ROWL_OGGENC_PATH", "ROWL_WEBP2PNG_PATH"):
+                        binary = env.get(var, "")
+                        ver = run([binary, "--version"]) if binary else None
+                        tool_lines.append(
+                            f"{var}={binary} "
+                            f"exists={pathlib.Path(binary).is_file() if binary else False} "
+                            f"version={(ver.stdout.strip() + ver.stderr.strip()) if ver is not None else 'n/a'!r} "
+                            f"rc={ver.returncode if ver is not None else 'n/a'}")
                     raise SystemExit(
                         f"guide sh block {index} ({mode}) failed: "
                         f"exit={proc.returncode}\n"
                         f"--- block ---\n{block}\n"
                         f"--- stdout ---\n{proc.stdout}\n"
-                        f"--- stderr ---\n{proc.stderr}")
+                        f"--- stderr ---\n{proc.stderr}\n"
+                        f"--- AUTHOR_WORK tree ---\n" + "\n".join(tree_lines) + "\n"
+                        f"--- tools ---\n" + "\n".join(tool_lines))
                 print(f"[AuthorGuide] block {index} ({mode}): green.")
         finally:
             if crash_dir.is_dir():

@@ -105,6 +105,11 @@ if shutil.which("ffmpeg") is None:
 
 directory = pathlib.Path(tempfile.mkdtemp(prefix="rowl-converters-"))
 
+# Tur-7: every section announces itself with flush=True so a TIMEOUT kill
+# (unbuffered via ctest -u) leaves the exact hang point in the log instead
+# of a zero-output kill. Prints change no assertion.
+print("[Converters] fixture: sine WAV + PCM", flush=True)
+
 # 1. Fixture: stereo sine WAV + raw PCM (the documented decode input shape).
 frames = []
 for i in range(RATE * SECONDS):
@@ -127,6 +132,7 @@ if pcm_path.read_bytes() != pcm_bytes:
 #    Decodes through the exact contract command shape (stdout `-` form);
 #    each source lands in its own file, and every call is -nostdin/-y so
 #    no overwrite prompt can ever block the suite.
+print("[Converters] MP3/FLAC decode path start", flush=True)
 mp3_path = directory / "tone.mp3"
 flac_path = directory / "tone.flac"
 run("ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error", "-y",
@@ -148,6 +154,7 @@ for src in (mp3_path, flac_path):
 print("[Converters] MP3/FLAC documented decode path OK")
 
 # 3. OGG determinism: file input twice + stdin once -> identical bytes + sidecars.
+print("[Converters] OGG encode start", flush=True)
 ogg_a = directory / "a.ogg"
 ogg_b = directory / "b.ogg"
 ogg_c = directory / "c.ogg"
@@ -192,6 +199,7 @@ print(f"[Converters] OGG determinism OK ({sha(ogg_a)[:16]}…, serial={expected_
 
 # 4. OGG round-trip: vorbisfile decode (same lib behind OggStreamSource) +
 #    duration + lossy-tolerant correlation probe (never bit-identical).
+print("[Converters] OGG round-trip checker compile start", flush=True)
 checker_src = directory / "ogg_check.cpp"
 checker_src.write_text(r"""
 #include <vorbis/vorbisfile.h>
@@ -253,6 +261,7 @@ if probe.stdout.strip() != "vorbis":
 print(f"[Converters] OGG round-trip OK (vorbisfile decode, corr={corr:.4f})")
 
 # 5. PNG determinism: gradient fixture -> lossless WebP -> convert twice -> identical.
+print("[Converters] PNG webp2png start", flush=True)
 width, height = 96, 64
 rows = [[((x * 3) % 256, (y * 5) % 256, ((x + y) * 2) % 256, ((x * y) % 256))
          for x in range(width)] for y in range(height)]

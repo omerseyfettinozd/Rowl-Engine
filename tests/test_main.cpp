@@ -15,6 +15,41 @@
 #endif
 #include <windows.h>
 #include <crtdbg.h>
+#include <cstdint>
+#include <cstdio>
+#include <eh.h>
+#include <exception>
+
+// Tur-7: a bare "abort() has been called" with no report text tells us
+// nothing about WHERE. These test-only handlers name the mechanism on
+// stderr before dying: Watson (invalid CRT parameter), terminate
+// (exception escaping noexcept / unhandled), or SEH (access violation,
+// breakpoint). Production code paths are untouched.
+static void RowlTestInvalidParameterHandler(const wchar_t* expression,
+                                            const wchar_t* function,
+                                            const wchar_t* file,
+                                            unsigned int line,
+                                            uintptr_t /*reserved*/) {
+    std::fwprintf(stderr, L"\n[ROWL-TEST-DIAG] invalid CRT parameter: expr='%ls' function='%ls' file='%ls' line=%u\n",
+                  expression ? expression : L"?", function ? function : L"?",
+                  file ? file : L"?", line);
+    std::fflush(stderr);
+    abort();
+}
+
+static void RowlTestTerminateHandler() {
+    std::fprintf(stderr, "\n[ROWL-TEST-DIAG] std::terminate called (exception escaped noexcept/unhandled)\n");
+    std::fflush(stderr);
+    abort();
+}
+
+static LONG WINAPI RowlTestSehFilter(EXCEPTION_POINTERS* info) {
+    std::fprintf(stderr, "\n[ROWL-TEST-DIAG] unhandled SEH 0x%08lX at %p\n",
+                 (unsigned long)info->ExceptionRecord->ExceptionCode,
+                 info->ExceptionRecord->ExceptionAddress);
+    std::fflush(stderr);
+    return EXCEPTION_CONTINUE_SEARCH;
+}
 #endif
 
 int main(int argc, char* argv[]) {
@@ -26,6 +61,9 @@ int main(int argc, char* argv[]) {
     _CrtSetReportMode(_CRT_ASSERT, _CRTDBG_MODE_FILE);
     _CrtSetReportFile(_CRT_ASSERT, _CRTDBG_FILE_STDERR);
     SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
+    _set_invalid_parameter_handler(RowlTestInvalidParameterHandler);
+    std::set_terminate(RowlTestTerminateHandler);
+    SetUnhandledExceptionFilter(RowlTestSehFilter);
 #endif
     // Flush every insertion: on a timeout kill, ctest prints what the pipe
     // captured, so progressive output turns a zero-output kill into a

@@ -50,34 +50,45 @@ def sha256_of(path):
     return hashlib.sha256(pathlib.Path(path).read_bytes()).hexdigest()
 
 
-def block_install_dir(path):
-    """Make `path` (a directory) uncopyable-into so a copy fails with EACCES.
+BLOCKER_PROBE = b"rowl-blocker: this file must stay untouched\n"
 
-    POSIX uses chmod 555; Windows ignores chmod on directories, so the
-    faithful equivalent is an explicit deny-write ACL (icacls, in-box
-    since Vista). Either way the copy must fail and the installer must
-    roll back; unblock_install_dir restores the directory.
+
+def block_install_dir(path):
+    """Plant a read-only FILE at `path` so the stub's copy fails with EACCES.
+
+    The stub copies with plain `cp SRC DST` (no --force): when DST is an
+    existing read-only file, opening it for writing fails on every
+    platform — EACCES on POSIX (mode 444), ERROR_ACCESS_DENIED on
+    Windows (read-only attribute; os.chmod maps 444 to exactly that).
+    The previous directory+ACL blocker is gone: a deny-write icacls ACE
+    does not stop this environment's copy path (tur-6: the blocked
+    install was silently accepted, returncode 0), while a read-only
+    file fails the same open-for-write call the stub itself makes.
+
+    An effectiveness probe opens the blocker for append right away: if
+    the host lets the write through (e.g. a token bypassing permission
+    checks), the gate fails LOUDLY instead of false-passing.
+    unblock_install_dir restores writability for cleanup.
     """
-    if os.name == "nt":
-        proc = subprocess.run(
-            ["icacls", str(path), "/deny", "*S-1-1-0:(W)"],
-            capture_output=True, text=True)
-        if proc.returncode != 0:
-            raise SystemExit(
-                "icacls deny failed: "
-                f"{proc.stderr.strip()[:300]}")
-    else:
-        os.chmod(path, 0o555)
+    path = pathlib.Path(path)
+    path.write_bytes(BLOCKER_PROBE)
+    os.chmod(path, 0o444)
+    try:
+        with open(path, "ab"):
+            pass
+    except OSError:
+        return
+    raise SystemExit(
+        f"blocker ineffective on this host: {path} accepted a write "
+        f"despite mode 444 (rollback gate would false-pass)")
 
 
 def unblock_install_dir(path):
     """Undo block_install_dir (also best-effort: never mask the real error)."""
-    if os.name == "nt":
-        subprocess.run(
-            ["icacls", str(path), "/remove:d", "*S-1-1-0"],
-            capture_output=True, text=True)
-    else:
-        os.chmod(path, 0o755)
+    try:
+        os.chmod(path, 0o666)
+    except OSError:
+        pass
 
 
 def write_fixture(fake_root):
@@ -264,23 +275,25 @@ with tempfile.TemporaryDirectory() as directory:
         if legacy_prefix.exists():
             raise SystemExit("legacy uninstall left the prefix behind")
 
-        # (d) Half-install rollback: block the LAST FILES entry with a
-        # read-only directory so every earlier file is copied first and
-        # then the copy fails. Install must exit non-zero and leave no
-        # newly copied file and no receipt behind.
-        # (cp of a file onto a plain directory would succeed by copying
-        # inside it, so the blocker forces EACCES — chmod-555 on POSIX,
-        # a deny-write ACL on Windows where chmod is a no-op on dirs.)
+        # (d) Half-install rollback: plant a read-only FILE on the LAST
+        # FILES entry so every earlier file is copied first and then the
+        # copy fails. Install must exit non-zero and leave no newly copied
+        # file and no receipt behind.
+        # (A plain directory would NOT fail: `cp SRC DST-dir` copies
+        # inside it and succeeds. The read-only file fails the stub's
+        # own open-for-write on every platform — EACCES/ACCESS_DENIED —
+        # and block_install_dir probes that the host honors it.)
         blocker_name = stub_files[-1]
         half_prefix = fake_root / "half-install"
         half_prefix.mkdir()
         blocker = half_prefix / blocker_name
-        blocker.mkdir(parents=True)
         block_install_dir(blocker)
         half = run(["sh", str(first), "--prefix", str(half_prefix)])
         if half.returncode == 0:
             unblock_install_dir(blocker)
-            raise SystemExit("blocked install was accepted")
+            raise SystemExit(
+                "blocked install was accepted "
+                f"(stdout={half.stdout[-300:]!r} stderr={half.stderr[-300:]!r})")
         if (half_prefix / ".rowl-receipt").exists() or \
                 (half_prefix / ".rowl-receipt.tmp").exists():
             unblock_install_dir(blocker)
@@ -290,10 +303,9 @@ with tempfile.TemporaryDirectory() as directory:
         if leftovers:
             unblock_install_dir(blocker)
             raise SystemExit(f"rollback left files behind: {leftovers}")
-        nested = list(blocker.iterdir())
-        if nested:
+        if not blocker.is_file() or blocker.read_bytes() != BLOCKER_PROBE:
             unblock_install_dir(blocker)
-            raise SystemExit(f"blocked copy wrote inside blocker: {nested}")
+            raise SystemExit("blocked copy modified the blocker file")
         unblock_install_dir(blocker)
         shutil.rmtree(half_prefix, ignore_errors=True)
 

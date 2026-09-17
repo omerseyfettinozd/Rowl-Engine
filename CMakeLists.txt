@@ -43,9 +43,14 @@ if(ROWL_BUILD_RUNTIME_TESTS)
 
     find_package(Python3 COMPONENTS Interpreter)
     if(Python3_Interpreter_FOUND)
+        # -u on every python gate (tur-7): ctest captures through a pipe,
+        # where stdout is block-buffered; on a TIMEOUT kill the buffer dies
+        # with the process and the hang point is lost. Unbuffered output
+        # keeps every section marker visible exactly where the run stopped.
+        # Pass/fail behavior is unchanged.
         add_test(
             NAME rowl_benchmark_tool_tests
-            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/test_benchmark_tools.py
+            COMMAND ${Python3_EXECUTABLE} -u ${CMAKE_SOURCE_DIR}/tests/test_benchmark_tools.py
         )
         set_tests_properties(rowl_benchmark_tool_tests PROPERTIES
             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
@@ -53,7 +58,7 @@ if(ROWL_BUILD_RUNTIME_TESTS)
         )
         add_test(
             NAME rowl_abi_tool_tests
-            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/test_abi_tools.py
+            COMMAND ${Python3_EXECUTABLE} -u ${CMAKE_SOURCE_DIR}/tests/test_abi_tools.py
         )
         set_tests_properties(rowl_abi_tool_tests PROPERTIES
             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
@@ -61,7 +66,7 @@ if(ROWL_BUILD_RUNTIME_TESTS)
         )
         add_test(
             NAME rowl_platform_gate_tests
-            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/test_platform_gates.py
+            COMMAND ${Python3_EXECUTABLE} -u ${CMAKE_SOURCE_DIR}/tests/test_platform_gates.py
         )
         set_tests_properties(rowl_platform_gate_tests PROPERTIES
             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
@@ -69,7 +74,7 @@ if(ROWL_BUILD_RUNTIME_TESTS)
         )
         add_test(
             NAME rowl_release_package_tool_tests
-            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/test_release_package.py
+            COMMAND ${Python3_EXECUTABLE} -u ${CMAKE_SOURCE_DIR}/tests/test_release_package.py
         )
         set_tests_properties(rowl_release_package_tool_tests PROPERTIES
             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
@@ -77,7 +82,7 @@ if(ROWL_BUILD_RUNTIME_TESTS)
         )
         add_test(
             NAME rowl_package_determinism_tests
-            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/test_package_determinism.py
+            COMMAND ${Python3_EXECUTABLE} -u ${CMAKE_SOURCE_DIR}/tests/test_package_determinism.py
         )
         set_tests_properties(rowl_package_determinism_tests PROPERTIES
             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
@@ -85,7 +90,7 @@ if(ROWL_BUILD_RUNTIME_TESTS)
         )
         add_test(
             NAME rowl_media_format_gate_tests
-            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/test_media_format_gate.py
+            COMMAND ${Python3_EXECUTABLE} -u ${CMAKE_SOURCE_DIR}/tests/test_media_format_gate.py
         )
         set_tests_properties(rowl_media_format_gate_tests PROPERTIES
             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
@@ -94,7 +99,7 @@ if(ROWL_BUILD_RUNTIME_TESTS)
         if(ROWL_BUILD_TOOLS)
             add_test(
                 NAME rowl_converter_tool_tests
-                COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/test_converters.py
+                COMMAND ${Python3_EXECUTABLE} -u ${CMAKE_SOURCE_DIR}/tests/test_converters.py
                     $<TARGET_FILE:rowl_oggenc>
                     $<TARGET_FILE:rowl_webp2png>
             )
@@ -105,7 +110,7 @@ if(ROWL_BUILD_RUNTIME_TESTS)
         endif()
         add_test(
             NAME rowl_export_tool_tests
-            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/test_export_game.py
+            COMMAND ${Python3_EXECUTABLE} -u ${CMAKE_SOURCE_DIR}/tests/test_export_game.py
         )
         set_tests_properties(rowl_export_tool_tests PROPERTIES
             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
@@ -113,7 +118,7 @@ if(ROWL_BUILD_RUNTIME_TESTS)
         )
         add_test(
             NAME rowl_self_extracting_installer_tests
-            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/test_self_extracting_installer.py
+            COMMAND ${Python3_EXECUTABLE} -u ${CMAKE_SOURCE_DIR}/tests/test_self_extracting_installer.py
         )
         set_tests_properties(rowl_self_extracting_installer_tests PROPERTIES
             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
@@ -121,7 +126,7 @@ if(ROWL_BUILD_RUNTIME_TESTS)
         )
         add_test(
             NAME rowl_player_guide_tests
-            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/test_player_guide.py
+            COMMAND ${Python3_EXECUTABLE} -u ${CMAKE_SOURCE_DIR}/tests/test_player_guide.py
         )
         set_tests_properties(rowl_player_guide_tests PROPERTIES
             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
@@ -130,7 +135,7 @@ if(ROWL_BUILD_RUNTIME_TESTS)
         )
         add_test(
             NAME rowl_author_guide_tests
-            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/test_author_guide.py
+            COMMAND ${Python3_EXECUTABLE} -u ${CMAKE_SOURCE_DIR}/tests/test_author_guide.py
         )
         set_tests_properties(rowl_author_guide_tests PROPERTIES
             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
@@ -138,7 +143,7 @@ if(ROWL_BUILD_RUNTIME_TESTS)
         )
         add_test(
             NAME rowl_golden_manifest_tests
-            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/test_golden_manifest.py
+            COMMAND ${Python3_EXECUTABLE} -u ${CMAKE_SOURCE_DIR}/tests/test_golden_manifest.py
         )
         set_tests_properties(rowl_golden_manifest_tests PROPERTIES
             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
@@ -146,7 +151,7 @@ if(ROWL_BUILD_RUNTIME_TESTS)
         )
         add_test(
             NAME rowl_editor_scale_fixture_tests
-            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/test_editor_scale_fixture.py
+            COMMAND ${Python3_EXECUTABLE} -u ${CMAKE_SOURCE_DIR}/tests/test_editor_scale_fixture.py
         )
         set_tests_properties(rowl_editor_scale_fixture_tests PROPERTIES
             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
@@ -154,7 +159,7 @@ if(ROWL_BUILD_RUNTIME_TESTS)
         )
         add_test(
             NAME rowl_font_license_glyph_tests
-            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/test_font_license_glyph.py
+            COMMAND ${Python3_EXECUTABLE} -u ${CMAKE_SOURCE_DIR}/tests/test_font_license_glyph.py
         )
         set_tests_properties(rowl_font_license_glyph_tests PROPERTIES
             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
@@ -162,7 +167,7 @@ if(ROWL_BUILD_RUNTIME_TESTS)
         )
         add_test(
             NAME rowl_third_party_license_tests
-            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/test_third_party_licenses.py
+            COMMAND ${Python3_EXECUTABLE} -u ${CMAKE_SOURCE_DIR}/tests/test_third_party_licenses.py
         )
         set_tests_properties(rowl_third_party_license_tests PROPERTIES
             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
@@ -221,7 +226,7 @@ if(ROWL_BUILD_RUNTIME_TESTS AND TARGET rowl_player)
     if(Python3_Interpreter_FOUND)
         add_test(
             NAME rowl_demo_first_light_packaged
-            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/test_demo_packaged.py
+            COMMAND ${Python3_EXECUTABLE} -u ${CMAKE_SOURCE_DIR}/tests/test_demo_packaged.py
                 $<TARGET_FILE:rowl_player>
                 $<TARGET_FILE:RowlEngineCore>
                 ${CMAKE_SOURCE_DIR}/samples/first_light
@@ -234,7 +239,7 @@ if(ROWL_BUILD_RUNTIME_TESTS AND TARGET rowl_player)
         )
         add_test(
             NAME rowl_demo_second_signal_packaged
-            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/test_demo_packaged.py
+            COMMAND ${Python3_EXECUTABLE} -u ${CMAKE_SOURCE_DIR}/tests/test_demo_packaged.py
                 $<TARGET_FILE:rowl_player>
                 $<TARGET_FILE:RowlEngineCore>
                 ${CMAKE_SOURCE_DIR}/samples/second_signal

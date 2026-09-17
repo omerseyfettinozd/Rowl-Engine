@@ -192,7 +192,10 @@ internal static class EditorMs5UxTests
         browser.RefreshAssets();
         DrainWatcherQueue();
         if (browser.MissingAssetCount != 1 || !browser.MissingAssetPaths.Contains(probe))
-            throw new Exception($"Delete did not raise a missing badge (count={browser.MissingAssetCount}).");
+            // Tur-7: count alone never names the 3 extra ghosts (Windows CI
+            // saw count=4). Dump the full missing set + asset census so the
+            // next red run identifies the stale entries directly.
+            throw new Exception($"Delete did not raise a missing badge (count={browser.MissingAssetCount}, want probe='{probe}'; missing=[{string.Join(";", browser.MissingAssetPaths)}]; assets={browser.AssetNames.Count}).");
         var ghostGroup = browser.AssetTree.FirstOrDefault(n => n.RelativePath == "__missing__");
         var ghost = ghostGroup?.Children.FirstOrDefault(c => c.FullPath == probe);
         if (ghost == null || !ghost.IsMissing)

@@ -118,6 +118,10 @@ void test_c_api_contract() {
         std::cerr << "C API contract fixture could not claim its owner thread" << std::endl;
         exit(1);
     }
+    // Tur-7: Windows CI aborts silently inside this section (bare
+    // "abort() has been called" after the Init story log). Phase markers
+    // on stderr pin the exact call; unitbuf in test_main flushes them.
+    std::cerr << "[contract] phase 1: init ok" << std::endl;
     RowlEngine_ResultCode wrongThreadResult = ROWL_RESULT_OK;
     std::thread wrongThread([&] {
         uint32_t wrongThreadRequired = 0;
@@ -161,6 +165,7 @@ void test_c_api_contract() {
             std::cerr << "Chapter index over an empty table must be invalid" << std::endl;
             exit(1);
         }
+        std::cerr << "[contract] phase 2: chapter empty-queries ok" << std::endl;
 
         const std::filesystem::path chapterGraph = unicodeRoot / "vnext_graph.json";
         {
@@ -188,7 +193,18 @@ void test_c_api_contract() {
                 ]
             })";
         }
-        RowlEngine_LoadStoryGraph(handle, chapterGraph.string().c_str());
+        // Narrow-path observability: on Windows path::string() encodes in
+        // the ANSI codepage, so a unicode fixture dir may not round-trip.
+        // Log the byte size + existence BEFORE the load call.
+        const std::string chapterNarrow = chapterGraph.string();
+        {
+            std::error_code probeEc;
+            std::cerr << "[contract] phase 2b: graph narrow bytes=" << chapterNarrow.size()
+                      << " exists=" << std::filesystem::exists(chapterGraph, probeEc)
+                      << " ec=" << probeEc.value() << std::endl;
+        }
+        RowlEngine_LoadStoryGraph(handle, chapterNarrow.c_str());
+        std::cerr << "[contract] phase 3: vnext load returned" << std::endl;
         if (RowlEngine_GetChapterCount(handle, &chapterCount) != ROWL_RESULT_OK ||
             chapterCount != 2) {
             std::cerr << "Loaded v5 graph must report two chapters" << std::endl;
