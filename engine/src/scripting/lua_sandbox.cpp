@@ -1,11 +1,10 @@
 #include "rowl/scripting/lua_sandbox.hpp"
 #include "rowl/core/logger.hpp"
-#include <charconv>
+#include "rowl/util/locale_independent_parse.hpp"
 #include <cmath>
 #include <cstdint>
 #include <string>
 #include <string_view>
-#include <system_error>
 #include <unordered_set>
 #include <vector>
 
@@ -108,14 +107,13 @@ bool LuaSandbox::isReservedVariableName(const std::string& key) {
 
 // Locale-independent number detection: only '.' is a decimal separator, so a
 // comma-decimal locale (e.g. tr_TR) can never change what a script value
-// means. std::from_chars never consults the global C/C++ locale.
+// means. parseAsciiDouble never consults the global C/C++ locale; from_chars
+// is not used because Apple's libc++ still ships floating-point from_chars
+// as a deleted function (macOS compile gate).
 static bool parseSandboxNumber(const std::string& text, double& out) {
     if (text.empty()) return false;
-    const char* first = text.data();
-    const char* last = first + text.size();
     double value = 0.0;
-    const auto result = std::from_chars(first, last, value);
-    if (result.ec != std::errc() || result.ptr != last) return false;
+    if (!Rowl::Util::parseAsciiDouble(text.data(), text.data() + text.size(), value)) return false;
     if (!std::isfinite(value)) return false;
     out = value;
     return true;

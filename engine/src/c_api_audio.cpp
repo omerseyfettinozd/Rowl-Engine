@@ -408,6 +408,9 @@ int RowlEngine_GetSfxActiveVoices(RowlEngineHandle handle) {
     }, 0);
 }
 
+// MSVC, extern "C" blogu icindeki C++ donuslu helper'a izin vermez;
+// helper C++ linkage ile acikca isaretlenir (GCC/Clang'de zaten oyleydi).
+extern "C++" {
 namespace {
 
 std::string escapeJsonString(const std::string& value) {
@@ -435,6 +438,7 @@ std::string escapeJsonString(const std::string& value) {
 }
 
 } // namespace
+} // extern "C++"
 
 RowlEngine_ResultCode RowlEngine_GetSfxActivePaths(
     RowlEngineHandle handle, char* buffer, uint32_t bufferSize,

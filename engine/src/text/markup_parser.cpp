@@ -8,6 +8,7 @@
 
 #include "rowl/text/markup_parser.hpp"
 #include "rowl/text/hex_color.hpp"
+#include "rowl/util/locale_independent_parse.hpp"
 
 #include <algorithm>
 #include <array>
@@ -103,21 +104,14 @@ std::optional<float> parseAsciiFloat(std::string_view text) {
         if (!expDigits) return std::nullopt;
     }
     if (i != text.size()) return std::nullopt;
-    // from_chars surec locale'ini dikkate almaz. Standard grammar leading
-    // '+' kabul etmedigi icin, yukarida dogrulanmis isareti burada ayikla.
-    bool positiveSign = false;
-    if (!text.empty() && text.front() == '+') {
-        positiveSign = true;
-        text.remove_prefix(1);
-    }
+    // Yukaridaki tarama zaten tam-tuketim dogruladi; donusum locale'den
+    // bagimsiz parseAsciiDouble ile yapilir (Apple libc++'ta from_chars(double)
+    // silinmis durumda; bkz. rowl/util/locale_independent_parse.hpp).
     double value = 0.0;
-    const auto result = std::from_chars(text.data(), text.data() + text.size(),
-                                        value, std::chars_format::general);
-    if (result.ec != std::errc() || result.ptr != text.data() + text.size() ||
+    if (!Rowl::Util::parseAsciiDouble(text.data(), text.data() + text.size(), value) ||
         !std::isfinite(value)) {
         return std::nullopt;
     }
-    if (positiveSign) value = std::abs(value);
     if (value > 3.402823466e+38 || value < -3.402823466e+38) {
         return std::nullopt;
     }

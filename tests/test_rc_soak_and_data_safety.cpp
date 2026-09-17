@@ -160,12 +160,22 @@ void test_rc_soak_and_data_safety() {
             // tens of MB on its own, so the tight 8MB production tolerance
             // is meaningless there; leak detection under sanitizers is
             // LSan's job (currently out of scope), not this gauge's.
-#if defined(__SANITIZE_ADDRESS__) || \
-    (defined(__has_feature) && __has_feature(address_sanitizer))
+            // NOTE: __has_feature is Clang-only and must not be called inside
+            // a single #if on GCC/MSVC (older GCC errors with "missing binary
+            // operator"); hence the nested guard.
+#if defined(__SANITIZE_ADDRESS__)
+#define ROWL_SANITIZER_BUILD 1
+#elif defined(__has_feature)
+#if __has_feature(address_sanitizer)
+#define ROWL_SANITIZER_BUILD 1
+#endif
+#endif
+#ifdef ROWL_SANITIZER_BUILD
             constexpr uint64_t kTolerance = 64ULL * 1024ULL * 1024ULL;
 #else
             constexpr uint64_t kTolerance = 8ULL * 1024ULL * 1024ULL;
 #endif
+#undef ROWL_SANITIZER_BUILD
             if (maxRss < minRss || maxRss - minRss > kTolerance) {
                 std::cerr << "Soak RSS drifted: min=" << minRss << " max=" << maxRss << std::endl;
                 exit(1);

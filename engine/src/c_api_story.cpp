@@ -133,6 +133,9 @@ const char* RowlEngine_GetLastStoryGraphErrorWithLength(RowlEngineHandle handle,
 
 /* ── Graph vNext chapter queries ─────────────────────────────────────── */
 
+// MSVC, extern "C" blogu icindeki C++ donuslu helper'a izin vermez (C2526);
+// helper C++ linkage ile acikca isaretlenir (GCC/Clang'de zaten oyleydi).
+extern "C++" {
 namespace {
 
 std::vector<const Rowl::Core::GraphChapter*> orderedChapters(const Rowl::Core::Engine* engine) {
@@ -150,6 +153,7 @@ std::vector<const Rowl::Core::GraphChapter*> orderedChapters(const Rowl::Core::E
 }
 
 } // namespace
+} // extern "C++"
 
 RowlEngine_ResultCode RowlEngine_GetCurrentChapterIdUtf8(
     RowlEngineHandle handle, char* buffer, uint32_t bufferSize,
