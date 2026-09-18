@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <algorithm>
 #include <optional>
+#include <system_error>
 
 namespace Rowl::VFS {
 
@@ -237,14 +238,19 @@ void VFSManager::remountProject(const std::string& projectRoot) {
 }
 
 void VFSManager::mountPackagesUnder(const fs::path& pkgPath) {
-    // Fresh codes per probe: a reused error_code must never carry a previous
-    // step's state into the next mount decision.
-    std::error_code probeError;
-    if (!fs::exists(pkgPath, probeError) || probeError) return;
-    probeError.clear();
-    if (!fs::is_directory(pkgPath, probeError) || probeError) return;
-
     const std::string pkgUtf8 = Rowl::Platform::pathToUtf8(pkgPath);
+    // A2a-fix2: exists() Windows CI'da MEVCUT bir dizin için FALSE döndü ve
+    // tarama 243. satırda sessizce atlandı. exists artık sadece tanı
+    // bilgisidir — kararı bağımsız syscall olan iterator verir, her dal
+    // konuşur. Yokluk normaldir (loose-only projeler), sessiz geçilir.
+    std::error_code probeError;
+    const bool present = fs::exists(pkgPath, probeError) && !probeError;
+    const std::string probeDetail =
+        present ? "present"
+                : "negative (" + (probeError ? probeError.message() : "absent") +
+                      ") — scan attempted anyway";
+    ROWL_LOG_INFO("VFS packages probe for '" + pkgUtf8 + "': " + probeDetail);
+
     std::error_code iterError;
     bool mountedAny = false;
     for (const auto& entry : fs::directory_iterator(pkgPath, iterError)) {
@@ -266,6 +272,13 @@ void VFSManager::mountPackagesUnder(const fs::path& pkgPath) {
             mountPackage("", Rowl::Platform::pathToUtf8(entry.path()));
             mountedAny = true;
         }
+    }
+    if (iterError) {
+        // Yokluk normaldir; probe satırı üstte zaten var, tekrar sus.
+        if (iterError != std::errc::no_such_file_or_directory) {
+            ROWL_LOG_WARN("VFS package scan failed in '" + pkgUtf8 + "': " + iterError.message());
+        }
+        return;
     }
     if (!mountedAny) {
         ROWL_LOG_INFO("VFS package scan found no archives under '" + pkgUtf8 + "'");
