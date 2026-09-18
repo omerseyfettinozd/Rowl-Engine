@@ -43,10 +43,15 @@ void RowlEngine_PlayAudio(RowlEngineHandle handle,
                        (filterType == 3)  ? Rowl::Audio::DSPFilterType::UnderwaterLowPass :
                                             Rowl::Audio::DSPFilterType::Normal;
         audio->playAudioInt(assetPath, channelType, filter);
-        if (!audio->getLastError().empty()) {
-            if (auto ctx = engine->getContext()) {
+        // A5-tur2: string↔kod senkronu — fail'de kod 10 (mevcut), başarıda
+        // kod 0 (YENİ). playAudio girişi snapshot'ı temizler; kod kanalı da
+        // aynı sözleşmeyi izler (bayat kod yok).
+        if (auto ctx = engine->getContext()) {
+            if (!audio->getLastError().empty()) {
                 ctx->setError(Rowl::Core::RuntimeErrorCode::AudioDecodeError,
                               audio->getLastError(), "play_audio", assetPath);
+            } else {
+                ctx->setSuccess("play_audio", assetPath);
             }
         }
     });
@@ -55,9 +60,20 @@ void RowlEngine_PlayAudio(RowlEngineHandle handle,
 void RowlEngine_StopBgm(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return;
     invokeNoexcept([&] {
-        auto* checked = toEngineChecked(handle);
-        auto* audio = checked ? checked->getAudio() : nullptr;
-        if (audio) audio->stopBgm();
+        auto* engine = toEngineChecked(handle);
+        auto* audio = engine ? engine->getAudio() : nullptr;
+        if (!audio) return;
+        // A5-tur2: stop fail'i (Clear/Pause) koda yayılır; başarı kodu
+        // sıfırlar (tur1'de snapshot'a giren clear ile senkron).
+        audio->stopBgm();
+        if (auto ctx = engine->getContext()) {
+            if (!audio->getLastError().empty()) {
+                ctx->setError(Rowl::Core::RuntimeErrorCode::AudioDecodeError,
+                              audio->getLastError(), "stop_bgm", "");
+            } else {
+                ctx->setSuccess("stop_bgm", "");
+            }
+        }
     });
 }
 
@@ -222,7 +238,22 @@ void RowlEngine_GetAudioSpectrum(RowlEngineHandle handle, float* outBands, int b
 void RowlEngine_PlayVoiceBlip(RowlEngineHandle handle, const char* soundPath, float pitch, float volume, int channelType) {
     if (!isLiveHandle(handle)) return;
     invokeNoexcept([&] {
-        if (auto* checked = toEngineChecked(handle)) checked->playVoiceBlip(soundPath ? soundPath : "", pitch, volume, channelType);
+        auto* engine = toEngineChecked(handle);
+        if (!engine) return;
+        // A5-tur2: blip snapshot'ı koda yayılır (pratikte synth kurtarır ve
+        // snapshot boş olur → kod 0; synth-Put fail'i kod 10 olur).
+        engine->playVoiceBlip(soundPath ? soundPath : "", pitch, volume, channelType);
+        if (auto ctx = engine->getContext()) {
+            const auto* audio = engine->getAudio();
+            const std::string blipError = audio ? audio->getLastError() : "";
+            if (!blipError.empty()) {
+                ctx->setError(Rowl::Core::RuntimeErrorCode::AudioDecodeError,
+                              blipError, "play_voice_blip",
+                              soundPath ? soundPath : "");
+            } else {
+                ctx->setSuccess("play_voice_blip", soundPath ? soundPath : "");
+            }
+        }
     });
 }
 

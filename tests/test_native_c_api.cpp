@@ -919,6 +919,36 @@ void test_native_c_api() {
     RowlEngine_TriggerVoiceDucking(handle, 1);
     RowlEngine_TriggerVoiceDucking(handle, 0);
     RowlEngine_StopBgm(handle);
+    // A5-tur2: string↔kod senkronu. Kayıp-dosya play'i kod 10 + dolu string
+    // verir; stop-başarısı ikisini de sıfırlar; blip (synth) kod 0 verir.
+    // Kırmızı-kanıt: setSuccess/setError yayılımlarından biri kaldırılırsa
+    // aşağıdaki assert'ler düşer.
+    RowlEngine_PlayAudio(handle, "missing_a5t2.wav", 0, 0);
+    if (RowlEngine_GetLastResultCode(handle) != 10) {
+        std::cerr << "Missing-file play did not yield AudioDecodeError (10), got: "
+                  << RowlEngine_GetLastResultCode(handle) << std::endl;
+        exit(1);
+    }
+    if (std::string(RowlEngine_GetLastAudioError(handle)).empty()) {
+        std::cerr << "Missing-file play left the audio error string empty" << std::endl;
+        exit(1);
+    }
+    RowlEngine_StopBgm(handle);
+    if (RowlEngine_GetLastResultCode(handle) != 0) {
+        std::cerr << "Successful stop did not reset the result code, got: "
+                  << RowlEngine_GetLastResultCode(handle) << std::endl;
+        exit(1);
+    }
+    if (!std::string(RowlEngine_GetLastAudioError(handle)).empty()) {
+        std::cerr << "Successful stop left a stale audio error string" << std::endl;
+        exit(1);
+    }
+    RowlEngine_PlayVoiceBlip(handle, "", 1.0f, 0.8f, 1);
+    if (RowlEngine_GetLastResultCode(handle) != 0) {
+        std::cerr << "Voice blip did not yield success code, got: "
+                  << RowlEngine_GetLastResultCode(handle) << std::endl;
+        exit(1);
+    }
     TEST_PASS("C-API Audio Control (PlayAudio, SetBgmVolume, Ducking, StopBgm)");
 
     // Variable & Scripting C-API
