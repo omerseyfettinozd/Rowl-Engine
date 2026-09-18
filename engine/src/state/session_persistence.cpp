@@ -95,7 +95,12 @@ SessionLoadResult SessionPersistence::loadSlotDetailed(int32_t slotIndex) const 
         // load always answers from the last good slot.
         cleanupStraySlotTemp(filePath);
 
-        if (!fs::exists(filePath) || !fs::is_regular_file(filePath)) {
+        // A2b: error_code probes — the throwing overloads turn a hostile
+        // save directory (overlong path, dead permissions) into an escaped
+        // filesystem_error; a missing slot is NotFound, never an exception.
+        std::error_code probeError;
+        if (!fs::exists(filePath, probeError) || probeError ||
+            !fs::is_regular_file(filePath, probeError) || probeError) {
             ROWL_LOG_WARN("Save slot #" + std::to_string(slotIndex) +
                           " does not exist at: " +
                           Rowl::Platform::pathToUtf8(filePath));
@@ -147,9 +152,23 @@ std::shared_ptr<const GameState> SessionPersistence::loadSlot(int32_t slotIndex)
 
 bool SessionPersistence::hasSlot(int32_t slotIndex) const {
     if (!isValidSlot(slotIndex)) return false;
-    const std::filesystem::path filePath = m_saveDirectory /
-        ("save_slot_" + std::to_string(slotIndex) + ".json");
-    return std::filesystem::exists(filePath) && std::filesystem::is_regular_file(filePath);
+    // A2b: no-throw by contract — callers (pause slot page, C API has-slot
+    // queries) poll this per refresh. The throwing exists/is_regular_file
+    // overloads escape as filesystem_error on a hostile save directory
+    // (overlong path, dead permissions); error_code probes answer false.
+    // A2b: no-throw by contract — callers (pause slot page, C API has-slot
+    // queries) poll this per refresh. The throwing exists/is_regular_file
+    // overloads escape as filesystem_error on a hostile save directory
+    // (overlong path, dead permissions); error_code probes answer false.
+    try {
+        const std::filesystem::path filePath = m_saveDirectory /
+            ("save_slot_" + std::to_string(slotIndex) + ".json");
+        std::error_code probeError;
+        return std::filesystem::exists(filePath, probeError) && !probeError &&
+               std::filesystem::is_regular_file(filePath, probeError) && !probeError;
+    } catch (...) {
+        return false;
+    }
 }
 
 bool SessionPersistence::deleteSlot(int32_t slotIndex) const {

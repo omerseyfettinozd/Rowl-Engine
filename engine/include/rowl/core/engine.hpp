@@ -9,6 +9,7 @@
 #include "rowl/core/runtime_context.hpp"
 #include "rowl/core/story_graph.hpp"
 #include "rowl/core/story_runtime.hpp"
+#include <array>
 #include <cstdint>
 #include <string>
 #include <memory>
@@ -362,6 +363,14 @@ private:
     PauseMenuMode m_pauseMode = PauseMenuMode::Main;
     int m_pauseSelected = 0;
     int32_t m_activeQuickSlot = 0;
+    // A2b: pause slot-page occupancy cache. getPauseMenuView runs per UI
+    // refresh (up to every frame from the editor preview); 10 slots x 2
+    // stats per call is pure syscall overhead. Rebuilt on menu open and
+    // after any slot mutation (save/delete); a stale "dolu" from an
+    // out-of-band delete only costs one fail-closed load. Mutable: the view
+    // builder is const, the cache is an internal memo.
+    mutable bool m_pauseSlotCacheValid = false;
+    mutable std::array<bool, 10> m_pauseSlotPresent{};
     bool m_windowAudioSuspended = false;
     float m_autoAdvanceElapsed = 0.0f;
     float m_textSpeedMultiplier = 1.0f;

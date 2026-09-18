@@ -2093,6 +2093,8 @@ bool Engine::saveGameSlot(int32_t slotIndex) {
                             "save_game_slot", std::to_string(slotIndex));
         return false;
     }
+    // A2b: the slot page memoizes occupancy — a successful write changes it.
+    m_pauseSlotCacheValid = false;
     m_context->setSuccess("save_game_slot", std::to_string(slotIndex));
     return true;
 }
@@ -2241,6 +2243,9 @@ void Engine::setPaused(bool paused) {
     m_pauseMode = PauseMenuMode::Main;
     m_pauseSelected = 0;
     m_pauseConfirmQuit = false;
+    // A2b: a fresh menu open rebuilds slot occupancy — saves or deletes may
+    // have happened out-of-band while unpaused (editor, quick keys).
+    m_pauseSlotCacheValid = false;
     ROWL_LOG_INFO(paused ? "[Player] Paused — menu open (Esc/P to resume)."
                          : "[Player] Resumed.");
 }
@@ -2414,10 +2419,22 @@ PauseMenuView Engine::getPauseMenuView() const {
     } else {
         const bool saving = (m_pauseMode == PauseMenuMode::SaveSlots);
         view.title = saving ? "Kayit Yuvasi Sec" : "Yukleme Yuvasi Sec";
+        // A2b: occupancy is memoized (see m_pauseSlotCacheValid) — a slot
+        // page holds 10 rows and this view rebuilds per UI refresh.
+        static_assert(kPauseMenuQuickSlotMax - kPauseMenuQuickSlotMin + 1 ==
+                      10, "pause slot cache assumes the 0..9 quick-slot window");
+        if (!m_pauseSlotCacheValid) {
+            for (int32_t slot = kPauseMenuQuickSlotMin; slot <= kPauseMenuQuickSlotMax; ++slot) {
+                m_pauseSlotPresent[static_cast<size_t>(slot - kPauseMenuQuickSlotMin)] =
+                    hasSaveSlot(slot);
+            }
+            m_pauseSlotCacheValid = true;
+        }
         for (int32_t slot = kPauseMenuQuickSlotMin; slot <= kPauseMenuQuickSlotMax; ++slot) {
             PauseMenuRow row;
             row.label = "Yuva " + std::to_string(slot);
-            row.value = hasSaveSlot(slot) ? "dolu" : "bos";
+            row.value = m_pauseSlotPresent[static_cast<size_t>(slot - kPauseMenuQuickSlotMin)]
+                ? "dolu" : "bos";
             view.rows.push_back(row);
         }
         view.hint = "ENTER/tik: sec   0-9: dogrudan sec   ESC: geri";
@@ -2503,6 +2520,8 @@ bool Engine::deleteSaveSlot(int32_t slotIndex) {
                             "delete_save_slot", std::to_string(slotIndex));
         return false;
     }
+    // A2b: the slot page memoizes occupancy — a successful delete changes it.
+    m_pauseSlotCacheValid = false;
     m_context->setSuccess("delete_save_slot", std::to_string(slotIndex));
     return true;
 }

@@ -7,6 +7,7 @@
 #include <chrono>
 #include <algorithm>
 #include <cmath>
+#include <string_view>
 
 namespace Rowl::State {
 
@@ -23,6 +24,37 @@ constexpr size_t kMaxContentIdBytes = 1024;
 // Faz 2 Dilim 4: downscaled thumbnails stay far below this; the cap only
 // bounds hostile slot files (the 4 MiB slot cap still applies first).
 constexpr size_t kMaxThumbnailBase64Bytes = 1024 * 1024;
+// A2b: nlohmann::json::parse recurses per nesting level with no depth limit
+// of its own — a hostile slot of megabytes of "[[[..." exhausts the thread
+// stack (SIGSEGV, uncatchable) before any field budget is reached. Legit
+// saves nest ~6 deep (object > dialogue_history > entry > scalars); 128 is
+// generous. String-aware linear pre-scan: quotes and backslash escapes are
+// skipped so brackets inside dialogue text never count.
+constexpr size_t kMaxSaveNestingDepth = 128;
+
+bool saveNestingWithinBudget(std::string_view text) {
+    size_t depth = 0;
+    bool inString = false;
+    for (size_t i = 0; i < text.size(); ++i) {
+        const char c = text[i];
+        if (inString) {
+            if (c == '\\') {
+                ++i;  // skip the escaped byte, whatever it is
+            } else if (c == '"') {
+                inString = false;
+            }
+            continue;
+        }
+        if (c == '"') {
+            inString = true;
+        } else if (c == '[' || c == '{') {
+            if (++depth > kMaxSaveNestingDepth) return false;
+        } else if (c == ']' || c == '}') {
+            if (depth > 0) --depth;
+        }
+    }
+    return true;
+}
 
 } // namespace
 
@@ -253,6 +285,13 @@ std::string GameState::serializeJson() const {
 
 GameStateDecodeResult GameState::decodeJson(const std::string& jsonStr) {
     if (jsonStr.empty() || jsonStr.size() > kMaxSaveFileBytes) return {};
+    // A2b: nesting pre-scan before parse — see kMaxSaveNestingDepth. A
+    // hostile "[[[..." payload would otherwise recurse the parser off the
+    // thread stack (uncatchable) instead of answering InvalidData.
+    if (!saveNestingWithinBudget(jsonStr)) {
+        ROWL_LOG_ERROR("GameState JSON exceeds the nesting depth budget");
+        return {nullptr, GameStateDecodeStatus::InvalidData, CurrentSaveFormatVersion};
+    }
     try {
         auto j = nlohmann::json::parse(jsonStr);
         if (!j.is_object()) {

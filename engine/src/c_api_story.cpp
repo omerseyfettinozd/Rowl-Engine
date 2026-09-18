@@ -288,13 +288,23 @@ void RowlEngine_SetProjectDirectory(RowlEngineHandle handle, const char* project
         // Try loading story graph via VFS first (project Assets is now mounted)
         engine->loadStoryGraphFile();
         if (engine->getCurrentNodeId() == 0) {
-            std::string graphPath = std::string(projectRoot) + "/Assets/json/full_story_graph.json";
-            if (std::filesystem::exists(graphPath)) {
-                engine->loadStoryGraphFromPath(graphPath);
-            } else {
-                std::string altGraphPath = std::string(projectRoot) + "/full_story_graph.json";
-                if (std::filesystem::exists(altGraphPath)) {
-                    engine->loadStoryGraphFromPath(altGraphPath);
+            // A2b: UTF-8 in, wide path out — the narrow path ctor would
+            // reinterpret a non-ASCII project root in the ANSI codepage on
+            // Windows (mojibake miss), and the throwing probes turn a
+            // hostile root into an escaped exception instead of a skip.
+            const auto rootWide = Rowl::Platform::pathFromUtf8(projectRoot);
+            const std::filesystem::path candidates[] = {
+                rootWide / "Assets" / "json" / "full_story_graph.json",
+                rootWide / "Assets" / "full_story_graph.json",
+                rootWide / "full_story_graph.json",
+            };
+            std::error_code probeError;
+            for (const auto& candidate : candidates) {
+                probeError.clear();
+                if (std::filesystem::is_regular_file(candidate, probeError) && !probeError) {
+                    engine->loadStoryGraphFromPath(
+                        Rowl::Platform::pathToUtf8(candidate));
+                    break;
                 }
             }
         }

@@ -728,5 +728,82 @@ void test_save_slot_and_package_fuzz() {
     }
     TEST_PASS("Errno-parametric injection (EACCES/EROFS/normalize), truncated-final InvalidData, rename-fail closed");
 
+    // (6) A2b: hasSlot no-throw + save nesting-depth guard (bilerek-boz).
+    {
+        // Overlong save directory: the throwing exists/is_regular_file
+        // probes fail with an OS error here (ENAMETOOLONG). Pre-fix that
+        // error escaped hasSlot as std::filesystem::filesystem_error; the
+        // A2b contract answers false and never throws. The probe keeps the
+        // case honest: on a platform where overlong paths resolve, the
+        // assertions below would be vacuous, so skip instead of passing.
+        const std::string longDir =
+            testRoot.string() + "/" + std::string(5000, 'x');
+        const std::filesystem::path longSlot =
+            std::filesystem::path(longDir) / "save_slot_0.json";
+        std::error_code probeEc;
+        (void)std::filesystem::exists(longSlot, probeEc);
+        if (!probeEc) {
+            std::cout << "  [SKIP] overlong paths resolve on this platform; "
+                         "hasSlot no-throw case is vacuous"
+                      << std::endl;
+        } else {
+            Rowl::State::SessionPersistence longPersistence{
+                std::filesystem::path(longDir)};
+            bool threw = false;
+            bool answer = true;
+            try {
+                answer = longPersistence.hasSlot(0);
+            } catch (...) {
+                threw = true;
+            }
+            if (threw) {
+                failCase("hasSlot threw on a hostile save directory instead of false");
+            }
+            if (answer) {
+                failCase("hasSlot reported a slot inside an overlong directory");
+            }
+            try {
+                if (Rowl::State::GameState::hasSlot(0, longDir)) {
+                    failCase("GameState::hasSlot reported a slot inside an "
+                             "overlong directory");
+                }
+            } catch (...) {
+                failCase("GameState::hasSlot threw on a hostile save directory");
+            }
+            TEST_PASS("hasSlot answers false (never throws) on a hostile save directory");
+        }
+    }
+
+    {
+        // Nesting-depth guard: 512 levels of real "[" nest far above the 128
+        // cap yet far below any stack danger, so the pre-guard binary
+        // survives to report RED (decode succeeds — the nested array lands
+        // in a dumped variable value) while the guarded build answers
+        // InvalidData without ever entering the parser.
+        std::string nested("{\"step_id\":1,\"active_node_id\":101,");
+        nested += "\"variables\":{\"k\":";
+        nested.append(512, '[');
+        nested.append(512, ']');
+        nested += "}}";
+        requireDecodeRejected(nested, "512-deep nested save payload");
+
+        // Brackets inside dialogue strings must not count toward depth: a
+        // 300-"[" chapter title is flat JSON and must still load.
+        const std::string bracketText(300, '[');
+        const std::string flat =
+            std::string("{\"step_id\":1,\"active_node_id\":101,") +
+            "\"variables\":{},\"chapter_title\":\"" + bracketText + "\"}";
+        Rowl::State::GameStateDecodeResult flatResult;
+        try {
+            flatResult = Rowl::State::GameState::decodeJson(flat);
+        } catch (...) {
+            failCase("decodeJson threw on brackets-inside-string payload");
+        }
+        if (!flatResult.succeeded()) {
+            failCase("Brackets inside a save string tripped the depth guard");
+        }
+    }
+    TEST_PASS("Save nesting-depth guard rejects deep nesting, ignores string brackets");
+
     std::filesystem::remove_all(testRoot, cleanupError);
 }
