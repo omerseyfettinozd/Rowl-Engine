@@ -19,6 +19,7 @@
 #include <cstring>
 #include <string>
 #include <fstream>
+#include <mutex>
 #include <system_error>
 
 #ifndef ROWL_SHADER_DIR
@@ -66,15 +67,29 @@ void fnvMixU64(uint64_t& hash, uint64_t value) {
     fnvMixBytes(hash, &value, sizeof(value));
 }
 
+// A3-tur2 (log-only): bozuk renk her kare sessiz-beyaza dusuyordu. Ayni
+// deger icin tek WARN (cap'li kume; dosyada emsal yok). Mutex yalnizca
+// bozuk-girdi kolunda tutulur; gecerli renk yolu kilitsiz ve sessizdir.
+constexpr size_t kHexWarnOnceCap = 32;
+
+void warnHexColorOnce(const std::string& hex) {
+    static std::mutex mutex;
+    static std::unordered_set<std::string> warned;
+    std::lock_guard<std::mutex> lock(mutex);
+    if (warned.size() >= kHexWarnOnceCap || !warned.insert(hex).second) return;
+    ROWL_LOG_WARN("Invalid hex color '" + hex + "'; using white fallback (logged once per value)");
+}
+
 static SDL_Color parseHexColor(const std::string& hex, uint8_t defaultA = 255) {
     // Faz 4.5 Dilim 2: tek birlesik cozucu (rowl/text/hex_color.hpp).
-    // Pencere yedegi tarihsel beyazdir; bozuk girdi yedege duser ve
-    // basarisizlik ok ile gozlenebilir — sessiz cop renk uretilmez.
+    // Pencere yedegi tarihsel beyazdir; bozuk girdi yedege duser.
+    // A3-tur2 (log-only): basarisizlik artik gozlenebilir — bozuk deger
+    // basina tek WARN (cap'li, spam yok). Gecerli renkler sessiz kalir.
     const Rowl::Text::HexColor fallback{255, 255, 255, defaultA};
     bool ok = false;
     const Rowl::Text::HexColor parsed =
         Rowl::Text::parseHexColor(hex, fallback, &ok);
-    (void)ok;
+    if (!ok) warnHexColorOnce(hex);
     return {parsed.r, parsed.g, parsed.b, parsed.a};
 }
 
@@ -287,9 +302,25 @@ bool Window::initialize(const std::string& title, uint32_t width, uint32_t heigh
 }
 
 void Window::initGpuMsdfRenderer() {
-    if (!m_sdlRenderer || m_isOffscreen) return;
+    // A3-tur2 (log-only): sessiz kapilar artik nedenini bir kez soyler.
+    // init-zamani yolu (kare-basi degil); bayrak uyede, davranis ayni.
+    if (!m_sdlRenderer || m_isOffscreen) {
+        if (!m_msdfSkipReasonLogged) {
+            m_msdfSkipReasonLogged = true;
+            ROWL_LOG_INFO(std::string("MSDF GPU renderer skipped, font fallback active: ") +
+                          (!m_sdlRenderer ? "no SDL renderer" : "offscreen/headless surface"));
+        }
+        return;
+    }
     auto* device = SDL_GetGPURendererDevice(m_sdlRenderer);
-    if (!device || !(SDL_GetGPUShaderFormats(device) & SDL_GPU_SHADERFORMAT_SPIRV)) return;
+    if (!device || !(SDL_GetGPUShaderFormats(device) & SDL_GPU_SHADERFORMAT_SPIRV)) {
+        if (!m_msdfSkipReasonLogged) {
+            m_msdfSkipReasonLogged = true;
+            ROWL_LOG_INFO(std::string("MSDF GPU renderer skipped, font fallback active: ") +
+                          (!device ? "no GPU device" : "SPIRV shader format unsupported"));
+        }
+        return;
+    }
     const auto code = loadMsdfShaderCode();
     if (code.empty()) { ROWL_LOG_WARN("MSDF GPU shader artifact is unavailable; using font fallback"); return; }
     SDL_GPUShaderCreateInfo info{};

@@ -346,6 +346,8 @@ private:
     SDL_GPURenderState* m_msdfRenderState = nullptr;
     std::unique_ptr<MsdfRenderer> m_msdfRenderer;
     SDL_Texture* m_msdfAtlasTexture = nullptr;
+    // A3-tur2 (log-only): sessiz MSDF kapilarinin tek-sefer INFO bayragi.
+    bool m_msdfSkipReasonLogged = false;
     std::unordered_map<std::string, std::unique_ptr<FontRenderer>> m_buttonFontCache;
 
     uint32_t m_width       = 1920;
