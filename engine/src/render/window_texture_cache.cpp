@@ -66,6 +66,7 @@ void Window::clearTextureCache() {
     m_missingTextureCache.clear();
     m_budgetRejectedTextureCache.clear();
     m_buttonFontCache.clear();
+    m_missingFontCache.clear();
     m_textureCacheEvictionCount = 0;
     m_textureUseClock = 0;
     m_msdfAtlasTexture = nullptr;
@@ -74,6 +75,15 @@ void Window::clearTextureCache() {
         shutdownGpuMsdfRenderer();
     }
     ROWL_LOG_INFO("Hardware Texture Cache Cleared (" + std::to_string(uniqueTextures.size()) + " unique textures freed).");
+}
+
+// A3-tur6 (hygiene): proje-remount'u negatif-hükümleri geçersiz kılar.
+// Pozitif doku/font önbelleklerine dokunmaz (frame-cache reloadFonts'ta
+// zaten invalidate edilir); yalnız "yok" kararları bayatlar.
+void Window::invalidateMissingCaches() {
+    m_missingTextureCache.clear();
+    m_budgetRejectedTextureCache.clear();
+    m_missingFontCache.clear();
 }
 
 void Window::setTextureCacheBudgetBytes(uint64_t bytes) {
@@ -215,6 +225,10 @@ SDL_Texture* Window::loadTexture(const std::string& filename) {
 
     if (!surface) {
         stbi_image_free(data);
+        // A3-tur6 (hygiene): decode-tuttu-surface-tutmadı da negatif-küme —
+        // her karede VFS+decode tekrarı yok. Transient-OOM notu: küme remount'ta
+        // temizlenir (invalidateMissingCaches), kalıcı zehirlenme yok.
+        rememberMissingTexture(std::move(normPath));
         recordLoadTime();
         return nullptr;
     }
@@ -238,13 +252,17 @@ SDL_Texture* Window::loadTexture(const std::string& filename) {
         }
         m_missingTextureCache.erase(normPath);
         // A3-tur3 (lifecycle): tek anahtar (normPath). filename/bareName
-        // insert'leri okunmuyordu (:1110 tek okuma) — olu agirlik + capraz-
-        // dizin bareName golgeleme kaldirildi. Sayaclar isaretci-anahtarli,
+        // insert'leri okunmuyordu (loadTexture başındaki contains tek okuma)
+        // — olu agirlik + capraz-dizin bareName golgeleme kaldirildi. Sayaclar isaretci-anahtarli,
         // eviction value-erase'li: davranis-notr.
         m_textureCache[normPath] = texture;
         m_textureMemoryBytes[texture] = textureBytes;
         touchTexture(texture);
         ROWL_LOG_INFO("✅ Loaded Hardware Texture: " + filename + " (" + std::to_string(width) + "x" + std::to_string(height) + ") from " + sourceInfo);
+    } else {
+        // A3-tur6 (hygiene): renderer texture üretimini reddetti (GPU baskısı
+        // vb.) — surface-kolu gibi negatif-küme, kare-başı retry yok.
+        rememberMissingTexture(std::move(normPath));
     }
     recordLoadTime();
     return texture;

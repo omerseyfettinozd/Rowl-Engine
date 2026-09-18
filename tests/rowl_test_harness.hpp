@@ -24,6 +24,7 @@
 #include <iterator>
 #include <cstdlib>
 #include <iomanip>
+#include <sstream>  // A3-tur6: frameHashFail hex-formatı harness-helper'a taşındı
 #include <SDL3/SDL.h>
 #include <zstd.h>
 
@@ -50,6 +51,15 @@
 
 #define TEST_PASS(name) std::cout << "  ✅ [PASS] " << name << std::endl
 #define TEST_SECTION(title) std::cout << "\n📌 === " << title << " ===" << std::endl
+
+// A3-tur6 (hygiene): kilit-testlerinin fail-helper ikizlenmesi paylaşıma
+// alındı (cerr + exit(1) tek-noktada). Fixture'lar farklı (hash statik,
+// reuse pencereli) o yüzden yalnız helper paylaşılır; her test kendi
+// thin-wrapper'ını ya da doğrudan bunu kullanır.
+[[noreturn]] inline void rowlLockFail(const char* lockName, const std::string& message) {
+    std::cerr << lockName << " lock failure: " << message << std::endl;
+    std::exit(1);
+}
 
 inline std::vector<uint8_t> decodeBase64(const std::string_view input) {
     static constexpr std::string_view alphabet =
@@ -109,6 +119,7 @@ void test_pixel_pitch();
 void test_window_input_routing();
 void test_frame_hash_lock();
 void test_frame_reuse_lock();  // A3-tur5: identical-frame reuse D2 kilidi
+void test_cache_hygiene();  // A3-tur6: negatif-onbellek hijyen kilidi
 void test_runtime_context_and_diagnostics();
 void test_crash_log();
 void test_story_graph_parser();

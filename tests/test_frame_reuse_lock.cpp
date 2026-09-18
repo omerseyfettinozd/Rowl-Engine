@@ -2,11 +2,11 @@
  * test_frame_reuse_lock.cpp — A3-tur5 D2 kilidi: renderVisualNovelFrame
  * identical-frame reuse sözleşmesi headless karakterizasyonla sabitlenir.
  *
- * Kilitlenen davranışlar (window.cpp:1255-1274 kanonik + :1632/:1646 forward):
+ * Kilitlenen davranışlar (window.cpp:1038-1052 kanonik + :1410/:1424 forward):
  *  1. İlk render reuse DEĞİL (m_frameCacheValid boş başlar), sayaçlar işler.
  *  2. Birebir-aynı 2. çağrı erken-dönüş + 4 sayaç sıfırlama + reused=true.
  *  3. Dar overload'lar kanonikle aynı contentHash'i üretir (reuse-bayrağıyla
- *     kanıtlı — :1632 tek-diyalog + :1646 legacy, boş-ve-dolu içerik).
+ *     kanıtlı — :1410 tek-diyalog + :1424 legacy, boş-ve-dolu içerik).
  *  4. Legacy overload'ın zımni alanları (typewriter=false vb.) struct
  *     varsayılanlarıyla birebir — kasıtlıysa belgelidir, değişim kilidi kırar.
  *  5. Hash-koruması: tint kapıdan geçer (dynamics-değil) ama hash yakalar —
@@ -54,8 +54,7 @@ void renderCanonicalDialogue(Window& window, const DialogueRenderData& dlg) {
 }
 
 [[noreturn]] void reuseFail(const std::string& message) {
-    std::cerr << "Frame reuse lock failure: " << message << std::endl;
-    std::exit(1);
+    rowlLockFail("Frame reuse", message);
 }
 
 void expectReused(Window& window, bool want, const char* step) {
@@ -91,7 +90,7 @@ void test_frame_reuse_lock() {
     }
     TEST_PASS("Reuse frame zeroes all four profile counters");
 
-    // 3a. Dar overload (:1632), boş diyalog — kanonik-boş ile aynı hash.
+    // 3a. Dar overload (:1410), boş diyalog — kanonik-boş ile aynı hash.
     {
         DialogueRenderData emptyDlg;
         emptyDlg.hasDialogueBox = false;
@@ -101,7 +100,7 @@ void test_frame_reuse_lock() {
     }
     expectReused(window, true, "Single-dialogue forward (empty) matches canonical hash");
 
-    // 3b. Legacy overload (:1646), hasDialogueBox=false — boş vektörle kanoniğe.
+    // 3b. Legacy overload (:1424), hasDialogueBox=false — boş vektörle kanoniğe.
     window.renderVisualNovelFrame(false, "", 0.0f, 0.0f, 1920.0f, 1080.0f,
                                   kNoCharacters, false, "", "",
                                   0.0f, 0.0f, 0.0f, 0.0f);

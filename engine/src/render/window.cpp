@@ -105,6 +105,9 @@ static SDL_Color parseHexColor(const std::string& hex, uint8_t defaultA = 255) {
 // A3-tur3 (lifecycle): secim-dugmesi font onbellegi tavani — hikaye-JSON'undan
 // gelen saldirgan-etkili anahtarla sinirsiz buyumeye karsi refuse-to-grow.
 constexpr size_t kMaxButtonFontCacheEntries = 8;
+// A3-tur6 (hygiene): yuklenemeyen font-adlari negatif-kumesi tavani —
+// texture yolundaki 512'lik emsalden kucuk (aile-adlari az, VFS-retry pahali).
+constexpr size_t kMaxMissingFontCacheEntries = 64;
 float touchCoordinateToPhysical(float normalized, uint32_t extent) {
     return std::clamp(normalized, 0.0f, 1.0f) * static_cast<float>(extent);
 }
@@ -1369,7 +1372,11 @@ void Window::renderVisualNovelFrame(
                     // A3-tur3 (lifecycle): hikaye-kontrollu anahtarla sinirsiz
                     // buyume yok — cap'te miss default fonta duser (fail-closed
                     // render) + tek WARN. VFS-oku/parse cap-otu disi tutulur.
-                    if (m_buttonFontCache.size() >= kMaxButtonFontCacheEntries) {
+                    // A3-tur6 (hygiene): cap-ALTI miss de negatif-kumede —
+                    // bozuk aile-adi her karede VFS+parse tekrarina girmez.
+                    if (m_missingFontCache.contains(choice.fontFamily)) {
+                        // Negatif-hukum: default font (found end'de kalir).
+                    } else if (m_buttonFontCache.size() >= kMaxButtonFontCacheEntries) {
                         warnTaggedOnce("fontcap", choice.fontFamily,
                                        "Button font cache full (" +
                                            std::to_string(kMaxButtonFontCacheEntries) +
@@ -1380,6 +1387,17 @@ void Window::renderVisualNovelFrame(
                         auto bytes = vfs().readBytes(choice.fontFamily);
                         if (!bytes.empty() && renderer->loadFontFromMemory(bytes.data(), bytes.size())) {
                             found = m_buttonFontCache.emplace(choice.fontFamily, std::move(renderer)).first;
+                        } else {
+                            // A3-tur6 (hygiene): yuklenemeyen ad negatif-kumeye
+                            // (tavanli; tasaunca en-eskiden dusur — texture
+                            // yolundaki emsalle ayni desen).
+                            if (m_missingFontCache.size() >= kMaxMissingFontCacheEntries) {
+                                m_missingFontCache.erase(m_missingFontCache.begin());
+                            }
+                            m_missingFontCache.insert(choice.fontFamily);
+                            warnTaggedOnce("fontmiss", choice.fontFamily,
+                                           "Button font '" + choice.fontFamily +
+                                               "' failed to load; default font used (logged once per value)");
                         }
                     }
                 }

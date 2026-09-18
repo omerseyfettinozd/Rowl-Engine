@@ -263,7 +263,12 @@ public:
 
     SDL_Texture* loadTexture(const std::string& filename);
     void clearTextureCache();
+    // A3-tur6 (hygiene): remount, negatif-hükümleri (missing + budget-dışı +
+    // font-miss) geçersiz kılar — mount-öncesi miss, mount-sonrası zehirli
+    // kalmasın diye. Pozitif önbelleklere DOKUNMAZ (dar invalidasyon).
+    void invalidateMissingCaches();
     size_t getNegativeTextureCacheSize() const { return m_missingTextureCache.size(); }
+    size_t getMissingFontCacheSize() const { return m_missingFontCache.size(); }
     size_t getTextureCacheTextureCount() const { return m_textureMemoryBytes.size(); }
     uint64_t getTextureCacheBytes() const;
     uint64_t getTextureCacheBudgetBytes() const { return m_textureCacheBudgetBytes; }
@@ -349,6 +354,9 @@ private:
     // A3-tur2 (log-only): sessiz MSDF kapilarinin tek-sefer INFO bayragi.
     bool m_msdfSkipReasonLogged = false;
     std::unordered_map<std::string, std::unique_ptr<FontRenderer>> m_buttonFontCache;
+    // A3-tur6 (hygiene): yüklenemeyen buton-font adları — texture yolundaki
+    // m_missingTextureCache emsali; kare-başı VFS+parse tekrarını keser.
+    std::unordered_set<std::string> m_missingFontCache;
 
     uint32_t m_width       = 1920;
     uint32_t m_height      = 1080;

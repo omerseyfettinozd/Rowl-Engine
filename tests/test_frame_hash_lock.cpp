@@ -52,10 +52,10 @@ uint64_t hashOf(const CanonicalFrame& frame) {
 }
 
 [[noreturn]] void frameHashFail(const std::string& message, uint64_t got, uint64_t want) {
-    std::cerr << "Frame hash lock failure: " << message
-              << " (got 0x" << std::hex << got
-              << ", want 0x" << want << std::dec << ")" << std::endl;
-    std::exit(1);
+    std::ostringstream oss;
+    oss << message << " (got 0x" << std::hex << got
+        << ", want 0x" << want << std::dec << ")";
+    rowlLockFail("Frame hash", oss.str());
 }
 
 } // namespace

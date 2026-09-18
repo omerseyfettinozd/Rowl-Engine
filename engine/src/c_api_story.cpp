@@ -284,6 +284,10 @@ void RowlEngine_SetProjectDirectory(RowlEngineHandle handle, const char* project
         auto* win = engine->getWindow();
         if (win) {
             win->reloadFonts();
+            // A3-tur6 (hygiene): remount dosya-kumesini degistirir — mount-oncesi
+            // "yok" hukumleri (missing/budget-disi/font-miss) bayatlar, zehirli
+            // kalmasin diye ayni kancada gecersiz kilinir.
+            win->invalidateMissingCaches();
         }
         // Try loading story graph via VFS first (project Assets is now mounted)
         engine->loadStoryGraphFile();
