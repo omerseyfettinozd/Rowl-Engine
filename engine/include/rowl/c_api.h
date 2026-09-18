@@ -88,6 +88,7 @@ typedef struct RowlEngine_ApiVersion {
 #define ROWL_ENGINE_CAPABILITY_PREFETCH_CHAPTERS UINT64_C(65536)
 /* Faz 5 Dilim 5: converter provenance sidecars (rowl_oggenc / rowl_webp2png). */
 #define ROWL_ENGINE_CAPABILITY_CONVERTER_PROVENANCE UINT64_C(131072)
+#define ROWL_ENGINE_CAPABILITY_MSDF_RENDER       UINT64_C(262144)
 
 /** Current additive C API version. This query does not require an engine handle. */
 ROWL_API RowlEngine_ResultCode RowlEngine_GetApiVersion(

@@ -27,6 +27,9 @@ if(ROWL_ENABLE_GPU_MSDF)
         message(WARNING "glslc was not found; GPU MSDF is disabled and the font renderer fallback will be used.")
     endif()
 endif()
+# B1: shader-varlığı tests/ alt-dizininden de okunur (capability-bit varlık
+# testi için; CACHE'e yazılır, normal değişken alt-dizine yayılmaz).
+set(ROWL_GPU_MSDF_SHADER_AVAILABLE "${ROWL_GPU_MSDF_SHADER_AVAILABLE}" CACHE INTERNAL "GPU MSDF shader artifact available")
 
 # ── nlohmann/json (header-only JSON library) ──────────────────────────────
 # Prefer a package supplied by the active toolchain (for example vcpkg or an

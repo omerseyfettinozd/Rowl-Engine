@@ -77,6 +77,10 @@ endif()
 # The test binary is the exporting side of its own engine objects, matching
 # how RowlEngineCore builds them.
 target_compile_definitions(rowl_tests PRIVATE ROWL_BUILDING_DLL)
+# B1: MSDF capability-bit varlık testi bu build'in shader-durumunu bilir
+# (CACHE'den; shaderless-fallback'ta bit 0 beklenir).
+target_compile_definitions(rowl_tests PRIVATE
+    ROWL_TEST_GPU_MSDF_EXPECTED=${ROWL_GPU_MSDF_SHADER_AVAILABLE})
 
 add_test(NAME rowl_native_tests COMMAND rowl_tests)
 set_tests_properties(rowl_native_tests PROPERTIES

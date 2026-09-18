@@ -35,7 +35,18 @@ constexpr uint64_t kCapabilities =
     ROWL_ENGINE_CAPABILITY_AUDIO_MIXER_POLYPHONY |
     ROWL_ENGINE_CAPABILITY_CHARACTER_LAYERS |
     ROWL_ENGINE_CAPABILITY_PREFETCH_CHAPTERS |
-    ROWL_ENGINE_CAPABILITY_CONVERTER_PROVENANCE;
+    ROWL_ENGINE_CAPABILITY_CONVERTER_PROVENANCE
+#if ROWL_GPU_MSDF_SHADER_AVAILABLE
+    | ROWL_ENGINE_CAPABILITY_MSDF_RENDER
+#endif
+    ;
+
+// B1: enum sabit-genişlik kontratı — C# `: int` eşleşmesi için iki hata
+// kodu da 32-bit kilitlidir (C ABI eklemeli-uyumluluğun temeli).
+static_assert(sizeof(RowlEngine_ResultCode) == 4,
+              "RowlEngine_ResultCode must stay 32-bit");
+static_assert(sizeof(Rowl::Core::RuntimeErrorCode) == 4,
+              "RuntimeErrorCode must stay 32-bit");
 
 RowlEngine_ResultCode copyHostPath(
     RowlEngineHandle handle, char* buffer, uint32_t bufferSize,

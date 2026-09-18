@@ -78,6 +78,54 @@ void test_c_api_contract() {
         exit(1);
     }
 
+    // B1: MSDF capability biti + enum sabit-genişlik kontratı. Bit değeri
+    // yalnız-eklemeli (262144); varlığı build-tipine bağlıdır (normalde 1,
+    // shaderless-fallback'ta 0 — ROWL_TEST_GPU_MSDF_EXPECTED CMake'ten gelir).
+    // Maskede bilinmeyen bit olmamalıdır (rezerv-kaçak avcısı).
+    if (ROWL_ENGINE_CAPABILITY_MSDF_RENDER != UINT64_C(262144)) {
+        std::cerr << "MSDF capability bit value drifted" << std::endl;
+        exit(1);
+    }
+    if (sizeof(RowlEngine_ResultCode) != 4) {
+        std::cerr << "RowlEngine_ResultCode is not 32-bit" << std::endl;
+        exit(1);
+    }
+#if ROWL_TEST_GPU_MSDF_EXPECTED
+    if ((capabilities & ROWL_ENGINE_CAPABILITY_MSDF_RENDER) == 0) {
+        std::cerr << "MSDF capability bit missing in shader build" << std::endl;
+        exit(1);
+    }
+#else
+    if ((capabilities & ROWL_ENGINE_CAPABILITY_MSDF_RENDER) != 0) {
+        std::cerr << "MSDF capability bit set in shaderless build" << std::endl;
+        exit(1);
+    }
+#endif
+    constexpr uint64_t kKnownCapabilities =
+        ROWL_ENGINE_CAPABILITY_RESULT_CODES |
+        ROWL_ENGINE_CAPABILITY_CALLER_BUFFERS |
+        ROWL_ENGINE_CAPABILITY_USER_DATA_DIRECTORIES |
+        ROWL_ENGINE_CAPABILITY_GRAPH_VNEXT |
+        ROWL_ENGINE_CAPABILITY_PLAYER_LOOP |
+        ROWL_ENGINE_CAPABILITY_SAVE_METADATA |
+        ROWL_ENGINE_CAPABILITY_PLAYER_CHOICES |
+        ROWL_ENGINE_CAPABILITY_LOCALIZATION |
+        ROWL_ENGINE_CAPABILITY_RICH_TEXT_MARKUP |
+        ROWL_ENGINE_CAPABILITY_TEXT_SHAPING |
+        ROWL_ENGINE_CAPABILITY_ACCESSIBILITY |
+        ROWL_ENGINE_CAPABILITY_LONG_AUDIO_CONTRACT |
+        ROWL_ENGINE_CAPABILITY_CAMERA_ROTATION_IGNORED |
+        ROWL_ENGINE_CAPABILITY_AUDIO_STREAMING |
+        ROWL_ENGINE_CAPABILITY_AUDIO_MIXER_POLYPHONY |
+        ROWL_ENGINE_CAPABILITY_CHARACTER_LAYERS |
+        ROWL_ENGINE_CAPABILITY_PREFETCH_CHAPTERS |
+        ROWL_ENGINE_CAPABILITY_CONVERTER_PROVENANCE |
+        ROWL_ENGINE_CAPABILITY_MSDF_RENDER;
+    if ((capabilities & ~kKnownCapabilities) != 0) {
+        std::cerr << "Unknown capability bits in mask" << std::endl;
+        exit(1);
+    }
+
     uint32_t required = 77;
     if (RowlEngine_GetSaveDirectoryUtf8(nullptr, nullptr, 0, &required) !=
             ROWL_RESULT_INVALID_HANDLE ||
