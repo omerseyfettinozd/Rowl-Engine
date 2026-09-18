@@ -115,6 +115,7 @@ int main(int argc, char* argv[]) {
     test_localization();
     test_markup_parser();
     test_text_shaping();
+    test_utf8_decoder();
     test_accessibility();
     test_character_layers();
     test_prefetch_chapters();

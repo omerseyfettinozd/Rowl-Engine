@@ -1,6 +1,9 @@
 #include "rowl/render/font_renderer.hpp"
 #include "rowl/core/logger.hpp"
+#include "rowl/text/utf8.hpp"
 #include <fstream>
+#include <filesystem>
+#include <system_error>
 #include <cmath>
 #include <algorithm>
 
@@ -62,13 +65,43 @@ bool FontRenderer::loadFont(const std::string& fontPath) {
         ROWL_LOG_WARN("Could not open font file: " + fontPath);
         return false;
     }
-
     std::streamsize size = file.tellg();
     file.seekg(0, std::ios::beg);
 
     m_fontBuffer.resize(static_cast<size_t>(size));
     if (!file.read(reinterpret_cast<char*>(m_fontBuffer.data()), size)) {
         ROWL_LOG_ERROR("Failed to read font file data: " + fontPath);
+        return false;
+    }
+
+    return loadFontFromMemory(m_fontBuffer.data(), m_fontBuffer.size());
+}
+
+bool FontRenderer::loadFontFromPath(const std::filesystem::path& fontPath) {
+    // A3-tur4 (metin turu): error_code yoklamasi — varlik/kosul throw
+    // uretmez (initFontRenderer sistem-aday dongusu kare-disi ama
+    // firtina-gurultusuz olmali); acim Windows'ta wide (Unicode yol),
+    // POSIX'te dar UTF-8 bayt (bozulmadan gecer).
+    std::error_code ec;
+    if (!std::filesystem::is_regular_file(fontPath, ec) || ec) {
+        ROWL_LOG_WARN("Could not open font file: " + fontPath.string());
+        return false;
+    }
+#if defined(_WIN32)
+    std::ifstream file(fontPath.wstring(), std::ios::binary | std::ios::ate);
+#else
+    std::ifstream file(fontPath, std::ios::binary | std::ios::ate);
+#endif
+    if (!file.is_open()) {
+        ROWL_LOG_WARN("Could not open font file: " + fontPath.string());
+        return false;
+    }
+    std::streamsize size = file.tellg();
+    file.seekg(0, std::ios::beg);
+
+    m_fontBuffer.resize(static_cast<size_t>(size));
+    if (!file.read(reinterpret_cast<char*>(m_fontBuffer.data()), size)) {
+        ROWL_LOG_ERROR("Failed to read font file data: " + fontPath.string());
         return false;
     }
 
@@ -112,28 +145,15 @@ bool FontRenderer::loadFontFromMemory(const uint8_t* data, size_t size) {
 }
 
 uint32_t FontRenderer::getNextCodepoint(const std::string& str, size_t& byteIndex) {
+    // A3-tur4 (metin turu): cozumleme tek paylasimli strict decoder'da
+    // (rowl/text/utf8.hpp). Gecerli girdi davranisi ayni; gecersiz/yarim
+    // dizi artik ham lead bayti degil U+FFFD doner (onceki sessiz-cop
+    // codepoint uretimi kapandi). Imza sabit (testler + stb yedek yolu).
     if (byteIndex >= str.length()) return 0;
-
-    unsigned char c0 = static_cast<unsigned char>(str[byteIndex++]);
-    if (c0 < 0x80) {
-        return c0;
-    } else if ((c0 & 0xE0) == 0xC0) {
-        if (byteIndex >= str.length()) return c0;
-        unsigned char c1 = static_cast<unsigned char>(str[byteIndex++]);
-        return ((c0 & 0x1F) << 6) | (c1 & 0x3F);
-    } else if ((c0 & 0xF0) == 0xE0) {
-        if (byteIndex + 1 >= str.length()) { byteIndex = str.length(); return c0; }
-        unsigned char c1 = static_cast<unsigned char>(str[byteIndex++]);
-        unsigned char c2 = static_cast<unsigned char>(str[byteIndex++]);
-        return ((c0 & 0x0F) << 12) | ((c1 & 0x3F) << 6) | (c2 & 0x3F);
-    } else if ((c0 & 0xF8) == 0xF0) {
-        if (byteIndex + 2 >= str.length()) { byteIndex = str.length(); return c0; }
-        unsigned char c1 = static_cast<unsigned char>(str[byteIndex++]);
-        unsigned char c2 = static_cast<unsigned char>(str[byteIndex++]);
-        unsigned char c3 = static_cast<unsigned char>(str[byteIndex++]);
-        return ((c0 & 0x07) << 18) | ((c1 & 0x3F) << 12) | ((c2 & 0x3F) << 6) | (c3 & 0x3F);
-    }
-    return c0;
+    const Rowl::Text::Utf8Scalar decoded = Rowl::Text::decodeUtf8Scalar(
+        str.data() + byteIndex, str.data() + str.size());
+    byteIndex += decoded.length;
+    return decoded.codepoint;
 }
 
 size_t FontRenderer::countCodepoints(const std::string& utf8Text) {

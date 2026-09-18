@@ -1,5 +1,6 @@
 #include "rowl/render/msdf_renderer.hpp"
 #include "rowl/core/logger.hpp"
+#include "rowl/text/utf8.hpp"
 #include <algorithm>
 #include <cmath>
 #include <nlohmann/json.hpp>
@@ -95,13 +96,13 @@ float MsdfRenderer::measureTextWidth(const std::string& utf8Text, float pixelHei
     if (!m_loaded || pixelHeight <= 0.0f || !std::isfinite(pixelHeight)) return 0.0f;
     float width = 0.0f;
     for (size_t index = 0; index < utf8Text.size();) {
-        const auto first = static_cast<uint8_t>(utf8Text[index++]);
-        uint32_t codepoint = first;
-        int remaining = first < 0x80 ? 0 : (first & 0xE0) == 0xC0 ? 1 : (first & 0xF0) == 0xE0 ? 2 : 3;
-        if (remaining > 0 && index + static_cast<size_t>(remaining) <= utf8Text.size()) {
-            codepoint = first & ((1u << (7 - remaining - 1)) - 1);
-            for (int i = 0; i < remaining; ++i) codepoint = (codepoint << 6) | (static_cast<uint8_t>(utf8Text[index++]) & 0x3Fu);
-        }
+        // A3-tur4 (metin turu): paylasimli strict decoder — gecersiz dizi
+        // U+FFFD aramasina duser (atlas'ta yoksa genislik katmaz, onceki
+        // cop-codepoint lookup ile ayni sonuc; gecerli girdi ayni).
+        const Rowl::Text::Utf8Scalar decoded = Rowl::Text::decodeUtf8Scalar(
+            utf8Text.data() + index, utf8Text.data() + utf8Text.size());
+        index += decoded.length;
+        const uint32_t codepoint = decoded.codepoint;
         if (const auto glyph = m_glyphs.find(codepoint); glyph != m_glyphs.end()) width += glyph->second.advance * pixelHeight;
     }
     return width;

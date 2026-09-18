@@ -28,6 +28,7 @@ add_executable(rowl_tests
     test_localization.cpp
     test_markup_parser.cpp
     test_text_shaping.cpp
+    test_utf8_decoder.cpp
     test_accessibility.cpp
     test_character_layers.cpp
     test_character_layer_benchmarks.cpp

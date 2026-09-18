@@ -115,6 +115,7 @@ void test_graph_vnext();
 void test_localization();
 void test_markup_parser();
 void test_text_shaping();
+void test_utf8_decoder();  // A3-tur4: paylasimli strict UTF-8 decoder kilidi
 void test_accessibility();
 void test_character_layers();
 void test_character_layer_benchmarks();

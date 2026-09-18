@@ -1,4 +1,5 @@
 #include "rowl/text/text_shaper.hpp"
+#include "rowl/text/utf8.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -28,21 +29,11 @@ struct Scalar {
 };
 
 uint32_t decodeScalar(std::string_view text) noexcept {
+    // A3-tur4 (metin turu): paylasimli strict decoder. Markup yolu zaten
+    // gecerli UTF-8 (FFFD-kodlu) verir; ham-girdi yollari (C API, yedek)
+    // artik cop codepoint degil U+FFFD uretir.
     if (text.empty()) return 0xFFFDu;
-    const auto c0 = static_cast<uint8_t>(text[0]);
-    if (c0 < 0x80u) return c0;
-    if ((c0 & 0xE0u) == 0xC0u && text.size() >= 2)
-        return ((c0 & 0x1Fu) << 6u) | (static_cast<uint8_t>(text[1]) & 0x3Fu);
-    if ((c0 & 0xF0u) == 0xE0u && text.size() >= 3)
-        return ((c0 & 0x0Fu) << 12u) |
-               ((static_cast<uint8_t>(text[1]) & 0x3Fu) << 6u) |
-               (static_cast<uint8_t>(text[2]) & 0x3Fu);
-    if ((c0 & 0xF8u) == 0xF0u && text.size() >= 4)
-        return ((c0 & 0x07u) << 18u) |
-               ((static_cast<uint8_t>(text[1]) & 0x3Fu) << 12u) |
-               ((static_cast<uint8_t>(text[2]) & 0x3Fu) << 6u) |
-               (static_cast<uint8_t>(text[3]) & 0x3Fu);
-    return 0xFFFDu;
+    return decodeUtf8Scalar(text.data(), text.data() + text.size()).codepoint;
 }
 
 bool fallbackExtendsGrapheme(uint32_t cp) noexcept {

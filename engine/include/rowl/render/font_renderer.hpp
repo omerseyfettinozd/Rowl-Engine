@@ -1,5 +1,6 @@
 #pragma once
 
+#include <filesystem>
 #include <string>
 #include <vector>
 #include <unordered_map>
@@ -25,6 +26,12 @@ public:
     ~FontRenderer();
 
     bool loadFont(const std::string& fontPath);
+    /// A3-tur4 (metin turu): yol-nesneli yukleme — error_code yoklamasi
+    /// (throw yok) + Windows'ta wide-acim (Unicode yollu sistem fontlari).
+    /// Proje fontlari VFS/bellek yolunu kullanmaya devam eder. Ayri isim:
+    /// loadFont(string) overload'i string-literali cagrilarinda belirsizlik
+    /// yaratirdi (eklemeli-uyumluluk icin ayri API).
+    bool loadFontFromPath(const std::filesystem::path& fontPath);
     bool loadFontFromMemory(const uint8_t* data, size_t size);
     bool isLoaded() const { return m_loaded; }
 

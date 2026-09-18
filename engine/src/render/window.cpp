@@ -2,6 +2,7 @@
 #include "thirdparty/stb_image.h"
 #include "rowl/render/window.hpp"
 #include "rowl/text/hex_color.hpp"
+#include "rowl/text/utf8.hpp"
 #include "rowl/core/pause_menu.hpp"
 #include "rowl/render/frame_composition.hpp"
 #include "rowl/render/aspect_guardian.hpp"
@@ -363,8 +364,15 @@ bool Window::renderGpuMsdfText(const std::string& text, float x, float baseline,
     if (!m_msdfRenderState || !m_msdfRenderer || !m_msdfAtlasTexture) return false;
     if (!SDL_SetGPURenderState(m_sdlRenderer, m_msdfRenderState)) return false;
     float pen = x;
-    for (unsigned char c : text) {
-        const auto* glyph = m_msdfRenderer->findGlyph(c);
+    // A3-tur4 (metin turu): bayt degil skaler iterasyonu — cok-baytli
+    // karakterler tek glyph aramasina duser (onceki her bayti ayri arardi;
+    // ASCII davranisi ayni). Gecersiz dizi U+FFFD olur, atlas'ta yoksa
+    // yarim-adim ilerler (onceki cop-lookup ile ayni).
+    for (std::size_t i = 0; i < text.size();) {
+        const Rowl::Text::Utf8Scalar decoded = Rowl::Text::decodeUtf8Scalar(
+            text.data() + i, text.data() + text.size());
+        i += decoded.length;
+        const auto* glyph = m_msdfRenderer->findGlyph(decoded.codepoint);
         if (!glyph) { pen += px * .5f; continue; }
         SDL_FRect src{glyph->atlasLeft, glyph->atlasTop, glyph->atlasRight-glyph->atlasLeft, glyph->atlasBottom-glyph->atlasTop};
         SDL_FRect dst{pen + glyph->planeLeft*px, baseline + glyph->planeTop*px,
@@ -538,11 +546,15 @@ void Window::initFontRenderer() {
     };
 
     for (const auto& path : systemFontCandidates) {
-        if (fs::exists(path) && fs::is_regular_file(path)) {
-            if (m_fontRenderer->loadFont(path)) {
-                ROWL_LOG_INFO("✅ Loaded Visual Novel TTF Font from System: " + path);
-                return;
-            }
+        // A3-tur4 (metin turu): error_code yoklamasi (throw yok) + yol
+        // nesnesiyle yukleme (Windows-wide hazir; dar-string ANSI
+        // tuzagindan kacinir).
+        const fs::path candidate(path);
+        std::error_code probeEc;
+        if (!fs::is_regular_file(candidate, probeEc) || probeEc) continue;
+        if (m_fontRenderer->loadFontFromPath(candidate)) {
+            ROWL_LOG_INFO("✅ Loaded Visual Novel TTF Font from System: " + path);
+            return;
         }
     }
 
