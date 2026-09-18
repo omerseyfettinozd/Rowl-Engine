@@ -948,6 +948,106 @@ namespace RowlEngine.Editor.Native
             uint bufferSize,
             out uint outRequiredSize);
 
+        // ── B3a caller-buffer P/Invoke girişleri (14 adet) ──
+        //
+        // A5-tur3 + B2a + B2b'nin eklediği API'lerin 1:1 Cdecl aynaları
+        // (engine/include/rowl/c_api.h). Ödünç-imzalı WithLength varyantları
+        // durur; call-site göçü B5'indir — bu blok yalnızca eksik girişleri
+        // kapatır (köprü %100'e). Sözleşme: NULL/0 size-query, undersized
+        // clears + BufferTooSmall. Sayac okumaları değere-göre-dönüşlüdür
+        // (ölü-handle'da 0; fail-closed skalerler).
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_GetScriptRuntimeDiagnosticsJsonUtf8(
+            IntPtr handle,
+            IntPtr buffer,
+            uint bufferSize,
+            out uint outRequiredSize);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_GetDialogueHistoryJsonUtf8(
+            IntPtr handle,
+            IntPtr buffer,
+            uint bufferSize,
+            out uint outRequiredSize);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_GetVariableUtf8(
+            IntPtr handle,
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string key,
+            IntPtr buffer,
+            uint bufferSize,
+            out uint outRequiredSize);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_GetLastResultOperationUtf8(
+            IntPtr handle,
+            IntPtr buffer,
+            uint bufferSize,
+            out uint outRequiredSize);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_GetLastResultMessageUtf8(
+            IntPtr handle,
+            IntPtr buffer,
+            uint bufferSize,
+            out uint outRequiredSize);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_GetLastResultTargetUtf8(
+            IntPtr handle,
+            IntPtr buffer,
+            uint bufferSize,
+            out uint outRequiredSize);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_GetPauseMenuJsonUtf8(
+            IntPtr handle,
+            IntPtr buffer,
+            uint bufferSize,
+            out uint outRequiredSize);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_GetLastStoryGraphErrorUtf8(
+            IntPtr handle,
+            IntPtr buffer,
+            uint bufferSize,
+            out uint outRequiredSize);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_GetSpeakerUtf8(
+            IntPtr handle,
+            IntPtr buffer,
+            uint bufferSize,
+            out uint outRequiredSize);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_GetDialogueUtf8(
+            IntPtr handle,
+            IntPtr buffer,
+            uint bufferSize,
+            out uint outRequiredSize);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_GetLastAudioErrorUtf8(
+            IntPtr handle,
+            IntPtr buffer,
+            uint bufferSize,
+            out uint outRequiredSize);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_GetDialogueVoiceBlipSoundUtf8(
+            IntPtr handle,
+            IntPtr buffer,
+            uint bufferSize,
+            out uint outRequiredSize);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern uint RowlEngine_GetSynthBlipCount(IntPtr handle);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ulong RowlEngine_GetAudioDropCount(IntPtr handle);
+
         // ── Helpers ──────────────────────────────────────────────────────────
 
         /// <summary>Converts a native C UTF-8 string pointer to a managed string safely.</summary>
