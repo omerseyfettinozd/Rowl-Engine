@@ -186,6 +186,21 @@ const char* RowlEngine_GetLastAudioErrorWithLength(RowlEngineHandle handle, uint
     return value;
 }
 
+// B2b: audio-error caller-buffer varyantı (dead-handle'da INVALID_HANDLE;
+// eski API "" dönerdi, o korunur).
+RowlEngine_ResultCode RowlEngine_GetLastAudioErrorUtf8(
+    RowlEngineHandle handle, char* buffer, uint32_t bufferSize,
+    uint32_t* outRequiredSize) {
+    if (!isLiveHandle(handle)) return ROWL_RESULT_INVALID_HANDLE;
+    return invokeNoexcept<RowlEngine_ResultCode>([&] {
+        auto* checked = toEngineChecked(handle);
+        const auto* audio = checked ? checked->getAudio() : nullptr;
+        if (!audio) return ROWL_RESULT_INVALID_HANDLE;
+        return copyUtf8ToCaller(audio->getLastError(), buffer,
+                                bufferSize, outRequiredSize);
+    }, ROWL_RESULT_UNKNOWN_ERROR);
+}
+
 int RowlEngine_IsAudioDeviceAvailable(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return 0;
     return invokeNoexcept<int>([&] {
@@ -278,6 +293,20 @@ const char* RowlEngine_GetDialogueVoiceBlipSoundWithLength(RowlEngineHandle hand
     const char* value = RowlEngine_GetDialogueVoiceBlipSound(handle);
     if (outLen) *outLen = static_cast<uint32_t>(std::strlen(value));
     return value;
+}
+
+// B2b: voice-blip-sound caller-buffer varyantı (dead-handle'da
+// INVALID_HANDLE; eski API "" dönerdi, o korunur).
+RowlEngine_ResultCode RowlEngine_GetDialogueVoiceBlipSoundUtf8(
+    RowlEngineHandle handle, char* buffer, uint32_t bufferSize,
+    uint32_t* outRequiredSize) {
+    if (!isLiveHandle(handle)) return ROWL_RESULT_INVALID_HANDLE;
+    return invokeNoexcept<RowlEngine_ResultCode>([&] {
+        auto* checked = toEngineChecked(handle);
+        if (!checked) return ROWL_RESULT_INVALID_HANDLE;
+        return copyUtf8ToCaller(checked->getDialogueVoiceBlipSound(), buffer,
+                                bufferSize, outRequiredSize);
+    }, ROWL_RESULT_UNKNOWN_ERROR);
 }
 
 float RowlEngine_GetDialogueVoiceBlipPitch(RowlEngineHandle handle) {

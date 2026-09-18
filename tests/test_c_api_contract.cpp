@@ -660,6 +660,90 @@ void test_c_api_contract() {
         }
     }
 
+    // B2b: story+audio caller-buffer varyantları (5 adet). B2a dersi:
+    // her parity-kontrolü varyant adını taşır (ara-log'suz çağrılarda
+    // başarısızlık noktası kaymasın).
+    {
+        using Utf8Getter = RowlEngine_ResultCode (*)(RowlEngineHandle, char*, uint32_t, uint32_t*);
+        auto checkParity = [&](const char* name, Utf8Getter getter, const char* legacy) {
+            const std::string value = readDirectory(handle, getter);
+            if (value != legacy) {
+                std::cerr << "B2b " << name << " parity mismatch: [" << value
+                          << "] vs [" << legacy << "]" << std::endl;
+                exit(1);
+            }
+        };
+        if (RowlEngine_GetLastStoryGraphErrorUtf8(nullptr, nullptr, 0, &required) !=
+                ROWL_RESULT_INVALID_HANDLE ||
+            RowlEngine_GetSpeakerUtf8(nullptr, nullptr, 0, &required) !=
+                ROWL_RESULT_INVALID_HANDLE ||
+            RowlEngine_GetDialogueUtf8(nullptr, nullptr, 0, &required) !=
+                ROWL_RESULT_INVALID_HANDLE ||
+            RowlEngine_GetLastAudioErrorUtf8(nullptr, nullptr, 0, &required) !=
+                ROWL_RESULT_INVALID_HANDLE ||
+            RowlEngine_GetDialogueVoiceBlipSoundUtf8(nullptr, nullptr, 0, &required) !=
+                ROWL_RESULT_INVALID_HANDLE) {
+            std::cerr << "B2b null-handle contract failed" << std::endl;
+            exit(1);
+        }
+        // Konuşmacı/diyalog dolu-içerik parity'si (speaker şeması).
+        RowlEngine_UpdateSceneFromJson(handle,
+            R"([{"type":"speaker","data":{"speaker":"B2b-Anlatıcı","dialogue":"B2b deneme cümlesi"}}])");
+        checkParity("speaker", RowlEngine_GetSpeakerUtf8,
+                    RowlEngine_GetSpeaker(handle));
+        checkParity("dialogue", RowlEngine_GetDialogueUtf8,
+                    RowlEngine_GetDialogue(handle));
+        if (std::string(RowlEngine_GetSpeaker(handle)) != "B2b-Anlatıcı" ||
+            std::string(RowlEngine_GetDialogue(handle)) != "B2b deneme cümlesi") {
+            std::cerr << "B2b speaker/dialogue content mismatch" << std::endl;
+            exit(1);
+        }
+        // Story-graph-error parity'si: kayıp dosya her zaman hata üretir.
+        const std::u8string b2bMissingU8 =
+            (unicodeRoot / "rowl-b2b-missing-graph.json").u8string();
+        const std::string b2bMissingNarrow(
+            reinterpret_cast<const char*>(b2bMissingU8.data()), b2bMissingU8.size());
+        RowlEngine_LoadStoryGraph(handle, b2bMissingNarrow.c_str());
+        const std::string storyError = readDirectory(
+            handle, RowlEngine_GetLastStoryGraphErrorUtf8);
+        if (storyError.empty() ||
+            storyError != RowlEngine_GetLastStoryGraphError(handle)) {
+            std::cerr << "B2b story-graph-error parity mismatch" << std::endl;
+            exit(1);
+        }
+        // Audio-error parity'si (ortamdan bağımsız: iki kanal aynı durumu
+        // okur; hata yoksa iki tarafta "" — readDirectory boşluğu kabul
+        // etmez, bu yüzden burada doğrudan sözleşme kurulur).
+        {
+            const std::string legacyAudio(RowlEngine_GetLastAudioError(handle));
+            uint32_t audioReq = 0;
+            if (RowlEngine_GetLastAudioErrorUtf8(handle, nullptr, 0, &audioReq) !=
+                    ROWL_RESULT_OK ||
+                audioReq != static_cast<uint32_t>(legacyAudio.size() + 1)) {
+                std::cerr << "B2b audio-error size-query mismatch" << std::endl;
+                exit(1);
+            }
+            std::vector<char> audioBuf(audioReq, '\0');
+            uint32_t audioRep = 0;
+            if (RowlEngine_GetLastAudioErrorUtf8(
+                    handle, audioBuf.data(),
+                    static_cast<uint32_t>(audioBuf.size()),
+                    &audioRep) != ROWL_RESULT_OK ||
+                audioRep != audioReq || std::string(audioBuf.data()) != legacyAudio) {
+                std::cerr << "B2b audio-error parity mismatch" << std::endl;
+                exit(1);
+            }
+        }
+        // Voice-blip parity'si (set sonrası dolu-içerik).
+        RowlEngine_SetDialogueVoiceBlip(handle, "voices/b2b.wav", 1.0f, 0.1f, 2, 0, 0);
+        checkParity("voice-blip-sound", RowlEngine_GetDialogueVoiceBlipSoundUtf8,
+                    RowlEngine_GetDialogueVoiceBlipSound(handle));
+        if (std::string(RowlEngine_GetDialogueVoiceBlipSound(handle)) != "voices/b2b.wav") {
+            std::cerr << "B2b voice-blip content mismatch" << std::endl;
+            exit(1);
+        }
+    }
+
     RowlEngine_Destroy(handle);
     std::error_code cleanupError;
     std::filesystem::remove_all(unicodeRoot, cleanupError);

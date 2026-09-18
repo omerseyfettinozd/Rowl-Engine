@@ -133,6 +133,20 @@ const char* RowlEngine_GetLastStoryGraphErrorWithLength(RowlEngineHandle handle,
     return value;
 }
 
+// B2b: story-graph-error caller-buffer varyantı (dead-handle'da
+// INVALID_HANDLE; eski API "" dönerdi, o korunur).
+RowlEngine_ResultCode RowlEngine_GetLastStoryGraphErrorUtf8(
+    RowlEngineHandle handle, char* buffer, uint32_t bufferSize,
+    uint32_t* outRequiredSize) {
+    if (!isLiveHandle(handle)) return ROWL_RESULT_INVALID_HANDLE;
+    return invokeNoexcept<RowlEngine_ResultCode>([&] {
+        auto* engine = toEngineChecked(handle);
+        if (!engine) return ROWL_RESULT_INVALID_HANDLE;
+        return copyUtf8ToCaller(engine->getLastStoryGraphLoadError(), buffer,
+                                bufferSize, outRequiredSize);
+    }, ROWL_RESULT_UNKNOWN_ERROR);
+}
+
 /* ── Graph vNext chapter queries ─────────────────────────────────────── */
 
 // MSVC, extern "C" blogu icindeki C++ donuslu helper'a izin vermez (C2526);
@@ -370,6 +384,32 @@ const char* RowlEngine_GetDialogueWithLength(RowlEngineHandle handle, uint32_t* 
     const char* value = RowlEngine_GetDialogue(handle);
     if (outLen) *outLen = static_cast<uint32_t>(std::strlen(value));
     return value;
+}
+
+// B2b: speaker/dialogue caller-buffer varyantları (dead-handle'da
+// INVALID_HANDLE; eski API'ler "" dönerdi, onlar korunur).
+RowlEngine_ResultCode RowlEngine_GetSpeakerUtf8(
+    RowlEngineHandle handle, char* buffer, uint32_t bufferSize,
+    uint32_t* outRequiredSize) {
+    if (!isLiveHandle(handle)) return ROWL_RESULT_INVALID_HANDLE;
+    return invokeNoexcept<RowlEngine_ResultCode>([&] {
+        auto* engine = toEngineChecked(handle);
+        if (!engine) return ROWL_RESULT_INVALID_HANDLE;
+        return copyUtf8ToCaller(engine->getActiveSpeaker(), buffer,
+                                bufferSize, outRequiredSize);
+    }, ROWL_RESULT_UNKNOWN_ERROR);
+}
+
+RowlEngine_ResultCode RowlEngine_GetDialogueUtf8(
+    RowlEngineHandle handle, char* buffer, uint32_t bufferSize,
+    uint32_t* outRequiredSize) {
+    if (!isLiveHandle(handle)) return ROWL_RESULT_INVALID_HANDLE;
+    return invokeNoexcept<RowlEngine_ResultCode>([&] {
+        auto* engine = toEngineChecked(handle);
+        if (!engine) return ROWL_RESULT_INVALID_HANDLE;
+        return copyUtf8ToCaller(engine->getActiveDialogue(), buffer,
+                                bufferSize, outRequiredSize);
+    }, ROWL_RESULT_UNKNOWN_ERROR);
 }
 
 uint64_t RowlEngine_GetCurrentNodeId(RowlEngineHandle handle) {

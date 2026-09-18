@@ -346,6 +346,10 @@ ROWL_API const char* RowlEngine_GetLastStoryGraphError(RowlEngineHandle handle);
 /** Length-reporting variant of GetLastStoryGraphError (see lifetime contract). */
 ROWL_API const char* RowlEngine_GetLastStoryGraphErrorWithLength(RowlEngineHandle handle, uint32_t* outLen);
 
+/** Caller-buffer variant of GetLastStoryGraphError (B2b; no borrowed lifetime). */
+ROWL_API RowlEngine_ResultCode RowlEngine_GetLastStoryGraphErrorUtf8(
+    RowlEngineHandle handle, char* buffer, uint32_t bufferSize, uint32_t* outRequiredSize);
+
 /**
  * Graph vNext chapter queries (ROWL_ENGINE_CAPABILITY_GRAPH_VNEXT).
  *
@@ -562,11 +566,19 @@ ROWL_API const char* RowlEngine_GetSpeaker(RowlEngineHandle handle);
  */
 ROWL_API const char* RowlEngine_GetSpeakerWithLength(RowlEngineHandle handle, uint32_t* outLen);
 
+/** Caller-buffer variant of GetSpeaker (B2b; no borrowed lifetime). */
+ROWL_API RowlEngine_ResultCode RowlEngine_GetSpeakerUtf8(
+    RowlEngineHandle handle, char* buffer, uint32_t bufferSize, uint32_t* outRequiredSize);
+
 /** Same ownership rules as RowlEngine_GetSpeaker. */
 ROWL_API const char* RowlEngine_GetDialogue(RowlEngineHandle handle);
 
 /** Length-reporting variant of GetDialogue (see lifetime contract above). */
 ROWL_API const char* RowlEngine_GetDialogueWithLength(RowlEngineHandle handle, uint32_t* outLen);
+
+/** Caller-buffer variant of GetDialogue (B2b; no borrowed lifetime). */
+ROWL_API RowlEngine_ResultCode RowlEngine_GetDialogueUtf8(
+    RowlEngineHandle handle, char* buffer, uint32_t bufferSize, uint32_t* outRequiredSize);
 
 /** Returns the ID of the currently active story node. */
 ROWL_API uint64_t RowlEngine_GetCurrentNodeId(RowlEngineHandle handle);
@@ -753,6 +765,10 @@ ROWL_API const char* RowlEngine_GetLastAudioError(RowlEngineHandle handle);
 /** Length-reporting variant of GetLastAudioError (see lifetime contract). */
 ROWL_API const char* RowlEngine_GetLastAudioErrorWithLength(RowlEngineHandle handle, uint32_t* outLen);
 
+/** Caller-buffer variant of GetLastAudioError (B2b; no borrowed lifetime). */
+ROWL_API RowlEngine_ResultCode RowlEngine_GetLastAudioErrorUtf8(
+    RowlEngineHandle handle, char* buffer, uint32_t bufferSize, uint32_t* outRequiredSize);
+
 /** Returns 1 when a physical audio output device is open, 0 while in silent fallback. */
 ROWL_API int RowlEngine_IsAudioDeviceAvailable(RowlEngineHandle handle);
 
@@ -781,6 +797,10 @@ ROWL_API const char* RowlEngine_GetDialogueVoiceBlipSound(RowlEngineHandle handl
 
 /** Length-reporting variant of GetDialogueVoiceBlipSound (see lifetime contract). */
 ROWL_API const char* RowlEngine_GetDialogueVoiceBlipSoundWithLength(RowlEngineHandle handle, uint32_t* outLen);
+
+/** Caller-buffer variant of GetDialogueVoiceBlipSound (B2b; no borrowed lifetime). */
+ROWL_API RowlEngine_ResultCode RowlEngine_GetDialogueVoiceBlipSoundUtf8(
+    RowlEngineHandle handle, char* buffer, uint32_t bufferSize, uint32_t* outRequiredSize);
 
 /** Returns active dialogue voice blip base pitch multiplier. */
 ROWL_API float RowlEngine_GetDialogueVoiceBlipPitch(RowlEngineHandle handle);
