@@ -1,6 +1,7 @@
 #include "rowl/vfs/vfs.hpp"
 #include "rowl/vfs/rowlpkg_reader.hpp"
 #include "rowl/core/logger.hpp"
+#include "rowl/platform/user_data_directories.hpp"
 #include <fstream>
 #include <filesystem>
 #include <algorithm>
@@ -46,10 +47,33 @@ std::optional<fs::path> resolveInsideRoot(const fs::path& canonicalRoot,
 
 } // namespace
 
+// A2a: quiet single-lookup loose-file read. nullopt = miss/unreadable (no
+// diagnostics — multi-source probing must stay log-clean); an engaged,
+// possibly empty vector is a REAL asset. Loud callers (read()) add their
+// own single diagnostic on top.
+std::optional<std::vector<uint8_t>> readLooseFileQuiet(const fs::path& fullPath) {
+    std::error_code error;
+    if (!fs::is_regular_file(fullPath, error) || error) return std::nullopt;
+    const auto fileSize = fs::file_size(fullPath, error);
+    if (error || fileSize > kMaxLooseAssetBytes) return std::nullopt;
+
+    std::ifstream file(fullPath, std::ios::binary);
+    if (!file.is_open()) return std::nullopt;
+    std::vector<uint8_t> buffer(static_cast<std::size_t>(fileSize));
+    if (fileSize > 0 &&
+        !file.read(reinterpret_cast<char*>(buffer.data()),
+                   static_cast<std::streamsize>(fileSize))) {
+        return std::nullopt;
+    }
+    return buffer;
+}
+
 LooseDirectorySource::LooseDirectorySource(std::string physicalPath)
     : m_physicalPath(std::move(physicalPath)) {
     std::error_code error;
-    m_canonicalRoot = fs::weakly_canonical(m_physicalPath, error);
+    // A2a: canonicalize through UTF-8 — the narrow string ctor would
+    // reinterpret a non-ASCII mount root in the ANSI codepage on Windows.
+    m_canonicalRoot = fs::weakly_canonical(pathFromUtf8(m_physicalPath), error);
     if (error) {
         m_canonicalRoot.clear();
         ROWL_LOG_WARN("VFS could not canonicalize mount root: " + m_physicalPath);
@@ -58,7 +82,10 @@ LooseDirectorySource::LooseDirectorySource(std::string physicalPath)
 
 bool LooseDirectorySource::exists(const std::string& path) {
     const auto fullPath = resolveInsideRoot(m_canonicalRoot, path);
-    return fullPath && fs::exists(*fullPath) && fs::is_regular_file(*fullPath);
+    if (!fullPath) return false;
+    std::error_code error;
+    return fs::exists(*fullPath, error) && !error &&
+           fs::is_regular_file(*fullPath, error) && !error;
 }
 
 std::vector<uint8_t> LooseDirectorySource::read(const std::string& path) {
@@ -67,35 +94,25 @@ std::vector<uint8_t> LooseDirectorySource::read(const std::string& path) {
         ROWL_LOG_WARN("VFS rejected path outside mount root: " + path);
         return {};
     }
-    std::ifstream file(*fullPath, std::ios::binary | std::ios::ate);
-    if (!file.is_open()) {
-        ROWL_LOG_WARN("Failed to open file: " + fullPath->string());
+    auto data = readLooseFileQuiet(*fullPath);
+    if (!data) {
+        ROWL_LOG_WARN("VFS could not read loose asset: " + fullPath->string());
         return {};
     }
+    return std::move(*data);
+}
 
-    std::streamsize size = file.tellg();
-    if (size < 0) {
-        ROWL_LOG_WARN("Failed to determine file size: " + fullPath->string());
-        return {};
-    }
-    if (static_cast<uintmax_t>(size) > kMaxLooseAssetBytes) {
-        ROWL_LOG_WARN("VFS rejected oversized loose asset: " + fullPath->string());
-        return {};
-    }
-
-    file.seekg(0, std::ios::beg);
-
-    std::vector<uint8_t> buffer(size);
-    if (!file.read(reinterpret_cast<char*>(buffer.data()), size)) {
-        ROWL_LOG_WARN("Failed to read file: " + fullPath->string());
-        return {};
-    }
-    return buffer;
+std::optional<std::vector<uint8_t>> LooseDirectorySource::tryRead(const std::string& path) {
+    const auto fullPath = resolveInsideRoot(m_canonicalRoot, path);
+    if (!fullPath) return std::nullopt;
+    return readLooseFileQuiet(*fullPath);
 }
 
 std::unique_ptr<std::istream> LooseDirectorySource::openStream(const std::string& path) {
     const auto fullPath = resolveInsideRoot(m_canonicalRoot, path);
-    if (!fullPath || !fs::is_regular_file(*fullPath)) return nullptr;
+    if (!fullPath) return nullptr;
+    std::error_code error;
+    if (!fs::is_regular_file(*fullPath, error) || error) return nullptr;
     auto stream = std::make_unique<std::ifstream>(*fullPath, std::ios::binary);
     if (!stream->is_open()) return nullptr;
     return stream;
@@ -109,7 +126,11 @@ void VFSManager::initialize() {
 
     // A mod using an ordinary asset path overrides the packaged entry at the
     // same path.  Preserve the explicit mods/ namespace for tooling too.
-    if (fs::exists("mods") && fs::is_directory("mods")) {
+    // A2a: error_code overloads throughout — a vanished CWD or an unreadable
+    // directory must degrade to "no mounts", never throw across the VFS.
+    std::error_code fsError;
+    if (!fsError && fs::exists("mods", fsError) && !fsError &&
+        fs::is_directory("mods", fsError) && !fsError) {
         mountDirectory("", "mods");
         mountDirectory("mods", "mods");
     }
@@ -117,27 +138,38 @@ void VFSManager::initialize() {
     // A default runtime may only expose its asset root. Mounting the current
     // directory here used to make unrelated project files readable through an
     // empty VFS prefix whenever the engine was launched from a project root.
-    const std::vector<fs::path> candidateRoots = {
-        fs::current_path() / "Assets"
-    };
+    const fs::path candidatesRoot = fs::current_path(fsError);
+    std::vector<fs::path> candidateRoots;
+    if (!fsError) candidateRoots.push_back(candidatesRoot / "Assets");
 
     for (const auto& root : candidateRoots) {
-        if (fs::exists(root) && fs::is_directory(root)) {
-            mountDirectory("", root.string());
-            mountDirectory("Assets", root.string());
+        fsError.clear();
+        if (!fs::exists(root, fsError) || fsError) continue;
+        if (!fs::is_directory(root, fsError) || fsError) continue;
+        // A2a: pathToUtf8, never .string() — .string() is ANSI-encoded on
+        // Windows and would lose a non-ASCII project root.
+        const std::string rootUtf8 = Rowl::Platform::pathToUtf8(root);
+        mountDirectory("", rootUtf8);
+        mountDirectory("Assets", rootUtf8);
 
-            fs::path imgPath = root / "images";
-            if (fs::exists(imgPath) && fs::is_directory(imgPath)) {
-                mountDirectory("", imgPath.string());
-                mountDirectory("images", imgPath.string());
-            }
+        fs::path imgPath = root / "images";
+        if (fs::exists(imgPath, fsError) && !fsError &&
+            fs::is_directory(imgPath, fsError) && !fsError) {
+            const std::string imgUtf8 = Rowl::Platform::pathToUtf8(imgPath);
+            mountDirectory("", imgUtf8);
+            mountDirectory("images", imgUtf8);
+        }
 
-            fs::path pkgPath = root / "packages";
-            if (fs::exists(pkgPath) && fs::is_directory(pkgPath)) {
-                for (const auto& entry : fs::directory_iterator(pkgPath)) {
-                    if (entry.is_regular_file() && entry.path().extension() == ".rowlpkg") {
-                        mountPackage("", entry.path().string());
-                    }
+        fs::path pkgPath = root / "packages";
+        if (fs::exists(pkgPath, fsError) && !fsError &&
+            fs::is_directory(pkgPath, fsError) && !fsError) {
+            std::error_code iterError;
+            for (const auto& entry : fs::directory_iterator(pkgPath, iterError)) {
+                if (iterError) break;
+                std::error_code entryError;
+                if (entry.is_regular_file(entryError) && !entryError &&
+                    entry.path().extension() == ".rowlpkg") {
+                    mountPackage("", Rowl::Platform::pathToUtf8(entry.path()));
                 }
             }
         }
@@ -160,8 +192,12 @@ void VFSManager::remountProject(const std::string& projectRoot) {
 
     if (projectRoot.empty()) return;
 
-    fs::path root(projectRoot);
-    if (!fs::exists(root) || !fs::is_directory(root)) {
+    // A2a: UTF-8 contract — the narrow path ctor would lose a non-ASCII root
+    // on Windows before any lookup even runs.
+    fs::path root = pathFromUtf8(projectRoot);
+    std::error_code fsError;
+    if (!fs::exists(root, fsError) || fsError ||
+        !fs::is_directory(root, fsError) || fsError) {
         ROWL_LOG_WARN("VFS cannot remount non-existent project root: " + projectRoot);
         return;
     }
@@ -171,9 +207,11 @@ void VFSManager::remountProject(const std::string& projectRoot) {
     // Mount mods first so a release can override package content without a
     // second loose Assets tree.  The package remains the only base source.
     fs::path modsPath = root / "mods";
-    if (fs::exists(modsPath) && fs::is_directory(modsPath)) {
-        mountDirectory("", modsPath.string());
-        mountDirectory("mods", modsPath.string());
+    if (fs::exists(modsPath, fsError) && !fsError &&
+        fs::is_directory(modsPath, fsError) && !fsError) {
+        const std::string modsUtf8 = Rowl::Platform::pathToUtf8(modsPath);
+        mountDirectory("", modsUtf8);
+        mountDirectory("mods", modsUtf8);
     }
 
     // Only expose declared runtime content. Mounting the project root at the
@@ -181,23 +219,32 @@ void VFSManager::remountProject(const std::string& projectRoot) {
     // readable through an asset lookup after a project switch.
     // 1. Mount project Assets folder.
     fs::path assetsPath = root / "Assets";
-    if (fs::exists(assetsPath) && fs::is_directory(assetsPath)) {
-        mountDirectory("", assetsPath.string());
-        mountDirectory("Assets", assetsPath.string());
+    if (fs::exists(assetsPath, fsError) && !fsError &&
+        fs::is_directory(assetsPath, fsError) && !fsError) {
+        const std::string assetsUtf8 = Rowl::Platform::pathToUtf8(assetsPath);
+        mountDirectory("", assetsUtf8);
+        mountDirectory("Assets", assetsUtf8);
 
         // 2. Mount images
         fs::path imgPath = assetsPath / "images";
-        if (fs::exists(imgPath) && fs::is_directory(imgPath)) {
-            mountDirectory("", imgPath.string());
-            mountDirectory("images", imgPath.string());
+        if (fs::exists(imgPath, fsError) && !fsError &&
+            fs::is_directory(imgPath, fsError) && !fsError) {
+            const std::string imgUtf8 = Rowl::Platform::pathToUtf8(imgPath);
+            mountDirectory("", imgUtf8);
+            mountDirectory("images", imgUtf8);
         }
 
         // 3. Mount packages
         fs::path pkgPath = assetsPath / "packages";
-        if (fs::exists(pkgPath) && fs::is_directory(pkgPath)) {
-            for (const auto& entry : fs::directory_iterator(pkgPath)) {
-                if (entry.is_regular_file() && entry.path().extension() == ".rowlpkg") {
-                    mountPackage("", entry.path().string());
+        if (fs::exists(pkgPath, fsError) && !fsError &&
+            fs::is_directory(pkgPath, fsError) && !fsError) {
+            std::error_code iterError;
+            for (const auto& entry : fs::directory_iterator(pkgPath, iterError)) {
+                if (iterError) break;
+                std::error_code entryError;
+                if (entry.is_regular_file(entryError) && !entryError &&
+                    entry.path().extension() == ".rowlpkg") {
+                    mountPackage("", Rowl::Platform::pathToUtf8(entry.path()));
                 }
             }
         }
@@ -210,6 +257,13 @@ void VFSManager::remountProject(const std::string& projectRoot) {
 void VFSManager::mountDirectory(const std::string& virtualPrefix, const std::string& physicalPath) {
     std::lock_guard<std::recursive_mutex> lock(m_mutex);
     auto source = std::make_shared<LooseDirectorySource>(physicalPath);
+    // A2a: refuse dead mounts loudly. Previously an unreachable root was
+    // mounted anyway and every lookup silently missed.
+    if (!source->isValid()) {
+        ROWL_LOG_ERROR("VFS refused to mount unreachable directory: '" + physicalPath +
+                       "' under virtual prefix '" + virtualPrefix + "'");
+        return;
+    }
     m_mountPoints.emplace_back(virtualPrefix, source);
     ROWL_LOG_INFO("VFS Mounted directory: '" + physicalPath + "' under virtual prefix '" + virtualPrefix + "'");
 }
@@ -254,6 +308,50 @@ bool VFSManager::exists(const std::string& vfsPath) {
     return false;
 }
 
+std::optional<std::vector<uint8_t>> VFSManager::readBytesSinglePass(const std::string& cleanPath) {
+    // Snapshot under lock; IO runs lock-free (A2a).
+    const auto mounts = getMountPoints();
+    // Try with prefix stripping first (correct priority: mods > data > packages)
+    for (const auto& [prefix, source] : mounts) {
+        // If cleanPath starts with prefix, try stripped version first
+        if (!prefix.empty() && cleanPath.size() > prefix.size() &&
+            cleanPath.compare(0, prefix.size(), prefix) == 0 &&
+            cleanPath[prefix.size()] == '/') {
+            std::string stripped = cleanPath.substr(prefix.size() + 1);
+            if (auto data = source->tryRead(stripped)) {
+                ROWL_LOG_TRACE("VFS Resolved '" + cleanPath + "' via " + source->getSourceName() + " (prefix-stripped)");
+                return data;
+            }
+        }
+    }
+
+    // Fallback: try direct path (for paths without prefix)
+    for (const auto& [prefix, source] : mounts) {
+        (void)prefix;
+        if (auto data = source->tryRead(cleanPath)) {
+            ROWL_LOG_TRACE("VFS Resolved '" + cleanPath + "' via " + source->getSourceName());
+            return data;
+        }
+    }
+    return std::nullopt;
+}
+
+std::unique_ptr<std::istream> VFSManager::openStreamSinglePass(const std::string& cleanPath) {
+    const auto mounts = getMountPoints();
+    for (const auto& [prefix, source] : mounts) {
+        if (!prefix.empty() && cleanPath.size() > prefix.size() &&
+            cleanPath.compare(0, prefix.size(), prefix) == 0 && cleanPath[prefix.size()] == '/') {
+            const std::string stripped = cleanPath.substr(prefix.size() + 1);
+            if (auto stream = source->tryOpenStream(stripped)) return stream;
+        }
+    }
+    for (const auto& [prefix, source] : mounts) {
+        (void)prefix;
+        if (auto stream = source->tryOpenStream(cleanPath)) return stream;
+    }
+    return nullptr;
+}
+
 std::vector<uint8_t> VFSManager::readBytes(const std::string& vfsPath) {
     if (vfsPath.empty()) {
         ROWL_LOG_WARN("VFS attempted to read empty path");
@@ -263,27 +361,9 @@ std::vector<uint8_t> VFSManager::readBytes(const std::string& vfsPath) {
     std::string cleanPath = vfsPath;
     std::replace(cleanPath.begin(), cleanPath.end(), '\\', '/');
 
-    std::lock_guard<std::recursive_mutex> lock(m_mutex);
-    // Try with prefix stripping first (correct priority order)
-    for (const auto& [prefix, source] : m_mountPoints) {
-        if (!prefix.empty() && cleanPath.size() > prefix.size() &&
-            cleanPath.compare(0, prefix.size(), prefix) == 0 &&
-            cleanPath[prefix.size()] == '/') {
-            std::string stripped = cleanPath.substr(prefix.size() + 1);
-            if (source->exists(stripped)) {
-                ROWL_LOG_TRACE("VFS Resolved '" + cleanPath + "' via " + source->getSourceName() + " (prefix-stripped)");
-                return source->read(stripped);
-            }
-        }
-    }
-
-    // Fallback: try direct path
-    for (const auto& [prefix, source] : m_mountPoints) {
-        if (source->exists(cleanPath)) {
-            ROWL_LOG_TRACE("VFS Resolved '" + cleanPath + "' via " + source->getSourceName());
-            return source->read(cleanPath);
-        }
-    }
+    // A2a: engaged-but-empty is a REAL empty asset (no "not found" warn);
+    // nullopt is a true miss on every source.
+    if (auto data = readBytesSinglePass(cleanPath)) return std::move(*data);
 
     ROWL_LOG_WARN("VFS File not found: '" + cleanPath + "'");
     return {};
@@ -293,19 +373,7 @@ std::unique_ptr<std::istream> VFSManager::openReadStream(const std::string& vfsP
     if (vfsPath.empty()) return nullptr;
     std::string cleanPath = vfsPath;
     std::replace(cleanPath.begin(), cleanPath.end(), '\\', '/');
-    std::lock_guard<std::recursive_mutex> lock(m_mutex);
-    for (const auto& [prefix, source] : m_mountPoints) {
-        if (!prefix.empty() && cleanPath.size() > prefix.size() &&
-            cleanPath.compare(0, prefix.size(), prefix) == 0 && cleanPath[prefix.size()] == '/') {
-            const std::string stripped = cleanPath.substr(prefix.size() + 1);
-            if (source->exists(stripped)) return source->openStream(stripped);
-        }
-    }
-    for (const auto& [prefix, source] : m_mountPoints) {
-        (void)prefix;
-        if (source->exists(cleanPath)) return source->openStream(cleanPath);
-    }
-    return nullptr;
+    return openStreamSinglePass(cleanPath);
 }
 
 std::string VFSManager::readString(const std::string& vfsPath) {

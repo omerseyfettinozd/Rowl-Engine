@@ -418,6 +418,109 @@ void test_vfs_security() {
     std::filesystem::remove_all(vfsProject);
     TEST_PASS("VFS-first story graph auto-load upon project mount verified");
 
+    // A2a-tur1 (boş-dosya bilerek-boz): a present-but-empty asset must stay
+    // distinguishable from a miss — engaged-empty tryRead, silent readBytes,
+    // and a VALID empty stream (old code returned nullptr for empty raws).
+    {
+        std::ofstream(mountRoot / "empty.txt", std::ios::binary).close();
+        auto emptyProbe = source.tryRead("empty.txt");
+        if (!emptyProbe || !emptyProbe->empty()) {
+            std::cerr << "VFS tryRead did not report an engaged-empty asset" << std::endl;
+            exit(1);
+        }
+        if (source.tryRead("definitely-missing.txt")) {
+            std::cerr << "VFS tryRead reported a miss as present" << std::endl;
+            exit(1);
+        }
+        Rowl::VFS::VFSManager emptyVfs;
+        emptyVfs.mountDirectory("", mountRoot.string());
+        if (!emptyVfs.exists("empty.txt") || !emptyVfs.readBytes("empty.txt").empty() ||
+            emptyVfs.readString("empty.txt") != "" || emptyVfs.exists("definitely-missing.txt") ||
+            !emptyVfs.readBytes("definitely-missing.txt").empty()) {
+            std::cerr << "VFS confused a present-but-empty asset with a miss" << std::endl;
+            exit(1);
+        }
+        auto emptyStream = emptyVfs.openReadStream("empty.txt");
+        if (!emptyStream || emptyStream->peek() != std::char_traits<char>::eof() ||
+            emptyVfs.openReadStream("definitely-missing.txt")) {
+            std::cerr << "VFS empty-asset stream was not a valid empty stream" << std::endl;
+            exit(1);
+        }
+        const std::string emptyEntryPath = "empty.txt";
+        Rowl::VFS::RowlPkgHeader emptyHeader{{'R', 'O', 'W', 'L'}, 1, 1, headerSize};
+        Rowl::VFS::RowlPkgEntryRaw emptyEntry{fnv1a64(emptyEntryPath),
+                                              static_cast<uint32_t>(emptyEntryPath.size()),
+                                              headerSize, 0, 0, 0};
+        const auto emptyPackage = writePackage("empty_entry.rowlpkg", emptyHeader, emptyEntry,
+                                               emptyEntryPath, "");
+        Rowl::VFS::RowlPkgDataSource emptySource(emptyPackage.string());
+        auto emptyEntryProbe = emptySource.tryRead(emptyEntryPath);
+        if (!emptySource.isValid() || !emptyEntryProbe || !emptyEntryProbe->empty()) {
+            std::cerr << "Package tryRead did not report an engaged-empty entry" << std::endl;
+            exit(1);
+        }
+        auto emptyEntryStream = emptySource.tryOpenStream(emptyEntryPath);
+        if (!emptyEntryStream || emptyEntryStream->peek() != std::char_traits<char>::eof() ||
+            emptySource.tryRead("missing.txt") || emptySource.tryOpenStream("missing.txt")) {
+            std::cerr << "Package empty entry did not yield a valid empty stream" << std::endl;
+            exit(1);
+        }
+    }
+    TEST_PASS("A2a Present-but-empty assets stay distinguishable from misses (loose + package)");
+
+    // A2a-tur1 (ölü-mount bilerek-boz): a root that cannot even be
+    // canonicalized must be refused at mount time — previously it mounted
+    // "successfully" and every lookup silently missed. The healthy fixture
+    // root must stay valid, so the gate cannot be a blanket refusal.
+    {
+        if (!source.isValid()) {
+            std::cerr << "VFS mount gate rejected a healthy mount root" << std::endl;
+            exit(1);
+        }
+        std::error_code linkEc;
+        std::filesystem::create_symlink(testRoot / "loop-b", testRoot / "loop-a", linkEc);
+        std::filesystem::create_symlink(testRoot / "loop-a", testRoot / "loop-b", linkEc);
+        if (!linkEc) {
+            Rowl::VFS::LooseDirectorySource loopSource((testRoot / "loop-a").string());
+            Rowl::VFS::VFSManager loopVfs;
+            loopVfs.mountDirectory("", (testRoot / "loop-a").string());
+            if (loopSource.isValid() || !loopVfs.getMountPoints().empty()) {
+                std::cerr << "VFS mounted a root it cannot canonicalize" << std::endl;
+                exit(1);
+            }
+        }
+    }
+    TEST_PASS("A2a Uncanonicalizable mount roots are refused loudly at mount time");
+
+    // A2a-tur1 (throwing-iterator bilerek-boz): an unreadable packages dir
+    // must degrade to "no package mounts", never throw across remount (old
+    // code used the throwing directory_iterator overload).
+    {
+        const auto noReadProject = testRoot / "noread_project";
+        std::filesystem::create_directories(noReadProject / "Assets" / "packages");
+        std::ofstream(noReadProject / "Assets" / "ok.txt") << "ok";
+#ifndef _WIN32
+        std::filesystem::permissions(noReadProject / "Assets" / "packages",
+                                     std::filesystem::perms::none);
+#endif
+        Rowl::VFS::VFSManager noReadVfs;
+        bool threw = false;
+        try {
+            noReadVfs.remountProject(noReadProject.string());
+        } catch (...) {
+            threw = true;
+        }
+#ifndef _WIN32
+        std::filesystem::permissions(noReadProject / "Assets" / "packages",
+                                     std::filesystem::perms::owner_all);
+#endif
+        if (threw || noReadVfs.readString("ok.txt") != "ok") {
+            std::cerr << "VFS remount threw on (or lost assets to) an unreadable packages dir" << std::endl;
+            exit(1);
+        }
+    }
+    TEST_PASS("A2a Unreadable package directories degrade to no-mounts without throwing");
+
     // No global-restore remount: vfs is function-local.
     TEST_PASS("Project remount exposes Assets but not project-root files");
 

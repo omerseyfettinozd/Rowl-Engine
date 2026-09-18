@@ -2,6 +2,7 @@
 
 #include "rowl/vfs/vfs.hpp"
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 #include <unordered_map>
@@ -44,13 +45,20 @@ public:
 
     bool exists(const std::string& path) override;
     std::vector<uint8_t> read(const std::string& path) override;
+    std::optional<std::vector<uint8_t>> tryRead(const std::string& path) override;
     std::unique_ptr<std::istream> openStream(const std::string& path) override;
+    std::unique_ptr<std::istream> tryOpenStream(const std::string& path) override;
     std::string getSourceName() const override { return "RowlPkgDataSource [" + m_filepath + "]"; }
 
     bool isValid() const { return m_isValid; }
 
 private:
     bool loadIndexTable();
+    /// A2a: shared entry materialization. nullopt = IO/decompression
+    /// failure; engaged (possibly empty) = the real entry bytes. The file
+    /// mutex covers only seek+read — decompression runs lock-free.
+    std::optional<std::vector<uint8_t>> readEntry(const PackageEntry& entry,
+                                                  const std::string& path);
 
     std::string m_filepath;
     std::ifstream m_fileStream;

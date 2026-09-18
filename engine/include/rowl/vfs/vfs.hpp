@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 #include <memory>
@@ -18,6 +19,19 @@ public:
     virtual std::vector<uint8_t> read(const std::string& path) = 0;
     virtual std::unique_ptr<std::istream> openStream(const std::string& path) = 0;
     virtual std::string getSourceName() const = 0;
+    /// A2a: single-lookup read — nullopt means absent/unreadable, with no
+    /// exists+read TOCTOU and no double lookup. An engaged (even empty)
+    /// vector is a REAL asset, never a miss. Quiet by contract: multi-source
+    /// probing must not log per-source failures. The default keeps external
+    /// implementers working through the legacy two-step path.
+    virtual std::optional<std::vector<uint8_t>> tryRead(const std::string& path) {
+        if (!exists(path)) return std::nullopt;
+        return read(path);
+    }
+    /// A2a: single-lookup stream open. Default keeps the legacy path.
+    virtual std::unique_ptr<std::istream> tryOpenStream(const std::string& path) {
+        return openStream(path);
+    }
 };
 
 class LooseDirectorySource : public IDataSource {
@@ -27,9 +41,14 @@ public:
 
     bool exists(const std::string& path) override;
     std::vector<uint8_t> read(const std::string& path) override;
+    std::optional<std::vector<uint8_t>> tryRead(const std::string& path) override;
     std::unique_ptr<std::istream> openStream(const std::string& path) override;
     std::string getSourceName() const override { return "LooseDirectorySource [" + m_physicalPath + "]"; }
     const std::string& getPhysicalPath() const { return m_physicalPath; }
+    /// A2a: false when the mount root could not be canonicalized (dead
+    /// mount). mountDirectory() refuses such sources instead of letting
+    /// every lookup silently miss.
+    bool isValid() const { return !m_canonicalRoot.empty(); }
 
 private:
     std::string m_physicalPath;
@@ -64,6 +83,12 @@ public:
     }
 
 private:
+    /// A2a: mount-list snapshot + single-pass probe. The global lock covers
+    /// only the snapshot; file IO runs lock-free so one slow source cannot
+    /// stall mounts/unmounts. nullopt = missed on every source.
+    std::optional<std::vector<uint8_t>> readBytesSinglePass(const std::string& cleanPath);
+    std::unique_ptr<std::istream> openStreamSinglePass(const std::string& cleanPath);
+
     mutable std::recursive_mutex m_mutex;
     std::vector<std::pair<std::string, std::shared_ptr<IDataSource>>> m_mountPoints;
     bool m_initialized = false;

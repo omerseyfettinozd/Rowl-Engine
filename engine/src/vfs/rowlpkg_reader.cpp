@@ -1,5 +1,6 @@
 #include "rowl/vfs/rowlpkg_reader.hpp"
 #include "rowl/core/logger.hpp"
+#include "rowl/platform/user_data_directories.hpp"
 #include <zstd.h>
 #include <cstring>
 #include <filesystem>
@@ -27,7 +28,9 @@ constexpr size_t kDecompressedReadChunkBytes = 64 * 1024;
 class ZstdEntryStreamBuf final : public std::streambuf {
 public:
     ZstdEntryStreamBuf(const std::string& filepath, const PackageEntry& entry)
-        : m_file(filepath, std::ios::binary), m_entry(entry),
+        // A2a: open through UTF-8 — the narrow string ctor would reinterpret
+        // a non-ASCII package path in the ANSI codepage on Windows.
+        : m_file(Rowl::Platform::pathFromUtf8(filepath), std::ios::binary), m_entry(entry),
           m_dstream(ZSTD_createDStream()) {
         setg(m_output.data(), m_output.data(), m_output.data());
         if (!m_file || !m_dstream || !reset()) m_error = true;
@@ -133,7 +136,9 @@ std::optional<std::string> normalizePackagePath(std::string path) {
     if (path.empty() || path.find('\0') != std::string::npos) return std::nullopt;
 
     std::replace(path.begin(), path.end(), '\\', '/');
-    const std::filesystem::path normalized = std::filesystem::path(path).lexically_normal();
+    // A2a: entry names are UTF-8 — same narrow-ctor trap as the mount root.
+    const std::filesystem::path normalized =
+        std::filesystem::path(std::u8string(path.begin(), path.end())).lexically_normal();
     if (normalized.empty() || normalized.is_absolute() || normalized.has_root_name() ||
         normalized.has_root_directory()) {
         return std::nullopt;
@@ -148,7 +153,8 @@ std::optional<std::string> normalizePackagePath(std::string path) {
 
 RowlPkgDataSource::RowlPkgDataSource(std::string pkgFilepath)
     : m_filepath(std::move(pkgFilepath)) {
-    m_fileStream.open(m_filepath, std::ios::binary);
+    // A2a: UTF-8 open (bkz. ZstdEntryStreamBuf).
+    m_fileStream.open(Rowl::Platform::pathFromUtf8(m_filepath), std::ios::binary);
     if (!m_fileStream.is_open()) {
         ROWL_LOG_WARN("Failed to open package archive: " + m_filepath);
         return;
@@ -316,28 +322,49 @@ std::vector<uint8_t> RowlPkgDataSource::read(const std::string& path) {
         return {};
     }
 
-    const auto& entry = it->second;
+    auto data = readEntry(it->second, path);
+    return data ? std::move(*data) : std::vector<uint8_t>{};
+}
 
-    // Thread-safe file access for multi-threaded VFS
-    std::lock_guard<std::mutex> lock(m_fileMutex);
+std::optional<std::vector<uint8_t>> RowlPkgDataSource::tryRead(const std::string& path) {
+    if (!m_isValid) return std::nullopt;
+    const auto normalizedPath = normalizePackagePath(path);
+    if (!normalizedPath) return std::nullopt;
+    auto it = m_indexTable.find(*normalizedPath);
+    if (it == m_indexTable.end()) return std::nullopt;
+    return readEntry(it->second, path);
+}
 
-    m_fileStream.seekg(entry.offset, std::ios::beg);
-
-    if (!m_fileStream.good()) {
-        ROWL_LOG_ERROR("Failed to seek to entry offset in package: " + path);
-        return {};
-    }
-
+std::optional<std::vector<uint8_t>> RowlPkgDataSource::readEntry(const PackageEntry& entry,
+                                                                 const std::string& path) {
     std::vector<uint8_t> compressedBuffer(entry.compressedSize);
-    m_fileStream.read(reinterpret_cast<char*>(compressedBuffer.data()), entry.compressedSize);
+    {
+        // Thread-safe file access for multi-threaded VFS. A2a: the mutex
+        // covers only the shared-stream seek+read — ZSTD_decompress below
+        // touches locals only, so decodes no longer serialize on IO.
+        std::lock_guard<std::mutex> lock(m_fileMutex);
 
-    if (m_fileStream.gcount() != static_cast<std::streamsize>(entry.compressedSize)) {
-        ROWL_LOG_ERROR("Failed to read compressed data for: " + path);
-        return {};
+        m_fileStream.seekg(static_cast<std::streamoff>(entry.offset), std::ios::beg);
+
+        if (!m_fileStream.good()) {
+            ROWL_LOG_ERROR("Failed to seek to entry offset in package: " + path);
+            return std::nullopt;
+        }
+
+        if (entry.compressedSize > 0) {
+            m_fileStream.read(reinterpret_cast<char*>(compressedBuffer.data()),
+                              static_cast<std::streamsize>(entry.compressedSize));
+
+            if (m_fileStream.gcount() != static_cast<std::streamsize>(entry.compressedSize)) {
+                ROWL_LOG_ERROR("Failed to read compressed data for: " + path);
+                return std::nullopt;
+            }
+        }
     }
 
     if (entry.flags == 0) {
-        // Raw uncompressed file data
+        // Raw uncompressed file data (an engaged empty vector is a real
+        // empty entry, never a miss).
         return compressedBuffer;
     } else if (entry.flags == 1) {
         // Zstd compressed chunk
@@ -349,21 +376,25 @@ std::vector<uint8_t> RowlPkgDataSource::read(const std::string& path) {
 
         if (ZSTD_isError(result)) {
             ROWL_LOG_ERROR("Zstd decompression failed for asset '" + path + "': " + std::string(ZSTD_getErrorName(result)));
-            return {};
+            return std::nullopt;
         }
         if (result != entry.uncompressedSize) {
             ROWL_LOG_ERROR("Zstd output size mismatch for asset '" + path + "'");
-            return {};
+            return std::nullopt;
         }
 
         return decompressedBuffer;
     }
 
     ROWL_LOG_WARN("Unsupported compression flag for asset: " + path);
-    return {};
+    return std::nullopt;
 }
 
 std::unique_ptr<std::istream> RowlPkgDataSource::openStream(const std::string& path) {
+    return tryOpenStream(path);
+}
+
+std::unique_ptr<std::istream> RowlPkgDataSource::tryOpenStream(const std::string& path) {
     if (!m_isValid) return nullptr;
     const auto normalizedPath = normalizePackagePath(path);
     if (!normalizedPath) return nullptr;
@@ -374,10 +405,13 @@ std::unique_ptr<std::istream> RowlPkgDataSource::openStream(const std::string& p
         return stream->good() ? std::move(stream) : nullptr;
     }
     // Raw entries remain bounded by package validation. They do not require a
-    // decoder, and read() preserves the existing contiguous-asset behavior.
-    auto bytes = read(path);
-    if (bytes.empty()) return nullptr;
-    return std::make_unique<std::istringstream>(std::string(reinterpret_cast<const char*>(bytes.data()), bytes.size()), std::ios::binary);
+    // decoder. A2a: single lookup via readEntry (no exists probe), and the
+    // bytes move into the stream — the old read()+copy+copy is one copy now.
+    // A present-but-empty entry yields a valid empty stream, not nullptr.
+    auto data = readEntry(it->second, path);
+    if (!data) return nullptr;
+    std::string bytes(reinterpret_cast<const char*>(data->data()), data->size());
+    return std::make_unique<std::istringstream>(std::move(bytes), std::ios::binary);
 }
 
 } // namespace Rowl::VFS
