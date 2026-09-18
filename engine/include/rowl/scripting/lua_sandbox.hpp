@@ -64,9 +64,23 @@ private:
     /// base functions, engine bridge). clearVariables() removes every other
     /// global so script-created names cannot leak across sessions.
     void snapshotInitialGlobals();
+    /// Removes every global outside m_initialGlobals (lua_next-safe:
+    /// collect-then-clear). Shared by clearVariables() and repairGlobals().
+    void sweepStrayGlobals();
     /// Bridge and standard-library names a script must never overwrite via
     /// setVariable()/setGlobalNumber().
     static bool isReservedVariableName(const std::string& key);
+    /// A1 (H26): removes an impostor `rowl` key a module planted in its own
+    /// environment via rawset (which bypasses the __newindex guard). Must use
+    /// rawset, never setfield — the guard silently swallows `rowl` writes.
+    void sweepModuleEnvRowl(const std::string& moduleId);
+    /// A1 (H31): replaces shared stdlib tables a script polluted in place
+    /// (math/string/table via fresh requiref, base funcs via pristine
+    /// re-registration), re-nils the blacklist, clears a hostile global-table
+    /// metatable, and rebinds the bridge. Legitimate script globals, the
+    /// variable map, and the H24 poison are preserved — repair is not a
+    /// session boundary. Code-load paths only, never per-frame/condition.
+    void repairGlobals();
 
     lua_State* m_luaState = nullptr;
     std::unordered_map<std::string, std::string> m_scriptVariables;

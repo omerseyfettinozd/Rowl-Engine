@@ -256,6 +256,31 @@ void LuaSandbox::snapshotInitialGlobals() {
     lua_pop(m_luaState, 1);
 }
 
+void LuaSandbox::sweepStrayGlobals() {
+    if (!m_luaState) return;
+    // Scripts can create arbitrary globals (x = 1, function on_enter...).
+    // Only sandbox-owned names survive a session boundary; lua_next cannot
+    // tolerate mutation mid-iteration, so collect first, then clear.
+    std::vector<std::string> strayGlobals;
+    lua_pushglobaltable(m_luaState);
+    lua_pushnil(m_luaState);
+    while (lua_next(m_luaState, -2) != 0) {
+        if (lua_type(m_luaState, -2) == LUA_TSTRING) {
+            if (const char* name = lua_tostring(m_luaState, -2)) {
+                if (m_initialGlobals.find(name) == m_initialGlobals.end()) {
+                    strayGlobals.emplace_back(name);
+                }
+            }
+        }
+        lua_pop(m_luaState, 1);
+    }
+    lua_pop(m_luaState, 1);
+    for (const auto& name : strayGlobals) {
+        lua_pushnil(m_luaState);
+        lua_setglobal(m_luaState, name.c_str());
+    }
+}
+
 void LuaSandbox::bindEngineApis() {
     if (!m_luaState) return;
 
@@ -270,6 +295,70 @@ void LuaSandbox::bindEngineApis() {
     lua_setfield(m_luaState, -2, "var_set");
 
     lua_setglobal(m_luaState, "rowl");
+}
+
+// A1 (H26): a module environment's __newindex guard silently ignores `rowl`
+// writes, but rawset(_G, "rowl", fake) bypasses the guard and plants an
+// impostor bridge that later callbacks in the same module would resolve
+// before the real one. The sweep deletes that key with rawset — lua_setfield
+// would re-trigger the guard and silently keep the impostor.
+void LuaSandbox::sweepModuleEnvRowl(const std::string& moduleId) {
+    if (!m_luaState) return;
+    const auto module = m_modules.find(moduleId);
+    if (module == m_modules.end()) return;
+    lua_rawgeti(m_luaState, LUA_REGISTRYINDEX, module->second); // env
+    lua_pushstring(m_luaState, "rowl");
+    lua_pushnil(m_luaState);
+    lua_rawset(m_luaState, -3); // bypass __newindex, delete the impostor
+    lua_pop(m_luaState, 1); // env
+}
+
+// A1 (H31): scripts share the stdlib tables through the global table (and
+// module envs through __index), so `math.sqrt = ...` in one script poisons
+// every later reader. Fresh tables from the open functions replace the
+// polluted ones. _LOADED entries are dropped first — otherwise requiref
+// returns the polluted cached table. Re-running luaopen_base registers into
+// the EXISTING global table (pristine base funcs overwrite polluted ones,
+// other globals survive), but it also reintroduces dofile/load — re-nil them.
+void LuaSandbox::repairGlobals() {
+    if (!m_luaState) return;
+    lua_getfield(m_luaState, LUA_REGISTRYINDEX, "_LOADED");
+    if (lua_istable(m_luaState, -1)) {
+        // "_G" must be dropped too: initialize() cached the base table in
+        // _LOADED, and requiref would otherwise return it without re-running
+        // luaopen_base (leaving polluted base funcs like tostring in place).
+        for (const char* lib : {"math", "string", "table", "_G"}) {
+            lua_pushnil(m_luaState);
+            lua_setfield(m_luaState, -2, lib);
+        }
+    }
+    lua_pop(m_luaState, 1); // _LOADED
+    luaL_requiref(m_luaState, "math", luaopen_math, 1);
+    lua_pop(m_luaState, 1);
+    luaL_requiref(m_luaState, "string", luaopen_string, 1);
+    lua_pop(m_luaState, 1);
+    luaL_requiref(m_luaState, "table", luaopen_table, 1);
+    lua_pop(m_luaState, 1);
+    luaL_requiref(m_luaState, "_G", luaopen_base, 1);
+    lua_pop(m_luaState, 1);
+    lua_pushnil(m_luaState); lua_setglobal(m_luaState, "dofile");
+    lua_pushnil(m_luaState); lua_setglobal(m_luaState, "loadfile");
+    lua_pushnil(m_luaState); lua_setglobal(m_luaState, "load");
+    lua_pushnil(m_luaState); lua_setglobal(m_luaState, "collectgarbage");
+    // The global table itself must carry no metatable: a script with
+    // setmetatable() access could otherwise install a hostile __index that
+    // intercepts every later global read. Fresh states have none, and engine
+    // code never sets one (module envs use their own tables).
+    lua_pushglobaltable(m_luaState);
+    lua_pushnil(m_luaState);
+    lua_setmetatable(m_luaState, -2);
+    lua_pop(m_luaState, 1);
+    // Rebind the bridge in case a script assigned `rowl` directly. This is
+    // deliberately NOT clearVariables(): repair preserves legitimate script
+    // globals (on_enter/on_update defined by earlier scripts must survive),
+    // the variable map, and the H24 poison — repair is not a session
+    // boundary. Stray cleanup stays exclusive to clearVariables().
+    bindEngineApis();
 }
 
 void LuaSandbox::setVariable(const std::string& key, const std::string& value) {
@@ -408,27 +497,7 @@ bool LuaSandbox::evaluateCondition(const std::string& conditionExpr) {
 
 void LuaSandbox::clearVariables() {
     if (m_luaState) {
-        // Scripts can create arbitrary globals (x = 1, function on_enter...).
-        // Only sandbox-owned names survive a session boundary; lua_next cannot
-        // tolerate mutation mid-iteration, so collect first, then clear.
-        std::vector<std::string> strayGlobals;
-        lua_pushglobaltable(m_luaState);
-        lua_pushnil(m_luaState);
-        while (lua_next(m_luaState, -2) != 0) {
-            if (lua_type(m_luaState, -2) == LUA_TSTRING) {
-                if (const char* name = lua_tostring(m_luaState, -2)) {
-                    if (m_initialGlobals.find(name) == m_initialGlobals.end()) {
-                        strayGlobals.emplace_back(name);
-                    }
-                }
-            }
-            lua_pop(m_luaState, 1);
-        }
-        lua_pop(m_luaState, 1);
-        for (const auto& name : strayGlobals) {
-            lua_pushnil(m_luaState);
-            lua_setglobal(m_luaState, name.c_str());
-        }
+        sweepStrayGlobals();
         for (const auto& [key, value] : m_scriptVariables) {
             (void)value;
             lua_pushnil(m_luaState);
@@ -470,14 +539,17 @@ bool LuaSandbox::executeString(const std::string& scriptCode) {
         std::string err = takeLuaError(m_luaState);
         lua_pop(m_luaState, 1);
         m_lastError = err;
-        bindEngineApis();
+        // A1 (H31): a failing script may already have polluted shared stdlib
+        // tables before erroring — repair (rebinds the bridge internally).
+        repairGlobals();
         ROWL_LOG_WARN("Lua Script Runtime Exception (Caught Safely): " + err);
         return false;
     }
 
     // Scripts may create globals freely, but cannot permanently replace the
     // engine bridge used by subsequent component scripts or conditions.
-    bindEngineApis();
+    // A1 (H31): same repair on the success path — pollution needs no error.
+    repairGlobals();
     return true;
 }
 
@@ -539,7 +611,8 @@ bool LuaSandbox::loadModule(const std::string& moduleId, const std::string& scri
         m_lastError = rawError ? rawError : "unknown Lua error";
         ROWL_LOG_WARN("Lua component runtime exception in '" + moduleId + "': " + m_lastError);
         lua_pop(m_luaState, 2); // error, environment
-        bindEngineApis();
+        // Env is discarded, but shared globals may be polluted already.
+        repairGlobals();
         return false;
     }
 
@@ -549,7 +622,11 @@ bool LuaSandbox::loadModule(const std::string& moduleId, const std::string& scri
     lua_pushvalue(m_luaState, environmentIndex);
     m_modules[moduleId] = luaL_ref(m_luaState, LUA_REGISTRYINDEX);
     lua_pop(m_luaState, 1); // environment
-    bindEngineApis();
+    // A1 (H31+H26): the module chunk ran against shared tables (repair is
+    // safe here — loads are rare, never per-frame) and may have planted an
+    // env-local `rowl` impostor via rawset (sweep it).
+    repairGlobals();
+    sweepModuleEnvRowl(moduleId);
     return true;
 }
 
@@ -587,10 +664,16 @@ bool LuaSandbox::callOptionalModuleFunction(const std::string& moduleId,
         ROWL_LOG_ERROR("Lua component lifecycle callback '" + moduleId + "." + functionName + "' failed: " + m_lastError);
         lua_pop(m_luaState, 2); // error, environment
         bindEngineApis();
+        // A1 (H26): the failed callback may have planted an env-local `rowl`
+        // impostor before erroring. No repairGlobals here — module callbacks
+        // are per-frame paths (H31 cost ban); repair runs on code-load paths.
+        sweepModuleEnvRowl(moduleId);
         return false;
     }
     lua_pop(m_luaState, 1); // environment
     bindEngineApis();
+    // A1 (H26): a successful callback can plant the impostor just as well.
+    sweepModuleEnvRowl(moduleId);
     return true;
 }
 

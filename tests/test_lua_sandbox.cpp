@@ -114,6 +114,18 @@ void test_lua_sandbox() {
     }
     TEST_PASS("Infinite Loop Defense (10M Instruction Limit Hook)");
 
+    // A1 (H24 bilerek-boz): tripping the limit poisons the session — a hostile
+    // script must not catch-and-respin WITHOUT a host-driven session boundary.
+    if (lua.executeString("rowl.var_set('h24_respin', 'should-not-run')")) {
+        std::cerr << "Lua poisoned session accepted a respin!" << std::endl;
+        exit(1);
+    }
+    if (lua.getLastError().empty() || lua.getVariable("h24_respin") == "should-not-run") {
+        std::cerr << "Lua poisoned session refused without a diagnosis" << std::endl;
+        exit(1);
+    }
+    TEST_PASS("A1 Poisoned Session Refuses Respin Until Session Boundary");
+
     // A1 (H24): tripping the instruction limit poisons the session — a hostile
     // script must not catch-and-respin. A new session boundary lifts it.
     lua.clearVariables();
@@ -151,6 +163,99 @@ void test_lua_sandbox() {
         exit(1);
     }
     TEST_PASS("Lua Stack-Overflow Fails Closed, Sandbox Reusable");
+
+    // A1 (H27 bilerek-boz): a script-controlled non-string error value must not
+    // crash the bridge — lua_tostring's nullptr becomes "unknown Lua error".
+    if (lua.executeString("error({})")) {
+        std::cerr << "Lua table error value was not reported as failure!" << std::endl;
+        exit(1);
+    }
+    if (lua.getLastError().empty()) {
+        std::cerr << "Lua table error value recorded no error" << std::endl;
+        exit(1);
+    }
+    TEST_PASS("A1 Non-String Error Value Fails Closed Without Crash");
+
+    // A1 (H26 bilerek-boz): rawset bypasses the __newindex guard and plants an
+    // env-local impostor bridge. The sweep must remove it on load AND on call.
+    if (!lua.loadModule("impostor", R"(
+        rawset(_G, "rowl", { var_set = function(k, v) end, var_get = function(k) return "fake" end })
+        function on_enter() rowl.var_set("h26_bridge", "real") end
+    )")) {
+        std::cerr << "Lua impostor module failed to load" << std::endl;
+        exit(1);
+    }
+    if (!lua.callOptionalModuleFunction("impostor", "on_enter") ||
+        lua.getVariable("h26_bridge") != "real") {
+        std::cerr << "Lua module impostor bridge survived the sweep!" << std::endl;
+        exit(1);
+    }
+    // Plant DURING a callback: the impostor wins inside that call (no-op), but
+    // the success-path sweep removes it so the next callback hits the bridge.
+    if (!lua.loadModule("planter", R"(
+        function on_update(dt)
+            rawset(_G, "rowl", { var_set = function(k, v) end })
+            rowl.var_set("h26_planted", "fake-wins")
+        end
+        function on_probe() rowl.var_set("h26_after_sweep", "real") end
+    )")) {
+        std::cerr << "Lua planter module failed to load" << std::endl;
+        exit(1);
+    }
+    if (!lua.callOptionalModuleFunction("planter", "on_update", 0.016) ||
+        !lua.getVariable("h26_planted").empty()) {
+        std::cerr << "Lua planter setup did not behave as designed" << std::endl;
+        exit(1);
+    }
+    if (!lua.callOptionalModuleFunction("planter", "on_probe") ||
+        lua.getVariable("h26_after_sweep") != "real") {
+        std::cerr << "Lua callback-planted impostor survived the sweep!" << std::endl;
+        exit(1);
+    }
+    lua.unloadModule("impostor");
+    lua.unloadModule("planter");
+    TEST_PASS("A1 Module Impostor Bridge Swept on Load and Call");
+
+    // A1 (H31 bilerek-boz): in-place stdlib pollution is repaired on the next
+    // code-load path — shared tables, base functions, and the blacklist.
+    if (!lua.executeString("math.sqrt = function(x) return -1 end")) {
+        std::cerr << "Lua pollution setup script failed" << std::endl;
+        exit(1);
+    }
+    if (!lua.executeString("rowl.var_set('h31_math', tostring(math.sqrt(16)))") ||
+        lua.getVariable("h31_math") != "4.0") {  // Lua 5.3+: float tostring keeps .0
+        std::cerr << "Lua polluted math.sqrt survived repair!" << std::endl;
+        exit(1);
+    }
+    if (!lua.executeString("tostring = function(x) return 'pwned' end")) {
+        std::cerr << "Lua base-pollution setup script failed" << std::endl;
+        exit(1);
+    }
+    if (!lua.executeString("rowl.var_set('h31_base', tostring(42))") ||
+        lua.getVariable("h31_base") != "42") {
+        std::cerr << "Lua polluted tostring survived repair!" << std::endl;
+        exit(1);
+    }
+    // Fresh base reintroduces the escape hatches — repair must re-nil them.
+    if (!lua.executeString(
+            "if dofile ~= nil or loadfile ~= nil or load ~= nil or collectgarbage ~= nil then "
+            "error('base re-registration reopened an escape hatch') end")) {
+        std::cerr << "Lua blacklist was not restored after base repair!" << std::endl;
+        exit(1);
+    }
+    // Module-vector: a module chunk reaches the same shared tables through
+    // __index. Loads are rare (never per-frame), so the load path repairs.
+    if (!lua.loadModule("polluter", "math.sqrt = function(x) return -999 end")) {
+        std::cerr << "Lua polluter module failed to load" << std::endl;
+        exit(1);
+    }
+    if (!lua.executeString("rowl.var_set('h31_modvec', tostring(math.sqrt(16)))") ||
+        lua.getVariable("h31_modvec") != "4.0") {  // float tostring, bkz. h31_math
+        std::cerr << "Lua module-vector stdlib pollution survived load repair!" << std::endl;
+        exit(1);
+    }
+    lua.unloadModule("polluter");
+    TEST_PASS("A1 Shared Stdlib Pollution Repaired on Code-Load Paths");
 
     // Lua Condition Evaluation
     lua.setGlobalNumber("player_gold", 75.0);

@@ -13,6 +13,7 @@ std::mutex Logger::s_logMutex;
 bool Logger::s_initialized = false;
 std::unique_ptr<std::ofstream> Logger::s_logFile;
 size_t Logger::s_logFileSize = 0;
+std::string Logger::s_logPath;
 
 void Logger::init(const std::string& logFile) {
     std::lock_guard<std::mutex> lock(s_logMutex);
@@ -21,7 +22,8 @@ void Logger::init(const std::string& logFile) {
         s_logLevel = LogLevel::Trace;
 
         if (!logFile.empty()) {
-            s_logFile = std::make_unique<std::ofstream>(logFile, std::ios::app);
+            s_logPath = logFile;
+            s_logFile = std::make_unique<std::ofstream>(s_logPath, std::ios::app);
             if (s_logFile && s_logFile->is_open()) {
                 // Get current file size
                 s_logFile->seekp(0, std::ios::end);
@@ -72,21 +74,36 @@ std::string Logger::formatTimestamp() {
 }
 
 void Logger::rotateLogFile() {
-    if (!s_logFile || !s_logFile->is_open()) return;
+    if (!s_logFile || !s_logFile->is_open() || s_logPath.empty()) return;
 
     if (s_logFileSize >= MAX_LOG_FILE_SIZE) {
         s_logFile->close();
 
-        // Rename current log to .1, .2, .3 (keep 3 backups)
+        // Rename current log to .1, .2, .3 (keep 3 backups), beside the
+        // configured path — never a hardcoded filename (A1, #35). Rename
+        // failures are checked and reported; the worst case is a skipped
+        // generation, never silent loss or a logging stall.
+        std::error_code fsError;
         for (int i = 2; i >= 0; --i) {
-            std::string src = (i == 0) ? "rowl_engine.log" : "rowl_engine.log." + std::to_string(i);
-            std::string dst = "rowl_engine.log." + std::to_string(i + 1);
-            if (std::filesystem::exists(src)) {
-                std::filesystem::rename(src, dst);
+            const std::string src = (i == 0) ? s_logPath : s_logPath + "." + std::to_string(i);
+            const std::string dst = s_logPath + "." + std::to_string(i + 1);
+            if (std::filesystem::exists(src, fsError) && !fsError) {
+                std::filesystem::rename(src, dst, fsError);
+                if (fsError) {
+                    std::cout << "[Logger] rotation rename failed: '" << src << "' -> '"
+                              << dst << "': " << fsError.message() << std::endl;
+                    fsError.clear();
+                }
+            } else if (fsError) {
+                fsError.clear();
             }
         }
 
-        s_logFile = std::make_unique<std::ofstream>("rowl_engine.log", std::ios::app);
+        s_logFile = std::make_unique<std::ofstream>(s_logPath, std::ios::app);
+        if (!s_logFile->is_open()) {
+            std::cout << "[Logger] rotation reopen failed: '" << s_logPath << "'" << std::endl;
+            s_logFile.reset();
+        }
         s_logFileSize = 0;
     }
 }

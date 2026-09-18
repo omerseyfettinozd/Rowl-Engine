@@ -40,6 +40,9 @@ private:
     static std::unique_ptr<std::ofstream> s_logFile;
     static size_t s_logFileSize;
     static const size_t MAX_LOG_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+    /// A1 (#35): the exact path passed to init(). Rotation renames THIS file,
+    /// never a hardcoded name, so a custom log path rotates beside itself.
+    static std::string s_logPath;
 
     static std::string_view logLevelToString(LogLevel level);
     static std::string formatTimestamp();
