@@ -342,6 +342,25 @@ void test_vfs_security() {
     }
     TEST_PASS("Mods override package assets at matching relative VFS paths");
 
+    // A2a-fix3 (sessiz-tarama regresyonu): Windows CI'da probe "present"
+    // demesine rağmen tarama tek kelime etmeden ölüyordu (tek sessiz çıkış:
+    // no_such_file erken-dönüşü ya da yutulan istisna). Tarama artık
+    // canonicalize + try/catch kalkanında; bu iki düşman form throw etmeden,
+    // loose asset'leri gizlemeden geçmeli.
+    const auto hostileProject = testRoot / "hostile_packages_project";
+    std::filesystem::create_directories(hostileProject / "Assets");
+    std::ofstream(hostileProject / "Assets" / "packages") << "not-a-directory";
+    std::ofstream(hostileProject / "Assets" / "loose.txt") << "loose";
+    vfs.remountProject(hostileProject.string());
+    if (vfs.readString("loose.txt") != "loose") {
+        std::cerr << "Remount with a file-as-packages-dir hid loose assets" << std::endl;
+        exit(1);
+    }
+    const auto bareProject = testRoot / "bare_project";
+    std::filesystem::create_directories(bareProject / "Assets");
+    vfs.remountProject(bareProject.string());
+    TEST_PASS("Hostile package-scan forms fail loudly without throwing");
+
     const std::string graphVfsPath = "json/full_story_graph.json";
     const std::string graphJson = R"({"start_node_id":101,"nodes":[{"id":101,"speaker":"Packaged","dialogue":"VFS graph"}]})";
     const uint64_t graphIndexOffset = headerSize + graphJson.size();

@@ -5,6 +5,7 @@
 #include <fstream>
 #include <filesystem>
 #include <algorithm>
+#include <exception>
 #include <optional>
 #include <system_error>
 
@@ -238,13 +239,27 @@ void VFSManager::remountProject(const std::string& projectRoot) {
 }
 
 void VFSManager::mountPackagesUnder(const fs::path& pkgPath) {
-    const std::string pkgUtf8 = Rowl::Platform::pathToUtf8(pkgPath);
-    // A2a-fix2: exists() Windows CI'da MEVCUT bir dizin için FALSE döndü ve
-    // tarama 243. satırda sessizce atlandı. exists artık sadece tanı
-    // bilgisidir — kararı bağımsız syscall olan iterator verir, her dal
-    // konuşur. Yokluk normaldir (loose-only projeler), sessiz geçilir.
+    // A2a-fix3: Windows CI'da probe "present" demesine rağmen tarama sessiz
+    // ölüyordu — ne mount, ne "no archives", ne WARN, üstelik "Remount
+    // Complete" bile basılmadan (invokeNoexcept çağrıcıyı da yutuyordu).
+    // Kod incelemesi tek sessiz çıkışı gösteriyor: exists "present" + iterator
+    // no_such_file (8.3-kısa-yollu RUNNER~1 formunda exists/iterator ayrışması)
+    // ya da yutulan bir istisna. İkisine de çare: önce canonicalize (aynı
+    // kökte loose mount'ların KANITLANMIŞ çalışan primitive'i — exists+iterator
+    // artık özdeş formda koşar), tarama try/catch kalkanında, skip dalı INFO.
+    std::error_code canonError;
+    const fs::path canonPath = fs::weakly_canonical(pkgPath, canonError);
+    if (canonError || canonPath.empty()) {
+        ROWL_LOG_WARN("VFS package scan skipped: cannot resolve '" +
+                      Rowl::Platform::pathToUtf8(pkgPath) + "': " + canonError.message());
+        return;
+    }
+    const std::string pkgUtf8 = Rowl::Platform::pathToUtf8(canonPath);
+    // A2a-fix2: exists() Windows CI'da MEVCUT bir dizin için FALSE döndü;
+    // exists artık sadece tanı bilgisidir — kararı bağımsız syscall olan
+    // iterator verir. Yokluk normaldir (loose-only projeler).
     std::error_code probeError;
-    const bool present = fs::exists(pkgPath, probeError) && !probeError;
+    const bool present = fs::exists(canonPath, probeError) && !probeError;
     const std::string probeDetail =
         present ? "present"
                 : "negative (" + (probeError ? probeError.message() : "absent") +
@@ -253,31 +268,40 @@ void VFSManager::mountPackagesUnder(const fs::path& pkgPath) {
 
     std::error_code iterError;
     bool mountedAny = false;
-    for (const auto& entry : fs::directory_iterator(pkgPath, iterError)) {
-        // A2a-fix1: an iterator/entry failure used to end the scan silently
-        // (Windows CI mounted a verified game.rowlpkg never, with no log
-        // line at all). Loud now — a skipped scan must explain itself.
-        if (iterError) {
-            ROWL_LOG_WARN("VFS package scan failed in '" + pkgUtf8 + "': " + iterError.message());
-            return;
+    try {
+        for (const auto& entry : fs::directory_iterator(canonPath, iterError)) {
+            // A2a-fix1: an iterator/entry failure used to end the scan silently
+            // (Windows CI mounted a verified game.rowlpkg never, with no log
+            // line at all). Loud now — a skipped scan must explain itself.
+            if (iterError) {
+                ROWL_LOG_WARN("VFS package scan failed in '" + pkgUtf8 + "': " + iterError.message());
+                return;
+            }
+            std::error_code entryError;
+            const bool regular = entry.is_regular_file(entryError);
+            if (entryError) {
+                ROWL_LOG_WARN("VFS package scan skipped unreadable entry in '" + pkgUtf8 +
+                              "': " + entryError.message());
+                continue;
+            }
+            if (regular && entry.path().extension() == ".rowlpkg") {
+                mountPackage("", Rowl::Platform::pathToUtf8(entry.path()));
+                mountedAny = true;
+            }
         }
-        std::error_code entryError;
-        const bool regular = entry.is_regular_file(entryError);
-        if (entryError) {
-            ROWL_LOG_WARN("VFS package scan skipped unreadable entry in '" + pkgUtf8 +
-                          "': " + entryError.message());
-            continue;
-        }
-        if (regular && entry.path().extension() == ".rowlpkg") {
-            mountPackage("", Rowl::Platform::pathToUtf8(entry.path()));
-            mountedAny = true;
-        }
+    } catch (const std::exception& ex) {
+        // A2a-fix3: çağrıcı invokeNoexcept altında — yutulan istisna hem
+        // mount'u hem teşhisi öldürüyordu. Artık her çıkış konuşur.
+        ROWL_LOG_WARN("VFS package scan threw in '" + pkgUtf8 + "': " + ex.what());
+        return;
+    } catch (...) {
+        ROWL_LOG_WARN("VFS package scan threw in '" + pkgUtf8 + "'");
+        return;
     }
     if (iterError) {
-        // Yokluk normaldir; probe satırı üstte zaten var, tekrar sus.
-        if (iterError != std::errc::no_such_file_or_directory) {
-            ROWL_LOG_WARN("VFS package scan failed in '" + pkgUtf8 + "': " + iterError.message());
-        }
+        // A2a-fix3: eskiden no_such_file burada SESSİZ dönüyordu — Windows
+        // CI'daki kör nokta buydu. Skip normaldir, ama sessiz değildir.
+        ROWL_LOG_INFO("VFS package scan skipped '" + pkgUtf8 + "': " + iterError.message());
         return;
     }
     if (!mountedAny) {
