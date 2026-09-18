@@ -20,6 +20,7 @@
 #include <string>
 #include <fstream>
 #include <mutex>
+#include <unordered_map>
 #include <system_error>
 
 #ifndef ROWL_SHADER_DIR
@@ -70,14 +71,21 @@ void fnvMixU64(uint64_t& hash, uint64_t value) {
 // A3-tur2 (log-only): bozuk renk her kare sessiz-beyaza dusuyordu. Ayni
 // deger icin tek WARN (cap'li kume; dosyada emsal yok). Mutex yalnizca
 // bozuk-girdi kolunda tutulur; gecerli renk yolu kilitsiz ve sessizdir.
-constexpr size_t kHexWarnOnceCap = 32;
+// A3-tur3: ayni cekirdek etiketli font-cap WARN'ina da hizmet eder.
+constexpr size_t kLogWarnOnceCap = 32;
+
+void warnTaggedOnce(const std::string& tag, const std::string& key, const std::string& message) {
+    static std::mutex mutex;
+    static std::unordered_map<std::string, std::unordered_set<std::string>> warnedByTag;
+    std::lock_guard<std::mutex> lock(mutex);
+    auto& warned = warnedByTag[tag];
+    if (warned.size() >= kLogWarnOnceCap || !warned.insert(key).second) return;
+    ROWL_LOG_WARN(message);
+}
 
 void warnHexColorOnce(const std::string& hex) {
-    static std::mutex mutex;
-    static std::unordered_set<std::string> warned;
-    std::lock_guard<std::mutex> lock(mutex);
-    if (warned.size() >= kHexWarnOnceCap || !warned.insert(hex).second) return;
-    ROWL_LOG_WARN("Invalid hex color '" + hex + "'; using white fallback (logged once per value)");
+    warnTaggedOnce("hex", hex,
+                   "Invalid hex color '" + hex + "'; using white fallback (logged once per value)");
 }
 
 static SDL_Color parseHexColor(const std::string& hex, uint8_t defaultA = 255) {
@@ -97,6 +105,9 @@ constexpr int kMaxTextureDimension = 8'192;
 constexpr uint64_t kMaxTexturePixels = 16ULL * 1024 * 1024;
 constexpr uint64_t kMinimumTextureCacheBytes = 1ULL * 1024ULL * 1024ULL;
 constexpr size_t kMaxMissingTextureCacheEntries = 512;
+// A3-tur3 (lifecycle): secim-dugmesi font onbellegi tavani — hikaye-JSON'undan
+// gelen saldirgan-etkili anahtarla sinirsiz buyumeye karsi refuse-to-grow.
+constexpr size_t kMaxButtonFontCacheEntries = 8;
 float touchCoordinateToPhysical(float normalized, uint32_t extent) {
     return std::clamp(normalized, 0.0f, 1.0f) * static_cast<float>(extent);
 }
@@ -304,6 +315,9 @@ bool Window::initialize(const std::string& title, uint32_t width, uint32_t heigh
 void Window::initGpuMsdfRenderer() {
     // A3-tur2 (log-only): sessiz kapilar artik nedenini bir kez soyler.
     // init-zamani yolu (kare-basi degil); bayrak uyede, davranis ayni.
+    // A3-tur3 (lifecycle): giriste once kapat — reloadFonts tekrar-cagrisi
+    // eski shader/renderstate'in ustune yazmasin (shutdown nullptr-guvenli).
+    shutdownGpuMsdfRenderer();
     if (!m_sdlRenderer || m_isOffscreen) {
         if (!m_msdfSkipReasonLogged) {
             m_msdfSkipReasonLogged = true;
@@ -689,14 +703,25 @@ bool Window::hasScreenTint() const {
 
 void Window::setVignette(float intensity, float radius, const std::string& colorHex) {
     if (!std::isfinite(intensity) || !std::isfinite(radius)) return;
+    // A3-tur3 (lifecycle): radius texture'a bake'li (ensureVignetteTexture);
+    // degisince ya da kapatilinca eski bake imha edilir, lazy rebake.
+    // Renk/yogunluk draw'da ColorMod/AlphaMod ile canli — doku gerektirmez.
+    auto destroyVignetteBake = [this] {
+        if (m_vignetteTexture) { SDL_DestroyTexture(m_vignetteTexture); m_vignetteTexture = nullptr; }
+    };
     if (intensity <= 0.001f) {
         m_screenFx.vignetteEnabled = false;
         m_screenFx.vignetteIntensity = 0.0f;
+        destroyVignetteBake();
         return;
     }
     m_screenFx.vignetteEnabled = true;
     m_screenFx.vignetteIntensity = std::clamp(intensity, 0.0f, 1.0f);
-    m_screenFx.vignetteRadius = std::clamp(radius, 0.0f, 1.0f);
+    const float newRadius = std::clamp(radius, 0.0f, 1.0f);
+    if (newRadius != m_screenFx.vignetteRadius) {
+        m_screenFx.vignetteRadius = newRadius;
+        destroyVignetteBake();
+    }
     SDL_Color c = parseHexColor(colorHex, 255);
     m_screenFx.vignetteR = c.r;
     m_screenFx.vignetteG = c.g;
@@ -1190,9 +1215,11 @@ SDL_Texture* Window::loadTexture(const std::string& filename) {
             return nullptr;
         }
         m_missingTextureCache.erase(normPath);
-        m_textureCache[filename] = texture;
+        // A3-tur3 (lifecycle): tek anahtar (normPath). filename/bareName
+        // insert'leri okunmuyordu (:1110 tek okuma) — olu agirlik + capraz-
+        // dizin bareName golgeleme kaldirildi. Sayaclar isaretci-anahtarli,
+        // eviction value-erase'li: davranis-notr.
         m_textureCache[normPath] = texture;
-        m_textureCache[bareName] = texture;
         m_textureMemoryBytes[texture] = textureBytes;
         touchTexture(texture);
         ROWL_LOG_INFO("✅ Loaded Hardware Texture: " + filename + " (" + std::to_string(width) + "x" + std::to_string(height) + ") from " + sourceInfo);
@@ -1549,10 +1576,21 @@ void Window::renderVisualNovelFrame(
             if (!choice.fontFamily.empty() && choice.fontFamily != "Default") {
                 auto found = m_buttonFontCache.find(choice.fontFamily);
                 if (found == m_buttonFontCache.end()) {
-                    auto renderer = std::make_unique<FontRenderer>();
-                    auto bytes = vfs().readBytes(choice.fontFamily);
-                    if (!bytes.empty() && renderer->loadFontFromMemory(bytes.data(), bytes.size())) {
-                        found = m_buttonFontCache.emplace(choice.fontFamily, std::move(renderer)).first;
+                    // A3-tur3 (lifecycle): hikaye-kontrollu anahtarla sinirsiz
+                    // buyume yok — cap'te miss default fonta duser (fail-closed
+                    // render) + tek WARN. VFS-oku/parse cap-otu disi tutulur.
+                    if (m_buttonFontCache.size() >= kMaxButtonFontCacheEntries) {
+                        warnTaggedOnce("fontcap", choice.fontFamily,
+                                       "Button font cache full (" +
+                                           std::to_string(kMaxButtonFontCacheEntries) +
+                                           "); '" + choice.fontFamily +
+                                           "' falls back to default (logged once per value)");
+                    } else {
+                        auto renderer = std::make_unique<FontRenderer>();
+                        auto bytes = vfs().readBytes(choice.fontFamily);
+                        if (!bytes.empty() && renderer->loadFontFromMemory(bytes.data(), bytes.size())) {
+                            found = m_buttonFontCache.emplace(choice.fontFamily, std::move(renderer)).first;
+                        }
                     }
                 }
                 if (found != m_buttonFontCache.end()) choiceFont = found->second.get();
@@ -1846,6 +1884,9 @@ void Window::drawSprite(const std::string& filename,
         float alphaClamped = std::clamp(opacity, 0.0f, 1.0f);
         SDL_SetTextureAlphaMod(tex, static_cast<Uint8>(alphaClamped * 255.0f));
         SDL_RenderTexture(m_sdlRenderer, tex, nullptr, &dstRect);
+        // A3-tur3 (lifecycle): paylasimli-onbellek dokuda mod birakma —
+        // bg/char yollarindaki 255-restore emsali.
+        SDL_SetTextureAlphaMod(tex, 255);
     }
 }
 
