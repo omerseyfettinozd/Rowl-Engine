@@ -449,7 +449,7 @@ void test_save_slot_and_package_fuzz() {
             return std::string((std::istreambuf_iterator<char>(input)),
                                std::istreambuf_iterator<char>());
         };
-        const std::string baselineBytes = readBytes(slotPath);
+        std::string baselineBytes = readBytes(slotPath);
         if (baselineBytes.empty()) {
             failCase("Durability baseline slot file is empty");
         }
@@ -499,6 +499,14 @@ void test_save_slot_and_package_fuzz() {
         // Restore the baseline so the stray-tmp check below reads known-good data.
         if (!persistence.saveSlot(goodState, slot)) {
             failCase("Could not restore durability baseline slot");
+        }
+        // serializeJson wall-clock zaman gömer (timestamp + saved_at): restore
+        // farklı bir saniyeye sarkarsa bytes değişir. Aşağıdaki cleanup
+        // check'i load'un dosyaya dokunmadığını kanıtlar, o yüzden referansı
+        // restore-sonrası oku (CI saniye-sınırı flake'i: 35371246836).
+        baselineBytes = readBytes(slotPath);
+        if (baselineBytes.empty()) {
+            failCase("Restored durability baseline slot file is empty");
         }
 
         // Simulated half-tmp: a stray "<slot>.json.tmp" beside the good slot
