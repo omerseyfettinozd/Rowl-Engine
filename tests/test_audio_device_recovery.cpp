@@ -60,6 +60,21 @@ void test_audio_device_recovery() {
         std::cerr << "Recovery audio init failed" << std::endl;
         exit(1);
     }
+    // A5-tur4: init→true kontratı — initialize cihazsızda bile true döner
+    // (silent-fallback); cihazlıda snapshot boş, cihazsızda E1 open-fail'i
+    // snapshot'ta AÇIK durur (gizli fail yok).
+    if (recovery.isAudioDeviceAvailable()) {
+        if (!recovery.getLastError().empty()) {
+            std::cerr << "Device-available init left a stale audio error: "
+                      << recovery.getLastError() << std::endl;
+            exit(1);
+        }
+    } else {
+        if (recovery.getLastError().empty()) {
+            std::cerr << "Deviceless init hid the stream-open failure" << std::endl;
+            exit(1);
+        }
+    }
     if (recovery.isAudioDeviceAvailable()) {
         const auto recoveryRoot = std::filesystem::temp_directory_path() / "rowl_audio_recovery_test";
         const auto recoveryAssetDir = recoveryRoot / "Assets" / "audio";
@@ -104,6 +119,39 @@ void test_audio_device_recovery() {
 
         std::filesystem::remove_all(recoveryRoot);
         // No global-restore remount: recoveryVfs is function-local.
+    } else {
+        // A5-tur4: SKIP-raporu — sessiz atlama yok; hangi coverage'ın
+        // atlandığı logda görünür (intent aşağıda cihazsızca kanıtlanır).
+        std::cout << "  SKIP audio device rebuild: no physical device "
+                     "(BGM intent covered by deviceless asserts below)"
+                  << std::endl;
+    }
+    // A5-tur4: intent-iddiaları gate-dışında — volume/filter round-trip ve
+    // cihazsız-REMOVED CPU-side state'tir, cihaz gerektirmez. (CI dummy'sinde
+    // cihazlı-dal koşar; cihazsız-dal gerçek-cihazsız koşularda koşar.)
+    recovery.setBgmVolume(0.7f);
+    recovery.applyDspFilter(Rowl::Audio::DSPFilterType::Telephone);
+    if (std::abs(recovery.getBgmVolume() - 0.7f) > 0.001f ||
+        recovery.getActiveFilter() != Rowl::Audio::DSPFilterType::Telephone) {
+        std::cerr << "Deviceless volume/filter intent was not retained" << std::endl;
+        exit(1);
+    }
+    if (!recovery.isAudioDeviceAvailable()) {
+        // Cihazsız-REMOVED: reopen dener ve AÇIKÇA fail olur (E8 snapshot
+        // dolar); intent (volume/filter) korunur. Fail gizlenmez.
+        recovery.handleDeviceEvent(SDL_EVENT_AUDIO_DEVICE_REMOVED);
+        if (std::abs(recovery.getBgmVolume() - 0.7f) > 0.001f ||
+            recovery.getActiveFilter() != Rowl::Audio::DSPFilterType::Telephone) {
+            std::cerr << "Deviceless device-removal lost volume/filter intent" << std::endl;
+            exit(1);
+        }
+        if (recovery.getLastError().empty()) {
+            std::cerr << "Deviceless reopen hid its stream failure" << std::endl;
+            exit(1);
+        }
+        TEST_PASS("Deviceless intent retention + open device-rebuild failure");
+    } else {
+        TEST_PASS("Device-backed volume/filter intent round-trip");
     }
     recovery.handleDeviceEvent(SDL_EVENT_AUDIO_DEVICE_ADDED);
     recovery.setOutputSuspended(true);
