@@ -311,6 +311,7 @@ set(ROWL_ENGINE_SOURCES
     src/core/engine.cpp
     # Rendering
     src/render/window.cpp
+    src/render/window_texture_cache.cpp  # A3-tur5: texture-cache bölünmesi
     src/render/camera2d.cpp
     src/render/transition_manager.cpp
     src/render/font_renderer.cpp

@@ -108,6 +108,7 @@ int main(int argc, char* argv[]) {
     test_pixel_pitch();
     test_window_input_routing();
     test_frame_hash_lock();
+    test_frame_reuse_lock();
     test_runtime_context_and_diagnostics();
     test_crash_log();
     test_story_graph_parser();
