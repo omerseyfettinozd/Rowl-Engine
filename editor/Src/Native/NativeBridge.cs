@@ -381,6 +381,11 @@ namespace RowlEngine.Editor.Native
 
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
         internal static extern void RowlEngine_SetMasterVolume(IntPtr handle, float volume);
+
+        // B4 — simetrik tamamlama (C API'de zaten var, c_api_audio.cpp:114;
+        // additive, ABI-etkisiz). Guard round-trip testleri için.
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern float RowlEngine_GetMasterVolume(IntPtr handle);
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
         internal static extern void RowlEngine_SetVoiceVolume(IntPtr handle, float volume);
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]

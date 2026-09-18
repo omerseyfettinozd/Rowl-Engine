@@ -933,29 +933,45 @@ namespace RowlEngine.Editor.Native
         public bool IsAudioOutputSuspended
             => InvokeNative(handle => NativeBridge.RowlEngine_IsAudioOutputSuspended(handle) != 0, false);
 
+        // B4 — NativeGuard öndoğrulaması: non-finite forward edilmez
+        // (NaN std::clamp'ten sızar, engine.cpp:1777-1782), finite [0,1].
+        // Native'e sıfır dokunuş (D3 yasağı); yeni public API/alan yok.
         public void SetMasterVolume(float volume)
         {
-            InvokeNative(handle => NativeBridge.RowlEngine_SetMasterVolume(handle, volume));
+            if (!NativeGuard.TryClamp01(volume, out float v))
+                return;
+            InvokeNative(handle => NativeBridge.RowlEngine_SetMasterVolume(handle, v));
         }
+
+        public float GetMasterVolume()
+            => InvokeNative(NativeBridge.RowlEngine_GetMasterVolume, 1.0f);
 
         public void SetBgmVolume(float volume)
         {
-            InvokeNative(handle => NativeBridge.RowlEngine_SetBgmVolume(handle, volume));
+            if (!NativeGuard.TryClamp01(volume, out float v))
+                return;
+            InvokeNative(handle => NativeBridge.RowlEngine_SetBgmVolume(handle, v));
         }
 
         public void SetVoiceVolume(float volume)
         {
-            InvokeNative(handle => NativeBridge.RowlEngine_SetVoiceVolume(handle, volume));
+            if (!NativeGuard.TryClamp01(volume, out float v))
+                return;
+            InvokeNative(handle => NativeBridge.RowlEngine_SetVoiceVolume(handle, v));
         }
 
         public void SetSfxVolume(float volume)
         {
-            InvokeNative(handle => NativeBridge.RowlEngine_SetSfxVolume(handle, volume));
+            if (!NativeGuard.TryClamp01(volume, out float v))
+                return;
+            InvokeNative(handle => NativeBridge.RowlEngine_SetSfxVolume(handle, v));
         }
 
         public void SetTextSpeedMultiplier(float multiplier)
         {
-            InvokeNative(handle => NativeBridge.RowlEngine_SetTextSpeedMultiplier(handle, multiplier));
+            if (!NativeGuard.TryClamp(multiplier, 0.25f, 4.0f, out float m))
+                return;
+            InvokeNative(handle => NativeBridge.RowlEngine_SetTextSpeedMultiplier(handle, m));
         }
 
         /// <summary>
@@ -964,8 +980,16 @@ namespace RowlEngine.Editor.Native
         /// </summary>
         public void SetTextScale(float scale)
         {
-            InvokeNative(handle => NativeBridge.RowlEngine_SetTextScale(handle, scale));
+            if (!NativeGuard.TryClamp(scale, 1.0f, 2.0f, out float s))
+                return;
+            InvokeNative(handle => NativeBridge.RowlEngine_SetTextScale(handle, s));
         }
+
+        // B4 — simetrik tamamlama: test-thread bridge-direkt okuyamaz
+        // (owner-thread affinity, toEngineChecked fail-closed); okuma
+        // worker-dispatch'tan akar.
+        public float GetTextScale()
+            => InvokeNative(NativeBridge.RowlEngine_GetTextScale, 1.0f);
 
         public void SetHighContrast(bool enabled)
         {
@@ -979,7 +1003,9 @@ namespace RowlEngine.Editor.Native
 
         public void SetAutoAdvanceDelayOffset(float seconds)
         {
-            InvokeNative(handle => NativeBridge.RowlEngine_SetAutoAdvanceDelayOffset(handle, seconds));
+            if (!NativeGuard.TryClamp(seconds, 0.0f, 60.0f, out float s))
+                return;
+            InvokeNative(handle => NativeBridge.RowlEngine_SetAutoAdvanceDelayOffset(handle, s));
         }
 
         public void PlayAudio(string assetPath, int channelType = 0, int filterType = 0)
@@ -1042,7 +1068,9 @@ namespace RowlEngine.Editor.Native
 
         public void SetDialogueVoiceBlipVolume(float volume)
         {
-            InvokeNative(handle => NativeBridge.RowlEngine_SetDialogueVoiceBlipVolume(handle, volume));
+            if (!NativeGuard.TryClamp01(volume, out float v))
+                return;
+            InvokeNative(handle => NativeBridge.RowlEngine_SetDialogueVoiceBlipVolume(handle, v));
         }
 
         public uint GetVoiceBlipCount()
@@ -1309,6 +1337,10 @@ namespace RowlEngine.Editor.Native
         ScriptRuntimeError = 9,
         AudioDecodeError = 10,
         StateError = 11,
+        // B4 — B3a'da NativeBridge.ResultCode'a eklenen 12/13'ün public
+        // aynası (sözleşme-aynalama; class-logic sıfır-diff).
+        BufferTooSmall = 12,
+        Unsupported = 13,
         UnknownError = 99
     }
 
