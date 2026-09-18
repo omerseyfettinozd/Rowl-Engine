@@ -13,6 +13,9 @@
 #include <istream>
 #include <vector>
 #include <cctype>
+#include <mutex>
+#include <string>
+#include <unordered_set>
 
 namespace Rowl::Audio {
 
@@ -20,6 +23,20 @@ namespace {
 
 constexpr uintmax_t kMaxEncodedAudioBytes = 64ULL * 1024 * 1024;
 constexpr Uint32 kMaxDecodedAudioBytes = 64U * 1024 * 1024;
+
+// A5-tur1: per-frame/per-pump SDL hata log'ları için değer-başı warn-once
+// (A3-tur7 transition deseni: cap-32, spam yok). m_lastError'e DOKUNMAZ:
+// m_lastError "son tamamlanmış API çağrısı" snapshot'ıdır; update-thread
+// path'leri onu ezmemelidir.
+constexpr size_t kAudioWarnOnceCap = 32;
+
+void warnAudioOnce(const std::string& message) {
+    static std::mutex mutex;
+    static std::unordered_set<std::string> warned;
+    std::lock_guard<std::mutex> lock(mutex);
+    if (warned.size() >= kAudioWarnOnceCap || !warned.insert(message).second) return;
+    ROWL_LOG_WARN("[AudioEngine] " + message + " (logged once per value)");
+}
 
 size_t vorbisRead(void* pointer, size_t size, size_t count, void* datasource) {
     auto* stream = static_cast<std::istream*>(datasource);
@@ -245,23 +262,34 @@ bool AudioEngine::initialize() {
     // Initialize SDL3 Audio subsystem
     if (Rowl::Platform::SdlSubsystemLease::acquire(SDL_INIT_AUDIO)) {
         m_audioLeaseHeld = true;
+        // A5-tur1: tekil akışın hangisinin açılamadığı kayda geçer (toplu
+        // null-check öncesinde ilk hata korunur; davranış değişmez).
+        auto openDeviceStreamChecked = [&](const char* streamName) {
+            SDL_AudioStream* stream = SDL_OpenAudioDeviceStream(
+                SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr, nullptr, nullptr);
+            if (!stream && m_lastError.empty()) {
+                m_lastError = std::string("Audio stream could not be opened (") +
+                              streamName + "): " + SDL_GetError();
+            }
+            return stream;
+        };
         // Open default audio device stream for BGM
-        m_bgmStream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr, nullptr, nullptr);
+        m_bgmStream = openDeviceStreamChecked("BGM");
         // A second BGM stream lets a new, already-decoded track be queued
         // before the current track is touched. This is what makes transition
         // failures transactional and enables a real crossfade.
-        m_transitionBgmStream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr, nullptr, nullptr);
+        m_transitionBgmStream = openDeviceStreamChecked("transition-BGM");
         // Voice has its own gain path so narration controls never affect SFX.
-        m_voiceStream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr, nullptr, nullptr);
+        m_voiceStream = openDeviceStreamChecked("voice");
         // Faz 5 Dilim 2: SFX havuz akışları (slot başına bir akış).
         ensureSfxPoolStreams();
         // Faz 5 Dilim 1: Ambience loop RAM için kendi akışı (karışım yok,
         // yalnızca bağımsız gain + loop besleme).
         // Faz 5 Dilim 2: BedB için ikinci ambience akışı.
-        m_ambienceStream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr, nullptr, nullptr);
-        m_ambienceStreamB = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr, nullptr, nullptr);
+        m_ambienceStream = openDeviceStreamChecked("ambience");
+        m_ambienceStreamB = openDeviceStreamChecked("ambience-B");
         // Faz 5 Dilim 2: Ui one-shot ayrı tekil akış (havuz dışı kalır).
-        m_uiStream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr, nullptr, nullptr);
+        m_uiStream = openDeviceStreamChecked("UI");
 
         if (m_bgmStream && m_transitionBgmStream && m_voiceStream && m_ambienceStream && m_ambienceStreamB && m_uiStream && !m_sfxPoolStreams.empty()) {
             bool sfxReady = true;
@@ -360,7 +388,10 @@ bool AudioEngine::decodeAssetToFloatPcm(const std::string& assetPath,
             bytes = vfs().readBytes(candidate);
             if (!bytes.empty()) {
                 if (bytes.size() > kMaxEncodedAudioBytes) {
-                    ROWL_LOG_WARN("Audio file exceeds the maximum accepted size: " + assetPath);
+                    // A5-tur1: 64 MiB reddi caller'a ulaşır (önce log-only idi,
+                    // C API PlayAudio kördü).
+                    m_lastError = "Audio file exceeds the maximum accepted size: " + assetPath;
+                    ROWL_LOG_WARN("[AudioEngine] " + m_lastError);
                     if (channelIsBgm) {
                         closeBgmStream();
                         resetStreamInfoNoBgm();
@@ -378,7 +409,9 @@ bool AudioEngine::decodeAssetToFloatPcm(const std::string& assetPath,
 
     if (loaded && audioBuf && audioLen > 0) {
         if (audioLen > kMaxDecodedAudioBytes || audioLen > static_cast<Uint32>(INT_MAX)) {
-            ROWL_LOG_WARN("Decoded audio exceeds the maximum accepted size: " + assetPath);
+            // A5-tur1: decode-cap reddi caller'a ulaşır (önce log-only idi).
+            m_lastError = "Decoded audio exceeds the maximum accepted size: " + assetPath;
+            ROWL_LOG_WARN("[AudioEngine] " + m_lastError);
             SDL_free(audioBuf);
             if (channelIsBgm) {
                 closeBgmStream();
@@ -584,7 +617,10 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
             bytes = vfs().readBytes(candidate);
             if (!bytes.empty()) {
                 if (bytes.size() > kMaxEncodedAudioBytes) {
-                    ROWL_LOG_WARN("Audio file exceeds the maximum accepted size: " + assetPath);
+                    // A5-tur1: 64 MiB reddi caller'a ulaşır (önce log-only idi,
+                    // C API PlayAudio kördü).
+                    m_lastError = "Audio file exceeds the maximum accepted size: " + assetPath;
+                    ROWL_LOG_WARN("[AudioEngine] " + m_lastError);
                     if (channel == AudioChannelType::Bgm) {
                         closeBgmStream();
                         resetStreamInfoNoBgm();
@@ -602,7 +638,9 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
 
     if (loaded && audioBuf && audioLen > 0) {
         if (audioLen > kMaxDecodedAudioBytes || audioLen > static_cast<Uint32>(INT_MAX)) {
-            ROWL_LOG_WARN("Decoded audio exceeds the maximum accepted size: " + assetPath);
+            // A5-tur1: decode-cap reddi caller'a ulaşır (önce log-only idi).
+            m_lastError = "Decoded audio exceeds the maximum accepted size: " + assetPath;
+            ROWL_LOG_WARN("[AudioEngine] " + m_lastError);
             SDL_free(audioBuf);
             if (channel == AudioChannelType::Bgm) {
                 closeBgmStream();
@@ -663,23 +701,41 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
                                        (channel == AudioChannelType::Ui) ? m_uiStream : sfxTargetStream;
         if (targetStream) {
             if (channel == AudioChannelType::Bgm && !transitionRequested) {
-                SDL_ClearAudioStream(m_bgmStream);
+                // A5-tur1: Clear fail'i kayda geçer ama queue belirleyicidir
+                // (m_lastError'e yazılmaz — başarılı Put kirlenmemelidir).
+                if (!SDL_ClearAudioStream(m_bgmStream)) {
+                    ROWL_LOG_WARN("[AudioEngine] Failed to clear BGM audio stream: " +
+                                  std::string(SDL_GetError()));
+                }
             }
             if (transitionRequested) {
-                SDL_ClearAudioStream(m_transitionBgmStream);
+                if (!SDL_ClearAudioStream(m_transitionBgmStream)) {
+                    ROWL_LOG_WARN("[AudioEngine] Failed to clear transition BGM audio stream: " +
+                                  std::string(SDL_GetError()));
+                }
             }
             // Faz 5 Dilim 1: Ambience loop beslemesi kendi akışında baştan
             // kuyruğa girer.
             // Faz 5 Dilim 2: Ui one-shot ayrı tekil akışa kuyruğa girer
             // (havuz dışı; telemetri ayrıdır).
             if (channel == AudioChannelType::Ambience && m_ambienceStream) {
-                SDL_ClearAudioStream(m_ambienceStream);
+                // A5-tur1: Clear fail'i kayda geçer (queue belirleyicidir).
+                if (!SDL_ClearAudioStream(m_ambienceStream)) {
+                    ROWL_LOG_WARN("[AudioEngine] Failed to clear ambience audio stream: " +
+                                  std::string(SDL_GetError()));
+                }
             }
             if (channel == AudioChannelType::Ui && m_uiStream) {
-                SDL_ClearAudioStream(m_uiStream);
+                if (!SDL_ClearAudioStream(m_uiStream)) {
+                    ROWL_LOG_WARN("[AudioEngine] Failed to clear UI audio stream: " +
+                                  std::string(SDL_GetError()));
+                }
             }
             if (channel == AudioChannelType::Sfx && sfxTargetStream) {
-                SDL_ClearAudioStream(sfxTargetStream);
+                if (!SDL_ClearAudioStream(sfxTargetStream)) {
+                    ROWL_LOG_WARN("[AudioEngine] Failed to clear SFX pool audio stream: " +
+                                  std::string(SDL_GetError()));
+                }
             }
             if (!SDL_SetAudioStreamFormat(targetStream, &floatSpec, nullptr) ||
                 !SDL_PutAudioStreamData(targetStream, floatBuffer, floatLength)) {
@@ -751,7 +807,14 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
                 m_isUiPlaying = true;
                 m_uiSampleOffset = 0;
             }
-            if (!m_outputSuspended) SDL_ResumeAudioStreamDevice(targetStream);
+            if (!m_outputSuspended) {
+                // A5-tur1: resume fail'inde queue başarılı olsa da ses çıkmaz —
+                // gerçek başarısızlıktır, caller'a ulaşır.
+                if (!SDL_ResumeAudioStreamDevice(targetStream)) {
+                    m_lastError = "Unable to resume audio stream: " + std::string(SDL_GetError());
+                    ROWL_LOG_WARN("[AudioEngine] " + m_lastError);
+                }
+            }
             ROWL_LOG_INFO("[AudioEngine] Playback started: " + assetPath + " (" + std::to_string(floatLength) + " PCM bytes)");
         } else {
             // Headless / fallback playback without physical stream
@@ -806,13 +869,32 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
 }
 
 void AudioEngine::stopBgm() {
+    // A5-tur1: stop snapshot'ı — önceki hata korunmaz, bu çağrının sonucu
+    // kayda geçer (state sıfırlama aynen; davranış değişmez).
+    m_lastError.clear();
+    auto noteStopFailure = [&](const std::string& message) {
+        if (m_lastError.empty()) m_lastError = message;
+        ROWL_LOG_WARN("[AudioEngine] " + message);
+    };
     if (m_bgmStream) {
-        SDL_ClearAudioStream(m_bgmStream);
-        SDL_PauseAudioStreamDevice(m_bgmStream);
+        if (!SDL_ClearAudioStream(m_bgmStream)) {
+            noteStopFailure("Unable to clear BGM audio stream while stopping: " +
+                            std::string(SDL_GetError()));
+        }
+        if (!SDL_PauseAudioStreamDevice(m_bgmStream)) {
+            noteStopFailure("Unable to pause BGM audio stream while stopping: " +
+                            std::string(SDL_GetError()));
+        }
     }
     if (m_transitionBgmStream) {
-        SDL_ClearAudioStream(m_transitionBgmStream);
-        SDL_PauseAudioStreamDevice(m_transitionBgmStream);
+        if (!SDL_ClearAudioStream(m_transitionBgmStream)) {
+            noteStopFailure("Unable to clear transition BGM audio stream while stopping: " +
+                            std::string(SDL_GetError()));
+        }
+        if (!SDL_PauseAudioStreamDevice(m_transitionBgmStream)) {
+            noteStopFailure("Unable to pause transition BGM audio stream while stopping: " +
+                            std::string(SDL_GetError()));
+        }
     }
     // Faz 5 Dilim 1: stream kolları (kaynak kapanır, snapshot no_bgm'e döner).
     closeBgmStream();
@@ -828,25 +910,55 @@ void AudioEngine::stopBgm() {
 
 void AudioEngine::stopAll() {
     stopBgm();
+    // A5-tur1: stopBgm snapshot'ı korunur — havuz/bed/UI fail'leri ilk-hatayı
+    // ezmez (noteStopFailure guard'lıdır); state sıfırlama aynen.
+    auto noteStopFailure = [&](const std::string& message) {
+        if (m_lastError.empty()) m_lastError = message;
+        ROWL_LOG_WARN("[AudioEngine] " + message);
+    };
     // Faz 5 Dilim 2: havuzdaki TÜM sesler + BedB + Ui durdurulur.
     for (SDL_AudioStream* stream : m_sfxPoolStreams) {
         if (stream) {
-            SDL_ClearAudioStream(stream);
-            SDL_PauseAudioStreamDevice(stream);
+            if (!SDL_ClearAudioStream(stream)) {
+                noteStopFailure("Unable to clear SFX pool audio stream while stopping: " +
+                                std::string(SDL_GetError()));
+            }
+            if (!SDL_PauseAudioStreamDevice(stream)) {
+                noteStopFailure("Unable to pause SFX pool audio stream while stopping: " +
+                                std::string(SDL_GetError()));
+            }
         }
     }
     m_sfxPool.stopAll();
     if (m_ambienceStream) {
-        SDL_ClearAudioStream(m_ambienceStream);
-        SDL_PauseAudioStreamDevice(m_ambienceStream);
+        if (!SDL_ClearAudioStream(m_ambienceStream)) {
+            noteStopFailure("Unable to clear ambience audio stream while stopping: " +
+                            std::string(SDL_GetError()));
+        }
+        if (!SDL_PauseAudioStreamDevice(m_ambienceStream)) {
+            noteStopFailure("Unable to pause ambience audio stream while stopping: " +
+                            std::string(SDL_GetError()));
+        }
     }
     if (m_ambienceStreamB) {
-        SDL_ClearAudioStream(m_ambienceStreamB);
-        SDL_PauseAudioStreamDevice(m_ambienceStreamB);
+        if (!SDL_ClearAudioStream(m_ambienceStreamB)) {
+            noteStopFailure("Unable to clear ambience-B audio stream while stopping: " +
+                            std::string(SDL_GetError()));
+        }
+        if (!SDL_PauseAudioStreamDevice(m_ambienceStreamB)) {
+            noteStopFailure("Unable to pause ambience-B audio stream while stopping: " +
+                            std::string(SDL_GetError()));
+        }
     }
     if (m_uiStream) {
-        SDL_ClearAudioStream(m_uiStream);
-        SDL_PauseAudioStreamDevice(m_uiStream);
+        if (!SDL_ClearAudioStream(m_uiStream)) {
+            noteStopFailure("Unable to clear UI audio stream while stopping: " +
+                            std::string(SDL_GetError()));
+        }
+        if (!SDL_PauseAudioStreamDevice(m_uiStream)) {
+            noteStopFailure("Unable to pause UI audio stream while stopping: " +
+                            std::string(SDL_GetError()));
+        }
     }
     cancelAmbienceCrossfade();
     m_ambienceData.clear();
@@ -960,17 +1072,26 @@ void AudioEngine::update(float deltaSeconds) {
         return;
     }
     if (m_deviceAvailable) {
+        // A5-tur1: loop-feed fail'leri warn-once ile kayda geçer.
+        // m_lastError'e YAZILMAZ — o "son API çağrısı" snapshot'ıdır,
+        // update-thread onu ezmemelidir.
         if (m_bgmStream && !m_bgmData.empty() && m_bgmLoop) {
             int available = SDL_GetAudioStreamAvailable(m_bgmStream);
             if (available <= 0) {
-                SDL_PutAudioStreamData(m_bgmStream, m_bgmData.data(), static_cast<int>(m_bgmData.size()));
-                if (!m_outputSuspended) SDL_ResumeAudioStreamDevice(m_bgmStream);
+                if (!SDL_PutAudioStreamData(m_bgmStream, m_bgmData.data(), static_cast<int>(m_bgmData.size()))) {
+                    warnAudioOnce("BGM loop re-queue failed: " + std::string(SDL_GetError()));
+                } else if (!m_outputSuspended && !SDL_ResumeAudioStreamDevice(m_bgmStream)) {
+                    warnAudioOnce("BGM loop stream resume failed: " + std::string(SDL_GetError()));
+                }
             }
         }
         if (m_transitionBgmStream && !m_transitionBgmData.empty() && m_bgmLoop) {
             if (SDL_GetAudioStreamAvailable(m_transitionBgmStream) <= 0) {
-                SDL_PutAudioStreamData(m_transitionBgmStream, m_transitionBgmData.data(), static_cast<int>(m_transitionBgmData.size()));
-                if (!m_outputSuspended) SDL_ResumeAudioStreamDevice(m_transitionBgmStream);
+                if (!SDL_PutAudioStreamData(m_transitionBgmStream, m_transitionBgmData.data(), static_cast<int>(m_transitionBgmData.size()))) {
+                    warnAudioOnce("Transition BGM loop re-queue failed: " + std::string(SDL_GetError()));
+                } else if (!m_outputSuspended && !SDL_ResumeAudioStreamDevice(m_transitionBgmStream)) {
+                    warnAudioOnce("Transition BGM loop stream resume failed: " + std::string(SDL_GetError()));
+                }
             }
         }
         // Faz 5 Dilim 1: stream refill update-thread'de senkron çalışır
@@ -980,15 +1101,21 @@ void AudioEngine::update(float deltaSeconds) {
         if (m_ambienceStream && !m_ambienceData.empty() && m_isAmbiencePlaying) {
             int ambAvailable = SDL_GetAudioStreamAvailable(m_ambienceStream);
             if (ambAvailable <= 0) {
-                SDL_PutAudioStreamData(m_ambienceStream, m_ambienceData.data(), static_cast<int>(m_ambienceData.size()));
-                if (!m_outputSuspended) SDL_ResumeAudioStreamDevice(m_ambienceStream);
+                if (!SDL_PutAudioStreamData(m_ambienceStream, m_ambienceData.data(), static_cast<int>(m_ambienceData.size()))) {
+                    warnAudioOnce("Ambience loop re-queue failed: " + std::string(SDL_GetError()));
+                } else if (!m_outputSuspended && !SDL_ResumeAudioStreamDevice(m_ambienceStream)) {
+                    warnAudioOnce("Ambience loop stream resume failed: " + std::string(SDL_GetError()));
+                }
             }
         }
         if (m_ambienceStreamB && !m_ambienceDataB.empty() && m_isAmbiencePlayingB) {
             int ambAvailableB = SDL_GetAudioStreamAvailable(m_ambienceStreamB);
             if (ambAvailableB <= 0) {
-                SDL_PutAudioStreamData(m_ambienceStreamB, m_ambienceDataB.data(), static_cast<int>(m_ambienceDataB.size()));
-                if (!m_outputSuspended) SDL_ResumeAudioStreamDevice(m_ambienceStreamB);
+                if (!SDL_PutAudioStreamData(m_ambienceStreamB, m_ambienceDataB.data(), static_cast<int>(m_ambienceDataB.size()))) {
+                    warnAudioOnce("Ambience-B loop re-queue failed: " + std::string(SDL_GetError()));
+                } else if (!m_outputSuspended && !SDL_ResumeAudioStreamDevice(m_ambienceStreamB)) {
+                    warnAudioOnce("Ambience-B loop stream resume failed: " + std::string(SDL_GetError()));
+                }
             }
         }
         updateBgmTransition(std::isfinite(deltaSeconds) ? deltaSeconds : 0.0f);
@@ -1018,12 +1145,22 @@ void AudioEngine::updateBgmTransition(float deltaSeconds) {
         incoming = fadeCurveIncoming(m_fadeCurve, progress);
     }
     const float baseGain = m_mixer.gainFor(StreamBusId::Bgm);
-    SDL_SetAudioStreamGain(m_bgmStream, baseGain * outgoing);
-    SDL_SetAudioStreamGain(m_transitionBgmStream, baseGain * incoming);
+    // A5-tur1: transition gain/clear/pause fail'leri kayda geçer (warn-only;
+    // swap aynen devam eder — davranış değişmez, m_lastError'e yazılmaz).
+    if (!SDL_SetAudioStreamGain(m_bgmStream, baseGain * outgoing)) {
+        warnAudioOnce("BGM transition outgoing gain failed: " + std::string(SDL_GetError()));
+    }
+    if (!SDL_SetAudioStreamGain(m_transitionBgmStream, baseGain * incoming)) {
+        warnAudioOnce("BGM transition incoming gain failed: " + std::string(SDL_GetError()));
+    }
     if (progress < 1.0f) return;
 
-    SDL_ClearAudioStream(m_bgmStream);
-    SDL_PauseAudioStreamDevice(m_bgmStream);
+    if (!SDL_ClearAudioStream(m_bgmStream)) {
+        warnAudioOnce("BGM transition swap clear failed: " + std::string(SDL_GetError()));
+    }
+    if (!SDL_PauseAudioStreamDevice(m_bgmStream)) {
+        warnAudioOnce("BGM transition swap pause failed: " + std::string(SDL_GetError()));
+    }
     std::swap(m_bgmStream, m_transitionBgmStream);
     std::swap(m_bgmData, m_transitionBgmData);
     m_bgmTransitionActive = false;
@@ -1125,6 +1262,8 @@ void AudioEngine::handleDeviceEvent(uint32_t sdlEventType) {
 
 bool AudioEngine::reopenDeviceStreams() {
     if (!m_initialized) return false;
+    // A5-tur1: reopen snapshot'ı — bu çağrının sonucu kayda geçer.
+    m_lastError.clear();
     // Playback intent (BGM path/loop buffer, volumes, filter, ducking) lives
     // in member state, so only the device-bound streams are rebuilt. The BGM
     // loop feed in update() re-queues m_bgmData into a fresh stream on its
@@ -1147,13 +1286,23 @@ bool AudioEngine::reopenDeviceStreams() {
     }
     m_audioLeaseHeld = true;
 
-    m_bgmStream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr, nullptr, nullptr);
-    m_transitionBgmStream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr, nullptr, nullptr);
-    m_voiceStream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr, nullptr, nullptr);
+    // A5-tur1: kısmi açılışta hangi akışın öldüğü bilinir (ilk hata korunur).
+    auto reopenStreamChecked = [&](const char* streamName) {
+        SDL_AudioStream* stream = SDL_OpenAudioDeviceStream(
+            SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr, nullptr, nullptr);
+        if (!stream && m_lastError.empty()) {
+            m_lastError = std::string("Audio stream could not be reopened (") +
+                          streamName + "): " + SDL_GetError();
+        }
+        return stream;
+    };
+    m_bgmStream = reopenStreamChecked("BGM");
+    m_transitionBgmStream = reopenStreamChecked("transition-BGM");
+    m_voiceStream = reopenStreamChecked("voice");
     ensureSfxPoolStreams();
-    m_ambienceStream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr, nullptr, nullptr);
-    m_ambienceStreamB = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr, nullptr, nullptr);
-    m_uiStream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr, nullptr, nullptr);
+    m_ambienceStream = reopenStreamChecked("ambience");
+    m_ambienceStreamB = reopenStreamChecked("ambience-B");
+    m_uiStream = reopenStreamChecked("UI");
     bool sfxStreamsReady = !m_sfxPoolStreams.empty();
     for (SDL_AudioStream* stream : m_sfxPoolStreams) sfxStreamsReady = sfxStreamsReady && (stream != nullptr);
     if (m_bgmStream && m_transitionBgmStream && m_voiceStream && sfxStreamsReady && m_ambienceStream && m_ambienceStreamB && m_uiStream) {
@@ -1184,11 +1333,18 @@ bool AudioEngine::reopenDeviceStreams() {
                         ((firstFrame * streamCh) + i) % ringFloats)];
                 }
                 if (SDL_SetAudioStreamFormat(m_bgmStream, &floatSpec, nullptr)) {
-                    SDL_PutAudioStreamData(m_bgmStream, restore.data(),
-                                           static_cast<int>(validFloats * sizeof(float)));
+                    // A5-tur1: "rebuild başarılı, intent korundu" denirken geri
+                    // kuyruklama düşmüş olabilir — kayda geçer.
+                    if (!SDL_PutAudioStreamData(m_bgmStream, restore.data(),
+                                               static_cast<int>(validFloats * sizeof(float))) &&
+                        m_lastError.empty()) {
+                        m_lastError = "BGM ring restore re-queue failed: " + std::string(SDL_GetError());
+                    }
                 }
             }
-            if (!m_outputSuspended) SDL_ResumeAudioStreamDevice(m_bgmStream);
+            if (!m_outputSuspended && !SDL_ResumeAudioStreamDevice(m_bgmStream) && m_lastError.empty()) {
+                m_lastError = "Reopened BGM stream resume failed: " + std::string(SDL_GetError());
+            }
         }
         // Faz 5 Dilim 2: havuz sesleri kalan baytlarıyla geri kuyruğa girer
         // (offset korunur, baştan başlama YOKTUR); bed'ler loop niyetiyle
@@ -1212,8 +1368,12 @@ bool AudioEngine::reopenDeviceStreams() {
                 SDL_ClearAudioStream(poolStream);
                 SDL_SetAudioStreamGain(poolStream, m_mixer.gainFor(StreamBusId::Sfx));
                 if (SDL_SetAudioStreamFormat(poolStream, &voiceSpec, nullptr)) {
-                    SDL_PutAudioStreamData(poolStream, voice.pcm.data() + off * sizeof(float),
-                                           static_cast<int>(remBytes));
+                    // A5-tur1: havuz geri-kuyruklama fail'i kayda geçer.
+                    if (!SDL_PutAudioStreamData(poolStream, voice.pcm.data() + off * sizeof(float),
+                                               static_cast<int>(remBytes)) &&
+                        m_lastError.empty()) {
+                        m_lastError = "SFX pool voice re-queue failed: " + std::string(SDL_GetError());
+                    }
                 }
             }
         }
@@ -1230,7 +1390,11 @@ bool AudioEngine::reopenDeviceStreams() {
             SDL_ClearAudioStream(bedStream);
             SDL_SetAudioStreamGain(bedStream, ambienceBedGain(bed));
             if (SDL_SetAudioStreamFormat(bedStream, &bedSpec, nullptr)) {
-                SDL_PutAudioStreamData(bedStream, data.data(), static_cast<int>(data.size()));
+                // A5-tur1: bed geri-kuyruklama fail'i kayda geçer.
+                if (!SDL_PutAudioStreamData(bedStream, data.data(), static_cast<int>(data.size())) &&
+                    m_lastError.empty()) {
+                    m_lastError = "Ambience bed re-queue failed: " + std::string(SDL_GetError());
+                }
             }
         }
         if (m_outputSuspended) setOutputSuspended(true, true);
@@ -1260,10 +1424,18 @@ void AudioEngine::setOutputSuspended(bool suspended, bool force) {
     for (SDL_AudioStream* poolStream : m_sfxPoolStreams) streams.push_back(poolStream);
     for (SDL_AudioStream* stream : streams) {
         if (!stream) continue;
+        // A5-tur1: suspend/resume ıskalanırsa flag ile cihaz diverge olur —
+        // kayda geçer (ilk hata korunur; davranış değişmez).
         if (suspended) {
-            SDL_PauseAudioStreamDevice(stream);
+            if (!SDL_PauseAudioStreamDevice(stream) && m_lastError.empty()) {
+                m_lastError = "Unable to suspend audio stream: " + std::string(SDL_GetError());
+                ROWL_LOG_WARN("[AudioEngine] " + m_lastError);
+            }
         } else {
-            SDL_ResumeAudioStreamDevice(stream);
+            if (!SDL_ResumeAudioStreamDevice(stream) && m_lastError.empty()) {
+                m_lastError = "Unable to resume audio stream: " + std::string(SDL_GetError());
+                ROWL_LOG_WARN("[AudioEngine] " + m_lastError);
+            }
         }
     }
     ROWL_LOG_INFO(std::string("[AudioEngine] Output ") + (suspended ? "suspended." : "resumed."));
@@ -1272,16 +1444,24 @@ void AudioEngine::setOutputSuspended(bool suspended, bool force) {
 void AudioEngine::applyChannelGains() {
     // Faz 5 Dilim 2: TEK kazanç kaynağı StreamMixer'dır (matematik birebir:
     // master*bus, duck yalnız BGM; bed başına master*bedVol).
-    if (m_bgmStream) SDL_SetAudioStreamGain(m_bgmStream, m_mixer.gainFor(StreamBusId::Bgm));
-    if (m_transitionBgmStream) SDL_SetAudioStreamGain(m_transitionBgmStream, 0.0f);
-    if (m_voiceStream) SDL_SetAudioStreamGain(m_voiceStream, m_mixer.gainFor(StreamBusId::Voice));
+    // A5-tur1: uygulanamayan gain kayda geçer (UI ile duyulan uyuşmazsa
+    // teşhis vardır; değer aynen hesaplanır — matematik değişmez).
+    auto setGainChecked = [&](SDL_AudioStream* stream, float gain, const char* busName) {
+        if (stream && !SDL_SetAudioStreamGain(stream, gain)) {
+            warnAudioOnce(std::string("Channel gain not applied (") + busName +
+                          "): " + SDL_GetError());
+        }
+    };
+    setGainChecked(m_bgmStream, m_mixer.gainFor(StreamBusId::Bgm), "bgm");
+    setGainChecked(m_transitionBgmStream, 0.0f, "transition-bgm");
+    setGainChecked(m_voiceStream, m_mixer.gainFor(StreamBusId::Voice), "voice");
     const float sfxGain = m_mixer.gainFor(StreamBusId::Sfx);
     for (SDL_AudioStream* stream : m_sfxPoolStreams) {
-        if (stream) SDL_SetAudioStreamGain(stream, sfxGain);
+        setGainChecked(stream, sfxGain, "sfx-pool");
     }
-    if (m_uiStream) SDL_SetAudioStreamGain(m_uiStream, m_mixer.gainFor(StreamBusId::Sfx));
-    if (m_ambienceStream) SDL_SetAudioStreamGain(m_ambienceStream, ambienceBedGain(0));
-    if (m_ambienceStreamB) SDL_SetAudioStreamGain(m_ambienceStreamB, ambienceBedGain(1));
+    setGainChecked(m_uiStream, m_mixer.gainFor(StreamBusId::Sfx), "ui");
+    setGainChecked(m_ambienceStream, ambienceBedGain(0), "ambience");
+    setGainChecked(m_ambienceStreamB, ambienceBedGain(1), "ambience-B");
 }
 
 void AudioEngine::updateTelemetry(float deltaSeconds) {
@@ -1707,11 +1887,22 @@ void AudioEngine::playVoiceBlip(const std::string& assetPath, float pitch, float
                         for (size_t s = 0; s < sampleCount; ++s) {
                             samples[s] *= volume;
                         }
-                        SDL_ClearAudioStream(targetStream);
-                        SDL_SetAudioStreamFormat(targetStream, &floatSpec, nullptr);
-                        SDL_SetAudioStreamFrequencyRatio(targetStream, pitch);
-                        SDL_PutAudioStreamData(targetStream, floatBuffer, floatLength);
-                        SDL_ResumeAudioStreamDevice(targetStream);
+                        // A5-tur1: kuyruk fail'i kayda geçer (assetPlayed aynen
+                        // true kalır — synth'e düşmek davranış değiştirirdi).
+                        if (!SDL_ClearAudioStream(targetStream)) {
+                            ROWL_LOG_WARN("[AudioEngine] Failed to clear voice blip stream: " +
+                                          std::string(SDL_GetError()));
+                        }
+                        if (!SDL_SetAudioStreamFormat(targetStream, &floatSpec, nullptr) ||
+                            !SDL_SetAudioStreamFrequencyRatio(targetStream, pitch) ||
+                            !SDL_PutAudioStreamData(targetStream, floatBuffer, floatLength) ||
+                            !SDL_ResumeAudioStreamDevice(targetStream)) {
+                            if (m_lastError.empty()) {
+                                m_lastError = "Voice blip asset could not be queued: " +
+                                              std::string(SDL_GetError());
+                            }
+                            ROWL_LOG_WARN("[AudioEngine] " + m_lastError);
+                        }
                         if (channel == AudioChannelType::Voice) {
                             m_isVoicePlaying = true;
                         } else if (channel == AudioChannelType::Sfx) {
@@ -1762,10 +1953,21 @@ void AudioEngine::playVoiceBlip(const std::string& assetPath, float pitch, float
         blipSpec.freq = kBlipSampleRate;
 
         SDL_ClearAudioStream(targetStream);
-        SDL_SetAudioStreamFormat(targetStream, &blipSpec, nullptr);
-        SDL_SetAudioStreamFrequencyRatio(targetStream, 1.0f);
-        SDL_PutAudioStreamData(targetStream, blipPcm.data(), static_cast<int>(blipPcm.size() * sizeof(float)));
-        SDL_ResumeAudioStreamDevice(targetStream);
+        // A5-tur1: synth kuyruk fail'i kayda geçer; synth BAŞARILI kuyruğa
+        // girerse asset-decode'dan kalma kirli m_lastError temizlenir
+        // (başarı+kirlilik olmamalıdır).
+        if (!SDL_SetAudioStreamFormat(targetStream, &blipSpec, nullptr) ||
+            !SDL_SetAudioStreamFrequencyRatio(targetStream, 1.0f) ||
+            !SDL_PutAudioStreamData(targetStream, blipPcm.data(), static_cast<int>(blipPcm.size() * sizeof(float))) ||
+            !SDL_ResumeAudioStreamDevice(targetStream)) {
+            if (m_lastError.empty()) {
+                m_lastError = "Synth voice blip could not be queued: " +
+                              std::string(SDL_GetError());
+            }
+            ROWL_LOG_WARN("[AudioEngine] " + m_lastError);
+        } else {
+            m_lastError.clear();
+        }
 
         if (channel == AudioChannelType::Sfx) {
             // Faz 5 Dilim 2: prosedürel blip de havuz slotuna yazılır
@@ -1886,12 +2088,20 @@ bool AudioEngine::openBgmStream(const std::string& candidate,
     m_bgmSampleOffset = 0;
     m_isBgmStreamed = true;
     if (m_bgmStream) {
-        SDL_ClearAudioStream(m_bgmStream);
+        // A5-tur1: hazırlık fail'leri kayda geçer (warn-only; return true
+        // aynen — başarı+kirlilik olmamalıdır).
+        if (!SDL_ClearAudioStream(m_bgmStream)) {
+            ROWL_LOG_WARN("[AudioEngine] Failed to clear BGM stream for streaming playback: " +
+                          std::string(SDL_GetError()));
+        }
         SDL_AudioSpec floatSpec{};
         floatSpec.format = SDL_AUDIO_F32;
         floatSpec.channels = static_cast<Uint8>(channels);
         floatSpec.freq = static_cast<int>(rate);
-        SDL_SetAudioStreamFormat(m_bgmStream, &floatSpec, nullptr);
+        if (!SDL_SetAudioStreamFormat(m_bgmStream, &floatSpec, nullptr)) {
+            ROWL_LOG_WARN("[AudioEngine] Failed to set BGM stream format for streaming playback: " +
+                          std::string(SDL_GetError()));
+        }
     }
     const double threshold =
         longAudioThresholdSeconds(rate, channels, 2);
@@ -1917,7 +2127,11 @@ bool AudioEngine::openBgmStream(const std::string& candidate,
     applyChannelGains();
     pumpBgmStream();
     if (m_bgmStream && m_deviceAvailable && !m_outputSuspended) {
-        SDL_ResumeAudioStreamDevice(m_bgmStream);
+        // A5-tur1: warn-only (açılış başarılı sayılır; return true aynen).
+        if (!SDL_ResumeAudioStreamDevice(m_bgmStream)) {
+            ROWL_LOG_WARN("[AudioEngine] Failed to resume BGM stream for streaming playback: " +
+                          std::string(SDL_GetError()));
+        }
     }
     ROWL_LOG_INFO("[AudioEngine] Streaming playback started: " + assetPath);
     return true;
@@ -1929,9 +2143,14 @@ void AudioEngine::queueStreamChunkToDevice(const float* samples, size_t frames,
     (void)channels;
     (void)sampleRate;
     if (!samples || frames == 0 || !m_bgmStream || !m_deviceAvailable) return;
-    SDL_PutAudioStreamData(m_bgmStream, samples,
-                           static_cast<int>(frames * channels * sizeof(float)));
-    if (!m_outputSuspended) SDL_ResumeAudioStreamDevice(m_bgmStream);
+    // A5-tur1: pump-thread path'i — warn-once log-only (m_lastError snapshot
+    // kontratı gereği update-thread'den ezilmez).
+    if (!SDL_PutAudioStreamData(m_bgmStream, samples,
+                           static_cast<int>(frames * channels * sizeof(float)))) {
+        warnAudioOnce("BGM stream chunk re-queue failed: " + std::string(SDL_GetError()));
+    } else if (!m_outputSuspended && !SDL_ResumeAudioStreamDevice(m_bgmStream)) {
+        warnAudioOnce("BGM stream chunk resume failed: " + std::string(SDL_GetError()));
+    }
 }
 
 void AudioEngine::pumpBgmStream() {
@@ -2094,10 +2313,17 @@ void AudioEngine::ensureSfxPoolStreams() {
     const float gain = m_mixer.gainFor(StreamBusId::Sfx);
     for (size_t i = 0; i < want; ++i) {
         if (!m_sfxPoolStreams[i]) {
+            // A5-tur1: havuz akış açılış fail'i kayda geçer (ilk hata korunur).
             m_sfxPoolStreams[i] = SDL_OpenAudioDeviceStream(
                 SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr, nullptr, nullptr);
-            if (m_sfxPoolStreams[i]) {
-                SDL_SetAudioStreamGain(m_sfxPoolStreams[i], gain);
+            if (!m_sfxPoolStreams[i]) {
+                if (m_lastError.empty()) {
+                    m_lastError = "SFX pool audio stream could not be opened: " +
+                                  std::string(SDL_GetError());
+                }
+                ROWL_LOG_WARN("[AudioEngine] " + m_lastError);
+            } else if (!SDL_SetAudioStreamGain(m_sfxPoolStreams[i], gain)) {
+                warnAudioOnce("SFX pool stream gain not applied: " + std::string(SDL_GetError()));
             }
         }
     }
@@ -2120,8 +2346,16 @@ void AudioEngine::clearAmbienceBed(int bed) {
     if (!isValidAmbienceBed(bed)) return;
     SDL_AudioStream* stream = ambienceBedStream(bed);
     if (stream) {
-        SDL_ClearAudioStream(stream);
-        SDL_PauseAudioStreamDevice(stream);
+        // A5-tur1: warn-only (bed-clear update-thread'den de çağrılır;
+        // m_lastError snapshot kontratı korunur; state sıfırlama aynen).
+        if (!SDL_ClearAudioStream(stream)) {
+            ROWL_LOG_WARN("[AudioEngine] Failed to clear ambience bed stream: " +
+                          std::string(SDL_GetError()));
+        }
+        if (!SDL_PauseAudioStreamDevice(stream)) {
+            ROWL_LOG_WARN("[AudioEngine] Failed to pause ambience bed stream: " +
+                          std::string(SDL_GetError()));
+        }
     }
     if (bed == 0) {
         m_ambienceData.clear();
@@ -2140,6 +2374,9 @@ void AudioEngine::queueAmbienceBed(int bed, const SDL_AudioSpec& floatSpec,
                                   const uint8_t* floatBytes, size_t byteCount,
                                   const std::string& assetPath) {
     if (!isValidAmbienceBed(bed) || !floatBytes || byteCount == 0) return;
+    // A5-tur1: queue snapshot'ı — decode başarılıysa buraya temiz gelinir;
+    // önceki çağrıdan stale kalmamalıdır.
+    m_lastError.clear();
     std::vector<uint8_t>& data = (bed == 0) ? m_ambienceData : m_ambienceDataB;
     size_t& offset = (bed == 0) ? m_ambienceSampleOffset : m_ambienceSampleOffsetB;
     bool& playing = (bed == 0) ? m_isAmbiencePlaying : m_isAmbiencePlayingB;
@@ -2153,10 +2390,21 @@ void AudioEngine::queueAmbienceBed(int bed, const SDL_AudioSpec& floatSpec,
     m_ambienceBedRateHz[bed] = (floatSpec.freq > 0) ? floatSpec.freq : 48000;
     SDL_AudioStream* stream = ambienceBedStream(bed);
     if (stream && m_deviceAvailable) {
-        SDL_ClearAudioStream(stream);
+        // A5-tur1: kuyruk fail'i kayda geçer — playAmbienceBed true dönerken
+        // hata görünmezdi (C API körlüğü). Davranış aynen (dönüş değişmez).
+        if (!SDL_ClearAudioStream(stream)) {
+            ROWL_LOG_WARN("[AudioEngine] Failed to clear ambience bed stream before queue: " +
+                          std::string(SDL_GetError()));
+        }
         if (SDL_SetAudioStreamFormat(stream, &floatSpec, nullptr) &&
             SDL_PutAudioStreamData(stream, floatBytes, static_cast<int>(byteCount))) {
-            if (!m_outputSuspended) SDL_ResumeAudioStreamDevice(stream);
+            if (!m_outputSuspended && !SDL_ResumeAudioStreamDevice(stream) && m_lastError.empty()) {
+                m_lastError = "Ambience bed stream resume failed: " + std::string(SDL_GetError());
+                ROWL_LOG_WARN("[AudioEngine] " + m_lastError);
+            }
+        } else if (m_lastError.empty()) {
+            m_lastError = "Ambience bed audio could not be queued: " + std::string(SDL_GetError());
+            ROWL_LOG_WARN("[AudioEngine] " + m_lastError);
         }
     }
 }
@@ -2241,10 +2489,17 @@ bool AudioEngine::crossfadeAmbienceTo(const std::string& assetPath,
     m_ambCrossDuration = durationSeconds;
     m_ambCrossCurve = curve;
     // İlk kare: from tam kazançta, to sessiz (eğri uçları snap'lenir).
+    // A5-tur1: warn-only (dönüş true aynen; matematik değişmez).
     SDL_AudioStream* fromStream = ambienceBedStream(from);
-    if (fromStream) SDL_SetAudioStreamGain(fromStream, ambienceBedGain(from));
+    if (fromStream && !SDL_SetAudioStreamGain(fromStream, ambienceBedGain(from))) {
+        ROWL_LOG_WARN("[AudioEngine] Ambience crossfade from-gain not applied: " +
+                      std::string(SDL_GetError()));
+    }
     SDL_AudioStream* toStream = ambienceBedStream(to);
-    if (toStream) SDL_SetAudioStreamGain(toStream, ambienceBedGain(to));
+    if (toStream && !SDL_SetAudioStreamGain(toStream, ambienceBedGain(to))) {
+        ROWL_LOG_WARN("[AudioEngine] Ambience crossfade to-gain not applied: " +
+                      std::string(SDL_GetError()));
+    }
     return true;
 }
 
@@ -2259,10 +2514,15 @@ void AudioEngine::cancelAmbienceCrossfade() {
 void AudioEngine::updateAmbienceCrossfade(float deltaSeconds) {
     if (!m_ambCrossActive) return;
     m_ambCrossElapsed += std::max(0.0f, deltaSeconds);
+    // A5-tur1: per-frame path — warn-once log-only (m_lastError'e yazılmaz).
     SDL_AudioStream* fromStream = ambienceBedStream(m_ambCrossFrom);
-    if (fromStream) SDL_SetAudioStreamGain(fromStream, ambienceBedGain(m_ambCrossFrom));
+    if (fromStream && !SDL_SetAudioStreamGain(fromStream, ambienceBedGain(m_ambCrossFrom))) {
+        warnAudioOnce("Ambience crossfade from-gain failed: " + std::string(SDL_GetError()));
+    }
     SDL_AudioStream* toStream = ambienceBedStream(m_ambCrossTo);
-    if (toStream) SDL_SetAudioStreamGain(toStream, ambienceBedGain(m_ambCrossTo));
+    if (toStream && !SDL_SetAudioStreamGain(toStream, ambienceBedGain(m_ambCrossTo))) {
+        warnAudioOnce("Ambience crossfade to-gain failed: " + std::string(SDL_GetError()));
+    }
     const float progress = (m_ambCrossDuration > 0.0f)
         ? std::clamp(m_ambCrossElapsed / m_ambCrossDuration, 0.0f, 1.0f)
         : 1.0f;

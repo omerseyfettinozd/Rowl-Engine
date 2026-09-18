@@ -212,6 +212,14 @@ void test_audio_engine() {
         }
     }
     std::filesystem::remove_all(audioProjectRoot);
+    // A5-tur1: 64 MiB reddi error snapshot'ında görünür kılındı (C API
+    // körlüğü kapandı). Kırmızı-kanıt: E2 m_lastError yazması kaldırılırsa
+    // aşağıdaki assert düşer.
+    if (audio.getLastError().empty()) {
+        std::cerr << "Oversized audio rejection left no audio error snapshot"
+                  << std::endl;
+        exit(1);
+    }
     // No global-restore remount: vfs is function-local, so nothing leaks into
     // later tests.
     TEST_PASS("BGM WAV Decode, Queueing, and Failed-Load State Preservation");
@@ -219,6 +227,15 @@ void test_audio_engine() {
     audio.stopBgm();
     if (!audio.getCurrentBgmPath().empty()) {
         std::cerr << "Audio BGM stop mismatch" << std::endl;
+        exit(1);
+    }
+    // A5-tur1: stop error snapshot'ını temizler — önceki failed-load/oversize
+    // hatası stop sonrası görünmemelidir ("son tamamlanan çağrı" sözleşmesi).
+    // Kırmızı-kanıt: stopBgm girişindeki m_lastError.clear() kaldırılırsa
+    // aşağıdaki assert düşer (oversize reddi snapshot'ı kirletir).
+    if (!audio.getLastError().empty()) {
+        std::cerr << "Stop did not reset the audio error snapshot: "
+                  << audio.getLastError() << std::endl;
         exit(1);
     }
     TEST_PASS("BGM Stop & Track Reset");
@@ -535,6 +552,34 @@ void test_audio_engine() {
         }
     }
     TEST_PASS("Capability LONG_AUDIO_CONTRACT (2048) advertised");
+
+    // A5-tur1: bozuk ".ogg" blip'i decode hatası üretir (ov_open fail →
+    // m_lastError dolar) ama synth fallback BAŞARILI olur — error snapshot'ı
+    // temizlenmelidir (başarı + kirlilik yok). Cihazsız koşuda da geçer:
+    // synth dalı cihaz yokken başarıyı erken ilan eder ve yine clear() çalışır.
+    // Kırmızı-kanıt: playVoiceBlip synth-clear kaldırılırsa aşağıdaki assert
+    // düşer (decode hatası snapshot'ta kalır).
+    {
+        const auto blipRoot =
+            std::filesystem::temp_directory_path() / "rowl_blip_broken_ogg";
+        std::filesystem::create_directories(blipRoot / "audio");
+        {
+            std::ofstream broken(blipRoot / "audio" / "blip_broken.ogg",
+                                 std::ios::binary);
+            const char garbage[] = "BOZUK-OGG-ICERIK-0123456789ABCDEF";
+            broken.write(garbage, sizeof(garbage) - 1);
+        }
+        vfs.remountProject(blipRoot.string());
+        audio.playVoiceBlip("audio/blip_broken.ogg", 1.5f, 0.75f,
+                            Rowl::Audio::AudioChannelType::Voice);
+        std::filesystem::remove_all(blipRoot);
+        if (!audio.getLastError().empty()) {
+            std::cerr << "Synth fallback success left a stale audio error: "
+                      << audio.getLastError() << std::endl;
+            exit(1);
+        }
+    }
+    TEST_PASS("Voice-Blip Synth Success Clears Error Snapshot (broken-OGG decode failure absorbed)");
 
     audio.shutdown();
     if (audio.isInitialized()) exit(1);
