@@ -512,6 +512,39 @@ void test_vfs_security() {
     }
     TEST_PASS("A2a Present-but-empty assets stay distinguishable from misses (loose + package)");
 
+    // A2a-tur1 (unicode-entry bilerek-boz): normalizePackagePath used
+    // generic_string(), which throws ERROR_NO_UNICODE_TRANSLATION on Windows
+    // for non-ASCII entry names — the packaged images/ışıklı_röle.jpg entry
+    // killed every Windows mount (5 reds). A package carrying that exact
+    // entry name must load and round-trip. (On Linux generic==UTF-8 bytes,
+    // so this locks the contract locally and bites on Windows CI.)
+    {
+        const std::string unicodeEntryPath =
+            "images/\xC4\xB1\xC5\x9F\xC4\xB1\x6B\x6C\xC4\xB1\x5F\x72\xC3\xB6\x6C\x65\x2E\x6A\x70\x67";
+        const std::string unicodePayload = "unicode-pkg";
+        const uint64_t unicodeIndexOffset = headerSize + unicodePayload.size();
+        Rowl::VFS::RowlPkgHeader unicodeHeader{{'R', 'O', 'W', 'L'}, 1, 1, unicodeIndexOffset};
+        Rowl::VFS::RowlPkgEntryRaw unicodeEntry{fnv1a64(unicodeEntryPath),
+                                                static_cast<uint32_t>(unicodeEntryPath.size()),
+                                                headerSize,
+                                                static_cast<uint32_t>(unicodePayload.size()),
+                                                static_cast<uint32_t>(unicodePayload.size()), 0};
+        const auto unicodePackage = writePackage("unicode_entry.rowlpkg", unicodeHeader, unicodeEntry,
+                                                 unicodeEntryPath, unicodePayload);
+        Rowl::VFS::RowlPkgDataSource unicodeSource(unicodePackage.string());
+        auto unicodeProbe = unicodeSource.tryRead(unicodeEntryPath);
+        const std::vector<uint8_t> unicodeExpected(unicodePayload.begin(), unicodePayload.end());
+        if (!unicodeSource.isValid() || !unicodeProbe || *unicodeProbe != unicodeExpected) {
+            std::cerr << "Package did not round-trip a non-ASCII UTF-8 entry name" << std::endl;
+            exit(1);
+        }
+        if (unicodeSource.tryRead("images/missing.jpg")) {
+            std::cerr << "Package reported a miss as present next to a unicode entry" << std::endl;
+            exit(1);
+        }
+    }
+    TEST_PASS("A2a Packages with non-ASCII UTF-8 entry names load and round-trip");
+
     // A2a-tur1 (ölü-mount bilerek-boz): a root that cannot even be
     // canonicalized must be refused at mount time — previously it mounted
     // "successfully" and every lookup silently missed. The healthy fixture

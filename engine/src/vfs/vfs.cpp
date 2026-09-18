@@ -98,7 +98,10 @@ std::vector<uint8_t> LooseDirectorySource::read(const std::string& path) {
     }
     auto data = readLooseFileQuiet(*fullPath);
     if (!data) {
-        ROWL_LOG_WARN("VFS could not read loose asset: " + fullPath->string());
+        // A2a-fix5: .string() throws on non-ASCII paths through the ANSI
+        // codepage on Windows — a failed read of a unicode asset must log,
+        // never throw. pathToUtf8 is the proven u8-roundtrip.
+        ROWL_LOG_WARN("VFS could not read loose asset: " + Rowl::Platform::pathToUtf8(*fullPath));
         return {};
     }
     return std::move(*data);
@@ -193,7 +196,9 @@ void VFSManager::remountProject(const std::string& projectRoot) {
         return;
     }
 
-    ROWL_LOG_INFO("Remounting VFS for isolated project root: " + root.string());
+    // A2a-fix5: log the UTF-8 input, not root.string() — the narrow
+    // conversion throws on a non-ASCII project root on Windows.
+    ROWL_LOG_INFO("Remounting VFS for isolated project root: " + projectRoot);
 
     // Mount mods first so a release can override package content without a
     // second loose Assets tree.  The package remains the only base source.

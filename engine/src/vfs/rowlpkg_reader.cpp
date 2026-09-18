@@ -146,7 +146,12 @@ std::optional<std::string> normalizePackagePath(std::string path) {
 
     const auto first = normalized.begin();
     if (first == normalized.end() || *first == "..") return std::nullopt;
-    return normalized.generic_string();
+    // A2a-fix5: generic_string() converts through the ANSI codepage on
+    // Windows and THROWS (ERROR_NO_UNICODE_TRANSLATION) on non-ASCII entry
+    // names — that throw killed every Windows package mount (5 reds). Keys
+    // are UTF-8 by contract: return the u8string bytes verbatim.
+    const auto utf8 = normalized.u8string();
+    return std::string(utf8.begin(), utf8.end());
 }
 
 } // namespace
