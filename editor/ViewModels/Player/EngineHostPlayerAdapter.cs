@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Runtime.InteropServices;
 using RowlEngine.Editor.Native;
 using RowlEngine.Editor.Services;
 
@@ -58,85 +57,42 @@ public sealed class EngineHostPlayerAdapter : IPlayerEngine
     public void SetVoiceVolume(float value) => _host.SetVoiceVolume(value);
     public void SetSfxVolume(float value) => _host.SetSfxVolume(value);
 
-    // Faz 5 Dilim 2 fix turu 1 — EngineHost SIFIR-DIFF: bu iki bus için
-    // EngineHost'ta wrapper YOKTUR; adaptör canlı handle'a mevcut public
-    // yüzeyden (IsInitialized + Handle) erişip NativeBridge delegesini
-    // doğrudan çağırır. Ölü handle no-op, clamp [0,1], non-finite ignore
-    // (AudioMixerService.AcceptBedVolume semantiği).
-    public void SetAmbienceVolume(float value) =>
-        ForwardVolume(NativeBridge.RowlEngine_SetAmbienceVolume, value);
+    // B5 trio-1 — worker-dispatch göçü: Faz 5 Dilim 2'deki direkt-forward
+    // canlıda fail-closed-suskunluktu (B5-kırmızısı kanıtlı); marshal artık
+    // owner-thread'den akar. Semantik birebir aynı (clamp/guard worker'da).
+    public void SetAmbienceVolume(float value) => ForwardWorker(w => w.SetAmbienceVolume(value));
 
-    public void SetUiVolume(float value) =>
-        ForwardVolume(NativeBridge.RowlEngine_SetUiVolume, value);
+    public void SetUiVolume(float value) => ForwardWorker(w => w.SetUiVolume(value));
 
-    // Faz 5 Dilim 2 fix turu 1 — global mixer config aynı fail-closed
-    // yoldan akar: eğri 0/1 dışı ignore, derinlik [1,16] clamp.
-    public void SetFadeCurve(int curve)
-    {
-        if (curve != 0 && curve != 1)
-            return;
-        ForwardSetting(NativeBridge.RowlEngine_SetFadeCurve, curve);
-    }
+    // B5 trio-1 — global mixer config aynı worker-yoldan akar: eğri 0/1
+    // dışı ignore, derinlik [1,16] clamp (guard worker'da).
+    public void SetFadeCurve(int curve) => ForwardWorker(w => w.SetFadeCurve(curve));
 
-    public void SetSfxPoolDepth(int depth) =>
-        ForwardSetting(NativeBridge.RowlEngine_SetSfxPoolDepth, Math.Clamp(depth, 1, 16));
+    public void SetSfxPoolDepth(int depth) => ForwardWorker(w => w.SetSfxPoolDepth(depth));
 
-    // Faz 5 Dilim 3 — EngineHost SIFIR-DIFF: katmanlı karakter hattı da
-    // adaptör-forward'dır. Servis aynası önden doğrular (bilinmeyen slot,
-    // bozuk/aşırı asset, geçersiz preset adı forward edilmez); ölü handle
-    // no-op, throw sessiz fail-closed. String girdiler native bounded
-    // taramaya girer; sözleşme docs/CHARACTER_LAYERS_CONTRACT.md'dedir.
+    // B5 trio-2 — worker-dispatch göçü: servis-ayna pre-check'ler adapter'da
+    // kalır (domain-önkoşul; ölü-handle/no-throw yolları değişmez), marshal +
+    // clamp worker'dadır. Sözleşme docs/CHARACTER_LAYERS_CONTRACT.md'dedir.
     public void SetCharacterSlotAsset(string slot, string asset)
     {
         if (!CharacterLayersService.IsKnownSlot(slot) ||
             !CharacterLayersService.IsAssetPathSyntaxValid(asset))
             return;
-        IntPtr handle = LiveHandle();
-        if (handle == IntPtr.Zero)
-            return;
-        try
-        {
-            NativeBridge.RowlEngine_SetCharacterSlotAsset(handle, slot, asset ?? string.Empty);
-        }
-        catch (Exception)
-        {
-            // Ölü handle / kapalı native: sessiz fail-closed.
-        }
+        ForwardWorker(w => w.SetCharacterSlotAsset(slot, asset ?? string.Empty));
     }
 
     public void SetCharacterSlotOpacity(string slot, float opacity)
     {
         if (!CharacterLayersService.IsKnownSlot(slot) || !float.IsFinite(opacity))
             return;
-        IntPtr handle = LiveHandle();
-        if (handle == IntPtr.Zero)
-            return;
-        try
-        {
-            NativeBridge.RowlEngine_SetCharacterSlotOpacity(
-                handle, slot, Math.Clamp(opacity, 0.0f, 1.0f));
-        }
-        catch (Exception)
-        {
-            // Ölü handle / kapalı native: sessiz fail-closed.
-        }
+        ForwardWorker(w => w.SetCharacterSlotOpacity(slot, opacity));
     }
 
     public void SetCharacterSlotVisible(string slot, bool visible)
     {
         if (!CharacterLayersService.IsKnownSlot(slot))
             return;
-        IntPtr handle = LiveHandle();
-        if (handle == IntPtr.Zero)
-            return;
-        try
-        {
-            NativeBridge.RowlEngine_SetCharacterSlotVisible(handle, slot, visible ? 1 : 0);
-        }
-        catch (Exception)
-        {
-            // Ölü handle / kapalı native: sessiz fail-closed.
-        }
+        ForwardWorker(w => w.SetCharacterSlotVisible(slot, visible));
     }
 
     public void RegisterCharacterPreset(string name, string expressionJson)
@@ -144,263 +100,111 @@ public sealed class EngineHostPlayerAdapter : IPlayerEngine
         if (!CharacterLayersService.IsPresetNameValid(name) ||
             !CharacterLayersService.TryParsePreset(expressionJson, out _))
             return;
-        IntPtr handle = LiveHandle();
-        if (handle == IntPtr.Zero)
-            return;
-        try
-        {
-            NativeBridge.RowlEngine_RegisterCharacterPreset(handle, name, expressionJson);
-        }
-        catch (Exception)
-        {
-            // Ölü handle / kapalı native: sessiz fail-closed.
-        }
+        ForwardWorker(w => w.RegisterCharacterPreset(name, expressionJson));
     }
 
     public void ApplyCharacterExpression(string name)
     {
         if (!CharacterLayersService.IsPresetNameValid(name))
             return;
-        IntPtr handle = LiveHandle();
-        if (handle == IntPtr.Zero)
-            return;
-        try
-        {
-            NativeBridge.RowlEngine_ApplyCharacterExpression(handle, name);
-        }
-        catch (Exception)
-        {
-            // Ölü handle / kapalı native: sessiz fail-closed.
-        }
+        ForwardWorker(w => w.ApplyCharacterExpression(name));
     }
 
-    public string GetLastCharacterError()
-    {
-        IntPtr handle = LiveHandle();
-        if (handle == IntPtr.Zero)
-            return string.Empty;
-        try
-        {
-            if (NativeBridge.RowlEngine_GetLastCharacterErrorUtf8(
-                    handle, IntPtr.Zero, 0, out uint required) != NativeBridge.ResultCode.Ok ||
-                required == 0)
-                return string.Empty;
-            IntPtr buffer = Marshal.AllocHGlobal((int)required);
-            try
-            {
-                if (NativeBridge.RowlEngine_GetLastCharacterErrorUtf8(
-                        handle, buffer, required, out _) != NativeBridge.ResultCode.Ok)
-                    return string.Empty;
-                return Marshal.PtrToStringUTF8(buffer) ?? string.Empty;
-            }
-            finally
-            {
-                Marshal.FreeHGlobal(buffer);
-            }
-        }
-        catch (Exception)
-        {
-            return string.Empty;
-        }
-    }
+    public string GetLastCharacterError() =>
+        ForwardWorker(w => w.GetLastCharacterError(), string.Empty);
 
-    private IntPtr LiveHandle() =>
-        _host.IsInitialized ? _host.Handle : IntPtr.Zero;
+    // B5 — LiveHandle kalktı (20/20 worker-göçü; direkt-handle kullanımı sıfır).
 
-    // Faz 5 Dilim 4 — EngineHost SIFIR-DIFF: bütçeli prefetch + chapter
-    // penceresi hattı da adaptör-forward'dır. Servis aynası önden doğrular
-    // (bilinmeyen chapter-id, boş JSON forward edilmez); ölü handle no-op,
-    // throw sessiz fail-closed. Bütçe clamp'lenir (0 = 32 MiB default),
-    // pump süresi clamp'lenir (non-finite/<=0 = ~4 ms). String girdiler
-    // native bounded taramaya girer; sözleşme
+    // B5 trio-3 — worker-dispatch göçü: servis-ayna pre-check'ler
+    // (boş-JSON, chapter-id, bütçe/pump clamp) adapter'da aynen kalır,
+    // marshal owner-thread'den akar. Sözleşme
     // docs/PREFETCH_AND_CHAPTERS_CONTRACT.md'dedir.
     public void LoadChapterIndexJson(string indexJson)
     {
         if (string.IsNullOrWhiteSpace(indexJson))
             return;
-        IntPtr handle = LiveHandle();
-        if (handle == IntPtr.Zero)
-            return;
-        try
-        {
-            NativeBridge.RowlEngine_LoadChapterIndexJson(handle, indexJson);
-        }
-        catch (Exception)
-        {
-            // Ölü handle / kapalı native: sessiz fail-closed.
-        }
+        ForwardWorker(w => w.LoadChapterIndexJson(indexJson));
     }
 
     public void AppendChapterFileJson(string chapterJson)
     {
         if (string.IsNullOrWhiteSpace(chapterJson))
             return;
-        IntPtr handle = LiveHandle();
-        if (handle == IntPtr.Zero)
-            return;
-        try
-        {
-            NativeBridge.RowlEngine_AppendChapterFileJson(handle, chapterJson);
-        }
-        catch (Exception)
-        {
-            // Ölü handle / kapalı native: sessiz fail-closed.
-        }
+        ForwardWorker(w => w.AppendChapterFileJson(chapterJson));
     }
 
     public void LoadChapter(string chapterId)
     {
         if (!PrefetchChaptersService.IsChapterIdValid(chapterId))
             return;
-        ForwardChapterId(NativeBridge.RowlEngine_LoadChapter, chapterId);
+        ForwardWorker(w => w.LoadChapter(chapterId));
     }
 
     public void UnloadChapter(string chapterId)
     {
         if (!PrefetchChaptersService.IsChapterIdValid(chapterId))
             return;
-        ForwardChapterId(NativeBridge.RowlEngine_UnloadChapter, chapterId);
+        ForwardWorker(w => w.UnloadChapter(chapterId));
     }
 
     public string GetLoadedChaptersJson() =>
-        ReadCallerJson(NativeBridge.RowlEngine_GetLoadedChaptersJson);
+        ForwardWorker(w => w.GetLoadedChaptersJson(), string.Empty);
 
     public string GetPrefetchProgressJson() =>
-        ReadCallerJson(NativeBridge.RowlEngine_GetPrefetchProgressJson);
+        ForwardWorker(w => w.GetPrefetchProgressJson(), string.Empty);
 
     public string GetCurrentChapterId() =>
-        ReadCallerJson(NativeBridge.RowlEngine_GetCurrentChapterIdUtf8);
+        ForwardWorker(w => w.GetCurrentChapterId(), string.Empty);
 
-    public bool IsChapterBoundaryNode(ulong nodeId)
-    {
-        IntPtr handle = LiveHandle();
-        if (handle == IntPtr.Zero)
-            return false;
-        try
-        {
-            return NativeBridge.RowlEngine_IsChapterBoundaryNode(handle, nodeId) != 0;
-        }
-        catch (Exception)
-        {
-            return false;
-        }
-    }
+    public bool IsChapterBoundaryNode(ulong nodeId) =>
+        ForwardWorker(w => w.IsChapterBoundaryNode(nodeId), false);
 
     public void PrefetchChapterAssets(string? chapterId, ulong budgetBytes)
     {
         if (!string.IsNullOrEmpty(chapterId) &&
             !PrefetchChaptersService.IsChapterIdValid(chapterId))
             return;
-        IntPtr handle = LiveHandle();
-        if (handle == IntPtr.Zero)
-            return;
-        try
-        {
-            NativeBridge.RowlEngine_PrefetchChapterAssets(
-                handle,
-                string.IsNullOrEmpty(chapterId) ? null : chapterId,
-                PrefetchChaptersService.ClampBudgetBytes(budgetBytes));
-        }
-        catch (Exception)
-        {
-            // Ölü handle / kapalı native: sessiz fail-closed.
-        }
+        string? id = string.IsNullOrEmpty(chapterId) ? null : chapterId;
+        ulong budget = PrefetchChaptersService.ClampBudgetBytes(budgetBytes);
+        ForwardWorker(w => w.PrefetchChapterAssets(id, budget));
     }
 
     public int PumpPrefetch(float maxMilliseconds)
     {
-        IntPtr handle = LiveHandle();
-        if (handle == IntPtr.Zero)
-            return 0;
+        double clamped = PrefetchChaptersService.ClampPumpMilliseconds(maxMilliseconds);
+        return ForwardWorker(w => w.PumpPrefetch((float)clamped), 0);
+    }
+
+    // B5 — worker-forward omurgası: marshal owner-thread'den akar;
+    // ölü/kapalı worker sessiz fail-closed (Faz 5 dead-handle testleri
+    // aynen geçer). Trio-1 ile ForwardVolume/ForwardSetting kalktı.
+    private void ForwardWorker(Action<OffscreenRuntimeWorker> write)
+    {
+        OffscreenRuntimeWorker? runtime = _host.Runtime;
+        if (runtime == null)
+            return;
         try
         {
-            double clamped = PrefetchChaptersService.ClampPumpMilliseconds(maxMilliseconds);
-            return Math.Max(0, NativeBridge.RowlEngine_PumpPrefetch(handle, (float)clamped));
+            write(runtime);
         }
         catch (Exception)
         {
-            return 0;
+            // Ölü worker / kapalı native: sessiz fail-closed.
         }
     }
 
-    private void ForwardChapterId(
-        Func<IntPtr, string, NativeBridge.ResultCode> write, string chapterId)
+    private T ForwardWorker<T>(Func<OffscreenRuntimeWorker, T> read, T fallback)
     {
-        IntPtr handle = LiveHandle();
-        if (handle == IntPtr.Zero)
-            return;
+        OffscreenRuntimeWorker? runtime = _host.Runtime;
+        if (runtime == null)
+            return fallback;
         try
         {
-            write(handle, chapterId);
+            return read(runtime);
         }
         catch (Exception)
         {
-            // Ölü handle / kapalı native: sessiz fail-closed.
-        }
-    }
-
-    private delegate NativeBridge.ResultCode CallerJsonReader(
-        IntPtr handle, IntPtr buffer, uint bufferSize, out uint required);
-
-    private string ReadCallerJson(CallerJsonReader read)
-    {
-        IntPtr handle = LiveHandle();
-        if (handle == IntPtr.Zero)
-            return string.Empty;
-        try
-        {
-            if (read(handle, IntPtr.Zero, 0, out uint required) != NativeBridge.ResultCode.Ok ||
-                required == 0)
-                return string.Empty;
-            IntPtr buffer = Marshal.AllocHGlobal((int)required);
-            try
-            {
-                if (read(handle, buffer, required, out _) != NativeBridge.ResultCode.Ok)
-                    return string.Empty;
-                return Marshal.PtrToStringUTF8(buffer) ?? string.Empty;
-            }
-            finally
-            {
-                Marshal.FreeHGlobal(buffer);
-            }
-        }
-        catch (Exception)
-        {
-            return string.Empty;
-        }
-    }
-
-    private void ForwardVolume(Action<IntPtr, float> write, float value)
-    {
-        if (!float.IsFinite(value) || !_host.IsInitialized)
-            return;
-        IntPtr handle = _host.Handle;
-        if (handle == IntPtr.Zero)
-            return;
-        try
-        {
-            write(handle, Math.Clamp(value, 0.0f, 1.0f));
-        }
-        catch (Exception)
-        {
-            // Ölü handle / kapalı native: sessiz fail-closed.
-        }
-    }
-
-    private void ForwardSetting(Action<IntPtr, int> write, int value)
-    {
-        if (!_host.IsInitialized)
-            return;
-        IntPtr handle = _host.Handle;
-        if (handle == IntPtr.Zero)
-            return;
-        try
-        {
-            write(handle, value);
-        }
-        catch (Exception)
-        {
-            // Ölü handle / kapalı native: sessiz fail-closed.
+            return fallback;
         }
     }
     public void SetTextScale(float value) => _host.SetTextScale(value);

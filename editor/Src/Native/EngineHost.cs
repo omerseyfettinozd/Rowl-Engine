@@ -75,6 +75,11 @@ namespace RowlEngine.Editor.Native
 
         internal int RuntimeWorkerThreadId => _runtime?.ManagedThreadId ?? 0;
 
+        // B5 — adapter'ın K-trio worker-wrapper'larına erişimi (TAŞINMA
+        // KURALI: marshal API worker'da yaşar; host'a davranış eklenmez,
+        // yalnızca erişim verilir — şişirme yasağına aykırı değil).
+        internal OffscreenRuntimeWorker? Runtime => _runtime;
+
         private T InvokeNative<T>(Func<IntPtr, T> command, T fallback)
         {
             OffscreenRuntimeWorker? runtime = _runtime;

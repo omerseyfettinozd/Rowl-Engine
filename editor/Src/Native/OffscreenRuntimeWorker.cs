@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -80,6 +81,137 @@ namespace RowlEngine.Editor.Native
                 return true;
             });
         }
+
+        // ── B5 K-trio worker wrapper'ları ─────────────────────────────────
+        //
+        // TAŞINMA KURALI: marshal API burada yaşar. Adapter UI-thread'inden
+        // direkt NativeBridge çağırıyordu — yabancı-thread → toEngineChecked
+        // fail-closed → canlıda sessizce hiçbir şey yapmıyordu (B5-kırmızısı
+        // kanıtlı). Bu wrapper'lar owner-thread'den (Invoke) çağırır; guard/
+        // pre-check semantiği adapter'dakiyle birebir aynıdır (NativeGuard +
+        // servis-ayna kuralları taşınır, yeniden-icat edilmez).
+
+        // Trio-1 — mixer: ambience/UI volume, fade-curve, sfx-pool.
+        internal void SetAmbienceVolume(float volume)
+        {
+            if (!NativeGuard.TryClamp01(volume, out float v)) return;
+            Invoke(handle => NativeBridge.RowlEngine_SetAmbienceVolume(handle, v));
+        }
+
+        internal void SetUiVolume(float volume)
+        {
+            if (!NativeGuard.TryClamp01(volume, out float v)) return;
+            Invoke(handle => NativeBridge.RowlEngine_SetUiVolume(handle, v));
+        }
+
+        internal void SetFadeCurve(int curve)
+        {
+            if (curve != 0 && curve != 1) return;
+            Invoke(handle => NativeBridge.RowlEngine_SetFadeCurve(handle, curve));
+        }
+
+        internal void SetSfxPoolDepth(int depth) =>
+            Invoke(handle => NativeBridge.RowlEngine_SetSfxPoolDepth(
+                handle, Math.Clamp(depth, 1, 16)));
+
+        // Trio-2 — character layers: slot yazmaları + preset + last-error.
+        // Servis-ayna pre-check'ler adapter'da kalır (domain-önkoşul);
+        // burada yalnızca owner-thread marshal + NativeGuard uygulanır.
+        internal void SetCharacterSlotAsset(string slot, string asset) =>
+            Invoke(handle => NativeBridge.RowlEngine_SetCharacterSlotAsset(handle, slot, asset));
+
+        internal void SetCharacterSlotOpacity(string slot, float opacity)
+        {
+            if (!NativeGuard.TryClamp01(opacity, out float o)) return;
+            Invoke(handle => NativeBridge.RowlEngine_SetCharacterSlotOpacity(handle, slot, o));
+        }
+
+        internal void SetCharacterSlotVisible(string slot, bool visible) =>
+            Invoke(handle => NativeBridge.RowlEngine_SetCharacterSlotVisible(handle, slot, visible ? 1 : 0));
+
+        internal void RegisterCharacterPreset(string name, string expressionJson) =>
+            Invoke(handle => NativeBridge.RowlEngine_RegisterCharacterPreset(handle, name, expressionJson));
+
+        internal void ApplyCharacterExpression(string name) =>
+            Invoke(handle => NativeBridge.RowlEngine_ApplyCharacterExpression(handle, name));
+
+        internal string GetLastCharacterError() =>
+            Invoke(handle =>
+            {
+                if (NativeBridge.RowlEngine_GetLastCharacterErrorUtf8(
+                        handle, IntPtr.Zero, 0, out uint required) != NativeBridge.ResultCode.Ok ||
+                    required == 0)
+                    return string.Empty;
+                IntPtr buffer = Marshal.AllocHGlobal((int)required);
+                try
+                {
+                    if (NativeBridge.RowlEngine_GetLastCharacterErrorUtf8(
+                            handle, buffer, required, out _) != NativeBridge.ResultCode.Ok)
+                        return string.Empty;
+                    return Marshal.PtrToStringUTF8(buffer) ?? string.Empty;
+                }
+                finally
+                {
+                    Marshal.FreeHGlobal(buffer);
+                }
+            });
+
+        // Trio-3 — chapter/prefetch: index/load/unload/prefetch/pump +
+        // caller-buffer JSON okumalar. Servis-ayna pre-check'ler (boş-JSON,
+        // chapter-id geçerliliği, bütçe/pump clamp) adapter'da kalır;
+        // burada yalnızca owner-thread marshal uygulanır. Sözleşme
+        // docs/PREFETCH_AND_CHAPTERS_CONTRACT.md'dedir.
+        internal void LoadChapterIndexJson(string indexJson) =>
+            Invoke(handle => NativeBridge.RowlEngine_LoadChapterIndexJson(handle, indexJson));
+
+        internal void AppendChapterFileJson(string chapterJson) =>
+            Invoke(handle => NativeBridge.RowlEngine_AppendChapterFileJson(handle, chapterJson));
+
+        internal void LoadChapter(string chapterId) =>
+            Invoke(handle => NativeBridge.RowlEngine_LoadChapter(handle, chapterId));
+
+        internal void UnloadChapter(string chapterId) =>
+            Invoke(handle => NativeBridge.RowlEngine_UnloadChapter(handle, chapterId));
+
+        internal void PrefetchChapterAssets(string? chapterId, ulong budgetBytes) =>
+            Invoke(handle => NativeBridge.RowlEngine_PrefetchChapterAssets(handle, chapterId, budgetBytes));
+
+        internal int PumpPrefetch(float maxMilliseconds) =>
+            Math.Max(0, Invoke(handle => NativeBridge.RowlEngine_PumpPrefetch(handle, maxMilliseconds)));
+
+        internal bool IsChapterBoundaryNode(ulong nodeId) =>
+            Invoke(handle => NativeBridge.RowlEngine_IsChapterBoundaryNode(handle, nodeId) != 0);
+
+        private delegate NativeBridge.ResultCode CallerJsonReader(
+            IntPtr handle, IntPtr buffer, uint bufferSize, out uint required);
+
+        private string ReadCallerJson(CallerJsonReader read) =>
+            Invoke(handle =>
+            {
+                if (read(handle, IntPtr.Zero, 0, out uint required) != NativeBridge.ResultCode.Ok ||
+                    required == 0)
+                    return string.Empty;
+                IntPtr buffer = Marshal.AllocHGlobal((int)required);
+                try
+                {
+                    if (read(handle, buffer, required, out _) != NativeBridge.ResultCode.Ok)
+                        return string.Empty;
+                    return Marshal.PtrToStringUTF8(buffer) ?? string.Empty;
+                }
+                finally
+                {
+                    Marshal.FreeHGlobal(buffer);
+                }
+            });
+
+        internal string GetLoadedChaptersJson() =>
+            ReadCallerJson(NativeBridge.RowlEngine_GetLoadedChaptersJson);
+
+        internal string GetPrefetchProgressJson() =>
+            ReadCallerJson(NativeBridge.RowlEngine_GetPrefetchProgressJson);
+
+        internal string GetCurrentChapterId() =>
+            ReadCallerJson(NativeBridge.RowlEngine_GetCurrentChapterIdUtf8);
 
         internal bool TryPost(Action<IntPtr> command)
         {
