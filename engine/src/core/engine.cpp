@@ -375,7 +375,7 @@ void Engine::resetToStartNode() {
                     {"data", c.data}
                 });
             }
-            updateSceneFromComponents(compsJson.dump());
+            updateSceneFromComponents(compsJson);
         } else {
             updateActiveScene(
                 startNode.speaker, startNode.dialogue,
@@ -456,6 +456,11 @@ void Engine::advanceToNextNode(uint32_t choiceIndex) {
 
     const auto advanceResult = m_storyRuntime.advance(choiceIndex);
     if (advanceResult == StoryRuntime::AdvanceResult::CurrentNodeMissing) {
+        // A2a-tur2: the reset used to fire with no log line (unlike the
+        // ChoiceUnavailable INFO below). A missing cursor is always a bug
+        // upstream — say so.
+        ROWL_LOG_WARN("Advance from missing node #" +
+                      std::to_string(m_storyRuntime.currentNodeId()) + "; resetting to start node");
         resetToStartNode();
         return;
     }
@@ -484,7 +489,7 @@ void Engine::advanceToNextNode(uint32_t choiceIndex) {
                     {"data", c.data}
                 });
             }
-            updateSceneFromComponents(compsJson.dump());
+            updateSceneFromComponents(compsJson);
         } else {
             updateActiveScene(
                 nextNode.speaker, nextNode.dialogue,
@@ -632,6 +637,21 @@ void Engine::updateSceneFromComponents(const std::string& componentsJson,
         ROWL_LOG_ERROR("Component JSON exceeds the maximum accepted size");
         return;
     }
+    nlohmann::json root;
+    try {
+        root = nlohmann::json::parse(componentsJson);
+    } catch (const std::exception& e) {
+        // A2a-tur2: no scene state was touched yet — nothing to restore.
+        ROWL_LOG_ERROR("Failed to parse components JSON: " + std::string(e.what()));
+        return;
+    }
+    updateSceneFromComponents(root, replayEntryEffects);
+}
+
+// A2a-tur2: JSON overload — owns the snapshot/restore contract formerly
+// inline in the string version (behavior unchanged, parse step skipped).
+void Engine::updateSceneFromComponents(const nlohmann::json& root,
+                                       bool replayEntryEffects) {
     const auto previousCharacters = m_activeCharacters;
     const auto previousDialogues = m_activeDialogues;
     const auto previousChoices = m_activeChoiceButtons;
@@ -690,7 +710,6 @@ void Engine::updateSceneFromComponents(const std::string& componentsJson,
         }
     };
     try {
-        auto root = nlohmann::json::parse(componentsJson);
         nlohmann::json comps = root;
         if (root.is_object() && root.contains("components") && root["components"].is_array()) {
             comps = root["components"];
@@ -1229,7 +1248,7 @@ bool Engine::parseStoryGraphJson(const std::string& jsonContent) {
                 {"data", component.data}
             });
         }
-        updateSceneFromComponents(componentsJson.dump());
+        updateSceneFromComponents(componentsJson);
     } else {
         updateActiveScene(
             startNode.speaker, startNode.dialogue, startNode.background,
@@ -1409,7 +1428,11 @@ void Engine::loadStoryGraphFile() {
         "Assets/full_story_graph.json"
     };
     for (const auto& p : searchPaths) {
-        if (std::filesystem::exists(p)) {
+        // A2a-tur2: ec overload + wide path — the throwing narrow overload
+        // dies on non-ASCII roots on Windows instead of answering false.
+        std::error_code probeError;
+        const std::filesystem::path probePath = Rowl::Platform::pathFromUtf8(p);
+        if (std::filesystem::exists(probePath, probeError) && !probeError) {
             loadStoryGraphFromPath(p);
             return;
         }
@@ -1434,10 +1457,15 @@ void Engine::loadActiveStoryFile() {
                 try {
                     nlohmann::json data = nlohmann::json::parse(content);
                     uint64_t nodeId = data.value("node_id", static_cast<uint64_t>(0));
-                    if (nodeId != 0) m_storyRuntime.setCurrentNodeId(nodeId);
+                    // A2a-tur2: a dangling id used to move the cursor in total
+                    // silence (scene sync just skipped). Audible now.
+                    if (nodeId != 0 && !m_storyRuntime.setCurrentNodeId(nodeId)) {
+                        ROWL_LOG_WARN("Active story from VFS " + candidate + " points at node #" +
+                                      std::to_string(nodeId) + " absent from the loaded graph");
+                    }
 
                     if (data.contains("components") && data["components"].is_array()) {
-                        updateSceneFromComponents(data["components"].dump());
+                        updateSceneFromComponents(data["components"]);
                     } else {
                         updateActiveScene(
                             data.value("speaker",          std::string{}),
@@ -1476,18 +1504,26 @@ void Engine::loadActiveStoryFile() {
     };
 
     for (const auto& path : searchPaths) {
+        // A2a-tur2: wide path + ec overloads + wide open — the implicit
+        // narrow conversion dies on non-ASCII roots on Windows (same class
+        // as loadStoryGraphFromPath's Tur-12 hardening).
+        const std::filesystem::path widePath = Rowl::Platform::pathFromUtf8(path);
         std::error_code fileError;
-        if (std::filesystem::is_regular_file(path, fileError) && !fileError &&
-            std::filesystem::file_size(path, fileError) <= kMaxStoryJsonBytes && !fileError) {
-            std::ifstream f(path);
+        if (std::filesystem::is_regular_file(widePath, fileError) && !fileError &&
+            std::filesystem::file_size(widePath, fileError) <= kMaxStoryJsonBytes && !fileError) {
+            std::ifstream f(widePath);
             if (f.is_open()) {
                 try {
                     nlohmann::json data = nlohmann::json::parse(f);
                     uint64_t nodeId = data.value("node_id", static_cast<uint64_t>(0));
-                    if (nodeId != 0) m_storyRuntime.setCurrentNodeId(nodeId);
+                    // A2a-tur2: same dangle-audibility as the VFS path above.
+                    if (nodeId != 0 && !m_storyRuntime.setCurrentNodeId(nodeId)) {
+                        ROWL_LOG_WARN("Active story file " + path + " points at node #" +
+                                      std::to_string(nodeId) + " absent from the loaded graph");
+                    }
 
                     if (data.contains("components") && data["components"].is_array()) {
-                        updateSceneFromComponents(data["components"].dump());
+                        updateSceneFromComponents(data["components"]);
                     } else {
                         updateActiveScene(
                             data.value("speaker",          std::string{}),
@@ -2103,7 +2139,12 @@ bool Engine::loadGameSlot(int32_t slotIndex) {
 
     m_gameState = loadResult.state;
     m_playtimeSeconds = m_gameState ? m_gameState->playtimeSeconds : 0.0;
-    m_storyRuntime.setCurrentNodeId(m_gameState->activeNodeId);
+    // A2a-tur2: a save pointing outside its graph restored a null cursor
+    // silently. Audible now; the restore flow itself is unchanged.
+    if (!m_storyRuntime.setCurrentNodeId(m_gameState->activeNodeId)) {
+        ROWL_LOG_WARN("Save slot #" + std::to_string(slotIndex) + " restores node #" +
+                      std::to_string(m_gameState->activeNodeId) + " absent from the loaded graph");
+    }
     // Loading restores state; it is not a node-entry event and must not replay SFX.
     m_lastSfxPlaybackNodeId = m_storyRuntime.currentNodeId();
 
@@ -2116,7 +2157,16 @@ bool Engine::loadGameSlot(int32_t slotIndex) {
     }
 
     // Synchronize scene to loaded node
-    if (const StoryNode* activeNode = m_storyRuntime.currentNode()) {
+    const StoryNode* activeNode = m_storyRuntime.currentNode();
+    if (!activeNode) {
+        // A2a-tur2: the setCurrentNodeId WARN above already fired for a
+        // committed graph; this covers the empty-graph legacy path where the
+        // id was accepted with nothing to validate against.
+        ROWL_LOG_WARN("Save slot #" + std::to_string(slotIndex) +
+                      " restored with no scene to sync (node #" +
+                      std::to_string(m_storyRuntime.currentNodeId()) + " not in graph)");
+    }
+    if (activeNode) {
         const auto& nextNode = *activeNode;
         if (!nextNode.components.empty()) {
             nlohmann::json compsJson = nlohmann::json::array();
@@ -2128,7 +2178,7 @@ bool Engine::loadGameSlot(int32_t slotIndex) {
                     {"data", c.data}
                 });
             }
-            updateSceneFromComponents(compsJson.dump(), false);
+            updateSceneFromComponents(compsJson, false);
         } else {
             updateActiveScene(
                 nextNode.speaker, nextNode.dialogue,
@@ -2462,7 +2512,12 @@ bool Engine::rewind(uint64_t steps) {
     if (!rewound) return false;
 
     m_gameState = rewound;
-    m_storyRuntime.setCurrentNodeId(m_gameState->activeNodeId);
+    // A2a-tur2: same dangle-audibility as the save-load restore above.
+    if (!m_storyRuntime.setCurrentNodeId(m_gameState->activeNodeId)) {
+        ROWL_LOG_WARN("Rewind of " + std::to_string(steps) +
+                      " steps lands on node #" + std::to_string(m_gameState->activeNodeId) +
+                      " absent from the loaded graph");
+    }
 
     if (m_luaSandbox && m_gameState->variables) {
         m_luaSandbox->clearVariables();
@@ -2471,7 +2526,14 @@ bool Engine::rewind(uint64_t steps) {
         }
     }
 
-    if (const StoryNode* activeNode = m_storyRuntime.currentNode()) {
+    const StoryNode* activeNode = m_storyRuntime.currentNode();
+    if (!activeNode) {
+        // A2a-tur2: same no-scene-to-sync audibility as the save-load
+        // restore above.
+        ROWL_LOG_WARN("Rewind completed with no scene to sync (node #" +
+                      std::to_string(m_storyRuntime.currentNodeId()) + " not in graph)");
+    }
+    if (activeNode) {
         const auto& nextNode = *activeNode;
         if (!nextNode.components.empty()) {
             nlohmann::json compsJson = nlohmann::json::array();
@@ -2483,7 +2545,7 @@ bool Engine::rewind(uint64_t steps) {
                     {"data", c.data}
                 });
             }
-            updateSceneFromComponents(compsJson.dump(), false);
+            updateSceneFromComponents(compsJson, false);
         } else {
             updateActiveScene(
                 nextNode.speaker, nextNode.dialogue,

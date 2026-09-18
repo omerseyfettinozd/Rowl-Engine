@@ -69,7 +69,9 @@ void RowlEngine_UpdateSceneFromJson(
     const char* componentsJson)
 {
     if (!isLiveHandle(handle) || !componentsJson) return;
-    invokeNoexcept([&] { toEngine(handle)->updateSceneFromComponents(componentsJson); });
+    // A2a-tur2: explicit string — const char* is convertible to both the
+    // string and the JSON overloads (ambiguous otherwise).
+    invokeNoexcept([&] { toEngine(handle)->updateSceneFromComponents(std::string(componentsJson)); });
 }
 
 void RowlEngine_LoadStoryGraph(RowlEngineHandle handle, const char* jsonPath) {

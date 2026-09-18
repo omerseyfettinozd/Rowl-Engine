@@ -143,6 +143,11 @@ public:
     /// Used by the editor's component-based architecture.
     void updateSceneFromComponents(const std::string& componentsJson,
                                    bool replayEntryEffects = true);
+    /// A2a-tur2: JSON overload — callers holding a parsed document skip the
+    /// dump/parse roundtrip. Owns the snapshot/restore contract; the string
+    /// version only parses and delegates.
+    void updateSceneFromComponents(const nlohmann::json& components,
+                                   bool replayEntryEffects = true);
 
     void loadActiveStoryFile();
     void loadStoryGraphFile();

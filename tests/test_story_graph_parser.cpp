@@ -100,6 +100,25 @@ void test_story_graph_parser() {
     }
     TEST_PASS("StoryRuntime commits graph ownership transactionally");
 
+    // A2a-tur2 (dangling-cursor bilerek-boz): setCurrentNodeId must REPORT a
+    // dangling id (false) while preserving the legacy cursor move — the
+    // engine WARNs on false, flows don't change. Empty graph validates
+    // nothing (legacy accept).
+    if (!runtime.setCurrentNodeId(202) || runtime.currentNodeId() != 202) {
+        std::cerr << "StoryRuntime rejected a valid node id" << std::endl;
+        exit(1);
+    }
+    if (runtime.setCurrentNodeId(999) || runtime.currentNodeId() != 999) {
+        std::cerr << "StoryRuntime did not report a dangling node id" << std::endl;
+        exit(1);
+    }
+    StoryRuntime freshRuntime;
+    if (!freshRuntime.setCurrentNodeId(999) || freshRuntime.currentNodeId() != 999) {
+        std::cerr << "StoryRuntime validated against an empty graph" << std::endl;
+        exit(1);
+    }
+    TEST_PASS("StoryRuntime reports dangling cursor ids while preserving the move");
+
     if (!runtime.resetToStart() || runtime.currentNodeId() != 101) {
         std::cerr << "StoryRuntime did not restore the committed start node" << std::endl;
         exit(1);
