@@ -8,6 +8,20 @@
  *  - All functions use the `extern "C"` ABI (no C++ name mangling).
  *  - Engine instances are represented as opaque void* handles.
  *  - Strings are passed as null-terminated const char* (UTF-8).
+ *
+ * Threading contract (B3b/K3 — worker-dispatch model):
+ *  - One owner thread per handle. The first Init call claims the handle for
+ *    the calling thread; every later call from another thread fails closed
+ *    (INVALID_HANDLE / empty / 0 return, the engine object is untouched).
+ *  - Shutdown/Destroy from a non-owner thread have no effect. Destroyed
+ *    records are retained until process exit, so a stale handle can never
+ *    become valid again through address reuse (retention, not generations).
+ *  - Hosts must serialize all calls for one handle onto its owner thread.
+ *    The editor does this via OffscreenRuntimeWorker dispatch; standalone
+ *    runtimes stay on their host UI/event thread. Concurrent Init of several
+ *    engines from several threads is NOT a supported topology.
+ *  - Subsystem-internal locks (VFS, logger, audio, save, prefetch window)
+ *    guard shared state inside one engine; they do not lift handle affinity.
  *  - No C++ types, templates, or exceptions cross the boundary.
  */
 
