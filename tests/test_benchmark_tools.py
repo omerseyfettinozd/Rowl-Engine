@@ -132,6 +132,42 @@ with tempfile.TemporaryDirectory() as directory:
     if ci_warning.returncode != 0 or "WARNING" not in ci_warning.stdout:
         raise SystemExit("CI boundary +25% regression did not warn with exit 0")
 
+    # A1-fix (B4): sub-floor big-percent noise must NOT breach. Mirrors the
+    # three consecutive CI reds (vfs_io +50..95% at +5..10µs absolute).
+    floor_baseline = directory / "floor-baseline.json"
+    floor_report = report()
+    floor_report["metrics"]["vfs_io"]["avg_ms"] = 0.010799
+    floor_report["metrics"]["json_update"]["avg_ms"] = 0.189400
+    floor_baseline.write_text(json.dumps(floor_report), encoding="utf-8")
+    floor_candidate = directory / "floor-candidate.json"
+    floor_candidate_report = report()
+    floor_candidate_report["metrics"]["vfs_io"]["avg_ms"] = 0.021041  # +94.8%, +10µs
+    floor_candidate_report["metrics"]["json_update"]["avg_ms"] = 0.287375  # +51.7%, +98µs
+    floor_candidate.write_text(json.dumps(floor_candidate_report), encoding="utf-8")
+    floor_pass = subprocess.run(
+        [sys.executable, str(TOOL), str(floor_baseline), str(floor_candidate),
+         "--warn-percent", "20", "--fail-percent", "35"],
+        capture_output=True, text=True, check=False)
+    if floor_pass.returncode != 0:
+        raise SystemExit("sub-floor host noise breached the fail gate "
+                         f"(exit {floor_pass.returncode}): {floor_pass.stderr.strip()}")
+
+    # Tripwire proof (bilerek-boz): a REAL regression clearing both the
+    # percent gate and the absolute floor must still breach with exit 2.
+    trip_baseline = directory / "trip-baseline.json"
+    trip_baseline.write_text(json.dumps(floor_report), encoding="utf-8")
+    trip_candidate = directory / "trip-candidate.json"
+    trip_candidate_report = report()
+    trip_candidate_report["metrics"]["vfs_io"]["avg_ms"] = 0.010799
+    trip_candidate_report["metrics"]["json_update"]["avg_ms"] = 0.189400 * 3.0  # +200%, +379µs
+    trip_candidate.write_text(json.dumps(trip_candidate_report), encoding="utf-8")
+    trip_breach = subprocess.run(
+        [sys.executable, str(TOOL), str(trip_baseline), str(trip_candidate),
+         "--warn-percent", "20", "--fail-percent", "35"],
+        capture_output=True, text=True, check=False)
+    if trip_breach.returncode != 2 or "json_update.avg_ms" not in trip_breach.stderr:
+        raise SystemExit("genuine 3x json_update regression did not breach the fail gate")
+
     editor_baseline = directory / "editor-baseline.json"
     editor_candidate = directory / "editor-candidate.json"
     editor_incompatible = directory / "editor-incompatible.json"

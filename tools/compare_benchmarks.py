@@ -19,13 +19,21 @@ import sys
 
 # name -> (document path, higher_is_better). Wall-clock costs regress upward;
 # throughput-style gauges such as FPS regress downward.
+#
+# A1-fix (B4 tur-girdisi, oylu): saf-yüzde kapısı alt-ms metriklerde fiziksel
+# olarak anlamsızdı (10µs tabanda %50 = +5µs → kırmızı). Her metriğin MUTLAK
+# tabanı (native birim) var: ihlal için hem yüzde eşiği HEM mutlak taban
+# aşılmalı. Tabanlar, 3 üst-üste gürültü-kırmızısının gözlenen host-farkını
+# (vfs +10µs, json +199µs, steady +1.5µs, first-frame +59ms) kapsar; gerçek
+# regresyonlar (alttaki testlerde 2-3x) hâlâ yakalanır. min-of-3 örnekleme
+# takip-işi (B4): tek-örnek ölçüm hâlâ koşu-içi varyansa açık.
 METRICS = {
-    "first_frame_ms": (("metrics", "first_frame_ms"), False),
-    "steady_frame_ms": (("metrics", "steady_frame_ms"), False),
-    "transition_fps": (("metrics", "transition_fps"), True),
-    "vfs_io.avg_ms": (("metrics", "vfs_io", "avg_ms"), False),
-    "json_update.avg_ms": (("metrics", "json_update", "avg_ms"), False),
-    "process_memory_bytes": (("metrics", "process_memory_bytes"), False),
+    "first_frame_ms": (("metrics", "first_frame_ms"), False, 75.0),
+    "steady_frame_ms": (("metrics", "steady_frame_ms"), False, 0.010),
+    "transition_fps": (("metrics", "transition_fps"), True, 5.0),
+    "vfs_io.avg_ms": (("metrics", "vfs_io", "avg_ms"), False, 0.050),
+    "json_update.avg_ms": (("metrics", "json_update", "avg_ms"), False, 0.250),
+    "process_memory_bytes": (("metrics", "process_memory_bytes"), False, None),
 }
 
 
@@ -80,7 +88,7 @@ def compare(baseline, candidate):
 
     rows = []
     skipped = []
-    for name, (path, higher_is_better) in METRICS.items():
+    for name, (path, higher_is_better, abs_floor) in METRICS.items():
         before = value_at(baseline, path)
         after = value_at(candidate, path)
         if before is None or after is None:
@@ -91,8 +99,14 @@ def compare(baseline, candidate):
         delta_percent = ((after - before) / before) * 100.0
         # Regression points the wrong way per metric direction.
         regression = delta_percent if not higher_is_better else -delta_percent
+        abs_delta = abs(after - before)
+        # A regression counts only when it clears BOTH the percent gate and
+        # the absolute floor (None floor = percent-only, e.g. memory bytes).
+        over_floor = abs_floor is None or abs_delta > abs_floor
         rows.append({"metric": name, "baseline": before, "candidate": after,
-                     "delta_percent": delta_percent, "regression_percent": regression})
+                     "delta_percent": delta_percent, "regression_percent": regression,
+                     "abs_delta": abs_delta, "abs_floor": abs_floor,
+                     "counts": bool(over_floor)})
     return {"compatible": True, "environment": base_key, "metrics": rows,
             "skipped": skipped}
 
@@ -131,13 +145,13 @@ def main():
         print(f"  {name}: not present on both sides, skipped")
         print(f"[BenchmarkCompare] WARNING: {name} not present on both sides, skipped")
     breached = [row for row in result["metrics"]
-                if row["regression_percent"] > args.warn_percent]
+                if row["counts"] and row["regression_percent"] > args.warn_percent]
     for row in breached:
         print(f"[BenchmarkCompare] WARNING: {row['metric']} regressed "
               f"{row['regression_percent']:.2f}% (warn at {args.warn_percent:.2f}%)")
     if args.fail_percent is not None:
         failures = [row for row in result["metrics"]
-                    if row["regression_percent"] > args.fail_percent]
+                    if row["counts"] and row["regression_percent"] > args.fail_percent]
         if failures:
             names = ", ".join(row["metric"] for row in failures)
             print(f"[BenchmarkCompare] ERROR: regression threshold breached: {names}",
