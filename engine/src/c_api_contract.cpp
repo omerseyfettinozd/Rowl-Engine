@@ -42,7 +42,7 @@ RowlEngine_ResultCode copyHostPath(
     uint32_t* outRequiredSize, bool profile) {
     if (!isLiveHandle(handle)) return ROWL_RESULT_INVALID_HANDLE;
     return invokeNoexcept<RowlEngine_ResultCode>([&] {
-        auto* engine = toEngine(handle);
+        auto* engine = toEngineChecked(handle);
         if (!engine) return ROWL_RESULT_INVALID_HANDLE;
         const auto path = profile ? engine->getProfileDirectoryPath()
                                   : engine->getSaveDirectoryPath();

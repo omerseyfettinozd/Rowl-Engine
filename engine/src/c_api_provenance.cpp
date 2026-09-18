@@ -75,7 +75,7 @@ RowlEngine_ResultCode RowlEngine_GetAssetProvenanceJson(RowlEngineHandle handle,
     if (pathView.empty()) return ROWL_RESULT_INVALID_ARGUMENT;
     if (!isLiveHandle(handle)) return ROWL_RESULT_INVALID_HANDLE;
     return invokeNoexcept<RowlEngine_ResultCode>([&] {
-        auto* engine = toEngine(handle);
+        auto* engine = toEngineChecked(handle);
         if (!engine) return ROWL_RESULT_INVALID_HANDLE;
         auto* vfs = engine->getVfs();
         if (!vfs) return ROWL_RESULT_UNKNOWN_ERROR;

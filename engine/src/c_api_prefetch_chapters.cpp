@@ -224,7 +224,7 @@ int RowlEngine_IsChapterBoundaryNode(RowlEngineHandle handle, uint64_t nodeId) {
             return runtime.loader.isChapterBoundaryNode(nodeId) ? 1 : 0;
         }
         // Loader henuz beslenmemis: motorun aktif grafigine bak (salt-okunur).
-        auto* engine = toEngine(handle);
+        auto* engine = toEngineChecked(handle);
         if (engine == nullptr) return 0;
         return Rowl::Core::documentChapterBoundary(engine->getStoryGraphDocument(), nodeId)
                    ? 1
@@ -259,7 +259,7 @@ RowlEngine_ResultCode RowlEngine_PrefetchChapterAssets(RowlEngineHandle handle,
     }
     return invokeNoexcept<RowlEngine_ResultCode>([&] {
         PrefetchChapterRuntime& runtime = g_prefetchStates[handle];
-        auto* engine = toEngine(handle);
+        auto* engine = toEngineChecked(handle);
         if (engine == nullptr) return ROWL_RESULT_INVALID_HANDLE;
 
         std::vector<Rowl::Core::PrefetchAsset> assets;
@@ -353,7 +353,7 @@ int RowlEngine_PumpPrefetch(RowlEngineHandle handle, float maxMilliseconds) {
     }
     return invokeNoexcept<int>([&] {
         PrefetchChapterRuntime& runtime = g_prefetchStates[handle];
-        auto* engine = toEngine(handle);
+        auto* engine = toEngineChecked(handle);
         if (engine == nullptr) return 0;
         const std::size_t pumped =
             runtime.prefetch.pump(engine->getVfs(), static_cast<double>(maxMilliseconds));

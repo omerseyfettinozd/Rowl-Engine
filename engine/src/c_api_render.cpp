@@ -16,7 +16,7 @@ void RowlEngine_SetExternalWindowHandle(RowlEngineHandle handle,
                                          uint32_t width,
                                          uint32_t height) {
     if (!isLiveHandle(handle)) return;
-    invokeNoexcept([&] { toEngine(handle)->setExternalWindowHandle(nativeWindowHandle, width, height); });
+    invokeNoexcept([&] { if (auto* checked = toEngineChecked(handle)) checked->setExternalWindowHandle(nativeWindowHandle, width, height); });
 }
 
 void RowlEngine_ResizeViewport(RowlEngineHandle handle,
@@ -24,7 +24,8 @@ void RowlEngine_ResizeViewport(RowlEngineHandle handle,
                                 uint32_t newHeight) {
     if (!isLiveHandle(handle)) return;
     invokeNoexcept([&] {
-        auto* win = toEngine(handle)->getWindow();
+        auto* checked = toEngineChecked(handle);
+        auto* win = checked ? checked->getWindow() : nullptr;
         if (win) win->resizeViewport(newWidth, newHeight);
     });
 }
@@ -44,13 +45,17 @@ const uint8_t* RowlEngine_GetPixelBufferEx(RowlEngineHandle handle,
         if (outPitch) *outPitch = 0;
         return nullptr;
     }
-    return invokeNoexcept<const uint8_t*>([&] { return toEngine(handle)->getPixelBuffer(outW, outH, outPitch); }, nullptr);
+    return invokeNoexcept<const uint8_t*>([&] {
+        auto* checked = toEngineChecked(handle);
+        return checked ? checked->getPixelBuffer(outW, outH, outPitch) : nullptr;
+    }, nullptr);
 }
 
 uint32_t RowlEngine_GetTextureCacheTextureCount(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return 0;
     return invokeNoexcept<uint32_t>([&] {
-        const auto* window = toEngine(handle)->getWindow();
+        auto* checked = toEngineChecked(handle);
+        const auto* window = checked ? checked->getWindow() : nullptr;
         return window ? static_cast<uint32_t>(window->getTextureCacheTextureCount()) : 0;
     }, 0);
 }
@@ -58,7 +63,8 @@ uint32_t RowlEngine_GetTextureCacheTextureCount(RowlEngineHandle handle) {
 uint64_t RowlEngine_GetTextureCacheBytes(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return 0;
     return invokeNoexcept<uint64_t>([&] {
-        const auto* window = toEngine(handle)->getWindow();
+        auto* checked = toEngineChecked(handle);
+        const auto* window = checked ? checked->getWindow() : nullptr;
         return window ? window->getTextureCacheBytes() : 0;
     }, 0);
 }
@@ -66,7 +72,8 @@ uint64_t RowlEngine_GetTextureCacheBytes(RowlEngineHandle handle) {
 uint64_t RowlEngine_GetTextureCacheBudgetBytes(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return 0;
     return invokeNoexcept<uint64_t>([&] {
-        const auto* window = toEngine(handle)->getWindow();
+        auto* checked = toEngineChecked(handle);
+        const auto* window = checked ? checked->getWindow() : nullptr;
         return window ? window->getTextureCacheBudgetBytes() : 0;
     }, 0);
 }
@@ -74,7 +81,8 @@ uint64_t RowlEngine_GetTextureCacheBudgetBytes(RowlEngineHandle handle) {
 uint64_t RowlEngine_GetTextureCacheEvictionCount(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return 0;
     return invokeNoexcept<uint64_t>([&] {
-        const auto* window = toEngine(handle)->getWindow();
+        auto* checked = toEngineChecked(handle);
+        const auto* window = checked ? checked->getWindow() : nullptr;
         return window ? window->getTextureCacheEvictionCount() : 0;
     }, 0);
 }
@@ -82,7 +90,8 @@ uint64_t RowlEngine_GetTextureCacheEvictionCount(RowlEngineHandle handle) {
 double RowlEngine_GetLastFrameTextureLoadMilliseconds(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return 0.0;
     return invokeNoexcept<double>([&] {
-        const auto* window = toEngine(handle)->getWindow();
+        auto* checked = toEngineChecked(handle);
+        const auto* window = checked ? checked->getWindow() : nullptr;
         return window ? window->getLastFrameTextureLoadMilliseconds() : 0.0;
     }, 0.0);
 }
@@ -90,7 +99,8 @@ double RowlEngine_GetLastFrameTextureLoadMilliseconds(RowlEngineHandle handle) {
 double RowlEngine_GetLastFrameNonTextureRenderMilliseconds(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return 0.0;
     return invokeNoexcept<double>([&] {
-        const auto* window = toEngine(handle)->getWindow();
+        auto* checked = toEngineChecked(handle);
+        const auto* window = checked ? checked->getWindow() : nullptr;
         return window ? window->getLastFrameNonTextureRenderMilliseconds() : 0.0;
     }, 0.0);
 }
@@ -98,7 +108,8 @@ double RowlEngine_GetLastFrameNonTextureRenderMilliseconds(RowlEngineHandle hand
 double RowlEngine_GetLastFrameTextRasterizationMilliseconds(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return 0.0;
     return invokeNoexcept<double>([&] {
-        const auto* window = toEngine(handle)->getWindow();
+        auto* checked = toEngineChecked(handle);
+        const auto* window = checked ? checked->getWindow() : nullptr;
         return window ? window->getLastFrameTextRasterizationMilliseconds() : 0.0;
     }, 0.0);
 }
@@ -106,7 +117,8 @@ double RowlEngine_GetLastFrameTextRasterizationMilliseconds(RowlEngineHandle han
 double RowlEngine_GetLastFrameRendererFlushMilliseconds(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return 0.0;
     return invokeNoexcept<double>([&] {
-        const auto* window = toEngine(handle)->getWindow();
+        auto* checked = toEngineChecked(handle);
+        const auto* window = checked ? checked->getWindow() : nullptr;
         return window ? window->getLastFrameRendererFlushMilliseconds() : 0.0;
     }, 0.0);
 }
@@ -114,19 +126,20 @@ double RowlEngine_GetLastFrameRendererFlushMilliseconds(RowlEngineHandle handle)
 void RowlEngine_SetTextureCacheBudgetBytes(RowlEngineHandle handle, uint64_t bytes) {
     if (!isLiveHandle(handle)) return;
     invokeNoexcept([&] {
-        auto* window = toEngine(handle)->getWindow();
+        auto* checked = toEngineChecked(handle);
+        auto* window = checked ? checked->getWindow() : nullptr;
         if (window) window->setTextureCacheBudgetBytes(bytes);
     });
 }
 
 void RowlEngine_SetPlayState(RowlEngineHandle handle, int isPlaying) {
     if (!isLiveHandle(handle)) return;
-    invokeNoexcept([&] { toEngine(handle)->setPlayState(isPlaying != 0); });
+    invokeNoexcept([&] { if (auto* checked = toEngineChecked(handle)) checked->setPlayState(isPlaying != 0); });
 }
 
 void RowlEngine_ResetToStartNode(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return;
-    invokeNoexcept([&] { toEngine(handle)->resetToStartNode(); });
+    invokeNoexcept([&] { if (auto* checked = toEngineChecked(handle)) checked->resetToStartNode(); });
 }
 
 /* ── Transitions, camera & screen FX ────────────────────────────────────────── */
@@ -136,14 +149,15 @@ void RowlEngine_StartTransition(RowlEngineHandle handle, const char* kind, float
     invokeNoexcept([&] {
         std::string k = kind ? kind : "crossfade";
         std::string c = colorHex ? colorHex : "";
-        toEngine(handle)->startTransition(k, durationSeconds, c);
+        if (auto* checked = toEngineChecked(handle)) checked->startTransition(k, durationSeconds, c);
     });
 }
 
 int RowlEngine_IsTransitionActive(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return 0;
     return invokeNoexcept<int>([&] {
-        return toEngine(handle)->isTransitionActive() ? 1 : 0;
+        auto* checked = toEngineChecked(handle);
+        return (checked && checked->isTransitionActive()) ? 1 : 0;
     }, 0);
 }
 
@@ -152,14 +166,16 @@ int RowlEngine_IsPreviewFrameStatic(RowlEngineHandle handle) {
     // hosts fall back to the pre-MS-4 copy-every-frame behavior.
     if (!isLiveHandle(handle)) return 0;
     return invokeNoexcept<int>([&] {
-        return toEngine(handle)->isPreviewFrameStatic() ? 1 : 0;
+        auto* checked = toEngineChecked(handle);
+        return (checked && checked->isPreviewFrameStatic()) ? 1 : 0;
     }, 0);
 }
 
 void RowlEngine_SetCamera(RowlEngineHandle handle, float x, float y, float zoom) {
     if (!isLiveHandle(handle)) return;
     invokeNoexcept([&] {
-        auto* cam = toEngine(handle)->getCamera();
+        auto* checked = toEngineChecked(handle);
+        auto* cam = checked ? checked->getCamera() : nullptr;
         if (cam) {
             cam->setPosition(x, y);
             cam->setZoom(zoom);
@@ -170,7 +186,8 @@ void RowlEngine_SetCamera(RowlEngineHandle handle, float x, float y, float zoom)
 void RowlEngine_TriggerCameraShake(RowlEngineHandle handle, float intensity, float durationSeconds) {
     if (!isLiveHandle(handle)) return;
     invokeNoexcept([&] {
-        auto* cam = toEngine(handle)->getCamera();
+        auto* checked = toEngineChecked(handle);
+        auto* cam = checked ? checked->getCamera() : nullptr;
         if (cam) {
             cam->shake(intensity, durationSeconds);
         }
@@ -180,7 +197,8 @@ void RowlEngine_TriggerCameraShake(RowlEngineHandle handle, float intensity, flo
 void RowlEngine_ResetCamera(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return;
     invokeNoexcept([&] {
-        auto* cam = toEngine(handle)->getCamera();
+        auto* checked = toEngineChecked(handle);
+        auto* cam = checked ? checked->getCamera() : nullptr;
         if (cam) {
             cam->reset();
         }
@@ -201,7 +219,8 @@ static Rowl::Render::CameraEasing mapEasing(int easingType) {
 void RowlEngine_CameraPanTo(RowlEngineHandle handle, float targetX, float targetY, float durationSeconds, int easingType) {
     if (!isLiveHandle(handle)) return;
     invokeNoexcept([&] {
-        auto* cam = toEngine(handle)->getCamera();
+        auto* checked = toEngineChecked(handle);
+        auto* cam = checked ? checked->getCamera() : nullptr;
         if (cam) {
             cam->panTo(targetX, targetY, durationSeconds, mapEasing(easingType));
         }
@@ -211,7 +230,8 @@ void RowlEngine_CameraPanTo(RowlEngineHandle handle, float targetX, float target
 void RowlEngine_CameraZoomTo(RowlEngineHandle handle, float targetZoom, float durationSeconds, int easingType) {
     if (!isLiveHandle(handle)) return;
     invokeNoexcept([&] {
-        auto* cam = toEngine(handle)->getCamera();
+        auto* checked = toEngineChecked(handle);
+        auto* cam = checked ? checked->getCamera() : nullptr;
         if (cam) {
             cam->zoomTo(targetZoom, durationSeconds, mapEasing(easingType));
         }
@@ -221,7 +241,8 @@ void RowlEngine_CameraZoomTo(RowlEngineHandle handle, float targetZoom, float du
 int RowlEngine_IsCameraMoving(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return 0;
     return invokeNoexcept<int>([&] {
-        const auto* cam = toEngine(handle)->getCamera();
+        auto* checked = toEngineChecked(handle);
+        const auto* cam = checked ? checked->getCamera() : nullptr;
         return (cam && cam->isMoving()) ? 1 : 0;
     }, 0);
 }
@@ -229,28 +250,30 @@ int RowlEngine_IsCameraMoving(RowlEngineHandle handle) {
 void RowlEngine_TriggerCameraShakePreset(RowlEngineHandle handle, const char* presetName, float intensityMultiplier, float durationSeconds) {
     if (!isLiveHandle(handle)) return;
     invokeNoexcept([&] {
-        toEngine(handle)->triggerCameraShakePreset(presetName ? presetName : "subtle", intensityMultiplier, durationSeconds);
+        if (auto* checked = toEngineChecked(handle)) checked->triggerCameraShakePreset(presetName ? presetName : "subtle", intensityMultiplier, durationSeconds);
     });
 }
 
 void RowlEngine_TriggerCameraShakeProfile(RowlEngineHandle handle, float intensity, float durationSeconds, float frequency, float damping, float dirX, float dirY) {
     if (!isLiveHandle(handle)) return;
     invokeNoexcept([&] {
-        toEngine(handle)->triggerCameraShakeProfile(intensity, durationSeconds, frequency, damping, dirX, dirY);
+        if (auto* checked = toEngineChecked(handle)) checked->triggerCameraShakeProfile(intensity, durationSeconds, frequency, damping, dirX, dirY);
     });
 }
 
 float RowlEngine_GetCameraShakeOffsetX(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return 0.0f;
     return invokeNoexcept<float>([&] {
-        return toEngine(handle)->getCameraShakeOffsetX();
+        auto* checked = toEngineChecked(handle);
+        return checked ? checked->getCameraShakeOffsetX() : 0.0f;
     }, 0.0f);
 }
 
 float RowlEngine_GetCameraShakeOffsetY(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return 0.0f;
     return invokeNoexcept<float>([&] {
-        return toEngine(handle)->getCameraShakeOffsetY();
+        auto* checked = toEngineChecked(handle);
+        return checked ? checked->getCameraShakeOffsetY() : 0.0f;
     }, 0.0f);
 }
 
@@ -258,7 +281,8 @@ float RowlEngine_GetCameraShakeOffsetY(RowlEngineHandle handle) {
 // The camera owns the flag; both flash entry points consult it here so
 // engine.cpp and window.cpp stay untouched.
 static bool reducedMotionActive(RowlEngineHandle handle) {
-    const auto* cam = toEngine(handle)->getCamera();
+    auto* checked = toEngineChecked(handle);
+    const auto* cam = checked ? checked->getCamera() : nullptr;
     return cam && cam->reducedMotion();
 }
 
@@ -266,7 +290,7 @@ void RowlEngine_TriggerScreenFlash(RowlEngineHandle handle, uint8_t r, uint8_t g
     if (!isLiveHandle(handle)) return;
     invokeNoexcept([&] {
         if (reducedMotionActive(handle)) return;
-        toEngine(handle)->triggerScreenFlash(r, g, b, durationSeconds, intensity);
+        if (auto* checked = toEngineChecked(handle)) checked->triggerScreenFlash(r, g, b, durationSeconds, intensity);
     });
 }
 
@@ -274,56 +298,59 @@ void RowlEngine_TriggerScreenFlashHex(RowlEngineHandle handle, const char* color
     if (!isLiveHandle(handle)) return;
     invokeNoexcept([&] {
         if (reducedMotionActive(handle)) return;
-        toEngine(handle)->triggerScreenFlashHex(colorHex ? colorHex : "#FFFFFF", durationSeconds, intensity);
+        if (auto* checked = toEngineChecked(handle)) checked->triggerScreenFlashHex(colorHex ? colorHex : "#FFFFFF", durationSeconds, intensity);
     });
 }
 
 int RowlEngine_IsScreenFlashActive(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return 0;
     return invokeNoexcept<int>([&] {
-        return toEngine(handle)->isScreenFlashActive() ? 1 : 0;
+        auto* checked = toEngineChecked(handle);
+        return (checked && checked->isScreenFlashActive()) ? 1 : 0;
     }, 0);
 }
 
 void RowlEngine_SetScreenTint(RowlEngineHandle handle, uint8_t r, uint8_t g, uint8_t b, float opacity) {
     if (!isLiveHandle(handle)) return;
     invokeNoexcept([&] {
-        toEngine(handle)->setScreenTint(r, g, b, opacity);
+        if (auto* checked = toEngineChecked(handle)) checked->setScreenTint(r, g, b, opacity);
     });
 }
 
 void RowlEngine_SetScreenTintHex(RowlEngineHandle handle, const char* colorHex, float opacity) {
     if (!isLiveHandle(handle)) return;
     invokeNoexcept([&] {
-        toEngine(handle)->setScreenTintHex(colorHex ? colorHex : "", opacity);
+        if (auto* checked = toEngineChecked(handle)) checked->setScreenTintHex(colorHex ? colorHex : "", opacity);
     });
 }
 
 void RowlEngine_ClearScreenTint(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return;
     invokeNoexcept([&] {
-        toEngine(handle)->clearScreenTint();
+        if (auto* checked = toEngineChecked(handle)) checked->clearScreenTint();
     });
 }
 
 float RowlEngine_GetScreenTintOpacity(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return 0.0f;
     return invokeNoexcept<float>([&] {
-        return toEngine(handle)->getScreenTintOpacity();
+        auto* checked = toEngineChecked(handle);
+        return checked ? checked->getScreenTintOpacity() : 0.0f;
     }, 0.0f);
 }
 
 void RowlEngine_SetVignette(RowlEngineHandle handle, float intensity, float radius, const char* colorHex) {
     if (!isLiveHandle(handle)) return;
     invokeNoexcept([&] {
-        toEngine(handle)->setVignette(intensity, radius, colorHex ? colorHex : "#000000");
+        if (auto* checked = toEngineChecked(handle)) checked->setVignette(intensity, radius, colorHex ? colorHex : "#000000");
     });
 }
 
 float RowlEngine_GetVignetteIntensity(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return 0.0f;
     return invokeNoexcept<float>([&] {
-        return toEngine(handle)->getVignetteIntensity();
+        auto* checked = toEngineChecked(handle);
+        return checked ? checked->getVignetteIntensity() : 0.0f;
     }, 0.0f);
 }
 

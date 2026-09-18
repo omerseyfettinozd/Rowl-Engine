@@ -130,7 +130,8 @@ int RowlEngine_Init(RowlEngineHandle handle,
         cfg.virtualHeight = virtualHeight;
         cfg.vsync         = (vsync != 0);
         cfg.isIpcMode     = false; // IPC artık yok — tek süreç
-        return toEngine(handle)->initialize(cfg) ? 1 : 0;
+        auto* checked = toEngineChecked(handle);
+        return (checked && checked->initialize(cfg)) ? 1 : 0;
     }, 0);
 }
 
@@ -148,28 +149,32 @@ int RowlEngine_InitStandalone(RowlEngineHandle handle,
         cfg.virtualHeight    = virtualHeight > 0 ? virtualHeight : 1080;
         cfg.vsync            = (vsync != 0);
         cfg.standaloneWindow = true;
-        return toEngine(handle)->initialize(cfg) ? 1 : 0;
+        auto* checked = toEngineChecked(handle);
+        return (checked && checked->initialize(cfg)) ? 1 : 0;
     }, 0);
 }
 
 void RowlEngine_Run(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return;
-    invokeNoexcept([&] { toEngine(handle)->run(); });
+    invokeNoexcept([&] { if (auto* checked = toEngineChecked(handle)) checked->run(); });
 }
 
 void RowlEngine_Step(RowlEngineHandle handle, float deltaTime) {
     if (!isLiveHandle(handle)) return;
-    invokeNoexcept([&] { toEngine(handle)->step(deltaTime); });
+    invokeNoexcept([&] { if (auto* checked = toEngineChecked(handle)) checked->step(deltaTime); });
 }
 
 void RowlEngine_Shutdown(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return;
-    invokeNoexcept([&] { toEngine(handle)->shutdown(); });
+    invokeNoexcept([&] { if (auto* checked = toEngineChecked(handle)) checked->shutdown(); });
 }
 
 int RowlEngine_IsRunning(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return 0;
-    return invokeNoexcept<int>([&] { return toEngine(handle)->isRunning() ? 1 : 0; }, 0);
+    return invokeNoexcept<int>([&] {
+        auto* checked = toEngineChecked(handle);
+        return (checked && checked->isRunning()) ? 1 : 0;
+    }, 0);
 }
 
 } // extern "C"

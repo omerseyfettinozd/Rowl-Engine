@@ -30,7 +30,7 @@ void RowlEngine_UpdateScene(
     float dlgX,  float dlgY,  float dlgW,  float dlgH)
 {
     if (!isLiveHandle(handle)) return;
-    invokeNoexcept([&] { toEngine(handle)->updateActiveScene(
+    invokeNoexcept([&] { if (auto* checked = toEngineChecked(handle)) checked->updateActiveScene(
         speaker    ? speaker    : "",
         dialogue   ? dialogue   : "",
         background ? background : "",
@@ -52,7 +52,7 @@ void RowlEngine_UpdateSceneEx(
     float dlgX,  float dlgY,  float dlgW,  float dlgH)
 {
     if (!isLiveHandle(handle)) return;
-    invokeNoexcept([&] { toEngine(handle)->updateActiveScene(
+    invokeNoexcept([&] { if (auto* checked = toEngineChecked(handle)) checked->updateActiveScene(
         speaker    ? speaker    : "",
         dialogue   ? dialogue   : "",
         background ? background : "",
@@ -71,14 +71,14 @@ void RowlEngine_UpdateSceneFromJson(
     if (!isLiveHandle(handle) || !componentsJson) return;
     // A2a-tur2: explicit string — const char* is convertible to both the
     // string and the JSON overloads (ambiguous otherwise).
-    invokeNoexcept([&] { toEngine(handle)->updateSceneFromComponents(std::string(componentsJson)); });
+    invokeNoexcept([&] { if (auto* checked = toEngineChecked(handle)) checked->updateSceneFromComponents(std::string(componentsJson)); });
 }
 
 void RowlEngine_LoadStoryGraph(RowlEngineHandle handle, const char* jsonPath) {
     if (!isLiveHandle(handle)) return;
     if (!jsonPath || !*jsonPath) {
         invokeNoexcept([&] {
-            if (auto* engine = toEngine(handle)) {
+            if (auto* engine = toEngineChecked(handle)) {
                 if (auto ctx = engine->getContext()) {
                     ctx->setError(Rowl::Core::RuntimeErrorCode::InvalidArgument,
                                   "Story graph path is null or empty",
@@ -90,7 +90,7 @@ void RowlEngine_LoadStoryGraph(RowlEngineHandle handle, const char* jsonPath) {
     }
     // Engine'in path'i geçici olarak override et ve graph'i yükle
     invokeNoexcept([&] {
-        if (auto* engine = toEngine(handle)) {
+        if (auto* engine = toEngineChecked(handle)) {
             engine->loadStoryGraphFromPath(jsonPath);
         }
     });
@@ -100,7 +100,7 @@ int RowlEngine_LoadStoryGraphFromVfs(RowlEngineHandle handle, const char* vfsPat
     if (!isLiveHandle(handle)) return 0;
     if (!vfsPath || !*vfsPath) {
         invokeNoexcept([&] {
-            if (auto* engine = toEngine(handle)) {
+            if (auto* engine = toEngineChecked(handle)) {
                 if (auto ctx = engine->getContext()) {
                     ctx->setError(Rowl::Core::RuntimeErrorCode::InvalidArgument,
                                   "Story graph VFS path is null or empty",
@@ -112,7 +112,7 @@ int RowlEngine_LoadStoryGraphFromVfs(RowlEngineHandle handle, const char* vfsPat
     }
     int loaded = 0;
     invokeNoexcept([&] {
-        if (auto* engine = toEngine(handle)) {
+        if (auto* engine = toEngineChecked(handle)) {
             loaded = engine->loadStoryGraphFromVfs(vfsPath) ? 1 : 0;
         }
     });
@@ -123,7 +123,7 @@ const char* RowlEngine_GetLastStoryGraphError(RowlEngineHandle handle) {
     static thread_local std::string buffer;
     buffer.clear();
     if (!isLiveHandle(handle)) return buffer.c_str();
-    invokeNoexcept([&] { buffer = toEngine(handle)->getLastStoryGraphLoadError(); });
+    invokeNoexcept([&] { auto* checked = toEngineChecked(handle); buffer = checked ? checked->getLastStoryGraphLoadError() : ""; });
     return buffer.c_str();
 }
 
@@ -162,7 +162,7 @@ RowlEngine_ResultCode RowlEngine_GetCurrentChapterIdUtf8(
     uint32_t* outRequiredSize) {
     if (!isLiveHandle(handle)) return ROWL_RESULT_INVALID_HANDLE;
     return invokeNoexcept<RowlEngine_ResultCode>([&] {
-        auto* engine = toEngine(handle);
+        auto* engine = toEngineChecked(handle);
         if (!engine) return ROWL_RESULT_INVALID_HANDLE;
         return copyUtf8ToCaller(engine->getCurrentChapterId(), buffer,
                                 bufferSize, outRequiredSize);
@@ -174,7 +174,7 @@ RowlEngine_ResultCode RowlEngine_GetChapterCount(
     if (!isLiveHandle(handle)) return ROWL_RESULT_INVALID_HANDLE;
     if (!outCount) return ROWL_RESULT_INVALID_ARGUMENT;
     return invokeNoexcept<RowlEngine_ResultCode>([&] {
-        auto* engine = toEngine(handle);
+        auto* engine = toEngineChecked(handle);
         if (!engine) return ROWL_RESULT_INVALID_HANDLE;
         const auto chapters = engine->getStoryGraphDocument().chapters.size();
         *outCount = static_cast<uint32_t>(chapters);
@@ -187,7 +187,7 @@ RowlEngine_ResultCode RowlEngine_GetChapterIdAtUtf8(
     uint32_t bufferSize, uint32_t* outRequiredSize) {
     if (!isLiveHandle(handle)) return ROWL_RESULT_INVALID_HANDLE;
     return invokeNoexcept<RowlEngine_ResultCode>([&] {
-        auto* engine = toEngine(handle);
+        auto* engine = toEngineChecked(handle);
         if (!engine) return ROWL_RESULT_INVALID_HANDLE;
         const auto ordered = orderedChapters(engine);
         if (index >= ordered.size()) return ROWL_RESULT_INVALID_ARGUMENT;
@@ -199,7 +199,7 @@ RowlEngine_ResultCode RowlEngine_GetChapterIdAtUtf8(
 uint32_t RowlEngine_GetChoiceCount(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return 0;
     return invokeNoexcept<uint32_t>([&] {
-        auto* engine = toEngine(handle);
+        auto* engine = toEngineChecked(handle);
         if (!engine) return static_cast<uint32_t>(0);
         return static_cast<uint32_t>(engine->getActiveChoiceButtons().size());
     }, 0);
@@ -210,7 +210,7 @@ RowlEngine_ResultCode RowlEngine_GetChoiceLabelAtUtf8(
     uint32_t bufferSize, uint32_t* outRequiredSize) {
     if (!isLiveHandle(handle)) return ROWL_RESULT_INVALID_HANDLE;
     return invokeNoexcept<RowlEngine_ResultCode>([&] {
-        auto* engine = toEngine(handle);
+        auto* engine = toEngineChecked(handle);
         if (!engine) return ROWL_RESULT_INVALID_HANDLE;
         const auto& buttons = engine->getActiveChoiceButtons();
         if (index >= buttons.size()) return ROWL_RESULT_INVALID_ARGUMENT;
@@ -224,7 +224,7 @@ RowlEngine_ResultCode RowlEngine_GetChoiceOptionIdAtUtf8(
     uint32_t bufferSize, uint32_t* outRequiredSize) {
     if (!isLiveHandle(handle)) return ROWL_RESULT_INVALID_HANDLE;
     return invokeNoexcept<RowlEngine_ResultCode>([&] {
-        auto* engine = toEngine(handle);
+        auto* engine = toEngineChecked(handle);
         if (!engine) return ROWL_RESULT_INVALID_HANDLE;
         const auto& buttons = engine->getActiveChoiceButtons();
         if (index >= buttons.size()) return ROWL_RESULT_INVALID_ARGUMENT;
@@ -238,7 +238,7 @@ RowlEngine_ResultCode RowlEngine_GetActiveDialogueContentIdsJson(
     uint32_t* outRequiredSize) {
     if (!isLiveHandle(handle)) return ROWL_RESULT_INVALID_HANDLE;
     return invokeNoexcept<RowlEngine_ResultCode>([&] {
-        auto* engine = toEngine(handle);
+        auto* engine = toEngineChecked(handle);
         if (!engine) return ROWL_RESULT_INVALID_HANDLE;
         nlohmann::json ids = nlohmann::json::array();
         for (const auto& dialogue : engine->getActiveDialogues()) {
@@ -252,7 +252,7 @@ RowlEngine_ResultCode RowlEngine_GetActiveDialogueContentIdsJson(
 void RowlEngine_SetProjectDirectory(RowlEngineHandle handle, const char* projectRoot) {
     if (!isLiveHandle(handle) || !projectRoot || !*projectRoot) return;
     invokeNoexcept([&] {
-        auto* engine = toEngine(handle);
+        auto* engine = toEngineChecked(handle);
         // Save slots belong to the selected game/project. This prevents an
         // embedded editor preview or another standalone game from sharing the
         // process-relative default "saves" directory.
@@ -317,24 +317,24 @@ void RowlEngine_SetProjectDirectory(RowlEngineHandle handle, const char* project
 
 void RowlEngine_SetBgmTransitionDefaults(RowlEngineHandle handle, const char* transition, float durationSeconds) {
     if (!isLiveHandle(handle)) return;
-    invokeNoexcept([&] { toEngine(handle)->setBgmTransitionDefaults(transition ? transition : "instant", durationSeconds); });
+    invokeNoexcept([&] { if (auto* checked = toEngineChecked(handle)) checked->setBgmTransitionDefaults(transition ? transition : "instant", durationSeconds); });
 }
 
 void RowlEngine_AdvanceNode(RowlEngineHandle handle, uint32_t choiceIndex) {
     if (!isLiveHandle(handle)) return;
-    invokeNoexcept([&] { toEngine(handle)->advanceToNextNode(choiceIndex); });
+    invokeNoexcept([&] { if (auto* checked = toEngineChecked(handle)) checked->advanceToNextNode(choiceIndex); });
 }
 
 int RowlEngine_SelectChoice(RowlEngineHandle handle, const char* optionId) {
     if (!isLiveHandle(handle) || !optionId || !*optionId) return 0;
-    return invokeNoexcept<int>([&] { return toEngine(handle)->advanceToChoice(optionId) ? 1 : 0; }, 0);
+    return invokeNoexcept<int>([&] { auto* checked = toEngineChecked(handle); return (checked && checked->advanceToChoice(optionId)) ? 1 : 0; }, 0);
 }
 
 int RowlEngine_PointerDown(RowlEngineHandle handle, float x, float y) {
     if (!isLiveHandle(handle)) return 0;
     // Editor supplies 1920x1080 virtual coordinates; the engine's offscreen
     // surface is the same size, so the shared hit-test path remains canonical.
-    return invokeNoexcept<int>([&] { return toEngine(handle)->handlePointerDown(x, y) ? 1 : 0; }, 0);
+    return invokeNoexcept<int>([&] { auto* checked = toEngineChecked(handle); return (checked && checked->handlePointerDown(x, y)) ? 1 : 0; }, 0);
 }
 
 /* ── State queries ───────────────────────────────────────────────────────── */
@@ -344,7 +344,8 @@ const char* RowlEngine_GetSpeaker(RowlEngineHandle handle) {
     // Returned pointer is valid until next step/update — owned by engine
     static thread_local std::string buf;
     return invokeNoexcept<const char*>([&] {
-        buf = toEngine(handle)->getActiveSpeaker();
+        auto* checked = toEngineChecked(handle);
+        buf = checked ? checked->getActiveSpeaker() : "";
         return buf.c_str();
     }, "");
 }
@@ -353,7 +354,8 @@ const char* RowlEngine_GetDialogue(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return "";
     static thread_local std::string buf;
     return invokeNoexcept<const char*>([&] {
-        buf = toEngine(handle)->getActiveDialogue();
+        auto* checked = toEngineChecked(handle);
+        buf = checked ? checked->getActiveDialogue() : "";
         return buf.c_str();
     }, "");
 }
@@ -372,37 +374,37 @@ const char* RowlEngine_GetDialogueWithLength(RowlEngineHandle handle, uint32_t* 
 
 uint64_t RowlEngine_GetCurrentNodeId(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return 0;
-    return invokeNoexcept<uint64_t>([&] { return toEngine(handle)->getCurrentNodeId(); }, 0);
+    return invokeNoexcept<uint64_t>([&] { auto* checked = toEngineChecked(handle); return checked ? checked->getCurrentNodeId() : 0; }, 0);
 }
 
 float RowlEngine_GetBackgroundRotation(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return 0.0f;
-    return invokeNoexcept<float>([&] { return toEngine(handle)->getActiveBackgroundRotation(); }, 0.0f);
+    return invokeNoexcept<float>([&] { auto* checked = toEngineChecked(handle); return checked ? checked->getActiveBackgroundRotation() : 0.0f; }, 0.0f);
 }
 
 void RowlEngine_SetBackgroundParallax(RowlEngineHandle handle, float parallaxX, float parallaxY) {
     if (!isLiveHandle(handle)) return;
-    invokeNoexcept([&] { toEngine(handle)->setBackgroundParallax(parallaxX, parallaxY); });
+    invokeNoexcept([&] { if (auto* checked = toEngineChecked(handle)) checked->setBackgroundParallax(parallaxX, parallaxY); });
 }
 
 float RowlEngine_GetBackgroundParallaxX(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return 1.0f;
-    return invokeNoexcept<float>([&] { return toEngine(handle)->getActiveBackgroundParallaxX(); }, 1.0f);
+    return invokeNoexcept<float>([&] { auto* checked = toEngineChecked(handle); return checked ? checked->getActiveBackgroundParallaxX() : 1.0f; }, 1.0f);
 }
 
 float RowlEngine_GetBackgroundParallaxY(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return 1.0f;
-    return invokeNoexcept<float>([&] { return toEngine(handle)->getActiveBackgroundParallaxY(); }, 1.0f);
+    return invokeNoexcept<float>([&] { auto* checked = toEngineChecked(handle); return checked ? checked->getActiveBackgroundParallaxY() : 1.0f; }, 1.0f);
 }
 
 float RowlEngine_GetBackgroundOpacity(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return 1.0f;
-    return invokeNoexcept<float>([&] { return toEngine(handle)->getActiveBackgroundOpacity(); }, 1.0f);
+    return invokeNoexcept<float>([&] { auto* checked = toEngineChecked(handle); return checked ? checked->getActiveBackgroundOpacity() : 1.0f; }, 1.0f);
 }
 
 float RowlEngine_GetCharacterRotation(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return 0.0f;
-    return invokeNoexcept<float>([&] { return toEngine(handle)->getActiveCharacterRotation(); }, 0.0f);
+    return invokeNoexcept<float>([&] { auto* checked = toEngineChecked(handle); return checked ? checked->getActiveCharacterRotation() : 0.0f; }, 0.0f);
 }
 
 } // extern "C"
