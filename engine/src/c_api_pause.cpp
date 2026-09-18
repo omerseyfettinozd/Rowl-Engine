@@ -88,3 +88,17 @@ const char* RowlEngine_GetPauseMenuJsonWithLength(RowlEngineHandle handle, uint3
     if (outLen) *outLen = static_cast<uint32_t>(std::strlen(value));
     return value;
 }
+
+// B2a: PauseMenu caller-buffer varyantı (dead-handle'da INVALID_HANDLE;
+// eski API "{\"open\":false,\"rows\":[]}" dönerdi, o korunur).
+RowlEngine_ResultCode RowlEngine_GetPauseMenuJsonUtf8(
+    RowlEngineHandle handle, char* buffer, uint32_t bufferSize,
+    uint32_t* outRequiredSize) {
+    if (!isLiveHandle(handle)) return ROWL_RESULT_INVALID_HANDLE;
+    return invokeNoexcept<RowlEngine_ResultCode>([&] {
+        auto* engine = toEngineChecked(handle);
+        if (!engine) return ROWL_RESULT_INVALID_HANDLE;
+        return copyUtf8ToCaller(engine->getPauseMenuJson(), buffer,
+                                bufferSize, outRequiredSize);
+    }, ROWL_RESULT_UNKNOWN_ERROR);
+}

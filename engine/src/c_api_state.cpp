@@ -67,6 +67,49 @@ const char* RowlEngine_GetDialogueHistoryJsonWithLength(RowlEngineHandle handle,
     return value;
 }
 
+// B2a: thread_local ödünç-imza yerine caller-buffer varyantları
+// (additive-only; eski const char* API'ler aynen korunur).
+RowlEngine_ResultCode RowlEngine_GetScriptRuntimeDiagnosticsJsonUtf8(
+    RowlEngineHandle handle, char* buffer, uint32_t bufferSize,
+    uint32_t* outRequiredSize) {
+    if (!isLiveHandle(handle)) return ROWL_RESULT_INVALID_HANDLE;
+    return invokeNoexcept<RowlEngine_ResultCode>([&] {
+        nlohmann::json diagnostics = nlohmann::json::array();
+        auto* engine = toEngineChecked(handle);
+        if (!engine) return ROWL_RESULT_INVALID_HANDLE;
+        for (const auto& status : engine->getScriptRuntimeStatuses()) {
+            diagnostics.push_back({
+                {"module_id", status.moduleId},
+                {"path", status.sourcePath},
+                {"state", status.state},
+                {"error", status.lastError},
+            });
+        }
+        return copyUtf8ToCaller(diagnostics.dump(), buffer,
+                                bufferSize, outRequiredSize);
+    }, ROWL_RESULT_UNKNOWN_ERROR);
+}
+
+RowlEngine_ResultCode RowlEngine_GetDialogueHistoryJsonUtf8(
+    RowlEngineHandle handle, char* buffer, uint32_t bufferSize,
+    uint32_t* outRequiredSize) {
+    if (!isLiveHandle(handle)) return ROWL_RESULT_INVALID_HANDLE;
+    return invokeNoexcept<RowlEngine_ResultCode>([&] {
+        nlohmann::json history = nlohmann::json::array();
+        auto* engine = toEngineChecked(handle);
+        if (!engine) return ROWL_RESULT_INVALID_HANDLE;
+        for (const auto& entry : engine->getDialogueHistory()) {
+            history.push_back({
+                {"node_id", entry.nodeId}, {"speaker", entry.speaker},
+                {"dialogue", entry.dialogue}, {"read", entry.read},
+                {"content_id", entry.contentId},
+            });
+        }
+        return copyUtf8ToCaller(history.dump(), buffer,
+                                bufferSize, outRequiredSize);
+    }, ROWL_RESULT_UNKNOWN_ERROR);
+}
+
 RowlEngine_ResultCode RowlEngine_SaveGameSlotResult(
     RowlEngineHandle handle, int32_t slotIndex) {
     if (!isLiveHandle(handle)) return ROWL_RESULT_INVALID_HANDLE;
@@ -191,6 +234,20 @@ const char* RowlEngine_GetVariableWithLength(RowlEngineHandle handle, const char
     return value;
 }
 
+// B2a: GetVariable caller-buffer varyantı (null-key dead-handle ile aynı
+// kanaldan: INVALID_HANDLE; eski API "" dönerdi, o korunur).
+RowlEngine_ResultCode RowlEngine_GetVariableUtf8(
+    RowlEngineHandle handle, const char* key, char* buffer,
+    uint32_t bufferSize, uint32_t* outRequiredSize) {
+    if (!isLiveHandle(handle) || !key) return ROWL_RESULT_INVALID_HANDLE;
+    return invokeNoexcept<RowlEngine_ResultCode>([&] {
+        auto* engine = toEngineChecked(handle);
+        if (!engine) return ROWL_RESULT_INVALID_HANDLE;
+        return copyUtf8ToCaller(engine->getScriptVariable(key), buffer,
+                                bufferSize, outRequiredSize);
+    }, ROWL_RESULT_UNKNOWN_ERROR);
+}
+
 int RowlEngine_EvaluateCondition(RowlEngineHandle handle, const char* conditionExpr) {
     // Fail-closed: every error path reports false (0). A dead handle surfaces
     // as InvalidHandle through RowlEngine_GetLastResultCode(); a null
@@ -301,6 +358,45 @@ const char* RowlEngine_GetLastResultTargetWithLength(RowlEngineHandle handle, ui
     const char* value = RowlEngine_GetLastResultTarget(handle);
     if (outLen) *outLen = static_cast<uint32_t>(std::strlen(value));
     return value;
+}
+
+// B2a: LastResult üçlüsünün caller-buffer varyantları. Eski API'lerin
+// dead-handle string'leri ("none", "Invalid or...", "") korunur; yeni
+// varyantlar dead-handle'da INVALID_HANDLE döner (buffer'lı kontrat).
+RowlEngine_ResultCode RowlEngine_GetLastResultOperationUtf8(
+    RowlEngineHandle handle, char* buffer, uint32_t bufferSize,
+    uint32_t* outRequiredSize) {
+    if (!isLiveHandle(handle)) return ROWL_RESULT_INVALID_HANDLE;
+    return invokeNoexcept<RowlEngine_ResultCode>([&] {
+        auto* engine = toEngineChecked(handle);
+        if (!engine || !engine->getContext()) return ROWL_RESULT_INVALID_HANDLE;
+        return copyUtf8ToCaller(engine->getContext()->getLastResult().operation,
+                                buffer, bufferSize, outRequiredSize);
+    }, ROWL_RESULT_UNKNOWN_ERROR);
+}
+
+RowlEngine_ResultCode RowlEngine_GetLastResultMessageUtf8(
+    RowlEngineHandle handle, char* buffer, uint32_t bufferSize,
+    uint32_t* outRequiredSize) {
+    if (!isLiveHandle(handle)) return ROWL_RESULT_INVALID_HANDLE;
+    return invokeNoexcept<RowlEngine_ResultCode>([&] {
+        auto* engine = toEngineChecked(handle);
+        if (!engine || !engine->getContext()) return ROWL_RESULT_INVALID_HANDLE;
+        return copyUtf8ToCaller(engine->getContext()->getLastResult().message,
+                                buffer, bufferSize, outRequiredSize);
+    }, ROWL_RESULT_UNKNOWN_ERROR);
+}
+
+RowlEngine_ResultCode RowlEngine_GetLastResultTargetUtf8(
+    RowlEngineHandle handle, char* buffer, uint32_t bufferSize,
+    uint32_t* outRequiredSize) {
+    if (!isLiveHandle(handle)) return ROWL_RESULT_INVALID_HANDLE;
+    return invokeNoexcept<RowlEngine_ResultCode>([&] {
+        auto* engine = toEngineChecked(handle);
+        if (!engine || !engine->getContext()) return ROWL_RESULT_INVALID_HANDLE;
+        return copyUtf8ToCaller(engine->getContext()->getLastResult().target,
+                                buffer, bufferSize, outRequiredSize);
+    }, ROWL_RESULT_UNKNOWN_ERROR);
 }
 
 void RowlEngine_ClearLastResult(RowlEngineHandle handle) {

@@ -824,11 +824,19 @@ ROWL_API const char* RowlEngine_GetScriptRuntimeDiagnosticsJson(RowlEngineHandle
 /** Length-reporting variant of GetScriptRuntimeDiagnosticsJson (see lifetime contract). */
 ROWL_API const char* RowlEngine_GetScriptRuntimeDiagnosticsJsonWithLength(RowlEngineHandle handle, uint32_t* outLen);
 
+/** Caller-buffer variant of GetScriptRuntimeDiagnosticsJson (B2a; no borrowed lifetime). */
+ROWL_API RowlEngine_ResultCode RowlEngine_GetScriptRuntimeDiagnosticsJsonUtf8(
+    RowlEngineHandle handle, char* buffer, uint32_t bufferSize, uint32_t* outRequiredSize);
+
 /** Returns the bounded player dialogue backlog as an engine-owned JSON array. */
 ROWL_API const char* RowlEngine_GetDialogueHistoryJson(RowlEngineHandle handle);
 
 /** Length-reporting variant of GetDialogueHistoryJson (see lifetime contract). */
 ROWL_API const char* RowlEngine_GetDialogueHistoryJsonWithLength(RowlEngineHandle handle, uint32_t* outLen);
+
+/** Caller-buffer variant of GetDialogueHistoryJson (B2a; no borrowed lifetime). */
+ROWL_API RowlEngine_ResultCode RowlEngine_GetDialogueHistoryJsonUtf8(
+    RowlEngineHandle handle, char* buffer, uint32_t bufferSize, uint32_t* outRequiredSize);
 
 /* ── Save / Load Slots & History Rewind ───────────────────────────────────── */
 
@@ -930,6 +938,10 @@ ROWL_API const char* RowlEngine_GetPauseMenuJson(RowlEngineHandle handle);
 /** Same ownership rules as RowlEngine_GetDialogueHistoryJsonWithLength. */
 ROWL_API const char* RowlEngine_GetPauseMenuJsonWithLength(RowlEngineHandle handle, uint32_t* outLen);
 
+/** Caller-buffer variant of GetPauseMenuJson (B2a; no borrowed lifetime). */
+ROWL_API RowlEngine_ResultCode RowlEngine_GetPauseMenuJsonUtf8(
+    RowlEngineHandle handle, char* buffer, uint32_t bufferSize, uint32_t* outRequiredSize);
+
 /* ── Scripting & Variable Evaluation ─────────────────────────────────────── */
 
 /** Sets a string variable in the scripting environment and game state. */
@@ -948,6 +960,10 @@ ROWL_API const char* RowlEngine_GetVariable(RowlEngineHandle handle, const char*
 
 /** Length-reporting variant of GetVariable (see lifetime contract). */
 ROWL_API const char* RowlEngine_GetVariableWithLength(RowlEngineHandle handle, const char* key, uint32_t* outLen);
+
+/** Caller-buffer variant of GetVariable (B2a; no borrowed lifetime). */
+ROWL_API RowlEngine_ResultCode RowlEngine_GetVariableUtf8(
+    RowlEngineHandle handle, const char* key, char* buffer, uint32_t bufferSize, uint32_t* outRequiredSize);
 
 /**
  * Evaluates a Lua condition expression (e.g. "gold >= 50"). Returns 1 for true, 0 for false.
@@ -993,6 +1009,10 @@ ROWL_API const char* RowlEngine_GetLastResultOperation(RowlEngineHandle handle);
 /** Length-reporting variant of GetLastResultOperation (see lifetime contract). */
 ROWL_API const char* RowlEngine_GetLastResultOperationWithLength(RowlEngineHandle handle, uint32_t* outLen);
 
+/** Caller-buffer variant of GetLastResultOperation (B2a; no borrowed lifetime). */
+ROWL_API RowlEngine_ResultCode RowlEngine_GetLastResultOperationUtf8(
+    RowlEngineHandle handle, char* buffer, uint32_t bufferSize, uint32_t* outRequiredSize);
+
 /**
  * Returns the human-readable diagnostic message of the last runtime operation.
  * Pointer is thread-local/engine-owned UTF-8 string.
@@ -1002,6 +1022,10 @@ ROWL_API const char* RowlEngine_GetLastResultMessage(RowlEngineHandle handle);
 /** Length-reporting variant of GetLastResultMessage (see lifetime contract). */
 ROWL_API const char* RowlEngine_GetLastResultMessageWithLength(RowlEngineHandle handle, uint32_t* outLen);
 
+/** Caller-buffer variant of GetLastResultMessage (B2a; no borrowed lifetime). */
+ROWL_API RowlEngine_ResultCode RowlEngine_GetLastResultMessageUtf8(
+    RowlEngineHandle handle, char* buffer, uint32_t bufferSize, uint32_t* outRequiredSize);
+
 /**
  * Returns the target identifier or path of the last runtime operation (e.g. slot index or file path).
  * Pointer is thread-local/engine-owned UTF-8 string.
@@ -1010,6 +1034,10 @@ ROWL_API const char* RowlEngine_GetLastResultTarget(RowlEngineHandle handle);
 
 /** Length-reporting variant of GetLastResultTarget (see lifetime contract). */
 ROWL_API const char* RowlEngine_GetLastResultTargetWithLength(RowlEngineHandle handle, uint32_t* outLen);
+
+/** Caller-buffer variant of GetLastResultTarget (B2a; no borrowed lifetime). */
+ROWL_API RowlEngine_ResultCode RowlEngine_GetLastResultTargetUtf8(
+    RowlEngineHandle handle, char* buffer, uint32_t bufferSize, uint32_t* outRequiredSize);
 
 /**
  * Clears the last runtime result and resets it to OK/Success.

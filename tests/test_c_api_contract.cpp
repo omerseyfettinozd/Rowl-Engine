@@ -593,6 +593,73 @@ void test_c_api_contract() {
         }
     }
 
+    // B2a: state+pause caller-buffer varyantları (7 adet). Ölü-handle'da
+    // INVALID_HANDLE; round-trip'te legacy string ile birebir eşleşme;
+    // copyUtf8ToCaller kontratı (NULL/0 size-query, undersized BUFFER_TOO_SMALL).
+    {
+        if (RowlEngine_GetScriptRuntimeDiagnosticsJsonUtf8(nullptr, nullptr, 0, &required) !=
+                ROWL_RESULT_INVALID_HANDLE ||
+            RowlEngine_GetDialogueHistoryJsonUtf8(nullptr, nullptr, 0, &required) !=
+                ROWL_RESULT_INVALID_HANDLE ||
+            RowlEngine_GetPauseMenuJsonUtf8(nullptr, nullptr, 0, &required) !=
+                ROWL_RESULT_INVALID_HANDLE ||
+            RowlEngine_GetVariableUtf8(nullptr, "k", nullptr, 0, &required) !=
+                ROWL_RESULT_INVALID_HANDLE ||
+            RowlEngine_GetVariableUtf8(handle, nullptr, nullptr, 0, &required) !=
+                ROWL_RESULT_INVALID_HANDLE ||
+            RowlEngine_GetLastResultOperationUtf8(nullptr, nullptr, 0, &required) !=
+                ROWL_RESULT_INVALID_HANDLE ||
+            RowlEngine_GetLastResultMessageUtf8(nullptr, nullptr, 0, &required) !=
+                ROWL_RESULT_INVALID_HANDLE ||
+            RowlEngine_GetLastResultTargetUtf8(nullptr, nullptr, 0, &required) !=
+                ROWL_RESULT_INVALID_HANDLE) {
+            std::cerr << "B2a null-handle contract failed" << std::endl;
+            exit(1);
+        }
+        RowlEngine_SetVariable(handle, "b2a_key", "b2a_değer-测试");
+        const std::string varValue = readDirectory(
+            handle,
+            [](RowlEngineHandle h, char* buffer, uint32_t size, uint32_t* outRequired) {
+                return RowlEngine_GetVariableUtf8(h, "b2a_key", buffer, size, outRequired);
+            });
+        if (varValue != "b2a_değer-测试" ||
+            std::string(RowlEngine_GetVariable(handle, "b2a_key")) != varValue) {
+            std::cerr << "B2a variable round-trip mismatch: " << varValue << std::endl;
+            exit(1);
+        }
+        const std::string diagnostics = readDirectory(
+            handle, RowlEngine_GetScriptRuntimeDiagnosticsJsonUtf8);
+        if (diagnostics != RowlEngine_GetScriptRuntimeDiagnosticsJson(handle)) {
+            std::cerr << "B2a diagnostics round-trip mismatch" << std::endl;
+            exit(1);
+        }
+        const std::string history = readDirectory(
+            handle, RowlEngine_GetDialogueHistoryJsonUtf8);
+        if (history != RowlEngine_GetDialogueHistoryJson(handle)) {
+            std::cerr << "B2a history round-trip mismatch" << std::endl;
+            exit(1);
+        }
+        const std::string pauseMenu = readDirectory(
+            handle, RowlEngine_GetPauseMenuJsonUtf8);
+        if (pauseMenu != RowlEngine_GetPauseMenuJson(handle)) {
+            std::cerr << "B2a pause-menu round-trip mismatch" << std::endl;
+            exit(1);
+        }
+        RowlEngine_SaveGameSlotResult(handle, 0);
+        const std::string lastOp = readDirectory(
+            handle, RowlEngine_GetLastResultOperationUtf8);
+        const std::string lastMsg = readDirectory(
+            handle, RowlEngine_GetLastResultMessageUtf8);
+        const std::string lastTarget = readDirectory(
+            handle, RowlEngine_GetLastResultTargetUtf8);
+        if (lastOp != RowlEngine_GetLastResultOperation(handle) ||
+            lastMsg != RowlEngine_GetLastResultMessage(handle) ||
+            lastTarget != RowlEngine_GetLastResultTarget(handle)) {
+            std::cerr << "B2a last-result round-trip mismatch" << std::endl;
+            exit(1);
+        }
+    }
+
     RowlEngine_Destroy(handle);
     std::error_code cleanupError;
     std::filesystem::remove_all(unicodeRoot, cleanupError);
