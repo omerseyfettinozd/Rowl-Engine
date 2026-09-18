@@ -1,22 +1,40 @@
 #include "rowl/render/transition_manager.hpp"
 #include "rowl/text/hex_color.hpp"
+#include "rowl/core/logger.hpp"
 #include <SDL3/SDL.h>
 #include <cstdlib>
 #include <cmath>
+#include <mutex>
+#include <string>
+#include <unordered_set>
 
 namespace Rowl::Render {
 
 constexpr float kMinDuration = 0.01f;
 constexpr float kMaxDuration = 60.0f;
 
+// A3-tur7 (hygiene): transition-hex yorum-çelişkisi kapatıldı — window.cpp'deki
+// warnTaggedOnce çekirdeği bu dosyaya taşınmaz (çapraz-bağımlılık yok, bilinçli
+// ikizlilik); tek-etiketli dosya-yerel emsal, aynı 32-cap deseniyle.
+constexpr size_t kTransitionHexWarnCap = 32;
+
+void warnTransitionHexOnce(const std::string& hex) {
+    static std::mutex mutex;
+    static std::unordered_set<std::string> warned;
+    std::lock_guard<std::mutex> lock(mutex);
+    if (warned.size() >= kTransitionHexWarnCap || !warned.insert(hex).second) return;
+    ROWL_LOG_WARN("Invalid transition hex color '" + hex +
+                  "'; using black fallback (logged once per value)");
+}
+
 static void parseHexColor(const std::string& hex, uint8_t& r, uint8_t& g, uint8_t& b, uint8_t& a) {
     // Faz 4.5 Dilim 2: tek birlesik cozucu (rowl/text/hex_color.hpp).
     // Gecis yedegi tarihsel siyahtir (0,0,0,255); bozuk girdi yedege duser
-    // ve basarisizlik ok ile gozlenebilir — sessiz cop renk uretilmez.
+    // ve basarisizlik gozlenebilir (deger-basi tek WARN, spam yok).
     bool ok = false;
     const Rowl::Text::HexColor parsed = Rowl::Text::parseHexColor(
         hex, Rowl::Text::HexColor{0, 0, 0, 255}, &ok);
-    (void)ok;
+    if (!ok) warnTransitionHexOnce(hex);
     r = parsed.r;
     g = parsed.g;
     b = parsed.b;

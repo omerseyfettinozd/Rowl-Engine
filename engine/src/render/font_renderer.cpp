@@ -34,6 +34,15 @@ void blendTexel(SDL_Surface* target, int x, int y, SDL_Color color, uint8_t cove
 
 constexpr SDL_Color kContrastOutline{0, 0, 0, 255};
 
+// A3-tur7 (font-harden): glif-önbellek tavanı — anahtar (boyut×codepoint)
+// hikaye-metninden sürülebilir, sınırsız büyümeye karşı en-eskiden-düşür.
+// 2048, meşru kullanımı (birkaç boyut × geniş Unicode aralığı) kapsamaz-dışı
+// bırakmayacak kadar yüksek, hostile-büyümeyi kesecek kadar düşüktür.
+constexpr size_t kMaxGlyphCacheEntries = 2048;
+// A3-tur7: font-dosya tavanı — tellg -1 (hata) + devasa resize'a karşı.
+// 64MB, mevcut en-ağır CJK fontların (~20MB) çok üstünde güvenli-pay bırakır.
+constexpr uint64_t kMaxFontFileBytes = 64ULL * 1024ULL * 1024ULL;
+
 } // namespace
 
 FontRenderer::FontRenderer() {
@@ -66,6 +75,11 @@ bool FontRenderer::loadFont(const std::string& fontPath) {
         return false;
     }
     std::streamsize size = file.tellg();
+    // A3-tur7: tellg hatası (-1) devasa-resize'a dönüşmesin; dev-dosya kapıda.
+    if (size < 0 || static_cast<uint64_t>(size) > kMaxFontFileBytes) {
+        ROWL_LOG_WARN("Font file has invalid or excessive size: " + fontPath);
+        return false;
+    }
     file.seekg(0, std::ios::beg);
 
     m_fontBuffer.resize(static_cast<size_t>(size));
@@ -97,6 +111,11 @@ bool FontRenderer::loadFontFromPath(const std::filesystem::path& fontPath) {
         return false;
     }
     std::streamsize size = file.tellg();
+    // A3-tur7: tellg-guard (dar-yol emsali — bkz. loadFont).
+    if (size < 0 || static_cast<uint64_t>(size) > kMaxFontFileBytes) {
+        ROWL_LOG_WARN("Font file has invalid or excessive size: " + fontPath.string());
+        return false;
+    }
     file.seekg(0, std::ios::beg);
 
     m_fontBuffer.resize(static_cast<size_t>(size));
@@ -195,6 +214,9 @@ const Glyph* FontRenderer::getGlyph(uint32_t codepoint, int pixelHeight) {
         glyph.height = 0;
         glyph.xoff = 0;
         glyph.yoff = 0;
+        if (m_glyphCache.size() >= kMaxGlyphCacheEntries) {
+            m_glyphCache.erase(m_glyphCache.begin());
+        }
         m_glyphCache[key] = glyph;
         return &m_glyphCache[key];
     }
@@ -210,6 +232,10 @@ const Glyph* FontRenderer::getGlyph(uint32_t codepoint, int pixelHeight) {
         stbtt_FreeBitmap(bitmap, nullptr);
     }
 
+    // A3-tur7: tavan-aşımında en-eskiden-düşür (boşluk-kolu emsali).
+    if (m_glyphCache.size() >= kMaxGlyphCacheEntries) {
+        m_glyphCache.erase(m_glyphCache.begin());
+    }
     m_glyphCache[key] = glyph;
     return &m_glyphCache[key];
 }
@@ -255,8 +281,14 @@ std::shared_ptr<const Rowl::Text::ShapedText> FontRenderer::shapeTextShared(
     options.maxWidth = maxWidth;
     auto layout = std::make_shared<Rowl::Text::ShapedText>(
         m_textShaper.shapeMarkup(markup, options));
-    if (m_shapeCache.size() >= 16) m_shapeCache.erase(m_shapeCache.begin());
-    m_shapeCache.push_back({markup, fontSize, maxWidth, m_textScale, layout});
+    // A3-tur7: insert tahsisi patlarsa (OOM) cachesiz-devam — fail-open
+    // performans, fail-closed doğruluk (kilit-test deseni tur2'den).
+    try {
+        if (m_shapeCache.size() >= 16) m_shapeCache.erase(m_shapeCache.begin());
+        m_shapeCache.push_back({markup, fontSize, maxWidth, m_textScale, layout});
+    } catch (...) {
+        // Bilinçli-yutma: önbellek lüks, layout zaten hazır — render sürer.
+    }
     return layout;
 }
 
@@ -303,6 +335,10 @@ void FontRenderer::renderShapedText(
                 cached.xoff = bitmap.bearingX;
                 cached.yoff = -bitmap.bearingY;
                 cached.bitmap = std::move(bitmap.bitmap);
+                // A3-tur7: shaped-glif önbelleği de tavanlı (getGlyph emsali).
+                if (m_shapedGlyphCache.size() >= kMaxGlyphCacheEntries) {
+                    m_shapedGlyphCache.erase(m_shapedGlyphCache.begin());
+                }
                 found = m_shapedGlyphCache.emplace(key, std::move(cached)).first;
             }
             const Glyph& glyph = found->second;

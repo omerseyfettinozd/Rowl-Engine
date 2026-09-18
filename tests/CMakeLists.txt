@@ -41,6 +41,7 @@ add_executable(rowl_tests
     test_frame_hash_lock.cpp
     test_frame_reuse_lock.cpp
     test_cache_hygiene.cpp
+    test_font_hardening.cpp
     test_single_engine_image.cpp
     test_demo_first_light.cpp
     test_demo_second_signal.cpp
