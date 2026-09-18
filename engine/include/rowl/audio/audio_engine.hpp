@@ -176,13 +176,20 @@ public:
     // Typewriter Character Voice Blips & Audio Effects (Milestone 25)
     void playVoiceBlip(const std::string& assetPath = "", float pitch = 1.0f, float volume = 1.0f, AudioChannelType channel = AudioChannelType::Voice);
     uint32_t getVoiceBlipCount() const { return m_voiceBlipCount; }
-    void resetVoiceBlipCount() { m_voiceBlipCount = 0; }
+    // A5-tur3: synth-fallback ayırt edilebilirliği — synth dalında üretilen
+    // blip'ler ayrıca sayılır (synth <= voice her zaman).
+    uint32_t getSynthBlipCount() const { return m_synthBlipCount; }
+    // A5-tur3: kuyruğa konamayan chunk'lar (update/pump Put-fail).
+    uint64_t getDropCount() const { return m_dropCount; }
+    void resetVoiceBlipCount() { m_voiceBlipCount = 0; m_synthBlipCount = 0; }
     float getLastVoiceBlipPitch() const { return m_lastVoiceBlipPitch; }
 
     void shutdown();
 
 private:
     uint32_t m_voiceBlipCount = 0;
+    uint32_t m_synthBlipCount = 0;
+    uint64_t m_dropCount = 0;
     float m_lastVoiceBlipPitch = 1.0f;
     float m_masterVolume = 1.0f;
     float m_bgmVolume = 1.0f;
@@ -248,7 +255,8 @@ private:
     // float; kapasite kanal sayısından bağımsız üst bantla tutulur).
     std::vector<float> m_bgmRing;
     uint64_t m_bgmRingWriteFrames = 0; // üretici (decode frontier sayacı)
-    uint64_t m_bgmRingReadFrames = 0;  // tüketici sayacı (telemetri penceresi)
+    // A5-tur3: m_bgmRingReadFrames KALDIRILDI (ölü-sayaç: yazılıyordu ama
+    // hiçbir okuyucusu yoktu; yanıltıcı telemetri barındırmamak için silindi).
     uint64_t m_bgmStreamPcmPos = 0;    // kaynaktan çözülen toplam frame
     bool m_isBgmStreamed = false;
     bool m_bgmStreamEos = false;

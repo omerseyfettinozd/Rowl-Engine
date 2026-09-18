@@ -949,6 +949,22 @@ void test_native_c_api() {
                   << RowlEngine_GetLastResultCode(handle) << std::endl;
         exit(1);
     }
+    // A5-tur3: synth/drop sayaç okuyucuları — boş-path blip'i synth'e düşer
+    // (cihazlıda synth>=1); synth<=voice her koşulda; sağlıklı dummy'de drop 0.
+    if (RowlEngine_IsAudioDeviceAvailable(handle)) {
+        if (RowlEngine_GetSynthBlipCount(handle) == 0) {
+            std::cerr << "C-API synth blip count is zero after synth blips" << std::endl;
+            exit(1);
+        }
+    }
+    if (RowlEngine_GetSynthBlipCount(handle) > RowlEngine_GetVoiceBlipCount(handle)) {
+        std::cerr << "C-API synth blip count exceeds voice blip count" << std::endl;
+        exit(1);
+    }
+    if (RowlEngine_GetAudioDropCount(handle) != 0) {
+        std::cerr << "C-API audio drop count nonzero on healthy device" << std::endl;
+        exit(1);
+    }
     TEST_PASS("C-API Audio Control (PlayAudio, SetBgmVolume, Ducking, StopBgm)");
 
     // Variable & Scripting C-API

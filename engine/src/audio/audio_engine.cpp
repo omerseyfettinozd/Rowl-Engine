@@ -227,7 +227,6 @@ bool AudioEngine::initialize() {
     m_uiVolume = 1.0f;
     m_bgmStreamSource.reset();
     m_bgmRingWriteFrames = 0;
-    m_bgmRingReadFrames = 0;
     m_bgmStreamPcmPos = 0;
     m_isBgmStreamed = false;
     m_bgmStreamEos = false;
@@ -1080,6 +1079,8 @@ void AudioEngine::update(float deltaSeconds) {
             if (available <= 0) {
                 if (!SDL_PutAudioStreamData(m_bgmStream, m_bgmData.data(), static_cast<int>(m_bgmData.size()))) {
                     warnAudioOnce("BGM loop re-queue failed: " + std::string(SDL_GetError()));
+                    // A5-tur3: kuyruğa giremeyen chunk drop sayılır.
+                    ++m_dropCount;
                 } else if (!m_outputSuspended && !SDL_ResumeAudioStreamDevice(m_bgmStream)) {
                     warnAudioOnce("BGM loop stream resume failed: " + std::string(SDL_GetError()));
                 }
@@ -1089,6 +1090,7 @@ void AudioEngine::update(float deltaSeconds) {
             if (SDL_GetAudioStreamAvailable(m_transitionBgmStream) <= 0) {
                 if (!SDL_PutAudioStreamData(m_transitionBgmStream, m_transitionBgmData.data(), static_cast<int>(m_transitionBgmData.size()))) {
                     warnAudioOnce("Transition BGM loop re-queue failed: " + std::string(SDL_GetError()));
+                    ++m_dropCount;
                 } else if (!m_outputSuspended && !SDL_ResumeAudioStreamDevice(m_transitionBgmStream)) {
                     warnAudioOnce("Transition BGM loop stream resume failed: " + std::string(SDL_GetError()));
                 }
@@ -1103,6 +1105,7 @@ void AudioEngine::update(float deltaSeconds) {
             if (ambAvailable <= 0) {
                 if (!SDL_PutAudioStreamData(m_ambienceStream, m_ambienceData.data(), static_cast<int>(m_ambienceData.size()))) {
                     warnAudioOnce("Ambience loop re-queue failed: " + std::string(SDL_GetError()));
+                    ++m_dropCount;
                 } else if (!m_outputSuspended && !SDL_ResumeAudioStreamDevice(m_ambienceStream)) {
                     warnAudioOnce("Ambience loop stream resume failed: " + std::string(SDL_GetError()));
                 }
@@ -1113,6 +1116,7 @@ void AudioEngine::update(float deltaSeconds) {
             if (ambAvailableB <= 0) {
                 if (!SDL_PutAudioStreamData(m_ambienceStreamB, m_ambienceDataB.data(), static_cast<int>(m_ambienceDataB.size()))) {
                     warnAudioOnce("Ambience-B loop re-queue failed: " + std::string(SDL_GetError()));
+                    ++m_dropCount;
                 } else if (!m_outputSuspended && !SDL_ResumeAudioStreamDevice(m_ambienceStreamB)) {
                     warnAudioOnce("Ambience-B loop stream resume failed: " + std::string(SDL_GetError()));
                 }
@@ -1967,6 +1971,9 @@ void AudioEngine::playVoiceBlip(const std::string& assetPath, float pitch, float
             ROWL_LOG_WARN("[AudioEngine] " + m_lastError);
         } else {
             m_lastError.clear();
+            // A5-tur3: synth-fallback ayırt edilebilirliği — başarılı synth
+            // kuyruğu ayrıca sayılır (synth <= voice).
+            ++m_synthBlipCount;
         }
 
         if (channel == AudioChannelType::Sfx) {
@@ -2078,7 +2085,6 @@ bool AudioEngine::openBgmStream(const std::string& candidate,
     m_bgmRingChannels = channels;
     m_bgmStreamRateHz = rate;
     m_bgmRingWriteFrames = 0;
-    m_bgmRingReadFrames = 0;
     m_bgmStreamPcmPos = 0;
     m_bgmStreamEos = false;
     m_bgmStreamFilter = filter;
@@ -2148,6 +2154,7 @@ void AudioEngine::queueStreamChunkToDevice(const float* samples, size_t frames,
     if (!SDL_PutAudioStreamData(m_bgmStream, samples,
                            static_cast<int>(frames * channels * sizeof(float)))) {
         warnAudioOnce("BGM stream chunk re-queue failed: " + std::string(SDL_GetError()));
+        ++m_dropCount;
     } else if (!m_outputSuspended && !SDL_ResumeAudioStreamDevice(m_bgmStream)) {
         warnAudioOnce("BGM stream chunk resume failed: " + std::string(SDL_GetError()));
     }
@@ -2212,7 +2219,6 @@ void AudioEngine::pumpBgmStream() {
             queueStreamChunkToDevice(m_bgmPumpScratch.data(), got, channels,
                                      rate);
             m_bgmRingWriteFrames += got;
-            m_bgmRingReadFrames += got;
             m_bgmStreamPcmPos += got;
             ++chunks;
         }
@@ -2235,7 +2241,6 @@ void AudioEngine::pumpBgmStream() {
                 // korunur: min(pcmPos,kapasite)/rate.
                 m_bgmStreamPcmPos = 0;
                 m_bgmRingWriteFrames = 0;
-                m_bgmRingReadFrames = 0;
                 if (got == 0 && ++emptyWraps >= 2) break;
                 continue;
             }
@@ -2256,7 +2261,6 @@ void AudioEngine::closeBgmStream() {
     m_bgmStreamEos = false;
     m_bgmStreamPcmPos = 0;
     m_bgmRingWriteFrames = 0;
-    m_bgmRingReadFrames = 0;
 }
 
 void AudioEngine::resetStreamInfoNoBgm() {

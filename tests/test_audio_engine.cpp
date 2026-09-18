@@ -276,6 +276,26 @@ void test_audio_engine() {
         std::cerr << "Fallback to procedural synth for missing/corrupt asset failed" << std::endl;
         exit(1);
     }
+    // A5-tur3: synth-fallback ayırt edilebilirliği — missing-asset blip'i
+    // synth'e düştü. Cihazlıda synth sayacı artar ve synth<=voice olur
+    // (cihazsızda synth dalına girilmez, gate'li). Kırmızı-kanıt: synth++
+    // kaldırılırsa cihazlı koşuda aşağıdaki assert düşer.
+    if (audio.isAudioDeviceAvailable()) {
+        if (audio.getSynthBlipCount() == 0) {
+            std::cerr << "Synth fallback blip was not counted" << std::endl;
+            exit(1);
+        }
+        if (audio.getSynthBlipCount() > audio.getVoiceBlipCount()) {
+            std::cerr << "Synth blip count exceeds voice blip count" << std::endl;
+            exit(1);
+        }
+    }
+    // A5-tur3: sağlıklı dummy'de drop olmaz (sayaç mekanizması var, değer 0;
+    // drop-fail headless-dummy'de tetiklenemez, o yüzden değer-kanıtı).
+    if (audio.getDropCount() != 0) {
+        std::cerr << "Unexpected audio drop count on healthy device" << std::endl;
+        exit(1);
+    }
 
     // Edge Case: Extreme pitch and volume values get safely clamped
     audio.playVoiceBlip("", 99.0f, -2.0f, Rowl::Audio::AudioChannelType::Voice);

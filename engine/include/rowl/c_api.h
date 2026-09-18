@@ -808,6 +808,12 @@ ROWL_API uint32_t RowlEngine_GetVoiceBlipCount(RowlEngineHandle handle);
 /** Resets cumulative voice blip counter to zero. */
 ROWL_API void RowlEngine_ResetVoiceBlipCount(RowlEngineHandle handle);
 
+/** Returns how many blips fell back to procedural synthesis (A5-tur3; synth <= voice). */
+ROWL_API uint32_t RowlEngine_GetSynthBlipCount(RowlEngineHandle handle);
+
+/** Returns cumulative audio chunks dropped at queue time (A5-tur3). */
+ROWL_API uint64_t RowlEngine_GetAudioDropCount(RowlEngineHandle handle);
+
 /**
  * Returns a JSON array of current script-component diagnostics. The result is
  * engine-owned and valid until the next diagnostics query on the same thread.

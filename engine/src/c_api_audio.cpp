@@ -350,6 +350,26 @@ void RowlEngine_ResetVoiceBlipCount(RowlEngineHandle handle) {
     });
 }
 
+// A5-tur3: synth/drop sayaç okuyucuları (additive-only; reset ikisini de
+// sıfırlar — C++ resetVoiceBlipCount sözleşmesi).
+uint32_t RowlEngine_GetSynthBlipCount(RowlEngineHandle handle) {
+    if (!isLiveHandle(handle)) return 0;
+    return invokeNoexcept<uint32_t>([&] {
+        auto* checked = toEngineChecked(handle);
+        const auto* audio = checked ? checked->getAudio() : nullptr;
+        return audio ? audio->getSynthBlipCount() : 0;
+    }, 0);
+}
+
+uint64_t RowlEngine_GetAudioDropCount(RowlEngineHandle handle) {
+    if (!isLiveHandle(handle)) return 0;
+    return invokeNoexcept<uint64_t>([&] {
+        auto* checked = toEngineChecked(handle);
+        const auto* audio = checked ? checked->getAudio() : nullptr;
+        return audio ? audio->getDropCount() : 0;
+    }, 0);
+}
+
 // ── Faz 5 Dilim 1: streaming observability + volume matrix ──────────────
 
 int RowlEngine_IsStreaming(RowlEngineHandle handle) {
