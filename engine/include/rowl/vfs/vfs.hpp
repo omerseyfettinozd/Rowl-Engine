@@ -88,6 +88,11 @@ private:
     /// stall mounts/unmounts. nullopt = missed on every source.
     std::optional<std::vector<uint8_t>> readBytesSinglePass(const std::string& cleanPath);
     std::unique_ptr<std::istream> openStreamSinglePass(const std::string& cleanPath);
+    /// A2a-fix1: shared package-directory scan used by initialize() and
+    /// remountProject(). Probes with fresh error_codes, warns loudly on an
+    /// iterator/entry failure (never a silent skip), and notes when a
+    /// present directory yields no archives. Call with m_mutex held.
+    void mountPackagesUnder(const std::filesystem::path& pkgPath);
 
     mutable std::recursive_mutex m_mutex;
     std::vector<std::pair<std::string, std::shared_ptr<IDataSource>>> m_mountPoints;

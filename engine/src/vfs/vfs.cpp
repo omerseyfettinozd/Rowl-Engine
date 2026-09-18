@@ -161,18 +161,7 @@ void VFSManager::initialize() {
         }
 
         fs::path pkgPath = root / "packages";
-        if (fs::exists(pkgPath, fsError) && !fsError &&
-            fs::is_directory(pkgPath, fsError) && !fsError) {
-            std::error_code iterError;
-            for (const auto& entry : fs::directory_iterator(pkgPath, iterError)) {
-                if (iterError) break;
-                std::error_code entryError;
-                if (entry.is_regular_file(entryError) && !entryError &&
-                    entry.path().extension() == ".rowlpkg") {
-                    mountPackage("", Rowl::Platform::pathToUtf8(entry.path()));
-                }
-            }
-        }
+        mountPackagesUnder(pkgPath);
     }
 
     m_initialized = true;
@@ -206,7 +195,10 @@ void VFSManager::remountProject(const std::string& projectRoot) {
 
     // Mount mods first so a release can override package content without a
     // second loose Assets tree.  The package remains the only base source.
+    // A2a-fix1: clear before every probe chain — a reused error_code must
+    // never carry a previous step's state into the next decision.
     fs::path modsPath = root / "mods";
+    fsError.clear();
     if (fs::exists(modsPath, fsError) && !fsError &&
         fs::is_directory(modsPath, fsError) && !fsError) {
         const std::string modsUtf8 = Rowl::Platform::pathToUtf8(modsPath);
@@ -219,6 +211,7 @@ void VFSManager::remountProject(const std::string& projectRoot) {
     // readable through an asset lookup after a project switch.
     // 1. Mount project Assets folder.
     fs::path assetsPath = root / "Assets";
+    fsError.clear();
     if (fs::exists(assetsPath, fsError) && !fsError &&
         fs::is_directory(assetsPath, fsError) && !fsError) {
         const std::string assetsUtf8 = Rowl::Platform::pathToUtf8(assetsPath);
@@ -227,6 +220,7 @@ void VFSManager::remountProject(const std::string& projectRoot) {
 
         // 2. Mount images
         fs::path imgPath = assetsPath / "images";
+        fsError.clear();
         if (fs::exists(imgPath, fsError) && !fsError &&
             fs::is_directory(imgPath, fsError) && !fsError) {
             const std::string imgUtf8 = Rowl::Platform::pathToUtf8(imgPath);
@@ -235,23 +229,47 @@ void VFSManager::remountProject(const std::string& projectRoot) {
         }
 
         // 3. Mount packages
-        fs::path pkgPath = assetsPath / "packages";
-        if (fs::exists(pkgPath, fsError) && !fsError &&
-            fs::is_directory(pkgPath, fsError) && !fsError) {
-            std::error_code iterError;
-            for (const auto& entry : fs::directory_iterator(pkgPath, iterError)) {
-                if (iterError) break;
-                std::error_code entryError;
-                if (entry.is_regular_file(entryError) && !entryError &&
-                    entry.path().extension() == ".rowlpkg") {
-                    mountPackage("", Rowl::Platform::pathToUtf8(entry.path()));
-                }
-            }
-        }
+        mountPackagesUnder(assetsPath / "packages");
     }
 
     ROWL_LOG_INFO("VFS Remount Complete for project '" + projectRoot + "' (" +
                   std::to_string(m_mountPoints.size()) + " mount points).");
+}
+
+void VFSManager::mountPackagesUnder(const fs::path& pkgPath) {
+    // Fresh codes per probe: a reused error_code must never carry a previous
+    // step's state into the next mount decision.
+    std::error_code probeError;
+    if (!fs::exists(pkgPath, probeError) || probeError) return;
+    probeError.clear();
+    if (!fs::is_directory(pkgPath, probeError) || probeError) return;
+
+    const std::string pkgUtf8 = Rowl::Platform::pathToUtf8(pkgPath);
+    std::error_code iterError;
+    bool mountedAny = false;
+    for (const auto& entry : fs::directory_iterator(pkgPath, iterError)) {
+        // A2a-fix1: an iterator/entry failure used to end the scan silently
+        // (Windows CI mounted a verified game.rowlpkg never, with no log
+        // line at all). Loud now — a skipped scan must explain itself.
+        if (iterError) {
+            ROWL_LOG_WARN("VFS package scan failed in '" + pkgUtf8 + "': " + iterError.message());
+            return;
+        }
+        std::error_code entryError;
+        const bool regular = entry.is_regular_file(entryError);
+        if (entryError) {
+            ROWL_LOG_WARN("VFS package scan skipped unreadable entry in '" + pkgUtf8 +
+                          "': " + entryError.message());
+            continue;
+        }
+        if (regular && entry.path().extension() == ".rowlpkg") {
+            mountPackage("", Rowl::Platform::pathToUtf8(entry.path()));
+            mountedAny = true;
+        }
+    }
+    if (!mountedAny) {
+        ROWL_LOG_INFO("VFS package scan found no archives under '" + pkgUtf8 + "'");
+    }
 }
 
 void VFSManager::mountDirectory(const std::string& virtualPrefix, const std::string& physicalPath) {
