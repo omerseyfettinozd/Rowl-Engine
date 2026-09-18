@@ -361,6 +361,31 @@ void test_vfs_security() {
     vfs.remountProject(bareProject.string());
     TEST_PASS("Hostile package-scan forms fail loudly without throwing");
 
+    // A2a-fix4 (girdi-izolasyonu): patlayan/okunamayan TEK girdi taramayı
+    // öldürmemeli — geçerli paket yine mount'lanmalı. Sarkan symlink
+    // (POSIX'te girdi-hatası verir) + geçerli paket yanyana; Windows'ta
+    // symlink ayrıcalığı yoksa .rowlpkg uzantılı dizin aynı izolasyonu dener.
+    const auto isolateProject = testRoot / "isolate_packages_project";
+    std::filesystem::create_directories(isolateProject / "Assets" / "packages");
+    std::error_code linkError;
+    std::filesystem::create_symlink("rowl-missing-target",
+                                    isolateProject / "Assets" / "packages" / "broken.rowlpkg",
+                                    linkError);
+    if (linkError) {
+        std::filesystem::create_directories(
+            isolateProject / "Assets" / "packages" / "dir.rowlpkg", linkError);
+    }
+    std::filesystem::copy_file(validPackage,
+                               isolateProject / "Assets" / "packages" / "game.rowlpkg",
+                               std::filesystem::copy_options::overwrite_existing);
+    vfs.remountProject(isolateProject.string());
+    if (vfs.readString("dir/safe.txt") != "x") {
+        std::cerr << "A hostile packages sibling killed the scan: valid package not mounted"
+                  << std::endl;
+        exit(1);
+    }
+    TEST_PASS("One hostile packages entry cannot kill the scan");
+
     const std::string graphVfsPath = "json/full_story_graph.json";
     const std::string graphJson = R"({"start_node_id":101,"nodes":[{"id":101,"speaker":"Packaged","dialogue":"VFS graph"}]})";
     const uint64_t graphIndexOffset = headerSize + graphJson.size();

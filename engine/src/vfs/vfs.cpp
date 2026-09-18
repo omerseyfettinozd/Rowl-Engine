@@ -269,25 +269,43 @@ void VFSManager::mountPackagesUnder(const fs::path& pkgPath) {
     std::error_code iterError;
     bool mountedAny = false;
     try {
-        for (const auto& entry : fs::directory_iterator(canonPath, iterError)) {
-            // A2a-fix1: an iterator/entry failure used to end the scan silently
-            // (Windows CI mounted a verified game.rowlpkg never, with no log
-            // line at all). Loud now — a skipped scan must explain itself.
-            if (iterError) {
-                ROWL_LOG_WARN("VFS package scan failed in '" + pkgUtf8 + "': " + iterError.message());
-                return;
+        // A2a-fix4: canonical tarama, girdi-seviyesinde izole edilir. Windows
+        // CI'da STL iterasyonu ERROR_NO_UNICODE_TRANSLATION fırlattı
+        // (wide→ANSI-codepage çevirisi); tek patlayan girdi BÜTÜN taramayı
+        // öldürmemeli — game.rowlpkg yine mount'lanmalı. increment ec'li
+        // (throw etmez); deref+işleme iç try'da (patlarsa WARN+continue).
+        fs::directory_iterator it(canonPath, iterError);
+        const fs::directory_iterator end;
+        while (!iterError && it != end) {
+            try {
+                const fs::directory_entry entry = *it;
+                std::error_code entryError;
+                const bool regular = entry.is_regular_file(entryError);
+                if (entryError) {
+                    // A2a-fix1: an iterator/entry failure used to end the scan
+                    // silently (Windows CI mounted a verified game.rowlpkg
+                    // never, with no log line at all). Loud now — a skipped
+                    // scan must explain itself.
+                    ROWL_LOG_WARN("VFS package scan skipped unreadable entry in '" + pkgUtf8 +
+                                  "': " + entryError.message());
+                } else if (regular && entry.path().extension().wstring() == L".rowlpkg") {
+                    // Wide-karşılaştırma: hot-loop'ta narrow-literal/path
+                    // dönüşümü sıfır. pathToUtf8 temiz u8-roundtrip'tir
+                    // (kanıtlı) ve o da iç try'ın kalkanındadır.
+                    mountPackage("", Rowl::Platform::pathToUtf8(entry.path()));
+                    mountedAny = true;
+                }
+            } catch (const std::exception& ex) {
+                ROWL_LOG_WARN("VFS package scan skipped throwing entry in '" + pkgUtf8 +
+                              "': " + ex.what());
+            } catch (...) {
+                ROWL_LOG_WARN("VFS package scan skipped throwing entry in '" + pkgUtf8 + "'");
             }
-            std::error_code entryError;
-            const bool regular = entry.is_regular_file(entryError);
-            if (entryError) {
-                ROWL_LOG_WARN("VFS package scan skipped unreadable entry in '" + pkgUtf8 +
-                              "': " + entryError.message());
-                continue;
-            }
-            if (regular && entry.path().extension() == ".rowlpkg") {
-                mountPackage("", Rowl::Platform::pathToUtf8(entry.path()));
-                mountedAny = true;
-            }
+            it.increment(iterError);
+        }
+        if (iterError) {
+            ROWL_LOG_WARN("VFS package scan failed in '" + pkgUtf8 + "': " + iterError.message());
+            return;
         }
     } catch (const std::exception& ex) {
         // A2a-fix3: çağrıcı invokeNoexcept altında — yutulan istisna hem
