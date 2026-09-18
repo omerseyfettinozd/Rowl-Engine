@@ -75,6 +75,13 @@ extern "C" {
 
 RowlEngine_ResultCode RowlEngine_SetCharacterSlotAsset(
     RowlEngineHandle handle, const char* slotName, const char* assetPath) {
+    // A4-tur1 (siralama): handle-once — olu-handle'da arg'lara bakilmadan
+    // INVALID_HANDLE (story-TU konvansiyonu); erase-hijyeni korunur.
+    if (!toEngineChecked(handle)) {
+        std::lock_guard<std::mutex> lock(g_characterMutex);
+        g_characterStates.erase(handle);
+        return ROWL_RESULT_INVALID_HANDLE;
+    }
     Rowl::Scene::CharacterSlot slot = Rowl::Scene::CharacterSlot::Body;
     const RowlEngine_ResultCode slotCheck = checkSlotName(slotName, slot);
     if (slotCheck != ROWL_RESULT_OK) return slotCheck;
@@ -101,6 +108,13 @@ RowlEngine_ResultCode RowlEngine_SetCharacterSlotAsset(
 RowlEngine_ResultCode RowlEngine_GetCharacterSlotAssetUtf8(
     RowlEngineHandle handle, const char* slotName, char* buffer,
     uint32_t bufferSize, uint32_t* outRequiredSize) {
+    // A4-tur1 (siralama): handle-once — olu-handle'da arg'lara bakilmadan
+    // INVALID_HANDLE (story-TU konvansiyonu); erase-hijyeni korunur.
+    if (!toEngineChecked(handle)) {
+        std::lock_guard<std::mutex> lock(g_characterMutex);
+        g_characterStates.erase(handle);
+        return ROWL_RESULT_INVALID_HANDLE;
+    }
     Rowl::Scene::CharacterSlot slot = Rowl::Scene::CharacterSlot::Body;
     const RowlEngine_ResultCode slotCheck = checkSlotName(slotName, slot);
     if (slotCheck != ROWL_RESULT_OK) return slotCheck;
@@ -120,6 +134,13 @@ RowlEngine_ResultCode RowlEngine_GetCharacterSlotAssetUtf8(
 
 RowlEngine_ResultCode RowlEngine_SetCharacterSlotOpacity(
     RowlEngineHandle handle, const char* slotName, float opacity) {
+    // A4-tur1 (siralama): handle-once — olu-handle'da arg'lara bakilmadan
+    // INVALID_HANDLE (story-TU konvansiyonu); erase-hijyeni korunur.
+    if (!toEngineChecked(handle)) {
+        std::lock_guard<std::mutex> lock(g_characterMutex);
+        g_characterStates.erase(handle);
+        return ROWL_RESULT_INVALID_HANDLE;
+    }
     Rowl::Scene::CharacterSlot slot = Rowl::Scene::CharacterSlot::Body;
     const RowlEngine_ResultCode slotCheck = checkSlotName(slotName, slot);
     if (slotCheck != ROWL_RESULT_OK) return slotCheck;
@@ -141,6 +162,13 @@ RowlEngine_ResultCode RowlEngine_SetCharacterSlotOpacity(
 
 RowlEngine_ResultCode RowlEngine_GetCharacterSlotOpacity(
     RowlEngineHandle handle, const char* slotName, float* outOpacity) {
+    // A4-tur1 (siralama): handle-once — olu-handle'da arg'lara bakilmadan
+    // INVALID_HANDLE (story-TU konvansiyonu); erase-hijyeni korunur.
+    if (!toEngineChecked(handle)) {
+        std::lock_guard<std::mutex> lock(g_characterMutex);
+        g_characterStates.erase(handle);
+        return ROWL_RESULT_INVALID_HANDLE;
+    }
     if (outOpacity == nullptr) return ROWL_RESULT_INVALID_ARGUMENT;
     Rowl::Scene::CharacterSlot slot = Rowl::Scene::CharacterSlot::Body;
     const RowlEngine_ResultCode slotCheck = checkSlotName(slotName, slot);
@@ -159,6 +187,13 @@ RowlEngine_ResultCode RowlEngine_GetCharacterSlotOpacity(
 
 RowlEngine_ResultCode RowlEngine_SetCharacterSlotVisible(
     RowlEngineHandle handle, const char* slotName, int visible) {
+    // A4-tur1 (siralama): handle-once — olu-handle'da arg'lara bakilmadan
+    // INVALID_HANDLE (story-TU konvansiyonu); erase-hijyeni korunur.
+    if (!toEngineChecked(handle)) {
+        std::lock_guard<std::mutex> lock(g_characterMutex);
+        g_characterStates.erase(handle);
+        return ROWL_RESULT_INVALID_HANDLE;
+    }
     Rowl::Scene::CharacterSlot slot = Rowl::Scene::CharacterSlot::Body;
     const RowlEngine_ResultCode slotCheck = checkSlotName(slotName, slot);
     if (slotCheck != ROWL_RESULT_OK) return slotCheck;
@@ -193,6 +228,13 @@ int RowlEngine_IsCharacterSlotVisible(RowlEngineHandle handle,
 RowlEngine_ResultCode RowlEngine_RegisterCharacterPreset(
     RowlEngineHandle handle, const char* presetName,
     const char* expressionJsonUtf8) {
+    // A4-tur1 (siralama): handle-once — olu-handle'da arg'lara bakilmadan
+    // INVALID_HANDLE (story-TU konvansiyonu); erase-hijyeni korunur.
+    if (!toEngineChecked(handle)) {
+        std::lock_guard<std::mutex> lock(g_characterMutex);
+        g_characterStates.erase(handle);
+        return ROWL_RESULT_INVALID_HANDLE;
+    }
     std::string_view nameView;
     const RowlEngine_ResultCode nameCheck =
         checkPresetName(presetName, nameView);
@@ -227,6 +269,13 @@ RowlEngine_ResultCode RowlEngine_RegisterCharacterPreset(
 
 RowlEngine_ResultCode RowlEngine_ApplyCharacterExpression(
     RowlEngineHandle handle, const char* presetName) {
+    // A4-tur1 (siralama): handle-once — olu-handle'da arg'lara bakilmadan
+    // INVALID_HANDLE (story-TU konvansiyonu); erase-hijyeni korunur.
+    if (!toEngineChecked(handle)) {
+        std::lock_guard<std::mutex> lock(g_characterMutex);
+        g_characterStates.erase(handle);
+        return ROWL_RESULT_INVALID_HANDLE;
+    }
     std::string_view nameView;
     const RowlEngine_ResultCode nameCheck =
         checkPresetName(presetName, nameView);

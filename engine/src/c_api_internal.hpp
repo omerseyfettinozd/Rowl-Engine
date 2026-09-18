@@ -48,6 +48,12 @@ bool isLiveHandle(RowlEngineHandle handle) noexcept;
 bool claimHandleThread(RowlEngineHandle handle) noexcept;
 std::unique_ptr<Rowl::Core::Engine> takeLiveHandle(RowlEngineHandle handle) noexcept;
 Rowl::Core::Engine* toEngine(RowlEngineHandle h);
+Rowl::Core::Engine* toEngineChecked(RowlEngineHandle h) noexcept;
+// A4-tur1: tek-kilitli canlı+thread kontrollü erişim — isLiveHandle +
+// toEngine çift-bakışındaki TOCTOU penceresini kapatır (arada destroy
+// edilirse ikinci bakış null döner, deref UB olurdu). Fail-closed: ölü/
+// yabancı-thread handle'da nullptr. noexcept; kilit içerde alınır,
+// iç içe g_handleMutex alınmaz.
 
 #if defined(__GNUC__) || defined(__clang__)
 #pragma GCC visibility pop

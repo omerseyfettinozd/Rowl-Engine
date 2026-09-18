@@ -75,6 +75,13 @@ extern "C" {
 
 RowlEngine_ResultCode RowlEngine_LoadChapterIndexJson(RowlEngineHandle handle,
                                                       const char* indexJsonUtf8) {
+    // A4-tur1 (siralama): handle-once — olu-handle'da arg'lara bakilmadan
+    // INVALID_HANDLE (story-TU konvansiyonu); erase-hijyeni korunur.
+    if (!toEngineChecked(handle)) {
+        std::lock_guard<std::mutex> lock(g_prefetchMutex);
+        g_prefetchStates.erase(handle);
+        return ROWL_RESULT_INVALID_HANDLE;
+    }
     std::string_view view;
     if (checkSizedInput(indexJsonUtf8, view, kPrefetchInputLimitBytes) != ROWL_RESULT_OK) {
         return ROWL_RESULT_INVALID_ARGUMENT;
@@ -99,6 +106,13 @@ RowlEngine_ResultCode RowlEngine_LoadChapterIndexJson(RowlEngineHandle handle,
 
 RowlEngine_ResultCode RowlEngine_AppendChapterFileJson(RowlEngineHandle handle,
                                                        const char* chapterJsonUtf8) {
+    // A4-tur1 (siralama): handle-once — olu-handle'da arg'lara bakilmadan
+    // INVALID_HANDLE (story-TU konvansiyonu); erase-hijyeni korunur.
+    if (!toEngineChecked(handle)) {
+        std::lock_guard<std::mutex> lock(g_prefetchMutex);
+        g_prefetchStates.erase(handle);
+        return ROWL_RESULT_INVALID_HANDLE;
+    }
     std::string_view view;
     if (checkSizedInput(chapterJsonUtf8, view, kChapterFileInputLimitBytes) !=
         ROWL_RESULT_OK) {
@@ -124,6 +138,13 @@ RowlEngine_ResultCode RowlEngine_AppendChapterFileJson(RowlEngineHandle handle,
 
 RowlEngine_ResultCode RowlEngine_LoadChapter(RowlEngineHandle handle,
                                              const char* chapterIdUtf8) {
+    // A4-tur1 (siralama): handle-once — olu-handle'da arg'lara bakilmadan
+    // INVALID_HANDLE (story-TU konvansiyonu); erase-hijyeni korunur.
+    if (!toEngineChecked(handle)) {
+        std::lock_guard<std::mutex> lock(g_prefetchMutex);
+        g_prefetchStates.erase(handle);
+        return ROWL_RESULT_INVALID_HANDLE;
+    }
     std::string_view view;
     if (checkChapterId(chapterIdUtf8, view) != ROWL_RESULT_OK) {
         return ROWL_RESULT_INVALID_ARGUMENT;
@@ -147,6 +168,13 @@ RowlEngine_ResultCode RowlEngine_LoadChapter(RowlEngineHandle handle,
 
 RowlEngine_ResultCode RowlEngine_UnloadChapter(RowlEngineHandle handle,
                                                const char* chapterIdUtf8) {
+    // A4-tur1 (siralama): handle-once — olu-handle'da arg'lara bakilmadan
+    // INVALID_HANDLE (story-TU konvansiyonu); erase-hijyeni korunur.
+    if (!toEngineChecked(handle)) {
+        std::lock_guard<std::mutex> lock(g_prefetchMutex);
+        g_prefetchStates.erase(handle);
+        return ROWL_RESULT_INVALID_HANDLE;
+    }
     std::string_view view;
     if (checkChapterId(chapterIdUtf8, view) != ROWL_RESULT_OK) {
         return ROWL_RESULT_INVALID_ARGUMENT;
@@ -207,6 +235,13 @@ int RowlEngine_IsChapterBoundaryNode(RowlEngineHandle handle, uint64_t nodeId) {
 RowlEngine_ResultCode RowlEngine_PrefetchChapterAssets(RowlEngineHandle handle,
                                                        const char* chapterIdUtf8,
                                                        uint64_t budgetBytes) {
+    // A4-tur1 (siralama): handle-once — olu-handle'da arg'lara bakilmadan
+    // INVALID_HANDLE (story-TU konvansiyonu); erase-hijyeni korunur.
+    if (!toEngineChecked(handle)) {
+        std::lock_guard<std::mutex> lock(g_prefetchMutex);
+        g_prefetchStates.erase(handle);
+        return ROWL_RESULT_INVALID_HANDLE;
+    }
     // Bos/null chapterId = aktif chapter (loader aktif, yoksa motorun aktif
     // chapter'i). Dolu chapterId 128 karakter siniriyla dogrulanir.
     std::string requested;

@@ -111,6 +111,7 @@ int main(int argc, char* argv[]) {
     test_frame_reuse_lock();
     test_cache_hygiene();
     test_font_hardening();
+    test_handle_hygiene();
     test_runtime_context_and_diagnostics();
     test_crash_log();
     test_story_graph_parser();

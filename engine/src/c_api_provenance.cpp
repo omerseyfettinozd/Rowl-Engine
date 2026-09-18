@@ -63,6 +63,11 @@ RowlEngine_ResultCode RowlEngine_GetAssetProvenanceJson(RowlEngineHandle handle,
                                                        const char* assetPathUtf8, char* buffer,
                                                        uint32_t bufferSize,
                                                        uint32_t* outRequiredSize) {
+    // A4-tur1 (siralama): handle-once — olu-handle'da arg'lara bakilmadan
+    // INVALID_HANDLE (story-TU konvansiyonu).
+    // A4-tur1 (siralama): handle-once — olu-handle'da arg'lara bakilmadan
+    // INVALID_HANDLE (story-TU konvansiyonu).
+    if (!toEngineChecked(handle)) return ROWL_RESULT_INVALID_HANDLE;
     std::string_view pathView;
     if (checkSizedInput(assetPathUtf8, pathView) != ROWL_RESULT_OK) {
         return ROWL_RESULT_INVALID_ARGUMENT;

@@ -65,6 +65,18 @@ Rowl::Core::Engine* toEngine(RowlEngineHandle h) {
             record->ownerThread == std::this_thread::get_id()) ? it->second : nullptr;
 }
 
+// A4-tur1: toEngine ile aynı tek-kilit; null-handle açıkça reddedilir
+// (map'te bulunamaz ama cast-öncesi erken-çıkış niyeti belgeler).
+Rowl::Core::Engine* toEngineChecked(RowlEngineHandle h) noexcept {
+    if (!h) return nullptr;
+    std::lock_guard<std::mutex> lock(g_handleMutex);
+    const auto it = g_liveHandles.find(h);
+    if (it == g_liveHandles.end()) return nullptr;
+    const auto* record = static_cast<const HandleRecord*>(h);
+    return (record->ownerThread == std::thread::id{} ||
+            record->ownerThread == std::this_thread::get_id()) ? it->second : nullptr;
+}
+
 #if defined(__GNUC__) || defined(__clang__)
 #pragma GCC visibility pop
 #endif
