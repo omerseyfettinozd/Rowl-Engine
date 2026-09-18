@@ -37,6 +37,7 @@ add_executable(rowl_tests
     test_hardening_and_reliability.cpp
     test_rc_soak_and_data_safety.cpp
     test_camera_and_transition_pipeline.cpp
+    test_frame_hash_lock.cpp
     test_single_engine_image.cpp
     test_demo_first_light.cpp
     test_demo_second_signal.cpp

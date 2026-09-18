@@ -107,6 +107,7 @@ Engine* testEngineFromHandle(RowlEngineHandle handle);
 void test_game_object_component_system();
 void test_pixel_pitch();
 void test_window_input_routing();
+void test_frame_hash_lock();
 void test_runtime_context_and_diagnostics();
 void test_crash_log();
 void test_story_graph_parser();

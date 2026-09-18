@@ -193,6 +193,20 @@ public:
     /// can pin the Esc/P/digit/arrow contract without a visible window.
     static bool mapKeyToRuntimeInput(uint32_t sdlKey, Rowl::Platform::RuntimeInputEvent& outEvent);
 
+    /// A3 (K2 kilidi): identical-frame skip kararının paketlenmiş-içerik
+    /// çekirdeği — yalnız parametre + FNV, üye durumu okumaz. Public ve
+    /// static — MS-6 emsali — ki headless golden test bölünme/`render_data.hpp`
+    /// çıkarımı sonrası skip-davranışını sabitleyebilsin. İmza/algoritma
+    /// değişimi K2 kilit testini güncellemeyi gerektirir (kör değişim YOK).
+    /// Dinamik durum (kamera/effekt/boyut) üye `hashFrameContent`'te karışır.
+    static uint64_t hashPackedFrameContent(bool hasBackground, const std::string& background,
+                                           float bgX, float bgY, float bgW, float bgH,
+                                           const std::vector<CharacterRenderData>& characters,
+                                           const std::vector<DialogueRenderData>& dialogues,
+                                           const std::vector<ChoiceButtonRenderData>& choices,
+                                           float bgRotation, float bgParallaxX, float bgParallaxY,
+                                           float bgOpacity);
+
     void pollEvents(bool& outShouldQuit);
     void beginFrame();
 

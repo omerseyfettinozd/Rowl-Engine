@@ -107,6 +107,7 @@ int main(int argc, char* argv[]) {
     test_game_object_component_system();
     test_pixel_pitch();
     test_window_input_routing();
+    test_frame_hash_lock();
     test_runtime_context_and_diagnostics();
     test_crash_log();
     test_story_graph_parser();

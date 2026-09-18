@@ -1584,13 +1584,13 @@ void Window::renderVisualNovelFrame(
     renderVisualNovelFrame(hasBackground, background, bgX, bgY, bgW, bgH, characters, dlg);
 }
 
-uint64_t Window::hashFrameContent(bool hasBackground, const std::string& background,
+uint64_t Window::hashPackedFrameContent(bool hasBackground, const std::string& background,
                               float bgX, float bgY, float bgW, float bgH,
                               const std::vector<CharacterRenderData>& characters,
                               const std::vector<DialogueRenderData>& dialogues,
                               const std::vector<ChoiceButtonRenderData>& choices,
                               float bgRotation, float bgParallaxX, float bgParallaxY,
-                              float bgOpacity) const {
+                              float bgOpacity) {
     uint64_t hash = kFnvOffsetBasis;
     fnvMixBool(hash, hasBackground);
     fnvMixString(hash, background);
@@ -1675,6 +1675,22 @@ uint64_t Window::hashFrameContent(bool hasBackground, const std::string& backgro
         fnvMixString(hash, choice.fontFamily);
         fnvMixBool(hash, choice.enabled);
     }
+    // Packed content ends here; dynamic state mixes in hashFrameContent.
+    return hash;
+}
+
+// A3: üye sarmalayıcı — saf çekirdek + dinamik durum. Op sırası korunur;
+// davranış değişikliği YOK (ayırma öncesi/sonrası hash'ler birebir aynı).
+uint64_t Window::hashFrameContent(bool hasBackground, const std::string& background,
+                              float bgX, float bgY, float bgW, float bgH,
+                              const std::vector<CharacterRenderData>& characters,
+                              const std::vector<DialogueRenderData>& dialogues,
+                              const std::vector<ChoiceButtonRenderData>& choices,
+                              float bgRotation, float bgParallaxX, float bgParallaxY,
+                              float bgOpacity) const {
+    uint64_t hash = hashPackedFrameContent(hasBackground, background, bgX, bgY, bgW, bgH,
+                                           characters, dialogues, choices,
+                                           bgRotation, bgParallaxX, bgParallaxY, bgOpacity);
     // Dynamic render state that is not part of the packed frame.
     fnvMixF32(hash, m_camera ? m_camera->getShakeOffsetX() : 0.0f);
     fnvMixF32(hash, m_camera ? m_camera->getShakeOffsetY() : 0.0f);
