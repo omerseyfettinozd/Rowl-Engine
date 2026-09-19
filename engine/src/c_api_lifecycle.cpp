@@ -53,6 +53,27 @@ bool claimHandleThread(RowlEngineHandle handle) noexcept {
     return record->ownerThread == callingThread;
 }
 
+// D4 (#49): classify-then-claim iki ayrı kilitte TOCTOU bırakırdı (araya
+// giren rakip claim'ler, kaybedeni yanlışlıkla INVALID_HANDLE yapardı).
+// Tek kilit altında sınıfla + (Mine ise) claim'le.
+HandleStanding claimHandleOrClassify(RowlEngineHandle handle) noexcept {
+    if (!handle) return HandleStanding::Dead;
+    std::lock_guard<std::mutex> lock(g_handleMutex);
+    if (g_liveHandles.find(handle) == g_liveHandles.end()) {
+        return HandleStanding::Dead;
+    }
+    auto* record = static_cast<HandleRecord*>(handle);
+    const auto callingThread = std::this_thread::get_id();
+    if (record->ownerThread != std::thread::id{} &&
+        record->ownerThread != callingThread) {
+        return HandleStanding::Foreign;
+    }
+    if (record->ownerThread == std::thread::id{}) {
+        record->ownerThread = callingThread;
+    }
+    return HandleStanding::Mine;
+}
+
 // D3 (B1d #151): administrative unclaim. Only RowlEngine_ReclaimHandle calls
 // this (which additionally steals the dispatch pin under the video serial).
 bool unclaimHandleThread(RowlEngineHandle handle) noexcept {
@@ -277,13 +298,14 @@ void RowlEngine_Run(RowlEngineHandle handle) {
 }
 
 void RowlEngine_Step(RowlEngineHandle handle, float deltaTime) {
-    if (!isLiveHandle(handle)) {
-        // D3 (#102): foreign Step stamps WRONG_THREAD instead of vanishing.
-        if (classifyHandle(handle) == HandleStanding::Foreign) {
-            stampWrongThread(handle, "step");
-        }
+    // D3 (#102): foreign Step stamps WRONG_THREAD instead of vanishing.
+    // D4 (#49): claim-or-reject — sahipsiz pencerede ilk Step'leyen
+    // claim'ler; sonraki yabancı-Step'ler damgalanır, ilerlemez.
+    if (claimHandleOrClassify(handle) == HandleStanding::Foreign) {
+        stampWrongThread(handle, "step");
         return;
     }
+    if (!isLiveHandle(handle)) return;  // dead: sessiz no-op (D3 ile aynı)
     invokeNoexcept([&] {
         auto checked = toEngineChecked(handle);
         if (!checked) return;

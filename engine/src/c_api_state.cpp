@@ -112,6 +112,17 @@ RowlEngine_ResultCode RowlEngine_GetDialogueHistoryJsonUtf8(
 
 RowlEngine_ResultCode RowlEngine_SaveGameSlotResult(
     RowlEngineHandle handle, int32_t slotIndex) {
+    // D4 (#49): claim-or-reject. Create-sonrası/Init-öncesi penceresinde
+    // handle sahipsizdir (isLiveHandle her thread'e geçer); iki thread
+    // Save/Load/Rewind'i kilitsiz yarıştırıp m_gameState shared_ptr'ında UB
+    // üretirdi. İlk çağıran claim'ler, yabancılar WRONG_THREAD damgasıyla
+    // reddedilir — sessiz INVALID_HANDLE gömülmesi yok, state'e dokunulmaz.
+    // Tek-kilit: classify-then-claim TOCTOU'su kaybedeni yanlışlıkla
+    // INVALID_HANDLE yapardı.
+    if (claimHandleOrClassify(handle) == HandleStanding::Foreign) {
+        stampWrongThread(handle, "save_game_slot");
+        return ROWL_RESULT_WRONG_THREAD;
+    }
     if (!isLiveHandle(handle)) return ROWL_RESULT_INVALID_HANDLE;
     return invokeNoexcept<RowlEngine_ResultCode>([&] {
         auto engine = toEngineChecked(handle);
@@ -130,6 +141,11 @@ int RowlEngine_SaveGameSlot(RowlEngineHandle handle, int32_t slotIndex) {
 
 RowlEngine_ResultCode RowlEngine_LoadGameSlotResult(
     RowlEngineHandle handle, int32_t slotIndex) {
+    // D4 (#49): Save ile aynı claim-or-reject (gerekçe yukarıda).
+    if (claimHandleOrClassify(handle) == HandleStanding::Foreign) {
+        stampWrongThread(handle, "load_game_slot");
+        return ROWL_RESULT_WRONG_THREAD;
+    }
     if (!isLiveHandle(handle)) return ROWL_RESULT_INVALID_HANDLE;
     return invokeNoexcept<RowlEngine_ResultCode>([&] {
         auto engine = toEngineChecked(handle);
@@ -147,6 +163,12 @@ int RowlEngine_LoadGameSlot(RowlEngineHandle handle, int32_t slotIndex) {
 }
 
 int RowlEngine_HasSaveSlot(RowlEngineHandle handle, int32_t slotIndex) {
+    // D4 (#49): salt-okuma değil — Engine::hasSaveSlot görünürde const ama
+    // sessionPersistence() üzerinden setSaveDirectory yazar; aynı kapı.
+    if (claimHandleOrClassify(handle) == HandleStanding::Foreign) {
+        stampWrongThread(handle, "has_save_slot");
+        return 0;
+    }
     if (!isLiveHandle(handle)) return 0;
     return invokeNoexcept<int>([&] {
         auto checked = toEngineChecked(handle);
@@ -155,6 +177,11 @@ int RowlEngine_HasSaveSlot(RowlEngineHandle handle, int32_t slotIndex) {
 }
 
 int RowlEngine_DeleteSaveSlot(RowlEngineHandle handle, int32_t slotIndex) {
+    // D4 (#49): disk + m_pauseSlotCacheValid yazar; aynı kapı.
+    if (claimHandleOrClassify(handle) == HandleStanding::Foreign) {
+        stampWrongThread(handle, "delete_save_slot");
+        return 0;
+    }
     if (!isLiveHandle(handle)) return 0;
     return invokeNoexcept<int>([&] {
         auto checked = toEngineChecked(handle);
@@ -163,6 +190,11 @@ int RowlEngine_DeleteSaveSlot(RowlEngineHandle handle, int32_t slotIndex) {
 }
 
 int RowlEngine_Rewind(RowlEngineHandle handle, uint32_t steps) {
+    // D4 (#49): m_gameState zincirini yazar; aynı kapı.
+    if (claimHandleOrClassify(handle) == HandleStanding::Foreign) {
+        stampWrongThread(handle, "rewind");
+        return 0;
+    }
     if (!isLiveHandle(handle)) return 0;
     return invokeNoexcept<int>([&] {
         auto checked = toEngineChecked(handle);
@@ -181,6 +213,12 @@ uint64_t RowlEngine_GetCurrentStepId(RowlEngineHandle handle) {
 RowlEngine_ResultCode RowlEngine_GetSaveSlotMetadataJson(
     RowlEngineHandle handle, int32_t slotIndex, char* buffer,
     uint32_t bufferSize, uint32_t* outRequiredSize) {
+    // D4 (#49): display-only ama engine->hasSaveSlot üzerinden aynı
+    // yazan-yola girer; aynı kapı.
+    if (claimHandleOrClassify(handle) == HandleStanding::Foreign) {
+        stampWrongThread(handle, "get_save_slot_metadata");
+        return ROWL_RESULT_WRONG_THREAD;
+    }
     if (!isLiveHandle(handle)) return ROWL_RESULT_INVALID_HANDLE;
     if (!Rowl::State::isValidSlot(slotIndex)) return ROWL_RESULT_INVALID_ARGUMENT;
     return invokeNoexcept<RowlEngine_ResultCode>([&] {

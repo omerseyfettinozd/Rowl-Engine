@@ -746,6 +746,51 @@ double LuaSandbox::getGlobalNumber(const std::string& key, double defaultValue) 
     return defaultValue;
 }
 
+// D4 (#45): surgical variable-map restore after a condition ran. Fast-path
+// on map-identical snapshots (read-only conditions stay silent). Otherwise
+// added keys are erased from the map with their global nilled under
+// RecoveryScope, and modified/deleted keys are replayed through
+// setVariable() (Lua-first commit, budget-checked, no-throw — snapshot keys
+// fit the budget by construction). m_variablesBytes is assigned exactly, not
+// recomputed, so the byte counter cannot drift across evaluations. Runs on
+// every evaluateCondition exit path via ConditionPurityGuard; never throws.
+void LuaSandbox::rollbackConditionVariables(
+    const std::unordered_map<std::string, std::string>& snapshot,
+    std::size_t snapshotBytes, const char* exprForLog) {
+    if (m_scriptVariables == snapshot && m_variablesBytes == snapshotBytes) {
+        return;
+    }
+    std::size_t restored = 0;
+    for (auto it = m_scriptVariables.begin(); it != m_scriptVariables.end();) {
+        if (snapshot.find(it->first) == snapshot.end()) {
+            const std::string key = it->first;
+            it = m_scriptVariables.erase(it);
+            if (m_luaState) {
+                const RecoveryScope recovery(this);
+                lua_pushnil(m_luaState);
+                lua_setglobal(m_luaState, key.c_str());
+            }
+            ++restored;
+        } else {
+            ++it;
+        }
+    }
+    for (const auto& [key, value] : snapshot) {
+        const auto current = m_scriptVariables.find(key);
+        if (current == m_scriptVariables.end() || current->second != value) {
+            setVariable(key, value);
+            ++restored;
+        }
+    }
+    m_variablesBytes = snapshotBytes;
+    std::string expr = (exprForLog != nullptr) ? exprForLog : "";
+    if (expr.size() > 64) {
+        expr = expr.substr(0, 64) + "...";
+    }
+    ROWL_LOG_WARN("Lua condition side-effect rolled back (" +
+                  std::to_string(restored) + " var(s)): '" + expr + "'");
+}
+
 bool LuaSandbox::evaluateCondition(const std::string& conditionExpr) {
     std::lock_guard<std::recursive_mutex> lock(m_mutex);
     m_lastError.clear();
@@ -767,6 +812,12 @@ bool LuaSandbox::evaluateCondition(const std::string& conditionExpr) {
     }
     // B7 (#26): poisoned sessions refuse before touching Lua state.
     if (!checkCallbackAllowed("condition")) return false;
+
+    // D4 (#45): purity guard — snapshot before any Lua runs; the dtor rolls
+    // back rowl.var_set writes on every exit path below (result, syntax
+    // error, runtime error, oversize refuse). Literal fast-paths above stay
+    // guard-free: they execute nothing.
+    const ConditionPurityGuard purityGuard(this, conditionExpr);
 
     // B7 (#28-class residual): the old code reset the instruction counter with
     // a raw push/setfield pair — unprotected-throw UB on a quota-pinned

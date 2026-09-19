@@ -1,5 +1,6 @@
 #include "rowl/state/game_state.hpp"
 #include "rowl/core/logger.hpp"
+#include "rowl/core/story_graph.hpp"
 #include "rowl/platform/user_data_directories.hpp"
 #include "rowl/state/save_metadata.hpp"
 #include "rowl/state/session_persistence.hpp"
@@ -252,6 +253,16 @@ std::shared_ptr<const GameState> GameState::withSaveMetadata(
     return nextState;
 }
 
+std::shared_ptr<const GameState> GameState::withGraphIdentity(
+    const std::shared_ptr<const GameState>& current,
+    const std::string& graphIdentity) {
+    if (!current) return nullptr;
+    if (current->graphIdentity == graphIdentity) return current;
+    auto nextState = std::make_shared<GameState>(*current);
+    nextState->graphIdentity = graphIdentity;
+    return nextState;
+}
+
 std::shared_ptr<const GameState> GameState::rewind(
     const std::shared_ptr<const GameState>& current,
     uint64_t stepsToRewind) {
@@ -302,6 +313,10 @@ std::string GameState::serializeJson() const {
     ).count();
     // Faz 2 Dilim 4 display-only save metadata (optional on decode).
     j["saved_at"] = Rowl::State::iso8601UtcNow();
+    // D4/G (#70): graph content identity. Written only when stamped (legacy
+    // saves have no key → decode defaults to "" → legacy-warn path on load).
+    // No format bump: additive optional key, v3 readers ignore unknowns.
+    if (!graphIdentity.empty()) j["graph_id"] = graphIdentity;
     j["playtime_seconds"] = playtimeSeconds;
     j["chapter_id"] = chapterId;
     j["chapter_title"] = chapterTitle;
@@ -417,6 +432,14 @@ GameStateDecodeResult GameState::decodeJson(const std::string& jsonStr) {
         if (!thumbnailBase64.empty() &&
             !Rowl::State::base64Decode(thumbnailBase64, state->thumbnailPng)) {
             ROWL_LOG_ERROR("GameState JSON contains a malformed thumbnail");
+            return {nullptr, GameStateDecodeStatus::InvalidData, version};
+        }
+
+        // D4/G (#70): graph identity is optional — legacy saves predate it.
+        // Oversized values are hostile/foreign input → InvalidData.
+        state->graphIdentity = j.value("graph_id", "");
+        if (state->graphIdentity.size() > Rowl::Core::kMaxGraphIdentityBytes) {
+            ROWL_LOG_ERROR("GameState JSON contains an oversized graph identity");
             return {nullptr, GameStateDecodeStatus::InvalidData, version};
         }
 

@@ -2357,22 +2357,32 @@ bool Engine::saveGameSlot(int32_t slotIndex) {
                             "save_game_slot", std::to_string(slotIndex));
         return false;
     }
-    m_gameState = Rowl::State::SessionPersistence::checkpoint(
-        m_gameState, m_storyRuntime.currentNodeId());
-    if (m_gameState) {
-        m_gameState = Rowl::State::GameState::withSaveMetadata(
-            m_gameState, buildSaveMetadata());
+    // D4/D1 (#51): stage-then-commit. checkpoint+metadata önce yerelde
+    // hazırlanır; m_gameState'e yalnızca disk yazımı BAŞARILIYSA commit'lenir.
+    // Başarısız save artık stepId/node ilerletmez, eski slot dosyası değişmez.
+    std::shared_ptr<const Rowl::State::GameState> staged =
+        Rowl::State::SessionPersistence::checkpoint(
+            m_gameState, m_storyRuntime.currentNodeId());
+    if (staged) {
+        staged = Rowl::State::GameState::withSaveMetadata(
+            staged, buildSaveMetadata());
+        // D4/G (#70): stamp the committed graph's content identity so a
+        // foreign-graph save aborts at load instead of warn-only merging.
+        // Graph-less flows stamp "" → legacy-warn path on load.
+        staged = Rowl::State::GameState::withGraphIdentity(
+            staged, Rowl::Core::computeGraphIdentity(getStoryGraphDocument()));
     }
     auto& persistence = sessionPersistence();
     const std::string saveDirectory =
         Rowl::Platform::pathToUtf8(persistence.saveDirectory());
-    bool ok = persistence.saveSlot(m_gameState, slotIndex);
+    bool ok = persistence.saveSlot(staged, slotIndex);
     if (!ok) {
         m_context->setError(RuntimeErrorCode::IoError,
                             "Failed to write save slot #" + std::to_string(slotIndex) + " to " + saveDirectory,
                             "save_game_slot", std::to_string(slotIndex));
         return false;
     }
+    m_gameState = staged;
     // A2b: the slot page memoizes occupancy — a successful write changes it.
     m_pauseSlotCacheValid = false;
     m_context->setSuccess("save_game_slot", std::to_string(slotIndex));
@@ -2430,6 +2440,61 @@ bool Engine::loadGameSlot(int32_t slotIndex) {
         return false;
     }
 
+    // D4/V (#43/#44/#46/#50/#52): sarkan-cursor reddi. Kayittaki node
+    // commit'li grafta yoksa load commitlenmeden reddedilir (ValidationError).
+    // Graf commitlenmemisken (legacy/graphsiz akis) dogrulanacak bir sey
+    // olmadigindan eski kabul-davranisi korunur.
+    {
+        const uint64_t savedNode = loadResult.state ? loadResult.state->activeNodeId : 0;
+        const auto& doc = getStoryGraphDocument();
+        if (!doc.nodes.empty() && doc.nodes.find(savedNode) == doc.nodes.end()) {
+            m_context->setError(RuntimeErrorCode::ValidationError,
+                                "Save slot #" + std::to_string(slotIndex) +
+                                    " restores node #" + std::to_string(savedNode) +
+                                    " absent from the loaded graph",
+                                "load_game_slot", std::to_string(slotIndex));
+            return false;
+        }
+    }
+
+    // D4/G (#70): graf-kimliği kilidi. Kayıt, commit'li graftan farklı bir
+    // içeriğe aitse load commitlenmeden reddedilir (ValidationError): yabancı
+    // değişken/ses/playtime oturuma bulaşmaz, rewind zinciri korunur.
+    // Kimliksiz legacy kayıtlar WARN ile eski kabul-davranışını korur;
+    // grafsız akışta karşılaştırılacak bir şey yoktur (V ile aynı kural).
+    {
+        const std::string savedGraph =
+            loadResult.state ? loadResult.state->graphIdentity : "";
+        const auto& doc = getStoryGraphDocument();
+        if (savedGraph.empty()) {
+            ROWL_LOG_WARN("Save slot #" + std::to_string(slotIndex) +
+                          " carries no graph identity (legacy save); " +
+                          "skipping graph-identity check");
+        } else if (!doc.nodes.empty() &&
+                   savedGraph !=
+                       Rowl::Core::computeGraphIdentity(doc)) {
+            m_context->setError(RuntimeErrorCode::ValidationError,
+                                "Save slot #" + std::to_string(slotIndex) +
+                                    " was recorded from a different story graph; " +
+                                    "refusing to apply",
+                                "load_game_slot", std::to_string(slotIndex));
+            return false;
+        }
+    }
+
+    // D4/R (#48): rollback anlık-görüntüsü. decode+validate geçti ama restore
+    // zinciri (imleç/lua/sahne/ses) patlarsa oturum yarı-göçmüş kalmasın:
+    // yakala, geri al, fail-loud dön.
+    const auto prevState = m_gameState;
+    const uint64_t prevNode = m_storyRuntime.currentNodeId();
+    const double prevPlaytime = m_playtimeSeconds;
+    const uint64_t prevSfxNode = m_lastSfxPlaybackNodeId;
+    // getAllVariables const-ref döner — kopya şart (clearVariables sonrası
+    // referans ölürdü).
+    const auto prevLuaVars = m_luaSandbox
+        ? m_luaSandbox->getAllVariables()
+        : std::unordered_map<std::string, std::string>{};
+    try {
     m_gameState = loadResult.state;
     m_playtimeSeconds = m_gameState ? m_gameState->playtimeSeconds : 0.0;
     // A2a-tur2: a save pointing outside its graph restored a null cursor
@@ -2487,6 +2552,28 @@ bool Engine::loadGameSlot(int32_t slotIndex) {
         }
     }
     restoreAudioStateFromGameState();
+    } catch (const std::exception& restoreError) {
+        // Best-effort geri-alım: adımlar atama + no-throw lua ilkelleridir,
+        // kendi başına fırlatmaz. Sahne görselleri yeni karede kalabilir —
+        // state otoriterdir, WARN duyurur.
+        m_gameState = prevState;
+        m_playtimeSeconds = prevPlaytime;
+        m_lastSfxPlaybackNodeId = prevSfxNode;
+        m_storyRuntime.setCurrentNodeId(prevNode);
+        if (m_luaSandbox) {
+            m_luaSandbox->clearVariables();
+            for (const auto& [key, value] : prevLuaVars) m_luaSandbox->setVariable(key, value);
+        }
+        ROWL_LOG_WARN("Load slot #" + std::to_string(slotIndex) +
+                      " restore failed (" + restoreError.what() +
+                      "); session rolled back");
+        m_context->setError(RuntimeErrorCode::UnknownError,
+                            "Load slot #" + std::to_string(slotIndex) +
+                                " restore failed; session rolled back: " +
+                                restoreError.what(),
+                            "load_game_slot", std::to_string(slotIndex));
+        return false;
+    }
     ROWL_LOG_INFO("Loaded Game Slot #" + std::to_string(slotIndex) +
                   " → Node #" + std::to_string(m_storyRuntime.currentNodeId()));
     if (loadResult.migrated()) {
@@ -2829,8 +2916,28 @@ bool Engine::rewind(uint64_t steps) {
         return false;
     }
     auto rewound = Rowl::State::SessionPersistence::rewind(m_gameState, steps);
-    if (!rewound) return false;
+    if (!rewound) {
+        // D4/R-48: refuse-yolu last-result'a yazılmadan 0 dönüyordu; host
+        // bayat Ok kodunu okuyup hatayı kaçırıyordu. Fail-loud.
+        m_context->setError(RuntimeErrorCode::InvalidArgument,
+                            steps == 0
+                                ? "Cannot rewind zero steps"
+                                : "Cannot rewind " + std::to_string(steps) +
+                                      " steps from step #" +
+                                      std::to_string(getCurrentStepId()),
+                            "rewind", std::to_string(steps));
+        return false;
+    }
 
+    // D4/R (#48): load ile aynı rollback sözleşmesi — restore patlarsa
+    // oturum rewind-öncesine döner, fail-loud.
+    const auto prevState = m_gameState;
+    const uint64_t prevNode = m_storyRuntime.currentNodeId();
+    const uint64_t prevSfxNode = m_lastSfxPlaybackNodeId;
+    const auto prevLuaVars = m_luaSandbox
+        ? m_luaSandbox->getAllVariables()
+        : std::unordered_map<std::string, std::string>{};
+    try {
     m_gameState = rewound;
     // A2a-tur2: same dangle-audibility as the save-load restore above.
     if (!m_storyRuntime.setCurrentNodeId(m_gameState->activeNodeId)) {
@@ -2881,6 +2988,24 @@ bool Engine::rewind(uint64_t steps) {
         }
     }
     restoreAudioStateFromGameState();
+    } catch (const std::exception& restoreError) {
+        m_gameState = prevState;
+        m_lastSfxPlaybackNodeId = prevSfxNode;
+        m_storyRuntime.setCurrentNodeId(prevNode);
+        if (m_luaSandbox) {
+            m_luaSandbox->clearVariables();
+            for (const auto& [key, value] : prevLuaVars) m_luaSandbox->setVariable(key, value);
+        }
+        ROWL_LOG_WARN("Rewind of " + std::to_string(steps) +
+                      " steps restore failed (" + restoreError.what() +
+                      "); session rolled back");
+        m_context->setError(RuntimeErrorCode::UnknownError,
+                            std::string("Rewind restore failed; session rolled back: ") +
+                                restoreError.what(),
+                            "rewind", std::to_string(steps));
+        return false;
+    }
+    m_context->setSuccess("rewind", std::to_string(steps));
     return true;
 }
 

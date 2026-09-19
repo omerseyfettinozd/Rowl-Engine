@@ -89,6 +89,12 @@ struct GameState {
     uint32_t thumbnailWidth = 0;
     uint32_t thumbnailHeight = 0;
 
+    // Faz D4/G (#70): story/graph content identity ("graph_id" on the wire).
+    // Stamped at save time from the committed graph; empty for legacy saves
+    // (decode default) and graph-less flows. Never affects simulation or
+    // rewind — load-time gate only.
+    std::string graphIdentity;
+
     // Smart pointers last
     std::shared_ptr<const VariableMap> variables = std::make_shared<VariableMap>();
     std::shared_ptr<const std::vector<DialogueHistoryEntry>> dialogueHistory =
@@ -132,6 +138,13 @@ struct GameState {
     static std::shared_ptr<const GameState> withSaveMetadata(
         const std::shared_ptr<const GameState>& current,
         const SaveMetadata& metadata
+    );
+
+    /// Returns a structurally shared copy stamped with a graph identity
+    /// (D4/G #70). Equal identity returns the input unchanged.
+    static std::shared_ptr<const GameState> withGraphIdentity(
+        const std::shared_ptr<const GameState>& current,
+        const std::string& graphIdentity
     );
 
     // Serialization & slot persistence

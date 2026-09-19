@@ -42,6 +42,32 @@ public:
 
     bool evaluateCondition(const std::string& conditionExpr);
 
+    /// D4 (#45): condition side-effect purity. evaluateCondition() snapshots
+    /// the variable map on entry; the guard's dtor rolls back anything the
+    /// condition wrote via rowl.var_set (added keys erased + global nilled,
+    /// modified keys replayed through setVariable()). Read-only conditions
+    /// hit the == fast-path and stay silent. A-scope only: the variable map
+    /// and its globals. Raw non-map Lua globals a condition plants directly
+    /// (e.g. `x = 1`) are NOT rolled back — documented residual; conditions
+    /// are authored content, not hostile code.
+    struct ConditionPurityGuard {
+        explicit ConditionPurityGuard(LuaSandbox* owner, const std::string& expr)
+            : m_owner(owner), m_expr(expr),
+              m_snapshot(owner->m_scriptVariables),
+              m_bytes(owner->m_variablesBytes) {}
+        ~ConditionPurityGuard() {
+            m_owner->rollbackConditionVariables(m_snapshot, m_bytes,
+                                                m_expr.c_str());
+        }
+        ConditionPurityGuard(const ConditionPurityGuard&) = delete;
+        ConditionPurityGuard& operator=(const ConditionPurityGuard&) = delete;
+    private:
+        LuaSandbox* m_owner;
+        std::string m_expr;
+        std::unordered_map<std::string, std::string> m_snapshot;
+        std::size_t m_bytes;
+    };
+
     /// The most recent module compile or lifecycle error. This is intentionally
     /// diagnostic-only: callers must still use the boolean return value as the
     /// authority for an operation's success.
@@ -148,6 +174,14 @@ private:
     /// still terminates on wall time.
     bool checkCallbackAllowed(const char* what);
     void armWallDeadline();
+    /// D4 (#45): surgical restore of the variable map after a condition ran.
+    /// Map-identical snapshots return via fast-path; otherwise added keys are
+    /// erased (map + global under RecoveryScope) and modified keys are
+    /// replayed through setVariable(), with m_variablesBytes restored exactly.
+    /// Never throws out (rollback runs on every evaluateCondition exit path).
+    void rollbackConditionVariables(
+        const std::unordered_map<std::string, std::string>& snapshot,
+        std::size_t snapshotBytes, const char* exprForLog);
 
     lua_State* m_luaState = nullptr;
     // B7 (#34/#37): every public entry point locks this. The Lua C API is

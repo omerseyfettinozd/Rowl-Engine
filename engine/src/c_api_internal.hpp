@@ -63,6 +63,11 @@ enum class HandleStanding {
 HandleStanding classifyHandle(RowlEngineHandle handle) noexcept;
 bool isLiveHandle(RowlEngineHandle handle) noexcept;
 bool claimHandleThread(RowlEngineHandle handle) noexcept;
+// D4 (#49): tek-kilitli claim-or-reject — classify + claim aynı kilit altında,
+// araya claim sızamaz (ayrı-ayrı çağrıdaki TOCTOU INVALID_HANDLE üretirdi).
+// Dead → Dead; Foreign → Foreign (claim yok); sahipsiz/sahipli-Mine → claim +
+// Mine. Save/Load/Step/Rewind ailesi bunu kullanır.
+HandleStanding claimHandleOrClassify(RowlEngineHandle handle) noexcept;
 bool unclaimHandleThread(RowlEngineHandle handle) noexcept;
 std::shared_ptr<Rowl::Core::Engine> takeLiveHandle(RowlEngineHandle handle) noexcept;
 Rowl::Core::Engine* toEngine(RowlEngineHandle h);
