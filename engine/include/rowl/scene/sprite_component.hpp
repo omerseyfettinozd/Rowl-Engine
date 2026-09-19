@@ -1,6 +1,8 @@
 #pragma once
 
 #include "rowl/scene/component.hpp"
+#include <algorithm>
+#include <cmath>
 #include <string>
 
 namespace Rowl::Scene {
@@ -20,16 +22,19 @@ public:
     const std::string& getTexturePath() const { return m_texturePath; }
     void setTexturePath(const std::string& texturePath) { m_texturePath = texturePath; }
 
+    // B6 (#3/#11): same keep-last-valid contract as TransformComponent;
+    // opacity additionally clamps to [0,1] (a downstream std::clamp cannot
+    // stop NaN from reaching the UB float-to-Uint8 alpha cast).
     float getWidth() const { return m_width; }
-    void setWidth(float width) { m_width = width; }
+    void setWidth(float width) { if (std::isfinite(width)) m_width = width; }
 
     float getHeight() const { return m_height; }
-    void setHeight(float height) { m_height = height; }
+    void setHeight(float height) { if (std::isfinite(height)) m_height = height; }
 
-    void setSize(float width, float height) { m_width = width; m_height = height; }
+    void setSize(float width, float height) { if (std::isfinite(width) && std::isfinite(height)) { m_width = width; m_height = height; } }
 
     float getOpacity() const { return m_opacity; }
-    void setOpacity(float opacity) { m_opacity = opacity; }
+    void setOpacity(float opacity) { if (std::isfinite(opacity)) m_opacity = std::clamp(opacity, 0.0f, 1.0f); }
 
     int getSortOrder() const { return m_sortOrder; }
     void setSortOrder(int sortOrder) { m_sortOrder = sortOrder; }

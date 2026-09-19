@@ -1221,7 +1221,10 @@ void Window::renderVisualNovelFrame(
                 ? m_fontRenderer->measureTextWidth(dlg.speaker, speakerFontPx)
                 : (static_cast<float>(dlg.speaker.length()) * 10.0f * metrics.scaleFactor);
 
-            float tagW = std::clamp(speakerTextW + (32.0f * metrics.scaleFactor), 120.0f * metrics.scaleFactor, scaledDlgW * 0.8f);
+            // B6 (#10): narrow boxes make lo > hi (std::clamp UB) — pin hi up.
+            float tagW = std::clamp(speakerTextW + (32.0f * metrics.scaleFactor),
+                                    120.0f * metrics.scaleFactor,
+                                    std::max(scaledDlgW * 0.8f, 120.0f * metrics.scaleFactor));
             float tagH = (dlg.speakerFontSize * 1.4f + 12.0f) * metrics.scaleFactor;
             float tagX = physBoxX + (20.0f * metrics.scaleFactor);
             float tagY = physBoxY - (tagH * 0.6f);
@@ -1313,7 +1316,10 @@ void Window::renderVisualNovelFrame(
             if (!dlg.speaker.empty()) {
                 float speakerFontPx = dlg.speakerFontSize * metrics.scaleFactor;
                 float speakerTextW = m_fontRenderer->measureTextWidth(dlg.speaker, speakerFontPx);
-                float tagW = std::clamp(speakerTextW + (32.0f * metrics.scaleFactor), 120.0f * metrics.scaleFactor, scaledDlgW * 0.8f);
+                // B6 (#10): narrow boxes make lo > hi (std::clamp UB) — pin hi up.
+            float tagW = std::clamp(speakerTextW + (32.0f * metrics.scaleFactor),
+                                    120.0f * metrics.scaleFactor,
+                                    std::max(scaledDlgW * 0.8f, 120.0f * metrics.scaleFactor));
                 float tagH = (dlg.speakerFontSize * 1.4f + 12.0f) * metrics.scaleFactor;
                 float tagX = physBoxX + (20.0f * metrics.scaleFactor);
                 float tagY = physBoxY - (tagH * 0.6f);
@@ -1326,7 +1332,8 @@ void Window::renderVisualNovelFrame(
                     textDrawY,
                     speakerFontPx,
                     {255, 255, 255, 255},
-                    tagW - (32.0f * metrics.scaleFactor),
+                    // B6 (#10): keep the wrap width non-negative on narrow boxes.
+                    std::max(0.0f, tagW - (32.0f * metrics.scaleFactor)),
                     tagH,
                     "Left"
                 );
@@ -1656,6 +1663,14 @@ void Window::drawSprite(const std::string& filename,
                         float virtualHeight,
                         float opacity) {
     if (!m_initialized || !m_sdlRenderer || filename.empty()) return;
+    // B6 (#3/#11) defense-in-depth: setters already reject non-finite, but a
+    // poisoned value must never reach the UB float-to-Uint8 alpha cast or an
+    // undefined SDL_FRect. Drop the sprite, keep the frame.
+    if (!std::isfinite(virtualX) || !std::isfinite(virtualY) ||
+        !std::isfinite(virtualWidth) || !std::isfinite(virtualHeight) ||
+        !std::isfinite(opacity)) {
+        return;
+    }
 
     if (!m_isEmbedded) {
         int currentPhysW = 0, currentPhysH = 0;

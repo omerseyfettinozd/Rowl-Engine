@@ -10,6 +10,8 @@
 #include "rowl/core/story_graph.hpp"
 #include "rowl/core/story_runtime.hpp"
 #include <array>
+#include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <string>
 #include <memory>
@@ -214,7 +216,13 @@ public:
     float getActiveBackgroundParallaxX() const { return m_activeBackgroundParallaxX; }
     float getActiveBackgroundParallaxY() const { return m_activeBackgroundParallaxY; }
     float getActiveBackgroundOpacity()   const { return m_activeBackgroundOpacity; }
-    void setBackgroundParallax(float px, float py) { m_activeBackgroundParallaxX = px; m_activeBackgroundParallaxY = py; }
+    /// B6 (#8): rejects non-finite inputs (keeps last-valid) and clamps
+    /// finite values to [-8,8]; same contract as JSON hydration.
+    void setBackgroundParallax(float px, float py) {
+        if (!std::isfinite(px) || !std::isfinite(py)) return;
+        m_activeBackgroundParallaxX = std::clamp(px, -8.0f, 8.0f);
+        m_activeBackgroundParallaxY = std::clamp(py, -8.0f, 8.0f);
+    }
     float getActiveDialogueBoxX()       const { return m_activeDialogueData.x; }
     float getActiveDialogueBoxY()       const { return m_activeDialogueData.y; }
     float getActiveDialogueBoxWidth()   const { return m_activeDialogueData.width; }

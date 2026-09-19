@@ -537,6 +537,14 @@ bool Engine::advanceToChoice(const std::string& optionId) {
 }
 
 bool Engine::handlePointerDown(float physicalX, float physicalY) {
+    // B6 (#9): NaN x/y fails every comparison in containsPhysicalPoint, so
+    // the tap is misclassified as bezelTap — and with no choice buttons the
+    // bezel path returns false (advance). A non-finite tap is not a tap:
+    // consume it as a no-op before it can advance the story.
+    if (!std::isfinite(physicalX) || !std::isfinite(physicalY)) {
+        ROWL_LOG_WARN("Non-finite pointer coordinates consumed without advancing");
+        return true;
+    }
     if (!m_window) return false;
     float x = 0.0f, y = 0.0f;
     bool bezelTap = false;
@@ -578,6 +586,46 @@ void Engine::updateActiveScene(
     float dlgX, float dlgY, float dlgW, float dlgH,
     float bgRot, float charRot
 ) {
+    // B6 (#6): the 14 legacy geometry floats flowed unsanitized into member
+    // state and then into SDL_FRect production (NaN drops the frame, Inf
+    // overflows, negative w/h draws invisible/mirrored). Non-finite inputs
+    // keep last-valid, finite ones are magnitude-capped; w/h stay positive.
+    // One InvalidArgument record per call (fail-loud); valid inputs identical.
+    auto fixSceneFloat = [&](float& v, float keep, float lo, float hi) {
+        if (!std::isfinite(v)) {
+            v = keep;
+        } else {
+            v = std::clamp(v, lo, hi);
+        }
+    };
+    const float mag = static_cast<float>(kMaxComponentNumericMagnitude);
+    const float oldBgW = m_activeBackgroundWidth, oldBgH = m_activeBackgroundHeight;
+    const float oldCharW = m_activeCharacterWidth, oldCharH = m_activeCharacterHeight;
+    const float oldDlgW = m_activeDialogueBoxWidth, oldDlgH = m_activeDialogueBoxHeight;
+    bool sceneArgsValid =
+        std::isfinite(bgX) && std::isfinite(bgY) && std::isfinite(bgW) && std::isfinite(bgH) &&
+        std::isfinite(charX) && std::isfinite(charY) && std::isfinite(charW) && std::isfinite(charH) &&
+        std::isfinite(dlgX) && std::isfinite(dlgY) && std::isfinite(dlgW) && std::isfinite(dlgH) &&
+        std::isfinite(bgRot) && std::isfinite(charRot);
+    fixSceneFloat(bgX, m_activeBackgroundX, -mag, mag);
+    fixSceneFloat(bgY, m_activeBackgroundY, -mag, mag);
+    fixSceneFloat(bgW, oldBgW > 0.0f ? oldBgW : 1920.0f, 1.0f, mag);
+    fixSceneFloat(bgH, oldBgH > 0.0f ? oldBgH : 1080.0f, 1.0f, mag);
+    fixSceneFloat(charX, m_activeCharacterX, -mag, mag);
+    fixSceneFloat(charY, m_activeCharacterY, -mag, mag);
+    fixSceneFloat(charW, oldCharW > 0.0f ? oldCharW : 360.0f, 1.0f, mag);
+    fixSceneFloat(charH, oldCharH > 0.0f ? oldCharH : 540.0f, 1.0f, mag);
+    fixSceneFloat(dlgX, m_activeDialogueBoxX, -mag, mag);
+    fixSceneFloat(dlgY, m_activeDialogueBoxY, -mag, mag);
+    fixSceneFloat(dlgW, oldDlgW > 0.0f ? oldDlgW : 1760.0f, 1.0f, mag);
+    fixSceneFloat(dlgH, oldDlgH > 0.0f ? oldDlgH : 180.0f, 1.0f, mag);
+    fixSceneFloat(bgRot, m_activeBackgroundRotation, -mag, mag);
+    fixSceneFloat(charRot, m_activeCharacterRotation, -mag, mag);
+    if (!sceneArgsValid) {
+        ROWL_LOG_WARN("Legacy UpdateScene rejected a non-finite argument, kept last-valid geometry");
+        m_context->setError(RuntimeErrorCode::InvalidArgument,
+                            "Legacy scene geometry must be finite", "update_active_scene", "");
+    }
     m_activeChoiceButtons.clear();
     m_hasBackground = !background.empty();
     m_hasDialogueBox = !dialogue.empty() || !speaker.empty();
@@ -806,7 +854,19 @@ void Engine::updateSceneFromComponents(const nlohmann::json& root,
                 dlgData.height = data.value("height", 180.0f);
                 dlgData.scale = data.value("scale", 1.0f);
                 dlgData.typewriterEnabled = data.value("typewriter_enabled", true);
-                dlgData.textSpeed = data.value("text_speed", 30);
+                // B6 (#1/#12): raw text_speed hydration used to flow into
+                // evaluateReveal cursor math unclamped — a huge value made
+                // the reveal cursor unreachable (permanent lock), a negative
+                // value silently disabled the typewriter. Clamp to
+                // [1,1000] ms/char, fallback to default 30 + WARN.
+                dlgData.textSpeed = 30;
+                if (data.contains("text_speed")) {
+                    const int rawSpeed = data.value("text_speed", 30);
+                    if (rawSpeed < 1 || rawSpeed > 1000) {
+                        ROWL_LOG_WARN("Dialogue text_speed out of range, clamped to [1,1000]");
+                    }
+                    dlgData.textSpeed = std::clamp(rawSpeed, 1, 1000);
+                }
                 dlgData.autoAdvance = data.value("auto_advance", false);
                 dlgData.autoAdvanceDelay = std::clamp(data.value("auto_advance_delay", 2.0f), 0.0f, 60.0f);
                 dlgData.fontSize = data.value("font_size", 24.0f);
@@ -868,8 +928,20 @@ void Engine::updateSceneFromComponents(const nlohmann::json& root,
                 m_activeBackgroundWidth = data.value("width", 1920.0f);
                 m_activeBackgroundHeight = data.value("height", 1080.0f);
                 m_activeBackgroundRotation = data.value("rotation", 0.0f);
-                m_activeBackgroundParallaxX = data.value("parallax_x", 1.0f);
-                m_activeBackgroundParallaxY = data.value("parallax_y", 1.0f);
+                // B6 (#8): raw parallax hydration flowed into
+                // transformRectParallax unclamped — NaN/Inf silently killed
+                // the background. Reject non-finite (keep default 1.0),
+                // clamp finite to [-8,8]; same contract as the setter.
+                m_activeBackgroundParallaxX = 1.0f;
+                m_activeBackgroundParallaxY = 1.0f;
+                const float rawPx = data.value("parallax_x", 1.0f);
+                const float rawPy = data.value("parallax_y", 1.0f);
+                if (std::isfinite(rawPx) && std::isfinite(rawPy)) {
+                    m_activeBackgroundParallaxX = std::clamp(rawPx, -8.0f, 8.0f);
+                    m_activeBackgroundParallaxY = std::clamp(rawPy, -8.0f, 8.0f);
+                } else {
+                    ROWL_LOG_WARN("Non-finite background parallax rejected, kept default");
+                }
                 m_activeBackgroundOpacity = std::clamp(data.value("opacity", 1.0f), 0.0f, 1.0f);
                 m_hasBackground = !m_activeBackground.empty();
             } else if (type == "character") {
@@ -1759,7 +1831,12 @@ void Engine::step(float deltaTime) {
     for (const auto& dialogue : m_activeDialogues) {
         if (dialogue.autoAdvance) {
             autoAdvanceEnabled = true;
-            autoAdvanceDelay = std::max(autoAdvanceDelay, dialogue.autoAdvanceDelay + m_autoAdvanceDelayOffset);
+            // B6 (#4/#7): two individually [0,60]-clamped delays summed
+            // unclamped (60+60=120s, double the documented ceiling). The sum
+            // is clamped to the same ceiling; valid sub-ceiling sums unchanged.
+            autoAdvanceDelay = std::clamp(
+                std::max(autoAdvanceDelay, dialogue.autoAdvanceDelay + m_autoAdvanceDelayOffset),
+                0.0f, 60.0f);
         }
     }
     const StoryNode* activeNode = m_storyRuntime.currentNode();
@@ -1818,6 +1895,13 @@ void Engine::step(float deltaTime) {
 }
 
 void Engine::setTextSpeedMultiplier(float multiplier) {
+    // B6 (#2): bare std::clamp(NaN, 0.25, 4.0) returns NaN — the poisoned
+    // multiplier then NaNs elapsedTypewriterTime every step and hits the
+    // float-to-size_t UB cast in areActiveDialoguesComplete. Keep last-good.
+    if (!std::isfinite(multiplier)) {
+        ROWL_LOG_WARN("Non-finite text-speed multiplier rejected, keeping last value");
+        return;
+    }
     m_textSpeedMultiplier = std::clamp(multiplier, 0.25f, 4.0f);
 }
 
