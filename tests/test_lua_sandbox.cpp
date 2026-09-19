@@ -147,6 +147,38 @@ void test_lua_sandbox() {
     }
     TEST_PASS("Lua Memory-Bomb Fails Closed, Sandbox Reusable");
 
+    // #28 bilerek-boz: pin the quota at its ceiling, then force an error-path
+    // recovery (repairGlobals/bind run outside any pcall). Pre-fix the second
+    // OOM escapes through C++ frames (crash); post-fix the call fails closed
+    // on the recovery reserve and the sandbox stays usable after a session
+    // boundary frees the pinned object.
+    if (!lua.executeString("t28 = {} for i = 1, 63 do t28[#t28+1] = string.rep('q', 1048576) end")) {
+        std::cerr << "Lua quota-pinning setup failed: " << lua.getLastError() << std::endl;
+        exit(1);
+    }
+    // Top-up in 64-byte steps (above the short-string interning limit, so every
+    // chunk counts against the quota): the counter ends within ~64 B of the
+    // ceiling, leaving no room for an unreserved post-pcall recovery.
+    if (!lua.executeString("while pcall(function() t28[#t28+1] = string.rep('q', 64) end) do end")) {
+        std::cerr << "Lua quota top-up failed unexpectedly" << std::endl;
+        exit(1);
+    }
+    if (lua.executeString("error('boom28-after-pin')")) {
+        std::cerr << "Lua quota-pinned error was not reported as failure!" << std::endl;
+        exit(1);
+    }
+    if (lua.getLastError().empty()) {
+        std::cerr << "Lua quota-pinned error recorded no error" << std::endl;
+        exit(1);
+    }
+    lua.clearVariables();
+    if (!lua.executeString("rowl.var_set('after_pin28', 'ok')") ||
+        lua.getVariable("after_pin28") != "ok") {
+        std::cerr << "Lua sandbox unusable after quota-pinned error" << std::endl;
+        exit(1);
+    }
+    TEST_PASS("#28 Quota-Pinned Error-Path Recovery Fails Closed Without Crash");
+
     // Hostile: unbounded non-tail recursion must fail closed (stack
     // overflow), then the sandbox must serve the next script normally.
     if (lua.executeString("local function f() return 1 + f() end f()")) {

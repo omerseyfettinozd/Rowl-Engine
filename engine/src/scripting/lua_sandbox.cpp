@@ -35,10 +35,21 @@ static std::string takeLuaError(lua_State* state) {
     return rawError ? rawError : "unknown Lua error";
 }
 
-static void resetInstructionCounter(lua_State* state) {
-    lua_pushinteger(state, 0);
-    lua_setfield(state, LUA_REGISTRYINDEX, "_rowl_instruction_count");
+// #28: entry accounting runs outside any pcall, so it executes inside the
+// recovery reserve (quota-pinned sessions must survive it).
+void LuaSandbox::resetInstructionCounter() {
+    if (!m_luaState) return;
+    const RecoveryScope recovery(this);
+    lua_pushinteger(m_luaState, 0);
+    lua_setfield(m_luaState, LUA_REGISTRYINDEX, "_rowl_instruction_count");
 }
+
+// #28: recovery reserve. Script-side allocations are capped at
+// kMaxLuaMemoryBytes, so at recovery entry live Lua memory is at most the
+// quota (plus one in-flight growth); the reserve strictly exceeds worst-case
+// recovery allocation (a few small tables/strings), which makes a second OOM
+// during post-pcall recovery impossible.
+constexpr std::size_t kRecoveryReserveBytes = 1024u * 1024u;
 
 // Component environments intentionally accept ordinary globals (their private
 // state), but the engine bridge itself must remain read-only. Keeping this at
@@ -126,7 +137,9 @@ void* LuaSandbox::quotaAlloc(void* ud, void* ptr, size_t osize, size_t nsize) {
         return nullptr;
     }
     const size_t grown = (nsize > osize) ? (nsize - osize) : 0;
-    if (sandbox && sandbox->m_bytesAllocated + grown > kMaxLuaMemoryBytes) return nullptr;
+    size_t cap = kMaxLuaMemoryBytes;
+    if (sandbox && sandbox->m_inRecovery) cap += kRecoveryReserveBytes;
+    if (sandbox && sandbox->m_bytesAllocated + grown > cap) return nullptr;
     void* resized = realloc(ptr, nsize);
     if (resized && sandbox) sandbox->m_bytesAllocated += grown;
     return resized;
@@ -205,7 +218,7 @@ bool LuaSandbox::initialize() {
     lua_setfield(m_luaState, LUA_REGISTRYINDEX, SANDBOX_REGISTRY_KEY);
 
     // Initialize instruction counter
-    resetInstructionCounter(m_luaState);
+    resetInstructionCounter();
 
     // Load safe standard libraries only
     luaL_requiref(m_luaState, "_G", luaopen_base, 1);
@@ -258,6 +271,7 @@ void LuaSandbox::snapshotInitialGlobals() {
 
 void LuaSandbox::sweepStrayGlobals() {
     if (!m_luaState) return;
+    const RecoveryScope recovery(this);
     // Scripts can create arbitrary globals (x = 1, function on_enter...).
     // Only sandbox-owned names survive a session boundary; lua_next cannot
     // tolerate mutation mid-iteration, so collect first, then clear.
@@ -283,6 +297,7 @@ void LuaSandbox::sweepStrayGlobals() {
 
 void LuaSandbox::bindEngineApis() {
     if (!m_luaState) return;
+    const RecoveryScope recovery(this);
 
     // Create rowl namespace table
     lua_newtable(m_luaState);
@@ -304,6 +319,7 @@ void LuaSandbox::bindEngineApis() {
 // would re-trigger the guard and silently keep the impostor.
 void LuaSandbox::sweepModuleEnvRowl(const std::string& moduleId) {
     if (!m_luaState) return;
+    const RecoveryScope recovery(this);
     const auto module = m_modules.find(moduleId);
     if (module == m_modules.end()) return;
     lua_rawgeti(m_luaState, LUA_REGISTRYINDEX, module->second); // env
@@ -322,6 +338,7 @@ void LuaSandbox::sweepModuleEnvRowl(const std::string& moduleId) {
 // other globals survive), but it also reintroduces dofile/load — re-nil them.
 void LuaSandbox::repairGlobals() {
     if (!m_luaState) return;
+    const RecoveryScope recovery(this);
     lua_getfield(m_luaState, LUA_REGISTRYINDEX, "_LOADED");
     if (lua_istable(m_luaState, -1)) {
         // "_G" must be dropped too: initialize() cached the base table in
@@ -522,7 +539,7 @@ bool LuaSandbox::executeString(const std::string& scriptCode) {
     // Reset instruction counter before each execution
     m_lastError.clear();
     if (!checkRunAllowed("executeString", scriptCode.size())) return false;
-    resetInstructionCounter(m_luaState);
+    resetInstructionCounter();
 
     int loadStatus = luaL_loadstring(m_luaState, scriptCode.c_str());
     if (loadStatus != LUA_OK) {
@@ -587,7 +604,7 @@ bool LuaSandbox::loadModule(const std::string& moduleId, const std::string& scri
     lua_setfield(m_luaState, -2, "__metatable");
     lua_setmetatable(m_luaState, environmentIndex);
 
-    resetInstructionCounter(m_luaState);
+    resetInstructionCounter();
     const int loadStatus = luaL_loadbufferx(m_luaState, scriptCode.data(), scriptCode.size(),
                                             moduleId.c_str(), "t");
     if (loadStatus != LUA_OK) {
@@ -657,7 +674,7 @@ bool LuaSandbox::callOptionalModuleFunction(const std::string& moduleId,
         return false;
     }
     lua_pushnumber(m_luaState, deltaTime);
-    resetInstructionCounter(m_luaState);
+    resetInstructionCounter();
     if (lua_pcall(m_luaState, 1, 0, 0) != LUA_OK) {
         const char* rawError = lua_tostring(m_luaState, -1);
         m_lastError = rawError ? rawError : "unknown Lua error";
@@ -710,7 +727,7 @@ bool LuaSandbox::callOptionalFunction(const std::string& functionName, double de
     }
 
     lua_pushnumber(m_luaState, deltaTime);
-    resetInstructionCounter(m_luaState);
+    resetInstructionCounter();
     if (lua_pcall(m_luaState, 1, 0, 0) != LUA_OK) {
         const char* rawError = lua_tostring(m_luaState, -1);
         const std::string error = rawError ? rawError : "unknown Lua error";

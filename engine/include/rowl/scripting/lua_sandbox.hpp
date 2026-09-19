@@ -55,10 +55,34 @@ public:
     /// until clearVariables() resets the session. Internal (hook access).
     void tripInstructionLimit() { m_limitTripped = true; }
 
+    /// #28: RAII recovery scope. Post-pcall recovery (repairGlobals,
+    /// bindEngineApis, sweepModuleEnvRowl, sweepStrayGlobals,
+    /// resetInstructionCounter) allocates outside any pcall; when a hostile
+    /// script pins the quota at its ceiling those allocations would raise a
+    /// second Lua error through C++ frames (UB/crash). Inside the scope
+    /// quotaAlloc grants a reserve no script-side allocation can consume, so
+    /// recovery cannot OOM. Internal (recovery-path use only).
+    struct RecoveryScope {
+        explicit RecoveryScope(LuaSandbox* owner) : m_owner(owner) {
+            m_saved = owner->m_inRecovery;
+            owner->m_inRecovery = true;
+        }
+        ~RecoveryScope() { m_owner->m_inRecovery = m_saved; }
+        RecoveryScope(const RecoveryScope&) = delete;
+        RecoveryScope& operator=(const RecoveryScope&) = delete;
+    private:
+        LuaSandbox* m_owner;
+        bool m_saved;
+    };
+
 private:
     static void* quotaAlloc(void* ud, void* ptr, size_t osize, size_t nsize);
     /// Fail-closed entry gate: refuses poisoned sessions and oversized code.
     bool checkRunAllowed(const char* what, std::size_t codeBytes);
+    /// #28: was a file-static free function; made a member so entry
+    /// accounting runs inside the recovery reserve (quota-pinned sessions
+    /// must survive it — it executes outside any pcall).
+    void resetInstructionCounter();
     void bindEngineApis();
     /// Records the global names owned by the sandbox itself (safe libraries,
     /// base functions, engine bridge). clearVariables() removes every other
@@ -91,6 +115,8 @@ private:
     // A1: instruction-limit poison (H24) + allocation quota (H25) state.
     bool m_limitTripped = false;
     std::size_t m_bytesAllocated = 0;
+    // #28: true while post-pcall recovery runs (see RecoveryScope).
+    bool m_inRecovery = false;
 };
 
 } // namespace Rowl::Scripting
