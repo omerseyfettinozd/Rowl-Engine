@@ -1404,7 +1404,7 @@ bool Engine::loadStoryGraphFromAssetStream(
     return true;
 }
 
-void Engine::loadStoryGraphFile() {
+bool Engine::loadStoryGraphFile() {
     // 1. Try VFS resolution first (isolated project mounts, packages, or loose assets)
     if (const auto host = getPlatformHost()) {
         const std::vector<std::string> vfsCandidates = {
@@ -1416,7 +1416,7 @@ void Engine::loadStoryGraphFile() {
         for (const auto& candidate : vfsCandidates) {
             auto stream = host->openAssetStream(candidate);
             if (stream && loadStoryGraphFromAssetStream(candidate, std::move(stream))) {
-                return;
+                return true;
             }
         }
     }
@@ -1433,14 +1433,55 @@ void Engine::loadStoryGraphFile() {
         std::error_code probeError;
         const std::filesystem::path probePath = Rowl::Platform::pathFromUtf8(p);
         if (std::filesystem::exists(probePath, probeError) && !probeError) {
-            loadStoryGraphFromPath(p);
-            return;
+            // #122: surface the attempt's verdict instead of swallowing it —
+            // loadStoryGraphFromPath already records parse/IO failures.
+            return loadStoryGraphFromPath(p);
         }
     }
-    loadActiveStoryFile();
+    if (loadActiveStoryFile()) {
+        return true;
+    }
+    // #122: total miss — no candidate produced a graph. Fail loud through
+    // the story/context error channels instead of booting storyless in
+    // silence. Engine::init keeps its true contract (bare-init editor/test
+    // flows are unaffected); the diagnosis is observable, not fatal.
+    recordStoryGraphMiss(
+        "No story graph found: probed VFS candidates "
+        "(json/full_story_graph.json, full_story_graph.json, "
+        "Assets/json/full_story_graph.json, Assets/full_story_graph.json), "
+        "the physical fallbacks (Assets/json/full_story_graph.json, "
+        "Assets/full_story_graph.json), and the active-story overlay. "
+        "Set a project directory containing a story graph.");
+    return false;
 }
 
-void Engine::loadActiveStoryFile() {
+/// #122: records a SPECIFIC story-boot diagnosis, always overwriting the
+/// previous channel content (chronological verdicts; see header).
+void Engine::recordStoryGraphCause(const std::string& detail) {
+    m_storyRuntime.recordLoadFailure(detail);
+    ROWL_LOG_ERROR(detail);
+    m_context->setError(RuntimeErrorCode::FileNotFound, detail,
+                        "load_story_graph", "");
+}
+
+/// #122: records a story-boot miss into the story + context error channels.
+/// Preserves a more specific error already present (remount root cause,
+/// parse rejection); a later successful commit() clears the channel.
+void Engine::recordStoryGraphMiss(const std::string& detail) {
+    // Preserve the root cause: a remount failure (or a parse rejection)
+    // already in the channel is more specific than this total-miss note.
+    // A later successful commit() clears the channel.
+    if (!m_storyRuntime.lastLoadError().empty()) {
+        ROWL_LOG_ERROR(m_storyRuntime.lastLoadError());
+        return;
+    }
+    m_storyRuntime.recordLoadFailure(detail);
+    ROWL_LOG_ERROR(detail);
+    m_context->setError(RuntimeErrorCode::FileNotFound, detail,
+                        "load_story_graph", "");
+}
+
+bool Engine::loadActiveStoryFile() {
     // 1. Try VFS resolution first
     auto* vfsPtr = getVfs();
     if (vfsPtr) {
@@ -1488,7 +1529,7 @@ void Engine::loadActiveStoryFile() {
                     }
                     ROWL_LOG_INFO("Loaded active story from VFS: " + candidate);
                     m_context->setSuccess("load_active_story_vfs", candidate);
-                    return;
+                    return true;
                 } catch (const std::exception& e) {
                     ROWL_LOG_ERROR("Active story load error from VFS " + candidate + ": " + e.what());
                 }
@@ -1546,13 +1587,15 @@ void Engine::loadActiveStoryFile() {
                     }
                     ROWL_LOG_INFO("Loaded active story node #" +
                                   std::to_string(m_storyRuntime.currentNodeId()) + " from: " + path);
-                    return;
+                    return true;
                 } catch (const std::exception& e) {
                     ROWL_LOG_ERROR("Active story load error in " + path + ": " + e.what());
                 }
             }
         }
     }
+    // No overlay applied — not a failure; bare sessions keep the cursor.
+    return false;
 }
 
 void Engine::step(float deltaTime) {

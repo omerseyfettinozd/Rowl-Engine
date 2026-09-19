@@ -293,7 +293,15 @@ void RowlEngine_SetProjectDirectory(RowlEngineHandle handle, const char* project
         // Legacy projects without locale keys keep the "en" fallback.
         Rowl::I18n::applyProjectLocalesToEngine(*engine, projectRoot);
         if (engine->getVfs()) {
-            engine->getVfs()->remountProject(projectRoot);
+            // #122: a dead root used to clear the mounts in total silence —
+            // the story boot then missed with no diagnosis anywhere. Record
+            // the root cause; the load below preserves it (total-miss note
+            // never overwrites a more specific error).
+            if (!engine->getVfs()->remountProject(projectRoot)) {
+                engine->recordStoryGraphCause(
+                    "Project root is missing or not a directory: " +
+                    std::string(projectRoot));
+            }
         }
         auto* win = engine->getWindow();
         if (win) {

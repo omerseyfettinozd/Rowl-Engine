@@ -179,12 +179,12 @@ void VFSManager::clearMountPoints() {
     ROWL_LOG_INFO("VFS Mount Points Cleared.");
 }
 
-void VFSManager::remountProject(const std::string& projectRoot) {
+bool VFSManager::remountProject(const std::string& projectRoot) {
     std::lock_guard<std::recursive_mutex> lock(m_mutex);
     clearMountPoints();
     m_initialized = true;
 
-    if (projectRoot.empty()) return;
+    if (projectRoot.empty()) return true;
 
     // A2a: UTF-8 contract — the narrow path ctor would lose a non-ASCII root
     // on Windows before any lookup even runs.
@@ -192,8 +192,11 @@ void VFSManager::remountProject(const std::string& projectRoot) {
     std::error_code fsError;
     if (!fs::exists(root, fsError) || fsError ||
         !fs::is_directory(root, fsError) || fsError) {
+        // #122: report the miss to the caller instead of swallowing it — the
+        // VFS stays bare (cleared above), and the C API story layer records
+        // the diagnosis in the story/context error channels.
         ROWL_LOG_WARN("VFS cannot remount non-existent project root: " + projectRoot);
-        return;
+        return false;
     }
 
     // A2a-fix5: log the UTF-8 input, not root.string() — the narrow
@@ -241,6 +244,7 @@ void VFSManager::remountProject(const std::string& projectRoot) {
 
     ROWL_LOG_INFO("VFS Remount Complete for project '" + projectRoot + "' (" +
                   std::to_string(m_mountPoints.size()) + " mount points).");
+    return true;
 }
 
 void VFSManager::mountPackagesUnder(const fs::path& pkgPath) {

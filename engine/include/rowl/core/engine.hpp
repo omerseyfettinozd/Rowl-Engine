@@ -150,8 +150,10 @@ public:
     void updateSceneFromComponents(const nlohmann::json& components,
                                    bool replayEntryEffects = true);
 
-    void loadActiveStoryFile();
-    void loadStoryGraphFile();
+    /// #122: true when an overlay was applied; a missing overlay is not a
+    /// failure (bare sessions keep the default cursor).
+    bool loadActiveStoryFile();
+    bool loadStoryGraphFile();
 
     /**
      * Loads a story graph from a specific file path.
@@ -166,6 +168,17 @@ public:
     const std::string& getLastStoryGraphLoadError() const {
         return m_storyRuntime.lastLoadError();
     }
+    /// #122: records a SPECIFIC story-boot diagnosis (dead remount root,
+    /// parse/IO rejection). Always overwrites — each new operation's verdict
+    /// replaces the previous one (same convention as loadStoryGraphFromPath's
+    /// clearLoadError). A later successful commit() clears the channel.
+    void recordStoryGraphCause(const std::string& detail);
+    /// #122: records a GENERIC total-miss note. Fills only an empty channel
+    /// so it never overwrites a more specific diagnosis recorded above.
+    /// Used by loadStoryGraphFile's total miss and by SetProjectDirectory's
+    /// remount failure (void C API surface cannot return the diagnosis
+    /// itself).
+    void recordStoryGraphMiss(const std::string& detail);
 
     // choiceIndex: which branch to follow (0 = first). Default 0 for backward compat.
     void advanceToNextNode(uint32_t choiceIndex = 0);

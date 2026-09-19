@@ -67,7 +67,11 @@ public:
     VFSManager& operator=(const VFSManager&) = delete;
 
     void initialize();
-    void remountProject(const std::string& projectRoot);
+    /// #122: returns false when the root is missing/not-a-directory (mounts
+    /// stay cleared); true when the root is accepted or empty (empty clears
+    /// mounts, as before). Callers surface false through the story/context
+    /// error channels — the C API surface is void.
+    bool remountProject(const std::string& projectRoot);
     void clearMountPoints();
     void mountDirectory(const std::string& virtualPrefix, const std::string& physicalPath);
     void mountPackage(const std::string& virtualPrefix, const std::string& pkgPath);

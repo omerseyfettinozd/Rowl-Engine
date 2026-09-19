@@ -598,6 +598,65 @@ void test_vfs_security() {
     }
     TEST_PASS("A2a Unreadable package directories degrade to no-mounts without throwing");
 
+    // #122 bilerek-boz: varolmayan proje kökü sessizce yutulmamalı. Remount
+    // kök-nedeni story/context hata kanallarında kelimesi kelimesine görünür
+    // olmalı (Init'in genel miss-notu DEĞİL — spesifik tanı her zaman yazar),
+    // ve motor bare-init sözleşmesini korumalı (Init hâlâ true).
+    // CWD-duyarlılığı: motorun fiziksel story yedeği process-CWD'yi yoklar;
+    // süit CWD'si (repo kökü) gerçek bir grafik taşır ve miss'i maskeler.
+    // Bu yüzden blok süresince CWD boş bir temp dizine sabitlenir (RAII).
+    {
+        struct ScopedCwd {
+            std::filesystem::path saved;
+            bool ok = false;
+            explicit ScopedCwd(const std::filesystem::path& dir) {
+                std::error_code ec;
+                saved = std::filesystem::current_path(ec);
+                if (ec) return;
+                std::filesystem::create_directories(dir, ec);
+                if (ec) return;
+                std::filesystem::current_path(dir, ec);
+                ok = !ec;
+            }
+            ~ScopedCwd() {
+                if (ok) {
+                    std::error_code ec;
+                    std::filesystem::current_path(saved, ec);
+                }
+            }
+        };
+        const auto emptyCwd = std::filesystem::temp_directory_path() /
+            ("rowl_122_empty_cwd_" + uniqueSuffix);
+        ScopedCwd cwdPin(emptyCwd);
+        if (!cwdPin.ok) {
+            std::cerr << "#122 setup: could not pin CWD" << std::endl;
+            exit(1);
+        }
+        RowlEngineHandle missHandle = RowlEngine_Create();
+        if (!missHandle || !RowlEngine_Init(missHandle, 320, 180, 0)) {
+            std::cerr << "#122 setup: bare init failed" << std::endl;
+            exit(1);
+        }
+        const auto deadRoot = std::filesystem::temp_directory_path() /
+            ("rowl_122_dead_root_" + uniqueSuffix);
+        std::error_code deadEc;
+        std::filesystem::remove_all(deadRoot, deadEc);
+        RowlEngine_SetProjectDirectory(missHandle, deadRoot.string().c_str());
+        const std::string missError =
+            RowlEngine_GetLastStoryGraphError(missHandle);
+        if (missError.find("missing or not a directory") == std::string::npos ||
+            missError.find(deadRoot.string()) == std::string::npos) {
+            std::cerr << "#122: dead project root left no root-cause diagnosis, got: '"
+                      << missError << "'" << std::endl;
+            RowlEngine_Destroy(missHandle);
+            exit(1);
+        }
+        RowlEngine_Destroy(missHandle);
+        std::error_code sweepEc;
+        std::filesystem::remove_all(emptyCwd, sweepEc);
+    }
+    TEST_PASS("#122 Dead project roots fail loud with a root-cause diagnosis");
+
     // No global-restore remount: vfs is function-local.
     TEST_PASS("Project remount exposes Assets but not project-root files");
 
