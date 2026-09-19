@@ -717,10 +717,14 @@ ROWL_API void RowlEngine_PlayAudio(RowlEngineHandle handle,
 /** Stops currently playing BGM stream. */
 ROWL_API void RowlEngine_StopBgm(RowlEngineHandle handle);
 
-/** Sets BGM volume (0.0f - 1.0f). */
+/** Sets BGM volume (0.0f - 1.0f). #86: the live gain is committed into
+ * GameState (no rewind step); save/load/rewind restore it. */
 ROWL_API void RowlEngine_SetBgmVolume(RowlEngineHandle handle, float volume);
+/** Master volume setter; #86 persistence commit like SetBgmVolume. */
 ROWL_API void RowlEngine_SetMasterVolume(RowlEngineHandle handle, float volume);
+/** Voice volume setter; #86 persistence commit like SetBgmVolume. */
 ROWL_API void RowlEngine_SetVoiceVolume(RowlEngineHandle handle, float volume);
+/** SFX volume setter; #86 persistence commit like SetBgmVolume. */
 ROWL_API void RowlEngine_SetSfxVolume(RowlEngineHandle handle, float volume);
 /** Applies player-local reading preferences without changing story data. */
 ROWL_API void RowlEngine_SetTextSpeedMultiplier(RowlEngineHandle handle, float multiplier);

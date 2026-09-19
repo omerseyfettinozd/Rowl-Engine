@@ -147,11 +147,15 @@ public:
 
     /// Updates the scene from a JSON string containing component data.
     /// Used by the editor's component-based architecture.
+    /// #86: transactional — a throw mid-update restores the previous scene
+    /// visuals AND the live audio mixer AND the camera (snapshot/restore).
     void updateSceneFromComponents(const std::string& componentsJson,
                                    bool replayEntryEffects = true);
     /// A2a-tur2: JSON overload — callers holding a parsed document skip the
     /// dump/parse roundtrip. Owns the snapshot/restore contract; the string
     /// version only parses and delegates.
+    /// #86: see the string overload note — the catch re-applies the audio
+    /// mixer snapshot and the camera snapshot, not just scene visuals.
     void updateSceneFromComponents(const nlohmann::json& components,
                                    bool replayEntryEffects = true);
 
@@ -272,6 +276,10 @@ public:
 
     // ── Save / Load Slots & State Persistence ──────────────────────────────
     bool saveGameSlot(int32_t slotIndex);
+    /// #86: transactional restore — on success the scene, the Lua sandbox,
+    /// the playtime clock AND the live audio mixer follow the loaded state;
+    /// on failure the session (including mixer, camera and clock) rolls back
+    /// and the call fails loud.
     bool loadGameSlot(int32_t slotIndex);
     /// MS-6: F5/F9 operate on this slot (kPauseMenuQuickSlotMin..Max).
     /// Out-of-range requests are rejected; the active slot is unchanged.
@@ -299,6 +307,9 @@ public:
     std::string getPauseMenuJson() const;
     bool hasSaveSlot(int32_t slotIndex) const;
     bool deleteSaveSlot(int32_t slotIndex);
+    /// #86: same rollback contract as loadGameSlot — success rewinds the
+    /// scene, Lua sandbox, playtime clock and live audio mixer to the target
+    /// step; failure restores the pre-rewind session and fails loud.
     bool rewind(uint64_t steps = 1);
     uint64_t getCurrentStepId() const;
     void setSaveDirectory(const std::string& saveDir);
@@ -308,6 +319,12 @@ public:
     std::filesystem::path getProfileDirectoryPath() const;
     void setBgmTransitionDefaults(std::string kind, float durationSeconds);
     std::shared_ptr<const Rowl::State::GameState> getGameState() const { return m_gameState; }
+    /// #86: stamps the live mixer gains (master/bgm/sfx/voice) into
+    /// m_gameState WITHOUT advancing stepId (see withMixerVolumes), so later
+    /// save/load/rewind restore what the player hears. Called by every
+    /// persisted volume setter (pause menu + C API). No-op without audio or
+    /// without a live game state.
+    void commitMixerVolumesToGameState();
 
     // ── Scripting & Variable Evaluation ───────────────────────────────────
     Rowl::Scripting::LuaSandbox* getLuaSandbox() const { return m_luaSandbox.get(); }
@@ -425,8 +442,14 @@ private:
     void menuChooseSlot(int32_t slotIndex);
     void menuBack();
     float pauseMenuVolume(int row) const;
+    /// #86: setting a volume row also commits the mixer to the game state
+    /// (see commitMixerVolumesToGameState) — pause-menu mixing survives
+    /// save/load/rewind instead of staying session-local.
     void setPauseMenuVolume(int row, float volume);
     void applyAudioSuspension(const std::shared_ptr<Rowl::Platform::PlatformHost>& host);
+    /// #86: restores the FULL persisted mixer (master/bgm/sfx/voice gains +
+    /// DSP filter + BGM intent) from m_gameState. Called after every
+    /// scene/load/rewind restore.
     void restoreAudioStateFromGameState();
     void deactivateScripts(bool callOnExit = true);
     void activateScripts(const std::vector<nlohmann::json>& scripts,
@@ -435,6 +458,31 @@ private:
                           const std::string& state, const std::string& error = {});
     void recordActiveDialogueHistory();
     bool areActiveDialoguesComplete() const;
+    // ── #86: transactional scene/load/rewind restore snapshots ─────────────
+    // Live mixer + camera state captured BEFORE a mutating restore chain and
+    // re-applied when the chain throws. Plain structs (no engine/audio
+    // headers needed here); apply* never throws out (best-effort + WARN).
+    struct AudioSnapshot {
+        bool hasAudio = false;
+        float masterVolume = 1.0f;
+        float bgmVolume = 1.0f;
+        float sfxVolume = 1.0f;
+        float voiceVolume = 1.0f;
+        std::string bgmPath;
+        bool bgmPlaying = false;
+        int dspFilter = 0; // 0=Normal,1=CaveReverb,2=Telephone,3=UnderwaterLowPass
+    };
+    struct CameraSnapshot {
+        bool hasCamera = false;
+        float x = 960.0f;
+        float y = 540.0f;
+        float zoom = 1.0f;
+        float rotation = 0.0f;
+    };
+    AudioSnapshot captureAudioSnapshot() const;
+    void applyAudioSnapshot(const AudioSnapshot& snapshot);
+    CameraSnapshot captureCameraSnapshot() const;
+    void applyCameraSnapshot(const CameraSnapshot& snapshot);
 public:
     /// MS-4 dirty-frame query: true when the next rendered frame cannot differ
     /// from the currently presented one (no transition, flash, camera motion,

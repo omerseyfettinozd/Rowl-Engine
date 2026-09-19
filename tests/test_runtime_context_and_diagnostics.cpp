@@ -145,7 +145,7 @@ void test_runtime_context_and_diagnostics() {
         }
         res = engine.getContext()->getLastResult();
         if (!res.isOk() || res.operation != "load_game_slot" ||
-            res.message.find("version 1 to version 3") == std::string::npos) {
+            res.message.find("version 1 to version 4") == std::string::npos) {
             std::cerr << "loadGameSlot(2) did not expose migration result" << std::endl;
             exit(1);
         }

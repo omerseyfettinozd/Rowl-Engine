@@ -113,6 +113,11 @@ std::shared_ptr<const GameState> GameState::createNextState(
         nextState->activeBgm = current->activeBgm;
         nextState->bgmVolume = current->bgmVolume;
         nextState->bgmPlaying = current->bgmPlaying;
+        // #86: mixer gains ride every step transition (in-memory chain and
+        // save/load/rewind restore them via the same copy).
+        nextState->masterVolume = current->masterVolume;
+        nextState->sfxVolume = current->sfxVolume;
+        nextState->voiceVolume = current->voiceVolume;
         nextState->dialogueHistory = current->dialogueHistory;
     }
 
@@ -171,6 +176,10 @@ std::shared_ptr<const GameState> GameState::createNextStateWithVariables(
         nextState->activeBgm = current->activeBgm;
         nextState->bgmVolume = current->bgmVolume;
         nextState->bgmPlaying = current->bgmPlaying;
+        // #86: bulk write path carries the mixer too (see createNextState).
+        nextState->masterVolume = current->masterVolume;
+        nextState->sfxVolume = current->sfxVolume;
+        nextState->voiceVolume = current->voiceVolume;
         nextState->dialogueHistory = current->dialogueHistory;
     }
     auto variableMap = std::make_shared<VariableMap>();
@@ -196,16 +205,29 @@ std::shared_ptr<const GameState> GameState::createNextStateWithAudio(
     const std::string& bgm,
     float volume,
     bool playing,
-    const std::string& filter) {
+    const std::string& filter,
+    float masterVolume,
+    float sfxVolume,
+    float voiceVolume) {
     auto nextState = std::make_shared<GameState>();
     nextState->stepId = current ? current->stepId + 1 : 1;
     nextState->activeNodeId = activeNodeId;
     nextState->previousState = current;
     nextState->activeBackground = background;
     nextState->activeBgm = bgm;
-    nextState->bgmVolume = std::clamp(volume, 0.0f, 1.0f);
+    nextState->bgmVolume = std::isfinite(volume) ? std::clamp(volume, 0.0f, 1.0f)
+                                                 : (current ? current->bgmVolume : 1.0f);
     nextState->bgmPlaying = playing;
     nextState->dspFilter = filter;
+    // #86: scene audio commit carries the live mixer (same finite-or-keep
+    // contract as bgmVolume above so a hostile component value cannot poison
+    // the chain).
+    const float fallbackMaster = current ? current->masterVolume : 1.0f;
+    const float fallbackSfx = current ? current->sfxVolume : 1.0f;
+    const float fallbackVoice = current ? current->voiceVolume : 1.0f;
+    nextState->masterVolume = std::isfinite(masterVolume) ? std::clamp(masterVolume, 0.0f, 1.0f) : fallbackMaster;
+    nextState->sfxVolume = std::isfinite(sfxVolume) ? std::clamp(sfxVolume, 0.0f, 1.0f) : fallbackSfx;
+    nextState->voiceVolume = std::isfinite(voiceVolume) ? std::clamp(voiceVolume, 0.0f, 1.0f) : fallbackVoice;
     nextState->variables = current ? current->variables : std::make_shared<VariableMap>();
     nextState->dialogueHistory = current ? current->dialogueHistory :
         std::make_shared<std::vector<DialogueHistoryEntry>>();
@@ -263,6 +285,22 @@ std::shared_ptr<const GameState> GameState::withGraphIdentity(
     return nextState;
 }
 
+std::shared_ptr<const GameState> GameState::withMixerVolumes(
+    const std::shared_ptr<const GameState>& current,
+    float masterVolume,
+    float bgmVolume,
+    float sfxVolume,
+    float voiceVolume) {
+    if (!current) return nullptr;
+    auto nextState = std::make_shared<GameState>(*current);
+    // stepId/previousState untouched: no new rewind link (see header note).
+    if (std::isfinite(masterVolume)) nextState->masterVolume = std::clamp(masterVolume, 0.0f, 1.0f);
+    if (std::isfinite(bgmVolume)) nextState->bgmVolume = std::clamp(bgmVolume, 0.0f, 1.0f);
+    if (std::isfinite(sfxVolume)) nextState->sfxVolume = std::clamp(sfxVolume, 0.0f, 1.0f);
+    if (std::isfinite(voiceVolume)) nextState->voiceVolume = std::clamp(voiceVolume, 0.0f, 1.0f);
+    return nextState;
+}
+
 std::shared_ptr<const GameState> GameState::rewind(
     const std::shared_ptr<const GameState>& current,
     uint64_t stepsToRewind) {
@@ -289,6 +327,11 @@ std::string GameState::serializeJson() const {
     j["active_bgm"] = activeBgm;
     j["bgm_volume"] = bgmVolume;
     j["bgm_playing"] = bgmPlaying;
+    // #86 (v4): full mixer. v3 and older readers ignore unknown keys, so old
+    // builds still load v4 files (mixer falls back to 1.0 there).
+    j["master_volume"] = masterVolume;
+    j["sfx_volume"] = sfxVolume;
+    j["voice_volume"] = voiceVolume;
     nlohmann::json history = nlohmann::json::array();
     if (dialogueHistory) {
         for (const auto& entry : *dialogueHistory) {
@@ -351,7 +394,9 @@ GameStateDecodeResult GameState::decodeJson(const std::string& jsonStr) {
             return {};
         }
         const auto version = j.value("version", CurrentSaveFormatVersion);
-        if (version != 1 && version != 2 && version != CurrentSaveFormatVersion) {
+        // #86 (v4): 1/2/3 decode as Migrated (mixer keys default to 1.0);
+        // anything else is foreign.
+        if (version != 1 && version != 2 && version != 3 && version != CurrentSaveFormatVersion) {
             ROWL_LOG_ERROR("Unsupported GameState save version: " + std::to_string(version));
             return {nullptr, GameStateDecodeStatus::UnsupportedVersion, version};
         }
@@ -365,10 +410,25 @@ GameStateDecodeResult GameState::decodeJson(const std::string& jsonStr) {
         state->activeBgm = j.value("active_bgm", "");
         state->bgmVolume = j.value("bgm_volume", 1.0f);
         state->bgmPlaying = j.value("bgm_playing", !state->activeBgm.empty());
+        // #86 (v4): mixer keys are optional — legacy saves predate them.
+        state->masterVolume = j.value("master_volume", 1.0f);
+        state->sfxVolume = j.value("sfx_volume", 1.0f);
+        state->voiceVolume = j.value("voice_volume", 1.0f);
 
         if (!std::isfinite(state->bgmVolume) || state->bgmVolume < 0.0f || state->bgmVolume > 1.0f) {
             ROWL_LOG_ERROR("GameState JSON contains an invalid BGM volume");
             return {nullptr, GameStateDecodeStatus::InvalidData, version};
+        }
+        // #86: mixer volumes follow the same fail-closed contract as bgmVolume.
+        for (const auto [label, value] : {
+                 std::pair{"master_volume", state->masterVolume},
+                 std::pair{"sfx_volume", state->sfxVolume},
+                 std::pair{"voice_volume", state->voiceVolume},
+             }) {
+            if (!std::isfinite(value) || value < 0.0f || value > 1.0f) {
+                ROWL_LOG_ERROR(std::string("GameState JSON contains an invalid ") + label);
+                return {nullptr, GameStateDecodeStatus::InvalidData, version};
+            }
         }
 
         if (state->stepId == 0 || state->activeNodeId == 0) {

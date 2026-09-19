@@ -87,22 +87,24 @@ void RowlEngine_SetBgmVolume(RowlEngineHandle handle, float volume) {
         requireEngineInitialized(checked, "set_bgm_volume");
         auto* audio = checked->getAudio();
         if (audio) audio->setBgmVolume(volume);
+        // #86: setter commit — canlı kazanç state'e damgalanır (step yok).
+        checked->commitMixerVolumesToGameState();
     });
 }
 
 void RowlEngine_SetMasterVolume(RowlEngineHandle handle, float volume) {
     if (!isLiveHandle(handle)) return;
-    invokeNoexcept([&] { auto checked = toEngineChecked(handle); if (!checked) return; requireEngineInitialized(checked, "set_master_volume"); if (auto* audio = checked->getAudio()) audio->setMasterVolume(volume); });
+    invokeNoexcept([&] { auto checked = toEngineChecked(handle); if (!checked) return; requireEngineInitialized(checked, "set_master_volume"); if (auto* audio = checked->getAudio()) audio->setMasterVolume(volume); checked->commitMixerVolumesToGameState(); });
 }
 
 void RowlEngine_SetVoiceVolume(RowlEngineHandle handle, float volume) {
     if (!isLiveHandle(handle)) return;
-    invokeNoexcept([&] { auto checked = toEngineChecked(handle); if (!checked) return; requireEngineInitialized(checked, "set_voice_volume"); if (auto* audio = checked->getAudio()) audio->setVoiceVolume(volume); });
+    invokeNoexcept([&] { auto checked = toEngineChecked(handle); if (!checked) return; requireEngineInitialized(checked, "set_voice_volume"); if (auto* audio = checked->getAudio()) audio->setVoiceVolume(volume); checked->commitMixerVolumesToGameState(); });
 }
 
 void RowlEngine_SetSfxVolume(RowlEngineHandle handle, float volume) {
     if (!isLiveHandle(handle)) return;
-    invokeNoexcept([&] { auto checked = toEngineChecked(handle); if (!checked) return; requireEngineInitialized(checked, "set_sfx_volume"); if (auto* audio = checked->getAudio()) audio->setSfxVolume(volume); });
+    invokeNoexcept([&] { auto checked = toEngineChecked(handle); if (!checked) return; requireEngineInitialized(checked, "set_sfx_volume"); if (auto* audio = checked->getAudio()) audio->setSfxVolume(volume); checked->commitMixerVolumesToGameState(); });
 }
 
 void RowlEngine_SetTextSpeedMultiplier(RowlEngineHandle handle, float multiplier) {

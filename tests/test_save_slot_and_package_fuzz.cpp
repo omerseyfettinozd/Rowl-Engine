@@ -165,7 +165,7 @@ void test_save_slot_and_package_fuzz() {
         R"({"version":3.5,"step_id":1,"active_node_id":101,"variables":{}})",
         R"({"version":-1,"step_id":1,"active_node_id":101,"variables":{}})",
         R"({"version":0,"step_id":1,"active_node_id":101,"variables":{}})",
-        R"({"version":4,"step_id":1,"active_node_id":101,"variables":{}})",
+        R"({"version":5,"step_id":1,"active_node_id":101,"variables":{}})",
         R"({"version":999,"step_id":1,"active_node_id":101,"variables":{}})",
         R"({"version":4294967295,"step_id":1,"active_node_id":101,"variables":{}})",
         R"({"version":3,"step_id":0,"active_node_id":101,"variables":{}})",

@@ -64,7 +64,9 @@ struct DialogueHistoryEntry {
 #endif
 
 struct GameState {
-    static constexpr uint32_t CurrentSaveFormatVersion = 3;
+    // #86: mixer volumes are save state (v4). v3 and older saves carry no
+    // mixer keys and decode to 1.0 defaults (Migrated).
+    static constexpr uint32_t CurrentSaveFormatVersion = 4;
 
     // POD members first
     uint64_t stepId = 0;
@@ -77,6 +79,13 @@ struct GameState {
     std::string activeBgm;
     float bgmVolume = 1.0f;
     bool bgmPlaying = false;
+    // #86: full mixer (bgmVolume above + these three). Stamped on every
+    // volume-setter commit and every scene audio commit, restored by
+    // Engine::restoreAudioStateFromGameState on load/rewind. Ambience/Ui
+    // gains stay session-local and are deliberately not persisted.
+    float masterVolume = 1.0f;
+    float sfxVolume = 1.0f;
+    float voiceVolume = 1.0f;
 
     // Faz 2 Dilim 4 display-only save metadata (see SaveMetadata).
     // savedAt is the ISO-8601 stamp written by serializeJson ("saved_at").
@@ -122,7 +131,12 @@ struct GameState {
         const std::string& bgm,
         float volume,
         bool playing,
-        const std::string& filter
+        const std::string& filter,
+        // #86: live mixer at commit time (default 1.0 keeps older callers
+        // compiling; Engine passes the live gains).
+        float masterVolume = 1.0f,
+        float sfxVolume = 1.0f,
+        float voiceVolume = 1.0f
     );
 
     static std::shared_ptr<const GameState> rewind(
@@ -145,6 +159,20 @@ struct GameState {
     static std::shared_ptr<const GameState> withGraphIdentity(
         const std::shared_ptr<const GameState>& current,
         const std::string& graphIdentity
+    );
+
+    /// #86: volume-setter commit. Returns a structurally shared copy carrying
+    /// the live mixer gains WITHOUT advancing stepId or extending the rewind
+    /// chain (same convention as withSaveMetadata/withGraphIdentity): slider
+    /// ticks must not become rewind steps, but save/load/rewind restore them.
+    /// Non-finite inputs keep the current value; finite inputs clamp to
+    /// [0,1]. Null input returns nullptr.
+    static std::shared_ptr<const GameState> withMixerVolumes(
+        const std::shared_ptr<const GameState>& current,
+        float masterVolume,
+        float bgmVolume,
+        float sfxVolume,
+        float voiceVolume
     );
 
     // Serialization & slot persistence

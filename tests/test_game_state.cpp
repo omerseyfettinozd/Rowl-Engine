@@ -408,10 +408,11 @@ void test_game_state() {
     }
     TEST_PASS("GameState Save Corruption, Version, and Slot-Bounds Containment");
 
-    // Faz 6 Dilim 7 IS 2/2: save-format sürüm karar kilidi. Davranış değişikliği
-    // yok — decodeJson sürümsüz JSON'u Loaded-olarak-3 kabul eder (game_state.cpp:265),
-    // v1/v2 pasif Migrated toleransıdır (:379-381, dönüşüm kodu yok), bilinmeyen
-    // sürümler reddedilir (:261-268). Bu matris kararı kilitler.
+    // Faz 6 Dilim 7 IS 2/2: save-format sürüm karar kilidi + #86 (v4).
+    // decodeJson sürümsüz JSON'u Loaded-olarak-4 kabul eder (sürümsüz =
+    // güncel yazar varsayımı), v1/v2/v3 pasif Migrated toleransıdır
+    // (mikser anahtarları 1.0 default; dönüşüm kodu yok), bilinmeyen
+    // sürümler reddedilir. Bu matris kararı kilitler.
     {
         struct VersionExpectation {
             const char* label;
@@ -423,15 +424,18 @@ void test_game_state() {
         };
         const VersionExpectation matrix[] = {
             {"missing-version", R"({"step_id":1,"active_node_id":101,"variables":{}})",
-             Rowl::State::GameStateDecodeStatus::Loaded, 3, true, false},
+             Rowl::State::GameStateDecodeStatus::Loaded, 4, true, false},
             {"v1", R"({"version":1,"step_id":1,"active_node_id":101,"variables":{}})",
              Rowl::State::GameStateDecodeStatus::Migrated, 1, true, true},
             {"v2", R"({"version":2,"step_id":1,"active_node_id":101,"variables":{}})",
              Rowl::State::GameStateDecodeStatus::Migrated, 2, true, true},
+            // #86: v3 artık güncel değil — mikser anahtarsız eski kayıt.
             {"v3", R"({"version":3,"step_id":1,"active_node_id":101,"variables":{}})",
-             Rowl::State::GameStateDecodeStatus::Loaded, 3, true, false},
+             Rowl::State::GameStateDecodeStatus::Migrated, 3, true, true},
             {"v4", R"({"version":4,"step_id":1,"active_node_id":101,"variables":{}})",
-             Rowl::State::GameStateDecodeStatus::UnsupportedVersion, 4, false, false},
+             Rowl::State::GameStateDecodeStatus::Loaded, 4, true, false},
+            {"v5", R"({"version":5,"step_id":1,"active_node_id":101,"variables":{}})",
+             Rowl::State::GameStateDecodeStatus::UnsupportedVersion, 5, false, false},
             {"v999", R"({"version":999,"step_id":1,"active_node_id":101,"variables":{}})",
              Rowl::State::GameStateDecodeStatus::UnsupportedVersion, 999, false, false},
             {"string-version", R"({"version":"3","step_id":1,"active_node_id":101,"variables":{}})",
@@ -456,14 +460,14 @@ void test_game_state() {
         // ValidationError + red) mevcut e2e ile kilitlidir
         // (test_runtime_context_and_diagnostics.cpp:129-153), burada tekrarlanmaz.
         // Bilinmeyen sürümün slot katmanındaki karşılığı (session_persistence.cpp:120-127)
-        // v4 üzerinden doğrulanır:
+        // v5 üzerinden doğrulanır:
         std::ofstream(std::filesystem::path(testSaveDir) / "save_slot_8.json")
-            << R"({"version":4,"step_id":1,"active_node_id":101,"variables":{}})";
-        const auto v4Slot = persistence.loadSlotDetailed(8);
-        if (v4Slot.succeeded() ||
-            v4Slot.status != Rowl::State::SessionLoadStatus::UnsupportedVersion ||
-            v4Slot.sourceVersion != 4) {
-            std::cerr << "v4 save slot was not UnsupportedVersion" << std::endl;
+            << R"({"version":5,"step_id":1,"active_node_id":101,"variables":{}})";
+        const auto v5Slot = persistence.loadSlotDetailed(8);
+        if (v5Slot.succeeded() ||
+            v5Slot.status != Rowl::State::SessionLoadStatus::UnsupportedVersion ||
+            v5Slot.sourceVersion != 5) {
+            std::cerr << "v5 save slot was not UnsupportedVersion" << std::endl;
             exit(1);
         }
         persistence.deleteSlot(8);

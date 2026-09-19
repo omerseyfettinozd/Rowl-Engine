@@ -780,6 +780,12 @@ void Engine::updateSceneFromComponents(const nlohmann::json& root,
     const auto previousHasDialogueBox = m_hasDialogueBox;
     const auto previousGameState = m_gameState;
     const auto previousLuaVariables = m_luaSandbox ? m_luaSandbox->getAllVariables() : std::unordered_map<std::string, std::string>{};
+    // #86: camera + live-mixer snapshot. Component zinciri kamera/mikseri
+    // TRY içinde mutasyona uğratır (camera bile replayEntryEffects=false iken;
+    // ses ertelenmiş blokta); throw'da görseller kadar ses+kamera da geri
+    // alınır, yoksa yeni karede bayat mikser dururdu.
+    const auto previousAudio = captureAudioSnapshot();
+    const auto previousCamera = captureCameraSnapshot();
     const auto restorePreviousState = [&] {
         m_activeCharacters = previousCharacters;
         m_activeDialogues = previousDialogues;
@@ -810,6 +816,10 @@ void Engine::updateSceneFromComponents(const nlohmann::json& root,
             m_luaSandbox->clearVariables();
             for (const auto& [key, value] : previousLuaVariables) m_luaSandbox->setVariable(key, value);
         }
+        // #86: önce kamera, sonra ses (apply* best-effort + WARN, dışarı
+        // fırlatmaz; catch'in kendisi throw-safe kalır).
+        applyCameraSnapshot(previousCamera);
+        applyAudioSnapshot(previousAudio);
     };
     try {
         nlohmann::json comps = root;
@@ -1289,7 +1299,11 @@ void Engine::updateSceneFromComponents(const nlohmann::json& root,
             m_gameState = Rowl::State::GameState::createNextStateWithAudio(
                 m_gameState, m_storyRuntime.currentNodeId(), m_activeBackground,
                 m_audio->getCurrentBgmPath(), m_audio->getBgmVolume(),
-                m_audio->isBgmPlaying(), filter);
+                m_audio->isBgmPlaying(), filter,
+                // #86: sahne-ses commit'i tam mikseri damgalar (bgm dışı
+                // kazançlar başka türlü state'e hiç inmezdi).
+                m_audio->getMasterVolume(), m_audio->getSfxVolume(),
+                m_audio->getVoiceVolume());
         }
 
         // Sync voice blip default settings from character if dialogue sound is empty or uses defaults
@@ -2504,6 +2518,12 @@ bool Engine::loadGameSlot(int32_t slotIndex) {
     const auto prevLuaVars = m_luaSandbox
         ? m_luaSandbox->getAllVariables()
         : std::unordered_map<std::string, std::string>{};
+    // #86: restore zinciri sahneyi updateSceneFromComponents ile kurar
+    // (kamera replayEntryEffects=false iken bile mutasyona uğrar) ve sesi
+    // restoreAudioStateFromGameState ile değiştirir. Throw'da state kadar
+    // kamera/canli-mikser de geri alınır.
+    const auto prevAudio = captureAudioSnapshot();
+    const auto prevCamera = captureCameraSnapshot();
     try {
     m_gameState = loadResult.state;
     m_playtimeSeconds = m_gameState ? m_gameState->playtimeSeconds : 0.0;
@@ -2563,9 +2583,12 @@ bool Engine::loadGameSlot(int32_t slotIndex) {
     }
     restoreAudioStateFromGameState();
     } catch (const std::exception& restoreError) {
-        // Best-effort geri-alım: adımlar atama + no-throw lua ilkelleridir,
-        // kendi başına fırlatmaz. Sahne görselleri yeni karede kalabilir —
-        // state otoriterdir, WARN duyurur.
+        // #86: best-effort geri-alım — state/imleç/lua atamaları + no-throw
+        // lua ilkelleri kendi başına fırlatmaz; apply* best-effort + WARN
+        // olduğu için catch gövdesi throw-safe'dir. Sahne görselleri içteki
+        // updateSceneFromComponents catch'iyle çoktan geri alındı; burada
+        // kamera + canlı-mikser de geri alınır (state otoriterdir, WARN
+        // duyurur).
         m_gameState = prevState;
         m_playtimeSeconds = prevPlaytime;
         m_lastSfxPlaybackNodeId = prevSfxNode;
@@ -2574,6 +2597,8 @@ bool Engine::loadGameSlot(int32_t slotIndex) {
             m_luaSandbox->clearVariables();
             for (const auto& [key, value] : prevLuaVars) m_luaSandbox->setVariable(key, value);
         }
+        applyCameraSnapshot(prevCamera);
+        applyAudioSnapshot(prevAudio);
         ROWL_LOG_WARN("Load slot #" + std::to_string(slotIndex) +
                       " restore failed (" + restoreError.what() +
                       "); session rolled back");
@@ -2664,13 +2689,16 @@ float Engine::pauseMenuVolume(int row) const {
 void Engine::setPauseMenuVolume(int row, float volume) {
     if (!m_audio) return;
     volume = std::clamp(volume, 0.0f, 1.0f);
+    bool mixerRow = true;
     switch (row) {
         case 3: m_audio->setMasterVolume(volume); break;
         case 4: m_audio->setBgmVolume(volume); break;
         case 5: m_audio->setSfxVolume(volume); break;
         case 6: m_audio->setVoiceVolume(volume); break;
-        default: break;
+        default: mixerRow = false; break;
     }
+    // #86: setter commit — slider tıklaması state'e damgalanır (step yok).
+    if (mixerRow) commitMixerVolumesToGameState();
 }
 
 void Engine::pauseMenuAdjustSelected(int direction) {
@@ -2943,12 +2971,20 @@ bool Engine::rewind(uint64_t steps) {
     // oturum rewind-öncesine döner, fail-loud.
     const auto prevState = m_gameState;
     const uint64_t prevNode = m_storyRuntime.currentNodeId();
+    // #86: load (2499) karşılığı — rewind hedef state'in playtime'ını
+    // oturuma işler; eskiden m_playtimeSeconds rewind-öncesinde takılı
+    // kalıyordu.
+    const double prevPlaytime = m_playtimeSeconds;
     const uint64_t prevSfxNode = m_lastSfxPlaybackNodeId;
     const auto prevLuaVars = m_luaSandbox
         ? m_luaSandbox->getAllVariables()
         : std::unordered_map<std::string, std::string>{};
+    // #86: load ile aynı rollback sözleşmesi — kamera + canlı-mikser dahil.
+    const auto prevAudio = captureAudioSnapshot();
+    const auto prevCamera = captureCameraSnapshot();
     try {
     m_gameState = rewound;
+    m_playtimeSeconds = m_gameState ? m_gameState->playtimeSeconds : 0.0;
     // A2a-tur2: same dangle-audibility as the save-load restore above.
     if (!m_storyRuntime.setCurrentNodeId(m_gameState->activeNodeId)) {
         ROWL_LOG_WARN("Rewind of " + std::to_string(steps) +
@@ -3000,12 +3036,16 @@ bool Engine::rewind(uint64_t steps) {
     restoreAudioStateFromGameState();
     } catch (const std::exception& restoreError) {
         m_gameState = prevState;
+        // #86: playtime senkronu (load karşılığı) + kamera/ses geri-alımı.
+        m_playtimeSeconds = prevPlaytime;
         m_lastSfxPlaybackNodeId = prevSfxNode;
         m_storyRuntime.setCurrentNodeId(prevNode);
         if (m_luaSandbox) {
             m_luaSandbox->clearVariables();
             for (const auto& [key, value] : prevLuaVars) m_luaSandbox->setVariable(key, value);
         }
+        applyCameraSnapshot(prevCamera);
+        applyAudioSnapshot(prevAudio);
         ROWL_LOG_WARN("Rewind of " + std::to_string(steps) +
                       " steps restore failed (" + restoreError.what() +
                       "); session rolled back");
@@ -3021,7 +3061,12 @@ bool Engine::rewind(uint64_t steps) {
 
 void Engine::restoreAudioStateFromGameState() {
     if (!m_audio || !m_gameState) return;
+    // #86: tam mikser restore'u. Ambience/Ui kazançları bilerek
+    // session-local kalır (state'e yazılmaz, buradan okunmaz).
+    m_audio->setMasterVolume(m_gameState->masterVolume);
     m_audio->setBgmVolume(m_gameState->bgmVolume);
+    m_audio->setSfxVolume(m_gameState->sfxVolume);
+    m_audio->setVoiceVolume(m_gameState->voiceVolume);
     if (m_gameState->dspFilter == "Cave" || m_gameState->dspFilter == "CaveReverb") {
         m_audio->applyDspFilter(Rowl::Audio::DSPFilterType::CaveReverb);
     } else if (m_gameState->dspFilter == "Telephone") {
@@ -3038,6 +3083,95 @@ void Engine::restoreAudioStateFromGameState() {
     } else {
         m_audio->stopBgm();
     }
+}
+
+// ── #86: transactional restore snapshot helpers ─────────────────────────────
+// capture* salt-okuma (throw-safe); apply* best-effort + WARN, dışarı asla
+// fırlatmaz — catch gövdelerinden çağrılmaya uygundur.
+Engine::AudioSnapshot Engine::captureAudioSnapshot() const {
+    AudioSnapshot snapshot;
+    if (!m_audio) return snapshot;
+    snapshot.hasAudio = true;
+    snapshot.masterVolume = m_audio->getMasterVolume();
+    snapshot.bgmVolume = m_audio->getBgmVolume();
+    snapshot.sfxVolume = m_audio->getSfxVolume();
+    snapshot.voiceVolume = m_audio->getVoiceVolume();
+    snapshot.bgmPath = m_audio->getCurrentBgmPath();
+    snapshot.bgmPlaying = m_audio->isBgmPlaying();
+    switch (m_audio->getActiveFilter()) {
+        case Rowl::Audio::DSPFilterType::CaveReverb: snapshot.dspFilter = 1; break;
+        case Rowl::Audio::DSPFilterType::Telephone: snapshot.dspFilter = 2; break;
+        case Rowl::Audio::DSPFilterType::UnderwaterLowPass: snapshot.dspFilter = 3; break;
+        case Rowl::Audio::DSPFilterType::Normal: break;
+    }
+    return snapshot;
+}
+
+void Engine::applyAudioSnapshot(const AudioSnapshot& snapshot) {
+    if (!snapshot.hasAudio || !m_audio) return;
+    try {
+        // Kazanç + filtre her zaman geri yazılır (idempotent setter'lar).
+        m_audio->setMasterVolume(snapshot.masterVolume);
+        m_audio->setBgmVolume(snapshot.bgmVolume);
+        m_audio->setSfxVolume(snapshot.sfxVolume);
+        m_audio->setVoiceVolume(snapshot.voiceVolume);
+        Rowl::Audio::DSPFilterType filter = Rowl::Audio::DSPFilterType::Normal;
+        if (snapshot.dspFilter == 1) filter = Rowl::Audio::DSPFilterType::CaveReverb;
+        else if (snapshot.dspFilter == 2) filter = Rowl::Audio::DSPFilterType::Telephone;
+        else if (snapshot.dspFilter == 3) filter = Rowl::Audio::DSPFilterType::UnderwaterLowPass;
+        m_audio->applyDspFilter(filter);
+        // BGM niyeti SADECE sapmışsa düzeltilir: mutasyon-suz throw yolunda
+        // aynı parçayı baştan çalmak duyulur bir restart olurdu.
+        if (snapshot.bgmPlaying && !snapshot.bgmPath.empty()) {
+            if (!m_audio->isBgmPlaying() || m_audio->getCurrentBgmPath() != snapshot.bgmPath) {
+                m_audio->playAudio(snapshot.bgmPath, Rowl::Audio::AudioChannelType::Bgm, filter);
+            }
+        } else if (m_audio->isBgmPlaying()) {
+            m_audio->stopBgm();
+        }
+    } catch (const std::exception& e) {
+        ROWL_LOG_WARN("Audio snapshot re-apply failed: " + std::string(e.what()));
+    } catch (...) {
+        ROWL_LOG_WARN("Audio snapshot re-apply failed (unknown error)");
+    }
+}
+
+Engine::CameraSnapshot Engine::captureCameraSnapshot() const {
+    CameraSnapshot snapshot;
+    const auto* camera = m_window ? m_window->getCamera() : nullptr;
+    if (!camera) return snapshot;
+    snapshot.hasCamera = true;
+    snapshot.x = camera->getPositionX();
+    snapshot.y = camera->getPositionY();
+    snapshot.zoom = camera->getZoom();
+    snapshot.rotation = camera->getRotation();
+    return snapshot;
+}
+
+void Engine::applyCameraSnapshot(const CameraSnapshot& snapshot) {
+    if (!snapshot.hasCamera) return;
+    auto* camera = m_window ? m_window->getCamera() : nullptr;
+    if (!camera) return;
+    try {
+        // Setter'lar in-flight tween'leri iptal eder: tam restore.
+        camera->setPosition(snapshot.x, snapshot.y);
+        camera->setZoom(snapshot.zoom);
+        camera->setRotation(snapshot.rotation);
+    } catch (const std::exception& e) {
+        ROWL_LOG_WARN("Camera snapshot re-apply failed: " + std::string(e.what()));
+    } catch (...) {
+        ROWL_LOG_WARN("Camera snapshot re-apply failed (unknown error)");
+    }
+}
+
+void Engine::commitMixerVolumesToGameState() {
+    // #86: setter commit — canlı kazançları step ilerletmeden state'e
+    // damgalar (withMixerVolumes: yapısal-paylaşım, rewind zinciri uzamaz).
+    if (!m_audio || !m_gameState) return;
+    m_gameState = Rowl::State::GameState::withMixerVolumes(
+        m_gameState,
+        m_audio->getMasterVolume(), m_audio->getBgmVolume(),
+        m_audio->getSfxVolume(), m_audio->getVoiceVolume());
 }
 
 uint64_t Engine::getCurrentStepId() const {

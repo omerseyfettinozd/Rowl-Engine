@@ -33,6 +33,9 @@
  */
 #include "rowl_test_harness.hpp"
 
+#include <nlohmann/json.hpp>
+#include <sstream>
+
 namespace {
 
 void appendU16LE(std::vector<uint8_t>& out, uint16_t value) {
@@ -1821,4 +1824,301 @@ void test_audio_lock_offscreen_global_pump() {
     }
     if (!eventsAlreadyInit) SDL_QuitSubSystem(SDL_INIT_EVENTS);
     TEST_PASS("Audio Offscreen Global Pump (#75) — temizlik (pin birakildi)");
+}
+
+/**
+ * test_audio_lock.cpp eklentisi — Scene-Restore Ses Snapshot (#86) kilitleri.
+ *
+ * KILIT (mutant oldurur):
+ *  1. test_audio_lock_scene_restore_audio_snapshot: updateScene zinciri
+ *     kamerayi + canli mikseri mutasyona ugratip SONRA throw ederse catch
+ *     sahne-gorsel + ses + kamera esitligini kurar. Mutantlar: snapshot
+ *     yakalamanin silinmesi, catch'te apply* cagrilarinin kaldirilmasi,
+ *     applyAudioSnapshot icindeki kazanc/filtre satirlarinin silinmesi —
+ *     hepsi exit(1) ile olur (throw deterministiktir: ertelenmis ses
+ *     blogunda string "volume" -> nlohmann type_error; oncesindeki gecerli
+ *     ses comp'u DSP+vol mutasyonunu islemis, kamera comp'u kamerayi
+ *     tasimistir).
+ *  2. test_audio_lock_mixer_persistence: volume setter'lar state'e commitler
+ *     (step ilerlemez), save/load + rewind tam mikseri restore eder, rewind
+ *     playtime'i senkronlar. Mutantlar: commit cagrilarinin kaldirilmasi,
+ *     restoreAudioStateFromGameState'te master/sfx/voice satirlarinin
+ *     silinmesi, rewind playtime senkronunun kaldirilmasi.
+ *  3. test_audio_lock_save_format_v4_mixer: v4 round-trip + withMixerVolumes
+ *     sozlesmesi + legacy Migrated + yabanci-red + bozuk-mikser red.
+ *
+ * Cihaz bagimsizdir (kazanc/filtre setter'lari + snapshot'lar SDL cihazina
+ * dokunmaz; BGM miss fail-closed'dur): requireAudioDeviceOrSkip YOKTUR,
+ * cihazsiz kosuda da calisir. Timing-assert YOKTUR; tum karsilastirmalar
+ * kayitli deger/float-tam esitliktir (0.25'in katlari ikili-tamdir).
+ */
+namespace {
+
+std::string lock86ProjectRoot(const char* tag) {
+    static int counter = 0;
+    std::ostringstream name;
+    name << "rowl_audio_lock86_" << tag << "_" << ++counter;
+    auto dir = std::filesystem::temp_directory_path() / name.str();
+    std::error_code ec;
+    std::filesystem::remove_all(dir, ec);
+    std::filesystem::create_directories(dir, ec);
+    return dir.string();
+}
+
+void lock86Check(bool condition, const std::string& what) {
+    if (!condition) lockFail("#86: " + what);
+}
+
+RowlEngineHandle lock86CreateEngine(const std::string& root) {
+    RowlEngineHandle handle = RowlEngine_Create();
+    if (!handle) lockFail("#86: Create failed");
+    RowlEngine_SetProjectDirectory(handle, root.c_str());
+    if (!RowlEngine_Init(handle, 320, 180, 0)) lockFail("#86: Init failed");
+    return handle;
+}
+
+void lock86WriteTwoNodeGraph(const std::string& path) {
+    std::ofstream graph(path);
+    graph << R"({"format_version":4,"start_node_id":101,"nodes":[
+      {"id":101,"speaker":"Guide","dialogue":"First.","next_nodes":[{"id":102}]},
+      {"id":102,"speaker":"Guide","dialogue":"Second."}]})";
+}
+
+void lock86CheckMixer(RowlEngineHandle handle, float master, float bgm,
+                      float sfx, float voice, const std::string& tag) {
+    lock86Check(RowlEngine_GetMasterVolume(handle) == master, tag + ": master");
+    lock86Check(RowlEngine_GetBgmVolume(handle) == bgm, tag + ": bgm");
+    lock86Check(RowlEngine_GetSfxVolume(handle) == sfx, tag + ": sfx");
+    lock86Check(RowlEngine_GetVoiceVolume(handle) == voice, tag + ": voice");
+    auto* engine = Rowl::Core::testEngineFromHandle(handle);
+    lock86Check(engine != nullptr, tag + ": test bridge null");
+    const auto state = engine->getGameState();
+    lock86Check(state != nullptr, tag + ": null game state");
+    lock86Check(state->masterVolume == master, tag + ": state master");
+    lock86Check(state->bgmVolume == bgm, tag + ": state bgm");
+    lock86Check(state->sfxVolume == sfx, tag + ": state sfx");
+    lock86Check(state->voiceVolume == voice, tag + ": state voice");
+}
+
+double lock86SlotPlaytime(RowlEngineHandle handle, int32_t slot) {
+    uint32_t required = 0;
+    if (RowlEngine_GetSaveSlotMetadataJson(handle, slot, nullptr, 0,
+                                            &required) != ROWL_RESULT_OK ||
+        required < 1) {
+        lockFail("#86: metadata size query failed");
+    }
+    std::vector<char> buffer(required, '\0');
+    uint32_t repeated = 0;
+    if (RowlEngine_GetSaveSlotMetadataJson(handle, slot, buffer.data(),
+                                            static_cast<uint32_t>(buffer.size()),
+                                            &repeated) != ROWL_RESULT_OK) {
+        lockFail("#86: metadata copy failed");
+    }
+    return nlohmann::json::parse(buffer.data()).at("playtime_seconds").get<double>();
+}
+
+} // namespace
+
+void test_audio_lock_scene_restore_audio_snapshot() {
+    TEST_SECTION("Scene-Restore Audio Snapshot (#86)");
+
+    const std::string root = lock86ProjectRoot("scene");
+    RowlEngineHandle handle = lock86CreateEngine(root);
+    auto* engine = Rowl::Core::testEngineFromHandle(handle);
+    lock86Check(engine != nullptr && engine->getAudio() != nullptr &&
+                    engine->getCamera() != nullptr,
+                "engine/audio/camera missing");
+    auto* audio = engine->getAudio();
+    auto* camera = engine->getCamera();
+
+    // Baseline: bilinen mikser + kamera + sahne.
+    RowlEngine_SetMasterVolume(handle, 0.5f);
+    RowlEngine_SetBgmVolume(handle, 0.25f);
+    RowlEngine_SetSfxVolume(handle, 0.75f);
+    RowlEngine_SetVoiceVolume(handle, 0.125f);
+    RowlEngine_SetCamera(handle, 100.0f, 200.0f, 2.0f);
+    lock86Check(audio->getActiveFilter() == Rowl::Audio::DSPFilterType::Normal,
+                "baseline filter not Normal");
+    const auto beforeState = engine->getGameState();
+    const std::string beforeBackground = engine->getActiveBackground();
+
+    // Zincir: background + kamera mutasyonu, gecerli ses comp'u (DSP + bgm
+    // vol mutasyonu; bgm_track miss'i fail-closed'dur), sonra ERTELENMIS ses
+    // blogunda deterministik throw (a2'de string volume -> type_error).
+    // updateScene catch'i hatayi yutar ve geri alir; disariya throw cikmaz.
+    const char* sceneJson = R"([
+      {"type":"background","id":"bg","enabled":true,
+       "data":{"texture":"bg_changed.png"}},
+      {"type":"camera","id":"cam","enabled":true,
+       "data":{"x":500.0,"y":500.0,"zoom":3.0}},
+      {"type":"audio","id":"a1","enabled":true,
+       "data":{"dsp_filter":"Telephone","volume":0.9,
+               "bgm_track":"audio/changed.wav"}},
+      {"type":"audio","id":"a2","enabled":true,
+       "data":{"dsp_filter":"Normal","volume":"loud"}}
+    ])";
+    RowlEngine_UpdateSceneFromJson(handle, sceneJson);
+
+    // Gozlem cubugu: sahne-gorsel + ses + kamera esitligi.
+    lock86Check(engine->getGameState() == beforeState,
+                "game state pointer not restored");
+    lock86Check(engine->getActiveBackground() == beforeBackground,
+                "background not restored");
+    lock86Check(camera->getPositionX() == 100.0f &&
+                    camera->getPositionY() == 200.0f,
+                "camera position not restored");
+    lock86Check(camera->getZoom() == 2.0f, "camera zoom not restored");
+    lock86Check(camera->getRotation() == 0.0f, "camera rotation not restored");
+    lock86Check(audio->getMasterVolume() == 0.5f, "master not restored");
+    lock86Check(audio->getBgmVolume() == 0.25f, "bgm volume not restored");
+    lock86Check(audio->getSfxVolume() == 0.75f, "sfx volume not restored");
+    lock86Check(audio->getVoiceVolume() == 0.125f, "voice volume not restored");
+    lock86Check(audio->getActiveFilter() == Rowl::Audio::DSPFilterType::Normal,
+                "dsp filter not restored");
+    TEST_PASS("Scene restore catch — visual + mixer + camera equality");
+
+    RowlEngine_Destroy(handle);
+}
+
+void test_audio_lock_mixer_persistence() {
+    TEST_SECTION("Mixer Persistence (#86)");
+
+    const std::string root = lock86ProjectRoot("mixer");
+    RowlEngineHandle handle = lock86CreateEngine(root);
+    const std::string graphPath = root + "/two_node.json";
+    lock86WriteTwoNodeGraph(graphPath);
+    RowlEngine_LoadStoryGraph(handle, graphPath.c_str());
+    RowlEngine_Step(handle, 0.0f);
+    RowlEngine_AdvanceNode(handle, 0);
+    RowlEngine_Step(handle, 0.0f);
+    lock86Check(RowlEngine_GetCurrentNodeId(handle) == 102, "setup node != 102");
+
+    // Setter commit: state'e damgalar ama adim ilerletmez.
+    const uint64_t step0 = RowlEngine_GetCurrentStepId(handle);
+    RowlEngine_SetMasterVolume(handle, 0.5f);
+    RowlEngine_SetBgmVolume(handle, 0.25f);
+    RowlEngine_SetSfxVolume(handle, 0.75f);
+    RowlEngine_SetVoiceVolume(handle, 0.125f);
+    lock86Check(RowlEngine_GetCurrentStepId(handle) == step0,
+                "setter commit advanced stepId");
+    lock86CheckMixer(handle, 0.5f, 0.25f, 0.75f, 0.125f, "setter-commit");
+
+    // Pozitif-kontrol: kaydet -> saptir -> yukle -> mikser geri doner.
+    lock86Check(RowlEngine_SaveGameSlotResult(handle, 1) == ROWL_RESULT_OK,
+                "control save failed");
+    RowlEngine_SetMasterVolume(handle, 1.0f);
+    RowlEngine_SetBgmVolume(handle, 0.5f);
+    RowlEngine_SetSfxVolume(handle, 0.25f);
+    RowlEngine_SetVoiceVolume(handle, 0.75f);
+    lock86Check(RowlEngine_LoadGameSlotResult(handle, 1) == ROWL_RESULT_OK,
+                "control load failed");
+    lock86CheckMixer(handle, 0.5f, 0.25f, 0.75f, 0.125f, "load-restore");
+    TEST_PASS("Mixer setter-commit + save/load restore (no step bump)");
+
+    // Rewind tam mikseri restore eder (bgm-disi kazanc mutantini oldurur).
+    RowlEngine_SetVariable(handle, "m86", "v");
+    RowlEngine_SetMasterVolume(handle, 1.0f);
+    RowlEngine_SetBgmVolume(handle, 0.5f);
+    RowlEngine_SetSfxVolume(handle, 0.25f);
+    RowlEngine_SetVoiceVolume(handle, 0.75f);
+    lock86Check(RowlEngine_Rewind(handle, 1) == 1, "rewind failed");
+    lock86CheckMixer(handle, 0.5f, 0.25f, 0.75f, 0.125f, "rewind-restore");
+    TEST_PASS("Mixer rewind restore (master/sfx/voice)");
+
+    // Rewind playtime senkronu (load 2499 karsiligi): slot metadata
+    // playtime_seconds gozlemi. 0.25 adimlari ikili-tamdir.
+    RowlEngine_SetPlayState(handle, 1);
+    RowlEngine_Step(handle, 0.25f);
+    RowlEngine_Step(handle, 0.25f);
+    lock86Check(RowlEngine_SaveGameSlotResult(handle, 3) == ROWL_RESULT_OK,
+                "playtime save failed");
+    lock86Check(lock86SlotPlaytime(handle, 3) == 0.5, "slot3 playtime != 0.5");
+    RowlEngine_Step(handle, 0.25f);
+    RowlEngine_Step(handle, 0.25f);
+    RowlEngine_SetVariable(handle, "m86p", "v");
+    lock86Check(RowlEngine_Rewind(handle, 1) == 1, "playtime rewind failed");
+    lock86Check(RowlEngine_SaveGameSlotResult(handle, 4) == ROWL_RESULT_OK,
+                "post-rewind save failed");
+    // Fix'siz 1.0 (bayat), fix'li 0.5 (hedef state'in playtime'i).
+    lock86Check(lock86SlotPlaytime(handle, 4) == 0.5,
+                "rewind did not sync playtime (stale 1.0?)");
+    TEST_PASS("Rewind playtime sync (slot metadata 0.5, not stale 1.0)");
+
+    RowlEngine_Destroy(handle);
+}
+
+void test_audio_lock_save_format_v4_mixer() {
+    TEST_SECTION("Save Format v4 Mixer (#86)");
+    using Rowl::State::GameState;
+
+    // withMixerVolumes: deger + step-sabiti + zincir-paylasimi.
+    const auto s0 = GameState::createInitialState();
+    const uint64_t step0 = s0->stepId;
+    const auto s1 = GameState::withMixerVolumes(s0, 0.5f, 0.25f, 0.75f, 0.125f);
+    lock86Check(s1 != nullptr, "withMixerVolumes null");
+    lock86Check(s1->stepId == step0, "withMixerVolumes advanced stepId");
+    lock86Check(s1->previousState == s0->previousState,
+                "withMixerVolumes extended rewind chain");
+    lock86Check(s1->masterVolume == 0.5f && s1->bgmVolume == 0.25f &&
+                    s1->sfxVolume == 0.75f && s1->voiceVolume == 0.125f,
+                "withMixerVolumes values");
+    // Null -> nullptr.
+    lock86Check(GameState::withMixerVolumes(nullptr, 0.5f, 0.5f, 0.5f, 0.5f) == nullptr,
+                "withMixerVolumes null must return nullptr");
+    // Non-finite korur, sonlu clamp'lenir.
+    const auto s2 = GameState::withMixerVolumes(
+        s1, std::numeric_limits<float>::quiet_NaN(),
+        std::numeric_limits<float>::infinity(),
+        -std::numeric_limits<float>::infinity(), 0.5f);
+    lock86Check(s2->masterVolume == 0.5f && s2->bgmVolume == 0.25f &&
+                    s2->sfxVolume == 0.75f && s2->voiceVolume == 0.5f,
+                "withMixerVolumes non-finite must keep current");
+    const auto s3 = GameState::withMixerVolumes(s1, 5.0f, -2.0f, 0.25f, 0.75f);
+    lock86Check(s3->masterVolume == 1.0f && s3->bgmVolume == 0.0f &&
+                    s3->sfxVolume == 0.25f && s3->voiceVolume == 0.75f,
+                "withMixerVolumes must clamp to [0,1]");
+    TEST_PASS("withMixerVolumes contract (values, no-step, null, non-finite, clamp)");
+
+    // v4 round-trip: Loaded, kaynak 4, mikser birebir.
+    const std::string json = s1->serializeJson();
+    const auto res = GameState::decodeJson(json);
+    lock86Check(res.succeeded() &&
+                    res.status == Rowl::State::GameStateDecodeStatus::Loaded &&
+                    res.sourceVersion == 4,
+                "v4 must decode Loaded/4");
+    lock86Check(res.state->masterVolume == 0.5f && res.state->bgmVolume == 0.25f &&
+                    res.state->sfxVolume == 0.75f && res.state->voiceVolume == 0.125f,
+                "v4 mixer round-trip");
+    TEST_PASS("Save format v4 round-trip (Loaded, mixer intact)");
+
+    // Legacy v3: Migrated + mikser defaultlari.
+    auto legacy = nlohmann::json::parse(json);
+    legacy["version"] = 3;
+    legacy.erase("master_volume");
+    legacy.erase("sfx_volume");
+    legacy.erase("voice_volume");
+    const auto res3 = GameState::decodeJson(legacy.dump());
+    lock86Check(res3.succeeded() &&
+                    res3.status == Rowl::State::GameStateDecodeStatus::Migrated &&
+                    res3.sourceVersion == 3,
+                "v3 must decode Migrated/3");
+    lock86Check(res3.state->masterVolume == 1.0f && res3.state->sfxVolume == 1.0f &&
+                    res3.state->voiceVolume == 1.0f && res3.state->bgmVolume == 0.25f,
+                "v3 mixer defaults (bgm preserved)");
+    TEST_PASS("Legacy v3 Migrated (mixer defaults 1.0)");
+
+    // Yabanci sürüm + bozuk mikser reddedilir.
+    auto foreign = nlohmann::json::parse(json);
+    foreign["version"] = 5;
+    const auto res5 = GameState::decodeJson(foreign.dump());
+    lock86Check(!res5.succeeded() &&
+                    res5.status == Rowl::State::GameStateDecodeStatus::UnsupportedVersion,
+                "v5 must be UnsupportedVersion");
+    auto hostile = nlohmann::json::parse(json);
+    hostile["master_volume"] = 2.0;
+    const auto resH = GameState::decodeJson(hostile.dump());
+    lock86Check(!resH.succeeded() &&
+                    resH.status == Rowl::State::GameStateDecodeStatus::InvalidData,
+                "out-of-range mixer must be InvalidData");
+    TEST_PASS("Foreign version + hostile mixer rejected");
 }
