@@ -134,6 +134,10 @@ public:
     double bgmStreamBufferedSeconds() const;
     bool isAmbiencePlaying() const { return m_isAmbiencePlaying; }
     const std::string& getCurrentAmbiencePath() const { return m_currentAmbiencePath; }
+    // Bulgu #81: Ui durumu ambience ile simetriktir (bayat/çelişkili durum
+    // kilidi bu erişimciler üzerinden gözlenir). Salt okuma; davranışsız.
+    bool isUiPlaying() const { return m_isUiPlaying; }
+    const std::string& getCurrentUiPath() const { return m_currentUiPath; }
 
     // ── Faz 5 Dilim 2: mixer / polyphony / eğriler / bed'ler / pump ──
     // StreamMixer applyChannelGains'in tek kazanç kaynağıdır (salt okuma).
@@ -191,6 +195,19 @@ public:
     // asla kullanmamalıdır (emsal: Rowl::Core::testEngineFromHandle).
     float testLastDspPeak() const;
 
+    // Bulgu #81 test-only kancalar (davranışsız gözlem + deterministik
+    // hata-enjeksiyonu; üretim kodu bunları asla kullanmamalıdır,
+    // emsal: testLastDspPeak):
+    //  - testFailNextQueue: bir sonraki playAudio kuyruk denemesini SDL'ye
+    //    dokunmadan başarısız sayar (fail yolu birebir aynı çalışır; bayrak
+    //    tüketilir). Gerçek SetFormat/Put hatasını deterministik kurmak
+    //    mümkün olmadığı için kilit bu kancayla yazılır.
+    //  - testQueuedBytes: kanal akışındaki kuyruklu bayt
+    //    (SDL_GetAudioStreamAvailable; akış yoksa/hatada 0). SFX'te slot 0
+    //    izlenir (derinlik 1 ile hedef deterministiktir).
+    void testFailNextQueue() { m_testFailQueueNext = true; }
+    size_t testQueuedBytes(AudioChannelType channel) const;
+
     void shutdown();
 
 private:
@@ -213,6 +230,9 @@ private:
 
     std::string m_currentBgmPath = "";
     std::string m_lastError;
+    // Bulgu #81 test-only: testFailNextQueue bayrağı (bir sonraki kuyruk
+    // denemesinde tüketilir).
+    bool m_testFailQueueNext = false;
     std::vector<uint8_t> m_bgmData;
     std::vector<uint8_t> m_transitionBgmData;
     bool m_isBgmPlaying = false;
@@ -278,6 +298,7 @@ private:
     std::vector<uint8_t> m_uiData; // float PCM, one-shot (m_uiStream)
     size_t m_uiSampleOffset = 0;
     bool m_isUiPlaying = false;
+    std::string m_currentUiPath; // Bulgu #81: ambience-path simetriği
     ChannelTelemetry m_telemetryAmbience;
     ChannelTelemetry m_telemetryUi;
     StreamInfo m_streamInfo; // snapshot: tek karar kaynağı

@@ -203,6 +203,24 @@ float AudioEngine::testLastDspPeak() const {
     return g_testLastDspPeak;
 }
 
+// Bulgu #81 test-only gözlem (üretim kodu kullanmaz; salt okuma).
+size_t AudioEngine::testQueuedBytes(AudioChannelType channel) const {
+    const SDL_AudioStream* stream = nullptr;
+    switch (channel) {
+        case AudioChannelType::Bgm: stream = m_bgmStream; break;
+        case AudioChannelType::Voice: stream = m_voiceStream; break;
+        case AudioChannelType::Ambience: stream = m_ambienceStream; break;
+        case AudioChannelType::Ui: stream = m_uiStream; break;
+        case AudioChannelType::Sfx:
+            stream = m_sfxPoolStreams.empty() ? nullptr : m_sfxPoolStreams[0];
+            break;
+    }
+    if (!stream) return 0;
+    const int available =
+        SDL_GetAudioStreamAvailable(const_cast<SDL_AudioStream*>(stream));
+    return (available > 0) ? static_cast<size_t>(available) : 0;
+}
+
 AudioEngine::AudioEngine(Rowl::VFS::VFSManager* vfs)
     : m_vfs(vfs) {
     if (!m_vfs) {
@@ -295,6 +313,7 @@ bool AudioEngine::initialize() {
     m_uiData.clear();
     m_uiSampleOffset = 0;
     m_isUiPlaying = false;
+    m_currentUiPath.clear();
     m_telemetryAmbience = {};
     m_telemetryUi = {};
     m_streamInfo = StreamInfo{};
@@ -748,45 +767,53 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
                                        (channel == AudioChannelType::Ambience) ? m_ambienceStream :
                                        (channel == AudioChannelType::Ui) ? m_uiStream : sfxTargetStream;
         if (targetStream) {
-            if (channel == AudioChannelType::Bgm && !transitionRequested) {
-                // A5-tur1: Clear fail'i kayda geçer ama queue belirleyicidir
-                // (m_lastError'e yazılmaz — başarılı Put kirlenmemelidir).
-                if (!SDL_ClearAudioStream(m_bgmStream)) {
-                    ROWL_LOG_WARN("[AudioEngine] Failed to clear BGM audio stream: " +
-                                  std::string(SDL_GetError()));
-                }
-            }
             if (transitionRequested) {
                 if (!SDL_ClearAudioStream(m_transitionBgmStream)) {
                     ROWL_LOG_WARN("[AudioEngine] Failed to clear transition BGM audio stream: " +
                                   std::string(SDL_GetError()));
                 }
             }
-            // Faz 5 Dilim 1: Ambience loop beslemesi kendi akışında baştan
-            // kuyruğa girer.
-            // Faz 5 Dilim 2: Ui one-shot ayrı tekil akışa kuyruğa girer
-            // (havuz dışı; telemetri ayrıdır).
-            if (channel == AudioChannelType::Ambience && m_ambienceStream) {
-                // A5-tur1: Clear fail'i kayda geçer (queue belirleyicidir).
-                if (!SDL_ClearAudioStream(m_ambienceStream)) {
-                    ROWL_LOG_WARN("[AudioEngine] Failed to clear ambience audio stream: " +
-                                  std::string(SDL_GetError()));
+            // Bulgu #81: yıkıcı pre-clear kaldırıldı — Clear, prova-Put
+            // BAŞARISINA gate'lendi (fail-atomicity). Eski sıra
+            // (Clear → SetFormat/Put) kuyruk-hatasında çalmakta olan sesi
+            // yok edip bayrakları bayat bırakıyordu (ambience/UI/SFX'te
+            // kuyruk boş + eski PCM iddiası; non-transition BGM'de sağlıklı
+            // BGM'in imhası). Yeni sıra: SetFormat → prova-Put →
+            // (başarıda) Clear-artığı + commit-Put + state yazımı.
+            // SDL_SetAudioStreamFormat kuyruğu flush etmez (belge: eski veri
+            // eski formatıyla korunur), o yüzden SetFormat-hatası da eski
+            // kuyruğa dokunmaz. Transition scratch akışı yukarıda aynen
+            // temizlenir (eski BGM Put başarısına kadar korunur — doğru
+            // desen, dokunulmadı).
+            const bool needsReplace =
+                !transitionRequested &&
+                (channel == AudioChannelType::Bgm || channel == AudioChannelType::Ambience ||
+                 channel == AudioChannelType::Ui || channel == AudioChannelType::Sfx);
+            bool queueOk = false;
+            if (m_testFailQueueNext) {
+                // Bulgu #81 test kancası: prova öncesi deterministik
+                // kuyruk-hatası (SDL çağrılmaz; fail yolu birebir aynı
+                // çalışır, bayrak tüketilir).
+                m_testFailQueueNext = false;
+            } else if (SDL_SetAudioStreamFormat(targetStream, &floatSpec, nullptr)) {
+                if (!needsReplace) {
+                    // Voice + transition-scratch: doğrudan ek-kuyruk
+                    // (yıkıcı adım yoktur; eski davranış aynen).
+                    queueOk = SDL_PutAudioStreamData(targetStream, floatBuffer, floatLength);
+                } else if (SDL_PutAudioStreamData(targetStream, floatBuffer, floatLength)) {
+                    // Prova BAŞARILI: eski kuyruk yıkılır, aynı yük taze
+                    // kuyruğa commit-Put ile yazılır (replace semantiği
+                    // korunur; hata eski kuyruğa dokunmaz).
+                    // A5-tur1: Clear fail'i kayda geçer ama queue belirleyicidir
+                    // (m_lastError'e yazılmaz — başarılı Put kirlenmemelidir).
+                    if (!SDL_ClearAudioStream(targetStream)) {
+                        ROWL_LOG_WARN("[AudioEngine] Failed to clear audio stream: " +
+                                      std::string(SDL_GetError()));
+                    }
+                    queueOk = SDL_PutAudioStreamData(targetStream, floatBuffer, floatLength);
                 }
             }
-            if (channel == AudioChannelType::Ui && m_uiStream) {
-                if (!SDL_ClearAudioStream(m_uiStream)) {
-                    ROWL_LOG_WARN("[AudioEngine] Failed to clear UI audio stream: " +
-                                  std::string(SDL_GetError()));
-                }
-            }
-            if (channel == AudioChannelType::Sfx && sfxTargetStream) {
-                if (!SDL_ClearAudioStream(sfxTargetStream)) {
-                    ROWL_LOG_WARN("[AudioEngine] Failed to clear SFX pool audio stream: " +
-                                  std::string(SDL_GetError()));
-                }
-            }
-            if (!SDL_SetAudioStreamFormat(targetStream, &floatSpec, nullptr) ||
-                !SDL_PutAudioStreamData(targetStream, floatBuffer, floatLength)) {
+            if (!queueOk) {
                 ROWL_LOG_ERROR("[AudioEngine] Failed to queue decoded audio: " + std::string(SDL_GetError()));
                 m_lastError = "Unable to queue decoded audio: " + std::string(SDL_GetError());
                 SDL_free(floatBuffer);
@@ -854,6 +881,7 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
                 m_uiData.assign(floatBuffer, floatBuffer + floatLength);
                 m_isUiPlaying = true;
                 m_uiSampleOffset = 0;
+                m_currentUiPath = assetPath;
             }
             if (!m_outputSuspended) {
                 // A5-tur1: resume fail'inde queue başarılı olsa da ses çıkmaz —
@@ -890,6 +918,7 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
                 m_ambienceSampleOffset = 0;
             } else if (channel == AudioChannelType::Ui) {
                 m_uiData.assign(floatBuffer, floatBuffer + floatLength);
+                m_currentUiPath = assetPath;
                 m_isUiPlaying = true;
                 m_uiSampleOffset = 0;
             } else if (channel == AudioChannelType::Sfx) {
@@ -1023,6 +1052,7 @@ void AudioEngine::stopAll() {
     m_uiData.clear();
     m_uiSampleOffset = 0;
     m_isUiPlaying = false;
+    m_currentUiPath.clear();
     m_isVoicePlaying = false;
     triggerVoiceDucking(false);
     ROWL_LOG_INFO("[AudioEngine] All audio channels stopped.");
@@ -1252,6 +1282,7 @@ void AudioEngine::shutdown() {
     m_uiData.clear();
     m_uiSampleOffset = 0;
     m_isUiPlaying = false;
+    m_currentUiPath.clear();
     m_telemetryAmbience = {};
     m_telemetryUi = {};
     m_telemetryBgm = {};
