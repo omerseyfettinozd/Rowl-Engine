@@ -879,7 +879,7 @@ ROWL_API float RowlEngine_GetAudioChannelPeak(RowlEngineHandle handle, int chann
 /** Returns the RMS level (0.0f - 1.0f) for a channel (0: Bgm, 1: Voice, 2: Sfx, 3: Master) and channelIndex (0: Left, 1: Right). */
 ROWL_API float RowlEngine_GetAudioChannelRms(RowlEngineHandle handle, int channelType, int channelIndex);
 
-/** Fills outBands with up to bandCount frequency band estimates (0: Bass, 1: Mid-Low, 2: Mid-High, 3: Treble). */
+/** Fills outBands with up to bandCount frequency band estimates (0: Bass, 1: Mid-Low, 2: Mid-High, 3: Treble). Dead-handle (silent tier): zero-fills outBands[0..bandCount) and records nothing, so stale bands never read as live. Null buffer or bandCount <= 0 is a silent no-op. */
 ROWL_API void RowlEngine_GetAudioSpectrum(RowlEngineHandle handle, float* outBands, int bandCount);
 
 /* ── Typewriter Voice Blips & Audio Effects (Milestone 25) ───────────────── */

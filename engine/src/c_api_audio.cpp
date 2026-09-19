@@ -248,7 +248,13 @@ float RowlEngine_GetAudioChannelRms(RowlEngineHandle handle, int channelType, in
 }
 
 void RowlEngine_GetAudioSpectrum(RowlEngineHandle handle, float* outBands, int bandCount) {
-    if (!isLiveHandle(handle) || !outBands || bandCount <= 0) return;
+    if (!outBands || bandCount <= 0) return;
+    // #76: olu-handle sessiz-tier sifir-doldur — tampona dokunulmazsa bayat
+    // bantlar canli gibi okunur. Kayit yok (sessiz-tier sozlesmesi).
+    if (!isLiveHandle(handle)) {
+        for (int i = 0; i < bandCount; ++i) outBands[i] = 0.0f;
+        return;
+    }
     invokeNoexcept([&] {
         auto checked = toEngineChecked(handle);
         const auto* audio = checked ? checked->getAudio() : nullptr;

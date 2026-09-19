@@ -1635,3 +1635,55 @@ void test_audio_lock_outage_pending_fail_preserved() {
     control.stopAll();
     control.shutdown();
 }
+
+/**
+ * test_audio_lock.cpp eklentisi — Dead-Handle Spectrum Zero-Fill (#76) KILIDI.
+ *
+ * KILIT (mutant oldurur): olu-handle'da GetAudioSpectrum caller tamponuna
+ * dokunmuyordu — bayat bantlar canli gibi okunuyordu. Duzeltme (sessiz-tier):
+ * olu-handle dali outBands[0..bandCount)'u sifir-doldurur, kayit tutmaz.
+ * Sifir-doldurma satiri silinirse asagidaki zehir-tampon assert'i exit(1)
+ * ile duser.
+ *
+ * Gozlem (deterministik; cihaz-bagimsiz — olu-handle yolu audio cihaza
+ * ugramaz, o yuzden requireAudioDeviceOrSkip YOKTUR; timing-assert YOK):
+ *  Create/Destroy ile oldurulmus handle + zehirli tampon
+ *  (0.5f/0.75f/1.0f/0.25f) -> cagri sonrasi tamponun tamami 0.0f (tam-esitlik).
+ *  Null/hatali-sayi guard'lari sessiz no-op'tur (cokme yok). Peak/Rms skaler
+ *  0.0f sozlesmesi degismez (asagida bekci-assert ile belgelenir).
+ */
+void test_audio_lock_dead_handle_spectrum_zero_fill() {
+    TEST_SECTION("Audio Dead-Handle Spectrum Zero-Fill (#76)");
+
+    RowlEngineHandle handle = RowlEngine_Create();
+    if (!handle) {
+        lockFail("Audio Dead-Handle Spectrum (#76): RowlEngine_Create failed");
+    }
+    RowlEngine_Destroy(handle); // handle artik olu (retention: tekrar gecerli olamaz)
+
+    float bands[4] = {0.5f, 0.75f, 1.0f, 0.25f};
+    RowlEngine_GetAudioSpectrum(handle, bands, 4);
+    for (int i = 0; i < 4; ++i) {
+        if (bands[i] != 0.0f) {
+            lockFail("Audio Dead-Handle Spectrum (#76): olu-handle tamponu sifirlamadi "
+                     "(bant " + std::to_string(i) + ")");
+        }
+    }
+    TEST_PASS("Audio Dead-Handle Spectrum — olu-handle caller tamponunu sifirlar");
+
+    // Guard'lar: null tampon / bandCount <= 0 sessiz no-op'tur (cokme yok).
+    RowlEngine_GetAudioSpectrum(handle, nullptr, 4);
+    RowlEngine_GetAudioSpectrum(handle, bands, 0);
+    RowlEngine_GetAudioSpectrum(handle, bands, -1);
+    for (int i = 0; i < 4; ++i) {
+        if (bands[i] != 0.0f) {
+            lockFail("Audio Dead-Handle Spectrum (#76): guard cagrisi tamponu bozdu");
+        }
+    }
+    // Peak/Rms skaler sozlesmesi degismez: olu-handle 0.0f doner.
+    if (RowlEngine_GetAudioChannelPeak(handle, 3, 0) != 0.0f ||
+        RowlEngine_GetAudioChannelRms(handle, 3, 1) != 0.0f) {
+        lockFail("Audio Dead-Handle Spectrum (#76): Peak/Rms olu-handle sozlesmesi bozuldu");
+    }
+    TEST_PASS("Audio Dead-Handle Spectrum — guard'lar sessiz, Peak/Rms 0.0f korunur");
+}
