@@ -35,8 +35,13 @@
 // The opaque C handle is a stable record, not the Engine allocation itself.
 // Destroyed records are intentionally retained until process exit so an old
 // host callback can never become valid again if malloc reuses an Engine address.
+// D3 (B1d #106): the Engine is SHARED-owned, not unique-owned. Readers copy
+// the shared_ptr under the registry lock and use the copy AFTER unlocking,
+// so a concurrent Destroy can erase the map entry but can never free an
+// Engine an in-flight call is still using (use-after-destroy → safe
+// lifetime extension; the destructor simply runs on the last holder).
 struct HandleRecord {
-    std::unique_ptr<Rowl::Core::Engine> engine;
+    std::shared_ptr<Rowl::Core::Engine> engine;
     std::thread::id ownerThread;
 };
 
@@ -44,11 +49,34 @@ extern std::mutex g_handleMutex;
 extern std::unordered_map<RowlEngineHandle, Rowl::Core::Engine*> g_liveHandles;
 extern std::vector<std::unique_ptr<HandleRecord>> g_handleRecords;
 
+// D3 (B1d #150/#157): liveness and affinity are DIFFERENT answers. Old code
+// folded both into isLiveHandle/toEngineChecked-null, so aux maps treated a
+// foreign-thread call on a live handle exactly like a dead handle — and
+// ERASED live state. Classify first: erase only on Dead, stamp WrongThread
+// (no state touched) on Foreign.
+enum class HandleStanding {
+    Dead,    // unknown handle, or destroyed (not in the live map)
+    Foreign, // live, but owned by another thread
+    Mine,    // live and owned by the caller (or unclaimed: any thread may claim)
+};
+
+HandleStanding classifyHandle(RowlEngineHandle handle) noexcept;
 bool isLiveHandle(RowlEngineHandle handle) noexcept;
 bool claimHandleThread(RowlEngineHandle handle) noexcept;
-std::unique_ptr<Rowl::Core::Engine> takeLiveHandle(RowlEngineHandle handle) noexcept;
+bool unclaimHandleThread(RowlEngineHandle handle) noexcept;
+std::shared_ptr<Rowl::Core::Engine> takeLiveHandle(RowlEngineHandle handle) noexcept;
 Rowl::Core::Engine* toEngine(RowlEngineHandle h);
-Rowl::Core::Engine* toEngineChecked(RowlEngineHandle h) noexcept;
+// D3 (B1d #106): shared copy under the lock; null on dead/foreign.
+std::shared_ptr<Rowl::Core::Engine> toEngineChecked(RowlEngineHandle h) noexcept;
+// Ownership-free copy: live map hit regardless of owner thread. For the
+// WrongThread stamping path and cross-thread last-result reads only —
+// holding this does NOT grant calling rights, it only keeps the Engine
+// (and its context) alive while the rejection is recorded/read.
+std::shared_ptr<Rowl::Core::Engine> copyEngineAnyThread(RowlEngineHandle h) noexcept;
+// D3 (B1d #102): records a loud WrongThread rejection on the engine's own
+// (mutex-guarded) context AND logs it. Callable cross-thread precisely
+// because it only touches shared ownership + the context lock.
+void stampWrongThread(RowlEngineHandle handle, const char* op) noexcept;
 // D2 (#140): TU-local aux-map'lerin Destroy-yolu temizliği. Tanımlar
 // c_api_prefetch_chapters.cpp / c_api_character_layers.cpp'de (anonim
 // namespace dışında, external linkage); çağrı c_api_lifecycle.cpp'de.
@@ -125,4 +153,12 @@ inline bool requireEngineInitialized(Rowl::Core::Engine* engine, const char* op)
         }
     }
     return false;
+}
+
+// D3 (B1d #106): shared-ownership overload — toEngineChecked artık
+// shared_ptr döndürdüğünden onlarca çağrı noktası değişmeden derlenir;
+// ham-pointer çağrılar eski imzaya gitmeye devam eder.
+inline bool requireEngineInitialized(const std::shared_ptr<Rowl::Core::Engine>& engine,
+                                     const char* op) noexcept {
+    return requireEngineInitialized(engine.get(), op);
 }

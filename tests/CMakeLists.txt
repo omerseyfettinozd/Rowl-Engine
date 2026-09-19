@@ -45,6 +45,7 @@ add_executable(rowl_tests
     test_handle_hygiene.cpp
     test_lifecycle_init_guards.cpp
     test_lifecycle_shutdown_sweep.cpp
+    test_lifecycle_thread_lease.cpp
     test_numeric_guards.cpp
     test_lua_hardening.cpp
     test_single_engine_image.cpp

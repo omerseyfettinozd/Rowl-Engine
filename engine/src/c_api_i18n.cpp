@@ -94,7 +94,7 @@ RowlEngine_ResultCode RowlEngine_SetLocale(RowlEngineHandle handle,
     if (!isLiveHandle(handle)) return ROWL_RESULT_INVALID_HANDLE;
     if (!locale || !*locale) return ROWL_RESULT_INVALID_ARGUMENT;
     return invokeNoexcept<RowlEngine_ResultCode>([&] {
-        auto* engine = toEngineChecked(handle);
+        auto engine = toEngineChecked(handle);
         if (!engine) return ROWL_RESULT_INVALID_HANDLE;
         return engine->getLocalization().setLocale(locale)
                    ? ROWL_RESULT_OK
@@ -107,7 +107,7 @@ RowlEngine_ResultCode RowlEngine_GetLocale(RowlEngineHandle handle, char* buffer
                                            uint32_t* outRequiredSize) {
     if (!isLiveHandle(handle)) return ROWL_RESULT_INVALID_HANDLE;
     return invokeNoexcept<RowlEngine_ResultCode>([&] {
-        auto* engine = toEngineChecked(handle);
+        auto engine = toEngineChecked(handle);
         if (!engine) return ROWL_RESULT_INVALID_HANDLE;
         return copyUtf8ToCaller(engine->getLocalization().getLocale(), buffer,
                                 bufferSize, outRequiredSize);
@@ -119,7 +119,7 @@ RowlEngine_ResultCode RowlEngine_GetSupportedLocalesJson(
     uint32_t* outRequiredSize) {
     if (!isLiveHandle(handle)) return ROWL_RESULT_INVALID_HANDLE;
     return invokeNoexcept<RowlEngine_ResultCode>([&] {
-        auto* engine = toEngineChecked(handle);
+        auto engine = toEngineChecked(handle);
         if (!engine) return ROWL_RESULT_INVALID_HANDLE;
         nlohmann::json locales = nlohmann::json::array();
         for (const auto& locale :

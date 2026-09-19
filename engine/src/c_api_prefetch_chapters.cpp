@@ -27,6 +27,7 @@
 #include <cstring>
 #include <limits>
 #include <mutex>
+#include <optional>
 #include <unordered_map>
 
 namespace {
@@ -71,6 +72,46 @@ bool isParseError(const std::string& error) {
 
 } // namespace
 
+// D3 (#150/#157): aux-entry guard. Dead → erase + INVALID_HANDLE (D2 #140
+// hijyeni korunur); Foreign → WRONG_THREAD + loud stamp, aux STATE'E
+// DOKUNULMAZ; Mine → disengaged (devam). A4 handle-once sıralaması aynen:
+// ölü-handle'da arg'lara bakılmaz. Kilit: aux mutex içeride alınır (ölü
+// dalı), yabancı dalda kilit tutulmaz.
+inline std::optional<RowlEngine_ResultCode> guardPrefetchEntry(RowlEngineHandle handle,
+                                                              const char* op) {
+    switch (classifyHandle(handle)) {
+        case HandleStanding::Dead: {
+            std::lock_guard<std::mutex> lock(g_prefetchMutex);
+            g_prefetchStates.erase(handle);
+            return ROWL_RESULT_INVALID_HANDLE;
+        }
+        case HandleStanding::Foreign:
+            stampWrongThread(handle, op);
+            return ROWL_RESULT_WRONG_THREAD;
+        case HandleStanding::Mine:
+            return std::nullopt;
+    }
+    return ROWL_RESULT_UNKNOWN_ERROR; // erişilemez; -Wreturn-type susturucu
+}
+
+// D3: aynı karar, çağıran aux kilidini tutarken (ikinci/taze bakış).
+// Kilit-iç içelik eskisiyle aynı: aux > handle (eski isLiveHandle
+// kontrolü de aux altında handle kilidi alırdı) + yaprak context/logger.
+inline std::optional<RowlEngine_ResultCode> guardPrefetchEntryLocked(RowlEngineHandle handle,
+                                                                    const char* op) {
+    if (classifyHandle(handle) == HandleStanding::Dead) {
+        g_prefetchStates.erase(handle);
+        return ROWL_RESULT_INVALID_HANDLE;
+    }
+    if (!isLiveHandle(handle)) {
+        // Araya giren reclaim: yabancılaşmış ama state canlı — silmeden,
+        // sesli reddet.
+        stampWrongThread(handle, op);
+        return ROWL_RESULT_WRONG_THREAD;
+    }
+    return std::nullopt;
+}
+
 // D2 (#140): Destroy yalnız g_liveHandles'tan siliyordu; Create/kullan/
 // Destroy döngüsü ChapterLoader+prefetch kuyruğunu kalıcı tutuyordu.
 // Lifecycle TU'su Destroy yolunda buradan temizler. Anonim-namespace
@@ -87,21 +128,17 @@ extern "C" {
 
 RowlEngine_ResultCode RowlEngine_LoadChapterIndexJson(RowlEngineHandle handle,
                                                       const char* indexJsonUtf8) {
-    // A4-tur1 (siralama): handle-once — olu-handle'da arg'lara bakilmadan
-    // INVALID_HANDLE (story-TU konvansiyonu); erase-hijyeni korunur.
-    if (!toEngineChecked(handle)) {
-        std::lock_guard<std::mutex> lock(g_prefetchMutex);
-        g_prefetchStates.erase(handle);
-        return ROWL_RESULT_INVALID_HANDLE;
+    // D3 (#150/#157): ölü-ayrımı guard'da; erase yalnız gerçek ölümde.
+    if (const auto guard = guardPrefetchEntry(handle, "load_chapter_index_json")) {
+        return *guard;
     }
     std::string_view view;
     if (checkSizedInput(indexJsonUtf8, view, kPrefetchInputLimitBytes) != ROWL_RESULT_OK) {
         return ROWL_RESULT_INVALID_ARGUMENT;
     }
     std::lock_guard<std::mutex> lock(g_prefetchMutex);
-    if (!isLiveHandle(handle)) {
-        g_prefetchStates.erase(handle);
-        return ROWL_RESULT_INVALID_HANDLE;
+    if (const auto guard = guardPrefetchEntryLocked(handle, "load_chapter_index_json")) {
+        return *guard;
     }
     return invokeNoexcept<RowlEngine_ResultCode>([&] {
         PrefetchChapterRuntime& runtime = g_prefetchStates[handle];
@@ -118,12 +155,9 @@ RowlEngine_ResultCode RowlEngine_LoadChapterIndexJson(RowlEngineHandle handle,
 
 RowlEngine_ResultCode RowlEngine_AppendChapterFileJson(RowlEngineHandle handle,
                                                        const char* chapterJsonUtf8) {
-    // A4-tur1 (siralama): handle-once — olu-handle'da arg'lara bakilmadan
-    // INVALID_HANDLE (story-TU konvansiyonu); erase-hijyeni korunur.
-    if (!toEngineChecked(handle)) {
-        std::lock_guard<std::mutex> lock(g_prefetchMutex);
-        g_prefetchStates.erase(handle);
-        return ROWL_RESULT_INVALID_HANDLE;
+    // D3 (#150/#157): ölü-ayrımı guard'da; erase yalnız gerçek ölümde.
+    if (const auto guard = guardPrefetchEntry(handle, "append_chapter_file_json")) {
+        return *guard;
     }
     std::string_view view;
     if (checkSizedInput(chapterJsonUtf8, view, kChapterFileInputLimitBytes) !=
@@ -131,9 +165,8 @@ RowlEngine_ResultCode RowlEngine_AppendChapterFileJson(RowlEngineHandle handle,
         return ROWL_RESULT_INVALID_ARGUMENT;
     }
     std::lock_guard<std::mutex> lock(g_prefetchMutex);
-    if (!isLiveHandle(handle)) {
-        g_prefetchStates.erase(handle);
-        return ROWL_RESULT_INVALID_HANDLE;
+    if (const auto guard = guardPrefetchEntryLocked(handle, "append_chapter_file_json")) {
+        return *guard;
     }
     return invokeNoexcept<RowlEngine_ResultCode>([&] {
         PrefetchChapterRuntime& runtime = g_prefetchStates[handle];
@@ -150,21 +183,17 @@ RowlEngine_ResultCode RowlEngine_AppendChapterFileJson(RowlEngineHandle handle,
 
 RowlEngine_ResultCode RowlEngine_LoadChapter(RowlEngineHandle handle,
                                              const char* chapterIdUtf8) {
-    // A4-tur1 (siralama): handle-once — olu-handle'da arg'lara bakilmadan
-    // INVALID_HANDLE (story-TU konvansiyonu); erase-hijyeni korunur.
-    if (!toEngineChecked(handle)) {
-        std::lock_guard<std::mutex> lock(g_prefetchMutex);
-        g_prefetchStates.erase(handle);
-        return ROWL_RESULT_INVALID_HANDLE;
+    // D3 (#150/#157): ölü-ayrımı guard'da; erase yalnız gerçek ölümde.
+    if (const auto guard = guardPrefetchEntry(handle, "load_chapter")) {
+        return *guard;
     }
     std::string_view view;
     if (checkChapterId(chapterIdUtf8, view) != ROWL_RESULT_OK) {
         return ROWL_RESULT_INVALID_ARGUMENT;
     }
     std::lock_guard<std::mutex> lock(g_prefetchMutex);
-    if (!isLiveHandle(handle)) {
-        g_prefetchStates.erase(handle);
-        return ROWL_RESULT_INVALID_HANDLE;
+    if (const auto guard = guardPrefetchEntryLocked(handle, "load_chapter")) {
+        return *guard;
     }
     return invokeNoexcept<RowlEngine_ResultCode>([&] {
         PrefetchChapterRuntime& runtime = g_prefetchStates[handle];
@@ -180,21 +209,17 @@ RowlEngine_ResultCode RowlEngine_LoadChapter(RowlEngineHandle handle,
 
 RowlEngine_ResultCode RowlEngine_UnloadChapter(RowlEngineHandle handle,
                                                const char* chapterIdUtf8) {
-    // A4-tur1 (siralama): handle-once — olu-handle'da arg'lara bakilmadan
-    // INVALID_HANDLE (story-TU konvansiyonu); erase-hijyeni korunur.
-    if (!toEngineChecked(handle)) {
-        std::lock_guard<std::mutex> lock(g_prefetchMutex);
-        g_prefetchStates.erase(handle);
-        return ROWL_RESULT_INVALID_HANDLE;
+    // D3 (#150/#157): ölü-ayrımı guard'da; erase yalnız gerçek ölümde.
+    if (const auto guard = guardPrefetchEntry(handle, "unload_chapter")) {
+        return *guard;
     }
     std::string_view view;
     if (checkChapterId(chapterIdUtf8, view) != ROWL_RESULT_OK) {
         return ROWL_RESULT_INVALID_ARGUMENT;
     }
     std::lock_guard<std::mutex> lock(g_prefetchMutex);
-    if (!isLiveHandle(handle)) {
-        g_prefetchStates.erase(handle);
-        return ROWL_RESULT_INVALID_HANDLE;
+    if (const auto guard = guardPrefetchEntryLocked(handle, "unload_chapter")) {
+        return *guard;
     }
     return invokeNoexcept<RowlEngine_ResultCode>([&] {
         PrefetchChapterRuntime& runtime = g_prefetchStates[handle];
@@ -212,9 +237,8 @@ RowlEngine_ResultCode RowlEngine_GetLoadedChaptersJson(RowlEngineHandle handle, 
                                                        uint32_t bufferSize,
                                                        uint32_t* outRequiredSize) {
     std::lock_guard<std::mutex> lock(g_prefetchMutex);
-    if (!isLiveHandle(handle)) {
-        g_prefetchStates.erase(handle);
-        return ROWL_RESULT_INVALID_HANDLE;
+    if (const auto guard = guardPrefetchEntryLocked(handle, "get_loaded_chapters_json")) {
+        return *guard;
     }
     return invokeNoexcept<RowlEngine_ResultCode>([&] {
         PrefetchChapterRuntime& runtime = g_prefetchStates[handle];
@@ -226,8 +250,14 @@ RowlEngine_ResultCode RowlEngine_GetLoadedChaptersJson(RowlEngineHandle handle, 
 int RowlEngine_IsChapterBoundaryNode(RowlEngineHandle handle, uint64_t nodeId) {
     if (nodeId == 0) return 0;
     std::lock_guard<std::mutex> lock(g_prefetchMutex);
-    if (!isLiveHandle(handle)) {
+    // D3 (#150/#157): int-taşıyıcıda kod taşınamaz; yabancı WrongThread
+    // damgasıyla sesli reddedilir (0 döner), erase yalnız gerçek ölümde.
+    if (classifyHandle(handle) == HandleStanding::Dead) {
         g_prefetchStates.erase(handle);
+        return 0;
+    }
+    if (!isLiveHandle(handle)) {
+        stampWrongThread(handle, "is_chapter_boundary");
         return 0;
     }
     return invokeNoexcept<int>([&] {
@@ -236,10 +266,10 @@ int RowlEngine_IsChapterBoundaryNode(RowlEngineHandle handle, uint64_t nodeId) {
             return runtime.loader.isChapterBoundaryNode(nodeId) ? 1 : 0;
         }
         // Loader henuz beslenmemis: motorun aktif grafigine bak (salt-okunur).
-        auto* engine = toEngineChecked(handle);
+        auto engine = toEngineChecked(handle);
         if (engine == nullptr) return 0;
         // D1 (#131): mountsuz VFS'te okuma hayalet-missing üretirdi.
-        if (!requireEngineInitialized(engine, "is_chapter_boundary")) return 0;
+        if (!requireEngineInitialized(engine.get(), "is_chapter_boundary")) return 0;
         return Rowl::Core::documentChapterBoundary(engine->getStoryGraphDocument(), nodeId)
                    ? 1
                    : 0;
@@ -249,12 +279,9 @@ int RowlEngine_IsChapterBoundaryNode(RowlEngineHandle handle, uint64_t nodeId) {
 RowlEngine_ResultCode RowlEngine_PrefetchChapterAssets(RowlEngineHandle handle,
                                                        const char* chapterIdUtf8,
                                                        uint64_t budgetBytes) {
-    // A4-tur1 (siralama): handle-once — olu-handle'da arg'lara bakilmadan
-    // INVALID_HANDLE (story-TU konvansiyonu); erase-hijyeni korunur.
-    if (!toEngineChecked(handle)) {
-        std::lock_guard<std::mutex> lock(g_prefetchMutex);
-        g_prefetchStates.erase(handle);
-        return ROWL_RESULT_INVALID_HANDLE;
+    // D3 (#150/#157): ölü-ayrımı guard'da; erase yalnız gerçek ölümde.
+    if (const auto guard = guardPrefetchEntry(handle, "prefetch_chapter_assets")) {
+        return *guard;
     }
     // Bos/null chapterId = aktif chapter (loader aktif, yoksa motorun aktif
     // chapter'i). Dolu chapterId 128 karakter siniriyla dogrulanir.
@@ -267,17 +294,16 @@ RowlEngine_ResultCode RowlEngine_PrefetchChapterAssets(RowlEngineHandle handle,
         requested.assign(view.data(), view.size());
     }
     std::lock_guard<std::mutex> lock(g_prefetchMutex);
-    if (!isLiveHandle(handle)) {
-        g_prefetchStates.erase(handle);
-        return ROWL_RESULT_INVALID_HANDLE;
+    if (const auto guard = guardPrefetchEntryLocked(handle, "prefetch_chapter_assets")) {
+        return *guard;
     }
     return invokeNoexcept<RowlEngine_ResultCode>([&] {
         PrefetchChapterRuntime& runtime = g_prefetchStates[handle];
-        auto* engine = toEngineChecked(handle);
+        auto engine = toEngineChecked(handle);
         if (engine == nullptr) return ROWL_RESULT_INVALID_HANDLE;
         // D1 (#131): mountsuz VFS'te pump tüm kuyruğu missing işaretleyip
         // OK dönüyordu (OK yalanı). Fail-closed: STATE_ERROR.
-        if (!requireEngineInitialized(engine, "prefetch_chapter_assets")) {
+        if (!requireEngineInitialized(engine.get(), "prefetch_chapter_assets")) {
             return ROWL_RESULT_STATE_ERROR;
         }
 
@@ -366,16 +392,21 @@ RowlEngine_ResultCode RowlEngine_PrefetchChapterAssets(RowlEngineHandle handle,
 
 int RowlEngine_PumpPrefetch(RowlEngineHandle handle, float maxMilliseconds) {
     std::lock_guard<std::mutex> lock(g_prefetchMutex);
-    if (!isLiveHandle(handle)) {
+    // D3 (#150/#157): int-taşıyıcı; yabancı damgayla reddedilir, erase yok.
+    if (classifyHandle(handle) == HandleStanding::Dead) {
         g_prefetchStates.erase(handle);
+        return 0;
+    }
+    if (!isLiveHandle(handle)) {
+        stampWrongThread(handle, "pump_prefetch");
         return 0;
     }
     return invokeNoexcept<int>([&] {
         PrefetchChapterRuntime& runtime = g_prefetchStates[handle];
-        auto* engine = toEngineChecked(handle);
+        auto engine = toEngineChecked(handle);
         if (engine == nullptr) return 0;
         // D1 (#131): pump guard'ı — PrefetchChapterAssets ile aynı delik.
-        if (!requireEngineInitialized(engine, "pump_prefetch")) return 0;
+        if (!requireEngineInitialized(engine.get(), "pump_prefetch")) return 0;
         const std::size_t pumped =
             runtime.prefetch.pump(engine->getVfs(), static_cast<double>(maxMilliseconds));
         return pumped > static_cast<std::size_t>((std::numeric_limits<int>::max)())
@@ -388,9 +419,8 @@ RowlEngine_ResultCode RowlEngine_GetPrefetchProgressJson(RowlEngineHandle handle
                                                          uint32_t bufferSize,
                                                          uint32_t* outRequiredSize) {
     std::lock_guard<std::mutex> lock(g_prefetchMutex);
-    if (!isLiveHandle(handle)) {
-        g_prefetchStates.erase(handle);
-        return ROWL_RESULT_INVALID_HANDLE;
+    if (const auto guard = guardPrefetchEntryLocked(handle, "get_prefetch_progress_json")) {
+        return *guard;
     }
     return invokeNoexcept<RowlEngine_ResultCode>([&] {
         PrefetchChapterRuntime& runtime = g_prefetchStates[handle];

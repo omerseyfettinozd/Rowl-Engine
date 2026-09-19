@@ -340,6 +340,7 @@ set(ROWL_ENGINE_SOURCES
     src/platform/mobile_input.cpp
     src/platform/sdl_event_dispatcher.cpp
     src/platform/sdl_subsystem_lease.cpp
+    src/platform/sdl_video_serial.cpp
     # Entity-Component Scene System
     src/scene/component.cpp
     src/scene/transform_component.cpp

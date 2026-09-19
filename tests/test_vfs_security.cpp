@@ -433,6 +433,10 @@ void test_vfs_security() {
         exit(1);
     }
     TEST_PASS("C API reports VFS graph load failures while preserving the active graph");
+    // D3 (#133): bu handle'in lease'i bırakılmalı — süreç-ömürlü video
+    // lease'i sonraki bölümlerin yabancı-thread init'lerini kilitler.
+    RowlEngine_Shutdown(packagedHandle);
+    RowlEngine_Destroy(packagedHandle);
 
     // Verify VFS-first resolution for story graphs and active story
     // T0b: fixed temp name replaced with the run-unique suffix so parallel

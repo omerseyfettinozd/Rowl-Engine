@@ -156,6 +156,7 @@ RowlEngine_PrefetchChapterAssets
 RowlEngine_PumpPrefetch
 RowlEngine_QuickLoad
 RowlEngine_QuickSave
+RowlEngine_ReclaimHandle
 RowlEngine_RegisterCharacterPreset
 RowlEngine_ResetCamera
 RowlEngine_ResetToStartNode

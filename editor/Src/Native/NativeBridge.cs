@@ -32,6 +32,8 @@ namespace RowlEngine.Editor.Native
             StateError = 11,
             BufferTooSmall = 12,
             Unsupported = 13,
+            // D3 (B1d #102) — native ROWL_RESULT_WRONG_THREAD aynası.
+            WrongThread = 14,
             UnknownError = 99,
         }
 
@@ -64,6 +66,14 @@ namespace RowlEngine.Editor.Native
 
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
         internal static extern void RowlEngine_Destroy(IntPtr handle);
+
+        // D3 (B1d #151) — sahiplik-devir P/Invoke aynası (B3a deseni: ilan
+        // köprüde; EngineHost sarmalayıcısı YOK — devir, sahibi ölmüş
+        // handle'ın idari kurtarmasıdır, normal host akışı Çağırmaz;
+        // OffscreenRuntimeWorker zaten tüm çağrıları worker thread'inde
+        // seriler, o yüzden host'un reclaim'e ihtiyacı yoktur).
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_ReclaimHandle(IntPtr handle);
 
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
         internal static extern int RowlEngine_Init(

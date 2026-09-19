@@ -11,6 +11,10 @@ namespace RowlEngine.Editor.Tests;
 // handle'da caller-buffer sözleşmesini (NULL/0 size-query, undersized
 // BufferTooSmall + cleared, exact-copy parity) ve davranışı doğrular;
 // EngineHost'a dokunulmaz (sıfır-diff kuralı), call-site göçü B5'indir.
+// D3: canlı native host VIDEO lease'i süreç-genelidir; paralel xUnit
+// koleksiyonlarıyla çakışınca lease-affinity Init'i reddeder. Seri
+// koleksiyonda koşar.
+[Collection("StaticRootSequential")]
 public sealed class EditorBridgeUtf8SliceTests
 {
     private delegate NativeBridge.ResultCode Utf8Getter(

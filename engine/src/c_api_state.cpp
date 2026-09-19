@@ -21,7 +21,7 @@ const char* RowlEngine_GetScriptRuntimeDiagnosticsJson(RowlEngineHandle handle) 
     static thread_local std::string buffer;
     return invokeNoexcept<const char*>([&] {
         nlohmann::json diagnostics = nlohmann::json::array();
-        auto* checked = toEngineChecked(handle);
+        auto checked = toEngineChecked(handle);
         if (!checked) return "[]";
         for (const auto& status : checked->getScriptRuntimeStatuses()) {
             diagnostics.push_back({
@@ -41,7 +41,7 @@ const char* RowlEngine_GetDialogueHistoryJson(RowlEngineHandle handle) {
     static thread_local std::string buffer;
     return invokeNoexcept<const char*>([&] {
         nlohmann::json history = nlohmann::json::array();
-        auto* checked = toEngineChecked(handle);
+        auto checked = toEngineChecked(handle);
         if (!checked) return "[]";
         for (const auto& entry : checked->getDialogueHistory()) {
             history.push_back({
@@ -75,7 +75,7 @@ RowlEngine_ResultCode RowlEngine_GetScriptRuntimeDiagnosticsJsonUtf8(
     if (!isLiveHandle(handle)) return ROWL_RESULT_INVALID_HANDLE;
     return invokeNoexcept<RowlEngine_ResultCode>([&] {
         nlohmann::json diagnostics = nlohmann::json::array();
-        auto* engine = toEngineChecked(handle);
+        auto engine = toEngineChecked(handle);
         if (!engine) return ROWL_RESULT_INVALID_HANDLE;
         for (const auto& status : engine->getScriptRuntimeStatuses()) {
             diagnostics.push_back({
@@ -96,7 +96,7 @@ RowlEngine_ResultCode RowlEngine_GetDialogueHistoryJsonUtf8(
     if (!isLiveHandle(handle)) return ROWL_RESULT_INVALID_HANDLE;
     return invokeNoexcept<RowlEngine_ResultCode>([&] {
         nlohmann::json history = nlohmann::json::array();
-        auto* engine = toEngineChecked(handle);
+        auto engine = toEngineChecked(handle);
         if (!engine) return ROWL_RESULT_INVALID_HANDLE;
         for (const auto& entry : engine->getDialogueHistory()) {
             history.push_back({
@@ -114,7 +114,7 @@ RowlEngine_ResultCode RowlEngine_SaveGameSlotResult(
     RowlEngineHandle handle, int32_t slotIndex) {
     if (!isLiveHandle(handle)) return ROWL_RESULT_INVALID_HANDLE;
     return invokeNoexcept<RowlEngine_ResultCode>([&] {
-        auto* engine = toEngineChecked(handle);
+        auto engine = toEngineChecked(handle);
         if (!engine) return ROWL_RESULT_INVALID_HANDLE;
         engine->saveGameSlot(slotIndex);
         const auto context = engine->getContext();
@@ -132,7 +132,7 @@ RowlEngine_ResultCode RowlEngine_LoadGameSlotResult(
     RowlEngineHandle handle, int32_t slotIndex) {
     if (!isLiveHandle(handle)) return ROWL_RESULT_INVALID_HANDLE;
     return invokeNoexcept<RowlEngine_ResultCode>([&] {
-        auto* engine = toEngineChecked(handle);
+        auto engine = toEngineChecked(handle);
         if (!engine) return ROWL_RESULT_INVALID_HANDLE;
         engine->loadGameSlot(slotIndex);
         const auto context = engine->getContext();
@@ -149,7 +149,7 @@ int RowlEngine_LoadGameSlot(RowlEngineHandle handle, int32_t slotIndex) {
 int RowlEngine_HasSaveSlot(RowlEngineHandle handle, int32_t slotIndex) {
     if (!isLiveHandle(handle)) return 0;
     return invokeNoexcept<int>([&] {
-        auto* checked = toEngineChecked(handle);
+        auto checked = toEngineChecked(handle);
         return (checked && checked->hasSaveSlot(slotIndex)) ? 1 : 0;
     }, 0);
 }
@@ -157,7 +157,7 @@ int RowlEngine_HasSaveSlot(RowlEngineHandle handle, int32_t slotIndex) {
 int RowlEngine_DeleteSaveSlot(RowlEngineHandle handle, int32_t slotIndex) {
     if (!isLiveHandle(handle)) return 0;
     return invokeNoexcept<int>([&] {
-        auto* checked = toEngineChecked(handle);
+        auto checked = toEngineChecked(handle);
         return (checked && checked->deleteSaveSlot(slotIndex)) ? 1 : 0;
     }, 0);
 }
@@ -165,7 +165,7 @@ int RowlEngine_DeleteSaveSlot(RowlEngineHandle handle, int32_t slotIndex) {
 int RowlEngine_Rewind(RowlEngineHandle handle, uint32_t steps) {
     if (!isLiveHandle(handle)) return 0;
     return invokeNoexcept<int>([&] {
-        auto* checked = toEngineChecked(handle);
+        auto checked = toEngineChecked(handle);
         return (checked && checked->rewind(steps)) ? 1 : 0;
     }, 0);
 }
@@ -173,7 +173,7 @@ int RowlEngine_Rewind(RowlEngineHandle handle, uint32_t steps) {
 uint64_t RowlEngine_GetCurrentStepId(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return 0;
     return invokeNoexcept<uint64_t>([&] {
-        auto* checked = toEngineChecked(handle);
+        auto checked = toEngineChecked(handle);
         return checked ? checked->getCurrentStepId() : 0;
     }, 0);
 }
@@ -184,7 +184,7 @@ RowlEngine_ResultCode RowlEngine_GetSaveSlotMetadataJson(
     if (!isLiveHandle(handle)) return ROWL_RESULT_INVALID_HANDLE;
     if (!Rowl::State::isValidSlot(slotIndex)) return ROWL_RESULT_INVALID_ARGUMENT;
     return invokeNoexcept<RowlEngine_ResultCode>([&] {
-        auto* engine = toEngineChecked(handle);
+        auto engine = toEngineChecked(handle);
         if (!engine) return ROWL_RESULT_INVALID_HANDLE;
         // Display-only read: the live story is never touched.
         if (!engine->hasSaveSlot(slotIndex)) return ROWL_RESULT_FILE_NOT_FOUND;
@@ -214,7 +214,7 @@ RowlEngine_ResultCode RowlEngine_GetSaveSlotMetadataJson(
 void RowlEngine_SetVariable(RowlEngineHandle handle, const char* key, const char* value) {
     if (!isLiveHandle(handle) || !key || !value) return;
     invokeNoexcept([&] {
-        if (auto* checked = toEngineChecked(handle)) checked->setScriptVariable(key, value);
+        if (auto checked = toEngineChecked(handle)) checked->setScriptVariable(key, value);
     });
 }
 
@@ -222,7 +222,7 @@ const char* RowlEngine_GetVariable(RowlEngineHandle handle, const char* key) {
     if (!isLiveHandle(handle) || !key) return "";
     static thread_local std::string buf;
     return invokeNoexcept<const char*>([&] {
-        auto* checked = toEngineChecked(handle);
+        auto checked = toEngineChecked(handle);
         buf = checked ? checked->getScriptVariable(key) : "";
         return buf.c_str();
     }, "");
@@ -241,7 +241,7 @@ RowlEngine_ResultCode RowlEngine_GetVariableUtf8(
     uint32_t bufferSize, uint32_t* outRequiredSize) {
     if (!isLiveHandle(handle) || !key) return ROWL_RESULT_INVALID_HANDLE;
     return invokeNoexcept<RowlEngine_ResultCode>([&] {
-        auto* engine = toEngineChecked(handle);
+        auto engine = toEngineChecked(handle);
         if (!engine) return ROWL_RESULT_INVALID_HANDLE;
         return copyUtf8ToCaller(engine->getScriptVariable(key), buffer,
                                 bufferSize, outRequiredSize);
@@ -255,7 +255,7 @@ int RowlEngine_EvaluateCondition(RowlEngineHandle handle, const char* conditionE
     if (!isLiveHandle(handle)) return 0;
     if (!conditionExpr) {
         invokeNoexcept([&] {
-            if (auto* engine = toEngineChecked(handle)) {
+            if (auto engine = toEngineChecked(handle)) {
                 if (auto ctx = engine->getContext()) {
                     ctx->setError(Rowl::Core::RuntimeErrorCode::InvalidArgument,
                                   "Condition expression pointer is null; failing closed",
@@ -266,7 +266,7 @@ int RowlEngine_EvaluateCondition(RowlEngineHandle handle, const char* conditionE
         return 0;
     }
     return invokeNoexcept<int>([&] {
-        auto* checked = toEngineChecked(handle);
+        auto checked = toEngineChecked(handle);
         return (checked && checked->evaluateCondition(conditionExpr)) ? 1 : 0;
     }, 0);
 }
@@ -275,7 +275,7 @@ int RowlEngine_ExecuteScript(RowlEngineHandle handle, const char* scriptCode) {
     if (!isLiveHandle(handle)) return 0;
     if (!scriptCode) {
         invokeNoexcept([&] {
-            if (auto* engine = toEngineChecked(handle)) {
+            if (auto engine = toEngineChecked(handle)) {
                 if (auto ctx = engine->getContext()) {
                     ctx->setError(Rowl::Core::RuntimeErrorCode::InvalidArgument,
                                   "Script code string pointer is null",
@@ -286,15 +286,31 @@ int RowlEngine_ExecuteScript(RowlEngineHandle handle, const char* scriptCode) {
         return 0;
     }
     return invokeNoexcept<int>([&] {
-        auto* engine = toEngineChecked(handle);
+        auto engine = toEngineChecked(handle);
         return (engine && engine->executeScript(scriptCode)) ? 1 : 0;
     }, 0);
 }
 
 int32_t RowlEngine_GetLastResultCode(RowlEngineHandle handle) {
-    if (!isLiveHandle(handle)) return static_cast<int32_t>(Rowl::Core::RuntimeErrorCode::InvalidHandle);
+    // D3 (B1d #102/#150): live-but-foreign reads the engine's OWN stamped
+    // result (WRONG_THREAD after a rejected call) through shared ownership —
+    // INVALID_HANDLE stays reserved for genuinely dead handles, so callers
+    // can finally tell the two apart. Context reads are internally locked;
+    // a handle that died between classify and copy reports INVALID_HANDLE.
+    if (!isLiveHandle(handle)) {
+        if (classifyHandle(handle) != HandleStanding::Foreign) {
+            return static_cast<int32_t>(Rowl::Core::RuntimeErrorCode::InvalidHandle);
+        }
+        return invokeNoexcept<int32_t>([&] {
+            const auto engine = copyEngineAnyThread(handle);
+            if (!engine || !engine->getContext()) {
+                return static_cast<int32_t>(Rowl::Core::RuntimeErrorCode::InvalidHandle);
+            }
+            return engine->getContext()->getLastResult().rawCode();
+        }, static_cast<int32_t>(Rowl::Core::RuntimeErrorCode::UnknownError));
+    }
     return invokeNoexcept<int32_t>([&] {
-        auto* engine = toEngineChecked(handle);
+        auto engine = toEngineChecked(handle);
         if (!engine || !engine->getContext()) return static_cast<int32_t>(Rowl::Core::RuntimeErrorCode::UnknownError);
         return engine->getContext()->getLastResult().rawCode();
     }, static_cast<int32_t>(Rowl::Core::RuntimeErrorCode::UnknownError));
@@ -304,11 +320,20 @@ const char* RowlEngine_GetLastResultOperation(RowlEngineHandle handle) {
     static thread_local std::string buf;
     buf.clear();
     if (!isLiveHandle(handle)) {
+        // D3: foreign-live → stamped op ("shutdown"/"step"/...); dead → "none".
+        if (classifyHandle(handle) == HandleStanding::Foreign) {
+            return invokeNoexcept<const char*>([&] {
+                const auto engine = copyEngineAnyThread(handle);
+                if (!engine || !engine->getContext()) return "unknown";
+                buf = engine->getContext()->getLastResult().operation;
+                return buf.c_str();
+            }, "unknown");
+        }
         buf = "none";
         return buf.c_str();
     }
     return invokeNoexcept<const char*>([&] {
-        auto* engine = toEngineChecked(handle);
+        auto engine = toEngineChecked(handle);
         if (!engine || !engine->getContext()) return "unknown";
         buf = engine->getContext()->getLastResult().operation;
         return buf.c_str();
@@ -319,11 +344,20 @@ const char* RowlEngine_GetLastResultMessage(RowlEngineHandle handle) {
     static thread_local std::string buf;
     buf.clear();
     if (!isLiveHandle(handle)) {
+        // D3: foreign-live → stamped message; dead → legacy text.
+        if (classifyHandle(handle) == HandleStanding::Foreign) {
+            return invokeNoexcept<const char*>([&] {
+                const auto engine = copyEngineAnyThread(handle);
+                if (!engine || !engine->getContext()) return "Internal error occurred";
+                buf = engine->getContext()->getLastResult().message;
+                return buf.c_str();
+            }, "Internal error occurred");
+        }
         buf = "Invalid or uninitialized engine handle";
         return buf.c_str();
     }
     return invokeNoexcept<const char*>([&] {
-        auto* engine = toEngineChecked(handle);
+        auto engine = toEngineChecked(handle);
         if (!engine || !engine->getContext()) return "Internal error occurred";
         buf = engine->getContext()->getLastResult().message;
         return buf.c_str();
@@ -333,9 +367,20 @@ const char* RowlEngine_GetLastResultMessage(RowlEngineHandle handle) {
 const char* RowlEngine_GetLastResultTarget(RowlEngineHandle handle) {
     static thread_local std::string buf;
     buf.clear();
-    if (!isLiveHandle(handle)) return buf.c_str();
+    if (!isLiveHandle(handle)) {
+        // D3: foreign-live → stamped target; dead → empty (unchanged).
+        if (classifyHandle(handle) == HandleStanding::Foreign) {
+            return invokeNoexcept<const char*>([&] {
+                const auto engine = copyEngineAnyThread(handle);
+                if (!engine || !engine->getContext()) return "";
+                buf = engine->getContext()->getLastResult().target;
+                return buf.c_str();
+            }, "");
+        }
+        return buf.c_str();
+    }
     return invokeNoexcept<const char*>([&] {
-        auto* engine = toEngineChecked(handle);
+        auto engine = toEngineChecked(handle);
         if (!engine || !engine->getContext()) return "";
         buf = engine->getContext()->getLastResult().target;
         return buf.c_str();
@@ -366,9 +411,21 @@ const char* RowlEngine_GetLastResultTargetWithLength(RowlEngineHandle handle, ui
 RowlEngine_ResultCode RowlEngine_GetLastResultOperationUtf8(
     RowlEngineHandle handle, char* buffer, uint32_t bufferSize,
     uint32_t* outRequiredSize) {
-    if (!isLiveHandle(handle)) return ROWL_RESULT_INVALID_HANDLE;
+    if (!isLiveHandle(handle)) {
+        // D3-fix (review): plain okuyucu gibi Foreign'a damgayı sun;
+        // INVALID_HANDLE yalnız gerçekten ölü handle'ındır.
+        if (classifyHandle(handle) == HandleStanding::Foreign) {
+            return invokeNoexcept<RowlEngine_ResultCode>([&] {
+                const auto engine = copyEngineAnyThread(handle);
+                if (!engine || !engine->getContext()) return ROWL_RESULT_INVALID_HANDLE;
+                return copyUtf8ToCaller(engine->getContext()->getLastResult().operation,
+                                        buffer, bufferSize, outRequiredSize);
+            }, ROWL_RESULT_UNKNOWN_ERROR);
+        }
+        return ROWL_RESULT_INVALID_HANDLE;
+    }
     return invokeNoexcept<RowlEngine_ResultCode>([&] {
-        auto* engine = toEngineChecked(handle);
+        auto engine = toEngineChecked(handle);
         if (!engine || !engine->getContext()) return ROWL_RESULT_INVALID_HANDLE;
         return copyUtf8ToCaller(engine->getContext()->getLastResult().operation,
                                 buffer, bufferSize, outRequiredSize);
@@ -378,9 +435,20 @@ RowlEngine_ResultCode RowlEngine_GetLastResultOperationUtf8(
 RowlEngine_ResultCode RowlEngine_GetLastResultMessageUtf8(
     RowlEngineHandle handle, char* buffer, uint32_t bufferSize,
     uint32_t* outRequiredSize) {
-    if (!isLiveHandle(handle)) return ROWL_RESULT_INVALID_HANDLE;
+    if (!isLiveHandle(handle)) {
+        // D3-fix (review): Foreign damga-okuması; ölü → INVALID_HANDLE.
+        if (classifyHandle(handle) == HandleStanding::Foreign) {
+            return invokeNoexcept<RowlEngine_ResultCode>([&] {
+                const auto engine = copyEngineAnyThread(handle);
+                if (!engine || !engine->getContext()) return ROWL_RESULT_INVALID_HANDLE;
+                return copyUtf8ToCaller(engine->getContext()->getLastResult().message,
+                                        buffer, bufferSize, outRequiredSize);
+            }, ROWL_RESULT_UNKNOWN_ERROR);
+        }
+        return ROWL_RESULT_INVALID_HANDLE;
+    }
     return invokeNoexcept<RowlEngine_ResultCode>([&] {
-        auto* engine = toEngineChecked(handle);
+        auto engine = toEngineChecked(handle);
         if (!engine || !engine->getContext()) return ROWL_RESULT_INVALID_HANDLE;
         return copyUtf8ToCaller(engine->getContext()->getLastResult().message,
                                 buffer, bufferSize, outRequiredSize);
@@ -390,9 +458,20 @@ RowlEngine_ResultCode RowlEngine_GetLastResultMessageUtf8(
 RowlEngine_ResultCode RowlEngine_GetLastResultTargetUtf8(
     RowlEngineHandle handle, char* buffer, uint32_t bufferSize,
     uint32_t* outRequiredSize) {
-    if (!isLiveHandle(handle)) return ROWL_RESULT_INVALID_HANDLE;
+    if (!isLiveHandle(handle)) {
+        // D3-fix (review): Foreign damga-okuması; ölü → INVALID_HANDLE.
+        if (classifyHandle(handle) == HandleStanding::Foreign) {
+            return invokeNoexcept<RowlEngine_ResultCode>([&] {
+                const auto engine = copyEngineAnyThread(handle);
+                if (!engine || !engine->getContext()) return ROWL_RESULT_INVALID_HANDLE;
+                return copyUtf8ToCaller(engine->getContext()->getLastResult().target,
+                                        buffer, bufferSize, outRequiredSize);
+            }, ROWL_RESULT_UNKNOWN_ERROR);
+        }
+        return ROWL_RESULT_INVALID_HANDLE;
+    }
     return invokeNoexcept<RowlEngine_ResultCode>([&] {
-        auto* engine = toEngineChecked(handle);
+        auto engine = toEngineChecked(handle);
         if (!engine || !engine->getContext()) return ROWL_RESULT_INVALID_HANDLE;
         return copyUtf8ToCaller(engine->getContext()->getLastResult().target,
                                 buffer, bufferSize, outRequiredSize);
@@ -402,7 +481,7 @@ RowlEngine_ResultCode RowlEngine_GetLastResultTargetUtf8(
 void RowlEngine_ClearLastResult(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return;
     invokeNoexcept([&] {
-        auto* engine = toEngineChecked(handle);
+        auto engine = toEngineChecked(handle);
         if (engine && engine->getContext()) {
             engine->getContext()->clearResult();
         }

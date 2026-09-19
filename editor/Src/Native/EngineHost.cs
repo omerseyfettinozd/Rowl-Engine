@@ -1346,6 +1346,9 @@ namespace RowlEngine.Editor.Native
         // aynası (sözleşme-aynalama; class-logic sıfır-diff).
         BufferTooSmall = 12,
         Unsupported = 13,
+        // D3 (B1d #102) — 14'ün public aynası (canlı handle'a yabancı
+        // thread çağrısı; LastResultCode zaten bunu taşır, cast değişmez).
+        WrongThread = 14,
         UnknownError = 99
     }
 

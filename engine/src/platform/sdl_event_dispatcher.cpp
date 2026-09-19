@@ -50,9 +50,13 @@ std::optional<uint32_t> targetWindowId(const SDL_Event& event) {
     }
 }
 
+bool isDispatchThreadLockedless(const std::optional<std::thread::id>& pin) {
+    return pin && *pin == std::this_thread::get_id();
+}
+
 bool isDispatchThread() {
     std::lock_guard<std::mutex> lock(g_eventMutex);
-    return g_eventThread && *g_eventThread == std::this_thread::get_id();
+    return isDispatchThreadLockedless(g_eventThread);
 }
 
 void routeEvent(const SDL_Event& event) {
@@ -122,6 +126,47 @@ std::vector<SDL_Event> SdlEventDispatcher::takeGlobalEvents() {
         g_globalEvents.pop_front();
     }
     return events;
+}
+
+// D3 (B1d #115/#128/#151/#155): the dispatch pin outlives its thread when a
+// visible owner dies without Shutdown — every later register/pump/take on
+// the surviving threads fails closed against the dead id and the process
+// can never init or pump again. These three predicates/transfers are the
+// recovery surface; the table itself is never touched by them.
+bool SdlEventDispatcher::isDispatchThread() noexcept {
+    try {
+        return ::Rowl::Platform::isDispatchThread();
+    } catch (...) {
+        return false;
+    }
+}
+
+bool SdlEventDispatcher::isEligibleForRegister() noexcept {
+    try {
+        std::lock_guard<std::mutex> lock(g_eventMutex);
+        // Unclaimed pin: this thread WILL claim it inside registerWindow.
+        // Claimed by us: re-entry is fine (duplicate-id still rejected there).
+        // Claimed by anyone else: creating a native window first would abort
+        // on macOS/Cocoa (#153) — the caller must fail BEFORE touching SDL.
+        return !g_eventThread || isDispatchThreadLockedless(g_eventThread);
+    } catch (...) {
+        return false;
+    }
+}
+
+void SdlEventDispatcher::stealDispatchThread() noexcept {
+    try {
+        std::lock_guard<std::mutex> lock(g_eventMutex);
+        // Administrative transfer only (RowlEngine_ReclaimHandle): the table
+        // is kept — the dead owner's window registration is still valid, its
+        // events keep routing, only the pumping thread changes. Multi-handle
+        // caveat, documented on ReclaimHandle: a second live visible handle
+        // on yet another thread must Shutdown/Init to re-register after the
+        // reclaimed handle is torn down (the pin clears when the table
+        // empties, so a full Shutdown→Init cycle always recovers).
+        g_eventThread = std::this_thread::get_id();
+    } catch (...) {
+    }
 }
 
 } // namespace Rowl::Platform

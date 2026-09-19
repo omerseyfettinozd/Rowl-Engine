@@ -11,6 +11,10 @@ namespace RowlEngine.Editor.Tests;
 // köprü-öncesinde keser. Speed/offset için native getter YOKTUR — bu iki
 // setter no-throw + guard-ünitiyle kapsanır (kırmızı-yalanı söylenmez);
 // gözlenebilir setter'lar (master, scale, blip) round-trip ile kanıtlanır.
+// D3: canlı native host VIDEO lease'i süreç-genelidir; paralel xUnit
+// koleksiyonlarıyla çakışınca lease-affinity Init'i reddeder. Seri
+// koleksiyonda koşar.
+[Collection("StaticRootSequential")]
 public sealed class EditorBridgeGuardSliceTests
 {
     [Fact]
@@ -40,6 +44,19 @@ public sealed class EditorBridgeGuardSliceTests
         if ((int)NativeBridge.ResultCode.BufferTooSmall != 12 ||
             (int)NativeBridge.ResultCode.Unsupported != 13)
             throw new Exception("B4: bridge/public enum parity broken");
+    }
+
+    [Fact]
+    public void D3_WrongThread_MirrorsNative14()
+    {
+        // D3 (B1d #102): canlı handle'a yabancı-thread çağrısı artık
+        // WRONG_THREAD (14) damgalar; üç katman (C enum, bridge, public)
+        // aynı sayıda kilitlenir. Davranış kilidi native tarafta
+        // (test_lifecycle_thread_lease); burası sözleşme-aynalama kilididir.
+        if ((int)NativeBridge.ResultCode.WrongThread != 14)
+            throw new Exception("D3: bridge must mirror native 14");
+        if ((int)RuntimeErrorCode.WrongThread != 14)
+            throw new Exception("D3: public enum must mirror bridge 14");
     }
 
     private static EngineHost CreateLiveHost()

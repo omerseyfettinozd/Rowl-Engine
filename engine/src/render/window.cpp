@@ -232,6 +232,14 @@ bool Window::initialize(const std::string& title, uint32_t width, uint32_t heigh
 
     ROWL_LOG_INFO("Initializing SDL3 Windowing & Hardware Graphics Subsystem...");
 
+    // D3 (#153/#159, Wayland deseni): thread-dogrulama creation ONCESINDE.
+    // Baska thread dispatch pinini tutarken SDL_CreateWindow cagirmak
+    // macOS/Cocoa'da abort'tur; lease/acquire dahil HICBIR SDL cagrisina
+    // dokunmadan fail-closed don.
+    if (!Rowl::Platform::SdlEventDispatcher::isEligibleForRegister()) {
+        ROWL_LOG_ERROR("Visible SDL windows must be created on the SDL event/dispatch thread.");
+        return false;
+    }
     if (!Rowl::Platform::SdlSubsystemLease::acquire(SDL_INIT_VIDEO)) {
         ROWL_LOG_ERROR("SDL_Init(SDL_INIT_VIDEO) failed: " + std::string(SDL_GetError()));
         return false;
@@ -386,6 +394,15 @@ bool Window::initializeEmbedded(void* nativeHandle, uint32_t width, uint32_t hei
     ROWL_LOG_INFO("Initializing SDL3 in Embedded mode (native handle: " +
                   std::to_string(reinterpret_cast<uintptr_t>(nativeHandle)) + ")");
 
+    // D3 (#153/#159, Wayland deseni): thread-dogrulama creation ONCESINDE
+    // (acquire dahil). Yabanci thread'den dis Cocoa tutamaciyla
+    // CreateWindowWithProperties macOS'ta abort'tur; HICBIR SDL cagrisina
+    // dokunmadan fail-closed don.
+    if (!Rowl::Platform::SdlEventDispatcher::isEligibleForRegister()) {
+        ROWL_LOG_ERROR("initializeEmbedded: native embeds must be created on the SDL "
+                       "event/dispatch thread.");
+        return false;
+    }
     if (!Rowl::Platform::SdlSubsystemLease::acquire(SDL_INIT_VIDEO)) {
         ROWL_LOG_ERROR("SDL_Init(SDL_INIT_VIDEO) failed: " + std::string(SDL_GetError()));
         return false;

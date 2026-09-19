@@ -237,6 +237,12 @@ internal static class EditorHeadlessTestSuite
             EditorViewModelThinningTests.Run(mainVm);
 
             // Test 29: End-to-end editor flow (Hub create → open → nodes → inspector → import → preview → save → build → package)
+            // D3 (#133): E2E kendi canlı host'unu açar; paylaşılan mainVm
+            // host'u yaşarken VIDEO lease-affinity ikinci init'i reddeder.
+            // mainVm'nin engine'i burada bırakılır (worker + lease senkron
+            // serbest); mainVm test 31/33'te enginesiz kullanılmaya devam
+            // eder (connectEngine:false modu), final Dispose idempotenttir.
+            mainVm.EngineHost.Dispose();
             EditorEndToEndFlowTests.Run(testProjectRoot);
 
             // Test 30: MS-4 dirty-frame copy gate & idle-diet counters

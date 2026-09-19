@@ -11,7 +11,7 @@
 int RowlEngine_SetQuickSaveSlot(RowlEngineHandle handle, int32_t slotIndex) {
     if (!isLiveHandle(handle)) return 0;
     return invokeNoexcept<int>([&] {
-        auto* checked = toEngineChecked(handle);
+        auto checked = toEngineChecked(handle);
         return (checked && checked->setQuickSaveSlot(slotIndex)) ? 1 : 0;
     }, 0);
 }
@@ -19,7 +19,7 @@ int RowlEngine_SetQuickSaveSlot(RowlEngineHandle handle, int32_t slotIndex) {
 int32_t RowlEngine_GetQuickSaveSlot(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return -1;
     return invokeNoexcept<int32_t>([&] {
-        auto* checked = toEngineChecked(handle);
+        auto checked = toEngineChecked(handle);
         return checked ? checked->getQuickSaveSlot() : -1;
     }, -1);
 }
@@ -27,7 +27,7 @@ int32_t RowlEngine_GetQuickSaveSlot(RowlEngineHandle handle) {
 int RowlEngine_QuickSave(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return 0;
     return invokeNoexcept<int>([&] {
-        auto* checked = toEngineChecked(handle);
+        auto checked = toEngineChecked(handle);
         return (checked && checked->quickSave()) ? 1 : 0;
     }, 0);
 }
@@ -35,7 +35,7 @@ int RowlEngine_QuickSave(RowlEngineHandle handle) {
 int RowlEngine_QuickLoad(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return 0;
     return invokeNoexcept<int>([&] {
-        auto* checked = toEngineChecked(handle);
+        auto checked = toEngineChecked(handle);
         return (checked && checked->quickLoad()) ? 1 : 0;
     }, 0);
 }
@@ -43,14 +43,14 @@ int RowlEngine_QuickLoad(RowlEngineHandle handle) {
 void RowlEngine_SetPaused(RowlEngineHandle handle, int paused) {
     if (!isLiveHandle(handle)) return;
     invokeNoexcept([&] {
-        if (auto* checked = toEngineChecked(handle)) checked->setPaused(paused != 0);
+        if (auto checked = toEngineChecked(handle)) checked->setPaused(paused != 0);
     });
 }
 
 int RowlEngine_IsPaused(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return 0;
     return invokeNoexcept<int>([&] {
-        auto* checked = toEngineChecked(handle);
+        auto checked = toEngineChecked(handle);
         return (checked && checked->isPaused()) ? 1 : 0;
     }, 0);
 }
@@ -69,7 +69,7 @@ void RowlEngine_PauseMenuCommand(RowlEngineHandle handle, int command) {
             case ROWL_PAUSE_MENU_CONFIRM: parsed = Cmd::Confirm; break;
             default: return;
         }
-        if (auto* checked = toEngineChecked(handle)) checked->pauseMenuCommand(parsed);
+        if (auto checked = toEngineChecked(handle)) checked->pauseMenuCommand(parsed);
     });
 }
 
@@ -77,7 +77,7 @@ const char* RowlEngine_GetPauseMenuJson(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return "{\"open\":false,\"rows\":[]}";
     static thread_local std::string buffer;
     return invokeNoexcept<const char*>([&] {
-        auto* checked = toEngineChecked(handle);
+        auto checked = toEngineChecked(handle);
         buffer = checked ? checked->getPauseMenuJson() : "{\"open\":false,\"rows\":[]}";
         return buffer.c_str();
     }, "{\"open\":false,\"rows\":[]}");
@@ -96,7 +96,7 @@ RowlEngine_ResultCode RowlEngine_GetPauseMenuJsonUtf8(
     uint32_t* outRequiredSize) {
     if (!isLiveHandle(handle)) return ROWL_RESULT_INVALID_HANDLE;
     return invokeNoexcept<RowlEngine_ResultCode>([&] {
-        auto* engine = toEngineChecked(handle);
+        auto engine = toEngineChecked(handle);
         if (!engine) return ROWL_RESULT_INVALID_HANDLE;
         return copyUtf8ToCaller(engine->getPauseMenuJson(), buffer,
                                 bufferSize, outRequiredSize);

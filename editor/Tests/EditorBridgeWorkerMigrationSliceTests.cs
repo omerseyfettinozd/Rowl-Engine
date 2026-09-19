@@ -10,6 +10,10 @@ namespace RowlEngine.Editor.Tests;
 // kırmızısı verir (değer yazılmaz, default okunur); trio taşındıkça yeşile
 // döner. Okuma worker üzerinden yapılır (test-thread bridge-direkt okuyamaz
 // — B4 canlı-dersi).
+// D3: canlı native host VIDEO lease'i süreç-genelidir; paralel xUnit
+// koleksiyonlarıyla çakışınca lease-affinity Init'i reddeder. Seri
+// koleksiyonda koşar (B4/Utf8 ile aynı sıra).
+[Collection("StaticRootSequential")]
 public sealed class EditorBridgeWorkerMigrationSliceTests
 {
     private static EngineHost CreateLiveHost()

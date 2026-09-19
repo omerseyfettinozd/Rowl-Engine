@@ -30,6 +30,10 @@ enum class RuntimeErrorCode : int32_t {
     StateError = 11,
     BufferTooSmall = 12,
     Unsupported = 13,
+    // D3 (B1d #102/#150/#157): call from a non-owner thread on a live
+    // handle. Appended (existing values untouched) so the numeric ABI of
+    // every earlier code is preserved.
+    WrongThread = 14,
     UnknownError = 99
 };
 

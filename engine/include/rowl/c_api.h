@@ -12,10 +12,23 @@
  * Threading contract (B3b/K3 — worker-dispatch model):
  *  - One owner thread per handle. The first Init call claims the handle for
  *    the calling thread; every later call from another thread fails closed
- *    (INVALID_HANDLE / empty / 0 return, the engine object is untouched).
- *  - Shutdown/Destroy from a non-owner thread have no effect. Destroyed
- *    records are retained until process exit, so a stale handle can never
- *    become valid again through address reuse (retention, not generations).
+ *    and the engine object is untouched. Two tiers (D3/B1d):
+ *    silent — ordinary getters/setters return the dead-handle default
+ *    (0 / empty / no-op, ResultCode sites INVALID_HANDLE) and record
+ *    nothing. Silent is deliberate: stamping every foreign read would
+ *    thrash the shared result context and flood the log on hot paths
+ *    (native S3/S7 lock this in).
+ *    loud — ownership-level calls on a LIVE handle stamp WRONG_THREAD (14)
+ *    with the offending operation name, cross-thread readable via
+ *    RowlEngine_GetLastResultCode/Message (+Utf8 variants), and log the
+ *    rejection. Stamping calls: Shutdown, Destroy, Step, Init (claim
+ *    refused by a live owner), the prefetch/character aux guards, and the
+ *    visible-step dispatch gate. Calls on a truly dead handle stay silent
+ *    no-ops (there is no engine left to record into), so INVALID_HANDLE
+ *    keeps meaning "dead", never "foreign".
+ *  - Destroyed records are retained until process exit, so a stale handle
+ *    can never become valid again through address reuse (retention, not
+ *    generations).
  *  - Hosts must serialize all calls for one handle onto its owner thread.
  *    The editor does this via OffscreenRuntimeWorker dispatch; standalone
  *    runtimes stay on their host UI/event thread. Concurrent Init of several
@@ -65,6 +78,9 @@ typedef enum RowlEngine_ResultCode {
     ROWL_RESULT_STATE_ERROR = 11,
     ROWL_RESULT_BUFFER_TOO_SMALL = 12,
     ROWL_RESULT_UNSUPPORTED = 13,
+    /* D3 (B1d #102/#150/#157): call from a non-owner thread on a live
+       handle. Appended; earlier values are frozen. */
+    ROWL_RESULT_WRONG_THREAD = 14,
     ROWL_RESULT_UNKNOWN_ERROR = 99
 } RowlEngine_ResultCode;
 
@@ -161,7 +177,35 @@ ROWL_API void RowlEngine_Destroy(RowlEngineHandle handle);
  *
  * The thread that first calls Init becomes the handle owner. Every later
  * call using this handle, including Destroy, must use that same host thread.
- * A call from another thread is safely rejected (void calls do nothing).
+ *
+ * D3 (B1d): an ownership-level call from another thread on a LIVE handle
+ * is rejected LOUDLY, not silently — the rejection stamps WRONG_THREAD (14)
+ * on the engine's last-result with the offending operation name, and the
+ * calling thread can read it back via RowlEngine_GetLastResultCode/Message
+ * (a dead handle still reports INVALID_HANDLE, so the two are
+ * distinguishable). Loud calls: Shutdown, Destroy, Step, Init (live owner
+ * refuses the claim), the prefetch/character aux guards, and the
+ * visible-step dispatch gate. Ordinary getters/setters stay silent
+ * fail-closed (see the threading contract above). Void calls
+ * (Shutdown/Destroy/Step) additionally log the rejection. Calls on a truly
+ * dead handle stay silent no-ops (there is no engine left to record into).
+ *
+ * If the owner thread exited without destroying the handle, the handle is
+ * NOT permanently wedged: RowlEngine_ReclaimHandle transfers ownership (and
+ * the process-wide SDL event-dispatch pin) to the calling thread, after
+ * which Shutdown/Destroy work again. Reclaim is an administrative recovery
+ * operation — call it only after the previous owner thread has exited; a
+ * still-running previous owner degrades loudly (its calls stamp
+ * WRONG_THREAD) rather than silently corrupting state.
+ *
+ * Process-wide SDL video init is serialized AND owner-pinned: concurrent
+ * Init/Shutdown/Destroy on different threads cannot interleave SDL video
+ * calls (one process-wide video serial), and a second thread cannot acquire
+ * the video subsystem while another thread holds it (first-acquirer
+ * affinity, released back to unclaimed when the lease count reaches zero).
+ * A visible/embedded engine stepped from a thread that does not own the
+ * event-dispatch pin advances nothing and stamps WRONG_THREAD (offscreen
+ * engines are unaffected — they never touch the dispatch pin).
  */
 ROWL_API int RowlEngine_Init(RowlEngineHandle handle,
                               uint32_t virtualWidth,
@@ -193,11 +237,27 @@ ROWL_API int RowlEngine_InitStandalone(RowlEngineHandle handle,
 ROWL_API void RowlEngine_Run(RowlEngineHandle handle);
 
 /**
+ * D3 (B1d #151): administrative ownership recovery for a handle whose owner
+ * thread exited without destroying it. Transfers handle ownership AND the
+ * process-wide SDL event-dispatch pin to the calling thread and reports
+ * ROWL_RESULT_OK; a dead/unknown handle reports ROWL_RESULT_INVALID_HANDLE.
+ * After a successful reclaim the calling thread may Shutdown/Destroy (or
+ * keep stepping) the engine; leases the dead owner held are released by the
+ * normal Shutdown/Destroy path on the reclaiming thread.
+ *
+ * @return ROWL_RESULT_OK on success, ROWL_RESULT_INVALID_HANDLE for a
+ * dead/unknown handle. Additive API (ABI baseline grows 218 to 219).
+ */
+ROWL_API RowlEngine_ResultCode RowlEngine_ReclaimHandle(RowlEngineHandle handle);
+
+/**
  * Advances the engine by one frame.
  * Call this every frame from the host's render/tick loop.
  * @param deltaTime Elapsed time since the last call, in seconds.
  * Visible/embedded handles share one process UI/event thread because SDL's
- * native event queue is process-global.
+ * native event queue is process-global. D3 (B1d #155): a visible engine
+ * stepped from any other thread advances NOTHING and stamps WRONG_THREAD;
+ * offscreen engines keep the plain owner-thread contract.
  */
 ROWL_API void RowlEngine_Step(RowlEngineHandle handle, float deltaTime);
 
@@ -209,6 +269,8 @@ ROWL_API void RowlEngine_Step(RowlEngineHandle handle, float deltaTime);
  * gömülü tutamaç ve save-dizin override'ı sıfırlanır; aynı handle'da
  * Shutdown→Init taze-handle ile özdeş başlar. Paylaşılan-VFS senaryosunda
  * (host setVfs ile aynı instance'ı verdiyse) mount'lar da temizlenir.
+ * D3 (B1d #102): Shutdown/Destroy on a live handle from a non-owner thread
+ * stamp WRONG_THREAD (readable cross-thread) instead of silently no-op'ing.
  */
 ROWL_API void RowlEngine_Shutdown(RowlEngineHandle handle);
 
@@ -1057,6 +1119,7 @@ ROWL_API int RowlEngine_ExecuteScript(RowlEngineHandle handle, const char* scrip
  *  11 = StateError
  *  12 = BufferTooSmall
  *  13 = Unsupported
+ *  14 = WrongThread (D3: foreign-thread rejection on a live handle)
  *  99 = UnknownError
  */
 ROWL_API int32_t RowlEngine_GetLastResultCode(RowlEngineHandle handle);

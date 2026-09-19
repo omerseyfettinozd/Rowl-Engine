@@ -20,7 +20,7 @@ void RowlEngine_PlayAudio(RowlEngineHandle handle,
     if (!isLiveHandle(handle)) return;
     if (!assetPath || !*assetPath) {
         invokeNoexcept([&] {
-            if (auto* engine = toEngineChecked(handle)) {
+            if (auto engine = toEngineChecked(handle)) {
                 if (auto ctx = engine->getContext()) {
                     ctx->setError(Rowl::Core::RuntimeErrorCode::InvalidArgument,
                                   "Audio asset path is null or empty",
@@ -31,7 +31,7 @@ void RowlEngine_PlayAudio(RowlEngineHandle handle,
         return;
     }
     invokeNoexcept([&] {
-        auto* engine = toEngineChecked(handle);
+        auto engine = toEngineChecked(handle);
         if (!engine) return;
         auto* audio = engine->getAudio();
         if (!audio) return;
@@ -60,7 +60,7 @@ void RowlEngine_PlayAudio(RowlEngineHandle handle,
 void RowlEngine_StopBgm(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return;
     invokeNoexcept([&] {
-        auto* engine = toEngineChecked(handle);
+        auto engine = toEngineChecked(handle);
         auto* audio = engine ? engine->getAudio() : nullptr;
         if (!audio) return;
         // A5-tur2: stop fail'i (Clear/Pause) koda yayılır; başarı kodu
@@ -80,7 +80,7 @@ void RowlEngine_StopBgm(RowlEngineHandle handle) {
 void RowlEngine_SetBgmVolume(RowlEngineHandle handle, float volume) {
     if (!isLiveHandle(handle)) return;
     invokeNoexcept([&] {
-        auto* checked = toEngineChecked(handle);
+        auto checked = toEngineChecked(handle);
         if (!checked) return;
         // D1 (#110/#132): pre-init sessiz-drop + sahte-0.0 getter ikilisi.
         // Davranış korunur (yaz-devam), kanala StateError sinyali verilir.
@@ -92,51 +92,51 @@ void RowlEngine_SetBgmVolume(RowlEngineHandle handle, float volume) {
 
 void RowlEngine_SetMasterVolume(RowlEngineHandle handle, float volume) {
     if (!isLiveHandle(handle)) return;
-    invokeNoexcept([&] { auto* checked = toEngineChecked(handle); if (!checked) return; requireEngineInitialized(checked, "set_master_volume"); if (auto* audio = checked->getAudio()) audio->setMasterVolume(volume); });
+    invokeNoexcept([&] { auto checked = toEngineChecked(handle); if (!checked) return; requireEngineInitialized(checked, "set_master_volume"); if (auto* audio = checked->getAudio()) audio->setMasterVolume(volume); });
 }
 
 void RowlEngine_SetVoiceVolume(RowlEngineHandle handle, float volume) {
     if (!isLiveHandle(handle)) return;
-    invokeNoexcept([&] { auto* checked = toEngineChecked(handle); if (!checked) return; requireEngineInitialized(checked, "set_voice_volume"); if (auto* audio = checked->getAudio()) audio->setVoiceVolume(volume); });
+    invokeNoexcept([&] { auto checked = toEngineChecked(handle); if (!checked) return; requireEngineInitialized(checked, "set_voice_volume"); if (auto* audio = checked->getAudio()) audio->setVoiceVolume(volume); });
 }
 
 void RowlEngine_SetSfxVolume(RowlEngineHandle handle, float volume) {
     if (!isLiveHandle(handle)) return;
-    invokeNoexcept([&] { auto* checked = toEngineChecked(handle); if (!checked) return; requireEngineInitialized(checked, "set_sfx_volume"); if (auto* audio = checked->getAudio()) audio->setSfxVolume(volume); });
+    invokeNoexcept([&] { auto checked = toEngineChecked(handle); if (!checked) return; requireEngineInitialized(checked, "set_sfx_volume"); if (auto* audio = checked->getAudio()) audio->setSfxVolume(volume); });
 }
 
 void RowlEngine_SetTextSpeedMultiplier(RowlEngineHandle handle, float multiplier) {
     if (!isLiveHandle(handle)) return;
     // D1 (#132 tutunur-sınıfı): değer yazılmaya devam eder + sinyal.
-    invokeNoexcept([&] { auto* checked = toEngineChecked(handle); if (!checked) return; requireEngineInitialized(checked, "set_text_speed_multiplier"); checked->setTextSpeedMultiplier(multiplier); });
+    invokeNoexcept([&] { auto checked = toEngineChecked(handle); if (!checked) return; requireEngineInitialized(checked, "set_text_speed_multiplier"); checked->setTextSpeedMultiplier(multiplier); });
 }
 
 void RowlEngine_SetAutoAdvanceDelayOffset(RowlEngineHandle handle, float seconds) {
     if (!isLiveHandle(handle)) return;
-    invokeNoexcept([&] { auto* checked = toEngineChecked(handle); if (!checked) return; requireEngineInitialized(checked, "set_auto_advance_delay_offset"); checked->setAutoAdvanceDelayOffset(seconds); });
+    invokeNoexcept([&] { auto checked = toEngineChecked(handle); if (!checked) return; requireEngineInitialized(checked, "set_auto_advance_delay_offset"); checked->setAutoAdvanceDelayOffset(seconds); });
 }
 
 float RowlEngine_GetMasterVolume(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return 0.0f;
     // D1 (#110/#132): sahte-0.0 artık StateError sinyaliyle ayırt edilir
     // (değer korunur — muted ile karışmaz).
-    return invokeNoexcept<float>([&] { auto* checked = toEngineChecked(handle); if (!checked) return 0.0f; requireEngineInitialized(checked, "get_master_volume"); const auto* audio = checked->getAudio(); return audio ? audio->getMasterVolume() : 0.0f; }, 0.0f);
+    return invokeNoexcept<float>([&] { auto checked = toEngineChecked(handle); if (!checked) return 0.0f; requireEngineInitialized(checked, "get_master_volume"); const auto* audio = checked->getAudio(); return audio ? audio->getMasterVolume() : 0.0f; }, 0.0f);
 }
 
 float RowlEngine_GetVoiceVolume(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return 0.0f;
-    return invokeNoexcept<float>([&] { auto* checked = toEngineChecked(handle); if (!checked) return 0.0f; requireEngineInitialized(checked, "get_voice_volume"); const auto* audio = checked->getAudio(); return audio ? audio->getVoiceVolume() : 0.0f; }, 0.0f);
+    return invokeNoexcept<float>([&] { auto checked = toEngineChecked(handle); if (!checked) return 0.0f; requireEngineInitialized(checked, "get_voice_volume"); const auto* audio = checked->getAudio(); return audio ? audio->getVoiceVolume() : 0.0f; }, 0.0f);
 }
 
 float RowlEngine_GetSfxVolume(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return 0.0f;
-    return invokeNoexcept<float>([&] { auto* checked = toEngineChecked(handle); if (!checked) return 0.0f; requireEngineInitialized(checked, "get_sfx_volume"); const auto* audio = checked->getAudio(); return audio ? audio->getSfxVolume() : 0.0f; }, 0.0f);
+    return invokeNoexcept<float>([&] { auto checked = toEngineChecked(handle); if (!checked) return 0.0f; requireEngineInitialized(checked, "get_sfx_volume"); const auto* audio = checked->getAudio(); return audio ? audio->getSfxVolume() : 0.0f; }, 0.0f);
 }
 
 void RowlEngine_TriggerVoiceDucking(RowlEngineHandle handle, int isVoiceActive) {
     if (!isLiveHandle(handle)) return;
     invokeNoexcept([&] {
-        auto* checked = toEngineChecked(handle);
+        auto checked = toEngineChecked(handle);
         if (!checked) return;
         // D1 (#110): pre-init komut-drop da sinyalli olur.
         requireEngineInitialized(checked, "trigger_voice_ducking");
@@ -148,7 +148,7 @@ void RowlEngine_TriggerVoiceDucking(RowlEngineHandle handle, int isVoiceActive) 
 int RowlEngine_IsBgmPlaying(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return 0;
     return invokeNoexcept<int>([&] {
-        auto* checked = toEngineChecked(handle);
+        auto checked = toEngineChecked(handle);
         const auto* audio = checked ? checked->getAudio() : nullptr;
         return audio && audio->isBgmPlaying() ? 1 : 0;
     }, 0);
@@ -157,7 +157,7 @@ int RowlEngine_IsBgmPlaying(RowlEngineHandle handle) {
 int RowlEngine_IsVoicePlaying(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return 0;
     return invokeNoexcept<int>([&] {
-        auto* checked = toEngineChecked(handle);
+        auto checked = toEngineChecked(handle);
         const auto* audio = checked ? checked->getAudio() : nullptr;
         return audio && audio->isVoicePlaying() ? 1 : 0;
     }, 0);
@@ -166,7 +166,7 @@ int RowlEngine_IsVoicePlaying(RowlEngineHandle handle) {
 int RowlEngine_GetActiveDspFilter(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return 0;
     return invokeNoexcept<int>([&] {
-        auto* checked = toEngineChecked(handle);
+        auto checked = toEngineChecked(handle);
         const auto* audio = checked ? checked->getAudio() : nullptr;
         if (!audio) return 0;
         switch (audio->getActiveFilter()) {
@@ -183,7 +183,7 @@ const char* RowlEngine_GetLastAudioError(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return "";
     static thread_local std::string buffer;
     return invokeNoexcept<const char*>([&] {
-        auto* checked = toEngineChecked(handle);
+        auto checked = toEngineChecked(handle);
         const auto* audio = checked ? checked->getAudio() : nullptr;
         buffer = audio ? audio->getLastError() : "";
         return buffer.c_str();
@@ -203,7 +203,7 @@ RowlEngine_ResultCode RowlEngine_GetLastAudioErrorUtf8(
     uint32_t* outRequiredSize) {
     if (!isLiveHandle(handle)) return ROWL_RESULT_INVALID_HANDLE;
     return invokeNoexcept<RowlEngine_ResultCode>([&] {
-        auto* checked = toEngineChecked(handle);
+        auto checked = toEngineChecked(handle);
         const auto* audio = checked ? checked->getAudio() : nullptr;
         if (!audio) return ROWL_RESULT_INVALID_HANDLE;
         return copyUtf8ToCaller(audio->getLastError(), buffer,
@@ -214,7 +214,7 @@ RowlEngine_ResultCode RowlEngine_GetLastAudioErrorUtf8(
 int RowlEngine_IsAudioDeviceAvailable(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return 0;
     return invokeNoexcept<int>([&] {
-        auto* checked = toEngineChecked(handle);
+        auto checked = toEngineChecked(handle);
         const auto* audio = checked ? checked->getAudio() : nullptr;
         return (audio && audio->isAudioDeviceAvailable()) ? 1 : 0;
     }, 0);
@@ -223,7 +223,7 @@ int RowlEngine_IsAudioDeviceAvailable(RowlEngineHandle handle) {
 int RowlEngine_IsAudioOutputSuspended(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return 0;
     return invokeNoexcept<int>([&] {
-        auto* checked = toEngineChecked(handle);
+        auto checked = toEngineChecked(handle);
         const auto* audio = checked ? checked->getAudio() : nullptr;
         return (audio && audio->isOutputSuspended()) ? 1 : 0;
     }, 0);
@@ -232,7 +232,7 @@ int RowlEngine_IsAudioOutputSuspended(RowlEngineHandle handle) {
 float RowlEngine_GetAudioChannelPeak(RowlEngineHandle handle, int channelType, int channelIndex) {
     if (!isLiveHandle(handle)) return 0.0f;
     return invokeNoexcept<float>([&] {
-        auto* checked = toEngineChecked(handle);
+        auto checked = toEngineChecked(handle);
         const auto* audio = checked ? checked->getAudio() : nullptr;
         return audio ? audio->getChannelPeak(channelType, channelIndex) : 0.0f;
     }, 0.0f);
@@ -241,7 +241,7 @@ float RowlEngine_GetAudioChannelPeak(RowlEngineHandle handle, int channelType, i
 float RowlEngine_GetAudioChannelRms(RowlEngineHandle handle, int channelType, int channelIndex) {
     if (!isLiveHandle(handle)) return 0.0f;
     return invokeNoexcept<float>([&] {
-        auto* checked = toEngineChecked(handle);
+        auto checked = toEngineChecked(handle);
         const auto* audio = checked ? checked->getAudio() : nullptr;
         return audio ? audio->getChannelRms(channelType, channelIndex) : 0.0f;
     }, 0.0f);
@@ -250,7 +250,7 @@ float RowlEngine_GetAudioChannelRms(RowlEngineHandle handle, int channelType, in
 void RowlEngine_GetAudioSpectrum(RowlEngineHandle handle, float* outBands, int bandCount) {
     if (!isLiveHandle(handle) || !outBands || bandCount <= 0) return;
     invokeNoexcept([&] {
-        auto* checked = toEngineChecked(handle);
+        auto checked = toEngineChecked(handle);
         const auto* audio = checked ? checked->getAudio() : nullptr;
         if (audio) {
             audio->getSpectrumBands(outBands, bandCount);
@@ -263,7 +263,7 @@ void RowlEngine_GetAudioSpectrum(RowlEngineHandle handle, float* outBands, int b
 void RowlEngine_PlayVoiceBlip(RowlEngineHandle handle, const char* soundPath, float pitch, float volume, int channelType) {
     if (!isLiveHandle(handle)) return;
     invokeNoexcept([&] {
-        auto* engine = toEngineChecked(handle);
+        auto engine = toEngineChecked(handle);
         if (!engine) return;
         // A5-tur2: blip snapshot'ı koda yayılır (pratikte synth kurtarır ve
         // snapshot boş olur → kod 0; synth-Put fail'i kod 10 olur).
@@ -285,7 +285,7 @@ void RowlEngine_PlayVoiceBlip(RowlEngineHandle handle, const char* soundPath, fl
 void RowlEngine_SetDialogueVoiceBlip(RowlEngineHandle handle, const char* soundPath, float basePitch, float pitchVariance, int cadence, int skipPunctuation, int channelType) {
     if (!isLiveHandle(handle)) return;
     invokeNoexcept([&] {
-        if (auto* checked = toEngineChecked(handle)) checked->setDialogueVoiceBlip(soundPath ? soundPath : "", basePitch, pitchVariance, cadence, skipPunctuation != 0, channelType);
+        if (auto checked = toEngineChecked(handle)) checked->setDialogueVoiceBlip(soundPath ? soundPath : "", basePitch, pitchVariance, cadence, skipPunctuation != 0, channelType);
     });
 }
 
@@ -293,7 +293,7 @@ const char* RowlEngine_GetDialogueVoiceBlipSound(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return "";
     static thread_local std::string buffer;
     return invokeNoexcept<const char*>([&] {
-        auto* checked = toEngineChecked(handle);
+        auto checked = toEngineChecked(handle);
         buffer = checked ? checked->getDialogueVoiceBlipSound() : "";
         return buffer.c_str();
     }, "");
@@ -312,7 +312,7 @@ RowlEngine_ResultCode RowlEngine_GetDialogueVoiceBlipSoundUtf8(
     uint32_t* outRequiredSize) {
     if (!isLiveHandle(handle)) return ROWL_RESULT_INVALID_HANDLE;
     return invokeNoexcept<RowlEngine_ResultCode>([&] {
-        auto* checked = toEngineChecked(handle);
+        auto checked = toEngineChecked(handle);
         if (!checked) return ROWL_RESULT_INVALID_HANDLE;
         return copyUtf8ToCaller(checked->getDialogueVoiceBlipSound(), buffer,
                                 bufferSize, outRequiredSize);
@@ -322,7 +322,7 @@ RowlEngine_ResultCode RowlEngine_GetDialogueVoiceBlipSoundUtf8(
 float RowlEngine_GetDialogueVoiceBlipPitch(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return 1.0f;
     return invokeNoexcept<float>([&] {
-        auto* checked = toEngineChecked(handle);
+        auto checked = toEngineChecked(handle);
         return checked ? checked->getDialogueVoiceBlipPitch() : 1.0f;
     }, 1.0f);
 }
@@ -330,7 +330,7 @@ float RowlEngine_GetDialogueVoiceBlipPitch(RowlEngineHandle handle) {
 float RowlEngine_GetDialogueVoiceBlipVariance(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return 0.08f;
     return invokeNoexcept<float>([&] {
-        auto* checked = toEngineChecked(handle);
+        auto checked = toEngineChecked(handle);
         return checked ? checked->getDialogueVoiceBlipVariance() : 0.08f;
     }, 0.08f);
 }
@@ -338,7 +338,7 @@ float RowlEngine_GetDialogueVoiceBlipVariance(RowlEngineHandle handle) {
 int RowlEngine_GetDialogueVoiceBlipCadence(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return 1;
     return invokeNoexcept<int>([&] {
-        auto* checked = toEngineChecked(handle);
+        auto checked = toEngineChecked(handle);
         return checked ? checked->getDialogueVoiceBlipCadence() : 1;
     }, 1);
 }
@@ -346,7 +346,7 @@ int RowlEngine_GetDialogueVoiceBlipCadence(RowlEngineHandle handle) {
 int RowlEngine_GetDialogueVoiceBlipSkipPunctuation(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return 1;
     return invokeNoexcept<int>([&] {
-        auto* checked = toEngineChecked(handle);
+        auto checked = toEngineChecked(handle);
         return (checked && checked->getDialogueVoiceBlipSkipPunctuation()) ? 1 : 0;
     }, 1);
 }
@@ -354,7 +354,7 @@ int RowlEngine_GetDialogueVoiceBlipSkipPunctuation(RowlEngineHandle handle) {
 int RowlEngine_GetDialogueVoiceBlipChannel(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return 1;
     return invokeNoexcept<int>([&] {
-        auto* checked = toEngineChecked(handle);
+        auto checked = toEngineChecked(handle);
         return checked ? checked->getDialogueVoiceBlipChannel() : 1;
     }, 1);
 }
@@ -362,7 +362,7 @@ int RowlEngine_GetDialogueVoiceBlipChannel(RowlEngineHandle handle) {
 float RowlEngine_GetDialogueVoiceBlipVolume(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return 0.85f;
     return invokeNoexcept<float>([&] {
-        auto* checked = toEngineChecked(handle);
+        auto checked = toEngineChecked(handle);
         return checked ? checked->getDialogueVoiceBlipVolume() : 0.85f;
     }, 0.85f);
 }
@@ -370,14 +370,14 @@ float RowlEngine_GetDialogueVoiceBlipVolume(RowlEngineHandle handle) {
 void RowlEngine_SetDialogueVoiceBlipVolume(RowlEngineHandle handle, float volume) {
     if (!isLiveHandle(handle)) return;
     invokeNoexcept([&] {
-        if (auto* checked = toEngineChecked(handle)) checked->setDialogueVoiceBlipVolume(volume);
+        if (auto checked = toEngineChecked(handle)) checked->setDialogueVoiceBlipVolume(volume);
     });
 }
 
 uint32_t RowlEngine_GetVoiceBlipCount(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return 0;
     return invokeNoexcept<uint32_t>([&] {
-        auto* checked = toEngineChecked(handle);
+        auto checked = toEngineChecked(handle);
         return checked ? checked->getVoiceBlipCount() : 0;
     }, 0);
 }
@@ -385,7 +385,7 @@ uint32_t RowlEngine_GetVoiceBlipCount(RowlEngineHandle handle) {
 void RowlEngine_ResetVoiceBlipCount(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return;
     invokeNoexcept([&] {
-        if (auto* checked = toEngineChecked(handle)) checked->resetVoiceBlipCount();
+        if (auto checked = toEngineChecked(handle)) checked->resetVoiceBlipCount();
     });
 }
 
@@ -394,7 +394,7 @@ void RowlEngine_ResetVoiceBlipCount(RowlEngineHandle handle) {
 uint32_t RowlEngine_GetSynthBlipCount(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return 0;
     return invokeNoexcept<uint32_t>([&] {
-        auto* checked = toEngineChecked(handle);
+        auto checked = toEngineChecked(handle);
         const auto* audio = checked ? checked->getAudio() : nullptr;
         return audio ? audio->getSynthBlipCount() : 0;
     }, 0);
@@ -403,7 +403,7 @@ uint32_t RowlEngine_GetSynthBlipCount(RowlEngineHandle handle) {
 uint64_t RowlEngine_GetAudioDropCount(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return 0;
     return invokeNoexcept<uint64_t>([&] {
-        auto* checked = toEngineChecked(handle);
+        auto checked = toEngineChecked(handle);
         const auto* audio = checked ? checked->getAudio() : nullptr;
         return audio ? audio->getDropCount() : 0;
     }, 0);
@@ -414,7 +414,7 @@ uint64_t RowlEngine_GetAudioDropCount(RowlEngineHandle handle) {
 int RowlEngine_IsStreaming(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return 0;
     return invokeNoexcept<int>([&] {
-        auto* checked = toEngineChecked(handle);
+        auto checked = toEngineChecked(handle);
         const auto* audio = checked ? checked->getAudio() : nullptr;
         return audio && audio->isStreaming() ? 1 : 0;
     }, 0);
@@ -425,7 +425,7 @@ RowlEngine_ResultCode RowlEngine_GetStreamInfoJson(
     uint32_t* outRequiredSize) {
     if (!isLiveHandle(handle)) return ROWL_RESULT_INVALID_HANDLE;
     return invokeNoexcept<RowlEngine_ResultCode>([&] {
-        auto* engine = toEngineChecked(handle);
+        auto engine = toEngineChecked(handle);
         if (!engine) return ROWL_RESULT_INVALID_HANDLE;
         const auto* audio = engine->getAudio();
         if (!audio) return ROWL_RESULT_INVALID_HANDLE;
@@ -437,7 +437,7 @@ RowlEngine_ResultCode RowlEngine_GetStreamInfoJson(
 float RowlEngine_GetBgmVolume(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return 0.0f;
     return invokeNoexcept<float>([&] {
-        auto* checked = toEngineChecked(handle);
+        auto checked = toEngineChecked(handle);
         if (!checked) return 0.0f;
         // D1 (#110/#132): sahte-0.0 sinyali.
         requireEngineInitialized(checked, "get_bgm_volume");
@@ -450,14 +450,14 @@ void RowlEngine_SetAmbienceVolume(RowlEngineHandle handle, float volume) {
     if (!isLiveHandle(handle)) return;
     invokeNoexcept([&] {
         // D1 (#110): aynı setter-sinyal disiplini.
-        if (auto* engine = toEngineChecked(handle)) { requireEngineInitialized(engine, "set_ambience_volume"); if (auto* audio = engine->getAudio()) audio->setAmbienceVolume(volume); }
+        if (auto engine = toEngineChecked(handle)) { requireEngineInitialized(engine, "set_ambience_volume"); if (auto* audio = engine->getAudio()) audio->setAmbienceVolume(volume); }
     });
 }
 
 float RowlEngine_GetAmbienceVolume(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return 0.0f;
     return invokeNoexcept<float>([&] {
-        auto* checked = toEngineChecked(handle);
+        auto checked = toEngineChecked(handle);
         const auto* audio = checked ? checked->getAudio() : nullptr;
         return audio ? audio->getAmbienceVolume() : 0.0f;
     }, 0.0f);
@@ -466,14 +466,14 @@ float RowlEngine_GetAmbienceVolume(RowlEngineHandle handle) {
 void RowlEngine_SetUiVolume(RowlEngineHandle handle, float volume) {
     if (!isLiveHandle(handle)) return;
     invokeNoexcept([&] {
-        if (auto* engine = toEngineChecked(handle)) if (auto* audio = engine->getAudio()) audio->setUiVolume(volume);
+        if (auto engine = toEngineChecked(handle)) if (auto* audio = engine->getAudio()) audio->setUiVolume(volume);
     });
 }
 
 float RowlEngine_GetUiVolume(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return 0.0f;
     return invokeNoexcept<float>([&] {
-        auto* checked = toEngineChecked(handle);
+        auto checked = toEngineChecked(handle);
         const auto* audio = checked ? checked->getAudio() : nullptr;
         return audio ? audio->getUiVolume() : 0.0f;
     }, 0.0f);
@@ -484,7 +484,7 @@ float RowlEngine_GetUiVolume(RowlEngineHandle handle) {
 void RowlEngine_SetFadeCurve(RowlEngineHandle handle, int curve) {
     if (!isLiveHandle(handle)) return;
     invokeNoexcept([&] {
-        auto* checked = toEngineChecked(handle);
+        auto checked = toEngineChecked(handle);
         auto* audio = checked ? checked->getAudio() : nullptr;
         if (!audio) return;
         // Geçersiz eğri yoksayılır (son geçerli değer korunur).
@@ -499,7 +499,7 @@ void RowlEngine_SetFadeCurve(RowlEngineHandle handle, int curve) {
 int RowlEngine_GetFadeCurve(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return 0;
     return invokeNoexcept<int>([&] {
-        auto* checked = toEngineChecked(handle);
+        auto checked = toEngineChecked(handle);
         const auto* audio = checked ? checked->getAudio() : nullptr;
         return audio ? static_cast<int>(audio->fadeCurve()) : 0;
     }, 0);
@@ -508,14 +508,14 @@ int RowlEngine_GetFadeCurve(RowlEngineHandle handle) {
 void RowlEngine_SetSfxPoolDepth(RowlEngineHandle handle, int depth) {
     if (!isLiveHandle(handle)) return;
     invokeNoexcept([&] {
-        if (auto* engine = toEngineChecked(handle)) if (auto* audio = engine->getAudio()) audio->setSfxPoolDepth(depth);
+        if (auto engine = toEngineChecked(handle)) if (auto* audio = engine->getAudio()) audio->setSfxPoolDepth(depth);
     });
 }
 
 int RowlEngine_GetSfxPoolDepth(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return 0;
     return invokeNoexcept<int>([&] {
-        auto* checked = toEngineChecked(handle);
+        auto checked = toEngineChecked(handle);
         const auto* audio = checked ? checked->getAudio() : nullptr;
         return audio ? static_cast<int>(audio->sfxPoolDepth()) : 0;
     }, 0);
@@ -524,7 +524,7 @@ int RowlEngine_GetSfxPoolDepth(RowlEngineHandle handle) {
 int RowlEngine_GetSfxActiveVoices(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return 0;
     return invokeNoexcept<int>([&] {
-        auto* checked = toEngineChecked(handle);
+        auto checked = toEngineChecked(handle);
         const auto* audio = checked ? checked->getAudio() : nullptr;
         return audio ? static_cast<int>(audio->sfxActiveVoices()) : 0;
     }, 0);
@@ -567,7 +567,7 @@ RowlEngine_ResultCode RowlEngine_GetSfxActivePaths(
     uint32_t* outRequiredSize) {
     if (!isLiveHandle(handle)) return ROWL_RESULT_INVALID_HANDLE;
     return invokeNoexcept<RowlEngine_ResultCode>([&] {
-        auto* engine = toEngineChecked(handle);
+        auto engine = toEngineChecked(handle);
         if (!engine) return ROWL_RESULT_INVALID_HANDLE;
         const auto* audio = engine->getAudio();
         if (!audio) return ROWL_RESULT_INVALID_HANDLE;
@@ -587,7 +587,7 @@ int RowlEngine_PlayAmbienceBed(RowlEngineHandle handle, const char* assetPath, i
     if (!isLiveHandle(handle)) return 0;
     if (!assetPath || !*assetPath) {
         invokeNoexcept([&] {
-            if (auto* engine = toEngineChecked(handle)) {
+            if (auto engine = toEngineChecked(handle)) {
                 if (auto ctx = engine->getContext()) {
                     ctx->setError(Rowl::Core::RuntimeErrorCode::InvalidArgument,
                                   "Ambience asset path is null or empty",
@@ -598,7 +598,7 @@ int RowlEngine_PlayAmbienceBed(RowlEngineHandle handle, const char* assetPath, i
         return 0;
     }
     return invokeNoexcept<int>([&] {
-        auto* engine = toEngineChecked(handle);
+        auto engine = toEngineChecked(handle);
         if (!engine) return 0;
         auto* audio = engine->getAudio();
         if (!audio) return 0;
@@ -616,21 +616,21 @@ int RowlEngine_PlayAmbienceBed(RowlEngineHandle handle, const char* assetPath, i
 void RowlEngine_StopAmbienceBed(RowlEngineHandle handle, int bed) {
     if (!isLiveHandle(handle)) return;
     invokeNoexcept([&] {
-        if (auto* engine = toEngineChecked(handle)) if (auto* audio = engine->getAudio()) audio->stopAmbienceBed(bed);
+        if (auto engine = toEngineChecked(handle)) if (auto* audio = engine->getAudio()) audio->stopAmbienceBed(bed);
     });
 }
 
 void RowlEngine_SetAmbienceBedVolume(RowlEngineHandle handle, int bed, float volume) {
     if (!isLiveHandle(handle)) return;
     invokeNoexcept([&] {
-        if (auto* engine = toEngineChecked(handle)) if (auto* audio = engine->getAudio()) audio->setAmbienceBedVolume(bed, volume);
+        if (auto engine = toEngineChecked(handle)) if (auto* audio = engine->getAudio()) audio->setAmbienceBedVolume(bed, volume);
     });
 }
 
 float RowlEngine_GetAmbienceBedVolume(RowlEngineHandle handle, int bed) {
     if (!isLiveHandle(handle)) return 0.0f;
     return invokeNoexcept<float>([&] {
-        auto* checked = toEngineChecked(handle);
+        auto checked = toEngineChecked(handle);
         const auto* audio = checked ? checked->getAudio() : nullptr;
         return audio ? audio->ambienceBedVolume(bed) : 0.0f;
     }, 0.0f);
@@ -639,7 +639,7 @@ float RowlEngine_GetAmbienceBedVolume(RowlEngineHandle handle, int bed) {
 int RowlEngine_IsAmbienceBedPlaying(RowlEngineHandle handle, int bed) {
     if (!isLiveHandle(handle)) return 0;
     return invokeNoexcept<int>([&] {
-        auto* checked = toEngineChecked(handle);
+        auto checked = toEngineChecked(handle);
         const auto* audio = checked ? checked->getAudio() : nullptr;
         return audio && audio->isAmbienceBedPlaying(bed) ? 1 : 0;
     }, 0);
@@ -650,7 +650,7 @@ int RowlEngine_CrossfadeAmbienceTo(RowlEngineHandle handle, const char* assetPat
     if (!isLiveHandle(handle)) return 0;
     if (!assetPath || !*assetPath) {
         invokeNoexcept([&] {
-            if (auto* engine = toEngineChecked(handle)) {
+            if (auto engine = toEngineChecked(handle)) {
                 if (auto ctx = engine->getContext()) {
                     ctx->setError(Rowl::Core::RuntimeErrorCode::InvalidArgument,
                                   "Ambience asset path is null or empty",
@@ -661,7 +661,7 @@ int RowlEngine_CrossfadeAmbienceTo(RowlEngineHandle handle, const char* assetPat
         return 0;
     }
     return invokeNoexcept<int>([&] {
-        auto* engine = toEngineChecked(handle);
+        auto engine = toEngineChecked(handle);
         if (!engine) return 0;
         auto* audio = engine->getAudio();
         if (!audio) return 0;
@@ -685,7 +685,7 @@ int RowlEngine_CrossfadeAmbienceTo(RowlEngineHandle handle, const char* assetPat
 int RowlEngine_IsAmbienceCrossfadeActive(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return 0;
     return invokeNoexcept<int>([&] {
-        auto* checked = toEngineChecked(handle);
+        auto checked = toEngineChecked(handle);
         const auto* audio = checked ? checked->getAudio() : nullptr;
         return audio && audio->isAmbienceCrossfadeActive() ? 1 : 0;
     }, 0);
@@ -696,7 +696,7 @@ RowlEngine_ResultCode RowlEngine_GetBgmPumpStatsJson(
     uint32_t* outRequiredSize) {
     if (!isLiveHandle(handle)) return ROWL_RESULT_INVALID_HANDLE;
     return invokeNoexcept<RowlEngine_ResultCode>([&] {
-        auto* engine = toEngineChecked(handle);
+        auto engine = toEngineChecked(handle);
         if (!engine) return ROWL_RESULT_INVALID_HANDLE;
         const auto* audio = engine->getAudio();
         if (!audio) return ROWL_RESULT_INVALID_HANDLE;
@@ -708,7 +708,7 @@ RowlEngine_ResultCode RowlEngine_GetBgmPumpStatsJson(
 uint64_t RowlEngine_GetBgmPumpAvgMicroseconds(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return 0;
     return invokeNoexcept<uint64_t>([&] {
-        auto* checked = toEngineChecked(handle);
+        auto checked = toEngineChecked(handle);
         const auto* audio = checked ? checked->getAudio() : nullptr;
         return audio ? audio->bgmPumpAvgMicroseconds() : 0;
     }, 0);
