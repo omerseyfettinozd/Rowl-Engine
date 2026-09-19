@@ -2122,3 +2122,86 @@ void test_audio_lock_save_format_v4_mixer() {
                 "out-of-range mixer must be InvalidData");
     TEST_PASS("Foreign version + hostile mixer rejected");
 }
+
+// Hedef #74: typewriter-blip yazimlari ile host telemetri/hata okumalari
+// arasindaki data-race kilidi. N thread x M blip (bos asset: VFS/havuz
+// dokunulmaz, synth/erken-donus yolu), join sonrasi tam-esitlik:
+//   getVoiceBlipCount() == N*M (kayipsiz; plain-sayac mutantinda kayip olur),
+//   getSynthBlipCount() <= voice (A5-tur3 konvansiyonu),
+//   getDropCount() == 0 (drop sayaci karismaz).
+// Pitch/telemetri tam-deger iddiasi YOKTUR (kilit sayim kilididir).
+// Sayac cihaz kapisindan ONCE artar: cihazsiz kosuda da calisir, SKIP YOKTUR.
+// Timing-assert YOKTUR (sadece join + tam-esitlik).
+void test_audio_lock_voice_blip_concurrent_counts() {
+    TEST_SECTION("Audio Voice-Blip Concurrent Counts Lock (#74)");
+
+    Rowl::VFS::VFSManager vfs;
+    Rowl::Audio::AudioEngine audio(&vfs);
+    if (!audio.initialize() || !audio.isInitialized()) {
+        lockFail("Voice-Blip Concurrent Counts (#74): audio init failed");
+    }
+    audio.resetVoiceBlipCount();
+
+    constexpr int kThreads = 8;
+    constexpr int kBlipsPerThread = 250;
+    constexpr uint32_t kExpected = static_cast<uint32_t>(kThreads * kBlipsPerThread);
+
+    // Okuyucu thread'ler: hammer sirasinda host tarafi telemetri/hata
+    // okumalarini canlandirir (deger iddiasi YOK — sadece kilit egzersizi;
+    // yaris TSan/kayip-sayim ile yakalanir).
+    std::atomic<bool> readersRun{true};
+    auto readerBody = [&]() {
+        while (readersRun.load()) {
+            const std::string err = audio.getLastError();
+            const uint32_t voice = audio.getVoiceBlipCount();
+            const uint32_t synth = audio.getSynthBlipCount();
+            const bool playing = audio.isVoicePlaying();
+            (void)err;
+            (void)voice;
+            (void)synth;
+            (void)playing;
+        }
+    };
+    std::thread readerA(readerBody);
+    std::thread readerB(readerBody);
+
+    auto hammerBody = [&](int threadIndex) {
+        // Turlu pitch: her karakter farkli pitch'le gelir (engine.cpp
+        // typewriter yolu emsali); degere bakilmaz, sadece yazim yarisi.
+        const float pitch = 0.9f + 0.05f * static_cast<float>(threadIndex);
+        for (int i = 0; i < kBlipsPerThread; ++i) {
+            audio.playVoiceBlip("", pitch, 0.85f,
+                                Rowl::Audio::AudioChannelType::Voice);
+        }
+    };
+    std::vector<std::thread> workers;
+    workers.reserve(kThreads);
+    for (int t = 0; t < kThreads; ++t) {
+        workers.emplace_back(hammerBody, t);
+    }
+    for (auto& worker : workers) worker.join();
+    readersRun.store(false);
+    readerA.join();
+    readerB.join();
+
+    const uint32_t voice = audio.getVoiceBlipCount();
+    if (voice != kExpected) {
+        lockFail("Voice-Blip Concurrent Counts (#74): kayip sayim (voice=" +
+                 std::to_string(voice) + ", beklenen=" + std::to_string(kExpected) + ")");
+    }
+    TEST_PASS("Audio Voice-Blip Counts — N x M kayipsiz (voice==2000)");
+
+    const uint32_t synth = audio.getSynthBlipCount();
+    if (!(synth <= voice)) {
+        lockFail("Voice-Blip Concurrent Counts (#74): synth konvansiyonu bozuldu");
+    }
+    TEST_PASS("Audio Voice-Blip Counts — synth<=voice konvansiyonu");
+
+    if (audio.getDropCount() != 0u) {
+        lockFail("Voice-Blip Concurrent Counts (#74): drop sayaci karisti");
+    }
+    TEST_PASS("Audio Voice-Blip Counts — drop karismaz (0)");
+
+    audio.stopAll();
+    audio.shutdown();
+}

@@ -235,6 +235,43 @@ AudioEngine::~AudioEngine() {
     }
 }
 
+// Hedef #74: m_lastError "son tamamlanmış API çağrısı" snapshot'ıdır.
+// Tüm yazma/okuma bu kilit altındadır; okuyucu (host/C API) tutarlı bir
+// kopya alır, yazan thread'ler birbirini ezmez (ilk-hata-korunur).
+void AudioEngine::setLastError(const std::string& message) {
+    std::lock_guard<std::mutex> lock(m_stateMutex);
+    m_lastError = message;
+}
+
+void AudioEngine::setLastErrorIfEmpty(const std::string& message) {
+    std::lock_guard<std::mutex> lock(m_stateMutex);
+    if (m_lastError.empty()) m_lastError = message;
+}
+
+void AudioEngine::clearLastError() {
+    std::lock_guard<std::mutex> lock(m_stateMutex);
+    m_lastError.clear();
+}
+
+std::string AudioEngine::lastErrorSnapshot() const {
+    std::lock_guard<std::mutex> lock(m_stateMutex);
+    return m_lastError;
+}
+
+bool AudioEngine::lastErrorEmpty() const {
+    std::lock_guard<std::mutex> lock(m_stateMutex);
+    return m_lastError.empty();
+}
+
+std::string AudioEngine::getLastError() const {
+    return lastErrorSnapshot();
+}
+
+float AudioEngine::getLastVoiceBlipPitch() const {
+    std::lock_guard<std::mutex> lock(m_stateMutex);
+    return m_lastVoiceBlipPitch;
+}
+
 void AudioEngine::setVfs(Rowl::VFS::VFSManager* vfs) {
     if (vfs) {
         m_ownedVfs.reset();
@@ -264,7 +301,7 @@ bool AudioEngine::initialize() {
     m_currentBgmPath = "";
     // Bulgu #82: re-init hijyeni (pending eski yasamdan sizamaz).
     m_pendingBgmPath.clear();
-    m_lastError.clear();
+    clearLastError();
     m_isBgmPlaying = false;
     m_isVoicePlaying = false;
     m_deviceAvailable = false;
@@ -330,9 +367,9 @@ bool AudioEngine::initialize() {
         auto openDeviceStreamChecked = [&](const char* streamName) {
             SDL_AudioStream* stream = SDL_OpenAudioDeviceStream(
                 SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr, nullptr, nullptr);
-            if (!stream && m_lastError.empty()) {
-                m_lastError = std::string("Audio stream could not be opened (") +
-                              streamName + "): " + SDL_GetError();
+            if (!stream) {
+                setLastErrorIfEmpty(std::string("Audio stream could not be opened (") +
+                                    streamName + "): " + SDL_GetError());
             }
             return stream;
         };
@@ -427,10 +464,14 @@ bool AudioEngine::decodeAssetToFloatPcm(const std::string& assetPath,
         if (vfs().exists(candidate)) {
             if (hasOggExtension(candidate)) {
                 auto stream = vfs().openReadStream(candidate);
-                if (stream && decodeOggVorbis(*stream, spec, bytes, m_lastError)) {
+                // Hedef #74: decode çıktısı lokalde toplanır, snapshot'a tek
+                // noktada yazılır (m_lastError'e referansla yazmak yarışlıdır).
+                std::string oggError;
+                const bool oggOpened = static_cast<bool>(stream);
+                if (oggOpened && decodeOggVorbis(*stream, spec, bytes, oggError)) {
                     audioBuf = static_cast<Uint8*>(SDL_malloc(bytes.size()));
                     if (!audioBuf) {
-                        m_lastError = "Unable to allocate decoded Ogg/Vorbis PCM";
+                        setLastError("Unable to allocate decoded Ogg/Vorbis PCM");
                         // #87 transactional decode: saf helper state'e
                         // dokunmaz; predecessor + snapshot + intent aynen
                         // korunur (karar caller'indir).
@@ -441,8 +482,13 @@ bool AudioEngine::decodeAssetToFloatPcm(const std::string& assetPath,
                     loaded = true;
                     break;
                 }
-                if (m_lastError.empty()) m_lastError = "Ogg/Vorbis stream could not be decoded";
-                ROWL_LOG_WARN("[AudioEngine] " + m_lastError + ": " + assetPath);
+                if (oggOpened) {
+                    setLastError(oggError.empty() ? "Ogg/Vorbis stream could not be decoded"
+                                                  : oggError);
+                } else {
+                    setLastErrorIfEmpty("Ogg/Vorbis stream could not be decoded");
+                }
+                ROWL_LOG_WARN("[AudioEngine] " + lastErrorSnapshot() + ": " + assetPath);
                 // #87 transactional decode: saf helper state'e dokunmaz;
                 // predecessor + snapshot + intent aynen korunur (karar
                 // caller'indir).
@@ -453,8 +499,8 @@ bool AudioEngine::decodeAssetToFloatPcm(const std::string& assetPath,
                 if (bytes.size() > kMaxEncodedAudioBytes) {
                     // A5-tur1: 64 MiB reddi caller'a ulaşır (önce log-only idi,
                     // C API PlayAudio kördü).
-                    m_lastError = "Audio file exceeds the maximum accepted size: " + assetPath;
-                    ROWL_LOG_WARN("[AudioEngine] " + m_lastError);
+                    setLastError("Audio file exceeds the maximum accepted size: " + assetPath);
+                    ROWL_LOG_WARN("[AudioEngine] " + lastErrorSnapshot());
                     // #87 transactional decode: saf helper state'e dokunmaz.
                     return false;
                 }
@@ -470,8 +516,8 @@ bool AudioEngine::decodeAssetToFloatPcm(const std::string& assetPath,
     if (loaded && audioBuf && audioLen > 0) {
         if (audioLen > kMaxDecodedAudioBytes || audioLen > static_cast<Uint32>(INT_MAX)) {
             // A5-tur1: decode-cap reddi caller'a ulaşır (önce log-only idi).
-            m_lastError = "Decoded audio exceeds the maximum accepted size: " + assetPath;
-            ROWL_LOG_WARN("[AudioEngine] " + m_lastError);
+            setLastError("Decoded audio exceeds the maximum accepted size: " + assetPath);
+            ROWL_LOG_WARN("[AudioEngine] " + lastErrorSnapshot());
             SDL_free(audioBuf);
             // #87 transactional decode: saf helper state'e dokunmaz.
             return false;
@@ -485,8 +531,8 @@ bool AudioEngine::decodeAssetToFloatPcm(const std::string& assetPath,
         if (!SDL_ConvertAudioSamples(&spec, audioBuf, static_cast<int>(audioLen),
                                      &floatSpec, &floatBuffer, &floatLength) ||
             !floatBuffer || floatLength <= 0) {
-            m_lastError = "Unable to convert decoded audio to float PCM: " + std::string(SDL_GetError());
-            ROWL_LOG_ERROR("[AudioEngine] " + m_lastError);
+            setLastError("Unable to convert decoded audio to float PCM: " + std::string(SDL_GetError()));
+            ROWL_LOG_ERROR("[AudioEngine] " + lastErrorSnapshot());
             SDL_free(audioBuf);
             // #87 transactional decode: saf helper state'e dokunmaz.
             return false;
@@ -506,8 +552,8 @@ bool AudioEngine::decodeAssetToFloatPcm(const std::string& assetPath,
         SDL_free(audioBuf);
         return true;
     }
-    m_lastError = "Audio file could not be decoded (supported: WAV, OGG/Vorbis): " + assetPath;
-    ROWL_LOG_WARN("[AudioEngine] " + m_lastError);
+    setLastError("Audio file could not be decoded (supported: WAV, OGG/Vorbis): " + assetPath);
+    ROWL_LOG_WARN("[AudioEngine] " + lastErrorSnapshot());
     // #87 transactional decode: saf helper state'e dokunmaz.
     return false;
 }
@@ -529,7 +575,7 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
     // çağrısına aittir, o yüzden reset YOKTUR.
     if (!m_initialized || assetPath.empty()) return;
 
-    m_lastError.clear();
+    clearLastError();
 
     // ── Faz 5 Dilim 1: snapshot kanalı + Bgm header probe (RAM bloğu öncesi) ──
     // Karar operatörü long_audio_contract'tır (strict `>`); burada formül
@@ -587,8 +633,8 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
                 }
             }
             if (!bgmAssetKnown) {
-                m_lastError = "Audio file could not be decoded (supported: WAV, OGG/Vorbis): " + assetPath;
-                ROWL_LOG_WARN("[AudioEngine] " + m_lastError);
+                setLastError("Audio file could not be decoded (supported: WAV, OGG/Vorbis): " + assetPath);
+                ROWL_LOG_WARN("[AudioEngine] " + lastErrorSnapshot());
                 return;
             }
             // Sessiz yedek akış açmaz: önceki kaynak kapatılır, karar
@@ -638,10 +684,8 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
                               filter)) {
                 return;
             }
-            if (m_lastError.empty()) {
-                m_lastError = "Ogg/Vorbis stream could not be opened: " + assetPath;
-            }
-            ROWL_LOG_WARN("[AudioEngine] " + m_lastError);
+            setLastErrorIfEmpty("Ogg/Vorbis stream could not be opened: " + assetPath);
+            ROWL_LOG_WARN("[AudioEngine] " + lastErrorSnapshot());
             return;
         }
         // Over-threshold ama akışlanamayan konteyner (WAV): mevcut RAM yolu
@@ -667,10 +711,14 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
         if (vfs().exists(candidate)) {
             if (hasOggExtension(candidate)) {
                 auto stream = vfs().openReadStream(candidate);
-                if (stream && decodeOggVorbis(*stream, spec, bytes, m_lastError)) {
+                // Hedef #74: decode çıktısı lokalde toplanır, snapshot'a tek
+                // noktada yazılır (m_lastError'e referansla yazmak yarışlıdır).
+                std::string oggError;
+                const bool oggOpened = static_cast<bool>(stream);
+                if (oggOpened && decodeOggVorbis(*stream, spec, bytes, oggError)) {
                     audioBuf = static_cast<Uint8*>(SDL_malloc(bytes.size()));
                     if (!audioBuf) {
-                        m_lastError = "Unable to allocate decoded Ogg/Vorbis PCM";
+                        setLastError("Unable to allocate decoded Ogg/Vorbis PCM");
                         // #87: fail yolu yalniz hata yazar; predecessor +
                         // snapshot + intent aynen korunur.
                         return;
@@ -680,8 +728,13 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
                     loaded = true;
                     break;
                 }
-                if (m_lastError.empty()) m_lastError = "Ogg/Vorbis stream could not be decoded";
-                ROWL_LOG_WARN("[AudioEngine] " + m_lastError + ": " + assetPath);
+                if (oggOpened) {
+                    setLastError(oggError.empty() ? "Ogg/Vorbis stream could not be decoded"
+                                                  : oggError);
+                } else {
+                    setLastErrorIfEmpty("Ogg/Vorbis stream could not be decoded");
+                }
+                ROWL_LOG_WARN("[AudioEngine] " + lastErrorSnapshot() + ": " + assetPath);
                 // #87: fail yolu yalniz hata yazar; predecessor + snapshot +
                 // intent aynen korunur.
                 return;
@@ -691,8 +744,8 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
                 if (bytes.size() > kMaxEncodedAudioBytes) {
                     // A5-tur1: 64 MiB reddi caller'a ulaşır (önce log-only idi,
                     // C API PlayAudio kördü).
-                    m_lastError = "Audio file exceeds the maximum accepted size: " + assetPath;
-                    ROWL_LOG_WARN("[AudioEngine] " + m_lastError);
+                    setLastError("Audio file exceeds the maximum accepted size: " + assetPath);
+                    ROWL_LOG_WARN("[AudioEngine] " + lastErrorSnapshot());
                     // #87: fail yolu yalniz hata yazar; predecessor aynen korunur.
                     return;
                 }
@@ -708,8 +761,8 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
     if (loaded && audioBuf && audioLen > 0) {
         if (audioLen > kMaxDecodedAudioBytes || audioLen > static_cast<Uint32>(INT_MAX)) {
             // A5-tur1: decode-cap reddi caller'a ulaşır (önce log-only idi).
-            m_lastError = "Decoded audio exceeds the maximum accepted size: " + assetPath;
-            ROWL_LOG_WARN("[AudioEngine] " + m_lastError);
+            setLastError("Decoded audio exceeds the maximum accepted size: " + assetPath);
+            ROWL_LOG_WARN("[AudioEngine] " + lastErrorSnapshot());
             SDL_free(audioBuf);
             // #87: fail yolu yalniz hata yazar; predecessor aynen korunur.
             return;
@@ -723,8 +776,8 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
         if (!SDL_ConvertAudioSamples(&spec, audioBuf, static_cast<int>(audioLen),
                                      &floatSpec, &floatBuffer, &floatLength) ||
             !floatBuffer || floatLength <= 0) {
-            m_lastError = "Unable to convert decoded audio to float PCM: " + std::string(SDL_GetError());
-            ROWL_LOG_ERROR("[AudioEngine] " + m_lastError);
+            setLastError("Unable to convert decoded audio to float PCM: " + std::string(SDL_GetError()));
+            ROWL_LOG_ERROR("[AudioEngine] " + lastErrorSnapshot());
             SDL_free(audioBuf);
             // #87: fail yolu yalniz hata yazar; predecessor aynen korunur.
             return;
@@ -811,7 +864,7 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
             }
             if (!queueOk) {
                 ROWL_LOG_ERROR("[AudioEngine] Failed to queue decoded audio: " + std::string(SDL_GetError()));
-                m_lastError = "Unable to queue decoded audio: " + std::string(SDL_GetError());
+                setLastError("Unable to queue decoded audio: " + std::string(SDL_GetError()));
                 SDL_free(floatBuffer);
                 SDL_free(audioBuf);
                 // #87 transactional commit: decode OK + queue-fail'de kaynak
@@ -883,8 +936,8 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
                 // A5-tur1: resume fail'inde queue başarılı olsa da ses çıkmaz —
                 // gerçek başarısızlıktır, caller'a ulaşır.
                 if (!SDL_ResumeAudioStreamDevice(targetStream)) {
-                    m_lastError = "Unable to resume audio stream: " + std::string(SDL_GetError());
-                    ROWL_LOG_WARN("[AudioEngine] " + m_lastError);
+                    setLastError("Unable to resume audio stream: " + std::string(SDL_GetError()));
+                    ROWL_LOG_WARN("[AudioEngine] " + lastErrorSnapshot());
                 }
             }
             ROWL_LOG_INFO("[AudioEngine] Playback started: " + assetPath + " (" + std::to_string(floatLength) + " PCM bytes)");
@@ -935,8 +988,8 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
         SDL_free(floatBuffer);
         SDL_free(audioBuf);
     } else {
-        m_lastError = "Audio file could not be decoded (supported: WAV, OGG/Vorbis): " + assetPath;
-        ROWL_LOG_WARN("[AudioEngine] " + m_lastError);
+        setLastError("Audio file could not be decoded (supported: WAV, OGG/Vorbis): " + assetPath);
+        ROWL_LOG_WARN("[AudioEngine] " + lastErrorSnapshot());
         // #87: final-miss fail yolu yalniz hata yazar; predecessor +
         // snapshot + intent aynen korunur.
     }
@@ -945,9 +998,9 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
 void AudioEngine::stopBgm() {
     // A5-tur1: stop snapshot'ı — önceki hata korunmaz, bu çağrının sonucu
     // kayda geçer (state sıfırlama aynen; davranış değişmez).
-    m_lastError.clear();
+    clearLastError();
     auto noteStopFailure = [&](const std::string& message) {
-        if (m_lastError.empty()) m_lastError = message;
+        setLastErrorIfEmpty(message);
         ROWL_LOG_WARN("[AudioEngine] " + message);
     };
     if (m_bgmStream) {
@@ -989,7 +1042,7 @@ void AudioEngine::stopAll() {
     // A5-tur1: stopBgm snapshot'ı korunur — havuz/bed/UI fail'leri ilk-hatayı
     // ezmez (noteStopFailure guard'lıdır); state sıfırlama aynen.
     auto noteStopFailure = [&](const std::string& message) {
-        if (m_lastError.empty()) m_lastError = message;
+        setLastErrorIfEmpty(message);
         ROWL_LOG_WARN("[AudioEngine] " + message);
     };
     // Faz 5 Dilim 2: havuzdaki TÜM sesler + BedB + Ui durdurulur.
@@ -1346,7 +1399,7 @@ void AudioEngine::handleDeviceEvent(uint32_t sdlEventType) {
 bool AudioEngine::reopenDeviceStreams() {
     if (!m_initialized) return false;
     // A5-tur1: reopen snapshot'ı — bu çağrının sonucu kayda geçer.
-    m_lastError.clear();
+    clearLastError();
     // Playback intent (BGM path/loop buffer, volumes, filter, ducking) lives
     // in member state, so only the device-bound streams are rebuilt. The BGM
     // loop feed in update() re-queues m_bgmData into a fresh stream on its
@@ -1368,8 +1421,8 @@ bool AudioEngine::reopenDeviceStreams() {
     m_deviceAvailable = false;
 
     if (!m_audioLeaseHeld && !Rowl::Platform::SdlSubsystemLease::acquire(SDL_INIT_AUDIO)) {
-        m_lastError = "Audio subsystem unavailable while reopening device streams";
-        ROWL_LOG_WARN("[AudioEngine] " + m_lastError);
+        setLastError("Audio subsystem unavailable while reopening device streams");
+        ROWL_LOG_WARN("[AudioEngine] " + lastErrorSnapshot());
         return false;
     }
     m_audioLeaseHeld = true;
@@ -1378,9 +1431,9 @@ bool AudioEngine::reopenDeviceStreams() {
     auto reopenStreamChecked = [&](const char* streamName) {
         SDL_AudioStream* stream = SDL_OpenAudioDeviceStream(
             SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr, nullptr, nullptr);
-        if (!stream && m_lastError.empty()) {
-            m_lastError = std::string("Audio stream could not be reopened (") +
-                          streamName + "): " + SDL_GetError();
+        if (!stream) {
+            setLastErrorIfEmpty(std::string("Audio stream could not be reopened (") +
+                                streamName + "): " + SDL_GetError());
         }
         return stream;
     };
@@ -1424,14 +1477,13 @@ bool AudioEngine::reopenDeviceStreams() {
                     // A5-tur1: "rebuild başarılı, intent korundu" denirken geri
                     // kuyruklama düşmüş olabilir — kayda geçer.
                     if (!SDL_PutAudioStreamData(m_bgmStream, restore.data(),
-                                               static_cast<int>(validFloats * sizeof(float))) &&
-                        m_lastError.empty()) {
-                        m_lastError = "BGM ring restore re-queue failed: " + std::string(SDL_GetError());
+                                               static_cast<int>(validFloats * sizeof(float)))) {
+                        setLastErrorIfEmpty("BGM ring restore re-queue failed: " + std::string(SDL_GetError()));
                     }
                 }
             }
-            if (!m_outputSuspended && !SDL_ResumeAudioStreamDevice(m_bgmStream) && m_lastError.empty()) {
-                m_lastError = "Reopened BGM stream resume failed: " + std::string(SDL_GetError());
+            if (!m_outputSuspended && !SDL_ResumeAudioStreamDevice(m_bgmStream)) {
+                setLastErrorIfEmpty("Reopened BGM stream resume failed: " + std::string(SDL_GetError()));
             }
         }
         // Faz 5 Dilim 2: havuz sesleri kalan baytlarıyla geri kuyruğa girer
@@ -1458,9 +1510,8 @@ bool AudioEngine::reopenDeviceStreams() {
                 if (SDL_SetAudioStreamFormat(poolStream, &voiceSpec, nullptr)) {
                     // A5-tur1: havuz geri-kuyruklama fail'i kayda geçer.
                     if (!SDL_PutAudioStreamData(poolStream, voice.pcm.data() + off * sizeof(float),
-                                               static_cast<int>(remBytes)) &&
-                        m_lastError.empty()) {
-                        m_lastError = "SFX pool voice re-queue failed: " + std::string(SDL_GetError());
+                                               static_cast<int>(remBytes))) {
+                        setLastErrorIfEmpty("SFX pool voice re-queue failed: " + std::string(SDL_GetError()));
                     }
                 }
             }
@@ -1479,9 +1530,8 @@ bool AudioEngine::reopenDeviceStreams() {
             SDL_SetAudioStreamGain(bedStream, ambienceBedGain(bed));
             if (SDL_SetAudioStreamFormat(bedStream, &bedSpec, nullptr)) {
                 // A5-tur1: bed geri-kuyruklama fail'i kayda geçer.
-                if (!SDL_PutAudioStreamData(bedStream, data.data(), static_cast<int>(data.size())) &&
-                    m_lastError.empty()) {
-                    m_lastError = "Ambience bed re-queue failed: " + std::string(SDL_GetError());
+                if (!SDL_PutAudioStreamData(bedStream, data.data(), static_cast<int>(data.size()))) {
+                    setLastErrorIfEmpty("Ambience bed re-queue failed: " + std::string(SDL_GetError()));
                 }
             }
         }
@@ -1493,13 +1543,13 @@ bool AudioEngine::reopenDeviceStreams() {
         // queue duserse predecessor + snapshot + niyet korunur, m_lastError
         // dolar, pending tutulur (retry bir sonraki donuste; #87 sozlesmesi).
         if (wasOutageReturn && !pendingBgm.empty()) {
-            const std::string reopenError = m_lastError;
+            const std::string reopenError = lastErrorSnapshot();
             playAudio(pendingBgm, AudioChannelType::Bgm);
-            if (m_lastError.empty()) {
+            if (lastErrorEmpty()) {
                 // Basari: commit siteleri pending'i tuketti. Onceki rebuild
                 // hatasi varsa ilk-hata-korunur (A5-tur1); basarili Put
                 // kirlenmemelidir.
-                if (!reopenError.empty()) m_lastError = reopenError;
+                if (!reopenError.empty()) setLastError(reopenError);
             }
         }
         if (m_outputSuspended) setOutputSuspended(true, true);
@@ -1508,7 +1558,7 @@ bool AudioEngine::reopenDeviceStreams() {
     }
     ROWL_LOG_WARN("[AudioEngine] Output stream rebuild failed: " + std::string(SDL_GetError()) +
                   " — keeping silent fallback with playback intent.");
-    m_lastError = "Audio output stream rebuild failed: " + std::string(SDL_GetError());
+    setLastError("Audio output stream rebuild failed: " + std::string(SDL_GetError()));
     if (m_bgmStream) { SDL_DestroyAudioStream(m_bgmStream); m_bgmStream = nullptr; }
     if (m_transitionBgmStream) { SDL_DestroyAudioStream(m_transitionBgmStream); m_transitionBgmStream = nullptr; }
     if (m_voiceStream) { SDL_DestroyAudioStream(m_voiceStream); m_voiceStream = nullptr; }
@@ -1532,14 +1582,14 @@ void AudioEngine::setOutputSuspended(bool suspended, bool force) {
         // A5-tur1: suspend/resume ıskalanırsa flag ile cihaz diverge olur —
         // kayda geçer (ilk hata korunur; davranış değişmez).
         if (suspended) {
-            if (!SDL_PauseAudioStreamDevice(stream) && m_lastError.empty()) {
-                m_lastError = "Unable to suspend audio stream: " + std::string(SDL_GetError());
-                ROWL_LOG_WARN("[AudioEngine] " + m_lastError);
+            if (!SDL_PauseAudioStreamDevice(stream)) {
+                setLastErrorIfEmpty("Unable to suspend audio stream: " + std::string(SDL_GetError()));
+                ROWL_LOG_WARN("[AudioEngine] " + lastErrorSnapshot());
             }
         } else {
-            if (!SDL_ResumeAudioStreamDevice(stream) && m_lastError.empty()) {
-                m_lastError = "Unable to resume audio stream: " + std::string(SDL_GetError());
-                ROWL_LOG_WARN("[AudioEngine] " + m_lastError);
+            if (!SDL_ResumeAudioStreamDevice(stream)) {
+                setLastErrorIfEmpty("Unable to resume audio stream: " + std::string(SDL_GetError()));
+                ROWL_LOG_WARN("[AudioEngine] " + lastErrorSnapshot());
             }
         }
     }
@@ -1570,6 +1620,10 @@ void AudioEngine::applyChannelGains() {
 }
 
 void AudioEngine::updateTelemetry(float deltaSeconds) {
+    // Hedef #74: telemetri yazımları blip deflect'i ve host okuyucularıyla
+    // aynı kilit altındadır (son-yazan-kazanır; değer determinizmi yoktur,
+    // yırtık okuma/yazma yoktur).
+    std::lock_guard<std::mutex> lock(m_stateMutex);
     constexpr float kSampleRate = 44100.0f;
     constexpr float kDecayRate = 2.8f; // ~350ms smooth analog VU decay
     const float dt = (std::isfinite(deltaSeconds) && deltaSeconds > 0.0f) ? std::min(deltaSeconds, 0.1f) : (1.0f / 60.0f);
@@ -1865,6 +1919,7 @@ void AudioEngine::updateTelemetry(float deltaSeconds) {
 }
 
 float AudioEngine::getChannelPeak(int channelType, int channelIndex) const {
+    std::lock_guard<std::mutex> lock(m_stateMutex);
     const ChannelTelemetry* tel = nullptr;
     switch (channelType) {
         case 0: tel = &m_telemetryBgm; break;
@@ -1879,6 +1934,7 @@ float AudioEngine::getChannelPeak(int channelType, int channelIndex) const {
 }
 
 float AudioEngine::getChannelRms(int channelType, int channelIndex) const {
+    std::lock_guard<std::mutex> lock(m_stateMutex);
     const ChannelTelemetry* tel = nullptr;
     switch (channelType) {
         case 0: tel = &m_telemetryBgm; break;
@@ -1894,6 +1950,7 @@ float AudioEngine::getChannelRms(int channelType, int channelIndex) const {
 
 void AudioEngine::getSpectrumBands(float* outBands, int bandCount) const {
     if (!outBands || bandCount <= 0) return;
+    std::lock_guard<std::mutex> lock(m_stateMutex);
     for (int i = 0; i < bandCount; ++i) {
         outBands[i] = (i < 4) ? m_spectrumBands[i] : 0.0f;
     }
@@ -1901,6 +1958,11 @@ void AudioEngine::getSpectrumBands(float* outBands, int bandCount) const {
 
 void AudioEngine::playVoiceBlip(const std::string& assetPath, float pitch, float volume, AudioChannelType channel) {
     if (!m_initialized) return;
+    // Hedef #74: blip gövdesi tek kilit altında serileşir — sayaç artışı,
+    // pitch/telemetri deflect'i, SDL kuyruk adımları ve synth sayımı host
+    // okuyucularıyla (ve diğer blip thread'leriyle) yarışmaz. Sayaçların
+    // kendisi de atomiktir (kilitsiz exact-count okuma için).
+    std::lock_guard<std::mutex> lock(m_stateMutex);
 
     if (!std::isfinite(pitch) || pitch <= 0.01f) pitch = 1.0f;
     if (!std::isfinite(volume)) volume = 0.85f;
@@ -2166,14 +2228,14 @@ bool AudioEngine::openBgmStream(const std::string& candidate,
     auto source = std::make_unique<OggStreamSource>();
     std::string error;
     if (!source->open(vfs(), candidate, error)) {
-        m_lastError = error.empty()
-            ? "Ogg/Vorbis stream could not be opened: " + assetPath : error;
+        setLastError(error.empty()
+            ? "Ogg/Vorbis stream could not be opened: " + assetPath : error);
         return false;
     }
     const uint32_t rate = source->sampleRateHz();
     const uint32_t channels = source->channelCount();
     if (rate == 0 || channels == 0 || channels > 8) {
-        m_lastError = "Ogg/Vorbis stream has an unsupported audio format: " + assetPath;
+        setLastError("Ogg/Vorbis stream has an unsupported audio format: " + assetPath);
         return false;
     }
     // Ring 4x4096 frame sabit üst bant: heap'te bir kez ayrılır, akışlar
@@ -2336,8 +2398,8 @@ void AudioEngine::pumpBgmStream() {
             const bool midStreamCorrupt =
                 !srcError.empty() && srcError.find("corrupt") != std::string::npos;
             if (midStreamCorrupt) {
-                m_lastError = srcError;
-                ROWL_LOG_WARN("[AudioEngine] " + m_lastError);
+                setLastError(srcError);
+                ROWL_LOG_WARN("[AudioEngine] " + lastErrorSnapshot());
                 stopBgm();
                 break;
             }
@@ -2427,11 +2489,9 @@ void AudioEngine::ensureSfxPoolStreams() {
             m_sfxPoolStreams[i] = SDL_OpenAudioDeviceStream(
                 SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr, nullptr, nullptr);
             if (!m_sfxPoolStreams[i]) {
-                if (m_lastError.empty()) {
-                    m_lastError = "SFX pool audio stream could not be opened: " +
-                                  std::string(SDL_GetError());
-                }
-                ROWL_LOG_WARN("[AudioEngine] " + m_lastError);
+                setLastErrorIfEmpty("SFX pool audio stream could not be opened: " +
+                                    std::string(SDL_GetError()));
+                ROWL_LOG_WARN("[AudioEngine] " + lastErrorSnapshot());
             } else if (!SDL_SetAudioStreamGain(m_sfxPoolStreams[i], gain)) {
                 warnAudioOnce("SFX pool stream gain not applied: " + std::string(SDL_GetError()));
             }
@@ -2486,7 +2546,7 @@ void AudioEngine::queueAmbienceBed(int bed, const SDL_AudioSpec& floatSpec,
     if (!isValidAmbienceBed(bed) || !floatBytes || byteCount == 0) return;
     // A5-tur1: queue snapshot'ı — decode başarılıysa buraya temiz gelinir;
     // önceki çağrıdan stale kalmamalıdır.
-    m_lastError.clear();
+    clearLastError();
     std::vector<uint8_t>& data = (bed == 0) ? m_ambienceData : m_ambienceDataB;
     size_t& offset = (bed == 0) ? m_ambienceSampleOffset : m_ambienceSampleOffsetB;
     bool& playing = (bed == 0) ? m_isAmbiencePlaying : m_isAmbiencePlayingB;
@@ -2508,13 +2568,16 @@ void AudioEngine::queueAmbienceBed(int bed, const SDL_AudioSpec& floatSpec,
         }
         if (SDL_SetAudioStreamFormat(stream, &floatSpec, nullptr) &&
             SDL_PutAudioStreamData(stream, floatBytes, static_cast<int>(byteCount))) {
-            if (!m_outputSuspended && !SDL_ResumeAudioStreamDevice(stream) && m_lastError.empty()) {
-                m_lastError = "Ambience bed stream resume failed: " + std::string(SDL_GetError());
-                ROWL_LOG_WARN("[AudioEngine] " + m_lastError);
+            if (!m_outputSuspended && !SDL_ResumeAudioStreamDevice(stream) &&
+                lastErrorEmpty()) {
+                setLastErrorIfEmpty("Ambience bed stream resume failed: " +
+                                    std::string(SDL_GetError()));
+                ROWL_LOG_WARN("[AudioEngine] " + lastErrorSnapshot());
             }
-        } else if (m_lastError.empty()) {
-            m_lastError = "Ambience bed audio could not be queued: " + std::string(SDL_GetError());
-            ROWL_LOG_WARN("[AudioEngine] " + m_lastError);
+        } else if (lastErrorEmpty()) {
+            setLastErrorIfEmpty("Ambience bed audio could not be queued: " +
+                                std::string(SDL_GetError()));
+            ROWL_LOG_WARN("[AudioEngine] " + lastErrorSnapshot());
         }
     }
 }

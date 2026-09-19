@@ -1,10 +1,12 @@
 #pragma once
 
+#include <atomic>
 #include <string>
 #include <vector>
 #include <array>
 #include <cstdint>
 #include <memory>
+#include <mutex>
 #include <unordered_map>
 
 #include "rowl/audio/audio_streaming.hpp"
@@ -114,7 +116,9 @@ public:
     bool isBgmPlaying() const { return m_isBgmPlaying; }
     bool isVoicePlaying() const { return m_isVoicePlaying; }
     bool isBgmTransitionActive() const { return m_bgmTransitionActive; }
-    const std::string& getLastError() const { return m_lastError; }
+    // Hedef #74: snapshot semantiği — çağrı anındaki değerin kopyası döner
+    // (referans YOK; host thread okurken writer ezemez).
+    std::string getLastError() const;
 
     // ── Faz 5 Dilim 1: OGG streaming çekirdek gözlemlenebilirliği ──
     // 1 = o anki BGM kararı stream, 0 = memory / unknown / yok (fail-closed).
@@ -186,7 +190,7 @@ public:
     // A5-tur3: kuyruğa konamayan chunk'lar (update/pump Put-fail).
     uint64_t getDropCount() const { return m_dropCount; }
     void resetVoiceBlipCount() { m_voiceBlipCount = 0; m_synthBlipCount = 0; }
-    float getLastVoiceBlipPitch() const { return m_lastVoiceBlipPitch; }
+    float getLastVoiceBlipPitch() const;
 
     // #77 test-only latch: son applyDspToFloatPcm çıkışının max|örnek|
     // değeri (NaN-yapışkan: tek bir NaN çıkış mandalı NaN yapar, böylece
@@ -216,9 +220,22 @@ public:
     void shutdown();
 
 private:
-    uint32_t m_voiceBlipCount = 0;
-    uint32_t m_synthBlipCount = 0;
-    uint64_t m_dropCount = 0;
+    // Hedef #74: typewriter-blip yazımları ile host telemetri/hata okumaları
+    // arasındaki data-race kilidi. Sayaçlar atomiktir (N×M hammer kayıpsız);
+    // m_lastError snapshot semantiğiyle m_stateMutex altında okunur/yazılır
+    // (cpp'deki warn-once statik kilidi üye durumunu korumaz); blip gövdesi,
+    // pitch ve telemetri deflect'i de aynı kilitle serileşir.
+    std::atomic<uint32_t> m_voiceBlipCount{0};
+    std::atomic<uint32_t> m_synthBlipCount{0};
+    std::atomic<uint64_t> m_dropCount{0};
+    // Blip yolunda yazılan bayrak da atomiktir (hammera katılır).
+    std::atomic<bool> m_isVoicePlaying{false};
+    mutable std::mutex m_stateMutex;
+    void setLastError(const std::string& message);
+    void setLastErrorIfEmpty(const std::string& message);
+    void clearLastError();
+    std::string lastErrorSnapshot() const;
+    bool lastErrorEmpty() const;
     float m_lastVoiceBlipPitch = 1.0f;
     float m_masterVolume = 1.0f;
     float m_bgmVolume = 1.0f;
@@ -250,7 +267,7 @@ private:
     std::vector<uint8_t> m_bgmData;
     std::vector<uint8_t> m_transitionBgmData;
     bool m_isBgmPlaying = false;
-    bool m_isVoicePlaying = false;
+    // m_isVoicePlaying atomik bayrak olarak yukarıda (Hedef #74 bloğunda).
     SDL_AudioStream* m_bgmStream = nullptr;
     SDL_AudioStream* m_transitionBgmStream = nullptr;
     SDL_AudioStream* m_voiceStream = nullptr;
