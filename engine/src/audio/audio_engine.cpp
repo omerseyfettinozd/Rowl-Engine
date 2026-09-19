@@ -121,6 +121,15 @@ void applyDspToFloatPcm(float* samples, size_t sampleCount, int channels,
         return;
     }
 
+    // D5 (#77): güvenilmeyen PCM tek noktada sanitize edilir. IEEE-float
+    // WAV'deki tek NaN/Inf örnek, Telephone dalında lowPass durumunu,
+    // CaveReverb dalında gecikme hattını kalıcı zehirlerdi (clamp NaN'i
+    // geçirir; Underwater dalında clamp hiç yoktu). Filtreye girmeden
+    // önce sonlu-olmayan örnekler sessizliğe çekilir.
+    for (size_t i = 0; i < sampleCount; ++i) {
+        if (!std::isfinite(samples[i])) samples[i] = 0.0f;
+    }
+
     const size_t channelCount = static_cast<size_t>(channels);
     std::vector<float> lowPass(channelCount, 0.0f);
     std::vector<float> highPass(channelCount, 0.0f);
@@ -141,7 +150,9 @@ void applyDspToFloatPcm(float* samples, size_t sampleCount, int channels,
             }
             case DSPFilterType::UnderwaterLowPass:
                 lowPass[channel] += kUnderwaterLowPassAlpha * (input - lowPass[channel]);
-                samples[sample] = lowPass[channel];
+                // D5 (#77): diğer dallardaki [-1,1] clamp'i burada da —
+                // sanitize'e rağmen dal çıktısı sınırlı kalır.
+                samples[sample] = std::clamp(lowPass[channel], -1.0f, 1.0f);
                 break;
             case DSPFilterType::CaveReverb: {
                 // A short feedback tap is intentionally bounded below one second,
