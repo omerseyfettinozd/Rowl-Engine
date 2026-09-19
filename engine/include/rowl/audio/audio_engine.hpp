@@ -207,6 +207,11 @@ public:
     //    izlenir (derinlik 1 ile hedef deterministiktir).
     void testFailNextQueue() { m_testFailQueueNext = true; }
     size_t testQueuedBytes(AudioChannelType channel) const;
+    // Bulgu #82 test-only kanca (davranissiz state anahtari; uretim kodu bunu
+    // asla kullanmamalidir, emsal: testFailNextQueue): cihaz outage'unu
+    // deterministik kurar. Donus uretim yoluyla (reopenDeviceStreams)
+    // gerceklesir; kanca donusu simulate etmez, yalniz outage'u acar.
+    void testSetDeviceAvailable(bool available) { m_deviceAvailable = available; }
 
     void shutdown();
 
@@ -230,6 +235,15 @@ private:
 
     std::string m_currentBgmPath = "";
     std::string m_lastError;
+    // Bulgu #82: outage pending-BGM niyeti. Sessiz-yedekte (!m_deviceAvailable)
+    // BGM play niyeti yazar ama PCM verisini getiremez (bayat m_bgmData + yeni
+    // m_currentBgmPath ayrismasi). Commit noktasi reopenDeviceStreams basari
+    // yoludur (gercek-donus gecisinde tam playAudio taahhudu: routing karari
+    // dahil memory-RAM kuyrugu + olu-stream kaynagi tek-noktada). Basarili her
+    // BGM commit'i ve explicit stopBgm pending'i tuketir. Fail-closed: decode/
+    // queue duserse predecessor + snapshot + niyet korunur, m_lastError dolar,
+    // pending tutulur (retry bir sonraki donuste; #87 sozlesmesi).
+    std::string m_pendingBgmPath = "";
     // Bulgu #81 test-only: testFailNextQueue bayrağı (bir sonraki kuyruk
     // denemesinde tüketilir).
     bool m_testFailQueueNext = false;

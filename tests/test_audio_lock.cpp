@@ -1149,3 +1149,489 @@ void test_audio_lock_bgm_cap_fail_closed() {
     audio.stopAll();
     audio.shutdown();
 }
+
+/**
+ * test_audio_lock.cpp eklentisi — Outage BGM Intent-Data Sync (#82) KİLİDİ.
+ *
+ * KILIT (mutant oldurur): cihaz kesintisinde playAudio sessiz-yedek dalı
+ * niyeti yazar (path=B, playing=true) ama PCM verisini getirmez — m_bgmData
+ * bayat A'da kalır, kaynak ölüdür (closeBgmStream). Dönüşte update()
+ * loop-feed bayat A'yı taze akışa kuyruklar: duyulan=A, path=B ayrışması.
+ * Düzeltme (pending-path + dönüş-decode, temizle DEĞİL): outage dalı
+ * m_pendingBgmPath yazar; reopenDeviceStreams gerçek-dönüş geçişinde tam
+ * playAudio taahhudunu çalıştırır (niyetle veri aynı parça olur, routing
+ * kararı korunur — memory ve ölü-kaynaklı streamed köşesi tek-noktada).
+ * Temizle-mutantında (m_bgmData.clear, pending YOK) qb==0 düşer; commit-
+ * kapısı mutantında (reopen'da pending-decode YOK) qb==qa düşer → exit(1).
+ *
+ * Gözlem (deterministik; timing-assert/sleep/poll YOK; bu dosyanın deseni
+ * aynen: TEST_SECTION/TEST_PASS + hata=exit(1) + setOutputSuspended(true)
+ * dondurma + testQueuedBytes tam-eşitlik + cihazsızda açık SKIP):
+ *  - Fixture: iki farklı-boy float WAV — A=64x0.5f, B=256x0.25f (4x boy
+ *    farkı; bayat/taze ayrımı içerik-getter'sız tam-eşitlikle yapılır).
+ *  - Sıra: suspend(önce) → A çal → qa → testSetDeviceAvailable(false)
+ *    → B çal → niyet assert (path=B + playing) → reopenDeviceStreams
+ *    (dönüş=üretim yolu) → update() → qb.
+ *  - İddia: qb == q_controlB (aynı VFS'te ikinci engine, aynı suspend-
+ *    sırasıyla B) VE qb != qa. Suspend play'lerden ÖNCE kurulur: qa/qb/
+ *    consumption yarışı yoktur.
+ *  - Streamed köşe (ayrı adım, aynı pending-decode): over-threshold OGG
+ *    A → outage → OGG B → reopen → update → isStreaming + path + snapshot
+ *    asset B. Pre-fix'te kaynak ölüdür (isStreaming false) → exit(1).
+ *  - C API void-sessizliği kapsam-dışı gözlemdir (değişiklik yok).
+ */
+namespace {
+
+void setupOutageProject(Rowl::VFS::VFSManager& vfs, Rowl::Audio::AudioEngine& audio) {
+    if (!audio.initialize() || !audio.isInitialized()) {
+        lockFail("Audio Outage BGM Sync (#82): audio init failed");
+    }
+    const auto root = std::filesystem::temp_directory_path() / "rowl_audio_outage_bgm_project";
+    const auto dir = root / "Assets" / "audio";
+    std::filesystem::create_directories(dir);
+    // 4x boy farkı: bayat/taze ayrımı tam-eşitlikle (içerik-getter'sız).
+    writeBytes(dir / "o_bgm_a.wav",
+               makeFloatWavMono44100(std::vector<float>(64, 0.5f)));
+    writeBytes(dir / "o_bgm_b.wav",
+               makeFloatWavMono44100(std::vector<float>(256, 0.25f)));
+    // Streamed köşe: aynı over-threshold OGG iki ayrı isimle (header probe +
+    // decoder gerçektir; miss-guard fixture tekniği aynen).
+    const auto streamed =
+        missGuardPatchGranuleForStream(missGuardLongToneOggBytes(),
+                                       static_cast<uint64_t>(1000000000));
+    writeBytes(dir / "o_stream_a.ogg", streamed);
+    writeBytes(dir / "o_stream_b.ogg", streamed);
+    vfs.remountProject(root.string());
+}
+
+} // namespace
+
+void test_audio_lock_outage_bgm_intent_data_sync() {
+    TEST_SECTION("Audio Outage BGM Intent-Data Sync (#82)");
+
+    Rowl::VFS::VFSManager vfs;
+    Rowl::Audio::AudioEngine audio(&vfs);
+    setupOutageProject(vfs, audio);
+    if (!requireAudioDeviceOrSkip(audio, "Audio Outage BGM Sync")) return;
+
+    // Tüketim play'lerden ÖNCE donar: qa/qb karşılaştırması tam-eşitliktir.
+    audio.setOutputSuspended(true);
+
+    // Kurulum: A çalar (cihazlı), kuyruk snapshot'ı qa.
+    audio.playAudio("audio/o_bgm_a.wav", Rowl::Audio::AudioChannelType::Bgm);
+    const size_t qa = audio.testQueuedBytes(Rowl::Audio::AudioChannelType::Bgm);
+    if (qa == 0) {
+        lockFail("kurulum kuyrugu bos — fixture cihaza kuyruklanamadi");
+    }
+    if (!audio.isBgmPlaying() || audio.getCurrentBgmPath() != "audio/o_bgm_a.wav") {
+        lockFail("kurulum niyeti yanlis");
+    }
+    TEST_PASS("Audio Outage Sync — kurulum (A calar, qa>0)");
+
+    // Outage: niyet B'ye geçer (sessiz-yedek dalı), veri getirilemez.
+    audio.testSetDeviceAvailable(false);
+    audio.playAudio("audio/o_bgm_b.wav", Rowl::Audio::AudioChannelType::Bgm);
+    if (audio.getCurrentBgmPath() != "audio/o_bgm_b.wav" || !audio.isBgmPlaying()) {
+        lockFail("outage niyeti kurulamadi (path=B + playing)");
+    }
+    TEST_PASS("Audio Outage Sync — outage niyeti B'de (determinizm korunur)");
+
+    // Dönüş: üretim yoluyla (reopen = gerçek-dönüş geçişi; kanca dönüşü
+    // simulate etmez, yalnız outage'u açar).
+    if (!audio.reopenDeviceStreams()) {
+        lockFail("donus rebuild basarisiz: " + audio.getLastError());
+    }
+    if (!audio.isAudioDeviceAvailable()) {
+        lockFail("donus cihazi acilmadi");
+    }
+    audio.update();
+    const size_t qb = audio.testQueuedBytes(Rowl::Audio::AudioChannelType::Bgm);
+
+    // Kontrol: aynı VFS'te ikinci engine, aynı suspend-sırasıyla B.
+    Rowl::VFS::VFSManager vfsControl;
+    Rowl::Audio::AudioEngine control(&vfsControl);
+    if (!control.initialize() || !control.isInitialized()) {
+        lockFail("kontrol engine init failed");
+    }
+    vfsControl.remountProject((std::filesystem::temp_directory_path() /
+                               "rowl_audio_outage_bgm_project")
+                                  .string());
+    if (!control.isAudioDeviceAvailable()) {
+        lockFail("kontrol engine cihazsiz — ana kosu cihazliydi (tuhaf durum)");
+    }
+    control.setOutputSuspended(true);
+    control.playAudio("audio/o_bgm_b.wav", Rowl::Audio::AudioChannelType::Bgm);
+    const size_t qControlB = control.testQueuedBytes(Rowl::Audio::AudioChannelType::Bgm);
+    if (qControlB == 0) {
+        lockFail("kontrol kuyrugu bos — fixture cihaza kuyruklanamadi");
+    }
+    if (qControlB == qa) {
+        lockFail("fixture ayirimi yok (kontrol-B == qa) — 4x boy farki calismadi");
+    }
+    if (qb != qControlB) {
+        lockFail("donus verisi B degil (qb != kontrol-B)");
+    }
+    if (qb == qa) {
+        lockFail("bayat A geri-kuyruklandi (niyet-veri ayrismasi)");
+    }
+    if (audio.getCurrentBgmPath() != "audio/o_bgm_b.wav" || !audio.isBgmPlaying()) {
+        lockFail("donus niyeti bozuldu");
+    }
+    TEST_PASS("Audio Outage Sync — donus verisi B (qb==kontrol, qb!=qa)");
+
+    // Streamed köşe: over-threshold OGG A → outage → OGG B → reopen → update.
+    audio.playAudio("audio/o_stream_a.ogg", Rowl::Audio::AudioChannelType::Bgm);
+    audio.update();
+    if (!audio.isStreaming()) {
+        lockFail("stream kurulumu acilmadi (isStreaming false)");
+    }
+    audio.testSetDeviceAvailable(false);
+    audio.playAudio("audio/o_stream_b.ogg", Rowl::Audio::AudioChannelType::Bgm);
+    if (audio.getCurrentBgmPath() != "audio/o_stream_b.ogg" || !audio.isBgmPlaying()) {
+        lockFail("stream outage niyeti kurulamadi");
+    }
+    if (!audio.reopenDeviceStreams()) {
+        lockFail("stream donus rebuild basarisiz: " + audio.getLastError());
+    }
+    audio.update();
+    if (!audio.isStreaming()) {
+        lockFail("donus stream kaynagi olu (niyet-veri ayrismasi)");
+    }
+    if (audio.getCurrentBgmPath() != "audio/o_stream_b.ogg") {
+        lockFail("donus stream path yalani: '" + audio.getCurrentBgmPath() + "'");
+    }
+    if (audio.streamInfoJson().find("\"asset\":\"audio/o_stream_b.ogg\"") == std::string::npos) {
+        lockFail("donus stream snapshot yalani: " + audio.streamInfoJson());
+    }
+    TEST_PASS("Audio Outage Sync — streamed kose donuste B'ye kavusur");
+
+    audio.setOutputSuspended(false);
+    audio.stopAll();
+    audio.shutdown();
+    control.stopAll();
+    control.shutdown();
+}
+
+/**
+ * R1 GENISLETMESI — Outage BGM pending-tuketim kilidi (#82, 2. tur).
+ *
+ * Yukaridaki #82 KILIT blogu ve testi DEGISTIRILMEDEN korunur; bu blok ve
+ * asagidaki iki test SADECE kapsama ekler. R1 deligi: basari-yolu pending
+ * tuketimleri kilit disindaydi — niyet veriye kavustuktan sonra pending
+ * bosalmazsa bir sonraki niyetsiz donus bayat niyeti diriltir (2. kayip:
+ * duyulan bayat parca, niyet guncel parca) veya fail-yolu pending'i
+ * dusururse retry hakki olur.
+ *
+ * Kapsanan tuketim siteleri (engine/src/audio/audio_engine.cpp):
+ *  - :860 RAM-cihaz basari komiti (davranissal kilit: niyetsiz-donus probu
+ *    bayat B'yi diriltmeye calisir; silinirse qb2==qB duser).
+ *  - :2201 stream taahhudu komiti (davranissal kilit: streamed cift-niyet
+ *    + commit-yolu icrasi; suspend-altinda ring/pompa gozlenemediginden
+ *    clear-satirinin TEK BASINA dusmesi gozlem-disi kalir — sozlesme-ayni
+ *    site, teftisle pinlidir).
+ *  - :899 akissiz-yedek basari komiti: cihaz-var + akis-yok durumu public
+ *    API ile kurulamaz (initialize/reopen all-or-nothing acar/yikar; kanca
+ *    donusu simulate etmez, yalniz outage'u acar) — ayni tuketim
+ *    sozlesmesi, teftisle pinlidir.
+ *  - reopen fail-closed: decode/queue duserse pending tutulur, retry bir
+ *    sonraki gercek-donus gecisinde commitler (davranissal kilit:
+ *    fail-varyanti; kosulsuz-clear mutantinda retry qb==qa duser).
+ *
+ * Desen aynen: TEST_SECTION/TEST_PASS + hata=exit(1) + setOutputSuspended
+ * dondurma + testQueuedBytes tam-esitlik + cihazsizda acik SKIP; timing
+ * assert/sleep/poll YOKTUR.
+ */
+namespace {
+
+void setupR1OutageProject(Rowl::VFS::VFSManager& vfs, Rowl::Audio::AudioEngine& audio) {
+    if (!audio.initialize() || !audio.isInitialized()) {
+        lockFail("Audio Outage R1: audio init failed");
+    }
+    const auto root = std::filesystem::temp_directory_path() / "rowl_audio_outage_r1_project";
+    const auto dir = root / "Assets" / "audio";
+    std::filesystem::create_directories(dir);
+    // Uc ayrik boy: bayat/taze/dirilen ayrimi tam-esitlikle (icerik-getter'siz).
+    writeBytes(dir / "r1_bgm_a.wav",
+               makeFloatWavMono44100(std::vector<float>(64, 0.5f)));
+    writeBytes(dir / "r1_bgm_b.wav",
+               makeFloatWavMono44100(std::vector<float>(256, 0.25f)));
+    writeBytes(dir / "r1_bgm_c.wav",
+               makeFloatWavMono44100(std::vector<float>(128, 0.75f)));
+    // Streamed kose: ayni over-threshold OGG uc ayri isimle (ayrim path +
+    // snapshot asset ile; header probe + decoder gercektir).
+    const auto streamed =
+        missGuardPatchGranuleForStream(missGuardLongToneOggBytes(),
+                                       static_cast<uint64_t>(1000000000));
+    writeBytes(dir / "r1_stream_a.ogg", streamed);
+    writeBytes(dir / "r1_stream_b.ogg", streamed);
+    writeBytes(dir / "r1_stream_c.ogg", streamed);
+    vfs.remountProject(root.string());
+}
+
+} // namespace
+
+void test_audio_lock_outage_pending_no_stale_replay() {
+    TEST_SECTION("Audio Outage Pending No-Stale-Replay (R1)");
+
+    Rowl::VFS::VFSManager vfs;
+    Rowl::Audio::AudioEngine audio(&vfs);
+    setupR1OutageProject(vfs, audio);
+    if (!requireAudioDeviceOrSkip(audio, "Audio Outage R1 No-Stale-Replay")) return;
+
+    // Tüketim tum play'lerden ONCE donar: karsilastirmalar tam-esitliktir.
+    audio.setOutputSuspended(true);
+
+    // Kontrol: ayni VFS'te ikinci engine, ayni suspend-sirasiyla B sonra C
+    // (replace semantigi: sirayla okunan qB/qC gecerlidir).
+    Rowl::VFS::VFSManager vfsControl;
+    Rowl::Audio::AudioEngine control(&vfsControl);
+    if (!control.initialize() || !control.isInitialized()) {
+        lockFail("R1 kontrol engine init failed");
+    }
+    vfsControl.remountProject((std::filesystem::temp_directory_path() /
+                               "rowl_audio_outage_r1_project")
+                                  .string());
+    if (!control.isAudioDeviceAvailable()) {
+        lockFail("R1 kontrol engine cihazsiz — ana kosu cihazliydi (tuhaf durum)");
+    }
+    control.setOutputSuspended(true);
+
+    // Kurulum: A calar (cihazli), B/C kontrolde (ayrisma kontrolu).
+    audio.playAudio("audio/r1_bgm_a.wav", Rowl::Audio::AudioChannelType::Bgm);
+    const size_t qa = audio.testQueuedBytes(Rowl::Audio::AudioChannelType::Bgm);
+    if (qa == 0) {
+        lockFail("R1 kurulum kuyrugu bos — fixture cihaza kuyruklanamadi");
+    }
+    control.playAudio("audio/r1_bgm_b.wav", Rowl::Audio::AudioChannelType::Bgm);
+    const size_t qB = control.testQueuedBytes(Rowl::Audio::AudioChannelType::Bgm);
+    control.playAudio("audio/r1_bgm_c.wav", Rowl::Audio::AudioChannelType::Bgm);
+    const size_t qC = control.testQueuedBytes(Rowl::Audio::AudioChannelType::Bgm);
+    if (qB == 0 || qC == 0) {
+        lockFail("R1 kontrol kuyrugu bos — fixture cihaza kuyruklanamadi");
+    }
+    if (qB == qa || qC == qa || qC == qB) {
+        lockFail("R1 fixture ayirimi yok (A/B/C kuyruklari cakisti)");
+    }
+    TEST_PASS("Audio Outage R1 — kurulum (A/B/C ayrik, qa/qB/qC>0)");
+
+    // Baz (#82 1. kayip aynen): outage B -> reopen -> B verisi.
+    audio.testSetDeviceAvailable(false);
+    audio.playAudio("audio/r1_bgm_b.wav", Rowl::Audio::AudioChannelType::Bgm);
+    if (audio.getCurrentBgmPath() != "audio/r1_bgm_b.wav" || !audio.isBgmPlaying()) {
+        lockFail("R1 outage niyeti kurulamadi (path=B + playing)");
+    }
+    if (!audio.reopenDeviceStreams()) {
+        lockFail("R1 donus rebuild basarisiz: " + audio.getLastError());
+    }
+    audio.update();
+    const size_t qb = audio.testQueuedBytes(Rowl::Audio::AudioChannelType::Bgm);
+    if (qb != qB) {
+        lockFail("R1 donus verisi B degil (qb != qB)");
+    }
+    if (qb == qa) {
+        lockFail("R1 bayat A geri-kuyruklandi (niyet-veri ayrismasi)");
+    }
+    TEST_PASS("Audio Outage R1 — baz: donus verisi B (qb==qB, qb!=qa)");
+
+    // C cihazda basariyla calar (basari-yolu tuketim :860 calisir).
+    audio.playAudio("audio/r1_bgm_c.wav", Rowl::Audio::AudioChannelType::Bgm);
+    const size_t qc = audio.testQueuedBytes(Rowl::Audio::AudioChannelType::Bgm);
+    if (qc != qC) {
+        lockFail("R1 C taahhudu bozuldu (qc != qC)");
+    }
+    TEST_PASS("Audio Outage R1 — C cihazda (qc==qC)");
+
+    // NIYETSIZ ikinci donus: yeni play YOK, outage + reopen. Bayat pending
+    // yasasaydi B dirilirdi (2. kayip: duyulan=B, niyet=C); tuketim
+    // saglamsa C yasar. :860-sil mutantinda qb2==qB duser -> exit(1).
+    audio.testSetDeviceAvailable(false);
+    if (!audio.reopenDeviceStreams()) {
+        lockFail("R1 niyetsiz donus rebuild basarisiz: " + audio.getLastError());
+    }
+    audio.update();
+    const size_t qb2 = audio.testQueuedBytes(Rowl::Audio::AudioChannelType::Bgm);
+    if (qb2 != qC) {
+        lockFail("R1 niyetsiz donuste C yasamadi (bayat pending dirildi?)");
+    }
+    if (qb2 == qB) {
+        lockFail("R1 niyetsiz donuste bayat B dirildi (2. kayip)");
+    }
+    if (audio.getCurrentBgmPath() != "audio/r1_bgm_c.wav" || !audio.isBgmPlaying()) {
+        lockFail("R1 niyetsiz donus niyeti bozuldu (path=C + playing)");
+    }
+    TEST_PASS("Audio Outage R1 — niyetsiz donus C'yi korur (RAM tuketim)");
+
+    // Cift-niyet tek-donus: outage'da B sonra C; kazanan SON niyet C olmalidir
+    // (ilk-kazanir mutantinda qc3==qB duser -> exit(1)).
+    audio.testSetDeviceAvailable(false);
+    audio.playAudio("audio/r1_bgm_b.wav", Rowl::Audio::AudioChannelType::Bgm);
+    audio.playAudio("audio/r1_bgm_c.wav", Rowl::Audio::AudioChannelType::Bgm);
+    if (audio.getCurrentBgmPath() != "audio/r1_bgm_c.wav" || !audio.isBgmPlaying()) {
+        lockFail("R1 cift-niyet kurulamadi (path=C + playing)");
+    }
+    if (!audio.reopenDeviceStreams()) {
+        lockFail("R1 cift-niyet donus rebuild basarisiz: " + audio.getLastError());
+    }
+    audio.update();
+    const size_t qc3 = audio.testQueuedBytes(Rowl::Audio::AudioChannelType::Bgm);
+    if (qc3 != qC) {
+        lockFail("R1 cift-niyette son niyet C kazanmadi (qc3 != qC)");
+    }
+    if (qc3 == qB) {
+        lockFail("R1 cift-niyette ilk niyet B yapisti (uzerine-yazma kaybi)");
+    }
+    TEST_PASS("Audio Outage R1 — cift-niyet tek-donus C'yi commitler");
+
+    // Streamed kose: A -> outage B -> reopen (stream taahhudu :2201 tuketir).
+    audio.playAudio("audio/r1_stream_a.ogg", Rowl::Audio::AudioChannelType::Bgm);
+    audio.update();
+    if (!audio.isStreaming()) {
+        lockFail("R1 stream kurulumu acilmadi (isStreaming false)");
+    }
+    audio.testSetDeviceAvailable(false);
+    audio.playAudio("audio/r1_stream_b.ogg", Rowl::Audio::AudioChannelType::Bgm);
+    if (audio.getCurrentBgmPath() != "audio/r1_stream_b.ogg" || !audio.isBgmPlaying()) {
+        lockFail("R1 stream outage niyeti kurulamadi");
+    }
+    if (!audio.reopenDeviceStreams()) {
+        lockFail("R1 stream donus rebuild basarisiz: " + audio.getLastError());
+    }
+    audio.update();
+    if (!audio.isStreaming()) {
+        lockFail("R1 stream donuste kaynak olu (niyet-veri ayrismasi)");
+    }
+    if (audio.getCurrentBgmPath() != "audio/r1_stream_b.ogg") {
+        lockFail("R1 stream donus path yalani: '" + audio.getCurrentBgmPath() + "'");
+    }
+    if (audio.streamInfoJson().find("\"asset\":\"audio/r1_stream_b.ogg\"") == std::string::npos) {
+        lockFail("R1 stream donus snapshot yalani: " + audio.streamInfoJson());
+    }
+    TEST_PASS("Audio Outage R1 — streamed donus B'yi commitler");
+
+    // Streamed cift-niyet: outage'da B sonra C; donus C'yi acmalidir.
+    audio.testSetDeviceAvailable(false);
+    audio.playAudio("audio/r1_stream_b.ogg", Rowl::Audio::AudioChannelType::Bgm);
+    audio.playAudio("audio/r1_stream_c.ogg", Rowl::Audio::AudioChannelType::Bgm);
+    if (!audio.reopenDeviceStreams()) {
+        lockFail("R1 stream cift-niyet rebuild basarisiz: " + audio.getLastError());
+    }
+    audio.update();
+    if (!audio.isStreaming()) {
+        lockFail("R1 stream cift-niyet kaynagi olu");
+    }
+    if (audio.getCurrentBgmPath() != "audio/r1_stream_c.ogg") {
+        lockFail("R1 stream cift-niyette B yapisti: '" + audio.getCurrentBgmPath() + "'");
+    }
+    if (audio.streamInfoJson().find("\"asset\":\"audio/r1_stream_c.ogg\"") == std::string::npos) {
+        lockFail("R1 stream cift-niyet snapshot yalani: " + audio.streamInfoJson());
+    }
+    TEST_PASS("Audio Outage R1 — streamed cift-niyet C'yi commitler");
+
+    // Streamed niyetsiz donus: yenisiz outage + reopen durumu korur.
+    audio.testSetDeviceAvailable(false);
+    if (!audio.reopenDeviceStreams()) {
+        lockFail("R1 stream niyetsiz rebuild basarisiz: " + audio.getLastError());
+    }
+    audio.update();
+    if (!audio.isStreaming()) {
+        lockFail("R1 stream niyetsiz donuste kaynak oldu");
+    }
+    if (audio.getCurrentBgmPath() != "audio/r1_stream_c.ogg") {
+        lockFail("R1 stream niyetsiz donus path yalani: '" + audio.getCurrentBgmPath() + "'");
+    }
+    TEST_PASS("Audio Outage R1 — streamed niyetsiz donus durumu korur");
+
+    audio.setOutputSuspended(false);
+    audio.stopAll();
+    audio.shutdown();
+    control.stopAll();
+    control.shutdown();
+}
+
+void test_audio_lock_outage_pending_fail_preserved() {
+    TEST_SECTION("Audio Outage Pending Fail-Preserved (R1)");
+
+    Rowl::VFS::VFSManager vfs;
+    Rowl::Audio::AudioEngine audio(&vfs);
+    setupR1OutageProject(vfs, audio);
+    if (!requireAudioDeviceOrSkip(audio, "Audio Outage R1 Fail-Preserved")) return;
+
+    // Tüketim play'lerden ONCE donar: karsilastirmalar tam-esitliktir.
+    audio.setOutputSuspended(true);
+
+    // Kurulum: A calar (cihazli), kuyruk snapshot'i qa.
+    audio.playAudio("audio/r1_bgm_a.wav", Rowl::Audio::AudioChannelType::Bgm);
+    const size_t qa = audio.testQueuedBytes(Rowl::Audio::AudioChannelType::Bgm);
+    if (qa == 0) {
+        lockFail("R1 fail kurulum kuyrugu bos — fixture cihaza kuyruklanamadi");
+    }
+
+    // Kontrol: ayni VFS'te ikinci engine, ayni suspend-sirasiyla B.
+    Rowl::VFS::VFSManager vfsControl;
+    Rowl::Audio::AudioEngine control(&vfsControl);
+    if (!control.initialize() || !control.isInitialized()) {
+        lockFail("R1 fail kontrol engine init failed");
+    }
+    vfsControl.remountProject((std::filesystem::temp_directory_path() /
+                               "rowl_audio_outage_r1_project")
+                                  .string());
+    if (!control.isAudioDeviceAvailable()) {
+        lockFail("R1 fail kontrol engine cihazsiz — ana kosu cihazliydi (tuhaf durum)");
+    }
+    control.setOutputSuspended(true);
+    control.playAudio("audio/r1_bgm_b.wav", Rowl::Audio::AudioChannelType::Bgm);
+    const size_t qB = control.testQueuedBytes(Rowl::Audio::AudioChannelType::Bgm);
+    if (qB == 0) {
+        lockFail("R1 fail kontrol kuyrugu bos — fixture cihaza kuyruklanamadi");
+    }
+    if (qB == qa) {
+        lockFail("R1 fail fixture ayirimi yok (kontrol-B == qa)");
+    }
+    TEST_PASS("Audio Outage R1 fail — kurulum (A calar, kontrol-B ayrik)");
+
+    // Outage niyeti B; commit kancayla dusurulur (fail-closed: kanca bayragi
+    // prova-oncesi tuketilir, SDL'ye dokunulmaz, fail yolu birebir isler).
+    audio.testSetDeviceAvailable(false);
+    audio.playAudio("audio/r1_bgm_b.wav", Rowl::Audio::AudioChannelType::Bgm);
+    audio.testFailNextQueue();
+    if (!audio.reopenDeviceStreams()) {
+        lockFail("R1 fail rebuild dondu (commit-fail rebuild'i oldurmemeli)");
+    }
+    if (audio.getLastError().empty()) {
+        lockFail("R1 fail commit dusmedi (kanca ateslenmedi?)");
+    }
+    if (audio.getCurrentBgmPath() != "audio/r1_bgm_b.wav" || !audio.isBgmPlaying()) {
+        lockFail("R1 fail niyet korunmadi (path=B + playing)");
+    }
+    audio.update();
+    const size_t qbFail = audio.testQueuedBytes(Rowl::Audio::AudioChannelType::Bgm);
+    if (qbFail != qa) {
+        lockFail("R1 fail kismi-commit (predecessor A korunmadi)");
+    }
+    TEST_PASS("Audio Outage R1 fail — niyet + predecessor korunur, pending tutulur");
+
+    // Retry: bir sonraki GERCEK-donus gecisi B'yi commitler (pending dusmemistir;
+    // kosulsuz-clear mutantinda retry bayat A'da kalir -> exit(1)).
+    audio.testSetDeviceAvailable(false);
+    if (!audio.reopenDeviceStreams()) {
+        lockFail("R1 retry rebuild basarisiz: " + audio.getLastError());
+    }
+    audio.update();
+    const size_t qb = audio.testQueuedBytes(Rowl::Audio::AudioChannelType::Bgm);
+    if (qb != qB) {
+        lockFail("R1 retry B'yi commitlemedi (pending dustu?)");
+    }
+    if (qb == qa) {
+        lockFail("R1 retry bayat A'da kaldi (pending kaybi)");
+    }
+    if (audio.getCurrentBgmPath() != "audio/r1_bgm_b.wav" || !audio.isBgmPlaying()) {
+        lockFail("R1 retry niyeti bozuldu");
+    }
+    TEST_PASS("Audio Outage R1 fail — retry pending'i commitler (qb==qB)");
+
+    audio.setOutputSuspended(false);
+    audio.stopAll();
+    audio.shutdown();
+    control.stopAll();
+    control.shutdown();
+}

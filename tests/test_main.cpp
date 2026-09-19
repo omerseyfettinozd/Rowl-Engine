@@ -103,6 +103,9 @@ int main(int argc, char* argv[]) {
     test_audio_lock_queue_fail_atomic();
     test_audio_lock_bgm_transactional();
     test_audio_lock_bgm_cap_fail_closed();
+    test_audio_lock_outage_bgm_intent_data_sync();
+    test_audio_lock_outage_pending_no_stale_replay();
+    test_audio_lock_outage_pending_fail_preserved();
     test_lua_sandbox();
     test_mobile_input();
     test_platform_host();

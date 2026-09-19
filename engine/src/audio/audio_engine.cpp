@@ -262,6 +262,8 @@ bool AudioEngine::initialize() {
     m_activeFilter = DSPFilterType::Normal;
     m_isDuckingActive = false;
     m_currentBgmPath = "";
+    // Bulgu #82: re-init hijyeni (pending eski yasamdan sizamaz).
+    m_pendingBgmPath.clear();
     m_lastError.clear();
     m_isBgmPlaying = false;
     m_isVoicePlaying = false;
@@ -595,6 +597,9 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
             m_currentBgmPath = assetPath;
             m_isBgmPlaying = true;
             m_bgmTransitionActive = false;
+            // Bulgu #82: niyetle ayni parca pending'e yazilir (veri donuste
+            // getirilir; commit reopenDeviceStreams gercek-donus gecisidir).
+            m_pendingBgmPath = assetPath;
             if (probedForBgm) {
                 m_streamInfo = probedInfo;
                 if (m_streamInfo.mode == StreamMode::Stream) {
@@ -851,6 +856,8 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
                 m_currentBgmPath = assetPath;
                 m_isBgmPlaying = true;
                 m_bgmSampleOffset = 0;
+                // Bulgu #82: niyet veriye kavustu — pending tuketilir.
+                m_pendingBgmPath.clear();
             } else if (channel == AudioChannelType::Ambience) {
                 // Faz 5 Dilim 1: Ambience loop RAM (stream-ready iskelet;
                 // bu dilimde tam decode + loop besleme).
@@ -888,6 +895,8 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
                 m_currentBgmPath = assetPath;
                 m_isBgmPlaying = true;
                 m_bgmSampleOffset = 0;
+                // Bulgu #82: akissiz yedekte de niyet veriye kavustu.
+                m_pendingBgmPath.clear();
                 // Faz 5 Dilim 1: akışsız yedekte RAM snapshot'ı.
                 closeBgmStream();
                 if (probedForBgm) {
@@ -965,6 +974,8 @@ void AudioEngine::stopBgm() {
     closeBgmStream();
     resetStreamInfoNoBgm();
     m_currentBgmPath = "";
+    // Bulgu #82: explicit stop niyeti dusurur — pending de tuketilir.
+    m_pendingBgmPath.clear();
     m_bgmData.clear();
     m_transitionBgmData.clear();
     m_bgmTransitionActive = false;
@@ -1349,6 +1360,11 @@ bool AudioEngine::reopenDeviceStreams() {
     if (m_ambienceStream) { SDL_DestroyAudioStream(m_ambienceStream); m_ambienceStream = nullptr; }
     if (m_ambienceStreamB) { SDL_DestroyAudioStream(m_ambienceStreamB); m_ambienceStreamB = nullptr; }
     if (m_uiStream) { SDL_DestroyAudioStream(m_uiStream); m_uiStream = nullptr; }
+    // Bulgu #82: gercek-donus gecisi (outage -> available). Siradan
+    // REMOVED/FORMAT_CHANGED rebuild'inde giris-available'dir; pending zaten
+    // ancak outage dalinda kurulur (cift-guvenlik: bayrak + transition).
+    const bool wasOutageReturn = !m_deviceAvailable;
+    const std::string pendingBgm = m_pendingBgmPath;
     m_deviceAvailable = false;
 
     if (!m_audioLeaseHeld && !Rowl::Platform::SdlSubsystemLease::acquire(SDL_INIT_AUDIO)) {
@@ -1467,6 +1483,23 @@ bool AudioEngine::reopenDeviceStreams() {
                     m_lastError.empty()) {
                     m_lastError = "Ambience bed re-queue failed: " + std::string(SDL_GetError());
                 }
+            }
+        }
+        // Bulgu #82 pending-decode commit: outage'da yazilan niyet (yeni parca)
+        // donuste veriye kavusur. Tam playAudio taahhudu calisir (probe +
+        // routing karari dahil): memory-RAM kuyrugu ve kaynagi olmus streamed
+        // kosesi tek-noktada kapanir; ayri decode+queue ikizlenmesi yoktur
+        // (kontrol-engine ile bayt-ayni sonuc garantisi). Fail-closed: decode/
+        // queue duserse predecessor + snapshot + niyet korunur, m_lastError
+        // dolar, pending tutulur (retry bir sonraki donuste; #87 sozlesmesi).
+        if (wasOutageReturn && !pendingBgm.empty()) {
+            const std::string reopenError = m_lastError;
+            playAudio(pendingBgm, AudioChannelType::Bgm);
+            if (m_lastError.empty()) {
+                // Basari: commit siteleri pending'i tuketti. Onceki rebuild
+                // hatasi varsa ilk-hata-korunur (A5-tur1); basarili Put
+                // kirlenmemelidir.
+                if (!reopenError.empty()) m_lastError = reopenError;
             }
         }
         if (m_outputSuspended) setOutputSuspended(true, true);
@@ -2164,6 +2197,8 @@ bool AudioEngine::openBgmStream(const std::string& candidate,
     m_isBgmPlaying = true;
     m_bgmSampleOffset = 0;
     m_isBgmStreamed = true;
+    // Bulgu #82: stream taahhudu de niyeti veriye kavusturur.
+    m_pendingBgmPath.clear();
     if (m_bgmStream) {
         // A5-tur1: hazırlık fail'leri kayda geçer (warn-only; return true
         // aynen — başarı+kirlilik olmamalıdır).
