@@ -77,6 +77,14 @@ std::filesystem::path platformUserDataRoot() {
     if (auto home = linuxHomeDirectory(); !home.empty()) {
         return home / ".local" / "share" / kApplicationDirectory;
     }
+#elif defined(__APPLE__)
+    // B7 (#36): macOS fell into the #else below (XDG-style ~/.local/share) —
+    // the platform convention is ~/Library/Application Support. Sandboxed
+    // (Mac App Store) builds relocate this automatically; the non-sandboxed
+    // path here matches Apple's File System Programming Guide.
+    if (auto home = absoluteEnvironmentPath("HOME"); !home.empty()) {
+        return home / "Library" / "Application Support" / kApplicationDirectory;
+    }
 #else
     if (auto home = absoluteEnvironmentPath("HOME"); !home.empty()) {
         return home / ".local" / "share" / kApplicationDirectory;

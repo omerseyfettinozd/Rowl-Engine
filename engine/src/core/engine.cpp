@@ -1322,6 +1322,12 @@ bool Engine::parseStoryGraphJson(const std::string& jsonContent) {
         }
         updateSceneFromComponents(componentsJson);
     } else {
+        // B7 (#38): the legacy branch skipped the script teardown the
+        // component branch performs (status-clear + deactivate above) — a
+        // lingering entity script kept running headless against the new
+        // graph's globals. Mirror the teardown before painting the scene.
+        m_scriptRuntimeStatuses.clear();
+        deactivateScripts();
         updateActiveScene(
             startNode.speaker, startNode.dialogue, startNode.background,
             startNode.backgroundX, startNode.backgroundY,
@@ -2145,6 +2151,10 @@ void Engine::shutdown() {
     ROWL_LOG_INFO("Shutting down Rowl Engine...");
 
     deactivateScripts();
+    // B7 (#38): deactivation stops the scripts, but the stale statuses
+    // survived shutdown — a host reusing the Engine object (or reading status
+    // between shutdown and re-init) saw the previous session's script state.
+    m_scriptRuntimeStatuses.clear();
 
     if (m_scene) {
         m_scene->clear();
@@ -2766,7 +2776,17 @@ bool Engine::evaluateCondition(const std::string& conditionExpr) {
     }
     bool ok = m_luaSandbox->evaluateCondition(conditionExpr);
     if (!ok && !m_luaSandbox->getLastError().empty()) {
-        m_context->setError(RuntimeErrorCode::ScriptSyntaxError,
+        // B7 (#27): the old single branch reported ScriptSyntaxError for EVERY
+        // failure — including instruction-limit poison and runtime throws — so
+        // hosts could never distinguish a typo from a dead session. The
+        // sandbox tags the phase; the wrapper maps it to the existing codes
+        // (no new RuntimeErrorCode — no C ABI / C# churn).
+        const auto phase = m_luaSandbox->getLastConditionPhase();
+        const RuntimeErrorCode code =
+            (phase == Rowl::Scripting::LuaSandbox::ConditionPhase::Syntax)
+                ? RuntimeErrorCode::ScriptSyntaxError
+                : RuntimeErrorCode::ScriptRuntimeError;
+        m_context->setError(code,
                             m_luaSandbox->getLastError(),
                             "evaluate_condition", conditionExpr);
         return false;

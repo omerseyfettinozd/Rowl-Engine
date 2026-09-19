@@ -1,7 +1,9 @@
 #pragma once
 
+#include <chrono>
 #include <string>
 #include <memory>
+#include <mutex>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -28,7 +30,7 @@ public:
     /// Removes a loaded component module and releases its Lua registry entry.
     bool unloadModule(const std::string& moduleId);
     void clearModules();
-    std::size_t getModuleCount() const { return m_modules.size(); }
+    std::size_t getModuleCount() const;
     /// Calls a global lifecycle callback when it exists. Missing callbacks are successful no-ops.
     bool callOptionalFunction(const std::string& functionName, double deltaTime = 0.0);
     void shutdown();
@@ -45,6 +47,13 @@ public:
     /// authority for an operation's success.
     const std::string& getLastError() const { return m_lastError; }
 
+    /// B7 (#27): which failure phase produced the current m_lastError.
+    /// Syntax = load-time (ROWL_SCRIPT_SYNTAX_ERROR), Runtime = everything
+    /// else (ROWL_SCRIPT_RUNTIME_ERROR). Diagnostic-only alongside
+    /// getLastError(); the engine wrapper maps it to ResultCode.
+    enum class ConditionPhase { None, Syntax, Runtime };
+    ConditionPhase getLastConditionPhase() const { return m_lastConditionPhase; }
+
     const std::unordered_map<std::string, std::string>& getAllVariables() const { return m_scriptVariables; }
     void clearVariables();
 
@@ -54,6 +63,18 @@ public:
     /// hook when a script trips the limit; entry points refuse further runs
     /// until clearVariables() resets the session. Internal (hook access).
     void tripInstructionLimit() { m_limitTripped = true; }
+    /// B7 (#31): records one instruction-limit trip, returns the new
+    /// consecutive-trip streak. The hook's own counter reset writes single
+    /// trips back, so only a tight catch-and-respin tightens the streak.
+    /// Internal (hook access).
+    unsigned noteInstructionTrip();
+    /// B7: poisons the session with a reason (fail-closed until
+    /// clearVariables()). Internal (hook access).
+    void poisonSession(const std::string& reason);
+    /// B7 (#24): polls the armed wall-clock deadline. Returns false (with
+    /// outError set) when the in-flight callback exceeded its budget.
+    /// Disarmed deadline = always true. Internal (hook access).
+    bool checkWallDeadline(std::string& outError);
 
     /// #28: RAII recovery scope. Post-pcall recovery (repairGlobals,
     /// bindEngineApis, sweepModuleEnvRowl, sweepStrayGlobals,
@@ -105,18 +126,59 @@ private:
     /// variable map, and the H24 poison are preserved — repair is not a
     /// session boundary. Code-load paths only, never per-frame/condition.
     void repairGlobals();
+    /// B7 (#29/#39): full environment quarantine shared by repairGlobals()
+    /// and repairStringMetatable(): restores the string metatable, reinstalls
+    /// the setmetatable guard, and sweeps the extended shadow list. Runs under
+    /// RecoveryScope — never throws out.
+    void quarantineEnvironment();
+    /// B7 (#35): restores the string metatable's __index to the pristine
+    /// string library. A hostile `("").upper = f` shadows stdlib string
+    /// methods process-wide; repairGlobals() replaces the table but the
+    /// metatable survives, so it is restored explicitly here.
+    void repairStringMetatable();
+    /// B7 (#32): installs the __gc-rejecting setmetatable wrapper over the
+    /// pristine base setmetatable. Idempotent; called by repairGlobals() and
+    /// clearVariables(). Always runs under RecoveryScope.
+    void installSetmetatableGuard();
+    /// B7 (#24): fail-closed callback gates. checkCallbackAllowed() refuses
+    /// poisoned sessions without consuming wall-clock time; armWallDeadline()
+    /// stamps a 5s deadline before a script callback runs; checkWallDeadline()
+    /// is polled by the instruction hook so a pcall-trapped infinite loop
+    /// (B7 #31: uncatchable-error is impossible in single-threaded Lua)
+    /// still terminates on wall time.
+    bool checkCallbackAllowed(const char* what);
+    void armWallDeadline();
 
     lua_State* m_luaState = nullptr;
+    // B7 (#34/#37): every public entry point locks this. The Lua C API is
+    // single-threaded-unsafe; the recursive form lets host-side nested calls
+    // (e.g. setVariable from a rowl.var bridge callback) re-enter safely.
+    mutable std::recursive_mutex m_mutex;
     std::unordered_map<std::string, std::string> m_scriptVariables;
     std::unordered_map<std::string, int> m_modules;
     std::unordered_set<std::string> m_initialGlobals;
     std::string m_lastError;
+    // B7 (#27): failure phase for the current m_lastError (None = no failure).
+    ConditionPhase m_lastConditionPhase = ConditionPhase::None;
     bool m_initialized = false;
     // A1: instruction-limit poison (H24) + allocation quota (H25) state.
     bool m_limitTripped = false;
     std::size_t m_bytesAllocated = 0;
     // #28: true while post-pcall recovery runs (see RecoveryScope).
     bool m_inRecovery = false;
+    // B7 (#22): host-side variable-map budget. Both a hostile script stuffing
+    // the map via rowl.var.set and a chatty host caller feed this counter;
+    // setVariable() rejects past the cap instead of growing unboundedly.
+    std::size_t m_variablesBytes = 0;
+    // B7 (#31): consecutive trip streak. A single trip is written back by the
+    // hook's own counter reset; only a tight catch-and-respin tightens this.
+    // Hitting the streak cap poisons the session (fail-closed); the message
+    // rotates per streak so a finite-catch script records the escalation.
+    unsigned m_tripStreak = 0;
+    // B7 (#24): monotonic wall-clock deadline for the in-flight callback.
+    // Default-constructed (disarmed) until armWallDeadline() stamps it.
+    std::chrono::steady_clock::time_point m_entryDeadline{};
+    bool m_deadlineArmed = false;
 };
 
 } // namespace Rowl::Scripting

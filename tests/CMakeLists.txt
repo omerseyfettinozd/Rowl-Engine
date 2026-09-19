@@ -44,6 +44,7 @@ add_executable(rowl_tests
     test_font_hardening.cpp
     test_handle_hygiene.cpp
     test_numeric_guards.cpp
+    test_lua_hardening.cpp
     test_single_engine_image.cpp
     test_demo_first_light.cpp
     test_demo_second_signal.cpp
