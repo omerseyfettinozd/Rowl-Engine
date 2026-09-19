@@ -152,14 +152,23 @@ void test_lua_sandbox() {
     // OOM escapes through C++ frames (crash); post-fix the call fails closed
     // on the recovery reserve and the sandbox stays usable after a session
     // boundary frees the pinned object.
-    if (!lua.executeString("t28 = {} for i = 1, 63 do t28[#t28+1] = string.rep('q', 1048576) end")) {
+    //
+    // CI dersi (2026-09-19): sabit "63 dilim" Lua 5.5.1'de (yerel) geçip
+    // 5.4.6'da (CI) patlıyordu — string.rep'in ~2MiB geçici zirvesi (büyüme
+    // tamponu + sonuç aynı anda kotaya sayılı) tavanı ~62MiB'de vurur; sürüm
+    // farkı tetik-dilimini bir-iki kaydırır. Sabitleme uyarlanabilir: ilk
+    // OOM'da dur, anlamlı tabanı doğrula (48MiB — bozuk tahsisçi yüksek sesle
+    // yakalanır), iki-kademeli tamamlama (4KiB hızlı-yaklaşma + 64B hassas;
+    // kanca-bütçesi dostu, tek-kademe 64B 250K+ iterasyonda 10M kancaya
+    // takılırdı) tavana ~100B dayandırır.
+    if (!lua.executeString("t28 = {} pins28 = 0 while pins28 < 70 and pcall(function() t28[#t28+1] = string.rep('q', 1048576) end) do pins28 = pins28 + 1 end assert(pins28 >= 48, 'quota pin too shallow')")) {
         std::cerr << "Lua quota-pinning setup failed: " << lua.getLastError() << std::endl;
         exit(1);
     }
-    // Top-up in 64-byte steps (above the short-string interning limit, so every
-    // chunk counts against the quota): the counter ends within ~64 B of the
+    // Two-stage top-up (both above the short-string interning limit, so every
+    // chunk counts against the quota): the counter ends within ~100 B of the
     // ceiling, leaving no room for an unreserved post-pcall recovery.
-    if (!lua.executeString("while pcall(function() t28[#t28+1] = string.rep('q', 64) end) do end")) {
+    if (!lua.executeString("while pcall(function() t28[#t28+1] = string.rep('q', 4096) end) do end while pcall(function() t28[#t28+1] = string.rep('q', 64) end) do end")) {
         std::cerr << "Lua quota top-up failed unexpectedly" << std::endl;
         exit(1);
     }
