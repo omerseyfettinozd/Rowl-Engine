@@ -184,6 +184,13 @@ public:
     void resetVoiceBlipCount() { m_voiceBlipCount = 0; m_synthBlipCount = 0; }
     float getLastVoiceBlipPitch() const { return m_lastVoiceBlipPitch; }
 
+    // #77 test-only latch: son applyDspToFloatPcm çıkışının max|örnek|
+    // değeri (NaN-yapışkan: tek bir NaN çıkış mandalı NaN yapar, böylece
+    // Telephone durum-zehiri VE CaveReverb gecikme-hattı zehiri aynı
+    // mandalla gözlemlenir). Davranışsız gözlemdir; üretim kodu bunu
+    // asla kullanmamalıdır (emsal: Rowl::Core::testEngineFromHandle).
+    float testLastDspPeak() const;
+
     void shutdown();
 
 private:

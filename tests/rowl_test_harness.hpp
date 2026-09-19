@@ -99,6 +99,8 @@ void test_audio_engine();
 void test_audio_device_recovery();
 void test_audio_streaming();
 void test_audio_mixer();
+void test_audio_lock_sanitize_nan();
+void test_audio_lock_underwater_clamp();
 void test_lua_sandbox();
 void test_mobile_input();
 void test_platform_host();

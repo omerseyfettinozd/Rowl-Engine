@@ -114,10 +114,34 @@ bool decodeOggVorbis(std::istream& stream, SDL_AudioSpec& spec, std::vector<uint
     return true;
 }
 
+// #77 test-only mandal: son applyDspToFloatPcm çıkışının max|örnek|
+// değeri. Gövde-içi olduğu için üç çağırıcıyı (playAudio RAM,
+// decodeAssetToFloatPcm, pumpBgmStream) ek kablosuz kapsar. Tek float
+// yazma — DSP davranışına dokunmaz. NaN-yapışkan semantik: `>` tek
+// başına CaveReverb koldaki seyrek NaN'i (gecikme hattı 5512 frame ≫
+// 64-örnek fixture) sonlu clamp komşuları arasında kaybederdi; tek bir
+// NaN çıkışı mandalı NaN yapar, böylece sanitize-silme Telephone VE
+// CaveReverb dallarında da DÜŞER (kırmızı-kanıt matrisi "0/NaN" kolu).
+float g_testLastDspPeak = 0.0f;
+
+void recordDspPeak(const float* samples, size_t sampleCount) {
+    for (size_t i = 0; i < sampleCount; ++i) {
+        const float a = std::fabs(samples[i]);
+        if (std::isnan(a) || a > g_testLastDspPeak) g_testLastDspPeak = a;
+    }
+}
+
 void applyDspToFloatPcm(float* samples, size_t sampleCount, int channels,
                         int sampleRate, DSPFilterType filter) {
-    if (!samples || sampleCount == 0 || channels <= 0 || sampleRate <= 0 ||
-        filter == DSPFilterType::Normal) {
+    // Deterministik başlangıç: testler-arası sızıntı yok.
+    g_testLastDspPeak = 0.0f;
+    if (!samples || sampleCount == 0 || channels <= 0 || sampleRate <= 0) {
+        return;
+    }
+    if (filter == DSPFilterType::Normal) {
+        // Passthrough dalı: çıkış = giriş; mandal yine yazılır (kalıcılık
+        // gözlemi temiz-Normal çalışın canlı sinyal taşıdığını kanıtlar).
+        recordDspPeak(samples, sampleCount);
         return;
     }
 
@@ -167,9 +191,17 @@ void applyDspToFloatPcm(float* samples, size_t sampleCount, int channels,
                 break;
         }
     }
+
+    // #77 test-only mandal yazma noktası (gövde sonu, tek float yazma).
+    recordDspPeak(samples, sampleCount);
 }
 
 } // namespace
+
+// #77 test-only accessor (üretim kodu kullanmaz).
+float AudioEngine::testLastDspPeak() const {
+    return g_testLastDspPeak;
+}
 
 AudioEngine::AudioEngine(Rowl::VFS::VFSManager* vfs)
     : m_vfs(vfs) {
