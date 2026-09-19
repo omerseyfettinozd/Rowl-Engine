@@ -96,6 +96,7 @@ int main(int argc, char* argv[]) {
     test_audio_engine();
     test_audio_device_recovery();
     test_audio_streaming();
+    test_audio_seek_forward_no_reset();
     test_audio_mixer();
     test_audio_lock_sanitize_nan();
     test_audio_lock_underwater_clamp();

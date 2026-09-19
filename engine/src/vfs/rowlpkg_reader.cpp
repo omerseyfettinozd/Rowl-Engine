@@ -2,6 +2,7 @@
 #include "rowl/core/logger.hpp"
 #include "rowl/platform/user_data_directories.hpp"
 #include <zstd.h>
+#include <atomic>
 #include <cstring>
 #include <filesystem>
 #include <mutex>
@@ -21,6 +22,11 @@ constexpr uint32_t kMaxPackageFileCount = 100'000;
 constexpr uint64_t kMaxCompressionExpansionRatio = 1'024;
 constexpr size_t kCompressedReadChunkBytes = 64 * 1024;
 constexpr size_t kDecompressedReadChunkBytes = 64 * 1024;
+
+// Hedef #80 test-seam sayacı: Zstd giriş-akış decoder reset (baştan-çözüm)
+// sayısı. reset() başarıyla tamamlanınca artar (kurulum reset'i dahil).
+// Süreç-geneli monoton sayaçtır; testler baz-değeri alıp delta okur.
+std::atomic<uint64_t> g_zstdEntryDecoderResets{0};
 
 // A bounded, seekable decoder stream for a single Zstd package entry.  The
 // decoder retains only two fixed-size chunks; seeking rewinds and discards
@@ -70,6 +76,9 @@ private:
         m_input = {nullptr, 0, 0};
         setg(m_output.data(), m_output.data(), m_output.data());
         m_error = !m_file || ZSTD_isError(ZSTD_initDStream(m_dstream));
+        // Hedef #80 seam: yalnız başarılı re-init sayılır (bozuk akışın
+        // düşen reset'i "baştan-çözüm" değildir).
+        if (!m_error) ++g_zstdEntryDecoderResets;
         return !m_error;
     }
 
@@ -99,14 +108,32 @@ private:
         return true;
     }
 
+    // Hedef #80: ileri-seek decoder reset'i YAPMAZ — o anki konumdan hedefe
+    // artımlı discard edilir (sıkıştırılmış girdi baştan çözülmez, örn. OGG
+    // akışının pump/loop dışı ileri sarımları). Yalnızca geri-seek
+    // (hedef < konum) veya bozuk durum baştan reset gerektirir.
     std::streampos seekTo(uint64_t target) {
-        if (target > m_entry.uncompressedSize || !reset()) return std::streampos(std::streamoff(-1));
+        if (target > m_entry.uncompressedSize) return std::streampos(std::streamoff(-1));
+        if (!m_error) {
+            const uint64_t current =
+                m_position - static_cast<uint64_t>(egptr() - gptr());
+            if (target >= current) {
+                return discardForward(target - current);
+            }
+        }
+        if (!reset()) return std::streampos(std::streamoff(-1));
+        return discardForward(target);
+    }
+
+    // Artımlı discard: o anki konumdan `count` bayt tüketir (decoder reset'i
+    // YOKTUR). Başarıda yeni mantıksal konumu, düşmede -1 döner.
+    std::streampos discardForward(uint64_t count) {
         std::array<char, kDecompressedReadChunkBytes> discard{};
-        while (target > 0) {
-            const auto chunk = static_cast<std::streamsize>(std::min<uint64_t>(target, discard.size()));
+        while (count > 0) {
+            const auto chunk = static_cast<std::streamsize>(std::min<uint64_t>(count, discard.size()));
             const auto read = sgetn(discard.data(), chunk);
             if (read != chunk) return std::streampos(std::streamoff(-1));
-            target -= static_cast<uint64_t>(read);
+            count -= static_cast<uint64_t>(read);
         }
         return std::streampos(static_cast<std::streamoff>(m_position - (egptr() - gptr())));
     }
@@ -417,6 +444,10 @@ std::unique_ptr<std::istream> RowlPkgDataSource::tryOpenStream(const std::string
     if (!data) return nullptr;
     std::string bytes(reinterpret_cast<const char*>(data->data()), data->size());
     return std::make_unique<std::istringstream>(std::move(bytes), std::ios::binary);
+}
+
+uint64_t zstdEntryDecoderResetCount() {
+    return g_zstdEntryDecoderResets.load(std::memory_order_relaxed);
 }
 
 } // namespace Rowl::VFS

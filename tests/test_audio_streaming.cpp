@@ -860,3 +860,277 @@ void test_audio_streaming() {
         TEST_PASS("Robustness (soak, suspend, device rebuild, fail-closed)");
     }
 }
+
+/**
+ * test_audio_streaming.cpp eklentisi — OGG Seek Forward-No-Reset (#80) KİLİDİ.
+ *
+ * KILIT (mutant oldurur): Zstd paket giriş-akışında ileri-seek decoder
+ * reset'i (sıkıştırılmış girdiyi baştan-çözüm) YAPMAMALIDIR; yalnızca
+ * geri-seek reset gerektirir. seekTo() içindeki eski koşulsuz reset()
+ * geri gelirse (veya ileri-dal reset'e bağlanırsa) aşağıdaki reset-delta
+ * gözlemleri exit(1) ile düşer:
+ *  (a) ileri-seek (beg) → delta 0 + bayt-eşitliği + tellg,
+ *  (b) aynı-konum seek → no-op, delta 0,
+ *  (c) SEEK_CUR ileri → delta 0 + bayt-eşitliği,
+ *  (d) geri-seek (beg 0) → delta >= 1 + bayt-eşitliği,
+ *  (e) SEEK_END ileri (hedef > konum) → delta 0 + kuyruk-eşitliği,
+ *  (f) sınır-aşımı seek → fail-closed (failbit),
+ *  (g) OGG uçtan-uca durum-eşitliği: paket-akışı üzerinden PCM ileri/geri
+ *      seek'ler bellek-içi referans decode ile bayt-aynı (memcmp).
+ *
+ * Gözlem notları (desen aynen: TEST_SECTION/TEST_PASS + hata=exit(1)):
+ *  - Reset sayacı Rowl::VFS::zstdEntryDecoderResetCount() test-seam'idir
+ *    (davranışsız gözlem; üretim kodu kullanmaz). Süreç-geneli monoton
+ *    sayaçtır: baz değeri HER seek'ten hemen önce alınır, yalnız delta
+ *    karşılaştırılır (mutlak değere bel bağlanmaz).
+ *  - (g)'de reset-delta İDDİA EDİLMEZ: libvorbis ov_pcm_seek ikili-arama
+ *    (bisection) sırasında bayt-düzeyinde meşru geri-seek yapabilir; orada
+ *    kilitlenen yalnız durum-eşitliğidir.
+ *  - Yamanmış granule (1e9) ov_pcm_total'u şişirir; PCM seek sınırları
+ *    GERÇEK frame sayısına (88200) göre seçilir, total'a göre değil.
+ *  - timing-assert/sleep/poll YOKTUR; cihaz gerektirmez (headless koşar,
+ *    SKIP yok — mandal decode-düzeyindedir, SDL akışına dokunmaz).
+ */
+void test_audio_seek_forward_no_reset() {
+    TEST_SECTION("Audio OGG Seek — Forward-No-Reset (#80)");
+
+    // Fixture: CRC-onarımlı granule-yamalı uzun OGG (gerçek 88200 frame,
+    // stereo 44100 Hz) + 200 KiB desenli blob; ikisi de tek .rowlpkg içinde
+    // zstd (flags=1) — sıkıştırılmış-girdi seek yolu budur.
+    const std::vector<uint8_t> ogg = patchGranuleWithCrcForStream(
+        longToneOggBytes(), static_cast<uint64_t>(1000000000));
+    std::string blob(200'000, '\0');
+    for (size_t i = 0; i < blob.size(); ++i) {
+        blob[i] = static_cast<char>((i * 37u + i / 17u) % 251u);
+    }
+    auto compressEntry = [](const void* data, size_t size) {
+        std::vector<uint8_t> out(ZSTD_compressBound(size));
+        const size_t n = ZSTD_compress(out.data(), out.size(), data, size, 1);
+        if (ZSTD_isError(n)) fail("Seek fixture Zstd compress failed");
+        out.resize(n);
+        return out;
+    };
+    const std::vector<uint8_t> oggComp =
+        compressEntry(ogg.data(), ogg.size());
+    const std::vector<uint8_t> blobComp =
+        compressEntry(blob.data(), blob.size());
+
+    const auto root =
+        std::filesystem::temp_directory_path() / "rowl_audio_seek_project";
+    std::filesystem::create_directories(root);
+    const auto pkgPath = root / "seek.rowlpkg";
+    const std::string oggName = "audio/seek_theme.ogg";
+    const std::string blobName = "audio/seek_blob.bin";
+    auto fnv1a64 = [](const std::string& value) {
+        uint64_t hash = 14695981039346656037ULL;
+        for (const unsigned char byte : value) {
+            hash ^= byte;
+            hash *= 1099511628211ULL;
+        }
+        return hash;
+    };
+    constexpr uint64_t kHeaderSize = sizeof(Rowl::VFS::RowlPkgHeader);
+    const uint64_t oggOffset = kHeaderSize;
+    const uint64_t blobOffset = oggOffset + oggComp.size();
+    const uint64_t indexOffset = blobOffset + blobComp.size();
+    const Rowl::VFS::RowlPkgHeader header{{'R', 'O', 'W', 'L'}, 1, 2, indexOffset};
+    const Rowl::VFS::RowlPkgEntryRaw oggEntry{
+        fnv1a64(oggName), static_cast<uint32_t>(oggName.size()), oggOffset,
+        oggComp.size(), ogg.size(), 1};
+    const Rowl::VFS::RowlPkgEntryRaw blobEntry{
+        fnv1a64(blobName), static_cast<uint32_t>(blobName.size()), blobOffset,
+        blobComp.size(), blob.size(), 1};
+    {
+        std::ofstream out(pkgPath, std::ios::binary);
+        expect(!!out, "Seek package could not be created");
+        out.write(reinterpret_cast<const char*>(&header), sizeof(header));
+        out.write(reinterpret_cast<const char*>(oggComp.data()),
+                  static_cast<std::streamsize>(oggComp.size()));
+        out.write(reinterpret_cast<const char*>(blobComp.data()),
+                  static_cast<std::streamsize>(blobComp.size()));
+        out.write(reinterpret_cast<const char*>(&oggEntry), sizeof(oggEntry));
+        out.write(oggName.data(), static_cast<std::streamsize>(oggName.size()));
+        out.write(reinterpret_cast<const char*>(&blobEntry), sizeof(blobEntry));
+        out.write(blobName.data(), static_cast<std::streamsize>(blobName.size()));
+        out.close();
+        expect(!!out, "Seek package write failed");
+    }
+
+    // Bayt-düzeyi kilit: ham Zstd giriş-akışı (libvorbis yok — tam deterministik).
+    Rowl::VFS::RowlPkgDataSource source(pkgPath.string());
+    expect(source.isValid(), "Seek package did not validate");
+    auto stream = source.openStream(blobName);
+    expect(stream && stream->good(), "Seek blob stream did not open");
+    const uint64_t blobSize = static_cast<uint64_t>(blob.size());
+
+    std::vector<char> probe(1024, 0);
+    stream->read(probe.data(), static_cast<std::streamsize>(probe.size()));
+    expect(stream->gcount() == static_cast<std::streamsize>(probe.size()) &&
+               std::memcmp(probe.data(), blob.data(), probe.size()) == 0,
+           "Seek blob head mismatch");
+
+    // (a) İleri-seek: reset YOK + bayt-eşitliği + tellg.
+    {
+        const uint64_t target = 150000;
+        const uint64_t base = Rowl::VFS::zstdEntryDecoderResetCount();
+        stream->clear();
+        stream->seekg(static_cast<std::streamoff>(target), std::ios::beg);
+        expect(stream->good(), "Forward seek failed");
+        expect(Rowl::VFS::zstdEntryDecoderResetCount() == base,
+               "Forward seek reset the Zstd decoder (must advance without reset)");
+        expect(static_cast<std::streamoff>(stream->tellg()) ==
+                   static_cast<std::streamoff>(target),
+               "Forward seek tell mismatch");
+        stream->read(probe.data(), static_cast<std::streamsize>(probe.size()));
+        expect(stream->gcount() == static_cast<std::streamsize>(probe.size()) &&
+                   std::memcmp(probe.data(), blob.data() + target, probe.size()) == 0,
+               "Forward-seek read diverges from payload");
+        TEST_PASS("Seek lock — forward seek skips decoder reset (delta 0, bytes exact)");
+    }
+
+    // (b) Aynı-konum seek: no-op, reset YOK.
+    {
+        const std::streamoff here =
+            static_cast<std::streamoff>(stream->tellg());
+        const uint64_t base = Rowl::VFS::zstdEntryDecoderResetCount();
+        stream->seekg(here, std::ios::beg);
+        expect(stream->good(), "Same-position seek failed");
+        expect(Rowl::VFS::zstdEntryDecoderResetCount() == base,
+               "Same-position seek must be a no-op (no reset)");
+        TEST_PASS("Seek lock — same-position seek is a no-op (delta 0)");
+    }
+
+    // (c) SEEK_CUR ileri: reset YOK + bayt-eşitliği.
+    {
+        const uint64_t base = Rowl::VFS::zstdEntryDecoderResetCount();
+        stream->seekg(1000, std::ios::cur);
+        expect(stream->good(), "SEEK_CUR forward seek failed");
+        expect(Rowl::VFS::zstdEntryDecoderResetCount() == base,
+               "SEEK_CUR forward seek reset the decoder (must advance without reset)");
+        const uint64_t pos =
+            static_cast<uint64_t>(static_cast<std::streamoff>(stream->tellg()));
+        std::vector<char> cur(512, 0);
+        stream->read(cur.data(), static_cast<std::streamsize>(cur.size()));
+        expect(stream->gcount() == static_cast<std::streamsize>(cur.size()) &&
+                   std::memcmp(cur.data(), blob.data() + pos, cur.size()) == 0,
+               "SEEK_CUR forward read diverges from payload");
+        TEST_PASS("Seek lock — SEEK_CUR forward skips decoder reset (delta 0, bytes exact)");
+    }
+
+    // (d) Geri-seek: reset VAR + bayt-eşitliği.
+    {
+        const uint64_t base = Rowl::VFS::zstdEntryDecoderResetCount();
+        stream->clear();
+        stream->seekg(0, std::ios::beg);
+        expect(stream->good(), "Backward seek failed");
+        expect(Rowl::VFS::zstdEntryDecoderResetCount() >= base + 1,
+               "Backward seek must reset the decoder");
+        stream->read(probe.data(), static_cast<std::streamsize>(probe.size()));
+        expect(stream->gcount() == static_cast<std::streamsize>(probe.size()) &&
+                   std::memcmp(probe.data(), blob.data(), probe.size()) == 0,
+               "Backward-seek head read diverges from payload");
+        TEST_PASS("Seek lock — backward seek resets the decoder (delta >= 1, bytes exact)");
+    }
+
+    // (e) SEEK_END ileri (hedef > konum): reset YOK + kuyruk-eşitliği.
+    // Konum baştadır (1024); hedef sondan-512 (>> konum) ileri-daldadır.
+    {
+        const uint64_t base = Rowl::VFS::zstdEntryDecoderResetCount();
+        stream->clear();
+        stream->seekg(-512, std::ios::end);
+        expect(stream->good(), "SEEK_END forward seek failed");
+        expect(Rowl::VFS::zstdEntryDecoderResetCount() == base,
+               "SEEK_END forward seek reset the decoder (must advance without reset)");
+        std::vector<char> tail(512, 0);
+        stream->read(tail.data(), static_cast<std::streamsize>(tail.size()));
+        expect(stream->gcount() == static_cast<std::streamsize>(tail.size()) &&
+                   std::memcmp(tail.data(), blob.data() + blobSize - 512,
+                               tail.size()) == 0,
+               "SEEK_END forward tail diverges from payload");
+        TEST_PASS("Seek lock — SEEK_END forward skips decoder reset (delta 0, tail exact)");
+    }
+
+    // (f) Sınır-aşımı seek: fail-closed (konum oynamaz, failbit kurulur).
+    {
+        stream->clear();
+        stream->seekg(static_cast<std::streamoff>(blobSize + 1), std::ios::beg);
+        expect(stream->fail(), "Out-of-range seek must fail closed");
+        TEST_PASS("Seek lock — out-of-range seek fails closed");
+    }
+
+    // (g) OGG uçtan-uca durum-eşitliği: paket-akışı üzerinden PCM ileri/geri
+    // seek'ler bellek-içi referans decode ile bayt-aynıdır.
+    {
+        using namespace Rowl::Audio;
+        Rowl::VFS::VFSManager vfs;
+        vfs.mountPackage("", pkgPath.string());
+        OggStreamSource src;
+        std::string oggError;
+        expect(src.open(vfs, oggName, oggError),
+               "Seek OGG open failed: " + oggError);
+        const uint32_t rate = src.sampleRateHz();
+        const uint32_t channels = src.channelCount();
+        expect(rate != 0 && channels != 0 && channels <= 8,
+               "Seek OGG format invalid");
+
+        // Referans: aynı baytlar bellek-akışından tam-decode (parity deseni).
+        std::string oggBytes(reinterpret_cast<const char*>(ogg.data()), ogg.size());
+        auto refStream =
+            std::make_unique<std::istringstream>(oggBytes, std::ios::binary);
+        OggVorbis_File decoder{};
+        const ov_callbacks callbacks{parityVorbisRead, parityVorbisSeek,
+                                     parityVorbisClose, parityVorbisTell};
+        expect(ov_open_callbacks(refStream.get(), &decoder, nullptr, 0,
+                                 callbacks) == 0,
+               "Seek reference ov_open failed");
+        constexpr float kS16ToFloat = 1.0f / 32768.0f;
+        std::vector<float> ref;
+        {
+            std::array<char, 32 * 1024> chunk{};
+            int bitstream = 0;
+            while (true) {
+                const long bytes = ov_read(&decoder, chunk.data(),
+                                           static_cast<int>(chunk.size()),
+                                           0, 2, 1, &bitstream);
+                expect(bytes >= 0, "Seek reference hit corrupt stream");
+                if (bytes == 0) break;
+                const size_t samples = static_cast<size_t>(bytes) / 2;
+                for (size_t i = 0; i < samples; ++i) {
+                    int16_t sample = 0;
+                    std::memcpy(&sample, chunk.data() + i * 2, sizeof(sample));
+                    ref.push_back(static_cast<float>(sample) * kS16ToFloat);
+                }
+            }
+        }
+        ov_clear(&decoder);
+        expect(!ref.empty() && ref.size() % channels == 0,
+               "Seek reference decode invalid");
+
+        // İleri PCM seek (gerçek aralıkta) → referansla bayt-aynı.
+        constexpr uint64_t kSeekFrame = 44100;
+        expect(src.seekPcmFrame(kSeekFrame), "Seek OGG forward PCM seek failed");
+        std::vector<float> fwd(4096u * 8u, 0.0f);
+        bool eos = false;
+        const size_t got = src.readFloatFrames(fwd.data(), 4096u, eos);
+        expect(got == 4096u, "Seek OGG forward read fell short");
+        expect(ref.size() >= (kSeekFrame + 4096u) * channels,
+               "Seek reference too short for forward window");
+        expect(std::memcmp(fwd.data(), ref.data() + kSeekFrame * channels,
+                           4096u * channels * sizeof(float)) == 0,
+               "Forward PCM seek diverges from reference decode");
+
+        // Geri PCM seek (0) → baş-eşitliği.
+        expect(src.seekPcmFrame(0), "Seek OGG backward PCM seek failed");
+        std::vector<float> head(64u * 8u, 0.0f);
+        const size_t gotHead = src.readFloatFrames(head.data(), 64u, eos);
+        expect(gotHead > 0 &&
+                   std::memcmp(head.data(), ref.data(),
+                               gotHead * channels * sizeof(float)) == 0,
+               "Backward PCM seek diverges from stream head");
+        src.close();
+        TEST_PASS("Seek lock — OGG forward/backward PCM seeks match reference decode (memcmp)");
+    }
+
+    std::error_code cleanupError;
+    std::filesystem::remove_all(root, cleanupError);
+}
