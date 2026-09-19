@@ -204,6 +204,11 @@ ROWL_API void RowlEngine_Step(RowlEngineHandle handle, float deltaTime);
 /**
  * Shuts down and frees all engine subsystems.
  * The handle remains valid but unusable after this call.
+ * D2: shutdown süpürür — oturum profili (play/pause, hız/ofset,
+ * bgm-varsayılanı, sahne, playtime), story graph + cursor, VFS mount'ları,
+ * gömülü tutamaç ve save-dizin override'ı sıfırlanır; aynı handle'da
+ * Shutdown→Init taze-handle ile özdeş başlar. Paylaşılan-VFS senaryosunda
+ * (host setVfs ile aynı instance'ı verdiyse) mount'lar da temizlenir.
  */
 ROWL_API void RowlEngine_Shutdown(RowlEngineHandle handle);
 
@@ -424,6 +429,10 @@ ROWL_API RowlEngine_ResultCode RowlEngine_GetActiveDialogueContentIdsJson(
 
 /**
  * Sets the active project root directory, isolating VFS mounts to that project.
+ * D2 (#113): oynanmış oturum ortasında çağrılırsa reddedilir (no-op +
+ * StateError via GetLastResultCode) — aksi halde story commit + gameState
+ * sıfırlama ilerlemeyi sessizce silerdi. Proje-değişimi için
+ * Shutdown→Init döngüsü kullanın; oynanmamış motorda serbesttir.
  * @param projectRoot Absolute or relative path to the active project folder.
  */
 ROWL_API void RowlEngine_SetProjectDirectory(RowlEngineHandle handle,

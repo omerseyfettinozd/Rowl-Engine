@@ -114,6 +114,11 @@ RowlEngineHandle RowlEngine_Create(void) {
 void RowlEngine_Destroy(RowlEngineHandle handle) {
     auto engine = takeLiveHandle(handle);
     if (!engine) return;
+    // D2 (#140): per-handle aux-map'ler (prefetch + character) meşru
+    // destroy yolunda hiç silinmiyordu — her Create/kullan/Destroy
+    // döngüsü kalıcı ChapterLoader+queue+string bırakıyordu.
+    clearPrefetchStatesForHandle(handle);
+    clearCharacterStatesForHandle(handle);
     invokeNoexcept([&] { engine.reset(); });
 }
 

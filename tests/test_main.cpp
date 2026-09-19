@@ -113,6 +113,7 @@ int main(int argc, char* argv[]) {
     test_font_hardening();
     test_handle_hygiene();
     test_lifecycle_init_guards();
+    test_lifecycle_shutdown_sweep();
     test_numeric_guards();
     test_lua_hardening();
     test_runtime_context_and_diagnostics();

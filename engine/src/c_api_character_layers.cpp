@@ -71,6 +71,16 @@ RowlEngine_ResultCode checkPresetName(const char* presetName,
 
 } // namespace
 
+// D2 (#140): prefetch TU'sundaki ikiz — Destroy yolunda lifecycle
+// TU'su buradan temizler; Create/kullan/Destroy sizintisi kapanir.
+void clearCharacterStatesForHandle(RowlEngineHandle handle) noexcept {
+    try {
+        std::lock_guard<std::mutex> lock(g_characterMutex);
+        g_characterStates.erase(handle);
+    } catch (...) {
+    }
+}
+
 extern "C" {
 
 RowlEngine_ResultCode RowlEngine_SetCharacterSlotAsset(

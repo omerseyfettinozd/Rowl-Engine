@@ -403,6 +403,11 @@ private:
     // unpaused, stamped into save metadata, restored on load.
     double m_playtimeSeconds = 0.0;
     Rowl::State::SaveMetadata buildSaveMetadata() const;
+    // D2 (#112/#127/#136/#137): shutdown-süpürme — oturum profilini
+    // (play/pause, hız/ofset, bgm-varsayılanı, sahne görünür durumu,
+    // playtime, pause-menü) fabrika değerlerine döndürür. Non-virtual
+    // private helper: sınıf yerleşimini değiştirmez (ABI-güvenli).
+    void resetSessionProfile();
     bool parseStoryGraphJson(const std::string& jsonContent);
     Rowl::State::SessionPersistence& sessionPersistence() const;
     bool loadStoryGraphFromAssetStream(const std::string& assetPath,

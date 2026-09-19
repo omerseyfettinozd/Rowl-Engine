@@ -71,6 +71,18 @@ bool isParseError(const std::string& error) {
 
 } // namespace
 
+// D2 (#140): Destroy yalnız g_liveHandles'tan siliyordu; Create/kullan/
+// Destroy döngüsü ChapterLoader+prefetch kuyruğunu kalıcı tutuyordu.
+// Lifecycle TU'su Destroy yolunda buradan temizler. Anonim-namespace
+// dışında: external linkage, c_api_internal.hpp'den ilanlı.
+void clearPrefetchStatesForHandle(RowlEngineHandle handle) noexcept {
+    try {
+        std::lock_guard<std::mutex> lock(g_prefetchMutex);
+        g_prefetchStates.erase(handle);
+    } catch (...) {
+    }
+}
+
 extern "C" {
 
 RowlEngine_ResultCode RowlEngine_LoadChapterIndexJson(RowlEngineHandle handle,

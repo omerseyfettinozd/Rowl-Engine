@@ -270,6 +270,32 @@ void RowlEngine_SetProjectDirectory(RowlEngineHandle handle, const char* project
     if (!isLiveHandle(handle) || !projectRoot || !*projectRoot) return;
     invokeNoexcept([&] {
         auto* engine = toEngineChecked(handle);
+        if (!engine) return;
+        // D2 (#113): canlı oturum ortasında proje-değişimi story commit +
+        // gameState-sıfırlama + lua-temizleme ile ilerlemeyi sessizce
+        // siliyordu. OYNANMIŞ oturumda reddet (fail-loud); yapılandırma
+        // aşamasındaki motorda (init'li ama oynanmamış — örn. sesin
+        // mount-öncesi SetProjectDirectory akışı) mount serbesttir.
+        // "Oynanmış" = history dolu, cursor start'tan ayrılmış veya
+        // script-variable step'i ilerlemiş (init tabanı stepId=1).
+        bool sessionLive = false;
+        if (engine->isInitialized()) {
+            const auto& doc = engine->getStoryGraphDocument();
+            if (!doc.nodes.empty()) {
+                sessionLive = !engine->getDialogueHistory().empty() ||
+                              engine->getCurrentNodeId() != doc.startNodeId ||
+                              engine->getCurrentStepId() > 1;
+            }
+        }
+        if (sessionLive) {
+            if (auto* ctx = engine->getContext()) {
+                ctx->setError(Rowl::Core::RuntimeErrorCode::StateError,
+                              "SetProjectDirectory rejected mid-session; shut down "
+                              "before switching projects",
+                              "set_project_directory", "");
+            }
+            return;
+        }
         // Save slots belong to the selected game/project. This prevents an
         // embedded editor preview or another standalone game from sharing the
         // process-relative default "saves" directory.

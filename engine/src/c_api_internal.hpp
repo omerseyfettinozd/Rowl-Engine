@@ -49,6 +49,11 @@ bool claimHandleThread(RowlEngineHandle handle) noexcept;
 std::unique_ptr<Rowl::Core::Engine> takeLiveHandle(RowlEngineHandle handle) noexcept;
 Rowl::Core::Engine* toEngine(RowlEngineHandle h);
 Rowl::Core::Engine* toEngineChecked(RowlEngineHandle h) noexcept;
+// D2 (#140): TU-local aux-map'lerin Destroy-yolu temizliği. Tanımlar
+// c_api_prefetch_chapters.cpp / c_api_character_layers.cpp'de (anonim
+// namespace dışında, external linkage); çağrı c_api_lifecycle.cpp'de.
+void clearPrefetchStatesForHandle(RowlEngineHandle handle) noexcept;
+void clearCharacterStatesForHandle(RowlEngineHandle handle) noexcept;
 // A4-tur1: tek-kilitli canlı+thread kontrollü erişim — isLiveHandle +
 // toEngine çift-bakışındaki TOCTOU penceresini kapatır (arada destroy
 // edilirse ikinci bakış null döner, deref UB olurdu). Fail-closed: ölü/

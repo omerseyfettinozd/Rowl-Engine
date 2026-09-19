@@ -2199,8 +2199,65 @@ bool Engine::isPreviewFrameStatic() const {
     return true;
 }
 
+void Engine::resetSessionProfile() {
+    // D2 (#136/#137): shutdown->re-init aynı handle'da önceki oturumun
+    // profilini yeni oturuma sızdırıyordu (oynatılmamışken playtime,
+    // 4.0x hız, eski bgm-varsayılanı). Fabrika değerlerine döndür.
+    m_isPlaying   = false;
+    m_paused      = false;
+    m_pauseConfirmQuit = false;
+    m_pauseMode   = PauseMenuMode::Main;
+    m_pauseSelected = 0;
+    m_activeQuickSlot = 0;
+    m_pauseSlotCacheValid = false;
+    m_textSpeedMultiplier = 1.0f;
+    m_autoAdvanceDelayOffset = 0.0f;
+    m_defaultBgmTransition = "instant";
+    m_defaultBgmTransitionDurationSeconds = 1.0f;
+    m_playtimeSeconds = 0.0;
+    m_autoAdvanceElapsed = 0.0f;
+    // D2 (#127): shutdown sonrası canlı handle stale sahneyi servis
+    // ediyordu. Sahne görünür durumunu taze-handle değerlerine çek
+    // (header in-class default'larıyla birebir aynı).
+    m_activeSpeaker    = "Evelyn";
+    m_activeDialogue   = "Welcome to Rowl Engine!";
+    m_activeBackground = "bg_beach_sunset.png";
+    m_activeBackgroundX = 0.0f;
+    m_activeBackgroundY = 0.0f;
+    m_activeBackgroundWidth  = 1920.0f;
+    m_activeBackgroundHeight = 1080.0f;
+    m_activeBackgroundRotation = 0.0f;
+    m_activeBackgroundParallaxX = 1.0f;
+    m_activeBackgroundParallaxY = 1.0f;
+    m_activeBackgroundOpacity   = 1.0f;
+    m_activeCharacter  = "spr_evelyn.png";
+    m_activeCharacterX = 1440.0f;
+    m_activeCharacterY = 340.0f;
+    m_activeCharacterWidth  = 360.0f;
+    m_activeCharacterHeight = 540.0f;
+    m_activeCharacterRotation = 0.0f;
+    m_activeCharacters.clear();
+    m_activeDialogueBoxX = 80.0f;
+    m_activeDialogueBoxY = 860.0f;
+    m_activeDialogueBoxWidth  = 1760.0f;
+    m_activeDialogueBoxHeight = 180.0f;
+    m_activeDialogueData = Rowl::Render::DialogueRenderData{};
+    m_activeDialogues.clear();
+    m_activeChoiceButtons.clear();
+    m_hasActiveScript = false;
+    m_activeScriptModuleIds.clear();
+    m_hasBackground  = true;
+    m_hasDialogueBox = true;
+    m_lastRecordedDialogueNodeId = 0;
+    m_lastSfxPlaybackNodeId = 0;
+}
+
 void Engine::shutdown() {
-    if (!m_initialized) return;
+    // D2 (#126-rest): guard yalnız m_initialized'a bakıyordu; başarısız
+    // init'in yarım-state'i (B1a sonrası kalamaz ama savunma-derinliği)
+    // shutdown'sız kalıyordu. Süpürme idempotent: taze handle'da her
+    // sıfırlama zaten-defaulta yazar, VFS boş-mount temizler.
+    if (!m_initialized && !m_window) return;
 
     ROWL_LOG_INFO("Shutting down Rowl Engine...");
 
@@ -2229,6 +2286,27 @@ void Engine::shutdown() {
         m_window->shutdown();
         m_window.reset();
     }
+
+    // D2 shutdown-süpürme: oturum profili + graph + mount + handle.
+    resetSessionProfile();
+    // D2 (#112): story graph + cursor + gameState bir sonraki oturuma
+    // sızmasın. Taze-handle ile özdeş başlangıç.
+    m_storyRuntime = StoryRuntime{};
+    m_gameState.reset();
+    // D2 (#107): VFS mount'ları önceki projenin story/lua/paketini yeni
+    // oturuma sızdırıyordu (initialize erken-dönüyordu). VFS per-Engine
+    // (RuntimeContext sahipliği); paylaşılan-VFS sözleşmesi c_api.h'de.
+    if (getVfs()) {
+        getVfs()->clearMountPoints();
+    }
+    // D2 (#124): gömülü tutamaç sıfırlanmazsa sonraki Init host
+    // standalone istese bile bayat pointer ile embedded dalına girer.
+    // Tek-çekimlik tüketim: shutdown sonrası re-init config-güdümlü.
+    m_externalWindowHandle = nullptr;
+    m_externalWindowWidth  = 0;
+    m_externalWindowHeight = 0;
+    // D2 (#113-kuzeni): proje-override save-dizini de oturuma aittir.
+    m_saveDirectoryOverride.clear();
 
     m_isRunning   = false;
     m_initialized = false;
