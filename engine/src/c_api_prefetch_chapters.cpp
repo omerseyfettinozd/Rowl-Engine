@@ -226,6 +226,8 @@ int RowlEngine_IsChapterBoundaryNode(RowlEngineHandle handle, uint64_t nodeId) {
         // Loader henuz beslenmemis: motorun aktif grafigine bak (salt-okunur).
         auto* engine = toEngineChecked(handle);
         if (engine == nullptr) return 0;
+        // D1 (#131): mountsuz VFS'te okuma hayalet-missing üretirdi.
+        if (!requireEngineInitialized(engine, "is_chapter_boundary")) return 0;
         return Rowl::Core::documentChapterBoundary(engine->getStoryGraphDocument(), nodeId)
                    ? 1
                    : 0;
@@ -261,6 +263,11 @@ RowlEngine_ResultCode RowlEngine_PrefetchChapterAssets(RowlEngineHandle handle,
         PrefetchChapterRuntime& runtime = g_prefetchStates[handle];
         auto* engine = toEngineChecked(handle);
         if (engine == nullptr) return ROWL_RESULT_INVALID_HANDLE;
+        // D1 (#131): mountsuz VFS'te pump tüm kuyruğu missing işaretleyip
+        // OK dönüyordu (OK yalanı). Fail-closed: STATE_ERROR.
+        if (!requireEngineInitialized(engine, "prefetch_chapter_assets")) {
+            return ROWL_RESULT_STATE_ERROR;
+        }
 
         std::vector<Rowl::Core::PrefetchAsset> assets;
         if (runtime.loader.hasChapters()) {
@@ -355,6 +362,8 @@ int RowlEngine_PumpPrefetch(RowlEngineHandle handle, float maxMilliseconds) {
         PrefetchChapterRuntime& runtime = g_prefetchStates[handle];
         auto* engine = toEngineChecked(handle);
         if (engine == nullptr) return 0;
+        // D1 (#131): pump guard'ı — PrefetchChapterAssets ile aynı delik.
+        if (!requireEngineInitialized(engine, "pump_prefetch")) return 0;
         const std::size_t pumped =
             runtime.prefetch.pump(engine->getVfs(), static_cast<double>(maxMilliseconds));
         return pumped > static_cast<std::size_t>((std::numeric_limits<int>::max)())

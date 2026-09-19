@@ -99,6 +99,9 @@ public:
     // ── Queries ────────────────────────────────────────────────────────────
 
     bool isRunning() const { return m_isRunning; }
+    // D1 (B1b #108-#132): C-API pre-init guard'ları için fail-closed
+    // bayrağı. Non-virtual, üye eklemez — ABI'yi etkilemez.
+    bool isInitialized() const { return m_initialized; }
     const EngineConfig& getConfig() const { return m_config; }
     Rowl::Render::Window* getWindow() const { return m_window.get(); }
     Rowl::Render::Camera2D* getCamera() const { return m_window ? m_window->getCamera() : nullptr; }

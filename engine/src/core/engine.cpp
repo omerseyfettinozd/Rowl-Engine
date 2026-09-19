@@ -380,6 +380,12 @@ bool Engine::initialize(const EngineConfig& config) {
 
     m_initialized = true;
     m_isRunning   = true;
+    // D1 (#108): init, önceki last-result'u geçersiz kılar. Pre-init
+    // load/save girişimi artık guard'lı (aşağıda) ama savunma-derinliği:
+    // init-sonrası kanal her zaman init'e aittir, bayat load-OK kalamaz.
+    if (m_context) {
+        m_context->setSuccess("init", "");
+    }
     return true;
 }
 
@@ -2256,6 +2262,17 @@ Rowl::State::SaveMetadata Engine::buildSaveMetadata() const {
 }
 
 bool Engine::saveGameSlot(int32_t slotIndex) {
+    // D1 (#109/#129/#130): init-öncesi save, varolmayan oturumu node-0
+    // kayıt olarak dosyaya yazıp success dönüyordu. Fail-closed: dosya
+    // yazılmadan StateError + false (quickSave otomatik kapsanır).
+    if (!m_initialized) {
+        if (m_context) {
+            m_context->setError(RuntimeErrorCode::StateError,
+                                "Cannot save: engine is not initialized",
+                                "save_game_slot", std::to_string(slotIndex));
+        }
+        return false;
+    }
     if (!Rowl::State::isValidSlot(slotIndex)) {
         m_context->setError(RuntimeErrorCode::InvalidArgument,
                             "Invalid save slot index #" + std::to_string(slotIndex) + " (must be 0-99)",
@@ -2285,6 +2302,17 @@ bool Engine::saveGameSlot(int32_t slotIndex) {
 }
 
 bool Engine::loadGameSlot(int32_t slotIndex) {
+    // D1 (#108/#129/#130): init-öncesi load, oturumu sessizce uygulayıp
+    // setSuccess bırakıyordu; sonraki init imha edip stale OK bırakıyordu.
+    // Fail-closed: state'e dokunmadan StateError + false.
+    if (!m_initialized) {
+        if (m_context) {
+            m_context->setError(RuntimeErrorCode::StateError,
+                                "Cannot load: engine is not initialized",
+                                "load_game_slot", std::to_string(slotIndex));
+        }
+        return false;
+    }
     if (!Rowl::State::isValidSlot(slotIndex)) {
         m_context->setError(RuntimeErrorCode::InvalidArgument,
                             "Invalid save slot index #" + std::to_string(slotIndex) + " (must be 0-99)",
@@ -2712,6 +2740,16 @@ bool Engine::deleteSaveSlot(int32_t slotIndex) {
 }
 
 bool Engine::rewind(uint64_t steps) {
+    // D1 (#130): rewind yolunda hiçbir guard yoktu — init-öncesi/shutdown-
+    // sonrası retained state üzerinde sessizce çalışıyordu. Fail-closed.
+    if (!m_initialized) {
+        if (m_context) {
+            m_context->setError(RuntimeErrorCode::StateError,
+                                "Cannot rewind: engine is not initialized",
+                                "rewind", std::to_string(steps));
+        }
+        return false;
+    }
     auto rewound = Rowl::State::SessionPersistence::rewind(m_gameState, steps);
     if (!rewound) return false;
 

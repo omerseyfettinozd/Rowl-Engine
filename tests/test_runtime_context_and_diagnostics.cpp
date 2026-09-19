@@ -45,6 +45,17 @@ void test_runtime_context_and_diagnostics() {
         Rowl::Core::Engine engineA(ctxA);
         Rowl::Core::Engine engineB(ctxB);
 
+        // D1 (#109/#129/#130): save/load init-öncesi fail-closed
+        // olduğundan izolasyon senaryosu init'li motorlarla kurulur
+        // (pre-init save artık dosya yazmaz + StateError döner).
+        Rowl::Core::EngineConfig isoConfig;
+        isoConfig.virtualWidth = 320;
+        isoConfig.virtualHeight = 180;
+        if (!engineA.initialize(isoConfig) || !engineB.initialize(isoConfig)) {
+            std::cerr << "Isolation engines failed to initialize" << std::endl;
+            exit(1);
+        }
+
         if (!engineA.getVfs()->exists("alpha.txt") || engineA.getVfs()->exists("beta.txt")) {
             std::cerr << "Engine A does not isolate its VFS" << std::endl;
             exit(1);

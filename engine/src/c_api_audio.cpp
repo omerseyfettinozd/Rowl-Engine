@@ -81,56 +81,66 @@ void RowlEngine_SetBgmVolume(RowlEngineHandle handle, float volume) {
     if (!isLiveHandle(handle)) return;
     invokeNoexcept([&] {
         auto* checked = toEngineChecked(handle);
-        auto* audio = checked ? checked->getAudio() : nullptr;
+        if (!checked) return;
+        // D1 (#110/#132): pre-init sessiz-drop + sahte-0.0 getter ikilisi.
+        // Davranış korunur (yaz-devam), kanala StateError sinyali verilir.
+        requireEngineInitialized(checked, "set_bgm_volume");
+        auto* audio = checked->getAudio();
         if (audio) audio->setBgmVolume(volume);
     });
 }
 
 void RowlEngine_SetMasterVolume(RowlEngineHandle handle, float volume) {
     if (!isLiveHandle(handle)) return;
-    invokeNoexcept([&] { if (auto* engine = toEngineChecked(handle)) if (auto* audio = engine->getAudio()) audio->setMasterVolume(volume); });
+    invokeNoexcept([&] { auto* checked = toEngineChecked(handle); if (!checked) return; requireEngineInitialized(checked, "set_master_volume"); if (auto* audio = checked->getAudio()) audio->setMasterVolume(volume); });
 }
 
 void RowlEngine_SetVoiceVolume(RowlEngineHandle handle, float volume) {
     if (!isLiveHandle(handle)) return;
-    invokeNoexcept([&] { if (auto* engine = toEngineChecked(handle)) if (auto* audio = engine->getAudio()) audio->setVoiceVolume(volume); });
+    invokeNoexcept([&] { auto* checked = toEngineChecked(handle); if (!checked) return; requireEngineInitialized(checked, "set_voice_volume"); if (auto* audio = checked->getAudio()) audio->setVoiceVolume(volume); });
 }
 
 void RowlEngine_SetSfxVolume(RowlEngineHandle handle, float volume) {
     if (!isLiveHandle(handle)) return;
-    invokeNoexcept([&] { if (auto* engine = toEngineChecked(handle)) if (auto* audio = engine->getAudio()) audio->setSfxVolume(volume); });
+    invokeNoexcept([&] { auto* checked = toEngineChecked(handle); if (!checked) return; requireEngineInitialized(checked, "set_sfx_volume"); if (auto* audio = checked->getAudio()) audio->setSfxVolume(volume); });
 }
 
 void RowlEngine_SetTextSpeedMultiplier(RowlEngineHandle handle, float multiplier) {
     if (!isLiveHandle(handle)) return;
-    invokeNoexcept([&] { if (auto* checked = toEngineChecked(handle)) checked->setTextSpeedMultiplier(multiplier); });
+    // D1 (#132 tutunur-sınıfı): değer yazılmaya devam eder + sinyal.
+    invokeNoexcept([&] { auto* checked = toEngineChecked(handle); if (!checked) return; requireEngineInitialized(checked, "set_text_speed_multiplier"); checked->setTextSpeedMultiplier(multiplier); });
 }
 
 void RowlEngine_SetAutoAdvanceDelayOffset(RowlEngineHandle handle, float seconds) {
     if (!isLiveHandle(handle)) return;
-    invokeNoexcept([&] { if (auto* checked = toEngineChecked(handle)) checked->setAutoAdvanceDelayOffset(seconds); });
+    invokeNoexcept([&] { auto* checked = toEngineChecked(handle); if (!checked) return; requireEngineInitialized(checked, "set_auto_advance_delay_offset"); checked->setAutoAdvanceDelayOffset(seconds); });
 }
 
 float RowlEngine_GetMasterVolume(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return 0.0f;
-    return invokeNoexcept<float>([&] { auto* checked = toEngineChecked(handle); const auto* audio = checked ? checked->getAudio() : nullptr; return audio ? audio->getMasterVolume() : 0.0f; }, 0.0f);
+    // D1 (#110/#132): sahte-0.0 artık StateError sinyaliyle ayırt edilir
+    // (değer korunur — muted ile karışmaz).
+    return invokeNoexcept<float>([&] { auto* checked = toEngineChecked(handle); if (!checked) return 0.0f; requireEngineInitialized(checked, "get_master_volume"); const auto* audio = checked->getAudio(); return audio ? audio->getMasterVolume() : 0.0f; }, 0.0f);
 }
 
 float RowlEngine_GetVoiceVolume(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return 0.0f;
-    return invokeNoexcept<float>([&] { auto* checked = toEngineChecked(handle); const auto* audio = checked ? checked->getAudio() : nullptr; return audio ? audio->getVoiceVolume() : 0.0f; }, 0.0f);
+    return invokeNoexcept<float>([&] { auto* checked = toEngineChecked(handle); if (!checked) return 0.0f; requireEngineInitialized(checked, "get_voice_volume"); const auto* audio = checked->getAudio(); return audio ? audio->getVoiceVolume() : 0.0f; }, 0.0f);
 }
 
 float RowlEngine_GetSfxVolume(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return 0.0f;
-    return invokeNoexcept<float>([&] { auto* checked = toEngineChecked(handle); const auto* audio = checked ? checked->getAudio() : nullptr; return audio ? audio->getSfxVolume() : 0.0f; }, 0.0f);
+    return invokeNoexcept<float>([&] { auto* checked = toEngineChecked(handle); if (!checked) return 0.0f; requireEngineInitialized(checked, "get_sfx_volume"); const auto* audio = checked->getAudio(); return audio ? audio->getSfxVolume() : 0.0f; }, 0.0f);
 }
 
 void RowlEngine_TriggerVoiceDucking(RowlEngineHandle handle, int isVoiceActive) {
     if (!isLiveHandle(handle)) return;
     invokeNoexcept([&] {
         auto* checked = toEngineChecked(handle);
-        auto* audio = checked ? checked->getAudio() : nullptr;
+        if (!checked) return;
+        // D1 (#110): pre-init komut-drop da sinyalli olur.
+        requireEngineInitialized(checked, "trigger_voice_ducking");
+        auto* audio = checked->getAudio();
         if (audio) audio->triggerVoiceDucking(isVoiceActive != 0);
     });
 }
@@ -428,7 +438,10 @@ float RowlEngine_GetBgmVolume(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return 0.0f;
     return invokeNoexcept<float>([&] {
         auto* checked = toEngineChecked(handle);
-        const auto* audio = checked ? checked->getAudio() : nullptr;
+        if (!checked) return 0.0f;
+        // D1 (#110/#132): sahte-0.0 sinyali.
+        requireEngineInitialized(checked, "get_bgm_volume");
+        const auto* audio = checked->getAudio();
         return audio ? audio->getBgmVolume() : 0.0f;
     }, 0.0f);
 }
@@ -436,7 +449,8 @@ float RowlEngine_GetBgmVolume(RowlEngineHandle handle) {
 void RowlEngine_SetAmbienceVolume(RowlEngineHandle handle, float volume) {
     if (!isLiveHandle(handle)) return;
     invokeNoexcept([&] {
-        if (auto* engine = toEngineChecked(handle)) if (auto* audio = engine->getAudio()) audio->setAmbienceVolume(volume);
+        // D1 (#110): aynı setter-sinyal disiplini.
+        if (auto* engine = toEngineChecked(handle)) { requireEngineInitialized(engine, "set_ambience_volume"); if (auto* audio = engine->getAudio()) audio->setAmbienceVolume(volume); }
     });
 }
 

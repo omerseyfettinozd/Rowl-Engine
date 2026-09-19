@@ -30,7 +30,9 @@ void RowlEngine_UpdateScene(
     float dlgX,  float dlgY,  float dlgW,  float dlgH)
 {
     if (!isLiveHandle(handle)) return;
-    invokeNoexcept([&] { if (auto* checked = toEngineChecked(handle)) checked->updateActiveScene(
+    // D1 (#111): init-öncesi sahne yazımı Init'i delip bir sonraki oturuma
+    // sessizce enjekte oluyordu. Fail-closed: no-op + StateError sinyali.
+    invokeNoexcept([&] { auto* checked = toEngineChecked(handle); if (!checked || !requireEngineInitialized(checked, "update_scene")) return; checked->updateActiveScene(
         speaker    ? speaker    : "",
         dialogue   ? dialogue   : "",
         background ? background : "",
@@ -52,7 +54,8 @@ void RowlEngine_UpdateSceneEx(
     float dlgX,  float dlgY,  float dlgW,  float dlgH)
 {
     if (!isLiveHandle(handle)) return;
-    invokeNoexcept([&] { if (auto* checked = toEngineChecked(handle)) checked->updateActiveScene(
+    // D1 (#111): Ex varyantı aynı delik — init-öncesi yazım enjeksiyonu.
+    invokeNoexcept([&] { auto* checked = toEngineChecked(handle); if (!checked || !requireEngineInitialized(checked, "update_scene")) return; checked->updateActiveScene(
         speaker    ? speaker    : "",
         dialogue   ? dialogue   : "",
         background ? background : "",
@@ -339,7 +342,9 @@ void RowlEngine_SetProjectDirectory(RowlEngineHandle handle, const char* project
 
 void RowlEngine_SetBgmTransitionDefaults(RowlEngineHandle handle, const char* transition, float durationSeconds) {
     if (!isLiveHandle(handle)) return;
-    invokeNoexcept([&] { if (auto* checked = toEngineChecked(handle)) checked->setBgmTransitionDefaults(transition ? transition : "instant", durationSeconds); });
+    // D1 (#132 tutunur-sınıfı): salt-state setter init-öncesi tutunur ama
+    // void yüzünden sinyal vermezdi. Davranış korunur + StateError sinyali.
+    invokeNoexcept([&] { auto* checked = toEngineChecked(handle); if (!checked) return; requireEngineInitialized(checked, "set_bgm_transition_defaults"); checked->setBgmTransitionDefaults(transition ? transition : "instant", durationSeconds); });
 }
 
 void RowlEngine_AdvanceNode(RowlEngineHandle handle, uint32_t choiceIndex) {
@@ -367,7 +372,13 @@ const char* RowlEngine_GetSpeaker(RowlEngineHandle handle) {
     static thread_local std::string buf;
     return invokeNoexcept<const char*>([&] {
         auto* checked = toEngineChecked(handle);
-        buf = checked ? checked->getActiveSpeaker() : "";
+        // D1 (#111): pre-init okuma demo varsayılanını gerçek sanıyordu.
+        // Boş + StateError sinyali (dönüş imzası korunur).
+        if (!checked || !requireEngineInitialized(checked, "get_speaker")) {
+            buf.clear();
+            return buf.c_str();
+        }
+        buf = checked->getActiveSpeaker();
         return buf.c_str();
     }, "");
 }
@@ -377,7 +388,12 @@ const char* RowlEngine_GetDialogue(RowlEngineHandle handle) {
     static thread_local std::string buf;
     return invokeNoexcept<const char*>([&] {
         auto* checked = toEngineChecked(handle);
-        buf = checked ? checked->getActiveDialogue() : "";
+        // D1 (#111): GetSpeaker ile aynı delik.
+        if (!checked || !requireEngineInitialized(checked, "get_dialogue")) {
+            buf.clear();
+            return buf.c_str();
+        }
+        buf = checked->getActiveDialogue();
         return buf.c_str();
     }, "");
 }
@@ -403,6 +419,12 @@ RowlEngine_ResultCode RowlEngine_GetSpeakerUtf8(
     return invokeNoexcept<RowlEngine_ResultCode>([&] {
         auto* engine = toEngineChecked(handle);
         if (!engine) return ROWL_RESULT_INVALID_HANDLE;
+        // D1 (#114): init/graph-öncesi sahte default içerik OK ile servis
+        // ediliyordu. Fail-closed: boş çıktı + STATE_ERROR.
+        if (!requireEngineInitialized(engine, "get_speaker")) {
+            copyUtf8ToCaller("", buffer, bufferSize, outRequiredSize);
+            return ROWL_RESULT_STATE_ERROR;
+        }
         return copyUtf8ToCaller(engine->getActiveSpeaker(), buffer,
                                 bufferSize, outRequiredSize);
     }, ROWL_RESULT_UNKNOWN_ERROR);
@@ -415,6 +437,11 @@ RowlEngine_ResultCode RowlEngine_GetDialogueUtf8(
     return invokeNoexcept<RowlEngine_ResultCode>([&] {
         auto* engine = toEngineChecked(handle);
         if (!engine) return ROWL_RESULT_INVALID_HANDLE;
+        // D1 (#114): GetSpeakerUtf8 ile aynı delik.
+        if (!requireEngineInitialized(engine, "get_dialogue")) {
+            copyUtf8ToCaller("", buffer, bufferSize, outRequiredSize);
+            return ROWL_RESULT_STATE_ERROR;
+        }
         return copyUtf8ToCaller(engine->getActiveDialogue(), buffer,
                                 bufferSize, outRequiredSize);
     }, ROWL_RESULT_UNKNOWN_ERROR);
@@ -432,7 +459,7 @@ float RowlEngine_GetBackgroundRotation(RowlEngineHandle handle) {
 
 void RowlEngine_SetBackgroundParallax(RowlEngineHandle handle, float parallaxX, float parallaxY) {
     if (!isLiveHandle(handle)) return;
-    invokeNoexcept([&] { if (auto* checked = toEngineChecked(handle)) checked->setBackgroundParallax(parallaxX, parallaxY); });
+    invokeNoexcept([&] { auto* checked = toEngineChecked(handle); if (!checked) return; requireEngineInitialized(checked, "set_background_parallax"); checked->setBackgroundParallax(parallaxX, parallaxY); });
 }
 
 float RowlEngine_GetBackgroundParallaxX(RowlEngineHandle handle) {

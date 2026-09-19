@@ -104,3 +104,20 @@ inline RowlEngine_ResultCode copyUtf8ToCaller(
     buffer[value.size()] = '\0';
     return ROWL_RESULT_OK;
 }
+
+/// D1 (B1b #108-#132): pre-init fail-loud disiplini. Init-öncesi çağrılan
+/// giriş davranışını korur (void'ler no-op ya da son-geçerliyi yazar,
+/// getter'lar mevcut fallback'u döner) ama last-result kanalına StateError
+/// işler; disiplinsiz caller GetLastResultCode'dan ayırt eder. noexcept;
+/// engine null ise sessiz false (handle guard'ı çağırandadır).
+inline bool requireEngineInitialized(Rowl::Core::Engine* engine, const char* op) noexcept {
+    if (engine != nullptr && engine->isInitialized()) return true;
+    if (engine != nullptr) {
+        if (Rowl::Core::RuntimeContext* ctx = engine->getContext()) {
+            ctx->setError(Rowl::Core::RuntimeErrorCode::StateError,
+                          "Engine is not initialized; call RowlEngine_Init first",
+                          op ? op : "", "");
+        }
+    }
+    return false;
+}

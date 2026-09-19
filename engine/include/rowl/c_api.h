@@ -314,6 +314,8 @@ ROWL_API void RowlEngine_ResetToStartNode(RowlEngineHandle handle);
 /**
  * Updates the currently displayed visual novel scene.
  * All pointer parameters must remain valid only for the duration of the call.
+ * Requires a prior RowlEngine_Init (D1/B1b): pre-init calls are no-ops that
+ * report StateError via RowlEngine_GetLastResultCode.
  */
 ROWL_API void RowlEngine_UpdateScene(
     RowlEngineHandle handle,
@@ -578,6 +580,7 @@ ROWL_API int RowlEngine_PointerDown(RowlEngineHandle handle, float x, float y);
  * The returned pointer is owned by the engine — do NOT free it.
  * It is valid until the next RowlEngine_UpdateScene / RowlEngine_Step call.
  * See the lifetime contract above; prefer GetSpeakerWithLength for exact bytes.
+ * Requires a prior RowlEngine_Init (D1/B1b): pre-init returns "" with StateError.
  */
 ROWL_API const char* RowlEngine_GetSpeaker(RowlEngineHandle handle);
 
@@ -587,7 +590,9 @@ ROWL_API const char* RowlEngine_GetSpeaker(RowlEngineHandle handle);
  */
 ROWL_API const char* RowlEngine_GetSpeakerWithLength(RowlEngineHandle handle, uint32_t* outLen);
 
-/** Caller-buffer variant of GetSpeaker (B2b; no borrowed lifetime). */
+/** Caller-buffer variant of GetSpeaker (B2b; no borrowed lifetime).
+ * Requires a prior RowlEngine_Init (D1/B1b): pre-init copies empty output
+ * and returns StateError instead of serving demo defaults as OK. */
 ROWL_API RowlEngine_ResultCode RowlEngine_GetSpeakerUtf8(
     RowlEngineHandle handle, char* buffer, uint32_t bufferSize, uint32_t* outRequiredSize);
 
@@ -597,7 +602,8 @@ ROWL_API const char* RowlEngine_GetDialogue(RowlEngineHandle handle);
 /** Length-reporting variant of GetDialogue (see lifetime contract above). */
 ROWL_API const char* RowlEngine_GetDialogueWithLength(RowlEngineHandle handle, uint32_t* outLen);
 
-/** Caller-buffer variant of GetDialogue (B2b; no borrowed lifetime). */
+/** Caller-buffer variant of GetDialogue (B2b; no borrowed lifetime).
+ * Same pre-init contract as GetSpeakerUtf8 (D1/B1b). */
 ROWL_API RowlEngine_ResultCode RowlEngine_GetDialogueUtf8(
     RowlEngineHandle handle, char* buffer, uint32_t bufferSize, uint32_t* outRequiredSize);
 
@@ -881,7 +887,9 @@ ROWL_API RowlEngine_ResultCode RowlEngine_GetDialogueHistoryJsonUtf8(
 
 /* ── Save / Load Slots & History Rewind ───────────────────────────────────── */
 
-/** Result-coded save entry point for new hosts. */
+/** Result-coded save entry point for new hosts.
+ * Requires a prior RowlEngine_Init (D1/B1b): pre-init saves return
+ * StateError without writing a file. */
 ROWL_API RowlEngine_ResultCode RowlEngine_SaveGameSlotResult(
     RowlEngineHandle handle, int32_t slotIndex);
 
@@ -891,7 +899,9 @@ ROWL_API RowlEngine_ResultCode RowlEngine_SaveGameSlotResult(
  */
 ROWL_API int RowlEngine_SaveGameSlot(RowlEngineHandle handle, int32_t slotIndex);
 
-/** Result-coded load entry point for new hosts. */
+/** Result-coded load entry point for new hosts.
+ * Requires a prior RowlEngine_Init (D1/B1b): pre-init loads return
+ * StateError without touching session state. */
 ROWL_API RowlEngine_ResultCode RowlEngine_LoadGameSlotResult(
     RowlEngineHandle handle, int32_t slotIndex);
 
@@ -904,7 +914,8 @@ ROWL_API int RowlEngine_HasSaveSlot(RowlEngineHandle handle, int32_t slotIndex);
 /** Deletes the specified save slot. Returns 1 on success, 0 on failure. */
 ROWL_API int RowlEngine_DeleteSaveSlot(RowlEngineHandle handle, int32_t slotIndex);
 
-/** Rewinds the game state by the specified number of steps (default 1). Returns 1 on success, 0 on failure. */
+/** Rewinds the game state by the specified number of steps (default 1). Returns 1 on success, 0 on failure.
+ * Requires a prior RowlEngine_Init (D1/B1b): pre-init rewind returns 0 with StateError. */
 ROWL_API int RowlEngine_Rewind(RowlEngineHandle handle, uint32_t steps);
 
 /** Returns the current history step ID. */
@@ -1109,6 +1120,8 @@ ROWL_API int RowlEngine_IsPreviewFrameStatic(RowlEngineHandle handle);
  * Sets 2D camera position and zoom factor.
  * x, y: camera center coordinates in virtual canvas space (default: 960, 540).
  * zoom: zoom factor (clamped between 0.1 and 10.0, default: 1.0).
+ * Pre-init calls keep prior behavior but report StateError via
+ * RowlEngine_GetLastResultCode (D1/B1b); same for the other audio/render setters.
  */
 ROWL_API void RowlEngine_SetCamera(RowlEngineHandle handle, float x, float y, float zoom);
 
@@ -1224,7 +1237,8 @@ ROWL_API RowlEngine_ResultCode RowlEngine_GetLoadedChaptersJson(
     RowlEngineHandle handle, char* buffer, uint32_t bufferSize,
     uint32_t* outRequiredSize);
 /** Returns 1 when the node starts a chapter or has a successor in another chapter; 0 otherwise
- * (unknown node and dead handle are 0, fail closed). */
+ * (unknown node and dead handle are 0, fail closed). Requires a prior RowlEngine_Init
+ * for engine-graph reads (D1/B1b): pre-init returns 0 with StateError. */
 ROWL_API int RowlEngine_IsChapterBoundaryNode(RowlEngineHandle handle, uint64_t nodeId);
 /**
  * Triggers a prefetch for the requested chapter window (chapter + its
@@ -1232,12 +1246,14 @@ ROWL_API int RowlEngine_IsChapterBoundaryNode(RowlEngineHandle handle, uint64_t 
  * engine current chapter, else the current node + successors for legacy
  * single-file graphs). budgetBytes 0 selects the 32 MiB default; larger
  * values clamp to 128 MiB. Runs one synchronous ~4 ms pump before returning;
- * further progress via RowlEngine_PumpPrefetch.
+ * further progress via RowlEngine_PumpPrefetch. Requires a prior
+ * RowlEngine_Init (D1/B1b): pre-init returns StateError (no phantom-missing).
  */
 ROWL_API RowlEngine_ResultCode RowlEngine_PrefetchChapterAssets(
     RowlEngineHandle handle, const char* chapterIdUtf8, uint64_t budgetBytes);
 /** Pumps the prefetch queue for at most maxMilliseconds (<= 0 or non-finite
- * selects ~4 ms; clamped to 50 ms). Returns newly-ready assets (0 fail closed). */
+ * selects ~4 ms; clamped to 50 ms). Returns newly-ready assets (0 fail closed).
+ * Pre-init pumps 0 with StateError (D1/B1b). */
 ROWL_API int RowlEngine_PumpPrefetch(RowlEngineHandle handle, float maxMilliseconds);
 /** Copies {total_assets, ready_assets, missing_assets, queued_assets,
  * ready_bytes, budget_bytes, complete, missing_paths[], last_diagnostic} as UTF-8 JSON. */
