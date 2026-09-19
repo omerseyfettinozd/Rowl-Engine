@@ -420,11 +420,13 @@ bool AudioEngine::decodeAssetToFloatPcm(const std::string& assetPath,
                 }
                 if (m_lastError.empty()) m_lastError = "Ogg/Vorbis stream could not be decoded";
                 ROWL_LOG_WARN("[AudioEngine] " + m_lastError + ": " + assetPath);
-                // Stale stream kararı korunmaz: RAM-decode başarısızlığında
-                // önceki akış kapatılıp snapshot no_bgm/unknown'a sıfırlanır.
-                // (Miras davranış: kanal ne olursa olsun koşulsuzdur.)
-                closeBgmStream();
-                resetStreamInfoNoBgm();
+                // Stale stream karari yalnizca Bgm kanalinda korunmaz (#78):
+                // non-BGM miss baska kanalin stream/snapshot state'ine
+                // dokunmaz.
+                if (channelIsBgm) {
+                    closeBgmStream();
+                    resetStreamInfoNoBgm();
+                }
                 return false;
             }
             bytes = vfs().readBytes(candidate);
@@ -496,10 +498,11 @@ bool AudioEngine::decodeAssetToFloatPcm(const std::string& assetPath,
     }
     m_lastError = "Audio file could not be decoded (supported: WAV, OGG/Vorbis): " + assetPath;
     ROWL_LOG_WARN("[AudioEngine] " + m_lastError);
-    // Stale stream kararı korunmaz (yukarıdaki OGG dalıyla aynı).
-    // (Miras davranış: kanal ne olursa olsun koşulsuzdur.)
-    closeBgmStream();
-    resetStreamInfoNoBgm();
+    // Stale stream karari yalnizca Bgm kanalinda korunmaz (#78).
+    if (channelIsBgm) {
+        closeBgmStream();
+        resetStreamInfoNoBgm();
+    }
     return false;
 }
 
@@ -650,10 +653,13 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
                 }
                 if (m_lastError.empty()) m_lastError = "Ogg/Vorbis stream could not be decoded";
                 ROWL_LOG_WARN("[AudioEngine] " + m_lastError + ": " + assetPath);
-                // Stale stream kararı korunmaz: RAM-decode başarısızlığında
-                // önceki akış kapatılıp snapshot no_bgm/unknown'a sıfırlanır.
-                closeBgmStream();
-                resetStreamInfoNoBgm();
+                // Stale stream karari yalnizca Bgm kanalinda korunmaz (#78):
+                // non-BGM miss baska kanalin stream/snapshot state'ine
+                // dokunmaz.
+                if (channel == AudioChannelType::Bgm) {
+                    closeBgmStream();
+                    resetStreamInfoNoBgm();
+                }
                 return;
             }
             bytes = vfs().readBytes(candidate);
@@ -904,9 +910,11 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
     } else {
         m_lastError = "Audio file could not be decoded (supported: WAV, OGG/Vorbis): " + assetPath;
         ROWL_LOG_WARN("[AudioEngine] " + m_lastError);
-        // Stale stream kararı korunmaz (yukarıdaki OGG dalıyla aynı).
-        closeBgmStream();
-        resetStreamInfoNoBgm();
+        // Stale stream karari yalnizca Bgm kanalinda korunmaz (#78).
+        if (channel == AudioChannelType::Bgm) {
+            closeBgmStream();
+            resetStreamInfoNoBgm();
+        }
     }
 }
 

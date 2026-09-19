@@ -281,3 +281,245 @@ void test_audio_lock_underwater_clamp() {
     requireClampedUnitPeak(audio.testLastDspPeak(), "lock_dc_neg/CaveReverb");
     TEST_PASS("Audio Clamp Lock — CaveReverb -5.0f DC (isaret-simetrisi)");
 }
+
+/**
+ * test_audio_lock.cpp eklentisi — BGM Miss Guard (#78) KILIDI.
+ *
+ * KILIT (mutant oldurur): non-BGM kanalda miss (olmayan dosya / bozuk OGG)
+ * calan streaming BGM'i yikmamalidir. Asagidaki 4 fail-closed yolda
+ * dogrulandi: eksik dosya x helper/dogrudan + bozuk OGG x helper/dogrudan
+ * (6 Miss Guard adimi PASS). V3 (yanlis-uye sifirlama), M2 (tek-gate
+ * kaldirma) ve V4 (helper final-miss gatesiz) varyantlari exit=1 ile olur.
+ *
+ * Gozlem (yedi iddia tek noktada, requireMissGuardIntact, timing-assert YOK):
+ *  (a) isBgmPlaying() hâlâ true (intent korunur),
+ *  (b) isStreaming() hâlâ true (stream nesnesi sag),
+ *  (c) streamInfoJson() mode=="stream" (snapshot dogrulugu),
+ *  (d) reason=="over_threshold" (no_bgm DEGIL),
+ *  (e) asset==kurulum BGM'i (miss dosyasi DEGIL),
+ *  (f) channel==0/Bgm (2/Sfx DEGIL),
+ *  (g) getCurrentBgmPath()==kurulum BGM'i (bos DEGIL).
+ *
+ * KAPSAM-DISI (acik cephe, evrensel-kapsama iddiasi YOKTUR): govdedeki
+ * 13 gated siteden bu kilit disinda kalanlar — playAudio alloc (~643),
+ * encoded-cap (~672), decoded-cap (~693), convert-fail (~711),
+ * queue-fail (~794) ve helper/playAudio icindeki kalan varyantlar.
+ * Bu yollarda gate kaldirilinca test yesil kalabilir (~711 karsi-mutanti
+ * yesil birakir); kapsama genisletmesi ayri istir.
+ *
+ * Decode-helper varyanti private decodeAssetToFloatPcm'i public
+ * non-BGM caller'lar uzerinden surer: playAmbienceBed /
+ * crossfadeAmbienceTo helper'i channelIsBgm=false ile cagirir.
+ *
+ * BGM fail-closed karsit-kanit: BGM kanalinda miss stream'i KAPATIR
+ * (gate BGM dalini bozmadi).
+ *
+ * Cihaz bagimliligi: streaming kurulum cihaza baglidir; cihazsiz kosuda
+ * requireAudioDeviceOrSkip acik SKIP'i aynen uygulanir.
+ */
+namespace {
+
+// Uzun OGG fixture (2 sn sine, 44100 Hz stereo, 88200 frame):
+// test_audio_streaming.cpp'deki kLongToneOggBase64 ile bayt-bayti ayni
+// (derleme-sirasinda dogrulanan kopya; splice betigi karsilastirir).
+const char* kMissGuardLongToneOggBase64 = "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4AAAEGCDpsTiAIWGrAQAQgIAHIpiWZrmeZ4niqapmiRJ0zxPFEXRNE1TVUmSpnmeKIqiaZqmqrIsTfM8URRF01RVVYWmeZ4oiqJpqqrqwvM8TxRF0TRV1XXheZ4niqJomqrquhBFUTRN01RNVXVdIIqmaZqqqqquC0RPFE1TVV3XdYHniaJpqqqrui4QTdNUVVV1XVkGmKZpqqrryjJAVVXVdV1XlgGqqqqu67qyDFBV13VdWZZlAK7rurIsywIAAA4cAAACjKCTjCqLsNGECw9AoSErAoAoAADAGKYUU8owJiGkEBrGJIQUQiYlpdJSqiCkUlIpFYRUSiolo5RSailVEFIpqZQKQiollVIAANiBAwDYgYVQaMhKACAPAIAwRinGGHNOIqQUY845JxFSijHnnJNKMeacc85JKRlzzDnnpJTOOeecc1JK5pxzzjkppXPOOeeclFJK55xzTkopJYTOQSellNI555wTAABU4AAAEGCjyOYEI0GFhqwEAFIBAAyOY1ma5nmiaJqWJGma53meKJqmJkma5nmeJ4qqyfM8TxRF0TRVled5niiKommqKtcVRdM0TVVVXbIsiqZpmqrqujBN01RV13VdmKZpqqrrui5sW1VV1XVlGbatqqrqurIMXNd1ZdmWgSy7ruzasgAA8AQHAKACG1ZHOCkaCyw0ZCUAkAEAQBiDkEIIIWUQQgohhJRSCAkAABhwAAAIMKEMFBqyEgBIBQAAjLHWWmuttdZAZ6211lprrYDMWmuttdZaa6211lprrbXWUmuttdZaa6211lprrbXWWmuttdZaa6211lprrbXWWmuttdZaa6211lprrbXWWmuttdZaay2llFJKKaWUUkoppZRSSimllFJKBQD6VTgA+D/YsDrCSdFYYKEhKwGAcAAAwBilGHMMQimlVAgx5px0VFqLsUKIMeckpNRabMVzzkEoIZXWYiyecw5CKSnFVmNRKYRSUkottliLSqGjklJKrdVYjDGppNZai63GYoxJKbTUWosxFiNsTam12GqrsRhjayottBhjjMUIX2RsLabaag3GCCNbLC3VWmswxhjdW4ultpqLMT742lIsMdZcAAB3gwMARIKNM6wknRWOBhcashIACAkAIBBSijHGGHPOOeekUow55pxzDkIIoVSKMcaccw5CCCGUjDHmnHMQQgghhFJKxpxzEEII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";
+
+std::vector<uint8_t> missGuardLongToneOggBytes() {
+    const auto bytes = decodeBase64(kMissGuardLongToneOggBase64);
+    if (bytes.empty() || bytes.size() <= 64 ||
+        std::memcmp(bytes.data(), "OggS", 4) != 0) {
+        lockFail("Audio BGM Miss Guard (#78): uzun OGG fixture cozule medi");
+    }
+    return bytes;
+}
+
+// OGG page CRC (poly 0x04C11DB7, init 0) — test_audio_streaming.cpp'deki
+// oggPageCrc ile ayni algoritma (CRC alani sifirlanir, tum sayfa).
+uint32_t missGuardOggPageCrc(const uint8_t* data, size_t size) {
+    static uint32_t table[256];
+    static bool ready = false;
+    if (!ready) {
+        for (uint32_t i = 0; i < 256; ++i) {
+            uint32_t r = i << 24;
+            for (int k = 0; k < 8; ++k) {
+                r = (r & 0x80000000u) ? ((r << 1) ^ 0x04C11DB7u) : (r << 1);
+            }
+            table[i] = r;
+        }
+        ready = true;
+    }
+    uint32_t crc = 0;
+    for (size_t i = 0; i < size; ++i) {
+        crc = (crc << 8) ^ table[((crc >> 24) ^ data[i]) & 0xFFu];
+    }
+    return crc;
+}
+
+// CRC-onarimli granule yamasi: header probe + source-duration geci
+// (ov_pcm_total, CRC-duyarli) over-threshold raporlar; decoder gercek
+// paketleri calip EOS'a ulasir. test_audio_streaming.cpp'deki
+// patchGranuleWithCrcForStream ile ayni islem.
+std::vector<uint8_t> missGuardPatchGranuleForStream(std::vector<uint8_t> ogg,
+                                                    uint64_t granule) {
+    size_t lastPage = std::string::npos;
+    for (size_t i = 0; i + 27 <= ogg.size(); ++i) {
+        if (std::memcmp(ogg.data() + i, "OggS", 4) == 0) lastPage = i;
+    }
+    if (lastPage == std::string::npos) {
+        lockFail("Audio BGM Miss Guard (#78): granule yamasi icin OggS sayfasi yok");
+    }
+    if (lastPage + 27 > ogg.size()) {
+        lockFail("Audio BGM Miss Guard (#78): kesik OggS sayfasi");
+    }
+    for (int b = 0; b < 8; ++b) {
+        ogg[lastPage + 6 + b] = static_cast<uint8_t>((granule >> (8 * b)) & 0xFFu);
+    }
+    const size_t nseg = ogg[lastPage + 26];
+    if (lastPage + 27 + nseg > ogg.size()) {
+        lockFail("Audio BGM Miss Guard (#78): kesik OggS segment tablosu");
+    }
+    size_t body = 0;
+    for (size_t i = 0; i < nseg; ++i) body += ogg[lastPage + 27 + i];
+    const size_t pageEnd = lastPage + 27 + nseg + body;
+    if (pageEnd > ogg.size()) {
+        lockFail("Audio BGM Miss Guard (#78): kesik OggS sayfa govdesi");
+    }
+    ogg[lastPage + 22] = 0;
+    ogg[lastPage + 23] = 0;
+    ogg[lastPage + 24] = 0;
+    ogg[lastPage + 25] = 0;
+    const uint32_t crc = missGuardOggPageCrc(ogg.data() + lastPage, pageEnd - lastPage);
+    ogg[lastPage + 22] = static_cast<uint8_t>(crc & 0xFFu);
+    ogg[lastPage + 23] = static_cast<uint8_t>((crc >> 8) & 0xFFu);
+    ogg[lastPage + 24] = static_cast<uint8_t>((crc >> 16) & 0xFFu);
+    ogg[lastPage + 25] = static_cast<uint8_t>((crc >> 24) & 0xFFu);
+    return ogg;
+}
+
+void setupMissGuardProject(Rowl::VFS::VFSManager& vfs, Rowl::Audio::AudioEngine& audio) {
+    if (!audio.initialize() || !audio.isInitialized()) {
+        lockFail("Audio BGM Miss Guard (#78): audio init failed");
+    }
+    const auto root = std::filesystem::temp_directory_path() / "rowl_audio_bgm_miss_guard_project";
+    const auto dir = root / "Assets" / "audio";
+    std::filesystem::create_directories(dir);
+    // Streaming BGM fixture: 1e9 granule (header probe + ov_pcm_total
+    // over-threshold; decoder gercek paketleri calar).
+    const auto patched =
+        missGuardPatchGranuleForStream(missGuardLongToneOggBytes(),
+                                       static_cast<uint64_t>(1000000000));
+    writeBytes(dir / "miss_bgm.ogg", patched);
+    // Bozuk OGG fixture (decode-helper OGG-fail dali icin): ilk 100 bayt.
+    const auto tone = missGuardLongToneOggBytes();
+    const size_t cut = std::min<size_t>(tone.size(), 100);
+    writeBytes(dir / "miss_corrupt.ogg",
+               std::vector<uint8_t>(tone.begin(), tone.begin() + static_cast<ptrdiff_t>(cut)));
+    vfs.remountProject(root.string());
+}
+
+// Uc iddia tek noktada degil, yedi iddia tek noktada (#78-tur2):
+// (a) intent (isBgmPlaying), (b) stream nesnesi (isStreaming),
+// (c) snapshot mode=="stream", (d) reason=="over_threshold" (no_bgm DEGIL),
+// (e) asset==kurulum BGM'i (miss dosyasi DEGIL),
+// (f) channel==0/Bgm (2/Sfx DEGIL), (g) m_currentBgmPath==kurulum BGM'i
+// (bos DEGIL). M2 varyanti (mode stream kalirken reason=no_bgm +
+// asset=miss dosyasi + channel=2 + path bos) bu dort ek iddia ile FAIL
+// verir (exit 1); yalniz mode bakmak onu oldurmez.
+void requireMissGuardIntact(Rowl::Audio::AudioEngine& audio, const std::string& context) {
+    static const std::string kExpectedBgm = "audio/miss_bgm.ogg";
+    if (!audio.isBgmPlaying()) {
+        lockFail(context + ": BGM intent dustu (isBgmPlaying false)");
+    }
+    if (!audio.isStreaming()) {
+        lockFail(context + ": stream nesnesi kapandi (isStreaming false)");
+    }
+    const std::string json = audio.streamInfoJson();
+    if (json.find("\"mode\":\"stream\"") == std::string::npos) {
+        lockFail(context + ": snapshot yalana dustu (mode!=stream): " + json);
+    }
+    if (json.find("\"reason\":\"over_threshold\"") == std::string::npos) {
+        lockFail(context + ": snapshot reason yalani (over_threshold degil): " + json);
+    }
+    if (json.find("\"channel\":0") == std::string::npos) {
+        lockFail(context + ": snapshot channel yalani (0/Bgm degil): " + json);
+    }
+    if (json.find("\"asset\":\"" + kExpectedBgm + "\"") == std::string::npos) {
+        lockFail(context + ": snapshot asset yalani (kurulum BGM degil): " + json);
+    }
+    if (audio.getCurrentBgmPath() != kExpectedBgm) {
+        lockFail(context + ": BGM path yalani (bos/yanlis): '" +
+                 audio.getCurrentBgmPath() + "'");
+    }
+}
+
+} // namespace
+
+void test_audio_lock_bgm_miss_guard() {
+    TEST_SECTION("Audio BGM Miss Guard (#78)");
+
+    Rowl::VFS::VFSManager vfs;
+    Rowl::Audio::AudioEngine audio(&vfs);
+    setupMissGuardProject(vfs, audio);
+    if (!requireAudioDeviceOrSkip(audio, "Audio BGM Miss Guard")) return;
+
+    // Adim 1: gecerli streaming BGM kurulumu.
+    audio.playAudio("audio/miss_bgm.ogg", Rowl::Audio::AudioChannelType::Bgm);
+    audio.update();
+    requireMissGuardIntact(audio, "kurulum/miss_bgm.ogg");
+    TEST_PASS("Audio BGM Miss Guard — kurulum (streaming BGM: intent+stream+snapshot)");
+
+    // Adim 2 (katil gozlem): eksik SFX miss'i BGM'e dokunmaz.
+    audio.playAudio("audio/does_not_exist.wav", Rowl::Audio::AudioChannelType::Sfx);
+    requireMissGuardIntact(audio, "eksik Sfx sonrasi");
+    TEST_PASS("Audio BGM Miss Guard — eksik SFX BGM stream/snapshot'i korur");
+
+    // Varyant: Voice + Ui kanallarinda eksik dosya.
+    audio.playAudio("audio/does_not_exist.wav", Rowl::Audio::AudioChannelType::Voice);
+    requireMissGuardIntact(audio, "eksik Voice sonrasi");
+    audio.playAudio("audio/does_not_exist.wav", Rowl::Audio::AudioChannelType::Ui);
+    requireMissGuardIntact(audio, "eksik Ui sonrasi");
+    TEST_PASS("Audio BGM Miss Guard — eksik Voice/Ui BGM stream/snapshot'i korur");
+
+    // Varyant: decode helper uzerinden non-BGM miss (public caller'lar
+    // helper'i channelIsBgm=false ile cagirir). Hem final-miss dali
+    // (olmayan dosya) hem OGG-decode-fail dali (bozuk OGG) gozlenir.
+    if (audio.playAmbienceBed(0, "audio/does_not_exist.wav")) {
+        lockFail("eksik bed beklenmedik basari dondu");
+    }
+    requireMissGuardIntact(audio, "eksik ambience-bed sonrasi");
+    if (audio.crossfadeAmbienceTo("audio/does_not_exist.wav", 0.0f,
+                                  Rowl::Audio::FadeCurve::Linear)) {
+        lockFail("eksik crossfade beklenmedik basari dondu");
+    }
+    requireMissGuardIntact(audio, "eksik crossfade sonrasi");
+    if (audio.playAmbienceBed(0, "audio/miss_corrupt.ogg")) {
+        lockFail("bozuk OGG bed beklenmedik basari dondu");
+    }
+    requireMissGuardIntact(audio, "bozuk OGG bed sonrasi");
+    TEST_PASS("Audio BGM Miss Guard — helper-dali non-BGM miss BGM'i korur (bed/crossfade/corrupt)");
+
+    // 4. varyant (#78-tur2, V3 katili): bozuk OGG helper disinda DOGUDAN
+    // playAudio non-BGM uzerinden surulur (Sfx/Voice/Ui x corrupt OGG).
+    // playAudio OGG-decode-fail dali (audio_engine.cpp ~656) Bgm-gated
+    // degilse stream kapanir + snapshot yalana duser ve genis guard
+    // exit(1) ile oldurur. Helper-varyanti bu dala ugramaz
+    // (decodeAssetToFloatPcm ayri sitedir), o yuzden bu varyant zorunludur.
+    audio.playAudio("audio/miss_corrupt.ogg", Rowl::Audio::AudioChannelType::Sfx);
+    requireMissGuardIntact(audio, "bozuk OGG dogrudan Sfx sonrasi");
+    audio.playAudio("audio/miss_corrupt.ogg", Rowl::Audio::AudioChannelType::Voice);
+    requireMissGuardIntact(audio, "bozuk OGG dogrudan Voice sonrasi");
+    audio.playAudio("audio/miss_corrupt.ogg", Rowl::Audio::AudioChannelType::Ui);
+    requireMissGuardIntact(audio, "bozuk OGG dogrudan Ui sonrasi");
+    TEST_PASS("Audio BGM Miss Guard — dogrudan playAudio non-BGM corrupt OGG BGM'i korur (Sfx/Voice/Ui)");
+
+    // Karsit-kanit: BGM kanalinda miss hâlâ fail-closed'dur (gate BGM
+    // dalini bozmadi): stream kapanir, snapshot stream degildir.
+    audio.playAudio("audio/does_not_exist.wav", Rowl::Audio::AudioChannelType::Bgm);
+    if (audio.isStreaming()) {
+        lockFail("BGM miss stream'i kapatmadi — fail-closed bozuldu");
+    }
+    TEST_PASS("Audio BGM Miss Guard — BGM miss fail-closed kalir (karsit-kanit)");
+
+    audio.stopAll();
+    audio.shutdown();
+}
