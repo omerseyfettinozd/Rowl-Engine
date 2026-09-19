@@ -232,8 +232,16 @@ void Engine::setExternalWindowHandle(void* nativeHandle, uint32_t w, uint32_t h)
 
 bool Engine::initialize(const EngineConfig& config) {
     if (m_initialized) {
+        // B1a (#103/#125): double-init sessiz-başarıydı (1) ve boyut
+        // validasyonunu atlıyordu. Yüksek sesle reddet; shutdown→re-init
+        // akışı etkilenmez (shutdown m_initialized'ı düşürür).
         ROWL_LOG_WARN("Engine is already initialized.");
-        return true;
+        if (m_context) {
+            m_context->setError(RuntimeErrorCode::StateError,
+                                "Engine is already initialized; shut down before re-initializing",
+                                "init", "");
+        }
+        return false;
     }
 
     if (config.virtualWidth == 0 || config.virtualHeight == 0 ||
@@ -241,6 +249,15 @@ bool Engine::initialize(const EngineConfig& config) {
         config.virtualHeight > kMaxVirtualCanvasDimension) {
         ROWL_LOG_ERROR("Invalid virtual canvas dimensions: " +
                        std::to_string(config.virtualWidth) + "x" + std::to_string(config.virtualHeight));
+        // B1a (#104): init-başarısızlığı last-error yazmadan 0 dönüyordu
+        // (stale OK). Her ret kanala işlenir.
+        if (m_context) {
+            m_context->setError(RuntimeErrorCode::ValidationError,
+                                "Invalid virtual canvas dimensions: " +
+                                    std::to_string(config.virtualWidth) + "x" +
+                                    std::to_string(config.virtualHeight),
+                                "init", "");
+        }
         return false;
     }
 
@@ -306,6 +323,13 @@ bool Engine::initialize(const EngineConfig& config) {
 
     if (!windowOk) {
         ROWL_LOG_ERROR("Failed to initialize render window!");
+        // B1a (#104/#126-kısmi): yarı-pencereyi tutma (yeniden-init
+        // overwrite eder, shutdown geri alamazdı) + kanala işle.
+        m_window.reset();
+        if (m_context) {
+            m_context->setError(RuntimeErrorCode::StateError,
+                                "Failed to initialize render window", "init", "");
+        }
         return false;
     }
 
@@ -318,11 +342,35 @@ bool Engine::initialize(const EngineConfig& config) {
 
     // Initialize Audio Engine Subsystem
     m_audio = std::make_unique<Rowl::Audio::AudioEngine>(getVfs());
-    m_audio->initialize();
+    // B1a (#105): dönüş çöpe atılıyor, Init yine 1 dönüyordu. Başarısız
+    // alt-sistem init'i yüksek sesle kapatır (bugün audio hep true döner —
+    // sözleşme-pini; lua OOM'da false dönebilir).
+    if (!m_audio->initialize()) {
+        ROWL_LOG_ERROR("Failed to initialize audio engine!");
+        m_audio.reset();
+        m_scene.reset();
+        m_window.reset();
+        if (m_context) {
+            m_context->setError(RuntimeErrorCode::StateError,
+                                "Failed to initialize audio engine", "init", "");
+        }
+        return false;
+    }
 
     // Initialize Sandboxed Lua Scripting Environment
     m_luaSandbox = std::make_unique<Rowl::Scripting::LuaSandbox>();
-    m_luaSandbox->initialize();
+    if (!m_luaSandbox->initialize()) {
+        ROWL_LOG_ERROR("Failed to initialize sandboxed Lua environment!");
+        m_luaSandbox.reset();
+        m_audio.reset();
+        m_scene.reset();
+        m_window.reset();
+        if (m_context) {
+            m_context->setError(RuntimeErrorCode::StateError,
+                                "Failed to initialize sandboxed Lua environment", "init", "");
+        }
+        return false;
+    }
 
     // Initialize GameState Subsystem (Root Step #1)
     m_gameState = Rowl::State::GameState::createInitialState(m_storyRuntime.currentNodeId());

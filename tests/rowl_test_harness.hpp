@@ -122,6 +122,7 @@ void test_frame_reuse_lock();  // A3-tur5: identical-frame reuse D2 kilidi
 void test_cache_hygiene();  // A3-tur6: negatif-onbellek hijyen kilidi
 void test_font_hardening();  // A3-tur7: font-yukleme fail-closed kilidi
 void test_handle_hygiene();  // A4-tur1: handle-once siralama kilidi
+void test_lifecycle_init_guards();  // B1a: fail-loud init kilitleri
 void test_numeric_guards();  // B6: sayisal-uc/native guard dilimi bilerek-boz kilitleri
 void test_lua_hardening();  // B7: lua-sandbox sertlestirme dilimi bilerek-boz kilitleri
 void test_runtime_context_and_diagnostics();

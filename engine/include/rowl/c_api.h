@@ -152,6 +152,13 @@ ROWL_API void RowlEngine_Destroy(RowlEngineHandle handle);
  * @param vsync         1 = enable vsync, 0 = disable.
  * @return 1 on success, 0 on failure.
  *
+ * Fail-loud init (B1a): every rejection records a last-result
+ * (RowlEngine_GetLastResultCode/Message) — ValidationError (6) for bad
+ * canvas dimensions, StateError (11) for double-init or subsystem failure.
+ * A second Init on a live engine returns 0 (was: silent 1); shut down
+ * first, then re-init. A failed Init leaves no half-window behind, so a
+ * corrected retry on the same handle is safe.
+ *
  * The thread that first calls Init becomes the handle owner. Every later
  * call using this handle, including Destroy, must use that same host thread.
  * A call from another thread is safely rejected (void calls do nothing).
