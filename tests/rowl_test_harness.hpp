@@ -109,6 +109,7 @@ void test_audio_lock_outage_bgm_intent_data_sync();
 void test_audio_lock_outage_pending_no_stale_replay();
 void test_audio_lock_outage_pending_fail_preserved();
 void test_audio_lock_dead_handle_spectrum_zero_fill();
+void test_audio_lock_offscreen_global_pump();
 void test_lua_sandbox();
 void test_mobile_input();
 void test_platform_host();

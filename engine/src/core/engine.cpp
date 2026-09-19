@@ -1772,6 +1772,16 @@ void Engine::step(float deltaTime) {
     // hotplug rebuilds output streams, minimize suspends output, restore
     // resumes it. Playback intent is preserved in all three cases.
     if (m_audio) {
+        // #75: offscreen runtimes register no window, so pollEvents above
+        // early-returns and the dispatch pin stays unclaimed — takeGlobal-
+        // Events below would no-op without touching SDL_PollEvent and global
+        // audio-device events would sit dead in the SDL queue. Claim-and-
+        // pump first; the take's own internal pump then drains nothing new.
+        // Visible/embedded order (takeEvents-pump, takeGlobalEvents-pump)
+        // is untouched.
+        if (m_window->isOffscreen()) {
+            Rowl::Platform::SdlEventDispatcher::pumpOnly();
+        }
         for (const SDL_Event& event : Rowl::Platform::SdlEventDispatcher::takeGlobalEvents()) {
             switch (event.type) {
                 case SDL_EVENT_AUDIO_DEVICE_ADDED:

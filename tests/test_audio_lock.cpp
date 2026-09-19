@@ -1687,3 +1687,138 @@ void test_audio_lock_dead_handle_spectrum_zero_fill() {
     }
     TEST_PASS("Audio Dead-Handle Spectrum — guard'lar sessiz, Peak/Rms 0.0f korunur");
 }
+
+/**
+ * test_audio_lock.cpp eklentisi — Offscreen Global Pump (#75) KILIDI.
+ *
+ * KILIT (mutant oldurur): offscreen runtime pencere kaydetmez; pollEvents
+ * (m_eventWindowId==0) erken doner, dispatch pini sahipsiz kalir ve
+ * takeGlobalEvents SDL_PollEvent'e dokunmadan no-op'a duser — global
+ * audio-device/minimize eventleri SDL kuyrugunda olu kalir. Duzeltme:
+ * Engine::step offscreen dalinda once SdlEventDispatcher::pumpOnly()
+ * (sahipsizse-claim + pump) cagirir. pumpOnly satiri veya isOffscreen dali
+ * silinirse asagidaki minimize adimi suspend'i kuramaz -> exit(1).
+ * test_audio_device_recovery.cpp 3. adim ayni kablolari dogrular ama KAYITLI
+ * pencereyle (pin sahipli) — bu kilit kayitsiz offscreen-default halini
+ * kapsar; visible cift-pump duzeni aynen korunur (gozlem).
+ *
+ * Gozlem (deterministik; timing-assert/sleep/poll YOK; bu dosyanin deseni
+ * aynen: TEST_SECTION/TEST_PASS + hata=exit(1)):
+ *  - MINIMIZED itilir + RowlEngine_Step -> IsAudioOutputSuspended==1.
+ *  - RESTORED itilir + Step -> suspend==0 (resume yolu da global kuyruktan).
+ *  - ADDED itilir + Step -> suspend'e sizma yok + SDL kuyrugu bos (pump
+ *    kaniti; cihaz varken ADDED no-op dalidir, handleDeviceEvent ~1327).
+ *
+ * Cihaz bagimsizdir: suspend bayragi CPU-side'dir (cihaz SKIP'i YOKTUR).
+ * CTest dummy suruculeri saglar; init basarisizsa acik SKIP (hata DEGILDIR).
+ */
+void test_audio_lock_offscreen_global_pump() {
+    TEST_SECTION("Audio Offscreen Global Pump (#75)");
+
+    // SDL_PushEvent events-alt-sistemi ister (device_recovery emsali).
+    const bool eventsAlreadyInit = SDL_WasInit(SDL_INIT_EVENTS) != 0;
+    if (!eventsAlreadyInit && !SDL_InitSubSystem(SDL_INIT_EVENTS)) {
+        std::cerr << "Offscreen Global Pump (#75): SDL events init failed" << std::endl;
+        std::exit(1);
+    }
+
+    // Offscreen-default onkosulu: kayitli pencere YOK, pin sahipsiz. Bu
+    // thread'de kalmis bos-tablo pin varsa dummy-kayit+sil ile birakilir;
+    // yabanci pin veya dolu tabloya dokunulmaz (register basarisizsa pas).
+    constexpr uint32_t kPinReleaseProbe = 0x0750FF75u; // "75" temali, gercek SDL id'si degil
+    if (Rowl::Platform::SdlEventDispatcher::registerWindow(kPinReleaseProbe)) {
+        Rowl::Platform::SdlEventDispatcher::unregisterWindow(kPinReleaseProbe);
+    }
+
+    RowlEngineHandle handle = RowlEngine_Create();
+    if (!handle || RowlEngine_Init(handle, 320, 180, 0) != 1) {
+        std::cout << "  SKIP Audio Offscreen Global Pump (offscreen engine init olmadi; CTest dummy'siz headless?)"
+                  << std::endl;
+        if (handle) RowlEngine_Destroy(handle);
+        if (!eventsAlreadyInit) SDL_QuitSubSystem(SDL_INIT_EVENTS);
+        return;
+    }
+    if (RowlEngine_IsAudioOutputSuspended(handle) != 0) {
+        std::cerr << "Offscreen Global Pump (#75): taze runtime suspend'li basladi" << std::endl;
+        std::exit(1);
+    }
+
+    // Init-artigi SDL eventleri probu kirletmesin (dispatcher'a dokunmadan
+    // ham bosaltma; pin sahipsizken take no-op olurdu).
+    {
+        SDL_Event stale{};
+        while (SDL_PollEvent(&stale)) {
+        }
+    }
+
+    // 1. MINIMIZED global kuyruktan suspend'i kurmalidir (pre-fix: pin
+    // sahipsiz -> take no-op -> suspend 0 kalir -> exit(1)).
+    SDL_Event minimizedEvent{};
+    minimizedEvent.type = SDL_EVENT_WINDOW_MINIMIZED;
+    minimizedEvent.window.windowID = 0;
+    if (!SDL_PushEvent(&minimizedEvent)) {
+        std::cerr << "Offscreen Global Pump (#75): minimize probu kuyruga giremedi" << std::endl;
+        std::exit(1);
+    }
+    RowlEngine_Step(handle, 0.016f);
+    if (RowlEngine_IsAudioOutputSuspended(handle) != 1) {
+        std::cerr << "Offscreen Global Pump (#75): MINIMIZED offscreen Step'te suspend kuramadi "
+                     "(SDL kuyrugu pompalanmiyor)"
+                  << std::endl;
+        std::exit(1);
+    }
+    TEST_PASS("Audio Offscreen Pump — MINIMIZED suspend kurar (penceresiz global drain)");
+
+    // 2. RESTORED resume eder (ayni global yolun diger yonu).
+    SDL_Event restoredEvent{};
+    restoredEvent.type = SDL_EVENT_WINDOW_RESTORED;
+    restoredEvent.window.windowID = 0;
+    if (!SDL_PushEvent(&restoredEvent)) {
+        std::cerr << "Offscreen Global Pump (#75): restore probu kuyruga giremedi" << std::endl;
+        std::exit(1);
+    }
+    RowlEngine_Step(handle, 0.016f);
+    if (RowlEngine_IsAudioOutputSuspended(handle) != 0) {
+        std::cerr << "Offscreen Global Pump (#75): RESTORED offscreen Step'te resume edemedi" << std::endl;
+        std::exit(1);
+    }
+    TEST_PASS("Audio Offscreen Pump — RESTORED resume eder (penceresiz global drain)");
+
+    // 3. AUDIO_DEVICE_ADDED (cihaz varken no-op dali): suspend'e sizmaz ve
+    // SDL kuyrugunda olu kalmaz — audio-device sinifi pump kaniti.
+    SDL_Event addedEvent{};
+    addedEvent.type = SDL_EVENT_AUDIO_DEVICE_ADDED;
+    addedEvent.adevice.which = 7;
+    if (!SDL_PushEvent(&addedEvent)) {
+        std::cerr << "Offscreen Global Pump (#75): ADDED probu kuyruga giremedi" << std::endl;
+        std::exit(1);
+    }
+    RowlEngine_Step(handle, 0.016f);
+    if (RowlEngine_IsAudioOutputSuspended(handle) != 0) {
+        std::cerr << "Offscreen Global Pump (#75): cihaz eventi suspend'e sizdi" << std::endl;
+        std::exit(1);
+    }
+    {
+        SDL_Event leftover{};
+        if (SDL_PollEvent(&leftover)) {
+            std::cerr << "Offscreen Global Pump (#75): Step sonrasi SDL kuyrugu bosalmadi "
+                         "(audio-device eventi olu kaldi, type="
+                      << static_cast<int>(leftover.type) << ")" << std::endl;
+            std::exit(1);
+        }
+    }
+    if (RowlEngine_IsRunning(handle) != 1) {
+        std::cerr << "Offscreen Global Pump (#75): runtime prob sonrasi kosar durumda degil" << std::endl;
+        std::exit(1);
+    }
+    TEST_PASS("Audio Offscreen Pump — ADDED tuketilir, kuyruk bos, runtime sag");
+
+    RowlEngine_Destroy(handle);
+    // Pin temizligi: prob pini bu thread'e claim'ledi; bos-tabloysa birak ki
+    // sonraki testler (single-image, lifecycle) taze-surec gorunumuyle baslasin.
+    if (Rowl::Platform::SdlEventDispatcher::registerWindow(kPinReleaseProbe)) {
+        Rowl::Platform::SdlEventDispatcher::unregisterWindow(kPinReleaseProbe);
+    }
+    if (!eventsAlreadyInit) SDL_QuitSubSystem(SDL_INIT_EVENTS);
+    TEST_PASS("Audio Offscreen Global Pump (#75) — temizlik (pin birakildi)");
+}

@@ -107,6 +107,7 @@ int main(int argc, char* argv[]) {
     test_audio_lock_outage_pending_no_stale_replay();
     test_audio_lock_outage_pending_fail_preserved();
     test_audio_lock_dead_handle_spectrum_zero_fill();
+    test_audio_lock_offscreen_global_pump();
     test_lua_sandbox();
     test_mobile_input();
     test_platform_host();

@@ -32,6 +32,14 @@ public:
     /// Pumps SDL once on the dispatch thread and returns only this window's events.
     static std::vector<SDL_Event> takeEvents(uint32_t windowId);
 
+    /// Claims the dispatch pin when unclaimed, then pumps SDL once.
+    /// Offscreen runtimes register no window, so their pollEvents path never
+    /// touches the queue and the pin stays unclaimed — a later takeGlobal-
+    /// Events would no-op without reaching SDL_PollEvent (#75). Calling this
+    /// first makes the global drain work there. On a foreign-owned pin this
+    /// is a fail-closed no-op; on the owning thread it is just a pump.
+    static void pumpOnly();
+
     /// Pumps SDL once on the dispatch thread and returns process-wide events
     /// that belong to no window (audio-device add/remove/format changes and
     /// window minimize/maximize/restore). Window-targeted events and QUIT are

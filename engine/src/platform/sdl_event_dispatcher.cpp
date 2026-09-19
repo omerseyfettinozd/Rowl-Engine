@@ -100,6 +100,18 @@ void SdlEventDispatcher::unregisterWindow(uint32_t windowId) noexcept {
     if (g_windowEvents.empty()) g_eventThread.reset();
 }
 
+void SdlEventDispatcher::pumpOnly() {
+    // #75: offscreen runtimes never register a window, so the pin is still
+    // unclaimed on their step thread and pumpEvents() below would fail
+    // closed without touching SDL_PollEvent. Claim-if-unclaimed mirrors
+    // registerWindow's first-claim rule; a foreign-owned pin stays a no-op.
+    {
+        std::lock_guard<std::mutex> lock(g_eventMutex);
+        if (!g_eventThread) g_eventThread = std::this_thread::get_id();
+    }
+    pumpEvents();
+}
+
 std::vector<SDL_Event> SdlEventDispatcher::takeEvents(uint32_t windowId) {
     if (!isDispatchThread()) return {};
     pumpEvents();
