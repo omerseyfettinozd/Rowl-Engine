@@ -103,6 +103,8 @@ void test_audio_lock_sanitize_nan();
 void test_audio_lock_underwater_clamp();
 void test_audio_lock_bgm_miss_guard();
 void test_audio_lock_queue_fail_atomic();
+void test_audio_lock_bgm_transactional();
+void test_audio_lock_bgm_cap_fail_closed();
 void test_lua_sandbox();
 void test_mobile_input();
 void test_platform_host();

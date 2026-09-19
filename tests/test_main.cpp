@@ -101,6 +101,8 @@ int main(int argc, char* argv[]) {
     test_audio_lock_underwater_clamp();
     test_audio_lock_bgm_miss_guard();
     test_audio_lock_queue_fail_atomic();
+    test_audio_lock_bgm_transactional();
+    test_audio_lock_bgm_cap_fail_closed();
     test_lua_sandbox();
     test_mobile_input();
     test_platform_host();

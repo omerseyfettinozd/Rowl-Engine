@@ -395,14 +395,17 @@ bool AudioEngine::initialize() {
 // ── Faz 5 Dilim 2: playAudio decode bloğunun birebir çıkarımı ─────────────
 // Kısa-ses full-decode yolu byte-identical korunur; eski satır-içi kod ile
 // bu yordam aynı baytları üretir (VFS aday sırası, OGG/WAV dalları, cap
-// kontrolleri, float dönüşümü, DSP, Ui gain bake aynen). channelIsBgm
-// true iken BGM hata yollarındaki closeBgmStream+resetStreamInfoNoBgm
-// davranışı da aynen korunur.
+// kontrolleri, float dönüşümü, DSP, Ui gain bake aynen). #87 gereği hata
+// yolları state'e dokunmaz (saf decode; channelIsBgm imza gereği korunur
+// ama yoksayilir, karar caller'indir).
 bool AudioEngine::decodeAssetToFloatPcm(const std::string& assetPath,
                                         DSPFilterType filter, bool applyUiGain,
                                         bool channelIsBgm,
                                         SDL_AudioSpec& specOut,
                                         std::vector<uint8_t>& floatPcmOut) {
+    // #87: channelIsBgm artik state karari vermez (saf decode; karar
+    // caller'indir). İmza korunur, parametre bilerek yoksayilir.
+    (void)channelIsBgm;
     std::vector<uint8_t> bytes;
     SDL_AudioSpec spec;
     Uint8* audioBuf = nullptr;
@@ -426,10 +429,9 @@ bool AudioEngine::decodeAssetToFloatPcm(const std::string& assetPath,
                     audioBuf = static_cast<Uint8*>(SDL_malloc(bytes.size()));
                     if (!audioBuf) {
                         m_lastError = "Unable to allocate decoded Ogg/Vorbis PCM";
-                        if (channelIsBgm) {
-                            closeBgmStream();
-                            resetStreamInfoNoBgm();
-                        }
+                        // #87 transactional decode: saf helper state'e
+                        // dokunmaz; predecessor + snapshot + intent aynen
+                        // korunur (karar caller'indir).
                         return false;
                     }
                     std::memcpy(audioBuf, bytes.data(), bytes.size());
@@ -439,13 +441,9 @@ bool AudioEngine::decodeAssetToFloatPcm(const std::string& assetPath,
                 }
                 if (m_lastError.empty()) m_lastError = "Ogg/Vorbis stream could not be decoded";
                 ROWL_LOG_WARN("[AudioEngine] " + m_lastError + ": " + assetPath);
-                // Stale stream karari yalnizca Bgm kanalinda korunmaz (#78):
-                // non-BGM miss baska kanalin stream/snapshot state'ine
-                // dokunmaz.
-                if (channelIsBgm) {
-                    closeBgmStream();
-                    resetStreamInfoNoBgm();
-                }
+                // #87 transactional decode: saf helper state'e dokunmaz;
+                // predecessor + snapshot + intent aynen korunur (karar
+                // caller'indir).
                 return false;
             }
             bytes = vfs().readBytes(candidate);
@@ -455,10 +453,7 @@ bool AudioEngine::decodeAssetToFloatPcm(const std::string& assetPath,
                     // C API PlayAudio kördü).
                     m_lastError = "Audio file exceeds the maximum accepted size: " + assetPath;
                     ROWL_LOG_WARN("[AudioEngine] " + m_lastError);
-                    if (channelIsBgm) {
-                        closeBgmStream();
-                        resetStreamInfoNoBgm();
-                    }
+                    // #87 transactional decode: saf helper state'e dokunmaz.
                     return false;
                 }
                 SDL_IOStream* io = SDL_IOFromConstMem(bytes.data(), bytes.size());
@@ -476,10 +471,7 @@ bool AudioEngine::decodeAssetToFloatPcm(const std::string& assetPath,
             m_lastError = "Decoded audio exceeds the maximum accepted size: " + assetPath;
             ROWL_LOG_WARN("[AudioEngine] " + m_lastError);
             SDL_free(audioBuf);
-            if (channelIsBgm) {
-                closeBgmStream();
-                resetStreamInfoNoBgm();
-            }
+            // #87 transactional decode: saf helper state'e dokunmaz.
             return false;
         }
         SDL_AudioSpec floatSpec{};
@@ -494,10 +486,7 @@ bool AudioEngine::decodeAssetToFloatPcm(const std::string& assetPath,
             m_lastError = "Unable to convert decoded audio to float PCM: " + std::string(SDL_GetError());
             ROWL_LOG_ERROR("[AudioEngine] " + m_lastError);
             SDL_free(audioBuf);
-            if (channelIsBgm) {
-                closeBgmStream();
-                resetStreamInfoNoBgm();
-            }
+            // #87 transactional decode: saf helper state'e dokunmaz.
             return false;
         }
         auto* samples = reinterpret_cast<float*>(floatBuffer);
@@ -517,11 +506,7 @@ bool AudioEngine::decodeAssetToFloatPcm(const std::string& assetPath,
     }
     m_lastError = "Audio file could not be decoded (supported: WAV, OGG/Vorbis): " + assetPath;
     ROWL_LOG_WARN("[AudioEngine] " + m_lastError);
-    // Stale stream karari yalnizca Bgm kanalinda korunmaz (#78).
-    if (channelIsBgm) {
-        closeBgmStream();
-        resetStreamInfoNoBgm();
-    }
+    // #87 transactional decode: saf helper state'e dokunmaz.
     return false;
 }
 
@@ -580,8 +565,32 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
         // Keep intended BGM state in headless/silent environments. This lets
         // scene transitions remain deterministic even when no device exists.
         if (channel == AudioChannelType::Bgm) {
+            // #87 existence gate: olmayan dosya bile predecessor'i yikip
+            // intent yazmamalidir. Miss -> hata + return (asagidaki close'a,
+            // intent yazimina ve reset'e hic girilmez). Var olan dosya eski
+            // sessiz-yedek davranisiyla kayda gecer.
+            bool bgmAssetKnown = probedForBgm;
+            if (!bgmAssetKnown) {
+                const std::vector<std::string> bgmCandidates = {
+                    assetPath,
+                    "Assets/" + assetPath,
+                    "Assets/audio/" + assetPath,
+                    "audio/" + assetPath
+                };
+                for (const auto& candidate : bgmCandidates) {
+                    if (vfs().exists(candidate)) {
+                        bgmAssetKnown = true;
+                        break;
+                    }
+                }
+            }
+            if (!bgmAssetKnown) {
+                m_lastError = "Audio file could not be decoded (supported: WAV, OGG/Vorbis): " + assetPath;
+                ROWL_LOG_WARN("[AudioEngine] " + m_lastError);
+                return;
+            }
             // Sessiz yedek akış açmaz: önceki kaynak kapatılır, karar
-            // memory/unknown olarak kayda geçer (fail-closed).
+            // memory/unknown olarak kayda geçer.
             closeBgmStream();
             m_currentBgmPath = assetPath;
             m_isBgmPlaying = true;
@@ -615,8 +624,8 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
     }
 
     // ── Faz 5 Dilim 1: streaming taahhüdü (yalnız Bgm + OGG + over-threshold).
-    // Başarıda RAM bloğuna girmeden döner; akış açılamazsa closeBgmStream
-    // + resetStreamInfoNoBgm ile fail-closed kapanır (hata kayda geçer).
+    // Başarıda RAM bloğuna girmeden döner; akış açılamazsa #87 gereği
+    // predecessor korunur (fail yolu yalniz hata yazar, commit YOKTUR).
     if (channel == AudioChannelType::Bgm && probedForBgm &&
         probedInfo.mode == StreamMode::Stream) {
         if (hasOggExtension(probeCandidate)) {
@@ -628,8 +637,6 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
                 m_lastError = "Ogg/Vorbis stream could not be opened: " + assetPath;
             }
             ROWL_LOG_WARN("[AudioEngine] " + m_lastError);
-            closeBgmStream();
-            resetStreamInfoNoBgm();
             return;
         }
         // Over-threshold ama akışlanamayan konteyner (WAV): mevcut RAM yolu
@@ -659,10 +666,8 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
                     audioBuf = static_cast<Uint8*>(SDL_malloc(bytes.size()));
                     if (!audioBuf) {
                         m_lastError = "Unable to allocate decoded Ogg/Vorbis PCM";
-                        if (channel == AudioChannelType::Bgm) {
-                            closeBgmStream();
-                            resetStreamInfoNoBgm();
-                        }
+                        // #87: fail yolu yalniz hata yazar; predecessor +
+                        // snapshot + intent aynen korunur.
                         return;
                     }
                     std::memcpy(audioBuf, bytes.data(), bytes.size());
@@ -672,13 +677,8 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
                 }
                 if (m_lastError.empty()) m_lastError = "Ogg/Vorbis stream could not be decoded";
                 ROWL_LOG_WARN("[AudioEngine] " + m_lastError + ": " + assetPath);
-                // Stale stream karari yalnizca Bgm kanalinda korunmaz (#78):
-                // non-BGM miss baska kanalin stream/snapshot state'ine
-                // dokunmaz.
-                if (channel == AudioChannelType::Bgm) {
-                    closeBgmStream();
-                    resetStreamInfoNoBgm();
-                }
+                // #87: fail yolu yalniz hata yazar; predecessor + snapshot +
+                // intent aynen korunur.
                 return;
             }
             bytes = vfs().readBytes(candidate);
@@ -688,10 +688,7 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
                     // C API PlayAudio kördü).
                     m_lastError = "Audio file exceeds the maximum accepted size: " + assetPath;
                     ROWL_LOG_WARN("[AudioEngine] " + m_lastError);
-                    if (channel == AudioChannelType::Bgm) {
-                        closeBgmStream();
-                        resetStreamInfoNoBgm();
-                    }
+                    // #87: fail yolu yalniz hata yazar; predecessor aynen korunur.
                     return;
                 }
                 SDL_IOStream* io = SDL_IOFromConstMem(bytes.data(), bytes.size());
@@ -709,10 +706,7 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
             m_lastError = "Decoded audio exceeds the maximum accepted size: " + assetPath;
             ROWL_LOG_WARN("[AudioEngine] " + m_lastError);
             SDL_free(audioBuf);
-            if (channel == AudioChannelType::Bgm) {
-                closeBgmStream();
-                resetStreamInfoNoBgm();
-            }
+            // #87: fail yolu yalniz hata yazar; predecessor aynen korunur.
             return;
         }
         SDL_AudioSpec floatSpec{};
@@ -727,10 +721,7 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
             m_lastError = "Unable to convert decoded audio to float PCM: " + std::string(SDL_GetError());
             ROWL_LOG_ERROR("[AudioEngine] " + m_lastError);
             SDL_free(audioBuf);
-            if (channel == AudioChannelType::Bgm) {
-                closeBgmStream();
-                resetStreamInfoNoBgm();
-            }
+            // #87: fail yolu yalniz hata yazar; predecessor aynen korunur.
             return;
         }
         auto* samples = reinterpret_cast<float*>(floatBuffer);
@@ -818,10 +809,8 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
                 m_lastError = "Unable to queue decoded audio: " + std::string(SDL_GetError());
                 SDL_free(floatBuffer);
                 SDL_free(audioBuf);
-                if (channel == AudioChannelType::Bgm) {
-                    closeBgmStream();
-                    resetStreamInfoNoBgm();
-                }
+                // #87 transactional commit: decode OK + queue-fail'de kaynak
+                // + snapshot yikilmaz; predecessor aynen korunur.
                 return;
             }
             // Device-facing effects are transactional with decode/queue: a
@@ -939,11 +928,8 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
     } else {
         m_lastError = "Audio file could not be decoded (supported: WAV, OGG/Vorbis): " + assetPath;
         ROWL_LOG_WARN("[AudioEngine] " + m_lastError);
-        // Stale stream karari yalnizca Bgm kanalinda korunmaz (#78).
-        if (channel == AudioChannelType::Bgm) {
-            closeBgmStream();
-            resetStreamInfoNoBgm();
-        }
+        // #87: final-miss fail yolu yalniz hata yazar; predecessor +
+        // snapshot + intent aynen korunur.
     }
 }
 
@@ -2140,7 +2126,10 @@ bool AudioEngine::findBgmStreamCandidate(
 bool AudioEngine::openBgmStream(const std::string& candidate,
                                 const std::string& assetPath,
                                 int snapshotChannel, DSPFilterType filter) {
-    closeBgmStream();
+    // #87 transactional commit: giris-close YOKTUR. Kaynak lokal
+    // unique_ptr ile acilip valide edilir; commit (move + state + snapshot
+    // + pump) YALNIZ basarida. Fail'de hicbir state'e dokunulmaz,
+    // predecessor aynen korunur.
     auto source = std::make_unique<OggStreamSource>();
     std::string error;
     if (!source->open(vfs(), candidate, error)) {

@@ -302,8 +302,10 @@ void test_audio_lock_underwater_clamp() {
  *
  * KAPSAM-DISI (acik cephe, evrensel-kapsama iddiasi YOKTUR): govdedeki
  * 13 gated siteden bu kilit disinda kalanlar — playAudio alloc (~643),
- * encoded-cap (~672), decoded-cap (~693), convert-fail (~711),
  * queue-fail (~794) ve helper/playAudio icindeki kalan varyantlar.
+ * encoded-cap (~686), decoded-cap (OGG cozumu) ve convert-fail (~718)
+ * dallari ayri "Audio BGM Cap Fail-Closed (#87)" kilidiyle kapsanir
+ * (asagida); burada kapsam-disi kalirlar.
  * Bu yollarda gate kaldirilinca test yesil kalabilir (~711 karsi-mutanti
  * yesil birakir); kapsama genisletmesi ayri istir.
  *
@@ -311,8 +313,10 @@ void test_audio_lock_underwater_clamp() {
  * non-BGM caller'lar uzerinden surer: playAmbienceBed /
  * crossfadeAmbienceTo helper'i channelIsBgm=false ile cagirir.
  *
- * BGM fail-closed karsit-kanit: BGM kanalinda miss stream'i KAPATIR
- * (gate BGM dalini bozmadi).
+ * BGM fail-closed karsit-kanit [#87 guncellemesi]: BGM kanalinda miss
+ * artik predecessor-preserving'dir (eski "miss stream'i KAPATIR" davranisi
+ * kaldirildi): stream + snapshot + intent korunur, hata kayda gecer.
+ * Explicit stopBgm() kapatmaya devam eder (ayrisma kilidi).
  *
  * Cihaz bagimliligi: streaming kurulum cihaza baglidir; cihazsiz kosuda
  * requireAudioDeviceOrSkip acik SKIP'i aynen uygulanir.
@@ -512,13 +516,24 @@ void test_audio_lock_bgm_miss_guard() {
     requireMissGuardIntact(audio, "bozuk OGG dogrudan Ui sonrasi");
     TEST_PASS("Audio BGM Miss Guard — dogrudan playAudio non-BGM corrupt OGG BGM'i korur (Sfx/Voice/Ui)");
 
-    // Karsit-kanit: BGM kanalinda miss hâlâ fail-closed'dur (gate BGM
-    // dalini bozmadi): stream kapanir, snapshot stream degildir.
+    // Karsit-kanit [#87 guncellemesi]: BGM kanalinda miss artik
+    // predecessor-preserving'dir (eski "BGM miss kapatir" fail-closed
+    // davranisi kaldirildi): stream + snapshot + intent aynen korunur,
+    // hata caller'a ulasir.
     audio.playAudio("audio/does_not_exist.wav", Rowl::Audio::AudioChannelType::Bgm);
-    if (audio.isStreaming()) {
-        lockFail("BGM miss stream'i kapatmadi — fail-closed bozuldu");
+    requireMissGuardIntact(audio, "BGM miss sonrasi (#87)");
+    if (audio.getLastError().empty()) {
+        lockFail("BGM miss hatasi caller'a ulasmadi (m_lastError bos)");
     }
-    TEST_PASS("Audio BGM Miss Guard — BGM miss fail-closed kalir (karsit-kanit)");
+    TEST_PASS("Audio BGM Miss Guard — BGM miss predecessor'i korur (#87, karsit-kanit guncellemesi)");
+
+    // Ayrisma kilidi: explicit stopBgm() hâlâ kapatir (miss korumasindan
+    // ayristigi kilitlenir; stop sessiz degildir, intent duser).
+    audio.stopBgm();
+    if (audio.isBgmPlaying() || audio.isStreaming() || !audio.getCurrentBgmPath().empty()) {
+        lockFail("explicit stopBgm() kapatmadi — miss korumasi stop'u bozmamali");
+    }
+    TEST_PASS("Audio BGM Miss Guard — explicit stopBgm() hâlâ kapatir (ayrisma)");
 
     audio.stopAll();
     audio.shutdown();
@@ -549,8 +564,9 @@ void test_audio_lock_bgm_miss_guard() {
  *   (c) m_lastError "Unable to queue decoded audio" ile doludur
  *       (queue-fail caller'a ulaştı; enjeksiyonun kuyruk adımında
  *       tüketildiğinin kanıtıdır),
- *   (d) karşıt-kanıt: aynı senaryoda BGM miss fail-closed kalır
- *       (stream kapanır — #78 davranışı bozulmadı).
+ *   (d) karşıt-kanıt [#87 güncellemesi]: aynı senaryoda BGM miss
+ *       predecessor-preserving'dir (stream kapanmaz — eski #78 "miss
+ *       kapatır" davranışı kalktı), hata caller'a ulaşır.
  * Pre-clear mutantında (a) düşer: kuyruk 0'lanır, exit(1).
  *
  * Determinizm notları:
@@ -600,12 +616,15 @@ void test_audio_lock_queue_fail_atomic() {
     requireMissGuardIntact(audio, "kurulum/miss_bgm.ogg");
     TEST_PASS("Audio Queue-Fail — kurulum (streaming BGM intact)");
 
-    // Karşıt-kanıt (d): BGM miss fail-closed kalır (stream kapanır).
+    // Karşıt-kanıt (d) [#87 güncellemesi]: BGM miss artık
+    // predecessor-preserving'dir (stream kapanmaz); queue-fail atomikliği
+    // ile çelişmez, hata caller'a ulaşır.
     audio.playAudio("audio/does_not_exist.wav", Rowl::Audio::AudioChannelType::Bgm);
-    if (audio.isStreaming()) {
-        lockFail("BGM miss stream'i kapatmadi — fail-closed bozuldu (#78 regresyonu)");
+    requireMissGuardIntact(audio, "BGM miss sonrasi (#87)");
+    if (audio.getLastError().empty()) {
+        lockFail("BGM miss hatasi caller'a ulasmadi (m_lastError bos)");
     }
-    TEST_PASS("Audio Queue-Fail — BGM miss fail-closed kalir (karsit-kanit)");
+    TEST_PASS("Audio Queue-Fail — BGM miss predecessor'i korur (#87, karsit-kanit)");
 
     // Bayt-kesin karşılaştırma için cihaz tüketimi dondurulur.
     audio.setOutputSuspended(true);
@@ -693,6 +712,440 @@ void test_audio_lock_queue_fail_atomic() {
     TEST_PASS("Audio Queue-Fail — BGM (non-transition) kuyruk korunur, hata caller'a ulaşır");
 
     audio.setOutputSuspended(false);
+    audio.stopAll();
+    audio.shutdown();
+}
+
+/**
+ * test_audio_lock.cpp eklentisi — BGM Transactional Commit (#87) KİLİDİ.
+ *
+ * KILIT (mutant oldurur): BGM fail yolları predecessor'ı yıkmamalıdır.
+ * decode-once → queue/prova → SADECE başarıda commit (close+snapshot+intent).
+ * Fail yolu yalnız m_lastError yazar. Kapsanan upfront-yıkım siteleri:
+ *  decodeAssetToFloatPcm 6 site, openBgmStream girişi (2143), playAudio
+ *  no-device dalı (585/601), playAudio RAM 6 site + queue-fail (822) +
+ *  final-miss (944). Cap dallari (encoded/decoded/convert) ayri
+ *  "Audio BGM Cap Fail-Closed (#87)" kilidinde kapsanir (asagida).
+ * Herhangi biri geri gelirse asagidaki adimlardan biri exit(1) ile duser.
+ *
+ * Gözlem (tests/test_audio_lock.cpp deseni aynen): TEST_SECTION/TEST_PASS +
+ * hata=exit(1); timing-assert/sleep/poll YOK; requireMissGuardIntact 7-iddia;
+ * deterministik hook'lar (testFailNextQueue, testQueuedBytes,
+ * setOutputSuspended(true) dondurma).
+ *  (a) decode-fail (corrupt + eksik) sonrası predecessor sağ + hata dolu.
+ *  (b) streaming open-fail (probe geçer, source->open düşer): predecessor
+ *      sağ + hata "could not be opened" (yol-kanıtı).
+ *  (c) queue-fail (testFailNextQueue + BGM RAM WAV): testQueuedBytes(Bgm)
+ *      değişmez + intent eski asset'te + hata "Unable to queue decoded audio".
+ *  (d) no-device existence: cihazsız koşar (requireAudioDeviceOrSkip YOK;
+ *      cihazlı koşuda açık SKIP notu): sessiz-yedekte geçerli BGM intent'i
+ *      kurulur, eksik dosya intent+snapshot'ı yıkmaz + hata set.
+ *  (e) intent doğruluğu: başarısız yeni BGM (Fade+duration) transition
+ *      başlatmaz; başarılı transition swap'ı aynen (regresyon bekçisi,
+ *      update(1.0f) ile deterministik sürülür — duvar-saati YOK).
+ *  (f) ayrışma: explicit stopBgm() hâlâ kapatır.
+ *
+ * KAPSAM-DIŞI: pump-mid-stream-corrupt stopBgm (2317), shutdown (1266) ve
+ * init-fail destroy kolları bilinçli stop'tur; bu kilit fail-yolu commit
+ * kapısını kilitler, bilinçli stopları değil.
+ */
+namespace {
+
+// #87 open-fail fixture: header-probe over-threshold raporlar (son-sayfa
+// granule 1e9 aynen korunur) ama source->open deterministik düşer (2. sayfa
+// comment-paketinin ilk baytı bozuldu + CRC onarılmadı). Probe CRC'ye bakmaz
+// (boyut-tablosu yürüyüşü), ov_open ise setup'ı doğruladığı için açılış düşer.
+std::vector<uint8_t> transactionalOpenFailOgg() {
+    auto ogg = missGuardPatchGranuleForStream(missGuardLongToneOggBytes(),
+                                              static_cast<uint64_t>(1000000000));
+    size_t offset = 0;
+    int pageIndex = 0;
+    while (offset + 27 <= ogg.size()) {
+        if (std::memcmp(ogg.data() + offset, "OggS", 4) != 0) {
+            lockFail("Audio BGM Transactional (#87): OggS sayfa yuruyusu bozuldu");
+        }
+        const size_t segCount = ogg[offset + 26];
+        if (offset + 27 + segCount > ogg.size()) {
+            lockFail("Audio BGM Transactional (#87): kesik segment tablosu");
+        }
+        size_t body = 0;
+        for (size_t i = 0; i < segCount; ++i) body += ogg[offset + 27 + i];
+        if (offset + 27 + segCount + body > ogg.size()) {
+            lockFail("Audio BGM Transactional (#87): kesik sayfa govdesi");
+        }
+        if (pageIndex == 1) {
+            if (body == 0) {
+                lockFail("Audio BGM Transactional (#87): comment sayfasi govdesiz");
+            }
+            ogg[offset + 27 + segCount] ^= 0xFFu; // paket tipi 0x03 -> gecersiz
+            return ogg;
+        }
+        offset += 27 + segCount + body;
+        ++pageIndex;
+    }
+    lockFail("Audio BGM Transactional (#87): 2. OGG sayfasi yok");
+}
+
+void setupTransactionalProject(Rowl::VFS::VFSManager& vfs, Rowl::Audio::AudioEngine& audio) {
+    setupMissGuardProject(vfs, audio);
+    const auto dir = std::filesystem::temp_directory_path() /
+                     "rowl_audio_bgm_miss_guard_project" / "Assets" / "audio";
+    std::filesystem::create_directories(dir);
+    writeBytes(dir / "miss_openfail.ogg", transactionalOpenFailOgg());
+    const auto wav = makeFloatWavMono44100(std::vector<float>(64, 0.5f));
+    writeBytes(dir / "t_bgm_a.wav", wav);
+    writeBytes(dir / "t_bgm_b.wav", wav);
+    vfs.remountProject((std::filesystem::temp_directory_path() /
+                        "rowl_audio_bgm_miss_guard_project")
+                           .string());
+}
+
+} // namespace
+
+void test_audio_lock_bgm_transactional() {
+    TEST_SECTION("Audio BGM Transactional Commit (#87)");
+
+    Rowl::VFS::VFSManager vfs;
+    Rowl::Audio::AudioEngine audio(&vfs);
+    setupTransactionalProject(vfs, audio);
+
+    // (d) no-device existence: yalnız gerçek-cihazsız koşuda çalışır
+    // (requireAudioDeviceOrSkip YOK; cihazlı koşuda açık SKIP notu).
+    if (!audio.isAudioDeviceAvailable()) {
+        audio.playAudio("audio/t_bgm_a.wav", Rowl::Audio::AudioChannelType::Bgm);
+        if (!audio.isBgmPlaying() || audio.getCurrentBgmPath() != "audio/t_bgm_a.wav") {
+            lockFail("sessiz-yedek BGM intent'i kurulamadi");
+        }
+        if (audio.streamInfoJson().find("\"asset\":\"audio/t_bgm_a.wav\"") == std::string::npos) {
+            lockFail("sessiz-yedek snapshot kurulamadi: " + audio.streamInfoJson());
+        }
+        audio.playAudio("audio/does_not_exist.wav", Rowl::Audio::AudioChannelType::Bgm);
+        if (!audio.isBgmPlaying() || audio.getCurrentBgmPath() != "audio/t_bgm_a.wav") {
+            lockFail("sessiz-yedek miss intent'i yikti (predecessor korunmadi)");
+        }
+        if (audio.streamInfoJson().find("\"asset\":\"audio/t_bgm_a.wav\"") == std::string::npos) {
+            lockFail("sessiz-yedek miss snapshot'i yikti: " + audio.streamInfoJson());
+        }
+        if (audio.getLastError().empty()) {
+            lockFail("sessiz-yedek miss hatasi caller'a ulasmadi");
+        }
+        TEST_PASS("Audio Transactional — sessiz-yedek miss intent+snapshot'i korur (d)");
+    } else {
+        std::cout << "  SKIP Audio Transactional (d) no-device existence"
+                     " (cihaz mevcut; sessiz dal erisilemez)"
+                  << std::endl;
+    }
+    if (!requireAudioDeviceOrSkip(audio, "Audio BGM Transactional")) return;
+
+    auto requireErrorSet = [&](const std::string& context) {
+        if (audio.getLastError().empty()) {
+            lockFail(context + ": fail caller'a ulasmadi (m_lastError bos)");
+        }
+    };
+
+    // Kurulum: geçerli streaming BGM.
+    audio.playAudio("audio/miss_bgm.ogg", Rowl::Audio::AudioChannelType::Bgm);
+    audio.update();
+    requireMissGuardIntact(audio, "kurulum/miss_bgm.ogg");
+    TEST_PASS("Audio Transactional — kurulum (streaming BGM intact)");
+
+    // (a) decode-fail sonrası predecessor sağ: corrupt + eksik dosya.
+    audio.playAudio("audio/miss_corrupt.ogg", Rowl::Audio::AudioChannelType::Bgm);
+    requireMissGuardIntact(audio, "corrupt OGG sonrasi (a)");
+    requireErrorSet("corrupt OGG sonrasi (a)");
+    audio.playAudio("audio/does_not_exist.wav", Rowl::Audio::AudioChannelType::Bgm);
+    requireMissGuardIntact(audio, "eksik dosya sonrasi (a)");
+    requireErrorSet("eksik dosya sonrasi (a)");
+    TEST_PASS("Audio Transactional — decode-fail predecessor'i korur (a)");
+
+    // (b) streaming open-fail: probe geçer ama source->open düşer.
+    audio.playAudio("audio/miss_openfail.ogg", Rowl::Audio::AudioChannelType::Bgm);
+    requireMissGuardIntact(audio, "open-fail sonrasi (b)");
+    {
+        const std::string err = audio.getLastError();
+        if (err.find("could not be opened") == std::string::npos) {
+            lockFail("open-fail acilis adiminda dusmedi, baska yola saptı (m_lastError): '" + err + "'");
+        }
+    }
+    TEST_PASS("Audio Transactional — streaming open-fail predecessor'i korur (b)");
+
+    // (e-fail) transition intent: başarısız yeni BGM transition başlatmaz.
+    audio.playBgm("audio/does_not_exist.wav", Rowl::Audio::BgmTransitionKind::Fade, 5.0f);
+    if (audio.isBgmTransitionActive()) {
+        lockFail("basarisiz BGM transition baslatti (intent kirliligi)");
+    }
+    requireMissGuardIntact(audio, "basarisiz transition sonrasi (e)");
+    requireErrorSet("basarisiz transition sonrasi (e)");
+    TEST_PASS("Audio Transactional — basarisiz BGM transition baslatmaz (e)");
+
+    // (e-ok) başarılı transition regresyon bekçisi: swap aynen çalışır.
+    audio.playAudio("audio/t_bgm_a.wav", Rowl::Audio::AudioChannelType::Bgm);
+    if (!audio.isBgmPlaying() || audio.getCurrentBgmPath() != "audio/t_bgm_a.wav") {
+        lockFail("RAM BGM kurulumu commitlenmedi");
+    }
+    audio.playBgm("audio/t_bgm_b.wav", Rowl::Audio::BgmTransitionKind::Fade, 0.5f);
+    if (!audio.isBgmTransitionActive()) {
+        lockFail("gecerli Fade transition baslamadi (regresyon)");
+    }
+    // Sozlesme (test_audio_engine.cpp Transition Queueing kilidiyle ayni):
+    // intent commit'te yeni parcaya gecer, fiziksel swap update ile tamamlanir.
+    if (audio.getCurrentBgmPath() != "audio/t_bgm_b.wav") {
+        lockFail("transition intent commitlenmedi (regresyon)");
+    }
+    audio.update(1.0f);
+    if (audio.isBgmTransitionActive()) {
+        lockFail("transition suresi bitmesine ragmen swap olmadi (regresyon)");
+    }
+    if (audio.getCurrentBgmPath() != "audio/t_bgm_b.wav") {
+        lockFail("transition swap commitlenmedi (regresyon)");
+    }
+    TEST_PASS("Audio Transactional — basarili transition swap aynen (e regresyon bekcisi)");
+
+    // (c) queue-fail: suspend altında RAM predecessor + fail-next enjeksiyonu.
+    audio.setOutputSuspended(true);
+    audio.playAudio("audio/t_bgm_b.wav", Rowl::Audio::AudioChannelType::Bgm);
+    const size_t bgmBefore = audio.testQueuedBytes(Rowl::Audio::AudioChannelType::Bgm);
+    if (bgmBefore == 0) {
+        lockFail("BGM kurulum kuyrugu bos — fixture cihaza kuyruklanamadi");
+    }
+    audio.testFailNextQueue();
+    audio.playAudio("audio/t_bgm_a.wav", Rowl::Audio::AudioChannelType::Bgm);
+    if (audio.testQueuedBytes(Rowl::Audio::AudioChannelType::Bgm) != bgmBefore) {
+        lockFail("BGM queue-fail eski kuyrugu yikti");
+    }
+    if (!audio.isBgmPlaying() || audio.getCurrentBgmPath() != "audio/t_bgm_b.wav") {
+        lockFail("BGM queue-fail intent'i yikti (predecessor korunmadi)");
+    }
+    {
+        const std::string err = audio.getLastError();
+        if (err.find("Unable to queue decoded audio") == std::string::npos) {
+            lockFail("BGM queue-fail caller'a ulasmadi (m_lastError): '" + err + "'");
+        }
+    }
+    TEST_PASS("Audio Transactional — queue-fail kuyruk+intent'i korur (c)");
+    audio.setOutputSuspended(false);
+
+    // (f) ayrışma: explicit stopBgm() hâlâ kapatır.
+    audio.stopBgm();
+    if (audio.isBgmPlaying() || audio.isStreaming() || !audio.getCurrentBgmPath().empty()) {
+        lockFail("explicit stopBgm() kapatmadi (koruma stop'u bozmamali)");
+    }
+    TEST_PASS("Audio Transactional — explicit stopBgm() hâlâ kapatir (f)");
+
+    audio.stopAll();
+    audio.shutdown();
+}
+
+/**
+ * test_audio_lock.cpp eklentisi — BGM Cap Fail-Closed (#87) KİLİDİ.
+ *
+ * KILIT (mutant oldurur): playAudio RAM yolundaki uc cap/fail dali da
+ * fail-closed'dur — predecessor (intent + stream + snapshot) korunur, yalniz
+ * m_lastError yazilir. Herhangi bir dala upfront-yikim mutantı
+ * (closeBgmStream + resetStreamInfoNoBgm) eklenirse asagidaki adimlardan
+ * biri exit(1) ile duser:
+ *  - encoded-cap (~686): 65 MiB sparse WAV (128 MiB loose-alti, 64 MiB
+ *    encoded-ustu). Bu dalin mutantı yesil birakan delikti (2. tur kirmizi
+ *    kapi sondasi: isStreaming==false + mode!=stream).
+ *  - decoded-cap (OGG cozumu): 200-zincirli OGG (~1.8 MiB dosya, ~70 MiB
+ *    cozulmus S16). Zincirler ayni serial ile birlesirse decoder "corrupt"
+ *    der; her zincir benzersiz serial + onarilmis CRC tasir (yapi gecerli,
+ *    karar memory — probe ilk/son-halka suresini gorur, threshold-alti).
+ *  - convert-fail (~718): 9-kanal tiny float WAV. SDL yukler ama
+ *    SDL_ConvertAudioSamples reddeder ("src_spec->channels is invalid").
+ *
+ * Gozlem (bu dosyadaki desen aynen): TEST_SECTION/TEST_PASS + hata=exit(1);
+ * timing-assert/sleep/poll YOK; requireMissGuardIntact 7-iddia (kurulum
+ * streaming BGM aynen); hata-mesaji dal-kaniti (yanlis dala sapma yakalanir).
+ * Cihaz bagimliligi: RAM yolu cihaza baglidir; cihazsiz kosuda acik SKIP
+ * (requireAudioDeviceOrSkip aynen).
+ *
+ * KAPSAM-DISI (savunma-derinligi, erisilemez dal): WAV decoded-cap (~704,
+ * "Decoded audio exceeds") bu kilit disindadir. Uncompressed WAV'de
+ * encoded~=decoded+44 oldugundan 704'u tetikleyecek girdi once encoded-cap
+ * (~686) duser; 704'e ayirt-edici erisim yoktur (OGG-ici decoded-cap
+ * yukarida kapsanir). Bu dala upfront-yikim iadesi suite'i yesil birakir
+ * (V5 saman-adam); dal govdede korunur ama kilitlenmez.
+ */
+namespace {
+
+// 65 MiB sparse WAV basligi (IEEE-float mono 44100): data chunk iddiasi
+// 65 MiB-44 bayttir; dosya resize_file ile seyrek sisme yapar (4 KiB disk,
+// VFS okumasi 65 MiB — hizli, page-cache).
+std::vector<uint8_t> capOversizeWavHeader() {
+    static constexpr uint64_t kTotal = 65ULL * 1024 * 1024;
+    static constexpr uint32_t kData = static_cast<uint32_t>(kTotal - 44);
+    std::vector<uint8_t> out;
+    out.insert(out.end(), {'R', 'I', 'F', 'F'});
+    appendU32LE(out, 36u + kData);
+    out.insert(out.end(), {'W', 'A', 'V', 'E'});
+    out.insert(out.end(), {'f', 'm', 't', ' '});
+    appendU32LE(out, 16u);
+    appendU16LE(out, 3u); // IEEE float
+    appendU16LE(out, 1u); // mono
+    appendU32LE(out, 44100u);
+    appendU32LE(out, 44100u * 4u);
+    appendU16LE(out, 4u);
+    appendU16LE(out, 32u);
+    out.insert(out.end(), {'d', 'a', 't', 'a'});
+    appendU32LE(out, kData);
+    return out;
+}
+
+void writeSparseOversizeWav(const std::filesystem::path& path) {
+    static constexpr uint64_t kTotal = 65ULL * 1024 * 1024;
+    const std::vector<uint8_t> header = capOversizeWavHeader();
+    {
+        std::ofstream out(path, std::ios::binary | std::ios::trunc);
+        if (!out) {
+            lockFail("Audio BGM Cap Fail-Closed (#87): oversize WAV acilamadi");
+        }
+        out.write(reinterpret_cast<const char*>(header.data()),
+                  static_cast<std::streamsize>(header.size()));
+        out.close();
+        if (!out) {
+            lockFail("Audio BGM Cap Fail-Closed (#87): oversize WAV basligi yazilamadi");
+        }
+    }
+    std::error_code ec;
+    std::filesystem::resize_file(path, kTotal, ec);
+    if (ec) {
+        lockFail("Audio BGM Cap Fail-Closed (#87): oversize WAV seyrek sisirme basarisiz: " +
+                 ec.message());
+    }
+}
+
+// Zincirli OGG decode-bombasi: ayni ton 200 kez uclanir. Her halka benzersiz
+// serial + onarilmis sayfa-CRC tasir (missGuardOggPageCrc aynen), yoksa
+// decoder zinciri "corrupt" sayar. Dosya ~1.8 MiB (cap-alti), cozulmus S16
+// ~70 MiB (cap-ustu): decodeOggVorbis "Decoded Ogg/Vorbis audio exceeds the
+// maximum accepted size" ile duser. Probe halka-suresini gorur
+// (threshold-alti, memory-rotasi) — akis-taahhudu degil RAM cozumu isler.
+std::vector<uint8_t> capChainedDecodeBombOgg() {
+    const std::vector<uint8_t> tone = missGuardLongToneOggBytes();
+    uint32_t baseSerial = static_cast<uint32_t>(tone[14]) |
+                          (static_cast<uint32_t>(tone[15]) << 8) |
+                          (static_cast<uint32_t>(tone[16]) << 16) |
+                          (static_cast<uint32_t>(tone[17]) << 24);
+    std::vector<uint8_t> out;
+    out.reserve(tone.size() * 200);
+    for (int link = 0; link < 200; ++link) {
+        std::vector<uint8_t> copy = tone;
+        size_t offset = 0;
+        while (offset + 27 <= copy.size()) {
+            if (std::memcmp(copy.data() + offset, "OggS", 4) != 0) {
+                lockFail("Audio BGM Cap Fail-Closed (#87): zincir sayfa yuruyusu bozuldu");
+            }
+            const size_t segCount = copy[offset + 26];
+            if (offset + 27 + segCount > copy.size()) {
+                lockFail("Audio BGM Cap Fail-Closed (#87): zincir kesik segment tablosu");
+            }
+            size_t body = 0;
+            for (size_t i = 0; i < segCount; ++i) body += copy[offset + 27 + i];
+            const size_t pageEnd = offset + 27 + segCount + body;
+            if (pageEnd > copy.size()) {
+                lockFail("Audio BGM Cap Fail-Closed (#87): zincir kesik sayfa govdesi");
+            }
+            const uint32_t serial = baseSerial + static_cast<uint32_t>(link) + 1u;
+            copy[offset + 14] = static_cast<uint8_t>(serial & 0xFFu);
+            copy[offset + 15] = static_cast<uint8_t>((serial >> 8) & 0xFFu);
+            copy[offset + 16] = static_cast<uint8_t>((serial >> 16) & 0xFFu);
+            copy[offset + 17] = static_cast<uint8_t>((serial >> 24) & 0xFFu);
+            copy[offset + 22] = 0;
+            copy[offset + 23] = 0;
+            copy[offset + 24] = 0;
+            copy[offset + 25] = 0;
+            const uint32_t crc =
+                missGuardOggPageCrc(copy.data() + offset, pageEnd - offset);
+            copy[offset + 22] = static_cast<uint8_t>(crc & 0xFFu);
+            copy[offset + 23] = static_cast<uint8_t>((crc >> 8) & 0xFFu);
+            copy[offset + 24] = static_cast<uint8_t>((crc >> 16) & 0xFFu);
+            copy[offset + 25] = static_cast<uint8_t>((crc >> 24) & 0xFFu);
+            offset = pageEnd;
+        }
+        if (offset != copy.size()) {
+            lockFail("Audio BGM Cap Fail-Closed (#87): zincir artigi kaldi");
+        }
+        out.insert(out.end(), copy.begin(), copy.end());
+    }
+    return out;
+}
+
+// Convert-hostile tiny WAV: 9-kanal float (SDL yukler, ConvertAudioSamples
+// "src_spec->channels is invalid" ile reddeder). 64 frame, bayt-kucuk.
+std::vector<uint8_t> capNineChannelWav() {
+    static constexpr uint16_t kChannels = 9;
+    static constexpr uint32_t kFrames = 64;
+    const uint32_t dataBytes = kFrames * kChannels * sizeof(float);
+    std::vector<uint8_t> out;
+    out.insert(out.end(), {'R', 'I', 'F', 'F'});
+    appendU32LE(out, 36u + dataBytes);
+    out.insert(out.end(), {'W', 'A', 'V', 'E'});
+    out.insert(out.end(), {'f', 'm', 't', ' '});
+    appendU32LE(out, 16u);
+    appendU16LE(out, 3u); // IEEE float
+    appendU16LE(out, kChannels);
+    appendU32LE(out, 44100u);
+    appendU32LE(out, 44100u * kChannels * 4u);
+    appendU16LE(out, static_cast<uint16_t>(kChannels * 4u));
+    appendU16LE(out, 32u);
+    out.insert(out.end(), {'d', 'a', 't', 'a'});
+    appendU32LE(out, dataBytes);
+    for (uint32_t i = 0; i < kFrames * kChannels; ++i) appendFloatLE(out, 0.5f);
+    return out;
+}
+
+} // namespace
+
+void test_audio_lock_bgm_cap_fail_closed() {
+    TEST_SECTION("Audio BGM Cap Fail-Closed (#87)");
+
+    Rowl::VFS::VFSManager vfs;
+    Rowl::Audio::AudioEngine audio(&vfs);
+    setupTransactionalProject(vfs, audio);
+    const auto dir = std::filesystem::temp_directory_path() /
+                     "rowl_audio_bgm_miss_guard_project" / "Assets" / "audio";
+    std::filesystem::create_directories(dir);
+    writeSparseOversizeWav(dir / "cap_oversize_65m.wav");
+    writeBytes(dir / "cap_chain200.ogg", capChainedDecodeBombOgg());
+    writeBytes(dir / "cap_ch9.wav", capNineChannelWav());
+
+    if (!requireAudioDeviceOrSkip(audio, "Audio BGM Cap Fail-Closed")) return;
+
+    auto requireErrorContains = [&](const std::string& needle, const std::string& context) {
+        const std::string err = audio.getLastError();
+        if (err.find(needle) == std::string::npos) {
+            lockFail(context + ": fail baska yola sapti (m_lastError): '" + err + "'");
+        }
+    };
+
+    // Kurulum: gecerli streaming BGM (7-iddiali bekci aynen).
+    audio.playAudio("audio/miss_bgm.ogg", Rowl::Audio::AudioChannelType::Bgm);
+    audio.update();
+    requireMissGuardIntact(audio, "kurulum/miss_bgm.ogg");
+    TEST_PASS("Audio Cap Fail-Closed — kurulum (streaming BGM intact)");
+
+    // encoded-cap: 65 MiB sparse WAV reddi predecessor'i korur.
+    audio.playAudio("audio/cap_oversize_65m.wav", Rowl::Audio::AudioChannelType::Bgm);
+    requireMissGuardIntact(audio, "encoded-cap sonrasi");
+    requireErrorContains("Audio file exceeds the maximum accepted size",
+                         "encoded-cap sonrasi");
+    TEST_PASS("Audio Cap Fail-Closed — encoded-cap predecessor'i korur");
+
+    // decoded-cap: zincir-cozum tasmasi predecessor'i korur.
+    audio.playAudio("audio/cap_chain200.ogg", Rowl::Audio::AudioChannelType::Bgm);
+    requireMissGuardIntact(audio, "decoded-cap sonrasi");
+    requireErrorContains("Decoded Ogg/Vorbis audio exceeds the maximum accepted size",
+                         "decoded-cap sonrasi");
+    TEST_PASS("Audio Cap Fail-Closed — decoded-cap predecessor'i korur");
+
+    // convert-fail: 9-kanal ceviri reddi predecessor'i korur.
+    audio.playAudio("audio/cap_ch9.wav", Rowl::Audio::AudioChannelType::Bgm);
+    requireMissGuardIntact(audio, "convert-fail sonrasi");
+    requireErrorContains("Unable to convert decoded audio",
+                         "convert-fail sonrasi");
+    TEST_PASS("Audio Cap Fail-Closed — convert-fail predecessor'i korur");
+
     audio.stopAll();
     audio.shutdown();
 }
