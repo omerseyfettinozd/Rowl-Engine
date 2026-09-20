@@ -420,6 +420,15 @@ void RowlEngine_SetProjectDirectory(RowlEngineHandle handle, const char* project
     });
 }
 
+void RowlEngine_EndSession(RowlEngineHandle handle) {
+    if (!isLiveHandle(handle)) return;
+    invokeNoexcept([&] {
+        auto engine = toEngineChecked(handle);
+        if (!engine || !engine->isInitialized()) return;
+        engine->endSession();
+    });
+}
+
 void RowlEngine_SetBgmTransitionDefaults(RowlEngineHandle handle, const char* transition, float durationSeconds) {
     if (!isLiveHandle(handle)) return;
     // D1 (#132 tutunur-sınıfı): salt-state setter init-öncesi tutunur ama

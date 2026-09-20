@@ -2360,6 +2360,37 @@ namespace RowlEngine.Editor.ViewModels
                     return;
                 }
 
+                // Önce hedefi doğrula — geçersiz klasörde oturuma dokunulmaz.
+                if (!ProjectOpenCoordinator.TryResolve(selectedDir, out var target) || target == null)
+                {
+                    AppendLog("Seçilen klasörde geçerli bir Rowl Engine projesi bulunamadı.");
+                    AppendLog("   Beklenen yapı: [KlasörAdı]/Assets/json/full_story_graph.json");
+                    return;
+                }
+
+                // Mount-öncesi oturumu sonlandır: canlı oturumda (oynanmış
+                // preview, sahne push'larıyla bile şişmiş step) native
+                // SetProjectDirectory reddedilir (mid-session StateError) ve
+                // editör/motor proje konusunda ayrışıp her sonraki motor
+                // çağrısında hata üretir. EndSession reset'in aksine replay
+                // yapmadan (cursor başa, step/history sıfırlı, Lua karantinalı)
+                // kapatır; reset bypass'ı (player penceresi dahil) burada etkisizdir.
+                if (IsPlayingStandalone)
+                    StopStandaloneGame();
+                if (EngineHost.IsInitialized)
+                    EngineHost.EndSession();
+
+                // Pre-flight mount: Switch editör durumunu (yol/düğüm/cache)
+                // değiştirmeden önce reddi yakala. Reddedilirse erken dön —
+                // önceki proje motorda ve editörde aynen durur, restore gerekmez.
+                if (EngineHost.IsInitialized && !EngineHost.SetProjectDirectoryChecked(target.RootPath))
+                {
+                    EngineHost.TryGetLastEngineResult(out _, out _, out string remountDetail);
+                    AppendLog($"[HATA] Proje motor mount edilemedi: {remountDetail}");
+                    NotifyError($"Proje motor mount edilemedi ({remountDetail}).", "Proje Aç");
+                    return;
+                }
+
                 var result = EditorProjectLifecycleCoordinator.ExecuteOpenProject(
                     selectedDir,
                     ProjectRoot,
@@ -2370,7 +2401,7 @@ namespace RowlEngine.Editor.ViewModels
                         ProjectRoot = root;
                         CurrentProjectPath = path;
                     },
-                    EngineHost.SetProjectDirectory,
+                    root => EngineHost.SetProjectDirectory(root),
                     LoadFullStoryGraphFile,
                     () =>
                     {

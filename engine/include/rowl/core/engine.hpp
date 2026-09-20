@@ -204,6 +204,11 @@ public:
     void setAutoAdvanceDelayOffset(float seconds);
     bool isPlaying() const { return m_isPlaying; }
     void resetToStartNode();
+    /// Ends the live session without touching the presented scene: play state
+    /// off, lua session cleared, cursor back to start, step/history reset.
+    /// Unlike resetToStartNode() there is no scene re-hydration, so no replay
+    /// side effect can re-arm the live markers. Mount boundary helper.
+    void endSession();
     const uint8_t* getPixelBuffer(uint32_t* outW, uint32_t* outH) const;
     /// Pitch-aware overload (MS-0 contract). outPitch receives the surface
     /// row stride in bytes; may exceed (*outW)*4. Any out-param may be null.

@@ -125,6 +125,18 @@ void test_lifecycle_shutdown_sweep() {
     if (RowlEngine_GetCurrentNodeId(p) != 102)
         rowlLockFail("lifecycle-shutdown-sweep",
                      "rejected SetProjectDirectory must not wipe the session");
+    // EndSession oynanmış oturumu mountsuz sonlandırır: cursor başa, step/
+    // history sıfırlanır (replay'siz — reset'in aksine step geri zıplamaz),
+    // sonraki mount kabul edilir.
+    RowlEngine_EndSession(p);
+    if (RowlEngine_GetCurrentNodeId(p) != 101)
+        rowlLockFail("lifecycle-shutdown-sweep",
+                     "EndSession must return the cursor to the start node");
+    RowlEngine_ClearLastResult(p);
+    RowlEngine_SetProjectDirectory(p, projDir.string().c_str());
+    if (RowlEngine_GetLastResultCode(p) == 11)
+        rowlLockFail("lifecycle-shutdown-sweep",
+                     "ended session must accept SetProjectDirectory");
     RowlEngine_Shutdown(p);
     // Shutdown-sonrası story'süz motorda yine kabul (re-init öncesi mount).
     RowlEngine_SetProjectDirectory(p, projDir.string().c_str());

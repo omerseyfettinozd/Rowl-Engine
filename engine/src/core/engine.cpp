@@ -449,6 +449,20 @@ void Engine::resetToStartNode() {
     }
 }
 
+void Engine::endSession() {
+    setPlayState(false);
+    if (m_luaSandbox) m_luaSandbox->clearVariables();
+    // No scene re-hydration here by design: resetToStartNode() re-presents
+    // the start node with replay on, and audio/variable entry effects bump
+    // stepId back above 1 (mid-session gate trips on step alone). The mount
+    // boundary needs pristine markers, visuals stay as-is (the host pushes
+    // right after the mount anyway).
+    if (!m_storyRuntime.resetToStart()) return;
+    m_gameState = Rowl::State::GameState::createInitialState(m_storyRuntime.startNodeId());
+    m_lastRecordedDialogueNodeId = 0;
+    m_lastSfxPlaybackNodeId = 0;
+}
+
 const uint8_t* Engine::getPixelBuffer(uint32_t* outW, uint32_t* outH) const {
     return getPixelBuffer(outW, outH, nullptr);
 }

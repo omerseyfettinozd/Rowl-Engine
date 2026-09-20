@@ -500,6 +500,16 @@ ROWL_API RowlEngine_ResultCode RowlEngine_GetActiveDialogueContentIdsJson(
 ROWL_API void RowlEngine_SetProjectDirectory(RowlEngineHandle handle,
                                              const char* projectRoot);
 
+/**
+ * Ends the live story session without touching the presented scene (play
+ * state off, lua session cleared, cursor/step/history reset). Mount helper:
+ * call before SetProjectDirectory when the session may have been played —
+ * the mid-session gate only accepts unplayed engines. Silent no-op on dead
+ * or uninitialized handles. The presented scene is left as-is; push a scene
+ * after the mount as usual.
+ */
+ROWL_API void RowlEngine_EndSession(RowlEngineHandle handle);
+
 /** Updates project-owned BGM defaults without remounting assets or resetting the active scene. */
 ROWL_API void RowlEngine_SetBgmTransitionDefaults(RowlEngineHandle handle,
                                                   const char* transition,

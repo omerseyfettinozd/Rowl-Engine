@@ -320,6 +320,9 @@ namespace RowlEngine.Editor.Native
             [MarshalAs(UnmanagedType.LPUTF8Str)] string projectRoot);
 
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern void RowlEngine_EndSession(IntPtr handle);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
         internal static extern void RowlEngine_SetBgmTransitionDefaults(IntPtr handle,
             [MarshalAs(UnmanagedType.LPUTF8Str)] string transition, float durationSeconds);
 

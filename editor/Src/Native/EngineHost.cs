@@ -662,6 +662,62 @@ namespace RowlEngine.Editor.Native
             }
         }
 
+        /// <summary>
+        /// Reads the native last-result channel (code + operation + message).
+        /// Callers must clear the channel with NativeBridge.RowlEngine_ClearLastResult
+        /// <i>before</i> the native call under test; otherwise a stale result from
+        /// an earlier failure can be misread as fresh evidence.
+        /// </summary>
+        public bool TryGetLastEngineResult(out int code, out string operation, out string message)
+        {
+            code = 0;
+            operation = string.Empty;
+            message = string.Empty;
+            if (!IsInitialized) return false;
+            code = InvokeNative(handle => NativeBridge.RowlEngine_GetLastResultCode(handle), 0);
+            operation = InvokeNative(handle => NativeBridge.PtrToString(
+                NativeBridge.RowlEngine_GetLastResultOperationWithLength(handle, out uint opLen), opLen), string.Empty);
+            message = InvokeNative(handle => NativeBridge.PtrToString(
+                NativeBridge.RowlEngine_GetLastResultMessageWithLength(handle, out uint msgLen), msgLen), string.Empty);
+            return true;
+        }
+
+        /// <summary>
+        /// Ends the native session without replay (cursor to start, step/history
+        /// reset, Lua quarantine cleared) so the next SetProjectDirectory is
+        /// accepted as a fresh mount. No-op on an uninitialized engine.
+        /// </summary>
+        public void EndSession()
+        {
+            if (!IsInitialized) return;
+            InvokeNative(handle => NativeBridge.RowlEngine_EndSession(handle));
+        }
+
+        /// <summary>
+        /// Mounts the project like <see cref="SetProjectDirectory"/>, but reports
+        /// the native rejection instead of swallowing it. Pre-clears the
+        /// last-result channel before the mount, then rejects on
+        /// (operation "set_project_directory" + non-zero code) so both refusal
+        /// modes — StateError (mid-session) and IoError (unwritable save dir) —
+        /// are detected. Returns false when the mount was rejected.
+        /// </summary>
+        public bool SetProjectDirectoryChecked(string projectRoot)
+        {
+            if (!IsInitialized || string.IsNullOrEmpty(projectRoot)) return true;
+            _lastPreviewComponentsJson = null;
+            InvokeNative(handle => NativeBridge.RowlEngine_ClearLastResult(handle));
+            InvokeNative(handle => NativeBridge.RowlEngine_SetProjectDirectory(handle, projectRoot));
+            bool rejected = TryGetLastEngineResult(out int code, out string op, out _)
+                && code != 0
+                && op == "set_project_directory";
+            if (!IsPlaying)
+            {
+                InvokeNative(handle => NativeBridge.RowlEngine_Step(handle, 0.0f));
+                UpdatePixelBuffer();
+            }
+            return !rejected;
+        }
+
         public void SetBgmTransitionDefaults(string transition, float durationSeconds)
         {
             InvokeNative(handle => NativeBridge.RowlEngine_SetBgmTransitionDefaults(handle, transition, durationSeconds));
