@@ -170,50 +170,6 @@ namespace RowlEngine.Editor.ViewModels
         public override int GetHashCode() => RelativePath.GetHashCode();
     }
 
-    public partial class AssetItemViewModel : ViewModelBase
-    {
-        public string Name { get; }
-        public string Icon { get; }
-        public string IconColor { get; }
-
-        public AssetItemViewModel(string path)
-        {
-            Name = path;
-            string ext = System.IO.Path.GetExtension(path).ToLowerInvariant();
-            if (Services.MediaFormatCatalog.IsSupportedImageExtension(ext))
-            {
-                Icon = "";
-                IconColor = ThemeFallbackColors.BrushHex("MutedText", ThemeFallbackColors.Muted);
-            }
-            else if (Services.MediaFormatCatalog.IsSupportedAudioExtension(ext))
-            {
-                Icon = "";
-                IconColor = ThemeFallbackColors.BrushHex("MutedText", ThemeFallbackColors.Muted);
-            }
-            else if (ext == ".json" || ext == ".txt" || ext == ".lua")
-            {
-                Icon = "";
-                IconColor = ThemeFallbackColors.BrushHex("MutedText", ThemeFallbackColors.Muted);
-            }
-            else
-            {
-                Icon = "";
-                IconColor = ThemeFallbackColors.BrushHex("MutedText", ThemeFallbackColors.Muted);
-            }
-        }
-
-        public override string ToString() => Name;
-
-        public override bool Equals(object? obj)
-        {
-            if (obj is AssetItemViewModel other) return Name == other.Name;
-            if (obj is string str) return Name == str;
-            return false;
-        }
-
-        public override int GetHashCode() => Name.GetHashCode();
-    }
-
     public partial class AssetBrowserViewModel : ViewModelBase, IDisposable
     {
         public MainWindowViewModel MainViewModel { get; }
@@ -276,8 +232,6 @@ namespace RowlEngine.Editor.ViewModels
         }
 
         public ObservableCollection<AssetNodeViewModel> AssetTree { get; } = new();
-        public ObservableCollection<AssetItemViewModel> Assets { get; } = new();
-        public ObservableCollection<string> AssetNames { get; } = new();
 
         // MS-5: asset watcher + missing-asset tracking
         private readonly List<FileSystemWatcher> _watchers = new();
@@ -365,8 +319,6 @@ namespace RowlEngine.Editor.ViewModels
         private void RefreshAssetsCore()
         {
             AssetTree.Clear();
-            Assets.Clear();
-            AssetNames.Clear();
             _visibleFileCount = 0;
             _hiddenFileCount = 0;
             bool filterActive = FilterActive;
@@ -635,8 +587,6 @@ namespace RowlEngine.Editor.ViewModels
                 _visibleFileCount++;
 
                 targetCollection.Add(fileNode);
-                Assets.Add(new AssetItemViewModel(relPath));
-                AssetNames.Add(relPath);
             }
         }
 

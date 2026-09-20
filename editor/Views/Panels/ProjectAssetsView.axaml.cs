@@ -21,6 +21,17 @@ namespace RowlEngine.Editor.Views.Panels
 
         private void OnAssetPointerPressed(object? sender, PointerPressedEventArgs e)
         {
+            // Faz 4: tek context menü öğe düzeyinde; sağ-tık basılan satırı
+            // seçer ki menü komutları doğru düğüme işlesin.
+            if (e.GetCurrentPoint(this).Properties.IsRightButtonPressed)
+            {
+                if (sender is Control ctrl && ctrl.DataContext is AssetNodeViewModel node)
+                {
+                    var browser = (DataContext as MainWindowViewModel)?.AssetBrowserViewModel;
+                    if (browser != null) browser.SelectedNode = node;
+                }
+                return;
+            }
             if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
             {
                 if (sender is Control ctrl && ctrl.DataContext is AssetNodeViewModel node)

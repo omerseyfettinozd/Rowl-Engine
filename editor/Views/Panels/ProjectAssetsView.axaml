@@ -56,18 +56,7 @@
                       SelectedItem="{Binding AssetBrowserViewModel.SelectedNode, Mode=TwoWay}" 
                       Margin="4" 
                       Foreground="{DynamicResource PrimaryText}">
-                <TreeView.ContextMenu>
-                    <ContextMenu>
-                        <MenuItem Header="Yeni Klasör Oluştur" Command="{Binding AssetBrowserViewModel.CreateFolderCommand}"/>
-                        <MenuItem Header="Dosya İçe Aktar..." Command="{Binding ImportAssetCommand}"/>
-                        <Separator/>
-                        <MenuItem Header="Yeniden Adlandır (F2)" Command="{Binding AssetBrowserViewModel.StartRenameCommand}"/>
-                        <MenuItem Header="Dosya Yöneticisinde Aç" Command="{Binding AssetBrowserViewModel.OpenInExplorerCommand}"/>
-                        <Separator/>
-                        <MenuItem Header="Sil" Command="{Binding AssetBrowserViewModel.DeleteAssetCommand}"/>
-                        <MenuItem Header="Yenile" Command="{Binding AssetBrowserViewModel.RefreshAssetsCommand}"/>
-                    </ContextMenu>
-                </TreeView.ContextMenu>
+                <!-- Faz 4: tek context menü (öğe düzeyi; sağ-tık seçimi code-behind'de). -->
                 <TreeView.Styles>
                     <Style Selector="TreeViewItem" x:DataType="vm:AssetNodeViewModel">
                         <!-- Faz 4: genişletme ViewModel'den gelir (yalnızca kök + filtre). -->

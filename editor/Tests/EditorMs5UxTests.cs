@@ -185,7 +185,7 @@ internal static class EditorMs5UxTests
         File.WriteAllText(probe, "ms5");
         browser.RefreshAssets();
         DrainWatcherQueue();
-        if (!browser.AssetNames.Contains("ms5_probe.txt"))
+        if (!TreeContainsFile(browser, "ms5_probe.txt"))
             throw new Exception("Probe file was not listed after creation.");
 
         File.Delete(probe);
@@ -195,7 +195,7 @@ internal static class EditorMs5UxTests
             // Tur-7: count alone never names the 3 extra ghosts (Windows CI
             // saw count=4). Dump the full missing set + asset census so the
             // next red run identifies the stale entries directly.
-            throw new Exception($"Delete did not raise a missing badge (count={browser.MissingAssetCount}, want probe='{probe}'; missing=[{string.Join(";", browser.MissingAssetPaths)}]; assets={browser.AssetNames.Count}).");
+            throw new Exception($"Delete did not raise a missing badge (count={browser.MissingAssetCount}, want probe='{probe}'; missing=[{string.Join(";", browser.MissingAssetPaths)}]; status='{browser.StatusText}').");
         var ghostGroup = browser.AssetTree.FirstOrDefault(n => n.RelativePath == "__missing__");
         var ghost = ghostGroup?.Children.FirstOrDefault(c => c.FullPath == probe);
         if (ghost == null || !ghost.IsMissing)
@@ -221,7 +221,7 @@ internal static class EditorMs5UxTests
         try
         {
             File.WriteAllText(watch, "watch");
-            if (!WaitFor(() => browser.AssetNames.Contains("ms5_watch.txt"), TimeSpan.FromSeconds(10)))
+            if (!WaitFor(() => TreeContainsFile(browser, "ms5_watch.txt"), TimeSpan.FromSeconds(10)))
                 throw new Exception("Watcher did not pick up the created file within 10 s.");
 
             File.Delete(watch);
@@ -242,6 +242,22 @@ internal static class EditorMs5UxTests
     private static void DrainWatcherQueue()
     {
         try { Dispatcher.UIThread.RunJobs(); } catch { }
+    }
+
+    /// <summary>
+    /// Faz 4: ölü AssetNames koleksiyonu kalktı; varlık sayımı AssetTree
+    /// üzerinden özyinelemeli yapılır (hayalet grup başlığı hariç).
+    /// </summary>
+    private static bool TreeContainsFile(AssetBrowserViewModel browser, string fileName)
+    {
+        var stack = new System.Collections.Generic.Stack<AssetNodeViewModel>(browser.AssetTree);
+        while (stack.Count > 0)
+        {
+            var node = stack.Pop();
+            if (!node.IsDirectory && !node.IsMissingGroup && node.Name == fileName) return true;
+            foreach (var child in node.Children) stack.Push(child);
+        }
+        return false;
     }
 
     private static bool WaitFor(Func<bool> condition, TimeSpan timeout)
