@@ -214,6 +214,8 @@
                     <RowDefinition Height="*"/>
                     <RowDefinition Height="{Binding BottomSplitterHeight}"/>
                     <RowDefinition Height="{Binding BottomPanelHeight}"/>
+                    <RowDefinition Height="{Binding AssetsStripSplitterHeight}"/>
+                    <RowDefinition Height="{Binding AssetsStripHeight}"/>
                 </Grid.RowDefinitions>
 
                 <Grid Grid.Row="0" ClipToBounds="True">
@@ -345,9 +347,6 @@
                         <TabItem Header="Günlük" IsVisible="{Binding IsLogPanelVisible}">
                             <panels:OutputLogView/>
                         </TabItem>
-                        <TabItem Header="Varlıklar" IsVisible="{Binding IsAssetsPanelVisible}">
-                            <panels:ProjectAssetsView/>
-                        </TabItem>
                         <TabItem Header="Diyalog Geçmişi" IsVisible="{Binding IsBacklogPanelVisible}">
                             <panels:BacklogView DataContext="{Binding BacklogViewModel}"/>
                         </TabItem>
@@ -358,6 +357,15 @@
                             <panels:ProjectIssuesView DataContext="{Binding ProjectIssuesViewModel}"/>
                         </TabItem>
                     </TabControl>
+                </Grid>
+
+                <GridSplitter Grid.Row="3" IsVisible="{Binding IsAssetsPanelVisible}"
+                              Background="{DynamicResource BorderColor}" ResizeDirection="Rows" Height="6"/>
+
+                <!-- Assets şeridi (Faz 6 Dilim 2): sekmelerden bağımsız,
+                     tuvalin altında kendi alanında yaşar -->
+                <Grid Grid.Row="4" MinHeight="140" IsVisible="{Binding IsAssetsPanelVisible}">
+                    <panels:ProjectAssetsView/>
                 </Grid>
             </Grid>
 

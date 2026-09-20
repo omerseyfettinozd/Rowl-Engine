@@ -18,7 +18,7 @@ namespace RowlEngine.Editor.Services
         public static GridLength CalculateBottomSplitterHeight(bool isVisible, double height = 6) =>
             isVisible ? new GridLength(height) : new GridLength(0);
 
-        public static GridLength CalculateHierarchyPanelWidth(bool isVisible, double width = 240) =>
+        public static GridLength CalculateHierarchyPanelWidth(bool isVisible, double width = 200) =>
             isVisible ? new GridLength(width) : new GridLength(0);
 
         public static GridLength CalculateHierarchySplitterWidth(bool isVisible, double width = 6) =>
@@ -51,6 +51,15 @@ namespace RowlEngine.Editor.Services
         }
 
         /// <summary>
+        /// Faz 6 Dilim 2: Varlıklar artık alt sekmelerde değil, kendi
+        /// şeridinde yaşar — bu yüzden bayat sekme indeksleri (ör. eski
+        /// 4 = Sorunlar) yeni aralığa kelepçelenir. Sekme kimlikleri ve
+        /// Ctrl+1..7 eşleşmesi değişmez: 0 = Günlük, 1 = Diyalog Geçmişi,
+        /// 2 = Kayıt Slotları, 3 = Sorunlar.
+        /// </summary>
+        public static int ClampBottomTab(int index) => Math.Clamp(index, 0, 3);
+
+        /// <summary>
         /// Handles switching and toggling of workspace panels and views.
         /// </summary>
         public static void HandlePanelAction(
@@ -75,7 +84,8 @@ namespace RowlEngine.Editor.Services
                     isHierarchyVisible = !isHierarchyVisible;
                     break;
                 case "Assets":
-                    ToggleBottomTab(ref isAssetsVisible, ref bottomPanelActiveTab, 1);
+                    // Faz 6 Dilim 2: ayrı şerit — sekme indeksine dokunmaz.
+                    isAssetsVisible = !isAssetsVisible;
                     break;
                 case "Inspector":
                     isInspectorVisible = !isInspectorVisible;
@@ -84,19 +94,19 @@ namespace RowlEngine.Editor.Services
                     ToggleBottomTab(ref isLogVisible, ref bottomPanelActiveTab, 0);
                     break;
                 case "Backlog":
-                    ToggleBottomTab(ref isBacklogVisible, ref bottomPanelActiveTab, 2);
+                    ToggleBottomTab(ref isBacklogVisible, ref bottomPanelActiveTab, 1);
                     break;
                 case "SaveSlots":
                     isSaveSlotsVisible = !isSaveSlotsVisible;
                     if (isSaveSlotsVisible)
                     {
                         refreshSaveSlots?.Invoke();
-                        bottomPanelActiveTab = 3;
+                        bottomPanelActiveTab = 2;
                     }
                     break;
                 case "ProjectIssues":
                     isProjectIssuesVisible = !isProjectIssuesVisible;
-                    if (isProjectIssuesVisible) bottomPanelActiveTab = 4;
+                    if (isProjectIssuesVisible) bottomPanelActiveTab = 3;
                     break;
                 case "NodeGraph":
                     isNodeGraphActive = true;

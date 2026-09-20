@@ -255,13 +255,20 @@ namespace RowlEngine.Editor.ViewModels
         private bool _isHierarchyPanelVisible = true;
 
         /// <summary>
-        /// The bottom area remains available while either of its independent
-        /// tabs is enabled. Assets must not disappear merely because the log
-        /// panel was closed.
+        /// Faz 6 Dilim 2: alt sekme alanı yalnızca Günlük/Diyalog Geçmişi/
+        /// Kayıt Slotları/Sorunlar sekmelerini kapsar. Varlıklar kendi
+        /// şeridinde yaşar (<see cref="IsAssetsPanelVisible"/>) ve sekme
+        /// alanını açık tutmaz.
         /// </summary>
-        public bool IsBottomPanelVisible => IsLogPanelVisible || IsAssetsPanelVisible || IsBacklogPanelVisible || IsSaveSlotsPanelVisible || IsProjectIssuesPanelVisible;
+        public bool IsBottomPanelVisible => IsLogPanelVisible || IsBacklogPanelVisible || IsSaveSlotsPanelVisible || IsProjectIssuesPanelVisible;
         public GridLength BottomPanelHeight => EditorWorkspaceLayoutService.CalculateBottomPanelHeight(IsBottomPanelVisible);
         public GridLength BottomSplitterHeight => EditorWorkspaceLayoutService.CalculateBottomSplitterHeight(IsBottomPanelVisible);
+        /// <summary>
+        /// Faz 6 Dilim 2: tuvalin altındaki bağımsız Varlıklar şeridi.
+        /// Sekme alanından ayrı açılıp kapanır, kendi yüksekliğini korur.
+        /// </summary>
+        public GridLength AssetsStripHeight => EditorWorkspaceLayoutService.CalculateBottomPanelHeight(IsAssetsPanelVisible, _assetsStripHeightPixels);
+        public GridLength AssetsStripSplitterHeight => EditorWorkspaceLayoutService.CalculateBottomSplitterHeight(IsAssetsPanelVisible);
         public GridLength HierarchyPanelWidth => EditorWorkspaceLayoutService.CalculateHierarchyPanelWidth(IsHierarchyPanelVisible);
         public GridLength HierarchySplitterWidth => EditorWorkspaceLayoutService.CalculateHierarchySplitterWidth(IsHierarchyPanelVisible);
         public GridLength InspectorPanelWidth => EditorWorkspaceLayoutService.CalculateInspectorPanelWidth(IsInspectorPanelVisible);
@@ -270,6 +277,8 @@ namespace RowlEngine.Editor.ViewModels
         partial void OnIsAssetsPanelVisibleChanged(bool value) =>
             NotifyBottomPanelLayoutChanged();
 
+        partial void OnAssetsStripHeightPixelsChanged(double value) =>
+            OnPropertyChanged(nameof(AssetsStripHeight));
         partial void OnIsLogPanelVisibleChanged(bool value) =>
             NotifyBottomPanelLayoutChanged();
 
@@ -287,6 +296,8 @@ namespace RowlEngine.Editor.ViewModels
             OnPropertyChanged(nameof(IsBottomPanelVisible));
             OnPropertyChanged(nameof(BottomPanelHeight));
             OnPropertyChanged(nameof(BottomSplitterHeight));
+            OnPropertyChanged(nameof(AssetsStripHeight));
+            OnPropertyChanged(nameof(AssetsStripSplitterHeight));
         }
 
         partial void OnIsHierarchyPanelVisibleChanged(bool value)
@@ -302,10 +313,18 @@ namespace RowlEngine.Editor.ViewModels
         }
 
         /// <summary>
-        /// Active tab index in the bottom panel: 0 = Log, 1 = Assets
+        /// Active tab index in the bottom panel: 0 = Log, 1 = Backlog,
+        /// 2 = SaveSlots, 3 = ProjectIssues (Faz 6 Dilim 2: Varlıklar
+        /// sekmeden ayrı şeride taşındı).
         /// </summary>
         [ObservableProperty]
         private int _bottomPanelActiveTab = 0;
+
+        /// <summary>
+        /// Faz 6 Dilim 2: Varlıklar şeridinin piksel yüksekliği (varsayılan 180).
+        /// </summary>
+        [ObservableProperty]
+        private double _assetsStripHeightPixels = 180;
 
         // Center view: single active tab (radio semantics). Node Graph is default.
         [ObservableProperty]
@@ -1730,6 +1749,10 @@ namespace RowlEngine.Editor.ViewModels
                 ref splitMode,
                 () => SaveSlotsViewModel?.Refresh());
 
+            // Faz 6 Dilim 2: eski kayıtlardan/eylemlerden gelen bayat
+            // indeksler (ör. Varlıklar döneminden kalan 4) kelepçelenir.
+            bottomActiveTab = EditorWorkspaceLayoutService.ClampBottomTab(bottomActiveTab);
+
             IsHierarchyPanelVisible = isHierarchy;
             IsAssetsPanelVisible = isAssets;
             IsInspectorPanelVisible = isInspector;
@@ -2257,7 +2280,7 @@ namespace RowlEngine.Editor.ViewModels
                         if (issues.Any(issue => issue.IsError))
                         {
                             IsProjectIssuesPanelVisible = true;
-                            BottomPanelActiveTab = 4;
+                            BottomPanelActiveTab = 3;
                         }
                     },
                     AppendLog,
@@ -2340,7 +2363,7 @@ namespace RowlEngine.Editor.ViewModels
         {
             ProjectIssuesViewModel.SetIssues(issues);
             IsProjectIssuesPanelVisible = true;
-            BottomPanelActiveTab = 4;
+            BottomPanelActiveTab = 3;
             if (issues.Count == 0) AppendLog("[GRAPH CHECK] No blocking asset or route issues found.");
             foreach (var issue in issues)
                 AppendLog($"{(issue.IsError ? "Hata" : "Uyarı")} [GRAPH CHECK] {issue.Message}");
