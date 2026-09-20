@@ -137,8 +137,16 @@ namespace RowlEngine.Editor.ViewModels
         /// <summary>Visible rect in canvas coordinates (minimap + tests).</summary>
         public Rect ViewportRect { get; private set; }
 
-        /// <summary>Union of all node bounds in canvas coordinates.</summary>
+        /// <summary>
+        /// Faz 6 Dilim 4: düğüm birleşimi + görünüm birleşimi (+64px pay).
+        /// Görünüm de dünyaya dahil olduğu için uzaklaştırınca/pan yapınca
+        /// minimap çerçeveyi içeride tutar. Boş grafta dejenere (0,0,0,0)
+        /// korunur.
+        /// </summary>
         public Rect WorldBounds { get; private set; }
+
+        /// <summary>Düğüm taramasından gelen ham birleşim (görünümsüz).</summary>
+        private Rect _nodeBounds;
 
         public static Rect ComputeViewportRect(
             double panX, double panY, double zoom, double viewportWidth, double viewportHeight)
@@ -162,6 +170,37 @@ namespace RowlEngine.Editor.ViewModels
                 RebuildIndex();
         }
 
+        /// <summary>
+        /// Faz 6 Dilim 4: dünyayı düğümler + görünüm birleşimine genişletir
+        /// (+pay). Düğüm yoksa dejenerelik aynen döner (ZoomToFit no-op'u
+        /// ve boş-minimap erken çıkışı korunur).
+        /// </summary>
+        public static Rect UnionWorldWithViewport(Rect nodeBounds, Rect viewport, double margin = 64)
+        {
+            if (nodeBounds.Width <= 0 || nodeBounds.Height <= 0)
+                return nodeBounds;
+            double x1 = nodeBounds.X, y1 = nodeBounds.Y;
+            double x2 = nodeBounds.X + nodeBounds.Width, y2 = nodeBounds.Y + nodeBounds.Height;
+            if (viewport.Width > 0 && viewport.Height > 0)
+            {
+                x1 = Math.Min(x1, viewport.X);
+                y1 = Math.Min(y1, viewport.Y);
+                x2 = Math.Max(x2, viewport.X + viewport.Width);
+                y2 = Math.Max(y2, viewport.Y + viewport.Height);
+            }
+            return new Rect(x1 - margin, y1 - margin,
+                (x2 - x1) + margin * 2, (y2 - y1) + margin * 2);
+        }
+
+        private void UpdateWorldBounds()
+        {
+            Rect united = UnionWorldWithViewport(_nodeBounds, ViewportRect);
+            if (united != WorldBounds)
+            {
+                WorldBounds = united;
+                OnPropertyChanged(nameof(WorldBounds));
+            }
+        }
         /// <summary>Rebuilds the whole index (load / reset paths).</summary>
         public void RebuildIndex()
         {
@@ -189,6 +228,8 @@ namespace RowlEngine.Editor.ViewModels
             WorldBounds = double.IsPositiveInfinity(minX)
                 ? new Rect(0, 0, 0, 0)
                 : new Rect(minX, minY, Math.Max(0, maxX - minX), Math.Max(0, maxY - minY));
+            _nodeBounds = WorldBounds;
+            UpdateWorldBounds();
             OnPropertyChanged(nameof(WorldBounds));
             RebuildIncidentMap();
             RefreshVisible();
@@ -204,6 +245,8 @@ namespace RowlEngine.Editor.ViewModels
             {
                 ViewportRect = view;
                 OnPropertyChanged(nameof(ViewportRect));
+                // Faz 6 Dilim 4: pan/zoom ile kayan görünüm dünyayı da taşır.
+                UpdateWorldBounds();
             }
             var visible = new HashSet<ulong>(_index.Query(
                 view.X - CullMargin, view.Y - CullMargin,

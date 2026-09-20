@@ -13,7 +13,9 @@ namespace RowlEngine.Editor.Controls
     {
         /// <summary>
         /// Maps a minimap control point to canvas coordinates. Returns null
-        /// for degenerate inputs instead of throwing.
+        /// for degenerate inputs instead of throwing. Faz 6 Dilim 4: hedef
+        /// dünyaya kelepçelenir — harita dışına sürükleme görünümü dışarı
+        /// taşıyamaz.
         /// </summary>
         public static Point? CanvasFromControlPoint(
             Size controlSize, Rect world, Point controlPoint)
@@ -27,9 +29,11 @@ namespace RowlEngine.Editor.Controls
                 return null;
             double offsetX = (controlSize.Width - world.Width * scale) / 2;
             double offsetY = (controlSize.Height - world.Height * scale) / 2;
+            double x = world.X + (controlPoint.X - offsetX) / scale;
+            double y = world.Y + (controlPoint.Y - offsetY) / scale;
             return new Point(
-                world.X + (controlPoint.X - offsetX) / scale,
-                world.Y + (controlPoint.Y - offsetY) / scale);
+                Math.Clamp(x, world.X, world.X + world.Width),
+                Math.Clamp(y, world.Y, world.Y + world.Height));
         }
     }
 }

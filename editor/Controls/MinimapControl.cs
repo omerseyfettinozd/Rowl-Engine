@@ -236,7 +236,11 @@ namespace RowlEngine.Editor.Controls
                 }
             }
 
-            Rect view = ViewportRect;
+            // Faz 6 Dilim 4: çerçeve dünyaya kelepçelenir — görünüm
+            // dışarı taşsa bile mavi çerçeve harita dışına çıkmaz.
+            Rect view = ViewportRect.Intersect(WorldBounds);
+            if (view.Width <= 0 || view.Height <= 0)
+                return;
             var viewport = new Rect(
                 offsetX + (view.X - world.X) * scale,
                 offsetY + (view.Y - world.Y) * scale,

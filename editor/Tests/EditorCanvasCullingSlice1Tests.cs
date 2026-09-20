@@ -377,6 +377,77 @@ public sealed class EditorCanvasCullingSlice1Tests
             new Size(200, 150), new Rect(0, 0, 0, 0), new Point(0, 0)));
     }
 
+    // ── Faz 6 Dilim 4: minimap kelepçesi ───────────────────────────────
+
+    [Fact]
+    public void WorldBounds_UnionsNodesWithViewportAndKeepsEmptyDegenerate()
+    {
+        using var shell = new CulledShell();
+        MainWindowViewModel vm = shell.Vm;
+        try
+        {
+            var graph = vm.NodeGraphViewModel;
+            graph.ViewportWidth = 1280;
+            graph.ViewportHeight = 800;
+            vm.PanX = 0;
+            vm.PanY = 0;
+            vm.ZoomScale = 1.0;
+            graph.RefreshVisible();
+            // Boş graf dejenereliği korunur.
+            Assert.Equal(0, graph.WorldBounds.Width);
+            Assert.Equal(0, graph.WorldBounds.Height);
+
+            var node = AddNode(vm, 1, 100, 100);
+            graph.RefreshVisible();
+            var (nx, ny, nw, nh) = NodeGraphViewModel.NodeBounds(node);
+            Rect view = graph.ViewportRect;
+            Rect world = graph.WorldBounds;
+            // El hesabı birleşim + 64px pay (üretim sabitiyle aynı).
+            double x1 = Math.Min(nx, view.X) - 64;
+            double y1 = Math.Min(ny, view.Y) - 64;
+            double x2 = Math.Max(nx + nw, view.X + view.Width) + 64;
+            double y2 = Math.Max(ny + nh, view.Y + view.Height) + 64;
+            Assert.Equal(x1, world.X, precision: 6);
+            Assert.Equal(y1, world.Y, precision: 6);
+            Assert.Equal(x2 - x1, world.Width, precision: 6);
+            Assert.Equal(y2 - y1, world.Height, precision: 6);
+
+            // Uzak pan: dünya görünümü de sığdırır, çerçeve içeride kalır.
+            vm.PanX = -10000;
+            Rect view2 = graph.ViewportRect;
+            Rect world2 = graph.WorldBounds;
+            Assert.True(world2.X <= view2.X - 64 + 1e-6);
+            Assert.True(world2.Y <= view2.Y - 64 + 1e-6);
+            Assert.True(world2.X + world2.Width >= view2.X + view2.Width + 64 - 1e-6);
+            Assert.True(world2.Y + world2.Height >= view2.Y + view2.Height + 64 - 1e-6);
+        }
+        finally
+        {
+            shell.Dispose();
+        }
+    }
+
+    [Fact]
+    public void Minimap_ClampsDragTargetToWorld()
+    {
+        var world = new Rect(0, 0, 2000, 1000);
+        var size = new Size(200, 150);
+        // Ölçek 0.1, ofset (0, 25): (500,500) -> (5000,4750) -> kelepçelenir.
+        var far = MinimapProjection.CanvasFromControlPoint(size, world, new Point(500, 500));
+        Assert.NotNull(far);
+        Assert.Equal(2000, far!.Value.X, precision: 6);
+        Assert.Equal(1000, far.Value.Y, precision: 6);
+        var neg = MinimapProjection.CanvasFromControlPoint(size, world, new Point(-50, -50));
+        Assert.NotNull(neg);
+        Assert.Equal(0, neg!.Value.X, precision: 6);
+        Assert.Equal(0, neg.Value.Y, precision: 6);
+        // İç nokta aynen eşlenir (kelepçe etkisiz).
+        var center = MinimapProjection.CanvasFromControlPoint(size, world, new Point(100, 75));
+        Assert.NotNull(center);
+        Assert.Equal(1000, center!.Value.X, precision: 6);
+        Assert.Equal(500, center.Value.Y, precision: 6);
+    }
+
     // ── 2.000 node / 6.000 edge gate ─────────────────────────────────
 
     [Fact]
