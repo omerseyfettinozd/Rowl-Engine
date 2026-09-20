@@ -2,10 +2,14 @@
  * test_audio_lock.cpp — Audio DSP guard locks (#77).
  *
  * KILIT (mutant oldurur) vs GOZCU (watch; oldurmez, davranis bekcisi):
- *  - KILIT: sanitize-NaN (Telephone/CaveReverb/Underwater/Normal + zehir-fixture)
- *    ve clamp (Underwater/Telephone/CaveReverb + DC fixture). Ilgili govde
- *    satiri (sanitize dongusu / dal clamp'i) silinirse mandal kirmiziya
- *    duser (NaN/0.0f canlilik kaybi veya >1.0f tasma).
+ *  - KILIT: sanitize-NaN (Telephone/CaveReverb/Underwater/Normal + zehir-fixture),
+ *    clamp-ust-bound (Underwater/Telephone/CaveReverb + sicak-DC fixture,
+ *    peak<=1.0), Telephone clamp-vurus bandi (sicak-DC, ~1.0: sabit-0.5
+ *    cikti + kazanc-0.5/0.3 dususlerini oldurur) ve kalibrasyon kilidi
+ *    (Telephone + dogrusal-bolge 0.1f-DC fixture, hp*2.1 dar bant:
+ *    kazanc-1.0/0.5/0.3 sessiz-gecislerini oldurur). Ilgili govde
+ *    satiri (sanitize dongusu / dal clamp'i / hp kazanci) silinirse veya
+ *    sessizce degisirse mandal kirmiziya duser.
  *  - GOZCU: kalicilik (temiz Normal) ve OGG yanlis-pozitif bekcisi.
  *    Sanitize/clamp mutantini OLDURMEZLER; regresyon bekcisidirler
  *    (asiri-duzeltme / testler-arasi sizma gozlemi).
@@ -118,6 +122,13 @@ void setupLockProject(Rowl::VFS::VFSManager& vfs, Rowl::Audio::AudioEngine& audi
                makeFloatWavMono44100(std::vector<float>(256, 5.0f)));
     writeBytes(dir / "lock_dc_neg.wav",
                makeFloatWavMono44100(std::vector<float>(256, -5.0f)));
+    // Dogrusal-bolge fixture (#77-tur2): +/-0.1f DC, 256 ornek. Sicak DC
+    // clamp'i doyurur (kazanc degisimi gorunmez olur); bu fixture'da clamp
+    // doymaz, mandal Telephone hp*2.1 adim-tepkisidir (~0.0756).
+    writeBytes(dir / "lock_lin_pos.wav",
+               makeFloatWavMono44100(std::vector<float>(256, 0.1f)));
+    writeBytes(dir / "lock_lin_neg.wav",
+               makeFloatWavMono44100(std::vector<float>(256, -0.1f)));
     const std::vector<uint8_t> ogg = decodeBase64(kLockToneOggBase64);
     if (ogg.empty()) {
         lockFail("Audio DSP Guard Locks (#77): OGG fixture decode failed");
@@ -150,12 +161,42 @@ float requireLivePeak(Rowl::Audio::AudioEngine& audio, const std::string& contex
     return peak;
 }
 
-void requireClampedUnitPeak(float peak, const std::string& context) {
+void requireClampUpperBound(float peak, const std::string& context) {
+    // Fail-closed: NaN da dusurur (NaN <= 1.0f yanlistir).
     if (!(peak <= 1.0f)) {
-        lockFail(context + ": Underwater tasti");
+        lockFail(context + ": clamp tasti (mandal >1.0f veya NaN)");
     }
-    if (!(peak >= 0.5f)) {
-        lockFail(context + ": sinyal gecti ama boguldu — asiri-duzeltme bekcisi (mesru retune gecer)");
+}
+
+// Dala-ozel clamp-vurus bandi (Telephone + sicak DC, #77-tur2): hp*2.1
+// gecici-tepesi clamp'e carpar, mandal ~1.0 olur. Sabit-0.5 cikti (0.5),
+// kazanc-0.5 (0.9) ve kazanc-0.3 (0.54) mutantlari burada duser;
+// kazanc-1.0 (1.8 clamp'e carpar, ~1.0) dogrusal-bantta duser.
+// Fail-closed: NaN/sifir da dusurur.
+void requireTelephoneClampHit(float peak, const std::string& context) {
+    requireClampUpperBound(peak, context);
+    if (!(peak >= 0.95f)) {
+        lockFail(context + ": Telephone clamp vurusuna ulasamadi "
+                            "(beklenen ~1.0; sabit-0.5 cikti / kazanc dususu?)");
+    }
+}
+
+// Dogrusal-bolge kazanc bandi (Telephone + 0.1f DC, #77-tur2 kalibrasyon
+// kilidi): clamp doymaz, mandal hp*2.1 adim-tepkisidir (OLCULEN deger
+// asagida pinlidir). Dar tolerans kazanc-1.0/0.5/0.3 sessiz-gecislerini,
+// sabit-0.5 ciktiyi (0.5) ve olu DSP'yi (0.0) oldurur. 2.1->1.8 mesru
+// retune AYRI kalibrasyon bandi ister (bu bant o zaman kayar); eski >=0.5
+// leniensi ("mesru retune gecer") clamp kilidinden cikarilmistir.
+// Fail-closed: NaN da dusurur.
+void requireTelephoneLinearGain(float peak, const std::string& context) {
+    // OLCULEN (2026-09-20, dummy-cihaz, dogru kazanc 2.1): +/-0.1f DC
+    // Telephone mandali = 0.0756 (iki isarette ayni). Bant ~= +/-7%:
+    // kazanc-1.8 (0.0648) dahil tum sessiz dususler disarida kalir.
+    static constexpr float kLinLo = 0.070f;
+    static constexpr float kLinHi = 0.081f;
+    if (!(peak >= kLinLo && peak <= kLinHi)) {
+        lockFail(context + ": Telephone dogrusal kazanc bandi disinda "
+                            "(hp*2.1 kalibrasyon bandi; sessiz kazanc-gecisi?)");
     }
 }
 
@@ -239,43 +280,60 @@ void test_audio_lock_underwater_clamp() {
     setupLockProject(vfs, audio);
     if (!requireAudioDeviceOrSkip(audio, "Audio Clamp Lock")) return;
 
-    // Pozitif DC: clamp kaldirilirsa mandal ~5.0 olur (B1 DUSER).
+    // Pozitif DC: clamp kaldirilirsa mandal ~5.0 olur (B1 DUSER). Canlilik
+    // alt boundu (#77-tur2) DC fixture'dan ayrildi: burada yalniz ust bound
+    // (tasmak yok); canlilik sanitize kilidi + dogrusal-bantta kilitlidir.
     audio.playAudio("audio/lock_dc_pos.wav", Rowl::Audio::AudioChannelType::Bgm,
                     Rowl::Audio::DSPFilterType::UnderwaterLowPass);
-    requireClampedUnitPeak(audio.testLastDspPeak(), "lock_dc_pos/UnderwaterLowPass");
-    TEST_PASS("Audio Clamp Lock — Underwater +5.0f DC (tasmak yok, bogulmak yok)");
+    requireClampUpperBound(audio.testLastDspPeak(), "lock_dc_pos/UnderwaterLowPass");
+    TEST_PASS("Audio Clamp Lock — Underwater +5.0f DC (tasmak yok)");
 
-    // Negatif varyant: isaret-simetrisi (fabs uzerinden ayni boundlar).
+    // Negatif varyant: isaret-simetrisi (fabs uzerinden ayni bound).
     audio.playAudio("audio/lock_dc_neg.wav", Rowl::Audio::AudioChannelType::Bgm,
                     Rowl::Audio::DSPFilterType::UnderwaterLowPass);
-    requireClampedUnitPeak(audio.testLastDspPeak(), "lock_dc_neg/UnderwaterLowPass");
+    requireClampUpperBound(audio.testLastDspPeak(), "lock_dc_neg/UnderwaterLowPass");
     TEST_PASS("Audio Clamp Lock — Underwater -5.0f DC (isaret-simetrisi)");
 
     // Sicak-sinyal ortusu (madde 2): ayni DC fixture'lar Telephone VE
     // CaveReverb ile de calinir. Telephone'da DC gecisi (hp*2.1) clamp'siz
     // ~3.78'e firlar; CaveReverb'de (input+delayed*0.28) clamp'siz ~5.0'e
-    // firlar — iki dalin clamp silmeleri de kirmiziya duser. Alt bound
-    // (>=0.5f) asiri-duzeltme bekcisidir (mesru retune gecer): mandal gecis
-    // anindaki clamp vurusunu gorur (maks), surekli-hal susturmasini degil.
+    // firlar — iki dalin clamp silmeleri de kirmiziya duser. Telephone
+    // dala-ozel clamp-vurus bandiyla (~1.0) kilitlenir: sabit-0.5 cikti
+    // (0.5) ve kazanc-0.5/0.3 dususleri burada olur.
     audio.playAudio("audio/lock_dc_pos.wav", Rowl::Audio::AudioChannelType::Bgm,
                     Rowl::Audio::DSPFilterType::Telephone);
-    requireClampedUnitPeak(audio.testLastDspPeak(), "lock_dc_pos/Telephone");
-    TEST_PASS("Audio Clamp Lock — Telephone +5.0f DC (sicak-sinyal ortusu)");
+    requireTelephoneClampHit(audio.testLastDspPeak(), "lock_dc_pos/Telephone");
+    TEST_PASS("Audio Clamp Lock — Telephone +5.0f DC (clamp vurus ~1.0)");
 
     audio.playAudio("audio/lock_dc_neg.wav", Rowl::Audio::AudioChannelType::Bgm,
                     Rowl::Audio::DSPFilterType::Telephone);
-    requireClampedUnitPeak(audio.testLastDspPeak(), "lock_dc_neg/Telephone");
+    requireTelephoneClampHit(audio.testLastDspPeak(), "lock_dc_neg/Telephone");
     TEST_PASS("Audio Clamp Lock — Telephone -5.0f DC (isaret-simetrisi)");
 
     audio.playAudio("audio/lock_dc_pos.wav", Rowl::Audio::AudioChannelType::Bgm,
                     Rowl::Audio::DSPFilterType::CaveReverb);
-    requireClampedUnitPeak(audio.testLastDspPeak(), "lock_dc_pos/CaveReverb");
+    requireClampUpperBound(audio.testLastDspPeak(), "lock_dc_pos/CaveReverb");
     TEST_PASS("Audio Clamp Lock — CaveReverb +5.0f DC (sicak-sinyal ortusu)");
 
     audio.playAudio("audio/lock_dc_neg.wav", Rowl::Audio::AudioChannelType::Bgm,
                     Rowl::Audio::DSPFilterType::CaveReverb);
-    requireClampedUnitPeak(audio.testLastDspPeak(), "lock_dc_neg/CaveReverb");
+    requireClampUpperBound(audio.testLastDspPeak(), "lock_dc_neg/CaveReverb");
     TEST_PASS("Audio Clamp Lock — CaveReverb -5.0f DC (isaret-simetrisi)");
+
+    // Kalibrasyon kilidi (ayri blok, #77-tur2): dogrusal-bolge fixture
+    // (+/-0.1f DC) Telephone ile calinir; clamp doymaz, mandal hp*2.1
+    // adim-tepkisidir. Dar bant kazanc-1.0/0.5/0.3 sessiz-gecislerini,
+    // sabit-0.5 ciktiyi ve olu DSP'yi oldurur; dogru kazancta (2.1) YESIL
+    // kalir. 1.8 retune ayri kalibrasyon bandi ister (bu bant kayar).
+    audio.playAudio("audio/lock_lin_pos.wav", Rowl::Audio::AudioChannelType::Bgm,
+                    Rowl::Audio::DSPFilterType::Telephone);
+    requireTelephoneLinearGain(audio.testLastDspPeak(), "lock_lin_pos/Telephone");
+    TEST_PASS("Audio Kalibrasyon Kilidi — Telephone +0.1f DC (hp*2.1 dar bant)");
+
+    audio.playAudio("audio/lock_lin_neg.wav", Rowl::Audio::AudioChannelType::Bgm,
+                    Rowl::Audio::DSPFilterType::Telephone);
+    requireTelephoneLinearGain(audio.testLastDspPeak(), "lock_lin_neg/Telephone");
+    TEST_PASS("Audio Kalibrasyon Kilidi — Telephone -0.1f DC (isaret-simetrisi)");
 }
 
 /**
