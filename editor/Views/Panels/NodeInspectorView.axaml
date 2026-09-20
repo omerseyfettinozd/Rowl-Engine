@@ -21,7 +21,7 @@
                 <StackPanel Spacing="8">
                     <!-- Kart 1: GameObject (Unity tarzı düz bölüm) -->
                     <StackPanel>
-                        <DockPanel Margin="10,8,10,2">
+                        <DockPanel Margin="0,2,0,0">
                             <StackPanel Spacing="0">
                                 <TextBlock Text="DENETÇİ" FontWeight="Bold" FontSize="12"
                                            Foreground="{DynamicResource PrimaryText}" VerticalAlignment="Center"/>
@@ -63,10 +63,10 @@
                             </Button>
                         </DockPanel>
                         <Border BorderBrush="{DynamicResource BorderColor}" BorderThickness="0,0,0,1"
-                                Margin="10,4,10,0"/>
+                                Margin="0,4,0,0"/>
 
                         <!-- Selected GameObject Name & Active State -->
-                        <Grid ColumnDefinitions="*, Auto" Margin="10,6"
+                        <Grid ColumnDefinitions="*, Auto" Margin="0,6,0,0"
                               IsVisible="{Binding InspectorViewModel.HasSelectedObject}">
                             <!-- Editable GameObject Name -->
                             <TextBox Grid.Column="0"
@@ -92,10 +92,9 @@
                     <StackPanel
                         IsVisible="{Binding SelectedNode, Converter={x:Static conv:ObjectConverters.IsNotNull}}">
                         <TextBlock Text="DÜĞÜM" FontSize="11" FontWeight="Bold"
-                                   Foreground="{DynamicResource PrimaryText}" Margin="10,4,10,2"/>
-                        <Border BorderBrush="{DynamicResource BorderColor}" BorderThickness="0,0,0,1"
-                                Margin="10,0,10,0"/>
-                        <StackPanel Spacing="8" Margin="10,6">
+                                   Foreground="{DynamicResource PrimaryText}" Margin="0,4,0,2"/>
+                        <Border BorderBrush="{DynamicResource BorderColor}" BorderThickness="0,0,0,1"/>
+                        <StackPanel Spacing="8" Margin="0,6,0,0">
                         <StackPanel Spacing="2">
                             <TextBlock Text="Başlık" FontSize="10" Foreground="{DynamicResource MutedText}"/>
                             <TextBox Text="{Binding SelectedNode.Title}"
@@ -174,12 +173,14 @@
                                    IsVisible="{Binding InspectorViewModel.SelectedNodeHasErrors}"
                                    FontSize="10" FontWeight="Bold" Foreground="{DynamicResource ErrorColor}"/>
                         <!-- Faz 5 Dilim 5 fix: dönüştürülmüş asset provenance rozeti.
-                             Sidecar yoksa HasSelectedAssetProvenance=false → gizli (fail-closed). -->
-                        <Border Background="{DynamicResource SurfaceBackground}" CornerRadius="4" Padding="8"
+                             Sidecar yoksa HasSelectedAssetProvenance=false → gizli (fail-closed).
+                             Unity çizgisi: düz satır + hairline, standart etiket. -->
+                        <Separator Background="{DynamicResource BorderColor}" Height="1"
+                                   IsVisible="{Binding InspectorViewModel.HasSelectedAssetProvenance}"/>
+                        <StackPanel Spacing="2"
                                 IsVisible="{Binding InspectorViewModel.HasSelectedAssetProvenance}">
-                        <StackPanel Spacing="4">
-                            <TextBlock Text="DÖNÜŞTÜRME KÖKENİ" FontSize="10" FontWeight="Black"
-                                       Foreground="{DynamicResource Accent}" LetterSpacing="0.5"/>
+                            <TextBlock Text="DÖNÜŞTÜRME KÖKENİ" FontSize="10" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource MutedText}"/>
                             <ItemsControl ItemsSource="{Binding InspectorViewModel.SelectedAssetProvenance}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
@@ -190,7 +191,6 @@
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
                         </StackPanel>
-                        </Border>
                             </StackPanel>
                     </StackPanel>
                 </StackPanel>
@@ -198,7 +198,7 @@
 
             <!-- Components List & Add Component Button -->
             <ScrollViewer Grid.Row="1" Padding="8,8" HorizontalScrollBarVisibility="Disabled">
-                <StackPanel Spacing="12">
+                <StackPanel Spacing="8">
 
                     <!-- Empty State: No GameObject Selected -->
                     <StackPanel IsVisible="{Binding !InspectorViewModel.HasSelectedObject}" 
@@ -216,8 +216,7 @@
                                    Margin="16,0"/>
                     </StackPanel>
 
-                    <DockPanel IsVisible="{Binding InspectorViewModel.HasSelectedObject}"
-                                 Margin="2,0">
+                    <DockPanel IsVisible="{Binding InspectorViewModel.HasSelectedObject}">
                         <TextBlock Text="BİLEŞENLER" FontSize="11" FontWeight="Bold"
                                    Foreground="{DynamicResource PrimaryText}" VerticalAlignment="Center"/>
                         <TextBlock DockPanel.Dock="Right" Text="{Binding HierarchyViewModel.SelectedObject.Components.Count, StringFormat='{}{0} etkin'}"
@@ -295,7 +294,7 @@
             </ScrollViewer>
 
             <!-- Engine Sync: ince şerit (aynı komut/kilit; kart zemini yok) -->
-            <Border Grid.Row="2" Padding="8,4"
+            <Border Grid.Row="2" Padding="10,8"
                     BorderBrush="{DynamicResource BorderColor}" BorderThickness="0,1,0,0">
                 <Button Content="Önizlemeye Gönder"
                         ToolTip.Tip="Send the selected node to the running preview"

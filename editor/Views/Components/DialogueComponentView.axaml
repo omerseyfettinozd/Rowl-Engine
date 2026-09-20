@@ -210,7 +210,7 @@
                             </StackPanel>
                             <StackPanel Grid.Column="1" Spacing="2" Margin="4,0,0,0">
                                 <TextBlock Text="Border Color (HEX)" FontSize="10" Foreground="{DynamicResource MutedText}"/>
-                                <TextBox Text="{Binding BorderColor}" Background="{DynamicResource InputBackground}" Foreground="{Binding BorderColor}" BorderBrush="{DynamicResource BorderColor}" FontSize="11" FontWeight="Bold"/>
+                                <TextBox Text="{Binding BorderColor}" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{Binding BorderColor}" FontSize="11" FontWeight="Bold"/>
                             </StackPanel>
                         </Grid>
 
