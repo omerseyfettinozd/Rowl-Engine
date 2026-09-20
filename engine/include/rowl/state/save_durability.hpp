@@ -7,10 +7,14 @@ namespace Rowl::State {
 
 /// Save durability: crash-safe atomic slot writes (Faz 4.5 Dilim 2).
 ///
-/// Protocol: serialize -> write temp file (<slot>.json.tmp) -> rename over
-/// the target. A crash mid-write can only leave a stray .tmp; the previous
+/// Protocol: serialize -> write OWNED UNIQUE temp file
+/// (<slot>.json.tmp.<pid>.<counter>[.rand]) -> rename over the target.
+/// A crash mid-write can only leave a stray unique tmp; the previous
 /// good slot file is never truncated in place, so load always sees either
-/// the old or the new complete payload — never a half slot.
+/// the old or the new complete payload — never a half slot. Concurrent
+/// writers never share a tmp name, so the rename winner is always one
+/// complete payload (R1 #3; the legacy shared "<slot>.json.tmp" name
+/// below survives only as the stray-cleanup anchor).
 ///
 /// FSYNC DECISION: fsync is OFF in this slice (documented, deliberate).
 /// Rationale: the write path uses std::ofstream for portability across
@@ -20,11 +24,14 @@ namespace Rowl::State {
 /// mid-write (the slice goal). Power-loss / OS-crash durability (file-data
 /// fdatasync + directory fsync on POSIX) is explicitly out of scope and can
 /// be added later inside writeSlotFileAtomically without touching callers.
+/// Legacy shared temp name ("<slot>.json.tmp"): no longer used for writing
+/// (R1 #3 — writers mint owned unique tmps), kept as the stray-cleanup
+/// anchor for interrupted writes from older builds. Never throws.
 std::filesystem::path saveTempPathFor(const std::filesystem::path& finalPath);
 
 /// Atomically replaces finalPath with content. Returns true on success;
 /// on failure returns false, sets *errorOut (when non-null), removes the
-/// stray .tmp (best effort), and leaves any pre-existing finalPath
+/// owned unique tmp (best effort), and leaves any pre-existing finalPath
 /// byte-identical. Never throws.
 bool writeSlotFileAtomically(const std::filesystem::path& finalPath,
                              const std::string& content,

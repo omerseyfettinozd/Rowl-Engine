@@ -147,6 +147,7 @@ void test_lifecycle_init_guards();  // B1a: fail-loud init kilitleri
 void test_lifecycle_shutdown_sweep();  // D2: shutdown-supurme + re-init kilitleri
 void test_lifecycle_thread_lease();  // D3: thread/lease + dispatch-pin kilitleri
 void test_save_lock();  // D4: save/load/rewind kilitleri (#43-#53, #70)
+void test_save_slot_concurrency();  // R1 #3: eszamanli slot yazarlarinda kazanan hep tam payload
 void test_numeric_guards();  // B6: sayisal-uc/native guard dilimi bilerek-boz kilitleri
 void test_lua_hardening();  // B7: lua-sandbox sertlestirme dilimi bilerek-boz kilitleri
 void test_runtime_context_and_diagnostics();

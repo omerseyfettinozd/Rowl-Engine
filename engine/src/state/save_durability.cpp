@@ -14,6 +14,13 @@
 #if defined(_WIN32)
 #define NOMINMAX
 #include <windows.h>
+#include <fcntl.h>
+#include <io.h>
+#include <share.h>
+#include <sys/stat.h>
+#else
+#include <fcntl.h>
+#include <unistd.h>
 #endif
 
 namespace Rowl::State {
@@ -99,8 +106,68 @@ bool replaceFileAtomically(const std::filesystem::path& temporaryPath,
 #endif
 }
 
+// R1 (#3): sahipli benzersiz temp üretimi. Eski kod her yazar için aynı
+// "<slot>.json.tmp" adını kullanıyordu: aynı slota eşzamanlı yazan iki
+// yazar aynı tmp dosyasını O_TRUNC ile paylaşıp birbirinin baytını ezer,
+// son rename sessizce ilk yazarı kaybederdi (kayıp güncelleme / yırtık
+// bayt). Artık her yazar yalnızca kendisinin bildiği bir tmp dosyası
+// üretir (<slot>.json.tmp.<pid>.<sayaç>[.rastgele]): yazma+rename ya hep
+// ya hiçtir; kazanan her zaman TAM bir payload'dur, yırtık okuma imkânsız.
+// Kasıtlı olarak .lock yok: rename atomikliği zaten tam-payload garantisi
+// verir; son-kazanan-kazanır burada doğru davranıştır (kayıp-güncelleme
+// değil, atomik slot değişimi).
+std::atomic<unsigned long> g_tempCounter{0};
+
+#if defined(_WIN32)
+std::string currentProcessTag() {
+    return std::to_string(static_cast<unsigned long>(GetCurrentProcessId()));
+}
+#else
+std::string currentProcessTag() {
+    return std::to_string(static_cast<unsigned long>(::getpid()));
+}
+#endif
+
+// Yalnızca bu işleme ait, yeni oluşturulmuş boş bir temp dosyasının yolunu
+// döndürür (0600). Üretimde başarısız olursa boş path döner. Dönen ad
+// tahmin edilemez olduğu için (pid + atomik sayaç + mkstemp rastgeleliği /
+// O_EXCL sahiplenmesi) başka bir yazarla paylaşılamaz.
+std::filesystem::path mintOwnedTempPath(const std::filesystem::path& finalPath) {
+    const std::string stem = finalPath.string() + ".tmp." + currentProcessTag() +
+                             "." + std::to_string(g_tempCounter.fetch_add(1, std::memory_order_relaxed));
+#if defined(_WIN32)
+    // _sopen_s O_CREAT|O_EXCL: dosya varsa EEXIST ile başarısız olur; sayaç
+    // her çağrıda arttığı için çakışma pratikte imkânsız, attempt döngüsü
+    // sayaç-sarma/MMAP kalıntısına karşı kemerdir.
+    for (int attempt = 0; attempt < 64; ++attempt) {
+        const std::string candidate = stem + "." + std::to_string(attempt);
+        int fd = -1;
+        const int opened = _sopen_s(&fd, candidate.c_str(),
+                                    _O_CREAT | _O_EXCL | _O_WRONLY, _SH_DENYRW,
+                                    _S_IREAD | _S_IWRITE);
+        if (opened == 0) {
+            _close(fd);
+            return std::filesystem::path(candidate);
+        }
+        if (errno != EEXIST) return std::filesystem::path{};
+    }
+    return std::filesystem::path{};
+#else
+    // mkstemp: O_CREAT|O_EXCL ile 0600 kipinde atomik üretir, XXXXXX'i
+    // yerinde rastgele adla değiştirir.
+    std::string pattern = stem + ".XXXXXX";
+    const int fd = ::mkstemp(pattern.data());
+    if (fd < 0) return std::filesystem::path{};
+    ::close(fd);
+    return std::filesystem::path(pattern);
+#endif
+}
+
 } // namespace
 
+// R1 (#3): artık yalnızca legacy stray adı; yazma yolu
+// mintOwnedTempPath kullanır. İmza korunur (fuzz testi plant/kontrol için
+// kullanır, SessionPersistence değişmez).
 std::filesystem::path saveTempPathFor(const std::filesystem::path& finalPath) {
     std::filesystem::path temporaryPath = finalPath;
     temporaryPath += ".tmp";
@@ -117,12 +184,16 @@ bool writeSlotFileAtomically(const std::filesystem::path& finalPath,
         return false;
     };
 
-    const fs::path temporaryPath = saveTempPathFor(finalPath);
+    const fs::path temporaryPath = mintOwnedTempPath(finalPath);
+    if (temporaryPath.empty()) {
+        return fail("Failed to create unique save slot temp file beside: " +
+                    Rowl::Platform::pathToUtf8(finalPath));
+    }
 
     // Test-only errno injection (production default off): simulate a
-    // mid-write filesystem failure. A partial .tmp is staged so the failure
-    // looks like a real interrupted write, then removed; the pre-existing
-    // target file is never touched.
+    // mid-write filesystem failure. A partial tmp is staged in OUR owned
+    // unique file so the failure looks like a real interrupted write, then
+    // removed; the pre-existing target file is never touched.
     if (const int injectedErrno = effectiveInjectErrno(); injectedErrno != 0) {
         try {
             {
@@ -188,6 +259,10 @@ bool writeSlotFileAtomically(const std::filesystem::path& finalPath,
 }
 
 void cleanupStraySlotTemp(const std::filesystem::path& finalPath) {
+    // R1 (#3) notu: yalnızca legacy "<slot>.json.tmp" süpürülür. Kesintiye
+    // uğramış benzersiz tmp'ler (<slot>.json.tmp.<pid>...) bilerek
+    // süpürülmez: canlı bir yazarı silmek sahte kayıt-hatasına yol açardı;
+    // yetim benzersiz tmp zararsız disk tozudur (çökme sıklığıyla sınırlı).
     try {
         std::error_code error;
         std::filesystem::remove(saveTempPathFor(finalPath), error);
