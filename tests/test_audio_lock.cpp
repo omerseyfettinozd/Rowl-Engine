@@ -2690,7 +2690,16 @@ void test_audio_lock_save_format_v4_mixer() {
 //   getVoiceBlipCount() == N*M (kayipsiz; plain-sayac mutantinda kayip olur),
 //   getSynthBlipCount() <= voice (A5-tur3 konvansiyonu),
 //   getDropCount() == 0 (drop sayaci karismaz).
-// Pitch/telemetri tam-deger iddiasi YOKTUR (kilit sayim kilididir).
+// Fixture gerekcesi ("" yolu hukmu): playVoiceBlip govdesinde "" icin
+// erken-return YOKTUR — `if (!assetPath.empty())` blogu atlanir, akis
+// `if (!assetPlayed)` synth dalina girer (cihaz/kuyruk tam-yolu). Sayac
+// artisi cihaz kapisindan (`if (!m_deviceAvailable) return;`) ONCE yapilir,
+// yani cihazsiz kosuda da calisir, SKIP YOKTUR. Bu yuzden mevcut "" fixture
+// tam-yol hammer'dir; erken-return kolu ayri mini teste aittir (burada YOK).
+// warn-once notu: playVoiceBlip ROWL_LOG_WARN'u dogrudan kullanir;
+// warnAudioOnce sayac kancasi YOKTUR (gozlenebilirlik yok) — bu yuzden
+// uretim degisikligi YAPILMADI, yalnizca test guclendirildi.
+// Pitch/telemetri tam-deger iddiasi YOKTUR (kilit: sayim + sonluluk).
 // Sayac cihaz kapisindan ONCE artar: cihazsiz kosuda da calisir, SKIP YOKTUR.
 // Timing-assert YOKTUR (sadece join + tam-esitlik).
 void test_audio_lock_voice_blip_concurrent_counts() {
@@ -2707,24 +2716,46 @@ void test_audio_lock_voice_blip_concurrent_counts() {
     constexpr int kBlipsPerThread = 250;
     constexpr uint32_t kExpected = static_cast<uint32_t>(kThreads * kBlipsPerThread);
 
-    // Okuyucu thread'ler: hammer sirasinda host tarafi telemetri/hata
-    // okumalarini canlandirir (deger iddiasi YOK — sadece kilit egzersizi;
-    // yaris TSan/kayip-sayim ile yakalanir).
+    // Okuyucu-tutarlilik: her okuyucu yerel min/max + monotonluk + sonluluk
+    // izler (yerel izleme — ek atomik cekisme yok; birlesim join sonrasi).
+    struct ReaderObs {
+        uint32_t minVoice = UINT32_MAX;
+        uint32_t maxVoice = 0;
+        uint32_t lastVoice = 0;
+        bool hasSample = false;
+        bool sawDecrease = false;
+        bool sawNonFinite = false;
+    };
     std::atomic<bool> readersRun{true};
-    auto readerBody = [&]() {
+    auto readerBody = [&](ReaderObs& obs) {
         while (readersRun.load()) {
             const std::string err = audio.getLastError();
             const uint32_t voice = audio.getVoiceBlipCount();
             const uint32_t synth = audio.getSynthBlipCount();
             const bool playing = audio.isVoicePlaying();
+            const float pitch = audio.getLastVoiceBlipPitch();
+            const float peak = audio.getChannelPeak(1, 0);
+            const float rms = audio.getChannelRms(1, 0);
+            const float peakR = audio.getChannelPeak(1, 1);
+            const float rmsR = audio.getChannelRms(1, 1);
             (void)err;
-            (void)voice;
             (void)synth;
             (void)playing;
+            if (voice < obs.minVoice) obs.minVoice = voice;
+            if (voice > obs.maxVoice) obs.maxVoice = voice;
+            if (obs.hasSample && voice < obs.lastVoice) obs.sawDecrease = true;
+            obs.lastVoice = voice;
+            obs.hasSample = true;
+            if (!std::isfinite(pitch) || !std::isfinite(peak) || !std::isfinite(rms) ||
+                !std::isfinite(peakR) || !std::isfinite(rmsR)) {
+                obs.sawNonFinite = true;
+            }
         }
     };
-    std::thread readerA(readerBody);
-    std::thread readerB(readerBody);
+    ReaderObs obsA;
+    ReaderObs obsB;
+    std::thread readerA([&]() { readerBody(obsA); });
+    std::thread readerB([&]() { readerBody(obsB); });
 
     auto hammerBody = [&](int threadIndex) {
         // Turlu pitch: her karakter farkli pitch'le gelir (engine.cpp
@@ -2762,6 +2793,36 @@ void test_audio_lock_voice_blip_concurrent_counts() {
         lockFail("Voice-Blip Concurrent Counts (#74): drop sayaci karisti");
     }
     TEST_PASS("Audio Voice-Blip Counts — drop karismaz (0)");
+
+    // Okuyucu-tutarlilik birlesimi: final ornek (ana thread) gozleme katilir;
+    // boylece gozlenen-max == 2000 deterministiktir (okuyucu son ornegi
+    // kacirabilir; max'in kaynagi final ornektir, monotonluk okuyucudan).
+    uint32_t obsMax = obsA.maxVoice;
+    if (obsB.maxVoice > obsMax) obsMax = obsB.maxVoice;
+    if (voice > obsMax) obsMax = voice;
+    if (!obsA.hasSample || !obsB.hasSample) {
+        lockFail("Voice-Blip Concurrent Counts (#74): okuyucu ornek uretemedi");
+    }
+    if (obsA.sawDecrease || obsB.sawDecrease) {
+        lockFail("Voice-Blip Concurrent Counts (#74): okuyucu azalan sayim gordu");
+    }
+    if (obsMax != kExpected) {
+        lockFail("Voice-Blip Concurrent Counts (#74): gozlenen max tutarsiz (max=" +
+                 std::to_string(obsMax) + ", beklenen=" + std::to_string(kExpected) + ")");
+    }
+    TEST_PASS("Audio Voice-Blip Counts — okuyucu gozlemi monoton-artan (max==2000)");
+
+    const float finalPitch = audio.getLastVoiceBlipPitch();
+    const float finalPeak = audio.getChannelPeak(1, 0);
+    const float finalRms = audio.getChannelRms(1, 0);
+    const float finalPeakR = audio.getChannelPeak(1, 1);
+    const float finalRmsR = audio.getChannelRms(1, 1);
+    if (obsA.sawNonFinite || obsB.sawNonFinite ||
+        !std::isfinite(finalPitch) || !std::isfinite(finalPeak) || !std::isfinite(finalRms) ||
+        !std::isfinite(finalPeakR) || !std::isfinite(finalRmsR)) {
+        lockFail("Voice-Blip Concurrent Counts (#74): pitch/telemetri sonlu-kalmadi");
+    }
+    TEST_PASS("Audio Voice-Blip Counts — pitch/telemetri sonlu-kalir");
 
     audio.stopAll();
     audio.shutdown();
