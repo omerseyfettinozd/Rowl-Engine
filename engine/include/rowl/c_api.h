@@ -233,6 +233,14 @@ ROWL_API int RowlEngine_InitStandalone(RowlEngineHandle handle,
 
 /**
  * Starts the blocking standalone render/event loop until quit or window close.
+ *
+ * Bulgu #14 fail-closed: offscreen/embedded handles can never produce a
+ * quit event through this loop (offscreen registers no event window;
+ * embedded frames are host-driven via Step), so Run returns immediately on
+ * them and stamps StateError (11, op "run") instead of entering an
+ * unstoppable loop — the handle stays initialized and drivable via Step.
+ * Shutdown is NOT called on this path. Standalone windows keep the
+ * blocking contract unchanged.
  */
 ROWL_API void RowlEngine_Run(RowlEngineHandle handle);
 

@@ -2109,6 +2109,25 @@ void Engine::run() {
         return;
     }
 
+    // Bulgu #14 (HIGH): offscreen handle'da run() kesilemeyen sonsuz
+    // donguye girerdi — initializeOffscreen m_eventWindowId setlemez,
+    // pollEvents erken doner, SDL_EVENT_QUIT hicbir kayitli pencereye
+    // yonlendirilmediginden m_isRunning false yazilamazdi. Fail-closed:
+    // quit uretemeyen handle'da donguye girmeden don; shutdown cagrilmaz
+    // (handle Step ile surulebilir kalir), kanala StateError islenir.
+    // Embedded/standalone pencereler kayitli oldugu icin etkilenmez.
+    if (!m_window || m_window->isOffscreen()) {
+        ROWL_LOG_ERROR("Engine run() rejected: offscreen handle cannot produce "
+                       "a quit event; drive it with step() instead.");
+        if (m_context) {
+            m_context->setError(RuntimeErrorCode::StateError,
+                                "Run requires a quit-capable window; offscreen "
+                                "handles cannot produce quit — drive them with Step",
+                                "run", "");
+        }
+        return;
+    }
+
     ROWL_LOG_INFO("Entering standalone render loop...");
     setPlayState(true);
 

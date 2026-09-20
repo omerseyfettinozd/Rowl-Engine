@@ -367,7 +367,34 @@ void RowlEngine_Run(RowlEngineHandle handle) {
     // serial would deadlock a concurrent Shutdown waiting for it. Liveness
     // + shared ownership is the whole guard (D3 #106).
     if (!isLiveHandle(handle)) return;
-    invokeNoexcept([&] { if (auto checked = toEngineChecked(handle)) checked->run(); });
+    invokeNoexcept([&] {
+        auto checked = toEngineChecked(handle);
+        if (!checked) return;
+        // #14 [HIGH]: the blocking loop only terminates on a quit event, and
+        // an offscreen/embedded window can never produce one (offscreen never
+        // registers an event source, so pollEvents early-returns; embedded
+        // frames are driven by the host via Step). Entering the loop here
+        // would hang the owner thread with no defined cross-thread stop, so
+        // refuse fail-closed: log + stamp StateError (op=run), engine untouched.
+        // Detection uses the existing Window accessors only (no new plumbing);
+        // real standalone windows are unaffected. No video serial (D3 #106).
+        if (checked->isInitialized()) {
+            const auto* window = checked->getWindow();
+            if (window != nullptr && (window->isOffscreen() || window->isEmbedded())) {
+                if (Rowl::Core::RuntimeContext* ctx = checked->getContext()) {
+                    ctx->setError(Rowl::Core::RuntimeErrorCode::StateError,
+                                  "RowlEngine_Run refused: blocking loop requires a standalone window; "
+                                  "offscreen/embedded handles cannot produce quit "
+                                  "(drive frames with RowlEngine_Step)",
+                                  "run", "");
+                }
+                ROWL_LOG_ERROR("RowlEngine_Run: refused blocking loop on offscreen/embedded handle "
+                               "(no quit source; use RowlEngine_Step)");
+                return;
+            }
+        }
+        checked->run();
+    });
 }
 
 void RowlEngine_Step(RowlEngineHandle handle, float deltaTime) {
