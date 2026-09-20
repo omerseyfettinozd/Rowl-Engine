@@ -23,11 +23,27 @@ internal static class EditorWorkspaceThemeTests
         if (!app.Resources.TryGetValue("PrimaryTextColor", out var fg) ||
             !(fg is Avalonia.Media.Color fgc && fgc == Avalonia.Media.Color.Parse("#F2EFE6")))
             throw new Exception("OLED theme did not apply PrimaryTextColor");
+        // Unity kromu Dilim F: OLED yüzeyleri saf siyah karakterini koruyarak
+        // griye kaydı (App #000000 + metin #F2EFE6 sabit).
+        if (!app.Resources.TryGetValue("SurfaceBackgroundColor", out var obg) ||
+            !(obg is Avalonia.Media.Color obgc && obgc == Avalonia.Media.Color.Parse("#141417")))
+            throw new Exception("OLED theme did not apply shifted SurfaceBackgroundColor");
+        if (!app.Resources.TryGetValue("PanelBackgroundColor", out var opnl) ||
+            !(opnl is Avalonia.Media.Color opnlc && opnlc == Avalonia.Media.Color.Parse("#1B1B1F")))
+            throw new Exception("OLED theme did not apply shifted PanelBackgroundColor");
         settings.SelectedTheme = "Kemik Beyazı (Karanlık)";
         settings.ApplyTheme();
         if (!app.Resources.TryGetValue("AppBackgroundColor", out var bg2) ||
             !(bg2 is Avalonia.Media.Color bgc2 && bgc2 == Avalonia.Media.Color.Parse("#0A0A0B")))
             throw new Exception("Default theme did not restore AppBackgroundColor");
+        // Unity kromu Dilim F: varsayılan tema yüzeyleri nötr Unity grilerine
+        // kaydı (App #0A0A0B sabit).
+        if (!app.Resources.TryGetValue("SurfaceBackgroundColor", out var dbg) ||
+            !(dbg is Avalonia.Media.Color dbgc && dbgc == Avalonia.Media.Color.Parse("#232327")))
+            throw new Exception("Default theme did not apply shifted SurfaceBackgroundColor");
+        if (!app.Resources.TryGetValue("PanelBackgroundColor", out var dpnl) ||
+            !(dpnl is Avalonia.Media.Color dpnlc && dpnlc == Avalonia.Media.Color.Parse("#2A2A2E")))
+            throw new Exception("Default theme did not apply shifted PanelBackgroundColor");
         Console.WriteLine("  [PASS] Theme switch (Kemik Beyazı <-> Saf Siyah OLED) verified");
 
         mainVm.ShowPanel("Hierarchy");

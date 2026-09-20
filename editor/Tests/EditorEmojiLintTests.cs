@@ -24,15 +24,15 @@ namespace RowlEngine.Editor.Tests
         // güvenlik-ağı noktasıdır.
         private static readonly Dictionary<string, string[]> AllowedHex = new()
         {
-            ["SettingsDialog.axaml"] = new[] { "#17171A", "#101013", "#F2EFE6", "#A8A49C" },
-            ["ThemeFallbackColors.cs"] = new[] { "#131315", "#26262B", "#F2EFE6", "#A8A49C", "#6E6C66", "#7DA56D", "#DCA85A", "#D96868", "#9C7FD1" },
+            ["SettingsDialog.axaml"] = new[] { "#17171A", "#101013", "#F2EFE6", "#A8A49C", "#2A2A2E", "#1B1B1F" },
+            ["ThemeFallbackColors.cs"] = new[] { "#131315", "#26262B", "#F2EFE6", "#A8A49C", "#6E6C66", "#7DA56D", "#DCA85A", "#D96868", "#9C7FD1", "#232327", "#3A3A40" },
             ["DialogueComponentViewModel.cs"] = new[] { "#F1F5F9", "#38BDF8", "#0F0F1A", "#00F0FF", "#0A0A12", "#334155", "#000000", "#F59E0B", "#1E1E2E", "#EC4899" },
             ["ChoiceComponentViewModel.cs"] = new[] { "#111827", "#374151", "#6B7280", "#F5E6C8", "#E8C98E", "#241A12", "#7C5C3B", "#450A0A", "#B91C1C", "#FEE2E2", "#EF4444", "#1E293B", "#0EA5E9", "#FFFFFF", "#38BDF8", "#475569" },
             ["CanvasGroupViewModel.cs"] = new[] { "#3B82F6" },
             ["TransitionComponentView.axaml"] = new[] { "#000000", "#FFFFFF", "#0A183D" },
             ["TransitionComponentViewModel.cs"] = new[] { "#000000", "#FFFFFF", "#0A183D" },
             ["NodeColorTags.cs"] = new[] { "#EF4444", "#F59E0B", "#EAB308", "#22C55E", "#3B82F6", "#A855F7", "#EC4899", "#6B7280", "#64748B", "#38BDF8" },
-            ["SettingsViewModel.cs"] = new[] { "#0A0A0B", "#131315", "#17171A", "#0E0E10", "#000000", "#26262B", "#34343B", "#F2EFE6", "#D8D4CC", "#A8A49C", "#6E6C66", "#FFFFFF", "#2A2A2E", "#3A3A40", "#222226", "#333338", "#6E3235", "#4A5D4C", "#8E8E96", "#7DA56D", "#DCA85A", "#D96868", "#9C7FD1", "#0A0A0C", "#101013", "#1C1C20", "#2A2A2F", "#161618", "#232327", "#101012", "#1A1A1E" },
+            ["SettingsViewModel.cs"] = new[] { "#0A0A0B", "#131315", "#17171A", "#0E0E10", "#000000", "#26262B", "#34343B", "#F2EFE6", "#D8D4CC", "#A8A49C", "#6E6C66", "#FFFFFF", "#2A2A2E", "#3A3A40", "#222226", "#333338", "#6E3235", "#4A5D4C", "#8E8E96", "#7DA56D", "#DCA85A", "#D96868", "#9C7FD1", "#0A0A0C", "#101013", "#1C1C20", "#2A2A2F", "#161618", "#232327", "#101012", "#1A1A1E", "#1B1B1E", "#4A4A52", "#3B3B42", "#4C4C55", "#323237", "#43434A", "#141417", "#1B1B1F", "#0E0E11", "#2A2A30", "#3A3A41", "#1E1E22", "#2C2C32" },
         };
         private static readonly string[] BannedSymbols = new[]
         {

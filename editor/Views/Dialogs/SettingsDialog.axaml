@@ -58,7 +58,7 @@
                         <WrapPanel Orientation="Horizontal">
                             <Border Width="140" Height="70" CornerRadius="8" Margin="4"
                                     BorderBrush="{DynamicResource BorderSubtle}" BorderThickness="1"
-                                    Background="#17171A" Padding="10">
+                                    Background="#2A2A2E" Padding="10">
                                 <StackPanel VerticalAlignment="Center" Spacing="2">
                                     <TextBlock Text="Aa" FontSize="16" FontWeight="Bold"
                                                Foreground="#F2EFE6" HorizontalAlignment="Center"/>
@@ -69,7 +69,7 @@
                             </Border>
                             <Border Width="140" Height="70" CornerRadius="8" Margin="4"
                                     BorderBrush="{DynamicResource BorderSubtle}" BorderThickness="1"
-                                    Background="#101013" Padding="10">
+                                    Background="#1B1B1F" Padding="10">
                                 <StackPanel VerticalAlignment="Center" Spacing="2">
                                     <TextBlock Text="Aa" FontSize="16" FontWeight="Bold"
                                                Foreground="#F2EFE6" HorizontalAlignment="Center"/>

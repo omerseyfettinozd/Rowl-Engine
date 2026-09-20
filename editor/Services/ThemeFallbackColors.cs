@@ -13,8 +13,8 @@ namespace RowlEngine.Editor.Services
     /// </summary>
     internal static class ThemeFallbackColors
     {
-        public static readonly Color Surface = Color.Parse("#131315");
-        public static readonly Color Border = Color.Parse("#26262B");
+        public static readonly Color Surface = Color.Parse("#232327");
+        public static readonly Color Border = Color.Parse("#3A3A40");
         public static readonly Color Text = Color.Parse("#F2EFE6");
         public static readonly Color Muted = Color.Parse("#A8A49C");
         public static readonly Color Dim = Color.Parse("#6E6C66");
