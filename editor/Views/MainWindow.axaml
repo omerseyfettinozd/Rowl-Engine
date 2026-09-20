@@ -33,13 +33,13 @@
                         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
                             <Menu Background="Transparent">
                                 <MenuItem x:Name="WindowsMenu" Header="Pencereler" Foreground="{DynamicResource PrimaryText}" FontSize="12" FontWeight="SemiBold">
-                                    <MenuItem Header="Hierarchy" Command="{Binding ShowPanelCommand}" CommandParameter="Hierarchy"/>
-                                    <MenuItem Header="Node Inspector" Command="{Binding ShowPanelCommand}" CommandParameter="Inspector"/>
-                                    <MenuItem Header="Output Log" Command="{Binding ShowPanelCommand}" CommandParameter="Log"/>
-                                <MenuItem Header="Project Assets" Command="{Binding ShowPanelCommand}" CommandParameter="Assets"/>
-                                <MenuItem Header="Dialogue Backlog" Command="{Binding ShowPanelCommand}" CommandParameter="Backlog"/>
-                                <MenuItem Header="Save Slots" Command="{Binding ShowPanelCommand}" CommandParameter="SaveSlots"/>
-                                <MenuItem Header="Project Issues" Command="{Binding ShowPanelCommand}" CommandParameter="ProjectIssues"/>
+                                    <MenuItem Header="Hierarchy" InputGesture="Ctrl+1" Command="{Binding ShowPanelCommand}" CommandParameter="Hierarchy"/>
+                                    <MenuItem Header="Node Inspector" InputGesture="Ctrl+2" Command="{Binding ShowPanelCommand}" CommandParameter="Inspector"/>
+                                    <MenuItem Header="Output Log" InputGesture="Ctrl+3" Command="{Binding ShowPanelCommand}" CommandParameter="Log"/>
+                                <MenuItem Header="Project Assets" InputGesture="Ctrl+4" Command="{Binding ShowPanelCommand}" CommandParameter="Assets"/>
+                                <MenuItem Header="Dialogue Backlog" InputGesture="Ctrl+5" Command="{Binding ShowPanelCommand}" CommandParameter="Backlog"/>
+                                <MenuItem Header="Save Slots" InputGesture="Ctrl+6" Command="{Binding ShowPanelCommand}" CommandParameter="SaveSlots"/>
+                                <MenuItem Header="Project Issues" InputGesture="Ctrl+7" Command="{Binding ShowPanelCommand}" CommandParameter="ProjectIssues"/>
                                 </MenuItem>
                             </Menu>
                         </StackPanel>

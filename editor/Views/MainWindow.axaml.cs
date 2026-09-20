@@ -203,6 +203,13 @@ namespace RowlEngine.Editor.Views
                 e.Handled = true;
             }
 
+            // ── Paneller (Faz 5: Pencereler menüsü kısayolları Ctrl+1..7) ──
+            else if (ctrl && !shift && !isTextInput && TryPanelShortcut(e.Key, out string? panel))
+            {
+                vm.ShowPanel(panel!);
+                e.Handled = true;
+            }
+
             // ── Tam Ekran ───────────────────────────────────────────
             else if (e.Key == Key.F11)
             {
@@ -223,6 +230,26 @@ namespace RowlEngine.Editor.Views
                 vm.OpenProjectHubCommand.Execute(null);
                 e.Handled = true;
             }
+        }
+
+        /// <summary>
+        /// Faz 5: Pencereler menüsü kısayolları (Ctrl+1..7, menü sırasıyla).
+        /// Metin girişinde çalışmaz (MS-5 kuralı).
+        /// </summary>
+        internal static bool TryPanelShortcut(Key key, out string? panel)
+        {
+            panel = key switch
+            {
+                Key.D1 or Key.NumPad1 => "Hierarchy",
+                Key.D2 or Key.NumPad2 => "Inspector",
+                Key.D3 or Key.NumPad3 => "Log",
+                Key.D4 or Key.NumPad4 => "Assets",
+                Key.D5 or Key.NumPad5 => "Backlog",
+                Key.D6 or Key.NumPad6 => "SaveSlots",
+                Key.D7 or Key.NumPad7 => "ProjectIssues",
+                _ => null,
+            };
+            return panel != null;
         }
     }
 }

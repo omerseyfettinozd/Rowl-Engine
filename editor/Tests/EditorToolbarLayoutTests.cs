@@ -60,6 +60,45 @@ namespace RowlEngine.Editor
                     throw new Exception(
                         $"Pencereler menu should have 7 items, has {windowsMenu.Items.Count}");
 
+                // Faz 5: panel kısayolları menüde yazar (InputGesture) ve
+                // gerçekten yönlendirilir (TryPanelShortcut + KeyDown).
+                // KeyGesture.ToString() sürüm-formatına kilitlenmemek için
+                // yalnızca rozet varlığı denetlenir; eşleşme TryPanelShortcut
+                // tablosuyla aşağıda kilitlenir.
+                var menuItems = windowsMenu.Items.OfType<MenuItem>().ToArray();
+                if (menuItems.Length != 7
+                    || menuItems.Any(m => m.InputGesture is null))
+                    throw new Exception(
+                        $"Panel shortcut gestures changed: [{string.Join(", ", menuItems.Select(m => m.InputGesture?.ToString() ?? "-"))}]");
+                string?[] expectedPanels = new[]
+                {
+                    "Hierarchy", "Inspector", "Log", "Assets",
+                    "Backlog", "SaveSlots", "ProjectIssues"
+                };
+                for (int i = 0; i < 7; i++)
+                {
+                    var key = (Avalonia.Input.Key)((int)Avalonia.Input.Key.D1 + i);
+                    if (!MainWindow.TryPanelShortcut(key, out string? panel) || panel != expectedPanels[i])
+                        throw new Exception($"TryPanelShortcut({key}) did not map to {expectedPanels[i]}");
+                }
+                if (MainWindow.TryPanelShortcut(Avalonia.Input.Key.D8, out _))
+                    throw new Exception("TryPanelShortcut must reject keys outside Ctrl+1..7");
+
+                // Gerçek tuş yönlendirme: Ctrl+3 Log paneline ulaşır (durum geri alınır).
+                bool logBefore = mainVm.IsLogPanelVisible;
+                int tabBefore = mainVm.BottomPanelActiveTab;
+                window.RaiseEvent(new Avalonia.Input.KeyEventArgs
+                {
+                    RoutedEvent = Avalonia.Input.InputElement.KeyDownEvent,
+                    Key = Avalonia.Input.Key.D3,
+                    KeyModifiers = Avalonia.Input.KeyModifiers.Control
+                });
+                if (mainVm.IsLogPanelVisible == logBefore
+                    && mainVm.BottomPanelActiveTab == tabBefore)
+                    throw new Exception("Ctrl+3 did not reach the Log panel.");
+                mainVm.IsLogPanelVisible = logBefore;
+                mainVm.BottomPanelActiveTab = tabBefore;
+
                 var projectsMenu = window.FindControl<MenuItem>("ProjectsMenu")
                     ?? throw new Exception("ProjectsMenu not found");
                 if (projectsMenu.Items.Count != 2)
