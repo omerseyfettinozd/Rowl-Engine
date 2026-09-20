@@ -9,6 +9,7 @@ RowlEngine_Create
 RowlEngine_CrossfadeAmbienceTo
 RowlEngine_DeleteSaveSlot
 RowlEngine_Destroy
+RowlEngine_EndSession
 RowlEngine_EvaluateCondition
 RowlEngine_ExecuteScript
 RowlEngine_GetActiveDialogueContentIdsJson
