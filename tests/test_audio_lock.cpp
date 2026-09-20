@@ -2267,22 +2267,26 @@ void test_audio_lock_offscreen_global_pump() {
  * test_audio_lock.cpp eklentisi — Scene-Restore Ses Snapshot (#86) kilitleri.
  *
  * KILIT (mutant oldurur):
- *  1. test_audio_lock_scene_restore_audio_snapshot: updateScene zinciri
- *     kamerayi + canli mikseri mutasyona ugratip SONRA throw ederse catch
- *     sahne-gorsel + ses + kamera esitligini kurar. Mutantlar: snapshot
+ *  1. test_audio_lock_scene_restore_audio_snapshot: aktif BGM (A) +
+ *     ambience + ui fixture kurulur; a1 gecerli mutasyonla niyeti B'ye
+ *     saptirip (Telephone + 0.9 + streaming-B switch) SONRA a2 throw eder;
+ *     catch sahne-gorsel + ses + kamera esitligini kurar. Oldurur: snapshot
  *     yakalamanin silinmesi, catch'te apply* cagrilarinin kaldirilmasi,
- *     applyAudioSnapshot icindeki kazanc/filtre satirlarinin silinmesi —
- *     hepsi exit(1) ile olur (throw deterministiktir: ertelenmis ses
- *     blogunda string "volume" -> nlohmann type_error; oncesindeki gecerli
- *     ses comp'u DSP+vol mutasyonunu islemis, kamera comp'u kamerayi
- *     tasimistir).
+ *     applyAudioSnapshot icindeki kazanc/filtre/BGM-dali satirlarinin
+ *     silinmesi, a1'in notrlenmesi (teeth adimi: a1 tek basina once kosar,
+ *     sapma gozlenir). Ambience/Ui session-local dislama acik iddia edilir
+ *     (restore sonrasi esitlik pinlenir). master/sfx/voice: sahne comp'u
+ *     uretimde yalniz bgmVol/filtre/BGM-path saptirir; bu uc kanal sahne
+ *     yolunda capture-side + capraz-karisma pinidir, dort-kanal apply-side
+ *     Test-2'de (load/rewind dort kanali da bastan yazar) kilitlenir.
  *  2. test_audio_lock_mixer_persistence: volume setter'lar state'e commitler
  *     (step ilerlemez), save/load + rewind tam mikseri restore eder, rewind
  *     playtime'i senkronlar. Mutantlar: commit cagrilarinin kaldirilmasi,
  *     restoreAudioStateFromGameState'te master/sfx/voice satirlarinin
  *     silinmesi, rewind playtime senkronunun kaldirilmasi.
  *  3. test_audio_lock_save_format_v4_mixer: v4 round-trip + withMixerVolumes
- *     sozlesmesi + legacy Migrated + yabanci-red + bozuk-mikser red.
+ *     sozlesmesi + legacy Migrated + yabanci-red + bozuk-mikser red
+ *     (HER KANAL icin ayri InvalidData esigi: +, -, NaN, string-tip).
  *
  * Cihaz bagimsizdir (kazanc/filtre setter'lari + snapshot'lar SDL cihazina
  * dokunmaz; BGM miss fail-closed'dur): requireAudioDeviceOrSkip YOKTUR,
@@ -2354,12 +2358,70 @@ double lock86SlotPlaytime(RowlEngineHandle handle, int32_t slot) {
     return nlohmann::json::parse(buffer.data()).at("playtime_seconds").get<double>();
 }
 
+// Test-1 a1 comp'u: gecerli mutasyon (DSP + bgmVol + gecerli B'ye BGM
+// switch). B streaming OGG'dur: cihazli RAM yolu (audio_engine.cpp'de
+// playAudio govdesindeki applyDspFilter) Telephone'u ezerdi; streaming dali
+// (openBgmStream) canli filtreye dokunmaz — uc boyutta da sapma her iki
+// modda da korunur. a2: ertelenmis blokta deterministik throw (string
+// volume -> nlohmann type_error).
+const char* kLock86A1Json =
+    R"({"type":"audio","id":"a1","enabled":true,
+        "data":{"dsp_filter":"Telephone","volume":0.9,)"
+    R"("bgm_track":"audio/lock86_bgm_b.ogg","bgm_transition":"instant"}})";
+const char* kLock86A2Json =
+    R"({"type":"audio","id":"a2","enabled":true,
+        "data":{"dsp_filter":"Normal","volume":"loud"}})";
+
+// #86 sahne-fixture dosyalari motor Init'inden ONCE yazilir (VFS project
+// kokunden cozer: "audio/x" -> Assets/audio/x; miss-guard projesindeki
+// teknik aynen).
+void lock86WriteSceneAudioFixtures(const std::string& root) {
+    const auto dir = std::filesystem::path(root) / "Assets" / "audio";
+    std::error_code ec;
+    std::filesystem::create_directories(dir, ec);
+    writeBytes(dir / "lock86_bgm_a.wav",
+               makeFloatWavMono44100(std::vector<float>(64, 0.5f)));
+    writeBytes(dir / "lock86_amb.wav",
+               makeFloatWavMono44100(std::vector<float>(64, 0.25f)));
+    writeBytes(dir / "lock86_ui.wav",
+               makeFloatWavMono44100(std::vector<float>(64, 0.75f)));
+    // a1'in B parcasi: over-threshold OGG (header probe + decoder gercek).
+    writeBytes(dir / "lock86_bgm_b.ogg",
+               missGuardPatchGranuleForStream(missGuardLongToneOggBytes(),
+                                              static_cast<uint64_t>(1000000000)));
+}
+
+// Bilinen mikser + Normal filtre + aktif BGM/Ambience/Ui niyeti kurar.
+// Sessiz-yedekte de intent yazilir (BGM existence-gate'li, Ambience bayrakli;
+// Ui sessizde intent tutmaz — uretim dali — o yuzden Ui burada assert
+// edilmez, yalniz esitlik-pinine kaydedilir).
+void lock86EstablishAudioBaseline(RowlEngineHandle handle,
+                                  Rowl::Audio::AudioEngine* audio) {
+    RowlEngine_SetMasterVolume(handle, 0.5f);
+    RowlEngine_SetBgmVolume(handle, 0.25f);
+    RowlEngine_SetSfxVolume(handle, 0.75f);
+    RowlEngine_SetVoiceVolume(handle, 0.125f);
+    audio->applyDspFilter(Rowl::Audio::DSPFilterType::Normal);
+    audio->playAudio("audio/lock86_bgm_a.wav", Rowl::Audio::AudioChannelType::Bgm);
+    audio->playAudio("audio/lock86_amb.wav", Rowl::Audio::AudioChannelType::Ambience);
+    audio->playAudio("audio/lock86_ui.wav", Rowl::Audio::AudioChannelType::Ui);
+    lock86Check(audio->isBgmPlaying(), "baseline BGM intent kurulamadi");
+    lock86Check(audio->getCurrentBgmPath() == "audio/lock86_bgm_a.wav",
+                "baseline BGM path yanlis");
+    lock86Check(audio->isAmbiencePlaying(), "baseline ambience intent kurulamadi");
+    lock86Check(audio->getCurrentAmbiencePath() == "audio/lock86_amb.wav",
+                "baseline ambience path yanlis");
+    lock86Check(audio->getActiveFilter() == Rowl::Audio::DSPFilterType::Normal,
+                "baseline filter not Normal");
+}
+
 } // namespace
 
 void test_audio_lock_scene_restore_audio_snapshot() {
     TEST_SECTION("Scene-Restore Audio Snapshot (#86)");
 
     const std::string root = lock86ProjectRoot("scene");
+    lock86WriteSceneAudioFixtures(root);
     RowlEngineHandle handle = lock86CreateEngine(root);
     auto* engine = Rowl::Core::testEngineFromHandle(handle);
     lock86Check(engine != nullptr && engine->getAudio() != nullptr &&
@@ -2368,33 +2430,57 @@ void test_audio_lock_scene_restore_audio_snapshot() {
     auto* audio = engine->getAudio();
     auto* camera = engine->getCamera();
 
-    // Baseline: bilinen mikser + kamera + sahne.
-    RowlEngine_SetMasterVolume(handle, 0.5f);
-    RowlEngine_SetBgmVolume(handle, 0.25f);
-    RowlEngine_SetSfxVolume(handle, 0.75f);
-    RowlEngine_SetVoiceVolume(handle, 0.125f);
+    // Tuketim tum play'lerden ONCE donar: Ui one-shot dummy cihazda bile
+    // tuketilmez — intent/path pinleri tam-esitliktir, timing-assert YOKTUR.
+    audio->setOutputSuspended(true);
+
+    // Dis-disi bacak: a1 TEK BASINA (throwsuz sahnede) once kosar — fixture
+    // disleri iddia degil gozlemdir (filtre + bgmVol + BGM-path sapar).
+    // a1 notrlenirse (miss track / baseline volume / filtreden arinmis)
+    // bu adim duser; restore iddiasi disli fixture'a dayanir.
+    lock86EstablishAudioBaseline(handle, audio);
+    {
+        const std::string teeth = std::string("[") + kLock86A1Json + "]";
+        RowlEngine_UpdateSceneFromJson(handle, teeth.c_str());
+        lock86Check(audio->getActiveFilter() == Rowl::Audio::DSPFilterType::Telephone,
+                    "teeth: a1 filtreyi oynatmadi");
+        lock86Check(audio->getBgmVolume() == 0.9f, "teeth: a1 bgmVol'u oynatmadi");
+        lock86Check(audio->isBgmPlaying() &&
+                        audio->getCurrentBgmPath() == "audio/lock86_bgm_b.ogg",
+                    "teeth: a1 BGM path'i oynatmadi (B'ye switch olmadi)");
+    }
+    TEST_PASS("Scene-restore fixture teeth (a1: filter+bgmVol+BGM-path saptirir)");
+
+    // Baseline sifirla + throw-oncesi anlik goruntu. Snapshot canli degerleri
+    // yakalar; game-state pointer'i da burada pinlenir (setter commit'leri
+    // pointer'i degistirir, o yuzden hepsi capture'dan ONCE kosar).
+    // master/sfx/voice: sahne comp'u uretimde (pendingAudio) yalniz
+    // bgmVol/filtre/BGM-path saptirir — bu uc kanal sahne yolunda capture-side
+    // + capraz-karisma pinidir (ayrik baseline degerleri); apply-side
+    // dort-kanal restore Test-2'de (load/rewind dort kanali da bastan yazar)
+    // kilitlenir.
+    lock86EstablishAudioBaseline(handle, audio);
     RowlEngine_SetCamera(handle, 100.0f, 200.0f, 2.0f);
-    lock86Check(audio->getActiveFilter() == Rowl::Audio::DSPFilterType::Normal,
-                "baseline filter not Normal");
     const auto beforeState = engine->getGameState();
     const std::string beforeBackground = engine->getActiveBackground();
+    const bool beforeAmbPlaying = audio->isAmbiencePlaying();
+    const std::string beforeAmbPath = audio->getCurrentAmbiencePath();
+    const bool beforeUiPlaying = audio->isUiPlaying();
+    const std::string beforeUiPath = audio->getCurrentUiPath();
 
-    // Zincir: background + kamera mutasyonu, gecerli ses comp'u (DSP + bgm
-    // vol mutasyonu; bgm_track miss'i fail-closed'dur), sonra ERTELENMIS ses
-    // blogunda deterministik throw (a2'de string volume -> type_error).
-    // updateScene catch'i hatayi yutar ve geri alir; disariya throw cikmaz.
-    const char* sceneJson = R"([
-      {"type":"background","id":"bg","enabled":true,
-       "data":{"texture":"bg_changed.png"}},
-      {"type":"camera","id":"cam","enabled":true,
-       "data":{"x":500.0,"y":500.0,"zoom":3.0}},
-      {"type":"audio","id":"a1","enabled":true,
-       "data":{"dsp_filter":"Telephone","volume":0.9,
-               "bgm_track":"audio/changed.wav"}},
-      {"type":"audio","id":"a2","enabled":true,
-       "data":{"dsp_filter":"Normal","volume":"loud"}}
-    ])";
-    RowlEngine_UpdateSceneFromJson(handle, sceneJson);
+    // Zincir: background + kamera mutasyonu, gecerli ses comp'u a1 (DSP + bgm
+    // vol + gecerli B'ye BGM switch; niyet A'dan B'ye sapar), sonra
+    // ERTELENMIS ses blogunda deterministik throw (a2'de string volume ->
+    // type_error). updateScene catch'i hatayi yutar ve geri alir; disariya
+    // throw cikmaz.
+    const std::string sceneJson =
+        std::string("[") +
+        R"({"type":"background","id":"bg","enabled":true,
+             "data":{"texture":"bg_changed.png"}},)" +
+        R"({"type":"camera","id":"cam","enabled":true,
+             "data":{"x":500.0,"y":500.0,"zoom":3.0}},)" +
+        kLock86A1Json + "," + kLock86A2Json + "]";
+    RowlEngine_UpdateSceneFromJson(handle, sceneJson.c_str());
 
     // Gozlem cubugu: sahne-gorsel + ses + kamera esitligi.
     lock86Check(engine->getGameState() == beforeState,
@@ -2412,8 +2498,26 @@ void test_audio_lock_scene_restore_audio_snapshot() {
     lock86Check(audio->getVoiceVolume() == 0.125f, "voice volume not restored");
     lock86Check(audio->getActiveFilter() == Rowl::Audio::DSPFilterType::Normal,
                 "dsp filter not restored");
-    TEST_PASS("Scene restore catch — visual + mixer + camera equality");
+    // BGM niyeti: a1 B'ye saptirmisti; BGM-dalsiz restore burada olur
+    // (path B'de kalir).
+    lock86Check(audio->isBgmPlaying(), "BGM intent dustu (isBgmPlaying false)");
+    lock86Check(audio->getCurrentBgmPath() == "audio/lock86_bgm_a.wav",
+                std::string("BGM path restore olmadi: '") + audio->getCurrentBgmPath() + "'");
+    // Ambience/Ui session-local dislama (acik iddia): sahne + restore ikisi
+    // de dokunmaz — onceki deger aynen durur. Ui sessiz-yedekte intent
+    // tutmaz (uretim dali), o yuzden pin esitliktir: cihazda dolu-esit,
+    // cihazsizda bos-esit.
+    lock86Check(audio->isAmbiencePlaying() == beforeAmbPlaying,
+                "ambience playing degisti (session-local ihlal?)");
+    lock86Check(audio->getCurrentAmbiencePath() == beforeAmbPath,
+                "ambience path degisti (session-local ihlal?)");
+    lock86Check(audio->isUiPlaying() == beforeUiPlaying,
+                "ui playing degisti (session-local ihlal?)");
+    lock86Check(audio->getCurrentUiPath() == beforeUiPath,
+                "ui path degisti (session-local ihlal?)");
+    TEST_PASS("Scene restore catch — visual + mixer + BGM-intent + camera equality (amb/ui excluded)");
 
+    audio->setOutputSuspended(false);
     RowlEngine_Destroy(handle);
 }
 
@@ -2544,20 +2648,40 @@ void test_audio_lock_save_format_v4_mixer() {
                 "v3 mixer defaults (bgm preserved)");
     TEST_PASS("Legacy v3 Migrated (mixer defaults 1.0)");
 
-    // Yabanci sürüm + bozuk mikser reddedilir.
+    // Yabanci sürüm reddedilir.
     auto foreign = nlohmann::json::parse(json);
     foreign["version"] = 5;
     const auto res5 = GameState::decodeJson(foreign.dump());
     lock86Check(!res5.succeeded() &&
                     res5.status == Rowl::State::GameStateDecodeStatus::UnsupportedVersion,
                 "v5 must be UnsupportedVersion");
-    auto hostile = nlohmann::json::parse(json);
-    hostile["master_volume"] = 2.0;
-    const auto resH = GameState::decodeJson(hostile.dump());
-    lock86Check(!resH.succeeded() &&
-                    resH.status == Rowl::State::GameStateDecodeStatus::InvalidData,
-                "out-of-range mixer must be InvalidData");
-    TEST_PASS("Foreign version + hostile mixer rejected");
+    TEST_PASS("Foreign version rejected (UnsupportedVersion)");
+
+    // Bozuk-mikser HER KANAL icin ayri InvalidData esigi: (+ aralik-disi,
+    // - aralik-disi, NaN, string-tip) x (master, bgm, sfx, voice). Eski
+    // yalniz-master probu diger kanallarin esik-silinmesini yakalayamazdi;
+    // her hucre ayri assert'tir (fail-closed esik kanal-bazinda pinlidir).
+    // NaN dump'ta null'a iner, string-tip dogrudan type_error uretir — ikisi
+    // de decode catch-yolundan InvalidData'ya duser (varsayilan status).
+    auto requireInvalidMixer = [&](const char* key, nlohmann::json badValue,
+                                   const char* probe) {
+        auto mutated = nlohmann::json::parse(json);
+        mutated[key] = std::move(badValue);
+        const auto res = GameState::decodeJson(mutated.dump());
+        const std::string tag =
+            std::string("bozuk-mikser [") + key + "/" + probe + "]";
+        lock86Check(!res.succeeded(), tag + " kabul edildi");
+        lock86Check(res.status == Rowl::State::GameStateDecodeStatus::InvalidData,
+                    tag + " InvalidData degil");
+    };
+    const char* kMixerKeys[4] = {"master_volume", "bgm_volume", "sfx_volume", "voice_volume"};
+    for (const char* key : kMixerKeys) {
+        requireInvalidMixer(key, 2.0, "pos-aralik-disi");
+        requireInvalidMixer(key, -0.5, "neg-aralik-disi");
+        requireInvalidMixer(key, std::numeric_limits<double>::quiet_NaN(), "nan");
+        requireInvalidMixer(key, "loud", "string-tip");
+    }
+    TEST_PASS("Bozuk-mikser per-channel InvalidData (4 kanal x +, -, NaN, string)");
 }
 
 // Hedef #74: typewriter-blip yazimlari ile host telemetri/hata okumalari
