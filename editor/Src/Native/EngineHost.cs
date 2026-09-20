@@ -1193,7 +1193,7 @@ namespace RowlEngine.Editor.Native
                 if (string.IsNullOrWhiteSpace(json)) return null;
                 return SaveSlotMetadata.FromJson(slotIndex, json);
             }
-            catch (JsonException ex)
+            catch (Exception ex) when (ex is JsonException or KeyNotFoundException or InvalidOperationException or FormatException)
             {
                 SlotMetadataParseErrorCount++;
                 Debug.WriteLine($"EngineHost slot metadata parse failed ({SlotMetadataParseErrorCount}): {ex.Message}");
@@ -1429,8 +1429,10 @@ namespace RowlEngine.Editor.Native
 
     /// <summary>
     /// Display-only save-slot metadata (Faz 2 Dilim 4/5 slot picker).
-    /// Parsed from <c>RowlEngine_GetSaveSlotMetadataJson</c>; malformed
-    /// payloads throw <see cref="JsonException"/> for the caller to count.
+    /// Parsed from <c>RowlEngine_GetSaveSlotMetadataJson</c>; missing keys
+    /// fall back to backward-compatible defaults (pre-thumbnail on-disk
+    /// slots), malformed JSON throws <see cref="JsonException"/> for the
+    /// caller to count.
     /// </summary>
     public sealed class SaveSlotMetadata
     {
@@ -1452,16 +1454,43 @@ namespace RowlEngine.Editor.Native
             return new SaveSlotMetadata
             {
                 Slot = slot,
-                SavedAt = root.GetProperty("saved_at").GetString() ?? string.Empty,
-                PlaytimeSeconds = root.GetProperty("playtime_seconds").GetDouble(),
-                ChapterId = root.GetProperty("chapter_id").GetString() ?? string.Empty,
-                ChapterTitle = root.GetProperty("chapter_title").GetString() ?? string.Empty,
-                Summary = root.GetProperty("summary").GetString() ?? string.Empty,
-                ThumbnailWidth = root.GetProperty("thumbnail_width").GetUInt32(),
-                ThumbnailHeight = root.GetProperty("thumbnail_height").GetUInt32(),
-                HasThumbnail = root.GetProperty("has_thumbnail").GetBoolean(),
-                ThumbnailPngBase64 = root.GetProperty("thumbnail_png_base64").GetString() ?? string.Empty,
+                SavedAt = GetString(root, "saved_at"),
+                PlaytimeSeconds = GetDouble(root, "playtime_seconds"),
+                ChapterId = GetString(root, "chapter_id"),
+                ChapterTitle = GetString(root, "chapter_title"),
+                Summary = GetString(root, "summary"),
+                ThumbnailWidth = GetUInt32(root, "thumbnail_width"),
+                ThumbnailHeight = GetUInt32(root, "thumbnail_height"),
+                HasThumbnail = GetBoolean(root, "has_thumbnail"),
+                ThumbnailPngBase64 = GetString(root, "thumbnail_png_base64"),
             };
+
+            static string GetString(JsonElement element, string name)
+                => element.TryGetProperty(name, out var value) &&
+                   value.ValueKind == JsonValueKind.String
+                    ? value.GetString() ?? string.Empty
+                    : string.Empty;
+
+            static double GetDouble(JsonElement element, string name)
+                => element.TryGetProperty(name, out var value) &&
+                   value.ValueKind == JsonValueKind.Number &&
+                   value.TryGetDouble(out double number)
+                    ? number
+                    : 0.0;
+
+            static uint GetUInt32(JsonElement element, string name)
+                => element.TryGetProperty(name, out var value) &&
+                   value.ValueKind == JsonValueKind.Number &&
+                   value.TryGetUInt32(out uint number)
+                    ? number
+                    : 0;
+
+            static bool GetBoolean(JsonElement element, string name)
+                => element.TryGetProperty(name, out var value) &&
+                   (value.ValueKind == JsonValueKind.True ||
+                    value.ValueKind == JsonValueKind.False)
+                    ? value.GetBoolean()
+                    : false;
         }
     }
 }
