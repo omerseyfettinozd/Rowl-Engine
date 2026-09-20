@@ -1922,6 +1922,65 @@ namespace RowlEngine.Editor.ViewModels
             SplitScreenMode = splitMode;
         }
 
+        /// <summary>
+        /// Unity kromu Dilim G2: düzen önayarları (Düzen ComboBox'ı).
+        /// Seçim değişimi anında uygular; sonradan elle panel açılıp
+        /// kapanırsa ad etiketi kalır (Unity davranışı).
+        /// </summary>
+        public List<string> AvailableLayoutPresets { get; } = new() { "Varsayılan", "Sahne Odağı", "Oyun Testi" };
+
+        [ObservableProperty]
+        private string _selectedLayoutPreset = "Varsayılan";
+
+        partial void OnSelectedLayoutPresetChanged(string value) => ApplyLayoutPresetState(value);
+
+        private void ApplyLayoutPresetState(string? presetName)
+        {
+            if (string.IsNullOrEmpty(presetName)) return;
+            bool isHierarchy = IsHierarchyPanelVisible;
+            bool isAssets = IsAssetsPanelVisible;
+            bool isInspector = IsInspectorPanelVisible;
+            bool isLog = IsLogPanelVisible;
+            bool isBacklog = IsBacklogPanelVisible;
+            bool isSaveSlots = IsSaveSlotsPanelVisible;
+            bool isProjectIssues = IsProjectIssuesPanelVisible;
+            int bottomActiveTab = BottomPanelActiveTab;
+            bool isNodeGraph = IsNodeGraphActive;
+            bool isPreview = IsPreviewActive;
+            bool isEnginePreview = IsEnginePreviewActive;
+            int splitMode = SplitScreenMode;
+
+            EditorWorkspaceLayoutService.ApplyLayoutPreset(
+                presetName,
+                ref isHierarchy,
+                ref isAssets,
+                ref isInspector,
+                ref isLog,
+                ref isBacklog,
+                ref isSaveSlots,
+                ref isProjectIssues,
+                ref bottomActiveTab,
+                ref isNodeGraph,
+                ref isPreview,
+                ref isEnginePreview,
+                ref splitMode);
+
+            bottomActiveTab = EditorWorkspaceLayoutService.ClampBottomTab(bottomActiveTab);
+
+            IsHierarchyPanelVisible = isHierarchy;
+            IsAssetsPanelVisible = isAssets;
+            IsInspectorPanelVisible = isInspector;
+            IsLogPanelVisible = isLog;
+            IsBacklogPanelVisible = isBacklog;
+            IsSaveSlotsPanelVisible = isSaveSlots;
+            IsProjectIssuesPanelVisible = isProjectIssues;
+            BottomPanelActiveTab = bottomActiveTab;
+            IsNodeGraphActive = isNodeGraph;
+            IsPreviewActive = isPreview;
+            IsEnginePreviewActive = isEnginePreview;
+            SplitScreenMode = splitMode;
+        }
+
         // COMPONENT MANAGEMENT
         /// <summary>
         /// Controls visibility of the "Add Component" dropdown menu in the Inspector.

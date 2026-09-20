@@ -99,6 +99,17 @@
                                     Foreground="{Binding SplitScreenButtonForeground}"
                                     FontWeight="Bold" FontSize="11" CornerRadius="6" Padding="10,5"/>
                             </StackPanel>
+
+                            <!-- Unity kromu Dilim G2: düzen önayarı (kilitli
+                                 CenterViewTabs kabına dokunmadan kardeş öğe). -->
+                            <Border Width="1" Height="18" Background="{DynamicResource BorderColor}" Margin="6,0"/>
+                            <TextBlock Text="Düzen" Foreground="{DynamicResource MutedText}"
+                                       FontSize="11" VerticalAlignment="Center"/>
+                            <ComboBox x:Name="LayoutPresetCombo"
+                                      ItemsSource="{Binding AvailableLayoutPresets}"
+                                      SelectedItem="{Binding SelectedLayoutPreset, Mode=TwoWay}"
+                                      ToolTip.Tip="Çalışma düzeni önayarı"
+                                      FontSize="11" MinWidth="110" VerticalAlignment="Center"/>
                         </StackPanel>
                     </DockPanel>
                 </Border>

@@ -281,6 +281,9 @@ internal static class EditorHeadlessTestSuite
             // Test 41: Unity kromu Dilim G1 — asset view toggle lock
             Tests.EditorAssetViewToggleTests.Run(mainVm);
 
+            // Test 42: Unity kromu Dilim G2 — layout preset lock
+            Tests.EditorLayoutPresetTests.Run(mainVm);
+
             Console.WriteLine("\n=======================================================");
             Console.WriteLine("ALL EDITOR HEADLESS TESTS PASSED SUCCESSFULLY!");
             Console.WriteLine("=======================================================\n");

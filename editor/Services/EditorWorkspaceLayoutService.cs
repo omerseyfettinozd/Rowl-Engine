@@ -133,6 +133,75 @@ namespace RowlEngine.Editor.Services
         }
 
         /// <summary>
+        /// Unity kromu Dilim G2: düzen önayarı — panelleri AÇIK/KAPALI olarak
+        /// atar (HandlePanelAction gibi geçiş yapmaz). Bilinmeyen ad no-op'tur.
+        /// Önayarlar: "Varsayılan" (tam çalışma düzeni), "Sahne Odağı"
+        /// (yan paneller kapalı, tuval + şerit), "Oyun Testi" (Oyuncu merkezde,
+        /// şerit kapalı, Denetçi açık).
+        /// </summary>
+        public static void ApplyLayoutPreset(
+            string presetName,
+            ref bool isHierarchyVisible,
+            ref bool isAssetsVisible,
+            ref bool isInspectorVisible,
+            ref bool isLogVisible,
+            ref bool isBacklogVisible,
+            ref bool isSaveSlotsVisible,
+            ref bool isProjectIssuesVisible,
+            ref int bottomPanelActiveTab,
+            ref bool isNodeGraphActive,
+            ref bool isPreviewActive,
+            ref bool isEnginePreviewActive,
+            ref int splitScreenMode)
+        {
+            switch (presetName)
+            {
+                case "Varsayılan":
+                    isHierarchyVisible = true;
+                    isInspectorVisible = true;
+                    isAssetsVisible = true;
+                    isLogVisible = true;
+                    isBacklogVisible = false;
+                    isSaveSlotsVisible = false;
+                    isProjectIssuesVisible = false;
+                    bottomPanelActiveTab = 0;
+                    isNodeGraphActive = true;
+                    isPreviewActive = false;
+                    isEnginePreviewActive = false;
+                    splitScreenMode = 0;
+                    break;
+                case "Sahne Odağı":
+                    isHierarchyVisible = false;
+                    isInspectorVisible = false;
+                    isAssetsVisible = true;
+                    isLogVisible = false;
+                    isBacklogVisible = false;
+                    isSaveSlotsVisible = false;
+                    isProjectIssuesVisible = false;
+                    bottomPanelActiveTab = 0;
+                    isNodeGraphActive = true;
+                    isPreviewActive = false;
+                    isEnginePreviewActive = false;
+                    splitScreenMode = 0;
+                    break;
+                case "Oyun Testi":
+                    isHierarchyVisible = false;
+                    isInspectorVisible = true;
+                    isAssetsVisible = false;
+                    isLogVisible = false;
+                    isBacklogVisible = false;
+                    isSaveSlotsVisible = false;
+                    isProjectIssuesVisible = false;
+                    bottomPanelActiveTab = 0;
+                    isNodeGraphActive = false;
+                    isPreviewActive = false;
+                    isEnginePreviewActive = true;
+                    splitScreenMode = 0;
+                    break;
+            }
+        }
+
+        /// <summary>
         /// Cycles split screen mode (0: Off -> 1: Horizontal -> 2: Vertical -> 0: Off).
         /// </summary>
         public static int CycleSplitScreen(
