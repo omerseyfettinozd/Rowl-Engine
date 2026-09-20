@@ -107,19 +107,20 @@ internal static class EditorStoryLifecycleTests
             ref activeTab, ref isGraph, ref isPrev, ref isEngPrev, ref split);
         if (isHierarchy) throw new Exception("Hierarchy panel should have been toggled to false.");
 
-        // Toggle Assets tab (tab 1)
+        // Toggle Assets strip (Faz 6 Dilim 2: ayrı şerit — sekme
+        // indeksine dokunmaz, yalnızca görünürlük değişir)
         EditorWorkspaceLayoutService.HandlePanelAction("Assets",
             ref isHierarchy, ref isAssets, ref isInspector, ref isLog,
             ref isBacklog, ref isSaveSlots, ref isIssues,
             ref activeTab, ref isGraph, ref isPrev, ref isEngPrev, ref split);
-        if (!isAssets || activeTab != 1) throw new Exception("Assets drawer should be visible and activeTab == 1.");
+        if (!isAssets || activeTab != 0) throw new Exception("Assets strip should be visible without touching activeTab.");
 
-        // Toggle Assets tab again while active -> closes drawer
+        // Toggle Assets strip again while open -> closes strip
         EditorWorkspaceLayoutService.HandlePanelAction("Assets",
             ref isHierarchy, ref isAssets, ref isInspector, ref isLog,
             ref isBacklog, ref isSaveSlots, ref isIssues,
             ref activeTab, ref isGraph, ref isPrev, ref isEngPrev, ref split);
-        if (isAssets) throw new Exception("Clicking active Assets tab again should have closed it.");
+        if (isAssets) throw new Exception("Clicking open Assets strip again should have closed it.");
 
         // Step 17.5: Split Screen Cycling & Dimensions
         Console.WriteLine("    [Step 17.5]: Split Screen Cycling & Dimensions...");

@@ -52,6 +52,18 @@ namespace RowlEngine.Editor.Views.Panels
             _draggedNode = null;
         }
 
+        private void OnAssetDoubleTapped(object? sender, TappedEventArgs e)
+        {
+            // Faz 6 Dilim 3: klasöre çift-tıkla gir (ızgara + ağaç).
+            if (sender is Control ctrl && ctrl.DataContext is AssetNodeViewModel node)
+            {
+                if (node.IsEditing) return;
+                _isPointerPressed = false;
+                _draggedNode = null;
+                (DataContext as MainWindowViewModel)?.AssetBrowserViewModel.EnterFolder(node);
+            }
+        }
+
         private async void OnAssetPointerMoved(object? sender, PointerEventArgs e)
         {
             if (!_isPointerPressed || _draggedNode == null) return;

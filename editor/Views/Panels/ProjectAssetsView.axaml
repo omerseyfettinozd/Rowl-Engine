@@ -50,8 +50,27 @@
                           FontSize="11" MinWidth="90"/>
             </Grid>
 
-            <Grid Grid.Row="2">
-            <TreeView
+            <!-- Faz 6 Dilim 3: sol klasör ağacı + sağ simge ızgarası -->
+            <Grid Grid.Row="2" RowDefinitions="Auto,*">
+                <!-- Yol çipi + üst klasör -->
+                <DockPanel Grid.Row="0" Margin="8,6,8,2" LastChildFill="True">
+                    <Button DockPanel.Dock="Left" Content="↑ Üst"
+                            ToolTip.Tip="Üst klasöre git"
+                            Command="{Binding AssetBrowserViewModel.GoToParentFolderCommand}"
+                            Background="Transparent" Foreground="{DynamicResource PrimaryText}"
+                            BorderBrush="{DynamicResource BorderColor}" BorderThickness="1"
+                            CornerRadius="4" Padding="6,3" FontSize="10" Margin="0,0,6,0"/>
+                    <Border Background="{DynamicResource SurfaceBackground}"
+                            BorderBrush="{DynamicResource BorderSubtle}" BorderThickness="1"
+                            CornerRadius="4" Padding="8,3" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding AssetBrowserViewModel.SelectedFolder.RelativePath, FallbackValue=Assets}"
+                                   Foreground="{DynamicResource SecondaryText}" FontSize="11"
+                                   TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding AssetBrowserViewModel.SelectedFolder.FullPath}"/>
+                    </Border>
+                </DockPanel>
+
+                <Grid Grid.Row="1" ColumnDefinitions="220,6,*">
+            <TreeView Grid.Column="0"
                       Background="Transparent"
                       ItemsSource="{Binding AssetBrowserViewModel.AssetTree}"
                       SelectedItem="{Binding AssetBrowserViewModel.SelectedNode, Mode=TwoWay}"
@@ -70,7 +89,8 @@
                         <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" Background="Transparent"
                                     PointerPressed="OnAssetPointerPressed"
                                     PointerMoved="OnAssetPointerMoved"
-                                    PointerReleased="OnAssetPointerReleased">
+                                    PointerReleased="OnAssetPointerReleased"
+                                    DoubleTapped="OnAssetDoubleTapped">
                             <StackPanel.ContextMenu>
                                 <ContextMenu>
                                     <MenuItem Header="Yeni Klasör Oluştur" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.CreateFolderCommand}"/>
@@ -138,6 +158,71 @@
                 </TreeView.ItemTemplate>
             </TreeView>
 
+            <GridSplitter Grid.Column="1" Background="{DynamicResource BorderColor}"
+                          ResizeDirection="Columns" Width="6"/>
+
+            <!-- Sağ: simge ızgarası + taşınmış boş-durum panelleri -->
+            <Grid Grid.Column="2">
+                <ListBox Background="Transparent"
+                         ItemsSource="{Binding AssetBrowserViewModel.FolderContents}"
+                         SelectedItem="{Binding AssetBrowserViewModel.SelectedNode, Mode=TwoWay}"
+                         SelectionMode="Single" Margin="4"
+                         Foreground="{DynamicResource PrimaryText}"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                    <ListBox.KeyBindings>
+                        <KeyBinding Gesture="Enter" Command="{Binding AssetBrowserViewModel.EnterSelectedFolderCommand}"/>
+                    </ListBox.KeyBindings>
+                    <ListBox.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel Orientation="Horizontal"/>
+                        </ItemsPanelTemplate>
+                    </ListBox.ItemsPanel>
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="vm:AssetNodeViewModel">
+                            <StackPanel Width="{Binding $parent[UserControl].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.GridItemSize}"
+                                        Background="Transparent" Spacing="4" Margin="6"
+                                        PointerPressed="OnAssetPointerPressed"
+                                        PointerMoved="OnAssetPointerMoved"
+                                        PointerReleased="OnAssetPointerReleased"
+                                        DoubleTapped="OnAssetDoubleTapped"
+                                        ToolTip.Tip="{Binding Name}">
+                                <!-- Faz 4 menüsüyle aynı 7 öğe (ızgara paritesi). -->
+                                <StackPanel.ContextMenu>
+                                    <ContextMenu>
+                                        <MenuItem Header="Yeni Klasör Oluştur" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.CreateFolderCommand}"/>
+                                        <MenuItem Header="Dosya İçe Aktar..." Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ImportAssetCommand}"/>
+                                        <Separator/>
+                                        <MenuItem Header="Yeniden Adlandır (F2)" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.StartRenameCommand}"/>
+                                        <MenuItem Header="Dosya Yöneticisinde Aç" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.OpenInExplorerCommand}"/>
+                                        <Separator/>
+                                        <MenuItem Header="Sil" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.DeleteAssetCommand}"/>
+                                        <MenuItem Header="Yenile" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.RefreshAssetsCommand}"/>
+                                    </ContextMenu>
+                                </StackPanel.ContextMenu>
+                                <Border Background="{DynamicResource ToolbarButtonBg}"
+                                        BorderBrush="{DynamicResource BorderColor}" BorderThickness="1"
+                                        CornerRadius="6" Padding="6" HorizontalAlignment="Center"
+                                        Width="{Binding $parent[UserControl].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.GridItemImageSize}"
+                                        Height="{Binding $parent[UserControl].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.GridItemImageSize}">
+                                    <Panel VerticalAlignment="Center" HorizontalAlignment="Center">
+                                        <Image Source="{Binding Thumbnail}" IsVisible="{Binding HasThumbnail}"
+                                               Stretch="Uniform" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                        <TextBlock Text="{Binding TypeLabel}" IsVisible="{Binding !HasThumbnail}"
+                                                   FontSize="10" Foreground="{DynamicResource MutedText}"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                   TextWrapping="Wrap" TextAlignment="Center"/>
+                                    </Panel>
+                                </Border>
+                                <TextBlock Text="{Binding Name}"
+                                           Foreground="{DynamicResource PrimaryText}"
+                                           FontSize="11" TextTrimming="CharacterEllipsis"
+                                           TextWrapping="Wrap" MaxLines="2"
+                                           TextAlignment="Center" HorizontalAlignment="Stretch"/>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+
             <!-- Faz 5: boş-durum — dosyası yok (eylem: içe aktar) -->
             <StackPanel x:Name="AssetsEmptyPanel"
                         IsVisible="{Binding AssetBrowserViewModel.IsTreeEmpty}"
@@ -169,14 +254,27 @@
                         HorizontalAlignment="Center"/>
             </StackPanel>
             </Grid>
+                </Grid>
+            </Grid>
 
-            <!-- Faz 4: durum satırı -->
+            <!-- Faz 4: durum satırı + Faz 6 Dilim 3: ızgara boyut kaydırıcısı -->
             <Border Grid.Row="3" Background="{DynamicResource SurfaceBackground}"
                     BorderBrush="{DynamicResource BorderColor}" BorderThickness="0,1,0,0"
                     Padding="8,4">
-                <TextBlock Text="{Binding AssetBrowserViewModel.StatusText}"
-                           Foreground="{DynamicResource MutedText}" FontSize="10"
-                           VerticalAlignment="Center"/>
+                <DockPanel LastChildFill="True">
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6"
+                                VerticalAlignment="Center">
+                        <TextBlock Text="Boyut" Foreground="{DynamicResource MutedText}"
+                                   FontSize="10" VerticalAlignment="Center"/>
+                        <Slider Minimum="40" Maximum="128"
+                                Value="{Binding AssetBrowserViewModel.GridItemSize, Mode=TwoWay}"
+                                ToolTip.Tip="Simge boyutu"
+                                Width="110" VerticalAlignment="Center"/>
+                    </StackPanel>
+                    <TextBlock Text="{Binding AssetBrowserViewModel.StatusText}"
+                               Foreground="{DynamicResource MutedText}" FontSize="10"
+                               VerticalAlignment="Center"/>
+                </DockPanel>
             </Border>
         </Grid>
     </Border>

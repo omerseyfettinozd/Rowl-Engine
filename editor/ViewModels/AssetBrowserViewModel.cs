@@ -422,6 +422,8 @@ namespace RowlEngine.Editor.ViewModels
                 ? $"{shownFiles} sonuç"
                 : $"{_visibleFileCount} öğe" +
                   (_hiddenFileCount > 0 ? $" · {_hiddenFileCount} sistem dosyası gizli" : string.Empty);
+            // Faz 6 Dilim 3: budama sonrası gezinme durumunu canlı ağaca bağla.
+            ResolveFolderNavigation();
         }
 
         /// <summary>
@@ -447,6 +449,147 @@ namespace RowlEngine.Editor.ViewModels
         {
             SearchText = string.Empty;
             SelectedTypeFilter = "Tümü";
+        }
+
+        // ── Faz 6 Dilim 3: klasör ağacı + simge ızgarası gezinmesi ──────────
+        /// <summary>
+        /// Faz 6 Dilim 3: ızgarada gezilen klasör. Yalnızca gezinme
+        /// durumudur — seçim otoritesi <see cref="SelectedNode"/> olarak kalır.
+        /// </summary>
+        [ObservableProperty]
+        private AssetNodeViewModel? _selectedFolder;
+
+        /// <summary>
+        /// Faz 6 Dilim 3: seçili klasörün ızgara içeriği. Aynı düğüm
+        /// referanslarının ayrı koleksiyonudur (klon yok, IsExpanded
+        /// aynen korunur); kayıp hayaletler ve kayıp-grup ızgaraya girmez.
+        /// </summary>
+        public ObservableCollection<AssetNodeViewModel> FolderContents { get; } = new();
+
+        /// <summary>Faz 6 Dilim 3: ızgara hücre genişliği, piksel (40–128).</summary>
+        [ObservableProperty]
+        private double _gridItemSize = 72;
+
+        /// <summary>Faz 6 Dilim 3: hücredeki küçük-resim karesi kenarı.</summary>
+        public double GridItemImageSize => Math.Max(24, GridItemSize - 32);
+
+        partial void OnGridItemSizeChanged(double value)
+        {
+            double clamped = Math.Clamp(value, 40, 128);
+            if (!clamped.Equals(value))
+                GridItemSize = clamped;
+            OnPropertyChanged(nameof(GridItemImageSize));
+        }
+
+        partial void OnSelectedFolderChanged(AssetNodeViewModel? value) => RebuildFolderContents();
+
+        /// <summary>
+        /// Faz 6 Dilim 3: klasöre gir (ızgara çift-tık / Enter). Yalnızca
+        /// gerçek klasörler; hayalet ve kayıp-grup reddedilir.
+        /// </summary>
+        public void EnterFolder(AssetNodeViewModel? node)
+        {
+            if (node == null || !node.IsDirectory || node.IsMissing || node.IsMissingGroup)
+                return;
+            AssetNodeViewModel live = FindNodeByRelativePath(node.RelativePath) ?? node;
+            SelectedFolder = live;
+            SelectedNode = live;
+        }
+
+        /// <summary>Faz 6 Dilim 3: seçili öğe klasörse içine gir (Enter tuşu).</summary>
+        [RelayCommand]
+        private void EnterSelectedFolder() => EnterFolder(SelectedNode);
+
+        /// <summary>Faz 6 Dilim 3: üst klasöre çık (kökte kalır).</summary>
+        [RelayCommand]
+        private void GoToParentFolder()
+        {
+            AssetNodeViewModel? root = AssetTree.FirstOrDefault(n => n.IsDirectory && !n.IsMissingGroup);
+            AssetNodeViewModel? folder = SelectedFolder;
+            if (folder == null || string.IsNullOrEmpty(folder.FullPath))
+            {
+                SelectedFolder = root;
+                return;
+            }
+            string? parentFull = null;
+            try
+            {
+                parentFull = Path.GetDirectoryName(
+                    folder.FullPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+            }
+            catch { }
+            AssetNodeViewModel? parent = string.IsNullOrEmpty(parentFull)
+                ? null
+                : FindDirectoryByFullPath(parentFull);
+            SelectedFolder = parent ?? root;
+        }
+
+        private AssetNodeViewModel? FindNodeByRelativePath(string relativePath)
+        {
+            var stack = new Stack<AssetNodeViewModel>(AssetTree);
+            while (stack.Count > 0)
+            {
+                var node = stack.Pop();
+                if (node.RelativePath.Equals(relativePath, StringComparison.Ordinal))
+                    return node;
+                foreach (var child in node.Children) stack.Push(child);
+            }
+            return null;
+        }
+
+        private AssetNodeViewModel? FindDirectoryByFullPath(string fullPath)
+        {
+            var stack = new Stack<AssetNodeViewModel>(AssetTree);
+            while (stack.Count > 0)
+            {
+                var node = stack.Pop();
+                if (node.IsDirectory && !node.IsMissingGroup &&
+                    node.FullPath.Equals(fullPath, StringComparison.OrdinalIgnoreCase))
+                    return node;
+                foreach (var child in node.Children) stack.Push(child);
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Faz 6 Dilim 3: tarama sonunda gezinme durumunu canlı ağaca
+        /// bağlar. SelectedNode tek seçim otoritesidir — ölü referanslar
+        /// RelativePath ile yeniden çözülür (TwoWay ping-pong'a karşı
+        /// yalnızca içerik gerçekten değişince yazılır).
+        /// </summary>
+        private void ResolveFolderNavigation()
+        {
+            if (SelectedNode != null)
+            {
+                AssetNodeViewModel? live = FindNodeByRelativePath(SelectedNode.RelativePath);
+                if (live != null && !ReferenceEquals(live, SelectedNode))
+                    SelectedNode = live;
+            }
+            AssetNodeViewModel? folder = SelectedFolder != null
+                ? FindNodeByRelativePath(SelectedFolder.RelativePath)
+                : null;
+            if (folder != null && (folder.IsMissing || folder.IsMissingGroup || !folder.IsDirectory))
+                folder = null;
+            folder ??= AssetTree.FirstOrDefault(n => n.IsDirectory && !n.IsMissingGroup);
+            bool same = folder == null
+                ? SelectedFolder == null
+                : SelectedFolder != null &&
+                  SelectedFolder.RelativePath.Equals(folder.RelativePath, StringComparison.Ordinal);
+            if (!same)
+                SelectedFolder = folder; // OnSelectedFolderChanged ızgarayı kurar
+            else
+                RebuildFolderContents(); // aynı klasör, yeni ağaç örnekleri
+        }
+
+        private void RebuildFolderContents()
+        {
+            FolderContents.Clear();
+            foreach (var child in SelectedFolder?.Children ?? Enumerable.Empty<AssetNodeViewModel>())
+            {
+                if (child.IsMissing || child.IsMissingGroup)
+                    continue;
+                FolderContents.Add(child);
+            }
         }
 
         private static string? TryRelativize(string fullPath)

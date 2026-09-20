@@ -267,7 +267,7 @@ namespace RowlEngine.Editor.ViewModels
         /// Faz 6 Dilim 2: tuvalin altındaki bağımsız Varlıklar şeridi.
         /// Sekme alanından ayrı açılıp kapanır, kendi yüksekliğini korur.
         /// </summary>
-        public GridLength AssetsStripHeight => EditorWorkspaceLayoutService.CalculateBottomPanelHeight(IsAssetsPanelVisible, _assetsStripHeightPixels);
+        public GridLength AssetsStripHeight => EditorWorkspaceLayoutService.CalculateBottomPanelHeight(IsAssetsPanelVisible, AssetsStripHeightPixels);
         public GridLength AssetsStripSplitterHeight => EditorWorkspaceLayoutService.CalculateBottomSplitterHeight(IsAssetsPanelVisible);
         public GridLength HierarchyPanelWidth => EditorWorkspaceLayoutService.CalculateHierarchyPanelWidth(IsHierarchyPanelVisible);
         public GridLength HierarchySplitterWidth => EditorWorkspaceLayoutService.CalculateHierarchySplitterWidth(IsHierarchyPanelVisible);
