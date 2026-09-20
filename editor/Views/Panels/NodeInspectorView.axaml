@@ -12,7 +12,7 @@
              x:Class="RowlEngine.Editor.Views.Panels.NodeInspectorView"
              x:DataType="vm:MainWindowViewModel">
     <Border Background="{DynamicResource PanelBackground}">
-        <Grid RowDefinitions="Auto, *, Auto">
+        <Grid RowDefinitions="Auto, *">
 
             <!-- Panel Header: GameObject Inspector (Unity Style) -->
             <Border Grid.Row="0" Background="{DynamicResource SurfaceBackground}" 
@@ -313,20 +313,6 @@
 
                 </StackPanel>
             </ScrollViewer>
-
-            <!-- Engine Sync: ince şerit (aynı komut/kilit; kart zemini yok) -->
-            <Border Grid.Row="2" Padding="10,8"
-                    BorderBrush="{DynamicResource BorderColor}" BorderThickness="0,1,0,0">
-                <Button Content="Önizlemeye Gönder"
-                        ToolTip.Tip="Send the selected node to the running preview"
-                        Command="{Binding PushHotReloadPacketCommand}"
-                        IsEnabled="{Binding InspectorViewModel.HasSelectedObject}"
-                        HorizontalAlignment="Stretch"
-                        HorizontalContentAlignment="Center"
-                        Background="{DynamicResource AccentButtonBg}"
-                        Foreground="{DynamicResource AccentButtonFg}"
-                        FontWeight="Bold" FontSize="11" CornerRadius="2" Padding="12,4"/>
-            </Border>
         </Grid>
     </Border>
 </UserControl>
