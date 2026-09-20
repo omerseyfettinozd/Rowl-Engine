@@ -231,8 +231,10 @@ void test_lua_sandbox() {
         std::cerr << "Lua module impostor bridge survived the sweep!" << std::endl;
         exit(1);
     }
-    // Plant DURING a callback: the impostor wins inside that call (no-op), but
-    // the success-path sweep removes it so the next callback hits the bridge.
+    // D6 (#158): plant DURING a callback — the guarded rawset now swallows
+    // the impostor, so the REAL bridge serves the in-callback write
+    // (pre-fix the fake won here and the write was a silent no-op). The
+    // success-path sweep stays as belt-and-braces for the next callback.
     if (!lua.loadModule("planter", R"(
         function on_update(dt)
             rawset(_G, "rowl", { var_set = function(k, v) end })
@@ -244,8 +246,8 @@ void test_lua_sandbox() {
         exit(1);
     }
     if (!lua.callOptionalModuleFunction("planter", "on_update", 0.016) ||
-        !lua.getVariable("h26_planted").empty()) {
-        std::cerr << "Lua planter setup did not behave as designed" << std::endl;
+        lua.getVariable("h26_planted") != "fake-wins") {
+        std::cerr << "Lua planter write did not reach the real bridge" << std::endl;
         exit(1);
     }
     if (!lua.callOptionalModuleFunction("planter", "on_probe") ||

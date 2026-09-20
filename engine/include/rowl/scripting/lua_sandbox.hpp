@@ -145,6 +145,18 @@ private:
     /// environment via rawset (which bypasses the __newindex guard). Must use
     /// rawset, never setfield — the guard silently swallows `rowl` writes.
     void sweepModuleEnvRowl(const std::string& moduleId);
+    /// D6 (#158): pre-pcall scrub+pin — evicts any env-local `rowl` impostor
+    /// and pins the verified registry bridge into the module env, so bridge
+    /// resolution inside the callback never depends on a plantable env key.
+    void scrubAndPinModuleEnvRowl(const std::string& moduleId);
+    /// D6 (#158): rawsets the registry `_rowl_bridge` table into the env at
+    /// the given stack index (C rawset bypasses the __newindex guard by
+    /// design). No-op when no verified bridge is published.
+    void pinVerifiedRowlIntoEnv(int envIndex);
+    /// D6 (#158): installs the impostor-swallowing rawset wrapper over the
+    /// pristine base rawset. Idempotent; called by initialize() and
+    /// quarantineEnvironment(). Always runs under RecoveryScope.
+    void installRawsetGuard();
     /// A1 (H31): replaces shared stdlib tables a script polluted in place
     /// (math/string/table via fresh requiref, base funcs via pristine
     /// re-registration), re-nils the blacklist, clears a hostile global-table

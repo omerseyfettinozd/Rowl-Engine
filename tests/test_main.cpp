@@ -137,6 +137,7 @@ int main(int argc, char* argv[]) {
     test_lifecycle_shutdown_sweep();
     test_lifecycle_thread_lease();    test_lifecycle_handle_reclamation();    test_save_lock();    test_save_slot_concurrency();    test_numeric_guards();
     test_lua_hardening();
+    test_lua_module_rowl_impostor();
     test_runtime_context_and_diagnostics();
     test_crash_log();
     test_story_graph_parser();

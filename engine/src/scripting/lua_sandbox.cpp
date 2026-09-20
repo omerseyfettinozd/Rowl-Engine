@@ -345,6 +345,13 @@ bool LuaSandbox::initialize() {
     lua_getglobal(m_luaState, "setmetatable");
     lua_setfield(m_luaState, LUA_REGISTRYINDEX, "_rowl_pristine_setmetatable");
     installSetmetatableGuard();
+    // D6 (#158): capture the pristine base rawset before the guard wraps it
+    // (same pattern as setmetatable above — the registry is unreachable
+    // without the debug library, and installRawsetGuard() always wraps this
+    // copy, never the current global).
+    lua_getglobal(m_luaState, "rawset");
+    lua_setfield(m_luaState, LUA_REGISTRYINDEX, "_rowl_pristine_rawset");
+    installRawsetGuard();
     snapshotInitialGlobals();
 
     m_initialized = true;
@@ -409,6 +416,13 @@ void LuaSandbox::bindEngineApis() {
     lua_setfield(m_luaState, -2, "var_set");
 
     lua_setglobal(m_luaState, "rowl");
+
+    // D6 (#158): publish the verified bridge reference. Module callbacks pin
+    // this table into their environment before the pcall (pre-pcall scrub+pin)
+    // and the guarded rawset compares impostor candidates against it, so
+    // bridge resolution never depends on an env key a script can plant.
+    lua_getglobal(m_luaState, "rowl");
+    lua_setfield(m_luaState, LUA_REGISTRYINDEX, "_rowl_bridge");
 }
 
 // A1 (H26): a module environment's __newindex guard silently ignores `rowl`
@@ -425,6 +439,42 @@ void LuaSandbox::sweepModuleEnvRowl(const std::string& moduleId) {
     lua_pushstring(m_luaState, "rowl");
     lua_pushnil(m_luaState);
     lua_rawset(m_luaState, -3); // bypass __newindex, delete the impostor
+    lua_pop(m_luaState, 1); // env
+}
+
+// D6 (#158): pins the verified bridge into a module env (rawset from C,
+// which bypasses the __newindex guard by design — the same path the sweep
+// uses). Afterwards `rowl` inside the module resolves to the registry
+// reference without consulting __index, so a planted key cannot win.
+void LuaSandbox::pinVerifiedRowlIntoEnv(int envIndex) {
+    if (!m_luaState) return;
+    const RecoveryScope recovery(this);
+    const int env = lua_absindex(m_luaState, envIndex);
+    lua_getfield(m_luaState, LUA_REGISTRYINDEX, "_rowl_bridge");
+    if (lua_istable(m_luaState, -1) == 0) {
+        lua_pop(m_luaState, 1); // no verified bridge; leave the env alone
+        return;
+    }
+    lua_pushstring(m_luaState, "rowl");
+    lua_pushvalue(m_luaState, -2); // bridge
+    lua_rawset(m_luaState, env);
+    lua_pop(m_luaState, 1); // bridge
+}
+
+// D6 (#158): pre-pcall scrub+pin. Deletes any env-local `rowl` impostor an
+// earlier run planted (belt-and-braces alongside the post-pcall sweep) and
+// pins the verified bridge, closing the intra-callback TOCTOU window the
+// post-hoc sweep could not reach.
+void LuaSandbox::scrubAndPinModuleEnvRowl(const std::string& moduleId) {
+    if (!m_luaState) return;
+    const RecoveryScope recovery(this);
+    const auto module = m_modules.find(moduleId);
+    if (module == m_modules.end()) return;
+    lua_rawgeti(m_luaState, LUA_REGISTRYINDEX, module->second); // env
+    lua_pushstring(m_luaState, "rowl");
+    lua_pushnil(m_luaState);
+    lua_rawset(m_luaState, -3); // delete any impostor (C rawset: no guard)
+    pinVerifiedRowlIntoEnv(-1);
     lua_pop(m_luaState, 1); // env
 }
 
@@ -466,6 +516,36 @@ static int lua_guarded_setmetatable(lua_State* L) {
     return 1;
 }
 
+// D6 (#158): rawset wrapper. The module __newindex guard swallows plain
+// `rowl = fake`, but the pristine rawset bypasses it by design —
+// rawset(_G, "rowl", fake) planted an env-local impostor that won every
+// rowl.* lookup for the rest of the SAME pcall (the post-hoc sweep ran too
+// late). The wrapper compares any "rowl" write against the verified bridge
+// in the registry and swallows non-bridge values (returning the table, like
+// rawset); every other call delegates to the pristine rawset captured at
+// initialize(). Upvalue 1 = pristine rawset. `rowl` is a reserved name no
+// legitimate module writes, so the swallow changes nothing legitimate.
+static int lua_guarded_rawset(lua_State* L) {
+    const int top = lua_gettop(L);
+    if (top >= 3 && lua_type(L, 2) == LUA_TSTRING) {
+        size_t len = 0;
+        const char* key = lua_tolstring(L, 2, &len);
+        if (key && len == 4 && std::memcmp(key, "rowl", 4) == 0) {
+            lua_getfield(L, LUA_REGISTRYINDEX, "_rowl_bridge");
+            const bool isBridge = lua_rawequal(L, 3, -1) != 0;
+            lua_pop(L, 1);
+            if (!isBridge) {
+                lua_settop(L, 1); // swallow the plant; return the table
+                return 1;
+            }
+        }
+    }
+    lua_pushvalue(L, lua_upvalueindex(1)); // pristine rawset
+    lua_insert(L, 1);
+    lua_call(L, top, LUA_MULTRET);
+    return lua_gettop(L);
+}
+
 void LuaSandbox::installSetmetatableGuard() {
     if (!m_luaState) return;
     const RecoveryScope recovery(this);
@@ -488,6 +568,29 @@ void LuaSandbox::installSetmetatableGuard() {
     lua_setglobal(m_luaState, "setmetatable");
     lua_pushboolean(m_luaState, 1);
     lua_setfield(m_luaState, LUA_REGISTRYINDEX, "_rowl_setmeta_guarded");
+}
+
+// D6 (#158): installs the rawset wrapper over the pristine base rawset.
+// Idempotent; called by initialize() and quarantineEnvironment(). Always
+// wraps the registry capture, never the current global — a script may have
+// shadowed the global with its own function (module envs accept ordinary
+// globals), and wrapping that would launder hostile power through the guard.
+void LuaSandbox::installRawsetGuard() {
+    if (!m_luaState) return;
+    const RecoveryScope recovery(this);
+    lua_getfield(m_luaState, LUA_REGISTRYINDEX, "_rowl_rawset_guarded");
+    const bool already = lua_toboolean(m_luaState, -1) != 0;
+    lua_pop(m_luaState, 1);
+    if (already) return;
+    lua_getfield(m_luaState, LUA_REGISTRYINDEX, "_rowl_pristine_rawset");
+    if (lua_isfunction(m_luaState, -1) == 0) {
+        lua_pop(m_luaState, 1); // no pristine captured; leave base as-is
+        return;
+    }
+    lua_pushcclosure(m_luaState, lua_guarded_rawset, 1);
+    lua_setglobal(m_luaState, "rawset");
+    lua_pushboolean(m_luaState, 1);
+    lua_setfield(m_luaState, LUA_REGISTRYINDEX, "_rowl_rawset_guarded");
 }
 
 // B7 (#35): restores the string metatable's __index to the pristine string
@@ -550,6 +653,12 @@ void LuaSandbox::quarantineEnvironment() {
         lua_setglobal(m_luaState, name);
     }
     bindEngineApis();
+    // D6 (#158): luaopen_base reintroduces the pristine rawset on every
+    // repair — re-wrap it (marker reset mirrors the setmetatable guard
+    // above; the bridge ref is fresh again after bindEngineApis()).
+    lua_pushboolean(m_luaState, 0);
+    lua_setfield(m_luaState, LUA_REGISTRYINDEX, "_rowl_rawset_guarded");
+    installRawsetGuard();
 }
 
 // A1 (H31): scripts share the stdlib tables through the global table (and
@@ -1023,6 +1132,10 @@ bool LuaSandbox::loadModule(const std::string& moduleId, const std::string& scri
         return false;
     }
     // B7 (#24): wall-clock deadline around the chunk run (see executeString).
+    // D6 (#158): pin the verified bridge into the fresh env BEFORE the chunk
+    // runs — the chunk itself could rawset-plant an impostor and consume it
+    // in the same run, a TOCTOU the post-load sweep cannot reach.
+    pinVerifiedRowlIntoEnv(environmentIndex);
     armWallDeadline();
     const int modulePcallStatus = lua_pcall(m_luaState, 0, 0, 0);
     m_deadlineArmed = false;
@@ -1089,6 +1202,12 @@ bool LuaSandbox::callOptionalModuleFunction(const std::string& moduleId,
     }
     lua_pushnumber(m_luaState, deltaTime);
     resetInstructionCounter();
+    // D6 (#158): pre-pcall scrub+pin — evict any env-local `rowl` impostor
+    // and resolve this callback against the verified registry bridge, so a
+    // rawset plant inside THIS pcall is swallowed by the guarded rawset and
+    // can no longer divert rowl.* mid-callback. The post-pcall sweep below
+    // stays as belt-and-braces.
+    scrubAndPinModuleEnvRowl(moduleId);
     // B7 (#24): wall-clock deadline around the run; disarmed the moment the
     // pcall returns so bookkeeping never bills the next callback.
     armWallDeadline();
@@ -1197,6 +1316,12 @@ void LuaSandbox::shutdown() {
         lua_setfield(m_luaState, LUA_REGISTRYINDEX, SANDBOX_REGISTRY_KEY);
         lua_pushnil(m_luaState);
         lua_setfield(m_luaState, LUA_REGISTRYINDEX, "_rowl_instruction_count");
+        lua_pushnil(m_luaState);
+        lua_setfield(m_luaState, LUA_REGISTRYINDEX, "_rowl_bridge");
+        lua_pushnil(m_luaState);
+        lua_setfield(m_luaState, LUA_REGISTRYINDEX, "_rowl_pristine_rawset");
+        lua_pushnil(m_luaState);
+        lua_setfield(m_luaState, LUA_REGISTRYINDEX, "_rowl_rawset_guarded");
 
         lua_close(m_luaState);
         m_luaState = nullptr;

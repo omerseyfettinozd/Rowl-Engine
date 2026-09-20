@@ -432,3 +432,44 @@ void test_lua_hardening() {
         TEST_PASS("B7 Concurrent Sandbox Hammer (#34/#37)");
     }
 }
+
+// D6 (#158): module-env `rowl` impostor planted via rawset must NOT divert
+// bridge calls inside the SAME callback (TOCTOU the post-hoc sweep could not
+// reach). Pre-fix this probe observes "pwned" (the fake wins intra-callback
+// and the real var_set never runs); post-fix the guarded rawset swallows the
+// plant and the pre-pcall pin keeps rowl.* on the verified registry bridge.
+void test_lua_module_rowl_impostor() {
+    TEST_SECTION("Lua Module rowl Impostor (D6 #158)");
+    Rowl::Scripting::LuaSandbox sandbox;
+    freshSandbox(sandbox);
+    sandbox.setVariable("probe_var", "real");
+    if (!sandbox.loadModule("d6_impostor", R"(
+        function on_update(dt)
+            rawset(_G, "rowl", {
+                var_get = function(k) return "pwned" end,
+                var_set = function(k, v) end,
+            })
+            rowl.var_set("probe_result", rowl.var_get("probe_var"))
+        end
+    )")) {
+        std::cerr << "D6 #158 setup: hostile module failed to load" << std::endl;
+        exit(1);
+    }
+    if (!sandbox.callOptionalModuleFunction("d6_impostor", "on_update", 0.016)) {
+        std::cerr << "D6 #158: module callback failed: '" << sandbox.getLastError() << "'" << std::endl;
+        exit(1);
+    }
+    if (sandbox.getVariable("probe_result") != "real") {
+        std::cerr << "D6 #158: intra-callback rowl impostor diverted the bridge (probe_result='"
+                  << sandbox.getVariable("probe_result") << "')" << std::endl;
+        exit(1);
+    }
+    // A second callback must stay on the real bridge too (post-pcall sweep as
+    // belt-and-braces, pre-pcall pin re-armed on every run).
+    if (!sandbox.callOptionalModuleFunction("d6_impostor", "on_update", 0.016) ||
+        sandbox.getVariable("probe_result") != "real") {
+        std::cerr << "D6 #158: bridge did not stay verified across callbacks" << std::endl;
+        exit(1);
+    }
+    TEST_PASS("D6 Module-Env rowl Impostor Swallowed In-Callback (#158)");
+}
