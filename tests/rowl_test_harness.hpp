@@ -110,6 +110,7 @@ void test_audio_lock_outage_bgm_intent_data_sync();
 void test_audio_lock_outage_pending_no_stale_replay();
 void test_audio_lock_outage_pending_fail_preserved();
 void test_audio_lock_dead_handle_spectrum_zero_fill();
+void test_audio_lock_dead_handle_guards_watcher();
 void test_audio_lock_offscreen_global_pump();
 void test_audio_lock_scene_restore_audio_snapshot();
 void test_audio_lock_mixer_persistence();
