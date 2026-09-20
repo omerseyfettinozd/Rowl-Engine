@@ -826,6 +826,14 @@ void Engine::updateSceneFromComponents(const nlohmann::json& root,
     const auto previousHasBackground = m_hasBackground;
     const auto previousHasDialogueBox = m_hasDialogueBox;
     const auto previousGameState = m_gameState;
+    // #20/#21: background-kolu parallax/opakligi + tek-atimlik SFX
+    // isareti + diyalog-gecmis isareti de try-ici mutasyondur; snapshot
+    // disi kalirsa sahne-vektor restore'u sonrasi bayat kalirdi.
+    const auto previousBackgroundParallaxX = m_activeBackgroundParallaxX;
+    const auto previousBackgroundParallaxY = m_activeBackgroundParallaxY;
+    const auto previousBackgroundOpacity = m_activeBackgroundOpacity;
+    const auto previousLastSfxPlaybackNodeId = m_lastSfxPlaybackNodeId;
+    const auto previousLastRecordedDialogueNodeId = m_lastRecordedDialogueNodeId;
     const auto previousLuaVariables = m_luaSandbox ? m_luaSandbox->getAllVariables() : std::unordered_map<std::string, std::string>{};
     // #86: camera + live-mixer snapshot. Component zinciri kamera/mikseri
     // TRY içinde mutasyona uğratır (camera bile replayEntryEffects=false iken;
@@ -833,6 +841,9 @@ void Engine::updateSceneFromComponents(const nlohmann::json& root,
     // alınır, yoksa yeni karede bayat mikser dururdu.
     const auto previousAudio = captureAudioSnapshot();
     const auto previousCamera = captureCameraSnapshot();
+    // #20/#21: canli script kumesinin tam goruntusu (id + kaynak +
+    // durum + bayrak). unload geri alinamaz oldugu icin kaynak sarttir.
+    const auto previousScripts = captureScriptSnapshot();
     const auto restorePreviousState = [&] {
         m_activeCharacters = previousCharacters;
         m_activeDialogues = previousDialogues;
@@ -846,6 +857,11 @@ void Engine::updateSceneFromComponents(const nlohmann::json& root,
         m_activeBackgroundWidth = previousBackgroundWidth;
         m_activeBackgroundHeight = previousBackgroundHeight;
         m_activeBackgroundRotation = previousBackgroundRotation;
+        m_activeBackgroundParallaxX = previousBackgroundParallaxX;
+        m_activeBackgroundParallaxY = previousBackgroundParallaxY;
+        m_activeBackgroundOpacity = previousBackgroundOpacity;
+        m_lastSfxPlaybackNodeId = previousLastSfxPlaybackNodeId;
+        m_lastRecordedDialogueNodeId = previousLastRecordedDialogueNodeId;
         m_activeCharacterX = previousCharacterX;
         m_activeCharacterY = previousCharacterY;
         m_activeCharacterWidth = previousCharacterWidth;
@@ -864,9 +880,12 @@ void Engine::updateSceneFromComponents(const nlohmann::json& root,
             for (const auto& [key, value] : previousLuaVariables) m_luaSandbox->setVariable(key, value);
         }
         // #86: önce kamera, sonra ses (apply* best-effort + WARN, dışarı
-        // fırlatmaz; catch'in kendisi throw-safe kalır).
+        // fırlatmaz; catch'in kendisi throw-safe kalır). #20/#21: script
+        // kumesi en sonda — modul seti sapmissa kaynaklardan yeniden
+        // yuklenir, sapmamissa calisan modullere dokunulmaz.
         applyCameraSnapshot(previousCamera);
         applyAudioSnapshot(previousAudio);
+        applyScriptSnapshot(previousScripts, replayEntryEffects);
     };
     try {
         nlohmann::json comps = root;
@@ -939,12 +958,16 @@ void Engine::updateSceneFromComponents(const nlohmann::json& root,
         m_hasDialogueBox = false;
         std::vector<nlohmann::json> pendingAudioComponents;
         std::vector<nlohmann::json> pendingScripts;
+        // #20/#21: kamera + pencere-FX de ses gibi ertelenir — dongu ici
+        // cihaz mutasyonu kalmaz, kotu-alanli bilesen sahneyi yarim
+        // birakamaz. Script yikimi (status-clear + deactivate) ayni sebeple
+        // dogrulama-sonrasi faza tasindi (asagida script fazi).
+        std::vector<nlohmann::json> pendingCameraComponents;
+        std::vector<nlohmann::json> pendingFxComponents;
 
-        // The payload has passed schema validation, so the active script can
-        // be notified without a malformed update leaving the scene half-live.
-        m_scriptRuntimeStatuses.clear();
-        deactivateScripts(replayEntryEffects);
-
+        // Yikim ertelendi: yukaridaki yorumdaki script fazina bak. Burada
+        // henuz canli kumeye dokunulmaz; kotu-alan throw'u eski scriptler
+        // yukluyken yakalanir.
         for (const auto& comp : comps) {
             if (!comp.contains("type") || !comp.contains("data")) continue;
             bool enabled = comp.value("enabled", true);
@@ -1188,97 +1211,16 @@ void Engine::updateSceneFromComponents(const nlohmann::json& root,
                     }
                 }
             } else if (type == "camera") {
-                if (m_window && m_window->getCamera()) {
-                    float zoom = data.value("zoom", 1.0f);
-                    float x = data.value("x", 960.0f);
-                    float y = data.value("y", 540.0f);
-                    float rot = data.value("rotation", 0.0f);
-                    float panDuration = data.value("pan_duration", 0.0f);
-                    float zoomDuration = data.value("zoom_duration", 0.0f);
-                    std::string easingStr = data.value("easing", "ease_in_out");
-
-                    Rowl::Render::CameraEasing easing = Rowl::Render::CameraEasing::EaseInOutCubic;
-                    if (easingStr == "linear") easing = Rowl::Render::CameraEasing::Linear;
-                    else if (easingStr == "ease_in") easing = Rowl::Render::CameraEasing::EaseInQuad;
-                    else if (easingStr == "ease_out") easing = Rowl::Render::CameraEasing::EaseOutQuad;
-                    else if (easingStr == "smooth_step") easing = Rowl::Render::CameraEasing::SmoothStep;
-
-                    if (panDuration > 0.0f) {
-                        m_window->getCamera()->panTo(x, y, panDuration, easing);
-                    } else {
-                        m_window->getCamera()->setPosition(x, y);
-                    }
-
-                    if (zoomDuration > 0.0f) {
-                        m_window->getCamera()->zoomTo(zoom, zoomDuration, easing);
-                    } else {
-                        m_window->getCamera()->setZoom(zoom);
-                    }
-
-                    m_window->getCamera()->setRotation(rot);
-                    if (replayEntryEffects && data.contains("shake_preset") && !data["shake_preset"].get<std::string>().empty() && data["shake_preset"].get<std::string>() != "none") {
-                        std::string preset = data["shake_preset"].get<std::string>();
-                        float mult = data.value("shake_intensity_multiplier", 1.0f);
-                        float durOverride = data.value("shake_duration_override", 0.0f);
-                        if (data.contains("shake_intensity") && data.value("shake_intensity", 0.0f) > 0.0f) {
-                            float intensity = data.value("shake_intensity", 0.0f);
-                            float duration = data.value("shake_duration", 0.5f);
-                            float freq = data.value("shake_frequency", 25.0f);
-                            float damping = data.value("shake_damping", 1.0f);
-                            float dirX = data.value("shake_dir_x", 1.0f);
-                            float dirY = data.value("shake_dir_y", 1.0f);
-                            Rowl::Render::CameraShakePreset presetEnum = Rowl::Render::CameraShakePreset::Custom;
-                            if (preset == "subtle") presetEnum = Rowl::Render::CameraShakePreset::Subtle;
-                            else if (preset == "earthquake") presetEnum = Rowl::Render::CameraShakePreset::Earthquake;
-                            else if (preset == "explosion") presetEnum = Rowl::Render::CameraShakePreset::Explosion;
-                            else if (preset == "heartbeat" || preset == "pulse") presetEnum = Rowl::Render::CameraShakePreset::Heartbeat;
-                            m_window->getCamera()->shakeWithProfile(presetEnum, intensity, duration, freq, damping, dirX, dirY);
-                        } else {
-                            m_window->getCamera()->shakePreset(preset, mult, durOverride);
-                        }
-                    } else if (replayEntryEffects && data.contains("shake_intensity") && data.contains("shake_duration")) {
-                        float intensity = data.value("shake_intensity", 0.0f);
-                        float duration = data.value("shake_duration", 0.0f);
-                        float freq = data.value("shake_frequency", 25.0f);
-                        float damping = data.value("shake_damping", 2.0f);
-                        float dirX = data.value("shake_dir_x", 1.0f);
-                        float dirY = data.value("shake_dir_y", 1.0f);
-                        m_window->getCamera()->shakeWithProfile(Rowl::Render::CameraShakePreset::Custom, intensity, duration, freq, damping, dirX, dirY);
-                    }
-                }
+                // #20/#21: dogrulama-sonrasi faza ertelendi (asagida kamera
+                // fazi). replayEntryEffects=false iken bile sahnelenir —
+                // eski davranis kamerayi bayraksiz uygulardi.
+                pendingCameraComponents.push_back(data);
             } else if (type == "transition" || type == "screen_fx" || type == "visual_fx") {
                 if (!replayEntryEffects) continue;
-                if (data.contains("kind")) {
-                    std::string kind = data.value("kind", "crossfade");
-                    float duration = data.value("duration", 1.0f);
-                    std::string colorHex = data.value("color", "#000000");
-                    if (m_window && kind != "none") {
-                        m_window->startTransition(kind, duration, colorHex);
-                    }
-                }
-                if (m_window) {
-                    if (data.value("flash_enabled", false) || (data.contains("flash_duration") && data.value("flash_duration", 0.0f) > 0.0f)) {
-                        std::string flashColor = data.value("flash_color", "#FFFFFF");
-                        float flashDuration = data.value("flash_duration", 0.5f);
-                        float flashIntensity = data.value("flash_intensity", 1.0f);
-                        m_window->triggerScreenFlashHex(flashColor, flashDuration, flashIntensity);
-                    }
-                    if (data.value("tint_enabled", false) || data.contains("tint_color") || data.contains("tint_opacity")) {
-                        std::string tintColor = data.value("tint_color", "#000000");
-                        float tintOpacity = data.value("tint_opacity", 0.0f);
-                        if (tintOpacity > 0.001f) {
-                            m_window->setScreenTintHex(tintColor, tintOpacity);
-                        } else {
-                            m_window->clearScreenTint();
-                        }
-                    }
-                    if (data.value("vignette_enabled", false) || data.contains("vignette_intensity")) {
-                        float vIntensity = data.value("vignette_intensity", 0.0f);
-                        float vRadius = data.value("vignette_radius", 0.75f);
-                        std::string vColor = data.value("vignette_color", "#000000");
-                        m_window->setVignette(vIntensity, vRadius, vColor);
-                    }
-                }
+                // #20/#21: pencere-FX (transition/flash/tint/vignette) ayni
+                // faza ertelendi; throw'da snapshot degil hics-uygulama
+                // korur (snapshot kapsami disiydi).
+                pendingFxComponents.push_back(data);
             } else if (type == "script") {
                 pendingScripts.push_back(data);
             }
@@ -1290,6 +1232,18 @@ void Engine::updateSceneFromComponents(const nlohmann::json& root,
 
         if (m_activeDialogues.empty() && m_hasDialogueBox) {
             m_activeDialogues.push_back(m_activeDialogueData);
+        }
+
+        // #20/#21: dogrulama-sonrasi atomik faz — dongu firlatmadan gecti,
+        // sahnelenen kamera/FX/ses/script simdi uygulanir. Her bilesenin
+        // firlatabilen alan-okumalari cihaza dokunmadan once biter, o yuzden
+        // bu fazdaki bir throw baska cihazi kirletmeden catch'e duser.
+        for (const auto& data : pendingCameraComponents) {
+            applyCameraComponent(data, replayEntryEffects);
+        }
+
+        for (const auto& data : pendingFxComponents) {
+            applyScreenFxComponent(data);
         }
 
         for (const auto& data : pendingAudioComponents) {
@@ -1333,7 +1287,15 @@ void Engine::updateSceneFromComponents(const nlohmann::json& root,
         if (m_isPlaying && !pendingAudioComponents.empty())
             m_lastSfxPlaybackNodeId = m_storyRuntime.currentNodeId();
 
-        activateScripts(pendingScripts, replayEntryEffects);
+        // #20/#21: script fazi — firlatabilen JSON/VFS okumalari (stage)
+        // canli kume dururken kosar; yikim + aktivasyon ancak hepsi
+        // saglamsa olur. Boylece kotu-alanli script bileseni eski kumeyi
+        // oldurmeden catch'e duser (sessiz olu script sonu).
+        std::vector<StagedScript> stagedScripts;
+        stageScripts(pendingScripts, stagedScripts);
+        m_scriptRuntimeStatuses.clear();
+        deactivateScripts(replayEntryEffects);
+        activateScripts(stagedScripts, replayEntryEffects);
 
         if (replayEntryEffects && m_audio && (!pendingAudioComponents.empty()) && m_gameState) {
             std::string filter = "Normal";
@@ -1390,8 +1352,16 @@ void Engine::updateSceneFromComponents(const nlohmann::json& root,
                       std::to_string(m_activeDialogues.size()) + " dlgs, HasBg: " +
                       (m_hasBackground ? "true" : "false") + ", HasDlg: " +
                       (m_hasDialogueBox ? "true" : "false"));
+        // #20/#21: gozlemlenebilir sinyal — basari Ok damgalar, throw yolu
+        // asagida ValidationError isler (void imzasi korunur; host
+        // RowlEngine_GetLastResultCode ile okur, yeni C API gerekmez).
+        m_context->setSuccess("update_scene_from_components", "");
     } catch (const std::exception& e) {
         restorePreviousState();
+        m_context->setError(RuntimeErrorCode::ValidationError,
+                            "Component scene update failed; previous scene restored: " +
+                                std::string(e.what()),
+                            "update_scene_from_components", "");
         ROWL_LOG_ERROR("Failed to parse components JSON: " + std::string(e.what()));
     }
 }
@@ -2168,30 +2138,38 @@ void Engine::deactivateScripts(bool callOnExit) {
         }
     }
     m_activeScriptModuleIds.clear();
+    m_activeScriptSources.clear();
     m_hasActiveScript = false;
 }
 
-void Engine::activateScripts(const std::vector<nlohmann::json>& scripts,
-                             bool callOnEnter) {
-    if (!m_luaSandbox) return;
+void Engine::stageScripts(const std::vector<nlohmann::json>& scripts,
+                          std::vector<StagedScript>& outStaged) {
+    outStaged.clear();
+    outStaged.reserve(scripts.size());
     for (std::size_t scriptIndex = 0; scriptIndex < scripts.size(); ++scriptIndex) {
         const auto& script = scripts[scriptIndex];
+        // Firlatabilen okumalar (yanlis-tipli "code"/"path" type_error'i)
+        // burada, canli kume dururken olur.
         std::string source = script.value("code", "");
         const std::string path = script.value("path", "");
         if (source.empty() && !path.empty()) {
-            auto* vfsPtr = getVfs();
-            if (!vfsPtr) {
-                markScriptStatus((path + "#" + std::to_string(scriptIndex)), path, "failed",
-                                 "Runtime VFS is unavailable");
-                continue;
-            }
-            source = vfsPtr->readString(path);
-            if (source.empty()) {
-                ROWL_LOG_ERROR("Lua script asset could not be read: " + path);
-                markScriptStatus((path + "#" + std::to_string(scriptIndex)), path, "failed",
-                                 "Lua script asset could not be read");
-                continue;
-            }
+            if (auto* vfsPtr = getVfs()) source = vfsPtr->readString(path);
+        }
+        outStaged.push_back({std::move(source), path, scriptIndex});
+    }
+}
+
+void Engine::activateScripts(const std::vector<StagedScript>& scripts,
+                             bool callOnEnter) {
+    if (!m_luaSandbox) return;
+    for (const auto& staged : scripts) {
+        const std::string& source = staged.source;
+        const std::string& path = staged.path;
+        const std::size_t scriptIndex = staged.index;
+        if (source.empty() && !path.empty()) {
+            markScriptStatus((path + "#" + std::to_string(scriptIndex)), path, "failed",
+                             "Lua script asset could not be read");
+            continue;
         }
         if (source.empty()) {
             markScriptStatus("inline#" + std::to_string(scriptIndex), path, "failed",
@@ -2205,6 +2183,7 @@ void Engine::activateScripts(const std::vector<nlohmann::json>& scripts,
             continue;
         }
         m_activeScriptModuleIds.push_back(moduleId);
+        m_activeScriptSources.push_back(source);
         m_hasActiveScript = true;
         if (callOnEnter && !m_luaSandbox->callOptionalModuleFunction(moduleId, "on_enter")) {
             ROWL_LOG_ERROR("Lua on_enter callback failed" + (path.empty() ? std::string{} : ": " + path));
@@ -2336,6 +2315,7 @@ void Engine::resetSessionProfile() {
     m_activeChoiceButtons.clear();
     m_hasActiveScript = false;
     m_activeScriptModuleIds.clear();
+    m_activeScriptSources.clear();
     m_hasBackground  = true;
     m_hasDialogueBox = true;
     m_lastRecordedDialogueNodeId = 0;
@@ -3227,6 +3207,159 @@ void Engine::applyCameraSnapshot(const CameraSnapshot& snapshot) {
         ROWL_LOG_WARN("Camera snapshot re-apply failed: " + std::string(e.what()));
     } catch (...) {
         ROWL_LOG_WARN("Camera snapshot re-apply failed (unknown error)");
+    }
+}
+
+Engine::ScriptSnapshot Engine::captureScriptSnapshot() const {
+    ScriptSnapshot snapshot;
+    snapshot.hasActiveScript = m_hasActiveScript;
+    snapshot.moduleIds = m_activeScriptModuleIds;
+    snapshot.sources = m_activeScriptSources;
+    snapshot.statuses = m_scriptRuntimeStatuses;
+    return snapshot;
+}
+
+void Engine::applyScriptSnapshot(const ScriptSnapshot& snapshot, bool callOnEnter) {
+    try {
+        // Sessizce bosalt: rollback sirasinda on_exit yan-etkisi istenmez;
+        // hedef, throw-oncesi canli kumeyi aynen diriltmektir.
+        const bool modulesDiffer = (m_activeScriptModuleIds != snapshot.moduleIds);
+        if (m_luaSandbox && modulesDiffer) {
+            for (auto it = m_activeScriptModuleIds.rbegin(); it != m_activeScriptModuleIds.rend(); ++it) {
+                m_luaSandbox->unloadModule(*it);
+            }
+        }
+        m_activeScriptModuleIds = snapshot.moduleIds;
+        m_activeScriptSources = snapshot.sources;
+        m_hasActiveScript = snapshot.hasActiveScript;
+        m_scriptRuntimeStatuses = snapshot.statuses;
+        if (m_luaSandbox && modulesDiffer && snapshot.hasActiveScript) {
+            for (std::size_t i = 0; i < snapshot.moduleIds.size() && i < snapshot.sources.size(); ++i) {
+                if (snapshot.sources[i].empty()) continue;
+                if (!m_luaSandbox->loadModule(snapshot.moduleIds[i], snapshot.sources[i])) {
+                    ROWL_LOG_WARN("Script snapshot re-apply failed for '" + snapshot.moduleIds[i] +
+                                  "': " + m_luaSandbox->getLastError());
+                    continue;
+                }
+                if (callOnEnter) {
+                    m_luaSandbox->callOptionalModuleFunction(snapshot.moduleIds[i], "on_enter");
+                }
+            }
+        }
+    } catch (const std::exception& e) {
+        ROWL_LOG_WARN("Script snapshot re-apply failed: " + std::string(e.what()));
+    } catch (...) {
+        ROWL_LOG_WARN("Script snapshot re-apply failed (unknown error)");
+    }
+}
+
+void Engine::applyCameraComponent(const nlohmann::json& data, bool replayEntryEffects) {
+    auto* camera = m_window ? m_window->getCamera() : nullptr;
+    if (!camera) return;
+    // Once tum alan-okumalari (firlatabilir: yanlis-tipli deger
+    // type_error'i), sonra setter'lar (isfinite-korumali, firlatmaz).
+    // Okuma throw ederse kameraya hic dokunulmamistir.
+    const float zoom = data.value("zoom", 1.0f);
+    const float x = data.value("x", 960.0f);
+    const float y = data.value("y", 540.0f);
+    const float rot = data.value("rotation", 0.0f);
+    const float panDuration = data.value("pan_duration", 0.0f);
+    const float zoomDuration = data.value("zoom_duration", 0.0f);
+    const std::string easingStr = data.value("easing", "ease_in_out");
+    const bool hasShakePreset = data.contains("shake_preset");
+    const std::string preset = hasShakePreset ? data["shake_preset"].get<std::string>() : "";
+    const float mult = data.value("shake_intensity_multiplier", 1.0f);
+    const float durOverride = data.value("shake_duration_override", 0.0f);
+    const bool hasShakeIntensity = data.contains("shake_intensity");
+    const bool hasShakeDuration = data.contains("shake_duration");
+    const float shakeIntensity = data.value("shake_intensity", 0.0f);
+    // Dal-bazli varsayilanlar aynen korunur (preset-dali duration 0.5 +
+    // damping 1.0; yalın-dal duration 0.0 + damping 2.0).
+    const float shakeDurationPreset = data.value("shake_duration", 0.5f);
+    const float shakeDurationPlain = data.value("shake_duration", 0.0f);
+    const float shakeFrequency = data.value("shake_frequency", 25.0f);
+    const float shakeDampingPreset = data.value("shake_damping", 1.0f);
+    const float shakeDampingPlain = data.value("shake_damping", 2.0f);
+    const float shakeDirX = data.value("shake_dir_x", 1.0f);
+    const float shakeDirY = data.value("shake_dir_y", 1.0f);
+
+    Rowl::Render::CameraEasing easing = Rowl::Render::CameraEasing::EaseInOutCubic;
+    if (easingStr == "linear") easing = Rowl::Render::CameraEasing::Linear;
+    else if (easingStr == "ease_in") easing = Rowl::Render::CameraEasing::EaseInQuad;
+    else if (easingStr == "ease_out") easing = Rowl::Render::CameraEasing::EaseOutQuad;
+    else if (easingStr == "smooth_step") easing = Rowl::Render::CameraEasing::SmoothStep;
+
+    if (panDuration > 0.0f) {
+        camera->panTo(x, y, panDuration, easing);
+    } else {
+        camera->setPosition(x, y);
+    }
+
+    if (zoomDuration > 0.0f) {
+        camera->zoomTo(zoom, zoomDuration, easing);
+    } else {
+        camera->setZoom(zoom);
+    }
+
+    camera->setRotation(rot);
+    if (replayEntryEffects && hasShakePreset && !preset.empty() && preset != "none") {
+        if (hasShakeIntensity && shakeIntensity > 0.0f) {
+            Rowl::Render::CameraShakePreset presetEnum = Rowl::Render::CameraShakePreset::Custom;
+            if (preset == "subtle") presetEnum = Rowl::Render::CameraShakePreset::Subtle;
+            else if (preset == "earthquake") presetEnum = Rowl::Render::CameraShakePreset::Earthquake;
+            else if (preset == "explosion") presetEnum = Rowl::Render::CameraShakePreset::Explosion;
+            else if (preset == "heartbeat" || preset == "pulse") presetEnum = Rowl::Render::CameraShakePreset::Heartbeat;
+            camera->shakeWithProfile(presetEnum, shakeIntensity, shakeDurationPreset, shakeFrequency,
+                                     shakeDampingPreset, shakeDirX, shakeDirY);
+        } else {
+            camera->shakePreset(preset, mult, durOverride);
+        }
+    } else if (replayEntryEffects && hasShakeIntensity && hasShakeDuration) {
+        camera->shakeWithProfile(Rowl::Render::CameraShakePreset::Custom, shakeIntensity, shakeDurationPlain,
+                                 shakeFrequency, shakeDampingPlain, shakeDirX, shakeDirY);
+    }
+}
+
+void Engine::applyScreenFxComponent(const nlohmann::json& data) {
+    if (!m_window) return;
+    // Ayni sozlesme: once firlatabilen okumalar, sonra pencere setter'lari
+    // (hex-cozucu yedekli + isfinite-korumali, firlatmaz).
+    const bool hasKind = data.contains("kind");
+    const std::string kind = data.value("kind", "crossfade");
+    const float duration = data.value("duration", 1.0f);
+    const std::string colorHex = data.value("color", "#000000");
+    const bool flashEnabled = data.value("flash_enabled", false);
+    const bool hasFlashDuration = data.contains("flash_duration");
+    const float flashDuration = data.value("flash_duration", 0.0f);
+    const std::string flashColor = data.value("flash_color", "#FFFFFF");
+    const float flashDurationOrDefault = data.value("flash_duration", 0.5f);
+    const float flashIntensity = data.value("flash_intensity", 1.0f);
+    const bool tintEnabled = data.value("tint_enabled", false);
+    const bool hasTintColor = data.contains("tint_color");
+    const bool hasTintOpacity = data.contains("tint_opacity");
+    const std::string tintColor = data.value("tint_color", "#000000");
+    const float tintOpacity = data.value("tint_opacity", 0.0f);
+    const bool vignetteEnabled = data.value("vignette_enabled", false);
+    const bool hasVignetteIntensity = data.contains("vignette_intensity");
+    const float vignetteIntensity = data.value("vignette_intensity", 0.0f);
+    const float vignetteRadius = data.value("vignette_radius", 0.75f);
+    const std::string vignetteColor = data.value("vignette_color", "#000000");
+
+    if (hasKind && kind != "none") {
+        m_window->startTransition(kind, duration, colorHex);
+    }
+    if (flashEnabled || (hasFlashDuration && flashDuration > 0.0f)) {
+        m_window->triggerScreenFlashHex(flashColor, flashDurationOrDefault, flashIntensity);
+    }
+    if (tintEnabled || hasTintColor || hasTintOpacity) {
+        if (tintOpacity > 0.001f) {
+            m_window->setScreenTintHex(tintColor, tintOpacity);
+        } else {
+            m_window->clearScreenTint();
+        }
+    }
+    if (vignetteEnabled || hasVignetteIntensity) {
+        m_window->setVignette(vignetteIntensity, vignetteRadius, vignetteColor);
     }
 }
 

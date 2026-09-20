@@ -149,6 +149,11 @@ public:
     /// Used by the editor's component-based architecture.
     /// #86: transactional — a throw mid-update restores the previous scene
     /// visuals AND the live audio mixer AND the camera (snapshot/restore).
+    /// #20/#21: camera/FX/script applications are deferred to a
+    /// post-validation atomic phase (throw leaves them unapplied instead of
+    /// half-applied); the script set + parallax/opacity + SFX marker join
+    /// the snapshot, and failure/success is signalled on the context result
+    /// (readable via RowlEngine_GetLastResultCode).
     void updateSceneFromComponents(const std::string& componentsJson,
                                    bool replayEntryEffects = true);
     /// A2a-tur2: JSON overload — callers holding a parsed document skip the
@@ -393,6 +398,11 @@ private:
     std::vector<Rowl::Render::ChoiceButtonRenderData> m_activeChoiceButtons;
     bool m_hasActiveScript = false;
     std::vector<std::string> m_activeScriptModuleIds;
+    // #20/#21: the loaded source per module id (parallel to
+    // m_activeScriptModuleIds). The transactional scene restore reloads these
+    // when a failed update tore the live set down, so a throw can never leave
+    // a silent dead script behind the restored scene.
+    std::vector<std::string> m_activeScriptSources;
     std::vector<ScriptRuntimeStatus> m_scriptRuntimeStatuses;
     uint64_t m_lastRecordedDialogueNodeId = 0;
     // Audio components are applied while a scene is refreshed as well as when
@@ -457,7 +467,18 @@ private:
     /// scene/load/rewind restore.
     void restoreAudioStateFromGameState();
     void deactivateScripts(bool callOnExit = true);
-    void activateScripts(const std::vector<nlohmann::json>& scripts,
+    // #20/#21: JSON shapes are staged (throwing field reads + VFS preload)
+    // BEFORE the live script set is torn down; the staged form then activates
+    // without touching JSON/VFS, so a malformed script component fails while
+    // the previous scripts are still loaded.
+    struct StagedScript {
+        std::string source;
+        std::string path;
+        std::size_t index = 0;
+    };
+    void stageScripts(const std::vector<nlohmann::json>& scripts,
+                      std::vector<StagedScript>& outStaged);
+    void activateScripts(const std::vector<StagedScript>& scripts,
                          bool callOnEnter = true);
     void markScriptStatus(const std::string& moduleId, const std::string& sourcePath,
                           const std::string& state, const std::string& error = {});
@@ -484,10 +505,30 @@ private:
         float zoom = 1.0f;
         float rotation = 0.0f;
     };
+    // #20/#21: the live script set the scene update may tear down. Sources
+    // ride along because sandbox unloadModule() erases the registry entry —
+    // ids alone could never resurrect the previous set.
+    struct ScriptSnapshot {
+        bool hasActiveScript = false;
+        std::vector<std::string> moduleIds;
+        std::vector<std::string> sources;
+        std::vector<ScriptRuntimeStatus> statuses;
+    };
     AudioSnapshot captureAudioSnapshot() const;
     void applyAudioSnapshot(const AudioSnapshot& snapshot);
     CameraSnapshot captureCameraSnapshot() const;
     void applyCameraSnapshot(const CameraSnapshot& snapshot);
+    ScriptSnapshot captureScriptSnapshot() const;
+    // Best-effort + WARN, never throws out (catch-body safe). Reloads the
+    // snapshot sources only when the live module set drifted; otherwise the
+    // still-loaded modules are left running and only the members are repinned.
+    void applyScriptSnapshot(const ScriptSnapshot& snapshot, bool callOnEnter);
+    // #20/#21: deferred camera/FX application. The component loop only
+    // stages these payloads; the post-validation phase applies them with
+    // throwing field reads strictly before any device setter, so a malformed
+    // field fails atomically (same precedent as the deferred audio block).
+    void applyCameraComponent(const nlohmann::json& data, bool replayEntryEffects);
+    void applyScreenFxComponent(const nlohmann::json& data);
 public:
     /// MS-4 dirty-frame query: true when the next rendered frame cannot differ
     /// from the currently presented one (no transition, flash, camera motion,
