@@ -970,13 +970,24 @@ void test_audio_lock_queue_fail_atomic() {
  *      sağ + hata "could not be opened" (yol-kanıtı).
  *  (c) queue-fail (testFailNextQueue + BGM RAM WAV): testQueuedBytes(Bgm)
  *      değişmez + intent eski asset'te + hata "Unable to queue decoded audio".
- *  (d) no-device existence: cihazsız koşar (requireAudioDeviceOrSkip YOK;
- *      cihazlı koşuda açık SKIP notu): sessiz-yedekte geçerli BGM intent'i
- *      kurulur, eksik dosya intent+snapshot'ı yıkmaz + hata set.
+ *  (d) forced-device-less: gercek-cihazsiz kosu beklenmez, kanca ile
+ *      zorlanir (testSetDeviceAvailable(false/true); donus bayrak-
+ *      restorasyonudur — sessiz-miss akislara dokunmaz): sessiz-yedekte
+ *      gecerli BGM intent'i kurulur, eksik dosya intent+snapshot'i yikmaz,
+ *      kuyruk literal 0 kalir + hata set.
+ *  (d2) forced-device-less streaming-miss: akan predecessor uzerinde sessiz
+ *      miss — akis + kuyruk + snapshot aynen (VFS'te var olan fixture'lar
+ *      sessiz dalda commit'e girerdi; yalniz bilinmeyen-dosya dali
+ *      cihazsiz test edilebilir).
  *  (e) intent doğruluğu: başarısız yeni BGM (Fade+duration) transition
- *      başlatmaz; başarılı transition swap'ı aynen (regresyon bekçisi,
- *      update(1.0f) ile deterministik sürülür — duvar-saati YOK).
+ *      başlatmaz (+ kuyruk/snapshot dondurma); başarılı transition swap'ı
+ *      aynen (regresyon bekçisi, update(1.0f) ile deterministik sürülür —
+ *      duvar-saati YOK).
  *  (f) ayrışma: explicit stopBgm() hâlâ kapatır.
+ *
+ * #87-tur3 BGM-ozel fark (#78/#81 adimlari SILINMEDI, bu iki iddia eklendi):
+ * her fail dalinda kuyruk delta-0 (q0>0 bazli — bosaltma-oldurme gucu) ve
+ * streamInfoJson birebirlik (buffered_seconds ilerlemesi/pozisyonu dahil).
  *
  * KAPSAM-DIŞI: pump-mid-stream-corrupt stopBgm (2317), shutdown (1266) ve
  * init-fail destroy kolları bilinçli stop'tur; bu kilit fail-yolu commit
@@ -1033,6 +1044,43 @@ void setupTransactionalProject(Rowl::VFS::VFSManager& vfs, Rowl::Audio::AudioEng
                            .string());
 }
 
+// #87-tur3 BGM-ozel dondurma gozlemleri (#78/#81 ile ortusmez — adimlar
+// SILINMEDI, bu iki iddia eklendi):
+//  - kuyruk delta-0: testQueuedBytes tam-esitlik (sessiz-bosaltan VE sessiz-
+//    kirleten mutant duser). Baz q0>0 kilitlenir: bos kuyrukta bosaltma
+//    gozlenemezdi, o yuzden "kuyruk==0" degil "kuyruk==q0 (q0>0)" istenir.
+//    Sessiz dallarda (d/d2) kuyruk gercekten 0'dir, orada literal 0 aranir.
+//  - snapshot birebirlik: streamInfoJson string tam-esitlik (buffered_seconds
+//    ilerlemesi/pozisyonu dahil — yeni-BGM faili akan predecessor'in
+//    konumunu bozmaz; #78/#81'de bu yoktur).
+std::string snapStreamingPredecessorJson(Rowl::Audio::AudioEngine& audio,
+                                         const std::string& context) {
+    const std::string json = audio.streamInfoJson();
+    const auto parsed = nlohmann::json::parse(json);
+    const double buffered = parsed.value("buffered_seconds", 0.0);
+    if (!(buffered > 0.0)) {
+        lockFail(context + ": kurulum akisi ilerlemedi (buffered_seconds==0): " + json);
+    }
+    return json;
+}
+
+void requireBgmPredecessorFrozen(Rowl::Audio::AudioEngine& audio, size_t queuedBefore,
+                                 const std::string& jsonBefore,
+                                 const std::string& context) {
+    const size_t queuedAfter =
+        audio.testQueuedBytes(Rowl::Audio::AudioChannelType::Bgm);
+    if (queuedAfter != queuedBefore) {
+        lockFail(context + ": fail kuyruga dokundu (once=" + std::to_string(queuedBefore) +
+                 " sonra=" + std::to_string(queuedAfter) + ")");
+    }
+    const std::string jsonAfter = audio.streamInfoJson();
+    if (jsonAfter != jsonBefore) {
+        lockFail(context + ": fail snapshot/pozisyonu bozdu (once='" + jsonBefore +
+                 "' sonra='" + jsonAfter + "')");
+    }
+    requireMissGuardIntact(audio, context);
+}
+
 } // namespace
 
 void test_audio_lock_bgm_transactional() {
@@ -1042,32 +1090,41 @@ void test_audio_lock_bgm_transactional() {
     Rowl::Audio::AudioEngine audio(&vfs);
     setupTransactionalProject(vfs, audio);
 
-    // (d) no-device existence: yalnız gerçek-cihazsız koşuda çalışır
-    // (requireAudioDeviceOrSkip YOK; cihazlı koşuda açık SKIP notu).
-    if (!audio.isAudioDeviceAvailable()) {
-        audio.playAudio("audio/t_bgm_a.wav", Rowl::Audio::AudioChannelType::Bgm);
-        if (!audio.isBgmPlaying() || audio.getCurrentBgmPath() != "audio/t_bgm_a.wav") {
-            lockFail("sessiz-yedek BGM intent'i kurulamadi");
-        }
-        if (audio.streamInfoJson().find("\"asset\":\"audio/t_bgm_a.wav\"") == std::string::npos) {
-            lockFail("sessiz-yedek snapshot kurulamadi: " + audio.streamInfoJson());
-        }
-        audio.playAudio("audio/does_not_exist.wav", Rowl::Audio::AudioChannelType::Bgm);
-        if (!audio.isBgmPlaying() || audio.getCurrentBgmPath() != "audio/t_bgm_a.wav") {
-            lockFail("sessiz-yedek miss intent'i yikti (predecessor korunmadi)");
-        }
-        if (audio.streamInfoJson().find("\"asset\":\"audio/t_bgm_a.wav\"") == std::string::npos) {
-            lockFail("sessiz-yedek miss snapshot'i yikti: " + audio.streamInfoJson());
-        }
-        if (audio.getLastError().empty()) {
-            lockFail("sessiz-yedek miss hatasi caller'a ulasmadi");
-        }
-        TEST_PASS("Audio Transactional — sessiz-yedek miss intent+snapshot'i korur (d)");
-    } else {
-        std::cout << "  SKIP Audio Transactional (d) no-device existence"
-                     " (cihaz mevcut; sessiz dal erisilemez)"
-                  << std::endl;
+    // (d) forced-device-less: gercek-cihazsiz kosu BEKLENMEZ; kanca ile
+    // zorlanir (testSetDeviceAvailable semantigi: yalniz outage'u acar,
+    // donusu simulate etmez — donus asagida kancanin geri-cevrilmesidir;
+    // sessiz-miss akislara dokunmadigi icin bayrak-restorasyonu yeterlidir).
+    // Sessiz dal hic kuyruklamaz: literal kuyruk==0 aranir.
+    const bool realDevice = audio.isAudioDeviceAvailable();
+    audio.testSetDeviceAvailable(false);
+    audio.playAudio("audio/t_bgm_a.wav", Rowl::Audio::AudioChannelType::Bgm);
+    if (!audio.isBgmPlaying() || audio.getCurrentBgmPath() != "audio/t_bgm_a.wav") {
+        lockFail("sessiz-yedek BGM intent'i kurulamadi");
     }
+    if (audio.streamInfoJson().find("\"asset\":\"audio/t_bgm_a.wav\"") == std::string::npos) {
+        lockFail("sessiz-yedek snapshot kurulamadi: " + audio.streamInfoJson());
+    }
+    if (audio.testQueuedBytes(Rowl::Audio::AudioChannelType::Bgm) != 0) {
+        lockFail("sessiz-yedek cihaz kuyruguna yazdi (sessiz dal kuyruklamaz)");
+    }
+    audio.playAudio("audio/does_not_exist.wav", Rowl::Audio::AudioChannelType::Bgm);
+    if (!audio.isBgmPlaying() || audio.getCurrentBgmPath() != "audio/t_bgm_a.wav") {
+        lockFail("sessiz-yedek miss intent'i yikti (predecessor korunmadi)");
+    }
+    if (audio.streamInfoJson().find("\"asset\":\"audio/t_bgm_a.wav\"") == std::string::npos) {
+        lockFail("sessiz-yedek miss snapshot'i yikti: " + audio.streamInfoJson());
+    }
+    if (audio.testQueuedBytes(Rowl::Audio::AudioChannelType::Bgm) != 0) {
+        lockFail("sessiz-yedek miss kuyrukladi (fail yolu kuyruklamaz)");
+    }
+    if (audio.getLastError().empty()) {
+        lockFail("sessiz-yedek miss hatasi caller'a ulasmadi");
+    }
+    audio.testSetDeviceAvailable(realDevice);
+    if (audio.isAudioDeviceAvailable() != realDevice) {
+        lockFail("kanca donusu cihaz bayragini bozdurdu");
+    }
+    TEST_PASS("Audio Transactional — sessiz-yedek miss intent+snapshot'i korur, kuyruk 0 (d)");
     if (!requireAudioDeviceOrSkip(audio, "Audio BGM Transactional")) return;
 
     auto requireErrorSet = [&](const std::string& context) {
@@ -1082,18 +1139,35 @@ void test_audio_lock_bgm_transactional() {
     requireMissGuardIntact(audio, "kurulum/miss_bgm.ogg");
     TEST_PASS("Audio Transactional — kurulum (streaming BGM intact)");
 
+    // #87-tur3 dondurma: ilerleme kaniti (buffered_seconds>0 — akis konumu
+    // var) + tuketim dondurma (setOutputSuspended) altinda kuyruk snapshot'i
+    // (q0>0 — bosaltma-oldurme gucu). Sonraki fail dallari delta-0 + json
+    // birebir + 7-iddia ile kilitlenir (#78/#81'den fark: BGM-ozel
+    // akis-pozisyonu korunumu).
+    const std::string kurulumJson =
+        snapStreamingPredecessorJson(audio, "kurulum/miss_bgm.ogg");
+    audio.setOutputSuspended(true);
+    const size_t kurulumQueued =
+        audio.testQueuedBytes(Rowl::Audio::AudioChannelType::Bgm);
+    if (kurulumQueued == 0) {
+        lockFail("kurulum kuyrugu bos — bosaltma-oldurme gucu yok");
+    }
+
     // (a) decode-fail sonrası predecessor sağ: corrupt + eksik dosya.
     audio.playAudio("audio/miss_corrupt.ogg", Rowl::Audio::AudioChannelType::Bgm);
-    requireMissGuardIntact(audio, "corrupt OGG sonrasi (a)");
+    requireBgmPredecessorFrozen(audio, kurulumQueued, kurulumJson,
+                                "corrupt OGG sonrasi (a)");
     requireErrorSet("corrupt OGG sonrasi (a)");
     audio.playAudio("audio/does_not_exist.wav", Rowl::Audio::AudioChannelType::Bgm);
-    requireMissGuardIntact(audio, "eksik dosya sonrasi (a)");
+    requireBgmPredecessorFrozen(audio, kurulumQueued, kurulumJson,
+                                "eksik dosya sonrasi (a)");
     requireErrorSet("eksik dosya sonrasi (a)");
     TEST_PASS("Audio Transactional — decode-fail predecessor'i korur (a)");
 
     // (b) streaming open-fail: probe geçer ama source->open düşer.
     audio.playAudio("audio/miss_openfail.ogg", Rowl::Audio::AudioChannelType::Bgm);
-    requireMissGuardIntact(audio, "open-fail sonrasi (b)");
+    requireBgmPredecessorFrozen(audio, kurulumQueued, kurulumJson,
+                                "open-fail sonrasi (b)");
     {
         const std::string err = audio.getLastError();
         if (err.find("could not be opened") == std::string::npos) {
@@ -1107,9 +1181,26 @@ void test_audio_lock_bgm_transactional() {
     if (audio.isBgmTransitionActive()) {
         lockFail("basarisiz BGM transition baslatti (intent kirliligi)");
     }
-    requireMissGuardIntact(audio, "basarisiz transition sonrasi (e)");
+    requireBgmPredecessorFrozen(audio, kurulumQueued, kurulumJson,
+                                "basarisiz transition sonrasi (e)");
     requireErrorSet("basarisiz transition sonrasi (e)");
     TEST_PASS("Audio Transactional — basarisiz BGM transition baslatmaz (e)");
+
+    // (d2) forced-device-less streaming-miss: dosya bilinmedigi icin sessiz
+    // dal commit'e girmez (intent/snapshot/akis/kuyruk aynen); kanca geri
+    // cevrilir. VFS'te VAR olan fixture'lar (openfail/corrupt/cap) sessiz
+    // dalda commit'e girerdi — o dallar cihazsiz test EDILEMEZ (asagidaki
+    // SKIP gerekcesi cap testinde pinlidir).
+    audio.testSetDeviceAvailable(false);
+    audio.playAudio("audio/does_not_exist.wav", Rowl::Audio::AudioChannelType::Bgm);
+    requireBgmPredecessorFrozen(audio, kurulumQueued, kurulumJson,
+                                "sessiz streaming-miss sonrasi (d2)");
+    requireErrorSet("sessiz streaming-miss sonrasi (d2)");
+    audio.testSetDeviceAvailable(true);
+    if (!audio.isAudioDeviceAvailable()) {
+        lockFail("kanca donusu cihazi acmadi (d2)");
+    }
+    TEST_PASS("Audio Transactional — zorlanmis-cihazsiz miss akis+kuyrugu korur (d2)");
 
     // (e-ok) başarılı transition regresyon bekçisi: swap aynen çalışır.
     audio.playAudio("audio/t_bgm_a.wav", Rowl::Audio::AudioChannelType::Bgm);
@@ -1141,10 +1232,15 @@ void test_audio_lock_bgm_transactional() {
     if (bgmBefore == 0) {
         lockFail("BGM kurulum kuyrugu bos — fixture cihaza kuyruklanamadi");
     }
+    const std::string ramJsonBefore = audio.streamInfoJson();
     audio.testFailNextQueue();
     audio.playAudio("audio/t_bgm_a.wav", Rowl::Audio::AudioChannelType::Bgm);
     if (audio.testQueuedBytes(Rowl::Audio::AudioChannelType::Bgm) != bgmBefore) {
         lockFail("BGM queue-fail eski kuyrugu yikti");
+    }
+    if (audio.streamInfoJson() != ramJsonBefore) {
+        lockFail("BGM queue-fail snapshot'i bozdu (once='" + ramJsonBefore +
+                 "' sonra='" + audio.streamInfoJson() + "')");
     }
     if (!audio.isBgmPlaying() || audio.getCurrentBgmPath() != "audio/t_bgm_b.wav") {
         lockFail("BGM queue-fail intent'i yikti (predecessor korunmadi)");
@@ -1189,15 +1285,22 @@ void test_audio_lock_bgm_transactional() {
  *
  * Gozlem (bu dosyadaki desen aynen): TEST_SECTION/TEST_PASS + hata=exit(1);
  * timing-assert/sleep/poll YOK; requireMissGuardIntact 7-iddia (kurulum
- * streaming BGM aynen); hata-mesaji dal-kaniti (yanlis dala sapma yakalanir).
+ * streaming BGM aynen) + #87-tur3 BGM-ozel dondurma (kuyruk delta-0 q0>0 +
+ * streamInfoJson birebir — akis-pozisyonu korunumu; #78/#81'de yoktur);
+ * hata-mesaji dal-kaniti (yanlis dala sapma yakalanir).
  * Cihaz bagimliligi: RAM yolu cihaza baglidir; cihazsiz kosuda acik SKIP
- * (requireAudioDeviceOrSkip aynen).
+ * (requireAudioDeviceOrSkip aynen) + gerekce: cap fixture'lari VFS'te VAR
+ * oldugu icin sessiz dalda commit'e girer, predecessor'i dagitir (tasarim);
+ * yalniz bilinmeyen-dosya dallari zorlanmis-cihazsiz test edilebilir
+ * (transactional d/d2'de kapsanir).
  *
- * KAPSAM-DISI (savunma-derinligi, erisilemez dal): WAV decoded-cap (~704,
- * "Decoded audio exceeds") bu kilit disindadir. Uncompressed WAV'de
- * encoded~=decoded+44 oldugundan 704'u tetikleyecek girdi once encoded-cap
- * (~686) duser; 704'e ayirt-edici erisim yoktur (OGG-ici decoded-cap
- * yukarida kapsanir). Bu dala upfront-yikim iadesi suite'i yesil birakir
+ * KAPSAM-DISI (dogrulanmis-erisilemez dal, encoded-cap-only daraltmasi):
+ * WAV decoded-cap (~762, "Decoded audio exceeds") bu kilit disindadir ve
+ * dogrudan erisilemez — dogrulama: iki cap da birebir 64 MiB'dir
+ * (kMaxEncodedAudioBytes == kMaxDecodedAudioBytes); WAV dosya = 44 + data,
+ * SDL_LoadWAV audioLen <= dosya-44 oldugundan audioLen > 64 MiB gerektiren
+ * her girdi once ~744 encoded-cap'e duser. OGG-ici decoded-cap (zincir)
+ * yukarida KAPSANIR. Bu dala upfront-yikim iadesi suite'i yesil birakir
  * (V5 saman-adam); dal govdede korunur ama kilitlenmez.
  */
 namespace {
@@ -1358,27 +1461,42 @@ void test_audio_lock_bgm_cap_fail_closed() {
     requireMissGuardIntact(audio, "kurulum/miss_bgm.ogg");
     TEST_PASS("Audio Cap Fail-Closed — kurulum (streaming BGM intact)");
 
+    // #87-tur3 dondurma (transactional ile ayni teknik): ilerleme kaniti +
+    // tuketim dondurma altinda kuyruk snapshot'i (q0>0).
+    const std::string kurulumJson =
+        snapStreamingPredecessorJson(audio, "kurulum/miss_bgm.ogg");
+    audio.setOutputSuspended(true);
+    const size_t kurulumQueued =
+        audio.testQueuedBytes(Rowl::Audio::AudioChannelType::Bgm);
+    if (kurulumQueued == 0) {
+        lockFail("kurulum kuyrugu bos — bosaltma-oldurme gucu yok");
+    }
+
     // encoded-cap: 65 MiB sparse WAV reddi predecessor'i korur.
     audio.playAudio("audio/cap_oversize_65m.wav", Rowl::Audio::AudioChannelType::Bgm);
-    requireMissGuardIntact(audio, "encoded-cap sonrasi");
+    requireBgmPredecessorFrozen(audio, kurulumQueued, kurulumJson,
+                                "encoded-cap sonrasi");
     requireErrorContains("Audio file exceeds the maximum accepted size",
                          "encoded-cap sonrasi");
     TEST_PASS("Audio Cap Fail-Closed — encoded-cap predecessor'i korur");
 
     // decoded-cap: zincir-cozum tasmasi predecessor'i korur.
     audio.playAudio("audio/cap_chain200.ogg", Rowl::Audio::AudioChannelType::Bgm);
-    requireMissGuardIntact(audio, "decoded-cap sonrasi");
+    requireBgmPredecessorFrozen(audio, kurulumQueued, kurulumJson,
+                                "decoded-cap sonrasi");
     requireErrorContains("Decoded Ogg/Vorbis audio exceeds the maximum accepted size",
                          "decoded-cap sonrasi");
     TEST_PASS("Audio Cap Fail-Closed — decoded-cap predecessor'i korur");
 
     // convert-fail: 9-kanal ceviri reddi predecessor'i korur.
     audio.playAudio("audio/cap_ch9.wav", Rowl::Audio::AudioChannelType::Bgm);
-    requireMissGuardIntact(audio, "convert-fail sonrasi");
+    requireBgmPredecessorFrozen(audio, kurulumQueued, kurulumJson,
+                                "convert-fail sonrasi");
     requireErrorContains("Unable to convert decoded audio",
                          "convert-fail sonrasi");
     TEST_PASS("Audio Cap Fail-Closed — convert-fail predecessor'i korur");
 
+    audio.setOutputSuspended(false);
     audio.stopAll();
     audio.shutdown();
 }
