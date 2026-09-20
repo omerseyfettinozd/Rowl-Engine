@@ -232,6 +232,8 @@ namespace RowlEngine.Editor.Native
         public ulong ActiveContentIdsParseErrorCount { get; private set; }
         /// <summary>Slot metadata JSON parses that failed (see debug log).</summary>
         public ulong SlotMetadataParseErrorCount { get; private set; }
+        /// <summary>Dispatcher-tick faults swallowed by the last-resort guard (see debug log).</summary>
+        public ulong TickErrorCount { get; private set; }
 
         /// <summary>
         /// Pure copy-gate decision behind the dirty-frame optimization, kept
@@ -261,6 +263,20 @@ namespace RowlEngine.Editor.Native
         {
             if (!IsInitialized) return;
 
+            try
+            {
+                TickCore();
+            }
+            catch (Exception ex)
+            {
+                // Son kale: 60 Hz dispatcher threadi asla fırlatmamalı.
+                TickErrorCount++;
+                Debug.WriteLine($"EngineHost tick failed ({TickErrorCount}): {ex.Message}");
+            }
+        }
+
+        private void TickCore()
+        {
             var now = DateTime.UtcNow;
             float dt = (float)(now - _lastTick).TotalSeconds;
             _lastTick = now;
@@ -583,15 +599,16 @@ namespace RowlEngine.Editor.Native
                     NativeBridge.RowlEngine_GetScriptRuntimeDiagnosticsJsonWithLength(handle, out uint diagLen), diagLen), string.Empty);
                 ScriptRuntimeDiagnostics = JsonSerializer.Deserialize<List<ScriptRuntimeDiagnostic>>(json)
                     ?? new List<ScriptRuntimeDiagnostic>();
+                OnPropertyChanged(nameof(ScriptRuntimeDiagnostics));
             }
-            catch (JsonException ex)
+            catch (Exception ex)
             {
-                // MS-4: counted instead of silent.
+                // MS-4: counted instead of silent. Json-dışı hatalar
+                // (yerel/marshal/worker) da 60 Hz yolunda yakalanır.
                 DiagnosticsParseErrorCount++;
                 Debug.WriteLine($"EngineHost script diagnostics parse failed ({DiagnosticsParseErrorCount}): {ex.Message}");
                 ScriptRuntimeDiagnostics = Array.Empty<ScriptRuntimeDiagnostic>();
             }
-            OnPropertyChanged(nameof(ScriptRuntimeDiagnostics));
         }
 
         public void RefreshDialogueHistory()
@@ -603,15 +620,16 @@ namespace RowlEngine.Editor.Native
                     NativeBridge.RowlEngine_GetDialogueHistoryJsonWithLength(handle, out uint histLen), histLen), string.Empty);
                 DialogueHistory = JsonSerializer.Deserialize<List<DialogueHistoryEntry>>(json)
                     ?? new List<DialogueHistoryEntry>();
+                OnPropertyChanged(nameof(DialogueHistory));
             }
-            catch (JsonException ex)
+            catch (Exception ex)
             {
-                // MS-4: counted instead of silent.
+                // MS-4: counted instead of silent. Json-dışı hatalar
+                // (yerel/marshal/worker) da 60 Hz yolunda yakalanır.
                 DialogueHistoryParseErrorCount++;
                 Debug.WriteLine($"EngineHost dialogue history parse failed ({DialogueHistoryParseErrorCount}): {ex.Message}");
                 DialogueHistory = Array.Empty<DialogueHistoryEntry>();
             }
-            OnPropertyChanged(nameof(DialogueHistory));
         }
 
         /// <summary>Loads (or reloads) a story graph JSON file into the engine.</summary>
