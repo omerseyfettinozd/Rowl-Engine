@@ -218,9 +218,17 @@ namespace RowlEngine.Editor.ViewModels
         [ObservableProperty]
         private bool _isFilterNoMatch;
 
-        partial void OnSearchTextChanged(string value) => RefreshAssets();
+        partial void OnSearchTextChanged(string value)
+        {
+            ResetGridRenderLimit();
+            RefreshAssets();
+        }
 
-        partial void OnSelectedTypeFilterChanged(string value) => RefreshAssets();
+        partial void OnSelectedTypeFilterChanged(string value)
+        {
+            ResetGridRenderLimit();
+            RefreshAssets();
+        }
 
         /// <summary>Faz 4: arama veya tür filtresi aktif mi?</summary>
         private bool FilterActive =>
@@ -483,6 +491,62 @@ namespace RowlEngine.Editor.ViewModels
 
         partial void OnSelectedFolderChanged(AssetNodeViewModel? value) => RebuildFolderContents();
 
+        /// <summary>Faz 6: ızgara tek seferde en fazla bu kadar hücre çizer.</summary>
+        public const int DefaultGridRenderLimit = 200;
+
+        /// <summary>Faz 6: "daha fazla göster" adım büyüklüğü.</summary>
+        public const int GridRenderStep = 200;
+
+        /// <summary>
+        /// Faz 6: ızgaranın o an çizdiği üst sınır. WrapPanel sanallaştırma
+        /// yapmadığı için veri-penceresi uygulanır: ListBox
+        /// <see cref="VisibleGridItems"/> üzerine bağlıdır, tamamı
+        /// <see cref="FolderContents"/> içinde durur.
+        /// </summary>
+        [ObservableProperty]
+        private int _gridRenderLimit = DefaultGridRenderLimit;
+
+        /// <summary>Faz 6: ızgaranın o an çizdiği pencere (en fazla limit).</summary>
+        public ObservableCollection<AssetNodeViewModel> VisibleGridItems { get; } = new();
+
+        /// <summary>Faz 6: pencerede gösterilmeyen öğe kaldı mı?</summary>
+        [ObservableProperty]
+        private bool _hasMoreGridItems;
+
+        /// <summary>Faz 6: "gösterilen/toplam" sayacı ("200/1500 gösteriliyor").</summary>
+        [ObservableProperty]
+        private string _gridItemsStatus = string.Empty;
+
+        partial void OnGridRenderLimitChanged(int value) => UpdateVisibleGridItems();
+
+        /// <summary>Faz 6: 200 öğe daha çiz (kalan azsa tümünü açar).</summary>
+        [RelayCommand]
+        private void ShowMoreGridItems()
+        {
+            GridRenderLimit = Math.Min(FolderContents.Count, GridRenderLimit + GridRenderStep);
+        }
+
+        /// <summary>Faz 6: yeni klasör/filtrede pencereyi başa sarar.</summary>
+        private void ResetGridRenderLimit()
+        {
+            GridRenderLimit = DefaultGridRenderLimit;
+        }
+
+        private void UpdateVisibleGridItems()
+        {
+            int total = FolderContents.Count;
+            int shown = Math.Clamp(GridRenderLimit, 0, total);
+            VisibleGridItems.Clear();
+            for (int i = 0; i < shown; i++)
+                VisibleGridItems.Add(FolderContents[i]);
+            HasMoreGridItems = shown < total;
+            GridItemsStatus = total == 0
+                ? string.Empty
+                : shown < total
+                    ? $"{shown}/{total} gösteriliyor"
+                    : $"{total} öğe";
+        }
+
         /// <summary>
         /// Faz 6 Dilim 3: klasöre gir (ızgara çift-tık / Enter). Yalnızca
         /// gerçek klasörler; hayalet ve kayıp-grup reddedilir.
@@ -492,6 +556,7 @@ namespace RowlEngine.Editor.ViewModels
             if (node == null || !node.IsDirectory || node.IsMissing || node.IsMissingGroup)
                 return;
             AssetNodeViewModel live = FindNodeByRelativePath(node.RelativePath) ?? node;
+            ResetGridRenderLimit();
             SelectedFolder = live;
             SelectedNode = live;
         }
@@ -521,6 +586,7 @@ namespace RowlEngine.Editor.ViewModels
             AssetNodeViewModel? parent = string.IsNullOrEmpty(parentFull)
                 ? null
                 : FindDirectoryByFullPath(parentFull);
+            ResetGridRenderLimit();
             SelectedFolder = parent ?? root;
         }
 
@@ -563,7 +629,13 @@ namespace RowlEngine.Editor.ViewModels
             {
                 AssetNodeViewModel? live = FindNodeByRelativePath(SelectedNode.RelativePath);
                 if (live != null && !ReferenceEquals(live, SelectedNode))
-                    SelectedNode = live;
+                {
+                    // Equals yol-tabanlı olduğundan üretilen setter bu
+                    // yazmayı yutardı; bayat seçim ağaçta vurguyu
+                    // kaybettirir ve rename ölü düğümde açılırdı.
+                    _selectedNode = live;
+                    OnPropertyChanged(nameof(SelectedNode));
+                }
             }
             AssetNodeViewModel? folder = SelectedFolder != null
                 ? FindNodeByRelativePath(SelectedFolder.RelativePath)
@@ -576,9 +648,21 @@ namespace RowlEngine.Editor.ViewModels
                 : SelectedFolder != null &&
                   SelectedFolder.RelativePath.Equals(folder.RelativePath, StringComparison.Ordinal);
             if (!same)
-                SelectedFolder = folder; // OnSelectedFolderChanged ızgarayı kurar
+            {
+                SelectedFolder = folder; // yol değişti → olay ızgarayı kurar
+            }
             else
-                RebuildFolderContents(); // aynı klasör, yeni ağaç örnekleri
+            {
+                if (folder != null && !ReferenceEquals(folder, SelectedFolder))
+                {
+                    // Aynı klasör, yeni ağaç örneği: setter yutmasın diye
+                    // alanı doğrudan benimse (yoksa ızgara ilk taramanın
+                    // anlık görüntüsünde donar).
+                    _selectedFolder = folder;
+                    OnPropertyChanged(nameof(SelectedFolder));
+                }
+                RebuildFolderContents();
+            }
         }
 
         private void RebuildFolderContents()
@@ -590,6 +674,9 @@ namespace RowlEngine.Editor.ViewModels
                     continue;
                 FolderContents.Add(child);
             }
+            // Faz 6: limit korunur (izleyici/tuş yenilemesi kaydırmayı
+            // geri sarmaz), pencere yeni içeriğe göre dilimlenir.
+            UpdateVisibleGridItems();
         }
 
         private static string? TryRelativize(string fullPath)

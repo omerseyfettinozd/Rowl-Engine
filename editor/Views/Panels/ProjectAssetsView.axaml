@@ -162,9 +162,9 @@
                           ResizeDirection="Columns" Width="6"/>
 
             <!-- Sağ: simge ızgarası + taşınmış boş-durum panelleri -->
-            <Grid Grid.Column="2">
-                <ListBox Background="Transparent"
-                         ItemsSource="{Binding AssetBrowserViewModel.FolderContents}"
+            <Grid Grid.Column="2" RowDefinitions="*,Auto">
+                <ListBox Grid.Row="0" Background="Transparent"
+                         ItemsSource="{Binding AssetBrowserViewModel.VisibleGridItems}"
                          SelectedItem="{Binding AssetBrowserViewModel.SelectedNode, Mode=TwoWay}"
                          SelectionMode="Single" Margin="4"
                          Foreground="{DynamicResource PrimaryText}"
@@ -222,6 +222,18 @@
                         </DataTemplate>
                     </ListBox.ItemTemplate>
                 </ListBox>
+
+                <!-- Faz 6: veri-penceresi — WrapPanel sanallaşmaz, o yüzden
+                     ızgara dilim dilim çizilir (200'erlik adımlar). -->
+                <Button Grid.Row="0" Content="{Binding AssetBrowserViewModel.GridItemsStatus}"
+                        Command="{Binding AssetBrowserViewModel.ShowMoreGridItemsCommand}"
+                        ToolTip.Tip="Sonraki 200 öğeyi göster"
+                        IsVisible="{Binding AssetBrowserViewModel.HasMoreGridItems}"
+                        VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,8"
+                        Background="{DynamicResource SurfaceBackground}"
+                        Foreground="{DynamicResource PrimaryText}"
+                        BorderBrush="{DynamicResource BorderColor}" BorderThickness="1"
+                        CornerRadius="6" Padding="12,5" FontSize="11"/>
 
             <!-- Faz 5: boş-durum — dosyası yok (eylem: içe aktar) -->
             <StackPanel x:Name="AssetsEmptyPanel"
