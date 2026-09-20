@@ -275,6 +275,9 @@ internal static class EditorHeadlessTestSuite
             // Test 39: UI Sadeleştirme Faz 5 — chrome language lock
             EditorChromeLanguageTests.Run(mainVm);
 
+            // Test 40: UI Sadeleştirme Faz 5 — AssetPicker adoption lock
+            EditorAssetPickerTests.Run();
+
             Console.WriteLine("\n=======================================================");
             Console.WriteLine("ALL EDITOR HEADLESS TESTS PASSED SUCCESSFULLY!");
             Console.WriteLine("=======================================================\n");

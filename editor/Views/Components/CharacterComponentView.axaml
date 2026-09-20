@@ -31,7 +31,7 @@
             <!-- Component Body -->
             <StackPanel IsVisible="{Binding IsExpanded}" Spacing="8" Margin="10,8">
                 <StackPanel Spacing="4">
-                    <TextBlock Text="Character Sprite Image (Sürükle Bırak / Drag &amp; Drop)" FontSize="11" Foreground="{DynamicResource MutedText}"/>
+                    <TextBlock Text="Karakter Görseli (Sürükle-Bırak)" FontSize="11" Foreground="{DynamicResource MutedText}"/>
                     <Border x:Name="DropZoneBorder"
                             DragDrop.AllowDrop="True"
                             Background="{DynamicResource InputBackground}" 
@@ -40,13 +40,10 @@
                             CornerRadius="6" 
                             Padding="6">
                         <StackPanel Spacing="6">
-                            <Grid ColumnDefinitions="*, Auto">
-                                <TextBox Grid.Column="0" Text="{Binding Sprite}" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}" Margin="0,0,4,0"/>
-                                <Button Grid.Column="1" Content="Browse..."
-                                        Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).SelectImageForComponentCommand}"
-                                        CommandParameter="{Binding}"
-                                        Background="{DynamicResource AccentButtonBg}" Foreground="{DynamicResource AccentButtonFg}" FontSize="11" Padding="8,4" CornerRadius="4"/>
-                            </Grid>
+                            <ctrl:AssetPickerControl AssetPath="{Binding Sprite, Mode=TwoWay}"
+                                                             Watermark="Örn: characters/ornek.png veya boş"
+                                                             BrowseCommand="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).SelectImageForComponentCommand}"
+                                                             BrowseParameter="{Binding}"/>
                             <ctrl:FieldValidationBadge Validation="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).InspectorViewModel.Validation}"
                                                        NodeId="{Binding Node.Id}" FieldKey="character.sprite"/>
                             <!-- Sprite Preview Thumbnail / Drop Area -->
@@ -56,8 +53,8 @@
                                            IsVisible="{Binding SpriteBitmap, Converter={x:Static ObjectConverters.IsNotNull}}"/>
                                     <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="2"
                                                 IsVisible="{Binding SpriteBitmap, Converter={x:Static ObjectConverters.IsNull}}">
-                                        <TextBlock Text="Sürükle Bırak / Drag Sprite Here" FontSize="11" Foreground="{DynamicResource MutedText}" HorizontalAlignment="Center" FontWeight="SemiBold"/>
-                                        <TextBlock Text="Assets panelinden sürükleyin veya Browse'a tıklayın" FontSize="9" Foreground="{DynamicResource MutedText}" HorizontalAlignment="Center" FontStyle="Italic"/>
+                                        <TextBlock Text="Görseli Buraya Sürükle-Bırak" FontSize="11" Foreground="{DynamicResource MutedText}" HorizontalAlignment="Center" FontWeight="SemiBold"/>
+                                        <TextBlock Text="Assets panelinden sürükleyin veya Gözat'a tıklayın" FontSize="9" Foreground="{DynamicResource MutedText}" HorizontalAlignment="Center" FontStyle="Italic"/>
                                     </StackPanel>
                                 </Panel>
                             </Border>
