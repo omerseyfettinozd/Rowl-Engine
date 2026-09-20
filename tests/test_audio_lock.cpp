@@ -287,7 +287,7 @@ void test_audio_lock_underwater_clamp() {
  * (6 Miss Guard adimi PASS). V3 (yanlis-uye sifirlama), M2 (tek-gate
  * kaldirma) ve V4 (helper final-miss gatesiz) varyantlari exit=1 ile olur.
  *
- * Gozlem (yedi iddia tek noktada, requireMissGuardIntact, timing-assert YOK):
+ * Gozlem (yedi bagimsiz kontrol a..g, requireMissGuardIntact hepsini cagirir,
  *  (a) isBgmPlaying() hâlâ true (intent korunur),
  *  (b) isStreaming() hâlâ true (stream nesnesi sag),
  *  (c) streamInfoJson() mode=="stream" (snapshot dogrulugu),
@@ -417,7 +417,7 @@ void setupMissGuardProject(Rowl::VFS::VFSManager& vfs, Rowl::Audio::AudioEngine&
     vfs.remountProject(root.string());
 }
 
-// Uc iddia tek noktada degil, yedi iddia tek noktada (#78-tur2):
+// Yedi iddia yedi bagimsiz noktada (#78-tur3; once tek guard'daydi):
 // (a) intent (isBgmPlaying), (b) stream nesnesi (isStreaming),
 // (c) snapshot mode=="stream", (d) reason=="over_threshold" (no_bgm DEGIL),
 // (e) asset==kurulum BGM'i (miss dosyasi DEGIL),
@@ -425,31 +425,107 @@ void setupMissGuardProject(Rowl::VFS::VFSManager& vfs, Rowl::Audio::AudioEngine&
 // (bos DEGIL). M2 varyanti (mode stream kalirken reason=no_bgm +
 // asset=miss dosyasi + channel=2 + path bos) bu dort ek iddia ile FAIL
 // verir (exit 1); yalniz mode bakmak onu oldurmez.
-void requireMissGuardIntact(Rowl::Audio::AudioEngine& audio, const std::string& context) {
-    static const std::string kExpectedBgm = "audio/miss_bgm.ogg";
+// Her kontrol yalnizca kendi alanini okur; tek-alan mutantini yalnizca
+// o alanin kontrolu oldurur. Her kontrol basarida bir kez TEST_PASS yazar
+// (static once-flag; guard ~17 kez cagrilir, log sismesin).
+static const std::string kMissGuardExpectedBgm = "audio/miss_bgm.ogg";
+
+void requireMissGuardIntent(Rowl::Audio::AudioEngine& audio, const std::string& context) {
     if (!audio.isBgmPlaying()) {
         lockFail(context + ": BGM intent dustu (isBgmPlaying false)");
     }
+    static bool once = false;
+    if (!once) {
+        once = true;
+        TEST_PASS("Audio BGM Miss Guard — kontrol (a) intent (isBgmPlaying)");
+    }
+}
+
+void requireMissGuardStreamObject(Rowl::Audio::AudioEngine& audio,
+                                  const std::string& context) {
     if (!audio.isStreaming()) {
         lockFail(context + ": stream nesnesi kapandi (isStreaming false)");
     }
+    static bool once = false;
+    if (!once) {
+        once = true;
+        TEST_PASS("Audio BGM Miss Guard — kontrol (b) stream nesnesi (isStreaming)");
+    }
+}
+
+void requireMissGuardSnapshotMode(Rowl::Audio::AudioEngine& audio,
+                                  const std::string& context) {
     const std::string json = audio.streamInfoJson();
     if (json.find("\"mode\":\"stream\"") == std::string::npos) {
         lockFail(context + ": snapshot yalana dustu (mode!=stream): " + json);
     }
+    static bool once = false;
+    if (!once) {
+        once = true;
+        TEST_PASS("Audio BGM Miss Guard — kontrol (c) snapshot mode==stream");
+    }
+}
+
+void requireMissGuardSnapshotReason(Rowl::Audio::AudioEngine& audio,
+                                    const std::string& context) {
+    const std::string json = audio.streamInfoJson();
     if (json.find("\"reason\":\"over_threshold\"") == std::string::npos) {
         lockFail(context + ": snapshot reason yalani (over_threshold degil): " + json);
     }
+    static bool once = false;
+    if (!once) {
+        once = true;
+        TEST_PASS("Audio BGM Miss Guard — kontrol (d) snapshot reason==over_threshold");
+    }
+}
+
+void requireMissGuardSnapshotAsset(Rowl::Audio::AudioEngine& audio,
+                                   const std::string& context) {
+    const std::string json = audio.streamInfoJson();
+    if (json.find("\"asset\":\"" + kMissGuardExpectedBgm + "\"") == std::string::npos) {
+        lockFail(context + ": snapshot asset yalani (kurulum BGM degil): " + json);
+    }
+    static bool once = false;
+    if (!once) {
+        once = true;
+        TEST_PASS("Audio BGM Miss Guard — kontrol (e) snapshot asset==kurulum BGM'i");
+    }
+}
+
+void requireMissGuardSnapshotChannel(Rowl::Audio::AudioEngine& audio,
+                                     const std::string& context) {
+    const std::string json = audio.streamInfoJson();
     if (json.find("\"channel\":0") == std::string::npos) {
         lockFail(context + ": snapshot channel yalani (0/Bgm degil): " + json);
     }
-    if (json.find("\"asset\":\"" + kExpectedBgm + "\"") == std::string::npos) {
-        lockFail(context + ": snapshot asset yalani (kurulum BGM degil): " + json);
+    static bool once = false;
+    if (!once) {
+        once = true;
+        TEST_PASS("Audio BGM Miss Guard — kontrol (f) snapshot channel==0/Bgm");
     }
-    if (audio.getCurrentBgmPath() != kExpectedBgm) {
+}
+
+void requireMissGuardCurrentPath(Rowl::Audio::AudioEngine& audio,
+                                 const std::string& context) {
+    if (audio.getCurrentBgmPath() != kMissGuardExpectedBgm) {
         lockFail(context + ": BGM path yalani (bos/yanlis): '" +
                  audio.getCurrentBgmPath() + "'");
     }
+    static bool once = false;
+    if (!once) {
+        once = true;
+        TEST_PASS("Audio BGM Miss Guard — kontrol (g) path==kurulum BGM'i");
+    }
+}
+
+void requireMissGuardIntact(Rowl::Audio::AudioEngine& audio, const std::string& context) {
+    requireMissGuardIntent(audio, context);
+    requireMissGuardStreamObject(audio, context);
+    requireMissGuardSnapshotMode(audio, context);
+    requireMissGuardSnapshotReason(audio, context);
+    requireMissGuardSnapshotAsset(audio, context);
+    requireMissGuardSnapshotChannel(audio, context);
+    requireMissGuardCurrentPath(audio, context);
 }
 
 } // namespace
