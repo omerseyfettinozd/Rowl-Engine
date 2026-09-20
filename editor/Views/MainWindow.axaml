@@ -33,13 +33,13 @@
                         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
                             <Menu Background="Transparent">
                                 <MenuItem x:Name="WindowsMenu" Header="Pencereler" Foreground="{DynamicResource PrimaryText}" FontSize="12" FontWeight="SemiBold">
-                                    <MenuItem Header="Hierarchy" InputGesture="Ctrl+1" Command="{Binding ShowPanelCommand}" CommandParameter="Hierarchy"/>
-                                    <MenuItem Header="Node Inspector" InputGesture="Ctrl+2" Command="{Binding ShowPanelCommand}" CommandParameter="Inspector"/>
-                                    <MenuItem Header="Output Log" InputGesture="Ctrl+3" Command="{Binding ShowPanelCommand}" CommandParameter="Log"/>
-                                <MenuItem Header="Project Assets" InputGesture="Ctrl+4" Command="{Binding ShowPanelCommand}" CommandParameter="Assets"/>
-                                <MenuItem Header="Dialogue Backlog" InputGesture="Ctrl+5" Command="{Binding ShowPanelCommand}" CommandParameter="Backlog"/>
-                                <MenuItem Header="Save Slots" InputGesture="Ctrl+6" Command="{Binding ShowPanelCommand}" CommandParameter="SaveSlots"/>
-                                <MenuItem Header="Project Issues" InputGesture="Ctrl+7" Command="{Binding ShowPanelCommand}" CommandParameter="ProjectIssues"/>
+                                    <MenuItem Header="Hiyerarşi" InputGesture="Ctrl+1" Command="{Binding ShowPanelCommand}" CommandParameter="Hierarchy"/>
+                                    <MenuItem Header="Denetçi" InputGesture="Ctrl+2" Command="{Binding ShowPanelCommand}" CommandParameter="Inspector"/>
+                                    <MenuItem Header="Günlük" InputGesture="Ctrl+3" Command="{Binding ShowPanelCommand}" CommandParameter="Log"/>
+                                <MenuItem Header="Varlıklar" InputGesture="Ctrl+4" Command="{Binding ShowPanelCommand}" CommandParameter="Assets"/>
+                                <MenuItem Header="Diyalog Geçmişi" InputGesture="Ctrl+5" Command="{Binding ShowPanelCommand}" CommandParameter="Backlog"/>
+                                <MenuItem Header="Kayıt Slotları" InputGesture="Ctrl+6" Command="{Binding ShowPanelCommand}" CommandParameter="SaveSlots"/>
+                                <MenuItem Header="Sorunlar" InputGesture="Ctrl+7" Command="{Binding ShowPanelCommand}" CommandParameter="ProjectIssues"/>
                                 </MenuItem>
                             </Menu>
                         </StackPanel>
@@ -342,19 +342,19 @@
                                 <Setter Property="Foreground" Value="{DynamicResource PrimaryText}"/>
                             </Style>
                         </TabControl.Styles>
-                        <TabItem Header="Log" IsVisible="{Binding IsLogPanelVisible}">
+                        <TabItem Header="Günlük" IsVisible="{Binding IsLogPanelVisible}">
                             <panels:OutputLogView/>
                         </TabItem>
-                        <TabItem Header="Assets" IsVisible="{Binding IsAssetsPanelVisible}">
+                        <TabItem Header="Varlıklar" IsVisible="{Binding IsAssetsPanelVisible}">
                             <panels:ProjectAssetsView/>
                         </TabItem>
-                        <TabItem Header="Backlog" IsVisible="{Binding IsBacklogPanelVisible}">
+                        <TabItem Header="Diyalog Geçmişi" IsVisible="{Binding IsBacklogPanelVisible}">
                             <panels:BacklogView DataContext="{Binding BacklogViewModel}"/>
                         </TabItem>
-                        <TabItem Header="Save Slots" IsVisible="{Binding IsSaveSlotsPanelVisible}">
+                        <TabItem Header="Kayıt Slotları" IsVisible="{Binding IsSaveSlotsPanelVisible}">
                             <panels:SaveSlotsView DataContext="{Binding SaveSlotsViewModel}"/>
                         </TabItem>
-                        <TabItem Header="Issues" IsVisible="{Binding IsProjectIssuesPanelVisible}">
+                        <TabItem Header="Sorunlar" IsVisible="{Binding IsProjectIssuesPanelVisible}">
                             <panels:ProjectIssuesView DataContext="{Binding ProjectIssuesViewModel}"/>
                         </TabItem>
                     </TabControl>

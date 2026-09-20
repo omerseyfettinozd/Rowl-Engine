@@ -326,7 +326,7 @@ namespace RowlEngine.Editor.ViewModels
         public bool IsSplitScreenHorizontal => SplitScreenMode == 1;
         public bool IsSplitScreenVertical => SplitScreenMode == 2;
 
-        public string SplitScreenButtonText => SplitScreenMode > 0 ? $"Split: {(SplitScreenMode == 1 ? "H" : "V")}" : "Split Screen";
+        public string SplitScreenButtonText => SplitScreenMode > 0 ? $"Bölünmüş: {(SplitScreenMode == 1 ? "H" : "V")}" : "Bölünmüş Ekran";
         public string SplitScreenButtonColor => SplitScreenMode > 0
             ? ThemeFallbackColors.BrushHex("PrimaryText", ThemeFallbackColors.Text)
             : ThemeFallbackColors.BrushHex("ToolbarButtonBg", ThemeFallbackColors.Surface);

@@ -144,7 +144,7 @@
 
         <!-- Canvas Viewport Controls Overlay (yalnizca Reset (0,0) — zoom rozeti status barda) -->
         <Border x:Name="CanvasViewportOverlay" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="16" Background="{DynamicResource SurfaceBackground}" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1" CornerRadius="6" Padding="8,4">
-            <Button Content="Reset View (0,0)" Command="{Binding ResetCanvasViewCommand}" Padding="6,2" FontSize="11" Background="{DynamicResource AccentButtonBg}" Foreground="{DynamicResource AccentButtonFg}" CornerRadius="4"/>
+            <Button x:Name="ResetViewButton" Content="Görünümü Sıfırla (0,0)" Command="{Binding ResetCanvasViewCommand}" Padding="6,2" FontSize="11" Background="{DynamicResource AccentButtonBg}" Foreground="{DynamicResource AccentButtonFg}" CornerRadius="4"/>
         </Border>
     </Grid>
 </UserControl>

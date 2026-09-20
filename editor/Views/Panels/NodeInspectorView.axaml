@@ -21,7 +21,7 @@
                 <StackPanel Spacing="6">
                     <DockPanel>
                         <StackPanel Spacing="1">
-                            <TextBlock Text="INSPECTOR" FontWeight="Black" FontSize="11"
+                            <TextBlock Text="DENETÇİ" FontWeight="Black" FontSize="11"
                                        Foreground="{DynamicResource Accent}" VerticalAlignment="Center" LetterSpacing="0.6"/>
                             <TextBlock Text="Seçili sahne nesnesi" FontSize="10"
                                        Foreground="{DynamicResource MutedText}"/>
@@ -164,7 +164,7 @@
                     <!-- Empty State: No GameObject Selected -->
                     <StackPanel IsVisible="{Binding !InspectorViewModel.HasSelectedObject}" 
                                 Spacing="8" Margin="0,40">
-                        <TextBlock Text="No GameObject Selected"
+                        <TextBlock Text="Seçili GameObject Yok"
                                    FontSize="13" FontWeight="Bold"
                                    Foreground="{DynamicResource PrimaryText}"
                                    HorizontalAlignment="Center"/>

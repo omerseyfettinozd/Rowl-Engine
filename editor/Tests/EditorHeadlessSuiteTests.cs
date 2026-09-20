@@ -272,6 +272,9 @@ internal static class EditorHeadlessTestSuite
             // Test 38: UI Sadeleştirme Faz 5 — empty-state lock
             EditorEmptyStateTests.Run(mainVm);
 
+            // Test 39: UI Sadeleştirme Faz 5 — chrome language lock
+            EditorChromeLanguageTests.Run(mainVm);
+
             Console.WriteLine("\n=======================================================");
             Console.WriteLine("ALL EDITOR HEADLESS TESTS PASSED SUCCESSFULLY!");
             Console.WriteLine("=======================================================\n");
