@@ -371,6 +371,74 @@ void test_native_c_api() {
         TEST_PASS("MS-6 Preview Click-to-Complete & Keyboard/Pointer Parity");
     }
 
+    // D6 #148: click-to-complete must snap to the line's own totalSeconds,
+    // not a magic constant. Pause-heavy lines can exceed 9999 s of reveal
+    // time; an under-shooting snap leaves the line "typing", so every later
+    // advance is swallowed by completeTypewriterIfTyping (soft-lock: the
+    // story never moves even though the user asked to advance twice).
+    {
+        std::string pauses;
+        for (int i = 0; i < 170; ++i) pauses += "<pause=60>";
+        const std::string heavyLine = "A" + pauses; // trailing ~10200 s > 9999
+        const auto heavyGraphPath = std::filesystem::temp_directory_path() / "rowl_d6_148_heavy_graph.json";
+        {
+            std::ofstream graph(heavyGraphPath);
+            graph << R"({"format_version":4,"start_node_id":201,"nodes":[
+              {"id":201,"speaker":"Evelyn","dialogue":"Heavy.","components":[
+                {"type":"dialogue","id":"d_d6_148","enabled":true,"data":{
+                  "speaker":"Evelyn",
+                  "dialogue":")" << heavyLine << R"(",
+                  "typewriter_enabled":true,"text_speed":30}}],
+               "next_nodes":[{"id":202}]},
+              {"id":202,"speaker":"Evelyn","dialogue":"Second."}]})";
+        }
+        RowlEngine_LoadStoryGraph(handle, heavyGraphPath.string().c_str());
+        RowlEngine_Step(handle, 0.0f);
+        if (RowlEngine_GetCurrentNodeId(handle) != 201) {
+            std::cerr << "D6-148: heavy fixture did not present node 201" << std::endl;
+            exit(1);
+        }
+        RowlEngine_Step(handle, 0.2f);
+        // First advance completes the line; the node must not move.
+        RowlEngine_AdvanceNode(handle, 0);
+        if (RowlEngine_GetCurrentNodeId(handle) != 201) {
+            std::cerr << "D6-148: mid-typing AdvanceNode skipped the node instead of completing it"
+                      << std::endl;
+            exit(1);
+        }
+        // The snap must reach the line's own total: 9999.0f is not enough.
+        if (cApiEngine->getActiveDialogues().empty() ||
+            cApiEngine->getActiveDialogues()[0].elapsedTypewriterTime < 10000.0f) {
+            std::cerr << "D6-148: complete snap under-shot the line total (soft-lock window)"
+                      << std::endl;
+            exit(1);
+        }
+        // Second advance must move on; unfixed code swallows it (still typing).
+        RowlEngine_AdvanceNode(handle, 0);
+        if (RowlEngine_GetCurrentNodeId(handle) != 202) {
+            std::cerr << "D6-148: pause-heavy line soft-locked advance (node stuck at 201)"
+                      << std::endl;
+            exit(1);
+        }
+        std::filesystem::remove(heavyGraphPath);
+        // Restore the MS-6 tour state the slot blocks below expect: the
+        // shared handle must be left on the typewriter graph with node 102
+        // current (see "reused by the slot/pause blocks" note above).
+        {
+            const auto ms6Path = std::filesystem::temp_directory_path() / "rowl_ms6_typewriter_graph.json";
+            RowlEngine_LoadStoryGraph(handle, ms6Path.string().c_str());
+            RowlEngine_Step(handle, 0.0f);
+            RowlEngine_Step(handle, 0.2f);
+            RowlEngine_AdvanceNode(handle, 0); // complete the line
+            RowlEngine_AdvanceNode(handle, 0); // 101 -> 102
+            if (RowlEngine_GetCurrentNodeId(handle) != 102) {
+                std::cerr << "D6-148: MS-6 tour state restore failed" << std::endl;
+                exit(1);
+            }
+        }
+        TEST_PASS("D6-148 Pause-Heavy Complete Snaps to Line Total (No Advance Soft-Lock)");
+    }
+
     // MS-6: quick slots 0-9, active-slot quick save/load wiring, and the
     // pause-menu skeleton (nav, values, slot pages, exit confirmation).
     {

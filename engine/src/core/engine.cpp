@@ -75,13 +75,6 @@ std::shared_ptr<const Rowl::Text::ShapedText> shapeDialogue(
         fallback.shapeMarkup(dialogue.dialogue, options));
 }
 
-Rowl::Text::RevealState dialogueReveal(
-    const Rowl::Render::FontRenderer* renderer,
-    const Rowl::Render::DialogueRenderData& dialogue) {
-    return Rowl::Text::evaluateReveal(*shapeDialogue(renderer, dialogue),
-        dialogue.elapsedTypewriterTime, dialogue.textSpeed);
-}
-
 bool isSafeComponentData(const nlohmann::json& value, std::size_t depth = 0) {
     if (depth > kMaxComponentDataDepth) return false;
     if (value.is_string()) return value.get_ref<const std::string&>().size() <= kMaxComponentStringBytes;
@@ -472,26 +465,55 @@ bool Engine::completeTypewriterIfTyping() {
     // play state. A typing line completes on the first advance request from
     // ANY input (keyboard, pointer, swipe, choice) in both player and
     // preview; only a settled line advances the story.
+    // D6 #148: the snap targets each line's OWN totalSeconds, never a magic
+    // constant. Pause-heavy lines can exceed 9999 s of reveal time; an
+    // under-shooting snap leaves the line "typing", so the next advance is
+    // swallowed here again (soft-lock). Lines that are not typing keep their
+    // state untouched; the blip index snaps to revealUnits.size(), which is
+    // provably in range (evaluateReveal never reports more visible units).
+    // The +10 ms margin is load-bearing: elapsed is float while totalSeconds
+    // is double, and a bare cast can land one ulp below the cursor, reading
+    // back incomplete on the very next query.
+    constexpr double kSnapMarginSeconds = 0.01;
     const auto* fontRenderer = m_window ? m_window->getFontRenderer() : nullptr;
     bool anyTyping = false;
-    for (const auto& dlg : m_activeDialogues) {
-        if (dlg.typewriterEnabled && dlg.textSpeed > 0 &&
-            !dialogueReveal(fontRenderer, dlg).complete) {
+    for (auto& dlg : m_activeDialogues) {
+        if (dlg.typewriterEnabled && dlg.textSpeed > 0) {
+            const auto shaped = shapeDialogue(fontRenderer, dlg);
+            const auto reveal = Rowl::Text::evaluateReveal(
+                *shaped, dlg.elapsedTypewriterTime, dlg.textSpeed);
+            if (!reveal.complete) {
+                anyTyping = true;
+                // reveal.totalSeconds is the PARTIAL cursor (evaluateReveal
+                // breaks at `elapsed`), so it must not be the snap target —
+                // it grows with every snap and `complete` never arrives.
+                // Re-evaluate at +inf for the true line total; the margin
+                // covers the float(double) round-trip on re-query.
+                const double fullTotal = Rowl::Text::evaluateReveal(
+                    *shaped, std::numeric_limits<double>::infinity(),
+                    dlg.textSpeed).totalSeconds;
+                dlg.elapsedTypewriterTime = static_cast<float>(
+                    std::max<double>(dlg.elapsedTypewriterTime,
+                                     fullTotal + kSnapMarginSeconds));
+                dlg.lastBlipCodepointIndex = shaped->revealUnits.size();
+            }
+        }
+    }
+    if (m_activeDialogueData.typewriterEnabled && m_activeDialogueData.textSpeed > 0) {
+        const auto shaped = shapeDialogue(fontRenderer, m_activeDialogueData);
+        const auto reveal = Rowl::Text::evaluateReveal(
+            *shaped, m_activeDialogueData.elapsedTypewriterTime,
+            m_activeDialogueData.textSpeed);
+        if (!reveal.complete) {
             anyTyping = true;
-            break;
+            const double fullTotal = Rowl::Text::evaluateReveal(
+                *shaped, std::numeric_limits<double>::infinity(),
+                m_activeDialogueData.textSpeed).totalSeconds;
+            m_activeDialogueData.elapsedTypewriterTime = static_cast<float>(
+                std::max<double>(m_activeDialogueData.elapsedTypewriterTime,
+                                 fullTotal + kSnapMarginSeconds));
+            m_activeDialogueData.lastBlipCodepointIndex = shaped->revealUnits.size();
         }
-    }
-    if (!anyTyping && m_activeDialogueData.typewriterEnabled && m_activeDialogueData.textSpeed > 0) {
-        anyTyping = !dialogueReveal(fontRenderer, m_activeDialogueData).complete;
-    }
-
-    if (anyTyping) {
-        for (auto& dlg : m_activeDialogues) {
-            dlg.elapsedTypewriterTime = 9999.0f;
-            dlg.lastBlipCodepointIndex = 99999;
-        }
-        m_activeDialogueData.elapsedTypewriterTime = 9999.0f;
-        m_activeDialogueData.lastBlipCodepointIndex = 99999;
     }
     return anyTyping;
 }
