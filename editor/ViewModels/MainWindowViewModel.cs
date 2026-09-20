@@ -1466,38 +1466,51 @@ namespace RowlEngine.Editor.ViewModels
 
         private async void StartStandaloneGame()
         {
-            bool started = await EditorPlayModeCoordinator.StartPlayModeAsync(
-                EngineHost,
-                async () =>
-                {
-                    await ConnectEngineAsync();
-                    return EngineHost.IsInitialized;
-                },
-                () => SaveActiveStoryFile() && SaveFullStoryGraphFile(),
-                node => SelectNodeQuiet(node),
-                node => PushSceneToEngine(node),
-                GetStartNode,
-                msg => AppendLog(msg),
-                () =>
-                {
-                    if (SplitScreenMode == 0)
-                    {
-                        IsEnginePreviewActive = true;
-                        IsPreviewActive = false;
-                        IsNodeGraphActive = false;
-                    }
-                },
-                AssetsJsonPath);
-
-            if (started)
+            // async void: await zincirindeki istisna yakalanmazsa uygulamayı
+            // düşürür — oyun başlatma ara-sıra hatası bu yüzdendi. Yakala,
+            // günlüğe + bildirime yaz, durumu temiz bırak.
+            try
             {
-                IsPlayingStandalone = true;
-                IsPlayPaused = false;
-                if (EngineHost.IsInitialized)
-                    EngineHost.SetPaused(false);
-                PlayButtonText = "Stop";
-                PlayButtonColor = ThemeFallbackColors.BrushHex("DangerButtonBg", ThemeFallbackColors.Error);
-                StatusText = "Offscreen Play Mode Active";
+                bool started = await EditorPlayModeCoordinator.StartPlayModeAsync(
+                    EngineHost,
+                    async () =>
+                    {
+                        await ConnectEngineAsync();
+                        return EngineHost.IsInitialized;
+                    },
+                    () => SaveActiveStoryFile() && SaveFullStoryGraphFile(),
+                    node => SelectNodeQuiet(node),
+                    node => PushSceneToEngine(node),
+                    GetStartNode,
+                    msg => AppendLog(msg),
+                    () =>
+                    {
+                        if (SplitScreenMode == 0)
+                        {
+                            IsEnginePreviewActive = true;
+                            IsPreviewActive = false;
+                            IsNodeGraphActive = false;
+                        }
+                    },
+                    AssetsJsonPath);
+
+                if (started)
+                {
+                    IsPlayingStandalone = true;
+                    IsPlayPaused = false;
+                    if (EngineHost.IsInitialized)
+                        EngineHost.SetPaused(false);
+                    PlayButtonText = "Stop";
+                    PlayButtonColor = ThemeFallbackColors.BrushHex("DangerButtonBg", ThemeFallbackColors.Error);
+                    StatusText = "Offscreen Play Mode Active";
+                }
+            }
+            catch (Exception ex)
+            {
+                IsPlayingStandalone = false;
+                StatusText = "Oyun başlatılamadı — ayrıntı Günlük'te";
+                AppendLog($"[HATA] Oyun başlatılamadı: {ex.Message}");
+                NotifyError($"Oyun başlatılamadı: {ex.Message}", "Oynat");
             }
         }
 

@@ -11,7 +11,7 @@
       </DockPanel>
       <Grid>
       <ScrollViewer><ItemsControl ItemsSource="{Binding Issues}"><ItemsControl.ItemTemplate><DataTemplate>
-        <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Command="{Binding #Root.DataContext.FocusCommand}" CommandParameter="{Binding}"><TextBlock Text="{Binding Message}" TextWrapping="Wrap" Foreground="{DynamicResource PrimaryText}"/></Button>
+        <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" FontSize="11" Command="{Binding #Root.DataContext.FocusCommand}" CommandParameter="{Binding}"><TextBlock Text="{Binding Message}" FontSize="12" TextWrapping="Wrap" Foreground="{DynamicResource PrimaryText}"/></Button>
       </DataTemplate></ItemsControl.ItemTemplate></ItemsControl></ScrollViewer>
       <!-- Faz 5: boş-durum — sorun yok (eylem: yeniden analiz) -->
       <StackPanel x:Name="IssuesEmptyPanel" IsVisible="{Binding #Root.DataContext.IsEmpty}"

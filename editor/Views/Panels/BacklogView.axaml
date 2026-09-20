@@ -10,8 +10,8 @@
         <ItemsControl.ItemTemplate>
           <DataTemplate>
             <StackPanel Margin="0,0,0,8">
-              <TextBlock Text="{Binding speaker}" FontWeight="Bold" Foreground="{DynamicResource AccentColor}" />
-              <TextBlock Text="{Binding dialogue}" TextWrapping="Wrap" Foreground="{DynamicResource PrimaryText}" />
+              <TextBlock Text="{Binding speaker}" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource AccentColor}" />
+              <TextBlock Text="{Binding dialogue}" FontSize="12" TextWrapping="Wrap" Foreground="{DynamicResource PrimaryText}" />
             </StackPanel>
           </DataTemplate>
         </ItemsControl.ItemTemplate>

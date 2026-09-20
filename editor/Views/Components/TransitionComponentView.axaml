@@ -5,7 +5,7 @@
              x:DataType="comp:TransitionComponentViewModel">
   <Border Background="{DynamicResource CardBackground}" CornerRadius="6" Margin="0,4" Padding="10" BorderBrush="{DynamicResource CardBorderColor}" BorderThickness="1">
     <StackPanel Spacing="8">
-      <TextBlock Text="Scene Transition" FontWeight="Bold" Foreground="{DynamicResource PrimaryText}" />
+      <TextBlock Text="Scene Transition" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource PrimaryText}" />
 
       <!-- Transition Kind -->
       <StackPanel Spacing="2">

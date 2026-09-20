@@ -3,12 +3,13 @@
              xmlns:comp="using:RowlEngine.Editor.ViewModels.Components"
              xmlns:vm="using:RowlEngine.Editor.ViewModels"
              xmlns:ctrl="using:RowlEngine.Editor.Controls"
+             xmlns:p="using:RowlEngine.Editor.Views.Panels"
              x:Class="RowlEngine.Editor.Views.Components.ChoiceComponentView"
              x:DataType="comp:ChoiceComponentViewModel">
   <Border Background="{DynamicResource CardBackground}" CornerRadius="6" Margin="0,4" Padding="10" BorderBrush="{DynamicResource CardBorderColor}" BorderThickness="1">
     <StackPanel Spacing="8">
       <Grid ColumnDefinitions="*,Auto">
-        <TextBlock Text="Player Choices" FontWeight="Bold" Foreground="{DynamicResource PrimaryText}"/>
+        <TextBlock Text="Player Choices" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource PrimaryText}"/>
         <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4">
           <CheckBox IsChecked="{Binding IsEnabled}" ToolTip.Tip="Enable/Disable"/>
           <Button Content="Sil" Command="{Binding RemoveSelfCommand}" Foreground="{DynamicResource ErrorColor}" Background="Transparent" BorderThickness="0"/>
@@ -18,7 +19,7 @@
       <ItemsControl ItemsSource="{Binding Options}">
         <ItemsControl.ItemTemplate>
           <DataTemplate x:DataType="comp:ChoiceOptionViewModel">
-            <Border Padding="8" Margin="0,2" BorderBrush="{Binding BorderColor}" Background="{Binding BackgroundColor}" BorderThickness="1" CornerRadius="{Binding CornerRadius}">
+            <Border Padding="8" Margin="0,2" BorderBrush="{Binding BorderColor}" Background="{Binding BackgroundColor}" BorderThickness="1" CornerRadius="{Binding CornerRadius, Converter={x:Static p:DoubleToBoxConverter.Instance}}">
               <StackPanel Spacing="6">
                 <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="4">
                   <TextBox Grid.Column="0" Watermark="Button text" Text="{Binding Text}" FontSize="{Binding FontSize}" Foreground="{Binding TextColor}"/>

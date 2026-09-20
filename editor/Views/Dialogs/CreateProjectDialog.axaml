@@ -19,14 +19,14 @@
         <StackPanel Grid.Row="1" Spacing="14">
             <StackPanel Spacing="6">
                 <TextBlock Text="Proje Adı" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource PrimaryText}"/>
-                <TextBox Name="NameBox" Text="Yeni Proje" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderSubtle}"/>
+                <TextBox Name="NameBox" Text="Yeni Proje" FontSize="12" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderSubtle}"/>
             </StackPanel>
 
             <StackPanel Spacing="6">
                 <TextBlock Text="Kayıt Konumu" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource PrimaryText}"/>
                 <Grid ColumnDefinitions="*, 8, Auto">
-                    <TextBox Grid.Column="0" Name="FolderBox" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderSubtle}"/>
-                    <Button Grid.Column="2" Name="BrowseButton" Content="Gözat..." Background="{DynamicResource ToolbarButtonBg}" Foreground="{DynamicResource PrimaryText}" CornerRadius="4" Padding="12,6"/>
+                    <TextBox Grid.Column="0" Name="FolderBox" FontSize="12" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderSubtle}"/>
+                    <Button Grid.Column="2" Name="BrowseButton" Content="Gözat..." FontSize="12" Background="{DynamicResource ToolbarButtonBg}" Foreground="{DynamicResource PrimaryText}" CornerRadius="4" Padding="12,6"/>
                 </Grid>
             </StackPanel>
 
@@ -35,8 +35,8 @@
 
         <!-- Actions -->
         <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10" Margin="0,16,0,0">
-            <Button Name="CancelButton" Content="İptal" Background="Transparent" Foreground="{DynamicResource MutedText}" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1" CornerRadius="6" Padding="16,8"/>
-            <Button Name="CreateButton" Content="Oluştur" Background="{DynamicResource AccentButtonBg}" Foreground="{DynamicResource AccentButtonFg}" FontWeight="Bold" CornerRadius="6" Padding="20,8"/>
+            <Button Name="CancelButton" Content="İptal" FontSize="12" Background="Transparent" Foreground="{DynamicResource MutedText}" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1" CornerRadius="6" Padding="16,8"/>
+            <Button Name="CreateButton" Content="Oluştur" FontSize="12" Background="{DynamicResource AccentButtonBg}" Foreground="{DynamicResource AccentButtonFg}" FontWeight="Bold" CornerRadius="6" Padding="20,8"/>
         </StackPanel>
     </Grid>
 </Window>

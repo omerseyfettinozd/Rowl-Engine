@@ -4,6 +4,7 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="clr-namespace:RowlEngine.Editor.ViewModels"
              xmlns:comp="using:RowlEngine.Editor.ViewModels.Components"
+             xmlns:p="using:RowlEngine.Editor.Views.Panels"
              mc:Ignorable="d" d:DesignWidth="1280" d:DesignHeight="720"
              x:Class="RowlEngine.Editor.Views.LivePreviewControl"
              x:DataType="vm:MainWindowViewModel">
@@ -152,8 +153,8 @@
                                             Background="{Binding BoxColor}"
                                             Opacity="{Binding BoxOpacity}"
                                             BorderBrush="{Binding BorderColorHex}"
-                                            BorderThickness="{Binding BorderThickness}"
-                                            CornerRadius="{Binding CornerRadius}"
+                                            BorderThickness="{Binding BorderThickness, Converter={x:Static p:DoubleToBoxConverter.Instance}}"
+                                            CornerRadius="{Binding CornerRadius, Converter={x:Static p:DoubleToBoxConverter.Instance}}"
                                             BoxShadow="0 10 30 0 #000000"
                                             PointerPressed="OnDialogueBoxItemPointerPressed">
                                         <Grid>
@@ -220,7 +221,7 @@
                                     <Border Width="{Binding Width}" Height="{Binding Height}"
                                             IsVisible="{Binding IsEnabled}"
                                             Background="{Binding BackgroundColor}" BorderBrush="{Binding BorderColor}"
-                                            BorderThickness="{Binding BorderThickness}" CornerRadius="{Binding CornerRadius}"
+                                            BorderThickness="{Binding BorderThickness, Converter={x:Static p:DoubleToBoxConverter.Instance}}" CornerRadius="{Binding CornerRadius, Converter={x:Static p:DoubleToBoxConverter.Instance}}"
                                             Opacity="{Binding Opacity}" DragDrop.AllowDrop="True"
                                             PointerPressed="OnChoiceButtonPointerPressed">
                                         <Grid>
@@ -228,7 +229,7 @@
                                             <TextBlock Text="{Binding Text}" FontSize="{Binding FontSize}" Foreground="{Binding TextColor}"
                                                        FontFamily="{Binding FontFamily}"
                                                        TextAlignment="{Binding TextAlignment}" VerticalAlignment="Center" HorizontalAlignment="Stretch"
-                                                       Margin="{Binding Padding}" TextWrapping="Wrap" IsHitTestVisible="False"/>
+                                                       Margin="{Binding Padding, Converter={x:Static p:DoubleToBoxConverter.Instance}}" TextWrapping="Wrap" IsHitTestVisible="False"/>
                                             <Border Width="18" Height="18" HorizontalAlignment="Right" VerticalAlignment="Bottom"
                                                     Background="{DynamicResource Accent}" BorderBrush="{DynamicResource PrimaryText}" BorderThickness="2" CornerRadius="9"
                                                     Margin="0,0,-6,-6" Cursor="BottomRightCorner"

@@ -62,17 +62,17 @@ internal static class EditorWorkspaceThemeTests
 
         // Tek şerit: Varlıklar ilk sekme (0), Günlük ikinci (1);
         // ikisi aynı alanı paylaşır, bağımsız açılıp kapanır. Şerit,
-        // sekmelerden en az biri açıkken yüksekliğini korur.
+        // sekmelerden en az biri açıkken yüksekliğini korur. Kapanan
+        // aktif sekmede indeks görünen ilk sekmeye çekilir.
         mainVm.ShowPanel("Assets");
         if (mainVm.IsAssetsPanelVisible)
             throw new Exception("Assets tab did not close independently");
         if (!mainVm.IsBottomPanelVisible)
             throw new Exception("Closing Assets incorrectly hid the shared strip");
+        if (mainVm.BottomPanelActiveTab != 1)
+            throw new Exception("Active tab did not fall back to the visible Log tab");
         if (mainVm.BottomPanelHeight.Value != 180 || mainVm.BottomSplitterHeight.Value != 6)
             throw new Exception("Shared strip did not keep its height after Assets closed");
-        mainVm.ShowPanel("Log");
-        if (!mainVm.IsLogPanelVisible || mainVm.BottomPanelActiveTab != 1)
-            throw new Exception("Opening Log did not select the second tab");
         mainVm.ShowPanel("Log");
         if (mainVm.IsLogPanelVisible || mainVm.IsBottomPanelVisible)
             throw new Exception("Bottom workspace remained visible after both tabs were closed");
@@ -91,8 +91,8 @@ internal static class EditorWorkspaceThemeTests
         mainVm.ShowPanel("Backlog");
         if (mainVm.IsBacklogPanelVisible)
             throw new Exception("Dialogue backlog panel did not close independently");
-        mainVm.ShowPanel("Log");
-        mainVm.ShowPanel("Log");
+        if (mainVm.BottomPanelActiveTab != 0)
+            throw new Exception("Active tab did not fall back to the visible Assets tab");
         if (mainVm.IsLogPanelVisible || !mainVm.IsAssetsPanelVisible)
             throw new Exception("Bottom tabs did not restore their default state");
         Console.WriteLine(

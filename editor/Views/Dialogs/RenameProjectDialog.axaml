@@ -12,13 +12,13 @@
 
         <StackPanel Grid.Row="1" Spacing="8">
             <TextBlock Name="FieldLabelText" Text="Yeni Proje Adı" FontSize="12" Foreground="{DynamicResource MutedText}"/>
-            <TextBox Name="NameBox" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderSubtle}"/>
+            <TextBox Name="NameBox" FontSize="12" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderSubtle}"/>
             <TextBlock Name="ErrorText" Foreground="{DynamicResource DangerButtonBg}" FontSize="11" IsVisible="False"/>
         </StackPanel>
 
         <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10" Margin="0,12,0,0">
-            <Button Name="CancelButton" Content="İptal" Background="Transparent" Foreground="{DynamicResource MutedText}" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1" CornerRadius="6" Padding="14,6"/>
-            <Button Name="SaveButton" Content="Kaydet" Background="{DynamicResource AccentButtonBg}" Foreground="{DynamicResource AccentButtonFg}" FontWeight="Bold" CornerRadius="6" Padding="18,6"/>
+            <Button Name="CancelButton" Content="İptal" FontSize="12" Background="Transparent" Foreground="{DynamicResource MutedText}" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1" CornerRadius="6" Padding="14,6"/>
+            <Button Name="SaveButton" Content="Kaydet" FontSize="12" Background="{DynamicResource AccentButtonBg}" Foreground="{DynamicResource AccentButtonFg}" FontWeight="Bold" CornerRadius="6" Padding="18,6"/>
         </StackPanel>
     </Grid>
 </Window>

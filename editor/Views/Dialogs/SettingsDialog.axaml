@@ -47,6 +47,7 @@
                         </StackPanel>
 
                         <Button Content="Temayı Uygula"
+                                FontSize="12"
                                 Command="{Binding ApplyThemeCommand}"
                                 HorizontalAlignment="Left"
                                 Background="{DynamicResource AccentButtonBg}"
@@ -94,7 +95,7 @@
                         <Border Background="{DynamicResource PanelBackground}" CornerRadius="8" 
                                 Padding="16" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1">
                             <StackPanel Spacing="10">
-                                <CheckBox Content="Otomatik Kaydetme"
+                                <CheckBox Content="Otomatik Kaydetme" FontSize="12"
                                           IsChecked="{Binding AutoSaveEnabled}"
                                           Foreground="{DynamicResource PrimaryText}" FontWeight="SemiBold"/>
                                 <StackPanel Spacing="4" IsVisible="{Binding AutoSaveEnabled}">
@@ -123,27 +124,27 @@
                         <TextBlock Text="Bu tercihler cihazda saklanır; proje dosyasına veya oyun kayıtlarına eklenmez."
                                    TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource MutedText}"/>
                         <StackPanel Spacing="6">
-                            <TextBlock Text="Ana Ses" Foreground="{DynamicResource SecondaryText}"/>
+                            <TextBlock Text="Ana Ses" FontSize="12" Foreground="{DynamicResource SecondaryText}"/>
                             <Slider Minimum="0" Maximum="1" Value="{Binding MasterVolume}"/>
                         </StackPanel>
                         <StackPanel Spacing="6">
-                            <TextBlock Text="Müzik" Foreground="{DynamicResource SecondaryText}"/>
+                            <TextBlock Text="Müzik" FontSize="12" Foreground="{DynamicResource SecondaryText}"/>
                             <Slider Minimum="0" Maximum="1" Value="{Binding BgmVolume}"/>
                         </StackPanel>
                         <StackPanel Spacing="6">
-                            <TextBlock Text="Konuşma" Foreground="{DynamicResource SecondaryText}"/>
+                            <TextBlock Text="Konuşma" FontSize="12" Foreground="{DynamicResource SecondaryText}"/>
                             <Slider Minimum="0" Maximum="1" Value="{Binding VoiceVolume}"/>
                         </StackPanel>
                         <StackPanel Spacing="6">
-                            <TextBlock Text="Efekt" Foreground="{DynamicResource SecondaryText}"/>
+                            <TextBlock Text="Efekt" FontSize="12" Foreground="{DynamicResource SecondaryText}"/>
                             <Slider Minimum="0" Maximum="1" Value="{Binding SfxVolume}"/>
                         </StackPanel>
                         <StackPanel Spacing="6">
-                            <TextBlock Text="Metin Hızı Çarpanı" Foreground="{DynamicResource SecondaryText}"/>
+                            <TextBlock Text="Metin Hızı Çarpanı" FontSize="12" Foreground="{DynamicResource SecondaryText}"/>
                             <Slider Minimum="0.25" Maximum="4" Value="{Binding TextSpeedMultiplier}"/>
                         </StackPanel>
                         <StackPanel Spacing="6">
-                            <TextBlock Text="Otomatik İlerleme Ek Gecikmesi (sn)" Foreground="{DynamicResource SecondaryText}"/>
+                            <TextBlock Text="Otomatik İlerleme Ek Gecikmesi (sn)" FontSize="12" Foreground="{DynamicResource SecondaryText}"/>
                             <Slider Minimum="0" Maximum="60" Value="{Binding AutoAdvanceDelay}"/>
                         </StackPanel>
                     </StackPanel>
@@ -159,16 +160,16 @@
                         <TextBlock Text="Bu değerler açık projenin project.rowlproj dosyasına kaydedilir."
                                    TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource MutedText}"/>
                         <StackPanel Spacing="6">
-                            <TextBlock Text="Kayıt Slotu Sayısı" Foreground="{DynamicResource SecondaryText}"/>
+                            <TextBlock Text="Kayıt Slotu Sayısı" FontSize="12" Foreground="{DynamicResource SecondaryText}"/>
                             <NumericUpDown Minimum="1" Maximum="100" Value="{Binding ProjectSaveSlotCount}"/>
                         </StackPanel>
                         <StackPanel Spacing="6">
-                            <TextBlock Text="Varsayılan BGM Geçişi" Foreground="{DynamicResource SecondaryText}"/>
+                            <TextBlock Text="Varsayılan BGM Geçişi" FontSize="12" Foreground="{DynamicResource SecondaryText}"/>
                             <ComboBox ItemsSource="{Binding ProjectBgmTransitionOptions}"
                                       SelectedItem="{Binding ProjectDefaultBgmTransition}"/>
                         </StackPanel>
                         <StackPanel Spacing="6">
-                            <TextBlock Text="Varsayılan Geçiş Süresi (sn)" Foreground="{DynamicResource SecondaryText}"/>
+                            <TextBlock Text="Varsayılan Geçiş Süresi (sn)" FontSize="12" Foreground="{DynamicResource SecondaryText}"/>
                             <NumericUpDown Minimum="0" Maximum="60" Increment="0.1"
                                            Value="{Binding ProjectDefaultBgmTransitionDurationSeconds}"/>
                         </StackPanel>

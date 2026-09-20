@@ -130,6 +130,49 @@ namespace RowlEngine.Editor.Services
                     splitScreenMode = CycleSplitScreen(splitScreenMode, out isNodeGraphActive, out isEnginePreviewActive, out isPreviewActive);
                     break;
             }
+
+            // Aktif sekme kapatılınca indeks gizli sekmede kör kalır ve
+            // şerit başlıksız içerik gösterirdi — görünen ilk sekmeye çek.
+            if (!IsBottomTabVisible(
+                bottomPanelActiveTab,
+                isAssetsVisible, isLogVisible, isBacklogVisible,
+                isSaveSlotsVisible, isProjectIssuesVisible))
+            {
+                bottomPanelActiveTab = FirstVisibleBottomTab(
+                    isAssetsVisible, isLogVisible, isBacklogVisible,
+                    isSaveSlotsVisible, isProjectIssuesVisible);
+            }
+        }
+
+        private static bool IsBottomTabVisible(
+            int index,
+            bool isAssetsVisible,
+            bool isLogVisible,
+            bool isBacklogVisible,
+            bool isSaveSlotsVisible,
+            bool isProjectIssuesVisible) => index switch
+            {
+                0 => isAssetsVisible,
+                1 => isLogVisible,
+                2 => isBacklogVisible,
+                3 => isSaveSlotsVisible,
+                4 => isProjectIssuesVisible,
+                _ => false
+            };
+
+        private static int FirstVisibleBottomTab(
+            bool isAssetsVisible,
+            bool isLogVisible,
+            bool isBacklogVisible,
+            bool isSaveSlotsVisible,
+            bool isProjectIssuesVisible)
+        {
+            if (isAssetsVisible) return 0;
+            if (isLogVisible) return 1;
+            if (isBacklogVisible) return 2;
+            if (isSaveSlotsVisible) return 3;
+            if (isProjectIssuesVisible) return 4;
+            return 0; // Hepsi kapalı: şerit çöker, indeks önemsiz.
         }
 
         /// <summary>

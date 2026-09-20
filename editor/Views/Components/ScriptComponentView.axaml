@@ -7,7 +7,7 @@
              x:DataType="comp:ScriptComponentViewModel">
   <Border Background="{DynamicResource CardBackground}" CornerRadius="6" Margin="0,4" Padding="10" BorderBrush="{DynamicResource CardBorderColor}" BorderThickness="1">
     <StackPanel Spacing="6">
-      <TextBlock Text="Lua Script" FontWeight="Bold" Foreground="{DynamicResource PrimaryText}" />
+      <TextBlock Text="Lua Script" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource PrimaryText}" />
       <TextBlock Text="Project-relative script path" FontSize="11" Foreground="{DynamicResource MutedText}" />
       <TextBox Text="{Binding ScriptPath}" Watermark="scripts/example.lua" />
       <ctrl:FieldValidationBadge Validation="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).InspectorViewModel.Validation}"
