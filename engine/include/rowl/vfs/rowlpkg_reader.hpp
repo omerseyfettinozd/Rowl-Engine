@@ -67,12 +67,17 @@ private:
     mutable std::mutex m_fileMutex; // Thread safety for multi-threaded VFS reads
 };
 
-// Hedef #80 test-only seam (davranışsız gözlem; üretim kodu bunu asla
-// kullanmamalıdır, emsal: AudioEngine::testLastDspPeak): Zstd paket
-// giriş-akışlarının decoder reset (sıkıştırılmış girdiyi baştan-çözüm)
-// sayacı. İleri-seek reset YAPMAMALI (delta 0), geri-seek YAPMALI
-// (delta >= 1). Süreç-geneli monoton sayaçtır; testler ölçüm öncesi baz
-// değeri alıp delta karşılaştırır (mutlak değere bel bağlanmaz).
-uint64_t zstdEntryDecoderResetCount();
+// Hedef #80 üretim metriği (performans kilidi): Zstd paket giriş-akışlarının
+// GERÇEK I/O olay sayaçları (süreç-geneli monoton). Üretim bu olayları zaten
+// yaşar; sayaçlar yalnızca gözler, davranışı değiştirmez:
+//  - Rewind: başarılı decoder (yeniden-)kurulumu (akış-açılışı + geri-seek;
+//    ileri-seek kurulum YAPMAZ, artımlı discard ile ilerler).
+//  - Compressed: paketten tüketilen sıkıştırılmış bayt.
+//  - Decompressed: üretilen sıkıştırılmamış bayt.
+// Gözlem erişimi içindir: ölçüm öncesi baz-değeri alıp yalnız delta
+// karşılaştırın (mutlak değere bel bağlanmaz).
+uint64_t zstdEntryStreamRewindCount();
+uint64_t zstdEntryStreamCompressedBytes();
+uint64_t zstdEntryStreamDecompressedBytes();
 
 } // namespace Rowl::VFS

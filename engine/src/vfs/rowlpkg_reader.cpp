@@ -23,10 +23,17 @@ constexpr uint64_t kMaxCompressionExpansionRatio = 1'024;
 constexpr size_t kCompressedReadChunkBytes = 64 * 1024;
 constexpr size_t kDecompressedReadChunkBytes = 64 * 1024;
 
-// Hedef #80 test-seam sayacı: Zstd giriş-akış decoder reset (baştan-çözüm)
-// sayısı. reset() başarıyla tamamlanınca artar (kurulum reset'i dahil).
-// Süreç-geneli monoton sayaçtır; testler baz-değeri alıp delta okur.
-std::atomic<uint64_t> g_zstdEntryDecoderResets{0};
+// Hedef #80 üretim metriği (performans kilidi): Zstd giriş-akışlarının GERÇEK
+// I/O olay sayaçları (süreç-geneli monoton). Üretim bu olayları zaten yaşar;
+// sayaçlar yalnızca gözler, davranışı değiştirmez:
+//  - rewind: başarılı decoder (yeniden-)kurulumu (akış-açılışı + geri-seek),
+//  - compressed: paketten tüketilen sıkıştırılmış bayt,
+//  - decompressed: üretilen sıkıştırılmamış bayt.
+// İleri-seek kurulum yapmaz (discardForward artımlı ilerler); koşulsuz-reset
+// mutantı rewind sayacında ve yeniden-decompress sınırında ölür.
+std::atomic<uint64_t> g_zstdEntryStreamRewinds{0};
+std::atomic<uint64_t> g_zstdEntryStreamCompressedBytes{0};
+std::atomic<uint64_t> g_zstdEntryStreamDecompressedBytes{0};
 
 // A bounded, seekable decoder stream for a single Zstd package entry.  The
 // decoder retains only two fixed-size chunks; seeking rewinds and discards
@@ -76,9 +83,13 @@ private:
         m_input = {nullptr, 0, 0};
         setg(m_output.data(), m_output.data(), m_output.data());
         m_error = !m_file || ZSTD_isError(ZSTD_initDStream(m_dstream));
-        // Hedef #80 seam: yalnız başarılı re-init sayılır (bozuk akışın
-        // düşen reset'i "baştan-çözüm" değildir).
-        if (!m_error) ++g_zstdEntryDecoderResets;
+        // Hedef #80 üretim metriği: yalnız başarılı (yeniden-)kurulum sayılır
+        // (bozuk akışın düşen reset'i geriye-sarma değildir). Akış-açılışı
+        // dahildir; gözlemler baz-değeri alıp delta okur.
+        if (!m_error) {
+            ++m_rewinds;
+            ++g_zstdEntryStreamRewinds;
+        }
         return !m_error;
     }
 
@@ -93,6 +104,11 @@ private:
                 m_file.read(reinterpret_cast<char*>(m_inputBytes.data()), bytes);
                 if (m_file.gcount() != bytes) { m_error = true; return false; }
                 m_compressedRead += static_cast<uint64_t>(bytes);
+                // Hedef #80 üretim metriği: paketten tüketilen GERÇEK
+                // sıkıştırılmış bayt (monoton; reset'te sıfırlanmaz).
+                m_compressedBytes += static_cast<uint64_t>(bytes);
+                g_zstdEntryStreamCompressedBytes.fetch_add(static_cast<uint64_t>(bytes),
+                                                           std::memory_order_relaxed);
                 m_input = {m_inputBytes.data(), static_cast<size_t>(bytes), 0};
             }
             const size_t result = ZSTD_decompressStream(m_dstream, &output, &m_input);
@@ -104,6 +120,10 @@ private:
         }
         if (output.pos > m_entry.uncompressedSize - m_position) { m_error = true; return false; }
         m_position += output.pos;
+        // Hedef #80 üretim metriği: üretilen GERÇEK sıkıştırılmamış bayt
+        // (monoton; reset'te sıfırlanmaz — ileri-seek maliyeti buradan okunur).
+        m_decompressedBytes += output.pos;
+        g_zstdEntryStreamDecompressedBytes.fetch_add(output.pos, std::memory_order_relaxed);
         setg(m_output.data(), m_output.data(), m_output.data() + output.pos);
         return true;
     }
@@ -146,6 +166,11 @@ private:
     ZSTD_inBuffer m_input{nullptr, 0, 0};
     uint64_t m_compressedRead = 0;
     uint64_t m_position = 0;
+    // Hedef #80 üretim metriği (akışın üretim durumu; süreç-geneli aynalara
+    // yansıtılır): geriye-sarma + tüketilen sıkıştırılmış + üretilen bayt.
+    uint64_t m_rewinds = 0;
+    uint64_t m_compressedBytes = 0;
+    uint64_t m_decompressedBytes = 0;
     bool m_error = false;
 };
 
@@ -446,8 +471,16 @@ std::unique_ptr<std::istream> RowlPkgDataSource::tryOpenStream(const std::string
     return std::make_unique<std::istringstream>(std::move(bytes), std::ios::binary);
 }
 
-uint64_t zstdEntryDecoderResetCount() {
-    return g_zstdEntryDecoderResets.load(std::memory_order_relaxed);
+uint64_t zstdEntryStreamRewindCount() {
+    return g_zstdEntryStreamRewinds.load(std::memory_order_relaxed);
+}
+
+uint64_t zstdEntryStreamCompressedBytes() {
+    return g_zstdEntryStreamCompressedBytes.load(std::memory_order_relaxed);
+}
+
+uint64_t zstdEntryStreamDecompressedBytes() {
+    return g_zstdEntryStreamDecompressedBytes.load(std::memory_order_relaxed);
 }
 
 } // namespace Rowl::VFS

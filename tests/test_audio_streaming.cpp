@@ -865,27 +865,32 @@ void test_audio_streaming() {
  * test_audio_streaming.cpp eklentisi — OGG Seek Forward-No-Reset (#80) KİLİDİ.
  *
  * KILIT (mutant oldurur): Zstd paket giriş-akışında ileri-seek decoder
- * reset'i (sıkıştırılmış girdiyi baştan-çözüm) YAPMAMALIDIR; yalnızca
- * geri-seek reset gerektirir. seekTo() içindeki eski koşulsuz reset()
- * geri gelirse (veya ileri-dal reset'e bağlanırsa) aşağıdaki reset-delta
- * gözlemleri exit(1) ile düşer:
- *  (a) ileri-seek (beg) → delta 0 + bayt-eşitliği + tellg,
- *  (b) aynı-konum seek → no-op, delta 0,
- *  (c) SEEK_CUR ileri → delta 0 + bayt-eşitliği,
- *  (d) geri-seek (beg 0) → delta >= 1 + bayt-eşitliği,
- *  (e) SEEK_END ileri (hedef > konum) → delta 0 + kuyruk-eşitliği,
+ * kurulumu (geriye-sarma) YAPMAMALIDIR; yalnızca geri-seek kurulum
+ * gerektirir. seekTo() içindeki eski koşulsuz reset() geri gelirse (veya
+ * ileri-dal kuruluma bağlanırsa) aşağıdaki üretim-metriği gözlemleri exit(1)
+ * ile düşer (bayt-eşitliği mutantı GEÇİRİR — sayaç öldürür):
+ *  (a) ileri-seek (derin konumdan): rewind-delta 0 + yeniden-decompress <=
+ *      hedef-current+64KB (kalibrasyon: 64KB çıktı-chunk payı) +
+ *      monoton-ilerleme + bayt-eşitliği + tellg (16MiB sıkışabilir entry),
+ *  (b) aynı-konum seek → no-op, rewind-delta 0,
+ *  (c) SEEK_CUR ileri → rewind-delta 0 + decompress-sınırı + bayt-eşitliği,
+ *  (d) geri-seek (beg 0) → rewind-delta >= 1 + bayt-eşitliği,
+ *  (e) SEEK_END ileri (hedef > konum) → rewind-delta 0 + decompress-sınırı +
+ *      kuyruk-eşitliği,
  *  (f) sınır-aşımı seek → fail-closed (failbit),
- *  (g) OGG uçtan-uca durum-eşitliği: paket-akışı üzerinden PCM ileri/geri
- *      seek'ler bellek-içi referans decode ile bayt-aynı (memcmp).
+ *  (g) OGG uçtan-uca durum-eşitliği (reset-serbest adım): paket-akışı
+ *      üzerinden PCM ileri/geri seek'ler bellek-içi referans decode ile
+ *      bayt-aynı (memcmp); reset iddiası taşımaz.
  *
  * Gözlem notları (desen aynen: TEST_SECTION/TEST_PASS + hata=exit(1)):
- *  - Reset sayacı Rowl::VFS::zstdEntryDecoderResetCount() test-seam'idir
- *    (davranışsız gözlem; üretim kodu kullanmaz). Süreç-geneli monoton
- *    sayaçtır: baz değeri HER seek'ten hemen önce alınır, yalnız delta
- *    karşılaştırılır (mutlak değere bel bağlanmaz).
- *  - (g)'de reset-delta İDDİA EDİLMEZ: libvorbis ov_pcm_seek ikili-arama
- *    (bisection) sırasında bayt-düzeyinde meşru geri-seek yapabilir; orada
- *    kilitlenen yalnız durum-eşitliğidir.
+ *  - Sayaçlar Rowl::VFS::zstdEntryStream{RewindCount,CompressedBytes,
+ *    DecompressedBytes} üretim metrikleridir (GERÇEK I/O olayları; test-seam
+ *    değildir). Süreç-geneli monoton sayaçlardır: baz değeri HER seek'ten
+ *    hemen önce alınır, yalnız delta karşılaştırılır (mutlak değere bel
+ *    bağlanmaz).
+ *  - (g) reset-serbesttir, reset-delta İDDİA EDİLMEZ: libvorbis ov_pcm_seek
+ *    ikili-arama (bisection) sırasında bayt-düzeyinde meşru geri-seek
+ *    yapabilir; orada kilitlenen yalnız durum-eşitliğidir.
  *  - Yamanmış granule (1e9) ov_pcm_total'u şişirir; PCM seek sınırları
  *    GERÇEK frame sayısına (88200) göre seçilir, total'a göre değil.
  *  - timing-assert/sleep/poll YOKTUR; cihaz gerektirmez (headless koşar,
@@ -895,13 +900,18 @@ void test_audio_seek_forward_no_reset() {
     TEST_SECTION("Audio OGG Seek — Forward-No-Reset (#80)");
 
     // Fixture: CRC-onarımlı granule-yamalı uzun OGG (gerçek 88200 frame,
-    // stereo 44100 Hz) + 200 KiB desenli blob; ikisi de tek .rowlpkg içinde
-    // zstd (flags=1) — sıkıştırılmış-girdi seek yolu budur.
+    // stereo 44100 Hz) + 16 MiB desenli blob; ikisi de tek .rowlpkg içinde
+    // zstd (flags=1) — sıkıştırılmış-girdi seek yolu budur. Blob deseni
+    // sıkışabilir tutulur (64 baytlık koşular, 0..255 döngüsü), paket küçük
+    // kalır; kurulum mevcut fixture üretim helper'larıyla yapılır
+    // (compressEntry + FNV-1a + ham başlık/kayıt yazımı).
     const std::vector<uint8_t> ogg = patchGranuleWithCrcForStream(
         longToneOggBytes(), static_cast<uint64_t>(1000000000));
-    std::string blob(200'000, '\0');
+    constexpr uint64_t kSeekBlobBytes = 16ULL * 1024 * 1024;
+    constexpr uint64_t kSeekChunkSlack = 64ULL * 1024;
+    std::string blob(static_cast<size_t>(kSeekBlobBytes), '\0');
     for (size_t i = 0; i < blob.size(); ++i) {
-        blob[i] = static_cast<char>((i * 37u + i / 17u) % 251u);
+        blob[i] = static_cast<char>((i / 64u) % 256u);
     }
     auto compressEntry = [](const void* data, size_t size) {
         std::vector<uint8_t> out(ZSTD_compressBound(size));
@@ -969,44 +979,74 @@ void test_audio_seek_forward_no_reset() {
                std::memcmp(probe.data(), blob.data(), probe.size()) == 0,
            "Seek blob head mismatch");
 
-    // (a) İleri-seek: reset YOK + bayt-eşitliği + tellg.
+    // (a) İleri-seek (derin konumdan): rewind YOK + yeniden-decompress <=
+    // mesafe+64KB + monoton-ilerleme + bayt-eşitliği + tellg. Koşulsuz-reset
+    // mutantı hedefi baştan çözerek rewind sayacında ve decompress-sınırında
+    // ölür (bayt-eşitliği mutantı geçirir).
     {
-        const uint64_t target = 150000;
-        const uint64_t base = Rowl::VFS::zstdEntryDecoderResetCount();
+        // Mutantı ayırt edecek derin konuma ilerle (8MiB): buradan 12MiB'e
+        // ileri-seek mesafesi ~4MiB olur; mutant 12MiB'yi baştan çözer.
+        constexpr uint64_t kDeepPos = 8ULL * 1024 * 1024;
+        constexpr uint64_t kTarget = 12ULL * 1024 * 1024;
         stream->clear();
-        stream->seekg(static_cast<std::streamoff>(target), std::ios::beg);
+        stream->seekg(static_cast<std::streamoff>(kDeepPos), std::ios::beg);
+        expect(stream->good(), "Deep-position seek failed");
+        std::vector<char> deep(512, 0);
+        stream->read(deep.data(), static_cast<std::streamsize>(deep.size()));
+        expect(stream->gcount() == static_cast<std::streamsize>(deep.size()) &&
+                   std::memcmp(deep.data(), blob.data() + kDeepPos, deep.size()) == 0,
+               "Deep-position read diverges from payload");
+        const uint64_t current =
+            static_cast<uint64_t>(static_cast<std::streamoff>(stream->tellg()));
+        expect(current == kDeepPos + deep.size(), "Deep-position tell mismatch");
+        const uint64_t distance = kTarget - current;
+
+        const uint64_t baseRewinds = Rowl::VFS::zstdEntryStreamRewindCount();
+        const uint64_t baseDecomp = Rowl::VFS::zstdEntryStreamDecompressedBytes();
+        stream->clear();
+        stream->seekg(static_cast<std::streamoff>(kTarget), std::ios::beg);
         expect(stream->good(), "Forward seek failed");
-        expect(Rowl::VFS::zstdEntryDecoderResetCount() == base,
-               "Forward seek reset the Zstd decoder (must advance without reset)");
+        expect(Rowl::VFS::zstdEntryStreamRewindCount() == baseRewinds,
+               "Forward seek rewound the Zstd decoder (must advance without rewind)");
+        const uint64_t decompDelta =
+            Rowl::VFS::zstdEntryStreamDecompressedBytes() - baseDecomp;
+        expect(decompDelta <= distance + kSeekChunkSlack,
+               "Forward seek re-decompressed beyond target-current+64KB");
+        expect(decompDelta + kSeekChunkSlack >= distance,
+               "Forward seek made no monotonic decode progress");
         expect(static_cast<std::streamoff>(stream->tellg()) ==
-                   static_cast<std::streamoff>(target),
+                   static_cast<std::streamoff>(kTarget),
                "Forward seek tell mismatch");
         stream->read(probe.data(), static_cast<std::streamsize>(probe.size()));
         expect(stream->gcount() == static_cast<std::streamsize>(probe.size()) &&
-                   std::memcmp(probe.data(), blob.data() + target, probe.size()) == 0,
+                   std::memcmp(probe.data(), blob.data() + kTarget, probe.size()) == 0,
                "Forward-seek read diverges from payload");
-        TEST_PASS("Seek lock — forward seek skips decoder reset (delta 0, bytes exact)");
+        TEST_PASS("Seek lock — forward seek bounded re-decode without rewind (16MiB entry)");
     }
 
-    // (b) Aynı-konum seek: no-op, reset YOK.
+    // (b) Aynı-konum seek: no-op, rewind YOK.
     {
         const std::streamoff here =
             static_cast<std::streamoff>(stream->tellg());
-        const uint64_t base = Rowl::VFS::zstdEntryDecoderResetCount();
+        const uint64_t base = Rowl::VFS::zstdEntryStreamRewindCount();
         stream->seekg(here, std::ios::beg);
         expect(stream->good(), "Same-position seek failed");
-        expect(Rowl::VFS::zstdEntryDecoderResetCount() == base,
-               "Same-position seek must be a no-op (no reset)");
+        expect(Rowl::VFS::zstdEntryStreamRewindCount() == base,
+               "Same-position seek must be a no-op (no rewind)");
         TEST_PASS("Seek lock — same-position seek is a no-op (delta 0)");
     }
 
-    // (c) SEEK_CUR ileri: reset YOK + bayt-eşitliği.
+    // (c) SEEK_CUR ileri: rewind YOK + decompress-sınırı + bayt-eşitliği.
     {
-        const uint64_t base = Rowl::VFS::zstdEntryDecoderResetCount();
+        const uint64_t baseRewinds = Rowl::VFS::zstdEntryStreamRewindCount();
+        const uint64_t baseDecomp = Rowl::VFS::zstdEntryStreamDecompressedBytes();
         stream->seekg(1000, std::ios::cur);
         expect(stream->good(), "SEEK_CUR forward seek failed");
-        expect(Rowl::VFS::zstdEntryDecoderResetCount() == base,
-               "SEEK_CUR forward seek reset the decoder (must advance without reset)");
+        expect(Rowl::VFS::zstdEntryStreamRewindCount() == baseRewinds,
+               "SEEK_CUR forward seek rewound the decoder (must advance without rewind)");
+        expect(Rowl::VFS::zstdEntryStreamDecompressedBytes() - baseDecomp <=
+                   1000 + kSeekChunkSlack,
+               "SEEK_CUR forward seek re-decompressed beyond 1000+64KB");
         const uint64_t pos =
             static_cast<uint64_t>(static_cast<std::streamoff>(stream->tellg()));
         std::vector<char> cur(512, 0);
@@ -1014,40 +1054,47 @@ void test_audio_seek_forward_no_reset() {
         expect(stream->gcount() == static_cast<std::streamsize>(cur.size()) &&
                    std::memcmp(cur.data(), blob.data() + pos, cur.size()) == 0,
                "SEEK_CUR forward read diverges from payload");
-        TEST_PASS("Seek lock — SEEK_CUR forward skips decoder reset (delta 0, bytes exact)");
+        TEST_PASS("Seek lock — SEEK_CUR forward skips decoder rewind (delta 0, bytes exact)");
     }
 
-    // (d) Geri-seek: reset VAR + bayt-eşitliği.
+    // (d) Geri-seek: rewind VAR + bayt-eşitliği.
     {
-        const uint64_t base = Rowl::VFS::zstdEntryDecoderResetCount();
+        const uint64_t base = Rowl::VFS::zstdEntryStreamRewindCount();
         stream->clear();
         stream->seekg(0, std::ios::beg);
         expect(stream->good(), "Backward seek failed");
-        expect(Rowl::VFS::zstdEntryDecoderResetCount() >= base + 1,
-               "Backward seek must reset the decoder");
+        expect(Rowl::VFS::zstdEntryStreamRewindCount() >= base + 1,
+               "Backward seek must rewind the decoder");
         stream->read(probe.data(), static_cast<std::streamsize>(probe.size()));
         expect(stream->gcount() == static_cast<std::streamsize>(probe.size()) &&
                    std::memcmp(probe.data(), blob.data(), probe.size()) == 0,
                "Backward-seek head read diverges from payload");
-        TEST_PASS("Seek lock — backward seek resets the decoder (delta >= 1, bytes exact)");
+        TEST_PASS("Seek lock — backward seek rewinds the decoder (delta >= 1, bytes exact)");
     }
 
-    // (e) SEEK_END ileri (hedef > konum): reset YOK + kuyruk-eşitliği.
-    // Konum baştadır (1024); hedef sondan-512 (>> konum) ileri-daldadır.
+    // (e) SEEK_END ileri (hedef > konum): rewind YOK + decompress-sınırı +
+    // kuyruk-eşitliği. Konum baştadır (1024); hedef sondan-512 (>> konum)
+    // ileri-daldadır.
     {
-        const uint64_t base = Rowl::VFS::zstdEntryDecoderResetCount();
+        const uint64_t tailTarget = blobSize - 512;
+        const uint64_t distance = tailTarget - 1024;
+        const uint64_t baseRewinds = Rowl::VFS::zstdEntryStreamRewindCount();
+        const uint64_t baseDecomp = Rowl::VFS::zstdEntryStreamDecompressedBytes();
         stream->clear();
         stream->seekg(-512, std::ios::end);
         expect(stream->good(), "SEEK_END forward seek failed");
-        expect(Rowl::VFS::zstdEntryDecoderResetCount() == base,
-               "SEEK_END forward seek reset the decoder (must advance without reset)");
+        expect(Rowl::VFS::zstdEntryStreamRewindCount() == baseRewinds,
+               "SEEK_END forward seek rewound the decoder (must advance without rewind)");
+        expect(Rowl::VFS::zstdEntryStreamDecompressedBytes() - baseDecomp <=
+                   distance + kSeekChunkSlack,
+               "SEEK_END forward seek re-decompressed beyond target-current+64KB");
         std::vector<char> tail(512, 0);
         stream->read(tail.data(), static_cast<std::streamsize>(tail.size()));
         expect(stream->gcount() == static_cast<std::streamsize>(tail.size()) &&
                    std::memcmp(tail.data(), blob.data() + blobSize - 512,
                                tail.size()) == 0,
                "SEEK_END forward tail diverges from payload");
-        TEST_PASS("Seek lock — SEEK_END forward skips decoder reset (delta 0, tail exact)");
+        TEST_PASS("Seek lock — SEEK_END forward skips decoder rewind (delta 0, tail exact)");
     }
 
     // (f) Sınır-aşımı seek: fail-closed (konum oynamaz, failbit kurulur).
@@ -1058,8 +1105,11 @@ void test_audio_seek_forward_no_reset() {
         TEST_PASS("Seek lock — out-of-range seek fails closed");
     }
 
-    // (g) OGG uçtan-uca durum-eşitliği: paket-akışı üzerinden PCM ileri/geri
-    // seek'ler bellek-içi referans decode ile bayt-aynıdır.
+    // (g) OGG uçtan-uca durum-eşitliği (reset-serbest adım: reset iddiası
+    // taşımaz, OGG üretim sayacına bağlanmaz): paket-akışı üzerinden PCM
+    // ileri/geri seek'ler bellek-içi referans decode ile bayt-aynıdır.
+    // Gerekçe: libvorbis ov_pcm_seek ikili-arama sırasında bayt-düzeyinde
+    // meşru geri-seek yapabilir; burada kilitlenen yalnız durum-eşitliğidir.
     {
         using namespace Rowl::Audio;
         Rowl::VFS::VFSManager vfs;
