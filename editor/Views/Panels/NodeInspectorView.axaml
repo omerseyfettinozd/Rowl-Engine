@@ -19,93 +19,83 @@
                     BorderBrush="{DynamicResource BorderColor}" BorderThickness="0,0,0,1"
                     Padding="10,8">
                 <StackPanel Spacing="8">
-                    <!-- Kart 1: GameObject -->
-                    <Border Background="{DynamicResource CardBackground}"
-                            BorderBrush="{DynamicResource CardBorderColor}" BorderThickness="1"
-                            CornerRadius="6">
-                        <StackPanel>
-                            <Border Background="{DynamicResource CardHeaderBackground}"
-                                    CornerRadius="6,6,0,0" Padding="8,6">
-                                <DockPanel>
-                                    <StackPanel Spacing="1">
-                                        <TextBlock Text="DENETÇİ" FontWeight="Black" FontSize="11"
-                                                   Foreground="{DynamicResource Accent}" VerticalAlignment="Center" LetterSpacing="0.6"/>
-                                        <TextBlock Text="Seçili sahne nesnesi" FontSize="10"
-                                                   Foreground="{DynamicResource MutedText}"/>
-                                    </StackPanel>
-                                    <TextBlock DockPanel.Dock="Right"
-                                               Text="{Binding HierarchyViewModel.SelectedObject.Id, StringFormat='ID: {0}', FallbackValue=''}"
-                                               FontSize="10" Foreground="{DynamicResource MutedText}"
-                                               VerticalAlignment="Center"/>
-                                    <!-- Unity kromu Dilim G3: nesne işlemleri
-                                         taşma menüsü (yalnızca mevcut komutlar).
-                                         Üç-nokta glifi lintte yasaktır, o
-                                         yüzden Content "..." yazılır. -->
-                                    <Button DockPanel.Dock="Right" Content="..."
-                                            ToolTip.Tip="Nesne işlemleri"
-                                            IsEnabled="{Binding InspectorViewModel.HasSelectedObject}"
-                                            Background="Transparent" Foreground="{DynamicResource MutedText}"
-                                            BorderBrush="{DynamicResource BorderColor}" BorderThickness="1"
-                                            CornerRadius="4" Padding="6,1" FontSize="11" Margin="6,0,0,0"
-                                            VerticalAlignment="Center">
-                                        <Button.Flyout>
-                                            <MenuFlyout Placement="BottomEdgeAlignedRight">
-                                                <MenuItem x:Name="DuplicateObjectMenuItem" Header="Çoğalt"
-                                                          Command="{Binding HierarchyViewModel.DuplicateObjectCommand}"
-                                                          CommandParameter="{Binding HierarchyViewModel.SelectedObject}"/>
-                                                <MenuItem x:Name="DeleteObjectMenuItem" Header="Sil"
-                                                          Command="{Binding HierarchyViewModel.DeleteObjectCommand}"
-                                                          CommandParameter="{Binding HierarchyViewModel.SelectedObject}"/>
-                                                <Separator/>
-                                                <MenuItem x:Name="MoveObjectUpMenuItem" Header="Yukarı Taşı"
-                                                          Command="{Binding HierarchyViewModel.MoveObjectUpCommand}"
-                                                          CommandParameter="{Binding HierarchyViewModel.SelectedObject}"/>
-                                                <MenuItem x:Name="MoveObjectDownMenuItem" Header="Aşağı Taşı"
-                                                          Command="{Binding HierarchyViewModel.MoveObjectDownCommand}"
-                                                          CommandParameter="{Binding HierarchyViewModel.SelectedObject}"/>
-                                            </MenuFlyout>
-                                        </Button.Flyout>
-                                    </Button>
-                                </DockPanel>
-                            </Border>
+                    <!-- Kart 1: GameObject (Unity tarzı düz bölüm) -->
+                    <StackPanel>
+                        <DockPanel Margin="10,8,10,2">
+                            <StackPanel Spacing="0">
+                                <TextBlock Text="DENETÇİ" FontWeight="Bold" FontSize="12"
+                                           Foreground="{DynamicResource PrimaryText}" VerticalAlignment="Center"/>
+                                <TextBlock Text="Seçili sahne nesnesi" FontSize="10"
+                                           Foreground="{DynamicResource MutedText}"/>
+                            </StackPanel>
+                            <TextBlock DockPanel.Dock="Right"
+                                       Text="{Binding HierarchyViewModel.SelectedObject.Id, StringFormat='ID: {0}', FallbackValue=''}"
+                                       FontSize="10" Foreground="{DynamicResource MutedText}"
+                                       VerticalAlignment="Center"/>
+                            <!-- Unity kromu Dilim G3: nesne işlemleri
+                                 taşma menüsü (yalnızca mevcut komutlar).
+                                 Üç-nokta glifi lintte yasaktır, o
+                                 yüzden Content "..." yazılır. -->
+                            <Button DockPanel.Dock="Right" Content="..."
+                                    ToolTip.Tip="Nesne işlemleri"
+                                    IsEnabled="{Binding InspectorViewModel.HasSelectedObject}"
+                                    Background="Transparent" Foreground="{DynamicResource MutedText}"
+                                    BorderBrush="{DynamicResource BorderColor}" BorderThickness="1"
+                                    CornerRadius="2" Padding="6,1" FontSize="11" Margin="6,0,0,0"
+                                    VerticalAlignment="Center">
+                                <Button.Flyout>
+                                    <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                        <MenuItem x:Name="DuplicateObjectMenuItem" Header="Çoğalt"
+                                                  Command="{Binding HierarchyViewModel.DuplicateObjectCommand}"
+                                                  CommandParameter="{Binding HierarchyViewModel.SelectedObject}"/>
+                                        <MenuItem x:Name="DeleteObjectMenuItem" Header="Sil"
+                                                  Command="{Binding HierarchyViewModel.DeleteObjectCommand}"
+                                                  CommandParameter="{Binding HierarchyViewModel.SelectedObject}"/>
+                                        <Separator/>
+                                        <MenuItem x:Name="MoveObjectUpMenuItem" Header="Yukarı Taşı"
+                                                  Command="{Binding HierarchyViewModel.MoveObjectUpCommand}"
+                                                  CommandParameter="{Binding HierarchyViewModel.SelectedObject}"/>
+                                        <MenuItem x:Name="MoveObjectDownMenuItem" Header="Aşağı Taşı"
+                                                  Command="{Binding HierarchyViewModel.MoveObjectDownCommand}"
+                                                  CommandParameter="{Binding HierarchyViewModel.SelectedObject}"/>
+                                    </MenuFlyout>
+                                </Button.Flyout>
+                            </Button>
+                        </DockPanel>
+                        <Border BorderBrush="{DynamicResource BorderColor}" BorderThickness="0,0,0,1"
+                                Margin="10,4,10,0"/>
 
-                            <!-- Selected GameObject Name & Active State -->
-                            <Grid ColumnDefinitions="*, Auto" Margin="10,8"
-                                  IsVisible="{Binding InspectorViewModel.HasSelectedObject}">
-                                <!-- Editable GameObject Name -->
-                                <TextBox Grid.Column="0"
-                                         Text="{Binding HierarchyViewModel.SelectedObject.Name, FallbackValue='GameObject'}"
-                                         Watermark="GameObject adı"
-                                         Background="{DynamicResource InputBackground}"
-                                         Foreground="{DynamicResource PrimaryText}"
-                                         BorderBrush="{DynamicResource BorderColor}"
-                                         FontWeight="SemiBold"
-                                         FontSize="12" Padding="8,5" Margin="0,0,8,0"/>
+                        <!-- Selected GameObject Name & Active State -->
+                        <Grid ColumnDefinitions="*, Auto" Margin="10,6"
+                              IsVisible="{Binding InspectorViewModel.HasSelectedObject}">
+                            <!-- Editable GameObject Name -->
+                            <TextBox Grid.Column="0"
+                                     Text="{Binding HierarchyViewModel.SelectedObject.Name, FallbackValue='GameObject'}"
+                                     Watermark="GameObject adı"
+                                     Background="{DynamicResource InputBackground}"
+                                     Foreground="{DynamicResource PrimaryText}"
+                                     BorderBrush="{DynamicResource BorderColor}"
+                                     FontSize="12" Padding="8,4" Margin="0,0,8,0"/>
 
-                                <!-- Active Toggle -->
-                                <CheckBox Grid.Column="1"
-                                          IsChecked="{Binding HierarchyViewModel.SelectedObject.IsActive}"
-                                          ToolTip.Tip="GameObject etkinlik durumu"
-                                          Content="Etkin"
-                                          FontSize="11"
-                                          Foreground="{DynamicResource PrimaryText}"
-                                          VerticalAlignment="Center"/>
-                            </Grid>
-                        </StackPanel>
-                    </Border>
+                            <!-- Active Toggle -->
+                            <CheckBox Grid.Column="1"
+                                      IsChecked="{Binding HierarchyViewModel.SelectedObject.IsActive}"
+                                      ToolTip.Tip="GameObject etkinlik durumu"
+                                      Content="Etkin"
+                                      FontSize="11"
+                                      Foreground="{DynamicResource PrimaryText}"
+                                      VerticalAlignment="Center"/>
+                        </Grid>
+                    </StackPanel>
 
-                    <!-- Kart 2: Düğüm bölümü (Faz 4 Dilim 4: başlık + bölüm + gruplar + renk) -->
-                    <Border Background="{DynamicResource CardBackground}"
-                            BorderBrush="{DynamicResource CardBorderColor}" BorderThickness="1"
-                            CornerRadius="6"
-                            IsVisible="{Binding SelectedNode, Converter={x:Static conv:ObjectConverters.IsNotNull}}">
-                        <StackPanel>
-                            <Border Background="{DynamicResource CardHeaderBackground}"
-                                    CornerRadius="6,6,0,0" Padding="8,6">
-                                <TextBlock Text="DÜĞÜM" FontSize="10" FontWeight="Black"
-                                           Foreground="{DynamicResource Accent}" LetterSpacing="0.5"/>
-                            </Border>
-                            <StackPanel Spacing="8" Margin="10,8">
+                    <!-- Kart 2: Düğüm bölümü (düz bölüm; tüm iç bağlar aynen) -->
+                    <StackPanel
+                        IsVisible="{Binding SelectedNode, Converter={x:Static conv:ObjectConverters.IsNotNull}}">
+                        <TextBlock Text="DÜĞÜM" FontSize="11" FontWeight="Bold"
+                                   Foreground="{DynamicResource PrimaryText}" Margin="10,4,10,2"/>
+                        <Border BorderBrush="{DynamicResource BorderColor}" BorderThickness="0,0,0,1"
+                                Margin="10,0,10,0"/>
+                        <StackPanel Spacing="8" Margin="10,6">
                         <StackPanel Spacing="2">
                             <TextBlock Text="Başlık" FontSize="10" Foreground="{DynamicResource MutedText}"/>
                             <TextBox Text="{Binding SelectedNode.Title}"
@@ -117,7 +107,6 @@
                                                        NodeId="{Binding SelectedNode.Id}"
                                                        FieldKey="node.title"/>
                         </StackPanel>
-                        <Border Background="{DynamicResource SurfaceBackground}" CornerRadius="4" Padding="8">
                         <Grid ColumnDefinitions="Auto,*">
                             <TextBlock Grid.Column="0" Text="Bölüm:"
                                        FontSize="11" Foreground="{DynamicResource MutedText}"
@@ -128,8 +117,6 @@
                                       ToolTip.Tip="Kayıt/yükleme sınırı (Yok = tanımsız)"
                                       FontSize="11" HorizontalAlignment="Stretch"/>
                         </Grid>
-                        </Border>
-                        <Border Background="{DynamicResource SurfaceBackground}" CornerRadius="4" Padding="8">
                         <StackPanel Spacing="2">
                             <TextBlock Text="Gruplar" FontSize="10" Foreground="{DynamicResource MutedText}"/>
                             <ItemsControl ItemsSource="{Binding InspectorViewModel.MemberGroups}">
@@ -175,7 +162,6 @@
                                         FontSize="11" Padding="8,4"/>
                             </Grid>
                         </StackPanel>
-                        </Border>
                         <StackPanel Spacing="2" Orientation="Horizontal">
                             <TextBlock Text="Etiket:" FontSize="11"
                                        Foreground="{DynamicResource MutedText}"
@@ -206,8 +192,7 @@
                         </StackPanel>
                         </Border>
                             </StackPanel>
-                        </StackPanel>
-                    </Border>
+                    </StackPanel>
                 </StackPanel>
             </Border>
 
@@ -231,27 +216,25 @@
                                    Margin="16,0"/>
                     </StackPanel>
 
-                    <Border IsVisible="{Binding InspectorViewModel.HasSelectedObject}"
-                            Background="{DynamicResource CardHeaderBackground}" BorderBrush="{DynamicResource BorderColor}"
-                            BorderThickness="1" CornerRadius="6" Padding="10,7">
-                        <DockPanel>
-                            <TextBlock Text="BİLEŞENLER" FontSize="10" FontWeight="Black"
-                                       Foreground="{DynamicResource Accent}" LetterSpacing="0.5"/>
-                            <TextBlock DockPanel.Dock="Right" Text="{Binding HierarchyViewModel.SelectedObject.Components.Count, StringFormat='{}{0} etkin'}"
-                                       FontSize="10" Foreground="{DynamicResource MutedText}"/>
-                            <!-- Unity kromu Dilim G3: bileşen şeridi taşma
-                                 menüsü (mevcut Ekle komutunun kısayolu). -->
-                            <Button DockPanel.Dock="Right" Content="..."
-                                    ToolTip.Tip="Bileşen işlemleri"
-                                    Command="{Binding ShowAddComponentMenuCommand}"
-                                    IsVisible="{Binding !IsAddComponentMenuOpen}"
-                                    IsEnabled="{Binding InspectorViewModel.HasSelectedObject}"
-                                    Background="Transparent" Foreground="{DynamicResource MutedText}"
-                                    BorderBrush="{DynamicResource BorderColor}" BorderThickness="1"
-                                    CornerRadius="4" Padding="6,1" FontSize="11" Margin="6,0,0,0"
-                                    VerticalAlignment="Center"/>
-                        </DockPanel>
-                    </Border>
+                    <DockPanel IsVisible="{Binding InspectorViewModel.HasSelectedObject}"
+                                 Margin="2,0">
+                        <TextBlock Text="BİLEŞENLER" FontSize="11" FontWeight="Bold"
+                                   Foreground="{DynamicResource PrimaryText}" VerticalAlignment="Center"/>
+                        <TextBlock DockPanel.Dock="Right" Text="{Binding HierarchyViewModel.SelectedObject.Components.Count, StringFormat='{}{0} etkin'}"
+                                   FontSize="10" Foreground="{DynamicResource MutedText}"
+                                   VerticalAlignment="Center"/>
+                        <!-- Unity kromu Dilim G3: bileşen şeridi taşma
+                             menüsü (mevcut Ekle komutunun kısayolu). -->
+                        <Button DockPanel.Dock="Right" Content="..."
+                                ToolTip.Tip="Bileşen işlemleri"
+                                Command="{Binding ShowAddComponentMenuCommand}"
+                                IsVisible="{Binding !IsAddComponentMenuOpen}"
+                                IsEnabled="{Binding InspectorViewModel.HasSelectedObject}"
+                                Background="Transparent" Foreground="{DynamicResource MutedText}"
+                                BorderBrush="{DynamicResource BorderColor}" BorderThickness="1"
+                                CornerRadius="2" Padding="6,1" FontSize="11" Margin="6,0,0,0"
+                                VerticalAlignment="Center"/>
+                    </DockPanel>
 
                     <!-- Attached Components Collection (Rendered via ComponentTemplateSelector) -->
                     <ItemsControl ItemsSource="{Binding HierarchyViewModel.SelectedObject.Components}"
@@ -261,72 +244,68 @@
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
 
-                    <!-- ADD COMPONENT BUTTON (Positioned Inside Inspector at the Bottom) -->
-                    <StackPanel IsVisible="{Binding InspectorViewModel.HasSelectedObject}" Spacing="6" Margin="0,6,0,10">
+                    <!-- ADD COMPONENT (Unity tarzı düz bölüm; komutlar aynen) -->
+                    <StackPanel IsVisible="{Binding InspectorViewModel.HasSelectedObject}" Spacing="4" Margin="0,6,0,10">
                         <Button Content="Bileşen Ekle"
                                 Command="{Binding ShowAddComponentMenuCommand}"
                                 HorizontalAlignment="Stretch"
-                                Padding="12,9"
-                                FontSize="12"
-                                FontWeight="SemiBold"
-                                Background="{DynamicResource CardBackground}"
+                                Padding="12,4"
+                                FontSize="11"
+                                Background="Transparent"
                                 Foreground="{DynamicResource PrimaryText}"
-                                BorderBrush="{DynamicResource CardBorderColor}"
+                                BorderBrush="{DynamicResource BorderColor}"
                                 BorderThickness="1"
-                                CornerRadius="6"
+                                CornerRadius="2"
                                 HorizontalContentAlignment="Center"/>
 
                         <!-- Add Component Flyout List -->
                         <StackPanel IsVisible="{Binding IsAddComponentMenuOpen}" Spacing="2">
-                            <Border Background="{DynamicResource CardHeaderBackground}" CornerRadius="6" 
-                                    Padding="4" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1">
-                                <StackPanel Spacing="2">
-                                    <TextBlock Text="Eklenecek bileşeni seç" FontSize="11"
-                                               Foreground="{DynamicResource MutedText}" Margin="8,4"/>
-                                    <Button Content="Dialogue &amp; Speaker"
-                                            Command="{Binding AddComponentByTypeCommand}" CommandParameter="dialogue"
-                                            HorizontalAlignment="Stretch" Padding="8,6" FontSize="11"
-                                            Background="Transparent" Foreground="{DynamicResource PrimaryText}" CornerRadius="4"/>
-                                    <Button Content="Background Layer"
-                                            Command="{Binding AddComponentByTypeCommand}" CommandParameter="background"
-                                            HorizontalAlignment="Stretch" Padding="8,6" FontSize="11"
-                                            Background="Transparent" Foreground="{DynamicResource PrimaryText}" CornerRadius="4"/>
-                                    <Button Content="Character Sprite"
-                                            Command="{Binding AddComponentByTypeCommand}" CommandParameter="character"
-                                            HorizontalAlignment="Stretch" Padding="8,6" FontSize="11"
-                                            Background="Transparent" Foreground="{DynamicResource PrimaryText}" CornerRadius="4"/>
-                                    <Button Content="Audio &amp; DSP"
-                                            Command="{Binding AddComponentByTypeCommand}" CommandParameter="audio"
-                                            HorizontalAlignment="Stretch" Padding="8,6" FontSize="11"
-                                            Background="Transparent" Foreground="{DynamicResource PrimaryText}" CornerRadius="4"/>
-                                    <Button Content="Player Choices"
-                                            Command="{Binding AddComponentByTypeCommand}" CommandParameter="choice"
-                                            HorizontalAlignment="Stretch" Padding="8,6" FontSize="11"
-                                            Background="Transparent" Foreground="{DynamicResource PrimaryText}" CornerRadius="4"/>
-                                    <Button Content="Lua Script"
-                                            Command="{Binding AddComponentByTypeCommand}" CommandParameter="script"
-                                            HorizontalAlignment="Stretch" Padding="8,6" FontSize="11"
-                                            Background="Transparent" Foreground="{DynamicResource PrimaryText}" CornerRadius="4"/>
-                                </StackPanel>
-                            </Border>
+                            <StackPanel Spacing="2">
+                                <TextBlock Text="Eklenecek bileşeni seç" FontSize="11"
+                                           Foreground="{DynamicResource MutedText}" Margin="8,4"/>
+                                <Button Content="Dialogue &amp; Speaker"
+                                        Command="{Binding AddComponentByTypeCommand}" CommandParameter="dialogue"
+                                        HorizontalAlignment="Stretch" Padding="8,6" FontSize="11"
+                                        Background="Transparent" Foreground="{DynamicResource PrimaryText}" CornerRadius="2"/>
+                                <Button Content="Background Layer"
+                                        Command="{Binding AddComponentByTypeCommand}" CommandParameter="background"
+                                        HorizontalAlignment="Stretch" Padding="8,6" FontSize="11"
+                                        Background="Transparent" Foreground="{DynamicResource PrimaryText}" CornerRadius="2"/>
+                                <Button Content="Character Sprite"
+                                        Command="{Binding AddComponentByTypeCommand}" CommandParameter="character"
+                                        HorizontalAlignment="Stretch" Padding="8,6" FontSize="11"
+                                        Background="Transparent" Foreground="{DynamicResource PrimaryText}" CornerRadius="2"/>
+                                <Button Content="Audio &amp; DSP"
+                                        Command="{Binding AddComponentByTypeCommand}" CommandParameter="audio"
+                                        HorizontalAlignment="Stretch" Padding="8,6" FontSize="11"
+                                        Background="Transparent" Foreground="{DynamicResource PrimaryText}" CornerRadius="2"/>
+                                <Button Content="Player Choices"
+                                        Command="{Binding AddComponentByTypeCommand}" CommandParameter="choice"
+                                        HorizontalAlignment="Stretch" Padding="8,6" FontSize="11"
+                                        Background="Transparent" Foreground="{DynamicResource PrimaryText}" CornerRadius="2"/>
+                                <Button Content="Lua Script"
+                                        Command="{Binding AddComponentByTypeCommand}" CommandParameter="script"
+                                        HorizontalAlignment="Stretch" Padding="8,6" FontSize="11"
+                                        Background="Transparent" Foreground="{DynamicResource PrimaryText}" CornerRadius="2"/>
+                            </StackPanel>
                         </StackPanel>
                     </StackPanel>
 
                 </StackPanel>
             </ScrollViewer>
 
-            <!-- Engine Sync Button -->
-            <Border Grid.Row="2" Padding="8,6,8,8" Background="{DynamicResource SurfaceBackground}"
+            <!-- Engine Sync: ince şerit (aynı komut/kilit; kart zemini yok) -->
+            <Border Grid.Row="2" Padding="8,4"
                     BorderBrush="{DynamicResource BorderColor}" BorderThickness="0,1,0,0">
                 <Button Content="Önizlemeye Gönder"
                         ToolTip.Tip="Send the selected node to the running preview"
-                        Command="{Binding PushHotReloadPacketCommand}" 
+                        Command="{Binding PushHotReloadPacketCommand}"
                         IsEnabled="{Binding InspectorViewModel.HasSelectedObject}"
-                        HorizontalAlignment="Stretch" 
+                        HorizontalAlignment="Stretch"
                         HorizontalContentAlignment="Center"
-                        Background="{DynamicResource AccentButtonBg}" 
-                        Foreground="{DynamicResource AccentButtonFg}" 
-                        FontWeight="Bold" FontSize="11" CornerRadius="4" Padding="12,7"/>
+                        Background="{DynamicResource AccentButtonBg}"
+                        Foreground="{DynamicResource AccentButtonFg}"
+                        FontWeight="Bold" FontSize="11" CornerRadius="2" Padding="12,4"/>
             </Border>
         </Grid>
     </Border>
