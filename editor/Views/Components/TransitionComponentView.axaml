@@ -5,7 +5,7 @@
              x:DataType="comp:TransitionComponentViewModel">
   <Border Background="{DynamicResource CardBackground}" CornerRadius="6" Margin="0,4" Padding="10" BorderBrush="{DynamicResource CardBorderColor}" BorderThickness="1">
     <StackPanel Spacing="8">
-      <TextBlock Text="🎬 Scene Transition" FontWeight="Bold" Foreground="{DynamicResource PrimaryText}" />
+      <TextBlock Text="Scene Transition" FontWeight="Bold" Foreground="{DynamicResource PrimaryText}" />
 
       <!-- Transition Kind -->
       <StackPanel Spacing="2">
@@ -30,7 +30,7 @@
       <!-- Screen Flash FX -->
       <Border Background="{DynamicResource SurfaceBackground}" CornerRadius="4" Padding="8">
         <StackPanel Spacing="6">
-          <CheckBox IsChecked="{Binding FlashEnabled}" Content="⚡ Screen Flash FX" FontWeight="SemiBold" FontSize="11" />
+          <CheckBox IsChecked="{Binding FlashEnabled}" Content="Screen Flash FX" FontWeight="SemiBold" FontSize="11" />
           <Grid ColumnDefinitions="*,8,*,8,*" IsVisible="{Binding FlashEnabled}">
             <StackPanel Grid.Column="0" Spacing="2">
               <TextBlock Text="Color Hex" FontSize="10" Foreground="{DynamicResource MutedText}" />
@@ -51,7 +51,7 @@
       <!-- Color Tint & Vignette FX -->
       <Border Background="{DynamicResource SurfaceBackground}" CornerRadius="4" Padding="8">
         <StackPanel Spacing="6">
-          <TextBlock Text="🎨 Post-Process Color Tint &amp; Vignette" FontWeight="SemiBold" FontSize="11" Foreground="{DynamicResource PrimaryText}" />
+          <TextBlock Text="Post-Process Color Tint &amp; Vignette" FontWeight="SemiBold" FontSize="11" Foreground="{DynamicResource PrimaryText}" />
 
           <!-- Tint -->
           <CheckBox IsChecked="{Binding TintEnabled}" Content="Screen Color Tint Overlay" FontSize="11" />

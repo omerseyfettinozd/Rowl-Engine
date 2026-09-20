@@ -11,7 +11,7 @@ internal static class EditorDocumentCanvasTests
 {
     public static void Run(MainWindowViewModel mainVm)
     {
-        Console.WriteLine("\n📌 [Test 13]: StoryGraphDocumentWriter, StoryGraphCanvasService & Layout Assist Presets...");
+        Console.WriteLine("\n[Test 13]: StoryGraphDocumentWriter, StoryGraphCanvasService & Layout Assist Presets...");
 
         // 1. StoryGraphDocumentWriter Persistence
         string testWriterAssetsDir = Path.Combine(Path.GetTempPath(), $"RowlTestWriter_Assets_{Guid.NewGuid():N}");
@@ -140,6 +140,6 @@ internal static class EditorDocumentCanvasTests
             layoutNode.CharacterScale != 1.0)
             throw new Exception("ResetCharacterDimensions failed to set 360x540 scale 1.0");
 
-        Console.WriteLine("  ✅ [PASS] StoryGraphDocumentWriter, StoryGraphCanvasService & Layout Assist Presets verified");
+        Console.WriteLine("  [PASS] StoryGraphDocumentWriter, StoryGraphCanvasService & Layout Assist Presets verified");
     }
 }

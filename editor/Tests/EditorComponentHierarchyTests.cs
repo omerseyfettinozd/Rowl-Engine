@@ -11,7 +11,7 @@ internal static class EditorComponentHierarchyTests
 {
     public static void Run(MainWindowViewModel mainVm)
     {
-        Console.WriteLine("\n📌 [Test 1]: NodeViewModel & Modular Component Trash Can Button...");
+        Console.WriteLine("\n[Test 1]: NodeViewModel & Modular Component Trash Can Button...");
         var node = new NodeViewModel(101, "Test Node", 100, 150, bare: false);
         if (node.Components.Count < 4)
             throw new Exception("Expected at least 4 default components");
@@ -105,7 +105,7 @@ internal static class EditorComponentHierarchyTests
             }
         }
         Console.WriteLine(
-            "  ✅ [PASS] Component addition, script serialization, proxy sync, and " +
+            "  [PASS] Component addition, script serialization, proxy sync, and " +
             "Trash Can (RemoveSelfCommand) verified");
 
         var emptyHierarchyNode = new NodeViewModel(
@@ -126,6 +126,6 @@ internal static class EditorComponentHierarchyTests
         if (mainVm.HierarchyViewModel.IsCurrentNodeEmpty)
             throw new Exception("Hierarchy showed an empty-frame state without a selected node");
         Console.WriteLine(
-            "  ✅ [PASS] Hierarchy empty state tracks GameObject creation and deletion");
+            "  [PASS] Hierarchy empty state tracks GameObject creation and deletion");
     }
 }

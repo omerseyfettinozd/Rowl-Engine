@@ -27,7 +27,7 @@ namespace RowlEngine.Editor.ViewModels
             main.PropertyChanged += OnMainViewModelPropertyChanged;
         }
 
-        // ── Selected GameObject (drives the Inspector) ──
+        // Selected GameObject (drives the Inspector)
 
         public ObservableCollection<FrameObjectViewModel> SelectedObjects { get; } = new();
 
@@ -59,7 +59,7 @@ namespace RowlEngine.Editor.ViewModels
             EditorSelectionCoordinator.ClearObjectSelection(SelectedObjects, p => SelectedObject = p);
         }
 
-        // ── Current Node Info (displayed at top of Hierarchy) ──
+        // Current Node Info (displayed at top of Hierarchy)
 
         public NodeViewModel? CurrentNode => MainViewModel.SelectedNode;
         public string CurrentNodeTitle => CurrentNode?.Title ?? "No Node Selected";
@@ -68,7 +68,7 @@ namespace RowlEngine.Editor.ViewModels
         public bool HasObjects => CurrentNode?.Objects.Count > 0;
         public bool IsCurrentNodeEmpty => HasCurrentNode && !HasObjects;
 
-        // ── Create Object Menu ──
+        // Create Object Menu
 
         [ObservableProperty]
         private bool _isCreateObjectMenuOpen;
@@ -111,7 +111,7 @@ namespace RowlEngine.Editor.ViewModels
 
             SelectedObject = newObj;
             IsCreateObjectMenuOpen = false;
-            MainViewModel.AppendLog($"📦 Created {newObj.Name} in Node #{CurrentNode.Id}");
+            MainViewModel.AppendLog($"Created {newObj.Name} in Node #{CurrentNode.Id}");
             MainViewModel.ScheduleSave();
         }
 
@@ -129,7 +129,7 @@ namespace RowlEngine.Editor.ViewModels
                 SelectedObject = CurrentNode.Objects.FirstOrDefault();
             }
 
-            MainViewModel.AppendLog($"🗑️ Deleted object '{name}' from Node #{CurrentNode.Id}");
+            MainViewModel.AppendLog($"Deleted object '{name}' from Node #{CurrentNode.Id}");
             MainViewModel.ScheduleSave();
         }
 
@@ -142,7 +142,7 @@ namespace RowlEngine.Editor.ViewModels
             var copy = CurrentNode.DuplicateObject(target);
             SelectedObject = copy;
 
-            MainViewModel.AppendLog($"📋 Duplicated object '{target.Name}' in Node #{CurrentNode.Id}");
+            MainViewModel.AppendLog($"Duplicated object '{target.Name}' in Node #{CurrentNode.Id}");
             MainViewModel.ScheduleSave();
         }
 
@@ -182,7 +182,7 @@ namespace RowlEngine.Editor.ViewModels
             }
             SelectedObjects.Clear();
             SelectedObject = CurrentNode.Objects.FirstOrDefault();
-            MainViewModel.AppendLog($"🗑️ Batch deleted {count} object(s) from Node #{CurrentNode.Id}");
+            MainViewModel.AppendLog($"Batch deleted {count} object(s) from Node #{CurrentNode.Id}");
             MainViewModel.ScheduleSave();
         }
 
@@ -202,7 +202,7 @@ namespace RowlEngine.Editor.ViewModels
             SelectedObjects.Clear();
             foreach (var copy in copies) SelectedObjects.Add(copy);
             SelectedObject = copies.LastOrDefault();
-            MainViewModel.AppendLog($"📋 Batch duplicated {copies.Count} object(s) in Node #{CurrentNode.Id}");
+            MainViewModel.AppendLog($"Batch duplicated {copies.Count} object(s) in Node #{CurrentNode.Id}");
             MainViewModel.ScheduleSave();
         }
 
@@ -217,11 +217,11 @@ namespace RowlEngine.Editor.ViewModels
             {
                 UndoRedoService.Instance.RecordAction(new ObjectToggleAction(targets));
             }
-            MainViewModel.AppendLog($"👁️ Batch toggled visibility of {count} object(s)");
+            MainViewModel.AppendLog($"Batch toggled visibility of {count} object(s)");
             MainViewModel.ScheduleSave();
         }
 
-        // ── Event Handling ──
+        // Event Handling
 
         private void OnMainViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
         {

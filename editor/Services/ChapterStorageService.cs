@@ -83,7 +83,7 @@ namespace RowlEngine.Editor.Services
                 .Select(n => n.id)
                 .ToList();
 
-        // ── Split / merge (pure JSON, no view models) ──
+        // Split / merge (pure JSON, no view models)
 
         /// <summary>
         /// Splits a full story graph JSON document into per-chapter files.

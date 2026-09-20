@@ -46,7 +46,7 @@ internal static class CrashRecoveryService
     internal static string GetRecoveryDir(string assetsJsonPath)
         => Path.Combine(assetsJsonPath, RecoveryDirName);
 
-    // ── Dirty flag ─────────────────────────────────────────────
+    // Dirty flag
 
     public static void MarkDirty(string assetsJsonPath)
     {
@@ -89,7 +89,7 @@ internal static class CrashRecoveryService
         }
     }
 
-    // ── Save wrapper ───────────────────────────────────────────
+    // Save wrapper
     // Called from the TryWriteSnapshot path (sequence semantics unchanged):
     // marks dirty before the write, journals + refreshes last-good after a
     // successful write, clears dirty last.
@@ -124,7 +124,7 @@ internal static class CrashRecoveryService
         }
     }
 
-    // ── Journal ────────────────────────────────────────────────
+    // Journal
     // One JSON object per line: {seq, utc, sha256, format_version,
     // snapshot}. Flushed with fsync; rotated to the newest 50 files /
     // 10 MB total.
@@ -210,7 +210,7 @@ internal static class CrashRecoveryService
         return replay;
     }
 
-    // ── Last-good copy ─────────────────────────────────────────
+    // Last-good copy
     // refreshed after every successful write: canonical full_story_graph.json
     // plus a .sha256 sidecar, both written atomically.
 
@@ -235,7 +235,7 @@ internal static class CrashRecoveryService
         }
     }
 
-    // ── Startup validation + restore offer ─────────────────────
+    // Startup validation + restore offer
     // Validates the canonical document (parse + nodes array + structure
     // shape). A broken/missing canonical never triggers an automatic
     // overwrite; the caller offers the RestoreOffer to the user instead.
@@ -386,7 +386,7 @@ internal static class CrashRecoveryService
         }
     }
 
-    // ── Helpers ────────────────────────────────────────────────
+    // Helpers
 
     internal static string ComputeSha256(string text)
     {

@@ -208,7 +208,7 @@ public static class TranslationStatusService
         }
     }
 
-    // ── Internals ──────────────────────────────────────────────────────
+    // Internals
 
     internal sealed record CatalogEntry(
         string Speaker, string Text, string AltText, string? SourceHash);

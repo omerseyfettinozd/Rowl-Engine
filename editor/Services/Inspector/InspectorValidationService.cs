@@ -213,7 +213,7 @@ namespace RowlEngine.Editor.Services.Inspector
                 .ToList();
         }
 
-        // ── Lazy dirty tracking (Dilim 2 search-index pattern) ──
+        // Lazy dirty tracking (Dilim 2 search-index pattern)
         //
         // Collection/property events only MARK nodes dirty (O(1)); the
         // expensive per-node pass runs on the next read (badge query,
@@ -263,7 +263,7 @@ namespace RowlEngine.Editor.Services.Inspector
                 Changed?.Invoke(this, EventArgs.Empty);
         }
 
-        // ── Incremental core ──
+        // Incremental core
 
         /// <summary>
         /// Immediate per-node pass (flush path only). Callers must have
@@ -470,7 +470,7 @@ namespace RowlEngine.Editor.Services.Inspector
         private bool TryGetNode(ulong nodeId, out NodeViewModel node) =>
             _nodeById.TryGetValue(nodeId, out node!);
 
-        // ── Entry bookkeeping ──
+        // Entry bookkeeping
 
         private void Add(NodeViewModel node, string fieldKey, bool isError, string message)
         {
@@ -523,7 +523,7 @@ namespace RowlEngine.Editor.Services.Inspector
             Changed?.Invoke(this, EventArgs.Empty);
         }
 
-        // ── Subscriptions (leak-safe: removals unhook via OldItems) ──
+        // Subscriptions (leak-safe: removals unhook via OldItems)
 
         private void HookNode(NodeViewModel node)
         {

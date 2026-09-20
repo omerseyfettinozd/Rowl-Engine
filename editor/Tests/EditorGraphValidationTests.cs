@@ -12,7 +12,7 @@ internal static class EditorGraphValidationTests
 {
     public static void Run(string testProjectRoot)
     {
-        Console.WriteLine("\n📌 [Test 3]: ConnectionViewModel & Single Outgoing Wire Rule...");
+        Console.WriteLine("\n[Test 3]: ConnectionViewModel & Single Outgoing Wire Rule...");
         var testConnections = new ObservableCollection<ConnectionViewModel>();
         var node1 = new NodeViewModel(1, "N1", 0, 0);
         var node2 = new NodeViewModel(2, "N2", 300, 0);
@@ -23,7 +23,7 @@ internal static class EditorGraphValidationTests
         if (testConnections.Count != 2)
             throw new Exception("Initial test conns failed");
         Console.WriteLine(
-            "  ✅ [PASS] Wire topology & single outgoing rule verified without touching project files");
+            "  [PASS] Wire topology & single outgoing rule verified without touching project files");
 
         var validationNode = new NodeViewModel(901, "Validation", 0, 0, bare: false);
         var missingBackground = validationNode.GetComponent<BackgroundComponentViewModel>();
@@ -43,7 +43,7 @@ internal static class EditorGraphValidationTests
             throw new Exception("Build validation did not report missing assets and unreachable nodes");
         }
         Console.WriteLine(
-            "  ✅ [PASS] Build validation blocks missing assets and reports unreachable nodes");
+            "  [PASS] Build validation blocks missing assets and reports unreachable nodes");
 
         var cycleConnections = new[]
         {
@@ -66,6 +66,6 @@ internal static class EditorGraphValidationTests
             throw new Exception("Graph analysis did not report reachable cycles and terminal nodes");
         }
         Console.WriteLine(
-            "  ✅ [PASS] Graph analysis uses the actual start node and reports cycles/terminal nodes");
+            "  [PASS] Graph analysis uses the actual start node and reports cycles/terminal nodes");
     }
 }

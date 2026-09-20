@@ -21,7 +21,7 @@ internal static class EditorHeadlessTestSuite
             NativeEnvironment.EnsureDisplayFreeDrivers();
 
             Console.WriteLine("\n=======================================================");
-            Console.WriteLine("🧪 ROWL ENGINE EDITOR HEADLESS TEST SUITE 🧪");
+            Console.WriteLine("ROWL ENGINE EDITOR HEADLESS TEST SUITE");
             Console.WriteLine("=======================================================");
 
             // Display-free platform: the suite is named "headless" and must run
@@ -66,7 +66,7 @@ internal static class EditorHeadlessTestSuite
             EditorRuntimeStateTests.Run(mainVm, testProjectRoot);
 
             // ── Test 9b: Player-local settings profile ───────────────────────
-            Console.WriteLine("\n📌 [Test 9b]: Player settings profile persistence and bounds...");
+            Console.WriteLine("\n[Test 9b]: Player settings profile persistence and bounds...");
             string profilePath = Path.Combine(testProjectRoot, "player-settings.json");
             var savedProfile = new PlayerSettingsProfile
             {
@@ -89,7 +89,7 @@ internal static class EditorHeadlessTestSuite
             var fallbackProfile = PlayerSettingsProfile.Load(profilePath);
             if (fallbackProfile.MasterVolume != 1 || fallbackProfile.TextSpeedMultiplier != 1)
                 throw new Exception("Invalid player settings profile did not fall back to defaults");
-            Console.WriteLine("  ✅ [PASS] Player-local settings profile persistence and invalid-file fallback verified");
+            Console.WriteLine("  [PASS] Player-local settings profile persistence and invalid-file fallback verified");
 
             // ── Test 10: StoryGraphLoaderService Decoupled Hydration & Error Isolation ──
             EditorStoryGraphLoaderTests.Run();
@@ -227,7 +227,7 @@ internal static class EditorHeadlessTestSuite
                 EditorScaleBenchmark.Record(benchmark, benchmarkProjectRoot);
 
                 benchmark.Write(benchmarkPath);
-                Console.WriteLine($"  ⚡ [BENCHMARK] Editor interaction report written: {benchmarkPath}");
+                Console.WriteLine($"  [BENCHMARK] Editor interaction report written: {benchmarkPath}");
             }
 
             // Test 27: Audio device status observer (edge-triggered toasts)
@@ -261,7 +261,7 @@ internal static class EditorHeadlessTestSuite
             EditorGraphVNextHeadlessTests.Run();
 
             Console.WriteLine("\n=======================================================");
-            Console.WriteLine("🎉 ALL EDITOR HEADLESS TESTS PASSED SUCCESSFULLY! 🎉");
+            Console.WriteLine("ALL EDITOR HEADLESS TESTS PASSED SUCCESSFULLY!");
             Console.WriteLine("=======================================================\n");
             }
             finally

@@ -10,7 +10,7 @@ internal static class EditorCinematicFxTests
 {
     public static void Run(MainWindowViewModel mainVm)
     {
-        Console.WriteLine("\n📌 [Test 26]: Cinematic Camera Shake Presets & Screen Visual FX Pipeline...");
+        Console.WriteLine("\n[Test 26]: Cinematic Camera Shake Presets & Screen Visual FX Pipeline...");
 
         // Step 26.1: CameraComponentViewModel Preset Selection & Auto-Population
         Console.WriteLine("    [Step 26.1]: CameraComponentViewModel Shake Preset Selection & Parameters...");
@@ -173,6 +173,6 @@ internal static class EditorCinematicFxTests
         mainVm.EngineHost.SetVignette(0.0f);
         mainVm.EngineHost.ResetCamera();
 
-        Console.WriteLine("  ✅ [PASS] Cinematic Camera Shake Presets & Screen Visual FX Pipeline verified");
+        Console.WriteLine("  [PASS] Cinematic Camera Shake Presets & Screen Visual FX Pipeline verified");
     }
 }

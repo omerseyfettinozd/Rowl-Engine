@@ -11,7 +11,7 @@ internal static class EditorTypewriterAudioTests
 {
     public static void Run(MainWindowViewModel mainVm)
     {
-        Console.WriteLine("\n📌 [Test 25]: Typewriter Character Voice Blips & Dialogue Audio Effects...");
+        Console.WriteLine("\n[Test 25]: Typewriter Character Voice Blips & Dialogue Audio Effects...");
 
         // Step 25.1: DialogueComponentViewModel Default Values & Property Mutation
         Console.WriteLine("    [Step 25.1]: DialogueComponentViewModel Defaults & Property Mutation...");
@@ -214,6 +214,6 @@ internal static class EditorTypewriterAudioTests
         if (!activeStoryJson.Contains("\"voice_blip_volume\": 0.7") && !activeStoryJson.Contains("\"voice_blip_volume\":0.7"))
             throw new Exception("SerializeActiveStory did not include voice_blip_volume");
 
-        Console.WriteLine("  ✅ [PASS] Typewriter Character Voice Blips & Dialogue Audio Effects verified");
+        Console.WriteLine("  [PASS] Typewriter Character Voice Blips & Dialogue Audio Effects verified");
     }
 }

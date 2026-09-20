@@ -11,7 +11,7 @@ internal static class EditorEndToEndFlowTests
 {
     public static void Run(string mainProjectRoot)
     {
-        Console.WriteLine("\n📌 [Test 29]: End-to-end editor flow (Hub create → nodes → inspector → import → preview → save → build → package)...");
+        Console.WriteLine("\n[Test 29]: End-to-end editor flow (Hub create → nodes → inspector → import → preview → save → build → package)...");
 
         string previousProjectRoot = MainWindowViewModel.ProjectRoot;
         string e2eParent = Path.Combine(Path.GetTempPath(), $"RowlE2E_{Guid.NewGuid():N}");
@@ -141,7 +141,7 @@ internal static class EditorEndToEndFlowTests
                 new FileInfo(packageResult.PackagePath).Length == 0)
                 throw new Exception("Package step did not produce a valid .rowlpkg archive");
 
-            Console.WriteLine("  ✅ [PASS] End-to-end editor flow verified (create → open → nodes → inspector → import → preview → save → build → package)");
+            Console.WriteLine("  [PASS] End-to-end editor flow verified (create → open → nodes → inspector → import → preview → save → build → package)");
         }
         finally
         {

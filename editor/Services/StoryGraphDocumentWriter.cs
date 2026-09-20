@@ -39,13 +39,13 @@ public static class StoryGraphDocumentWriter
             }
             catch (Exception cleanupEx)
             {
-                log?.Invoke($"ℹ️ Legacy graph copy could not be removed: {cleanupEx.Message}");
+                log?.Invoke($"Legacy graph copy could not be removed: {cleanupEx.Message}");
             }
             return true;
         }
         catch (Exception ex)
         {
-            log?.Invoke($"⚠️ Failed to save story graph: {ex.Message}");
+            log?.Invoke($"Failed to save story graph: {ex.Message}");
             return false;
         }
     }
@@ -65,7 +65,7 @@ public static class StoryGraphDocumentWriter
         }
         catch (Exception ex)
         {
-            log?.Invoke($"⚠️ Failed to save active_story.json: {ex.Message}");
+            log?.Invoke($"Failed to save active_story.json: {ex.Message}");
             return false;
         }
     }

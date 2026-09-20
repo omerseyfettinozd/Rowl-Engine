@@ -40,12 +40,12 @@ public static class EditorAudioAssetPickerService
         if (normalizedType == "bgm")
         {
             component.BgmTrack = fileName;
-            logAction?.Invoke($"🎵 Selected BGM track '{fileName}' for Audio Component");
+            logAction?.Invoke($"Selected BGM track '{fileName}' for Audio Component");
         }
         else if (normalizedType == "sfx")
         {
             component.SfxTrack = fileName;
-            logAction?.Invoke($"🔊 Selected SFX track '{fileName}' for Audio Component");
+            logAction?.Invoke($"Selected SFX track '{fileName}' for Audio Component");
         }
         else
         {
@@ -109,7 +109,7 @@ public static class EditorAudioAssetPickerService
         }
         catch (Exception ex)
         {
-            logAction?.Invoke($"⚠️ Failed to pick audio file: {ex.Message}");
+            logAction?.Invoke($"Failed to pick audio file: {ex.Message}");
         }
     }
 }

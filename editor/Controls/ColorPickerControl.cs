@@ -54,7 +54,7 @@ namespace RowlEngine.Editor.Controls
             var root = new StackPanel { Spacing = 4, Orientation = Avalonia.Layout.Orientation.Horizontal };
             var clear = new Button
             {
-                Content = "✕",
+                Content = "X",
                 FontSize = 10,
                 Padding = new Thickness(6, 2),
                 [ToolTip.TipProperty] = "Temizle",

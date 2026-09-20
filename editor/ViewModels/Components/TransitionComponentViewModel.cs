@@ -10,7 +10,7 @@ namespace RowlEngine.Editor.ViewModels.Components
     public partial class TransitionComponentViewModel : NodeComponentViewModel
     {
         public override string DisplayName => "Scene Transition";
-        public override string Icon => "🎬";
+        public override string Icon => "Geçiş";
         public override string TypeKey => "transition";
 
         [ObservableProperty]
@@ -22,7 +22,7 @@ namespace RowlEngine.Editor.ViewModels.Components
         [ObservableProperty]
         private string _colorHex = "#000000";
 
-        // ── Screen Flash FX ──
+        // Screen Flash FX
         [ObservableProperty]
         private bool _flashEnabled = false;
 
@@ -35,7 +35,7 @@ namespace RowlEngine.Editor.ViewModels.Components
         [ObservableProperty]
         private double _flashIntensity = 1.0;
 
-        // ── Screen Tint FX ──
+        // Screen Tint FX
         [ObservableProperty]
         private bool _tintEnabled = false;
 
@@ -45,7 +45,7 @@ namespace RowlEngine.Editor.ViewModels.Components
         [ObservableProperty]
         private double _tintOpacity = 0.35;
 
-        // ── Vignette FX ──
+        // Vignette FX
         [ObservableProperty]
         private bool _vignetteEnabled = false;
 

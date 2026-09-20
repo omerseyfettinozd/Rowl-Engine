@@ -11,7 +11,7 @@ internal static class EditorMediaFormatCatalogTests
 {
     public static void Run(MainWindowViewModel mainVm, string testProjectRoot)
     {
-        Console.WriteLine("\n📌 [Test 33]: Faz 1 medya format sözleşmesi (katalog + import + validation)...");
+        Console.WriteLine("\n[Test 33]: Faz 1 medya format sözleşmesi (katalog + import + validation)...");
 
         // Step 33.1: single capability table
         Console.WriteLine("    [Step 33.1]: MediaFormatCatalog accepted/rejected sets...");
@@ -162,7 +162,7 @@ internal static class EditorMediaFormatCatalogTests
             try { Directory.Delete(scenarioRoot, true); } catch { }
         }
 
-        Console.WriteLine("  ✅ [PASS] Media format contract, import rejection and validation audits verified");
+        Console.WriteLine("  [PASS] Media format contract, import rejection and validation audits verified");
     }
 
     /// <summary>

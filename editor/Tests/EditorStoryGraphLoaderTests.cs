@@ -8,7 +8,7 @@ internal static class EditorStoryGraphLoaderTests
 {
     public static void Run()
     {
-        Console.WriteLine("\n📌 [Test 10]: StoryGraphLoaderService Decoupled Hydration & Isolation...");
+        Console.WriteLine("\n[Test 10]: StoryGraphLoaderService Decoupled Hydration & Isolation...");
         string testGraphJson = """
         {
           "format_version": 4,
@@ -64,6 +64,6 @@ internal static class EditorStoryGraphLoaderTests
                 throw new Exception("StoryGraphLoaderService should fail gracefully on missing 'nodes' array");
         }
 
-        Console.WriteLine("  ✅ [PASS] StoryGraphLoaderService decoupled hydration, wire connections, and error isolation verified");
+        Console.WriteLine("  [PASS] StoryGraphLoaderService decoupled hydration, wire connections, and error isolation verified");
     }
 }

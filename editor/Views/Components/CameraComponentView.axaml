@@ -5,7 +5,7 @@
              x:DataType="comp:CameraComponentViewModel">
   <Border Background="{DynamicResource CardBackground}" CornerRadius="6" Margin="0,4" Padding="10" BorderBrush="{DynamicResource CardBorderColor}" BorderThickness="1">
     <StackPanel Spacing="8">
-      <TextBlock Text="🎥 2D Camera" FontWeight="Bold" Foreground="{DynamicResource PrimaryText}" />
+      <TextBlock Text="2D Camera" FontWeight="Bold" Foreground="{DynamicResource PrimaryText}" />
 
       <!-- Position -->
       <Grid ColumnDefinitions="*,8,*">

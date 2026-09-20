@@ -101,8 +101,8 @@ public partial class LocalizationDeskViewModel : ViewModelBase
         ApplyViewFilter();
         var (translated, missing, changed) = TranslationStatusService.CountStates(_allRows);
         StatusLine = $"{_allRows.Count} satır: {translated} çevrilmiş, {missing} eksik, {changed} değişmiş" +
-            (inventoryError is not null ? $" — ⚠️ {inventoryError}" : string.Empty) +
-            (catalogError is not null ? $" — ⚠️ {catalogError}" : string.Empty);
+            (inventoryError is not null ? $" — {inventoryError}" : string.Empty) +
+            (catalogError is not null ? $" — {catalogError}" : string.Empty);
         if (SelectedRow is not null)
         {
             TranslationRow? reselected = _allRows.FirstOrDefault(
@@ -138,9 +138,9 @@ public partial class LocalizationDeskViewModel : ViewModelBase
         string? error = TranslationStatusService.SaveCatalog(_projectRoot, TargetLocale, _allRows);
         Refresh();
         if (error is not null)
-            StatusLine += $" — ❌ {error}";
+            StatusLine += $" — {error}";
         else
-            StatusLine += " — ✅ kaydedildi";
+            StatusLine += " — kaydedildi";
     }
 
     /// <summary>Serializes the current rows for a spreadsheet round trip.</summary>
@@ -151,10 +151,10 @@ public partial class LocalizationDeskViewModel : ViewModelBase
     {
         ImportResult result = TranslationExchangeService.TryImportCsv(csv, _allRows);
         if (!result.Accepted)
-            return $"❌ İçe aktarma reddedildi: {result.Error}";
+            return $"İçe aktarma reddedildi: {result.Error}";
         ApplyViewFilter();
         RefreshCountsOnly();
-        return $"✅ {result.UpdatedCount} satır güncellendi" +
+        return $"{result.UpdatedCount} satır güncellendi" +
             (result.SkippedUnknownCount > 0 ? $", {result.SkippedUnknownCount} bilinmeyen anahtar atlandı" : string.Empty);
     }
 
@@ -172,7 +172,7 @@ public partial class LocalizationDeskViewModel : ViewModelBase
         var inventory = TranslationInventoryService.BuildInventory(_projectRoot, out string? error);
         if (error is not null && inventory.Count == 0)
         {
-            StatusLine += $" — ❌ pseudo üretilemedi: {error}";
+            StatusLine += $" — pseudo üretilemedi: {error}";
             return;
         }
         try
@@ -182,11 +182,11 @@ public partial class LocalizationDeskViewModel : ViewModelBase
             string json = PseudoLocaleGenerator.GenerateCatalog(inventory);
             ProjectFileSystem.WriteAllTextAtomically(
                 Path.Combine(localesDir, PseudoLocaleGenerator.PseudoFileName), json);
-            StatusLine += $" — ✅ pseudo katalog yazıldı ({PseudoLocaleGenerator.PseudoFileName})";
+            StatusLine += $" — pseudo katalog yazıldı ({PseudoLocaleGenerator.PseudoFileName})";
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
-            StatusLine += $" — ❌ pseudo yazılamadı: {exception.Message}";
+            StatusLine += $" — pseudo yazılamadı: {exception.Message}";
         }
     }
 

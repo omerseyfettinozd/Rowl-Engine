@@ -110,7 +110,7 @@ internal static class ProjectLintService
         }
     }
 
-    // ── Rule 1: choice / condition targets ──────────────────────────
+    // Rule 1: choice / condition targets
     // Widens the inline TargetNodeId==0 check (error there, error here) to
     // the batch pass and to deleted-node targets, on every node regardless
     // of reachability. Disabled components/options are skipped.
@@ -176,7 +176,7 @@ internal static class ProjectLintService
         }
     }
 
-    // ── Rule 2: Lua pre-scan ─────────────────────────────────────────
+    // Rule 2: Lua pre-scan
     // Empty / oversized .lua files warn; a require/dofile/loadfile literal
     // escaping the project Assets tree errors. Serialize() is the only
     // component access (no reflection); file reads stay under assetsPath.
@@ -370,7 +370,7 @@ internal static class ProjectLintService
         return null;
     }
 
-    // ── Rule 3: dialogue text / translation / glyph ──────────────────
+    // Rule 3: dialogue text / translation / glyph
     // Empty speaker/text warn (same severity as the inline inspector rule).
     // Translation coverage reuses the Faz 3 desk contract: missing catalog
     // entries and stale source hashes warn per locale. Unshapable glyphs
@@ -579,7 +579,7 @@ internal static class ProjectLintService
         return result;
     }
 
-    // ── Rule 5: long-audio streaming budget ─────────────────────────────
+    // Rule 5: long-audio streaming budget
     // Faz 5 Dilim 1: BGM tracks whose on-disk size exceeds the 64 MiB
     // decoded-PCM budget take the OGG streaming path (header-probed
     // duration over threshold); over-budget non-OGG assets fall back to
@@ -654,7 +654,7 @@ internal static class ProjectLintService
         }
     }
 
-    // ── Rule 5 (Faz 5 Dilim 3): eksik katman asset'i ────────────────
+    // Rule 5 (Faz 5 Dilim 3): eksik katman asset'i
     // Katman slotu dolu ama dosyası diskte yoksa advisory WARNING verilir
     // (error YOK). Missing-file sahipliği Validate'dedir (orası error
     // verir); bu kural yalnızca erken uyarıdır. Boş slotlar sessizdir.
@@ -726,7 +726,7 @@ internal static class ProjectLintService
         }
     }
 
-    // ── Rule 6 (Faz 5 Dilim 4): eksik prefetch asset'i ───────────────
+    // Rule 6 (Faz 5 Dilim 4): eksik prefetch asset'i
     // Prefetch penceresi (aktif + sonraki sahne) üst-seviye image/audio
     // yollarını kuyruğa alır; dosyası diskte olmayan bir asset kuyruğu
     // durdurmaz ama missing sayılır + tanı bırakır. Bu kural eksik
@@ -797,7 +797,7 @@ internal static class ProjectLintService
         }
     }
 
-    // ── Rule 7 (Faz 5 Dilim 5): dönüştürülmüş asset tazeliği ────
+    // Rule 7 (Faz 5 Dilim 5): dönüştürülmüş asset tazeliği
     // Her <c>&lt;çıktı&gt;.rowlconv.json</c> sidecar için iki hash karşılaştırılır:
     // sidecar'daki output_sha256 vs diskteki çıktı, sidecar'daki source_sha256
     // vs kaynak (SourceAssets/ altında gövde-adı+eşleşen kaynak uzantıyla
@@ -962,7 +962,7 @@ internal static class ProjectLintService
         return null;
     }
 
-    // ── Rule 4: unused assets ────────────────────────────────────────
+    // Rule 4: unused assets
     // ExactPaths MINUS the referenced-asset candidate set (normalized +
     // images/audio/fonts/scripts prefixes, mirroring batch resolution) =
     // unused warnings. NodeId is null (file-level), AssetPath is set.

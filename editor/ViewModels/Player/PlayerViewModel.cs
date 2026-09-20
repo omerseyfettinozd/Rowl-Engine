@@ -124,7 +124,7 @@ public sealed partial class PlayerViewModel : ViewModelBase
         OnPropertyChanged(nameof(SkipModeLabel));
     }
 
-    // ── Top-level flows ──────────────────────────────────────────
+    // Top-level flows
     //
     // Value-returning flows stay plain methods (tests assert outcomes);
     // the *Command properties below adapt them for view binding.
@@ -173,7 +173,7 @@ public sealed partial class PlayerViewModel : ViewModelBase
         return transition;
     }
 
-    // ── Semantic input ───────────────────────────────────────────
+    // Semantic input
 
     public void HandleCommand(PlayerInputCommand command)
     {
@@ -295,7 +295,7 @@ public sealed partial class PlayerViewModel : ViewModelBase
         RefreshPresentation();
     }
 
-    // ── Per-frame driver ─────────────────────────────────────────
+    // Per-frame driver
 
     public void Tick(float dt)
     {
@@ -359,7 +359,7 @@ public sealed partial class PlayerViewModel : ViewModelBase
         }
     }
 
-    // ── Slots & preferences ──────────────────────────────────────
+    // Slots & preferences
 
     public bool SaveToSlot(int index)
     {
@@ -415,7 +415,7 @@ public sealed partial class PlayerViewModel : ViewModelBase
             Fail(error);
     }
 
-    // ── Faz 5 Dilim 4 prefetch hattı ─────────────────────────────
+    // Faz 5 Dilim 4 prefetch hattı
     //
     // Rozet + chapter-geçiş tetikleme aynı player dikişi (_engine) üzerinden
     // akar; kararlar PrefetchChaptersService'tedir (saf + fail-closed). Fake
@@ -487,7 +487,7 @@ public sealed partial class PlayerViewModel : ViewModelBase
         }
     }
 
-    // ── Internals ────────────────────────────────────────────────
+    // Internals
 
     private bool EnterPlaying(PlayerIntent intent)
     {

@@ -74,7 +74,7 @@ public static class PrefetchChaptersService
     /// <summary>Paketdeki chapter dosyaları öneki (Assets köküne göre).</summary>
     public const string ChaptersPackagePrefix = "json/chapters/";
 
-    // ── Bütçe aynası ───────────────────────────────────────────────
+    // Bütçe aynası
 
     /// <summary>
     /// Bütçeyi native formüle clamp'ler: 0 → varsayılan (32 MiB), aksi halde
@@ -92,7 +92,7 @@ public static class PrefetchChaptersService
             ? DefaultPumpMilliseconds
             : Math.Min(maxMilliseconds, MaxPumpMilliseconds);
 
-    // ── Chapter-id doğrulama ───────────────────────────────────────
+    // Chapter-id doğrulama
 
     /// <summary>
     /// Chapter-id sözdizimi (native <c>checkChapterId</c> aynası): boş değil,
@@ -107,7 +107,7 @@ public static class PrefetchChaptersService
         return Encoding.UTF8.GetByteCount(chapterId) <= MaxChapterIdChars;
     }
 
-    // ── Komşuluk kararları (saf) ───────────────────────────────────
+    // Komşuluk kararları (saf)
 
     /// <summary>
     /// Resident pencere (native <c>applyWindow</c> aynası): sıralı chapter
@@ -163,7 +163,7 @@ public static class PrefetchChaptersService
         return currentActive;
     }
 
-    // ── İlerleme parse ─────────────────────────────────────────────
+    // İlerleme parse
 
     /// <summary>
     /// İlerleme JSON'unu snapshot'a çevirir. Null/boş/bozuk girdi, kökte
@@ -214,7 +214,7 @@ public static class PrefetchChaptersService
         }
     }
 
-    // ── Delege okumaları (null/throw fail-closed) ──────────────────
+    // Delege okumaları (null/throw fail-closed)
 
     /// <summary>
     /// Verilen okuyucudan ilerleme snapshot'ı alır (polling-free: çağrıcı ne
@@ -291,7 +291,7 @@ public static class PrefetchChaptersService
         }
     }
 
-    // ── Rozet ──────────────────────────────────────────────────────
+    // Rozet
 
     /// <summary>
     /// İlerleme JSON'unu hazır/eksik/byte rozetine çevirir. Geçerli girdi
@@ -326,7 +326,7 @@ public static class PrefetchChaptersService
         }
     }
 
-    // ── Paket referans kümesi ──────────────────────────────────────
+    // Paket referans kümesi
 
     /// <summary>
     /// Paket referans dosyası mı? <see cref="ChaptersPackagePrefix"/> altındaki
@@ -367,7 +367,7 @@ public static class PrefetchChaptersService
         return refs;
     }
 
-    // ── Özel yardımcılar ───────────────────────────────────────────
+    // Özel yardımcılar
 
     private static int IndexOf(IReadOnlyList<string>? ordered, string? chapterId)
     {

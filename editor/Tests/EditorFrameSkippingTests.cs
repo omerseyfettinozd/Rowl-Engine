@@ -13,7 +13,7 @@ internal static class EditorFrameSkippingTests
 {
     public static void Run()
     {
-        Console.WriteLine("\n📌 [Test 30]: MS-4 dirty-frame copy gate & idle-diet counters...");
+        Console.WriteLine("\n[Test 30]: MS-4 dirty-frame copy gate & idle-diet counters...");
 
         // Pure gate: active always copies; a freshly settled frame copies
         // once (latch); a still frame on the same step skips; a step advance
@@ -71,6 +71,6 @@ internal static class EditorFrameSkippingTests
             NativeBridge.RowlEngine_Destroy(handle);
         }
 
-        Console.WriteLine("  ✅ [PASS] MS-4 dirty-frame gate truth table and native static query verified");
+        Console.WriteLine("  [PASS] MS-4 dirty-frame gate truth table and native static query verified");
     }
 }

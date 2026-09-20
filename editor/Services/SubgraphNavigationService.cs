@@ -13,7 +13,7 @@ namespace RowlEngine.Editor.Services
     /// <summary>
     /// Faz 4 Dilim 3 — hierarchical subgraph navigation. Owns the subgraph
     /// definitions, the depth stack and the breadcrumb trail
-    /// ("Root › Chapter › Subgraph…"), and computes the canvas scope filter:
+    /// ("Root / Chapter / Subgraph…"), and computes the canvas scope filter:
     /// <list type="bullet">
     /// <item>At root every unsubgraphed node plus each subgraph's boundary
     /// (entry + exit) nodes are visible; interior-only members are hidden so
@@ -240,9 +240,9 @@ namespace RowlEngine.Editor.Services
                 return null;
             string title = owner.Title.Length > 0 ? owner.Title : owner.Id;
             if (owner.EntryNodeId == nodeId)
-                return $"◧ {title}";
+                return title;
             if (owner.ExitNodeIds.Contains(nodeId))
-                return $"{title} ⏏";
+                return title;
             return null;
         }
 

@@ -17,7 +17,7 @@ namespace RowlEngine.Editor.ViewModels.Components
         private const double DefaultHeight = 1080.0;
 
         public override string DisplayName => "Background Layer";
-        public override string Icon => "🖼️";
+        public override string Icon => "Görsel";
         public override string TypeKey => "background";
 
         [ObservableProperty]
@@ -53,7 +53,7 @@ namespace RowlEngine.Editor.ViewModels.Components
         [ObservableProperty]
         private Bitmap? _textureBitmap;
 
-        // ── Scale → Width/Height sync ──
+        // Scale Width/Height sync
         partial void OnScaleChanged(double value)
         {
             if (value <= 0) return;

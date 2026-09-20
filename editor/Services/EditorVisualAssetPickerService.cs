@@ -39,7 +39,7 @@ public static class EditorVisualAssetPickerService
         {
             charComp.Sprite = fileName;
             charComp.RefreshBitmap();
-            logAction?.Invoke($"🖼️ Selected Sprite '{fileName}' for Character Component (Auto-copied to Assets/images)");
+            logAction?.Invoke($"Selected Sprite '{fileName}' for Character Component (Auto-copied to Assets/images)");
             return true;
         }
 
@@ -47,7 +47,7 @@ public static class EditorVisualAssetPickerService
         {
             bgComp.Texture = fileName;
             bgComp.RefreshBitmap();
-            logAction?.Invoke($"🖼️ Selected Texture '{fileName}' for Background Component (Auto-copied to Assets/images)");
+            logAction?.Invoke($"Selected Texture '{fileName}' for Background Component (Auto-copied to Assets/images)");
             return true;
         }
 
@@ -104,7 +104,7 @@ public static class EditorVisualAssetPickerService
         }
         catch (Exception ex)
         {
-            logAction?.Invoke($"⚠️ Failed to pick image file: {ex.Message}");
+            logAction?.Invoke($"Failed to pick image file: {ex.Message}");
         }
     }
 }

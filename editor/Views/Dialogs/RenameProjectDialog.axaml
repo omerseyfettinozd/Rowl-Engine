@@ -8,7 +8,7 @@
         CanResize="False">
 
     <Grid RowDefinitions="Auto, *, Auto" Margin="20">
-        <TextBlock Grid.Row="0" Text="✏️ Projeyi Yeniden Adlandır" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource PrimaryText}" Margin="0,0,0,12"/>
+        <TextBlock Grid.Row="0" Text="Projeyi Yeniden Adlandır" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource PrimaryText}" Margin="0,0,0,12"/>
 
         <StackPanel Grid.Row="1" Spacing="8">
             <TextBlock Text="Yeni Proje Adı" FontSize="12" Foreground="{DynamicResource MutedText}"/>

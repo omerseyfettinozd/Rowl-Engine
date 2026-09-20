@@ -13,7 +13,7 @@ internal static class EditorViewModelThinningTests
 {
     public static void Run(MainWindowViewModel mainVm)
     {
-        Console.WriteLine("\n📌 [Test 28]: ViewModel Thinning Equivalence (Rotation, Selection-Rect, Diagnostics, Telemetry Routing)...");
+        Console.WriteLine("\n[Test 28]: ViewModel Thinning Equivalence (Rotation, Selection-Rect, Diagnostics, Telemetry Routing)...");
 
         Console.WriteLine("    [Step 28.1]: Selection-rect normalization...");
         var forward = EditorSelectionCoordinator.ComputeSelectionRect(new Point(10, 20), new Point(110, 120));
@@ -101,6 +101,6 @@ internal static class EditorViewModelThinningTests
         EditorSceneSyncService.RouteAudioTelemetry(0, 0, 0, 0, PeakBy, RmsBy, null, null);
         EditorSceneSyncService.RouteAudioTelemetry(0, 0, 0, 0, null, null, null, routedAudio);
 
-        Console.WriteLine("  ✅ [PASS] ViewModel thinning equivalence verified");
+        Console.WriteLine("  [PASS] ViewModel thinning equivalence verified");
     }
 }

@@ -10,7 +10,7 @@ internal static class EditorAssetCacheTests
 {
     public static void Run()
     {
-        Console.WriteLine("\n📌 [Test 8]: Performance Benchmark & Cache Optimization Verification...");
+        Console.WriteLine("\n[Test 8]: Performance Benchmark & Cache Optimization Verification...");
         var stopwatch = Stopwatch.StartNew();
 
         // Benchmark 1: Negative caching for missing files (10,000 lookups)
@@ -26,7 +26,7 @@ internal static class EditorAssetCacheTests
         double negativeCacheMilliseconds = stopwatch.Elapsed.TotalMilliseconds;
         double negativeCacheIops = lookupIterations / negativeCacheMilliseconds * 1000.0;
         Console.WriteLine(
-            $"  ⚡ [BENCHMARK] AssetBitmapCache Negative Lookups: {lookupIterations:N0} queries in " +
+            $"  [BENCHMARK] AssetBitmapCache Negative Lookups: {lookupIterations:N0} queries in " +
             $"{negativeCacheMilliseconds:F2}ms ({negativeCacheIops:N0} queries/sec)");
 
         if (negativeCacheMilliseconds > 500)
@@ -46,7 +46,7 @@ internal static class EditorAssetCacheTests
         }
 
         Console.WriteLine(
-            $"  ⚡ [BENCHMARK] AssetBitmapCache: {cacheStats.BitmapCount} unique bitmap, " +
+            $"  [BENCHMARK] AssetBitmapCache: {cacheStats.BitmapCount} unique bitmap, " +
             $"{cacheStats.EstimatedRgbaBytes:N0} estimated RGBA bytes");
         AssetBitmapCache.Clear();
         if (AssetBitmapCache.GetStats().BitmapCount != 0)
@@ -68,6 +68,6 @@ internal static class EditorAssetCacheTests
         }
 
         AssetBitmapCache.Clear();
-        Console.WriteLine("  ✅ [PASS] AssetBitmapCache high-throughput negative caching & memory safety verified");
+        Console.WriteLine("  [PASS] AssetBitmapCache high-throughput negative caching & memory safety verified");
     }
 }

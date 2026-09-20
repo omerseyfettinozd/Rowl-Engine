@@ -11,7 +11,7 @@ namespace RowlEngine.Editor.ViewModels.Components
     public partial class AudioComponentViewModel : NodeComponentViewModel
     {
         public override string DisplayName => "Audio & DSP";
-        public override string Icon => "🔊";
+        public override string Icon => "Ses";
         public override string TypeKey => "audio";
 
         [ObservableProperty]

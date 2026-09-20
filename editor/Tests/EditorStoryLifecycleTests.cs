@@ -11,7 +11,7 @@ internal static class EditorStoryLifecycleTests
 {
     public static void Run(MainWindowViewModel mainVm)
     {
-        Console.WriteLine("\n📌 [Test 17]: StoryGraphLifecycleCoordinator & EditorWorkspaceLayoutService Isolation...");
+        Console.WriteLine("\n[Test 17]: StoryGraphLifecycleCoordinator & EditorWorkspaceLayoutService Isolation...");
 
         // Step 17.1: StoryGraphLifecycleCoordinator Start Node Resolution and State Propagation
         Console.WriteLine("    [Step 17.1]: StoryGraphLifecycleCoordinator Start Node Resolution...");
@@ -170,6 +170,6 @@ internal static class EditorStoryLifecycleTests
         if (!reached || Math.Abs(curZoom - 1.5) > 0.001 || Math.Abs(curPanX - targetX) > 0.05)
             throw new Exception("ComputeSmoothStep failed to converge to target pan and zoom.");
 
-        Console.WriteLine("  ✅ [PASS] StoryGraphLifecycleCoordinator & EditorWorkspaceLayoutService Isolation verified");
+        Console.WriteLine("  [PASS] StoryGraphLifecycleCoordinator & EditorWorkspaceLayoutService Isolation verified");
     }
 }

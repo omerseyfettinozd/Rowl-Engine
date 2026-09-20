@@ -9,7 +9,7 @@ internal static class EditorTransformGizmoTests
 {
     public static void Run(MainWindowViewModel mainVm)
     {
-        Console.WriteLine("\n📌 [Test 22]: Visual Transform Gizmo, Rotation & Scale Controls...");
+        Console.WriteLine("\n[Test 22]: Visual Transform Gizmo, Rotation & Scale Controls...");
 
         // Step 22.1: CharacterComponentViewModel Rotation & Scale properties
         Console.WriteLine("    [Step 22.1]: CharacterComponentViewModel Rotation & Scale...");
@@ -87,6 +87,6 @@ internal static class EditorTransformGizmoTests
         if (testNode.BackgroundRotation != 0.0 || testNode.CharacterRotation != 0.0)
             throw new Exception("ResetRotationCommand failed to reset rotations on selected node components");
 
-        Console.WriteLine("  ✅ [PASS] Visual Transform Gizmo, Rotation & Scale Controls verified");
+        Console.WriteLine("  [PASS] Visual Transform Gizmo, Rotation & Scale Controls verified");
     }
 }

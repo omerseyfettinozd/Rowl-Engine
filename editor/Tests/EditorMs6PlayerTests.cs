@@ -13,7 +13,7 @@ internal static class EditorMs6PlayerTests
 {
     public static void Run()
     {
-        Console.WriteLine("\n📌 [Test 32]: MS-6 preview click-to-complete (editor headless)...");
+        Console.WriteLine("\n[Test 32]: MS-6 preview click-to-complete (editor headless)...");
 
         string graphPath = Path.Combine(Path.GetTempPath(), $"RowlMs6Preview_{Guid.NewGuid():N}.json");
         File.WriteAllText(graphPath,
@@ -69,7 +69,7 @@ internal static class EditorMs6PlayerTests
             try { File.Delete(graphPath); } catch { }
         }
 
-        Console.WriteLine("  ✅ [PASS] MS-6 preview click-to-complete verified");
+        Console.WriteLine("  [PASS] MS-6 preview click-to-complete verified");
     }
 
     private static void ClickEmptyCanvas(IntPtr handle)

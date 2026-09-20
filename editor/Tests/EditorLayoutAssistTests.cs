@@ -8,7 +8,7 @@ internal static class EditorLayoutAssistTests
 {
     public static void Run(MainWindowViewModel mainVm)
     {
-        Console.WriteLine("\n📌 [Test 6]: OBS Assist Transform & Alignment System...");
+        Console.WriteLine("\n[Test 6]: OBS Assist Transform & Alignment System...");
         if (mainVm.SelectedNode == null && mainVm.Nodes.Count > 0)
             mainVm.SelectNode(mainVm.Nodes[0]);
 
@@ -37,6 +37,6 @@ internal static class EditorLayoutAssistTests
             mainVm.ToggleSnapAssist();
         }
 
-        Console.WriteLine("  ✅ [PASS] OBS Assist (Fit 1080p, Center, Ground Baseline, Snap Toggle) verified");
+        Console.WriteLine("  [PASS] OBS Assist (Fit 1080p, Center, Ground Baseline, Snap Toggle) verified");
     }
 }

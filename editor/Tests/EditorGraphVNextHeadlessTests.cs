@@ -10,7 +10,7 @@ internal static class EditorGraphVNextHeadlessTests
 {
     public static void Run()
     {
-        Console.WriteLine("\n📌 [Test 34]: Graph vNext sözleşmesi (v5 serileştirme + yapı doğrulama)...");
+        Console.WriteLine("\n[Test 34]: Graph vNext sözleşmesi (v5 serileştirme + yapı doğrulama)...");
 
         // Step 34.1: v5 round-trip through the loader.
         Console.WriteLine("    [Step 34.1]: v5 serialize → load structure round-trip...");
@@ -81,6 +81,6 @@ internal static class EditorGraphVNextHeadlessTests
                 throw new Exception("Orphan chapter reference was not reported as an error.");
         }
 
-        Console.WriteLine("  ✅ [PASS] Graph vNext v5 round-trip and structure validation verified");
+        Console.WriteLine("  [PASS] Graph vNext v5 round-trip and structure validation verified");
     }
 }

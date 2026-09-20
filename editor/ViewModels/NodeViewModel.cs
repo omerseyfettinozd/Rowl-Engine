@@ -112,7 +112,7 @@ namespace RowlEngine.Editor.ViewModels
         private bool _isSubgraphBoundary;
 
         /// <summary>
-        /// Display-only badge text for boundary nodes (e.g. "◧ Trial").
+        /// Display-only badge text for boundary nodes (e.g. "Trial").
         /// Empty for interior and plain nodes.
         /// </summary>
         [ObservableProperty]

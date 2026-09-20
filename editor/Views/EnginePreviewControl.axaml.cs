@@ -221,7 +221,7 @@ namespace RowlEngine.Editor.Views
                 if (badge != null)
                     badge.Background = Avalonia.Media.SolidColorBrush.Parse(hexColor);
                 if (label != null)
-                    label.Text = $"● {text}";
+                    label.Text = $"{text}";
             });
         }
     }

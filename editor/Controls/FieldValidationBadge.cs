@@ -8,7 +8,7 @@ namespace RowlEngine.Editor.Controls
     /// <summary>
     /// Faz 4 Dilim 4 — inline field validation badge. Binds to the shared
     /// <see cref="InspectorValidationService"/> and shows the first matching
-    /// issue for one (node, field) pair: red ⛔ for errors, amber ⚠ for
+    /// issue for one (node, field) pair: red for errors, amber for
     /// warnings (full message in the tooltip). Collapsed when the field is
     /// clean. Refresh is event-driven (<c>InspectorValidationService.Changed</c>),
     /// so typing in the Inspector updates badges without polling.
@@ -106,7 +106,7 @@ namespace RowlEngine.Editor.Controls
                     break;
                 }
             }
-            _label.Text = first.IsError ? $"⛔ {first.Message}" : $"⚠ {first.Message}";
+            _label.Text = first.IsError ? $"Hata: {first.Message}" : $"Uyarı: {first.Message}";
             string color = first.IsError ? "#7F1D1D" : "#78350F";
             string border = first.IsError ? "#EF4444" : "#F59E0B";
             Background = new Avalonia.Media.SolidColorBrush(

@@ -15,15 +15,15 @@
             <Border Background="{DynamicResource CardHeaderBackground}" CornerRadius="6,6,0,0" Padding="8,6">
                 <Grid ColumnDefinitions="*, Auto">
                     <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                        <TextBlock Text="🔊" FontSize="13" VerticalAlignment="Center"/>
+                        <TextBlock Text="Ses" FontSize="13" VerticalAlignment="Center"/>
                         <TextBlock Text="{Binding DisplayName}" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource PrimaryText}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                     </StackPanel>
                     <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="3" VerticalAlignment="Center">
                         <CheckBox IsChecked="{Binding IsEnabled}" ToolTip.Tip="Enable/Disable" MinWidth="0" Padding="0" Margin="0,0,2,0"/>
-                        <Button Content="▲" Command="{Binding MoveUpCommand}" ToolTip.Tip="Move Up" FontSize="10" Padding="4,2" MinWidth="0" Background="Transparent" Foreground="{DynamicResource MutedText}" BorderThickness="0"/>
-                        <Button Content="▼" Command="{Binding MoveDownCommand}" ToolTip.Tip="Move Down" FontSize="10" Padding="4,2" MinWidth="0" Background="Transparent" Foreground="{DynamicResource MutedText}" BorderThickness="0"/>
-                        <ToggleButton IsChecked="{Binding IsExpanded}" Content="⚙️" FontSize="10" Padding="4,2" MinWidth="0" Background="Transparent" Foreground="{DynamicResource MutedText}" BorderThickness="0"/>
-                        <Button Content="🗑️" FontSize="10" Padding="4,2" MinWidth="0" Background="Transparent" Foreground="#EF4444" BorderThickness="0" ToolTip.Tip="Remove Component" Command="{Binding RemoveSelfCommand}"/>
+                        <Button Content="Yukarı" Command="{Binding MoveUpCommand}" ToolTip.Tip="Move Up" FontSize="10" Padding="4,2" MinWidth="0" Background="Transparent" Foreground="{DynamicResource MutedText}" BorderThickness="0"/>
+                        <Button Content="Aşağı" Command="{Binding MoveDownCommand}" ToolTip.Tip="Move Down" FontSize="10" Padding="4,2" MinWidth="0" Background="Transparent" Foreground="{DynamicResource MutedText}" BorderThickness="0"/>
+                        <ToggleButton IsChecked="{Binding IsExpanded}" Content="Ayar" FontSize="10" Padding="4,2" MinWidth="0" Background="Transparent" Foreground="{DynamicResource MutedText}" BorderThickness="0"/>
+                        <Button Content="Sil" FontSize="10" Padding="4,2" MinWidth="0" Background="Transparent" Foreground="#EF4444" BorderThickness="0" ToolTip.Tip="Remove Component" Command="{Binding RemoveSelfCommand}"/>
                     </StackPanel>
                 </Grid>
             </Border>
@@ -39,8 +39,8 @@
                         <Button Grid.Column="1" Command="{Binding ToggleBgmPreviewCommand}" Margin="4,0,0,0" Padding="8,4"
                                 ToolTip.Tip="BGM Önizleme Çal / Durdur">
                             <Panel>
-                                <TextBlock Text="▶" IsVisible="{Binding !IsPreviewingBgm}" FontSize="11" Foreground="#10B981"/>
-                                <TextBlock Text="⏹" IsVisible="{Binding IsPreviewingBgm}" FontSize="11" Foreground="#EF4444"/>
+                                <TextBlock Text="Önizle" IsVisible="{Binding !IsPreviewingBgm}" FontSize="11" Foreground="#10B981"/>
+                                <TextBlock Text="Durdur" IsVisible="{Binding IsPreviewingBgm}" FontSize="11" Foreground="#EF4444"/>
                             </Panel>
                         </Button>
                     </Grid>
@@ -64,8 +64,8 @@
                         <Button Grid.Column="1" Command="{Binding ToggleSfxPreviewCommand}" Margin="4,0,0,0" Padding="8,4"
                                 ToolTip.Tip="SFX Önizleme Çal / Durdur">
                             <Panel>
-                                <TextBlock Text="▶" IsVisible="{Binding !IsPreviewingSfx}" FontSize="11" Foreground="#3B82F6"/>
-                                <TextBlock Text="⏹" IsVisible="{Binding IsPreviewingSfx}" FontSize="11" Foreground="#EF4444"/>
+                                <TextBlock Text="Önizle" IsVisible="{Binding !IsPreviewingSfx}" FontSize="11" Foreground="#3B82F6"/>
+                                <TextBlock Text="Durdur" IsVisible="{Binding IsPreviewingSfx}" FontSize="11" Foreground="#EF4444"/>
                             </Panel>
                         </Button>
                     </Grid>

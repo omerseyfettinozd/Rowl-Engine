@@ -488,7 +488,7 @@ public sealed class EditorLocalizationSlice4Tests
             string reply = desk.ImportCsvText(
                 "content_id,speaker,source_text,translated_text,alt_text\r\n" +
                 $"{IdB},Voice,Pick up.,Alıcıyı kaldırdın.,\r\n");
-            Assert.StartsWith("✅", reply);
+            Assert.StartsWith("1 satır güncellendi", reply);
             desk.SaveCommand.Execute(null);
 
             desk.GeneratePseudoCatalogCommand.Execute(null);

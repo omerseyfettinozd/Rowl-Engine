@@ -57,12 +57,12 @@ public static class EditorComponentService
             if (component is BackgroundComponentViewModel bg) bg.RefreshBitmap();
             else if (component is CharacterComponentViewModel ch) ch.RefreshBitmap();
 
-            log?.Invoke($"➕ Added {component.DisplayName} component to '{resolvedTarget.Name}' in Node #{node.Id}");
+            log?.Invoke($"Added {component.DisplayName} component to '{resolvedTarget.Name}' in Node #{node.Id}");
             return component;
         }
         catch (KeyNotFoundException)
         {
-            log?.Invoke($"⚠️ Unknown component type: {typeKey}");
+            log?.Invoke($"Unknown component type: {typeKey}");
             return null;
         }
     }
@@ -87,7 +87,7 @@ public static class EditorComponentService
             node.RemoveComponent(component);
         }
 
-        log?.Invoke($"🗑️ Removed {name} component from Node #{node.Id}");
+        log?.Invoke($"Removed {name} component from Node #{node.Id}");
         return true;
     }
 

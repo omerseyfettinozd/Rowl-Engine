@@ -16,16 +16,16 @@
                     <Canvas x:Name="ViewportCanvas" Width="1920" Height="1080" Background="#161B2E">
                         <Canvas.ContextMenu>
                             <ContextMenu>
-                                <MenuItem Header="🎯 Merkeze Hizala (Center to Screen)" Command="{Binding CenterSelectedElementCommand}"/>
-                                <MenuItem Header="📐 Çerçeveye Sığdır (Fit to Canvas)" Command="{Binding FitBackgroundToScreenCommand}"/>
-                                <MenuItem Header="🖼️ Arka Planı 1920x1080 Yap (Stretch Full HD)" Command="{Binding FitBackgroundToScreenCommand}"/>
-                                <MenuItem Header="⬇️ Karakterleri Zemine Oturt (Ground Baseline)" Command="{Binding AlignCharacterToBottomCommand}"/>
+                                <MenuItem Header="Merkeze Hizala (Center to Screen)" Command="{Binding CenterSelectedElementCommand}"/>
+                                <MenuItem Header="Çerçeveye Sığdır (Fit to Canvas)" Command="{Binding FitBackgroundToScreenCommand}"/>
+                                <MenuItem Header="Arka Planı 1920x1080 Yap (Stretch Full HD)" Command="{Binding FitBackgroundToScreenCommand}"/>
+                                <MenuItem Header="Karakterleri Zemine Oturt (Ground Baseline)" Command="{Binding AlignCharacterToBottomCommand}"/>
                                 <Separator/>
-                                <MenuItem Header="↕ Diyalog Alt Banner (1720x220)" Command="{Binding PresetDialogueBoxCommand}" CommandParameter="BottomBanner"/>
-                                <MenuItem Header="🎯 Diyalog Kutusunu Ortala" Command="{Binding PresetDialogueBoxCommand}" CommandParameter="Center"/>
+                                <MenuItem Header="Diyalog Alt Banner (1720x220)" Command="{Binding PresetDialogueBoxCommand}" CommandParameter="BottomBanner"/>
+                                <MenuItem Header="Diyalog Kutusunu Ortala" Command="{Binding PresetDialogueBoxCommand}" CommandParameter="Center"/>
                                 <Separator/>
-                                <MenuItem Header="🧲 Manyetik Snap Kılavuzları (Snap Assist)" Command="{Binding ToggleSnapAssistCommand}"/>
-                                <MenuItem Header="🔄 Rotasyonu Sıfırla (Reset Rotation)" Command="{Binding ResetRotationCommand}"/>
+                                <MenuItem Header="Manyetik Snap Kılavuzları (Snap Assist)" Command="{Binding ToggleSnapAssistCommand}"/>
+                                <MenuItem Header="Rotasyonu Sıfırla (Reset Rotation)" Command="{Binding ResetRotationCommand}"/>
                             </ContextMenu>
                         </Canvas.ContextMenu>
 
@@ -98,14 +98,13 @@
                                             <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="6"
                                                         IsVisible="{Binding SpriteBitmap, Converter={x:Static ObjectConverters.IsNull}}"
                                                         IsHitTestVisible="False">
-                                                <TextBlock Text="👤" FontSize="36" HorizontalAlignment="Center"/>
                                                 <TextBlock Text="{Binding Sprite}" Foreground="#38BDF8" FontSize="12" FontWeight="Bold" HorizontalAlignment="Center"/>
                                             </StackPanel>
 
                                             <!-- Overlay Label at Bottom -->
                                             <Border VerticalAlignment="Bottom" HorizontalAlignment="Center" Background="#D00F172A" Padding="6,2" Margin="0,0,0,4" CornerRadius="4" IsHitTestVisible="False">
                                                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="4">
-                                                    <TextBlock Text="👤 Character" Foreground="#00F0FF" FontSize="10" FontWeight="Bold"/>
+                                                    <TextBlock Text="Character" Foreground="#00F0FF" FontSize="10" FontWeight="Bold"/>
                                                     <TextBlock Text="{Binding Width, StringFormat='({0:0}'}" Foreground="#94A3B8" FontSize="9"/>
                                                     <TextBlock Text="x" Foreground="#94A3B8" FontSize="9"/>
                                                     <TextBlock Text="{Binding Height, StringFormat='{}{0:0})'}" Foreground="#94A3B8" FontSize="9"/>
@@ -182,7 +181,7 @@
                                             <!-- Drag handle badge -->
                                             <Border HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-14,14,0" Background="#0F172A" BorderBrush="{Binding BorderColorHex}" BorderThickness="1" CornerRadius="4" Padding="6,2" IsHitTestVisible="False">
                                                 <StackPanel Orientation="Horizontal" Spacing="4">
-                                                    <TextBlock Text="💬 Dialogue Box" Foreground="{Binding BorderColorHex}" FontSize="10" FontWeight="Bold"/>
+                                                    <TextBlock Text="Dialogue Box" Foreground="{Binding BorderColorHex}" FontSize="10" FontWeight="Bold"/>
                                                     <TextBlock Text="{Binding Width, StringFormat='({0:0}'}" Foreground="#94A3B8" FontSize="10"/>
                                                     <TextBlock Text="x" Foreground="#94A3B8" FontSize="10"/>
                                                     <TextBlock Text="{Binding Height, StringFormat='{}{0:0})'}" Foreground="#94A3B8" FontSize="10"/>
@@ -246,7 +245,7 @@
 
                         <!-- Floating HUD Snap Tooltip Badge -->
                         <Border x:Name="SnapBadge" IsVisible="False" IsHitTestVisible="False" Background="#0F172A" BorderBrush="#00F0FF" BorderThickness="2" CornerRadius="6" Padding="10,5" BoxShadow="0 6 16 0 #000000">
-                            <TextBlock x:Name="SnapBadgeText" Text="🧲 Snapped" Foreground="#00F0FF" FontSize="13" FontWeight="Bold"/>
+                            <TextBlock x:Name="SnapBadgeText" Text="Snapped" Foreground="#00F0FF" FontSize="13" FontWeight="Bold"/>
                         </Border>
 
                     </Canvas>
@@ -259,7 +258,6 @@
                     Background="#D90F172A" BorderBrush="#334155" BorderThickness="1"
                     IsHitTestVisible="False" Opacity="0.9">
                 <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                    <TextBlock Text="🔊" FontSize="11" Foreground="#94A3B8" VerticalAlignment="Center"/>
                     <StackPanel Spacing="2" VerticalAlignment="Center">
                         <!-- Left Channel -->
                         <StackPanel Orientation="Horizontal" Spacing="3">

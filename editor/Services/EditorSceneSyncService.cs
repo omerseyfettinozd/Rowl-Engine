@@ -31,7 +31,7 @@ public static class EditorSceneSyncService
         }
         catch (Exception ex)
         {
-            log?.Invoke($"⚠️ Component-based scene sync failed, falling back to legacy: {ex.Message}");
+            log?.Invoke($"Component-based scene sync failed, falling back to legacy: {ex.Message}");
             // Fallback to legacy single-character API with rotation
             host.UpdateSceneEx(
                 node.Speaker ?? "",

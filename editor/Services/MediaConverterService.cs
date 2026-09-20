@@ -202,7 +202,7 @@ public static class MediaConverterService
             && string.Equals(provenance.OutputSha256, outputHash, StringComparison.OrdinalIgnoreCase);
     }
 
-    // ── CLI inşası (tek nokta; sözleşme sırası) ────────────────
+    // CLI inşası (tek nokta; sözleşme sırası)
 
     /// <summary>Sözleşme: <c>rowl_webp2png -o OUT.png --sidecar FILE IN.webp</c>.</summary>
     public static ProcessStartInfo BuildWebpStartInfo(
@@ -289,7 +289,7 @@ public static class MediaConverterService
             _ => null,
         });
 
-    // ── Dönüştürme ─────────────────────────────────────────────
+    // Dönüştürme
 
     /// <summary>
     /// Tek dosyayı dönüştürür (fail-closed: timeout/exit-code/sidecar
@@ -347,7 +347,7 @@ public static class MediaConverterService
             if (verifyError is not null)
                 return new(ConversionOutcome.Failed, outputRelative, verifyError);
             StampSourcePath(outputFullPath, sourcePathStamp ?? Path.GetFileName(sourceFullPath));
-            log?.Invoke($"🔄 Dönüştürüldü: {Path.GetFileName(sourceFullPath)} -> {outputRelative}");
+            log?.Invoke($"Dönüştürüldü: {Path.GetFileName(sourceFullPath)} -> {outputRelative}");
             return new(ConversionOutcome.Converted, outputRelative, $"Dönüştürüldü: '{outputRelative}'.");
         }
 
@@ -412,7 +412,7 @@ public static class MediaConverterService
             if (verifyError is not null)
                 return new(ConversionOutcome.Failed, outputRelative, verifyError);
             StampSourcePath(outputFullPath, sourcePathStamp ?? Path.GetFileName(sourceFullPath));
-            log?.Invoke($"🔄 Dönüştürüldü: {Path.GetFileName(sourceFullPath)} -> {outputRelative}");
+            log?.Invoke($"Dönüştürüldü: {Path.GetFileName(sourceFullPath)} -> {outputRelative}");
             return new(ConversionOutcome.Converted, outputRelative, $"Dönüştürüldü: '{outputRelative}'.");
         }
         finally
@@ -555,7 +555,7 @@ public static class MediaConverterService
         }
         catch (Exception error)
         {
-            log?.Invoke($"⚠️ SourceAssets taranamadı ({error.GetType().Name}); dönüştürme atlandı.");
+            log?.Invoke($"SourceAssets taranamadı ({error.GetType().Name}); dönüştürme atlandı.");
             return results;
         }
         Array.Sort(sources, StringComparer.Ordinal);

@@ -13,7 +13,7 @@ internal static class EditorCameraTransitionTests
 {
     public static void Run(MainWindowViewModel mainVm)
     {
-        Console.WriteLine("\n📌 [Test 11]: Camera & Transition Components Lifecycle & Native P/Invoke...");
+        Console.WriteLine("\n[Test 11]: Camera & Transition Components Lifecycle & Native P/Invoke...");
 
         // 1. Component Registry Discovery
         var availableTypes = ComponentRegistry.AvailableTypes;
@@ -155,6 +155,6 @@ internal static class EditorCameraTransitionTests
             }
         }
 
-        Console.WriteLine("  ✅ [PASS] Camera and Transition component models, hydration, and NativeBridge P/Invoke verified");
+        Console.WriteLine("  [PASS] Camera and Transition component models, hydration, and NativeBridge P/Invoke verified");
     }
 }

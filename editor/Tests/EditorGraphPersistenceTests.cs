@@ -13,13 +13,13 @@ internal static class EditorGraphPersistenceTests
 {
     public static void Run(MainWindowViewModel mainVm, string testProjectRoot)
     {
-        Console.WriteLine("\n📌 [Test 4]: Story Graph v4 Serialization & Coordinate Persistence...");
+        Console.WriteLine("\n[Test 4]: Story Graph v4 Serialization & Coordinate Persistence...");
         if (!mainVm.LoadFullStoryGraphFile())
             throw new Exception("Failed to load full_story_graph.json");
         if (mainVm.Nodes.Count == 0)
             throw new Exception("Nodes collection empty after load");
         Console.WriteLine(
-            $"  ✅ [PASS] Loaded {mainVm.Nodes.Count} project nodes with full component integrity " +
+            $"  [PASS] Loaded {mainVm.Nodes.Count} project nodes with full component integrity " +
             "(no unwanted node pollution)");
 
         if (!ProjectOpenCoordinator.TryResolve(testProjectRoot, out var resolvedProject) ||
@@ -35,7 +35,7 @@ internal static class EditorGraphPersistenceTests
             throw new Exception("Assets folder selection was not resolved to its project root");
         }
         Console.WriteLine(
-            "  ✅ [PASS] Project-folder and Assets-folder selection resolve to the same project root");
+            "  [PASS] Project-folder and Assets-folder selection resolve to the same project root");
 
         var successfulTransition = new List<string>();
         bool switchSucceeded = ProjectOpenCoordinator.Switch(
@@ -69,7 +69,7 @@ internal static class EditorGraphPersistenceTests
         {
             throw new Exception("Failed project transition rollback ordering changed");
         }
-        Console.WriteLine("  ✅ [PASS] Project transition success and rollback ordering");
+        Console.WriteLine("  [PASS] Project transition success and rollback ordering");
 
         string fileSystemTestRoot = Path.Combine(
             Path.GetTempPath(), $"RowlFileSystemTests_{Guid.NewGuid():N}");
@@ -96,7 +96,7 @@ internal static class EditorGraphPersistenceTests
         {
             try { Directory.Delete(fileSystemTestRoot, true); } catch { }
         }
-        Console.WriteLine("  ✅ [PASS] Project file copy and atomic write primitives");
+        Console.WriteLine("  [PASS] Project file copy and atomic write primitives");
 
         var multiChoiceSource = new NodeViewModel(9001, "Multi Choice", 0, 0, bare: true);
         var firstChoiceObject = multiChoiceSource.CreateObject("First Choices");
@@ -120,7 +120,7 @@ internal static class EditorGraphPersistenceTests
         if (!reloadedRoutes.SetEquals(new[] { "first_route", "second_route" }))
             throw new Exception("Multiple ChoiceComponents did not preserve every route");
         Console.WriteLine(
-            "  ✅ [PASS] Multiple ChoiceComponents preserve every stable-ID route across save/reload");
+            "  [PASS] Multiple ChoiceComponents preserve every stable-ID route across save/reload");
 
         var deletedTarget = mainVm.Nodes.First(item => item.Id == 9002);
         mainVm.DeleteNode(deletedTarget);
@@ -136,7 +136,7 @@ internal static class EditorGraphPersistenceTests
             if (savedRoutes.Contains("first_route") || !savedRoutes.Contains("second_route"))
                 throw new Exception("Deleting a target node left a stale choice route");
         }
-        Console.WriteLine("  ✅ [PASS] Deleting a target node removes its persisted choice route");
+        Console.WriteLine("  [PASS] Deleting a target node removes its persisted choice route");
 
         string graphPath = Path.Combine(
             MainWindowViewModel.AssetsJsonPath, "full_story_graph.json");
@@ -148,6 +148,6 @@ internal static class EditorGraphPersistenceTests
         if (!mainVm.Nodes.Select(item => item.Id).SequenceEqual(nodeIdsBeforeFailedLoad))
             throw new Exception("Malformed graph replaced the current in-memory project");
         File.WriteAllText(graphPath, validGraph);
-        Console.WriteLine("  ✅ [PASS] Malformed graph loading preserves the current in-memory project");
+        Console.WriteLine("  [PASS] Malformed graph loading preserves the current in-memory project");
     }
 }

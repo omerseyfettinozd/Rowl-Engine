@@ -128,7 +128,7 @@ public static class TranslationExchangeService
         return TranslationStatusService.SerializeCatalog(normalized, entries);
     }
 
-    // ── CSV codec (RFC 4180) ──────────────────────────────────────────
+    // CSV codec (RFC 4180)
 
     internal static string Escape(string? value)
     {

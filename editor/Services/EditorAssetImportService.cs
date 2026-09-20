@@ -72,7 +72,7 @@ public static class EditorAssetImportService
             string fileName = Path.GetFileName(fullPath);
             if (MediaFormatCatalog.RequiresExplicitRejection(fileName))
             {
-                log?.Invoke($"❌ Import rejected: {MediaFormatCatalog.RejectionMessage(fileName)}");
+                log?.Invoke($"Import rejected: {MediaFormatCatalog.RejectionMessage(fileName)}");
                 continue;
             }
             if (MediaConverterService.TryGetConversionTarget(
@@ -87,12 +87,12 @@ public static class EditorAssetImportService
                     fullPath, outputFull, toolName, converterOptions, log, cancellationToken).ConfigureAwait(false);
                 if (conversion.Outcome == MediaConverterService.ConversionOutcome.Failed)
                 {
-                    log?.Invoke($"❌ Import conversion failed: {conversion.Message}");
+                    log?.Invoke($"Import conversion failed: {conversion.Message}");
                     continue;
                 }
                 log?.Invoke(conversion.Outcome == MediaConverterService.ConversionOutcome.SkippedUpToDate
-                    ? $"⏭️ Import skipped (up to date): {fileName} -> Assets/{outDir}/{outputName}"
-                    : $"📥 Imported Asset (converted): {fileName} -> Assets/{outDir}/{outputName}");
+                    ? $"Import skipped (up to date): {fileName} -> Assets/{outDir}/{outputName}"
+                    : $"Imported Asset (converted): {fileName} -> Assets/{outDir}/{outputName}");
                 imported.Add($"{outDir}/{outputName}");
                 continue;
             }
@@ -110,7 +110,7 @@ public static class EditorAssetImportService
             }
 
             string relativeLog = string.IsNullOrEmpty(subDir) ? fileName : $"{subDir}/{fileName}";
-            log?.Invoke($"📥 Imported Asset: {fileName} -> Assets/{relativeLog}");
+            log?.Invoke($"Imported Asset: {fileName} -> Assets/{relativeLog}");
             imported.Add(relativeLog);
         }
 
@@ -128,7 +128,7 @@ public static class EditorAssetImportService
         if (!File.Exists(fullPath)) return string.Empty;
         if (MediaFormatCatalog.RequiresExplicitRejection(fullPath))
         {
-            log?.Invoke($"❌ Import rejected: {MediaFormatCatalog.RejectionMessage(Path.GetFileName(fullPath))}");
+            log?.Invoke($"Import rejected: {MediaFormatCatalog.RejectionMessage(Path.GetFileName(fullPath))}");
             return string.Empty;
         }
         if (MediaConverterService.TryGetConversionTarget(
@@ -140,10 +140,10 @@ public static class EditorAssetImportService
                 .GetAwaiter().GetResult();
             if (conversion.Outcome == MediaConverterService.ConversionOutcome.Failed)
             {
-                log?.Invoke($"❌ Import conversion failed: {conversion.Message}");
+                log?.Invoke($"Import conversion failed: {conversion.Message}");
                 return string.Empty;
             }
-            log?.Invoke($"📥 Auto-imported image (converted) '{outputName}' into Assets/{outDir}/");
+            log?.Invoke($"Auto-imported image (converted) '{outputName}' into Assets/{outDir}/");
             return outputName;
         }
 
@@ -158,7 +158,7 @@ public static class EditorAssetImportService
             File.Copy(fullPath, destPath, overwrite: true);
         }
 
-        log?.Invoke($"📥 Auto-imported image '{fileName}' into Assets/images/");
+        log?.Invoke($"Auto-imported image '{fileName}' into Assets/images/");
         return fileName;
     }
 
@@ -173,7 +173,7 @@ public static class EditorAssetImportService
         if (!File.Exists(fullPath)) return string.Empty;
         if (MediaFormatCatalog.RequiresExplicitRejection(fullPath))
         {
-            log?.Invoke($"❌ Import rejected: {MediaFormatCatalog.RejectionMessage(Path.GetFileName(fullPath))}");
+            log?.Invoke($"Import rejected: {MediaFormatCatalog.RejectionMessage(Path.GetFileName(fullPath))}");
             return string.Empty;
         }
         if (MediaConverterService.TryGetConversionTarget(
@@ -185,10 +185,10 @@ public static class EditorAssetImportService
                 .GetAwaiter().GetResult();
             if (conversion.Outcome == MediaConverterService.ConversionOutcome.Failed)
             {
-                log?.Invoke($"❌ Import conversion failed: {conversion.Message}");
+                log?.Invoke($"Import conversion failed: {conversion.Message}");
                 return string.Empty;
             }
-            log?.Invoke($"📥 Auto-imported audio (converted) '{outputName}' into Assets/{outDir}/");
+            log?.Invoke($"Auto-imported audio (converted) '{outputName}' into Assets/{outDir}/");
             return outputName;
         }
 
@@ -203,7 +203,7 @@ public static class EditorAssetImportService
             File.Copy(fullPath, destPath, overwrite: true);
         }
 
-        log?.Invoke($"📥 Auto-imported audio '{fileName}' into Assets/audio/");
+        log?.Invoke($"Auto-imported audio '{fileName}' into Assets/audio/");
         return fileName;
     }
 }

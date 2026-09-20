@@ -10,7 +10,7 @@ internal static class EditorSaveAsBuildTests
 {
     public static void Run(MainWindowViewModel mainVm, string testProjectRoot)
     {
-        Console.WriteLine("\n📌 [Test 12]: ProjectSaveAsCoordinator, PackageAssetsAsync & Pipeline Validation Isolation...");
+        Console.WriteLine("\n[Test 12]: ProjectSaveAsCoordinator, PackageAssetsAsync & Pipeline Validation Isolation...");
 
         // 1. ProjectSaveAsCoordinator Success & Manifest Verification
         string testCoordSaveAsDir = Path.Combine(Path.GetTempPath(), $"RowlTestCoord_SaveAs_{Guid.NewGuid():N}");
@@ -107,6 +107,6 @@ internal static class EditorSaveAsBuildTests
         try { Directory.Delete(testCoordSaveAsDir, true); } catch { }
         try { File.Delete(testPackageOut); } catch { }
 
-        Console.WriteLine("  ✅ [PASS] ProjectSaveAsCoordinator, PackageAssetsAsync & Pipeline Validation Isolation verified");
+        Console.WriteLine("  [PASS] ProjectSaveAsCoordinator, PackageAssetsAsync & Pipeline Validation Isolation verified");
     }
 }

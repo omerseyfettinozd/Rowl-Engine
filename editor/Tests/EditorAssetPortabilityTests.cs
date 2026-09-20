@@ -8,7 +8,7 @@ internal static class EditorAssetPortabilityTests
 {
     public static void Run(MainWindowViewModel mainVm)
     {
-        Console.WriteLine("\n📌 [Test 5]: Asset Auto-Copy & Project Portability (External Image Import)...");
+        Console.WriteLine("\n[Test 5]: Asset Auto-Copy & Project Portability (External Image Import)...");
         string tempExternalFile = Path.Combine(
             Path.GetTempPath(), "test_external_character_sprite.png");
         File.WriteAllBytes(
@@ -32,7 +32,7 @@ internal static class EditorAssetPortabilityTests
         try { File.Delete(tempExternalFile); } catch { }
         try { File.Delete(expectedDestination); } catch { }
         Console.WriteLine(
-            "  ✅ [PASS] External file automatically copied into project Assets/images/ " +
+            "  [PASS] External file automatically copied into project Assets/images/ " +
             "and linked via relative filename");
     }
 }

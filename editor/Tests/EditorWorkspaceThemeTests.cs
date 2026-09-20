@@ -7,7 +7,7 @@ internal static class EditorWorkspaceThemeTests
 {
     public static void Run(MainWindowViewModel mainVm)
     {
-        Console.WriteLine("\n📌 [Test 2]: Dynamic Theming (Light/Orange-White & Dark/Black-White)...");
+        Console.WriteLine("\n[Test 2]: Dynamic Theming (Light/Orange-White & Dark/Black-White)...");
         if (!mainVm.IsDarkMode)
             throw new Exception("Default theme should be Dark mode");
         mainVm.ToggleTheme();
@@ -18,7 +18,7 @@ internal static class EditorWorkspaceThemeTests
         mainVm.ToggleTheme();
         if (!mainVm.IsDarkMode)
             throw new Exception("Theme toggle should switch back to Dark mode");
-        Console.WriteLine("  ✅ [PASS] Theme toggle (Dark <-> Light/Orange) verified");
+        Console.WriteLine("  [PASS] Theme toggle (Dark <-> Light/Orange) verified");
 
         mainVm.ShowPanel("Hierarchy");
         if (mainVm.HierarchyPanelWidth.Value != 0 || mainVm.HierarchySplitterWidth.Value != 0)
@@ -32,7 +32,7 @@ internal static class EditorWorkspaceThemeTests
         mainVm.ShowPanel("Inspector");
         if (mainVm.InspectorPanelWidth.Value != 280 || mainVm.InspectorSplitterWidth.Value != 6)
             throw new Exception("Inspector did not restore its workspace width");
-        Console.WriteLine("  ✅ [PASS] Hidden side panels release workspace width");
+        Console.WriteLine("  [PASS] Hidden side panels release workspace width");
 
         mainVm.ShowPanel("Log");
         if (mainVm.IsLogPanelVisible || !mainVm.IsAssetsPanelVisible || !mainVm.IsBottomPanelVisible)
@@ -58,7 +58,7 @@ internal static class EditorWorkspaceThemeTests
         if (mainVm.IsBacklogPanelVisible)
             throw new Exception("Dialogue backlog panel did not close independently");
         Console.WriteLine(
-            "  ✅ [PASS] Bottom Log and Assets panel visibility is independent and reclaims height");
+            "  [PASS] Bottom Log and Assets panel visibility is independent and reclaims height");
 
         mainVm.ShowPanel("SplitScreen");
         mainVm.ShowPanel("Preview");
@@ -69,6 +69,6 @@ internal static class EditorWorkspaceThemeTests
         if (mainVm.SplitScreenMode != 0 || !mainVm.IsEnginePreviewActive || mainVm.IsNodeGraphActive)
             throw new Exception("Game preview mode did not exit split screen cleanly");
         mainVm.ShowPanel("NodeGraph");
-        Console.WriteLine("  ✅ [PASS] Single preview modes exit split screen consistently");
+        Console.WriteLine("  [PASS] Single preview modes exit split screen consistently");
     }
 }

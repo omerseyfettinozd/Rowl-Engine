@@ -15,15 +15,15 @@
             <Border Background="{DynamicResource CardHeaderBackground}" CornerRadius="6,6,0,0" Padding="8,6">
                 <Grid ColumnDefinitions="*, Auto">
                     <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                        <TextBlock Text="💬" FontSize="13" VerticalAlignment="Center"/>
+                        <TextBlock Text="Diyalog" FontSize="13" VerticalAlignment="Center"/>
                         <TextBlock Text="Dialogue" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource PrimaryText}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                     </StackPanel>
                     <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="3" VerticalAlignment="Center">
                         <CheckBox IsChecked="{Binding IsEnabled}" ToolTip.Tip="Enable/Disable" MinWidth="0" Padding="0" Margin="0,0,2,0"/>
-                        <Button Content="▲" Command="{Binding MoveUpCommand}" ToolTip.Tip="Move Up" FontSize="10" Padding="4,2" MinWidth="0" Background="Transparent" Foreground="{DynamicResource MutedText}" BorderThickness="0"/>
-                        <Button Content="▼" Command="{Binding MoveDownCommand}" ToolTip.Tip="Move Down" FontSize="10" Padding="4,2" MinWidth="0" Background="Transparent" Foreground="{DynamicResource MutedText}" BorderThickness="0"/>
-                        <ToggleButton IsChecked="{Binding IsExpanded}" Content="⚙️" FontSize="10" Padding="4,2" MinWidth="0" Background="Transparent" Foreground="{DynamicResource MutedText}" BorderThickness="0"/>
-                        <Button Content="🗑️" FontSize="10" Padding="4,2" MinWidth="0" Background="Transparent" Foreground="#EF4444" BorderThickness="0" ToolTip.Tip="Remove Component" Command="{Binding RemoveSelfCommand}"/>
+                        <Button Content="Yukarı" Command="{Binding MoveUpCommand}" ToolTip.Tip="Move Up" FontSize="10" Padding="4,2" MinWidth="0" Background="Transparent" Foreground="{DynamicResource MutedText}" BorderThickness="0"/>
+                        <Button Content="Aşağı" Command="{Binding MoveDownCommand}" ToolTip.Tip="Move Down" FontSize="10" Padding="4,2" MinWidth="0" Background="Transparent" Foreground="{DynamicResource MutedText}" BorderThickness="0"/>
+                        <ToggleButton IsChecked="{Binding IsExpanded}" Content="Ayar" FontSize="10" Padding="4,2" MinWidth="0" Background="Transparent" Foreground="{DynamicResource MutedText}" BorderThickness="0"/>
+                        <Button Content="Sil" FontSize="10" Padding="4,2" MinWidth="0" Background="Transparent" Foreground="#EF4444" BorderThickness="0" ToolTip.Tip="Remove Component" Command="{Binding RemoveSelfCommand}"/>
                     </StackPanel>
                 </Grid>
             </Border>
@@ -33,7 +33,7 @@
                 <!-- 1. Speaker & Dialogue Content -->
                 <Border Background="{DynamicResource SurfaceBackground}" CornerRadius="4" Padding="8">
                     <StackPanel Spacing="6">
-                        <TextBlock Text="📝 SPEAKER &amp; TEXT" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource AccentColor}"/>
+                        <TextBlock Text="SPEAKER &amp; TEXT" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource AccentColor}"/>
                         
                         <Grid ColumnDefinitions="*, Auto, Auto">
                             <StackPanel Grid.Column="0" Spacing="2">
@@ -65,7 +65,7 @@
                             <Grid ColumnDefinitions="*,Auto">
                                 <TextBox Grid.Column="0" Text="{Binding ContentId, Mode=TwoWay}" FontFamily="Monospace" FontSize="10"
                                          Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}"/>
-                                <Button Grid.Column="1" Content="↻" Margin="4,0,0,0" Padding="8,2" FontSize="11"
+                                <Button Grid.Column="1" Content="Üret" Margin="4,0,0,0" Padding="8,2" FontSize="11"
                                         ToolTip.Tip="Yeni tekil kimlik üret"
                                         Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).InspectorViewModel.RegenerateSelectedContentIdCommand}"/>
                             </Grid>
@@ -78,7 +78,7 @@
                 <!-- 2. Typewriter & Timing Behavior -->
                 <Border Background="{DynamicResource SurfaceBackground}" CornerRadius="4" Padding="8">
                     <StackPanel Spacing="6">
-                        <TextBlock Text="⌨️ TYPEWRITER &amp; TIMING" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource AccentColor}"/>
+                        <TextBlock Text="TYPEWRITER &amp; TIMING" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource AccentColor}"/>
                         
                         <Grid ColumnDefinitions="Auto, *">
                             <CheckBox Grid.Column="0" IsChecked="{Binding TypewriterEnabled}" Content="Enable Typewriter" FontSize="11" Foreground="{DynamicResource PrimaryText}" Margin="0,0,8,0"/>
@@ -106,8 +106,8 @@
                         <Border Background="{DynamicResource CardHeaderBackground}" CornerRadius="4" Padding="6" Margin="0,4,0,0">
                             <StackPanel Spacing="6">
                                 <Grid ColumnDefinitions="*, Auto">
-                                    <TextBlock Grid.Column="0" Text="🎵 Character Voice Blip (Sound FX)" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource AccentColor}" VerticalAlignment="Center"/>
-                                    <Button Grid.Column="1" Content="▶ Önizle (Test Blip)" Command="{Binding PreviewVoiceBlipCommand}"
+                                    <TextBlock Grid.Column="0" Text="Character Voice Blip (Sound FX)" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource AccentColor}" VerticalAlignment="Center"/>
+                                    <Button Grid.Column="1" Content="Önizle (Test Blip)" Command="{Binding PreviewVoiceBlipCommand}"
                                             ToolTip.Tip="Test character voice blip sound"
                                             FontSize="10" Padding="6,2" Background="{DynamicResource AccentButtonBg}" Foreground="{DynamicResource AccentButtonFg}" CornerRadius="4"/>
                                 </Grid>
@@ -174,7 +174,7 @@
                 <!-- 3. Typography & Styling -->
                 <Border Background="{DynamicResource SurfaceBackground}" CornerRadius="4" Padding="8">
                     <StackPanel Spacing="6">
-                        <TextBlock Text="🎨 TYPOGRAPHY &amp; STYLING" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource AccentColor}"/>
+                        <TextBlock Text="TYPOGRAPHY &amp; STYLING" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource AccentColor}"/>
 
                         <Grid ColumnDefinitions="*, *">
                             <StackPanel Grid.Column="0" Spacing="2" Margin="0,0,4,0">
@@ -201,7 +201,7 @@
                 <!-- 4. Box Visuals & Appearance -->
                 <Border Background="{DynamicResource SurfaceBackground}" CornerRadius="4" Padding="8">
                     <StackPanel Spacing="6">
-                        <TextBlock Text="🖼️ BOX THEME &amp; OPACITY" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource AccentColor}"/>
+                        <TextBlock Text="BOX THEME &amp; OPACITY" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource AccentColor}"/>
 
                         <Grid ColumnDefinitions="*, *">
                             <StackPanel Grid.Column="0" Spacing="2" Margin="0,0,4,0">
@@ -227,7 +227,7 @@
                 <!-- 5. Geometry Coordinates & Size -->
                 <Border Background="{DynamicResource SurfaceBackground}" CornerRadius="4" Padding="8">
                     <StackPanel Spacing="6">
-                        <TextBlock Text="📐 TRANSFORM &amp; PRESETS" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource AccentColor}"/>
+                        <TextBlock Text="TRANSFORM &amp; PRESETS" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource AccentColor}"/>
 
                         <Grid ColumnDefinitions="*, *" Margin="0,2">
                             <StackPanel Grid.Column="0" Spacing="2" Margin="0,0,4,0">
@@ -252,24 +252,24 @@
                         </Grid>
 
                         <StackPanel Spacing="2">
-                            <TextBlock Text="🔍 Scale (1.0 = 100%)" FontSize="10" Foreground="{DynamicResource AccentColor}" FontWeight="Bold"/>
+                            <TextBlock Text="Scale (1.0 = 100%)" FontSize="10" Foreground="{DynamicResource AccentColor}" FontWeight="Bold"/>
                             <NumericUpDown Value="{Binding Scale}" Minimum="0.1" Maximum="5.0" Increment="0.1" FormatString="0.00" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource AccentColor}" BorderBrush="{DynamicResource BorderColor}"/>
                         </StackPanel>
 
                         <!-- Layout Presets (5 Presets) -->
                         <TextBlock Text="Quick Layout Presets" FontSize="10" Foreground="{DynamicResource MutedText}" Margin="0,4,0,0"/>
                         <Grid ColumnDefinitions="*, *" Margin="0,2">
-                            <Button Grid.Column="0" Content="↕ Standard Banner" HorizontalAlignment="Stretch" Margin="0,0,2,2" Padding="4,4" FontSize="10" Background="{DynamicResource ToolbarButtonBg}" Foreground="{DynamicResource PrimaryText}" CornerRadius="4"
+                            <Button Grid.Column="0" Content="Standard Banner" HorizontalAlignment="Stretch" Margin="0,0,2,2" Padding="4,4" FontSize="10" Background="{DynamicResource ToolbarButtonBg}" Foreground="{DynamicResource PrimaryText}" CornerRadius="4"
                                     Command="{Binding SetStandardCommand}"/>
-                            <Button Grid.Column="1" Content="⬜ Square Avatar" HorizontalAlignment="Stretch" Margin="2,0,0,2" Padding="4,4" FontSize="10" Background="{DynamicResource ToolbarButtonBg}" Foreground="{DynamicResource PrimaryText}" CornerRadius="4"
+                            <Button Grid.Column="1" Content="Square Avatar" HorizontalAlignment="Stretch" Margin="2,0,0,2" Padding="4,4" FontSize="10" Background="{DynamicResource ToolbarButtonBg}" Foreground="{DynamicResource PrimaryText}" CornerRadius="4"
                                     Command="{Binding SetSquareCommand}"/>
                         </Grid>
                         <Grid ColumnDefinitions="*, *, *" Margin="0,2">
-                            <Button Grid.Column="0" Content="📜 NVL Novel" HorizontalAlignment="Stretch" Margin="0,0,2,0" Padding="2,4" FontSize="9" Background="{DynamicResource ToolbarButtonBg}" Foreground="{DynamicResource PrimaryText}" CornerRadius="4"
+                            <Button Grid.Column="0" Content="NVL Novel" HorizontalAlignment="Stretch" Margin="0,0,2,0" Padding="2,4" FontSize="9" Background="{DynamicResource ToolbarButtonBg}" Foreground="{DynamicResource PrimaryText}" CornerRadius="4"
                                     Command="{Binding SetNvlFullscreenCommand}"/>
-                            <Button Grid.Column="1" Content="🎬 Top Subtitle" HorizontalAlignment="Stretch" Margin="1,0,1,0" Padding="2,4" FontSize="9" Background="{DynamicResource ToolbarButtonBg}" Foreground="{DynamicResource PrimaryText}" CornerRadius="4"
+                            <Button Grid.Column="1" Content="Top Subtitle" HorizontalAlignment="Stretch" Margin="1,0,1,0" Padding="2,4" FontSize="9" Background="{DynamicResource ToolbarButtonBg}" Foreground="{DynamicResource PrimaryText}" CornerRadius="4"
                                     Command="{Binding SetTopSubtitleCommand}"/>
-                            <Button Grid.Column="2" Content="💭 Comic Bubble" HorizontalAlignment="Stretch" Margin="2,0,0,0" Padding="2,4" FontSize="9" Background="{DynamicResource ToolbarButtonBg}" Foreground="{DynamicResource PrimaryText}" CornerRadius="4"
+                            <Button Grid.Column="2" Content="Comic Bubble" HorizontalAlignment="Stretch" Margin="2,0,0,0" Padding="2,4" FontSize="9" Background="{DynamicResource ToolbarButtonBg}" Foreground="{DynamicResource PrimaryText}" CornerRadius="4"
                                     Command="{Binding SetComicBubbleCommand}"/>
                         </Grid>
                     </StackPanel>

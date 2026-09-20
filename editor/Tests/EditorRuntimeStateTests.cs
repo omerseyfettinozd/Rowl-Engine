@@ -11,7 +11,7 @@ internal static class EditorRuntimeStateTests
 {
     public static void Run(MainWindowViewModel mainVm, string testProjectRoot)
     {
-        Console.WriteLine("\n📌 [Test 9]: Lua Condition, Variable Components & Native State Slots...");
+        Console.WriteLine("\n[Test 9]: Lua Condition, Variable Components & Native State Slots...");
 
         // Component Creation & Serialization
         var varComp = (VariableComponentViewModel)ComponentRegistry.Create("variable");
@@ -99,7 +99,7 @@ internal static class EditorRuntimeStateTests
             host.Rewind(1);
         }
 
-        Console.WriteLine("  ✅ [PASS] Variable/Condition components, serialization, and P/Invoke Save/Load slots + Structured Diagnostics verified");
+        Console.WriteLine("  [PASS] Variable/Condition components, serialization, and P/Invoke Save/Load slots + Structured Diagnostics verified");
 
         // Preview coalescing may skip only a script-free scene whose exact
         // payload is already rendered. Script components retain their
@@ -125,6 +125,6 @@ internal static class EditorRuntimeStateTests
         mainVm.ScheduleEnginePreviewUpdate(scriptedPreviewNode);
         if (!mainVm.DeliverScheduledEnginePreview())
             throw new Exception("Script preview was incorrectly treated as a no-op");
-        Console.WriteLine("  ✅ [PASS] Preview no-op coalescing preserves script refresh behavior");
+        Console.WriteLine("  [PASS] Preview no-op coalescing preserves script refresh behavior");
     }
 }

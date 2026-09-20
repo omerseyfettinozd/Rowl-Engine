@@ -9,7 +9,7 @@ namespace RowlEngine.Editor.ViewModels.Components
     public partial class VariableComponentViewModel : NodeComponentViewModel
     {
         public override string DisplayName => "Variable Modifier";
-        public override string Icon => "📊";
+        public override string Icon => "Değişken";
         public override string TypeKey => "variable";
 
         [ObservableProperty]

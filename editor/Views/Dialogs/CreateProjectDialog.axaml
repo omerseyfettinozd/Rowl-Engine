@@ -11,7 +11,7 @@
     <Grid RowDefinitions="Auto, *, Auto" Margin="20">
         <!-- Header -->
         <StackPanel Grid.Row="0" Spacing="4" Margin="0,0,0,16">
-            <TextBlock Text="✨ Yeni Proje Oluştur" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource PrimaryText}"/>
+            <TextBlock Text="Yeni Proje Oluştur" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource PrimaryText}"/>
             <TextBlock Text="Yeni bir görsel roman veya etkileşimli hikaye projesi başlatın" FontSize="12" Foreground="{DynamicResource MutedText}"/>
         </StackPanel>
 

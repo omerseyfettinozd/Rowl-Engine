@@ -46,7 +46,7 @@ public static class StoryGraphLoaderService
                 var node = StoryGraphNodeHydrator.CreateShell(nodeJson, nodeMap.Count);
                 ulong nodeId = node.Id;
 
-                // ── V3 Format: Objects array (Unity GameObject style) ──
+                // V3 Format: Objects array (Unity GameObject style)
                 if (nodeJson.TryGetProperty("objects", out var objsArray) && objsArray.ValueKind == JsonValueKind.Array)
                 {
                     foreach (var objJson in objsArray.EnumerateArray())
@@ -70,13 +70,13 @@ public static class StoryGraphLoaderService
                                 }
                                 else if (unknownType is not null)
                                 {
-                                    result.Warnings.Add($"⚠️ Unknown component type '{unknownType}' in Node #{nodeId}, skipping.");
+                                    result.Warnings.Add($"Unknown component type '{unknownType}' in Node #{nodeId}, skipping.");
                                 }
                             }
                         }
                     }
                 }
-                // ── V2 Format: Components array directly under node (auto-migrate into objects) ──
+                // V2 Format: Components array directly under node (auto-migrate into objects)
                 else if (nodeJson.TryGetProperty("components", out var compsArray) && compsArray.ValueKind == JsonValueKind.Array)
                 {
                     foreach (var compJson in compsArray.EnumerateArray())
@@ -89,11 +89,11 @@ public static class StoryGraphLoaderService
                         }
                         else if (unknownType is not null)
                         {
-                            result.Warnings.Add($"⚠️ Unknown component type '{unknownType}' in Node #{nodeId}, skipping.");
+                            result.Warnings.Add($"Unknown component type '{unknownType}' in Node #{nodeId}, skipping.");
                         }
                     }
                 }
-                // ── V1 Format: Create objects & components from flat fields ──
+                // V1 Format: Create objects & components from flat fields
                 else
                 {
                     StoryGraphNodeHydrator.PopulateLegacyFields(node, nodeJson);

@@ -6,7 +6,7 @@
         mc:Ignorable="d"
         x:Class="RowlEngine.Editor.Views.Dialogs.SettingsDialog"
         x:DataType="vm:SettingsViewModel"
-        Title="⚙️ Ayarlar — Rowl Engine"
+        Title="Ayarlar — Rowl Engine"
         Width="720" Height="560"
         MinWidth="600" MinHeight="450"
         WindowStartupLocation="CenterOwner"
@@ -15,22 +15,21 @@
 
     <Grid RowDefinitions="Auto, *, Auto">
 
-        <!-- ── Başlık Çubuğu ──────────────────────────────────────── -->
-        <Border Grid.Row="0" Background="{DynamicResource SurfaceBackground}" 
+        <!-- Başlık Çubuğu -->
+        <Border Grid.Row="0" Background="{DynamicResource SurfaceBackground}"
                 BorderBrush="{DynamicResource BorderColor}" BorderThickness="0,0,0,1" Padding="20,14">
             <StackPanel Orientation="Horizontal" Spacing="10">
-                <TextBlock Text="⚙️" FontSize="18" VerticalAlignment="Center"/>
-                <TextBlock Text="Ayarlar" FontSize="16" FontWeight="Bold" 
+                <TextBlock Text="Ayarlar" FontSize="16" FontWeight="Bold"
                            Foreground="{DynamicResource PrimaryText}" VerticalAlignment="Center"/>
             </StackPanel>
         </Border>
 
-        <!-- ── Ana İçerik — TabControl ────────────────────────────── -->
+        <!-- Ana İçerik - TabControl -->
         <TabControl Grid.Row="1" SelectedIndex="{Binding SelectedTabIndex}" Margin="0" Padding="0"
                     Background="Transparent">
 
-            <!-- ═══ SEKME 1: Tema &amp; Görünüm ═══ -->
-            <TabItem Header="🎨 Tema">
+            <!-- SEKME 1: Tema ve Görünüm -->
+            <TabItem Header="Tema">
                 <ScrollViewer Padding="24,16">
                     <StackPanel Spacing="18">
                         <TextBlock Text="Tema &amp; Görünüm" FontSize="15" FontWeight="Bold" 
@@ -47,7 +46,7 @@
                                       BorderBrush="{DynamicResource BorderSubtle}"/>
                         </StackPanel>
 
-                        <Button Content="🎨 Temayı Uygula" 
+                        <Button Content="Temayı Uygula"
                                 Command="{Binding ApplyThemeCommand}"
                                 HorizontalAlignment="Left"
                                 Background="{DynamicResource AccentButtonBg}" 
@@ -79,8 +78,8 @@
                 </ScrollViewer>
             </TabItem>
 
-            <!-- ═══ SEKME 2: Genel Editör ═══ -->
-            <TabItem Header="⚙️ Genel">
+            <!-- SEKME 2: Genel Editör -->
+            <TabItem Header="Genel">
                 <ScrollViewer Padding="24,16">
                     <StackPanel Spacing="18">
                         <TextBlock Text="Genel Editör Ayarları" FontSize="15" FontWeight="Bold" 
@@ -90,7 +89,7 @@
                         <Border Background="{DynamicResource PanelBackground}" CornerRadius="8" 
                                 Padding="16" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1">
                             <StackPanel Spacing="10">
-                                <CheckBox Content="💾 Otomatik Kaydetme" 
+                                <CheckBox Content="Otomatik Kaydetme"
                                           IsChecked="{Binding AutoSaveEnabled}"
                                           Foreground="{DynamicResource PrimaryText}" FontWeight="SemiBold"/>
                                 <StackPanel Spacing="4" IsVisible="{Binding AutoSaveEnabled}">
@@ -110,8 +109,8 @@
                 </ScrollViewer>
             </TabItem>
 
-            <!-- ═══ SEKME 3: Oyuncu ═══ -->
-            <TabItem Header="🎮 Oyuncu">
+            <!-- SEKME 3: Oyuncu -->
+            <TabItem Header="Oyuncu">
                 <ScrollViewer Padding="24,16">
                     <StackPanel Spacing="18">
                         <TextBlock Text="Oyuncu Tercihleri" FontSize="15" FontWeight="Bold"
@@ -146,8 +145,8 @@
                 </ScrollViewer>
             </TabItem>
 
-            <!-- ═══ SEKME 4: Proje Runtime ═══ -->
-            <TabItem Header="📦 Proje">
+            <!-- SEKME 4: Proje Runtime -->
+            <TabItem Header="Proje">
                 <ScrollViewer Padding="24,16">
                     <StackPanel Spacing="18">
                         <TextBlock Text="Proje Runtime Ayarları" FontSize="15" FontWeight="Bold"
@@ -172,8 +171,8 @@
                 </ScrollViewer>
             </TabItem>
 
-            <!-- ═══ SEKME 5: Kısayollar ═══ -->
-            <TabItem Header="⌨️ Kısayollar">
+            <!-- SEKME 5: Kısayollar -->
+            <TabItem Header="Kısayollar">
                 <ScrollViewer Padding="24,16">
                     <StackPanel Spacing="12">
                         <TextBlock Text="Klavye Kısayolları" FontSize="15" FontWeight="Bold" 
@@ -203,11 +202,11 @@
                 </ScrollViewer>
             </TabItem>
 
-            <!-- ═══ SEKME 6: Hakkında ═══ -->
-            <TabItem Header="ℹ️ Hakkında">
+            <!-- SEKME 6: Hakkında -->
+            <TabItem Header="Hakkında">
                 <ScrollViewer Padding="24,16">
                     <StackPanel Spacing="18" HorizontalAlignment="Center" VerticalAlignment="Center">
-                        <TextBlock Text="🎮 ROWL ENGINE" FontSize="28" FontWeight="Bold" 
+                        <TextBlock Text="ROWL ENGINE" FontSize="28" FontWeight="Bold"
                                    Foreground="{DynamicResource AccentColor}" HorizontalAlignment="Center"/>
                         <TextBlock Text="Visual Novel &amp; Interactive Storytelling Engine" 
                                    FontSize="13" Foreground="{DynamicResource MutedText}" HorizontalAlignment="Center"/>
@@ -220,7 +219,7 @@
                                 <Grid ColumnDefinitions="Auto, *"><TextBlock Grid.Column="0" Text="Motor:" Foreground="{DynamicResource MutedText}" FontSize="12" Margin="0,0,12,0"/><TextBlock Grid.Column="1" Text="SDL3 Hardware Canvas + C++ Core" Foreground="{DynamicResource PrimaryText}" FontSize="12"/></Grid>
                                 <Grid ColumnDefinitions="Auto, *"><TextBlock Grid.Column="0" Text="Editör:" Foreground="{DynamicResource MutedText}" FontSize="12" Margin="0,0,12,0"/><TextBlock Grid.Column="1" Text="Avalonia UI (.NET) + Zero-Copy P/Invoke" Foreground="{DynamicResource PrimaryText}" FontSize="12"/></Grid>
                                 <Grid ColumnDefinitions="Auto, *"><TextBlock Grid.Column="0" Text="Paketleme:" Foreground="{DynamicResource MutedText}" FontSize="12" Margin="0,0,12,0"/><TextBlock Grid.Column="1" Text="Zstd Sıkıştırma + .rowlpkg Arşivi" Foreground="{DynamicResource PrimaryText}" FontSize="12"/></Grid>
-                                <Grid ColumnDefinitions="Auto, *"><TextBlock Grid.Column="0" Text="Platformlar:" Foreground="{DynamicResource MutedText}" FontSize="12" Margin="0,0,12,0"/><TextBlock Grid.Column="1" Text="🪟 Windows  🐧 Linux  🍎 macOS  🤖 Android  📱 iOS" Foreground="{DynamicResource PrimaryText}" FontSize="12"/></Grid>
+                                <Grid ColumnDefinitions="Auto, *"><TextBlock Grid.Column="0" Text="Platformlar:" Foreground="{DynamicResource MutedText}" FontSize="12" Margin="0,0,12,0"/><TextBlock Grid.Column="1" Text="Windows  Linux  macOS  Android  iOS" Foreground="{DynamicResource PrimaryText}" FontSize="12"/></Grid>
                             </StackPanel>
                         </Border>
 
@@ -231,11 +230,11 @@
             </TabItem>
         </TabControl>
 
-        <!-- ── Alt Butonlar ───────────────────────────────────────── -->
+        <!-- Alt Butonlar -->
         <Border Grid.Row="2" Background="{DynamicResource SurfaceBackground}" 
                 BorderBrush="{DynamicResource BorderColor}" BorderThickness="0,1,0,0" Padding="16,10">
             <DockPanel>
-                <Button DockPanel.Dock="Left" Content="🔄 Varsayılanlara Sıfırla" 
+                <Button DockPanel.Dock="Left" Content="Varsayılanlara Sıfırla"
                         Command="{Binding ResetDefaultsCommand}"
                         Background="Transparent" Foreground="{DynamicResource MutedText}" 
                         BorderBrush="{DynamicResource BorderColor}" BorderThickness="1"

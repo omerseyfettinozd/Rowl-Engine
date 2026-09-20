@@ -100,12 +100,12 @@ public static class ProjectBuildService
         var validation = ProjectValidationService.Validate(nodes, connections, assetsPath, startNodeId);
         onValidationIssues?.Invoke(validation);
         foreach (var issue in validation)
-            log?.Invoke($"{(issue.IsError ? "❌" : "⚠️")} [BUILD CHECK] {issue.Message}");
+            log?.Invoke($"[BUILD CHECK] {issue.Message}");
 
         if (validation.Any(issue => issue.IsError))
         {
             string errorMsg = "Build cancelled: fix blocking project validation errors first.";
-            log?.Invoke($"⛔ {errorMsg}");
+            log?.Invoke(errorMsg);
             return new(false, false, buildOutDir, errorMsg, validation)
             {
                 Diagnostic = new BuildDiagnostic(
@@ -208,7 +208,7 @@ public static class ProjectBuildService
             }
 
             File.Move(stagingPackage, fullOutput, overwrite: true);
-            Report($"📦 [VFS PAKET] .rowlpkg başarıyla oluşturuldu: {fullOutput}");
+            Report($"Paket [VFS PAKET] .rowlpkg başarıyla oluşturuldu: {fullOutput}");
             return new(true, false, fullOutput, "Package created successfully.", processResult.StandardOutput);
         }
         catch (OperationCanceledException)
@@ -330,7 +330,7 @@ public static class ProjectBuildService
                 "ROWL ENGINE — STANDALONE GAME RELEASE\n\nRun ./run_game.sh on Linux/macOS or run_game.bat on Windows.\n\nAssets/packages/game.rowlpkg is the canonical game content. Put an asset in mods/ with the same relative path to override it.\n");
             RunReleaseVerifier(repoRoot, staging, token, Report);
             Directory.Move(staging, output);
-            Report($"✅ Build complete: {output}");
+            Report($"Build complete: {output}");
             return new(true, false, output, "Build complete.");
         }
         catch (OperationCanceledException)

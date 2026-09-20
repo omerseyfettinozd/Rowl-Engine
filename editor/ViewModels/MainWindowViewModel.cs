@@ -26,7 +26,7 @@ namespace RowlEngine.Editor.ViewModels
     public partial class MainWindowViewModel : ViewModelBase, IDisposable
     {
         private bool _disposed;
-        // ── Centralized path helpers ──
+        // Centralized path helpers
         /// <summary>
         /// Resolves the real project root (where Assets/ and editor/ live) by
         /// walking up from the executing assembly location until we find a
@@ -96,7 +96,7 @@ namespace RowlEngine.Editor.ViewModels
         public string CurrentBuildTarget => OperatingSystem.IsWindows() ? "Windows"
             : OperatingSystem.IsMacOS() ? "macOS"
             : "Linux";
-        public string BuildButtonText => $"🚀 {CurrentBuildTarget} Build";
+        public string BuildButtonText => $"{CurrentBuildTarget} Build";
         public string BuildButtonTooltip => $"Bu host için bağımsız oyun çıktısı üret (Ctrl+B)";
 
         [RelayCommand]
@@ -119,7 +119,7 @@ namespace RowlEngine.Editor.ViewModels
             if (UndoRedo.CanUndo)
             {
                 UndoRedo.Undo();
-                Toast.Show($"↩ Geri alındı: {UndoRedo.UndoDescription}", ToastType.Info, 1500);
+                Toast.Show($"Geri Al: {UndoRedo.UndoDescription}", ToastType.Info, 1500);
             }
         }
 
@@ -129,11 +129,11 @@ namespace RowlEngine.Editor.ViewModels
             if (UndoRedo.CanRedo)
             {
                 UndoRedo.Redo();
-                Toast.Show($"↪ Yinelendi: {UndoRedo.RedoDescription}", ToastType.Info, 1500);
+                Toast.Show($"Yinele: {UndoRedo.RedoDescription}", ToastType.Info, 1500);
             }
         }
 
-        // ── Hızlı Arama (Quick Search, Faz 4 Dilim 2) ───────────────
+        // Hızlı Arama (Quick Search, Faz 4 Dilim 2)
         // The box text lives here for XAML/shortcut compatibility; every
         // query, filter, result and jump decision lives in SearchViewModel.
         [ObservableProperty]
@@ -155,7 +155,7 @@ namespace RowlEngine.Editor.ViewModels
             else Search?.Refresh();
         }
 
-        // ── Tam Ekran ─────────────────────────────────────────────────
+        // Tam Ekran
         [RelayCommand]
         private void ToggleFullscreen()
         {
@@ -326,7 +326,7 @@ namespace RowlEngine.Editor.ViewModels
         public bool IsSplitScreenHorizontal => SplitScreenMode == 1;
         public bool IsSplitScreenVertical => SplitScreenMode == 2;
 
-        public string SplitScreenButtonText => SplitScreenMode > 0 ? $"⇱ ⇲ Split: {(SplitScreenMode == 1 ? "H" : "V")}" : "⊞ Split Screen";
+        public string SplitScreenButtonText => SplitScreenMode > 0 ? $"Split: {(SplitScreenMode == 1 ? "H" : "V")}" : "Split Screen";
         public string SplitScreenButtonColor => SplitScreenMode > 0 ? "#2563EB" : "#1E293B";
         public string SplitScreenButtonForeground => SplitScreenMode > 0 ? "White" : "#94A3B8";
 
@@ -345,7 +345,7 @@ namespace RowlEngine.Editor.ViewModels
         [ObservableProperty]
         private bool _isDarkMode = true;
 
-        public string ThemeButtonText => IsDarkMode ? "🌙 Karanlık Mod" : "☀️ Aydınlık Mod";
+        public string ThemeButtonText => IsDarkMode ? "Karanlık Mod" : "Aydınlık Mod";
         public string ThemeButtonColor => IsDarkMode ? "#2A2A3D" : "#FFEDD5";
         public string ThemeButtonForeground => IsDarkMode ? "#F8FAFC" : "#EA580C";
 
@@ -362,7 +362,7 @@ namespace RowlEngine.Editor.ViewModels
             OnPropertyChanged(nameof(ThemeButtonText));
             OnPropertyChanged(nameof(ThemeButtonColor));
             OnPropertyChanged(nameof(ThemeButtonForeground));
-            AppendLog($"🎨 Tema değiştirildi: {(IsDarkMode ? "Karanlık Mod (Siyah-Beyaz)" : "Aydınlık Mod (Turuncu-Beyaz, Siyah Yazı)")}");
+            AppendLog($"Tema değiştirildi: {(IsDarkMode ? "Karanlık Mod (Siyah-Beyaz)" : "Aydınlık Mod (Turuncu-Beyaz, Siyah Yazı)")}");
         }
 
         private readonly EditorUiTimer _smoothTimer;
@@ -459,7 +459,7 @@ namespace RowlEngine.Editor.ViewModels
             {
                 CurrentProjectPath = projectPath;
                 ProjectRoot = projectPath;
-                StatusText = $"✅ Proje yüklendi: {Path.GetFileName(projectPath)}";
+                StatusText = $"Proje yüklendi: {Path.GetFileName(projectPath)}";
             }
             else
             {
@@ -502,19 +502,19 @@ namespace RowlEngine.Editor.ViewModels
             AudioComponentViewModel.GlobalPreviewAudioAction = (assetPath, channelType, filterType) =>
             {
                 EngineHost.PlayAudio(assetPath, channelType, filterType);
-                AppendLog($"🔊 Ses önizlemesi başlatıldı: '{assetPath}' (Kanal: {channelType}, Filtre: {filterType})");
+                AppendLog($"Ses önizlemesi başlatıldı: '{assetPath}' (Kanal: {channelType}, Filtre: {filterType})");
             };
 
             AudioComponentViewModel.GlobalStopAudioAction = () =>
             {
                 EngineHost.StopBgm();
-                AppendLog("⏹ Ses önizlemesi durduruldu.");
+                AppendLog("Ses önizlemesi durduruldu.");
             };
 
             DialogueComponentViewModel.GlobalPreviewVoiceBlipAction = (soundPath, pitch, volume, channelType) =>
             {
                 EngineHost.PlayVoiceBlip(soundPath, pitch, volume, channelType);
-                AppendLog($"💬 Karakter ses blip önizlemesi: '{soundPath}' (Pitch: {pitch:F2}x, Vol: {volume:P0}, Kanal: {channelType})");
+                AppendLog($"Karakter ses blip önizlemesi: '{soundPath}' (Pitch: {pitch:F2}x, Vol: {volume:P0}, Kanal: {channelType})");
             };
 
             EngineHost.AudioTelemetryPolled += (pL, pR, rL, rR) =>
@@ -575,7 +575,7 @@ namespace RowlEngine.Editor.ViewModels
             if (status.DirtyFlagPresent && status.CanonicalOk)
             {
                 CrashRecoveryService.ClearDirty(AssetsJsonPath);
-                AppendLog("ℹ️ Önceki oturum kaydedilmeden kapandı; son tamamlanan kayıt sağlam.");
+                AppendLog("Önceki oturum kaydedilmeden kapandı; son tamamlanan kayıt sağlam.");
             }
             else if (!status.CanonicalOk && (status.HasLastGood || status.JournalEntries > 0))
             {
@@ -583,7 +583,7 @@ namespace RowlEngine.Editor.ViewModels
                     offer is not null)
                 {
                     PendingRecoveryOffer = offer;
-                    AppendLog($"⚠️ Proje dosyası bozuk/eksik ({status.CanonicalError}); kurtarma hazır ({offer.Source}, {offer.NodeCount} düğüm). RestoreFromRecovery ile geri yükleyin.");
+                    AppendLog($"Proje dosyası bozuk/eksik ({status.CanonicalError}); kurtarma hazır ({offer.Source}, {offer.NodeCount} düğüm). RestoreFromRecovery ile geri yükleyin.");
                 }
             }
         }
@@ -597,12 +597,12 @@ namespace RowlEngine.Editor.ViewModels
             if (CrashRecoveryService.RestoreOfferToCanonical(AssetsJsonPath, PendingRecoveryOffer) &&
                 LoadFullStoryGraphFile())
             {
-                AppendLog($"✅ Kurtarma uygulandı ({PendingRecoveryOffer.Source}, {PendingRecoveryOffer.NodeCount} düğüm).");
+                AppendLog($"Kurtarma uygulandı ({PendingRecoveryOffer.Source}, {PendingRecoveryOffer.NodeCount} düğüm).");
                 PendingRecoveryOffer = null;
             }
             else
             {
-                AppendLog("⚠️ Kurtarma uygulanamadı.");
+                AppendLog("Kurtarma uygulanamadı.");
             }
         }
 
@@ -697,7 +697,7 @@ namespace RowlEngine.Editor.ViewModels
             WireStartPoint = new Point(sourceNode.X + 265, sourceNode.Y + sourceNode.GetOutputPortY(optionId));
             WireEndPoint = mousePos;
             IsDraggingWire = true;
-            AppendLog($"✂️ Unplugged cable from Node #{sourceNode.Id}, re-routing wire...");
+            AppendLog($"Unplugged cable from Node #{sourceNode.Id}, re-routing wire...");
         }
 
         public void UpdateWireDrag(Point currentMousePos)
@@ -744,17 +744,17 @@ namespace RowlEngine.Editor.ViewModels
                 }
                 UndoRedoService.Instance.RecordAction(new ConnectWireAction(
                     Connections, newConn, replaced, changes, UpdateStartNodeState));
-                AppendLog($"✅ Connected Wire: Node #{sourceNode.Id} ---> Node #{newConn.TargetNode?.Id} (Total cables: {Connections.Count})");
+                AppendLog($"Connected Wire: Node #{sourceNode.Id} ---> Node #{newConn.TargetNode?.Id} (Total cables: {Connections.Count})");
             }
             else if (unplugged != null)
             {
                 UndoRedoService.Instance.RecordAction(
                     new DisconnectCablesUndoAction(Connections, new List<ConnectionViewModel> { unplugged }, UpdateStartNodeState));
-                AppendLog("✂️ Connection dropped in empty space (cable unplugged / removed).");
+                AppendLog("Connection dropped in empty space (cable unplugged / removed).");
             }
             else
             {
-                AppendLog("✂️ Connection dropped in empty space (cable unplugged / removed).");
+                AppendLog("Connection dropped in empty space (cable unplugged / removed).");
             }
 
             UpdateStartNodeState();
@@ -786,7 +786,7 @@ namespace RowlEngine.Editor.ViewModels
             _wireDragOptionId = string.Empty;
             _wireDragRemovedConn = null;
             UpdateStartNodeState();
-            AppendLog("✂️ Kablo çekme iptal edildi (değişiklik yok).");
+            AppendLog("Geri Al: Kablo çekme iptal edildi (değişiklik yok).");
         }
 
         /// <summary>
@@ -807,7 +807,7 @@ namespace RowlEngine.Editor.ViewModels
                 node.X = pos.X;
                 node.Y = pos.Y;
             }
-            AppendLog("↩ Sürükleme iptal edildi, düğümler başlangıç konumuna döndü.");
+            AppendLog("Geri Al: Sürükleme iptal edildi, düğümler başlangıç konumuna döndü.");
         }
 
         /// <summary>MS-5: true while a drag snapshot is pending commit or cancel.</summary>
@@ -864,7 +864,7 @@ namespace RowlEngine.Editor.ViewModels
             {
                 UndoRedoService.Instance.RecordAction(new DisconnectCablesUndoAction(Connections, removed, UpdateStartNodeState));
                 ScheduleSave();
-                AppendLog($"✂️ Disconnected {count} incoming cable(s) from Node #{node.Id}");
+                AppendLog($"Disconnected {count} incoming cable(s) from Node #{node.Id}");
             }
         }
 
@@ -877,7 +877,7 @@ namespace RowlEngine.Editor.ViewModels
             {
                 UndoRedoService.Instance.RecordAction(new DisconnectCablesUndoAction(Connections, removed, UpdateStartNodeState));
                 ScheduleSave();
-                AppendLog($"✂️ Disconnected {count} outgoing cable(s) from Node #{node.Id}");
+                AppendLog($"Disconnected {count} outgoing cable(s) from Node #{node.Id}");
             }
         }
 
@@ -901,7 +901,7 @@ namespace RowlEngine.Editor.ViewModels
             {
                 UndoRedoService.Instance.RecordAction(new DisconnectCablesUndoAction(Connections, removed, UpdateStartNodeState));
                 ScheduleSave();
-                AppendLog($"✂️ Disconnected all {count} cable(s) attached to Node #{node.Id}");
+                AppendLog($"Disconnected all {count} cable(s) attached to Node #{node.Id}");
             }
         }
 
@@ -919,7 +919,7 @@ namespace RowlEngine.Editor.ViewModels
                 .ToList();
             StoryGraphCanvasService.DeleteNode(node, Nodes, Connections, SetChoiceTarget);
             UndoRedoService.Instance.RecordAction(new DeleteNodeUndoAction(this, node, attached));
-            AppendLog($"🗑️ Deleted Node #{node.Id} ({node.Title})");
+            AppendLog($"Deleted Node #{node.Id} ({node.Title})");
             SelectedNode = Nodes.FirstOrDefault();
             UpdateStartNodeState();
         }
@@ -936,7 +936,7 @@ namespace RowlEngine.Editor.ViewModels
             SelectedNode = newNode;
             UndoRedoService.Instance.RecordAction(new AddNodeUndoAction(this, newNode));
             UpdateStartNodeState();
-            AppendLog($"✨ Added new node #{nextId} at visible screen center ({spawnX:F0}, {spawnY:F0})");
+            AppendLog($"Added new node #{nextId} at visible screen center ({spawnX:F0}, {spawnY:F0})");
         }
 
         [RelayCommand]
@@ -1085,7 +1085,7 @@ namespace RowlEngine.Editor.ViewModels
                 CurrentStructure());
         }
 
-        // ── Faz 4 Dilim 3 — session structure (groups / subgraphs / chapters) ──
+        // Faz 4 Dilim 3 — session structure (groups / subgraphs / chapters)
         // The parsed vNext document lands here on load and is composed back on
         // every save path; all frame/stack/file logic lives in the services.
 
@@ -1122,12 +1122,12 @@ namespace RowlEngine.Editor.ViewModels
                     : new List<NodeViewModel>());
             if (picked.Count == 0)
             {
-                AppendLog("ℹ️ Grup için önce düğüm seçin.");
+                AppendLog("Grup için önce düğüm seçin.");
                 return;
             }
             var group = Groups.CreateFromNodes(
                 $"Grup {Groups.Groups.Count + 1}", "#3B82F6", picked);
-            AppendLog($"🗂 Grup oluşturuldu: '{group.Title}' ({picked.Count} düğüm).");
+            AppendLog($"Grup oluşturuldu: '{group.Title}' ({picked.Count} düğüm).");
         }
 
         /// <summary>Enters the subgraph owning the selected node.</summary>
@@ -1198,11 +1198,11 @@ namespace RowlEngine.Editor.ViewModels
                     Nodes, Connections, GetStartNode()?.Id ?? 101, CurrentStructure());
                 var written = ChapterStorageService.Split(
                     json, Path.Combine(AssetsJsonPath, "chapters"));
-                AppendLog($"📚 Bölümlere ayrıldı: {string.Join(", ", written)}.");
+                AppendLog($"Bölümlere ayrıldı: {string.Join(", ", written)}.");
             }
             catch (Exception ex)
             {
-                AppendLog($"⚠️ Bölümlere ayırma başarısız: {ex.Message}");
+                AppendLog($"Bölümlere ayırma başarısız: {ex.Message}");
             }
         }
 
@@ -1218,11 +1218,11 @@ namespace RowlEngine.Editor.ViewModels
                 ProjectFileSystem.WriteAllTextAtomically(
                     Path.Combine(AssetsJsonPath, "full_story_graph.json"), merged);
                 if (LoadFullStoryGraphFile())
-                    AppendLog("📚 Bölümler birleştirildi ve tuval yenilendi.");
+                    AppendLog("Bölümler birleştirildi ve tuval yenilendi.");
             }
             catch (Exception ex)
             {
-                AppendLog($"⚠️ Bölüm birleştirme başarısız: {ex.Message}");
+                AppendLog($"Bölüm birleştirme başarısız: {ex.Message}");
             }
         }
 
@@ -1304,7 +1304,7 @@ namespace RowlEngine.Editor.ViewModels
         private bool _isPlayingStandalone = false;
 
         [ObservableProperty]
-        private string _playButtonText = "▶ Play";
+        private string _playButtonText = "Play";
 
         [ObservableProperty]
         private string _playButtonColor = "#16A34A";
@@ -1368,7 +1368,7 @@ namespace RowlEngine.Editor.ViewModels
             if (started)
             {
                 IsPlayingStandalone = true;
-                PlayButtonText = "⏹ Stop";
+                PlayButtonText = "Stop";
                 PlayButtonColor = "#DC2626";
                 StatusText = "Offscreen Play Mode Active";
             }
@@ -1384,7 +1384,7 @@ namespace RowlEngine.Editor.ViewModels
                 msg => AppendLog(msg));
 
             IsPlayingStandalone = false;
-            PlayButtonText = "▶ Play";
+            PlayButtonText = "Play";
             PlayButtonColor = "#16A34A";
             StatusText = "Engine Ready — Offscreen C++ Runtime Active";
         }
@@ -1482,7 +1482,7 @@ namespace RowlEngine.Editor.ViewModels
             }
             UpdateStartNodeState();
             ScheduleSave();
-            AppendLog($"🗑️ Batch deleted {deletedCount} node(s)");
+            AppendLog($"Batch deleted {deletedCount} node(s)");
         }
 
         [RelayCommand]
@@ -1504,10 +1504,10 @@ namespace RowlEngine.Editor.ViewModels
             SelectedNode = clones.LastOrDefault();
             UpdateStartNodeState();
             ScheduleSave();
-            AppendLog($"📋 Batch duplicated {clones.Count} node(s) with internal wires preserved");
+            AppendLog($"Batch duplicated {clones.Count} node(s) with internal wires preserved");
         }
 
-        // ── MS-5: canvas clipboard (Ctrl+C / Ctrl+V) ──────────────────────
+        // MS-5: canvas clipboard (Ctrl+C / Ctrl+V)
         private readonly List<NodeViewModel> _nodeClipboard = new();
         private double _pasteOffsetX = 40.0;
         private double _pasteOffsetY = 40.0;
@@ -1530,7 +1530,7 @@ namespace RowlEngine.Editor.ViewModels
             _pasteOffsetX = 40.0;
             _pasteOffsetY = 40.0;
             if (_nodeClipboard.Count > 0)
-                AppendLog($"📋 Copied {_nodeClipboard.Count} node(s) to clipboard");
+                AppendLog($"Copied {_nodeClipboard.Count} node(s) to clipboard");
         }
 
         /// <summary>
@@ -1560,10 +1560,10 @@ namespace RowlEngine.Editor.ViewModels
 
             UpdateStartNodeState();
             ScheduleSave();
-            AppendLog($"📋 Pasted {clones.Count} node(s) from clipboard");
+            AppendLog($"Pasted {clones.Count} node(s) from clipboard");
         }
 
-        // ── MS-5: arrow-key nudge ─────────────────────────────────────────
+        // MS-5: arrow-key nudge
         /// <summary>
         /// MS-5: moves the selection by a small delta as one atomic undo step.
         /// Used by arrow keys (1px, 10px with Shift).
@@ -1592,7 +1592,7 @@ namespace RowlEngine.Editor.ViewModels
                 EditorBatchOperationService.BatchAlignNodes(targets, alignment);
                 UndoRedoService.Instance.RecordAction(new MoveNodesAction(before, SnapshotNodePositions(targets)));
                 ScheduleSave();
-                AppendLog($"📐 Aligned {targets.Count} node(s) to {alignment}");
+                AppendLog($"Aligned {targets.Count} node(s) to {alignment}");
             }
         }
 
@@ -1607,7 +1607,7 @@ namespace RowlEngine.Editor.ViewModels
                 EditorBatchOperationService.BatchDistributeNodes(targets, distribution);
                 UndoRedoService.Instance.RecordAction(new MoveNodesAction(before, SnapshotNodePositions(targets)));
                 ScheduleSave();
-                AppendLog($"📊 Distributed {targets.Count} node(s) {distribution}");
+                AppendLog($"Distributed {targets.Count} node(s) {distribution}");
             }
         }
 
@@ -1653,7 +1653,7 @@ namespace RowlEngine.Editor.ViewModels
             }
             catch (Exception ex)
             {
-                AppendLog($"⚠️ Failed to import asset: {ex.Message}");
+                AppendLog($"Failed to import asset: {ex.Message}");
             }
         }
 
@@ -1760,9 +1760,7 @@ namespace RowlEngine.Editor.ViewModels
             SplitScreenMode = splitMode;
         }
 
-        // ══════════════════════════════════════════════════════════════════════
-        // ██  COMPONENT MANAGEMENT  ██
-        // ══════════════════════════════════════════════════════════════════════
+        // COMPONENT MANAGEMENT
         /// <summary>
         /// Controls visibility of the "Add Component" dropdown menu in the Inspector.
         /// </summary>
@@ -1928,7 +1926,7 @@ namespace RowlEngine.Editor.ViewModels
         public void ToggleSnapAssist()
         {
             IsSnapAssistEnabled = !IsSnapAssistEnabled;
-            AppendLog($"🧲 Snap Assist: {(IsSnapAssistEnabled ? "AÇIK (ENABLED)" : "KAPALI (DISABLED)")}");
+            AppendLog($"Snap Assist: {(IsSnapAssistEnabled ? "AÇIK (ENABLED)" : "KAPALI (DISABLED)")}");
         }
 
         /// <summary>
@@ -1942,7 +1940,7 @@ namespace RowlEngine.Editor.ViewModels
             ScheduleSave();
             if (EngineHost.IsInitialized)
                 PushSceneToEngine(SelectedNode);
-            AppendLog("📐 OBS Assist: Arka plan 1920x1080 ekrana tam oturtuldu (Fitted to Screen)");
+            AppendLog("OBS Assist: Arka plan 1920x1080 ekrana tam oturtuldu (Fitted to Screen)");
         }
 
         [RelayCommand]
@@ -1951,7 +1949,7 @@ namespace RowlEngine.Editor.ViewModels
             if (SelectedNode == null) return;
             if (EditorLayoutAssistService.CenterSelectedElement(SelectedNode, out string desc))
             {
-                AppendLog($"🎯 OBS Assist: {desc}");
+                AppendLog($"OBS Assist: {desc}");
             }
             ScheduleSave();
             if (EngineHost.IsInitialized)
@@ -1966,7 +1964,7 @@ namespace RowlEngine.Editor.ViewModels
             ScheduleSave();
             if (EngineHost.IsInitialized)
                 PushSceneToEngine(SelectedNode);
-            AppendLog("⬇️ OBS Assist: Karakterler zemin hizasına oturtuldu (Ground Baseline)");
+            AppendLog("OBS Assist: Karakterler zemin hizasına oturtuldu (Ground Baseline)");
         }
 
         [RelayCommand]
@@ -1977,7 +1975,7 @@ namespace RowlEngine.Editor.ViewModels
             ScheduleSave();
             if (EngineHost.IsInitialized && SelectedNode != null)
                 PushSceneToEngine(SelectedNode);
-            AppendLog("📐 OBS Assist: Karakter boyutu standart orana sıfırlandı (600x900)");
+            AppendLog("OBS Assist: Karakter boyutu standart orana sıfırlandı (600x900)");
         }
 
         [RelayCommand]
@@ -1986,9 +1984,9 @@ namespace RowlEngine.Editor.ViewModels
             if (SelectedNode == null) return;
             EditorLayoutAssistService.PresetDialogueBox(SelectedNode, preset);
             if (preset == "BottomBanner")
-                AppendLog("↕ OBS Assist: Diyalog kutusu alt banner olarak ayarlandı (1720x220)");
+                AppendLog("OBS Assist: Diyalog kutusu alt banner olarak ayarlandı (1720x220)");
             else if (preset == "Center")
-                AppendLog("🎯 OBS Assist: Diyalog kutusu merkeze hizalandı");
+                AppendLog("OBS Assist: Diyalog kutusu merkeze hizalandı");
             ScheduleSave();
             if (EngineHost.IsInitialized)
                 PushSceneToEngine(SelectedNode);
@@ -2002,9 +2000,9 @@ namespace RowlEngine.Editor.ViewModels
             ScheduleSave();
             if (EngineHost.IsInitialized)
                 PushSceneToEngine(SelectedNode);
-            AppendLog("🔄 OBS Assist: Sahne rotasyonları sıfırlandı (Rotation Reset)");
+            AppendLog("OBS Assist: Sahne rotasyonları sıfırlandı (Rotation Reset)");
         }
-        // ── PROJECT MANAGEMENT & BUILD EXPORT PIPELINE ──────────────────────
+        // PROJECT MANAGEMENT & BUILD EXPORT PIPELINE
 
         /// <summary>
         /// Explicitly saves the current project (graphs, node layouts, and configs).
@@ -2045,7 +2043,7 @@ namespace RowlEngine.Editor.ViewModels
             }
             catch (Exception ex)
             {
-                AppendLog($"⚠️ Kayıt anlık görüntüsü alınamadı: {ex.Message}");
+                AppendLog($"Kayıt anlık görüntüsü alınamadı: {ex.Message}");
                 return false;
             }
 
@@ -2055,7 +2053,7 @@ namespace RowlEngine.Editor.ViewModels
             {
                 Volatile.Write(ref _saveCompletedSequence, sequence);
                 IsProjectDirty = false;
-                AppendLog($"💾 [PROJE KAYDEDİLDİ] {Nodes.Count} düğüm ve tüm bileşenler başarıyla kaydedildi ({DateTime.Now:HH:mm:ss})");
+                AppendLog($"[PROJE KAYDEDİLDİ] {Nodes.Count} düğüm ve tüm bileşenler başarıyla kaydedildi ({DateTime.Now:HH:mm:ss})");
             }
             return written;
         }
@@ -2075,7 +2073,7 @@ namespace RowlEngine.Editor.ViewModels
             }
             catch (Exception ex)
             {
-                AppendLog($"⚠️ Kayıt anlık görüntüsü alınamadı: {ex.Message}");
+                AppendLog($"Kayıt anlık görüntüsü alınamadı: {ex.Message}");
                 return Task.CompletedTask;
             }
 
@@ -2094,7 +2092,7 @@ namespace RowlEngine.Editor.ViewModels
                 {
                     string message = ex.Message;
                     Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                        AppendLog($"⚠️ Arka plan kayıt başarısız: {message}"));
+                        AppendLog($"Arka plan kayıt başarısız: {message}"));
                     return;
                 }
                 Avalonia.Threading.Dispatcher.UIThread.Post(() =>
@@ -2106,7 +2104,7 @@ namespace RowlEngine.Editor.ViewModels
                     if (written)
                     {
                         IsProjectDirty = false;
-                        AppendLog($"💾 [PROJE KAYDEDİLDİ] {nodeCount} düğüm ve tüm bileşenler başarıyla kaydedildi ({DateTime.Now:HH:mm:ss})");
+                        AppendLog($"[PROJE KAYDEDİLDİ] {nodeCount} düğüm ve tüm bileşenler başarıyla kaydedildi ({DateTime.Now:HH:mm:ss})");
                     }
                 });
             });
@@ -2142,7 +2140,7 @@ namespace RowlEngine.Editor.ViewModels
 
                 if (selectedDir == null)
                 {
-                    AppendLog("ℹ️ Proje açma iptal edildi.");
+                    AppendLog("Proje açma iptal edildi.");
                     return;
                 }
 
@@ -2170,7 +2168,7 @@ namespace RowlEngine.Editor.ViewModels
                     ProjectRuntimeSettings = ProjectRuntimeSettingsService.Load(Path.Combine(ProjectRoot, "project.rowlproj"));
                     LoadProjectRuntimeSettingsIntoEditor();
                     SaveSlotsViewModel.Refresh();
-                    AppendLog($"   📊 {Nodes.Count} düğüm, {Connections.Count} bağlantı yüklendi.");
+                    AppendLog($"   {Nodes.Count} düğüm, {Connections.Count} bağlantı yüklendi.");
 
                     // Select first node if available
                     if (Nodes.Count > 0)
@@ -2179,7 +2177,7 @@ namespace RowlEngine.Editor.ViewModels
             }
             catch (Exception ex)
             {
-                AppendLog($"⚠️ Proje açma hatası: {ex.Message}");
+                AppendLog($"Proje açma hatası: {ex.Message}");
             }
         }
 
@@ -2204,13 +2202,13 @@ namespace RowlEngine.Editor.ViewModels
                 }
                 else
                 {
-                    AppendLog("ℹ️ Farklı kaydetme iptal edildi.");
+                    AppendLog("Farklı kaydetme iptal edildi.");
                     return;
                 }
             }
             catch (Exception ex)
             {
-                AppendLog($"⚠️ Farklı kaydetme hatası: {ex.Message}");
+                AppendLog($"Farklı kaydetme hatası: {ex.Message}");
             }
         }
 
@@ -2254,7 +2252,7 @@ namespace RowlEngine.Editor.ViewModels
                     }
                     else
                     {
-                        AppendLog("ℹ️ Build işlemi iptal edildi.");
+                        AppendLog("Build işlemi iptal edildi.");
                         return;
                     }
                 }
@@ -2285,7 +2283,7 @@ namespace RowlEngine.Editor.ViewModels
             }
             catch (Exception ex)
             {
-                AppendLog($"⚠️ Build işlemi sırasında hata oluştu: {ex.Message}");
+                AppendLog($"Build işlemi sırasında hata oluştu: {ex.Message}");
             }
             finally
             {
@@ -2337,7 +2335,7 @@ namespace RowlEngine.Editor.ViewModels
             var startId = GetStartNode()?.Id;
             var structure = CurrentStructure();
             string assetsPath = AssetsPath;
-            AppendLog("🔍 [GRAPH LINT] Arka plan taraması başladı...");
+            AppendLog("Ara: [GRAPH LINT] Arka plan taraması başladı...");
             _ = Task.Run(() =>
             {
                 IReadOnlyList<ProjectValidationIssue> issues;
@@ -2359,9 +2357,9 @@ namespace RowlEngine.Editor.ViewModels
             ProjectIssuesViewModel.SetIssues(issues);
             IsProjectIssuesPanelVisible = true;
             BottomPanelActiveTab = 4;
-            if (issues.Count == 0) AppendLog("✅ [GRAPH CHECK] No blocking asset or route issues found.");
+            if (issues.Count == 0) AppendLog("[GRAPH CHECK] No blocking asset or route issues found.");
             foreach (var issue in issues)
-                AppendLog($"{(issue.IsError ? "❌" : "⚠️")} [GRAPH CHECK] {issue.Message}");
+                AppendLog($"{(issue.IsError ? "Hata" : "Uyarı")} [GRAPH CHECK] {issue.Message}");
         }
 
         /// <summary>
@@ -2395,7 +2393,7 @@ namespace RowlEngine.Editor.ViewModels
                     }
                     else
                     {
-                        AppendLog("ℹ️ Paket oluşturma iptal edildi.");
+                        AppendLog("Paket oluşturma iptal edildi.");
                         return;
                     }
                 }

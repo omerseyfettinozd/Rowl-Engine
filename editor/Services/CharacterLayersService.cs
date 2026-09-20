@@ -41,7 +41,7 @@ public static class CharacterLayersService
     /// <summary>Preset adı tavanı (native <c>kMaxCharacterPresetNameBytes</c> aynası).</summary>
     public const int MaxPresetNameBytes = 256;
 
-    // ── Slot parse / validate ────────────────────────────────────────
+    // Slot parse / validate
 
     /// <summary>Bilinen slot mu? Karşılaştırma Ordinal'dir ("Body" geçersiz).</summary>
     public static bool IsKnownSlot(string? slot) => TryGetSlotIndex(slot, out _);
@@ -125,7 +125,7 @@ public static class CharacterLayersService
         return Math.Clamp(candidate, 0.0f, 1.0f);
     }
 
-    // ── Preset / layers parse ────────────────────────────────────────
+    // Preset / layers parse
 
     /// <summary>
     /// Expression preset JSON'unu slot→asset haritasına çevirir. Kök obje
@@ -274,7 +274,7 @@ public static class CharacterLayersService
         }
     }
 
-    // ── Expression atomiklik kararı ───────────────────────────────────
+    // Expression atomiklik kararı
 
     /// <summary>
     /// Atomik expression kararı (native <c>applyExpression</c> aynası):
@@ -336,7 +336,7 @@ public static class CharacterLayersService
         return true;
     }
 
-    // ── Delege okumaları (null/throw fail-closed) ─────────────────────
+    // Delege okumaları (null/throw fail-closed)
 
     /// <summary>Slot asset okuma; null delege/throw fail-closed "" döner.</summary>
     public static string ReadSlotAsset(Func<string?>? read)
@@ -427,7 +427,7 @@ public static class CharacterLayersService
         }
     }
 
-    // ── Rozet ────────────────────────────────────────────────────────
+    // Rozet
 
     /// <summary>
     /// Draw-list JSON'unu (<c>[{slot, asset, opacity}]</c>) rozete çevirir.
@@ -470,7 +470,7 @@ public static class CharacterLayersService
         }
     }
 
-    // ── Referans toplama (linter Validate + unused + paket) ──────────
+    // Referans toplama (linter Validate + unused + paket)
 
     /// <summary>
     /// Component datasındaki katman referanslarını toplar: <c>layers</c>
@@ -508,7 +508,7 @@ public static class CharacterLayersService
         return refs;
     }
 
-    // ── Özel yardımcılar ─────────────────────────────────────────────
+    // Özel yardımcılar
 
     private static object? ToObject<TValue>(TValue? value) =>
         value is null ? null : (object)value;

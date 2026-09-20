@@ -11,7 +11,7 @@ namespace RowlEngine.Editor.ViewModels.Components
     public partial class CameraComponentViewModel : NodeComponentViewModel
     {
         public override string DisplayName => "2D Camera";
-        public override string Icon => "🎥";
+        public override string Icon => "Kamera";
         public override string TypeKey => "camera";
 
         [ObservableProperty]

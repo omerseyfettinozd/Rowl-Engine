@@ -8,7 +8,7 @@ internal static class EditorAudioDspTests
 {
     public static void Run(MainWindowViewModel mainVm)
     {
-        Console.WriteLine("\n📌 [Test 23]: Real-Time Audio DSP Telemetry & Stereo VU Meter Controls...");
+        Console.WriteLine("\n[Test 23]: Real-Time Audio DSP Telemetry & Stereo VU Meter Controls...");
 
         // Step 23.1: AudioComponentViewModel Preview Commands & State Transitions
         Console.WriteLine("    [Step 23.1]: AudioComponentViewModel Preview & Toggle Commands...");
@@ -111,6 +111,6 @@ internal static class EditorAudioDspTests
         mainVm.EngineHost.PlayAudio("test_bgm.ogg", 0, 0);
         mainVm.EngineHost.StopBgm();
 
-        Console.WriteLine("  ✅ [PASS] Real-Time Audio DSP Telemetry & Stereo VU Meter Controls verified");
+        Console.WriteLine("  [PASS] Real-Time Audio DSP Telemetry & Stereo VU Meter Controls verified");
     }
 }

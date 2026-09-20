@@ -11,7 +11,7 @@ internal static class EditorSelectionBatchTests
 {
     public static void Run(MainWindowViewModel mainVm)
     {
-        Console.WriteLine("\n📌 [Test 20]: EditorSelectionCoordinator & EditorBatchOperationService Multi-Selection & Batch Ops...");
+        Console.WriteLine("\n[Test 20]: EditorSelectionCoordinator & EditorBatchOperationService Multi-Selection & Batch Ops...");
 
         // Step 20.1: EditorSelectionCoordinator Multi-Selection & Toggle
         Console.WriteLine("    [Step 20.1]: SelectionCoordinator Single, Multi, Invert & Clear...");
@@ -128,6 +128,6 @@ internal static class EditorSelectionBatchTests
         if (hierarchyNode.Objects.Count != 2)
             throw new Exception("BatchDeleteObjects failed.");
 
-        Console.WriteLine("  ✅ [PASS] EditorSelectionCoordinator & EditorBatchOperationService verified");
+        Console.WriteLine("  [PASS] EditorSelectionCoordinator & EditorBatchOperationService verified");
     }
 }

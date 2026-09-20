@@ -50,7 +50,7 @@ public static class EditorBuildCoordinator
             if (result.Diagnostic != null)
                 reportDiagnostic?.Invoke(result.Diagnostic);
             if (reportDiagnostic == null)
-                log?.Invoke($"⚠️ {result.Message}");
+                log?.Invoke(result.Message);
         }
 
         return result;
@@ -83,7 +83,7 @@ public static class EditorBuildCoordinator
 
         if (validation.Any(issue => issue.IsError))
         {
-            string errorMsg = "⛔ Build cancelled: fix blocking project validation errors first.";
+            string errorMsg = "Build cancelled: fix blocking project validation errors first.";
             var diagnostic = new BuildDiagnostic(
                 BuildDiagnosticCode.ValidationFailed,
                 BuildDiagnosticSeverity.Error,
@@ -118,7 +118,7 @@ public static class EditorBuildCoordinator
         if (!result.Succeeded)
         {
             if (reportDiagnostic == null)
-                log?.Invoke($"{(result.Cancelled ? "ℹ️" : "⚠️")} {result.Message}");
+                log?.Invoke(result.Message);
         }
 
         return result;
@@ -142,11 +142,11 @@ public static class EditorBuildCoordinator
             assetsPath, outPkg, log, cancellationToken, reportDiagnostic).ConfigureAwait(false);
         if (result.Succeeded)
         {
-            log?.Invoke($"📦 [VFS PAKET] .rowlpkg başarıyla oluşturuldu:\n  📁 Konum: {result.PackagePath}");
+            log?.Invoke($"Paket [VFS PAKET] .rowlpkg başarıyla oluşturuldu:\n  Konum: {result.PackagePath}");
         }
         else if (reportDiagnostic == null)
         {
-            log?.Invoke($"⚠️ Paket oluşturma başarısız: {result.Message}");
+            log?.Invoke($"Paket oluşturma başarısız: {result.Message}");
         }
 
         return result;

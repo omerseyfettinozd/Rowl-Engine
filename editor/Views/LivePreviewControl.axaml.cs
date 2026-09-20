@@ -12,7 +12,7 @@ namespace RowlEngine.Editor.Views
 {
     public partial class LivePreviewControl : UserControl
     {
-        // ── Constants for virtual canvas bounds ──
+        // Constants for virtual canvas bounds
         private const double VirtualCanvasWidth = 1920.0;
         private const double VirtualCanvasHeight = 1080.0;
         private const double DragLimitPadding = 500.0;
@@ -635,14 +635,14 @@ namespace RowlEngine.Editor.Views
             double guideLineY = 0;
             string snapInfo = "";
 
-            // --- X AXIS SNAPPING ---
+            // X AXIS SNAPPING
             // 1. Canvas Left Edge (0)
             if (Math.Abs(rawX - 0.0) < SnapThreshold)
             {
                 snappedX = 0.0;
                 snappedHorizontally = true;
                 guideLineX = 0.0;
-                snapInfo += "🧲 Sol Kenar (0) ";
+                snapInfo += "Sol Kenar (0) ";
             }
             // 2. Canvas Horizontal Center ((1920 - width) / 2)
             else if (Math.Abs(rawX - ((VirtualCanvasWidth - width) / 2.0)) < SnapThreshold)
@@ -650,7 +650,7 @@ namespace RowlEngine.Editor.Views
                 snappedX = (VirtualCanvasWidth - width) / 2.0;
                 snappedHorizontally = true;
                 guideLineX = VirtualCanvasWidth / 2.0;
-                snapInfo += "🧲 Yatay Merkez (960) ";
+                snapInfo += "Yatay Merkez (960) ";
             }
             // 3. Canvas Right Edge (1920 - width)
             else if (Math.Abs(rawX - (VirtualCanvasWidth - width)) < SnapThreshold)
@@ -658,7 +658,7 @@ namespace RowlEngine.Editor.Views
                 snappedX = VirtualCanvasWidth - width;
                 snappedHorizontally = true;
                 guideLineX = VirtualCanvasWidth;
-                snapInfo += "🧲 Sağ Kenar (1920) ";
+                snapInfo += "Sağ Kenar (1920) ";
             }
             // 4. Safe Margin Left (60)
             else if (Math.Abs(rawX - 60.0) < SnapThreshold)
@@ -666,7 +666,7 @@ namespace RowlEngine.Editor.Views
                 snappedX = 60.0;
                 snappedHorizontally = true;
                 guideLineX = 60.0;
-                snapInfo += "🧲 Kenar Payı (60) ";
+                snapInfo += "Kenar Payı (60) ";
             }
             // 5. Safe Margin Right (1920 - width - 60)
             else if (Math.Abs(rawX - (VirtualCanvasWidth - width - 60.0)) < SnapThreshold)
@@ -674,17 +674,17 @@ namespace RowlEngine.Editor.Views
                 snappedX = VirtualCanvasWidth - width - 60.0;
                 snappedHorizontally = true;
                 guideLineX = VirtualCanvasWidth - 60.0;
-                snapInfo += "🧲 Kenar Payı (1860) ";
+                snapInfo += "Kenar Payı (1860) ";
             }
 
-            // --- Y AXIS SNAPPING ---
+            // Y AXIS SNAPPING
             // 1. Canvas Top Edge (0)
             if (Math.Abs(rawY - 0.0) < SnapThreshold)
             {
                 snappedY = 0.0;
                 snappedVertically = true;
                 guideLineY = 0.0;
-                snapInfo += "🧲 Üst Kenar (0) ";
+                snapInfo += "Üst Kenar (0) ";
             }
             // 2. Canvas Vertical Center ((1080 - height) / 2)
             else if (Math.Abs(rawY - ((VirtualCanvasHeight - height) / 2.0)) < SnapThreshold)
@@ -692,7 +692,7 @@ namespace RowlEngine.Editor.Views
                 snappedY = (VirtualCanvasHeight - height) / 2.0;
                 snappedVertically = true;
                 guideLineY = VirtualCanvasHeight / 2.0;
-                snapInfo += "🧲 Dikey Merkez (540) ";
+                snapInfo += "Dikey Merkez (540) ";
             }
             // 3. Canvas Bottom Edge (1080 - height)
             else if (Math.Abs(rawY - (VirtualCanvasHeight - height)) < SnapThreshold)
@@ -700,7 +700,7 @@ namespace RowlEngine.Editor.Views
                 snappedY = VirtualCanvasHeight - height;
                 snappedVertically = true;
                 guideLineY = VirtualCanvasHeight;
-                snapInfo += "🧲 Alt Kenar (1080) ";
+                snapInfo += "Alt Kenar (1080) ";
             }
             // 4. Ground Baseline (1080 - height - 30)
             else if (Math.Abs(rawY - (VirtualCanvasHeight - height - 30.0)) < SnapThreshold)
@@ -708,7 +708,7 @@ namespace RowlEngine.Editor.Views
                 snappedY = VirtualCanvasHeight - height - 30.0;
                 snappedVertically = true;
                 guideLineY = VirtualCanvasHeight - 30.0;
-                snapInfo += "🧲 Zemin Çizgisi ";
+                snapInfo += "Zemin Çizgisi ";
             }
 
             UpdateSnapVisuals(snappedHorizontally, guideLineX, snappedVertically, guideLineY, snapInfo.Trim(), snappedX, snappedY);

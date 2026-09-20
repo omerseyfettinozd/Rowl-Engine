@@ -14,7 +14,7 @@
     <Border Background="{DynamicResource PanelBackground}">
         <Grid RowDefinitions="Auto, *, Auto">
 
-            <!-- ── Panel Header: GameObject Inspector (Unity Style) ── -->
+            <!-- Panel Header: GameObject Inspector (Unity Style) -->
             <Border Grid.Row="0" Background="{DynamicResource SurfaceBackground}" 
                     BorderBrush="{DynamicResource BorderColor}" BorderThickness="0,0,0,1"
                     Padding="10,8">
@@ -58,7 +58,7 @@
                     <!-- Düğüm bölümü (Faz 4 Dilim 4: başlık + bölüm + gruplar + renk) -->
                     <StackPanel Spacing="6"
                                 IsVisible="{Binding SelectedNode, Converter={x:Static conv:ObjectConverters.IsNotNull}}">
-                        <TextBlock Text="🔷 DÜĞÜM" FontSize="10" FontWeight="Black"
+                        <TextBlock Text="DÜĞÜM" FontSize="10" FontWeight="Black"
                                    Foreground="{DynamicResource Accent}" LetterSpacing="0.5"/>
                         <StackPanel Spacing="2">
                             <TextBlock Text="Başlık" FontSize="10" Foreground="{DynamicResource MutedText}"/>
@@ -72,7 +72,7 @@
                                                        FieldKey="node.title"/>
                         </StackPanel>
                         <Grid ColumnDefinitions="Auto,*">
-                            <TextBlock Grid.Column="0" Text="📚 Bölüm:"
+                            <TextBlock Grid.Column="0" Text="Bölüm:"
                                        FontSize="11" Foreground="{DynamicResource MutedText}"
                                        VerticalAlignment="Center" Margin="0,0,8,0"/>
                             <ComboBox Grid.Column="1"
@@ -82,7 +82,7 @@
                                       FontSize="11" HorizontalAlignment="Stretch"/>
                         </Grid>
                         <StackPanel Spacing="2">
-                            <TextBlock Text="🗂 Gruplar" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                            <TextBlock Text="Gruplar" FontSize="10" Foreground="{DynamicResource MutedText}"/>
                             <ItemsControl ItemsSource="{Binding InspectorViewModel.MemberGroups}">
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate>
@@ -121,13 +121,13 @@
                                         </DataTemplate>
                                     </ComboBox.ItemTemplate>
                                 </ComboBox>
-                                <Button Grid.Column="1" Content="＋ Ekle"
+                                <Button Grid.Column="1" Content="+ Ekle"
                                         Command="{Binding InspectorViewModel.JoinSelectedJoinGroupCommand}"
                                         FontSize="11" Padding="8,4"/>
                             </Grid>
                         </StackPanel>
                         <StackPanel Spacing="2" Orientation="Horizontal">
-                            <TextBlock Text="🏷 Etiket:" FontSize="11"
+                            <TextBlock Text="Etiket:" FontSize="11"
                                        Foreground="{DynamicResource MutedText}"
                                        VerticalAlignment="Center" Margin="0,0,8,0"/>
                             <ctrl:ColorPickerControl Mode="Palette"
@@ -141,7 +141,7 @@
                              Sidecar yoksa HasSelectedAssetProvenance=false → gizli (fail-closed). -->
                         <StackPanel Spacing="4"
                                     IsVisible="{Binding InspectorViewModel.HasSelectedAssetProvenance}">
-                            <TextBlock Text="🧾 DÖNÜŞTÜRME KÖKENİ" FontSize="10" FontWeight="Black"
+                            <TextBlock Text="DÖNÜŞTÜRME KÖKENİ" FontSize="10" FontWeight="Black"
                                        Foreground="{DynamicResource Accent}" LetterSpacing="0.5"/>
                             <ItemsControl ItemsSource="{Binding InspectorViewModel.SelectedAssetProvenance}">
                                 <ItemsControl.ItemTemplate>
@@ -157,16 +157,14 @@
                 </StackPanel>
             </Border>
 
-            <!-- ── Components List & Add Component Button ── -->
+            <!-- Components List & Add Component Button -->
             <ScrollViewer Grid.Row="1" Padding="8,8" HorizontalScrollBarVisibility="Disabled">
                 <StackPanel Spacing="12">
 
                     <!-- Empty State: No GameObject Selected -->
                     <StackPanel IsVisible="{Binding !InspectorViewModel.HasSelectedObject}" 
                                 Spacing="8" Margin="0,40">
-                        <TextBlock Text="📦" FontSize="36" HorizontalAlignment="Center" 
-                                   Foreground="{DynamicResource MutedText}"/>
-                        <TextBlock Text="No GameObject Selected" 
+                        <TextBlock Text="No GameObject Selected"
                                    FontSize="13" FontWeight="Bold"
                                    Foreground="{DynamicResource PrimaryText}"
                                    HorizontalAlignment="Center"/>
@@ -198,11 +196,9 @@
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
 
-                    <!-- ══════════════════════════════════════════════════════════════════
-                         ➕ ADD COMPONENT BUTTON (Positioned Inside Inspector at the Bottom)
-                         ══════════════════════════════════════════════════════════════════ -->
+                    <!-- ADD COMPONENT BUTTON (Positioned Inside Inspector at the Bottom) -->
                     <StackPanel IsVisible="{Binding InspectorViewModel.HasSelectedObject}" Spacing="6" Margin="0,6,0,10">
-                        <Button Content="➕ Bileşen Ekle"
+                        <Button Content="Bileşen Ekle"
                                 Command="{Binding ShowAddComponentMenuCommand}"
                                 HorizontalAlignment="Stretch"
                                 Padding="12,9"
@@ -222,27 +218,27 @@
                                 <StackPanel Spacing="2">
                                     <TextBlock Text="Eklenecek bileşeni seç" FontSize="11"
                                                Foreground="{DynamicResource MutedText}" Margin="8,4"/>
-                                    <Button Content="💬 Dialogue &amp; Speaker"
+                                    <Button Content="Dialogue &amp; Speaker"
                                             Command="{Binding AddComponentByTypeCommand}" CommandParameter="dialogue"
                                             HorizontalAlignment="Stretch" Padding="8,6" FontSize="11"
                                             Background="Transparent" Foreground="{DynamicResource PrimaryText}" CornerRadius="4"/>
-                                    <Button Content="🖼️ Background Layer"
+                                    <Button Content="Background Layer"
                                             Command="{Binding AddComponentByTypeCommand}" CommandParameter="background"
                                             HorizontalAlignment="Stretch" Padding="8,6" FontSize="11"
                                             Background="Transparent" Foreground="{DynamicResource PrimaryText}" CornerRadius="4"/>
-                                    <Button Content="👤 Character Sprite"
+                                    <Button Content="Character Sprite"
                                             Command="{Binding AddComponentByTypeCommand}" CommandParameter="character"
                                             HorizontalAlignment="Stretch" Padding="8,6" FontSize="11"
                                             Background="Transparent" Foreground="{DynamicResource PrimaryText}" CornerRadius="4"/>
-                                    <Button Content="🔊 Audio &amp; DSP"
+                                    <Button Content="Audio &amp; DSP"
                                             Command="{Binding AddComponentByTypeCommand}" CommandParameter="audio"
                                             HorizontalAlignment="Stretch" Padding="8,6" FontSize="11"
                                             Background="Transparent" Foreground="{DynamicResource PrimaryText}" CornerRadius="4"/>
-                                    <Button Content="🔀 Player Choices"
+                                    <Button Content="Player Choices"
                                             Command="{Binding AddComponentByTypeCommand}" CommandParameter="choice"
                                             HorizontalAlignment="Stretch" Padding="8,6" FontSize="11"
                                             Background="Transparent" Foreground="{DynamicResource PrimaryText}" CornerRadius="4"/>
-                                    <Button Content="📜 Lua Script"
+                                    <Button Content="Lua Script"
                                             Command="{Binding AddComponentByTypeCommand}" CommandParameter="script"
                                             HorizontalAlignment="Stretch" Padding="8,6" FontSize="11"
                                             Background="Transparent" Foreground="{DynamicResource PrimaryText}" CornerRadius="4"/>
@@ -254,10 +250,10 @@
                 </StackPanel>
             </ScrollViewer>
 
-            <!-- ── Engine Sync Button ── -->
+            <!-- Engine Sync Button -->
             <Border Grid.Row="2" Padding="8,6,8,8" Background="{DynamicResource SurfaceBackground}"
                     BorderBrush="{DynamicResource BorderColor}" BorderThickness="0,1,0,0">
-                <Button Content="⚡ Önizlemeye Gönder"
+                <Button Content="Önizlemeye Gönder"
                         ToolTip.Tip="Send the selected node to the running preview"
                         Command="{Binding PushHotReloadPacketCommand}" 
                         IsEnabled="{Binding InspectorViewModel.HasSelectedObject}"

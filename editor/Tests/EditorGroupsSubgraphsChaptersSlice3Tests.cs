@@ -393,8 +393,8 @@ public sealed class EditorGroupsSubgraphsChaptersSlice3Tests
         vm.Subgraphs.LoadDefinitions(new[] { TrialDef() });
 
         Assert.True(a.IsSubgraphBoundary);
-        Assert.Equal("◧ Trial", a.SubgraphBadge);
-        Assert.Equal("Trial ⏏", vm.Nodes[2].SubgraphBadge);
+        Assert.Equal("Trial", a.SubgraphBadge);
+        Assert.Equal("Trial", vm.Nodes[2].SubgraphBadge);
         Assert.False(vm.Nodes[1].IsSubgraphBoundary);
         Assert.Equal(string.Empty, vm.Nodes[1].SubgraphBadge);
         // Badge-only props never dirty the index: the hit survives untouched.

@@ -101,12 +101,12 @@ public static class EditorProjectLifecycleCoordinator
             else if (OperatingSystem.IsMacOS())
                 Process.Start("open", projectRoot);
 
-            logAction?.Invoke($"📂 Proje klasörü açıldı: {projectRoot}");
+            logAction?.Invoke($"Proje klasörü açıldı: {projectRoot}");
             return true;
         }
         catch (Exception ex)
         {
-            logAction?.Invoke($"⚠️ Klasör açılamadı: {ex.Message}");
+            logAction?.Invoke($"Klasör açılamadı: {ex.Message}");
             return false;
         }
     }
@@ -145,18 +145,18 @@ public static class EditorProjectLifecycleCoordinator
 
             if (result.Succeeded)
             {
-                logAction?.Invoke($"💾 [FARKLI KAYDET] Proje başarıyla kopyalandı: {targetDirectory}");
+                logAction?.Invoke($"[FARKLI KAYDET] Proje başarıyla kopyalandı: {targetDirectory}");
             }
             else
             {
-                logAction?.Invoke($"⚠️ Farklı kaydetme hatası: {result.Message}");
+                logAction?.Invoke($"Farklı kaydetme hatası: {result.Message}");
             }
 
             return result;
         }
         catch (Exception ex)
         {
-            logAction?.Invoke($"⚠️ Farklı kaydetme hatası: {ex.Message}");
+            logAction?.Invoke($"Farklı kaydetme hatası: {ex.Message}");
             return new SaveAsResult(false, targetDirectory, ex.Message);
         }
     }
@@ -178,7 +178,7 @@ public static class EditorProjectLifecycleCoordinator
     {
         if (!ProjectOpenCoordinator.TryResolve(selectedDirectory, out var project))
         {
-            logAction?.Invoke("⚠️ Seçilen klasörde geçerli bir Rowl Engine projesi bulunamadı.");
+            logAction?.Invoke("Seçilen klasörde geçerli bir Rowl Engine projesi bulunamadı.");
             logAction?.Invoke("   Beklenen yapı: [KlasörAdı]/Assets/json/full_story_graph.json");
             return new ProjectOpenResult(false, null, "Geçerli bir Rowl Engine projesi bulunamadı.");
         }
@@ -196,12 +196,12 @@ public static class EditorProjectLifecycleCoordinator
 
         if (loaded)
         {
-            logAction?.Invoke($"📂 [PROJE AÇILDI] {project!.RootPath}");
+            logAction?.Invoke($"[PROJE AÇILDI] {project!.RootPath}");
             return new ProjectOpenResult(true, project!.RootPath, null);
         }
         else
         {
-            logAction?.Invoke($"⚠️ Hikaye grafiği yüklenemedi: {project!.GraphFilePath}");
+            logAction?.Invoke($"Hikaye grafiği yüklenemedi: {project!.GraphFilePath}");
             return new ProjectOpenResult(false, project!.RootPath, "Hikaye grafiği yüklenemedi.");
         }
     }

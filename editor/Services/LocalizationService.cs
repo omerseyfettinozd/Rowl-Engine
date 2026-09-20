@@ -193,7 +193,7 @@ public sealed class LocalizationService
             : supported[0];
     }
 
-    // ── Native selection (handle-seamed, worker-thread safe) ────────────
+    // Native selection (handle-seamed, worker-thread safe)
 
     /// <summary>
     /// Reads the native active locale through a live engine handle.

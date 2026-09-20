@@ -90,7 +90,7 @@ namespace RowlEngine.Editor.ViewModels
 
             _registry.Add(info);
             RefreshProjects();
-            StatusText = $"✅ '{name}' oluşturuldu";
+            StatusText = $"'{name}' oluşturuldu";
         }
 
         [RelayCommand]
@@ -121,7 +121,7 @@ namespace RowlEngine.Editor.ViewModels
 
             _registry.Add(info);
             RefreshProjects();
-            StatusText = $"📂 '{name}' içe aktarıldı";
+            StatusText = $"'{name}' içe aktarıldı";
         }
 
         public void OpenProject(ProjectCardViewModel card)
@@ -148,7 +148,7 @@ namespace RowlEngine.Editor.ViewModels
             }
 
             RefreshProjects();
-            StatusText = $"✏️ '{newName}' olarak yeniden adlandırıldı";
+            StatusText = $"'{newName}' olarak yeniden adlandırıldı";
         }
 
         public async Task SetCoverAsync(ProjectCardViewModel card)
@@ -174,7 +174,7 @@ namespace RowlEngine.Editor.ViewModels
             string src = files[0].Path.LocalPath;
             if (MediaFormatCatalog.RequiresExplicitRejection(src))
             {
-                StatusText = $"⚠️ Kapak reddedildi: {MediaFormatCatalog.RejectionMessage(Path.GetFileName(src))}";
+                StatusText = $"Kapak reddedildi: {MediaFormatCatalog.RejectionMessage(Path.GetFileName(src))}";
                 return;
             }
             try
@@ -186,11 +186,11 @@ namespace RowlEngine.Editor.ViewModels
 
                 _registry.UpdateCover(card.Info.Id, destName);
                 RefreshProjects();
-                StatusText = "🖼️ Kapak resmi güncellendi";
+                StatusText = "Kapak resmi güncellendi";
             }
             catch (Exception ex)
             {
-                StatusText = $"⚠️ Kapak değiştirilemedi: {ex.Message}";
+                StatusText = $"Kapak değiştirilemedi: {ex.Message}";
             }
         }
 
@@ -205,7 +205,7 @@ namespace RowlEngine.Editor.ViewModels
 
             _registry.Remove(card.Info.Id);
             RefreshProjects();
-            StatusText = $"🗑️ '{card.Name}' listeden kaldırıldı";
+            StatusText = $"'{card.Name}' listeden kaldırıldı";
         }
 
         private Window? GetActiveWindow()

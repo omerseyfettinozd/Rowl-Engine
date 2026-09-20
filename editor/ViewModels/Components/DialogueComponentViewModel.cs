@@ -12,7 +12,7 @@ namespace RowlEngine.Editor.ViewModels.Components
     public partial class DialogueComponentViewModel : NodeComponentViewModel
     {
         public override string DisplayName => "Dialogue";
-        public override string Icon => "💬";
+        public override string Icon => "Diyalog";
         public override string TypeKey => "dialogue";
 
         /// <summary>

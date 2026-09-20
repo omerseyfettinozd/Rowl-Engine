@@ -36,23 +36,23 @@ public sealed partial class SaveSlotsViewModel : ViewModelBase
     private void Save(SaveSlotEntry? slot)
     {
         if (slot is null) return;
-        if (_main.EngineHost.SaveGameSlot(slot.Index)) { _main.AppendLog($"💾 Oyun slotu {slot.Index + 1} kaydedildi."); Refresh(); }
-        else { _main.AppendLog($"⚠️ Oyun slotu {slot.Index + 1} kaydedilemedi."); _main.CheckEngineDiagnostics(); }
+        if (_main.EngineHost.SaveGameSlot(slot.Index)) { _main.AppendLog($"Oyun slotu {slot.Index + 1} kaydedildi."); Refresh(); }
+        else { _main.AppendLog($"Oyun slotu {slot.Index + 1} kaydedilemedi."); _main.CheckEngineDiagnostics(); }
     }
 
     [RelayCommand]
     private void Load(SaveSlotEntry? slot)
     {
         if (slot is null || !slot.IsOccupied) return;
-        if (_main.EngineHost.LoadGameSlot(slot.Index)) { _main.SyncEditorToRuntimeNode(); _main.BacklogViewModel.Refresh(); _main.AppendLog($"📂 Oyun slotu {slot.Index + 1} yüklendi."); }
-        else { _main.AppendLog($"⚠️ Oyun slotu {slot.Index + 1} yüklenemedi; çalışan sahne korundu."); _main.CheckEngineDiagnostics(); }
+        if (_main.EngineHost.LoadGameSlot(slot.Index)) { _main.SyncEditorToRuntimeNode(); _main.BacklogViewModel.Refresh(); _main.AppendLog($"Oyun slotu {slot.Index + 1} yüklendi."); }
+        else { _main.AppendLog($"Oyun slotu {slot.Index + 1} yüklenemedi; çalışan sahne korundu."); _main.CheckEngineDiagnostics(); }
     }
 
     [RelayCommand]
     private async System.Threading.Tasks.Task DeleteAsync(SaveSlotEntry? slot)
     {
         if (slot is null || !slot.IsOccupied || !await _main.ConfirmDeleteSaveSlotAsync(slot.Index)) return;
-        if (_main.EngineHost.DeleteSaveSlot(slot.Index)) { _main.AppendLog($"🗑️ Oyun slotu {slot.Index + 1} silindi."); Refresh(); }
-        else { _main.AppendLog($"⚠️ Oyun slotu {slot.Index + 1} silinemedi."); _main.CheckEngineDiagnostics(); }
+        if (_main.EngineHost.DeleteSaveSlot(slot.Index)) { _main.AppendLog($"Oyun slotu {slot.Index + 1} silindi."); Refresh(); }
+        else { _main.AppendLog($"Oyun slotu {slot.Index + 1} silinemedi."); _main.CheckEngineDiagnostics(); }
     }
 }

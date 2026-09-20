@@ -16,7 +16,7 @@ internal static class EditorMs5UxTests
 {
     public static void Run(MainWindowViewModel mainVm, string testProjectRoot)
     {
-        Console.WriteLine("\n📌 [Test 31]: MS-5 editor UX — drag cancel, keyboard tour, asset watcher...");
+        Console.WriteLine("\n[Test 31]: MS-5 editor UX — drag cancel, keyboard tour, asset watcher...");
 
         var scratchA = new NodeViewModel(9101, "MS5 Scratch A", 100, 100, bare: true);
         var scratchB = new NodeViewModel(9102, "MS5 Scratch B", 600, 100, bare: true);
@@ -44,7 +44,7 @@ internal static class EditorMs5UxTests
                 mainVm.SelectedNode = mainVm.Nodes.FirstOrDefault();
         }
 
-        Console.WriteLine("  ✅ [PASS] MS-5 editor UX verified");
+        Console.WriteLine("  [PASS] MS-5 editor UX verified");
     }
 
     private static void UndoBaseline(out bool canUndo, out string description)

@@ -40,10 +40,10 @@ namespace RowlEngine.Editor.Models
 
         public string IconSymbol => Type switch
         {
-            NotificationType.Success => "✅",
-            NotificationType.Warning => "⚠️",
-            NotificationType.Error   => "❌",
-            _                        => "ℹ️"
+            NotificationType.Success => "",
+            NotificationType.Warning => "",
+            NotificationType.Error   => "",
+            _                        => ""
         };
 
         public ToastNotification(string message, NotificationType type = NotificationType.Info, string? title = null)

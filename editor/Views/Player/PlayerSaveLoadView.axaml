@@ -10,8 +10,8 @@
       <Button Content="Geri"
               Command="{Binding RequestIntentCommand}"
               CommandParameter="{x:Static services:PlayerIntent.CloseOverlay}" />
-      <Button Content="◀" Command="{Binding SlotsPreviousPageCommand}" />
-      <Button Content="▶" Command="{Binding SlotsNextPageCommand}" />
+      <Button Content="Önceki" Command="{Binding SlotsPreviousPageCommand}" />
+      <Button Content="Sonraki" Command="{Binding SlotsNextPageCommand}" />
     </StackPanel>
     <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
       <ItemsControl ItemsSource="{Binding Slots.Entries}">

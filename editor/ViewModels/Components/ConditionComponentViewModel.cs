@@ -9,7 +9,7 @@ namespace RowlEngine.Editor.ViewModels.Components
     public partial class ConditionComponentViewModel : NodeComponentViewModel
     {
         public override string DisplayName => "Condition (Lua)";
-        public override string Icon => "⚖️";
+        public override string Icon => "Koşul";
         public override string TypeKey => "condition";
 
         [ObservableProperty]

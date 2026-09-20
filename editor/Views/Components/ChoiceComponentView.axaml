@@ -8,10 +8,10 @@
   <Border Background="{DynamicResource CardBackground}" CornerRadius="6" Margin="0,4" Padding="10" BorderBrush="{DynamicResource CardBorderColor}" BorderThickness="1">
     <StackPanel Spacing="8">
       <Grid ColumnDefinitions="*,Auto">
-        <TextBlock Text="🔀 Player Choices" FontWeight="Bold" Foreground="{DynamicResource PrimaryText}"/>
+        <TextBlock Text="Player Choices" FontWeight="Bold" Foreground="{DynamicResource PrimaryText}"/>
         <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4">
           <CheckBox IsChecked="{Binding IsEnabled}" ToolTip.Tip="Enable/Disable"/>
-          <Button Content="🗑️" Command="{Binding RemoveSelfCommand}" Foreground="#EF4444" Background="Transparent" BorderThickness="0"/>
+          <Button Content="Sil" Command="{Binding RemoveSelfCommand}" Foreground="#EF4444" Background="Transparent" BorderThickness="0"/>
         </StackPanel>
       </Grid>
       <TextBox Watermark="Choice heading" Text="{Binding Title}"/>
@@ -23,7 +23,7 @@
                 <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="4">
                   <TextBox Grid.Column="0" Watermark="Button text" Text="{Binding Text}" FontSize="{Binding FontSize}" Foreground="{Binding TextColor}"/>
                   <CheckBox Grid.Column="1" IsChecked="{Binding IsEnabled}" ToolTip.Tip="Enable this button"/>
-                  <ToggleButton Grid.Column="2" Content="⚙" IsChecked="{Binding IsExpanded}" ToolTip.Tip="Button appearance"/>
+                  <ToggleButton Grid.Column="2" Content="Ayar" IsChecked="{Binding IsExpanded}" ToolTip.Tip="Button appearance"/>
                 </Grid>
                 <StackPanel IsVisible="{Binding IsExpanded}" Spacing="6">
                   <Grid ColumnDefinitions="*,90,Auto" ColumnSpacing="5">
@@ -87,7 +87,7 @@
       </ItemsControl>
       <ctrl:FieldValidationBadge Validation="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).InspectorViewModel.Validation}"
                                          NodeId="{Binding Node.Id}" FieldKey="choice.option_target" />
-      <Button Content="＋ Add choice" Command="{Binding AddOptionCommand}" HorizontalAlignment="Left"/>
+      <Button Content="+ Add choice" Command="{Binding AddOptionCommand}" HorizontalAlignment="Left"/>
       <TextBlock Text="Each option has a stable ID and a target node. Use the graph cables to visualize routes; the target ID is the source of truth." TextWrapping="Wrap" FontSize="10" Foreground="{DynamicResource MutedText}"/>
     </StackPanel>
   </Border>

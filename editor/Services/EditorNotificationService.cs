@@ -118,7 +118,7 @@ namespace RowlEngine.Editor.Services
 
             ToastService.Instance.Show(msg, toastType, 4000);
             Show(msg, isWarning ? NotificationType.Warning : NotificationType.Error, "Motor Uyarısı", 4000);
-            log?.Invoke($"⚠️ [Motor Tanı] {code} — {operation}: {message} ({target})");
+            log?.Invoke($"[Motor Tanı] {code} — {operation}: {message} ({target})");
         }
 
         /// <summary>Publishes structured build/package failures to toast, notification list and log.</summary>
@@ -153,9 +153,9 @@ namespace RowlEngine.Editor.Services
 
             string prefix = diagnostic.Severity switch
             {
-                BuildDiagnosticSeverity.Info => "ℹ️",
-                BuildDiagnosticSeverity.Warning => "⚠️",
-                _ => "❌"
+                BuildDiagnosticSeverity.Info => "",
+                BuildDiagnosticSeverity.Warning => "",
+                _ => ""
             };
             log?.Invoke($"{prefix} {logLine}");
         }
@@ -174,14 +174,14 @@ namespace RowlEngine.Editor.Services
                 const string msg = "Ses cihazı kayboldu — sessiz moda geçildi, çalma niyeti korunuyor.";
                 ToastService.Instance.Show(msg, ToastType.Warning, 4000);
                 ShowWarning(msg, "Ses Cihazı");
-                log?.Invoke("⚠️ [Ses] Cihaz kaybı algılandı; motor sessiz fallback + niyet korumasında.");
+                log?.Invoke("[Ses] Cihaz kaybı algılandı; motor sessiz fallback + niyet korumasında.");
             }
             else
             {
                 const string msg = "Ses cihazı geri geldi — çıkış yeniden açıldı.";
                 ToastService.Instance.Show(msg, ToastType.Success, 4000);
                 ShowSuccess(msg, "Ses Cihazı");
-                log?.Invoke("✅ [Ses] Cihaz geri geldi; çıkış akışları yeniden kuruldu.");
+                log?.Invoke("[Ses] Cihaz geri geldi; çıkış akışları yeniden kuruldu.");
             }
             return true;
         }

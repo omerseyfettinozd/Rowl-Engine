@@ -11,7 +11,7 @@ internal static class EditorParallaxCameraTests
 {
     public static void Run(MainWindowViewModel mainVm)
     {
-        Console.WriteLine("\n📌 [Test 24]: Multi-Layer Parallax Depth & 2.5D Camera Controls...");
+        Console.WriteLine("\n[Test 24]: Multi-Layer Parallax Depth & 2.5D Camera Controls...");
 
         // Step 24.1: BackgroundComponentViewModel Parallax & Opacity Defaults and Reset
         Console.WriteLine("    [Step 24.1]: BackgroundComponentViewModel Parallax & Opacity Defaults...");
@@ -142,6 +142,6 @@ internal static class EditorParallaxCameraTests
             Math.Abs(legacyBg.Opacity - 0.95) > 0.001)
             throw new Exception("StoryGraphNodeHydrator failed to ingest legacy parallax & opacity");
 
-        Console.WriteLine("  ✅ [PASS] Multi-Layer Parallax Depth & 2.5D Camera Controls verified");
+        Console.WriteLine("  [PASS] Multi-Layer Parallax Depth & 2.5D Camera Controls verified");
     }
 }

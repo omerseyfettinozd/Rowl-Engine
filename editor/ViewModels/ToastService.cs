@@ -28,7 +28,7 @@ namespace RowlEngine.Editor.ViewModels
         private string _toastBackground = "#22C55E";
 
         [ObservableProperty]
-        private string _toastIcon = "✅";
+        private string _toastIcon = "";
 
         private CancellationTokenSource? _hideCts;
 
@@ -41,11 +41,11 @@ namespace RowlEngine.Editor.ViewModels
             Message = message;
             (ToastIcon, ToastBackground) = type switch
             {
-                ToastType.Success => ("✅", "#16A34A"),
-                ToastType.Warning => ("⚠️", "#D97706"),
-                ToastType.Error   => ("❌", "#DC2626"),
-                ToastType.Info    => ("ℹ️", "#2563EB"),
-                _                 => ("✅", "#16A34A")
+                ToastType.Success => ("", "#16A34A"),
+                ToastType.Warning => ("", "#D97706"),
+                ToastType.Error   => ("", "#DC2626"),
+                ToastType.Info    => ("", "#2563EB"),
+                _                 => ("", "#16A34A")
             };
             IsVisible = true;
 

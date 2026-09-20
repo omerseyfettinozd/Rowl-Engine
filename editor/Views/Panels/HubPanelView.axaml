@@ -64,7 +64,7 @@
                                     <!-- Sağ aksiyonlar -->
                                     <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="0,0,10,0">
                                         <Button Content="Aç" Command="{Binding OpenCommand}" Background="#5AA535" Foreground="White" CornerRadius="4" Padding="18,8" FontSize="12" FontWeight="Bold" BorderBrush="#3A6E24" BorderThickness="1"/>
-                                        <Button Content="⋯" Background="#555555" Foreground="White" FontSize="14" Padding="8,6" CornerRadius="4" BorderBrush="#3A3A3A" BorderThickness="1" MinWidth="36">
+                                        <Button Content="Diğer" Background="#555555" Foreground="White" FontSize="14" Padding="8,6" CornerRadius="4" BorderBrush="#3A3A3A" BorderThickness="1" MinWidth="36">
                                             <Button.Flyout><MenuFlyout><MenuItem Header="İsim Değiştir" Command="{Binding RenameCommand}"/><MenuItem Header="Kapak Değiştir" Command="{Binding SetCoverCommand}"/><Separator/><MenuItem Header="Sil" Command="{Binding DeleteCommand}" Foreground="#DC2626"/></MenuFlyout></Button.Flyout>
                                         </Button>
                                     </StackPanel>

@@ -23,14 +23,14 @@ public static class EditorPlayModeCoordinator
         string assetsJsonPath)
     {
         saveStoryFiles();
-        log("▶ Starting Offscreen Play Mode...");
+        log("Starting Offscreen Play Mode...");
 
         if (!host.IsInitialized)
         {
             bool connected = await ensureEngineConnected();
             if (!connected || !host.IsInitialized)
             {
-                log("❌ Engine not initialized. Click 'Connect Engine' first.");
+                log("Engine not initialized. Click 'Connect Engine' first.");
                 return false;
             }
         }
@@ -57,7 +57,7 @@ public static class EditorPlayModeCoordinator
             pushScene(startNode);
         }
 
-        log("✅ Engine play state activated (Started from first frame).");
+        log("Engine play state activated (Started from first frame).");
         return true;
     }
 
@@ -71,7 +71,7 @@ public static class EditorPlayModeCoordinator
         host.SetPlayState(false);
         host.ResetToStartNode();
 
-        log("⏹ Play mode stopped (Engine reset to first frame).");
+        log("Play mode stopped (Engine reset to first frame).");
 
         var startNode = getStartNode();
         if (startNode != null)

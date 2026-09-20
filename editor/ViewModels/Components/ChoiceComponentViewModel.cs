@@ -89,7 +89,7 @@ namespace RowlEngine.Editor.ViewModels.Components
     public partial class ChoiceComponentViewModel : NodeComponentViewModel
     {
         public override string DisplayName => "Player Choices";
-        public override string Icon => "🔀";
+        public override string Icon => "Seçim";
         public override string TypeKey => "choice";
 
         [ObservableProperty] private string _layout = "Vertical";

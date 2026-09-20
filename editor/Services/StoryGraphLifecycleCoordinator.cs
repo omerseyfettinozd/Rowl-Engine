@@ -38,7 +38,7 @@ namespace RowlEngine.Editor.Services
                     out var readError))
             {
                 if (!string.IsNullOrEmpty(readError))
-                    log?.Invoke($"⚠️ Failed to read story graph: {readError}");
+                    log?.Invoke($"Failed to read story graph: {readError}");
                 return false;
             }
 
@@ -54,7 +54,7 @@ namespace RowlEngine.Editor.Services
                     if (!loadResult.Success)
                     {
                         if (!string.IsNullOrEmpty(loadResult.ErrorMessage))
-                            log?.Invoke($"⚠️ Failed to load story graph: {loadResult.ErrorMessage}");
+                            log?.Invoke($"Failed to load story graph: {loadResult.ErrorMessage}");
                         return false;
                     }
 
@@ -98,7 +98,7 @@ namespace RowlEngine.Editor.Services
                         foreach (var node in previousNodes) nodes.Add(node);
                         foreach (var connection in previousConnections) connections.Add(connection);
                         UpdateStartNodeState(nodes, connections);
-                        log?.Invoke($"⚠️ Structure state could not be applied, load rolled back: {structureEx.Message}");
+                        log?.Invoke($"Structure state could not be applied, load rolled back: {structureEx.Message}");
                         return false;
                     }
 
@@ -108,7 +108,7 @@ namespace RowlEngine.Editor.Services
                         selectNodeQuiet(startNode);
                     }
 
-                    log?.Invoke($"📂 Loaded story graph from {filePath} ({nodes.Count} nodes, {connections.Count} connections, format v{loadResult.FormatVersion})");
+                    log?.Invoke($"Loaded story graph from {filePath} ({nodes.Count} nodes, {connections.Count} connections, format v{loadResult.FormatVersion})");
                     return true;
                 }
             }
@@ -120,7 +120,7 @@ namespace RowlEngine.Editor.Services
                 foreach (var node in previousNodes) nodes.Add(node);
                 foreach (var connection in previousConnections) connections.Add(connection);
                 UpdateStartNodeState(nodes, connections);
-                log?.Invoke($"⚠️ Failed to load story graph: {ex.Message}");
+                log?.Invoke($"Failed to load story graph: {ex.Message}");
                 return false;
             }
         }

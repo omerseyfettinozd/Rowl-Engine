@@ -26,7 +26,7 @@
                                 Command="{Binding ImportAssetCommand}"
                                 Background="{DynamicResource AccentButtonBg}" Foreground="White"
                                 CornerRadius="4" Padding="6,3" FontSize="10"/>
-                        <Button Content="↻"
+                        <Button Content="Yenile"
                                 ToolTip.Tip="Refresh the asset list"
                                 Command="{Binding AssetBrowserViewModel.RefreshAssetsCommand}"
                                 Background="Transparent" Foreground="{DynamicResource PrimaryText}"
@@ -44,14 +44,14 @@
                       Foreground="{DynamicResource PrimaryText}">
                 <TreeView.ContextMenu>
                     <ContextMenu>
-                        <MenuItem Header="📁 Yeni Klasör Oluştur" Command="{Binding AssetBrowserViewModel.CreateFolderCommand}"/>
-                        <MenuItem Header="📥 Dosya İçe Aktar..." Command="{Binding ImportAssetCommand}"/>
+                        <MenuItem Header="Yeni Klasör Oluştur" Command="{Binding AssetBrowserViewModel.CreateFolderCommand}"/>
+                        <MenuItem Header="Dosya İçe Aktar..." Command="{Binding ImportAssetCommand}"/>
                         <Separator/>
-                        <MenuItem Header="✏️ Yeniden Adlandır (F2)" Command="{Binding AssetBrowserViewModel.StartRenameCommand}"/>
-                        <MenuItem Header="📂 Dosya Yöneticisinde Aç" Command="{Binding AssetBrowserViewModel.OpenInExplorerCommand}"/>
+                        <MenuItem Header="Yeniden Adlandır (F2)" Command="{Binding AssetBrowserViewModel.StartRenameCommand}"/>
+                        <MenuItem Header="Dosya Yöneticisinde Aç" Command="{Binding AssetBrowserViewModel.OpenInExplorerCommand}"/>
                         <Separator/>
-                        <MenuItem Header="🗑️ Sil" Command="{Binding AssetBrowserViewModel.DeleteAssetCommand}"/>
-                        <MenuItem Header="🔄 Yenile" Command="{Binding AssetBrowserViewModel.RefreshAssetsCommand}"/>
+                        <MenuItem Header="Sil" Command="{Binding AssetBrowserViewModel.DeleteAssetCommand}"/>
+                        <MenuItem Header="Yenile" Command="{Binding AssetBrowserViewModel.RefreshAssetsCommand}"/>
                     </ContextMenu>
                 </TreeView.ContextMenu>
                 <TreeView.Styles>
@@ -68,14 +68,14 @@
                                     PointerReleased="OnAssetPointerReleased">
                             <StackPanel.ContextMenu>
                                 <ContextMenu>
-                                    <MenuItem Header="📁 Yeni Klasör Oluştur" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.CreateFolderCommand}"/>
-                                    <MenuItem Header="📥 Dosya İçe Aktar..." Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ImportAssetCommand}"/>
+                                    <MenuItem Header="Yeni Klasör Oluştur" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.CreateFolderCommand}"/>
+                                    <MenuItem Header="Dosya İçe Aktar..." Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ImportAssetCommand}"/>
                                     <Separator/>
-                                    <MenuItem Header="✏️ Yeniden Adlandır (F2)" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.StartRenameCommand}"/>
-                                    <MenuItem Header="📂 Dosya Yöneticisinde Aç" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.OpenInExplorerCommand}"/>
+                                    <MenuItem Header="Yeniden Adlandır (F2)" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.StartRenameCommand}"/>
+                                    <MenuItem Header="Dosya Yöneticisinde Aç" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.OpenInExplorerCommand}"/>
                                     <Separator/>
-                                    <MenuItem Header="🗑️ Sil" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.DeleteAssetCommand}"/>
-                                    <MenuItem Header="🔄 Yenile" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.RefreshAssetsCommand}"/>
+                                    <MenuItem Header="Sil" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.DeleteAssetCommand}"/>
+                                    <MenuItem Header="Yenile" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.RefreshAssetsCommand}"/>
                                 </ContextMenu>
                             </StackPanel.ContextMenu>
                             <TextBlock Text="{Binding Icon}" Foreground="{Binding IconColor}" FontSize="14" VerticalAlignment="Center"/>
@@ -90,7 +90,7 @@
                             <Border IsVisible="{Binding IsMissing}"
                                     Background="#7F3030" CornerRadius="3" Padding="4,1"
                                     VerticalAlignment="Center">
-                                <TextBlock Text="⚠️ KAYIP" FontSize="9" Foreground="#FCA5A5" FontWeight="Bold"/>
+                                <TextBlock Text="KAYIP" FontSize="9" Foreground="#FCA5A5" FontWeight="Bold"/>
                             </Border>
 
                             <TextBox Text="{Binding EditingName, Mode=TwoWay}" 

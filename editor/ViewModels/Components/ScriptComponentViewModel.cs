@@ -7,7 +7,7 @@ namespace RowlEngine.Editor.ViewModels.Components
     public partial class ScriptComponentViewModel : NodeComponentViewModel
     {
         public override string DisplayName => "Lua Script";
-        public override string Icon => "📜";
+        public override string Icon => "Betik";
         public override string TypeKey => "script";
 
         [ObservableProperty]

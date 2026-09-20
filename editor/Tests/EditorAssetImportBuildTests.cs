@@ -9,7 +9,7 @@ internal static class EditorAssetImportBuildTests
 {
     public static void Run(MainWindowViewModel mainVm, string testProjectRoot)
     {
-        Console.WriteLine("\n📌 [Test 16]: EditorAssetImportService & EditorBuildCoordinator Isolation...");
+        Console.WriteLine("\n[Test 16]: EditorAssetImportService & EditorBuildCoordinator Isolation...");
 
         // 1. EditorAssetImportService Extension Subdirectory Resolution
         Console.WriteLine("    [Step 16.1]: Extension Subdirectory Resolution...");
@@ -120,6 +120,6 @@ internal static class EditorAssetImportBuildTests
             try { Directory.Delete(testPackageDir, true); } catch { }
         }
 
-        Console.WriteLine("  ✅ [PASS] EditorAssetImportService & EditorBuildCoordinator Isolation verified");
+        Console.WriteLine("  [PASS] EditorAssetImportService & EditorBuildCoordinator Isolation verified");
     }
 }

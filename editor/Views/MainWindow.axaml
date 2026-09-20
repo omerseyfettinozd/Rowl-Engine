@@ -22,36 +22,31 @@
 
     <Grid RowDefinitions="Auto, *, Auto">
 
-        <!-- ══════════════════════════════════════════════════════════════════
-             PROFESSIONAL TOOLBAR — 2 Satırlı Düzen
-             Satır 1: Logo + Gezinme Sekmeleri + Pencereler Menüsü
-             Satır 2: Kaydet + Undo/Redo + Arama + Node İşlemleri + Build + Play + ⚙️ Ayarlar
-             ══════════════════════════════════════════════════════════════════ -->
+        <!-- PROFESSIONAL TOOLBAR: 2 Satırlı Düzen / Satır 1: Logo + Gezinme Sekmeleri + Pencereler Menüsü / Satır 2: Kaydet + Undo/Redo + Arama + Node İşlemleri + Build + Play + Ayarlar -->
         <Border Grid.Row="0" Background="{DynamicResource SurfaceBackground}" 
                 BorderBrush="{DynamicResource BorderColor}" BorderThickness="0,0,0,1">
             <StackPanel>
 
-                <!-- ── Satır 1: Logo + Gezinme + Pencereler ────────────── -->
+                <!-- Satır 1: Logo + Gezinme + Pencereler -->
                 <Border Padding="12,6,12,4">
                     <DockPanel>
                         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
                             <Menu Background="Transparent">
                                 <MenuItem Header="Pencereler" Foreground="{DynamicResource PrimaryText}" FontSize="12" FontWeight="SemiBold">
-                                    <MenuItem Header="📋 Hierarchy" Command="{Binding ShowPanelCommand}" CommandParameter="Hierarchy"/>
-                                    <MenuItem Header="🔍 Node Inspector" Command="{Binding ShowPanelCommand}" CommandParameter="Inspector"/>
-                                    <MenuItem Header="📝 Output Log" Command="{Binding ShowPanelCommand}" CommandParameter="Log"/>
-                                <MenuItem Header="📁 Project Assets" Command="{Binding ShowPanelCommand}" CommandParameter="Assets"/>
-                                <MenuItem Header="💬 Dialogue Backlog" Command="{Binding ShowPanelCommand}" CommandParameter="Backlog"/>
-                                <MenuItem Header="💾 Save Slots" Command="{Binding ShowPanelCommand}" CommandParameter="SaveSlots"/>
-                                <MenuItem Header="⚠️ Project Issues" Command="{Binding ShowPanelCommand}" CommandParameter="ProjectIssues"/>
-                                <MenuItem Header="🌐 Çeviri Masası" Command="{Binding OpenLocalizationDeskCommand}"/>
-                                <MenuItem Header="🔎 Analyze Story Graph" Command="{Binding AnalyzeStoryGraphCommand}"/>
+                                    <MenuItem Header="Hierarchy" Command="{Binding ShowPanelCommand}" CommandParameter="Hierarchy"/>
+                                    <MenuItem Header="Node Inspector" Command="{Binding ShowPanelCommand}" CommandParameter="Inspector"/>
+                                    <MenuItem Header="Output Log" Command="{Binding ShowPanelCommand}" CommandParameter="Log"/>
+                                <MenuItem Header="Project Assets" Command="{Binding ShowPanelCommand}" CommandParameter="Assets"/>
+                                <MenuItem Header="Dialogue Backlog" Command="{Binding ShowPanelCommand}" CommandParameter="Backlog"/>
+                                <MenuItem Header="Save Slots" Command="{Binding ShowPanelCommand}" CommandParameter="SaveSlots"/>
+                                <MenuItem Header="Project Issues" Command="{Binding ShowPanelCommand}" CommandParameter="ProjectIssues"/>
+                                <MenuItem Header="Çeviri Masası" Command="{Binding OpenLocalizationDeskCommand}"/>
+                                <MenuItem Header="Analyze Story Graph" Command="{Binding AnalyzeStoryGraphCommand}"/>
                                 </MenuItem>
                             </Menu>
                         </StackPanel>
 
                         <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                            <TextBlock Text="✦" FontSize="16" Foreground="{DynamicResource Accent}" VerticalAlignment="Center"/>
                             <TextBlock Text="ROWL" FontWeight="Black" Foreground="{DynamicResource Accent}" FontSize="14" VerticalAlignment="Center" LetterSpacing="0.5"/>
                             <TextBlock Text="STORY STUDIO" FontWeight="Light" Foreground="{DynamicResource MutedText}" FontSize="14" VerticalAlignment="Center" Margin="-2,0,0,0"/>
 
@@ -84,10 +79,10 @@
                     </DockPanel>
                 </Border>
 
-                <!-- ── İnce Ayırıcı ───────────────────────────────────── -->
+                <!-- İnce Ayırıcı -->
                 <Border Height="1" Background="{DynamicResource BorderColor}"/>
 
-                <!-- ── Satır 2: Eylem Butonları ────────────────────────── -->
+                <!-- Satır 2: Eylem Butonları -->
                 <Border Padding="12,5,12,6">
                     <DockPanel>
 
@@ -114,7 +109,7 @@
                                     CornerRadius="6" Padding="12,5" FontSize="11"/>
 
                             <!-- Player (Faz 2 standalone player shell) -->
-                            <Button Content="🎮 Oyuncu"
+                            <Button Content="Oyuncu"
                                     Command="{Binding OpenPlayerWindowCommand}"
                                     ToolTip.Tip="Bağımsız oyuncu penceresi"
                                     Background="Transparent"
@@ -123,8 +118,8 @@
 
                             <Border Width="1" Height="22" Background="{DynamicResource BorderColor}" Margin="2,0"/>
 
-                            <!-- ⚙️ Ayarlar -->
-                            <Button Content="⚙️" 
+                            <!-- Ayarlar -->
+                            <Button Content="Ayarlar"
                                     ToolTip.Tip="Ayarlar (Ctrl+,)" 
                                     Command="{Binding OpenSettingsCommand}"
                                     Background="Transparent" 
@@ -135,7 +130,7 @@
 
                         <!-- Sol: Kaydet + Undo/Redo + Arama + Node İşlemleri -->
                         <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                            <Button Content="💾 Kaydet" 
+                            <Button Content="Kaydet"
                                     ToolTip.Tip="Projeyi Kaydet (Ctrl+S)"
                                     Command="{Binding SaveProjectCommand}" 
                                     Background="{DynamicResource ToolbarButtonBg}" 
@@ -144,7 +139,7 @@
 
                             <Border Width="1" Height="22" Background="{DynamicResource BorderColor}" Margin="2,0"/>
 
-                            <Button Content="↩ Geri" 
+                            <Button Content="Geri Al"
                                     ToolTip.Tip="Geri Al (Ctrl+Z)"
                                     Command="{Binding UndoCommand}" 
                                     IsEnabled="{Binding UndoRedo.CanUndo}"
@@ -152,7 +147,7 @@
                                     Foreground="{DynamicResource PrimaryText}" 
                                     CornerRadius="6" Padding="8,5" FontSize="11"/>
 
-                            <Button Content="↪ İleri" 
+                            <Button Content="Yinele"
                                     ToolTip.Tip="Yinele (Ctrl+Y)"
                                     Command="{Binding RedoCommand}" 
                                     IsEnabled="{Binding UndoRedo.CanRedo}"
@@ -162,7 +157,7 @@
 
                             <Border Width="1" Height="22" Background="{DynamicResource BorderColor}" Margin="2,0"/>
 
-                            <Button Content="🔍 Ara" 
+                            <Button Content="Ara"
                                     ToolTip.Tip="Node / Asset Ara (Ctrl+F)"
                                     Command="{Binding ToggleSearchCommand}" 
                                     Background="{DynamicResource ToolbarButtonBg}" 
@@ -176,12 +171,12 @@
                                     Command="{Binding AddNodeCommand}" 
                                     Background="{DynamicResource InfoBrush}" 
                                     Foreground="White" CornerRadius="6" Padding="10,5" FontSize="11"/>
-                            <Button Content="✂ Ayır" 
+                            <Button Content="Ayır"
                                     ToolTip.Tip="Seçili Node Bağlantılarını Kes"
                                     Command="{Binding DisconnectSelectedNodeCablesCommand}" 
                                     Background="{DynamicResource WarningBrush}" 
                                     Foreground="White" CornerRadius="6" Padding="10,5" FontSize="11"/>
-                            <Button Content="🗑 Sil" 
+                            <Button Content="Sil"
                                     ToolTip.Tip="Seçili Node'u Sil (Delete)"
                                     Command="{Binding DeleteSelectedNodeCommand}" 
                                     Background="{DynamicResource DangerButtonBg}" 
@@ -192,9 +187,7 @@
             </StackPanel>
         </Border>
 
-        <!-- ══════════════════════════════════════════════════════════════════
-             MAIN WORKSPACE
-             ══════════════════════════════════════════════════════════════════ -->
+        <!-- MAIN WORKSPACE -->
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="{Binding HierarchyPanelWidth}"/>
@@ -221,7 +214,7 @@
 
                 <Grid Grid.Row="0" ClipToBounds="True">
 
-                    <!-- 🍞 BREADCRUMB + CHAPTER SCOPE (Faz 4 Dilim 3) -->
+                    <!-- BREADCRUMB + CHAPTER SCOPE (Faz 4 Dilim 3) -->
                     <Border HorizontalAlignment="Left" VerticalAlignment="Top"
                             Margin="12,12,0,0" ZIndex="90"
                             Background="{DynamicResource SurfaceBackground}"
@@ -238,7 +231,7 @@
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
                                         <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-                                            <TextBlock Text="›" Foreground="{DynamicResource MutedText}" FontSize="12" VerticalAlignment="Center"/>
+                                            <TextBlock Text="/" Foreground="{DynamicResource MutedText}" FontSize="12" VerticalAlignment="Center"/>
                                             <Button Tag="CrumbNav" Content="{Binding Title}" Padding="6,2" FontSize="11"
                                                     ToolTip.Tip="Bu düzeye dön"/>
                                         </StackPanel>
@@ -250,9 +243,9 @@
                             <ComboBox ItemsSource="{Binding Subgraphs.AvailableChapterOptions}"
                                       SelectedItem="{Binding Subgraphs.ChapterFilterOption}"
                                       FontSize="11" MinWidth="110" ToolTip.Tip="Tuvali tek bölüme daralt"/>
-                            <Button Content="＋ Grup" Command="{Binding CreateGroupFromSelectionCommand}"
+                            <Button Content="+ Grup" Command="{Binding CreateGroupFromSelectionCommand}"
                                     Padding="6,2" FontSize="11" ToolTip.Tip="Seçili düğümlerden grup oluştur"/>
-                            <Button Content="⤴ Üst" Command="{Binding ExitSubgraphCommand}"
+                            <Button Content="Üst" Command="{Binding ExitSubgraphCommand}"
                                     Padding="6,2" FontSize="11" ToolTip.Tip="Bir üst düzeye çık"/>
                         </StackPanel>
                     </Border>
@@ -284,7 +277,7 @@
                         </Grid>
                     </Grid>
 
-                    <!-- 🔍 GLOBAL SEARCH OVERLAY (Faz 4 Dilim 2) -->
+                    <!-- GLOBAL SEARCH OVERLAY (Faz 4 Dilim 2) -->
                     <Border IsVisible="{Binding IsSearchVisible}"
                             VerticalAlignment="Top" HorizontalAlignment="Center"
                             Margin="0,12,0,0" ZIndex="100"
@@ -294,7 +287,7 @@
                             BoxShadow="0 8 24 0 #60000000">
                         <StackPanel Spacing="8">
                             <TextBox Text="{Binding SearchQuery}"
-                                     Watermark="🔍 Ara: başlık, konuşmacı, metin, speaker:Evelyn, type:choice… (Esc kapat)"
+                                     Watermark="Ara: başlık, konuşmacı, metin, speaker:Evelyn, type:choice… (Esc kapat)"
                                      Background="{DynamicResource InputBackground}"
                                      Foreground="{DynamicResource PrimaryText}"
                                      BorderThickness="0" Padding="12,8" FontSize="14"/>
@@ -349,19 +342,19 @@
                                 <Setter Property="Foreground" Value="{DynamicResource PrimaryText}"/>
                             </Style>
                         </TabControl.Styles>
-                        <TabItem Header="📝 Log" IsVisible="{Binding IsLogPanelVisible}">
+                        <TabItem Header="Log" IsVisible="{Binding IsLogPanelVisible}">
                             <panels:OutputLogView/>
                         </TabItem>
-                        <TabItem Header="📁 Assets" IsVisible="{Binding IsAssetsPanelVisible}">
+                        <TabItem Header="Assets" IsVisible="{Binding IsAssetsPanelVisible}">
                             <panels:ProjectAssetsView/>
                         </TabItem>
-                        <TabItem Header="💬 Backlog" IsVisible="{Binding IsBacklogPanelVisible}">
+                        <TabItem Header="Backlog" IsVisible="{Binding IsBacklogPanelVisible}">
                             <panels:BacklogView DataContext="{Binding BacklogViewModel}"/>
                         </TabItem>
-                        <TabItem Header="💾 Save Slots" IsVisible="{Binding IsSaveSlotsPanelVisible}">
+                        <TabItem Header="Save Slots" IsVisible="{Binding IsSaveSlotsPanelVisible}">
                             <panels:SaveSlotsView DataContext="{Binding SaveSlotsViewModel}"/>
                         </TabItem>
-                        <TabItem Header="⚠️ Issues" IsVisible="{Binding IsProjectIssuesPanelVisible}">
+                        <TabItem Header="Issues" IsVisible="{Binding IsProjectIssuesPanelVisible}">
                             <panels:ProjectIssuesView DataContext="{Binding ProjectIssuesViewModel}"/>
                         </TabItem>
                     </TabControl>
@@ -377,19 +370,17 @@
             </Grid>
         </Grid>
 
-        <!-- ══════════════════════════════════════════════════════════════════
-             STATUS BAR (Alt Durum Çubuğu)
-             ══════════════════════════════════════════════════════════════════ -->
+        <!-- STATUS BAR (Alt Durum Çubuğu) -->
         <Border Grid.Row="2" Background="{DynamicResource StatusBarBg}" 
                 BorderBrush="{DynamicResource BorderColor}" BorderThickness="0,1,0,0" 
                 Padding="12,4" Height="28">
             <DockPanel>
                 <!-- Sağ: Build Hedefi + Zoom -->
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="12">
-                    <TextBlock Text="{Binding ZoomScale, StringFormat='🔍 {0:P0}'}" 
+                    <TextBlock Text="{Binding ZoomScale, StringFormat='{}{0:P0}'}"
                                Foreground="{DynamicResource DimText}" FontSize="11" VerticalAlignment="Center"/>
                     <Border Width="1" Height="14" Background="{DynamicResource BorderColor}"/>
-                    <TextBlock Text="{Binding CurrentBuildTarget, StringFormat='🎯 {0}'}" 
+                    <TextBlock Text="{Binding CurrentBuildTarget, StringFormat='{}{0}'}"
                                Foreground="{DynamicResource DimText}" FontSize="11" VerticalAlignment="Center"/>
                 </StackPanel>
 
@@ -400,9 +391,7 @@
             </DockPanel>
         </Border>
 
-        <!-- ══════════════════════════════════════════════════════════════════
-             TOAST NOTIFICATION OVERLAY (Sağ Alt)
-             ══════════════════════════════════════════════════════════════════ -->
+        <!-- TOAST NOTIFICATION OVERLAY (Sağ Alt) -->
         <StackPanel Grid.Row="1" Grid.RowSpan="2"
                     HorizontalAlignment="Right" VerticalAlignment="Bottom"
                     Margin="0,0,20,40" ZIndex="200" Spacing="8">

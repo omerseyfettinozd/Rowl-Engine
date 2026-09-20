@@ -25,7 +25,7 @@ namespace RowlEngine.Editor.ViewModels.Components
         private bool _isUpdatingDimensions = false;
 
         public override string DisplayName => "Character Sprite";
-        public override string Icon => "👤";
+        public override string Icon => "Karakter";
         public override string TypeKey => "character";
 
         [ObservableProperty]
@@ -77,7 +77,7 @@ namespace RowlEngine.Editor.ViewModels.Components
         [ObservableProperty]
         private int _voiceBlipCadence = 1;
 
-        // ── Faz 5 Dilim 3: katmanlı karakter kütüphanesi ──
+        // Faz 5 Dilim 3: katmanlı karakter kütüphanesi
         //
         // Dört sabit slot (body/face/outfit/accessory; sıra
         // CharacterLayersService.SlotOrder'dadır). Legacy tek-sprite
@@ -111,7 +111,7 @@ namespace RowlEngine.Editor.ViewModels.Components
         /// <summary>Expression adları (sıralı, bağlanabilir).</summary>
         public ObservableCollection<string> ExpressionNames { get; } = new();
 
-        /// <summary>Expression kütüphanesi: isim → slot→asset (salt-okunur görünüm).</summary>
+        /// <summary>Expression kütüphanesi: isim -> slot->asset (salt-okunur görünüm).</summary>
         public IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> ExpressionPresets =>
             _expressions.ToDictionary(
                 pair => pair.Key,
@@ -124,7 +124,7 @@ namespace RowlEngine.Editor.ViewModels.Components
             DialogueComponentViewModel.GlobalPreviewVoiceBlipAction?.Invoke(VoiceBlipSound, (float)VoiceBlipPitch, 0.85f, 1);
         }
 
-        // ── Scale & Dimension Sync ──
+        // Scale & Dimension Sync
         partial void OnScaleChanged(double value)
         {
             if (_isUpdatingDimensions || value <= 0) return;

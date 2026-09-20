@@ -164,7 +164,7 @@ public static class MarkupParser
         }
     }
 
-    // ── Native kopru (handle gerektirmez, fail-closed) ────────────────────
+    // Native kopru (handle gerektirmez, fail-closed)
 
     private delegate NativeBridge.ResultCode CallerStringQuery(
         IntPtr buffer, uint bufferSize, out uint requiredSize);
@@ -258,7 +258,7 @@ public static class MarkupParser
         Array.Empty<MarkupDiagnostic>(),
         0, 0);
 
-    // ── Cozumleyici ic durumu (native sinifa birebir port) ────────────────
+    // Cozumleyici ic durumu (native sinifa birebir port)
 
     private sealed class ParserState
     {
@@ -774,7 +774,7 @@ public static class MarkupParser
             }
         }
 
-        // ── Saf yardimcilar ──
+        // Saf yardimcilar
 
         private static bool IsAsciiAlpha(char c) =>
             (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');

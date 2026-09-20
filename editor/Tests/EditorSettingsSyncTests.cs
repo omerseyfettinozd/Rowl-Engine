@@ -10,7 +10,7 @@ internal static class EditorSettingsSyncTests
 {
     public static void Run(MainWindowViewModel mainVm, string testProjectRoot)
     {
-        Console.WriteLine("\n📌 [Test 15]: EditorSettingsSyncService & EditorComponentService Lifecycle...");
+        Console.WriteLine("\n[Test 15]: EditorSettingsSyncService & EditorComponentService Lifecycle...");
 
         // 1. EditorSettingsSyncService Round-trip & Clamping
         string testEditorSettingsPath = Path.Combine(testProjectRoot, "test_editor_settings.json");
@@ -139,6 +139,6 @@ internal static class EditorSettingsSyncTests
         if (!removed || compObj.Components.Contains(compDlg))
             throw new Exception("EditorComponentService.RemoveComponent failed to remove dialogue component");
 
-        Console.WriteLine("  ✅ [PASS] EditorSettingsSyncService & EditorComponentService Lifecycle verified");
+        Console.WriteLine("  [PASS] EditorSettingsSyncService & EditorComponentService Lifecycle verified");
     }
 }

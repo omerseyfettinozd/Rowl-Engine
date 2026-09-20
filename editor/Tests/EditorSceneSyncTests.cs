@@ -11,7 +11,7 @@ internal static class EditorSceneSyncTests
 {
     public static void Run(MainWindowViewModel mainVm, string testProjectRoot)
     {
-        Console.WriteLine("\n📌 [Test 14]: EditorSceneSyncService & EditorPlayModeCoordinator Lifecycle...");
+        Console.WriteLine("\n[Test 14]: EditorSceneSyncService & EditorPlayModeCoordinator Lifecycle...");
 
         // 1. EditorSceneSyncService PushScene & Diagnostics
         var syncNode = new NodeViewModel(401, "Sync Node", 0, 0, bare: true);
@@ -76,6 +76,6 @@ internal static class EditorSceneSyncTests
         if (mainVm.EngineHost.IsPlaying)
             throw new Exception("EngineHost.IsPlaying was still true after StopPlayMode");
 
-        Console.WriteLine("  ✅ [PASS] EditorSceneSyncService & EditorPlayModeCoordinator Lifecycle verified");
+        Console.WriteLine("  [PASS] EditorSceneSyncService & EditorPlayModeCoordinator Lifecycle verified");
     }
 }

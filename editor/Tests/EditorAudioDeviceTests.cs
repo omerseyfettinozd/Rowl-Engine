@@ -8,7 +8,7 @@ internal static class EditorAudioDeviceTests
 {
     public static void Run(MainWindowViewModel mainVm)
     {
-        Console.WriteLine("\n📌 [Test 27]: Audio Device Status Observer & Edge-Triggered Toasts...");
+        Console.WriteLine("\n[Test 27]: Audio Device Status Observer & Edge-Triggered Toasts...");
         mainVm.NotificationService.ClearAll();
 
         Console.WriteLine("    [Step 27.1]: Device-loss transition...");
@@ -53,6 +53,6 @@ internal static class EditorAudioDeviceTests
         if (!mainVm.LogOutput.Contains("kaydedilemedi"))
             throw new Exception("Save failure did not log the expected message");
 
-        Console.WriteLine("  ✅ [PASS] Audio device status observer & edge-triggered toasts verified");
+        Console.WriteLine("  [PASS] Audio device status observer & edge-triggered toasts verified");
     }
 }

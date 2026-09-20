@@ -13,7 +13,7 @@ internal static class EditorAudioPickerTests
 {
     public static void Run(MainWindowViewModel mainVm, string testProjectRoot)
     {
-        Console.WriteLine("\n📌 [Test 19]: EditorAudioAssetPickerService & EditorModalDialogCoordinator Isolation...");
+        Console.WriteLine("\n[Test 19]: EditorAudioAssetPickerService & EditorModalDialogCoordinator Isolation...");
 
         // Step 19.1: EnsureAssetsAudioFolder
         Console.WriteLine("    [Step 19.1]: EnsureAssetsAudioFolder Directory Creation...");
@@ -97,6 +97,6 @@ internal static class EditorAudioPickerTests
         if (blockedTransition)
             throw new Exception("OpenProjectHubAsync should abort transition when unsaved changes resolution returns false.");
 
-        Console.WriteLine("  ✅ [PASS] EditorAudioAssetPickerService & EditorModalDialogCoordinator Isolation verified");
+        Console.WriteLine("  [PASS] EditorAudioAssetPickerService & EditorModalDialogCoordinator Isolation verified");
     }
 }

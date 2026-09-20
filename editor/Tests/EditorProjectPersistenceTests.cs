@@ -12,7 +12,7 @@ internal static class EditorProjectPersistenceTests
 {
     public static void Run(MainWindowViewModel mainVm, string testProjectRoot)
     {
-        Console.WriteLine("\n📌 [Test 7]: Project Save, Save As & Standalone Build Pipeline...");
+        Console.WriteLine("\n[Test 7]: Project Save, Save As & Standalone Build Pipeline...");
         // MS-2: SaveProject is fire-and-forget; the Save As below must copy
         // a completed save, so wait for it synchronously here.
         mainVm.SaveProjectNow();
@@ -95,9 +95,9 @@ internal static class EditorProjectPersistenceTests
         try { Directory.Delete(testSaveAsDir, true); } catch { }
         try { Directory.Delete(testBuildDir, true); } catch { }
 
-        Console.WriteLine("  ✅ [PASS] Project Save, Save As (all assets + manifest) & Standalone Game Build verified");
+        Console.WriteLine("  [PASS] Project Save, Save As (all assets + manifest) & Standalone Game Build verified");
 
-        Console.WriteLine("\n📌 [Test 7b]: Project runtime settings migration...");
+        Console.WriteLine("\n[Test 7b]: Project runtime settings migration...");
         string manifestPath = Path.Combine(testProjectRoot, "runtime-settings.rowlproj");
         File.WriteAllText(manifestPath, "{ \"name\": \"Legacy\" }");
         var legacySettings = ProjectRuntimeSettingsService.Load(manifestPath);
@@ -120,7 +120,7 @@ internal static class EditorProjectPersistenceTests
             throw new Exception("Project runtime settings did not round-trip");
         }
 
-        Console.WriteLine("  ✅ [PASS] Project runtime settings migration and round-trip verified");
+        Console.WriteLine("  [PASS] Project runtime settings migration and round-trip verified");
 
         string editorProfilePath = Path.Combine(testProjectRoot, "editor-settings.json");
         new EditorSettingsProfile
@@ -132,6 +132,6 @@ internal static class EditorProjectPersistenceTests
         if (editorProfile.AutoSaveEnabled || editorProfile.AutoSaveIntervalSeconds != 15)
             throw new Exception("Editor settings profile did not persist and sanitize autosave behaviour");
 
-        Console.WriteLine("  ✅ [PASS] Editor-local autosave settings persistence and bounds verified");
+        Console.WriteLine("  [PASS] Editor-local autosave settings persistence and bounds verified");
     }
 }

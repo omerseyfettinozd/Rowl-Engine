@@ -51,9 +51,7 @@
                                         <Panel>
                                             <Image IsVisible="{Binding IsCoverLoaded}" Source="{Binding CoverBitmap}" Stretch="UniformToFill" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
                                             <Panel IsVisible="{Binding !IsCoverLoaded}" Background="{DynamicResource PanelBackground}">
-                                                <Border Width="28" Height="28" CornerRadius="6" Background="{DynamicResource ToolbarButtonBg}" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                                    <TextBlock Text="✦" Foreground="{DynamicResource Accent}" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="14"/>
-                                                </Border>
+                                                <Border Width="28" Height="28" CornerRadius="6" Background="{DynamicResource ToolbarButtonBg}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                             </Panel>
                                         </Panel>
                                     </Border>
@@ -64,7 +62,7 @@
                                     </StackPanel>
                                     <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="0,0,10,0">
                                         <Button Content="Aç" Command="{Binding OpenCommand}" Background="{DynamicResource AccentButtonBg}" Foreground="{DynamicResource PrimaryText}" BorderThickness="0" CornerRadius="8" Padding="18,8" FontSize="12" FontWeight="SemiBold"/>
-                                        <Button Content="⋯" Background="{DynamicResource ToolbarButtonBg}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1" CornerRadius="8" FontSize="14" Padding="8,6" MinWidth="36">
+                                        <Button Content="Diğer" Background="{DynamicResource ToolbarButtonBg}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1" CornerRadius="8" FontSize="14" Padding="8,6" MinWidth="36">
                                             <Button.Flyout>
                                                 <MenuFlyout>
                                                     <MenuItem Header="İsim Değiştir" Command="{Binding RenameCommand}"/>

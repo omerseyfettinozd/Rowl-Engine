@@ -11,7 +11,7 @@ internal static class EditorProjectLifecycleTests
 {
     public static void Run(MainWindowViewModel mainVm, string testProjectRoot)
     {
-        Console.WriteLine("\n📌 [Test 18]: EditorProjectLifecycleCoordinator & EditorVisualAssetPickerService Isolation...");
+        Console.WriteLine("\n[Test 18]: EditorProjectLifecycleCoordinator & EditorVisualAssetPickerService Isolation...");
 
         // Step 18.1: ResolveUnsavedChangesAsync State Transitions
         Console.WriteLine("    [Step 18.1]: ResolveUnsavedChangesAsync State Transitions...");
@@ -154,6 +154,6 @@ internal static class EditorProjectLifecycleTests
         if (unsupportedAssigned)
             throw new Exception("ApplyImageAssetToComponent should return false for unsupported component type.");
 
-        Console.WriteLine("  ✅ [PASS] EditorProjectLifecycleCoordinator & EditorVisualAssetPickerService Isolation verified");
+        Console.WriteLine("  [PASS] EditorProjectLifecycleCoordinator & EditorVisualAssetPickerService Isolation verified");
     }
 }

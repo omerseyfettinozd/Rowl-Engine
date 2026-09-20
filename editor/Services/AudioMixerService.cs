@@ -60,7 +60,7 @@ public static class AudioMixerService
     /// <summary>Kazanç tutarlılık toleransı (float çarpım payı).</summary>
     public const float GainTolerance = 1e-5f;
 
-    // ── Mixer kazançları ─────────────────────────────────────────────
+    // Mixer kazançları
     //
     // Native matematik aynası (stream_mixer.hpp): her bus'ta
     // master*bus, duck YALNIZ BGM'de (master*bgm*duckGain).
@@ -101,7 +101,7 @@ public static class AudioMixerService
         return Math.Abs(observedGain - expected) <= tolerance;
     }
 
-    // ── Fade eğrisi ─────────────────────────────────────────────────
+    // Fade eğrisi
 
     /// <summary>
     /// Eğri adı/int girdisini parse eder. "linear"/"0" → Linear,
@@ -147,7 +147,7 @@ public static class AudioMixerService
         }
     }
 
-    // ── SFX polyphony derinliği ──────────────────────────────────────
+    // SFX polyphony derinliği
 
     /// <summary>Havuz derinliğini [1,16] aralığına clamp'ler.</summary>
     public static int ClampPoolDepth(int depth) => Math.Clamp(depth, MinPoolDepth, MaxPoolDepth);
@@ -198,7 +198,7 @@ public static class AudioMixerService
         }
     }
 
-    // ── Ambience bed'leri ────────────────────────────────────────────
+    // Ambience bed'leri
 
     /// <summary>Geçerli yatak: 0 = BedA (legacy), 1 = BedB.</summary>
     public static bool IsValidAmbienceBed(int bed) => bed is BedA or BedB;
@@ -271,7 +271,7 @@ public static class AudioMixerService
         }
     }
 
-    // ── Pump maliyeti ────────────────────────────────────────────────
+    // Pump maliyeti
 
     /// <summary>
     /// Pump JSON'unu snapshot'a çevirir. Null/boş/bozuk girdi, kökte

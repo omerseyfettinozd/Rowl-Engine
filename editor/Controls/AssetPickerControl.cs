@@ -62,7 +62,7 @@ namespace RowlEngine.Editor.Controls
             var box = new TextBox { Margin = new Thickness(0, 0, 4, 0) };
             box.Bind(TextBox.TextProperty, new Binding(nameof(AssetPath)) { Source = this, Mode = BindingMode.TwoWay });
             box.Bind(TextBox.WatermarkProperty, new Binding(nameof(Watermark)) { Source = this });
-            var browse = new Button { Content = "📁 Gözat", Padding = new Thickness(8, 4), FontSize = 11 };
+            var browse = new Button { Content = "Gözat", Padding = new Thickness(8, 4), FontSize = 11 };
             browse.Bind(Button.CommandProperty, new Binding(nameof(BrowseCommand)) { Source = this });
             browse.Bind(Button.CommandParameterProperty, new Binding(nameof(BrowseParameter)) { Source = this });
             browse.Bind(IsVisibleProperty, new Binding(nameof(BrowseCommand))

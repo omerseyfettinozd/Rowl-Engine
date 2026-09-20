@@ -34,14 +34,14 @@ namespace RowlEngine.Editor.ViewModels
         public ObservableCollection<NodeComponentViewModel> Components { get; } = new();
 
         /// <summary>
-        /// Dynamic icon based on primary component, or 📦 for empty object.
+        /// Dynamic icon based on primary component, or Paket for empty object.
         /// </summary>
         public string Icon
         {
             get
             {
                 var first = Components.FirstOrDefault();
-                if (first == null) return "📦";
+                if (first == null) return "Paket";
                 return first.Icon;
             }
         }

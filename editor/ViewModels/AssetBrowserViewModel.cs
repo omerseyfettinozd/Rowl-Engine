@@ -43,7 +43,7 @@ namespace RowlEngine.Editor.ViewModels
 
             if (isDirectory)
             {
-                Icon = "📁";
+                Icon = "";
                 IconColor = "#FBBF24";
             }
             else
@@ -51,27 +51,27 @@ namespace RowlEngine.Editor.ViewModels
                 string ext = System.IO.Path.GetExtension(name).ToLowerInvariant();
                 if (Services.MediaFormatCatalog.IsSupportedImageExtension(ext))
                 {
-                    Icon = "🖼️";
+                    Icon = "";
                     IconColor = "#38BDF8";
                 }
                 else if (Services.MediaFormatCatalog.IsSupportedAudioExtension(ext))
                 {
-                    Icon = "🎵";
+                    Icon = "";
                     IconColor = "#A855F7";
                 }
                 else if (ext == ".json" || ext == ".txt" || ext == ".lua")
                 {
-                    Icon = "📜";
+                    Icon = "";
                     IconColor = "#F59E0B";
                 }
                 else if (ext == ".rowlpkg")
                 {
-                    Icon = "📦";
+                    Icon = "";
                     IconColor = "#10B981";
                 }
                 else
                 {
-                    Icon = "📄";
+                    Icon = "";
                     IconColor = "#94A3B8";
                 }
             }
@@ -166,22 +166,22 @@ namespace RowlEngine.Editor.ViewModels
             string ext = System.IO.Path.GetExtension(path).ToLowerInvariant();
             if (Services.MediaFormatCatalog.IsSupportedImageExtension(ext))
             {
-                Icon = "🖼️";
+                Icon = "";
                 IconColor = "#38BDF8";
             }
             else if (Services.MediaFormatCatalog.IsSupportedAudioExtension(ext))
             {
-                Icon = "🎵";
+                Icon = "";
                 IconColor = "#A855F7";
             }
             else if (ext == ".json" || ext == ".txt" || ext == ".lua")
             {
-                Icon = "📜";
+                Icon = "";
                 IconColor = "#F59E0B";
             }
             else
             {
-                Icon = "📦";
+                Icon = "";
                 IconColor = "#10B981";
             }
         }
@@ -209,7 +209,7 @@ namespace RowlEngine.Editor.ViewModels
         public ObservableCollection<AssetItemViewModel> Assets { get; } = new();
         public ObservableCollection<string> AssetNames { get; } = new();
 
-        // ── MS-5: asset watcher + missing-asset tracking ──────────────────
+        // MS-5: asset watcher + missing-asset tracking
         private readonly List<FileSystemWatcher> _watchers = new();
         private System.Threading.Timer? _watchDebounce;
         private readonly object _watchLock = new();
@@ -322,7 +322,7 @@ namespace RowlEngine.Editor.ViewModels
             var missingSet = new HashSet<string>(missing, StringComparer.OrdinalIgnoreCase);
             if (missing.Count > 0)
             {
-                var group = new AssetNodeViewModel("⚠️ Kayıp Dosyalar", "__missing__", string.Empty, true);
+                var group = new AssetNodeViewModel("Kayıp Dosyalar", "__missing__", string.Empty, true);
                 foreach (string fullPath in missing)
                 {
                     string name = System.IO.Path.GetFileName(fullPath);
@@ -339,7 +339,7 @@ namespace RowlEngine.Editor.ViewModels
 
             if (newlyMissing.Count > 0)
             {
-                string msg = $"⚠️ {newlyMissing.Count} varlık diskte bulunamadı: {string.Join(", ", newlyMissing.Select(System.IO.Path.GetFileName))}";
+                string msg = $"{newlyMissing.Count} varlık diskte bulunamadı: {string.Join(", ", newlyMissing.Select(System.IO.Path.GetFileName))}";
                 try
                 {
                     MainViewModel.AppendLog(msg);
@@ -378,7 +378,7 @@ namespace RowlEngine.Editor.ViewModels
             System.Diagnostics.Debug.WriteLine(msg);
             try
             {
-                MainViewModel.AppendLog($"⚠️ {msg}");
+                MainViewModel.AppendLog($"{msg}");
                 MainViewModel.NotifyError(msg, "Varlık Tarayıcı");
                 ToastService.Instance.Show(msg, ToastType.Error, 5000);
             }
@@ -388,7 +388,7 @@ namespace RowlEngine.Editor.ViewModels
             }
         }
 
-        // ── MS-5: FileSystemWatcher (debounced) ───────────────────────────
+        // MS-5: FileSystemWatcher (debounced)
         private void StartWatching()
         {
             StopWatchingCore();

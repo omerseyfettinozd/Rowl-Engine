@@ -456,7 +456,7 @@ internal static class StoryGraphSaveService
         }
         catch (Exception ex)
         {
-            log?.Invoke($"⚠️ Failed to save story graph: {ex.Message}");
+            log?.Invoke($"Failed to save story graph: {ex.Message}");
             return false;
         }
     }
@@ -486,7 +486,7 @@ internal static class StoryGraphSaveService
         }
         catch (Exception ex)
         {
-            log?.Invoke($"ℹ️ Legacy graph copy could not be removed: {ex.Message}");
+            log?.Invoke($"Legacy graph copy could not be removed: {ex.Message}");
         }
     }
 }
