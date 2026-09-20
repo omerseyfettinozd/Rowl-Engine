@@ -8,40 +8,57 @@
              x:DataType="vm:MainWindowViewModel">
     <Border Background="{DynamicResource PanelBackground}">
         <Grid RowDefinitions="Auto, Auto, *, Auto">
+            <!-- Unity kromu: tek satır araç çubuğu — başlık + yol çipi +
+                 üst klasör + 4 aksiyon (sıra + komutlar aynen). -->
             <Border Grid.Row="0" Background="{DynamicResource SurfaceBackground}"
                     BorderBrush="{DynamicResource BorderColor}" BorderThickness="0,0,0,1"
-                    Padding="8,5">
-                <DockPanel LastChildFill="False">
+                    Padding="8,4">
+                <DockPanel LastChildFill="True">
                     <TextBlock Text="Varlıklar" FontWeight="Bold" FontSize="12"
-                               Foreground="{DynamicResource PrimaryText}" VerticalAlignment="Center"/>
-                    <!-- Unity kromu: taşmada saran ince aksiyon satırı
-                         (sıra + komutlar aynen). -->
-                    <WrapPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                               Foreground="{DynamicResource PrimaryText}" VerticalAlignment="Center"
+                               Margin="0,0,6,0"/>
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="4"
+                                VerticalAlignment="Center">
                         <Button Content="Yeni Klasör"
                                 ToolTip.Tip="Seçili konumun altında klasör oluştur"
                                 Command="{Binding AssetBrowserViewModel.CreateFolderCommand}"
                                 Background="Transparent" Foreground="{DynamicResource PrimaryText}"
                                 BorderBrush="{DynamicResource BorderColor}" BorderThickness="1"
-                                CornerRadius="2" Padding="6,3" FontSize="10"/>
+                                CornerRadius="2" Padding="6,2" FontSize="10"/>
                         <Button Content="İçe Aktar"
                                 ToolTip.Tip="Dosyayı proje Assets klasörüne içe aktar"
                                 Command="{Binding ImportAssetCommand}"
                                 Background="{DynamicResource AccentButtonBg}" Foreground="{DynamicResource AccentButtonFg}"
-                                CornerRadius="2" Padding="6,3" FontSize="10"/>
+                                CornerRadius="2" Padding="6,2" FontSize="10"/>
                         <Button Content="Yenile"
                                 ToolTip.Tip="Varlık listesini yenile"
                                 Command="{Binding AssetBrowserViewModel.RefreshAssetsCommand}"
                                 Background="Transparent" Foreground="{DynamicResource PrimaryText}"
                                 BorderBrush="{DynamicResource BorderColor}" BorderThickness="1"
-                                CornerRadius="2" Padding="6,3" FontSize="12"/>
+                                CornerRadius="2" Padding="6,2" FontSize="12"/>
                         <!-- Unity kromu Dilim G1: ızgara/liste anahtarı -->
                         <Button Content="{Binding AssetBrowserViewModel.AssetViewToggleText}"
                                 ToolTip.Tip="Izgara/Liste görünümü arasında geç"
                                 Command="{Binding AssetBrowserViewModel.ToggleAssetViewCommand}"
                                 Background="Transparent" Foreground="{DynamicResource PrimaryText}"
                                 BorderBrush="{DynamicResource BorderColor}" BorderThickness="1"
-                                CornerRadius="2" Padding="6,3" FontSize="10"/>
-                    </WrapPanel>
+                                CornerRadius="2" Padding="6,2" FontSize="10"/>
+                    </StackPanel>
+                    <Button DockPanel.Dock="Left" Content="↑ Üst"
+                            ToolTip.Tip="Üst klasöre git"
+                            Command="{Binding AssetBrowserViewModel.GoToParentFolderCommand}"
+                            Background="Transparent" Foreground="{DynamicResource PrimaryText}"
+                            BorderBrush="{DynamicResource BorderColor}" BorderThickness="1"
+                            CornerRadius="2" Padding="6,2" FontSize="10" Margin="0,0,6,0"
+                            VerticalAlignment="Center"/>
+                    <Border Background="{DynamicResource SurfaceBackground}"
+                            BorderBrush="{DynamicResource BorderSubtle}" BorderThickness="1"
+                            CornerRadius="2" Padding="8,2" VerticalAlignment="Center"
+                            MinWidth="80" Margin="0,0,6,0">
+                        <TextBlock Text="{Binding AssetBrowserViewModel.SelectedFolder.RelativePath, FallbackValue=Assets}"
+                                   Foreground="{DynamicResource SecondaryText}" FontSize="11"
+                                   TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding AssetBrowserViewModel.SelectedFolder.FullPath}"/>
+                    </Border>
                 </DockPanel>
             </Border>
 
@@ -59,26 +76,9 @@
                           FontSize="11" MinWidth="90"/>
             </Grid>
 
-            <!-- Faz 6 Dilim 3: sol klasör ağacı + sağ simge ızgarası -->
-            <Grid Grid.Row="2" RowDefinitions="Auto,*">
-                <!-- Yol çipi + üst klasör (ince satır) -->
-                <DockPanel Grid.Row="0" Margin="8,4,8,2" LastChildFill="True">
-                    <Button DockPanel.Dock="Left" Content="↑ Üst"
-                            ToolTip.Tip="Üst klasöre git"
-                            Command="{Binding AssetBrowserViewModel.GoToParentFolderCommand}"
-                            Background="Transparent" Foreground="{DynamicResource PrimaryText}"
-                            BorderBrush="{DynamicResource BorderColor}" BorderThickness="1"
-                            CornerRadius="2" Padding="6,2" FontSize="10" Margin="0,0,6,0"/>
-                    <Border Background="{DynamicResource SurfaceBackground}"
-                            BorderBrush="{DynamicResource BorderSubtle}" BorderThickness="1"
-                            CornerRadius="2" Padding="8,2" VerticalAlignment="Center">
-                        <TextBlock Text="{Binding AssetBrowserViewModel.SelectedFolder.RelativePath, FallbackValue=Assets}"
-                                   Foreground="{DynamicResource SecondaryText}" FontSize="11"
-                                   TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding AssetBrowserViewModel.SelectedFolder.FullPath}"/>
-                    </Border>
-                </DockPanel>
-
-                <Grid Grid.Row="1" ColumnDefinitions="220,6,*">
+            <!-- Faz 6 Dilim 3: sol klasör ağacı + sağ simge ızgarası
+                 (yol çipi üst araç çubuğunda). -->
+            <Grid Grid.Row="2" ColumnDefinitions="220,6,*">
             <TreeView Grid.Column="0"
                       Background="Transparent"
                       ItemsSource="{Binding AssetBrowserViewModel.AssetTree}"
@@ -179,6 +179,14 @@
                          Foreground="{DynamicResource PrimaryText}"
                          IsVisible="{Binding AssetBrowserViewModel.IsGridView}"
                          ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                    <ListBox.Styles>
+                        <Style Selector="ListBoxItem">
+                            <Setter Property="Padding" Value="2"/>
+                            <Setter Property="Margin" Value="0"/>
+                            <Setter Property="MinHeight" Value="0"/>
+                            <Setter Property="CornerRadius" Value="0"/>
+                        </Style>
+                    </ListBox.Styles>
                     <ListBox.KeyBindings>
                         <KeyBinding Gesture="Enter" Command="{Binding AssetBrowserViewModel.EnterSelectedFolderCommand}"/>
                     </ListBox.KeyBindings>
@@ -190,7 +198,7 @@
                     <ListBox.ItemTemplate>
                         <DataTemplate x:DataType="vm:AssetNodeViewModel">
                             <StackPanel Width="{Binding $parent[UserControl].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.GridItemSize}"
-                                        Background="Transparent" Spacing="4" Margin="6"
+                                        Background="Transparent" Spacing="2" Margin="4"
                                         PointerPressed="OnAssetPointerPressed"
                                         PointerMoved="OnAssetPointerMoved"
                                         PointerReleased="OnAssetPointerReleased"
@@ -226,7 +234,7 @@
                                 <TextBlock Text="{Binding Name}"
                                            Foreground="{DynamicResource PrimaryText}"
                                            FontSize="11" TextTrimming="CharacterEllipsis"
-                                           TextWrapping="Wrap" MaxLines="2"
+                                           MaxLines="1"
                                            TextAlignment="Center" HorizontalAlignment="Stretch"/>
                             </StackPanel>
                         </DataTemplate>
@@ -329,13 +337,13 @@
                         HorizontalAlignment="Center"/>
             </StackPanel>
             </Grid>
-                </Grid>
             </Grid>
 
-            <!-- Faz 4: durum satırı + Faz 6 Dilim 3: ızgara boyut kaydırıcısı -->
+            <!-- Faz 4: durum satırı + Faz 6 Dilim 3: ızgara boyut kaydırıcısı
+                 (ince şerit: kaydırıcı yüksekliği kilitli). -->
             <Border Grid.Row="3" Background="{DynamicResource SurfaceBackground}"
                     BorderBrush="{DynamicResource BorderColor}" BorderThickness="0,1,0,0"
-                    Padding="8,4">
+                    Padding="8,2">
                 <DockPanel LastChildFill="True">
                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6"
                                 VerticalAlignment="Center">
@@ -344,7 +352,7 @@
                         <Slider Minimum="40" Maximum="128"
                                 Value="{Binding AssetBrowserViewModel.GridItemSize, Mode=TwoWay}"
                                 ToolTip.Tip="Simge boyutu"
-                                Width="110" VerticalAlignment="Center"/>
+                                Width="110" Height="24" VerticalAlignment="Center"/>
                     </StackPanel>
                     <TextBlock Text="{Binding AssetBrowserViewModel.StatusText}"
                                Foreground="{DynamicResource MutedText}" FontSize="10"

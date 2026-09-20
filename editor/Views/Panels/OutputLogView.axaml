@@ -46,8 +46,9 @@
                      SelectionMode="Single">
                 <ListBox.Styles>
                     <Style Selector="ListBoxItem">
-                        <Setter Property="Padding" Value="4,2"/>
+                        <Setter Property="Padding" Value="4,1"/>
                         <Setter Property="Margin" Value="0"/>
+                        <Setter Property="MinHeight" Value="0"/>
                         <Setter Property="CornerRadius" Value="0"/>
                     </Style>
                     <Style Selector="ListBoxItem:nth-child(2n)">
