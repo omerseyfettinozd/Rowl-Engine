@@ -75,6 +75,20 @@ protected:
     }
 
 private:
+    // Hedef #80 kilit-yapısı: decoder (yeniden-)kurulumunun TEK sarmalayıcısı.
+    // Bütün ZSTD_initDStream çağrıları buradan geçer; başarılı kurulum burada
+    // sayılır. reset() ya da gelecekteki başka bir yol doğrudan
+    // ZSTD_initDStream çağırırsa sayaç baypas edilir (doğrudan-init bypass) —
+    // bu dosyada ikinci bir çağrı noktası açılmamalıdır (grep ile denetlenir).
+    bool initDecoder() {
+        m_error = !m_file || ZSTD_isError(ZSTD_initDStream(m_dstream));
+        // Yalnız başarılı (yeniden-)kurulum sayılır (bozuk akışın düşen
+        // kurulumu geriye-sarma değildir). Akış-açılışı dahildir; gözlemler
+        // baz-değeri alıp delta okur.
+        if (!m_error) ++g_zstdEntryStreamRewinds;
+        return !m_error;
+    }
+
     bool reset() {
         m_file.clear();
         m_file.seekg(static_cast<std::streamoff>(m_entry.offset), std::ios::beg);
@@ -82,15 +96,7 @@ private:
         m_position = 0;
         m_input = {nullptr, 0, 0};
         setg(m_output.data(), m_output.data(), m_output.data());
-        m_error = !m_file || ZSTD_isError(ZSTD_initDStream(m_dstream));
-        // Hedef #80 üretim metriği: yalnız başarılı (yeniden-)kurulum sayılır
-        // (bozuk akışın düşen reset'i geriye-sarma değildir). Akış-açılışı
-        // dahildir; gözlemler baz-değeri alıp delta okur.
-        if (!m_error) {
-            ++m_rewinds;
-            ++g_zstdEntryStreamRewinds;
-        }
-        return !m_error;
+        return initDecoder();
     }
 
     bool fill() {
@@ -106,7 +112,6 @@ private:
                 m_compressedRead += static_cast<uint64_t>(bytes);
                 // Hedef #80 üretim metriği: paketten tüketilen GERÇEK
                 // sıkıştırılmış bayt (monoton; reset'te sıfırlanmaz).
-                m_compressedBytes += static_cast<uint64_t>(bytes);
                 g_zstdEntryStreamCompressedBytes.fetch_add(static_cast<uint64_t>(bytes),
                                                            std::memory_order_relaxed);
                 m_input = {m_inputBytes.data(), static_cast<size_t>(bytes), 0};
@@ -122,7 +127,6 @@ private:
         m_position += output.pos;
         // Hedef #80 üretim metriği: üretilen GERÇEK sıkıştırılmamış bayt
         // (monoton; reset'te sıfırlanmaz — ileri-seek maliyeti buradan okunur).
-        m_decompressedBytes += output.pos;
         g_zstdEntryStreamDecompressedBytes.fetch_add(output.pos, std::memory_order_relaxed);
         setg(m_output.data(), m_output.data(), m_output.data() + output.pos);
         return true;
@@ -166,11 +170,11 @@ private:
     ZSTD_inBuffer m_input{nullptr, 0, 0};
     uint64_t m_compressedRead = 0;
     uint64_t m_position = 0;
-    // Hedef #80 üretim metriği (akışın üretim durumu; süreç-geneli aynalara
-    // yansıtılır): geriye-sarma + tüketilen sıkıştırılmış + üretilen bayt.
-    uint64_t m_rewinds = 0;
-    uint64_t m_compressedBytes = 0;
-    uint64_t m_decompressedBytes = 0;
+    // Hedef #80 notu (2. tur): akış-üyesi ayna sayaçlar (m_rewinds /
+    // m_compressedBytes / m_decompressedBytes) ÖLÜYDÜ — yalnız yazılıyor,
+    // hiç okunmuyordu. Tek canlı zstd akışı + baz-delta izolasyonu varken
+    // süreç-geneli monoton sayaçlar aynı gözlemi verir; üye aynalar okunmadan
+    // durum şişirirdi, bu yüzden SİLİNDİ (per-stream getter açılmadı).
     bool m_error = false;
 };
 

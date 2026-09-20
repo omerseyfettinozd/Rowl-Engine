@@ -71,7 +71,9 @@ private:
 // GERÇEK I/O olay sayaçları (süreç-geneli monoton). Üretim bu olayları zaten
 // yaşar; sayaçlar yalnızca gözler, davranışı değiştirmez:
 //  - Rewind: başarılı decoder (yeniden-)kurulumu (akış-açılışı + geri-seek;
-//    ileri-seek kurulum YAPMAZ, artımlı discard ile ilerler).
+//    ileri-seek kurulum YAPMAZ, artımlı discard ile ilerler). Sayım, decoder
+//    kurulumunun tek sarmalayıcısı initDecoder() içindedir (doğrudan
+//    ZSTD_initDStream çağrısı açılmamalıdır — sayaç baypas kilidi).
 //  - Compressed: paketten tüketilen sıkıştırılmış bayt.
 //  - Decompressed: üretilen sıkıştırılmamış bayt.
 // Gözlem erişimi içindir: ölçüm öncesi baz-değeri alıp yalnız delta
