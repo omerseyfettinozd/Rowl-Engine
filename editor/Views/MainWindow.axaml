@@ -61,28 +61,44 @@
 
                             <Border Width="1" Height="18" Background="{DynamicResource BorderColor}" Margin="6,0"/>
 
-                            <!-- Gezinme Sekmeleri -->
-                            <Button Content="Sahneler" Command="{Binding ShowPanelCommand}" CommandParameter="NodeGraph"
-                                    Background="Transparent" Foreground="{DynamicResource PrimaryText}" 
-                                    CornerRadius="6" Padding="10,5" FontSize="11"/>
-                            <Button Content="Önizleme" Command="{Binding ShowPanelCommand}" CommandParameter="Preview"
-                                    Background="Transparent" Foreground="{DynamicResource PrimaryText}" 
-                                    CornerRadius="6" Padding="10,5" FontSize="11"/>
-                            <Button Content="Oyuncu" Command="{Binding ShowPanelCommand}" CommandParameter="EnginePreview"
+                            <!-- Gezinme Sekmeleri (Unity Scene/Game şeridi) -->
+                            <StackPanel x:Name="CenterViewTabs" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+                            <Button Command="{Binding ShowPanelCommand}" CommandParameter="NodeGraph"
+                                    Background="Transparent"
+                                    CornerRadius="6" Padding="10,6,10,4">
+                                <StackPanel Spacing="3">
+                                    <TextBlock Text="Sahneler" Foreground="{DynamicResource PrimaryText}" FontSize="11" HorizontalAlignment="Center"/>
+                                    <Border Height="2" CornerRadius="1" Background="{Binding SceneTabBrush}"/>
+                                </StackPanel>
+                            </Button>
+                            <Button Command="{Binding ShowPanelCommand}" CommandParameter="Preview"
+                                    Background="Transparent"
+                                    CornerRadius="6" Padding="10,6,10,4">
+                                <StackPanel Spacing="3">
+                                    <TextBlock Text="Önizleme" Foreground="{DynamicResource PrimaryText}" FontSize="11" HorizontalAlignment="Center"/>
+                                    <Border Height="2" CornerRadius="1" Background="{Binding PreviewTabBrush}"/>
+                                </StackPanel>
+                            </Button>
+                            <Button Command="{Binding ShowPanelCommand}" CommandParameter="EnginePreview"
                                     ToolTip.Tip="Oyuncu önizleme paneli (sağ tık: bağımsız pencere)"
-                                    Background="Transparent" Foreground="{DynamicResource PrimaryText}"
-                                    CornerRadius="6" Padding="10,5" FontSize="11">
+                                    Background="Transparent"
+                                    CornerRadius="6" Padding="10,6,10,4">
+                                <StackPanel Spacing="3">
+                                    <TextBlock Text="Oyuncu" Foreground="{DynamicResource PrimaryText}" FontSize="11" HorizontalAlignment="Center"/>
+                                    <Border Height="2" CornerRadius="1" Background="{Binding GameTabBrush}"/>
+                                </StackPanel>
                                 <Button.ContextMenu>
                                     <ContextMenu>
                                         <MenuItem Header="Bağımsız Pencerede Aç" Command="{Binding OpenPlayerWindowCommand}"/>
                                     </ContextMenu>
                                 </Button.ContextMenu>
                             </Button>
-                            <Button Content="{Binding SplitScreenButtonText}" 
+                            <Button Content="{Binding SplitScreenButtonText}"
                                     Command="{Binding ShowPanelCommand}" CommandParameter="SplitScreen"
-                                    Background="{Binding SplitScreenButtonColor}" 
+                                    Background="{Binding SplitScreenButtonColor}"
                                     Foreground="{Binding SplitScreenButtonForeground}"
                                     FontWeight="Bold" FontSize="11" CornerRadius="6" Padding="10,5"/>
+                            </StackPanel>
                         </StackPanel>
                     </DockPanel>
                 </Border>

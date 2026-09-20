@@ -70,6 +70,27 @@ namespace RowlEngine.Editor
                 if (transportButtons[1].IsEnabled || transportButtons[2].IsEnabled)
                     throw new Exception("Pause/Step must be disabled while not playing");
 
+                // Unity düzeni Dilim B: Scene/Game sekme şeridi — komut
+                // parametreleri EN kalır, vurgu aktif görünümü izler.
+                var tabs = window.FindControl<StackPanel>("CenterViewTabs")
+                    ?? throw new Exception("CenterViewTabs not found");
+                var tabButtons = tabs.Children.OfType<Button>().ToList();
+                if (tabButtons.Count != 4)
+                    throw new Exception(
+                        $"CenterViewTabs should have 4 buttons, has {tabButtons.Count}");
+                string?[] tabParams = tabButtons
+                    .Select(b => b.CommandParameter as string).ToArray();
+                string?[] expectedParams = new[] { "NodeGraph", "Preview", "EnginePreview", "SplitScreen" };
+                if (!tabParams.SequenceEqual(expectedParams))
+                    throw new Exception(
+                        $"CenterViewTabs params changed: [{string.Join(", ", tabParams)}]");
+                mainVm.ShowPanelCommand.Execute("EnginePreview");
+                if (!mainVm.IsEnginePreviewActive || mainVm.GameTabBrush == "Transparent")
+                    throw new Exception("Game tab highlight did not follow EnginePreview");
+                mainVm.ShowPanelCommand.Execute("NodeGraph");
+                if (!mainVm.IsNodeGraphActive || mainVm.SceneTabBrush == "Transparent")
+                    throw new Exception("Scene tab highlight did not follow NodeGraph");
+
                 string[] allToolbar = leftContents
                     .Concat(rightButtons.Select(b => b.Content as string ?? string.Empty))
                     .ToArray();

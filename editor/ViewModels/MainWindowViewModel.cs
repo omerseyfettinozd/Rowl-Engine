@@ -336,6 +336,19 @@ namespace RowlEngine.Editor.ViewModels
         [ObservableProperty]
         private bool _isEnginePreviewActive = false;
 
+        /// <summary>
+        /// Unity sekme şeridi vurguları: aktif görünümün alt çizgisi
+        /// Accent rengi, pasifler şeffaf. Tema değişiminde PlayButtonColor
+        /// ile aynı tazelik sınıfındadır (sekme değişiminde yenilenir).
+        /// </summary>
+        public string SceneTabBrush => IsNodeGraphActive ? ThemeFallbackColors.BrushHex("Accent", ThemeFallbackColors.Text) : "Transparent";
+        public string PreviewTabBrush => IsPreviewActive ? ThemeFallbackColors.BrushHex("Accent", ThemeFallbackColors.Text) : "Transparent";
+        public string GameTabBrush => IsEnginePreviewActive ? ThemeFallbackColors.BrushHex("Accent", ThemeFallbackColors.Text) : "Transparent";
+
+        partial void OnIsNodeGraphActiveChanged(bool value) => OnPropertyChanged(nameof(SceneTabBrush));
+        partial void OnIsPreviewActiveChanged(bool value) => OnPropertyChanged(nameof(PreviewTabBrush));
+        partial void OnIsEnginePreviewActiveChanged(bool value) => OnPropertyChanged(nameof(GameTabBrush));
+
         // Split-screen mode: both Node Graph + Live Preview visible side-by-side.
         // Toggled via toolbar button; when off, center area goes back to radio toggle.
         [ObservableProperty]
