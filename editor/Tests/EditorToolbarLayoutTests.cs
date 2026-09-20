@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using Avalonia.Controls;
+using Avalonia.Layout;
 using RowlEngine.Editor.ViewModels;
 using RowlEngine.Editor.Views;
 
@@ -41,11 +42,33 @@ namespace RowlEngine.Editor
                 var right = window.FindControl<StackPanel>("ToolbarRightGroups")
                     ?? throw new Exception("ToolbarRightGroups not found");
                 var rightButtons = right.Children.OfType<Button>().ToList();
-                if (rightButtons.Count != 4)
+                // Unity düzeni: Play ortadaki TransportCluster'a taşındı,
+                // sağda Build/İptal/Ayarlar kaldı.
+                if (rightButtons.Count != 3)
                     throw new Exception(
-                        $"Right toolbar should have 4 buttons, has {rightButtons.Count}");
+                        $"Right toolbar should have 3 buttons, has {rightButtons.Count}");
                 if ((rightButtons[^1].Content as string) != "Ayarlar")
                     throw new Exception("Ayarlar must be the last (standalone) right toolbar button");
+
+                // Unity düzeni Dilim A: ortalanmış taşıma kümesi
+                // (Oynat/Duraklat/Adım), komutlara bağlı, oynamıyorken
+                // Duraklat/Adım kapalı.
+                var cluster = window.FindControl<StackPanel>("TransportCluster")
+                    ?? throw new Exception("TransportCluster not found");
+                if (cluster.HorizontalAlignment != HorizontalAlignment.Center)
+                    throw new Exception("TransportCluster must be centered");
+                var transportButtons = cluster.Children.OfType<Button>().ToList();
+                if (transportButtons.Count != 3
+                    || transportButtons.Any(b => b.Command is null))
+                    throw new Exception("TransportCluster should have 3 wired buttons");
+                string[] expectedTips = { "Oynat / Durdur", "Duraklat", "Kare Adım (1/60 sn)" };
+                string?[] actualTips = transportButtons
+                    .Select(b => ToolTip.GetTip(b) as string).ToArray();
+                if (!actualTips.SequenceEqual(expectedTips))
+                    throw new Exception(
+                        $"Transport tooltips changed: [{string.Join(", ", actualTips)}]");
+                if (transportButtons[1].IsEnabled || transportButtons[2].IsEnabled)
+                    throw new Exception("Pause/Step must be disabled while not playing");
 
                 string[] allToolbar = leftContents
                     .Concat(rightButtons.Select(b => b.Content as string ?? string.Empty))

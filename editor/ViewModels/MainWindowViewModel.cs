@@ -1312,6 +1312,26 @@ namespace RowlEngine.Editor.ViewModels
         private string _playButtonColor =
             ThemeFallbackColors.BrushHex("PlayButtonGreenColor", ThemeFallbackColors.Success);
 
+        [ObservableProperty]
+        private bool _isPlayPaused = false;
+
+        /// <summary>Unity taşıma kümesi: Duraklat yalnızca oynarken etkindir.</summary>
+        public bool CanPauseStandalone => IsPlayingStandalone;
+
+        /// <summary>Unity taşıma kümesi: Adım yalnızca oynarken + duraklıyken etkindir.</summary>
+        public bool CanStepStandalone => IsPlayingStandalone && IsPlayPaused;
+
+        partial void OnIsPlayingStandaloneChanged(bool value)
+        {
+            OnPropertyChanged(nameof(CanPauseStandalone));
+            OnPropertyChanged(nameof(CanStepStandalone));
+        }
+
+        partial void OnIsPlayPausedChanged(bool value)
+        {
+            OnPropertyChanged(nameof(CanStepStandalone));
+        }
+
         public NodeViewModel? GetStartNode()
         {
             return StoryGraphLifecycleCoordinator.ResolveStartNode(Nodes, Connections);
@@ -1324,6 +1344,33 @@ namespace RowlEngine.Editor.ViewModels
                 StopStandaloneGame();
             else
                 StartStandaloneGame();
+        }
+
+        /// <summary>
+        /// Unity taşıma kümesi: duraklat/devam et. Native çağrı yalnızca
+        /// motor bağlıyken yapılır; VM durumu headless'ta da döner
+        /// (kilit testi motoru başlatmadan geçişi doğrular).
+        /// </summary>
+        [RelayCommand]
+        public void PauseStandalone()
+        {
+            if (!IsPlayingStandalone) return;
+            IsPlayPaused = !IsPlayPaused;
+            if (EngineHost.IsInitialized)
+                EngineHost.SetPaused(IsPlayPaused);
+            StatusText = IsPlayPaused ? "Paused — simulation frozen" : "Offscreen Play Mode Active";
+        }
+
+        /// <summary>
+        /// Unity taşıma kümesi: duraklıyken tek kare ilerle (1/60 sn).
+        /// Motor bağlı değilse <see cref="EngineHost.Step"/> no-op'tur.
+        /// </summary>
+        [RelayCommand]
+        public void StepStandalone()
+        {
+            if (!CanStepStandalone) return;
+            EngineHost.Step(1f / 60f);
+            AppendLog("[Play] Stepped one frame (1/60s)");
         }
 
         /// <summary>
@@ -1371,6 +1418,9 @@ namespace RowlEngine.Editor.ViewModels
             if (started)
             {
                 IsPlayingStandalone = true;
+                IsPlayPaused = false;
+                if (EngineHost.IsInitialized)
+                    EngineHost.SetPaused(false);
                 PlayButtonText = "Stop";
                 PlayButtonColor = ThemeFallbackColors.BrushHex("DangerButtonBg", ThemeFallbackColors.Error);
                 StatusText = "Offscreen Play Mode Active";
@@ -1387,6 +1437,9 @@ namespace RowlEngine.Editor.ViewModels
                 msg => AppendLog(msg));
 
             IsPlayingStandalone = false;
+            IsPlayPaused = false;
+            if (EngineHost.IsInitialized)
+                EngineHost.SetPaused(false);
             PlayButtonText = "Play";
             PlayButtonColor = ThemeFallbackColors.BrushHex("PlayButtonGreenColor", ThemeFallbackColors.Success);
             StatusText = "Engine Ready — Offscreen C++ Runtime Active";
