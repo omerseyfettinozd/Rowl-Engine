@@ -628,17 +628,27 @@ void test_audio_lock_bgm_miss_guard() {
  *  Her kanal (UI/Ambience/SFX/BGM-RAM) için: geçerli WAV çalınır (kuyruk
  *  snapshot'ı >0 + bayraklar eski asset), ardından testFailNextQueue
  *  kancasıyla kuyruk-hatası enjekte edilip aynı kanalda ikinci WAV çalınır:
- *   (a) hedef akışın queued-bayt değeri (testQueuedBytes) fail ÖNCESİ
- *       snapshot'a tam eşittir (sıfırlanmamış),
- *   (b) bayraklar eski asset'i gösterir (UI: isUiPlaying + getCurrentUiPath;
- *       Ambience: isAmbiencePlaying + getCurrentAmbiencePath; SFX:
- *       sfxActivePaths tek-girdi eski yol; BGM-RAM: bayt + hata),
+ *   (a) iki-yonlu: hedef akışın queued-bayt değeri (testQueuedBytes) fail
+ *       ONCESI snapshot'a tam eşittir (sıfırlanmamış) VE yeni assetin PCM
+ *       boyuna esit DEGILDIR (yanlis-kuyruklama yakalanir; fixture'lar
+ *       ayrik-boyludur: eski 64x0.5f, yeni 256x0.25f).
+ *   (b) capraz: bayraklar eski asset'i gösterir (UI: isUiPlaying +
+ *       getCurrentUiPath; Ambience: isAmbiencePlaying +
+ *       getCurrentAmbiencePath; SFX: sfxActivePaths tek-girdi eski yol;
+ *       BGM-RAM: getCurrentBgmPath eski yol) VE queued-bayt eski-boyda
+ *       kalir (capraz bag: yol+bayt birlikte eskiyi gosterir).
  *   (c) m_lastError "Unable to queue decoded audio" ile doludur
  *       (queue-fail caller'a ulaştı; enjeksiyonun kuyruk adımında
  *       tüketildiğinin kanıtıdır),
  *   (d) karşıt-kanıt [#87 güncellemesi]: aynı senaryoda BGM miss
  *       predecessor-preserving'dir (stream kapanmaz — eski #78 "miss
  *       kapatır" davranışı kalktı), hata caller'a ulaşır.
+ *  Ikinci kanca (testFailCommitPut, testFailNextQueue emsali): commit
+ *  asamasindaki kuyruk-dususu ayni erken-noktada SDL'ye dokunmadan
+ *  basarisiz sayar; Clear-sonrasi commit-Put dusus senaryosunda da
+ *  queued-bytes==before korunur (atomiklik iddiasi).
+ *  V3 kalibrasyon (kanca saglamlik kaniti): enjeksiyonsuz yeni asset
+ *  kuyruklar, bayt DEGISIR (kanca takili kalmamis + fixture'lar ayrik).
  * Pre-clear mutantında (a) düşer: kuyruk 0'lanır, exit(1).
  *
  * Determinizm notları:
@@ -656,25 +666,29 @@ void test_audio_lock_queue_fail_atomic() {
     setupMissGuardProject(vfs, audio);
     if (!requireAudioDeviceOrSkip(audio, "Audio Queue-Fail Atomicity")) return;
 
-    // Kanal başına ayrı-isimli geçerli WAV (64 x 0.5f mono 44100 — formatlar
-    // aynı olduğu için SetFormat no-op'tur; SDL belgesi: SetFormat kuyruğu
-    // flush etmez). Miss-guard projesinin dizinine eklenir + tekrar remount
-    // edilir (aynı kök: streaming BGM + WAV'lar tek VFS'te).
+    // Kanal başına ayrı-isimli geçerli WAV — fixture ayrimi: eski
+    // 64x0.5f mono 44100, yeni 256x0.25f mono 44100 (boy+icerik farkli;
+    // formatlar ayni oldugu icin SetFormat no-op'tur; SDL belgesi:
+    // SetFormat kuyruğu flush etmez). Miss-guard projesinin dizinine
+    // eklenir + tekrar remount edilir (aynı kök: streaming BGM + WAV'lar
+    // tek VFS'te). Yeni assetin PCM karsiligi 256*4=1024 bayttir.
     const auto qdir = std::filesystem::temp_directory_path() /
                       "rowl_audio_bgm_miss_guard_project" / "Assets" / "audio";
     std::filesystem::create_directories(qdir);
-    const auto qWav = makeFloatWavMono44100(std::vector<float>(64, 0.5f));
-    writeBytes(qdir / "q_ui.wav", qWav);
-    writeBytes(qdir / "q_ui_new.wav", qWav);
-    writeBytes(qdir / "q_amb.wav", qWav);
-    writeBytes(qdir / "q_amb_new.wav", qWav);
-    writeBytes(qdir / "q_sfx.wav", qWav);
-    writeBytes(qdir / "q_sfx_new.wav", qWav);
-    writeBytes(qdir / "q_bgm.wav", qWav);
-    writeBytes(qdir / "q_bgm_new.wav", qWav);
+    const auto qOldWav = makeFloatWavMono44100(std::vector<float>(64, 0.5f));
+    const auto qNewWav = makeFloatWavMono44100(std::vector<float>(256, 0.25f));
+    writeBytes(qdir / "q_ui.wav", qOldWav);
+    writeBytes(qdir / "q_ui_new.wav", qNewWav);
+    writeBytes(qdir / "q_amb.wav", qOldWav);
+    writeBytes(qdir / "q_amb_new.wav", qNewWav);
+    writeBytes(qdir / "q_sfx.wav", qOldWav);
+    writeBytes(qdir / "q_sfx_new.wav", qNewWav);
+    writeBytes(qdir / "q_bgm.wav", qOldWav);
+    writeBytes(qdir / "q_bgm_new.wav", qNewWav);
     vfs.remountProject((std::filesystem::temp_directory_path() /
                         "rowl_audio_bgm_miss_guard_project")
                            .string());
+    static constexpr size_t kQueueNewPcmBytes = 256 * sizeof(float);
 
     auto requireQueueFailed = [&](const std::string& context) {
         const std::string err = audio.getLastError();
@@ -701,53 +715,126 @@ void test_audio_lock_queue_fail_atomic() {
     // Bayt-kesin karşılaştırma için cihaz tüketimi dondurulur.
     audio.setOutputSuspended(true);
 
-    // UI kanalı (a+b+c).
+    // UI kanalı (a+b+c + ikinci kanca + V3).
     audio.playAudio("audio/q_ui.wav", Rowl::Audio::AudioChannelType::Ui);
     const size_t uiBefore = audio.testQueuedBytes(Rowl::Audio::AudioChannelType::Ui);
     if (uiBefore == 0) {
         lockFail("UI kurulum kuyrugu bos — fixture cihaza kuyruklanamadi");
+    }
+    if (uiBefore == kQueueNewPcmBytes) {
+        lockFail("UI fixture ayrimi yok (eski==yeni boy) — 4x boy farki calismadi");
     }
     if (!audio.isUiPlaying() || audio.getCurrentUiPath() != "audio/q_ui.wav") {
         lockFail("UI kurulum bayraklari yanlis");
     }
     audio.testFailNextQueue();
     audio.playAudio("audio/q_ui_new.wav", Rowl::Audio::AudioChannelType::Ui);
-    if (audio.testQueuedBytes(Rowl::Audio::AudioChannelType::Ui) != uiBefore) {
-        lockFail("UI queue-fail eski kuyrugu yok etti (pre-clear mutantı)");
+    {
+        const size_t uiAfter = audio.testQueuedBytes(Rowl::Audio::AudioChannelType::Ui);
+        if (uiAfter != uiBefore) {
+            lockFail("UI queue-fail eski kuyrugu yok etti (pre-clear mutantı)");
+        }
+        if (uiAfter == kQueueNewPcmBytes) {
+            lockFail("UI queue-fail yeni yuku kuyrukladi (fail yolu kuyrukladi?)");
+        }
     }
     if (!audio.isUiPlaying() || audio.getCurrentUiPath() != "audio/q_ui.wav") {
         lockFail("UI queue-fail bayraklari bayatladi (yeni/eski celiskisi)");
     }
+    if (audio.testQueuedBytes(Rowl::Audio::AudioChannelType::Ui) != uiBefore) {
+        lockFail("UI queue-fail caprazinda bayt eski-boyda degil (yol+bayt ayrismasi)");
+    }
     requireQueueFailed("UI queue-fail sonrasi");
     TEST_PASS("Audio Queue-Fail — UI kuyruk+bayrak korunur, hata caller'a ulaşır");
+    // Ikinci kanca: commit-asamasi dususu de kuyrugu korur.
+    audio.testFailCommitPut();
+    audio.playAudio("audio/q_ui_new.wav", Rowl::Audio::AudioChannelType::Ui);
+    if (audio.testQueuedBytes(Rowl::Audio::AudioChannelType::Ui) != uiBefore) {
+        lockFail("UI commit-Put-dusus eski kuyrugu yok etti");
+    }
+    if (!audio.isUiPlaying() || audio.getCurrentUiPath() != "audio/q_ui.wav") {
+        lockFail("UI commit-Put-dusus bayraklari bayatladi");
+    }
+    requireQueueFailed("UI commit-Put-dusus sonrasi");
+    TEST_PASS("Audio Queue-Fail — UI commit-dususu kuyruk+bayrak korunur");
+    // V3 kalibrasyon: enjeksiyonsuz yeni asset kuyruklar, bayt DEGISIR.
+    audio.playAudio("audio/q_ui_new.wav", Rowl::Audio::AudioChannelType::Ui);
+    {
+        const size_t uiNew = audio.testQueuedBytes(Rowl::Audio::AudioChannelType::Ui);
+        if (uiNew == uiBefore) {
+            lockFail("UI V3 kalibrasyon bayt degismedi (kanca takili mi / fixture ayni mi?)");
+        }
+        if (audio.getCurrentUiPath() != "audio/q_ui_new.wav") {
+            lockFail("UI V3 kalibrasyon yeni yolu commitlemedi");
+        }
+    }
+    TEST_PASS("Audio Queue-Fail — UI V3 kalibrasyon (enjeksiyonsuz yeni kuyruklar)");
 
-    // Ambience kanalı (a+b+c).
+    // Ambience kanalı (a+b+c + ikinci kanca + V3).
     audio.playAudio("audio/q_amb.wav", Rowl::Audio::AudioChannelType::Ambience);
     const size_t ambBefore =
         audio.testQueuedBytes(Rowl::Audio::AudioChannelType::Ambience);
     if (ambBefore == 0) {
         lockFail("Ambience kurulum kuyrugu bos — fixture cihaza kuyruklanamadi");
     }
+    if (ambBefore == kQueueNewPcmBytes) {
+        lockFail("Ambience fixture ayrimi yok (eski==yeni boy)");
+    }
     if (!audio.isAmbiencePlaying() || audio.getCurrentAmbiencePath() != "audio/q_amb.wav") {
         lockFail("Ambience kurulum bayraklari yanlis");
     }
     audio.testFailNextQueue();
     audio.playAudio("audio/q_amb_new.wav", Rowl::Audio::AudioChannelType::Ambience);
-    if (audio.testQueuedBytes(Rowl::Audio::AudioChannelType::Ambience) != ambBefore) {
-        lockFail("Ambience queue-fail eski kuyrugu yok etti (pre-clear mutantı)");
+    {
+        const size_t ambAfter =
+            audio.testQueuedBytes(Rowl::Audio::AudioChannelType::Ambience);
+        if (ambAfter != ambBefore) {
+            lockFail("Ambience queue-fail eski kuyrugu yok etti (pre-clear mutantı)");
+        }
+        if (ambAfter == kQueueNewPcmBytes) {
+            lockFail("Ambience queue-fail yeni yuku kuyrukladi");
+        }
     }
     if (!audio.isAmbiencePlaying() || audio.getCurrentAmbiencePath() != "audio/q_amb.wav") {
         lockFail("Ambience queue-fail bayraklari bayatladi (yeni/eski celiskisi)");
     }
+    if (audio.testQueuedBytes(Rowl::Audio::AudioChannelType::Ambience) != ambBefore) {
+        lockFail("Ambience queue-fail caprazinda bayt eski-boyda degil");
+    }
     requireQueueFailed("Ambience queue-fail sonrasi");
     TEST_PASS("Audio Queue-Fail — Ambience kuyruk+bayrak korunur, hata caller'a ulaşır");
+    audio.testFailCommitPut();
+    audio.playAudio("audio/q_amb_new.wav", Rowl::Audio::AudioChannelType::Ambience);
+    if (audio.testQueuedBytes(Rowl::Audio::AudioChannelType::Ambience) != ambBefore) {
+        lockFail("Ambience commit-Put-dusus eski kuyrugu yok etti");
+    }
+    if (!audio.isAmbiencePlaying() || audio.getCurrentAmbiencePath() != "audio/q_amb.wav") {
+        lockFail("Ambience commit-Put-dusus bayraklari bayatladi");
+    }
+    requireQueueFailed("Ambience commit-Put-dusus sonrasi");
+    TEST_PASS("Audio Queue-Fail — Ambience commit-dususu kuyruk+bayrak korunur");
+    audio.playAudio("audio/q_amb_new.wav", Rowl::Audio::AudioChannelType::Ambience);
+    {
+        const size_t ambNew =
+            audio.testQueuedBytes(Rowl::Audio::AudioChannelType::Ambience);
+        if (ambNew == ambBefore) {
+            lockFail("Ambience V3 kalibrasyon bayt degismedi");
+        }
+        if (audio.getCurrentAmbiencePath() != "audio/q_amb_new.wav") {
+            lockFail("Ambience V3 kalibrasyon yeni yolu commitlemedi");
+        }
+    }
+    TEST_PASS("Audio Queue-Fail — Ambience V3 kalibrasyon (enjeksiyonsuz yeni kuyruklar)");
 
-    // SFX kanalı (a+b+c; derinlik 1 → slot 0 deterministik).
+    // SFX kanalı (a+b+c + ikinci kanca + V3; derinlik 1 → slot 0 deterministik).
     audio.setSfxPoolDepth(1);
     audio.playAudio("audio/q_sfx.wav", Rowl::Audio::AudioChannelType::Sfx);
     const size_t sfxBefore = audio.testQueuedBytes(Rowl::Audio::AudioChannelType::Sfx);
     if (sfxBefore == 0) {
         lockFail("SFX kurulum kuyrugu bos — fixture cihaza kuyruklanamadi");
+    }
+    if (sfxBefore == kQueueNewPcmBytes) {
+        lockFail("SFX fixture ayrimi yok (eski==yeni boy)");
     }
     {
         const auto paths = audio.sfxActivePaths();
@@ -757,8 +844,14 @@ void test_audio_lock_queue_fail_atomic() {
     }
     audio.testFailNextQueue();
     audio.playAudio("audio/q_sfx_new.wav", Rowl::Audio::AudioChannelType::Sfx);
-    if (audio.testQueuedBytes(Rowl::Audio::AudioChannelType::Sfx) != sfxBefore) {
-        lockFail("SFX queue-fail eski kuyrugu yok etti (pre-clear mutantı)");
+    {
+        const size_t sfxAfter = audio.testQueuedBytes(Rowl::Audio::AudioChannelType::Sfx);
+        if (sfxAfter != sfxBefore) {
+            lockFail("SFX queue-fail eski kuyrugu yok etti (pre-clear mutantı)");
+        }
+        if (sfxAfter == kQueueNewPcmBytes) {
+            lockFail("SFX queue-fail yeni yuku kuyrukladi");
+        }
     }
     {
         const auto paths = audio.sfxActivePaths();
@@ -766,22 +859,90 @@ void test_audio_lock_queue_fail_atomic() {
             lockFail("SFX queue-fail slot-PCM'i bayatladi (yeni/eski celiskisi)");
         }
     }
+    if (audio.testQueuedBytes(Rowl::Audio::AudioChannelType::Sfx) != sfxBefore) {
+        lockFail("SFX queue-fail caprazinda bayt eski-boyda degil");
+    }
     requireQueueFailed("SFX queue-fail sonrasi");
     TEST_PASS("Audio Queue-Fail — SFX kuyruk+slot korunur, hata caller'a ulaşır");
+    audio.testFailCommitPut();
+    audio.playAudio("audio/q_sfx_new.wav", Rowl::Audio::AudioChannelType::Sfx);
+    if (audio.testQueuedBytes(Rowl::Audio::AudioChannelType::Sfx) != sfxBefore) {
+        lockFail("SFX commit-Put-dusus eski kuyrugu yok etti");
+    }
+    {
+        const auto paths = audio.sfxActivePaths();
+        if (paths.size() != 1 || paths[0] != "audio/q_sfx.wav") {
+            lockFail("SFX commit-Put-dusus slot-PCM'i bayatladi");
+        }
+    }
+    requireQueueFailed("SFX commit-Put-dusus sonrasi");
+    TEST_PASS("Audio Queue-Fail — SFX commit-dususu kuyruk+slot korunur");
+    audio.playAudio("audio/q_sfx_new.wav", Rowl::Audio::AudioChannelType::Sfx);
+    {
+        const size_t sfxNew = audio.testQueuedBytes(Rowl::Audio::AudioChannelType::Sfx);
+        if (sfxNew == sfxBefore) {
+            lockFail("SFX V3 kalibrasyon bayt degismedi");
+        }
+        const auto paths = audio.sfxActivePaths();
+        if (paths.size() != 1 || paths[0] != "audio/q_sfx_new.wav") {
+            lockFail("SFX V3 kalibrasyon yeni slotu commitlemedi");
+        }
+    }
+    TEST_PASS("Audio Queue-Fail — SFX V3 kalibrasyon (enjeksiyonsuz yeni kuyruklar)");
 
-    // BGM kanalı, RAM yolu (kısa WAV; non-transition dalı) (a+c).
+    // BGM kanalı, RAM yolu (kısa WAV; non-transition dalı) (a+b+c + ikinci
+    // kanca + V3).
     audio.playAudio("audio/q_bgm.wav", Rowl::Audio::AudioChannelType::Bgm);
     const size_t bgmBefore = audio.testQueuedBytes(Rowl::Audio::AudioChannelType::Bgm);
     if (bgmBefore == 0) {
         lockFail("BGM kurulum kuyrugu bos — fixture cihaza kuyruklanamadi");
     }
+    if (bgmBefore == kQueueNewPcmBytes) {
+        lockFail("BGM fixture ayrimi yok (eski==yeni boy)");
+    }
+    if (audio.getCurrentBgmPath() != "audio/q_bgm.wav" || !audio.isBgmPlaying()) {
+        lockFail("BGM kurulum niyeti yanlis");
+    }
     audio.testFailNextQueue();
     audio.playAudio("audio/q_bgm_new.wav", Rowl::Audio::AudioChannelType::Bgm);
+    {
+        const size_t bgmAfter = audio.testQueuedBytes(Rowl::Audio::AudioChannelType::Bgm);
+        if (bgmAfter != bgmBefore) {
+            lockFail("BGM queue-fail eski kuyrugu yok etti (pre-clear mutantı)");
+        }
+        if (bgmAfter == kQueueNewPcmBytes) {
+            lockFail("BGM queue-fail yeni yuku kuyrukladi");
+        }
+    }
+    if (audio.getCurrentBgmPath() != "audio/q_bgm.wav" || !audio.isBgmPlaying()) {
+        lockFail("BGM queue-fail niyeti bayatladi (yol+bayt caprazi)");
+    }
     if (audio.testQueuedBytes(Rowl::Audio::AudioChannelType::Bgm) != bgmBefore) {
-        lockFail("BGM queue-fail eski kuyrugu yok etti (pre-clear mutantı)");
+        lockFail("BGM queue-fail caprazinda bayt eski-boyda degil");
     }
     requireQueueFailed("BGM queue-fail sonrasi");
     TEST_PASS("Audio Queue-Fail — BGM (non-transition) kuyruk korunur, hata caller'a ulaşır");
+    audio.testFailCommitPut();
+    audio.playAudio("audio/q_bgm_new.wav", Rowl::Audio::AudioChannelType::Bgm);
+    if (audio.testQueuedBytes(Rowl::Audio::AudioChannelType::Bgm) != bgmBefore) {
+        lockFail("BGM commit-Put-dusus eski kuyrugu yok etti");
+    }
+    if (audio.getCurrentBgmPath() != "audio/q_bgm.wav" || !audio.isBgmPlaying()) {
+        lockFail("BGM commit-Put-dusus niyeti bayatladi");
+    }
+    requireQueueFailed("BGM commit-Put-dusus sonrasi");
+    TEST_PASS("Audio Queue-Fail — BGM commit-dususu kuyruk+niyet korunur");
+    audio.playAudio("audio/q_bgm_new.wav", Rowl::Audio::AudioChannelType::Bgm);
+    {
+        const size_t bgmNew = audio.testQueuedBytes(Rowl::Audio::AudioChannelType::Bgm);
+        if (bgmNew == bgmBefore) {
+            lockFail("BGM V3 kalibrasyon bayt degismedi");
+        }
+        if (audio.getCurrentBgmPath() != "audio/q_bgm_new.wav") {
+            lockFail("BGM V3 kalibrasyon yeni yolu commitlemedi");
+        }
+    }
+    TEST_PASS("Audio Queue-Fail — BGM V3 kalibrasyon (enjeksiyonsuz yeni kuyruklar)");
 
     audio.setOutputSuspended(false);
     audio.stopAll();

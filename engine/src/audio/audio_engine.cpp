@@ -841,11 +841,14 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
                 (channel == AudioChannelType::Bgm || channel == AudioChannelType::Ambience ||
                  channel == AudioChannelType::Ui || channel == AudioChannelType::Sfx);
             bool queueOk = false;
-            if (m_testFailQueueNext) {
-                // Bulgu #81 test kancası: prova öncesi deterministik
+            if (m_testFailQueueNext || m_testFailCommitPutNext) {
+                // Bulgu #81 test kancalari: prova öncesi deterministik
                 // kuyruk-hatası (SDL çağrılmaz; fail yolu birebir aynı
-                // çalışır, bayrak tüketilir).
+                // çalışır, bayraklar tüketilir). testFailCommitPut commit
+                // asamasinin dusus senaryosunu ayni erken-noktada kurar:
+                // prova/Clear hic calismaz, kuyruk ==before korunur.
                 m_testFailQueueNext = false;
+                m_testFailCommitPutNext = false;
             } else if (SDL_SetAudioStreamFormat(targetStream, &floatSpec, nullptr)) {
                 if (!needsReplace) {
                     // Voice + transition-scratch: doğrudan ek-kuyruk
