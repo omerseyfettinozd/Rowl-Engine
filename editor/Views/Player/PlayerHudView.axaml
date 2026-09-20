@@ -16,7 +16,7 @@
     <Border Grid.Row="1" />
     <!-- Dialogue box -->
     <Border Grid.Row="2" Margin="48,8,48,4" Padding="16,10" CornerRadius="10"
-            Background="#AA0F172A" BorderBrush="#38BDF8" BorderThickness="1">
+            Background="{DynamicResource SurfaceBackground}" BorderBrush="{DynamicResource Accent}" BorderThickness="1">
       <StackPanel Spacing="4">
         <TextBlock Text="{Binding Speaker}" FontWeight="Bold" FontSize="15" />
         <TextBlock Text="{Binding Dialogue}" FontSize="14" TextWrapping="Wrap" MinHeight="44" />

@@ -327,8 +327,12 @@ namespace RowlEngine.Editor.ViewModels
         public bool IsSplitScreenVertical => SplitScreenMode == 2;
 
         public string SplitScreenButtonText => SplitScreenMode > 0 ? $"Split: {(SplitScreenMode == 1 ? "H" : "V")}" : "Split Screen";
-        public string SplitScreenButtonColor => SplitScreenMode > 0 ? "#2563EB" : "#1E293B";
-        public string SplitScreenButtonForeground => SplitScreenMode > 0 ? "White" : "#94A3B8";
+        public string SplitScreenButtonColor => SplitScreenMode > 0
+            ? ThemeFallbackColors.BrushHex("PrimaryText", ThemeFallbackColors.Text)
+            : ThemeFallbackColors.BrushHex("ToolbarButtonBg", ThemeFallbackColors.Surface);
+        public string SplitScreenButtonForeground => SplitScreenMode > 0
+            ? ThemeFallbackColors.BrushHex("AppBackground", ThemeFallbackColors.Surface)
+            : ThemeFallbackColors.BrushHex("MutedText", ThemeFallbackColors.Muted);
 
         partial void OnSplitScreenModeChanged(int value)
         {
@@ -340,30 +344,9 @@ namespace RowlEngine.Editor.ViewModels
             OnPropertyChanged(nameof(SplitScreenButtonForeground));
         }
 
-        public string ConnectButtonColor => IsConnected ? "#2563EB" : "#64748B";
-
-        [ObservableProperty]
-        private bool _isDarkMode = true;
-
-        public string ThemeButtonText => IsDarkMode ? "Karanlık Mod" : "Aydınlık Mod";
-        public string ThemeButtonColor => IsDarkMode ? "#2A2A3D" : "#FFEDD5";
-        public string ThemeButtonForeground => IsDarkMode ? "#F8FAFC" : "#EA580C";
-
-        [RelayCommand]
-        public void ToggleTheme()
-        {
-            IsDarkMode = !IsDarkMode;
-            if (Avalonia.Application.Current != null)
-            {
-                Avalonia.Application.Current.RequestedThemeVariant = IsDarkMode 
-                    ? Avalonia.Styling.ThemeVariant.Dark 
-                    : Avalonia.Styling.ThemeVariant.Light;
-            }
-            OnPropertyChanged(nameof(ThemeButtonText));
-            OnPropertyChanged(nameof(ThemeButtonColor));
-            OnPropertyChanged(nameof(ThemeButtonForeground));
-            AppendLog($"Tema değiştirildi: {(IsDarkMode ? "Karanlık Mod (Siyah-Beyaz)" : "Aydınlık Mod (Turuncu-Beyaz, Siyah Yazı)")}");
-        }
+        public string ConnectButtonColor => IsConnected
+            ? ThemeFallbackColors.BrushHex("PrimaryText", ThemeFallbackColors.Text)
+            : ThemeFallbackColors.BrushHex("DimText", ThemeFallbackColors.Dim);
 
         private readonly EditorUiTimer _smoothTimer;
 
@@ -1126,7 +1109,7 @@ namespace RowlEngine.Editor.ViewModels
                 return;
             }
             var group = Groups.CreateFromNodes(
-                $"Grup {Groups.Groups.Count + 1}", "#3B82F6", picked);
+                $"Grup {Groups.Groups.Count + 1}", CanvasGroupViewModel.DefaultColor, picked);
             AppendLog($"Grup oluşturuldu: '{group.Title}' ({picked.Count} düğüm).");
         }
 
@@ -1307,7 +1290,8 @@ namespace RowlEngine.Editor.ViewModels
         private string _playButtonText = "Play";
 
         [ObservableProperty]
-        private string _playButtonColor = "#16A34A";
+        private string _playButtonColor =
+            ThemeFallbackColors.BrushHex("PlayButtonGreenColor", ThemeFallbackColors.Success);
 
         public NodeViewModel? GetStartNode()
         {
@@ -1369,7 +1353,7 @@ namespace RowlEngine.Editor.ViewModels
             {
                 IsPlayingStandalone = true;
                 PlayButtonText = "Stop";
-                PlayButtonColor = "#DC2626";
+                PlayButtonColor = ThemeFallbackColors.BrushHex("DangerButtonBg", ThemeFallbackColors.Error);
                 StatusText = "Offscreen Play Mode Active";
             }
         }
@@ -1385,7 +1369,7 @@ namespace RowlEngine.Editor.ViewModels
 
             IsPlayingStandalone = false;
             PlayButtonText = "Play";
-            PlayButtonColor = "#16A34A";
+            PlayButtonColor = ThemeFallbackColors.BrushHex("PlayButtonGreenColor", ThemeFallbackColors.Success);
             StatusText = "Engine Ready — Offscreen C++ Runtime Active";
         }
 

@@ -11,7 +11,7 @@
         <TextBlock Text="Player Choices" FontWeight="Bold" Foreground="{DynamicResource PrimaryText}"/>
         <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4">
           <CheckBox IsChecked="{Binding IsEnabled}" ToolTip.Tip="Enable/Disable"/>
-          <Button Content="Sil" Command="{Binding RemoveSelfCommand}" Foreground="#EF4444" Background="Transparent" BorderThickness="0"/>
+          <Button Content="Sil" Command="{Binding RemoveSelfCommand}" Foreground="{DynamicResource ErrorColor}" Background="Transparent" BorderThickness="0"/>
         </StackPanel>
       </Grid>
       <TextBox Watermark="Choice heading" Text="{Binding Title}"/>
@@ -29,7 +29,7 @@
                   <Grid ColumnDefinitions="*,90,Auto" ColumnSpacing="5">
                     <TextBox Grid.Column="0" Watermark="Condition (e.g. affinity_evelyn &gt;= 3)" Text="{Binding Condition}" FontSize="11"/>
                     <TextBlock Grid.Column="1" Text="Graph cable sets target" FontSize="10" TextWrapping="Wrap" Foreground="{DynamicResource MutedText}" VerticalAlignment="Center"/>
-                    <Button Grid.Column="2" Content="Remove" Command="{Binding $parent[UserControl].DataContext.RemoveOptionCommand}" CommandParameter="{Binding}" Background="Transparent" Foreground="#FCA5A5"/>
+                    <Button Grid.Column="2" Content="Remove" Command="{Binding $parent[UserControl].DataContext.RemoveOptionCommand}" CommandParameter="{Binding}" Background="Transparent" Foreground="{DynamicResource ErrorColor}"/>
                   </Grid>
                   <Grid ColumnDefinitions="Auto,*,Auto,*" ColumnSpacing="5">
                     <TextBlock Text="Preset" VerticalAlignment="Center" FontSize="11"/>
@@ -45,7 +45,7 @@
                     <TextBlock Grid.Column="4" Text="Opacity" VerticalAlignment="Center"/><TextBox Grid.Column="5" Text="{Binding Opacity}" Width="58"/>
                   </Grid>
                   <Border Tag="Font" DragDrop.AllowDrop="True" DragDrop.DragOver="OnAssetDragOver" DragDrop.Drop="OnAssetDrop"
-                          BorderBrush="#475569" BorderThickness="1" CornerRadius="4" Padding="3">
+                          BorderBrush="{DynamicResource BorderColor}" BorderThickness="1" CornerRadius="4" Padding="3">
                     <TextBox Watermark="Font: Assets panelinden .ttf/.otf sürükle" Text="{Binding FontFamily}" BorderThickness="0"/>
                   </Border>
                   <Grid ColumnDefinitions="*,*" ColumnSpacing="5">
@@ -64,19 +64,19 @@
                   <TextBlock Text="Buton görselleri — Assets panelinden ilgili alana sürükle bırak"
                              FontSize="10" Foreground="{DynamicResource MutedText}" TextWrapping="Wrap"/>
                   <Border Tag="Normal" DragDrop.AllowDrop="True" DragDrop.DragOver="OnAssetDragOver" DragDrop.Drop="OnAssetDrop"
-                          BorderBrush="#38BDF8" BorderThickness="1" CornerRadius="4" Padding="3">
+                          BorderBrush="{DynamicResource Accent}" BorderThickness="1" CornerRadius="4" Padding="3">
                     <TextBox Watermark="Normal görseli buraya bırak" Text="{Binding NormalImage}" BorderThickness="0"/>
                   </Border>
                   <Border Tag="Hover" DragDrop.AllowDrop="True" DragDrop.DragOver="OnAssetDragOver" DragDrop.Drop="OnAssetDrop"
-                          BorderBrush="#475569" BorderThickness="1" CornerRadius="4" Padding="3">
+                          BorderBrush="{DynamicResource BorderColor}" BorderThickness="1" CornerRadius="4" Padding="3">
                     <TextBox Watermark="Hover görselini buraya bırak" Text="{Binding HoverImage}" BorderThickness="0"/>
                   </Border>
                   <Border Tag="Pressed" DragDrop.AllowDrop="True" DragDrop.DragOver="OnAssetDragOver" DragDrop.Drop="OnAssetDrop"
-                          BorderBrush="#475569" BorderThickness="1" CornerRadius="4" Padding="3">
+                          BorderBrush="{DynamicResource BorderColor}" BorderThickness="1" CornerRadius="4" Padding="3">
                     <TextBox Watermark="Pressed görselini buraya bırak" Text="{Binding PressedImage}" BorderThickness="0"/>
                   </Border>
                   <Border Tag="Disabled" DragDrop.AllowDrop="True" DragDrop.DragOver="OnAssetDragOver" DragDrop.Drop="OnAssetDrop"
-                          BorderBrush="#475569" BorderThickness="1" CornerRadius="4" Padding="3">
+                          BorderBrush="{DynamicResource BorderColor}" BorderThickness="1" CornerRadius="4" Padding="3">
                     <TextBox Watermark="Disabled görselini buraya bırak" Text="{Binding DisabledImage}" BorderThickness="0"/>
                   </Border>
                 </StackPanel>

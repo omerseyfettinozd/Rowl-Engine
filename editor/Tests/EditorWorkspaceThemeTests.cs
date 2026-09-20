@@ -7,18 +7,28 @@ internal static class EditorWorkspaceThemeTests
 {
     public static void Run(MainWindowViewModel mainVm)
     {
-        Console.WriteLine("\n[Test 2]: Dynamic Theming (Light/Orange-White & Dark/Black-White)...");
-        if (!mainVm.IsDarkMode)
-            throw new Exception("Default theme should be Dark mode");
-        mainVm.ToggleTheme();
-        if (mainVm.IsDarkMode)
-            throw new Exception("Theme toggle should switch to Light mode");
-        if (!mainVm.ThemeButtonText.Contains("Aydınlık"))
-            throw new Exception("Theme button text should indicate Light mode");
-        mainVm.ToggleTheme();
-        if (!mainVm.IsDarkMode)
-            throw new Exception("Theme toggle should switch back to Dark mode");
-        Console.WriteLine("  [PASS] Theme toggle (Dark <-> Light/Orange) verified");
+        Console.WriteLine("\n[Test 2]: Theming (Kemik Beyazı + Saf Siyah OLED)...");
+        var settings = new SettingsViewModel();
+        if (settings.SelectedTheme != "Kemik Beyazı (Karanlık)")
+            throw new Exception("Default theme should be Kemik Beyazı (Karanlık)");
+        if (settings.AvailableThemes.Count != 2)
+            throw new Exception("Expected exactly 2 themes");
+        settings.SelectedTheme = "Saf Siyah (OLED)";
+        settings.ApplyTheme();
+        var app = Avalonia.Application.Current
+            ?? throw new Exception("Application.Current is missing");
+        if (!app.Resources.TryGetValue("AppBackgroundColor", out var bg) ||
+            !(bg is Avalonia.Media.Color bgc && bgc == Avalonia.Media.Color.Parse("#000000")))
+            throw new Exception("OLED theme did not apply AppBackgroundColor");
+        if (!app.Resources.TryGetValue("PrimaryTextColor", out var fg) ||
+            !(fg is Avalonia.Media.Color fgc && fgc == Avalonia.Media.Color.Parse("#F2EFE6")))
+            throw new Exception("OLED theme did not apply PrimaryTextColor");
+        settings.SelectedTheme = "Kemik Beyazı (Karanlık)";
+        settings.ApplyTheme();
+        if (!app.Resources.TryGetValue("AppBackgroundColor", out var bg2) ||
+            !(bg2 is Avalonia.Media.Color bgc2 && bgc2 == Avalonia.Media.Color.Parse("#0A0A0B")))
+            throw new Exception("Default theme did not restore AppBackgroundColor");
+        Console.WriteLine("  [PASS] Theme switch (Kemik Beyazı <-> Saf Siyah OLED) verified");
 
         mainVm.ShowPanel("Hierarchy");
         if (mainVm.HierarchyPanelWidth.Value != 0 || mainVm.HierarchySplitterWidth.Value != 0)

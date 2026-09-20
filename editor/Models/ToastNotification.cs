@@ -1,5 +1,6 @@
 using System;
 using CommunityToolkit.Mvvm.ComponentModel;
+using RowlEngine.Editor.Services;
 
 namespace RowlEngine.Editor.Models
 {
@@ -32,10 +33,10 @@ namespace RowlEngine.Editor.Models
 
         public string AccentColor => Type switch
         {
-            NotificationType.Success => "#10B981", // Emerald Green
-            NotificationType.Warning => "#F59E0B", // Amber
-            NotificationType.Error   => "#EF4444", // Crimson Red
-            _                        => "#3B82F6"  // Dodger Blue
+            NotificationType.Success => ThemeFallbackColors.BrushHex("SuccessBrush", ThemeFallbackColors.Success),
+            NotificationType.Warning => ThemeFallbackColors.BrushHex("WarningBrush", ThemeFallbackColors.Warning),
+            NotificationType.Error => ThemeFallbackColors.BrushHex("ErrorBrush", ThemeFallbackColors.Error),
+            _ => ThemeFallbackColors.BrushHex("InfoBrush", ThemeFallbackColors.Info)
         };
 
         public string IconSymbol => Type switch

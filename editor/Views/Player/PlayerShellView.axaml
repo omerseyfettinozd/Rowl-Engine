@@ -10,22 +10,22 @@
     <!-- Render surface host fills the background; states overlay it. -->
     <player:TitleScreenView IsVisible="{Binding IsTitle}" />
     <player:PlayerHudView IsVisible="{Binding IsPlaying}" />
-    <Border IsVisible="{Binding IsPause}" Background="#CC000000" Padding="32">
+    <Border IsVisible="{Binding IsPause}" Background="{DynamicResource CanvasBackground}" Padding="32">
       <player:PauseMenuView HorizontalAlignment="Center" VerticalAlignment="Center" />
     </Border>
-    <Border IsVisible="{Binding IsBacklog}" Background="#CC000000" Padding="32">
+    <Border IsVisible="{Binding IsBacklog}" Background="{DynamicResource CanvasBackground}" Padding="32">
       <player:PlayerBacklogView />
     </Border>
-    <Border IsVisible="{Binding IsSave}" Background="#CC000000" Padding="32">
+    <Border IsVisible="{Binding IsSave}" Background="{DynamicResource CanvasBackground}" Padding="32">
       <player:PlayerSaveLoadView />
     </Border>
-    <Border IsVisible="{Binding IsLoad}" Background="#CC000000" Padding="32">
+    <Border IsVisible="{Binding IsLoad}" Background="{DynamicResource CanvasBackground}" Padding="32">
       <player:PlayerSaveLoadView />
     </Border>
-    <Border IsVisible="{Binding IsPreferences}" Background="#CC000000" Padding="32">
+    <Border IsVisible="{Binding IsPreferences}" Background="{DynamicResource CanvasBackground}" Padding="32">
       <player:PlayerPreferencesView MaxWidth="560" />
     </Border>
-    <Border IsVisible="{Binding IsConfirmExit}" Background="#CC000000" Padding="32">
+    <Border IsVisible="{Binding IsConfirmExit}" Background="{DynamicResource CanvasBackground}" Padding="32">
       <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8">
         <TextBlock Text="Çıkmak istiyor musunuz?" FontSize="20" HorizontalAlignment="Center" />
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="12">

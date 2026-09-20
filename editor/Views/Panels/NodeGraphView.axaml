@@ -53,9 +53,9 @@
                                         Cursor="Hand" ToolTip.Tip="Sürükle: grupla taşı • Çift tık: üyelere sar">
                                     <DockPanel Margin="10,0,6,0" VerticalAlignment="Center">
                                         <TextBlock Tag="GroupDelete" DockPanel.Dock="Right" Text="×" FontSize="14"
-                                                   FontWeight="Bold" Foreground="White" VerticalAlignment="Center"
+                                                   FontWeight="Bold" Foreground="{DynamicResource PrimaryText}" VerticalAlignment="Center"
                                                    Cursor="Hand" ToolTip.Tip="Grubu sil (düğümler kalır)"/>
-                                        <TextBlock Text="{Binding Title}" FontWeight="Bold" Foreground="White"
+                                        <TextBlock Text="{Binding Title}" FontWeight="Bold" Foreground="{DynamicResource PrimaryText}"
                                                    FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                                     </DockPanel>
                                 </Border>
@@ -81,7 +81,7 @@
                 </ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="vm:ConnectionViewModel">
-                        <controls:BezierWireRenderer StartPoint="{Binding StartPoint}" EndPoint="{Binding EndPoint}" WireBrush="#10B981" WireThickness="3.0"/>
+                        <controls:BezierWireRenderer StartPoint="{Binding StartPoint}" EndPoint="{Binding EndPoint}" WireBrush="{DynamicResource WireColor}" WireThickness="3.0"/>
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
@@ -116,8 +116,8 @@
                        Width="{Binding SelectionBoxWidth}"
                        Height="{Binding SelectionBoxHeight}"
                        IsVisible="{Binding IsSelectingBox}"
-                       Fill="#333B82F6"
-                       Stroke="#3B82F6"
+                       Fill="{DynamicResource Accent}"
+                       Stroke="{DynamicResource Accent}"
                        StrokeThickness="1.5"
                        StrokeDashArray="4,2"/>
         </Canvas>

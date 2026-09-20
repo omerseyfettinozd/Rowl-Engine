@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
+using RowlEngine.Editor.Services;
 
 namespace RowlEngine.Editor.Controls
 {
@@ -59,12 +60,12 @@ namespace RowlEngine.Editor.Controls
             if (label is not null)
             {
                 label.Text = BadgeText;
-                label.Foreground = new SolidColorBrush(Color.Parse("#34D399"));
+                label.Foreground = this.FindResource("SuccessColor") as IBrush ?? ThemeFallbackColors.TextBrush;
             }
             if (border is not null)
             {
-                border.Background = new SolidColorBrush(Color.Parse("#123B2F"));
-                border.BorderBrush = new SolidColorBrush(Color.Parse("#10B981"));
+                border.Background = this.FindResource("SuccessBrush") as IBrush ?? ThemeFallbackColors.SurfaceBrush;
+                border.BorderBrush = this.FindResource("SuccessColor") as IBrush ?? ThemeFallbackColors.BorderBrush;
                 border.BorderThickness = new Thickness(1);
             }
         }

@@ -11,6 +11,12 @@ namespace RowlEngine.Editor.ViewModels.Components
     /// </summary>
     public partial class DialogueComponentViewModel : NodeComponentViewModel
     {
+        // Oyun-içeriği varsayılanları (proje verisine kaydedilir; editör
+        // kromu DEĞİL — lint istisnası bu dosyayla sınırlıdır).
+        internal const string DefaultBoxColor = "#0F0F1A";
+        internal const string DefaultBorderColor = "#00F0FF";
+        internal const string DefaultTextColor = "#F1F5F9";
+        internal const string DefaultSpeakerColor = "#38BDF8";
         public override string DisplayName => "Dialogue";
         public override string Icon => "Diyalog";
         public override string TypeKey => "dialogue";

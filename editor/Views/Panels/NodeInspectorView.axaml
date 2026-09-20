@@ -136,7 +136,7 @@
                         </StackPanel>
                         <TextBlock Text="{Binding InspectorViewModel.SelectedNodeIssues.Count, StringFormat='{}{0} sorun'}"
                                    IsVisible="{Binding InspectorViewModel.SelectedNodeHasErrors}"
-                                   FontSize="10" FontWeight="Bold" Foreground="#EF4444"/>
+                                   FontSize="10" FontWeight="Bold" Foreground="{DynamicResource ErrorColor}"/>
                         <!-- Faz 5 Dilim 5 fix: dönüştürülmüş asset provenance rozeti.
                              Sidecar yoksa HasSelectedAssetProvenance=false → gizli (fail-closed). -->
                         <StackPanel Spacing="4"

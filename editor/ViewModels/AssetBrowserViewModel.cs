@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using RowlEngine.Editor.Services;
 
 namespace RowlEngine.Editor.ViewModels
 {
@@ -44,7 +45,7 @@ namespace RowlEngine.Editor.ViewModels
             if (isDirectory)
             {
                 Icon = "";
-                IconColor = "#FBBF24";
+                IconColor = ThemeFallbackColors.BrushHex("PrimaryText", ThemeFallbackColors.Text);
             }
             else
             {
@@ -52,27 +53,27 @@ namespace RowlEngine.Editor.ViewModels
                 if (Services.MediaFormatCatalog.IsSupportedImageExtension(ext))
                 {
                     Icon = "";
-                    IconColor = "#38BDF8";
+                    IconColor = ThemeFallbackColors.BrushHex("MutedText", ThemeFallbackColors.Muted);
                 }
                 else if (Services.MediaFormatCatalog.IsSupportedAudioExtension(ext))
                 {
                     Icon = "";
-                    IconColor = "#A855F7";
+                    IconColor = ThemeFallbackColors.BrushHex("MutedText", ThemeFallbackColors.Muted);
                 }
                 else if (ext == ".json" || ext == ".txt" || ext == ".lua")
                 {
                     Icon = "";
-                    IconColor = "#F59E0B";
+                    IconColor = ThemeFallbackColors.BrushHex("MutedText", ThemeFallbackColors.Muted);
                 }
                 else if (ext == ".rowlpkg")
                 {
                     Icon = "";
-                    IconColor = "#10B981";
+                    IconColor = ThemeFallbackColors.BrushHex("MutedText", ThemeFallbackColors.Muted);
                 }
                 else
                 {
                     Icon = "";
-                    IconColor = "#94A3B8";
+                    IconColor = ThemeFallbackColors.BrushHex("MutedText", ThemeFallbackColors.Muted);
                 }
             }
         }
@@ -167,22 +168,22 @@ namespace RowlEngine.Editor.ViewModels
             if (Services.MediaFormatCatalog.IsSupportedImageExtension(ext))
             {
                 Icon = "";
-                IconColor = "#38BDF8";
+                IconColor = ThemeFallbackColors.BrushHex("MutedText", ThemeFallbackColors.Muted);
             }
             else if (Services.MediaFormatCatalog.IsSupportedAudioExtension(ext))
             {
                 Icon = "";
-                IconColor = "#A855F7";
+                IconColor = ThemeFallbackColors.BrushHex("MutedText", ThemeFallbackColors.Muted);
             }
             else if (ext == ".json" || ext == ".txt" || ext == ".lua")
             {
                 Icon = "";
-                IconColor = "#F59E0B";
+                IconColor = ThemeFallbackColors.BrushHex("MutedText", ThemeFallbackColors.Muted);
             }
             else
             {
                 Icon = "";
-                IconColor = "#10B981";
+                IconColor = ThemeFallbackColors.BrushHex("MutedText", ThemeFallbackColors.Muted);
             }
         }
 

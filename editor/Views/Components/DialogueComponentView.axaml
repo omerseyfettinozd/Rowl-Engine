@@ -23,7 +23,7 @@
                         <Button Content="Yukarı" Command="{Binding MoveUpCommand}" ToolTip.Tip="Move Up" FontSize="10" Padding="4,2" MinWidth="0" Background="Transparent" Foreground="{DynamicResource MutedText}" BorderThickness="0"/>
                         <Button Content="Aşağı" Command="{Binding MoveDownCommand}" ToolTip.Tip="Move Down" FontSize="10" Padding="4,2" MinWidth="0" Background="Transparent" Foreground="{DynamicResource MutedText}" BorderThickness="0"/>
                         <ToggleButton IsChecked="{Binding IsExpanded}" Content="Ayar" FontSize="10" Padding="4,2" MinWidth="0" Background="Transparent" Foreground="{DynamicResource MutedText}" BorderThickness="0"/>
-                        <Button Content="Sil" FontSize="10" Padding="4,2" MinWidth="0" Background="Transparent" Foreground="#EF4444" BorderThickness="0" ToolTip.Tip="Remove Component" Command="{Binding RemoveSelfCommand}"/>
+                        <Button Content="Sil" FontSize="10" Padding="4,2" MinWidth="0" Background="Transparent" Foreground="{DynamicResource ErrorColor}" BorderThickness="0" ToolTip.Tip="Remove Component" Command="{Binding RemoveSelfCommand}"/>
                     </StackPanel>
                 </Grid>
             </Border>

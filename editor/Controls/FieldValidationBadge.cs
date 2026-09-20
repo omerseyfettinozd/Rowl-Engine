@@ -2,6 +2,7 @@ using System;
 using Avalonia;
 using Avalonia.Controls;
 using RowlEngine.Editor.Services.Inspector;
+using RowlEngine.Editor.Services;
 
 namespace RowlEngine.Editor.Controls
 {
@@ -107,13 +108,14 @@ namespace RowlEngine.Editor.Controls
                 }
             }
             _label.Text = first.IsError ? $"Hata: {first.Message}" : $"Uyarı: {first.Message}";
-            string color = first.IsError ? "#7F1D1D" : "#78350F";
-            string border = first.IsError ? "#EF4444" : "#F59E0B";
-            Background = new Avalonia.Media.SolidColorBrush(
-                Avalonia.Media.Color.Parse(first.IsError ? "#FECACA" : "#FEF3C7"));
-            BorderBrush = new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.Parse(border));
+            bool isError = first.IsError;
+            Background = this.FindResource(isError ? "ErrorBrush" : "WarningBrush") as Avalonia.Media.IBrush
+                ?? ThemeFallbackColors.SurfaceBrush;
+            BorderBrush = this.FindResource(isError ? "ErrorBrush" : "WarningBrush") as Avalonia.Media.IBrush
+                ?? ThemeFallbackColors.BorderBrush;
             BorderThickness = new Thickness(1);
-            _label.Foreground = new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.Parse(color));
+            _label.Foreground = this.FindResource(isError ? "ErrorColor" : "MutedText") as Avalonia.Media.IBrush
+                ?? ThemeFallbackColors.TextBrush;
             ToolTip.SetTip(this, first.Message);
             IsVisible = true;
         }

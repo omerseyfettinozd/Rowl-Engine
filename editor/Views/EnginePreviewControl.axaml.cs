@@ -4,8 +4,10 @@ using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Media;
 using Avalonia.Threading;
 using RowlEngine.Editor.Native;
+using RowlEngine.Editor.Services;
 using RowlEngine.Editor.ViewModels;
 
 namespace RowlEngine.Editor.Views
@@ -92,11 +94,11 @@ namespace RowlEngine.Editor.Views
         {
             if (_engineHost != null && _engineHost.IsPlaying)
             {
-                UpdateStatusBadge("LIVE PLAYMODE", "#16A34A");
+                UpdateStatusBadge("LIVE PLAYMODE", "SuccessBrush");
             }
             else
             {
-                UpdateStatusBadge("FIRST FRAME (PAUSED)", "#64748B");
+                UpdateStatusBadge("FIRST FRAME (PAUSED)", "MutedText");
             }
         }
 
@@ -212,14 +214,14 @@ namespace RowlEngine.Editor.Views
             }
         }
 
-        private void UpdateStatusBadge(string text, string hexColor)
+        private void UpdateStatusBadge(string text, string brushKey)
         {
             Dispatcher.UIThread.Post(() =>
             {
                 var badge = this.FindControl<Border>("StatusBadge");
                 var label = this.FindControl<TextBlock>("StatusText");
                 if (badge != null)
-                    badge.Background = Avalonia.Media.SolidColorBrush.Parse(hexColor);
+                    badge.Background = this.FindResource(brushKey) as IBrush ?? ThemeFallbackColors.SurfaceBrush;
                 if (label != null)
                     label.Text = $"{text}";
             });

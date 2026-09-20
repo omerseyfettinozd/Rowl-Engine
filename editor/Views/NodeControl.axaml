@@ -10,9 +10,9 @@
         <Border Canvas.Left="10" Canvas.Top="0" ZIndex="5" Width="240" Height="5"
                 CornerRadius="11,11,0,0" Background="{Binding ColorTagBrush}" IsVisible="{Binding HasColorTag}"/>
         <!-- Faz 4 Dilim 3 — subgraph sınır rozeti (çift tıkla içeri gir) -->
-        <Border Canvas.Left="10" Canvas.Top="-20" ZIndex="6" Background="#7C3AED" CornerRadius="4" Padding="6,2"
+        <Border Canvas.Left="10" Canvas.Top="-20" ZIndex="6" Background="{DynamicResource AccentButtonBg}" CornerRadius="4" Padding="6,2"
                 IsVisible="{Binding IsSubgraphBoundary}" ToolTip.Tip="Subgraph sınırı — içeri girmek için çift tıklayın">
-            <TextBlock Text="{Binding SubgraphBadge}" FontSize="9" Foreground="White" FontWeight="Bold"/>
+            <TextBlock Text="{Binding SubgraphBadge}" FontSize="9" Foreground="{DynamicResource PrimaryText}" FontWeight="Bold"/>
         </Border>
         <!-- Main Card Body -->
         <Border Canvas.Left="10" Canvas.Top="0" Width="240" Height="{Binding NodeCardHeight}"
@@ -23,8 +23,8 @@
                 <Border Grid.Row="0" Background="{DynamicResource NodeHeaderBg}" CornerRadius="11,11,0,0" Padding="12,0">
                     <DockPanel VerticalAlignment="Center">
                         <Border DockPanel.Dock="Left" Width="8" Height="8" CornerRadius="4" Background="{DynamicResource AccentColor}" Margin="0,0,8,0" VerticalAlignment="Center"/>
-                        <Border IsVisible="{Binding IsStartNode}" Background="#10B981" CornerRadius="3" Padding="4,1" Margin="0,0,6,0" VerticalAlignment="Center" DockPanel.Dock="Right">
-                            <TextBlock Text="START" FontSize="9" Foreground="White" FontWeight="Black"/>
+                        <Border IsVisible="{Binding IsStartNode}" Background="{DynamicResource SuccessBrush}" CornerRadius="3" Padding="4,1" Margin="0,0,6,0" VerticalAlignment="Center" DockPanel.Dock="Right">
+                            <TextBlock Text="START" FontSize="9" Foreground="{DynamicResource PrimaryText}" FontWeight="Black"/>
                         </Border>
                         <TextBlock Text="{Binding Id, StringFormat='#{0}'}" Foreground="{DynamicResource MutedText}" FontSize="11" HorizontalAlignment="Right" VerticalAlignment="Center" DockPanel.Dock="Right" Margin="0,0,6,0"/>
                         <TextBlock Text="{Binding Title}" FontWeight="Bold" Foreground="{DynamicResource PrimaryText}" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
@@ -36,13 +36,13 @@
                     <StackPanel Spacing="6">
                         <StackPanel Orientation="Horizontal" Spacing="6">
                             <Border Background="{DynamicResource AccentButtonBg}" CornerRadius="3" Padding="4,1">
-                                <TextBlock Text="{Binding Speaker}" FontSize="10" Foreground="White" FontWeight="Bold"/>
+                                <TextBlock Text="{Binding Speaker}" FontSize="10" Foreground="{DynamicResource AccentButtonFg}" FontWeight="Bold"/>
                             </Border>
-                            <Border Background="#243D35" IsVisible="{Binding HasDialogueBox}" CornerRadius="3" Padding="4,1">
-                                <TextBlock Text="DİYALOG" FontSize="8" Foreground="#A7E3BE" FontWeight="Bold"/>
+                            <Border Background="{DynamicResource SuccessBrush}" IsVisible="{Binding HasDialogueBox}" CornerRadius="3" Padding="4,1">
+                                <TextBlock Text="DİYALOG" FontSize="8" Foreground="{DynamicResource SuccessColor}" FontWeight="Bold"/>
                             </Border>
-                            <Border Background="#26394A" IsVisible="{Binding HasChoices}" CornerRadius="3" Padding="4,1">
-                                <TextBlock Text="SEÇİM" FontSize="8" Foreground="#B7DCF5" FontWeight="Bold"/>
+                            <Border Background="{DynamicResource AccentButtonBg}" IsVisible="{Binding HasChoices}" CornerRadius="3" Padding="4,1">
+                                <TextBlock Text="SEÇİM" FontSize="8" Foreground="{DynamicResource Accent}" FontWeight="Bold"/>
                             </Border>
                             <TextBlock Text="{Binding BackgroundTexture}" FontSize="10" Foreground="{DynamicResource MutedText}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                         </StackPanel>
@@ -55,12 +55,12 @@
 
         <!-- Left Input Handle (Green Pin Centered Exactly at X=0, Y=60) -->
         <Border Name="InputPinHandle" Canvas.Left="-5" Canvas.Top="45" Width="30" Height="30" Background="Transparent" Cursor="Hand" ToolTip.Tip="Flow Input Pin (Left Click: Drag Cable / Right Click: Disconnect)">
-            <Ellipse Width="16" Height="16" Fill="#10B981" Stroke="#FFFFFF" StrokeThickness="2" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            <Ellipse Width="16" Height="16" Fill="{DynamicResource SuccessBrush}" Stroke="{DynamicResource PrimaryText}" StrokeThickness="2" HorizontalAlignment="Center" VerticalAlignment="Center"/>
         </Border>
 
         <!-- Default output remains for linear nodes. Choice nodes get one pin per option. -->
         <Border Name="OutputPinHandle" IsVisible="{Binding !HasChoices}" Canvas.Left="250" Canvas.Top="45" Width="30" Height="30" Background="Transparent" Cursor="Hand" ToolTip.Tip="Flow Output Pin">
-            <Ellipse Width="16" Height="16" Fill="#10B981" Stroke="#FFFFFF" StrokeThickness="2" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            <Ellipse Width="16" Height="16" Fill="{DynamicResource SuccessBrush}" Stroke="{DynamicResource PrimaryText}" StrokeThickness="2" HorizontalAlignment="Center" VerticalAlignment="Center"/>
         </Border>
 
         <ItemsControl ItemsSource="{Binding ChoiceOptions}" Canvas.Left="245" Canvas.Top="45" ClipToBounds="False">
@@ -72,7 +72,7 @@
                     <Border Tag="{Binding OptionId}" Width="90" Height="30" Background="Transparent" Cursor="Hand" ToolTip.Tip="Choice output — drag to its target node">
                         <Grid ColumnDefinitions="*,24">
                             <TextBlock Text="{Binding Text}" FontSize="9" Foreground="{DynamicResource MutedText}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,4,0"/>
-                            <Ellipse Grid.Column="1" Width="16" Height="16" Fill="#38BDF8" Stroke="#FFFFFF" StrokeThickness="2" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                            <Ellipse Grid.Column="1" Width="16" Height="16" Fill="{DynamicResource Accent}" Stroke="{DynamicResource PrimaryText}" StrokeThickness="2" VerticalAlignment="Center" HorizontalAlignment="Center"/>
                         </Grid>
                     </Border>
                 </DataTemplate>

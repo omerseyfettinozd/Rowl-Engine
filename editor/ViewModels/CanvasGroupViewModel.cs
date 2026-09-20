@@ -30,8 +30,12 @@ namespace RowlEngine.Editor.ViewModels
         [ObservableProperty]
         private string _title = string.Empty;
 
+        // Grup rengi oyun-içeriğidir (proje verisine kaydedilir, kullanıcı
+        // değiştirebilir); editör kromu DEĞİL — lint istisnası bu dosyayla sınırlıdır.
+        internal const string DefaultColor = "#3B82F6";
+
         [ObservableProperty]
-        private string _color = "#3B82F6";
+        private string _color = DefaultColor;
 
         [ObservableProperty]
         private double _x;
@@ -58,7 +62,7 @@ namespace RowlEngine.Editor.ViewModels
         {
             GroupId = id;
             Title = title;
-            Color = string.IsNullOrEmpty(color) ? "#3B82F6" : color;
+            Color = string.IsNullOrEmpty(color) ? DefaultColor : color;
             X = x;
             Y = y;
             Width = Math.Max(MinWidth, width);

@@ -68,7 +68,7 @@
                                                     <MenuItem Header="İsim Değiştir" Command="{Binding RenameCommand}"/>
                                                     <MenuItem Header="Kapak Değiştir" Command="{Binding SetCoverCommand}"/>
                                                     <Separator/>
-                                                    <MenuItem Header="Sil" Command="{Binding DeleteCommand}" Foreground="#DC2626"/>
+                                                    <MenuItem Header="Sil" Command="{Binding DeleteCommand}" Foreground="{DynamicResource ErrorColor}"/>
                                                 </MenuFlyout>
                                             </Button.Flyout>
                                         </Button>

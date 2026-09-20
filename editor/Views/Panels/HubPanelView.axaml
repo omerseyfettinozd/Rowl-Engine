@@ -42,30 +42,30 @@
                     <ItemsControl.ItemTemplate>
                         <DataTemplate x:DataType="vm:ProjectCardViewModel">
                             <!-- Minecraft şerit: sol kapak kare, orta bilgi, sağ Aç + menü -->
-                            <Border Height="84" CornerRadius="6" Background="#2E2E2E" BorderBrush="#555555" BorderThickness="1" BoxShadow="0 2 0 0 #1A1A1A" ClipToBounds="True">
-                                <Grid ColumnDefinitions="84,*,Auto" Background="#3A3A3A">
+                            <Border Height="84" CornerRadius="6" Background="{DynamicResource PanelBackground}" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1" BoxShadow="0 2 0 0 #1A1A1A" ClipToBounds="True">
+                                <Grid ColumnDefinitions="84,*,Auto" Background="{DynamicResource SurfaceBackground}">
                                     <!-- Sol kapak -->
-                                    <Border Grid.Column="0" Background="#1E1E1E" ClipToBounds="True" BorderBrush="#555555" BorderThickness="0,0,1,0">
+                                    <Border Grid.Column="0" Background="{DynamicResource InputBackground}" ClipToBounds="True" BorderBrush="{DynamicResource BorderColor}" BorderThickness="0,0,1,0">
                                         <Panel>
                                             <Image IsVisible="{Binding IsCoverLoaded}" Source="{Binding CoverBitmap}" Stretch="UniformToFill" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
-                                            <Panel IsVisible="{Binding !IsCoverLoaded}" Background="#2B2B2B">
-                                                <Border Width="28" Height="28" CornerRadius="4" Background="#3A3A3A" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                                    <TextBlock Text="▣" Foreground="#7A7A7A" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="14"/>
+                                            <Panel IsVisible="{Binding !IsCoverLoaded}" Background="{DynamicResource PanelBackground}">
+                                                <Border Width="28" Height="28" CornerRadius="4" Background="{DynamicResource SurfaceBackground}" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                    <TextBlock Text="▣" Foreground="{DynamicResource MutedText}" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="14"/>
                                                 </Border>
                                             </Panel>
                                         </Panel>
                                     </Border>
                                     <!-- Orta bilgi -->
                                     <StackPanel Grid.Column="1" Margin="10,8" Spacing="2" VerticalAlignment="Center">
-                                        <TextBlock Text="{Binding Name}" FontWeight="Bold" FontSize="13" Foreground="White" TextTrimming="CharacterEllipsis"/>
-                                        <TextBlock Text="{Binding Path}" FontSize="10" Foreground="#A0A0A0" TextTrimming="CharacterEllipsis"/>
-                                        <TextBlock Text="{Binding LastOpenedText}" FontSize="10" Foreground="#7A7A7A"/>
+                                        <TextBlock Text="{Binding Name}" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource PrimaryText}" TextTrimming="CharacterEllipsis"/>
+                                        <TextBlock Text="{Binding Path}" FontSize="10" Foreground="{DynamicResource SecondaryText}" TextTrimming="CharacterEllipsis"/>
+                                        <TextBlock Text="{Binding LastOpenedText}" FontSize="10" Foreground="{DynamicResource MutedText}"/>
                                     </StackPanel>
                                     <!-- Sağ aksiyonlar -->
                                     <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="0,0,10,0">
-                                        <Button Content="Aç" Command="{Binding OpenCommand}" Background="#5AA535" Foreground="White" CornerRadius="4" Padding="18,8" FontSize="12" FontWeight="Bold" BorderBrush="#3A6E24" BorderThickness="1"/>
-                                        <Button Content="Diğer" Background="#555555" Foreground="White" FontSize="14" Padding="8,6" CornerRadius="4" BorderBrush="#3A3A3A" BorderThickness="1" MinWidth="36">
-                                            <Button.Flyout><MenuFlyout><MenuItem Header="İsim Değiştir" Command="{Binding RenameCommand}"/><MenuItem Header="Kapak Değiştir" Command="{Binding SetCoverCommand}"/><Separator/><MenuItem Header="Sil" Command="{Binding DeleteCommand}" Foreground="#DC2626"/></MenuFlyout></Button.Flyout>
+                                        <Button Content="Aç" Command="{Binding OpenCommand}" Background="{DynamicResource SuccessBrush}" Foreground="{DynamicResource PrimaryText}" CornerRadius="4" Padding="18,8" FontSize="12" FontWeight="Bold" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1"/>
+                                        <Button Content="Diğer" Background="{DynamicResource ToolbarButtonBg}" Foreground="{DynamicResource PrimaryText}" FontSize="14" Padding="8,6" CornerRadius="4" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1" MinWidth="36">
+                                            <Button.Flyout><MenuFlyout><MenuItem Header="İsim Değiştir" Command="{Binding RenameCommand}"/><MenuItem Header="Kapak Değiştir" Command="{Binding SetCoverCommand}"/><Separator/><MenuItem Header="Sil" Command="{Binding DeleteCommand}" Foreground="{DynamicResource ErrorColor}"/></MenuFlyout></Button.Flyout>
                                         </Button>
                                     </StackPanel>
                                 </Grid>

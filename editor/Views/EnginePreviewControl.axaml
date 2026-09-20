@@ -9,11 +9,11 @@
              x:DataType="vm:MainWindowViewModel"
              PointerPressed="OnPreviewPointerPressed">
 
-    <Border Background="#0B0F19" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+    <Border Background="{DynamicResource AppBackground}" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
         <Grid>
             <!-- 16:9 Aspect Guardian Letterbox Container (Exact 1:1 match with LivePreviewControl) -->
             <Viewbox Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="12">
-                <Border Width="1920" Height="1080" Background="#121624" CornerRadius="8" ClipToBounds="True" BoxShadow="0 10 30 0 #000000">
+                <Border Width="1920" Height="1080" Background="{DynamicResource PanelBackground}" CornerRadius="8" ClipToBounds="True" BoxShadow="0 10 30 0 #000000">
                     <Grid>
                         <!-- Offscreen Render Target Image (1920x1080 exact 1:1) -->
                         <Image x:Name="EnginePreviewImage"

@@ -9,6 +9,7 @@ using System.Reflection;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
+using RowlEngine.Editor.Services;
 using RowlEngine.Editor.ViewModels.Components;
 
 namespace RowlEngine.Editor.ViewModels
@@ -46,7 +47,7 @@ namespace RowlEngine.Editor.ViewModels
         private string _chapterId = string.Empty;
 
         [ObservableProperty]
-        private string _borderColor = "#2A2A3D";
+        private string _borderColor = ThemeFallbackColors.BrushHex("BorderColor", ThemeFallbackColors.Border);
 
         partial void OnIsStartNodeChanged(bool value) => RefreshBorderColor();
 
@@ -58,9 +59,16 @@ namespace RowlEngine.Editor.ViewModels
         {
             // Temporary search-jump highlight wins so the focused card is
             // unmistakable; selection stays second, start badge last.
-            BorderColor = IsSearchHighlighted ? "#FACC15"
-                : IsSelected ? "#F09A78"
-                : IsStartNode ? "#10B981" : "#2A2A3D";
+            // Kart kenarlığı durum renkleri: arama-vurgusu (dikkat) > seçim
+            // (kemik) > başlangıç (başarı) > varsayılan (sınır). Tema
+            // değişimini takip eder (runtime token okuma).
+            BorderColor = IsSearchHighlighted
+                ? ThemeFallbackColors.BrushHex("WarningBrush", ThemeFallbackColors.Warning)
+                : IsSelected
+                    ? ThemeFallbackColors.BrushHex("PrimaryText", ThemeFallbackColors.Text)
+                    : IsStartNode
+                        ? ThemeFallbackColors.BrushHex("SuccessBrush", ThemeFallbackColors.Success)
+                        : ThemeFallbackColors.BrushHex("BorderColor", ThemeFallbackColors.Border);
         }
 
         // ── Faz 4 Dilim 2 — color tags & search visuals ──
@@ -763,13 +771,13 @@ namespace RowlEngine.Editor.ViewModels
 
         public string TextColor
         {
-            get => PrimaryDialogueComponent?.TextColor ?? "#F1F5F9";
+            get => PrimaryDialogueComponent?.TextColor ?? DialogueComponentViewModel.DefaultTextColor;
             set { var d = PrimaryDialogueComponent; if (d != null) d.TextColor = value; }
         }
 
         public string SpeakerColor
         {
-            get => PrimaryDialogueComponent?.SpeakerColor ?? "#38BDF8";
+            get => PrimaryDialogueComponent?.SpeakerColor ?? DialogueComponentViewModel.DefaultSpeakerColor;
             set { var d = PrimaryDialogueComponent; if (d != null) d.SpeakerColor = value; }
         }
 
@@ -781,13 +789,13 @@ namespace RowlEngine.Editor.ViewModels
 
         public string BoxColor
         {
-            get => PrimaryDialogueComponent?.BoxColor ?? "#0F0F1A";
+            get => PrimaryDialogueComponent?.BoxColor ?? DialogueComponentViewModel.DefaultBoxColor;
             set { var d = PrimaryDialogueComponent; if (d != null) d.BoxColor = value; }
         }
 
         public string BorderColorHex
         {
-            get => PrimaryDialogueComponent?.BorderColor ?? "#00F0FF";
+            get => PrimaryDialogueComponent?.BorderColor ?? DialogueComponentViewModel.DefaultBorderColor;
             set { var d = PrimaryDialogueComponent; if (d != null) d.BorderColor = value; }
         }
 

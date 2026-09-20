@@ -2,6 +2,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
+using RowlEngine.Editor.Services;
 
 namespace RowlEngine.Editor.ViewModels
 {
@@ -25,7 +26,8 @@ namespace RowlEngine.Editor.ViewModels
         private bool _isVisible = false;
 
         [ObservableProperty]
-        private string _toastBackground = "#22C55E";
+        private string _toastBackground =
+            ThemeFallbackColors.BrushHex("SuccessBrush", ThemeFallbackColors.Success);
 
         [ObservableProperty]
         private string _toastIcon = "";
@@ -41,11 +43,11 @@ namespace RowlEngine.Editor.ViewModels
             Message = message;
             (ToastIcon, ToastBackground) = type switch
             {
-                ToastType.Success => ("", "#16A34A"),
-                ToastType.Warning => ("", "#D97706"),
-                ToastType.Error   => ("", "#DC2626"),
-                ToastType.Info    => ("", "#2563EB"),
-                _                 => ("", "#16A34A")
+                ToastType.Success => ("", ThemeFallbackColors.BrushHex("SuccessBrush", ThemeFallbackColors.Success)),
+                ToastType.Warning => ("", ThemeFallbackColors.BrushHex("WarningBrush", ThemeFallbackColors.Warning)),
+                ToastType.Error   => ("", ThemeFallbackColors.BrushHex("ErrorBrush", ThemeFallbackColors.Error)),
+                ToastType.Info    => ("", ThemeFallbackColors.BrushHex("InfoBrush", ThemeFallbackColors.Info)),
+                _                 => ("", ThemeFallbackColors.BrushHex("SuccessBrush", ThemeFallbackColors.Success))
             };
             IsVisible = true;
 

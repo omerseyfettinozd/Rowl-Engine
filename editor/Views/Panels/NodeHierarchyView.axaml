@@ -25,7 +25,7 @@
                                 Command="{Binding HierarchyViewModel.ToggleCreateObjectMenuCommand}"
                                 IsEnabled="{Binding HierarchyViewModel.HasCurrentNode}"
                                 Background="{DynamicResource AccentButtonBg}"
-                                Foreground="White"
+                                Foreground="{DynamicResource AccentButtonFg}"
                                 FontWeight="SemiBold"
                                 FontSize="11"
                                 Padding="8,3"
@@ -162,7 +162,7 @@
                             HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
                             Padding="6,4" FontSize="11" Margin="3,0,0,0"
                             Background="{DynamicResource DangerButtonBg}"
-                            Foreground="White" CornerRadius="4"/>
+                            Foreground="{DynamicResource AccentButtonFg}" CornerRadius="4"/>
                 </Grid>
             </Border>
         </Grid>

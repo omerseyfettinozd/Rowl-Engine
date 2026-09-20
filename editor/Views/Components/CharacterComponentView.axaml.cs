@@ -44,14 +44,14 @@ namespace RowlEngine.Editor.Views.Components
 
             if (isOver && IsValidImageDrop(e.DataTransfer))
             {
-                dropBorder.BorderBrush = Brush.Parse("#00F0FF");
+                dropBorder.BorderBrush = this.FindResource("Accent") as IBrush ?? ThemeFallbackColors.TextBrush;
                 dropBorder.BorderThickness = new Thickness(2);
                 e.DragEffects = DragDropEffects.Copy;
                 e.Handled = true;
             }
             else
             {
-                dropBorder.BorderBrush = this.FindResource("BorderColor") as IBrush ?? Brush.Parse("#334155");
+                dropBorder.BorderBrush = this.FindResource("BorderColor") as IBrush ?? ThemeFallbackColors.BorderBrush;
                 dropBorder.BorderThickness = new Thickness(1.5);
                 if (!isOver)
                 {

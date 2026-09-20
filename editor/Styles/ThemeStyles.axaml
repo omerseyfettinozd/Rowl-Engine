@@ -8,11 +8,11 @@
          ═══════════════════════════════════════════════════════════════════════ -->
 
     <!-- ── Arka Plan Katmanları ─────────────────────────────────────────── -->
-    <Color x:Key="AppBackgroundColor">#161218</Color>
-    <Color x:Key="SurfaceBackgroundColor">#211A22</Color>
-    <Color x:Key="PanelBackgroundColor">#1B1620</Color>
-    <Color x:Key="InputBackgroundColor">#120E15</Color>
-    <Color x:Key="CanvasBackgroundColor">#100D14</Color>
+    <Color x:Key="AppBackgroundColor">#0A0A0B</Color>
+    <Color x:Key="SurfaceBackgroundColor">#131315</Color>
+    <Color x:Key="PanelBackgroundColor">#17171A</Color>
+    <Color x:Key="InputBackgroundColor">#0E0E10</Color>
+    <Color x:Key="CanvasBackgroundColor">#000000</Color>
 
     <SolidColorBrush x:Key="AppBackground" Color="{DynamicResource AppBackgroundColor}"/>
     <SolidColorBrush x:Key="SurfaceBackground" Color="{DynamicResource SurfaceBackgroundColor}"/>
@@ -21,16 +21,16 @@
     <SolidColorBrush x:Key="CanvasBackground" Color="{DynamicResource CanvasBackgroundColor}"/>
 
     <!-- ── Kenarlıklar ─────────────────────────────────────────────────── -->
-    <Color x:Key="BorderColorValue">#3A2E3F</Color>
-    <Color x:Key="BorderSubtleColorValue">#514052</Color>
+    <Color x:Key="BorderColorValue">#26262B</Color>
+    <Color x:Key="BorderSubtleColorValue">#34343B</Color>
     <SolidColorBrush x:Key="BorderColor" Color="{DynamicResource BorderColorValue}"/>
     <SolidColorBrush x:Key="BorderSubtle" Color="{DynamicResource BorderSubtleColorValue}"/>
 
     <!-- ── Metin Renkleri ──────────────────────────────────────────────── -->
-    <Color x:Key="PrimaryTextColor">#FFF6EF</Color>
-    <Color x:Key="SecondaryTextColor">#E3D6DA</Color>
-    <Color x:Key="MutedTextColor">#B8A8B1</Color>
-    <Color x:Key="DimTextColor">#847681</Color>
+    <Color x:Key="PrimaryTextColor">#F2EFE6</Color>
+    <Color x:Key="SecondaryTextColor">#D8D4CC</Color>
+    <Color x:Key="MutedTextColor">#A8A49C</Color>
+    <Color x:Key="DimTextColor">#6E6C66</Color>
 
     <SolidColorBrush x:Key="PrimaryText" Color="{DynamicResource PrimaryTextColor}"/>
     <SolidColorBrush x:Key="SecondaryText" Color="{DynamicResource SecondaryTextColor}"/>
@@ -38,10 +38,10 @@
     <SolidColorBrush x:Key="DimText" Color="{DynamicResource DimTextColor}"/>
 
     <!-- ── Vurgu (Accent) Renkleri ─────────────────────────────────────── -->
-    <Color x:Key="AccentColor">#F09A78</Color>
-    <Color x:Key="AccentHoverColor">#FFC0A1</Color>
-    <Color x:Key="AccentButtonBgColor">#B95C49</Color>
-    <Color x:Key="AccentButtonHoverColor">#D8755C</Color>
+    <Color x:Key="AccentColor">#F2EFE6</Color>
+    <Color x:Key="AccentHoverColor">#FFFFFF</Color>
+    <Color x:Key="AccentButtonBgColor">#2A2A2E</Color>
+    <Color x:Key="AccentButtonHoverColor">#3A3A40</Color>
 
     <SolidColorBrush x:Key="Accent" Color="{DynamicResource AccentColor}"/>
     <SolidColorBrush x:Key="AccentHover" Color="{DynamicResource AccentHoverColor}"/>
@@ -60,25 +60,25 @@
     <SolidColorBrush x:Key="InfoBrush" Color="{DynamicResource InfoColor}"/>
 
     <!-- ── Buton Renkleri ──────────────────────────────────────────────── -->
-    <Color x:Key="ToolbarButtonBgColor">#302634</Color>
-    <Color x:Key="ToolbarButtonHoverColor">#47364A</Color>
-    <Color x:Key="DangerButtonBgColor">#A94B52</Color>
-    <Color x:Key="PlayButtonGreenColor">#5E8D61</Color>
-    <Color x:Key="PlayButtonRedColor">#A94B52</Color>
+    <Color x:Key="ToolbarButtonBgColor">#222226</Color>
+    <Color x:Key="ToolbarButtonHoverColor">#333338</Color>
+    <Color x:Key="DangerButtonBgColor">#6E3235</Color>
+    <Color x:Key="PlayButtonGreenColor">#4A5D4C</Color>
+    <Color x:Key="PlayButtonRedColor">#6E3235</Color>
 
     <SolidColorBrush x:Key="ToolbarButtonBg" Color="{DynamicResource ToolbarButtonBgColor}"/>
     <SolidColorBrush x:Key="ToolbarButtonHover" Color="{DynamicResource ToolbarButtonHoverColor}"/>
     <SolidColorBrush x:Key="DangerButtonBg" Color="{DynamicResource DangerButtonBgColor}"/>
 
     <!-- ── Status Bar ──────────────────────────────────────────────────── -->
-    <Color x:Key="StatusBarBgColor">#141016</Color>
+    <Color x:Key="StatusBarBgColor">#0A0A0B</Color>
     <SolidColorBrush x:Key="StatusBarBg" Color="{DynamicResource StatusBarBgColor}"/>
 
     <!-- ── Node Graph ──────────────────────────────────────────────────── -->
-    <Color x:Key="NodeCardBgColor">#241C28</Color>
-    <Color x:Key="NodeHeaderBgColor">#302536</Color>
-    <Color x:Key="WireColor">#9CCB82</Color>
-    <Color x:Key="WireDragColor">#F09A78</Color>
+    <Color x:Key="NodeCardBgColor">#17171A</Color>
+    <Color x:Key="NodeHeaderBgColor">#222226</Color>
+    <Color x:Key="WireColor">#8E8E96</Color>
+    <Color x:Key="WireDragColor">#F2EFE6</Color>
 
     <SolidColorBrush x:Key="NodeCardBg" Color="{DynamicResource NodeCardBgColor}"/>
     <SolidColorBrush x:Key="NodeHeaderBg" Color="{DynamicResource NodeHeaderBgColor}"/>

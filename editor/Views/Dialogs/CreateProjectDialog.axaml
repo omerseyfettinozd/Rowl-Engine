@@ -36,7 +36,7 @@
         <!-- Actions -->
         <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10" Margin="0,16,0,0">
             <Button Name="CancelButton" Content="İptal" Background="Transparent" Foreground="{DynamicResource MutedText}" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1" CornerRadius="6" Padding="16,8"/>
-            <Button Name="CreateButton" Content="Oluştur" Background="{DynamicResource AccentButtonBg}" Foreground="White" FontWeight="Bold" CornerRadius="6" Padding="20,8"/>
+            <Button Name="CreateButton" Content="Oluştur" Background="{DynamicResource AccentButtonBg}" Foreground="{DynamicResource AccentButtonFg}" FontWeight="Bold" CornerRadius="6" Padding="20,8"/>
         </StackPanel>
     </Grid>
 </Window>

@@ -24,7 +24,7 @@
                         <Button Content="Import"
                                 ToolTip.Tip="Import a file into the project Assets folder"
                                 Command="{Binding ImportAssetCommand}"
-                                Background="{DynamicResource AccentButtonBg}" Foreground="White"
+                                Background="{DynamicResource AccentButtonBg}" Foreground="{DynamicResource AccentButtonFg}"
                                 CornerRadius="4" Padding="6,3" FontSize="10"/>
                         <Button Content="Yenile"
                                 ToolTip.Tip="Refresh the asset list"
@@ -88,9 +88,9 @@
 
                             <!-- MS-5: kayıp dosya rozeti (diskten silinen varlık) -->
                             <Border IsVisible="{Binding IsMissing}"
-                                    Background="#7F3030" CornerRadius="3" Padding="4,1"
+                                    Background="{DynamicResource DangerButtonBg}" CornerRadius="3" Padding="4,1"
                                     VerticalAlignment="Center">
-                                <TextBlock Text="KAYIP" FontSize="9" Foreground="#FCA5A5" FontWeight="Bold"/>
+                                <TextBlock Text="KAYIP" FontSize="9" Foreground="{DynamicResource ErrorColor}" FontWeight="Bold"/>
                             </Border>
 
                             <TextBox Text="{Binding EditingName, Mode=TwoWay}" 

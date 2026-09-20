@@ -19,13 +19,13 @@ internal static class EditorNotificationTests
         var warning = notifService.ShowWarning("Disk slot nearly full");
         var error = notifService.ShowError("Compilation failed");
 
-        if (info.Type != NotificationType.Info || info.IconSymbol != "" || info.AccentColor != "#3B82F6")
+        if (info.Type != NotificationType.Info || info.IconSymbol != "" || info.AccentColor != "#9C7FD1")
             throw new Exception("NotificationType.Info properties mismatch");
-        if (success.Type != NotificationType.Success || success.IconSymbol != "" || success.AccentColor != "#10B981")
+        if (success.Type != NotificationType.Success || success.IconSymbol != "" || success.AccentColor != "#7DA56D")
             throw new Exception("NotificationType.Success properties mismatch");
-        if (warning.Type != NotificationType.Warning || warning.IconSymbol != "" || warning.AccentColor != "#F59E0B")
+        if (warning.Type != NotificationType.Warning || warning.IconSymbol != "" || warning.AccentColor != "#DCA85A")
             throw new Exception("NotificationType.Warning properties mismatch");
-        if (error.Type != NotificationType.Error || error.IconSymbol != "" || error.AccentColor != "#EF4444")
+        if (error.Type != NotificationType.Error || error.IconSymbol != "" || error.AccentColor != "#D96868")
             throw new Exception("NotificationType.Error properties mismatch");
 
         // Step 21.2: Queue capping

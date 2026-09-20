@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Media;
+using RowlEngine.Editor.Services;
 
 namespace RowlEngine.Editor.Views.Dialogs
 {
@@ -26,7 +27,7 @@ namespace RowlEngine.Editor.Views.Dialogs
                 yesBtn.Content = confirmText;
                 if (isDestructive)
                 {
-                    yesBtn.Background = new SolidColorBrush(Color.Parse("#DC2626"));
+                    yesBtn.Background = this.FindResource("DangerButtonBg") as IBrush ?? ThemeFallbackColors.SurfaceBrush;
                 }
                 yesBtn.Click += (_, _) => Close(true);
             }

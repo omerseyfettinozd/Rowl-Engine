@@ -93,8 +93,8 @@
                                     ToolTip.Tip="{Binding BuildButtonTooltip}" 
                                     Command="{Binding BuildGameCommand}" 
                                     IsEnabled="{Binding !IsBuilding}"
-                                    Background="{DynamicResource AccentButtonBg}" 
-                                    Foreground="White" CornerRadius="6" Padding="12,5" 
+                                    Background="{DynamicResource AccentButtonBg}"
+                                    Foreground="{DynamicResource AccentButtonFg}" CornerRadius="6" Padding="12,5"
                                     FontWeight="Bold" FontSize="11"/>
                             <Button Content="İptal" IsVisible="{Binding IsBuilding}" Command="{Binding CancelBuildCommand}"
                                     ToolTip.Tip="Build işlemini iptal et" Padding="8,5" FontSize="11"/>
@@ -104,8 +104,8 @@
                             <!-- Play -->
                             <Button Content="{Binding PlayButtonText}" 
                                     Command="{Binding TogglePlayStandaloneCommand}" 
-                                    Background="{Binding PlayButtonColor}" 
-                                    Foreground="White" FontWeight="Bold" 
+                                    Background="{Binding PlayButtonColor}"
+                                    Foreground="{DynamicResource AccentButtonFg}" FontWeight="Bold"
                                     CornerRadius="6" Padding="12,5" FontSize="11"/>
 
                             <!-- Player (Faz 2 standalone player shell) -->
@@ -169,18 +169,18 @@
                             <Button Content="+ Node" 
                                     ToolTip.Tip="Yeni Node Ekle (Ctrl+N)"
                                     Command="{Binding AddNodeCommand}" 
-                                    Background="{DynamicResource InfoBrush}" 
-                                    Foreground="White" CornerRadius="6" Padding="10,5" FontSize="11"/>
+                                    Background="{DynamicResource InfoBrush}"
+                                    Foreground="{DynamicResource AccentButtonFg}" CornerRadius="6" Padding="10,5" FontSize="11"/>
                             <Button Content="Ayır"
                                     ToolTip.Tip="Seçili Node Bağlantılarını Kes"
                                     Command="{Binding DisconnectSelectedNodeCablesCommand}" 
-                                    Background="{DynamicResource WarningBrush}" 
-                                    Foreground="White" CornerRadius="6" Padding="10,5" FontSize="11"/>
+                                    Background="{DynamicResource WarningBrush}"
+                                    Foreground="{DynamicResource AccentButtonFg}" CornerRadius="6" Padding="10,5" FontSize="11"/>
                             <Button Content="Sil"
                                     ToolTip.Tip="Seçili Node'u Sil (Delete)"
                                     Command="{Binding DeleteSelectedNodeCommand}" 
-                                    Background="{DynamicResource DangerButtonBg}" 
-                                    Foreground="White" CornerRadius="6" Padding="10,5" FontSize="11"/>
+                                    Background="{DynamicResource DangerButtonBg}"
+                                    Foreground="{DynamicResource AccentButtonFg}" CornerRadius="6" Padding="10,5" FontSize="11"/>
                         </StackPanel>
                     </DockPanel>
                 </Border>
@@ -313,7 +313,7 @@
                                                 <TextBlock Text="{Binding NodeTitle}" FontWeight="Bold" Foreground="{DynamicResource PrimaryText}" FontSize="12"/>
                                                 <TextBlock Text="{Binding NodeId, StringFormat='#{0}'}" Foreground="{DynamicResource MutedText}" FontSize="11" VerticalAlignment="Center"/>
                                                 <Border Background="{DynamicResource AccentButtonBg}" CornerRadius="3" Padding="5,1" VerticalAlignment="Center">
-                                                    <TextBlock Text="{Binding FieldLabel}" FontSize="9" Foreground="White" FontWeight="Bold"/>
+                                                    <TextBlock Text="{Binding FieldLabel}" FontSize="9" Foreground="{DynamicResource AccentButtonFg}" FontWeight="Bold"/>
                                                 </Border>
                                             </StackPanel>
                                             <TextBlock Text="{Binding Snippet}" FontSize="11" Foreground="{DynamicResource SecondaryText}" TextWrapping="Wrap" MaxLines="2"/>
@@ -402,8 +402,8 @@
                     BoxShadow="0 4 16 0 #80000000">
                 <StackPanel Orientation="Horizontal" Spacing="10">
                     <TextBlock Text="{Binding Toast.ToastIcon}" FontSize="18" VerticalAlignment="Center"/>
-                    <TextBlock Text="{Binding Toast.Message}" 
-                               Foreground="White" FontSize="13" FontWeight="SemiBold"
+                    <TextBlock Text="{Binding Toast.Message}"
+                               Foreground="{DynamicResource PrimaryText}" FontSize="13" FontWeight="SemiBold"
                                VerticalAlignment="Center" TextWrapping="Wrap"/>
                 </StackPanel>
             </Border>

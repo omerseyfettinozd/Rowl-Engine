@@ -16,13 +16,13 @@ internal static class EditorComponentHierarchyTests
         if (node.Components.Count < 4)
             throw new Exception("Expected at least 4 default components");
         node.IsStartNode = true;
-        if (node.BorderColor != "#10B981")
+        if (node.BorderColor != "#7DA56D")
             throw new Exception("Start node visual state was not applied");
         node.IsSelected = true;
-        if (node.BorderColor != "#F09A78")
+        if (node.BorderColor != "#F2EFE6")
             throw new Exception("Selected node visual state did not take priority");
         node.IsSelected = false;
-        if (node.BorderColor != "#10B981" || !node.ComponentSummary.EndsWith("BİLEŞEN"))
+        if (node.BorderColor != "#7DA56D" || !node.ComponentSummary.EndsWith("BİLEŞEN"))
             throw new Exception("Node card visual summary state is inconsistent");
 
         var dialogue = node.GetComponent<DialogueComponentViewModel>();

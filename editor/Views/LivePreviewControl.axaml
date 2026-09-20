@@ -8,12 +8,12 @@
              x:Class="RowlEngine.Editor.Views.LivePreviewControl"
              x:DataType="vm:MainWindowViewModel">
 
-    <Border Background="#0B0F19" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" DragDrop.AllowDrop="True">
+    <Border Background="{DynamicResource AppBackground}" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" DragDrop.AllowDrop="True">
         <Grid>
             <!-- 16:9 Aspect Guardian Letterbox Container -->
             <Viewbox Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="12">
-                <Border Width="1920" Height="1080" Background="#121624" CornerRadius="8" ClipToBounds="True" BoxShadow="0 10 30 0 #000000">
-                    <Canvas x:Name="ViewportCanvas" Width="1920" Height="1080" Background="#161B2E">
+                <Border Width="1920" Height="1080" Background="{DynamicResource PanelBackground}" CornerRadius="8" ClipToBounds="True" BoxShadow="0 10 30 0 #000000">
+                    <Canvas x:Name="ViewportCanvas" Width="1920" Height="1080" Background="{DynamicResource CanvasBackground}">
                         <Canvas.ContextMenu>
                             <ContextMenu>
                                 <MenuItem Header="Merkeze Hizala (Center to Screen)" Command="{Binding CenterSelectedElementCommand}"/>
@@ -37,7 +37,7 @@
                                 Width="{Binding SelectedNode.BackgroundWidth}" 
                                 Height="{Binding SelectedNode.BackgroundHeight}" 
                                 RenderTransformOrigin="50%,50%"
-                                Background="#1A2035" BorderBrush="#3B82F6" BorderThickness="1.5">
+                                Background="{DynamicResource PanelBackground}" BorderBrush="{DynamicResource Accent}" BorderThickness="1.5">
                             <Border.RenderTransform>
                                 <RotateTransform Angle="{Binding SelectedNode.BackgroundRotation}"/>
                             </Border.RenderTransform>
@@ -50,18 +50,18 @@
                                 <!-- Decorative Atmosphere Fallback Text if Bitmap loading -->
                                 <TextBlock Text="{Binding SelectedNode.BackgroundTexture, StringFormat='Scene BG: {0}'}" 
                                            IsVisible="{Binding SelectedNode.BackgroundBitmap, Converter={x:Static ObjectConverters.IsNull}}"
-                                           Foreground="#64748B" FontSize="20" FontWeight="Bold" Margin="40,90" HorizontalAlignment="Left"
+                                           Foreground="{DynamicResource MutedText}" FontSize="20" FontWeight="Bold" Margin="40,90" HorizontalAlignment="Left"
                                            IsHitTestVisible="False"/>
 
                                 <!-- Background Rotate Handle (Top-Center) -->
                                 <Border Name="BgRotateHandle" Width="18" Height="18" HorizontalAlignment="Center" VerticalAlignment="Top" 
-                                        Background="#A855F7" BorderBrush="White" BorderThickness="2" CornerRadius="9" Cursor="Hand" Margin="0,-27,0,0"
+                                        Background="{DynamicResource Accent}" BorderBrush="{DynamicResource PrimaryText}" BorderThickness="2" CornerRadius="9" Cursor="Hand" Margin="0,-27,0,0"
                                         PointerPressed="OnBgRotateHandlePointerPressed"
                                         ToolTip.Tip="Rotate Background (Drag to Rotate, Right-Click to Reset)"/>
 
                                 <!-- Background Resize Handles -->
                                 <Border Name="BgHandleBR" Width="18" Height="18" HorizontalAlignment="Right" VerticalAlignment="Bottom" 
-                                        Background="#3B82F6" BorderBrush="White" BorderThickness="2" CornerRadius="9" Cursor="BottomRightCorner" Margin="0,0,-7,-7" ToolTip.Tip="Resize Background"/>
+                                        Background="{DynamicResource Accent}" BorderBrush="{DynamicResource PrimaryText}" BorderThickness="2" CornerRadius="9" Cursor="BottomRightCorner" Margin="0,0,-7,-7" ToolTip.Tip="Resize Background"/>
                             </Grid>
                         </Border>
 
@@ -85,7 +85,7 @@
                                             Height="{Binding Height}" Cursor="Hand"
                                             IsVisible="{Binding IsEnabled}"
                                             RenderTransformOrigin="50%,50%"
-                                            Background="#2A374A" BorderBrush="#00F0FF" BorderThickness="2" CornerRadius="8" BoxShadow="0 10 30 0 #000000"
+                                            Background="{DynamicResource PanelBackground}" BorderBrush="{DynamicResource Accent}" BorderThickness="2" CornerRadius="8" BoxShadow="0 10 30 0 #000000"
                                             PointerPressed="OnCharacterPointerPressed">
                                         <Border.RenderTransform>
                                             <RotateTransform Angle="{Binding Rotation}"/>
@@ -98,29 +98,29 @@
                                             <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="6"
                                                         IsVisible="{Binding SpriteBitmap, Converter={x:Static ObjectConverters.IsNull}}"
                                                         IsHitTestVisible="False">
-                                                <TextBlock Text="{Binding Sprite}" Foreground="#38BDF8" FontSize="12" FontWeight="Bold" HorizontalAlignment="Center"/>
+                                                <TextBlock Text="{Binding Sprite}" Foreground="{DynamicResource Accent}" FontSize="12" FontWeight="Bold" HorizontalAlignment="Center"/>
                                             </StackPanel>
 
                                             <!-- Overlay Label at Bottom -->
                                             <Border VerticalAlignment="Bottom" HorizontalAlignment="Center" Background="#D00F172A" Padding="6,2" Margin="0,0,0,4" CornerRadius="4" IsHitTestVisible="False">
                                                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="4">
-                                                    <TextBlock Text="Character" Foreground="#00F0FF" FontSize="10" FontWeight="Bold"/>
-                                                    <TextBlock Text="{Binding Width, StringFormat='({0:0}'}" Foreground="#94A3B8" FontSize="9"/>
-                                                    <TextBlock Text="x" Foreground="#94A3B8" FontSize="9"/>
-                                                    <TextBlock Text="{Binding Height, StringFormat='{}{0:0})'}" Foreground="#94A3B8" FontSize="9"/>
-                                                    <TextBlock Text="{Binding Rotation, StringFormat='{} {0:0}°'}" Foreground="#A855F7" FontSize="9"/>
+                                                    <TextBlock Text="Character" Foreground="{DynamicResource Accent}" FontSize="10" FontWeight="Bold"/>
+                                                    <TextBlock Text="{Binding Width, StringFormat='({0:0}'}" Foreground="{DynamicResource MutedText}" FontSize="9"/>
+                                                    <TextBlock Text="x" Foreground="{DynamicResource MutedText}" FontSize="9"/>
+                                                    <TextBlock Text="{Binding Height, StringFormat='{}{0:0})'}" Foreground="{DynamicResource MutedText}" FontSize="9"/>
+                                                    <TextBlock Text="{Binding Rotation, StringFormat='{} {0:0}°'}" Foreground="{DynamicResource Accent}" FontSize="9"/>
                                                 </StackPanel>
                                             </Border>
 
                                             <!-- Character Rotate Handle (Top-Center) -->
                                             <Border Width="18" Height="18" HorizontalAlignment="Center" VerticalAlignment="Top"
-                                                    Background="#A855F7" BorderBrush="White" BorderThickness="2" CornerRadius="9" Cursor="Hand" Margin="0,-27,0,0"
+                                                    Background="{DynamicResource Accent}" BorderBrush="{DynamicResource PrimaryText}" BorderThickness="2" CornerRadius="9" Cursor="Hand" Margin="0,-27,0,0"
                                                     PointerPressed="OnCharRotateHandlePointerPressed"
                                                     ToolTip.Tip="Rotate Character (Drag to Rotate, Right-Click to Reset)"/>
 
                                             <!-- Character Resize Handle (Bottom-Right) -->
                                             <Border Width="18" Height="18" HorizontalAlignment="Right" VerticalAlignment="Bottom"
-                                                    Background="#00F0FF" BorderBrush="White" BorderThickness="2" CornerRadius="9" Cursor="BottomRightCorner" Margin="0,0,-5,-5"
+                                                    Background="{DynamicResource Accent}" BorderBrush="{DynamicResource PrimaryText}" BorderThickness="2" CornerRadius="9" Cursor="BottomRightCorner" Margin="0,0,-5,-5"
                                                     PointerPressed="OnCharHandlePointerPressed"
                                                     ToolTip.Tip="Resize Character"/>
                                         </Grid>
@@ -164,7 +164,7 @@
                                                     CornerRadius="6" Padding="14,4"
                                                     BoxShadow="0 4 10 0 #000000" IsHitTestVisible="False">
                                                 <TextBlock Text="{Binding Speaker, FallbackValue='Evelyn'}"
-                                                           Foreground="#FFFFFF"
+                                                           Foreground="{DynamicResource PrimaryText}"
                                                            FontSize="{Binding SpeakerFontSize}"
                                                            FontWeight="Bold"/>
                                             </Border>
@@ -179,23 +179,23 @@
                                             </ScrollViewer>
 
                                             <!-- Drag handle badge -->
-                                            <Border HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-14,14,0" Background="#0F172A" BorderBrush="{Binding BorderColorHex}" BorderThickness="1" CornerRadius="4" Padding="6,2" IsHitTestVisible="False">
+                                            <Border HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-14,14,0" Background="{DynamicResource InputBackground}" BorderBrush="{Binding BorderColorHex}" BorderThickness="1" CornerRadius="4" Padding="6,2" IsHitTestVisible="False">
                                                 <StackPanel Orientation="Horizontal" Spacing="4">
                                                     <TextBlock Text="Dialogue Box" Foreground="{Binding BorderColorHex}" FontSize="10" FontWeight="Bold"/>
-                                                    <TextBlock Text="{Binding Width, StringFormat='({0:0}'}" Foreground="#94A3B8" FontSize="10"/>
-                                                    <TextBlock Text="x" Foreground="#94A3B8" FontSize="10"/>
-                                                    <TextBlock Text="{Binding Height, StringFormat='{}{0:0})'}" Foreground="#94A3B8" FontSize="10"/>
+                                                    <TextBlock Text="{Binding Width, StringFormat='({0:0}'}" Foreground="{DynamicResource MutedText}" FontSize="10"/>
+                                                    <TextBlock Text="x" Foreground="{DynamicResource MutedText}" FontSize="10"/>
+                                                    <TextBlock Text="{Binding Height, StringFormat='{}{0:0})'}" Foreground="{DynamicResource MutedText}" FontSize="10"/>
                                                 </StackPanel>
                                             </Border>
 
                                             <!-- Dialogue Box Resize Corner Handles -->
-                                            <Border Width="18" Height="18" HorizontalAlignment="Left" VerticalAlignment="Top" Background="{Binding BorderColorHex}" BorderBrush="White" BorderThickness="2" CornerRadius="9" Cursor="TopLeftCorner" Margin="-7,-7,0,0"
+                                            <Border Width="18" Height="18" HorizontalAlignment="Left" VerticalAlignment="Top" Background="{Binding BorderColorHex}" BorderBrush="{DynamicResource PrimaryText}" BorderThickness="2" CornerRadius="9" Cursor="TopLeftCorner" Margin="-7,-7,0,0"
                                                     PointerPressed="OnDialogueHandleTLPointerPressed" ToolTip.Tip="Resize Top-Left"/>
-                                            <Border Width="18" Height="18" HorizontalAlignment="Right" VerticalAlignment="Top" Background="{Binding BorderColorHex}" BorderBrush="White" BorderThickness="2" CornerRadius="9" Cursor="TopRightCorner" Margin="0,-7,-7,0"
+                                            <Border Width="18" Height="18" HorizontalAlignment="Right" VerticalAlignment="Top" Background="{Binding BorderColorHex}" BorderBrush="{DynamicResource PrimaryText}" BorderThickness="2" CornerRadius="9" Cursor="TopRightCorner" Margin="0,-7,-7,0"
                                                     PointerPressed="OnDialogueHandleTRPointerPressed" ToolTip.Tip="Resize Top-Right"/>
-                                            <Border Width="18" Height="18" HorizontalAlignment="Left" VerticalAlignment="Bottom" Background="{Binding BorderColorHex}" BorderBrush="White" BorderThickness="2" CornerRadius="9" Cursor="BottomLeftCorner" Margin="-7,0,0,-7"
+                                            <Border Width="18" Height="18" HorizontalAlignment="Left" VerticalAlignment="Bottom" Background="{Binding BorderColorHex}" BorderBrush="{DynamicResource PrimaryText}" BorderThickness="2" CornerRadius="9" Cursor="BottomLeftCorner" Margin="-7,0,0,-7"
                                                     PointerPressed="OnDialogueHandleBLPointerPressed" ToolTip.Tip="Resize Bottom-Left"/>
-                                            <Border Width="18" Height="18" HorizontalAlignment="Right" VerticalAlignment="Bottom" Background="{Binding BorderColorHex}" BorderBrush="White" BorderThickness="2" CornerRadius="9" Cursor="BottomRightCorner" Margin="0,0,-7,-7"
+                                            <Border Width="18" Height="18" HorizontalAlignment="Right" VerticalAlignment="Bottom" Background="{Binding BorderColorHex}" BorderBrush="{DynamicResource PrimaryText}" BorderThickness="2" CornerRadius="9" Cursor="BottomRightCorner" Margin="0,0,-7,-7"
                                                     PointerPressed="OnDialogueHandleBRPointerPressed" ToolTip.Tip="Resize Bottom-Right"/>
                                         </Grid>
                                     </Border>
@@ -230,7 +230,7 @@
                                                        TextAlignment="{Binding TextAlignment}" VerticalAlignment="Center" HorizontalAlignment="Stretch"
                                                        Margin="{Binding Padding}" TextWrapping="Wrap" IsHitTestVisible="False"/>
                                             <Border Width="18" Height="18" HorizontalAlignment="Right" VerticalAlignment="Bottom"
-                                                    Background="#38BDF8" BorderBrush="White" BorderThickness="2" CornerRadius="9"
+                                                    Background="{DynamicResource Accent}" BorderBrush="{DynamicResource PrimaryText}" BorderThickness="2" CornerRadius="9"
                                                     Margin="0,0,-6,-6" Cursor="BottomRightCorner"
                                                     PointerPressed="OnChoiceButtonResizePointerPressed"/>
                                         </Grid>
@@ -240,12 +240,12 @@
                         </ItemsControl>
 
                         <!-- OBS-Style Smart Snap Guidelines (Magnet Alignment Overlay) -->
-                        <Border x:Name="SnapGuideV" Width="2" Height="1080" Background="#00F0FF" IsVisible="False" IsHitTestVisible="False" BoxShadow="0 0 12 3 #00F0FF" />
-                        <Border x:Name="SnapGuideH" Height="2" Width="1920" Background="#00F0FF" IsVisible="False" IsHitTestVisible="False" BoxShadow="0 0 12 3 #00F0FF" />
+                        <Border x:Name="SnapGuideV" Width="2" Height="1080" Background="{DynamicResource Accent}" IsVisible="False" IsHitTestVisible="False" BoxShadow="0 0 12 3 #F2EFE6" />
+                        <Border x:Name="SnapGuideH" Height="2" Width="1920" Background="{DynamicResource Accent}" IsVisible="False" IsHitTestVisible="False" BoxShadow="0 0 12 3 #F2EFE6" />
 
                         <!-- Floating HUD Snap Tooltip Badge -->
-                        <Border x:Name="SnapBadge" IsVisible="False" IsHitTestVisible="False" Background="#0F172A" BorderBrush="#00F0FF" BorderThickness="2" CornerRadius="6" Padding="10,5" BoxShadow="0 6 16 0 #000000">
-                            <TextBlock x:Name="SnapBadgeText" Text="Snapped" Foreground="#00F0FF" FontSize="13" FontWeight="Bold"/>
+                        <Border x:Name="SnapBadge" IsVisible="False" IsHitTestVisible="False" Background="{DynamicResource InputBackground}" BorderBrush="{DynamicResource Accent}" BorderThickness="2" CornerRadius="6" Padding="10,5" BoxShadow="0 6 16 0 #000000">
+                            <TextBlock x:Name="SnapBadgeText" Text="Snapped" Foreground="{DynamicResource Accent}" FontSize="13" FontWeight="Bold"/>
                         </Border>
 
                     </Canvas>
@@ -255,21 +255,21 @@
             <!-- Professional Stereo VU Meter HUD Badge (Bottom Right) -->
             <Border HorizontalAlignment="Right" VerticalAlignment="Bottom"
                     Margin="14" Padding="8,5" CornerRadius="4"
-                    Background="#D90F172A" BorderBrush="#334155" BorderThickness="1"
+                    Background="#D90F172A" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1"
                     IsHitTestVisible="False" Opacity="0.9">
                 <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                     <StackPanel Spacing="2" VerticalAlignment="Center">
                         <!-- Left Channel -->
                         <StackPanel Orientation="Horizontal" Spacing="3">
-                            <TextBlock Text="L" FontSize="9" Width="10" Foreground="#64748B" VerticalAlignment="Center"/>
+                            <TextBlock Text="L" FontSize="9" Width="10" Foreground="{DynamicResource MutedText}" VerticalAlignment="Center"/>
                             <ProgressBar Minimum="0" Maximum="1" Value="{Binding LivePreviewViewModel.MasterPeakL}" Width="64" Height="4"
-                                         Foreground="#10B981" Background="#1E293B"/>
+                                         Foreground="{DynamicResource SuccessBrush}" Background="{DynamicResource InputBackground}"/>
                         </StackPanel>
                         <!-- Right Channel -->
                         <StackPanel Orientation="Horizontal" Spacing="3">
-                            <TextBlock Text="R" FontSize="9" Width="10" Foreground="#64748B" VerticalAlignment="Center"/>
+                            <TextBlock Text="R" FontSize="9" Width="10" Foreground="{DynamicResource MutedText}" VerticalAlignment="Center"/>
                             <ProgressBar Minimum="0" Maximum="1" Value="{Binding LivePreviewViewModel.MasterPeakR}" Width="64" Height="4"
-                                         Foreground="#10B981" Background="#1E293B"/>
+                                         Foreground="{DynamicResource SuccessBrush}" Background="{DynamicResource InputBackground}"/>
                         </StackPanel>
                     </StackPanel>
                 </StackPanel>
