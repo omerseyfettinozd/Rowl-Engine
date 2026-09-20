@@ -125,6 +125,20 @@ void test_lifecycle_init_guards() {
     RowlEngine_Shutdown(scene);
     RowlEngine_Destroy(scene);
 
+    // R1 (#4): pre-init JSON sahne yazımı da enjekte olamaz (kardes
+    // guardla ayna: no-op + StateError(11)).
+    RowlEngineHandle jscene = RowlEngine_Create();
+    if (jscene == nullptr) rowlLockFail("lifecycle-init-guards", "Create returned null");
+    RowlEngine_UpdateSceneFromJson(jscene, "[{\"type\":\"dialogue\",\"enabled\":true,"
+        "\"data\":{\"speaker\":\"INJECTED_FROM_JSON\",\"dialogue\":\"injected\"}}]");
+    checkInitCode("pre-init update-scene-from-json", jscene, 11 /* StateError */);
+    if (RowlEngine_Init(jscene, 320, 180, 0) != 1)
+        rowlLockFail("lifecycle-init-guards", "Init must succeed");
+    if (std::string(RowlEngine_GetSpeaker(jscene)).find("INJECTED_FROM_JSON") != std::string::npos)
+        rowlLockFail("lifecycle-init-guards", "pre-init JSON scene write leaked into the session");
+    RowlEngine_Shutdown(jscene);
+    RowlEngine_Destroy(jscene);
+
     // #131: pre-init prefetch OK-yalanı kapanır.
     RowlEngineHandle pf = RowlEngine_Create();
     if (pf == nullptr) rowlLockFail("lifecycle-init-guards", "Create returned null");

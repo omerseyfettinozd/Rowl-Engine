@@ -75,7 +75,9 @@ void RowlEngine_UpdateSceneFromJson(
     if (!isLiveHandle(handle) || !componentsJson) return;
     // A2a-tur2: explicit string — const char* is convertible to both the
     // string and the JSON overloads (ambiguous otherwise).
-    invokeNoexcept([&] { if (auto checked = toEngineChecked(handle)) checked->updateSceneFromComponents(std::string(componentsJson)); });
+    // R1 (#4): kardes guardlarla ayna — init-öncesi JSON yazımı no-op +
+    // StateError ("update_scene" op kanalı aynen).
+    invokeNoexcept([&] { auto checked = toEngineChecked(handle); if (!checked || !requireEngineInitialized(checked, "update_scene")) return; checked->updateSceneFromComponents(std::string(componentsJson)); });
 }
 
 void RowlEngine_LoadStoryGraph(RowlEngineHandle handle, const char* jsonPath) {
