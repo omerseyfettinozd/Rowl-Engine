@@ -232,6 +232,13 @@ namespace RowlEngine.Editor.ViewModels
         public double TargetPanY { get; set; } = 0;
         public double TargetZoom { get; set; } = 1.0;
 
+        /// <summary>
+        /// Unity kromu: minimap görünürlük anahtarı sahne başlığındadır.
+        /// SettingsViewModel'a eklenemez (Test 15 yasaklı adlar).
+        /// </summary>
+        [ObservableProperty]
+        private bool _isMinimapVisible = true;
+
         // Panel visibility (menu toggles). Lightweight, deterministic, mobile-friendly — no floating windows.
         [ObservableProperty]
         private bool _isAssetsPanelVisible = true;
@@ -423,6 +430,22 @@ namespace RowlEngine.Editor.ViewModels
             TargetPanX = 0;
             TargetPanY = 0;
             TargetZoom = 1.0;
+            StartSmoothViewAnimation();
+        }
+
+        /// <summary>
+        /// Unity kromu: başlık şeridi +/− düğmeleri. Teker adımı (0.05)
+        /// yerine kaba 0.2 adım; NodeGraphViewModel sınırlarında kelepçelenir.
+        /// </summary>
+        [RelayCommand]
+        public void ZoomInView() => ZoomStep(0.2);
+
+        [RelayCommand]
+        public void ZoomOutView() => ZoomStep(-0.2);
+
+        private void ZoomStep(double delta)
+        {
+            TargetZoom = Math.Clamp(Math.Round(TargetZoom + delta, 4), NodeGraphViewModel.MinZoom, NodeGraphViewModel.MaxZoom);
             StartSmoothViewAnimation();
         }
 
