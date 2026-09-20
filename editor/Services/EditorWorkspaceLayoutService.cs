@@ -51,13 +51,13 @@ namespace RowlEngine.Editor.Services
         }
 
         /// <summary>
-        /// Faz 6 Dilim 2: Varlıklar artık alt sekmelerde değil, kendi
-        /// şeridinde yaşar — bu yüzden bayat sekme indeksleri (ör. eski
-        /// 4 = Sorunlar) yeni aralığa kelepçelenir. Sekme kimlikleri ve
-        /// Ctrl+1..7 eşleşmesi değişmez: 0 = Günlük, 1 = Diyalog Geçmişi,
-        /// 2 = Kayıt Slotları, 3 = Sorunlar.
+        /// Alt şerit tek sekmeli yapıdadır: Varlıklar ilk sekmedir
+        /// (Unity alt panel düzeni). Bayat sekme indeksleri yeni aralığa
+        /// kelepçelenir. Sekme kimlikleri ve Ctrl+1..7 eşleşmesi:
+        /// 0 = Varlıklar, 1 = Günlük, 2 = Diyalog Geçmişi,
+        /// 3 = Kayıt Slotları, 4 = Sorunlar.
         /// </summary>
-        public static int ClampBottomTab(int index) => Math.Clamp(index, 0, 3);
+        public static int ClampBottomTab(int index) => Math.Clamp(index, 0, 4);
 
         /// <summary>
         /// Handles switching and toggling of workspace panels and views.
@@ -84,29 +84,29 @@ namespace RowlEngine.Editor.Services
                     isHierarchyVisible = !isHierarchyVisible;
                     break;
                 case "Assets":
-                    // Faz 6 Dilim 2: ayrı şerit — sekme indeksine dokunmaz.
-                    isAssetsVisible = !isAssetsVisible;
+                    // Tek şerit: ilk sekme (diğer sekmelerle aynı davranış).
+                    ToggleBottomTab(ref isAssetsVisible, ref bottomPanelActiveTab, 0);
                     break;
                 case "Inspector":
                     isInspectorVisible = !isInspectorVisible;
                     break;
                 case "Log":
-                    ToggleBottomTab(ref isLogVisible, ref bottomPanelActiveTab, 0);
+                    ToggleBottomTab(ref isLogVisible, ref bottomPanelActiveTab, 1);
                     break;
                 case "Backlog":
-                    ToggleBottomTab(ref isBacklogVisible, ref bottomPanelActiveTab, 1);
+                    ToggleBottomTab(ref isBacklogVisible, ref bottomPanelActiveTab, 2);
                     break;
                 case "SaveSlots":
                     isSaveSlotsVisible = !isSaveSlotsVisible;
                     if (isSaveSlotsVisible)
                     {
                         refreshSaveSlots?.Invoke();
-                        bottomPanelActiveTab = 2;
+                        bottomPanelActiveTab = 3;
                     }
                     break;
                 case "ProjectIssues":
                     isProjectIssuesVisible = !isProjectIssuesVisible;
-                    if (isProjectIssuesVisible) bottomPanelActiveTab = 3;
+                    if (isProjectIssuesVisible) bottomPanelActiveTab = 4;
                     break;
                 case "NodeGraph":
                     isNodeGraphActive = true;

@@ -60,36 +60,43 @@ internal static class EditorWorkspaceThemeTests
             throw new Exception("Inspector did not restore its workspace width");
         Console.WriteLine("  [PASS] Hidden side panels release workspace width");
 
-        // Faz 6 Dilim 2: Günlük sekme alanında, Varlıklar kendi şeridinde.
-        // İkisi birbirinden bağımsız açılıp kapanır; sekme alanı kapanınca
-        // şerit yüksekliğini korur.
-        mainVm.ShowPanel("Log");
-        if (mainVm.IsLogPanelVisible || !mainVm.IsAssetsPanelVisible || mainVm.IsBottomPanelVisible)
-            throw new Exception("Closing Log incorrectly hid the Assets strip");
-        if (mainVm.AssetsStripHeight.Value != 180 || mainVm.AssetsStripSplitterHeight.Value != 6)
-            throw new Exception("Assets strip did not keep its height after Log closed");
+        // Tek şerit: Varlıklar ilk sekme (0), Günlük ikinci (1);
+        // ikisi aynı alanı paylaşır, bağımsız açılıp kapanır. Şerit,
+        // sekmelerden en az biri açıkken yüksekliğini korur.
         mainVm.ShowPanel("Assets");
         if (mainVm.IsAssetsPanelVisible)
-            throw new Exception("Assets strip did not close independently");
-        if (mainVm.IsBottomPanelVisible)
-            throw new Exception("Bottom workspace remained visible after both areas were closed");
-        if (mainVm.BottomPanelHeight.Value != 0 || mainVm.BottomSplitterHeight.Value != 0
-            || mainVm.AssetsStripHeight.Value != 0 || mainVm.AssetsStripSplitterHeight.Value != 0)
+            throw new Exception("Assets tab did not close independently");
+        if (!mainVm.IsBottomPanelVisible)
+            throw new Exception("Closing Assets incorrectly hid the shared strip");
+        if (mainVm.BottomPanelHeight.Value != 180 || mainVm.BottomSplitterHeight.Value != 6)
+            throw new Exception("Shared strip did not keep its height after Assets closed");
+        mainVm.ShowPanel("Log");
+        if (!mainVm.IsLogPanelVisible || mainVm.BottomPanelActiveTab != 1)
+            throw new Exception("Opening Log did not select the second tab");
+        mainVm.ShowPanel("Log");
+        if (mainVm.IsLogPanelVisible || mainVm.IsBottomPanelVisible)
+            throw new Exception("Bottom workspace remained visible after both tabs were closed");
+        if (mainVm.BottomPanelHeight.Value != 0 || mainVm.BottomSplitterHeight.Value != 0)
             throw new Exception("Hidden bottom workspace still reserved height");
         mainVm.ShowPanel("Assets");
-        if (!mainVm.IsAssetsPanelVisible || mainVm.IsBottomPanelVisible ||
-            mainVm.AssetsStripHeight.Value != 180 || mainVm.AssetsStripSplitterHeight.Value != 6)
+        if (!mainVm.IsAssetsPanelVisible || !mainVm.IsBottomPanelVisible
+            || mainVm.BottomPanelHeight.Value != 180 || mainVm.BottomSplitterHeight.Value != 6
+            || mainVm.BottomPanelActiveTab != 0)
         {
-            throw new Exception("Assets strip did not restore independently");
+            throw new Exception("Assets tab did not restore the shared strip");
         }
         mainVm.ShowPanel("Backlog");
-        if (!mainVm.IsBacklogPanelVisible || mainVm.BottomPanelActiveTab != 1 || !mainVm.IsBottomPanelVisible)
+        if (!mainVm.IsBacklogPanelVisible || mainVm.BottomPanelActiveTab != 2 || !mainVm.IsBottomPanelVisible)
             throw new Exception("Dialogue backlog panel did not become an independent bottom workspace");
         mainVm.ShowPanel("Backlog");
         if (mainVm.IsBacklogPanelVisible)
             throw new Exception("Dialogue backlog panel did not close independently");
+        mainVm.ShowPanel("Log");
+        mainVm.ShowPanel("Log");
+        if (mainVm.IsLogPanelVisible || !mainVm.IsAssetsPanelVisible)
+            throw new Exception("Bottom tabs did not restore their default state");
         Console.WriteLine(
-            "  [PASS] Bottom Log panel and Assets strip visibility is independent and reclaims height");
+            "  [PASS] Bottom tabs share one strip, toggle independently and reclaim height");
 
         mainVm.ShowPanel("SplitScreen");
         mainVm.ShowPanel("Preview");

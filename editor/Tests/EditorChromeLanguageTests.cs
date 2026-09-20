@@ -44,8 +44,8 @@ namespace RowlEngine.Editor
                 if (!ids.SequenceEqual(expectedIds))
                     throw new Exception($"Menu command identifiers must stay English: [{string.Join(", ", ids)}]");
 
-                // Sekme başlıkları menüyle aynı sözlük (Faz 6 Dilim 2:
-                // Varlıklar sekmeden ayrı şeride taşındı — 4 sekme kaldı).
+                // Sekme başlıkları menüyle aynı sözlük (tek şerit:
+                // Varlıklar ilk sekme — 5 sekme).
                 string[] tabs = window.GetLogicalDescendants().OfType<TabItem>()
                     .Select(t => t.Header as string ?? string.Empty)
                     .Where(h => expectedHeaders.Contains(h) || h == "Log" || h == "Assets"
@@ -53,7 +53,7 @@ namespace RowlEngine.Editor
                     .ToArray();
                 string[] expectedTabs = new[]
                 {
-                    "Günlük", "Diyalog Geçmişi", "Kayıt Slotları", "Sorunlar"
+                    "Varlıklar", "Günlük", "Diyalog Geçmişi", "Kayıt Slotları", "Sorunlar"
                 };
                 if (!tabs.SequenceEqual(expectedTabs))
                     throw new Exception($"Tab headers diverged: [{string.Join(", ", tabs)}]");

@@ -261,8 +261,6 @@
                     <RowDefinition Height="*"/>
                     <RowDefinition Height="{Binding BottomSplitterHeight}"/>
                     <RowDefinition Height="{Binding BottomPanelHeight}"/>
-                    <RowDefinition Height="{Binding AssetsStripSplitterHeight}"/>
-                    <RowDefinition Height="{Binding AssetsStripHeight}"/>
                 </Grid.RowDefinitions>
 
                 <Grid Grid.Row="0" ClipToBounds="True">
@@ -380,7 +378,8 @@
                 <GridSplitter Grid.Row="1" IsVisible="{Binding IsBottomPanelVisible}"
                               Background="{DynamicResource BorderColor}" ResizeDirection="Rows" Height="6"/>
 
-                <!-- Bottom: Log + Assets (Tabbed) -->
+                <!-- Alt şerit: Varlıklar + Günlük + diğerleri tek
+                     sekmeli yapıda (Unity alt panel düzeni) -->
                 <Grid Grid.Row="2" MinHeight="140" IsVisible="{Binding IsBottomPanelVisible}">
                     <TabControl SelectedIndex="{Binding BottomPanelActiveTab}"
                                 Background="{DynamicResource PanelBackground}">
@@ -391,6 +390,9 @@
                                 <Setter Property="Foreground" Value="{DynamicResource PrimaryText}"/>
                             </Style>
                         </TabControl.Styles>
+                        <TabItem Header="Varlıklar" IsVisible="{Binding IsAssetsPanelVisible}">
+                            <panels:ProjectAssetsView/>
+                        </TabItem>
                         <TabItem Header="Günlük" IsVisible="{Binding IsLogPanelVisible}">
                             <panels:OutputLogView/>
                         </TabItem>
@@ -404,15 +406,6 @@
                             <panels:ProjectIssuesView DataContext="{Binding ProjectIssuesViewModel}"/>
                         </TabItem>
                     </TabControl>
-                </Grid>
-
-                <GridSplitter Grid.Row="3" IsVisible="{Binding IsAssetsPanelVisible}"
-                              Background="{DynamicResource BorderColor}" ResizeDirection="Rows" Height="6"/>
-
-                <!-- Assets şeridi (Faz 6 Dilim 2): sekmelerden bağımsız,
-                     tuvalin altında kendi alanında yaşar -->
-                <Grid Grid.Row="4" MinHeight="140" IsVisible="{Binding IsAssetsPanelVisible}">
-                    <panels:ProjectAssetsView/>
                 </Grid>
             </Grid>
 

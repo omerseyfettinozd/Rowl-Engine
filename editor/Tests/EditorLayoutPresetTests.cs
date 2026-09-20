@@ -56,7 +56,10 @@ public sealed class EditorLayoutPresetTests : IDisposable
         Assert.False(_vm.IsHierarchyPanelVisible);
         Assert.False(_vm.IsInspectorPanelVisible);
         Assert.True(_vm.IsAssetsPanelVisible);
-        Assert.False(_vm.IsBottomPanelVisible);
+        // Tek şerit: Varlıklar sekmesi açıkken alt şerit görünür
+        // (yalnızca Varlıklar sekmesiyle).
+        Assert.True(_vm.IsBottomPanelVisible);
+        Assert.Equal(0, _vm.BottomPanelActiveTab);
         Assert.True(_vm.IsNodeGraphActive);
 
         _vm.SelectedLayoutPreset = "Oyun Testi";
