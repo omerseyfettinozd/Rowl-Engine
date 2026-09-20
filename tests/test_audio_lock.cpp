@@ -2541,6 +2541,22 @@ void test_audio_lock_spectrum_nonpositive_guard_watcher() {
  *  - ADDED itilir + Step -> suspend'e sizma yok + SDL kuyrugu bos (pump
  *    kaniti; cihaz varken ADDED no-op dalidir, handleDeviceEvent ~1327).
  *    ADDED'yi suspend'e sizdiran mutant bu fazda duser.
+ *  - MAXIMIZED itilir + Step -> suspend==0 + SDL kuyrugu bos (RESTORED
+ *    emsali; switch'teki AYRI case satiri). Onkosul: MINIMIZED ile suspend
+ *    kurulur; bu faz yalniz MAXIMIZED dalini gozler. MAXIMIZED-satir-silme
+ *    mutanti (case silinmesi / isGlobalEvent'ten dusurulmesi) burada duser.
+ *  - REMOVED / FORMAT_CHANGED tuketimi + reopen-kaniti: cihaz varken bu iki
+ *    dal handleDeviceEvent'e duser, reopenDeviceStreams giriste son ses
+ *    hatasini TEMIZLER ve cihazi sag birakir. Kayip-dosya BGM play'iyle hata
+ *    tohumu kurulur; olay + Step sonrasi suspend==0 + kuyruk bos + hata
+ *    BOSALMIS + cihaz==1 aranir. Kalibrasyon: olaysiz Step tohumu korur
+ *    (yalniz reopen temizler). REMOVED/FORMAT-satir-silme mutanti hatayi
+ *    bayat birakir -> duser.
+ *  - Yabanci-pin no-op: pin baska thread'de tutulurken (basarili
+ *    registerWindow + is bitince unregister) bu thread'den pumpOnly cagrilir
+ *    -> isDispatchThread false VE isEligibleForRegister false KALIR.
+ *    Kosulsuz-steal mutanti (claim-if-unclaimed kosulunun kaldirilmasi)
+ *    pini calar -> duser. Randevu C++20 atomic wait/notify'ledir.
  *
  * Cihaz bagimsizdir: suspend bayragi CPU-side'dir (cihaz SKIP'i YOKTUR).
  * CTest dummy suruculeri saglar; init basarisizsa FAIL-LOUD exit(1)
@@ -2690,6 +2706,204 @@ void test_audio_lock_offscreen_global_pump() {
         std::exit(1);
     }
     TEST_PASS("Audio Offscreen Pump — ADDED tuketilir, kuyruk bos, runtime sag");
+
+    // 4. MAXIMIZED resume eder (RESTORED emsali; switch'teki AYRI case
+    // satiri). Izolasyon onkosulu: MINIMIZED ile suspend==1 kurulur; bu faz
+    // yalniz MAXIMIZED dalini gozler — MAXIMIZED-satir-silme mutanti (case
+    // silinmesi / isGlobalEvent'ten dusurulmesi) burada duser, MINIMIZED /
+    // RESTORED-only mutantlari onceki fazlarda duser.
+    if (RowlEngine_IsAudioOutputSuspended(handle) != 0) {
+        std::cerr << "Offscreen Global Pump (#75): MAXIMIZED onkosulu bozuldu — suspend kurulu (faz-3 sizintisi?)"
+                  << std::endl;
+        std::exit(1);
+    }
+    SDL_Event minimSetupEvent{};
+    minimSetupEvent.type = SDL_EVENT_WINDOW_MINIMIZED;
+    minimSetupEvent.window.windowID = 0;
+    if (!SDL_PushEvent(&minimSetupEvent)) {
+        std::cerr << "Offscreen Global Pump (#75): MAXIMIZED kurulum minimize probu kuyruga giremedi" << std::endl;
+        std::exit(1);
+    }
+    RowlEngine_Step(handle, 0.016f);
+    if (RowlEngine_IsAudioOutputSuspended(handle) != 1) {
+        std::cerr << "Offscreen Global Pump (#75): MAXIMIZED kurulum MINIMIZED'i suspend kuramadi" << std::endl;
+        std::exit(1);
+    }
+    requireSdlQueueDrained75("MAXIMIZED-kurulum");
+    SDL_Event maximizedEvent{};
+    maximizedEvent.type = SDL_EVENT_WINDOW_MAXIMIZED;
+    maximizedEvent.window.windowID = 0;
+    if (!SDL_PushEvent(&maximizedEvent)) {
+        std::cerr << "Offscreen Global Pump (#75): maximize probu kuyruga giremedi" << std::endl;
+        std::exit(1);
+    }
+    RowlEngine_Step(handle, 0.016f);
+    if (RowlEngine_IsAudioOutputSuspended(handle) != 0) {
+        std::cerr << "Offscreen Global Pump (#75): MAXIMIZED offscreen Step'te resume edemedi (MAXIMIZED dali islenmiyor)"
+                  << std::endl;
+        std::exit(1);
+    }
+    requireSdlQueueDrained75("MAXIMIZED");
+    TEST_PASS("Audio Offscreen Pump — MAXIMIZED resume eder (penceresiz global drain)");
+
+    // 5. AUDIO_DEVICE_REMOVED / FORMAT_CHANGED tuketimi + reopen-kaniti:
+    // cihaz varken bu iki dal handleDeviceEvent'e duser, reopenDeviceStreams
+    // giriste son ses hatasini TEMIZLER (clearLastError) ve cikista cihazi sag
+    // birakir. Kayip-dosya BGM play'iyle hata tohumu kurulur (native_c_api
+    // emsali: dolu string); olay + Step sonrasi suspend==0 + kuyruk bos +
+    // hata BOSALMIS + cihaz==1 aranir. Kalibrasyon: olaysiz Step tohumu korur
+    // (yalniz reopen temizler — Step'in baska temizlik sipari yok).
+    // REMOVED/FORMAT-satir-silme mutanti (switch case'i silinmesi veya
+    // isGlobalEvent'ten dusurulmesi) hatayi bayat birakir -> exit(1).
+    if (RowlEngine_IsAudioOutputSuspended(handle) != 0) {
+        std::cerr << "Offscreen Global Pump (#75): REMOVED onkosulu bozuldu — suspend kurulu (faz-4 sizintisi?)"
+                  << std::endl;
+        std::exit(1);
+    }
+    RowlEngine_PlayAudio(handle, "audio/does_not_exist_75.wav", 0, 0);
+    if (std::string(RowlEngine_GetLastAudioError(handle)).empty()) {
+        std::cerr << "Offscreen Global Pump (#75): hata tohumu kurulamadi (kayip-dosya play'i hata yazmadi)"
+                  << std::endl;
+        std::exit(1);
+    }
+    RowlEngine_Step(handle, 0.016f);
+    if (std::string(RowlEngine_GetLastAudioError(handle)).empty()) {
+        std::cerr << "Offscreen Global Pump (#75): kalibrasyon bozuldu — olaysiz Step hata tohumunu temizledi (reopen-disi temizlik?)"
+                  << std::endl;
+        std::exit(1);
+    }
+    requireSdlQueueDrained75("HATA-TOHUMU-KALIBRASYON");
+    SDL_Event removedEvent{};
+    removedEvent.type = SDL_EVENT_AUDIO_DEVICE_REMOVED;
+    removedEvent.adevice.which = 7;
+    if (!SDL_PushEvent(&removedEvent)) {
+        std::cerr << "Offscreen Global Pump (#75): REMOVED probu kuyruga giremedi" << std::endl;
+        std::exit(1);
+    }
+    RowlEngine_Step(handle, 0.016f);
+    if (RowlEngine_IsAudioOutputSuspended(handle) != 0) {
+        std::cerr << "Offscreen Global Pump (#75): REMOVED eventi suspend'e sizdi" << std::endl;
+        std::exit(1);
+    }
+    requireSdlQueueDrained75("REMOVED");
+    if (!std::string(RowlEngine_GetLastAudioError(handle)).empty()) {
+        std::cerr << "Offscreen Global Pump (#75): REMOVED reopen'a ugramadi — hata bayat kaldi (REMOVED dali silinmis/kopuk?)"
+                  << std::endl;
+        std::exit(1);
+    }
+    if (RowlEngine_IsAudioDeviceAvailable(handle) != 1) {
+        std::cerr << "Offscreen Global Pump (#75): REMOVED reopen cihazi dusurdu" << std::endl;
+        std::exit(1);
+    }
+    TEST_PASS("Audio Offscreen Pump — REMOVED tuketilir + reopen hatayi temizler, cihaz sag");
+    // FORMAT_CHANGED: tohum tazelenir (reopen temizledi), ayni dort iddia.
+    RowlEngine_PlayAudio(handle, "audio/does_not_exist_75.wav", 0, 0);
+    if (std::string(RowlEngine_GetLastAudioError(handle)).empty()) {
+        std::cerr << "Offscreen Global Pump (#75): FORMAT_CHANGED tohumu kurulamadi" << std::endl;
+        std::exit(1);
+    }
+    SDL_Event formatEvent{};
+    formatEvent.type = SDL_EVENT_AUDIO_DEVICE_FORMAT_CHANGED;
+    formatEvent.adevice.which = 7;
+    if (!SDL_PushEvent(&formatEvent)) {
+        std::cerr << "Offscreen Global Pump (#75): FORMAT_CHANGED probu kuyruga giremedi" << std::endl;
+        std::exit(1);
+    }
+    RowlEngine_Step(handle, 0.016f);
+    if (RowlEngine_IsAudioOutputSuspended(handle) != 0) {
+        std::cerr << "Offscreen Global Pump (#75): FORMAT_CHANGED eventi suspend'e sizdi" << std::endl;
+        std::exit(1);
+    }
+    requireSdlQueueDrained75("FORMAT_CHANGED");
+    if (!std::string(RowlEngine_GetLastAudioError(handle)).empty()) {
+        std::cerr << "Offscreen Global Pump (#75): FORMAT_CHANGED reopen'a ugramadi — hata bayat kaldi (FORMAT_CHANGED dali silinmis/kopuk?)"
+                  << std::endl;
+        std::exit(1);
+    }
+    if (RowlEngine_IsAudioDeviceAvailable(handle) != 1) {
+        std::cerr << "Offscreen Global Pump (#75): FORMAT_CHANGED reopen cihazi dusurdu" << std::endl;
+        std::exit(1);
+    }
+    TEST_PASS("Audio Offscreen Pump — FORMAT_CHANGED tuketilir + reopen hatayi temizler, cihaz sag");
+
+    // 6. Yabanci-pin no-op: pumpOnly'daki claim-if-unclaimed kosulu kaldirilip
+    // kosulsuz-steal'e cevrilirse yabanci thread'in pini calinir. Pin tutucu
+    // thread'de tutulur (kPinReleaseProbe emsali: basarili registerWindow +
+    // is bitince unregister); bu thread'den pumpOnly cagrilir ->
+    // isDispatchThread false VE isEligibleForRegister false KALIR.
+    // Kosulsuz-steal ikisini de true'ya cevirir -> exit(1). Randevu C++20
+    // atomic wait/notify'ledir (sleep/poll/timing-assert YOK); erken-cikis
+    // yollarinda tutucu once birakilir + join'lenir (terminate yok).
+    // Onkosul: pin sahipsiz birakilir — bu thread'in Step'lerden kalan claim'i
+    // prob-kayit+sil ile temizlenir (tablo zaten bostur, pin sifirlanir).
+    if (!Rowl::Platform::SdlEventDispatcher::registerWindow(kPinReleaseProbe)) {
+        std::cerr << "Offscreen Global Pump (#75): yabanci-pin onkosulu — prob kaydi olmadi (pin yabancida mi?)"
+                  << std::endl;
+        std::exit(1);
+    }
+    Rowl::Platform::SdlEventDispatcher::unregisterWindow(kPinReleaseProbe);
+    if (Rowl::Platform::SdlEventDispatcher::isDispatchThread() ||
+        !Rowl::Platform::SdlEventDispatcher::isEligibleForRegister()) {
+        std::cerr << "Offscreen Global Pump (#75): yabanci-pin onkosulu bozuldu — pin sahipsiz degil" << std::endl;
+        std::exit(1);
+    }
+    std::atomic<bool> holderReady{false};
+    std::atomic<bool> holderPinned{false};
+    std::atomic<bool> releaseHolder{false};
+    std::thread holderThread([&] {
+        holderPinned.store(Rowl::Platform::SdlEventDispatcher::registerWindow(kPinReleaseProbe),
+                           std::memory_order_relaxed);
+        holderReady.store(true, std::memory_order_relaxed);
+        holderReady.notify_one();
+        releaseHolder.wait(false, std::memory_order_relaxed);
+        if (holderPinned.load(std::memory_order_relaxed)) {
+            Rowl::Platform::SdlEventDispatcher::unregisterWindow(kPinReleaseProbe);
+        }
+    });
+    holderReady.wait(false, std::memory_order_relaxed);
+    auto releaseHolderThread = [&] {
+        releaseHolder.store(true, std::memory_order_relaxed);
+        releaseHolder.notify_one();
+        holderThread.join();
+    };
+    if (!holderPinned.load(std::memory_order_relaxed)) {
+        releaseHolderThread();
+        std::cerr << "Offscreen Global Pump (#75): tutucu thread pin'i alamadi (register basarisiz)" << std::endl;
+        std::exit(1);
+    }
+    // Kurulum kaniti: bu thread yabancidir (sahip degil, kayit-uygun degil).
+    std::string foreignSetupFail;
+    if (Rowl::Platform::SdlEventDispatcher::isDispatchThread()) {
+        foreignSetupFail = "Offscreen Global Pump (#75): yabanci-pin kurulumu yabanci degil (bu thread sahip?)";
+    } else if (Rowl::Platform::SdlEventDispatcher::isEligibleForRegister()) {
+        foreignSetupFail = "Offscreen Global Pump (#75): yabanci-pin kurulumu kayit-uygun (pin sahipsiz mi?)";
+    }
+    // Katil gozlem: yabanci pin uzerinde pumpOnly no-op kalmalidir.
+    std::string foreignPumpFail;
+    if (foreignSetupFail.empty()) {
+        Rowl::Platform::SdlEventDispatcher::pumpOnly();
+        if (Rowl::Platform::SdlEventDispatcher::isDispatchThread()) {
+            foreignPumpFail = "Offscreen Global Pump (#75): pumpOnly yabanci pin'i caldi (kosulsuz-steal mutanti)";
+        } else if (Rowl::Platform::SdlEventDispatcher::isEligibleForRegister()) {
+            foreignPumpFail =
+                "Offscreen Global Pump (#75): pumpOnly yabanci pin'i caldi (kayit-uygunlugu bozuldu)";
+        }
+    }
+    releaseHolderThread();
+    if (!foreignSetupFail.empty()) {
+        std::cerr << foreignSetupFail << std::endl;
+        std::exit(1);
+    }
+    if (!foreignPumpFail.empty()) {
+        std::cerr << foreignPumpFail << std::endl;
+        std::exit(1);
+    }
+    if (Rowl::Platform::SdlEventDispatcher::isDispatchThread() ||
+        !Rowl::Platform::SdlEventDispatcher::isEligibleForRegister()) {
+        std::cerr << "Offscreen Global Pump (#75): tutucu pin'i birakmadi (tablo/pin sizintisi?)" << std::endl;
+        std::exit(1);
+    }
+    TEST_PASS("Audio Offscreen Pump — pumpOnly yabanci pin'e dokunmaz (kosulsuz-steal oldurme)");
 
     RowlEngine_Destroy(handle);
     // Pin temizligi: prob pini bu thread'e claim'ledi; bos-tabloysa birak ki
