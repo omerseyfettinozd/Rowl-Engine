@@ -250,9 +250,19 @@ float RowlEngine_GetAudioChannelRms(RowlEngineHandle handle, int channelType, in
 }
 
 void RowlEngine_GetAudioSpectrum(RowlEngineHandle handle, float* outBands, int bandCount) {
+    // null ve bandCount<=0 sessiz no-op'tur (handle durumundan bagimsiz).
     if (!outBands || bandCount <= 0) return;
-    // #76: olu-handle sessiz-tier sifir-doldur — tampona dokunulmazsa bayat
-    // bantlar canli gibi okunur. Kayit yok (sessiz-tier sozlesmesi).
+    // #76-tur2: Dead vs Foreign ayrimi — isLiveHandle ikisini birlestirir,
+    // ayrimli mutant yesil gecerdi. Tek classify ile ikiye ayrilir.
+    if (classifyHandle(handle) == HandleStanding::Foreign) {
+        // Foreign: tampona DOKUNULMAZ + WrongThread damgasi (loud-tier;
+        // RowlEngine_GetLastResultCode ile okunur).
+        stampWrongThread(handle, "get_audio_spectrum");
+        return;
+    }
+    // Dead (bilinmeyen/yok-edilmis/null handle): sessiz-tier sifir-doldur —
+    // tampona yazilir ama kayit YOKTUR (GetLastResultCode INVALID_HANDLE
+    // kalir, WrongThread damgasi YOK).
     if (!isLiveHandle(handle)) {
         for (int i = 0; i < bandCount; ++i) outBands[i] = 0.0f;
         return;

@@ -108,7 +108,9 @@ int main(int argc, char* argv[]) {
     test_audio_lock_outage_pending_no_stale_replay();
     test_audio_lock_outage_pending_fail_preserved();
     test_audio_lock_dead_handle_spectrum_zero_fill();
-    test_audio_lock_dead_handle_guards_watcher();
+    test_audio_lock_spectrum_foreign_thread();
+    test_audio_lock_spectrum_null_guard_lock();
+    test_audio_lock_spectrum_nonpositive_guard_watcher();
     test_audio_lock_offscreen_global_pump();
     test_audio_lock_scene_restore_audio_snapshot();
     test_audio_lock_mixer_persistence();

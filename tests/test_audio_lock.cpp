@@ -2303,16 +2303,20 @@ void test_audio_lock_outage_pending_fail_preserved() {
  * Sifir-doldurma satiri silinirse asagidaki zehir-tampon assert'i exit(1)
  * ile duser.
  *
- * Cekirdek daraltma: bandCount=8, cagri-oncesi tum bantlar 3.14159f zehirli,
- * Destroy sonrasi tek iddia: 8 bandin TAMAMI bit-bit ==0.0f (tolerans YOK,
- * -0.0f bile RED — bit deseni 0x00000000 olmalidir). Bant-atlayan mutantlar
- * (bant0-atlayan / son-bant-atlayan) ve doldurmasiz mutant bu iddia ile OLUR.
+ * Cekirdek (#76-tur2): genislikler 1-4-8-16, cagri-oncesi tum bantlar
+ * 3.14159f zehirli, Destroy sonrasi tek iddia: tum bantlar bit-bit ==0.0f
+ * (tolerans YOK, -0.0f bile RED — bit deseni 0x00000000 olmalidir).
+ * bant0 ve son-bant ayri belirtilir. Tek-genislik (sabit-8) ve m!=8
+ * mutantlari dar genisliklerde duser. Damga YOKTUR: GetLastResultCode
+ * INVALID_HANDLE kalir (WrongThread damgasi RED — Dead/Foreign ayrimli
+ * mutantin Dead'i-Foreign-sanmasi burada olur).
  *
  * Gozlem (deterministik; cihaz-bagimsiz — olu-handle yolu audio cihaza
  * ugramaz, o yuzden requireAudioDeviceOrSkip YOKTUR; timing-assert YOK):
- *  Null/hatali-sayi guard'lari + Peak/Rms skaler 0.0f sozlesmesi ayri
- *  test_audio_lock_dead_handle_guards_watcher gozcusundedir (kapsama
- *  silinmez, bolunur). Bu cekirdek SADECE sifir-doldur kilididir.
+ *  Null-guard + Peak/Rms skaler 0.0f sozlesmesi
+ *  test_audio_lock_spectrum_null_guard_lock kilidinde, bandCount<=0
+ *  gozcusu test_audio_lock_spectrum_nonpositive_guard_watcher'dadir
+ *  (kapsama silinmez, bolunur). Bu cekirdek SADECE sifir-doldur kilididir.
  */
 void test_audio_lock_dead_handle_spectrum_zero_fill() {
     TEST_SECTION("Audio Dead-Handle Spectrum Zero-Fill (#76)");
@@ -2323,61 +2327,188 @@ void test_audio_lock_dead_handle_spectrum_zero_fill() {
     }
     RowlEngine_Destroy(handle); // handle artik olu (retention: tekrar gecerli olamaz)
 
-    float bands[8];
-    for (int i = 0; i < 8; ++i) bands[i] = 3.14159f;
-    RowlEngine_GetAudioSpectrum(handle, bands, 8);
-    for (int i = 0; i < 8; ++i) {
-        uint32_t bits = 0;
-        std::memcpy(&bits, &bands[i], sizeof(bits));
-        if (bits != 0u) {
-            lockFail("Audio Dead-Handle Spectrum (#76): olu-handle tamponu sifirlamadi "
-                     "(bant " + std::to_string(i) + ")");
+    const int widths[4] = {1, 4, 8, 16};
+    for (const int width : widths) {
+        std::vector<float> bands(static_cast<size_t>(width), 3.14159f);
+        RowlEngine_GetAudioSpectrum(handle, bands.data(), width);
+        for (int i = 0; i < width; ++i) {
+            uint32_t bits = 0;
+            std::memcpy(&bits, &bands[i], sizeof(bits));
+            if (bits != 0u) {
+                const std::string where =
+                    (i == 0) ? "bant0"
+                             : ((i == width - 1) ? "son-bant"
+                                                 : ("bant " + std::to_string(i)));
+                lockFail("Audio Dead-Handle Spectrum (#76): genislik " +
+                         std::to_string(width) + " " + where +
+                         " sifirlanmadi (olu-handle tamponu bayat birakti)");
+            }
         }
+        TEST_PASS(("Audio Dead-Handle Spectrum — genislik " + std::to_string(width) +
+                   " tum bantlar bit-bit 0.0f")
+                      .c_str());
     }
-    TEST_PASS("Audio Dead-Handle Spectrum — olu-handle caller tamponunu sifirlar (8/8 bit-bit 0.0f)");
+    // Damga YOK: olu-handle kayit tutmaz — GetLastResultCode INVALID_HANDLE
+    // kalir. Dead'i-Foreign-sanip damgalayan ayrimli mutant burada OLUR.
+    if (RowlEngine_GetLastResultCode(handle) !=
+        static_cast<int32_t>(ROWL_RESULT_INVALID_HANDLE)) {
+        lockFail("Audio Dead-Handle Spectrum (#76): olu-handle damga birakti "
+                 "(INVALID_HANDLE beklenir, WrongThread RED)");
+    }
+    if (RowlEngine_GetLastResultCode(handle) ==
+        static_cast<int32_t>(ROWL_RESULT_WRONG_THREAD)) {
+        lockFail("Audio Dead-Handle Spectrum (#76): olu-handle WrongThread "
+                 "damgasi tasiyor (Dead/Foreign ayrimi bozuk)");
+    }
+    TEST_PASS("Audio Dead-Handle Spectrum — olu-handle kayit tutmaz (damga YOK)");
 }
 
 /**
- * test_audio_lock.cpp eklentisi — Dead-Handle Guards Watcher (#76) GOZCUSU.
+ * test_audio_lock.cpp eklentisi — Spectrum Foreign-Thread (#76-tur2) KILIDI.
  *
- * GOZCU (oldurmez, davranis bekcisi): null/0/-1 guard'lari sessiz no-op'tur
- * (cokme yok, tampona dokunulmaz) + Peak/Rms skaler 0.0f sozlesmesi degismez.
- * Cekirdek kilitten ayristirildi (kapsama silinmedi, bolundu): guard-kaldirma
- * varyantinda (null-kontrol silinirse nullptr cagrisi cokar) gozlem verir,
- * sifir-doldurma mutantini OLDURMEZ.
+ * KILIT (mutant oldurur): !isLiveHandle Dead+Foreign'i birlestiriyordu —
+ * yabanci-thread cagrisi da sessiz sifir-dolduruyor, tampona dokunuyor ve
+ * damga birakmiyordu. Duzeltme (loud-tier): canli handle'a yabanci-thread
+ * cagrisi tampona DOKUNMAZ + WRONG_THREAD (14) damgalar.
+ *  - Foreign'i-Dead-sanip dolduran/ayrimli mutant: zehir-tampon degisir ->
+ *    exit(1) (tampon-dokunmazlik).
+ *  - Damgayi kaldiran mutant: GetLastResultCode 14 degil -> exit(1) (damga).
+ *
+ * Gozlem (deterministik; timing-assert/sleep/poll YOK): sahiplik
+ * RowlEngine_Init ile kurulur (cagiran thread owner olur); ayri thread
+ * zehirli tamponla cagirir, tamponu ve damgayi thread-icinde okur.
+ * Damga paylasimli context'tedir — owner da join sonrasi 14 gorur.
+ */
+void test_audio_lock_spectrum_foreign_thread() {
+    TEST_SECTION("Audio Spectrum Foreign-Thread (#76)");
+
+    RowlEngineHandle handle = RowlEngine_Create();
+    if (!handle) {
+        lockFail("Audio Spectrum Foreign (#76): RowlEngine_Create failed");
+    }
+    if (RowlEngine_Init(handle, 320, 180, 0) != 1) {
+        RowlEngine_Destroy(handle);
+        lockFail("Audio Spectrum Foreign (#76): fixture Init failed (sahiplik kurulamadi)");
+    }
+
+    static constexpr float kForeignPoison = 2.71828f;
+    static constexpr int kForeignBands = 8;
+    uint32_t poisonBits = 0;
+    std::memcpy(&poisonBits, &kForeignPoison, sizeof(poisonBits));
+    bool foreignUntouched = false;
+    int32_t foreignCode = -1;
+    std::thread foreign([&] {
+        float bands[kForeignBands];
+        for (int i = 0; i < kForeignBands; ++i) bands[i] = kForeignPoison;
+        RowlEngine_GetAudioSpectrum(handle, bands, kForeignBands);
+        bool intact = true;
+        for (int i = 0; i < kForeignBands; ++i) {
+            uint32_t bits = 0;
+            std::memcpy(&bits, &bands[i], sizeof(bits));
+            if (bits != poisonBits) {
+                intact = false;
+                break;
+            }
+        }
+        foreignUntouched = intact;
+        foreignCode = RowlEngine_GetLastResultCode(handle);
+    });
+    foreign.join();
+    if (!foreignUntouched) {
+        RowlEngine_Shutdown(handle);
+        RowlEngine_Destroy(handle);
+        lockFail("Audio Spectrum Foreign (#76): yabanci-thread cagrisi tampona "
+                 "dokundu (tampon degismemis olmaliydi)");
+    }
+    if (foreignCode != static_cast<int32_t>(ROWL_RESULT_WRONG_THREAD)) {
+        RowlEngine_Shutdown(handle);
+        RowlEngine_Destroy(handle);
+        lockFail("Audio Spectrum Foreign (#76): WrongThread damgasi yok (kod " +
+                 std::to_string(foreignCode) + ", 14 beklenir)");
+    }
+    // Damga paylasimli context'tedir: owner da join sonrasi 14 + op gorur.
+    if (RowlEngine_GetLastResultCode(handle) !=
+        static_cast<int32_t>(ROWL_RESULT_WRONG_THREAD)) {
+        RowlEngine_Shutdown(handle);
+        RowlEngine_Destroy(handle);
+        lockFail("Audio Spectrum Foreign (#76): damga owner'a gorunmuyor "
+                 "(paylasimli context bozuk)");
+    }
+    if (std::string(RowlEngine_GetLastResultOperation(handle)) !=
+        "get_audio_spectrum") {
+        RowlEngine_Shutdown(handle);
+        RowlEngine_Destroy(handle);
+        lockFail("Audio Spectrum Foreign (#76): damga op'u yanlis "
+                 "(get_audio_spectrum beklenir)");
+    }
+    RowlEngine_Shutdown(handle);
+    RowlEngine_Destroy(handle);
+    TEST_PASS("Audio Spectrum Foreign — tampon degismemis + WrongThread damgasi (kilit)");
+}
+
+/**
+ * test_audio_lock.cpp eklentisi — Spectrum Null-Guard (#76) KILIDI.
+ *
+ * KILIT (cokme gozlemi): null tampon sessiz no-op'tur (cokme yok).
+ * null-kontrol kaldirilirsa asagidaki nullptr cagrisi NULL deref ile
+ * cokar — suit kirmiziya duser. Peak/Rms skaler 0.0f sozlesmesi degismez
+ * (olu-handle 0.0f doner; davranis bekcisi, bu kilitle ayni fonksiyonda
+ * pinlidir).
  *
  * Deterministik; cihaz-bagimsiz (requireAudioDeviceOrSkip YOKTUR);
  * timing-assert YOKTUR.
  */
-void test_audio_lock_dead_handle_guards_watcher() {
-    TEST_SECTION("Audio Dead-Handle Guards Watcher (#76)");
+void test_audio_lock_spectrum_null_guard_lock() {
+    TEST_SECTION("Audio Spectrum Null-Guard (#76)");
 
     RowlEngineHandle handle = RowlEngine_Create();
     if (!handle) {
-        lockFail("Audio Dead-Handle Guards (#76): RowlEngine_Create failed");
+        lockFail("Audio Spectrum Null-Guard (#76): RowlEngine_Create failed");
     }
     RowlEngine_Destroy(handle); // handle artik olu (retention: tekrar gecerli olamaz)
 
-    // Guard'lar: null tampon / bandCount <= 0 sessiz no-op'tur (cokme yok,
-    // tampona dokunulmaz). Zehir korunur — guard silinirse nullptr cagrisi
-    // gozlem verir.
-    float bands[4] = {0.5f, 0.75f, 1.0f, 0.25f};
+    // Null tampon: sessiz no-op, cokme yok (kaldirma-karsi mutant cokar).
     RowlEngine_GetAudioSpectrum(handle, nullptr, 4);
+    RowlEngine_GetAudioSpectrum(handle, nullptr, 16);
+    // Peak/Rms skaler sozlesmesi degismez: olu-handle 0.0f doner.
+    if (RowlEngine_GetAudioChannelPeak(handle, 3, 0) != 0.0f ||
+        RowlEngine_GetAudioChannelRms(handle, 3, 1) != 0.0f) {
+        lockFail("Audio Spectrum Null-Guard (#76): Peak/Rms olu-handle sozlesmesi bozuldu");
+    }
+    TEST_PASS("Audio Spectrum Null-Guard — null sessiz no-op, Peak/Rms 0.0f korunur (kilit)");
+}
+
+/**
+ * test_audio_lock.cpp eklentisi — Spectrum NonPositive-Guard (#76) GOZCUSU.
+ *
+ * GOZCU (oldurmez, gozlem-disi): bandCount<=0 acik guard'inin kaldirilmasinin
+ * gozlenebilir etkisi YOKTUR — sifir-doldur dongusu `for (i=0; i<bandCount)`
+ * zaten bos doner (bos-dongu), o yuzden kill-matrisi iddiasi YOKTUR.
+ * Yalniz davranis bekcisidir: sessiz no-op, zehir-tampona dokunulmaz.
+ *
+ * Deterministik; cihaz-bagimsiz (requireAudioDeviceOrSkip YOKTUR);
+ * timing-assert YOKTUR.
+ */
+void test_audio_lock_spectrum_nonpositive_guard_watcher() {
+    TEST_SECTION("Audio Spectrum NonPositive-Guard Watcher (#76)");
+
+    RowlEngineHandle handle = RowlEngine_Create();
+    if (!handle) {
+        lockFail("Audio Spectrum NonPositive-Guard (#76): RowlEngine_Create failed");
+    }
+    RowlEngine_Destroy(handle); // handle artik olu (retention: tekrar gecerli olamaz)
+
+    float bands[4] = {0.5f, 0.75f, 1.0f, 0.25f};
     RowlEngine_GetAudioSpectrum(handle, bands, 0);
     RowlEngine_GetAudioSpectrum(handle, bands, -1);
     const float expected[4] = {0.5f, 0.75f, 1.0f, 0.25f};
     for (int i = 0; i < 4; ++i) {
         if (bands[i] != expected[i]) {
-            lockFail("Audio Dead-Handle Guards (#76): guard cagrisi tamponu bozdu "
+            lockFail("Audio Spectrum NonPositive-Guard (#76): guard cagrisi tamponu bozdu "
                      "(bant " + std::to_string(i) + ")");
         }
     }
-    // Peak/Rms skaler sozlesmesi degismez: olu-handle 0.0f doner.
-    if (RowlEngine_GetAudioChannelPeak(handle, 3, 0) != 0.0f ||
-        RowlEngine_GetAudioChannelRms(handle, 3, 1) != 0.0f) {
-        lockFail("Audio Dead-Handle Guards (#76): Peak/Rms olu-handle sozlesmesi bozuldu");
-    }
-    TEST_PASS("Audio Dead-Handle Guards — guard'lar sessiz, Peak/Rms 0.0f korunur (gozcu)");
+    TEST_PASS("Audio Spectrum NonPositive-Guard — bandCount<=0 sessiz no-op (gozcu, oldurmez)");
 }
 
 /**
