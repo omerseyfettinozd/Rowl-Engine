@@ -26,6 +26,11 @@ namespace RowlEngine.Editor.ViewModels
         [ObservableProperty]
         private int _autoSaveIntervalSeconds = 60;
 
+        // Faz 6: varlık ızgarası simge boyutu (kaydırıcı AssetBrowserViewModel'dedir;
+        // burası makine profiline giden/gelen kalıcılık köprüsüdür).
+        [ObservableProperty]
+        private double _assetGridItemSize = 72;
+
         public List<int> AutoSaveIntervals { get; } = new() { 15, 30, 60, 120, 300 };
 
         [ObservableProperty]

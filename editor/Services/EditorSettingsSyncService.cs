@@ -26,6 +26,7 @@ public static class EditorSettingsSyncService
         var profile = EditorSettingsProfile.Load(path);
         settings.AutoSaveEnabled = profile.AutoSaveEnabled;
         settings.AutoSaveIntervalSeconds = profile.AutoSaveIntervalSeconds;
+        settings.AssetGridItemSize = profile.AssetGridItemSize;
     }
 
     public static void LoadProjectRuntimeSettings(ProjectRuntimeSettings projectSettings, SettingsViewModel settings)
@@ -48,12 +49,14 @@ public static class EditorSettingsSyncService
     {
         if (string.IsNullOrEmpty(propertyName)) return;
 
-        if (propertyName is nameof(SettingsViewModel.AutoSaveEnabled) or nameof(SettingsViewModel.AutoSaveIntervalSeconds))
+        if (propertyName is nameof(SettingsViewModel.AutoSaveEnabled) or nameof(SettingsViewModel.AutoSaveIntervalSeconds)
+            or nameof(SettingsViewModel.AssetGridItemSize))
         {
             new EditorSettingsProfile
             {
                 AutoSaveEnabled = settings.AutoSaveEnabled,
-                AutoSaveIntervalSeconds = settings.AutoSaveIntervalSeconds
+                AutoSaveIntervalSeconds = settings.AutoSaveIntervalSeconds,
+                AssetGridItemSize = settings.AssetGridItemSize
             }.Save(editorSettingsPath);
             return;
         }

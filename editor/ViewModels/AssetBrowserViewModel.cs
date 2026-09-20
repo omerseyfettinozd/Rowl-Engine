@@ -298,6 +298,10 @@ namespace RowlEngine.Editor.ViewModels
         public AssetBrowserViewModel(MainWindowViewModel main)
         {
             MainViewModel = main;
+            // Simge boyutu kalıcılığı: MainVM ctor'u LoadEditorSettings'i
+            // bizden önce çalıştırdığı için Settings'teki değer diskten
+            // gelen değerdir; ızgara açılışta onu devralır.
+            GridItemSize = MainViewModel.Settings.AssetGridItemSize;
             RefreshAssets();
             StartWatching();
         }
@@ -487,6 +491,11 @@ namespace RowlEngine.Editor.ViewModels
             if (!clamped.Equals(value))
                 GridItemSize = clamped;
             OnPropertyChanged(nameof(GridItemImageSize));
+            // Kalıcılık (tek yön: ızgara → Settings → makine profili).
+            // Settings'ten ızgaraya geri yazma yoktur, döngü oluşmaz;
+            // Settings.PropertyChanged ana VM'de profili diske yazar.
+            if (!MainViewModel.Settings.AssetGridItemSize.Equals(GridItemSize))
+                MainViewModel.Settings.AssetGridItemSize = GridItemSize;
         }
 
         partial void OnSelectedFolderChanged(AssetNodeViewModel? value) => RebuildFolderContents();

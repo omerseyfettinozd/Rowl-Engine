@@ -117,4 +117,56 @@ public sealed class EditorAssetGridVirtualizationTests : IDisposable
         Assert.Equal(AssetBrowserViewModel.DefaultGridRenderLimit, browser.GridRenderLimit);
         Assert.Single(browser.VisibleGridItems);
     }
+
+    [Fact]
+    public void GridItemSize_PersistsAcrossRestart()
+    {
+        // Simge boyutu makine profiline yazılır; gerçek kullanıcı dosyasını
+        // kirletmemek için anlık görüntü alınıp test sonunda geri yüklenir.
+        string machinePath = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "RowlEngine", "editor-settings.json");
+        byte[]? snapshot = File.Exists(machinePath) ? File.ReadAllBytes(machinePath) : null;
+        try
+        {
+            var browser = _vm.AssetBrowserViewModel;
+
+            // Izgara → Settings yönü (kaydırıcı hareketi).
+            browser.GridItemSize = 100;
+            Assert.Equal(100, _vm.Settings.AssetGridItemSize);
+            // Aralık-dışı değer ızgarada kelepçelenir, kelepçeli hali saklanır.
+            browser.GridItemSize = 500;
+            Assert.Equal(128, browser.GridItemSize);
+            Assert.Equal(128, _vm.Settings.AssetGridItemSize);
+
+            // Disk turu (geçici yol): kaydet → taze Settings'e yükle.
+            string tmpProfile = Path.Combine(Path.GetTempPath(), "RowlGridSize_" + Guid.NewGuid().ToString("N") + ".json");
+            try
+            {
+                new EditorSettingsProfile { AssetGridItemSize = 100 }.Save(tmpProfile);
+                var fresh = new SettingsViewModel();
+                EditorSettingsSyncService.LoadEditorSettings(tmpProfile, fresh);
+                Assert.Equal(100, fresh.AssetGridItemSize);
+            }
+            finally { try { File.Delete(tmpProfile); } catch (Exception) { } }
+
+            // Aralık-dışı ham değerler yüklenirken kelepçelenir.
+            Assert.Equal(128, new EditorSettingsProfile { AssetGridItemSize = 500 }.Sanitized().AssetGridItemSize);
+            Assert.Equal(40, new EditorSettingsProfile { AssetGridItemSize = 10 }.Sanitized().AssetGridItemSize);
+
+            // Açılış yönü: yeni tarayıcı Settings'teki değeri devralır.
+            _vm.Settings.AssetGridItemSize = 88;
+            var second = new AssetBrowserViewModel(_vm);
+            Assert.Equal(88, second.GridItemSize);
+        }
+        finally
+        {
+            try
+            {
+                if (snapshot != null) File.WriteAllBytes(machinePath, snapshot);
+                else if (File.Exists(machinePath)) File.Delete(machinePath);
+            }
+            catch (Exception) { }
+        }
+    }
 }
