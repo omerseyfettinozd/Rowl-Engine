@@ -102,10 +102,16 @@ public sealed class EditorConsoleCountersTests : IDisposable
                 throw new Exception($"Console badge count unreadable: '{badge.Text}'");
         }
 
-        // Günlük kutusu Grid'e taşınırken bağını kaybetmemeli.
-        var logBox = view.GetLogicalDescendants().OfType<TextBox>().FirstOrDefault()
-            ?? throw new Exception("Console log TextBox not found");
-        if (logBox.Text is null || !logBox.Text.StartsWith("[System]", StringComparison.Ordinal))
-            throw new Exception("Console log TextBox lost its LogOutput binding");
+        // Günlük gövdesi satır listesidir (Unity kromu H4; TextBox yok):
+        // ilk satır çekirdek satır, probe satırı listede görünür.
+        _vm.AppendLog("H4 probe satırı");
+        var logList = view.GetLogicalDescendants().OfType<ListBox>().FirstOrDefault()
+            ?? throw new Exception("Console log ListBox not found");
+        var rows = (logList.ItemsSource as string[])?.ToList()
+            ?? logList.Items.OfType<string>().ToList();
+        if (rows.Count == 0 || !rows[0].StartsWith("[System]", StringComparison.Ordinal))
+            throw new Exception("Console log ListBox lost its LogOutput binding");
+        if (!rows.Any(r => r.EndsWith("H4 probe satırı", StringComparison.Ordinal)))
+            throw new Exception("Console log probe satırı görünmüyor");
     }
 }
