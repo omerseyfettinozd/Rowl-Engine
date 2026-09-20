@@ -7,27 +7,27 @@
              x:Class="RowlEngine.Editor.Views.Panels.ProjectAssetsView"
              x:DataType="vm:MainWindowViewModel">
     <Border Background="{DynamicResource PanelBackground}">
-        <Grid RowDefinitions="Auto, *">
+        <Grid RowDefinitions="Auto, Auto, *, Auto">
             <Border Grid.Row="0" Background="{DynamicResource SurfaceBackground}"
                     BorderBrush="{DynamicResource BorderColor}" BorderThickness="0,0,0,1"
                     Padding="8,6">
                 <DockPanel LastChildFill="False">
-                    <TextBlock Text="Project Assets" FontWeight="Bold" FontSize="12"
+                    <TextBlock Text="Varlıklar" FontWeight="Bold" FontSize="12"
                                Foreground="{DynamicResource PrimaryText}" VerticalAlignment="Center"/>
                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="4">
-                        <Button Content="New folder"
-                                ToolTip.Tip="Create a folder under the selected asset location"
+                        <Button Content="Yeni Klasör"
+                                ToolTip.Tip="Seçili konumun altında klasör oluştur"
                                 Command="{Binding AssetBrowserViewModel.CreateFolderCommand}"
                                 Background="Transparent" Foreground="{DynamicResource PrimaryText}"
                                 BorderBrush="{DynamicResource BorderColor}" BorderThickness="1"
                                 CornerRadius="4" Padding="6,3" FontSize="10"/>
-                        <Button Content="Import"
-                                ToolTip.Tip="Import a file into the project Assets folder"
+                        <Button Content="İçe Aktar"
+                                ToolTip.Tip="Dosyayı proje Assets klasörüne içe aktar"
                                 Command="{Binding ImportAssetCommand}"
                                 Background="{DynamicResource AccentButtonBg}" Foreground="{DynamicResource AccentButtonFg}"
                                 CornerRadius="4" Padding="6,3" FontSize="10"/>
                         <Button Content="Yenile"
-                                ToolTip.Tip="Refresh the asset list"
+                                ToolTip.Tip="Varlık listesini yenile"
                                 Command="{Binding AssetBrowserViewModel.RefreshAssetsCommand}"
                                 Background="Transparent" Foreground="{DynamicResource PrimaryText}"
                                 BorderBrush="{DynamicResource BorderColor}" BorderThickness="1"
@@ -36,7 +36,21 @@
                 </DockPanel>
             </Border>
 
-            <TreeView Grid.Row="1"
+            <!-- Faz 4: arama + tür filtresi -->
+            <Grid Grid.Row="1" ColumnDefinitions="*, Auto" Margin="8,6,8,2">
+                <TextBox Grid.Column="0" Watermark="Ara: ad veya uzantı"
+                         Text="{Binding AssetBrowserViewModel.SearchText}"
+                         Background="{DynamicResource InputBackground}"
+                         Foreground="{DynamicResource PrimaryText}"
+                         BorderBrush="{DynamicResource BorderSubtle}"
+                         CornerRadius="4" Padding="6,3" FontSize="11" Margin="0,0,6,0"/>
+                <ComboBox Grid.Column="1"
+                          ItemsSource="{Binding AssetBrowserViewModel.AssetTypeFilters}"
+                          SelectedItem="{Binding AssetBrowserViewModel.SelectedTypeFilter, Mode=TwoWay}"
+                          FontSize="11" MinWidth="90"/>
+            </Grid>
+
+            <TreeView Grid.Row="2"
                       Background="Transparent" 
                       ItemsSource="{Binding AssetBrowserViewModel.AssetTree}" 
                       SelectedItem="{Binding AssetBrowserViewModel.SelectedNode, Mode=TwoWay}" 
@@ -56,7 +70,8 @@
                 </TreeView.ContextMenu>
                 <TreeView.Styles>
                     <Style Selector="TreeViewItem" x:DataType="vm:AssetNodeViewModel">
-                        <Setter Property="IsExpanded" Value="True"/>
+                        <!-- Faz 4: genişletme ViewModel'den gelir (yalnızca kök + filtre). -->
+                        <Setter Property="IsExpanded" Value="{Binding IsExpanded}"/>
                         <Setter Property="Padding" Value="2,3"/>
                     </Style>
                 </TreeView.Styles>
@@ -111,6 +126,15 @@
                     </TreeDataTemplate>
                 </TreeView.ItemTemplate>
             </TreeView>
+
+            <!-- Faz 4: durum satırı -->
+            <Border Grid.Row="3" Background="{DynamicResource SurfaceBackground}"
+                    BorderBrush="{DynamicResource BorderColor}" BorderThickness="0,1,0,0"
+                    Padding="8,4">
+                <TextBlock Text="{Binding AssetBrowserViewModel.StatusText}"
+                           Foreground="{DynamicResource MutedText}" FontSize="10"
+                           VerticalAlignment="Center"/>
+            </Border>
         </Grid>
     </Border>
 </UserControl>

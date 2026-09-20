@@ -26,6 +26,13 @@ namespace RowlEngine.Editor.ViewModels
         private string _editingName = string.Empty;
 
         /// <summary>
+        /// Faz 4: ağaçta genişletme durumu ViewModel'de tutulur (yalnızca
+        /// kök açık + filtre aktifken tümü; IsExpanded=True stili kalktı).
+        /// </summary>
+        [ObservableProperty]
+        private bool _isExpanded;
+
+        /// <summary>
         /// MS-5: true when the file was previously known but is now absent on
         /// disk (deleted/renamed externally). Shown with a "kayıp dosya" badge.
         /// </summary>
@@ -206,6 +213,50 @@ namespace RowlEngine.Editor.ViewModels
         [ObservableProperty]
         private AssetNodeViewModel? _selectedNode;
 
+        /// <summary>Faz 4: arama kutusu (ad/uzantı içerir). Her tuş RefreshAssets'i tetikler.</summary>
+        [ObservableProperty]
+        private string _searchText = string.Empty;
+
+        /// <summary>Faz 4: tür filtresi seçenekleri (Türkçe, sabit).</summary>
+        public IReadOnlyList<string> AssetTypeFilters { get; } =
+            new[] { "Tümü", "Görsel", "Ses", "Betik", "Paket" };
+
+        /// <summary>Faz 4: seçili tür filtresi. Değişim RefreshAssets'i tetikler.</summary>
+        [ObservableProperty]
+        private string _selectedTypeFilter = "Tümü";
+
+        /// <summary>Faz 4: durum satırı ("12 öğe · 2 sistem dosyası gizli" / "5 sonuç").</summary>
+        [ObservableProperty]
+        private string _statusText = string.Empty;
+
+        partial void OnSearchTextChanged(string value) => RefreshAssets();
+
+        partial void OnSelectedTypeFilterChanged(string value) => RefreshAssets();
+
+        /// <summary>Faz 4: arama veya tür filtresi aktif mi?</summary>
+        private bool FilterActive =>
+            !string.IsNullOrWhiteSpace(SearchText) || SelectedTypeFilter != "Tümü";
+
+        private int _visibleFileCount;
+        private int _hiddenFileCount;
+
+        /// <summary>Faz 4: dosya adı + tür filtresi eşleşmesi.</summary>
+        private bool MatchesFilter(string fileName)
+        {
+            if (!string.IsNullOrWhiteSpace(SearchText) &&
+                !fileName.Contains(SearchText, StringComparison.OrdinalIgnoreCase))
+                return false;
+            string ext = System.IO.Path.GetExtension(fileName).ToLowerInvariant();
+            return SelectedTypeFilter switch
+            {
+                "Görsel" => Services.MediaFormatCatalog.IsSupportedImageExtension(ext),
+                "Ses" => Services.MediaFormatCatalog.IsSupportedAudioExtension(ext),
+                "Betik" => ext == ".json" || ext == ".txt" || ext == ".lua",
+                "Paket" => ext == ".rowlpkg",
+                _ => true,
+            };
+        }
+
         public ObservableCollection<AssetNodeViewModel> AssetTree { get; } = new();
         public ObservableCollection<AssetItemViewModel> Assets { get; } = new();
         public ObservableCollection<string> AssetNames { get; } = new();
@@ -285,6 +336,9 @@ namespace RowlEngine.Editor.ViewModels
             AssetTree.Clear();
             Assets.Clear();
             AssetNames.Clear();
+            _visibleFileCount = 0;
+            _hiddenFileCount = 0;
+            bool filterActive = FilterActive;
 
             // Define VFS mount point: only Assets/ is the canonical asset root.
             var mountPoints = new List<(string displayName, string path)>
@@ -302,7 +356,11 @@ namespace RowlEngine.Editor.ViewModels
                 if (System.IO.Directory.Exists(mountPath))
                 {
                     var rootDir = new System.IO.DirectoryInfo(mountPath);
-                    var rootNode = new AssetNodeViewModel(displayName, displayName, mountPath, true, RefreshAssets);
+                    var rootNode = new AssetNodeViewModel(displayName, displayName, mountPath, true, RefreshAssets)
+                    {
+                        // Faz 4: yalnızca kök açık başlar (IsExpanded=True stili kalktı).
+                        IsExpanded = true
+                    };
 
                     PopulateDirectoryNode(rootDir, mountPath, rootNode.Children, currentFiles);
                     AssetTree.Add(rootNode);
@@ -323,7 +381,10 @@ namespace RowlEngine.Editor.ViewModels
             var missingSet = new HashSet<string>(missing, StringComparer.OrdinalIgnoreCase);
             if (missing.Count > 0)
             {
-                var group = new AssetNodeViewModel("Kayıp Dosyalar", "__missing__", string.Empty, true);
+                var group = new AssetNodeViewModel("Kayıp Dosyalar", "__missing__", string.Empty, true)
+                {
+                    IsExpanded = filterActive
+                };
                 foreach (string fullPath in missing)
                 {
                     string name = System.IO.Path.GetFileName(fullPath);
@@ -352,6 +413,12 @@ namespace RowlEngine.Editor.ViewModels
                     System.Diagnostics.Debug.WriteLine($"Failed to report missing assets: {ex.Message}");
                 }
             }
+
+            // Faz 4: durum satırı.
+            StatusText = filterActive
+                ? $"{_visibleFileCount} sonuç"
+                : $"{_visibleFileCount} öğe" +
+                  (_hiddenFileCount > 0 ? $" · {_hiddenFileCount} sistem dosyası gizli" : string.Empty);
         }
 
         private static string? TryRelativize(string fullPath)
@@ -502,6 +569,7 @@ namespace RowlEngine.Editor.ViewModels
 
         private void PopulateDirectoryNode(System.IO.DirectoryInfo dirInfo, string rootPath, ObservableCollection<AssetNodeViewModel> targetCollection, HashSet<string>? currentFiles = null)
         {
+            bool filterActive = FilterActive;
             foreach (var subDir in dirInfo.GetDirectories().OrderBy(d => d.Name))
             {
                 if (subDir.Name.StartsWith(".") || IgnoredDirectoryNames.Contains(subDir.Name)) continue;
@@ -511,6 +579,10 @@ namespace RowlEngine.Editor.ViewModels
 
                 PopulateDirectoryNode(subDir, rootPath, dirNode.Children, currentFiles);
 
+                // Faz 4: filtre aktifken görünür çocuk barındırmayan klasör budanır.
+                if (filterActive && dirNode.Children.Count == 0) continue;
+                if (filterActive) dirNode.IsExpanded = true;
+
                 targetCollection.Add(dirNode);
             }
 
@@ -518,11 +590,18 @@ namespace RowlEngine.Editor.ViewModels
             {
                 if (file.Name.StartsWith(".") ||
                     IgnoredFileExtensions.Contains(file.Extension) ||
-                    file.Name.Equals(".gitkeep", StringComparison.OrdinalIgnoreCase)) continue;
+                    file.Name.Equals(".gitkeep", StringComparison.OrdinalIgnoreCase))
+                {
+                    _hiddenFileCount++;
+                    continue;
+                }
+                if (!MatchesFilter(file.Name)) continue;
 
                 string relPath = System.IO.Path.GetRelativePath(rootPath, file.FullName);
                 var fileNode = new AssetNodeViewModel(file.Name, relPath, file.FullName, false, RefreshAssets);
+                if (filterActive) fileNode.IsExpanded = true;
                 currentFiles?.Add(file.FullName);
+                _visibleFileCount++;
 
                 targetCollection.Add(fileNode);
                 Assets.Add(new AssetItemViewModel(relPath));
