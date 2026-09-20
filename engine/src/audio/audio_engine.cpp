@@ -841,14 +841,10 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
                 (channel == AudioChannelType::Bgm || channel == AudioChannelType::Ambience ||
                  channel == AudioChannelType::Ui || channel == AudioChannelType::Sfx);
             bool queueOk = false;
-            if (m_testFailQueueNext || m_testFailCommitPutNext) {
-                // Bulgu #81 test kancalari: prova öncesi deterministik
-                // kuyruk-hatası (SDL çağrılmaz; fail yolu birebir aynı
-                // çalışır, bayraklar tüketilir). testFailCommitPut commit
-                // asamasinin dusus senaryosunu ayni erken-noktada kurar:
-                // prova/Clear hic calismaz, kuyruk ==before korunur.
+            if (m_testFailQueueNext) {
+                // Bulgu #81 pre-prova kancasi: SDL'ye dokunmadan deterministik
+                // kuyruk-hatasi (prova/Clear hic calismaz; fail yolu birebir ayni).
                 m_testFailQueueNext = false;
-                m_testFailCommitPutNext = false;
             } else if (SDL_SetAudioStreamFormat(targetStream, &floatSpec, nullptr)) {
                 if (!needsReplace) {
                     // Voice + transition-scratch: doğrudan ek-kuyruk
@@ -857,14 +853,77 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
                 } else if (SDL_PutAudioStreamData(targetStream, floatBuffer, floatLength)) {
                     // Prova BAŞARILI: eski kuyruk yıkılır, aynı yük taze
                     // kuyruğa commit-Put ile yazılır (replace semantiği
-                    // korunur; hata eski kuyruğa dokunmaz).
+                    // korunur).
                     // A5-tur1: Clear fail'i kayda geçer ama queue belirleyicidir
                     // (m_lastError'e yazılmaz — başarılı Put kirlenmemelidir).
                     if (!SDL_ClearAudioStream(targetStream)) {
                         ROWL_LOG_WARN("[AudioEngine] Failed to clear audio stream: " +
                                       std::string(SDL_GetError()));
                     }
-                    queueOk = SDL_PutAudioStreamData(targetStream, floatBuffer, floatLength);
+                    if (m_testFailCommitPutNext) {
+                        // Bulgu #81 commit kancasi: prova+Clear GERCEK kostu,
+                        // commit-Put cagrilmadan dusus (gercek commit-dususu).
+                        m_testFailCommitPutNext = false;
+                        queueOk = false;
+                    } else {
+                        queueOk = SDL_PutAudioStreamData(targetStream, floatBuffer, floatLength);
+                    }
+                    if (!queueOk) {
+                        // Bulgu #81 atomiklik (yalniz bu sozlesme): commit-Put
+                        // dususunde Clear sonrasi bosalan kuyruga kanal-basina
+                        // son kuyruklanan PCM (m_bgmData / m_ambienceData /
+                        // m_uiData / SFX slot PCM'i) geri kuyruklanir; state
+                        // yazilmaz (kuyruk==before gercek olur). Best-effort
+                        // restore: sonucu queueOk'yu degistirmez (fail yolu +
+                        // m_lastError korunur). Basari yolunda ek SDL cagrisi YOKTUR.
+                        const uint8_t* restoreData = nullptr;
+                        int restoreBytes = 0;
+                        SDL_AudioSpec restoreSpec{};
+                        bool haveRestoreSpec = false;
+                        if (channel == AudioChannelType::Bgm) {
+                            if (m_isBgmPlaying && !m_bgmData.empty() &&
+                                m_bgmData.size() <= static_cast<size_t>(INT_MAX)) {
+                                restoreData = m_bgmData.data();
+                                restoreBytes = static_cast<int>(m_bgmData.size());
+                            }
+                        } else if (channel == AudioChannelType::Ambience) {
+                            if (m_isAmbiencePlaying && !m_ambienceData.empty() &&
+                                m_ambienceData.size() <= static_cast<size_t>(INT_MAX)) {
+                                restoreData = m_ambienceData.data();
+                                restoreBytes = static_cast<int>(m_ambienceData.size());
+                            }
+                        } else if (channel == AudioChannelType::Ui) {
+                            if (m_isUiPlaying && !m_uiData.empty() &&
+                                m_uiData.size() <= static_cast<size_t>(INT_MAX)) {
+                                restoreData = m_uiData.data();
+                                restoreBytes = static_cast<int>(m_uiData.size());
+                            }
+                        } else if (channel == AudioChannelType::Sfx) {
+                            if (sfxSlot < m_sfxPool.voices().size()) {
+                                const SfxVoice& oldVoice = m_sfxPool.voices()[sfxSlot];
+                                if (oldVoice.playing && !oldVoice.pcm.empty() &&
+                                    oldVoice.pcm.size() <= static_cast<size_t>(INT_MAX)) {
+                                    restoreData = oldVoice.pcm.data();
+                                    restoreBytes = static_cast<int>(oldVoice.pcm.size());
+                                    restoreSpec.format = SDL_AUDIO_F32;
+                                    restoreSpec.channels =
+                                        static_cast<Uint8>(std::clamp(oldVoice.channels, 1, 8));
+                                    restoreSpec.freq =
+                                        (oldVoice.sampleRate > 0) ? oldVoice.sampleRate : 48000;
+                                    haveRestoreSpec = true;
+                                }
+                            }
+                        }
+                        if (restoreData != nullptr && restoreBytes > 0) {
+                            if (haveRestoreSpec) {
+                                SDL_SetAudioStreamFormat(targetStream, &restoreSpec, nullptr);
+                            }
+                            if (!SDL_PutAudioStreamData(targetStream, restoreData, restoreBytes)) {
+                                ROWL_LOG_WARN("[AudioEngine] Failed to restore previous audio queue after commit drop: " +
+                                              std::string(SDL_GetError()));
+                            }
+                        }
+                    }
                 }
             }
             if (!queueOk) {

@@ -206,12 +206,12 @@ public:
     //    dokunmadan başarısız sayar (fail yolu birebir aynı çalışır; bayrak
     //    tüketilir). Gerçek SetFormat/Put hatasını deterministik kurmak
     //    mümkün olmadığı için kilit bu kancayla yazılır.
-    //  - testFailCommitPut: testFailNextQueue emsali ikinci kanca; commit
-    //    asamasindaki kuyruk-dususunu ayni erken-noktada SDL'ye dokunmadan
-    //    basarisiz sayar (prova/Clear hic calismaz; bayrak tuketilir).
-    //    Clear-sonrasi commit-Put dusus senaryosunun atomiklik iddiasini
-    //    kilitler (queued-bytes==before). Uretimde yalniz hook + tuketim
-    //    noktasi vardir, davranis degisikligi yoktur.
+    //  - testFailCommitPut: commit asamasindaki kuyruk-dususunu prova-Put
+    //    basarisi + Clear sonrasi enjekte eder (commit-Put cagrilmadan dusus;
+    //    bayrak tuketilir). Clear sonrasi bosalan kuyruga kanal-basina son
+    //    PCM geri kuyruklanir (atomiklik gercek olur; state yazilmaz).
+    //    Uretimde yalniz hook + tuketim noktasi + best-effort restore vardir,
+    //    basari-yolu davranis degisikligi yoktur.
     //  - testQueuedBytes: kanal akışındaki kuyruklu bayt
     //    (SDL_GetAudioStreamAvailable; akış yoksa/hatada 0). SFX'te slot 0
     //    izlenir (derinlik 1 ile hedef deterministiktir).
@@ -277,9 +277,9 @@ private:
     // queue duserse predecessor + snapshot + niyet korunur, m_lastError dolar,
     // pending tutulur (retry bir sonraki donuste; #87 sozlesmesi).
     std::string m_pendingBgmPath = "";
-    // Bulgu #81 test-only: testFailNextQueue bayrağı (bir sonraki kuyruk
-    // denemesinde tüketilir) + testFailCommitPut bayrağı (commit asamasinin
-    // ayni erken-noktada tuketilen ikinci kancasi).
+    // Bulgu #81 test-only: testFailNextQueue bayrağı (erken dalda tuketilir:
+    // prova/Clear hic calismaz) + testFailCommitPut bayrağı (prova basarisi +
+    // Clear sonrasi commit-Put onunde tuketilir; gercek commit-dususu).
     bool m_testFailQueueNext = false;
     bool m_testFailCommitPutNext = false;
     std::vector<uint8_t> m_bgmData;
