@@ -8,10 +8,13 @@
 
 #include "c_api_internal.hpp"
 #include "rowl/audio/audio_engine.hpp"
-#include "cstring"
 #include <cstdio>
 extern "C" {
 /* ── Audio control & voice blips ──────────────────────────────────────────────── */
+
+// R1 (#6): WithLength boyutları bu tamponlardan alır.
+static thread_local std::string g_lastAudioErrorBuf;
+static thread_local std::string g_voiceBlipSoundBuf;
 
 void RowlEngine_PlayAudio(RowlEngineHandle handle,
                           const char* assetPath,
@@ -183,7 +186,7 @@ int RowlEngine_GetActiveDspFilter(RowlEngineHandle handle) {
 
 const char* RowlEngine_GetLastAudioError(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return "";
-    static thread_local std::string buffer;
+    std::string& buffer = g_lastAudioErrorBuf;
     return invokeNoexcept<const char*>([&] {
         auto checked = toEngineChecked(handle);
         const auto* audio = checked ? checked->getAudio() : nullptr;
@@ -194,7 +197,7 @@ const char* RowlEngine_GetLastAudioError(RowlEngineHandle handle) {
 
 const char* RowlEngine_GetLastAudioErrorWithLength(RowlEngineHandle handle, uint32_t* outLen) {
     const char* value = RowlEngine_GetLastAudioError(handle);
-    if (outLen) *outLen = static_cast<uint32_t>(std::strlen(value));
+    if (outLen) *outLen = withLengthOf(g_lastAudioErrorBuf, value);
     return value;
 }
 
@@ -309,7 +312,7 @@ void RowlEngine_SetDialogueVoiceBlip(RowlEngineHandle handle, const char* soundP
 
 const char* RowlEngine_GetDialogueVoiceBlipSound(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return "";
-    static thread_local std::string buffer;
+    std::string& buffer = g_voiceBlipSoundBuf;
     return invokeNoexcept<const char*>([&] {
         auto checked = toEngineChecked(handle);
         buffer = checked ? checked->getDialogueVoiceBlipSound() : "";
@@ -319,7 +322,7 @@ const char* RowlEngine_GetDialogueVoiceBlipSound(RowlEngineHandle handle) {
 
 const char* RowlEngine_GetDialogueVoiceBlipSoundWithLength(RowlEngineHandle handle, uint32_t* outLen) {
     const char* value = RowlEngine_GetDialogueVoiceBlipSound(handle);
-    if (outLen) *outLen = static_cast<uint32_t>(std::strlen(value));
+    if (outLen) *outLen = withLengthOf(g_voiceBlipSoundBuf, value);
     return value;
 }
 

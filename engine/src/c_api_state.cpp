@@ -12,13 +12,20 @@
 #include "rowl/state/save_metadata.hpp"
 #include "rowl/state/save_slots.hpp"
 #include "nlohmann/json.hpp"
-#include "cstring"
 extern "C" {
 /* ── Scripting, session state & structured results ────────────────────────── */
 
+// R1 (#6): WithLength boyutları bu tamponlardan alır.
+static thread_local std::string g_scriptDiagnosticsBuf;
+static thread_local std::string g_dialogueHistoryBuf;
+static thread_local std::string g_variableBuf;
+static thread_local std::string g_lastResultOpBuf;
+static thread_local std::string g_lastResultMsgBuf;
+static thread_local std::string g_lastResultTargetBuf;
+
 const char* RowlEngine_GetScriptRuntimeDiagnosticsJson(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return "[]";
-    static thread_local std::string buffer;
+    std::string& buffer = g_scriptDiagnosticsBuf;
     return invokeNoexcept<const char*>([&] {
         nlohmann::json diagnostics = nlohmann::json::array();
         auto checked = toEngineChecked(handle);
@@ -38,7 +45,7 @@ const char* RowlEngine_GetScriptRuntimeDiagnosticsJson(RowlEngineHandle handle) 
 
 const char* RowlEngine_GetDialogueHistoryJson(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return "[]";
-    static thread_local std::string buffer;
+    std::string& buffer = g_dialogueHistoryBuf;
     return invokeNoexcept<const char*>([&] {
         nlohmann::json history = nlohmann::json::array();
         auto checked = toEngineChecked(handle);
@@ -57,13 +64,13 @@ const char* RowlEngine_GetDialogueHistoryJson(RowlEngineHandle handle) {
 
 const char* RowlEngine_GetScriptRuntimeDiagnosticsJsonWithLength(RowlEngineHandle handle, uint32_t* outLen) {
     const char* value = RowlEngine_GetScriptRuntimeDiagnosticsJson(handle);
-    if (outLen) *outLen = static_cast<uint32_t>(std::strlen(value));
+    if (outLen) *outLen = withLengthOf(g_scriptDiagnosticsBuf, value);
     return value;
 }
 
 const char* RowlEngine_GetDialogueHistoryJsonWithLength(RowlEngineHandle handle, uint32_t* outLen) {
     const char* value = RowlEngine_GetDialogueHistoryJson(handle);
-    if (outLen) *outLen = static_cast<uint32_t>(std::strlen(value));
+    if (outLen) *outLen = withLengthOf(g_dialogueHistoryBuf, value);
     return value;
 }
 
@@ -258,7 +265,7 @@ void RowlEngine_SetVariable(RowlEngineHandle handle, const char* key, const char
 
 const char* RowlEngine_GetVariable(RowlEngineHandle handle, const char* key) {
     if (!isLiveHandle(handle) || !key) return "";
-    static thread_local std::string buf;
+    std::string& buf = g_variableBuf;
     return invokeNoexcept<const char*>([&] {
         auto checked = toEngineChecked(handle);
         buf = checked ? checked->getScriptVariable(key) : "";
@@ -268,7 +275,7 @@ const char* RowlEngine_GetVariable(RowlEngineHandle handle, const char* key) {
 
 const char* RowlEngine_GetVariableWithLength(RowlEngineHandle handle, const char* key, uint32_t* outLen) {
     const char* value = RowlEngine_GetVariable(handle, key);
-    if (outLen) *outLen = static_cast<uint32_t>(std::strlen(value));
+    if (outLen) *outLen = withLengthOf(g_variableBuf, value);
     return value;
 }
 
@@ -355,7 +362,7 @@ int32_t RowlEngine_GetLastResultCode(RowlEngineHandle handle) {
 }
 
 const char* RowlEngine_GetLastResultOperation(RowlEngineHandle handle) {
-    static thread_local std::string buf;
+    std::string& buf = g_lastResultOpBuf;
     buf.clear();
     if (!isLiveHandle(handle)) {
         // D3: foreign-live → stamped op ("shutdown"/"step"/...); dead → "none".
@@ -379,7 +386,7 @@ const char* RowlEngine_GetLastResultOperation(RowlEngineHandle handle) {
 }
 
 const char* RowlEngine_GetLastResultMessage(RowlEngineHandle handle) {
-    static thread_local std::string buf;
+    std::string& buf = g_lastResultMsgBuf;
     buf.clear();
     if (!isLiveHandle(handle)) {
         // D3: foreign-live → stamped message; dead → legacy text.
@@ -403,7 +410,7 @@ const char* RowlEngine_GetLastResultMessage(RowlEngineHandle handle) {
 }
 
 const char* RowlEngine_GetLastResultTarget(RowlEngineHandle handle) {
-    static thread_local std::string buf;
+    std::string& buf = g_lastResultTargetBuf;
     buf.clear();
     if (!isLiveHandle(handle)) {
         // D3: foreign-live → stamped target; dead → empty (unchanged).
@@ -427,19 +434,19 @@ const char* RowlEngine_GetLastResultTarget(RowlEngineHandle handle) {
 
 const char* RowlEngine_GetLastResultOperationWithLength(RowlEngineHandle handle, uint32_t* outLen) {
     const char* value = RowlEngine_GetLastResultOperation(handle);
-    if (outLen) *outLen = static_cast<uint32_t>(std::strlen(value));
+    if (outLen) *outLen = withLengthOf(g_lastResultOpBuf, value);
     return value;
 }
 
 const char* RowlEngine_GetLastResultMessageWithLength(RowlEngineHandle handle, uint32_t* outLen) {
     const char* value = RowlEngine_GetLastResultMessage(handle);
-    if (outLen) *outLen = static_cast<uint32_t>(std::strlen(value));
+    if (outLen) *outLen = withLengthOf(g_lastResultMsgBuf, value);
     return value;
 }
 
 const char* RowlEngine_GetLastResultTargetWithLength(RowlEngineHandle handle, uint32_t* outLen) {
     const char* value = RowlEngine_GetLastResultTarget(handle);
-    if (outLen) *outLen = static_cast<uint32_t>(std::strlen(value));
+    if (outLen) *outLen = withLengthOf(g_lastResultTargetBuf, value);
     return value;
 }
 

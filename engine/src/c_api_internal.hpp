@@ -143,6 +143,22 @@ inline RowlEngine_ResultCode copyUtf8ToCaller(
     return ROWL_RESULT_OK;
 }
 
+/// R1 (#6): WithLength varyantları kopyalanan baytı raporlar, strlen'i
+/// değil. Düz getter tampona yazmışsa (dönen pointer tamponundur) boyut
+/// tamponun kendisinden alınır, gömülü NUL korunur; literal fallback
+/// (ölü-handle ""/"[]"/"none"...) dönmüşse NUL içermez, strlen güvenlidir.
+/// copyUtf8ToCaller ile aynı UINT32 korkuluğu. noexcept.
+inline uint32_t withLengthOf(const std::string& buf, const char* value) noexcept {
+    size_t n;
+    if (value != nullptr && value == buf.data())
+        n = buf.size();
+    else
+        n = std::strlen(value != nullptr ? value : "");
+    if (n >= std::numeric_limits<uint32_t>::max())
+        n = std::numeric_limits<uint32_t>::max();
+    return static_cast<uint32_t>(n);
+}
+
 /// D1 (B1b #108-#132): pre-init fail-loud disiplini. Init-öncesi çağrılan
 /// giriş davranışını korur (void'ler no-op ya da son-geçerliyi yazar,
 /// getter'lar mevcut fallback'u döner) ama last-result kanalına StateError

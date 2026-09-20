@@ -12,7 +12,6 @@
 #include "rowl/vfs/vfs.hpp"
 #include "algorithm"
 #include "atomic"
-#include "cstring"
 #include "fstream"
 #include "filesystem"
 #include "nlohmann/json.hpp"
@@ -125,8 +124,12 @@ int RowlEngine_LoadStoryGraphFromVfs(RowlEngineHandle handle, const char* vfsPat
     return loaded;
 }
 
+// R1 (#6): WithLength boyutu bu tampondan alır (düz getter literal
+// dönerse helper strlen'e düşer).
+static thread_local std::string g_storyGraphErrorBuf;
+
 const char* RowlEngine_GetLastStoryGraphError(RowlEngineHandle handle) {
-    static thread_local std::string buffer;
+    std::string& buffer = g_storyGraphErrorBuf;
     buffer.clear();
     if (!isLiveHandle(handle)) return buffer.c_str();
     invokeNoexcept([&] { auto checked = toEngineChecked(handle); buffer = checked ? checked->getLastStoryGraphLoadError() : ""; });
@@ -135,7 +138,7 @@ const char* RowlEngine_GetLastStoryGraphError(RowlEngineHandle handle) {
 
 const char* RowlEngine_GetLastStoryGraphErrorWithLength(RowlEngineHandle handle, uint32_t* outLen) {
     const char* value = RowlEngine_GetLastStoryGraphError(handle);
-    if (outLen) *outLen = static_cast<uint32_t>(std::strlen(value));
+    if (outLen) *outLen = withLengthOf(g_storyGraphErrorBuf, value);
     return value;
 }
 
@@ -457,10 +460,14 @@ int RowlEngine_PointerDown(RowlEngineHandle handle, float x, float y) {
 
 /* ── State queries ───────────────────────────────────────────────────────── */
 
+// R1 (#6): WithLength boyutları bu tamponlardan alır.
+static thread_local std::string g_speakerBuf;
+static thread_local std::string g_dialogueBuf;
+
 const char* RowlEngine_GetSpeaker(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return "";
     // Returned pointer is valid until next step/update — owned by engine
-    static thread_local std::string buf;
+    std::string& buf = g_speakerBuf;
     return invokeNoexcept<const char*>([&] {
         auto checked = toEngineChecked(handle);
         // D1 (#111): pre-init okuma demo varsayılanını gerçek sanıyordu.
@@ -476,7 +483,7 @@ const char* RowlEngine_GetSpeaker(RowlEngineHandle handle) {
 
 const char* RowlEngine_GetDialogue(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return "";
-    static thread_local std::string buf;
+    std::string& buf = g_dialogueBuf;
     return invokeNoexcept<const char*>([&] {
         auto checked = toEngineChecked(handle);
         // D1 (#111): GetSpeaker ile aynı delik.
@@ -491,13 +498,13 @@ const char* RowlEngine_GetDialogue(RowlEngineHandle handle) {
 
 const char* RowlEngine_GetSpeakerWithLength(RowlEngineHandle handle, uint32_t* outLen) {
     const char* value = RowlEngine_GetSpeaker(handle);
-    if (outLen) *outLen = static_cast<uint32_t>(std::strlen(value));
+    if (outLen) *outLen = withLengthOf(g_speakerBuf, value);
     return value;
 }
 
 const char* RowlEngine_GetDialogueWithLength(RowlEngineHandle handle, uint32_t* outLen) {
     const char* value = RowlEngine_GetDialogue(handle);
-    if (outLen) *outLen = static_cast<uint32_t>(std::strlen(value));
+    if (outLen) *outLen = withLengthOf(g_dialogueBuf, value);
     return value;
 }
 

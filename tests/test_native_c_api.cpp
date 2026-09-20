@@ -74,6 +74,21 @@ void test_native_c_api() {
     }
     TEST_PASS("C-API Concurrent Runtime Isolation and SDL Lease Retention");
 
+    // R1 (#6): WithLength kopyalanan baytı raporlar, strlen'i değil.
+    // \u0000 JSON-escape'i gömülü NUL'lu 5 baytlık string olur; len 5
+    // olmalı (strlen 2 raporlardı) ve 5 bayt da bozulmadan durmalı.
+    RowlEngine_UpdateSceneFromJson(handle,
+        R"([{"type":"speaker","data":{"speaker":"AB\u0000CD","dialogue":"x"}}])");
+    {
+        uint32_t len = 0xDEAD;
+        const char* p = RowlEngine_GetSpeakerWithLength(handle, &len);
+        if (len != 5 || std::memcmp(p, "AB\0CD", 5) != 0) {
+            std::cerr << "GetSpeakerWithLength truncated embedded NUL (len=" << len << ")" << std::endl;
+            exit(1);
+        }
+    }
+    TEST_PASS("C-API WithLength Reports Copied Bytes, Not Strlen (R1 #6)");
+
     RowlEngine_Step(handle, std::numeric_limits<float>::quiet_NaN());
     RowlEngine_Step(handle, -1.0f);
     RowlEngine_Step(handle, 10.0f);

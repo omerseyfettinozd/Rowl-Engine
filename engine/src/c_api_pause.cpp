@@ -6,7 +6,8 @@
  */
 #include "c_api_internal.hpp"
 
-#include <cstring>
+// R1 (#6): WithLength boyutu bu tampondan alır.
+static thread_local std::string g_pauseMenuJsonBuf;
 
 int RowlEngine_SetQuickSaveSlot(RowlEngineHandle handle, int32_t slotIndex) {
     if (!isLiveHandle(handle)) return 0;
@@ -75,7 +76,7 @@ void RowlEngine_PauseMenuCommand(RowlEngineHandle handle, int command) {
 
 const char* RowlEngine_GetPauseMenuJson(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return "{\"open\":false,\"rows\":[]}";
-    static thread_local std::string buffer;
+    std::string& buffer = g_pauseMenuJsonBuf;
     return invokeNoexcept<const char*>([&] {
         auto checked = toEngineChecked(handle);
         buffer = checked ? checked->getPauseMenuJson() : "{\"open\":false,\"rows\":[]}";
@@ -85,7 +86,7 @@ const char* RowlEngine_GetPauseMenuJson(RowlEngineHandle handle) {
 
 const char* RowlEngine_GetPauseMenuJsonWithLength(RowlEngineHandle handle, uint32_t* outLen) {
     const char* value = RowlEngine_GetPauseMenuJson(handle);
-    if (outLen) *outLen = static_cast<uint32_t>(std::strlen(value));
+    if (outLen) *outLen = withLengthOf(g_pauseMenuJsonBuf, value);
     return value;
 }
 
