@@ -41,22 +41,22 @@
                 <StackPanel Spacing="4">
                     <TextBlock Text="SPEAKER &amp; TEXT" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource MutedText}"/>
 
-                    <Grid ColumnDefinitions="*, Auto, Auto" ColumnSpacing="8">
-                        <StackPanel Grid.Column="0" Spacing="2">
-                            <TextBlock Text="Speaker Name" FontSize="10" Foreground="{DynamicResource MutedText}"/>
-                            <TextBox Text="{Binding Speaker, Mode=TwoWay}" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}" FontSize="12"/>
-                            <ctrl:FieldValidationBadge Validation="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).InspectorViewModel.Validation}"
-                                                       NodeId="{Binding Node.Id}" FieldKey="dialogue.speaker"/>
-                        </StackPanel>
-                        <StackPanel Grid.Column="1" Spacing="2">
-                            <TextBlock Text="Title Font (px)" FontSize="10" Foreground="{DynamicResource MutedText}"/>
-                            <ctrl:RangedNumberControl Value="{Binding SpeakerFontSize}" Minimum="10" Maximum="64" Step="2" Width="150"/>
-                        </StackPanel>
-                        <StackPanel Grid.Column="2" Spacing="2">
-                            <TextBlock Text="Title Color" FontSize="10" Foreground="{DynamicResource MutedText}"/>
-                            <ctrl:ColorPickerControl Mode="Hex" SelectedValue="{Binding SpeakerColor, Mode=TwoWay}"/>
-                        </StackPanel>
-                    </Grid>
+                    <StackPanel Spacing="2">
+                        <TextBlock Text="Speaker Name" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                        <TextBox Text="{Binding Speaker, Mode=TwoWay}" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}" FontSize="12"/>
+                        <ctrl:FieldValidationBadge Validation="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).InspectorViewModel.Validation}"
+                                                   NodeId="{Binding Node.Id}" FieldKey="dialogue.speaker"/>
+                    </StackPanel>
+
+                    <StackPanel Spacing="2">
+                        <TextBlock Text="Title Font (px)" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                        <ctrl:RangedNumberControl Value="{Binding SpeakerFontSize}" Minimum="10" Maximum="64" Step="2" HorizontalAlignment="Stretch"/>
+                    </StackPanel>
+
+                    <StackPanel Spacing="2">
+                        <TextBlock Text="Title Color" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                        <ctrl:ColorPickerControl Mode="Hex" SelectedValue="{Binding SpeakerColor, Mode=TwoWay}"/>
+                    </StackPanel>
 
                     <StackPanel Spacing="2">
                         <TextBlock Text="Dialogue Content" FontSize="10" Foreground="{DynamicResource MutedText}"/>
@@ -166,10 +166,10 @@
 
                         <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
                             <CheckBox Grid.Column="0" IsChecked="{Binding VoiceBlipSkipPunctuation}" Content="Noktalama/Boşluk Atla" FontSize="10" Foreground="{DynamicResource PrimaryText}"/>
-                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                                <TextBlock Text="Kanal:" FontSize="10" Foreground="{DynamicResource MutedText}" VerticalAlignment="Center"/>
-                                <TextBox Text="{Binding VoiceBlipChannel, Mode=TwoWay}" Width="70" FontSize="10" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}"/>
-                            </StackPanel>
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6" VerticalAlignment="Center">
+                                <TextBlock Grid.Column="0" Text="Kanal:" FontSize="10" Foreground="{DynamicResource MutedText}" VerticalAlignment="Center"/>
+                                <TextBox Grid.Column="1" Text="{Binding VoiceBlipChannel, Mode=TwoWay}" FontSize="10" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}" HorizontalAlignment="Stretch"/>
+                            </Grid>
                         </Grid>
                     </StackPanel>
                 </StackPanel>
@@ -265,14 +265,14 @@
                         <Button Grid.Column="1" Content="Square Avatar" HorizontalAlignment="Stretch" Padding="4,4" FontSize="10" Background="{DynamicResource ToolbarButtonBg}" Foreground="{DynamicResource PrimaryText}" CornerRadius="4"
                                 Command="{Binding SetSquareCommand}"/>
                     </Grid>
-                    <Grid ColumnDefinitions="*, *, *" ColumnSpacing="4">
-                        <Button Grid.Column="0" Content="NVL Novel" HorizontalAlignment="Stretch" Padding="2,4" FontSize="9" Background="{DynamicResource ToolbarButtonBg}" Foreground="{DynamicResource PrimaryText}" CornerRadius="4"
+                    <Grid ColumnDefinitions="*,*" ColumnSpacing="4">
+                        <Button Grid.Column="0" Content="NVL Novel" HorizontalAlignment="Stretch" Padding="4,4" FontSize="10" Background="{DynamicResource ToolbarButtonBg}" Foreground="{DynamicResource PrimaryText}" CornerRadius="4"
                                 Command="{Binding SetNvlFullscreenCommand}"/>
-                        <Button Grid.Column="1" Content="Top Subtitle" HorizontalAlignment="Stretch" Padding="2,4" FontSize="9" Background="{DynamicResource ToolbarButtonBg}" Foreground="{DynamicResource PrimaryText}" CornerRadius="4"
+                        <Button Grid.Column="1" Content="Top Subtitle" HorizontalAlignment="Stretch" Padding="4,4" FontSize="10" Background="{DynamicResource ToolbarButtonBg}" Foreground="{DynamicResource PrimaryText}" CornerRadius="4"
                                 Command="{Binding SetTopSubtitleCommand}"/>
-                        <Button Grid.Column="2" Content="Comic Bubble" HorizontalAlignment="Stretch" Padding="2,4" FontSize="9" Background="{DynamicResource ToolbarButtonBg}" Foreground="{DynamicResource PrimaryText}" CornerRadius="4"
-                                Command="{Binding SetComicBubbleCommand}"/>
                     </Grid>
+                    <Button Content="Comic Bubble" HorizontalAlignment="Stretch" Padding="4,4" FontSize="10" Background="{DynamicResource ToolbarButtonBg}" Foreground="{DynamicResource PrimaryText}" CornerRadius="4"
+                            Command="{Binding SetComicBubbleCommand}"/>
                 </StackPanel>
             </StackPanel>
         </StackPanel>

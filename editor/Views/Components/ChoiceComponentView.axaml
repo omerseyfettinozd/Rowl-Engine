@@ -50,12 +50,12 @@
                       <x:String>Neon</x:String><x:String>Minimal</x:String><x:String>Paper</x:String><x:String>Danger</x:String>
                     </ComboBox>
                     <TextBlock Grid.Column="2" Text="Yazı Tipi" VerticalAlignment="Center" FontSize="10" Foreground="{DynamicResource MutedText}"/>
-                    <TextBox Grid.Column="3" Text="{Binding FontSize}" Width="56"/>
+                    <TextBox Grid.Column="3" Text="{Binding FontSize}" HorizontalAlignment="Stretch"/>
                   </Grid>
                   <Grid ColumnDefinitions="Auto,*,Auto,*,Auto,*" ColumnSpacing="8">
-                    <TextBlock Text="X" VerticalAlignment="Center" FontSize="10" Foreground="{DynamicResource MutedText}"/><TextBox Grid.Column="1" Text="{Binding X}" Width="58"/>
-                    <TextBlock Grid.Column="2" Text="Y" VerticalAlignment="Center" FontSize="10" Foreground="{DynamicResource MutedText}"/><TextBox Grid.Column="3" Text="{Binding Y}" Width="58"/>
-                    <TextBlock Grid.Column="4" Text="Opacity" VerticalAlignment="Center" FontSize="10" Foreground="{DynamicResource MutedText}"/><TextBox Grid.Column="5" Text="{Binding Opacity}" Width="58"/>
+                    <TextBlock Text="X" VerticalAlignment="Center" FontSize="10" Foreground="{DynamicResource MutedText}"/><TextBox Grid.Column="1" Text="{Binding X}" HorizontalAlignment="Stretch"/>
+                    <TextBlock Grid.Column="2" Text="Y" VerticalAlignment="Center" FontSize="10" Foreground="{DynamicResource MutedText}"/><TextBox Grid.Column="3" Text="{Binding Y}" HorizontalAlignment="Stretch"/>
+                    <TextBlock Grid.Column="4" Text="Opacity" VerticalAlignment="Center" FontSize="10" Foreground="{DynamicResource MutedText}"/><TextBox Grid.Column="5" Text="{Binding Opacity}" HorizontalAlignment="Stretch"/>
                   </Grid>
                   <Border Tag="Font" DragDrop.AllowDrop="True" DragDrop.DragOver="OnAssetDragOver" DragDrop.Drop="OnAssetDrop"
                           BorderBrush="{DynamicResource BorderColor}" BorderThickness="1" CornerRadius="4" Padding="3">
@@ -70,9 +70,9 @@
                     <TextBox Grid.Column="1" Watermark="Border #RRGGBB" Text="{Binding BorderColor}"/>
                   </Grid>
                   <Grid ColumnDefinitions="Auto,*,Auto,*,Auto,*" ColumnSpacing="8">
-                    <TextBlock Text="W" VerticalAlignment="Center" FontSize="10" Foreground="{DynamicResource MutedText}"/><TextBox Grid.Column="1" Text="{Binding Width}" Width="54"/>
-                    <TextBlock Grid.Column="2" Text="H" VerticalAlignment="Center" FontSize="10" Foreground="{DynamicResource MutedText}"/><TextBox Grid.Column="3" Text="{Binding Height}" Width="54"/>
-                    <TextBlock Grid.Column="4" Text="Radius" VerticalAlignment="Center" FontSize="10" Foreground="{DynamicResource MutedText}"/><TextBox Grid.Column="5" Text="{Binding CornerRadius}" Width="54"/>
+                    <TextBlock Text="W" VerticalAlignment="Center" FontSize="10" Foreground="{DynamicResource MutedText}"/><TextBox Grid.Column="1" Text="{Binding Width}" HorizontalAlignment="Stretch"/>
+                    <TextBlock Grid.Column="2" Text="H" VerticalAlignment="Center" FontSize="10" Foreground="{DynamicResource MutedText}"/><TextBox Grid.Column="3" Text="{Binding Height}" HorizontalAlignment="Stretch"/>
+                    <TextBlock Grid.Column="4" Text="Radius" VerticalAlignment="Center" FontSize="10" Foreground="{DynamicResource MutedText}"/><TextBox Grid.Column="5" Text="{Binding CornerRadius}" HorizontalAlignment="Stretch"/>
                   </Grid>
                   <TextBlock Text="Buton görselleri — Assets panelinden ilgili alana sürükle bırak"
                              FontSize="10" Foreground="{DynamicResource MutedText}" TextWrapping="Wrap"/>
