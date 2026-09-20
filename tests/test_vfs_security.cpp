@@ -661,6 +661,81 @@ void test_vfs_security() {
     }
     TEST_PASS("#122 Dead project roots fail loud with a root-cause diagnosis");
 
+    // R1 (#14) bilerek-boz: initialize() CWD'ye göre mount yapmamalı (bare
+    // init). Aynı binary farklı CWD'den farklı varlık çözmemeli; varlık
+    // kökü yalnızca explicit remountProject ile gelir. Taze iki VFSManager
+    // once-guard'ı deler, her biri kendi CWD'sini yansıtır.
+    {
+        struct ScopedCwd14 {
+            std::filesystem::path saved;
+            bool ok = false;
+            explicit ScopedCwd14(const std::filesystem::path& dir) {
+                std::error_code ec;
+                saved = std::filesystem::current_path(ec);
+                if (ec) return;
+                std::filesystem::create_directories(dir, ec);
+                if (ec) return;
+                std::filesystem::current_path(dir, ec);
+                ok = !ec;
+            }
+            ~ScopedCwd14() {
+                if (ok) {
+                    std::error_code ec;
+                    std::filesystem::current_path(saved, ec);
+                }
+            }
+        };
+        const auto dirA = testRoot / "cwd_a";
+        const auto dirB = testRoot / "cwd_b";
+        std::error_code setupEc;
+        std::filesystem::create_directories(dirA / "Assets", setupEc);
+        std::filesystem::create_directories(dirB / "Assets", setupEc);
+        if (setupEc) {
+            std::cerr << "#14 setup: could not plant CWD fixtures" << std::endl;
+            exit(1);
+        }
+        std::ofstream(dirA / "Assets" / "same.txt") << "A";
+        std::ofstream(dirB / "Assets" / "same.txt") << "B";
+        std::string readA = "<unread>", readB = "<unread>";
+        {
+            ScopedCwd14 cwdPin(dirA);
+            if (!cwdPin.ok) {
+                std::cerr << "#14 setup: could not pin CWD to dirA" << std::endl;
+                exit(1);
+            }
+            Rowl::VFS::VFSManager vfsA;
+            vfsA.initialize();
+            readA = vfsA.readString("same.txt");
+        }
+        {
+            ScopedCwd14 cwdPin(dirB);
+            if (!cwdPin.ok) {
+                std::cerr << "#14 setup: could not pin CWD to dirB" << std::endl;
+                exit(1);
+            }
+            Rowl::VFS::VFSManager vfsB;
+            vfsB.initialize();
+            readB = vfsB.readString("same.txt");
+        }
+        if (readA != readB) {
+            std::cerr << "#14: initialize() resolved CWD-relative assets ('" << readA
+                      << "' vs '" << readB << "')" << std::endl;
+            exit(1);
+        }
+        // Explicit kök hâlâ çalışmalı: bare init + remountProject(dirB).
+        Rowl::VFS::VFSManager vfs;
+        vfs.initialize();
+        if (!vfs.remountProject(dirB.string())) {
+            std::cerr << "#14: remountProject rejected a valid root" << std::endl;
+            exit(1);
+        }
+        if (vfs.readString("same.txt") != "B") {
+            std::cerr << "#14: explicit remount did not resolve dirB assets" << std::endl;
+            exit(1);
+        }
+    }
+    TEST_PASS("R1 #14: initialize() mounts nothing CWD-relative; explicit remount works");
+
     // No global-restore remount: vfs is function-local.
     TEST_PASS("Project remount exposes Assets but not project-root files");
 

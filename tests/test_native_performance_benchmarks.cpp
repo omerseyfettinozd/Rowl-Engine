@@ -245,6 +245,12 @@ void test_native_performance_benchmarks(const std::string& benchmarkJsonPath = "
     // 2. Scene JSON Parse & Update Benchmark
     RowlEngineHandle handle = RowlEngine_Create();
     RowlEngine_Init(handle, 1920, 1080, 0);
+    // R1 (#14): VFS bare-init sözleşmesi — doku ısınması artık CWD
+    // mount'una güvenemez; süit CWD'sini (repo kökü, Assets'li) explicit
+    // proje kökü olarak ver (golden bölümündeki SetProjectDirectory
+    // kalıbıyla aynı).
+    const std::string benchProjectRoot = std::filesystem::current_path().string();
+    RowlEngine_SetProjectDirectory(handle, benchProjectRoot.c_str());
     const auto configuredTextureBudgetBytes = benchmarkTextureCacheBudgetBytes();
     RowlEngine_SetTextureCacheBudgetBytes(handle, configuredTextureBudgetBytes);
 

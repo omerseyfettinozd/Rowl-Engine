@@ -129,46 +129,12 @@ void VFSManager::initialize() {
 
     ROWL_LOG_INFO("Initializing Hybrid Virtual File System (VFS)...");
 
-    // A mod using an ordinary asset path overrides the packaged entry at the
-    // same path.  Preserve the explicit mods/ namespace for tooling too.
-    // A2a: error_code overloads throughout — a vanished CWD or an unreadable
-    // directory must degrade to "no mounts", never throw across the VFS.
-    std::error_code fsError;
-    if (!fsError && fs::exists("mods", fsError) && !fsError &&
-        fs::is_directory("mods", fsError) && !fsError) {
-        mountDirectory("", "mods");
-        mountDirectory("mods", "mods");
-    }
-
-    // A default runtime may only expose its asset root. Mounting the current
-    // directory here used to make unrelated project files readable through an
-    // empty VFS prefix whenever the engine was launched from a project root.
-    const fs::path candidatesRoot = fs::current_path(fsError);
-    std::vector<fs::path> candidateRoots;
-    if (!fsError) candidateRoots.push_back(candidatesRoot / "Assets");
-
-    for (const auto& root : candidateRoots) {
-        fsError.clear();
-        if (!fs::exists(root, fsError) || fsError) continue;
-        if (!fs::is_directory(root, fsError) || fsError) continue;
-        // A2a: pathToUtf8, never .string() — .string() is ANSI-encoded on
-        // Windows and would lose a non-ASCII project root.
-        const std::string rootUtf8 = Rowl::Platform::pathToUtf8(root);
-        mountDirectory("", rootUtf8);
-        mountDirectory("Assets", rootUtf8);
-
-        fs::path imgPath = root / "images";
-        if (fs::exists(imgPath, fsError) && !fsError &&
-            fs::is_directory(imgPath, fsError) && !fsError) {
-            const std::string imgUtf8 = Rowl::Platform::pathToUtf8(imgPath);
-            mountDirectory("", imgUtf8);
-            mountDirectory("images", imgUtf8);
-        }
-
-        fs::path pkgPath = root / "packages";
-        mountPackagesUnder(pkgPath);
-    }
-
+    // R1 (#14): bare init — SIFIR mount. Eski kod buradan CWD'ye göre
+    // "mods/" + current_path/"Assets" mount'luyordu: aynı binary farklı
+    // dizinden çalışınca farklı varlık çözüyordu (belirlenimsiz). Varlık
+    // kökü artık yalnızca explicit remountProject(projectRoot) ile gelir
+    // (proje yükleme yolu); proje yoksa VFS çıplak kalır, okumalar miss
+    // döner. once-guard + kilit disiplini aynen durur.
     m_initialized = true;
     ROWL_LOG_INFO("VFS Initialization Complete (" + std::to_string(m_mountPoints.size()) + " mount points).");
 }
