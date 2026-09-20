@@ -1,4 +1,8 @@
-# C1 — Görsel-Dil Mock + Tasarım-Token Paketi (C1a, ONAY BEKLİYOR)
+# C1 — Görsel-Dil Mock + Tasarım-Token Paketi (C1a, ~~ONAY BEKLİYOR~~ SUPERSEDED 2026-09-20)
+
+> **SUPERSEDED:** Siyah + kemik-beyazı (`#0A0A0B` + `#F2EFE6`) yönü kararı (UI Sadeleştirme,
+> KARAR-0) bu paketi geçersiz kıldı. Q1–Q4 soruları HÜKÜMSÜZDÜR; token önerileri uygulanmayacak.
+> Belge tarihsel kayıt olarak korunur.
 
 Faz C strangler'ının (C2 LivePreview + C3 MainWindow kabuğu + C4
 lint/markup/validation) görsel-dil kilidi. Dayanak:

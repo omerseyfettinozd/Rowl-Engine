@@ -9,8 +9,10 @@ görsel yenileme nedeniyle değişmez.
 
 ## Görsel temel
 
-- **Renk:** Uzun yazım oturumları için sıcak, koyu mürdüm yüzeyler; mercan
-  vurgu (`#F09A78`) birincil eylemi ve seçili odağı taşır. Başarı yeşili,
+- **Renk (2026-09-20 revizyonu — UI Sadeleştirme KARAR-0):** Varsayılan karanlık mod
+  siyah + kemik-beyazıdır: zeminler `#0A0A0B`/`#131315`/`#17171A`, metin `#F2EFE6`
+  (bone white). Vurgu renkli değildir; en açık ton birincil eylemi ve seçili odağı
+  taşır. Eski dil (sıcak koyu mürdüm + mercan `#F09A78`) hükümsüzdür. Başarı yeşili,
   uyarı altını ve hata kırmızısı yalnızca durum anlamı için kullanılır.
 - **Tipografi:** Arayüz başlıkları kısa ve belirgin, açıklamalar sade ve
   ikincildir. Proje ve sahne adları bilgi hiyerarşisinde dosya yollarından önce
