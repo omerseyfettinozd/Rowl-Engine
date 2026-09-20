@@ -14,12 +14,18 @@
             <!-- Component Header -->
             <Border Background="{DynamicResource CardHeaderBackground}" CornerRadius="2,2,0,0" Padding="8,6">
                 <Grid ColumnDefinitions="*, Auto">
-                    <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                        <TextBlock Text="Görsel" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource MutedText}" VerticalAlignment="Center"/>
-                        <TextBlock Text="{Binding DisplayName}" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource PrimaryText}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-                    </StackPanel>
+                    <Grid Grid.Column="0" ColumnDefinitions="Auto,*" VerticalAlignment="Center">
+                        <CheckBox Grid.Column="0" IsChecked="{Binding IsEnabled}" ToolTip.Tip="Enable/Disable" MinWidth="0" Padding="0" Margin="0,0,2,0" VerticalAlignment="Center"/>
+                        <ToggleButton Grid.Column="1" IsChecked="{Binding IsExpanded}" ToolTip.Tip="Genişlet/Daralt"
+                                      Background="Transparent" BorderThickness="0" Padding="4,2"
+                                      HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" VerticalAlignment="Center">
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6">
+                                <TextBlock Grid.Column="0" Text="Görsel" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource MutedText}" VerticalAlignment="Center"/>
+                                <TextBlock Grid.Column="1" Text="{Binding DisplayName}" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource PrimaryText}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                            </Grid>
+                        </ToggleButton>
+                    </Grid>
                     <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="3" VerticalAlignment="Center">
-                        <CheckBox IsChecked="{Binding IsEnabled}" ToolTip.Tip="Enable/Disable" MinWidth="0" Padding="0" Margin="0,0,2,0"/>
                         <Button Content="Yukarı" Command="{Binding MoveUpCommand}" ToolTip.Tip="Move Up" FontSize="10" Padding="4,2" MinWidth="0" Background="Transparent" Foreground="{DynamicResource MutedText}" BorderThickness="0"/>
                         <Button Content="Aşağı" Command="{Binding MoveDownCommand}" ToolTip.Tip="Move Down" FontSize="10" Padding="4,2" MinWidth="0" Background="Transparent" Foreground="{DynamicResource MutedText}" BorderThickness="0"/>
                         <ToggleButton IsChecked="{Binding IsExpanded}" Content="Ayar" FontSize="10" Padding="4,2" MinWidth="0" Background="Transparent" Foreground="{DynamicResource MutedText}" BorderThickness="0"/>
