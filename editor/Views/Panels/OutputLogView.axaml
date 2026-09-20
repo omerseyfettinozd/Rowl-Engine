@@ -7,8 +7,43 @@
              x:Class="RowlEngine.Editor.Views.Panels.OutputLogView"
              x:DataType="vm:MainWindowViewModel">
     <Border Background="{DynamicResource LogConsoleBg}">
-        <ScrollViewer Padding="8" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
-            <TextBox Text="{Binding LogOutput}" IsReadOnly="True" AcceptsReturn="True" Background="Transparent" BorderThickness="0" FontFamily="Consolas, Monospace" FontSize="12" Foreground="{DynamicResource LogConsoleText}"/>
-        </ScrollViewer>
+        <Grid RowDefinitions="Auto,*">
+            <!-- Unity kromu: konsol araç satırı (Temizle + sayaç rozetleri) -->
+            <Border Grid.Row="0" BorderBrush="{DynamicResource BorderSubtle}" BorderThickness="0,0,0,1"
+                    Padding="8,4">
+                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <Button Content="Temizle"
+                            Command="{Binding ClearLogCommand}"
+                            ToolTip.Tip="Konsolu temizle"
+                            Background="{DynamicResource ToolbarButtonBg}"
+                            Foreground="{DynamicResource PrimaryText}"
+                            FontSize="11" Padding="8,3" CornerRadius="4"/>
+                    <Border Background="{DynamicResource CardHeaderBackground}" CornerRadius="8"
+                            Padding="7,2" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding LogErrorCount, StringFormat='Hata: {0}'}"
+                                   Foreground="{DynamicResource ErrorBrush}"
+                                   FontSize="11" FontWeight="SemiBold"
+                                   ToolTip.Tip="Hata sayısı"/>
+                    </Border>
+                    <Border Background="{DynamicResource CardHeaderBackground}" CornerRadius="8"
+                            Padding="7,2" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding LogWarningCount, StringFormat='Uyarı: {0}'}"
+                                   Foreground="{DynamicResource WarningBrush}"
+                                   FontSize="11" FontWeight="SemiBold"
+                                   ToolTip.Tip="Uyarı sayısı"/>
+                    </Border>
+                    <Border Background="{DynamicResource CardHeaderBackground}" CornerRadius="8"
+                            Padding="7,2" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding LogInfoCount, StringFormat='Bilgi: {0}'}"
+                                   Foreground="{DynamicResource InfoBrush}"
+                                   FontSize="11"
+                                   ToolTip.Tip="Bilgi sayısı"/>
+                    </Border>
+                </StackPanel>
+            </Border>
+            <ScrollViewer Grid.Row="1" Padding="8" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+                <TextBox Text="{Binding LogOutput}" IsReadOnly="True" AcceptsReturn="True" Background="Transparent" BorderThickness="0" FontFamily="Consolas, Monospace" FontSize="12" Foreground="{DynamicResource LogConsoleText}"/>
+            </ScrollViewer>
+        </Grid>
     </Border>
 </UserControl>

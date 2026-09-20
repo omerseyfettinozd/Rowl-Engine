@@ -172,8 +172,60 @@ namespace RowlEngine.Editor.ViewModels
         [ObservableProperty]
         private bool _isConnected = false;
 
+        /// <summary>
+        /// Unity kromu Dilim E: konsol çekirdek satırı. Temizle komutu günlüğü
+        /// bu satıra sıfırlar; sayaçlar her LogOutput yazımında yeniden taranır.
+        /// </summary>
+        public const string LogSeedLine = "[System] Rowl Engine Editor initialized.\n";
+
         [ObservableProperty]
-        private string _logOutput = "[System] Rowl Engine Editor initialized.\n";
+        private string _logOutput = LogSeedLine;
+
+        /// <summary>
+        /// Unity kromu Dilim E: konsol rozet sayaçları. Sezgisel sınıflandırma
+        /// (öncelik: hata > uyarı > bilgi; boş satırlar sayılmaz):
+        /// hata = error/hata/failed/başarısız/exception, uyarı =
+        /// warning/uyarı/uyari, kalan = bilgi. Tek yazıcı AppendLog'dur,
+        /// ClearLog çekirdek satıra döndürür; tarama LogOutput içeriğiyle her
+        /// zaman tutarlıdır (artımlı sayaç kayması olamaz).
+        /// </summary>
+        [ObservableProperty]
+        private int _logErrorCount;
+
+        [ObservableProperty]
+        private int _logWarningCount;
+
+        [ObservableProperty]
+        private int _logInfoCount;
+
+        partial void OnLogOutputChanged(string value) => RecountLogLines();
+
+        private void RecountLogLines()
+        {
+            int errors = 0, warnings = 0, infos = 0;
+            foreach (var line in LogOutput.Split('\n'))
+            {
+                if (string.IsNullOrWhiteSpace(line)) continue;
+                if (IsLogErrorLine(line)) errors++;
+                else if (IsLogWarningLine(line)) warnings++;
+                else infos++;
+            }
+            LogErrorCount = errors;
+            LogWarningCount = warnings;
+            LogInfoCount = infos;
+        }
+
+        private static bool IsLogErrorLine(string line) =>
+            line.Contains("error", StringComparison.OrdinalIgnoreCase) ||
+            line.Contains("hata", StringComparison.OrdinalIgnoreCase) ||
+            line.Contains("failed", StringComparison.OrdinalIgnoreCase) ||
+            line.Contains("başarısız", StringComparison.OrdinalIgnoreCase) ||
+            line.Contains("exception", StringComparison.OrdinalIgnoreCase);
+
+        private static bool IsLogWarningLine(string line) =>
+            line.Contains("warning", StringComparison.OrdinalIgnoreCase) ||
+            line.Contains("uyarı", StringComparison.OrdinalIgnoreCase) ||
+            line.Contains("uyari", StringComparison.OrdinalIgnoreCase);
 
         public ObservableCollection<NodeViewModel> SelectedNodes { get; } = new();
 
@@ -588,6 +640,10 @@ namespace RowlEngine.Editor.ViewModels
 
             // Faz 4 Dilim 5 — crash-recovery check (read-only; never overwrites).
             CheckCrashRecoveryAtStartup();
+
+            // Unity kromu Dilim E: alan başlatıcı kısmi tetiklemez; açılış +
+            // kurtarma satırları sayaçlara girsin diye ctor sonunda taranır.
+            RecountLogLines();
 
             // Embedded engine: initialize directly with isolated project VFS
             if (connectEngine)
@@ -1757,6 +1813,16 @@ namespace RowlEngine.Editor.ViewModels
                 return;
             }
             LogOutput += $"[{DateTime.Now:HH:mm:ss}] {message}\n";
+        }
+
+        /// <summary>
+        /// Unity kromu Dilim E: konsolu çekirdek satırına sıfırlar; sayaçlar
+        /// kısmi (OnLogOutputChanged) aracılığıyla yeniden taranır.
+        /// </summary>
+        [RelayCommand]
+        public void ClearLog()
+        {
+            LogOutput = LogSeedLine;
         }
 
         // Debounced save to avoid disk thrashing during drag operations
