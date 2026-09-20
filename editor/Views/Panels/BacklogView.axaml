@@ -4,6 +4,7 @@
              x:Class="RowlEngine.Editor.Views.Panels.BacklogView"
              x:DataType="vm:BacklogViewModel">
   <Border Background="{DynamicResource LogConsoleBg}" Padding="8">
+    <Grid>
     <ScrollViewer VerticalScrollBarVisibility="Auto">
       <ItemsControl ItemsSource="{Binding Entries}">
         <ItemsControl.ItemTemplate>
@@ -16,5 +17,19 @@
         </ItemsControl.ItemTemplate>
       </ItemsControl>
     </ScrollViewer>
+    <!-- Faz 5: boş-durum — kayıt yok (eylem: oyuncuyu aç) -->
+    <StackPanel x:Name="BacklogEmptyPanel" IsVisible="{Binding IsEmpty}"
+                VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="8" Margin="16">
+      <TextBlock Text="Henüz diyalog kaydı yok." FontSize="11" FontStyle="Italic"
+                 Foreground="{DynamicResource MutedText}" HorizontalAlignment="Center"/>
+      <TextBlock Text="Oyuncu önizlemedeki konuşmalar burada birikir." FontSize="10"
+                 Foreground="{DynamicResource DimText}" HorizontalAlignment="Center"
+                 TextWrapping="Wrap" TextAlignment="Center"/>
+      <Button Content="Oyuncu Önizlemeyi Aç" Command="{Binding OpenPlayerCommand}"
+              ToolTip.Tip="Oyuncu önizleme panelini aç"
+              Background="{DynamicResource AccentButtonBg}" Foreground="{DynamicResource AccentButtonFg}"
+              CornerRadius="6" Padding="12,5" FontSize="11" HorizontalAlignment="Center"/>
+    </StackPanel>
+    </Grid>
   </Border>
 </UserControl>

@@ -9,9 +9,22 @@
                 Background="{DynamicResource ToolbarButtonBg}" Foreground="{DynamicResource PrimaryText}"
                 CornerRadius="6" Padding="10,4" FontSize="11"/>
       </DockPanel>
+      <Grid>
       <ScrollViewer><ItemsControl ItemsSource="{Binding Issues}"><ItemsControl.ItemTemplate><DataTemplate>
         <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Command="{Binding #Root.DataContext.FocusCommand}" CommandParameter="{Binding}"><TextBlock Text="{Binding Message}" TextWrapping="Wrap" Foreground="{DynamicResource PrimaryText}"/></Button>
       </DataTemplate></ItemsControl.ItemTemplate></ItemsControl></ScrollViewer>
+      <!-- Faz 5: boş-durum — sorun yok (eylem: yeniden analiz) -->
+      <StackPanel x:Name="IssuesEmptyPanel" IsVisible="{Binding #Root.DataContext.IsEmpty}"
+                  VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="8" Margin="16">
+        <TextBlock Text="Sorun bulunamadı." FontSize="11" FontStyle="Italic"
+                   Foreground="{DynamicResource MutedText}" HorizontalAlignment="Center"/>
+        <Button Content="Yeniden Analiz Et"
+                Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AnalyzeStoryGraphCommand}"
+                ToolTip.Tip="Hikaye grafiğini analiz et"
+                Background="{DynamicResource AccentButtonBg}" Foreground="{DynamicResource AccentButtonFg}"
+                CornerRadius="6" Padding="12,5" FontSize="11" HorizontalAlignment="Center"/>
+      </StackPanel>
+      </Grid>
     </DockPanel>
   </Border>
 </UserControl>

@@ -207,6 +207,17 @@ namespace RowlEngine.Editor.ViewModels
         [ObservableProperty]
         private string _statusText = string.Empty;
 
+        /// <summary>
+        /// Faz 5: gerçek dosya/klasör yok (kayıp grubu sayılmaz; filtre
+        /// kapalıyken anlamlı). Boş-durum panelini açar.
+        /// </summary>
+        [ObservableProperty]
+        private bool _isTreeEmpty;
+
+        /// <summary>Faz 5: filtre aktif ama görünür dosya yok. Filtre-temizleme panelini açar.</summary>
+        [ObservableProperty]
+        private bool _isFilterNoMatch;
+
         partial void OnSearchTextChanged(string value) => RefreshAssets();
 
         partial void OnSelectedTypeFilterChanged(string value) => RefreshAssets();
@@ -402,11 +413,40 @@ namespace RowlEngine.Editor.ViewModels
             }
 
             // Faz 4: durum satırı (budama sonrası görünür sayı).
+            // Faz 5: boş-durum rozetleri — gerçek düğüm sayımı budamadan
+            // ÖNCE yapılır (filtre görünümü boşaltabilir ama dosyalar durur).
+            IsTreeEmpty = !filterActive && !HasRealNodes(AssetTree);
             int shownFiles = filterActive ? PruneFilteredNodes(AssetTree) : _visibleFileCount;
+            IsFilterNoMatch = filterActive && shownFiles == 0;
             StatusText = filterActive
                 ? $"{shownFiles} sonuç"
                 : $"{_visibleFileCount} öğe" +
                   (_hiddenFileCount > 0 ? $" · {_hiddenFileCount} sistem dosyası gizli" : string.Empty);
+        }
+
+        /// <summary>
+        /// Faz 5: ağaçta kayıp-grubu/hayalet dışı gerçek düğüm var mı?
+        /// (Boş klasörler de içerik sayılır — panel yalnızca tamamen
+        /// boşken görünür.)
+        /// </summary>
+        private static bool HasRealNodes(ObservableCollection<AssetNodeViewModel> nodes)
+        {
+            foreach (var node in nodes)
+            {
+                if (!node.IsMissing && !node.IsMissingGroup)
+                    return true;
+                if (HasRealNodes(node.Children))
+                    return true;
+            }
+            return false;
+        }
+
+        /// <summary>Faz 5: arama + tür filtresini temizler (boş-durum eylemi).</summary>
+        [RelayCommand]
+        private void ClearFilter()
+        {
+            SearchText = string.Empty;
+            SelectedTypeFilter = "Tümü";
         }
 
         private static string? TryRelativize(string fullPath)
