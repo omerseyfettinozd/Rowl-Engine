@@ -18,48 +18,65 @@
             <Border Grid.Row="0" Background="{DynamicResource SurfaceBackground}" 
                     BorderBrush="{DynamicResource BorderColor}" BorderThickness="0,0,0,1"
                     Padding="10,8">
-                <StackPanel Spacing="6">
-                    <DockPanel>
-                        <StackPanel Spacing="1">
-                            <TextBlock Text="DENETÇİ" FontWeight="Black" FontSize="11"
-                                       Foreground="{DynamicResource Accent}" VerticalAlignment="Center" LetterSpacing="0.6"/>
-                            <TextBlock Text="Seçili sahne nesnesi" FontSize="10"
-                                       Foreground="{DynamicResource MutedText}"/>
+                <StackPanel Spacing="8">
+                    <!-- Kart 1: GameObject -->
+                    <Border Background="{DynamicResource CardBackground}"
+                            BorderBrush="{DynamicResource CardBorderColor}" BorderThickness="1"
+                            CornerRadius="6">
+                        <StackPanel>
+                            <Border Background="{DynamicResource CardHeaderBackground}"
+                                    CornerRadius="6,6,0,0" Padding="8,6">
+                                <DockPanel>
+                                    <StackPanel Spacing="1">
+                                        <TextBlock Text="DENETÇİ" FontWeight="Black" FontSize="11"
+                                                   Foreground="{DynamicResource Accent}" VerticalAlignment="Center" LetterSpacing="0.6"/>
+                                        <TextBlock Text="Seçili sahne nesnesi" FontSize="10"
+                                                   Foreground="{DynamicResource MutedText}"/>
+                                    </StackPanel>
+                                    <TextBlock DockPanel.Dock="Right"
+                                               Text="{Binding HierarchyViewModel.SelectedObject.Id, StringFormat='ID: {0}', FallbackValue=''}"
+                                               FontSize="10" Foreground="{DynamicResource MutedText}"
+                                               VerticalAlignment="Center"/>
+                                </DockPanel>
+                            </Border>
+
+                            <!-- Selected GameObject Name & Active State -->
+                            <Grid ColumnDefinitions="*, Auto" Margin="10,8"
+                                  IsVisible="{Binding InspectorViewModel.HasSelectedObject}">
+                                <!-- Editable GameObject Name -->
+                                <TextBox Grid.Column="0"
+                                         Text="{Binding HierarchyViewModel.SelectedObject.Name, FallbackValue='GameObject'}"
+                                         Watermark="GameObject adı"
+                                         Background="{DynamicResource InputBackground}"
+                                         Foreground="{DynamicResource PrimaryText}"
+                                         BorderBrush="{DynamicResource BorderColor}"
+                                         FontWeight="SemiBold"
+                                         FontSize="12" Padding="8,5" Margin="0,0,8,0"/>
+
+                                <!-- Active Toggle -->
+                                <CheckBox Grid.Column="1"
+                                          IsChecked="{Binding HierarchyViewModel.SelectedObject.IsActive}"
+                                          ToolTip.Tip="GameObject etkinlik durumu"
+                                          Content="Etkin"
+                                          FontSize="11"
+                                          Foreground="{DynamicResource PrimaryText}"
+                                          VerticalAlignment="Center"/>
+                            </Grid>
                         </StackPanel>
-                        <TextBlock DockPanel.Dock="Right" 
-                                   Text="{Binding HierarchyViewModel.SelectedObject.Id, StringFormat='ID: {0}', FallbackValue=''}" 
-                                   FontSize="10" Foreground="{DynamicResource MutedText}" 
-                                   VerticalAlignment="Center"/>
-                    </DockPanel>
+                    </Border>
 
-                    <!-- Selected GameObject Name & Active State -->
-                    <Grid ColumnDefinitions="*, Auto" 
-                          IsVisible="{Binding InspectorViewModel.HasSelectedObject}">
-                        <!-- Editable GameObject Name -->
-                        <TextBox Grid.Column="0" 
-                                 Text="{Binding HierarchyViewModel.SelectedObject.Name, FallbackValue='GameObject'}" 
-                                 Watermark="GameObject Name"
-                                 Background="{DynamicResource InputBackground}" 
-                                 Foreground="{DynamicResource PrimaryText}" 
-                                 BorderBrush="{DynamicResource BorderColor}"
-                                 FontWeight="SemiBold"
-                                 FontSize="12" Padding="8,5" Margin="0,0,8,0"/>
-
-                        <!-- Active Toggle -->
-                        <CheckBox Grid.Column="1"
-                                  IsChecked="{Binding HierarchyViewModel.SelectedObject.IsActive}"
-                                  ToolTip.Tip="Toggle GameObject Active State"
-                                  Content="Active"
-                                  FontSize="11"
-                                  Foreground="{DynamicResource PrimaryText}"
-                                  VerticalAlignment="Center"/>
-                    </Grid>
-
-                    <!-- Düğüm bölümü (Faz 4 Dilim 4: başlık + bölüm + gruplar + renk) -->
-                    <StackPanel Spacing="6"
-                                IsVisible="{Binding SelectedNode, Converter={x:Static conv:ObjectConverters.IsNotNull}}">
-                        <TextBlock Text="DÜĞÜM" FontSize="10" FontWeight="Black"
-                                   Foreground="{DynamicResource Accent}" LetterSpacing="0.5"/>
+                    <!-- Kart 2: Düğüm bölümü (Faz 4 Dilim 4: başlık + bölüm + gruplar + renk) -->
+                    <Border Background="{DynamicResource CardBackground}"
+                            BorderBrush="{DynamicResource CardBorderColor}" BorderThickness="1"
+                            CornerRadius="6"
+                            IsVisible="{Binding SelectedNode, Converter={x:Static conv:ObjectConverters.IsNotNull}}">
+                        <StackPanel>
+                            <Border Background="{DynamicResource CardHeaderBackground}"
+                                    CornerRadius="6,6,0,0" Padding="8,6">
+                                <TextBlock Text="DÜĞÜM" FontSize="10" FontWeight="Black"
+                                           Foreground="{DynamicResource Accent}" LetterSpacing="0.5"/>
+                            </Border>
+                            <StackPanel Spacing="8" Margin="10,8">
                         <StackPanel Spacing="2">
                             <TextBlock Text="Başlık" FontSize="10" Foreground="{DynamicResource MutedText}"/>
                             <TextBox Text="{Binding SelectedNode.Title}"
@@ -71,6 +88,7 @@
                                                        NodeId="{Binding SelectedNode.Id}"
                                                        FieldKey="node.title"/>
                         </StackPanel>
+                        <Border Background="{DynamicResource SurfaceBackground}" CornerRadius="4" Padding="8">
                         <Grid ColumnDefinitions="Auto,*">
                             <TextBlock Grid.Column="0" Text="Bölüm:"
                                        FontSize="11" Foreground="{DynamicResource MutedText}"
@@ -81,6 +99,8 @@
                                       ToolTip.Tip="Kayıt/yükleme sınırı (Yok = tanımsız)"
                                       FontSize="11" HorizontalAlignment="Stretch"/>
                         </Grid>
+                        </Border>
+                        <Border Background="{DynamicResource SurfaceBackground}" CornerRadius="4" Padding="8">
                         <StackPanel Spacing="2">
                             <TextBlock Text="Gruplar" FontSize="10" Foreground="{DynamicResource MutedText}"/>
                             <ItemsControl ItemsSource="{Binding InspectorViewModel.MemberGroups}">
@@ -126,6 +146,7 @@
                                         FontSize="11" Padding="8,4"/>
                             </Grid>
                         </StackPanel>
+                        </Border>
                         <StackPanel Spacing="2" Orientation="Horizontal">
                             <TextBlock Text="Etiket:" FontSize="11"
                                        Foreground="{DynamicResource MutedText}"
@@ -139,8 +160,9 @@
                                    FontSize="10" FontWeight="Bold" Foreground="{DynamicResource ErrorColor}"/>
                         <!-- Faz 5 Dilim 5 fix: dönüştürülmüş asset provenance rozeti.
                              Sidecar yoksa HasSelectedAssetProvenance=false → gizli (fail-closed). -->
-                        <StackPanel Spacing="4"
-                                    IsVisible="{Binding InspectorViewModel.HasSelectedAssetProvenance}">
+                        <Border Background="{DynamicResource SurfaceBackground}" CornerRadius="4" Padding="8"
+                                IsVisible="{Binding InspectorViewModel.HasSelectedAssetProvenance}">
+                        <StackPanel Spacing="4">
                             <TextBlock Text="DÖNÜŞTÜRME KÖKENİ" FontSize="10" FontWeight="Black"
                                        Foreground="{DynamicResource Accent}" LetterSpacing="0.5"/>
                             <ItemsControl ItemsSource="{Binding InspectorViewModel.SelectedAssetProvenance}">
@@ -153,7 +175,10 @@
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
                         </StackPanel>
-                    </StackPanel>
+                        </Border>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
                 </StackPanel>
             </Border>
 
@@ -168,7 +193,7 @@
                                    FontSize="13" FontWeight="Bold"
                                    Foreground="{DynamicResource PrimaryText}"
                                    HorizontalAlignment="Center"/>
-                        <TextBlock Text="Select an object from the Hierarchy panel or click '+ Create' to add and inspect components."
+                        <TextBlock Text="Hiyerarşi panelinden bir nesne seç, bileşenler burada listelenir."
                                    FontSize="11" FontStyle="Italic"
                                    Foreground="{DynamicResource MutedText}"
                                    HorizontalAlignment="Center"
@@ -178,8 +203,8 @@
                     </StackPanel>
 
                     <Border IsVisible="{Binding InspectorViewModel.HasSelectedObject}"
-                            Background="{DynamicResource SurfaceBackground}" BorderBrush="{DynamicResource BorderSubtle}"
-                            BorderThickness="1" CornerRadius="8" Padding="10,7">
+                            Background="{DynamicResource CardHeaderBackground}" BorderBrush="{DynamicResource BorderColor}"
+                            BorderThickness="1" CornerRadius="6" Padding="10,7">
                         <DockPanel>
                             <TextBlock Text="BİLEŞENLER" FontSize="10" FontWeight="Black"
                                        Foreground="{DynamicResource Accent}" LetterSpacing="0.5"/>
@@ -204,11 +229,11 @@
                                 Padding="12,9"
                                 FontSize="12"
                                 FontWeight="SemiBold"
-                                Background="{DynamicResource CardHeaderBackground}"
+                                Background="{DynamicResource CardBackground}"
                                 Foreground="{DynamicResource PrimaryText}"
-                                BorderBrush="{DynamicResource BorderColor}"
+                                BorderBrush="{DynamicResource CardBorderColor}"
                                 BorderThickness="1"
-                                CornerRadius="8"
+                                CornerRadius="6"
                                 HorizontalContentAlignment="Center"/>
 
                         <!-- Add Component Flyout List -->
