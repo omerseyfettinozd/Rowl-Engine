@@ -160,6 +160,12 @@
                                         Command="{Binding InspectorViewModel.JoinSelectedJoinGroupCommand}"
                                         FontSize="11" Padding="8,4"/>
                             </Grid>
+                            <!-- Boş-durum: grupsuz düğüm (butonsuz ipucu) -->
+                            <TextBlock Text="Henüz grup yok — listeden seçip + Ekle'ye bas."
+                                       IsVisible="{Binding InspectorViewModel.HasNoMemberGroups}"
+                                       FontSize="10" FontStyle="Italic"
+                                       Foreground="{DynamicResource MutedText}"
+                                       TextWrapping="Wrap"/>
                         </StackPanel>
                         <StackPanel Spacing="2" Orientation="Horizontal">
                             <TextBlock Text="Etiket:" FontSize="11"
@@ -243,6 +249,13 @@
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
 
+                    <!-- Boş-durum: bileşensiz nesne (butonsuz ipucu) -->
+                    <TextBlock Text="Bu nesnede henüz bileşen yok — Bileşen Ekle ile ilk bileşeni ekle."
+                               IsVisible="{Binding HierarchyViewModel.SelectedObject.HasNoComponents}"
+                               FontSize="10" FontStyle="Italic"
+                               Foreground="{DynamicResource MutedText}"
+                               TextWrapping="Wrap" Margin="0,2"/>
+
                     <!-- ADD COMPONENT (Unity tarzı düz bölüm; komutlar aynen) -->
                     <StackPanel IsVisible="{Binding InspectorViewModel.HasSelectedObject}" Spacing="4" Margin="0,6,0,10">
                         <Button Content="Bileşen Ekle"
@@ -262,28 +275,36 @@
                             <StackPanel Spacing="2">
                                 <TextBlock Text="Eklenecek bileşeni seç" FontSize="11"
                                            Foreground="{DynamicResource MutedText}" Margin="8,4"/>
-                                <Button Content="Dialogue &amp; Speaker"
+                                <Button Content="Diyalog ve Konuşmacı"
                                         Command="{Binding AddComponentByTypeCommand}" CommandParameter="dialogue"
                                         HorizontalAlignment="Stretch" Padding="8,6" FontSize="11"
                                         Background="Transparent" Foreground="{DynamicResource PrimaryText}" CornerRadius="2"/>
-                                <Button Content="Background Layer"
+                                <Button Content="Arka Plan Katmanı"
                                         Command="{Binding AddComponentByTypeCommand}" CommandParameter="background"
                                         HorizontalAlignment="Stretch" Padding="8,6" FontSize="11"
                                         Background="Transparent" Foreground="{DynamicResource PrimaryText}" CornerRadius="2"/>
-                                <Button Content="Character Sprite"
+                                <Button Content="Karakter Spritesı"
                                         Command="{Binding AddComponentByTypeCommand}" CommandParameter="character"
                                         HorizontalAlignment="Stretch" Padding="8,6" FontSize="11"
                                         Background="Transparent" Foreground="{DynamicResource PrimaryText}" CornerRadius="2"/>
-                                <Button Content="Audio &amp; DSP"
+                                <Button Content="Ses ve DSP"
                                         Command="{Binding AddComponentByTypeCommand}" CommandParameter="audio"
                                         HorizontalAlignment="Stretch" Padding="8,6" FontSize="11"
                                         Background="Transparent" Foreground="{DynamicResource PrimaryText}" CornerRadius="2"/>
-                                <Button Content="Player Choices"
+                                <Button Content="Oyuncu Seçimleri"
                                         Command="{Binding AddComponentByTypeCommand}" CommandParameter="choice"
                                         HorizontalAlignment="Stretch" Padding="8,6" FontSize="11"
                                         Background="Transparent" Foreground="{DynamicResource PrimaryText}" CornerRadius="2"/>
-                                <Button Content="Lua Script"
+                                <Button Content="Lua Betiği"
                                         Command="{Binding AddComponentByTypeCommand}" CommandParameter="script"
+                                        HorizontalAlignment="Stretch" Padding="8,6" FontSize="11"
+                                        Background="Transparent" Foreground="{DynamicResource PrimaryText}" CornerRadius="2"/>
+                                <Button Content="Kamera (2D)"
+                                        Command="{Binding AddComponentByTypeCommand}" CommandParameter="camera"
+                                        HorizontalAlignment="Stretch" Padding="8,6" FontSize="11"
+                                        Background="Transparent" Foreground="{DynamicResource PrimaryText}" CornerRadius="2"/>
+                                <Button Content="Sahne Geçişi"
+                                        Command="{Binding AddComponentByTypeCommand}" CommandParameter="transition"
                                         HorizontalAlignment="Stretch" Padding="8,6" FontSize="11"
                                         Background="Transparent" Foreground="{DynamicResource PrimaryText}" CornerRadius="2"/>
                             </StackPanel>

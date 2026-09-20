@@ -56,12 +56,16 @@ namespace RowlEngine.Editor.ViewModels
             }
         }
 
+        /// <summary>True when no components are attached (drives the empty-state hint).</summary>
+        public bool HasNoComponents => Components.Count == 0;
+
         public FrameObjectViewModel()
         {
             Components.CollectionChanged += (s, e) =>
             {
                 OnPropertyChanged(nameof(Icon));
                 OnPropertyChanged(nameof(SummaryText));
+                OnPropertyChanged(nameof(HasNoComponents));
             };
         }
 
@@ -97,6 +101,7 @@ namespace RowlEngine.Editor.ViewModels
 
             OnPropertyChanged(nameof(Icon));
             OnPropertyChanged(nameof(SummaryText));
+            OnPropertyChanged(nameof(HasNoComponents));
             Node?.NotifyObjectsChanged();
             return comp;
         }
@@ -124,6 +129,7 @@ namespace RowlEngine.Editor.ViewModels
 
             OnPropertyChanged(nameof(Icon));
             OnPropertyChanged(nameof(SummaryText));
+            OnPropertyChanged(nameof(HasNoComponents));
             Node?.NotifyObjectsChanged();
         }
 
@@ -136,6 +142,7 @@ namespace RowlEngine.Editor.ViewModels
 
             OnPropertyChanged(nameof(Icon));
             OnPropertyChanged(nameof(SummaryText));
+            OnPropertyChanged(nameof(HasNoComponents));
             Node?.NotifyObjectsChanged();
         }
 

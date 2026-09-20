@@ -10,7 +10,7 @@
     <StackPanel>
       <Border Background="{DynamicResource CardHeaderBackground}" CornerRadius="2,2,0,0" Padding="8,6">
         <Grid ColumnDefinitions="*,Auto">
-          <TextBlock Text="Player Choices" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource PrimaryText}" VerticalAlignment="Center"/>
+          <TextBlock Text="Oyuncu Seçimleri" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource PrimaryText}" VerticalAlignment="Center"/>
           <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="3" VerticalAlignment="Center">
             <CheckBox IsChecked="{Binding IsEnabled}" ToolTip.Tip="Enable/Disable" MinWidth="0" Padding="0" Margin="0,0,2,0"/>
             <Button Content="Yukarı" Command="{Binding MoveUpCommand}" ToolTip.Tip="Move Up" FontSize="10" Padding="4,2" MinWidth="0" Background="Transparent" Foreground="{DynamicResource MutedText}" BorderThickness="0"/>
@@ -21,14 +21,14 @@
         </Grid>
       </Border>
       <StackPanel IsVisible="{Binding IsExpanded}" Spacing="8" Margin="8,6">
-      <TextBox Watermark="Choice heading" Text="{Binding Title}"/>
+      <TextBox Watermark="Seçim başlığı" Text="{Binding Title}"/>
       <ItemsControl ItemsSource="{Binding Options}">
         <ItemsControl.ItemTemplate>
           <DataTemplate x:DataType="comp:ChoiceOptionViewModel">
             <Border Padding="8" Margin="0,2" BorderBrush="{Binding BorderColor}" Background="{Binding BackgroundColor}" BorderThickness="1" CornerRadius="{Binding CornerRadius, Converter={x:Static p:DoubleToBoxConverter.Instance}}">
               <StackPanel Spacing="6">
                 <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
-                  <TextBox Grid.Column="0" Watermark="Button text" Text="{Binding Text}" FontSize="{Binding FontSize}" Foreground="{Binding TextColor}"/>
+                  <TextBox Grid.Column="0" Watermark="Düğme metni" Text="{Binding Text}" FontSize="{Binding FontSize}" Foreground="{Binding TextColor}"/>
                   <CheckBox Grid.Column="1" IsChecked="{Binding IsEnabled}" ToolTip.Tip="Enable this button"/>
                   <ToggleButton Grid.Column="2" Content="Ayar" IsChecked="{Binding IsExpanded}" ToolTip.Tip="Button appearance"/>
                 </Grid>
@@ -36,14 +36,14 @@
                   <Grid ColumnDefinitions="*,90,Auto" ColumnSpacing="8">
                     <TextBox Grid.Column="0" Watermark="Condition (e.g. affinity_evelyn &gt;= 3)" Text="{Binding Condition}" FontSize="11"/>
                     <TextBlock Grid.Column="1" Text="Graph cable sets target" FontSize="10" TextWrapping="Wrap" Foreground="{DynamicResource MutedText}" VerticalAlignment="Center"/>
-                    <Button Grid.Column="2" Content="Remove" Command="{Binding $parent[UserControl].DataContext.RemoveOptionCommand}" CommandParameter="{Binding}" Background="Transparent" Foreground="{DynamicResource ErrorColor}"/>
+                    <Button Grid.Column="2" Content="Kaldır" Command="{Binding $parent[UserControl].DataContext.RemoveOptionCommand}" CommandParameter="{Binding}" Background="Transparent" Foreground="{DynamicResource ErrorColor}"/>
                   </Grid>
                   <Grid ColumnDefinitions="Auto,*,Auto,*" ColumnSpacing="8">
-                    <TextBlock Text="Preset" VerticalAlignment="Center" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                    <TextBlock Text="Hazır Stil" VerticalAlignment="Center" FontSize="10" Foreground="{DynamicResource MutedText}"/>
                     <ComboBox Grid.Column="1" SelectedItem="{Binding StylePreset}">
                       <x:String>Neon</x:String><x:String>Minimal</x:String><x:String>Paper</x:String><x:String>Danger</x:String>
                     </ComboBox>
-                    <TextBlock Grid.Column="2" Text="Font" VerticalAlignment="Center" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                    <TextBlock Grid.Column="2" Text="Yazı Tipi" VerticalAlignment="Center" FontSize="10" Foreground="{DynamicResource MutedText}"/>
                     <TextBox Grid.Column="3" Text="{Binding FontSize}" Width="56"/>
                   </Grid>
                   <Grid ColumnDefinitions="Auto,*,Auto,*,Auto,*" ColumnSpacing="8">
@@ -94,8 +94,12 @@
       </ItemsControl>
       <ctrl:FieldValidationBadge Validation="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).InspectorViewModel.Validation}"
                                          NodeId="{Binding Node.Id}" FieldKey="choice.option_target" />
-      <Button Content="+ Add choice" Command="{Binding AddOptionCommand}" HorizontalAlignment="Left"/>
-      <TextBlock Text="Each option has a stable ID and a target node. Use the graph cables to visualize routes; the target ID is the source of truth." TextWrapping="Wrap" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+      <Button Content="+ Seçim ekle" Command="{Binding AddOptionCommand}" HorizontalAlignment="Left"/>
+      <!-- Boş-durum: seçeneksiz Choice (butonsuz ipucu) -->
+      <TextBlock Text="Henüz seçenek yok — + Seçim ekle'ye bas, hedefi graf kablosuyla ver."
+                 IsVisible="{Binding HasNoOptions}"
+                 TextWrapping="Wrap" FontSize="10" FontStyle="Italic" Foreground="{DynamicResource MutedText}"/>
+      <TextBlock Text="Her seçeneğin sabit bir kimliği ve hedef düğümü vardır; hedefi graf kablosuyla ver." TextWrapping="Wrap" FontSize="10" Foreground="{DynamicResource MutedText}"/>
       </StackPanel>
     </StackPanel>
   </Border>

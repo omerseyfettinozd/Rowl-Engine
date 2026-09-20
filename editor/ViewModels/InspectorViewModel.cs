@@ -49,6 +49,7 @@ namespace RowlEngine.Editor.ViewModels
                     OnPropertyChanged(nameof(HasSelectedAssetProvenance));
                     OnPropertyChanged(nameof(SelectedChapterOption));
                     OnPropertyChanged(nameof(MemberGroups));
+                    OnPropertyChanged(nameof(HasNoMemberGroups));
                     OnPropertyChanged(nameof(JoinableGroups));
                     WatchChapterNode(SelectedNode);
                 }
@@ -226,6 +227,9 @@ namespace RowlEngine.Editor.ViewModels
                 ? Array.Empty<CanvasGroupViewModel>()
                 : MainViewModel.Groups.GroupsOf(SelectedNode.Id);
 
+        /// <summary>True when the selected node belongs to no group (drives the empty-state hint).</summary>
+        public bool HasNoMemberGroups => MemberGroups.Count == 0;
+
         /// <summary>Groups the selected node can still join.</summary>
         public IReadOnlyList<CanvasGroupViewModel> JoinableGroups
         {
@@ -287,6 +291,7 @@ namespace RowlEngine.Editor.ViewModels
         private void RaiseGroupProps()
         {
             OnPropertyChanged(nameof(MemberGroups));
+            OnPropertyChanged(nameof(HasNoMemberGroups));
             OnPropertyChanged(nameof(JoinableGroups));
         }
 

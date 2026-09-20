@@ -96,6 +96,9 @@ namespace RowlEngine.Editor.ViewModels.Components
         [ObservableProperty] private string _title = "Choose";
         public ObservableCollection<ChoiceOptionViewModel> Options { get; } = new();
 
+        /// <summary>True when no options exist (drives the empty-state hint).</summary>
+        public bool HasNoOptions => Options.Count == 0;
+
         /// <summary>
         /// Lightweight notification used when an existing option changes.  Keeping
         /// this separate from <see cref="Options"/> prevents Avalonia from rebuilding
@@ -235,6 +238,7 @@ namespace RowlEngine.Editor.ViewModels.Components
 
             // Only additions/removals/reordering replace the collection projection.
             OnPropertyChanged(nameof(Options));
+            OnPropertyChanged(nameof(HasNoOptions));
         }
 
         private void OnOptionPropertyChanged(object? sender, PropertyChangedEventArgs e)
