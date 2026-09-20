@@ -68,6 +68,36 @@ namespace RowlEngine.Editor.ViewModels
         public bool HasObjects => CurrentNode?.Objects.Count > 0;
         public bool IsCurrentNodeEmpty => HasCurrentNode && !HasObjects;
 
+        /// <summary>
+        /// Unity kromu: hiyerarşi arama filtresi (nesne adı, büyük/küçük
+        /// harf duyarsız). Seçimi temizlemez; yalnızca listeyi daraltır.
+        /// </summary>
+        [ObservableProperty]
+        private string _hierarchyFilterText = string.Empty;
+
+        /// <summary>
+        /// Filtrelenmiş nesne listesi: aynı referanslar (klon yok).
+        /// Boş filtre = tam liste. Ad değişimleri listeyi tetiklemez
+        /// (ekleme/silme ve düğüm değişimi tetikler).
+        /// </summary>
+        public ObservableCollection<FrameObjectViewModel> FilteredObjects { get; } = new();
+
+        partial void OnHierarchyFilterTextChanged(string value) => RebuildFilteredObjects();
+
+        private void RebuildFilteredObjects()
+        {
+            FilteredObjects.Clear();
+            var objects = CurrentNode?.Objects;
+            if (objects is null) return;
+            string filter = HierarchyFilterText.Trim();
+            foreach (var obj in objects)
+            {
+                if (filter.Length == 0 ||
+                    obj.Name.Contains(filter, StringComparison.OrdinalIgnoreCase))
+                    FilteredObjects.Add(obj);
+            }
+        }
+
         // Create Object Menu
 
         [ObservableProperty]
@@ -247,6 +277,8 @@ namespace RowlEngine.Editor.ViewModels
                 OnPropertyChanged(nameof(HasObjects));
                 OnPropertyChanged(nameof(IsCurrentNodeEmpty));
 
+                RebuildFilteredObjects();
+
                 // Auto-select first object or null
                 SelectedObject = CurrentNode?.Objects.FirstOrDefault();
             }
@@ -273,6 +305,7 @@ namespace RowlEngine.Editor.ViewModels
         {
             OnPropertyChanged(nameof(HasObjects));
             OnPropertyChanged(nameof(IsCurrentNodeEmpty));
+            RebuildFilteredObjects();
         }
 
         private void UnsubscribeCurrentNode()

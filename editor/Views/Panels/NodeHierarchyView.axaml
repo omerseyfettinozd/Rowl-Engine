@@ -54,6 +54,15 @@
                         </Button>
                     </DockPanel>
 
+                    <!-- Unity kromu: nesne adı filtresi -->
+                    <TextBox Watermark="Ara: nesne adı"
+                             Text="{Binding HierarchyViewModel.HierarchyFilterText}"
+                             IsVisible="{Binding HierarchyViewModel.HasCurrentNode}"
+                             Background="{DynamicResource InputBackground}"
+                             Foreground="{DynamicResource PrimaryText}"
+                             BorderBrush="{DynamicResource BorderSubtle}"
+                             CornerRadius="4" Padding="6,3" FontSize="11"/>
+
                     <!-- Active Node Info -->
                     <StackPanel IsVisible="{Binding HierarchyViewModel.HasCurrentNode}" Spacing="1">
                         <TextBlock Text="{Binding HierarchyViewModel.CurrentNodeTitle}" 
@@ -73,7 +82,7 @@
 
             <!-- GameObject List (Hierarchy Tree) -->
             <Grid Grid.Row="1">
-                <ListBox ItemsSource="{Binding SelectedNode.Objects}"
+                <ListBox ItemsSource="{Binding HierarchyViewModel.FilteredObjects}"
                          SelectedItem="{Binding HierarchyViewModel.SelectedObject, Mode=TwoWay}"
                          Background="Transparent"
                          Margin="4"
