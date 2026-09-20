@@ -37,6 +37,35 @@
                                                Text="{Binding HierarchyViewModel.SelectedObject.Id, StringFormat='ID: {0}', FallbackValue=''}"
                                                FontSize="10" Foreground="{DynamicResource MutedText}"
                                                VerticalAlignment="Center"/>
+                                    <!-- Unity kromu Dilim G3: nesne işlemleri
+                                         taşma menüsü (yalnızca mevcut komutlar).
+                                         Üç-nokta glifi lintte yasaktır, o
+                                         yüzden Content "..." yazılır. -->
+                                    <Button DockPanel.Dock="Right" Content="..."
+                                            ToolTip.Tip="Nesne işlemleri"
+                                            IsEnabled="{Binding InspectorViewModel.HasSelectedObject}"
+                                            Background="Transparent" Foreground="{DynamicResource MutedText}"
+                                            BorderBrush="{DynamicResource BorderColor}" BorderThickness="1"
+                                            CornerRadius="4" Padding="6,1" FontSize="11" Margin="6,0,0,0"
+                                            VerticalAlignment="Center">
+                                        <Button.Flyout>
+                                            <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                                <MenuItem x:Name="DuplicateObjectMenuItem" Header="Çoğalt"
+                                                          Command="{Binding HierarchyViewModel.DuplicateObjectCommand}"
+                                                          CommandParameter="{Binding HierarchyViewModel.SelectedObject}"/>
+                                                <MenuItem x:Name="DeleteObjectMenuItem" Header="Sil"
+                                                          Command="{Binding HierarchyViewModel.DeleteObjectCommand}"
+                                                          CommandParameter="{Binding HierarchyViewModel.SelectedObject}"/>
+                                                <Separator/>
+                                                <MenuItem x:Name="MoveObjectUpMenuItem" Header="Yukarı Taşı"
+                                                          Command="{Binding HierarchyViewModel.MoveObjectUpCommand}"
+                                                          CommandParameter="{Binding HierarchyViewModel.SelectedObject}"/>
+                                                <MenuItem x:Name="MoveObjectDownMenuItem" Header="Aşağı Taşı"
+                                                          Command="{Binding HierarchyViewModel.MoveObjectDownCommand}"
+                                                          CommandParameter="{Binding HierarchyViewModel.SelectedObject}"/>
+                                            </MenuFlyout>
+                                        </Button.Flyout>
+                                    </Button>
                                 </DockPanel>
                             </Border>
 
@@ -210,6 +239,17 @@
                                        Foreground="{DynamicResource Accent}" LetterSpacing="0.5"/>
                             <TextBlock DockPanel.Dock="Right" Text="{Binding HierarchyViewModel.SelectedObject.Components.Count, StringFormat='{}{0} etkin'}"
                                        FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                            <!-- Unity kromu Dilim G3: bileşen şeridi taşma
+                                 menüsü (mevcut Ekle komutunun kısayolu). -->
+                            <Button DockPanel.Dock="Right" Content="..."
+                                    ToolTip.Tip="Bileşen işlemleri"
+                                    Command="{Binding ShowAddComponentMenuCommand}"
+                                    IsVisible="{Binding !IsAddComponentMenuOpen}"
+                                    IsEnabled="{Binding InspectorViewModel.HasSelectedObject}"
+                                    Background="Transparent" Foreground="{DynamicResource MutedText}"
+                                    BorderBrush="{DynamicResource BorderColor}" BorderThickness="1"
+                                    CornerRadius="4" Padding="6,1" FontSize="11" Margin="6,0,0,0"
+                                    VerticalAlignment="Center"/>
                         </DockPanel>
                     </Border>
 

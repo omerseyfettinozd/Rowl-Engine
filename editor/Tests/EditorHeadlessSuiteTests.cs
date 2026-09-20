@@ -284,6 +284,9 @@ internal static class EditorHeadlessTestSuite
             // Test 42: Unity kromu Dilim G2 — layout preset lock
             Tests.EditorLayoutPresetTests.Run(mainVm);
 
+            // Test 43: Unity kromu Dilim G3 — inspector overflow lock
+            Tests.EditorInspectorOverflowTests.Run(mainVm);
+
             Console.WriteLine("\n=======================================================");
             Console.WriteLine("ALL EDITOR HEADLESS TESTS PASSED SUCCESSFULLY!");
             Console.WriteLine("=======================================================\n");
