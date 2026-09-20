@@ -134,6 +134,10 @@ void test_demo_second_signal();
 // Engine behind a C-API handle; production code must never use it.
 namespace Rowl::Core {
 Engine* testEngineFromHandle(RowlEngineHandle handle);
+// R1 #7 test-only sayaçları (c_api_lifecycle.cpp): slot havuzu boyutu +
+// canlı handle sayısı. Davranış-nötr gözlem.
+uint64_t RowlTest_HandleSlotCount();
+uint64_t RowlTest_LiveHandleCount();
 }
 void test_game_object_component_system();
 void test_pixel_pitch();
@@ -146,6 +150,7 @@ void test_handle_hygiene();  // A4-tur1: handle-once siralama kilidi
 void test_lifecycle_init_guards();  // B1a: fail-loud init kilitleri
 void test_lifecycle_shutdown_sweep();  // D2: shutdown-supurme + re-init kilitleri
 void test_lifecycle_thread_lease();  // D3: thread/lease + dispatch-pin kilitleri
+void test_lifecycle_handle_reclamation();  // R1 #7: nesilli slot havuzu + ABA kilidi
 void test_save_lock();  // D4: save/load/rewind kilitleri (#43-#53, #70)
 void test_save_slot_concurrency();  // R1 #3: eszamanli slot yazarlarinda kazanan hep tam payload
 void test_numeric_guards();  // B6: sayisal-uc/native guard dilimi bilerek-boz kilitleri

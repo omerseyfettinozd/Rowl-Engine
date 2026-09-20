@@ -26,8 +26,8 @@ void test_handle_hygiene() {
     TEST_SECTION("C-API Handle Hygiene (A4-tur1: handle-once ordering)");
 
     // Bozuk-handle: hiç yaratılmamış. Ölü-handle: yaratılıp yok edilmiş.
-    // (HandleRecord'lar süreç-çıkışına kadar saklanır; ölü-handle tekrar
-    // geçerli olmaz — use-after-destroy testi için güvenli zemin.)
+    // (Handle'lar nesilli slot token'ıdır; ölü-handle tekrar geçerli olmaz
+    // — use-after-destroy testi için güvenli zemin.)
     auto* const bogus = reinterpret_cast<RowlEngineHandle>(0xDEADBEEFu);
     RowlEngineHandle dead = RowlEngine_Create();
     if (dead == nullptr) rowlLockFail("handle-hygiene", "RowlEngine_Create returned null");

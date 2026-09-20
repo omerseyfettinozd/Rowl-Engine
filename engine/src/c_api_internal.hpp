@@ -17,6 +17,7 @@
 #include "rowl/core/engine.hpp"
 
 #include <exception>
+#include <cstdint>
 #include <cstring>
 #include <limits>
 #include <memory>
@@ -32,9 +33,12 @@
 #pragma GCC visibility push(hidden)
 #endif
 
-// The opaque C handle is a stable record, not the Engine allocation itself.
-// Destroyed records are intentionally retained until process exit so an old
-// host callback can never become valid again if malloc reuses an Engine address.
+// The opaque C handle is a generational slot token, not the Engine
+// allocation itself (R1 #7) — void* carries (index << 32 | generation).
+// Destroyed slots are RECYCLED via a free-list (memory bounded by peak-live)
+// instead of retained forever; a stale token can never become valid again
+// after its slot is reused because the generation bump makes it name a
+// different token (ABA defense). Token 0 (nullptr) is never minted.
 // D3 (B1d #106): the Engine is SHARED-owned, not unique-owned. Readers copy
 // the shared_ptr under the registry lock and use the copy AFTER unlocking,
 // so a concurrent Destroy can erase the map entry but can never free an
@@ -43,11 +47,20 @@
 struct HandleRecord {
     std::shared_ptr<Rowl::Core::Engine> engine;
     std::thread::id ownerThread;
+    // R1 (#7): generational slot pool. live=false iken engine boş,
+    // ownerThread tanımsızdır; generation yalnızca slot yeniden
+    // kullanıldığında artar (Create), asla sıfırlanmaz.
+    uint64_t generation{0};
+    bool live{false};
 };
 
 extern std::mutex g_handleMutex;
 extern std::unordered_map<RowlEngineHandle, Rowl::Core::Engine*> g_liveHandles;
 extern std::vector<std::unique_ptr<HandleRecord>> g_handleRecords;
+// R1 (#7): ölü slot indeksleri (Create önce buradan alır) + monoton nesil
+// kaynağı (0 rezerve: token 0 == nullptr hep Dead).
+extern std::vector<uint32_t> g_handleFreeList;
+extern uint64_t g_handleNextGeneration;
 
 // D3 (B1d #150/#157): liveness and affinity are DIFFERENT answers. Old code
 // folded both into isLiveHandle/toEngineChecked-null, so aux maps treated a

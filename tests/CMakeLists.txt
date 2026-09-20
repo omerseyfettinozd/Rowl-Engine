@@ -47,6 +47,7 @@ add_executable(rowl_tests
     test_lifecycle_init_guards.cpp
     test_lifecycle_shutdown_sweep.cpp
     test_lifecycle_thread_lease.cpp
+    test_lifecycle_handle_reclamation.cpp
     test_save_lock.cpp
     test_save_slot_concurrency.cpp
     test_numeric_guards.cpp

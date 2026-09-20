@@ -20,6 +20,44 @@
 std::mutex g_handleMutex;
 std::unordered_map<RowlEngineHandle, Rowl::Core::Engine*> g_liveHandles;
 std::vector<std::unique_ptr<HandleRecord>> g_handleRecords;
+// R1 (#7): generational slot pool — ölü slotlar free-list'e döner
+// (bellek peak-live ile sınırlı), nesil sayacı monoton artar (0 rezerve).
+std::vector<uint32_t> g_handleFreeList;
+uint64_t g_handleNextGeneration{1};
+
+// R1 (#7): token kodlama — void* = (index << 32) | generation. Public typedef
+// değişmez (.NET host dokunulmaz); ham-pointer sitelerinin tamamı artık bu
+// çözümlemeden geçer, doğrudan static_cast<HandleRecord*> YOK.
+static RowlEngineHandle encodeHandleToken(uint32_t index, uint64_t generation) noexcept {
+    const auto token = (static_cast<uint64_t>(index) << 32) |
+                       (generation & 0xFFFFFFFFULL);
+    return reinterpret_cast<RowlEngineHandle>(static_cast<uintptr_t>(token));
+}
+
+static uint64_t nextHandleGeneration() noexcept {
+    // Pratikte sarmaz (2^64); yine de 0 rezerve korunur.
+    uint64_t generation = g_handleNextGeneration++;
+    if (generation == 0) generation = g_handleNextGeneration++;
+    return generation;
+}
+
+// Kilit TUTULURKEN çağrılır. Token geçerli CANLI bir slotu adlandırıyorsa
+// (indeks sınırda + nesil eşleşmesi + live-map'te bu token) kaydı döner;
+// yoksa nullptr. Bayat token (destroy sonrası, slot yeniden kullanılmış
+// bile olsa) nesil uyuşmazlığından elenir — ABA savunması.
+static HandleRecord* recordForLocked(RowlEngineHandle handle) noexcept {
+    if (!handle) return nullptr;
+    const auto token = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(handle));
+    const auto index = static_cast<uint32_t>(token >> 32);
+    const auto generation = static_cast<uint32_t>(token & 0xFFFFFFFFULL);
+    if (generation == 0 || index >= g_handleRecords.size()) return nullptr;
+    HandleRecord* record = g_handleRecords[index].get();
+    if (record == nullptr || !record->live || record->generation != generation) {
+        return nullptr;
+    }
+    if (g_liveHandles.find(handle) == g_liveHandles.end()) return nullptr;
+    return record;
+}
 
 // D3 (B1d #150/#157): single locked classification. Liveness (map hit) and
 // affinity (owner match) are answered together so callers can no longer
@@ -27,8 +65,8 @@ std::vector<std::unique_ptr<HandleRecord>> g_handleRecords;
 HandleStanding classifyHandle(RowlEngineHandle handle) noexcept {
     if (!handle) return HandleStanding::Dead;
     std::lock_guard<std::mutex> lock(g_handleMutex);
-    if (g_liveHandles.find(handle) == g_liveHandles.end()) return HandleStanding::Dead;
-    const auto* record = static_cast<const HandleRecord*>(handle);
+    const auto* record = recordForLocked(handle);
+    if (record == nullptr) return HandleStanding::Dead;
     return (record->ownerThread == std::thread::id{} ||
             record->ownerThread == std::this_thread::get_id())
                ? HandleStanding::Mine
@@ -42,9 +80,8 @@ bool isLiveHandle(RowlEngineHandle handle) noexcept {
 bool claimHandleThread(RowlEngineHandle handle) noexcept {
     if (!handle) return false;
     std::lock_guard<std::mutex> lock(g_handleMutex);
-    const auto it = g_liveHandles.find(handle);
-    if (it == g_liveHandles.end()) return false;
-    auto* record = static_cast<HandleRecord*>(handle);
+    auto* record = recordForLocked(handle);
+    if (record == nullptr) return false;
     const auto callingThread = std::this_thread::get_id();
     if (record->ownerThread == std::thread::id{}) {
         record->ownerThread = callingThread;
@@ -59,10 +96,10 @@ bool claimHandleThread(RowlEngineHandle handle) noexcept {
 HandleStanding claimHandleOrClassify(RowlEngineHandle handle) noexcept {
     if (!handle) return HandleStanding::Dead;
     std::lock_guard<std::mutex> lock(g_handleMutex);
-    if (g_liveHandles.find(handle) == g_liveHandles.end()) {
+    auto* record = recordForLocked(handle);
+    if (record == nullptr) {
         return HandleStanding::Dead;
     }
-    auto* record = static_cast<HandleRecord*>(handle);
     const auto callingThread = std::this_thread::get_id();
     if (record->ownerThread != std::thread::id{} &&
         record->ownerThread != callingThread) {
@@ -79,8 +116,8 @@ HandleStanding claimHandleOrClassify(RowlEngineHandle handle) noexcept {
 bool unclaimHandleThread(RowlEngineHandle handle) noexcept {
     if (!handle) return false;
     std::lock_guard<std::mutex> lock(g_handleMutex);
-    if (g_liveHandles.find(handle) == g_liveHandles.end()) return false;
-    auto* record = static_cast<HandleRecord*>(handle);
+    auto* record = recordForLocked(handle);
+    if (record == nullptr) return false;
     record->ownerThread = std::thread::id{};
     return true;
 }
@@ -88,22 +125,29 @@ bool unclaimHandleThread(RowlEngineHandle handle) noexcept {
 std::shared_ptr<Rowl::Core::Engine> takeLiveHandle(RowlEngineHandle handle) noexcept {
     if (!handle) return {};
     std::lock_guard<std::mutex> lock(g_handleMutex);
-    const auto it = g_liveHandles.find(handle);
-    if (it == g_liveHandles.end()) return {};
-    auto* record = static_cast<HandleRecord*>(handle);
+    auto* record = recordForLocked(handle);
+    if (record == nullptr) return {};
     if (record->ownerThread != std::thread::id{} &&
         record->ownerThread != std::this_thread::get_id()) {
         return {};
     }
+    const auto it = g_liveHandles.find(handle);
     g_liveHandles.erase(it);
+    // R1 (#7): slot emekliliği — kayıt ölü işaretlenir, indeks free-list'e
+    // döner (bellek peak-live ile sınırlı). Nesil artmaz (artış Create'te,
+    // yeniden kullanımda); bayat token zaten map'te yok + nesil eskitir.
+    record->live = false;
+    const auto token = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(handle));
+    g_handleFreeList.push_back(static_cast<uint32_t>(token >> 32));
     return std::move(record->engine);
 }
 
 Rowl::Core::Engine* toEngine(RowlEngineHandle h) {
     std::lock_guard<std::mutex> lock(g_handleMutex);
+    const auto* record = recordForLocked(h);
+    if (record == nullptr) return nullptr;
     const auto it = g_liveHandles.find(h);
     if (it == g_liveHandles.end()) return nullptr;
-    const auto* record = static_cast<const HandleRecord*>(h);
     return (record->ownerThread == std::thread::id{} ||
             record->ownerThread == std::this_thread::get_id()) ? it->second : nullptr;
 }
@@ -116,9 +160,8 @@ Rowl::Core::Engine* toEngine(RowlEngineHandle h) {
 std::shared_ptr<Rowl::Core::Engine> toEngineChecked(RowlEngineHandle h) noexcept {
     if (!h) return nullptr;
     std::lock_guard<std::mutex> lock(g_handleMutex);
-    const auto it = g_liveHandles.find(h);
-    if (it == g_liveHandles.end()) return nullptr;
-    const auto* record = static_cast<const HandleRecord*>(h);
+    const auto* record = recordForLocked(h);
+    if (record == nullptr) return nullptr;
     if (record->ownerThread != std::thread::id{} &&
         record->ownerThread != std::this_thread::get_id()) {
         return nullptr;
@@ -129,8 +172,8 @@ std::shared_ptr<Rowl::Core::Engine> toEngineChecked(RowlEngineHandle h) noexcept
 std::shared_ptr<Rowl::Core::Engine> copyEngineAnyThread(RowlEngineHandle h) noexcept {
     if (!h) return nullptr;
     std::lock_guard<std::mutex> lock(g_handleMutex);
-    if (g_liveHandles.find(h) == g_liveHandles.end()) return nullptr;
-    const auto* record = static_cast<const HandleRecord*>(h);
+    const auto* record = recordForLocked(h);
+    if (record == nullptr) return nullptr;
     return record->engine;
 }
 
@@ -166,6 +209,16 @@ namespace Rowl::Core {
 Engine* testEngineFromHandle(RowlEngineHandle handle) {
     return toEngine(handle);
 }
+// R1 (#7) test-only sayaçları: slot havuzu büyümesi (Create/Destroy
+// döngülerinde sınır) + canlı handle sayısı. Davranış-nötr gözlem.
+uint64_t RowlTest_HandleSlotCount() {
+    std::lock_guard<std::mutex> lock(g_handleMutex);
+    return static_cast<uint64_t>(g_handleRecords.size());
+}
+uint64_t RowlTest_LiveHandleCount() {
+    std::lock_guard<std::mutex> lock(g_handleMutex);
+    return static_cast<uint64_t>(g_liveHandles.size());
+}
 } // namespace Rowl::Core
 
 extern "C" {
@@ -174,9 +227,30 @@ extern "C" {
 RowlEngineHandle RowlEngine_Create(void) {
     return invokeNoexcept<RowlEngineHandle>([] {
         std::lock_guard<std::mutex> lock(g_handleMutex);
+        // R1 (#7): önce free-list — ölü slot yeniden kullanılır (nesil
+        // artar, engine/owner sıfırlanır); boşsa yeni slot eklenir. Motor
+        // tahsisi her iki yolda da mutasyondan ÖNCE olur (throw'da kayıt
+        // ve map'e dokunulmamış olur; eski push_back-geri-alma disiplini
+        // append yolunda aynen durur).
+        auto freshEngine = std::make_shared<Rowl::Core::Engine>();
+        if (!g_handleFreeList.empty()) {
+            const uint32_t index = g_handleFreeList.back();
+            g_handleFreeList.pop_back();
+            HandleRecord* record = g_handleRecords[index].get();
+            record->engine = std::move(freshEngine);
+            record->ownerThread = std::thread::id{};
+            record->generation = nextHandleGeneration();
+            record->live = true;
+            const auto handle = encodeHandleToken(index, record->generation);
+            g_liveHandles.emplace(handle, record->engine.get());
+            return handle;
+        }
         auto record = std::make_unique<HandleRecord>();
-        record->engine = std::make_shared<Rowl::Core::Engine>();
-        const auto handle = static_cast<RowlEngineHandle>(record.get());
+        record->engine = std::move(freshEngine);
+        record->generation = nextHandleGeneration();
+        record->live = true;
+        const auto index = static_cast<uint32_t>(g_handleRecords.size());
+        const auto handle = encodeHandleToken(index, record->generation);
         g_liveHandles.emplace(handle, record->engine.get());
         try {
             g_handleRecords.push_back(std::move(record));
@@ -193,7 +267,7 @@ void RowlEngine_Destroy(RowlEngineHandle handle) {
     // no SDL video call here can interleave a concurrent Init/Shutdown.
     Rowl::Platform::VideoSerialGuard serial;
     // D3 (B1d #102): foreign-thread Destroy stamps WRONG_THREAD instead of
-    // silently no-op'ing (and leaks nothing: the record stays retained).
+    // silently no-op'ing (and leaks nothing: the live slot is untouched).
     if (classifyHandle(handle) == HandleStanding::Foreign) {
         stampWrongThread(handle, "destroy");
         return;
@@ -216,9 +290,8 @@ RowlEngine_ResultCode RowlEngine_ReclaimHandle(RowlEngineHandle handle) {
     Rowl::Platform::VideoSerialGuard serial;
     {
         std::lock_guard<std::mutex> lock(g_handleMutex);
-        const auto it = g_liveHandles.find(handle);
-        if (it == g_liveHandles.end()) return ROWL_RESULT_INVALID_HANDLE;
-        auto* record = static_cast<HandleRecord*>(handle);
+        auto* record = recordForLocked(handle);
+        if (record == nullptr) return ROWL_RESULT_INVALID_HANDLE;
         // Unconditional administrative transfer: the caller asserts the
         // previous owner thread has exited. A still-running previous owner
         // is NOT silently hijacked — its calls become Foreign and stamp
