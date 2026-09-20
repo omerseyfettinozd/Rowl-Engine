@@ -1175,15 +1175,31 @@ void test_audio_lock_queue_fail_atomic() {
  *      sağ + hata "could not be opened" (yol-kanıtı).
  *  (c) queue-fail (testFailNextQueue + BGM RAM WAV): testQueuedBytes(Bgm)
  *      değişmez + intent eski asset'te + hata "Unable to queue decoded audio".
+ *  SOZLESME IKILIGI (uretim 614-664 dogrulamali, uretim degisikligi YOK):
+ *  cihazli yol fail-closed'dur (asagidaki tum fail dallari predecessor'i
+ *  korur, yalniz m_lastError yazar); sessiz-bilinen-dosya yolu COMMIT'tir
+ *  (tasarim): existence-gate'i gecen dosya closeBgmStream + intent/snapshot
+ *  yazimiyla kayda gecer — intent yeni dosyaya gecer (predecessor dagilir),
+ *  snapshot asset yeni dosyadir, kuyruk literal 0, hata BOSTUR. Cap
+ *  fail-closed YALNIZ cihazlidir; sessiz-bilinen cap COMMIT'i cap kilidindeki
+ *  (s) adiminda pinlidir (yesil-gizli DEGIL).
  *  (d) forced-device-less: gercek-cihazsiz kosu beklenmez, kanca ile
  *      zorlanir (testSetDeviceAvailable(false/true); donus bayrak-
  *      restorasyonudur — sessiz-miss akislara dokunmaz): sessiz-yedekte
- *      gecerli BGM intent'i kurulur, eksik dosya intent+snapshot'i yikmaz,
- *      kuyruk literal 0 kalir + hata set.
+ *      gecerli BGM intent'i kurulur (kurulum json'u saklanir), eksik dosya
+ *      intent'i korur + snapshot tam-esitlikle aynen (substring DEGIL),
+ *      kuyruk literal 0 (TEK-YONLU: sessiz dal hic kuyruklamaz; bu iddia
+ *      yalniz sessiz-kirleteni oldurur, bosaltma gucu cihazli q0>0
+ *      dallarindadir) + hata set.
  *  (d2) forced-device-less streaming-miss: akan predecessor uzerinde sessiz
- *      miss — akis + kuyruk + snapshot aynen (VFS'te var olan fixture'lar
- *      sessiz dalda commit'e girerdi; yalniz bilinmeyen-dosya dali
- *      cihazsiz test edilebilir).
+ *      miss — akis + kuyruk + snapshot aynen; bayrak geri-cevirme sonrasi
+ *      reopenDeviceStreams (uretim donus yolu, #82 deseni) cagrilir: json
+ *      birebir + intent + miss-guard aynen, kuyruk sifir DEGIL (ring-restore;
+ *      pencere-degeri kurulumdan kucuk olabilir — TASARIM, delta-0 ARANMAZ),
+ *      ikinci reopen delta-0 + json birebir (idempotans) kilitlenir (VFS'te
+ *      var olan fixture'lar sessiz dalda commit'e girerdi; yalniz
+ *      bilinmeyen-dosya dali cihazsiz test edilebilir — bilinen-dosya
+ *      COMMIT'i cap (s)'dedir).
  *  (e) intent doğruluğu: başarısız yeni BGM (Fade+duration) transition
  *      başlatmaz (+ kuyruk/snapshot dondurma); başarılı transition swap'ı
  *      aynen (regresyon bekçisi, update(1.0f) ile deterministik sürülür —
@@ -1299,7 +1315,12 @@ void test_audio_lock_bgm_transactional() {
     // zorlanir (testSetDeviceAvailable semantigi: yalniz outage'u acar,
     // donusu simulate etmez — donus asagida kancanin geri-cevrilmesidir;
     // sessiz-miss akislara dokunmadigi icin bayrak-restorasyonu yeterlidir).
-    // Sessiz dal hic kuyruklamaz: literal kuyruk==0 aranir.
+    // Sessiz kurulum snapshot'i saklanir: miss sonrasi substring DEGIL
+    // tam-esitlik aranir (alan-degisimli mutant substring'i atlatirdi).
+    // Sessiz dal hic kuyruklamaz: literal kuyruk==0 aranir — TEK-YONLU not:
+    // bos kuyrukta bosaltma gozlenemez, bu iddia yalniz sessiz-kirleten
+    // (kuyruklayan) mutanti oldurur; bosaltma-oldurme gucu cihazli
+    // q0>0 dallarindadir.
     const bool realDevice = audio.isAudioDeviceAvailable();
     audio.testSetDeviceAvailable(false);
     audio.playAudio("audio/t_bgm_a.wav", Rowl::Audio::AudioChannelType::Bgm);
@@ -1309,6 +1330,7 @@ void test_audio_lock_bgm_transactional() {
     if (audio.streamInfoJson().find("\"asset\":\"audio/t_bgm_a.wav\"") == std::string::npos) {
         lockFail("sessiz-yedek snapshot kurulamadi: " + audio.streamInfoJson());
     }
+    const std::string silentSetupJson = audio.streamInfoJson();
     if (audio.testQueuedBytes(Rowl::Audio::AudioChannelType::Bgm) != 0) {
         lockFail("sessiz-yedek cihaz kuyruguna yazdi (sessiz dal kuyruklamaz)");
     }
@@ -1316,8 +1338,9 @@ void test_audio_lock_bgm_transactional() {
     if (!audio.isBgmPlaying() || audio.getCurrentBgmPath() != "audio/t_bgm_a.wav") {
         lockFail("sessiz-yedek miss intent'i yikti (predecessor korunmadi)");
     }
-    if (audio.streamInfoJson().find("\"asset\":\"audio/t_bgm_a.wav\"") == std::string::npos) {
-        lockFail("sessiz-yedek miss snapshot'i yikti: " + audio.streamInfoJson());
+    if (audio.streamInfoJson() != silentSetupJson) {
+        lockFail("sessiz-yedek miss snapshot'i degistirdi (once='" + silentSetupJson +
+                 "' sonra='" + audio.streamInfoJson() + "')");
     }
     if (audio.testQueuedBytes(Rowl::Audio::AudioChannelType::Bgm) != 0) {
         lockFail("sessiz-yedek miss kuyrukladi (fail yolu kuyruklamaz)");
@@ -1394,8 +1417,8 @@ void test_audio_lock_bgm_transactional() {
     // (d2) forced-device-less streaming-miss: dosya bilinmedigi icin sessiz
     // dal commit'e girmez (intent/snapshot/akis/kuyruk aynen); kanca geri
     // cevrilir. VFS'te VAR olan fixture'lar (openfail/corrupt/cap) sessiz
-    // dalda commit'e girerdi — o dallar cihazsiz test EDILEMEZ (asagidaki
-    // SKIP gerekcesi cap testinde pinlidir).
+    // dalda commit'e girerdi — o dallar cihazsiz test EDILEMEZ (bilinen-dosya
+    // COMMIT davranisi cap testindeki (s) adiminda pinlidir).
     audio.testSetDeviceAvailable(false);
     audio.playAudio("audio/does_not_exist.wav", Rowl::Audio::AudioChannelType::Bgm);
     requireBgmPredecessorFrozen(audio, kurulumQueued, kurulumJson,
@@ -1405,7 +1428,37 @@ void test_audio_lock_bgm_transactional() {
     if (!audio.isAudioDeviceAvailable()) {
         lockFail("kanca donusu cihazi acmadi (d2)");
     }
-    TEST_PASS("Audio Transactional — zorlanmis-cihazsiz miss akis+kuyrugu korur (d2)");
+    // Donus uretim yoludur (kanca donusu simulate etmez, yalniz outage'u
+    // acar — #82 deseni): reopen rebuild eder; unknown-miss pending yazmadigi
+    // icin replay YOKTUR. Rebuild SDL kuyrugunu dusurup ring penceresini geri
+    // kuyruklar (4-chunk pencere tasarimi — kurulum daha fazla chunk
+    // kuyruklamisti); o yuzden kuyruk pencere-degerine iner (kurulum
+    // snapshot'iyla tam-esitlik ARANMAZ), snapshot/pozisyon (json) ve intent
+    // birebir aynen kalmalidir. Ardindan ikinci reopen ile rebuild
+    // idempotansi delta-0 + json birebir kilitlenir (tuketim dondurma
+    // altinda halka degismez).
+    if (!audio.reopenDeviceStreams()) {
+        lockFail("reopen-donusu rebuild basarisiz (d2): " + audio.getLastError());
+    }
+    if (audio.streamInfoJson() != kurulumJson) {
+        lockFail("reopen-donusu snapshot/pozisyonu bozdu (d2) (once='" + kurulumJson +
+                 "' sonra='" + audio.streamInfoJson() + "')");
+    }
+    requireMissGuardIntact(audio, "reopen-donusu sonrasi (d2)");
+    if (!audio.isBgmPlaying() || audio.getCurrentBgmPath() != "audio/miss_bgm.ogg") {
+        lockFail("reopen-donusu intent'i bozdu (d2)");
+    }
+    const size_t reopenQueued =
+        audio.testQueuedBytes(Rowl::Audio::AudioChannelType::Bgm);
+    if (reopenQueued == 0) {
+        lockFail("reopen-donusu akisi dusurdu (ring-restore kuyruklamadi) (d2)");
+    }
+    if (!audio.reopenDeviceStreams()) {
+        lockFail("ikinci reopen rebuild basarisiz (d2): " + audio.getLastError());
+    }
+    requireBgmPredecessorFrozen(audio, reopenQueued, kurulumJson,
+                                "ikinci reopen-donusu sonrasi (d2)");
+    TEST_PASS("Audio Transactional — zorlanmis-cihazsiz miss akis+kuyrugu korur, donus aynen (d2)");
 
     // (e-ok) başarılı transition regresyon bekçisi: swap aynen çalışır.
     audio.playAudio("audio/t_bgm_a.wav", Rowl::Audio::AudioChannelType::Bgm);
@@ -1488,16 +1541,25 @@ void test_audio_lock_bgm_transactional() {
  *  - convert-fail (~718): 9-kanal tiny float WAV. SDL yukler ama
  *    SDL_ConvertAudioSamples reddeder ("src_spec->channels is invalid").
  *
+ *  - sessiz-bilinen COMMIT (s): zorlanmis-cihazsiz bilinen cap dosyasi
+ *    existence-gate'i gecer, commit'e girer (intent+snapshot yeni dosya,
+ *    kuyruk literal 0, hata bos) — bu yikim PINLIDIR (fail-closed mutanti
+ *    burada duser: intent eski dosyada kalir + hata dolar).
+ *
  * Gozlem (bu dosyadaki desen aynen): TEST_SECTION/TEST_PASS + hata=exit(1);
  * timing-assert/sleep/poll YOK; requireMissGuardIntact 7-iddia (kurulum
  * streaming BGM aynen) + #87-tur3 BGM-ozel dondurma (kuyruk delta-0 q0>0 +
  * streamInfoJson birebir — akis-pozisyonu korunumu; #78/#81'de yoktur);
  * hata-mesaji dal-kaniti (yanlis dala sapma yakalanir).
- * Cihaz bagimliligi: RAM yolu cihaza baglidir; cihazsiz kosuda acik SKIP
- * (requireAudioDeviceOrSkip aynen) + gerekce: cap fixture'lari VFS'te VAR
- * oldugu icin sessiz dalda commit'e girer, predecessor'i dagitir (tasarim);
- * yalniz bilinmeyen-dosya dallari zorlanmis-cihazsiz test edilebilir
- * (transactional d/d2'de kapsanir).
+ * Cihaz bagimliligi: RAM fail-closed yolu cihaza baglidir; cihazsiz kosuda
+ * bu adimlar acik SKIP (requireAudioDeviceOrSkip aynen) + gerekce: cap
+ * fixture'lari VFS'te VAR oldugu icin sessiz dalda existence-gate'i gecer,
+ * closeBgmStream + intent/snapshot yazimiyla COMMIT'e girer, predecessor'i
+ * dagitir (tasarim — uretim 614-664) ve hata set EDILMEZ. Bu COMMIT davranisi
+ * yesil-gizli DEGILDIR: (s) adimi SKIP oncesinde kosar (kanca-zorlamali,
+ * cihaza bagli degildir) ve sessiz-bilinen cap'i birebir kilitler.
+ * Yalniz bilinmeyen-dosya dallari sessizde korunur (transactional d/d2'de
+ * kapsanir).
  *
  * KAPSAM-DISI (dogrulanmis-erisilemez dal, encoded-cap-only daraltmasi):
  * WAV decoded-cap (~762, "Decoded audio exceeds") bu kilit disindadir ve
@@ -1650,6 +1712,46 @@ void test_audio_lock_bgm_cap_fail_closed() {
     writeSparseOversizeWav(dir / "cap_oversize_65m.wav");
     writeBytes(dir / "cap_chain200.ogg", capChainedDecodeBombOgg());
     writeBytes(dir / "cap_ch9.wav", capNineChannelWav());
+
+    // (s) forced-device-less sessiz-bilinen COMMIT: VFS'te VAR olan cap
+    // fixture sessiz dalda existence-gate'i gecer (uretim 614-664: gate yalniz
+    // bilinmeyen dosyada erken doner) ve COMMIT'e girer — intent yeni dosyaya
+    // gecer (predecessor dagilir, TASARIM), snapshot asset yeni dosyadir,
+    // kuyruk literal 0, hata BOSTUR. Kanca-zorlamali oldugu icin cihaza bagli
+    // degildir, SKIP oncesinde kosar. Cihazli fail-closed sozlesmesiyle
+    // karistirilmamalidir: cap fail-closed YALNIZ cihazli yoldadir.
+    {
+        const bool realDeviceCap = audio.isAudioDeviceAvailable();
+        audio.testSetDeviceAvailable(false);
+        audio.playAudio("audio/t_bgm_a.wav", Rowl::Audio::AudioChannelType::Bgm);
+        if (!audio.isBgmPlaying() || audio.getCurrentBgmPath() != "audio/t_bgm_a.wav") {
+            lockFail("sessiz kurulum intent'i kurulamadi (s)");
+        }
+        audio.playAudio("audio/cap_oversize_65m.wav", Rowl::Audio::AudioChannelType::Bgm);
+        // COMMIT pin'i: intent yeni dosyadadir (predecessor yikimi TASARIM).
+        // Fail-closed mutanti burada duser (intent eski dosyada kalirdi).
+        if (!audio.isBgmPlaying() ||
+            audio.getCurrentBgmPath() != "audio/cap_oversize_65m.wav") {
+            lockFail("sessiz-bilinen cap commitlenmedi (intent yeni dosyada degil) (s)");
+        }
+        if (audio.streamInfoJson().find("\"asset\":\"audio/cap_oversize_65m.wav\"") ==
+            std::string::npos) {
+            lockFail("sessiz-bilinen cap snapshot'i yeni dosyada degil (s): " +
+                     audio.streamInfoJson());
+        }
+        if (audio.testQueuedBytes(Rowl::Audio::AudioChannelType::Bgm) != 0) {
+            lockFail("sessiz-bilinen cap kuyrukladi (sessiz dal kuyruklamaz) (s)");
+        }
+        if (!audio.getLastError().empty()) {
+            lockFail("sessiz-bilinen cap hata yazdi (commit yolu hatasizdir) (s): '" +
+                     audio.getLastError() + "'");
+        }
+        audio.testSetDeviceAvailable(realDeviceCap);
+        if (audio.isAudioDeviceAvailable() != realDeviceCap) {
+            lockFail("kanca donusu cihaz bayragini bozdurdu (s)");
+        }
+        TEST_PASS("Audio Cap — sessiz-bilinen cap COMMIT (intent+snapshot yeni dosya, kuyruk 0, hata bos)");
+    }
 
     if (!requireAudioDeviceOrSkip(audio, "Audio BGM Cap Fail-Closed")) return;
 
