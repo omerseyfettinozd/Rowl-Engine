@@ -3461,19 +3461,26 @@ void test_audio_lock_save_format_v4_mixer() {
 // arasindaki data-race kilidi. N thread x M blip (bos asset: VFS/havuz
 // dokunulmaz, synth/erken-donus yolu), join sonrasi tam-esitlik:
 //   getVoiceBlipCount() == N*M (kayipsiz; plain-sayac mutantinda kayip olur),
-//   getSynthBlipCount() <= voice (A5-tur3 konvansiyonu),
-//   getDropCount() == 0 (drop sayaci karismaz).
+//   getSynthBlipCount() <= voice (A5-tur3 konvansiyonu; tutarlilik olarak kalir),
+//   getDropCount() snapshot-farki == 0 (drop sayaci kumulatiftir, mutlak-0 YOK).
 // Fixture gerekcesi ("" yolu hukmu): playVoiceBlip govdesinde "" icin
 // erken-return YOKTUR — `if (!assetPath.empty())` blogu atlanir, akis
 // `if (!assetPlayed)` synth dalina girer (cihaz/kuyruk tam-yolu). Sayac
 // artisi cihaz kapisindan (`if (!m_deviceAvailable) return;`) ONCE yapilir,
-// yani cihazsiz kosuda da calisir, SKIP YOKTUR. Bu yuzden mevcut "" fixture
-// tam-yol hammer'dir; erken-return kolu ayri mini teste aittir (burada YOK).
+// yani hammer+sayac iddialari cihazsiz kosuda da calisir (bu kisimda SKIP
+// YOKTUR). Buna karsilik SDL kuyruk/synth-sayimi/isVoicePlaying bayragi
+// cihaz kapisi SONRASINDA yazilir: bu dal YALNIZCA cihazli kosuda pinlenir,
+// cihazsizda acik SKIP ile gecilir (gerekce SKIP satirinda; yanlis-beklenti
+// mutantini oldurur).
 // warn-once notu: playVoiceBlip ROWL_LOG_WARN'u dogrudan kullanir;
 // warnAudioOnce sayac kancasi YOKTUR (gozlenebilirlik yok) — bu yuzden
 // uretim degisikligi YAPILMADI, yalnizca test guclendirildi.
-// Pitch/telemetri tam-deger iddiasi YOKTUR (kilit: sayim + sonluluk).
-// Sayac cihaz kapisindan ONCE artar: cihazsiz kosuda da calisir, SKIP YOKTUR.
+// Pitch/telemetri tam-deger iddiasi YOKTUR. Hammer'daki sonluluk gozlemi
+// sanitize KANITI SAYILMAZ (hammer girdileri hep sonludur; kanit deterministik
+// birim testtedir: test_audio_lock_voice_blip_sanitize_finiteness).
+// Tautoloji notu (son tur): onceki `obsMax = max(okuyucu, final)` birlesimi
+// finali kendisiyle karsilastirdigi icin tautolojiydi — KALDIRILDI; her
+// okuyucunun KENDI maxVoice degeri raporlanir (final gozleme KATILMAZ).
 // Timing-assert YOKTUR (sadece join + tam-esitlik).
 void test_audio_lock_voice_blip_concurrent_counts() {
     TEST_SECTION("Audio Voice-Blip Concurrent Counts Lock (#74)");
@@ -3484,18 +3491,29 @@ void test_audio_lock_voice_blip_concurrent_counts() {
         lockFail("Voice-Blip Concurrent Counts (#74): audio init failed");
     }
     audio.resetVoiceBlipCount();
+    // Cihaz kosulu (test basina): hammer+sayac iddialari cihazdan bagimsiz,
+    // SDL/synth/playing pini cihazli-dala ozeldir (asagida SKIP ile).
+    const bool haveDevice = audio.isAudioDeviceAvailable();
+    // Drop sayaci kumulatiftir (resetVoiceBlipCount sifirlamaz): mutlak-0
+    // test-sirasi bagimlidir; snapshot+fark-0 dogrudur (uint64 tasmasinda da
+    // fark aritmetigi gecerlidir).
+    const uint64_t dropBefore = audio.getDropCount();
 
     constexpr int kThreads = 8;
     constexpr int kBlipsPerThread = 250;
     constexpr uint32_t kExpected = static_cast<uint32_t>(kThreads * kBlipsPerThread);
 
-    // Okuyucu-tutarlilik: her okuyucu yerel min/max + monotonluk + sonluluk
-    // izler (yerel izleme — ek atomik cekisme yok; birlesim join sonrasi).
+    // Okuyucu-tutarlilik: her okuyucu yerel min/max + ornek-sayaci +
+    // monotonluk + sonluluk izler (yerel izleme — ek atomik cekisme yok;
+    // birlesim join sonrasi; final ornek gozleme KATILMAZ).
     struct ReaderObs {
         uint32_t minVoice = UINT32_MAX;
         uint32_t maxVoice = 0;
         uint32_t lastVoice = 0;
-        bool hasSample = false;
+        // Settle-beklemesi ana thread'den okurken okuyucu thread yazar:
+        // bu tek alan atomiktir (TSan temizligi); diger alanlar yalnizca
+        // sahip thread + join-sonrasi okunur.
+        std::atomic<uint64_t> sampleCount{0};
         bool sawDecrease = false;
         bool sawNonFinite = false;
     };
@@ -3516,9 +3534,9 @@ void test_audio_lock_voice_blip_concurrent_counts() {
             (void)playing;
             if (voice < obs.minVoice) obs.minVoice = voice;
             if (voice > obs.maxVoice) obs.maxVoice = voice;
-            if (obs.hasSample && voice < obs.lastVoice) obs.sawDecrease = true;
+            if (obs.sampleCount > 0u && voice < obs.lastVoice) obs.sawDecrease = true;
             obs.lastVoice = voice;
-            obs.hasSample = true;
+            ++obs.sampleCount;
             if (!std::isfinite(pitch) || !std::isfinite(peak) || !std::isfinite(rms) ||
                 !std::isfinite(peakR) || !std::isfinite(rmsR)) {
                 obs.sawNonFinite = true;
@@ -3545,6 +3563,22 @@ void test_audio_lock_voice_blip_concurrent_counts() {
         workers.emplace_back(hammerBody, t);
     }
     for (auto& worker : workers) worker.join();
+    // Ornek-deterministicligi (timing-assert DEGILDIR): blip govdesi kilidi
+    // hammer boyunca neredeyse hep tutar, bu yuzden okuyucular hammer
+    // penceresinde az ornek bulabilir (yavas-zamanlayicide <50 gozlendi).
+    // Okuyucular hammer SONRASI da calismaya devam eder (sayac 2000'de sabit;
+    // monotonluk/ust-sinir iddialari etkilenmez), her okuyucu 50 ornege
+    // ulasana kadar beklenir. Bekleme davranisa dair iddia DEGILDIR, yalnizca
+    // bos-donme esigini deterministik kilar; sure-siniri asimi fail-loud'dur
+    // (bozuk-ortam; sessiz gecis YOK).
+    constexpr uint64_t kMinReaderSamples = 50u;
+    const auto settleDeadline =
+        std::chrono::steady_clock::now() + std::chrono::seconds(10);
+    while ((obsA.sampleCount < kMinReaderSamples ||
+            obsB.sampleCount < kMinReaderSamples) &&
+           std::chrono::steady_clock::now() < settleDeadline) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
     readersRun.store(false);
     readerA.join();
     readerB.join();
@@ -3562,40 +3596,123 @@ void test_audio_lock_voice_blip_concurrent_counts() {
     }
     TEST_PASS("Audio Voice-Blip Counts — synth<=voice konvansiyonu");
 
-    if (audio.getDropCount() != 0u) {
+    // Drop: snapshot-farki 0 (mutlak-0 DEGIL; sayac kumulatiftir).
+    if (audio.getDropCount() - dropBefore != 0u) {
         lockFail("Voice-Blip Concurrent Counts (#74): drop sayaci karisti");
     }
-    TEST_PASS("Audio Voice-Blip Counts — drop karismaz (0)");
+    TEST_PASS("Audio Voice-Blip Counts — drop karismaz (fark-0)");
 
-    // Okuyucu-tutarlilik birlesimi: final ornek (ana thread) gozleme katilir;
-    // boylece gozlenen-max == 2000 deterministiktir (okuyucu son ornegi
-    // kacirabilir; max'in kaynagi final ornektir, monotonluk okuyucudan).
-    uint32_t obsMax = obsA.maxVoice;
-    if (obsB.maxVoice > obsMax) obsMax = obsB.maxVoice;
-    if (voice > obsMax) obsMax = voice;
-    if (!obsA.hasSample || !obsB.hasSample) {
-        lockFail("Voice-Blip Concurrent Counts (#74): okuyucu ornek uretemedi");
-    }
-    if (obsA.sawDecrease || obsB.sawDecrease) {
-        lockFail("Voice-Blip Concurrent Counts (#74): okuyucu azalan sayim gordu");
-    }
-    if (obsMax != kExpected) {
-        lockFail("Voice-Blip Concurrent Counts (#74): gozlenen max tutarsiz (max=" +
-                 std::to_string(obsMax) + ", beklenen=" + std::to_string(kExpected) + ")");
-    }
-    TEST_PASS("Audio Voice-Blip Counts — okuyucu gozlemi monoton-artan (max==2000)");
+    // Okuyucu-tutarlilik (her okuyucu KENDI gozlemiyle; final KATILMAZ):
+    //  - ornek-sayaci >= 50 (hasSample yerine; bos-donme mutantini oldurur),
+    //  - minVoice <= kendi maxVoice (alt-sinir),
+    //  - kendi maxVoice <= N*M (ust-sinir; okuyucu kuyrugu kacirabilir,
+    //    esitlik iddiasi YOKTUR — final-esitlik tautolojiydi),
+    //  - azalan sayim YOK (monotonluk; kilit-silinme mutantini oldurur),
+    //  - sonlu-disi gozlem YOK (yirtik-okuma bekcisi; sanitize kaniti DEGIL).
+    auto checkReader = [&](const ReaderObs& obs, const char* tag) {
+        const std::string ctx =
+            std::string("Voice-Blip Concurrent Counts (#74) [") + tag + "]: ";
+        if (obs.sampleCount < kMinReaderSamples) {
+            lockFail(ctx + "okuyucu ornek uretemedi (count=" +
+                     std::to_string(obs.sampleCount) + ")");
+        }
+        if (!(obs.minVoice <= obs.maxVoice)) {
+            lockFail(ctx + "minVoice alt-siniri bozuldu (min=" +
+                     std::to_string(obs.minVoice) + ", max=" +
+                     std::to_string(obs.maxVoice) + ")");
+        }
+        if (!(obs.maxVoice <= kExpected)) {
+            lockFail(ctx + "gozlenen max tasti (max=" +
+                     std::to_string(obs.maxVoice) + ", N*M=" +
+                     std::to_string(kExpected) + ")");
+        }
+        if (obs.sawDecrease) {
+            lockFail(ctx + "okuyucu azalan sayim gordu");
+        }
+        if (obs.sawNonFinite) {
+            lockFail(ctx + "okuyucu sonlu-disi telemetri/pitch gordu");
+        }
+    };
+    checkReader(obsA, "okuyucu-A");
+    checkReader(obsB, "okuyucu-B");
+    TEST_PASS("Audio Voice-Blip Counts — okuyucu gozlemi tutarli (A.max=" +
+              std::to_string(obsA.maxVoice) + ", B.max=" +
+              std::to_string(obsB.maxVoice) + ", N*M=" +
+              std::to_string(kExpected) + ")");
 
-    const float finalPitch = audio.getLastVoiceBlipPitch();
-    const float finalPeak = audio.getChannelPeak(1, 0);
-    const float finalRms = audio.getChannelRms(1, 0);
-    const float finalPeakR = audio.getChannelPeak(1, 1);
-    const float finalRmsR = audio.getChannelRms(1, 1);
-    if (obsA.sawNonFinite || obsB.sawNonFinite ||
-        !std::isfinite(finalPitch) || !std::isfinite(finalPeak) || !std::isfinite(finalRms) ||
-        !std::isfinite(finalPeakR) || !std::isfinite(finalRmsR)) {
-        lockFail("Voice-Blip Concurrent Counts (#74): pitch/telemetri sonlu-kalmadi");
+    // SDL/synth/playing dali: YALNIZCA cihazli kosuda pinlenir. Synth-sayimi
+    // ve isVoicePlaying bayragi cihaz kapisi SONRASINDA yazilir; cihazsizda
+    // synth==0/playing==false kalir, beklenti SKIP ile gecilir (gerekce budur;
+    // SKIP'siz yanlis-beklenti burada OLUR).
+    if (haveDevice) {
+        if (!(synth > 0u)) {
+            lockFail("Voice-Blip Concurrent Counts (#74): cihazli-dalda synth uretilmedi");
+        }
+        TEST_PASS("Audio Voice-Blip Counts — cihazli-dal synth pini (synth>0)");
+        if (!audio.isVoicePlaying()) {
+            lockFail("Voice-Blip Concurrent Counts (#74): cihazli-dalda playing bayragi kurulmadi");
+        }
+        TEST_PASS("Audio Voice-Blip Counts — cihazli-dal playing pini");
+    } else {
+        std::cout << "  SKIP Audio Voice-Blip synth/playing pini "
+                  << "(cihazsiz; synth-sayimi ve playing bayragi cihaz kapisi "
+                  << "sonrasinda yazilir)" << std::endl;
     }
-    TEST_PASS("Audio Voice-Blip Counts — pitch/telemetri sonlu-kalir");
+
+    audio.stopAll();
+    audio.shutdown();
+}
+
+// Hedef #74 (deterministik sonluluk birimi): playVoiceBlip sanitize kaniti.
+// Hammer girdileri hep sonlu oldugu icin hammer'daki sonluluk gozlemi kanit
+// SAYILMAZ; bu test NaN/+-Inf/uc-deger pitch+volume verir ve sanitize sonrasi
+// getLastVoiceBlipPitch'in sonlu + [0.25,4.0] oldugunu pinler. Govdedeki
+// sanitize blogu (`!isfinite` ikameleri + clamp'lar) silinirse NaN/Inf/uc-deger
+// aynen mandala duser ve bu test OLUR (kirmizi).
+// Cihaz kosulu: pitch mandali cihaz kapisindan ONCE yazilir, cihazdan
+// bagimsizdir — SKIP YOKTUR. Timing-assert YOKTUR.
+void test_audio_lock_voice_blip_sanitize_finiteness() {
+    TEST_SECTION("Audio Voice-Blip Sanitize Finiteness (#74)");
+
+    Rowl::VFS::VFSManager vfs;
+    Rowl::Audio::AudioEngine audio(&vfs);
+    if (!audio.initialize() || !audio.isInitialized()) {
+        lockFail("Voice-Blip Sanitize Finiteness (#74): audio init failed");
+    }
+
+    const float kNaN = std::numeric_limits<float>::quiet_NaN();
+    const float kInf = std::numeric_limits<float>::infinity();
+    struct SanitizeCase {
+        float pitch;
+        float volume;
+        const char* tag;
+    };
+    const SanitizeCase cases[] = {
+        {kNaN, 0.85f, "nan-pitch"},
+        {kInf, 0.85f, "inf-pitch"},
+        {-kInf, 0.85f, "neginf-pitch"},
+        {1.0f, kNaN, "nan-volume"},
+        {1.0f, kInf, "inf-volume"},
+        {1.0f, -kInf, "neginf-volume"},
+        {kNaN, kNaN, "nan-pitch+nan-volume"},
+        {kInf, -kInf, "inf-pitch+neginf-volume"},
+        {0.0f, 0.85f, "zero-pitch"},
+        {100.0f, 0.85f, "huge-pitch"},
+    };
+    for (const SanitizeCase& c : cases) {
+        audio.playVoiceBlip("", c.pitch, c.volume,
+                            Rowl::Audio::AudioChannelType::Voice);
+        const float got = audio.getLastVoiceBlipPitch();
+        if (!std::isfinite(got)) {
+            lockFail(std::string("Voice-Blip Sanitize Finiteness (#74): sonlu-kalmadi [") +
+                     c.tag + "]");
+        }
+        if (!(got >= 0.25f && got <= 4.0f)) {
+            lockFail(std::string("Voice-Blip Sanitize Finiteness (#74): aralik-disi [") +
+                     c.tag + "]=" + std::to_string(got));
+        }
+    }
+    TEST_PASS("Audio Voice-Blip Sanitize — NaN/Inf/uc-deger sonlu + [0.25,4.0]");
 
     audio.stopAll();
     audio.shutdown();

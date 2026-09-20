@@ -119,6 +119,7 @@ void test_audio_lock_scene_restore_stopped_bgm_stays_stopped();
 void test_audio_lock_mixer_persistence();
 void test_audio_lock_save_format_v4_mixer();
 void test_audio_lock_voice_blip_concurrent_counts();
+void test_audio_lock_voice_blip_sanitize_finiteness();
 void test_lua_sandbox();
 void test_mobile_input();
 void test_platform_host();

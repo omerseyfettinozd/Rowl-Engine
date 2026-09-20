@@ -117,6 +117,7 @@ int main(int argc, char* argv[]) {
     test_audio_lock_mixer_persistence();
     test_audio_lock_save_format_v4_mixer();
     test_audio_lock_voice_blip_concurrent_counts();
+    test_audio_lock_voice_blip_sanitize_finiteness();
     test_lua_sandbox();
     test_mobile_input();
     test_platform_host();
