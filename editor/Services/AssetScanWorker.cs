@@ -24,6 +24,7 @@ internal sealed class AssetScanWorker : IDisposable
     private readonly Thread _thread;
     private readonly ManualResetEventSlim _started = new(false);
     private int _disposeState;
+    private int _commandsDisposed;
 
     public AssetScanWorker(string threadName = "Rowl Editor Asset Scan")
     {
@@ -117,6 +118,9 @@ internal sealed class AssetScanWorker : IDisposable
         _started.Set();
         foreach (Action command in _commands.GetConsumingEnumerable())
             command();
+        // Worker-thread Dispose yalnızca CompleteAdding yapar; kuyunun
+        // dispose'u numaralandırıcı bittikten sonra buraya aittir.
+        DisposeCommandsOnce();
     }
 
     private void ThrowIfUnavailable()
@@ -130,9 +134,21 @@ internal sealed class AssetScanWorker : IDisposable
         if (Interlocked.Exchange(ref _disposeState, 1) != 0)
             return;
         _commands.CompleteAdding();
-        if (Environment.CurrentManagedThreadId != ManagedThreadId)
-            _thread.Join();
-        _commands.Dispose();
+        if (Environment.CurrentManagedThreadId == ManagedThreadId)
+        {
+            // Worker threadi: kuyuyu numaralandırıyoruz; dispose'u
+            // Run bitimine bırak, yalnızca _started'ı kapat.
+            _started.Dispose();
+            return;
+        }
+        _thread.Join();
+        DisposeCommandsOnce();
         _started.Dispose();
+    }
+
+    private void DisposeCommandsOnce()
+    {
+        if (Interlocked.Exchange(ref _commandsDisposed, 1) == 0)
+            _commands.Dispose();
     }
 }

@@ -22,6 +22,7 @@ namespace RowlEngine.Editor.Native
         private Exception? _startupError;
         private IntPtr _handle;
         private int _disposeState;
+        private int _commandsDisposed;
 
         internal OffscreenRuntimeWorker(
             Func<IntPtr>? createHandle = null,
@@ -246,17 +247,22 @@ namespace RowlEngine.Editor.Native
                 _started.Set();
             }
 
-            if (_handle == IntPtr.Zero) return;
-            try
+            if (_handle != IntPtr.Zero)
             {
-                foreach (Action<IntPtr> command in _commands.GetConsumingEnumerable())
-                    command(_handle);
+                try
+                {
+                    foreach (Action<IntPtr> command in _commands.GetConsumingEnumerable())
+                        command(_handle);
+                }
+                finally
+                {
+                    _destroyHandle(_handle);
+                    _handle = IntPtr.Zero;
+                }
             }
-            finally
-            {
-                _destroyHandle(_handle);
-                _handle = IntPtr.Zero;
-            }
+            // Worker-thread Dispose yalnızca CompleteAdding yapar; kuyunun
+            // dispose'u numaralandırıcı bittikten sonra buraya aittir.
+            DisposeCommandsOnce();
         }
 
         private static void DestroyNativeHandle(IntPtr handle)
@@ -275,10 +281,22 @@ namespace RowlEngine.Editor.Native
         {
             if (Interlocked.Exchange(ref _disposeState, 1) != 0) return;
             _commands.CompleteAdding();
-            if (Environment.CurrentManagedThreadId != ManagedThreadId)
-                _thread.Join();
-            _commands.Dispose();
+            if (Environment.CurrentManagedThreadId == ManagedThreadId)
+            {
+                // Worker threadi: kuyuyu numaralandırıyoruz; dispose'u
+                // Run bitimine bırak, yalnızca _started'ı kapat.
+                _started.Dispose();
+                return;
+            }
+            _thread.Join();
+            DisposeCommandsOnce();
             _started.Dispose();
+        }
+
+        private void DisposeCommandsOnce()
+        {
+            if (Interlocked.Exchange(ref _commandsDisposed, 1) == 0)
+                _commands.Dispose();
         }
     }
 }
