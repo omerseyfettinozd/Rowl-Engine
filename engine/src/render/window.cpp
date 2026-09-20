@@ -625,6 +625,11 @@ void Window::setInputHandler(std::function<void(const Rowl::Platform::RuntimeInp
 
 void Window::startTransition(const std::string& kind, float durationSeconds, const std::string& colorHex) {
     if (!m_transitionManager) return;
+    // D6-#147: önce doğrula, sonra snapshot — bilinmeyen tür/kötü süre SDL
+    // readback'e mal olmaz; erken aynı-tür tetikleme birleştirilir. Geçersiz
+    // girdi sürmekte olan geçişi de öldürmez (eski davranış durdururdu).
+    if (!m_transitionManager->canStartTransition(kind, durationSeconds)) return;
+    if (m_transitionManager->shouldCoalesceRetrigger(kind)) return;
     m_transitionManager->captureSnapshot(m_offscreenSurface, m_sdlRenderer);
     m_transitionManager->startTransitionFromKind(kind, durationSeconds, colorHex);
 }

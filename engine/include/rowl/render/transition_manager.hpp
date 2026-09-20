@@ -41,6 +41,20 @@ public:
 
     void stopTransition();
 
+    // D6-#147: validate-before-snapshot + retrigger coalesce. Window,
+    // pahalı snapshot (SDL readback) öncesi bu kapılardan geçer; yeni
+    // mantık burada yaşar, window.cpp büyümez.
+    static bool isKnownKind(const std::string& kind);
+    static bool isUsableDuration(float durationSeconds);
+    bool canStartTransition(const std::string& kind, float durationSeconds) const;
+    bool shouldCoalesceRetrigger(const std::string& kind) const;
+
+    // D6-#147 kanıt sayacı: captureSnapshot girişimi (readback) sayısı.
+    // Geçersiz girdi spam'inde artmaması, doğrulamanın snapshot'tan önce
+    // geldiğini kanıtlar (mutant: snapshot'ı öne taşıyan değişiklik bu
+    // kilide takılır).
+    uint64_t getSnapshotCaptureCount() const { return m_snapshotCaptureCount; }
+
     bool isTransitionActive() const { return m_type != TransitionType::None; }
     TransitionType getType() const { return m_type; }
     float getProgress() const { return m_progress; } // 0.0f to 1.0f
@@ -79,6 +93,7 @@ private:
     SDL_Texture* m_snapshotTexture = nullptr;
     int m_snapshotWidth = 0;
     int m_snapshotHeight = 0;
+    uint64_t m_snapshotCaptureCount = 0;
 };
 
 } // namespace Rowl::Render

@@ -64,22 +64,62 @@ void TransitionManager::startTransition(TransitionType type,
     m_colorA = a;
 }
 
+// D6-#147: tür eşlemesi tek noktada — kapılar (isKnownKind,
+// shouldCoalesceRetrigger) ve başlatma aynı tabloyu okur, kayma olmaz.
+static TransitionType typeForKind(const std::string& kind) {
+    if (kind == "crossfade" || kind == "fade") return TransitionType::CrossFade;
+    if (kind == "fade_black" || kind == "black") return TransitionType::FadeToBlack;
+    if (kind == "fade_white" || kind == "white") return TransitionType::FadeToWhite;
+    if (kind == "fade_color" || kind == "color") return TransitionType::FadeToColor;
+    if (kind == "wipe_left") return TransitionType::WipeLeft;
+    if (kind == "wipe_right") return TransitionType::WipeRight;
+    return TransitionType::None;
+}
+
+// D6-#147: erken aynı-tür yeniden tetikleme (%90 ilerleme altı) yoksayılır;
+// geçiş baştan başlamaz, snapshot tazelenmez.
+constexpr float kRetriggerCoalesceProgress = 0.9f;
+
+bool TransitionManager::isKnownKind(const std::string& kind) {
+    return typeForKind(kind) != TransitionType::None;
+}
+
+bool TransitionManager::isUsableDuration(float durationSeconds) {
+    return std::isfinite(durationSeconds) && durationSeconds > 0.0f;
+}
+
+bool TransitionManager::canStartTransition(const std::string& kind,
+                                           float durationSeconds) const {
+    return isKnownKind(kind) && isUsableDuration(durationSeconds);
+}
+
+bool TransitionManager::shouldCoalesceRetrigger(const std::string& kind) const {
+    if (m_type == TransitionType::None) return false;
+    return typeForKind(kind) == m_type && m_progress < kRetriggerCoalesceProgress;
+}
+
 void TransitionManager::startTransitionFromKind(const std::string& kind,
                                                float durationSeconds,
                                                const std::string& colorHex) {
-    if (kind == "crossfade" || kind == "fade") {
+    const TransitionType type = typeForKind(kind);
+    if (type == TransitionType::None) {
+        stopTransition();
+        return;
+    }
+    if (shouldCoalesceRetrigger(kind)) return;
+    if (type == TransitionType::CrossFade) {
         startTransition(TransitionType::CrossFade, durationSeconds);
-    } else if (kind == "fade_black" || kind == "black") {
+    } else if (type == TransitionType::FadeToBlack) {
         startTransition(TransitionType::FadeToBlack, durationSeconds, 0, 0, 0, 255);
-    } else if (kind == "fade_white" || kind == "white") {
+    } else if (type == TransitionType::FadeToWhite) {
         startTransition(TransitionType::FadeToWhite, durationSeconds, 255, 255, 255, 255);
-    } else if (kind == "fade_color" || kind == "color") {
+    } else if (type == TransitionType::FadeToColor) {
         uint8_t r = 0, g = 0, b = 0, a = 255;
         parseHexColor(colorHex, r, g, b, a);
         startTransition(TransitionType::FadeToColor, durationSeconds, r, g, b, a);
-    } else if (kind == "wipe_left") {
+    } else if (type == TransitionType::WipeLeft) {
         startTransition(TransitionType::WipeLeft, durationSeconds);
-    } else if (kind == "wipe_right") {
+    } else if (type == TransitionType::WipeRight) {
         startTransition(TransitionType::WipeRight, durationSeconds);
     } else {
         stopTransition();
@@ -103,6 +143,9 @@ void TransitionManager::update(float dt) {
 }
 
 bool TransitionManager::captureSnapshot(SDL_Surface* surface, SDL_Renderer* renderer) {
+    // D6-#147 kanıt sayacı: her readback girişimi sayılır (Window kapıları
+    // geçersiz girdiyi buraya hiç ulaştırmaz).
+    ++m_snapshotCaptureCount;
     cleanupSnapshot();
     if (!renderer) return false;
 

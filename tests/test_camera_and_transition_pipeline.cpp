@@ -5,6 +5,8 @@
 #include "rowl_test_harness.hpp"
 #include "rowl/render/frame_composition.hpp"
 #include "rowl/text/hex_color.hpp"
+#include <cmath>
+#include <limits>
 
 namespace {
 
@@ -66,6 +68,144 @@ void testTransitionHexUnification() {
         }
     }
     TEST_PASS("fade_color starts for valid, alpha, empty and malformed hex");
+}
+
+// D6-#147 — VALIDATE-BEFORE-SNAPSHOT: geçersiz tür/süre snapshot'a (SDL
+// readback) mal olmaz; erken aynı-tür tetikleme birleştirilir. Kanıt:
+// readback sayacı + 10x spam (snapshot'ı doğrulama-öncesine taşıyan bir
+// mutant sayaç kilidine takılır).
+void testTransitionValidateBeforeSnapshot() {
+    TEST_SECTION("Transition Validate-Before-Snapshot & Retrigger Coalesce");
+    using Rowl::Render::TransitionManager;
+    using Rowl::Render::TransitionType;
+
+    // Kapı tablosu: 10 geçerli tür, reddedilenler.
+    for (const char* kind : {"crossfade", "fade", "fade_black", "black",
+                             "fade_white", "white", "fade_color", "color",
+                             "wipe_left", "wipe_right"}) {
+        if (!TransitionManager::isKnownKind(kind) ||
+            !TransitionManager().canStartTransition(kind, 0.5f)) {
+            std::cerr << "canStartTransition rejected valid kind '" << kind
+                      << "'" << std::endl;
+            exit(1);
+        }
+    }
+    if (TransitionManager::isKnownKind("uydurma") ||
+        TransitionManager::isKnownKind("")) {
+        std::cerr << "isKnownKind accepted an unknown kind" << std::endl;
+        exit(1);
+    }
+    const float nan = std::numeric_limits<float>::quiet_NaN();
+    const float inf = std::numeric_limits<float>::infinity();
+    for (float bad : {0.0f, -1.0f, nan, inf}) {
+        if (TransitionManager::isUsableDuration(bad) ||
+            TransitionManager().canStartTransition("crossfade", bad)) {
+            std::cerr << "canStartTransition accepted bad duration " << bad
+                      << std::endl;
+            exit(1);
+        }
+    }
+    TEST_PASS("Transition gate accepts 10 known kinds, rejects unknown/NaN/non-positive");
+
+    // Birleştirme: erken aynı-tür tetikleme elapsed'i sıfırlamaz.
+    {
+        TransitionManager transition;
+        transition.startTransitionFromKind("crossfade", 1.0f);
+        transition.update(0.1f);
+        const float elapsedBefore = transition.getElapsed();
+        transition.startTransitionFromKind("crossfade", 1.0f);
+        if (transition.getType() != TransitionType::CrossFade ||
+            std::fabs(transition.getElapsed() - elapsedBefore) > 1e-6f) {
+            std::cerr << "Early same-kind retrigger must coalesce (no restart)"
+                      << std::endl;
+            exit(1);
+        }
+        // %90 sonrası yeniden tetikleme baştan başlatır.
+        transition.update(0.85f);
+        transition.startTransitionFromKind("crossfade", 1.0f);
+        if (!transition.isTransitionActive() || transition.getElapsed() != 0.0f) {
+            std::cerr << "Late retrigger must restart the transition"
+                      << std::endl;
+            exit(1);
+        }
+    }
+    // Farklı tür ortada geçişi devralır.
+    {
+        TransitionManager transition;
+        transition.startTransitionFromKind("crossfade", 1.0f);
+        transition.update(0.1f);
+        transition.startTransitionFromKind("wipe_left", 1.0f);
+        if (transition.getType() != TransitionType::WipeLeft ||
+            transition.getElapsed() != 0.0f) {
+            std::cerr << "Different-kind retrigger must switch the transition"
+                      << std::endl;
+            exit(1);
+        }
+    }
+    TEST_PASS("Same-kind early retrigger coalesces; late/different-kind restarts");
+
+    // Pencere düzeyi: 10x spam geçersiz girdi readback'e mal olmaz, sürmekte
+    // olan geçişi öldürmez; birleştirilmiş tetikleme yeniden yakalamaz.
+    {
+        Rowl::VFS::VFSManager vfs;
+        vfs.remountProject(std::filesystem::current_path().string());
+        Rowl::Render::Window window(&vfs);
+        if (!window.initializeOffscreen(320, 180)) {
+            std::cerr << "Could not initialize offscreen window for transition gate test"
+                      << std::endl;
+            exit(1);
+        }
+        Rowl::Render::TransitionManager* manager = window.getTransitionManager();
+        if (!manager) {
+            std::cerr << "Offscreen window has no transition manager" << std::endl;
+            exit(1);
+        }
+        const uint64_t base = manager->getSnapshotCaptureCount();
+        for (int i = 0; i < 10; ++i) {
+            window.startTransition("uydurma-tur", 0.5f, "");
+            window.startTransition("crossfade", 0.0f, "");
+            window.startTransition("crossfade", -1.0f, "");
+            window.startTransition("crossfade", nan, "");
+            window.startTransition("crossfade", inf, "");
+        }
+        if (manager->getSnapshotCaptureCount() != base) {
+            std::cerr << "Invalid transition input reached the snapshot readback"
+                      << std::endl;
+            exit(1);
+        }
+        if (window.isTransitionActive()) {
+            std::cerr << "Invalid transition input started a transition"
+                      << std::endl;
+            exit(1);
+        }
+
+        window.startTransition("crossfade", 0.5f, "");
+        if (manager->getSnapshotCaptureCount() != base + 1 ||
+            !window.isTransitionActive()) {
+            std::cerr << "Valid transition must capture once and go active"
+                      << std::endl;
+            exit(1);
+        }
+        window.update(0.05f);
+        for (int i = 0; i < 10; ++i)
+            window.startTransition("crossfade", 0.5f, "");
+        if (manager->getSnapshotCaptureCount() != base + 1 ||
+            !window.isTransitionActive()) {
+            std::cerr << "Coalesced retrigger must not recapture the snapshot"
+                      << std::endl;
+            exit(1);
+        }
+        // Geçersiz girdi sürmekte olan geçişi öldürmez.
+        window.startTransition("uydurma-tur", 0.5f, "");
+        if (!window.isTransitionActive() ||
+            manager->getSnapshotCaptureCount() != base + 1) {
+            std::cerr << "Invalid input must not kill the running transition"
+                      << std::endl;
+            exit(1);
+        }
+        window.shutdown();
+    }
+    TEST_PASS("10x invalid/coalesced spam costs zero readbacks; running transition survives");
 }
 
 }  // namespace
@@ -809,4 +949,5 @@ void test_camera_and_transition_pipeline() {
     }
 
     testTransitionHexUnification();
+    testTransitionValidateBeforeSnapshot();
 }
