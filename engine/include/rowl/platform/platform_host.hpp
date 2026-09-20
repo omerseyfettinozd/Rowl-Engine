@@ -57,7 +57,18 @@ struct RuntimeInputEvent {
         MenuLeft,
         MenuRight,
         MenuBack,
-        SelectSlot
+        SelectSlot,
+        // #16: release/ambient vocabulary. The dispatcher already queued
+        // KEY_UP/BUTTON_UP/FINGER_MOTION but Window::pollEvents had no
+        // branch for them, and MOUSE_MOTION/MOUSE_WHEEL/TEXT_INPUT never
+        // routed at all — all six were silently unconsumed. These carry
+        // the now-conscious handler-visible consumption; Engine routes
+        // them to no story action (see handleRuntimeInput).
+        PointerUp,
+        KeyUp,
+        PointerMotion,
+        Scroll,
+        TextInput
     };
 
     Type type;
@@ -66,6 +77,10 @@ struct RuntimeInputEvent {
     /// Meaningful only for SelectSlot: the requested quick-save slot
     /// (kPauseMenuQuickSlotMin..kPauseMenuQuickSlotMax).
     int32_t slot = 0;
+    /// Meaningful only for KeyUp: the released SDL keycode.
+    uint32_t key = 0;
+    /// Meaningful only for TextInput: the committed UTF-8 text.
+    std::string text;
 };
 
 /// Minimum host boundary shared by desktop and future mobile shells. Keep this

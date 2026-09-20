@@ -36,6 +36,12 @@ std::optional<uint32_t> targetWindowId(const SDL_Event& event) {
         case SDL_EVENT_MOUSE_BUTTON_DOWN:
         case SDL_EVENT_MOUSE_BUTTON_UP:
             return event.button.windowID;
+        case SDL_EVENT_MOUSE_MOTION:
+            return event.motion.windowID;
+        case SDL_EVENT_MOUSE_WHEEL:
+            return event.wheel.windowID;
+        case SDL_EVENT_TEXT_INPUT:
+            return event.text.windowID;
         case SDL_EVENT_FINGER_DOWN:
         case SDL_EVENT_FINGER_UP:
         case SDL_EVENT_FINGER_MOTION:

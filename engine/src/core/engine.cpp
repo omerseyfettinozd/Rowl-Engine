@@ -198,6 +198,17 @@ void Engine::handleRuntimeInput(const Rowl::Platform::RuntimeInputEvent& event) 
         case Type::SwipeBack:
             if (!m_paused) rewind(1);
             break;
+        case Type::PointerUp:
+        case Type::KeyUp:
+        case Type::PointerMotion:
+        case Type::Scroll:
+        case Type::TextInput:
+            // #16: consciously consumed at the Window boundary (the input
+            // handler fires observably) but carrying no story action:
+            // releases, hover/drag positions, scroll deltas and committed
+            // text must never advance dialogue, toggle pause, rewind, or
+            // touch save slots.
+            break;
     }
 }
 

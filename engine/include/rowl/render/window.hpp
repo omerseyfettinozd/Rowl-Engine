@@ -188,6 +188,11 @@ public:
 
     void setInputHandler(std::function<void(const Rowl::Platform::RuntimeInputEvent&)> handler);
 
+    /// Dispatcher id this window consumes via pollEvents (0 when the window
+    /// owns no dispatch registration: offscreen or uninitialized). Public so
+    /// headless-capable tests can target synthetic SDL events at a real
+    /// visible window without touching dispatcher internals.
+    uint32_t eventWindowId() const noexcept { return m_eventWindowId; }
     /// MS-6: pure SDL-key → player-action translation behind pollEvents.
     /// Returns false for unmapped keys. Public and static so headless tests
     /// can pin the Esc/P/digit/arrow contract without a visible window.

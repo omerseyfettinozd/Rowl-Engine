@@ -129,6 +129,7 @@ int main(int argc, char* argv[]) {
     test_game_object_component_system();
     test_pixel_pitch();
     test_window_input_routing();
+    test_window_input_routing_release_motion_wheel_text();
     test_frame_hash_lock();
     test_frame_reuse_lock();
     test_cache_hygiene();

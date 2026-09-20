@@ -990,6 +990,64 @@ void Window::pollEvents(bool& outShouldQuit) {
                                                         event.button.x, event.button.y});
                 }
                 break;
+            case SDL_EVENT_MOUSE_BUTTON_UP:
+                // #16: release was queued by the dispatcher but had no branch
+                // here, so press/release pairing was unobservable. Left-button
+                // only, mirroring BUTTON_DOWN above.
+                if (event.button.button == SDL_BUTTON_LEFT) {
+                    if (m_inputHandler) m_inputHandler({Rowl::Platform::RuntimeInputEvent::Type::PointerUp,
+                                                        event.button.x, event.button.y});
+                }
+                break;
+            case SDL_EVENT_KEY_UP: {
+                // #16: key release was queued but branchless. Every release is
+                // observable (press/release pairing needs unmapped keys too);
+                // the SDL keycode rides along in `key`.
+                Rowl::Platform::RuntimeInputEvent input{
+                    Rowl::Platform::RuntimeInputEvent::Type::KeyUp};
+                input.key = static_cast<uint32_t>(event.key.key);
+                if (m_inputHandler) m_inputHandler(input);
+                break;
+            }
+            case SDL_EVENT_MOUSE_MOTION:
+                // #16: motion never routed before the dispatcher fix; now it
+                // surfaces as hover position through the input channel.
+                if (m_inputHandler) m_inputHandler({Rowl::Platform::RuntimeInputEvent::Type::PointerMotion,
+                                                    event.motion.x, event.motion.y});
+                break;
+            case SDL_EVENT_MOUSE_WHEEL: {
+                // #16: wheel never routed before the dispatcher fix. x/y carry
+                // scroll deltas (not cursor position); SDL reports flipped
+                // (natural) deltas inverted, so normalize the sign back per
+                // the SDL_MouseWheelEvent contract.
+                float dx = event.wheel.x;
+                float dy = event.wheel.y;
+                if (event.wheel.direction == SDL_MOUSEWHEEL_FLIPPED) {
+                    dx = -dx;
+                    dy = -dy;
+                }
+                if (m_inputHandler) m_inputHandler({Rowl::Platform::RuntimeInputEvent::Type::Scroll, dx, dy});
+                break;
+            }
+            case SDL_EVENT_TEXT_INPUT: {
+                // #16: text never routed before the dispatcher fix. Null text
+                // carries nothing observable and stays unconsumed.
+                if (event.text.text == nullptr) break;
+                Rowl::Platform::RuntimeInputEvent input{
+                    Rowl::Platform::RuntimeInputEvent::Type::TextInput};
+                input.text = event.text.text;
+                if (m_inputHandler) m_inputHandler(input);
+                break;
+            }
+            case SDL_EVENT_FINGER_MOTION: {
+                // #16: finger motion was queued but branchless. Same
+                // viewport-relative mapping as FINGER_DOWN/UP so drag
+                // positions land in physical pixels.
+                const float x = touchCoordinateToPhysical(event.tfinger.x, m_width);
+                const float y = touchCoordinateToPhysical(event.tfinger.y, m_height);
+                if (m_inputHandler) m_inputHandler({Rowl::Platform::RuntimeInputEvent::Type::PointerMotion, x, y});
+                break;
+            }
             case SDL_EVENT_FINGER_DOWN: {
                 const float x = touchCoordinateToPhysical(event.tfinger.x, m_width);
                 const float y = touchCoordinateToPhysical(event.tfinger.y, m_height);

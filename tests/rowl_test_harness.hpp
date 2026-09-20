@@ -143,6 +143,7 @@ uint64_t RowlTest_LiveHandleCount();
 void test_game_object_component_system();
 void test_pixel_pitch();
 void test_window_input_routing();
+void test_window_input_routing_release_motion_wheel_text();  // #16: release/motion/wheel/text tuketim kilidi
 void test_frame_hash_lock();
 void test_frame_reuse_lock();  // A3-tur5: identical-frame reuse D2 kilidi
 void test_cache_hygiene();  // A3-tur6: negatif-onbellek hijyen kilidi
