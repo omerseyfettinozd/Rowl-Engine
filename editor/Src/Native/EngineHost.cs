@@ -444,20 +444,18 @@ namespace RowlEngine.Editor.Native
         /// <summary>Sets the C++ engine playback state (true = Play, false = Stop/Pause).</summary>
         public void SetPlayState(bool isPlaying)
         {
+            if (!IsInitialized) return;
             if (IsPlaying == isPlaying) return;
             IsPlaying = isPlaying;
             _lastTick = DateTime.UtcNow;
             _lastIdleUpkeep = _lastTick;
 
-            if (IsInitialized)
+            InvokeNative(handle => NativeBridge.RowlEngine_SetPlayState(handle, isPlaying ? 1 : 0));
+            if (!isPlaying)
             {
-                InvokeNative(handle => NativeBridge.RowlEngine_SetPlayState(handle, isPlaying ? 1 : 0));
-                if (!isPlaying)
-                {
-                    // Render static frame when stopping
-                    InvokeNative(handle => NativeBridge.RowlEngine_Step(handle, 0.0f));
-                    UpdatePixelBuffer();
-                }
+                // Render static frame when stopping
+                InvokeNative(handle => NativeBridge.RowlEngine_Step(handle, 0.0f));
+                UpdatePixelBuffer();
             }
             OnPropertyChanged(nameof(IsPlaying));
         }
