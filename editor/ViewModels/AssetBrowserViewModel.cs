@@ -3,9 +3,11 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using RowlEngine.Editor.Services;
+using RowlEngine.Editor.Views.Dialogs;
 
 namespace RowlEngine.Editor.ViewModels
 {
@@ -84,7 +86,13 @@ namespace RowlEngine.Editor.ViewModels
             if (!IsEditing) return;
             IsEditing = false;
 
-            if (string.IsNullOrWhiteSpace(EditingName) || EditingName.Trim() == Name)
+            // Faz 4: sessiz-return dalları kullanıcıya bildirilir.
+            if (string.IsNullOrWhiteSpace(EditingName))
+            {
+                try { ToastService.Instance.Show("Varlık adı boş olamaz.", ToastType.Warning, 4000); } catch { }
+                return;
+            }
+            if (EditingName.Trim() == Name)
             {
                 return;
             }
@@ -94,7 +102,20 @@ namespace RowlEngine.Editor.ViewModels
                 string? parentDir = System.IO.Path.GetDirectoryName(FullPath);
                 if (string.IsNullOrEmpty(parentDir)) return;
 
-                string newFullPath = System.IO.Path.Combine(parentDir, EditingName.Trim());
+                string newName = EditingName.Trim();
+                if (newName.IndexOfAny(System.IO.Path.GetInvalidFileNameChars()) >= 0)
+                {
+                    try { ToastService.Instance.Show($"Geçersiz ad: '{newName}'", ToastType.Warning, 4000); } catch { }
+                    return;
+                }
+                string newFullPath = System.IO.Path.Combine(parentDir, newName);
+
+                // Faz 4: hedef mevcutsa sessizce atlama; bildir.
+                if (System.IO.Directory.Exists(newFullPath) || System.IO.File.Exists(newFullPath))
+                {
+                    try { ToastService.Instance.Show($"'{newName}' zaten mevcut.", ToastType.Warning, 4000); } catch { }
+                    return;
+                }
 
                 if (IsDirectory)
                 {
@@ -280,6 +301,19 @@ namespace RowlEngine.Editor.ViewModels
 
         /// <summary>MS-5: debounce between a disk event and the tree refresh.</summary>
         internal static TimeSpan WatchDebounceInterval { get; set; } = TimeSpan.FromMilliseconds(400);
+
+        /// <summary>
+        /// Faz 4: silme-onay enjeksiyonu (başlık, mesaj → onay?). Headless
+        /// testler buradan mock'lar; null ise gerçek ConfirmDialog açılır.
+        /// </summary>
+        public Func<string, string, Task<bool>>? ConfirmDeleteAsync { get; set; }
+
+        /// <summary>
+        /// Faz 4: klasör-adı enjeksiyonu (önerilen ad → girilen ad/null).
+        /// Headless testler buradan mock'lar; null ise RenameProjectDialog
+        /// varyantı açılır (penceresiz ortamda önerilen ad kullanılır).
+        /// </summary>
+        public Func<string, Task<string?>>? PromptForFolderNameAsync { get; set; }
 
         /// <summary>MS-5: true while at least one project directory is watched.</summary>
         public bool IsWatching => _watchers.Count > 0;
@@ -606,8 +640,13 @@ namespace RowlEngine.Editor.ViewModels
             }
         }
 
+        /// <summary>
+        /// Faz 4: klasör oluşturma isim sorar (RenameProjectDialog varyantı;
+        /// vazgeçilirse hiçbir şey yapılmaz). Komut adı CreateFolderCommand
+        /// olarak korunur (Async soneki atılır).
+        /// </summary>
         [RelayCommand]
-        public void CreateFolder()
+        public async Task CreateFolderAsync()
         {
             try
             {
@@ -628,19 +667,38 @@ namespace RowlEngine.Editor.ViewModels
                     }
                 }
 
-                string newFolderName = "YeniKlasor";
-                string fullNewFolderPath = System.IO.Path.Combine(targetDir, newFolderName);
+                string suggested = "YeniKlasor";
+                string fullSuggested = System.IO.Path.Combine(targetDir, suggested);
                 int counter = 1;
-                while (System.IO.Directory.Exists(fullNewFolderPath))
+                while (System.IO.Directory.Exists(fullSuggested))
                 {
-                    newFolderName = $"YeniKlasor_{counter++}";
-                    fullNewFolderPath = System.IO.Path.Combine(targetDir, newFolderName);
+                    suggested = $"YeniKlasor_{counter++}";
+                    fullSuggested = System.IO.Path.Combine(targetDir, suggested);
+                }
+
+                string? name = PromptForFolderNameAsync != null
+                    ? await PromptForFolderNameAsync(suggested)
+                    : await PromptFolderNameAsync(suggested);
+                if (string.IsNullOrWhiteSpace(name)) return;
+                name = name.Trim();
+                if (name.IndexOfAny(System.IO.Path.GetInvalidFileNameChars()) >= 0)
+                {
+                    ToastService.Instance.Show($"Geçersiz klasör adı: '{name}'", ToastType.Warning, 4000);
+                    return;
+                }
+
+                string fullNewFolderPath = System.IO.Path.Combine(targetDir, name);
+                if (System.IO.Directory.Exists(fullNewFolderPath))
+                {
+                    ToastService.Instance.Show($"'{name}' zaten mevcut.", ToastType.Warning, 4000);
+                    return;
                 }
 
                 System.IO.Directory.CreateDirectory(fullNewFolderPath);
                 System.IO.File.WriteAllText(System.IO.Path.Combine(fullNewFolderPath, ".gitkeep"), "");
 
                 RefreshAssets();
+                ToastService.Instance.Show($"'{name}' oluşturuldu.", ToastType.Info, 3000);
             }
             catch (Exception ex)
             {
@@ -648,8 +706,28 @@ namespace RowlEngine.Editor.ViewModels
             }
         }
 
+        /// <summary>Faz 4: pencere varsa prompt dialogu, yoksa önerilen ad.</summary>
+        private async Task<string?> PromptFolderNameAsync(string suggested)
+        {
+            try
+            {
+                var window = EditorDialogService.GetMainWindow();
+                if (window == null) return suggested;
+                var dlg = new RenameProjectDialog(suggested, "Yeni Klasör", "Klasör Adı", "Klasör adı boş olamaz.");
+                return await dlg.ShowDialog<string?>(window);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Faz 4: silmeden önce ConfirmDialog sorar (klasörde öğe sayısı
+        /// mesaja yazılır). Komut adı DeleteAssetCommand olarak korunur.
+        /// </summary>
         [RelayCommand]
-        public void DeleteAsset()
+        public async Task DeleteAssetAsync()
         {
             if (SelectedNode == null) return;
             // MS-5: ghosts are already gone from disk; just drop the selection.
@@ -659,28 +737,64 @@ namespace RowlEngine.Editor.ViewModels
                 RefreshAssets();
                 return;
             }
+            var node = SelectedNode;
+            int childCount = 0;
+            if (node.IsDirectory)
+            {
+                try
+                {
+                    if (System.IO.Directory.Exists(node.FullPath))
+                        childCount = System.IO.Directory.EnumerateFileSystemEntries(node.FullPath, "*", SearchOption.AllDirectories).Count();
+                }
+                catch { }
+            }
+            string title = node.IsDirectory ? "Klasörü Sil" : "Dosyayı Sil";
+            string message = node.IsDirectory
+                ? $"'{node.Name}' klasörünü ve içindeki {childCount} öğeyi silmek istediğinize emin misiniz?"
+                : $"'{node.Name}' dosyasını silmek istediğinize emin misiniz?";
+            bool confirmed = ConfirmDeleteAsync != null
+                ? await ConfirmDeleteAsync(title, message)
+                : await ShowDeleteConfirmAsync(title, message);
+            if (!confirmed) return;
             try
             {
-                if (SelectedNode.IsDirectory)
+                if (node.IsDirectory)
                 {
-                    if (System.IO.Directory.Exists(SelectedNode.FullPath))
+                    if (System.IO.Directory.Exists(node.FullPath))
                     {
-                        System.IO.Directory.Delete(SelectedNode.FullPath, true);
+                        System.IO.Directory.Delete(node.FullPath, true);
                     }
                 }
                 else
                 {
-                    if (System.IO.File.Exists(SelectedNode.FullPath))
+                    if (System.IO.File.Exists(node.FullPath))
                     {
-                        System.IO.File.Delete(SelectedNode.FullPath);
+                        System.IO.File.Delete(node.FullPath);
                     }
                 }
                 SelectedNode = null;
                 RefreshAssets();
+                ToastService.Instance.Show($"'{node.Name}' silindi.", ToastType.Info, 3000);
             }
             catch (Exception ex)
             {
                 ReportAssetError("varlık silme", ex);
+            }
+        }
+
+        /// <summary>Faz 4: pencere yoksa güvenli varsayılan VAZGEÇ'tir (false).</summary>
+        private async Task<bool> ShowDeleteConfirmAsync(string title, string message)
+        {
+            try
+            {
+                var window = EditorDialogService.GetMainWindow();
+                if (window == null) return false;
+                var dlg = new ConfirmDialog(title, message, "Sil", true);
+                return await dlg.ShowDialog<bool?>(window) == true;
+            }
+            catch
+            {
+                return false;
             }
         }
 
