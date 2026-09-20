@@ -717,15 +717,21 @@ namespace RowlEngine.Editor.Native
         /// modes — StateError (mid-session) and IoError (unwritable save dir) —
         /// are detected. Returns false when the mount was rejected.
         /// </summary>
-        public bool SetProjectDirectoryChecked(string projectRoot)
+        public bool SetProjectDirectoryChecked(string projectRoot, out string detail)
         {
+            detail = string.Empty;
             if (!IsInitialized || string.IsNullOrEmpty(projectRoot)) return true;
             _lastPreviewComponentsJson = null;
             InvokeNative(handle => NativeBridge.RowlEngine_ClearLastResult(handle));
             InvokeNative(handle => NativeBridge.RowlEngine_SetProjectDirectory(handle, projectRoot));
-            bool rejected = TryGetLastEngineResult(out int code, out string op, out _)
-                && code != 0
-                && op == "set_project_directory";
+            // Kanal mount öncesi temizlendi; sıfır-dışı her kod bu mounta
+            // aittir (ölü-kök reddi load_story_graph op'uyla damgalanır).
+            // Anlık görüntü iç Step'ten ÖNCE alınır: Step WrongThread
+            // damgası yanlış reje yol açardı. Detay da burada yakalanır.
+            bool rejected = TryGetLastEngineResult(out int code, out _, out string message)
+                && code != 0;
+            if (rejected)
+                detail = message;
             if (!IsPlaying)
             {
                 InvokeNative(handle => NativeBridge.RowlEngine_Step(handle, 0.0f));

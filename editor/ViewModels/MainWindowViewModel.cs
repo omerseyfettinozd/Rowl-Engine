@@ -2383,9 +2383,8 @@ namespace RowlEngine.Editor.ViewModels
                 // Pre-flight mount: Switch editör durumunu (yol/düğüm/cache)
                 // değiştirmeden önce reddi yakala. Reddedilirse erken dön —
                 // önceki proje motorda ve editörde aynen durur, restore gerekmez.
-                if (EngineHost.IsInitialized && !EngineHost.SetProjectDirectoryChecked(target.RootPath))
+                if (EngineHost.IsInitialized && !EngineHost.SetProjectDirectoryChecked(target.RootPath, out string remountDetail))
                 {
-                    EngineHost.TryGetLastEngineResult(out _, out _, out string remountDetail);
                     AppendLog($"[HATA] Proje motor mount edilemedi: {remountDetail}");
                     NotifyError($"Proje motor mount edilemedi ({remountDetail}).", "Proje Aç");
                     return;
