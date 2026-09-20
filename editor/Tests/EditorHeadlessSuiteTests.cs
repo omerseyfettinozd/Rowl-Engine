@@ -266,6 +266,9 @@ internal static class EditorHeadlessTestSuite
             // Test 36: UI Sadeleştirme Faz 4 — Assets redesign lock
             EditorAssetsRedesignTests.Run(mainVm, testProjectRoot);
 
+            // Test 37: UI Sadeleştirme Faz 5 — breadcrumb/status merge lock
+            EditorBreadcrumbStatusTests.Run(mainVm);
+
             Console.WriteLine("\n=======================================================");
             Console.WriteLine("ALL EDITOR HEADLESS TESTS PASSED SUCCESSFULLY!");
             Console.WriteLine("=======================================================\n");
