@@ -112,7 +112,8 @@ int main(int argc, char* argv[]) {
     test_audio_lock_spectrum_null_guard_lock();
     test_audio_lock_spectrum_nonpositive_guard_watcher();
     test_audio_lock_offscreen_global_pump();
-    test_audio_lock_scene_restore_audio_snapshot();
+    test_audio_lock_scene_restore_no_restart_on_clean_throw();
+    test_audio_lock_scene_restore_stopped_bgm_stays_stopped();
     test_audio_lock_mixer_persistence();
     test_audio_lock_save_format_v4_mixer();
     test_audio_lock_voice_blip_concurrent_counts();
