@@ -138,20 +138,22 @@ void applyDspToFloatPcm(float* samples, size_t sampleCount, int channels,
     if (!samples || sampleCount == 0 || channels <= 0 || sampleRate <= 0) {
         return;
     }
-    if (filter == DSPFilterType::Normal) {
-        // Passthrough dalı: çıkış = giriş; mandal yine yazılır (kalıcılık
-        // gözlemi temiz-Normal çalışın canlı sinyal taşıdığını kanıtlar).
-        recordDspPeak(samples, sampleCount);
-        return;
-    }
-
-    // D5 (#77): güvenilmeyen PCM tek noktada sanitize edilir. IEEE-float
-    // WAV'deki tek NaN/Inf örnek, Telephone dalında lowPass durumunu,
-    // CaveReverb dalında gecikme hattını kalıcı zehirlerdi (clamp NaN'i
-    // geçirir; Underwater dalında clamp hiç yoktu). Filtreye girmeden
-    // önce sonlu-olmayan örnekler sessizliğe çekilir.
+    // D5 (#77): guvenilmeyen PCM tek noktada sanitize edilir (Normal
+    // erken-donus ONCESI). IEEE-float WAV'deki tek NaN/Inf ornek,
+    // Telephone dalinda lowPass durumunu, CaveReverb dalinda gecikme
+    // hattini kalici zehirlerdi (clamp NaN'i gecirir; Underwater dalinda
+    // clamp hic yoktu). Filtreye girmeden once sonlu-olmayan ornekler
+    // sessizlige cekilir; sonlu sinyal bit-bit ayni kalir.
     for (size_t i = 0; i < sampleCount; ++i) {
         if (!std::isfinite(samples[i])) samples[i] = 0.0f;
+    }
+
+    if (filter == DSPFilterType::Normal) {
+        // Passthrough dalı: sanitize SONRASI doner; mandal yine yazilir
+        // (kalicilik gozlemi temiz-Normal calisin canli sinyal tasidigini
+        // kanitlar, zehir-fixture ise sifirlanmis sonlu mandal birakir).
+        recordDspPeak(samples, sampleCount);
+        return;
     }
 
     const size_t channelCount = static_cast<size_t>(channels);

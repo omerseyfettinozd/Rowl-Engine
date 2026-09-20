@@ -2,7 +2,7 @@
  * test_audio_lock.cpp — Audio DSP guard locks (#77).
  *
  * KILIT (mutant oldurur) vs GOZCU (watch; oldurmez, davranis bekcisi):
- *  - KILIT: sanitize-NaN (Telephone/CaveReverb/Underwater + zehir-fixture)
+ *  - KILIT: sanitize-NaN (Telephone/CaveReverb/Underwater/Normal + zehir-fixture)
  *    ve clamp (Underwater/Telephone/CaveReverb + DC fixture). Ilgili govde
  *    satiri (sanitize dongusu / dal clamp'i) silinirse mandal kirmiziya
  *    duser (NaN/0.0f canlilik kaybi veya >1.0f tasma).
@@ -19,15 +19,14 @@
  * Kapsam (madde 3): kilit iddiasi YALNIZCA playAudio-RAM yoludur.
  * decodeAssetToFloatPcm ve pumpBgmStream ayni applyDspToFloatPcm
  * govdesini cagirir (tek mandal yazma noktasi) ama bu kilitlerce
- * dogrudan calistirilmaz. Normal dali passthrough'dur (sanitize oncesi
- * doner): zehir mandala NaN olarak yansir — bu kapsam-disidir, asagida
- * gozlem olarak belgelenir.
+ * dogrudan calistirilmaz. Normal dali da sanitize'den gecer (erken-donus
+ * sanitize SONRASIDIR): zehir-fixture sifirlanmis sonlu mandal birakir,
+ * kilit requireLivePeak ile kilitlenir.
  *
  * NaN-yapiskan mandal (madde 4): tek bir NaN cikis ornegi mandali NaN
  * yapar ve sonraki sonlu ornekler onu temizlemez; boylece CaveReverb
  * kolundaki seyrek NaN (gecikme hatti 5512 frame >> 64-ornek fixture,
- * sonlu clamp komsulari arasinda kaybolurdu) da dusurur. Normal
- * passthrough'ta da ayni yapiskanlik gozlenir (asagidaki gozlem).
+ * sonlu clamp komsulari arasinda kaybolurdu) da dusurur.
  *
  * Desen: TEST_SECTION/TEST_PASS + hata=exit(1); timing-assert YOKTUR.
  */
@@ -155,8 +154,8 @@ void requireClampedUnitPeak(float peak, const std::string& context) {
     if (!(peak <= 1.0f)) {
         lockFail(context + ": Underwater tasti");
     }
-    if (!(peak >= 0.999f)) {
-        lockFail(context + ": sinyal gecti ama boguldu — asiri-duzeltme bekcisi");
+    if (!(peak >= 0.5f)) {
+        lockFail(context + ": sinyal gecti ama boguldu — asiri-duzeltme bekcisi (mesru retune gecer)");
     }
 }
 
@@ -199,22 +198,16 @@ void test_audio_lock_sanitize_nan() {
                     "zehir tamponu oldurdu — temiz kuyruk sustu");
     TEST_PASS("Audio Sanitize Lock — Underwater (NaN/+Inf/-Inf, capraz bacak)");
 
-    // Normal dal gozlemi (madde 3): passthrough dali sanitize ONCESI doner,
-    // o yuzden zehir mandala NaN olarak yansir. Bu kapsam-disidir (durumsuz
-    // dal; zehirlenecek lowPass/delay hatti yok) — kilit degil, belgelenmis
-    // gozlemdir. NaN-yapiskan semantik kaniti: tek NaN mandali NaN yapar,
-    // sonraki 61 sonlu ornek onu temizlemez.
+    // Normal dal KILIDI: sanitize Normal erken-donus ONCESINDE calisir,
+    // o yuzden zehir-fixture sifirlanmis sonlu mandal birakir (sonlu
+    // sinyal bit-bit aynidir, yalniz non-finite sifirlanir). requireLivePeak
+    // fail-closed'dur: sanitize silinirse mandal NaN/0.0f kalir, exit(1).
     audio.playAudio("audio/lock_nan.wav", Rowl::Audio::AudioChannelType::Bgm,
                     Rowl::Audio::DSPFilterType::Normal);
-    {
-        const float peak = audio.testLastDspPeak();
-        if (!std::isnan(peak)) {
-            lockFail("lock_nan/Normal: passthrough gozlemi bozuldu — "
-                     "mandal NaN beklenirken sonlu deger goruldu "
-                     "(Normal dali sanitize oncesi donmelidir)");
-        }
-    }
-    TEST_PASS("Audio Normal Gozlem — passthrough NaN-yapiskandir (kapsam-disi, kilit degil)");
+    requireLivePeak(audio, "lock_nan/Normal",
+                    "NaN sanitize'den gecti",
+                    "zehir tamponu oldurdu — sanitize sonrasi sessizlik");
+    TEST_PASS("Audio Sanitize Lock — Normal (NaN/+Inf/-Inf, erken-donus sanitize sonrasi)");
 
     // Kalicilik GOZCUSU (madde 4): zehirli calistan hemen sonra temiz fixture
     // Normal filtreyle calinir — mandal hâlâ canli (zehir testler-arasi sizma
@@ -262,8 +255,8 @@ void test_audio_lock_underwater_clamp() {
     // CaveReverb ile de calinir. Telephone'da DC gecisi (hp*2.1) clamp'siz
     // ~3.78'e firlar; CaveReverb'de (input+delayed*0.28) clamp'siz ~5.0'e
     // firlar — iki dalin clamp silmeleri de kirmiziya duser. Alt bound
-    // (>=0.999f) asiri-duzeltme bekcisidir: mandal gecis anindaki clamp
-    // vurusunu gorur (maks), surekli-hal susturmasini degil.
+    // (>=0.5f) asiri-duzeltme bekcisidir (mesru retune gecer): mandal gecis
+    // anindaki clamp vurusunu gorur (maks), surekli-hal susturmasini degil.
     audio.playAudio("audio/lock_dc_pos.wav", Rowl::Audio::AudioChannelType::Bgm,
                     Rowl::Audio::DSPFilterType::Telephone);
     requireClampedUnitPeak(audio.testLastDspPeak(), "lock_dc_pos/Telephone");
