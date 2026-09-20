@@ -260,6 +260,9 @@ internal static class EditorHeadlessTestSuite
             // Test 34: Faz 1 Graph vNext contract (v5 round-trip + structure validation)
             EditorGraphVNextHeadlessTests.Run();
 
+            // Test 35: UI Sadeleştirme Faz 3 — toolbar layout lock
+            EditorToolbarLayoutTests.Run(mainVm);
+
             Console.WriteLine("\n=======================================================");
             Console.WriteLine("ALL EDITOR HEADLESS TESTS PASSED SUCCESSFULLY!");
             Console.WriteLine("=======================================================\n");
