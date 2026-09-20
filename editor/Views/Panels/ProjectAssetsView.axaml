@@ -32,6 +32,13 @@
                                 Background="Transparent" Foreground="{DynamicResource PrimaryText}"
                                 BorderBrush="{DynamicResource BorderColor}" BorderThickness="1"
                                 CornerRadius="4" Padding="6,3" FontSize="12"/>
+                        <!-- Unity kromu Dilim G1: ızgara/liste anahtarı -->
+                        <Button Content="{Binding AssetBrowserViewModel.AssetViewToggleText}"
+                                ToolTip.Tip="Izgara/Liste görünümü arasında geç"
+                                Command="{Binding AssetBrowserViewModel.ToggleAssetViewCommand}"
+                                Background="Transparent" Foreground="{DynamicResource PrimaryText}"
+                                BorderBrush="{DynamicResource BorderColor}" BorderThickness="1"
+                                CornerRadius="4" Padding="6,3" FontSize="10"/>
                     </StackPanel>
                 </DockPanel>
             </Border>
@@ -163,11 +170,12 @@
 
             <!-- Sağ: simge ızgarası + taşınmış boş-durum panelleri -->
             <Grid Grid.Column="2" RowDefinitions="*,Auto">
-                <ListBox Grid.Row="0" Background="Transparent"
+                <ListBox x:Name="AssetGridListBox" Grid.Row="0" Background="Transparent"
                          ItemsSource="{Binding AssetBrowserViewModel.VisibleGridItems}"
                          SelectedItem="{Binding AssetBrowserViewModel.SelectedNode, Mode=TwoWay}"
                          SelectionMode="Single" Margin="4"
                          Foreground="{DynamicResource PrimaryText}"
+                         IsVisible="{Binding AssetBrowserViewModel.IsGridView}"
                          ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                     <ListBox.KeyBindings>
                         <KeyBinding Gesture="Enter" Command="{Binding AssetBrowserViewModel.EnterSelectedFolderCommand}"/>
@@ -219,6 +227,59 @@
                                            TextWrapping="Wrap" MaxLines="2"
                                            TextAlignment="Center" HorizontalAlignment="Stretch"/>
                             </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+
+                <!-- Unity kromu Dilim G1: kompakt liste görünümü. Aynı pencere
+                     (VisibleGridItems) + aynı seçim otoritesi (SelectedNode);
+                     yalnızca sunum farklıdır. -->
+                <ListBox x:Name="AssetListListBox" Grid.Row="0" Background="Transparent"
+                         ItemsSource="{Binding AssetBrowserViewModel.VisibleGridItems}"
+                         SelectedItem="{Binding AssetBrowserViewModel.SelectedNode, Mode=TwoWay}"
+                         SelectionMode="Single" Margin="4"
+                         Foreground="{DynamicResource PrimaryText}"
+                         IsVisible="{Binding !AssetBrowserViewModel.IsGridView}"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                    <ListBox.KeyBindings>
+                        <KeyBinding Gesture="Enter" Command="{Binding AssetBrowserViewModel.EnterSelectedFolderCommand}"/>
+                    </ListBox.KeyBindings>
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="vm:AssetNodeViewModel">
+                            <Grid ColumnDefinitions="Auto,*,Auto" Margin="2,1"
+                                  DoubleTapped="OnAssetDoubleTapped"
+                                  ToolTip.Tip="{Binding Name}">
+                                <!-- Faz 4 menüsüyle aynı 7 öğe (liste paritesi). -->
+                                <Grid.ContextMenu>
+                                    <ContextMenu>
+                                        <MenuItem Header="Yeni Klasör Oluştur" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.CreateFolderCommand}"/>
+                                        <MenuItem Header="Dosya İçe Aktar..." Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ImportAssetCommand}"/>
+                                        <Separator/>
+                                        <MenuItem Header="Yeniden Adlandır (F2)" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.StartRenameCommand}"/>
+                                        <MenuItem Header="Dosya Yöneticisinde Aç" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.OpenInExplorerCommand}"/>
+                                        <Separator/>
+                                        <MenuItem Header="Sil" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.DeleteAssetCommand}"/>
+                                        <MenuItem Header="Yenile" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.RefreshAssetsCommand}"/>
+                                    </ContextMenu>
+                                </Grid.ContextMenu>
+                                <Border Grid.Column="0"
+                                        Background="{DynamicResource ToolbarButtonBg}"
+                                        BorderBrush="{DynamicResource BorderColor}" BorderThickness="1"
+                                        CornerRadius="3" Padding="4,1" MinWidth="40"
+                                        VerticalAlignment="Center" Margin="0,0,8,0">
+                                    <TextBlock Text="{Binding TypeLabel}" FontSize="9"
+                                               Foreground="{DynamicResource MutedText}"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <TextBlock Grid.Column="1" Text="{Binding Name}"
+                                           Foreground="{DynamicResource PrimaryText}"
+                                           FontSize="12" TextTrimming="CharacterEllipsis"
+                                           VerticalAlignment="Center"/>
+                                <TextBlock Grid.Column="2" Text="{Binding RelativePath}"
+                                           Foreground="{DynamicResource MutedText}"
+                                           FontSize="10" TextTrimming="CharacterEllipsis"
+                                           VerticalAlignment="Center" Margin="8,0,0,0"/>
+                            </Grid>
                         </DataTemplate>
                     </ListBox.ItemTemplate>
                 </ListBox>

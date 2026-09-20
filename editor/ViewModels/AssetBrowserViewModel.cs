@@ -500,6 +500,27 @@ namespace RowlEngine.Editor.ViewModels
 
         partial void OnSelectedFolderChanged(AssetNodeViewModel? value) => RebuildFolderContents();
 
+        /// <summary>
+        /// Unity kromu Dilim G1: sağ bölme görünümü. True = simge ızgarası,
+        /// false = kompakt liste. Her iki görünüm de aynı
+        /// <see cref="VisibleGridItems"/> penceresine ve aynı seçim
+        /// otoritesine bağlıdır; anahtar yalnızca sunumu değiştirir.
+        /// </summary>
+        [ObservableProperty]
+        private bool _isGridView = true;
+
+        /// <summary>Dilim G1: anahtar butonunun eylem metni (ızgaradayken "Liste").</summary>
+        public string AssetViewToggleText => IsGridView ? "Liste" : "Izgara";
+
+        partial void OnIsGridViewChanged(bool value) => OnPropertyChanged(nameof(AssetViewToggleText));
+
+        /// <summary>Dilim G1: ızgara/liste görünümü arasında geç.</summary>
+        [RelayCommand]
+        private void ToggleAssetView()
+        {
+            IsGridView = !IsGridView;
+        }
+
         /// <summary>Faz 6: ızgara tek seferde en fazla bu kadar hücre çizer.</summary>
         public const int DefaultGridRenderLimit = 200;
 

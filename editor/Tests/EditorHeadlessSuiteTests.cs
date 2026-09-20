@@ -278,6 +278,9 @@ internal static class EditorHeadlessTestSuite
             // Test 40: UI Sadeleştirme Faz 5 — AssetPicker adoption lock
             EditorAssetPickerTests.Run();
 
+            // Test 41: Unity kromu Dilim G1 — asset view toggle lock
+            Tests.EditorAssetViewToggleTests.Run(mainVm);
+
             Console.WriteLine("\n=======================================================");
             Console.WriteLine("ALL EDITOR HEADLESS TESTS PASSED SUCCESSFULLY!");
             Console.WriteLine("=======================================================\n");
