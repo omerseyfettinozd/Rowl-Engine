@@ -223,6 +223,15 @@ public:
     // deterministik kurar. Donus uretim yoluyla (reopenDeviceStreams)
     // gerceklesir; kanca donusu simulate etmez, yalniz outage'u acar.
     void testSetDeviceAvailable(bool available) { m_deviceAvailable = available; }
+    // Kilit #78-2.tur test-only gozlem (davranissiz; uretim kodu bunu asla
+    // kullanmamalidir, emsal: testQueuedBytes): akan BGM stream kaynaginin
+    // acikligi (m_bgmStreamSource->isOpen()). isStreaming() yalniz niyet
+    // bayragini (m_isBgmStreamed) okur; fail yoluna sizmis bir
+    // m_bgmStreamSource->close() bayragi yesil birakir — bu gozlem
+    // veri-duzlemi canliligini kilitler.
+    bool testBgmStreamSourceOpen() const {
+        return m_bgmStreamSource != nullptr && m_bgmStreamSource->isOpen();
+    }
 
     void shutdown();
 

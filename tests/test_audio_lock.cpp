@@ -586,6 +586,57 @@ void requireMissGuardIntact(Rowl::Audio::AudioEngine& audio, const std::string& 
     requireMissGuardCurrentPath(audio, context);
 }
 
+// #78-2.tur kurulum ilerleme kaniti (#78 baglami, kendi fixture'i):
+// akan predecessor'in konumu vardir (buffered_seconds>0). pcmPos
+// sifirlayan mutantin oldurme gucu buna dayanir: sifir tabanda sifirlama
+// gozlenemezdi, o yuzden "json esit" degil "json esit (ilerlemis bazda)"
+// istenir.
+std::string missGuardStreamingProgressJson(Rowl::Audio::AudioEngine& audio,
+                                           const std::string& context) {
+    const std::string json = audio.streamInfoJson();
+    const auto parsed = nlohmann::json::parse(json);
+    const double buffered = parsed.value("buffered_seconds", 0.0);
+    if (!(buffered > 0.0)) {
+        lockFail(context + ": kurulum akisi ilerlemedi (buffered_seconds==0): " + json);
+    }
+    return json;
+}
+
+// #78-2.tur veri-duzlemi dondurma gozlemi (KENDI helper'i;
+// #87 requireBgmPredecessorFrozen KULLANILMAZ — kilitler bagimsiz kalir):
+//  - kuyruk delta-0: testQueuedBytes(Bgm) tam-esitlik (q0>0 bazli —
+//    bos kuyrukta bosaltma gozlenemezdi; sessiz dalda #87-d kurali gecerlidir:
+//    sessiz dal hic kuyruklamaz, orada literal 0 aranir).
+//  - snapshot birebirlik: streamInfoJson string tam-esitlik
+//    (buffered_seconds dahil — akan predecessor'in konumu bozulmaz;
+//    pcmPos sifirlayan mutant json'u degistirir, duser).
+//  - kaynak canliligi: BGM stream kaynagi fail sonrasi acik kalir
+//    (testBgmStreamSourceOpen — isStreaming bayragi DEGIL, kaynagin kendisi;
+//    fail yoluna sizmis bir close() bayragi yesil birakir, bu gozlem oldurur).
+void requireMissGuardDataFrozen(Rowl::Audio::AudioEngine& audio, size_t queuedBefore,
+                                const std::string& jsonBefore,
+                                const std::string& context) {
+    const size_t queuedAfter =
+        audio.testQueuedBytes(Rowl::Audio::AudioChannelType::Bgm);
+    if (queuedAfter != queuedBefore) {
+        lockFail(context + ": fail BGM kuyruguna dokundu (once=" + std::to_string(queuedBefore) +
+                 " sonra=" + std::to_string(queuedAfter) + ")");
+    }
+    const std::string jsonAfter = audio.streamInfoJson();
+    if (jsonAfter != jsonBefore) {
+        lockFail(context + ": fail akis konumunu/snapshot'i bozdu (once='" + jsonBefore +
+                 "' sonra='" + jsonAfter + "')");
+    }
+    if (!audio.testBgmStreamSourceOpen()) {
+        lockFail(context + ": fail BGM stream kaynagini kapatti (kaynak olu, bayrak sag)");
+    }
+    static bool once = false;
+    if (!once) {
+        once = true;
+        TEST_PASS("Audio BGM Miss Guard — kontrol (h) veri-duzlemi donmus (kuyruk+json+kaynak)");
+    }
+}
+
 } // namespace
 
 void test_audio_lock_bgm_miss_guard() {
@@ -594,42 +645,133 @@ void test_audio_lock_bgm_miss_guard() {
     Rowl::VFS::VFSManager vfs;
     Rowl::Audio::AudioEngine audio(&vfs);
     setupMissGuardProject(vfs, audio);
+
+    // Sessiz dal (#87-d kurali #78 fixture'ina uyarlanmis — #87
+    // literal'leri KOPYALANMAZ): zorlanmis-cihazsiz kosuda sessiz-yedek BGM
+    // niyeti kurulur; #78 miss varyantlari (non-BGM + BGM) niyeti ve
+    // snapshot'i yikmaz, kuyruk literal 0 kalir (sessiz dal hic kuyruklamaz),
+    // BGM miss hatasi caller'a ulasir. requireAudioDeviceOrSkip ONCESI
+    // calisir (gercek-cihazsiz kosuda da gecerlidir).
+    {
+        const bool realDevice = audio.isAudioDeviceAvailable();
+        audio.testSetDeviceAvailable(false);
+        audio.playAudio("audio/miss_bgm.ogg", Rowl::Audio::AudioChannelType::Bgm);
+        if (!audio.isBgmPlaying() || audio.getCurrentBgmPath() != "audio/miss_bgm.ogg") {
+            lockFail("sessiz-yedek BGM niyeti kurulamadi");
+        }
+        if (audio.streamInfoJson().find("\"asset\":\"audio/miss_bgm.ogg\"") == std::string::npos) {
+            lockFail("sessiz-yedek snapshot kurulamadi: " + audio.streamInfoJson());
+        }
+        if (audio.testQueuedBytes(Rowl::Audio::AudioChannelType::Bgm) != 0) {
+            lockFail("sessiz-yedek cihaz kuyruguna yazdi (sessiz dal kuyruklamaz)");
+        }
+        const std::string silentJson = audio.streamInfoJson();
+        // #78 miss varyanti (non-BGM, sessiz): kayda bile gecmez, niyet aynen.
+        audio.playAudio("audio/does_not_exist.wav", Rowl::Audio::AudioChannelType::Sfx);
+        if (!audio.isBgmPlaying() || audio.getCurrentBgmPath() != "audio/miss_bgm.ogg") {
+            lockFail("sessiz non-BGM miss niyeti yikti (predecessor korunmadi)");
+        }
+        if (audio.streamInfoJson() != silentJson) {
+            lockFail("sessiz non-BGM miss snapshot'i yikti: " + audio.streamInfoJson());
+        }
+        if (audio.testQueuedBytes(Rowl::Audio::AudioChannelType::Bgm) != 0) {
+            lockFail("sessiz non-BGM miss kuyrukladi (fail yolu kuyruklamaz)");
+        }
+        // Sessiz BGM miss: existence-gate hata + return, niyet aynen.
+        audio.playAudio("audio/does_not_exist.wav", Rowl::Audio::AudioChannelType::Bgm);
+        if (!audio.isBgmPlaying() || audio.getCurrentBgmPath() != "audio/miss_bgm.ogg") {
+            lockFail("sessiz BGM miss niyeti yikti (predecessor korunmadi)");
+        }
+        if (audio.streamInfoJson() != silentJson) {
+            lockFail("sessiz BGM miss snapshot'i yikti: " + audio.streamInfoJson());
+        }
+        if (audio.testQueuedBytes(Rowl::Audio::AudioChannelType::Bgm) != 0) {
+            lockFail("sessiz BGM miss kuyrukladi (fail yolu kuyruklamaz)");
+        }
+        if (audio.getLastError().empty()) {
+            lockFail("sessiz BGM miss hatasi caller'a ulasmadi");
+        }
+        audio.testSetDeviceAvailable(realDevice);
+        if (audio.isAudioDeviceAvailable() != realDevice) {
+            lockFail("kanca donusu cihaz bayragini bozdurdu");
+        }
+        TEST_PASS("Audio BGM Miss Guard — sessiz dal miss niyet+snapshot'i korur, kuyruk 0 (#87-d kurali)");
+    }
+
     if (!requireAudioDeviceOrSkip(audio, "Audio BGM Miss Guard")) return;
+
+    // Her miss varyanti tek kapidan gecer (#78-2.tur): fail ONCESI tuketim
+    // dondurulur (setOutputSuspended) + kuyruk bazi (q0>0) + snapshot bazi
+    // (json0) alinir; fail SONRASI once 7 kontrol (requireMissGuardIntact),
+    // sonra veri-duzlemi dondurma (requireMissGuardDataFrozen: kuyruk delta-0
+    // + json birebir + kaynak acik) kilitlenir. Veri-duzlemi canlilik probu:
+    // update bir kez surulur — kuyruk azalmaz, snapshot/konum aynen kalir
+    // (dondurma altinda pump no-op'tur; deterministik, timing YOK).
+    auto runMissVariant = [&](const std::string& context, auto&& failFn) {
+        audio.setOutputSuspended(true);
+        const size_t q0 = audio.testQueuedBytes(Rowl::Audio::AudioChannelType::Bgm);
+        if (q0 == 0) {
+            lockFail(context + ": dondurma bazi bos (q0==0) — bosaltma-oldurme gucu yok");
+        }
+        const std::string json0 = audio.streamInfoJson();
+        failFn();
+        requireMissGuardIntact(audio, context);
+        requireMissGuardDataFrozen(audio, q0, json0, context);
+        audio.update();
+        const size_t q1 = audio.testQueuedBytes(Rowl::Audio::AudioChannelType::Bgm);
+        if (q1 < q0) {
+            lockFail(context + ": canlilik probu kuyruk eridi (once=" + std::to_string(q0) +
+                     " sonra=" + std::to_string(q1) + ")");
+        }
+        if (audio.streamInfoJson() != json0) {
+            lockFail(context + ": canlilik probu snapshot/konumu bozdu (once='" + json0 +
+                     "' sonra='" + audio.streamInfoJson() + "')");
+        }
+    };
 
     // Adim 1: gecerli streaming BGM kurulumu.
     audio.playAudio("audio/miss_bgm.ogg", Rowl::Audio::AudioChannelType::Bgm);
     audio.update();
     requireMissGuardIntact(audio, "kurulum/miss_bgm.ogg");
+    // Ilerleme kaniti (buffered_seconds>0 — akis konumu var; pcmPos
+    // sifirlayan mutantin oldurme gucu bu baza dayanir).
+    (void)missGuardStreamingProgressJson(audio, "kurulum/miss_bgm.ogg");
     TEST_PASS("Audio BGM Miss Guard — kurulum (streaming BGM: intent+stream+snapshot)");
 
     // Adim 2 (katil gozlem): eksik SFX miss'i BGM'e dokunmaz.
-    audio.playAudio("audio/does_not_exist.wav", Rowl::Audio::AudioChannelType::Sfx);
-    requireMissGuardIntact(audio, "eksik Sfx sonrasi");
+    runMissVariant("eksik Sfx sonrasi", [&]() {
+        audio.playAudio("audio/does_not_exist.wav", Rowl::Audio::AudioChannelType::Sfx);
+    });
     TEST_PASS("Audio BGM Miss Guard — eksik SFX BGM stream/snapshot'i korur");
 
     // Varyant: Voice + Ui kanallarinda eksik dosya.
-    audio.playAudio("audio/does_not_exist.wav", Rowl::Audio::AudioChannelType::Voice);
-    requireMissGuardIntact(audio, "eksik Voice sonrasi");
-    audio.playAudio("audio/does_not_exist.wav", Rowl::Audio::AudioChannelType::Ui);
-    requireMissGuardIntact(audio, "eksik Ui sonrasi");
+    runMissVariant("eksik Voice sonrasi", [&]() {
+        audio.playAudio("audio/does_not_exist.wav", Rowl::Audio::AudioChannelType::Voice);
+    });
+    runMissVariant("eksik Ui sonrasi", [&]() {
+        audio.playAudio("audio/does_not_exist.wav", Rowl::Audio::AudioChannelType::Ui);
+    });
     TEST_PASS("Audio BGM Miss Guard — eksik Voice/Ui BGM stream/snapshot'i korur");
 
     // Varyant: decode helper uzerinden non-BGM miss (public caller'lar
     // helper'i channelIsBgm=false ile cagirir). Hem final-miss dali
     // (olmayan dosya) hem OGG-decode-fail dali (bozuk OGG) gozlenir.
-    if (audio.playAmbienceBed(0, "audio/does_not_exist.wav")) {
-        lockFail("eksik bed beklenmedik basari dondu");
-    }
-    requireMissGuardIntact(audio, "eksik ambience-bed sonrasi");
-    if (audio.crossfadeAmbienceTo("audio/does_not_exist.wav", 0.0f,
-                                  Rowl::Audio::FadeCurve::Linear)) {
-        lockFail("eksik crossfade beklenmedik basari dondu");
-    }
-    requireMissGuardIntact(audio, "eksik crossfade sonrasi");
-    if (audio.playAmbienceBed(0, "audio/miss_corrupt.ogg")) {
-        lockFail("bozuk OGG bed beklenmedik basari dondu");
-    }
-    requireMissGuardIntact(audio, "bozuk OGG bed sonrasi");
+    runMissVariant("eksik ambience-bed sonrasi", [&]() {
+        if (audio.playAmbienceBed(0, "audio/does_not_exist.wav")) {
+            lockFail("eksik bed beklenmedik basari dondu");
+        }
+    });
+    runMissVariant("eksik crossfade sonrasi", [&]() {
+        if (audio.crossfadeAmbienceTo("audio/does_not_exist.wav", 0.0f,
+                                      Rowl::Audio::FadeCurve::Linear)) {
+            lockFail("eksik crossfade beklenmedik basari dondu");
+        }
+    });
+    runMissVariant("bozuk OGG bed sonrasi", [&]() {
+        if (audio.playAmbienceBed(0, "audio/miss_corrupt.ogg")) {
+            lockFail("bozuk OGG bed beklenmedik basari dondu");
+        }
+    });
     TEST_PASS("Audio BGM Miss Guard — helper-dali non-BGM miss BGM'i korur (bed/crossfade/corrupt)");
 
     // 4. varyant (#78-tur2, V3 katili): bozuk OGG helper disinda DOGUDAN
@@ -638,20 +780,24 @@ void test_audio_lock_bgm_miss_guard() {
     // degilse stream kapanir + snapshot yalana duser ve genis guard
     // exit(1) ile oldurur. Helper-varyanti bu dala ugramaz
     // (decodeAssetToFloatPcm ayri sitedir), o yuzden bu varyant zorunludur.
-    audio.playAudio("audio/miss_corrupt.ogg", Rowl::Audio::AudioChannelType::Sfx);
-    requireMissGuardIntact(audio, "bozuk OGG dogrudan Sfx sonrasi");
-    audio.playAudio("audio/miss_corrupt.ogg", Rowl::Audio::AudioChannelType::Voice);
-    requireMissGuardIntact(audio, "bozuk OGG dogrudan Voice sonrasi");
-    audio.playAudio("audio/miss_corrupt.ogg", Rowl::Audio::AudioChannelType::Ui);
-    requireMissGuardIntact(audio, "bozuk OGG dogrudan Ui sonrasi");
+    runMissVariant("bozuk OGG dogrudan Sfx sonrasi", [&]() {
+        audio.playAudio("audio/miss_corrupt.ogg", Rowl::Audio::AudioChannelType::Sfx);
+    });
+    runMissVariant("bozuk OGG dogrudan Voice sonrasi", [&]() {
+        audio.playAudio("audio/miss_corrupt.ogg", Rowl::Audio::AudioChannelType::Voice);
+    });
+    runMissVariant("bozuk OGG dogrudan Ui sonrasi", [&]() {
+        audio.playAudio("audio/miss_corrupt.ogg", Rowl::Audio::AudioChannelType::Ui);
+    });
     TEST_PASS("Audio BGM Miss Guard — dogrudan playAudio non-BGM corrupt OGG BGM'i korur (Sfx/Voice/Ui)");
 
     // Karsit-kanit [#87 guncellemesi]: BGM kanalinda miss artik
     // predecessor-preserving'dir (eski "BGM miss kapatir" fail-closed
     // davranisi kaldirildi): stream + snapshot + intent aynen korunur,
     // hata caller'a ulasir.
-    audio.playAudio("audio/does_not_exist.wav", Rowl::Audio::AudioChannelType::Bgm);
-    requireMissGuardIntact(audio, "BGM miss sonrasi (#87)");
+    runMissVariant("BGM miss sonrasi (#87)", [&]() {
+        audio.playAudio("audio/does_not_exist.wav", Rowl::Audio::AudioChannelType::Bgm);
+    });
     if (audio.getLastError().empty()) {
         lockFail("BGM miss hatasi caller'a ulasmadi (m_lastError bos)");
     }
@@ -659,6 +805,7 @@ void test_audio_lock_bgm_miss_guard() {
 
     // Ayrisma kilidi: explicit stopBgm() hâlâ kapatir (miss korumasindan
     // ayristigi kilitlenir; stop sessiz degildir, intent duser).
+    audio.setOutputSuspended(false);
     audio.stopBgm();
     if (audio.isBgmPlaying() || audio.isStreaming() || !audio.getCurrentBgmPath().empty()) {
         lockFail("explicit stopBgm() kapatmadi — miss korumasi stop'u bozmamali");
