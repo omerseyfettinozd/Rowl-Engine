@@ -436,11 +436,12 @@ bool AudioEngine::initialize() {
 // ── Faz 5 Dilim 2: playAudio decode bloğunun birebir çıkarımı ─────────────
 // Kısa-ses full-decode yolu byte-identical korunur; eski satır-içi kod ile
 // bu yordam aynı baytları üretir (VFS aday sırası, OGG/WAV dalları, cap
-// kontrolleri, float dönüşümü, DSP, Ui gain bake aynen). #87 gereği hata
+// kontrolleri, float dönüşümü, DSP aynen; Ui gain bake KALDIRILDI —
+// kazanç yalnız akışta, tek kaynak gainFor(Ui)). #87 gereği hata
 // yolları state'e dokunmaz (saf decode; channelIsBgm imza gereği korunur
 // ama yoksayilir, karar caller'indir).
 bool AudioEngine::decodeAssetToFloatPcm(const std::string& assetPath,
-                                        DSPFilterType filter, bool applyUiGain,
+                                        DSPFilterType filter,
                                         bool channelIsBgm,
                                         SDL_AudioSpec& specOut,
                                         std::vector<uint8_t>& floatPcmOut) {
@@ -542,12 +543,8 @@ bool AudioEngine::decodeAssetToFloatPcm(const std::string& assetPath,
         auto* samples = reinterpret_cast<float*>(floatBuffer);
         applyDspToFloatPcm(samples, static_cast<size_t>(floatLength) / sizeof(float),
                            floatSpec.channels, floatSpec.freq, filter);
-        // Faz 5 Dilim 1: Ui one-shot kazancı örneklere işlenir; fiziksel
-        // akış kazancı (master*sfx zinciri) aynen kalır.
-        if (applyUiGain) {
-            const size_t uiSamples = static_cast<size_t>(floatLength) / sizeof(float);
-            for (size_t i = 0; i < uiSamples; ++i) samples[i] *= m_uiVolume;
-        }
+        // Ui kazancı örneklere işlenmez (bake yok); tek kaynak m_uiStream
+        // gain'dir (gainFor(Ui) = master*ui).
         specOut = floatSpec;
         floatPcmOut.assign(floatBuffer, floatBuffer + floatLength);
         SDL_free(floatBuffer);
@@ -787,12 +784,8 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
         auto* samples = reinterpret_cast<float*>(floatBuffer);
         applyDspToFloatPcm(samples, static_cast<size_t>(floatLength) / sizeof(float),
                            floatSpec.channels, floatSpec.freq, filter);
-        // Faz 5 Dilim 1: Ui one-shot kazancı örneklere işlenir; fiziksel
-        // akış kazancı (master*sfx zinciri) aynen kalır.
-        if (channel == AudioChannelType::Ui) {
-            const size_t uiSamples = static_cast<size_t>(floatLength) / sizeof(float);
-            for (size_t i = 0; i < uiSamples; ++i) samples[i] *= m_uiVolume;
-        }
+        // Ui kazancı örneklere işlenmez (bake yok); tek kaynak m_uiStream
+        // gain'dir (gainFor(Ui) = master*ui), kuyruk-sonrası slider canlıdır.
 
         const bool transitionRequested = channel == AudioChannelType::Bgm &&
             m_isBgmPlaying && !m_currentBgmPath.empty() &&
@@ -1678,7 +1671,7 @@ void AudioEngine::applyChannelGains() {
     for (SDL_AudioStream* stream : m_sfxPoolStreams) {
         setGainChecked(stream, sfxGain, "sfx-pool");
     }
-    setGainChecked(m_uiStream, m_mixer.gainFor(StreamBusId::Sfx), "ui");
+    setGainChecked(m_uiStream, m_mixer.gainFor(StreamBusId::Ui), "ui");
     setGainChecked(m_ambienceStream, ambienceBedGain(0), "ambience");
     setGainChecked(m_ambienceStreamB, ambienceBedGain(1), "ambience-B");
 }
@@ -1916,7 +1909,9 @@ void AudioEngine::updateTelemetry(float deltaSeconds) {
                 frames++;
             }
             if (frames > 0) {
-                const float gain = m_masterVolume * m_sfxVolume;
+                // Ui tek-kaynak: gainFor(Ui) = master*ui (master dahili;
+                // cift-master yasaktir). Sfx bus'i UI'ye dokunmaz.
+                const float gain = m_mixer.gainFor(StreamBusId::Ui);
                 targetUiL = std::clamp(maxL * gain, 0.0f, 1.0f);
                 targetUiR = std::clamp(maxR * gain, 0.0f, 1.0f);
                 targetUiRmsL = std::clamp(std::sqrt(sumSqL / static_cast<float>(frames)) * gain, 0.0f, 1.0f);
@@ -2650,7 +2645,7 @@ bool AudioEngine::playAmbienceBed(int bed, const std::string& assetPath) {
     if (!m_initialized || !isValidAmbienceBed(bed) || assetPath.empty()) return false;
     SDL_AudioSpec spec{};
     std::vector<uint8_t> pcm;
-    if (!decodeAssetToFloatPcm(assetPath, DSPFilterType::Normal, false, false, spec, pcm)) {
+    if (!decodeAssetToFloatPcm(assetPath, DSPFilterType::Normal, false, spec, pcm)) {
         return false;
     }
     cancelAmbienceCrossfade();
@@ -2704,7 +2699,7 @@ bool AudioEngine::crossfadeAmbienceTo(const std::string& assetPath,
     durationSeconds = std::min(durationSeconds, 60.0f);
     SDL_AudioSpec spec{};
     std::vector<uint8_t> pcm;
-    if (!decodeAssetToFloatPcm(assetPath, DSPFilterType::Normal, false, false, spec, pcm)) {
+    if (!decodeAssetToFloatPcm(assetPath, DSPFilterType::Normal, false, spec, pcm)) {
         return false;
     }
     const int from = m_isAmbiencePlaying ? 0 : (m_isAmbiencePlayingB ? 1 : 0);

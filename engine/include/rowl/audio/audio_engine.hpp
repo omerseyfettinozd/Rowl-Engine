@@ -29,7 +29,8 @@ enum class AudioChannelType {
     Voice,
     Sfx,
     // Faz 5 Dilim 1 ekleri (mevcut 0/1/2 değerleri aynen korunur):
-    // 3 = Ambience (loop RAM), 4 = Ui (one-shot, fiziksel sfxStream).
+    // 3 = Ambience (loop RAM), 4 = Ui (one-shot, ayri m_uiStream,
+    // master*ui bus; Sfx bus'i UI'ye dokunmaz).
     Ambience,
     Ui
 };
@@ -408,7 +409,7 @@ private:
     // playAudio decode bloğunun birebir çıkarımı (kısa-ses full-decode
     // byte-identical; eski satır-içi kod bu yordamı çağırır).
     bool decodeAssetToFloatPcm(const std::string& assetPath,
-                               DSPFilterType filter, bool applyUiGain,
+                               DSPFilterType filter,
                                bool channelIsBgm,
                                SDL_AudioSpec& specOut,
                                std::vector<uint8_t>& floatPcmOut);

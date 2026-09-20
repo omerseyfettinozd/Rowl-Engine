@@ -42,8 +42,10 @@ No duplicate ABI was added; no legacy entry point changed signature.
   bidirectional-synced by every setter, so legacy getters and telemetry
   formulas are unaffected.
 - Math is bit-identical to the Dilim-1 chain: `master*bus` everywhere,
-  duck (`master*bgm*duckFactor`) only on BGM. Ui stream gain stays on the
-  `master*sfx` chain (Ui sample-gain bake in the decode path is unchanged).
+  duck (`master*bgm*duckFactor`) only on BGM. Ui reads the independent
+  `master*ui` bus (`gainFor(Ui)`) for both its stream gain and its
+  telemetry; the Ui sample-gain bake in the decode path is removed, so Ui
+  is applied exactly once and the Sfx bus no longer gates UI.
 - BGM transition base gain is `mixer.gainFor(Bgm)`; the per-frame
   outgoing/incoming scale comes from §3.
 
