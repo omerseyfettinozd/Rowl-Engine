@@ -93,13 +93,34 @@
                                     <MenuItem Header="Yenile" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.RefreshAssetsCommand}"/>
                                 </ContextMenu>
                             </StackPanel.ContextMenu>
-                            <TextBlock Text="{Binding Icon}" Foreground="{Binding IconColor}" FontSize="14" VerticalAlignment="Center"/>
-                            
-                            <TextBlock Text="{Binding Name}" 
-                                       IsVisible="{Binding !IsEditing}" 
+                            <Image Source="{Binding Thumbnail}" IsVisible="{Binding HasThumbnail}"
+                                   Width="28" Height="28" Stretch="UniformToFill" VerticalAlignment="Center"/>
+                            <Border IsVisible="{Binding !HasThumbnail}"
+                                    Background="{DynamicResource ToolbarButtonBg}"
+                                    BorderBrush="{DynamicResource BorderColor}" BorderThickness="1"
+                                    CornerRadius="3" Padding="4,1" MinWidth="40"
+                                    VerticalAlignment="Center">
+                                <TextBlock Text="{Binding TypeLabel}" FontSize="9"
+                                           Foreground="{DynamicResource MutedText}"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+
+                            <TextBlock Text="{Binding Name}"
+                                       IsVisible="{Binding !IsEditing}"
                                        Foreground="{DynamicResource PrimaryText}"
-                                       FontSize="12" 
+                                       FontSize="12"
+                                       TextTrimming="CharacterEllipsis"
+                                       ToolTip.Tip="{Binding Name}"
                                        VerticalAlignment="Center"/>
+
+                            <!-- Faz 4: kayıp-grup bilgi çipi (grup satırı seçilemez). -->
+                            <Border IsVisible="{Binding IsMissingGroup}"
+                                    Background="Transparent"
+                                    BorderBrush="{DynamicResource ErrorColor}" BorderThickness="1"
+                                    CornerRadius="3" Padding="4,1"
+                                    VerticalAlignment="Center">
+                                <TextBlock Text="bilgi" FontSize="9" Foreground="{DynamicResource ErrorColor}"/>
+                            </Border>
 
                             <!-- MS-5: kayıp dosya rozeti (diskten silinen varlık) -->
                             <Border IsVisible="{Binding IsMissing}"

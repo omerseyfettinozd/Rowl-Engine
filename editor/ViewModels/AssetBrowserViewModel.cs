@@ -15,8 +15,17 @@ namespace RowlEngine.Editor.ViewModels
         public string RelativePath { get; private set; }
         public string FullPath { get; private set; }
         public bool IsDirectory { get; }
-        public string Icon { get; }
-        public string IconColor { get; }
+        /// <summary>Faz 4: tür etiketi (Klasör/Görsel/Ses/Betik/Paket/Dosya).</summary>
+        public string TypeLabel { get; }
+        /// <summary>Faz 4: "__missing__" grup başlığı (seçilemez bilgi satırı).</summary>
+        public bool IsMissingGroup => !IsMissing && RelativePath == "__missing__";
+        /// <summary>
+        /// Faz 4: görsel küçük resmi (AssetBitmapCache; dizin/kayıp/desteklenmeyen
+        /// türde null → şablon tip etiketine düşer).
+        /// </summary>
+        public Avalonia.Media.Imaging.Bitmap? Thumbnail =>
+            IsDirectory || IsMissing ? null : Services.AssetBitmapCache.GetOrLoad(FullPath);
+        public bool HasThumbnail => Thumbnail != null;
         public ObservableCollection<AssetNodeViewModel> Children { get; } = new();
 
         [ObservableProperty]
@@ -48,41 +57,19 @@ namespace RowlEngine.Editor.ViewModels
             FullPath = fullPath;
             IsDirectory = isDirectory;
             _onRenamed = onRenamed;
+            TypeLabel = GetTypeLabel(isDirectory, name);
+        }
 
-            if (isDirectory)
-            {
-                Icon = "";
-                IconColor = ThemeFallbackColors.BrushHex("PrimaryText", ThemeFallbackColors.Text);
-            }
-            else
-            {
-                string ext = System.IO.Path.GetExtension(name).ToLowerInvariant();
-                if (Services.MediaFormatCatalog.IsSupportedImageExtension(ext))
-                {
-                    Icon = "";
-                    IconColor = ThemeFallbackColors.BrushHex("MutedText", ThemeFallbackColors.Muted);
-                }
-                else if (Services.MediaFormatCatalog.IsSupportedAudioExtension(ext))
-                {
-                    Icon = "";
-                    IconColor = ThemeFallbackColors.BrushHex("MutedText", ThemeFallbackColors.Muted);
-                }
-                else if (ext == ".json" || ext == ".txt" || ext == ".lua")
-                {
-                    Icon = "";
-                    IconColor = ThemeFallbackColors.BrushHex("MutedText", ThemeFallbackColors.Muted);
-                }
-                else if (ext == ".rowlpkg")
-                {
-                    Icon = "";
-                    IconColor = ThemeFallbackColors.BrushHex("MutedText", ThemeFallbackColors.Muted);
-                }
-                else
-                {
-                    Icon = "";
-                    IconColor = ThemeFallbackColors.BrushHex("MutedText", ThemeFallbackColors.Muted);
-                }
-            }
+        /// <summary>Faz 4: uzantıdan tür etiketi (filtre kategorileriyle aynı küme).</summary>
+        internal static string GetTypeLabel(bool isDirectory, string name)
+        {
+            if (isDirectory) return "Klasör";
+            string ext = System.IO.Path.GetExtension(name).ToLowerInvariant();
+            if (Services.MediaFormatCatalog.IsSupportedImageExtension(ext)) return "Görsel";
+            if (Services.MediaFormatCatalog.IsSupportedAudioExtension(ext)) return "Ses";
+            if (ext == ".json" || ext == ".txt" || ext == ".lua") return "Betik";
+            if (ext == ".rowlpkg") return "Paket";
+            return "Dosya";
         }
 
         public void StartRename()
@@ -212,6 +199,16 @@ namespace RowlEngine.Editor.ViewModels
 
         [ObservableProperty]
         private AssetNodeViewModel? _selectedNode;
+
+        /// <summary>
+        /// Faz 4: "__missing__" grup başlığı seçilemez bilgi satırıdır;
+        /// seçim denenirse geri bırakılır (hayalet çocuklar seçilebilir).
+        /// </summary>
+        partial void OnSelectedNodeChanged(AssetNodeViewModel? value)
+        {
+            if (value is not null && value.IsMissingGroup)
+                SelectedNode = null;
+        }
 
         /// <summary>Faz 4: arama kutusu (ad/uzantı içerir). Her tuş RefreshAssets'i tetikler.</summary>
         [ObservableProperty]
