@@ -9,13 +9,13 @@
              x:Class="RowlEngine.Editor.Views.Components.DialogueComponentView"
              x:DataType="comp:DialogueComponentViewModel">
 
-    <Border Background="{DynamicResource CardBackground}" CornerRadius="6" Margin="0,4" Padding="0" BorderBrush="{DynamicResource CardBorderColor}" BorderThickness="1">
+    <Border Background="{DynamicResource CardBackground}" CornerRadius="2" Margin="0,4" Padding="0" BorderBrush="{DynamicResource CardBorderColor}" BorderThickness="1">
         <StackPanel>
             <!-- Component Header -->
-            <Border Background="{DynamicResource CardHeaderBackground}" CornerRadius="6,6,0,0" Padding="8,6">
+            <Border Background="{DynamicResource CardHeaderBackground}" CornerRadius="2,2,0,0" Padding="8,6">
                 <Grid ColumnDefinitions="*, Auto">
                     <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                        <TextBlock Text="Diyalog" FontSize="13" VerticalAlignment="Center"/>
+                        <TextBlock Text="Diyalog" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource MutedText}" VerticalAlignment="Center"/>
                         <TextBlock Text="Dialogue" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource PrimaryText}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                     </StackPanel>
                     <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="3" VerticalAlignment="Center">
@@ -29,251 +29,245 @@
             </Border>
 
             <!-- Component Body -->
-            <StackPanel IsVisible="{Binding IsExpanded}" Spacing="10" Margin="10,8">
+            <StackPanel IsVisible="{Binding IsExpanded}" Spacing="8" Margin="8,6">
                 <!-- 1. Speaker & Dialogue Content -->
-                <Border Background="{DynamicResource SurfaceBackground}" CornerRadius="4" Padding="8">
-                    <StackPanel Spacing="6">
-                        <TextBlock Text="SPEAKER &amp; TEXT" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource AccentColor}"/>
-                        
-                        <Grid ColumnDefinitions="*, Auto, Auto">
-                            <StackPanel Grid.Column="0" Spacing="2">
-                                <TextBlock Text="Speaker Name" FontSize="10" Foreground="{DynamicResource MutedText}"/>
-                                <TextBox Text="{Binding Speaker, Mode=TwoWay}" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}" FontSize="12"/>
-                                <ctrl:FieldValidationBadge Validation="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).InspectorViewModel.Validation}"
-                                                           NodeId="{Binding Node.Id}" FieldKey="dialogue.speaker"/>
-                            </StackPanel>
-                            <StackPanel Grid.Column="1" Spacing="2" Margin="6,0,0,0">
-                                <TextBlock Text="Title Font (px)" FontSize="10" Foreground="{DynamicResource MutedText}"/>
-                                <ctrl:RangedNumberControl Value="{Binding SpeakerFontSize}" Minimum="10" Maximum="64" Step="2" Width="150"/>
-                            </StackPanel>
-                            <StackPanel Grid.Column="2" Spacing="2" Margin="6,0,0,0">
-                                <TextBlock Text="Title Color" FontSize="10" Foreground="{DynamicResource MutedText}"/>
-                                <ctrl:ColorPickerControl Mode="Hex" SelectedValue="{Binding SpeakerColor, Mode=TwoWay}"/>
-                            </StackPanel>
-                        </Grid>
+                <Separator Background="{DynamicResource BorderColor}" Height="1"/>
+                <StackPanel Spacing="4">
+                    <TextBlock Text="SPEAKER &amp; TEXT" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource MutedText}"/>
 
-                        <StackPanel Spacing="2" Margin="0,2,0,0">
-                            <TextBlock Text="Dialogue Content" FontSize="10" Foreground="{DynamicResource MutedText}"/>
-                            <TextBox Text="{Binding DialogueText, Mode=TwoWay}" AcceptsReturn="True" Height="64"
-                                     TextWrapping="Wrap" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}" FontSize="12"/>
+                    <Grid ColumnDefinitions="*, Auto, Auto" ColumnSpacing="8">
+                        <StackPanel Grid.Column="0" Spacing="2">
+                            <TextBlock Text="Speaker Name" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                            <TextBox Text="{Binding Speaker, Mode=TwoWay}" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}" FontSize="12"/>
                             <ctrl:FieldValidationBadge Validation="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).InspectorViewModel.Validation}"
-                                                       NodeId="{Binding Node.Id}" FieldKey="dialogue.dialogue_text"/>
+                                                       NodeId="{Binding Node.Id}" FieldKey="dialogue.speaker"/>
                         </StackPanel>
+                        <StackPanel Grid.Column="1" Spacing="2">
+                            <TextBlock Text="Title Font (px)" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                            <ctrl:RangedNumberControl Value="{Binding SpeakerFontSize}" Minimum="10" Maximum="64" Step="2" Width="150"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="2" Spacing="2">
+                            <TextBlock Text="Title Color" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                            <ctrl:ColorPickerControl Mode="Hex" SelectedValue="{Binding SpeakerColor, Mode=TwoWay}"/>
+                        </StackPanel>
+                    </Grid>
 
-                        <StackPanel Spacing="2" Margin="0,2,0,0">
-                            <TextBlock Text="Content ID (kalıcı kimlik)" FontSize="10" Foreground="{DynamicResource MutedText}"/>
-                            <Grid ColumnDefinitions="*,Auto">
-                                <TextBox Grid.Column="0" Text="{Binding ContentId, Mode=TwoWay}" FontFamily="Monospace" FontSize="10"
-                                         Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}"/>
-                                <Button Grid.Column="1" Content="Üret" Margin="4,0,0,0" Padding="8,2" FontSize="11"
-                                        ToolTip.Tip="Yeni tekil kimlik üret"
-                                        Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).InspectorViewModel.RegenerateSelectedContentIdCommand}"/>
-                            </Grid>
-                            <ctrl:FieldValidationBadge Validation="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).InspectorViewModel.Validation}"
-                                                       NodeId="{Binding Node.Id}" FieldKey="dialogue.content_id"/>
-                        </StackPanel>
+                    <StackPanel Spacing="2">
+                        <TextBlock Text="Dialogue Content" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                        <TextBox Text="{Binding DialogueText, Mode=TwoWay}" AcceptsReturn="True" Height="64"
+                                 TextWrapping="Wrap" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}" FontSize="12"/>
+                        <ctrl:FieldValidationBadge Validation="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).InspectorViewModel.Validation}"
+                                                   NodeId="{Binding Node.Id}" FieldKey="dialogue.dialogue_text"/>
                     </StackPanel>
-                </Border>
+
+                    <StackPanel Spacing="2">
+                        <TextBlock Text="Content ID (kalıcı kimlik)" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                            <TextBox Grid.Column="0" Text="{Binding ContentId, Mode=TwoWay}" FontFamily="Monospace" FontSize="10"
+                                     Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}"/>
+                            <Button Grid.Column="1" Content="Üret" Padding="8,2" FontSize="11"
+                                    ToolTip.Tip="Yeni tekil kimlik üret"
+                                    Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).InspectorViewModel.RegenerateSelectedContentIdCommand}"/>
+                        </Grid>
+                        <ctrl:FieldValidationBadge Validation="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).InspectorViewModel.Validation}"
+                                                   NodeId="{Binding Node.Id}" FieldKey="dialogue.content_id"/>
+                    </StackPanel>
+                </StackPanel>
 
                 <!-- 2. Typewriter & Timing Behavior -->
-                <Border Background="{DynamicResource SurfaceBackground}" CornerRadius="4" Padding="8">
-                    <StackPanel Spacing="6">
-                        <TextBlock Text="TYPEWRITER &amp; TIMING" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource AccentColor}"/>
-                        
-                        <Grid ColumnDefinitions="Auto, *">
-                            <CheckBox Grid.Column="0" IsChecked="{Binding TypewriterEnabled}" Content="Enable Typewriter" FontSize="11" Foreground="{DynamicResource PrimaryText}" Margin="0,0,8,0"/>
-                            <StackPanel Grid.Column="1" Spacing="2" IsVisible="{Binding TypewriterEnabled}">
-                                <Grid ColumnDefinitions="*, Auto">
-                                    <TextBlock Grid.Column="0" Text="Speed (ms/char)" FontSize="10" Foreground="{DynamicResource MutedText}"/>
-                                    <TextBlock Grid.Column="1" Text="{Binding TextSpeed, StringFormat='{}{0} ms'}" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource PrimaryText}"/>
-                                </Grid>
-                                <Slider Value="{Binding TextSpeed}" Minimum="5" Maximum="100" SmallChange="5" LargeChange="15"/>
-                            </StackPanel>
-                        </Grid>
+                <Separator Background="{DynamicResource BorderColor}" Height="1"/>
+                <StackPanel Spacing="4">
+                    <TextBlock Text="TYPEWRITER &amp; TIMING" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource MutedText}"/>
 
-                        <Grid ColumnDefinitions="Auto, *" Margin="0,2,0,0">
-                            <CheckBox Grid.Column="0" IsChecked="{Binding AutoAdvance}" Content="Auto Advance" FontSize="11" Foreground="{DynamicResource PrimaryText}" Margin="0,0,8,0"/>
-                            <StackPanel Grid.Column="1" Spacing="2" IsVisible="{Binding AutoAdvance}">
-                                <Grid ColumnDefinitions="*, Auto">
-                                    <TextBlock Grid.Column="0" Text="Wait Delay" FontSize="10" Foreground="{DynamicResource MutedText}"/>
-                                    <TextBlock Grid.Column="1" Text="{Binding AutoAdvanceDelay, StringFormat='{}{0:F1}s'}" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource PrimaryText}"/>
-                                </Grid>
-                                <Slider Value="{Binding AutoAdvanceDelay}" Minimum="0.5" Maximum="10.0" SmallChange="0.5"/>
-                            </StackPanel>
-                        </Grid>
-
-                        <!-- Voice Blip Sound Asset & Preview -->
-                        <Border Background="{DynamicResource CardHeaderBackground}" CornerRadius="4" Padding="6" Margin="0,4,0,0">
-                            <StackPanel Spacing="6">
-                                <Grid ColumnDefinitions="*, Auto">
-                                    <TextBlock Grid.Column="0" Text="Character Voice Blip (Sound FX)" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource AccentColor}" VerticalAlignment="Center"/>
-                                    <Button Grid.Column="1" Content="Önizle (Test Blip)" Command="{Binding PreviewVoiceBlipCommand}"
-                                            ToolTip.Tip="Test character voice blip sound"
-                                            FontSize="10" Padding="6,2" Background="{DynamicResource AccentButtonBg}" Foreground="{DynamicResource AccentButtonFg}" CornerRadius="4"/>
-                                </Grid>
-                                
-                                <StackPanel Spacing="2">
-                                    <TextBlock Text="Sound Asset (.wav / .ogg - boşsa synth blip)" FontSize="10" Foreground="{DynamicResource MutedText}"/>
-                                    <ctrl:AssetPickerControl AssetPath="{Binding TypewriterSound, Mode=TwoWay}" Watermark="Örn: blip_voice.wav veya boş (prosedürel synth)"/>
-                                    <ctrl:FieldValidationBadge Validation="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).InspectorViewModel.Validation}"
-                                                               NodeId="{Binding Node.Id}" FieldKey="dialogue.blip_sound"/>
-                                </StackPanel>
-
-                                <Grid ColumnDefinitions="*, *">
-                                    <!-- Base Pitch -->
-                                    <StackPanel Grid.Column="0" Spacing="2" Margin="0,0,4,0">
-                                        <Grid ColumnDefinitions="*, Auto">
-                                            <TextBlock Grid.Column="0" Text="Base Pitch" FontSize="10" Foreground="{DynamicResource MutedText}"/>
-                                            <TextBlock Grid.Column="1" Text="{Binding VoiceBlipPitch, StringFormat='{}{0:F2}x'}" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource PrimaryText}"/>
-                                        </Grid>
-                                        <Slider Value="{Binding VoiceBlipPitch}" Minimum="0.5" Maximum="2.0" SmallChange="0.05" LargeChange="0.1"/>
-                                    </StackPanel>
-
-                                    <!-- Pitch Variance -->
-                                    <StackPanel Grid.Column="1" Spacing="2" Margin="4,0,0,0">
-                                        <Grid ColumnDefinitions="*, Auto">
-                                            <TextBlock Grid.Column="0" Text="Modulation (±)" FontSize="10" Foreground="{DynamicResource MutedText}"/>
-                                            <TextBlock Grid.Column="1" Text="{Binding VoiceBlipVariance, StringFormat='{}{0:F2}'}" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource PrimaryText}"/>
-                                        </Grid>
-                                        <Slider Value="{Binding VoiceBlipVariance}" Minimum="0.0" Maximum="0.30" SmallChange="0.01" LargeChange="0.05"/>
-                                    </StackPanel>
-                                </Grid>
-
-                                <Grid ColumnDefinitions="*, *">
-                                    <!-- Cadence (every N characters) -->
-                                    <StackPanel Grid.Column="0" Spacing="2" Margin="0,0,4,0">
-                                        <Grid ColumnDefinitions="*, Auto">
-                                            <TextBlock Grid.Column="0" Text="Cadence (Her N Karakter)" FontSize="10" Foreground="{DynamicResource MutedText}"/>
-                                            <TextBlock Grid.Column="1" Text="{Binding VoiceBlipCadence, StringFormat='{}Her {0}.'}" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource PrimaryText}"/>
-                                        </Grid>
-                                        <Slider Value="{Binding VoiceBlipCadence}" Minimum="1" Maximum="5" SmallChange="1" LargeChange="1"/>
-                                    </StackPanel>
-
-                                    <!-- Blip Volume -->
-                                    <StackPanel Grid.Column="1" Spacing="2" Margin="4,0,0,0">
-                                        <Grid ColumnDefinitions="*, Auto">
-                                            <TextBlock Grid.Column="0" Text="Blip Volume" FontSize="10" Foreground="{DynamicResource MutedText}"/>
-                                            <TextBlock Grid.Column="1" Text="{Binding VoiceBlipVolume, StringFormat='{}{0:P0}'}" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource PrimaryText}"/>
-                                        </Grid>
-                                        <Slider Value="{Binding VoiceBlipVolume}" Minimum="0.0" Maximum="1.0" SmallChange="0.05" LargeChange="0.1"/>
-                                    </StackPanel>
-                                </Grid>
-
-                                <Grid ColumnDefinitions="*, *">
-                                    <CheckBox Grid.Column="0" IsChecked="{Binding VoiceBlipSkipPunctuation}" Content="Noktalama/Boşluk Atla" FontSize="10" Foreground="{DynamicResource PrimaryText}"/>
-                                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                                        <TextBlock Text="Kanal:" FontSize="10" Foreground="{DynamicResource MutedText}" VerticalAlignment="Center"/>
-                                        <TextBox Text="{Binding VoiceBlipChannel, Mode=TwoWay}" Width="70" FontSize="10" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}"/>
-                                    </StackPanel>
-                                </Grid>
-                            </StackPanel>
-                        </Border>
-                    </StackPanel>
-                </Border>
-
-                <!-- 3. Typography & Styling -->
-                <Border Background="{DynamicResource SurfaceBackground}" CornerRadius="4" Padding="8">
-                    <StackPanel Spacing="6">
-                        <TextBlock Text="TYPOGRAPHY &amp; STYLING" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource AccentColor}"/>
-
-                        <Grid ColumnDefinitions="*, *">
-                            <StackPanel Grid.Column="0" Spacing="2" Margin="0,0,4,0">
-                                <TextBlock Text="Font Size (px)" FontSize="10" Foreground="{DynamicResource MutedText}"/>
-                                <ctrl:RangedNumberControl Value="{Binding FontSize}" Minimum="12" Maximum="64" Step="2"/>
-                            </StackPanel>
-                            <StackPanel Grid.Column="1" Spacing="2" Margin="4,0,0,0">
-                                <TextBlock Text="Text Color (HEX)" FontSize="10" Foreground="{DynamicResource MutedText}"/>
-                                <ctrl:ColorPickerControl Mode="Hex" SelectedValue="{Binding TextColor, Mode=TwoWay}"/>
-                            </StackPanel>
-                        </Grid>
-
-                        <StackPanel Spacing="2" Margin="0,2,0,0">
-                            <TextBlock Text="Alignment" FontSize="10" Foreground="{DynamicResource MutedText}"/>
-                            <Grid ColumnDefinitions="*, *, *">
-                                <RadioButton Grid.Column="0" Content="Left" IsChecked="{Binding IsAlignLeft}" GroupName="AlignGroup" FontSize="10"/>
-                                <RadioButton Grid.Column="1" Content="Center" IsChecked="{Binding IsAlignCenter}" GroupName="AlignGroup" FontSize="10"/>
-                                <RadioButton Grid.Column="2" Content="Right" IsChecked="{Binding IsAlignRight}" GroupName="AlignGroup" FontSize="10"/>
-                            </Grid>
-                        </StackPanel>
-                    </StackPanel>
-                </Border>
-
-                <!-- 4. Box Visuals & Appearance -->
-                <Border Background="{DynamicResource SurfaceBackground}" CornerRadius="4" Padding="8">
-                    <StackPanel Spacing="6">
-                        <TextBlock Text="BOX THEME &amp; OPACITY" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource AccentColor}"/>
-
-                        <Grid ColumnDefinitions="*, *">
-                            <StackPanel Grid.Column="0" Spacing="2" Margin="0,0,4,0">
-                                <TextBlock Text="Box Color (HEX)" FontSize="10" Foreground="{DynamicResource MutedText}"/>
-                                <ctrl:ColorPickerControl Mode="Hex" SelectedValue="{Binding BoxColor, Mode=TwoWay}"/>
-                            </StackPanel>
-                            <StackPanel Grid.Column="1" Spacing="2" Margin="4,0,0,0">
-                                <TextBlock Text="Border Color (HEX)" FontSize="10" Foreground="{DynamicResource MutedText}"/>
-                                <TextBox Text="{Binding BorderColor}" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{Binding BorderColor}" FontSize="11" FontWeight="Bold"/>
-                            </StackPanel>
-                        </Grid>
-
-                        <StackPanel Spacing="2" Margin="0,2,0,0">
+                    <Grid ColumnDefinitions="Auto, *" ColumnSpacing="8">
+                        <CheckBox Grid.Column="0" IsChecked="{Binding TypewriterEnabled}" Content="Enable Typewriter" FontSize="11" Foreground="{DynamicResource PrimaryText}"/>
+                        <StackPanel Grid.Column="1" Spacing="2" IsVisible="{Binding TypewriterEnabled}">
                             <Grid ColumnDefinitions="*, Auto">
-                                <TextBlock Grid.Column="0" Text="Box Opacity" FontSize="10" Foreground="{DynamicResource MutedText}"/>
-                                <TextBlock Grid.Column="1" Text="{Binding BoxOpacity, StringFormat='{}{0:P0}'}" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource PrimaryText}"/>
+                                <TextBlock Grid.Column="0" Text="Speed (ms/char)" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                                <TextBlock Grid.Column="1" Text="{Binding TextSpeed, StringFormat='{}{0} ms'}" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource PrimaryText}"/>
                             </Grid>
-                            <Slider Value="{Binding BoxOpacity}" Minimum="0.0" Maximum="1.0" SmallChange="0.05" LargeChange="0.1"/>
+                            <Slider Value="{Binding TextSpeed}" Minimum="5" Maximum="100" SmallChange="5" LargeChange="15"/>
                         </StackPanel>
-                    </StackPanel>
-                </Border>
+                    </Grid>
 
-                <!-- 5. Geometry Coordinates & Size -->
-                <Border Background="{DynamicResource SurfaceBackground}" CornerRadius="4" Padding="8">
-                    <StackPanel Spacing="6">
-                        <TextBlock Text="TRANSFORM &amp; PRESETS" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource AccentColor}"/>
+                    <Grid ColumnDefinitions="Auto, *" ColumnSpacing="8">
+                        <CheckBox Grid.Column="0" IsChecked="{Binding AutoAdvance}" Content="Auto Advance" FontSize="11" Foreground="{DynamicResource PrimaryText}"/>
+                        <StackPanel Grid.Column="1" Spacing="2" IsVisible="{Binding AutoAdvance}">
+                            <Grid ColumnDefinitions="*, Auto">
+                                <TextBlock Grid.Column="0" Text="Wait Delay" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                                <TextBlock Grid.Column="1" Text="{Binding AutoAdvanceDelay, StringFormat='{}{0:F1}s'}" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource PrimaryText}"/>
+                            </Grid>
+                            <Slider Value="{Binding AutoAdvanceDelay}" Minimum="0.5" Maximum="10.0" SmallChange="0.5"/>
+                        </StackPanel>
+                    </Grid>
 
-                        <Grid ColumnDefinitions="*, *" Margin="0,2">
-                            <StackPanel Grid.Column="0" Spacing="2" Margin="0,0,4,0">
-                                <TextBlock Text="Box X" FontSize="10" Foreground="{DynamicResource MutedText}"/>
-                                <NumericUpDown Value="{Binding X}" Minimum="-500" Maximum="2500" Increment="20" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}"/>
-                            </StackPanel>
-                            <StackPanel Grid.Column="1" Spacing="2" Margin="4,0,0,0">
-                                <TextBlock Text="Box Y" FontSize="10" Foreground="{DynamicResource MutedText}"/>
-                                <NumericUpDown Value="{Binding Y}" Minimum="-500" Maximum="2500" Increment="20" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}"/>
-                            </StackPanel>
-                        </Grid>
-
-                        <Grid ColumnDefinitions="*, *" Margin="0,2">
-                            <StackPanel Grid.Column="0" Spacing="2" Margin="0,0,4,0">
-                                <TextBlock Text="Width" FontSize="10" Foreground="{DynamicResource MutedText}"/>
-                                <NumericUpDown Value="{Binding Width}" Minimum="100" Maximum="1920" Increment="20" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}"/>
-                            </StackPanel>
-                            <StackPanel Grid.Column="1" Spacing="2" Margin="4,0,0,0">
-                                <TextBlock Text="Height" FontSize="10" Foreground="{DynamicResource MutedText}"/>
-                                <NumericUpDown Value="{Binding Height}" Minimum="60" Maximum="1080" Increment="20" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}"/>
-                            </StackPanel>
+                    <!-- Voice Blip Sound Asset & Preview -->
+                    <Separator Background="{DynamicResource BorderColor}" Height="1"/>
+                    <StackPanel Spacing="4">
+                        <Grid ColumnDefinitions="*, Auto">
+                            <TextBlock Grid.Column="0" Text="Character Voice Blip (Sound FX)" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource MutedText}" VerticalAlignment="Center"/>
+                            <Button Grid.Column="1" Content="Önizle (Test Blip)" Command="{Binding PreviewVoiceBlipCommand}"
+                                    ToolTip.Tip="Test character voice blip sound"
+                                    FontSize="10" Padding="6,2" Background="{DynamicResource AccentButtonBg}" Foreground="{DynamicResource AccentButtonFg}" CornerRadius="4"/>
                         </Grid>
 
                         <StackPanel Spacing="2">
-                            <TextBlock Text="Scale (1.0 = 100%)" FontSize="10" Foreground="{DynamicResource AccentColor}" FontWeight="Bold"/>
-                            <NumericUpDown Value="{Binding Scale}" Minimum="0.1" Maximum="5.0" Increment="0.1" FormatString="0.00" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource AccentColor}" BorderBrush="{DynamicResource BorderColor}"/>
+                            <TextBlock Text="Sound Asset (.wav / .ogg - boşsa synth blip)" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                            <ctrl:AssetPickerControl AssetPath="{Binding TypewriterSound, Mode=TwoWay}" Watermark="Örn: blip_voice.wav veya boş (prosedürel synth)"/>
+                            <ctrl:FieldValidationBadge Validation="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).InspectorViewModel.Validation}"
+                                                       NodeId="{Binding Node.Id}" FieldKey="dialogue.blip_sound"/>
                         </StackPanel>
 
-                        <!-- Layout Presets (5 Presets) -->
-                        <TextBlock Text="Quick Layout Presets" FontSize="10" Foreground="{DynamicResource MutedText}" Margin="0,4,0,0"/>
-                        <Grid ColumnDefinitions="*, *" Margin="0,2">
-                            <Button Grid.Column="0" Content="Standard Banner" HorizontalAlignment="Stretch" Margin="0,0,2,2" Padding="4,4" FontSize="10" Background="{DynamicResource ToolbarButtonBg}" Foreground="{DynamicResource PrimaryText}" CornerRadius="4"
-                                    Command="{Binding SetStandardCommand}"/>
-                            <Button Grid.Column="1" Content="Square Avatar" HorizontalAlignment="Stretch" Margin="2,0,0,2" Padding="4,4" FontSize="10" Background="{DynamicResource ToolbarButtonBg}" Foreground="{DynamicResource PrimaryText}" CornerRadius="4"
-                                    Command="{Binding SetSquareCommand}"/>
+                        <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                            <!-- Base Pitch -->
+                            <StackPanel Grid.Column="0" Spacing="2">
+                                <Grid ColumnDefinitions="*, Auto">
+                                    <TextBlock Grid.Column="0" Text="Base Pitch" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                                    <TextBlock Grid.Column="1" Text="{Binding VoiceBlipPitch, StringFormat='{}{0:F2}x'}" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource PrimaryText}"/>
+                                </Grid>
+                                <Slider Value="{Binding VoiceBlipPitch}" Minimum="0.5" Maximum="2.0" SmallChange="0.05" LargeChange="0.1"/>
+                            </StackPanel>
+
+                            <!-- Pitch Variance -->
+                            <StackPanel Grid.Column="1" Spacing="2">
+                                <Grid ColumnDefinitions="*, Auto">
+                                    <TextBlock Grid.Column="0" Text="Modulation (±)" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                                    <TextBlock Grid.Column="1" Text="{Binding VoiceBlipVariance, StringFormat='{}{0:F2}'}" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource PrimaryText}"/>
+                                </Grid>
+                                <Slider Value="{Binding VoiceBlipVariance}" Minimum="0.0" Maximum="0.30" SmallChange="0.01" LargeChange="0.05"/>
+                            </StackPanel>
                         </Grid>
-                        <Grid ColumnDefinitions="*, *, *" Margin="0,2">
-                            <Button Grid.Column="0" Content="NVL Novel" HorizontalAlignment="Stretch" Margin="0,0,2,0" Padding="2,4" FontSize="9" Background="{DynamicResource ToolbarButtonBg}" Foreground="{DynamicResource PrimaryText}" CornerRadius="4"
-                                    Command="{Binding SetNvlFullscreenCommand}"/>
-                            <Button Grid.Column="1" Content="Top Subtitle" HorizontalAlignment="Stretch" Margin="1,0,1,0" Padding="2,4" FontSize="9" Background="{DynamicResource ToolbarButtonBg}" Foreground="{DynamicResource PrimaryText}" CornerRadius="4"
-                                    Command="{Binding SetTopSubtitleCommand}"/>
-                            <Button Grid.Column="2" Content="Comic Bubble" HorizontalAlignment="Stretch" Margin="2,0,0,0" Padding="2,4" FontSize="9" Background="{DynamicResource ToolbarButtonBg}" Foreground="{DynamicResource PrimaryText}" CornerRadius="4"
-                                    Command="{Binding SetComicBubbleCommand}"/>
+
+                        <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                            <!-- Cadence (every N characters) -->
+                            <StackPanel Grid.Column="0" Spacing="2">
+                                <Grid ColumnDefinitions="*, Auto">
+                                    <TextBlock Grid.Column="0" Text="Cadence (Her N Karakter)" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                                    <TextBlock Grid.Column="1" Text="{Binding VoiceBlipCadence, StringFormat='{}Her {0}.'}" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource PrimaryText}"/>
+                                </Grid>
+                                <Slider Value="{Binding VoiceBlipCadence}" Minimum="1" Maximum="5" SmallChange="1" LargeChange="1"/>
+                            </StackPanel>
+
+                            <!-- Blip Volume -->
+                            <StackPanel Grid.Column="1" Spacing="2">
+                                <Grid ColumnDefinitions="*, Auto">
+                                    <TextBlock Grid.Column="0" Text="Blip Volume" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                                    <TextBlock Grid.Column="1" Text="{Binding VoiceBlipVolume, StringFormat='{}{0:P0}'}" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource PrimaryText}"/>
+                                </Grid>
+                                <Slider Value="{Binding VoiceBlipVolume}" Minimum="0.0" Maximum="1.0" SmallChange="0.05" LargeChange="0.1"/>
+                            </StackPanel>
+                        </Grid>
+
+                        <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                            <CheckBox Grid.Column="0" IsChecked="{Binding VoiceBlipSkipPunctuation}" Content="Noktalama/Boşluk Atla" FontSize="10" Foreground="{DynamicResource PrimaryText}"/>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                <TextBlock Text="Kanal:" FontSize="10" Foreground="{DynamicResource MutedText}" VerticalAlignment="Center"/>
+                                <TextBox Text="{Binding VoiceBlipChannel, Mode=TwoWay}" Width="70" FontSize="10" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}"/>
+                            </StackPanel>
                         </Grid>
                     </StackPanel>
-                </Border>
+                </StackPanel>
+
+                <!-- 3. Typography & Styling -->
+                <Separator Background="{DynamicResource BorderColor}" Height="1"/>
+                <StackPanel Spacing="4">
+                    <TextBlock Text="TYPOGRAPHY &amp; STYLING" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource MutedText}"/>
+
+                    <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                        <StackPanel Grid.Column="0" Spacing="2">
+                            <TextBlock Text="Font Size (px)" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                            <ctrl:RangedNumberControl Value="{Binding FontSize}" Minimum="12" Maximum="64" Step="2"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Spacing="2">
+                            <TextBlock Text="Text Color (HEX)" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                            <ctrl:ColorPickerControl Mode="Hex" SelectedValue="{Binding TextColor, Mode=TwoWay}"/>
+                        </StackPanel>
+                    </Grid>
+
+                    <StackPanel Spacing="2">
+                        <TextBlock Text="Alignment" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                        <Grid ColumnDefinitions="*, *, *" ColumnSpacing="8">
+                            <RadioButton Grid.Column="0" Content="Left" IsChecked="{Binding IsAlignLeft}" GroupName="AlignGroup" FontSize="10"/>
+                            <RadioButton Grid.Column="1" Content="Center" IsChecked="{Binding IsAlignCenter}" GroupName="AlignGroup" FontSize="10"/>
+                            <RadioButton Grid.Column="2" Content="Right" IsChecked="{Binding IsAlignRight}" GroupName="AlignGroup" FontSize="10"/>
+                        </Grid>
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- 4. Box Visuals & Appearance -->
+                <Separator Background="{DynamicResource BorderColor}" Height="1"/>
+                <StackPanel Spacing="4">
+                    <TextBlock Text="BOX THEME &amp; OPACITY" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource MutedText}"/>
+
+                    <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                        <StackPanel Grid.Column="0" Spacing="2">
+                            <TextBlock Text="Box Color (HEX)" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                            <ctrl:ColorPickerControl Mode="Hex" SelectedValue="{Binding BoxColor, Mode=TwoWay}"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Spacing="2">
+                            <TextBlock Text="Border Color (HEX)" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                            <TextBox Text="{Binding BorderColor}" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{Binding BorderColor}" FontSize="11" FontWeight="Bold"/>
+                        </StackPanel>
+                    </Grid>
+
+                    <StackPanel Spacing="2">
+                        <Grid ColumnDefinitions="*, Auto">
+                            <TextBlock Grid.Column="0" Text="Box Opacity" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                            <TextBlock Grid.Column="1" Text="{Binding BoxOpacity, StringFormat='{}{0:P0}'}" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource PrimaryText}"/>
+                        </Grid>
+                        <Slider Value="{Binding BoxOpacity}" Minimum="0.0" Maximum="1.0" SmallChange="0.05" LargeChange="0.1"/>
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- 5. Geometry Coordinates & Size -->
+                <Separator Background="{DynamicResource BorderColor}" Height="1"/>
+                <StackPanel Spacing="4">
+                    <TextBlock Text="TRANSFORM &amp; PRESETS" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource MutedText}"/>
+
+                    <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                        <StackPanel Grid.Column="0" Spacing="2">
+                            <TextBlock Text="Box X" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                            <NumericUpDown Value="{Binding X}" Minimum="-500" Maximum="2500" Increment="20" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Spacing="2">
+                            <TextBlock Text="Box Y" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                            <NumericUpDown Value="{Binding Y}" Minimum="-500" Maximum="2500" Increment="20" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}"/>
+                        </StackPanel>
+                    </Grid>
+
+                    <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                        <StackPanel Grid.Column="0" Spacing="2">
+                            <TextBlock Text="Width" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                            <NumericUpDown Value="{Binding Width}" Minimum="100" Maximum="1920" Increment="20" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Spacing="2">
+                            <TextBlock Text="Height" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                            <NumericUpDown Value="{Binding Height}" Minimum="60" Maximum="1080" Increment="20" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}"/>
+                        </StackPanel>
+                    </Grid>
+
+                    <StackPanel Spacing="2">
+                        <TextBlock Text="Scale (1.0 = 100%)" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                        <NumericUpDown Value="{Binding Scale}" Minimum="0.1" Maximum="5.0" Increment="0.1" FormatString="0.00" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource AccentColor}" BorderBrush="{DynamicResource BorderColor}"/>
+                    </StackPanel>
+
+                    <!-- Layout Presets (5 Presets) -->
+                    <TextBlock Text="Quick Layout Presets" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                    <Grid ColumnDefinitions="*,*" ColumnSpacing="4">
+                        <Button Grid.Column="0" Content="Standard Banner" HorizontalAlignment="Stretch" Padding="4,4" FontSize="10" Background="{DynamicResource ToolbarButtonBg}" Foreground="{DynamicResource PrimaryText}" CornerRadius="4"
+                                Command="{Binding SetStandardCommand}"/>
+                        <Button Grid.Column="1" Content="Square Avatar" HorizontalAlignment="Stretch" Padding="4,4" FontSize="10" Background="{DynamicResource ToolbarButtonBg}" Foreground="{DynamicResource PrimaryText}" CornerRadius="4"
+                                Command="{Binding SetSquareCommand}"/>
+                    </Grid>
+                    <Grid ColumnDefinitions="*, *, *" ColumnSpacing="4">
+                        <Button Grid.Column="0" Content="NVL Novel" HorizontalAlignment="Stretch" Padding="2,4" FontSize="9" Background="{DynamicResource ToolbarButtonBg}" Foreground="{DynamicResource PrimaryText}" CornerRadius="4"
+                                Command="{Binding SetNvlFullscreenCommand}"/>
+                        <Button Grid.Column="1" Content="Top Subtitle" HorizontalAlignment="Stretch" Padding="2,4" FontSize="9" Background="{DynamicResource ToolbarButtonBg}" Foreground="{DynamicResource PrimaryText}" CornerRadius="4"
+                                Command="{Binding SetTopSubtitleCommand}"/>
+                        <Button Grid.Column="2" Content="Comic Bubble" HorizontalAlignment="Stretch" Padding="2,4" FontSize="9" Background="{DynamicResource ToolbarButtonBg}" Foreground="{DynamicResource PrimaryText}" CornerRadius="4"
+                                Command="{Binding SetComicBubbleCommand}"/>
+                    </Grid>
+                </StackPanel>
             </StackPanel>
         </StackPanel>
     </Border>

@@ -9,13 +9,13 @@
              x:Class="RowlEngine.Editor.Views.Components.AudioComponentView"
              x:DataType="comp:AudioComponentViewModel">
 
-    <Border Background="{DynamicResource CardBackground}" CornerRadius="6" Margin="0,4" Padding="0" BorderBrush="{DynamicResource CardBorderColor}" BorderThickness="1">
+    <Border Background="{DynamicResource CardBackground}" CornerRadius="2" Margin="0,4" Padding="0" BorderBrush="{DynamicResource CardBorderColor}" BorderThickness="1">
         <StackPanel>
             <!-- Component Header -->
-            <Border Background="{DynamicResource CardHeaderBackground}" CornerRadius="6,6,0,0" Padding="8,6">
+            <Border Background="{DynamicResource CardHeaderBackground}" CornerRadius="2,2,0,0" Padding="8,6">
                 <Grid ColumnDefinitions="*, Auto">
                     <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                        <TextBlock Text="Ses" FontSize="13" VerticalAlignment="Center"/>
+                        <TextBlock Text="Ses" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource MutedText}" VerticalAlignment="Center"/>
                         <TextBlock Text="{Binding DisplayName}" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource PrimaryText}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                     </StackPanel>
                     <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="3" VerticalAlignment="Center">
@@ -29,14 +29,14 @@
             </Border>
 
             <!-- Component Body -->
-            <StackPanel IsVisible="{Binding IsExpanded}" Spacing="8" Margin="10,8">
+            <StackPanel IsVisible="{Binding IsExpanded}" Spacing="8" Margin="8,6">
                 <!-- BGM Track -->
                 <StackPanel Spacing="4">
-                    <TextBlock Text="BGM Track (Arka Plan Müziği)" FontSize="11" Foreground="{DynamicResource MutedText}"/>
-                    <Grid ColumnDefinitions="*, Auto">
+                    <TextBlock Text="BGM Track (Arka Plan Müziği)" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                    <Grid ColumnDefinitions="*, Auto" ColumnSpacing="8">
                         <TextBox Grid.Column="0" Text="{Binding BgmTrack}" Watermark="Örn: bgm_theme.ogg"
                                  Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}"/>
-                        <Button Grid.Column="1" Command="{Binding ToggleBgmPreviewCommand}" Margin="4,0,0,0" Padding="8,4"
+                        <Button Grid.Column="1" Command="{Binding ToggleBgmPreviewCommand}" Padding="8,4"
                                 ToolTip.Tip="BGM Önizleme Çal / Durdur">
                             <Panel>
                                 <TextBlock Text="Önizle" IsVisible="{Binding !IsPreviewingBgm}" FontSize="11" Foreground="{DynamicResource SuccessColor}"/>
@@ -47,7 +47,7 @@
                     <ctrl:FieldValidationBadge Validation="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).InspectorViewModel.Validation}"
                                                NodeId="{Binding Node.Id}" FieldKey="audio.bgm_track"/>
                     <!-- BGM Stereo VU Meter -->
-                    <Grid ColumnDefinitions="Auto, *" RowDefinitions="Auto, Auto" Margin="0,2,0,2">
+                    <Grid ColumnDefinitions="Auto, *" RowDefinitions="Auto, Auto">
                         <TextBlock Grid.Row="0" Grid.Column="0" Text="L" FontSize="9" Width="12" Foreground="{DynamicResource MutedText}" VerticalAlignment="Center"/>
                         <ProgressBar Grid.Row="0" Grid.Column="1" Minimum="0" Maximum="1" Value="{Binding BgmPeakL}" Height="4" Foreground="{DynamicResource SuccessBrush}" Background="{DynamicResource InputBackground}" Margin="0,1"/>
                         <TextBlock Grid.Row="1" Grid.Column="0" Text="R" FontSize="9" Width="12" Foreground="{DynamicResource MutedText}" VerticalAlignment="Center"/>
@@ -56,12 +56,13 @@
                 </StackPanel>
 
                 <!-- SFX Track -->
+                <Separator Background="{DynamicResource BorderColor}" Height="1"/>
                 <StackPanel Spacing="4">
-                    <TextBlock Text="SFX Track (Ses Efekti)" FontSize="11" Foreground="{DynamicResource MutedText}"/>
-                    <Grid ColumnDefinitions="*, Auto">
+                    <TextBlock Text="SFX Track (Ses Efekti)" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                    <Grid ColumnDefinitions="*, Auto" ColumnSpacing="8">
                         <TextBox Grid.Column="0" Text="{Binding SfxTrack}" Watermark="Örn: sfx_click.wav"
                                  Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}"/>
-                        <Button Grid.Column="1" Command="{Binding ToggleSfxPreviewCommand}" Margin="4,0,0,0" Padding="8,4"
+                        <Button Grid.Column="1" Command="{Binding ToggleSfxPreviewCommand}" Padding="8,4"
                                 ToolTip.Tip="SFX Önizleme Çal / Durdur">
                             <Panel>
                                 <TextBlock Text="Önizle" IsVisible="{Binding !IsPreviewingSfx}" FontSize="11" Foreground="{DynamicResource Accent}"/>
@@ -72,7 +73,7 @@
                     <ctrl:FieldValidationBadge Validation="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).InspectorViewModel.Validation}"
                                                NodeId="{Binding Node.Id}" FieldKey="audio.sfx_track"/>
                     <!-- SFX Stereo VU Meter -->
-                    <Grid ColumnDefinitions="Auto, *" RowDefinitions="Auto, Auto" Margin="0,2,0,2">
+                    <Grid ColumnDefinitions="Auto, *" RowDefinitions="Auto, Auto">
                         <TextBlock Grid.Row="0" Grid.Column="0" Text="L" FontSize="9" Width="12" Foreground="{DynamicResource MutedText}" VerticalAlignment="Center"/>
                         <ProgressBar Grid.Row="0" Grid.Column="1" Minimum="0" Maximum="1" Value="{Binding SfxPeakL}" Height="4" Foreground="{DynamicResource Accent}" Background="{DynamicResource InputBackground}" Margin="0,1"/>
                         <TextBlock Grid.Row="1" Grid.Column="0" Text="R" FontSize="9" Width="12" Foreground="{DynamicResource MutedText}" VerticalAlignment="Center"/>
@@ -83,16 +84,17 @@
                 </StackPanel>
 
                 <!-- Volume Slider -->
-                <StackPanel Spacing="4">
+                <Separator Background="{DynamicResource BorderColor}" Height="1"/>
+                <StackPanel Spacing="2">
                     <Grid ColumnDefinitions="*, Auto">
-                        <TextBlock Grid.Column="0" Text="Ses Seviyesi (Volume)" FontSize="11" Foreground="{DynamicResource MutedText}"/>
-                        <TextBlock Grid.Column="1" Text="{Binding Volume, StringFormat={}{0:P0}}" FontSize="11" Foreground="{DynamicResource MutedText}"/>
+                        <TextBlock Grid.Column="0" Text="Ses Seviyesi (Volume)" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                        <TextBlock Grid.Column="1" Text="{Binding Volume, StringFormat={}{0:P0}}" FontSize="10" Foreground="{DynamicResource MutedText}"/>
                     </Grid>
                     <Slider Minimum="0" Maximum="1" Value="{Binding Volume}" SmallChange="0.05" LargeChange="0.1"/>
                 </StackPanel>
 
-                <StackPanel Spacing="4">
-                    <TextBlock Text="DSP Filter" FontSize="11" Foreground="{DynamicResource MutedText}"/>
+                <StackPanel Spacing="2">
+                    <TextBlock Text="DSP Filter" FontSize="10" Foreground="{DynamicResource MutedText}"/>
                     <ComboBox SelectedItem="{Binding DspFilter}" HorizontalAlignment="Stretch" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}">
                         <x:String>Normal</x:String>
                         <x:String>Telephone</x:String>
@@ -100,8 +102,8 @@
                         <x:String>UnderwaterLowPass</x:String>
                     </ComboBox>
                 </StackPanel>
-                <StackPanel Spacing="4">
-                    <TextBlock Text="BGM Geçişi" FontSize="11" Foreground="{DynamicResource MutedText}"/>
+                <StackPanel Spacing="2">
+                    <TextBlock Text="BGM Geçişi" FontSize="10" Foreground="{DynamicResource MutedText}"/>
                     <ComboBox SelectedItem="{Binding BgmTransition}" HorizontalAlignment="Stretch" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}">
                         <x:String>project_default</x:String>
                         <x:String>instant</x:String>
@@ -109,8 +111,8 @@
                         <x:String>crossfade</x:String>
                     </ComboBox>
                 </StackPanel>
-                <StackPanel Spacing="4">
-                    <TextBlock Text="BGM Geçiş Süresi (sn, 0 = proje varsayılanı)" FontSize="11" Foreground="{DynamicResource MutedText}"/>
+                <StackPanel Spacing="2">
+                    <TextBlock Text="BGM Geçiş Süresi (sn, 0 = proje varsayılanı)" FontSize="10" Foreground="{DynamicResource MutedText}"/>
                     <NumericUpDown Minimum="0" Maximum="60" Increment="0.1" Value="{Binding BgmTransitionDurationSeconds}"/>
                 </StackPanel>
                 <!-- Faz 5 Dilim 2 fix turu 1: per-node fade/BedB/crossfade
