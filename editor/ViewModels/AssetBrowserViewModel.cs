@@ -22,11 +22,15 @@ namespace RowlEngine.Editor.ViewModels
         /// <summary>Faz 4: "__missing__" grup başlığı (seçilemez bilgi satırı).</summary>
         public bool IsMissingGroup => !IsMissing && RelativePath == "__missing__";
         /// <summary>
-        /// Faz 4: görsel küçük resmi (AssetBitmapCache; dizin/kayıp/desteklenmeyen
-        /// türde null → şablon tip etiketine düşer).
+        /// Faz 4: görsel küçük resmi (AssetBitmapCache; dizin/kayıp/görsel-dışı
+        /// türde null → şablon tip etiketine düşer). Uzantı kapısı decode
+        /// denemesinden ÖNCE çalışır (bozuk/görsel-dışı dosya Bitmap üretmemeli).
         /// </summary>
         public Avalonia.Media.Imaging.Bitmap? Thumbnail =>
-            IsDirectory || IsMissing ? null : Services.AssetBitmapCache.GetOrLoad(FullPath);
+            IsDirectory || IsMissing ||
+            !Services.MediaFormatCatalog.IsSupportedImageExtension(System.IO.Path.GetExtension(Name))
+                ? null
+                : Services.AssetBitmapCache.GetOrLoad(FullPath);
         public bool HasThumbnail => Thumbnail != null;
         public ObservableCollection<AssetNodeViewModel> Children { get; } = new();
 
@@ -397,9 +401,10 @@ namespace RowlEngine.Editor.ViewModels
                 }
             }
 
-            // Faz 4: durum satırı.
+            // Faz 4: durum satırı (budama sonrası görünür sayı).
+            int shownFiles = filterActive ? PruneFilteredNodes(AssetTree) : _visibleFileCount;
             StatusText = filterActive
-                ? $"{_visibleFileCount} sonuç"
+                ? $"{shownFiles} sonuç"
                 : $"{_visibleFileCount} öğe" +
                   (_hiddenFileCount > 0 ? $" · {_hiddenFileCount} sistem dosyası gizli" : string.Empty);
         }
@@ -552,7 +557,6 @@ namespace RowlEngine.Editor.ViewModels
 
         private void PopulateDirectoryNode(System.IO.DirectoryInfo dirInfo, string rootPath, ObservableCollection<AssetNodeViewModel> targetCollection, HashSet<string>? currentFiles = null)
         {
-            bool filterActive = FilterActive;
             foreach (var subDir in dirInfo.GetDirectories().OrderBy(d => d.Name))
             {
                 if (subDir.Name.StartsWith(".") || IgnoredDirectoryNames.Contains(subDir.Name)) continue;
@@ -561,10 +565,6 @@ namespace RowlEngine.Editor.ViewModels
                 var dirNode = new AssetNodeViewModel(subDir.Name, relPath, subDir.FullName, true, RefreshAssets);
 
                 PopulateDirectoryNode(subDir, rootPath, dirNode.Children, currentFiles);
-
-                // Faz 4: filtre aktifken görünür çocuk barındırmayan klasör budanır.
-                if (filterActive && dirNode.Children.Count == 0) continue;
-                if (filterActive) dirNode.IsExpanded = true;
 
                 targetCollection.Add(dirNode);
             }
@@ -578,16 +578,50 @@ namespace RowlEngine.Editor.ViewModels
                     _hiddenFileCount++;
                     continue;
                 }
-                if (!MatchesFilter(file.Name)) continue;
 
                 string relPath = System.IO.Path.GetRelativePath(rootPath, file.FullName);
                 var fileNode = new AssetNodeViewModel(file.Name, relPath, file.FullName, false, RefreshAssets);
-                if (filterActive) fileNode.IsExpanded = true;
                 currentFiles?.Add(file.FullName);
                 _visibleFileCount++;
 
                 targetCollection.Add(fileNode);
             }
+        }
+
+        /// <summary>
+        /// Faz 4 (düzeltme): filtre budaması SADECE görünümü kırpar; tarama
+        /// her zaman tam yapılır. Aksi halde filtre-dışı dosyalar o taramada
+        /// currentFiles'ta yer almaz ve kayıp-hayalet diye damgalanırdı.
+        /// Kayıp grubu budanmaz (uyarılar arama sırasında da görünür).
+        /// </summary>
+        /// <returns>Budama sonrası görünür gerçek dosya sayısı.</returns>
+        private int PruneFilteredNodes(ObservableCollection<AssetNodeViewModel> nodes)
+        {
+            int keptFiles = 0;
+            for (int i = nodes.Count - 1; i >= 0; i--)
+            {
+                var node = nodes[i];
+                if (node.IsMissingGroup) continue;
+                if (node.IsDirectory)
+                {
+                    int kept = PruneFilteredNodes(node.Children);
+                    if (kept == 0) nodes.RemoveAt(i);
+                    else
+                    {
+                        node.IsExpanded = true;
+                        keptFiles += kept;
+                    }
+                }
+                else if (MatchesFilter(node.Name))
+                {
+                    keptFiles++;
+                }
+                else
+                {
+                    nodes.RemoveAt(i);
+                }
+            }
+            return keptFiles;
         }
 
         /// <summary>

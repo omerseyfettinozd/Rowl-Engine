@@ -263,6 +263,9 @@ internal static class EditorHeadlessTestSuite
             // Test 35: UI Sadeleştirme Faz 3 — toolbar layout lock
             EditorToolbarLayoutTests.Run(mainVm);
 
+            // Test 36: UI Sadeleştirme Faz 4 — Assets redesign lock
+            EditorAssetsRedesignTests.Run(mainVm, testProjectRoot);
+
             Console.WriteLine("\n=======================================================");
             Console.WriteLine("ALL EDITOR HEADLESS TESTS PASSED SUCCESSFULLY!");
             Console.WriteLine("=======================================================\n");
