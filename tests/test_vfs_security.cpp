@@ -839,6 +839,79 @@ void test_vfs_security() {
     }
     TEST_PASS("#142 Corrupt packages surface a skip count on the context channel");
 
+    // #143: sticky failbit — a short read must not darken the whole package.
+    // Two-entry archive on one shared stream: read A (good), truncate the
+    // file so B short-reads (failbit+eof set on the shared stream), restore
+    // the file, read B again. Pre-fix the second B read returns empty: the
+    // stale failbit makes seekg a no-op and the good() gate fails. The fix
+    // (clear() before seekg in readEntry) makes B readable again, and the
+    // short-read entry itself still fails safely (contained, not masked).
+    {
+        const std::string stickyA = "sticky/a.txt";
+        const std::string stickyB = "sticky/b.txt";
+        const std::string payloadA("A-payload-123");
+        const std::string payloadB("B-payload-456");
+        const uint64_t stickyIndexOffset =
+            headerSize + payloadA.size() + payloadB.size();
+        Rowl::VFS::RowlPkgHeader stickyHeader{{'R', 'O', 'W', 'L'}, 1, 2, stickyIndexOffset};
+        Rowl::VFS::RowlPkgEntryRaw stickyEntryA{
+            fnv1a64(stickyA), static_cast<uint32_t>(stickyA.size()),
+            headerSize, payloadA.size(), payloadA.size(), 0};
+        Rowl::VFS::RowlPkgEntryRaw stickyEntryB{
+            fnv1a64(stickyB), static_cast<uint32_t>(stickyB.size()),
+            headerSize + payloadA.size(), payloadB.size(), payloadB.size(), 0};
+        const auto stickyPackage = testRoot / "sticky_failbit.rowlpkg";
+        const auto writeStickyFull = [&] {
+            std::ofstream output(stickyPackage, std::ios::binary | std::ios::trunc);
+            output.write(reinterpret_cast<const char*>(&stickyHeader), sizeof(stickyHeader));
+            output.write(payloadA.data(), static_cast<std::streamsize>(payloadA.size()));
+            output.write(payloadB.data(), static_cast<std::streamsize>(payloadB.size()));
+            output.write(reinterpret_cast<const char*>(&stickyEntryA), sizeof(stickyEntryA));
+            output.write(stickyA.data(), static_cast<std::streamsize>(stickyA.size()));
+            output.write(reinterpret_cast<const char*>(&stickyEntryB), sizeof(stickyEntryB));
+            output.write(stickyB.data(), static_cast<std::streamsize>(stickyB.size()));
+        };
+        writeStickyFull();
+        Rowl::VFS::RowlPkgDataSource stickySource(stickyPackage.string());
+        if (!stickySource.isValid()) {
+            std::cerr << "#143 setup: two-entry package rejected" << std::endl;
+            exit(1);
+        }
+        const auto readA = [&](const std::string& path) {
+            const auto bytes = stickySource.read(path);
+            return std::string(bytes.begin(), bytes.end());
+        };
+        if (readA(stickyA) != payloadA || readA(stickyB) != payloadB) {
+            std::cerr << "#143 setup: baseline reads failed" << std::endl;
+            exit(1);
+        }
+        // Poison: cut the file inside B's payload. B short-reads and sets
+        // failbit+eof on the shared stream.
+        std::error_code truncateEc;
+        std::filesystem::resize_file(stickyPackage, headerSize + payloadA.size(), truncateEc);
+        if (truncateEc) {
+            std::cerr << "#143 setup: resize_file failed: " << truncateEc.message() << std::endl;
+            exit(1);
+        }
+        if (!stickySource.read(stickyB).empty()) {
+            std::cerr << "#143: short read decoded instead of failing safely" << std::endl;
+            exit(1);
+        }
+        // Restore the file: B must be readable again on the same open stream.
+        writeStickyFull();
+        if (readA(stickyB) != payloadB) {
+            std::cerr << "#143: sticky failbit darkened the package after restore "
+                         "(short read leaked past its entry)"
+                      << std::endl;
+            exit(1);
+        }
+        if (readA(stickyA) != payloadA) {
+            std::cerr << "#143: neighboring entry unreadable after restore" << std::endl;
+            exit(1);
+        }
+    }
+    TEST_PASS("#143 Short reads stay contained; shared stream recovers after restore");
+
     // Windows CI stalls for minutes deleting this tree (~140 small files, one
     // file symlink, one 128 MB fixture), hanging the suite with no output;
     // the same delete is instant elsewhere. Prime suspects, ranked: (1) AV /

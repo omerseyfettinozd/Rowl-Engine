@@ -77,6 +77,14 @@ public:
     // Movement query
     bool isMoving() const { return isPanning() || isZooming() || isShaking(); }
 
+    // #160: stall diagnosis. Zero/negative-dt upkeep (editor idle Step(0))
+    // never advances tween timers, so a tween started idle would sit with
+    // isMoving()==true forever and no completion signal. update() counts
+    // consecutive no-progress steps while a tween is in flight; hosts read
+    // the edge-triggered diagnosis via Engine::step's context signal.
+    uint64_t stalledStepCount() const { return m_zeroDtStallSteps; }
+    bool isTweenStalled() const { return m_zeroDtStallSteps > 0; }
+
     // Update with delta time (decays shake and advances tweens)
     void update(float dt);
 
@@ -132,6 +140,9 @@ private:
     float m_shakeOffsetX = 0.0f;
     float m_shakeOffsetY = 0.0f;
     bool m_reducedMotion = false;
+    // #160: consecutive update() calls with dt<=0 while isMoving(). Reset
+    // on any positive-dt update and on reset(). Saturates, never wraps.
+    uint64_t m_zeroDtStallSteps = 0;
 };
 
 } // namespace Rowl::Render

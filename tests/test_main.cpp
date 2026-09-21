@@ -156,6 +156,7 @@ int main(int argc, char* argv[]) {
     test_converter_provenance();
     test_camera_and_transition_pipeline();
     test_scene_update_rollback();
+    test_render_transition_fixes();
     test_native_performance_benchmarks(benchmarkJsonPath);
     test_character_layer_benchmarks();
     test_golden_project_benchmarks(goldenJsonPath);

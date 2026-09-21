@@ -56,10 +56,27 @@ public:
     uint64_t getSnapshotCaptureCount() const { return m_snapshotCaptureCount; }
 
     bool isTransitionActive() const { return m_type != TransitionType::None; }
+    // #162: stage-then-commit sonrası gözlemlenebilirlik — başarısız capture
+    // eski snapshot'a dokunmadığı için bu bayrak lock-testin pinidir.
+    bool hasSnapshot() const { return m_snapshotTexture != nullptr; }
     TransitionType getType() const { return m_type; }
     float getProgress() const { return m_progress; } // 0.0f to 1.0f
     float getDuration() const { return m_duration; }
     float getElapsed() const { return m_elapsed; }
+
+    // #163: başarısız sahne güncellemesi, update'le GELEN (önceden uçan)
+    // geçişin snapshot'ını değiştirmişse descriptor'u geri yazar. Doku
+    // Engine tarafında güncel kareden yeniden yakalanır (sahnenin geri
+    // kalanı zaten restore edilmiştir); yakalama düşerse Engine abort eder.
+    // Tür/doku tutarlılığı çağıranın sorumluluğundadır.
+    void restoreTransitionState(TransitionType type, float durationSeconds, float elapsedSeconds) {
+        m_type = type;
+        m_duration = durationSeconds;
+        m_elapsed = elapsedSeconds;
+        m_progress = (durationSeconds > 0.0f)
+                         ? std::clamp(elapsedSeconds / durationSeconds, 0.0f, 1.0f)
+                         : 1.0f;
+    }
 
     void update(float dt);
 

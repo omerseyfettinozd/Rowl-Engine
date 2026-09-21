@@ -214,7 +214,16 @@ void Camera2D::shakePreset(const std::string& presetName, float intensityMultipl
 }
 
 void Camera2D::update(float dt) {
-    if (!std::isfinite(dt) || dt <= 0.0f) return;
+    // #160: dt<=0 advances nothing below — count the stall while a tween
+    // is in flight instead of freezing silently. Positive-dt updates clear
+    // the count, so only a real zero-dt storm reads as stalled.
+    if (!std::isfinite(dt) || dt <= 0.0f) {
+        if (dt <= 0.0f && isMoving() && m_zeroDtStallSteps < UINT64_MAX) {
+            ++m_zeroDtStallSteps;
+        }
+        return;
+    }
+    m_zeroDtStallSteps = 0;
 
     // Advance pan tween
     if (m_panTimer < m_panDuration) {
@@ -333,6 +342,7 @@ void Camera2D::reset() {
     m_shakeDirY = 1.0f;
     m_shakeOffsetX = 0.0f;
     m_shakeOffsetY = 0.0f;
+    m_zeroDtStallSteps = 0;
 }
 
 } // namespace Rowl::Render

@@ -873,6 +873,29 @@ void Engine::updateSceneFromComponents(const nlohmann::json& root,
     // #20/#21: canli script kumesinin tam goruntusu (id + kaynak +
     // durum + bayrak). unload geri alinamaz oldugu icin kaynak sarttir.
     const auto previousScripts = captureScriptSnapshot();
+    // #163 (daraltilmis artik): pencere-FX snapshot'i. screen_fx bilesenleri
+    // post-fazda (applyScreenFxComponent) uygulanir; sonraki ses/script fazi
+    // firlatirsa catch pencere durumunu da geri alir. Gecis dokusu kurtari-
+    // lamaz (degistiren capture eskisini imha eder), o yuzden descriptor
+    // karsilastirilir: farkliysa yetim kalan abort edilir, ayniysa dokunulmaz.
+    const auto previousScreenFx =
+        m_window ? m_window->getScreenFxState() : Rowl::Render::Window::ScreenFxState{};
+    const bool previousTransitionActive =
+        m_window && m_window->getTransitionManager()
+            ? m_window->getTransitionManager()->isTransitionActive()
+            : false;
+    const auto previousTransitionType =
+        m_window && m_window->getTransitionManager()
+            ? m_window->getTransitionManager()->getType()
+            : Rowl::Render::TransitionType::None;
+    const float previousTransitionDuration =
+        m_window && m_window->getTransitionManager()
+            ? m_window->getTransitionManager()->getDuration()
+            : 0.0f;
+    const float previousTransitionElapsed =
+        m_window && m_window->getTransitionManager()
+            ? m_window->getTransitionManager()->getElapsed()
+            : 0.0f;
     const auto restorePreviousState = [&] {
         m_activeCharacters = previousCharacters;
         m_activeDialogues = previousDialogues;
@@ -915,6 +938,25 @@ void Engine::updateSceneFromComponents(const nlohmann::json& root,
         applyCameraSnapshot(previousCamera);
         applyAudioSnapshot(previousAudio);
         applyScriptSnapshot(previousScripts, replayEntryEffects);
+        // #163 (daraltilmis artik): pencere-FX en sonda — kamera/ses/script
+        // restore'undan sonra, hicbir restore'un FX'e ihtiyaci yok. Skalerler
+        // birebir geri yazilir; basarisiz update'in baslattigi/deistirdigi
+        // gecis abort edilir (dokusu kurtarilamaz), degismemisse dokunulmaz.
+        if (m_window) {
+            m_window->restoreScreenFxState(previousScreenFx);
+            if (auto* tm = m_window->getTransitionManager()) {
+                const bool descriptorChanged =
+                    tm->isTransitionActive() != previousTransitionActive ||
+                    tm->getType() != previousTransitionType ||
+                    tm->getDuration() != previousTransitionDuration ||
+                    tm->getElapsed() != previousTransitionElapsed;
+                if (descriptorChanged) {
+                    ROWL_LOG_WARN("Failed scene update touched window transition; "
+                                  "aborting the orphaned transition");
+                    tm->stopTransition();
+                }
+            }
+        }
     };
     try {
         nlohmann::json comps = root;
@@ -1893,6 +1935,22 @@ void Engine::step(float deltaTime) {
                 case SDL_EVENT_WINDOW_RESTORED:
                     m_windowAudioSuspended = false;
                     break;
+                // #164: render-cihaz olaylari artik dispatcher'dan global
+                // kuyruga duser (eskiden sessiz dusuyorlardi). RESET'ler
+                // kurtarilabilir: doku onbellegi + MSDF bastan kurulur, host
+                // sinyalsiz devam eder (ses-cihazi rebuild precedent'i).
+                // LOST kurtarilamaz: renderer yeniden kurulmadan sonraki
+                // kareler tanımsızdır, host GetLastResultCode ile gorur.
+                case SDL_EVENT_RENDER_TARGETS_RESET:
+                case SDL_EVENT_RENDER_DEVICE_RESET:
+                    m_window->rebuildRenderResources();
+                    break;
+                case SDL_EVENT_RENDER_DEVICE_LOST:
+                    ROWL_LOG_WARN("Render device lost; recreate the renderer");
+                    m_context->setError(Rowl::Core::RuntimeErrorCode::IoError,
+                                        "Render device lost; recreate the renderer",
+                                        "step", "");
+                    break;
                 default:
                     break;
             }
@@ -1901,6 +1959,30 @@ void Engine::step(float deltaTime) {
     }
 
     m_window->update(deltaTime);
+
+    // #160: zero-dt upkeep (editor idle Step(0), clamped NaN/negatives) never
+    // advances camera tween timers. The tween genuinely cannot progress, so
+    // the first stalled step stamps an edge-triggered StateError the host can
+    // read via GetLastResultCode — frozen vs progressing becomes observable
+    // instead of isMoving() sitting at 1 forever with no diagnosis. The latch
+    // clears when the tween moves again; per-step stamping would drown the
+    // idle log and churn last-result every 500ms.
+    if (const auto* cam = m_window->getCamera()) {
+        if (deltaTime <= 0.0f && cam->isTweenStalled()) {
+            if (!m_cameraStallSignalled) {
+                m_cameraStallSignalled = true;
+                ROWL_LOG_WARN("Camera tween stalled: Step(0) while a pan/zoom/shake "
+                              "is in flight advances nothing; drive Step with dt>0 "
+                              "to complete it");
+                m_context->setError(Rowl::Core::RuntimeErrorCode::StateError,
+                                    "Camera tween stalled: zero-dt steps while a tween "
+                                    "is in flight never advance it",
+                                    "step", "");
+            }
+        } else {
+            m_cameraStallSignalled = false;
+        }
+    }
 
     // MS-6: pause freezes story simulation (typewriter, auto-advance,
     // scripts, entities). Rendering, audio upkeep, and the menu overlay below
@@ -2093,8 +2175,15 @@ void Engine::setAutoAdvanceDelayOffset(float seconds) {
 }
 
 void Engine::startTransition(const std::string& kind, float durationSeconds, const std::string& colorHex) {
-    if (m_window) {
-        m_window->startTransition(kind, durationSeconds, colorHex);
+    if (!m_window) return;
+    // #162: yakalama-başarısızlığı artık host-görünür. Kapı-reddi/coalesce
+    // true döndüğü için D6-#147 sessizliği bozulmaz; SADECE snapshot'sız
+    // başlatma girişimi IoError damgalar (void imza korunur).
+    if (!m_window->startTransition(kind, durationSeconds, colorHex)) {
+        ROWL_LOG_WARN("startTransition: snapshot capture failed, no transition started");
+        m_context->setError(Rowl::Core::RuntimeErrorCode::IoError,
+                            "Transition snapshot capture failed; no transition started",
+                            "start_transition", "");
     }
 }
 

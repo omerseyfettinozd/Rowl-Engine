@@ -146,7 +146,11 @@ bool TransitionManager::captureSnapshot(SDL_Surface* surface, SDL_Renderer* rend
     // D6-#147 kanıt sayacı: her readback girişimi sayılır (Window kapıları
     // geçersiz girdiyi buraya hiç ulaştırmaz).
     ++m_snapshotCaptureCount;
-    cleanupSnapshot();
+    // #162: stage-then-commit. Eski kod önce cleanupSnapshot() çağırıp sonra
+    // fallible readback'e giriyordu: renderer null / readback fail / texture
+    // fail durumunda hem false dönüyor hem de o ana kadarki canlı kares.
+    // metni imha ediyordu. Artık taze doku bir yerelde kurulur, SADECE başarıda
+    // commitlenir; başarısızlık eski snapshot'a dokunmaz.
     if (!renderer) return false;
 
     SDL_Surface* src = surface;
@@ -156,19 +160,27 @@ bool TransitionManager::captureSnapshot(SDL_Surface* surface, SDL_Renderer* rend
         src = tempSurface;
     }
 
-    if (!src) return false;
-
-    m_snapshotTexture = SDL_CreateTextureFromSurface(renderer, src);
-    if (m_snapshotTexture) {
-        m_snapshotWidth = src->w;
-        m_snapshotHeight = src->h;
+    SDL_Texture* freshTexture = nullptr;
+    int freshWidth = 0;
+    int freshHeight = 0;
+    if (src) {
+        freshTexture = SDL_CreateTextureFromSurface(renderer, src);
+        if (freshTexture) {
+            freshWidth = src->w;
+            freshHeight = src->h;
+        }
     }
 
     if (tempSurface) {
         SDL_DestroySurface(tempSurface);
     }
 
-    return m_snapshotTexture != nullptr;
+    if (!freshTexture) return false;
+    cleanupSnapshot();
+    m_snapshotTexture = freshTexture;
+    m_snapshotWidth = freshWidth;
+    m_snapshotHeight = freshHeight;
+    return true;
 }
 
 void TransitionManager::renderTransition(SDL_Renderer* renderer, const ViewportMetrics& metrics) {

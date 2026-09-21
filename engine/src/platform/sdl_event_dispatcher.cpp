@@ -19,6 +19,15 @@ bool isGlobalEvent(uint32_t type) {
         case SDL_EVENT_AUDIO_DEVICE_ADDED:
         case SDL_EVENT_AUDIO_DEVICE_REMOVED:
         case SDL_EVENT_AUDIO_DEVICE_FORMAT_CHANGED:
+        // #164: RENDER_* cihaz olaylari cihaza aittir, pencereye degil —
+        // ses-cihazi olaylari gibi global kuyruga duser. Eskiden
+        // targetWindowId'de eslesmeyip routeEvent:79'da sessiz dusuyorlardi;
+        // global olduklarindan beri Engine::step tuketir. (Offscreen
+        // bagisikligi ele almadan degil ulastirilamazliktandi; gorunur/
+        // embedded hedef bu yolla rebuild + sinyal alir.)
+        case SDL_EVENT_RENDER_TARGETS_RESET:
+        case SDL_EVENT_RENDER_DEVICE_RESET:
+        case SDL_EVENT_RENDER_DEVICE_LOST:
         case SDL_EVENT_WINDOW_MINIMIZED:
         case SDL_EVENT_WINDOW_MAXIMIZED:
         case SDL_EVENT_WINDOW_RESTORED:

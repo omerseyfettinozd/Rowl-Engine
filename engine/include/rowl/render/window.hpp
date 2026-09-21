@@ -276,6 +276,12 @@ public:
 
     SDL_Texture* loadTexture(const std::string& filename);
     void clearTextureCache();
+    // #164: render-cihaz reset kurtarma. TARGETS_RESET/DEVICE_RESET sonrasi
+    // VRAM'daki her doku suphelidir: doku onbellegi + MSDF atlas/shader durumu
+    // bastan kurulur (init re-entrant'tir: giriste shutdown). Sayac kurtarma
+    // gozlemlenebilirligini kilit-testine verir.
+    void rebuildRenderResources();
+    uint64_t getRenderDeviceRebuildCount() const { return m_renderDeviceRebuildCount; }
     // A3-tur6 (hygiene): remount, negatif-hükümleri (missing + budget-dışı +
     // font-miss) geçersiz kılar — mount-öncesi miss, mount-sonrası zehirli
     // kalmasın diye. Pozitif önbelleklere DOKUNMAZ (dar invalidasyon).
@@ -318,7 +324,9 @@ public:
     Camera2D* getCamera() const { return m_camera.get(); }
     TransitionManager* getTransitionManager() const { return m_transitionManager.get(); }
 
-    void startTransition(const std::string& kind, float durationSeconds, const std::string& colorHex = "");
+    // #162: yakalama-başarısızlığında false — kapı-reddi/coalesce sessiz
+    // no-op BAŞARIDIR (true, D6-#147 semantiği korunur).
+    bool startTransition(const std::string& kind, float durationSeconds, const std::string& colorHex = "");
     bool isTransitionActive() const;
 
     // Screen Visual FX Pipeline (Tint, Flash, Vignette Post-Process)
@@ -336,6 +344,34 @@ public:
     void setVignette(float intensity, float radius = 0.75f, const std::string& colorHex = "#000000");
     float getVignetteIntensity() const;
     bool isVignetteActive() const;
+
+    // #163: pencere-FX snapshot çifti. Başarısız sahne güncellemesi ScreenFx
+    // skalelerini birebir geri yazar (transition/flash/tint/vignette); geçiş
+    // descriptor'u Engine tarafında karşılaştırılıp yetim kalan abort edilir.
+    struct ScreenFxState {
+        bool flashActive = false;
+        uint8_t flashR = 255;
+        uint8_t flashG = 255;
+        uint8_t flashB = 255;
+        float flashDuration = 0.0f;
+        float flashElapsed = 0.0f;
+        float flashIntensity = 1.0f;
+
+        bool hasTint = false;
+        uint8_t tintR = 0;
+        uint8_t tintG = 0;
+        uint8_t tintB = 0;
+        float tintOpacity = 0.0f;
+
+        bool vignetteEnabled = false;
+        float vignetteIntensity = 0.0f;
+        float vignetteRadius = 0.75f;
+        uint8_t vignetteR = 0;
+        uint8_t vignetteG = 0;
+        uint8_t vignetteB = 0;
+    };
+    ScreenFxState getScreenFxState() const { return m_screenFx; }
+    void restoreScreenFxState(const ScreenFxState& state);
 
     void update(float dt);
 
@@ -364,6 +400,8 @@ private:
     SDL_GPURenderState* m_msdfRenderState = nullptr;
     std::unique_ptr<MsdfRenderer> m_msdfRenderer;
     SDL_Texture* m_msdfAtlasTexture = nullptr;
+    // #164: render-cihaz reset sonrasi kurtarma sayaci (TARGETS/DEVICE_RESET).
+    uint64_t m_renderDeviceRebuildCount = 0;
     // A3-tur2 (log-only): sessiz MSDF kapilarinin tek-sefer INFO bayragi.
     bool m_msdfSkipReasonLogged = false;
     std::unordered_map<std::string, std::unique_ptr<FontRenderer>> m_buttonFontCache;
@@ -407,28 +445,6 @@ private:
                               float bgOpacity) const;
     void invalidateFrameCache() { m_frameCacheValid = false; }
 
-    struct ScreenFxState {
-        bool flashActive = false;
-        uint8_t flashR = 255;
-        uint8_t flashG = 255;
-        uint8_t flashB = 255;
-        float flashDuration = 0.0f;
-        float flashElapsed = 0.0f;
-        float flashIntensity = 1.0f;
-
-        bool hasTint = false;
-        uint8_t tintR = 0;
-        uint8_t tintG = 0;
-        uint8_t tintB = 0;
-        float tintOpacity = 0.0f;
-
-        bool vignetteEnabled = false;
-        float vignetteIntensity = 0.0f;
-        float vignetteRadius = 0.75f;
-        uint8_t vignetteR = 0;
-        uint8_t vignetteG = 0;
-        uint8_t vignetteB = 0;
-    };
     ScreenFxState m_screenFx;
     SDL_Texture* m_vignetteTexture = nullptr;
     void ensureVignetteTexture();

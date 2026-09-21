@@ -58,6 +58,7 @@ add_executable(rowl_tests
     test_save_lock.cpp
     test_save_slot_concurrency.cpp
     test_scene_update_rollback.cpp    test_numeric_guards.cpp
+    test_render_transition_fixes.cpp
     test_lua_hardening.cpp
     test_single_engine_image.cpp
     test_demo_first_light.cpp

@@ -623,15 +623,22 @@ void Window::setInputHandler(std::function<void(const Rowl::Platform::RuntimeInp
     m_inputHandler = std::move(handler);
 }
 
-void Window::startTransition(const std::string& kind, float durationSeconds, const std::string& colorHex) {
-    if (!m_transitionManager) return;
+bool Window::startTransition(const std::string& kind, float durationSeconds, const std::string& colorHex) {
+    if (!m_transitionManager) return true;
     // D6-#147: önce doğrula, sonra snapshot — bilinmeyen tür/kötü süre SDL
     // readback'e mal olmaz; erken aynı-tür tetikleme birleştirilir. Geçersiz
     // girdi sürmekte olan geçişi de öldürmez (eski davranış durdururdu).
-    if (!m_transitionManager->canStartTransition(kind, durationSeconds)) return;
-    if (m_transitionManager->shouldCoalesceRetrigger(kind)) return;
-    m_transitionManager->captureSnapshot(m_offscreenSurface, m_sdlRenderer);
+    // Kapı-reddi sessiz no-op BAŞARIDIR (true): D6-#147 kilitleri geçersiz
+    // spam sonrası OK bekler. SADECE yakalama-başarısızlığı false döner
+    // (#162: bool yoksayma + snapshot'sız başlatma deliği).
+    if (!m_transitionManager->canStartTransition(kind, durationSeconds)) return true;
+    if (m_transitionManager->shouldCoalesceRetrigger(kind)) return true;
+    if (!m_transitionManager->captureSnapshot(m_offscreenSurface, m_sdlRenderer)) {
+        ROWL_LOG_WARN("Transition snapshot capture failed; transition not started");
+        return false;
+    }
     m_transitionManager->startTransitionFromKind(kind, durationSeconds, colorHex);
+    return true;
 }
 
 bool Window::isTransitionActive() const {
@@ -750,6 +757,30 @@ float Window::getVignetteIntensity() const {
 
 bool Window::isVignetteActive() const {
     return m_screenFx.vignetteEnabled && m_screenFx.vignetteIntensity > 0.001f;
+}
+
+void Window::restoreScreenFxState(const ScreenFxState& state) {
+    // #163: skaler restore birebirdir. Vignette bake'i radius'a gomulu
+    // oldugu icin farkli radius'lu bayat bake birakilamaz — imha edilir,
+    // sonraki renderScreenEffects'te restore'lu radius'tan lazy rebake olur.
+    // Renk/yogunluk zaten canli modlarla okunur, doku gerektirmez.
+    const bool radiusChanged = state.vignetteRadius != m_screenFx.vignetteRadius;
+    m_screenFx = state;
+    if (radiusChanged && m_vignetteTexture) {
+        SDL_DestroyTexture(m_vignetteTexture);
+        m_vignetteTexture = nullptr;
+    }
+}
+
+void Window::rebuildRenderResources() {
+    // #164: cihaz reseti sonrasi VRAM suphelidir — doku onbellegi bosaltilir,
+    // GPU-MSDF durumu bastan kurulur (init giriste shutdown cagirir,
+    // offscreen'de log-once'li skip). Kurtarma best-effort'tur: basari
+    // INFO, sayac artar; DEVICE_LOST (kurtarilamaz) bu yola girmez.
+    clearTextureCache();
+    initGpuMsdfRenderer();
+    ++m_renderDeviceRebuildCount;
+    ROWL_LOG_INFO("Render device resources rebuilt after reset event");
 }
 
 void Window::ensureVignetteTexture() {

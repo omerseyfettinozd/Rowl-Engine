@@ -437,6 +437,11 @@ private:
     mutable bool m_pauseSlotCacheValid = false;
     mutable std::array<bool, 10> m_pauseSlotPresent{};
     bool m_windowAudioSuspended = false;
+    // #160: stall-signal edge latch. Set on the first zero-dt step observed
+    // while a camera tween is in flight, cleared when the tween progresses
+    // or ends — the context error fires once per stall episode, not per
+    // idle step.
+    bool m_cameraStallSignalled = false;
     float m_autoAdvanceElapsed = 0.0f;
     float m_textSpeedMultiplier = 1.0f;
     float m_autoAdvanceDelayOffset = 0.0f;

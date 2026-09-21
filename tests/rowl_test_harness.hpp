@@ -184,3 +184,4 @@ void test_rc_soak_and_data_safety();
 void test_save_slot_and_package_fuzz();
 void test_camera_and_transition_pipeline();
 void test_scene_update_rollback();  // #20/#21: scene-update atomic-rollback hybrid probe
+void test_render_transition_fixes();  // #160/#162/#163/#164: render/transition lock tests
