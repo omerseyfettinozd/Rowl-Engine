@@ -51,6 +51,13 @@ std::optional<uint32_t> targetWindowId(const SDL_Event& event) {
             return event.wheel.windowID;
         case SDL_EVENT_TEXT_INPUT:
             return event.text.windowID;
+        case SDL_EVENT_TEXT_EDITING:
+            // #60: composition olayları hedef pencere taşır (SDL_events.h:
+            // edit.windowID) ama casesiz routeEvent:87-88'de nullopt ile
+            // düşüyordu — CJK/composition uçtan-uca imkânsızdı.
+            return event.edit.windowID;
+        case SDL_EVENT_TEXT_EDITING_CANDIDATES:
+            return event.edit_candidates.windowID;
         case SDL_EVENT_FINGER_DOWN:
         case SDL_EVENT_FINGER_UP:
         case SDL_EVENT_FINGER_MOTION:

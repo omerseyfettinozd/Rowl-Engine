@@ -24,6 +24,12 @@
 #include <unordered_map>
 #include <system_error>
 
+// #65: TARGET_OS_IPHONE ayrımı yalnızca Apple derlemesinde anlamlıdır;
+// diğer platformlarda bu başlık yoktur.
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+#endif
+
 #ifndef ROWL_SHADER_DIR
 #define ROWL_SHADER_DIR ""
 #endif
@@ -430,7 +436,23 @@ bool Window::initializeEmbedded(void* nativeHandle, uint32_t width, uint32_t hei
 #if defined(_WIN32)
     SDL_SetPointerProperty(props, SDL_PROP_WINDOW_CREATE_WIN32_HWND_POINTER, nativeHandle);
 #elif defined(__APPLE__)
-    SDL_SetPointerProperty(props, SDL_PROP_WINDOW_CREATE_COCOA_WINDOW_POINTER, nativeHandle);
+#if defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE
+    // #65: iOS gömme desteklenmiyor — UIView* bir UIWindowScene yaşam-döngüsü
+    // ister (Faz 6/7 mobil kapısı, docs/PLATFORM_SUPPORT.md). Sessiz
+    // yanlış-pencere/success yerine açık hata (aşağıdaki #else deseniyle
+    // aynı fail-closed: lease iade edilir, false dönülür).
+    SDL_DestroyProperties(props);
+    ROWL_LOG_ERROR("initializeEmbedded: iOS embedding is not supported "
+                   "(Faz 6/7 mobile gate; UIView* requires a UIWindowScene lifecycle).");
+    Rowl::Platform::SdlSubsystemLease::release(SDL_INIT_VIDEO);
+    m_videoLeaseHeld = false;
+    return false;
+#else
+    // #56/#63: sözleşme macOS'ta NSView* diyor (c_api.h:304); NSWindow
+    // bekleyen slota değil, NSView bekleyen slota besle.
+    ROWL_LOG_INFO("initializeEmbedded: embedding macOS NSView* via COCOA_VIEW_POINTER");
+    SDL_SetPointerProperty(props, SDL_PROP_WINDOW_CREATE_COCOA_VIEW_POINTER, nativeHandle);
+#endif
 #elif defined(__linux__)
     // Faz 4.5 Dilim 4: Linux desktop embeds X11 only. The previous naked
     // '#else' X11-assumption is gone on purpose: unknown platforms must fail
@@ -621,6 +643,20 @@ bool Window::mapPhysicalToVirtual(float physicalX, float physicalY,
 
 void Window::setInputHandler(std::function<void(const Rowl::Platform::RuntimeInputEvent&)> handler) {
     m_inputHandler = std::move(handler);
+}
+
+void Window::setTextInputEnabled(bool enabled) {
+    // #60: kenar-tetiklemeli — SDL çağrısı yalnızca durum değişiminde.
+    // SDL, metin girdisi enable edilmeden TEXT_INPUT/TEXT_EDITING üretmez
+    // (varsayılan kapalı), bu yüzden yönlendirilen yol üretimde ölüydü.
+    if (enabled == m_textInputEnabled) return;
+    m_textInputEnabled = enabled;
+    if (!m_sdlWindow) return;
+    if (enabled) {
+        SDL_StartTextInput(m_sdlWindow);
+    } else {
+        SDL_StopTextInput(m_sdlWindow);
+    }
 }
 
 bool Window::startTransition(const std::string& kind, float durationSeconds, const std::string& colorHex) {
@@ -1075,6 +1111,24 @@ void Window::pollEvents(bool& outShouldQuit) {
                     Rowl::Platform::RuntimeInputEvent::Type::TextInput};
                 input.text = event.text.text;
                 if (m_inputHandler) m_inputHandler(input);
+                break;
+            }
+            case SDL_EVENT_TEXT_EDITING: {
+                // #60: composition never routed (dispatcher nullopt-drop).
+                // Null text carries nothing observable and stays unconsumed.
+                if (event.edit.text == nullptr) break;
+                Rowl::Platform::RuntimeInputEvent input{
+                    Rowl::Platform::RuntimeInputEvent::Type::TextEditing};
+                input.text = event.edit.text;
+                input.compositionStart = event.edit.start;
+                input.compositionLength = event.edit.length;
+                if (m_inputHandler) m_inputHandler(input);
+                break;
+            }
+            case SDL_EVENT_TEXT_EDITING_CANDIDATES: {
+                // #60: aday listesi bilinçli tüketilir (iz bırakır, olay
+                // taşımaz) — composition metni TEXT_EDITING bacağından akar.
+                ROWL_LOG_TRACE("Window consumed TEXT_EDITING_CANDIDATES without payload mapping");
                 break;
             }
             case SDL_EVENT_FINGER_MOTION: {

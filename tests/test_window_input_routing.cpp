@@ -238,7 +238,7 @@ void test_window_input_routing_release_motion_wheel_text() {
         for (const auto& event : seen) {
             if (event.type != type) continue;
             if (type == Type::KeyUp && event.key != key) continue;
-            if (type == Type::TextInput && event.text != text) continue;
+            if ((type == Type::TextInput || type == Type::TextEditing) && event.text != text) continue;
             if ((type == Type::PointerUp || type == Type::PointerMotion || type == Type::Scroll) &&
                 (std::abs(event.x - x) > 0.001f || std::abs(event.y - y) > 0.001f)) continue;
             return true;
@@ -411,6 +411,34 @@ void test_window_input_routing_release_motion_wheel_text() {
         }
     }
 
+    // 9. TEXT_EDITING (#60): composition text + selection rides along.
+    {
+        SDL_Event event{};
+        event.type = SDL_EVENT_TEXT_EDITING;
+        event.edit.windowID = wid;
+        event.edit.text = "ni";
+        event.edit.start = 0;
+        event.edit.length = 2;
+        pushOrDie(event, "TEXT_EDITING");
+        seen.clear();
+        step();
+        if (!contains(Type::TextEditing, 0.0f, 0.0f, 0, "ni")) {
+            std::cerr << "Synthetic TEXT_EDITING was not consciously consumed" << std::endl;
+            exit(1);
+        }
+        bool selectionOk = false;
+        for (const auto& e : seen) {
+            if (e.type == Type::TextEditing && e.text == "ni" &&
+                e.compositionStart == 0 && e.compositionLength == 2) {
+                selectionOk = true;
+            }
+        }
+        if (!selectionOk) {
+            std::cerr << "TEXT_EDITING composition selection did not ride along" << std::endl;
+            exit(1);
+        }
+    }
+
     window.shutdown();
-    TEST_PASS("Releases, motion, wheel and text are consciously consumed (#16)");
+    TEST_PASS("Releases, motion, wheel, text and composition are consciously consumed (#16/#60)");
 }

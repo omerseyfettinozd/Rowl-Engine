@@ -68,7 +68,12 @@ struct RuntimeInputEvent {
         KeyUp,
         PointerMotion,
         Scroll,
-        TextInput
+        TextInput,
+        // #60: IME composition kelime dağarcığı. TEXT_EDITING /
+        // TEXT_EDITING_CANDIDATES dispatcher'da düşüyordu (composition
+        // bacağı); committed-text (TextInput) gibi bilinçli tüketilir,
+        // hikâye eylemi taşımaz (bkz. handleRuntimeInput).
+        TextEditing
     };
 
     Type type;
@@ -80,7 +85,12 @@ struct RuntimeInputEvent {
     /// Meaningful only for KeyUp: the released SDL keycode.
     uint32_t key = 0;
     /// Meaningful only for TextInput: the committed UTF-8 text.
+    /// Meaningful only for TextEditing: the in-progress composition text.
     std::string text;
+    /// Meaningful only for TextEditing: SDL composition selection
+    /// (start/length, -1 when unset).
+    int32_t compositionStart = -1;
+    int32_t compositionLength = -1;
 };
 
 /// Minimum host boundary shared by desktop and future mobile shells. Keep this
@@ -108,6 +118,12 @@ public:
     virtual std::vector<RuntimeInputEvent> takeInputEvents();
     virtual RenderSurface renderSurface() const;
     virtual AudioFocus audioFocus() const;
+    /// #60: IME composition isteği. Varsayılan kapalıdır (masaüstü
+    /// hostsuz akış etkilenmez); metin-alanı olan bir host true'ya
+    /// çevirir, Engine her step'te Window metin-girdisini buna göre
+    /// açıp kapatır. Faz 4.5 Dilim 4 konvansiyonu: default'lu sanal,
+    /// mevcut hostlar kaynak-uyumlu kalır.
+    virtual bool wantsTextInput() const { return false; }
 };
 
 /// Behavior-preserving desktop/default adapter. SDL window events continue to

@@ -207,11 +207,12 @@ void Engine::handleRuntimeInput(const Rowl::Platform::RuntimeInputEvent& event) 
         case Type::PointerMotion:
         case Type::Scroll:
         case Type::TextInput:
+        case Type::TextEditing:
             // #16: consciously consumed at the Window boundary (the input
             // handler fires observably) but carrying no story action:
-            // releases, hover/drag positions, scroll deltas and committed
-            // text must never advance dialogue, toggle pause, rewind, or
-            // touch save slots.
+            // releases, hover/drag positions, scroll deltas, committed
+            // text and IME composition must never advance dialogue,
+            // toggle pause, rewind, or touch save slots.
             break;
     }
 }
@@ -1898,6 +1899,10 @@ void Engine::step(float deltaTime) {
         for (const auto& event : platformHost->takeInputEvents()) {
             handleRuntimeInput(event);
         }
+        // #60: IME composition için SDL metin-girdisi host isteğine göre
+        // açılır/kapanır (Window içi kenar-tetiklemeli; hostsuz akışta
+        // wantsTextInput() false döner, durum değişmez).
+        m_window->setTextInputEnabled(platformHost->wantsTextInput());
     }
 
     bool shouldQuit = false;

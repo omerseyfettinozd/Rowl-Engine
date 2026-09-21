@@ -196,6 +196,13 @@ public:
 
     void setInputHandler(std::function<void(const Rowl::Platform::RuntimeInputEvent&)> handler);
 
+    /// #60: IME metin-girdisi anahtarı (kenar-tetiklemeli). Engine her
+    /// step'te host'un wantsTextInput() değerini buraya yansıtır; SDL
+    /// TEXT_INPUT/TEXT_EDITING olayı enable edilmeden hiç üretilmez.
+    /// Penceresiz (offscreen/null) durumda yalnızca durum kaydedilir.
+    void setTextInputEnabled(bool enabled);
+    bool isTextInputEnabled() const noexcept { return m_textInputEnabled; }
+
     /// Dispatcher id this window consumes via pollEvents (0 when the window
     /// owns no dispatch registration: offscreen or uninitialized). Public so
     /// headless-capable tests can target synthetic SDL events at a real
@@ -424,6 +431,8 @@ private:
     bool m_isEmbedded      = false; // true → rendering into host control
     bool m_isOffscreen     = false; // true → rendering to RGBA32 surface
     std::function<void(const Rowl::Platform::RuntimeInputEvent&)> m_inputHandler;
+    // #60: SDL metin-girdisi enable durumu (kenar-tetiklemeli Start/Stop).
+    bool m_textInputEnabled = false;
     std::unordered_map<int64_t, std::pair<float, float>> m_touchStarts;
     Rowl::VFS::VFSManager* m_vfs = nullptr;
     std::shared_ptr<Rowl::VFS::VFSManager> m_ownedVfs;

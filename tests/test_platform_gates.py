@@ -9,6 +9,13 @@ Asserts the locked structural contracts that behavior tests cannot pin:
   2. PlatformHost exposes no pure-virtual ('= 0') members.
   3. Touch input is single-path: the dead processSdlEvent switch is absent.
   4. The Wayland rejection error path exists (diagnostic, not crash/silent).
+  5. (#56/#63) the macOS embed feeds NSView* into COCOA_VIEW_POINTER —
+     COCOA_WINDOW_POINTER (NSWindow slot) is gone.
+  6. (#65) the Apple branch splits macOS vs iOS on TARGET_OS_IPHONE and
+     the iOS path fails closed (return false) instead of feeding a UIView*
+     into Cocoa window properties.
+  7. (#60) IME enablement exists: Window drives SDL_StartTextInput /
+     SDL_StopTextInput and PlatformHost offers defaulted wantsTextInput().
 """
 
 import pathlib
@@ -116,10 +123,43 @@ def main():
     if "SDL_GetCurrentVideoDriver" not in code:
         fail("Wayland rejection lacks the SDL_GetCurrentVideoDriver query")
 
+    # Gate 5 (#56/#63): macOS feeds the documented NSView* into the VIEW
+    # slot, never the WINDOW slot. Judged on comment-stripped code.
+    if "COCOA_VIEW_POINTER" not in code:
+        fail("macOS embed does not feed COCOA_VIEW_POINTER (NSView* contract)")
+    if "COCOA_WINDOW_POINTER" in code:
+        fail("COCOA_WINDOW_POINTER (NSWindow slot) still fed in initializeEmbedded")
+
+    # Gate 6 (#65): Apple branch splits on TARGET_OS_IPHONE; the iOS path
+    # fails closed. The split check needs the raw region (macro names
+    # survive stripping, but keep it explicit); fail-closed is judged on
+    # comment-stripped code following the iOS guard.
+    if "TARGET_OS_IPHONE" not in region:
+        fail("Apple embed branch has no TARGET_OS_IPHONE macOS/iOS split")
+    else:
+        lines = code.splitlines()
+        guard = next((i for i, line in enumerate(lines)
+                      if "TARGET_OS_IPHONE" in line), None)
+        if guard is None:
+            fail("TARGET_OS_IPHONE guard vanished after comment stripping")
+        elif "return false" not in "\n".join(lines[guard:guard + 14]):
+            fail("iOS embed path does not fail closed with 'return false'")
+
+    # Gate 7 (#60): IME enablement — Window edge-drives SDL text input,
+    # host offers a defaulted wantsTextInput(). Comment-stripped code.
+    window_code = strip_comments(window_source)
+    if "SDL_StartTextInput" not in window_code:
+        fail("Window never enables SDL text input (SDL_StartTextInput missing)")
+    if "SDL_StopTextInput" not in window_code:
+        fail("Window never disables SDL text input (SDL_StopTextInput missing)")
+    if "wantsTextInput" not in host_code:
+        fail("PlatformHost offers no wantsTextInput() IME request")
+
     if FAILURES:
         raise SystemExit(f"{len(FAILURES)} platform gate(s) violated")
     print("OK: platform gates green (x11-elif, fail-closed else, "
-          "no pure-virtual host, single touch path, wayland rejection)")
+          "no pure-virtual host, single touch path, wayland rejection, "
+          "cocoa-view-pointer, ios fail-closed, ime enablement)")
 
 
 if __name__ == "__main__":
