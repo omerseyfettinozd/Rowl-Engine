@@ -82,13 +82,19 @@ bool FontRenderer::loadFont(const std::string& fontPath) {
     }
     file.seekg(0, std::ios::beg);
 
-    m_fontBuffer.resize(static_cast<size_t>(size));
-    if (!file.read(reinterpret_cast<char*>(m_fontBuffer.data()), size)) {
+    // #57 (stage-then-commit): dosya once yerel tampona okunur; canli
+    // m_fontBuffer'a read+parse basarisi dogrulanmadan dokunulmaz. Eski
+    // kod resize'i canli tamponda yapip read-fail'de erken donuyordu:
+    // realloc tamponu tasimis, info->data (non-owning alias) sarkan
+    // kalmis, m_loaded true kaldigindan getGlyph sarkan pointer'i
+    // deref ediyordu (UAF).
+    std::vector<uint8_t> staged(static_cast<size_t>(size));
+    if (!file.read(reinterpret_cast<char*>(staged.data()), size)) {
         ROWL_LOG_ERROR("Failed to read font file data: " + fontPath);
         return false;
     }
 
-    return loadFontFromMemory(m_fontBuffer.data(), m_fontBuffer.size());
+    return loadFontFromMemory(staged.data(), staged.size());
 }
 
 bool FontRenderer::loadFontFromPath(const std::filesystem::path& fontPath) {
@@ -118,26 +124,74 @@ bool FontRenderer::loadFontFromPath(const std::filesystem::path& fontPath) {
     }
     file.seekg(0, std::ios::beg);
 
-    m_fontBuffer.resize(static_cast<size_t>(size));
-    if (!file.read(reinterpret_cast<char*>(m_fontBuffer.data()), size)) {
+    // #57 (stage-then-commit): loadFont ile ayni gerekce — once yerel
+    // tampon, commit yalniz loadFontFromMemory icinde dogrulama sonrasi.
+    std::vector<uint8_t> staged(static_cast<size_t>(size));
+    if (!file.read(reinterpret_cast<char*>(staged.data()), size)) {
         ROWL_LOG_ERROR("Failed to read font file data: " + fontPath.string());
         return false;
     }
 
-    return loadFontFromMemory(m_fontBuffer.data(), m_fontBuffer.size());
+    return loadFontFromMemory(staged.data(), staged.size());
 }
 
 bool FontRenderer::loadFontFromMemory(const uint8_t* data, size_t size) {
     if (!data || size == 0) return false;
 
-    if (m_fontBuffer.empty() || m_fontBuffer.data() != data) {
-        m_fontBuffer.assign(data, data + size);
+    // #57 (stage-then-commit): girdi once yerel tampona kopyalanir; canli
+    // m_fontBuffer / m_fontInfo'ya tum dogrulama bitmeden dokunulmaz.
+    // Basarisiz reload eski calisan fontu aynen birakir (fail-closed).
+    std::vector<uint8_t> staged(data, data + size);
+
+    // Savunma-derinligi: kesik/bozuk girdide stb tablo-taramasi tampon
+    // disina tasmasin. sfnt basligi her kapsayicide ayni yerlesimdedir
+    // (imza[0..3] + numTables[4..5]); dizin tampona sigmiyorsa parse'e
+    // girmeden reddet. (Kalinti: dizin-ici sahte offset'ler stb ic-okumada
+    // hâlâ tasmaya zorlayabilir — pre-existing stb zafi, ayrı bulgu adayı.)
+    if (staged.size() < 12) return false;
+    {
+        const uint32_t claimedTables =
+            (static_cast<uint32_t>(staged[4]) << 8) | staged[5];
+        if (static_cast<uint64_t>(claimedTables) * 16 + 12 > staged.size())
+            return false;
     }
 
-    auto* info = static_cast<stbtt_fontinfo*>(m_fontInfo);
-    if (!stbtt_InitFont(info, m_fontBuffer.data(), 0)) {
+    // Asama 1: stb parse — canli info degil, yerel info kullanilir.
+    // info->data yereli aliaslar; canli info hic sarkan konuma dusmez.
+    stbtt_fontinfo stagedInfo{};
+    if (!stbtt_InitFont(&stagedInfo, staged.data(), 0)) {
         // Font collection (.ttc/.ttf with several faces): stb_truetype
         // needs the byte offset of a face, so probe each face in order.
+        bool collectionOk = false;
+        const int faces = stbtt_GetNumberOfFonts(staged.data());
+        for (int face = 0; face < faces && !collectionOk; ++face) {
+            const int offset = stbtt_GetFontOffsetForIndex(staged.data(), face);
+            if (offset >= 0)
+                collectionOk = stbtt_InitFont(&stagedInfo, staged.data(), offset) != 0;
+        }
+        if (!collectionOk) {
+            ROWL_LOG_ERROR("stbtt_InitFont failed to parse font buffer!");
+            return false;
+        }
+    }
+
+    // Asama 2: shaper (ic-dengelemeli: basarisizsa canli state korunur).
+    // #41 notu: derlenmis backend + parse-basarisizligi artik sessiz
+    // fallback degil, yukleme-basarisizligidir. Derlenmemis backend ise
+    // kalici insa-kararidir (stb yolu mesrudur, log'da gorunur).
+    const bool advanced = m_textShaper.loadFontFromMemory(
+        staged.data(), staged.size());
+    if (!advanced && Rowl::Text::TextShaper::isAdvancedBackendCompiled()) {
+        ROWL_LOG_ERROR("Advanced text backend rejected the font buffer; "
+                       "keeping previously loaded font.");
+        return false;
+    }
+
+    // Asama 3: commit — tek hamle. Ayni baytlar az once dogrulandi; canli
+    // info re-init'i savunma-derinligidir (beklenmedik rette fail-closed).
+    m_fontBuffer = std::move(staged);
+    auto* info = static_cast<stbtt_fontinfo*>(m_fontInfo);
+    if (!stbtt_InitFont(info, m_fontBuffer.data(), 0)) {
         bool collectionOk = false;
         const int faces = stbtt_GetNumberOfFonts(m_fontBuffer.data());
         for (int face = 0; face < faces && !collectionOk; ++face) {
@@ -146,7 +200,10 @@ bool FontRenderer::loadFontFromMemory(const uint8_t* data, size_t size) {
                 collectionOk = stbtt_InitFont(info, m_fontBuffer.data(), offset) != 0;
         }
         if (!collectionOk) {
-            ROWL_LOG_ERROR("stbtt_InitFont failed to parse font buffer!");
+            ROWL_LOG_ERROR("stbtt_InitFont failed on validated font buffer!");
+            m_glyphCache.clear();
+            m_shapedGlyphCache.clear();
+            m_shapeCache.clear();
             m_loaded = false;
             return false;
         }
@@ -155,8 +212,6 @@ bool FontRenderer::loadFontFromMemory(const uint8_t* data, size_t size) {
     m_glyphCache.clear();
     m_shapedGlyphCache.clear();
     m_shapeCache.clear();
-    const bool advanced = m_textShaper.loadFontFromMemory(
-        m_fontBuffer.data(), m_fontBuffer.size());
     m_loaded = true;
     ROWL_LOG_INFO(std::string("✅ TrueType Font Loaded Successfully (") +
         (advanced ? "HarfBuzz/FriBidi" : "stb fallback") + ").");

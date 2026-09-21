@@ -8,6 +8,7 @@
 #include <mutex>
 #include <numeric>
 #include <unordered_map>
+#include <vector>
 
 #include <nlohmann/json.hpp>
 
@@ -125,6 +126,29 @@ bool TextShaper::loadFontFromMemory(const uint8_t* data,
     if (!m_impl || !data || size == 0) return false;
 #if ROWL_TEXT_SHAPING_AVAILABLE
     try {
+        // #57/#41-kalinti (stage-then-commit): yeni yuz once yerel baytta
+        // denenir; canli font/face yalniz yeni yuz gecerliyken sokulur.
+        // Eski kod canliyi once yikip sonra deniyordu — basarisiz reload
+        // onceki iyi backend'i dusuruyordu.
+        if (size > static_cast<std::size_t>(
+                std::numeric_limits<FT_Long>::max())) {
+            return false;
+        }
+        std::vector<uint8_t> staged(data, data + size);
+        FT_Face stagedFace = nullptr;
+        if (!m_impl->library || FT_New_Memory_Face(
+                m_impl->library, staged.data(),
+                static_cast<FT_Long>(staged.size()), 0,
+                &stagedFace) != 0) {
+            return false;
+        }
+        hb_font_t* stagedFont = hb_ft_font_create_referenced(stagedFace);
+        if (!stagedFont) {
+            FT_Done_Face(stagedFace);
+            return false;
+        }
+        // Commit: vektor move tampon sahipligini devreder (data pointer
+        // korunur), yuz yeni sahibin baytini gostermeye devam eder.
         if (m_impl->font) {
             hb_font_destroy(m_impl->font);
             m_impl->font = nullptr;
@@ -133,15 +157,10 @@ bool TextShaper::loadFontFromMemory(const uint8_t* data,
             FT_Done_Face(m_impl->face);
             m_impl->face = nullptr;
         }
-        m_impl->fontBytes.assign(data, data + size);
-        if (!m_impl->library || FT_New_Memory_Face(
-                m_impl->library, m_impl->fontBytes.data(),
-                static_cast<FT_Long>(m_impl->fontBytes.size()), 0,
-                &m_impl->face) != 0) {
-            return false;
-        }
-        m_impl->font = hb_ft_font_create_referenced(m_impl->face);
-        return m_impl->font != nullptr;
+        m_impl->fontBytes = std::move(staged);
+        m_impl->face = stagedFace;
+        m_impl->font = stagedFont;
+        return true;
     } catch (...) {
         return false;
     }
