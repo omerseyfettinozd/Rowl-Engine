@@ -165,6 +165,7 @@ void test_lua_module_rowl_impostor();  // D6 #158: module-env rowl impostor RED 
 void test_runtime_context_and_diagnostics();
 void test_crash_log();
 void test_story_graph_parser();
+void test_boot_story_diagnostics();  // #118/#119/#120: grafsiz/bozuk boot ayirt edilebilirlik kilidi
 void test_graph_vnext();
 void test_localization();
 void test_locale_cluster();  // Dilim Locale kümesi kilitleri (T1-T7)

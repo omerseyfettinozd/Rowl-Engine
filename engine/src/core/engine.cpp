@@ -384,15 +384,33 @@ bool Engine::initialize(const EngineConfig& config) {
     m_gameState = Rowl::State::GameState::createInitialState(m_storyRuntime.currentNodeId());
 
     // Load story graph from disk
-    loadStoryGraphFile();
+    const bool storyLoaded = loadStoryGraphFile();
 
     m_initialized = true;
     m_isRunning   = true;
     // D1 (#108): init, önceki last-result'u geçersiz kılar. Pre-init
     // load/save girişimi artık guard'lı (aşağıda) ama savunma-derinliği:
     // init-sonrası kanal her zaman init'e aittir, bayat load-OK kalamaz.
+    // #118/#119: grafsız boot'ta blanket setSuccess boot teşhisini
+    // birincil kanaldan siliyordu (Init=1 + OK ile storyless boot
+    // sağlıklı sanılıyordu). Başarıda init sahiplenir; başarısızlıkta
+    // boot hükmü init-imzasıyla korunur — init-true sözleşmesi durur,
+    // kanal ayırt edilebilir kalır.
     if (m_context) {
-        m_context->setSuccess("init", "");
+        if (storyLoaded) {
+            m_context->setSuccess("init", "");
+        } else {
+            RuntimeResult bootVerdict = m_context->getLastResult();
+            if (bootVerdict.isOk()) {
+                // Savunma-derinliği: zincir sessiz false dönerse genel
+                // miss yaz, sonra onu koru.
+                recordStoryGraphMiss(
+                    "Story boot produced no graph and recorded no cause.");
+                bootVerdict = m_context->getLastResult();
+            }
+            m_context->setError(bootVerdict.code, bootVerdict.message,
+                                "init", "");
+        }
     }
     return true;
 }
@@ -1635,7 +1653,12 @@ bool Engine::loadStoryGraphFile() {
         if (std::filesystem::exists(probePath, probeError) && !probeError) {
             // #122: surface the attempt's verdict instead of swallowing it —
             // loadStoryGraphFromPath already records parse/IO failures.
-            return loadStoryGraphFromPath(p);
+            // #120: bozuk ilk adayda erken return zincirin kalanını
+            // (ikinci aday + active-story overlay) kesiyordu; ret
+            // kaydedildi, kalan adaylar denenir.
+            if (loadStoryGraphFromPath(p)) {
+                return true;
+            }
         }
     }
     if (loadActiveStoryFile()) {

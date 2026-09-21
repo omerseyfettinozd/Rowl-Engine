@@ -143,6 +143,7 @@ int main(int argc, char* argv[]) {
     test_runtime_context_and_diagnostics();
     test_crash_log();
     test_story_graph_parser();
+    test_boot_story_diagnostics();
     test_graph_vnext();
     test_localization();
     test_locale_cluster();
