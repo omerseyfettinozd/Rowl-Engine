@@ -299,8 +299,22 @@ namespace RowlEngine.Editor.Native
                 // net for setters that mutate without an explicit copy.
                 // Mutating entry points (scene/story/choice/viewport) already
                 // copy synchronously, so interaction latency is unchanged.
+                double idleSeconds = (now - _lastIdleUpkeep).TotalSeconds;
                 _lastIdleUpkeep = now;
-                InvokeNative(handle => NativeBridge.RowlEngine_Step(handle, 0.0f));
+                // #160: the upkeep drives the visual clock with the real idle
+                // delta (clamped like the play loop) so in-flight camera
+                // tweens progress instead of stalling on Step(0). Paused story
+                // simulation stays frozen (engine.cpp paused branch), so this
+                // is story-safe.
+                float upkeepDt = (float)Math.Clamp(idleSeconds, 0.0, 0.25);
+                // Pre-clear so the read below belongs to this upkeep; Step
+                // never stamps success, so non-zero is always fresh evidence
+                // (e.g. the #160 stall StateError).
+                InvokeNative(handle => NativeBridge.RowlEngine_ClearLastResult(handle));
+                InvokeNative(handle => NativeBridge.RowlEngine_Step(handle, upkeepDt));
+                if (TryGetLastEngineResult(out int upkeepCode, out string upkeepOp, out string upkeepMsg)
+                    && upkeepCode != 0)
+                    Debug.WriteLine($"EngineHost idle upkeep last-result {upkeepCode} ({upkeepOp}): {upkeepMsg}");
                 UpdatePixelBuffer();
             }
 
@@ -1110,8 +1124,16 @@ namespace RowlEngine.Editor.Native
 
         public void GetAudioSpectrum(float[] outBands)
         {
-            if (IsInitialized && outBands != null && outBands.Length > 0)
-                InvokeNative(handle => NativeBridge.RowlEngine_GetAudioSpectrum(handle, outBands, outBands.Length));
+            if (!IsInitialized || outBands == null || outBands.Length == 0) return;
+            // #76-tur2: a foreign-handle call stamps WRONG_THREAD(14) and leaves
+            // the buffer untouched (stale bands would read as live). Pre-clear
+            // so the post-read belongs to this call; on a 14 hit zero the
+            // array. The dead-handle path already zero-fills natively without
+            // stamping.
+            InvokeNative(handle => NativeBridge.RowlEngine_ClearLastResult(handle));
+            InvokeNative(handle => NativeBridge.RowlEngine_GetAudioSpectrum(handle, outBands, outBands.Length));
+            if (TryGetLastEngineResult(out int code, out _, out _) && code == (int)RuntimeErrorCode.WrongThread)
+                Array.Clear(outBands);
         }
 
         // ── Typewriter Voice Blips & Audio Effects (Milestone 25) ─────────────
@@ -1283,42 +1305,77 @@ namespace RowlEngine.Editor.Native
         public void SetCamera(float x, float y, float zoom)
         {
             InvokeNative(handle => NativeBridge.RowlEngine_SetCamera(handle, x, y, zoom));
+            if (!IsPlaying)
+            {
+                Step();
+                Debug.WriteLine($"EngineHost SetCamera presented paused frame (x={x}, y={y}, zoom={zoom}).");
+            }
         }
 
         public void ResetCamera()
         {
             InvokeNative(NativeBridge.RowlEngine_ResetCamera);
+            if (!IsPlaying)
+            {
+                Step();
+                Debug.WriteLine("EngineHost ResetCamera presented paused frame.");
+            }
         }
 
         public void CameraPanTo(float targetX, float targetY, float durationSeconds, int easingType = 3)
         {
             InvokeNative(handle => NativeBridge.RowlEngine_CameraPanTo(handle, targetX, targetY, durationSeconds, easingType));
+            if (!IsPlaying)
+            {
+                Step();
+                Debug.WriteLine($"EngineHost CameraPanTo presented paused frame (target={targetX},{targetY}, duration={durationSeconds}).");
+            }
         }
 
         public void CameraZoomTo(float targetZoom, float durationSeconds, int easingType = 3)
         {
             InvokeNative(handle => NativeBridge.RowlEngine_CameraZoomTo(handle, targetZoom, durationSeconds, easingType));
+            if (!IsPlaying)
+            {
+                Step();
+                Debug.WriteLine($"EngineHost CameraZoomTo presented paused frame (target={targetZoom}, duration={durationSeconds}).");
+            }
         }
 
         public bool IsCameraMoving()
         {
-            return InvokeNative(handle => NativeBridge.RowlEngine_IsCameraMoving(handle) == 1, false);
+            return InvokeNative(handle => NativeBridge.RowlEngine_IsCameraMoving(handle) != 0, false);
         }
 
         public void TriggerCameraShake(float intensity, float durationSeconds)
         {
             InvokeNative(handle => NativeBridge.RowlEngine_TriggerCameraShake(handle, intensity, durationSeconds));
+            if (!IsPlaying)
+            {
+                Step();
+                Debug.WriteLine($"EngineHost TriggerCameraShake presented paused frame (intensity={intensity}, duration={durationSeconds}).");
+            }
         }
 
         public void TriggerCameraShakePreset(string presetName, float intensityMultiplier = 1.0f, float durationSeconds = 0.0f)
         {
             InvokeNative(handle => NativeBridge.RowlEngine_TriggerCameraShakePreset(handle, presetName, intensityMultiplier, durationSeconds));
+            if (!IsPlaying)
+            {
+                Step();
+                Debug.WriteLine($"EngineHost TriggerCameraShakePreset presented paused frame (preset={presetName}).");
+            }
         }
 
         public void TriggerCameraShakeProfile(float intensity, float durationSeconds, float frequency, float damping, float dirX, float dirY)
         {
             InvokeNative(handle => NativeBridge.RowlEngine_TriggerCameraShakeProfile(
                 handle, intensity, durationSeconds, frequency, damping, dirX, dirY));
+            if (!IsPlaying)
+            {
+                Step();
+                Debug.WriteLine("EngineHost TriggerCameraShakeProfile presented paused frame.");
+            }
         }
 
         public float GetCameraShakeOffsetX()
@@ -1335,42 +1392,74 @@ namespace RowlEngine.Editor.Native
 
         public void StartTransition(string kind, float durationSeconds, string? colorHex = null)
         {
+            // #162: snapshot-capture failure stamps IoError (op=start_transition)
+            // on the void path. Pre-clear so the read below belongs to this
+            // call; the log is conditional — the single result-gated setter
+            // among the 14 camera/FX setters.
+            InvokeNative(handle => NativeBridge.RowlEngine_ClearLastResult(handle));
             InvokeNative(handle => NativeBridge.RowlEngine_StartTransition(handle, kind, durationSeconds, colorHex));
+            if (TryGetLastEngineResult(out int code, out string op, out string message) && code != 0)
+                Debug.WriteLine($"EngineHost StartTransition last-result {code} ({op}): {message}");
         }
 
         public bool IsTransitionActive()
         {
-            return InvokeNative(handle => NativeBridge.RowlEngine_IsTransitionActive(handle) == 1, false);
+            return InvokeNative(handle => NativeBridge.RowlEngine_IsTransitionActive(handle) != 0, false);
         }
 
         public void TriggerScreenFlash(byte r, byte g, byte b, float durationSeconds, float intensity = 1.0f)
         {
             InvokeNative(handle => NativeBridge.RowlEngine_TriggerScreenFlash(handle, r, g, b, durationSeconds, intensity));
+            if (!IsPlaying)
+            {
+                Step();
+                Debug.WriteLine($"EngineHost TriggerScreenFlash presented paused frame (duration={durationSeconds}).");
+            }
         }
 
         public void TriggerScreenFlashHex(string colorHex, float durationSeconds, float intensity = 1.0f)
         {
             InvokeNative(handle => NativeBridge.RowlEngine_TriggerScreenFlashHex(handle, colorHex, durationSeconds, intensity));
+            if (!IsPlaying)
+            {
+                Step();
+                Debug.WriteLine($"EngineHost TriggerScreenFlashHex presented paused frame (color={colorHex}).");
+            }
         }
 
         public bool IsScreenFlashActive()
         {
-            return InvokeNative(handle => NativeBridge.RowlEngine_IsScreenFlashActive(handle) == 1, false);
+            return InvokeNative(handle => NativeBridge.RowlEngine_IsScreenFlashActive(handle) != 0, false);
         }
 
         public void SetScreenTint(byte r, byte g, byte b, float opacity)
         {
             InvokeNative(handle => NativeBridge.RowlEngine_SetScreenTint(handle, r, g, b, opacity));
+            if (!IsPlaying)
+            {
+                Step();
+                Debug.WriteLine($"EngineHost SetScreenTint presented paused frame (opacity={opacity}).");
+            }
         }
 
         public void SetScreenTintHex(string colorHex, float opacity)
         {
             InvokeNative(handle => NativeBridge.RowlEngine_SetScreenTintHex(handle, colorHex, opacity));
+            if (!IsPlaying)
+            {
+                Step();
+                Debug.WriteLine($"EngineHost SetScreenTintHex presented paused frame (color={colorHex}, opacity={opacity}).");
+            }
         }
 
         public void ClearScreenTint()
         {
             InvokeNative(NativeBridge.RowlEngine_ClearScreenTint);
+            if (!IsPlaying)
+            {
+                Step();
+                Debug.WriteLine("EngineHost ClearScreenTint presented paused frame.");
+            }
         }
 
         public float GetScreenTintOpacity()
@@ -1381,6 +1470,11 @@ namespace RowlEngine.Editor.Native
         public void SetVignette(float intensity, float radius = 0.75f, string? colorHex = null)
         {
             InvokeNative(handle => NativeBridge.RowlEngine_SetVignette(handle, intensity, radius, colorHex));
+            if (!IsPlaying)
+            {
+                Step();
+                Debug.WriteLine($"EngineHost SetVignette presented paused frame (intensity={intensity}).");
+            }
         }
 
         public float GetVignetteIntensity()

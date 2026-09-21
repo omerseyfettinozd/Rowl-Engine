@@ -701,8 +701,15 @@ namespace RowlEngine.Editor.Native
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
         internal static extern float RowlEngine_GetAudioChannelRms(IntPtr handle, int channelType, int channelIndex);
 
+        // #83: SizeParamIndex hardens the host side of the contract — bandCount
+        // (index 2) is declared as the capacity of outBands (index 1), so the
+        // marshaller validates the pairing. Host callers always pass
+        // outBands.Length (see EngineHost.GetAudioSpectrum).
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
-        internal static extern void RowlEngine_GetAudioSpectrum(IntPtr handle, [Out] float[] outBands, int bandCount);
+        internal static extern void RowlEngine_GetAudioSpectrum(
+            IntPtr handle,
+            [MarshalAs(UnmanagedType.LPArray, SizeParamIndex = 2)][Out] float[] outBands,
+            int bandCount);
 
         // ── Typewriter Voice Blips & Audio Effects (Milestone 25) ─────────────
 
