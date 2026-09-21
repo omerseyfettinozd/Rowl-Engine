@@ -744,6 +744,101 @@ void test_c_api_contract() {
         }
     }
 
+    // #69: sahipsiz handle uzerinde eszamanli story yazici/okuyucu islak
+    // testi. Claim artik paylasimli sahiplik + TU-local kapi (g_storyGate)
+    // tasiyor: yazici commit'i (chapter vektor realloc) ile okuyucu
+    // toEngineChecked-anlik-goruntu kopyasi arasindaki pencere kapali.
+    // Davranis kilidi (tek-is-parcaciginda kapi no-op oldugu icin RED
+    // uretemez — deterministik RED tests/test_story_gate.py'dedir):
+    // cokme yok, her okuma tutarli anlik-goruntu (sayi 0/2, id gecerli
+    // ya da INVALID_ARGUMENT), yazici bitince durum 2'ye yerlesir.
+    // Init BILEREK cagrilmaz: Init ana-is-parcacigini sahip yapar ve
+    // worker'lari Foreign'a dusururdu; LoadStoryGraph/GetChapter*
+    // Init gerektirmez (m_context/m_storyRuntime Create'te hazir).
+    {
+        const auto raceGraph = unicodeRoot / "race_graph.json";
+        {
+            std::ofstream raceFile(raceGraph);
+            raceFile << R"({
+                "format_version": 5, "start_node_id": 201,
+                "nodes": [
+                    {"id": 201, "chapter_id": "ch1", "next_nodes": [{"id": 202}]},
+                    {"id": 202, "chapter_id": "ch2"}
+                ],
+                "chapters": [
+                    {"id": "ch1", "title": "Race Bir", "order": 1},
+                    {"id": "ch2", "title": "Race İki", "order": 0}
+                ]
+            })";
+        }
+        // Parent phase-2b kalibi: dar-yol donusumu Windows ANSI
+        // codepage'de throw atabilir; UTF-8 baytlar her yerde gecer.
+        std::string raceNarrow;
+        try {
+            raceNarrow = raceGraph.string();
+        } catch (const std::exception&) {
+            const std::u8string raceU8 = raceGraph.u8string();
+            raceNarrow.assign(reinterpret_cast<const char*>(raceU8.data()), raceU8.size());
+        }
+        RowlEngineHandle raceHandle = RowlEngine_Create();
+        if (raceHandle == nullptr) {
+            std::cerr << "#69: race handle uretilemedi" << std::endl;
+            exit(1);
+        }
+        std::atomic<bool> raceTorn{false};
+        std::thread raceWriter([&] {
+            // LoadStoryGraph void doner (sonuc GetChapterCount/
+            // GetLastStoryGraphError ile gozlenir); yaris basinci
+            // cagrilarin kendisidir, donus kodu degil.
+            for (int i = 0; i < 50; ++i) {
+                RowlEngine_LoadStoryGraph(raceHandle, raceNarrow.c_str());
+            }
+        });
+        std::thread raceReader([&] {
+            for (int i = 0; i < 200; ++i) {
+                uint32_t raceCount = 99;
+                if (RowlEngine_GetChapterCount(raceHandle, &raceCount) != ROWL_RESULT_OK) {
+                    raceTorn = true;
+                    return;
+                }
+                if (raceCount != 0 && raceCount != 2) {
+                    raceTorn = true;
+                    return;
+                }
+                if (raceCount == 2) {
+                    char idBuf[64];
+                    uint32_t idRequired = 0;
+                    const auto idRc = RowlEngine_GetChapterIdAtUtf8(raceHandle, 0, idBuf,
+                                                                  sizeof(idBuf), &idRequired);
+                    if (idRc != ROWL_RESULT_OK && idRc != ROWL_RESULT_INVALID_ARGUMENT) {
+                        raceTorn = true;
+                        return;
+                    }
+                    if (idRc == ROWL_RESULT_OK) {
+                        const std::string id(idBuf);
+                        if (id != "ch1" && id != "ch2") {
+                            raceTorn = true;
+                            return;
+                        }
+                    }
+                }
+            }
+        });
+        raceWriter.join();
+        raceReader.join();
+        if (raceTorn) {
+            std::cerr << "#69: yazar/okuyucu penceresinde yirtik anlik-goruntu" << std::endl;
+            exit(1);
+        }
+        uint32_t settleCount = 0;
+        if (RowlEngine_GetChapterCount(raceHandle, &settleCount) != ROWL_RESULT_OK ||
+            settleCount != 2) {
+            std::cerr << "#69: yaris penceresi sonrasi durum yerlesmedi" << std::endl;
+            exit(1);
+        }
+        RowlEngine_Destroy(raceHandle);
+    }
+
     RowlEngine_Destroy(handle);
     std::error_code cleanupError;
     std::filesystem::remove_all(unicodeRoot, cleanupError);
