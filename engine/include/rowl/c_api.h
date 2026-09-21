@@ -557,7 +557,10 @@ ROWL_API RowlEngine_ResultCode RowlEngine_GetChoiceOptionIdAtUtf8(
  * "supported_locales", camelCase spellings accepted) loads when a project
  * is mounted; projects without locale keys keep the "en" fallback.
  * Catalogs at Assets/locales/<locale>.json map content_id to
- * speaker/text/alt_text. Resolution falls back from the active locale to
+ * speaker/text/alt_text. Each field takes a plain string or a plural
+ * table (category -> template, mandatory "other"; schema_version 1|2).
+ * Malformed rows are skipped and counted — they never veto the whole
+ * locale. Resolution falls back from the active locale to
  * the default locale and finally to the node's original text, so unknown
  * keys never surface as errors. All three calls are additive and leave
  * every older entry point untouched.
@@ -567,8 +570,16 @@ ROWL_API RowlEngine_ResultCode RowlEngine_GetChoiceOptionIdAtUtf8(
  * Switches the active locale. Returns ROWL_RESULT_OK on success,
  * ROWL_RESULT_INVALID_HANDLE for a dead handle, and
  * ROWL_RESULT_INVALID_ARGUMENT for a null/empty/unsupported code.
- * A rejected call leaves the active locale unchanged. Locale tags are
- * normalized ("tr-TR" selects "tr").
+ * A supported-but-unloaded locale (manifest-listed yet no readable
+ * catalog while another catalog is loaded) returns
+ * ROWL_RESULT_FILE_NOT_FOUND with a context FileNotFound record —
+ * no new result code was added; locale-free projects still accept any
+ * well-formed tag (legacy path). On success the mounted dialogue is
+ * re-resolved from its stored originals, so getters/render flip at once.
+ * Tags are full BCP 47 ("pt-BR" resolves from the "pt" catalog when no
+ * "pt-BR" catalog is loaded; "en-US" selects manifest "en"); malformed
+ * tags are INVALID_ARGUMENT. A rejected call leaves the active locale
+ * unchanged.
  */
 ROWL_API RowlEngine_ResultCode RowlEngine_SetLocale(
     RowlEngineHandle handle, const char* locale);

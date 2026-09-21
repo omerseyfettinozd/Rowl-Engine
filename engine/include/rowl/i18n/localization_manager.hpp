@@ -30,10 +30,18 @@ namespace Rowl::I18n {
 inline constexpr const char* kFallbackDefaultLocale = "en";
 
 /// One catalog row: content_id -> speaker / text / alt_text.
+///
+/// Each field is either a plain string or a CLDR plural table
+/// (category -> template, e.g. {"one": "%d coin", "other": "%d coins"}).
+/// Countless resolution (resolveText) uses the "other" form when a table
+/// is present; counted resolution goes through resolvePlural.
 struct LocalizedEntry {
     std::string speaker;
     std::string text;
     std::string altText;
+    std::unordered_map<std::string, std::string> speakerPlural;
+    std::unordered_map<std::string, std::string> textPlural;
+    std::unordered_map<std::string, std::string> altPlural;
 };
 
 /// Parsed manifest locale declaration.
@@ -77,13 +85,18 @@ public:
     // ── Catalog contract ───────────────────────────────────────────────
     //
     // Canonical files live at Assets/locales/<locale>.json with:
-    //   { "schema_version": 1, "locale": "<code>",
+    //   { "schema_version": 1|2, "locale": "<tag>",
     //     "entries": { "<content_id>":
     //       { "speaker": "...", "text": "...", "alt_text": "..." } } }
+    // Any field may alternatively be a plural table
+    // ({"one": "...", "other": "..."}); "other" is mandatory in a table.
 
-    /// Loads one catalog document. Returns false (leaving prior state
-    /// untouched) when the document is malformed or names another locale.
-    bool loadCatalog(const std::string& locale, const std::string& catalogJson);
+    /// Loads one catalog document. Malformed rows are skipped and counted
+    /// (see skippedEntries) instead of vetoing the whole catalog; returns
+    /// false — leaving prior state untouched — only when the document
+    /// itself is malformed or names another locale.
+    bool loadCatalog(const std::string& locale, const std::string& catalogJson,
+                     std::size_t* skippedOut = nullptr);
 
     /// Forgets every loaded catalog (project unmount boundary).
     void clearCatalogs();
@@ -91,21 +104,37 @@ public:
     // ── Runtime selection ──────────────────────────────────────────────
 
     /// Switches the active locale. Returns false for empty/unknown codes
-    /// and leaves the active locale unchanged.
+    /// and leaves the active locale unchanged. A manifest-listed locale
+    /// whose catalog is not loaded is also refused (legacy shim: when no
+    /// catalog is loaded at all, any supported code is still accepted so
+    /// locale-free projects keep working).
     bool setLocale(const std::string& locale);
+    /// Tri-state form: distinguishes "unsupported tag" from "supported
+    /// but not loaded" so callers can report the loss instead of serving
+    /// a silent fallback.
+    enum class LocaleSetResult { Ok, Unsupported, CatalogMissing };
+    LocaleSetResult trySetLocale(const std::string& locale);
     const std::string& getLocale() const { return m_activeLocale; }
     const std::string& getDefaultLocale() const { return m_manifest.defaultLocale; }
     const std::vector<std::string>& getSupportedLocales() const {
         return m_manifest.supportedLocales;
     }
     bool isLocaleSupported(const std::string& locale) const;
+    /// True when the locale — or any link of its fallback chain — has a
+    /// loaded catalog, i.e. setLocale would succeed on catalog grounds.
     bool isCatalogLoaded(const std::string& locale) const;
+    /// Number of entries skipped by the most recent loadCatalog call for
+    /// this locale (malformed rows never veto the healthy ones).
+    std::size_t skippedEntries(const std::string& locale) const;
 
     // ── Fallback chain ─────────────────────────────────────────────────
     //
     // resolveEntry tries the active catalog, then the default catalog.
     // resolveText additionally falls back to the node's original text,
-    // so callers always receive a displayable string.
+    // so callers always receive a displayable string. Every lookup walks
+    // the BCP 47 chain (requested tag -> language+script -> language), so
+    // a "pt-BR" request resolves from the "pt" catalog when no "pt-BR"
+    // catalog is loaded — without merging the two tags.
 
     std::optional<LocalizedEntry> resolveEntry(const std::string& contentId) const;
     ResolvedText resolveText(const std::string& contentId,
@@ -114,19 +143,38 @@ public:
                                 const std::string& originalSpeaker) const;
     ResolvedText resolveAltText(const std::string& contentId,
                                 const std::string& originalAltText) const;
+    /// Counted resolution for plural-table entries: picks the CLDR cardinal
+    /// category of the active language and resolves that form down the
+    /// same chain. Plain (non-table) entries resolve to their text.
+    ResolvedText resolvePlural(const std::string& contentId,
+                               const std::string& originalText,
+                               double count) const;
 
-    /// Normalizes a locale tag ("tr-TR" -> "tr"); empty when blank.
+    /// Normalizes a locale tag (case/separator canonicalization, shape
+    /// validation); empty when blank or malformed. Full BCP 47 tags are
+    /// preserved: "pt-BR" stays "pt-BR", it no longer collapses to "pt".
     static std::string normalizeLocale(const std::string& locale);
+    /// The lookup chain for a normalized tag, most specific first
+    /// ("zh-hant-hk" -> ["zh-hant-hk", "zh-hant", "zh"]).
+    static std::vector<std::string> fallbackChain(const std::string& locale);
+    /// CLDR cardinal plural category ("zero"/"one"/"two"/"few"/"many"/
+    /// "other") for a language subtag and a count. Documented subset of
+    /// CLDR rules; unknown languages yield "other".
+    static std::string pluralCategory(const std::string& language, double count);
 
 private:
     const LocalizedEntry* findIn(const std::string& locale,
                                  const std::string& contentId) const;
+    /// First fallback-chain link present in the manifest, or empty.
+    std::string matchSupported(const std::string& locale) const;
+    bool hasCatalogFor(const std::vector<std::string>& chain) const;
 
     LocaleManifest m_manifest;
     std::string m_activeLocale = kFallbackDefaultLocale;
     std::unordered_map<std::string,
                        std::unordered_map<std::string, LocalizedEntry>>
         m_catalogs;
+    std::unordered_map<std::string, std::size_t> m_skippedEntries;
 };
 
 } // namespace Rowl::I18n

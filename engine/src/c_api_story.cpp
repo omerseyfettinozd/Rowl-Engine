@@ -377,9 +377,6 @@ void RowlEngine_SetProjectDirectory(RowlEngineHandle handle, const char* project
             } catch (...) { }
         }
         engine->setBgmTransitionDefaults(transition, transitionDuration);
-        // Faz 3 Dilim 1: manifest locales + catalogs load on project mount.
-        // Legacy projects without locale keys keep the "en" fallback.
-        Rowl::I18n::applyProjectLocalesToEngine(*engine, projectRoot);
         if (engine->getVfs()) {
             // #122: a dead root used to clear the mounts in total silence —
             // the story boot then missed with no diagnosis anywhere. Record
@@ -391,6 +388,12 @@ void RowlEngine_SetProjectDirectory(RowlEngineHandle handle, const char* project
                     std::string(projectRoot));
             }
         }
+        // Faz 3 Dilim 1 (#92): manifest locales + catalogs load on project
+        // mount — AFTER the VFS remount above, so the VFS-first catalog
+        // probe sees packaged locales (Assets/locales inside .rowlpkg).
+        // Legacy projects without locale keys keep the "en" fallback.
+        // Story load below still runs after the locales are applied.
+        Rowl::I18n::applyProjectLocalesToEngine(*engine, projectRoot);
         auto* win = engine->getWindow();
         if (win) {
             win->reloadFonts();

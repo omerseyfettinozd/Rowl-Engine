@@ -240,11 +240,12 @@ const Glyph* FontRenderer::getGlyph(uint32_t codepoint, int pixelHeight) {
     return &m_glyphCache[key];
 }
 
-float FontRenderer::measureTextWidth(const std::string& utf8Text, float fontSize) {
+float FontRenderer::measureTextWidth(const std::string& utf8Text, float fontSize,
+                                       const std::string& language) {
     if (!m_loaded || utf8Text.empty()) return 0.0f;
 
     if (m_textShaper.isAdvancedBackendActive()) {
-        return shapeTextShared(utf8Text, fontSize)->width;
+        return shapeTextShared(utf8Text, fontSize, 0.0f, language)->width;
     }
 
     const std::string plainText = Rowl::Text::stripMarkup(utf8Text);
@@ -265,31 +266,44 @@ float FontRenderer::measureTextWidth(const std::string& utf8Text, float fontSize
 
 Rowl::Text::ShapedText FontRenderer::shapeText(const std::string& markup,
                                                 float fontSize,
-                                                float maxWidth) const {
-    return *shapeTextShared(markup, fontSize, maxWidth);
+                                                float maxWidth,
+                                                const std::string& language) const {
+    return *shapeTextShared(markup, fontSize, maxWidth, language);
 }
 
 std::shared_ptr<const Rowl::Text::ShapedText> FontRenderer::shapeTextShared(
-    const std::string& markup, float fontSize, float maxWidth) const {
+    const std::string& markup, float fontSize, float maxWidth,
+    const std::string& language) const {
     for (const auto& cached : m_shapeCache) {
         if (cached.markup == markup && cached.fontSize == fontSize &&
-            cached.maxWidth == maxWidth && cached.textScale == m_textScale)
+            cached.maxWidth == maxWidth && cached.textScale == m_textScale &&
+            cached.language == language)
             return cached.layout;
     }
     Rowl::Text::ShapeOptions options;
     options.fontSize = effectiveFontSize(fontSize);
     options.maxWidth = maxWidth;
+    options.language = language;
     auto layout = std::make_shared<Rowl::Text::ShapedText>(
         m_textShaper.shapeMarkup(markup, options));
     // A3-tur7: insert tahsisi patlarsa (OOM) cachesiz-devam — fail-open
     // performans, fail-closed doğruluk (kilit-test deseni tur2'den).
     try {
         if (m_shapeCache.size() >= 16) m_shapeCache.erase(m_shapeCache.begin());
-        m_shapeCache.push_back({markup, fontSize, maxWidth, m_textScale, layout});
+        m_shapeCache.push_back({markup, fontSize, maxWidth, m_textScale, language, layout});
     } catch (...) {
         // Bilinçli-yutma: önbellek lüks, layout zaten hazır — render sürer.
     }
     return layout;
+}
+
+void FontRenderer::invalidateShapeCache() {
+    // std::bad_alloc güvenliği: clear() wg. shrink gerektirmez; istisna
+    // atarsa önbellek eski halinde kalır — render yine doğru sürer.
+    try {
+        m_shapeCache.clear();
+    } catch (...) {
+    }
 }
 
 size_t FontRenderer::countRevealUnits(const std::string& markup,

@@ -1298,7 +1298,7 @@ void Window::renderVisualNovelFrame(
         if (!dlg.speaker.empty()) {
             float speakerFontPx = dlg.speakerFontSize * metrics.scaleFactor;
             float speakerTextW = (m_fontRenderer && m_fontRenderer->isLoaded())
-                ? m_fontRenderer->measureTextWidth(dlg.speaker, speakerFontPx)
+                ? m_fontRenderer->measureTextWidth(dlg.speaker, speakerFontPx, dlg.language)
                 : (static_cast<float>(dlg.speaker.length()) * 10.0f * metrics.scaleFactor);
 
             // B6 (#10): narrow boxes make lo > hi (std::clamp UB) — pin hi up.
@@ -1395,7 +1395,7 @@ void Window::renderVisualNovelFrame(
             // 4a. Speaker Name Text
             if (!dlg.speaker.empty()) {
                 float speakerFontPx = dlg.speakerFontSize * metrics.scaleFactor;
-                float speakerTextW = m_fontRenderer->measureTextWidth(dlg.speaker, speakerFontPx);
+                float speakerTextW = m_fontRenderer->measureTextWidth(dlg.speaker, speakerFontPx, dlg.language);
                 // B6 (#10): narrow boxes make lo > hi (std::clamp UB) — pin hi up.
             float tagW = std::clamp(speakerTextW + (32.0f * metrics.scaleFactor),
                                     120.0f * metrics.scaleFactor,
@@ -1429,7 +1429,7 @@ void Window::renderVisualNovelFrame(
                 float fontPx = dlg.fontSize * metrics.scaleFactor;
 
                 const auto shaped = m_fontRenderer->shapeTextShared(
-                    dlg.dialogue, fontPx, maxLineWidth);
+                    dlg.dialogue, fontPx, maxLineWidth, dlg.language);
                 size_t visibleUnits = shaped->revealUnits.size();
                 if (dlg.isPlaying && dlg.typewriterEnabled && dlg.textSpeed > 0) {
                     visibleUnits = Rowl::Text::evaluateReveal(

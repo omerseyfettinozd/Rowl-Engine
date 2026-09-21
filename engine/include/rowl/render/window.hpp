@@ -57,6 +57,14 @@ struct DialogueRenderData {
     /// Persistent Faz 2 content identity (UUID form); empty for legacy
     /// payloads that predate migration. Never interpreted by the renderer.
     std::string contentId;
+    /// Node-original strings, kept so a locale switch can re-resolve the
+    /// displayed speaker/dialogue without a node change. Empty for legacy
+    /// payloads (then speaker/dialogue are already the originals).
+    std::string originalSpeaker;
+    std::string originalDialogue;
+    /// Active BCP 47 tag at assembly time; fed to the shaper (HarfBuzz
+    /// language + FriBidi base direction) and part of the shape-cache key.
+    std::string language;
     float x = 80.0f;
     float y = 860.0f;
     float width = 1760.0f;

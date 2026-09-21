@@ -28,6 +28,7 @@ add_executable(rowl_tests
     test_story_graph_parser.cpp
     test_graph_vnext.cpp
     test_localization.cpp
+    test_locale_cluster.cpp
     test_markup_parser.cpp
     test_text_shaping.cpp
     test_utf8_decoder.cpp

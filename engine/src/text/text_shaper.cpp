@@ -2,6 +2,7 @@
 #include "rowl/text/utf8.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <limits>
 #include <mutex>
@@ -162,6 +163,42 @@ void ensureUnibreakInitialized() {
     });
 }
 
+/// Reports whether a BCP 47 tag wants a right-to-left paragraph base
+/// direction (#95). Script subtags win when present (Arab/Hebr/Thaa/Syrc…);
+/// otherwise the primary-language RTL set decides. Empty/unknown tags
+/// return false so those paragraphs keep the legacy FRIBIDI_PAR_ON path.
+bool isRtlLanguageTag(std::string_view tag) {
+    if (tag.empty()) return false;
+    std::string lower(tag);
+    std::transform(lower.begin(), lower.end(), lower.begin(),
+                   [](unsigned char c) {
+                       return static_cast<char>(std::tolower(c));
+                   });
+    std::replace(lower.begin(), lower.end(), '_', '-');
+    if (lower.find("arab") != std::string::npos ||
+        lower.find("hebr") != std::string::npos ||
+        lower.find("thaa") != std::string::npos ||
+        lower.find("syrc") != std::string::npos ||
+        lower.find("samr") != std::string::npos ||
+        lower.find("mand") != std::string::npos ||
+        lower.find("nkoo") != std::string::npos) {
+        return true;
+    }
+    const std::string primary =
+        lower.substr(0, lower.find('-') == std::string::npos
+                            ? lower.size()
+                            : lower.find('-'));
+    static const char* const kRtlLanguages[] = {
+        "ar", "fa", "ur", "he", "yi", "ps", "sd", "ug",
+        "dv", "ckb", "arc",
+    };
+    // NOTE: Hausa ("ha") is Latin-script by default, so bare "ha" stays
+    // LTR here; Ajami Hausa must tag the script ("ha-Arab") and is then
+    // caught by the script check above.
+    return std::find(std::begin(kRtlLanguages), std::end(kRtlLanguages),
+                     primary) != std::end(kRtlLanguages);
+}
+
 struct RawGlyph {
     uint32_t glyph = 0;
     uint32_t scalar = 0;
@@ -181,7 +218,12 @@ std::vector<RawGlyph> shapeVisualLine(hb_font_t* font,
     std::vector<FriBidiChar> codepoints(end - begin);
     for (uint32_t i = begin; i < end; ++i)
         codepoints[i - begin] = static_cast<FriBidiChar>(scalars[i].codepoint);
-    FriBidiParType baseDirection = FRIBIDI_PAR_ON;
+    // #95: the old unconditional PAR_ON let FriBidi infer the base
+    // direction from content, so a leading number/punctuation could pin an
+    // Arabic/Hebrew paragraph LTR. An explicit RTL tag now anchors the
+    // base direction; anything else keeps the legacy ON path.
+    FriBidiParType baseDirection =
+        isRtlLanguageTag(language) ? FRIBIDI_PAR_RTL : FRIBIDI_PAR_ON;
     std::vector<FriBidiStrIndex> logicalToVisual(codepoints.size());
     std::vector<FriBidiLevel> levels(codepoints.size());
     if (!fribidi_log2vis(codepoints.data(), static_cast<FriBidiStrIndex>(codepoints.size()),

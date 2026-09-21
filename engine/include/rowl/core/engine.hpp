@@ -256,14 +256,21 @@ public:
     Rowl::Scene::Scene* getScene()       const { return m_scene.get(); }
     Rowl::Audio::AudioEngine* getAudio() const { return m_audio.get(); }
 
-    // ── Localization (Faz 3 Dilim 1) ─────────────────────────────────────
-    // The manager owns every locale rule; the Engine only hosts it, so
-    // engine.cpp gains no logic. Catalogs load on project mount
-    // (see Rowl::I18n::applyProjectLocalesToEngine).
+    // ── Localization (Faz 3 Dilim 1 + locale kümesi) ───────────────────
+    // The manager owns every locale rule (tags, catalogs, fallback
+    // chain); the Engine only resolves assembled dialogue lines against
+    // it at updateScene time and on SetLocale. Catalogs load on project
+    // mount (see Rowl::I18n::applyProjectLocalesToEngine).
     Rowl::I18n::LocalizationManager& getLocalization() { return m_localization; }
     const Rowl::I18n::LocalizationManager& getLocalization() const {
         return m_localization;
     }
+    /// Re-resolves every live dialogue line (speaker + text) from its
+    /// stored original against the current locale, re-syncs the legacy
+    /// single-dialogue state, and invalidates the shape cache. Called by
+    /// updateScene assembly and after a successful SetLocale so the
+    /// visible language flips without a node change.
+    void refreshActiveDialogueLocalization();
 
     // ── Voice Blips & Audio Effects (Milestone 25) ────────────────────────
     void setDialogueVoiceBlip(const std::string& soundPath, float basePitch, float pitchVariance, int cadence, bool skipPunctuation, int channelType);

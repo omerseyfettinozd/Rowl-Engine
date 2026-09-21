@@ -130,13 +130,15 @@ void testManifestContract() {
         fail("Manifest default outside the supported list was dropped");
     }
 
-    // Region tags collapse to their primary subtag.
+    // Region tags are PRESERVED whole (never truncated): "tr-TR" stays a
+    // distinct tag that resolves down its own BCP 47 chain ("tr-TR" ->
+    // "tr"). This pins the locale-cluster contract (#91/#93).
     const LocaleManifest tagged = LocalizationManager::parseManifestJson(
         R"({"default_locale": "tr-TR", "supported_locales": ["tr-TR", "en-US"]})");
-    if (tagged.defaultLocale != "tr" || tagged.supportedLocales.size() != 2 ||
-        tagged.supportedLocales[0] != "tr" ||
-        tagged.supportedLocales[1] != "en") {
-        fail("BCP-47 locale tags were not normalized to primary subtags");
+    if (tagged.defaultLocale != "tr-tr" || tagged.supportedLocales.size() != 2 ||
+        tagged.supportedLocales[0] != "tr-tr" ||
+        tagged.supportedLocales[1] != "en-us") {
+        fail("BCP-47 locale tags were not preserved whole");
     }
     TEST_PASS("Manifest locale declaration (both spellings + legacy fallback)");
 }

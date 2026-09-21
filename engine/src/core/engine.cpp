@@ -68,10 +68,13 @@ bool isPunctuationOrWhitespace(uint32_t cp) {
 std::shared_ptr<const Rowl::Text::ShapedText> shapeDialogue(
     const Rowl::Render::FontRenderer* renderer,
     const Rowl::Render::DialogueRenderData& dialogue) {
-    if (renderer) return renderer->shapeTextShared(dialogue.dialogue, dialogue.fontSize);
+    if (renderer)
+        return renderer->shapeTextShared(dialogue.dialogue, dialogue.fontSize,
+                                         0.0f, dialogue.language);
     Rowl::Text::TextShaper fallback;
     Rowl::Text::ShapeOptions options;
     options.fontSize = dialogue.fontSize;
+    options.language = dialogue.language;
     return std::make_shared<Rowl::Text::ShapedText>(
         fallback.shapeMarkup(dialogue.dialogue, options));
 }
@@ -763,6 +766,13 @@ void Engine::updateActiveScene(
     m_activeDialogueBoxHeight = dlgH;
 
     m_activeDialogueData.hasDialogueBox = m_hasDialogueBox;
+    // Legacy payloads carry no contentId: resolution is a no-op but the
+    // originals/language stamps keep refreshActiveDialogueLocalization
+    // correct if a catalog later covers an empty id (never — guarded).
+    m_activeDialogueData.contentId = "";
+    m_activeDialogueData.originalSpeaker = m_activeSpeaker;
+    m_activeDialogueData.originalDialogue = m_activeDialogue;
+    m_activeDialogueData.language = m_localization.getLocale();
     m_activeDialogueData.speaker = m_activeSpeaker;
     m_activeDialogueData.dialogue = m_activeDialogue;
     m_activeDialogueData.x = dlgX;
@@ -983,6 +993,17 @@ void Engine::updateSceneFromComponents(const nlohmann::json& root,
                 dlgData.speaker = data.value("speaker", "Evelyn");
                 dlgData.dialogue = data.value("dialogue", "");
                 dlgData.contentId = data.value("content_id", "");
+                // Locale wiring (Dilim Locale kümesi): keep the node-original
+                // strings so a later SetLocale can re-resolve without a node
+                // change; resolve once here so render/getters/history inherit
+                // the active language. Empty contentId resolves to originals.
+                dlgData.originalSpeaker = dlgData.speaker;
+                dlgData.originalDialogue = dlgData.dialogue;
+                dlgData.language = m_localization.getLocale();
+                dlgData.speaker =
+                    m_localization.resolveSpeaker(dlgData.contentId, dlgData.speaker).value;
+                dlgData.dialogue =
+                    m_localization.resolveText(dlgData.contentId, dlgData.dialogue).value;
                 dlgData.x = data.value("x", 80.0f);
                 dlgData.y = data.value("y", 860.0f);
                 dlgData.width = data.value("width", 1760.0f);
@@ -1050,9 +1071,24 @@ void Engine::updateSceneFromComponents(const nlohmann::json& root,
             } else if (type == "speaker") {
                 m_activeSpeaker = data.value("speaker", m_activeSpeaker);
                 m_activeDialogue = data.value("dialogue", m_activeDialogue);
-                m_activeDialogueData.speaker = m_activeSpeaker;
-                m_activeDialogueData.dialogue = m_activeDialogue;
+                const std::string speakerContentId = data.value("content_id", "");
+                // Same locale resolve as the dialogue branch: store originals
+                // so refresh can re-resolve this legacy path as well.
+                m_activeDialogueData.contentId = speakerContentId;
+                m_activeDialogueData.originalSpeaker = m_activeSpeaker;
+                m_activeDialogueData.originalDialogue = m_activeDialogue;
+                m_activeDialogueData.language = m_localization.getLocale();
+                m_activeDialogueData.speaker =
+                    m_localization.resolveSpeaker(speakerContentId, m_activeSpeaker).value;
+                m_activeDialogueData.dialogue =
+                    m_localization.resolveText(speakerContentId, m_activeDialogue).value;
+                m_activeSpeaker = m_activeDialogueData.speaker;
+                m_activeDialogue = m_activeDialogueData.dialogue;
                 if (!m_activeDialogues.empty()) {
+                    m_activeDialogues[0].contentId = speakerContentId;
+                    m_activeDialogues[0].originalSpeaker = m_activeDialogueData.originalSpeaker;
+                    m_activeDialogues[0].originalDialogue = m_activeDialogueData.originalDialogue;
+                    m_activeDialogues[0].language = m_activeDialogueData.language;
                     m_activeDialogues[0].speaker = m_activeSpeaker;
                     m_activeDialogues[0].dialogue = m_activeDialogue;
                 }
@@ -2301,8 +2337,43 @@ void Engine::recordActiveDialogueHistory() {
     }
 }
 
-bool Engine::areActiveDialoguesComplete() const {
-    // MS-6: a paused line renders full text (visibility keys off the per-line
+void Engine::refreshActiveDialogueLocalization() {
+    // SetLocale-OK sonrası canlı satırları depolanan orijinallerden yeniden
+    // çözer: düğüm değişmeden GetDialogue/render yeni dile geçer. Orijinali
+    // boş legacy yükler için görünen metin zaten orijinaldir.
+    // Shape cache dil anahtarlı olduğundan dil değişiminde eskir (#95);
+    // pencere varsa geçersiz kılınır.
+    const std::string language = m_localization.getLocale();
+    auto refreshOne = [&](Rowl::Render::DialogueRenderData& dlg) {
+        const std::string& originalSpeaker =
+            dlg.originalSpeaker.empty() ? dlg.speaker : dlg.originalSpeaker;
+        const std::string& originalDialogue =
+            dlg.originalDialogue.empty() ? dlg.dialogue : dlg.originalDialogue;
+        if (dlg.originalSpeaker.empty()) dlg.originalSpeaker = dlg.speaker;
+        if (dlg.originalDialogue.empty()) dlg.originalDialogue = dlg.dialogue;
+        dlg.speaker =
+            m_localization.resolveSpeaker(dlg.contentId, originalSpeaker).value;
+        dlg.dialogue =
+            m_localization.resolveText(dlg.contentId, originalDialogue).value;
+        dlg.language = language;
+    };
+    refreshOne(m_activeDialogueData);
+    for (auto& dlg : m_activeDialogues) refreshOne(dlg);
+    if (m_hasDialogueBox && !m_activeDialogues.empty()) {
+        m_activeSpeaker = m_activeDialogues.front().speaker;
+        m_activeDialogue = m_activeDialogues.front().dialogue;
+    } else {
+        m_activeSpeaker = m_activeDialogueData.speaker;
+        m_activeDialogue = m_activeDialogueData.dialogue;
+    }
+    if (m_window) {
+        if (auto* fontRenderer = m_window->getFontRenderer()) {
+            fontRenderer->invalidateShapeCache();
+        }
+    }
+}
+
+bool Engine::areActiveDialoguesComplete() const {    // MS-6: a paused line renders full text (visibility keys off the per-line
     // playing flag) with frozen elapsed time, so for frame-staticity purposes
     // it counts as complete. This preserves the MS-4 dirty-frame gate for
     // paused previews. The advance path uses raw elapsed time instead, so

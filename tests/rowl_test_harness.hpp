@@ -167,6 +167,7 @@ void test_crash_log();
 void test_story_graph_parser();
 void test_graph_vnext();
 void test_localization();
+void test_locale_cluster();  // Dilim Locale kümesi kilitleri (T1-T7)
 void test_markup_parser();
 void test_text_shaping();
 void test_utf8_decoder();  // A3-tur4: paylasimli strict UTF-8 decoder kilidi

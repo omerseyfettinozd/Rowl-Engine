@@ -46,7 +46,10 @@ public:
     bool highContrast() const { return m_highContrast; }
 
     /// Measures the total pixel width of a single line of UTF-8 text at given font size.
-    float measureTextWidth(const std::string& utf8Text, float fontSize);
+    /// `language` threads the same BCP 47 tag as shapeTextShared so the
+    /// width authority and the rendered layout agree on RTL base direction.
+    float measureTextWidth(const std::string& utf8Text, float fontSize,
+                           const std::string& language = "");
 
     /// Wraps UTF-8 text to fit within maxWidth at given font size.
     std::vector<std::string> wrapText(const std::string& utf8Text, float fontSize, float maxWidth);
@@ -59,10 +62,19 @@ public:
 
     /// Shapes markup once for consumers that need the exact render/reveal
     /// layout. The returned glyph vector is the measurement authority too.
+    /// `language` is a BCP 47 tag: it selects the HarfBuzz language, the
+    /// libunibreak break tables and the FriBidi base direction, and it is
+    /// part of the shape-cache key (empty = legacy undifferentiated entry).
     Rowl::Text::ShapedText shapeText(const std::string& markup, float fontSize,
-                                     float maxWidth = 0.0f) const;
+                                     float maxWidth = 0.0f,
+                                     const std::string& language = "") const;
     std::shared_ptr<const Rowl::Text::ShapedText> shapeTextShared(
-        const std::string& markup, float fontSize, float maxWidth = 0.0f) const;
+        const std::string& markup, float fontSize, float maxWidth = 0.0f,
+        const std::string& language = "") const;
+    /// Drops every cached layout. Called on locale switch: the cache key
+    /// carries the language, so stale entries could otherwise linger until
+    /// the 16-entry ring evicts them.
+    void invalidateShapeCache();
 
     size_t countRevealUnits(const std::string& markup, float fontSize) const;
 
@@ -99,6 +111,7 @@ private:
         float fontSize = 0.0f;
         float maxWidth = 0.0f;
         float textScale = 1.0f;
+        std::string language;
         std::shared_ptr<const Rowl::Text::ShapedText> layout;
     };
     mutable std::vector<ShapeCacheEntry> m_shapeCache;

@@ -145,6 +145,7 @@ int main(int argc, char* argv[]) {
     test_story_graph_parser();
     test_graph_vnext();
     test_localization();
+    test_locale_cluster();
     test_markup_parser();
     test_text_shaping();
     test_utf8_decoder();
