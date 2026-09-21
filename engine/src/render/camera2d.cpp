@@ -155,6 +155,11 @@ void Camera2D::shakeWithProfile(CameraShakePreset preset, float intensity, float
         m_shakeOffsetY = 0.0f;
         return;
     }
+    // D6-#147-artık: sürmekte olan shake'i erken yeniden tetikleme
+    // birleştirilir (kalan süre %10'un üstündeyse yoksay); koşulsuz reset
+    // spam altında kamerayı hiç rahat bırakmıyordu. Durdurma isteği
+    // yukarıda zaten ele alındı; sayaç sıfıra doğru sayar.
+    if (m_shakeTimer > 0.1f * m_shakeDuration) return;
     m_shakePreset = preset;
     m_shakeIntensity = std::clamp(intensity, 0.0f, kMaxShakeIntensity);
     m_shakeDuration = std::clamp(durationSeconds, 0.0f, kMaxShakeDuration);

@@ -76,8 +76,8 @@ static TransitionType typeForKind(const std::string& kind) {
     return TransitionType::None;
 }
 
-// D6-#147: erken aynı-tür yeniden tetikleme (%90 ilerleme altı) yoksayılır;
-// geçiş baştan başlamaz, snapshot tazelenmez.
+// D6-#147 (+artık genellemesi): erken yeniden tetikleme (%90 ilerleme altı,
+// türden bağımsız) yoksayılır; geçiş baştan başlamaz, snapshot tazelenmez.
 constexpr float kRetriggerCoalesceProgress = 0.9f;
 
 bool TransitionManager::isKnownKind(const std::string& kind) {
@@ -93,9 +93,13 @@ bool TransitionManager::canStartTransition(const std::string& kind,
     return isKnownKind(kind) && isUsableDuration(durationSeconds);
 }
 
-bool TransitionManager::shouldCoalesceRetrigger(const std::string& kind) const {
+// D6-#147-artık genellemesi: aynı kural tür-değiştiren tetiklemeye de
+// uygulanır — alterne-tür spam'i de snapshot sayacını artırmaz, sürmekte
+// olan geçiş progress=1'e ulaşır. Tür parametresi sözleşme gereği durur
+// (çağrı noktaları değişmez).
+bool TransitionManager::shouldCoalesceRetrigger(const std::string& /*kind*/) const {
     if (m_type == TransitionType::None) return false;
-    return typeForKind(kind) == m_type && m_progress < kRetriggerCoalesceProgress;
+    return m_progress < kRetriggerCoalesceProgress;
 }
 
 void TransitionManager::startTransitionFromKind(const std::string& kind,

@@ -129,20 +129,29 @@ void testTransitionValidateBeforeSnapshot() {
             exit(1);
         }
     }
-    // Farklı tür ortada geçişi devralır.
+    // Farklı tür erken tetiklemede de birleşir (#147-artık genellemesi:
+    // alterne-tür spam'i snapshot artırmaz); %90 sonrası tür değiştirir.
     {
         TransitionManager transition;
         transition.startTransitionFromKind("crossfade", 1.0f);
         transition.update(0.1f);
         transition.startTransitionFromKind("wipe_left", 1.0f);
+        if (transition.getType() != TransitionType::CrossFade ||
+            std::fabs(transition.getElapsed() - 0.1f) > 1e-6f) {
+            std::cerr << "Early different-kind retrigger must coalesce (no restart)"
+                      << std::endl;
+            exit(1);
+        }
+        transition.update(0.85f);
+        transition.startTransitionFromKind("wipe_left", 1.0f);
         if (transition.getType() != TransitionType::WipeLeft ||
             transition.getElapsed() != 0.0f) {
-            std::cerr << "Different-kind retrigger must switch the transition"
+            std::cerr << "Late different-kind retrigger must switch the transition"
                       << std::endl;
             exit(1);
         }
     }
-    TEST_PASS("Same-kind early retrigger coalesces; late/different-kind restarts");
+    TEST_PASS("Early retrigger coalesces (any kind); late retrigger restarts");
 
     // Pencere düzeyi: 10x spam geçersiz girdi readback'e mal olmaz, sürmekte
     // olan geçişi öldürmez; birleştirilmiş tetikleme yeniden yakalamaz.
@@ -206,6 +215,139 @@ void testTransitionValidateBeforeSnapshot() {
         window.shutdown();
     }
     TEST_PASS("10x invalid/coalesced spam costs zero readbacks; running transition survives");
+}
+
+// D6-#147-artık: flash/shake koşulsuz resetleri + tür-alternatifli spam.
+// Üç bacak: (a) flash yeniden tetiklemede progress sıfırlanmaz;
+// (b) shake erken tetiklemede sayaç sıfırlanmaz, %10-kala kabul edilir;
+// (c) pencere düzeyinde alterne-tür spam snapshot artırmaz, geçiş
+// progress=1'e ulaşır, %90-sonrası tür değişimi yeni yakalama yapar.
+void testScreenFxRetriggerCoalesce() {
+    TEST_SECTION("Screen FX & Cross-Kind Retrigger Coalesce (#147 residue)");
+    using Rowl::Render::TransitionManager;
+    using Rowl::Render::TransitionType;
+
+    // Bacak (a): flash ilerler, erken yeniden tetikleme sıfırlamaz.
+    {
+        Rowl::VFS::VFSManager vfs;
+        vfs.remountProject(std::filesystem::current_path().string());
+        Rowl::Render::Window window(&vfs);
+        if (!window.initializeOffscreen(320, 180)) {
+            std::cerr << "Could not initialize offscreen window for flash gate test"
+                      << std::endl;
+            exit(1);
+        }
+        window.triggerScreenFlash(255, 0, 0, 1.0f, 1.0f);
+        window.update(0.1f);
+        const float progressBefore = window.getScreenFlashProgress();
+        if (std::fabs(progressBefore - 0.1f) > 1e-5f) {
+            std::cerr << "Flash progress did not advance to 0.1" << std::endl;
+            exit(1);
+        }
+        window.triggerScreenFlash(0, 255, 0, 1.0f, 1.0f);
+        if (!window.isScreenFlashActive() ||
+            std::fabs(window.getScreenFlashProgress() - progressBefore) > 1e-6f) {
+            std::cerr << "Early flash retrigger must coalesce (no restart)"
+                      << std::endl;
+            exit(1);
+        }
+        window.update(1.0f);
+        if (window.isScreenFlashActive()) {
+            std::cerr << "Finished flash must go inactive" << std::endl;
+            exit(1);
+        }
+        window.triggerScreenFlash(0, 255, 0, 1.0f, 1.0f);
+        if (!window.isScreenFlashActive() ||
+            window.getScreenFlashProgress() != 0.0f) {
+            std::cerr << "Idle flash retrigger must restart from zero"
+                      << std::endl;
+            exit(1);
+        }
+        window.shutdown();
+    }
+    TEST_PASS("Flash retrigger coalesces mid-flight; restarts when idle/finished");
+
+    // Bacak (b): shake sayacı erken tetiklemede sıfırlanmaz.
+    {
+        Rowl::Render::Camera2D camera(1920.0f, 1080.0f);
+        camera.shake(25.0f, 0.4f, 30.0f);
+        camera.update(0.05f);
+        const float timerBefore = camera.getShakeTimer();
+        if (timerBefore <= 0.3f) {
+            std::cerr << "Shake timer did not keep running after update"
+                      << std::endl;
+            exit(1);
+        }
+        camera.shakeWithProfile(Rowl::Render::CameraShakePreset::Custom,
+                                99.0f, 9.0f, 30.0f, 1.5f, 0.8f, 0.4f);
+        if (std::fabs(camera.getShakeTimer() - timerBefore) > 1e-6f) {
+            std::cerr << "Early shake retrigger must coalesce (timer keeps running)"
+                      << std::endl;
+            exit(1);
+        }
+        // Kalan %10'un altına inince yeni shake kabul edilir.
+        camera.update(0.32f);
+        camera.shakeWithProfile(Rowl::Render::CameraShakePreset::Custom,
+                                99.0f, 9.0f, 30.0f, 1.5f, 0.8f, 0.4f);
+        if (camera.getShakeTimer() < 9.0f - 1e-5f) {
+            std::cerr << "Late shake retrigger must restart the timer"
+                      << std::endl;
+            exit(1);
+        }
+    }
+    TEST_PASS("Shake retrigger coalesces early; restarts inside the last 10%");
+
+    // Bacak (c): alterne-tür spam snapshot artırmaz, geçiş tamamlanır.
+    {
+        Rowl::VFS::VFSManager vfs;
+        vfs.remountProject(std::filesystem::current_path().string());
+        Rowl::Render::Window window(&vfs);
+        if (!window.initializeOffscreen(320, 180)) {
+            std::cerr << "Could not initialize offscreen window for cross-kind spam test"
+                      << std::endl;
+            exit(1);
+        }
+        Rowl::Render::TransitionManager* manager = window.getTransitionManager();
+        if (!manager) {
+            std::cerr << "Offscreen window has no transition manager" << std::endl;
+            exit(1);
+        }
+        const uint64_t base = manager->getSnapshotCaptureCount();
+        window.startTransition("crossfade", 0.5f, "");
+        if (manager->getSnapshotCaptureCount() != base + 1 ||
+            !window.isTransitionActive()) {
+            std::cerr << "Valid transition must capture once and go active"
+                      << std::endl;
+            exit(1);
+        }
+        window.update(0.05f);
+        const float elapsedBefore = manager->getElapsed();
+        for (int i = 0; i < 10; ++i)
+            window.startTransition("wipe_left", 0.5f, "");
+        if (manager->getSnapshotCaptureCount() != base + 1 ||
+            manager->getType() != TransitionType::CrossFade ||
+            std::fabs(manager->getElapsed() - elapsedBefore) > 1e-6f) {
+            std::cerr << "Cross-kind spam must coalesce (no recapture, no switch)"
+                      << std::endl;
+            exit(1);
+        }
+        window.update(0.5f);
+        if (window.isTransitionActive() || manager->getProgress() != 1.0f) {
+            std::cerr << "Coalesced transition must run to progress=1 and complete"
+                      << std::endl;
+            exit(1);
+        }
+        window.startTransition("wipe_left", 0.5f, "");
+        if (manager->getSnapshotCaptureCount() != base + 2 ||
+            !window.isTransitionActive() ||
+            manager->getType() != TransitionType::WipeLeft) {
+            std::cerr << "Late different-kind start must capture and switch"
+                      << std::endl;
+            exit(1);
+        }
+        window.shutdown();
+    }
+    TEST_PASS("Cross-kind spam costs zero readbacks; transition completes; late switch captures");
 }
 
 }  // namespace
@@ -420,7 +562,16 @@ void test_camera_and_transition_pipeline() {
             exit(1);
         }
 
-        // Wipe transitions
+        // Wipe transitions — #147-artık: erken tür değişimi birleşir
+        // (fade_color sürer, baştan başlamaz); %90 sonrası wipe_left devralır.
+        transition.startTransitionFromKind("wipe_left", 0.8f);
+        if (!transition.isTransitionActive() ||
+            transition.getType() != Rowl::Render::TransitionType::FadeToColor) {
+            std::cerr << "Early different-kind retrigger must coalesce" << std::endl;
+            exit(1);
+        }
+
+        transition.update(0.95f);
         transition.startTransitionFromKind("wipe_left", 0.8f);
         if (!transition.isTransitionActive() || transition.getType() != Rowl::Render::TransitionType::WipeLeft) {
             std::cerr << "TransitionManager WipeLeft start failed" << std::endl;
@@ -649,7 +800,10 @@ void test_camera_and_transition_pipeline() {
             exit(1);
         }
 
-        // Explosion preset: rapid damping (2.2) and high frequency
+        // Explosion preset: rapid damping (2.2) and high frequency.
+        // #147-artık: erken preset değişimi birleşir; deprem shake'i
+        // bitmeden patlama uygulanmaz — önce settle edilir.
+        cam.update(1.2f);
         cam.shakePreset(Rowl::Render::CameraShakePreset::Explosion, 1.5f);
         if (cam.getShakePreset() != Rowl::Render::CameraShakePreset::Explosion ||
             std::abs(cam.getShakeDamping() - 2.2f) > 0.01f) {
@@ -657,7 +811,8 @@ void test_camera_and_transition_pipeline() {
             exit(1);
         }
 
-        // Heartbeat / Pulse preset: string overload
+        // Heartbeat / Pulse preset: string overload (#147-artık: settle sonrası).
+        cam.update(0.7f);
         cam.shakePreset("heartbeat");
         if (cam.getShakePreset() != Rowl::Render::CameraShakePreset::Heartbeat ||
             std::abs(cam.getShakeDirX() - 0.15f) > 0.01f ||
@@ -666,7 +821,8 @@ void test_camera_and_transition_pipeline() {
             exit(1);
         }
 
-        // Custom profile with full parameters
+        // Custom profile with full parameters (#147-artık: settle sonrası).
+        cam.update(1.5f);
         cam.shakeWithProfile(Rowl::Render::CameraShakePreset::Custom, 20.0f, 0.5f, 30.0f, 1.5f, 0.8f, 0.4f);
         if (std::abs(cam.getShakeDirX() - 0.8f) > 0.01f || std::abs(cam.getShakeDirY() - 0.4f) > 0.01f ||
             std::abs(cam.getShakeDamping() - 1.5f) > 0.01f) {
@@ -950,4 +1106,5 @@ void test_camera_and_transition_pipeline() {
 
     testTransitionHexUnification();
     testTransitionValidateBeforeSnapshot();
+    testScreenFxRetriggerCoalesce();
 }

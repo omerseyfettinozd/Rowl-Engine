@@ -231,11 +231,16 @@ void test_render_transition_fixes() {
         fxLockCheck(!window->isVignetteActive(), "#163: vignette leaked past rollback");
         TEST_PASS("#163 post-FX throw restores window FX + aborts orphan + signals");
 
-        // Leg 2: a live in-flight transition replaced by the failed update is
-        // aborted (its snapshot was destroyed by the replacing capture).
+        // Leg 2 (#147-artık ile güncellendi): failed update'in sahnelediği
+        // fade_black, sürmekte olan crossfade'i deviremez — erken tür
+        // değişimi birleşir, yeniden yakalama yapılmaz; rollback sahneyi
+        // geri alır ama update-öncesi başlatılmış geçişi yaşatır (ezilen
+        // snapshot yok, yetim geçiş yok).
         RowlEngine_StartTransition(handle, "crossfade", 5.0f, "");
         fxLockCheck(RowlEngine_IsTransitionActive(handle) == 1,
                     "#163 leg2: setup transition must start");
+        const uint64_t capturesBefore =
+            window->getTransitionManager()->getSnapshotCaptureCount();
         RowlEngine_UpdateSceneFromJson(handle, R"([
             {"type":"screen_fx","id":"fx","enabled":true,
              "data":{"kind":"fade_black","duration":1.0}},
@@ -244,11 +249,13 @@ void test_render_transition_fixes() {
         ])");
         fxLockCheck(RowlEngine_GetLastResultCode(handle) == ROWL_RESULT_VALIDATION_ERROR,
                     "#163 leg2: must still signal VALIDATION_ERROR");
-        fxLockCheck(RowlEngine_IsTransitionActive(handle) == 0,
-                    "#163 leg2: replaced in-flight transition must abort");
+        fxLockCheck(window->getTransitionManager()->getSnapshotCaptureCount() == capturesBefore,
+                    "#163 leg2: coalesced replacement must not recapture");
+        fxLockCheck(RowlEngine_IsTransitionActive(handle) == 1,
+                    "#163 leg2: pre-existing transition survives failed update");
         RowlEngine_Shutdown(handle);
         RowlEngine_Destroy(handle);
-        TEST_PASS("#163 replaced in-flight transition aborts on failed update");
+        TEST_PASS("#163 coalesced replacement recaptures nothing; pre-existing transition survives failed update");
     }
 
     // #164: RENDER_* routing + recovery. Dispatcher leg pins global routing

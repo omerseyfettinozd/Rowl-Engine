@@ -666,6 +666,13 @@ void Window::triggerScreenFlash(uint8_t r, uint8_t g, uint8_t b, float durationS
         m_screenFx.flashElapsed = 0.0f;
         return;
     }
+    // D6-#147-artık: sürmekte olan flaşı erken yeniden tetikleme
+    // birleştirilir; flash baştan başlamaz (transition coalesce emsali,
+    // %90 eşiği). Durdurma isteği (süre<=0) yukarıda zaten ele alındı.
+    constexpr float kFlashRetriggerCoalesceProgress = 0.9f;
+    if (m_screenFx.flashActive &&
+        m_screenFx.flashElapsed < kFlashRetriggerCoalesceProgress * m_screenFx.flashDuration)
+        return;
     m_screenFx.flashActive = true;
     m_screenFx.flashR = r;
     m_screenFx.flashG = g;
