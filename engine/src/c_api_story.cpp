@@ -425,6 +425,25 @@ void RowlEngine_SetProjectDirectory(RowlEngineHandle handle, const char* project
                 }
             }
         }
+        // #142: a corrupt .rowlpkg used to leave the mounts quietly short —
+        // WARN-only in the VFS, nothing on any host-visible channel. Surface
+        // the skip count on the context channel, but only when nothing more
+        // specific already claimed it (a failed story load outranks this).
+        if (auto* vfs = engine->getVfs()) {
+            const size_t skipped = vfs->skippedPackageCount();
+            if (skipped > 0) {
+                if (auto* ctx = engine->getContext()) {
+                    if (ctx->getLastResult().isOk()) {
+                        ctx->setError(Rowl::Core::RuntimeErrorCode::ValidationError,
+                                      "SetProjectDirectory mounted with " +
+                                          std::to_string(skipped) +
+                                          " unreadable package(s) skipped; first: " +
+                                          vfs->firstSkippedPackage(),
+                                      "set_project_directory", "");
+                    }
+                }
+            }
+        }
     });
 }
 

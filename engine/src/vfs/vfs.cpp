@@ -148,6 +148,10 @@ void VFSManager::clearMountPoints() {
 bool VFSManager::remountProject(const std::string& projectRoot) {
     std::lock_guard<std::recursive_mutex> lock(m_mutex);
     clearMountPoints();
+    // #142: per-remount skipped-package diagnosis — reset before the mount
+    // chain so stale counts never leak into the next project switch.
+    m_skippedPackages = 0;
+    m_firstSkippedPackage.clear();
     m_initialized = true;
 
     if (projectRoot.empty()) return true;
@@ -323,6 +327,12 @@ void VFSManager::mountPackage(const std::string& virtualPrefix, const std::strin
         m_mountPoints.emplace_back(virtualPrefix, source);
         ROWL_LOG_INFO("VFS Mounted package: '" + pkgPath + "' under virtual prefix '" + virtualPrefix + "'");
     } else {
+        // #142: WARN-only used to be the whole story — a corrupt package left
+        // the mounts quietly short with no host-visible signal. Count the skip
+        // (and keep the first path) so the C API layer can surface it on the
+        // context channel after remountProject.
+        ++m_skippedPackages;
+        if (m_firstSkippedPackage.empty()) m_firstSkippedPackage = pkgPath;
         ROWL_LOG_WARN("VFS Failed to mount package: '" + pkgPath + "'");
     }
 }

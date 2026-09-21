@@ -405,6 +405,11 @@ std::optional<std::vector<uint8_t>> RowlPkgDataSource::readEntry(const PackageEn
         // touches locals only, so decodes no longer serialize on IO.
         std::lock_guard<std::mutex> lock(m_fileMutex);
 
+        // #143: sticky failbit — truncated/kısa okuma fail+eof kurunca
+        // sonraki her seekg no-op olup tüm paket remount'a kadar
+        // kararıyordu. Her teşebbüs bayrakları temizler: kalıcı hata bu
+        // girdiye sınırlanır, akış bir sonraki çağrıda yeniden denenir.
+        m_fileStream.clear();
         m_fileStream.seekg(static_cast<std::streamoff>(entry.offset), std::ios::beg);
 
         if (!m_fileStream.good()) {

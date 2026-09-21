@@ -49,6 +49,12 @@ except ImportError:
 
 MANIFEST_PATH = "rowl/manifest.json"
 MANIFEST_FORMAT = 1
+# #145: reader agreement — engine/src/vfs/rowlpkg_reader.cpp rejects flags==1
+# entries whose integer expansion ratio (uncompressed/compressed) exceeds this.
+# The packer must never emit what the reader must reject; over-compressible
+# blobs fall back to raw storage below. Keep in sync with
+# kMaxCompressionExpansionRatio and tools/verify_release_package.py.
+MAX_EXPANSION_RATIO = 1024
 SKIP_SUFFIXES = (".rowlpkg", ".tmp", ".gitkeep")
 
 # Faz 1 Dilim 1: MVP medya format sözleşmesi. C# tarafındaki tek tablonun
@@ -262,6 +268,14 @@ def pack_directory(input_dir, output_pkg):
         if HAS_ZSTD and uncompressed_size > 0:
             compressed_data = cctx.compress(uncompressed_data)
             flags = 1  # Zstd
+            # #145 pack-time decision: the runtime reader fail-closes on
+            # flags==1 entries with uncompressed//compressed > 1024 (integer
+            # division, mirrored exactly). Highly redundant blobs (e.g. long
+            # zero runs) trip that gate, so store them raw instead of emitting
+            # a package the reader must reject.
+            if len(compressed_data) == 0 or uncompressed_size // len(compressed_data) > MAX_EXPANSION_RATIO:
+                compressed_data = uncompressed_data
+                flags = 0  # Raw (over-compressible for the reader's ratio gate)
         else:
             compressed_data = uncompressed_data
             flags = 0  # Raw

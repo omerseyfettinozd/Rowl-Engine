@@ -739,6 +739,106 @@ void test_vfs_security() {
     // No global-restore remount: vfs is function-local.
     TEST_PASS("Project remount exposes Assets but not project-root files");
 
+    // #142 bilerek-boz: bozuk .rowlpkg WARN-only yutulmamalı. Remount sayacı
+    // atlar (skippedPackageCount==1 + ilk yol tutulur), sayaç proje-değişiminde
+    // sıfırlanır (bayat sayım sızmaz), SetProjectDirectory ise story OK iken
+    // ValidationError(6) + "skipped" mesajını context kanalına yazar. Story
+    // zaten patlaksa story hatası önceliklidir (ezme yok — isOk gardı).
+    {
+        const auto proj142 = testRoot / "proj142";
+        std::error_code ec142;
+        std::filesystem::create_directories(proj142 / "Assets" / "packages", ec142);
+        std::filesystem::create_directories(proj142 / "Assets" / "json", ec142);
+        if (ec142) {
+            std::cerr << "#142 setup: could not stage project dirs" << std::endl;
+            exit(1);
+        }
+        {
+            std::ofstream pkg(proj142 / "Assets" / "packages" / "corrupt.rowlpkg",
+                              std::ios::binary);
+            pkg << "NOT-A-PACKAGE";
+        }
+        {
+            std::ofstream graph(proj142 / "Assets" / "json" / "full_story_graph.json");
+            graph << "{\"format_version\":4,\"start_node_id\":707,\"nodes\":"
+                     "[{\"id\":707,\"dialogue\":\"Hi\"}]}";
+        }
+        Rowl::VFS::VFSManager vfs142;
+        vfs142.initialize();
+        if (!vfs142.remountProject(proj142.string())) {
+            std::cerr << "#142: remountProject rejected a live project root" << std::endl;
+            exit(1);
+        }
+        if (vfs142.skippedPackageCount() != 1) {
+            std::cerr << "#142: corrupt package left no skip count, got "
+                      << vfs142.skippedPackageCount() << std::endl;
+            exit(1);
+        }
+        if (vfs142.firstSkippedPackage().find("corrupt.rowlpkg") == std::string::npos) {
+            std::cerr << "#142: first skipped package does not name the corrupt file, got: '"
+                      << vfs142.firstSkippedPackage() << "'" << std::endl;
+            exit(1);
+        }
+        // Sayaç proje-değişiminde sıfırlanmalı: temiz kök sıfır sayımla gelir.
+        const auto empty142 = testRoot / "empty142";
+        std::filesystem::create_directories(empty142, ec142);
+        if (ec142 || !vfs142.remountProject(empty142.string()) ||
+            vfs142.skippedPackageCount() != 0) {
+            std::cerr << "#142: skip count leaked across project switches" << std::endl;
+            exit(1);
+        }
+        // C API: story OK + 1 atlanan paket → ValidationError(6) + "skipped".
+        struct ScopedCwd142 {
+            std::filesystem::path saved;
+            bool ok = false;
+            explicit ScopedCwd142(const std::filesystem::path& dir) {
+                std::error_code ec;
+                saved = std::filesystem::current_path(ec);
+                if (ec) return;
+                std::filesystem::create_directories(dir, ec);
+                if (ec) return;
+                std::filesystem::current_path(dir, ec);
+                ok = !ec;
+            }
+            ~ScopedCwd142() {
+                if (ok) {
+                    std::error_code ec;
+                    std::filesystem::current_path(saved, ec);
+                }
+            }
+        };
+        const auto cwd142 = testRoot / "empty_cwd_142";
+        ScopedCwd142 cwdPin(cwd142);
+        if (!cwdPin.ok) {
+            std::cerr << "#142 setup: could not pin CWD" << std::endl;
+            exit(1);
+        }
+        RowlEngineHandle h142 = RowlEngine_Create();
+        if (!h142 || !RowlEngine_Init(h142, 320, 180, 0)) {
+            std::cerr << "#142 setup: bare init failed" << std::endl;
+            exit(1);
+        }
+        RowlEngine_SetProjectDirectory(h142, proj142.string().c_str());
+        const int32_t code142 = RowlEngine_GetLastResultCode(h142);
+        const char* rawMsg142 = RowlEngine_GetLastResultMessage(h142);
+        const std::string msg142 = rawMsg142 ? rawMsg142 : "";
+        if (code142 != 6) {
+            std::cerr << "#142: skipped package left no ValidationError(6), got code "
+                      << code142 << " msg: '" << msg142 << "'" << std::endl;
+            RowlEngine_Destroy(h142);
+            exit(1);
+        }
+        if (msg142.find("skipped") == std::string::npos ||
+            msg142.find("corrupt.rowlpkg") == std::string::npos) {
+            std::cerr << "#142: skip diagnosis names no package, got: '"
+                      << msg142 << "'" << std::endl;
+            RowlEngine_Destroy(h142);
+            exit(1);
+        }
+        RowlEngine_Destroy(h142);
+    }
+    TEST_PASS("#142 Corrupt packages surface a skip count on the context channel");
+
     // Windows CI stalls for minutes deleting this tree (~140 small files, one
     // file symlink, one 128 MB fixture), hanging the suite with no output;
     // the same delete is instant elsewhere. Prime suspects, ranked: (1) AV /

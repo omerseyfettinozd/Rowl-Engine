@@ -13,6 +13,13 @@ HEADER = struct.Struct("<4sHIQ")
 ENTRY = struct.Struct("<QIQQQI")
 MAX_ENTRIES = 100_000
 MANIFEST_PATH = "rowl/manifest.json"
+# #145: reader-mirror limits — engine/src/vfs/rowlpkg_reader.cpp fail-closes
+# on entries breaching these (kMaxPackageEntryBytes, kMaxCompressionExpansionRatio
+# with integer division). The verifier must reject what the reader would
+# reject, so a gated release never ships a package that loads short. Keep in
+# sync with the reader and tools/package_assets.py.
+MAX_ENTRY_BYTES = 128 * 1024 * 1024
+MAX_EXPANSION_RATIO = 1024
 
 
 def fail(message):
@@ -55,6 +62,19 @@ def read_package_entries(package_path):
                 fail("package contains an unsafe or duplicate entry path: " + path)
             if offset < HEADER.size or offset + compressed_size > index_offset:
                 fail("package entry payload points outside the payload area: " + path)
+            # #145 reader-mirror: size caps, flags coherence, and the integer-
+            # division expansion gate — exact mirror of rowlpkg_reader.cpp so
+            # the verifier rejects whatever the reader would fail-close on.
+            if flags > 1:
+                fail("package entry has invalid compression metadata: " + path)
+            if compressed_size > MAX_ENTRY_BYTES or uncompressed_size > MAX_ENTRY_BYTES:
+                fail("package entry size exceeds the reader limit: " + path)
+            if flags == 0 and compressed_size != uncompressed_size:
+                fail("package entry raw sizes disagree: " + path)
+            if flags == 1 and (compressed_size == 0 or uncompressed_size == 0):
+                fail("package entry has a zero compressed size: " + path)
+            if flags == 1 and uncompressed_size // compressed_size > MAX_EXPANSION_RATIO:
+                fail("package entry compression ratio exceeds the reader limit: " + path)
             entries[normalized] = (offset, compressed_size, uncompressed_size, flags)
 
         if MANIFEST_PATH not in entries:

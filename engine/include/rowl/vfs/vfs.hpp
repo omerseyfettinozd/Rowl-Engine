@@ -85,6 +85,17 @@ public:
         std::lock_guard<std::recursive_mutex> lock(m_mutex);
         return m_mountPoints;
     }
+    /// #142: packages skipped during the last remount (invalid/corrupt
+    /// .rowlpkg). Mount callers used to WARN-only; the C API layer reads
+    /// these after remountProject and surfaces them on the context channel.
+    size_t skippedPackageCount() const {
+        std::lock_guard<std::recursive_mutex> lock(m_mutex);
+        return m_skippedPackages;
+    }
+    std::string firstSkippedPackage() const {
+        std::lock_guard<std::recursive_mutex> lock(m_mutex);
+        return m_firstSkippedPackage;
+    }
 
 private:
     /// A2a: mount-list snapshot + single-pass probe. The global lock covers
@@ -101,6 +112,8 @@ private:
     mutable std::recursive_mutex m_mutex;
     std::vector<std::pair<std::string, std::shared_ptr<IDataSource>>> m_mountPoints;
     bool m_initialized = false;
+    size_t m_skippedPackages = 0;
+    std::string m_firstSkippedPackage;
 };
 
 } // namespace Rowl::VFS
