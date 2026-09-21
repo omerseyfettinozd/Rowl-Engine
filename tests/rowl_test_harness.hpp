@@ -153,6 +153,7 @@ void test_lifecycle_init_guards();  // B1a: fail-loud init kilitleri
 void test_lifecycle_shutdown_sweep();  // D2: shutdown-supurme + re-init kilitleri
 void test_lifecycle_thread_lease();  // D3: thread/lease + dispatch-pin kilitleri
 void test_lifecycle_run_guard();  // #14 [HIGH]: offscreen Run fail-closed kilidi
+void test_lifecycle_run_abort();  // #123 [HIGH]: run-loop istisnada fail-closed abort kilidi
 void test_lifecycle_handle_reclamation();  // R1 #7: nesilli slot havuzu + ABA kilidi
 void test_save_lock();  // D4: save/load/rewind kilitleri (#43-#53, #70)
 void test_save_slot_concurrency();  // R1 #3: eszamanli slot yazarlarinda kazanan hep tam payload

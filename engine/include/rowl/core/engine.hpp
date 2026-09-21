@@ -412,6 +412,8 @@ private:
 
     bool m_isRunning    = false;
     bool m_initialized  = false;
+    // #123 test-only seam counter (see testArmStepThrow). Idle zero.
+    int m_testStepThrowCountdown = 0;
     bool m_isPlaying    = false;
     // MS-6 player shell: pause menu + active quick-save slot.
     bool m_paused = false;
@@ -536,6 +538,14 @@ public:
     /// to skip the ~8.3 MB pixel copy; conservative by design — any doubt
     /// reports not-static so the host copies.
     bool isPreviewFrameStatic() const;
+
+    // #123 test-only fault-injection seam (run-abort RED probe). Arms step()
+    // to throw std::runtime_error instead of framing once the countdown hits
+    // zero (N<=0 disarms). Idle (0) costs one integer compare per step();
+    // production never arms it, so behavior is unchanged when idle.
+    void testArmStepThrow(int stepsUntilThrow) { m_testStepThrowCountdown = stepsUntilThrow; }
+    // #123 test-only observer for the aborted-frame playtime assertion.
+    double testPlaytimeSeconds() const { return m_playtimeSeconds; }
 };
 
 } // namespace Rowl::Core

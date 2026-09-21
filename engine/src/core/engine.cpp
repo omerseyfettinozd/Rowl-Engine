@@ -14,6 +14,7 @@
 #include "rowl/platform/sdl_event_dispatcher.hpp"
 #include <chrono>
 #include <cstdio>
+#include <stdexcept>
 #include <thread>
 #include <array>
 #include <cmath>
@@ -1782,9 +1783,15 @@ void Engine::step(float deltaTime) {
     if (platformHost && platformHost->lifecycleState() == Rowl::Platform::LifecycleState::Suspended) {
         return;
     }
-    // Faz 2 Dilim 4 total playtime: only live, unpaused play counts.
-    if (m_isPlaying && !m_paused) {
-        m_playtimeSeconds += deltaTime;
+    // #123: playtime accrues only for fully-presented frames. The increment
+    // used to lead step() (here), so an exception past it left the clock
+    // advanced on a half-frame. It now accrues at the end of step(), after
+    // all fallible frame work (see endFrame below).
+    // #123 test-only fault-injection seam: an armed countdown throws instead
+    // of framing (deterministic RED probe for the run-abort path). Idle (0)
+    // is one integer compare; production never arms it.
+    if (m_testStepThrowCountdown > 0 && --m_testStepThrowCountdown == 0) {
+        throw std::runtime_error("#123 test seam: injected step failure");
     }
     if (platformHost) {
         for (const auto& event : platformHost->takeInputEvents()) {
@@ -1993,6 +2000,15 @@ void Engine::step(float deltaTime) {
     }
 
     m_window->endFrame();
+
+    // #123: playtime accrues only for fully-presented frames — moved here
+    // from the top of step(), after all fallible frame work, so a frame that
+    // throws can never leave the clock advanced (clock/frame atomicity).
+    // Quit/suspend early-returns above still skip the accrual, as before.
+    // Faz 2 Dilim 4 total playtime: only live, unpaused play counts.
+    if (m_isPlaying && !m_paused) {
+        m_playtimeSeconds += deltaTime;
+    }
 }
 
 void Engine::setTextSpeedMultiplier(float multiplier) {
@@ -2112,20 +2128,65 @@ void Engine::run() {
     ROWL_LOG_INFO("Entering standalone render loop...");
     setPlayState(true);
 
+    // #123 [HIGH]: the loop body had no guard — an exception escaping step()
+    // tore the loop, skipped shutdown() below, left m_isRunning true (limbo:
+    // IsRunning=1 with no error signal, half-frame + advanced clock), and the
+    // void C-API wrapper swallowed it silently. Fail-closed: clear the running
+    // flag, stamp the context (fail-loud), break to the terminal shutdown
+    // below. The handler is throw-safe (flag first, best-effort context/log)
+    // so the catch can never become a second throw path.
+    const auto abortRunLoop = [this](const char* what) noexcept {
+        m_isRunning = false;
+        const char* safeWhat = (what != nullptr && what[0] != '\0') ? what : "unknown exception";
+        try {
+            if (m_context) {
+                m_context->setError(RuntimeErrorCode::StateError,
+                                    std::string("Engine run loop aborted by exception; "
+                                                "terminal shutdown (") + safeWhat + ")",
+                                    "run", "");
+            }
+        } catch (...) {
+            // Best-effort: the running flag is already cleared above.
+        }
+        try {
+            ROWL_LOG_ERROR("Engine run loop aborted by exception; terminal shutdown.");
+        } catch (...) {
+        }
+    };
+
     auto lastTime = std::chrono::high_resolution_clock::now();
     while (m_isRunning) {
-        auto currentTime = std::chrono::high_resolution_clock::now();
-        float dt = std::chrono::duration<float>(currentTime - lastTime).count();
-        lastTime = currentTime;
-        if (dt > 0.25f) dt = 0.25f;
-        if (dt < 0.0f)  dt = 0.0f;
+        try {
+            auto currentTime = std::chrono::high_resolution_clock::now();
+            float dt = std::chrono::duration<float>(currentTime - lastTime).count();
+            lastTime = currentTime;
+            if (dt > 0.25f) dt = 0.25f;
+            if (dt < 0.0f)  dt = 0.0f;
 
-        // step() internally calls pollEvents() and sets m_isRunning = false on quit
-        step(dt);
+            // step() internally calls pollEvents() and sets m_isRunning = false on quit
+            step(dt);
+        } catch (const std::exception& e) {
+            abortRunLoop(e.what());
+            break;
+        } catch (...) {
+            abortRunLoop(nullptr);
+            break;
+        }
     }
 
     ROWL_LOG_INFO("Engine render loop finished.");
-    shutdown();
+    // #123: shutdown() callees are non-noexcept (window/audio/lua teardown),
+    // so the terminal shutdown is nest-guarded — an abort followed by a
+    // throwing shutdown still leaves IsRunning=0 instead of propagating.
+    try {
+        shutdown();
+    } catch (...) {
+        m_isRunning = false;
+        try {
+            ROWL_LOG_ERROR("Engine shutdown threw during run-loop teardown; forced stop.");
+        } catch (...) {
+        }
+    }
 }
 
 void Engine::deactivateScripts(bool callOnExit) {
