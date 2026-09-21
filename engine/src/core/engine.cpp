@@ -1948,15 +1948,22 @@ void Engine::step(float deltaTime) {
         }
     }
     const StoryNode* activeNode = m_storyRuntime.currentNode();
-    if (m_isPlaying && autoAdvanceEnabled && m_activeChoiceButtons.empty() &&
-        activeNode && !activeNode->nextNodes.empty() &&
-        areActiveDialoguesComplete() && (!m_window || !m_window->isTransitionActive())) {
+    // #61 [HIGH]: while a transition runs, the gate below is closed and the
+    // old else-branch wiped the credit every frame — a single long transition
+    // starved auto-advance (wall clock = transition + full delay) while
+    // playtime kept accruing. Freeze the credit when the transition is the
+    // ONLY blocker; every other closed-gate cause still resets (open choice,
+    // node change, incomplete lines hold no credit by construction).
+    const bool advanceArmed = m_isPlaying && autoAdvanceEnabled && m_activeChoiceButtons.empty() &&
+        activeNode && !activeNode->nextNodes.empty() && areActiveDialoguesComplete();
+    const bool transitionClear = (!m_window || !m_window->isTransitionActive());
+    if (advanceArmed && transitionClear) {
         m_autoAdvanceElapsed += deltaTime;
         if (m_autoAdvanceElapsed >= autoAdvanceDelay) {
             m_autoAdvanceElapsed = 0.0f;
             advanceToNextNode();
         }
-    } else {
+    } else if (!advanceArmed) {
         m_autoAdvanceElapsed = 0.0f;
     }
     } // end MS-6 pause freeze of story simulation
@@ -2302,12 +2309,24 @@ bool Engine::areActiveDialoguesComplete() const {
     // click-to-complete still applies to armed lines (see
     // completeTypewriterIfTyping).
     if (!m_isPlaying) return true;
+    // #40 [HIGH]: the gate used to count raw codepoints of the marked-up
+    // source (tags included) against a uniform elapsed*1000/textSpeed line,
+    // while the presented frame reveals shaped units with per-unit
+    // pauseBefore/speed plus trailingPause. Markup-heavy lines read complete
+    // late, paused lines read complete early — auto-advance and the static-
+    // frame signal both drifted. Evaluate the same reveal the renderer
+    // presents (canonical completeTypewriterIfTyping path); a null renderer
+    // falls back to markup shaping, same as the snap path. The !m_isPlaying
+    // early-return above stays: paused previews pin elapsed at 9999 s while
+    // pause-heavy lines can total beyond that, so a bare reveal would call
+    // a settled preview "typing" forever.
+    const auto* gateFontRenderer = m_window ? m_window->getFontRenderer() : nullptr;
     for (const auto& dialogue : m_activeDialogues) {
         if (!dialogue.typewriterEnabled || dialogue.textSpeed <= 0) continue;
-        const auto total = Rowl::Render::FontRenderer::countCodepoints(dialogue.dialogue);
-        const auto visible = static_cast<std::size_t>(
-            (dialogue.elapsedTypewriterTime * 1000.0f) / static_cast<float>(dialogue.textSpeed));
-        if (visible < total) return false;
+        const auto shaped = shapeDialogue(gateFontRenderer, dialogue);
+        const auto reveal = Rowl::Text::evaluateReveal(
+            *shaped, dialogue.elapsedTypewriterTime, dialogue.textSpeed);
+        if (!reveal.complete) return false;
     }
     return true;
 }
