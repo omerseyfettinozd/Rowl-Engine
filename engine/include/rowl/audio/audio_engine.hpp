@@ -120,6 +120,13 @@ public:
     // Hedef #74: snapshot semantiği — çağrı anındaki değerin kopyası döner
     // (referans YOK; host thread okurken writer ezemez).
     std::string getLastError() const;
+    // Ses hata-kanalı (M4): son hatanın sınıfı — Device (IoError=7:
+    // akış-açma/cihaz/yeniden-kurma/kuyruk) vs Decode (AudioDecodeError=10:
+    // format-bozukluk/cap/dönüşüm). getLastError ile aynı snapshot
+    // sözleşmesi (referans YOK); setter'lar sınıfı mesajla BİRLİKTE yazar
+    // (bayat-sınıf olmaz; clearLastError None'a sıfırlar).
+    enum class AudioErrorClass { None = 0, Device = 1, Decode = 2 };
+    AudioErrorClass getLastErrorClass() const;
 
     // ── Faz 5 Dilim 1: OGG streaming çekirdek gözlemlenebilirliği ──
     // 1 = o anki BGM kararı stream, 0 = memory / unknown / yok (fail-closed).
@@ -219,6 +226,20 @@ public:
     void testFailNextQueue() { m_testFailQueueNext = true; }
     void testFailCommitPut() { m_testFailCommitPutNext = true; }
     size_t testQueuedBytes(AudioChannelType channel) const;
+    // Ses hata-kanalı test-only kancalar (davranışsız deterministik
+    // hata-enjeksiyonu; üretim kodu bunları asla kullanmamalıdır,
+    // emsal: testFailNextQueue):
+    //  - testFailNextReopen: reopenDeviceStreams'teki bir sonraki akış
+    //    açılışını SDL'ye dokunmadan başarısız sayar (bayrak tüketilir) —
+    //    M1 (reopen bool discard) + M4 (Device-sınıfı) kilidi bu kancayla
+    //    yazılır (dummy cihazda gerçek open-fail deterministik kurulamaz).
+    //  - testFailRestoreFormat: true iken reopen-restore SetFormat adımları
+    //    SDL'ye dokunmadan başarısız sayılır (M2 else-dalları birebir aynı
+    //    çalışır; kalıcıdır — test sonunda false'a çekilir). Gerçek
+    //    SetFormat fail'i deterministik kurulamadığı için kilit bu kancayla
+    //    yazılır.
+    void testFailNextReopen() { m_testFailReopenNext = true; }
+    void testFailRestoreFormat(bool fail) { m_testFailRestoreFormat = fail; }
     // Bulgu #82 test-only kanca (davranissiz state anahtari; uretim kodu bunu
     // asla kullanmamalidir, emsal: testFailNextQueue): cihaz outage'unu
     // deterministik kurar. Donus uretim yoluyla (reopenDeviceStreams)
@@ -248,8 +269,10 @@ private:
     // Blip yolunda yazılan bayrak da atomiktir (hammera katılır).
     std::atomic<bool> m_isVoicePlaying{false};
     mutable std::mutex m_stateMutex;
-    void setLastError(const std::string& message);
-    void setLastErrorIfEmpty(const std::string& message);
+    // M4: sınıf ZORUNLU parametredir (varsayılan YOK) — derleyici her yazım
+    // noktasını sınıflandırmaya zorlar (liste-dışı=sınıfsız kalamaz).
+    void setLastError(const std::string& message, AudioErrorClass errorClass);
+    void setLastErrorIfEmpty(const std::string& message, AudioErrorClass errorClass);
     void clearLastError();
     std::string lastErrorSnapshot() const;
     bool lastErrorEmpty() const;
@@ -269,6 +292,8 @@ private:
 
     std::string m_currentBgmPath = "";
     std::string m_lastError;
+    // M4: son hatanın sınıfı (mesajla birlikte yazılır/temizlenir/okunur).
+    AudioErrorClass m_lastErrorClass = AudioErrorClass::None;
     // Bulgu #82: outage pending-BGM niyeti. Sessiz-yedekte (!m_deviceAvailable)
     // BGM play niyeti yazar ama PCM verisini getiremez (bayat m_bgmData + yeni
     // m_currentBgmPath ayrismasi). Commit noktasi reopenDeviceStreams basari
@@ -283,6 +308,9 @@ private:
     // Clear sonrasi commit-Put onunde tuketilir; gercek commit-dususu).
     bool m_testFailQueueNext = false;
     bool m_testFailCommitPutNext = false;
+    // Ses hata-kanalı test-only bayrakları (üretimde false; davranışsız).
+    bool m_testFailReopenNext = false;
+    bool m_testFailRestoreFormat = false;
     std::vector<uint8_t> m_bgmData;
     std::vector<uint8_t> m_transitionBgmData;
     bool m_isBgmPlaying = false;
@@ -349,6 +377,11 @@ private:
     size_t m_uiSampleOffset = 0;
     bool m_isUiPlaying = false;
     std::string m_currentUiPath; // Bulgu #81: ambience-path simetriği
+    // M3a: Ui geri-kuyruk formatı queue anında saklanır (bed emsali:
+    // m_ambienceBedChannels/RateHz; varsayılan yalnızca format hiç
+    // görülmediyse kullanılır).
+    int m_uiChannels = 2;
+    int m_uiRateHz = 48000;
     ChannelTelemetry m_telemetryAmbience;
     ChannelTelemetry m_telemetryUi;
     StreamInfo m_streamInfo; // snapshot: tek karar kaynağı
@@ -405,6 +438,9 @@ private:
                           const uint8_t* floatBytes, size_t byteCount,
                           const std::string& assetPath);
     void ensureSfxPoolStreams();
+    // Kilitli gövde: çağıran m_stateMutex'i tutar, bu yordam kilit ALMAZ
+    // (playVoiceBlip gibi kilitli yollardan özyinelemeli kilitlenmeyi önler).
+    void ensureSfxPoolStreamsLocked();
     void destroySfxPoolStreams();
     // playAudio decode bloğunun birebir çıkarımı (kısa-ses full-decode
     // byte-identical; eski satır-içi kod bu yordamı çağırır).

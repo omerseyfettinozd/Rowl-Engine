@@ -64,6 +64,8 @@ struct OggStreamSource::Impl {
     bool decoderOpen = false;
     std::string path;
     std::string error;
+    // M4: son open-fail'inin sınıfı (open-sınıfı vs decode-sınıfı).
+    bool openFailed = false;
     uint32_t sampleRateHz = 0;
     uint32_t channelCount = 0;
 };
@@ -78,6 +80,7 @@ bool OggStreamSource::open(Rowl::VFS::VFSManager& vfs, const std::string& path,
     auto stream = vfs.openReadStream(path);
     if (!stream) {
         m_impl->error = "Ogg/Vorbis stream could not be opened: " + path;
+        m_impl->openFailed = true;
         error = m_impl->error;
         return false;
     }
@@ -86,6 +89,7 @@ bool OggStreamSource::open(Rowl::VFS::VFSManager& vfs, const std::string& path,
     if (ov_open_callbacks(m_impl->stream.get(), &m_impl->decoder, nullptr, 0,
                           callbacks) < 0) {
         m_impl->error = "Ogg/Vorbis stream could not be opened";
+        m_impl->openFailed = true;
         m_impl->stream.reset();
         error = m_impl->error;
         return false;
@@ -94,6 +98,7 @@ bool OggStreamSource::open(Rowl::VFS::VFSManager& vfs, const std::string& path,
     const vorbis_info* info = ov_info(&m_impl->decoder, -1);
     if (!info || info->channels <= 0 || info->channels > 8 || info->rate <= 0) {
         m_impl->error = "Ogg/Vorbis stream has an unsupported audio format";
+        m_impl->openFailed = false;
         close();
         error = m_impl->error;
         return false;
@@ -101,6 +106,7 @@ bool OggStreamSource::open(Rowl::VFS::VFSManager& vfs, const std::string& path,
     m_impl->sampleRateHz = static_cast<uint32_t>(info->rate);
     m_impl->channelCount = static_cast<uint32_t>(info->channels);
     m_impl->error.clear();
+    m_impl->openFailed = false;
     return true;
 }
 
@@ -112,6 +118,7 @@ void OggStreamSource::close() {
     m_impl->stream.reset();
     m_impl->sampleRateHz = 0;
     m_impl->channelCount = 0;
+    m_impl->openFailed = false;
 }
 
 bool OggStreamSource::isOpen() const {
@@ -198,5 +205,6 @@ double OggStreamSource::durationSeconds() const {
 
 const std::string& OggStreamSource::path() const { return m_impl->path; }
 const std::string& OggStreamSource::lastError() const { return m_impl->error; }
+bool OggStreamSource::lastOpenFailed() const { return m_impl->openFailed; }
 
 } // namespace Rowl::Audio

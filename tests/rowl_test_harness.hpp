@@ -97,6 +97,7 @@ void test_msdf_renderer();
 void test_game_state();
 void test_audio_engine();
 void test_audio_device_recovery();
+void test_audio_error_channel();
 void test_audio_streaming();
 void test_audio_seek_forward_no_reset();
 void test_audio_mixer();

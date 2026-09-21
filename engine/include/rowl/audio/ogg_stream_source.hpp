@@ -59,6 +59,10 @@ public:
 
     const std::string& path() const;
     const std::string& lastError() const;
+    // M4 (L3 düzeltmesi): son open-fail'inin sınıfı — true ise open-sınıfı
+    // (VFS/ov_open → Device/IoError=7), false ise decode-sınıfı (format/
+    // corrupt → Decode/AudioDecodeError=10). Başarıda false.
+    bool lastOpenFailed() const;
 
 private:
     struct Impl;

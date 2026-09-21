@@ -95,6 +95,7 @@ int main(int argc, char* argv[]) {
     test_game_state();
     test_audio_engine();
     test_audio_device_recovery();
+    test_audio_error_channel();
     test_audio_streaming();
     test_audio_seek_forward_no_reset();
     test_audio_mixer();

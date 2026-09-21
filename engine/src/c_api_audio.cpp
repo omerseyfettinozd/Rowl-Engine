@@ -9,6 +9,20 @@
 #include "c_api_internal.hpp"
 #include "rowl/audio/audio_engine.hpp"
 #include <cstdio>
+
+namespace {
+// Ses hata-kanalı (M4): motor-içi sınıf → C-API kodu eşlemesi. Device
+// (akış-açma/cihaz/kuyruk) → IoError(7); Decode ve sınıf-yok →
+// AudioDecodeError(10, mevcut davranış).
+Rowl::Core::RuntimeErrorCode audioErrorCodeFor(const Rowl::Audio::AudioEngine* audio) {
+    if (audio &&
+        audio->getLastErrorClass() == Rowl::Audio::AudioEngine::AudioErrorClass::Device) {
+        return Rowl::Core::RuntimeErrorCode::IoError;
+    }
+    return Rowl::Core::RuntimeErrorCode::AudioDecodeError;
+}
+} // namespace
+
 extern "C" {
 /* ── Audio control & voice blips ──────────────────────────────────────────────── */
 
@@ -51,7 +65,7 @@ void RowlEngine_PlayAudio(RowlEngineHandle handle,
         // aynı sözleşmeyi izler (bayat kod yok).
         if (auto ctx = engine->getContext()) {
             if (!audio->getLastError().empty()) {
-                ctx->setError(Rowl::Core::RuntimeErrorCode::AudioDecodeError,
+                ctx->setError(audioErrorCodeFor(audio),
                               audio->getLastError(), "play_audio", assetPath);
             } else {
                 ctx->setSuccess("play_audio", assetPath);
@@ -71,7 +85,7 @@ void RowlEngine_StopBgm(RowlEngineHandle handle) {
         audio->stopBgm();
         if (auto ctx = engine->getContext()) {
             if (!audio->getLastError().empty()) {
-                ctx->setError(Rowl::Core::RuntimeErrorCode::AudioDecodeError,
+                ctx->setError(audioErrorCodeFor(audio),
                               audio->getLastError(), "stop_bgm", "");
             } else {
                 ctx->setSuccess("stop_bgm", "");
@@ -293,7 +307,7 @@ void RowlEngine_PlayVoiceBlip(RowlEngineHandle handle, const char* soundPath, fl
             const auto* audio = engine->getAudio();
             const std::string blipError = audio ? audio->getLastError() : "";
             if (!blipError.empty()) {
-                ctx->setError(Rowl::Core::RuntimeErrorCode::AudioDecodeError,
+                ctx->setError(audioErrorCodeFor(audio),
                               blipError, "play_voice_blip",
                               soundPath ? soundPath : "");
             } else {
@@ -626,7 +640,7 @@ int RowlEngine_PlayAmbienceBed(RowlEngineHandle handle, const char* assetPath, i
         const bool ok = audio->playAmbienceBed(bed, assetPath);
         if (!ok && !audio->getLastError().empty()) {
             if (auto ctx = engine->getContext()) {
-                ctx->setError(Rowl::Core::RuntimeErrorCode::AudioDecodeError,
+                ctx->setError(audioErrorCodeFor(audio),
                               audio->getLastError(), "play_ambience_bed", assetPath);
             }
         }
@@ -695,7 +709,7 @@ int RowlEngine_CrossfadeAmbienceTo(RowlEngineHandle handle, const char* assetPat
         const bool ok = audio->crossfadeAmbienceTo(assetPath, durationSeconds, fade);
         if (!ok && !audio->getLastError().empty()) {
             if (auto ctx = engine->getContext()) {
-                ctx->setError(Rowl::Core::RuntimeErrorCode::AudioDecodeError,
+                ctx->setError(audioErrorCodeFor(audio),
                               audio->getLastError(), "crossfade_ambience_to", assetPath);
             }
         }
