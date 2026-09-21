@@ -251,10 +251,20 @@ void LuaSandbox::poisonSession(const std::string& reason) {
 // inside a script is additionally repaired by bindEngineApis().
 bool LuaSandbox::isReservedVariableName(const std::string& key) {
     static const std::unordered_set<std::string_view> kReserved = {
-        "rowl", "_G", "_ENV",
+        "rowl", "_G", "_ENV", "_VERSION",
         "math", "string", "table", "coroutine", "utf8",
         "package", "io", "os", "debug",
         "dofile", "loadfile", "load", "collectgarbage", "require", "module",
+        // #71: kalan Lua 5.4 taban-kutuphane adlari. setVariable/
+        // setGlobalNumber (ve icinden gecen rowl.var_set) dogrudan _G'ye
+        // yazar; bu adlar listede yokken host koprusu pcall/tostring'i ezip
+        // clearVariables sinirinda nil-olu birakiyordu (quarantine
+        // luaopen_base calistirmaz). print/warn cagrilabilir kalir (B7 #24);
+        // rezerv yalnizca host-uzerine-yazmayi reddeder.
+        "assert", "error", "getmetatable", "setmetatable",
+        "ipairs", "pairs", "next", "pcall", "xpcall",
+        "print", "warn", "select", "tonumber", "tostring", "type",
+        "rawget", "rawset", "rawequal", "rawlen",
     };
     return key.empty() || kReserved.find(key) != kReserved.end();
 }
@@ -1001,7 +1011,12 @@ void LuaSandbox::clearVariables() {
         // poison (#35), and a replaced setmetatable (#32) all survive a bare
         // sweep+rebind — quarantineEnvironment() resets each of them, so the
         // next session starts from a known-good environment.
-        quarantineEnvironment();
+        // #71: quarantine luaopen_base calistirmaz — nil'lenmis taban
+        // fonksiyonlar (rezerv-oncesi harita artiklari ya da onarimsiz
+        // kosul-yolundan sizanlar) sinirda olu kalir. repairGlobals tabani
+        // luaopen_base ile yeniden acar, kuyrugundaki quarantineEnvironment
+        // (:710) golgeleri/korumalari/kopruyu tazeler.
+        repairGlobals();
     }
     m_scriptVariables.clear();
     // A1 (H24): a new session boundary lifts the instruction-limit poison.

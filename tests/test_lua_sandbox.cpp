@@ -421,6 +421,37 @@ void test_lua_sandbox() {
     lua.clearVariables();
     TEST_PASS("MS-3 Session Isolation Without Global Leaks");
 
+    // #71: taban-kutuphane adlari degisken-API'sine kapali, sinir onarir.
+    lua.setVariable("pcall", "dead");
+    lua.setVariable("tostring", "dead");
+    lua.setGlobalNumber("pairs", 1.0);
+    if (!lua.getVariable("pcall").empty() || !lua.getVariable("tostring").empty() ||
+        !lua.getVariable("pairs").empty()) {
+        std::cerr << "#71: reserved base name accepted by the variable API" << std::endl;
+        exit(1);
+    }
+    if (!lua.evaluateCondition("pcall(function() end) == true") ||
+        !lua.evaluateCondition("tostring(42) == '42'")) {
+        std::cerr << "#71: rejected write damaged the base library" << std::endl;
+        exit(1);
+    }
+    // #71 leg 2: onarimsiz kosul-yolundan sizan zehir sinirda onarilir
+    // (kosul `return (...)` sarar ama cagrilan fonksiyon _G'ye yazar ve
+    // kosul yolunda repair calismaz; sweep baslangic-globallerine dokunmaz,
+    // quarantine luaopen_base calistirmaz — yalniz repair diriltir).
+    if (!lua.executeString("function h71_poison() tostring = nil return true end") ||
+        !lua.evaluateCondition("h71_poison()")) {
+        std::cerr << "#71: poison setup failed" << std::endl;
+        exit(1);
+    }
+    lua.clearVariables();
+    if (!lua.evaluateCondition("tostring(42) == '42'") ||
+        !lua.evaluateCondition("pcall(function() end) == true")) {
+        std::cerr << "#71: session boundary did not repair the base library" << std::endl;
+        exit(1);
+    }
+    TEST_PASS("#71 Base-Library Names Reserved, Boundary Repairs");
+
     lua.shutdown();
     if (lua.isInitialized()) exit(1);
     // A shut-down sandbox is dead: conditions fail closed with an error.
