@@ -368,6 +368,28 @@ set_tests_properties(d09_save_durability_probe PROPERTIES
     ENVIRONMENT "SDL_AUDIODRIVER=dummy;SDL_VIDEODRIVER=dummy"
     TIMEOUT 120
 )
+
+# D11 MSDF shaped-yol parite kilidi: bağımsız ikili
+# (rowl_msdf_shaped_parity_red_probe, ctest: msdf_shaped_parity_red_probe).
+# D10 emsali: rowl_tests gövdesine gömülmez; rowl_engine_objects'a bağlanır
+# (MsdfRenderer/Window iç sembolleri -fvisibility=hidden ile gizlidir).
+add_executable(rowl_msdf_shaped_parity_red_probe test_msdf_shaped_parity_red_probe.cpp)
+target_include_directories(rowl_msdf_shaped_parity_red_probe PRIVATE
+    ${CMAKE_SOURCE_DIR}/engine/include
+    ${CMAKE_SOURCE_DIR}/tests
+)
+target_link_libraries(rowl_msdf_shaped_parity_red_probe PRIVATE
+    rowl_engine_objects
+    rowl_engine_thirdparty
+)
+target_compile_definitions(rowl_msdf_shaped_parity_red_probe PRIVATE ROWL_BUILDING_DLL)
+
+add_test(NAME msdf_shaped_parity_red_probe COMMAND rowl_msdf_shaped_parity_red_probe)
+set_tests_properties(msdf_shaped_parity_red_probe PROPERTIES
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    ENVIRONMENT "SDL_AUDIODRIVER=dummy;SDL_VIDEODRIVER=dummy"
+    TIMEOUT 120
+)
 if(WIN32)
     # MSVC Debug runs the full native suite far slower than optimized
     # compilers; the CI --timeout 300 turns that into a zero-output kill.
