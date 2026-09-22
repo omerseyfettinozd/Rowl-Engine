@@ -237,6 +237,30 @@ set_tests_properties(d08_rewind_after_load_probe PROPERTIES
     ENVIRONMENT "SDL_AUDIODRIVER=dummy;SDL_VIDEODRIVER=dummy"
     TIMEOUT 120
 )
+
+# D10 font-fallback mutual-exclusion + all-or-nothing MSDF kilidi: bağımsız
+# ikili (rowl_tests gövdesine gömülmez ki kırmızı-yeşil döngüsü tüm süiti
+# koşmadan saniyeler içinde kanıtlansın). D01/D02'den farklı olarak
+# RowlEngineCore'a değil rowl_engine_objects'a bağlanır: Window/MsdfRenderer
+# iç sembolleri -fvisibility=hidden ile gizlidir (yalnızca C API export);
+# iç-davranış kilidi object-bağlantısı gerektirir (rowl_tests emsali).
+add_executable(rowl_text_fallback_red_probe test_text_fallback_red_probe.cpp)
+target_include_directories(rowl_text_fallback_red_probe PRIVATE
+    ${CMAKE_SOURCE_DIR}/engine/include
+    ${CMAKE_SOURCE_DIR}/tests
+)
+target_link_libraries(rowl_text_fallback_red_probe PRIVATE
+    rowl_engine_objects
+    rowl_engine_thirdparty
+)
+target_compile_definitions(rowl_text_fallback_red_probe PRIVATE ROWL_BUILDING_DLL)
+
+add_test(NAME text_fallback_red_probe COMMAND rowl_text_fallback_red_probe)
+set_tests_properties(text_fallback_red_probe PROPERTIES
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    ENVIRONMENT "SDL_AUDIODRIVER=dummy;SDL_VIDEODRIVER=dummy"
+    TIMEOUT 120
+)
 if(WIN32)
     # MSVC Debug runs the full native suite far slower than optimized
     # compilers; the CI --timeout 300 turns that into a zero-output kill.
