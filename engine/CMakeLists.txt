@@ -371,6 +371,7 @@ set(ROWL_ENGINE_SOURCES
     src/c_api_provenance.cpp
     src/c_api_state.cpp
     src/c_api_pause.cpp
+    src/c_api_thread_contract_guard.cpp  # D14: legacy-mixer checked loud varyantlar
 )
 # ── Third-party dependencies as a reusable INTERFACE target ───────────────
 # Both RowlEngineCore and rowl_tests link this; it carries the include/link

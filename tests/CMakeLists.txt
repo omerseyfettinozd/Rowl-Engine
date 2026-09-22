@@ -141,6 +141,23 @@ set_tests_properties(audio_snapshot_red_probe PROPERTIES
     ENVIRONMENT "SDL_AUDIODRIVER=dummy;SDL_VIDEODRIVER=dummy"
     TIMEOUT 120
 )
+
+# D14 threading-contract RED/green probu: yalnizca public C API'yi kullanan
+# bagimsiz ikili (paylasilan RowlEngineCore'a baglanir; uretim
+# topolojisiyle ayni). rowl_tests govdesine gomulmez ki kirmizi-yesil
+# dongusu tum suiti kosmadan saniyeler icinde kanitlansin.
+add_executable(rowl_thread_contract_red_probe test_thread_contract_red_probe.cpp)
+target_include_directories(rowl_thread_contract_red_probe PRIVATE
+    ${CMAKE_SOURCE_DIR}/engine/include
+)
+target_link_libraries(rowl_thread_contract_red_probe PRIVATE RowlEngineCore)
+
+add_test(NAME thread_contract_red_probe COMMAND rowl_thread_contract_red_probe)
+set_tests_properties(thread_contract_red_probe PROPERTIES
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    ENVIRONMENT "SDL_AUDIODRIVER=dummy;SDL_VIDEODRIVER=dummy"
+    TIMEOUT 120
+)
 if(WIN32)
     # MSVC Debug runs the full native suite far slower than optimized
     # compilers; the CI --timeout 300 turns that into a zero-output kill.
