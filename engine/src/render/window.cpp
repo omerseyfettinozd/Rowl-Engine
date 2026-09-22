@@ -6,6 +6,7 @@
 #include "rowl/core/pause_menu.hpp"
 #include "rowl/render/frame_composition.hpp"
 #include "rowl/render/aspect_guardian.hpp"
+#include "rowl/render/window_text_fallback.hpp"
 #include "rowl/core/logger.hpp"
 #include "rowl/platform/sdl_event_dispatcher.hpp"
 #include "rowl/platform/mobile_input.hpp"
@@ -357,29 +358,11 @@ void Window::initGpuMsdfRenderer() {
 }
 
 bool Window::renderGpuMsdfText(const std::string& text, float x, float baseline, float px, SDL_Color color) {
-    if (!m_msdfRenderState || !m_msdfRenderer || !m_msdfAtlasTexture) return false;
-    if (!SDL_SetGPURenderState(m_sdlRenderer, m_msdfRenderState)) return false;
-    float pen = x;
-    // A3-tur4 (metin turu): bayt degil skaler iterasyonu — cok-baytli
-    // karakterler tek glyph aramasina duser (onceki her bayti ayri arardi;
-    // ASCII davranisi ayni). Gecersiz dizi U+FFFD olur, atlas'ta yoksa
-    // yarim-adim ilerler (onceki cop-lookup ile ayni).
-    for (std::size_t i = 0; i < text.size();) {
-        const Rowl::Text::Utf8Scalar decoded = Rowl::Text::decodeUtf8Scalar(
-            text.data() + i, text.data() + text.size());
-        i += decoded.length;
-        const auto* glyph = m_msdfRenderer->findGlyph(decoded.codepoint);
-        if (!glyph) { pen += px * .5f; continue; }
-        SDL_FRect src{glyph->atlasLeft, glyph->atlasTop, glyph->atlasRight-glyph->atlasLeft, glyph->atlasBottom-glyph->atlasTop};
-        SDL_FRect dst{pen + glyph->planeLeft*px, baseline + glyph->planeTop*px,
-                      (glyph->planeRight-glyph->planeLeft)*px, (glyph->planeBottom-glyph->planeTop)*px};
-        SDL_SetTextureColorMod(m_msdfAtlasTexture, color.r, color.g, color.b);
-        SDL_SetTextureAlphaMod(m_msdfAtlasTexture, color.a);
-        SDL_RenderTexture(m_sdlRenderer, m_msdfAtlasTexture, &src, &dst);
-        pen += glyph->advance*px;
-    }
-    SDL_SetGPURenderState(m_sdlRenderer, nullptr);
-    return true;
+    // D10: çizim çekirdeği window_text_fallback.cpp'de (hepsi-ya-da-hiçi;
+    // eksik-glyph'te çizmeden false → çağıran debug-fallback'u eksiksiz çizer).
+    // Sembol korunur (additive ABI); window.hpp:389 deklarasyonu yerindedir.
+    return drawMsdfTextAllOrNothing(m_sdlRenderer, m_msdfRenderState, m_msdfRenderer.get(),
+                                    m_msdfAtlasTexture, text, x, baseline, px, color);
 }
 
 void Window::shutdownGpuMsdfRenderer() {
@@ -1412,7 +1395,9 @@ void Window::renderVisualNovelFrame(
             SDL_RenderRect(m_sdlRenderer, &speakerTag);
 
             // Draw speaker name text
-            if (!m_fontRenderer || !m_fontRenderer->isLoaded() || !m_offscreenSurface) {
+            // D10: karar çekirdeği window_text_fallback.hpp'de (birebir delege).
+            if (useFontFallbackPath(m_fontRenderer && m_fontRenderer->isLoaded(),
+                                    m_offscreenSurface != nullptr)) {
                 if (!renderGpuMsdfText(dlg.speaker, tagX + 16.0f * metrics.scaleFactor, tagY + tagH * .72f, speakerFontPx, {255,255,255,255})) {
                     SDL_SetRenderDrawColor(m_sdlRenderer, 255, 255, 255, 255);
                     SDL_RenderDebugText(m_sdlRenderer, tagX + (16.0f * metrics.scaleFactor), tagY + (tagH - 8.0f) / 2.0f, dlg.speaker.c_str());
@@ -1427,7 +1412,9 @@ void Window::renderVisualNovelFrame(
             float paddingLeft = 24.0f * metrics.scaleFactor;
             float paddingTop = 28.0f * metrics.scaleFactor;
 
-            if (!m_fontRenderer || !m_fontRenderer->isLoaded() || !m_offscreenSurface) {
+            // D10: karar çekirdeği window_text_fallback.hpp'de (birebir delege).
+            if (useFontFallbackPath(m_fontRenderer && m_fontRenderer->isLoaded(),
+                                    m_offscreenSurface != nullptr)) {
                 if (!renderGpuMsdfText(dlg.dialogue, physBoxX + paddingLeft, physBoxY + paddingTop + dlg.fontSize * metrics.scaleFactor, dlg.fontSize * metrics.scaleFactor, textColor)) {
                     SDL_SetRenderDrawColor(m_sdlRenderer, textColor.r, textColor.g, textColor.b, textColor.a);
                     SDL_RenderDebugText(m_sdlRenderer, physBoxX + paddingLeft, physBoxY + paddingTop, dlg.dialogue.c_str());
@@ -1452,7 +1439,9 @@ void Window::renderVisualNovelFrame(
         SDL_Color border = parseHexColor(choice.borderColor, 255);
         SDL_SetRenderDrawColor(m_sdlRenderer, border.r, border.g, border.b, border.a);
         SDL_RenderRect(m_sdlRenderer, &rect);
-        if (!m_fontRenderer || !m_fontRenderer->isLoaded() || !m_offscreenSurface) {
+        // D10: karar çekirdeği window_text_fallback.hpp'de (birebir delege).
+        if (useFontFallbackPath(m_fontRenderer && m_fontRenderer->isLoaded(),
+                                m_offscreenSurface != nullptr)) {
             SDL_Color text = parseHexColor(choice.textColor, 255);
             if (!renderGpuMsdfText(choice.text, px + 12.0f * metrics.scaleFactor,
                                    py + rect.h * .5f + choice.fontSize * metrics.scaleFactor * .35f,
@@ -1474,7 +1463,9 @@ void Window::renderVisualNovelFrame(
     }
 
     // 4. Render High-Quality Anti-Aliased TrueType Text directly onto Offscreen Surface
-    if (m_fontRenderer && m_fontRenderer->isLoaded() && m_offscreenSurface) {
+    // D10: fallback koşulunun tümleyeni (çift-rasterizasyon YOK, çift-skip YOK).
+    if (!useFontFallbackPath(m_fontRenderer && m_fontRenderer->isLoaded(),
+                             m_offscreenSurface != nullptr)) {
         const auto textRasterizationStarted = std::chrono::steady_clock::now();
         for (const auto& dlg : dialogues) {
             if (!dlg.hasDialogueBox) continue;

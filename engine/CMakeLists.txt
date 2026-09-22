@@ -315,6 +315,7 @@ set(ROWL_ENGINE_SOURCES
     # Rendering
     src/render/window.cpp
     src/render/window_texture_cache.cpp  # A3-tur5: texture-cache bölünmesi
+    src/render/window_text_fallback.cpp  # D10: font-fallback/MSDF çekirdek bölünmesi
     src/render/camera2d.cpp
     src/render/transition_manager.cpp
     src/render/font_renderer.cpp
