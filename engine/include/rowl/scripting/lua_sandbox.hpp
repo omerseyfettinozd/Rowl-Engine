@@ -47,9 +47,13 @@ public:
     /// condition wrote via rowl.var_set (added keys erased + global nilled,
     /// modified keys replayed through setVariable()). Read-only conditions
     /// hit the == fast-path and stay silent. A-scope only: the variable map
-    /// and its globals. Raw non-map Lua globals a condition plants directly
-    /// (e.g. `x = 1`) are NOT rolled back — documented residual; conditions
-    /// are authored content, not hostile code.
+    /// and its globals.
+    /// D06: raw non-map Lua globals a condition plants directly (e.g. `x = 1`
+    /// inside a condition function body) ARE rolled back — the D06 guard below
+    /// snapshots the _G name set on entry and nils added names on exit
+    /// (lua_condition_purity TU; no repairGlobals — per-frame forbidden).
+    /// Conditions remain authored content, not hostile code; value-clobber of
+    /// pre-existing globals stays out of scope by design.
     struct ConditionPurityGuard {
         explicit ConditionPurityGuard(LuaSandbox* owner, const std::string& expr)
             : m_owner(owner), m_expr(expr),
@@ -66,6 +70,24 @@ public:
         std::string m_expr;
         std::unordered_map<std::string, std::string> m_snapshot;
         std::size_t m_bytes;
+    };
+
+    /// D06: raw-global purity for evaluateCondition(). The guard snapshots
+    /// the _G name set on entry; the dtor nils every global the condition
+    /// ADDED (pre-existing values untouched, no repairGlobals — per-frame
+    /// forbidden). Single-lock model: runs UNDER evaluateCondition()'s lock,
+    /// takes no second mutex. Implemented in lua_condition_purity.cpp (new
+    /// TU); this declaration adds no data members (additive ABI: no layout
+    /// change, no symbol removed).
+    struct D06ConditionGlobalGuard {
+        explicit D06ConditionGlobalGuard(LuaSandbox* owner);
+        ~D06ConditionGlobalGuard();
+        D06ConditionGlobalGuard(const D06ConditionGlobalGuard&) = delete;
+        D06ConditionGlobalGuard& operator=(const D06ConditionGlobalGuard&) = delete;
+    private:
+        LuaSandbox* m_owner;
+        std::unordered_set<std::string> m_entry;
+        bool m_armed;
     };
 
     /// The most recent module compile or lifecycle error. This is intentionally

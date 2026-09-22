@@ -141,6 +141,39 @@ set_tests_properties(audio_snapshot_red_probe PROPERTIES
     ENVIRONMENT "SDL_AUDIODRIVER=dummy;SDL_VIDEODRIVER=dummy"
     TIMEOUT 120
 )
+
+# D06 ham-global sızıntı kilidi (evaluateCondition): yalnızca public C API'yi
+# kullanan iki bağımsız ikili (paylaşılan RowlEngineCore'a bağlanır; üretim
+# topolojisiyle aynı). rowl_tests gövdesine gömülmez ki kırmızı-yeşil döngüsü
+# tüm süiti koşmadan saniyeler içinde kanıtlansın. TIMEOUT: olası bir kilit
+# regresyonunda askı KIRMIZI verir.
+#   rowl_d06_probe_x — sızıntı probu (RED: PROB-DIRTY + exit 1; fix: PROB-CLEAN + exit 0).
+#   rowl_d06_probe_m — kontrol kolu (D4 ConditionPurityGuard yeşili; önce/sonra YEŞİL).
+add_executable(rowl_d06_probe_x test_d06_probe_x.cpp)
+target_include_directories(rowl_d06_probe_x PRIVATE
+    ${CMAKE_SOURCE_DIR}/engine/include
+)
+target_link_libraries(rowl_d06_probe_x PRIVATE RowlEngineCore)
+
+add_test(NAME d06_probe_x COMMAND rowl_d06_probe_x)
+set_tests_properties(d06_probe_x PROPERTIES
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    ENVIRONMENT "SDL_AUDIODRIVER=dummy;SDL_VIDEODRIVER=dummy"
+    TIMEOUT 120
+)
+
+add_executable(rowl_d06_probe_m test_d06_probe_m.cpp)
+target_include_directories(rowl_d06_probe_m PRIVATE
+    ${CMAKE_SOURCE_DIR}/engine/include
+)
+target_link_libraries(rowl_d06_probe_m PRIVATE RowlEngineCore)
+
+add_test(NAME d06_probe_m COMMAND rowl_d06_probe_m)
+set_tests_properties(d06_probe_m PROPERTIES
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    ENVIRONMENT "SDL_AUDIODRIVER=dummy;SDL_VIDEODRIVER=dummy"
+    TIMEOUT 120
+)
 if(WIN32)
     # MSVC Debug runs the full native suite far slower than optimized
     # compilers; the CI --timeout 300 turns that into a zero-output kill.

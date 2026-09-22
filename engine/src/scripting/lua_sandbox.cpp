@@ -937,6 +937,10 @@ bool LuaSandbox::evaluateCondition(const std::string& conditionExpr) {
     // error, runtime error, oversize refuse). Literal fast-paths above stay
     // guard-free: they execute nothing.
     const ConditionPurityGuard purityGuard(this, conditionExpr);
+    // D06: raw-global guard — _G name snapshot on entry; the dtor nils every
+    // global the condition planted. Single-lock model (this function's lock;
+    // no second mutex), no repairGlobals (per-frame forbidden).
+    const D06ConditionGlobalGuard d06Guard(this);
 
     // B7 (#28-class residual): the old code reset the instruction counter with
     // a raw push/setfield pair — unprotected-throw UB on a quota-pinned
