@@ -20,6 +20,7 @@
 #include <sys/stat.h>
 #else
 #include <fcntl.h>
+#include <signal.h>
 #include <unistd.h>
 #endif
 
@@ -34,7 +35,9 @@ namespace {
 // Forcing bytes to stable storage (POSIX fdatasync/fsync + dir fsync,
 // Windows FlushFileBuffers) would only matter for OS/power loss, which is
 // out of scope here. If that is ever required, add it here — inside this
-// module — without touching the SessionPersistence save path.
+// module — without touching the SessionPersistence save path. The header
+// documents the full guarantee ladder (L1 process-crash covered, L2 crash
+// residue bounded by the sweep below, L3 power-loss out of scope).
 
 std::atomic<int> g_injectErrno{0};
 
@@ -259,13 +262,107 @@ bool writeSlotFileAtomically(const std::filesystem::path& finalPath,
 }
 
 void cleanupStraySlotTemp(const std::filesystem::path& finalPath) {
-    // R1 (#3) notu: yalnızca legacy "<slot>.json.tmp" süpürülür. Kesintiye
-    // uğramış benzersiz tmp'ler (<slot>.json.tmp.<pid>...) bilerek
-    // süpürülmez: canlı bir yazarı silmek sahte kayıt-hatasına yol açardı;
-    // yetim benzersiz tmp zararsız disk tozudur (çökme sıklığıyla sınırlı).
+    // R1 (#3) notu: once yalnizca legacy "<slot>.json.tmp" süpürülürdü.
+    // D09: buna ek olarak sahibi-ölü benzersiz tmp'ler de süpürülür
+    // (cleanupStaleOwnedSlotTemps) — her crash en fazla bir tmp sızdırır ve
+    // süpürme artığı crash sayısıyla sınırlı tutar; canlı yazar tmp'sine
+    // asla dokunulmaz (sahte kayıt-hatası yok).
     try {
         std::error_code error;
         std::filesystem::remove(saveTempPathFor(finalPath), error);
+    } catch (...) {
+    }
+    cleanupStaleOwnedSlotTemps(finalPath);
+}
+
+// D09: "<pid>.<sayaç>.<kuyruk>" desenini çözer; yalnızca rakam-token'lar
+// kabul edilir (mintOwnedTempPath çıktısı birebir).
+bool allDigits(const std::string& token) {
+    if (token.empty()) return false;
+    for (char c : token) {
+        if (c < '0' || c > '9') return false;
+    }
+    return true;
+}
+
+// D09: sahip süreci yaşıyor mu? Kararsız kalınan her durumda (aralık-dışı
+// pid, EPERM/bilinmeyen errno, Windows'ta handle-açılamama) muhafazakâr
+// cevap YAŞIYOR'dur — süpürme yalnızca kanıtlanmış-ölü pid'e dokunur.
+bool ownerProcessAlive(unsigned long long pid) {
+#if defined(_WIN32)
+    if (pid == 0 || pid > 4294967295ULL) return true;
+    HANDLE handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE,
+                                static_cast<DWORD>(pid));
+    if (handle != nullptr) {
+        CloseHandle(handle);
+        return true;
+    }
+    // ERROR_INVALID_PARAMETER: böyle bir pid yok (ölü). Diğer hatalar
+    // (ACCESS_DENIED dahil) varlığına işaret edebilir — muhafazakâr geç.
+    return GetLastError() != ERROR_INVALID_PARAMETER;
+#else
+    if (pid == 0 || pid > 2147483647ULL) return true;
+    const pid_t candidate = static_cast<pid_t>(pid);
+    if (candidate == ::getpid()) return true;
+    if (::kill(candidate, 0) == 0) return true;
+    // ESRCH: süreç yok (ölü). EPERM: süreç var ama sinyal izni yok (canlı).
+    // Diğer errno'lar muhafazakâr-canlı sayılır.
+    return errno != ESRCH;
+#endif
+}
+
+void cleanupStaleOwnedSlotTemps(const std::filesystem::path& finalPath) {
+    try {
+        namespace fs = std::filesystem;
+        fs::path parent = finalPath.parent_path();
+        if (parent.empty()) parent = ".";
+        // Yalnızca bu slotun mint desenine uyan adlar:
+        // "<slot>.json.tmp.<pid>.<sayaç>.<rastgele>".
+        const std::string prefix = finalPath.filename().string() + ".tmp.";
+        std::error_code iterError;
+        fs::directory_iterator it(parent, iterError);
+        if (iterError) return;
+        const fs::directory_iterator end;
+        for (; it != end; it.increment(iterError)) {
+            if (iterError) break;
+            // Symlink-güvenli: yalnızca gerçek düzenli dosyalar; bağlantılar
+            // ve dizinler atlanır (dış hedefe dokunma riski yok).
+            std::error_code statusError;
+            if (it->symlink_status(statusError).type() != fs::file_type::regular ||
+                statusError) {
+                continue;
+            }
+            const std::string name = it->path().filename().string();
+            if (name.size() <= prefix.size() ||
+                name.compare(0, prefix.size(), prefix) != 0) {
+                continue;
+            }
+            const std::string rest = name.substr(prefix.size());
+            const std::string::size_type dot1 = rest.find('.');
+            if (dot1 == std::string::npos) continue;
+            const std::string::size_type dot2 = rest.find('.', dot1 + 1);
+            if (dot2 == std::string::npos) continue;
+            const std::string pidToken = rest.substr(0, dot1);
+            const std::string counterToken = rest.substr(dot1 + 1, dot2 - dot1 - 1);
+            const std::string tail = rest.substr(dot2 + 1);
+            if (!allDigits(pidToken) || !allDigits(counterToken) || tail.empty()) {
+                continue;
+            }
+            unsigned long long pid = 0;
+            try {
+                pid = std::stoull(pidToken);
+            } catch (...) {
+                continue;
+            }
+            // TOCTOU notu: kontrol ile silme arasında pid ölebilir ya da
+            // yeniden kullanılabilir. Ölen pid'in tmp'si tanım gereği yazılmaz
+            // (sahibi ölü) — silmek güvenli. Yeniden kullanılan pid'in aynı
+            // sayaç+rastgelelikle çakışması pratikte imkânsızdır (mkstemp
+            // rastgeleliği / O_EXCL sahiplenmesi).
+            if (ownerProcessAlive(pid)) continue;
+            std::error_code removeError;
+            fs::remove(it->path(), removeError);
+        }
     } catch (...) {
     }
 }

@@ -354,6 +354,13 @@ std::shared_ptr<const GameState> GameState::createNextState(
         nextState->sfxVolume = current->sfxVolume;
         nextState->voiceVolume = current->voiceVolume;
         nextState->dialogueHistory = current->dialogueHistory;
+        // D09: graf-kimliği adım geçişlerinde taşınır (mixer ile aynı
+        // sözleşme). Engine save yolu yine withGraphIdentity ile damgalar;
+        // G kilidi dosyadaki kimliği commit'li belgeyle karşılaştırır, bu
+        // bellek kopyası kapıyı etkilemez. Taşıma, Engine-dışı saveSlot
+        // yolunun (public API) da kimlikli slot yazmasını sağlar — kayıt
+        // legacy-warn yoluna düşmez, #70 provenance garantisi yapısal olur.
+        nextState->graphIdentity = current->graphIdentity;
     }
 
     // Structural sharing: only create new VariableMap if a variable actually changes

@@ -261,6 +261,27 @@ set_tests_properties(text_fallback_red_probe PROPERTIES
     ENVIRONMENT "SDL_AUDIODRIVER=dummy;SDL_VIDEODRIVER=dummy"
     TIMEOUT 120
 )
+
+# D09 save-dayaniklilik RED kilidi (tmp-yetimi + createNextState kimlik
+# tasiyici): yalnizca Rowl::State ic sembollerini kullanan bagimsiz ikili
+# (D08 emsali: rowl_engine_objects + rowl_engine_thirdparty). RED: exit 1 +
+# "D09-ORPHAN RED" / "D09-IDENTITY RED"; YESIL: exit 0.
+add_executable(rowl_d09_save_durability_probe test_d09_save_durability_probe.cpp)
+target_include_directories(rowl_d09_save_durability_probe PRIVATE
+    ${CMAKE_SOURCE_DIR}/engine/include
+)
+target_link_libraries(rowl_d09_save_durability_probe PRIVATE
+    rowl_engine_objects
+    rowl_engine_thirdparty
+)
+target_compile_definitions(rowl_d09_save_durability_probe PRIVATE ROWL_BUILDING_DLL)
+
+add_test(NAME d09_save_durability_probe COMMAND rowl_d09_save_durability_probe)
+set_tests_properties(d09_save_durability_probe PROPERTIES
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    ENVIRONMENT "SDL_AUDIODRIVER=dummy;SDL_VIDEODRIVER=dummy"
+    TIMEOUT 120
+)
 if(WIN32)
     # MSVC Debug runs the full native suite far slower than optimized
     # compilers; the CI --timeout 300 turns that into a zero-output kill.

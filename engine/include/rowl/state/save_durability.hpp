@@ -24,6 +24,28 @@ namespace Rowl::State {
 /// mid-write (the slice goal). Power-loss / OS-crash durability (file-data
 /// fdatasync + directory fsync on POSIX) is explicitly out of scope and can
 /// be added later inside writeSlotFileAtomically without touching callers.
+///
+/// D09 expansion — guarantee levels (what holds today, what does not):
+///   L1 process-crash mid-write: COVERED. Temp-file + rename means the slot
+///      file is either the old or the new complete payload; a torn slot is
+///      impossible (R1 #3: owned unique tmps make the rename winner always
+///      one complete payload, even under concurrent writers).
+///   L2 crash residue: BOUNDED. A crash leaks at most one tmp per interrupted
+///      save (legacy shared name or one owned unique tmp). The load/delete
+///      paths sweep the legacy stray plus dead-owner owned tmps
+///      (cleanupStaleOwnedSlotTemps); live-writer tmps are never touched.
+///      Residue is therefore capped by crash count, not by save count, so a
+///      crash loop cannot fill the disk and push later saves into ENOSPC.
+///   L3 OS-crash / power loss: NOT COVERED (deliberate). Closing this gap
+///      would require, inside writeSlotFileAtomically only: POSIX file
+///      fdatasync/fsync before rename plus a directory fsync after rename
+///      (rename itself must be durable), Windows FlushFileBuffers on the
+///      temp handle before MoveFileEx (which already passes WRITE_THROUGH
+///      for metadata). No caller changes, no format change. There is no
+///      fault-injection for power loss in this slice — only process-crash
+///      (kill -9 style interruption, staging a partial tmp) is exercised,
+///      via the errno-injection hook and the tmp-orphan probe.
+///
 /// Legacy shared temp name ("<slot>.json.tmp"): no longer used for writing
 /// (R1 #3 — writers mint owned unique tmps), kept as the stray-cleanup
 /// anchor for interrupted writes from older builds. Never throws.
@@ -41,6 +63,15 @@ bool writeSlotFileAtomically(const std::filesystem::path& finalPath,
 /// write. Called on the load path so a half-tmp beside a good slot is
 /// ignored and cleaned. Never throws.
 void cleanupStraySlotTemp(const std::filesystem::path& finalPath);
+
+/// D09: best-effort sweep of stale OWNED UNIQUE tmps
+/// ("<slot>.json.tmp.<pid>.<counter>.<rand...>") whose owner process is dead.
+/// Called from cleanupStraySlotTemp, so the load/delete paths that already
+/// call it gain the sweep with no caller changes. A tmp whose owner is alive
+/// (or undecidable) is never touched, nor is any name that does not match
+/// the minted pattern, nor symlinks — only provably-dead regular files go.
+/// Never throws.
+void cleanupStaleOwnedSlotTemps(const std::filesystem::path& finalPath);
 
 // Test-only ENOSPC (disk-full) injection hook. Production default is OFF:
 // injection is active only after setSaveDurabilityInjectEnospc(true) or when
