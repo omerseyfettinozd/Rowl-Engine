@@ -159,6 +159,23 @@ set_tests_properties(thread_contract_red_probe PROPERTIES
     TIMEOUT 120
 )
 
+# D13 aux-gate RED/green probu (P1 aux-yabanci-yazim + P2 registry-disi):
+# yalnizca public C API'yi kullanan bagimsiz ikili (paylasilan RowlEngineCore'a
+# baglanir; uretim topolojisiyle ayni). rowl_tests govdesine gomulmez ki
+# kirmizi-yesil dongusu tum suiti kosmadan saniyeler icinde kanitlansin.
+add_executable(rowl_d13_aux_gate_red_probe test_d13_aux_gate_red_probe.cpp)
+target_include_directories(rowl_d13_aux_gate_red_probe PRIVATE
+    ${CMAKE_SOURCE_DIR}/engine/include
+)
+target_link_libraries(rowl_d13_aux_gate_red_probe PRIVATE RowlEngineCore)
+
+add_test(NAME d13_aux_gate_red_probe COMMAND rowl_d13_aux_gate_red_probe)
+set_tests_properties(d13_aux_gate_red_probe PROPERTIES
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    ENVIRONMENT "SDL_AUDIODRIVER=dummy;SDL_VIDEODRIVER=dummy"
+    TIMEOUT 120
+)
+
 # D06 ham-global sızıntı kilidi (evaluateCondition): yalnızca public C API'yi
 # kullanan iki bağımsız ikili (paylaşılan RowlEngineCore'a bağlanır; üretim
 # topolojisiyle aynı). rowl_tests gövdesine gömülmez ki kırmızı-yeşil döngüsü

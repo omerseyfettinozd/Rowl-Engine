@@ -21,6 +21,7 @@
 #include <cstring>
 #include <mutex>
 #include <optional>
+#include <shared_mutex>
 #include <unordered_map>
 
 namespace {
@@ -34,7 +35,12 @@ struct CharacterRuntime {
     std::string lastError;
 };
 
-std::mutex g_characterMutex;
+// D13: prefetch TU'sundaki bölünmenin ikizi — okuyucular shared, yazıcılar
+// exclusive (ad TU-local kalır, HOIST YOK). Okuyucu Locked-guard'lar erase
+// YAPMAZ; okuyucular operator[] KULLANMAZ (hayalet-entry). İstisna:
+// GetCharacterDrawListJson anlamsal okuyucu ama composeDrawList çağrı-başı
+// skip-cache yazar (mutable) → exclusive sınıfta kilitlenir.
+std::shared_mutex g_characterMutex;
 std::unordered_map<RowlEngineHandle, CharacterRuntime> g_characterStates;
 
 RowlEngine_ResultCode checkCharacterInput(const char* input, std::string_view& out) noexcept {
@@ -79,7 +85,7 @@ inline std::optional<RowlEngine_ResultCode> guardCharacterEntry(RowlEngineHandle
                                                                const char* op) {
     switch (classifyHandle(handle)) {
         case HandleStanding::Dead: {
-            std::lock_guard<std::mutex> lock(g_characterMutex);
+            std::lock_guard<std::shared_mutex> lock(g_characterMutex);
             g_characterStates.erase(handle);
             return ROWL_RESULT_INVALID_HANDLE;
         }
@@ -92,7 +98,7 @@ inline std::optional<RowlEngine_ResultCode> guardCharacterEntry(RowlEngineHandle
     return ROWL_RESULT_UNKNOWN_ERROR; // erişilemez; -Wreturn-type susturucu
 }
 
-// D3: aynı karar, çağıran aux kilidini tutarken (ikinci/taze bakış).
+// D3: aynı karar, çağıran aux kilidini EXCLUSIVE tutarken (yazıcı-yol).
 inline std::optional<RowlEngine_ResultCode> guardCharacterEntryLocked(RowlEngineHandle handle,
                                                                      const char* op) {
     if (classifyHandle(handle) == HandleStanding::Dead) {
@@ -106,11 +112,26 @@ inline std::optional<RowlEngine_ResultCode> guardCharacterEntryLocked(RowlEngine
     return std::nullopt;
 }
 
+// D13: aynı karar, çağıran aux kilidini SHARED tutarken (okuyucu-yol).
+// Erase YOK (shared altında yazma yarışı); Dead map'e dokunmadan
+// INVALID_HANDLE döner, yabancı damgalı reddeder.
+inline std::optional<RowlEngine_ResultCode> guardCharacterEntryLockedRead(
+    RowlEngineHandle handle, const char* op) {
+    if (classifyHandle(handle) == HandleStanding::Dead) {
+        return ROWL_RESULT_INVALID_HANDLE;
+    }
+    if (!isLiveHandle(handle)) {
+        stampWrongThread(handle, op);
+        return ROWL_RESULT_WRONG_THREAD;
+    }
+    return std::nullopt;
+}
+
 // D2 (#140): prefetch TU'sundaki ikiz — Destroy yolunda lifecycle
 // TU'su buradan temizler; Create/kullan/Destroy sizintisi kapanir.
 void clearCharacterStatesForHandle(RowlEngineHandle handle) noexcept {
     try {
-        std::lock_guard<std::mutex> lock(g_characterMutex);
+        std::lock_guard<std::shared_mutex> lock(g_characterMutex);
         g_characterStates.erase(handle);
     } catch (...) {
     }
@@ -131,7 +152,7 @@ RowlEngine_ResultCode RowlEngine_SetCharacterSlotAsset(
     const RowlEngine_ResultCode assetCheck =
         checkCharacterInput(assetPath, assetView);
     if (assetCheck != ROWL_RESULT_OK) return assetCheck;
-    std::lock_guard<std::mutex> lock(g_characterMutex);
+    std::unique_lock<std::shared_mutex> lock(g_characterMutex);
     if (const auto guard = guardCharacterEntryLocked(handle, "set_character_slot_asset")) {
         return *guard;
     }
@@ -156,12 +177,18 @@ RowlEngine_ResultCode RowlEngine_GetCharacterSlotAssetUtf8(
     Rowl::Scene::CharacterSlot slot = Rowl::Scene::CharacterSlot::Body;
     const RowlEngine_ResultCode slotCheck = checkSlotName(slotName, slot);
     if (slotCheck != ROWL_RESULT_OK) return slotCheck;
-    std::lock_guard<std::mutex> lock(g_characterMutex);
-    if (const auto guard = guardCharacterEntryLocked(handle, "get_character_slot_asset")) {
+    // D13 okuyucu: shared.
+    std::shared_lock<std::shared_mutex> lock(g_characterMutex);
+    if (const auto guard = guardCharacterEntryLockedRead(handle, "get_character_slot_asset")) {
         return *guard;
     }
     return invokeNoexcept<RowlEngine_ResultCode>([&] {
-        CharacterRuntime& runtime = g_characterStates[handle];
+        // Hayalet-entry YOK: kayıtsız handle'da yerelde boş runtime okunur
+        // (operator[] default'uyla birebir; map'e yazılmaz).
+        const CharacterRuntime empty{};
+        const auto it = g_characterStates.find(handle);
+        const CharacterRuntime& runtime =
+            (it == g_characterStates.end()) ? empty : it->second;
         const std::size_t index = static_cast<std::size_t>(slot);
         (void)index;
         return copyUtf8ToCaller(runtime.layers.slotState(slot).asset, buffer,
@@ -178,7 +205,7 @@ RowlEngine_ResultCode RowlEngine_SetCharacterSlotOpacity(
     Rowl::Scene::CharacterSlot slot = Rowl::Scene::CharacterSlot::Body;
     const RowlEngine_ResultCode slotCheck = checkSlotName(slotName, slot);
     if (slotCheck != ROWL_RESULT_OK) return slotCheck;
-    std::lock_guard<std::mutex> lock(g_characterMutex);
+    std::unique_lock<std::shared_mutex> lock(g_characterMutex);
     if (const auto guard = guardCharacterEntryLocked(handle, "set_character_slot_opacity")) {
         return *guard;
     }
@@ -203,12 +230,16 @@ RowlEngine_ResultCode RowlEngine_GetCharacterSlotOpacity(
     Rowl::Scene::CharacterSlot slot = Rowl::Scene::CharacterSlot::Body;
     const RowlEngine_ResultCode slotCheck = checkSlotName(slotName, slot);
     if (slotCheck != ROWL_RESULT_OK) return slotCheck;
-    std::lock_guard<std::mutex> lock(g_characterMutex);
-    if (const auto guard = guardCharacterEntryLocked(handle, "get_character_slot_opacity")) {
+    // D13 okuyucu: shared.
+    std::shared_lock<std::shared_mutex> lock(g_characterMutex);
+    if (const auto guard = guardCharacterEntryLockedRead(handle, "get_character_slot_opacity")) {
         return *guard;
     }
     return invokeNoexcept<RowlEngine_ResultCode>([&] {
-        CharacterRuntime& runtime = g_characterStates[handle];
+        const CharacterRuntime empty{};
+        const auto it = g_characterStates.find(handle);
+        const CharacterRuntime& runtime =
+            (it == g_characterStates.end()) ? empty : it->second;
         *outOpacity = runtime.layers.slotState(slot).opacity;
         return ROWL_RESULT_OK;
     }, ROWL_RESULT_UNKNOWN_ERROR);
@@ -223,7 +254,7 @@ RowlEngine_ResultCode RowlEngine_SetCharacterSlotVisible(
     Rowl::Scene::CharacterSlot slot = Rowl::Scene::CharacterSlot::Body;
     const RowlEngine_ResultCode slotCheck = checkSlotName(slotName, slot);
     if (slotCheck != ROWL_RESULT_OK) return slotCheck;
-    std::lock_guard<std::mutex> lock(g_characterMutex);
+    std::unique_lock<std::shared_mutex> lock(g_characterMutex);
     if (const auto guard = guardCharacterEntryLocked(handle, "set_character_slot_visible")) {
         return *guard;
     }
@@ -239,10 +270,11 @@ int RowlEngine_IsCharacterSlotVisible(RowlEngineHandle handle,
                                       const char* slotName) {
     Rowl::Scene::CharacterSlot slot = Rowl::Scene::CharacterSlot::Body;
     if (checkSlotName(slotName, slot) != ROWL_RESULT_OK) return 0;
-    std::lock_guard<std::mutex> lock(g_characterMutex);
-    // D3 (#150/#157): int-taşıyıcı; yabancı damgayla reddedilir, erase yok.
+    // D13 okuyucu: shared.
+    std::shared_lock<std::shared_mutex> lock(g_characterMutex);
+    // D3 (#150/#157): int-taşıyıcı; yabancı damgayla reddedilir. D13: shared
+    // altında erase YOK — ölü dalı map'e dokunmadan 0 döner.
     if (classifyHandle(handle) == HandleStanding::Dead) {
-        g_characterStates.erase(handle);
         return 0;
     }
     if (!isLiveHandle(handle)) {
@@ -250,7 +282,10 @@ int RowlEngine_IsCharacterSlotVisible(RowlEngineHandle handle,
         return 0;
     }
     return invokeNoexcept<int>([&] {
-        CharacterRuntime& runtime = g_characterStates[handle];
+        const CharacterRuntime empty{};
+        const auto it = g_characterStates.find(handle);
+        const CharacterRuntime& runtime =
+            (it == g_characterStates.end()) ? empty : it->second;
         return runtime.layers.slotState(slot).visible ? 1 : 0;
     }, 0);
 }
@@ -270,7 +305,7 @@ RowlEngine_ResultCode RowlEngine_RegisterCharacterPreset(
     const RowlEngine_ResultCode jsonCheck =
         checkCharacterInput(expressionJsonUtf8, jsonView);
     if (jsonCheck != ROWL_RESULT_OK) return jsonCheck;
-    std::lock_guard<std::mutex> lock(g_characterMutex);
+    std::unique_lock<std::shared_mutex> lock(g_characterMutex);
     if (const auto guard = guardCharacterEntryLocked(handle, "register_character_preset")) {
         return *guard;
     }
@@ -303,7 +338,7 @@ RowlEngine_ResultCode RowlEngine_ApplyCharacterExpression(
     const RowlEngine_ResultCode nameCheck =
         checkPresetName(presetName, nameView);
     if (nameCheck != ROWL_RESULT_OK) return nameCheck;
-    std::lock_guard<std::mutex> lock(g_characterMutex);
+    std::unique_lock<std::shared_mutex> lock(g_characterMutex);
     if (const auto guard = guardCharacterEntryLocked(handle, "apply_character_expression")) {
         return *guard;
     }
@@ -327,12 +362,16 @@ RowlEngine_ResultCode RowlEngine_ApplyCharacterExpression(
 RowlEngine_ResultCode RowlEngine_GetCharacterPresetListJson(
     RowlEngineHandle handle, char* buffer, uint32_t bufferSize,
     uint32_t* outRequiredSize) {
-    std::lock_guard<std::mutex> lock(g_characterMutex);
-    if (const auto guard = guardCharacterEntryLocked(handle, "get_character_preset_list")) {
+    // D13 okuyucu: shared.
+    std::shared_lock<std::shared_mutex> lock(g_characterMutex);
+    if (const auto guard = guardCharacterEntryLockedRead(handle, "get_character_preset_list")) {
         return *guard;
     }
     return invokeNoexcept<RowlEngine_ResultCode>([&] {
-        CharacterRuntime& runtime = g_characterStates[handle];
+        const CharacterRuntime empty{};
+        const auto it = g_characterStates.find(handle);
+        const CharacterRuntime& runtime =
+            (it == g_characterStates.end()) ? empty : it->second;
         return copyUtf8ToCaller(runtime.presets.presetListJson().dump(),
                                 buffer, bufferSize, outRequiredSize);
     }, ROWL_RESULT_UNKNOWN_ERROR);
@@ -341,7 +380,9 @@ RowlEngine_ResultCode RowlEngine_GetCharacterPresetListJson(
 RowlEngine_ResultCode RowlEngine_GetCharacterDrawListJson(
     RowlEngineHandle handle, char* buffer, uint32_t bufferSize,
     uint32_t* outRequiredSize) {
-    std::lock_guard<std::mutex> lock(g_characterMutex);
+    // D13 istisnası: anlamsal okuyucu ama composeDrawList çağrı-başı
+    // skip-cache yazar (mutable) → exclusive sınıfında kilitlenir.
+    std::unique_lock<std::shared_mutex> lock(g_characterMutex);
     if (const auto guard = guardCharacterEntryLocked(handle, "get_character_draw_list")) {
         return *guard;
     }
@@ -361,12 +402,16 @@ RowlEngine_ResultCode RowlEngine_GetCharacterDrawListJson(
 RowlEngine_ResultCode RowlEngine_GetLastCharacterErrorUtf8(
     RowlEngineHandle handle, char* buffer, uint32_t bufferSize,
     uint32_t* outRequiredSize) {
-    std::lock_guard<std::mutex> lock(g_characterMutex);
-    if (const auto guard = guardCharacterEntryLocked(handle, "get_last_character_error")) {
+    // D13 okuyucu: shared.
+    std::shared_lock<std::shared_mutex> lock(g_characterMutex);
+    if (const auto guard = guardCharacterEntryLockedRead(handle, "get_last_character_error")) {
         return *guard;
     }
     return invokeNoexcept<RowlEngine_ResultCode>([&] {
-        CharacterRuntime& runtime = g_characterStates[handle];
+        const CharacterRuntime empty{};
+        const auto it = g_characterStates.find(handle);
+        const CharacterRuntime& runtime =
+            (it == g_characterStates.end()) ? empty : it->second;
         const std::string& error = runtime.lastError.empty()
                                        ? runtime.layers.lastError()
                                        : runtime.lastError;
