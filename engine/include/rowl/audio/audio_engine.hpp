@@ -177,11 +177,21 @@ public:
     float ambienceBedGain(int bed) const;
     // pumpBgmStream maliyet gözlemlenebilirliği (fail kapısı YOK):
     // son-64 pump penceresi + sayaç. Suspend altında pump çalışmaz,
-    // örnek de üretilmez.
-    uint64_t bgmPumpSampleCount() const { return m_pumpCount; }
-    uint64_t bgmPumpLastMicroseconds() const { return m_pumpLastUs; }
+    // örnek de üretilmez. D04: sayaç/pencere m_streamMutex altındadır
+    // (pump yazımıyla okuyucu hizalanır).
+    uint64_t bgmPumpSampleCount() const {
+        std::lock_guard<std::mutex> lock(m_streamMutex);
+        return m_pumpCount;
+    }
+    uint64_t bgmPumpLastMicroseconds() const {
+        std::lock_guard<std::mutex> lock(m_streamMutex);
+        return m_pumpLastUs;
+    }
     uint64_t bgmPumpAvgMicroseconds() const;
-    uint64_t bgmPumpMaxMicroseconds() const { return m_pumpMaxUs; }
+    uint64_t bgmPumpMaxMicroseconds() const {
+        std::lock_guard<std::mutex> lock(m_streamMutex);
+        return m_pumpMaxUs;
+    }
     std::string bgmPumpStatsJson() const;
 
     // Real-Time Audio Telemetry & VU Metering
@@ -269,6 +279,30 @@ private:
     // Blip yolunda yazılan bayrak da atomiktir (hammera katılır).
     std::atomic<bool> m_isVoicePlaying{false};
     mutable std::mutex m_stateMutex;
+    // D04: pump/stream-ring kilidi (m_stateMutex'tan AYRI yeni mutex).
+    // Kilit seçimi karar defteri (m_stateMutex'e karşı yeni mutex):
+    //  1) m_stateMutex YENİDEN KULLANILAMAZ: pump gövdesi setLastError /
+    //     stopBgm çağırır (ikisi de m_stateMutex alır); pump bu kilidi
+    //     tutarken çağrılsaydı özyinelemeli-kilit deadlock'u üretirdi
+    //     (std::mutex non-recursive). Hata yollarını ertelemek deseni bölerdi.
+    //  2) Perf-floor (S kapısı): m_stateMutex blip/telemetri/hata yolunun
+    //     kilididir; pump'un decode+SDL gövdesini orada tutmak ses-yolunun
+    //     tamamını pump maliyetine bağlardı. Özel kilit maliyeti izole eder.
+    //  3) Sıralama tek yönlüdür: m_stateMutex -> m_streamMutex (yalnız
+    //     updateTelemetry ring-penceresi). Pump/open/close m_streamMutex
+    //     tutarken m_stateMutex ALMAZ (hata kayıtları salım sonrasına
+    //     ertelenir) — döngü yoktur.
+    //  4) setter -> applyChannelGains zinciri kilitsiz kalır
+    //     (applyChannelGains kilit almaz; D03 hacim atomikleri relaxed
+    //     aynen) — özyinelemeli-kilit deadlock'u üretilemez. Pump kilidi
+    //     hacim atomikleriyle kesişmez (pump hacim okumaz/yazmaz).
+    // Korunan: m_bgmRing (+büyüten assign), m_bgmStreamSource (reset/move),
+    // m_bgmRingWriteFrames, m_bgmStreamPcmPos, m_bgmStreamEos,
+    // m_bgmRingChannels, m_bgmStreamRateHz, m_outputSuspended (pump guard
+    // okuması + setter yazımı), pump-stats penceresi/sayaçları.
+    // Kapsam-dışı (bilinçli; D13/D18 girdisi): m_streamInfo snapshot'ı,
+    // isStreaming()/isOutputSuspended() salt-okurları, m_initialized bayrağı.
+    mutable std::mutex m_streamMutex;
     // M4: sınıf ZORUNLU parametredir (varsayılan YOK) — derleyici her yazım
     // noktasını sınıflandırmaya zorlar (liste-dışı=sınıfsız kalamaz).
     void setLastError(const std::string& message, AudioErrorClass errorClass);
@@ -424,12 +458,16 @@ private:
     float m_ambCrossDuration = 0.0f;
     FadeCurve m_ambCrossCurve = FadeCurve::Linear;
     // pumpBgmStream maliyet penceresi (son 64 örnek + sayaç/maks).
+    // D04: recordPumpSample çağıranı m_streamMutex'i tutar (kilit ALMAZ);
+    // okuyucu erişimciler kilitlidir. bgmPumpAvgMicrosecondsLocked kilitli
+    // bağlamın iç hesabıdır (StatsJson + Avg tek kilitle hizalanır).
     uint64_t m_pumpCount = 0;
     uint64_t m_pumpLastUs = 0;
     uint64_t m_pumpMaxUs = 0;
     std::array<uint64_t, 64> m_pumpWindow{};
     size_t m_pumpWindowPos = 0;
     void recordPumpSample(uint64_t microseconds);
+    uint64_t bgmPumpAvgMicrosecondsLocked() const;
     static bool isValidAmbienceBed(int bed) { return bed == 0 || bed == 1; }
     SDL_AudioStream* ambienceBedStream(int bed) const;
     void clearAmbienceBed(int bed);
