@@ -68,6 +68,17 @@ struct GameState {
     // mixer keys and decode to 1.0 defaults (Migrated).
     static constexpr uint32_t CurrentSaveFormatVersion = 4;
 
+    // D08 (a): serializeJson'un "history" anahtarına yazdığı sınırlı öncül
+    // zincirin üst sınırı (halka sayısı, aktif state hariç). Her halka
+    // thumbnail'siz tam state'tir; thumbnail yalnızca aktif state'te kalır.
+    // K=4: 6. bölüm 1200-adım ölçümünde ~656KB ile 768KB kilidinin altında
+    // kalır (K=8 → ~974KB ile kilidi aşıyordu; eşik genişletilmedi, K
+    // düşürüldü). Additive ABI: anahtar opsiyonel, eski okuyucular yoksayar,
+    // format version bump YOK. Eksik/yabancı/bozuk "history" decode'da
+    // yoksayılır (previousState=nullptr — bugünkü davranış), InvalidData'ya
+    // düşürmez.
+    static constexpr size_t kMaxSerializedHistoryEntries = 4;
+
     // POD members first
     uint64_t stepId = 0;
     uint64_t activeNodeId = 101;
@@ -176,6 +187,11 @@ struct GameState {
     );
 
     // Serialization & slot persistence
+    //
+    // D08 (a): serializeJson aktif state'e ek olarak en fazla
+    // kMaxSerializedHistoryEntries öncül halkayı "history" anahtarına yazar
+    // (thumbnail'siz tam state'ler); decodeJson "history" varsa previousState
+    // zincirini kurar, böylece save->load sonrası rewind çalışır.
     std::string serializeJson() const;
     static GameStateDecodeResult decodeJson(const std::string& jsonStr);
     static std::shared_ptr<const GameState> deserializeJson(const std::string& jsonStr);
