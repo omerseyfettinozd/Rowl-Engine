@@ -263,6 +263,9 @@ RowlEngineHandle RowlEngine_Create(void) {
 }
 
 void RowlEngine_Destroy(RowlEngineHandle handle) {
+    // D13 kilit-sırası: VideoSerial DIŞTA (yukarıda), handle kilidi İÇTE
+    // (classify/take içeride). Sıra tersine çevrilmez; aux kilidine
+    // dokunulmaz. test_aux_gate.py kilitler.
     // D3 (B1d #138): teardown runs under the process-wide video serial —
     // no SDL video call here can interleave a concurrent Init/Shutdown.
     Rowl::Platform::VideoSerialGuard serial;
@@ -287,6 +290,8 @@ void RowlEngine_Destroy(RowlEngineHandle handle) {
 // D3 (B1d #151): ownership recovery after owner-thread death. Serial first
 // (lock order VideoSerial > handle), then unclaim + dispatch-pin steal.
 RowlEngine_ResultCode RowlEngine_ReclaimHandle(RowlEngineHandle handle) {
+    // D13 kilit-sırası: VideoSerial DIŞTA (yukarıda), g_handleMutex İÇTE
+    // (aşağıdaki açık kilit). Unconditional transfer; eski sahip Foreign'e düşer.
     Rowl::Platform::VideoSerialGuard serial;
     {
         std::lock_guard<std::mutex> lock(g_handleMutex);
@@ -363,6 +368,7 @@ int RowlEngine_InitStandalone(RowlEngineHandle handle,
 }
 
 void RowlEngine_Run(RowlEngineHandle handle) {
+    // D13: bilerek serial-sız (by-design) — bloklar, seri Shutdown'u kilitlerdi.
     // No video serial here by design: Run blocks until quit, so holding the
     // serial would deadlock a concurrent Shutdown waiting for it. Liveness
     // + shared ownership is the whole guard (D3 #106).
@@ -436,6 +442,7 @@ void RowlEngine_Step(RowlEngineHandle handle, float deltaTime) {
 }
 
 void RowlEngine_Shutdown(RowlEngineHandle handle) {
+    // D13 kilit-sırası: VideoSerial DIŞTA (yukarıda), handle kilidi İÇTE.
     Rowl::Platform::VideoSerialGuard serial;
     // D3 (B1d #102): foreign-thread Shutdown stamps WRONG_THREAD instead
     // of silently no-op'ing while leaking every lease it never released.
