@@ -85,14 +85,14 @@ public:
     bool isBgmLooping() const { return m_bgmLoop; }
     void setBgmLooping(bool loop) { m_bgmLoop = loop; }
 
-    float getBgmGain() const { return m_bgmGain; }
-    float getBgmVolume() const { return m_bgmVolume; }
-    float getMasterVolume() const { return m_masterVolume; }
-    float getVoiceVolume() const { return m_voiceVolume; }
-    float getSfxVolume() const { return m_sfxVolume; }
+    float getBgmGain() const { return m_bgmGain.load(std::memory_order_relaxed); }
+    float getBgmVolume() const { return m_bgmVolume.load(std::memory_order_relaxed); }
+    float getMasterVolume() const { return m_masterVolume.load(std::memory_order_relaxed); }
+    float getVoiceVolume() const { return m_voiceVolume.load(std::memory_order_relaxed); }
+    float getSfxVolume() const { return m_sfxVolume.load(std::memory_order_relaxed); }
     // Faz 5 Dilim 1 ekleri.
-    float getAmbienceVolume() const { return m_ambienceVolume; }
-    float getUiVolume() const { return m_uiVolume; }
+    float getAmbienceVolume() const { return m_ambienceVolume.load(std::memory_order_relaxed); }
+    float getUiVolume() const { return m_uiVolume.load(std::memory_order_relaxed); }
     DSPFilterType getActiveFilter() const { return m_activeFilter; }
     bool isInitialized() const { return m_initialized; }
     bool isDuckingActive() const { return m_isDuckingActive; }
@@ -277,11 +277,13 @@ private:
     std::string lastErrorSnapshot() const;
     bool lastErrorEmpty() const;
     float m_lastVoiceBlipPitch = 1.0f;
-    float m_masterVolume = 1.0f;
-    float m_bgmVolume = 1.0f;
-    float m_voiceVolume = 1.0f;
-    float m_sfxVolume = 1.0f;
-    float m_bgmGain = 1.0f;
+    // D03: hacim üyeleri ses-pump ve C-API thread'leri arasında paylaşılır
+    // (yırtık-okuma + TSan kilidi; her bus bağımsız tek-word → relaxed).
+    std::atomic<float> m_masterVolume = 1.0f;
+    std::atomic<float> m_bgmVolume = 1.0f;
+    std::atomic<float> m_voiceVolume = 1.0f;
+    std::atomic<float> m_sfxVolume = 1.0f;
+    std::atomic<float> m_bgmGain = 1.0f;
     float m_duckingFactor = 0.5f;  // Configurable ducking factor (default -6dB = 0.5)
     DSPFilterType m_activeFilter = DSPFilterType::Normal;
     bool m_isDuckingActive = false;
@@ -366,8 +368,8 @@ private:
     bool m_isBgmStreamed = false;
     bool m_bgmStreamEos = false;
     DSPFilterType m_bgmStreamFilter = DSPFilterType::Normal;
-    float m_ambienceVolume = 1.0f;
-    float m_uiVolume = 1.0f;
+    std::atomic<float> m_ambienceVolume = 1.0f;
+    std::atomic<float> m_uiVolume = 1.0f;
     SDL_AudioStream* m_ambienceStream = nullptr;
     std::vector<uint8_t> m_ambienceData; // float PCM, loop RAM
     size_t m_ambienceSampleOffset = 0;
@@ -409,7 +411,7 @@ private:
     size_t m_ambienceSampleOffsetB = 0;
     bool m_isAmbiencePlayingB = false;
     std::string m_currentAmbiencePathB;
-    float m_ambienceVolumeB = 1.0f;
+    std::atomic<float> m_ambienceVolumeB = 1.0f;
     // Bed float formatı (reopen sonrası geri-kuyruk için; queue anında kayda
     // geçer; varsayılan 2ch/48kHz yalnızca format hiç görülmediyse kullanılır).
     int m_ambienceBedChannels[2] = {2, 2};

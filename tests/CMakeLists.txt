@@ -141,6 +141,31 @@ set_tests_properties(audio_snapshot_red_probe PROPERTIES
     ENVIRONMENT "SDL_AUDIODRIVER=dummy;SDL_VIDEODRIVER=dummy"
     TIMEOUT 120
 )
+
+# D03 hacim-yarışı RED kilidi: Bacak-1 header-only StreamMixer + Bacak-3 public
+# C API + Bacak-2 AudioEngine üye hammer'ı (test-köprüsü testEngineFromHandle).
+# Üye-semboller paylaşılan RowlEngineCore'dan ihraç edilmez (yalnızca C API
+# ROWL_API'dir); bu yüzden rowl_tests gibi rowl_engine_objects'a bağlanır —
+# C++ çağrıları ve C-API çağrıları tek kopyayı paylaşır (çift-statik yok).
+# rowl_tests gövdesine gömülmez ki kırmızı-yeşil döngüsü tüm süiti koşmadan
+# saniyeler içinde kanıtlansın. TSan altında KIRMIZI (exit 66 + data-race
+# uyarısı), TSan'sız YEŞİL (exit 0).
+add_executable(rowl_audio_volume_race_red_probe test_audio_volume_race_red_probe.cpp)
+target_include_directories(rowl_audio_volume_race_red_probe PRIVATE
+    ${CMAKE_SOURCE_DIR}/engine/include
+)
+target_link_libraries(rowl_audio_volume_race_red_probe PRIVATE
+    rowl_engine_objects
+    rowl_engine_thirdparty
+)
+target_compile_definitions(rowl_audio_volume_race_red_probe PRIVATE ROWL_BUILDING_DLL)
+
+add_test(NAME audio_volume_race_red_probe COMMAND rowl_audio_volume_race_red_probe)
+set_tests_properties(audio_volume_race_red_probe PROPERTIES
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    ENVIRONMENT "SDL_AUDIODRIVER=dummy;SDL_VIDEODRIVER=dummy"
+    TIMEOUT 120
+)
 if(WIN32)
     # MSVC Debug runs the full native suite far slower than optimized
     # compilers; the CI --timeout 300 turns that into a zero-output kill.

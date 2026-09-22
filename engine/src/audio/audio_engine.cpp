@@ -331,7 +331,22 @@ bool AudioEngine::initialize() {
     // Faz 5 Dilim 2: havuz + mixer + eğri + bedB + crossfade + pump sıfırlanır.
     m_sfxPool = SfxVoicePool{};
     destroySfxPoolStreams();
-    m_mixer = StreamMixer{};
+    // D03: StreamMixer üyeleri atomik olduğundan toptan-atama (kopyala)
+    // derlenemez; varsayılan-değer sıfırlaması tek-tek yapılır (birebir aynı
+    // son-durum: tüm bus'lar 1.0, duck 1.0, kanallar 2).
+    m_mixer.setUserVolume(StreamBusId::Master, 1.0f);
+    m_mixer.setUserVolume(StreamBusId::Bgm, 1.0f);
+    m_mixer.setUserVolume(StreamBusId::Voice, 1.0f);
+    m_mixer.setUserVolume(StreamBusId::Sfx, 1.0f);
+    m_mixer.setUserVolume(StreamBusId::Ambience, 1.0f);
+    m_mixer.setUserVolume(StreamBusId::Ui, 1.0f);
+    m_mixer.setBgmDuckGain(1.0f);
+    m_mixer.setAmbienceBedVolume(1, 1.0f);
+    m_mixer.setChannelCount(StreamBusId::Bgm, 2);
+    m_mixer.setChannelCount(StreamBusId::Voice, 2);
+    m_mixer.setChannelCount(StreamBusId::Sfx, 2);
+    m_mixer.setChannelCount(StreamBusId::Ambience, 2);
+    m_mixer.setChannelCount(StreamBusId::Ui, 2);
     m_fadeCurve = FadeCurve::Linear;
     m_voiceBlipCount = 0;
     m_lastVoiceBlipPitch = 1.0f;
@@ -1215,31 +1230,31 @@ void AudioEngine::setBgmVolume(float volume) {
         ROWL_LOG_WARN("Ignoring non-finite BGM volume");
         return;
     }
-    m_bgmVolume = std::clamp(volume, 0.0f, 1.0f);
-    m_bgmGain = m_isDuckingActive ? (m_bgmVolume * m_duckingFactor) : m_bgmVolume;
+    m_bgmVolume.store(std::clamp(volume, 0.0f, 1.0f), std::memory_order_relaxed);
+    m_bgmGain.store(m_isDuckingActive ? (m_bgmVolume.load(std::memory_order_relaxed) * m_duckingFactor) : m_bgmVolume.load(std::memory_order_relaxed), std::memory_order_relaxed);
     // Faz 5 Dilim 2: üye + mixer çift-yön senkron (tek kaynak okumada mixer).
-    m_mixer.setUserVolume(StreamBusId::Bgm, m_bgmVolume);
+    m_mixer.setUserVolume(StreamBusId::Bgm, m_bgmVolume.load(std::memory_order_relaxed));
     applyChannelGains();
 }
 
 void AudioEngine::setMasterVolume(float volume) {
     if (!std::isfinite(volume)) return;
-    m_masterVolume = std::clamp(volume, 0.0f, 1.0f);
-    m_mixer.setUserVolume(StreamBusId::Master, m_masterVolume);
+    m_masterVolume.store(std::clamp(volume, 0.0f, 1.0f), std::memory_order_relaxed);
+    m_mixer.setUserVolume(StreamBusId::Master, m_masterVolume.load(std::memory_order_relaxed));
     applyChannelGains();
 }
 
 void AudioEngine::setVoiceVolume(float volume) {
     if (!std::isfinite(volume)) return;
-    m_voiceVolume = std::clamp(volume, 0.0f, 1.0f);
-    m_mixer.setUserVolume(StreamBusId::Voice, m_voiceVolume);
+    m_voiceVolume.store(std::clamp(volume, 0.0f, 1.0f), std::memory_order_relaxed);
+    m_mixer.setUserVolume(StreamBusId::Voice, m_voiceVolume.load(std::memory_order_relaxed));
     applyChannelGains();
 }
 
 void AudioEngine::setSfxVolume(float volume) {
     if (!std::isfinite(volume)) return;
-    m_sfxVolume = std::clamp(volume, 0.0f, 1.0f);
-    m_mixer.setUserVolume(StreamBusId::Sfx, m_sfxVolume);
+    m_sfxVolume.store(std::clamp(volume, 0.0f, 1.0f), std::memory_order_relaxed);
+    m_mixer.setUserVolume(StreamBusId::Sfx, m_sfxVolume.load(std::memory_order_relaxed));
     applyChannelGains();
 }
 
@@ -1252,19 +1267,19 @@ void AudioEngine::setAmbienceVolume(float volume) {
 
 void AudioEngine::setUiVolume(float volume) {
     if (!std::isfinite(volume)) return;
-    m_uiVolume = std::clamp(volume, 0.0f, 1.0f);
-    m_mixer.setUserVolume(StreamBusId::Ui, m_uiVolume);
+    m_uiVolume.store(std::clamp(volume, 0.0f, 1.0f), std::memory_order_relaxed);
+    m_mixer.setUserVolume(StreamBusId::Ui, m_uiVolume.load(std::memory_order_relaxed));
     applyChannelGains();
 }
 
 void AudioEngine::triggerVoiceDucking(bool isVoiceActive) {
     m_isDuckingActive = isVoiceActive;
     if (isVoiceActive) {
-        m_bgmGain = m_bgmVolume * m_duckingFactor;
-        ROWL_LOG_INFO("Voice Ducking Triggered -> BGM Attenuated by " + std::to_string(m_duckingFactor * 100.0f) + "% (Gain: " + std::to_string(m_bgmGain) + ")");
+        m_bgmGain.store(m_bgmVolume.load(std::memory_order_relaxed) * m_duckingFactor, std::memory_order_relaxed);
+        ROWL_LOG_INFO("Voice Ducking Triggered -> BGM Attenuated by " + std::to_string(m_duckingFactor * 100.0f) + "% (Gain: " + std::to_string(m_bgmGain.load(std::memory_order_relaxed)) + ")");
     } else {
-        m_bgmGain = m_bgmVolume;
-        ROWL_LOG_INFO("Voice Finished -> BGM Restored to Full Volume (Gain: " + std::to_string(m_bgmGain) + ")");
+        m_bgmGain.store(m_bgmVolume.load(std::memory_order_relaxed), std::memory_order_relaxed);
+        ROWL_LOG_INFO("Voice Finished -> BGM Restored to Full Volume (Gain: " + std::to_string(m_bgmGain.load(std::memory_order_relaxed)) + ")");
     }
     // Faz 5 Dilim 2: duck mixer'e bağlanır (mixer gainFor(Bgm) ==
     // master*m_bgmGain birebir korunur).
@@ -1279,7 +1294,7 @@ void AudioEngine::setDuckingFactor(float factor) {
     }
     m_duckingFactor = std::clamp(factor, 0.0f, 1.0f);
     if (m_isDuckingActive) {
-        m_bgmGain = m_bgmVolume * m_duckingFactor;
+        m_bgmGain.store(m_bgmVolume.load(std::memory_order_relaxed) * m_duckingFactor, std::memory_order_relaxed);
         m_mixer.setBgmDuckGain(m_duckingFactor);
     }
     applyChannelGains();
@@ -2162,7 +2177,9 @@ void AudioEngine::playVoiceBlip(const std::string& assetPath, float pitch, float
     m_lastVoiceBlipPitch = pitch;
 
     // Immediately deflect channel telemetry so VU meters and telemetry readers reflect the blip
-    float effectiveVol = volume * m_masterVolume * (channel == AudioChannelType::Sfx ? m_sfxVolume : m_voiceVolume);
+    // D03: atomik üyelerde üçlü-operatör kopya gerektirir (derlenemez);
+    // okumalar load(relaxed) ile floata indirgenir (matematik birebir).
+    float effectiveVol = volume * m_masterVolume.load(std::memory_order_relaxed) * (channel == AudioChannelType::Sfx ? m_sfxVolume.load(std::memory_order_relaxed) : m_voiceVolume.load(std::memory_order_relaxed));
     ChannelTelemetry& tel = (channel == AudioChannelType::Sfx) ? m_telemetrySfx : m_telemetryVoice;
     tel.peakL = std::max(tel.peakL, effectiveVol);
     tel.peakR = std::max(tel.peakR, effectiveVol);
@@ -2811,10 +2828,10 @@ void AudioEngine::setAmbienceBedVolume(int bed, float volume) {
     volume = std::clamp(volume, 0.0f, 1.0f);
     if (bed == 0) {
         // Miras tek-bed üyesi BedA ile çift-yön senkron tutulur.
-        m_ambienceVolume = volume;
+        m_ambienceVolume.store(volume, std::memory_order_relaxed);
         m_mixer.setUserVolume(StreamBusId::Ambience, volume);
     } else {
-        m_ambienceVolumeB = volume;
+        m_ambienceVolumeB.store(volume, std::memory_order_relaxed);
     }
     m_mixer.setAmbienceBedVolume(bed, volume);
     applyChannelGains();
@@ -2822,7 +2839,8 @@ void AudioEngine::setAmbienceBedVolume(int bed, float volume) {
 
 float AudioEngine::ambienceBedVolume(int bed) const {
     if (!isValidAmbienceBed(bed)) return 0.0f;
-    return (bed == 0) ? m_ambienceVolume : m_ambienceVolumeB;
+    // D03: atomik üçlü-operatör derlenemez; load(relaxed) ile floata indirgenir.
+    return (bed == 0) ? m_ambienceVolume.load(std::memory_order_relaxed) : m_ambienceVolumeB.load(std::memory_order_relaxed);
 }
 
 bool AudioEngine::isAmbienceBedPlaying(int bed) const {
