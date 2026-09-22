@@ -133,7 +133,15 @@ def check_media_format(rel_path):
 
 
 def read_sidecar_converted_from(full_path):
-    """Adjacent <file>.rowlconv.json sidecar -> converted_from record, else None."""
+    """Adjacent <file>.rowlconv.json sidecar -> converted_from record, else None.
+
+    D18a (KI-11 kardes kilit): sidecar bir `output_sha256` tasiyorsa cikti
+    dosyasi yeniden hash'lenir; uyusmazsa sidecar bayattir (cikti sidecar
+    yazimindan sonra degismistir) -> kayit DUSER + stderr uyarisi, pack
+    normal devam eder (fail-soft: sidecar provenance ipucudur, butunluk
+    kaniti degil). `output_sha256`'siz eski sidecar'lar aynen guvenilir
+    (anahtarsiz gecis, additive format).
+    """
     sidecar_path = full_path + ".rowlconv.json"
     try:
         if not os.path.isfile(sidecar_path):
@@ -147,6 +155,18 @@ def read_sidecar_converted_from(full_path):
     source_sha = sidecar.get("source_sha256")
     if not source_sha:
         return None
+    expected_output = sidecar.get("output_sha256")
+    if isinstance(expected_output, str) and len(expected_output) == 64:
+        try:
+            with open(full_path, "rb") as f:
+                actual_output = hashlib.sha256(f.read()).hexdigest()
+        except OSError:
+            return None
+        if actual_output != expected_output:
+            print(f"[Packer][WARN][stale-sidecar] {full_path}: output_sha256 "
+                  f"mismatch (sidecar bayat, cikti sonradan degismis) — "
+                  f"converted_from dusuruldu.", file=sys.stderr)
+            return None
     settings = sidecar.get("settings") if isinstance(sidecar.get("settings"), dict) else {}
     source_path = (sidecar.get("source_path") or settings.get("source_path")
                    or settings.get("source"))
@@ -300,6 +320,12 @@ def pack_directory(input_dir, output_pkg):
             "sha256": digest,
             "compressed_size": compressed_size,
             "flags": flags,
+            # D18a (KI-11): flags=1 kayda sikistirilmis-bayt hash anahtari.
+            # Deterministik + ortam-bagimsiz; okumada opsiyonel (eski
+            # paketler anahtarsiz gecmeye devam eder). Format eklentisi
+            # additive'dir, okuyucu/ABI etkilenmez.
+            **({"compressed_sha256": hashlib.sha256(compressed_data).hexdigest()}
+               if flags == 1 else {}),
             **({"converted_from": converted_from} if (converted_from := read_sidecar_converted_from(full_path)) else {}),
         })
 

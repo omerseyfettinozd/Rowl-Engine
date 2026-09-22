@@ -97,6 +97,14 @@ if(ROWL_BUILD_RUNTIME_TESTS)
             TIMEOUT 30
         )
         add_test(
+            NAME rowl_d18a_verify_depth_tests
+            COMMAND ${Python3_EXECUTABLE} -u ${CMAKE_SOURCE_DIR}/tests/test_d18a_verify_depth.py
+        )
+        set_tests_properties(rowl_d18a_verify_depth_tests PROPERTIES
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+            TIMEOUT 30
+        )
+        add_test(
             NAME rowl_package_determinism_tests
             COMMAND ${Python3_EXECUTABLE} -u ${CMAKE_SOURCE_DIR}/tests/test_package_determinism.py
         )

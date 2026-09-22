@@ -121,12 +121,27 @@ def verify_embedded_manifest(package, entries):
             bytes.fromhex(digest)
         except ValueError:
             fail("embedded manifest checksum mismatch for: " + record["path"])
-        # Raw payloads are re-hashed with the standard library; compressed
-        # entries are covered byte-for-byte by the determinism gate instead.
+        # Raw payloads are re-hashed with the standard library. Compressed
+        # (flags=1) entries carry a D18a `compressed_sha256` manifest key —
+        # the deterministic, environment-independent byte hash of the stored
+        # payload — re-hashed here when present. Records without the key
+        # (pre-D18a packages) keep the old behaviour and still pass.
         if entry[3] == 0:
             actual = hashlib.sha256(read_payload(package, entry[0], entry[1])).hexdigest()
             if actual != digest:
                 fail("embedded manifest checksum mismatch for: " + record["path"])
+        else:
+            compressed_digest = record.get("compressed_sha256")
+            if compressed_digest is not None:
+                if not isinstance(compressed_digest, str) or len(compressed_digest) != 64:
+                    fail("embedded manifest compressed checksum mismatch for: " + record["path"])
+                try:
+                    bytes.fromhex(compressed_digest)
+                except ValueError:
+                    fail("embedded manifest compressed checksum mismatch for: " + record["path"])
+                actual = hashlib.sha256(read_payload(package, entry[0], entry[1])).hexdigest()
+                if actual != compressed_digest:
+                    fail("embedded manifest compressed checksum mismatch for: " + record["path"])
 
 
 def verify_mod_overrides(mods_root):
