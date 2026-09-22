@@ -330,6 +330,7 @@ set(ROWL_ENGINE_SOURCES
     src/state/session_persistence.cpp
     # Scripting
     src/scripting/lua_sandbox.cpp
+    src/scripting/lua_condition_purity.cpp  # D06: koşul ham-global saflığı (yeni TU)
     # Audio
     src/audio/audio_engine.cpp
     src/audio/audio_blip_error_channel.cpp  # D02: blip hata-kanalı Locked-yardımcıları
