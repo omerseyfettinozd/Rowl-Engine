@@ -1,4 +1,5 @@
 #include "rowl/scripting/lua_sandbox.hpp"
+#include "rowl/scripting/lua_condition_purity.hpp"
 #include "rowl/core/logger.hpp"
 #include "rowl/util/locale_independent_parse.hpp"
 #include <cmath>
@@ -784,8 +785,11 @@ std::string LuaSandbox::getVariable(const std::string& key) const {
         // B7 (#28-class): even a read interns (allocates) when the key is new,
         // and a hostile _G metatable could run code — RecoveryScope keeps a
         // quota-pinned state from throwing through these C++ frames.
+        // D07: ham-okuma (d07_rawGetGlobal) — koşulun ektiği _G __index
+        // (D06 ad-snapshot'ına görünmez) kayıp-anahtarda ateşlenemez; mevcut
+        // anahtarlarda getglobal ile birebir aynı değer döner.
         const RecoveryScope recovery(const_cast<LuaSandbox*>(this));
-        lua_getglobal(m_luaState, key.c_str());
+        d07_rawGetGlobal(m_luaState, key.c_str());
         if (lua_isstring(m_luaState, -1) || lua_isnumber(m_luaState, -1)) {
             const char* raw = lua_tostring(m_luaState, -1);
             const std::string val = raw ? raw : "";
@@ -1285,7 +1289,13 @@ bool LuaSandbox::callOptionalFunction(const std::string& functionName, double de
     // callOptionalModuleFunction for the rationale).
     if (!checkCallbackAllowed(("callback " + functionName).c_str())) return false;
 
-    lua_getglobal(m_luaState, functionName.c_str());
+    // D07: ham-okuma (d07_rawGetGlobal) — koşulun ektiği _G __index kayıp
+    // callback çözümünde ateşlenemez (no-op sözleşmesi script kodu
+    // çalıştırmaz); mevcut callback'ler rawget ile birebir çözülür.
+    // B7 (#28-class): pushstring kota-pinned durumda ayırabilir — RecoveryScope
+    // rezervi altında (getVariable emsali). :850 getGlobalNumber KAPSAM-DIŞI.
+    const RecoveryScope recovery(this);
+    d07_rawGetGlobal(m_luaState, functionName.c_str());
     if (lua_isnil(m_luaState, -1)) {
         lua_pop(m_luaState, 1);
         return true;

@@ -30,4 +30,15 @@ std::unordered_set<std::string> d06_snapshotConditionGlobals(lua_State* state);
 std::size_t d06_sweepConditionGlobals(lua_State* state,
                                       const std::unordered_set<std::string>& entry);
 
+// D07: koşul-vektörü ham-okuma. Koşul yolu onarım çalıştırmaz (per-frame
+// yasak) ve D06 ad-kümesi snapshot'ı bir _G METATABLE'ını göremez; bir koşul
+// setmetatable(_G, {__index=...}) ile düşmanca __index ekebilir ve bu plant
+// kalıcı olur. Sonrasında kayıp-anahtara dokunan her ÇIPLAK lua_getglobal
+// script kodu çalıştırır (kirlilik + pcall-dışı okumada C++ çerçevelerinden
+// geçen hata). Bu yardımcı _G[key] değerini rawget ile yığına iter (+1):
+// __index ASLA ateşlenmez, hata fırlatılamaz, yığın dengesi çağrı başına
+// sabittir. Dönen değer itilen değerin Lua tip kodudur (LUA_TNIL kayıp).
+// Kilit almaz, kota-rezervi almaz (çağıran kilitlidir ve RecoveryScope içindedir).
+int d07_rawGetGlobal(lua_State* state, const char* key);
+
 } // namespace Rowl::Scripting

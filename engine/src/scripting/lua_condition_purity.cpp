@@ -20,7 +20,6 @@ extern "C" {
 #include <lua.h>
 #include <lauxlib.h>
 }
-
 namespace Rowl::Scripting {
 
 std::unordered_set<std::string> d06_snapshotConditionGlobals(lua_State* state) {
@@ -88,6 +87,19 @@ LuaSandbox::D06ConditionGlobalGuard::~D06ConditionGlobalGuard() {
         ROWL_LOG_WARN("Lua condition raw global(s) swept (" +
                       std::to_string(swept) + ")");
     }
+}
+
+// D07: koşul-vektörü ham-okuma. lua_getglobal kayıp anahtarda _G metatable
+// __index'i ateşler (script kodu çalışır); lua_rawget ateşlemez ve geçerli
+// tablo + anahtarda hata fırlatamaz. pushstring/rezerv disiplini çağırandadır
+// (RecoveryScope altında çağrılır). Yığına net +1 iter (değer), _G ara
+// tablosu remove ile düşürülür; çağıran tek değeri eskisi gibi tüketir.
+int d07_rawGetGlobal(lua_State* state, const char* key) {
+    lua_pushglobaltable(state);
+    lua_pushstring(state, key != nullptr ? key : "");
+    lua_rawget(state, -2);
+    lua_remove(state, -2);
+    return lua_type(state, -1);
 }
 
 } // namespace Rowl::Scripting

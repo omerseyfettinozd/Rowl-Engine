@@ -263,6 +263,28 @@ set_tests_properties(d15_pause_mixer_probe PROPERTIES
     TIMEOUT 120
 )
 
+# D07 koşul-vektörü kilidi (lua_sandbox çıplak getglobal okumaları: getVariable
+# + callOptionalFunction; :850 getGlobalNumber KAPSAM-DIŞI): iç sembolleri
+# kullanır (LuaSandbox C++ sınıfı; callOptionalFunction'ın public C API
+# karşılığı yok); bu yüzden D08 emsaliyle rowl_engine_objects'a bağlanır.
+# RED: PROB-DIRTY + exit 1; YEŞİL: PROB-CLEAN + exit 0.
+add_executable(rowl_d07_condition_vector_probe test_d07_condition_vector_probe.cpp)
+target_include_directories(rowl_d07_condition_vector_probe PRIVATE
+    ${CMAKE_SOURCE_DIR}/engine/include
+)
+target_link_libraries(rowl_d07_condition_vector_probe PRIVATE
+    rowl_engine_objects
+    rowl_engine_thirdparty
+)
+target_compile_definitions(rowl_d07_condition_vector_probe PRIVATE ROWL_BUILDING_DLL)
+
+add_test(NAME d07_condition_vector_probe COMMAND rowl_d07_condition_vector_probe)
+set_tests_properties(d07_condition_vector_probe PROPERTIES
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    ENVIRONMENT "SDL_AUDIODRIVER=dummy;SDL_VIDEODRIVER=dummy"
+    TIMEOUT 120
+)
+
 # D10 font-fallback mutual-exclusion + all-or-nothing MSDF kilidi: bağımsız
 # ikili (rowl_tests gövdesine gömülmez ki kırmızı-yeşil döngüsü tüm süiti
 # koşmadan saniyeler içinde kanıtlansın). D01/D02'den farklı olarak
