@@ -312,6 +312,7 @@ set(ROWL_ENGINE_SOURCES
     src/core/prefetch.cpp
     src/core/chapter_loader.cpp
     src/core/engine.cpp
+    src/core/engine_pause_mixer.cpp  # D15: pause-menu/mixer dörtlüsü (davranışsız taşıma)
     # Rendering
     src/render/window.cpp
     src/render/window_texture_cache.cpp  # A3-tur5: texture-cache bölünmesi

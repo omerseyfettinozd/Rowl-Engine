@@ -2989,43 +2989,6 @@ void Engine::pauseMenuMoveSelection(int direction) {
     m_pauseConfirmQuit = false;
 }
 
-float Engine::pauseMenuVolume(int row) const {
-    if (!m_audio) return 1.0f;
-    switch (row) {
-        case 3: return m_audio->getMasterVolume();
-        case 4: return m_audio->getBgmVolume();
-        case 5: return m_audio->getSfxVolume();
-        case 6: return m_audio->getVoiceVolume();
-        default: return 1.0f;
-    }
-}
-
-void Engine::setPauseMenuVolume(int row, float volume) {
-    if (!m_audio) return;
-    volume = std::clamp(volume, 0.0f, 1.0f);
-    bool mixerRow = true;
-    switch (row) {
-        case 3: m_audio->setMasterVolume(volume); break;
-        case 4: m_audio->setBgmVolume(volume); break;
-        case 5: m_audio->setSfxVolume(volume); break;
-        case 6: m_audio->setVoiceVolume(volume); break;
-        default: mixerRow = false; break;
-    }
-    // #86: setter commit — slider tıklaması state'e damgalanır (step yok).
-    if (mixerRow) commitMixerVolumesToGameState();
-}
-
-void Engine::pauseMenuAdjustSelected(int direction) {
-    if (m_pauseMode != PauseMenuMode::Main) return;
-    const int row = m_pauseSelected;
-    if (row >= 3 && row <= 6) {
-        setPauseMenuVolume(row, pauseMenuVolume(row) + direction * 0.05f);
-    } else if (row == 7) {
-        setTextSpeedMultiplier(m_textSpeedMultiplier + direction * 0.25f);
-    }
-    m_pauseConfirmQuit = false;
-}
-
 void Engine::menuChooseSlot(int32_t slotIndex) {
     if (m_pauseMode == PauseMenuMode::Main) return;
     if (slotIndex < kPauseMenuQuickSlotMin || slotIndex > kPauseMenuQuickSlotMax) return;
@@ -3629,16 +3592,6 @@ void Engine::applyScreenFxComponent(const nlohmann::json& data) {
     if (vignetteEnabled || hasVignetteIntensity) {
         m_window->setVignette(vignetteIntensity, vignetteRadius, vignetteColor);
     }
-}
-
-void Engine::commitMixerVolumesToGameState() {
-    // #86: setter commit — canlı kazançları step ilerletmeden state'e
-    // damgalar (withMixerVolumes: yapısal-paylaşım, rewind zinciri uzamaz).
-    if (!m_audio || !m_gameState) return;
-    m_gameState = Rowl::State::GameState::withMixerVolumes(
-        m_gameState,
-        m_audio->getMasterVolume(), m_audio->getBgmVolume(),
-        m_audio->getSfxVolume(), m_audio->getVoiceVolume());
 }
 
 uint64_t Engine::getCurrentStepId() const {
