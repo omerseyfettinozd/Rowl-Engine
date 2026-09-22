@@ -363,6 +363,7 @@ set(ROWL_ENGINE_SOURCES
     src/c_api_lifecycle.cpp
     src/c_api_story.cpp
     src/c_api_render.cpp
+    src/c_api_embed_guards.cpp
     src/c_api_audio.cpp
     src/c_api_character_layers.cpp
     src/c_api_prefetch_chapters.cpp

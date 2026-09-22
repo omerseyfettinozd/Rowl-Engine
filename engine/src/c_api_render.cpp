@@ -16,7 +16,25 @@ void RowlEngine_SetExternalWindowHandle(RowlEngineHandle handle,
                                          uint32_t width,
                                          uint32_t height) {
     if (!isLiveHandle(handle)) return;
-    invokeNoexcept([&] { if (auto checked = toEngineChecked(handle)) checked->setExternalWindowHandle(nativeWindowHandle, width, height); });
+    invokeNoexcept([&] {
+        auto checked = toEngineChecked(handle);
+        if (!checked) return;
+        // D01 (#135): post-Init gömme sessiz-forward'dı (bogus handle
+        // canlı pencereye yazılıyor, damga yoktu). Fail-closed: StateError
+        // damgala, canlı pencereye dokunma. Pre-Init davranış korunur
+        // (damgasız forward — Init tüketir). Ölü/yabancı handle sessiz
+        // (damgalanacak motor yok / sahiplik-kanalı kuralı).
+        if (checked->isInitialized()) {
+            if (auto* ctx = checked->getContext()) {
+                ctx->setError(Rowl::Core::RuntimeErrorCode::StateError,
+                              "SetExternalWindowHandle must be called BEFORE RowlEngine_Init; "
+                              "post-Init call rejected without touching the live window",
+                              "set_external_window_handle", "");
+            }
+            return;
+        }
+        checked->setExternalWindowHandle(nativeWindowHandle, width, height);
+    });
 }
 
 void RowlEngine_ResizeViewport(RowlEngineHandle handle,

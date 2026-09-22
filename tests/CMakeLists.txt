@@ -107,6 +107,22 @@ set_tests_properties(rowl_native_tests PROPERTIES
     # CI and sandbox machines; the offscreen engine needs neither.
     ENVIRONMENT "SDL_AUDIODRIVER=dummy;SDL_VIDEODRIVER=dummy"
 )
+
+# D01 (#135) embed RED/green probu: yalnızca public C API'yi kullanan
+# bağımsız ikili (paylaşılan RowlEngineCore'a bağlanır; üretim
+# topolojisiyle aynı). rowl_tests gövdesine gömülmez ki kırmızı-yeşil
+# döngüsü tüm süiti koşmadan saniyeler içinde kanıtlansın.
+add_executable(rowl_embed_red_probe test_embed_red_probe.cpp)
+target_include_directories(rowl_embed_red_probe PRIVATE
+    ${CMAKE_SOURCE_DIR}/engine/include
+)
+target_link_libraries(rowl_embed_red_probe PRIVATE RowlEngineCore)
+
+add_test(NAME embed_red_probe COMMAND rowl_embed_red_probe)
+set_tests_properties(embed_red_probe PROPERTIES
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    ENVIRONMENT "SDL_AUDIODRIVER=dummy;SDL_VIDEODRIVER=dummy"
+)
 if(WIN32)
     # MSVC Debug runs the full native suite far slower than optimized
     # compilers; the CI --timeout 300 turns that into a zero-output kill.

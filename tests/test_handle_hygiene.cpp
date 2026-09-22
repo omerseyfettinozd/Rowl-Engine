@@ -9,6 +9,7 @@
  * girişlerinin ölü-handle'da çökmeden fail-closed davrandığını kanıtlar.
  */
 #include "rowl_test_harness.hpp"
+#include "rowl/c_api_embed.hpp"
 
 namespace {
 
@@ -63,6 +64,14 @@ void test_handle_hygiene() {
         // provenance (1 hoist).
         checkHandleCode("GetAssetProvenanceJson",
                         RowlEngine_GetAssetProvenanceJson(h, nullptr, nullptr, 0, nullptr));
+        // D01 (#135) checked-embed: ölü/bozuk-handle'da arg'lara bakmadan
+        // INVALID_HANDLE (handle-önce; bogus nonzero OS handle'ı bile
+        // kararı değiştirmez).
+        checkHandleCode("SetExternalWindowHandleChecked",
+                        RowlEngine_SetExternalWindowHandleChecked(
+                            h, reinterpret_cast<void*>(0x1234), 1280, 720));
+        checkHandleCode("ResizeViewportChecked",
+                        RowlEngine_ResizeViewportChecked(h, 1280, 720));
         // story-TU regresyon-pinleri (zaten handle-önce idi).
         uint32_t count = 0;
         checkHandleCode("GetChapterCount", RowlEngine_GetChapterCount(h, &count));
@@ -77,7 +86,7 @@ void test_handle_hygiene() {
             rowlLockFail("handle-hygiene", "IsPaused dead-handle must be 0");
         }
     }
-    TEST_PASS("dead/bogus/null handle: 13 hoisted entries INVALID_HANDLE, void/int fail-closed");
+    TEST_PASS("dead/bogus/null handle: 15 hoisted entries INVALID_HANDLE, void/int fail-closed");
 
     // Canlı-handle + bozuk-arg hâlâ INVALID_ARGUMENT (sıralama yalnız
     // ölü-handle yolunu değiştirdi; saf arg-dogrulama korunur).

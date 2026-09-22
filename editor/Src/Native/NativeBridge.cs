@@ -106,6 +106,25 @@ namespace RowlEngine.Editor.Native
             uint newWidth,
             uint newHeight);
 
+        // D01 (#135) — checked embedding girişleri (rowl/c_api_embed.hpp).
+        // Legacy void formlar durur (ABI); nonzero handle'lı gömülü-yol
+        // EmbeddedRuntimeBootstrap üzerinden bu checked formları kullanır:
+        // ölü handle → InvalidHandle, yabancı thread → WrongThread,
+        // null/ölçüsüz arg → InvalidArgument, post-Init SetExternal ve
+        // pre-Init Resize → StateError.
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_SetExternalWindowHandleChecked(
+            IntPtr handle,
+            IntPtr nativeWindowHandle,
+            uint width,
+            uint height);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_ResizeViewportChecked(
+            IntPtr handle,
+            uint newWidth,
+            uint newHeight);
+
         // ── Offscreen Framebuffer & Playback Control ──────────────────────────
 
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]

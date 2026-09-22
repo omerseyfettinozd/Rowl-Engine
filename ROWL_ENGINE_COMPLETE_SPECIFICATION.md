@@ -247,6 +247,7 @@ editor binds the subset it uses (`editor/Src/Native/NativeBridge.cs`,
 7. `void RowlEngine_SetExternalWindowHandle(RowlEngineHandle handle, void* nativeWindowHandle, uint32_t width, uint32_t height)`
    - **Parameters**: `RowlEngineHandle handle`, `void* nativeWindowHandle` (HWND / NSView / X11 Window ID), `uint32_t width`, `uint32_t height`.
    - **Logic**: Configures external OS window embedding before `RowlEngine_Init()`.
+   - **D01 (#135) fail-closed**: a call on an already-initialized engine is rejected without touching the live window and stamps `StateError` (`"set_external_window_handle"`, readable via `RowlEngine_GetLastResultCode`); dead/foreign handles stay silent no-ops. The checked form `RowlEngine_SetExternalWindowHandleChecked` (`rowl/c_api_embed.hpp`) reports every rejection as a `ResultCode` (`INVALID_HANDLE` / `WRONG_THREAD` / `INVALID_ARGUMENT` / `STATE_ERROR`, success `OK`).
 
 8. `void RowlEngine_ResizeViewport(RowlEngineHandle handle, uint32_t newWidth, uint32_t newHeight)`
    - **Parameters**: `RowlEngineHandle handle`, `uint32_t newWidth`, `uint32_t newHeight`.
@@ -1277,7 +1278,7 @@ Exposes legacy flat properties that route getters/setters directly to attached c
 10. **`DisconnectSelectedNodeCables()`**: Removes all incoming and outgoing connections attached to `SelectedNode` and records an undo action.
 11. **`DeleteSelectedNode()`**: Calls `DeleteNode(SelectedNode)`, unplugs all cables, removes node from collection, records undo action, and recalculates `IsStartNode`.
 12. **`AddNode()`**: Calculates canvas center `(-PanX + 400) / ZoomScale, (-PanY + 300) / ZoomScale`, generates ID (`Max(Id) + 1`), attaches default components (`Dialogue`, `Background`, `Character`, `Audio`), hooks property change events, adds to `Nodes`, records undo action, and selects the new node.
-13. **`ConnectEngineAsync()`**: Initializes embedded native `RowlEngineCore` shared library via `EngineHost.Initialize(1920, 1080, true)`.
+13. **`ConnectEngineAsync()`**: Initializes the in-process `RowlEngineCore` shared library via `EngineHost.Initialize(1920, 1080, true)` in **offscreen framebuffer mode** (zero-copy `WriteableBitmap` preview — this is *not* native window embedding). True Single-Window embedding (rendering inside a host `NativeControlHost` via `RowlEngine_SetExternalWindowHandleChecked` pre-`Init`) flows through the fail-closed `EmbeddedRuntimeBootstrap` facade (D01 #135); `EngineHost.InitializeEmbedded` stays a frozen offscreen-fallback signature for backward compatibility.
 14. **`ConnectIpcAsync()`**: Backward-compatibility command alias forwarding directly to `ConnectEngineAsync()`.
 15. **`SetSquareDialogueBox()`**: Resizes selected node's dialogue box to 500x500 square avatar layout ($X=80, Y=540$).
 16. **`SetStandardDialogueBox()`**: Resets dialogue box to full-width bottom banner layout ($1760\times 180$ at $X=80, Y=860$).

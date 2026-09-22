@@ -163,6 +163,7 @@ RowlEngine_ResetCamera
 RowlEngine_ResetToStartNode
 RowlEngine_ResetVoiceBlipCount
 RowlEngine_ResizeViewport
+RowlEngine_ResizeViewportChecked
 RowlEngine_Rewind
 RowlEngine_Run
 RowlEngine_SaveGameSlot
@@ -181,6 +182,7 @@ RowlEngine_SetCharacterSlotVisible
 RowlEngine_SetDialogueVoiceBlip
 RowlEngine_SetDialogueVoiceBlipVolume
 RowlEngine_SetExternalWindowHandle
+RowlEngine_SetExternalWindowHandleChecked
 RowlEngine_SetFadeCurve
 RowlEngine_SetHighContrast
 RowlEngine_SetLocale

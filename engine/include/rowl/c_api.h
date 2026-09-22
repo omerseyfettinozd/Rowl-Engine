@@ -296,6 +296,13 @@ ROWL_API int RowlEngine_IsRunning(RowlEngineHandle handle);
  *
  * Must be called BEFORE RowlEngine_Init().
  *
+ * D01 (#135) fail-closed: a call on an already-initialized engine is
+ * REJECTED without touching the live window and stamps StateError with
+ * operation "set_external_window_handle" (readable via
+ * RowlEngine_GetLastResultCode). Dead/foreign handles stay silent no-ops.
+ * Prefer the checked form RowlEngine_SetExternalWindowHandleChecked
+ * (rowl/c_api_embed.hpp), which reports every rejection as a ResultCode.
+ *
  * @param nativeWindowHandle  Platform native handle:
  *   - Windows : HWND
  *   - Linux X11: Window (unsigned long) cast to void*
