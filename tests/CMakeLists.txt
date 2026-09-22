@@ -351,6 +351,47 @@ set_tests_properties(d09_save_durability_probe PROPERTIES
     ENVIRONMENT "SDL_AUDIODRIVER=dummy;SDL_VIDEODRIVER=dummy"
     TIMEOUT 120
 )
+# D05 telemetri-gecikme RED kilidi (RED-1: contention; TSan-kirmizi cerceve
+# HAKEMLIK ile IPTAL — pre-fix okuyucular m_stateMutex tutar, TSan hem once
+# hem sonra yesildir): blip-hammer (m_stateMutex'i SDL-kuyruk adimlari boyunca
+# tutar) vs okuyucu-hammer (getChannelPeak/getChannelRms/getSpectrumBands).
+# D03/D04 konvansiyonu: rowl_engine_objects'a baglanir (uye-semboller ihraç
+# edilmez), rowl_tests govdesine gomulmez. TSan'siz KIRMIZI exit 1 (p99 esik
+# ustu) / fix sonrasi YESIL exit 0; TSan yalnizca guvenlik agidir (sessiz).
+add_executable(rowl_d05_telemetry_latency_probe test_d05_telemetry_latency_probe.cpp)
+target_include_directories(rowl_d05_telemetry_latency_probe PRIVATE
+    ${CMAKE_SOURCE_DIR}/engine/include
+)
+target_link_libraries(rowl_d05_telemetry_latency_probe PRIVATE
+    rowl_engine_objects
+    rowl_engine_thirdparty
+)
+target_compile_definitions(rowl_d05_telemetry_latency_probe PRIVATE ROWL_BUILDING_DLL)
+
+add_test(NAME d05_telemetry_latency_probe COMMAND rowl_d05_telemetry_latency_probe)
+set_tests_properties(d05_telemetry_latency_probe PROPERTIES
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    ENVIRONMENT "SDL_AUDIODRIVER=dummy;SDL_VIDEODRIVER=dummy"
+    TIMEOUT 120
+)
+
+# D05 blip-kuyruk-sinif RED kilidi (RED-2: Decode->Device, :33/:45): kuyruk
+# fail yazim cekirdekleri M4 sozlesmesine gore Device(1) damgalamalidir.
+# D02 konvansiyonu: yalnizca public C API + ROWL_API Locked-yardimcilari
+# (paylasilan RowlEngineCore'a baglanir; uretim topolojisiyle ayni).
+# TSan'siz KIRMIZI exit 1 (Decode gozlemi) / fix sonrasi YESIL exit 0.
+add_executable(rowl_d05_blip_queue_class_probe test_d05_blip_queue_class_probe.cpp)
+target_include_directories(rowl_d05_blip_queue_class_probe PRIVATE
+    ${CMAKE_SOURCE_DIR}/engine/include
+)
+target_link_libraries(rowl_d05_blip_queue_class_probe PRIVATE RowlEngineCore)
+
+add_test(NAME d05_blip_queue_class_probe COMMAND rowl_d05_blip_queue_class_probe)
+set_tests_properties(d05_blip_queue_class_probe PROPERTIES
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    ENVIRONMENT "SDL_AUDIODRIVER=dummy;SDL_VIDEODRIVER=dummy"
+    TIMEOUT 120
+)
 if(WIN32)
     # MSVC Debug runs the full native suite far slower than optimized
     # compilers; the CI --timeout 300 turns that into a zero-output kill.

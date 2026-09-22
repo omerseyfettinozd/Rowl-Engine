@@ -127,6 +127,14 @@ public:
     // (bayat-sınıf olmaz; clearLastError None'a sıfırlar).
     enum class AudioErrorClass { None = 0, Device = 1, Decode = 2 };
     AudioErrorClass getLastErrorClass() const;
+    // D05 M4 damga-bağlama: hata + sınıf TEK kilit altında birlikte
+    // snapshot'lanır (bayat-sınıf yok; bağlama TU'su
+    // c_api_audio_error_stamp.cpp'dedir, bu hpp'de yalnız taşıyıcı struct).
+    struct AudioErrorStamp {
+        std::string message;
+        AudioErrorClass errorClass = AudioErrorClass::None;
+    };
+    AudioErrorStamp lastErrorStamped() const;
 
     // ── Faz 5 Dilim 1: OGG streaming çekirdek gözlemlenebilirliği ──
     // 1 = o anki BGM kararı stream, 0 = memory / unknown / yok (fail-closed).
@@ -195,6 +203,15 @@ public:
     std::string bgmPumpStatsJson() const;
 
     // Real-Time Audio Telemetry & VU Metering
+    // D05 (HAKEMLİK REVİZYONU, RED-1 contention kilidi): telemetri D03
+    // emsaliyle atomik/snapshot'a taşındı — okuyucular kilitsiz
+    // (load-relaxed), yazanlar (blip deflect + updateTelemetry) m_stateMutex
+    // altında serileşmeye devam eder. Gerekçe: blip gövdesi m_stateMutex'i
+    // SDL-kuyruk adımları boyunca tutar; okuyucuları kilitte tutmak
+    // ses-yolunu blip maliyetine bağlar (D04 perf-floor ruhuna aykırı).
+    // Kilit-sırası korunur (okuyucu artık hiçbir kilit almaz;
+    // updateTelemetry'deki m_stateMutex->m_streamMutex tek-yönü bozulmaz).
+    // Hacim getterları (:88-95) aynen kilitsiz kalır (D03/D04 ile çelişmez).
     float getChannelPeak(int channelType, int channelIndex = 0) const;
     float getChannelRms(int channelType, int channelIndex = 0) const;
     void getSpectrumBands(float* outBands, int bandCount) const;
@@ -272,7 +289,9 @@ private:
     // arasındaki data-race kilidi. Sayaçlar atomiktir (N×M hammer kayıpsız);
     // m_lastError snapshot semantiğiyle m_stateMutex altında okunur/yazılır
     // (cpp'deki warn-once statik kilidi üye durumunu korumaz); blip gövdesi,
-    // pitch ve telemetri deflect'i de aynı kilitle serileşir.
+    // pitch ve telemetri deflect'i de aynı kilitle serileşir. D05: telemetri
+    // okuyucuları artık kilitsizdir (atomic load-relaxed, contention kilidi
+    // RED-1) — yazan-yazan serileşmesi aynen korunur.
     std::atomic<uint32_t> m_voiceBlipCount{0};
     std::atomic<uint32_t> m_synthBlipCount{0};
     std::atomic<uint64_t> m_dropCount{0};
@@ -368,18 +387,25 @@ private:
     void applyChannelGains();
     void updateBgmTransition(float deltaSeconds);
     void updateTelemetry(float deltaSeconds);
+    // D05: telemetri sıfırlama — atomik üyelere relaxed store (kilit ALMAZ;
+    // kilitli bağlamdan da çağrılabilir; init/shutdown tek-thread'inden de).
+    void resetTelemetry();
 
     struct ChannelTelemetry {
-        float peakL = 0.0f;
-        float peakR = 0.0f;
-        float rmsL = 0.0f;
-        float rmsR = 0.0f;
+        // D05: her bus bağımsız tek-word → relaxed (D03 hacim emsali).
+        // Toptan-atama/kopya YOKTUR (atomik derlenmez); sıfırlama
+        // resetTelemetry() ile tek-tek store'ludur.
+        std::atomic<float> peakL = 0.0f;
+        std::atomic<float> peakR = 0.0f;
+        std::atomic<float> rmsL = 0.0f;
+        std::atomic<float> rmsR = 0.0f;
     };
     ChannelTelemetry m_telemetryBgm;
     ChannelTelemetry m_telemetryVoice;
     ChannelTelemetry m_telemetrySfx;
     ChannelTelemetry m_telemetryMaster;
-    std::array<float, 4> m_spectrumBands{0.0f, 0.0f, 0.0f, 0.0f};
+    // D05: spectrum da atomiktir (okuyucu load-relaxed, kilitsiz).
+    std::array<std::atomic<float>, 4> m_spectrumBands{{{0.0f}, {0.0f}, {0.0f}, {0.0f}}};
     size_t m_bgmSampleOffset = 0;
     // Faz 5 Dilim 2: SFX durumu havuzdadır (slot başına PCM + offset +
     // playing). m_lastSfxData/m_sfxSampleOffset/m_isSfxPlaying kaldırıldı.

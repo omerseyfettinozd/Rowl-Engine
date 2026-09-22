@@ -85,7 +85,8 @@ int main() {
         if (err != "Ogg/Vorbis stream is corrupt" || cls != ErrClass::Decode)
             snapFail("Bacak1 ogg-decode: unconditional overwrite lost (err='" + err + "')");
 
-        // 2264-2269: asset-blip kuyruk-fail'i ilk-hatayı KORUR; boşken Decode yazar.
+        // 2264-2269: asset-blip kuyruk-fail'i ilk-hatayı KORUR; boşken Device yazar
+        // (D05: M4 sözleşmesi kuyruk=Device; eski Decode beklentisi bilinçli güncellendi).
         {
             std::string stale = "stale prior error";
             ErrClass staleCls = ErrClass::Device;
@@ -97,11 +98,11 @@ int main() {
             std::string fresh;
             ErrClass freshCls = ErrClass::None;
             Rowl::Audio::recordAssetBlipQueueFailureLocked(fresh, freshCls);
-            if (fresh.empty() || freshCls != ErrClass::Decode)
+            if (fresh.empty() || freshCls != ErrClass::Device)
                 snapFail("Bacak1 asset-queue: empty-state write lost (err='" + fresh + "')");
         }
 
-        // 2330-2335: synth kuyruk-fail'i aynı koruma sözleşmesini izler.
+        // 2330-2335: synth kuyruk-fail'i aynı koruma sözleşmesini izler (D05: Device).
         {
             std::string stale = "stale prior error";
             ErrClass staleCls = ErrClass::Device;
@@ -113,7 +114,7 @@ int main() {
             std::string fresh;
             ErrClass freshCls = ErrClass::None;
             Rowl::Audio::recordSynthBlipQueueFailureLocked(fresh, freshCls);
-            if (fresh.empty() || freshCls != ErrClass::Decode)
+            if (fresh.empty() || freshCls != ErrClass::Device)
                 snapFail("Bacak1 synth-fail: empty-state write lost (err='" + fresh + "')");
         }
 

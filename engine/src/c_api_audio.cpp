@@ -10,6 +10,14 @@
 #include "rowl/audio/audio_engine.hpp"
 #include <cstdio>
 
+// D05 M4 damga-bağlama: tanım c_api_audio_error_stamp.cpp'dedir (ayrı TU;
+// struct sıfırdan değil, hata+sınıf birlikte snapshot'lanır, bayat-sınıf
+// yok). Yeni RowlEngine_ export DEĞİLDIR (additive ABI).
+namespace Rowl::D05 {
+Rowl::Core::RuntimeErrorCode audioErrorCodeForStamped(
+    const Rowl::Audio::AudioEngine* audio, std::string& messageOut);
+}
+
 namespace {
 // Ses hata-kanalı (M4): motor-içi sınıf → C-API kodu eşlemesi. Device
 // (akış-açma/cihaz/kuyruk) → IoError(7); Decode ve sınıf-yok →
@@ -302,12 +310,15 @@ void RowlEngine_PlayVoiceBlip(RowlEngineHandle handle, const char* soundPath, fl
         if (!engine) return;
         // A5-tur2: blip snapshot'ı koda yayılır (pratikte synth kurtarır ve
         // snapshot boş olur → kod 0; synth-Put fail'i kod 10 olur).
+        // D05: damga-bağlama — hata+sınıf TEK snapshot'tan (bayat-sınıf yok).
         engine->playVoiceBlip(soundPath ? soundPath : "", pitch, volume, channelType);
         if (auto ctx = engine->getContext()) {
             const auto* audio = engine->getAudio();
-            const std::string blipError = audio ? audio->getLastError() : "";
+            std::string blipError;
+            const auto blipCode =
+                Rowl::D05::audioErrorCodeForStamped(audio, blipError);
             if (!blipError.empty()) {
-                ctx->setError(audioErrorCodeFor(audio),
+                ctx->setError(blipCode,
                               blipError, "play_voice_blip",
                               soundPath ? soundPath : "");
             } else {

@@ -26,11 +26,12 @@ void recordBlipOggDecodeFailureLocked(std::string& lastError,
 void recordAssetBlipQueueFailureLocked(std::string& lastError,
                                        AudioEngine::AudioErrorClass& errorClass) {
     // M4: kilitli-yazım (kilit üstte tutulur; blip kuyruk
-    // fail'i Decode-sınıfıdır).
+    // fail'i Device-sınıfıdır — kuyruk = Device(1)/IoError-7,
+    // hpp:123-129; D05 RED-2 hakemliği M4 lehine).
     if (lastError.empty()) {
         lastError = "Voice blip asset could not be queued: " +
             std::string(SDL_GetError());
-        errorClass = AudioEngine::AudioErrorClass::Decode;
+        errorClass = AudioEngine::AudioErrorClass::Device;
     }
     ROWL_LOG_WARN("[AudioEngine] " + lastError);
 }
@@ -38,11 +39,11 @@ void recordAssetBlipQueueFailureLocked(std::string& lastError,
 void recordSynthBlipQueueFailureLocked(std::string& lastError,
                                        AudioEngine::AudioErrorClass& errorClass) {
     // M4: kilitli-yazım/temizleme (kilit üstte tutulur; synth kuyruk
-    // fail'i Decode).
+    // fail'i Device — D05 RED-2).
     if (lastError.empty()) {
         lastError = "Synth voice blip could not be queued: " +
             std::string(SDL_GetError());
-        errorClass = AudioEngine::AudioErrorClass::Decode;
+        errorClass = AudioEngine::AudioErrorClass::Device;
     }
     ROWL_LOG_WARN("[AudioEngine] " + lastError);
 }
