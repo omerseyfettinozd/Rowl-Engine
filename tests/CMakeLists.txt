@@ -216,6 +216,27 @@ set_tests_properties(audio_volume_race_red_probe PROPERTIES
     ENVIRONMENT "SDL_AUDIODRIVER=dummy;SDL_VIDEODRIVER=dummy"
     TIMEOUT 120
 )
+
+# D08 save->load->rewind RED kilidi: ic sembolleri kullanir (Rowl::Platform /
+# VFS / Core, -fvisibility=hidden ile gizli); bu yuzden rowl_tests gibi
+# rowl_engine_objects'a baglanir. RED: rewind=false + step sabit + exit 1;
+# YESIL: rewind=true + step-1 + exit 0.
+add_executable(rowl_d08_rewind_after_load_probe test_d08_rewind_after_load_probe.cpp)
+target_include_directories(rowl_d08_rewind_after_load_probe PRIVATE
+    ${CMAKE_SOURCE_DIR}/engine/include
+)
+target_link_libraries(rowl_d08_rewind_after_load_probe PRIVATE
+    rowl_engine_objects
+    rowl_engine_thirdparty
+)
+target_compile_definitions(rowl_d08_rewind_after_load_probe PRIVATE ROWL_BUILDING_DLL)
+
+add_test(NAME d08_rewind_after_load_probe COMMAND rowl_d08_rewind_after_load_probe)
+set_tests_properties(d08_rewind_after_load_probe PROPERTIES
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    ENVIRONMENT "SDL_AUDIODRIVER=dummy;SDL_VIDEODRIVER=dummy"
+    TIMEOUT 120
+)
 if(WIN32)
     # MSVC Debug runs the full native suite far slower than optimized
     # compilers; the CI --timeout 300 turns that into a zero-output kill.
