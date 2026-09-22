@@ -39,6 +39,14 @@ void warnAudioOnce(const std::string& message) {
     ROWL_LOG_WARN("[AudioEngine] " + message + " (logged once per value)");
 }
 
+// D05: kilitsiz telemetri yazımı — relaxed atomic-max. Yazanlar (blip deflect
+// + updateTelemetry) m_stateMutex altında serileşir; okuyucular load-relaxed
+// ile yırtıksız okur (TSan temiz, contention yok).
+inline void telemetryMaxRelaxed(std::atomic<float>& slot, float value) {
+    const float current = slot.load(std::memory_order_relaxed);
+    if (value > current) slot.store(value, std::memory_order_relaxed);
+}
+
 size_t vorbisRead(void* pointer, size_t size, size_t count, void* datasource) {
     auto* stream = static_cast<std::istream*>(datasource);
     if (!stream || size == 0 || count == 0) return 0;
@@ -280,6 +288,31 @@ AudioEngine::AudioErrorClass AudioEngine::getLastErrorClass() const {
     return m_lastErrorClass;
 }
 
+// D05 M4 damga-bağlama: hata + sınıf TEK kilit altında birlikte alınır
+// (bayat-sınıf yok). Bağlama karşılığı c_api_audio_error_stamp.cpp'dedir.
+AudioEngine::AudioErrorStamp AudioEngine::lastErrorStamped() const {
+    std::lock_guard<std::mutex> lock(m_stateMutex);
+    return AudioErrorStamp{m_lastError, m_lastErrorClass};
+}
+
+// D05: atomik telemetri sıfırlama (toptan-atama atomiklerde derlenmez, D03
+// StreamMixer emsali). Kilit ALMAZ; kilitli bağlamdan da çağrılabilir.
+void AudioEngine::resetTelemetry() {
+    ChannelTelemetry* channels[] = {
+        &m_telemetryBgm, &m_telemetryVoice, &m_telemetrySfx,
+        &m_telemetryMaster, &m_telemetryAmbience, &m_telemetryUi
+    };
+    for (ChannelTelemetry* tel : channels) {
+        tel->peakL.store(0.0f, std::memory_order_relaxed);
+        tel->peakR.store(0.0f, std::memory_order_relaxed);
+        tel->rmsL.store(0.0f, std::memory_order_relaxed);
+        tel->rmsR.store(0.0f, std::memory_order_relaxed);
+    }
+    for (auto& band : m_spectrumBands) {
+        band.store(0.0f, std::memory_order_relaxed);
+    }
+}
+
 float AudioEngine::getLastVoiceBlipPitch() const {
     std::lock_guard<std::mutex> lock(m_stateMutex);
     return m_lastVoiceBlipPitch;
@@ -322,11 +355,7 @@ bool AudioEngine::initialize() {
     m_bgmTransitionActive = false;
     m_bgmTransitionElapsedSeconds = 0.0f;
     m_bgmTransitionDurationSeconds = 0.0f;
-    m_telemetryBgm = {};
-    m_telemetryVoice = {};
-    m_telemetrySfx = {};
-    m_telemetryMaster = {};
-    m_spectrumBands.fill(0.0f);
+    resetTelemetry();  // D05: atomik üyeler toptan-atanamaz (derlenmez)
     m_bgmSampleOffset = 0;
     // Faz 5 Dilim 2: havuz + mixer + eğri + bedB + crossfade + pump sıfırlanır.
     m_sfxPool = SfxVoicePool{};
@@ -381,8 +410,7 @@ bool AudioEngine::initialize() {
     m_uiSampleOffset = 0;
     m_isUiPlaying = false;
     m_currentUiPath.clear();
-    m_telemetryAmbience = {};
-    m_telemetryUi = {};
+    resetTelemetry();  // D05: atomik üyeler toptan-atanamaz (derlenmez)
     m_streamInfo = StreamInfo{};
     m_streamChannel = 0;
     m_streamChannelFresh = false;
@@ -1450,13 +1478,7 @@ void AudioEngine::shutdown() {
     m_uiSampleOffset = 0;
     m_isUiPlaying = false;
     m_currentUiPath.clear();
-    m_telemetryAmbience = {};
-    m_telemetryUi = {};
-    m_telemetryBgm = {};
-    m_telemetryVoice = {};
-    m_telemetrySfx = {};
-    m_telemetryMaster = {};
-    m_spectrumBands.fill(0.0f);
+    resetTelemetry();  // D05: atomik üyeler toptan-atanamaz (derlenmez)
     m_bgmSampleOffset = 0;
 
     if (m_bgmStream) {
@@ -1828,9 +1850,10 @@ void AudioEngine::applyChannelGains() {
 }
 
 void AudioEngine::updateTelemetry(float deltaSeconds) {
-    // Hedef #74: telemetri yazımları blip deflect'i ve host okuyucularıyla
-    // aynı kilit altındadır (son-yazan-kazanır; değer determinizmi yoktur,
-    // yırtık okuma/yazma yoktur).
+    // Hedef #74: telemetri yazımları blip deflect'i ile aynı kilit altındadır
+    // (son-yazan-kazanır; değer determinizmi yoktur, yırtık okuma/yazma
+    // yoktur). D05: OKUYUCULAR kilitsizdir (atomic load-relaxed) — bu kilit
+    // yalnız yazan-yazan serileşmesidir (contention kilidi RED-1).
     std::lock_guard<std::mutex> lock(m_stateMutex);
     constexpr float kSampleRate = 44100.0f;
     constexpr float kDecayRate = 2.8f; // ~350ms smooth analog VU decay
@@ -1839,6 +1862,11 @@ void AudioEngine::updateTelemetry(float deltaSeconds) {
     auto decayVal = [dt, kDecayRate](float current, float target) {
         if (target >= current) return target;
         return std::max(target, current - kDecayRate * dt);
+    };
+    // D05: atomik-slot decay yazımı (load-relaxed → decay → store-relaxed).
+    auto decayAtomic = [&decayVal](std::atomic<float>& slot, float target) {
+        slot.store(decayVal(slot.load(std::memory_order_relaxed), target),
+                   std::memory_order_relaxed);
     };
 
     // 1. BGM Telemetry
@@ -1923,10 +1951,10 @@ void AudioEngine::updateTelemetry(float deltaSeconds) {
         }
     }
 
-    m_telemetryBgm.peakL = decayVal(m_telemetryBgm.peakL, targetBgmL);
-    m_telemetryBgm.peakR = decayVal(m_telemetryBgm.peakR, targetBgmR);
-    m_telemetryBgm.rmsL = decayVal(m_telemetryBgm.rmsL, targetBgmRmsL);
-    m_telemetryBgm.rmsR = decayVal(m_telemetryBgm.rmsR, targetBgmRmsR);
+    decayAtomic(m_telemetryBgm.peakL, targetBgmL);
+    decayAtomic(m_telemetryBgm.peakR, targetBgmR);
+    decayAtomic(m_telemetryBgm.rmsL, targetBgmRmsL);
+    decayAtomic(m_telemetryBgm.rmsR, targetBgmRmsR);
     streamLock.unlock(); // D04: ring-penceresi bitti; RAM/SFX dalları aynen
 
     // 2. SFX Telemetry (Faz 5 Dilim 2: havuz TOPLAMINDAN okunur; tek ses
@@ -1980,10 +2008,10 @@ void AudioEngine::updateTelemetry(float deltaSeconds) {
         targetSfxRmsR = std::clamp(targetSfxRmsR, 0.0f, 1.0f);
     }
 
-    m_telemetrySfx.peakL = decayVal(m_telemetrySfx.peakL, targetSfxL);
-    m_telemetrySfx.peakR = decayVal(m_telemetrySfx.peakR, targetSfxR);
-    m_telemetrySfx.rmsL = decayVal(m_telemetrySfx.rmsL, targetSfxRmsL);
-    m_telemetrySfx.rmsR = decayVal(m_telemetrySfx.rmsR, targetSfxRmsR);
+    decayAtomic(m_telemetrySfx.peakL, targetSfxL);
+    decayAtomic(m_telemetrySfx.peakR, targetSfxR);
+    decayAtomic(m_telemetrySfx.rmsL, targetSfxRmsL);
+    decayAtomic(m_telemetrySfx.rmsR, targetSfxRmsR);
 
     // 2b. Ambience Telemetry (Faz 5 Dilim 2: iki bed TOPLAMI; tek bed +
     // crossfade'siz durumda eski formülle birebir aynıdır).
@@ -2032,10 +2060,10 @@ void AudioEngine::updateTelemetry(float deltaSeconds) {
     targetAmbRmsL = std::clamp(targetAmbRmsL, 0.0f, 1.0f);
     targetAmbRmsR = std::clamp(targetAmbRmsR, 0.0f, 1.0f);
 
-    m_telemetryAmbience.peakL = decayVal(m_telemetryAmbience.peakL, targetAmbL);
-    m_telemetryAmbience.peakR = decayVal(m_telemetryAmbience.peakR, targetAmbR);
-    m_telemetryAmbience.rmsL = decayVal(m_telemetryAmbience.rmsL, targetAmbRmsL);
-    m_telemetryAmbience.rmsR = decayVal(m_telemetryAmbience.rmsR, targetAmbRmsR);
+    decayAtomic(m_telemetryAmbience.peakL, targetAmbL);
+    decayAtomic(m_telemetryAmbience.peakR, targetAmbR);
+    decayAtomic(m_telemetryAmbience.rmsL, targetAmbRmsL);
+    decayAtomic(m_telemetryAmbience.rmsR, targetAmbRmsR);
 
     // 2c. Ui Telemetry (one-shot drain; SFX deseniyle aynı pencere)
     float targetUiL = 0.0f;
@@ -2082,10 +2110,10 @@ void AudioEngine::updateTelemetry(float deltaSeconds) {
         }
     }
 
-    m_telemetryUi.peakL = decayVal(m_telemetryUi.peakL, targetUiL);
-    m_telemetryUi.peakR = decayVal(m_telemetryUi.peakR, targetUiR);
-    m_telemetryUi.rmsL = decayVal(m_telemetryUi.rmsL, targetUiRmsL);
-    m_telemetryUi.rmsR = decayVal(m_telemetryUi.rmsR, targetUiRmsR);
+    decayAtomic(m_telemetryUi.peakL, targetUiL);
+    decayAtomic(m_telemetryUi.peakR, targetUiR);
+    decayAtomic(m_telemetryUi.rmsL, targetUiRmsL);
+    decayAtomic(m_telemetryUi.rmsR, targetUiRmsR);
 
     // 3. Voice Telemetry
     float targetVoiceL = 0.0f;
@@ -2095,28 +2123,55 @@ void AudioEngine::updateTelemetry(float deltaSeconds) {
         targetVoiceL = gain * 0.85f;
         targetVoiceR = gain * 0.85f;
     }
-    m_telemetryVoice.peakL = decayVal(m_telemetryVoice.peakL, targetVoiceL);
-    m_telemetryVoice.peakR = decayVal(m_telemetryVoice.peakR, targetVoiceR);
-    m_telemetryVoice.rmsL = decayVal(m_telemetryVoice.rmsL, targetVoiceL * 0.7f);
-    m_telemetryVoice.rmsR = decayVal(m_telemetryVoice.rmsR, targetVoiceR * 0.7f);
+    decayAtomic(m_telemetryVoice.peakL, targetVoiceL);
+    decayAtomic(m_telemetryVoice.peakR, targetVoiceR);
+    decayAtomic(m_telemetryVoice.rmsL, targetVoiceL * 0.7f);
+    decayAtomic(m_telemetryVoice.rmsR, targetVoiceR * 0.7f);
 
     // 4. Master Telemetry (Combined peaks and RMS; Faz 5 Dilim 1: 4/5
     // Ambience/Ui de karışıma dahildir, 3=Master numarası korunur).
-    m_telemetryMaster.peakL = std::clamp(std::max({m_telemetryBgm.peakL, m_telemetrySfx.peakL, m_telemetryVoice.peakL, m_telemetryAmbience.peakL, m_telemetryUi.peakL}), 0.0f, 1.0f);
-    m_telemetryMaster.peakR = std::clamp(std::max({m_telemetryBgm.peakR, m_telemetrySfx.peakR, m_telemetryVoice.peakR, m_telemetryAmbience.peakR, m_telemetryUi.peakR}), 0.0f, 1.0f);
-    m_telemetryMaster.rmsL = std::clamp(std::sqrt(m_telemetryBgm.rmsL * m_telemetryBgm.rmsL +
-                                                  m_telemetrySfx.rmsL * m_telemetrySfx.rmsL +
-                                                  m_telemetryVoice.rmsL * m_telemetryVoice.rmsL +
-                                                  m_telemetryAmbience.rmsL * m_telemetryAmbience.rmsL +
-                                                  m_telemetryUi.rmsL * m_telemetryUi.rmsL), 0.0f, 1.0f);
-    m_telemetryMaster.rmsR = std::clamp(std::sqrt(m_telemetryBgm.rmsR * m_telemetryBgm.rmsR +
-                                                  m_telemetrySfx.rmsR * m_telemetrySfx.rmsR +
-                                                  m_telemetryVoice.rmsR * m_telemetryVoice.rmsR +
-                                                  m_telemetryAmbience.rmsR * m_telemetryAmbience.rmsR +
-                                                  m_telemetryUi.rmsR * m_telemetryUi.rmsR), 0.0f, 1.0f);
+    // D05: okumalar load-relaxed snapshot'udur (formül birebir), yazım
+    // store-relaxed'tir.
+    {
+        const float bgmPL = m_telemetryBgm.peakL.load(std::memory_order_relaxed);
+        const float sfxPL = m_telemetrySfx.peakL.load(std::memory_order_relaxed);
+        const float voicePL = m_telemetryVoice.peakL.load(std::memory_order_relaxed);
+        const float ambPL = m_telemetryAmbience.peakL.load(std::memory_order_relaxed);
+        const float uiPL = m_telemetryUi.peakL.load(std::memory_order_relaxed);
+        const float bgmPR = m_telemetryBgm.peakR.load(std::memory_order_relaxed);
+        const float sfxPR = m_telemetrySfx.peakR.load(std::memory_order_relaxed);
+        const float voicePR = m_telemetryVoice.peakR.load(std::memory_order_relaxed);
+        const float ambPR = m_telemetryAmbience.peakR.load(std::memory_order_relaxed);
+        const float uiPR = m_telemetryUi.peakR.load(std::memory_order_relaxed);
+        const float bgmRL = m_telemetryBgm.rmsL.load(std::memory_order_relaxed);
+        const float sfxRL = m_telemetrySfx.rmsL.load(std::memory_order_relaxed);
+        const float voiceRL = m_telemetryVoice.rmsL.load(std::memory_order_relaxed);
+        const float ambRL = m_telemetryAmbience.rmsL.load(std::memory_order_relaxed);
+        const float uiRL = m_telemetryUi.rmsL.load(std::memory_order_relaxed);
+        const float bgmRR = m_telemetryBgm.rmsR.load(std::memory_order_relaxed);
+        const float sfxRR = m_telemetrySfx.rmsR.load(std::memory_order_relaxed);
+        const float voiceRR = m_telemetryVoice.rmsR.load(std::memory_order_relaxed);
+        const float ambRR = m_telemetryAmbience.rmsR.load(std::memory_order_relaxed);
+        const float uiRR = m_telemetryUi.rmsR.load(std::memory_order_relaxed);
+        m_telemetryMaster.peakL.store(
+            std::clamp(std::max({bgmPL, sfxPL, voicePL, ambPL, uiPL}), 0.0f, 1.0f),
+            std::memory_order_relaxed);
+        m_telemetryMaster.peakR.store(
+            std::clamp(std::max({bgmPR, sfxPR, voicePR, ambPR, uiPR}), 0.0f, 1.0f),
+            std::memory_order_relaxed);
+        m_telemetryMaster.rmsL.store(
+            std::clamp(std::sqrt(bgmRL * bgmRL + sfxRL * sfxRL + voiceRL * voiceRL +
+                                 ambRL * ambRL + uiRL * uiRL), 0.0f, 1.0f),
+            std::memory_order_relaxed);
+        m_telemetryMaster.rmsR.store(
+            std::clamp(std::sqrt(bgmRR * bgmRR + sfxRR * sfxRR + voiceRR * voiceRR +
+                                 ambRR * ambRR + uiRR * uiRR), 0.0f, 1.0f),
+            std::memory_order_relaxed);
+    }
 
     // 5. 4-Band Spectrum Estimation
-    const float masterEnergy = (m_telemetryMaster.peakL + m_telemetryMaster.peakR) * 0.5f;
+    const float masterEnergy = (m_telemetryMaster.peakL.load(std::memory_order_relaxed) +
+                                m_telemetryMaster.peakR.load(std::memory_order_relaxed)) * 0.5f;
     float targetBands[4] = {
         masterEnergy * 0.95f,
         masterEnergy * 0.80f,
@@ -2129,12 +2184,13 @@ void AudioEngine::updateTelemetry(float deltaSeconds) {
         targetBands[0] *= 0.1f; targetBands[1] *= 1.1f; targetBands[2] *= 1.0f; targetBands[3] *= 0.15f;
     }
     for (size_t b = 0; b < 4; ++b) {
-        m_spectrumBands[b] = decayVal(m_spectrumBands[b], std::clamp(targetBands[b], 0.0f, 1.0f));
+        decayAtomic(m_spectrumBands[b], std::clamp(targetBands[b], 0.0f, 1.0f));
     }
 }
 
 float AudioEngine::getChannelPeak(int channelType, int channelIndex) const {
-    std::lock_guard<std::mutex> lock(m_stateMutex);
+    // D05: kilitsiz okuyucu (atomic load-relaxed; contention kilidi RED-1).
+    // Yazanlar m_stateMutex altında serileşir; yırtık okuma yoktur.
     const ChannelTelemetry* tel = nullptr;
     switch (channelType) {
         case 0: tel = &m_telemetryBgm; break;
@@ -2145,11 +2201,12 @@ float AudioEngine::getChannelPeak(int channelType, int channelIndex) const {
         case 5: tel = &m_telemetryUi; break;
         default: tel = &m_telemetryMaster; break;
     }
-    return (channelIndex == 1) ? tel->peakR : tel->peakL;
+    return (channelIndex == 1) ? tel->peakR.load(std::memory_order_relaxed)
+                               : tel->peakL.load(std::memory_order_relaxed);
 }
 
 float AudioEngine::getChannelRms(int channelType, int channelIndex) const {
-    std::lock_guard<std::mutex> lock(m_stateMutex);
+    // D05: kilitsiz okuyucu (atomic load-relaxed; contention kilidi RED-1).
     const ChannelTelemetry* tel = nullptr;
     switch (channelType) {
         case 0: tel = &m_telemetryBgm; break;
@@ -2160,14 +2217,15 @@ float AudioEngine::getChannelRms(int channelType, int channelIndex) const {
         case 5: tel = &m_telemetryUi; break;
         default: tel = &m_telemetryMaster; break;
     }
-    return (channelIndex == 1) ? tel->rmsR : tel->rmsL;
+    return (channelIndex == 1) ? tel->rmsR.load(std::memory_order_relaxed)
+                               : tel->rmsL.load(std::memory_order_relaxed);
 }
 
 void AudioEngine::getSpectrumBands(float* outBands, int bandCount) const {
     if (!outBands || bandCount <= 0) return;
-    std::lock_guard<std::mutex> lock(m_stateMutex);
+    // D05: kilitsiz okuyucu (atomic load-relaxed; contention kilidi RED-1).
     for (int i = 0; i < bandCount; ++i) {
-        outBands[i] = (i < 4) ? m_spectrumBands[i] : 0.0f;
+        outBands[i] = (i < 4) ? m_spectrumBands[i].load(std::memory_order_relaxed) : 0.0f;
     }
 }
 
@@ -2190,17 +2248,26 @@ void AudioEngine::playVoiceBlip(const std::string& assetPath, float pitch, float
     // Immediately deflect channel telemetry so VU meters and telemetry readers reflect the blip
     // D03: atomik üyelerde üçlü-operatör kopya gerektirir (derlenemez);
     // okumalar load(relaxed) ile floata indirgenir (matematik birebir).
+    // D05: yazımlar relaxed atomic-max'tir (telemetryMaxRelaxed); okuyucular
+    // kilitsiz okur (contention kilidi RED-1).
     float effectiveVol = volume * m_masterVolume.load(std::memory_order_relaxed) * (channel == AudioChannelType::Sfx ? m_sfxVolume.load(std::memory_order_relaxed) : m_voiceVolume.load(std::memory_order_relaxed));
     ChannelTelemetry& tel = (channel == AudioChannelType::Sfx) ? m_telemetrySfx : m_telemetryVoice;
-    tel.peakL = std::max(tel.peakL, effectiveVol);
-    tel.peakR = std::max(tel.peakR, effectiveVol);
-    tel.rmsL = std::max(tel.rmsL, effectiveVol * 0.707f);
-    tel.rmsR = std::max(tel.rmsR, effectiveVol * 0.707f);
+    telemetryMaxRelaxed(tel.peakL, effectiveVol);
+    telemetryMaxRelaxed(tel.peakR, effectiveVol);
+    telemetryMaxRelaxed(tel.rmsL, effectiveVol * 0.707f);
+    telemetryMaxRelaxed(tel.rmsR, effectiveVol * 0.707f);
 
-    m_telemetryMaster.peakL = std::clamp(std::max(m_telemetryMaster.peakL, tel.peakL), 0.0f, 1.0f);
-    m_telemetryMaster.peakR = std::clamp(std::max(m_telemetryMaster.peakR, tel.peakR), 0.0f, 1.0f);
-    m_telemetryMaster.rmsL = std::clamp(std::max(m_telemetryMaster.rmsL, tel.rmsL), 0.0f, 1.0f);
-    m_telemetryMaster.rmsR = std::clamp(std::max(m_telemetryMaster.rmsR, tel.rmsR), 0.0f, 1.0f);
+    // D05: master-deflect de atomic-max'tir (formül birebir: clamp(max());
+    // master yazımları hep clamp'li olduğundan max-öncesi tek-taraflı clamp
+    // denktir).
+    telemetryMaxRelaxed(m_telemetryMaster.peakL,
+                        std::clamp(tel.peakL.load(std::memory_order_relaxed), 0.0f, 1.0f));
+    telemetryMaxRelaxed(m_telemetryMaster.peakR,
+                        std::clamp(tel.peakR.load(std::memory_order_relaxed), 0.0f, 1.0f));
+    telemetryMaxRelaxed(m_telemetryMaster.rmsL,
+                        std::clamp(tel.rmsL.load(std::memory_order_relaxed), 0.0f, 1.0f));
+    telemetryMaxRelaxed(m_telemetryMaster.rmsR,
+                        std::clamp(tel.rmsR.load(std::memory_order_relaxed), 0.0f, 1.0f));
 
     if (!m_deviceAvailable) {
         return;
