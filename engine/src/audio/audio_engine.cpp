@@ -1,4 +1,5 @@
 #include "rowl/audio/audio_engine.hpp"
+#include "rowl/audio/audio_blip_error_channel.hpp"
 #include "rowl/core/logger.hpp"
 #include "rowl/platform/sdl_subsystem_lease.hpp"
 #include "rowl/vfs/vfs.hpp"
@@ -2221,8 +2222,10 @@ void AudioEngine::playVoiceBlip(const std::string& assetPath, float pitch, float
                             loaded = true;
                         }
                     } else if (!blipOggError.empty()) {
-                        m_lastError = blipOggError;
-                        m_lastErrorClass = AudioErrorClass::Decode;
+                        // D02: yazım çekirdeği audio_blip_error_channel.cpp'de
+                        // (Locked-sözleşme; kilit üstte tutulur).
+                        recordBlipOggDecodeFailureLocked(m_lastError, m_lastErrorClass,
+                                                         blipOggError);
                     }
                 } else {
                     bytes = vfs().readBytes(candidate);
@@ -2259,14 +2262,9 @@ void AudioEngine::playVoiceBlip(const std::string& assetPath, float pitch, float
                             !SDL_SetAudioStreamFrequencyRatio(targetStream, pitch) ||
                             !SDL_PutAudioStreamData(targetStream, floatBuffer, floatLength) ||
                             !SDL_ResumeAudioStreamDevice(targetStream)) {
-                            // M4: kilitli-yazım (kilit üstte tutulur; blip kuyruk
-                            // fail'i Decode-sınıfıdır).
-                            if (m_lastError.empty()) {
-                                m_lastError = "Voice blip asset could not be queued: " +
-                                    std::string(SDL_GetError());
-                                m_lastErrorClass = AudioErrorClass::Decode;
-                            }
-                            ROWL_LOG_WARN("[AudioEngine] " + m_lastError);
+                            // D02: yazım çekirdeği audio_blip_error_channel.cpp'de
+                            // (Locked-sözleşme; kilit üstte tutulur).
+                            recordAssetBlipQueueFailureLocked(m_lastError, m_lastErrorClass);
                         }
                         if (channel == AudioChannelType::Voice) {
                             m_isVoicePlaying = true;
@@ -2325,20 +2323,12 @@ void AudioEngine::playVoiceBlip(const std::string& assetPath, float pitch, float
             !SDL_SetAudioStreamFrequencyRatio(targetStream, 1.0f) ||
             !SDL_PutAudioStreamData(targetStream, blipPcm.data(), static_cast<int>(blipPcm.size() * sizeof(float))) ||
             !SDL_ResumeAudioStreamDevice(targetStream)) {
-            // M4: kilitli-yazım/temizleme (kilit üstte tutulur; synth kuyruk
-            // fail'i Decode).
-            if (m_lastError.empty()) {
-                m_lastError = "Synth voice blip could not be queued: " +
-                    std::string(SDL_GetError());
-                m_lastErrorClass = AudioErrorClass::Decode;
-            }
-            ROWL_LOG_WARN("[AudioEngine] " + m_lastError);
+            // D02: yazım/temizleme çekirdekleri audio_blip_error_channel.cpp'de
+            // (Locked-sözleşme; kilit üstte tutulur; else-kolu bütündür).
+            recordSynthBlipQueueFailureLocked(m_lastError, m_lastErrorClass);
         } else {
-            m_lastError.clear();
-            m_lastErrorClass = AudioErrorClass::None;
-            // A5-tur3: synth-fallback ayırt edilebilirliği — başarılı synth
-            // kuyruğu ayrıca sayılır (synth <= voice).
-            ++m_synthBlipCount;
+            recordSynthBlipQueueSuccessLocked(m_lastError, m_lastErrorClass,
+                                              m_synthBlipCount);
         }
 
         if (channel == AudioChannelType::Sfx) {
@@ -2696,17 +2686,12 @@ void AudioEngine::ensureSfxPoolStreamsLocked() {
     const float gain = m_mixer.gainFor(StreamBusId::Sfx);
     for (size_t i = 0; i < want; ++i) {
         if (!m_sfxPoolStreams[i]) {
-            // Kilitli yazım: bu yordam kilit almaz; çağıran kilidi tutar
-            // (özyinelemeli m_stateMutex kilitlenmesi olmaz).
+            // D02: yazım çekirdeği audio_blip_error_channel.cpp'de
+            // (Locked-sözleşme; kilit üstte tutulur).
             m_sfxPoolStreams[i] = SDL_OpenAudioDeviceStream(
                 SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr, nullptr, nullptr);
             if (!m_sfxPoolStreams[i]) {
-                if (m_lastError.empty()) {
-                    m_lastError = "SFX pool audio stream could not be opened: " +
-                        std::string(SDL_GetError());
-                    m_lastErrorClass = AudioErrorClass::Device;
-                }
-                ROWL_LOG_WARN("[AudioEngine] " + m_lastError);
+                recordSfxPoolStreamOpenFailureLocked(m_lastError, m_lastErrorClass);
             } else if (!SDL_SetAudioStreamGain(m_sfxPoolStreams[i], gain)) {
                 warnAudioOnce("SFX pool stream gain not applied: " + std::string(SDL_GetError()));
             }

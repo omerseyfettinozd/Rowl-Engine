@@ -332,6 +332,7 @@ set(ROWL_ENGINE_SOURCES
     src/scripting/lua_sandbox.cpp
     # Audio
     src/audio/audio_engine.cpp
+    src/audio/audio_blip_error_channel.cpp  # D02: blip hata-kanalı Locked-yardımcıları
     src/audio/ogg_stream_source.cpp
     # Platform abstraction
     src/platform/crash_handler.cpp
