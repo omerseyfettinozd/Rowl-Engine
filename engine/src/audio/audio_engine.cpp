@@ -1771,8 +1771,14 @@ bool AudioEngine::reopenDeviceStreams() {
 
 void AudioEngine::setOutputSuspended(bool suspended, bool force) {
     if (!m_initialized) return;
-    if (!force && suspended == m_outputSuspended) return;
-    m_outputSuspended = suspended;
+    // D04: bayrak yazımı pump guard-okumasıyla hizalanır. Kilit, SDL/hata
+    // çağrılarından ÖNCE salınır (setLastErrorIfEmpty m_stateMutex alır;
+    // elde stream-kilit varken çağrılsaydı sıralama döngüsü kurulurdu).
+    {
+        std::lock_guard<std::mutex> streamLock(m_streamMutex);
+        if (!force && suspended == m_outputSuspended) return;
+        m_outputSuspended = suspended;
+    }
     if (!m_deviceAvailable) return;
     // Faz 5 Dilim 2: havuzdaki TÜM sesler + BedB + Ui askıya alınır/devam eder.
     std::vector<SDL_AudioStream*> streams = {m_bgmStream, m_transitionBgmStream, m_voiceStream, m_ambienceStream, m_ambienceStreamB, m_uiStream};
@@ -1843,6 +1849,10 @@ void AudioEngine::updateTelemetry(float deltaSeconds) {
 
     // Faz 5 Dilim 1: stream telemetrisi ring penceresinden okunur (RAM
     // bloğu aşağıda aynen korunur; stream aktifken RAM dalı atlanır).
+    // D04: ring-penceresi m_streamMutex altındadır (sıralama m_stateMutex
+    // -> m_streamMutex; pump/open/close ters yönde kilit almaz). RAM dalı
+    // kilit-dışı aynen korunur.
+    std::unique_lock<std::mutex> streamLock(m_streamMutex);
     const bool bgmStreamActive =
         m_isBgmStreamed && m_isBgmPlaying && m_bgmRingWriteFrames > 0 &&
         m_bgmRingChannels > 0 && !m_bgmRing.empty();
@@ -1917,6 +1927,7 @@ void AudioEngine::updateTelemetry(float deltaSeconds) {
     m_telemetryBgm.peakR = decayVal(m_telemetryBgm.peakR, targetBgmR);
     m_telemetryBgm.rmsL = decayVal(m_telemetryBgm.rmsL, targetBgmRmsL);
     m_telemetryBgm.rmsR = decayVal(m_telemetryBgm.rmsR, targetBgmRmsR);
+    streamLock.unlock(); // D04: ring-penceresi bitti; RAM/SFX dalları aynen
 
     // 2. SFX Telemetry (Faz 5 Dilim 2: havuz TOPLAMINDAN okunur; tek ses
     // iken eski tek-stream formülüyle birebir aynıdır).
@@ -2453,7 +2464,12 @@ bool AudioEngine::openBgmStream(const std::string& candidate,
     }
     // Ring 4x4096 frame sabit üst bant: heap'te bir kez ayrılır, akışlar
     // arasında yeniden kullanılır (kanal üst bandı 8).
-    const size_t ringFloats = kStreamRingCapacityFrames * 8;
+    // D04: commit yazımları (ring/kaynak/sayaç/snapshot) pump ile hizalanır.
+    // applyChannelGains (kilitsiz) + pumpBgmStream (kendi kilidini alır)
+    // scope DIŞINDA çağrılır — içerde çağrılsaydı kilit-yuvalama olurdu.
+    {
+        std::lock_guard<std::mutex> streamLock(m_streamMutex);
+        const size_t ringFloats = kStreamRingCapacityFrames * 8;
     if (m_bgmRing.size() < ringFloats) {
         m_bgmRing.assign(ringFloats, 0.0f);
     }
@@ -2511,6 +2527,7 @@ bool AudioEngine::openBgmStream(const std::string& candidate,
     }
     m_streamInfo.channel = snapshotChannel;
     m_streamInfo.asset = assetPath;
+    } // D04 commit scope sonu (streamLock salınır; pump kendi kilidini alır)
     applyChannelGains();
     pumpBgmStream();
     if (m_bgmStream && m_deviceAvailable && !m_outputSuspended) {
@@ -2542,6 +2559,11 @@ void AudioEngine::queueStreamChunkToDevice(const float* samples, size_t frames,
 }
 
 void AudioEngine::pumpBgmStream() {
+    // D04: pump/stream-ring kilidi. m_stateMutex DEĞİL m_streamMutex tutulur:
+    // gövde setLastError/stopBgm çağırır (m_stateMutex alırlar) — aynı kilit
+    // özyinelemeli deadlock üretirdi. Hata+yıkım kilit salımına ertelenir
+    // (deferredError/deferredStop), sıralama döngüsü kurulmaz.
+    std::unique_lock<std::mutex> streamLock(m_streamMutex);
     if (!m_initialized || !m_isBgmStreamed || !m_bgmStreamSource ||
         !m_bgmStreamSource->isOpen()) {
         return;
@@ -2576,6 +2598,10 @@ void AudioEngine::pumpBgmStream() {
         static_cast<int>(rate * channels * sizeof(float)) / 2; // ~0.5 sn
     int chunks = 0;
     int emptyWraps = 0;
+    // D04: corrupt-yıkımı kilit-dışına ertelenir (setLastError + stopBgm
+    // m_stateMutex alır; streamLock tutulurken çağrılamaz).
+    std::string deferredError;
+    bool deferredStop = false;
     while (chunks < 4) {
         if (haveDevice && m_bgmStreamPcmPos > 0 &&
             SDL_GetAudioStreamAvailable(m_bgmStream) >= targetQueued) {
@@ -2611,9 +2637,8 @@ void AudioEngine::pumpBgmStream() {
             const bool midStreamCorrupt =
                 !srcError.empty() && srcError.find("corrupt") != std::string::npos;
             if (midStreamCorrupt) {
-                setLastError(srcError, AudioErrorClass::Decode);
-                ROWL_LOG_WARN("[AudioEngine] " + lastErrorSnapshot());
-                stopBgm();
+                deferredError = srcError;
+                deferredStop = true;
                 break;
             }
             if (m_bgmLoop && m_bgmStreamSource->seekPcmFrame(0)) {
@@ -2631,9 +2656,20 @@ void AudioEngine::pumpBgmStream() {
         if (got == 0) break;
     }
     recordElapsed();
+    // D04: ertelenmiş corrupt-yıkımı kilit salındıktan sonra çalışır
+    // (closeBgmStream m_streamMutex'i yeniden alır; setLastError
+    // m_stateMutex'i alır — elde kilit varken ikisi de deadlock'tur).
+    streamLock.unlock();
+    if (deferredStop) {
+        setLastError(deferredError, AudioErrorClass::Decode);
+        ROWL_LOG_WARN("[AudioEngine] " + lastErrorSnapshot());
+        stopBgm();
+    }
 }
 
 void AudioEngine::closeBgmStream() {
+    // D04: kaynak reset + sayaç sıfırlama pump ile hizalanır.
+    std::lock_guard<std::mutex> streamLock(m_streamMutex);
     if (m_bgmStreamSource) {
         m_bgmStreamSource->close();
         m_bgmStreamSource.reset();
@@ -2659,6 +2695,8 @@ std::string AudioEngine::streamInfoJson() const {
 }
 
 double AudioEngine::bgmStreamBufferedSeconds() const {
+    // D04: pcm-pos/rate okuması pump yazımıyla hizalanır.
+    std::lock_guard<std::mutex> streamLock(m_streamMutex);
     if (!m_isBgmStreamed || m_bgmStreamRateHz == 0) return 0.0;
     const uint64_t valid =
         std::min<uint64_t>(m_bgmStreamPcmPos, kStreamRingCapacityFrames);
@@ -2945,6 +2983,8 @@ float AudioEngine::ambienceBedGain(int bed) const {
 }
 
 void AudioEngine::recordPumpSample(uint64_t microseconds) {
+    // D04: çağıran (pumpBgmStream) m_streamMutex'i tutar; kilit ALINMAZ
+    // (alınsaydı pump gövdesiyle özyinelemeli-kilit olurdu).
     m_pumpWindow[m_pumpWindowPos % m_pumpWindow.size()] = microseconds;
     ++m_pumpWindowPos;
     ++m_pumpCount;
@@ -2953,6 +2993,12 @@ void AudioEngine::recordPumpSample(uint64_t microseconds) {
 }
 
 uint64_t AudioEngine::bgmPumpAvgMicroseconds() const {
+    std::lock_guard<std::mutex> streamLock(m_streamMutex);
+    return bgmPumpAvgMicrosecondsLocked();
+}
+
+uint64_t AudioEngine::bgmPumpAvgMicrosecondsLocked() const {
+    // D04: çağıran m_streamMutex'i tutar (Avg/StatsJson tek kilitle hizalanır).
     const size_t filled =
         static_cast<size_t>(std::min<uint64_t>(m_pumpCount, m_pumpWindow.size()));
     if (filled == 0) return 0;
@@ -2962,9 +3008,12 @@ uint64_t AudioEngine::bgmPumpAvgMicroseconds() const {
 }
 
 std::string AudioEngine::bgmPumpStatsJson() const {
+    // D04: sayaç/pencere tek kilit altında tutarlı okunur (Avg iç-helperla
+    // aynı kilitte; ayrı kilit özyinelemeli olurdu).
+    std::lock_guard<std::mutex> streamLock(m_streamMutex);
     return std::string("{\"count\":") + std::to_string(m_pumpCount) +
            ",\"last_us\":" + std::to_string(m_pumpLastUs) +
-           ",\"avg_us\":" + std::to_string(bgmPumpAvgMicroseconds()) +
+           ",\"avg_us\":" + std::to_string(bgmPumpAvgMicrosecondsLocked()) +
            ",\"max_us\":" + std::to_string(m_pumpMaxUs) + "}";
 }
 

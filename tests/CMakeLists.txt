@@ -217,6 +217,28 @@ set_tests_properties(audio_volume_race_red_probe PROPERTIES
     TIMEOUT 120
 )
 
+# D04 pump/stream-ring RED kilidi: pumpBgmStream hammer vs okuyucu hammer
+# (bgmStreamBufferedSeconds + bgmPumpStatsJson + update). D03 konvansiyonu:
+# rowl_engine_objects'a baglanir (uye-semboller ihraç edilmez), rowl_tests
+# govdesine gomulmez. TSan altinda KIRMIZI (exit 66 + data-race uyarisi),
+# TSan'siz YESIL (exit 0). Fix: m_streamMutex kilitli pump/stream-ring.
+add_executable(rowl_audio_pump_race_red_probe test_audio_pump_race_red_probe.cpp)
+target_include_directories(rowl_audio_pump_race_red_probe PRIVATE
+    ${CMAKE_SOURCE_DIR}/engine/include
+)
+target_link_libraries(rowl_audio_pump_race_red_probe PRIVATE
+    rowl_engine_objects
+    rowl_engine_thirdparty
+)
+target_compile_definitions(rowl_audio_pump_race_red_probe PRIVATE ROWL_BUILDING_DLL)
+
+add_test(NAME audio_pump_race_red_probe COMMAND rowl_audio_pump_race_red_probe)
+set_tests_properties(audio_pump_race_red_probe PROPERTIES
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    ENVIRONMENT "SDL_AUDIODRIVER=dummy;SDL_VIDEODRIVER=dummy"
+    TIMEOUT 120
+)
+
 # D08 save->load->rewind RED kilidi: ic sembolleri kullanir (Rowl::Platform /
 # VFS / Core, -fvisibility=hidden ile gizli); bu yuzden rowl_tests gibi
 # rowl_engine_objects'a baglanir. RED: rewind=false + step sabit + exit 1;
