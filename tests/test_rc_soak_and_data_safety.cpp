@@ -528,9 +528,10 @@ void test_rc_soak_and_data_safety() {
     }
 
     // 8. Ayni-kare yarisi: save->load->rewind->load sirali cagrilar (tek
-    // thread; save/load/rewind yolunda kilit yok, sirali guvenlik). Load
-    // zincirsiz state kurar (dosyada previousState yok), o yuzden ortadaki
-    // rewind -> false beklenir; son load tutarli olmalidir.
+    // thread; save/load/rewind yolunda kilit yok, sirali guvenlik). D08 (a):
+    // load serilestirilmis sinirli gecmisten ("history") zincir kurar, o
+    // yuzden ortadaki rewind(1) TRUE doner ve bir onceki halkaya iner
+    // (stepId tam 1 azalir); son load tutarli olmalidir.
     {
         engine.resetToStartNode();
         engine.advanceToNextNode();
@@ -543,13 +544,20 @@ void test_rc_soak_and_data_safety() {
             exit(1);
         }
         const uint64_t loadedNode = engine.getCurrentNodeId();
-        if (engine.rewind(1)) {
-            std::cerr << "Same-frame rewind moved on a chain-less loaded state"
+        const uint64_t loadedStep = engine.getCurrentStepId();
+        // 8'li halkada oncul: ((loaded-1+7)%8)+1.
+        const uint64_t wantNode = ((loadedNode - 1 + 7) % 8) + 1;
+        if (!engine.rewind(1)) {
+            std::cerr << "Same-frame rewind failed on a history-chained loaded state"
                       << std::endl;
             exit(1);
         }
-        if (engine.getCurrentNodeId() != loadedNode) {
-            std::cerr << "Same-frame no-op rewind mutated state" << std::endl;
+        if (engine.getCurrentNodeId() != wantNode) {
+            std::cerr << "Same-frame rewind did not reach the predecessor ring" << std::endl;
+            exit(1);
+        }
+        if (engine.getCurrentStepId() + 1 != loadedStep) {
+            std::cerr << "Same-frame rewind did not step back exactly once" << std::endl;
             exit(1);
         }
         if (!engine.loadGameSlot(2) || engine.getCurrentNodeId() != loadedNode) {

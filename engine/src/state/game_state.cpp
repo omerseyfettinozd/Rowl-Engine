@@ -75,6 +75,241 @@ bool isReservedStateKey(const std::string& key) {
     return key.empty() || kReserved.find(key) != kReserved.end();
 }
 
+// D08 (a): tek-state obje kodlayıcı. Aktif state withThumbnail=true ile
+// yazılır (mevcut tel format birebir korunur); "history" halkaları
+// withThumbnail=false ile yazılır (thumbnail yalnızca aktif state'te kalır,
+// 6. bölüm 768KB kilit payı korunur).
+nlohmann::json encodeStateObject(const GameState& s, bool withThumbnail) {
+    nlohmann::json j;
+    j["version"] = GameState::CurrentSaveFormatVersion;
+    j["step_id"] = s.stepId;
+    j["active_node_id"] = s.activeNodeId;
+    j["typewriter_index"] = s.typewriterIndex;
+    j["active_background"] = s.activeBackground;
+    j["dsp_filter"] = s.dspFilter;
+    j["active_bgm"] = s.activeBgm;
+    j["bgm_volume"] = s.bgmVolume;
+    j["bgm_playing"] = s.bgmPlaying;
+    // #86 (v4): full mixer. v3 and older readers ignore unknown keys, so old
+    // builds still load v4 files (mixer falls back to 1.0 there).
+    j["master_volume"] = s.masterVolume;
+    j["sfx_volume"] = s.sfxVolume;
+    j["voice_volume"] = s.voiceVolume;
+    nlohmann::json history = nlohmann::json::array();
+    if (s.dialogueHistory) {
+        for (const auto& entry : *s.dialogueHistory) {
+            history.push_back({
+                {"node_id", entry.nodeId}, {"speaker", entry.speaker},
+                {"dialogue", entry.dialogue}, {"read", entry.read},
+                {"content_id", entry.contentId},
+            });
+        }
+    }
+    j["dialogue_history"] = std::move(history);
+
+    nlohmann::json varObj = nlohmann::json::object();
+    if (s.variables) {
+        for (const auto& [k, v] : s.variables->data) {
+            varObj[k] = v;
+        }
+    }
+    j["variables"] = varObj;
+    j["timestamp"] = std::chrono::duration_cast<std::chrono::seconds>(
+        std::chrono::system_clock::now().time_since_epoch()
+    ).count();
+    // Faz 2 Dilim 4 display-only save metadata (optional on decode).
+    j["saved_at"] = Rowl::State::iso8601UtcNow();
+    // D4/G (#70): graph content identity. Written only when stamped (legacy
+    // saves have no key → decode defaults to "" → legacy-warn path on load).
+    // No format bump: additive optional key, v3 readers ignore unknowns.
+    if (!s.graphIdentity.empty()) j["graph_id"] = s.graphIdentity;
+    j["playtime_seconds"] = s.playtimeSeconds;
+    j["chapter_id"] = s.chapterId;
+    j["chapter_title"] = s.chapterTitle;
+    j["summary"] = s.summary;
+    if (withThumbnail) {
+        j["thumbnail_width"] = s.thumbnailWidth;
+        j["thumbnail_height"] = s.thumbnailHeight;
+        j["thumbnail_png_base64"] =
+            Rowl::State::base64Encode(
+                reinterpret_cast<const uint8_t*>(s.thumbnailPng.data()),
+                static_cast<uint32_t>(s.thumbnailPng.size()));
+    }
+    return j;
+}
+
+// D08 (a): tek-state obje çözümleyici. Kök ve her "history" halkası aynı
+// doğrulamadan geçer (bütçeler + fail-closed alanlar birebir); geçersiz
+// girdi nullptr döner. "history" anahtarına bakmaz (tek seviye — iç içe
+// history yoksayılır). previousState'e dokunmaz (zincirleme çağrıcının işi).
+std::shared_ptr<GameState> decodeStateObject(const nlohmann::json& j, uint32_t version) {
+    auto state = std::make_shared<GameState>();
+    state->stepId = j.value("step_id", static_cast<uint64_t>(1));
+    state->activeNodeId = j.value("active_node_id", static_cast<uint64_t>(101));
+    state->typewriterIndex = j.value("typewriter_index", static_cast<uint32_t>(0));
+    state->activeBackground = j.value("active_background", "bg_beach_sunset.png");
+    state->dspFilter = j.value("dsp_filter", "Normal");
+    state->activeBgm = j.value("active_bgm", "");
+    state->bgmVolume = j.value("bgm_volume", 1.0f);
+    state->bgmPlaying = j.value("bgm_playing", !state->activeBgm.empty());
+    // #86 (v4): mixer keys are optional — legacy saves predate them.
+    state->masterVolume = j.value("master_volume", 1.0f);
+    state->sfxVolume = j.value("sfx_volume", 1.0f);
+    state->voiceVolume = j.value("voice_volume", 1.0f);
+
+    if (!std::isfinite(state->bgmVolume) || state->bgmVolume < 0.0f || state->bgmVolume > 1.0f) {
+        ROWL_LOG_ERROR("GameState JSON contains an invalid BGM volume");
+        return nullptr;
+    }
+    // #86: mixer volumes follow the same fail-closed contract as bgmVolume.
+    for (const auto [label, value] : {
+             std::pair{"master_volume", state->masterVolume},
+             std::pair{"sfx_volume", state->sfxVolume},
+             std::pair{"voice_volume", state->voiceVolume},
+         }) {
+        if (!std::isfinite(value) || value < 0.0f || value > 1.0f) {
+            ROWL_LOG_ERROR(std::string("GameState JSON contains an invalid ") + label);
+            return nullptr;
+        }
+    }
+
+    if (state->stepId == 0 || state->activeNodeId == 0) {
+        ROWL_LOG_ERROR("GameState JSON contains an invalid step or node identifier");
+        return nullptr;
+    }
+
+    auto varMap = std::make_shared<VariableMap>();
+    if (j.contains("variables") && j["variables"].is_object()) {
+        if (j["variables"].size() > kMaxSaveVariables) {
+            ROWL_LOG_ERROR("GameState JSON has too many variables");
+            return nullptr;
+        }
+        for (auto& el : j["variables"].items()) {
+            if (el.key().empty() || el.key().size() > kMaxVariableKeyBytes) {
+                ROWL_LOG_ERROR("GameState JSON contains an invalid variable key");
+                return nullptr;
+            }
+            std::string value;
+            if (el.value().is_string()) {
+                value = el.value().get<std::string>();
+            } else {
+                value = el.value().dump();
+            }
+            if (value.size() > kMaxVariableValueBytes) {
+                ROWL_LOG_ERROR("GameState JSON contains an oversized variable value");
+                return nullptr;
+            }
+            varMap->data[el.key()] = std::move(value);
+        }
+    } else if (j.contains("variables")) {
+        ROWL_LOG_ERROR("GameState JSON variables must be an object");
+        return nullptr;
+    }
+    state->variables = varMap;
+
+    // Faz 2 Dilim 4 display metadata: all optional, legacy saves decode
+    // to empty/zero. playtime must be finite and non-negative.
+    state->savedAt = j.value("saved_at", "");
+    state->playtimeSeconds = j.value("playtime_seconds", 0.0);
+    if (!std::isfinite(state->playtimeSeconds) || state->playtimeSeconds < 0.0) {
+        ROWL_LOG_ERROR("GameState JSON contains an invalid playtime");
+        return nullptr;
+    }
+    state->chapterId = j.value("chapter_id", "");
+    state->chapterTitle = j.value("chapter_title", "");
+    state->summary = j.value("summary", "");
+    if (state->chapterId.size() > 1024 || state->chapterTitle.size() > 1024 ||
+        state->summary.size() > 4096) {
+        ROWL_LOG_ERROR("GameState JSON contains oversized save metadata");
+        return nullptr;
+    }
+    state->thumbnailWidth = j.value("thumbnail_width", static_cast<uint32_t>(0));
+    state->thumbnailHeight = j.value("thumbnail_height", static_cast<uint32_t>(0));
+    const std::string thumbnailBase64 = j.value("thumbnail_png_base64", "");
+    if (thumbnailBase64.size() > kMaxThumbnailBase64Bytes) {
+        ROWL_LOG_ERROR("GameState JSON contains an oversized thumbnail");
+        return nullptr;
+    }
+    state->thumbnailPng.clear();
+    if (!thumbnailBase64.empty() &&
+        !Rowl::State::base64Decode(thumbnailBase64, state->thumbnailPng)) {
+        ROWL_LOG_ERROR("GameState JSON contains a malformed thumbnail");
+        return nullptr;
+    }
+
+    // D4/G (#70): graph identity is optional — legacy saves predate it.
+    // Oversized values are hostile/foreign input → InvalidData.
+    state->graphIdentity = j.value("graph_id", "");
+    if (state->graphIdentity.size() > Rowl::Core::kMaxGraphIdentityBytes) {
+        ROWL_LOG_ERROR("GameState JSON contains an oversized graph identity");
+        return nullptr;
+    }
+
+    auto history = std::make_shared<std::vector<DialogueHistoryEntry>>();
+    if (j.contains("dialogue_history")) {
+        if (!j["dialogue_history"].is_array() ||
+            j["dialogue_history"].size() > kMaxDialogueHistoryEntries) {
+            ROWL_LOG_ERROR("GameState JSON dialogue history is invalid or too large");
+            return nullptr;
+        }
+        for (const auto& rawEntry : j["dialogue_history"]) {
+            if (!rawEntry.is_object()) {
+                ROWL_LOG_ERROR("GameState JSON dialogue history entry must be an object");
+                return nullptr;
+            }
+            DialogueHistoryEntry entry;
+            entry.nodeId = rawEntry.value("node_id", uint64_t{0});
+            entry.speaker = rawEntry.value("speaker", "");
+            entry.dialogue = rawEntry.value("dialogue", "");
+            entry.read = rawEntry.value("read", true);
+            entry.contentId = rawEntry.value("content_id", "");
+            if (entry.nodeId == 0 || entry.speaker.size() > kMaxDialogueHistoryTextBytes ||
+                entry.dialogue.size() > kMaxDialogueHistoryTextBytes ||
+                entry.contentId.size() > kMaxContentIdBytes) {
+                ROWL_LOG_ERROR("GameState JSON contains an invalid dialogue history entry");
+                return nullptr;
+            }
+            history->push_back(std::move(entry));
+        }
+    }
+    state->dialogueHistory = std::move(history);
+    state->previousState = nullptr;
+    return state;
+}
+
+// D08 (a): opsiyonel "history" dizisini öncül zincire çevirir. Başarısızlık
+// (eksik/yabancı/bozuk/sınır-aşan/monoton-olmayan) nullptr döner — çağrıcı
+// bugünkü davranışa düşer (previousState=nullptr), kök decode başarısını
+// etkilemez, InvalidData'ya düşürmez.
+std::shared_ptr<GameState> decodeHistoryChain(const nlohmann::json& raw,
+                                              const GameState& root,
+                                              uint32_t version) {
+    if (!raw.is_array() || raw.empty() ||
+        raw.size() > GameState::kMaxSerializedHistoryEntries) {
+        return nullptr;
+    }
+    std::vector<std::shared_ptr<GameState>> links;
+    links.reserve(raw.size());
+    for (const auto& rawEntry : raw) {
+        if (!rawEntry.is_object()) return nullptr;
+        auto entry = decodeStateObject(rawEntry, version);
+        if (!entry) return nullptr;
+        links.push_back(std::move(entry));
+    }
+    // stepId monotonluğu: kökten geçmişe kesin azalan sırada olmalı
+    // (serialize azalan sırada yazar; withMixerVolumes/withSaveMetadata/
+    // withGraphIdentity kopya-üzeri olduğundan ara halka üretmez).
+    uint64_t newerStep = root.stepId;
+    for (const auto& link : links) {
+        if (link->stepId >= newerStep) return nullptr;
+        newerStep = link->stepId;
+    }
+    for (size_t i = 0; i + 1 < links.size(); ++i) {
+        links[i]->previousState = links[i + 1];
+    }
+    return links.front();
+}
+
 } // namespace
 
 std::string GameState::getVariable(const std::string& key, const std::string& defaultValue) const {
@@ -317,59 +552,18 @@ std::shared_ptr<const GameState> GameState::rewind(
 }
 
 std::string GameState::serializeJson() const {
-    nlohmann::json j;
-    j["version"] = CurrentSaveFormatVersion;
-    j["step_id"] = stepId;
-    j["active_node_id"] = activeNodeId;
-    j["typewriter_index"] = typewriterIndex;
-    j["active_background"] = activeBackground;
-    j["dsp_filter"] = dspFilter;
-    j["active_bgm"] = activeBgm;
-    j["bgm_volume"] = bgmVolume;
-    j["bgm_playing"] = bgmPlaying;
-    // #86 (v4): full mixer. v3 and older readers ignore unknown keys, so old
-    // builds still load v4 files (mixer falls back to 1.0 there).
-    j["master_volume"] = masterVolume;
-    j["sfx_volume"] = sfxVolume;
-    j["voice_volume"] = voiceVolume;
-    nlohmann::json history = nlohmann::json::array();
-    if (dialogueHistory) {
-        for (const auto& entry : *dialogueHistory) {
-            history.push_back({
-                {"node_id", entry.nodeId}, {"speaker", entry.speaker},
-                {"dialogue", entry.dialogue}, {"read", entry.read},
-                {"content_id", entry.contentId},
-            });
-        }
+    nlohmann::json j = encodeStateObject(*this, true);
+    // D08 (a): sınırlı öncül zincir — en fazla
+    // kMaxSerializedHistoryEntries halka, her halka thumbnail'siz tam state.
+    // Zincirsiz state'lerde "history" yazılmaz (legacy dosyalarla aynı tel).
+    nlohmann::json chain = nlohmann::json::array();
+    size_t count = 0;
+    for (auto p = previousState;
+         p && count < kMaxSerializedHistoryEntries;
+         p = p->previousState, ++count) {
+        chain.push_back(encodeStateObject(*p, false));
     }
-    j["dialogue_history"] = std::move(history);
-
-    nlohmann::json varObj = nlohmann::json::object();
-    if (variables) {
-        for (const auto& [k, v] : variables->data) {
-            varObj[k] = v;
-        }
-    }
-    j["variables"] = varObj;
-    j["timestamp"] = std::chrono::duration_cast<std::chrono::seconds>(
-        std::chrono::system_clock::now().time_since_epoch()
-    ).count();
-    // Faz 2 Dilim 4 display-only save metadata (optional on decode).
-    j["saved_at"] = Rowl::State::iso8601UtcNow();
-    // D4/G (#70): graph content identity. Written only when stamped (legacy
-    // saves have no key → decode defaults to "" → legacy-warn path on load).
-    // No format bump: additive optional key, v3 readers ignore unknowns.
-    if (!graphIdentity.empty()) j["graph_id"] = graphIdentity;
-    j["playtime_seconds"] = playtimeSeconds;
-    j["chapter_id"] = chapterId;
-    j["chapter_title"] = chapterTitle;
-    j["summary"] = summary;
-    j["thumbnail_width"] = thumbnailWidth;
-    j["thumbnail_height"] = thumbnailHeight;
-    j["thumbnail_png_base64"] =
-        Rowl::State::base64Encode(
-            reinterpret_cast<const uint8_t*>(thumbnailPng.data()),
-            static_cast<uint32_t>(thumbnailPng.size()));
+    if (!chain.empty()) j["history"] = std::move(chain);
 
     return j.dump(2);
 }
@@ -401,137 +595,19 @@ GameStateDecodeResult GameState::decodeJson(const std::string& jsonStr) {
             return {nullptr, GameStateDecodeStatus::UnsupportedVersion, version};
         }
 
-        auto state = std::make_shared<GameState>();
-        state->stepId = j.value("step_id", static_cast<uint64_t>(1));
-        state->activeNodeId = j.value("active_node_id", static_cast<uint64_t>(101));
-        state->typewriterIndex = j.value("typewriter_index", static_cast<uint32_t>(0));
-        state->activeBackground = j.value("active_background", "bg_beach_sunset.png");
-        state->dspFilter = j.value("dsp_filter", "Normal");
-        state->activeBgm = j.value("active_bgm", "");
-        state->bgmVolume = j.value("bgm_volume", 1.0f);
-        state->bgmPlaying = j.value("bgm_playing", !state->activeBgm.empty());
-        // #86 (v4): mixer keys are optional — legacy saves predate them.
-        state->masterVolume = j.value("master_volume", 1.0f);
-        state->sfxVolume = j.value("sfx_volume", 1.0f);
-        state->voiceVolume = j.value("voice_volume", 1.0f);
-
-        if (!std::isfinite(state->bgmVolume) || state->bgmVolume < 0.0f || state->bgmVolume > 1.0f) {
-            ROWL_LOG_ERROR("GameState JSON contains an invalid BGM volume");
+        auto state = decodeStateObject(j, version);
+        if (!state) {
+            ROWL_LOG_ERROR("GameState JSON root object is invalid");
             return {nullptr, GameStateDecodeStatus::InvalidData, version};
         }
-        // #86: mixer volumes follow the same fail-closed contract as bgmVolume.
-        for (const auto [label, value] : {
-                 std::pair{"master_volume", state->masterVolume},
-                 std::pair{"sfx_volume", state->sfxVolume},
-                 std::pair{"voice_volume", state->voiceVolume},
-             }) {
-            if (!std::isfinite(value) || value < 0.0f || value > 1.0f) {
-                ROWL_LOG_ERROR(std::string("GameState JSON contains an invalid ") + label);
-                return {nullptr, GameStateDecodeStatus::InvalidData, version};
-            }
+        // D08 (a): opsiyonel sınırlı "history" → öncül zincir. Eksik/yabancı/
+        // bozuk history bugünkü davranışa düşer (previousState=nullptr); kök
+        // decode başarısını etkilemez, InvalidData'ya düşürmez.
+        std::shared_ptr<GameState> chain;
+        if (j.contains("history")) {
+            chain = decodeHistoryChain(j["history"], *state, version);
         }
-
-        if (state->stepId == 0 || state->activeNodeId == 0) {
-            ROWL_LOG_ERROR("GameState JSON contains an invalid step or node identifier");
-            return {nullptr, GameStateDecodeStatus::InvalidData, version};
-        }
-
-        auto varMap = std::make_shared<VariableMap>();
-        if (j.contains("variables") && j["variables"].is_object()) {
-            if (j["variables"].size() > kMaxSaveVariables) {
-                ROWL_LOG_ERROR("GameState JSON has too many variables");
-                return {nullptr, GameStateDecodeStatus::InvalidData, version};
-            }
-            for (auto& el : j["variables"].items()) {
-                if (el.key().empty() || el.key().size() > kMaxVariableKeyBytes) {
-                    ROWL_LOG_ERROR("GameState JSON contains an invalid variable key");
-                    return {nullptr, GameStateDecodeStatus::InvalidData, version};
-                }
-                std::string value;
-                if (el.value().is_string()) {
-                    value = el.value().get<std::string>();
-                } else {
-                    value = el.value().dump();
-                }
-                if (value.size() > kMaxVariableValueBytes) {
-                    ROWL_LOG_ERROR("GameState JSON contains an oversized variable value");
-                    return {nullptr, GameStateDecodeStatus::InvalidData, version};
-                }
-                varMap->data[el.key()] = std::move(value);
-            }
-        } else if (j.contains("variables")) {
-            ROWL_LOG_ERROR("GameState JSON variables must be an object");
-            return {nullptr, GameStateDecodeStatus::InvalidData, version};
-        }
-        state->variables = varMap;
-
-        // Faz 2 Dilim 4 display metadata: all optional, legacy saves decode
-        // to empty/zero. playtime must be finite and non-negative.
-        state->savedAt = j.value("saved_at", "");
-        state->playtimeSeconds = j.value("playtime_seconds", 0.0);
-        if (!std::isfinite(state->playtimeSeconds) || state->playtimeSeconds < 0.0) {
-            ROWL_LOG_ERROR("GameState JSON contains an invalid playtime");
-            return {nullptr, GameStateDecodeStatus::InvalidData, version};
-        }
-        state->chapterId = j.value("chapter_id", "");
-        state->chapterTitle = j.value("chapter_title", "");
-        state->summary = j.value("summary", "");
-        if (state->chapterId.size() > 1024 || state->chapterTitle.size() > 1024 ||
-            state->summary.size() > 4096) {
-            ROWL_LOG_ERROR("GameState JSON contains oversized save metadata");
-            return {nullptr, GameStateDecodeStatus::InvalidData, version};
-        }
-        state->thumbnailWidth = j.value("thumbnail_width", static_cast<uint32_t>(0));
-        state->thumbnailHeight = j.value("thumbnail_height", static_cast<uint32_t>(0));
-        const std::string thumbnailBase64 = j.value("thumbnail_png_base64", "");
-        if (thumbnailBase64.size() > kMaxThumbnailBase64Bytes) {
-            ROWL_LOG_ERROR("GameState JSON contains an oversized thumbnail");
-            return {nullptr, GameStateDecodeStatus::InvalidData, version};
-        }
-        state->thumbnailPng.clear();
-        if (!thumbnailBase64.empty() &&
-            !Rowl::State::base64Decode(thumbnailBase64, state->thumbnailPng)) {
-            ROWL_LOG_ERROR("GameState JSON contains a malformed thumbnail");
-            return {nullptr, GameStateDecodeStatus::InvalidData, version};
-        }
-
-        // D4/G (#70): graph identity is optional — legacy saves predate it.
-        // Oversized values are hostile/foreign input → InvalidData.
-        state->graphIdentity = j.value("graph_id", "");
-        if (state->graphIdentity.size() > Rowl::Core::kMaxGraphIdentityBytes) {
-            ROWL_LOG_ERROR("GameState JSON contains an oversized graph identity");
-            return {nullptr, GameStateDecodeStatus::InvalidData, version};
-        }
-
-        auto history = std::make_shared<std::vector<DialogueHistoryEntry>>();
-        if (j.contains("dialogue_history")) {
-            if (!j["dialogue_history"].is_array() ||
-                j["dialogue_history"].size() > kMaxDialogueHistoryEntries) {
-                ROWL_LOG_ERROR("GameState JSON dialogue history is invalid or too large");
-                return {nullptr, GameStateDecodeStatus::InvalidData, version};
-            }
-            for (const auto& rawEntry : j["dialogue_history"]) {
-                if (!rawEntry.is_object()) {
-                    ROWL_LOG_ERROR("GameState JSON dialogue history entry must be an object");
-                    return {nullptr, GameStateDecodeStatus::InvalidData, version};
-                }
-                DialogueHistoryEntry entry;
-                entry.nodeId = rawEntry.value("node_id", uint64_t{0});
-                entry.speaker = rawEntry.value("speaker", "");
-                entry.dialogue = rawEntry.value("dialogue", "");
-                entry.read = rawEntry.value("read", true);
-                entry.contentId = rawEntry.value("content_id", "");
-                if (entry.nodeId == 0 || entry.speaker.size() > kMaxDialogueHistoryTextBytes ||
-                    entry.dialogue.size() > kMaxDialogueHistoryTextBytes ||
-                    entry.contentId.size() > kMaxContentIdBytes) {
-                    ROWL_LOG_ERROR("GameState JSON contains an invalid dialogue history entry");
-                    return {nullptr, GameStateDecodeStatus::InvalidData, version};
-                }
-                history->push_back(std::move(entry));
-            }
-        }
-        state->dialogueHistory = std::move(history);
-        state->previousState = nullptr;
+        state->previousState = std::move(chain);
         const auto status = version == CurrentSaveFormatVersion
             ? GameStateDecodeStatus::Loaded
             : GameStateDecodeStatus::Migrated;

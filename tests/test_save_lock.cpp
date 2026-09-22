@@ -272,17 +272,24 @@ void test_save_lock() {
                   "R: control load failed");
         checkSessionIdentity(h, savedStep, 102, "r_key", "r_val", "R-ctrl");
 
-        // R48a (#48 gerçek-tetkik): load zinciri koparır → Rewind(1)
-        // reddedilir; bayat Ok DEĞİL InvalidArgument raporlanır, oturum aynı.
-        checkSave(RowlEngine_Rewind(h, 1) == 0,
-                  "R48a: post-load rewind must fail");
-        checkSave(RowlEngine_GetLastResultCode(h) == ROWL_RESULT_INVALID_ARGUMENT,
-                  "R48a: post-load rewind must report InvalidArgument (no stale Ok)");
-        checkSessionIdentity(h, savedStep, 102, "r_key", "r_val", "R48a");
+        // R48a (D08: load artik serilestirilmis sinirli gecmisten ("history")
+        // zincir kurar): load sonrasi Rewind(1) BAŞARIR — bir önceki halkaya
+        // döner (stepId tam 1 azalır, değişken öncül değere döner), Ok
+        // raporlanır. #48 ruhu korunur: oturum tam-tutarlıdır, bayat kod yok.
+        checkSave(RowlEngine_Rewind(h, 1) == 1,
+                  "R48a: post-load rewind must succeed (D08 history chain)");
+        checkSave(RowlEngine_GetLastResultCode(h) == ROWL_RESULT_OK,
+                  "R48a: post-load rewind must report Ok (no stale code)");
+        checkSessionIdentity(h, savedStep - 1, 102, "r_key", "", "R48a");
 
         // R48b: BAŞARILI rewind Ok yazar ve bir adım geri döner (duyarlılık).
         // Ayraç-başarısız-load context'i FileNotFound yapar — Ok assert'i
         // bayat-kodda kırmızıyı görür; ayraç oturumu kımıldatmaz (R1-kilidi).
+        // D08 sonrası R48a oturumu bir adım geri taşıdığından kurulum slot-1'i
+        // yeniden yükler (duyarlılık adımı +1 buradan gelir).
+        checkSave(RowlEngine_LoadGameSlotResult(h, 1) == ROWL_RESULT_OK,
+                  "R48b: setup reload failed");
+        checkSessionIdentity(h, savedStep, 102, "r_key", "r_val", "R48b-reload");
         RowlEngine_SetVariable(h, "r_key", "forward");
         const uint64_t fwdStep = RowlEngine_GetCurrentStepId(h);
         checkSave(fwdStep == savedStep + 1, "R48b: setup step did not advance");
