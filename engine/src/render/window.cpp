@@ -7,6 +7,7 @@
 #include "rowl/render/frame_composition.hpp"
 #include "rowl/render/aspect_guardian.hpp"
 #include "rowl/render/window_text_fallback.hpp"
+#include "rowl/render/window_msdf_shaped.hpp"
 #include "rowl/core/logger.hpp"
 #include "rowl/platform/sdl_event_dispatcher.hpp"
 #include "rowl/platform/mobile_input.hpp"
@@ -1398,7 +1399,25 @@ void Window::renderVisualNovelFrame(
             // D10: karar çekirdeği window_text_fallback.hpp'de (birebir delege).
             if (useFontFallbackPath(m_fontRenderer && m_fontRenderer->isLoaded(),
                                     m_offscreenSurface != nullptr)) {
-                if (!renderGpuMsdfText(dlg.speaker, tagX + 16.0f * metrics.scaleFactor, tagY + tagH * .72f, speakerFontPx, {255,255,255,255})) {
+                // D11: şekilli-MSDF yolu (shape girdileri TrueType koluyla AYNI
+                // ifade — :1491-1502 emsali; topY textDrawY :1489). Şekillenemezse
+                // ham-MSDF legacy (birebir eski piksel/davranış).
+                const float speakerWrapW = std::max(0.0f, tagW - (32.0f * metrics.scaleFactor));
+                const auto shapedSpeaker = m_fontRenderer
+                    ? m_fontRenderer->shapeTextShared(dlg.speaker, speakerFontPx, speakerWrapW)
+                    : nullptr;
+                bool speakerMsdfOk = false;
+                if (shapedSpeaker && !shapedSpeaker->glyphs.empty()) {
+                    speakerMsdfOk = drawMsdfShapedAllOrNothing(
+                        m_sdlRenderer, m_msdfRenderState, m_msdfRenderer.get(), m_msdfAtlasTexture,
+                        *shapedSpeaker, dlg.speaker, tagX + 16.0f * metrics.scaleFactor,
+                        tagY + (tagH - speakerFontPx) / 2.0f - (2.0f * metrics.scaleFactor),
+                        speakerFontPx, {255,255,255,255}, shapedSpeaker->revealUnits.size(),
+                        speakerWrapW, "Left");
+                } else {
+                    speakerMsdfOk = renderGpuMsdfText(dlg.speaker, tagX + 16.0f * metrics.scaleFactor, tagY + tagH * .72f, speakerFontPx, {255,255,255,255});
+                }
+                if (!speakerMsdfOk) {
                     SDL_SetRenderDrawColor(m_sdlRenderer, 255, 255, 255, 255);
                     SDL_RenderDebugText(m_sdlRenderer, tagX + (16.0f * metrics.scaleFactor), tagY + (tagH - 8.0f) / 2.0f, dlg.speaker.c_str());
                 }
@@ -1415,7 +1434,30 @@ void Window::renderVisualNovelFrame(
             // D10: karar çekirdeği window_text_fallback.hpp'de (birebir delege).
             if (useFontFallbackPath(m_fontRenderer && m_fontRenderer->isLoaded(),
                                     m_offscreenSurface != nullptr)) {
-                if (!renderGpuMsdfText(dlg.dialogue, physBoxX + paddingLeft, physBoxY + paddingTop + dlg.fontSize * metrics.scaleFactor, dlg.fontSize * metrics.scaleFactor, textColor)) {
+                // D11: şekilli-MSDF yolu (shape girdileri TrueType koluyla AYNI
+                // ifade — :1510-1520 emsali: maxLineWidth, fontPx, language,
+                // evaluateReveal; topY physBoxY+paddingTop :1525). Şekillenemezse
+                // ham-MSDF legacy (birebir eski piksel/davranış).
+                const float msdfFontPx = dlg.fontSize * metrics.scaleFactor;
+                const float msdfMaxLineW = scaledDlgW - (48.0f * metrics.scaleFactor);
+                const auto shapedDialogue = m_fontRenderer
+                    ? m_fontRenderer->shapeTextShared(dlg.dialogue, msdfFontPx, msdfMaxLineW, dlg.language)
+                    : nullptr;
+                size_t dialogueVisible = shapedDialogue ? shapedDialogue->revealUnits.size() : 0;
+                if (shapedDialogue && dlg.isPlaying && dlg.typewriterEnabled && dlg.textSpeed > 0) {
+                    dialogueVisible = Rowl::Text::evaluateReveal(
+                        *shapedDialogue, dlg.elapsedTypewriterTime, dlg.textSpeed).visibleUnits;
+                }
+                bool dialogueMsdfOk = false;
+                if (shapedDialogue && !shapedDialogue->glyphs.empty()) {
+                    dialogueMsdfOk = drawMsdfShapedAllOrNothing(
+                        m_sdlRenderer, m_msdfRenderState, m_msdfRenderer.get(), m_msdfAtlasTexture,
+                        *shapedDialogue, dlg.dialogue, physBoxX + paddingLeft, physBoxY + paddingTop,
+                        msdfFontPx, textColor, dialogueVisible, msdfMaxLineW, dlg.textAlignment);
+                } else {
+                    dialogueMsdfOk = renderGpuMsdfText(dlg.dialogue, physBoxX + paddingLeft, physBoxY + paddingTop + dlg.fontSize * metrics.scaleFactor, dlg.fontSize * metrics.scaleFactor, textColor);
+                }
+                if (!dialogueMsdfOk) {
                     SDL_SetRenderDrawColor(m_sdlRenderer, textColor.r, textColor.g, textColor.b, textColor.a);
                     SDL_RenderDebugText(m_sdlRenderer, physBoxX + paddingLeft, physBoxY + paddingTop, dlg.dialogue.c_str());
                 }
@@ -1443,9 +1485,34 @@ void Window::renderVisualNovelFrame(
         if (useFontFallbackPath(m_fontRenderer && m_fontRenderer->isLoaded(),
                                 m_offscreenSurface != nullptr)) {
             SDL_Color text = parseHexColor(choice.textColor, 255);
-            if (!renderGpuMsdfText(choice.text, px + 12.0f * metrics.scaleFactor,
+            // D11: şekilli-MSDF yolu (shape girdileri TrueType koluyla AYNI
+            // ifade — :1581-1583 emsali: fontPx, w-24*scale, textAlignment;
+            // topY py+(h-fontPx)*.5 :1582; şekil OTORİTESİ TrueType ile aynı
+            // nesne — Butler-önbellek salt-okunur yoklama, VFS/yükleme YOK).
+            // Şekillenemezse ham-MSDF legacy (birebir eski piksel/davranış).
+            const float choiceFontPx = choice.fontSize * metrics.scaleFactor;
+            const float choiceWrapW = rect.w - 24.0f * metrics.scaleFactor;
+            const FontRenderer* choiceMsdfFont = m_fontRenderer.get();
+            if (!choice.fontFamily.empty() && choice.fontFamily != "Default") {
+                const auto foundMsdfFont = m_buttonFontCache.find(choice.fontFamily);
+                if (foundMsdfFont != m_buttonFontCache.end()) choiceMsdfFont = foundMsdfFont->second.get();
+            }
+            const auto shapedChoice = choiceMsdfFont
+                ? choiceMsdfFont->shapeTextShared(choice.text, choiceFontPx, choiceWrapW)
+                : nullptr;
+            bool choiceMsdfOk = false;
+            if (shapedChoice && !shapedChoice->glyphs.empty()) {
+                choiceMsdfOk = drawMsdfShapedAllOrNothing(
+                    m_sdlRenderer, m_msdfRenderState, m_msdfRenderer.get(), m_msdfAtlasTexture,
+                    *shapedChoice, choice.text, px + 12.0f * metrics.scaleFactor,
+                    py + (rect.h - choiceFontPx) * 0.5f, choiceFontPx, text,
+                    shapedChoice->revealUnits.size(), choiceWrapW, choice.textAlignment);
+            } else {
+                choiceMsdfOk = renderGpuMsdfText(choice.text, px + 12.0f * metrics.scaleFactor,
                                    py + rect.h * .5f + choice.fontSize * metrics.scaleFactor * .35f,
-                                   choice.fontSize * metrics.scaleFactor, text)) {
+                                   choice.fontSize * metrics.scaleFactor, text);
+            }
+            if (!choiceMsdfOk) {
                 SDL_SetRenderDrawColor(m_sdlRenderer, text.r, text.g, text.b, text.a);
                 SDL_RenderDebugText(m_sdlRenderer, px + 12.0f, py + rect.h * 0.5f - 4.0f, choice.text.c_str());
             }
