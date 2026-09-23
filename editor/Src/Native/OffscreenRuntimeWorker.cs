@@ -111,6 +111,22 @@ namespace RowlEngine.Editor.Native
             Invoke(handle => NativeBridge.RowlEngine_SetFadeCurve(handle, curve));
         }
 
+        // W8-c — fade-curve loud formu: sessiz-düşüren void form korunur,
+        // yanına owner-thread Invoke üzerinden Checked P/Invoke çağrısı
+        // (ResultCode dönüşlü). Servis-ayna pre-check adapter'da kalır,
+        // worker yalnızca marshal yapar (B5 taşınma kuralı).
+        internal NativeBridge.ResultCode SetFadeCurveChecked(int curve) =>
+            Invoke(handle => NativeBridgeChecked.SetFadeCurveChecked(handle, curve));
+
+        internal NativeBridge.ResultCode GetFadeCurveChecked(out int curve)
+        {
+            int captured = 0;
+            NativeBridge.ResultCode code = Invoke(handle =>
+                NativeBridgeChecked.GetFadeCurveChecked(handle, out captured));
+            curve = captured;
+            return code;
+        }
+
         internal void SetSfxPoolDepth(int depth) =>
             Invoke(handle => NativeBridge.RowlEngine_SetSfxPoolDepth(
                 handle, Math.Clamp(depth, 1, 16)));
@@ -280,7 +296,16 @@ namespace RowlEngine.Editor.Native
         public void Dispose()
         {
             if (Interlocked.Exchange(ref _disposeState, 1) != 0) return;
-            _commands.CompleteAdding();
+            try
+            {
+                _commands.CompleteAdding();
+            }
+            catch (ObjectDisposedException)
+            {
+                // Sifir-handle'li worker Run() kuyrugu zaten kapatmistir;
+                // Dispose idempotent kalir (W8-f dal-2: handlesiz worker
+                // fırlatmadan duser, EngineHost.Initialize false doner).
+            }
             if (Environment.CurrentManagedThreadId == ManagedThreadId)
             {
                 // Worker threadi: kuyuyu numaralandırıyoruz; dispose'u

@@ -80,6 +80,18 @@ namespace RowlEngine.Editor.Native
         // yalnızca erişim verilir — şişirme yasağına aykırı değil).
         internal OffscreenRuntimeWorker? Runtime => _runtime;
 
+        // W8-f — Initialize başarısızlık detayı: üç sessiz-false dalı da
+        // LastError'u doldurur, başarılı init boşaltır. Throw yok, imza
+        // bool korunur. Yalnızca gözlemlenebilirliktir (dönüş semantiği
+        // aynı). EmbeddedRuntimeBootstrap satır 134-159 emsaldir.
+        internal string LastError { get; private set; } = string.Empty;
+
+        // W8-f — test seam'i: varsayılan null iken gerçek worker kurulur;
+        // testler deterministik başarısızlık dallarını (fırlatan fabrika,
+        // handlesiz worker) bu fabrikayla enjekte eder. Üretim akışı
+        // değişmez.
+        internal Func<OffscreenRuntimeWorker>? RuntimeFactory { get; set; }
+
         private T InvokeNative<T>(Func<IntPtr, T> command, T fallback)
         {
             OffscreenRuntimeWorker? runtime = _runtime;
@@ -148,25 +160,36 @@ namespace RowlEngine.Editor.Native
 
             try
             {
-                _runtime = new OffscreenRuntimeWorker();
+                _runtime = RuntimeFactory?.Invoke() ?? new OffscreenRuntimeWorker();
             }
-            catch (InvalidOperationException)
+            catch (InvalidOperationException ex)
             {
                 _runtime = null;
+                LastError = $"Engine init failed: offscreen runtime worker could not start ({ex.Message}).";
                 return false;
             }
             if (!IsInitialized)
             {
+                LastError = "Engine init failed: offscreen runtime worker started without a usable native handle.";
                 Dispose();
                 return false;
             }
             _lastPreviewComponentsJson = null;
+
+            // Kanal Init ÖNCESİ temizlenir (SetProjectDirectoryChecked
+            // emsali): sıfır-dışı her kod bu Init'e aittir, stale damga
+            // taze sanılmaz. Anlık görüntü Dispose ÖNCESİ alınır.
+            InvokeNative(handle => NativeBridge.RowlEngine_ClearLastResult(handle));
 
             int result = InvokeNative(handle => NativeBridge.RowlEngine_Init(
                 handle, width, height, vsync ? 1 : 0), 0);
 
             if (result == 0)
             {
+                if (TryGetLastEngineResult(out int code, out string operation, out string message))
+                    LastError = $"Engine init failed: RowlEngine_Init returned 0 (code {code}, operation '{operation}', message '{message}').";
+                else
+                    LastError = "Engine init failed: RowlEngine_Init returned 0 (last-error unreadable).";
                 Dispose();
                 return false;
             }
@@ -176,6 +199,7 @@ namespace RowlEngine.Editor.Native
             UpdatePixelBuffer();
 
             StartTickTimer();
+            LastError = string.Empty;
             return true;
         }
 

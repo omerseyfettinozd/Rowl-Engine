@@ -66,5 +66,32 @@ namespace RowlEngine.Editor.Native
             volume = NativeBridge.RowlEngine_GetMasterVolume(handle);
             return NativeBridge.ResultCode.Ok;
         }
+
+        // W8-c — fade-curve loud-tier Checked twin'leri (c_api.h 830-842).
+        //
+        // Legacy void/int formlar sessiz-tier iken bu formlar loud-tier'dir:
+        //  - IntPtr.Zero → InvalidHandle, native'e DOKUNULMAZ.
+        //  - Set'te curve 0/1 dışı → InvalidArgument, native'e DOKUNULMAZ
+        //    (native "0 Linear / 1 EqualPower" semantiğiyle birebir).
+        //  - null out C#'ta out int ile ifade edilemez; null yalıtımı
+        //    native'de fail-closed'dur (InvalidArgument) — bk. test.
+        //  - canlı handle'da yabancı-thread çağrısı native WrongThread
+        //    damgasını aynen yukarı taşır (eşleme/yutma yok).
+        internal static NativeBridge.ResultCode SetFadeCurveChecked(IntPtr handle, int curve)
+        {
+            if (handle == IntPtr.Zero)
+                return NativeBridge.ResultCode.InvalidHandle;
+            if (curve != 0 && curve != 1)
+                return NativeBridge.ResultCode.InvalidArgument;
+            return NativeBridge.RowlEngine_SetFadeCurveChecked(handle, curve);
+        }
+
+        internal static NativeBridge.ResultCode GetFadeCurveChecked(IntPtr handle, out int curve)
+        {
+            curve = 0;
+            if (handle == IntPtr.Zero)
+                return NativeBridge.ResultCode.InvalidHandle;
+            return NativeBridge.RowlEngine_GetFadeCurveChecked(handle, out curve);
+        }
     }
 }
