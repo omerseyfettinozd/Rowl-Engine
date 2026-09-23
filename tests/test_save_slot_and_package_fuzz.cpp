@@ -479,6 +479,10 @@ void test_save_slot_and_package_fuzz() {
 
         // Env-var injection path (production default off): with the variable
         // set the save fails the same way; unset, it succeeds again.
+        // W8-g mini-juri: production DELIBERATELY ignores the env-var under
+        // NDEBUG (save_durability.cpp:47), so the fail-closed half only runs
+        // in non-NDEBUG; the unset-succeeds half runs everywhere.
+#ifndef NDEBUG
         setTestEnv("ROWL_SAVE_INJECT_ENOSPC", "1");
         if (persistence.saveSlot(nextState, slot)) {
             setTestEnv("ROWL_SAVE_INJECT_ENOSPC", nullptr);
@@ -489,6 +493,9 @@ void test_save_slot_and_package_fuzz() {
         if (readBytes(slotPath) != baselineBytes) {
             failCase("Env-var ENOSPC-injected save modified the previous good slot");
         }
+#else
+        setTestEnv("ROWL_SAVE_INJECT_ENOSPC", nullptr);
+#endif
         if (!persistence.saveSlot(nextState, slot)) {
             failCase("Save after clearing ENOSPC injection failed");
         }

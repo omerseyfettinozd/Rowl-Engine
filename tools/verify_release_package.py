@@ -72,15 +72,20 @@ def read_package_entries(package_path):
                 path = path_bytes.decode("utf-8")
             except UnicodeDecodeError as error:
                 fail("package entry path is not UTF-8: " + str(error))
-            # W8-g mirror of normalizePackagePath
+            # W8-g curtain over normalizePackagePath
             # (engine/src/vfs/rowlpkg_reader.cpp:191-204): the reader
             # fail-closes on a NUL byte anywhere in the raw entry name and
-            # on a ".." segment surviving lexically_normal (bare "..",
-            # trailing "/.." or any inner dot-dot — lexically_normal only
-            # folds it away when a real parent segment absorbs it, and a
-            # leading survivor nullopts). The old curtain (leading "../"
-            # plus a "/../" substring) let a bare ".." through, and nothing
-            # screened NUL — both load-short against the reader.
+            # on a LEADING ".." survivor (lexically_normal folds inner and
+            # trailing dot-dots away when a real parent absorbs them, e.g.
+            # "a/../b"->"b" and "sub/.."->".", which the reader ACCEPTS).
+            # The curtain below is a conservative SUPERSET, not an exact
+            # mirror: it rejects ANY ".." segment (bare, leading, trailing,
+            # inner), so "a/../b" and "sub/.." are rejected here although
+            # the reader would fold them. Fail-closed direction: a benign
+            # over-reject the packer never emits; never a hole. The old
+            # curtain (leading "../" plus a "/../" substring) let a bare
+            # ".." through, and nothing screened NUL — both load-short
+            # against the reader.
             if b"\x00" in path_bytes:
                 fail("package contains an unsafe or duplicate entry path: " + path)
             normalized = path.replace("\\", "/")

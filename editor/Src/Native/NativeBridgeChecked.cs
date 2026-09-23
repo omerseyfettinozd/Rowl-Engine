@@ -83,7 +83,10 @@ namespace RowlEngine.Editor.Native
         // bu yüzden Zero→InvalidHandle önce, curve→InvalidArgument sonra
         // gelir ve ikisi de native'e DOKUNMAZ. Zero+kötü-curve'da
         // InvalidHandle native ile birebir; canlı+kötü-curve'da
-        // InvalidArgument native ile birebirdir. Tek ayrışma
+        // InvalidArgument native ile birebirdir (return-code kanalı;
+        // stamp yan-kanalı ayrışır: native context'e InvalidArgument
+        // damgalar, managed native'e dokunmadan döner — W8-g mini-jüri
+        // bulgusu, damga teşhisi native'e bırakılmıştır). Tek ayrışma
         // bogus-nonzero+kötü-curve'dür (managed InvalidArgument, native
         // InvalidHandle): bilinçli — argüman yerel kanıtla kötüdür, native
         // round-trip israftır; SetMasterVolumeChecked (bogus+NaN →

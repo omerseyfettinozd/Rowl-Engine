@@ -94,7 +94,7 @@ public sealed class EditorPlaybackMasterVolumeCheckedTests
     // ── RED-2: sayım-kilidi ──────────────────────────────────────────────
 
     [Fact]
-    public void D16_LegacyCount_Locked_154_Of_209()
+    public void D16_LegacyCount_Locked_154_Of_211()
     {
         var bridgeMethods = typeof(NativeBridge)
             .GetMethods(BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public)
