@@ -14,9 +14,13 @@
  *
  * Pin (davranis-degisikligi yok):
  *   statik — uc kol da kaynakta mevcut (XDG_DATA_HOME, getpwuid,
- *     temp_directory_path + current_path) ve son durak
+ *     temp_directory_path + current_path), HOME kolu hedefi
+ *     `home / ".local" / "share" / kApplicationDirectory` ile pinli
+ *     (hedef degisirse sessiz-gecis yok) ve son durak
  *     `return fallback / kApplicationDirectory` (temp-kolunda fail-open
  *     `return {}` yok);
+ *   tum statik aramalar satir-sonu normalize edilmis metinde yapilir
+ *     (LF/CRLF dayanikli; CRLF varyant yalanci-RED vermez);
  *   runtime — resolveUserDataDirectories() bos-donmez, mutlak-yoldur,
  *     saves/profiles ayrik + "saves"/"profiles" adli, kok "rowl-engine"
  *     adli; XDG_DATA_HOME canli-onceligi setenv ile pin'lenir (HOME/
@@ -24,8 +28,9 @@
  *     inis runtime'da zorlanamaz — o kol statik pinlidir).
  *
  * Oz-denetim: bellek-ici tamper fixture'lar (temp kolu kirilmis / fail-open
- * `return {}`'li kaynak) statik denetimi dusurmelidir; dusuremezse probun
- * kendisi kiriktir (exit 1). RED-kaniti repo'ya dokunmadan:
+ * `return {}`'li / HOME-hedefi bozulmus kaynak) statik denetimi dusurmelidir;
+ * dusuremezse probun kendisi kiriktir (exit 1). CRLF'ye cevrilmis kaynak da
+ * temiz kalmalidir (yalanci-RED yok). RED-kaniti repo'ya dokunmadan:
  * ROWL_W8E_USERDATA_SRC tamper'li kopyaya isaret edince exit 1.
  *
  * KIRMIZI-YESIL SOZLESMESI: zincir tam + resolve saglikli exit 0, degilse
@@ -78,37 +83,64 @@ std::string readSourceFile() {
     return {};
 }
 
+// Satir-sonu normalize: prob LF/CRLF'ye dayaniklidir (CRLF varyant
+// yalanci-RED vermez). `\r\n` -> `\n`, yalniz `\n` korunur, yalniz `\r` -> `\n`.
+std::string normalizeLineEndings(const std::string& text) {
+    std::string out;
+    out.reserve(text.size());
+    for (std::size_t i = 0; i < text.size(); ++i) {
+        if (text[i] == '\r') {
+            out.push_back('\n');
+            if (i + 1 < text.size() && text[i + 1] == '\n') ++i;
+        } else {
+            out.push_back(text[i]);
+        }
+    }
+    return out;
+}
+
 // Statik zincir denetimi; ihlal listesi doner (bos = temiz).
+// Tum aramalar normalize edilmis metinde yapilir (LF/CRLF dayanikli).
 std::vector<std::string> checkFallbackChain(const std::string& text) {
+    const std::string norm = normalizeLineEndings(text);
     std::vector<std::string> failures;
-    if (text.find("platformUserDataRoot") == std::string::npos) {
+    if (norm.find("platformUserDataRoot") == std::string::npos) {
         failures.push_back("platformUserDataRoot cozumu kaynakta yok");
     }
-    if (text.find("XDG_DATA_HOME") == std::string::npos) {
+    if (norm.find("XDG_DATA_HOME") == std::string::npos) {
         failures.push_back("XDG kolu yok (XDG_DATA_HOME)");
     }
-    if (text.find("getpwuid") == std::string::npos) {
+    if (norm.find("getpwuid") == std::string::npos) {
         failures.push_back("HOME/getpwuid kolu yok");
     }
-    const auto tempPos = text.find("temp_directory_path");
+    // HOME kolu hedef pini: HOME/getpwuid dali `.local/share` altina
+    // yazmalidir (home / ".local" / "share" / kApplicationDirectory).
+    // Hedef degisirse (orn. dogrudan home / kApplicationDirectory)
+    // sessiz-gecis YOK — fail.
+    if (norm.find("\".local\"") == std::string::npos ||
+        norm.find("\"share\"") == std::string::npos) {
+        failures.push_back(
+            "HOME kolu hedefi yok (home / \".local\" / \"share\" / kApplicationDirectory)");
+    }
+    const auto tempPos = norm.find("temp_directory_path");
     if (tempPos == std::string::npos) {
         failures.push_back("temp fallback kolu yok (temp_directory_path)");
     }
-    if (text.find("current_path") == std::string::npos) {
+    if (norm.find("current_path") == std::string::npos) {
         failures.push_back("son-durak kolu yok (current_path)");
     }
-    if (text.find("return fallback / kApplicationDirectory") == std::string::npos) {
+    if (norm.find("return fallback / kApplicationDirectory") == std::string::npos) {
         failures.push_back("fallback donusu yok (return fallback / kApplicationDirectory)");
     }
     // Fail-open yasagi: platformUserDataRoot govdesinde temp-kolundan sonra
     // ciplak `return {}` olmamalidir (pencere govde-kapanisina kadardir;
     // sonraki yardimcilarin bos-donusleri sayilmaz).
     if (tempPos != std::string::npos) {
-        const auto closePos = text.find("\n}\n", tempPos);
+        const auto closePos = norm.find("\n}\n", tempPos);
         const std::string tail =
             (closePos == std::string::npos)
-                ? text.substr(tempPos)
-                : text.substr(tempPos, closePos - tempPos);
+                ? norm.substr(tempPos)
+                : norm.substr(tempPos, closePos - tempPos);
         if (tail.find("return {};") != std::string::npos) {
             failures.push_back("fail-open: temp-kolunda `return {}` var");
         }
@@ -121,6 +153,33 @@ std::string tamperReplace(std::string text, const std::string& from,
     const auto pos = text.find(from);
     if (pos != std::string::npos) text.replace(pos, from.size(), to);
     return text;
+}
+
+// Tum gecisleri degistirir (HOME-hedefi gibi birden fazla dalda gecen
+// desenlerin tamper'i icin; `to`, `from`'u icermemelidir).
+std::string tamperReplaceAll(std::string text, const std::string& from,
+                             const std::string& to) {
+    std::string::size_type pos = 0;
+    while ((pos = text.find(from, pos)) != std::string::npos) {
+        text.replace(pos, from.size(), to);
+        pos += to.size();
+    }
+    return text;
+}
+
+// Oz-denetim CRLF fixture'i: normalize edilmis kaynagi CRLF'ye cevirir.
+std::string toCrlf(const std::string& text) {
+    const std::string norm = normalizeLineEndings(text);
+    std::string out;
+    out.reserve(norm.size() + norm.size() / 8);
+    for (const char c : norm) {
+        if (c == '\n') {
+            out += "\r\n";
+        } else {
+            out.push_back(c);
+        }
+    }
+    return out;
 }
 
 void checkLayout(const Rowl::Platform::UserDataDirectories& dirs, const char* label) {
@@ -151,19 +210,29 @@ int main() {
             tamperReplace(source, "temp_directory_path", "temp_directory_patcX");
         const auto brokenFailOpen = tamperReplace(
             source, "return fallback / kApplicationDirectory", "return {};");
+        const auto brokenHomeTarget =
+            tamperReplaceAll(source, "\".local\"", "\".locaX\"");
+        const auto crlfSource = toCrlf(source);
         const bool realClean = checkFallbackChain(source).empty();
+        const bool crlfClean = checkFallbackChain(crlfSource).empty();
         const bool tempCaught = !checkFallbackChain(brokenTemp).empty();
         const bool failOpenCaught = !checkFallbackChain(brokenFailOpen).empty();
+        const bool homeTargetCaught = !checkFallbackChain(brokenHomeTarget).empty();
         std::cout << "  [" << (realClean ? "ok" : "KIRIK") << "] oz-denetim gercek-kaynak-temiz"
+                  << std::endl;
+        std::cout << "  [" << (crlfClean ? "ok" : "KIRIK") << "] oz-denetim crlf-kaynak-temiz"
                   << std::endl;
         std::cout << "  [" << (tempCaught ? "ok" : "KIRIK") << "] oz-denetim temp-kolu-tamper-RED"
                   << std::endl;
         std::cout << "  [" << (failOpenCaught ? "ok" : "KIRIK")
                   << "] oz-denetim fail-open-tamper-RED" << std::endl;
-        w8eUserdataRequire(realClean && tempCaught && failOpenCaught,
+        std::cout << "  [" << (homeTargetCaught ? "ok" : "KIRIK")
+                  << "] oz-denetim home-hedef-tamper-RED" << std::endl;
+        w8eUserdataRequire(realClean && crlfClean && tempCaught && failOpenCaught &&
+                               homeTargetCaught,
                            "oz-denetim dustu (statik denetim RED-kilitli degil)");
     }
-    TEST_PASS("Oz-denetim: temp/fail-open tamper'lari RED-kilitli");
+    TEST_PASS("Oz-denetim: temp/fail-open/home-hedef tamper'lari RED-kilitli, CRLF temiz");
 
     // Statik pin: gercek kaynak zinciri tam olmalidir.
     {
@@ -173,7 +242,7 @@ int main() {
         }
         w8eUserdataRequire(failures.empty(), "fallback zinciri kirik (statik pin dustu)");
     }
-    TEST_PASS("Statik: XDG -> HOME/getpwuid -> temp/current zinciri + fail-open yok");
+    TEST_PASS("Statik: XDG -> HOME/getpwuid(.local/share) -> temp/current zinciri + fail-open yok");
 
     // Runtime pin: resolve saglikli (bos-donus yok).
     checkLayout(Rowl::Platform::resolveUserDataDirectories(), "resolve");
