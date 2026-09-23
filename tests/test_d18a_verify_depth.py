@@ -6,6 +6,9 @@ Dort prob, tek dosya (python-degisikligi -> python-prob; yeni native ikili yok):
   R1 (KI-11 yanlis-yesil): flags=1 (zstd) payload tek-bayt flip + sidecar
       yeniden hesaplanir -> verify exit 1, tani satirinda "compressed".
       (Pre-fix delik: exit 0 "OK" — determinizm butunluk degildir.)
+      zstd YOKSA sentetik flags=1 paketi ayni sahneyi kosar (R1-synth) —
+      SKIP YOK, kilit her ortamda calisir; kaskad-cemberi on-kosul
+      kirmizisinda verify sahnesini atlar.
   R2 (kontrol): flags=0 (raw) payload tek-bayt flip + taze sidecar ->
       once/sonra exit 1, "checksum mismatch" (eski davranis korunur).
   S1 (sidecar stale-output): cikti dosyasi sidecar yazimindan SONRA degisir
@@ -14,6 +17,10 @@ Dort prob, tek dosya (python-degisikligi -> python-prob; yeni native ikili yok):
       butunluk kaniti degil; pack'i fail-closed yapmak mesru akislari kirar).
       (Pre-fix delik: manifestte `converted_from` VAR — sorgusuz guven.)
   S2 (kontrol): fresh sidecar -> `converted_from` once/sonra VAR.
+  S3 (malformed sidecar): `output_sha256` bozuk deger tasir -> kayit
+      DUSER + stderr uyarisi, pack exit 0 (fail-open deliginin kilidi).
+  R3 (bozuk kayit): manifestte index-disi path -> exit 1 "unknown path",
+      ham traceback YOK (FAIL/JSON sozlesmesi korunur).
 
 Tum problar calisir, her prob PASS/FAIL yazdirir; herhangi biri duserde
 exit 1. Kirmizi cerceve: pre-fix kosumda R1 FAIL (exit 0 gozlemi) + S1 FAIL
@@ -88,6 +95,52 @@ def read_manifest(package_path):
     return json.loads(raw[offset:offset + csize].decode("utf-8"))
 
 
+def r1_verify_stage(package_path, rel_path, tag):
+    """Ortak R1 sahnesi: flip + taze sidecar -> exit 1 + 'compressed' tani."""
+    flip_payload_byte(package_path, rel_path, refresh_sidecar=True)
+    result = run_verify(package_path)
+    combined = result.stdout + result.stderr
+    check(tag + "-exit1", result.returncode == 1,
+          f"KI-11 deligi: flip'li flags=1 yuk exit {result.returncode}: {combined!r}")
+    check(tag + "-compressed-tani", "compressed" in combined,
+          f"tani satirinda 'compressed' yok: {combined!r}")
+
+
+def build_synth_package(package_path, blobs, manifest_doc):
+    """Sentetik v1 paketi: blobs=[(path, payload, flags)], manifest_doc dict.
+    R1-synth (flags=1 verify-mantigi) + R3 (bozuk-kayit) ortak kurucusu."""
+    manifest_bytes = (json.dumps(manifest_doc, sort_keys=True,
+                                 separators=(",", ":")) + "\n").encode("utf-8")
+    entries_spec = [(path, blob, flags, len(blob)) for path, blob, flags in blobs]
+    entries_spec.append((MANIFEST_PATH, manifest_bytes, 0, len(manifest_bytes)))
+    raw = bytearray(HEADER.size)
+    offsets = []
+    for _, blob, _, _ in entries_spec:
+        offsets.append(len(raw))
+        raw.extend(blob)
+    index_offset = len(raw)
+    for (path, blob, flags, usize), offset in zip(entries_spec, offsets):
+        encoded = path.encode("utf-8")
+        raw.extend(ENTRY.pack(0, len(encoded), offset, len(blob), usize, flags))
+        raw.extend(encoded)
+    HEADER.pack_into(raw, 0, b"ROWL", 1, len(entries_spec), index_offset)
+    pathlib.Path(package_path).write_bytes(bytes(raw))
+
+
+def build_synth_flags1(package_path, rel_path, payload):
+    """zstd'siz R1 yuku: flags=1 iddiali sentetik paket. Verify bayt
+    seviyesinde hash karsilastirir (decompress YOK) — bu kilit verify
+    mantigini ortam-bagimsiz test eder; packer/zstd uretimi ayri
+    (zstd'li kosuda packer dali calisir)."""
+    manifest_doc = {"files": [
+        {"compressed_sha256": hashlib.sha256(payload).hexdigest(),
+         "path": rel_path,
+         "sha256": "ff" * 32,
+         "size": len(payload)},
+    ], "format": 1}
+    build_synth_package(package_path, [(rel_path, payload, 1)], manifest_doc)
+
+
 def flip_payload_byte(package_path, rel_path, refresh_sidecar=True):
     """Tek bayt cevir (bozma); istenirse sidecar taze hesaplanir."""
     entries = parse_index(package_path)
@@ -106,13 +159,10 @@ with tempfile.TemporaryDirectory() as directory:
     root = pathlib.Path(directory)
 
     # --- R1: flags=1 payload flip + taze sidecar ---
-    # Ortam notu (test_media_format_gate emsali): zstandard yoksa packer
-    # flags=1 uretemez — kilitlenecek yuk yoktur, R1 SKIP (yesil) gecer.
-    # Kilit zstd'li cevrede serttir; duzeltme (a) adayı kendisi
-    # ortam-bagimsizdir (anahtarsiz eski paket gecer).
-    if not HAS_ZSTD:
-        print("[D18a][SKIP] R1 (zstandard yok: flags=1 yuku uretilemez)")
-    else:
+    # D18a-followup (bulgu 7): SKIP kaldirildi — kilit her ortamda CALISIR.
+    # zstd VARSA packer uretimi (tam entegrasyon); YOKSA sentetik flags=1
+    # paketi (verify bayt-mantigi kilidi; kardes test hard-fail emsali).
+    if HAS_ZSTD:
         r1_src = root / "r1-src"
         r1_src.mkdir()
         # Sıkıştırılabilir ama oran-kapısına takılmayan metin (oran ~10-50x,
@@ -125,13 +175,21 @@ with tempfile.TemporaryDirectory() as directory:
         check("R1-pack", packed.returncode == 0, f"pack failed: {packed.stderr!r}")
         r1_flags = parse_index(r1_pkg)["story.txt"][3]
         check("R1-flags1", r1_flags == 1, f"story.txt flags={r1_flags}, want 1")
-        flip_payload_byte(r1_pkg, "story.txt", refresh_sidecar=True)
-        result = run_verify(r1_pkg)
-        combined = result.stdout + result.stderr
-        check("R1-exit1", result.returncode == 1,
-              f"KI-11 deligi: flip'li flags=1 yuk exit {result.returncode}: {combined!r}")
-        check("R1-compressed-tani", "compressed" in combined,
-              f"tani satirinda 'compressed' yok: {combined!r}")
+        # Kaskad-cemberi (bulgu 10): on-kosul kirmiziysa verify sahnesi
+        # atlanir — 4x ayni hata yerine tek FAIL.
+        if "R1-pack" in FAILURES or "R1-flags1" in FAILURES:
+            print("[D18a][SKIP] R1-verify (on-kosul kirmizi, kaskad atlandi)")
+        else:
+            r1_verify_stage(r1_pkg, "story.txt", "R1")
+    else:
+        r1_pkg = root / "r1-synth.rowlpkg"
+        build_synth_flags1(r1_pkg, "story.txt", b"synth-flags1-payload" * 64)
+        r1_flags = parse_index(r1_pkg)["story.txt"][3]
+        check("R1-synth-flags1", r1_flags == 1, f"synth flags={r1_flags}, want 1")
+        if "R1-synth-flags1" in FAILURES:
+            print("[D18a][SKIP] R1-synth-verify (on-kosul kirmizi, kaskad atlandi)")
+        else:
+            r1_verify_stage(r1_pkg, "story.txt", "R1-synth")
 
     # --- R2 (kontrol): flags=0 payload flip + taze sidecar ---
     r2_src = root / "r2-src"
@@ -198,6 +256,45 @@ with tempfile.TemporaryDirectory() as directory:
     check("S2-converted-var",
           s2_record.get("converted_from", {}).get("source_sha256") == "22" * 32,
           f"fresh converted_from kayip/bozuk: {s2_record.get('converted_from')!r}")
+
+    # --- S3 (bulgu 3 kilidi): malformed output_sha256 -> DUSER + uyari ---
+    # Pre-fix delik: gecersiz deger fail-open guvenilir (converted_from VAR).
+    s3_src = root / "s3-src"
+    (s3_src / "audio").mkdir(parents=True)
+    s3_out = s3_src / "audio" / "s3.ogg"
+    s3_out.write_bytes(b"fake-ogg-bytes-malformed-sidecar!!")
+    pathlib.Path(str(s3_out) + ".rowlconv.json").write_text(json.dumps({
+        "source_sha256": "33" * 32,
+        "converter_name": "rowl_oggenc",
+        "converter_version": "1.0.0",
+        "settings": {"quality_q": 4},
+        "output_sha256": "BOZUK-UZUNLUK",
+    }), encoding="utf-8")
+    s3_pkg = root / "s3.rowlpkg"
+    packed = run_pack(s3_src, s3_pkg)
+    s3_manifest = read_manifest(s3_pkg)
+    s3_record = next(e for e in s3_manifest["files"] if e["path"] == "audio/s3.ogg")
+    check("S3-pack-ok", packed.returncode == 0,
+          f"fail-soft ihlali: pack exit {packed.returncode}: {packed.stderr!r}")
+    check("S3-converted-duser", "converted_from" not in s3_record,
+          f"malformed sidecar guvenildi: {s3_record.get('converted_from')!r}")
+    check("S3-stale-uyari", "stale-sidecar" in packed.stderr,
+          f"stderr uyarisi yok: {packed.stderr!r}")
+
+    # --- R3 (bulgu 6 kilidi): manifestte non-object kayit -> temiz fail ---
+    # Pre-fix delik: ham AttributeError traceback (FAIL/JSON sozlesmesi
+    # bozulur). Non-dict kayit kume-kontrollerinden ONCE guard'lanir.
+    r3_pkg = root / "r3.rowlpkg"
+    build_synth_package(r3_pkg, [("evil.bin", b"evil", 0)],
+                        {"files": ["BOZUK-KAYIT"], "format": 1})
+    result = run_verify(r3_pkg)
+    combined = result.stdout + result.stderr
+    check("R3-exit1", result.returncode == 1,
+          f"bozuk kayit yakalanmadi, exit {result.returncode}: {combined!r}")
+    check("R3-tani", "non-object record" in combined,
+          f"tani satirinda 'non-object record' yok: {combined!r}")
+    check("R3-temiz", "Traceback" not in combined,
+          f"ham traceback sizdi: {combined!r}")
 
 print(f"[D18a] {'OK' if not FAILURES else 'FAIL: ' + ','.join(FAILURES)}")
 sys.exit(1 if FAILURES else 0)

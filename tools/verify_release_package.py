@@ -103,6 +103,11 @@ def verify_embedded_manifest(package, entries):
     if manifest.get("format") != 1 or not isinstance(manifest.get("files"), list):
         fail("embedded manifest has an unsupported shape")
     records = manifest["files"]
+    # D18a-followup: bozuk kayit temiz fail uretir (sözleşme: --json/FAIL
+    # yolu; ham KeyError/AttributeError traceback'i degil).
+    for record in records:
+        if not isinstance(record, dict):
+            fail("embedded manifest contains a non-object record")
     manifest_paths = [record.get("path") for record in records]
     if any(not isinstance(path, str) for path in manifest_paths):
         fail("embedded manifest contains a non-string path")
@@ -111,6 +116,9 @@ def verify_embedded_manifest(package, entries):
     if set(manifest_paths) != set(entries) - {MANIFEST_PATH}:
         fail("embedded manifest file list does not match the package index")
     for record in records:
+        if not isinstance(record.get("path"), str) or record["path"] not in entries:
+            fail("embedded manifest record has an unknown path: "
+                 + repr(record.get("path")))
         entry = entries[record["path"]]
         if record.get("size") != entry[2]:
             fail("embedded manifest size mismatch for: " + record["path"])
@@ -132,6 +140,13 @@ def verify_embedded_manifest(package, entries):
                 fail("embedded manifest checksum mismatch for: " + record["path"])
         else:
             compressed_digest = record.get("compressed_sha256")
+            if compressed_digest is None:
+                # D18a-followup (KI-11 durustlugu, bulgu 2/11): anahtarsiz
+                # legacy kayit bilincli gecer (karar a) ama yuku
+                # DOGRULANMAMISTIR — sessiz guven yerine açik uyari.
+                print(f"[ReleaseVerifier][WARN][legacy-unverified] {record['path']}: "
+                      f"flags=1 yukte compressed_sha256 yok (legacy paket) — "
+                      f"bayt-hash dogrulanamadi.", file=sys.stderr)
             if compressed_digest is not None:
                 if not isinstance(compressed_digest, str) or len(compressed_digest) != 64:
                     fail("embedded manifest compressed checksum mismatch for: " + record["path"])

@@ -153,14 +153,35 @@ def read_sidecar_converted_from(full_path):
     if not isinstance(sidecar, dict):
         return None
     source_sha = sidecar.get("source_sha256")
-    if not source_sha:
+    if not isinstance(source_sha, str) or len(source_sha) != 64:
         return None
-    expected_output = sidecar.get("output_sha256")
-    if isinstance(expected_output, str) and len(expected_output) == 64:
+    try:
+        bytes.fromhex(source_sha)
+    except ValueError:
+        return None
+    # D18a-followup: `output_sha256` alani VARSA kapidir — bozuk/eksik
+    # deger artik fail-open guven degil, bayat sayilir (dusur + uyar).
+    # Alan YOKSA anahtarsiz eski sidecar'dir, aynen guvenilir (additive).
+    if "output_sha256" in sidecar:
+        expected_output = sidecar.get("output_sha256")
+        try:
+            output_wellformed = (isinstance(expected_output, str)
+                                 and len(expected_output) == 64
+                                 and bytes.fromhex(expected_output) is not None)
+        except ValueError:
+            output_wellformed = False
+        if not output_wellformed:
+            print(f"[Packer][WARN][stale-sidecar] {full_path}: output_sha256 "
+                  f"malformed (guvenilmez deger) — converted_from dusuruldu.",
+                  file=sys.stderr)
+            return None
         try:
             with open(full_path, "rb") as f:
                 actual_output = hashlib.sha256(f.read()).hexdigest()
-        except OSError:
+        except OSError as error:
+            print(f"[Packer][WARN][sidecar-unreadable] {full_path}: cikti "
+                  f"okunamadi ({error}) — converted_from dusuruldu.",
+                  file=sys.stderr)
             return None
         if actual_output != expected_output:
             print(f"[Packer][WARN][stale-sidecar] {full_path}: output_sha256 "
@@ -178,6 +199,12 @@ def read_sidecar_converted_from(full_path):
         record["path"] = source_path
     if converter:
         record["converter"] = converter
+    if not source_path or not converter:
+        # D18a-followup (C# okuyucu tam sema ister): kismi sidecar kabul
+        # edilir (additive) ama zayif-provenance olarak isaretlenir.
+        print(f"[Packer][WARN][thin-sidecar] {full_path}: sidecar kismi "
+              f"(kaynak/converter eksik) — converted_from zayif-provenance "
+              f"olarak kuruldu.", file=sys.stderr)
     return record
 
 
