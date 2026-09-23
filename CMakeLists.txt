@@ -173,6 +173,17 @@ if(ROWL_BUILD_RUNTIME_TESTS)
             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
             TIMEOUT 60
         )
+        # W8-f2 verifier-mirror kilidi: reader fail-closed aynasi (4 is:
+        # overlapping-payload, 4096 path cap, kanonik duplicate,
+        # manifest capraz-kontrol). Sentetik taban, derleme gerektirmez.
+        add_test(
+            NAME rowl_verifier_mirror_tests
+            COMMAND ${Python3_EXECUTABLE} -u ${CMAKE_SOURCE_DIR}/tests/test_verifier_mirror.py
+        )
+        set_tests_properties(rowl_verifier_mirror_tests PROPERTIES
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+            TIMEOUT 60
+        )
         add_test(
             NAME rowl_media_format_gate_tests
             COMMAND ${Python3_EXECUTABLE} -u ${CMAKE_SOURCE_DIR}/tests/test_media_format_gate.py

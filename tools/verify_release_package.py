@@ -26,6 +26,20 @@ def fail(message):
     raise ValueError(message)
 
 
+def canonical_package_key(normalized):
+    """Duplicate-detection key for a backslash-normalized entry path.
+
+    Prob-scoped mirror of the reader lexically_normal equivalence: dot
+    segments and empty segments (repeated slashes) collapse, so a/./b
+    and a//b share the key a/b. Security checks (absolute path, dot-dot)
+    stay on the raw normalized form; only the duplicate key is folded.
+    This is not a full C++ filesystem equivalence claim — the scope is
+    the probed set (dot / repeated-slash folding).
+    """
+    return "/".join(segment for segment in normalized.split("/")
+                    if segment not in ("", "."))
+
+
 def read_package_entries(package_path):
     package_size = os.path.getsize(package_path)
     if package_size < HEADER.size:
@@ -42,12 +56,14 @@ def read_package_entries(package_path):
 
         package.seek(index_offset)
         entries = {}
+        seen_canonical = set()
         for _ in range(count):
             raw = package.read(ENTRY.size)
             if len(raw) != ENTRY.size:
                 fail("package index ends before all entries were read")
             _, path_length, offset, compressed_size, uncompressed_size, flags = ENTRY.unpack(raw)
-            if path_length == 0 or path_length > 16 * 1024:
+            # W8-f2 mirror of rowlpkg_reader.cpp:298 (4096 cap, fail-closed).
+            if path_length == 0 or path_length > 4096:
                 fail("package contains an invalid path length")
             path_bytes = package.read(path_length)
             if len(path_bytes) != path_length:
@@ -58,8 +74,12 @@ def read_package_entries(package_path):
                 fail("package entry path is not UTF-8: " + str(error))
             normalized = path.replace("\\", "/")
             if (normalized.startswith("/") or normalized.startswith("../") or
-                    "/../" in normalized or normalized in entries):
+                    "/../" in normalized):
                 fail("package contains an unsafe or duplicate entry path: " + path)
+            canonical = canonical_package_key(normalized)
+            if canonical in seen_canonical:
+                fail("package contains an unsafe or duplicate entry path: " + path)
+            seen_canonical.add(canonical)
             if offset < HEADER.size or offset + compressed_size > index_offset:
                 fail("package entry payload points outside the payload area: " + path)
             # #145 reader-mirror: size caps, flags coherence, and the integer-
@@ -76,6 +96,18 @@ def read_package_entries(package_path):
             if flags == 1 and uncompressed_size // compressed_size > MAX_EXPANSION_RATIO:
                 fail("package entry compression ratio exceeds the reader limit: " + path)
             entries[normalized] = (offset, compressed_size, uncompressed_size, flags)
+
+        # W8-f2 mirror: the reader sorts payloadRanges and fail-closes when
+        # a range starts before the previous one ends (rowlpkg_reader.cpp).
+        # Equality is allowed: a range starting exactly at the previous end
+        # (including zero-byte entries) is not an overlap.
+        payload_ranges = sorted(
+            (offset, offset + compressed_size, path)
+            for path, (offset, compressed_size, _, _) in entries.items())
+        for previous, current in zip(payload_ranges, payload_ranges[1:]):
+            if current[0] < previous[1]:
+                fail("package contains overlapping payload ranges: " +
+                     current[2] + " overlaps " + previous[2])
 
         if MANIFEST_PATH not in entries:
             fail("package is missing its embedded manifest: " + MANIFEST_PATH)
@@ -118,6 +150,15 @@ def verify_embedded_manifest(package, entries):
     for record in records:
         entry = entries[record["path"]]
         if record.get("size") != entry[2]:
+            fail("embedded manifest size mismatch for: " + record["path"])
+        # W8-f2 mirror: packer manifest records carry the index truth
+        # (flags, compressed_size). A present key that contradicts the
+        # index is a forged manifest -> fail-closed. A missing key is a
+        # legacy record -> warn-open (checked below for compressed_sha256;
+        # flags/compressed_size stay unchecked when absent).
+        if "flags" in record and record["flags"] != entry[3]:
+            fail("embedded manifest flags mismatch for: " + record["path"])
+        if "compressed_size" in record and record["compressed_size"] != entry[1]:
             fail("embedded manifest size mismatch for: " + record["path"])
         digest = record.get("sha256")
         if not isinstance(digest, str) or len(digest) != 64:
