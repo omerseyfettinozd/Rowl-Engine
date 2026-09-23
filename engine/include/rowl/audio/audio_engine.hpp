@@ -93,9 +93,9 @@ public:
     // Faz 5 Dilim 1 ekleri.
     float getAmbienceVolume() const { return m_ambienceVolume.load(std::memory_order_relaxed); }
     float getUiVolume() const { return m_uiVolume.load(std::memory_order_relaxed); }
-    DSPFilterType getActiveFilter() const { return m_activeFilter; }
+    DSPFilterType getActiveFilter() const { return m_activeFilter.load(std::memory_order_relaxed); }
     bool isInitialized() const { return m_initialized; }
-    bool isDuckingActive() const { return m_isDuckingActive; }
+    bool isDuckingActive() const { return m_isDuckingActive.load(std::memory_order_relaxed); }
     bool isAudioDeviceAvailable() const { return m_deviceAvailable; }
 
     // Audio-device hotplug recovery. Call with an SDL audio-device event type
@@ -162,8 +162,8 @@ public:
     // ── Faz 5 Dilim 2: mixer / polyphony / eğriler / bed'ler / pump ──
     // StreamMixer applyChannelGains'in tek kazanç kaynağıdır (salt okuma).
     const StreamMixer& mixer() const { return m_mixer; }
-    void setFadeCurve(FadeCurve curve) { m_fadeCurve = curve; }
-    FadeCurve fadeCurve() const { return m_fadeCurve; }
+    void setFadeCurve(FadeCurve curve) { m_fadeCurve.store(curve, std::memory_order_relaxed); }
+    FadeCurve fadeCurve() const { return m_fadeCurve.load(std::memory_order_relaxed); }
     // SFX havuzu: derinlik [1,16], varsayılan 8; derinlik 1 = eski davranış.
     void setSfxPoolDepth(int depth);
     size_t sfxPoolDepth() const { return m_sfxPool.depth(); }
@@ -337,9 +337,12 @@ private:
     std::atomic<float> m_voiceVolume = 1.0f;
     std::atomic<float> m_sfxVolume = 1.0f;
     std::atomic<float> m_bgmGain = 1.0f;
-    float m_duckingFactor = 0.5f;  // Configurable ducking factor (default -6dB = 0.5)
-    DSPFilterType m_activeFilter = DSPFilterType::Normal;
-    bool m_isDuckingActive = false;
+    // G7: ducking/filter/egri uyeleri de ayni paylasim sinifindadir (setter
+    // API-thread, okur update/pump yolu; TSan RED-4 + header-reader RED-1;
+    // her biri bagimsiz tek-word -> relaxed, yeni mutex YOK).
+    std::atomic<float> m_duckingFactor = 0.5f;  // Configurable ducking factor (default -6dB = 0.5)
+    std::atomic<DSPFilterType> m_activeFilter = DSPFilterType::Normal;
+    std::atomic<bool> m_isDuckingActive = false;
     bool m_initialized = false;
     bool m_deviceAvailable = false;
     bool m_outputSuspended = false;
@@ -464,7 +467,7 @@ private:
 
     // ── Faz 5 Dilim 2 üyeleri (mevcut üye/imza/sıra/formül değişmez) ──
     StreamMixer m_mixer; // applyChannelGains'in TEK kazanç kaynağı
-    FadeCurve m_fadeCurve = FadeCurve::Linear; // BGM transition + amb cross
+    std::atomic<FadeCurve> m_fadeCurve = FadeCurve::Linear; // BGM transition + amb cross
     // Ambience BedB (BedA miras üyelerdedir).
     SDL_AudioStream* m_ambienceStreamB = nullptr;
     std::vector<uint8_t> m_ambienceDataB;
