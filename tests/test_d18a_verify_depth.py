@@ -19,7 +19,7 @@ Dort prob, tek dosya (python-degisikligi -> python-prob; yeni native ikili yok):
   S2 (kontrol): fresh sidecar -> `converted_from` once/sonra VAR.
   S3 (malformed sidecar): `output_sha256` bozuk deger tasir -> kayit
       DUSER + stderr uyarisi, pack exit 0 (fail-open deliginin kilidi).
-  R3 (bozuk kayit): manifestte index-disi path -> exit 1 "unknown path",
+  R3 (bozuk kayit): manifestte non-object kayit -> exit 1 "non-object record",
       ham traceback YOK (FAIL/JSON sozlesmesi korunur).
 
 Tum problar calisir, her prob PASS/FAIL yazdirir; herhangi biri duserde

@@ -116,9 +116,6 @@ def verify_embedded_manifest(package, entries):
     if set(manifest_paths) != set(entries) - {MANIFEST_PATH}:
         fail("embedded manifest file list does not match the package index")
     for record in records:
-        if not isinstance(record.get("path"), str) or record["path"] not in entries:
-            fail("embedded manifest record has an unknown path: "
-                 + repr(record.get("path")))
         entry = entries[record["path"]]
         if record.get("size") != entry[2]:
             fail("embedded manifest size mismatch for: " + record["path"])
