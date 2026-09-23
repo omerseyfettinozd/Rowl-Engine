@@ -344,7 +344,8 @@ set(ROWL_ENGINE_SOURCES
     src/audio/audio_blip_error_channel.cpp  # D02: blip hata-kanalı Locked-yardımcıları
     src/audio/ogg_stream_source.cpp
     # Platform abstraction
-    src/platform/crash_handler.cpp
+    # W8-f1 (5): crash_handler player-only'dir (.so'daki kopya oluydu;
+    # RowlCrash_* motor-icinden cagrilmaz) — lib listesinden dustu.
     src/platform/platform_host.cpp
     src/platform/user_data_directories.cpp
     src/platform/mobile_input.cpp

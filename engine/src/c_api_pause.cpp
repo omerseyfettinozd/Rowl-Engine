@@ -25,6 +25,13 @@ int RowlEngine_SetQuickSaveSlot(RowlEngineHandle handle, int32_t slotIndex) {
 }
 
 int32_t RowlEngine_GetQuickSaveSlot(RowlEngineHandle handle) {
+    // W8-f1 (1): SetQuickSaveSlot emsali (yukarida) — claim-or-reject ile
+    // loud: yabanci WRONG_THREAD damgali -1, state'e dokunulmaz.
+    // Olu-handle sessiz -1 aynen.
+    if (claimHandleOrClassify(handle) == HandleStanding::Foreign) {
+        stampWrongThread(handle, "get_quick_save_slot");
+        return -1;
+    }
     if (!isLiveHandle(handle)) return -1;
     return invokeNoexcept<int32_t>([&] {
         auto checked = toEngineChecked(handle);
@@ -59,6 +66,13 @@ int RowlEngine_QuickLoad(RowlEngineHandle handle) {
 }
 
 void RowlEngine_SetPaused(RowlEngineHandle handle, int paused) {
+    // W8-f1 (1): SetQuickSaveSlot emsali — claim-or-reject ile loud:
+    // yabanci WRONG_THREAD damgali sessiz ret, state'e dokunulmaz.
+    // Olu-handle sessiz ret aynen.
+    if (claimHandleOrClassify(handle) == HandleStanding::Foreign) {
+        stampWrongThread(handle, "set_paused");
+        return;
+    }
     if (!isLiveHandle(handle)) return;
     invokeNoexcept([&] {
         if (auto checked = toEngineChecked(handle)) checked->setPaused(paused != 0);
@@ -66,6 +80,13 @@ void RowlEngine_SetPaused(RowlEngineHandle handle, int paused) {
 }
 
 int RowlEngine_IsPaused(RowlEngineHandle handle) {
+    // W8-f1 (1): SetQuickSaveSlot emsali — claim-or-reject ile loud:
+    // yabanci WRONG_THREAD damgali 0, state'e dokunulmaz. Olu-handle
+    // sessiz 0 aynen.
+    if (claimHandleOrClassify(handle) == HandleStanding::Foreign) {
+        stampWrongThread(handle, "is_paused");
+        return 0;
+    }
     if (!isLiveHandle(handle)) return 0;
     return invokeNoexcept<int>([&] {
         auto checked = toEngineChecked(handle);
@@ -74,6 +95,13 @@ int RowlEngine_IsPaused(RowlEngineHandle handle) {
 }
 
 void RowlEngine_PauseMenuCommand(RowlEngineHandle handle, int command) {
+    // W8-f1 (1): SetQuickSaveSlot emsali — claim-or-reject ile loud:
+    // yabanci WRONG_THREAD damgali sessiz ret, state'e dokunulmaz.
+    // Olu-handle sessiz ret aynen.
+    if (claimHandleOrClassify(handle) == HandleStanding::Foreign) {
+        stampWrongThread(handle, "pause_menu_command");
+        return;
+    }
     if (!isLiveHandle(handle)) return;
     invokeNoexcept([&] {
         using Cmd = Rowl::Core::PauseMenuCommand;
@@ -92,6 +120,13 @@ void RowlEngine_PauseMenuCommand(RowlEngineHandle handle, int command) {
 }
 
 const char* RowlEngine_GetPauseMenuJson(RowlEngineHandle handle) {
+    // W8-f1 (1): SetQuickSaveSlot emsali — claim-or-reject ile loud:
+    // yabanci WRONG_THREAD damgali kapali literal, state'e dokunulmaz.
+    // Olu-handle aynen.
+    if (claimHandleOrClassify(handle) == HandleStanding::Foreign) {
+        stampWrongThread(handle, "get_pause_menu_json");
+        return "{\"open\":false,\"rows\":[]}";
+    }
     if (!isLiveHandle(handle)) return "{\"open\":false,\"rows\":[]}";
     std::string& buffer = g_pauseMenuJsonBuf;
     return invokeNoexcept<const char*>([&] {
@@ -102,6 +137,8 @@ const char* RowlEngine_GetPauseMenuJson(RowlEngineHandle handle) {
 }
 
 const char* RowlEngine_GetPauseMenuJsonWithLength(RowlEngineHandle handle, uint32_t* outLen) {
+    // W8-f1 (1): ayri kapi yok — ic getter (yukarida) claim'ler; sarmalayici
+    // kapiyi almaz (story WithLength emsali: cift-kapi self-deadlock disiplini).
     const char* value = RowlEngine_GetPauseMenuJson(handle);
     if (outLen) *outLen = withLengthOf(g_pauseMenuJsonBuf, value);
     return value;
@@ -112,6 +149,12 @@ const char* RowlEngine_GetPauseMenuJsonWithLength(RowlEngineHandle handle, uint3
 RowlEngine_ResultCode RowlEngine_GetPauseMenuJsonUtf8(
     RowlEngineHandle handle, char* buffer, uint32_t bufferSize,
     uint32_t* outRequiredSize) {
+    // W8-f1 (1): claim-or-reject ile loud damga; donus disiplini korunur
+    // (olu-handle gibi INVALID_HANDLE).
+    if (claimHandleOrClassify(handle) == HandleStanding::Foreign) {
+        stampWrongThread(handle, "get_pause_menu_json");
+        return ROWL_RESULT_INVALID_HANDLE;
+    }
     if (!isLiveHandle(handle)) return ROWL_RESULT_INVALID_HANDLE;
     return invokeNoexcept<RowlEngine_ResultCode>([&] {
         auto engine = toEngineChecked(handle);

@@ -7,6 +7,8 @@
  */
 
 #include "c_api_internal.hpp"
+// W8-f1 (3): InvalidArgument damga helper'i (src-ici; davranis-birebir).
+#include "c_api_stamp_helper.hpp"
 #include "rowl/audio/audio_engine.hpp"
 #include <cstdio>
 
@@ -44,15 +46,10 @@ void RowlEngine_PlayAudio(RowlEngineHandle handle,
                           int filterType) {
     if (!isLiveHandle(handle)) return;
     if (!assetPath || !*assetPath) {
-        invokeNoexcept([&] {
-            if (auto engine = toEngineChecked(handle)) {
-                if (auto ctx = engine->getContext()) {
-                    ctx->setError(Rowl::Core::RuntimeErrorCode::InvalidArgument,
-                                  "Audio asset path is null or empty",
-                                  "play_audio", "");
-                }
-            }
-        });
+        // W8-f1 (3): ortak helper (davranis-birebir: op + mesaj aynen).
+        stampInvalidArgument(toEngineChecked(handle),
+                             "Audio asset path is null or empty",
+                             "play_audio");
         return;
     }
     invokeNoexcept([&] {
@@ -639,15 +636,10 @@ RowlEngine_ResultCode RowlEngine_GetSfxActivePaths(
 int RowlEngine_PlayAmbienceBed(RowlEngineHandle handle, const char* assetPath, int bed) {
     if (!isLiveHandle(handle)) return 0;
     if (!assetPath || !*assetPath) {
-        invokeNoexcept([&] {
-            if (auto engine = toEngineChecked(handle)) {
-                if (auto ctx = engine->getContext()) {
-                    ctx->setError(Rowl::Core::RuntimeErrorCode::InvalidArgument,
-                                  "Ambience asset path is null or empty",
-                                  "play_ambience_bed", "");
-                }
-            }
-        });
+        // W8-f1 (3): ortak helper (davranis-birebir: op + mesaj + kod aynen).
+        stampInvalidArgument(toEngineChecked(handle),
+                             "Ambience asset path is null or empty",
+                             "play_ambience_bed");
         return 0;
     }
     return invokeNoexcept<int>([&] {
@@ -702,15 +694,10 @@ int RowlEngine_CrossfadeAmbienceTo(RowlEngineHandle handle, const char* assetPat
                                   float durationSeconds, int curve) {
     if (!isLiveHandle(handle)) return 0;
     if (!assetPath || !*assetPath) {
-        invokeNoexcept([&] {
-            if (auto engine = toEngineChecked(handle)) {
-                if (auto ctx = engine->getContext()) {
-                    ctx->setError(Rowl::Core::RuntimeErrorCode::InvalidArgument,
-                                  "Ambience asset path is null or empty",
-                                  "crossfade_ambience_to", "");
-                }
-            }
-        });
+        // W8-f1 (3): ortak helper (davranis-birebir: op + mesaj + kod aynen).
+        stampInvalidArgument(toEngineChecked(handle),
+                             "Ambience asset path is null or empty",
+                             "crossfade_ambience_to");
         return 0;
     }
     return invokeNoexcept<int>([&] {
