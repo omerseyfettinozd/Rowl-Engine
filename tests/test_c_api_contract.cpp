@@ -605,8 +605,12 @@ void test_c_api_contract() {
                 ROWL_RESULT_INVALID_HANDLE ||
             RowlEngine_GetVariableUtf8(nullptr, "k", nullptr, 0, &required) !=
                 ROWL_RESULT_INVALID_HANDLE ||
+            // W8-a (6) BILINCLI GUNCELLEME — gerekce: INVALID_HANDLE yalniz
+            // olu-handle'indir (c_api.h:21-28); canli handle + null-key artik
+            // InvalidArgument damgali doner (EvaluateCondition emsali).
+            // Eski `!= INVALID_HANDLE` kilidi bu sozlesmeyle celisiyordu.
             RowlEngine_GetVariableUtf8(handle, nullptr, nullptr, 0, &required) !=
-                ROWL_RESULT_INVALID_HANDLE ||
+                ROWL_RESULT_INVALID_ARGUMENT ||
             RowlEngine_GetLastResultOperationUtf8(nullptr, nullptr, 0, &required) !=
                 ROWL_RESULT_INVALID_HANDLE ||
             RowlEngine_GetLastResultMessageUtf8(nullptr, nullptr, 0, &required) !=

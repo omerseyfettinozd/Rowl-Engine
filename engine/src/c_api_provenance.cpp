@@ -65,15 +65,19 @@ RowlEngine_ResultCode RowlEngine_GetAssetProvenanceJson(RowlEngineHandle handle,
                                                        uint32_t* outRequiredSize) {
     // A4-tur1 (siralama): handle-once — olu-handle'da arg'lara bakilmadan
     // INVALID_HANDLE (story-TU konvansiyonu).
-    // A4-tur1 (siralama): handle-once — olu-handle'da arg'lara bakilmadan
-    // INVALID_HANDLE (story-TU konvansiyonu).
-    if (!toEngineChecked(handle)) return ROWL_RESULT_INVALID_HANDLE;
+    // W8-a (1): tek classifyHandle — cift-bakis TOCTOU kapali
+    // (toEngineChecked + isLiveHandle arasi destroy penceresi). Foreign dal
+    // WRONG_THREAD damgali ret (loud-tier); olu-handle INVALID_HANDLE aynen.
+    if (classifyHandle(handle) == HandleStanding::Foreign) {
+        stampWrongThread(handle, "get_asset_provenance");
+        return ROWL_RESULT_WRONG_THREAD;
+    }
+    if (!isLiveHandle(handle)) return ROWL_RESULT_INVALID_HANDLE;
     std::string_view pathView;
     if (checkSizedInput(assetPathUtf8, pathView) != ROWL_RESULT_OK) {
         return ROWL_RESULT_INVALID_ARGUMENT;
     }
     if (pathView.empty()) return ROWL_RESULT_INVALID_ARGUMENT;
-    if (!isLiveHandle(handle)) return ROWL_RESULT_INVALID_HANDLE;
     return invokeNoexcept<RowlEngine_ResultCode>([&] {
         auto engine = toEngineChecked(handle);
         if (!engine) return ROWL_RESULT_INVALID_HANDLE;
