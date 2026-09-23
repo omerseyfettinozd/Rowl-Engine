@@ -26,9 +26,14 @@ disagree, code wins and this document must be patched.
 - Missing keys (e.g. `first_light`) → default `"en"`, supported `["en"]`.
 - Malformed JSON → same `"en"` fallback; the project still loads.
 - A default outside the supported list is prepended, never dropped.
-- Tags normalize to the primary subtag (`"tr-TR"` → `"tr"`).
+- Tags normalize (lowercase, `_` → `-`) but are preserved whole — region
+  and script subtags are validated, never stripped. Resolution is
+  chain-aware: `matchSupported` walks the BCP 47 fallback chain
+  (`"tr-TR"` → `"tr-tr"` → `"tr"`), so `"tr-TR"` stays a distinct tag
+  that resolves down its own chain instead of being truncated to `"tr"`.
+  (Native `LocalizationManager` scope — see §5 for the managed-side difference.)
 
-## 3. Catalog shape (`schema_version: 1`)
+## 3. Catalog shape (`schema_version: 1|2`)
 
 ```json
 {
@@ -46,6 +51,13 @@ disagree, code wins and this document must be patched.
 
 - `locale` must match the file name; every entry needs string
   `speaker` / `text` / `alt_text` (empty strings allowed).
+- `schema_version` 1 or 2 is accepted; anything else rejects the load.
+  (Native runtime scope; the managed `LocalizationService.ValidateCatalog`
+  in §5 currently accepts only 1 — see §5.)
+  Malformed rows are skipped and counted (`skippedEntries`), so one
+  translator slip no longer vetoes the whole locale — only a broken
+  document (bad schema, locale mismatch, non-object `entries`) rejects
+  the load with prior state untouched.
 - A missing or malformed catalog stays unloaded; that locale resolves
   through the fallback chain instead of blocking the project mount.
 - Reference fixture: `samples/second_signal/Assets/locales/{en,tr}.json`.
@@ -74,6 +86,16 @@ manager. Mount wiring is one call in `SetProjectDirectory`
   catalog validation, `EffectiveLocale` (profile preference ∩ supported,
   else manifest default, else `"en"`), and handle-seamed native
   selection. `EngineHost` and `MainWindowViewModel` are untouched.
+- Managed-side divergence (native-parity gap, xUnit-locked):
+  `LocalizationService.NormalizeLocale` truncates to the primary subtag
+  (`"tr-TR"` → `"tr"`, locked by
+  `ParseManifest_RegionTagsNormalizeToPrimarySubtag`), and
+  `ValidateCatalog` accepts only `schema_version` 1 (locked by
+  `ValidateCatalog_RejectsWrongSchemaAndLocaleMismatch`) and returns on
+  the first malformed row instead of skip-and-count. Native behavior
+  (§2/§3) is the forward contract; managed parity (or an explicit
+  split-contract statement) belongs to a later Faz 3 slice and must update
+  this section plus the xUnit locks together.
 - `PlayerProfile.Language` (existing, `en` default, sanitized against
   known languages) is the preference source; no profile schema change.
 
