@@ -43,7 +43,10 @@
  * Bacak 2 — fonksiyonel parite çipası (her konfigürasyonda YEŞİL):
  *   blip sonrası update(); peak/rms [0,1] aralığında + sonlu, spectrum
  *   bantları sonlu; blip sayacı ilerler. Fix tek-thread semantiği
- *   değiştiremez.
+ *   değiştiremez. Sayaç ilerlemesi el-sıkışmalıdır (w8-g): Bacak-1 öncesi
+ *   ve Bacak-2'de deadline-sınırlı (2sn), 1ms-uykulu bekleyiş; el-sıkışmasız
+ *   anlık okuma paralel yükte pul üretir (hammer ~100µs örnekleme
+ *   penceresinde hiç zamanlanamayabilir).
  *
  * KIRMIZI-YEŞİL SÖZLEŞMESİ: TSan'sız exit 1 (RED) / exit 0 (YEŞİL);
  * TSan altında da aynı (TSan sessiz kalmalıdır — contention kilidi
@@ -80,6 +83,23 @@ constexpr int kLatencySamples = 2000;
 // arkasında bloklanıyor demektir.
 constexpr double kRedP99Us = 5.0;
 
+// Bacak-2 determinizm el-sıkışması (w8-g): hammer sayacının `baseline`
+// değerini geçtiğini deadline-sınırlı, CPU-yakmayan bekleyişle doğrula.
+// Her yoklamada 1ms uyunur (sınırsız busy-spin YOK); sayaç atomic olduğundan
+// bekleyiş hammer'ın m_stateMutex'iyle yarışmaz. Başarıda true, 2sn
+// bütçe aşımında false döner.
+constexpr auto kBlipProgressBudget = std::chrono::seconds(2);
+constexpr auto kBlipProgressPollStep = std::chrono::milliseconds(1);
+
+bool waitBlipProgress(Rowl::Audio::AudioEngine* audio, uint32_t baseline) {
+    const auto deadline = std::chrono::steady_clock::now() + kBlipProgressBudget;
+    for (;;) {
+        if (audio->getVoiceBlipCount() > baseline) return true;
+        if (std::chrono::steady_clock::now() >= deadline) return false;
+        std::this_thread::sleep_for(kBlipProgressPollStep);
+    }
+}
+
 }  // namespace
 
 int main() {
@@ -115,6 +135,17 @@ int main() {
             if (pitch > 1.2f) pitch = 0.9f;
         }
     });
+
+    // El-sıkışma (w8-g): örneklemeye başlamadan önce hammer'ın en az bir
+    // blip işlediğini deadline-sınırlı bekleyişle doğrula. El-sıkışmasız
+    // düzende kilitsiz okuyucu ~100µs'de 2000 örneği bitirir; paralel yükte
+    // hammer thread'i bu pencerede hiç zamanlanamazsa (stop bayrağı ilk
+    // yoklamadan önce görülür, 0 iterasyon) Bacak-2 pulu üretir. Bekleyiş
+    // 1ms adımlarla uyur, hammer'ın kilidiyle yarışmaz; aynı zamanda
+    // örnekleme boyunca hammer'ın aktif çekiçlediğini garantiler (RED-1
+    // contention sinyalini zayıflatmaz, güçlendirir).
+    if (!waitBlipProgress(&audio, blips0))
+        latencyFail("handshake: 2sn icinde hammer blip sayaci ilerlemedi");
 
     std::vector<double> samples;
     samples.reserve(kLatencySamples);
@@ -163,7 +194,10 @@ int main() {
         if (!std::isfinite(check[i]) || check[i] < 0.0f)
             latencyFail("bacak2: spectrum bandi bozuk");
     }
-    if (audio.getVoiceBlipCount() <= blips0)
+    // El-sıkışma Bacak-1 öncesi sayaç ilerlemesini zaten garantiledi;
+    // buradaki deadline-sınırlı doğrulama anlık okuma pulunu dışlar
+    // (hammer join'li, sayaç sabit; ilk yoklamada dönülür).
+    if (!waitBlipProgress(&audio, blips0))
         latencyFail("bacak2: hammer blip sayaci ilerlemedi");
     TEST_PASS("Bacak2 — tek-thread telemetri semantigi parite (aralik + sonluluk + sayac)");
 
