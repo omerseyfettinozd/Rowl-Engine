@@ -482,6 +482,17 @@ namespace RowlEngine.Editor.Native
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
         internal static extern int RowlEngine_GetFadeCurve(IntPtr handle);
 
+        // W8-c (bulgu-2) — fade-curve loud-tier Checked varyantları
+        // (c_api.h satır 852-854, W8-f sonrası). Legacy void/int formlar aynen durur
+        // (ABI); fail-closed semantik NativeBridgeChecked'tedir
+        // (Zero→InvalidHandle, curve 0/1 dışı→InvalidArgument, canlı
+        // handle'da yabancı-thread→WrongThread aynen yukarı taşınır).
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_SetFadeCurveChecked(IntPtr handle, int curve);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_GetFadeCurveChecked(IntPtr handle, out int value);
+
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
         internal static extern void RowlEngine_SetSfxPoolDepth(IntPtr handle, int depth);
 

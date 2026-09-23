@@ -9,16 +9,16 @@ namespace RowlEngine.Editor.Tests;
 
 // D16 — playback-transport + master-gain Checked twin kilidi.
 //
-// Kapsam (kohezif alt-küme, 6 twin): IsPaused / SetPaused / SetPlayState /
-// IsRunning / SetMasterVolume / GetMasterVolume. Legacy P/Invoke formlar
-// ABI için durur; fail-closed semantik yalnızca Checked twin'lerdedir.
+// Kapsam (kohezif alt-küme, 8 twin): IsPaused / SetPaused / SetPlayState /
+// IsRunning / SetMasterVolume / GetMasterVolume + W8-c SetFadeCurve /
+// GetFadeCurve. Legacy P/Invoke formlar ABI için durur; fail-closed
 // c_api.h'ye dokunulmaz (DN düşer, X D kalır).
 //
 // RED-1 (fail-closed): legacy int/void imzaların ölü handle'da fail-closed
 // karşılığı YOKTUR; Checked twin IntPtr.Zero'da native'e dokunmadan
 // InvalidHandle döner (native-free, deterministik).
-// RED-2 (sayım-kilidi): köprüde 209 DllImport = 55 ResultCode + 154 legacy;
-// Checked kapsama 6'da sabitlenir (kalan 148 kilitlidir).
+// RED-2 (sayım-kilidi): köprüde 211 DllImport = 57 ResultCode + 154 legacy;
+// Checked kapsama 8'de sabitlenir (kalan 148 kilitlidir).
 [Collection("StaticRootSequential")]
 public sealed class EditorPlaybackMasterVolumeCheckedTests
 {
@@ -103,15 +103,15 @@ public sealed class EditorPlaybackMasterVolumeCheckedTests
         int total = bridgeMethods.Count;
         int resultCode = bridgeMethods.Count(m => m.ReturnType == typeof(NativeBridge.ResultCode));
         int legacy = total - resultCode;
-        if (total != 209 || resultCode != 55 || legacy != 154)
-            throw new Exception($"D16: bridge census must be 209=55+154, got {total}={resultCode}+{legacy}");
+        if (total != 211 || resultCode != 57 || legacy != 154)
+            throw new Exception($"D16: bridge census must be 211=57+154, got {total}={resultCode}+{legacy}");
 
         var covered = typeof(NativeBridgeChecked)
             .GetMethods(BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public)
             .Where(m => m.ReturnType == typeof(NativeBridge.ResultCode))
             .ToList();
-        if (covered.Count != 6)
-            throw new Exception($"D16: Checked coverage must be 6, got {covered.Count}");
+        if (covered.Count != 8)
+            throw new Exception($"D16: Checked coverage must be 8, got {covered.Count}");
 
         var legacyNames = bridgeMethods.Select(m => m.Name).ToHashSet(StringComparer.Ordinal);
         foreach (var m in covered)
