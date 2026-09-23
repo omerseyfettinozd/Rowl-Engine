@@ -25,7 +25,7 @@ record of completed engineering work.
 | Standalone backlog | Partial | Bounded history and editor panel exist; the player has no backlog surface or voice replay | Phase 2 |
 | Global auto and read-aware skip | Partial | Per-dialogue `auto_advance` exists; no profile-level auto/skip/read contract exists | Phase 2 |
 | Persistent player profile | Missing | Preferences and read/unlock state are not independent of save slots | Phase 2 |
-| Localization | Missing | No locale manifest or `content_id`-keyed catalog exists | Phase 3 |
+| Localization | Ready | Locale manifest + `content_id` catalogs, BCP 47 chain-aware fallback and additive C ABI are covered by test_localization.cpp and the T1-T7 locale-cluster locks (test_locale_cluster.cpp) | Phase 3 |
 | Unicode shaping and rich text | Partial | UTF-8 codepoint rendering/typewriter exist; shaping, BiDi, CJK breaks and inline style spans do not | Phase 3 |
 | Large graph authoring | Partial | Pan/zoom, selection and basic first-match search exist; culling, minimap, result lists, groups and subgraphs do not | Phase 4 |
 | Project linter | Partial | Topology and missing-asset checks exist; script, media, locale, glyph, duplicate-ID and portability checks do not | Phase 4 |

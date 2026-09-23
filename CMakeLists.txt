@@ -104,6 +104,17 @@ if(ROWL_BUILD_RUNTIME_TESTS)
             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
             TIMEOUT 30
         )
+        # D18b-i i18n docs-sync probu: kod gercegi (sema 1|2, zincir-bilincli
+        # matchSupported, kirpmasiz etiket) ile BASELINE + LOCALIZATION_CONTRACT
+        # iddialarini kilitler. Salt dosya okur, derleme gerektirmez.
+        add_test(
+            NAME rowl_d18bi_i18n_sync_tests
+            COMMAND ${Python3_EXECUTABLE} -u ${CMAKE_SOURCE_DIR}/tests/test_d18bi_i18n_sync.py
+        )
+        set_tests_properties(rowl_d18bi_i18n_sync_tests PROPERTIES
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+            TIMEOUT 30
+        )
         add_test(
             NAME rowl_package_determinism_tests
             COMMAND ${Python3_EXECUTABLE} -u ${CMAKE_SOURCE_DIR}/tests/test_package_determinism.py
