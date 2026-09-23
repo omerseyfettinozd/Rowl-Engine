@@ -8,9 +8,10 @@
  *
  * Statik prob: engine/include/rowl/c_api.h metnini okur.
  *   KIRMIZI (pre-fix): "retained until process exit" cumlesi mevcutsa
- *   exit 1 — c_api.h:29-31, c_api_internal.hpp:36-41 ile celisir
- *   (gercek: free-list recycle + generation bump + ABA defense).
- *   YESIL (post-fix): recycle + generation wording mevcutsa exit 0.
+ *   exit 1 — internal.hpp (free-list recycle + generation gercigi) ile
+ *   celisir. YESIL (post-fix): "- Destroyed slots are recycled" capa
+ *   cumlesiyle baslayan 4-satirlik bultende recycle + generation + ABA
+ *   wording'i birlikte mevcutsa exit 0 (bulten konum-bagimsizdir).
  *
  * Sertlestirme (w8-e): salt-substring yerine davranis-capali pin —
  * kelime-ayrik false-green/red'e karsi:
@@ -18,12 +19,18 @@
  *     yerinde gorulurse RED (free-list recycle + generation gercigiyle
  *     celisir).
  *   - pozitif uclu: "recycl" + "generat…" + "ABA" UCU BIRLIKTE
- *     c_api.h:29-32 satir penceresinde olmalidir; biri eksikse ya da
- *     wording pencere disindaysa RED (W5 mikro-fix'i korunur: "32-bit
+ *     "- Destroyed slots are recycled" capa cumlesiyle baslayan 4-satirlik
+ *     bulten penceresinde olmalidir; capa yoksa, biri eksikse ya da wording
+ *     bulten disina dagilmissa RED (W5 mikro-fix'i korunur: "32-bit
  *     generation" yorumu + ABA savunma wording'i aynen aranir).
+ *   - konum-bagimsizlik: bulten dosyanin herhangi bir yerinde olabilir;
+ *     mutlak satir penceresi YOKTUR (W8-f/F3 Stamping genislemesi :29-32'yi
+ *     :42-45'e kaydirip mutlak pencereyi kirmisti — Ders-16: yorum
+ *     problarinda mutlak satir penceresi yasak, capa-bagli pencere sart).
  *   - oz-denetim: gomulu fixture'lar (bellek-ici tamper) siniflandiriciyi
- *     RED-kilitler — negatifli metin RED, ABA'siz metin RED, pencere-disi
- *     wording RED, hizali snippet GREEN; biri bile saparsa prob "kirk"
+ *     RED-kilitler — negatifli metin RED, ABA'siz metin RED, dagitik
+ *     wording RED, hizali snippet GREEN (bulten 10. satirda da olsa 20.
+ *     satirda da olsa GREEN); biri bile saparsa prob "kirk"
  *     sayilir (exit 1). RED degeri pre-fix celiskidedir; bu dilimde dosya
  *     hizali oldugundan GREEN beklenir.
  *
@@ -48,9 +55,12 @@ void red1Fail(const std::string& message) {
     rowlLockFail("d12-red1-retention-comment", message);
 }
 
-// 1-based satir penceresi [kWindowFirst, kWindowLast] (c_api.h:29-32).
-constexpr int kWindowFirst = 29;
-constexpr int kWindowLast = 32;
+// Capa-bagli bulten penceresi: "- Destroyed slots are recycled" capa
+// cumlesini tasiyan satir + sonraki 3 satir (Ders-16: mutlak satir
+// penceresi yorum genislemelerinde curur; capa her yerde olabilir).
+// Capa bulunamazsa pencere bostur -> uclu eksik -> RED.
+const char* kBulletAnchor = "Destroyed slots are recycled";
+constexpr int kBulletSpan = 4;
 constexpr const char* kNegativeSignature = "retained until process exit";
 
 enum class Red1Verdict { Green, RedNegative, RedWindow };
@@ -72,14 +82,19 @@ std::vector<std::string> splitLines(const std::string& text) {
 
 std::string windowText(const std::string& text) {
     const auto lines = splitLines(text);
-    std::string window;
-    for (int i = kWindowFirst; i <= kWindowLast; ++i) {
-        if (i >= 1 && static_cast<std::size_t>(i) <= lines.size()) {
-            window += lines[static_cast<std::size_t>(i) - 1];
-            window += '\n';
+    for (std::size_t i = 0; i < lines.size(); ++i) {
+        if (lines[i].find(kBulletAnchor) != std::string::npos) {
+            std::string window;
+            for (int k = 0; k < kBulletSpan &&
+                            i + static_cast<std::size_t>(k) < lines.size();
+                 ++k) {
+                window += lines[i + static_cast<std::size_t>(k)];
+                window += '\n';
+            }
+            return window;
         }
     }
-    return window;
+    return {};
 }
 
 Red1Verdict classifyHeader(const std::string& text) {
@@ -87,7 +102,7 @@ Red1Verdict classifyHeader(const std::string& text) {
     if (text.find(kNegativeSignature) != std::string::npos) {
         return Red1Verdict::RedNegative;
     }
-    // Pozitif uclu yalniz :29-32 penceresinde gecerlidir.
+    // Pozitif uclu yalniz capa-bulten penceresinde gecerlidir.
     const std::string window = windowText(text);
     const bool hasRecycle = window.find("recycl") != std::string::npos;
     const bool hasGeneration = window.find("generat") != std::string::npos;
@@ -141,21 +156,30 @@ std::string readHeader() {
     return {};
 }
 
-// 40 satirlik yapay baslik: wording ya :29-32 penceresinde ya da disinda.
-std::string fixtureHeader(bool negative, bool aba, bool inWindow) {
+// 40 satirlik yapay baslik: bulten 1-based bulletFirst satirinda baslar
+// (bulletFirst == 0 dagitik-wording demektir: capa yok, uclu daginik
+// filler'larda). Konum-bagimsizlik kaniti icin hizali bulten 10. satirda,
+// kaymis bulten 20. satirda kurulur — ikisi de GREEN vermelidir.
+std::string fixtureHeader(bool negative, bool aba, int bulletFirst) {
     std::ostringstream ss;
     for (int i = 1; i <= 40; ++i) {
-        if (inWindow ? (i == kWindowFirst) : (i == 5)) {
+        if (bulletFirst > 0 && i == bulletFirst) {
             ss << " *  - Destroyed slots are recycled via a free-list (memory bounded by\n";
-        } else if (inWindow ? (i == kWindowFirst + 1) : (i == 6)) {
+        } else if (bulletFirst > 0 && i == bulletFirst + 1) {
             ss << " *    peak-live); a stale handle cannot become valid again within the\n";
-        } else if (inWindow ? (i == kWindowFirst + 2) : (i == 7)) {
+        } else if (bulletFirst > 0 && i == bulletFirst + 2) {
             ss << " *    32-bit generation space because the generation bump on slot reuse\n";
-        } else if (inWindow ? (i == kWindowLast) : (i == 8)) {
+        } else if (bulletFirst > 0 && i == bulletFirst + 3) {
             ss << " *    makes it name a different token (recycle + generations"
                << (aba ? ", ABA defense" : "") << ").\n";
-        } else if (i == 12 && negative) {
+        } else if (i == 25 && negative) {
             ss << " *  - Handles are retained until process exit.\n";
+        } else if (bulletFirst == 0 && i == 5) {
+            ss << " *  filler recycled mention (capa disi, daginik)\n";
+        } else if (bulletFirst == 0 && i == 30) {
+            ss << " *  filler generation mention (capa disi, daginik)\n";
+        } else if (bulletFirst == 0 && i == 35) {
+            ss << " *  filler ABA mention (capa disi, daginik)\n";
         } else {
             ss << " *  filler line " << i << "\n";
         }
@@ -171,13 +195,15 @@ int runSelfChecks() {
         std::string text;
     } cases[] = {
         {"hizali-snippet-GREEN", Red1Verdict::Green,
-         fixtureHeader(false, true, true)},
+         fixtureHeader(false, true, 10)},
+        {"kaymis-bulten-GREEN", Red1Verdict::Green,
+         fixtureHeader(false, true, 20)},
         {"negatif-imza-RED", Red1Verdict::RedNegative,
-         fixtureHeader(true, true, true)},
+         fixtureHeader(true, true, 10)},
         {"ABAsiz-RED", Red1Verdict::RedWindow,
-         fixtureHeader(false, false, true)},
-        {"pencere-disi-RED", Red1Verdict::RedWindow,
-         fixtureHeader(false, true, false)},
+         fixtureHeader(false, false, 10)},
+        {"dagitik-wording-RED", Red1Verdict::RedWindow,
+         fixtureHeader(false, true, 0)},
     };
     for (const auto& c : cases) {
         const Red1Verdict got = classifyHeader(c.text);
@@ -200,7 +226,7 @@ int main() {
     if (runSelfChecks() != 0) {
         red1Fail("oz-denetim dustu (siniflandirici RED-kilitli degil)");
     }
-    TEST_PASS("Oz-denetim: negatif/ABA/pencere fixture'lari kilitli");
+    TEST_PASS("Oz-denetim: negatif/ABA/dagitik/konum fixture'lari kilitli");
 
     const std::string text = readHeader();
     const Red1Verdict verdict = classifyHeader(text);
@@ -214,7 +240,7 @@ int main() {
     }
     if (verdict == Red1Verdict::RedWindow) {
         const std::string window = windowText(text);
-        std::cout << "D12-RED1 RED: :29-32 penceresinde uclu eksik (recycl="
+        std::cout << "D12-RED1 RED: capa-bulten penceresinde uclu eksik (recycl="
                   << (window.find("recycl") != std::string::npos ? "var" : "yok")
                   << ", generat="
                   << (window.find("generat") != std::string::npos ? "var" : "yok")
@@ -224,7 +250,7 @@ int main() {
         return 1;
     }
 
-    std::cout << "D12-RED1 GREEN: c_api.h :29-32 recycle+generation+ABA hizali"
+    std::cout << "D12-RED1 GREEN: capa-bulten recycle+generation+ABA hizali"
               << std::endl;
     TEST_PASS("D12 RED-1 yesil");
     return 0;

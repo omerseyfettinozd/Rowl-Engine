@@ -84,6 +84,36 @@ def promote_to_compressed(package_bytes, entry_start):
     return bytes(raw)
 
 
+def promote_manifest_flags(package_bytes, manifest_offset, manifest_size,
+                            target_path):
+    """Gomulu manifestteki hedef kaydin "flags":0 degerini 1'e cevirir.
+
+    W8-f2 capraz-kontrolu (manifest flags/index flags tutarliligi) yalniz
+    index-yukseltmeyi fail-closed reddeder ("embedded manifest flags
+    mismatch") — sentetik taban iki yuzu birlikte yukseltmelidir. Yama
+    tek bayttir (0->1, ayni uzunluk): manifest yuk boyu, tum offset'ler ve
+    index aynen korunur. compressed_size sayisal olarak gecerli kalir
+    (RAW tabanda comp==uncomp); compressed_sha256 eksikligi legacy-WARN
+    ile gecer (bilincli, D18a karari). Kapsam kilidi: hedef "path"ten
+    geriye dogru ilk "flags":0 alinir, arada '}' varsa (baska kayit)
+    SystemExit — yanlis kayit yamalanmaz.
+    """
+    raw = bytearray(package_bytes)
+    payload = raw[manifest_offset:manifest_offset + manifest_size]
+    marker = f'"path":"{target_path}"'.encode("utf-8")
+    at = payload.find(marker)
+    if at < 0:
+        raise SystemExit(f"manifestte kayit yok: {target_path}")
+    flag = b'"flags":0'
+    found = payload.rfind(flag, 0, at)
+    if found < 0 or b"}" in payload[found:at]:
+        raise SystemExit(
+            f"manifest yama kapsam-disi: {target_path} kaydinda tekil "
+            f'"flags":0 bulunamadi')
+    raw[manifest_offset + found + len(flag) - 1] = ord("1")
+    return bytes(raw)
+
+
 def write_sidecar(package_path):
     """Taze pakete gecerli .sha256 sidecar yazar (dogrulanabilir taban)."""
     data = pathlib.Path(package_path).read_bytes()
@@ -131,9 +161,16 @@ with tempfile.TemporaryDirectory() as directory:
         if not HAS_ZSTD:
             # zstd'siz sentetik taban: RAW girdiyi ele flags=1'e yukselt
             # (ratio=1, verifier gecer; legacy-WARN uyarisi normaldir).
+            # Index + manifest birlikte yukseltilir (W8-f2 capraz-kontrolu
+            # tek-yuz yukseltmeyi fail-closed reddeder).
             promoted = root / "promoted.rowlpkg"
             promoted.write_bytes(
                 promote_to_compressed(pathlib.Path(package).read_bytes(), normal[0]))
+            data, entries = read_index(promoted)
+            manifest = next(e for e in entries if e[7] == "rowl/manifest.json")
+            promoted.write_bytes(
+                promote_manifest_flags(data, manifest[3], manifest[4],
+                                       "normal.txt"))
             write_sidecar(promoted)
             if verify_package(promoted).returncode != 0:
                 raise SystemExit("packer verify rejected the promoted zstd-free base")

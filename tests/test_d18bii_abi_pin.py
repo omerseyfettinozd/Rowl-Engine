@@ -8,7 +8,7 @@ Kilitlenen sozlesme:
   P3 additive-tamper: baseline'a yazilmamis sahte sembol (BogusProbe) pin
      tarafindan yakalanir (sayim sapmasi + header-delta); header'da sahte
      prob yoktur.
-  P4 reader-mirror: verify_release_package.py:76 tamsayi-bolme oran kapisi
+  P4 reader-mirror: verify_release_package.py:96 tamsayi-bolme oran kapisi
      (`uncompressed_size // compressed_size > MAX_EXPANSION_RATIO`) yerinde;
      gevsetme kirmizi verir.
   P5 derlenmis libRowlEngineCore bulunursa gercek arac kosar, exit 0 ve
