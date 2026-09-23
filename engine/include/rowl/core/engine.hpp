@@ -218,6 +218,18 @@ public:
     /// Pitch-aware overload (MS-0 contract). outPitch receives the surface
     /// row stride in bytes; may exceed (*outW)*4. Any out-param may be null.
     const uint8_t* getPixelBuffer(uint32_t* outW, uint32_t* outH, uint32_t* outPitch) const;
+    // W8-d(3): texture-cache / last-frame gozlemleri icin Engine facade'u.
+    // Pencere bosken sifir doner (c_api_render'daki checked->getWindow()
+    // zincirinin birebir karsiligi); C ABI imzasi degismez (additive).
+    uint32_t getTextureCacheTextureCount() const;
+    uint64_t getTextureCacheBytes() const;
+    uint64_t getTextureCacheBudgetBytes() const;
+    uint64_t getTextureCacheEvictionCount() const;
+    double getLastFrameTextureLoadMilliseconds() const;
+    double getLastFrameNonTextureRenderMilliseconds() const;
+    double getLastFrameTextRasterizationMilliseconds() const;
+    double getLastFrameRendererFlushMilliseconds() const;
+    void setTextureCacheBudgetBytes(uint64_t bytes);
 
     // ── Active scene getters ───────────────────────────────────────────────
     std::string getActiveSpeaker()      const { return m_activeSpeaker; }

@@ -309,6 +309,26 @@ set_tests_properties(d15_pause_mixer_probe PROPERTIES
     TIMEOUT 120
 )
 
+# W8-d dort cikarim parite kilidi (1:pause-menu JSON, 2:keymap, 3:facade,
+# 4:VFS-once font). D15 konvansiyonu: bagimsiz ikili, dummy driver.
+# RED: ilgili TU bilerek bozulursa PROB-DIRTY + exit 1.
+add_executable(rowl_w8d_extraction_parity test_w8d_extraction_parity.cpp)
+target_include_directories(rowl_w8d_extraction_parity PRIVATE
+    ${CMAKE_SOURCE_DIR}/engine/include
+)
+target_link_libraries(rowl_w8d_extraction_parity PRIVATE
+    rowl_engine_objects
+    rowl_engine_thirdparty
+)
+target_compile_definitions(rowl_w8d_extraction_parity PRIVATE ROWL_BUILDING_DLL)
+
+add_test(NAME w8d_extraction_parity COMMAND rowl_w8d_extraction_parity)
+set_tests_properties(w8d_extraction_parity PROPERTIES
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    ENVIRONMENT "SDL_AUDIODRIVER=dummy;SDL_VIDEODRIVER=dummy"
+    TIMEOUT 120
+)
+
 # D07 koşul-vektörü kilidi (lua_sandbox çıplak getglobal okumaları: getVariable
 # + callOptionalFunction; :850 getGlobalNumber KAPSAM-DIŞI): iç sembolleri
 # kullanır (LuaSandbox C++ sınıfı; callOptionalFunction'ın public C API

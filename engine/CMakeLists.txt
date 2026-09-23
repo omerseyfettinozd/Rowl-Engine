@@ -313,8 +313,13 @@ set(ROWL_ENGINE_SOURCES
     src/core/chapter_loader.cpp
     src/core/engine.cpp
     src/core/engine_pause_mixer.cpp  # D15: pause-menu/mixer dörtlüsü (davranışsız taşıma)
+    src/core/engine_pause_menu.cpp  # W8-d(1): pause-menu state-machine + view/JSON (davranışsız taşıma)
+    src/core/engine_render_facade.cpp  # W8-d(3): texture-cache/last-frame Engine facade'u (additive)
     # Rendering
     src/render/window.cpp
+    src/render/window_input.cpp  # W8-d(2): keymap + pollEvents (davranışsız taşıma)
+    src/render/window_pause_overlay.cpp  # W8-d(2): pause overlay (davranışsız taşıma)
+    src/render/window_font_resolve.cpp  # W8-d(4): font-cozumleme uc kademesi (saf taşıma)
     src/render/window_texture_cache.cpp  # A3-tur5: texture-cache bölünmesi
     src/render/window_text_fallback.cpp  # D10: font-fallback/MSDF çekirdek bölünmesi
     src/render/window_msdf_shaped.cpp  # D11: şekilli-MSDF plan/çizim bölünmesi
