@@ -75,8 +75,19 @@ namespace RowlEngine.Editor.Native
         //    (native "0 Linear / 1 EqualPower" semantiğiyle birebir).
         //  - null out C#'ta out int ile ifade edilemez; null yalıtımı
         //    native'de fail-closed'dur (InvalidArgument) — bk. test.
-        //  - canlı handle'da yabancı-thread çağrısı native WrongThread
-        //    damgasını aynen yukarı taşır (eşleme/yutma yok).
+        // W8-g G5 hata-önceliği parite kararı (logic değişikliği YOK):
+        // native sıra Foreign(WrongThread) > canlılık(InvalidHandle) >
+        // arg(InvalidArgument)'dır (c_api_thread_contract_guard.cpp; embed
+        // guard emsali NativeBridge.cs:109-114). Managed yalnızca Zero'yu
+        // native'siz bilir (sıfır-dışı canlılık native kayıt defterindedir);
+        // bu yüzden Zero→InvalidHandle önce, curve→InvalidArgument sonra
+        // gelir ve ikisi de native'e DOKUNMAZ. Zero+kötü-curve'da
+        // InvalidHandle native ile birebir; canlı+kötü-curve'da
+        // InvalidArgument native ile birebirdir. Tek ayrışma
+        // bogus-nonzero+kötü-curve'dür (managed InvalidArgument, native
+        // InvalidHandle): bilinçli — argüman yerel kanıtla kötüdür, native
+        // round-trip israftır; SetMasterVolumeChecked (bogus+NaN →
+        // InvalidArgument) emsaliyle tutarlıdır.
         internal static NativeBridge.ResultCode SetFadeCurveChecked(IntPtr handle, int curve)
         {
             if (handle == IntPtr.Zero)

@@ -5,17 +5,18 @@ using RowlEngine.Editor.Services;
 
 namespace RowlEngine.Editor.Tests;
 
-// D01 (#135) gömülü-yol fail-closed kilidi.
+// D01 (#135) gömülü-yol fail-closed kilidi + W8-g G5 EngineHost onto-fix.
 //
 // RED (pre-fix) kanıtı: EngineHost.InitializeEmbedded((IntPtr)0x1234, ...)
 // handle'ı düşürüp offscreen Initialize'a giriyordu (fail-open) —
-// Assert.False(ok) FAILED/exit 1 veriyordu.
+// InitializeEmbedded_BogusNonzero_FailsClosed FAILED/exit 1 veriyordu
+// (ok==true ile canlı offscreen motor dönüyordu).
 //
-// GREEN sözleşmesi (EngineHost.InitializeEmbedded İMZASI + eski yolu
-// DONDURULMUŞTUR — offscreen-fallback olarak kalır; yeni gömülü-yol
-// EmbeddedRuntimeBootstrap + EmbeddedBridgeGuard üzerinden akar):
-//  1. Legacy pin: Zero ve nonzero handle da offscreen fallback'a düşer
-//     (davranış değişikliği yok — sessiz migrasyon engeli).
+// GREEN sözleşmesi (W8-g G5):
+//  1. EngineHost.InitializeEmbedded: Zero → offscreen fallback (canlı);
+//     NONZERO → fail-closed (false + LastError, worker yok, native'e
+//     dokunulmaz). Eski "her handle offscreen'e düşer" davranışı
+//     bogus-nonzero fail-open idi, kapatıldı.
 //  2. Guard yönlendirme tablosu (native'siz, deterministik).
 //  3. Bootstrap + kayıtlı sahte-köprü: bogus-nonzero reddinde Init
 //     ÇAĞRILMAZ (false + LastError); kabulde SetExternal→Init sıralanır;
@@ -75,16 +76,54 @@ public sealed class EmbeddedHandleRedProbeTests
     [Fact]
     public void InitializeEmbedded_MustRouteNativeHandleThroughSetExternal()
     {
-        // Legacy pin (dondurulmuş davranış): EngineHost.InitializeEmbedded
-        // her handle'ı offscreen fallback'a düşürür. Yeni gömülü-yol
-        // EmbeddedRuntimeBootstrap'tadır (aşağıdaki testler); bu test eski
-        // yolun sessizce değişmediğini kilitler.
+        // W8-g G5 sözleşmesi: Zero offscreen fallback'a düşer (canlı);
+        // nonzero fail-closed'dur (aşağıdaki BogusNonzero testleri).
+        // Gerçek gömme-yolu EmbeddedRuntimeBootstrap'tadır.
         NativeEnvironment.EnsureDisplayFreeDrivers();
         using var host = new EngineHost();
         if (!host.InitializeEmbedded(IntPtr.Zero, 64, 64, false))
-            throw new Exception("D01: legacy Zero offscreen fallback must stay alive");
+            throw new Exception("D01: Zero offscreen fallback must stay alive");
         if (!host.IsInitialized)
-            throw new Exception("D01: legacy Zero must produce a live offscreen engine");
+            throw new Exception("D01: Zero must produce a live offscreen engine");
+    }
+
+    [Fact]
+    public void InitializeEmbedded_BogusNonzero_FailsClosed()
+    {
+        // W8-g G5 RED kilidi (pre-fix fail-open kanıtı: bu fact pre-fix
+        // FAILED veriyordu — bogus handle sessizce canlı offscreen
+        // motora dönüşüyordu). Post-fix fail-closed: false + LastError,
+        // worker yok, native'e dokunulmaz.
+        NativeEnvironment.EnsureDisplayFreeDrivers();
+        using var host = new EngineHost();
+        bool ok = host.InitializeEmbedded((IntPtr)0x1234, 64, 64, false);
+        if (ok)
+            throw new Exception("W8g: bogus-nonzero InitializeEmbedded must return false (no offscreen fallback)");
+        if (host.IsInitialized)
+            throw new Exception("W8g: rejected embed must not produce a live engine");
+        if (host.Runtime != null)
+            throw new Exception("W8g: rejected embed must not hold a worker");
+        if (host.Handle != IntPtr.Zero)
+            throw new Exception("W8g: rejected embed must expose a zero handle");
+        if (string.IsNullOrWhiteSpace(host.LastError))
+            throw new Exception("W8g: rejected embed must set LastError");
+        if (!host.LastError.Contains("Embedded", StringComparison.OrdinalIgnoreCase))
+            throw new Exception($"W8g: rejected embed LastError must name the embedded path, got '{host.LastError}'");
+    }
+
+    [Fact]
+    public void InitializeEmbedded_NonzeroZeroDims_FailsClosedWithGuardDetail()
+    {
+        // Sıfır yüzeyli nonzero: guard FailClosed detayı taşınır.
+        NativeEnvironment.EnsureDisplayFreeDrivers();
+        using var host = new EngineHost();
+        bool ok = host.InitializeEmbedded((IntPtr)0x1234, 0, 720, false);
+        if (ok)
+            throw new Exception("W8g: nonzero handle with zero dims must return false");
+        if (host.IsInitialized)
+            throw new Exception("W8g: zero-dims rejection must not produce a live engine");
+        if (string.IsNullOrWhiteSpace(host.LastError))
+            throw new Exception("W8g: zero-dims rejection must set LastError");
     }
 
     [Fact]
