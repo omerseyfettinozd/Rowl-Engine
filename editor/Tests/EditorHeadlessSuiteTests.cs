@@ -287,6 +287,9 @@ internal static class EditorHeadlessTestSuite
             // Test 43: Unity kromu Dilim G3 — inspector overflow lock
             Tests.EditorInspectorOverflowTests.Run(mainVm);
 
+            // Test 44: D17 drag-session RED probu (StoryGraphDragSession)
+            EditorDragSessionRedProbeTests.Run();
+
             Console.WriteLine("\n=======================================================");
             Console.WriteLine("ALL EDITOR HEADLESS TESTS PASSED SUCCESSFULLY!");
             Console.WriteLine("=======================================================\n");

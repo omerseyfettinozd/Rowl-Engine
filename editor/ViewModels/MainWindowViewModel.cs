@@ -251,8 +251,6 @@ namespace RowlEngine.Editor.ViewModels
         [ObservableProperty]
         private bool _isDraggingWire = false;
 
-        private string _wireDragOptionId = string.Empty;
-
         [ObservableProperty]
         private double _selectionBoxX = 0;
 
@@ -423,9 +421,8 @@ namespace RowlEngine.Editor.ViewModels
 
         private readonly EditorUiTimer _smoothTimer;
 
-        private NodeViewModel? _wireDragSourceNode;
-        private ConnectionViewModel? _wireDragRemovedConn;
-        private Dictionary<NodeViewModel, (double X, double Y)>? _nodeDragSnapshot;
+        /// <summary>D17: wire-drag + node-drag gesture state (extracted from :752-928).</summary>
+        private readonly StoryGraphDragSession _dragSession = new();
         public void StartSmoothViewAnimation()
         {
             if (!_smoothTimer.IsEnabled)
@@ -754,12 +751,14 @@ namespace RowlEngine.Editor.ViewModels
             StoryGraphCanvasService.EnforceSingleOutgoingWireRule(Connections, UpdateStartNodeState);
         }
 
+        /// <summary>
+        /// D17: thin delegate — gesture state lives in <see cref="StoryGraphDragSession"/>.
+        /// XAML-bound IsDraggingWire / WireStartPoint / WireEndPoint stay here
+        /// (NodeGraphView.axaml:90).
+        /// </summary>
         public void StartWireDrag(NodeViewModel sourceNode, Point pinPos, string optionId = "")
         {
-            _wireDragSourceNode = sourceNode;
-            _wireDragOptionId = optionId;
-            _wireDragRemovedConn = null;
-            WireStartPoint = new Point(sourceNode.X + 265, sourceNode.Y + sourceNode.GetOutputPortY(optionId));
+            WireStartPoint = _dragSession.StartWireDrag(sourceNode, optionId);
             WireEndPoint = pinPos;
             IsDraggingWire = true;
             AppendLog($"Started drawing wire from Green Output Pin of Node #{sourceNode.Id}...");
@@ -767,10 +766,7 @@ namespace RowlEngine.Editor.ViewModels
 
         public void StartUnplugWireDrag(NodeViewModel sourceNode, Point mousePos, string optionId = "", ConnectionViewModel? removedConn = null)
         {
-            _wireDragSourceNode = sourceNode;
-            _wireDragOptionId = optionId;
-            _wireDragRemovedConn = removedConn;
-            WireStartPoint = new Point(sourceNode.X + 265, sourceNode.Y + sourceNode.GetOutputPortY(optionId));
+            WireStartPoint = _dragSession.StartWireDrag(sourceNode, optionId, removedConn);
             WireEndPoint = mousePos;
             IsDraggingWire = true;
             AppendLog($"Unplugged cable from Node #{sourceNode.Id}, re-routing wire...");
@@ -786,58 +782,9 @@ namespace RowlEngine.Editor.ViewModels
 
         public void EndWireDrag(Point releasePos)
         {
-            if (!IsDraggingWire || _wireDragSourceNode == null) return;
+            if (!IsDraggingWire || !_dragSession.IsWireDragActive) return;
             IsDraggingWire = false;
-
-            var sourceNode = _wireDragSourceNode;
-            var optionId = _wireDragOptionId;
-            var unplugged = _wireDragRemovedConn;
-
-            var replacedBefore = Connections
-                .Where(c => c.SourceNode == sourceNode &&
-                    (string.IsNullOrEmpty(optionId) || c.OptionId == optionId))
-                .ToList();
-            ulong targetBefore = StoryGraphCanvasService.GetChoiceTarget(sourceNode, optionId);
-
-            var newConn = StoryGraphCanvasService.TryConnectWire(
-                sourceNode,
-                releasePos,
-                Nodes,
-                Connections,
-                optionId);
-
-            if (newConn != null)
-            {
-                var replaced = replacedBefore.Where(c => !Connections.Contains(c)).ToList();
-                if (unplugged != null && !replaced.Contains(unplugged))
-                    replaced.Insert(0, unplugged);
-                var changes = new List<ChoiceTargetChange>();
-                if (!string.IsNullOrEmpty(optionId))
-                {
-                    changes.Add(new ChoiceTargetChange(
-                        sourceNode, optionId, targetBefore,
-                        newConn.TargetNode?.Id ?? 0));
-                }
-                UndoRedoService.Instance.RecordAction(new ConnectWireAction(
-                    Connections, newConn, replaced, changes, UpdateStartNodeState));
-                AppendLog($"Connected Wire: Node #{sourceNode.Id} ---> Node #{newConn.TargetNode?.Id} (Total cables: {Connections.Count})");
-            }
-            else if (unplugged != null)
-            {
-                UndoRedoService.Instance.RecordAction(
-                    new DisconnectCablesUndoAction(Connections, new List<ConnectionViewModel> { unplugged }, UpdateStartNodeState));
-                AppendLog("Connection dropped in empty space (cable unplugged / removed).");
-            }
-            else
-            {
-                AppendLog("Connection dropped in empty space (cable unplugged / removed).");
-            }
-
-            UpdateStartNodeState();
-            ScheduleSave();
-            _wireDragSourceNode = null;
-            _wireDragOptionId = string.Empty;
-            _wireDragRemovedConn = null;
+            _dragSession.EndWireDrag(releasePos, Nodes, Connections, UpdateStartNodeState, AppendLog, ScheduleSave);
         }
 
         /// <summary>
@@ -848,21 +795,9 @@ namespace RowlEngine.Editor.ViewModels
         /// </summary>
         public void CancelWireDrag()
         {
-            if (!IsDraggingWire && _wireDragSourceNode == null && _wireDragRemovedConn == null) return;
+            if (!IsDraggingWire && !_dragSession.IsWireDragActive) return;
             IsDraggingWire = false;
-
-            var unplugged = _wireDragRemovedConn;
-            if (unplugged != null && !Connections.Contains(unplugged))
-            {
-                Connections.Add(unplugged);
-                UndoChoiceTarget.RestoreFor(new[] { unplugged });
-            }
-
-            _wireDragSourceNode = null;
-            _wireDragOptionId = string.Empty;
-            _wireDragRemovedConn = null;
-            UpdateStartNodeState();
-            AppendLog("Geri Al: Kablo çekme iptal edildi (değişiklik yok).");
+            _dragSession.CancelWireDrag(Connections, UpdateStartNodeState, AppendLog);
         }
 
         /// <summary>
@@ -873,21 +808,11 @@ namespace RowlEngine.Editor.ViewModels
         /// </summary>
         public void CancelNodeDrag()
         {
-            var snapshot = _nodeDragSnapshot;
-            _nodeDragSnapshot = null;
-            if (snapshot == null || snapshot.Count == 0) return;
-
-            foreach (var (node, pos) in snapshot)
-            {
-                if (!Nodes.Contains(node)) continue;
-                node.X = pos.X;
-                node.Y = pos.Y;
-            }
-            AppendLog("Geri Al: Sürükleme iptal edildi, düğümler başlangıç konumuna döndü.");
+            _dragSession.CancelNodeDrag(Nodes, AppendLog);
         }
 
         /// <summary>MS-5: true while a drag snapshot is pending commit or cancel.</summary>
-        public bool HasPendingNodeDrag => _nodeDragSnapshot != null && _nodeDragSnapshot.Count > 0;
+        public bool HasPendingNodeDrag => _dragSession.HasPendingNodeDrag;
 
         /// <summary>
         /// Snapshots drag-affected node positions. Call on pointer-press before any move.
@@ -897,7 +822,7 @@ namespace RowlEngine.Editor.ViewModels
             IEnumerable<NodeViewModel> affected = SelectedNodes.Count > 0
                 ? SelectedNodes.ToList()
                 : (SelectedNode != null ? new[] { SelectedNode } : Enumerable.Empty<NodeViewModel>());
-            _nodeDragSnapshot = affected.ToDictionary(n => n, n => (n.X, n.Y));
+            _dragSession.BeginNodeDragSnapshot(affected);
         }
 
         /// <summary>
@@ -905,26 +830,7 @@ namespace RowlEngine.Editor.ViewModels
         /// </summary>
         public void EndNodeDragSnapshot()
         {
-            var snapshot = _nodeDragSnapshot;
-            _nodeDragSnapshot = null;
-            if (snapshot == null || snapshot.Count == 0) return;
-
-            var before = new List<NodePosition>();
-            var after = new List<NodePosition>();
-            foreach (var (node, pos) in snapshot)
-            {
-                if (!Nodes.Contains(node)) continue;
-                if (node.X != pos.X || node.Y != pos.Y)
-                {
-                    before.Add(new NodePosition(node, pos.X, pos.Y));
-                    after.Add(new NodePosition(node, node.X, node.Y));
-                }
-            }
-            if (before.Count > 0)
-            {
-                UndoRedoService.Instance.RecordAction(new MoveNodesAction(before, after));
-                ScheduleSave();
-            }
+            _dragSession.EndNodeDragSnapshot(Nodes, ScheduleSave);
         }
 
         private List<NodePosition> SnapshotNodePositions(IEnumerable<NodeViewModel> nodes)
