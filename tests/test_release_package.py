@@ -5,6 +5,7 @@ import hashlib
 import json
 import pathlib
 import shutil
+import struct
 import subprocess
 import sys
 import tempfile
@@ -173,3 +174,74 @@ with tempfile.TemporaryDirectory() as directory:
                          f"{usage.returncode}")
 
     print("[ReleasePackageTests] packer verify + .sha256 contract holds.")
+
+    # --- W8-g: traversal curtain mirrors the engine reader ---
+    # normalizePackagePath (engine/src/vfs/rowlpkg_reader.cpp:191-204)
+    # fail-closes on NUL bytes and on a surviving ".." segment. The packer
+    # can never emit these names (real files cannot be called ".." or
+    # contain NUL), so the fixtures are crafted byte-by-byte below — fully
+    # manifest-consistent, so only the traversal curtain can reject them.
+    _HEADER = struct.Struct("<4sHIQ")
+    _ENTRY = struct.Struct("<QIQQQI")
+
+    def craft_package(package_path, names):
+        blobs = [(name, b"w8g-payload:" + name.replace(b"\x00", b"_"))
+                 for name in names]
+        payload = bytearray(_HEADER.size)
+        offsets = {}
+        for name, blob in blobs:
+            offsets[name] = len(payload)
+            payload.extend(blob)
+        records = [{
+            "compressed_size": len(blob),
+            "flags": 0,
+            "path": name.decode("utf-8"),
+            "sha256": hashlib.sha256(blob).hexdigest(),
+            "size": len(blob),
+        } for name, blob in blobs]
+        records.sort(key=lambda record: record["path"])
+        manifest_bytes = (json.dumps({"files": records, "format": 1},
+                                     sort_keys=True, separators=(",", ":"))
+                          + "\n").encode("utf-8")
+        manifest_offset = len(payload)
+        payload.extend(manifest_bytes)
+        index_offset = len(payload)
+        index = bytearray()
+        manifest_name = b"rowl/manifest.json"
+        for name, blob in blobs + [(manifest_name, manifest_bytes)]:
+            offset = offsets.get(name, manifest_offset)
+            index.extend(_ENTRY.pack(0, len(name), offset, len(blob),
+                                     len(blob), 0))
+            index.extend(name)
+        _HEADER.pack_into(payload, 0, b"ROWL", 1, len(blobs) + 1, index_offset)
+        payload.extend(index)
+        pathlib.Path(package_path).write_bytes(bytes(payload))
+
+    def stage_with_package(tag, package_path):
+        staged = root / tag
+        shutil.copytree(release, staged)
+        shutil.copy2(package_path,
+                     staged / "Assets" / "packages" / "game.rowlpkg")
+        return staged
+
+    graph_name = b"json/full_story_graph.json"
+    for tag, evil in [("bare-dotdot", b".."),
+                      ("trailing-dotdot", b"sub/.."),
+                      ("inner-dotdot", b"a/../b"),
+                      ("backslash-dotdot", b"..\\evil"),
+                      ("embedded-nul", b"a\x00b")]:
+        evil_pkg = root / f"w8g-{tag}.rowlpkg"
+        craft_package(evil_pkg, [evil, graph_name])
+        require_rejection(stage_with_package(f"w8g-{tag}", evil_pkg),
+                          "unsafe or duplicate entry path")
+
+    # False-positive control: dotty but harmless names stay green.
+    control_pkg = root / "w8g-control.rowlpkg"
+    craft_package(control_pkg, [b"a/..b", b"a/b..", b"...", graph_name])
+    control = run_verifier(stage_with_package("w8g-control", control_pkg))
+    if control.returncode != 0 or "Valid release" not in control.stdout:
+        raise SystemExit("traversal curtain rejected harmless dotty names: "
+                         + control.stderr)
+
+    print("[ReleasePackageTests] traversal curtain mirrors the reader "
+          "(dot-dot + NUL rejected, dotty names green).")

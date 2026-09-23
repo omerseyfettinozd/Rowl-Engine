@@ -72,9 +72,19 @@ def read_package_entries(package_path):
                 path = path_bytes.decode("utf-8")
             except UnicodeDecodeError as error:
                 fail("package entry path is not UTF-8: " + str(error))
+            # W8-g mirror of normalizePackagePath
+            # (engine/src/vfs/rowlpkg_reader.cpp:191-204): the reader
+            # fail-closes on a NUL byte anywhere in the raw entry name and
+            # on a ".." segment surviving lexically_normal (bare "..",
+            # trailing "/.." or any inner dot-dot — lexically_normal only
+            # folds it away when a real parent segment absorbs it, and a
+            # leading survivor nullopts). The old curtain (leading "../"
+            # plus a "/../" substring) let a bare ".." through, and nothing
+            # screened NUL — both load-short against the reader.
+            if b"\x00" in path_bytes:
+                fail("package contains an unsafe or duplicate entry path: " + path)
             normalized = path.replace("\\", "/")
-            if (normalized.startswith("/") or normalized.startswith("../") or
-                    "/../" in normalized):
+            if normalized.startswith("/") or ".." in normalized.split("/"):
                 fail("package contains an unsafe or duplicate entry path: " + path)
             canonical = canonical_package_key(normalized)
             if canonical in seen_canonical:
