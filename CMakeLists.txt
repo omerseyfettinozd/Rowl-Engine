@@ -127,6 +127,32 @@ if(ROWL_BUILD_RUNTIME_TESTS)
             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
             TIMEOUT 30
         )
+        # D18b-ii platform/paket kilit problari: salt dosya okur (+ /tmp
+        # fixture), derleme gerektirmez. Siralama alfabetiktir.
+        add_test(
+            NAME rowl_d18bii_abi_pin_tests
+            COMMAND ${Python3_EXECUTABLE} -u ${CMAKE_SOURCE_DIR}/tests/test_d18bii_abi_pin.py
+        )
+        set_tests_properties(rowl_d18bii_abi_pin_tests PROPERTIES
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+            TIMEOUT 30
+        )
+        add_test(
+            NAME rowl_d18bii_packaging_guard_tests
+            COMMAND ${Python3_EXECUTABLE} -u ${CMAKE_SOURCE_DIR}/tests/test_d18bii_packaging_guard.py
+        )
+        set_tests_properties(rowl_d18bii_packaging_guard_tests PROPERTIES
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+            TIMEOUT 60
+        )
+        add_test(
+            NAME rowl_d18bii_platform_lock_tests
+            COMMAND ${Python3_EXECUTABLE} -u ${CMAKE_SOURCE_DIR}/tests/test_d18bii_platform_lock.py
+        )
+        set_tests_properties(rowl_d18bii_platform_lock_tests PROPERTIES
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+            TIMEOUT 30
+        )
         add_test(
             NAME rowl_package_determinism_tests
             COMMAND ${Python3_EXECUTABLE} -u ${CMAKE_SOURCE_DIR}/tests/test_package_determinism.py
