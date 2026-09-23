@@ -126,6 +126,11 @@ namespace RowlEngine.Editor.Native
             uint newHeight);
 
         // ── Offscreen Framebuffer & Playback Control ──────────────────────────
+        //
+        // D16: bu kümedeki int/void/float legacy formlar ABI için durur
+        // (ölçüm: 209=55+154 korunur). Fail-closed semantik
+        // NativeBridgeChecked'tedir (IsPaused/SetPaused/SetPlayState/
+        // IsRunning/SetMasterVolume/GetMasterVolume — Zero→InvalidHandle).
 
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
         internal static extern IntPtr RowlEngine_GetPixelBuffer(
