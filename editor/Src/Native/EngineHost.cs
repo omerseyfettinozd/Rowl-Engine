@@ -186,10 +186,13 @@ namespace RowlEngine.Editor.Native
 
             if (result == 0)
             {
-                if (TryGetLastEngineResult(out int code, out string operation, out string message))
+                // W8-g G5 Init-0 sentinel: kanal bos-sentinel (0/""/"")
+                // donerse bunu neden gibi yazma — bos kanali adlandir.
+                if (TryGetLastEngineResult(out int code, out string operation, out string message)
+                    && (code != 0 || !string.IsNullOrEmpty(operation) || !string.IsNullOrEmpty(message)))
                     LastError = $"Engine init failed: RowlEngine_Init returned 0 (code {code}, operation '{operation}', message '{message}').";
                 else
-                    LastError = "Engine init failed: RowlEngine_Init returned 0 (last-error unreadable).";
+                    LastError = "Engine init failed: RowlEngine_Init returned 0 (last-result channel empty — no native cause captured).";
                 Dispose();
                 return false;
             }
@@ -205,9 +208,18 @@ namespace RowlEngine.Editor.Native
 
         /// <summary>
         /// Backward compatibility method for view components.
+        /// W8-g G5: bogus-nonzero fail-open kapandi — Zero offscreen
+        /// fallback'a duser (D01 legacy pin); nonzero fail-closed'dur
+        /// (false + LastError, worker yok). Gercek gomme-yolu
+        /// EmbeddedRuntimeBootstrap'tadir; bu imzanin uretim cagirani yok.
         /// </summary>
         public bool InitializeEmbedded(IntPtr nativeWindowHandle, uint width, uint height, bool vsync = true)
         {
+            if (nativeWindowHandle != IntPtr.Zero)
+            {
+                LastError = "Embedded init failed: nonzero native window handle is not claimed by this host (no offscreen fallback; embed via EmbeddedRuntimeBootstrap).";
+                return false;
+            }
             return Initialize(width, height, vsync);
         }
 
