@@ -48,6 +48,23 @@ or smoke proof to claim. macOS left compile-blocked through the Faz 7 D1
 gate below but remains device-blocked under the same rule. A target leaves
 this state only through the contract at the top of this file.
 
+### D18b-ii dilim kapsami (native)
+
+Android (native, bu dilim): release-paket uretimi fail-closed dogrulandi
+(export_android APK/AAB uretmez); real-device smoke evidence-blocked —
+destek iddiasi yok.
+
+iOS (native, bu dilim): .a/.dylib staging dogrulandi (IPA uretilmez);
+real-device smoke evidence-blocked.
+
+macOS D1 (native): compile-only kanit; paket/cihaz kaniti yok.
+
+### §5 Kapsam-disi (D18b-ii)
+
+Kapsam-disi (native, bu dilim): APK/AAB/IPA uretimi dogrulanmadi
+(fail-closed mesajlar kilitli); real-device smoke hicbir mobil hedefte
+kosulmadi; macOS paket/imza kaniti yok.
+
 ### Faz 7 D1 — macOS compile gate (CI-only, no device proof)
 
 `.github/workflows/ci.yml` gains `macos-arm64-compile` (`runs-on: macos-15`,
