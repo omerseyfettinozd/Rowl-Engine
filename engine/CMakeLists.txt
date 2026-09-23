@@ -462,7 +462,12 @@ endif()
 option(ROWL_BUILD_PLAYER "Build the standalone desktop player" ${ROWL_PLAYER_DEFAULT})
 
 if(ROWL_BUILD_PLAYER)
-    add_executable(rowl_player src/player/main.cpp)
+    # W8-c (bulgu-4): RowlCrash_* yardimcilari paylasilan kutuphaneden ihraç
+    # edilmez (-fvisibility=hidden, baslikta ROWL_API yok); player'in kullandigi
+    # tek ic yuzeydir. C API yolu paylasilan RowlEngineCore'dan gelmeye devam
+    # eder (uretim topolojisi degismez); yalnizca crash TU'su player'a dogrudan
+    # derlenir (motor ici bu sembolleri cagirmaz, .so'daki kopya oludur).
+    add_executable(rowl_player src/player/main.cpp src/platform/crash_handler.cpp)
     target_link_libraries(rowl_player PRIVATE RowlEngineCore ${SDL3_TARGET})
     set_target_properties(rowl_player PROPERTIES
         OUTPUT_NAME "rowl_player"
@@ -489,7 +494,13 @@ install(TARGETS RowlEngineCore
 if(TARGET rowl_player)
     install(TARGETS rowl_player RUNTIME DESTINATION bin)
 endif()
-install(DIRECTORY include/ DESTINATION include)
+# W8-c (bulgu-4): internal basliklar kurulu pakete cikmaz; yalnizca public
+# C ABI basliklari dagitilir (diger internal basliklar kaynak-agactan
+# kullanilir, kurulmaz).
+install(DIRECTORY include/ DESTINATION include
+    REGEX "audio/audio_blip_error_channel\\.hpp$" EXCLUDE
+    REGEX "platform/crash_handler\\.hpp$" EXCLUDE
+)
 if(ROWL_GPU_MSDF_SHADER_AVAILABLE)
     install(FILES "${ROWL_SHADER_DIR}/msdf_text.frag.spv" DESTINATION bin/shaders)
 endif()

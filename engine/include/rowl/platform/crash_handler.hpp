@@ -25,7 +25,9 @@
 
 #include <cstdint>
 
-#include "rowl/c_api.h"  // ROWL_API export macro only; C ABI untouched.
+#include "rowl/c_api.h"  // W8-c: crash yardimcilari exportlu DEGILDIR
+// (-fvisibility=hidden; baslikta ROWL_API yok). rowl_player bu TU'yu
+// dogrudan derler; paylasilan RowlEngineCore'a baglanan TU'lar erisemez.
 
 namespace Rowl::Platform {
 
@@ -34,20 +36,20 @@ namespace Rowl::Platform {
 // |argc|/|argv| are echoed into each log (truncated to a fixed bound).
 // Returns true while handlers are live, false where unavailable.
 // A false result is silent: the normal player flow is never disturbed.
-ROWL_API bool RowlCrash_Install(const char* logDir, int argc, char* argv[]);
+bool RowlCrash_Install(const char* logDir, int argc, char* argv[]);
 
 // Remove handlers installed by RowlCrash_Install. Safe to call at any time,
 // including when install was never called or reported false.
-ROWL_API void RowlCrash_Uninstall();
+void RowlCrash_Uninstall();
 
 // True while crash handlers are live.
-ROWL_API bool RowlCrash_IsInstalled();
+bool RowlCrash_IsInstalled();
 
 // Refresh the engine-result snapshot echoed by the crash path.
 // Safe-point only: call from normal control flow (never from inside a
 // handler), e.g. after engine init and after story-graph load. Values are
 // copied into fixed-size static storage and truncated when overlong.
 // Passing null pointers stores empty strings.
-ROWL_API void RowlCrash_RefreshSnapshot(int32_t resultCode, const char* operation, const char* target);
+void RowlCrash_RefreshSnapshot(int32_t resultCode, const char* operation, const char* target);
 
 }  // namespace Rowl::Platform

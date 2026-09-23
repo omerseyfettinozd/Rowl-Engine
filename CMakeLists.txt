@@ -161,11 +161,33 @@ if(ROWL_BUILD_RUNTIME_TESTS)
             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
             TIMEOUT 60
         )
+        # W8-c bulgu-1 kilidi: expansion-ratio gate probu (pack RAW-karari +
+        # verifier 2048x-forge reddi). D18b-ii blogu emsali; package_* icinde
+        # alfabetik (determinism < ratio_gate). zstd'siz yorumlayicida probun
+        # kendisi SKIP verir (sahte-kirmizi yok).
+        add_test(
+            NAME rowl_package_ratio_gate_tests
+            COMMAND ${Python3_EXECUTABLE} -u ${CMAKE_SOURCE_DIR}/tests/test_package_ratio_gate.py
+        )
+        set_tests_properties(rowl_package_ratio_gate_tests PROPERTIES
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+            TIMEOUT 60
+        )
         add_test(
             NAME rowl_media_format_gate_tests
             COMMAND ${Python3_EXECUTABLE} -u ${CMAKE_SOURCE_DIR}/tests/test_media_format_gate.py
         )
         set_tests_properties(rowl_media_format_gate_tests PROPERTIES
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+            TIMEOUT 60
+        )
+        # W8-c bulgu-4 kilidi: dinamik tabloda RowlEngine_-disi T sembol
+        # yok (9 internal helper gizli). Derlenmis lib yoksa prob SKIP verir.
+        add_test(
+            NAME rowl_no_internal_exports_tests
+            COMMAND ${Python3_EXECUTABLE} -u ${CMAKE_SOURCE_DIR}/tests/test_no_internal_exports.py
+        )
+        set_tests_properties(rowl_no_internal_exports_tests PROPERTIES
             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
             TIMEOUT 60
         )
