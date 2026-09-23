@@ -16,10 +16,9 @@
  * (RowlEngine_GetLastResultCode/Message); olu handle sessiz INVALID_HANDLE
  * (damgalanacak motor yok).
  *
- * Baslik rotusu YOK (D14 karari): prototipler burada + docs/
- * THREAD_CONTRACT_LEGACY_BRIDGE.md'de belgelenir; c_api.h'ye dokunulmaz,
- * boylece D12'nin :29-31 bandi duzeltmesiyle rebase cakismasi olmaz ve DN
- * kapisi duser. ABI yalnizca buyur (sembol silinmez).
+ * W8-c (bulgu-2): prototipler public basliga tasindi (c_api.h, legacy
+ * Set/GetFadeCurve yani); D12 birlestigi icin rebase cakismasi kalmadi.
+ * ABI yalnizca buyur (sembol silinmez).
  */
 
 #include "c_api_internal.hpp"

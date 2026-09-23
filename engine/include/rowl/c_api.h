@@ -826,6 +826,20 @@ ROWL_API float RowlEngine_GetUiVolume(RowlEngineHandle handle);
  */
 ROWL_API void RowlEngine_SetFadeCurve(RowlEngineHandle handle, int curve);
 ROWL_API int RowlEngine_GetFadeCurve(RowlEngineHandle handle);
+
+/**
+ * W8-c (bulgu-2): legacy mixer koprusunun checked loud varyantlari
+ * (tanim: engine/src/c_api_thread_contract_guard.cpp). Legacy void/int
+ * formlar sessiz-tier iken bu formlar loud-tier'dir: canli handle'a
+ * yabanci thread'den cagri ROWL_RESULT_WRONG_THREAD damgalar + cross-thread
+ * okunur; olu handle sessiz ROWL_RESULT_INVALID_HANDLE. curve 0/1 disi
+ * ROWL_RESULT_INVALID_ARGUMENT; null outValue ayni kodla fail-closed.
+ * Additive: legacy imzalar aynen durur.
+ */
+ROWL_API RowlEngine_ResultCode RowlEngine_SetFadeCurveChecked(
+    RowlEngineHandle handle, int curve);
+ROWL_API RowlEngine_ResultCode RowlEngine_GetFadeCurveChecked(
+    RowlEngineHandle handle, int* outValue);
 ROWL_API void RowlEngine_SetSfxPoolDepth(RowlEngineHandle handle, int depth);
 ROWL_API int RowlEngine_GetSfxPoolDepth(RowlEngineHandle handle);
 ROWL_API int RowlEngine_GetSfxActiveVoices(RowlEngineHandle handle);

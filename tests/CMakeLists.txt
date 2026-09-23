@@ -124,16 +124,23 @@ set_tests_properties(embed_red_probe PROPERTIES
     ENVIRONMENT "SDL_AUDIODRIVER=dummy;SDL_VIDEODRIVER=dummy"
 )
 
-# D02 audio snapshot-struct davranışsız taşıma kilidi: yalnızca public C API'yi
-# kullanan bağımsız ikili (paylaşılan RowlEngineCore'a bağlanır; üretim
-# topolojisiyle aynı). rowl_tests gövdesine gömülmez ki kırmızı-yeşil döngüsü
-# tüm süiti koşmadan saniyeler içinde kanıtlansın. TIMEOUT: helper'a yanlış
-# çevirim (kilit alan helper çağrısı) askıya düşerse KIRMIZI verir.
+# D02 audio snapshot-struct davranışsız taşıma kilidi: Bacak-1 doğrudan
+# Locked-yardımcıları çağırır (Rowl::Audio::record*Locked). Bu iç semboller
+# -fvisibility=hidden ile gizlidir (W8-c bulgu-4: public başlıkta ROWL_API
+# yok); bu yüzden D03/D04/D08 konvansiyonuyla rowl_engine_objects'a bağlanır
+# (paylaşılan RowlEngineCore'a değil). rowl_tests gövdesine gömülmez ki
+# kırmızı-yeşil döngüsü tüm süiti koşmadan saniyeler içinde kanıtlansın.
+# TIMEOUT: helper'a yanlış çevirim (kilit alan helper çağrısı) askıya düşerse
+# KIRMIZI verir.
 add_executable(rowl_audio_snapshot_red_probe test_audio_snapshot_red_probe.cpp)
 target_include_directories(rowl_audio_snapshot_red_probe PRIVATE
     ${CMAKE_SOURCE_DIR}/engine/include
 )
-target_link_libraries(rowl_audio_snapshot_red_probe PRIVATE RowlEngineCore)
+target_link_libraries(rowl_audio_snapshot_red_probe PRIVATE
+    rowl_engine_objects
+    rowl_engine_thirdparty
+)
+target_compile_definitions(rowl_audio_snapshot_red_probe PRIVATE ROWL_BUILDING_DLL)
 
 add_test(NAME audio_snapshot_red_probe COMMAND rowl_audio_snapshot_red_probe)
 set_tests_properties(audio_snapshot_red_probe PROPERTIES
@@ -417,14 +424,20 @@ set_tests_properties(d05_telemetry_latency_probe PROPERTIES
 
 # D05 blip-kuyruk-sinif RED kilidi (RED-2: Decode->Device, :33/:45): kuyruk
 # fail yazim cekirdekleri M4 sozlesmesine gore Device(1) damgalamalidir.
-# D02 konvansiyonu: yalnizca public C API + ROWL_API Locked-yardimcilari
-# (paylasilan RowlEngineCore'a baglanir; uretim topolojisiyle ayni).
+# Prob Locked-yardimcilari dogrudan cagirir (Rowl::Audio::record*Locked);
+# bu ic semboller -fvisibility=hidden ile gizlidir (W8-c bulgu-4), bu yuzden
+# D03/D04/D08 konvansiyonuyla rowl_engine_objects'a baglanir (paylasilan
+# RowlEngineCore'a degil).
 # TSan'siz KIRMIZI exit 1 (Decode gozlemi) / fix sonrasi YESIL exit 0.
 add_executable(rowl_d05_blip_queue_class_probe test_d05_blip_queue_class_probe.cpp)
 target_include_directories(rowl_d05_blip_queue_class_probe PRIVATE
     ${CMAKE_SOURCE_DIR}/engine/include
 )
-target_link_libraries(rowl_d05_blip_queue_class_probe PRIVATE RowlEngineCore)
+target_link_libraries(rowl_d05_blip_queue_class_probe PRIVATE
+    rowl_engine_objects
+    rowl_engine_thirdparty
+)
+target_compile_definitions(rowl_d05_blip_queue_class_probe PRIVATE ROWL_BUILDING_DLL)
 
 add_test(NAME d05_blip_queue_class_probe COMMAND rowl_d05_blip_queue_class_probe)
 set_tests_properties(d05_blip_queue_class_probe PROPERTIES

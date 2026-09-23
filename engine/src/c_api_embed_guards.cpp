@@ -12,7 +12,7 @@
 
 extern "C" {
 
-RowlEngine_ResultCode RowlEngine_SetExternalWindowHandleChecked(
+ROWL_API RowlEngine_ResultCode RowlEngine_SetExternalWindowHandleChecked(
     RowlEngineHandle handle,
     void* nativeWindowHandle,
     uint32_t width,
@@ -60,7 +60,7 @@ RowlEngine_ResultCode RowlEngine_SetExternalWindowHandleChecked(
     }, ROWL_RESULT_UNKNOWN_ERROR);
 }
 
-RowlEngine_ResultCode RowlEngine_ResizeViewportChecked(
+ROWL_API RowlEngine_ResultCode RowlEngine_ResizeViewportChecked(
     RowlEngineHandle handle,
     uint32_t newWidth,
     uint32_t newHeight) {
