@@ -68,7 +68,16 @@ const uint8_t* RowlEngine_GetPixelBufferEx(RowlEngineHandle handle,
     }
     return invokeNoexcept<const uint8_t*>([&] {
         auto checked = toEngineChecked(handle);
-        return checked ? checked->getPixelBuffer(outW, outH, outPitch) : nullptr;
+        // W8-a (7): checked-null yolunda da out-param sifirla (olu dal
+        // :63-68 emsali) — cross-thread destroy yarisinda nullptr + kirli
+        // out donuluyordu. Olu dal davranisi aynen korunur.
+        if (!checked) {
+            if (outW) *outW = 0;
+            if (outH) *outH = 0;
+            if (outPitch) *outPitch = 0;
+            return static_cast<const uint8_t*>(nullptr);
+        }
+        return checked->getPixelBuffer(outW, outH, outPitch);
     }, nullptr);
 }
 

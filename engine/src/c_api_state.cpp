@@ -279,12 +279,27 @@ const char* RowlEngine_GetVariableWithLength(RowlEngineHandle handle, const char
     return value;
 }
 
-// B2a: GetVariable caller-buffer varyantı (null-key dead-handle ile aynı
-// kanaldan: INVALID_HANDLE; eski API "" dönerdi, o korunur).
+// B2a: GetVariable caller-buffer varyantı (ölü-handle'da INVALID_HANDLE;
+// eski API "" dönerdi, o korunur).
+// W8-a (6): null-key ölü-handle kanalından ayrıldı (EvaluateCondition
+// :301-312 emsali) — önce handle (ölü -> INVALID_HANDLE aynen), sonra
+// null-key InvalidArgument + damga. INVALID_HANDLE yalnız ölü-handle'ındır.
 RowlEngine_ResultCode RowlEngine_GetVariableUtf8(
     RowlEngineHandle handle, const char* key, char* buffer,
     uint32_t bufferSize, uint32_t* outRequiredSize) {
-    if (!isLiveHandle(handle) || !key) return ROWL_RESULT_INVALID_HANDLE;
+    if (!isLiveHandle(handle)) return ROWL_RESULT_INVALID_HANDLE;
+    if (!key) {
+        invokeNoexcept([&] {
+            if (auto engine = toEngineChecked(handle)) {
+                if (auto ctx = engine->getContext()) {
+                    ctx->setError(Rowl::Core::RuntimeErrorCode::InvalidArgument,
+                                  "Variable key pointer is null; failing closed",
+                                  "get_variable", "");
+                }
+            }
+        });
+        return ROWL_RESULT_INVALID_ARGUMENT;
+    }
     return invokeNoexcept<RowlEngine_ResultCode>([&] {
         auto engine = toEngineChecked(handle);
         if (!engine) return ROWL_RESULT_INVALID_HANDLE;

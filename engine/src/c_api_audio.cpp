@@ -232,7 +232,10 @@ RowlEngine_ResultCode RowlEngine_GetLastAudioErrorUtf8(
     return invokeNoexcept<RowlEngine_ResultCode>([&] {
         auto checked = toEngineChecked(handle);
         const auto* audio = checked ? checked->getAudio() : nullptr;
-        if (!audio) return ROWL_RESULT_INVALID_HANDLE;
+        // W8-a (5): canli-handle + audio-null INVALID_HANDLE DEGIL —
+        // INVALID_HANDLE yalniz olu-handle'indir (c_api.h:21-28). Checked
+        // varyant emsali (thread_contract_guard.cpp:60,92): UNKNOWN_ERROR.
+        if (!audio) return ROWL_RESULT_UNKNOWN_ERROR;
         return copyUtf8ToCaller(audio->getLastError(), buffer,
                                 bufferSize, outRequiredSize);
     }, ROWL_RESULT_UNKNOWN_ERROR);
@@ -474,7 +477,9 @@ RowlEngine_ResultCode RowlEngine_GetStreamInfoJson(
         auto engine = toEngineChecked(handle);
         if (!engine) return ROWL_RESULT_INVALID_HANDLE;
         const auto* audio = engine->getAudio();
-        if (!audio) return ROWL_RESULT_INVALID_HANDLE;
+        // W8-a (5): GetLastAudioErrorUtf8 ile ayni duzeltme (olu-handle
+        // degil, audio-null: UNKNOWN_ERROR).
+        if (!audio) return ROWL_RESULT_UNKNOWN_ERROR;
         return copyUtf8ToCaller(audio->streamInfoJson(), buffer,
                                 bufferSize, outRequiredSize);
     }, ROWL_RESULT_UNKNOWN_ERROR);
@@ -616,7 +621,9 @@ RowlEngine_ResultCode RowlEngine_GetSfxActivePaths(
         auto engine = toEngineChecked(handle);
         if (!engine) return ROWL_RESULT_INVALID_HANDLE;
         const auto* audio = engine->getAudio();
-        if (!audio) return ROWL_RESULT_INVALID_HANDLE;
+        // W8-a (5): GetLastAudioErrorUtf8 ile ayni duzeltme (olu-handle
+        // degil, audio-null: UNKNOWN_ERROR).
+        if (!audio) return ROWL_RESULT_UNKNOWN_ERROR;
         std::string json = "[";
         bool first = true;
         for (const auto& path : audio->sfxActivePaths()) {
@@ -745,7 +752,9 @@ RowlEngine_ResultCode RowlEngine_GetBgmPumpStatsJson(
         auto engine = toEngineChecked(handle);
         if (!engine) return ROWL_RESULT_INVALID_HANDLE;
         const auto* audio = engine->getAudio();
-        if (!audio) return ROWL_RESULT_INVALID_HANDLE;
+        // W8-a (5): GetLastAudioErrorUtf8 ile ayni duzeltme (olu-handle
+        // degil, audio-null: UNKNOWN_ERROR).
+        if (!audio) return ROWL_RESULT_UNKNOWN_ERROR;
         return copyUtf8ToCaller(audio->bgmPumpStatsJson(), buffer,
                                 bufferSize, outRequiredSize);
     }, ROWL_RESULT_UNKNOWN_ERROR);

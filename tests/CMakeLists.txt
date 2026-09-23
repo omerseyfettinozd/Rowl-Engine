@@ -473,6 +473,42 @@ set_tests_properties(d12_red2 PROPERTIES
     ENVIRONMENT "SDL_AUDIODRIVER=dummy;SDL_VIDEODRIVER=dummy"
     TIMEOUT 120
 )
+
+# W8-a RED kilitleri (7 dogrulanmis bulgu; YAZMA fazi): her bulgu icin
+# bagimsiz prob ikilisi. D01 konvansiyonu: yalnizca public C API
+# (paylasilan RowlEngineCore'a baglanir; uretim topolojisiyle ayni).
+# rowl_tests govdesine gomulmez ki kirmizi-yesil dongusu tum suiti
+# kosmadan kanitlansin. Kok CMakeLists'e dokunulmaz.
+# Esleme: p1->provenance_foreign, p2->pause_loud, p3->projectdir_guards,
+# p4->run_foreign, p5->audio_null, p6->getvariable_nullkey, p7->pixelbuffer_race.
+foreach(w8a_num RANGE 1 7)
+    if(w8a_num EQUAL 1)
+        set(w8a_probe p1_provenance_foreign)
+    elseif(w8a_num EQUAL 2)
+        set(w8a_probe p2_pause_loud)
+    elseif(w8a_num EQUAL 3)
+        set(w8a_probe p3_projectdir_guards)
+    elseif(w8a_num EQUAL 4)
+        set(w8a_probe p4_run_foreign)
+    elseif(w8a_num EQUAL 5)
+        set(w8a_probe p5_audio_null)
+    elseif(w8a_num EQUAL 6)
+        set(w8a_probe p6_getvariable_nullkey)
+    else()
+        set(w8a_probe p7_pixelbuffer_race)
+    endif()
+    add_executable(rowl_w8a_${w8a_probe} test_w8a_${w8a_probe}.cpp)
+    target_include_directories(rowl_w8a_${w8a_probe} PRIVATE
+        ${CMAKE_SOURCE_DIR}/engine/include
+    )
+    target_link_libraries(rowl_w8a_${w8a_probe} PRIVATE RowlEngineCore)
+    add_test(NAME w8a_p${w8a_num} COMMAND rowl_w8a_${w8a_probe})
+    set_tests_properties(w8a_p${w8a_num} PROPERTIES
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        ENVIRONMENT "SDL_AUDIODRIVER=dummy;SDL_VIDEODRIVER=dummy"
+        TIMEOUT 120
+    )
+endforeach()
 if(WIN32)
     # MSVC Debug runs the full native suite far slower than optimized
     # compilers; the CI --timeout 300 turns that into a zero-output kill.
