@@ -7,6 +7,8 @@
  */
 
 #include "c_api_internal.hpp"
+// W8-f1 (3): InvalidArgument damga helper'i (src-ici; davranis-birebir).
+#include "c_api_stamp_helper.hpp"
 #include "rowl/platform/user_data_directories.hpp"
 #include "rowl/state/game_state.hpp"
 #include "rowl/state/save_metadata.hpp"
@@ -282,22 +284,19 @@ const char* RowlEngine_GetVariableWithLength(RowlEngineHandle handle, const char
 // B2a: GetVariable caller-buffer varyantı (ölü-handle'da INVALID_HANDLE;
 // eski API "" dönerdi, o korunur).
 // W8-a (6): null-key ölü-handle kanalından ayrıldı (EvaluateCondition
-// :301-312 emsali) — önce handle (ölü -> INVALID_HANDLE aynen), sonra
-// null-key InvalidArgument + damga. INVALID_HANDLE yalnız ölü-handle'ındır.
+// emsali) — önce handle: ölü VEYA yabancı -> INVALID_HANDLE (damgasız;
+// isLiveHandle yalnız Mine'e geçer, yabancı damgalanacak motora
+// toEngineChecked ile ulaşamaz), sonra null-key InvalidArgument + damga
+// (yalnız Mine handle'da). INVALID_HANDLE ölü-handle'a özel değildir.
 RowlEngine_ResultCode RowlEngine_GetVariableUtf8(
     RowlEngineHandle handle, const char* key, char* buffer,
     uint32_t bufferSize, uint32_t* outRequiredSize) {
     if (!isLiveHandle(handle)) return ROWL_RESULT_INVALID_HANDLE;
     if (!key) {
-        invokeNoexcept([&] {
-            if (auto engine = toEngineChecked(handle)) {
-                if (auto ctx = engine->getContext()) {
-                    ctx->setError(Rowl::Core::RuntimeErrorCode::InvalidArgument,
-                                  "Variable key pointer is null; failing closed",
-                                  "get_variable", "");
-                }
-            }
-        });
+        // W8-f1 (3): ortak helper (davranis-birebir: op + mesaj + kod aynen).
+        stampInvalidArgument(toEngineChecked(handle),
+                             "Variable key pointer is null; failing closed",
+                             "get_variable");
         return ROWL_RESULT_INVALID_ARGUMENT;
     }
     return invokeNoexcept<RowlEngine_ResultCode>([&] {
@@ -314,15 +313,10 @@ int RowlEngine_EvaluateCondition(RowlEngineHandle handle, const char* conditionE
     // expression records InvalidArgument on the handle's context.
     if (!isLiveHandle(handle)) return 0;
     if (!conditionExpr) {
-        invokeNoexcept([&] {
-            if (auto engine = toEngineChecked(handle)) {
-                if (auto ctx = engine->getContext()) {
-                    ctx->setError(Rowl::Core::RuntimeErrorCode::InvalidArgument,
-                                  "Condition expression pointer is null; failing closed",
-                                  "evaluate_condition", "");
-                }
-            }
-        });
+        // W8-f1 (3): ortak helper (davranis-birebir: op + mesaj + kod aynen).
+        stampInvalidArgument(toEngineChecked(handle),
+                             "Condition expression pointer is null; failing closed",
+                             "evaluate_condition");
         return 0;
     }
     return invokeNoexcept<int>([&] {
@@ -334,15 +328,10 @@ int RowlEngine_EvaluateCondition(RowlEngineHandle handle, const char* conditionE
 int RowlEngine_ExecuteScript(RowlEngineHandle handle, const char* scriptCode) {
     if (!isLiveHandle(handle)) return 0;
     if (!scriptCode) {
-        invokeNoexcept([&] {
-            if (auto engine = toEngineChecked(handle)) {
-                if (auto ctx = engine->getContext()) {
-                    ctx->setError(Rowl::Core::RuntimeErrorCode::InvalidArgument,
-                                  "Script code string pointer is null",
-                                  "execute_script", "");
-                }
-            }
-        });
+        // W8-f1 (3): ortak helper (davranis-birebir: op + mesaj + kod aynen).
+        stampInvalidArgument(toEngineChecked(handle),
+                             "Script code string pointer is null",
+                             "execute_script");
         return 0;
     }
     return invokeNoexcept<int>([&] {

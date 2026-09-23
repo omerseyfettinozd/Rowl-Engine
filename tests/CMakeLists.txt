@@ -64,6 +64,10 @@ add_executable(rowl_tests
     test_single_engine_image.cpp
     test_demo_first_light.cpp
     test_demo_second_signal.cpp
+    # W8-f1 (5): crash TU artik lib'de degil (player-only); test_crash_log
+    # RowlCrash_*'i dogrudan cagirdigindan TU test ikilisine derlenir.
+    # Tek-kopya disiplini korunur (lib kopyasi dustu, burada tek).
+    ../engine/src/platform/crash_handler.cpp
 )
 
 target_include_directories(rowl_tests PRIVATE

@@ -7,6 +7,8 @@
  */
 
 #include "c_api_internal.hpp"
+// W8-f1 (3): InvalidArgument damga helper'i (src-ici; davranis-birebir).
+#include "c_api_stamp_helper.hpp"
 #include "rowl/i18n/localization_manager.hpp"
 #include "rowl/platform/user_data_directories.hpp"
 #include "rowl/vfs/vfs.hpp"
@@ -134,15 +136,10 @@ void RowlEngine_UpdateSceneFromJson(
 void RowlEngine_LoadStoryGraph(RowlEngineHandle handle, const char* jsonPath) {
     if (!isLiveHandle(handle)) return;
     if (!jsonPath || !*jsonPath) {
-        invokeNoexcept([&] {
-            if (auto engine = toEngineClaimedForWrite(handle)) {
-                if (auto ctx = engine->getContext()) {
-                    ctx->setError(Rowl::Core::RuntimeErrorCode::InvalidArgument,
-                                  "Story graph path is null or empty",
-                                  "load_story_graph_path", "");
-                }
-            }
-        });
+        // W8-f1 (3): ortak helper (davranis-birebir: op + mesaj aynen).
+        stampInvalidArgument(toEngineClaimedForWrite(handle),
+                             "Story graph path is null or empty",
+                             "load_story_graph_path");
         return;
     }
     // Engine'in path'i geçici olarak override et ve graph'i yükle
@@ -156,15 +153,10 @@ void RowlEngine_LoadStoryGraph(RowlEngineHandle handle, const char* jsonPath) {
 int RowlEngine_LoadStoryGraphFromVfs(RowlEngineHandle handle, const char* vfsPath) {
     if (!isLiveHandle(handle)) return 0;
     if (!vfsPath || !*vfsPath) {
-        invokeNoexcept([&] {
-            if (auto engine = toEngineClaimedForWrite(handle)) {
-                if (auto ctx = engine->getContext()) {
-                    ctx->setError(Rowl::Core::RuntimeErrorCode::InvalidArgument,
-                                  "Story graph VFS path is null or empty",
-                                  "load_story_graph_vfs", "");
-                }
-            }
-        });
+        // W8-f1 (3): ortak helper (davranis-birebir: op + mesaj + kod aynen).
+        stampInvalidArgument(toEngineClaimedForWrite(handle),
+                             "Story graph VFS path is null or empty",
+                             "load_story_graph_vfs");
         return 0;
     }
     int loaded = 0;
@@ -372,16 +364,14 @@ void RowlEngine_SetProjectDirectory(RowlEngineHandle handle, const char* project
     }
     if (!isLiveHandle(handle)) return;
     // Null/bos kok InvalidArgument damgali ret (sessiz yutma yok).
+    // W8-f1 (2): bu dal yalnizca context damgalar (story vektorune okuma/
+    // yazma yok) — exclusive story kapisi gerekmez; checked-claim helper
+    // govdesinde kurulur (handle asiri-yuku), TU'da ciplak claim kalmaz.
     if (!projectRoot || !*projectRoot) {
-        invokeNoexcept([&] {
-            if (auto engine = toEngineClaimedForWrite(handle)) {
-                if (auto ctx = engine->getContext()) {
-                    ctx->setError(Rowl::Core::RuntimeErrorCode::InvalidArgument,
-                                  "Project root path is null or empty",
-                                  "set_project_directory", "");
-                }
-            }
-        });
+        // W8-f1 (3): ortak helper (davranis-birebir: op + mesaj aynen).
+        stampInvalidArgument(handle,
+                             "Project root path is null or empty",
+                             "set_project_directory");
         return;
     }
     invokeNoexcept([&] {

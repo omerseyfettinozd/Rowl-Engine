@@ -13,7 +13,8 @@
  *       Advance, oklar -> Menu*, F5/F9 -> QuickSave/QuickLoad, rakam ->
  *       SelectSlot+slot, eslenmemis tus -> false.
  *   (3) facade (engine_render_facade.cpp + c_api_render): budget roundtrip
- *       (Set->Get ayni deger); taze handleda sayaclar 0; dead-handle 0/0.0.
+ *       (Set->Get ayni deger); taze handleda sayaclar+bayt+4 lastframe 0;
+ *       dead-handle'da ayni 5 deger 0 (W8-f1 (6): 3/9 -> 9/9).
  *   (4) font-cozumleme (window_font_resolve.cpp): VFS-once sirasi — gecici
  *       dizine konan default.ttf VFS'ten yuklenir (isLoaded), sistem
  *       adaylarina dusulmez.
@@ -150,9 +151,19 @@ int main() {
     {
         check(RowlEngine_GetTextureCacheTextureCount(h) == 0, "facade: taze sayac 0");
         check(RowlEngine_GetTextureCacheEvictionCount(h) == 0, "facade: taze eviction 0");
+        // W8-f1 (6): 3/9 -> 9/9 — bayt + 4 last-frame degeri canli assert.
+        check(RowlEngine_GetTextureCacheBytes(h) == 0, "facade: taze bayt 0");
+        check(RowlEngine_GetLastFrameTextureLoadMilliseconds(h) == 0.0,
+              "facade: taze lastframe texture 0.0");
+        check(RowlEngine_GetLastFrameNonTextureRenderMilliseconds(h) == 0.0,
+              "facade: taze lastframe nontexture 0.0");
+        check(RowlEngine_GetLastFrameTextRasterizationMilliseconds(h) == 0.0,
+              "facade: taze lastframe text 0.0");
+        check(RowlEngine_GetLastFrameRendererFlushMilliseconds(h) == 0.0,
+              "facade: taze lastframe flush 0.0");
         RowlEngine_SetTextureCacheBudgetBytes(h, 12345678u);
         check(RowlEngine_GetTextureCacheBudgetBytes(h) == 12345678u, "facade: budget roundtrip");
-        std::cout << "  facade: sayac/budget 3/3" << std::endl;
+        std::cout << "  facade: sayac/budget/bayt/lastframe 8/8" << std::endl;
     }
 
     // ── Bacak (2b): overlay renderi (window_pause_overlay.cpp) ──
@@ -183,6 +194,16 @@ int main() {
     RowlEngine_Destroy(h);
     check(RowlEngine_GetTextureCacheTextureCount(h) == 0, "facade: dead-handle sayac 0");
     check(RowlEngine_GetTextureCacheBudgetBytes(h) == 0, "facade: dead-handle budget 0");
+    // W8-f1 (6): dead-handle'da ayni 5 deger sifir doner.
+    check(RowlEngine_GetTextureCacheBytes(h) == 0, "facade: dead-handle bayt 0");
+    check(RowlEngine_GetLastFrameTextureLoadMilliseconds(h) == 0.0,
+          "facade: dead-handle lastframe texture 0.0");
+    check(RowlEngine_GetLastFrameNonTextureRenderMilliseconds(h) == 0.0,
+          "facade: dead-handle lastframe nontexture 0.0");
+    check(RowlEngine_GetLastFrameTextRasterizationMilliseconds(h) == 0.0,
+          "facade: dead-handle lastframe text 0.0");
+    check(RowlEngine_GetLastFrameRendererFlushMilliseconds(h) == 0.0,
+          "facade: dead-handle lastframe flush 0.0");
 
     // ── Bacak (4): VFS-once font cozumu ──
     {
