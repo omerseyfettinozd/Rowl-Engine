@@ -74,16 +74,24 @@ arm64): Homebrew deps plus the same pinned SDL3 3.4.16 tarball as the
 is deliberately absent (no display server, no code signature on the hosted
 runner) — the job name says "compile" on purpose.
 
-Known Darwin gaps, recorded here and NOT fixed in D1 (adaptor skeleton is D2):
-- `engine/src/platform/user_data_directories.cpp:80-83` — the `#else`
-  HOME-fallback (`~/.local/share/...`) also catches Apple builds and violates
-  the Apple convention (`~/Library/Application Support/...`). D2 item, untouched.
-- Root `CMakeLists.txt:253` — `if(UNIX AND NOT APPLE)` keeps the GPU-MSDF
+Known Darwin gaps, updated after the Apple branch landed (3cc9849 landed:
+`engine/src/platform/user_data_directories.cpp` now returns
+`HOME/Library/Application Support` on `__APPLE__` builds):
+- `engine/src/platform/user_data_directories.cpp` — the `#else`
+  HOME-fallback (`~/.local/share/...`) no longer catches Apple builds; the
+  `__APPLE__` branch returns `~/Library/Application Support/...`, matching
+  the Apple convention (native scope: the macOS user-data root now follows
+  the File System Programming Guide outside the sandbox; C# scope:
+  save/profile directories are read via
+  GetSaveDirectoryUtf8/GetProfileDirectoryUtf8 caller-buffer, so no
+  hardcoded Linux path assumption remains).
+- Root `CMakeLists.txt:356` — `if(UNIX AND NOT APPLE)` keeps the GPU-MSDF
   smoke test Linux-only. Irrelevant to the D1 job (no CTest runs there), but
   any future macOS device gate must define the macOS GPU/smoke story.
 
-D2 preview: the macOS adaptor skeleton (user-data directory, packaging and
-signing shape) lands in D2; production code stays untouched in D1.
+D2 preview: the macOS packaging and signing shape lands in D2; the
+user-data directory item already landed in 3cc9849, so production code
+stays untouched in D1 and the D1 compile-only validity holds.
 
 ## Faz 4.5 — Wayland explicitly unsupported (release note)
 

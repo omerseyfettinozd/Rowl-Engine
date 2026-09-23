@@ -21,11 +21,24 @@
  *    loud — ownership-level calls on a LIVE handle stamp WRONG_THREAD (14)
  *    with the offending operation name, cross-thread readable via
  *    RowlEngine_GetLastResultCode/Message (+Utf8 variants), and log the
- *    rejection. Stamping calls: Shutdown, Destroy, Step, Init (claim
- *    refused by a live owner), the prefetch/character aux guards, and the
- *    visible-step dispatch gate. Calls on a truly dead handle stay silent
- *    no-ops (there is no engine left to record into), so INVALID_HANDLE
- *    keeps meaning "dead", never "foreign".
+ *    rejection. Stamping calls: Shutdown, Destroy, Step, Run, Init (claim
+ *    refused by a live owner), the prefetch/character aux guards, the
+ *    visible-step dispatch gate, the pause quick-slot trio
+ *    (set_quick_save_slot/quick_save/quick_load), get_quick_save_slot,
+ *    the pause state quartet (set_paused/is_paused/pause_menu_command/
+ *    get_pause_menu_json), the save-slot quintet (save_game_slot/
+ *    load_game_slot/has_save_slot/get_save_slot_metadata/delete_save_slot),
+ *    rewind, get_audio_spectrum, the embed pair
+ *    (set_external_window_handle/resize_viewport), get_asset_provenance,
+ *    set_project_directory, and the Set/GetFadeCurveChecked pair (op names
+ *    set_fade_curve/get_fade_curve; the legacy void/int mixer forms stay
+ *    silent-tier). Native scope: the op names above match the
+ *    stampWrongThread call sites one-to-one — live+foreign stamps
+ *    WRONG_THREAD (14), dead stays silent INVALID_HANDLE. C# scope: no
+ *    P/Invoke behavior change — legacy int/void forms stay silent, strict
+ *    hosts use the Checked ResultCode forms. Calls on a truly dead handle
+ *    stay silent no-ops (there is no engine left to record into), so
+ *    INVALID_HANDLE keeps meaning "dead", never "foreign".
  *  - Destroyed slots are recycled via a free-list (memory bounded by
  *    peak-live); a stale handle cannot become valid again within the
  *    32-bit generation space because the generation bump on slot reuse
