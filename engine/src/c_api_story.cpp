@@ -137,7 +137,9 @@ void RowlEngine_LoadStoryGraph(RowlEngineHandle handle, const char* jsonPath) {
     if (!isLiveHandle(handle)) return;
     if (!jsonPath || !*jsonPath) {
         // W8-f1 (3): ortak helper (davranis-birebir: op + mesaj aynen).
-        stampInvalidArgument(toEngineClaimedForWrite(handle),
+        // W8-g: context-only stamp — exclusive story kapisi gerekmez
+        // (SetProjectDirectory :372 emsali; ham-handle asiri-yuku).
+        stampInvalidArgument(handle,
                              "Story graph path is null or empty",
                              "load_story_graph_path");
         return;
@@ -154,7 +156,8 @@ int RowlEngine_LoadStoryGraphFromVfs(RowlEngineHandle handle, const char* vfsPat
     if (!isLiveHandle(handle)) return 0;
     if (!vfsPath || !*vfsPath) {
         // W8-f1 (3): ortak helper (davranis-birebir: op + mesaj + kod aynen).
-        stampInvalidArgument(toEngineClaimedForWrite(handle),
+        // W8-g: context-only stamp — exclusive story kapisi gerekmez (:372 emsali).
+        stampInvalidArgument(handle,
                              "Story graph VFS path is null or empty",
                              "load_story_graph_vfs");
         return 0;

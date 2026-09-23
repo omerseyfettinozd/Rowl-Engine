@@ -124,7 +124,7 @@ def main():
     mirror_intact = ("uncompressed_size // compressed_size > MAX_EXPANSION_RATIO"
                      in reader_source)
     check("P4-reader-mirror-intact", mirror_intact,
-          "verify_release_package.py:76 oran kapisi zayiflatilmis/kayip")
+          "verify_release_package.py:96 oran kapisi zayiflatilmis/kayip")
 
     # --- P5: derlenmis kutuphane varsa gercek yesil ---
     runtime = find_built_runtime()

@@ -32,9 +32,11 @@
  *    (set_external_window_handle/resize_viewport), get_asset_provenance,
  *    set_project_directory, and the Set/GetFadeCurveChecked pair (op names
  *    set_fade_curve/get_fade_curve; the legacy void/int mixer forms stay
- *    silent-tier). Native scope: the op names above match the
- *    stampWrongThread call sites one-to-one — live+foreign stamps
- *    WRONG_THREAD (14), dead stays silent INVALID_HANDLE. C# scope: no
+ *    silent-tier). Native scope: 37 stampWrongThread call-sites (grep-verified;
+ *    W8-g: op-name to call-site mapping is NOT one-to-one — init stamps from
+ *    two sites, get_pause_menu_json from two, parametric aux guards stamp
+ *    per-argument op, and the visible-step gate re-stamps step). Live+foreign
+ *    stamps WRONG_THREAD (14), dead stays silent INVALID_HANDLE. C# scope: no
  *    P/Invoke behavior change — legacy int/void forms stay silent, strict
  *    hosts use the Checked ResultCode forms. Calls on a truly dead handle
  *    stay silent no-ops (there is no engine left to record into), so
@@ -197,9 +199,9 @@ ROWL_API void RowlEngine_Destroy(RowlEngineHandle handle);
  * on the engine's last-result with the offending operation name, and the
  * calling thread can read it back via RowlEngine_GetLastResultCode/Message
  * (a dead handle still reports INVALID_HANDLE, so the two are
- * distinguishable). Loud calls: Shutdown, Destroy, Step, Init (live owner
- * refuses the claim), the prefetch/character aux guards, and the
- * visible-step dispatch gate. Ordinary getters/setters stay silent
+ * distinguishable). Loud calls: the full stamping list in the threading
+ * contract above (W8-g: single source — no second list here, lists rot).
+ * Ordinary getters/setters stay silent
  * fail-closed (see the threading contract above). Void calls
  * (Shutdown/Destroy/Step) additionally log the rejection. Calls on a truly
  * dead handle stay silent no-ops (there is no engine left to record into).

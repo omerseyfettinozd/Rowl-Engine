@@ -15,11 +15,12 @@ prototipler public başlığa taşındı (`c_api.h:852-854`); DN kapısı uygula
     native S3/S7 kilitler).
   - **loud** — ownership-düzeyi çağrılar canlı handle'da WRONG_THREAD (14)
     damgalar (op adıyla), `RowlEngine_GetLastResultCode/Message` (+Utf8)
-    ile cross-thread okunur + loglanır. Damgalayan çağrılar: Shutdown,
-    Destroy, Step, Init (canlı owner'ın claim reddi), prefetch/character aux
-    guard'ları, visible-step dispatch gate'i. Gerçekten ölü handle'daki
-    çağrılar sessiz no-op kalır (kaydedilecek motor yok); INVALID_HANDLE
-    hep "ölü" demektir, asla "yabancı" değil.
+    ile cross-thread okunur + loglanır. Damgalayanların TAM listesi için
+    tek-kaynak: `c_api.h:29-37` Stamping census (37 call-site, grep-kanıtlı;
+    op-adı↔call-site birebir DEĞİL — init/pause çift-site, parametrik
+    guard'lar; ikinci liste burada tutulmaz, listeler çürür). Gerçekten ölü
+    handle'daki çağrılar sessiz no-op kalır (kaydedilecek motor yok);
+    INVALID_HANDLE hep "ölü" demektir, asla "yabancı" değil.
 - Host'lar bir handle'ın tüm çağrılarını owner thread'e serileştirir
   (editör: OffscreenRuntimeWorker dispatch).
 
@@ -27,10 +28,10 @@ prototipler public başlığa taşındı (`c_api.h:852-854`); DN kapısı uygula
 
 | Yüzey (c_api.h) | Legacy form | Tier | Not |
 |---|---|---|---|
-| Save/Load slot sarmalayıcıları (1008-1023: `SaveGameSlot`, `LoadGameSlot` → `...Result` forward) | `int` 1/0 | **loud** | `Save/LoadGameSlotResult`, `Has/Delete/Rewind`, metadata: `claimHandleOrClassify` + `stampWrongThread` (D4 #49). Legacy `int` form sonucu forward'lar. |
-| Mixer fade/polyphony/bed (816-822 comment + devamı: `Set/GetFadeCurve`, `Set/GetSfxPoolDepth`, …) | `void` / `int` | **sessiz** | Yalnız `isLiveHandle`; yabancı da sessiz düşer. Strict isteyen host → §3 checked varyantlar. |
-| Chapter/prefetch penceresi (~1323-1358: `LoadChapterIndexJson`, `AppendChapterFileJson`, `Load/UnloadChapter`, `GetLoadedChaptersJson`, `IsChapterBoundaryNode`, …) | karışık | **loud** | Aux-map guard'ları: erase yalnız gerçek ölümde (`Dead`), yabancı damgalanır (D3 #150/#157). `int`-taşıyıcılarda kod taşınamaz → 0 + damga. |
-| Provenance (`GetAssetProvenanceJson`) | ResultCode | sessiz-yabancı | Yabancı `toEngineChecked` null → INVALID_HANDLE (damgasız). Strict isteyen host → checked varyant adayı (henüz yok). |
+| Save/Load slot sarmalayıcıları (1030-1077: `SaveGameSlotResult`, `LoadGameSlotResult`, `Has/DeleteSaveSlot`, `Rewind`, metadata) | `int` 1/0 | **loud** | `claimHandleOrClassify` + `stampWrongThread` (D4 #49). Legacy `int` form sonucu forward'lar. |
+| Mixer fade/polyphony/bed (yorum :827, decl'ler :842-859+: `Set/GetFadeCurve`, `Set/GetSfxPoolDepth`, bed'ler, pump) | `void` / `int` | **sessiz** | Yalnız `isLiveHandle`; yabancı da sessiz düşer. Strict isteyen host → §3 checked varyantlar. |
+| Chapter/prefetch penceresi (yorum :1335, decl'ler :1365-1384+: `LoadChapterIndexJson`, `AppendChapterFileJson`, `Load/UnloadChapter`, `GetLoadedChaptersJson`, `IsChapterBoundaryNode`, …) | karışık | **loud** | Aux-map guard'ları: erase yalnız gerçek ölümde (`Dead`), yabancı damgalanır (D3 #150/#157). `int`-taşıyıcılarda kod taşınamaz → 0 + damga. |
+| Provenance (`GetAssetProvenanceJson`) | ResultCode | **loud** | Yabancı `classifyHandle` → `stampWrongThread(handle, "get_asset_provenance")` + WRONG_THREAD (`c_api_provenance.cpp:71-73`); başlık damga-listesinde (`c_api.h:32`). Strict isteyen host → checked varyant adayı (henüz yok). |
 | Additive temel (`c_api_contract.cpp:1-8`) | — | — | Versiyon/capability + caller-buffer; yeni ResultCode'lu API'lerin temeli. Legacy girişler alt-sistem TU'larında uyumluluk sarmalayıcısı olarak kalır. |
 
 Kural: **sembol silmek YOK** (additive ABI). Yeni davranış yeni sembole
@@ -65,8 +66,8 @@ RED kilidi: `tests/test_thread_contract_red_probe.cpp`
 
 - N (native): `build-d14` + CTest (en az `thread_contract_red_probe`; tam
   `rowl_native_tests` yeşili hedeflenir).
-- D (doküman): bu dosya + malzeme paritesi (1008-1023, 816-822, ~1323-1358,
-  `c_api_contract.cpp:1-8`).
+- D (doküman): bu dosya + malzeme paritesi (1030-1077, 827/842-859,
+  1335/1365-1384, `c_api_contract.cpp:1-8`).
 - A (ABI): `tools/check_abi_additive.py` — yalnızca ekleme (iki yeni sembol),
   çıkarma yok.
 - DN (dotnet): **uygulanır** — başlık değişti (`c_api.h:852-854`),

@@ -85,7 +85,7 @@ Known Darwin gaps, updated after the Apple branch landed (3cc9849 landed:
   save/profile directories are read via
   GetSaveDirectoryUtf8/GetProfileDirectoryUtf8 caller-buffer, so no
   hardcoded Linux path assumption remains).
-- Root `CMakeLists.txt:356` — `if(UNIX AND NOT APPLE)` keeps the GPU-MSDF
+- Root `CMakeLists.txt:367` — `if(UNIX AND NOT APPLE)` keeps the GPU-MSDF
   smoke test Linux-only. Irrelevant to the D1 job (no CTest runs there), but
   any future macOS device gate must define the macOS GPU/smoke story.
 

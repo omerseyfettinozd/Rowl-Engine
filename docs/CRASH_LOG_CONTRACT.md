@@ -99,7 +99,10 @@ note: snapshot reflects the last safe-point refresh
 ## Non-goals / invariants
 
 - No C ABI change: `c_api.h` untouched, no new capability bits; the handler
-  is a C++-linkage helper exported with the existing `ROWL_API` macro.
+  is a C++-linkage helper compiled player-only (`engine/CMakeLists.txt:476`,
+  install'dan EXCLUDE `:508`) — paylasilan lib'e export YOK (W8-f1 (5)
+  tek-kopya disiplini; `RowlCrash_*` sembolleri `libRowlEngineCore.so`'da
+  yoktur, test ikilisi TU'yu dogrudan derler).
 - Zero diff in `engine.cpp`, `window.cpp`, `MainWindowViewModel`,
   `EngineHost`.
 - The editor is untouched.
