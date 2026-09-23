@@ -432,6 +432,47 @@ set_tests_properties(d05_blip_queue_class_probe PROPERTIES
     ENVIRONMENT "SDL_AUDIODRIVER=dummy;SDL_VIDEODRIVER=dummy"
     TIMEOUT 120
 )
+
+# D12 yorum-celiski RED kilidi (RED-1: retention cumlesi): c_api.h metnini
+# okuyan statik prob; yalnizca dosya okur ama D01 konvansiyonuyla paylasilan
+# RowlEngineCore'a baglanir (uretim topolojisiyle ayni). rowl_tests govdesine
+# gomulmez ki kirmizi-yesil dongusu tum suiti kosmadan saniyeler icinde
+# kanitlansin. KIRMIZI: "retained until process exit" + exit 1; YESIL:
+# recycle+generation wording + exit 0.
+add_executable(rowl_d12_red1_retention_comment test_d12_red1_retention_comment.cpp)
+target_include_directories(rowl_d12_red1_retention_comment PRIVATE
+    ${CMAKE_SOURCE_DIR}/engine/include
+)
+target_link_libraries(rowl_d12_red1_retention_comment PRIVATE RowlEngineCore)
+target_compile_definitions(rowl_d12_red1_retention_comment PRIVATE
+    ROWL_D12_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+)
+
+add_test(NAME d12_red1 COMMAND rowl_d12_red1_retention_comment)
+set_tests_properties(d12_red1 PROPERTIES
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    ENVIRONMENT "SDL_AUDIODRIVER=dummy;SDL_VIDEODRIVER=dummy"
+    TIMEOUT 120
+)
+
+# D12 golge-cagri RED kilidi (RED-2: sessiz legacy yuzey fail-closed):
+# yalnizca public C API (paylasilan RowlEngineCore'a baglanir; uretim
+# topolojisiyle ayni). rowl_tests govdesine gomulmez. Bogus/olu handle ile
+# void no-op, int 0, const-char "" + yabanci-thread sessiz-default;
+# crash/garbage KIRMIZI (exit 1), fail-closed YESIL (exit 0). D14 Checked
+# loud varyantlar (WRONG_THREAD 14) bu probun DISI.
+add_executable(rowl_d12_red2_shadow_call test_d12_red2_shadow_call.cpp)
+target_include_directories(rowl_d12_red2_shadow_call PRIVATE
+    ${CMAKE_SOURCE_DIR}/engine/include
+)
+target_link_libraries(rowl_d12_red2_shadow_call PRIVATE RowlEngineCore)
+
+add_test(NAME d12_red2 COMMAND rowl_d12_red2_shadow_call)
+set_tests_properties(d12_red2 PROPERTIES
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    ENVIRONMENT "SDL_AUDIODRIVER=dummy;SDL_VIDEODRIVER=dummy"
+    TIMEOUT 120
+)
 if(WIN32)
     # MSVC Debug runs the full native suite far slower than optimized
     # compilers; the CI --timeout 300 turns that into a zero-output kill.

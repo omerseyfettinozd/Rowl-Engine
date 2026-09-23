@@ -26,9 +26,10 @@
  *    visible-step dispatch gate. Calls on a truly dead handle stay silent
  *    no-ops (there is no engine left to record into), so INVALID_HANDLE
  *    keeps meaning "dead", never "foreign".
- *  - Destroyed records are retained until process exit, so a stale handle
- *    can never become valid again through address reuse (retention, not
- *    generations).
+ *  - Destroyed slots are recycled via a free-list (memory bounded by
+ *    peak-live); a stale handle cannot become valid again within the
+ *    32-bit generation space because the generation bump on slot reuse
+ *    makes it name a different token (recycle + generations, ABA defense).
  *  - Hosts must serialize all calls for one handle onto its owner thread.
  *    The editor does this via OffscreenRuntimeWorker dispatch; standalone
  *    runtimes stay on their host UI/event thread. Concurrent Init of several
