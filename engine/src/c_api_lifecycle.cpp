@@ -372,6 +372,12 @@ void RowlEngine_Run(RowlEngineHandle handle) {
     // No video serial here by design: Run blocks until quit, so holding the
     // serial would deadlock a concurrent Shutdown waiting for it. Liveness
     // + shared ownership is the whole guard (D3 #106).
+    // W8-a (4): yabanci-thread Run sessiz no-op degil — Destroy :274-277
+    // emsaliyle WRONG_THREAD damgali ret (loud-tier; bloklanmaz).
+    if (classifyHandle(handle) == HandleStanding::Foreign) {
+        stampWrongThread(handle, "run");
+        return;
+    }
     if (!isLiveHandle(handle)) return;
     invokeNoexcept([&] {
         auto checked = toEngineChecked(handle);

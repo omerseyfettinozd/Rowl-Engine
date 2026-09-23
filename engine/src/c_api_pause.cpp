@@ -10,6 +10,13 @@
 static thread_local std::string g_pauseMenuJsonBuf;
 
 int RowlEngine_SetQuickSaveSlot(RowlEngineHandle handle, int32_t slotIndex) {
+    // W8-a (2): kardes SaveGameSlotResult emsali (c_api_state.cpp:129-133) —
+    // claim-or-reject ile loud: yabanci WRONG_THREAD damgali 0, state'e
+    // dokunulmaz. Olu-handle sessiz 0 aynen.
+    if (claimHandleOrClassify(handle) == HandleStanding::Foreign) {
+        stampWrongThread(handle, "set_quick_save_slot");
+        return 0;
+    }
     if (!isLiveHandle(handle)) return 0;
     return invokeNoexcept<int>([&] {
         auto checked = toEngineChecked(handle);
@@ -26,6 +33,11 @@ int32_t RowlEngine_GetQuickSaveSlot(RowlEngineHandle handle) {
 }
 
 int RowlEngine_QuickSave(RowlEngineHandle handle) {
+    // W8-a (2): SetQuickSaveSlot ile ayni loud-kapi (op: quick_save).
+    if (claimHandleOrClassify(handle) == HandleStanding::Foreign) {
+        stampWrongThread(handle, "quick_save");
+        return 0;
+    }
     if (!isLiveHandle(handle)) return 0;
     return invokeNoexcept<int>([&] {
         auto checked = toEngineChecked(handle);
@@ -34,6 +46,11 @@ int RowlEngine_QuickSave(RowlEngineHandle handle) {
 }
 
 int RowlEngine_QuickLoad(RowlEngineHandle handle) {
+    // W8-a (2): SetQuickSaveSlot ile ayni loud-kapi (op: quick_load).
+    if (claimHandleOrClassify(handle) == HandleStanding::Foreign) {
+        stampWrongThread(handle, "quick_load");
+        return 0;
+    }
     if (!isLiveHandle(handle)) return 0;
     return invokeNoexcept<int>([&] {
         auto checked = toEngineChecked(handle);

@@ -363,7 +363,27 @@ bool probeSaveDirectoryWritable(const std::filesystem::path& dir) {
 
 }  // namespace
 
-void RowlEngine_SetProjectDirectory(RowlEngineHandle handle, const char* projectRoot) {    if (!isLiveHandle(handle) || !projectRoot || !*projectRoot) return;
+void RowlEngine_SetProjectDirectory(RowlEngineHandle handle, const char* projectRoot) {
+    // W8-a (3): tek guard ikiye bolundu (LoadStoryGraph :136-146 emsali).
+    // Yabanci handle WRONG_THREAD damgali ret; olu-handle sessiz ret aynen.
+    if (classifyHandle(handle) == HandleStanding::Foreign) {
+        stampWrongThread(handle, "set_project_directory");
+        return;
+    }
+    if (!isLiveHandle(handle)) return;
+    // Null/bos kok InvalidArgument damgali ret (sessiz yutma yok).
+    if (!projectRoot || !*projectRoot) {
+        invokeNoexcept([&] {
+            if (auto engine = toEngineClaimedForWrite(handle)) {
+                if (auto ctx = engine->getContext()) {
+                    ctx->setError(Rowl::Core::RuntimeErrorCode::InvalidArgument,
+                                  "Project root path is null or empty",
+                                  "set_project_directory", "");
+                }
+            }
+        });
+        return;
+    }
     invokeNoexcept([&] {
         auto engine = toEngineClaimedForWrite(handle);
         if (!engine) return;
