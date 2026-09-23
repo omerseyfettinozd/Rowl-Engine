@@ -1,9 +1,8 @@
 # Thread-Contract Legacy Köprüsü (D14)
 
 D14 kapsamı: `c_api.h` threading-contract yorumu (:12-35) + yeni guard TU
-(`engine/src/c_api_thread_contract_guard.cpp`) + bu doküman. Başlık rotuşu
-YOK — `c_api.h`'ye dokunulmaz (D12'nin :29-31 bandı düzeltmesiyle rebase
-çakışması olmaz; DN kapısı düşer).
+(`engine/src/c_api_thread_contract_guard.cpp`) + bu doküman. W8-c ile
+prototipler public başlığa taşındı (`c_api.h:852-854`); DN kapısı uygulanır.
 
 ## 1. Sözleşme (c_api.h:12-35 özeti)
 
@@ -39,14 +38,17 @@ Kural: **sembol silmek YOK** (additive ABI). Yeni davranış yeni sembole
 
 ## 3. D14 checked varyantlar (yeni TU)
 
-Prototipler (lokal `extern "C"` bildirimi; `c_api.h`'ye eklenmedi):
+Prototipler public başlıkta (`c_api.h:852-854`, additive ABI — eski
+sembollere dokunulmaz):
 
 ```c
 RowlEngine_ResultCode RowlEngine_SetFadeCurveChecked(RowlEngineHandle handle, int curve);
 RowlEngine_ResultCode RowlEngine_GetFadeCurveChecked(RowlEngineHandle handle, int* outValue);
 ```
 
-Davranış (`set_fade_curve` / `get_fade_curve` op damgasıyla):
+Davranış (`set_fade_curve` / `get_fade_curve` op damgasıyla; native kapsam:
+motor-tier kararı, C# kapsam: strict host ResultCode okur, legacy form
+sessiz kalır):
 
 - Canlı + owner → uygula/oku, `ROWL_RESULT_OK`. Legacy form aynı değeri görür.
 - Canlı + yabancı → `ROWL_RESULT_WRONG_THREAD` (14) + damga; motora dokunulmaz.
@@ -67,5 +69,6 @@ RED kilidi: `tests/test_thread_contract_red_probe.cpp`
   `c_api_contract.cpp:1-8`).
 - A (ABI): `tools/check_abi_additive.py` — yalnızca ekleme (iki yeni sembol),
   çıkarma yok.
-- DN (dotnet): **düşer** — başlık değişmedi (`c_api.h` diff yok).
+- DN (dotnet): **uygulanır** — başlık değişti (`c_api.h:852-854`),
+  bayraklı Editor+Tests derlemesi 0-hata.
 - S / TSan / X: yok.
