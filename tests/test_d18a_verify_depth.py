@@ -247,6 +247,9 @@ with tempfile.TemporaryDirectory() as directory:
         "settings": {"quality_q": 4},
         "output_sha256": hashlib.sha256(s2_out.read_bytes()).hexdigest(),
         "source_path": "sfx/theme.mp3",
+        # C# MediaConverterService.TryParse sozlesmesi (created_by zorunlu):
+        # fixture tam-semali tutulur, C# katmaninda fail-closed yenmez.
+        "created_by": "rowl_oggenc-test",
     }), encoding="utf-8")
     s2_pkg = root / "s2.rowlpkg"
     packed = run_pack(s2_src, s2_pkg)
@@ -256,6 +259,8 @@ with tempfile.TemporaryDirectory() as directory:
     check("S2-converted-var",
           s2_record.get("converted_from", {}).get("source_sha256") == "22" * 32,
           f"fresh converted_from kayip/bozuk: {s2_record.get('converted_from')!r}")
+    check("S2-tam-sema", "thin-sidecar" not in packed.stderr,
+          f"tam-semali fixture zayif sayildi: {packed.stderr!r}")
 
     # --- S3 (bulgu 3 kilidi): malformed output_sha256 -> DUSER + uyari ---
     # Pre-fix delik: gecersiz deger fail-open guvenilir (converted_from VAR).
