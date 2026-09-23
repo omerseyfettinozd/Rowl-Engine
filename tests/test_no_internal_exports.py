@@ -13,6 +13,7 @@ bu prob kok CMakeLists.txt'e kayitlidir).
 Derlenmis kutuphane bulunamazsa SKIP (exit 0). Repo'ya yazim yok.
 """
 
+import os
 import pathlib
 import shutil
 import subprocess
@@ -23,7 +24,20 @@ ABI_PREFIX = "RowlEngine_"
 
 
 def find_built_runtime():
-    """Derlenmis libRowlEngineCore.so arar (build*/lib + klasik build/)."""
+    """Derlenmis libRowlEngineCore.so arar.
+
+    W8-c fix-turu: ctest kaydi ROWL_LIB_DIR ile derlenen agacin lib
+    dizinini verir (bayat build/ golgelemesi yok); env yoksa eski
+    build-taramasina duser.
+    """
+    env_dir = os.environ.get("ROWL_LIB_DIR")
+    if env_dir:
+        for pattern in ("libRowlEngineCore.so", "libRowlEngineCore.dylib",
+                        "RowlEngineCore.dll"):
+            hit = pathlib.Path(env_dir) / pattern
+            if hit.is_file():
+                return str(hit)
+        return None
     patterns = ("libRowlEngineCore.so", "libRowlEngineCore.dylib",
                 "RowlEngineCore.dll")
     search_roots = [ROOT / "build", ROOT]

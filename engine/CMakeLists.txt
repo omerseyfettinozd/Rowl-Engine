@@ -494,9 +494,9 @@ install(TARGETS RowlEngineCore
 if(TARGET rowl_player)
     install(TARGETS rowl_player RUNTIME DESTINATION bin)
 endif()
-# W8-c (bulgu-4): internal basliklar kurulu pakete cikmaz; yalnizca public
-# C ABI basliklari dagitilir (diger internal basliklar kaynak-agactan
-# kullanilir, kurulmaz).
+# W8-c (bulgu-4): 2 internal baslik (blip-error-channel + crash-handler)
+# kurulu pakete cikmaz. (Diger internal basliklar bu kural disinda aynen
+# kurulur — bu EXCLUDE yalnizca ROWL_API'si kaldirilan ikisini kapsar.)
 install(DIRECTORY include/ DESTINATION include
     REGEX "audio/audio_blip_error_channel\\.hpp$" EXCLUDE
     REGEX "platform/crash_handler\\.hpp$" EXCLUDE

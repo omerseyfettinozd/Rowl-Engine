@@ -163,8 +163,8 @@ if(ROWL_BUILD_RUNTIME_TESTS)
         )
         # W8-c bulgu-1 kilidi: expansion-ratio gate probu (pack RAW-karari +
         # verifier 2048x-forge reddi). D18b-ii blogu emsali; package_* icinde
-        # alfabetik (determinism < ratio_gate). zstd'siz yorumlayicida probun
-        # kendisi SKIP verir (sahte-kirmizi yok).
+        # alfabetik (determinism < ratio_gate). zstd'siz yorumlayicida yalniz
+        # pack-karari SKIP olur; verifier-aynasi sentetik tabanda kosar.
         add_test(
             NAME rowl_package_ratio_gate_tests
             COMMAND ${Python3_EXECUTABLE} -u ${CMAKE_SOURCE_DIR}/tests/test_package_ratio_gate.py
@@ -183,12 +183,15 @@ if(ROWL_BUILD_RUNTIME_TESTS)
         )
         # W8-c bulgu-4 kilidi: dinamik tabloda RowlEngine_-disi T sembol
         # yok (9 internal helper gizli). Derlenmis lib yoksa prob SKIP verir.
+        # ROWL_LIB_DIR derlenen agacin lib dizinini isaret eder (bayat
+        # build/ golgelemesi olmaz).
         add_test(
             NAME rowl_no_internal_exports_tests
             COMMAND ${Python3_EXECUTABLE} -u ${CMAKE_SOURCE_DIR}/tests/test_no_internal_exports.py
         )
         set_tests_properties(rowl_no_internal_exports_tests PROPERTIES
             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+            ENVIRONMENT "ROWL_LIB_DIR=$<TARGET_FILE_DIR:RowlEngineCore>"
             TIMEOUT 60
         )
         if(ROWL_BUILD_TOOLS)
