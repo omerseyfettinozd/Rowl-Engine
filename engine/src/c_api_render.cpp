@@ -85,8 +85,7 @@ uint32_t RowlEngine_GetTextureCacheTextureCount(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return 0;
     return invokeNoexcept<uint32_t>([&] {
         auto checked = toEngineChecked(handle);
-        const auto* window = checked ? checked->getWindow() : nullptr;
-        return window ? static_cast<uint32_t>(window->getTextureCacheTextureCount()) : 0;
+        return checked ? checked->getTextureCacheTextureCount() : 0;
     }, 0);
 }
 
@@ -94,8 +93,7 @@ uint64_t RowlEngine_GetTextureCacheBytes(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return 0;
     return invokeNoexcept<uint64_t>([&] {
         auto checked = toEngineChecked(handle);
-        const auto* window = checked ? checked->getWindow() : nullptr;
-        return window ? window->getTextureCacheBytes() : 0;
+        return checked ? checked->getTextureCacheBytes() : 0;
     }, 0);
 }
 
@@ -103,8 +101,7 @@ uint64_t RowlEngine_GetTextureCacheBudgetBytes(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return 0;
     return invokeNoexcept<uint64_t>([&] {
         auto checked = toEngineChecked(handle);
-        const auto* window = checked ? checked->getWindow() : nullptr;
-        return window ? window->getTextureCacheBudgetBytes() : 0;
+        return checked ? checked->getTextureCacheBudgetBytes() : 0;
     }, 0);
 }
 
@@ -112,8 +109,7 @@ uint64_t RowlEngine_GetTextureCacheEvictionCount(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return 0;
     return invokeNoexcept<uint64_t>([&] {
         auto checked = toEngineChecked(handle);
-        const auto* window = checked ? checked->getWindow() : nullptr;
-        return window ? window->getTextureCacheEvictionCount() : 0;
+        return checked ? checked->getTextureCacheEvictionCount() : 0;
     }, 0);
 }
 
@@ -121,8 +117,7 @@ double RowlEngine_GetLastFrameTextureLoadMilliseconds(RowlEngineHandle handle) {
     if (!isLiveHandle(handle)) return 0.0;
     return invokeNoexcept<double>([&] {
         auto checked = toEngineChecked(handle);
-        const auto* window = checked ? checked->getWindow() : nullptr;
-        return window ? window->getLastFrameTextureLoadMilliseconds() : 0.0;
+        return checked ? checked->getLastFrameTextureLoadMilliseconds() : 0.0;
     }, 0.0);
 }
 
@@ -130,8 +125,7 @@ double RowlEngine_GetLastFrameNonTextureRenderMilliseconds(RowlEngineHandle hand
     if (!isLiveHandle(handle)) return 0.0;
     return invokeNoexcept<double>([&] {
         auto checked = toEngineChecked(handle);
-        const auto* window = checked ? checked->getWindow() : nullptr;
-        return window ? window->getLastFrameNonTextureRenderMilliseconds() : 0.0;
+        return checked ? checked->getLastFrameNonTextureRenderMilliseconds() : 0.0;
     }, 0.0);
 }
 
@@ -139,8 +133,7 @@ double RowlEngine_GetLastFrameTextRasterizationMilliseconds(RowlEngineHandle han
     if (!isLiveHandle(handle)) return 0.0;
     return invokeNoexcept<double>([&] {
         auto checked = toEngineChecked(handle);
-        const auto* window = checked ? checked->getWindow() : nullptr;
-        return window ? window->getLastFrameTextRasterizationMilliseconds() : 0.0;
+        return checked ? checked->getLastFrameTextRasterizationMilliseconds() : 0.0;
     }, 0.0);
 }
 
@@ -148,8 +141,7 @@ double RowlEngine_GetLastFrameRendererFlushMilliseconds(RowlEngineHandle handle)
     if (!isLiveHandle(handle)) return 0.0;
     return invokeNoexcept<double>([&] {
         auto checked = toEngineChecked(handle);
-        const auto* window = checked ? checked->getWindow() : nullptr;
-        return window ? window->getLastFrameRendererFlushMilliseconds() : 0.0;
+        return checked ? checked->getLastFrameRendererFlushMilliseconds() : 0.0;
     }, 0.0);
 }
 
@@ -160,8 +152,7 @@ void RowlEngine_SetTextureCacheBudgetBytes(RowlEngineHandle handle, uint64_t byt
         if (!checked) return;
         // D1 (#110): pre-init sessiz-drop → sinyalli-drop (davranış korunur).
         requireEngineInitialized(checked, "set_texture_cache_budget");
-        auto* window = checked->getWindow();
-        if (window) window->setTextureCacheBudgetBytes(bytes);
+        checked->setTextureCacheBudgetBytes(bytes);
     });
 }
 
