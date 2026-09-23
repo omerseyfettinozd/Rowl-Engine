@@ -542,6 +542,34 @@ foreach(w8a_num RANGE 1 7)
         TIMEOUT 120
     )
 endforeach()
+
+# W8-e YAZMA fazi (2 kucuk prob; davranis-degisikligi yok, prob-yalniz):
+#  (3a) user-data fallback-zincir pin'i (XDG -> HOME/getpwuid -> temp/current;
+#  test_platform_host.cpp'da fallback-zincir probu YOK).
+#  (3b) VideoSerialGuard reentrancy pin'i (non-recursive mutex + exactly-1
+#  guard + Run/Step serial-free; deadlock ureten test DEGIL, kural pin'i).
+# D05/D12 konvansiyonu: bagimsiz ikililer, rowl_tests govdesine gomulmez.
+# Kapilar: N D (native/platform; ABI degisikligi yok).
+foreach(w8e_probe userdata_fallback_probe video_serial_pin)
+    add_executable(rowl_w8e_${w8e_probe} test_w8e_${w8e_probe}.cpp)
+    target_include_directories(rowl_w8e_${w8e_probe} PRIVATE
+        ${CMAKE_SOURCE_DIR}/engine/include
+    )
+    target_link_libraries(rowl_w8e_${w8e_probe} PRIVATE
+        rowl_engine_objects
+        rowl_engine_thirdparty
+    )
+    target_compile_definitions(rowl_w8e_${w8e_probe} PRIVATE
+        ROWL_BUILDING_DLL
+        ROWL_W8E_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+    )
+    add_test(NAME w8e_${w8e_probe} COMMAND rowl_w8e_${w8e_probe})
+    set_tests_properties(w8e_${w8e_probe} PROPERTIES
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        ENVIRONMENT "SDL_AUDIODRIVER=dummy;SDL_VIDEODRIVER=dummy"
+        TIMEOUT 120
+    )
+endforeach()
 if(WIN32)
     # MSVC Debug runs the full native suite far slower than optimized
     # compilers; the CI --timeout 300 turns that into a zero-output kill.

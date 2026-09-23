@@ -20,13 +20,15 @@
  *
  * Bacak 1 — gecikme kilidi (TSan'sız KIRMIZI verir):
  *   thread-H: playVoiceBlip("", pitch, vol) döngüsü (synth kolu; blip
- *     gövdesi audio_engine.cpp:2180'de m_stateMutex'i alır ve SDL-kuyruk
- *     adımları boyunca (:2295/:2356) tutar).
+ *     gövdesi audio_engine.cpp:2232'de başlar, :2238'de m_stateMutex'i
+ *     alır ve SDL-kuyruk adımları boyunca (:2352/:2356 asset kolu,
+ *     :2413-2420 synth kolu) tutar; synth-üretim :2383-2406).
  *   thread-R (ana thread): getChannelPeak + getChannelRms +
  *     getSpectrumBands üçlüsünün çağrı-başına mikrosaniyesi (steady_clock,
  *     N=2000 örnek; p99 + max raporlanır).
  *   Öngörü (pre-fix): okuyucular m_stateMutex lock_guard'lı
- *     (:2136-2172) olduğundan hammer'ın kritik-bölümü arkasında bloklanır;
+ *     (pre-fix aralığı; güncel kilitsiz okuyucular :2191-2230) olduğundan
+ *     hammer'ın kritik-bölümü arkasında bloklanır;
  *     p99 eşik-üstüdür → "D05-LATENCY RED" + exit 1.
  *   Fix (telemetri üyeleri atomic<float>, okuyucular load-relaxed kilitsiz;
  *     yazanlar m_stateMutex altında serileşmeye devam eder, kilit-sırası
@@ -60,8 +62,10 @@ void latencyFail(const std::string& message) {
     rowlLockFail("d05-telemetry-latency-probe", message);
 }
 
-// Zamanlanan okuyucu üçlüsü: RED-1 kapsamındaki üç okuyucunun tamamı
-// (:2136-2172) her örnekte çağrılır.
+// Zamanlanan okuyucu üçlüsü: RED-1 kapsamındaki üç kilitsiz okuyucunun
+// tamamı (:2191 getChannelPeak, :2208 getChannelRms, :2224
+// getSpectrumBands) her örnekte çağrılır. (w8-e: satır-numaraları güncel
+// zemine taşındı; eşik/mantık değişmedi.)
 inline void timedTelemetryRead(Rowl::Audio::AudioEngine* audio, float* bands) {
     volatile float sink = 0.0f;
     sink += audio->getChannelPeak(1, 0);
