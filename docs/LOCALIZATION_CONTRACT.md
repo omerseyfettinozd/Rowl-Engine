@@ -24,8 +24,14 @@ disagree, code wins and this document must be patched.
 ```
 
 - Missing keys (e.g. `first_light`) → default `"en"`, supported `["en"]`.
+  (Both sides: native `LocalizationManager::parseManifestJson` and managed
+  `LocalizationService.ParseManifestLocales`.)
 - Malformed JSON → same `"en"` fallback; the project still loads.
+  (Both sides: native returns a default manifest on parse failure, managed
+  `ParseManifestLocales` falls back the same way.)
 - A default outside the supported list is prepended, never dropped.
+  (Both sides: native `parseManifestJson` inserts the default at the head,
+  managed `ParseManifestLocales` mirrors it.)
 - Tags normalize (lowercase, `_` → `-`) but are preserved whole — region
   and script subtags are validated, never stripped. Resolution is
   chain-aware: `matchSupported` walks the BCP 47 fallback chain
@@ -49,8 +55,13 @@ disagree, code wins and this document must be patched.
 }
 ```
 
-- `locale` must match the file name; every entry needs string
-  `speaker` / `text` / `alt_text` (empty strings allowed).
+- `locale` must match the file name; every entry needs `speaker` /
+  `text` / `alt_text`. Native scope: each field accepts a plain string
+  (empty allowed) or a plural table (category → template object with
+  mandatory `"other"`, `parseEntryField`, T5-locked in
+  `test_locale_cluster.cpp`); any other shape is skipped and counted.
+  Managed divergence: `LocalizationService.ValidateCatalog` requires all
+  three fields to be strings and returns on the first malformed row (see §5).
 - `schema_version` 1 or 2 is accepted; anything else rejects the load.
   (Native runtime scope; the managed `LocalizationService.ValidateCatalog`
   in §5 currently accepts only 1 — see §5.)
@@ -60,13 +71,15 @@ disagree, code wins and this document must be patched.
   the load with prior state untouched.
 - A missing or malformed catalog stays unloaded; that locale resolves
   through the fallback chain instead of blocking the project mount.
+  (Native mount-bootstrap scope: `c_api_i18n.cpp` `SetProjectDirectory`
+  wiring — unreadable/oversize files are skipped, never fatal.)
 - Reference fixture: `samples/second_signal/Assets/locales/{en,tr}.json`.
 
 ## 4. C ABI (additive; older entry points untouched)
 
 | Entry point | Contract |
 |---|---|
-| `RowlEngine_SetLocale(handle, locale)` | `OK` on switch; `INVALID_HANDLE` for a dead handle; `INVALID_ARGUMENT` for null/empty/unsupported codes (state unchanged). Tags normalize. |
+| `RowlEngine_SetLocale(handle, locale)` | `OK` on switch; `INVALID_HANDLE` for a dead handle; `INVALID_ARGUMENT` for null/empty/unsupported codes (state unchanged); `FILE_NOT_FOUND` when the code is supported but its catalog never loaded (`CatalogMissing`, T3-locked in `test_locale_cluster.cpp`). Tag normalization: native chain-aware (see §2), managed trim (see §5). |
 | `RowlEngine_GetLocale(handle, buffer, size, outRequired)` | Caller-buffer contract (null/0 = size query; undersized = `BUFFER_TOO_SMALL`). Fresh handles report `"en"`. |
 | `RowlEngine_GetSupportedLocalesJson(...)` | Same contract; UTF-8 JSON array (e.g. `["en","tr"]`). |
 | `RowlEngine_GetCapabilities` | Now includes `CAPABILITY_LOCALIZATION`; all older flags intact. |
@@ -85,7 +98,12 @@ manager. Mount wiring is one call in `SetProjectDirectory`
 - Logic: `editor/Services/LocalizationService.cs` — manifest parsing,
   catalog validation, `EffectiveLocale` (profile preference ∩ supported,
   else manifest default, else `"en"`), and handle-seamed native
-  selection. `EngineHost` and `MainWindowViewModel` are untouched.
+  selection. Dilim 1'de `EngineHost` ve `MainWindowViewModel` untouched
+  idi; Faz 3 Dilim 4'te `MainWindowViewModel.OpenLocalizationDesk` eklendi
+  (one-line `RelayCommand` delegation to
+  `LocalizationDeskCoordinator.OpenDesk` — all desk logic lives in the
+  Localization services and ViewModel, see
+  `LOCALIZATION_EDITOR_CONTRACT.md`). `EngineHost` hala untouched.
 - Managed-side divergence (native-parity gap, xUnit-locked):
   `LocalizationService.NormalizeLocale` truncates to the primary subtag
   (`"tr-TR"` → `"tr"`, locked by
@@ -101,9 +119,15 @@ manager. Mount wiring is one call in `SetProjectDirectory`
 
 ## 6. Limits
 
-- Catalog files larger than 16 MiB are skipped at mount time.
-- Locale codes: 1–32 ASCII alphanumerics after normalization.
-- Manifest documents larger than 1 MiB are ignored (fallback applies).
+- Locale codes (native `isWellFormedTag`, `localization_manager.cpp`):
+  lowercased `-`-separated tag of 1–4 subtags, 32 chars max; language
+  2–3 alpha, then script (4 alpha) / region (2 alpha or 3 digit) /
+  variant-or-extension run (2–8 alnum). Region and script subtags are
+  validated, never stripped.
+- Size caps are native mount-bootstrap scope only (`c_api_i18n.cpp`):
+  catalog documents over 16 MiB are skipped, manifest documents over
+  1 MiB are ignored (fallback applies). The managed
+  `LocalizationService.ValidateCatalog` enforces no size cap.
 
 ## 7. Test matrix
 
@@ -115,7 +139,12 @@ manager. Mount wiring is one call in `SetProjectDirectory`
 
 ## 8. Explicitly out of scope (later Faz 3 slices)
 
-Rich-text markup, shaping/rendering (FreeType/HarfBuzz/FriBidi/
-libunibreak), editor translation table, pseudo-locale, CSV/JSON exchange,
-font-license/glyph coverage checks, and per-node localized dialogue
-resolution through the story runtime.
+Shipped in Faz 3 Dilim 4 — see `docs/LOCALIZATION_EDITOR_CONTRACT.md`:
+editor translation table (Translation Desk via
+`LocalizationDeskCoordinator`), pseudo-locale (`PseudoLocaleGenerator`,
+tag `qps-ploc`), and CSV/JSON exchange (`TranslationExchangeService`).
+
+Still out of scope: rich-text markup, shaping/rendering
+(FreeType/HarfBuzz/FriBidi/libunibreak), font-license/glyph coverage
+checks, and per-node localized dialogue resolution through the story
+runtime.

@@ -115,6 +115,18 @@ if(ROWL_BUILD_RUNTIME_TESTS)
             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
             TIMEOUT 30
         )
+        # W8-b localization docs-sync probu: 8 belgelik sevk-gercegi
+        # (Dilim-4 desk/pseudo/exchange, cogul-tablo, etiket kurali,
+        # FILE_NOT_FOUND, desk delegasyonu, taraf kapsamlari, BASELINE
+        # hucresi) ile kod capalarini kilitler. Salt dosya okur.
+        add_test(
+            NAME rowl_w8b_docs_sync_tests
+            COMMAND ${Python3_EXECUTABLE} -u ${CMAKE_SOURCE_DIR}/tests/test_w8b_docs_sync.py
+        )
+        set_tests_properties(rowl_w8b_docs_sync_tests PROPERTIES
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+            TIMEOUT 30
+        )
         add_test(
             NAME rowl_package_determinism_tests
             COMMAND ${Python3_EXECUTABLE} -u ${CMAKE_SOURCE_DIR}/tests/test_package_determinism.py
