@@ -1259,7 +1259,7 @@ void AudioEngine::setBgmVolume(float volume) {
         return;
     }
     m_bgmVolume.store(std::clamp(volume, 0.0f, 1.0f), std::memory_order_relaxed);
-    m_bgmGain.store(m_isDuckingActive ? (m_bgmVolume.load(std::memory_order_relaxed) * m_duckingFactor) : m_bgmVolume.load(std::memory_order_relaxed), std::memory_order_relaxed);
+    m_bgmGain.store(m_isDuckingActive.load(std::memory_order_relaxed) ? (m_bgmVolume.load(std::memory_order_relaxed) * m_duckingFactor.load(std::memory_order_relaxed)) : m_bgmVolume.load(std::memory_order_relaxed), std::memory_order_relaxed);
     // Faz 5 Dilim 2: üye + mixer çift-yön senkron (tek kaynak okumada mixer).
     m_mixer.setUserVolume(StreamBusId::Bgm, m_bgmVolume.load(std::memory_order_relaxed));
     applyChannelGains();
@@ -1301,17 +1301,17 @@ void AudioEngine::setUiVolume(float volume) {
 }
 
 void AudioEngine::triggerVoiceDucking(bool isVoiceActive) {
-    m_isDuckingActive = isVoiceActive;
+    m_isDuckingActive.store(isVoiceActive, std::memory_order_relaxed);
     if (isVoiceActive) {
-        m_bgmGain.store(m_bgmVolume.load(std::memory_order_relaxed) * m_duckingFactor, std::memory_order_relaxed);
-        ROWL_LOG_INFO("Voice Ducking Triggered -> BGM Attenuated by " + std::to_string(m_duckingFactor * 100.0f) + "% (Gain: " + std::to_string(m_bgmGain.load(std::memory_order_relaxed)) + ")");
+        m_bgmGain.store(m_bgmVolume.load(std::memory_order_relaxed) * m_duckingFactor.load(std::memory_order_relaxed), std::memory_order_relaxed);
+        ROWL_LOG_INFO("Voice Ducking Triggered -> BGM Attenuated by " + std::to_string(m_duckingFactor.load(std::memory_order_relaxed) * 100.0f) + "% (Gain: " + std::to_string(m_bgmGain.load(std::memory_order_relaxed)) + ")");
     } else {
         m_bgmGain.store(m_bgmVolume.load(std::memory_order_relaxed), std::memory_order_relaxed);
         ROWL_LOG_INFO("Voice Finished -> BGM Restored to Full Volume (Gain: " + std::to_string(m_bgmGain.load(std::memory_order_relaxed)) + ")");
     }
     // Faz 5 Dilim 2: duck mixer'e bağlanır (mixer gainFor(Bgm) ==
     // master*m_bgmGain birebir korunur).
-    m_mixer.setBgmDuckGain(isVoiceActive ? m_duckingFactor : 1.0f);
+    m_mixer.setBgmDuckGain(isVoiceActive ? m_duckingFactor.load(std::memory_order_relaxed) : 1.0f);
     applyChannelGains();
 }
 
@@ -1320,16 +1320,16 @@ void AudioEngine::setDuckingFactor(float factor) {
         ROWL_LOG_WARN("Ignoring non-finite ducking factor");
         return;
     }
-    m_duckingFactor = std::clamp(factor, 0.0f, 1.0f);
-    if (m_isDuckingActive) {
-        m_bgmGain.store(m_bgmVolume.load(std::memory_order_relaxed) * m_duckingFactor, std::memory_order_relaxed);
-        m_mixer.setBgmDuckGain(m_duckingFactor);
+    m_duckingFactor.store(std::clamp(factor, 0.0f, 1.0f), std::memory_order_relaxed);
+    if (m_isDuckingActive.load(std::memory_order_relaxed)) {
+        m_bgmGain.store(m_bgmVolume.load(std::memory_order_relaxed) * m_duckingFactor.load(std::memory_order_relaxed), std::memory_order_relaxed);
+        m_mixer.setBgmDuckGain(m_duckingFactor.load(std::memory_order_relaxed));
     }
     applyChannelGains();
 }
 
 void AudioEngine::applyDspFilter(DSPFilterType filter) {
-    m_activeFilter = filter;
+    m_activeFilter.store(filter, std::memory_order_relaxed);
     std::string filterName = "Normal";
 
     switch (filter) {
@@ -1418,11 +1418,11 @@ void AudioEngine::updateBgmTransition(float deltaSeconds) {
     float outgoing = 0.0f;
     float incoming = 0.0f;
     if (m_activeBgmTransition == BgmTransitionKind::Fade) {
-        outgoing = fadeKindOutgoing(m_fadeCurve, progress);
-        incoming = fadeKindIncoming(m_fadeCurve, progress);
+        outgoing = fadeKindOutgoing(m_fadeCurve.load(std::memory_order_relaxed), progress);
+        incoming = fadeKindIncoming(m_fadeCurve.load(std::memory_order_relaxed), progress);
     } else {
-        outgoing = fadeCurveOutgoing(m_fadeCurve, progress);
-        incoming = fadeCurveIncoming(m_fadeCurve, progress);
+        outgoing = fadeCurveOutgoing(m_fadeCurve.load(std::memory_order_relaxed), progress);
+        incoming = fadeCurveIncoming(m_fadeCurve.load(std::memory_order_relaxed), progress);
     }
     const float baseGain = m_mixer.gainFor(StreamBusId::Bgm);
     // A5-tur1: transition gain/clear/pause fail'leri kayda geçer (warn-only;
@@ -1610,7 +1610,7 @@ bool AudioEngine::reopenDeviceStreams() {
     if (m_bgmStream && m_transitionBgmStream && m_voiceStream && sfxStreamsReady && m_ambienceStream && m_ambienceStreamB && m_uiStream) {
         m_deviceAvailable = true;
         applyChannelGains();
-        applyDspFilter(m_activeFilter);
+        applyDspFilter(m_activeFilter.load(std::memory_order_relaxed));
         // Faz 5 Dilim 1: stream intent korunur — kaynak VFS düzeyinde açık
         // kalır; ring'deki çözülmüş pencere taze akışa geri kuyruğa girer
         // (granule konumu + path korunur, baştan başlama YOKTUR).
@@ -2178,9 +2178,9 @@ void AudioEngine::updateTelemetry(float deltaSeconds) {
         masterEnergy * 0.65f,
         masterEnergy * 0.50f
     };
-    if (m_activeFilter == DSPFilterType::UnderwaterLowPass) {
+    if (m_activeFilter.load(std::memory_order_relaxed) == DSPFilterType::UnderwaterLowPass) {
         targetBands[0] *= 1.2f; targetBands[1] *= 0.5f; targetBands[2] *= 0.1f; targetBands[3] *= 0.02f;
-    } else if (m_activeFilter == DSPFilterType::Telephone) {
+    } else if (m_activeFilter.load(std::memory_order_relaxed) == DSPFilterType::Telephone) {
         targetBands[0] *= 0.1f; targetBands[1] *= 1.1f; targetBands[2] *= 1.0f; targetBands[3] *= 0.15f;
     }
     for (size_t b = 0; b < 4; ++b) {
