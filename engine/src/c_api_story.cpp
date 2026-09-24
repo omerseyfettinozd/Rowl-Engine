@@ -26,7 +26,11 @@
 extern "C++" {
 namespace {
 
-// #69: TU-local story gate. toEngineChecked paylasimli sahiplikle omru
+// #69/F5: TU-local, process-wide story gate. A writer on one handle also
+// blocks readers of other handles; this is part of the public threading
+// contract in c_api.h. Advance/choice can evaluate Lua conditions under the
+// write lock, so their callback duration is visible to other handles.
+// toEngineChecked paylasimli sahiplikle omru
 // uzatir (D3 #106) ama claim ile vektor-okuma arasi pencere aciktir:
 // baska bir thread bu TU uzerinden story'yi mutate edebilir (commit/clear
 // realloc → okuyucu sarkan pointer). Sorgular shared, yazicilar exclusive

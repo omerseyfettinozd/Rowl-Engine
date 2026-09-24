@@ -51,6 +51,12 @@
  *    engines from several threads is NOT a supported topology.
  *  - Subsystem-internal locks (VFS, logger, audio, save, prefetch window)
  *    guard shared state inside one engine; they do not lift handle affinity.
+ *  - Story/graph C API calls use one process-wide shared/exclusive gate.
+ *    A story write on any handle blocks story reads and writes on all other
+ *    handles until that call returns. Node advance and choice selection can
+ *    evaluate Lua choice conditions while holding the write gate. The gate
+ *    does not cover Step or C API calls outside the story/graph surface;
+ *    hosts must still follow the per-handle owner-thread rule above.
  *  - No C++ types, templates, or exceptions cross the boundary.
  */
 
