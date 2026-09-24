@@ -21,10 +21,12 @@
  */
 #include "rowl_test_harness.hpp"
 
+#include <atomic>
+#include <chrono>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <string>
-#include <unistd.h>
 
 namespace {
 
@@ -42,13 +44,19 @@ void writeFile(const fs::path& path, const std::string& content) {
 }
 
 // Süreci geçici dizine taşır, çıkışta CWD'yi geri yükler (RAII).
+// Taşınabilir benzersizlik: PID yerine (Windows/MSVC'de unistd.h yok)
+// duvar-saati + süreç-içi atomik sayaç kullanılır.
 class TempCwd {
 public:
     TempCwd() {
         saved_ = fs::current_path();
+        const uint64_t stamp =
+            static_cast<uint64_t>(std::chrono::steady_clock::now()
+                                      .time_since_epoch().count());
+        const uint64_t seq = s_counter.fetch_add(1, std::memory_order_relaxed);
         root_ = fs::temp_directory_path() /
-                ("rowl_bootdiag_" + std::to_string(
-                    static_cast<unsigned long long>(::getpid())));
+                ("rowl_bootdiag_" + std::to_string(stamp) + "_" +
+                 std::to_string(seq));
         std::error_code ec;
         fs::remove_all(root_, ec);
         fs::create_directories(root_, ec);
@@ -66,7 +74,10 @@ public:
 private:
     fs::path saved_;
     fs::path root_;
+    static std::atomic<uint64_t> s_counter;
 };
+
+inline std::atomic<uint64_t> TempCwd::s_counter{0};
 
 std::string graphJson(uint64_t startId) {
     return std::string("{\"format_version\":4,\"start_node_id\":") +

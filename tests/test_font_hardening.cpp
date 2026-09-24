@@ -176,6 +176,12 @@ void test_font_hardening() {
     // #41a pini: stb-gecer ama FT-gecersiz bayt artik sessiz fallback
     // degil, yukleme-basarisizligidir (eski kod 'stb fallback' ile true
     // donuyordu); canli font yine korunur.
+    // Yapi-notu: ileri backend derlenmemis build'de (ROWL_TEXT_SHAPING_AVAILABLE
+    // kapali — örn. sistemde harfbuzz/fribidi yoksa) stb yolu mesru yukleme
+    // yoludur ve bu alt-kontrol uygulanmaz; CI sanitizer/tsan job'lari backend
+    // paketlerini kurdugu icin orada her zaman calisir.
+    const bool advancedCompiled =
+        Rowl::Text::TextShaper::isAdvancedBackendCompiled();
     const std::vector<uint8_t> validBytesEarly =
         readFileBytes("Assets/fonts/default.ttf");
     if (validBytesEarly.empty()) {
@@ -183,6 +189,9 @@ void test_font_hardening() {
                   << std::endl;
         std::exit(1);
     }
+    if (!advancedCompiled) {
+        TEST_PASS("Advanced backend absent: stb-only path is the legitimate build contract (FT-reject check skipped)");
+    } else {
     const std::vector<uint8_t> stbOnly = makeStbPassFtFail(validBytesEarly);
     if (stbOnly.empty()) {
         std::cerr << "Font hardening lock failure: could not craft stb-pass fixture"
@@ -201,6 +210,7 @@ void test_font_hardening() {
                   << std::endl;
         std::exit(1);
     }
+    } // advancedCompiled
     // Bozuk dosya yolu da ayni garantiyi verir.
     const auto badPath =
         std::filesystem::temp_directory_path() / "rowl_tur7_garbage.ttf";
