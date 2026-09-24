@@ -1364,8 +1364,10 @@ bool LuaSandbox::callOptionalFunction(const std::string& functionName, double de
     // çalıştırmaz); mevcut callback'ler rawget ile birebir çözülür.
     // B7 (#28-class): pushstring kota-pinned durumda ayırabilir — RecoveryScope
     // rezervi altında (getVariable emsali). :850 getGlobalNumber KAPSAM-DIŞI.
-    const RecoveryScope recovery(this);
-    d07_rawGetGlobal(m_luaState, functionName.c_str());
+    {
+        const RecoveryScope recovery(this);
+        d07_rawGetGlobal(m_luaState, functionName.c_str());
+    }
     if (lua_isnil(m_luaState, -1)) {
         lua_pop(m_luaState, 1);
         return true;
@@ -1378,6 +1380,8 @@ bool LuaSandbox::callOptionalFunction(const std::string& functionName, double de
         return false;
     }
 
+    // The reserve must be closed before lua_pcall: the callback is script
+    // work and must stay inside the ordinary 64 MiB quota.
     lua_pushnumber(m_luaState, deltaTime);
     resetInstructionCounter();
     armWallDeadline();

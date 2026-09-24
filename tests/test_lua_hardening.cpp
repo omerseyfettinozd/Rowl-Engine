@@ -33,6 +33,7 @@ extern "C" {
 namespace Rowl::Scripting {
 struct LuaSandboxTestAccess {
     static std::size_t tracked(const LuaSandbox& sandbox) { return sandbox.m_bytesAllocated; }
+    static void setTracked(LuaSandbox& sandbox, std::size_t bytes) { sandbox.m_bytesAllocated = bytes; }
     static std::size_t reported(const LuaSandbox& sandbox) {
         return static_cast<std::size_t>(lua_gc(sandbox.m_luaState, LUA_GCCOUNT)) * 1024u +
             static_cast<std::size_t>(lua_gc(sandbox.m_luaState, LUA_GCCOUNTB));
@@ -141,6 +142,35 @@ void test_lua_hardening() {
             exit(1);
         }
         TEST_PASS("F2 Lua Quota Stays Aligned Across Conditions And Reset");
+    }
+
+    // F4: pin the accounting near its ceiling without allocating 64 MiB.
+    // Lookup may use the recovery reserve, but the callback's 256 KiB string
+    // must fail under the normal quota. The same callback then succeeds when
+    // the artificial pressure is removed.
+    {
+        using Access = Rowl::Scripting::LuaSandboxTestAccess;
+        Rowl::Scripting::LuaSandbox sandbox;
+        freshSandbox(sandbox);
+        if (!sandbox.executeString(
+                "function f4_alloc() local data = string.rep('x', 262144); "
+                "rowl.var_set('f4_ran', tostring(#data)) end")) {
+            std::cerr << "F4 setup: callback definition failed" << std::endl;
+            exit(1);
+        }
+        Access::setTracked(sandbox, 64u * 1024u * 1024u - 16u * 1024u);
+        const bool ranAtLimit = sandbox.callOptionalFunction("f4_alloc");
+        Access::setTracked(sandbox, Access::reported(sandbox));
+        if (ranAtLimit || sandbox.getVariable("f4_ran") != "") {
+            std::cerr << "F4: callback consumed the recovery reserve" << std::endl;
+            exit(1);
+        }
+        if (!sandbox.callOptionalFunction("f4_alloc") || sandbox.getVariable("f4_ran") != "262144") {
+            std::cerr << "F4: callback did not recover under the normal quota: "
+                      << sandbox.getLastError() << std::endl;
+            exit(1);
+        }
+        TEST_PASS("F4 Callback Cannot Consume Recovery Reserve");
     }
 
     // #25/#30: reserved bridge/stdlib names never enter saved state, on both
