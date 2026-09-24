@@ -20,6 +20,7 @@
 #include "rowl/state/game_state.hpp"
 
 #include <atomic>
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -357,6 +358,29 @@ void test_lua_hardening() {
             exit(1);
         }
         TEST_PASS("B7 Wall-Clock Deadline Terminates Heavy Scripts (#24)");
+    }
+
+    // F1: a single C pattern call must be rejected before it can bypass the hook.
+    {
+        Rowl::Scripting::LuaSandbox sandbox;
+        freshSandbox(sandbox);
+        const auto start = std::chrono::steady_clock::now();
+        const bool result = sandbox.evaluateCondition(
+            "string.find(string.rep('a',3000), string.rep('a*',10)..'b') == nil");
+        if (result || std::chrono::steady_clock::now() - start > std::chrono::seconds(6)) {
+            std::cerr << "F1: pathological pattern was not rejected promptly" << std::endl;
+            exit(1);
+        }
+        if (!sandbox.evaluateCondition("string.find('abc', 'b') == 2")) {
+            std::cerr << "F1: normal pattern search broke" << std::endl;
+            exit(1);
+        }
+        if (!sandbox.evaluateCondition(
+                "string.find(string.rep('a', 300), '[a-z][a-z][a-z]') == 1")) {
+            std::cerr << "F1: character classes were mistaken for quantifiers" << std::endl;
+            exit(1);
+        }
+        TEST_PASS("F1 Bounded Lua Pattern Work");
     }
 
     // #38: loading a legacy (component-free) graph tears down live scripts —

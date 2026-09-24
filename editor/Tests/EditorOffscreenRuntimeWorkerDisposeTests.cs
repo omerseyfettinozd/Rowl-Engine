@@ -11,6 +11,35 @@ namespace RowlEngine.Editor.Tests;
 public sealed class EditorOffscreenRuntimeWorkerDisposeTests
 {
     [Fact]
+    public async Task Worker_NativeCallStall_TimesOutAndRejectsFurtherCommands()
+    {
+        using var entered = new ManualResetEventSlim(false);
+        using var release = new ManualResetEventSlim(false);
+        using var destroyed = new ManualResetEventSlim(false);
+        using var worker = new OffscreenRuntimeWorker(
+            createHandle: () => new IntPtr(7),
+            destroyHandle: _ => destroyed.Set());
+        try
+        {
+            var pending = Task.Run(() => worker.Invoke(_ =>
+            {
+                entered.Set();
+                release.Wait();
+                return 1;
+            }));
+            Assert.True(entered.Wait(TimeSpan.FromSeconds(2)));
+            await Assert.ThrowsAsync<TimeoutException>(async () => await pending);
+            Assert.False(worker.IsAvailable);
+            Assert.False(worker.TryPost(_ => { }));
+        }
+        finally
+        {
+            release.Set();
+        }
+        Assert.True(destroyed.Wait(TimeSpan.FromSeconds(2)));
+    }
+
+    [Fact]
     public void Worker_SelfDisposeFromQueuedCommand_DrainsGracefully()
     {
         int destroyCount = 0;

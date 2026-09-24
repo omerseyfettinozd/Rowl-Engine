@@ -110,6 +110,54 @@ static int lua_rowl_var_set(lua_State* L) {
     return 0;
 }
 
+// Lua's pattern matcher runs inside one C call, so the VM hook cannot stop
+// catastrophic backtracking. Bound the work before entering the stdlib call.
+static int boundedPatternCall(lua_State* L) {
+    size_t subjectBytes = 0;
+    size_t patternBytes = 0;
+    luaL_checklstring(L, 1, &subjectBytes);
+    const char* pattern = luaL_checklstring(L, 2, &patternBytes);
+    const bool plainFind = lua_toboolean(L, lua_upvalueindex(2)) && lua_toboolean(L, 4);
+    if (plainFind) {
+        if (subjectBytes > 1024u * 1024u || patternBytes > 256)
+            return luaL_error(L, "Lua pattern work limit exceeded");
+    } else {
+        unsigned quantifiers = 0;
+        for (size_t i = 0; i < patternBytes; ++i) {
+            if (pattern[i] == '%' && i + 1 < patternBytes) { ++i; continue; }
+            if (pattern[i] == '[') {
+                while (++i < patternBytes && pattern[i] != ']') {
+                    if (pattern[i] == '%' && i + 1 < patternBytes) ++i;
+                }
+                continue;
+            }
+            if (pattern[i] == '*' || pattern[i] == '+' || pattern[i] == '-' || pattern[i] == '?')
+                ++quantifiers;
+        }
+        if (patternBytes > 256 || quantifiers > 2 ||
+            (subjectBytes > 65536 && quantifiers == 0) ||
+            (subjectBytes > 4096 && quantifiers == 1) ||
+            (subjectBytes > 128 && quantifiers == 2))
+            return luaL_error(L, "Lua pattern work limit exceeded");
+    }
+    const int arguments = lua_gettop(L);
+    lua_pushvalue(L, lua_upvalueindex(1));
+    lua_insert(L, 1);
+    lua_call(L, arguments, LUA_MULTRET);
+    return lua_gettop(L);
+}
+
+static void boundStringPatterns(lua_State* L) {
+    lua_getglobal(L, "string");
+    for (const char* name : {"find", "match", "gmatch", "gsub"}) {
+        lua_getfield(L, -1, name);
+        lua_pushboolean(L, std::strcmp(name, "find") == 0);
+        lua_pushcclosure(L, boundedPatternCall, 2);
+        lua_setfield(L, -2, name);
+    }
+    lua_pop(L, 1);
+}
+
 // Instruction counter hook - counts accumulated instructions
 static void lua_instruction_hook(lua_State* L, lua_Debug* ar) {
     (void)ar;
@@ -330,6 +378,7 @@ bool LuaSandbox::initialize() {
     lua_pop(m_luaState, 1);
     luaL_requiref(m_luaState, "string", luaopen_string, 1);
     lua_pop(m_luaState, 1);
+    boundStringPatterns(m_luaState);
     luaL_requiref(m_luaState, "table", luaopen_table, 1);
     lua_pop(m_luaState, 1);
 
@@ -697,6 +746,7 @@ void LuaSandbox::repairGlobals() {
     lua_pop(m_luaState, 1);
     luaL_requiref(m_luaState, "string", luaopen_string, 1);
     lua_pop(m_luaState, 1);
+    boundStringPatterns(m_luaState);
     luaL_requiref(m_luaState, "table", luaopen_table, 1);
     lua_pop(m_luaState, 1);
     luaL_requiref(m_luaState, "_G", luaopen_base, 1);

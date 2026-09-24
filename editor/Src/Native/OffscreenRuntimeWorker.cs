@@ -14,6 +14,7 @@ namespace RowlEngine.Editor.Native
     /// </summary>
     internal sealed class OffscreenRuntimeWorker : IDisposable
     {
+        private const int NativeCommandTimeoutMilliseconds = 7000;
         private readonly BlockingCollection<Action<IntPtr>> _commands = new();
         private readonly Func<IntPtr> _createHandle;
         private readonly Action<IntPtr> _destroyHandle;
@@ -69,6 +70,19 @@ namespace RowlEngine.Editor.Native
             catch (InvalidOperationException)
             {
                 throw new ObjectDisposedException(nameof(OffscreenRuntimeWorker));
+            }
+            bool completed;
+            try { completed = completion.Task.Wait(NativeCommandTimeoutMilliseconds); }
+            catch (AggregateException) { return completion.Task.GetAwaiter().GetResult(); }
+            if (!completed)
+            {
+                // A native call cannot be interrupted safely. Stop accepting
+                // commands; the background owner cleans up if it returns.
+                Interlocked.Exchange(ref _disposeState, 1);
+                try { _commands.CompleteAdding(); }
+                catch (ObjectDisposedException) { }
+                _started.Dispose();
+                throw new TimeoutException("The offscreen native runtime did not respond within 7 seconds.");
             }
             return completion.Task.GetAwaiter().GetResult();
         }
@@ -234,17 +248,21 @@ namespace RowlEngine.Editor.Native
         {
             ArgumentNullException.ThrowIfNull(command);
             if (!IsAvailable) return false;
-            return _commands.TryAdd(handle =>
+            try
             {
-                try { command(handle); }
-                catch (Exception error)
+                return _commands.TryAdd(handle =>
                 {
-                    // Async callers own diagnostics and the worker must stay
-                    // alive, but record the failure so posted commands cannot
-                    // fail silently.
-                    Debug.WriteLine($"[OffscreenRuntimeWorker] TryPost command failed: {error}");
-                }
-            });
+                    try { command(handle); }
+                    catch (Exception error)
+                    {
+                        Debug.WriteLine($"[OffscreenRuntimeWorker] TryPost command failed: {error}");
+                    }
+                });
+            }
+            catch (InvalidOperationException)
+            {
+                return false;
+            }
         }
 
         private void Run()
@@ -313,7 +331,11 @@ namespace RowlEngine.Editor.Native
                 _started.Dispose();
                 return;
             }
-            _thread.Join();
+            if (!_thread.Join(NativeCommandTimeoutMilliseconds))
+            {
+                _started.Dispose();
+                return; // Run owns queue disposal when the native call returns.
+            }
             DisposeCommandsOnce();
             _started.Dispose();
         }
