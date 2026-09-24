@@ -18,6 +18,9 @@
 #include "rowl_test_harness.hpp"
 #include "rowl/scripting/lua_sandbox.hpp"
 #include "rowl/state/game_state.hpp"
+extern "C" {
+#include <lua.h>
+}
 
 #include <atomic>
 #include <chrono>
@@ -26,6 +29,19 @@
 #include <string>
 #include <thread>
 #include <vector>
+
+namespace Rowl::Scripting {
+struct LuaSandboxTestAccess {
+    static std::size_t tracked(const LuaSandbox& sandbox) { return sandbox.m_bytesAllocated; }
+    static std::size_t reported(const LuaSandbox& sandbox) {
+        return static_cast<std::size_t>(lua_gc(sandbox.m_luaState, LUA_GCCOUNT)) * 1024u +
+            static_cast<std::size_t>(lua_gc(sandbox.m_luaState, LUA_GCCOUNTB));
+    }
+    static void* alloc(LuaSandbox& sandbox, void* ptr, std::size_t oldSize, std::size_t newSize) {
+        return LuaSandbox::quotaAlloc(&sandbox, ptr, oldSize, newSize);
+    }
+};
+}
 
 namespace {
 
@@ -79,6 +95,52 @@ void test_lua_hardening() {
     if (!cwd.ok) {
         std::cerr << "B7 setup: CWD pin failed" << std::endl;
         exit(1);
+    }
+
+    // F2: Lua passes a type tag for fresh allocations; shrink must refund the
+    // difference and growth must charge only after realloc succeeds.
+    {
+        using Access = Rowl::Scripting::LuaSandboxTestAccess;
+        Rowl::Scripting::LuaSandbox sandbox;
+        void* block = Access::alloc(sandbox, nullptr, LUA_TSTRING, 4096);
+        if (!block || Access::tracked(sandbox) != 4096) {
+            std::cerr << "F2: fresh allocation was undercounted" << std::endl;
+            exit(1);
+        }
+        block = Access::alloc(sandbox, block, 4096, 1024);
+        if (!block || Access::tracked(sandbox) != 1024) {
+            std::cerr << "F2: shrink was not refunded" << std::endl;
+            exit(1);
+        }
+        Access::alloc(sandbox, block, 1024, 0);
+        if (Access::tracked(sandbox) != 0) {
+            std::cerr << "F2: free left charged bytes" << std::endl;
+            exit(1);
+        }
+        TEST_PASS("F2 Lua Allocator Net Accounting");
+    }
+
+    {
+        using Access = Rowl::Scripting::LuaSandboxTestAccess;
+        Rowl::Scripting::LuaSandbox sandbox;
+        freshSandbox(sandbox);
+        sandbox.setVariable("score", "5");
+        for (int i = 0; i < 50000; ++i) {
+            if (!sandbox.evaluateCondition("score < 10 and score >= 0")) {
+                std::cerr << "F2: true condition failed after " << i << " evaluations" << std::endl;
+                exit(1);
+            }
+        }
+        if (Access::tracked(sandbox) != Access::reported(sandbox)) {
+            std::cerr << "F2: allocator diverged from Lua live bytes" << std::endl;
+            exit(1);
+        }
+        sandbox.clearVariables();
+        if (Access::tracked(sandbox) != Access::reported(sandbox)) {
+            std::cerr << "F2: session reset left allocator out of sync" << std::endl;
+            exit(1);
+        }
+        TEST_PASS("F2 Lua Quota Stays Aligned Across Conditions And Reset");
     }
 
     // #25/#30: reserved bridge/stdlib names never enter saved state, on both

@@ -145,6 +145,7 @@ public:
     };
 
 private:
+    friend struct LuaSandboxTestAccess;
     static void* quotaAlloc(void* ud, void* ptr, size_t osize, size_t nsize);
     /// Fail-closed entry gate: refuses poisoned sessions and oversized code.
     bool checkRunAllowed(const char* what, std::size_t codeBytes);

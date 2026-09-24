@@ -2,6 +2,7 @@
 #include "rowl/scripting/lua_condition_purity.hpp"
 #include "rowl/core/logger.hpp"
 #include "rowl/util/locale_independent_parse.hpp"
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
@@ -21,6 +22,11 @@ namespace Rowl::Scripting {
 
 // Per-sandbox state stored in Lua registry
 static const char* SANDBOX_REGISTRY_KEY = "_rowl_sandbox_ptr";
+static std::size_t luaMemoryBytes(lua_State* state) {
+    const int kib = lua_gc(state, LUA_GCCOUNT);
+    const int remainder = lua_gc(state, LUA_GCCOUNTB);
+    return static_cast<std::size_t>(kib) * 1024u + static_cast<std::size_t>(remainder);
+}
 constexpr std::size_t kMaxLoadedModules = 128;
 constexpr std::size_t kMaxModuleIdBytes = 256;
 // A1: sandbox resource budgets (H24/H25). Instruction hook trips at 10M;
@@ -223,6 +229,9 @@ static void lua_instruction_hook(lua_State* L, lua_Debug* ar) {
 // "not enough memory" error instead of OOM-killing the process.
 void* LuaSandbox::quotaAlloc(void* ud, void* ptr, size_t osize, size_t nsize) {
     auto* sandbox = static_cast<LuaSandbox*>(ud);
+    // Lua 5.4 passes a type tag, not an allocation size, for fresh objects.
+    // The old size is meaningful only when ptr names a live allocation.
+    if (!ptr) osize = 0;
     if (nsize == 0) {
         if (sandbox && osize <= sandbox->m_bytesAllocated) sandbox->m_bytesAllocated -= osize;
         else if (sandbox) sandbox->m_bytesAllocated = 0;
@@ -232,9 +241,14 @@ void* LuaSandbox::quotaAlloc(void* ud, void* ptr, size_t osize, size_t nsize) {
     const size_t grown = (nsize > osize) ? (nsize - osize) : 0;
     size_t cap = kMaxLuaMemoryBytes;
     if (sandbox && sandbox->m_inRecovery) cap += kRecoveryReserveBytes;
-    if (sandbox && sandbox->m_bytesAllocated + grown > cap) return nullptr;
+    if (sandbox && grown &&
+        (sandbox->m_bytesAllocated > cap || grown > cap - sandbox->m_bytesAllocated))
+        return nullptr;
     void* resized = realloc(ptr, nsize);
-    if (resized && sandbox) sandbox->m_bytesAllocated += grown;
+    if (resized && sandbox) {
+        if (nsize > osize) sandbox->m_bytesAllocated += nsize - osize;
+        else sandbox->m_bytesAllocated -= std::min(sandbox->m_bytesAllocated, osize - nsize);
+    }
     return resized;
 }
 
@@ -354,7 +368,9 @@ bool LuaSandbox::initialize() {
     // A1 (H25): cap total Lua allocations so one hostile chunk cannot OOM the
     // process (e.g. string.rep building a multi-GB block in a single call,
     // which the instruction hook never sees).
-    m_bytesAllocated = 0;
+    // luaL_newstate allocated its base state with Lua's original allocator.
+    // Include those live bytes before switching to the quota allocator.
+    m_bytesAllocated = luaMemoryBytes(m_luaState);
     m_limitTripped = false;
     // B7 (#22/#24/#27/#31): fresh-session accounting. Budgets and poison live
     // per lua_State, so a reused object must not inherit the old session's.
@@ -1075,6 +1091,10 @@ void LuaSandbox::clearVariables() {
         // luaopen_base ile yeniden acar, kuyrugundaki quarantineEnvironment
         // (:710) golgeleri/korumalari/kopruyu tazeler.
         repairGlobals();
+        // Release unreachable values from the old session, then reconcile
+        // with Lua's live-byte accounting before the next session starts.
+        lua_gc(m_luaState, LUA_GCCOLLECT);
+        m_bytesAllocated = luaMemoryBytes(m_luaState);
     }
     m_scriptVariables.clear();
     // A1 (H24): a new session boundary lifts the instruction-limit poison.
@@ -1409,6 +1429,7 @@ void LuaSandbox::shutdown() {
     m_scriptVariables.clear();
     m_initialGlobals.clear();
     // B7: per-session budgets die with the state (see initialize()).
+    m_bytesAllocated = 0;
     m_variablesBytes = 0;
     m_tripStreak = 0;
     m_deadlineArmed = false;
