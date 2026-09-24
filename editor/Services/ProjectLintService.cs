@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -26,6 +27,71 @@ namespace RowlEngine.Editor.Services;
 /// </summary>
 internal static class ProjectLintService
 {
+    internal sealed record CapturedGraph(
+        string Json,
+        ImmutableArray<CapturedConnection> Connections,
+        ImmutableArray<ulong> StartNodeIds,
+        ImmutableArray<CanvasGroup> Groups,
+        ImmutableArray<SubgraphDefinition> Subgraphs,
+        ImmutableArray<ChapterDefinition> Chapters,
+        ulong? StartNodeId);
+
+    internal sealed record CapturedConnection(ulong? SourceId, ulong? TargetId, string OptionId);
+
+    /// <summary>Freeze all graph data while the caller still owns the UI thread.</summary>
+    public static CapturedGraph CaptureGraph(
+        IEnumerable<NodeViewModel> nodes,
+        IEnumerable<ConnectionViewModel> connections,
+        ulong? startNodeId = null,
+        GraphStructureDocument? structure = null)
+    {
+        var nodeList = nodes.ToList();
+        var connectionList = connections.ToList();
+        var saved = StoryGraphSaveService.Capture(
+            nodeList, connectionList, startNodeId ?? 0, activeNode: null);
+        return new CapturedGraph(
+            StoryGraphSaveService.SerializeFullGraph(saved),
+            connectionList.Select(c => new CapturedConnection(
+                c.SourceNode?.Id, c.TargetNode?.Id, c.OptionId)).ToImmutableArray(),
+            nodeList.Where(n => n.IsStartNode).Select(n => n.Id).ToImmutableArray(),
+            structure?.Groups.Select(g => g with {
+                NodeIds = g.NodeIds.ToImmutableArray()
+            }).ToImmutableArray() ?? ImmutableArray<CanvasGroup>.Empty,
+            structure?.Subgraphs.Select(s => s with {
+                ExitNodeIds = s.ExitNodeIds.ToImmutableArray(),
+                NodeIds = s.NodeIds.ToImmutableArray()
+            }).ToImmutableArray() ?? ImmutableArray<SubgraphDefinition>.Empty,
+            structure?.Chapters.ToImmutableArray() ?? ImmutableArray<ChapterDefinition>.Empty,
+            startNodeId);
+    }
+
+    /// <summary>Run lint on worker-owned view models reconstructed from a detached snapshot.</summary>
+    public static IReadOnlyList<ProjectValidationIssue> LintCaptured(
+        CapturedGraph captured,
+        string assetsPath,
+        ProjectLintOptions? lintOptions = null)
+    {
+        using var document = JsonDocument.Parse(captured.Json);
+        var loaded = StoryGraphLoaderService.Load(document, ensureDefaultObjects: false);
+        if (!loaded.Success)
+            return new[] { new ProjectValidationIssue(true,
+                $"Graph snapshot could not be loaded for lint: {loaded.ErrorMessage}") };
+
+        var byId = loaded.Nodes.ToDictionary(n => n.Id);
+        foreach (var node in loaded.Nodes)
+            node.IsStartNode = captured.StartNodeIds.Contains(node.Id);
+        var connections = captured.Connections.Select(c => new ConnectionViewModel(
+            c.SourceId is { } source && byId.TryGetValue(source, out var sourceNode) ? sourceNode : null,
+            c.TargetId is { } target && byId.TryGetValue(target, out var targetNode) ? targetNode : null,
+            c.OptionId)).ToArray();
+        var structure = new GraphStructureDocument();
+        structure.Groups.AddRange(captured.Groups);
+        structure.Subgraphs.AddRange(captured.Subgraphs);
+        structure.Chapters.AddRange(captured.Chapters);
+        return Lint(loaded.Nodes, connections, assetsPath, captured.StartNodeId,
+            structure, lintOptions);
+    }
+
     /// <summary>Matches Lua require("mod"), require 'mod', require("a/b").</summary>
     private static readonly Regex LuaRequirePattern = new(
         @"\brequire\s*(?:\(\s*)?[""']([^""']+)[""']",
@@ -85,13 +151,10 @@ internal static class ProjectLintService
         ProjectLintOptions? lintOptions = null,
         CancellationToken cancellationToken = default)
     {
-        // Materialize the live collections on the caller (UI) thread; only
-        // the scan + rule evaluation leaves it.
-        var nodeSnapshot = nodes.ToList();
-        var connectionSnapshot = connections.ToList();
+        var captured = CaptureGraph(nodes, connections, startNodeId, structure);
         var options = lintOptions ?? new ProjectLintOptions();
         return Task.Run(
-            () => Lint(nodeSnapshot, connectionSnapshot, assetsPath, startNodeId, structure, options),
+            () => LintCaptured(captured, assetsPath, options),
             cancellationToken);
     }
 

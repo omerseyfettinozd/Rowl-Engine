@@ -739,7 +739,86 @@ public sealed class EditorProjectLinterSlice5Tests
             var nodes = new[] { n1 };
             var sync = ProjectLintService.Lint(nodes, Array.Empty<ConnectionViewModel>(), assets, 1);
             var async = await ProjectLintService.LintAsync(nodes, Array.Empty<ConnectionViewModel>(), assets, 1);
-            Assert.Equal(sync.Count, async.Count);
+            Assert.Equal(
+                sync.OrderBy(issue => issue.Message).ThenBy(issue => issue.NodeId),
+                async.OrderBy(issue => issue.Message).ThenBy(issue => issue.NodeId));
+        }
+        finally
+        {
+            DeleteTempAssets(assets);
+        }
+    }
+
+    [Fact]
+    public async Task CapturedLint_IgnoresLaterLiveGraphEdits()
+    {
+        string assets = MakeTempAssets();
+        try
+        {
+            var start = BareNode(1, "Start");
+            var choice = AddChoice(start, ("Unconnected", 0, true));
+            var destination = BareNode(2, "Destination");
+            var connection = new ConnectionViewModel(start, destination, "go");
+            var captured = ProjectLintService.CaptureGraph(
+                new[] { start, destination }, new[] { connection }, 1);
+
+            choice.Options.Clear();
+            start.Objects.Clear();
+            connection.TargetNode = null;
+
+            var issues = await Task.Run(() => ProjectLintService.LintCaptured(
+                captured, assets, new ProjectLintOptions(CheckUnusedAssets: false)));
+            Assert.Contains(issues, issue => issue.IsError &&
+                issue.Message.Contains("Unconnected") && issue.Message.Contains("target 0"));
+            Assert.DoesNotContain(issues, issue => issue.Message.Contains("rule failed"));
+            Assert.DoesNotContain(issues, issue => issue.Message.Contains("missing source or target"));
+        }
+        finally
+        {
+            DeleteTempAssets(assets);
+        }
+    }
+
+    [Fact]
+    public void CapturedLint_PreservesMissingConnectionWarning()
+    {
+        string assets = MakeTempAssets();
+        try
+        {
+            var start = BareNode(1, "Start");
+            var removed = BareNode(99, "Removed");
+            var captured = ProjectLintService.CaptureGraph(
+                new[] { start }, new[] { new ConnectionViewModel(start, removed) }, 1);
+            var issues = ProjectLintService.LintCaptured(captured, assets);
+            Assert.Contains(issues, issue => issue.IsError &&
+                issue.Message.Contains("missing source or target"));
+        }
+        finally
+        {
+            DeleteTempAssets(assets);
+        }
+    }
+
+    [Fact]
+    public void CapturedLint_PreservesInvalidStructureIssues()
+    {
+        string assets = MakeTempAssets();
+        try
+        {
+            var start = BareNode(1, "Start");
+            var structure = new GraphStructureDocument();
+            structure.Groups.Add(new CanvasGroup("group", "Broken", "#ffffff",
+                0, 0, 100, 100, new ulong[] { 99 }));
+            var nodes = new[] { start };
+            var connections = Array.Empty<ConnectionViewModel>();
+            var live = ProjectLintService.Lint(nodes, connections, assets, 1, structure);
+            var captured = ProjectLintService.CaptureGraph(nodes, connections, 1, structure);
+            var detached = ProjectLintService.LintCaptured(captured, assets);
+            Assert.Contains(detached, issue => issue.IsError &&
+                issue.Message.Contains("references missing node #99"));
+            Assert.Equal(
+                live.OrderBy(issue => issue.Message).ThenBy(issue => issue.NodeId),
+                detached.OrderBy(issue => issue.Message).ThenBy(issue => issue.NodeId));
         }
         finally
         {

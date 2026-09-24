@@ -2482,10 +2482,18 @@ namespace RowlEngine.Editor.ViewModels
         [RelayCommand]
         public void AnalyzeStoryGraph()
         {
-            var nodes = Nodes.ToList();
-            var connections = Connections.ToList();
-            var startId = GetStartNode()?.Id;
-            var structure = CurrentStructure();
+            ProjectLintService.CapturedGraph captured;
+            try
+            {
+                captured = ProjectLintService.CaptureGraph(
+                    Nodes, Connections, GetStartNode()?.Id, CurrentStructure());
+            }
+            catch (Exception ex)
+            {
+                ApplyLintResults(new[] { new ProjectValidationIssue(false,
+                    $"Lint anlık görüntüsü oluşturulamadı: {ex.Message}") });
+                return;
+            }
             string assetsPath = AssetsPath;
             AppendLog("Ara: [GRAPH LINT] Arka plan taraması başladı...");
             _ = Task.Run(() =>
@@ -2494,7 +2502,7 @@ namespace RowlEngine.Editor.ViewModels
                 try
                 {
                     issues = AssetScanner.Invoke(() =>
-                        ProjectLintService.Lint(nodes, connections, assetsPath, startId, structure));
+                        ProjectLintService.LintCaptured(captured, assetsPath));
                 }
                 catch (Exception ex)
                 {

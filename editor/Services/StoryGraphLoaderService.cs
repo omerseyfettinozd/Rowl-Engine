@@ -19,7 +19,7 @@ public sealed class StoryGraphLoadResult
 
 public static class StoryGraphLoaderService
 {
-    public static StoryGraphLoadResult Load(JsonDocument document)
+    public static StoryGraphLoadResult Load(JsonDocument document, bool ensureDefaultObjects = true)
     {
         var result = new StoryGraphLoadResult();
 
@@ -99,7 +99,8 @@ public static class StoryGraphLoaderService
                     StoryGraphNodeHydrator.PopulateLegacyFields(node, nodeJson);
                 }
 
-                StoryGraphNodeHydrator.EnsureDefaultObjects(node);
+                if (ensureDefaultObjects)
+                    StoryGraphNodeHydrator.EnsureDefaultObjects(node);
                 result.Nodes.Add(node);
                 nodeMap[nodeId] = node;
             }
