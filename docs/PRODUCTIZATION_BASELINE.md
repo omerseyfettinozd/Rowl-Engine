@@ -16,15 +16,20 @@ record of completed engineering work.
 
 ## Current capability inventory
 
+This inventory's player rows describe the **exported native RowlGame** unless
+a row explicitly names the editor. The Avalonia PlayerWindow is an editor-hosted
+surface and is not included in the exported native package. See
+[PLAYER_RELEASE_PARITY.md](PLAYER_RELEASE_PARITY.md) for the concrete matrix.
+
 | Area | Status | Current proof or missing product behavior | Roadmap owner |
 | --- | --- | --- | --- |
 | Transactional story graph and navigation | Ready | Parser/runtime isolation, choice routing and invalid-load rollback are covered by native tests | Completed foundation |
 | Save/load/rewind integrity | Ready | Versioned bounded reads, atomic writes, migration diagnostics and restore side-effect guards are covered | Completed foundation |
-| Standalone pause and ten save slots | Ready | SDL player pause overlay, volume/text controls and quick slots are covered | Completed foundation |
+| Standalone pause and ten save slots | Ready | Native SDL pause overlay, volume/text controls, quick slots, rewind and confirmed exit exist; title/backlog/profile parity is tracked separately | Completed foundation |
 | Player title/new/continue flow | Missing | Standalone starts directly in the story | Phase 2 |
-| Standalone backlog | Partial | Bounded history and editor panel exist; the player has no backlog surface or voice replay | Phase 2 |
-| Global auto and read-aware skip | Partial | Per-dialogue `auto_advance` exists; no profile-level auto/skip/read contract exists | Phase 2 |
-| Persistent player profile | Missing | Preferences and read/unlock state are not independent of save slots | Phase 2 |
+| Standalone backlog | Partial | Bounded runtime history and editor backlog panel exist; exported RowlGame has no backlog surface. Voice replay is absent from both surfaces. | Phase 2 parity follow-up |
+| Global auto and read-aware skip | Partial | Editor PlayerWindow has profile-driven auto/skip/read tracking; native player has per-dialogue `auto_advance` but no global read-aware workflow | Phase 2 parity follow-up |
+| Persistent player profile | Partial | Versioned profile persistence exists in the editor-hosted player; exported RowlGame does not load/save the equivalent profile independently of story slots | Phase 2 parity follow-up |
 | Localization | Ready | Locale manifest + `content_id` catalogs, BCP 47 chain-aware fallback and additive C ABI are covered by test_localization.cpp and the T1-T7 locale-cluster locks (test_locale_cluster.cpp) (native runtime scope; managed `NormalizeLocale`/`ValidateCatalog` deviations — see `LOCALIZATION_CONTRACT.md` §5) | Phase 3 |
 | Unicode shaping and rich text | Partial | UTF-8 codepoint rendering/typewriter exist; shaping, BiDi, CJK breaks and inline style spans do not | Phase 3 |
 | Large graph authoring | Partial | Pan/zoom, selection and basic first-match search exist; culling, minimap, result lists, groups and subgraphs do not | Phase 4 |
