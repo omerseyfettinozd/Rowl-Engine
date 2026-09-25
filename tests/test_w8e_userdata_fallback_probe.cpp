@@ -249,6 +249,18 @@ int main() {
     TEST_PASS("Runtime: resolveUserDataDirectories ayrik + mutlak + rowl-engine koklu");
 
     // Runtime pin: XDG_DATA_HOME canli-onceligi.
+    //
+    // #489: XDG_DATA_HOME yalniz `__linux__` dalinda okunur
+    // (user_data_directories.cpp:74, `#elif defined(__linux__)`). Windows
+    // ve macOS'ta resolver bu ortam degiskenine HICBIR bakmaz; XDG
+    // tanimsizdir. Bu blok hem Linux'a ozgudur hem de `::setenv`/
+    // `::unsetenv` POSIX-only oldugu icin MSVC derlemesini kirardi
+    // (error C2039/C3861, 1d4149e ile eklenmis, 23 Eyluz'den beri
+    // windows is'i kirmizi; fail-fast linux'u da iptal ediyordu).
+    //
+    // Dogru duzeltme shim degil: Linux'e ozgu davranisi Windows'ta
+    // test etmek yanlis. Win32/macOS icin XDG satiri zaten yoksayiliyor.
+#if defined(__linux__)
     {
         const char* oldXdg = std::getenv("XDG_DATA_HOME");
         const std::string saved = (oldXdg != nullptr) ? oldXdg : "";
@@ -276,6 +288,12 @@ int main() {
         checkLayout(Rowl::Platform::resolveUserDataDirectories(), "resolve-no-xdg");
     }
     TEST_PASS("Runtime: XDG canli-oncelikli, XDG'siz fail-open yok");
+#else
+    // Linux disinda XDG tanimsiz; resolver bu degiskene bakmaz. Testin
+    // konusu yok, sahte bir gecersizleştirme de olurdu.
+    std::cout << "  (XDG_DATA_HOME yalniz Linux'ta gecerli; bu platformda "
+                 "atlandi)" << std::endl;
+#endif
 
     std::cout << "W8E-USERDATA GREEN: fallback zinciri pinli" << std::endl;
     TEST_PASS("W8-e (3a) yesil");
