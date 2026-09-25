@@ -465,11 +465,21 @@ void RowlEngine_SetProjectDirectory(RowlEngineHandle handle, const char* project
         Rowl::I18n::applyProjectLocalesToEngine(*engine, projectRoot);
         auto* win = engine->getWindow();
         if (win) {
-            win->reloadFonts();
-            // A3-tur6 (hygiene): remount dosya-kumesini degistirir — mount-oncesi
-            // "yok" hukumleri (missing/budget-disi/font-miss) bayatlar, zehirli
-            // kalmasin diye ayni kancada gecersiz kilinir.
+            // #488 (SIRA): gecersiz kilme ONCE yapilir, reloadFonts() SONRA.
+            // A3-tur6 negatif onbellegi bu kancada dogru yere koydu ama
+            // yanlis sira birakti: reloadFonts() -> `if (!m_msdfRenderer)
+            // initGpuMsdfRenderer()` ile MSDF atlasini YENIDEN probeliyor
+            // (window.cpp:504). Proje mount oncesi (0 mount) ilk prob
+            // "fonts/msdf/default.png yok" diye negatife yaziyor; temizlik
+            // reloadFonts() dondukten SONRA geldigi icin yeniden prob
+            // zehirlenmis onbellegi okuyor, loadTexture hiç VFS'e
+            // sormadan nullptr donuyor ve MSDF hic kurulamıyordu.
+            // Dogrusu: icerik degisti -> negatif hukumler gecersiz ->
+            // SONRA yeniden prob. Kanit: CI run 36110267687, test
+            // `rowl_player_gpu_msdf_smoke` eklendigi gunden beri (06d1aa7)
+            // yesil olmadi — regresyon degil, dogmadan kirmizi bir sira hatasi.
             win->invalidateMissingCaches();
+            win->reloadFonts();
         }
         // Try loading story graph via VFS first (project Assets is now mounted)
         engine->loadStoryGraphFile();
