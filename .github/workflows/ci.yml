@@ -97,7 +97,7 @@ jobs:
           python3 tools/verify_release_package.py "$release_dir"
           (
             cd "$release_dir"
-            SDL_AUDIODRIVER=dummy LD_LIBRARY_PATH=. xvfb-run -a ./RowlGame --project . --package-smoke-test
+            SDL_AUDIODRIVER=dummy LD_LIBRARY_PATH=. python3 "$GITHUB_WORKSPACE/tools/measure_ci_time.py" --label linux-package-smoke --threshold 300 -- xvfb-run -a ./RowlGame --project . --package-smoke-test
           )
 
       - name: Record native benchmark baseline
@@ -426,6 +426,11 @@ jobs:
           file build-macos-arm64/lib/libRowlEngineCore.dylib | grep -q 'Mach-O.*arm64'
           file build-macos-arm64/bin/rowl_player | grep -q 'Mach-O.*arm64'
           file build-macos-arm64/bin/rowl_tests | grep -q 'Mach-O.*arm64'
+
+      - name: Check additive-only C ABI (Mach-O)
+        # Portable ABI gate'in Mach-O dali (nm -gU / llvm-nm);
+        # Linux'taki ELF cagrisi ile ayni betik, ayni baseline.
+        run: python3 tools/check_abi_additive.py build-macos-arm64/lib/libRowlEngineCore.dylib tools/abi_baseline.txt
 
       - name: Upload macOS ARM64 compile evidence
         uses: actions/upload-artifact@v4

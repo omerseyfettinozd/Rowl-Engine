@@ -2,19 +2,35 @@
 """Check that the RowlEngineCore public C ABI only grows additively.
 
 Usage:
-    check_abi_additive.py <libRowlEngineCore.so> <baseline.txt>
+    check_abi_additive.py <libRowlEngineCore.so|.dylib|.dll> <baseline.txt>
 
-Extracts dynamic symbols from the shared library with
-``nm -D --defined-only --format=posix``, keeps the public C ABI symbols
-(those starting with ``RowlEngine_``), and compares the sorted unique set
+Extracts exported symbols from the shared library with a portable tool
+chain (no ELF-only assumption), keeps the public C ABI symbols (those
+starting with ``RowlEngine_``), and compares the sorted unique set
 against a baseline file (one symbol per line, sorted).
+
+Tool selection by detected binary format (magic bytes + suffix):
+
+    ELF (.so)   : ``nm -D --defined-only --format=posix``,
+                  then ``llvm-nm -D --defined-only --format=posix``.
+    Mach-O (.dylib): ``nm -gU`` (BSD nm; leading '_' stripped),
+                  then ``llvm-nm``.
+    PE (.dll)   : ``dumpbin /EXPORTS``, then ``llvm-nm``, then ``nm``.
+
+``otool -L`` is probed on Mach-O hosts as a diagnostic (it lists linked
+libraries, not exports) but is never used for symbol extraction. If no
+usable tool is found, or every tool fails (e.g. broken toolchain), the
+script exits 1 with a clean ``ERROR:`` line — never a traceback
+(portable fallback).
 
 Exit codes:
     0 - ABI is identical to the baseline, or only additions were found.
     1 - A baseline symbol was removed, or usage/environment error
-        (missing library, missing baseline, or ``nm`` failure).
+        (missing library, missing baseline, or no working symbol tool).
 """
 
+import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -22,32 +38,171 @@ from pathlib import Path
 ABI_PREFIX = "RowlEngine_"
 
 
-def extract_abi_symbols(library: Path) -> list[str]:
-    """Return sorted unique RowlEngine_* dynamic symbols defined in library."""
+def detect_format(library: Path) -> str:
+    """Return 'ELF', 'Mach-O', 'PE', or 'unknown' for the given file."""
+    try:
+        with open(library, "rb") as fh:
+            magic = fh.read(4)
+    except OSError:
+        magic = b""
+    if magic.startswith(b"\x7fELF"):
+        return "ELF"
+    if magic.startswith(b"MZ"):
+        return "PE"
+    # Mach-O magics: 32/64-bit, normal/swapped, plus fat binary (cafebabe).
+    if magic in (
+        b"\xcf\xfa\xed\xfe",  # MH_MAGIC_64 LE
+        b"\xce\xfa\xed\xfe",  # MH_MAGIC LE
+        b"\xfe\xed\xfa\xcf",  # MH_MAGIC BE
+        b"\xfe\xed\xfa\xce",  # MH_MAGIC_64 BE
+        b"\xca\xfe\xba\xbe",  # FAT_MAGIC
+    ):
+        return "Mach-O"
+    suffix = library.suffix.lower()
+    if suffix == ".dll":
+        return "PE"
+    if suffix == ".dylib":
+        return "Mach-O"
+    if suffix == ".so":
+        return "ELF"
+    return "unknown"
+
+
+def _run(cmd: list[str]) -> str | None:
+    """Run cmd, returning stdout on success or None on any failure.
+
+    Missing binary, non-zero exit, timeout, and undecodable output all
+    map to None — the caller tries the next tool in the chain.
+    """
+    if shutil.which(cmd[0]) is None:
+        return None
     try:
         proc = subprocess.run(
-            ["nm", "-D", "--defined-only", "--format=posix", str(library)],
+            cmd,
             capture_output=True,
             text=True,
             check=False,
+            timeout=120,
         )
-    except FileNotFoundError:
-        print("ERROR: `nm` tool not found on PATH.", file=sys.stderr)
-        sys.exit(1)
+    except (OSError, subprocess.SubprocessError):
+        return None
     if proc.returncode != 0:
-        print(
-            f"ERROR: `nm` failed on '{library}': {proc.stderr.strip()}",
-            file=sys.stderr,
-        )
-        sys.exit(1)
+        return None
+    return proc.stdout
+
+
+def _parse_nm_posix(output: str, mach_o: bool = False) -> set[str]:
+    """Parse ``nm --format=posix`` / BSD-nm output for ABI symbols."""
     symbols = set()
-    for line in proc.stdout.splitlines():
+    for line in output.splitlines():
         line = line.strip()
         if not line:
             continue
         name = line.split()[0]
+        # Mach-O C symbols carry a leading underscore (BSD nm).
+        if mach_o and name.startswith("_"):
+            name = name[1:]
         if name.startswith(ABI_PREFIX):
             symbols.add(name)
+    return symbols
+
+
+def _parse_dumpbin(output: str) -> set[str]:
+    """Parse ``dumpbin /EXPORTS`` output for ABI symbols.
+
+    Export table rows look like::
+
+        ordinal hint RVA      name
+              1    0 00001000 RowlEngine_Create
+    """
+    symbols = set()
+    for line in output.splitlines():
+        parts = line.split()
+        if len(parts) < 4:
+            continue
+        # First three columns must be numeric-ish (ordinal/hint/RVA).
+        if not parts[0].isdigit() or not parts[1].isdigit():
+            continue
+        name = parts[3]
+        if name.startswith(ABI_PREFIX):
+            symbols.add(name)
+    return symbols
+
+
+def _otool_available() -> bool:
+    """Probe for ``otool -L`` (Mach-O diagnostic only, never extraction)."""
+    return shutil.which("otool") is not None
+
+
+def extract_abi_symbols(library: Path) -> list[str]:
+    """Return sorted unique RowlEngine_* exported symbols in library."""
+    fmt = detect_format(library)
+    tried: list[str] = []
+    symbols: set[str] = set()
+
+    if fmt == "PE":
+        chain: list[tuple[list[str], str]] = [
+            (["dumpbin", "/EXPORTS", str(library)], "dumpbin"),
+            (["llvm-nm", "--defined-only", str(library)], "llvm-nm"),
+            (["nm", "--defined-only", str(library)], "nm"),
+        ]
+        for cmd, label in chain:
+            tried.append(label)
+            out = _run(cmd)
+            if out is None:
+                continue
+            if label == "dumpbin":
+                symbols = _parse_dumpbin(out)
+            else:
+                symbols = _parse_nm_posix(out)
+            if symbols:
+                break
+    elif fmt == "Mach-O":
+        chain = [
+            (["nm", "-gU", str(library)], "nm"),
+            (["llvm-nm", "--defined-only", str(library)], "llvm-nm"),
+            (["nm", "-g", str(library)], "nm"),
+        ]
+        for cmd, label in chain:
+            tried.append(label)
+            out = _run(cmd)
+            if out is None:
+                continue
+            symbols = _parse_nm_posix(out, mach_o=True)
+            if symbols:
+                break
+        # otool -L lists linked libraries, not exports: diagnostic probe
+        # only, so a macOS log still shows which native tools were present.
+        if not symbols and _otool_available():
+            tried.append("otool -L (diagnostic only)")
+    else:  # ELF or unknown: ELF-style dynamic listing first.
+        chain = [
+            (["nm", "-D", "--defined-only", "--format=posix", str(library)], "nm -D"),
+            (
+                ["llvm-nm", "-D", "--defined-only", "--format=posix", str(library)],
+                "llvm-nm -D",
+            ),
+            (["nm", "--defined-only", "--format=posix", str(library)], "nm"),
+        ]
+        for cmd, label in chain:
+            tried.append(label)
+            out = _run(cmd)
+            if out is None:
+                continue
+            symbols = _parse_nm_posix(out)
+            if symbols:
+                break
+
+    if not symbols:
+        tried_str = ", ".join(tried) if tried else "no tools on PATH"
+        print(
+            f"ERROR: no working symbol tool for '{library}' "
+            f"(format: {fmt}; tried: {tried_str}). "
+            "Install binutils (`nm`), LLVM (`llvm-nm`), or MSVC "
+            "(`dumpbin`) for this platform.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
     return sorted(symbols)
 
 
@@ -61,7 +216,8 @@ def read_baseline(baseline: Path) -> list[str]:
 def main(argv: list[str]) -> int:
     if len(argv) != 3:
         print(
-            f"Usage: {Path(argv[0]).name} <libRowlEngineCore.so> <baseline.txt>",
+            f"Usage: {Path(argv[0]).name} <libRowlEngineCore.so|.dylib|.dll> "
+            "<baseline.txt>",
             file=sys.stderr,
         )
         return 1
