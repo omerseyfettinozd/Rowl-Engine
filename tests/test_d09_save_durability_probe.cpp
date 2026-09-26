@@ -31,12 +31,16 @@
 
 #include "rowl/state/game_state.hpp"
 #include "rowl/state/save_durability.hpp"
+#include "rowl/platform/user_data_directories.hpp"
 
 #include <cerrno>
 #include <chrono>
 #include <iostream>
 
-#ifndef _WIN32
+#ifdef _WIN32
+#define NOMINMAX
+#include <windows.h>
+#else
 #include <signal.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -65,8 +69,11 @@ void writeFileBytes(const std::filesystem::path& path, const std::string& bytes)
     out << bytes;
 }
 
-// Var olamayacak bir pid üretir: kill(pid,0) ESRCH vermelidir (ölü sahip).
-// Deterministik olması için INT_MAX'tan aşağı doğru ilk ESRCH vereni seçer.
+// Var olamayacak bir pid üretir: POSIX'te kill(pid,0) ESRCH vermelidir;
+// Windows'ta OpenProcess + ERROR_INVALID_PARAMETER (ölü sahip).
+// Deterministik olması için yüksek adaylardan aşağı doğru ilk
+// kanıtlanmış-ölü vereni seçer. Hiçbiri kanıtlanamazsa -1 döner;
+// çağıran SKIP eder (kızartmaz) — 492 -1 guard'ı.
 long findDeadPid() {
 #ifndef _WIN32
     for (long candidate = 2147483647L; candidate > 2147483647L - 64; --candidate) {
@@ -75,6 +82,17 @@ long findDeadPid() {
     }
     return -1;
 #else
+    // ownerProcessAlive ile aynı sözleşme: ERROR_INVALID_PARAMETER ölü
+    // demektir; diğer hatalar (ACCESS_DENIED dahil) muhafazakâr-canlıdır.
+    for (long candidate = 4194300L; candidate > 4194300L - 256; --candidate) {
+        HANDLE handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE,
+                                    static_cast<DWORD>(candidate));
+        if (handle != nullptr) {
+            CloseHandle(handle);
+            continue;
+        }
+        if (GetLastError() == ERROR_INVALID_PARAMETER) return candidate;
+    }
     return -1;
 #endif
 }
@@ -83,7 +101,7 @@ long livePid() {
 #ifndef _WIN32
     return static_cast<long>(::getpid());
 #else
-    return -1;
+    return static_cast<long>(GetCurrentProcessId());
 #endif
 }
 
@@ -111,37 +129,59 @@ int main() {
                    "probe setup: baseline atomic write failed");
 
         // Kesinti artıkları: legacy stray + sahibi-ölü benzersiz tmp.
-        const fs::path legacyStray = finalPath.string() + ".tmp";
+        // 492: yol kurulumu path operatörleriyle yapılır (dar .string()
+        // birleştirme Windows'ta ASCII-dışı temp kökünde fırlatırdı).
+        fs::path legacyStray = finalPath;
+        legacyStray += ".tmp";
         writeFileBytes(legacyStray, "PARTIAL-LEGACY-GARBAGE");
+        // 492 -1 guard: ölü pid kanıtlanamazsa bu dal SKIP edilir
+        // (kızartılmaz); iyi-slot + legacy + canlı-yazar kontrolleri
+        // taşınabilir oldukları için her platformda çalışır.
         const long deadPid = findDeadPid();
-        checkProbe(deadPid > 0, "probe setup: no provably-dead pid available");
-        const fs::path staleOwned =
-            fs::path(finalPath.string() + ".tmp." + std::to_string(deadPid) + ".0.ABCDEF");
-        writeFileBytes(staleOwned, "PARTIAL-OWNED-GARBAGE");
+        const bool haveDeadPid = deadPid > 0;
+        fs::path staleOwned;
+        if (!haveDeadPid) {
+            std::cout << "D09-PROBE SKIP: no provably-dead pid on this host; "
+                         "stale-owned assertions skipped" << std::endl;
+        } else {
+            staleOwned = finalPath;
+            staleOwned += ".tmp." + std::to_string(deadPid) + ".0.ABCDEF";
+            writeFileBytes(staleOwned, "PARTIAL-OWNED-GARBAGE");
+        }
         // Canlı yazar tmp'si: asla silinmemeli.
         const long selfPid = livePid();
-        checkProbe(selfPid > 0, "probe setup: live pid unavailable");
-        const fs::path liveOwned =
-            fs::path(finalPath.string() + ".tmp." + std::to_string(selfPid) + ".0.LIVE");
+        const bool haveLivePid = selfPid > 0;
+        fs::path liveOwned;
         const std::string liveSentinel = "LIVE-WRITER-BYTES";
-        writeFileBytes(liveOwned, liveSentinel);
+        if (!haveLivePid) {
+            std::cout << "D09-PROBE SKIP: no live pid on this host; "
+                         "live-writer assertions skipped" << std::endl;
+        } else {
+            liveOwned = finalPath;
+            liveOwned += ".tmp." + std::to_string(selfPid) + ".0.LIVE";
+            writeFileBytes(liveOwned, liveSentinel);
+        }
 
         Rowl::State::cleanupStraySlotTemp(finalPath);
 
         std::error_code ec;
         checkProbe(!fs::exists(legacyStray, ec),
                    "legacy <slot>.json.tmp must be swept (control)");
-        if (fs::exists(staleOwned, ec)) {
-            std::cerr << "D09-ORPHAN RED: stale owned tmp survived "
-                         "cleanupStraySlotTemp: "
-                      << staleOwned.string() << std::endl;
-            ++g_probeFailures;
+        if (haveDeadPid) {
+            if (fs::exists(staleOwned, ec)) {
+                std::cerr << "D09-ORPHAN RED: stale owned tmp survived "
+                             "cleanupStraySlotTemp: "
+                          << Rowl::Platform::pathToUtf8(staleOwned) << std::endl;
+                ++g_probeFailures;
+            }
         }
-        checkProbe(fs::exists(liveOwned, ec),
-                   "live writer owned tmp must be preserved");
-        if (fs::exists(liveOwned, ec)) {
-            checkProbe(readFileBytes(liveOwned) == liveSentinel,
-                       "live writer owned tmp must stay byte-identical");
+        if (haveLivePid) {
+            checkProbe(fs::exists(liveOwned, ec),
+                       "live writer owned tmp must be preserved");
+            if (fs::exists(liveOwned, ec)) {
+                checkProbe(readFileBytes(liveOwned) == liveSentinel,
+                           "live writer owned tmp must stay byte-identical");
+            }
         }
         checkProbe(readFileBytes(finalPath) == goodPayload,
                    "good slot file must stay byte-identical across sweep");

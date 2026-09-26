@@ -135,22 +135,30 @@ std::string currentProcessTag() {
 // döndürür (0600). Üretimde başarısız olursa boş path döner. Dönen ad
 // tahmin edilemez olduğu için (pid + atomik sayaç + mkstemp rastgeleliği /
 // O_EXCL sahiplenmesi) başka bir yazarla paylaşılamaz.
+//
+// 490: ad üretimi kayıpsız UTF-8 turuyla yapılır
+// (pathToUtf8/pathFromUtf8): Windows'ta path::string() ANSI codepage
+// dönüşümü uygular ve ASCII-dışı dizinlerde fırlatır/kayıplı çevirir.
+// Açma POSIX'te mkstemp (dar yol yereldir), Windows'ta _wsopen_s (geniş yol)
+// ile yapılır; dar _sopen_s + c_str() ASCII-dışı dizinde açamazdı.
 std::filesystem::path mintOwnedTempPath(const std::filesystem::path& finalPath) {
-    const std::string stem = finalPath.string() + ".tmp." + currentProcessTag() +
-                             "." + std::to_string(g_tempCounter.fetch_add(1, std::memory_order_relaxed));
+    const std::string stemUtf8 =
+        Rowl::Platform::pathToUtf8(finalPath) + ".tmp." + currentProcessTag() +
+        "." + std::to_string(g_tempCounter.fetch_add(1, std::memory_order_relaxed));
 #if defined(_WIN32)
-    // _sopen_s O_CREAT|O_EXCL: dosya varsa EEXIST ile başarısız olur; sayaç
+    // _wsopen_s O_CREAT|O_EXCL: dosya varsa EEXIST ile başarısız olur; sayaç
     // her çağrıda arttığı için çakışma pratikte imkânsız, attempt döngüsü
-    // sayaç-sarma/MMAP kalıntısına karşı kemerdir.
+    // sayaç-sarma kalıntısına karşı kemerdir.
     for (int attempt = 0; attempt < 64; ++attempt) {
-        const std::string candidate = stem + "." + std::to_string(attempt);
+        const std::filesystem::path candidate =
+            Rowl::Platform::pathFromUtf8(stemUtf8 + "." + std::to_string(attempt));
         int fd = -1;
-        const int opened = _sopen_s(&fd, candidate.c_str(),
-                                    _O_CREAT | _O_EXCL | _O_WRONLY, _SH_DENYRW,
-                                    _S_IREAD | _S_IWRITE);
+        const int opened = _wsopen_s(&fd, candidate.c_str(),
+                                     _O_CREAT | _O_EXCL | _O_WRONLY, _SH_DENYRW,
+                                     _S_IREAD | _S_IWRITE);
         if (opened == 0) {
             _close(fd);
-            return std::filesystem::path(candidate);
+            return candidate;
         }
         if (errno != EEXIST) return std::filesystem::path{};
     }
@@ -158,11 +166,11 @@ std::filesystem::path mintOwnedTempPath(const std::filesystem::path& finalPath) 
 #else
     // mkstemp: O_CREAT|O_EXCL ile 0600 kipinde atomik üretir, XXXXXX'i
     // yerinde rastgele adla değiştirir.
-    std::string pattern = stem + ".XXXXXX";
+    std::string pattern = stemUtf8 + ".XXXXXX";
     const int fd = ::mkstemp(pattern.data());
     if (fd < 0) return std::filesystem::path{};
     ::close(fd);
-    return std::filesystem::path(pattern);
+    return Rowl::Platform::pathFromUtf8(pattern);
 #endif
 }
 
@@ -175,6 +183,15 @@ std::filesystem::path saveTempPathFor(const std::filesystem::path& finalPath) {
     std::filesystem::path temporaryPath = finalPath;
     temporaryPath += ".tmp";
     return temporaryPath;
+}
+
+// 490: ön-yedek adı. Yazma yolu rename ÖNCESİ mevcut slotu buraya kopyalar;
+// başarıda silinir, rename başarısızlığında geri yüklenir. Salt-ASCII sonek
+// birleştirme (+=) native temsilde kalır: codepage dönüşümü/fırlatma yok.
+std::filesystem::path saveBackupPathFor(const std::filesystem::path& finalPath) {
+    std::filesystem::path backupPath = finalPath;
+    backupPath += ".pre-save-bak";
+    return backupPath;
 }
 
 bool writeSlotFileAtomically(const std::filesystem::path& finalPath,
@@ -223,6 +240,29 @@ bool writeSlotFileAtomically(const std::filesystem::path& finalPath,
                     Rowl::Platform::pathToUtf8(temporaryPath) + " " + errnoPrefix(EROFS));
     }
 
+    // 490 ön-yedek: hedef mevcutsa rename ÖNCESİ birebir kopyası alınır.
+    // Kopya alınamazsa fail-closed (eski dosya riske atılmaz): tmp temizlenir,
+    // hedefe dokunulmaz.
+    const fs::path backupPath = saveBackupPathFor(finalPath);
+    bool haveBackup = false;
+    {
+        std::error_code probeError;
+        if (fs::exists(finalPath, probeError) && !probeError &&
+            fs::is_regular_file(finalPath, probeError) && !probeError) {
+            std::error_code copyError;
+            fs::copy_file(finalPath, backupPath,
+                          fs::copy_options::overwrite_existing, copyError);
+            if (copyError) {
+                std::error_code removeError;
+                fs::remove(temporaryPath, removeError);
+                return fail("Failed to stage pre-save backup beside: " +
+                            Rowl::Platform::pathToUtf8(finalPath) + ": " +
+                            copyError.message());
+            }
+            haveBackup = true;
+        }
+    }
+
     {
         std::ofstream output(temporaryPath, std::ios::out | std::ios::trunc);
         if (!output.is_open()) {
@@ -244,6 +284,7 @@ bool writeSlotFileAtomically(const std::filesystem::path& finalPath,
             output.close();
             std::error_code removeError;
             fs::remove(temporaryPath, removeError);
+            if (haveBackup) fs::remove(backupPath, removeError);
             return fail("Failed to write complete save slot temp file: " +
                         Rowl::Platform::pathToUtf8(temporaryPath));
         }
@@ -253,10 +294,27 @@ bool writeSlotFileAtomically(const std::filesystem::path& finalPath,
     if (!replaceFileAtomically(temporaryPath, finalPath, replaceError)) {
         std::error_code removeError;
         fs::remove(temporaryPath, removeError);
+        // 490: yedekten restore — hedefi eski baytlara döndür (best-effort).
+        // POSIX rename / MoveFileEx(REPLACE_EXISTING) atomik olduğundan hedef
+        // normalde hiç bozulmaz; bu adım egzotik dosya-sistemi yarı-hâllerine
+        // karşı kemerdir. Restore tutarsa yedek temizlenir, tutmazsa adlî
+        // kanıt / elle kurtarma için yerinde bırakılır.
+        if (haveBackup) {
+            std::error_code restoreError;
+            fs::copy_file(backupPath, finalPath,
+                          fs::copy_options::overwrite_existing, restoreError);
+            if (!restoreError) fs::remove(backupPath, removeError);
+        }
         return fail(errnoPrefix(replaceError.value()) +
                     "Failed to atomically replace save slot file: " +
                     replaceError.message() + " (" + Rowl::Platform::pathToUtf8(temporaryPath) +
                     " -> " + Rowl::Platform::pathToUtf8(finalPath) + ")");
+    }
+    // Başarı: yedek artık artıktır, best-effort temizle. Crash bu satıra
+    // ulaşamadan gelirse slot başına ≤1 yedek kalır (diski doldurmaz).
+    if (haveBackup) {
+        std::error_code removeError;
+        fs::remove(backupPath, removeError);
     }
     return true;
 }
@@ -318,7 +376,10 @@ void cleanupStaleOwnedSlotTemps(const std::filesystem::path& finalPath) {
         if (parent.empty()) parent = ".";
         // Yalnızca bu slotun mint desenine uyan adlar:
         // "<slot>.json.tmp.<pid>.<sayaç>.<rastgele>".
-        const std::string prefix = finalPath.filename().string() + ".tmp.";
+        // 490: ad karşılaştırma kayıpsız UTF-8 üzerinden (filename().string()
+        // Windows'ta ANSI codepage ile fırlatırdı).
+        const std::string prefix =
+            Rowl::Platform::pathToUtf8(finalPath.filename()) + ".tmp.";
         std::error_code iterError;
         fs::directory_iterator it(parent, iterError);
         if (iterError) return;
@@ -332,7 +393,8 @@ void cleanupStaleOwnedSlotTemps(const std::filesystem::path& finalPath) {
                 statusError) {
                 continue;
             }
-            const std::string name = it->path().filename().string();
+            const std::string name =
+                Rowl::Platform::pathToUtf8(it->path().filename());
             if (name.size() <= prefix.size() ||
                 name.compare(0, prefix.size(), prefix) != 0) {
                 continue;

@@ -8,7 +8,9 @@ namespace Rowl::State {
 /// Save durability: crash-safe atomic slot writes (Faz 4.5 Dilim 2).
 ///
 /// Protocol: serialize -> write OWNED UNIQUE temp file
-/// (<slot>.json.tmp.<pid>.<counter>[.rand]) -> rename over the target.
+/// (<slot>.json.tmp.<pid>.<counter>[.rand]) -> stage pre-save backup of the
+/// existing slot (490: "<slot>.json.pre-save-bak") -> rename over the target
+/// (on rename failure the target is restored from the backup).
 /// A crash mid-write can only leave a stray unique tmp; the previous
 /// good slot file is never truncated in place, so load always sees either
 /// the old or the new complete payload — never a half slot. Concurrent
@@ -51,9 +53,19 @@ namespace Rowl::State {
 /// anchor for interrupted writes from older builds. Never throws.
 std::filesystem::path saveTempPathFor(const std::filesystem::path& finalPath);
 
+/// 490: pre-save backup name ("<slot>.json.pre-save-bak", same directory).
+/// writeSlotFileAtomically copies the pre-existing slot here BEFORE the
+/// rename; on success the backup is removed (best effort), on rename failure
+/// the target is restored from it (best effort). A crash between staging
+/// and removal leaves at most one backup per slot (bounded residue, kept
+/// out of the tmp-sweep namespaces so it is never mistaken for a stray).
+/// Never throws.
+std::filesystem::path saveBackupPathFor(const std::filesystem::path& finalPath);
+
 /// Atomically replaces finalPath with content. Returns true on success;
 /// on failure returns false, sets *errorOut (when non-null), removes the
-/// owned unique tmp (best effort), and leaves any pre-existing finalPath
+/// owned unique tmp (best effort), restores any pre-existing finalPath from
+/// the pre-save backup (best effort), and leaves any pre-existing finalPath
 /// byte-identical. Never throws.
 bool writeSlotFileAtomically(const std::filesystem::path& finalPath,
                              const std::string& content,
