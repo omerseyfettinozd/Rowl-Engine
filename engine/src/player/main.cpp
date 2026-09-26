@@ -121,6 +121,7 @@ static void printHelp(const char* progName) {
               << "  -w, --width <pixels>     Window width in pixels (default: 1920)\n"
               << "      --height <pixels>    Window height in pixels (default: 1080)\n"
               << "  -t, --title <name>       Window title (default: \"Rowl Game\")\n"
+              << "      --title-state <name> Title-screen selection, read-only (default: \"title\")\n"
               << "      --slot <N>           Active quick-save slot 0-9 for F5/F9 (default: 0)\n"
               << "      --no-vsync           Disable vertical sync\n\n"
               << "      --gpu-smoke-test     Render one standalone frame, then exit (CI)\n\n"
@@ -158,6 +159,10 @@ int rowlPlayerMain(int argc, char* argv[]) {
     std::string projectDir = ".";
     std::string storyGraphPath = "";
     std::string appTitle = "Rowl Game";
+    // Dilim-4 P1-A: title-state seçim iskeleti (salt-okunur). Argüman
+    // ayrıştırma + validasyon mesajından ibarettir; motor akışına yazma/
+    // silme yok, sahne akışı değişmez. Yeni dosya yok.
+    std::string titleState = "title";
     uint32_t winWidth = 1920;
     uint32_t winHeight = 1080;
     bool vsync = true;
@@ -188,6 +193,10 @@ int rowlPlayerMain(int argc, char* argv[]) {
             }
         } else if (arg == "-t" || arg == "--title") {
             if (!requireOptionValue(i, argc, argv, arg, appTitle)) return 1;
+        } else if (arg == "--title-state") {
+            // Dilim-4 P1-A: salt-okunur seçim; validasyon ayrıştırma
+            // sonrasında yapılır, motor durumuna yazılmaz.
+            if (!requireOptionValue(i, argc, argv, arg, titleState)) return 1;
         } else if (arg == "--no-vsync") {
             vsync = false;
         } else if (arg == "--slot") {
@@ -207,6 +216,14 @@ int rowlPlayerMain(int argc, char* argv[]) {
             return 1;
         }
     }
+
+    // Dilim-4 P1-A: title-state dallanma iskeleti (salt-okunur). Geçerli
+    // seçim yalnızca doğrulanıp raporlanır; sahne/motor akışı değişmez.
+    if (titleState != "title") {
+        std::cerr << "Invalid --title-state value '" << titleState << "' (expected one of: title)\n";
+        return 1;
+    }
+    std::cout << "[Player] Title state selected: '" << titleState << "' (read-only; scene flow unchanged).\n";
 
     // A2b: argv UTF-8 sözleşmesi. POSIX'te argv zaten UTF-8'dir; Windows'ta
     // main'in char* argv'si ANSI-codepage mojibake üretir (non-ASCII proje

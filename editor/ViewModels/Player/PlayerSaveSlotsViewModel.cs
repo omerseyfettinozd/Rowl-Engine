@@ -69,6 +69,16 @@ public sealed partial class PlayerSaveSlotsViewModel : ViewModelBase
     [ObservableProperty]
     private PlayerSlotsMode _mode = PlayerSlotsMode.Save;
 
+    /// <summary>
+    /// Dilim-4 P1-B — title kabuğu için salt-okunur slot metadata bağlaması.
+    /// Yalnızca <see cref="IPlayerEngine.HasSlot"/> /
+    /// <see cref="IPlayerEngine.GetSlotMetadata"/> okumalarından beslenir
+    /// (mevcut C ABI SaveGameSlot/LoadGameSlot/GetSaveSlotMetadata;
+    /// yeni yazma API'si yok, slot yazma/silme yok).
+    /// </summary>
+    [ObservableProperty]
+    private string _titleContinueLabel = string.Empty;
+
     public ObservableCollection<PlayerSaveSlotEntry> Entries { get; } = new();
 
     public int ThumbnailDecodeErrors => _thumbnailDecodeErrors;
@@ -96,6 +106,7 @@ public sealed partial class PlayerSaveSlotsViewModel : ViewModelBase
                 metadata = _engine.GetSlotMetadata(index);
             Entries.Add(new PlayerSaveSlotEntry(index, metadata, DecodeThumbnail(metadata)));
         }
+        RefreshTitleBinding();
     }
 
     /// <summary>Most recently saved occupied slot, or null when all are empty.</summary>
@@ -115,6 +126,30 @@ public sealed partial class PlayerSaveSlotsViewModel : ViewModelBase
             }
         }
         return latest;
+    }
+
+    /// <summary>
+    /// Dilim-4 P1-B — başlık satırını salt-okunur okumalarla tazeler: en son
+    /// dolu slotun metadata'sından (chapter/summary) etiket üretilir; boş
+    /// kasada etiket boşalır. Yazma/silme çağrısı yok.
+    /// </summary>
+    public void RefreshTitleBinding()
+    {
+        int? latest = FindLatestOccupied();
+        if (latest is null)
+        {
+            TitleContinueLabel = string.Empty;
+            return;
+        }
+        SaveSlotMetadata? metadata = _engine.HasSlot(latest.Value)
+            ? _engine.GetSlotMetadata(latest.Value)
+            : null;
+        string detail = metadata?.ChapterTitle ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(detail))
+            detail = metadata?.Summary ?? string.Empty;
+        TitleContinueLabel = string.IsNullOrWhiteSpace(detail)
+            ? $"Slot {latest.Value + 1}"
+            : $"Slot {latest.Value + 1} — {detail}";
     }
 
     private static readonly byte[] PngMagic =

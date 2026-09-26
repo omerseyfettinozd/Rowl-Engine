@@ -106,6 +106,13 @@ public sealed partial class PlayerViewModel : ViewModelBase
     public string SkipModeLabel => Profile.SkipMode.ToString();
     public bool CanContinue => FindLatestSlot() is not null;
 
+    /// <summary>
+    /// Dilim-4 P1-B — başlık kabuğuna salt-okunur slot metadata geçişi
+    /// (<see cref="PlayerSaveSlotsViewModel.TitleContinueLabel"/>; okuma
+    /// yönlü, yazma API'si yok).
+    /// </summary>
+    public string TitleContinueLabel => Slots.TitleContinueLabel;
+
     public Array AvailableSkipModes => Enum.GetValues(typeof(PlayerSkipMode));
     public IReadOnlyList<string> AvailableLanguages => PlayerProfile.SupportedLanguages;
     public IReadOnlyList<float> AvailableTextScales => PlayerProfile.AllowedTextScales;
@@ -494,7 +501,13 @@ public sealed partial class PlayerViewModel : ViewModelBase
         var transition = Machine.Request(intent);
         if (!transition.Allowed)
             return Fail(transition.DenyReason ?? "Could not enter Playing.");
-        AutoDriver.SetEnabled(Profile.AutoEnabled);
+        // Dilim-4 D-profil kill-switch: bayrak kapalıyken alt dal bugünkü
+        // davranışla birebir aynıdır (davranış değişmez); açıkken profil→
+        // sürücü bağlantısı merkezi Apply yolundan akar.
+        if (PlayerProfileAutoSkipGate.Enabled)
+            PlayerProfileAutoSkipGate.ApplyToDrivers(Profile, AutoDriver);
+        else
+            AutoDriver.SetEnabled(Profile.AutoEnabled);
         _stableTicks = 0;
         ApplyStateSideEffects();
         RefreshPresentation();
@@ -538,6 +551,7 @@ public sealed partial class PlayerViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsPreferences));
         OnPropertyChanged(nameof(IsConfirmExit));
         OnPropertyChanged(nameof(CanContinue));
+        OnPropertyChanged(nameof(TitleContinueLabel));
         OnPropertyChanged(nameof(IsAutoOn));
         OnPropertyChanged(nameof(SkipModeLabel));
     }
