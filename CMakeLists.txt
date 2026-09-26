@@ -88,6 +88,17 @@ if(ROWL_BUILD_RUNTIME_TESTS)
             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
             TIMEOUT 15
         )
+        # D6 #154 curutme kaydi: BGM defaults yarisi iddiasi CURUTULDU
+        # (3'lu oy 2-1, kod degisikligi yok); yazar-census pini. Salt dosya
+        # okur, derleme gerektirmez. Census kirilirsa yeniden-hakemlik gerekir.
+        add_test(
+            NAME rowl_d06_154_refutation_tests
+            COMMAND ${Python3_EXECUTABLE} -u ${CMAKE_SOURCE_DIR}/tests/test_d06_154_refutation.py
+        )
+        set_tests_properties(rowl_d06_154_refutation_tests PROPERTIES
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+            TIMEOUT 30
+        )
         add_test(
             NAME rowl_release_package_tool_tests
             COMMAND ${Python3_EXECUTABLE} -u ${CMAKE_SOURCE_DIR}/tests/test_release_package.py
