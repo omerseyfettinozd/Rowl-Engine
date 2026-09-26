@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -308,13 +309,78 @@ namespace RowlEngine.Editor.ViewModels
 
         public void RefreshAssets()
         {
+            // Dilim-6c sıra tacı: eşzamanlı tarama, uçuştaki async sonucu
+            // hükümsüz kılar (eski ağaç yeninin üstüne yazılamaz).
+            Interlocked.Increment(ref _scanSequence);
             try
             {
-                RefreshAssetsCore();
+                ApplyScanSnapshot(CaptureScanSnapshot());
             }
             catch (Exception ex)
             {
                 ReportAssetError("yenileme", ex);
+            }
+        }
+
+        /// <summary>
+        /// Dilim-6c: disk yürüyüşü worker thread'de, ağaç inşası UI
+        /// thread'inde. Sıra tacı yalnızca en son taramayı uygular; arada
+        /// yeni tarama başladıysa bu sonuç sessizce atılır. Hata raporu UI
+        /// thread'inden verilir. Watcher-restart mantığına dokunulmaz.
+        /// </summary>
+        public Task RefreshAssetsAsync()
+        {
+            long sequence = Interlocked.Increment(ref _scanSequence);
+            var completion = new TaskCompletionSource<object?>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+            Task.Run(() =>
+            {
+                AssetScanSnapshot? snapshot = null;
+                Exception? scanError = null;
+                try
+                {
+                    snapshot = CaptureScanSnapshot();
+                }
+                catch (Exception ex)
+                {
+                    scanError = ex;
+                }
+                PostToUiThread(() =>
+                {
+                    try
+                    {
+                        if (scanError is not null)
+                            ReportAssetError("yenileme", scanError);
+                        else if (sequence == Volatile.Read(ref _scanSequence) &&
+                            snapshot is not null)
+                            ApplyScanSnapshot(snapshot);
+                    }
+                    catch (Exception ex)
+                    {
+                        ReportAssetError("yenileme", ex);
+                    }
+                    finally
+                    {
+                        completion.TrySetResult(null);
+                    }
+                });
+            });
+            return completion.Task;
+        }
+
+        private static void PostToUiThread(Action action)
+        {
+            try
+            {
+                var dispatcher = Avalonia.Threading.Dispatcher.UIThread;
+                if (dispatcher.CheckAccess())
+                    action();
+                else
+                    dispatcher.Post(action);
+            }
+            catch
+            {
+                try { action(); } catch { }
             }
         }
 
@@ -343,12 +409,45 @@ namespace RowlEngine.Editor.ViewModels
             return false;
         }
 
-        private void RefreshAssetsCore()
+        // Dilim-6c: worker-safe tarama anlık görüntüsü (UI nesnesi yok,
+        // yalnızca düz veri — disk yürüyüşü UI thread'ini bloklamaz).
+        private sealed class AssetScanSnapshot
         {
-            AssetTree.Clear();
-            _visibleFileCount = 0;
-            _hiddenFileCount = 0;
-            bool filterActive = FilterActive;
+            public List<(string displayName, string path)> Mounts = new();
+            public List<ScannedRoot> Roots = new();
+            public int VisibleFileCount;
+            public int HiddenFileCount;
+        }
+
+        private sealed class ScannedRoot
+        {
+            public string DisplayName = string.Empty;
+            public string MountPath = string.Empty;
+            public ScannedDir Body = new();
+        }
+
+        private sealed class ScannedDir
+        {
+            public string Name = string.Empty;
+            public string RelativePath = string.Empty;
+            public string FullPath = string.Empty;
+            public List<ScannedDir> Directories = new();
+            public List<ScannedFile> Files = new();
+        }
+
+        private readonly record struct ScannedFile(string Name, string RelativePath, string FullPath);
+
+        // Dilim-6c sıra tacı (MS-2 kayıt sequencing ile aynı desen):
+        // yalnızca en son tarama ağaca uygulanır.
+        private long _scanSequence;
+
+        /// <summary>
+        /// Dilim-6c yakalama fazı: disk yürüyüşü, worker-safe (UI nesnesine
+        /// dokunulmaz; yoksayma kuralları eski taramayla birebir aynıdır).
+        /// </summary>
+        private AssetScanSnapshot CaptureScanSnapshot()
+        {
+            var snapshot = new AssetScanSnapshot();
 
             // Define VFS mount point: only Assets/ is the canonical asset root.
             var mountPoints = new List<(string displayName, string path)>
@@ -356,25 +455,91 @@ namespace RowlEngine.Editor.ViewModels
                 ("Assets", MainWindowViewModel.AssetsPath),
                 ("Mods", Path.Combine(MainWindowViewModel.ProjectRoot, "mods"))
             };
-            var currentFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            snapshot.Mounts.AddRange(mountPoints);
 
             foreach (var mountPoint in mountPoints)
             {
-                string displayName = mountPoint.displayName;
-                string mountPath = mountPoint.path;
-
-                if (System.IO.Directory.Exists(mountPath))
+                if (!System.IO.Directory.Exists(mountPoint.path)) continue;
+                var root = new ScannedRoot
                 {
-                    var rootDir = new System.IO.DirectoryInfo(mountPath);
-                    var rootNode = new AssetNodeViewModel(displayName, displayName, mountPath, true, RefreshAssets)
+                    DisplayName = mountPoint.displayName,
+                    MountPath = mountPoint.path,
+                    Body =
                     {
-                        // Faz 4: yalnızca kök açık başlar (IsExpanded=True stili kalktı).
-                        IsExpanded = true
-                    };
+                        Name = mountPoint.displayName,
+                        RelativePath = mountPoint.displayName,
+                        FullPath = mountPoint.path
+                    }
+                };
+                CaptureDirectory(new System.IO.DirectoryInfo(mountPoint.path), mountPoint.path, root.Body, snapshot);
+                snapshot.Roots.Add(root);
+            }
+            return snapshot;
+        }
 
-                    PopulateDirectoryNode(rootDir, mountPath, rootNode.Children, currentFiles);
-                    AssetTree.Add(rootNode);
+        private static void CaptureDirectory(
+            System.IO.DirectoryInfo dirInfo,
+            string rootPath,
+            ScannedDir target,
+            AssetScanSnapshot snapshot)
+        {
+            foreach (var subDir in dirInfo.GetDirectories().OrderBy(d => d.Name))
+            {
+                if (subDir.Name.StartsWith(".") || IgnoredDirectoryNames.Contains(subDir.Name)) continue;
+
+                var child = new ScannedDir
+                {
+                    Name = subDir.Name,
+                    RelativePath = System.IO.Path.GetRelativePath(rootPath, subDir.FullName),
+                    FullPath = subDir.FullName
+                };
+                CaptureDirectory(subDir, rootPath, child, snapshot);
+                target.Directories.Add(child);
+            }
+
+            foreach (var file in dirInfo.GetFiles().OrderBy(f => f.Name))
+            {
+                if (file.Name.StartsWith(".") ||
+                    IgnoredFileExtensions.Contains(file.Extension) ||
+                    file.Name.Equals(".gitkeep", StringComparison.OrdinalIgnoreCase))
+                {
+                    snapshot.HiddenFileCount++;
+                    continue;
                 }
+
+                target.Files.Add(new ScannedFile(
+                    file.Name,
+                    System.IO.Path.GetRelativePath(rootPath, file.FullName),
+                    file.FullName));
+                snapshot.VisibleFileCount++;
+            }
+        }
+
+        /// <summary>
+        /// Dilim-6c uygulama fazı: UI thread'inde çalışır; anlık görüntüden
+        /// ağacı kurar (hayalet takibi, filtre budaması, durum satırı ve
+        /// gezinme çözümlemesi eski davranışla birebir aynıdır).
+        /// </summary>
+        private void ApplyScanSnapshot(AssetScanSnapshot snapshot)
+        {
+            AssetTree.Clear();
+            _visibleFileCount = snapshot.VisibleFileCount;
+            _hiddenFileCount = snapshot.HiddenFileCount;
+            bool filterActive = FilterActive;
+
+            var mountPoints = snapshot.Mounts;
+            var currentFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var root in snapshot.Roots)
+            {
+                var rootNode = new AssetNodeViewModel(root.DisplayName, root.DisplayName, root.MountPath, true, RefreshAssets)
+                {
+                    // Faz 4: yalnızca kök açık başlar (IsExpanded=True stili kalktı).
+                    IsExpanded = true
+                };
+
+                BuildDirectoryNode(root.Body, rootNode.Children, currentFiles, RefreshAssets);
+                AssetTree.Add(rootNode);
             }
 
             // MS-5: previously seen files that vanished from disk become ghosts.
@@ -805,13 +970,13 @@ namespace RowlEngine.Editor.ViewModels
 
         private void OnWatchDebounceElapsed()
         {
+            // Dilim-6c: izleyici tetiklemeli tarama döngüsü worker'da
+            // (disk yürüyüşü UI thread'ini bloklamaz; uygulama fazı UI'ye
+            // post edilir). Restart mantığı (OnWatcherError → StartWatching)
+            // aynen korunur.
             try
             {
-                var dispatcher = Avalonia.Threading.Dispatcher.UIThread;
-                if (dispatcher.CheckAccess())
-                    RefreshAssets();
-                else
-                    dispatcher.Post(RefreshAssets);
+                _ = RefreshAssetsAsync();
             }
             catch
             {
@@ -855,34 +1020,30 @@ namespace RowlEngine.Editor.ViewModels
             ".json", ".rowlproj", ".rowlpkg", ".gitkeep", ".tmp", ".log"
         };
 
-        private void PopulateDirectoryNode(System.IO.DirectoryInfo dirInfo, string rootPath, ObservableCollection<AssetNodeViewModel> targetCollection, HashSet<string>? currentFiles = null)
+        /// <summary>
+        /// Dilim-6c: anlık görüntüden düğüm inşası (UI thread'i). Sıra ve
+        /// sayım eski taramayla birebir aynıdır; yalnızca veri kaynağı disk
+        /// yerine <see cref="AssetScanSnapshot"/> olur.
+        /// </summary>
+        private static void BuildDirectoryNode(
+            ScannedDir dir,
+            ObservableCollection<AssetNodeViewModel> targetCollection,
+            HashSet<string> currentFiles,
+            Action? onRenamed)
         {
-            foreach (var subDir in dirInfo.GetDirectories().OrderBy(d => d.Name))
+            foreach (var subDir in dir.Directories)
             {
-                if (subDir.Name.StartsWith(".") || IgnoredDirectoryNames.Contains(subDir.Name)) continue;
+                var dirNode = new AssetNodeViewModel(subDir.Name, subDir.RelativePath, subDir.FullPath, true, onRenamed);
 
-                string relPath = System.IO.Path.GetRelativePath(rootPath, subDir.FullName);
-                var dirNode = new AssetNodeViewModel(subDir.Name, relPath, subDir.FullName, true, RefreshAssets);
-
-                PopulateDirectoryNode(subDir, rootPath, dirNode.Children, currentFiles);
+                BuildDirectoryNode(subDir, dirNode.Children, currentFiles, onRenamed);
 
                 targetCollection.Add(dirNode);
             }
 
-            foreach (var file in dirInfo.GetFiles().OrderBy(f => f.Name))
+            foreach (var file in dir.Files)
             {
-                if (file.Name.StartsWith(".") ||
-                    IgnoredFileExtensions.Contains(file.Extension) ||
-                    file.Name.Equals(".gitkeep", StringComparison.OrdinalIgnoreCase))
-                {
-                    _hiddenFileCount++;
-                    continue;
-                }
-
-                string relPath = System.IO.Path.GetRelativePath(rootPath, file.FullName);
-                var fileNode = new AssetNodeViewModel(file.Name, relPath, file.FullName, false, RefreshAssets);
-                currentFiles?.Add(file.FullName);
-                _visibleFileCount++;
+                var fileNode = new AssetNodeViewModel(file.Name, file.RelativePath, file.FullPath, false, onRenamed);
+                currentFiles.Add(file.FullPath);
 
                 targetCollection.Add(fileNode);
             }
