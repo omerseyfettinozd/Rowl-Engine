@@ -16,6 +16,11 @@
         WindowStartupLocation="CenterScreen"
         Background="{DynamicResource AppBackground}">
 
+    <!-- KARAR-0 eşleme (Dilim-1, markup-only, davranış değişikliği yok):
+         AppBackground→#0A0A0B, PrimaryText→#F2EFE6, Accent→#F2EFE6;
+         soğuk palet (#0B0F19/#121624/#3B82F6/#00F0FF/#A855F7) bu dosyada
+         gömülü yok — çözümleme editor/Styles/ThemeStyles.axaml üzerinden. -->
+
     <Design.DataContext>
         <vm:MainWindowViewModel/>
     </Design.DataContext>

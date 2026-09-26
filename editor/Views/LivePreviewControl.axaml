@@ -103,7 +103,8 @@
                                             </StackPanel>
 
                                             <!-- Overlay Label at Bottom -->
-                                            <Border VerticalAlignment="Bottom" HorizontalAlignment="Center" Background="#D00F172A" Padding="6,2" Margin="0,0,0,4" CornerRadius="4" IsHitTestVisible="False">
+                                            <!-- KARAR-0 (Dilim-1): soğuk slate #0F172A → zemin #0A0A0B (alfa D0 aynen) -->
+                                            <Border VerticalAlignment="Bottom" HorizontalAlignment="Center" Background="#D00A0A0B" Padding="6,2" Margin="0,0,0,4" CornerRadius="4" IsHitTestVisible="False">
                                                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="4">
                                                     <TextBlock Text="Character" Foreground="{DynamicResource Accent}" FontSize="10" FontWeight="Bold"/>
                                                     <TextBlock Text="{Binding Width, StringFormat='({0:0}'}" Foreground="{DynamicResource MutedText}" FontSize="9"/>
@@ -254,9 +255,10 @@
             </Viewbox>
 
             <!-- Professional Stereo VU Meter HUD Badge (Bottom Right) -->
+            <!-- KARAR-0 (Dilim-1): soğuk slate #0F172A → zemin #131315 (alfa D9 aynen) -->
             <Border HorizontalAlignment="Right" VerticalAlignment="Bottom"
                     Margin="14" Padding="8,5" CornerRadius="4"
-                    Background="#D90F172A" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1"
+                    Background="#D9131315" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1"
                     IsHitTestVisible="False" Opacity="0.9">
                 <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                     <StackPanel Spacing="2" VerticalAlignment="Center">

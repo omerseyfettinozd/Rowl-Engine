@@ -3,6 +3,12 @@
 > **SUPERSEDED:** Siyah + kemik-beyazı (`#0A0A0B` + `#F2EFE6`) yönü kararı (UI Sadeleştirme,
 > KARAR-0) bu paketi geçersiz kıldı. Q1–Q4 soruları HÜKÜMSÜZDÜR; token önerileri uygulanmayacak.
 > Belge tarihsel kayıt olarak korunur.
+>
+> **KARAR-0 KİLİDİ (2026-09-20 revizyonu — GEÇERLİ):** Siyah `#0A0A0B` +
+> kemik-beyazı `#F2EFE6` geçerlidir (zeminler `#0A0A0B`/`#131315`/`#17171A`,
+> metin `#F2EFE6`; vurgu renkli değildir). Q1–Q4 HÜKÜMSÜZDÜR; aşağıdaki §2
+> token önerileri uygulanmayacak, §4 devir listesi §2'ye dayandığı ölçüde
+> geçersizdir. SUPERSEDED statüsü sürer — bu belge yalnızca tarihsel kayıttır.
 
 Faz C strangler'ının (C2 LivePreview + C3 MainWindow kabuğu + C4
 lint/markup/validation) görsel-dil kilidi. Dayanak:
