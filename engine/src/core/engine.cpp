@@ -1190,6 +1190,43 @@ void Engine::updateSceneFromComponents(const nlohmann::json& root,
                 cd.voiceBlipPitch = data.value("voice_blip_pitch", 1.0f);
                 cd.voiceBlipPitchVariance = data.value("voice_blip_variance", 0.08f);
                 cd.voiceBlipCadence = std::max(1, data.value("voice_blip_cadence", 1));
+                // E2a sprite-sheet (opsiyonel; yoksa/geçersizse legacy tek-kare).
+                // Sinirlar: izgara [1,64], fps (0,120], start sarmalanir.
+                // Gecersiz girdi sheet'i kapatir (fail-closed), sahne yasanir.
+                {
+                    const int sheetCols = data.value("sheet_cols", 0);
+                    const int sheetRows = data.value("sheet_rows", 0);
+                    const float sheetFps = data.value("sheet_fps", 0.0f);
+                    bool sheetLoop = true;
+                    if (data.contains("sheet_loop")) {
+                        if (data["sheet_loop"].is_boolean()) {
+                            sheetLoop = data["sheet_loop"].get<bool>();
+                        } else if (data["sheet_loop"].is_number()) {
+                            sheetLoop = data["sheet_loop"].get<int>() != 0;
+                        }
+                    }
+                    const int sheetStart = data.value("sheet_start", 0);
+                    const bool sheetShapeOk =
+                        sheetCols >= 1 && sheetCols <= 64 &&
+                        sheetRows >= 1 && sheetRows <= 64 &&
+                        (sheetCols > 1 || sheetRows > 1) &&
+                        std::isfinite(sheetFps) && sheetFps > 0.0f && sheetFps <= 120.0f;
+                    if (data.contains("sheet_cols") || data.contains("sheet_rows") ||
+                        data.contains("sheet_fps")) {
+                        if (sheetShapeOk) {
+                            cd.sheetCols = sheetCols;
+                            cd.sheetRows = sheetRows;
+                            cd.sheetFps = sheetFps;
+                            cd.sheetLoop = sheetLoop;
+                            const int total = sheetCols * sheetRows;
+                            const int start =
+                                total > 0 ? ((sheetStart % total) + total) % total : 0;
+                            cd.sheetElapsed = static_cast<float>(start) / sheetFps;
+                        } else {
+                            ROWL_LOG_WARN("character sprite-sheet ignored (invalid grid/fps), legacy single frame kept");
+                        }
+                    }
+                }
                 // Faz 5 Dilim 3 fix: `layers` varsa parse+compose yolu cizilir,
                 // yoksa legacy sprite yolu aynen calisir. Parse basarisizsa
                 // legacy sprite'a dusulur (fail-closed).
@@ -1993,6 +2030,9 @@ void Engine::step(float deltaTime) {
     // scripts, entities). Rendering, audio upkeep, and the menu overlay below
     // keep running so the pause screen stays alive.
     if (!m_paused) {
+    // E2b: sunum-efekt saati hikaye simulasyonuyla donar/akar (pause'da kare
+    // sabit kalir — MS-4 static-gate korunur).
+    updateCharacterFx(deltaTime);
     const auto* fontRenderer = m_window->getFontRenderer();
     for (auto& dlg : m_activeDialogues) {
         dlg.isPlaying = m_isPlaying;
@@ -2080,6 +2120,11 @@ void Engine::step(float deltaTime) {
         }
     }
 
+    // E2a: sprite-sheet saati typewriter'dan bagimsiz ilerler (gecisler gibi
+    // sunum-zamanli; duraklatma/zero-dt ilerletmez — deltaTime step-basinda
+    // sanitize edilir).
+    advanceSpriteSheets(deltaTime);
+
     bool autoAdvanceEnabled = false;
     float autoAdvanceDelay = 0.0f;
     for (const auto& dialogue : m_activeDialogues) {
@@ -2121,13 +2166,17 @@ void Engine::step(float deltaTime) {
     frame.backgroundY = m_activeBackgroundY;
     frame.backgroundWidth = m_activeBackgroundWidth;
     frame.backgroundHeight = m_activeBackgroundHeight;
-    frame.characters = m_activeCharacters;
     frame.dialogues = m_activeDialogues;
     frame.choices = m_activeChoiceButtons;
     frame.backgroundRotation = m_activeBackgroundRotation;
     frame.backgroundParallaxX = m_activeBackgroundParallaxX;
     frame.backgroundParallaxY = m_activeBackgroundParallaxY;
     frame.backgroundOpacity = m_activeBackgroundOpacity;
+    // E2b: FX kapali iken composeCharacterFx girisin kopyasidir (legacy kare
+    // bayt-birebir); acikken tween/vurgu/harman sunulan kopyaya isler.
+    // Window imzasi/hash degismez — C0/D2 kilidine dokunulmaz.
+    m_lastFxCharacters = composeCharacterFx();
+    frame.characters = m_lastFxCharacters;
     m_window->renderComposedFrame(frame);
 
     // Update & Render Entity-Component Scene (frozen while paused)
@@ -2190,6 +2239,58 @@ void Engine::startTransition(const std::string& kind, float durationSeconds, con
                             "Transition snapshot capture failed; no transition started",
                             "start_transition", "");
     }
+}
+
+void Engine::advanceSpriteSheets(float deltaTime) {
+    if (!std::isfinite(deltaTime) || deltaTime <= 0.0f) return;
+    for (auto& ch : m_activeCharacters) {
+        if (!ch.isSheetEnabled()) continue;
+        const int total = ch.sheetFrameCount();
+        if (total <= 1) continue;
+        const float span = static_cast<float>(total) / ch.sheetFps;
+        if (!(span > 0.0f) || !std::isfinite(span)) continue;
+        ch.sheetElapsed += deltaTime;
+        if (ch.sheetLoop) {
+            ch.sheetElapsed = std::fmod(ch.sheetElapsed, span);
+        } else if (ch.sheetElapsed > span) {
+            ch.sheetElapsed = span;
+        }
+    }
+}
+
+bool Engine::anySpriteSheetAnimating() const {
+    for (const auto& ch : m_activeCharacters) {
+        if (ch.isSheetAnimating()) return true;
+    }
+    return false;
+}
+
+std::string Engine::spriteSheetStateJson() const {
+    std::string out = "[";
+    bool first = true;
+    for (size_t i = 0; i < m_activeCharacters.size(); ++i) {
+        const auto& ch = m_activeCharacters[i];
+        if (!ch.isSheetEnabled()) continue;
+        if (!first) out += ",";
+        first = false;
+        std::string spriteEsc;
+        spriteEsc.reserve(ch.sprite.size());
+        for (const char c : ch.sprite) {
+            if (c == '"' || c == '\\') spriteEsc += '\\';
+            spriteEsc += c;
+        }
+        out += "{\"index\":" + std::to_string(i) +
+               ",\"sprite\":\"" + spriteEsc +
+               "\",\"cols\":" + std::to_string(ch.sheetCols) +
+               ",\"rows\":" + std::to_string(ch.sheetRows) +
+               ",\"frames\":" + std::to_string(ch.sheetFrameCount()) +
+               ",\"frame\":" + std::to_string(ch.sheetFrameIndex()) +
+               ",\"fps\":" + std::to_string(ch.sheetFps) +
+               ",\"loop\":" + (ch.sheetLoop ? "true" : "false") +
+               ",\"playing\":" + (ch.isSheetAnimating() ? "true" : "false") + "}";
+    }
+    out += "]";
+    return out;
 }
 
 void Engine::triggerCameraShakePreset(const std::string& preset, float intensityMultiplier, float durationOverride) {
@@ -2529,6 +2630,8 @@ bool Engine::isPreviewFrameStatic() const {
         if (camera->isMoving()) return false;
     }
     if (!areActiveDialoguesComplete()) return false;
+    // E2a: oynayan sprite-sheet karesi piksel ciktisini degistirir.
+    if (anySpriteSheetAnimating()) return false;
     // Entity scripts and component on_update callbacks can mutate visuals at
     // any tick; only a script/scene-free runtime is provably still.
     if (m_hasActiveScript) return false;
@@ -3483,6 +3586,256 @@ void Engine::resetVoiceBlipCount() {
     if (m_audio) {
         m_audio->resetVoiceBlipCount();
     }
+}
+
+// ── E2b: karakter tween + konusan-vurgusu + dudak-senkronu + expression-harmani ──
+// Tum dogrulama Engine canli-listesine karsi; pencere/init sarti yok (header'daki
+// nota bak). Hata-durumunda false + outError; basarida true.
+
+namespace {
+std::vector<std::string> e2bLiveSprites(
+    const std::vector<Rowl::Render::CharacterRenderData>& chars) {
+    std::vector<std::string> out;
+    out.reserve(chars.size());
+    for (const auto& ch : chars) out.push_back(ch.sprite);
+    return out;
+}
+} // namespace
+
+bool Engine::startCharacterTween(int index, float x, float y, float w, float h,
+                                 float opacity, float durationSeconds, int easing,
+                                 std::string& outError) {
+    const std::size_t count = m_activeCharacters.size();
+    if (index < 0 || static_cast<std::size_t>(index) >= count) {
+        outError = "character index out of range";
+        return false;
+    }
+    if (!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(w) ||
+        !std::isfinite(h) || !std::isfinite(opacity) ||
+        !std::isfinite(durationSeconds)) {
+        outError = "tween target must be finite";
+        return false;
+    }
+    if (durationSeconds < 0.0f) {
+        outError = "tween duration must be >= 0";
+        return false;
+    }
+    Rowl::Scene::CharacterFxEase ease = Rowl::Scene::CharacterFxEase::Linear;
+    if (!Rowl::Scene::characterFxEaseFromInt(easing, ease)) {
+        outError = "unknown tween easing (0..4)";
+        return false;
+    }
+    const auto& live = m_activeCharacters[static_cast<std::size_t>(index)];
+    // Yumusak devir: ucustaki ornekten basla (varsa), yoksa canli degerden.
+    Rowl::Scene::CharacterFxRect from{live.x, live.y, live.width, live.height,
+                                      live.opacity};
+    Rowl::Scene::CharacterFxRect sampled{};
+    if (m_charTweenTrack.sample(index, live.sprite, sampled)) {
+        from = sampled;
+    }
+    const Rowl::Scene::CharacterFxRect to{x, y, w, h, opacity};
+    m_charTweenTrack.start(index, live.sprite, from, to, durationSeconds, ease);
+    outError.clear();
+    return true;
+}
+
+bool Engine::cancelCharacterTween(int index, std::string& outError) {
+    const std::size_t count = m_activeCharacters.size();
+    if (index < 0 || static_cast<std::size_t>(index) >= count) {
+        outError = "character index out of range";
+        return false;
+    }
+    m_charTweenTrack.cancel(index);
+    outError.clear();
+    return true;
+}
+
+bool Engine::isCharacterTweenActive() const {
+    return m_charTweenTrack.isActive();
+}
+
+bool Engine::setSpeakerFocus(int focusedIndex, float dimOpacity, std::string& outError) {
+    if (focusedIndex < -1) {
+        outError = "focus index must be -1 (off) or a character index";
+        return false;
+    }
+    if (focusedIndex >= 0) {
+        const std::size_t count = m_activeCharacters.size();
+        if (static_cast<std::size_t>(focusedIndex) >= count) {
+            outError = "focus index out of range";
+            return false;
+        }
+        if (!std::isfinite(dimOpacity)) {
+            outError = "focus dim must be finite";
+            return false;
+        }
+        m_speakerFocus.enabled = true;
+        m_speakerFocus.focusedIndex = focusedIndex;
+        m_speakerFocus.dimOpacity = std::clamp(dimOpacity, 0.0f, 1.0f);
+    } else {
+        m_speakerFocus.enabled = false;
+        m_speakerFocus.focusedIndex = -1;
+    }
+    outError.clear();
+    return true;
+}
+
+bool Engine::getSpeakerFocus(int& outIndex, float& outDim) const {
+    outIndex = m_speakerFocus.enabled ? m_speakerFocus.focusedIndex : -1;
+    outDim = std::clamp(m_speakerFocus.dimOpacity, 0.0f, 1.0f);
+    return true;
+}
+
+bool Engine::setLipSyncEnabled(bool enabled) {
+    m_lipSync.enabled = enabled;
+    return true;
+}
+
+bool Engine::isLipSyncEnabled() const {
+    return m_lipSync.enabled;
+}
+
+bool Engine::beginExpressionBlend(float durationSeconds, std::string& outError) {
+    if (!std::isfinite(durationSeconds) || durationSeconds <= 0.0f) {
+        outError = "blend duration must be finite and > 0";
+        return false;
+    }
+    if (m_activeCharacters.empty()) {
+        outError = "no live characters to blend from";
+        return false;
+    }
+    m_exprBlend.oldChars.clear();
+    m_exprBlend.oldChars.reserve(m_activeCharacters.size());
+    for (const auto& ch : m_activeCharacters) {
+        Rowl::Scene::FxCharSnapshot snap;
+        snap.sprite = ch.sprite;
+        snap.x = ch.x;
+        snap.y = ch.y;
+        snap.w = ch.width;
+        snap.h = ch.height;
+        snap.opacity = ch.opacity;
+        m_exprBlend.oldChars.push_back(std::move(snap));
+    }
+    m_exprBlend.durationSeconds = durationSeconds;
+    m_exprBlend.elapsedSeconds = 0.0f;
+    m_exprBlend.active = true;
+    outError.clear();
+    return true;
+}
+
+bool Engine::isExpressionBlendActive() const {
+    return m_exprBlend.active;
+}
+
+void Engine::updateCharacterFx(float dt) {
+    const float step = (std::isfinite(dt) && dt > 0.0f) ? dt : 0.0f;
+    m_fxClockSec += step;
+    m_charTweenTrack.advance(step, e2bLiveSprites(m_activeCharacters));
+    if (m_exprBlend.active) {
+        m_exprBlend.elapsedSeconds += step;
+        if (m_exprBlend.elapsedSeconds >= m_exprBlend.durationSeconds) {
+            m_exprBlend.active = false;
+        }
+    }
+}
+
+std::vector<Rowl::Render::CharacterRenderData> Engine::composeCharacterFx() {
+    std::vector<Rowl::Render::CharacterRenderData> out = m_activeCharacters;
+    const std::size_t liveCount = out.size();
+
+    // 1) Expression-harmani: eski-anlik*(1-t) + canli*t. Canli bossa harman
+    // hayalet uretmesin diye kendini kapatir (fail-closed).
+    if (m_exprBlend.active) {
+        if (out.empty()) {
+            m_exprBlend.active = false;
+        } else {
+            const float t = m_exprBlend.progress();
+            std::vector<Rowl::Render::CharacterRenderData> blended;
+            blended.reserve(m_exprBlend.oldChars.size() + out.size());
+            for (const auto& old : m_exprBlend.oldChars) {
+                Rowl::Render::CharacterRenderData item;
+                item.sprite = old.sprite;
+                item.x = old.x;
+                item.y = old.y;
+                item.width = old.w;
+                item.height = old.h;
+                item.opacity = std::clamp(old.opacity * (1.0f - t), 0.0f, 1.0f);
+                blended.push_back(std::move(item));
+            }
+            for (auto& live : out) {
+                live.opacity = std::clamp(live.opacity * t, 0.0f, 1.0f);
+                blended.push_back(live);
+            }
+            out = std::move(blended);
+        }
+    }
+
+    // 2) Tween-ornekleme (yalnizca harman-oncesi canli indekste; harmanli
+    // karede indeksler kayar — tween canli listeye uygulanir).
+    if (!m_exprBlend.active) {
+        for (std::size_t i = 0; i < out.size(); ++i) {
+            Rowl::Scene::CharacterFxRect sampled{};
+            if (m_charTweenTrack.sample(static_cast<int>(i), out[i].sprite, sampled)) {
+                out[i].x = sampled.x;
+                out[i].y = sampled.y;
+                out[i].width = sampled.w;
+                out[i].height = sampled.h;
+                out[i].opacity = std::clamp(sampled.opacity, 0.0f, 1.0f);
+            }
+        }
+    }
+
+    // 3) Konusan-vurgusu: odaksizlar solar (odak disi carpan).
+    if (m_speakerFocus.enabled && m_speakerFocus.focusedIndex >= 0 &&
+        static_cast<std::size_t>(m_speakerFocus.focusedIndex) < liveCount &&
+        !m_exprBlend.active) {
+        for (std::size_t i = 0; i < out.size(); ++i) {
+            out[i].opacity = std::clamp(
+                out[i].opacity *
+                    m_speakerFocus.multiplierFor(static_cast<int>(i), liveCount),
+                0.0f, 1.0f);
+        }
+    }
+
+    // 4) Dudak-senkronu: odakli karakter, diyalog acilirken dikey salinir.
+    if (m_lipSync.enabled && m_speakerFocus.enabled &&
+        m_speakerFocus.focusedIndex >= 0 &&
+        static_cast<std::size_t>(m_speakerFocus.focusedIndex) < out.size() &&
+        !m_exprBlend.active && !areActiveDialoguesComplete()) {
+        out[static_cast<std::size_t>(m_speakerFocus.focusedIndex)].y +=
+            m_lipSync.bobOffset(m_fxClockSec);
+    }
+
+    return out;
+}
+
+std::string Engine::characterFxSnapshotJson() const {
+    nlohmann::json root;
+    root["characters"] = m_activeCharacters.size();
+    nlohmann::json tweens = nlohmann::json::array();
+    for (const auto& [index, tween] : m_charTweenTrack.entries()) {
+        nlohmann::json entry;
+        entry["index"] = index;
+        entry["active"] = !tween.done();
+        entry["progress"] = tween.progress();
+        entry["easing"] = static_cast<int>(tween.easing);
+        entry["target"] = {{"x", tween.to.x},
+                           {"y", tween.to.y},
+                           {"w", tween.to.w},
+                           {"h", tween.to.h},
+                           {"opacity", std::clamp(tween.to.opacity, 0.0f, 1.0f)}};
+        tweens.push_back(std::move(entry));
+    }
+    root["tweens"] = std::move(tweens);
+    root["focus"] = {{"enabled", m_speakerFocus.enabled},
+                     {"index", m_speakerFocus.enabled ? m_speakerFocus.focusedIndex : -1},
+                     {"dim", std::clamp(m_speakerFocus.dimOpacity, 0.0f, 1.0f)}};
+    root["lipsync"] = {{"enabled", m_lipSync.enabled}};
+    root["blend"] = {{"active", m_exprBlend.active},
+                     {"progress", m_exprBlend.progress()},
+                     {"old_count", m_exprBlend.oldChars.size()},
+                     {"blended_count", m_lastFxCharacters.size()}};
+    return root.dump();
 }
 
 } // namespace Rowl::Core

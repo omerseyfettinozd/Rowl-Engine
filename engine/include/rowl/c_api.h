@@ -141,6 +141,14 @@ typedef struct RowlEngine_ApiVersion {
 /* Faz 5 Dilim 5: converter provenance sidecars (rowl_oggenc / rowl_webp2png). */
 #define ROWL_ENGINE_CAPABILITY_CONVERTER_PROVENANCE UINT64_C(131072)
 #define ROWL_ENGINE_CAPABILITY_MSDF_RENDER       UINT64_C(262144)
+/* E2a: gecis-repertuvari (dissolve/push/iris) + sprite-sheet (yalniz-eklemeli). */
+#define ROWL_ENGINE_CAPABILITY_TRANSITION_REPERTOIRE UINT64_C(524288)
+#define ROWL_ENGINE_CAPABILITY_SPRITE_SHEET UINT64_C(1048576)
+/* E2b: karakter-tween + konusan-vurgusu + dudak-senkronu + expression-harmani
+ * + tek-roundtrip FX snapshot (C2 yardimcisi). Saf eklemeli; eski giris
+ * noktalarina dokunulmaz. Bit E2a'dan sonraki bos bayrak (2^21): E2a
+ * 524288/1048576'yi aldigindan cakismamasi icin 2097152. */
+#define ROWL_ENGINE_CAPABILITY_CHARACTER_FX UINT64_C(2097152)
 
 /** Current additive C API version. This query does not require an engine handle. */
 ROWL_API RowlEngine_ResultCode RowlEngine_GetApiVersion(
@@ -921,6 +929,60 @@ ROWL_API RowlEngine_ResultCode RowlEngine_GetLastCharacterErrorUtf8(
     RowlEngineHandle handle, char* buffer, uint32_t bufferSize,
     uint32_t* outRequiredSize);
 
+/**
+ * E2b — karakter-tween + konusan-vurgusu + dudak-senkronu + expression-harmani
+ * (ROWL_ENGINE_CAPABILITY_CHARACTER_FX). Tum giris eklemeli; eski karakter
+ * giris noktalari ve renderVisualNovelFrame imzasi degismez (C0/D2 kilidi).
+ *
+ * Sunum-katmani sozlesmesi: canli sahne listesi (m_activeCharacters) asla
+ * degismez; Step'teki kare-birlestirme sunulan kopyayi donusturur. Kapali
+ * iken (varsayilan) cikti girisin kopyasidir — legacy pikseller korunur.
+ * Init-bagimsizdir (saf Engine durumu): pencere sarti aranmaz; bos sahnede
+ * indeks isteyen cagri INVALID_ARGUMENT ile reddedilir.
+ *
+ * characterIndex: canli listedeki sira (0-tabanli). easing: 0 Linear,
+ * 1 EaseInQuad, 2 EaseOutQuad, 3 EaseInOutCubic, 4 SmoothStep (disi red).
+ * durationSeconds: 0 = anlik-pin (hedefte durur); negatif/non-finite red.
+ * focusedIndex: -1 = vurgu kapali; >=0 = odaktaki sira (aralik-disi red).
+ * dimOpacity: sonlu olmali, [0,1]'e clamp'lenir.
+ */
+ROWL_API RowlEngine_ResultCode RowlEngine_CharacterTweenTo(
+    RowlEngineHandle handle, int characterIndex,
+    float x, float y, float w, float h, float opacity,
+    float durationSeconds, int easing);
+ROWL_API RowlEngine_ResultCode RowlEngine_CancelCharacterTween(
+    RowlEngineHandle handle, int characterIndex);
+/** Ucusta (progress<1) tween varsa 1, yoksa 0. Olu/yabanci handle'da 0. */
+ROWL_API int RowlEngine_IsCharacterTweenActive(RowlEngineHandle handle);
+ROWL_API RowlEngine_ResultCode RowlEngine_SetSpeakerFocus(
+    RowlEngineHandle handle, int focusedIndex, float dimOpacity);
+ROWL_API RowlEngine_ResultCode RowlEngine_GetSpeakerFocus(
+    RowlEngineHandle handle, int* outFocusedIndex, float* outDimOpacity);
+ROWL_API RowlEngine_ResultCode RowlEngine_SetLipSyncEnabled(
+    RowlEngineHandle handle, int enabled);
+/** Dudak-senkronu aciksa 1, kapaliysa 0. Olu/yabanci handle'da 0. */
+ROWL_API int RowlEngine_IsLipSyncEnabled(RowlEngineHandle handle);
+/**
+ * Expression-harmani kurar: su anki canli liste fotograflanir; cagiran
+ * mevcut UpdateSceneFromJson yolundan yeni katmanlari iter; Step harmani
+ * eski*(1-t)+yeni*t ile sunar. Sure-bitiminde kendini kapatir. Bos sahnede
+ * veya gecersiz surede INVALID_ARGUMENT.
+ */
+ROWL_API RowlEngine_ResultCode RowlEngine_BeginCharacterExpressionBlend(
+    RowlEngineHandle handle, float durationSeconds);
+/**
+ * C2 yardimcisi: tween/focus/lipsync/harman durumunu tek cagrida JSON
+ * olarak verir (toplu-snapshot; dispatch-yagmurunu kurutur). Cikti seci:
+ * {"characters":N,"tweens":[{index,active,progress,easing,target:{...}}],
+ *  "focus":{enabled,index,dim},"lipsync":{enabled},
+ *  "blend":{active,progress,old_count,blended_count}}.
+ * Caller-buffer sozlesmesi (NULL/0 boyut-sorgu, dar tampon clears +
+ * BUFFER_TOO_SMALL).
+ */
+ROWL_API RowlEngine_ResultCode RowlEngine_GetCharacterFxSnapshotJson(
+    RowlEngineHandle handle, char* buffer, uint32_t bufferSize,
+    uint32_t* outRequiredSize);
+
 /** Triggers voice ducking attenuation on BGM (1 = voice active, 0 = restored). */
 ROWL_API void RowlEngine_TriggerVoiceDucking(RowlEngineHandle handle, int isVoiceActive);
 
@@ -1429,6 +1491,29 @@ ROWL_API RowlEngine_ResultCode RowlEngine_GetPrefetchProgressJson(
 ROWL_API RowlEngine_ResultCode RowlEngine_GetAssetProvenanceJson(
     RowlEngineHandle handle, const char* assetPathUtf8, char* buffer,
     uint32_t bufferSize, uint32_t* outRequiredSize);
+
+/**
+ * E2a — gecis-repertuvari kesfi + sprite-sheet gozlemlenebilirligi
+ * (ROWL_ENGINE_CAPABILITY_TRANSITION_REPERTOIRE / SPRITE_SHEET).
+ * Yalniz-eklemeli; eski giris noktalarina dokunulmaz.
+ *
+ * GetSupportedTransitionKindsJson handle-free saf yardimcidir
+ * (ParseMarkup emsali: motor ornegi, thread-affinity ve dosya G/C yok):
+ * RowlEngine_StartTransition'un kabul ettigi tur adlarini UTF-8 JSON dizi
+ * olarak kopyalar (or. `["crossfade",...,"dissolve","push_left",...]`).
+ * Caller-buffer sozlesmesi ParseMarkup ile aynidir (NULL/0 boyut-sorgu,
+ * dar tampon clears + BUFFER_TOO_SMALL + outRequiredSize).
+ *
+ * GetSpriteSheetStateJson aktif karakterlerin sheet durumunu kopyalar:
+ * `[{index, sprite, cols, rows, frames, frame, fps, loop, playing}]`.
+ * Sheet'siz sahnede `[]` + OK doner. Olu handle INVALID_HANDLE; init-siz
+ * handle StateError damgalar + `[]` kopyalar (D1/B1b paritesi).
+ */
+ROWL_API RowlEngine_ResultCode RowlEngine_GetSupportedTransitionKindsJson(
+    char* buffer, uint32_t bufferSize, uint32_t* outRequiredSize);
+ROWL_API RowlEngine_ResultCode RowlEngine_GetSpriteSheetStateJson(
+    RowlEngineHandle handle, char* buffer, uint32_t bufferSize,
+    uint32_t* outRequiredSize);
 
 #ifdef __cplusplus
 } /* extern "C" */

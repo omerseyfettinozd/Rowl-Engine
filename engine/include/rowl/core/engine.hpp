@@ -1,6 +1,7 @@
 #pragma once
 
 #include "rowl/render/window.hpp"
+#include "rowl/scene/character_fx.hpp"
 #include "rowl/i18n/localization_manager.hpp"
 #include "rowl/core/pause_menu.hpp"
 #include "rowl/platform/platform_host.hpp"
@@ -108,6 +109,11 @@ public:
     Rowl::Render::TransitionManager* getTransitionManager() const { return m_window ? m_window->getTransitionManager() : nullptr; }
     void startTransition(const std::string& kind, float durationSeconds, const std::string& colorHex = "");
     bool isTransitionActive() const { return m_window && m_window->isTransitionActive(); }
+    // E2a (yalniz-eklemeli): sprite-sheet saati + gozlemlenebilirlik.
+    // advanceSpriteSheets step'ten cagrilir; state JSON C API'ye tasinir.
+    void advanceSpriteSheets(float deltaTime);
+    std::string spriteSheetStateJson() const;
+    bool anySpriteSheetAnimating() const;
 
     // Camera Shake Presets & Profiles
     void triggerCameraShakePreset(const std::string& preset, float intensityMultiplier = 1.0f, float durationOverride = 0.0f);
@@ -303,6 +309,33 @@ public:
     uint32_t getVoiceBlipCount() const;
     void resetVoiceBlipCount();
 
+    // ── E2b: karakter tween + konusan-vurgusu + dudak-senkronu + expression-harmani ──
+    // Eklemeli sunum-katmani: m_activeCharacters CANLI listesi degismez; step'teki
+    // kare-birlestirme bu durumu okuyup sunulan kopyayi donusturur (window.cpp'ye
+    // dokunulmaz, hash/reuse kilidi etkilenmez). Tum basarisiz dogrulama false +
+    // outError doldurur (C API INVALID_ARGUMENT'a esler); durum degismez.
+    // Init-bagimsizdir: saf Engine uyesidir, pencere/acilis gerekmez (D1 enjeksiyon
+    // riski yoktur — sprite-bekcisi + sayim-kapisi bayat girdiyi sunumda eler).
+    bool startCharacterTween(int index, float x, float y, float w, float h,
+                             float opacity, float durationSeconds, int easing,
+                             std::string& outError);
+    bool cancelCharacterTween(int index, std::string& outError);
+    bool isCharacterTweenActive() const;
+    bool setSpeakerFocus(int focusedIndex, float dimOpacity, std::string& outError);
+    bool getSpeakerFocus(int& outIndex, float& outDim) const;
+    bool setLipSyncEnabled(bool enabled);
+    bool isLipSyncEnabled() const;
+    bool beginExpressionBlend(float durationSeconds, std::string& outError);
+    bool isExpressionBlendActive() const;
+    // C2 yardimcisi: tek-roundtrip toplu-cevap (tween/focus/lipsync/harman).
+    std::string characterFxSnapshotJson() const;
+    // Son birlestirilen (sunulan) karakter listesi — test gozlemlenebilirligi.
+    const std::vector<CharacterRenderData>& getFxComposedCharacters() const {
+        return m_lastFxCharacters;
+    }
+    void updateCharacterFx(float dt);
+    std::vector<CharacterRenderData> composeCharacterFx();
+
     // ── Save / Load Slots & State Persistence ──────────────────────────────
     bool saveGameSlot(int32_t slotIndex);
     /// #86: transactional restore — on success the scene, the Lua sandbox,
@@ -428,6 +461,15 @@ private:
     // a story node is entered. Keep the entry marker separate so inspector
     // preview refreshes cannot retrigger a one-shot SFX.
     uint64_t m_lastSfxPlaybackNodeId = 0;
+
+    // E2b sunum-durumu (canli listeye dokunmaz; yalnizca kare-birlestirmede
+    // okunur — bkz. ustteki metot blogu).
+    Rowl::Scene::CharacterTweenTrack m_charTweenTrack;
+    Rowl::Scene::SpeakerFocusState m_speakerFocus;
+    Rowl::Scene::LipSyncState m_lipSync;
+    Rowl::Scene::ExpressionBlendState m_exprBlend;
+    double m_fxClockSec = 0.0;
+    std::vector<CharacterRenderData> m_lastFxCharacters;
 
     bool m_isRunning    = false;
     bool m_initialized  = false;

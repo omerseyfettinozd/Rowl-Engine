@@ -378,6 +378,8 @@ set(ROWL_ENGINE_SOURCES
     src/c_api_audio.cpp
     src/c_api_audio_error_stamp.cpp  # D05: M4 damga-bağlama (hata+sınıf tek snapshot)
     src/c_api_character_layers.cpp
+    src/c_api_character_fx.cpp  # E2b: tween/focus/lipsync/harman (eklemeli)
+    src/c_api_e2a_repertoire.cpp  # E2a: gecis-repertuvari + sprite-sheet (yalniz-eklemeli)
     src/c_api_prefetch_chapters.cpp
     src/c_api_provenance.cpp
     src/c_api_state.cpp

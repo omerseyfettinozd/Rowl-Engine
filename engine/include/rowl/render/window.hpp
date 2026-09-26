@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <cmath>
 #include <cstdint>
 #include <memory>
 #include <functional>
@@ -48,6 +49,43 @@ struct CharacterRenderData {
     float voiceBlipPitch = 1.0f;
     float voiceBlipPitchVariance = 0.08f;
     int voiceBlipCadence = 1;
+
+    // E2a sprite-sheet (yalniz-eklemeli; varsayilan kapali = legacy tek-kare).
+    // sheetCols/sheetRows: izgara boyutu (or. 4x2 serit). fps: kare/saniye.
+    // loop: sonda sarmala (false = son karede dur). sheetElapsed: saniye
+    // cinsinden animasyon saati (Engine::step ilerletir).
+    int sheetCols = 0;
+    int sheetRows = 0;
+    float sheetFps = 0.0f;
+    bool sheetLoop = true;
+    float sheetElapsed = 0.0f;
+
+    bool isSheetEnabled() const {
+        if (sheetCols < 1 || sheetRows < 1) return false;
+        if (sheetCols <= 1 && sheetRows <= 1) return false;
+        if (!std::isfinite(sheetFps) || sheetFps <= 0.0f) return false;
+        return true;
+    }
+    int sheetFrameCount() const {
+        if (!isSheetEnabled()) return 1;
+        return sheetCols * sheetRows;
+    }
+    int sheetFrameIndex() const {
+        if (!isSheetEnabled()) return 0;
+        const int total = sheetCols * sheetRows;
+        const float span = static_cast<float>(total) / sheetFps;
+        float t = std::isfinite(sheetElapsed) && sheetElapsed > 0.0f ? sheetElapsed : 0.0f;
+        if (sheetLoop && span > 0.0f) t = std::fmod(t, span);
+        long idx = static_cast<long>(t * sheetFps);
+        if (idx < 0) idx = 0;
+        if (sheetLoop) return static_cast<int>(idx % total);
+        return idx >= total ? total - 1 : static_cast<int>(idx);
+    }
+    bool isSheetAnimating() const {
+        if (!isSheetEnabled()) return false;
+        if (sheetLoop) return true;
+        return sheetFrameIndex() < sheetFrameCount() - 1;
+    }
 };
 
 struct DialogueRenderData {

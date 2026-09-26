@@ -2,6 +2,7 @@
 #include "rowl/text/hex_color.hpp"
 #include "rowl/core/logger.hpp"
 #include <SDL3/SDL.h>
+#include <cstdint>
 #include <cstdlib>
 #include <cmath>
 #include <mutex>
@@ -73,7 +74,21 @@ static TransitionType typeForKind(const std::string& kind) {
     if (kind == "fade_color" || kind == "color") return TransitionType::FadeToColor;
     if (kind == "wipe_left") return TransitionType::WipeLeft;
     if (kind == "wipe_right") return TransitionType::WipeRight;
+    // E2a repertuvari (yalniz-eklemeli; mevcut esleme aynen korunur).
+    if (kind == "dissolve") return TransitionType::Dissolve;
+    if (kind == "push_left" || kind == "push") return TransitionType::PushLeft;
+    if (kind == "push_right") return TransitionType::PushRight;
+    if (kind == "push_up") return TransitionType::PushUp;
+    if (kind == "push_down") return TransitionType::PushDown;
+    if (kind == "iris_in" || kind == "iris") return TransitionType::IrisIn;
+    if (kind == "iris_out") return TransitionType::IrisOut;
     return TransitionType::None;
+}
+
+// E2a: kesif listesi typeForKind'in aynasidir; yeni tur eklenince buraya da
+// satir duser (aksi halde C API listesi ile baslatilabilir turler kayar).
+std::string TransitionManager::supportedKindsJson() {
+    return R"(["crossfade","fade_black","fade_white","fade_color","wipe_left","wipe_right","dissolve","push_left","push_right","push_up","push_down","iris_in","iris_out"])";
 }
 
 // D6-#147 (+artık genellemesi): erken yeniden tetikleme (%90 ilerleme altı,
@@ -125,6 +140,24 @@ void TransitionManager::startTransitionFromKind(const std::string& kind,
         startTransition(TransitionType::WipeLeft, durationSeconds);
     } else if (type == TransitionType::WipeRight) {
         startTransition(TransitionType::WipeRight, durationSeconds);
+    // E2a: yeni turler renksizdir (snapshot + geometri); renk alani tasiyici
+    // olarak durur, davranisa katilmaz. Gecersiz sure reddi startTransition
+    // icindedir (stop) — kapilar (canStartTransition) zaten yalnizca gecerli
+    // girdiyi gecirir.
+    } else if (type == TransitionType::Dissolve) {
+        startTransition(TransitionType::Dissolve, durationSeconds);
+    } else if (type == TransitionType::PushLeft) {
+        startTransition(TransitionType::PushLeft, durationSeconds);
+    } else if (type == TransitionType::PushRight) {
+        startTransition(TransitionType::PushRight, durationSeconds);
+    } else if (type == TransitionType::PushUp) {
+        startTransition(TransitionType::PushUp, durationSeconds);
+    } else if (type == TransitionType::PushDown) {
+        startTransition(TransitionType::PushDown, durationSeconds);
+    } else if (type == TransitionType::IrisIn) {
+        startTransition(TransitionType::IrisIn, durationSeconds);
+    } else if (type == TransitionType::IrisOut) {
+        startTransition(TransitionType::IrisOut, durationSeconds);
     } else {
         stopTransition();
     }
@@ -266,6 +299,111 @@ void TransitionManager::renderTransition(SDL_Renderer* renderer, const ViewportM
                 SDL_SetTextureBlendMode(m_snapshotTexture, SDL_BLENDMODE_NONE);
                 SDL_SetTextureAlphaMod(m_snapshotTexture, 255);
                 SDL_RenderTexture(renderer, m_snapshotTexture, &src, &wipeDst);
+            }
+            break;
+        }
+        // E2a repertuvari: snapshot salt-okunur, geometri progress-surumlu.
+        // Snapshot yoksa dal cizmez (yeni sahne gorunur) — legacy dallarla
+        // ayni fail-closed davranis.
+        case TransitionType::Dissolve: {
+            if (m_snapshotTexture && m_snapshotWidth > 0 && m_snapshotHeight > 0) {
+                constexpr int kCols = 32;
+                constexpr int kRows = 18;
+                SDL_SetTextureBlendMode(m_snapshotTexture, SDL_BLENDMODE_NONE);
+                SDL_SetTextureAlphaMod(m_snapshotTexture, 255);
+                for (int j = 0; j < kRows; ++j) {
+                    for (int i = 0; i < kCols; ++i) {
+                        const uint32_t h = static_cast<uint32_t>(i) * 73856093u
+                                         ^ static_cast<uint32_t>(j) * 19349663u
+                                         ^ 83492791u;
+                        const float threshold =
+                            static_cast<float>(h % 1000u) / 1000.0f;
+                        if (threshold < m_progress) continue; // cozundu
+                        SDL_FRect src = {
+                            static_cast<float>(m_snapshotWidth) * i / kCols,
+                            static_cast<float>(m_snapshotHeight) * j / kRows,
+                            static_cast<float>(m_snapshotWidth) / kCols,
+                            static_cast<float>(m_snapshotHeight) / kRows
+                        };
+                        SDL_FRect blk = {
+                            dst.x + dst.w * i / kCols,
+                            dst.y + dst.h * j / kRows,
+                            dst.w / kCols,
+                            dst.h / kRows
+                        };
+                        SDL_RenderTexture(renderer, m_snapshotTexture, &src, &blk);
+                    }
+                }
+            }
+            break;
+        }
+        case TransitionType::PushLeft:
+        case TransitionType::PushRight:
+        case TransitionType::PushUp:
+        case TransitionType::PushDown: {
+            if (m_snapshotTexture) {
+                SDL_FRect pushDst = dst;
+                if (m_type == TransitionType::PushLeft) {
+                    pushDst.x -= dst.w * m_progress;
+                } else if (m_type == TransitionType::PushRight) {
+                    pushDst.x += dst.w * m_progress;
+                } else if (m_type == TransitionType::PushUp) {
+                    pushDst.y -= dst.h * m_progress;
+                } else {
+                    pushDst.y += dst.h * m_progress;
+                }
+                SDL_SetTextureBlendMode(m_snapshotTexture, SDL_BLENDMODE_NONE);
+                SDL_SetTextureAlphaMod(m_snapshotTexture, 255);
+                SDL_RenderTexture(renderer, m_snapshotTexture, nullptr, &pushDst);
+            }
+            break;
+        }
+        case TransitionType::IrisOut: {
+            if (m_snapshotTexture) {
+                const float scale = 1.0f - m_progress;
+                SDL_FRect irisDst = {
+                    dst.x + dst.w * (1.0f - scale) * 0.5f,
+                    dst.y + dst.h * (1.0f - scale) * 0.5f,
+                    dst.w * scale,
+                    dst.h * scale
+                };
+                SDL_SetTextureBlendMode(m_snapshotTexture, SDL_BLENDMODE_NONE);
+                SDL_SetTextureAlphaMod(m_snapshotTexture, 255);
+                SDL_RenderTexture(renderer, m_snapshotTexture, nullptr, &irisDst);
+            }
+            break;
+        }
+        case TransitionType::IrisIn: {
+            if (m_snapshotTexture && m_snapshotWidth > 0 && m_snapshotHeight > 0) {
+                if (m_progress <= 0.0f) {
+                    SDL_SetTextureBlendMode(m_snapshotTexture, SDL_BLENDMODE_NONE);
+                    SDL_SetTextureAlphaMod(m_snapshotTexture, 255);
+                    SDL_RenderTexture(renderer, m_snapshotTexture, nullptr, &dst);
+                } else {
+                    const float hx0 = dst.x + dst.w * (1.0f - m_progress) * 0.5f;
+                    const float hx1 = dst.x + dst.w * (1.0f + m_progress) * 0.5f;
+                    const float hy0 = dst.y + dst.h * (1.0f - m_progress) * 0.5f;
+                    const float hy1 = dst.y + dst.h * (1.0f + m_progress) * 0.5f;
+                    const float sx = static_cast<float>(m_snapshotWidth) / dst.w;
+                    const float sy = static_cast<float>(m_snapshotHeight) / dst.h;
+                    SDL_SetTextureBlendMode(m_snapshotTexture, SDL_BLENDMODE_NONE);
+                    SDL_SetTextureAlphaMod(m_snapshotTexture, 255);
+                    const struct Band { float x0, y0, x1, y1; } bands[4] = {
+                        {dst.x, dst.y, hx0, dst.y + dst.h},
+                        {hx1, dst.y, dst.x + dst.w, dst.y + dst.h},
+                        {hx0, dst.y, hx1, hy0},
+                        {hx0, hy1, hx1, dst.y + dst.h}
+                    };
+                    for (const auto& b : bands) {
+                        if (b.x1 <= b.x0 || b.y1 <= b.y0) continue;
+                        SDL_FRect src = {
+                            (b.x0 - dst.x) * sx, (b.y0 - dst.y) * sy,
+                            (b.x1 - b.x0) * sx, (b.y1 - b.y0) * sy
+                        };
+                        SDL_FRect bdst = {b.x0, b.y0, b.x1 - b.x0, b.y1 - b.y0};
+                        SDL_RenderTexture(renderer, m_snapshotTexture, &src, &bdst);
+                    }
+                }
             }
             break;
         }

@@ -837,7 +837,11 @@ void Window::renderVisualNovelFrame(
     const bool dynamicsInFlight =
         (m_camera && m_camera->isMoving()) ||
         (m_transitionManager && m_transitionManager->isTransitionActive()) ||
-        m_screenFx.flashActive;
+        m_screenFx.flashActive ||
+        // E2a: oynayan sprite-sheet karesi icerigi degistirir — hash ayni
+        // kalsa da cache yeniden kullanilamaz (yoksa animasyon donar).
+        std::any_of(characters.begin(), characters.end(),
+                    [](const CharacterRenderData& ch) { return ch.isSheetAnimating(); });
     const uint64_t contentHash = hashFrameContent(
         hasBackground, background, bgX, bgY, bgW, bgH, characters,
         dialogues, choices, bgRotation, bgParallaxX, bgParallaxY, bgOpacity);
@@ -930,7 +934,24 @@ void Window::renderVisualNovelFrame(
             float texW = 0.0f, texH = 0.0f;
             if (SDL_GetTextureSize(charTex, &texW, &texH) && texW > 0.0f && texH > 0.0f && scaledCharW > 0.0f && scaledCharH > 0.0f) {
                 // Exact Uniform Proportional Fit inside (physCharX, physCharY, scaledCharW, scaledCharH)
-                float texAspect = texW / texH;
+                // E2a sprite-sheet: hucre secilir, fit hucre-aspect'iyle yapilir.
+                // Kapaliysa srcRect=nullptr (legacy tek-kare yolu birebir).
+                SDL_FRect cellSrc{};
+                const SDL_FRect* srcRect = nullptr;
+                float fitW = texW;
+                float fitH = texH;
+                if (ch.isSheetEnabled()) {
+                    const float cellW = texW / static_cast<float>(ch.sheetCols);
+                    const float cellH = texH / static_cast<float>(ch.sheetRows);
+                    const int frame = ch.sheetFrameIndex();
+                    const int fx = frame % ch.sheetCols;
+                    const int fy = frame / ch.sheetCols;
+                    cellSrc = {fx * cellW, fy * cellH, cellW, cellH};
+                    srcRect = &cellSrc;
+                    fitW = cellW;
+                    fitH = cellH;
+                }
+                float texAspect = fitW / fitH;
                 float boxAspect = scaledCharW / scaledCharH;
                 float drawW = scaledCharW;
                 float drawH = scaledCharH;
@@ -951,9 +972,9 @@ void Window::renderVisualNovelFrame(
 
                 SDL_FRect dstRect = { drawX, drawY, drawW, drawH };
                 if (std::abs(ch.rotation) > 1e-4f) {
-                    SDL_RenderTextureRotated(m_sdlRenderer, charTex, nullptr, &dstRect, static_cast<double>(ch.rotation), nullptr, SDL_FLIP_NONE);
+                    SDL_RenderTextureRotated(m_sdlRenderer, charTex, srcRect, &dstRect, static_cast<double>(ch.rotation), nullptr, SDL_FLIP_NONE);
                 } else {
-                    SDL_RenderTexture(m_sdlRenderer, charTex, nullptr, &dstRect);
+                    SDL_RenderTexture(m_sdlRenderer, charTex, srcRect, &dstRect);
                 }
             } else {
                 SDL_FRect charBox = { physCharX, physCharY, scaledCharW, scaledCharH };

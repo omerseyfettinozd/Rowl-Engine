@@ -574,6 +574,43 @@ foreach(w8e_probe userdata_fallback_probe video_serial_pin)
         TIMEOUT 120
     )
 endforeach()
+# E2b karakter-tween + konusan-vurgusu RED kilidi: yalnizca public C API +
+# public Engine okumalari (getFxComposedCharacters) + test-koprusu. D15
+# konvansiyonu: bagimsiz ikili, dummy driver. RED: vurgu-carpani terslenirse
+# A bacagi kirmiziya doner (sunulan kare okunur, yalnizca durum-depolama degil).
+add_executable(rowl_e2b_character_fx_red_probe test_e2b_character_fx_red_probe.cpp)
+target_include_directories(rowl_e2b_character_fx_red_probe PRIVATE
+    ${CMAKE_SOURCE_DIR}/engine/include
+)
+target_link_libraries(rowl_e2b_character_fx_red_probe PRIVATE
+    rowl_engine_objects
+    rowl_engine_thirdparty
+)
+target_compile_definitions(rowl_e2b_character_fx_red_probe PRIVATE ROWL_BUILDING_DLL)
+
+add_test(NAME e2b_character_fx_red_probe COMMAND rowl_e2b_character_fx_red_probe)
+set_tests_properties(e2b_character_fx_red_probe PROPERTIES
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    ENVIRONMENT "SDL_AUDIODRIVER=dummy;SDL_VIDEODRIVER=dummy"
+    TIMEOUT 120
+)
+# E2a gecis-repertuvari (dissolve/push/iris) + sprite-sheet RED/green probu:
+# yalnizca public C API'yi kullanan bagimsiz ikili (paylasilan RowlEngineCore'a
+# baglanir; uretim topolojisiyle ayni). rowl_tests govdesine gomulmez ki
+# kirmizi-yesil dongusu tum suiti kosmadan saniyeler icinde kanitlansin.
+# Kok CMakeLists'e dokunulmaz. C0 kilidine dokunulmaz (ses dosyalari yok).
+add_executable(rowl_e2a_transition_spritesheet_red_probe test_e2a_transition_spritesheet_red_probe.cpp)
+target_include_directories(rowl_e2a_transition_spritesheet_red_probe PRIVATE
+    ${CMAKE_SOURCE_DIR}/engine/include
+)
+target_link_libraries(rowl_e2a_transition_spritesheet_red_probe PRIVATE RowlEngineCore)
+
+add_test(NAME e2a_repertoire COMMAND rowl_e2a_transition_spritesheet_red_probe)
+set_tests_properties(e2a_repertoire PROPERTIES
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    ENVIRONMENT "SDL_AUDIODRIVER=dummy;SDL_VIDEODRIVER=dummy"
+    TIMEOUT 120
+)
 if(WIN32)
     # MSVC Debug runs the full native suite far slower than optimized
     # compilers; the CI --timeout 300 turns that into a zero-output kill.

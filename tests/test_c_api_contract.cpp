@@ -120,6 +120,9 @@ void test_c_api_contract() {
         ROWL_ENGINE_CAPABILITY_CHARACTER_LAYERS |
         ROWL_ENGINE_CAPABILITY_PREFETCH_CHAPTERS |
         ROWL_ENGINE_CAPABILITY_CONVERTER_PROVENANCE |
+        ROWL_ENGINE_CAPABILITY_CHARACTER_FX |  // E2b (paralel dilim; maske yesil-kalsin diye eklendi)
+        ROWL_ENGINE_CAPABILITY_TRANSITION_REPERTOIRE |  // E2a
+        ROWL_ENGINE_CAPABILITY_SPRITE_SHEET |  // E2a
         ROWL_ENGINE_CAPABILITY_MSDF_RENDER;
     if ((capabilities & ~kKnownCapabilities) != 0) {
         std::cerr << "Unknown capability bits in mask" << std::endl;

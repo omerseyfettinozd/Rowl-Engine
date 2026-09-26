@@ -19,7 +19,16 @@ enum class TransitionType {
     FadeToWhite,
     FadeToColor,
     WipeLeft,
-    WipeRight
+    WipeRight,
+    // E2a (yalniz-eklemeli): repertuvar genislemesi. Degerler sona eklendi;
+    // mevcut sira degismedi (ABI/C# int eslemesi korunur).
+    Dissolve,
+    PushLeft,
+    PushRight,
+    PushUp,
+    PushDown,
+    IrisIn,
+    IrisOut
 };
 
 class TransitionManager {
@@ -45,6 +54,10 @@ public:
     // pahalı snapshot (SDL readback) öncesi bu kapılardan geçer; yeni
     // mantık burada yaşar, window.cpp büyümez.
     static bool isKnownKind(const std::string& kind);
+    // E2a: kind->JSON listesi tek-noktadan (typeForKind tablosunun aynasi).
+    // C API kesif yuzeyi buradan beslenir; liste degisince ikisi birlikte
+    // degisir (D6-#147 "tek nokta" disiplini).
+    static std::string supportedKindsJson();
     static bool isUsableDuration(float durationSeconds);
     bool canStartTransition(const std::string& kind, float durationSeconds) const;
     bool shouldCoalesceRetrigger(const std::string& kind) const;
