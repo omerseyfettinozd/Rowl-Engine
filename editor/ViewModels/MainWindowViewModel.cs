@@ -66,10 +66,20 @@ namespace RowlEngine.Editor.ViewModels
         public static string AssetsPackagesPath => Path.Combine(AssetsPath, "packages");
 
         /// <summary>
-        /// The embedded C++ engine host. Exposed publicly so EnginePreviewControl
-        /// can register the native surface handle before initialization.
+        /// The embedded C++ engine host. Dilim-6a enjeksiyon noktası:
+        /// ctor'dan <c>engineHost</c> verilirse o kullanılır, verilmezse
+        /// eski davranış (yeni EngineHost) korunur. Dışarıdan verilen
+        /// host Dispose edilmez (sahiplik çağırandadır).
         /// </summary>
-        public EngineHost EngineHost { get; } = new EngineHost();
+        public EngineHost EngineHost { get; }
+
+        private readonly bool _ownsEngineHost;
+
+        /// <summary>
+        /// Dilim-6a diyalog enjeksiyon noktası: varsayılan üretim
+        /// uygulaması, testler sahtesini verebilir.
+        /// </summary>
+        public IDialogCoordinator Dialogs { get; }
 
         [ObservableProperty]
         private string _statusText = "Ready — Engine initializing...";
@@ -102,13 +112,13 @@ namespace RowlEngine.Editor.ViewModels
         [RelayCommand]
         private async Task OpenSettings()
         {
-            await EditorModalDialogCoordinator.OpenSettingsAsync(Settings, TopLevelHint as Window);
+            await Dialogs.OpenSettingsAsync(Settings, TopLevelHint as Window);
         }
 
         [RelayCommand]
         public async Task OpenProjectHubAsync()
         {
-            await EditorModalDialogCoordinator.OpenProjectHubAsync(
+            await Dialogs.OpenProjectHubAsync(
                 TopLevelHint as Window,
                 () => TopLevelHint is Window curWin ? ResolveUnsavedChangesAsync(curWin) : Task.FromResult(true));
         }
@@ -516,8 +526,11 @@ namespace RowlEngine.Editor.ViewModels
         {
         }
 
-        public MainWindowViewModel(string projectPath, bool connectEngine = true)
+        public MainWindowViewModel(string projectPath, bool connectEngine = true, EngineHost? engineHost = null, IDialogCoordinator? dialogs = null)
         {
+            EngineHost = engineHost ?? new EngineHost();
+            _ownsEngineHost = engineHost is null;
+            Dialogs = dialogs ?? DefaultDialogCoordinator.Instance;
             AssetBitmapCache.Clear();
 
             LoadPlayerSettings();
@@ -926,15 +939,15 @@ namespace RowlEngine.Editor.ViewModels
         {
             StatusText = "Initializing embedded C++ Engine...";
             AppendLog("[Engine] Starting embedded RowlEngineCore library...");
-            // Let the status text paint before the blocking native init below.
-            await Task.Yield();
 
-            // Native engine calls, framebuffer access and the DispatcherTimer must
-            // remain on the UI thread for the lifetime of this host (the C-API
-            // handle is thread-claimed at Init: see claimHandleThread in
-            // c_api_lifecycle.cpp). Every await below resumes on the UI thread,
-            // so ownership never migrates.
-            bool success = EngineHost.Initialize(1920, 1080, true);
+            // Dilim-6b worker tasması: eski sahte-asenkron (Task.Yield +
+            // UI thread'inde blok native init) yerine gerçek worker.
+            // Native sahiplik OffscreenRuntimeWorker thread'indedir —
+            // EngineHost her çağrıyı Invoke ile o thread'e marshal eder,
+            // Task.Run yalnızca bekleyen tarafı UI'dan çeker. Her await
+            // UI thread'ine döner; sıra, metin ve dallanma birebir aynıdır.
+            string projectRoot = ProjectRoot;
+            bool success = await Task.Run(() => EngineHost.Initialize(1920, 1080, true));
             IsConnected = success;
             if (!success)
             {
@@ -944,12 +957,10 @@ namespace RowlEngine.Editor.ViewModels
             }
 
             StatusText = "Mounting project VFS...";
-            await Task.Yield();
-            EngineHost.SetProjectDirectory(ProjectRoot);
+            await Task.Run(() => EngineHost.SetProjectDirectory(projectRoot));
 
             StatusText = "Applying player settings...";
-            await Task.Yield();
-            ApplyPlayerSettingsToEngine();
+            await Task.Run(() => ApplyPlayerSettingsToEngine());
 
             StatusText = "Engine Ready — Embedded C++ Runtime Active";
             AppendLog($"[Engine] RowlEngineCore mounted isolated project: {ProjectRoot}");
@@ -2614,7 +2625,8 @@ namespace RowlEngine.Editor.ViewModels
                     CrashRecoveryService.ClearDirty(AssetsJsonPath);
             }
 
-            EngineHost.Dispose();
+            if (_ownsEngineHost)
+                EngineHost.Dispose();
             AssetBitmapCache.Clear();
             try { AssetScanner.Dispose(); } catch { }
             try { AssetBrowserViewModel.Dispose(); } catch { }
