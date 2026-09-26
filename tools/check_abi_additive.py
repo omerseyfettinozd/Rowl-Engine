@@ -2,7 +2,7 @@
 """Check that the RowlEngineCore public C ABI only grows additively.
 
 Usage:
-    check_abi_additive.py <libRowlEngineCore.so|.dylib|.dll> <baseline.txt>
+    check_abi_additive.py <libRowlEngineCore.so|.dylib|.dll|.lib> <baseline.txt>
 
 Extracts exported symbols from the shared library with a portable tool
 chain (no ELF-only assumption), keeps the public C ABI symbols (those
@@ -16,6 +16,9 @@ Tool selection by detected binary format (magic bytes + suffix):
     Mach-O (.dylib): ``nm -gU`` (BSD nm; leading '_' stripped),
                   then ``llvm-nm``.
     PE (.dll)   : ``dumpbin /EXPORTS``, then ``llvm-nm``, then ``nm``.
+    COFF (.lib/.obj): ``llvm-nm``, then ``nm`` (both read COFF archives
+                  and objects; ``dumpbin /EXPORTS`` is DLL-only so it is
+                  not in this chain).
 
 ``otool -L`` is probed on Mach-O hosts as a diagnostic (it lists linked
 libraries, not exports) but is never used for symbol extraction. If no
@@ -39,18 +42,29 @@ ABI_PREFIX = "RowlEngine_"
 
 
 def detect_format(library: Path) -> str:
-    """Return 'ELF', 'Mach-O', 'PE', or 'unknown' for the given file."""
+    """Return 'ELF', 'Mach-O', 'PE', 'COFF', or 'unknown' for the given file."""
     try:
         with open(library, "rb") as fh:
-            magic = fh.read(4)
+            magic = fh.read(8)
     except OSError:
         magic = b""
     if magic.startswith(b"\x7fELF"):
         return "ELF"
     if magic.startswith(b"MZ"):
         return "PE"
+    # COFF archives (import/static .lib) start with the ar magic; COFF
+    # objects (.obj) start with a machine field (e.g. 0x8664 AMD64, 0x014C
+    # I386, 0xAA64 ARM64, little-endian) followed by section counts.
+    if magic.startswith(b"!<arch>"):
+        return "COFF"
+    if len(magic) >= 2 and magic[:2] in (
+        b"\x64\x86",  # IMAGE_FILE_MACHINE_AMD64
+        b"\x4c\x01",  # IMAGE_FILE_MACHINE_I386
+        b"\x64\xaa",  # IMAGE_FILE_MACHINE_ARM64
+    ):
+        return "COFF"
     # Mach-O magics: 32/64-bit, normal/swapped, plus fat binary (cafebabe).
-    if magic in (
+    if magic[:4] in (
         b"\xcf\xfa\xed\xfe",  # MH_MAGIC_64 LE
         b"\xce\xfa\xed\xfe",  # MH_MAGIC LE
         b"\xfe\xed\xfa\xcf",  # MH_MAGIC BE
@@ -61,6 +75,8 @@ def detect_format(library: Path) -> str:
     suffix = library.suffix.lower()
     if suffix == ".dll":
         return "PE"
+    if suffix in (".lib", ".obj"):
+        return "COFF"
     if suffix == ".dylib":
         return "Mach-O"
     if suffix == ".so":
@@ -129,6 +145,26 @@ def _parse_dumpbin(output: str) -> set[str]:
     return symbols
 
 
+def _parse_nm_coff(output: str) -> set[str]:
+    """Parse ``llvm-nm`` / ``nm`` output on COFF archives/objects.
+
+    Unlike ``nm --format=posix`` (name-first), llvm-nm prints address-first
+    rows (``00000000 T RowlEngine_Create``) and may prefix archive members
+    (``lib(member): ...``). This parser scans every whitespace-separated
+    token instead of assuming a column, and strips one leading underscore
+    (x86 cdecl decoration ``_RowlEngine_Foo``; x64/ARM64 have none).
+    """
+    symbols = set()
+    for line in output.splitlines():
+        for token in line.split():
+            name = token.strip("():,;")
+            if name.startswith("_"):
+                name = name[1:]
+            if name.startswith(ABI_PREFIX):
+                symbols.add(name)
+    return symbols
+
+
 def _otool_available() -> bool:
     """Probe for ``otool -L`` (Mach-O diagnostic only, never extraction)."""
     return shutil.which("otool") is not None
@@ -155,6 +191,21 @@ def extract_abi_symbols(library: Path) -> list[str]:
                 symbols = _parse_dumpbin(out)
             else:
                 symbols = _parse_nm_posix(out)
+            if symbols:
+                break
+    elif fmt == "COFF":
+        # Windows import/static library or object: dumpbin /EXPORTS is
+        # DLL-only, so the chain is llvm-nm then nm (both read COFF).
+        chain = [
+            (["llvm-nm", "--defined-only", str(library)], "llvm-nm"),
+            (["nm", "--defined-only", str(library)], "nm"),
+        ]
+        for cmd, label in chain:
+            tried.append(label)
+            out = _run(cmd)
+            if out is None:
+                continue
+            symbols = _parse_nm_coff(out)
             if symbols:
                 break
     elif fmt == "Mach-O":
