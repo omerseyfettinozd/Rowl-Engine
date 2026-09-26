@@ -503,9 +503,10 @@ public sealed partial class PlayerViewModel : ViewModelBase
             return Fail(transition.DenyReason ?? "Could not enter Playing.");
         // Dilim-4 D-profil kill-switch: bayrak kapalıyken alt dal bugünkü
         // davranışla birebir aynıdır (davranış değişmez); açıkken profil→
-        // sürücü bağlantısı merkezi Apply yolundan akar.
+        // sürücü bağlantısı merkezi Apply yolundan akar (Dilim-7: auto+skip
+        // oturum-giriş noktası ApplyToSession'da tekleşti, etki aynı).
         if (PlayerProfileAutoSkipGate.Enabled)
-            PlayerProfileAutoSkipGate.ApplyToDrivers(Profile, AutoDriver);
+            PlayerProfileAutoSkipGate.ApplyToSession(Profile, AutoDriver);
         else
             AutoDriver.SetEnabled(Profile.AutoEnabled);
         _stableTicks = 0;

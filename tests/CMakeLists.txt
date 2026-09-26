@@ -611,6 +611,26 @@ set_tests_properties(e2a_repertoire PROPERTIES
     ENVIRONMENT "SDL_AUDIODRIVER=dummy;SDL_VIDEODRIVER=dummy"
     TIMEOUT 120
 )
+# Dilim-7 parity (P1-C): slot metadata + semantic-input + backlog salt-okunur
+# sunum kilidi. Bagimsiz ikili; Engine/handle acmaz, pause/slot/rewind
+# yollarina girmez, C ABI'ye girmez (yeni RowlEngine_ sembolu yok). Sunum TU
+# saf oldugu icin prob onu dogrudan derler (lib gizli-gorunurluklu oldugundan
+# ic sembol .so'dan baglanamaz); test edilen kaynak, kargo lib'e girenle
+# ayni dosyadir. Mevcut testlere dokunulmaz.
+add_executable(rowl_p1_parity_presenter
+    test_p1_parity_presenter.cpp
+    ${CMAKE_SOURCE_DIR}/engine/src/core/engine_parity_presenter.cpp)
+target_include_directories(rowl_p1_parity_presenter PRIVATE
+    ${CMAKE_SOURCE_DIR}/engine/include
+)
+target_link_libraries(rowl_p1_parity_presenter PRIVATE RowlEngineCore rowl_engine_thirdparty)
+
+add_test(NAME p1_parity_presenter COMMAND rowl_p1_parity_presenter)
+set_tests_properties(p1_parity_presenter PROPERTIES
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    ENVIRONMENT "SDL_AUDIODRIVER=dummy;SDL_VIDEODRIVER=dummy"
+    TIMEOUT 120
+)
 if(WIN32)
     # MSVC Debug runs the full native suite far slower than optimized
     # compilers; the CI --timeout 300 turns that into a zero-output kill.
