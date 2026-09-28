@@ -81,6 +81,16 @@ jobs:
         # deseniyle ayni --timeout 300); ciktiyla duser, isi yakmaz.
         run: xvfb-run -a ctest --test-dir build --output-on-failure --timeout 300
 
+      - name: Check release launcher parity (linux/windows)
+        # Runs here, on Linux, so the Windows packaging step -- which
+        # cannot be executed from a Linux runner -- is still covered by a
+        # gate that fails fast in this job. Asserts statically that every
+        # step running tools/verify_release_package.py also emits a
+        # launcher via tools/make_release_launchers.py, with a platform
+        # matching its runner, and that the emitted names still match the
+        # names the verifier accepts.
+        run: python3 tools/check_release_launcher_parity.py
+
       - name: Verify standalone package and VFS smoke
         run: |
           release_dir="$RUNNER_TEMP/rowl-release"
@@ -88,14 +98,14 @@ jobs:
           python3 tools/package_assets.py Assets "$release_dir/Assets/packages/game.rowlpkg"
           cp build/bin/rowl_player "$release_dir/RowlGame"
           cp build/lib/libRowlEngineCore.so "$release_dir/"
-          cat > "$release_dir/run_game.sh" <<'EOF'
-          #!/bin/bash
-          SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-          export LD_LIBRARY_PATH="$SCRIPT_DIR:$LD_LIBRARY_PATH"
-          exec "$SCRIPT_DIR/RowlGame" "$@"
-          EOF
-          chmod +x "$release_dir/run_game.sh"
-          printf '@echo off\r\ncd /d "%%~dp0"\r\nRowlGame.exe %%*\r\n' > "$release_dir/run_game.bat"
+          # Launchers are produced by the shared helper, not inlined here.
+          # Both platform steps call tools/make_release_launchers.py so the
+          # launcher content has exactly one source; before that, only the
+          # Linux step knew how to write one and the Windows step shipped a
+          # release with no launcher at all. --platform both keeps the
+          # portable pair (byte-identical to the previous inline heredoc +
+          # printf) so the artifact contents do not change.
+          python3 tools/make_release_launchers.py "$release_dir" --platform both
           printf '# Rowl Engine mods\n' > "$release_dir/mods/README.md"
           printf 'ROWL ENGINE — STANDALONE GAME RELEASE\n' > "$release_dir/README.txt"
           cp packaging/THIRD_PARTY_NOTICES.md "$release_dir/THIRD_PARTY_NOTICES.md"
@@ -552,6 +562,12 @@ jobs:
           $dllSrc = 'build/vcpkg_installed/x64-windows/debug/bin'
           if (-not (Test-Path $dllSrc)) { $dllSrc = "$env:VCPKG_INSTALLATION_ROOT/installed/x64-windows/debug/bin" }
           Copy-Item (Join-Path $dllSrc '*.dll') $release
+          # Shared with the Linux packaging step: the launcher content lives
+          # in tools/make_release_launchers.py so the two platforms cannot
+          # drift. This step previously wrote NO launcher, so the release
+          # reached tools/verify_release_package.py without run_game.sh or
+          # run_game.bat and the gate failed with "missing release launcher".
+          python tools/make_release_launchers.py $release --platform windows
           Set-Content -NoNewline (Join-Path $release 'mods/README.md') '# Rowl Engine mods'
           Set-Content -NoNewline (Join-Path $release 'README.txt') 'ROWL ENGINE — STANDALONE GAME RELEASE'
           Copy-Item packaging/THIRD_PARTY_NOTICES.md $release

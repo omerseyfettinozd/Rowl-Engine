@@ -61,6 +61,9 @@ add_executable(rowl_tests
     test_scene_update_rollback.cpp    test_numeric_guards.cpp
     test_render_transition_fixes.cpp
     test_lua_hardening.cpp
+    # Lua sandbox dinamik guvenlik taramasi (DoS / kacis). Statik baslaticiyla
+    # kendini kaydeder; test_main.cpp'ye cagri eklenene kadar bosta kalmasin.
+    test_lua_sandbox_dos_probe.cpp
     test_single_engine_image.cpp
     test_demo_first_light.cpp
     test_demo_second_signal.cpp
