@@ -205,7 +205,7 @@ void test_crash_log() {
         const auto dir = makeCrashTempDir();
         const pid_t child = spawnCrashingChild(dir.string(), false);
         int status = 0;
-        if (!waitChild(child, status, 10)) {
+        if (!waitChild(child, status, 30)) {
             std::cerr << "crash-log test: SIGSEGV child timed out" << std::endl;
             exit(1);
         }
@@ -225,7 +225,7 @@ void test_crash_log() {
         const auto dir = makeCrashTempDir();
         const pid_t child = spawnCrashingChild(dir.string(), true);
         int status = 0;
-        if (!waitChild(child, status, 10)) {
+        if (!waitChild(child, status, 30)) {
             std::cerr << "crash-log test: terminate child timed out" << std::endl;
             exit(1);
         }

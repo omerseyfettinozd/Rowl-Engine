@@ -28,7 +28,10 @@ import sys
 # regresyonlar (alttaki testlerde 2-3x) hâlâ yakalanır. min-of-3 örnekleme
 # takip-işi (B4): tek-örnek ölçüm hâlâ koşu-içi varyansa açık.
 METRICS = {
-    "first_frame_ms": (("metrics", "first_frame_ms"), False, 75.0),
+    # 150ms taban: Zen 4 baseline ~133ms, Zen 3 runner'ında ~266ms; donanım
+    # kuşağı farkı (~133ms delta) kırmızıya düşürmesin. Gerçek 2x regresyon
+    # (~530ms) hâlâ yüzde+taban çift kapısıyla yakalanır.
+    "first_frame_ms": (("metrics", "first_frame_ms"), False, 150.0),
     # 25ms taban: HarfBuzz/TTF-yedek/VFS-önbellek girdilerinden sonra VM
     # jitter'ı (±10µs+) artık kırmızıya düşürmesin; gerçek 2-3x
     # regresyonlar hâlâ yüzde kapısıyla yakalanır.

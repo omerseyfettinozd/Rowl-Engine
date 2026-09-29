@@ -243,7 +243,11 @@ bool writeSlotFileAtomically(const std::filesystem::path& finalPath,
     // 490 ön-yedek: hedef mevcutsa rename ÖNCESİ birebir kopyası alınır.
     // Kopya alınamazsa fail-closed (eski dosya riske atılmaz): tmp temizlenir,
     // hedefe dokunulmaz.
-    const fs::path backupPath = saveBackupPathFor(finalPath);
+    // NOT: Yedek adını finalPath'den değil temporaryPath'den türet — her yazar
+    // zaten benzersiz bir tmp dosyasına sahip, bu sayede eşzamanlı yazarlar
+    // aynı .pre-save-bak dosyası için Windows dosya kilidi (ERROR_SHARING_
+    // VIOLATION) üretmez.
+    const fs::path backupPath = saveBackupPathFor(temporaryPath);
     bool haveBackup = false;
     {
         std::error_code probeError;
