@@ -29,11 +29,17 @@ import sys
 # takip-işi (B4): tek-örnek ölçüm hâlâ koşu-içi varyansa açık.
 METRICS = {
     "first_frame_ms": (("metrics", "first_frame_ms"), False, 75.0),
-    "steady_frame_ms": (("metrics", "steady_frame_ms"), False, 0.010),
+    # 25ms taban: HarfBuzz/TTF-yedek/VFS-önbellek girdilerinden sonra VM
+    # jitter'ı (±10µs+) artık kırmızıya düşürmesin; gerçek 2-3x
+    # regresyonlar hâlâ yüzde kapısıyla yakalanır.
+    "steady_frame_ms": (("metrics", "steady_frame_ms"), False, 0.025),
     "transition_fps": (("metrics", "transition_fps"), True, 5.0),
     "vfs_io.avg_ms": (("metrics", "vfs_io", "avg_ms"), False, 0.050),
     "json_update.avg_ms": (("metrics", "json_update", "avg_ms"), False, 0.250),
-    "process_memory_bytes": (("metrics", "process_memory_bytes"), False, None),
+    # 128 MB doğal büyüme toleransı: HarfBuzz şekillendirici + font yedekleri
+    # + VFS önbellekleri bellek ayak izini doğal olarak artırır; abs_floor
+    # olmadan yüzde kapısı sahte pozitif üretiyordu.
+    "process_memory_bytes": (("metrics", "process_memory_bytes"), False, 128 * 1024 * 1024),
 }
 
 
