@@ -915,7 +915,15 @@ void test_lua_sandbox_dos_probe() {
     g_strict = envOn("ROWL_DOS_PROBE_STRICT");
     emit("  [ORTAM] Lua çalışma sürümü = " + std::string(LUA_RELEASE) +
          "   (başlıklar 'Lua 5.4' diyor; link EDİLEN kütüphane budur)");
+#if defined(_MSC_VER)
+    emit("  [ORTAM] derleyici = MSVC " + std::to_string(_MSC_VER));
+#elif defined(__clang__)
+    emit("  [ORTAM] derleyici = Clang " __VERSION__);
+#elif defined(__GNUC__)
     emit("  [ORTAM] derleyici = GCC " __VERSION__);
+#else
+    emit("  [ORTAM] derleyici = Bilinmeyen");
+#endif
     emit("  [ORTAM] katı mod = " + std::string(g_strict ? "ACIK" : "kapali"));
 
     const auto t0 = Clock::now();
