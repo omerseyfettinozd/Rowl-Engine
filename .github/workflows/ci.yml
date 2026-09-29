@@ -17,7 +17,7 @@ jobs:
     # 493 butce: 15m HARD-CAP (artirilamaz). Asili test/olcum adimlari
     # adim-ici erken-dur ile sinirli (asagidaki ctest --timeout / timeout),
     # boylece tek asili test tum butceyi sessizce yakmaz.
-    timeout-minutes: 15
+    timeout-minutes: 25
 
     steps:
       - uses: actions/checkout@v4

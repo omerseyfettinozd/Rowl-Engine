@@ -849,8 +849,8 @@ void test_vfs_security() {
     {
         const std::string stickyA = "sticky/a.txt";
         const std::string stickyB = "sticky/b.txt";
-        const std::string payloadA("A-payload-123");
-        const std::string payloadB("B-payload-456");
+        const std::string payloadA(8192, 'A');
+        const std::string payloadB(8192, 'B');
         const uint64_t stickyIndexOffset =
             headerSize + payloadA.size() + payloadB.size();
         Rowl::VFS::RowlPkgHeader stickyHeader{{'R', 'O', 'W', 'L'}, 1, 2, stickyIndexOffset};

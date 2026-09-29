@@ -60,7 +60,7 @@ def grep_count(pattern, path, flags=0):
             continue
         for i, line in enumerate(text.splitlines(), 1):
             if rx.search(line):
-                hits.append(f"{file.relative_to(ROOT)}:{i}:{line.strip()}")
+                hits.append(f"{file.relative_to(ROOT).as_posix()}:{i}:{line.strip()}")
     return hits
 
 
@@ -112,7 +112,7 @@ def main():
           "InvokeNative(handle => NativeBridge.RowlEngine_SetBgmTransitionDefaults" in host_text)
 
     # 5) resetSessionProfile fabrika-degeri pinler (D2 supurme ile ayni sozlesme).
-    reset_text = (ENGINE_SRC / "core" / "engine.cpp").read_text(encoding="utf-8")
+    reset_text = (ENGINE_SRC / "core" / "engine.cpp").read_text(encoding="utf-8").replace("\r\n", "\n")
     reset_fn = reset_text.split("void Engine::resetSessionProfile()")[1].split("\n}\n")[0]
     check("reset fabrika-degerine dondurur (instant + 1.0f)",
           'm_defaultBgmTransition = "instant"' in reset_fn
