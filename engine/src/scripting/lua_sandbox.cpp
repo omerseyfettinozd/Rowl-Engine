@@ -916,8 +916,12 @@ void LuaSandbox::setGlobalNumber(const std::string& key, double value) {
 double LuaSandbox::getGlobalNumber(const std::string& key, double defaultValue) const {
     std::lock_guard<std::recursive_mutex> lock(m_mutex);
     if (m_luaState) {
+        // D07: ham-okuma (d07_rawGetGlobal) — koşulun ektiği _G __index
+        // metamethod'u kayıp-anahtarda ateşlenemez; lua_getglobal script kodu
+        // çalıştırıp DoS/SIGABRT riski taşır (getVariable emsali). Mevcut
+        // anahtarlarda getglobal ile birebir aynı değer döner.
         const RecoveryScope recovery(const_cast<LuaSandbox*>(this));
-        lua_getglobal(m_luaState, key.c_str());
+        d07_rawGetGlobal(m_luaState, key.c_str());
         if (lua_isnumber(m_luaState, -1)) {
             double val = lua_tonumber(m_luaState, -1);
             lua_pop(m_luaState, 1);
@@ -1394,10 +1398,22 @@ bool LuaSandbox::callOptionalFunction(const std::string& functionName, double de
         m_lastError = error;
         m_lastConditionPhase = ConditionPhase::Runtime;
         bindEngineApis();
+        // Mimari kural (bkz. :774): _G asla metatable taşımamalı — pcall içi
+        // setmetatable(_G, ...) denemesi burada sıfırlanır.
+        lua_pushglobaltable(m_luaState);
+        lua_pushnil(m_luaState);
+        lua_setmetatable(m_luaState, -2);
+        lua_pop(m_luaState, 1);
         ROWL_LOG_ERROR("Lua lifecycle callback '" + functionName + "' failed: " + error);
         return false;
     }
     bindEngineApis();
+    // Mimari kural (bkz. :774): _G asla metatable taşımamalı — başarılı
+    // callback de setmetatable(_G, ...) bırakmış olabilir.
+    lua_pushglobaltable(m_luaState);
+    lua_pushnil(m_luaState);
+    lua_setmetatable(m_luaState, -2);
+    lua_pop(m_luaState, 1);
     m_tripStreak = 0;
     return true;
 }

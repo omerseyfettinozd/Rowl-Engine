@@ -87,6 +87,13 @@ LuaSandbox::D06ConditionGlobalGuard::~D06ConditionGlobalGuard() {
         ROWL_LOG_WARN("Lua condition raw global(s) swept (" +
                       std::to_string(swept) + ")");
     }
+    // Mimari kural (lua_sandbox.cpp:774): _G asla metatable taşımamalı —
+    // koşul ifadesi setmetatable(_G, ...) bırakmış olabilir; guard çıkışında
+    // sıfırlanır (pcall-sonrası bindEngineApis emsali).
+    lua_pushglobaltable(m_owner->m_luaState);
+    lua_pushnil(m_owner->m_luaState);
+    lua_setmetatable(m_owner->m_luaState, -2);
+    lua_pop(m_owner->m_luaState, 1);
 }
 
 // D07: koşul-vektörü ham-okuma. lua_getglobal kayıp anahtarda _G metatable
