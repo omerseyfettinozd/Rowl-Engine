@@ -154,7 +154,16 @@ bool VFSManager::remountProject(const std::string& projectRoot) {
     m_firstSkippedPackage.clear();
     m_initialized = true;
 
-    if (projectRoot.empty()) return true;
+    // Fail-open closure: an empty project root used to be accepted as a
+    // successful remount (mounts silently cleared, caller told true). A blank
+    // path is a caller bug, not a legitimate "clear" request — report it as
+    // one so the C API story layer surfaces the diagnosis like any other
+    // rejected root. Mounts are already cleared and skipped-counters reset
+    // above; keep that state so a valid subsequent remount starts clean.
+    if (projectRoot.empty()) {
+        ROWL_LOG_WARN("VFS remountProject rejected empty project root");
+        return false;
+    }
 
     // A2a: UTF-8 contract — the narrow path ctor would lose a non-ASCII root
     // on Windows before any lookup even runs.

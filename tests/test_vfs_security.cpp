@@ -3,8 +3,10 @@
  * Split from main_test_runner.cpp; behavior unchanged.
  */
 #include "rowl_test_harness.hpp"
+#include "rowl/vfs/detail/rowl_sha256.hpp"
 
 #include <future>
+#include <optional>
 
 void test_vfs_security() {
     TEST_SECTION("VFS Isolation & Package Validation");
@@ -184,6 +186,134 @@ void test_vfs_security() {
     }
     TEST_PASS("Package Zstd entries decode incrementally with seekable streams");
 
+    // D18a-runtime: flags=1 entries whose embedded manifest record carries a
+    // compressed_sha256 are verified against the stored compressed bytes.
+    // The binary format stays v1: the hash travels in rowl/manifest.json.
+    // v1-shaped packages (no manifest, or manifest without the key) keep
+    // loading exactly as before; a substituted or corrupted payload with a
+    // key present is rejected.
+    const std::string hashedEntryPath = "audio/streamed.ogg";
+    const std::vector<uint8_t> expectedPayload(streamingPayload.begin(), streamingPayload.end());
+    std::vector<uint8_t> verifiedCompressed(ZSTD_compressBound(streamingPayload.size()));
+    verifiedCompressed.resize(ZSTD_compress(verifiedCompressed.data(), verifiedCompressed.size(),
+                                            streamingPayload.data(), streamingPayload.size(), 1));
+    const auto sha256Hex = [](const std::vector<uint8_t>& bytes) {
+        uint8_t digest[32];
+        Rowl::VFS::Detail::RowlSha256 context;
+        Rowl::VFS::Detail::rowlSha256Init(&context);
+        if (!bytes.empty()) {
+            Rowl::VFS::Detail::rowlSha256Update(&context, bytes.data(), bytes.size());
+        }
+        Rowl::VFS::Detail::rowlSha256Final(&context, digest);
+        static constexpr char kHexDigits[] = "0123456789abcdef";
+        std::string hex;
+        for (const uint8_t byte : digest) {
+            hex += kHexDigits[byte >> 4];
+            hex += kHexDigits[byte & 0xF];
+        }
+        return hex;
+    };
+    const std::string verifiedDigest = sha256Hex(verifiedCompressed);
+    const std::string manifestWithKey =
+        "{\"format\":1,\"files\":[{\"compressed_sha256\":\"" + verifiedDigest +
+        "\",\"path\":\"" + hashedEntryPath + "\",\"size\":" +
+        std::to_string(streamingPayload.size()) + "}]}";
+    const std::string manifestWithoutKey =
+        "{\"format\":1,\"files\":[{\"path\":\"" + hashedEntryPath + "\",\"size\":" +
+        std::to_string(streamingPayload.size()) + "}]}";
+    const std::string manifestMalformedKey =
+        "{\"format\":1,\"files\":[{\"compressed_sha256\":\"deadbeef\",\"path\":\"" +
+        hashedEntryPath + "\"}]}";
+    const auto writeZstdPackage = [&](const std::string& name,
+                                      const std::vector<uint8_t>& compressed,
+                                      const std::optional<std::string>& manifestJson) {
+        const std::string manifestPath = "rowl/manifest.json";
+        const uint64_t entryOffset = headerSize;
+        const uint64_t manifestOffset = entryOffset + compressed.size();
+        const uint64_t indexOffset = manifestOffset + (manifestJson ? manifestJson->size() : 0);
+        const uint32_t fileCount = manifestJson ? 2 : 1;
+        Rowl::VFS::RowlPkgHeader pkgHeader{{'R', 'O', 'W', 'L'}, 1, fileCount, indexOffset};
+        std::string blob(reinterpret_cast<const char*>(&pkgHeader), sizeof(pkgHeader));
+        blob.append(reinterpret_cast<const char*>(compressed.data()),
+                    static_cast<size_t>(compressed.size()));
+        if (manifestJson) blob.append(*manifestJson);
+        Rowl::VFS::RowlPkgEntryRaw entryRecord{
+            fnv1a64(hashedEntryPath), static_cast<uint32_t>(hashedEntryPath.size()), entryOffset,
+            compressed.size(), streamingPayload.size(), 1};
+        blob.append(reinterpret_cast<const char*>(&entryRecord), sizeof(entryRecord));
+        blob.append(hashedEntryPath);
+        if (manifestJson) {
+            Rowl::VFS::RowlPkgEntryRaw manifestRecord{
+                fnv1a64(manifestPath), static_cast<uint32_t>(manifestPath.size()), manifestOffset,
+                manifestJson->size(), manifestJson->size(), 0};
+            blob.append(reinterpret_cast<const char*>(&manifestRecord), sizeof(manifestRecord));
+            blob.append(manifestPath);
+        }
+        const auto packagePath = testRoot / name;
+        std::ofstream output(packagePath, std::ios::binary);
+        output.write(blob.data(), static_cast<std::streamsize>(blob.size()));
+        return packagePath;
+    };
+
+    // 1. No embedded manifest at all: a v1 package keeps loading untouched.
+    const auto legacyNoManifest = writeZstdPackage("legacy_no_manifest.rowlpkg",
+                                                   verifiedCompressed, std::nullopt);
+    Rowl::VFS::RowlPkgDataSource legacyNoManifestSource(legacyNoManifest.string());
+    if (!legacyNoManifestSource.isValid() ||
+        legacyNoManifestSource.read(hashedEntryPath) != expectedPayload) {
+        std::cerr << "A v1 package without an embedded manifest stopped loading" << std::endl;
+        exit(1);
+    }
+
+    // 2. Manifest present but the record carries no compressed_sha256 key:
+    // pre-D18a packages keep the legacy skip (warn-open, unverified).
+    const auto legacyWithoutKey = writeZstdPackage("legacy_without_key.rowlpkg",
+                                                   verifiedCompressed, manifestWithoutKey);
+    Rowl::VFS::RowlPkgDataSource legacyWithoutKeySource(legacyWithoutKey.string());
+    if (!legacyWithoutKeySource.isValid() ||
+        legacyWithoutKeySource.read(hashedEntryPath) != expectedPayload) {
+        std::cerr << "A manifest record without compressed_sha256 stopped loading" << std::endl;
+        exit(1);
+    }
+
+    // 3. Key present and the payload matches: verification passes silently.
+    const auto verifiedPackage = writeZstdPackage("verified_hash.rowlpkg",
+                                                  verifiedCompressed, manifestWithKey);
+    Rowl::VFS::RowlPkgDataSource verifiedSource(verifiedPackage.string());
+    if (!verifiedSource.isValid() ||
+        verifiedSource.read(hashedEntryPath) != expectedPayload) {
+        std::cerr << "A manifest-verified zstd payload failed to load" << std::endl;
+        exit(1);
+    }
+
+    // 4. Silent substitution: a DIFFERENT but valid zstd stream (same
+    // decompressed size) replaces the payload — decompression alone would
+    // succeed, so the manifest hash is the only guard. It must reject.
+    std::vector<uint8_t> substitutedPayload(streamingPayload.size());
+    for (size_t index = 0; index < substitutedPayload.size(); ++index) {
+        substitutedPayload[index] = static_cast<char>((streamingPayload[index] + 7) % 251);
+    }
+    std::vector<uint8_t> substitutedCompressed(ZSTD_compressBound(substitutedPayload.size()));
+    substitutedCompressed.resize(ZSTD_compress(substitutedCompressed.data(), substitutedCompressed.size(),
+                                               substitutedPayload.data(), substitutedPayload.size(), 1));
+    const auto substitutedPackage = writeZstdPackage("substituted_hash.rowlpkg",
+                                                     substitutedCompressed, manifestWithKey);
+    Rowl::VFS::RowlPkgDataSource substitutedSource(substitutedPackage.string());
+    if (!substitutedSource.isValid() || !substitutedSource.read(hashedEntryPath).empty()) {
+        std::cerr << "A substituted payload passed manifest sha256 verification" << std::endl;
+        exit(1);
+    }
+
+    // 5. A present-but-malformed key can never verify: fail closed.
+    const auto malformedKeyPackage = writeZstdPackage("malformed_key.rowlpkg",
+                                                      verifiedCompressed, manifestMalformedKey);
+    Rowl::VFS::RowlPkgDataSource malformedKeySource(malformedKeyPackage.string());
+    if (!malformedKeySource.isValid() || !malformedKeySource.read(hashedEntryPath).empty()) {
+        std::cerr << "A malformed compressed_sha256 key verified a payload" << std::endl;
+        exit(1);
+    }
+    TEST_PASS("Manifest sha256 verification gates flags=1 payloads while v1 warn-open holds");
+
     const std::string traversalPath = "../outside.txt";
     Rowl::VFS::RowlPkgEntryRaw traversalEntry{fnv1a64(traversalPath), static_cast<uint32_t>(traversalPath.size()),
                                                headerSize, 1, 1, 0};
@@ -360,6 +490,29 @@ void test_vfs_security() {
     std::filesystem::create_directories(bareProject / "Assets");
     vfs.remountProject(bareProject.string());
     TEST_PASS("Hostile package-scan forms fail loudly without throwing");
+
+    // Fail-open closure: an EMPTY project root used to return true — mounts
+    // silently cleared and the caller told "success". A blank path is a
+    // caller bug, not a legitimate clear request: it must be rejected like
+    // any other missing root, leave the manager in a clean bare state, and
+    // a valid remount afterwards must still work.
+    if (!vfs.remountProject(bareProject.string()) || vfs.getMountPoints().empty()) {
+        std::cerr << "A valid project root must remount successfully with mounts" << std::endl;
+        exit(1);
+    }
+    if (vfs.remountProject("")) {
+        std::cerr << "Empty project root remount must be rejected" << std::endl;
+        exit(1);
+    }
+    if (!vfs.getMountPoints().empty()) {
+        std::cerr << "Rejected empty-root remount left stale mounts behind" << std::endl;
+        exit(1);
+    }
+    if (!vfs.remountProject(packagedProject.string()) || vfs.readString("dir/safe.txt") != "x") {
+        std::cerr << "A valid remount after an empty-root rejection failed" << std::endl;
+        exit(1);
+    }
+    TEST_PASS("Empty project root remount is rejected and leaves a clean bare VFS");
 
     // A2a-fix4 (girdi-izolasyonu): patlayan/okunamayan TEK girdi taramayı
     // öldürmemeli — geçerli paket yine mount'lanmalı. Sarkan symlink

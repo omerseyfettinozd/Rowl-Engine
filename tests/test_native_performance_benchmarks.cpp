@@ -304,8 +304,23 @@ void test_native_performance_benchmarks(const std::string& benchmarkJsonPath = "
         exit(1);
     }
     const int FRAME_ITERATIONS = 60;
+    // Steady-state must measure REAL rendering, not the frame cache. The
+    // window pipeline reuses the previous composited frame whenever the
+    // content hash is unchanged (window.cpp fast-path), and a byte-identical
+    // scene fed every frame hashes identically — every iteration would hit
+    // the cache and report fake-low "steady" times. Mutate the character x
+    // every frame through the legacy UpdateScene overload: the JSON re-parse
+    // cost stays out of the measurement while the moving character forces
+    // the fast-path to miss so the full render path is actually timed. The
+    // diagonal walk (x 400..459) stays inside the 1920x1080 viewport, so
+    // texture set and cache telemetry below remain stable.
     auto frameStart = std::chrono::high_resolution_clock::now();
     for (int i = 0; i < FRAME_ITERATIONS; ++i) {
+        RowlEngine_UpdateScene(handle, "Evelyn", "Benchmark line",
+                               "Woman.png", 0.0f, 0.0f, 1920.0f, 1080.0f,
+                               "Margot.jpg", 400.0f + static_cast<float>(i),
+                               200.0f, 360.0f, 540.0f,
+                               80.0f, 840.0f, 1760.0f, 200.0f);
         RowlEngine_Step(handle, 0.01667f);
     }
     auto frameEnd = std::chrono::high_resolution_clock::now();

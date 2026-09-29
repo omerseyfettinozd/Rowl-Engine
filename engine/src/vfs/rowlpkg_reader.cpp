@@ -1,4 +1,5 @@
 #include "rowl/vfs/rowlpkg_reader.hpp"
+#include "rowl/vfs/detail/rowl_sha256.hpp"
 #include "rowl/core/logger.hpp"
 #include "rowl/platform/user_data_directories.hpp"
 #include <zstd.h>
@@ -11,6 +12,12 @@
 #include <sstream>
 #include <array>
 #include <streambuf>
+#include <cctype>
+#include <fstream>
+#include <nlohmann/json.hpp>
+#include <string>
+#include <unordered_map>
+#include <vector>
 
 namespace Rowl::VFS {
 
@@ -22,6 +29,115 @@ constexpr uint32_t kMaxPackageFileCount = 100'000;
 constexpr uint64_t kMaxCompressionExpansionRatio = 1'024;
 constexpr size_t kCompressedReadChunkBytes = 64 * 1024;
 constexpr size_t kDecompressedReadChunkBytes = 64 * 1024;
+// D18a-runtime: the packer's embedded manifest always lives here, stored
+// uncompressed (flags=0). Its flags=1 records carry `compressed_sha256` —
+// the SHA-256 of the compressed bytes — which the reader now verifies.
+constexpr const char* kManifestEntryPath = "rowl/manifest.json";
+
+// Fail-open closure for flags=1 entries. When the embedded manifest carries
+// a compressed_sha256 for the entry, the stored compressed bytes are hashed
+// and compared; a mismatch (silently substituted, truncated or corrupted
+// payload) fails the read. A missing key keeps the legacy skip — v1 packages
+// and pre-D18a manifests warn-open exactly as before. The binary format is
+// untouched: the hash arrives through the manifest, not a new index field.
+struct ManifestDigestIndex {
+    std::unordered_map<std::string, std::string> digestsByPath;
+
+    const std::string* find(const std::string& path) const {
+        const auto it = digestsByPath.find(path);
+        return it != digestsByPath.end() ? &it->second : nullptr;
+    }
+};
+
+std::optional<ManifestDigestIndex> buildManifestDigestIndex(
+    const std::string& filepath,
+    const std::unordered_map<std::string, PackageEntry>& indexTable) {
+    const auto manifestIt = indexTable.find(kManifestEntryPath);
+    if (manifestIt == indexTable.end()) return std::nullopt;
+
+    // The packer always stores the manifest raw (flags=0, compressed ==
+    // uncompressed); anything else is not a manifest this reader trusts.
+    const PackageEntry& manifestEntry = manifestIt->second;
+    if (manifestEntry.flags != 0 ||
+        manifestEntry.compressedSize != manifestEntry.uncompressedSize) {
+        return std::nullopt;
+    }
+
+    // Separate ifstream: the shared member stream is mutex-guarded for entry
+    // reads, and this scan runs once during construction anyway.
+    std::ifstream file(Rowl::Platform::pathFromUtf8(filepath), std::ios::binary);
+    if (!file.is_open()) return std::nullopt;
+    file.seekg(static_cast<std::streamoff>(manifestEntry.offset), std::ios::beg);
+    std::vector<char> buffer(manifestEntry.compressedSize);
+    if (manifestEntry.compressedSize > 0) {
+        file.read(buffer.data(), static_cast<std::streamsize>(manifestEntry.compressedSize));
+        if (file.gcount() != static_cast<std::streamsize>(manifestEntry.compressedSize)) {
+            return std::nullopt;
+        }
+    }
+
+    ManifestDigestIndex index;
+    try {
+        const auto document = nlohmann::json::parse(
+            std::string_view(buffer.data(), buffer.size()));
+        if (!document.is_object()) return std::nullopt;
+        const auto formatIt = document.find("format");
+        if (formatIt == document.end() || !formatIt->is_number_integer() ||
+            formatIt->get<int>() != 1) {
+            return std::nullopt;
+        }
+        const auto filesIt = document.find("files");
+        if (filesIt == document.end() || !filesIt->is_array()) return std::nullopt;
+        for (const auto& record : *filesIt) {
+            if (!record.is_object()) continue;
+            const auto pathIt = record.find("path");
+            const auto digestIt = record.find("compressed_sha256");
+            if (pathIt == record.end() || !pathIt->is_string() ||
+                digestIt == record.end() || !digestIt->is_string()) {
+                continue;
+            }
+            index.digestsByPath.emplace(pathIt->get<std::string>(),
+                                        digestIt->get<std::string>());
+        }
+    } catch (const nlohmann::json::exception&) {
+        // A malformed embedded manifest simply carries no verifiable keys —
+        // entries behave like the legacy no-key case. There is nothing to
+        // verify against, so nothing is silently trusted either.
+        return std::nullopt;
+    }
+    return index;
+}
+
+/// Verifies `bytes` against a 64-hex-character SHA-256 digest
+/// (case-insensitive, shape-validated; a wrong-length or non-hex string
+/// never verifies).
+bool verifyHashHex(const std::vector<uint8_t>& bytes, const std::string& expectedHex) {
+    if (expectedHex.size() != 32 * 2) return false;
+    std::array<char, 64> lowered{};
+    for (size_t i = 0; i < lowered.size(); ++i) {
+        const char character = expectedHex[i];
+        if (!std::isxdigit(static_cast<unsigned char>(character))) return false;
+        lowered[i] = (character >= 'A' && character <= 'F')
+                         ? static_cast<char>(character - 'A' + 'a')
+                         : character;
+    }
+    Detail::RowlSha256 context;
+    Detail::rowlSha256Init(&context);
+    if (!bytes.empty()) {
+        Detail::rowlSha256Update(&context, bytes.data(), bytes.size());
+    }
+    uint8_t digest[32];
+    Detail::rowlSha256Final(&context, digest);
+    static constexpr char kHexDigits[] = "0123456789abcdef";
+    volatile uint8_t difference = 0;
+    for (size_t i = 0; i < 32; ++i) {
+        difference = static_cast<uint8_t>(
+            difference |
+            (kHexDigits[(digest[i] >> 4) & 0xF] ^ lowered[i * 2]) |
+            (kHexDigits[digest[i] & 0xF] ^ lowered[i * 2 + 1]));
+    }
+    return difference == 0;
+}
 
 // Hedef #80 üretim metriği (performans kilidi): Zstd giriş-akışlarının GERÇEK
 // I/O olay sayaçları (süreç-geneli monoton). Üretim bu olayları zaten yaşar;
@@ -348,6 +464,9 @@ bool RowlPkgDataSource::loadIndexTable() {
         entry.uncompressedSize = rawEntry.uncompressedSize;
         entry.flags = rawEntry.flags;
 
+        // D18a-runtime: populate the digest AFTER the table insert succeeds —
+        // the digest index walks m_indexTable, so a rejected duplicate must
+        // not leave a poisoned digest behind.
         if (!m_indexTable.emplace(entry.relativePath, entry).second) {
             ROWL_LOG_ERROR("Duplicate package path: " + entry.relativePath);
             return false;
@@ -360,6 +479,20 @@ bool RowlPkgDataSource::loadIndexTable() {
         if (payloadRanges[i].first < payloadRanges[i - 1].second) {
             ROWL_LOG_ERROR("Overlapping payload ranges in package: " + m_filepath);
             return false;
+        }
+    }
+
+    // D18a-runtime: the table is complete — snapshot the embedded manifest's
+    // compressed_sha256 keys and attach them to the matching flags=1 entries.
+    // A v1/pre-D18a manifest (no keys) leaves every entry empty → skip, and
+    // a package without an embedded manifest behaves exactly as before.
+    if (auto digests = buildManifestDigestIndex(m_filepath, m_indexTable)) {
+        for (auto& [path, tableEntry] : m_indexTable) {
+            if (tableEntry.flags == 1) {
+                if (const std::string* digest = digests->find(path)) {
+                    tableEntry.compressedSha256Hex = *digest;
+                }
+            }
         }
     }
 
@@ -428,6 +561,16 @@ std::optional<std::vector<uint8_t>> RowlPkgDataSource::readEntry(const PackageEn
         }
     }
 
+    // D18a-runtime: verify the stored compressed bytes against the manifest
+    // compressed_sha256 BEFORE decoding — a silently substituted, truncated
+    // or hash-invalidating corrupted payload fails the read instead of
+    // serving content. No key (legacy record) skips exactly as before.
+    if (entry.flags == 1 && !entry.compressedSha256Hex.empty() &&
+        !verifyHashHex(compressedBuffer, entry.compressedSha256Hex)) {
+        ROWL_LOG_ERROR("Package entry failed manifest sha256 verification: " + path);
+        return std::nullopt;
+    }
+
     if (entry.flags == 0) {
         // Raw uncompressed file data (an engaged empty vector is a real
         // empty entry, never a miss).
@@ -467,6 +610,12 @@ std::unique_ptr<std::istream> RowlPkgDataSource::tryOpenStream(const std::string
     const auto it = m_indexTable.find(*normalizedPath);
     if (it == m_indexTable.end()) return nullptr;
     if (it->second.flags == 1) {
+        // D18a-runtime: streams must satisfy the same manifest-hash gate as
+        // read() — one materializing verification pass, then decode freely.
+        if (!it->second.compressedSha256Hex.empty() &&
+            !readEntry(it->second, path)) {
+            return nullptr;
+        }
         auto stream = std::make_unique<ZstdEntryIStream>(m_filepath, it->second);
         return stream->good() ? std::move(stream) : nullptr;
     }

@@ -36,6 +36,10 @@ struct PackageEntry {
     uint64_t compressedSize;
     uint64_t uncompressedSize;
     uint32_t flags;
+    /// D18a-runtime: hex compressed_sha256 carried by the embedded manifest
+    /// record (rowl/manifest.json) for flags=1 entries; empty = no key
+    /// (legacy record) and verification is skipped.
+    std::string compressedSha256Hex;
 };
 
 class RowlPkgDataSource : public IDataSource {
