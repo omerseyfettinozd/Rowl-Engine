@@ -4,8 +4,66 @@
  */
 #include "rowl_test_harness.hpp"
 
+// Bu dosyaya özel kompakt assert (ROWL_TEST_ASSERT): koşul false ise mesajla
+// çık; kilit-testlerindeki if/cerr/exit(1) kalıbının tek satırlık hali.
+#define ROWL_TEST_ASSERT(cond, msg)                                             \
+    do {                                                                        \
+        if (!(cond)) {                                                          \
+            std::cerr << "ROWL_TEST_ASSERT failed: " << msg << std::endl;       \
+            exit(1);                                                            \
+        }                                                                       \
+    } while (false)
+
+static void test_lua_sandbox_g_metatable_leak_regression() {
+    TEST_SECTION("Lua Sandbox _G Metatable Leak Regression (P0 + D06/D07)");
+
+    Rowl::Scripting::LuaSandbox sb;
+    ROWL_TEST_ASSERT(sb.initialize() && sb.isInitialized(), "sandbox init failed");
+
+    // P0 senaryosu: script setmetatable(_G, ...) bırakır; callOptionalFunction
+    // çıkışı (bindEngineApis komşuluğu) metatable'ı sıfırlamalı.
+    ROWL_TEST_ASSERT(sb.executeString(R"(
+        function on_update(dt)
+            setmetatable(_G, {__index = function(t, k)
+                if k == "zehirli" then return 999999 end
+                return nil
+            end})
+        end
+    )"), "on_update plant setup failed");
+    ROWL_TEST_ASSERT(sb.callOptionalFunction("on_update", 0.016),
+                     "on_update dispatch failed");
+
+    // 1) pcall-sonrası sıfırlama: _G metatable'sız kalmalı.
+    ROWL_TEST_ASSERT(sb.evaluateCondition("return getmetatable(_G) == nil"),
+                     "_G metatable survived callOptionalFunction exit");
+
+    // 2) ham-okuma (d07_rawGetGlobal): __index ateşlenmez; 'zehirli' 999999
+    // döndürmez, okuma yolu defaultValue'a düşer.
+    ROWL_TEST_ASSERT(sb.getGlobalNumber("zehirli", -1.0) == -1.0,
+                     "getGlobalNumber fired the planted _G __index");
+
+    // Koşul yolu: guard çıkışı (D06ConditionGlobalGuard yıkıcısı) metatable'ı
+    // yine sıfırlamalı.
+    ROWL_TEST_ASSERT(
+        sb.evaluateCondition(
+            "setmetatable(_G, {__index = function() return 'KOSUL' end}) ~= nil"),
+        "condition-path metatable plant setup failed");
+    ROWL_TEST_ASSERT(sb.evaluateCondition("return getmetatable(_G) == nil"),
+                     "_G metatable survived the condition guard exit");
+
+    // 3) koşul yolunun eklediği __index kayıp anahtarı yanıtlayamaz:
+    // getVariable ham-okuma + boş-dönüş sözleşmesi.
+    ROWL_TEST_ASSERT(sb.getVariable("olmayan") == "",
+                     "getVariable leaked through the condition-planted __index");
+
+    sb.shutdown();
+    TEST_PASS("_G metatable leak regression: pcall + condition exits reset; raw reads hold");
+}
+
 void test_lua_sandbox() {
     TEST_SECTION("Lua 5.4 Sandbox & Security Subsystem");
+
+    test_lua_sandbox_g_metatable_leak_regression();
 
     Rowl::Scripting::LuaSandbox lua;
     if (!lua.initialize() || !lua.isInitialized()) {
