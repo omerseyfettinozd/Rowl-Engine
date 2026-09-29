@@ -2,7 +2,7 @@
 """D18b-ii R3 — ABI-pin probu (check_abi_additive + baseline sayimi uzerinden).
 
 Kilitlenen sozlesme:
-  P1 tools/abi_baseline.txt 224 satir/sembol holds (plan "220" bayat).
+  P1 tools/abi_baseline.txt 235 satir/sembol holds (plan "220" bayat).
   P2 removal: baseline disi sembol kumesiyle karsilasan arac exit 1 verir
      (canli: yabanci ELF + gercek baseline; unit: 1-satir-dusurulmus kume).
   P3 additive-tamper: baseline'a yazilmamis sahte sembol (BogusProbe) pin
@@ -12,7 +12,7 @@ Kilitlenen sozlesme:
      (`uncompressed_size // compressed_size > MAX_EXPANSION_RATIO`) yerinde;
      gevsetme kirmizi verir.
   P5 derlenmis libRowlEngineCore bulunursa gercek arac kosar, exit 0 ve
-     224 eslesmesi beklenir; yoksa SKIP (P1-P4 kapiyi tasir).
+     235 eslesmesi beklenir; yoksa SKIP (P1-P4 kapiyi tasir).
 
 Repo'ya yazim yok; tamper'lar /tmp kopyalari uzerinde. Cikti: her prob
 PASS/FAIL satiri; herhangi biri duserse exit 1.
@@ -31,7 +31,7 @@ CHECK_TOOL = ROOT / "tools" / "check_abi_additive.py"
 C_API_H = ROOT / "engine" / "include" / "rowl" / "c_api.h"
 READER = ROOT / "tools" / "verify_release_package.py"
 
-EXPECTED_COUNT = 224
+EXPECTED_COUNT = 235
 BOGUS = "RowlEngine_BogusProbe"
 
 FAILURES = []
@@ -73,9 +73,9 @@ def main():
     sys.path.insert(0, str(ROOT / "tools"))
     import check_abi_additive as abi  # noqa: E402
 
-    # --- P1: 224 holds ---
+    # --- P1: 235 holds ---
     expected = abi.read_baseline(BASELINE)
-    check("P1-baseline-224-holds", len(expected) == EXPECTED_COUNT,
+    check("P1-baseline-235-holds", len(expected) == EXPECTED_COUNT,
           f"baseline {len(expected)} sembol, beklenen {EXPECTED_COUNT}")
     check("P1-baseline-sorted-unique",
           expected == sorted(set(expected)),
@@ -141,7 +141,7 @@ def main():
 
     if FAILURES:
         raise SystemExit(f"{len(FAILURES)} ABI-pin probu dustu")
-    print("OK: ABI pin green (224 holds, removal-red, tamper-red, mirror, "
+    print("OK: ABI pin green (235 holds, removal-red, tamper-red, mirror, "
           "built-lib where present)")
 
 
