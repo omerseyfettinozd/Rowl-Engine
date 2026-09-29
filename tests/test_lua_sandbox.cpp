@@ -60,10 +60,54 @@ static void test_lua_sandbox_g_metatable_leak_regression() {
     TEST_PASS("_G metatable leak regression: pcall + condition exits reset; raw reads hold");
 }
 
+static void test_lua_sandbox_nan_inf_rejection_regression() {
+    TEST_SECTION("Lua Sandbox NaN/Inf Rejection Regression (F1)");
+
+    Rowl::Scripting::LuaSandbox sb;
+    ROWL_TEST_ASSERT(sb.initialize() && sb.isInitialized(), "sandbox init failed");
+
+    // Lua köprüsü yolu (lua_rowl_var_set): ham LUA_TNUMBER NaN/±Inf sessizce
+    // reddedilmeli — "-nan"/"inf" metni olarak haritaya sızamaz.
+    ROWL_TEST_ASSERT(sb.executeString(R"(
+        rowl.var_set('nan_val', 0/0)
+        rowl.var_set('inf_val', 1/0)
+        rowl.var_set('neg_inf_val', -1/0)
+        rowl.var_set('valid_num', 42.5)
+        rowl.var_set('valid_str', 'rowl_test')
+    )"), "F1 bridge probe executeString failed");
+
+    ROWL_TEST_ASSERT(sb.getVariable("nan_val") == "",
+                     "NaN leaked into the host map via rowl.var_set");
+    ROWL_TEST_ASSERT(sb.getVariable("inf_val") == "",
+                     "+Inf leaked into the host map via rowl.var_set");
+    ROWL_TEST_ASSERT(sb.getVariable("neg_inf_val") == "",
+                     "-Inf leaked into the host map via rowl.var_set");
+    ROWL_TEST_ASSERT(sb.getVariable("valid_num") == "42.5",
+                     "valid finite number was not preserved");
+    ROWL_TEST_ASSERT(sb.getVariable("valid_str") == "rowl_test",
+                     "valid string value was not preserved");
+
+    // Host yolu (setVariable): sayısal-ISO parsesinde sonlu olmayan metinler
+    // ("nan"/"inf"/"-inf") WARN ile reddedilmeli; meşru metinler etkilenmez.
+    sb.setVariable("host_nan", "nan");
+    sb.setVariable("host_inf", "inf");
+    sb.setVariable("host_neg_inf", "-inf");
+    ROWL_TEST_ASSERT(sb.getVariable("host_nan") == "",
+                     "host-side 'nan' string was not rejected");
+    ROWL_TEST_ASSERT(sb.getVariable("host_inf") == "",
+                     "host-side 'inf' string was not rejected");
+    ROWL_TEST_ASSERT(sb.getVariable("host_neg_inf") == "",
+                     "host-side '-inf' string was not rejected");
+
+    sb.shutdown();
+    TEST_PASS("F1 NaN/Inf rejection: bridge + host paths reject, valid values hold");
+}
+
 void test_lua_sandbox() {
     TEST_SECTION("Lua 5.4 Sandbox & Security Subsystem");
 
     test_lua_sandbox_g_metatable_leak_regression();
+    test_lua_sandbox_nan_inf_rejection_regression();
 
     Rowl::Scripting::LuaSandbox lua;
     if (!lua.initialize() || !lua.isInitialized()) {

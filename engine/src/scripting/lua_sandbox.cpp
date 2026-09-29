@@ -808,15 +808,33 @@ void LuaSandbox::setVariable(const std::string& key, const std::string& value) {
         return;
     }
     // F1: NaN/Inf metin bozulması kapısı (host yolu). "nan"/"-nan"/"inf"
-    // gibi diziler sayı-olsa-yazılır patikasından haritaya sızamaz; sayısal
-    // görünümlü girdi bile sonlu sayıya oturmuyorsa reddedilir (setGlobalNumber
-    // emsali — satır 876 !std::isfinite disiplini).
+    // gibi diziler haritaya yazılamaz (setGlobalNumber emsali — satır 876
+    // !std::isfinite disiplini). Not: parseAsciiDouble bu yazımları gramer
+    // taramasında reddettiği için elle karşılaştırma şart; strtod uzantı
+    // yazımları ("NAN(...)" dahil) da strncmp ön-ekleriyle yakalanır.
     {
         double parsed = 0.0;
-        const bool numericLike = parseSandboxNumber(value, parsed);
-        if (!numericLike &&
-            Rowl::Util::parseAsciiDouble(value.data(), value.data() + value.size(), parsed) &&
-            !std::isfinite(parsed)) {
+        bool nonFiniteText = false;
+        if (Rowl::Util::parseAsciiDouble(value.data(), value.data() + value.size(), parsed)) {
+            nonFiniteText = !std::isfinite(parsed);
+        } else {
+            const auto matchesPrefix = [&](const char* word) {
+                const std::size_t n = std::strlen(word);
+                return value.size() == n &&
+                       std::strncmp(value.c_str(), word, n) == 0;
+            };
+            static const char* kNonFiniteWords[] = {
+                "nan", "-nan", "+nan", "inf", "-inf", "+inf",
+                "infinity", "-infinity", "+infinity",
+            };
+            for (const char* word : kNonFiniteWords) {
+                if (matchesPrefix(word)) {
+                    nonFiniteText = true;
+                    break;
+                }
+            }
+        }
+        if (nonFiniteText) {
             ROWL_LOG_WARN("Lua Sandbox rejected non-finite variable value: '" + key + "'");
             return;
         }
