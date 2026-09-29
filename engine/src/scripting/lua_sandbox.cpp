@@ -100,7 +100,21 @@ static int lua_rowl_var_get(lua_State* L) {
 }
 
 static int lua_rowl_var_set(lua_State* L) {
-    if (lua_gettop(L) >= 2 && lua_isstring(L, 1) && lua_isstring(L, 2)) {
+    if (lua_gettop(L) >= 2 && lua_isstring(L, 1)) {
+        // F1: NaN/Inf veri-bozulması kapısı. Kontrol, lua_tostring'den ÖNCE
+        // yapılmalı: lua_tostring sayı yuvasını yerinde LUA_TSTRING'e
+        // dönüştürür, sonraki lua_type her zaman TSTRING görür. 0/0 ve 1/0
+        // "-nan"/"inf" metnine dönüşmeden red edilir (setGlobalNumber'ın
+        // !std::isfinite disiplini).
+        if (lua_type(L, 2) == LUA_TNUMBER) {
+            const double number = lua_tonumber(L, 2);
+            if (!std::isfinite(number)) {
+                return 0; // sessiz red: NaN/Inf host haritasına yazılmaz
+            }
+        }
+        if (!lua_isstring(L, 2)) {
+            return 0;
+        }
         std::string key = lua_tostring(L, 1);
         std::string value = lua_tostring(L, 2);
 
@@ -792,6 +806,20 @@ void LuaSandbox::setVariable(const std::string& key, const std::string& value) {
     if (isReservedVariableName(key)) {
         ROWL_LOG_WARN("Lua Sandbox rejected reserved variable name: '" + key + "'");
         return;
+    }
+    // F1: NaN/Inf metin bozulması kapısı (host yolu). "nan"/"-nan"/"inf"
+    // gibi diziler sayı-olsa-yazılır patikasından haritaya sızamaz; sayısal
+    // görünümlü girdi bile sonlu sayıya oturmuyorsa reddedilir (setGlobalNumber
+    // emsali — satır 876 !std::isfinite disiplini).
+    {
+        double parsed = 0.0;
+        const bool numericLike = parseSandboxNumber(value, parsed);
+        if (!numericLike &&
+            Rowl::Util::parseAsciiDouble(value.data(), value.data() + value.size(), parsed) &&
+            !std::isfinite(parsed)) {
+            ROWL_LOG_WARN("Lua Sandbox rejected non-finite variable value: '" + key + "'");
+            return;
+        }
     }
     // B7 (#22): host-side variable-map budget. Both a hostile script stuffing
     // the map via rowl.var.set and a chatty host caller feed this counter;
