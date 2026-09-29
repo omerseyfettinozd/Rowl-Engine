@@ -108,18 +108,26 @@ def _run(cmd: list[str]) -> str | None:
 
 
 def _parse_nm_posix(output: str, mach_o: bool = False) -> set[str]:
-    """Parse ``nm --format=posix`` / BSD-nm output for ABI symbols."""
+    """Parse ``nm --format=posix`` / BSD-nm output for ABI symbols.
+
+    Two row shapes occur in the wild:
+
+        POSIX (``--format=posix``): ``RowlEngine_Create T 00001000``
+        BSD (macOS default nm):     ``0000000100001000 T _RowlEngine_Create``
+
+    The name column swaps position between the two, so scan every token:
+    strip archive-member decorations and, on Mach-O, one leading
+    underscore (Apple/x86 cdecl convention), then keep tokens carrying
+    the ABI prefix.
+    """
     symbols = set()
     for line in output.splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        name = line.split()[0]
-        # Mach-O C symbols carry a leading underscore (BSD nm).
-        if mach_o and name.startswith("_"):
-            name = name[1:]
-        if name.startswith(ABI_PREFIX):
-            symbols.add(name)
+        for token in line.split():
+            name = token.strip("():,;")
+            if mach_o and name.startswith("_"):
+                name = name[1:]
+            if name.startswith(ABI_PREFIX):
+                symbols.add(name)
     return symbols
 
 
@@ -136,8 +144,13 @@ def _parse_dumpbin(output: str) -> set[str]:
         parts = line.split()
         if len(parts) < 4:
             continue
-        # First three columns must be numeric-ish (ordinal/hint/RVA).
-        if not parts[0].isdigit() or not parts[1].isdigit():
+        # Column bases: ordinal is decimal, hint and RVA are hexadecimal
+        # (dumpbin prints hints like 0A/1F when A-F digits appear).
+        try:
+            int(parts[0], 10)   # ordinal (decimal)
+            int(parts[1], 16)   # hint (hex)
+            int(parts[2], 16)   # RVA (hex)
+        except ValueError:
             continue
         name = parts[3]
         if name.startswith(ABI_PREFIX):
@@ -213,6 +226,7 @@ def extract_abi_symbols(library: Path) -> list[str]:
             (["nm", "-gU", str(library)], "nm"),
             (["llvm-nm", "--defined-only", str(library)], "llvm-nm"),
             (["nm", "-g", str(library)], "nm"),
+            (["nm", "-g", "-P", str(library)], "nm -P"),
         ]
         for cmd, label in chain:
             tried.append(label)
