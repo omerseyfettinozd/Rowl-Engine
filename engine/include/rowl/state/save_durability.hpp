@@ -38,6 +38,16 @@ namespace Rowl::State {
 ///      (cleanupStaleOwnedSlotTemps); live-writer tmps are never touched.
 ///      Residue is therefore capped by crash count, not by save count, so a
 ///      crash loop cannot fill the disk and push later saves into ENOSPC.
+///      A normal (non-crash) failure leaks at most ONE backup, and only in the
+///      single case where the 490 restore was attempted and itself failed:
+///      that backup is then deliberately kept as recovery evidence. Every other
+///      exit removes its own temp, its partial backup, and its staged backup.
+///   L1b concurrent writers: COVERED for the in-process case by the commit
+///      mutex, and for a transient share conflict by the bounded retry
+///      (see SaveDurabilityTransientSite). Two writers in one process are
+///      fully serialised in the backup+replace section; a cross-process
+///      conflict is retried within a short budget, and if it still fails the
+///      save fails closed rather than writing a partial slot.
 ///   L3 OS-crash / power loss: NOT COVERED (deliberate). Closing this gap
 ///      would require, inside writeSlotFileAtomically only: POSIX file
 ///      fdatasync/fsync before rename plus a directory fsync after rename
@@ -56,10 +66,17 @@ std::filesystem::path saveTempPathFor(const std::filesystem::path& finalPath);
 /// 490: pre-save backup name ("<slot>.json.pre-save-bak", same directory).
 /// writeSlotFileAtomically copies the pre-existing slot here BEFORE the
 /// rename; on success the backup is removed (best effort), on rename failure
-/// the target is restored from it (best effort). A crash between staging
-/// and removal leaves at most one backup per slot (bounded residue, kept
-/// out of the tmp-sweep namespaces so it is never mistaken for a stray).
-/// Never throws.
+/// the target is restored from it (best effort) and the backup is removed
+/// unless the restore itself failed. A crash between staging and removal
+/// leaves at most one backup per INTERRUPTED WRITE; because the name carries
+/// the owner's pid, residue is bounded by crash count (not by save count) and
+/// is swept with that owner's other temps.
+/// NOTE: the backup is named from the caller's OWNED UNIQUE temp, so its real
+/// name is "<slot>.json.tmp.<pid>.<counter>.<rand>.pre-save-bak" and
+/// concurrent writers never share it. That name DOES match the
+/// cleanupStaleOwnedSlotTemps pattern, so a backup whose owner died is swept
+/// like any other stale owned temp — the desired outcome, since a live owner's
+/// backup is never touched. Never throws.
 std::filesystem::path saveBackupPathFor(const std::filesystem::path& finalPath);
 
 /// Atomically replaces finalPath with content. Returns true on success;
@@ -109,5 +126,80 @@ bool saveDurabilityInjectEnospc();
 // active errno injection.
 void setSaveDurabilityInjectErrno(int errnoValue);
 int saveDurabilityInjectErrno();
+
+// ---------------------------------------------------------------------------
+// Transient sharing-race hook (Windows CI save-slot concurrency fix).
+//
+// A concurrent writer on Windows transiently refuses the target's DELETE
+// access (ERROR_ACCESS_DENIED) or our own source read (ERROR_SHARING_VIOLATION);
+// those are not failures, they are the queue. writeSlotFileAtomically
+// classifies them and retries within a small bounded budget. That retry loop
+// is otherwise unobservable off Windows, so this hook arms a chosen retry site
+// to report a transient error WITHOUT performing the syscall — the code under
+// test still classifies, backs off, and decides success or fail-closed. The
+// sentinel is ERROR_SHARING_VIOLATION on Windows and EAGAIN on POSIX.
+//
+// The arming is PER SITE, and that is load-bearing rather than decorative: with
+// one shared queue the probe would drain it and the backup-copy and restore
+// paths could never be reached by a test at all. Per-site counters are what
+// let a test drive the backup-staging failure and the 490 restore end to end.
+//
+// HONEST SCOPE — what this hook gates and what it does not:
+//   gates: the retry loop shape, the backoff, the bounded budget, the
+//          per-site failure accounting, the classifier's acceptance of the
+//          sentinel, and (through those) the fail-closed and restore results.
+//   does NOT gate: the Windows-specific arms of the classifier (codes 33/303,
+//          and the "5 is transient for rename but permanent for copy" rule).
+//          Reaching those needs a real Win32 error, and NO test on any platform
+//          produces one - not even the Windows CI leg. They rest on documented
+//          Win32 semantics, not on a test. Saying otherwise would be an
+//          overclaim, so it is said here instead.
+//
+// Production default is 0 for every site; nothing arms it except this setter.
+// Never throws.
+enum class SaveDurabilityTransientSite : int {
+    Probe = 0,        // "is the existing slot a regular file?" backup probe
+    Copy = 1,         // 490 pre-save backup copy
+    Replace = 2,      // atomic rename over the target
+    BackupRemove = 3, // best-effort removal of the staged backup
+};
+void setSaveDurabilityInjectTransientFailures(int count,
+                                              SaveDurabilityTransientSite site);
+int saveDurabilityInjectTransientFailures(SaveDurabilityTransientSite site);
+
+// Transient failures the retry loop has actually absorbed at one site.
+// Monotonic; read it before and after to get a delta.
+int saveDurabilityTransientFailuresConsumed(SaveDurabilityTransientSite site);
+
+// The bounded-retry attempt budget (1 initial attempt + N-1 retries), so a
+// test sizes its injections from the implementation's own constant instead of
+// a hard-coded duplicate.
+int saveDurabilityTransientRetryAttempts();
+
+// Test-only: how many times two writers have been inside the commit section at
+// the same time. This is the ONLY observable trace of the commit mutex — the
+// Windows sharing violation it exists to prevent cannot be produced on Linux —
+// so without it, DELETING the mutex would leave every test green. With the
+// mutex present the count is necessarily zero, so this can never report a
+// false positive; it can only fail to catch a removed mutex on an unlucky
+// scheduling. Monotonic; reset it and read the delta.
+int saveDurabilityCommitOverlaps();
+int saveDurabilityCommitOverlapsReset();
+
+// Test-only: simulate a competing CROSS-PROCESS writer winning the race. When
+// armed, writeSlotFileAtomically overwrites the target with a known marker
+// AFTER staging the pre-save backup and BEFORE the atomic replace — the
+// in-process mutex already prevents a thread from doing this, so without this
+// seam the fingerprint guard's whole purpose ("a stale writer must not restore
+// its backup over a newer winner's payload") could never be observed by a
+// test, on any platform. Pair it with an armed Replace injection to drive the
+// save into the failure path and watch the marker survive.
+void setSaveDurabilityInjectCompetingWrite(bool inject);
+
+// The exact bytes saveDurabilityInjectCompetingWrite writes.
+const char* saveDurabilityCompetingWriteMarker();
+
+// True while a competing-write injection is armed.
+bool saveDurabilityInjectCompetingWrite();
 
 } // namespace Rowl::State
