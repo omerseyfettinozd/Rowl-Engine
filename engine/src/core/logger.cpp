@@ -138,9 +138,17 @@ void Logger::log(LogLevel level, std::string_view msg) {
     // File output with rotation
     if (s_logFile && s_logFile->is_open()) {
         rotateLogFile();
-        *s_logFile << "[" << timestamp << "] [" << levelStr << "] " << msg << std::endl;
-        s_logFile->flush();
-        s_logFileSize += logLine.size() + 1;
+        // rotateLogFile() yeniden acma basarisiz olursa s_logFile'i SIFIRLAR
+        // (asagida). Korumayi YENIDEN degerlendirmeden *s_logFile yazmak null'a
+        // basvururdu: cok dusunuk adresli erisim ihlali, yakalanmayan SEH,
+        // std::terminate yok — yani DIAG hatasi basmayan sert bir olum. Yazi
+        // yolunun kendisi ayni seyden sonra da hicbir sey yapamaz, bu yuzden
+        // koruma tekrarlanir ve akis sessizce atlanir.
+        if (s_logFile && s_logFile->is_open()) {
+            *s_logFile << "[" << timestamp << "] [" << levelStr << "] " << msg << std::endl;
+            s_logFile->flush();
+            s_logFileSize += logLine.size() + 1;
+        }
     }
 }
 

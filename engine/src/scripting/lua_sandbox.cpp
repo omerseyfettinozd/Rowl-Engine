@@ -895,7 +895,20 @@ void LuaSandbox::setVariable(const std::string& key, const std::string& value) {
     }
     m_variablesBytes = m_variablesBytes - oldBytes + entryBytes;
     m_scriptVariables[key] = value;
-    ROWL_LOG_TRACE("Lua Sandbox Variable Set: '" + key + "' = '" + value + "'");
+    // TRACE degeri KIRPILIR: sEtVariable 64 KiB'a kadar kabul ediyor ve
+    // degerin tamamini yazmak tek bir test blogundan ~4 MiB uretiyordu. Bu
+    // iki somut zarar veriyordi: (a) 10 MiB'lik rotasyon sayaci bu blogun
+    // icinde tetikleniyor (Logger::rotateLogFile dosyayi kapatip yeniden
+    // adlandirip aciyor), (b) ctest ~1 MB'da yakalama kestiigi icin Windows
+    // cokmelerinin TESHISI LOGDAN IMPOSSIZ hale geliyordu. Anahtar tam,
+    // deger onizleme + toplam bayt yazilir.
+    constexpr std::size_t kTraceValuePreview = 120;
+    std::string preview = value;
+    if (preview.size() > kTraceValuePreview) {
+        preview = value.substr(0, kTraceValuePreview) +
+                  "...<+" + std::to_string(value.size() - kTraceValuePreview) + "B>";
+    }
+    ROWL_LOG_TRACE("Lua Sandbox Variable Set: '" + key + "' = '" + preview + "'");
 }
 
 std::string LuaSandbox::getVariable(const std::string& key) const {
