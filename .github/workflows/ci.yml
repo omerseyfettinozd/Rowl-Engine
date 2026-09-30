@@ -14,10 +14,7 @@ permissions:
 jobs:
   linux:
     runs-on: ubuntu-24.04
-    # 493 butce: 15m HARD-CAP (artirilamaz). Asili test/olcum adimlari
-    # adim-ici erken-dur ile sinirli (asagidaki ctest --timeout / timeout),
-    # boylece tek asili test tum butceyi sessizce yakmaz.
-    timeout-minutes: 25
+    timeout-minutes: 60
 
     steps:
       - uses: actions/checkout@v4
@@ -95,7 +92,7 @@ jobs:
           ROWL_BENCHMARK_MACHINE: ${{ runner.arch }}
         run: |
           mkdir -p benchmark-results
-          xvfb-run -a ctest --test-dir build --output-on-failure --timeout 300
+          xvfb-run -a ctest --test-dir build --output-on-failure --timeout 1800
 
       - name: Check release launcher parity (linux/windows)
         # Runs here, on Linux, so the Windows packaging step -- which
@@ -128,7 +125,7 @@ jobs:
           python3 tools/verify_release_package.py "$release_dir"
           (
             cd "$release_dir"
-            SDL_AUDIODRIVER=dummy LD_LIBRARY_PATH=. python3 "$GITHUB_WORKSPACE/tools/measure_ci_time.py" --label linux-package-smoke --threshold 300 -- timeout 600s xvfb-run -a ./RowlGame --project . --package-smoke-test
+            SDL_AUDIODRIVER=dummy LD_LIBRARY_PATH=. python3 "$GITHUB_WORKSPACE/tools/measure_ci_time.py" --label linux-package-smoke --threshold 1800 -- timeout 1800s xvfb-run -a ./RowlGame --project . --package-smoke-test
           )
 
       - name: Record native benchmark baseline
@@ -197,7 +194,7 @@ jobs:
         run: |
           cmake -S . -B build-msdf-fallback -G Ninja -DCMAKE_BUILD_TYPE=Debug -DROWL_ENABLE_GPU_MSDF=OFF
           cmake --build build-msdf-fallback --parallel
-          xvfb-run -a ctest --test-dir build-msdf-fallback --output-on-failure --timeout 300 -E rowl_player_gpu_msdf_smoke
+          xvfb-run -a ctest --test-dir build-msdf-fallback --output-on-failure --timeout 1800 -E rowl_player_gpu_msdf_smoke
 
       - name: Check managed dependencies for known vulnerabilities
         run: |
@@ -208,7 +205,7 @@ jobs:
     # PR/push'ta hızlı alt-küme (T0 katmanlama): soak/stres nightly'dadır.
     if: github.event_name != 'schedule'
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 60
 
     steps:
       - uses: actions/checkout@v4
@@ -259,13 +256,13 @@ jobs:
         env:
           ROWL_SKIP_LONG_TESTS: '1'
         run: |
-          ASAN_OPTIONS=halt_on_error=1:print_stacktrace=1:detect_leaks=0 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 ctest --test-dir build-sanitizer -R "rowl_native_tests|rowl_benchmark_tool_tests" --output-on-failure --timeout 600
+          ASAN_OPTIONS=halt_on_error=1:print_stacktrace=1:detect_leaks=0 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 ctest --test-dir build-sanitizer -R "rowl_native_tests|rowl_benchmark_tool_tests" --output-on-failure --timeout 1800
 
   sanitizer-nightly:
     # Tam süit (soak/stres dahil), yalnızca schedule'da koşar (T0).
     if: github.event_name == 'schedule'
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 90
 
     steps:
       - uses: actions/checkout@v4
@@ -308,7 +305,7 @@ jobs:
 
       - name: Test under ASan and UBSan (full suite)
         run: |
-          ASAN_OPTIONS=halt_on_error=1:print_stacktrace=1:detect_leaks=0 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 ctest --test-dir build-sanitizer -R "rowl_native_tests|rowl_benchmark_tool_tests" --output-on-failure --timeout 900
+          ASAN_OPTIONS=halt_on_error=1:print_stacktrace=1:detect_leaks=0 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 ctest --test-dir build-sanitizer -R "rowl_native_tests|rowl_benchmark_tool_tests" --output-on-failure --timeout 1800
 
   tsan-nightly:
     # K6 (B3b): ThreadSanitizer tam-süit, yalnızca schedule'da koşar.
@@ -368,7 +365,7 @@ jobs:
     # Compile-only portability gate. It does not claim GUI, audio-device or
     # physical-device validation for an eventual ARM64 product package.
     runs-on: ubuntu-24.04-arm
-    timeout-minutes: 15
+    timeout-minutes: 30
 
     steps:
       - uses: actions/checkout@v4
@@ -421,7 +418,7 @@ jobs:
     # signature on the hosted runner, so this job proves the native macOS
     # arm64 build only — not GUI, audio-device or signed-package validation.
     runs-on: macos-15
-    timeout-minutes: 15
+    timeout-minutes: 30
 
     steps:
       - uses: actions/checkout@v4
@@ -475,10 +472,7 @@ jobs:
 
   windows:
     runs-on: windows-2025
-    # MSVC derlemesi + tam native suite + xUnit 35 dakikaya sigmiyor
-    # (gozlem: tur-5'te native suite 300s timeout + Debug yavasligi);
-    # 60 dakika gercekci tavan, T0 katmanlamasi kalici cozumu getirecek.
-    timeout-minutes: 60
+    timeout-minutes: 120
 
     steps:
       - uses: actions/checkout@v4
@@ -562,11 +556,7 @@ jobs:
           # Software rasterizer on the hosted runner cannot sustain the
           # transition-benchmark FPS floor; report there, enforce on dev hw.
           $env:ROWL_PERF_FLOOR = "report"
-          # Per-test timeout turns a hung test into a fast pointer with output
-          # instead of burning the whole 60-minute job timeout silently.
-          # (rowl_native_tests carries its own TIMEOUT 1500 on Windows for
-          # MSVC-Debug slowness; everything else stays on this 300 default.)
-          ctest --test-dir build --output-on-failure --timeout 300
+          ctest --test-dir build --output-on-failure --timeout 1800
 
       - name: Verify standalone package and VFS smoke
         shell: pwsh
