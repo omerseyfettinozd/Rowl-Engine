@@ -26,7 +26,7 @@ namespace {
 
 int g_concFailures = 0;
 
-void checkConc(bool cond, const char* what) {
+void checkConc(bool cond, const std::string& what) {
     if (!cond) {
         std::cerr << "SAVE-SLOT-CONC FAIL: " << what << std::endl;
         ++g_concFailures;
@@ -89,6 +89,51 @@ uint64_t parseU64(const std::string& s, bool* ok) {
         value = value * 10 + static_cast<uint64_t>(c - '0');
     }
     return value;
+}
+
+// Tanı: "torn/mixed" tek başına teşhis değildir. HANGI alt kontrolün
+// düştüğünü ve gözlenen değerleri döndürür, böylece bir sonraki Windows koşusu
+// "kırmızı" yerine gerçekten ne olduğunu söyler. isOneCompletePayload ile
+// aynı kontrol sırasını ve aynı eşikleri kullanır.
+std::string describePayloadMismatch(const std::string& bytes,
+                                    std::size_t bodySize) {
+    std::ostringstream out;
+    out << "bytes=" << bytes.size() << " (header+" << bodySize << "+tail) ";
+    if (bytes.size() < 32) { out << "| too short"; return out.str(); }
+    const std::string::size_type nl = bytes.find('\n');
+    if (nl == std::string::npos) { out << "| no newline in header"; return out.str(); }
+    {
+        std::istringstream head(bytes.substr(0, nl));
+        std::string wtok, rtok, extra;
+        if (!(head >> wtok >> rtok) || (head >> extra)) {
+            out << "| header token count wrong: [" << bytes.substr(0, nl) << "]";
+            return out.str();
+        }
+        if (wtok.rfind("WRITER:", 0) != 0 || rtok.rfind("ROUND:", 0) != 0) {
+            out << "| header prefix wrong: [" << bytes.substr(0, nl) << "]";
+            return out.str();
+        }
+    }
+    const std::string::size_type bodyEnd = nl + 1 + bodySize;
+    if (bytes.size() < bodyEnd + 10) {
+        out << "| SHORT: needs >= " << (bodyEnd + 10) << " bytes, has "
+            << bytes.size() << " -> payload truncated or partially written";
+        return out.str();
+    }
+    const std::string tail = bytes.substr(bodyEnd);
+    const std::string::size_type tailNl = tail.find('\n');
+    if (tailNl == std::string::npos) {
+        out << "| no newline in checksum tail";
+        return out.str();
+    }
+    if (tailNl + 1 != tail.size()) {
+        out << "| LONG: " << (tail.size() - (tailNl + 1))
+            << " trailing byte(s) after checksum -> two payloads concatenated "
+               "or a second append; tail=[" << tail.substr(0, 48) << "]";
+        return out.str();
+    }
+    out << "| checksum/body mismatch (length is right)";
+    return out.str();
 }
 
 bool isOneCompletePayload(const std::string& bytes, std::size_t bodySize) {
@@ -184,8 +229,11 @@ void test_save_slot_concurrency() {
     }
     checkConc(!finalBytes.empty(), "final slot file empty after hammer");
     if (!finalBytes.empty()) {
-        checkConc(isOneCompletePayload(finalBytes, kBodySize),
-                  "final slot is torn/mixed: not one writer's complete payload");
+        if (!isOneCompletePayload(finalBytes, kBodySize)) {
+            checkConc(false,
+                      "final slot is torn/mixed: not one writer's complete "
+                      "payload [" + describePayloadMismatch(finalBytes, kBodySize) + "]");
+        }
     }
 
     // Hiçbir artık kalmamalı: 200 yazının tamamı kendi benzersiz tmp'sini
