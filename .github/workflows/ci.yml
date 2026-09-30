@@ -79,7 +79,23 @@ jobs:
       - name: Test
         # 493 erken-dur: asili testi hizli isaretciye cevirir (windows
         # deseniyle ayni --timeout 300); ciktiyla duser, isi yakmaz.
-        run: xvfb-run -a ctest --test-dir build --output-on-failure --timeout 300
+        #
+        # BUTCE: benchmark JSON'u bu turun YAN URUNU olarak yazilir. Olcum
+        # icin ayri bir ikili kosusu calistirilmiyordu; o, ayni paketin tam
+        # tekraydi (run 36617943963'de 458 s'lik benchmark adiminin ~327 s'i
+        # daha once kosmus ctest'in tekraridi). Olcum sirasi korunur:
+        # g_transitionFps bu ikilinin icinde, benchmark'tan ONCE doldugu
+        # icin metrik kaybolmaz. Ayri bir surece tasinsaydi null olur ve
+        # compare_benchmarks o metrigi sessizce atlayardi - yani bir kapi
+        # kaybolurdu.
+        env:
+          ROWL_BENCHMARK_JSON: ${{ github.workspace }}/benchmark-results/linux-native.json
+          ROWL_BENCHMARK_BUILD_ID: ${{ github.sha }}
+          ROWL_BENCHMARK_BUILD_TYPE: Debug
+          ROWL_BENCHMARK_MACHINE: ${{ runner.arch }}
+        run: |
+          mkdir -p benchmark-results
+          xvfb-run -a ctest --test-dir build --output-on-failure --timeout 300
 
       - name: Check release launcher parity (linux/windows)
         # Runs here, on Linux, so the Windows packaging step -- which
@@ -116,13 +132,14 @@ jobs:
           )
 
       - name: Record native benchmark baseline
+        # Olcum "Test" adiminda yapildi; burada yalnizca dosyayi ozete koyuyoruz.
+        # Ikinci kez rowl_tests calistirmak 458 s harcadi ve hicbir yeni
+        # dogrulama uretmiyordu.
         run: |
-          mkdir -p benchmark-results
-          ROWL_BENCHMARK_BUILD_ID="$GITHUB_SHA" \
-          ROWL_BENCHMARK_BUILD_TYPE=Debug \
-          ROWL_BENCHMARK_MACHINE="$(uname -m)" \
-          SDL_AUDIODRIVER=dummy \
-          xvfb-run -a build/bin/rowl_tests --benchmark-json benchmark-results/linux-native.json
+          if [ ! -s benchmark-results/linux-native.json ]; then
+            echo "::error::benchmark JSON missing - Test adimi olcumu uretmedi"
+            exit 1
+          fi
           cat benchmark-results/linux-native.json >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload native benchmark baseline

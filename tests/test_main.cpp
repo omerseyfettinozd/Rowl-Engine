@@ -3,6 +3,8 @@
  * Split from main_test_runner.cpp; behavior unchanged.
  */
 #include "rowl_test_harness.hpp"
+
+#include <cstdlib>
 #ifdef _WIN32
 // Debug CRT + loader faults park on a modal dialog by default; on headless
 // CI that burns the whole ctest timeout with zero output (tur-6). Route
@@ -72,6 +74,19 @@ int main(int argc, char* argv[]) {
     std::cerr << std::unitbuf;
     std::string benchmarkJsonPath;
     std::string goldenJsonPath;
+    // CI BÜTÇESİ (linux 25-dk tavanı): benchmark JSON'u, bu ikilinin ZATEN
+    // koştuğu ctest turunun yan ürünü olarak yazılır. Ölçüm, ikisinin de
+    // gerektirdiği sırada (transition ölçümünden SONRA) aynı yerde kalır —
+    // g_transitionFps'i test_camera_and_transition_pipeline dolduruyor ve
+    // benchmark yalnızca o globali okuyor; ölçümü ayrı bir sürece taşımak
+    // onu null yapardı ve compare_benchmarks o metriği sessizce atlar,
+    // yani bir kapı kaybolurdu. Böylece "benchmark için ikiliyi ikinci kez
+    // koş" 458 saniyelik saf tekrar olmaktan çıkar (github actions run
+    // 36617943963: benchmark adımı 458 s, bunun ~327 s'i daha önce koşmuş
+    // ctest'in tekrarıydı).
+    if (const char* fromEnv = std::getenv("ROWL_BENCHMARK_JSON")) {
+        if (*fromEnv != '\0') benchmarkJsonPath = fromEnv;
+    }
     for (int index = 1; index < argc; ++index) {
         const std::string argument = argv[index];
         if (argument == "--benchmark-json" && index + 1 < argc) {

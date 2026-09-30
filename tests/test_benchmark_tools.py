@@ -20,7 +20,7 @@ def report(machine="test-machine", architecture="x86_64", cpu_model="Test CPU"):
         "build": {"id": "abc", "type": "Release"},
         "environment": {"os": "Linux", "architecture": architecture, "cpu_model": cpu_model,
                         "cpu_count": 8, "machine": machine},
-        "fixture_id": "native-default-v1",
+        "fixture_id": "native-default-v2",
         "metrics": {
             "vfs_io": {"avg_ms": 1.0},
             "json_update": {"avg_ms": 2.0},

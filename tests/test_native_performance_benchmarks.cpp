@@ -129,7 +129,7 @@ void writeBenchmarkJson(const std::string& outputPath, double startupMs, double 
            << "  \"build\": {\"id\": \"" << jsonEscape(environmentValue("ROWL_BENCHMARK_BUILD_ID", "unknown"))
            << "\", \"type\": \"" << jsonEscape(environmentValue("ROWL_BENCHMARK_BUILD_TYPE", "unknown")) << "\"},\n";
     writeBenchmarkEnvironment(stream);
-    stream << "  \"fixture_id\": \"" << jsonEscape(environmentValue("ROWL_BENCHMARK_FIXTURE", "native-default-v1")) << "\",\n"
+    stream << "  \"fixture_id\": \"" << jsonEscape(environmentValue("ROWL_BENCHMARK_FIXTURE", "native-default-v2")) << "\",\n"
            << "  \"metrics\": {\n"
            << "    \"startup_ms\": " << startupMs << ",\n"
            << "    \"vfs_io\": {\"iterations\": " << vfsIterations << ", \"total_ms\": " << vfsElapsedMs
