@@ -304,6 +304,36 @@ void test_vfs_security() {
         exit(1);
     }
 
+    // 4b. AYIRICI-KANONİKLİK KAPISI (Windows sha256 bypass düzeltmesi).
+    // Yukarıdaki test yalnızca WINDOWS'TA kırmızıydı: index tablosunun
+    // anahtarları normalizePackagePath'ten geliyor ve o fonksiyon
+    // u8string() ile platformun YEREL ayırıcısını döndürüyordu ('\' MSVC'de),
+    // dolayısıyla "rowl/manifest.json" sabitiyle eşleşmiyor, hiçbir digest
+    // bağlanmıyor ve kapı sessizce açık kalıyordu. Linux'ta aynı ayırıcı
+    // olduğu için o yol burada YAKALANAMAZDI.
+    //
+    // Bu vaka onu platformdan bağımsız kılar: manifest'in `path` alanı
+    // ters eğik çizgiyle yazılır. Düzeltme OLMADAN bu anahtar normalize
+    // edilmez, index anahtarı ("audio/streamed.ogg") ile eşleşmez, digest
+    // bağlanmaz ve DEĞİŞTİRİLMİŞ payload sessizce sunulur -> burada KIRMIZI.
+    // Düzeltmeyle anahtar aynı kanonikleştiriciden geçer, eşleşir ve
+    // değiştirilmiş payload reddedilir -> YEŞİL. Yani aynı hata sınıfı
+    // artık Linux CI'da da kırmızıya düşer.
+    const std::string manifestBackslashKey =
+        "{\"format\":1,\"files\":[{\"compressed_sha256\":\"" + verifiedDigest +
+        "\",\"path\":\"audio\\\\streamed.ogg\",\"size\":" +
+        std::to_string(streamingPayload.size()) + "}]}";
+    const auto backslashKeyPackage = writeZstdPackage("backslash_key.rowlpkg",
+                                                     substitutedCompressed, manifestBackslashKey);
+    Rowl::VFS::RowlPkgDataSource backslashKeySource(backslashKeyPackage.string());
+    if (!backslashKeySource.isValid() ||
+        !backslashKeySource.read(hashedEntryPath).empty()) {
+        std::cerr << "A backslash-separated manifest path bypassed sha256 "
+                     "verification (index keys are not canonical)"
+                  << std::endl;
+        exit(1);
+    }
+
     // 5. A present-but-malformed key can never verify: fail closed.
     const auto malformedKeyPackage = writeZstdPackage("malformed_key.rowlpkg",
                                                       verifiedCompressed, manifestMalformedKey);

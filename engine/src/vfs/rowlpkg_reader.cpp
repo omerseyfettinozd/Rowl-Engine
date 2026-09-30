@@ -49,6 +49,51 @@ struct ManifestDigestIndex {
     }
 };
 
+std::optional<std::string> normalizePackagePath(std::string path) {
+    if (path.empty() || path.find('\0') != std::string::npos) return std::nullopt;
+
+    std::replace(path.begin(), path.end(), '\\', '/');
+    // A2a: entry names are UTF-8 — same narrow-ctor trap as the mount root.
+    const std::filesystem::path normalized =
+        std::filesystem::path(std::u8string(path.begin(), path.end())).lexically_normal();
+    if (normalized.empty() || normalized.is_absolute() || normalized.has_root_name() ||
+        normalized.has_root_directory()) {
+        return std::nullopt;
+    }
+
+    const auto first = normalized.begin();
+    if (first == normalized.end() || *first == "..") return std::nullopt;
+    // A2a-fix5: generic_string() converts through the ANSI codepage on
+    // Windows and THROWS (ERROR_NO_UNICODE_TRANSLATION) on non-ASCII entry
+    // names — that throw killed every Windows package mount (5 reds). Keys
+    // are UTF-8 by contract: return the u8string bytes verbatim.
+    //
+    // KANONIK AYIRICI (Windows sha256 bypass düzeltmesi): u8string() yolu
+    // PLATFORMUN YEREL ayırıcısını kullanır ('\\' MSVC'de, '/' POSIX'te).
+    // Yukarıdaki std::replace'in yaptığı normalizasyonu tam olarak geri
+    // alıyordu: anahtarlar Windows'ta "rowl\\manifest.json" oluyor,
+    // buildManifestDigestIndex ise sabit "rowl/manifest.json" arıyor,
+    // eşleşme olmuyor, buildManifestDigestIndex nullopt dönüyor, hiçbir
+    // compressed_sha256 bağlanmıyor ve sha256 kapısındaki
+    // "!compressedSha256Hex.empty()" kısa devresi doğrulamayı sessizce
+    // atlayıp DEĞİŞTİRİLMİŞ payload'ı sunuyordu.
+    //
+    // Anahtarlar SÖZLEŞME gereği her yerde '/' olmalı: packer
+    // (tools/package_assets.py) '/' üretir, sabitler '/' kullanır, bu
+    // fonksiyon da '/' üretmelidir. u8string()'in yerel ayırıcısını
+    // döndürmesini beklemek platforma göre sessiz bir veri eşleştirme
+    // hatasıdır — Linux'te doğrulanamaz, Windows'ta güvenlik kapısını
+    // düşürür. Bu yüzden dönüşte yeniden kanonikleştiriyoruz.
+    // NOT: u8string() GECICI bir std::u8string dondurur; iki ayri cagrinin
+    // yineleyicilerini ayni range yapicisina gecirmek farkli nesneler
+    // arasinda iterator karsilastirmasi (tanimsiz davranis) olurdu.
+    // Once yerel degiskene aliyoruz.
+    const std::u8string utf8 = normalized.u8string();
+    std::string key(utf8.begin(), utf8.end());
+    std::replace(key.begin(), key.end(), '\\', '/');
+    return key;
+}
+
 std::optional<ManifestDigestIndex> buildManifestDigestIndex(
     const std::string& filepath,
     const std::unordered_map<std::string, PackageEntry>& indexTable) {
@@ -96,8 +141,14 @@ std::optional<ManifestDigestIndex> buildManifestDigestIndex(
                 digestIt == record.end() || !digestIt->is_string()) {
                 continue;
             }
-            index.digestsByPath.emplace(pathIt->get<std::string>(),
-                                        digestIt->get<std::string>());
+            // Anahtarı AYNI kanonikleştirici'den geçir: index tablosunun
+            // anahtarları da buradan üretiliyor, böylece eşleşme yapısal
+            // olarak garanti altında (sözleşmeye/packer ayırıcısına bağlı
+            // değil). Ham manifest `path` string'i Windows'ta ayırıcı
+            // yüzünden tabloyla uyuşmayabilirdi.
+            if (auto canonical = normalizePackagePath(pathIt->get<std::string>())) {
+                index.digestsByPath.emplace(*canonical, digestIt->get<std::string>());
+            }
         }
     } catch (const nlohmann::json::exception&) {
         // A malformed embedded manifest simply carries no verifiable keys —
@@ -304,27 +355,6 @@ private:
     ZstdEntryStreamBuf m_buffer;
 };
 
-std::optional<std::string> normalizePackagePath(std::string path) {
-    if (path.empty() || path.find('\0') != std::string::npos) return std::nullopt;
-
-    std::replace(path.begin(), path.end(), '\\', '/');
-    // A2a: entry names are UTF-8 — same narrow-ctor trap as the mount root.
-    const std::filesystem::path normalized =
-        std::filesystem::path(std::u8string(path.begin(), path.end())).lexically_normal();
-    if (normalized.empty() || normalized.is_absolute() || normalized.has_root_name() ||
-        normalized.has_root_directory()) {
-        return std::nullopt;
-    }
-
-    const auto first = normalized.begin();
-    if (first == normalized.end() || *first == "..") return std::nullopt;
-    // A2a-fix5: generic_string() converts through the ANSI codepage on
-    // Windows and THROWS (ERROR_NO_UNICODE_TRANSLATION) on non-ASCII entry
-    // names — that throw killed every Windows package mount (5 reds). Keys
-    // are UTF-8 by contract: return the u8string bytes verbatim.
-    const auto utf8 = normalized.u8string();
-    return std::string(utf8.begin(), utf8.end());
-}
 
 } // namespace
 
