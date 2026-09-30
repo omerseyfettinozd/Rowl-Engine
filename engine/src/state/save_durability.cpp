@@ -307,7 +307,8 @@ bool copyFileWithTransientRetry(const std::filesystem::path& from,
         // öyle bırakır, aksi halde bu satırın temizlik yolunun kapısı olmaz.
         [&]() {
             std::error_code stageError;
-            std::ofstream partial(to, std::ios::out | std::ios::trunc);
+            // binary: aynı CRLF gerekçesi (bkz. yukarıdaki uzun yorum).
+            std::ofstream partial(to, std::ios::out | std::ios::trunc | std::ios::binary);
             if (partial.is_open()) partial << "partial-copy";
         },
         [&]() {
@@ -728,7 +729,10 @@ bool writeSlotFileAtomically(const std::filesystem::path& finalPath,
     if (const int injectedErrno = effectiveInjectErrno(); injectedErrno != 0) {
         try {
             {
-                std::ofstream partial(temporaryPath, std::ios::out | std::ios::trunc);
+                // binary: yarım tmp de bayt-eşleşme sözleşmesinin parçası
+                // (bkz. üst yorumdaki CRLF gerekçesi).
+                std::ofstream partial(
+                    temporaryPath, std::ios::out | std::ios::trunc | std::ios::binary);
                 if (partial.is_open()) {
                     partial << content.substr(0, content.size() / 2);
                     partial.flush();
@@ -759,7 +763,22 @@ bool writeSlotFileAtomically(const std::filesystem::path& finalPath,
     // sıralama zaten header'da belgelenen "write temp -> stage backup ->
     // rename" protokolüdür.
     {
-        std::ofstream output(temporaryPath, std::ios::out | std::ios::trunc);
+        // BINARY ZORUNLU: MSVC'de std::ofstream varsayılan olarak TEXT
+        // modunda açılır ve CRT her '\n'i '\r\n'e çevirir. Baytların
+        // BİREBİR eşleşmesi gereken bir dosyaya yazıyoruz: üretim payload'ı
+        // GameState::serializeJson -> json.dump(2), yani ÇOK SATIRLı. Text
+        // modda her Windows kaydı CRLF ile, her Linux kaydı LF ile yazılıyor
+        // ve çağırana verilen content'ten FARKLI baytlar diske iniyor.
+        // Kısa vadede JSON ayrıştırmayı bozmuyor (CRLF geçerli JSON boşluğu),
+        // ama (a) platformlar arası bayt farkı, (b) 4 MiB'lik
+        // kMaxSaveFileBytes sınırına yakın bir kayıt Windows'ta sınırı aşıp
+        // kendi kaydı YÜKLEYEMEZ hale gelebilir, (c) içerik bütünlüğü
+        // varsayan her gelecek kullanım yanlış sonuç verir.
+        // Bu satır 2026-09-16'dan (b9e59ef) beri text modundaydı; Windows
+        // test_save_slot_concurrency'yi "concurrent writes must all succeed"
+        // erken çıkışı maskelediği için yıllardır görünmüyordu.
+        std::ofstream output(temporaryPath,
+                             std::ios::out | std::ios::trunc | std::ios::binary);
         if (!output.is_open()) {
             // iostream does not guarantee errno on open failure: a stale 0
             // would render a misleading "[ERRNO0 (0): Success]" tag, so fall
