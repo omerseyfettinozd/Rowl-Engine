@@ -358,6 +358,27 @@ set_tests_properties(d07_condition_vector_probe PROPERTIES
     TIMEOUT 120
 )
 
+# G4 kosul uzerinden _G metatable ile kopru yetki yukseltme kilidi: D07'nin
+# YAZMA tarafi karsiligi (D07 ciplak okumalari ham yola aldi; bindEngineApis'in
+# setglobal/getglobal cagrilari ham degildi). Bagimsiz ikili — red-yesil dongusu
+# tum suiti kosmadan saniyeler icinde kanitlansin.
+add_executable(rowl_g4_bridge_escalation_probe test_g4_bridge_escalation_probe.cpp)
+target_include_directories(rowl_g4_bridge_escalation_probe PRIVATE
+    ${CMAKE_SOURCE_DIR}/engine/include
+)
+target_link_libraries(rowl_g4_bridge_escalation_probe PRIVATE
+    rowl_engine_objects
+    rowl_engine_thirdparty
+)
+target_compile_definitions(rowl_g4_bridge_escalation_probe PRIVATE ROWL_BUILDING_DLL)
+
+add_test(NAME g4_bridge_escalation_probe COMMAND rowl_g4_bridge_escalation_probe)
+set_tests_properties(g4_bridge_escalation_probe PROPERTIES
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    ENVIRONMENT "SDL_AUDIODRIVER=dummy;SDL_VIDEODRIVER=dummy"
+    TIMEOUT 120
+)
+
 # D10 font-fallback mutual-exclusion + all-or-nothing MSDF kilidi: bağımsız
 # ikili (rowl_tests gövdesine gömülmez ki kırmızı-yeşil döngüsü tüm süiti
 # koşmadan saniyeler içinde kanıtlansın). D01/D02'den farklı olarak

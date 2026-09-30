@@ -505,13 +505,24 @@ void LuaSandbox::bindEngineApis() {
     lua_pushcfunction(m_luaState, lua_rowl_var_set);
     lua_setfield(m_luaState, -2, "var_set");
 
-    lua_setglobal(m_luaState, "rowl");
+    // G4: HAM YAYIN. lua_setglobal, _G'de __newindex varsa ve "rowl" anahtarı
+    // yoksa atama yerine __newindex'i ÇALIŞTIRIR — köprü hiç yazılmaz. Bu
+    // fonksiyon koşulun hemen ardından (evaluateCondition başarı VE hata yolu)
+    // çağrıldığı için, `rowl = nil` + `setmetatable(_G, {__newindex=...})`
+    // koşulu yayını sessizce düşürüyordu; ardından gelen lua_getglobal de
+    // __index'i ateşleyip SALDIRGANIN tablosunu getiriyor ve D6 (#158)'in
+    // "doğrulanmış köprü" işaretçisi (_rowl_bridge) ele geçiyordu. D07 çıplak
+    // OKUMALARI ham yola almıştı; burası aynı ailenin YAZMA tarafı.
+    d07_rawSetGlobal(m_luaState, "rowl", -1);
+    lua_pop(m_luaState, 1);
 
     // D6 (#158): publish the verified bridge reference. Module callbacks pin
     // this table into their environment before the pcall (pre-pcall scrub+pin)
     // and the guarded rawset compares impostor candidates against it, so
     // bridge resolution never depends on an env key a script can plant.
-    lua_getglobal(m_luaState, "rowl");
+    // G4: okuma da ham — __index ateşlenmez, dolayısıyla köprü kaynağı
+    // yalnızca yukarıdaki ham yazmanın bıraktığı değerdir.
+    d07_rawGetGlobal(m_luaState, "rowl");
     lua_setfield(m_luaState, LUA_REGISTRYINDEX, "_rowl_bridge");
 }
 
@@ -1101,6 +1112,19 @@ bool LuaSandbox::evaluateCondition(const std::string& conditionExpr) {
     armWallDeadline();
     int callStatus = lua_pcall(m_luaState, 0, 1, 0);
     m_deadlineArmed = false;
+    // G4: koşunun bıraktığı _G metatable'sini pcall'den HEMEN SONRA, host
+    // kodu _G'ye dokunmadan ÖNCE kaldır. Mimari kural zaten "_G asla
+    // metatable taşımamalı" diyordu ama uygulaması guard dtor'undaydı; oysa
+    // arada iki host işlemi koşuyor:
+    //   (a) bindEngineApis — setglobal/getglobal ikisi de metamethod'a duyarlı
+    //       (artık ham, ama düşman kodu bu pencerede hiç ateşlenmiyor);
+    //   (b) D06 süpürmesi — lua_setglobal(name, nil) de __newindex'e gider,
+    //       yani saldırgan hem __newindex takıp hem global ektiyse ekilen
+    //       HAM GLOBAL'LAR SİLİNMEZ. Süpürme ancak metatable kalktıktan
+    //       SONRA işini görebilir.
+    // Zararsız ve idempotent: metatable yoksa tekrarı no-op. dtor'daki temizlik
+    // diğer çıkış yolları (sözdizimi hatası, erken dönüşler) için duruyor.
+    d07_clearGlobalTableMetatable(m_luaState);
     if (callStatus != LUA_OK) {
         std::string err = takeLuaError(m_luaState);
         lua_pop(m_luaState, 1);

@@ -41,4 +41,27 @@ std::size_t d06_sweepConditionGlobals(lua_State* state,
 // Kilit almaz, kota-rezervi almaz (çağıran kilitlidir ve RecoveryScope içindedir).
 int d07_rawGetGlobal(lua_State* state, const char* key);
 
+// G4: koşul-vektörü ham-YAZMA — d07_rawGetGlobal'ın yazma tarafındaki eşi.
+// lua_setglobal = lua_setfield(LUA_GLOBALSINDEX, k) ve metamethod'a duyarlıdır:
+// _G'de __newindex varsa ve anahtar YOKSA atama yerine __newindex ÇALIŞIR, yani
+// köprü hiç yazılmaz. bindEngineApis bunu koşulun hemen ardından çağırdığı için
+// (evaluateCondition başarı ve hata yolları) bir koşul `rowl = nil` +
+// `setmetatable(_G, {__newindex=...})` ile köprüyü YAYINLATAMAZ hale geliyordu;
+// ardından gelen lua_getglobal da __index'i ateşleyip saldırganın tablosunu
+// registry'ye "_rowl_bridge" olarak yazıyordu (D6 #158'in "doğrulanmış köprü"
+// işaretçisi ele geçiyordu). Bu yardımcı _G[key] = value atamasını rawset ile
+// yapar: __newindex ASLA ateşlenmez, yığın dengesi çağrı başına sabittir
+// (net 0). valueIndex, push'tan ÖNCE mutlak dizine çevrilir; çağıran
+// RecoveryScope içindedir ve kilidi zaten tutar.
+void d07_rawSetGlobal(lua_State* state, const char* key, int valueIndex);
+
+// G4: _G metatable'ini kaldır. Mimari kural: "_G asla metatable taşımamalı"
+// (lua_sandbox.cpp bindEngineApis çağrısının yanındaki not). İki yerde
+// çağrılır: (1) evaluateCondition'da pcall'den HEMEN SONRA — koşulun
+// bıraktığı düşman metatable'i host kodu _G'ye dokunmadan önce düşsün, D06
+// süpürmesi de ancak o zaman işini görebilsin; (2) D06ConditionGlobalGuard
+// dtor'unda — diğer çıkış yolları. Metatable yoksa no-op (idempotent), yığın
+// dengesi net 0. Çağıran RecoveryScope içinde ve kilitlidir.
+void d07_clearGlobalTableMetatable(lua_State* state);
+
 } // namespace Rowl::Scripting

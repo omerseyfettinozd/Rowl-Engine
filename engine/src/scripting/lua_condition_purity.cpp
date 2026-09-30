@@ -89,11 +89,11 @@ LuaSandbox::D06ConditionGlobalGuard::~D06ConditionGlobalGuard() {
     }
     // Mimari kural (lua_sandbox.cpp:774): _G asla metatable taşımamalı —
     // koşul ifadesi setmetatable(_G, ...) bırakmış olabilir; guard çıkışında
-    // sıfırlanır (pcall-sonrası bindEngineApis emsali).
-    lua_pushglobaltable(m_owner->m_luaState);
-    lua_pushnil(m_owner->m_luaState);
-    lua_setmetatable(m_owner->m_luaState, -2);
-    lua_pop(m_owner->m_luaState, 1);
+    // sıfırlanır. G4: aynı temizlik evaluateCondition'da pcall'den hemen
+    // SONRA da yapılır (orada süpürmeden ÖNCE gelmesi gerekir, çünkü
+    // süpürmenin setglobal(name,nil) çağrıları da __newindex'e gider);
+    // buradaki çağrı diğer çıkış yollarını kapsar ve idempotent'tir.
+    d07_clearGlobalTableMetatable(m_owner->m_luaState);
 }
 
 // D07: koşul-vektörü ham-okuma. lua_getglobal kayıp anahtarda _G metatable
@@ -107,6 +107,24 @@ int d07_rawGetGlobal(lua_State* state, const char* key) {
     lua_rawget(state, -2);
     lua_remove(state, -2);
     return lua_type(state, -1);
+}
+
+void d07_rawSetGlobal(lua_State* state, const char* key, int valueIndex) {
+    // Mutlak dizine ÖNCE çevir: aşağıdaki push'lar -1'i kaydırır, göreli
+    // dizin geçersiz bir elemanı gösterirdi.
+    const int value = lua_absindex(state, valueIndex);
+    lua_pushglobaltable(state);
+    lua_pushstring(state, key != nullptr ? key : "");
+    lua_pushvalue(state, value);
+    lua_rawset(state, -3);
+    lua_pop(state, 1);
+}
+
+void d07_clearGlobalTableMetatable(lua_State* state) {
+    lua_pushglobaltable(state);
+    lua_pushnil(state);
+    lua_setmetatable(state, -2);
+    lua_pop(state, 1);
 }
 
 } // namespace Rowl::Scripting
