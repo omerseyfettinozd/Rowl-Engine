@@ -7,10 +7,13 @@ The Windows packaging step cannot be executed from a Linux runner, so
 a CI log. This gate makes the contract statically checkable on any
 machine. It does four things:
 
-1. Workflow coverage -- parses .github/workflows/ci.yml and asserts that
+1. Workflow coverage -- reads .github/workflows/ci.yml and asserts that
    every step which runs tools/verify_release_package.py also runs
    tools/make_release_launchers.py, with a platform that matches the job's
-   runner.
+   runner. The workflow is read by the small strict reader below, not by
+   PyYAML: this gate also runs inside the Windows release test job, whose
+   interpreter has no third-party packages, and `import yaml` there killed
+   the whole job before it could check anything.
 2. Name parity -- the launcher names the helper emits must be exactly the
    names the verifier accepts, so a rename on either side fails here instead
    of silently turning the release gate red on one platform only.
@@ -45,8 +48,6 @@ import re
 import sys
 import tempfile
 
-import yaml
-
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "tools"))
@@ -77,13 +78,268 @@ def fail(message):
     print("[LauncherParity] ERROR: " + message, file=sys.stderr)
 
 
+class WorkflowFormatError(ValueError):
+    """The workflow uses YAML this reader does not implement.
+
+    Raised, never swallowed. A reader that skipped what it did not
+    understand would return FEWER packaging steps than the file really
+    has, and the missing ones would silently stop being checked -- a
+    gate that quietly stops looking is worse than one that fails, because
+    it reports green while covering nothing.
+    """
+
+
+# Every YAML token this reader accepts. Anything outside it is an error
+# above, not a shrug.
+_KEY = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.-]*")
+_BLOCK_SCALAR = re.compile(r"\|([+-]?)")
+_PLAIN_FORBIDDEN = "[]{}&*!|>%@`"
+
+
+def _indent_of(line):
+    return len(line) - len(line.lstrip(" "))
+
+
+def _is_ignorable(line):
+    """Blank lines and whole-line comments carry no structure."""
+    stripped = line.strip()
+    return not stripped or stripped.startswith("#")
+
+
+def _parse_scalar(text, line_number):
+    """A single-line scalar value: plain, 'single' or "double" quoted."""
+    value = text.strip()
+    if not value:
+        return None
+    if value[0] in "'\"":
+        quote = value[0]
+        if len(value) < 2 or value[-1] != quote:
+            raise WorkflowFormatError(
+                f"line {line_number}: unterminated quoted scalar {text!r}")
+        return value[1:-1]
+    if value[0] in _PLAIN_FORBIDDEN:
+        raise WorkflowFormatError(
+            f"line {line_number}: unsupported YAML construct starting with "
+            f"{value[0]!r} in {text!r}")
+    # A '#' only opens a comment when it starts the line or follows a
+    # space; 'a#b' is a plain scalar, '#tag' and 'x #y' are not.
+    comment = re.search(r"(?:^|\s)#", value)
+    if comment:
+        value = value[:comment.start()].strip()
+    return value or None
+
+
+def _read_block_scalar(reader, index, parent_indent, line_number):
+    """Consume a `|` literal block scalar body and return its text.
+
+    Only literal (`|`) is supported. Folded (`>`) changes line breaks and
+    would silently alter the `run:` text this gate substring-matches, so
+    it is rejected rather than approximated.
+    """
+    body = []
+    while index < len(reader):
+        line = reader[index]
+        if not line.strip():
+            body.append("")
+            index += 1
+            continue
+        if _indent_of(line) <= parent_indent:
+            break
+        body.append(line)
+        index += 1
+    # Trailing blank lines belong to the surrounding document, not the
+    # block; YAML's own clip/strip rules make them insignificant anyway.
+    while body and not body[-1].strip():
+        body.pop()
+    if not body:
+        raise WorkflowFormatError(
+            f"line {line_number}: block scalar has no body")
+    block_indent = min(_indent_of(line) for line in body if line.strip())
+    return "\n".join(line[block_indent:] for line in body), index
+
+
+class _Reader:
+    """The workflow lines plus the few that were rewritten for parsing.
+
+    A sequence item written as `- key: value` carries its first key on the
+    dash line, so reading it as a mapping means treating the dash as two
+    spaces. That rewrite lives in `overlay` instead of being applied to
+    `lines`: the caller's list is never modified, which keeps the `- `
+    count in the anti-vacuity check honest no matter the order the two
+    run in.
+    """
+
+    def __init__(self, lines):
+        self.lines = lines
+        self.overlay = {}
+
+    def __len__(self):
+        return len(self.lines)
+
+    def __getitem__(self, index):
+        return self.overlay.get(index, self.lines[index])
+
+
+def _parse_block(reader, index, indent):
+    """Parse one mapping or sequence at the given indent.
+
+    Returns (value, next_index). Raises WorkflowFormatError on anything
+    it does not fully understand, so an unsupported construct surfaces as
+    a red gate instead of a smaller list of steps.
+    """
+    # Skip blanks/comments to find the first real line of this block.
+    while index < len(reader) and _is_ignorable(reader[index]):
+        index += 1
+    if index >= len(reader) or _indent_of(reader[index]) < indent:
+        return None, index
+
+    if reader[index].lstrip(" ").startswith("- "):
+        return _parse_sequence(reader, index, indent)
+    return _parse_mapping(reader, index, indent)
+
+
+def _parse_sequence(reader, index, indent):
+    items = []
+    while index < len(reader):
+        if _is_ignorable(reader[index]):
+            index += 1
+            continue
+        current = _indent_of(reader[index])
+        if current < indent:
+            break
+        if current > indent:
+            raise WorkflowFormatError(
+                f"line {index + 1}: unexpected indentation inside a sequence")
+        body = reader[index].lstrip(" ")
+        if not body.startswith("- "):
+            break
+        content = body[2:]
+        if re.match(r"([^:\s][^:]*?):(?:\s|$)", content):
+            # `- key: value` opens a mapping whose remaining keys sit two
+            # columns in, exactly where blanking the dash puts this one.
+            # `steps:` is a list of these, and each step's `run:` follows.
+            item_indent = current + 2
+            reader.overlay[index] = " " * item_indent + content
+            item, index = _parse_mapping(reader, index, item_indent)
+        else:
+            item = _parse_scalar(content, index + 1)
+            index += 1
+        items.append(item)
+    return items, index
+
+
+def _parse_mapping(reader, index, indent):
+    mapping = {}
+    while index < len(reader):
+        if _is_ignorable(reader[index]):
+            index += 1
+            continue
+        current = _indent_of(reader[index])
+        if current < indent:
+            break
+        if current > indent:
+            raise WorkflowFormatError(
+                f"line {index + 1}: unexpected indentation inside a mapping")
+        stripped = reader[index].lstrip(" ")
+        if stripped.startswith("- "):
+            break
+        match = re.match(r"([^:\s][^:]*?):(?:\s+(.*))?$", stripped)
+        if not match:
+            raise WorkflowFormatError(
+                f"line {index + 1}: {stripped!r} is not a `key: value` entry")
+        key = match.group(1).strip()
+        if not _KEY.fullmatch(key):
+            raise WorkflowFormatError(
+                f"line {index + 1}: unsupported key {key!r}")
+        rest = (match.group(2) or "").strip()
+        line_number = index + 1
+        index += 1
+
+        if _BLOCK_SCALAR.fullmatch(rest):
+            text, index = _read_block_scalar(reader, index, current, line_number)
+            mapping[key] = text
+            continue
+
+        if rest.startswith(">"):
+            raise WorkflowFormatError(
+                f"line {line_number}: folded (`>`) block scalars are not "
+                f"supported; this gate matches `run:` text verbatim")
+        if rest and rest[0] in "[{":
+            raise WorkflowFormatError(
+                f"line {line_number}: flow collections are not supported")
+
+        # A key with nothing after the colon owns the block nested below
+        # it. That block's indent is whatever the next real line uses,
+        # which need not be exactly one column deeper.
+        nested = index
+        while nested < len(reader) and _is_ignorable(reader[nested]):
+            nested += 1
+        if rest == "" and nested < len(reader) and _indent_of(reader[nested]) > current:
+            value, index = _parse_block(reader, nested, _indent_of(reader[nested]))
+        else:
+            value = _parse_scalar(rest, line_number)
+        if key in mapping:
+            raise WorkflowFormatError(
+                f"line {line_number}: duplicate key {key!r}")
+        mapping[key] = value
+    return mapping, index
+
+
 def load_workflow():
+    """Parse the workflow into {job_name: {...}}.
+
+    Deliberately hand-rolled. This gate runs inside the Windows release
+    test job, whose interpreter has no PyYAML, and a missing third-party
+    module there killed the whole job with a ModuleNotFoundError -- the
+    exact failure this function exists to prevent. The workflow only uses
+    mappings, `- ` sequences, plain/quoted scalars and `|` blocks; every
+    one of those is parsed here, and anything else raises rather than
+    being skipped.
+    """
     with open(WORKFLOW, "r", encoding="utf-8") as handle:
-        data = yaml.safe_load(handle)
-    jobs = data.get("jobs") or {}
+        text = handle.read()
+    lines = text.splitlines()
+    document, consumed = _parse_block(_Reader(lines), 0, 0)
+    while consumed < len(lines) and _is_ignorable(lines[consumed]):
+        consumed += 1
+    if consumed < len(lines):
+        raise WorkflowFormatError(
+            f"line {consumed + 1}: trailing content "
+            f"{lines[consumed].strip()!r} was not parsed")
+
+    jobs = (document or {}).get("jobs")
     if not jobs:
         raise ValueError("workflow defines no jobs")
+
+    # Anti-vacuity: the number of sequence items the reader produced must
+    # equal the number of `- ` lines in the file. `steps:` is the only
+    # thing this gate reads out of the workflow, so a reader that quietly
+    # dropped a step would narrow the gate while still reporting green.
+    # Counting is order-independent now that parsing never rewrites the
+    # caller's lines.
+    expected_items = sum(
+        1 for line in lines if line.lstrip(" ").startswith("- "))
+    actual_items = _count_sequences(document)
+    if actual_items != expected_items:
+        raise WorkflowFormatError(
+            f"the workflow reader parsed {actual_items} sequence item(s) but "
+            f"the file contains {expected_items} `- ` line(s); the gate would "
+            f"be checking fewer steps than the workflow declares")
+
+    for name, job in jobs.items():
+        if not isinstance(job, dict):
+            raise WorkflowFormatError(
+                f"job {name!r} is not a mapping but {type(job).__name__}")
     return jobs
+
+
+def _count_sequences(node):
+    """Total sequence items anywhere in the parsed document."""
+    if isinstance(node, list):
+        return len(node) + sum(_count_sequences(item) for item in node)
+    if isinstance(node, dict):
+        return sum(_count_sequences(value) for value in node.values())
+    return 0
 
 
 def load_launcher_module():
@@ -523,7 +779,7 @@ def main():
         problems.extend(check_emitted_bytes())
         problems.extend(check_line_endings_are_host_independent())
         problems.extend(check_editor_launcher_parity())
-    except (OSError, ValueError, yaml.YAMLError, ImportError) as error:
+    except (OSError, ValueError, ImportError) as error:
         print("[LauncherParity] ERROR: " + str(error), file=sys.stderr)
         return 1
 
