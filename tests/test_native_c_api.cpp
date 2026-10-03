@@ -505,6 +505,18 @@ void test_native_c_api() {
     // earlier blocks set BGM to 0.8 on this handle).
     {
         const auto typeGraphPath = std::filesystem::temp_directory_path() / "rowl_ms6_typewriter_graph.json";
+        // Izolasyon savunmasi: bu blok slot 1'i menu uzerinden doldurup slot 2'nin
+        // "bos" kaldigini dogrular (asagida). Kayitlar kalici kullanici veri
+        // dizininde yasar, bu yuzden onceki bir kosudan (ornegin
+        // test_p1_7_resize_save) artik kalmis slot 2 bu varsayimi kirar.
+        // Kirli durumu gizlemek yerine testin kendi temiz baslangic sartini
+        // burada garanti ediyoruz: test sirasi degisse bile MS-6 yesil kalir.
+        RowlEngine_DeleteSaveSlot(handle, 1);
+        RowlEngine_DeleteSaveSlot(handle, 2);
+        if (RowlEngine_HasSaveSlot(handle, 1) != 0 || RowlEngine_HasSaveSlot(handle, 2) != 0) {
+            std::cerr << "MS-6: slot precondition cleanup failed (slots 1 and 2 must start empty)" << std::endl;
+            exit(1);
+        }
         if (RowlEngine_IsPaused(handle) != 0) {
             std::cerr << "MS-6: menu must start closed" << std::endl;
             exit(1);
