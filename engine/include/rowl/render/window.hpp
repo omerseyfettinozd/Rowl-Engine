@@ -188,6 +188,7 @@ public:
      * Provides direct access to the RGBA32 pixel memory pointer for zero-copy/fast host sharing.
      */
     const uint8_t* getPixelBuffer() const;
+    size_t getPixelBufferLength() const;
 
     /**
      * Returns the offscreen surface row pitch in bytes (bytes per scanline).

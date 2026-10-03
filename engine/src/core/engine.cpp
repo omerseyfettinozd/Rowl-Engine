@@ -2771,8 +2771,9 @@ Rowl::State::SaveMetadata Engine::buildSaveMetadata() const {
     uint32_t width = 0, height = 0, pitch = 0;
     const uint8_t* pixels = getPixelBuffer(&width, &height, &pitch);
     if (pixels && width > 0 && height > 0) {
+        size_t bufferLength = m_window ? m_window->getPixelBufferLength() : 0;
         const auto thumbnail =
-            Rowl::State::encodeThumbnailPng(pixels, width, height, pitch);
+            Rowl::State::encodeThumbnailPng(pixels, bufferLength, width, height, pitch);
         metadata.thumbnailPng = std::move(thumbnail.png);
         metadata.thumbnailWidth = thumbnail.width;
         metadata.thumbnailHeight = thumbnail.height;

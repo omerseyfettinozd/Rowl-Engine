@@ -192,7 +192,7 @@ void test_game_state() {
     {
         std::vector<uint8_t> rgba(640 * 480 * 4, 128);
         const auto thumb = Rowl::State::encodeThumbnailPng(
-            rgba.data(), 640, 480, 640 * 4);
+            rgba.data(), rgba.size(), 640, 480, 640 * 4);
         if (thumb.png.size() < 8 ||
             thumb.png.compare(0, 8, std::string("\x89PNG\r\n\x1a\n", 8)) != 0 ||
             thumb.width != 320 || thumb.height != 240) {
@@ -213,7 +213,7 @@ void test_game_state() {
             std::cerr << "Malformed base64 must be rejected" << std::endl;
             exit(1);
         }
-        const auto empty = Rowl::State::encodeThumbnailPng(nullptr, 0, 0, 0);
+        const auto empty = Rowl::State::encodeThumbnailPng(nullptr, 0, 0, 0, 0);
         if (!empty.png.empty() || empty.width != 0) {
             std::cerr << "Degenerate pixels must yield an empty thumbnail" << std::endl;
             exit(1);

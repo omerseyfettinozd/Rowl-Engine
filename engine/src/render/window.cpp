@@ -228,6 +228,11 @@ const uint8_t* Window::getPixelBuffer() const {
     return static_cast<const uint8_t*>(m_offscreenSurface->pixels);
 }
 
+size_t Window::getPixelBufferLength() const {
+    if (!m_offscreenSurface) return 0;
+    return static_cast<size_t>(m_offscreenSurface->h) * static_cast<size_t>(m_offscreenSurface->pitch);
+}
+
 uint32_t Window::getPixelPitch() const {
     if (!m_offscreenSurface) return 0;
     return static_cast<uint32_t>(m_offscreenSurface->pitch);
@@ -520,6 +525,19 @@ void Window::resizeViewport(uint32_t newWidth, uint32_t newHeight) {
     m_height = newHeight;
     if (m_sdlWindow) {
         SDL_SetWindowSize(m_sdlWindow, static_cast<int>(newWidth), static_cast<int>(newHeight));
+    } else if (m_isOffscreen) {
+        if (m_offscreenSurface && (m_offscreenSurface->w != static_cast<int>(newWidth) || m_offscreenSurface->h != static_cast<int>(newHeight))) {
+            clearTextureCache();
+            if (m_sdlRenderer) {
+                SDL_DestroyRenderer(m_sdlRenderer);
+                m_sdlRenderer = nullptr;
+            }
+            SDL_DestroySurface(m_offscreenSurface);
+            m_offscreenSurface = SDL_CreateSurface(static_cast<int>(newWidth), static_cast<int>(newHeight), SDL_PIXELFORMAT_RGBA32);
+            if (m_offscreenSurface) {
+                m_sdlRenderer = SDL_CreateSoftwareRenderer(m_offscreenSurface);
+            }
+        }
     }
     ROWL_LOG_INFO("Viewport resized to " + std::to_string(newWidth) + "x" + std::to_string(newHeight));
 }

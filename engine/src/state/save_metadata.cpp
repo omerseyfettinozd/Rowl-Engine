@@ -195,8 +195,11 @@ std::string truncateSummary(const std::string& text, uint32_t maxBytes) {
 }
 
 ThumbnailResult encodeThumbnailPng(
-    const uint8_t* rgba, uint32_t width, uint32_t height, uint32_t pitchBytes) {
+    const uint8_t* rgba, size_t bufferLength, uint32_t width, uint32_t height, uint32_t pitchBytes) {
     if (!rgba || width == 0 || height == 0 || pitchBytes < width * 4) {
+        return {};
+    }
+    if (bufferLength < static_cast<size_t>(height) * pitchBytes) {
         return {};
     }
     const uint32_t outWidth = std::min(width, kThumbnailMaxWidth);

@@ -20,7 +20,7 @@ inline constexpr uint32_t kThumbnailMaxWidth = 320;
 /// (8-bit RGBA, stored deflate blocks — dependency-free and deterministic).
 /// Returns empty bytes for null/degenerate input instead of failing.
 ThumbnailResult encodeThumbnailPng(
-    const uint8_t* rgba, uint32_t width, uint32_t height, uint32_t pitchBytes);
+    const uint8_t* rgba, size_t bufferLength, uint32_t width, uint32_t height, uint32_t pitchBytes);
 
 /// Standard base64 (padded) encoding for embedding PNG bytes in slot JSON.
 std::string base64Encode(const uint8_t* data, uint32_t size);

@@ -663,3 +663,8 @@ if(WIN32)
     # Other hosts keep the CLI default: do not touch, they are green.
     set_tests_properties(rowl_native_tests PROPERTIES TIMEOUT 1500)
 endif()
+
+add_executable(test_p1_7_resize_save test_p1_7_resize_save.cpp)
+target_include_directories(test_p1_7_resize_save PRIVATE ${CMAKE_SOURCE_DIR}/engine/include)
+target_link_libraries(test_p1_7_resize_save PRIVATE RowlEngineCore)
+add_test(NAME test_p1_7_resize_save COMMAND test_p1_7_resize_save)
