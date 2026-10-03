@@ -5,6 +5,7 @@
 #include <fstream>
 #include <filesystem>
 #include <algorithm>
+#include <cctype>
 #include <exception>
 #include <optional>
 #include <system_error>
@@ -142,6 +143,7 @@ void VFSManager::initialize() {
 void VFSManager::clearMountPoints() {
     std::lock_guard<std::recursive_mutex> lock(m_mutex);
     m_mountPoints.clear();
+    invalidateShadowDiagnosesLocked();
     ROWL_LOG_INFO("VFS Mount Points Cleared.");
 }
 
@@ -326,6 +328,8 @@ void VFSManager::mountDirectory(const std::string& virtualPrefix, const std::str
         return;
     }
     m_mountPoints.emplace_back(virtualPrefix, source);
+    // P2-6: topoloji değişti -> üretilmiş gölgeleme teşhisleri geçersiz.
+    invalidateShadowDiagnosesLocked();
     ROWL_LOG_INFO("VFS Mounted directory: '" + physicalPath + "' under virtual prefix '" + virtualPrefix + "'");
 }
 
@@ -334,6 +338,8 @@ void VFSManager::mountPackage(const std::string& virtualPrefix, const std::strin
     auto source = std::make_shared<RowlPkgDataSource>(pkgPath);
     if (source->isValid()) {
         m_mountPoints.emplace_back(virtualPrefix, source);
+        // P2-6: topoloji değişti -> üretilmiş gölgeleme teşhisleri geçersiz.
+        invalidateShadowDiagnosesLocked();
         ROWL_LOG_INFO("VFS Mounted package: '" + pkgPath + "' under virtual prefix '" + virtualPrefix + "'");
     } else {
         // #142: WARN-only used to be the whole story — a corrupt package left
@@ -346,77 +352,413 @@ void VFSManager::mountPackage(const std::string& virtualPrefix, const std::strin
     }
 }
 
+// ============================================================================
+// P2-6 — MOUNT ÖNCELİK KURALI (TEK KAYNAK)
+// ============================================================================
+// ESKİ DAVRANIŞ: iki GEÇİŞ. GEÇİŞ 1 tüm mount'larda prefix-strip dener ve
+// ilen bulduğu anda DÖNER; GEÇİŞ 2 ancak GEÇİŞ 1 herkesi kaçırdıysa çalışır.
+// Bunun sonucu: mount LİSTESİ DEĞİL, prefix ÖZGÜLLÜĞÜ öncelik belirler.
+// Yani 6. sıradaki 'images' alias'ı, 0. sıradaki mods mount'unu GÖLGELER.
+// mount'un üstündeki "correct priority: mods > data > packages" yorumu bu
+// kodun yaptığının TAM TERSİYDİ (ayrıca "data" prefix'i hiç üretilmiyor).
+//
+// KURAL (artık tek yerde, üç çağrı yerinde de aynı):
+//   1) Mount LİSTESİ öncelik sırasıdır. remountProject() (vfs.cpp:184-217)
+//      mods'u, sonra Assets'i, en son paketleri mount EDER ve yorumu bunu
+//      açıkça söyler: "Mount mods first so a release can override package
+//      content". Sıra, override mekanizmasının kendisidir.
+//   2) Varlık yolu, liste BAŞINDAN SONA taranır. Her mount için önce
+//      prefix-strip'li biçim, sonra doğrudan biçim denenir.
+//   3) İLK bulan mount kazanır.
+//   4) Prefix bir ÖNCELİK iddiası DEĞİLDİR — sadece bir ALIAS'tır.
+//      'images' -> Assets/images, 'mods' -> mods, 'Assets' -> Assets yazan
+//      alias'lar aynı fiziksel kökü gösterir; "en uzun prefix kazanır" kuralı
+//      burada ANLAMSIZDIR (uzun bir alias daha yüksek bir katman değildir).
+//      Bu yüzden kural 1 her zaman prefix özgüllüğünü yener.
+//
+// FAIL-OPEN / FAIL-CLOSED:
+//   Mount katmanı FAIL-OPEN'dır (ilk bulan kazanır, çakışma reddedilmez).
+//   Gerekçe: burada sorulan soru "bu baytlar güvenilir mi?" değil, "hangi
+//   içeriği gösterelim?" — bir içerik SEÇİMİ kararıdır. Fail-closed olsaydı
+//   mod + base çakışan her varlık okunamaz olurdu, yani modlama sistemi
+//   tamamen çalışmazdı. Paket/manifest katmanı fail-closed KALIR (bayt
+//   bütünlüğü = yetki kararı); o katman bu dosyanın kapsamı dışındadır.
+//   AMA fail-open sessiz olmak zorunda değildir: aşağıda her gölgeleme WARN
+//   üretir. Sessiz fallback, sessiz hatadan kötüdür.
+//
+// MALİYET AYRIMI — öncelik DÜZELTMESİ ile teşhîs FARKLI işler:
+//   resolveInMountOrder() (çözümleme) UYGUNLAMA düzeltmesidir: ucuz ve doğru,
+//   ek yükü yoktur. Eğer eski iki geçişli kodu bir kez daha okursan aynı işi
+//   yapar — sadece kararı yanlış verir. KORUNUR.
+//   reportShadowing() ise bir TEŞHİS üretir ve çözümlemeden SONRA, her
+//   başarılı okumada kalan mount'ları tarar. 510f8c7'de bu tarama HER okumada
+//   koşuyordu; vfs_io benchmark'ı tek bir yolu 5000 kez okuduğu için ölçüm
+//   26.7us -> 128.3us (+%381) ile kırıldı (CI: %35 eşiği, %282 ölçüm).
+//   Bu bir DOĞRULUK maliyeti değil, tekrarlanan bir TANİ maliyetidir: aynı
+//   soruya verilen aynı cevap. Bu yüzden maliyet teşhisin ÜZERİNE
+//   yönlendirilir (claimShadowDiagnosis) ve çözümlemeye dokunulmaz.
+//
+//   Varsayılan-KAPALI (opt-in) bir ortam değişkeni KULLANILMADI. Gerekçe:
+//   bu projede bugün 4 "sessizce yeşil veren ölü kapı" bulundu ve bu
+//   proje tam da sessiz düşmeyi kapatmak için yazıldı — gölgeleme teşhisini
+//   varsayılan olarak susturmak, düzeltilen hatanın kendisini geri getirir.
+//   Teşhis zaten bir KAPI değil, bir TANI: doğru/yanlış ölçmez, yalnızca
+//   bilgi verir. Varsayılanı açık tutmak bedava olduğu için (aşağıda) ve
+//   susturmanın bir şey kazandırmadığı için opt-in savunulabilir bulunmadı.
+//   Teşhisin maliyeti indirgendiği için kapatma düğmesine de gerek kalmadı.
+namespace {
+
+using MountList = std::vector<std::pair<std::string, std::shared_ptr<IDataSource>>>;
+
+/// Kazanan mount'un hangi biçimle eşleştiği (yalnız teşhis/log için).
+struct MountHit {
+    size_t index = 0;
+    bool prefixStripped = false;
+};
+
+/// 'path', mount'un 'prefix' ALIAS'ının altında mı? Kural 4: bu yalnızca
+/// "hangi biçimi deneyeceğiz" sorusunu yanıtlar, öncelik kararı değildir.
+bool pathUnderPrefix(const std::string& path, const std::string& prefix) {
+    return !prefix.empty() && path.size() > prefix.size() &&
+           path.compare(0, prefix.size(), prefix) == 0 && path[prefix.size()] == '/';
+}
+
+/// P2-6: ÖNCELİK KURALININ TEK UYGULAMASI. exists()/readBytes/openStream
+/// üçü de BURAYI çağırır — eskiden aynı karar kopyala-yapıştırla üç yere
+/// yayılmış ve üçü de birlikte tersinmişti; tek noktaya toplamak aynı
+/// kararın yeniden ayrışmasını yapısal olarak imkânsız kılar.
+///
+/// `probe(source, path)` true dönerse o mount'ta varlık bulundu demektir.
+/// Kural 2/3: liste sırası korunur, ilk bulan kazanır.
+template <typename ProbeFn>
+std::optional<MountHit> resolveInMountOrder(const MountList& mounts,
+                                            const std::string& cleanPath,
+                                            ProbeFn&& probe) {
+    for (size_t i = 0; i < mounts.size(); ++i) {
+        const auto& [prefix, source] = mounts[i];
+        // Bu mount'un alias'ı yolu kapsıyorsa önce soyulmuş biçim denenir:
+        // prefix eşleştiği için bu mount'un bu varlığı taşıma niyeti nettir.
+        if (pathUnderPrefix(cleanPath, prefix)) {
+            if (probe(source, cleanPath.substr(prefix.size() + 1))) {
+                return MountHit{i, /*prefixStripped=*/true};
+            }
+        }
+        if (probe(source, cleanPath)) {
+            return MountHit{i, /*prefixStripped=*/false};
+        }
+    }
+    return std::nullopt;
+}
+
+// ---------------------------------------------------------------------------
+// KİMLİK ANAHTARI — "aynı dosya" sorusunun tek doğru cevabı
+// ---------------------------------------------------------------------------
+// resolvedIdentity() karşılaştırması YAZI karşılaştırması değil, FİZİKSEL
+// kimlik karşılaştırması olmak zorunda. lexically_normal() yalnızca sözdizimi
+// normalleştirir (".", "..", fazla ayırıcı) ve şu üç ayrımı YAPAMAZ:
+//
+//   1) Windows 8.3 KISA ADI. "C:\Users\RUNNER~1\AppData\Local\Temp\x" ile
+//      "C:\Users\runneradmin\AppData\Local\Temp\x" AYNI dizindir, ama iki
+//      farklı metindir. Windows CI'da mount yolu kısa adla, gölgeleme raporu
+//      uzun adla kurulduğu için resolvedIdentity() aynı dosyayı "farklı fiziksel
+//      kopya" sanıyor ve SAHTE gölgeleme basıyordu.
+//   2) AYIRICI. mount yolu native ("\"), log satırı generic ("/"). Aynı yol,
+//      iki metin. Windows'ta bu tek başına yeterli bir sahte uyarı sebebi.
+//   3) SYMLINK. Linux'ta iki farklı yol aynı dosyaya gösterebilir.
+//
+// Çözüm: canonical() — dosya MEVCUTSA nihai dosya tanıtıcısından (POSIX:
+// readlink zinciri; Windows: GetFinalPathNameByHandle) çözümlendiği için 8.3
+// kısa adı da uzun adı da, sembolik bağı da tek metne indirger. Dosya yoksa
+// (taramada "burada yok" yanıtı veren mount'lar için) weakly_canonical'a
+// düşülür; o da en azından göreli bileşenleri ve ayırıcıları normalleştirir.
+//
+// generic_string() ayırıcıyı her platformda '/' yapar. Windows'ta NTFS
+// aramaları büyük/küçük harfe DUYARSIZ olduğu için anahtar ASCII harf
+// katlanır; aksi halde "Assets" ile "assets" iki dizin sanılırdı.
+// (Kalan sınır: ASCII dışı harf katlama. Türkçe I veya Alman ss gibi
+// kenar durumlar tam katlanmaz — NTFS'in kendi karşılaştırmasıyla uyuşan
+// bir katlama std::filesystem'te yoktur.)
+std::string physicalPathKey(const fs::path& path) {
+    if (path.empty()) return {};
+    std::error_code error;
+    // Sıralama: canonical (nihai kimlik) -> weakly_canonical (yoksa bile
+    // sözdizimsel) -> lexically_normal (son çare, hata durumunda).
+    fs::path resolved = fs::canonical(path, error);
+    if (error || resolved.empty()) {
+        error.clear();
+        resolved = fs::weakly_canonical(path, error);
+        if (error || resolved.empty()) resolved = path.lexically_normal();
+    }
+    std::string key = resolved.generic_string();
+#ifdef _WIN32
+    // canonical() bazı durumlarda Win32 uzantı ön ekiyle döner
+    // (\\?\C:\... veya \\?\UNC\server\share\...). Karşılaştırma için şeritle;
+    // iki taraf da aynı fonksiyondan geçse de log okunur kalsın.
+    if (key.rfind("\\\\?\\UNC\\", 0) == 0) {
+        key = "\\\\" + key.substr(8);
+    } else if (key.rfind("\\\\?\\", 0) == 0) {
+        key = key.substr(4);
+    }
+    std::transform(key.begin(), key.end(), key.begin(), [](unsigned char c) {
+        return static_cast<char>(std::tolower(c));
+    });
+#endif
+    return key;
+}
+
+/// RowlPkgDataSource fiziksel paket yolunu YALNIZCA getSourceName() içinde
+/// yayınlar (rowlpkg_reader.hpp:55: "RowlPkgDataSource [<path>]"); bir
+/// getPhysicalPath() erişimcisi yoktur. Kimlik üretmek için parçalanır ve
+/// güvenlik için GERİ SARILIR: iç parça '[' veya ']' içeriyorsa ya da geri
+/// sarma metni birebir getSourceName() vermiyorsa parse BAŞARISIZ sayılır ve
+/// ham ada düşülür. Böylece köşeli parantez içeren bir yol (NTFS'de yasak
+/// değil) kimliği bozamaz, yalnızca kanonikleştirmeden düşer.
+std::optional<std::string> physicalPathInSourceName(const std::string& sourceName) {
+    const auto open = sourceName.find('[');
+    const auto close = sourceName.rfind(']');
+    if (open == std::string::npos || close == std::string::npos || close <= open + 1) {
+        return std::nullopt;
+    }
+    const std::string inner = sourceName.substr(open + 1, close - open - 1);
+    if (inner.find('[') != std::string::npos || inner.find(']') != std::string::npos) {
+        return std::nullopt;
+    }
+    if (sourceName.substr(0, open + 1) + inner + sourceName.substr(close) != sourceName) {
+        return std::nullopt;
+    }
+    return inner;
+}
+
+/// Bir mount'un FİZİKSEL kökü. remountProject aynı kökü bilerek birden çok
+/// ALIAS altında mount eder ('', 'mods', 'Assets', 'images'), yani mount listesi
+/// kök başına TEKRARLAR. Aynı kökten iki mount aynı varlık için aynı yanıtı
+/// verir — bu yüzden gölgeleme taraması kök başına TEKİL tutulur (aşağıda).
+/// Hem doğru hem de yarı maliyetli.
+std::string rootIdentity(const std::shared_ptr<IDataSource>& source) {
+    if (const auto* loose = dynamic_cast<const LooseDirectorySource*>(source.get())) {
+        return physicalPathKey(pathFromUtf8(loose->getPhysicalPath()));
+    }
+    // Paket kökü = paket dosyasının kendisi. getSourceName() ham yolu
+    // yayınladığı için önce kanonik anahtara çevrilir; aksi halde aynı paket
+    // 8.3 ve uzun adla mount edildiğinde İKİ FARKLI paket sanılır.
+    if (const auto inner = physicalPathInSourceName(source->getSourceName())) {
+        return physicalPathKey(pathFromUtf8(*inner));
+    }
+    return source->getSourceName();
+}
+
+/// Bir mount'un bu varlığı FİZİKSEL olarak nereden okuyacağını kimlik olarak
+/// kurar. İki mount aynı kimliği üretiyorsa onlar ALIAS'tır — aynı fiziksel
+/// dosyanın birden çok yazımıdır, çakışma DEĞİLDİR ve gölgeleme sayılmaz.
+///
+/// Bu ayrım şart: remountProject aynı dizini KASITLI olarak birden çok kez
+/// mount eder ('', 'Assets', 'images'...). Alias'ları gölgeleme saymak, her
+/// varlık okumasında bir uyarı basardı — yani "sessiz hatayı gürültüye"
+/// çevirmek. Gerçek gölgeleme, FARKLI bir fiziksel kopyanın erişilemez
+/// kalmasıdır: aynı ada sahip iki içerik birbirinden farklı olabilir ve
+/// çağıran yalnızca birini görecek.
+std::string resolvedIdentity(const std::shared_ptr<IDataSource>& source,
+                             const std::string& subPath) {
+    if (const auto* loose = dynamic_cast<const LooseDirectorySource*>(source.get())) {
+        // Kök zaten kanonik; alt yolu da kanonikleştir ki aynı dosyaya
+        // giden sembolik bağ ve ../ kalıntıları da eşleşsin.
+        return physicalPathKey(pathFromUtf8(loose->getPhysicalPath()) / pathFromUtf8(subPath));
+    }
+    // Paket ayrı bir fiziksel kap: aynı ada sahip bir kayıt, loose bir dosyadan
+    // farklı içerik taşıyabilir — her zaman ayrı kimlik sayılır. Kötü
+    // parse hâlinde ham ada düşülür (aynı paket iki kez farklı görünebilir;
+    // bu, kayıp bir uyarıdan iyidir, sahte bir uyarı değil).
+    if (const auto inner = physicalPathInSourceName(source->getSourceName())) {
+        return physicalPathKey(pathFromUtf8(*inner)) + "::" + subPath;
+    }
+    return source->getSourceName() + "::" + subPath;
+}
+
+/// P2-6: SESSİZ DÜŞMEYİ KALDIR. Kazanan mount bulunduktan SONRA kalan
+/// mount'lar YALNIZCA exists() ile yoklanır (içerik okunmaz, maliyet bir
+/// istat/indeks sorgusudur). Aynı varlık FARKLI bir fiziksel kopyada da
+/// varsa, çağıran yalnızca ilkini görecek ve diğeri ERİŞİLEMEZ olacak —
+/// bu, bir modun sessizce gölgelenmesidir ve kullanıcı nedenini göremezdi.
+/// Artık söylüyor: kazananı, gölgelenenleri ve nedenini.
+void reportShadowing(const std::string& cleanPath, const MountList& mounts,
+                     const MountHit& hit) {
+    const auto& [winPrefix, winSource] = mounts[hit.index];
+    const std::string winSub = hit.prefixStripped
+                                   ? cleanPath.substr(winPrefix.size() + 1)
+                                   : cleanPath;
+    const std::string winnerId = resolvedIdentity(winSource, winSub);
+
+    std::vector<std::string> shadowed;
+    // Bir mount'un bu varlığı sunabileceği iki biçim: doğrudan yol ve (alias
+    // kapsıyorsa) prefix soyulmuş yol. İkisi de aynı fiziksel dosyaya varabilir;
+    // consume() kimlik eşitliğiyle tekilleştirmeyi yapar.
+    const auto probeBothForms = [&](const std::shared_ptr<IDataSource>& source,
+                                    const std::string& prefix,
+                                    const auto& consume) {
+        if (source->exists(cleanPath)) consume(cleanPath);
+        if (pathUnderPrefix(cleanPath, prefix)) {
+            const std::string stripped = cleanPath.substr(prefix.size() + 1);
+            if (stripped != cleanPath && source->exists(stripped)) consume(stripped);
+        }
+    };
+
+    // Kök başına tekil: mount listesi aynı kökü birden çok kez içerir ve aynı
+    // kök aynı soruya aynı yanıtı verir. Tekrarlı yoklama hem pahalıdır hem de
+    // hiçbir yeni bilgi üretmez.
+    std::vector<std::string> probedRoots;
+
+    for (size_t j = hit.index + 1; j < mounts.size(); ++j) {
+        const auto& [prefix, source] = mounts[j];
+        const std::string root = rootIdentity(source);
+        if (std::find(probedRoots.begin(), probedRoots.end(), root) !=
+            probedRoots.end()) {
+            continue;
+        }
+        probedRoots.push_back(root);
+        // Kalan mount'un hem doğrudan hem soyulmuş biçimi yoklanır: hangi
+        // biçimde olursa olsun çağıran o içeriği göremeyecek.
+        probeBothForms(source, prefix, [&](const std::string& sub) {
+            const std::string id = resolvedIdentity(source, sub);
+            // Alias aynı fiziksel dosyayı gösteriyor → çakışma değil.
+            if (id == winnerId) return;
+            // Aynı kopya birden çok alias mount'tan görünebilir; bir kez yaz.
+            if (std::find(shadowed.begin(), shadowed.end(), id) == shadowed.end()) {
+                shadowed.push_back(id);
+            }
+        });
+    }
+    if (shadowed.empty()) return;
+
+    std::string list;
+    for (const auto& id : shadowed) {
+        if (!list.empty()) list += ", ";
+        list += id;
+    }
+    ROWL_LOG_WARN("VFS mount shadow: '" + cleanPath + "' resolved from mount #" +
+                  std::to_string(hit.index) + " (" + winSource->getSourceName() +
+                  "), but a DIFFERENT physical copy of the same asset is unreachable in: " +
+                  list + ". Earlier mount wins by priority. Remove the duplicate copy, "
+                  "or mount the layer that should win first.");
+}
+
+// P2-6 maliyet tavanı: bir VFSManager ömründe tanı üretilen yol sayısı.
+// Gerçek projeler yüzlerce varlıkla sınırlıdır; bu tavan yalnızca "sonsuz
+// benzersiz yol" gördüğümüzde (sürekli üretilen bir yol uzayı) belleği
+// sınırlar. Aşılırsa kayıt düşürülür — en kötü hal, teşhisin tekrar
+// üretilmesidir, sessizlik DEĞİLDİR.
+constexpr size_t kMaxDiagnosedShadowPaths = 4096;
+
+} // namespace
+
+// P2-6: bir yolun gölgeleme teşhisinin ÜRETİLİP ÜRETİLMEDİĞİNİ söyler.
+// true dönerse bu çağıran teşhisi üretir (tarama + WARN), false ise üretilmiş
+// demektir ve o yol için bir daha tarama yapılmaz, uyarı tekrar basılmaz.
+//
+// BU BİR VARLIK ÖNBELLEĞİ DEĞİLDİR — en önemli ayrım burada: hiçbir bayt,
+// varlık, okuma veya varlık-YOK yanıtı saklanmaz. Yalnızca "bu yol için
+// teşhis basıldı" bilgisi tutulur. Bu yüzden mount edilmemiş ya da sonradan
+// yazılmış bir varlık her zaman TAZE okunur; önbellek hiçbir okuma
+// davranışını değiştiremez.
+//
+// Geçerlilik mount TOPOLOJİSİNE bağlıdır: mountDirectory/mountPackage/
+// clearMountPoints her seferinde m_mountGeneration'ı ilerletir ve kaydı
+// atar. Mod ve paketler zaten mount anında takılır (remountProject), yani
+// topoloji değişmeden alt katmanlara yeni bir kopya eklenmesi teşhisi
+// bayatlatabilir — bu, "ilk okuma anındaki disk durumu" sözleşmesidir ve
+// sessizlik değildir: remountProject bir kez daha çağrıldığında tüm
+// teşhisler yeniden üretilir.
+bool VFSManager::claimShadowDiagnosis(const std::string& cleanPath) {
+    std::lock_guard<std::mutex> lock(m_shadowMutex);
+    if (m_diagnosedGeneration != m_mountGeneration) {
+        m_diagnosedGeneration = m_mountGeneration;
+        m_diagnosedShadowPaths.clear();
+    }
+    if (m_diagnosedShadowPaths.size() >= kMaxDiagnosedShadowPaths) {
+        m_diagnosedShadowPaths.clear();
+    }
+    return m_diagnosedShadowPaths.insert(cleanPath).second;
+}
+
+// m_mutex ALTINDA çağrılır. Kilit sırası her yerde m_mutex -> m_shadowMutex;
+// teşhis yolu yalnızca m_shadowMutex tutar, ters sıra hiç oluşmaz.
+void VFSManager::invalidateShadowDiagnosesLocked() {
+    std::lock_guard<std::mutex> lock(m_shadowMutex);
+    ++m_mountGeneration;
+    m_diagnosedShadowPaths.clear();
+}
+
+void VFSManager::diagnoseShadowing(
+    const std::string& cleanPath,
+    const std::vector<std::pair<std::string, std::shared_ptr<IDataSource>>>& mounts,
+    size_t hitIndex, bool hitWasPrefixStripped) {
+    // Kazananın ARKASINDA mount yoksa gölgeleme İMKÂN DIŞIDIR: hiçbir şey
+    // erişilemez kalmıyor. Tarama hiç başlamaz (en dar koşul).
+    if (hitIndex + 1 >= mounts.size()) return;
+    // Teşhis yol başına BİR KEZ üretilir. 5000 kez aynı varlığı okuyup
+    // 5000 kez aynı taramayı koşmak, aynı soruya 5000 kez aynı cevabı
+    // vermektir — hem zaman hem gürültü kaybıydı.
+    if (!claimShadowDiagnosis(cleanPath)) return;
+    reportShadowing(cleanPath, mounts, MountHit{hitIndex, hitWasPrefixStripped});
+}
+
 bool VFSManager::exists(const std::string& vfsPath) {
     if (vfsPath.empty()) return false;
 
     std::string cleanPath = vfsPath;
     std::replace(cleanPath.begin(), cleanPath.end(), '\\', '/');
 
-    std::lock_guard<std::recursive_mutex> lock(m_mutex);
-    // Try with prefix stripping first (correct priority: mods > data > packages)
-    for (const auto& [prefix, source] : m_mountPoints) {
-        // If cleanPath starts with prefix, try stripped version first
-        if (!prefix.empty() && cleanPath.size() > prefix.size() &&
-            cleanPath.compare(0, prefix.size(), prefix) == 0 &&
-            cleanPath[prefix.size()] == '/') {
-            std::string stripped = cleanPath.substr(prefix.size() + 1);
-            if (source->exists(stripped)) {
-                return true;
-            }
-        }
-    }
-
-    // Fallback: try direct path (for paths without prefix)
-    for (const auto& [prefix, source] : m_mountPoints) {
-        if (source->exists(cleanPath)) {
-            return true;
-        }
-    }
-    return false;
+    // Snapshot under lock; IO runs lock-free (A2a) — diagnoseShadowing da IO
+    // yaptığı için kilidi tutmak burada yanlış olurdu.
+    const auto mounts = getMountPoints();
+    const auto hit = resolveInMountOrder(
+        mounts, cleanPath,
+        [](const std::shared_ptr<IDataSource>& s, const std::string& p) {
+            return s->exists(p);
+        });
+    if (!hit) return false;
+    diagnoseShadowing(cleanPath, mounts, hit->index, hit->prefixStripped);
+    return true;
 }
 
 std::optional<std::vector<uint8_t>> VFSManager::readBytesSinglePass(const std::string& cleanPath) {
     // Snapshot under lock; IO runs lock-free (A2a).
     const auto mounts = getMountPoints();
-    // Try with prefix stripping first (correct priority: mods > data > packages)
-    for (const auto& [prefix, source] : mounts) {
-        // If cleanPath starts with prefix, try stripped version first
-        if (!prefix.empty() && cleanPath.size() > prefix.size() &&
-            cleanPath.compare(0, prefix.size(), prefix) == 0 &&
-            cleanPath[prefix.size()] == '/') {
-            std::string stripped = cleanPath.substr(prefix.size() + 1);
-            if (auto data = source->tryRead(stripped)) {
-                ROWL_LOG_TRACE("VFS Resolved '" + cleanPath + "' via " + source->getSourceName() + " (prefix-stripped)");
-                return data;
+    // Probe sonucu doğrudan tutulur: ikinci bir okuma yapmadan (TOCTOU yok)
+    // ve kazanan mount'un baytlarını israf etmeden aynı anda taşınır.
+    std::optional<std::vector<uint8_t>> data;
+    const auto hit = resolveInMountOrder(
+        mounts, cleanPath,
+        [&data](const std::shared_ptr<IDataSource>& s, const std::string& p) {
+            if (auto d = s->tryRead(p)) {
+                data = std::move(*d);
+                return true;
             }
-        }
-    }
-
-    // Fallback: try direct path (for paths without prefix)
-    for (const auto& [prefix, source] : mounts) {
-        (void)prefix;
-        if (auto data = source->tryRead(cleanPath)) {
-            ROWL_LOG_TRACE("VFS Resolved '" + cleanPath + "' via " + source->getSourceName());
-            return data;
-        }
-    }
-    return std::nullopt;
+            return false;
+        });
+    if (!hit) return std::nullopt;
+    ROWL_LOG_TRACE("VFS Resolved '" + cleanPath + "' via mount #" +
+                   std::to_string(hit->index) + " " +
+                   mounts[hit->index].second->getSourceName() +
+                   (hit->prefixStripped ? " (prefix-stripped)" : " (direct)"));
+    diagnoseShadowing(cleanPath, mounts, hit->index, hit->prefixStripped);
+    return data;
 }
 
 std::unique_ptr<std::istream> VFSManager::openStreamSinglePass(const std::string& cleanPath) {
     const auto mounts = getMountPoints();
-    for (const auto& [prefix, source] : mounts) {
-        if (!prefix.empty() && cleanPath.size() > prefix.size() &&
-            cleanPath.compare(0, prefix.size(), prefix) == 0 && cleanPath[prefix.size()] == '/') {
-            const std::string stripped = cleanPath.substr(prefix.size() + 1);
-            if (auto stream = source->tryOpenStream(stripped)) return stream;
-        }
-    }
-    for (const auto& [prefix, source] : mounts) {
-        (void)prefix;
-        if (auto stream = source->tryOpenStream(cleanPath)) return stream;
-    }
-    return nullptr;
+    std::unique_ptr<std::istream> stream;
+    const auto hit = resolveInMountOrder(
+        mounts, cleanPath,
+        [&stream](const std::shared_ptr<IDataSource>& s, const std::string& p) {
+            if (auto opened = s->tryOpenStream(p)) {
+                stream = std::move(opened);
+                return true;
+            }
+            return false;
+        });
+    if (!hit) return nullptr;
+    diagnoseShadowing(cleanPath, mounts, hit->index, hit->prefixStripped);
+    return stream;
 }
 
 std::vector<uint8_t> VFSManager::readBytes(const std::string& vfsPath) {

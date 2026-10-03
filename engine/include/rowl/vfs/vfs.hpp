@@ -9,6 +9,7 @@
 #include <mutex>
 #include <filesystem>
 #include <istream>
+#include <unordered_set>
 
 namespace Rowl::VFS {
 
@@ -111,11 +112,37 @@ private:
     /// present directory yields no archives. Call with m_mutex held.
     void mountPackagesUnder(const std::filesystem::path& pkgPath);
 
+    // --- P2-6 (private implementation state; NO public API changed) --------
+    // Shadow-DIAGNOSIS bookkeeping. This is NOT an asset cache: no bytes, no
+    // existence answers and no read results are stored — only the fact that
+    // "a shadow diagnosis was already produced for this path". Asset
+    // freshness is therefore untouched by it. Validity is tied to the mount
+    // TOPOLOGY: every mount mutation bumps m_mountGeneration and drops the
+    // record, so the next read re-derives the diagnosis.
+
+    /// true = this caller owns producing the diagnosis (scan + WARN);
+    /// false = it already exists, so skip both.
+    bool claimShadowDiagnosis(const std::string& cleanPath);
+    /// The single entry point for shadow reporting. Narrow-cost first
+    /// (nothing behind the winner -> no scan), then the once-per-path claim,
+    /// then the scan itself.
+    void diagnoseShadowing(
+        const std::string& cleanPath,
+        const std::vector<std::pair<std::string, std::shared_ptr<IDataSource>>>& mounts,
+        size_t hitIndex, bool hitWasPrefixStripped);
+    /// Call with m_mutex HELD (mount mutation). Lock order is always
+    /// m_mutex -> m_shadowMutex; the diagnosis path takes m_shadowMutex only.
+    void invalidateShadowDiagnosesLocked();
+
     mutable std::recursive_mutex m_mutex;
     std::vector<std::pair<std::string, std::shared_ptr<IDataSource>>> m_mountPoints;
     bool m_initialized = false;
     size_t m_skippedPackages = 0;
     std::string m_firstSkippedPackage;
+    mutable std::mutex m_shadowMutex;
+    std::unordered_set<std::string> m_diagnosedShadowPaths;
+    uint64_t m_mountGeneration = 0;
+    uint64_t m_diagnosedGeneration = 0;
 };
 
 } // namespace Rowl::VFS

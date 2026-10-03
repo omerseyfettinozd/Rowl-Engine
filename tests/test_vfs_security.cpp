@@ -502,6 +502,318 @@ void test_vfs_security() {
     }
     TEST_PASS("Mods override package assets at matching relative VFS paths");
 
+    // ========================================================================
+    // P2-6 — MOUNT ÖNCELİK TERSİNİMİ + GÖLGELEME TEŞHİSİ
+    // ========================================================================
+    // remountProject aynı fiziksel dizini bilerek birden çok ALIAS altında mount
+    // eder ('', 'Assets', 'images'). Önceki çözümleme iki GEÇİŞLİydi: GEÇİŞ 1
+    // TÜM mount'larda prefix-strip dener ve ilen bulduğu anda DÖNER; GEÇİŞ 2
+    // ancak GEÇİŞ 1 herkesi kaçırırsa çalışır. Böylece önceliği mount LİSTESİ
+    // değil, PREFIX ÖZGÜLLÜĞÜ belirliyordu: 'images' alias'ı (Assets/images)
+    // mods mount'unu gölgeliyor, mods override sessizce düşüyordu.
+    // Kural artık: liste sırası = öncelik (remountProject mods'u önce mount
+    // eder ve "a release can override package content" der).
+    const auto prioProject = testRoot / "p2_6_priority_project";
+    std::filesystem::create_directories(prioProject / "Assets" / "images");
+    std::filesystem::create_directories(prioProject / "Assets" / "packages");
+    std::filesystem::create_directories(prioProject / "mods" / "images");
+    std::ofstream(prioProject / "Assets" / "images" / "hero.png") << "BASE-HERO";
+    std::ofstream(prioProject / "Assets" / "images" / "baseonly.png") << "BASE-ONLY";
+    std::ofstream(prioProject / "mods" / "images" / "hero.png") << "MOD-HERO";
+    std::filesystem::copy_file(validPackage,
+                               prioProject / "Assets" / "packages" / "game.rowlpkg",
+                               std::filesystem::copy_options::overwrite_existing);
+    vfs.remountProject(prioProject.string());
+
+    const auto readViaStream = [](Rowl::VFS::VFSManager& m, const std::string& p) {
+        auto s = m.openReadStream(p);
+        if (!s) return std::string();
+        return std::string((std::istreambuf_iterator<char>(*s)),
+                           std::istreambuf_iterator<char>());
+    };
+
+    // YÖN A — alias prefix'te mods kazanır. Düzeltme öncesi burada BASE gelirdi.
+    if (vfs.readString("images/hero.png") != "MOD-HERO" ||
+        vfs.readString("mods/images/hero.png") != "MOD-HERO") {
+        std::cerr << "P2-6: the 'images' alias prefix shadowed the mods mount"
+                  << std::endl;
+        exit(1);
+    }
+    // YÖN B — yalnızca base'de bulunan varlık base'ten gelmeye devam eder. Bu,
+    // kuralın "mods her şeyi kazanır" DEĞİL, "liste sırası" olduğunu kanıtlar
+    // ve yanlış-pozitif gölgelemeyi engeller.
+    if (vfs.readString("images/baseonly.png") != "BASE-ONLY" ||
+        vfs.readString("Assets/images/hero.png") != "BASE-HERO") {
+        std::cerr << "P2-6: mount reordering hid a base-only asset" << std::endl;
+        exit(1);
+    }
+    // ÜÇÜNCÜ KATMAN: paket yalnızca orada olduğunda hâlâ erişilebilir olmalı.
+    if (vfs.readString("dir/safe.txt") != "x") {
+        std::cerr << "P2-6: mount reordering made packaged assets unreachable"
+                  << std::endl;
+        exit(1);
+    }
+    // Üç ayrı çözümleme yolu (exists / readBytes / openStream) AYNI kararı
+    // vermeli. Karar eskiden kopyala-yapıştırla üç yere yayılmıştı.
+    if (!vfs.exists("images/hero.png") || vfs.exists("images/nope.png") ||
+        readViaStream(vfs, "images/hero.png") != "MOD-HERO") {
+        std::cerr << "P2-6: exists()/openStream disagreed with readBytes" << std::endl;
+        exit(1);
+    }
+    TEST_PASS("P2-6 mount priority: mods wins at alias prefixes, base/package stay reachable");
+
+    // ------------------------------------------------------------------
+    // P2-6 — GÖLGELEME TEŞHİSİ KAPILARI
+    // ------------------------------------------------------------------
+    // Logger::init() süreç genelinde BİR KEZ çalışır ve test_logger_timestamp()
+    // bu ikiliden ÖNCE koşar (test_main.cpp); dosya yolunu oradan bilmiyoruz.
+    // Dosya, kendine ÖZGÜ bir işaret satırıyla BULUNUR — "en yeni hermetic
+    // dosya" seçimi yanlış olurdu, çünkü aynı makinede başka ajanlar paralel
+    // rowl_tests koşturuyor ve kendi hermetic loglarını üretiyor.
+    constexpr const char* kLiveMarker = "rowl-p2-6-logger-live-probe";
+    Rowl::Core::Logger::warn(kLiveMarker);
+
+    // Bir dosyada satır arar (rotasyon nedeniyle tüm kuşaklar taranır).
+    auto fileContains = [](const std::filesystem::path& path, const std::string& needle) {
+        std::ifstream in(path);
+        std::string line;
+        while (std::getline(in, line)) {
+            if (line.find(needle) != std::string::npos) return true;
+        }
+        return false;
+    };
+
+    // Logger 10 MB'ta döndürür (logger.cpp: MAX_LOG_FILE_SIZE) ve eskiyi
+    // <yol>.1/.2/.3 yapar; sayım bu yüzden kuşakların toplamıdır.
+    auto countShadowLines = [&](const std::filesystem::path& log, const std::string& needle) {
+        int count = 0;
+        for (int generation = 0; generation <= 4; ++generation) {
+            std::filesystem::path file = log;
+            if (generation > 0) file += "." + std::to_string(generation);
+            std::ifstream in(file);
+            if (!in) continue;
+            std::string line;
+            while (std::getline(in, line)) {
+                if (line.find("VFS mount shadow") != std::string::npos &&
+                    line.find(needle) != std::string::npos) {
+                    ++count;
+                }
+            }
+        }
+        return count;
+    };
+
+    // KAPI CANLI MI? Önce logger'ın gerçekten, BU SÜREÇTE, yazdığını kanıtla.
+    // Kanıtlanamazsa kapı "sessizce yeşil" olmaz — SERT kırmızı. Bu projede
+    // bugün 4 "sessizce yeşil veren ölü kapı" bulundu; bir kapının kendini
+    // doğrulayamaması sessiz yeşil demektir.
+    std::filesystem::path hermeticLog;
+    {
+        std::error_code ec;
+        for (const auto& entry : std::filesystem::directory_iterator(
+                 std::filesystem::temp_directory_path(), ec)) {
+            const std::string name = entry.path().filename().string();
+            if (name.rfind("rowl_logger_hermetic_", 0) != 0 ||
+                entry.path().extension() != ".log") {
+                continue;
+            }
+            if (fileContains(entry.path(), kLiveMarker)) {
+                hermeticLog = entry.path();
+                break;
+            }
+        }
+    }
+    if (hermeticLog.empty()) {
+        std::cerr << "P2-6: no hermetic log in this process carries '" << kLiveMarker
+                  << "', so the shadow-diagnosis gates cannot observe anything. "
+                     "test_logger_timestamp() must precede test_vfs_security(); "
+                     "a gate that cannot observe is not a green gate."
+                  << std::endl;
+        exit(1);
+    }
+
+    // KAPI 1 — SESSİZ DÜŞME KALDIRILDI + TEŞHİS YOL BAŞINA BİR KEZ.
+    // Üstteki öncelik kapısı bu yolu zaten okudu, yani teşhisi üretti. Yeni
+    // bir remountProject ile topoloji değişir ve teşhis DÜŞER (KAPI 3'ün
+    // sözleşmesi) — yani ölçüm "henüz üretilmemiş" bir durumdan başlar.
+    const std::string shadowNeedle = "images/hero.png";
+    if (!vfs.remountProject(prioProject.string())) {
+        std::cerr << "P2-6: could not re-arm the fixture for the shadow gates"
+                  << std::endl;
+        exit(1);
+    }
+    const int beforeFirstRead = countShadowLines(hermeticLog, shadowNeedle);
+    if (vfs.readString(shadowNeedle) != "MOD-HERO") {
+        std::cerr << "P2-6: mods override lost while re-reading the fixture"
+                  << std::endl;
+        exit(1);
+    }
+    if (countShadowLines(hermeticLog, shadowNeedle) != beforeFirstRead + 1) {
+        std::cerr << "P2-6: a genuinely shadowed asset produced no shadow WARN "
+                     "(silent mod drop is back)"
+                  << std::endl;
+        exit(1);
+    }
+    // Aynı varlık 8 kez daha okunuyor (exists + read + stream karışık). Tarama
+    // ve uyarı TEKRARLAMAMALI: hem gölgeleme taraması her okumada koşmamalı
+    // (vfs_io benchmark kapısı bunun %423'lük bir regresyonuna dönüşmüştü) hem
+    // de 5000 kez aynı varlığı okuyan bir oyun logu 5000 satır gürültüyle
+    // dolmamalı.
+    for (int i = 0; i < 8; ++i) {
+        (void)vfs.exists(shadowNeedle);
+        (void)vfs.readString(shadowNeedle);
+        (void)readViaStream(vfs, shadowNeedle);
+    }
+    if (countShadowLines(hermeticLog, shadowNeedle) != beforeFirstRead + 1) {
+        std::cerr << "P2-6: the shadow diagnosis is not memoized per path — the "
+                     "scan (and its WARN) re-runs on every read"
+                  << std::endl;
+        exit(1);
+    }
+    TEST_PASS("P2-6 shadow diagnosis is produced once per path, not once per read");
+
+    // KAPI 2 — BELLEK BAYATLAMASI YOK. Mount topolojisi değişince teşhis
+    // yeniden üretilmeli; aksi halde bir projede bulunan gölgeleme, proje
+    // değiştikten sonra da bastırılır ve teşhis kalıcı olarak SESSİZLEŞİR.
+    if (!vfs.remountProject(prioProject.string())) {
+        std::cerr << "P2-6: remount for the invalidation gate failed" << std::endl;
+        exit(1);
+    }
+    if (vfs.readString(shadowNeedle) != "MOD-HERO") {
+        std::cerr << "P2-6: mods override lost after remount" << std::endl;
+        exit(1);
+    }
+    if (countShadowLines(hermeticLog, shadowNeedle) != beforeFirstRead + 2) {
+        std::cerr << "P2-6: remounting did not invalidate the memoized shadow "
+                     "diagnosis (a stale memo would silence it forever)"
+                  << std::endl;
+        exit(1);
+    }
+    TEST_PASS("P2-6 shadow diagnosis is invalidated by a mount change");
+
+    // ------------------------------------------------------------------
+    // P2-6 — YOL KANONİKLEŞTİRMESİ (Windows RUNNER~1 / runneradmin sahte
+    // gölgelemesinin Linux'taki karşılığı)
+    // ------------------------------------------------------------------
+    // "Aynı fiziksel dosya hiçbir platformda farklı sayılmamalı" sözleşmesi
+    // Linux'ta bir SEMBOLİK BAĞLA ölçülebilir: iki farklı yol metni, tek bir
+    // dosya. physicalPathKey() canonical() kullandığı için ikisi aynı kimliği
+    // üretir ve SAHTE gölgeleme basılmaz. lexically_normal() kullanılsaydı
+    // (510f8c7'deki hali) bu kapı KIRMIZI olurdu — yani kapı canlıdır.
+    //
+    // Windows'ta aynı sınıf hata 8.3 kısa adıyla yaşanır: "C:\Users\RUNNER~1"
+    // ile "C:\Users\runneradmin" AYNI dizindir. O ayrımı da canonical()
+    // kapatır (nihai dosya tanıtıcısından çözümler) ve ayrıca generic_string()
+    // ayırıcıyı ('\' vs '/') ve Windows'ta ASCII harf katlaması büyük/küçük
+    // harfi eşitleştirir. Bu makinede Windows koşturulamaz; Linux'taki bu
+    // kapı aynı physicalPathKey() kodunu aynı şekilde zorlar.
+    const auto canonProject = testRoot / "p2_6_canonical_project";
+    const auto canonReal = canonProject / "real_layer";
+    std::filesystem::create_directories(canonReal / "images");
+    std::ofstream(canonReal / "images" / "hero.png") << "CANON-HERO";
+    std::ofstream(canonReal / "images" / "only_real.png") << "CANON-ONLY";
+    std::error_code symlinkEc;
+    const auto canonLink = canonProject / "link_layer";
+    std::filesystem::create_directory_symlink(canonReal, canonLink, symlinkEc);
+
+    if (symlinkEc) {
+        std::cerr << "P2-6: could not create the symlink alias fixture: "
+                  << symlinkEc.message() << std::endl;
+        exit(1);
+    }
+
+    // Aynı katmanın İKİ FARKLI YOLLA mount'u: gerçek yol + sembolik bağ.
+    Rowl::VFS::VFSManager canonVfs;
+    canonVfs.mountDirectory("", canonReal.string());
+    canonVfs.mountDirectory("", canonLink.string());
+
+    const std::string canonNeedle = "images/hero.png";
+    const int canonBefore = countShadowLines(hermeticLog, canonNeedle);
+    if (canonVfs.readString(canonNeedle) != "CANON-HERO" ||
+        !canonVfs.exists(canonNeedle)) {
+        std::cerr << "P2-6: symlinked alias mount could not be read" << std::endl;
+        exit(1);
+    }
+    if (countShadowLines(hermeticLog, canonNeedle) != canonBefore) {
+        std::cerr << "P2-6: one physical file reached through two path spellings "
+                     "was reported as a shadow — path canonicalization is broken"
+                  << std::endl;
+        exit(1);
+    }
+    // Karşı ters yön: GERÇEKTEN farklı iki fiziksel kopya hâlâ görülmeli.
+    // Kanonikleştirme "her şey aynı" diyerek körleşmemeli.
+    const auto canonOther = canonProject / "other_layer";
+    std::filesystem::create_directories(canonOther / "images");
+    std::ofstream(canonOther / "images" / "hero.png") << "OTHER-HERO";
+    Rowl::VFS::VFSManager realShadowVfs;
+    realShadowVfs.mountDirectory("", canonReal.string());
+    realShadowVfs.mountDirectory("", canonOther.string());
+    const int realBefore = countShadowLines(hermeticLog, canonNeedle);
+    if (realShadowVfs.readString(canonNeedle) != "CANON-HERO") {
+        std::cerr << "P2-6: earlier mount lost priority after canonicalization"
+                  << std::endl;
+        exit(1);
+    }
+    if (countShadowLines(hermeticLog, canonNeedle) != realBefore + 1) {
+        std::cerr << "P2-6: two genuinely different physical copies were NOT "
+                     "reported as shadowed — canonicalization went blind"
+                  << std::endl;
+        exit(1);
+    }
+    TEST_PASS("P2-6 path canonicalization: aliases are one file, distinct copies still shadow");
+
+    // ------------------------------------------------------------------
+    // P2-6 — YENİ KODUN KENDİ ÖLÇÜMÜ (gate değil, bilgi amaçlı yazdırma)
+    // ------------------------------------------------------------------
+    // Yeni kod iki parçadan oluşuyor: (a) mount-arkası tarama, (b) yol başına
+    // bir kez üretilen teşhis. (b) sayımı yukarıdaki KAPI 2 ile KESİN olarak
+    // ölçülüyor — kaç kez tarandığı gözlenebilir. Buradaki ölçüm (a)'nın
+    // SOĞUK maliyetini, yani benzersiz yol başına bir kez ödenen taramayı
+    // raporlar. Eşik değildir: süre tabanlı kapılar bu projede yanlış kırmızı
+    // üretiyor, o yüzden ölçülür ama kırmızıya çevirilmez.
+    {
+        const int kProbePaths = 64;
+        const auto probeRoot = testRoot / "p2_6_cost_probe";
+        std::filesystem::create_directories(probeRoot / "a" / "images");
+        std::filesystem::create_directories(probeRoot / "b" / "images");
+        std::filesystem::create_directories(probeRoot / "c" / "images");
+        for (int i = 0; i < kProbePaths; ++i) {
+            const std::string base = "images/cost_" + std::to_string(i) + ".png";
+            std::ofstream(probeRoot / "a" / base) << "A";
+            std::ofstream(probeRoot / "b" / base) << "B";
+            std::ofstream(probeRoot / "c" / base) << "C";
+        }
+        Rowl::VFS::VFSManager costVfs;
+        costVfs.mountDirectory("", (probeRoot / "a").string());
+        costVfs.mountDirectory("", (probeRoot / "b").string());
+        costVfs.mountDirectory("", (probeRoot / "c").string());
+
+        // Aynı işi iki biçimde ölç: (1) her yol BİR KEZ — teşhis maliyeti
+        // dâhil, gerçekçi "yeni varlık yükleniyor" şekli. (2) aynı yollar
+        // ikinci turda — teşhis üretilmiş, yalnız çözümleme kalmalı.
+        auto sweep = [&] {
+            const auto t0 = std::chrono::steady_clock::now();
+            for (int i = 0; i < kProbePaths; ++i) {
+                (void)costVfs.exists("images/cost_" + std::to_string(i) + ".png");
+            }
+            return std::chrono::duration<double, std::micro>(
+                std::chrono::steady_clock::now() - t0).count() / kProbePaths;
+        };
+        const double coldUs = sweep();   // teşhis üretilir
+        const double warmUs = sweep();   // teşhis bellekte
+        std::cerr << "  [P2-6 COST] " << kProbePaths
+                  << " unique shadowed paths over 3 layers: cold=" << std::fixed
+                  << std::setprecision(2) << coldUs << " us/path, warm="
+                  << warmUs << " us/path (memo delta "
+                  << std::setprecision(1) << (100.0 * (coldUs - warmUs) /
+                                               (coldUs > 0.0 ? coldUs : 1.0))
+                  << "% of cold)" << std::endl;
+        if (!(warmUs >= 0.0)) {
+            std::cerr << "P2-6: cost probe produced no measurement" << std::endl;
+            exit(1);
+        }
+    }
+
     // A2a-fix3 (sessiz-tarama regresyonu): Windows CI'da probe "present"
     // demesine rağmen tarama tek kelime etmeden ölüyordu (tek sessiz çıkış:
     // no_such_file erken-dönüşü ya da yutulan istisna). Tarama artık
