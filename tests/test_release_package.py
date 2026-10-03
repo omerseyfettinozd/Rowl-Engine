@@ -14,6 +14,8 @@ import tempfile
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 PACKAGER = ROOT / "tools" / "package_assets.py"
 VERIFIER = ROOT / "tools" / "verify_release_package.py"
+LAUNCHER_TOOL = ROOT / "tools" / "make_release_launchers.py"
+PARITY_CHECK = ROOT / "tools" / "check_release_launcher_parity.py"
 
 
 def run_verifier(release_root):
@@ -51,6 +53,306 @@ with tempfile.TemporaryDirectory() as directory:
     shutil.copytree(release, missing_launcher)
     (missing_launcher / "run_game.sh").unlink()
     require_rejection(missing_launcher, "missing release launcher")
+
+    # --- P2-16: the Windows launcher contract (ADIM 3/4/5) ---
+    #
+    # Until this block the only launcher fixture in the repo was run_game.sh,
+    # so every launcher assertion in the suite described the POSIX launcher.
+    # run_game.bat had NO fixture at all: deleting `cd /d "%~dp0"` from it, or
+    # corrupting the exe name, shipped a release that cannot start while
+    # check_release_launcher_parity.py, this file and the CI packaging step
+    # all stayed green. The release verifier used to stop at "a launcher file
+    # exists and is non-empty".
+    #
+    # The Windows layout is built here from the REAL producer --
+    # tools/make_release_launchers.py -- rather than from an inlined string,
+    # so the fixture cannot drift from what CI actually writes.
+    def stage_windows_release(tag, launcher_bytes=None, emit_platform="windows"):
+        """A release shaped like the Windows packaging step's output."""
+        staged = root / tag
+        staged.mkdir()
+        (staged / "Assets" / "packages").mkdir(parents=True)
+        shutil.copy2(release / "Assets" / "packages" / "game.rowlpkg",
+                     staged / "Assets" / "packages" / "game.rowlpkg")
+        shutil.copy2(release / "Assets" / "packages" / "game.rowlpkg.sha256",
+                     staged / "Assets" / "packages" / "game.rowlpkg.sha256")
+        (staged / "mods").mkdir()
+        (staged / "mods" / "README.md").write_text("# mods\n", encoding="utf-8")
+        (staged / "README.txt").write_text("release\n", encoding="utf-8")
+        shutil.copy2(ROOT / "packaging" / "THIRD_PARTY_NOTICES.md",
+                     staged / "THIRD_PARTY_NOTICES.md")
+        (staged / "RowlGame.exe").write_bytes(b"player")
+        (staged / "RowlEngineCore.dll").write_bytes(b"runtime")
+        emit = subprocess.run(
+            [sys.executable, str(LAUNCHER_TOOL), str(staged),
+             "--platform", emit_platform],
+            capture_output=True, text=True, check=False)
+        if emit.returncode != 0:
+            raise SystemExit("make_release_launchers.py failed on the "
+                             f"{tag} fixture: stdout={emit.stdout!r} "
+                             f"stderr={emit.stderr!r}")
+        if launcher_bytes is not None:
+            (staged / "run_game.bat").write_bytes(launcher_bytes)
+        return staged
+
+    # Positive: the launcher CI really writes must be accepted.
+    windows_release = stage_windows_release("windows-release")
+    if not (windows_release / "run_game.bat").is_file():
+        raise SystemExit("the Windows fixture did not get a run_game.bat")
+    if (windows_release / "run_game.sh").exists():
+        raise SystemExit("a --platform windows fixture must not ship run_game.sh")
+    accepted = run_verifier(windows_release)
+    if accepted.returncode != 0 or "Valid release" not in accepted.stdout:
+        raise SystemExit("verifier rejected the Windows-shaped release: "
+                         + accepted.stderr)
+
+    # The emitted .bat must really be CRLF on disk -- the constant can be
+    # right while the writer translates the newlines away.
+    emitted = (windows_release / "run_game.bat").read_bytes()
+    if b"\r\n" not in emitted or b"\n" in emitted.replace(b"\r\n", b""):
+        raise SystemExit(f"emitted run_game.bat is not CRLF: {emitted!r}")
+
+    # Negative 0: the P2-16 demo fixture, verbatim. A Windows-shaped release
+    # (RowlGame.exe + DLLs) carrying only a POSIX run_game.sh. The old
+    # existence check accepted it, and so did a content check at MINIMAL
+    # tier -- a shell script that execs the player IS a valid .sh. What makes
+    # it broken is that the .bat its platform needs is absent.
+    sh_only = stage_windows_release("windows-release-sh-only")
+    (sh_only / "run_game.bat").unlink()
+    (sh_only / "run_game.sh").write_text(
+        '#!/bin/sh\nexec ./RowlGame.exe "$@"\n', encoding="utf-8")
+    require_rejection(sh_only, "ships RowlGame.exe but no run_game.bat")
+
+    # Negative 1: a Windows release whose only launcher is removed. This is
+    # the shape the P2-16 report called out: run_game.bat exists in no fixture
+    # anywhere in the suite, so "delete the launcher" was only ever rehearsed
+    # against run_game.sh.
+    bare = stage_windows_release("no-windows-launcher")
+    (bare / "run_game.bat").unlink()
+    require_rejection(bare, "missing release launcher")
+
+    # Negative 1b: the launcher is present but does not start the player.
+    # The old check only asked "exists and is non-empty".
+    require_rejection(
+        stage_windows_release("empty-windows-launcher",
+                              b"@echo off\r\ncd /d \"%~dp0\"\r\n"),
+        "no line that runs the player with %*")
+
+    # Negative 2: `cd /d "%~dp0"` deleted (the P2-16 mutation verbatim).
+    require_rejection(
+        stage_windows_release(
+            "bat-no-cd",
+            b"@echo off\r\nRowlGame.exe %*\r\n"),
+        "missing the working-directory pin")
+
+    # Negative 3: exe name corrupted.
+    require_rejection(
+        stage_windows_release(
+            "bat-bad-exe",
+            b'@echo off\r\ncd /d "%~dp0"\r\nRowlGameX.exe %*\r\n'),
+        "is not a player executable the release verifier accepts")
+
+    # Negative 4: LF instead of CRLF.
+    require_rejection(
+        stage_windows_release(
+            "bat-lf-endings",
+            b'@echo off\ncd /d "%~dp0"\nRowlGame.exe %*\n'),
+        "bare LF line ending")
+
+    # Negative 5: the player runs before the working directory is pinned.
+    require_rejection(
+        stage_windows_release(
+            "bat-cd-after-exec",
+            b'@echo off\r\nRowlGame.exe %*\r\ncd /d "%~dp0"\r\n'),
+        "before the 'cd /d")
+
+    # Negative 6: a .bat that execs nothing at all.
+    require_rejection(
+        stage_windows_release(
+            "bat-no-exec",
+            b'@echo off\r\ncd /d "%~dp0"\r\necho nothing to run\r\n'),
+        "no line that runs the player with %*")
+
+    print("[ReleasePackageTests] Windows launcher contract: the emitted .bat "
+          "is accepted; missing pin, bad exe name, LF endings, wrong order and "
+          "no exec line are all rejected.")
+
+    # --- P2-16: the POSIX launcher must still exec the shipped player ---
+    for tag, content, fragment in [
+        ("sh-bad-exe", "#!/bin/sh\nexec ./RowlGameX \"$@\"\n",
+         "is not a player executable"),
+        ("sh-no-args", "#!/bin/sh\nexec ./RowlGame\n",
+         'forwards "$@"'),
+    ]:
+        staged = root / tag
+        shutil.copytree(release, staged)
+        (staged / "run_game.sh").write_text(content, encoding="utf-8")
+        require_rejection(staged, fragment)
+    # A CR anywhere in the POSIX launcher: /bin/sh will not run it.
+    staged = root / "sh-crlf"
+    shutil.copytree(release, staged)
+    (staged / "run_game.sh").write_bytes(b"#!/bin/sh\r\nexec ./RowlGame \"$@\"\r\n")
+    require_rejection(staged, "has a CR")
+
+    print("[ReleasePackageTests] POSIX launcher contract: bad exe name, "
+          "dropped argument forward and CR line endings are rejected.")
+
+    # --- P2-16 ADIM 5: the gates must be able to go RED ---
+    #
+    # Everything above mutates a fixture. That proves the VERIFIER can fail,
+    # but not that the parity gate -- the one CI actually runs on Linux to
+    # stand in for the Windows job -- can. So the real source of
+    # tools/make_release_launchers.py is mutated here, in a scratch copy of
+    # the repo, and tools/check_release_launcher_parity.py is run against it.
+    # This is the exact P2-16 mutation: delete `cd /d "%~dp0"`, break the exe
+    # name, downgrade CRLF to LF. Every one of them was green before this
+    # block existed.
+    def parity_against_mutated_tool(tag, mutate, mutate_editor=None):
+        """Copy the repo, mutate a launcher producer, run the parity gate.
+
+        Returns the CompletedProcess; the caller decides whether red is the
+        expected outcome.
+        """
+        scratch = root / f"parity-{tag}"
+        tools_dir = scratch / "tools"
+        tools_dir.mkdir(parents=True)
+        for name in ("make_release_launchers.py", "check_release_launcher_parity.py",
+                     "launcher_contract.py", "verify_release_package.py"):
+            shutil.copy2(ROOT / "tools" / name, tools_dir / name)
+        (scratch / ".github" / "workflows").mkdir(parents=True)
+        shutil.copy2(ROOT / ".github" / "workflows" / "ci.yml",
+                     scratch / ".github" / "workflows" / "ci.yml")
+        editor_dir = scratch / "editor" / "Services"
+        editor_dir.mkdir(parents=True)
+        editor_source = (ROOT / "editor" / "Services"
+                         / "ProjectBuildService.cs").read_text(encoding="utf-8")
+        if mutate_editor is not None:
+            editor_source = mutate_editor(editor_source)
+        (editor_dir / "ProjectBuildService.cs").write_text(editor_source,
+                                                          encoding="utf-8")
+
+        producer = tools_dir / "make_release_launchers.py"
+        source = producer.read_text(encoding="utf-8")
+        producer.write_text(mutate(source), encoding="utf-8")
+        return subprocess.run(
+            [sys.executable, str(tools_dir / "check_release_launcher_parity.py")],
+            capture_output=True, text=True, check=False)
+
+    def drop_cd_line(source):
+        mutated = source.replace("    'cd /d \"%~dp0\"\\r\\n'\n", "")
+        if mutated == source:
+            raise SystemExit("drop_cd_line changed nothing; the P2-16 "
+                             "mutation no longer matches the source")
+        return mutated
+
+    def break_exe_name(source):
+        mutated = source.replace('"RowlGame.exe %*\\r\\n"', '"RowlGameX.exe %*\\r\\n"')
+        if mutated == source:
+            raise SystemExit("break_exe_name changed nothing; the P2-16 "
+                             "mutation no longer matches the source")
+        return mutated
+
+    def downgrade_to_lf(source):
+        mutated = source.replace('\\r\\n"', '\\n"')
+        if mutated == source:
+            raise SystemExit("downgrade_to_lf changed nothing; the P2-16 "
+                             "mutation no longer matches the source")
+        return mutated
+
+    def route_windows_to_posix(source):
+        """--platform windows shipping the POSIX launcher.
+
+        The content checks below all still pass on this: the POSIX launcher
+        satisfies the contract, it is just the wrong file. Only checking the
+        LAUNCHERS routing table catches it.
+        """
+        mutated = source.replace(
+            '"windows": ((WINDOWS_LAUNCHER_NAME, WINDOWS_LAUNCHER, False),)',
+            '"windows": ((POSIX_LAUNCHER_NAME, POSIX_LAUNCHER, True),)')
+        if mutated == source:
+            raise SystemExit("route_windows_to_posix changed nothing; the "
+                             "LAUNCHERS table no longer has that shape")
+        return mutated
+
+    def drop_newline_guard(source):
+        """Removing newline=\"\" lets a translating host rewrite the CRLF.
+
+        Invisible when the gate runs on POSIX (os.linesep is already "\n"),
+        so the gate asserts the writer keeps the guard rather than relying on
+        the emitted bytes alone.
+        """
+        mutated = source.replace('newline=""', 'newline=None')
+        if mutated == source:
+            raise SystemExit("drop_newline_guard changed nothing; the emit() "
+                             "open() no longer carries the newline guard")
+        return mutated
+
+    def drop_executable_bit(source):
+        mutated = source.replace(
+            "mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH", "mode")
+        if mutated == source:
+            raise SystemExit("drop_executable_bit changed nothing")
+        return mutated
+
+    # Control first: the unmutated copy must be GREEN, otherwise "red" below
+    # would only prove the harness is broken.
+    control = parity_against_mutated_tool("control", lambda source: source + "\n")
+    if control.returncode != 0:
+        raise SystemExit("the parity gate rejected the unmutated launcher "
+                         "producer: stdout={0.stdout!r} "
+                         "stderr={0.stderr!r}".format(control))
+
+    for tag, mutate, fragment in [
+        ("no-cd", drop_cd_line, "missing the working-directory pin"),
+        ("bad-exe", break_exe_name,
+         "is not a player executable the release verifier accepts"),
+        ("lf-endings", downgrade_to_lf, "bare LF line ending"),
+        ("windows-routes-to-posix", route_windows_to_posix,
+         "would write ['run_game.sh'], not 'run_game.bat'"),
+        ("newline-guard-dropped", drop_newline_guard, 'newline=""'),
+        ("no-exec-bit", drop_executable_bit, "is not executable"),
+    ]:
+        result = parity_against_mutated_tool(tag, mutate)
+        if result.returncode == 0:
+            raise SystemExit(
+                f"the parity gate stayed GREEN on mutation {tag!r} — the "
+                f"launcher contract is not actually enforced:\n"
+                f"stdout={result.stdout!r}\nstderr={result.stderr!r}")
+        if fragment not in result.stderr:
+            raise SystemExit(
+                f"the parity gate went red on {tag!r} but not for the expected "
+                f"reason ({fragment!r}): stderr={result.stderr!r}")
+        print(f"[ReleasePackageTests] parity gate RED on {tag}: {fragment}")
+
+    # The editor (editor/Services/ProjectBuildService.cs) writes its own copy
+    # of the launcher text. It is a second producer, so it is held to the same
+    # contract: dropping the cd pin there must turn the gate red even though
+    # tools/make_release_launchers.py is untouched.
+    def editor_drops_cd(source):
+        mutated = source.replace('\\r\\ncd /d \\"%~dp0\\"', '\\r\\n')
+        if mutated == source:
+            raise SystemExit("editor_drops_cd changed nothing; the editor "
+                             "launcher literal no longer has that shape")
+        return mutated
+
+    editor_mutation = parity_against_mutated_tool(
+        "editor-drops-cd", lambda source: source + "\n",
+        mutate_editor=editor_drops_cd)
+    if editor_mutation.returncode == 0:
+        raise SystemExit(
+            "the parity gate stayed GREEN when the editor's launcher lost its "
+            f"cd pin: stdout={editor_mutation.stdout!r}")
+    if "missing the working-directory pin" not in editor_mutation.stderr:
+        raise SystemExit(
+            "the editor mutation went red for the wrong reason: "
+            f"{editor_mutation.stderr!r}")
+    print("[ReleasePackageTests] parity gate RED on editor-drops-cd: the "
+          "editor's launcher copy is checked too.")
+
+    print("[ReleasePackageTests] check_release_launcher_parity.py is red-capable: "
+          "control green, 7 launcher mutations red (missing cd pin in the tool "
+          "and in the editor, broken exe name, LF endings, wrong platform "
+          "routing, dropped newline guard, missing exec bit).")
 
     missing_runtime = root / "missing-runtime"
     shutil.copytree(release, missing_runtime)

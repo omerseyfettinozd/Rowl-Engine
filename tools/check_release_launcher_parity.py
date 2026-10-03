@@ -1,33 +1,59 @@
 #!/usr/bin/env python3
-"""Static gate: every release-packaging job emits a launcher before verifying.
+"""Static gate: every release-packaging job emits a launcher before verifying,
+and every emitted launcher satisfies the launcher contract.
 
 The Windows packaging step cannot be executed from a Linux runner, so
 "the Windows job is fixed" is otherwise unverifiable until someone reads
 a CI log. This gate makes the contract statically checkable on any
-machine: it parses .github/workflows/ci.yml and asserts that every step
-which runs tools/verify_release_package.py also runs
-tools/make_release_launchers.py, with a platform that matches the job's
-runner.
+machine. It does four things:
 
-It also checks the two ends against each other -- the launcher names the
-helper emits must be exactly the names the verifier accepts -- so a
-rename on either side fails here instead of silently turning the release
-gate red on one platform only.
+1. Workflow coverage -- parses .github/workflows/ci.yml and asserts that
+   every step which runs tools/verify_release_package.py also runs
+   tools/make_release_launchers.py, with a platform that matches the job's
+   runner.
+2. Name parity -- the launcher names the helper emits must be exactly the
+   names the verifier accepts, so a rename on either side fails here instead
+   of silently turning the release gate red on one platform only.
+3. CONTENT parity -- the actual launcher TEXT must satisfy
+   tools/launcher_contract.py. Before P2-16 this file only checked that the
+   .bat used CRLF; deleting `cd /d "%~dp0"` or corrupting the exe name left
+   this gate, tools/verify_release_package.py and tests/test_release_package.py
+   all green. That is a broken launcher shipping, so the lines that make the
+   .bat work are now asserted here.
+4. Write-path parity -- tools/make_release_launchers.py is actually RUN into
+   a temporary release root, and the bytes that land on disk are re-checked
+   against the same contract. The constants can be right while the writer
+   mangles them (newline translation is exactly how CRLF dies).
 
 Exit 0 = parity holds. Exit 1 = drift (diagnostics on stderr).
 """
 
+import contextlib
+import importlib.util
+import inspect
+import io
 import os
 import re
 import sys
+import tempfile
 
 import yaml
 
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(ROOT, "tools"))
+
+import launcher_contract as contract  # noqa: E402
+
 WORKFLOW = os.path.join(ROOT, ".github", "workflows", "ci.yml")
 VERIFIER = os.path.join(ROOT, "tools", "verify_release_package.py")
 LAUNCHER_TOOL = os.path.join(ROOT, "tools", "make_release_launchers.py")
+# The editor ships its own copy of the launcher text
+# (editor/Services/ProjectBuildService.cs). It is a second producer of the
+# same artifact, so it is checked against the same contract here rather than
+# being allowed to drift silently.
+EDITOR_BUILD_SERVICE = os.path.join(ROOT, "editor", "Services",
+                                   "ProjectBuildService.cs")
 
 VERIFIER_REF = "tools/verify_release_package.py"
 LAUNCHER_REF = "tools/make_release_launchers.py"
@@ -50,6 +76,14 @@ def load_workflow():
     if not jobs:
         raise ValueError("workflow defines no jobs")
     return jobs
+
+
+def load_launcher_module():
+    spec = importlib.util.spec_from_file_location("rowl_make_release_launchers",
+                                                  LAUNCHER_TOOL)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def step_run(step):
@@ -117,50 +151,217 @@ def check_workflow():
 
 
 def check_launcher_contract():
-    """The emitted names must be exactly the names the verifier accepts."""
+    """The emitted text must satisfy the launcher contract, and the names
+    must be exactly the names the verifier accepts."""
     problems = []
-    with open(LAUNCHER_TOOL, "r", encoding="utf-8") as handle:
-        source = handle.read()
+    module = load_launcher_module()
+
     with open(VERIFIER, "r", encoding="utf-8") as handle:
         verifier_source = handle.read()
 
-    namespace = {}
-    exec(compile(source, LAUNCHER_TOOL, "exec"), namespace)  # noqa: S102
+    player_names = contract.player_basenames()
 
-    windows_launcher = namespace["WINDOWS_LAUNCHER"]
-    posix_launcher = namespace["POSIX_LAUNCHER"]
-    if not windows_launcher.strip():
-        problems.append("the Windows launcher is empty")
-    if not posix_launcher.strip():
-        problems.append("the POSIX launcher is empty")
-    if not posix_launcher.startswith("#!"):
-        problems.append("the POSIX launcher has no shebang line")
-    # cmd.exe is the consumer of the .bat: every newline must be CRLF.
-    # A lone LF survives a text-mode write here (open() in text mode would
-    # translate the LF half of a CRLF), so assert both directions.
-    if "\r\n" not in windows_launcher:
-        problems.append("the Windows launcher has no CRLF line ending")
-    if "\n" in windows_launcher.replace("\r\n", ""):
-        problems.append("the Windows launcher has a bare LF line ending")
-    if "\r" in posix_launcher:
-        problems.append("the POSIX launcher has a CR; /bin/sh will not run it")
+    # The verifier must still consume the shared name lists, not a private
+    # copy: that is what makes the loop above a real two-sided check.
+    for reference in ("launcher_contract.LAUNCHER_NAMES",
+                      "launcher_contract.PLAYER_NAMES"):
+        if reference not in verifier_source:
+            problems.append(
+                f"tools/verify_release_package.py no longer reads "
+                f"{reference}; the producer/consumer name contract is now "
+                f"checked against nothing")
 
-    emitted = {namespace["POSIX_LAUNCHER_NAME"], namespace["WINDOWS_LAUNCHER_NAME"]}
-    match = re.search(r'for name in \(([^)]*)\)', verifier_source)
-    if not match:
+    windows_launcher = module.WINDOWS_LAUNCHER
+    posix_launcher = module.POSIX_LAUNCHER
+
+    # Content. This is the P2-16 addition: the .bat used to be checked for
+    # CRLF and nothing else, so removing the working-directory pin or the
+    # exe name was invisible here.
+    problems.extend(contract.windows_launcher_problems(windows_launcher,
+                                                       player_names))
+    problems.extend(contract.posix_launcher_problems(posix_launcher,
+                                                     player_names,
+                                                     full=True))
+
+    emitted = {module.POSIX_LAUNCHER_NAME, module.WINDOWS_LAUNCHER_NAME}
+    accepted = contract.LAUNCHER_NAMES
+    for name in sorted(emitted - accepted):
         problems.append(
-            "could not locate the verifier's launcher name list; the "
-            "producer/consumer name contract is unverified")
-    else:
-        accepted = set(re.findall(r'"([^"]+)"', match.group(1)))
-        if not accepted:
-            problems.append("the verifier's launcher name list is empty")
-        for name in sorted(emitted - accepted):
+            f"the helper emits {name!r} but the verifier does not accept it")
+    for name in sorted(accepted - emitted):
+        problems.append(
+            f"the verifier accepts {name!r} but the helper never emits it")
+
+    # The platform table must actually route each platform to its own
+    # launcher. Without this, pointing --platform windows at the POSIX
+    # launcher passes every content check below: the POSIX launcher satisfies
+    # the contract, it is simply the wrong file, and the Windows release
+    # would ship a shell script under a .bat name.
+    expected = {
+        "posix": (module.POSIX_LAUNCHER_NAME, module.POSIX_LAUNCHER),
+        "windows": (module.WINDOWS_LAUNCHER_NAME, module.WINDOWS_LAUNCHER),
+    }
+    for platform, (name, text) in sorted(expected.items()):
+        entries = module.LAUNCHERS.get(platform)
+        if not entries:
+            problems.append(f"the helper has no {platform!r} platform entry")
+            continue
+        names = {entry[0] for entry in entries}
+        texts = {entry[1] for entry in entries}
+        if names != {name}:
             problems.append(
-                f"the helper emits {name!r} but the verifier does not accept it")
-        for name in sorted(accepted - emitted):
+                f"--platform {platform} would write {sorted(names)}, not "
+                f"{name!r}; the Windows packaging step would ship the wrong "
+                f"launcher")
+        if texts != {text}:
             problems.append(
-                f"the verifier accepts {name!r} but the helper never emits it")
+                f"--platform {platform} would write launcher content that is "
+                f"not the {name!r} constant")
+
+    # The .bat is written with newline="" on purpose: a text-mode write on a
+    # platform that translates newlines rewrites the CRLF cmd.exe is handed.
+    # That corruption is invisible when this gate runs on POSIX -- os.linesep
+    # is "\n" here, so the bytes survive -- which is exactly why the check is
+    # static rather than left to the byte comparison below.
+    if 'newline=""' not in inspect.getsource(module.emit):
+        problems.append(
+            "make_release_launchers.emit() no longer opens the launcher with "
+            "newline=\"\"; on a newline-translating host the .bat's CRLF would "
+            "be rewritten before it reaches disk")
+    return problems
+
+
+def check_emitted_bytes():
+    """Run the helper for real and re-check the bytes it writes.
+
+    The constants above can be correct while the writer is not: open() in
+    text mode on a platform that translates newlines rewrites the CRLF the
+    .bat depends on, and no static read of the constant would notice.
+    """
+    problems = []
+    module = load_launcher_module()
+    platforms = sorted(module.LAUNCHERS)
+    with tempfile.TemporaryDirectory(prefix="rowl-launcher-parity-") as directory:
+        for platform in platforms:
+            root = os.path.join(directory, platform)
+            os.mkdir(root)
+            try:
+                # emit() narrates on stdout; the gate's own report is the
+                # only thing a CI log reader should have to parse.
+                with contextlib.redirect_stdout(io.StringIO()):
+                    module.emit(root, platform)
+            except (OSError, ValueError) as error:
+                problems.append(
+                    f"make_release_launchers.emit({platform!r}) failed: {error}")
+                continue
+            present = {entry for entry in os.listdir(root)}
+            wanted = {name for name, _, _ in module.LAUNCHERS[platform]}
+            for name in sorted(present - wanted):
+                problems.append(
+                    f"--platform {platform} wrote unexpected file {name!r}")
+            for missing in sorted(wanted - present):
+                problems.append(
+                    f"--platform {platform} did not write {missing!r}")
+            for name in sorted(wanted & present):
+                with open(os.path.join(root, name), "r", encoding="utf-8",
+                          newline="") as handle:
+                    problems.extend(contract.launcher_problems(
+                        name, handle.read(), contract.PLAYER_NAMES,
+                        full=True))
+            # The POSIX launcher is invoked as an executable, not read: it
+            # must carry the execute bit.
+            posix_path = os.path.join(root, module.POSIX_LAUNCHER_NAME)
+            if os.path.isfile(posix_path) and not os.access(posix_path, os.X_OK):
+                problems.append(
+                    f"{module.POSIX_LAUNCHER_NAME} is not executable; "
+                    f"./run_game.sh would fail with permission denied")
+    return problems
+
+
+def decode_csharp_literal(text):
+    """Decode a C# regular string literal body into its runtime characters."""
+    out = []
+    index = 0
+    while index < len(text):
+        char = text[index]
+        if char == "\\" and index + 1 < len(text):
+            index += 1
+            escape = text[index]
+            out.append({"n": "\n", "r": "\r", "t": "\t", "0": "\0",
+                        "\\": "\\", '"': '"', "'": "'"}.get(escape,
+                                                             "\\" + escape))
+        else:
+            out.append(char)
+        index += 1
+    return "".join(out)
+
+
+def editor_launcher_literals():
+    """The launcher text the editor build service writes, or None."""
+    try:
+        with open(EDITOR_BUILD_SERVICE, "r", encoding="utf-8") as handle:
+            source = handle.read()
+    except OSError:
+        return None
+    literals = {}
+    for name in (contract.POSIX_LAUNCHER_NAME, contract.WINDOWS_LAUNCHER_NAME):
+        marker = '"%s"' % name
+        start = source.find(marker)
+        if start < 0:
+            return None
+        # The marker is a path argument, e.g. Path.Combine(staging, "run_game.bat"),
+        # so the launcher TEXT is the next string literal after the following
+        # argument separator.
+        comma = source.find(",", start + len(marker))
+        if comma < 0:
+            return None
+        cursor = comma + 1
+        while cursor < len(source) and source[cursor] in " \t":
+            cursor += 1
+        if cursor >= len(source) or source[cursor] != '"':
+            return None
+        cursor += 1
+        # A C# literal cannot contain a bare `"`, so the closing quote of the
+        # value is the first one the escape walk does not consume.
+        body = []
+        while cursor < len(source):
+            char = source[cursor]
+            if char == "\\" and cursor + 1 < len(source):
+                body.append(source[cursor:cursor + 2])
+                cursor += 2
+                continue
+            if char == '"':
+                break
+            body.append(char)
+            cursor += 1
+        if cursor >= len(source):
+            return None
+        literals[name] = decode_csharp_literal("".join(body))
+    return literals
+
+
+def check_editor_launcher_parity():
+    """The editor emits the same launcher text; the two copies must agree."""
+    literals = editor_launcher_literals()
+    if literals is None:
+        return [("editor/Services/ProjectBuildService.cs: could not locate the "
+                 "launcher literals; the editor's copy of the launcher text is "
+                 "no longer compared against the helper's")]
+    module = load_launcher_module()
+    problems = []
+    expected = {
+        contract.POSIX_LAUNCHER_NAME: module.POSIX_LAUNCHER,
+        contract.WINDOWS_LAUNCHER_NAME: module.WINDOWS_LAUNCHER,
+    }
+    for name, text in sorted(literals.items()):
+        problems.extend(contract.launcher_problems(name, text,
+                                                   contract.PLAYER_NAMES,
+                                                   full=True))
+        if expected.get(name) != text:
+            problems.append(
+                f"editor/Services/ProjectBuildService.cs writes a different "
+                f"{name} than tools/make_release_launchers.py; the editor "
+                f"build and the CI package would ship different launchers")
     return problems
 
 
@@ -168,7 +369,9 @@ def main():
     try:
         checked, problems = check_workflow()
         problems.extend(check_launcher_contract())
-    except (OSError, ValueError, yaml.YAMLError) as error:
+        problems.extend(check_emitted_bytes())
+        problems.extend(check_editor_launcher_parity())
+    except (OSError, ValueError, yaml.YAMLError, ImportError) as error:
         print("[LauncherParity] ERROR: " + str(error), file=sys.stderr)
         return 1
 
@@ -182,7 +385,8 @@ def main():
     for title in checked:
         print(f"[LauncherParity] OK  {title}")
     print(f"[LauncherParity] {len(checked)} packaging step(s) emit a launcher "
-          f"before verification; launcher names match the verifier.")
+          f"before verification; launcher names and content match the "
+          f"verifier.")
     return 0
 
 

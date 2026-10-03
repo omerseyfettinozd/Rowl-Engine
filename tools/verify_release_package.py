@@ -8,6 +8,10 @@ import os
 import struct
 import sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+import launcher_contract  # noqa: E402
+
 
 HEADER = struct.Struct("<4sHIQ")
 ENTRY = struct.Struct("<QIQQQI")
@@ -223,6 +227,50 @@ def verify_mod_overrides(mods_root):
                 fail("mods override contains a non-regular entry: " + candidate)
 
 
+def verify_release_launchers(release_root):
+    """A launcher that exists but cannot start the game is still a broken release.
+
+    P2-16: this check used to stop at "run_game.sh or run_game.bat exists and
+    is non-empty". Deleting `cd /d "%~dp0"` from run_game.bat — the line that
+    pins the working directory so RowlGame.exe and the .dll files beside it
+    resolve — shipped a release that failed on first double-click while every
+    gate stayed green.
+
+    Tiering: run_game.bat is held to the FULL contract (the Windows launcher
+    has no fallback — cmd.exe has no equivalent of "start where the script
+    lives", so each line is load-bearing). run_game.sh is held to the MINIMAL
+    contract, because the POSIX launcher degrades gracefully when invoked from
+    inside the release directory and older hand-written launchers in the wild
+    use that form; the relocatable shape the helper emits is checked by
+    tools/check_release_launcher_parity.py, which runs on every CI job.
+    """
+    player_names = launcher_contract.player_basenames()
+    # A release must ship the launcher for the player it actually contains.
+    # Without this, a Windows-shaped release (RowlGame.exe + DLLs) carrying
+    # only run_game.sh passes: the .sh exists, and at MINIMAL tier a shell
+    # script that execs the player is a valid launcher. That is exactly the
+    # fixture bug P2-16 found -- tests/test_demo_packaged.py wrote a POSIX
+    # launcher on every platform, so no Windows run ever exercised the .bat.
+    if os.path.isfile(os.path.join(release_root, "RowlGame.exe")):
+        if not os.path.isfile(os.path.join(release_root, "run_game.bat")):
+            fail("release ships RowlGame.exe but no run_game.bat launcher; a "
+                 "Windows user would have no launcher for this player")
+    elif os.path.isfile(os.path.join(release_root, "RowlGame")):
+        if not os.path.isfile(os.path.join(release_root, "run_game.sh")):
+            fail("release ships RowlGame but no run_game.sh launcher")
+    for name in sorted(launcher_contract.LAUNCHER_NAMES):
+        path = os.path.join(release_root, name)
+        if not os.path.isfile(path):
+            continue
+        with open(path, "r", encoding="utf-8", errors="replace", newline="") as handle:
+            text = handle.read()
+        problems = launcher_contract.launcher_problems(
+            name, text, player_names, full=(name == "run_game.bat"))
+        if problems:
+            fail("release launcher does not satisfy its contract — "
+                 + "; ".join(problems))
+
+
 def verify(release_root):
     root = os.path.abspath(release_root)
     if not os.path.isdir(root):
@@ -241,12 +289,14 @@ def verify(release_root):
     notices_path = os.path.join(root, "THIRD_PARTY_NOTICES.md")
     if not os.path.isfile(notices_path) or os.path.getsize(notices_path) == 0:
         fail("missing third-party license inventory: THIRD_PARTY_NOTICES.md")
-    if not (os.path.isfile(os.path.join(root, "RowlGame")) or
-            os.path.isfile(os.path.join(root, "RowlGame.exe"))):
+    if not any(os.path.isfile(os.path.join(root, name))
+               for name in sorted(launcher_contract.PLAYER_NAMES)):
         fail("missing standalone player executable")
-    launchers = [os.path.join(root, name) for name in ("run_game.sh", "run_game.bat")]
+    launchers = [os.path.join(root, name)
+                 for name in sorted(launcher_contract.LAUNCHER_NAMES)]
     if not any(os.path.isfile(path) and os.path.getsize(path) > 0 for path in launchers):
         fail("missing release launcher (run_game.sh or run_game.bat)")
+    verify_release_launchers(root)
     if not any(name.startswith(("libRowlEngineCore", "RowlEngineCore"))
                for name in os.listdir(root)):
         fail("missing native RowlEngineCore runtime library")
