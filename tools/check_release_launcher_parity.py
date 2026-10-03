@@ -34,6 +34,15 @@ machine. It does four things:
    job stayed green. Step 4 cannot catch that from a Linux runner, because
    os.linesep is "\n" here and the bytes look right. Step 5 models the Windows
    write filter and asserts the launchers survive it.
+6. The simulation itself is platform-independent. Step 5's value rests
+   entirely on the filter behaving like Windows on every machine, and the
+   first version of it did not: it wrapped the host's own text-mode handle,
+   so on Linux it translated once (correct by accident) and on Windows it
+   translated twice, turning "a\n" into "a\r\r\n". Only the Windows runner
+   could see that, which is precisely how a Linux-runnable gate turns into
+   a machine-runnable one. check_simulation_is_platform_independent()
+   re-runs the filter on top of a host that ALSO translates and requires
+   exactly one translation, so the failure is reproducible on Linux.
 
 Exit 0 = parity holds. Exit 1 = drift (diagnostics on stderr).
 """
@@ -507,7 +516,13 @@ def check_launcher_contract():
 
 
 class _WindowsTextWriter:
-    """A text-mode handle whose writes pass through the Windows filter."""
+    """A text-mode handle whose writes pass through the Windows filter.
+
+    The filter runs EXACTLY ONCE, here, on data that has not been through a
+    newline-translating layer yet -- `_windows_open` guarantees that by
+    handing this wrapper a text handle opened with newline="". See
+    `_translation_free_text_handle` for why that matters.
+    """
 
     def __init__(self, handle, seen):
         self._handle = handle
@@ -516,6 +531,13 @@ class _WindowsTextWriter:
     def write(self, data):
         self._seen.append(data)
         return self._handle.write(contract.windows_text_mode_write(data))
+
+    def writelines(self, lines):
+        # Routed through write() so the filter cannot be bypassed. The real
+        # TextIOWrapper does the same and returns None; matching that keeps
+        # the wrapper substitutable for the handle it stands in for.
+        for line in lines:
+            self.write(line)
 
     def __enter__(self):
         self._handle.__enter__()
@@ -528,27 +550,310 @@ class _WindowsTextWriter:
         return getattr(self._handle, name)
 
 
+def _normalize_open_args(args, kwargs):
+    """open()'s positional tail, as a keyword dict.
+
+    open(file, mode, buffering, encoding, errors, newline, closefd, opener)
+    accepts any of those by position. Binding them by hand keeps the
+    patched open() faithful for a caller that passes `newline` (or any
+    other argument) positionally -- otherwise `kwargs.get("newline")`
+    would miss a newline that was in fact requested, and this gate would
+    translate a write the caller had explicitly asked to be left alone.
+
+    A name given both positionally and by keyword raises TypeError, the
+    same as the real open(), rather than silently picking one.
+    """
+    names = ("buffering", "encoding", "errors", "newline", "closefd", "opener")
+    bound = {}
+    for name, value in zip(names, args):
+        if name in kwargs:
+            raise TypeError(
+                f"open() got multiple values for argument {name!r}")
+        bound[name] = value
+    bound.update(kwargs)
+    return bound
+
+
+def _translation_free_text_handle(real_open, file, mode, bound):
+    """Open `file` for text writing WITHOUT any newline translation.
+
+    This is the heart of the platform independence. Two newline-translating
+    layers must never see the same write:
+
+      * the simulated Windows filter in _WindowsTextWriter, and
+      * whatever the HOST's own open() does with newline=None.
+
+    On Linux the second layer is the identity (os.linesep is "\\n"), so the
+    first version of this gate -- which handed the wrapper a plain text
+    handle and let the host's open() sit underneath it -- produced the
+    right bytes by luck. On Windows that host layer rewrites every "\\n" to
+    "\\r\\n" as well, so "a\\n" reached the disk as "a\\r\\r\\n" and the
+    gate's own self-test went red on the Windows runner only. The gate was
+    not modelling Windows; it was modelling "Windows plus whatever this
+    machine does", which is a different number on every machine.
+
+    Opening the substrate with newline="" removes the host's layer by
+    construction, so the bytes on disk are a function of `data` alone and
+    are identical on Linux, macOS and Windows. That is the open-rule
+    implementation: correct everywhere by definition, not correct only
+    where the accident held.
+
+    Only the WRITE filter is modelled. A read through this handle sees no
+    newline translation either, whereas a real Windows host would fold
+    "\\r\\n" to "\\n" on a read; the launcher producer never reads, and a
+    gate that claimed otherwise would be claiming more than it tests.
+    """
+    bound = dict(bound)
+    bound["newline"] = ""
+    return real_open(file, mode, **bound)
+
+
 def _windows_open(seen):
     """An `open` that translates newlines on text-mode WRITES, like Windows.
 
     CPython rewrites every "\\n" in a text-mode write to os.linesep, which is
-    "\\r\\n" on Windows. open() documents it; this reproduces it. Binary mode
-    ("wb") is deliberately NOT affected, because CPython performs no newline
-    translation in binary mode at all -- so a producer that writes binaries is
-    genuinely immune to the host, and one that writes text is not.
+    "\\r\\n" on Windows. open() documents it; this reproduces it, and it
+    reproduces it DETERMINISTICALLY: the translation is applied by
+    _WindowsTextWriter alone, over a handle that provably does not translate
+    (newline=""). The same input yields the same bytes on every platform, so
+    a Linux runner exercises exactly the filter a Windows runner would.
+
+    A caller that passes newline="" or any other value asked for a specific
+    translation; it gets it from the real host and is left alone, matching
+    open()'s documented behaviour rather than overriding it.
     """
     real_open = builtins.open
 
     def patched(file, mode="r", *args, **kwargs):
-        newline = kwargs.get("newline", None)
+        bound = _normalize_open_args(args, kwargs)
         writing = any(flag in mode for flag in ("w", "a", "+", "x"))
-        translating = writing and "b" not in mode and newline is None
-        handle = real_open(file, mode, *args, **kwargs)
+        translating = writing and "b" not in mode and bound.get("newline") is None
         if not translating:
-            return handle
-        return _WindowsTextWriter(handle, seen)
+            return real_open(file, mode, **bound)
+        return _WindowsTextWriter(
+            _translation_free_text_handle(real_open, file, mode, bound), seen)
 
     return patched
+
+
+def _windows_like_host_open(real_open):
+    """A stand-in for a Windows host's own `open()`.
+
+    Used only by the self-test below, to answer the question the Linux
+    runner cannot answer on its own: "what if the machine underneath this
+    gate already translates newlines, the way a Windows runner's does?"
+
+    It is REAL CPython behaviour, not a re-implementation: newline="\\r\\n"
+    is documented to rewrite every "\\n" written on EVERY platform. That is
+    what makes it a fair stand-in -- it goes through the same TextIOWrapper
+    machinery the simulation itself has to get right.
+    """
+    def host_open(file, mode="r", *args, **kwargs):
+        bound = _normalize_open_args(args, kwargs)
+        writing = any(flag in mode for flag in ("w", "a", "+", "x"))
+        if (writing and "b" not in mode
+                and bound.get("newline") is None):
+            bound["newline"] = contract.WINDOWS_TEXT_WRITE_LINESEP
+        return real_open(file, mode, **bound)
+
+    return host_open
+
+
+def _probe_bytes(directory, name, factory, payload="a\n", mode="w"):
+    """Write `payload` through `factory()` and return the bytes on disk.
+
+    `factory` is called to build the open() to install as builtins.open.
+    Composing two factories -- a Windows-like host, then the simulation on
+    top of it -- is how the double-translation regression is reproduced on
+    Linux, so the layering is a parameter rather than something each caller
+    hand-rolls.
+    """
+    probe = os.path.join(directory, name)
+    real_open = builtins.open
+    builtins.open = factory()
+    try:
+        with builtins.open(probe, mode, encoding="utf-8") as handle:
+            handle.write(payload)
+    finally:
+        builtins.open = real_open
+    with real_open(probe, "rb") as handle:
+        return handle.read()
+
+
+def check_simulation_is_platform_independent():
+    """The simulation must not depend on the host it runs on.
+
+    The first version of this gate wrapped the host's own text-mode handle,
+    so the Windows filter it simulated sat ON TOP of whatever the host's
+    open() already did. On Linux that host layer is the identity, so the
+    arithmetic came out right; on Windows it translated a second time and
+    the probe read b'a\\r\\r\\n'. The gate was green everywhere it had ever
+    run and red on the one platform that could disprove it.
+
+    A simulation that has to trust the host is not a simulation. These
+    checks pin the property down from both sides:
+
+      1. Stacked on a translating host, the filter still produces exactly
+         ONE translation. This is the regression test for the CI failure,
+         and it runs on Linux because the Windows-like host underneath is
+         built from real CPython behaviour rather than from os.linesep.
+      2. On a non-translating host it produces the same bytes -- the
+         simulation is a function of the payload, not of the machine.
+      3. It does not touch binary mode or an explicit newline=, so a
+         producer that already cannot be corrupted is left alone.
+    """
+    problems = []
+    real_open = builtins.open
+
+    with tempfile.TemporaryDirectory(
+            prefix="rowl-launcher-sim-",
+            dir=os.environ.get("ROWL_TMPDIR")) as directory:
+        # (1) The decisive one. Underneath the simulation sits a host that
+        # translates, which is exactly the Windows runner's situation.
+        # Composition order matters: _windows_open captures builtins.open
+        # when it is called, so the Windows-like host must be installed
+        # first and the simulation built on top of it.
+        seen = []
+
+        def windows_host_then_simulation():
+            builtins.open = _windows_like_host_open(real_open)
+            return _windows_open(seen)
+
+        windows_host_bytes = _probe_bytes(
+            directory, "on-windows-host.txt", windows_host_then_simulation)
+        if windows_host_bytes != b"a\r\n":
+            problems.append(
+                "the simulated-Windows open() does not translate exactly once "
+                f"when the host underneath also translates (wrote "
+                f"{windows_host_bytes!r}, expected b'a\\r\\n'); the filter is "
+                f"layered on the host's own, so its output depends on the "
+                f"machine it runs on and the check below cannot fail "
+                f"consistently")
+        if not seen:
+            problems.append(
+                "the simulated-Windows open() observed no text-mode write at "
+                "all, so it is not intercepting anything")
+
+        # (2) Same payload, non-translating host: identical bytes. Together
+        # with (1) this says the result is a function of the payload alone.
+        plain = _probe_bytes(directory, "on-posix-host.txt", lambda: _windows_open([]))
+        if plain != b"a\r\n":
+            problems.append(
+                "the simulated-Windows open() does not translate newlines on "
+                f"a text-mode write (wrote {plain!r}, expected b'a\\r\\n'); "
+                f"the host-independence check below is not simulating "
+                f"anything and cannot fail")
+        if plain != windows_host_bytes:
+            problems.append(
+                "the simulated-Windows open() produced different bytes "
+                f"depending on the host underneath it ({plain!r} vs "
+                f"{windows_host_bytes!r}); a simulation whose output depends "
+                f"on the machine is not a simulation")
+
+        # (3) Binary mode and an explicit newline are the two cases where a
+        # text-mode producer is ALREADY immune. Touching either would mean
+        # the filter was a blunt instrument that flagged correct writers.
+        # Both go through the PATCHED open, stacked on a translating host --
+        # otherwise this would assert that the real open() is faithful,
+        # which is the very assumption this gate exists not to make.
+        binary_path = os.path.join(directory, "binary.bin")
+        builtins.open = _windows_like_host_open(real_open)
+        builtins.open = _windows_open([])
+        try:
+            with builtins.open(binary_path, "wb") as handle:
+                handle.write(b"a\r\n")
+        finally:
+            builtins.open = real_open
+        with real_open(binary_path, "rb") as handle:
+            untouched = handle.read()
+        if untouched != b"a\r\n":
+            problems.append(
+                "the simulated-Windows open() rewrote a binary-mode write "
+                f"({untouched!r}); binary mode is immune to the host, so the "
+                f"filter must leave it alone")
+
+        explicit_seen = []
+        explicit = os.path.join(directory, "explicit-newline.txt")
+        builtins.open = _windows_open(explicit_seen)
+        try:
+            with builtins.open(explicit, "w", encoding="utf-8",
+                               newline="") as handle:
+                handle.write("a\n")
+        finally:
+            builtins.open = real_open
+        with real_open(explicit, "rb") as handle:
+            explicit_bytes = handle.read()
+        if explicit_bytes != b"a\n":
+            problems.append(
+                "the simulated-Windows open() rewrote a write that explicitly "
+                f"asked for newline='' ({explicit_bytes!r}); the caller "
+                f"already disabled translation and the filter must not "
+                f"override that")
+        if explicit_seen:
+            problems.append(
+                "the simulated-Windows open() intercepted a write that "
+                "explicitly asked for newline=''; a caller that named its "
+                "newline must be left alone")
+
+        # (4) The wrapper must reach the producer's REAL path, and the
+        # producer must be writing through the layer that CAN be corrupted.
+        # Two facts, and both are load-bearing:
+        #   - a text-mode write from emit() must be intercepted, or the
+        #     simulation sits on a path the producer never takes;
+        #   - a binary write must produce bytes identical to the contract,
+        #     which is what write_launcher_bytes() is supposed to guarantee.
+        # The probe below is a deliberately text-mode producer run through
+        # the same patched open. It is the mutation this gate exists to
+        # catch, run in miniature: if it is not caught, nothing else here
+        # can be trusted either.
+        module = load_launcher_module()
+        for platform in sorted(module.LAUNCHERS):
+            root = os.path.join(directory, "producer-" + platform)
+            os.mkdir(root)
+            produced = []
+            builtins.open = _windows_like_host_open(real_open)
+            builtins.open = _windows_open(produced)
+            try:
+                with contextlib.redirect_stdout(io.StringIO()):
+                    module.emit(root, platform)
+            except (OSError, ValueError):
+                continue  # a broken constant is the producer's problem
+            finally:
+                builtins.open = real_open
+            for name, _, _ in module.LAUNCHERS[platform]:
+                with real_open(os.path.join(root, name), "rb") as handle:
+                    data = handle.read()
+                problems.extend(contract.newline_problems(
+                    name, data,
+                    label=f"{name} emitted through the simulated Windows "
+                          f"stack by emit({platform!r})"))
+
+        # The miniature mutation: the same producer contract, written in
+        # text mode, MUST come out wrong. If this passes, the simulation is
+        # not detecting the defect it claims to model.
+        mutant = os.path.join(directory, "text-mode-mutant.txt")
+        builtins.open = _windows_like_host_open(real_open)
+        builtins.open = _windows_open([])
+        try:
+            with builtins.open(mutant, "w", encoding="utf-8") as handle:
+                handle.write(module.POSIX_LAUNCHER)
+        finally:
+            builtins.open = real_open
+        with real_open(mutant, "rb") as handle:
+            mutant_bytes = handle.read()
+        if not contract.newline_problems(
+                module.POSIX_LAUNCHER_NAME, mutant_bytes):
+            problems.append(
+                "a text-mode write of the POSIX launcher survived the "
+                "simulated Windows stack and still satisfies the contract; "
+                "the filter is not detecting the defect this gate guards "
+                "against, so a real host-dependent producer would pass")
+        if mutant_bytes == module.POSIX_LAUNCHER.encode("utf-8"):
+            problems.append(
+                "the simulated Windows stack left a text-mode write byte-for-"
+                "byte identical; no newline translation reached the disk at "
+                "all, so the simulation is inert")
+    return problems
 
 
 def check_line_endings_are_host_independent():
@@ -563,6 +868,11 @@ def check_line_endings_are_host_independent():
     corruption is invisible to a byte comparison and the same code ships a
     broken run_game.sh to the Windows job. That is why this bug reached CI
     while every Linux, sanitizer and arm64 job stayed green.
+
+    The simulation this rests on is itself checked, platform-independently,
+    by check_simulation_is_platform_independent() -- a harness that only
+    works on the machine it was written on cannot support a claim about
+    other machines.
     """
     problems = []
     module = load_launcher_module()
@@ -777,6 +1087,7 @@ def main():
         checked, problems = check_workflow()
         problems.extend(check_launcher_contract())
         problems.extend(check_emitted_bytes())
+        problems.extend(check_simulation_is_platform_independent())
         problems.extend(check_line_endings_are_host_independent())
         problems.extend(check_editor_launcher_parity())
     except (OSError, ValueError, ImportError) as error:
