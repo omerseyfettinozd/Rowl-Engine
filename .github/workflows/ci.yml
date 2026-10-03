@@ -3,6 +3,7 @@ name: Build and test
 on:
   push:
   pull_request:
+  workflow_dispatch:
   schedule:
     # Sanitizer tam-süit (soak/stres dahil) nightly; PR/push'ta hızlı alt-küme (T0).
     - cron: '23 2 * * *'
@@ -260,7 +261,7 @@ jobs:
 
   sanitizer-nightly:
     # Tam süit (soak/stres dahil), yalnızca schedule'da koşar (T0).
-    if: github.event_name == 'schedule'
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     timeout-minutes: 90
 
@@ -303,9 +304,12 @@ jobs:
       - name: Build native tests only
         run: cmake --build build-sanitizer --target rowl_tests --parallel 2
 
-      - name: Test under ASan and UBSan (full suite)
+      - name: Test under ASan and UBSan (full suite, perf floors report-only)
+        # Sanitizer yavaslamasi (~2.2x, hosted runner'da dalgali) zaman tavanlarini
+        # sistematik asar; tavan kapisi native linux/benchmark-compare islerinin
+        # konusudur. Bellek/UB/boyut kilitleri enforce kalir (TSan isiyle ayni desen).
         run: |
-          ASAN_OPTIONS=halt_on_error=1:print_stacktrace=1:detect_leaks=0 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 ctest --test-dir build-sanitizer -R "rowl_native_tests|rowl_benchmark_tool_tests" --output-on-failure --timeout 1800
+          ROWL_PERF_FLOOR=report ASAN_OPTIONS=halt_on_error=1:print_stacktrace=1:detect_leaks=0 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 ctest --test-dir build-sanitizer -R "rowl_native_tests|rowl_benchmark_tool_tests" --output-on-failure --timeout 1800
 
   tsan-nightly:
     # K6 (B3b): ThreadSanitizer tam-süit, yalnızca schedule'da koşar.
@@ -314,7 +318,7 @@ jobs:
     # + tam-süit 0 TSan uyarısı. Zamanlama-tavanları TSan yavaşlatmasında
     # sistematik aşılır → ROWL_PERF_FLOOR=report (Windows CI deseni); tavan
     # kapısı benchmark-compare işinin konusudur, TSan'ın değil.
-    if: github.event_name == 'schedule'
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     timeout-minutes: 90
 

@@ -167,17 +167,18 @@ void test_rc_soak_and_data_safety() {
             exit(1);
         }
         if (firstRss > 0) {
-            // Under ASan the allocator (quarantine, arenas) moves RSS by
-            // tens of MB on its own, so the tight 8MB production tolerance
+            // Under ASan/TSan the runtime (ASan quarantine and arenas, TSan
+            // shadow memory and sync metadata) moves RSS by tens of MB on
+            // its own, so the tight 8MB production tolerance
             // is meaningless there; leak detection under sanitizers is
             // LSan's job (currently out of scope), not this gauge's.
             // NOTE: __has_feature is Clang-only and must not be called inside
             // a single #if on GCC/MSVC (older GCC errors with "missing binary
             // operator"); hence the nested guard.
-#if defined(__SANITIZE_ADDRESS__)
+#if defined(__SANITIZE_ADDRESS__) || defined(__SANITIZE_THREAD__)
 #define ROWL_SANITIZER_BUILD 1
 #elif defined(__has_feature)
-#if __has_feature(address_sanitizer)
+#if __has_feature(address_sanitizer) || __has_feature(thread_sanitizer)
 #define ROWL_SANITIZER_BUILD 1
 #endif
 #endif
@@ -367,10 +368,10 @@ void test_rc_soak_and_data_safety() {
         // __has_feature tanimliyken degerlendirilir. GCC'nin __SANITIZE_*
         // makrolari CI sanitizer isini, __has_feature dali Clang sanitizer
         // derlemelerini kapsar.
-#if defined(__SANITIZE_ADDRESS__) || defined(__SANITIZE_UNDEFINED__) || defined(_WIN32)
+#if defined(__SANITIZE_ADDRESS__) || defined(__SANITIZE_UNDEFINED__) || defined(__SANITIZE_THREAD__) || defined(_WIN32)
         constexpr double kStressBudgetSecs = 600.0;
 #elif defined(__has_feature)
-#if __has_feature(address_sanitizer) || __has_feature(undefined_behavior_sanitizer)
+#if __has_feature(address_sanitizer) || __has_feature(undefined_behavior_sanitizer) || __has_feature(thread_sanitizer)
         constexpr double kStressBudgetSecs = 600.0;
 #else
         constexpr double kStressBudgetSecs = 300.0;
@@ -455,10 +456,10 @@ void test_rc_soak_and_data_safety() {
         // ASan+UBSan altinda load 316ms); N-stres kilidindeki ayni olcek
         // burada da gecerli, yoksa kilit gercek regresyonla yavaslamayi
         // ayirt edemez.
-#if defined(__SANITIZE_ADDRESS__) || defined(__SANITIZE_UNDEFINED__)
+#if defined(__SANITIZE_ADDRESS__) || defined(__SANITIZE_UNDEFINED__) || defined(__SANITIZE_THREAD__)
         constexpr double kGrowthTimeScale = 2.0;
 #elif defined(__has_feature)
-#if __has_feature(address_sanitizer) || __has_feature(undefined_behavior_sanitizer)
+#if __has_feature(address_sanitizer) || __has_feature(undefined_behavior_sanitizer) || __has_feature(thread_sanitizer)
         constexpr double kGrowthTimeScale = 2.0;
 #else
         constexpr double kGrowthTimeScale = 1.0;
