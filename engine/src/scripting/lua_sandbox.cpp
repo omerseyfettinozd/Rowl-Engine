@@ -1,4 +1,5 @@
 #include "rowl/scripting/lua_sandbox.hpp"
+#include "rowl/scripting/reserved_names.hpp"
 #include "rowl/scripting/lua_condition_purity.hpp"
 #include "rowl/core/logger.hpp"
 #include "rowl/util/locale_independent_parse.hpp"
@@ -323,28 +324,10 @@ void LuaSandbox::poisonSession(const std::string& reason) {
     ROWL_LOG_ERROR(m_lastError);
 }
 
-// Names owned by the sandbox bridge or the Lua standard libraries. A script
-// must never replace these through the variable API; direct global assignment
-// inside a script is additionally repaired by bindEngineApis().
-bool LuaSandbox::isReservedVariableName(const std::string& key) {
-    static const std::unordered_set<std::string_view> kReserved = {
-        "rowl", "_G", "_ENV", "_VERSION",
-        "math", "string", "table", "coroutine", "utf8",
-        "package", "io", "os", "debug",
-        "dofile", "loadfile", "load", "collectgarbage", "require", "module",
-        // #71: kalan Lua 5.4 taban-kutuphane adlari. setVariable/
-        // setGlobalNumber (ve icinden gecen rowl.var_set) dogrudan _G'ye
-        // yazar; bu adlar listede yokken host koprusu pcall/tostring'i ezip
-        // clearVariables sinirinda nil-olu birakiyordu (quarantine
-        // luaopen_base calistirmaz). print/warn cagrilabilir kalir (B7 #24);
-        // rezerv yalnizca host-uzerine-yazmayi reddeder.
-        "assert", "error", "getmetatable", "setmetatable",
-        "ipairs", "pairs", "next", "pcall", "xpcall",
-        "print", "warn", "select", "tonumber", "tostring", "type",
-        "rawget", "rawset", "rawequal", "rawlen",
-    };
-    return key.empty() || kReserved.find(key) != kReserved.end();
-}
+// Names owned by the sandbox bridge or the Lua standard libraries live in
+// reserved_names.hpp (shared with the state write path); see the header for
+// the list. Direct global assignment inside a script is additionally repaired
+// by bindEngineApis().
 
 // Locale-independent number detection: only '.' is a decimal separator, so a
 // comma-decimal locale (e.g. tr_TR) can never change what a script value
@@ -812,11 +795,11 @@ void LuaSandbox::repairGlobals() {
     quarantineEnvironment();
 }
 
-void LuaSandbox::setVariable(const std::string& key, const std::string& value) {
+bool LuaSandbox::setVariable(const std::string& key, const std::string& value) {
     std::lock_guard<std::recursive_mutex> lock(m_mutex);
-    if (isReservedVariableName(key)) {
+    if (Rowl::Scripting::isReservedVariableName(key)) {
         ROWL_LOG_WARN("Lua Sandbox rejected reserved variable name: '" + key + "'");
-        return;
+        return false;
     }
     // F1: NaN/Inf metin bozulması kapısı (host yolu). "nan"/"-nan"/"inf"
     // gibi diziler haritaya yazılamaz (setGlobalNumber emsali — satır 876
@@ -847,7 +830,7 @@ void LuaSandbox::setVariable(const std::string& key, const std::string& value) {
         }
         if (nonFiniteText) {
             ROWL_LOG_WARN("Lua Sandbox rejected non-finite variable value: '" + key + "'");
-            return;
+            return false;
         }
     }
     // B7 (#22): host-side variable-map budget. Both a hostile script stuffing
@@ -858,7 +841,7 @@ void LuaSandbox::setVariable(const std::string& key, const std::string& value) {
     if (key.size() > kMaxVariableKeyBytes || value.size() > kMaxVariableValueBytes ||
         key.size() != std::strlen(key.c_str())) {
         ROWL_LOG_WARN("Lua Sandbox rejected oversized variable: '" + key + "'");
-        return;
+        return false;
     }
     const std::size_t entryBytes = key.size() + value.size();
     std::size_t oldBytes = 0;
@@ -867,7 +850,7 @@ void LuaSandbox::setVariable(const std::string& key, const std::string& value) {
     }
     if (m_variablesBytes - oldBytes + entryBytes > kMaxVariableMapBytes) {
         ROWL_LOG_WARN("Lua Sandbox variable-map budget exhausted; rejected: '" + key + "'");
-        return;
+        return false;
     }
     // B7 (#22/#28-class bonus): Lua-first commit. The old code wrote the map
     // unconditionally, then pushed the global — and a host-side lua_pushstring
@@ -890,7 +873,7 @@ void LuaSandbox::setVariable(const std::string& key, const std::string& value) {
             m_lastError = err;
             m_lastConditionPhase = ConditionPhase::Runtime;
             ROWL_LOG_WARN("Lua Sandbox variable commit failed for '" + key + "': " + err);
-            return;
+            return false;
         }
     }
     m_variablesBytes = m_variablesBytes - oldBytes + entryBytes;
@@ -909,6 +892,7 @@ void LuaSandbox::setVariable(const std::string& key, const std::string& value) {
                   "...<+" + std::to_string(value.size() - kTraceValuePreview) + "B>";
     }
     ROWL_LOG_TRACE("Lua Sandbox Variable Set: '" + key + "' = '" + preview + "'");
+    return true;
 }
 
 std::string LuaSandbox::getVariable(const std::string& key) const {
@@ -937,15 +921,15 @@ std::string LuaSandbox::getVariable(const std::string& key) const {
     return "";
 }
 
-void LuaSandbox::setGlobalNumber(const std::string& key, double value) {
+bool LuaSandbox::setGlobalNumber(const std::string& key, double value) {
     std::lock_guard<std::recursive_mutex> lock(m_mutex);
-    if (isReservedVariableName(key)) {
+    if (Rowl::Scripting::isReservedVariableName(key)) {
         ROWL_LOG_WARN("Lua Sandbox rejected reserved variable name: '" + key + "'");
-        return;
+        return false;
     }
     if (!std::isfinite(value)) {
         ROWL_LOG_WARN("Lua Sandbox rejected non-finite numeric variable: '" + key + "'");
-        return;
+        return false;
     }
     // B7 (#22): same budget and Lua-first commit as setVariable(). A number
     // serializes short, but the map budget counts it all the same.
@@ -953,7 +937,7 @@ void LuaSandbox::setGlobalNumber(const std::string& key, double value) {
     if (key.size() > kMaxVariableKeyBytes || text.size() > kMaxVariableValueBytes ||
         key.size() != std::strlen(key.c_str())) {
         ROWL_LOG_WARN("Lua Sandbox rejected oversized numeric variable: '" + key + "'");
-        return;
+        return false;
     }
     const std::size_t entryBytes = key.size() + text.size();
     std::size_t oldBytes = 0;
@@ -962,7 +946,7 @@ void LuaSandbox::setGlobalNumber(const std::string& key, double value) {
     }
     if (m_variablesBytes - oldBytes + entryBytes > kMaxVariableMapBytes) {
         ROWL_LOG_WARN("Lua Sandbox variable-map budget exhausted; rejected: '" + key + "'");
-        return;
+        return false;
     }
     if (m_luaState) {
         const RecoveryScope recovery(this);
@@ -975,12 +959,13 @@ void LuaSandbox::setGlobalNumber(const std::string& key, double value) {
             m_lastError = err;
             m_lastConditionPhase = ConditionPhase::Runtime;
             ROWL_LOG_WARN("Lua Sandbox numeric commit failed for '" + key + "': " + err);
-            return;
+            return false;
         }
     }
     m_variablesBytes = m_variablesBytes - oldBytes + entryBytes;
     m_scriptVariables[key] = text;
     ROWL_LOG_TRACE("Lua Sandbox Number Set: '" + key + "' = " + text);
+    return true;
 }
 
 double LuaSandbox::getGlobalNumber(const std::string& key, double defaultValue) const {
