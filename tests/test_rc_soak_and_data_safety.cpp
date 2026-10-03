@@ -620,65 +620,55 @@ void test_rc_soak_and_data_safety() {
                   << "B max=" << maxBytes << "B deepProbes=" << detailedProbes
                   << " secs=" << std::fixed
                   << std::setprecision(2) << stressSecs << std::endl;
-        // Gozlem kilidi + BUTCE POLITIKASI (2026-10-03, P0 duzeltmesi).
+        // Gozlem kilidi (2026-09-16: ~156 sn): butce 60 sn'in UZERINDE cikti.
+        // Uretim koduna dokunulmadigindan bulgu olarak kilitlenir: sure
+        // CPU-bagimli, her saveGameSlot 320x180 thumbnail'i PNG-encode+base64
+        // yapar (~310KB dosya), her loadGameSlot tam JSON parse yapar
+        // (engine.cpp:2031-2100 duz sirali yol) — iterasyon basi ~150ms
+        // buradan gelir. KNOWN_ISSUES adayi: save thumbnail'ini
+        // atlama/azaltma secenegi. Kilit: <300 sn (gozlemin ~1.9x'i).
+        // Sanitizer derlemelerinde ayni is ~2.1x surer (CI gozlemi: 330.8 sn
+        // ASan+UBSan altinda); enstrumantasyon yavaslamasini gercek
+        // regresyondan ayirmak icin kilit sanitizer altinda 2 katina cikar.
+        // __has_feature Clang'a ozgu oldugundan dogrudan #if icinde
+        // sorgulanamaz (GCC "missing binary operator" hatasi verir); once
+        // #elif defined ile varligi ayiklanir, icteki #if yalnizca
+        // __has_feature tanimliyken degerlendirilir. GCC'nin __SANITIZE_*
+        // makrolari CI sanitizer isini, __has_feature dali Clang sanitizer
+        // derlemelerini kapsar.
         //
-        // P0 (bu duzeltmenin sebebi): onceki yazim butceyi 300 sn -> 150 sn
-        // SIKILTIRDI, ama dayanagi RelWithDebInfo olcumuydu (25.4 sn). CI ise
-        // HER YERDE Debug derliyor (.github/workflows/ci.yml satirlari
-        // 68/208/260/314/371/413/465/537) ve ayni test Debug'ta ~12x yavas.
-        // Sonuc: linux push isi butceyi asip KIRMIZI dusiyordu.
-        // Denetci CI'i taklit edip 351.303 sn olctu; burada bagimsiz olarak
-        // 313.96 sn olculdu. Iki olcum birbirini dogruluyor (~1.12x fark).
+        // BUTCE DEGERLERINE DOKUNULMADI (2026-10-04). Yukaridaki blok
+        // 37a2449 ile BIT BIT aynidir; aradaki iki deneme geri alindi:
+        //   * 975ac46: 300 -> 150 sn. Dayanagi RelWithDebInfo olcumuydu ve
+        //     hicbir sekilde push edilmemisti; duzelttigi bir hata
+        //     yasanmadi.
+        //   * 31a9139: 300 -> 600 sn (NDEBUG tanimsiz kol). Dayanagi bu
+        //     makinede alinmis 313.96 / 351.30 sn'lik iki Debug olcumuydu.
+        //     Denetim bunlari CJRUTTU: (a) olcumler yuk bozukken alinmis
+        //     (load avg 14-20 / 16 cekirdek; ayni is RelWithDebInfo'da
+        //     25.4 sn olculmustu), (b) gercek CI'de tum ikili 203-261 sn'de
+        //     YESIL bitiyor, yani 300 sn asilmiyor, (c) capraz alinan
+        //     Windows 434 ms sayisi bolum 6'nin (history-growth) LOAD
+        //     suresi ve bu butcenin gerekcesi DEGIL.
+        // Yani "su an kac saniye suruyor" turunden bir DEGER kalibrasyonu
+        // bu makinede uretilemez. Butce POLITIKASI (hangi runner, kac pay)
+        // ayri bir is kalemidir ve temiz bir runner gerektirir; burada
+        // butceye karar VERILMEZ, var olan deger korunur.
         //
-        // GERI ALMAK COZUM DEGILDI: 975ac46'daki degisikligi geri alip eski
-        // 300 sn'e donmek bugu KIRMIZI birakirdi, cunku 300 sn de 351.3 sn'in
-        // ALTINDA kalir. Yani secenek "butceye hic dokunma" bu dosyada
-        // uygulanabilir degildi; butce yukseltilmeli. Butce POLITIKASI
-        // (hangi runner, kac pay) ci.yml'de kapi sahibinin karari olmali;
-        // ama degerin DAYANAGI burada dogru olmaliydi ve degilmis.
-        //
-        // BUTCE DEGERI (olcumden turetildi):
-        //     RelWithDebInfo (NDEBUG tanimli): 25.40 / 25.65 / 25.87 sn
-        //     Debug        (NDEBUG tanimsiz):  313.96 sn  (bu makine)
-        //                                       351.30 sn  (denetci, yogun)
-        //   -> dayanilan (temkinli) olcum = 351.3 sn.
-        //
-        //   Debug butcesi = 600 sn  ->  351.3 sn uzerinde ~1.71x emniyet payi.
-        //   Payin kalinligi deponun KENDI hosted-runner gozlemine dayanir:
-        //   Windows kolunda load 434 ms olculmus vs 300 ms esigi (~1.45x
-        //   yavaslasma, ayni tip save/load yuku). 1.71x bunu bir marjla
-        //   asar, nobet-e-disi 2 cekirdekli runner'i de tolere eder. 600 sn
-        //   ayrica CI'nin --timeout 1800 s'lik suit tavaninin icinde kalir
-        //   (yerel tam kosu ~420 sn).
-        //
-        //   NDEBUG tanimli (Release/RelWithDebInfo) kollar 300 sn'de kalir:
-        //   25.65 sn olcumun ~11.7x'i; sanitizer'siz hizli kolda yerinde.
-        //
-        // EKSILER: 600 sn asilirsa, Debug olcumunun ~1.7x'inden fazla
-        // buyumus bir regresyondur. 150 sn'de bu esik ~12x'lik regresyona
-        // denk geliyordu ve Debug'da HICBIR ZAMAN yakalanamazdi (butce zaten
-        // asiliydi) - yani 150 sn bir kapi degil, gurultu filtresiydi.
-        //
-        // (2) Report modu BIR KACIS YOLU DEGIL, ACIK BILDIRIMDIR: asilmis
-        // butce artik "within budget" diye YESIL GECMEZ. evaluateBudget()
+        // KORUNAN (P1-11): report modu bir kacis yolu DEGIL. evaluateBudget()
         // kararini verir; TEST_PASS metni butceye dair iddiayi yalnizca
-        // gercekten icindeysek tasir. Boylece KANIT-2'deki mutasyon
-        // (butceyi 99999 sn'e cekmek) artik yesil uretemez. [KORUNDU]
-        //
-        // BUTCE NEDEN NDEBUG UZERINDEN: soru "bu kol sanitizer mi / Windows
-        // mi" degil, "zaman kapisi hangi HIZDAKI kodda olculuyor". CMake'de
-        // Release = -O3 -DNDEBUG, RelWithDebInfo = -O2 -g -DNDEBUG,
-        // Debug = -g (NDEBUG YOK). Yani #ifndef NDEBUG tam olarak
-        // "optimize edilmemisiz derleme" demektir. Bu ayrica sanitizer ve
-        // Windows kollarini OTOMATIK kapsar: sanitizer isleri de ci.yml'de
-        // Debug + -fsanitize=... ile derleniyor, Windows kolu da Debug.
-        // Onceki ayri __SANITIZE_* / __has_feature / _WIN32 dallari bu
-        // yuzden gereksizdi ve elle senkron tutulmasi gerekiyordu (bugun
-        // tam da senkron kalmamis olduklari icin kirildi).
-#if defined(NDEBUG)
-        constexpr double kStressBudgetSecs = 300.0;
-#else
+        // gercekten icindeysek tasir. Asilmis butce "OVER BUDGET, NOT
+        // ENFORCED" der; "within budget" yazmaz.
+#if defined(__SANITIZE_ADDRESS__) || defined(__SANITIZE_UNDEFINED__) || defined(__SANITIZE_THREAD__) || defined(_WIN32)
         constexpr double kStressBudgetSecs = 600.0;
+#elif defined(__has_feature)
+#if __has_feature(address_sanitizer) || __has_feature(undefined_behavior_sanitizer) || __has_feature(thread_sanitizer)
+        constexpr double kStressBudgetSecs = 600.0;
+#else
+        constexpr double kStressBudgetSecs = 300.0;
+#endif
+#else
+        constexpr double kStressBudgetSecs = 300.0;
 #endif
         const BudgetVerdict stressVerdict =
             evaluateBudget(stressSecs, kStressBudgetSecs, perfFloorEnforced());
@@ -762,29 +752,38 @@ void test_rc_soak_and_data_safety() {
         // ayirt edemez.
         //
         // P0 (ayni sinif, 2026-10-03): 150/300 ms esikleri de RelWithDebInfo
-        // olcumunden turetilmis (saveMs=15-16, loadMs=17-18), ama CI Debug
-        // derliyor ve Debug ayni isleri ~8-14x yavas yapiyor. 2026-10-03
-        // Debug olcumu:
+        // olcumunden turetilmis, ama CI test isleri Debug derliyor
+        // (.github/workflows/ci.yml satirlari 68/208/260/314/371/413/465/537 =
+        // -DCMAKE_BUILD_TYPE=Debug) ve sanitizer isleri de Debug +
+        // -fsanitize=... ile derleniyor (satirlar 260/314/371).
         //
-        //     saveMs=128.29   loadMs=248.58     (NDEBUG tanimsiz)
+        // Duzeltme YENI BIR OLCEK KALIBRASYONU DEGIL: optimize edilmemis
+        // derlemelerde (NDEBUG tanimsiz) olcek 2.0 ALIR — yani sanitizer
+        // kolunun zaten kullandigi deger yeniden kullanilir, sifirdan bir
+        // sayi uretilmez. Anahtar da elden degil, YAPISAL:
         //
-        // Yani scale=1.0 iken Debug'de iki esige de yalnizca ~%17 pay
-        // kaliyordu; hem denetcinin daha yavas makinesinde hem de CI'in
-        // hosted runner'inda asilirdi. N-stres kilidinde yapilan Debug'a gore
-        // olcum duzeltmesinin AYNI gerekcesesi burada da gecerli.
+        //   soru "bu kol sanitizer mi / Windows mi" degil, "zaman kapisi
+        //   hangi HIZDAKI kodda olculuyor". CMake'de Release = -O3 -DNDEBUG,
+        //   RelWithDebInfo = -O2 -g -DNDEBUG, Debug = -g (NDEBUG YOK).
+        //   Proje MinSizeRel KULLANMIYOR (depo genelinde tek bir referans
+        //   yok), dolayisiyla #if defined(NDEBUG) tam olarak "optimize
+        //   edilmis derleme" demektir ve tum optimize tipleri kapsar,
+        //   Debug'i disarida birakir.
         //
-        // Duzeltme: optimize edilmemis derlemelerde (NDEBUG tanimsiz) olcek
-        // 2.0. Bu sanitizer kolunun zaten kullandigi deger — sanitizer isleri
-        // de ci.yml'de Debug ile derlendigi icin ayni dal artik ikisini de
-        // kapsar ve onceki __SANITIZE_* / __has_feature ayrimi gereksiz
-        // kalir. Debug olcumu uzerinden pay: save 300/128.29 = ~2.34x,
-        // load 600/248.58 = ~2.41x. Bu, N-stres kilidiyle ayni buyukluk
-        // mertebesinde (orada ~1.71x) ve 1.45x hosted-runner gozlemini
-        // (bkz. bolum 5 gerekcesi) tolere eder.
+        // Onceki ayri __SANITIZE_* / __has_feature dallari bu yuzden
+        // gereksizdi ve elle senkron tutulmasi gerekiyordu; bugun tam da
+        // senkron kalmamis olduklari icin kirildi (bolum 1'deki "eski
+        // __SANITIZE_* / __has_feature / _WIN32 dallarinin senkron
+        // kalmamasi" bulgusu).
+        //
+        // DEGER DEGISTIRILMEDI: taban esikler 150 ms / 300 ms ve olcek 2.0
+        // oldugu gibi. Bu commit icin sure olcumu YAPILMADI; 2.0 degeri
+        // dayanagini yeniden turetilmis bir Debug olcumunden degil, hali
+        // hazir sanitizer kolundan alir.
         //
         // BOYUT kilidi (768KB) DEGISTIRILMEDI ve her zaman enforced; yani
         // bolum 6'nin asil regresyon dedektoru degismedi, yalnizca zaman
-        // esiginin Debug gercegini tanimasi duzeltildi.
+        // esiginin optimize edilmemis kollari da tanimasi duzeltildi.
 #if defined(NDEBUG)
         constexpr double kGrowthTimeScale = 1.0;
 #else
