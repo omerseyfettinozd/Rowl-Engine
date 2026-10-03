@@ -700,7 +700,7 @@ void test_vfs_security() {
         // P2-8 ikinci yarısı: raw akış yolu tek bir geçişle doğrulanmalı. Raw
         // dalı readEntry'e düşer ve readEntry kapıyı KENDİSİ çalıştırır;
         // tryOpenStream de verifyEntryDigest çağırırsa aynı saklı aralık İKİ
-        // KEZ hashlenir (ölçülen 37x yavaşlama — saf SHA-256 32 MiB ~233 ms,
+        // KEZ hashlenir (ölçülen ~2x yavaşlama — saf SHA-256 32 MiB ~233 ms,
         // gözlenen ~486 ms tam olarak iki geçiş). Bu sayaç UYGULAMADAN
         // BAĞIMSIZ: kapının okuduğu toplam baytı sayar, iki yolun ikisinde de.
         {

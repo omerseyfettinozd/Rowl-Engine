@@ -750,8 +750,10 @@ std::unique_ptr<std::istream> RowlPkgDataSource::tryOpenStream(const std::string
     // readEntry() below, and readEntry() already runs the SAME manifest gate
     // (unconditional since P2-7) before it hands back a single byte. Calling
     // verifyEntryDigest as well hashed the identical stored range twice — a
-    // pure 2x regression on the raw stream path (measured 37x wall clock for a
-    // 32 MiB raw entry, because the two SHA-256 passes over 32 MiB cost ~2x233 ms).
+    // pure 2x regression on the raw stream path: a 32 MiB raw entry went from
+    // ~309 ms to ~611 ms wall clock, because the two SHA-256 passes over 32 MiB
+    // cost ~2x233 ms. (Concurrent readers saw 3-4x, since the duplicate hash
+    // also ran under the stream mutex and serialised every open.)
     // This is NOT a security regression: raw is still verified, one hash pass,
     // inside readEntry. It only holds for raw; the zstd branch above cannot
     // use readEntry without resurrecting the dead decode, so it verifies here.
