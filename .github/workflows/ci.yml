@@ -32,33 +32,74 @@ permissions:
 #     tests/test_camera_and_transition_pipeline.cpp içindedir ve
 #     ROWL_PERF_FLOOR ile hiçbir ilgisi yoktur; sanitizer altında da, her
 #     platformda çalışır. Aynı süreçte geçişsiz "stabil" kare hızı ile geçiş
-#     kare hızını ölçüp oranı tavana çeker. Ölçülen bant:
-#       temiz native 0.03272..0.03441   (yayılım %5.2)
-#       ASan+UBSan   0.04471..0.04556   (yayılım %1.9)
-#     Tavan 0.025, yani gözlenen en düşük değerin %24 altında. Kırpılma
-#     (flake) payı için bırakılan pay. Duyarlılık ölümle kalibre EDİLDİ:
-#     geçiş render'ı bilerek 3 kat yavaşlatıldığında oran 0.0155'e düştü ve
-#     kapı hem native hem ASan altında KIRMIZI verdi (negatif kontrol).
-#     Kırmızı, geçişin stabile göre ~1.3 kat gerilediğinde gelir.
+#     kare hızını ölçüp oranı tavana çeker.
 #
-#  3. MUTLAK DUVAR-SAATİ TAVANLARI — REPORT-ONLY, ROWL_PERF_FLOOR=report.
+#     ÖLÇÜM İKİNCİ KEZ DÜZELTİLDİ (önceki turun commit'i kalıcı kırmızıydı):
+#     "stabil referans" hiç render etmiyordu. window.cpp:866'daki
+#     identical-frame fast-path, içerik hash'i değişmediği 90 karenin
+#     TAMAMINI cache HIT yapıyor, nonTexture=0.0 yazıp çıkıyordu; yani
+#     ölçülen oran tam kompozitin hiçbir parçasını görmüyordu.
+#     Düzeltme ÜRÜN KODUNA DOKUNMAZ: her karede sahne gerçekten değiştirilir
+#     (karakter x'i 1 piksel kaydırılır -> hash değişir -> fast-path tutmaz),
+#     desen repo içinde zaten kanıtlanmış
+#     (test_native_performance_benchmarks.cpp:306, test_character_layer_
+#     benchmarks.cpp:15 "cache-busting"). KAMERA TEK BAŞINA YETMEZ:
+#     RowlEngine_SetCamera anlık setPosition/setZoom'dur, isMoving() false
+#     kalır ve kamera konumu hash'e GİRMEZ.
+#     Sahne artık gerçektir (arka plan + karakter dokusu + diyalog kutusu);
+#     doku sayacı ayrıca kapılanır, boş kalmazsa kırmızı verir. KARE BAŞINA
+#     nonTexture denetimi vardır: fast-path bir kareyi atladıysa o kare
+#     ÖLÇÜLMEDİ demektir ve kapı bunu sessizce geçmez.
+#
+#     Ölçülen bant (ctest'in kendi kipi: SDL_VIDEODRIVER=dummy, 1920x1080,
+#     yazılım rasterizer; 5 tekrarın en iyisi, 4 bağımsız süreç):
+#       temiz native 0.2028..0.2087   (7 süreç, yayılım %2.9)
+#       ASan+UBSan   0.2678..0.2794   (oran ARTAR, aşağı düşmez)
+#     Tavan 0.12, yani gözlenen en düşük değerin %41 altında. Mankenin
+#     hızına göre değil ÖLÇÜLEN banttan türetildi: iki pencere de aynı
+#     süreçte, aynı makinede, arka arkaya ölçülür, yani oran kendini
+#     normalize eder.
+#     Duyarlılık ÖLÜMLE kalibre EDİLDİ: geçiş render'ı bilerek 3 kat
+#     yavaşlatıldığında oran 0.0663'e düştü ve kapı KIRMIZI verdi.
+#     Kırmızı, geçişin stabile göre ~1.7 kat gerilediğinde gelir.
+#
+#  3. MUTLAK DUVAR-SAATİ TAVANLARI — TAŞINAMAZ, raporlanır.
 #     (soak stres 300/600 sn, tarihçe büyüme, karakter katmanı 16-draw 8 ms,
-#     camera 30 FPS) Bunlar MAKİNEDEN BAĞIMSIZ DEĞİLDİR ve bu dosyada
-#     ölçülmüş olarak reddedilmiştir:
+#     camera 30 FPS) Bunlar MAKİNEDEN BAĞIMSIZ DEĞİLDİR:
 #       * camera 30 FPS tavanı KENDİ KOŞULUNDA ihlal: temiz native ölçüm
-#         26.7..27.4 FPS. Yani bu tavanı enforced yapmak kalıcı-kırmızı bir
-#         kapı üretir; kalıcı-kırmızı kapılar susturulur, susturulmuş kapı
-#         yok olur. Bu, bugünkü sahte yeşilin ikinci yarısıdır.
+#         24.5 FPS. Bu tavanı enforced yapmak kalıcı-kırmızı bir kapı üretir;
+#         kalıcı-kırmızı kapılar susturulur, susturulmuş kapı yok olur.
+#         Bu, bugünkü sahte yeşilin ikinci yarısı olurdu.
 #       * sanitizer altında test GERÇEKTEN 939 sn (ASan) / 1387 sn (TSan)
 #         sürüyor; 300 sn bütçesi orada hiçbir zaman uygulanamaz.
-#       * hosted runner'lar yazılım rasterizer ile çalışıyor (Linux lavapipe,
-#         Windows WARP); ürün tavanı tutturulamaz.
+#       * hosted runner'lar yazılım rasterizer ile çalışıyor.
 #     Rapor-only bir "susturma" DEĞİLDİR: ölçümün yapılamadığı yeri ölçüp
-#     bırakmaktır, ve aynı dosyada (2) numaralı kapı HER ZAMAN enforced
-#     olduğu için bu sinyaller sessizce kaybolamaz.
+#     bırakmaktır, ve (2) numaralı kapı HER YERDE enforced olduğu için bu
+#     sinyaller sessizce kaybolamaz.
+#
+# ENFORCEMENT MATRİSİ — hangi iş hangi tavanı zorlar:
+#
+#   iş                       ROWL_PERF_FLOOR   ROWL_CAMERA_FPS_FLOOR   oran (2)
+#   ------------------------  ----------------  ---------------------   --------
+#   linux (native)            enforced          report                  enforced
+#   linux msdf-fallback       enforced          report                  enforced
+#   sanitizer hızlı alt-küme  enforced          report                  enforced
+#   sanitizer-nightly         report            report                  enforced
+#   tsan-nightly             report            report                  enforced
+#   windows                  report            report                  enforced
+#
+#   ROWL_PERF_FLOOR = taşınabilen MUTLAK tavanlar (soak stres, tarihçe
+#   büyüme, karakter katmanı 16-draw). Hızlı işlerde enforced: bunlar zaten
+#   kod varsayılanı olarak enforced'dı, burada AÇIKÇA yazılarak politika
+#   görünür kılınıyor ve sanitizer işlerinde kapatılıyor (939/1387 sn
+#   ölçümü).
+#   ROWL_CAMERA_FPS_FLOOR = 30 FPS gibi taşınamayan tek camera tavanı
+#   için ayrılmış anahtar; her yerde AÇIKÇA 'report' yazılır, yani hiçbir
+#   işte enforced olmaz. (Set edilmediğinde ROWL_PERF_FLOOR'a düşer —
+#   geriye dönük uyum bu yolla korunur.)
 #
 # Kural: bir mutlak tavanı enforced yapmadan önce, o sayının bir ÖLÇÜMden
-# geldiğini gösterin. 30 FPS'in ölçümü yoktur; 0.025 oran tavanının vardır.
+# geldiğini gösterin. 30 FPS'in ölçümü yoktur; 0.12 oran tavanının vardır.
 # ─────────────────────────────────────────────────────────────────────────────
 
 jobs:
@@ -140,6 +181,15 @@ jobs:
           ROWL_BENCHMARK_BUILD_ID: ${{ github.sha }}
           ROWL_BENCHMARK_BUILD_TYPE: Debug
           ROWL_BENCHMARK_MACHINE: ${{ runner.arch }}
+          # Enforcement matrisi (dosya başındaki tablo): hızlı native iş →
+          # taşınabilen MUTLAK tavanlar enforced. Bu, kod varsayılanıyla
+          # aynı davranıştır; burada AÇIKÇA yazılarak politika görünür
+          # kılınıyor ve sanitizer işlerindeki kapatmayla simetrik oluyor.
+          ROWL_PERF_FLOOR: 'enforced'
+          # 30 FPS camera tavanı taşınamaz (temiz native ölçüm 24.5 FPS) ve
+          # her işte report kalır. Ayrı anahtar sayesinde ROWL_PERF_FLOOR
+          # enforced iken de açıkça kapatılabiliyor.
+          ROWL_CAMERA_FPS_FLOOR: 'report'
         run: |
           mkdir -p benchmark-results
           xvfb-run -a ctest --test-dir build --output-on-failure --timeout 1800
@@ -199,10 +249,10 @@ jobs:
         # Göreli regresyon kapısı (politika katmanı 1) — enforced.
         # exit 0 = compatible comparison or incompatible-or-missing-baseline
         # skip, exit 2 = regression breach beyond --fail-percent.
-        # NOT: mutlak tavanlar (ROWL_PERF_FLOOR) bu işte enforced DEĞİLDİR;
-        # `linux` işi ROWL_PERF_FLOOR set etmez, yani kod varsayılanı geçerli
-        # olur ve o da ölçümü yapılamayan tavanlarda 'report' yapar. Bu işin
-        # enforced sinyali buradan gelir.
+        # NOT: mutlak tavanların enforced sinyali BURADAN GELMEZ. Bu adım
+        # yalnızca göreli karşılaştırma yapar; mutlak tavanlar `linux` işinin
+        # Test adımında zorlanır (bkz. enforcement matrisi, dosya başı).
+        # ROWL_PERF_FLOOR burada hiç okunmaz — kapsam dışıdır.
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -254,8 +304,14 @@ jobs:
         # dizini artik kesismez. Not: absolute yol sart (user_data_directories.cpp
         # goreli XDG'yi sessizce yok sayar), o yuzden $RUNNER_TEMP mutlaka
         # absolute.
+        # Enforcement matrisi: hızlı native iş → taşınabilen mutlak tavanlar
+        # enforced, 30 FPS camera tavanı report. `linux` işiyle aynı politika;
+        # MSDF'siz yapılandırma ölçüm bandını değiştirmediği için (ölçülen
+        # bant aynı) aynı tavanlar geçerlidir.
         env:
           XDG_DATA_HOME: ${{ runner.temp }}/rowl-xdg-fallback
+          ROWL_PERF_FLOOR: 'enforced'
+          ROWL_CAMERA_FPS_FLOOR: 'report'
         run: |
           mkdir -p "$XDG_DATA_HOME"
           cmake -S . -B build-msdf-fallback -G Ninja -DCMAKE_BUILD_TYPE=Debug -DROWL_ENABLE_GPU_MSDF=OFF
@@ -319,8 +375,14 @@ jobs:
       - name: Test under ASan and UBSan (fast subset)
         # GPU smoke is excluded: it needs a real GPU/display and is unreliable under sanitizers.
         # ROWL_SKIP_LONG_TESTS: soak/stres bölümü nightly süite aittir (T0).
+        # Enforcement matrisi: bu hızlı alt-küme kod varsayılanıyla aynı
+        # davranışı zorlar (taşınabilen mutlak tavanlar enforced) ve bunu
+        # artık AÇIKÇA yazar; soak/stres dışarıda olduğu için 300 sn bütçesi
+        # burada uygulanabilir. 30 FPS camera tavanı yine report.
         env:
           ROWL_SKIP_LONG_TESTS: '1'
+          ROWL_PERF_FLOOR: 'enforced'
+          ROWL_CAMERA_FPS_FLOOR: 'report'
         run: |
           ASAN_OPTIONS=halt_on_error=1:print_stacktrace=1:detect_leaks=0 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 ctest --test-dir build-sanitizer -R "rowl_native_tests|rowl_benchmark_tool_tests" --output-on-failure --timeout 1800
 
@@ -376,10 +438,13 @@ jobs:
         # kapı olurdu, kalıcı-kırmızı kapı susturulur).
         # Politika katmanı 2: transition/steady ORAN kapısı ise burada
         # ENFORCED çalışır — ROWL_PERF_FLOOR ile ilgisi yoktur, ölçülen bant
-        # ASan'da 0.04471..0.04556'dır, tavan 0.025'in üstündedir.
+        # ASan'da 0.2678..0.2794'tür, tavan 0.12'nin üstündedir. Sanitizer
+        # oranı DÜŞÜRMEZ, ARTIRIR: iki pencerenin de ağırlığı SDL
+        # rasterizasyonundadır ve CI'da derlenen Release SDL3 sanitizer'ı
+        # görmez; yavaşlayan şey motorun C++ kodu olur.
         # Bellek/UB/boyut kilitleri enforce kalir (TSan isiyle ayni desen).
         run: |
-          ROWL_PERF_FLOOR=report ASAN_OPTIONS=halt_on_error=1:print_stacktrace=1:detect_leaks=0 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 ctest --test-dir build-sanitizer -R "rowl_native_tests|rowl_benchmark_tool_tests" --output-on-failure --timeout 1800
+          ROWL_PERF_FLOOR=report ROWL_CAMERA_FPS_FLOOR=report ASAN_OPTIONS=halt_on_error=1:print_stacktrace=1:detect_leaks=0 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 ctest --test-dir build-sanitizer -R "rowl_native_tests|rowl_benchmark_tool_tests" --output-on-failure --timeout 1800
 
   tsan-nightly:
     # K6 (B3b): ThreadSanitizer tam-süit, yalnızca schedule'da koşar.
@@ -436,7 +501,7 @@ jobs:
 
       - name: Test under TSan (full suite, perf floors report-only)
         run: |
-          ROWL_PERF_FLOOR=report TSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 ctest --test-dir build-tsan -R "rowl_native_tests|rowl_benchmark_tool_tests" --output-on-failure --timeout 1800
+          ROWL_PERF_FLOOR=report ROWL_CAMERA_FPS_FLOOR=report TSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 ctest --test-dir build-tsan -R "rowl_native_tests|rowl_benchmark_tool_tests" --output-on-failure --timeout 1800
 
   linux-arm64-compile:
     # Compile-only portability gate. It does not claim GUI, audio-device or
@@ -633,6 +698,7 @@ jobs:
           # Software rasterizer on the hosted runner cannot sustain the
           # transition-benchmark FPS floor; report there, enforce on dev hw.
           $env:ROWL_PERF_FLOOR = "report"
+          $env:ROWL_CAMERA_FPS_FLOOR = "report"
           ctest --test-dir build --output-on-failure --timeout 1800
 
       - name: Verify standalone package and VFS smoke
