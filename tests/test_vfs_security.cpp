@@ -4,9 +4,39 @@
  */
 #include "rowl_test_harness.hpp"
 #include "rowl/vfs/detail/rowl_sha256.hpp"
+#include "rowl/vfs/vfs.hpp"
 
 #include <future>
 #include <optional>
+#include <vector>
+
+#ifdef _WIN32
+#include <process.h>  // _getpid: MSVC'de unistd.h/getpid yok.
+#else
+#include <unistd.h>
+#endif
+
+namespace {
+
+// Sürece ÖZGÜ log işareti (denetim BULGU D). Aynı anda koşan iki süreç ASLA
+// aynı metni üretemez, dolayısıyla paralel koşular birbirinin logunu okuyup
+// birbirinin teşhisini yanlışlıkla sayamaz. Statik: süreç boyunca sabit.
+std::string p26LiveMarker() {
+    static const std::string marker = [] {
+#ifdef _WIN32
+        const long pid = _getpid();
+#else
+        const long pid = static_cast<long>(::getpid());
+#endif
+        return "rowl-p2-6-logger-live-probe/pid=" + std::to_string(pid) +
+               "/t=" + std::to_string(std::chrono::high_resolution_clock::now()
+                                         .time_since_epoch()
+                                         .count());
+    }();
+    return marker;
+}
+
+} // namespace
 
 void test_vfs_security() {
     TEST_SECTION("VFS Isolation & Package Validation");
@@ -570,7 +600,22 @@ void test_vfs_security() {
     // Dosya, kendine ÖZGÜ bir işaret satırıyla BULUNUR — "en yeni hermetic
     // dosya" seçimi yanlış olurdu, çünkü aynı makinede başka ajanlar paralel
     // rowl_tests koşturuyor ve kendi hermetic loglarını üretiyor.
-    constexpr const char* kLiveMarker = "rowl-p2-6-logger-live-probe";
+    //
+    // İŞARET SÜREÇ ÖZGÜ OLMAK ZORUNDA (denetim BULGU D). Önceki hâli bir
+    // DERLEME SABİTİYDİ ("rowl-p2-6-logger-live-probe"): o satırı taşıyan
+    // HER log dosyası eşleşiyordu. Arama da ilk eşleşmede durduğu için
+    // (break) hangi dosyanın seçildiğine readdir sırası karar veriyordu —
+    // ext4/tmpfs'te bu sıra YENİDEN ESKİYE döner, yani seçim şansa bağlıydı.
+    // Sonuç: teşhis doğru üretilmiş olsa bile kapı BAŞKA bir logu okuyor,
+    // sessiz mod düşmesi hatasını veriyordu. Temiz runner'da çalışıp uzun
+    // süreli runner'da düşmesinin sebebi tam olarak budur.
+    //
+    // Şimdi: PID + yüksek çözünürlüklü zaman damgası. Aynı anda koşan iki
+    // süreç ASLA aynı işareti üretemez, dolayısıyla paralel koşular birbirinin
+    // logunu okuyamaz. (PID tek başına yeterli değil: PID'ler yeniden
+    // kullanılır; zaman damgası tek başına da yeterli değil — saat çözünürlüğü
+    // altındaki iki süreç çakışabilir. İkisi birlikte benzersizdir.)
+    const std::string kLiveMarker = p26LiveMarker();
     Rowl::Core::Logger::warn(kLiveMarker);
 
     // Bir dosyada satır arar (rotasyon nedeniyle tüm kuşaklar taranır).
@@ -607,7 +652,13 @@ void test_vfs_security() {
     // Kanıtlanamazsa kapı "sessizce yeşil" olmaz — SERT kırmızı. Bu projede
     // bugün 4 "sessizce yeşil veren ölü kapı" bulundu; bir kapının kendini
     // doğrulayamaması sessiz yeşil demektir.
-    std::filesystem::path hermeticLog;
+    //
+    // Arama TÜM adayları tarar (denetim BULGU D): ilk eşleşmede durmak
+    // seçimi readdir sırasına bırakıyordu. Süreç özgü işaretle artık tam
+    // olarak bir dosya eşleşmesi GEREKİR; eşleşen birden fazla olursa bu
+    // bir çelişkidir ve sessizce bir tanesini seçmek yerine SERT kırmızı
+    // verilir — çünkü hangisinin doğru olduğunu bilmiyoruz.
+    std::vector<std::filesystem::path> markedLogs;
     {
         std::error_code ec;
         for (const auto& entry : std::filesystem::directory_iterator(
@@ -618,19 +669,29 @@ void test_vfs_security() {
                 continue;
             }
             if (fileContains(entry.path(), kLiveMarker)) {
-                hermeticLog = entry.path();
-                break;
+                markedLogs.push_back(entry.path());
             }
         }
     }
-    if (hermeticLog.empty()) {
-        std::cerr << "P2-6: no hermetic log in this process carries '" << kLiveMarker
+    if (markedLogs.empty()) {
+        std::cerr << "P2-6: no hermetic log in this process carries the marker '"
+                  << kLiveMarker
                   << "', so the shadow-diagnosis gates cannot observe anything. "
                      "test_logger_timestamp() must precede test_vfs_security(); "
                      "a gate that cannot observe is not a green gate."
                   << std::endl;
         exit(1);
     }
+    if (markedLogs.size() > 1) {
+        std::cerr << "P2-6: " << markedLogs.size()
+                  << " different hermetic logs carry THIS process's marker '"
+                  << kLiveMarker << "', which cannot happen if the marker is "
+                     "process-owned. The gate would have to guess which log is "
+                     "authoritative, so it refuses to guess:" << std::endl;
+        for (const auto& p : markedLogs) std::cerr << "    " << p << std::endl;
+        exit(1);
+    }
+    const std::filesystem::path hermeticLog = markedLogs.front();
 
     // KAPI 1 — SESSİZ DÜŞME KALDIRILDI + TEŞHİS YOL BAŞINA BİR KEZ.
     // Üstteki öncelik kapısı bu yolu zaten okudu, yani teşhisi üretti. Yeni
@@ -761,6 +822,92 @@ void test_vfs_security() {
         exit(1);
     }
     TEST_PASS("P2-6 path canonicalization: aliases are one file, distinct copies still shadow");
+
+    // ------------------------------------------------------------------
+    // P2-6 — KANONİKLEŞTİRME FIRLATIRSA TEŞHİS SESSİZCE YUTULMAZ
+    // ------------------------------------------------------------------
+    // BULGU A. physicalPathKey() dar dönüşümde generic_string() kullanıyordu;
+    // Windows'ta ASCII olmayan bir kökte (C:\Kullanıcılar, ayrışmış Unicode)
+    // MSVC system_error FIRLATIR, diagnoseShadowing() try/catch İÇERMEYORDU ve
+    // C API katmanı invokeNoexcept ile yutuyordu — yani teşhis kayboluyordu.
+    // Bu, "sessiz düşmeyi kaldır" değişikliğinin kendi kör noktasıydı.
+    //
+    // Linux'ta libstdc++ dar dönüşümde baytları olduğu gibi geçirir (YÖNTEM
+    // OLARAK DOĞRULANDI: 0xFF'li bir ad için generic_string() ve u8string()
+    // ikisi de fırlatmadan 12 bayt döndürdü). Yani bu hata Linux testlerinde
+    // kendiliğinden GÖRÜNMEZ. VFS'in kendi kanalı (setVfsInjectPathKeyThrow)
+    // Windows'taki davranışı BİREBİR taklit eder ve aşağıdaki sözleşmeyi
+    // Linux'ta ölçülebilir kılar.
+    //
+    // ÖLÇÜLEN SÖZLEŞME (üçü birden):
+    //   1) Okuma bozulmaz — hataya dönen bir yol bir varlığı ERİŞİLEMEZ yapmaz.
+    //   2) Teşhis kaybolmaz — "could not be canonicalised" tanısı loga düşer.
+    //   3) Gerçek gölgeleme gizlenmez — iki farklı fiziksel kopya yine
+    //      "VFS mount shadow" olarak bildirilir (yedek kimlik bilinçli olarak
+    //      SAHTE uyarı yönünde çalışır; kayıp uyarı yönünde DEĞİL).
+    const std::string throwNeedle = "images/throw_probe.png";
+    {
+        const auto throwProject = testRoot / "p2_6_throw_project";
+        const auto layerA = throwProject / "a";
+        const auto layerB = throwProject / "b";
+        std::filesystem::create_directories(layerA / "images");
+        std::filesystem::create_directories(layerB / "images");
+        std::ofstream(layerA / "images" / "throw_probe.png") << "THROW-A";
+        std::ofstream(layerB / "images" / "throw_probe.png") << "THROW-B";
+
+        Rowl::VFS::VFSManager throwVfs;
+        throwVfs.mountDirectory("", layerA.string());
+        throwVfs.mountDirectory("", layerB.string());
+
+        // Kanalı AÇ ve oku. Önce okuma doğrulanır: teşhis patlarsa bir varlık
+        // erişilemez olmamalıdır, yoksa "sessiz düşme" geri gelmiştir.
+        Rowl::VFS::setVfsInjectPathKeyThrow(true);
+        const int shadowBefore = countShadowLines(hermeticLog, throwNeedle);
+        std::string content;
+        bool threw = false;
+        try {
+            content = throwVfs.readString(throwNeedle);
+        } catch (const std::exception& e) {
+            threw = true;
+            std::cerr << "P2-6: a canonicalization failure escaped into the read "
+                         "path as an exception: " << e.what() << std::endl;
+        }
+        Rowl::VFS::setVfsInjectPathKeyThrow(false);
+
+        // (1) Okuma sağlam kalmalı: dar dönüşüm hatası bir varlığı erişilemez
+        // yapmaz. Yalnız teşhis zayıflar, veri yolu etkilenmez.
+        if (threw || content != "THROW-A") {
+            std::cerr << "P2-6: a path that cannot be canonicalised broke the READ "
+                         "itself (threw=" << (threw ? "yes" : "no")
+                      << ", content='" << content
+                      << "'). The shadow diagnosis must degrade, never the asset."
+                  << std::endl;
+            exit(1);
+        }
+        // (2) Teşhis kaybolmamalı: kanonikleştirme hatası AÇIK bir tanı
+        // olarak loglanmalı. Sessizce yutulursa kapı yeşil, gerçekte ise
+        // gölgelenmiş bir mod vardır — bugün birden fazla kez olan hata bu.
+        if (!fileContains(hermeticLog, "could not be canonicalised")) {
+            std::cerr << "P2-6: canonicalization failed but the diagnosis was "
+                         "SWALLOWED — no 'could not be canonicalised' diagnostic "
+                         "reached the log. A silent drop is indistinguishable from "
+                         "'no shadow found'."
+                      << std::endl;
+            exit(1);
+        }
+        // (3) Kötü yön de kapalı: kanonikleştirme çöktüğünde teşhis KÖRLEŞMEZ.
+        // İki farklı fiziksel kopya yine gölgeleme olarak bildirilir. Yedek
+        // kimlik bunu sahte-uyarı yönünde bozar, ama asla kayıp uyarıya düşmez.
+        if (countShadowLines(hermeticLog, throwNeedle) != shadowBefore + 1) {
+            std::cerr << "P2-6: canonicalization failed and the shadow diagnosis "
+                         "went BLIND — two genuinely different physical copies were "
+                         "not reported. Losing the diagnosis is the one outcome "
+                         "the fallback must never produce."
+                      << std::endl;
+            exit(1);
+        }
+    }
+    TEST_PASS("P2-6 canonicalization failure is reported loudly, never swallowed");
 
     // ------------------------------------------------------------------
     // P2-6 — YENİ KODUN KENDİ ÖLÇÜMÜ (gate değil, bilgi amaçlı yazdırma)

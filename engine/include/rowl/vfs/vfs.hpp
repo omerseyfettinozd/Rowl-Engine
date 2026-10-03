@@ -11,6 +11,26 @@
 #include <istream>
 #include <unordered_set>
 
+// ===========================================================================
+// MOUNT SIRA KURALI (SÖZLEŞME)
+// ===========================================================================
+// Bir varlık çözümlenirken mount listesi BAŞTAN SONA taranır ve İLK bulunan
+// mount kazanır: LİSTE SIRASI = ÖNCELİK. "Önce mount edilen kazanır."
+//
+// Prefix (virtualPrefix) BİR ÖNCELİK DEĞİLDİR, yalnızca bir ALIAS'tır.
+// Prefix'in bir varlığı kapsaması, o mount'un o varlığı taşıma niyeti
+// olduğunu gösterir (o yazım denensin); öncelik kararı yine yalnızca liste
+// sırasıdır. Bu ayrım şart: remountProject aynı fiziksel kökü bilerek birden
+// çok alias altında mount eder ('', 'mods', 'Assets', 'images'). Prefix özgüllüğü
+// öncelik belirleseydi 'images' alias'ı (Assets/images) mods mount'unu
+// gölgeler ve mods içeriği sessizce düşerdi — P2-6'nın düzelttiği hata.
+//
+// İki mount aynı FİZİKSEL kökü gösteriyorsa (alias, sembolik bağ, Windows 8.3
+// kısa adı) gölgeleme sayılmaz; kimlik canonical() ile karşılaştırılır.
+// Gölgeleme yalnızca FARKLI bir fiziksel kopyanın erişilemez kalmasıdır ve
+// okuma yolunda "VFS mount shadow" uyarısı olarak basılır.
+// ===========================================================================
+
 namespace Rowl::VFS {
 
 class IDataSource {
@@ -144,5 +164,17 @@ private:
     uint64_t m_mountGeneration = 0;
     uint64_t m_diagnosedGeneration = 0;
 };
+
+/// P2-6 (BULGU A) — TEST KANALI. physicalPathKey() içindeki dar dönüşümün
+/// FIRLATMA davranışını taklit eder; üretimde KAPALI. Windows'ta MSVC,
+/// temsil edilemeyen karakter içeren bir kökte std::system_error fırlatır ve
+/// Linux testleri bu davranışı kendiliğinden GÖREMEZ (libstdc++ dar dönüşümde
+/// baytları olduğu gibi geçirir). Kanal açıkken teşhis, kanonikleştirilemeyen
+/// yol için açık bir tanı basar ve okumayı bozmaz.
+///
+/// Yalnız testler içindir; save_durability.cpp'teki ENOSPC kanalıyla aynı
+/// desendir. Kalıcı ayar DEĞİLDİR: süreç ömrüyle sınırlıdır.
+void setVfsInjectPathKeyThrow(bool inject);
+bool vfsInjectPathKeyThrow();
 
 } // namespace Rowl::VFS

@@ -5,6 +5,7 @@
 #include <fstream>
 #include <filesystem>
 #include <algorithm>
+#include <atomic>
 #include <cctype>
 #include <exception>
 #include <optional>
@@ -478,8 +479,39 @@ std::optional<MountHit> resolveInMountOrder(const MountList& mounts,
 // (Kalan sınır: ASCII dışı harf katlama. Türkçe I veya Alman ss gibi
 // kenar durumlar tam katlanmaz — NTFS'in kendi karşılaştırmasıyla uyuşan
 // bir katlama std::filesystem'te yoktur.)
-std::string physicalPathKey(const fs::path& path) {
-    if (path.empty()) return {};
+
+// TEST KANAL AÇMA ARACI (BULGU A). Üretimde KAPALI ve bir "optimizasyon"
+// değil: physicalPathKey()'in DAR dönüşüm adımı MSVC'de ASCII olmayan
+// köklerde (C:\Kullanıcılar, C:\Users\<decomposed>) std::system_error
+// FIRLATIR. Bu satır olmadan o yol Linux testlerinde hiç görünmez, çünkü
+// libstdc++ dar dönüşümde baytları olduğu gibi geçirir. Kanal, Windows'taki
+// o davranışı Linux'ta BİREBİR taklit eder; test_vfs_security.cpp bunu
+// açıp "teşhis yutulmuyor" sözleşmesini ölçer. save_durability.cpp'teki
+// ENOSPC kanalıyla aynı desen ve aynı gerekçe (bu projede sessiz düşme
+// birden fazla kez gerçek hataya dönüştü).
+std::atomic<bool> g_injectPathKeyThrow{false};
+// physicalPathKey() üretilemediğinde kullanılan YEDEK kimlik sayacı. Ham
+// yazım da çevrilemezse (olası ama savunma derinliği) anahtar yine de
+// üretilir; sıfırdan farklı olsun ki iki FARKLI dosya asla aynı sanılmasın.
+std::atomic<uint64_t> g_uncanonicalKeySeq{0};
+
+// Kanonik anahtarı `key`e yazar ve HİÇBİR KOŞULDA FIRLATMAZ (P2-6 BULGU A).
+// Kanonikleştirilemezse `key` bir YEDEK kimliktir: okunabilir ama açıkça
+// "kanonikleştirilemedi" işaretlidir ve kanonik bir anahtarla ASLA eşit
+// olamaz (işaretçi baytı). Durum bir DÖNÜŞ DEĞERİYLE değil, AÇIK BİR TANI
+// ile bildirilir — çağıranın sessizce geçebileceği bir durum bırakılmaz.
+//
+// Yön bilinçlidir ve TEK YÖNLÜDÜR: kanonikleştirilemeyen bir yol için
+// iki farklı fiziksel dosya ASLA aynı anahtarı alamaz, dolayısıyla gerçek
+// bir gölgeleme hiçbir koşulda gizlenemez. Bunun bedeli, aynı dosyanın iki
+// alias yazımının "farklı fiziksel kopya" sanılmasıdır — yani bir SAHTE
+// uyarı. Bu projede kabul edilen yön "kayıp uyarı değil, sahte uyarı"dır
+// ve sessizlik bugün defalarca gerçek hataya dönüştü.
+void physicalPathKey(const fs::path& path, std::string& key) {
+    if (path.empty()) {
+        key.clear();
+        return;
+    }
     std::error_code error;
     // Sıralama: canonical (nihai kimlik) -> weakly_canonical (yoksa bile
     // sözdizimsel) -> lexically_normal (son çare, hata durumunda).
@@ -489,7 +521,55 @@ std::string physicalPathKey(const fs::path& path) {
         resolved = fs::weakly_canonical(path, error);
         if (error || resolved.empty()) resolved = path.lexically_normal();
     }
-    std::string key = resolved.generic_string();
+
+    std::string converted;
+    bool canonical = false;
+    // Kanal burada: emulated dar dönüşüm, GERÇEK kodun fırlattığı yerde.
+    if (g_injectPathKeyThrow.load(std::memory_order_relaxed)) {
+        // Windows'ta MSVC'nin yaptığı gibi: dar dönüşüm temsil edilemeyen
+        // karakter için system_error fırlatır, çağıran yutar.
+        try {
+            throw std::system_error(std::make_error_code(std::errc::illegal_byte_sequence),
+                                    "rowl injected narrow-conversion failure");
+        } catch (const std::exception& e) {
+            ROWL_LOG_WARN("VFS shadow diagnosis: path could not be canonicalised: "
+                          + std::string(e.what()) +
+                          ". Using a non-canonical fallback identity for this path; "
+                          "its shadow check is UNVERIFIED and may report a FALSE "
+                          "shadow. It cannot hide a real one.");
+            key = "\x01uncanonical\x01" +
+                  std::to_string(g_uncanonicalKeySeq.fetch_add(1, std::memory_order_relaxed));
+            return;
+        }
+    }
+    // generic_string() DEĞİL, pathToUtf8(): dosyanın kendi kuralı (satır 102)
+    // ".string() ASCII olmayan yollarda Windows'ta ANSI kod sayfası üzerinden
+    // FIRLATIR, pathToUtf8 kanıtlanmış u8-roundtrip'tir". generic_string() de
+    // aynı dar dönüşümü yapar, yani aynı istisnayı fırlatır.
+    try {
+        converted = Rowl::Platform::pathToUtf8(resolved);
+        canonical = true;
+    } catch (const std::exception& e) {
+        ROWL_LOG_WARN("VFS shadow diagnosis: path could not be canonicalised: "
+                      + std::string(e.what()) +
+                      ". Using a non-canonical fallback identity for this path; its "
+                      "shadow check is UNVERIFIED and may report a FALSE shadow. It "
+                      "cannot hide a real one.");
+    }
+    if (!canonical) {
+        // Yedek kimlik: ham yazım. Aynı dosyanın iki yazımı farklı sayılır
+        // (sahte uyarı — kabul edilen yön), iki farklı dosya ASLA aynı
+        // sayılmaz (asla kayıp uyarı yok).
+        key = "\x01uncanonical\x01";
+        try {
+            key += Rowl::Platform::pathToUtf8(path);
+        } catch (const std::exception&) {
+            key += std::to_string(
+                g_uncanonicalKeySeq.fetch_add(1, std::memory_order_relaxed));
+        }
+        return;
+    }
+    key = std::move(converted);
 #ifdef _WIN32
     // canonical() bazı durumlarda Win32 uzantı ön ekiyle döner
     // (\\?\C:\... veya \\?\UNC\server\share\...). Karşılaştırma için şeritle;
@@ -503,7 +583,6 @@ std::string physicalPathKey(const fs::path& path) {
         return static_cast<char>(std::tolower(c));
     });
 #endif
-    return key;
 }
 
 /// RowlPkgDataSource fiziksel paket yolunu YALNIZCA getSourceName() içinde
@@ -535,14 +614,17 @@ std::optional<std::string> physicalPathInSourceName(const std::string& sourceNam
 /// verir — bu yüzden gölgeleme taraması kök başına TEKİL tutulur (aşağıda).
 /// Hem doğru hem de yarı maliyetli.
 std::string rootIdentity(const std::shared_ptr<IDataSource>& source) {
+    std::string key;
     if (const auto* loose = dynamic_cast<const LooseDirectorySource*>(source.get())) {
-        return physicalPathKey(pathFromUtf8(loose->getPhysicalPath()));
+        physicalPathKey(pathFromUtf8(loose->getPhysicalPath()), key);
+        return key;
     }
     // Paket kökü = paket dosyasının kendisi. getSourceName() ham yolu
     // yayınladığı için önce kanonik anahtara çevrilir; aksi halde aynı paket
     // 8.3 ve uzun adla mount edildiğinde İKİ FARKLI paket sanılır.
     if (const auto inner = physicalPathInSourceName(source->getSourceName())) {
-        return physicalPathKey(pathFromUtf8(*inner));
+        physicalPathKey(pathFromUtf8(*inner), key);
+        return key;
     }
     return source->getSourceName();
 }
@@ -562,14 +644,18 @@ std::string resolvedIdentity(const std::shared_ptr<IDataSource>& source,
     if (const auto* loose = dynamic_cast<const LooseDirectorySource*>(source.get())) {
         // Kök zaten kanonik; alt yolu da kanonikleştir ki aynı dosyaya
         // giden sembolik bağ ve ../ kalıntıları da eşleşsin.
-        return physicalPathKey(pathFromUtf8(loose->getPhysicalPath()) / pathFromUtf8(subPath));
+        std::string key;
+        physicalPathKey(pathFromUtf8(loose->getPhysicalPath()) / pathFromUtf8(subPath), key);
+        return key;
     }
     // Paket ayrı bir fiziksel kap: aynı ada sahip bir kayıt, loose bir dosyadan
     // farklı içerik taşıyabilir — her zaman ayrı kimlik sayılır. Kötü
     // parse hâlinde ham ada düşülür (aynı paket iki kez farklı görünebilir;
     // bu, kayıp bir uyarıdan iyidir, sahte bir uyarı değil).
     if (const auto inner = physicalPathInSourceName(source->getSourceName())) {
-        return physicalPathKey(pathFromUtf8(*inner)) + "::" + subPath;
+        std::string key;
+        physicalPathKey(pathFromUtf8(*inner), key);
+        return key + "::" + subPath;
     }
     return source->getSourceName() + "::" + subPath;
 }
@@ -698,7 +784,25 @@ void VFSManager::diagnoseShadowing(
     // 5000 kez aynı taramayı koşmak, aynı soruya 5000 kez aynı cevabı
     // vermektir — hem zaman hem gürültü kaybıydı.
     if (!claimShadowDiagnosis(cleanPath)) return;
-    reportShadowing(cleanPath, mounts, MountHit{hitIndex, hitWasPrefixStripped});
+    // SESSİZ YUTMA KALANI. Bu fonksiyon teşhis YOLUDUR ve teşhis
+    // readBytes()/exists()/openStream() gibi düz okuma yollarından çağrılır;
+    // C API katmanı invokeNoexcept ile SARAR ve istisnayı yutar. Yani
+    // buradan kaçan her istisna, loga düşmeden, kullanıcıya da düşmeden
+    // kaybolur — ve P2-6'nın var olma sebebi olan "sessiz mod düşmesi"
+    // sessiz teşhis kaybına dönüşür. physicalPathKey() artık kendi dar
+    // dönüşümünü yakalıyor, ama bu kalkan KAPANIŞTIR: ileride eklenen
+    // bir std::filesystem çağrısının fırlatması teşhisi yine yutmasın.
+    // Yakalanan istisna KENDİSİ bir teşhistir: açık bir tanı basılır.
+    try {
+        reportShadowing(cleanPath, mounts, MountHit{hitIndex, hitWasPrefixStripped});
+    } catch (const std::exception& e) {
+        ROWL_LOG_WARN("VFS shadow diagnosis FAILED for '" + cleanPath +
+                      "': " + e.what() +
+                      ". This path was NOT checked for shadowing — a mod may be "
+                      "silently unreachable here. Reported rather than swallowed on "
+                      "purpose: a swallowed diagnosis is indistinguishable from "
+                      "'no shadow found'.");
+    }
 }
 
 bool VFSManager::exists(const std::string& vfsPath) {
@@ -789,6 +893,14 @@ std::string VFSManager::readString(const std::string& vfsPath) {
     auto bytes = readBytes(vfsPath);
     if (bytes.empty()) return "";
     return std::string(bytes.begin(), bytes.end());
+}
+
+void setVfsInjectPathKeyThrow(bool inject) {
+    g_injectPathKeyThrow.store(inject, std::memory_order_relaxed);
+}
+
+bool vfsInjectPathKeyThrow() {
+    return g_injectPathKeyThrow.load(std::memory_order_relaxed);
 }
 
 } // namespace Rowl::VFS
