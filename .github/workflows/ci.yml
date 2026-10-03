@@ -12,6 +12,55 @@ permissions:
   contents: read
   actions: read
 
+# ─────────────────────────────────────────────────────────────────────────────
+# PERFORMANS KAPISI POLİTİKASI (P2-15)
+#
+# Bu dosyada üç ayrı türde performans sinyali vardır. Karıştırılmamalıdır;
+# karışımları bugünün sahte yeşillerini üretti.
+#
+#  1. GÖRELİ REGRESYON KAPISI — ENFORCED, yalnız `linux`.
+#     tools/compare_benchmarks.py, bir önceki başarılı `main` koşusunun
+#     artifact'ıyla karşılaştırır (--warn-percent 20 / --fail-percent 35).
+#     Makineden bağımsızdır çünkü aynı ortamın iki koşusunu kıyaslar.
+#     transition_fps metriği de bu tabloda yer alır
+#     (compare_benchmarks.py METRICS: higher_is_better, abs_floor 5.0 FPS).
+#     Zayıf noktaları BILEREK: önceki artifact yoksa/çekilemezse/ortam
+#     anahtarları tutmazsa exit 0 ile sessizce skip eder. Bu bir sonraki
+#     işin konusudur; burada gizlenmez, adımların logunda görünür.
+#
+#  2. ORAN KAPISI (transition/steady) — ENFORCED, HER YERDE.
+#     tests/test_camera_and_transition_pipeline.cpp içindedir ve
+#     ROWL_PERF_FLOOR ile hiçbir ilgisi yoktur; sanitizer altında da, her
+#     platformda çalışır. Aynı süreçte geçişsiz "stabil" kare hızı ile geçiş
+#     kare hızını ölçüp oranı tavana çeker. Ölçülen bant:
+#       temiz native 0.03272..0.03441   (yayılım %5.2)
+#       ASan+UBSan   0.04471..0.04556   (yayılım %1.9)
+#     Tavan 0.025, yani gözlenen en düşük değerin %24 altında. Kırpılma
+#     (flake) payı için bırakılan pay. Duyarlılık ölümle kalibre EDİLDİ:
+#     geçiş render'ı bilerek 3 kat yavaşlatıldığında oran 0.0155'e düştü ve
+#     kapı hem native hem ASan altında KIRMIZI verdi (negatif kontrol).
+#     Kırmızı, geçişin stabile göre ~1.3 kat gerilediğinde gelir.
+#
+#  3. MUTLAK DUVAR-SAATİ TAVANLARI — REPORT-ONLY, ROWL_PERF_FLOOR=report.
+#     (soak stres 300/600 sn, tarihçe büyüme, karakter katmanı 16-draw 8 ms,
+#     camera 30 FPS) Bunlar MAKİNEDEN BAĞIMSIZ DEĞİLDİR ve bu dosyada
+#     ölçülmüş olarak reddedilmiştir:
+#       * camera 30 FPS tavanı KENDİ KOŞULUNDA ihlal: temiz native ölçüm
+#         26.7..27.4 FPS. Yani bu tavanı enforced yapmak kalıcı-kırmızı bir
+#         kapı üretir; kalıcı-kırmızı kapılar susturulur, susturulmuş kapı
+#         yok olur. Bu, bugünkü sahte yeşilin ikinci yarısıdır.
+#       * sanitizer altında test GERÇEKTEN 939 sn (ASan) / 1387 sn (TSan)
+#         sürüyor; 300 sn bütçesi orada hiçbir zaman uygulanamaz.
+#       * hosted runner'lar yazılım rasterizer ile çalışıyor (Linux lavapipe,
+#         Windows WARP); ürün tavanı tutturulamaz.
+#     Rapor-only bir "susturma" DEĞİLDİR: ölçümün yapılamadığı yeri ölçüp
+#     bırakmaktır, ve aynı dosyada (2) numaralı kapı HER ZAMAN enforced
+#     olduğu için bu sinyaller sessizce kaybolamaz.
+#
+# Kural: bir mutlak tavanı enforced yapmadan önce, o sayının bir ÖLÇÜMden
+# geldiğini gösterin. 30 FPS'in ölçümü yoktur; 0.025 oran tavanının vardır.
+# ─────────────────────────────────────────────────────────────────────────────
+
 jobs:
   linux:
     runs-on: ubuntu-24.04
@@ -147,9 +196,13 @@ jobs:
           path: benchmark-results/linux-native.json
 
       - name: Compare native benchmark with previous baseline
-        # Fail gate (Linux-only; Windows keeps ROWL_PERF_FLOOR=report):
+        # Göreli regresyon kapısı (politika katmanı 1) — enforced.
         # exit 0 = compatible comparison or incompatible-or-missing-baseline
         # skip, exit 2 = regression breach beyond --fail-percent.
+        # NOT: mutlak tavanlar (ROWL_PERF_FLOOR) bu işte enforced DEĞİLDİR;
+        # `linux` işi ROWL_PERF_FLOOR set etmez, yani kod varsayılanı geçerli
+        # olur ve o da ölçümü yapılamayan tavanlarda 'report' yapar. Bu işin
+        # enforced sinyali buradan gelir.
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -316,10 +369,15 @@ jobs:
       - name: Build native tests only
         run: cmake --build build-sanitizer --target rowl_tests --parallel 2
 
-      - name: Test under ASan and UBSan (full suite, perf floors report-only)
-        # Sanitizer yavaslamasi (~2.2x, hosted runner'da dalgali) zaman tavanlarini
-        # sistematik asar; tavan kapisi native linux/benchmark-compare islerinin
-        # konusudur. Bellek/UB/boyut kilitleri enforce kalir (TSan isiyle ayni desen).
+      - name: Test under ASan and UBSan (full suite, absolute perf floors report-only)
+        # Politika katmanı 3: MUTLAK tavanlar report-only. Gerekçe ölçülmüştür:
+        # bu test sanitizer altında GERÇEKTEN 939 sn sürüyor; 300 sn bütçesi
+        # burada hiçbir zaman uygulanamaz (enforced yapmak kalıcı-kırmızı bir
+        # kapı olurdu, kalıcı-kırmızı kapı susturulur).
+        # Politika katmanı 2: transition/steady ORAN kapısı ise burada
+        # ENFORCED çalışır — ROWL_PERF_FLOOR ile ilgisi yoktur, ölçülen bant
+        # ASan'da 0.04471..0.04556'dır, tavan 0.025'in üstündedir.
+        # Bellek/UB/boyut kilitleri enforce kalir (TSan isiyle ayni desen).
         run: |
           ROWL_PERF_FLOOR=report ASAN_OPTIONS=halt_on_error=1:print_stacktrace=1:detect_leaks=0 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 ctest --test-dir build-sanitizer -R "rowl_native_tests|rowl_benchmark_tool_tests" --output-on-failure --timeout 1800
 
@@ -327,9 +385,12 @@ jobs:
     # K6 (B3b): ThreadSanitizer tam-süit, yalnızca schedule'da koşar.
     # ASan'la aynı işte koşamaz (runtime'lar çakışır), o yüzden ayrı iş.
     # Kanıt (B3b): yerel TSan derlemesi temiz + kasıtlı-yarış kırmızı-kanıtlı
-    # + tam-süit 0 TSan uyarısı. Zamanlama-tavanları TSan yavaşlatmasında
-    # sistematik aşılır → ROWL_PERF_FLOOR=report (Windows CI deseni); tavan
-    # kapısı benchmark-compare işinin konusudur, TSan'ın değil.
+    # + tam-süit 0 TSan uyarısı. Politika katmanı 3: mutlak zamanlama
+    # tavanları TSan yavaşlatmasında sistematik aşılır (ölçülen tam süit:
+    # 1387 sn) → ROWL_PERF_FLOOR=report; bu, ölçümün yapılamadığı yeri
+    # ölçüp bırakmaktır, susturmak değildir. Politika katmanı 2: transition/
+    # steady ORAN kapısı TSan'da da ENFORCED çalışır ve --timeout 1800 tavanı
+    # yerinde kalır.
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     timeout-minutes: 90

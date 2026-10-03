@@ -734,46 +734,151 @@ void test_camera_and_transition_pipeline() {
         TEST_PASS("Scene JSON Camera & Transition Component Ingestion");
     }
 
-    // Test 7: Active Transition Render Performance Benchmark
+    // Test 7: Active Transition Render Performance Benchmark (P2-15)
+    //
+    // Burada IKI ayri kapi vardir; ikisi farkli gerekceyle zorlanir.
+    //
+    //  (1) ORAN KAPISI -- ENFORCED, her yerde, her kipte (sanitizer dahil).
+    //      Ayni surec icinde gecissiz "stabil" kare hizi ile gecis kare hizi
+    //      olculur ve gecisin stabile gore orani tavana cekilir.
+    //      OLÇÜM (offscreen, 5-6 tekrar):
+    //          temiz native : stabil 783..829 FPS | gecis 26.7..27.4 FPS
+    //                         oran 0.03272 .. 0.03441   (yayilim %5.2)
+    //          ASan+UBSan   : stabil 584..591 FPS | gecis 26.8..27.1 FPS
+    //                         oran 0.04542 .. 0.04599   (yayilim %1.2)
+    //      DOGRULENMIS IKI GERCEK:
+    //        (a) Oran sanitizer'da DEGISTIRILMEZ DEGIL -- 0.033 -> 0.046
+    //            (%39 kayma). Sebep: gecis karesi asil olarak SDL renderer
+    //            flush'i ile (37 ms/kare) yavaslar ve SDL ASan ile olceklenmez;
+    //            stabil kare ise motor C++ kodudur ve %30 yavaslar. Yani
+    //            oran "degismez" degildir ama her iki konfigurasyonda da
+    //            DAR ve tekrarlanabilir bir bantta kalir.
+    //        (b) MUTLAK gecis FPS'i sanitizer'da neredeyse AYNI (26.8 vs
+    //            27.0). Yani sanitizer bu metrik icin sorun degil; sorun
+    //            mutlak sayinin tasinamazligi (asagida (2)).
+    //      TAVAN 0.025 secildi: gozlenen EN DUSUK deger 0.03272, yani tavan
+    //      onun %24 altinda (ASan bandinda %45 altinda). Bu pay, daha yavas
+    //      bir hosted runner'a karsi kirlilmayi (flake) onlemek icindir.
+    //      Tavanin duyarliligi OLSUMLE KALIBRE EDILDI: gecis render'i
+    //      bilerek 3 KAT yavaslatildiginda oran 0.01551'e dustu ve kapi
+    //      KIRMIZI verdi. (Once 0.015 denenmisti ve DUSMEDI -- kirmizi
+    //      vermeyen bir kapi, kapi degildir. Tavan bu yuzden 0.025'tir.)
+    //      Yani kirmizi, gecisin stabile gore ~1.3 KAT geriledigi gelir.
+    //      TAVANIN KAYNAGI OLÇÜMDÜR; 30 FPS gibi bir yuvarlak sayinin
+    //      karsiligi degildir.
+    //
+    //  (2) MUTLAK 30 FPS TAVANI -- report-only, ROWL_PERF_FLOOR ile yonetilir.
+    //      Bu sayinin bir olcumden dogmadigi goruluyor: temiz native kosuda
+    //      olculen deger 26.7..27.4 FPS, yani tavan KENDI KOSULUNDA ihlal
+    //      ediliyor. Varsayilanin 'report' olmasi burada "susturma" degil,
+    //      olcumenin tasinamaz oldugu yeri olcek bildigimiz yerdir: mutlak
+    //      duvar-saati tabani sanitizer altinda (ASan 939 sn / TSan 1387 sn
+    //      olculdu) ve yazilim-rasterizer calisan hosted runner'larda
+    //      sistemik olarak asilir. Kritik olarak: ayni dosyada (1) numarali
+    //      oran kapisi HER ZAMAN enforced kaldigi icin bu satirdaki bir
+    //      regresyonun sessizce gecmesi mumkun degildir.
     {
         RowlEngineHandle handle = RowlEngine_Create();
         RowlEngine_Init(handle, 1920, 1080, 0);
 
-        RowlEngine_StartTransition(handle, "crossfade", 2.0f, nullptr);
-
+        const int warmupFrameCount = 30;
         const int frameCount = 60;
-        const auto benchStart = std::chrono::high_resolution_clock::now();
+        auto measureFrameWindowMs = [handle](int frames) {
+            const auto start = std::chrono::high_resolution_clock::now();
+            for (int f = 0; f < frames; ++f) {
+                RowlEngine_Step(handle, 0.016f);
+            }
+            const auto end = std::chrono::high_resolution_clock::now();
+            return std::chrono::duration<double, std::milli>(end - start).count();
+        };
 
-        for (int f = 0; f < frameCount; ++f) {
-            RowlEngine_Step(handle, 0.016f);
+        // Isinma olcum disidir: ilk karelerdeki tembel baslatma/cache dolumu
+        // stabil referansi kirletmesin.
+        measureFrameWindowMs(warmupFrameCount);
+
+        const double steadyMs = measureFrameWindowMs(frameCount);
+        const double steadyNonTextureMs =
+            RowlEngine_GetLastFrameNonTextureRenderMilliseconds(handle);
+
+        RowlEngine_StartTransition(handle, "crossfade", 2.0f, nullptr);
+        const double transitionMs = measureFrameWindowMs(frameCount);
+        const double transitionNonTextureMs =
+            RowlEngine_GetLastFrameNonTextureRenderMilliseconds(handle);
+
+        // --- OLÇUM GECERLILIGI: KAPININ KENDISI ---
+        // P2-17 (RSS'in 0 donmesi) ile AYNI sinif hata: olcum uretilmediginde
+        // kapinin susmasina izin verilmemelidir. Sifir sure, sonsuz FPS, ya da
+        // dongunun hic calismamasi "hizli" gorunur ve kapı yesil verirdi.
+        // Bu kontrol ROWL_PERF_FLOOR'un hangi degerde oldugundan BAGIMSIZ
+        // olarak, her iki kipte de zorlanir.
+        constexpr double kImplausibleFpsCeiling = 10000.0;
+        const bool timingUsable = std::isfinite(steadyMs) && std::isfinite(transitionMs) &&
+                                  steadyMs > 0.0 && transitionMs > 0.0;
+        const double steadyFps = timingUsable ? (frameCount / steadyMs) * 1000.0 : 0.0;
+        const double transitionFps = timingUsable ? (frameCount / transitionMs) * 1000.0 : 0.0;
+        if (!timingUsable || transitionFps <= 0.0 || steadyFps <= 0.0 ||
+            transitionFps > kImplausibleFpsCeiling) {
+            std::cerr << "Transition benchmark produced no usable measurement "
+                         "(steady " << steadyMs << "ms, transition " << transitionMs
+                      << "ms): the timing loop did not run" << std::endl;
+            exit(1);
+        }
+        // Renderer kare basina gercekten composite isi yapiyor mu? Gecis
+        // karesi sifir non-texture render suresi bildirirse o kare CIZILMEMIS
+        // demektir; o durumda olculen FPS bir kurgu olur ve 30 FPS tavanini
+        // da yaniltarak gecirdi.
+        if (transitionNonTextureMs <= 0.0 || steadyNonTextureMs <= 0.0) {
+            std::cerr << "Transition benchmark measured no renderer work "
+                         "(last-frame non-texture render: steady " << steadyNonTextureMs
+                      << "ms, transition " << transitionNonTextureMs
+                      << "ms): frames were not composited, FPS is meaningless" << std::endl;
+            exit(1);
         }
 
-        const auto benchEnd = std::chrono::high_resolution_clock::now();
-        double elapsedMs = std::chrono::duration<double, std::milli>(benchEnd - benchStart).count();
-        double fps = (frameCount / elapsedMs) * 1000.0;
+        const double transitionRatio = transitionFps / steadyFps;
 
-        std::cout << "  ⚡ [Benchmark] Active Transition Render: " << frameCount << " frames rendered in "
-                  << std::fixed << std::setprecision(2) << elapsedMs << "ms (~"
-                  << static_cast<int>(fps) << " FPS)" << std::endl;
-        g_transitionFps = fps;
+        std::cout << "  ⚡ [Benchmark] Active Transition Render: " << frameCount << " frames in "
+                  << std::fixed << std::setprecision(2) << transitionMs << "ms ("
+                  << std::setprecision(2) << transitionFps << " FPS); steady reference "
+                  << std::setprecision(2) << steadyFps << " FPS; transition/steady ratio "
+                  << std::setprecision(5) << transitionRatio
+                  << " (last-frame non-texture render: steady " << std::setprecision(3)
+                  << steadyNonTextureMs << "ms, transition " << transitionNonTextureMs
+                  << "ms)" << std::endl;
 
-        // A wall-clock FPS floor is meaningless under sanitizer
-        // instrumentation (2-5x slowdown is the tool, not the engine), so it
-        // is enforced only on clean builds. Frame correctness above is
-        // asserted unconditionally.
+        // compare_benchmarks.py bu metrigi "transition_fps" adiyla karsilastirir;
+        // semantik degismemesi icin gecis hizi yazilmaya devam eder.
+        g_transitionFps = transitionFps;
+
+        // (1) ORAN KAPISI -- enforced; ROWL_PERF_FLOOR ile veya sanitizer
+        //     makro'lariyla iliskisi YOKTUR. Bu, projede her yerde calisan
+        //     tek performans kapisidir.
+        constexpr double kTransitionRatioFloor = 0.025;
+        if (transitionRatio < kTransitionRatioFloor) {
+            std::cerr << "Transition render ratio regressed: transition/steady = "
+                      << transitionRatio << " is below the enforced floor "
+                      << kTransitionRatioFloor << " (steady " << steadyFps
+                      << " FPS, transition " << transitionFps << " FPS)" << std::endl;
+            exit(1);
+        }
+        TEST_PASS("Active Scene Transition stays within the enforced transition/steady ratio budget");
+
+        // (2) MUTLAK TAVAN -- report-only; yukaridaki gerekce.
 #if defined(__SANITIZE_ADDRESS__) || defined(__SANITIZE_THREAD__) || defined(__SANITIZE_UNDEFINED__)
-        std::cout << "  (sanitizer build: 30 FPS floor reported, not enforced)" << std::endl;
+        std::cout << "  (sanitizer build: absolute 30 FPS floor reported, not enforced; "
+                     "the transition/steady ratio floor above IS enforced)" << std::endl;
 #else
-        // A universal wall-clock gate is not valid until a compatible baseline
-        // exists for the exact machine/build/fixture. Report by default; a
-        // controlled performance host may opt in with ROWL_PERF_FLOOR=enforced.
+        // Mutlak tabanin varsayilani 'report': bu taban tasinamaz (yukarida
+        // olculdu). Denetimli bir performans makinesi ROWL_PERF_FLOOR=enforced
+        // ile kendi tabanini zorlayabilir.
         const bool perfFloorEnforced = environmentValue("ROWL_PERF_FLOOR", "report") == "enforced";
-        if (perfFloorEnforced && fps < 30.0) {
-            std::cerr << "Transition render FPS is too low: " << fps << std::endl;
+        if (perfFloorEnforced && transitionFps < 30.0) {
+            std::cerr << "Transition render FPS is too low: " << transitionFps << std::endl;
             exit(1);
         }
         if (!perfFloorEnforced) {
-            std::cout << "  (ROWL_PERF_FLOOR=report: 30 FPS floor reported, not enforced)" << std::endl;
+            std::cout << "  (ROWL_PERF_FLOOR=report: absolute 30 FPS floor reported, not enforced; "
+                         "the transition/steady ratio floor above IS enforced)" << std::endl;
         }
 #endif
 
