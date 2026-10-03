@@ -14,25 +14,148 @@
 #include <deque>
 #include <sstream>
 
-#if defined(__linux__)
+// RSS olcum platform bagimliliklari. psapi baglantisi tests/CMakeLists.txt'te
+// WIN32 icin zaten var (GetProcessMemoryInfo icin).
+#if defined(_WIN32)
+#include <windows.h>
+#include <psapi.h>
+#elif defined(__APPLE__)
+#include <mach/mach.h>
+#elif defined(__linux__)
 #include <unistd.h>
 #endif
 
 namespace {
 
-#if defined(__linux__)
-uint64_t currentRssBytes() {
+// ---------------------------------------------------------------------------
+// P2-17 (2026-10-03): RSS kapisi sessiz gecmeyi birakmaz.
+//
+// Onceki yazim: `uint64_t currentRssBytes() { ... }` idi ve Windows/macOS
+// kollarinda DUZ `return 0` idi. Butce govdesi `if (firstRss > 0)` icinde
+// oldugu icin bu platformlarda hicbir olcum yapilmadan dogrudan
+// "TEST_PASS(3000-frame soak keeps RSS stable)" yaziliyordu: kapi hicbir seyi
+// olcmeden yesil donuyordu. Kanit: currentRssBytes 0 donerken soak dongusune
+// ~200 MiB sizdirildi, test yine "ALL TESTS PASSED" + EXIT=0 verdi; ayni
+// ikili /proc/self/statm okurken ayni sizdirma ile EXIT=1 verdi.
+//
+// Duzeltme iki parca:
+//   1. `readRssBytes(uint64_t&)` her desteklenen platformda GERCEKTEN olcer ve
+//      "olcemeyi basaramadim" bilgisini `false` donusuyle disari verir. 0
+//      artuk gecerli bir RSS degeri DEGILDIR, hata sinyalidir.
+//   2. Kapi karari saf `evaluateRss(...)` fonksiyonundan gecer; bu fonksiyon
+//      olcum yoksa ASLA kararli (yesil) sonuc veremez.
+// ---------------------------------------------------------------------------
+
+// Desteklenen platformun adı (rapor/hata mesajlari icin).
+const char* rssPlatformName() {
+#if defined(_WIN32)
+    return "windows";
+#elif defined(__APPLE__)
+    return "macos";
+#elif defined(__linux__)
+    return "linux";
+#else
+    return "unsupported";
+#endif
+}
+
+// Kullanici sayisina anlamsiz gelen bir "resident" degeri olcumun calismadiginin
+// isaretidir (dosya acildi ama bos/bozuk okundu, sayfa boyutu 0, vb.).
+constexpr uint64_t kMinPlausibleRss = 1ULL << 20; // 1 MiB
+
+// Gercek resident set size okur. Basariliysa true + `out` doldurulur.
+bool readRssBytes(uint64_t& out) {
+#if defined(_WIN32)
+    // GetProcessWorkingSetSize kota LIMITI raporlar, kullanimi degil, bu yuzden
+    // hicbir buyumeyi goremez; WorkingSetSize gercek resident degerdir.
+    // (psapi baglantisi tests/CMakeLists.txt, yalniz WIN32.)
+    PROCESS_MEMORY_COUNTERS counters{};
+    if (GetProcessMemoryInfo(GetCurrentProcess(), &counters,
+                             sizeof(counters)) == 0) {
+        return false;
+    }
+    out = static_cast<uint64_t>(counters.WorkingSetSize);
+    return true;
+#elif defined(__APPLE__)
+    mach_task_basic_info info{};
+    mach_msg_type_number_t count = MACH_TASK_BASIC_INFO_COUNT;
+    if (task_info(mach_task_self(), MACH_TASK_BASIC_INFO,
+                  reinterpret_cast<task_info_t>(&info), &count) != KERN_SUCCESS) {
+        return false;
+    }
+    out = static_cast<uint64_t>(info.resident_size);
+    return true;
+#elif defined(__linux__)
     std::ifstream statm("/proc/self/statm");
     uint64_t size = 0, resident = 0;
-    if (statm >> size >> resident) {
-        const uint64_t page = static_cast<uint64_t>(::sysconf(_SC_PAGESIZE));
-        return resident * page;
-    }
-    return 0;
-}
+    if (!(statm >> size >> resident)) return false;
+    const long pageSize = ::sysconf(_SC_PAGESIZE);
+    if (pageSize <= 0) return false;
+    out = resident * static_cast<uint64_t>(pageSize);
+    return true;
 #else
-uint64_t currentRssBytes() { return 0; }
+    // Desteklenmeyen platform: kapinin kirmiziya dusmesi icin false donulur.
+    // (Eskiden burada 0 donulup kapi sessizce yesil geciyordu.)
+    (void)out;
+    return false;
 #endif
+}
+
+// RSS kapisinin karar tipleri. kUnmeasured YESIL DEGILDIR: kapi bu durumda
+// kirmiziya dusmelidir (bkz. bolum 1'deki kullanim).
+enum class RssVerdict { kStable, kDrift, kUnmeasured };
+
+// Saf karar fonksiyonu (yan etkisiz; bolum 10'daki meta kilit dogrudan
+// dogrular). Kapsanan "sessiz gecme" yollari:
+//   * samples == 0                     -> hic olcum alinmadi
+//   * samples * 2 < expectedSamples    -> orneklerin yarisi okunamadi
+//   * minRss < kMinPlausibleRss       -> sayisal ama anlamsiz "resident"
+//   * maxRss < minRss                  -> tutarsiz istatistik
+RssVerdict evaluateRss(uint64_t minRss, uint64_t maxRss, uint64_t tolerance,
+                       size_t samples, size_t expectedSamples) {
+    if (samples == 0) return RssVerdict::kUnmeasured;
+    if (samples * 2 < expectedSamples) return RssVerdict::kUnmeasured;
+    if (minRss < kMinPlausibleRss) return RssVerdict::kUnmeasured;
+    if (maxRss < minRss) return RssVerdict::kDrift;
+    if (maxRss - minRss > tolerance) return RssVerdict::kDrift;
+    return RssVerdict::kStable;
+}
+
+// ---------------------------------------------------------------------------
+// P1-11 (2026-10-03): sure kapisi yesil donerken "within budget" demeyecek.
+//
+// Onceki yazimda butce asiminda `std::cout` ile uyari yazilip, TEST_PASS ise
+// KOSULSUZ "within budget" metniyle cikardi. ROWL_PERF_FLOOR=report iken butce
+// 333 katina ciksa da yesil veriyordu. Simdi karar `evaluateBudget(...)` ile
+// veriliyor ve PASS metni ancak butce GERCEKTEN icinde oldugunda "within
+// budget" iceriyor.
+// ---------------------------------------------------------------------------
+enum class BudgetVerdict { kWithin, kExceededEnforced, kExceededReported };
+
+bool perfFloorEnforced() {
+    return environmentValue("ROWL_PERF_FLOOR", "enforced") == "enforced";
+}
+
+BudgetVerdict evaluateBudget(double measuredSecs, double budgetSecs, bool enforced) {
+    if (!(measuredSecs >= budgetSecs)) return BudgetVerdict::kWithin;
+    return enforced ? BudgetVerdict::kExceededEnforced : BudgetVerdict::kExceededReported;
+}
+
+// PASS satirina eklenecek zamanlama notu. kWithin disinda HICBIR dalinda
+// "within budget" kelimesi uretilmez; boylece yesil bir log, butce asilmis
+// oldugunu saklayamaz.
+std::string budgetPassNote(BudgetVerdict verdict, double measuredSecs, double budgetSecs) {
+    switch (verdict) {
+        case BudgetVerdict::kWithin:
+            return " within budget (" + std::to_string(static_cast<int>(std::lround(measuredSecs))) +
+                   "s <= " + std::to_string(static_cast<int>(std::lround(budgetSecs))) + "s)";
+        case BudgetVerdict::kExceededEnforced:
+            return " OVER BUDGET (enforced)";
+        case BudgetVerdict::kExceededReported:
+            return " OVER BUDGET, NOT ENFORCED — this pass does NOT verify timing";
+    }
+    return " UNKNOWN VERDICT";
+}
 
 class SoakHost final : public Rowl::Platform::PlatformHost {
 public:
@@ -106,6 +229,113 @@ bool probeWriteBlocked(const std::filesystem::path& dir) {
 void test_rc_soak_and_data_safety() {
     TEST_SECTION("RC Soak & Data Safety");
 
+    // -----------------------------------------------------------------------
+    // 0. KAPI HIJYENI KILIDI (P2-17 + P1-11, 2026-10-03)
+    //
+    // Bu blok, asagidaki iki OLÇME kredisinin karar fonksiyonlarini dogrudan
+    // dogrular. Amaci: bu dosyanin ileride tekrar "sessizlestirilmesini"
+    // engellemek. Bugun P2-17 ve P1-11 bulgularinin IKISI de ayni tek seyden
+    // dogdu: karar, olcumden bagimsiz olarak yesil uretebiliyordu. Asagidaki
+    // tablo, o eski kirli yesil yollarin her birinin ARTIK kirmiziya dustugunu
+    // kanitlar. Saf fonksiyonlari dogruladigi icin makine bagimliligi yoktur ve
+    // Linux'ta Windows/macOS dalinin da kirli olmadigini kanitlar.
+    //
+    // ROWL_SKIP_LONG_TESTS=1 ile de calisir: bu kilit uzun degildir ve
+    // atlanan bir soak'in arkasinda hicbir sey olcmeden gecmesine izin
+    // vermemelidir.
+    // -----------------------------------------------------------------------
+    {
+        const size_t kExpected = 10;
+        struct RssCase {
+            const char* label;
+            uint64_t minRss;
+            uint64_t maxRss;
+            uint64_t tolerance;
+            size_t samples;
+            RssVerdict expected;
+        };
+        const RssCase rssCases[] = {
+            {"stable 8MB drift under 8MB tolerance", 100ULL << 20, 104ULL << 20,
+             8ULL << 20, kExpected, RssVerdict::kStable},
+            {"leak: 200MiB drift", 128696320ULL, 333512704ULL,
+             8ULL << 20, kExpected, RssVerdict::kDrift},
+            // ESKI KIRLI YESIL YOL #1: hic ornek alinmadi (Windows/macOS'ta
+            // currentRssBytes() 0 donerdi -> 10 ornekten 0'u okunurdu).
+            {"zero samples (old Windows/macOS stub)", 0, 0, 8ULL << 20, 0,
+             RssVerdict::kUnmeasured},
+            // ESKI KIRLI YESIL YOL #2: orneklerin yarisi okunamadi.
+            {"4/10 samples readable", 100ULL << 20, 101ULL << 20, 8ULL << 20, 4,
+             RssVerdict::kUnmeasured},
+            {"5/10 samples readable (boundary ok)", 100ULL << 20, 101ULL << 20,
+             8ULL << 20, 5, RssVerdict::kStable},
+            {"implausible reading (<1MiB resident)", 4096, 4096, 8ULL << 20,
+             kExpected, RssVerdict::kUnmeasured},
+            {"inverted min/max", 200ULL << 20, 100ULL << 20, 8ULL << 20,
+             kExpected, RssVerdict::kDrift},
+        };
+        for (const RssCase& c : rssCases) {
+            const RssVerdict got = evaluateRss(c.minRss, c.maxRss, c.tolerance,
+                                               c.samples, kExpected);
+            if (got != c.expected) {
+                std::cerr << "RSS gate hygiene lock failed: " << c.label
+                          << " -> verdict " << static_cast<int>(got)
+                          << ", expected " << static_cast<int>(c.expected) << std::endl;
+                exit(1);
+            }
+        }
+
+        struct BudgetCase {
+            const char* label;
+            double measured;
+            double budget;
+            bool enforced;
+            BudgetVerdict expected;
+            bool passNoteMayClaimWithinBudget;
+        };
+        const BudgetCase budgetCases[] = {
+            {"inside budget, enforced", 100.0, 300.0, true,
+             BudgetVerdict::kWithin, true},
+            {"inside budget, report", 100.0, 300.0, false,
+             BudgetVerdict::kWithin, true},
+            // KANIT-2'deki mutasyonun KARSILIGI: butce 99999 sn'e cekildi.
+            {"budget blown 333x, enforced -> RED", 99999.0, 300.0, true,
+             BudgetVerdict::kExceededEnforced, false},
+            {"budget blown 333x, report", 99999.0, 300.0, false,
+             BudgetVerdict::kExceededReported, false},
+            {"exactly at budget is an exceed", 300.0, 300.0, true,
+             BudgetVerdict::kExceededEnforced, false},
+        };
+        for (const BudgetCase& c : budgetCases) {
+            const BudgetVerdict got =
+                evaluateBudget(c.measured, c.budget, c.enforced);
+            const std::string note = budgetPassNote(got, c.measured, c.budget);
+            const bool claimsWithin = note.find("within budget") != std::string::npos;
+            if (got != c.expected || claimsWithin != c.passNoteMayClaimWithinBudget) {
+                std::cerr << "Budget gate hygiene lock failed: " << c.label
+                          << " -> verdict " << static_cast<int>(got)
+                          << " (expected " << static_cast<int>(c.expected)
+                          << "), pass-note claims 'within budget'=" << claimsWithin
+                          << " (expected " << c.passNoteMayClaimWithinBudget
+                          << "): \"" << note << "\"" << std::endl;
+                exit(1);
+            }
+        }
+
+        // Oznemli: kirmiziya dusmemis her kosulda notun metni gercekten
+        // kirli-yesil iddiasini tasimamalidir (defensive, asagidaki iki
+        // kontrol regresyona donusmemis olsun diye).
+        if (budgetPassNote(BudgetVerdict::kExceededReported, 99999.0, 300.0)
+                .find("within budget") != std::string::npos ||
+            budgetPassNote(BudgetVerdict::kExceededEnforced, 99999.0, 300.0)
+                .find("within budget") != std::string::npos) {
+            std::cerr << "Budget gate hygiene lock failed: an exceeded budget still "
+                         "labels the pass line as 'within budget'" << std::endl;
+            exit(1);
+        }
+        TEST_PASS("gate hygiene: RSS never passes unmeasured; time budget never "
+                  "self-labels 'within budget' when exceeded");
+    }
+
     // T0 katmanlama: PR sanitizer işi hızlı alt-kümeyi koşar; soak/stres
     // (3000-frame soak, 200/1000-iterasyon stresleri, 1200-adım büyüme)
     // nightly'daki tam süite aittir. ROWL_SKIP_LONG_TESTS=1 iken bu bölüm
@@ -141,8 +371,24 @@ void test_rc_soak_and_data_safety() {
         constexpr int kAdvanceEvery = 10; // 300 node transitions total
         for (int i = 0; i < kWarmupSteps; ++i) engine.step(1.0f / 60.0f);
 
-        const uint64_t firstRss = currentRssBytes();
+        // P2-17: olcum basarisiz olursa hicbir dongu kirilmaz; kapi en basta
+        // kirmiziya dusmelidir (eski yazimda `firstRss > 0` sarti butceyi
+        // butun denetimiyle birlikte atliyordu).
+        uint64_t firstRss = 0;
+        if (!readRssBytes(firstRss)) {
+            std::cerr << "Soak RSS gauge could not read resident set size on platform '"
+                      << rssPlatformName()
+                      << "' — the RSS stability gate did NOT run and will NOT "
+                         "report a pass" << std::endl;
+            exit(1);
+        }
+
+        constexpr int kRssSampleEvery = 300;
+        const size_t expectedRssSamples =
+            static_cast<size_t>(kSoakSteps / kRssSampleEvery);
         uint64_t minRss = firstRss, maxRss = firstRss;
+        size_t rssSamples = 0;
+        size_t rssReadFailures = 0;
         uint64_t transitions = 0;
         for (int i = 1; i <= kSoakSteps; ++i) {
             engine.step(1.0f / 60.0f);
@@ -150,11 +396,15 @@ void test_rc_soak_and_data_safety() {
                 engine.advanceToNextNode();
                 ++transitions;
             }
-            if (i % 300 == 0) {
-                const uint64_t rss = currentRssBytes();
-                if (rss > 0) {
-                    minRss = std::min(minRss == 0 ? rss : minRss, rss);
+            if (i % kRssSampleEvery == 0) {
+                uint64_t rss = 0;
+                // Eskiden `if (rss > 0)` ile sessizce atiliyordu; artik sayilir.
+                if (readRssBytes(rss)) {
+                    ++rssSamples;
+                    minRss = std::min(minRss, rss);
                     maxRss = std::max(maxRss, rss);
+                } else {
+                    ++rssReadFailures;
                 }
             }
             if (!ringContains(engine.getCurrentNodeId()) || !engine.isRunning()) {
@@ -166,15 +416,14 @@ void test_rc_soak_and_data_safety() {
             std::cerr << "Soak did not perform the expected transitions" << std::endl;
             exit(1);
         }
-        if (firstRss > 0) {
-            // Under ASan/TSan the runtime (ASan quarantine and arenas, TSan
-            // shadow memory and sync metadata) moves RSS by tens of MB on
-            // its own, so the tight 8MB production tolerance
-            // is meaningless there; leak detection under sanitizers is
-            // LSan's job (currently out of scope), not this gauge's.
-            // NOTE: __has_feature is Clang-only and must not be called inside
-            // a single #if on GCC/MSVC (older GCC errors with "missing binary
-            // operator"); hence the nested guard.
+        // Under ASan/TSan the runtime (ASan quarantine and arenas, TSan
+        // shadow memory and sync metadata) moves RSS by tens of MB on
+        // its own, so the tight 8MB production tolerance
+        // is meaningless there; leak detection under sanitizers is
+        // LSan's job (currently out of scope), not this gauge's.
+        // NOTE: __has_feature is Clang-only and must not be called inside
+        // a single #if on GCC/MSVC (older GCC errors with "missing binary
+        // operator"); hence the nested guard.
 #if defined(__SANITIZE_ADDRESS__) || defined(__SANITIZE_THREAD__)
 #define ROWL_SANITIZER_BUILD 1
 #elif defined(__has_feature)
@@ -183,17 +432,36 @@ void test_rc_soak_and_data_safety() {
 #endif
 #endif
 #ifdef ROWL_SANITIZER_BUILD
-            constexpr uint64_t kTolerance = 64ULL * 1024ULL * 1024ULL;
+        constexpr uint64_t kTolerance = 64ULL * 1024ULL * 1024ULL;
 #else
-            constexpr uint64_t kTolerance = 8ULL * 1024ULL * 1024ULL;
+        constexpr uint64_t kTolerance = 8ULL * 1024ULL * 1024ULL;
 #endif
 #undef ROWL_SANITIZER_BUILD
-            if (maxRss < minRss || maxRss - minRss > kTolerance) {
-                std::cerr << "Soak RSS drifted: min=" << minRss << " max=" << maxRss << std::endl;
-                exit(1);
-            }
+
+        const RssVerdict rssVerdict = evaluateRss(
+            minRss, maxRss, kTolerance, rssSamples, expectedRssSamples);
+        std::cout << "  [soak-rss] platform=" << rssPlatformName()
+                  << " first=" << firstRss << "B min=" << minRss << "B max=" << maxRss
+                  << "B drift=" << (maxRss >= minRss ? maxRss - minRss : 0)
+                  << "B tolerance=" << kTolerance << "B samples=" << rssSamples
+                  << "/" << expectedRssSamples << " readFailures=" << rssReadFailures
+                  << std::endl;
+        if (rssVerdict == RssVerdict::kUnmeasured) {
+            std::cerr << "Soak RSS gate FAILED: measurement is not trustworthy "
+                         "(samples="
+                      << rssSamples << "/" << expectedRssSamples
+                      << ", readFailures=" << rssReadFailures
+                      << ", min=" << minRss << "B). Refusing to report a pass "
+                         "for a gate that did not measure anything." << std::endl;
+            exit(1);
         }
-        TEST_PASS("3000-frame / 300-transition soak keeps RSS stable");
+        if (rssVerdict == RssVerdict::kDrift) {
+            std::cerr << "Soak RSS drifted: min=" << minRss << " max=" << maxRss
+                      << " tolerance=" << kTolerance << std::endl;
+            exit(1);
+        }
+        TEST_PASS("3000-frame / 300-transition soak keeps RSS stable (measured on " +
+                  std::string(rssPlatformName()) + ")");
     }
 
     // 2. Stressed save / load / rewind integrity.
@@ -352,46 +620,70 @@ void test_rc_soak_and_data_safety() {
                   << "B max=" << maxBytes << "B deepProbes=" << detailedProbes
                   << " secs=" << std::fixed
                   << std::setprecision(2) << stressSecs << std::endl;
-        // Gozlem kilidi (2026-09-16: ~156 sn): butce 60 sn'in UZERINDE cikti.
-        // Uretim koduna dokunulmadigindan bulgu olarak kilitlenir: sure
-        // CPU-bagimli, her saveGameSlot 320x180 thumbnail'i PNG-encode+base64
-        // yapar (~310KB dosya), her loadGameSlot tam JSON parse yapar
-        // (engine.cpp:2031-2100 duz sirali yol) — iterasyon basi ~150ms
-        // buradan gelir. KNOWN_ISSUES adayi: save thumbnail'ini
-        // atlama/azaltma secenegi. Kilit: <300 sn (gozlemin ~1.9x'i).
-        // Sanitizer derlemelerinde ayni is ~2.1x surer (CI gozlemi: 330.8 sn
-        // ASan+UBSan altinda); enstrumantasyon yavaslamasini gercek
-        // regresyondan ayirmak icin kilit sanitizer altinda 2 katina cikar.
+        // Gozlem kilidi + BUTCE POLITIKASI (2026-10-03, P1-11 duzeltmesi).
+        //
+        // TARIHCE: 2026-09-16 gozlemi ~156 sn idi ve kilit <300 sn konuldu
+        // ("gozlemin ~1.9x'i"). O zamandan bu yana save yolu belirgin hizladi
+        // (her saveGameSlot 320x180 thumbnail PNG-encode+base64 yapiyordu;
+        // iterasyon basi ~150ms deniyordu). 2026-10-03 olcumu:
+        //
+        //     iters=1000 ... secs=25.40      (sanitizer'siz, RelWithDebInfo)
+        //     saveMs=16.04  loadMs=17.36    (bolum 6)
+        //
+        // Yani gercek sure ~25 sn, ilan edilen butce 300 sn: **~11.8x bosluk**.
+        // Onceki varsayim ("butce zaten asilmis, 318-319 sn olculdu") bu olcumle
+        // yanlislandi; gercek durum butcenin cok GENIS oldugu.
+        //
+        // Karar (olcumle destekli):
+        //  (1) Butceyi olculmus degere gore SIKILTIR: sanitizer'siz kollarda
+        //      300 sn -> 150 sn. Bu, olculen 25.4 sn'in ~5.9x'i. 5.9x pay,
+        //      yavas bir CI runner'i (2 cekirdekli paylasimli sanal makine,
+        //      ~2-4x yavas) tolere ederken 6x'lik bir gercek regresyonu
+        //      yakalar. 300 sn'de 12x'lik regresyon gecmesi demekti.
+        //      Windows + sanitizer kollari 600 sn'de kalir (daha agir ortam).
+        //  (2) Report modu BIR KACIS YOLU DEGIL, ACIK BILDIRIMDIR: asilmis
+        //      butce artik "within budget" diye YESIL GECMEZ. evaluateBudget()
+        //      kararini verir; TEST_PASS metni butceye dair iddiayi yalnizca
+        //      gercekten icindeysek tasir. Boylece KANIT-2'deki mutasyon
+        //      (butceyi 99999 sn'e cekmek) artik yesil uretemez.
+        //
+        // NOT (riski bilerek aliyorum): 150 sn degeri YEREL olcumden
+        // turetilmistir; CI hosted runner'i daha yavas olabilir. Butceyi
+        // daraltmak gercek bir regresyon yakalama kazanci verir ama CI'da
+        // yanlis kirmizi riski dogurur. Ilk CI kosusunda
+        // "[soak-stress] ... secs=" satirini okuyup gerekirse 150 -> 240 sn'e
+        // ayarlamak dogru olur.
         // __has_feature Clang'a ozgu oldugundan dogrudan #if icinde
         // sorgulanamaz (GCC "missing binary operator" hatasi verir); once
         // #elif defined ile varligi ayiklanir, icteki #if yalnizca
-        // __has_feature tanimliyken degerlendirilir. GCC'nin __SANITIZE_*
-        // makrolari CI sanitizer isini, __has_feature dali Clang sanitizer
-        // derlemelerini kapsar.
+        // __has_feature tanimliyken degerlendirilir.
 #if defined(__SANITIZE_ADDRESS__) || defined(__SANITIZE_UNDEFINED__) || defined(__SANITIZE_THREAD__) || defined(_WIN32)
         constexpr double kStressBudgetSecs = 600.0;
 #elif defined(__has_feature)
 #if __has_feature(address_sanitizer) || __has_feature(undefined_behavior_sanitizer) || __has_feature(thread_sanitizer)
         constexpr double kStressBudgetSecs = 600.0;
 #else
-        constexpr double kStressBudgetSecs = 300.0;
+        constexpr double kStressBudgetSecs = 150.0;
 #endif
 #else
-        constexpr double kStressBudgetSecs = 300.0;
+        constexpr double kStressBudgetSecs = 150.0;
 #endif
-        if (stressSecs >= kStressBudgetSecs) {
-            const bool perfFloorEnforced =
-                environmentValue("ROWL_PERF_FLOOR", "enforced") == "enforced";
-            if (perfFloorEnforced) {
-                std::cerr << "N-stress exceeded the locked observation budget ("
-                          << kStressBudgetSecs << "s): " << stressSecs << "s" << std::endl;
-                exit(1);
-            }
-            std::cout << "  [soak-stress] (ROWL_PERF_FLOOR=report: " << stressSecs
-                      << "s exceeds budget " << kStressBudgetSecs
-                      << "s, reported not enforced on hosted runner)" << std::endl;
+        const BudgetVerdict stressVerdict =
+            evaluateBudget(stressSecs, kStressBudgetSecs, perfFloorEnforced());
+        if (stressVerdict == BudgetVerdict::kExceededEnforced) {
+            std::cerr << "N-stress exceeded the locked observation budget ("
+                      << kStressBudgetSecs << "s): " << stressSecs << "s" << std::endl;
+            exit(1);
         }
-        TEST_PASS("1000-iteration save/load round-robin preserves node-id under 4MB within budget");
+        if (stressVerdict == BudgetVerdict::kExceededReported) {
+            std::cerr << "  [soak-stress] BUDGET EXCEEDED AND NOT ENFORCED: " << stressSecs
+                      << "s >= " << kStressBudgetSecs
+                      << "s (ROWL_PERF_FLOOR=report). The pass line below does NOT "
+                         "verify timing; treat this as an open perf budget debt."
+                      << std::endl;
+        }
+        TEST_PASS("1000-iteration save/load round-robin preserves node-id under 4MB" +
+                  budgetPassNote(stressVerdict, stressSecs, kStressBudgetSecs));
     }
 
     // 6. Tarihce-buyume olcumu: budama OLMADIGI icin (previousState sinirsiz
@@ -472,27 +764,50 @@ void test_rc_soak_and_data_safety() {
                       << grownBytes << "B" << std::endl;
             exit(1);
         }
-        if (saveMs > 150.0 * kGrowthTimeScale || loadMs > 300.0 * kGrowthTimeScale) {
+        // Asil asim kosulu: save 150ms * scale, load 300ms * scale. Iki esik
+        // farkli oldugu icin tek bir max()/budget ciftiyle temsil EDILEMEZ
+        // (saveMs=200ms, scale=1 iken asim vardir ama max()=200 < 300 derdi);
+        // bu yuzden asim hangi esigi astiysa O cift evaluateBudget'a girer.
+        const bool saveOverBound = saveMs > 150.0 * kGrowthTimeScale;
+        const bool loadOverBound = loadMs > 300.0 * kGrowthTimeScale;
+        std::string growthPassNote;
+        if (saveOverBound || loadOverBound) {
             // Tur-14: Faz 4.5 D1 karari — sure kilidi de fail-gate Linux-only.
             // CI-13'te Windows hosted runner'da load 434ms > 300ms: yavas
             // disk/CPU, urun regresyonu degil (boyut kilidi 372KB ile saglam).
-            // test_camera/layer-benchmark desenindeki ayni kapi: boyut kilidi
-            // makineden bagimsiz oldugu icin her yerde enforce edilir, sure
-            // kilidi report modunda raporlanir.
-            const bool perfFloorEnforced =
-                environmentValue("ROWL_PERF_FLOOR", "enforced") == "enforced";
-            if (perfFloorEnforced) {
+            // P1-11 (2026-10-03): bu dal bir uyari basmamalidir. Onceki yazim
+            // burada uyari yazip TEST_PASS'i kosulsuz "stays within the locked
+            // size/time bound" metniyle cikardi; yani sure kilidi asildiginda
+            // log "within ... bound" diyordu. Artik evaluateBudget karari
+            // PASS metnini belirliyor.
+            const double measured = saveOverBound ? saveMs : loadMs;
+            const double bound = saveOverBound ? 150.0 * kGrowthTimeScale
+                                               : 300.0 * kGrowthTimeScale;
+            const BudgetVerdict growthVerdict =
+                evaluateBudget(measured, bound, perfFloorEnforced());
+            if (growthVerdict == BudgetVerdict::kExceededEnforced) {
                 std::cerr << "Post-growth save/load exceeded the locked time bound (save<="
                           << 150.0 * kGrowthTimeScale << "ms load<=" << 300.0 * kGrowthTimeScale
                           << "ms): save=" << saveMs << "ms load=" << loadMs << "ms" << std::endl;
                 exit(1);
             }
-            std::cout << "  [history-growth] (ROWL_PERF_FLOOR=report: save="
-                      << saveMs << "ms load=" << loadMs << "ms exceeds save<="
-                      << 150.0 * kGrowthTimeScale << "ms load<=" << 300.0 * kGrowthTimeScale
-                      << "ms, reported not enforced)" << std::endl;
+            if (growthVerdict == BudgetVerdict::kExceededReported) {
+                std::cerr << "  [history-growth] TIME BOUND EXCEEDED AND NOT ENFORCED: save="
+                          << saveMs << "ms load=" << loadMs << "ms (bound save<="
+                          << 150.0 * kGrowthTimeScale << "ms load<=" << 300.0 * kGrowthTimeScale
+                          << "ms). The size bound IS enforced; the time bound is not."
+                          << std::endl;
+            }
+            growthPassNote =
+                "1200-advance history growth stays within the locked SIZE bound" +
+                budgetPassNote(growthVerdict, measured, bound) + " [time]";
+        } else {
+            growthPassNote =
+                "1200-advance history growth stays within the locked size/time bound" +
+                budgetPassNote(BudgetVerdict::kWithin, loadMs,
+                               300.0 * kGrowthTimeScale);
         }
-        TEST_PASS("1200-advance history growth stays within the locked size/time bound");
+        TEST_PASS(growthPassNote);
     }
 
     // 7. Derin-rewind clamp: 1200+ derinlikte rewind(2000) kok dugume
