@@ -17,6 +17,10 @@
 // RSS olcum platform bagimliliklari. psapi baglantisi tests/CMakeLists.txt'te
 // WIN32 icin zaten var (GetProcessMemoryInfo icin).
 #if defined(_WIN32)
+// windows.h min/max'i KORUMASIZ makro olarak tanimlar ve MSVC'nin STL'i
+// bunlari geri almaz; asagidaki std::min/std::max kullanimlari (RSS olcum
+// dongusu) "illegal token on right side of ::" ile patlar. Once tanimla.
+#define NOMINMAX
 #include <windows.h>
 #include <psapi.h>
 #elif defined(__APPLE__)
