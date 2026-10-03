@@ -192,7 +192,19 @@ jobs:
           path: benchmark-results/linux-editor.json
 
       - name: Verify shaderless fallback build
+        # Bu adim linux isinde IKINCI ctest turunu calistirir (ilk tur "Test"
+        # adiminda, ci.yml:96). Iki tur ayni $HOME'u paylasirken kayit dosyalari
+        # kalici kullanici veri dizininde (XDG_DATA_HOME -> rowl-engine/saves)
+        # yasar. Bir testin biraktigi slot, sonraki turun ayni slotu "bos" bekleyen
+        # assertion'ini kirar; bu tam olarak P1-7 -> MS-6 kirilmasinin yolu.
+        # Izole XDG_DATA_HOME bu sinifi kalici olarak kapatir: iki turun veri
+        # dizini artik kesismez. Not: absolute yol sart (user_data_directories.cpp
+        # goreli XDG'yi sessizce yok sayar), o yuzden $RUNNER_TEMP mutlaka
+        # absolute.
+        env:
+          XDG_DATA_HOME: ${{ runner.temp }}/rowl-xdg-fallback
         run: |
+          mkdir -p "$XDG_DATA_HOME"
           cmake -S . -B build-msdf-fallback -G Ninja -DCMAKE_BUILD_TYPE=Debug -DROWL_ENABLE_GPU_MSDF=OFF
           cmake --build build-msdf-fallback --parallel
           xvfb-run -a ctest --test-dir build-msdf-fallback --output-on-failure --timeout 1800 -E rowl_player_gpu_msdf_smoke
