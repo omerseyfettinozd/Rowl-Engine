@@ -141,14 +141,39 @@ BudgetVerdict evaluateBudget(double measuredSecs, double budgetSecs, bool enforc
     return enforced ? BudgetVerdict::kExceededEnforced : BudgetVerdict::kExceededReported;
 }
 
+// Olcumu GERCEK birimiyle bicimlendirir. "ms" icin 2 ondalik — bolum 6'nin
+// kendi [history-growth] olcum satiri da setprecision(2) kullandigi icin PASS
+// notu ile olcum satiri ayni sayiyi gosterir. "s" icin tam sayi (saniye
+// butcelerinde yaslama anlamsiz).
+std::string formatBudgetValue(double value, const char* unit) {
+    std::ostringstream os;
+    const bool isSeconds = (unit[0] == 's' && unit[1] == '\0');
+    os << std::fixed << std::setprecision(isSeconds ? 0 : 2);
+    os << value;
+    return os.str();
+}
+
 // PASS satirina eklenecek zamanlama notu. kWithin disinda HICBIR dalinda
 // "within budget" kelimesi uretilmez; boylece yesil bir log, butce asilmis
 // oldugunu saklayamaz.
-std::string budgetPassNote(BudgetVerdict verdict, double measuredSecs, double budgetSecs) {
+//
+// DENETIM (2026-10-04): `unit` parametresi eklendi. Onceki yazim her olcumu
+// saniye varsayip "s" soneki yaziyordu, ama bu fonksiyon IKI farkli birimle
+// cagrilir:
+//   * bolum 5 (N-stres): saniye  — stressSecs / kStressBudgetSecs
+//   * bolum 6 (buyume):  MILLISANIYE — saveMs / loadMs, 150.0/300.0 * scale
+// Bolum 6'da sonuc yesil logda "within budget (273s <= 600s)" oluyordu,
+// gercek degerler ise 272.98 ms <= 600 ms idi. Bu bir BIRIM etiketi yalaniydi
+// ve dogrudan P1-11'in "yesil log butceye dair yalan soylemesin" amaciyla
+// celisiyordu: metin dogru birimi degil, yanlis birimi ilan ediyordu.
+// Artik cagri yeri gercek birimi acikca belirtir; BUTCE DEGERLERINE (150/300,
+// kStressBudgetSecs, kGrowthTimeScale) dokunulmamistir — bu yalnizca etikettir.
+std::string budgetPassNote(BudgetVerdict verdict, double measured, double bound,
+                           const char* unit) {
     switch (verdict) {
         case BudgetVerdict::kWithin:
-            return " within budget (" + std::to_string(static_cast<int>(std::lround(measuredSecs))) +
-                   "s <= " + std::to_string(static_cast<int>(std::lround(budgetSecs))) + "s)";
+            return " within budget (" + formatBudgetValue(measured, unit) + unit +
+                   " <= " + formatBudgetValue(bound, unit) + unit + ")";
         case BudgetVerdict::kExceededEnforced:
             return " OVER BUDGET (enforced)";
         case BudgetVerdict::kExceededReported:
@@ -308,7 +333,7 @@ void test_rc_soak_and_data_safety() {
         for (const BudgetCase& c : budgetCases) {
             const BudgetVerdict got =
                 evaluateBudget(c.measured, c.budget, c.enforced);
-            const std::string note = budgetPassNote(got, c.measured, c.budget);
+            const std::string note = budgetPassNote(got, c.measured, c.budget, "s");
             const bool claimsWithin = note.find("within budget") != std::string::npos;
             if (got != c.expected || claimsWithin != c.passNoteMayClaimWithinBudget) {
                 std::cerr << "Budget gate hygiene lock failed: " << c.label
@@ -321,12 +346,38 @@ void test_rc_soak_and_data_safety() {
             }
         }
 
+        // BIRIM ETIKETI KILIDI (denetim 2026-10-04). budgetPassNote iki
+        // birimle cagrilir: bolum 5 saniye, bolum 6 milisaniye. Onceki
+        // yazim her ikisine de "s" yaziyordu; bolum 6'nin gercek degeri
+        // loadMs=272.98 iken log "within budget (273s <= 600s)" diyordu.
+        // Yanlis birim, P1-11'in yasakladigi turden bir yesil-log yalanidir
+        // ("dogru sayi, yanlis birim"), bu yuzden asagidaki iki kontrol
+        // regresyona donusmesini engeller:
+        //   * "ms" cagrisi "s" uretmemeli,
+        //   * "s" cagrisi "ms" uretmemeli,
+        //   * ms degerleri tam sayiya YUVARLANMAMALI (272.98 -> "273" olmaz).
+        {
+            const std::string secsNote =
+                budgetPassNote(BudgetVerdict::kWithin, 25.71, 300.0, "s");
+            const std::string msNote =
+                budgetPassNote(BudgetVerdict::kWithin, 272.98, 600.0, "ms");
+            if (secsNote.find("ms") != std::string::npos ||
+                msNote.find("272.98ms") == std::string::npos ||
+                msNote.find("600.00ms") == std::string::npos) {
+                std::cerr << "Budget gate hygiene lock failed: unit label does not "
+                             "match the measurement. seconds note=\""
+                          << secsNote << "\" ms note=\"" << msNote << "\""
+                          << std::endl;
+                exit(1);
+            }
+        }
+
         // Oznemli: kirmiziya dusmemis her kosulda notun metni gercekten
         // kirli-yesil iddiasini tasimamalidir (defensive, asagidaki iki
         // kontrol regresyona donusmemis olsun diye).
-        if (budgetPassNote(BudgetVerdict::kExceededReported, 99999.0, 300.0)
+        if (budgetPassNote(BudgetVerdict::kExceededReported, 99999.0, 300.0, "s")
                 .find("within budget") != std::string::npos ||
-            budgetPassNote(BudgetVerdict::kExceededEnforced, 99999.0, 300.0)
+            budgetPassNote(BudgetVerdict::kExceededEnforced, 99999.0, 300.0, "s")
                 .find("within budget") != std::string::npos) {
             std::cerr << "Budget gate hygiene lock failed: an exceeded budget still "
                          "labels the pass line as 'within budget'" << std::endl;
@@ -685,7 +736,7 @@ void test_rc_soak_and_data_safety() {
                       << std::endl;
         }
         TEST_PASS("1000-iteration save/load round-robin preserves node-id under 4MB" +
-                  budgetPassNote(stressVerdict, stressSecs, kStressBudgetSecs));
+                  budgetPassNote(stressVerdict, stressSecs, kStressBudgetSecs, "s"));
     }
 
     // 6. Tarihce-buyume olcumu: budama OLMADIGI icin (previousState sinirsiz
@@ -830,12 +881,17 @@ void test_rc_soak_and_data_safety() {
             }
             growthPassNote =
                 "1200-advance history growth stays within the locked SIZE bound" +
-                budgetPassNote(growthVerdict, measured, bound) + " [time]";
+                budgetPassNote(growthVerdict, measured, bound, "ms") + " [time]";
         } else {
+            // Ikisi de icinde: notun HER IKISINI de gercek birimiyle (ms)
+            // bildirmesi daha durust — yalniz loadMs yazmak saveMs'i
+            // belirsiz birakirdi. Degerler aynen 150.0/300.0 * kGrowthTimeScale.
             growthPassNote =
-                "1200-advance history growth stays within the locked size/time bound" +
-                budgetPassNote(BudgetVerdict::kWithin, loadMs,
-                               300.0 * kGrowthTimeScale);
+                "1200-advance history growth stays within the locked size/time bound"
+                " [save " + formatBudgetValue(saveMs, "ms") + "ms <= " +
+                formatBudgetValue(150.0 * kGrowthTimeScale, "ms") + "ms, load " +
+                formatBudgetValue(loadMs, "ms") + "ms <= " +
+                formatBudgetValue(300.0 * kGrowthTimeScale, "ms") + "ms]";
         }
         TEST_PASS(growthPassNote);
     }
