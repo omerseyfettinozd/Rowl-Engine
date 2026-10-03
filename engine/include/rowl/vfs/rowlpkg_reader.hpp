@@ -36,9 +36,12 @@ struct PackageEntry {
     uint64_t compressedSize;
     uint64_t uncompressedSize;
     uint32_t flags;
-    /// D18a-runtime: hex compressed_sha256 carried by the embedded manifest
-    /// record (rowl/manifest.json) for flags=1 entries; empty = no key
-    /// (legacy record) and verification is skipped.
+    /// D18a-runtime: hex SHA-256 of the bytes AS STORED for this entry,
+    /// carried by the embedded manifest record (rowl/manifest.json);
+    /// empty = no key (legacy record) and verification is skipped.
+    /// P2-7: applies to flags=0 entries too — `compressed_sha256` for zstd
+    /// entries, `sha256` for raw ones (raw stores content verbatim, so the
+    /// packer's uncompressed-content hash covers the stored bytes).
     std::string compressedSha256Hex;
 };
 
@@ -63,6 +66,11 @@ private:
     /// mutex covers only seek+read — decompression runs lock-free.
     std::optional<std::vector<uint8_t>> readEntry(const PackageEntry& entry,
                                                   const std::string& path);
+    /// P2-8: manifest-hash gate for the streaming path. Hashes the bytes AS
+    /// STORED in bounded chunks without materializing the entry or running a
+    /// decoder, so a stream can satisfy the same gate read() applies while
+    /// decoding the entry exactly once. No manifest key = legacy warn-open.
+    bool verifyEntryDigest(const PackageEntry& entry, const std::string& path);
 
     std::string m_filepath;
     std::ifstream m_fileStream;
