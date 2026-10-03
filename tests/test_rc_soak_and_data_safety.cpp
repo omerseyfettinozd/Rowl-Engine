@@ -25,6 +25,56 @@
 #include <unistd.h>
 #endif
 
+// ---------------------------------------------------------------------------
+// Sanitizer algilamasi — DOSYA BASINDA TEK KOSUL, TEK YERDE.
+//
+// DENETIM (2026-10-04). Onceki yazimda bu soru dosyanin UC ayri yerinde,
+// UC farkli bicimde soruluyordu:
+//   * bolum 1  kTolerance        -> ASan/TSan (UBSan YOK)
+//   * bolum 5  kStressBudgetSecs -> ASan/UBSan/TSan veya _WIN32
+//   * bolum 6  kGrowthTimeScale  -> ASan/UBSan/TSan
+// ve 63d767b bolum 6'yi `#if defined(NDEBUG)` anahtarina baglayarak kirdi.
+// Sonuc, bu commit ile duzeltilen tutarsizlik:
+//
+//   Debug, sanitizer yok : ESKI 150/300 ms  ->  YENI 300/600 ms  (2x GEVSEMIS)
+//
+// CI'da butce kapisi calisan isler TAMAMEN Debug (ci.yml 68/208/413/465/537),
+// yani EN SIK calisan tip 2 kat gevsetilmis oldu. Oysa 63d767b commit'i
+// "DEGER DEGISTIRILMEDI... bir sayi uretilmez" diyordu; bu ifade YANLISTI.
+//
+// Buradaki iki makro, eski (main = 5c07162) satirlarin ETKIN degerlerini
+// birebir korur — hicbir esik gevsemez:
+//   ROWL_SANITIZER_BUILD        ASan | UBSan | TSan   (zaman olcekleri)
+//   ROWL_RSS_INSTRUMENTED_BUILD ASan | TSan           (yalniz RSS'i oynatanlar)
+//
+// Ikisi ayri kaldi cunku sorulari farklidir ve eski kodda da farkliydi:
+// UBSan zaman olcegini ~2x yavaslatir ama resident set size'i kendi basina
+// oynatmaz; ASan/TSan (arena/quarantine, shadow memory) RSS'i onlarca MB
+// oynatir. Tek makroya indirmek UBSan-only derlemelerde kTolerance'i
+// 8 MB -> 64 MB yapardi, yani yine bir esik gevsemesi olurdu.
+//
+// __has_feature yalnizca Clang'da tanimlidir; GCC'de dogrudan #if icinde
+// sorgulanirsa "missing binary operator" hatasi verir. Bu yuzden once
+// defined() ile varligi ayiklanir, icteki #if yalnizca tanimliyken
+// degerlendirilir. GCC'nin __SANITIZE_* makrolari GCC sanitizer isini,
+// __has_feature dali Clang sanitizer derlemelerini kapsar.
+// ---------------------------------------------------------------------------
+#if defined(__SANITIZE_ADDRESS__) || defined(__SANITIZE_UNDEFINED__) || defined(__SANITIZE_THREAD__)
+#define ROWL_SANITIZER_BUILD 1
+#elif defined(__has_feature)
+#if __has_feature(address_sanitizer) || __has_feature(undefined_behavior_sanitizer) || __has_feature(thread_sanitizer)
+#define ROWL_SANITIZER_BUILD 1
+#endif
+#endif
+
+#if defined(__SANITIZE_ADDRESS__) || defined(__SANITIZE_THREAD__)
+#define ROWL_RSS_INSTRUMENTED_BUILD 1
+#elif defined(__has_feature)
+#if __has_feature(address_sanitizer) || __has_feature(thread_sanitizer)
+#define ROWL_RSS_INSTRUMENTED_BUILD 1
+#endif
+#endif
+
 namespace {
 
 // ---------------------------------------------------------------------------
@@ -472,22 +522,14 @@ void test_rc_soak_and_data_safety() {
         // its own, so the tight 8MB production tolerance
         // is meaningless there; leak detection under sanitizers is
         // LSan's job (currently out of scope), not this gauge's.
-        // NOTE: __has_feature is Clang-only and must not be called inside
-        // a single #if on GCC/MSVC (older GCC errors with "missing binary
-        // operator"); hence the nested guard.
-#if defined(__SANITIZE_ADDRESS__) || defined(__SANITIZE_THREAD__)
-#define ROWL_SANITIZER_BUILD 1
-#elif defined(__has_feature)
-#if __has_feature(address_sanitizer) || __has_feature(thread_sanitizer)
-#define ROWL_SANITIZER_BUILD 1
-#endif
-#endif
-#ifdef ROWL_SANITIZER_BUILD
+        // Anahtar dosya basinda TEK KOSUL olarak hesaplanir
+        // (ROWL_RSS_INSTRUMENTED_BUILD); UBSan burada bilerek disarida,
+        // cunku resident set size'i kendi basina oynatmaz.
+#ifdef ROWL_RSS_INSTRUMENTED_BUILD
         constexpr uint64_t kTolerance = 64ULL * 1024ULL * 1024ULL;
 #else
         constexpr uint64_t kTolerance = 8ULL * 1024ULL * 1024ULL;
 #endif
-#undef ROWL_SANITIZER_BUILD
 
         const RssVerdict rssVerdict = evaluateRss(
             minRss, maxRss, kTolerance, rssSamples, expectedRssSamples);
@@ -681,12 +723,9 @@ void test_rc_soak_and_data_safety() {
         // Sanitizer derlemelerinde ayni is ~2.1x surer (CI gozlemi: 330.8 sn
         // ASan+UBSan altinda); enstrumantasyon yavaslamasini gercek
         // regresyondan ayirmak icin kilit sanitizer altinda 2 katina cikar.
-        // __has_feature Clang'a ozgu oldugundan dogrudan #if icinde
-        // sorgulanamaz (GCC "missing binary operator" hatasi verir); once
-        // #elif defined ile varligi ayiklanir, icteki #if yalnizca
-        // __has_feature tanimliyken degerlendirilir. GCC'nin __SANITIZE_*
-        // makrolari CI sanitizer isini, __has_feature dali Clang sanitizer
-        // derlemelerini kapsar.
+        // Anahtar dosya basinda TEK KOSUL olarak hesaplanir
+        // (ROWL_SANITIZER_BUILD) — bu blok kendi #if zincirini tasimaz,
+        // boylece bolum 6 ile senkron kalamama yapisi kapatilir.
         //
         // BUTCE DEGERLERINE DOKUNULMADI (2026-10-04). Yukaridaki blok
         // 37a2449 ile BIT BIT aynidir; aradaki iki deneme geri alindi:
@@ -710,14 +749,8 @@ void test_rc_soak_and_data_safety() {
         // kararini verir; TEST_PASS metni butceye dair iddiayi yalnizca
         // gercekten icindeysek tasir. Asilmis butce "OVER BUDGET, NOT
         // ENFORCED" der; "within budget" yazmaz.
-#if defined(__SANITIZE_ADDRESS__) || defined(__SANITIZE_UNDEFINED__) || defined(__SANITIZE_THREAD__) || defined(_WIN32)
+#if defined(ROWL_SANITIZER_BUILD) || defined(_WIN32)
         constexpr double kStressBudgetSecs = 600.0;
-#elif defined(__has_feature)
-#if __has_feature(address_sanitizer) || __has_feature(undefined_behavior_sanitizer) || __has_feature(thread_sanitizer)
-        constexpr double kStressBudgetSecs = 600.0;
-#else
-        constexpr double kStressBudgetSecs = 300.0;
-#endif
 #else
         constexpr double kStressBudgetSecs = 300.0;
 #endif
@@ -799,46 +832,45 @@ void test_rc_soak_and_data_safety() {
         // Ust-sinir ~2x payla 768KB, sure ~2x payla save <= 150ms, load <= 300ms.
         // Sanitizer derlemelerinde enstrumantasyon vergisi ~2.1x (CI gozlemi:
         // ASan+UBSan altinda load 316ms); N-stres kilidindeki ayni olcek
-        // burada da gecerli, yoksa kilit gercek regresyonla yavaslamayi
+        // buruda da gecerli, yoksa kilit gercek regresyonla yavaslamayi
         // ayirt edemez.
         //
-        // P0 (ayni sinif, 2026-10-03): 150/300 ms esikleri de RelWithDebInfo
-        // olcumunden turetilmis, ama CI test isleri Debug derliyor
-        // (.github/workflows/ci.yml satirlari 68/208/260/314/371/413/465/537 =
-        // -DCMAKE_BUILD_TYPE=Debug) ve sanitizer isleri de Debug +
-        // -fsanitize=... ile derleniyor (satirlar 260/314/371).
+        // DENETIM (2026-10-04) — 63d767b'in YANLIS YORUMU VE ETKI.
+        // 63d767b bu blogu `#if defined(NDEBUG)` anahtarina baglamisti ve
+        // "DEGER DEGISTIRILMEDI... bir sayi uretilmez" demisti. IKISI DE
+        // YANLISTI. Preprocessor ile olculdu (5 yapilandirma, eski = main
+        // 5c07162'ye karsilik):
         //
-        // Duzeltme YENI BIR OLCEK KALIBRASYONU DEGIL: optimize edilmemis
-        // derlemelerde (NDEBUG tanimsiz) olcek 2.0 ALIR — yani sanitizer
-        // kolunun zaten kullandigi deger yeniden kullanilir, sifirdan bir
-        // sayi uretilmez. Anahtar da elden degil, YAPISAL:
+        //   Debug, sanitizer yok : ESKI 150/300  ->  63d767b 300/600
+        //   Debug + ASan/UBSan   : ESKI 300/600  ->  63d767b 300/600
+        //   Debug + TSan         : ESKI 300/600  ->  63d767b 300/600
+        //   Release (NDEBUG)     : ESKI 150/300  ->  63d767b 150/300
+        //   RelWithDebInfo       : ESKI 150/300  ->  63d767b 150/300
         //
-        //   soru "bu kol sanitizer mi / Windows mi" degil, "zaman kapisi
-        //   hangi HIZDAKI kodda olculuyor". CMake'de Release = -O3 -DNDEBUG,
-        //   RelWithDebInfo = -O2 -g -DNDEBUG, Debug = -g (NDEBUG YOK).
-        //   Proje MinSizeRel KULLANMIYOR (depo genelinde tek bir referans
-        //   yok), dolayisiyla #if defined(NDEBUG) tam olarak "optimize
-        //   edilmis derleme" demektir ve tum optimize tipleri kapsar,
-        //   Debug'i disarida birakir.
+        // Yani CI'da butce kapisi calisan isler TAMAMEN Debug
+        // (ci.yml 68/208/413/465/537), yani EN SIK CALISAN tip 2 kat
+        // gevsetilmis oldu. "Degerler aynen korundu" degil; gercek olan:
+        // "etkin degerler yapilandirmaya gore degisiyor ama HER
+        // yapilandirmada eskisiyle ayni".
         //
-        // Onceki ayri __SANITIZE_* / __has_feature dallari bu yuzden
-        // gereksizdi ve elle senkron tutulmasi gerekiyordu; bugun tam da
-        // senkron kalmamis olduklari icin kirildi (bolum 1'deki "eski
-        // __SANITIZE_* / __has_feature / _WIN32 dallarinin senkron
-        // kalmamasi" bulgusu).
+        // Neden "yapilandirmaya gore degisiyor" dogru bir sey: taban
+        // esikler 150/300 ms, olcek 2.0 yalnizca enstrumantasyonun zamani
+        // yaklaşık ikiye katladigi kolu tanir. Bu bir politika, bir olcum
+        // kalibrasyonu degil.
         //
-        // DEGER DEGISTIRILMEDI: taban esikler 150 ms / 300 ms ve olcek 2.0
-        // oldugu gibi. Bu commit icin sure olcumu YAPILMADI; 2.0 degeri
-        // dayanagini yeniden turetilmis bir Debug olcumunden degil, hali
-        // hazir sanitizer kolundan alir.
+        // DUZELTME: anahtar `#if defined(NDEBUG)` DEGIL, dosya basinda TEK
+        // KOSUL olarak hesaplanan ROWL_SANITIZER_BUILD geri alindi. Boylece
+        // (a) etkin degerler eski kodla BIT BIT ayni — hicbir esik gevsemez,
+        // (b) bolum 1 / 5 / 6 artik ayni makroyu okudugu icin senkron
+        // kalma hatasi YAPISAL olarak kapanir; uc ayri #if zinciri bir
+        // tanesine indirgendi. Bu commit icin HICBIR sure olcumu
+        // yapilmadi; kanit tamamen preprocessor okumasidir.
         //
-        // BOYUT kilidi (768KB) DEGISTIRILMEDI ve her zaman enforced; yani
-        // bolum 6'nin asil regresyon dedektoru degismedi, yalnizca zaman
-        // esiginin optimize edilmemis kollari da tanimasi duzeltildi.
-#if defined(NDEBUG)
-        constexpr double kGrowthTimeScale = 1.0;
-#else
+        // BOYUT kilidi (768KB) DEGISTIRILMEDI ve her zaman enforced.
+#ifdef ROWL_SANITIZER_BUILD
         constexpr double kGrowthTimeScale = 2.0;
+#else
+        constexpr double kGrowthTimeScale = 1.0;
 #endif
         if (grownBytes > 768ULL * 1024ULL) {
             std::cerr << "History growth exceeded the locked upper bound: "
