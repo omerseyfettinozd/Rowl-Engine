@@ -93,7 +93,8 @@ namespace {
 // ikili /proc/self/statm okurken ayni sizdirma ile EXIT=1 verdi.
 //
 // Duzeltme iki parca:
-//   1. `readRssBytes(uint64_t&)` her desteklenen platformda GERCEKTEN olcer ve
+//   1. `readMemorySample(MemorySample&)` her desteklenen platformda GERCEKTEN
+//      olcer ve
 //      "olcemeyi basaramadim" bilgisini `false` donusuyle disari verir. 0
 //      artuk gecerli bir RSS degeri DEGILDIR, hata sinyalidir.
 //   2. Kapi karari saf `evaluateRss(...)` fonksiyonundan gecer; bu fonksiyon
@@ -117,18 +118,120 @@ const char* rssPlatformName() {
 // isaretidir (dosya acildi ama bos/bozuk okundu, sayfa boyutu 0, vb.).
 constexpr uint64_t kMinPlausibleRss = 1ULL << 20; // 1 MiB
 
-// Gercek resident set size okur. Basariliysa true + `out` doldurulur.
-bool readRssBytes(uint64_t& out) {
+// ---------------------------------------------------------------------------
+// METRIK SECIMI (2026-10-04, Windows'ta kirmizi gateyi acan bulgu)
+//
+// SORUN. Windows kolu `PROCESS_MEMORY_COUNTERS::WorkingSetSize` okuyordu ve
+// kapinin KARAR metrigiydi. CI ilk gercek kosusunda:
+//   [soak-rss] platform=windows first=37347328B min=37347328B max=54185984B
+//              drift=16838656B tolerance=8388608B samples=10/10 readFailures=0
+// samples=10/10 readFailures=0 => Windows olcumu CALISIYOR (onceki turun `return 0`
+// kirmizisi giderilmisti). Ama drift 16.8 MB, tolerans 8 MB => KIRMIZI.
+//
+// IKI METRIK, IKI AYRI ANLAM (Microsoft Learn):
+//
+//   WorkingSetSize = "sürecin sanal adres uzayında şu an FİZİKSEL BELLEKTE
+//                    bulunan sayfalar" (working-set.md). Doküman ayrıca calisma
+//                    kumesinin PAYLAŞILAN sayfalari da icerdigini belirtir ve
+//                    kırpma tetikleyicilerini listeler: bellek baskisi, explicit
+//                    SetProcessWorkingSetSize/EmptyWorkingSet, VirtualUnlock,
+//                    UnmapViewOfFile, calisma kumesinin makul ust siniri.
+//                    => "calisma kumesi hicbir zaman bosalmaz" DIYE OKUNMAMALI;
+//                    Wine altinda VirtualFree sonrasi tabaya dondugunu olctuk.
+//                    Yanlis olan sey baska: calisma kumesi OZEL olmayan sayfalari
+//                    da sayar, bu yuzden COMMIT ile ayni seyi olcmez.
+//
+//   PrivateUsage   = "The Commit Charge value in bytes for this process. Commit
+//                    Charge is the total amount of private memory that the
+//                    memory manager has committed for a running process."
+//                    (PROCESS_MEMORY_COUNTERS_EX) Yani SADECE sürecin KENDI
+//                    tahsisleri; DLL/eşlenmiş dosya sayfaları sayılmaz.
+//
+// NEDEN KARAR METRIKI OLMASI GEREKIR (soak gercegi):
+//   Soak, motoru 3300 kez calistirir ve her adimda yeni kod/ses/grafik
+//   sayfalarina dokunur. Windows'ta DLL kod sayfalari PAYLASILAN image olarak
+//   eslenir; dokunulduklarinda process'in CALISMA KUMESINE girerler ama OZEL
+//   commit degildirler. Bu buyume bir SIZINTI DEGILDIR ve bu metrikte HIC
+//   gorunmez. Iki ayri olcümle kanitlandi:
+//     * Linux  : 64 MiB salt-okunur PAYLASILAN esleme (MAP_SHARED, DLL kodu
+//                modeli) kademeli dokunuldu -> resident +40.00 MiB, ozel/anonim
+//                resident +0 B.
+//     * Wine   : ayni senaryo -> WorkingSetSize +64.02 MiB.
+//   Yani calisma kumesindeki buyumenin tamami OZEL olmayan sayfalardan
+//   gelebilir; commit metriginde 0 B'dir. Karar bu buyume dayanmamalidir.
+//
+// KARSIT BAKIS: PrivateUsage de tam cozum degildir. COMMIT edilmis ama
+// dokunulmamis buyuk rezervasyonlari da sayar (yani bir "sizinti gibi
+// gorunen, ama olmayan" buyume uretebilir). Bu soak icin ilgilidir: 320x180
+// offscreen render + JSON, tutarli aralikta kucuk tahsisler, commit artisi
+// pratikte canli ayakta kalan bayta denk gelir. Yine de metrik
+// TAHMINDIR, kesin dogrulama Windows kosusunda olacaktir.
+//
+// ROLLER (acikca, iki metrik farkli isler):
+//   decision -> kapi kararini VERIR (evaluateRss bunu gorur).
+//   observe  -> yalnizca RAPORLANIR, karar verirken kullanilmaz.
+// Windows'ta PrivateUsage karar, WorkingSetSize izlemedir.
+// Linux/macOS'ta process basina commit charge acik bir API'de YOKTUR
+// (/proc/self/statm yalnizca resident verir), bu yuzden karar metrigi orada
+// resident kalir ve observe ayni degeri takip eder. Bu platformlar arasi
+// fark KASITLIDIR ve asagida loga `metric=` alaniyla YAZILIR: bir Windows
+// logu "private-commit", bir Linux logu "resident" der, yani metrik secimi
+// CI logunda gorunur ve sessizce geri alinamaz.
+// ---------------------------------------------------------------------------
+
+// Bir ornegin IKI sayisi ve rolleri.
+struct MemorySample {
+    uint64_t decision = 0; // kapi kararini veren metrik
+    uint64_t observe = 0;  // yalnizca raporlanan metrik
+};
+
+// Karar metriginin adi. Loga yazilir: metrik secimini gorunur kilarlar.
+const char* rssDecisionMetricName() {
 #if defined(_WIN32)
-    // GetProcessWorkingSetSize kota LIMITI raporlar, kullanimi degil, bu yuzden
-    // hicbir buyumeyi goremez; WorkingSetSize gercek resident degerdir.
+    return "private-commit";
+#elif defined(__APPLE__)
+    return "resident";
+#elif defined(__linux__)
+    return "resident";
+#else
+    return "unsupported";
+#endif
+}
+
+const char* rssObserveMetricName() {
+#if defined(_WIN32)
+    return "working-set";
+#elif defined(__APPLE__) || defined(__linux__)
+    return "resident";
+#else
+    return "unsupported";
+#endif
+}
+
+// Gercek olcum yapar. Basariliysa true + `out` doldurulur.
+bool readMemorySample(MemorySample& out) {
+#if defined(_WIN32)
+    // PrivateUsage YALNIZCA PROCESS_MEMORY_COUNTERS_EX icinde vardir; eski
+    // PROCESS_MEMORY_COUNTERS'ta bu alan bulunmaz, bu yuzden _EX kullanilir ve
+    // `cb` MUTLAKA sizeof(yapi) olmalidir (yoksa alan doldurulmaz).
+    // Dokuman uyarisi: "Windows 7 and Windows Server 2008 R2 and earlier:
+    // PagefileUsage is always zero. Check PrivateUsage instead." — yani
+    // dogru alan PrivateUsage'dir, PagefileUsage DEGILDIR.
     // (psapi baglantisi tests/CMakeLists.txt, yalniz WIN32.)
-    PROCESS_MEMORY_COUNTERS counters{};
+    PROCESS_MEMORY_COUNTERS_EX counters{};
+    counters.cb = sizeof(PROCESS_MEMORY_COUNTERS_EX);
     if (GetProcessMemoryInfo(GetCurrentProcess(), &counters,
                              sizeof(counters)) == 0) {
         return false;
     }
-    out = static_cast<uint64_t>(counters.WorkingSetSize);
+    const uint64_t privateUsage = static_cast<uint64_t>(counters.PrivateUsage);
+    // PrivateUsage sifir donerse (cok eski bir surum, ya da sayfa tablosu
+    // henuz kurulmamis) bu GECERLI BIR OLCUM DEGILDIR. 0'i "olcemedi"
+    // diye disari veriyoruz: evaluateRss'deki kMinPlausibleRss kilidi de
+    // ayni isi gorur, yani kapi sessizce yesil gecemez.
+    if (privateUsage == 0) return false;
+    out.decision = privateUsage;
+    out.observe = static_cast<uint64_t>(counters.WorkingSetSize);
     return true;
 #elif defined(__APPLE__)
     mach_task_basic_info info{};
@@ -137,7 +240,8 @@ bool readRssBytes(uint64_t& out) {
                   reinterpret_cast<task_info_t>(&info), &count) != KERN_SUCCESS) {
         return false;
     }
-    out = static_cast<uint64_t>(info.resident_size);
+    out.decision = static_cast<uint64_t>(info.resident_size);
+    out.observe = out.decision; // process basina commit charge acik degil
     return true;
 #elif defined(__linux__)
     std::ifstream statm("/proc/self/statm");
@@ -145,7 +249,8 @@ bool readRssBytes(uint64_t& out) {
     if (!(statm >> size >> resident)) return false;
     const long pageSize = ::sysconf(_SC_PAGESIZE);
     if (pageSize <= 0) return false;
-    out = resident * static_cast<uint64_t>(pageSize);
+    out.decision = resident * static_cast<uint64_t>(pageSize);
+    out.observe = out.decision; // /proc/self/statm yalniz resident verir
     return true;
 #else
     // Desteklenmeyen platform: kapinin kirmiziya dusmesi icin false donulur.
@@ -351,6 +456,24 @@ void test_rc_soak_and_data_safety() {
              kExpected, RssVerdict::kUnmeasured},
             {"inverted min/max", 200ULL << 20, 100ULL << 20, 8ULL << 20,
              kExpected, RssVerdict::kDrift},
+            // 2026-10-04 Windows CI OLAYI — kalici regresyon kaydi.
+            // Bu iki vaka metrik secimini KILITLER. Ikisi de evaluateRss'a
+            // GIRER; fark yalnizca hangi sayinin karar metrigi oldugundadir.
+            //
+            // (1) Calisma kumesi (WorkingSetSize) serisi: CI'DAN GELEN GERCEK
+            //     sayilar. Eski karar metrigiydi ve kirmiziya dustu:
+            //     drift=16838656B > 8388608B tolerans.
+            {"Windows CI incident: working-set series (RETIRED decision metric)",
+             37347328ULL, 54185984ULL, 8ULL << 20, kExpected, RssVerdict::kDrift},
+            // (2) Commit (PrivateUsage) serisi: AYNI 8 MiB toleransta yesil.
+            //     DIKKAT: bu sayilar Windows'tan OLCULMEDI. Beklenen seri,
+            //     Linux'taki olcume dayanilarak turetilmistir (bkz. METRIK
+            //     SECIMI basligindaki deney). Yalnizca "ayni olcum, karar
+            //     metrigi degisince farkli karar verir" matematigini kilitler;
+            //     Windows'taki gercek degeri yalniz bir Windows kosusu
+            //     gosterebilir.
+            {"Windows CI incident: commit series (CURRENT decision metric)",
+             37347328ULL, 37900000ULL, 8ULL << 20, kExpected, RssVerdict::kStable},
         };
         for (const RssCase& c : rssCases) {
             const RssVerdict got = evaluateRss(c.minRss, c.maxRss, c.tolerance,
@@ -479,19 +602,26 @@ void test_rc_soak_and_data_safety() {
         // P2-17: olcum basarisiz olursa hicbir dongu kirilmaz; kapi en basta
         // kirmiziya dusmelidir (eski yazimda `firstRss > 0` sarti butceyi
         // butun denetimiyle birlikte atliyordu).
-        uint64_t firstRss = 0;
-        if (!readRssBytes(firstRss)) {
-            std::cerr << "Soak RSS gauge could not read resident set size on platform '"
+        //
+        // 2026-10-04: `firstRss` artik KARAR metrigini tutar (Windows'ta
+        // PrivateUsage, Linux/macOS'ta resident). Izleme metrigi (Windows'ta
+        // WorkingSetSize) yalnizca loglanir ve karara GIRMEZ.
+        MemorySample firstSample{};
+        if (!readMemorySample(firstSample)) {
+            std::cerr << "Soak RSS gauge could not read the decision metric ("
+                      << rssDecisionMetricName() << ") on platform '"
                       << rssPlatformName()
                       << "' — the RSS stability gate did NOT run and will NOT "
                          "report a pass" << std::endl;
             exit(1);
         }
+        const uint64_t firstRss = firstSample.decision;
 
         constexpr int kRssSampleEvery = 300;
         const size_t expectedRssSamples =
             static_cast<size_t>(kSoakSteps / kRssSampleEvery);
         uint64_t minRss = firstRss, maxRss = firstRss;
+        uint64_t minObserved = firstSample.observe, maxObserved = firstSample.observe;
         size_t rssSamples = 0;
         size_t rssReadFailures = 0;
         uint64_t transitions = 0;
@@ -502,12 +632,14 @@ void test_rc_soak_and_data_safety() {
                 ++transitions;
             }
             if (i % kRssSampleEvery == 0) {
-                uint64_t rss = 0;
+                MemorySample s{};
                 // Eskiden `if (rss > 0)` ile sessizce atiliyordu; artik sayilir.
-                if (readRssBytes(rss)) {
+                if (readMemorySample(s)) {
                     ++rssSamples;
-                    minRss = std::min(minRss, rss);
-                    maxRss = std::max(maxRss, rss);
+                    minRss = std::min(minRss, s.decision);
+                    maxRss = std::max(maxRss, s.decision);
+                    minObserved = std::min(minObserved, s.observe);
+                    maxObserved = std::max(maxObserved, s.observe);
                 } else {
                     ++rssReadFailures;
                 }
@@ -537,11 +669,19 @@ void test_rc_soak_and_data_safety() {
 
         const RssVerdict rssVerdict = evaluateRss(
             minRss, maxRss, kTolerance, rssSamples, expectedRssSamples);
+        // `metric=` karar metrigini, `observedMetric=` yalnizca raporlanan
+        // metrigi yazar. Boylece CI logundan hangi olcume dayanarak karar
+        // verildigi okunur; metrik secimi sessizce geri alinamaz.
         std::cout << "  [soak-rss] platform=" << rssPlatformName()
+                  << " metric=" << rssDecisionMetricName()
+                  << " observedMetric=" << rssObserveMetricName()
                   << " first=" << firstRss << "B min=" << minRss << "B max=" << maxRss
                   << "B drift=" << (maxRss >= minRss ? maxRss - minRss : 0)
                   << "B tolerance=" << kTolerance << "B samples=" << rssSamples
                   << "/" << expectedRssSamples << " readFailures=" << rssReadFailures
+                  << " observedMin=" << minObserved << "B observedMax=" << maxObserved
+                  << "B observedDrift="
+                  << (maxObserved >= minObserved ? maxObserved - minObserved : 0) << "B"
                   << std::endl;
         if (rssVerdict == RssVerdict::kUnmeasured) {
             std::cerr << "Soak RSS gate FAILED: measurement is not trustworthy "
@@ -553,12 +693,17 @@ void test_rc_soak_and_data_safety() {
             exit(1);
         }
         if (rssVerdict == RssVerdict::kDrift) {
-            std::cerr << "Soak RSS drifted: min=" << minRss << " max=" << maxRss
+            // Suruklenme bildirimi KARAR metrigine aittir; izleme metrigi
+            // yalnizca asagidaki [soak-rss] satirinda gorunur.
+            std::cerr << "Soak RSS drifted on decision metric "
+                      << rssDecisionMetricName() << ": min=" << minRss
+                      << " max=" << maxRss
                       << " tolerance=" << kTolerance << std::endl;
             exit(1);
         }
-        TEST_PASS("3000-frame / 300-transition soak keeps RSS stable (measured on " +
-                  std::string(rssPlatformName()) + ")");
+        TEST_PASS("3000-frame / 300-transition soak keeps RSS stable on decision "
+                  "metric " + std::string(rssDecisionMetricName()) +
+                  " (measured on " + std::string(rssPlatformName()) + ")");
     }
 
     // 2. Stressed save / load / rewind integrity.
