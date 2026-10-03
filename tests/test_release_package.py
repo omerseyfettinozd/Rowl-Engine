@@ -17,6 +17,9 @@ VERIFIER = ROOT / "tools" / "verify_release_package.py"
 LAUNCHER_TOOL = ROOT / "tools" / "make_release_launchers.py"
 PARITY_CHECK = ROOT / "tools" / "check_release_launcher_parity.py"
 
+sys.path.insert(0, str(ROOT / "tools"))
+import launcher_contract as contract
+
 
 def run_verifier(release_root):
     return subprocess.run([sys.executable, str(VERIFIER), str(release_root)],
@@ -43,7 +46,17 @@ with tempfile.TemporaryDirectory() as directory:
                  release / "THIRD_PARTY_NOTICES.md")
     (release / "RowlGame").write_bytes(b"player")
     (release / "libRowlEngineCore.so").write_bytes(b"runtime")
-    (release / "run_game.sh").write_text("#!/bin/sh\nexec ./RowlGame \"$@\"\n", encoding="utf-8")
+    # Binary write. pathlib.write_text() defaults to newline=None, which maps
+    # every "\n" onto the host's os.linesep: LF here, CRLF on the Windows
+    # runner. The verifier then rejected its own valid fixture with "run_game.sh
+    # has a CR" and turned rowl_release_package_tool_tests red in the Windows
+    # matrix only. The bytes are asserted so a host that still rewrites them
+    # fails HERE, with a message naming the cause, instead of three CI jobs
+    # later.
+    launcher_bytes = b"#!/bin/sh\nexec ./RowlGame \"$@\"\n"
+    (release / "run_game.sh").write_bytes(launcher_bytes)
+    if b"\r" in (release / "run_game.sh").read_bytes():
+        raise SystemExit(f"run_game.sh fixture carries a CR: {launcher_bytes!r}")
 
     valid = run_verifier(release)
     if valid.returncode != 0 or "Valid release" not in valid.stdout:
@@ -119,8 +132,7 @@ with tempfile.TemporaryDirectory() as directory:
     # it broken is that the .bat its platform needs is absent.
     sh_only = stage_windows_release("windows-release-sh-only")
     (sh_only / "run_game.bat").unlink()
-    (sh_only / "run_game.sh").write_text(
-        '#!/bin/sh\nexec ./RowlGame.exe "$@"\n', encoding="utf-8")
+    (sh_only / "run_game.sh").write_bytes(b'#!/bin/sh\nexec ./RowlGame.exe "$@"\n')
     require_rejection(sh_only, "ships RowlGame.exe but no run_game.bat")
 
     # Negative 1: a Windows release whose only launcher is removed. This is
@@ -186,12 +198,17 @@ with tempfile.TemporaryDirectory() as directory:
     ]:
         staged = root / tag
         shutil.copytree(release, staged)
-        (staged / "run_game.sh").write_text(content, encoding="utf-8")
+        (staged / "run_game.sh").write_bytes(content.encode("utf-8"))
         require_rejection(staged, fragment)
-    # A CR anywhere in the POSIX launcher: /bin/sh will not run it.
+    # A CR anywhere in the POSIX launcher: /bin/sh will not run it. The bytes
+    # are built with the SAME function the parity gate uses to model a Windows
+    # text-mode write, so this case cannot drift away from the defect it
+    # stands for -- it is literally the payload the Windows runner produced.
     staged = root / "sh-crlf"
     shutil.copytree(release, staged)
-    (staged / "run_game.sh").write_bytes(b"#!/bin/sh\r\nexec ./RowlGame \"$@\"\r\n")
+    (staged / "run_game.sh").write_bytes(
+        contract.windows_text_mode_write("#!/bin/sh\nexec ./RowlGame \"$@\"\n")
+        .encode("utf-8"))
     require_rejection(staged, "has a CR")
 
     print("[ReleasePackageTests] POSIX launcher contract: bad exe name, "
@@ -274,17 +291,27 @@ with tempfile.TemporaryDirectory() as directory:
                              "LAUNCHERS table no longer has that shape")
         return mutated
 
-    def drop_newline_guard(source):
-        """Removing newline=\"\" lets a translating host rewrite the CRLF.
+    def revert_to_text_mode_write(source):
+        """Put the writer back into text mode -- the Windows-only bug itself.
 
-        Invisible when the gate runs on POSIX (os.linesep is already "\n"),
-        so the gate asserts the writer keeps the guard rather than relying on
-        the emitted bytes alone.
+        This is not a proxy for the defect, it IS the defect: a text-mode write
+        maps every "\\n" onto the host's os.linesep, so run_game.sh ships with a
+        CR when produced on a Windows runner and the release verifier rejects
+        its own valid package. On Linux it is invisible -- os.linesep is
+        already "\\n" -- which is how it reached CI with every Linux, sanitizer
+        and arm64 job green.
+
+        The gate must catch it two ways: statically (emit() no longer writes
+        through the binary writer) and behaviourally (the real emit() is run
+        against a simulated Windows host and the bytes it writes are checked).
         """
-        mutated = source.replace('newline=""', 'newline=None')
+        mutated = source.replace(
+            "launcher_contract.write_launcher_bytes(path, name, content)",
+            'with open(path, "w", encoding="utf-8") as handle:\n'
+            "            handle.write(content)")
         if mutated == source:
-            raise SystemExit("drop_newline_guard changed nothing; the emit() "
-                             "open() no longer carries the newline guard")
+            raise SystemExit("revert_to_text_mode_write changed nothing; "
+                             "emit() no longer calls write_launcher_bytes")
         return mutated
 
     def drop_executable_bit(source):
@@ -309,7 +336,8 @@ with tempfile.TemporaryDirectory() as directory:
         ("lf-endings", downgrade_to_lf, "bare LF line ending"),
         ("windows-routes-to-posix", route_windows_to_posix,
          "would write ['run_game.sh'], not 'run_game.bat'"),
-        ("newline-guard-dropped", drop_newline_guard, 'newline=""'),
+        ("text-mode-write", revert_to_text_mode_write,
+         "simulated Windows host"),
         ("no-exec-bit", drop_executable_bit, "is not executable"),
     ]:
         result = parity_against_mutated_tool(tag, mutate)
@@ -349,10 +377,10 @@ with tempfile.TemporaryDirectory() as directory:
     print("[ReleasePackageTests] parity gate RED on editor-drops-cd: the "
           "editor's launcher copy is checked too.")
 
-    print("[ReleasePackageTests] check_release_launcher_parity.py is red-capable: "
-          "control green, 7 launcher mutations red (missing cd pin in the tool "
-          "and in the editor, broken exe name, LF endings, wrong platform "
-          "routing, dropped newline guard, missing exec bit).")
+    print("[ReleasePackageTests] check_release_launcher_parity.py is "
+          "red-capable: control green, 7 launcher mutations red (missing cd pin "
+          "in the tool and in the editor, broken exe name, LF endings, wrong "
+          "platform routing, text-mode write, missing exec bit).")
 
     missing_runtime = root / "missing-runtime"
     shutil.copytree(release, missing_runtime)

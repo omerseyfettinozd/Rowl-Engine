@@ -12,6 +12,7 @@ import hashlib
 import json
 import os
 import pathlib
+import shutil
 import struct
 import subprocess
 import sys
@@ -22,6 +23,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 PACKAGER = ROOT / "tools" / "package_assets.py"
 
 sys.path.insert(0, str(ROOT / "tools"))
+import launcher_contract as contract
 import verify_release_package as verifier
 
 
@@ -130,11 +132,38 @@ with tempfile.TemporaryDirectory() as directory:
     (release / "THIRD_PARTY_NOTICES.md").write_text("notices\n", encoding="utf-8")
     (release / "RowlGame").write_bytes(b"player")
     (release / "libRowlEngineCore.so").write_bytes(b"runtime")
-    (release / "run_game.sh").write_text("#!/bin/sh\nexec ./RowlGame \"$@\"\n", encoding="utf-8")
+    # Binary write, and the bytes are asserted below. pathlib.write_text()
+    # defaults to newline=None, which maps every "\n" onto the host's
+    # os.linesep -- so this fixture was LF on Linux and CRLF on Windows, and
+    # the verifier rejected the CR on the Windows jobs only. That is what
+    # turned rowl_package_determinism_tests red in the Windows matrix while
+    # every other job stayed green.
+    launcher_bytes = b"#!/bin/sh\nexec ./RowlGame \"$@\"\n"
+    (release / "run_game.sh").write_bytes(launcher_bytes)
+    if b"\r" in (release / "run_game.sh").read_bytes():
+        raise SystemExit(f"run_game.sh fixture carries a CR: {launcher_bytes!r}")
     try:
         verifier.verify(str(release))
     except (OSError, ValueError) as error:
         raise SystemExit(f"verifier rejected the deterministic package: {error}")
+
+    # The same reason from the other side: the fixture above must verify, and
+    # the same launcher carrying the line endings a Windows text-mode write
+    # would have produced must be rejected. Without this pair the whole suite
+    # is byte-identical on both platforms and neither platform can notice the
+    # difference -- which is exactly how the bug reached CI.
+    crlf_release = root / "release-crlf"
+    shutil.copytree(release, crlf_release)
+    (crlf_release / "run_game.sh").write_bytes(
+        contract.windows_text_mode_write("#!/bin/sh\nexec ./RowlGame \"$@\"\n")
+        .encode("utf-8"))
+    try:
+        verifier.verify(str(crlf_release))
+    except (OSError, ValueError) as error:
+        if "has a CR" not in str(error):
+            raise SystemExit(f"expected the CR rejection, got: {error}")
+    else:
+        raise SystemExit("verifier accepted a run_game.sh carrying a CR")
 
 with tempfile.TemporaryDirectory() as directory:
     root = pathlib.Path(directory)

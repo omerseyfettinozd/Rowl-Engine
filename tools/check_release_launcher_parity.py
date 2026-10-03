@@ -24,11 +24,19 @@ machine. It does four things:
    a temporary release root, and the bytes that land on disk are re-checked
    against the same contract. The constants can be right while the writer
    mangles them (newline translation is exactly how CRLF dies).
+5. Host-independent line endings -- run_game.sh is LF and run_game.bat is
+   CRLF on EVERY platform. A text-mode write maps every "\n" onto the host's
+   os.linesep, which is why a CR-carrying run_game.sh reached the Windows
+   jobs and turned two gates red there while Linux, sanitizer and every arm64
+   job stayed green. Step 4 cannot catch that from a Linux runner, because
+   os.linesep is "\n" here and the bytes look right. Step 5 models the Windows
+   write filter and asserts the launchers survive it.
 
 Exit 0 = parity holds. Exit 1 = drift (diagnostics on stderr).
 """
 
 import contextlib
+import builtins
 import importlib.util
 import inspect
 import io
@@ -218,16 +226,159 @@ def check_launcher_contract():
                 f"--platform {platform} would write launcher content that is "
                 f"not the {name!r} constant")
 
-    # The .bat is written with newline="" on purpose: a text-mode write on a
-    # platform that translates newlines rewrites the CRLF cmd.exe is handed.
-    # That corruption is invisible when this gate runs on POSIX -- os.linesep
-    # is "\n" here, so the bytes survive -- which is exactly why the check is
-    # static rather than left to the byte comparison below.
-    if 'newline=""' not in inspect.getsource(module.emit):
+    # The writer must not be a text-mode write. This is the check that closes
+    # the Windows-only bug: a text-mode write maps every "\n" onto the host's
+    # os.linesep, so the SAME constant emits LF on Linux and CRLF on Windows.
+    # os.linesep is "\n" on a Linux runner, so this gate's own byte comparison
+    # cannot see it -- the corruption is invisible from every job that was
+    # already passing. BINARY mode is the only form that cannot translate.
+    source = inspect.getsource(module.emit)
+    if 'write_launcher_bytes(' not in source:
         problems.append(
-            "make_release_launchers.emit() no longer opens the launcher with "
-            "newline=\"\"; on a newline-translating host the .bat's CRLF would "
-            "be rewritten before it reaches disk")
+            "make_release_launchers.emit() no longer writes through "
+            "launcher_contract.write_launcher_bytes(); a text-mode write maps "
+            "every \\n onto the host's os.linesep, which ships run_game.sh "
+            "with a CR on Windows while Linux stays green")
+
+    # The constants must agree with the declared line endings BEFORE they are
+    # written, so a wrong constant fails at the producer and not on a user's
+    # machine.
+    for name, text in ((module.POSIX_LAUNCHER_NAME, module.POSIX_LAUNCHER),
+                       (module.WINDOWS_LAUNCHER_NAME, module.WINDOWS_LAUNCHER)):
+        problems.extend(contract.newline_problems(
+            name, text.encode("utf-8"), label=f"the {name} constant"))
+    return problems
+
+
+class _WindowsTextWriter:
+    """A text-mode handle whose writes pass through the Windows filter."""
+
+    def __init__(self, handle, seen):
+        self._handle = handle
+        self._seen = seen
+
+    def write(self, data):
+        self._seen.append(data)
+        return self._handle.write(contract.windows_text_mode_write(data))
+
+    def __enter__(self):
+        self._handle.__enter__()
+        return self
+
+    def __exit__(self, *exc_info):
+        return self._handle.__exit__(*exc_info)
+
+    def __getattr__(self, name):
+        return getattr(self._handle, name)
+
+
+def _windows_open(seen):
+    """An `open` that translates newlines on text-mode WRITES, like Windows.
+
+    CPython rewrites every "\\n" in a text-mode write to os.linesep, which is
+    "\\r\\n" on Windows. open() documents it; this reproduces it. Binary mode
+    ("wb") is deliberately NOT affected, because CPython performs no newline
+    translation in binary mode at all -- so a producer that writes binaries is
+    genuinely immune to the host, and one that writes text is not.
+    """
+    real_open = builtins.open
+
+    def patched(file, mode="r", *args, **kwargs):
+        newline = kwargs.get("newline", None)
+        writing = any(flag in mode for flag in ("w", "a", "+", "x"))
+        translating = writing and "b" not in mode and newline is None
+        handle = real_open(file, mode, *args, **kwargs)
+        if not translating:
+            return handle
+        return _WindowsTextWriter(handle, seen)
+
+    return patched
+
+
+def check_line_endings_are_host_independent():
+    """The producer's bytes must not depend on the machine that ran it.
+
+    This is the Windows-only defect, reproduced and then ruled out without a
+    Windows runner. open() is patched to translate newlines on text-mode
+    writes -- exactly what a Windows host does -- and the REAL emit() is run
+    through it. The bytes that reach disk must still satisfy the contract.
+
+    Step 4 cannot do this: on a Linux runner os.linesep is "\\n", so the
+    corruption is invisible to a byte comparison and the same code ships a
+    broken run_game.sh to the Windows job. That is why this bug reached CI
+    while every Linux, sanitizer and arm64 job stayed green.
+    """
+    problems = []
+    module = load_launcher_module()
+
+    # Self-test: if the patched open does not actually translate, the check
+    # below would pass on a harness that simulates nothing.
+    with tempfile.TemporaryDirectory(
+            prefix="rowl-launcher-eol-",
+            dir=os.environ.get("ROWL_TMPDIR")) as directory:
+        probe = os.path.join(directory, "probe.txt")
+        seen = []
+        real_open = builtins.open
+        builtins.open = _windows_open(seen)
+        try:
+            with builtins.open(probe, "w", encoding="utf-8") as handle:
+                handle.write("a\n")
+        finally:
+            builtins.open = real_open
+        with real_open(probe, "rb") as handle:
+            probe_bytes = handle.read()
+        if probe_bytes != b"a\r\n":
+            problems.append(
+                "the simulated-Windows open() no longer translates newlines "
+                f"on text-mode writes (probe wrote {probe_bytes!r}, expected "
+                f"b'a\\r\\n'); the host-independence check below is not "
+                f"simulating anything and cannot fail")
+        if not seen:
+            problems.append(
+                "the simulated-Windows open() observed no text-mode write at "
+                "all, so it is not intercepting anything")
+
+        # The real producer, on a simulated Windows host.
+        written = {}
+        for platform in sorted(module.LAUNCHERS):
+            root = os.path.join(directory, platform)
+            os.mkdir(root)
+            filtered_writes = []
+            real_open = builtins.open
+            builtins.open = _windows_open(filtered_writes)
+            try:
+                with contextlib.redirect_stdout(io.StringIO()):
+                    module.emit(root, platform)
+            except (OSError, ValueError) as error:
+                problems.append(
+                    f"make_release_launchers.emit({platform!r}) failed on the "
+                    f"simulated-Windows host: {error}")
+                continue
+            finally:
+                builtins.open = real_open
+            for name, _, _ in module.LAUNCHERS[platform]:
+                with real_open(os.path.join(root, name), "rb") as handle:
+                    written[name] = handle.read()
+
+    for name, data in sorted(written.items()):
+        problems.extend(contract.newline_problems(
+            name, data,
+            label=f"{name} emitted on a simulated Windows host"))
+
+    # The constants themselves are well-formed, and the filter is known to
+    # break them. Both matter: without the first, emit() could be writing
+    # garbage that happens to be unbreakable; without the second, the check
+    # above would pass on a filter that detects nothing.
+    for name, text in ((module.POSIX_LAUNCHER_NAME, module.POSIX_LAUNCHER),
+                       (module.WINDOWS_LAUNCHER_NAME, module.WINDOWS_LAUNCHER)):
+        problems.extend(contract.newline_problems(
+            name, text.encode("utf-8"), label=f"the {name} constant"))
+        if not contract.newline_problems(
+                name, contract.windows_text_mode_write(text).encode("utf-8")):
+            problems.append(
+                f"the {name} constant survives a Windows text-mode write; the "
+                f"filter no longer models the defect this check guards "
+                f"against")
     return problems
 
 
@@ -370,6 +521,7 @@ def main():
         checked, problems = check_workflow()
         problems.extend(check_launcher_contract())
         problems.extend(check_emitted_bytes())
+        problems.extend(check_line_endings_are_host_independent())
         problems.extend(check_editor_launcher_parity())
     except (OSError, ValueError, yaml.YAMLError, ImportError) as error:
         print("[LauncherParity] ERROR: " + str(error), file=sys.stderr)
