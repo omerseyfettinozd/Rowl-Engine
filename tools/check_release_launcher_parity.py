@@ -395,7 +395,7 @@ def check_workflow():
             if LAUNCHER_REF not in script:
                 problems.append(
                     f"{title}: runs the release verifier but never calls "
-                    f"{LAUNCHER_REF} — the packaged release would reach the "
+                    f"{LAUNCHER_REF} - the packaged release would reach the "
                     f"verifier with no launcher and the gate would fail")
                 continue
             chosen = platform_argument(script)

@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Contract tests for portable release package verification."""
 
+import ast
 import hashlib
 import json
+import os
 import pathlib
 import shutil
 import struct
@@ -329,21 +331,124 @@ with tempfile.TemporaryDirectory() as directory:
                          "producer: stdout={0.stdout!r} "
                          "stderr={0.stderr!r}".format(control))
 
-    for tag, mutate, fragment in [
-        ("no-cd", drop_cd_line, "missing the working-directory pin"),
+    # Some mutations only MEAN something on some platforms. `no-exec-bit` is
+    # the clear case, and this run is its CI failure:
+    #
+    #     the parity gate stayed GREEN on mutation 'no-exec-bit'
+    #
+    # The gate was right. os.chmod() on Windows honours nothing but the
+    # read-only flag -- "you can only set the file's read-only flag with it.
+    # All other bits are ignored" (Python docs, os.chmod) -- and os.access(p,
+    # os.X_OK) there is an existence check, not an executable check: "On
+    # Windows, the X_OK mode determines whether the file exists" (Python docs,
+    # os.access). So stripping S_IXUSR|S_IXGRP|S_IXOTH changes no observable
+    # state on a Windows runner: the mutation is a NO-OP there. A gate that
+    # went red on it would have to invent a violation that does not exist.
+    #
+    # So the mutation is scoped, NOT skipped. A silent `continue` is exactly
+    # how fake-green gates are born: nobody reads the log, the mutation
+    # quietly stops testing anything, and the next person to look sees a
+    # green gate and a test file with no failing case in it. Instead each
+    # mutation declares the platforms it is meaningful on, the run records
+    # which ones were vacuous HERE and says so out loud, and it asserts the
+    # vacuous ones still came back GREEN -- a scoped mutation that went red
+    # would mean the scope list is wrong, and that is also a failure.
+    #
+    # Scoping NARROWS nothing that matters: on a POSIX host every mutation
+    # below is in scope and must still go red, which is what the
+    # "scoped mutations must stay green" check is guarding against someone
+    # later "fixing" CI by widening the scope.
+    def host_supports_executable_bit():
+        """Does os.access(path, os.X_OK) mean anything on this host?
+
+        Probed rather than assumed, so the scope below cannot drift away
+        from the platform it is actually running on.
+
+        The two platforms have different signatures, and both are recognised:
+
+          POSIX    0o644 -> False, 0o755 -> True. The answers differ, so
+                   clearing the execute bits is observable and the mutation
+                   means something here.
+          Windows  0o644 -> True,  0o755 -> True. X_OK degenerated into an
+                   existence check and the file exists either way, so the
+                   answers are equal and the bit carries no information.
+
+        Anything else is refused rather than guessed at -- in particular a
+        0o755 file reading non-executable, which means something other than
+        platform semantics is in play (a noexec mount, a filesystem that
+        does not carry the bit) and the probe would be proving nothing.
+        """
+        probe = root / "exec-bit-probe.sh"
+        probe.write_bytes(b"#!/bin/sh\nexit 0\n")
+        os.chmod(probe, 0o644)
+        executable_without_x_bit = os.access(probe, os.X_OK)
+        os.chmod(probe, 0o755)
+        executable_with_x_bit = os.access(probe, os.X_OK)
+        if executable_without_x_bit is False and executable_with_x_bit is True:
+            return True   # POSIX: clearing the bits is observable
+        if executable_without_x_bit is True and executable_with_x_bit is True:
+            # Windows: X_OK answered "it exists" both times, so the bit
+            # carries no information and the mutation is vacuous here.
+            return False
+        raise SystemExit(
+            "the executable-bit probe is inconclusive on this host "
+            f"(0o644 -> {executable_without_x_bit}, 0o755 -> "
+            f"{executable_with_x_bit}); neither platform's signature "
+            "matched, so the mutation scope below cannot be decided from "
+            "it. A 0o755 file that reads non-executable usually means a "
+            "noexec mount or a filesystem that does not carry the bit.")
+
+    executable_bits_are_real = host_supports_executable_bit()
+
+    # Every mutation, with the platforms it is meaningful on. "any" means the
+    # mutation is platform-independent and must be red EVERYWHERE -- these
+    # are the ones that carry the contract, so scoping them away would be
+    # the real regression. "posix" means the mutation only removes observable
+    # state on POSIX, and on any other platform it is expected to stay green.
+    MUTATIONS = [
+        ("no-cd", drop_cd_line, "missing the working-directory pin", "any"),
         ("bad-exe", break_exe_name,
-         "is not a player executable the release verifier accepts"),
-        ("lf-endings", downgrade_to_lf, "bare LF line ending"),
+         "is not a player executable the release verifier accepts", "any"),
+        ("lf-endings", downgrade_to_lf, "bare LF line ending", "any"),
         ("windows-routes-to-posix", route_windows_to_posix,
-         "would write ['run_game.sh'], not 'run_game.bat'"),
+         "would write ['run_game.sh'], not 'run_game.bat'", "any"),
         ("text-mode-write", revert_to_text_mode_write,
-         "simulated Windows host"),
-        ("no-exec-bit", drop_executable_bit, "is not executable"),
-    ]:
+         "simulated Windows host", "any"),
+        ("no-exec-bit", drop_executable_bit, "is not executable", "posix"),
+    ]
+
+    def in_scope(platforms):
+        if platforms == "any":
+            return True
+        if platforms == "posix":
+            return executable_bits_are_real
+        raise SystemExit(f"unknown mutation scope {platforms!r}")
+
+    scoped_green = []
+    red_count = 0
+
+    for tag, mutate, fragment, platforms in MUTATIONS:
         result = parity_against_mutated_tool(tag, mutate)
+        if not in_scope(platforms):
+            # Not skipped -- checked, and the outcome asserted. A mutation
+            # that cannot violate the contract on this platform must not
+            # manufacture a violation; if it went red anyway, the scope
+            # declaration is stale and that is worth failing over.
+            if result.returncode != 0:
+                raise SystemExit(
+                    f"mutation {tag!r} is declared out of scope on this host "
+                    f"({platforms!r}) but the parity gate went RED on it, so "
+                    f"the scope declaration is wrong: "
+                    f"stdout={result.stdout!r}\nstderr={result.stderr!r}")
+            scoped_green.append(tag)
+            print(f"[ReleasePackageTests] parity gate GREEN on {tag}: "
+                  f"declared {platforms!r}, vacuous on this host (verified "
+                  f"out of scope, not skipped)")
+            continue
+        red_count += 1
         if result.returncode == 0:
             raise SystemExit(
-                f"the parity gate stayed GREEN on mutation {tag!r} — the "
+                f"the parity gate stayed GREEN on mutation {tag!r} - the "
                 f"launcher contract is not actually enforced:\n"
                 f"stdout={result.stdout!r}\nstderr={result.stderr!r}")
         if fragment not in result.stderr:
@@ -351,6 +456,21 @@ with tempfile.TemporaryDirectory() as directory:
                 f"the parity gate went red on {tag!r} but not for the expected "
                 f"reason ({fragment!r}): stderr={result.stderr!r}")
         print(f"[ReleasePackageTests] parity gate RED on {tag}: {fragment}")
+
+    # The scope list is only honest if it is doing something. On a host with
+    # real executable bits every mutation must have been exercised, and on a
+    # host without them the POSIX-only ones must have been reported as
+    # vacuous rather than quietly vanishing from the log. Either way the two
+    # counts have to add up to the number of mutations.
+    if red_count + len(scoped_green) != len(MUTATIONS):
+        raise SystemExit(
+            f"mutation accounting is broken: {red_count} red + "
+            f"{len(scoped_green)} scoped-green != {len(MUTATIONS)} mutations")
+    if executable_bits_are_real and scoped_green:
+        raise SystemExit(
+            f"this host has real executable bits, so every mutation is in "
+            f"scope, but {scoped_green} were skipped as vacuous; the scope "
+            f"declarations are too narrow")
 
     # The editor (editor/Services/ProjectBuildService.cs) writes its own copy
     # of the launcher text. It is a second producer, so it is held to the same
@@ -376,11 +496,99 @@ with tempfile.TemporaryDirectory() as directory:
             f"{editor_mutation.stderr!r}")
     print("[ReleasePackageTests] parity gate RED on editor-drops-cd: the "
           "editor's launcher copy is checked too.")
+    red_count += 1  # the editor is a second producer, held to the same contract
 
-    print("[ReleasePackageTests] check_release_launcher_parity.py is "
-          "red-capable: control green, 7 launcher mutations red (missing cd pin "
-          "in the tool and in the editor, broken exe name, LF endings, wrong "
-          "platform routing, text-mode write, missing exec bit).")
+    # --- Console output must be ASCII ---
+    #
+    # This block's own failure message once read:
+    #
+    #   the parity gate stayed GREEN on mutation 'no-exec-bit' <U+2014> the
+    #   launcher contract is not actually enforced
+    #
+    # The em dash is invisible in the source and in a Linux terminal, and on
+    # the Windows runner it reached the console as U+FFFD, so the log showed
+    #
+    #   ... on mutation 'no-exec-bit' - the launcher contract ...
+    #
+    # Nothing failed. Exit codes matched, assertions passed, and the log
+    # simply disagreed with the source -- which is the worst failure mode
+    # there is, because the one artifact a human reads to find out what CI
+    # did is the artifact that got mangled.
+    #
+    # Fixing the characters would only hold until the next person typed a
+    # dash, so the invariant is enforced instead. This walks the AST rather
+    # than grepping bytes, because the distinction that matters is REACHABLE:
+    # a non-ASCII character inside a string literal can be printed to a
+    # Windows console, while one inside a comment or docstring cannot and is
+    # perfectly safe. A grep for U+2014 would forbid both and train people to
+    # work around the check.
+    def console_safe_sources():
+        """Files whose diagnostics land in a CI log."""
+        return [ROOT / "tests" / "test_release_package.py",
+                ROOT / "tools" / "check_release_launcher_parity.py",
+                ROOT / "tools" / "launcher_contract.py",
+                ROOT / "tools" / "make_release_launchers.py"]
+
+    def non_ascii_literals(path):
+        """(line, char) for non-ASCII chars inside printable string literals.
+
+        Docstrings are excluded. They are string literals to the AST, but a
+        docstring is documentation, not a diagnostic: nothing prints it unless
+        it is handed to something like argparse's `description=`, and
+        launcher_contract.py -- where the remaining dashes live -- is a pure
+        library with no argparse and no main() at all. Keeping them would mean
+        the guard was enforcing "no non-ASCII anywhere" while claiming to
+        enforce "no non-ASCII on the console", and a check that overstates
+        what it checks is one people learn to route around.
+        """
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        docstrings = set()
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef,
+                                 ast.AsyncFunctionDef)):
+                body = getattr(node, "body", None)
+                if (body and isinstance(body[0], ast.Expr)
+                        and isinstance(body[0].value, ast.Constant)
+                        and isinstance(body[0].value.value, str)):
+                    docstrings.add(id(body[0].value))
+        found = []
+        for node in ast.walk(tree):
+            if (isinstance(node, ast.Constant) and isinstance(node.value, str)
+                    and id(node) not in docstrings):
+                for char in node.value:
+                    if ord(char) > 127:
+                        found.append((node.lineno, char))
+        return found
+
+    for source_path in console_safe_sources():
+        offenders = non_ascii_literals(source_path)
+        if offenders:
+            listed = ", ".join(
+                f"line {line} U+{ord(char):04X}" for line, char in offenders)
+            raise SystemExit(
+                f"{source_path.name} prints non-ASCII text to the console: "
+                f"{listed}. The Windows runner renders it as U+FFFD, so the "
+                f"CI log stops matching the source. Use an ASCII dash ('-') "
+                f"in any string that reaches stdout or stderr; non-ASCII in "
+                f"a comment or docstring is fine and is not checked here.")
+    print("[ReleasePackageTests] console output is ASCII; the Windows log "
+          "cannot mangle these diagnostics.")
+
+    # The counts are reported as measured, not as assumed. The previous
+    # wording hardcoded "7 launcher mutations red", which was true on Linux
+    # and false on the Windows runner -- and a summary that states a fixed
+    # number cannot tell a reader which number it actually got.
+    if scoped_green:
+        print("[ReleasePackageTests] check_release_launcher_parity.py is "
+              f"red-capable: control green, {red_count} of {len(MUTATIONS) + 1} "
+              f"mutations red, {len(scoped_green)} verified out of scope on "
+              f"this host ({', '.join(scoped_green)}).")
+    else:
+        print("[ReleasePackageTests] check_release_launcher_parity.py is "
+              f"red-capable: control green, all {len(MUTATIONS) + 1} mutations "
+              f"red (missing cd pin in the tool and in the editor, broken exe "
+              f"name, LF endings, wrong platform routing, text-mode write, "
+              f"missing exec bit).")
 
     missing_runtime = root / "missing-runtime"
     shutil.copytree(release, missing_runtime)
@@ -509,7 +717,7 @@ with tempfile.TemporaryDirectory() as directory:
     # normalizePackagePath (engine/src/vfs/rowlpkg_reader.cpp:191-204)
     # fail-closes on NUL bytes and on a surviving ".." segment. The packer
     # can never emit these names (real files cannot be called ".." or
-    # contain NUL), so the fixtures are crafted byte-by-byte below — fully
+    # contain NUL), so the fixtures are crafted byte-by-byte below - fully
     # manifest-consistent, so only the traversal curtain can reject them.
     _HEADER = struct.Struct("<4sHIQ")
     _ENTRY = struct.Struct("<QIQQQI")
