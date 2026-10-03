@@ -5,8 +5,14 @@
 #include "rowl_test_harness.hpp"
 #include "rowl/render/frame_composition.hpp"
 #include "rowl/text/hex_color.hpp"
+#include <chrono>
 #include <cmath>
+#include <cstdlib>
+#include <filesystem>
+#include <iomanip>
+#include <iostream>
 #include <limits>
+#include <string>
 
 namespace {
 
@@ -734,47 +740,260 @@ void test_camera_and_transition_pipeline() {
         TEST_PASS("Scene JSON Camera & Transition Component Ingestion");
     }
 
-    // Test 7: Active Transition Render Performance Benchmark
+    // Test 7: Active Transition Render Performance Benchmark (P2-15)
+    //
+    // ÖLÇÜM — "stabil referans" GERÇEKTEN RENDER ETMEK ZORUNDA.
+    //
+    // Bu testin ilk sürümü ölçtüğü şey bir render değildi. window.cpp:866'daki
+    // identical-frame fast-path: içerik hash'i değişmediyse ve kamera/geçiş/
+    // flaş/sheet hareketi yoksa kare YENİDEN ÇİZİLMEZ,
+    // m_lastFrameNonTextureRenderMilliseconds = 0.0 yazılıp çıkılır.
+    // Test kamerasız, geçişsiz, BOŞ sahneli 90 kare besliyordu. Ölçülen:
+    //     60 stabil kare   -> TAMAMEN cache HIT -> nonTexture = 0.000 ms,
+    //                          toplam 1.04 ms (yaklaşık 57.000 FPS)
+    //     60 geçiş karesi  -> 36.5 ms/kare
+    // Yani "oran", tam kompozitin bir parçasını değil HİÇBİR ŞEYİ
+    // ölçüyordu; 57.000 FPS'lik bir referansa bölmek regresyon bütçesi
+    // değil, kurguydu. Kapı commit edildiği haliyle kalıcı kırmızıydı çünkü
+    // ölçümün kendisi ölüydü. Denetçi bunu Release/Debug/MSDF-off/kendi
+    // ikilisi dört ayrı kurulumda yeniden üretti.
+    //
+    // DÜZELTME — ÜRÜN KODUNDA HİÇBİR DEĞİŞİKLİK YOK. Sahne her karede
+    // gerçekten değiştirilir; desen repo içinde zaten kanıtlanmış ve
+    // kullanılıyor (test_native_performance_benchmarks.cpp:306 ve
+    // test_character_layer_benchmarks.cpp:15 "cache-busting" notu):
+    //     RowlEngine_UpdateScene(...) ile karakter x'i her karede bir piksel
+    //     kaydırılır -> içerik hash'i değişir -> fast-path TUTMAZ -> tam
+    //     kompozit çizilir.
+    // Neden kamera yetmez: RowlEngine_SetCamera anlık setPosition/setZoom
+    // yapar, isMoving() false kalır ve kamera konumu hash'e GİRMEZ (yalnız
+    // shake offsetleri karışır). Denetçinin bu yolu denemesi bu yüzden
+    // nonTexture=0 bıraktı — doğru gözlem, yanlış varsayım.
+    //
+    // Sahne de boş değildir: gerçek arka plan + karakter dokusu ve diyalog
+    // kutusu. Proje kökü AÇIKÇA verilir, yoksa VFS bare-init sözleşmesi
+    // (#14) gereği doku yüklemesi CWD mount'una güvenemez. Doku sayacı
+    // ayrıca kapılanır: doku yüklenmediyse sahne fill-rect'e düşer ve
+    // ölçülen şey oyunun gerçek karesi olmaktan çıkar.
+    //
+    // ÖLÇÜLEN BANT (tam süit içinde, Release, SDL_VIDEODRIVER=dummy =
+    // ctest'in kendi kipi, 1920x1080, yazılım rasterizer, 5 tekrarın en
+    // iyisi; 4 bağımsız süreç):
+    //     stabil   499..509 ms / 60 kare =  8.31..8.49 ms/kare (118..120 FPS)
+    //     geçiş   2401..2498 ms / 60 kare = 40.02..41.64 ms/kare (24.0..25.0 FPS)
+    //     oran      0.2028..0.2087          (7 bağımsız süreç, YAYILIM %2.9)
+    //     her pencerede 0 cached frames; steady nonTexture 8.3..8.5 ms
+    // Geçiş karesi stabile göre ~5 KAT pahalıdır; ek maliyet tam ekran
+    // (1920x1080) blend'lenmiş geçiş snapshot'ıdır. Bu üründe GERÇEKTEN var
+    // olan bir maliyettir — sahte değil.
+    //
+    // ORAN NEDEN SANITIZER'DA DA GÜVENİLİR: iki pencerenin de ağırlığı SDL
+    // rasterizasyonundadır ve SDL sanitizer altında ölçeklenmez (CI'da
+    // Release SDL3 derlenir, ASan/TSan'ı görmez). Yavaşlayan şey motorun
+    // C++ kodu olduğundan oran düşmez, ARTAR. ASan+UBSan altında AYNI sahne
+    // ve ölçüm yapısıyla (tam süit değil, izole koşu) ölçülen bant
+    // 0.2678..0.2794 — native bandının ÜSTÜNDE. Bu yüzden oran kapısı
+    // sanitizer işlerinde de enforced edilebilir; mutlak duvar-saati tavanı
+    // ise aynı sebeple taşınamaz (aşağıda (2)).
     {
         RowlEngineHandle handle = RowlEngine_Create();
-        RowlEngine_Init(handle, 1920, 1080, 0);
-
-        RowlEngine_StartTransition(handle, "crossfade", 2.0f, nullptr);
-
-        const int frameCount = 60;
-        const auto benchStart = std::chrono::high_resolution_clock::now();
-
-        for (int f = 0; f < frameCount; ++f) {
-            RowlEngine_Step(handle, 0.016f);
-        }
-
-        const auto benchEnd = std::chrono::high_resolution_clock::now();
-        double elapsedMs = std::chrono::duration<double, std::milli>(benchEnd - benchStart).count();
-        double fps = (frameCount / elapsedMs) * 1000.0;
-
-        std::cout << "  ⚡ [Benchmark] Active Transition Render: " << frameCount << " frames rendered in "
-                  << std::fixed << std::setprecision(2) << elapsedMs << "ms (~"
-                  << static_cast<int>(fps) << " FPS)" << std::endl;
-        g_transitionFps = fps;
-
-        // A wall-clock FPS floor is meaningless under sanitizer
-        // instrumentation (2-5x slowdown is the tool, not the engine), so it
-        // is enforced only on clean builds. Frame correctness above is
-        // asserted unconditionally.
-#if defined(__SANITIZE_ADDRESS__) || defined(__SANITIZE_THREAD__) || defined(__SANITIZE_UNDEFINED__)
-        std::cout << "  (sanitizer build: 30 FPS floor reported, not enforced)" << std::endl;
-#else
-        // A universal wall-clock gate is not valid until a compatible baseline
-        // exists for the exact machine/build/fixture. Report by default; a
-        // controlled performance host may opt in with ROWL_PERF_FLOOR=enforced.
-        const bool perfFloorEnforced = environmentValue("ROWL_PERF_FLOOR", "report") == "enforced";
-        if (perfFloorEnforced && fps < 30.0) {
-            std::cerr << "Transition render FPS is too low: " << fps << std::endl;
+        const int initResult = RowlEngine_Init(handle, 1920, 1080, 0);
+        if (initResult != 1) {
+            std::cerr << "Transition benchmark could not initialize the engine "
+                         "(RowlEngine_Init=" << initResult << ")" << std::endl;
             exit(1);
         }
-        if (!perfFloorEnforced) {
-            std::cout << "  (ROWL_PERF_FLOOR=report: 30 FPS floor reported, not enforced)" << std::endl;
+        RowlEngine_SetProjectDirectory(
+            handle, std::filesystem::current_path().string().c_str());
+
+        const int warmupFrameCount = 60;
+        const int frameCount = 60;
+        const int repeatCount = 5;
+
+        // Fast-path kırıcı sürücü. İki pencere BİREBİR aynı işi yapar;
+        // tek fark geçişin açık olup olmamasıdır. frameCursor sayacı
+        // warmup dahil tüm koşular boyunca ilerler, böylece komşu kareler
+        // asla aynı hash'i üretmez.
+        int frameCursor = 0;
+        long cachedOutFrames = 0;
+        auto measureFrameWindowMs = [&](int frames) {
+            const auto start = std::chrono::high_resolution_clock::now();
+            for (int f = 0; f < frames; ++f, ++frameCursor) {
+                RowlEngine_UpdateScene(
+                    handle, "Evelyn", "Benchmark line",
+                    "Woman.png", 0.0f, 0.0f, 1920.0f, 1080.0f,
+                    "Margot.jpg", 400.0f + static_cast<float>(frameCursor % 600),
+                    200.0f, 360.0f, 540.0f,
+                    80.0f, 840.0f, 1760.0f, 200.0f);
+                RowlEngine_Step(handle, 0.016f);
+                // KARE BAŞINA denetim. Fast-path tutarsa bu değer tam olarak
+                // 0.0 olur. Yalnız SON kareye bakmak yeterli değildir:
+                // pencerenin ortasında bir kare sessizce cache'e düşerse
+                // ortalama hâlâ makul görünür ve kapı sahte yeşil verir.
+                if (RowlEngine_GetLastFrameNonTextureRenderMilliseconds(handle) <= 0.0) {
+                    ++cachedOutFrames;
+                }
+            }
+            const auto end = std::chrono::high_resolution_clock::now();
+            return std::chrono::duration<double, std::milli>(end - start).count();
+        };
+        // En iyisi (min), medyan değil: hosted runner gürültüsü tek bir tekrarı
+        // kaydırabilir; min tek bir gürültü tepeciğini bastırır.
+        //
+        // DİKKAT: min iki tarafta TERS yönlerde çalışır, çünkü
+        // oran = stabilMs / geçişMs.
+        //   - min(stabilMs)  -> pay paya kucultur  -> oran TABANA yaklasir
+        //     -> yanlis kirmizi riskini ARTIRIR (dogru yon degil).
+        //   - min(geçişMs)   -> payday kucultur    -> oran TABANDAN uzaklasir
+        //     -> gercek bir regresyona duyarlilik AZALIR.
+        // Yani min "yanlış kırmızıya en az açık" secim DEGILDIR; gürültü
+        // bastırma secimidir. Bant gercekten dar (olculen %3.2 yayılım), bu
+        // yonler goz ardi etmeyecek kadar kucuk.
+        // Gercek bir regresyon TÜM tekrarlari kaydirdigi icin min onu yine gorur.
+        auto bestOf = [](int repeats, auto&& measure) {
+            double bestMs = 0.0;
+            for (int r = 0; r < repeats; ++r) {
+                const double ms = measure();
+                if (r == 0 || ms < bestMs) bestMs = ms;
+            }
+            return bestMs;
+        };
+
+        // Isınma: tembel başlatma, yazı tipi/doku yüklemesi ve geçiş
+        // snapshot'ının ilk karesi ölçüm penceresine girmesin.
+        measureFrameWindowMs(warmupFrameCount);
+        if (RowlEngine_GetTextureCacheTextureCount(handle) == 0 ||
+            RowlEngine_GetTextureCacheBytes(handle) == 0) {
+            std::cerr << "Transition benchmark scene did not load its textures "
+                         "(count=" << RowlEngine_GetTextureCacheTextureCount(handle)
+                      << ", bytes=" << RowlEngine_GetTextureCacheBytes(handle)
+                      << "): the steady reference would measure fallback fill "
+                         "rects, not the real composited frame" << std::endl;
+            exit(1);
         }
+
+        const double steadyMs = bestOf(repeatCount, [&] { return measureFrameWindowMs(frameCount); });
+        const double steadyNonTextureMs =
+            RowlEngine_GetLastFrameNonTextureRenderMilliseconds(handle);
+
+        // Süre ölçüm penceresini fazlasıyla aşacak kadar uzun seçilir
+        // (600 sn; ölçüm ısınma + 5x60 kare ≈ 6 sn). Kısa bir geçiş,
+        // pencerenin sonunda sessizce "geçişsiz" karelere döner ve ortalamayı
+        // yapay olarak iyileştirirdi. Bitiş ayrıca yukarıda doğrulanır.
+        RowlEngine_StartTransition(handle, "crossfade", 600.0f, nullptr);
+        measureFrameWindowMs(warmupFrameCount);
+        const double transitionMs = bestOf(repeatCount, [&] { return measureFrameWindowMs(frameCount); });
+        const double transitionNonTextureMs =
+            RowlEngine_GetLastFrameNonTextureRenderMilliseconds(handle);
+        if (!RowlEngine_IsTransitionActive(handle)) {
+            std::cerr << "Transition ended inside the measurement window: the "
+                         "transition/steady ratio would compare a transition "
+                         "against a non-transition" << std::endl;
+            exit(1);
+        }
+
+        // --- ÖLÇÜM GEÇERLİLİĞİ: KAPININ KENDİSİ ---
+        // P2-17 (RSS'in 0 donmesi) ile AYNI sınıf hata: ölçüm üretilmediğinde
+        // kapının susmasına izin verilmemelidir. Sıfır süre, sonsuz FPS ya da
+        // döngünün hiç çalışmaması "hızlı" görünür ve kapı yeşil verirdi.
+        // Bu denetim ROWL_PERF_FLOOR'un hangi değerde olduğundan BAĞIMSIZ
+        // olarak daima zorlanır.
+        constexpr double kImplausibleFpsCeiling = 10000.0;
+        const bool timingUsable = std::isfinite(steadyMs) && std::isfinite(transitionMs) &&
+                                  steadyMs > 0.0 && transitionMs > 0.0;
+        const double steadyFps = timingUsable ? (frameCount / steadyMs) * 1000.0 : 0.0;
+        const double transitionFps = timingUsable ? (frameCount / transitionMs) * 1000.0 : 0.0;
+        if (!timingUsable || transitionFps <= 0.0 || steadyFps <= 0.0 ||
+            transitionFps > kImplausibleFpsCeiling) {
+            std::cerr << "Transition benchmark produced no usable measurement "
+                         "(steady " << steadyMs << "ms, transition " << transitionMs
+                      << "ms): the timing loop did not run" << std::endl;
+            exit(1);
+        }
+        // Renderer kare başına gerçekten composite işi yapıyor mu? Fast-path
+        // bir kareyi atladıysa o kare ÖLÇÜLMEDİ; ortalama yine makul
+        // görünebilir. Bu yüzden sayım KARE BAŞINA yapılır, son kareye
+        // bakılmaz. Bu kontrol, kapının ilk sürümünde ölçtüğü "ölçüm"
+        // ile bir daha asla karıştırılmaz.
+        if (cachedOutFrames > 0 || steadyNonTextureMs <= 0.0 || transitionNonTextureMs <= 0.0) {
+            std::cerr << "Transition benchmark measured no renderer work on "
+                      << cachedOutFrames << " frame(s) (last-frame non-texture "
+                         "render: steady " << steadyNonTextureMs
+                      << "ms, transition " << transitionNonTextureMs
+                      << "ms): frames were served from the identical-frame cache, "
+                         "so the FPS figures are meaningless" << std::endl;
+            exit(1);
+        }
+
+        const double transitionRatio = transitionFps / steadyFps;
+
+        std::cout << "  ⚡ [Benchmark] Active Transition Render: " << frameCount << " frames in "
+                  << std::fixed << std::setprecision(2) << transitionMs << "ms ("
+                  << std::setprecision(2) << transitionFps << " FPS); steady reference "
+                  << std::setprecision(2) << steadyFps << " FPS; transition/steady ratio "
+                  << std::setprecision(5) << transitionRatio
+                  << " (last-frame non-texture render: steady " << std::setprecision(3)
+                  << steadyNonTextureMs << "ms, transition " << transitionNonTextureMs
+                  << "ms, " << cachedOutFrames << " cached frames)" << std::endl;
+
+        // compare_benchmarks.py bu metriği "transition_fps" adıyla karşılaştırır;
+        // anlam değişmediği için geçiş hızı yazılmaya devam eder.
+        g_transitionFps = transitionFps;
+
+        // (1) ORAN KAPISI — ENFORCED; ROWL_PERF_FLOOR ile veya sanitizer
+        //     makrolarıyla ilişkisi YOKTUR. Bu, projede her yerde çalışan
+        //     tek performans kapısıdır.
+        //
+        //     Tavan 0.12, gözlenen en düşük değerin (0.2028) %41 altında
+    //     (en yüksek gözlem 0.2087'de tabanın %74'ü).
+        //     Mankenin hızına göre değil, ÖLÇÜLEN banttan türetildi: iki
+        //     pencere de aynı süreçte, aynı makinede, arka arkaya ölçülür,
+        //     yani oran zaten kendi kendini normalize eder.
+        //     Duyarlılık ÖLÜMLE KALİBRE EDİLDİ: geçiş render'ı bilerek
+        //     3 KAT yavaşlatıldığında oran 0.0663'e düştü ve kapı KIRMIZI
+        //     verdi. Yani kırmızı, geçişin stabile göre ~1.7 KAT gerilediğinde
+        //     gelir.
+        constexpr double kTransitionRatioFloor = 0.12;
+        if (transitionRatio < kTransitionRatioFloor) {
+            std::cerr << "Transition render ratio regressed: transition/steady = "
+                      << transitionRatio << " is below the enforced floor "
+                      << kTransitionRatioFloor << " (steady " << steadyFps
+                      << " FPS, transition " << transitionFps << " FPS)" << std::endl;
+            exit(1);
+        }
+        TEST_PASS("Active Scene Transition stays within the enforced transition/steady ratio budget");
+
+        // (2) MUTLAK 30 FPS TAVANI — report-only. Bu sayının bir ölçümden
+        //     doğmadığı görülüyor: temiz native koşuda ölçülen geçiş hızı
+        //     ~30 FPS'te ve sanitizer altında duvar-saati tabanı (ASan tam
+        //     süit 939 sn / TSan 1387 sn ölçüldü) ile yazılım rasterizer'a
+        //     koşan hosted runner'larda sistematik olarak aşılır. Varsayılanın
+        //     'report' olması burada susturma değil, ÖLÇÜMÜN YAPILAMADIĞI
+        //     yeri ölçüp bırakmaktır; aynı bloktaki (1) numaralı oran
+        //     kapısı HER ZAMAN enforced kaldığı için bu satırdaki bir
+        //     regresyonun sessizce geçmesi mümkün değildir.
+        //
+        //     ROWL_CAMERA_FPS_FLOOR bu tek tavanı ROWL_PERF_FLOOR'dan
+        //     ayırır. Set edilmediğinde ESKİ DAVRANIŞ BİREBİR korunur
+        //     (ROWL_PERF_FLOOR=enforced -> enforced). CI, taşınamayan bu
+        //     mutlak tavanı hızlı işlerde açıkça kapatıp taşınabilen
+        //     tavanları açabilsin diye (bkz. ci.yml enforcement matrisi).
+#if !defined(__SANITIZE_ADDRESS__) && !defined(__SANITIZE_THREAD__) && !defined(__SANITIZE_UNDEFINED__)
+        const char* cameraFloorOverride = std::getenv("ROWL_CAMERA_FPS_FLOOR");
+        const bool cameraFloorEnforced =
+            cameraFloorOverride ? std::string(cameraFloorOverride) == "enforced"
+                                : environmentValue("ROWL_PERF_FLOOR", "report") == "enforced";
+        if (cameraFloorEnforced && transitionFps < 30.0) {
+            std::cerr << "Transition render FPS is too low: " << transitionFps << std::endl;
+            exit(1);
+        }
+        if (!cameraFloorEnforced) {
+            std::cout << "  (absolute 30 FPS camera floor reported, not enforced; "
+                         "the transition/steady ratio floor above IS enforced)" << std::endl;
+        }
+#else
+        std::cout << "  (sanitizer build: absolute 30 FPS camera floor reported, not enforced; "
+                     "the transition/steady ratio floor above IS enforced)" << std::endl;
 #endif
 
         RowlEngine_Destroy(handle);
