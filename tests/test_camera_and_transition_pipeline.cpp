@@ -837,11 +837,19 @@ void test_camera_and_transition_pipeline() {
             const auto end = std::chrono::high_resolution_clock::now();
             return std::chrono::duration<double, std::milli>(end - start).count();
         };
-        // En iyisi (min), medyan değil: hosted runner gürültüsü tek bir
-        // tekrarı kaydırabilir; min hem numerator'ı (stabil) hem paydayı
-        // (geçiş) lehine en güvenli tarafa çeker, yani yanlış kırmızıya
-        // en az açık seçimdir. Gerçek bir regresyon TÜM tekrarları
-        // kaydırdığı için min onu yine de görür.
+        // En iyisi (min), medyan değil: hosted runner gürültüsü tek bir tekrarı
+        // kaydırabilir; min tek bir gürültü tepeciğini bastırır.
+        //
+        // DİKKAT: min iki tarafta TERS yönlerde çalışır, çünkü
+        // oran = stabilMs / geçişMs.
+        //   - min(stabilMs)  -> pay paya kucultur  -> oran TABANA yaklasir
+        //     -> yanlis kirmizi riskini ARTIRIR (dogru yon degil).
+        //   - min(geçişMs)   -> payday kucultur    -> oran TABANDAN uzaklasir
+        //     -> gercek bir regresyona duyarlilik AZALIR.
+        // Yani min "yanlış kırmızıya en az açık" secim DEGILDIR; gürültü
+        // bastırma secimidir. Bant gercekten dar (olculen %3.2 yayılım), bu
+        // yonler goz ardi etmeyecek kadar kucuk.
+        // Gercek bir regresyon TÜM tekrarlari kaydirdigi icin min onu yine gorur.
         auto bestOf = [](int repeats, auto&& measure) {
             double bestMs = 0.0;
             for (int r = 0; r < repeats; ++r) {
