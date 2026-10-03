@@ -1378,6 +1378,40 @@ bool LuaSandbox::callOptionalModuleFunction(const std::string& moduleId,
     armWallDeadline();
     const int pcallStatus = lua_pcall(m_luaState, 1, 0, 0);
     m_deadlineArmed = false;
+
+    // P2-10 (_G kaçışı): callOptionalFunction'ın (bkz. :1471/:1481) ve
+    // evaluateCondition'in (:1125) yaptığı temizliğin HİÇBİRİ burada yoktu;
+    // modül callback'i `_G` üzerinde iki kalıcı iz bırakabiliyordu. İkisi de
+    // iki dönüş yolundan ÖNDE ve TEK yerde yapılır: aynı satırları iki
+    // dönüş yoluna kopyalamak, ileride eklenebilecek üçüncü bir yolda
+    // unutulma riski bırakırdı. İkisi de aşağıdaki bindEngineApis() ve env
+    // süpürmesinden ÖNCE olmalıdır — o ikisi metamethod'a duyarlıdır (G4).
+    //
+    // (1) GERÇEK global tabloda bırakılan metatable. `rawset(_G,"_G",nil)`
+    //     env'in _G özdeşini kaldırır; `setmetatable(_G,...)` artık env'i
+    //     değil GERÇEK global tabloyu hedefler, ve orada kalır: masum
+    //     modüllerin tanımsız global okumalarını __index yakalar, stdlib'i
+    //     gizleyebilir. Maliyet 3 C API çağrısı, O(1) — H31 "per-frame
+    //     maliyet yasağı" için ihmal edilebilir (zaten bindEngineApis() ve
+    //     sweepModuleEnvRowl() çağrılıyor). repairGlobals() per-frame için
+    //     fazla; O(n) tablo yeniden açılışı. Zararsız ve idempotent.
+    d07_clearGlobalTableMetatable(m_luaState);
+    // (2) `rawset(_G,"_G",nil)` env'in _G özdeşini SİLİNCE, ikinci kaçış
+    //     çağrısı aynı silmeyi GERÇEK _G üzerine uygular ve geri dönüşsüz
+    //     bir bozulma bırakır (ölçüm: probe_h — 2. çağrıdan sonra gerçek
+    //     _G'nin _G alanı kalıcı olarak NIL). Alias'ı geri koymak kaçışı
+    //     her frame yeniden kurulmak zorunda bırakır ve bu bozulmayı hiç
+    //     oluşmaz hale getirir. rawset: env'in __newindex koruması
+    //     sweepModuleEnvRowl ile aynı disiplinde atlanır.
+    {
+        const RecoveryScope recovery(this);
+        lua_rawgeti(m_luaState, LUA_REGISTRYINDEX, module->second); // env
+        lua_pushstring(m_luaState, "_G");   // lua_rawset: ÖNCE anahtar...
+        lua_pushvalue(m_luaState, -2);      // ...sonra değer (top-2 key, top-1 value)
+        lua_rawset(m_luaState, -3);         // env._G = env (rawset pops key+value)
+        lua_pop(m_luaState, 1);             // env
+    }
+
     if (pcallStatus != LUA_OK) {
         const char* rawError = lua_tostring(m_luaState, -1);
         m_lastError = rawError ? rawError : "unknown Lua error";

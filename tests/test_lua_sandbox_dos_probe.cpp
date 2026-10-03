@@ -56,9 +56,47 @@ extern "C" {
 #include <thread>
 #include <vector>
 
+// P2-10: lua_sandbox.hpp bu yapıyı friend ilan ediyor (satır 148), bu yüzden
+// TAM OLARAK bu ad ve bu namespace altında tanımlanmalı (anonim namespace'e
+// koymak başka bir tip üretir ve friend eşleşmez).
+//
+// NEDEN GEREKLİ: G7 eskiden kaçışı getGlobalNumber() ile ölçüyordu; o bir HAM
+// okumadır (d07_rawGetGlobal -> lua_rawget) ve __index'i GÖREMEZ. Aşağıdaki
+// iki yardımcı tabloyu doğrudan inceler — ham alan okuması DEĞİLDİR — ve
+// kaçırılmış okumayı gösteren bir __index kurar (pozitif kontrol).
+namespace Rowl::Scripting {
+struct LuaSandboxTestAccess {
+    /// Gerçek global tabloda metatable var mı? (yapısal; __index'i yakmaz)
+    static bool globalHasMetatable(LuaSandbox& s) {
+        if (!s.m_luaState) return false;
+        const int top = lua_gettop(s.m_luaState);
+        lua_pushglobaltable(s.m_luaState);
+        const bool has = lua_getmetatable(s.m_luaState, -1) != 0;
+        if (has) lua_pop(s.m_luaState, 1);
+        lua_settop(s.m_luaState, top);
+        return has;
+    }
+    /// Bilinen-kötü durum üretmek için: host'un kendi C API'siyle gerçek
+    /// global tabloya metatable kurar. Ölçüm aracının KIRMIZI'ya düştüğünü
+    /// kanıtlamak için kullanılır — testin kör olmadığının tek garantisi bu.
+    static void plantGlobalMetatable(LuaSandbox& s) {
+        if (!s.m_luaState) return;
+        const int top = lua_gettop(s.m_luaState);
+        lua_newtable(s.m_luaState);
+        lua_newtable(s.m_luaState);
+        lua_setfield(s.m_luaState, -2, "__index");
+        lua_pushglobaltable(s.m_luaState);
+        lua_insert(s.m_luaState, -2);
+        lua_setmetatable(s.m_luaState, -2);
+        lua_settop(s.m_luaState, top);
+    }
+};
+} // namespace Rowl::Scripting
+
 namespace {
 
 using Rowl::Scripting::LuaSandbox;
+using GAccess = Rowl::Scripting::LuaSandboxTestAccess;
 using Clock = std::chrono::steady_clock;
 
 int g_surfacesPresent = 0;   // doğrulanmış kaçış yüzeyi sayısı
@@ -697,26 +735,32 @@ void probeGlobalTableMetatablePlant() {
         emit("  [G2] callOptionalFunction sonrası bitki hayatta mı -> " +
              std::string(survived ? "EVET" : "hayır") +
              " (callback ran=" + std::string(ran ? "true" : "false") + ")");
-        if (!survived) {
-            emit("  [G2] NOT: bu yol temiz — beklenen davranış değişmiş.");
-            sb.shutdown();
-            return;
-        }
-        escaped("P0", "callOptionalFunction() repairGlobals çağırmıyor; "
-                      "_G metatable bitkisi kalıcı");
+        // P2-10: eskiden burada `return` vardı. callOptionalFunction metatable'i
+        // ZATEN temizlediği için (lua_sandbox.cpp:1471/:1481) `survived` her
+        // zaman false oluyor ve fonksiyon GERİ DÖNÜYORDU — yani G3, G4, G5, G6
+        // ve G7 HİÇ ÇALIŞMIYORDU. Varsayılan (kaçış yok) durumda G bölümünün
+        // tamamı atlanıyordu. Artık yalnızca G3'e özgü olan aşağıdaki blok
+        // atlanıyor; geri kalan bölüm koşmaya devam ediyor.
+        if (survived) {
+            escaped("P0", "callOptionalFunction() repairGlobals çağırmıyor; "
+                          "_G metatable bitkisi kalıcı");
 
-        // G3: bitki kalıcıysa host okuması ele geçirilir.
-        const double poisoned = sb.getGlobalNumber("zehirli", -1.0);
-        emit("  [G3] getGlobalNumber('zehirli') = " + std::to_string(poisoned) +
-             "  (temiz sandbox'ta -1 vermeliydi)");
-        if (poisoned == 987654.0) {
-            escaped("P0", "getGlobalNumber() (lua_sandbox.cpp:920, D07 ham-okuma "
-                          "DEĞİL) kayıp anahtarları saldırgana teslim ediyor");
+            // G3: bitki kalıcıysa host okuması ele geçirilir.
+            const double poisoned = sb.getGlobalNumber("zehirli", -1.0);
+            emit("  [G3] getGlobalNumber('zehirli') = " + std::to_string(poisoned) +
+                 "  (temiz sandbox'ta -1 vermeliydi)");
+            if (poisoned == 987654.0) {
+                escaped("P0", "getGlobalNumber() (lua_sandbox.cpp:920, D07 ham-okuma "
+                              "DEĞİL) kayıp anahtarları saldırgana teslim ediyor");
+            }
+            // G3b: mevcut (kayıt) anahtarlar etkilenmiyor — __index sadece kayıpta ateşlenir.
+            emit("  [G3b] mevcut anahtarlar korunuyor mu: getGlobalNumber('rowl')=" +
+                 std::to_string(sb.getGlobalNumber("rowl", -1.0)) +
+                 " 'math'=" + std::to_string(sb.getGlobalNumber("math", -1.0)));
+        } else {
+            emit("  [G2] bu yol temiz (callOptionalFunction metatable'i sıfırlıyor) — "
+                 "G3 atlandı, G4-G7 yine koşuyor.");
         }
-        // G3b: mevcut (kayıt) anahtarlar etkilenmiyor — __index sadece kayıpta ateşlenir.
-        emit("  [G3b] mevcut anahtarlar korunuyor mu: getGlobalNumber('rowl')=" +
-             std::to_string(sb.getGlobalNumber("rowl", -1.0)) +
-             " 'math'=" + std::to_string(sb.getGlobalNumber("math", -1.0)));
         sb.shutdown();
     }
 
@@ -785,23 +829,117 @@ void probeGlobalTableMetatablePlant() {
         }
     }
 
-    // G7: modül yolu kapalı mı?
+    // G7: modül yolu kapalı mı?  (P2-10)
+    //
+    // ESKİ G7 İKİ KEZ KÖRDÜ — ikisi de düzeltildi:
+    //  (a) GERÇEK kaçış yolunu denemiyordu. Yalnız setmetatable(_G,...) yazıyordu;
+    //      ama modül env'inin metatablesi __metatable=false ile korumalı olduğu
+    //      için o çağrı zaten reddediliyordu. Gerçek yol şudur:
+    //          rawset(_G,"_G",nil)   -- env'in _G özdeşini kaldır
+    //          setmetatable(_G,..)  -- artık GERÇEK global tablo hedefleniyor
+    //      Artık ikisi de deneniyor.
+    //  (b) sonucu getGlobalNumber() ile ölçüyordu. O bir HAM okumadır
+    //      (d07_rawGetGlobal -> lua_rawget); __index'i GÖREMEZ. Kaçış YAPILSA
+    //      BİLE test geçiyordu — düzeltmeyi geri alsan da kimse yakalayamaz.
+    //
+    // Yeni ölçüm iki BAĞIMSIZ kanaldan okur:
+    //   kanal-1 (yapısal): host C API, gerçek global tabloda metatable var mı.
+    //                      Kaçışın kendisi. __index'i görme/ görmeme sorunu yok.
+    //   kanal-2 (sonuç)   : executeString ile _G.yok okuması — bu okuma
+    //                      __index'i ATEŞLER, yani kaçışın faydasını görür.
+    // Ham okuma (kanal-1'in eski ölçütü) de yazdırılır ama ARTIK ölçüt DEĞİL;
+    // körlüğünün kaydı olarak duruyor.
     {
         LuaSandbox sb;
         if (!sb.initialize()) fail("sandbox init");
-        const bool loaded = sb.loadModule("m",
-            "function on_enter() setmetatable(_G,{__index=function() return 'MODUL' end}) end");
-        const bool ran = loaded ? sb.callOptionalModuleFunction("m", "on_enter") : false;
-        const double after = sb.getGlobalNumber("yok", -1.0);
-        emit("  [G7] modül bitkisi: loadModule=" + std::string(loaded ? "true" : "false") +
-             " on_enter=" + std::string(ran ? "true" : "false") +
-             " sonrası getGlobalNumber('yok')=" + std::to_string(after) + " (temiz=-1)");
-        if (after != -1.0) {
-            escaped("P0", "modül ortamından _G bitkisi kurulabildi");
-            fail("G7: modül yolu da açık");
+
+        // --- POZİTİF KONTROL: bu ölçüm gerçekten kırmızıya düşebiliyor mu? ---
+        // Host'un kendi kurduğu metatable görülmeli. Görülmüyorsa test kördür
+        // ve aşağıdaki "temiz" sonucu hiçbir şey kanıtlamaz.
+        GAccess::plantGlobalMetatable(sb);
+        const bool detectorSeesBad = GAccess::globalHasMetatable(sb);
+        emit(std::string("  [G7] pozitif kontrol: host C API ile kurulan metatable ") +
+             (detectorSeesBad ? "GORULDU (ölçüm aracı ise yarıyor)"
+                              : "GORULMEDI (ölçüm aracı KÖR)"));
+        if (!detectorSeesBad) {
+            fail("G7 ölçüm aracı kör: bilinen-kötü durumda metatable görünmüyor");
         }
-        emit("  [G7] Modül yolu KAPALI: ortam metatablesi korumalı "
-             "(\"cannot change a protected metatable\").");
+
+        const bool loaded = sb.loadModule("m",
+            // GERÇEK kaçış: önce env gölgesini kaldır, sonra GERÇEK _G'ye dokun.
+            "function on_enter() "
+            "  rawset(_G,'_G',nil); "
+            "  setmetatable(_G,{__index=function() return 'MODUL' end}); "
+            "  rawset(_G,'g7_escape_ran','1'); "
+            "end");
+        const bool ran = loaded ? sb.callOptionalModuleFunction("m", "on_enter") : false;
+        if (!loaded) fail("G7 modül yüklenemedi: " + sb.getLastError());
+
+        const bool metaLeft = GAccess::globalHasMetatable(sb);
+
+        // kanal-2: kaçışın faydası. executeString gerçek global tabloda çalışır;
+        // buradaki _G.yok okuması __index'i ateşler. Ölçüm chunk İÇİNDE olur,
+        // repairGlobals() ondan SONRA çalışır — yani kanıt kendi eliyle silinmez.
+        runScript(sb, "g7_seen = _G.yok");
+        const std::string seen = sb.getVariable("g7_seen");
+
+        // Eski (köör) ölçüt — kayıt için, ölçüt DEĞİL:
+        const double rawAfter = sb.getGlobalNumber("yok", -1.0);
+
+        emit("  [G7] gercek kacis yolu: rawset(_G,'_G',nil) + setmetatable(_G,...)"
+             " on_enter=" + std::string(ran ? "true" : "false"));
+        emit("  [G7] kanal-1 (yapısal) : gercek _G metatable = " +
+             std::string(metaLeft ? "VAR  <-- KACIS KALICI" : "yok (temiz)"));
+        emit("  [G7] kanal-2 (module ici okuma, __index'e duyarli): _G.yok = " +
+             (seen.empty() ? std::string("<nil> (temiz)") : seen + "  <-- KACIRILMIS OKUMA"));
+        emit("  [G7] eski kor olcutut (yalnizca KAYIT, ölçüt degil): "
+             "getGlobalNumber('yok')=" + std::to_string(rawAfter) +
+             " — ham okuma __index'i gormez, bu yuzden tek basina yetersizdir");
+
+        if (metaLeft) {
+            escaped("P0", "modül callback'i GERÇEK global tabloda metatable bıraktı (_G kaçışı)");
+        }
+        if (seen == "MODUL") {
+            escaped("P0", "kaçırılmış okuma: masum global okuması __index'ten 'MODUL' aldı");
+        }
+        if (metaLeft || seen == "MODUL") {
+            fail("G7: modül yolu _G kaçışını kapatmıyor");
+        }
+        emit("  [G7] Modül yolu KAPALI: gerçek _G metatablesiz, kaçırılmış okuma temiz.");
+        sb.shutdown();
+    }
+
+    // G7b: katman-2 YAZMA yüzeyi (P2-10'da AÇIK kalan kısım) — dürüst kayıt.
+    // Kaçış, _G gölgesi kaldırıldıktan sonra `rawset(_G,k,v)` ile GERÇEK global
+    // tabloya doğrudan yazabiliyor. Metatable temizliği bunu ETKİLEMEZ (o
+    // ayrı bir yazma yoludur) ve düzeltme de kapatmıyor. Buradaki ölçüt host'un
+    // HAM okumasıdır: masum modülün math.sqrt(4) sonucu -1 ise gerçek stdlib
+    // tablosu değişmiştir. Kapatılması modül env'inin `_G` anlamını değiştiren
+    // mimari bir değişiklik ister (kökten çözüm) — ayrı iş kalemi.
+    {
+        LuaSandbox sb;
+        if (!sb.initialize()) fail("sandbox init");
+        sb.loadModule("saldirgan",
+            "function on_enter() "
+            "  rawset(_G,'_G',nil); "
+            "  rawset(_G,'math',{ tag='SALDIRGAN', sqrt=function() return -1 end }); "
+            "end");
+        // MASUM modül: hiçbir şey kurmuyor, hatta kaçış yolunu bile bilmiyor.
+        sb.loadModule("masum",
+            "function on_enter() "
+            "  rowl.var_set('p_sqrt', tostring(math.sqrt(4))); "
+            "end");
+        sb.callOptionalModuleFunction("masum", "on_enter");
+        const std::string before = sb.getVariable("p_sqrt");
+        sb.callOptionalModuleFunction("saldirgan", "on_enter");
+        sb.callOptionalModuleFunction("masum", "on_enter");
+        const std::string after = sb.getVariable("p_sqrt");
+        emit("  [G7b] yazma yüzeyi: masum modül math.sqrt(4) once=" + before +
+             " sonra=" + after + " (2 = bozulma yok, -1 = bozuldu)");
+        if (after == "-1") {
+            escaped("P1", "modül, GERÇEK global tablodaki stdlib tablosunu rawset ile "
+                          "değiştirebiliyor (katman-2 yazma; mimari düzeltme gerekir)");
+        }
         sb.shutdown();
     }
 
