@@ -668,3 +668,25 @@ add_executable(test_p1_7_resize_save test_p1_7_resize_save.cpp)
 target_include_directories(test_p1_7_resize_save PRIVATE ${CMAKE_SOURCE_DIR}/engine/include)
 target_link_libraries(test_p1_7_resize_save PRIVATE RowlEngineCore)
 add_test(NAME test_p1_7_resize_save COMMAND test_p1_7_resize_save)
+# CALISTIRMA DIZINI KURALI: her ctest kaydi WORKING_DIRECTORY'yi ACIKCA
+# yazmak ZORUNDA. Bu kayit sessizce CTest varsayilanina (<build>/tests)
+# dustugu icin ayrica pinlendi — proje koku olmayan bir CWD, VFS/mount
+# okuyan testleri sessizce kirar.
+#
+# NEDEN: suite cogu yerde proje-koku-goreli yollar ACIKAR —
+# test_msdf_renderer.cpp "Assets/fonts/msdf/default.json",
+# test_accessibility.cpp "Assets/fonts/default.ttf",
+# test_camera_and_transition_pipeline.cpp ise dogrudan
+# remountProject(current_path()). Bunlar cozumlen CWD'den gelir.
+# O_yuzden satiri su an IKI KEZ kanitlanmis bir kırılganlik uretiyordu:
+#   ./build/bin/rowl_tests  -> "Generated MSDF atlas metadata is not
+#                              runtime-compatible" (EXIT=1)
+# Bu bir "pre-existing MSDF failure" DEGILDIR; dogru CWD'de yesildir.
+# Ikilileri DOGRUDAN calistirma — daima `ctest --test-dir <build>` kullan
+# (veya once `cd <depo koku>`). Satir kodunu degil, yalnizca kaydin
+# calistirildigi dizini sabitler; testin davranisi degismez.
+set_tests_properties(test_p1_7_resize_save PROPERTIES
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    ENVIRONMENT "SDL_AUDIODRIVER=dummy;SDL_VIDEODRIVER=dummy"
+    TIMEOUT 300
+)
