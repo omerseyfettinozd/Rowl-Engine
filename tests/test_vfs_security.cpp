@@ -569,6 +569,337 @@ void test_vfs_security() {
     }
     TEST_PASS("One hostile packages entry cannot kill the scan");
 
+
+    // ---------------------------------------------------------------------
+    // P2-7 / P2-8 — package verification-layer locks.
+    //
+    // P2-7: the manifest sha256 gate only ever ran for flags=1 entries, so a
+    // corrupted RAW (flags=0) payload was served silently while its zstd twin
+    // failed hard. The packer writes a `sha256` key for EVERY record; the
+    // reader had a single key (`compressed_sha256`) that only exists for
+    // zstd records. Both classes are gated now.
+    //
+    // P2-8: tryOpenStream materialized the whole entry and ran a full
+    // ZSTD_decompress purely as a verification pass, then DISCARDED every byte
+    // and handed the caller a stream that decoded the entry a second time.
+    // The gate is a hash of the bytes as stored, so decompression was never
+    // part of it. These locks pin both halves: a raw entry is gated, and a
+    // stream open neither decodes nor materializes before the consumer reads.
+    //
+    // The "neither decodes nor materializes" half is measured through
+    // pkgEntryMaterializedBytes()/pkgEntryDecodedBytes(), which live INSIDE
+    // readEntry(). The zstd stream counters cannot see that pass at all — they
+    // only move in ZstdEntryStreamBuf::fill() — so a mutant that restored the
+    // materializing readEntry() call stayed green on them. pkgEntryDigestBytes()
+    // adds the complementary lock: the gate must still run, exactly once, over
+    // exactly the stored range.
+    // ---------------------------------------------------------------------
+    {
+        const auto sha256Hex = [](const std::vector<uint8_t>& bytes) {
+            Rowl::VFS::Detail::RowlSha256 context;
+            Rowl::VFS::Detail::rowlSha256Init(&context);
+            if (!bytes.empty()) {
+                Rowl::VFS::Detail::rowlSha256Update(&context, bytes.data(), bytes.size());
+            }
+            uint8_t digest[32];
+            Rowl::VFS::Detail::rowlSha256Final(&context, digest);
+            static constexpr char kHexDigits[] = "0123456789abcdef";
+            std::string hex;
+            hex.reserve(64);
+            for (const uint8_t byte : digest) {
+                hex += kHexDigits[byte >> 4];
+                hex += kHexDigits[byte & 0xF];
+            }
+            return hex;
+        };
+        const auto fnv1a64 = [](const std::string& value) {
+            uint64_t hash = 14695981039346656037ULL;
+            for (const unsigned char byte : value) {
+                hash ^= byte;
+                hash *= 1099511628211ULL;
+            }
+            return hash;
+        };
+
+        // flags=0 (raw) package with an embedded manifest, mirroring what
+        // tools/package_assets.py emits for an over-compressible blob.
+        const auto writeRawPackage = [&](const std::string& name,
+                                         const std::vector<uint8_t>& payload,
+                                         const std::string& manifestSha256) {
+            const std::string entryName = "raw/entry.bin";
+            const std::string manifestName = "rowl/manifest.json";
+            const std::string manifest =
+                "{\"format\":1,\"files\":[{\"compressed_size\":" +
+                std::to_string(payload.size()) + ",\"flags\":0,\"path\":\"" + entryName +
+                "\",\"sha256\":\"" + manifestSha256 + "\",\"size\":" +
+                std::to_string(payload.size()) + "}]}";
+            const uint64_t headerSize = sizeof(Rowl::VFS::RowlPkgHeader);
+            const uint64_t entryOffset = headerSize;
+            const uint64_t manifestOffset = entryOffset + payload.size();
+            const uint64_t indexOffset = manifestOffset + manifest.size();
+            Rowl::VFS::RowlPkgHeader header{
+                {'R', 'O', 'W', 'L'}, 1, 2, indexOffset};
+            std::string blob(reinterpret_cast<const char*>(&header), sizeof(header));
+            blob.append(reinterpret_cast<const char*>(payload.data()), payload.size());
+            blob.append(manifest);
+            Rowl::VFS::RowlPkgEntryRaw entryRecord{
+                fnv1a64(entryName), static_cast<uint32_t>(entryName.size()), entryOffset,
+                payload.size(), payload.size(), 0};
+            blob.append(reinterpret_cast<const char*>(&entryRecord), sizeof(entryRecord));
+            blob.append(entryName);
+            Rowl::VFS::RowlPkgEntryRaw manifestRecord{
+                fnv1a64(manifestName), static_cast<uint32_t>(manifestName.size()),
+                manifestOffset, manifest.size(), manifest.size(), 0};
+            blob.append(reinterpret_cast<const char*>(&manifestRecord), sizeof(manifestRecord));
+            blob.append(manifestName);
+            const auto packagePath = testRoot / name;
+            std::ofstream output(packagePath, std::ios::binary);
+            output.write(blob.data(), static_cast<std::streamsize>(blob.size()));
+            return entryName;
+        };
+
+        std::vector<uint8_t> rawPayload(4096);
+        // Fixtures are written under testRoot, which an earlier section may
+        // already have torn down. Recreate it so the package writes below land
+        // on disk instead of silently producing an empty (headerless) file.
+        std::filesystem::create_directories(testRoot);
+        for (size_t index = 0; index < rawPayload.size(); ++index) {
+            rawPayload[index] = static_cast<uint8_t>(index % 251);
+        }
+        const std::string rawDigest = sha256Hex(rawPayload);
+
+        // Correct manifest digest: the raw entry must be ACCEPTED. This is the
+        // false-positive lock — a gate that rejected every raw entry would be
+        // "secure" and useless.
+        const auto goodRaw = writeRawPackage("p2_7_good_raw.rowlpkg", rawPayload, rawDigest);
+        Rowl::VFS::RowlPkgDataSource goodRawSource((testRoot / "p2_7_good_raw.rowlpkg").string());
+        if (!goodRawSource.isValid() || goodRawSource.tryRead(goodRaw) != rawPayload) {
+            std::cerr << "P2-7: a raw entry with a correct manifest sha256 was rejected "
+                         "(false positive)"
+                      << std::endl;
+            exit(1);
+        }
+
+        // Wrong manifest digest: the raw entry must be REJECTED on both the
+        // read and the stream path. Before the fix the read returned the
+        // corrupted payload and only the zstd class was ever gated.
+        std::vector<uint8_t> corruptedRaw = rawPayload;
+        corruptedRaw[5] = static_cast<uint8_t>(corruptedRaw[5] ^ 0xFF);
+        const auto badRaw = writeRawPackage("p2_7_bad_raw.rowlpkg", corruptedRaw, rawDigest);
+        Rowl::VFS::RowlPkgDataSource badRawSource((testRoot / "p2_7_bad_raw.rowlpkg").string());
+        const auto badRawRead = badRawSource.tryRead(badRaw);
+        const auto badRawStream = badRawSource.tryOpenStream(badRaw);
+        if (!badRawSource.isValid() || badRawRead.has_value() || badRawStream) {
+            std::cerr << "P2-7: a corrupted flags=0 entry escaped manifest sha256 "
+                         "verification (raw entries were never gated)"
+                      << std::endl;
+            exit(1);
+        }
+        TEST_PASS("P2-7 raw (flags=0) entries obey the manifest sha256 gate on read and stream");
+
+        // P2-8 ikinci yarısı: raw akış yolu tek bir geçişle doğrulanmalı. Raw
+        // dalı readEntry'e düşer ve readEntry kapıyı KENDİSİ çalıştırır;
+        // tryOpenStream de verifyEntryDigest çağırırsa aynı saklı aralık İKİ
+        // KEZ hashlenir (ölçülen ~2x yavaşlama — saf SHA-256 32 MiB ~233 ms,
+        // gözlenen ~486 ms tam olarak iki geçiş). Bu sayaç UYGULAMADAN
+        // BAĞIMSIZ: kapının okuduğu toplam baytı sayar, iki yolun ikisinde de.
+        {
+            Rowl::VFS::RowlPkgDataSource rawStreamSource(
+                (testRoot / "p2_7_good_raw.rowlpkg").string());
+            const uint64_t readBase = Rowl::VFS::pkgEntryDigestBytes();
+            auto rawStream = rawStreamSource.tryOpenStream(goodRaw);
+            const uint64_t readDelta = Rowl::VFS::pkgEntryDigestBytes() - readBase;
+            if (!rawStream) {
+                std::cerr << "P2-8: a valid raw stream failed to open" << std::endl;
+                exit(1);
+            }
+            if (readDelta != rawPayload.size()) {
+                std::cerr << "P2-8: opening a raw stream hashed its stored bytes "
+                             << readDelta << " times for a " << rawPayload.size()
+                          << " byte entry (must be exactly one manifest gate pass)"
+                      << std::endl;
+                exit(1);
+            }
+            rawStream.reset();
+
+            // The read path must be single-pass too.
+            const uint64_t tryReadBase = Rowl::VFS::pkgEntryDigestBytes();
+            if (!rawStreamSource.tryRead(goodRaw).has_value()) {
+                std::cerr << "P2-8: a valid raw read failed" << std::endl;
+                exit(1);
+            }
+            if (Rowl::VFS::pkgEntryDigestBytes() - tryReadBase != rawPayload.size()) {
+                std::cerr << "P2-8: reading a raw entry hashed its stored bytes more than once"
+                          << std::endl;
+                exit(1);
+            }
+        }
+        TEST_PASS("P2-8 the manifest digest gate hashes each stored byte exactly once per open");
+
+        // P2-8: opening a manifest-gated stream must not decode or materialize
+        // the entry before the consumer reads. Baselines are taken around the
+        // openStream call only (see test_audio_streaming.cpp for the same
+        // contract on the seek path).
+        std::vector<uint8_t> streamingPayload(512 * 1024);
+        for (size_t index = 0; index < streamingPayload.size(); ++index) {
+            streamingPayload[index] = static_cast<uint8_t>((index * 37u + index / 17u) % 251u);
+        }
+        std::vector<uint8_t> compressed(ZSTD_compressBound(streamingPayload.size()));
+        const size_t compressedSize = ZSTD_compress(
+            compressed.data(), compressed.size(), streamingPayload.data(),
+            streamingPayload.size(), 1);
+        compressed.resize(compressedSize);
+        {
+            const std::string entryName = "audio/gated.ogg";
+            const std::string manifestName = "rowl/manifest.json";
+            std::string manifest = "{\"format\":1,\"files\":[{\"compressed_sha256\":\"" +
+                                   sha256Hex(compressed) + "\",\"compressed_size\":" +
+                                   std::to_string(compressed.size()) + ",\"flags\":1,\"path\":\"" +
+                                   entryName + "\",\"sha256\":\"" + sha256Hex(streamingPayload) +
+                                   "\",\"size\":" + std::to_string(streamingPayload.size()) +
+                                   "}]}";
+            const uint64_t headerSize = sizeof(Rowl::VFS::RowlPkgHeader);
+            const uint64_t entryOffset = headerSize;
+            const uint64_t manifestOffset = entryOffset + compressed.size();
+            const uint64_t indexOffset = manifestOffset + manifest.size();
+            Rowl::VFS::RowlPkgHeader header{{'R', 'O', 'W', 'L'}, 1, 2, indexOffset};
+            std::string blob(reinterpret_cast<const char*>(&header), sizeof(header));
+            blob.append(reinterpret_cast<const char*>(compressed.data()), compressed.size());
+            blob.append(manifest);
+            Rowl::VFS::RowlPkgEntryRaw entryRecord{
+                fnv1a64(entryName), static_cast<uint32_t>(entryName.size()), entryOffset,
+                compressed.size(), streamingPayload.size(), 1};
+            blob.append(reinterpret_cast<const char*>(&entryRecord), sizeof(entryRecord));
+            blob.append(entryName);
+            Rowl::VFS::RowlPkgEntryRaw manifestRecord{
+                fnv1a64(manifestName), static_cast<uint32_t>(manifestName.size()),
+                manifestOffset, manifest.size(), manifest.size(), 0};
+            blob.append(reinterpret_cast<const char*>(&manifestRecord), sizeof(manifestRecord));
+            blob.append(manifestName);
+            const auto packagePath = testRoot / "p2_8_gated_stream.rowlpkg";
+            std::ofstream output(packagePath, std::ios::binary);
+            output.write(blob.data(), static_cast<std::streamsize>(blob.size()));
+            output.close();
+            if (!output) {
+                std::cerr << "P2-8 fixture write failed for " << packagePath
+                          << " (blob=" << blob.size() << " bytes)" << std::endl;
+                exit(1);
+            }
+
+            Rowl::VFS::RowlPkgDataSource gatedSource(packagePath.string());
+            const uint64_t openBaseRewinds = Rowl::VFS::zstdEntryStreamRewindCount();
+            const uint64_t openBaseCompressed = Rowl::VFS::zstdEntryStreamCompressedBytes();
+            const uint64_t openBaseDecompressed = Rowl::VFS::zstdEntryStreamDecompressedBytes();
+            // P2-8'in GERÇEK ölçümü. zstd akış sayaçları yalnız
+            // ZstdEntryStreamBuf::fill() içinde artar; tryOpenStream'in geri
+            // alınıp readEntry()'i bir doğrulama geçişi olarak çağırdığı
+            // (P2-8'in kaldırdığı) materyalize decode O SAYAÇLARA hiç
+            // dokunmadığı için bu iki ölçüm onu göremezdi — mutant yeşil
+            // kalıyordu. readEntry'in kendi geçişini sayan bu sayaçlar onu
+            // görür: materyalize edilen giriş genişliği ve decode edilen
+            // bayt. Akış açılışı ikisini de ARTIRMAMALIDIR.
+            const uint64_t openBaseMaterialized = Rowl::VFS::pkgEntryMaterializedBytes();
+            const uint64_t openBaseEntryDecoded = Rowl::VFS::pkgEntryDecodedBytes();
+            const uint64_t openBaseDigestBytes = Rowl::VFS::pkgEntryDigestBytes();
+            auto stream = gatedSource.openStream(entryName);
+            if (!stream || !stream->good()) {
+                std::cerr << "P2-8: a manifest-verified stream failed to open" << std::endl;
+                exit(1);
+            }
+            // The whole point of P2-8: opening a gated stream must set up the
+            // decoder and nothing else. A full materializing verification pass
+            // would inflate the decompressed counter before the first read.
+            if (Rowl::VFS::zstdEntryStreamDecompressedBytes() != openBaseDecompressed ||
+                Rowl::VFS::zstdEntryStreamCompressedBytes() != openBaseCompressed) {
+                std::cerr << "P2-8: openStream decoded or read the entry during verification "
+                             "(the verified bytes are not the bytes the consumer reads)"
+                          << std::endl;
+                exit(1);
+            }
+            // …ve — akış sayaçlarının göremediği — readEntry'in materyalize
+            // decode geçişini de reddet. Ölçülen geçiş olsa 32 MiB'lık bir
+            // girişte ~16 MiB ölü geçici bellek ve tam bir ZSTD_decompress
+            // demektir.
+            const uint64_t openMaterialized = Rowl::VFS::pkgEntryMaterializedBytes();
+            const uint64_t openEntryDecoded = Rowl::VFS::pkgEntryDecodedBytes();
+            if (openMaterialized != openBaseMaterialized ||
+                openEntryDecoded != openBaseEntryDecoded) {
+                std::cerr << "P2-8: openStream ran a materializing decode pass inside readEntry "
+                             "(materialized +"
+                          << (openMaterialized - openBaseMaterialized) << " B, decoded +"
+                          << (openEntryDecoded - openBaseEntryDecoded) << " B) — the verified "
+                             "bytes are not the bytes the consumer reads"
+                          << std::endl;
+                exit(1);
+            }
+            // The gate itself must still run, over exactly the stored range —
+            // skipping verification would satisfy the checks above trivially.
+            if (Rowl::VFS::pkgEntryDigestBytes() - openBaseDigestBytes != compressed.size()) {
+                std::cerr << "P2-8: openStream did not hash the stored range exactly once ("
+                          << (Rowl::VFS::pkgEntryDigestBytes() - openBaseDigestBytes) << " of "
+                          << compressed.size() << " stored bytes)" << std::endl;
+                exit(1);
+            }
+            if (Rowl::VFS::zstdEntryStreamRewindCount() != openBaseRewinds + 1) {
+                std::cerr << "P2-8: openStream must perform exactly one decoder setup" << std::endl;
+                exit(1);
+            }
+
+            // And the bytes the consumer reads must be the verified bytes.
+            std::vector<char> consumed(
+                (std::istreambuf_iterator<char>(*stream)), std::istreambuf_iterator<char>());
+            if (consumed.size() != streamingPayload.size() ||
+                std::memcmp(consumed.data(), streamingPayload.data(), consumed.size()) != 0) {
+                std::cerr << "P2-8: stream output differs from the verified payload" << std::endl;
+                exit(1);
+            }
+        }
+        TEST_PASS("P2-8 manifest-gated streams verify without a materializing decode pass");
+
+        // A gated stream whose digest does not match must not open at all.
+        {
+            const std::string entryName = "audio/gated.ogg";
+            const std::string manifestName = "rowl/manifest.json";
+            std::string manifest = "{\"format\":1,\"files\":[{\"compressed_sha256\":\"" +
+                                   std::string(64, '0') + "\",\"flags\":1,\"path\":\"" +
+                                   entryName + "\"}]}";
+            const uint64_t headerSize = sizeof(Rowl::VFS::RowlPkgHeader);
+            const uint64_t entryOffset = headerSize;
+            const uint64_t manifestOffset = entryOffset + compressed.size();
+            const uint64_t indexOffset = manifestOffset + manifest.size();
+            Rowl::VFS::RowlPkgHeader header{{'R', 'O', 'W', 'L'}, 1, 2, indexOffset};
+            std::string blob(reinterpret_cast<const char*>(&header), sizeof(header));
+            blob.append(reinterpret_cast<const char*>(compressed.data()), compressed.size());
+            blob.append(manifest);
+            Rowl::VFS::RowlPkgEntryRaw entryRecord{
+                fnv1a64(entryName), static_cast<uint32_t>(entryName.size()), entryOffset,
+                compressed.size(), streamingPayload.size(), 1};
+            blob.append(reinterpret_cast<const char*>(&entryRecord), sizeof(entryRecord));
+            blob.append(entryName);
+            Rowl::VFS::RowlPkgEntryRaw manifestRecord{
+                fnv1a64(manifestName), static_cast<uint32_t>(manifestName.size()),
+                manifestOffset, manifest.size(), manifest.size(), 0};
+            blob.append(reinterpret_cast<const char*>(&manifestRecord), sizeof(manifestRecord));
+            blob.append(manifestName);
+            const auto packagePath = testRoot / "p2_8_bad_digest_stream.rowlpkg";
+            std::ofstream output(packagePath, std::ios::binary);
+            output.write(blob.data(), static_cast<std::streamsize>(blob.size()));
+            output.close();
+            if (!output) {
+                std::cerr << "P2-8 bad-digest fixture write failed" << std::endl;
+                exit(1);
+            }
+
+            Rowl::VFS::RowlPkgDataSource badDigestSource(packagePath.string());
+            if (!badDigestSource.isValid() || badDigestSource.openStream(entryName)) {
+                std::cerr << "P2-8: a stream opened for an entry that fails manifest sha256 "
+                             "verification"
+                          << std::endl;
+                exit(1);
+            }
+        }
+        TEST_PASS("P2-8 manifest-gated streams fail closed on a digest mismatch");
+    }
     const std::string graphVfsPath = "json/full_story_graph.json";
     const std::string graphJson = R"({"start_node_id":101,"nodes":[{"id":101,"speaker":"Packaged","dialogue":"VFS graph"}]})";
     const uint64_t graphIndexOffset = headerSize + graphJson.size();
@@ -1174,4 +1505,5 @@ void test_vfs_security() {
         }
     }
 #endif
+
 }

@@ -34,18 +34,34 @@ constexpr size_t kDecompressedReadChunkBytes = 64 * 1024;
 // the SHA-256 of the compressed bytes — which the reader now verifies.
 constexpr const char* kManifestEntryPath = "rowl/manifest.json";
 
-// Fail-open closure for flags=1 entries. When the embedded manifest carries
-// a compressed_sha256 for the entry, the stored compressed bytes are hashed
-// and compared; a mismatch (silently substituted, truncated or corrupted
-// payload) fails the read. A missing key keeps the legacy skip — v1 packages
-// and pre-D18a manifests warn-open exactly as before. The binary format is
-// untouched: the hash arrives through the manifest, not a new index field.
+// Integrity closure for BOTH entry classes. The packer writes one digest key
+// per record (tools/package_assets.py:347): `sha256` is the hash of the
+// UNCOMPRESSED content and is written for EVERY record, while
+// `compressed_sha256` (:354) is the hash of the STORED bytes and is added only
+// for flags=1 records. Which key applies depends on how the bytes are stored:
+//
+//   flags=1 (zstd) — the gate hashes the STORED (compressed) bytes, so
+//                    `compressed_sha256` is the applicable key.
+//   flags=0 (raw)  — loadIndexTable already forces compressedSize ==
+//                    uncompressedSize (:479), so the stored bytes ARE the
+//                    uncompressed content and the packer's `sha256` applies
+//                    directly to them.
+//
+// Both keys are snapshotted here so the hash gate runs for every entry that
+// has one; a mismatch (silently substituted, truncated or corrupted payload)
+// fails the read. A missing key keeps the legacy skip — v1 packages and
+// pre-D18a manifests warn-open exactly as before. The binary format is
+// untouched: the hashes arrive through the manifest, not a new index field.
 struct ManifestDigestIndex {
     std::unordered_map<std::string, std::string> digestsByPath;
+    std::unordered_map<std::string, std::string> compressedDigestsByPath;
 
-    const std::string* find(const std::string& path) const {
-        const auto it = digestsByPath.find(path);
-        return it != digestsByPath.end() ? &it->second : nullptr;
+    /// Digest of the bytes as stored in the archive. zstd entries verify the
+    /// compressed payload; raw entries verify the payload itself.
+    const std::string* findStoredDigest(const std::string& path, uint32_t flags) const {
+        const auto& table = (flags == 1) ? compressedDigestsByPath : digestsByPath;
+        const auto it = table.find(path);
+        return it != table.end() ? &it->second : nullptr;
     }
 };
 
@@ -136,18 +152,28 @@ std::optional<ManifestDigestIndex> buildManifestDigestIndex(
         for (const auto& record : *filesIt) {
             if (!record.is_object()) continue;
             const auto pathIt = record.find("path");
-            const auto digestIt = record.find("compressed_sha256");
-            if (pathIt == record.end() || !pathIt->is_string() ||
-                digestIt == record.end() || !digestIt->is_string()) {
-                continue;
-            }
+            if (pathIt == record.end() || !pathIt->is_string()) continue;
             // Anahtarı AYNI kanonikleştirici'den geçir: index tablosunun
             // anahtarları da buradan üretiliyor, böylece eşleşme yapısal
             // olarak garanti altında (sözleşmeye/packer ayırıcısına bağlı
             // değil). Ham manifest `path` string'i Windows'ta ayırıcı
             // yüzünden tabloyla uyuşmayabilirdi.
-            if (auto canonical = normalizePackagePath(pathIt->get<std::string>())) {
+            const auto canonical = normalizePackagePath(pathIt->get<std::string>());
+            if (!canonical) continue;
+
+            // P2-7: packer HER kayıt için `sha256` (ham içerik hash'i) yazıyor,
+            // `compressed_sha256`'i yalnız flags=1 için ekliyor. İkisi de
+            // toplanır; hangisinin geçerli olduğu girişin saklanma biçimine
+            // bağlıdır (findStoredDigest). Yalnız compressed_sha256 okumak
+            // flags=0 kayıtları ölçülemez bırakıyordu — sessiz bozulma.
+            if (const auto digestIt = record.find("sha256");
+                digestIt != record.end() && digestIt->is_string()) {
                 index.digestsByPath.emplace(*canonical, digestIt->get<std::string>());
+            }
+            if (const auto compressedDigestIt = record.find("compressed_sha256");
+                compressedDigestIt != record.end() && compressedDigestIt->is_string()) {
+                index.compressedDigestsByPath.emplace(*canonical,
+                                                      compressedDigestIt->get<std::string>());
             }
         }
     } catch (const nlohmann::json::exception&) {
@@ -159,26 +185,47 @@ std::optional<ManifestDigestIndex> buildManifestDigestIndex(
     return index;
 }
 
-/// Verifies `bytes` against a 64-hex-character SHA-256 digest
-/// (case-insensitive, shape-validated; a wrong-length or non-hex string
-/// never verifies).
-bool verifyHashHex(const std::vector<uint8_t>& bytes, const std::string& expectedHex) {
+// P2-8 kilit sayaclari: readEntry()'nin GORUNUR birakildigi olcum.
+// Yayimlanan zstd akis sayaclari SADECE ZstdEntryStreamBuf::fill() icinde
+// artar; readEntry'in ZSTD_decompress() cagrisi onlara hic dokunmaz. Bu
+// yuzden "stream acilisi materyalize bir decode yapmadi" iddiasi o
+// sayaclarla OLÇULEMEZDI — tryOpenStream'i eski haline (readEntry'i dogrulama
+// gecisi olarak cagirmaya) geri almak testi yesil birakti (mutant canli
+// kalmadi). Bu iki sayac tam olarak o gecisi gorur:
+//  - Materialized: readEntry'in entry-genislik tampona kopyaladigi bayt.
+//  - Decoded:      readEntry'in ZSTD_decompress ile urettigi bayt.
+// Ucuncu sayaç, kapinin okudugu bayt toplamini olcer ve IKI yolun ikisinde
+// de artar (buradaki verifyHashHex ve asagidaki verifyEntryDigest), boylece
+// "bir acilis/okuma sakli baytlari tam olarak bir kez hashler" olcumu
+// uygulamadan bagimsiz olur; cift hash regresyonu onu 2x'e cikarir.
+// Hepsi surec-geneli monoton, yalnizca gozler, davranisi degistirmez; yine
+// baz-deger alip delta okunur.
+std::atomic<uint64_t> g_pkgEntryMaterializedBytes{0};
+std::atomic<uint64_t> g_pkgEntryDecodedBytes{0};
+std::atomic<uint64_t> g_pkgEntryDigestBytes{0};
+
+/// Shape check for a manifest digest key: exactly 64 hex characters. Kept
+/// separate from the comparison so a caller can fail closed BEFORE spending
+/// any I/O on a key that can never match.
+bool isSha256Hex(const std::string& expectedHex) {
     if (expectedHex.size() != 32 * 2) return false;
+    for (const char character : expectedHex) {
+        if (!std::isxdigit(static_cast<unsigned char>(character))) return false;
+    }
+    return true;
+}
+
+/// Compares a raw 32-byte digest against a 64-hex-character SHA-256 string
+/// (case-insensitive). Returns false for a wrong-length or non-hex string.
+bool digestMatchesHex(const uint8_t digest[32], const std::string& expectedHex) {
+    if (!isSha256Hex(expectedHex)) return false;
     std::array<char, 64> lowered{};
     for (size_t i = 0; i < lowered.size(); ++i) {
         const char character = expectedHex[i];
-        if (!std::isxdigit(static_cast<unsigned char>(character))) return false;
         lowered[i] = (character >= 'A' && character <= 'F')
                          ? static_cast<char>(character - 'A' + 'a')
                          : character;
     }
-    Detail::RowlSha256 context;
-    Detail::rowlSha256Init(&context);
-    if (!bytes.empty()) {
-        Detail::rowlSha256Update(&context, bytes.data(), bytes.size());
-    }
-    uint8_t digest[32];
-    Detail::rowlSha256Final(&context, digest);
     static constexpr char kHexDigits[] = "0123456789abcdef";
     volatile uint8_t difference = 0;
     for (size_t i = 0; i < 32; ++i) {
@@ -188,6 +235,22 @@ bool verifyHashHex(const std::vector<uint8_t>& bytes, const std::string& expecte
             (kHexDigits[digest[i] & 0xF] ^ lowered[i * 2 + 1]));
     }
     return difference == 0;
+}
+
+/// Verifies `bytes` against a 64-hex-character SHA-256 digest
+/// (case-insensitive, shape-validated; a wrong-length or non-hex string
+/// never verifies).
+bool verifyHashHex(const std::vector<uint8_t>& bytes, const std::string& expectedHex) {
+    if (!isSha256Hex(expectedHex)) return false;
+    g_pkgEntryDigestBytes.fetch_add(bytes.size(), std::memory_order_relaxed);
+    Detail::RowlSha256 context;
+    Detail::rowlSha256Init(&context);
+    if (!bytes.empty()) {
+        Detail::rowlSha256Update(&context, bytes.data(), bytes.size());
+    }
+    uint8_t digest[32];
+    Detail::rowlSha256Final(&context, digest);
+    return digestMatchesHex(digest, expectedHex);
 }
 
 // Hedef #80 üretim metriği (performans kilidi): Zstd giriş-akışlarının GERÇEK
@@ -513,15 +576,20 @@ bool RowlPkgDataSource::loadIndexTable() {
     }
 
     // D18a-runtime: the table is complete — snapshot the embedded manifest's
-    // compressed_sha256 keys and attach them to the matching flags=1 entries.
+    // digest keys and attach them to the matching entries.
+    // P2-7: previously ONLY flags=1 entries were bound, which left every raw
+    // (flags=0) entry permanently unverified even though the packer writes a
+    // `sha256` key for them. Now every entry binds the digest that applies to
+    // how its bytes are stored (see ManifestDigestIndex::findStoredDigest).
     // A v1/pre-D18a manifest (no keys) leaves every entry empty → skip, and
     // a package without an embedded manifest behaves exactly as before.
     if (auto digests = buildManifestDigestIndex(m_filepath, m_indexTable)) {
         for (auto& [path, tableEntry] : m_indexTable) {
-            if (tableEntry.flags == 1) {
-                if (const std::string* digest = digests->find(path)) {
-                    tableEntry.compressedSha256Hex = *digest;
-                }
+            // The manifest entry itself carries no record of its own; binding
+            // a digest to it would make the index verify against itself.
+            if (path == kManifestEntryPath) continue;
+            if (const std::string* digest = digests->findStoredDigest(path, tableEntry.flags)) {
+                tableEntry.compressedSha256Hex = *digest;
             }
         }
     }
@@ -591,11 +659,23 @@ std::optional<std::vector<uint8_t>> RowlPkgDataSource::readEntry(const PackageEn
         }
     }
 
-    // D18a-runtime: verify the stored compressed bytes against the manifest
-    // compressed_sha256 BEFORE decoding — a silently substituted, truncated
-    // or hash-invalidating corrupted payload fails the read instead of
-    // serving content. No key (legacy record) skips exactly as before.
-    if (entry.flags == 1 && !entry.compressedSha256Hex.empty() &&
+    // P2-8 kilidi: readEntry gercekten bu entry'yi TAMAMEN materyalize ediyor.
+    // Bu sayac gecisi gorunur kilar. tryOpenStream'in ZSTD kolu readEntry'i
+    // KULLANMAMALIDIR (o kol verifyEntryDigest ile dogrulanir) — ham kol ise
+    // readEntry'e duser ve materyalizasyon zaten zorunludur.
+    g_pkgEntryMaterializedBytes.fetch_add(entry.compressedSize, std::memory_order_relaxed);
+
+    // D18a-runtime: verify the bytes as stored in the archive against the
+    // manifest digest BEFORE decoding — a silently substituted, truncated or
+    // hash-invalidating corrupted payload fails the read instead of serving
+    // content. No key (legacy record) skips exactly as before.
+    // P2-7: the `entry.flags == 1 &&` guard is GONE. It meant raw (flags=0)
+    // entries were never hashed at all, so a corrupted raw payload was served
+    // silently while its flags=1 twin failed hard. The digest is chosen by the
+    // binding step for the entry's storage class, and flags=0 entries store
+    // their content verbatim (compressedSize == uncompressedSize, enforced in
+    // loadIndexTable), so the same stored-bytes hash applies to both classes.
+    if (!entry.compressedSha256Hex.empty() &&
         !verifyHashHex(compressedBuffer, entry.compressedSha256Hex)) {
         ROWL_LOG_ERROR("Package entry failed manifest sha256 verification: " + path);
         return std::nullopt;
@@ -622,6 +702,11 @@ std::optional<std::vector<uint8_t>> RowlPkgDataSource::readEntry(const PackageEn
             return std::nullopt;
         }
 
+        // P2-8 kilidi: tam-bos decode olcumu. Bir akis acilisinda bu sayac
+        // ARTMAYI gorunur kilar — akis, donen decode eden akis kendisi
+        // uretir, dogrulama gecisi uretmez.
+        g_pkgEntryDecodedBytes.fetch_add(entry.uncompressedSize, std::memory_order_relaxed);
+
         return decompressedBuffer;
     }
 
@@ -639,16 +724,40 @@ std::unique_ptr<std::istream> RowlPkgDataSource::tryOpenStream(const std::string
     if (!normalizedPath) return nullptr;
     const auto it = m_indexTable.find(*normalizedPath);
     if (it == m_indexTable.end()) return nullptr;
+
+    // P2-8: streams must satisfy the SAME manifest-hash gate as read(), and
+    // they must satisfy it over the exact bytes the caller will consume.
+    //
+    // Previously this called readEntry() purely as a verification pass: it
+    // materialized the whole entry AND ran a full ZSTD_decompress, then threw
+    // every byte away and handed back a ZstdEntryIStream that decoded the
+    // entry a second time. That made the gate both useless (the verified bytes
+    // were not the bytes read — a second decode from the file happened after)
+    // and expensive (~240x the consumer's own read, ~16 MiB of dead temporary
+    // memory for an 8 MiB entry).
+    //
+    // The gate is a hash of the bytes AS STORED, so decompression is not part
+    // of it at all. verifyEntryDigest streams the stored bytes in bounded
+    // chunks and hashes them in place — no entry-wide buffer, no decoder —
+    // and the same on-disk range is then decoded once by the returned stream.
+    // Verified bytes and consumed bytes are therefore the same bytes.
     if (it->second.flags == 1) {
-        // D18a-runtime: streams must satisfy the same manifest-hash gate as
-        // read() — one materializing verification pass, then decode freely.
-        if (!it->second.compressedSha256Hex.empty() &&
-            !readEntry(it->second, path)) {
-            return nullptr;
-        }
+        if (!verifyEntryDigest(it->second, path)) return nullptr;
         auto stream = std::make_unique<ZstdEntryIStream>(m_filepath, it->second);
         return stream->good() ? std::move(stream) : nullptr;
     }
+    // Raw entries: NO verifyEntryDigest here. The raw branch falls through to
+    // readEntry() below, and readEntry() already runs the SAME manifest gate
+    // (unconditional since P2-7) before it hands back a single byte. Calling
+    // verifyEntryDigest as well hashed the identical stored range twice — a
+    // pure 2x regression on the raw stream path: a 32 MiB raw entry went from
+    // ~309 ms to ~611 ms wall clock, because the two SHA-256 passes over 32 MiB
+    // cost ~2x233 ms. (Concurrent readers saw 3-4x, since the duplicate hash
+    // also ran under the stream mutex and serialised every open.)
+    // This is NOT a security regression: raw is still verified, one hash pass,
+    // inside readEntry. It only holds for raw; the zstd branch above cannot
+    // use readEntry without resurrecting the dead decode, so it verifies here.
+    //
     // Raw entries remain bounded by package validation. They do not require a
     // decoder. A2a: single lookup via readEntry (no exists probe), and the
     // bytes move into the stream — the old read()+copy+copy is one copy now.
@@ -657,6 +766,76 @@ std::unique_ptr<std::istream> RowlPkgDataSource::tryOpenStream(const std::string
     if (!data) return nullptr;
     std::string bytes(reinterpret_cast<const char*>(data->data()), data->size());
     return std::make_unique<std::istringstream>(std::move(bytes), std::ios::binary);
+}
+
+bool RowlPkgDataSource::verifyEntryDigest(const PackageEntry& entry, const std::string& path) {
+    // Legacy package: no manifest key to verify against. Warn-open, exactly as
+    // before — fail-CLOSED applies to a key that is PRESENT and does not match.
+    if (entry.compressedSha256Hex.empty()) return true;
+
+    // A present-but-malformed key (wrong length, non-hex) can never verify.
+    // Check the shape before any I/O so a broken manifest fails closed even if
+    // the payload range is also unreadable.
+    if (!isSha256Hex(entry.compressedSha256Hex)) {
+        ROWL_LOG_ERROR("Package entry has a malformed manifest sha256 key: " + path);
+        return false;
+    }
+
+    // Stream the stored bytes through SHA-256 in bounded chunks. The digest
+    // covers the bytes as stored, so this is exactly what read()'s gate
+    // checks — without materializing the entry or running a decoder.
+    Detail::RowlSha256 context;
+    Detail::rowlSha256Init(&context);
+
+    // Aynı paylaşımlı-akış disiplini readEntry'inkinin kendisi: KİLİT yalnız
+    // seek+read'i kapsar, hash KİLİT DIŞINDA beslenir.
+    //
+    // Yarış-durum kanıtı (okunan baytlar degismez):
+    //  1. Her yineleme MUTLAK bir konuma (entry.offset + okunan) seek eder.
+    //     Göreli konum paylaşımlı akışın nereye baktığına bağlı olsaydı
+    //     başka bir is parçacığının araya girmesi doğru olmayan baytları
+    //     okutmamıza yol açardı; mutlak ofset bu bağımlılığı tamamen keser.
+    //  2. seekg ile read() aynı lock_guard kapsamındadır; aralarında başka bir
+    //     parçacık m_fileStream'e erişemez, dolayısıyla read() tam olarak
+    //     (offset + okunan .. offset + okunan + want) aralığını okur.
+    //  3. Hash, kilit bırakıldıktan SONRA, kilidi tutan parçacığın dokunamadığı
+    //     yerel `chunk` tamponu üzerinde beslenir.
+    // Sonuç: kilit tutma süresi I/O ile sınırlı, hash maliyeti kilit dışında —
+    // eşzamanlı akış açmaları artık serileşmez.
+    std::array<uint8_t, kCompressedReadChunkBytes> chunk{};
+    uint64_t consumed = 0;
+    while (consumed < entry.compressedSize) {
+        const auto want = static_cast<std::streamsize>(
+            std::min<uint64_t>(entry.compressedSize - consumed, chunk.size()));
+        {
+            std::lock_guard<std::mutex> lock(m_fileMutex);
+            // #143: sticky failbit — her teşebbüs bayrakları temizler.
+            m_fileStream.clear();
+            m_fileStream.seekg(static_cast<std::streamoff>(entry.offset + consumed),
+                               std::ios::beg);
+            if (!m_fileStream.good()) {
+                ROWL_LOG_ERROR("Failed to seek to entry offset in package: " + path);
+                return false;
+            }
+            m_fileStream.read(reinterpret_cast<char*>(chunk.data()), want);
+            if (m_fileStream.gcount() != want) {
+                ROWL_LOG_ERROR("Failed to read stored data for: " + path);
+                return false;
+            }
+        }
+        // KİLİT DIŞI: yalnız yerel bağlam (context) ve yerel tampon.
+        Detail::rowlSha256Update(&context, chunk.data(), static_cast<size_t>(want));
+        g_pkgEntryDigestBytes.fetch_add(static_cast<uint64_t>(want), std::memory_order_relaxed);
+        consumed += static_cast<uint64_t>(want);
+    }
+
+    uint8_t digest[32];
+    Detail::rowlSha256Final(&context, digest);
+    if (!digestMatchesHex(digest, entry.compressedSha256Hex)) {
+        ROWL_LOG_ERROR("Package entry failed manifest sha256 verification: " + path);
+        return false;
+    }
+    return true;
 }
 
 uint64_t zstdEntryStreamRewindCount() {
@@ -669,6 +848,18 @@ uint64_t zstdEntryStreamCompressedBytes() {
 
 uint64_t zstdEntryStreamDecompressedBytes() {
     return g_zstdEntryStreamDecompressedBytes.load(std::memory_order_relaxed);
+}
+
+uint64_t pkgEntryMaterializedBytes() {
+    return g_pkgEntryMaterializedBytes.load(std::memory_order_relaxed);
+}
+
+uint64_t pkgEntryDecodedBytes() {
+    return g_pkgEntryDecodedBytes.load(std::memory_order_relaxed);
+}
+
+uint64_t pkgEntryDigestBytes() {
+    return g_pkgEntryDigestBytes.load(std::memory_order_relaxed);
 }
 
 } // namespace Rowl::VFS

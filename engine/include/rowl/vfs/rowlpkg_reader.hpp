@@ -36,9 +36,12 @@ struct PackageEntry {
     uint64_t compressedSize;
     uint64_t uncompressedSize;
     uint32_t flags;
-    /// D18a-runtime: hex compressed_sha256 carried by the embedded manifest
-    /// record (rowl/manifest.json) for flags=1 entries; empty = no key
-    /// (legacy record) and verification is skipped.
+    /// D18a-runtime: hex SHA-256 of the bytes AS STORED for this entry,
+    /// carried by the embedded manifest record (rowl/manifest.json);
+    /// empty = no key (legacy record) and verification is skipped.
+    /// P2-7: applies to flags=0 entries too — `compressed_sha256` for zstd
+    /// entries, `sha256` for raw ones (raw stores content verbatim, so the
+    /// packer's uncompressed-content hash covers the stored bytes).
     std::string compressedSha256Hex;
 };
 
@@ -63,6 +66,11 @@ private:
     /// mutex covers only seek+read — decompression runs lock-free.
     std::optional<std::vector<uint8_t>> readEntry(const PackageEntry& entry,
                                                   const std::string& path);
+    /// P2-8: manifest-hash gate for the streaming path. Hashes the bytes AS
+    /// STORED in bounded chunks without materializing the entry or running a
+    /// decoder, so a stream can satisfy the same gate read() applies while
+    /// decoding the entry exactly once. No manifest key = legacy warn-open.
+    bool verifyEntryDigest(const PackageEntry& entry, const std::string& path);
 
     std::string m_filepath;
     std::ifstream m_fileStream;
@@ -85,5 +93,21 @@ private:
 uint64_t zstdEntryStreamRewindCount();
 uint64_t zstdEntryStreamCompressedBytes();
 uint64_t zstdEntryStreamDecompressedBytes();
+
+// P2-8 kilit sayacları: readEntry()'in materyalizasyonunu GÖRÜNÜR kılar.
+// Yukarıdaki zstd akış sayaçları yalnız ZstdEntryStreamBuf::fill() içinde
+// artar; readEntry'in ZSTD_decompress() geçişine hiç dokunmazlar, dolayısıyla
+// "stream açılışı materyalize bir decode yapmıyor" iddiası onlarla ölçülemez.
+//  - Materialized: readEntry'in entry-genişlik tampona kopyaladığı bayt.
+//  - Decoded:      readEntry'in ZSTD_decompress ile ürettiği bayt.
+// Aynı sözleşme: süreç-geneli monoton, yalnız gözler, davranışı değiştirmez;
+// ölçüm öncesi baz-değeri alıp yalnız delta karşılaştırın.
+uint64_t pkgEntryMaterializedBytes();
+uint64_t pkgEntryDecodedBytes();
+// Manifest-digest KAPISININ toplamda hashledigi bayt: hem readEntry'in tam
+// tamponlu geçişi hem akış yolunun parça-parça geçişi sayar. Uygulamadan
+// bağımsız ölçüm: bir açılış/okuma, saklı baytları tam olarak BİR kez
+// hashler (çift hash regresyonu bu sayacı 2x'e çıkarır).
+uint64_t pkgEntryDigestBytes();
 
 } // namespace Rowl::VFS
