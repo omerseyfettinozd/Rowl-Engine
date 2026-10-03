@@ -1,4 +1,5 @@
 #include "rowl/state/game_state.hpp"
+#include "rowl/scripting/reserved_names.hpp"
 #include "rowl/core/logger.hpp"
 #include "rowl/core/story_graph.hpp"
 #include "rowl/platform/user_data_directories.hpp"
@@ -59,21 +60,12 @@ bool saveNestingWithinBudget(std::string_view text) {
 }
 
 // B7 (#25/#30 reserve dual-reality): bridge and stdlib names must never enter
-// saved state. The sandbox rejects them on the Lua side (isReservedVariableName
-// in lua_sandbox.cpp — this mirror must stay in sync with it); these two
-// createNextState* functions are the write-path choke-point, so the filter
-// lives here and not in every caller. Grandfathered slot files that already
-// contain such keys still load (decodeJson is untouched) — only new writes
-// are refused.
-bool isReservedStateKey(const std::string& key) {
-    static const std::unordered_set<std::string_view> kReserved = {
-        "rowl", "_G", "_ENV",
-        "math", "string", "table", "coroutine", "utf8",
-        "package", "io", "os", "debug",
-        "dofile", "loadfile", "load", "collectgarbage", "require", "module",
-    };
-    return key.empty() || kReserved.find(key) != kReserved.end();
-}
+// saved state. The sandbox rejects them on the Lua side (see
+// rowl/scripting/reserved_names.hpp); these two createNextState* functions are
+// the write-path choke-point, so the filter lives here and not in every
+// caller. Grandfathered slot files that already contain such keys still load
+// (decodeJson is untouched) — only new writes are refused.
+
 
 // D08 (a): tek-state obje kodlayıcı. Aktif state withThumbnail=true ile
 // yazılır (mevcut tel format birebir korunur); "history" halkaları
@@ -366,10 +358,10 @@ std::shared_ptr<const GameState> GameState::createNextState(
     // Structural sharing: only create new VariableMap if a variable actually changes
     // B7 (#25/#30): reserved bridge/stdlib names never enter saved state —
     // the write is dropped (the step/node transition still applies).
-    if (!varKey.empty() && isReservedStateKey(varKey)) {
+    if (!varKey.empty() && Rowl::Scripting::isReservedVariableName(varKey)) {
         ROWL_LOG_WARN("GameState dropped reserved variable key: '" + varKey + "'");
     }
-    if (!varKey.empty() && !isReservedStateKey(varKey)) {
+    if (!varKey.empty() && !Rowl::Scripting::isReservedVariableName(varKey)) {
         // Create new variable map only if the value is different from current
         bool valueChanged = true;
         if (current && current->variables) {
@@ -427,9 +419,9 @@ std::shared_ptr<const GameState> GameState::createNextStateWithVariables(
     auto variableMap = std::make_shared<VariableMap>();
     variableMap->data = nextVariables;
     // B7 (#25/#30): bulk write path — strip reserved keys (see choke-point
-    // note on isReservedStateKey).
+    // note on Rowl::Scripting::isReservedVariableName).
     for (auto it = variableMap->data.begin(); it != variableMap->data.end();) {
-        if (isReservedStateKey(it->first)) {
+        if (Rowl::Scripting::isReservedVariableName(it->first)) {
             ROWL_LOG_WARN("GameState dropped reserved variable key: '" + it->first + "'");
             it = variableMap->data.erase(it);
         } else {

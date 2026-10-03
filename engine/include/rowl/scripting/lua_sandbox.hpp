@@ -35,9 +35,9 @@ public:
     bool callOptionalFunction(const std::string& functionName, double deltaTime = 0.0);
     void shutdown();
 
-    void setVariable(const std::string& key, const std::string& value);
+    bool setVariable(const std::string& key, const std::string& value);
     std::string getVariable(const std::string& key) const;
-    void setGlobalNumber(const std::string& key, double value);
+    bool setGlobalNumber(const std::string& key, double value);
     double getGlobalNumber(const std::string& key, double defaultValue = 0.0) const;
 
     bool evaluateCondition(const std::string& conditionExpr);
@@ -161,9 +161,6 @@ private:
     /// Removes every global outside m_initialGlobals (lua_next-safe:
     /// collect-then-clear). Shared by clearVariables() and repairGlobals().
     void sweepStrayGlobals();
-    /// Bridge and standard-library names a script must never overwrite via
-    /// setVariable()/setGlobalNumber().
-    static bool isReservedVariableName(const std::string& key);
     /// A1 (H26): removes an impostor `rowl` key a module planted in its own
     /// environment via rawset (which bypasses the __newindex guard). Must use
     /// rawset, never setfield — the guard silently swallows `rowl` writes.

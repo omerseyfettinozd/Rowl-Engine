@@ -62,6 +62,10 @@ bool SessionPersistence::saveSlot(
         fs::create_directories(finalPath.parent_path());
 
         const std::string json = state->serializeJson();
+        if (json.size() > kMaxSaveFileBytes) {
+            ROWL_LOG_ERROR("Save payload exceeds kMaxSaveFileBytes");
+            return false;
+        }
         std::string writeError;
         if (!writeSlotFileAtomically(finalPath, json, &writeError)) {
             ROWL_LOG_ERROR("Failed to durably save slot #" +

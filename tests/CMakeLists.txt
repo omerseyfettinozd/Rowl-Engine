@@ -668,3 +668,8 @@ add_executable(test_p1_7_resize_save test_p1_7_resize_save.cpp)
 target_include_directories(test_p1_7_resize_save PRIVATE ${CMAKE_SOURCE_DIR}/engine/include)
 target_link_libraries(test_p1_7_resize_save PRIVATE RowlEngineCore)
 add_test(NAME test_p1_7_resize_save COMMAND test_p1_7_resize_save)
+
+add_executable(rowl_test_p1_save_gate test_p1_save_gate.cpp)
+target_link_libraries(rowl_test_p1_save_gate PRIVATE RowlEngineCore)
+target_include_directories(rowl_test_p1_save_gate PRIVATE ${CMAKE_SOURCE_DIR}/engine/include)
+add_test(NAME rowl_test_p1_save_gate COMMAND rowl_test_p1_save_gate)

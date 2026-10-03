@@ -3480,10 +3480,11 @@ uint64_t Engine::getCurrentStepId() const {
 }
 
 void Engine::setScriptVariable(const std::string& key, const std::string& value) {
+    bool accepted = true;
     if (m_luaSandbox) {
-        m_luaSandbox->setVariable(key, value);
+        accepted = m_luaSandbox->setVariable(key, value);
     }
-    if (m_gameState) {
+    if (accepted && m_gameState) {
         m_gameState = Rowl::State::GameState::createNextState(
             m_gameState, m_storyRuntime.currentNodeId(), key, value);
     }
