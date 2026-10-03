@@ -585,6 +585,14 @@ void test_vfs_security() {
     // The gate is a hash of the bytes as stored, so decompression was never
     // part of it. These locks pin both halves: a raw entry is gated, and a
     // stream open neither decodes nor materializes before the consumer reads.
+    //
+    // The "neither decodes nor materializes" half is measured through
+    // pkgEntryMaterializedBytes()/pkgEntryDecodedBytes(), which live INSIDE
+    // readEntry(). The zstd stream counters cannot see that pass at all — they
+    // only move in ZstdEntryStreamBuf::fill() — so a mutant that restored the
+    // materializing readEntry() call stayed green on them. pkgEntryDigestBytes()
+    // adds the complementary lock: the gate must still run, exactly once, over
+    // exactly the stored range.
     // ---------------------------------------------------------------------
     {
         const auto sha256Hex = [](const std::vector<uint8_t>& bytes) {
@@ -689,6 +697,45 @@ void test_vfs_security() {
         }
         TEST_PASS("P2-7 raw (flags=0) entries obey the manifest sha256 gate on read and stream");
 
+        // P2-8 ikinci yarısı: raw akış yolu tek bir geçişle doğrulanmalı. Raw
+        // dalı readEntry'e düşer ve readEntry kapıyı KENDİSİ çalıştırır;
+        // tryOpenStream de verifyEntryDigest çağırırsa aynı saklı aralık İKİ
+        // KEZ hashlenir (ölçülen 37x yavaşlama — saf SHA-256 32 MiB ~233 ms,
+        // gözlenen ~486 ms tam olarak iki geçiş). Bu sayaç UYGULAMADAN
+        // BAĞIMSIZ: kapının okuduğu toplam baytı sayar, iki yolun ikisinde de.
+        {
+            Rowl::VFS::RowlPkgDataSource rawStreamSource(
+                (testRoot / "p2_7_good_raw.rowlpkg").string());
+            const uint64_t readBase = Rowl::VFS::pkgEntryDigestBytes();
+            auto rawStream = rawStreamSource.tryOpenStream(goodRaw);
+            const uint64_t readDelta = Rowl::VFS::pkgEntryDigestBytes() - readBase;
+            if (!rawStream) {
+                std::cerr << "P2-8: a valid raw stream failed to open" << std::endl;
+                exit(1);
+            }
+            if (readDelta != rawPayload.size()) {
+                std::cerr << "P2-8: opening a raw stream hashed its stored bytes "
+                             << readDelta << " times for a " << rawPayload.size()
+                          << " byte entry (must be exactly one manifest gate pass)"
+                      << std::endl;
+                exit(1);
+            }
+            rawStream.reset();
+
+            // The read path must be single-pass too.
+            const uint64_t tryReadBase = Rowl::VFS::pkgEntryDigestBytes();
+            if (!rawStreamSource.tryRead(goodRaw).has_value()) {
+                std::cerr << "P2-8: a valid raw read failed" << std::endl;
+                exit(1);
+            }
+            if (Rowl::VFS::pkgEntryDigestBytes() - tryReadBase != rawPayload.size()) {
+                std::cerr << "P2-8: reading a raw entry hashed its stored bytes more than once"
+                          << std::endl;
+                exit(1);
+            }
+        }
+        TEST_PASS("P2-8 the manifest digest gate hashes each stored byte exactly once per open");
+
         // P2-8: opening a manifest-gated stream must not decode or materialize
         // the entry before the consumer reads. Baselines are taken around the
         // openStream call only (see test_audio_streaming.cpp for the same
@@ -743,6 +790,17 @@ void test_vfs_security() {
             const uint64_t openBaseRewinds = Rowl::VFS::zstdEntryStreamRewindCount();
             const uint64_t openBaseCompressed = Rowl::VFS::zstdEntryStreamCompressedBytes();
             const uint64_t openBaseDecompressed = Rowl::VFS::zstdEntryStreamDecompressedBytes();
+            // P2-8'in GERÇEK ölçümü. zstd akış sayaçları yalnız
+            // ZstdEntryStreamBuf::fill() içinde artar; tryOpenStream'in geri
+            // alınıp readEntry()'i bir doğrulama geçişi olarak çağırdığı
+            // (P2-8'in kaldırdığı) materyalize decode O SAYAÇLARA hiç
+            // dokunmadığı için bu iki ölçüm onu göremezdi — mutant yeşil
+            // kalıyordu. readEntry'in kendi geçişini sayan bu sayaçlar onu
+            // görür: materyalize edilen giriş genişliği ve decode edilen
+            // bayt. Akış açılışı ikisini de ARTIRMAMALIDIR.
+            const uint64_t openBaseMaterialized = Rowl::VFS::pkgEntryMaterializedBytes();
+            const uint64_t openBaseEntryDecoded = Rowl::VFS::pkgEntryDecodedBytes();
+            const uint64_t openBaseDigestBytes = Rowl::VFS::pkgEntryDigestBytes();
             auto stream = gatedSource.openStream(entryName);
             if (!stream || !stream->good()) {
                 std::cerr << "P2-8: a manifest-verified stream failed to open" << std::endl;
@@ -756,6 +814,30 @@ void test_vfs_security() {
                 std::cerr << "P2-8: openStream decoded or read the entry during verification "
                              "(the verified bytes are not the bytes the consumer reads)"
                           << std::endl;
+                exit(1);
+            }
+            // …ve — akış sayaçlarının göremediği — readEntry'in materyalize
+            // decode geçişini de reddet. Ölçülen geçiş olsa 32 MiB'lık bir
+            // girişte ~16 MiB ölü geçici bellek ve tam bir ZSTD_decompress
+            // demektir.
+            const uint64_t openMaterialized = Rowl::VFS::pkgEntryMaterializedBytes();
+            const uint64_t openEntryDecoded = Rowl::VFS::pkgEntryDecodedBytes();
+            if (openMaterialized != openBaseMaterialized ||
+                openEntryDecoded != openBaseEntryDecoded) {
+                std::cerr << "P2-8: openStream ran a materializing decode pass inside readEntry "
+                             "(materialized +"
+                          << (openMaterialized - openBaseMaterialized) << " B, decoded +"
+                          << (openEntryDecoded - openBaseEntryDecoded) << " B) — the verified "
+                             "bytes are not the bytes the consumer reads"
+                          << std::endl;
+                exit(1);
+            }
+            // The gate itself must still run, over exactly the stored range —
+            // skipping verification would satisfy the checks above trivially.
+            if (Rowl::VFS::pkgEntryDigestBytes() - openBaseDigestBytes != compressed.size()) {
+                std::cerr << "P2-8: openStream did not hash the stored range exactly once ("
+                          << (Rowl::VFS::pkgEntryDigestBytes() - openBaseDigestBytes) << " of "
+                          << compressed.size() << " stored bytes)" << std::endl;
                 exit(1);
             }
             if (Rowl::VFS::zstdEntryStreamRewindCount() != openBaseRewinds + 1) {

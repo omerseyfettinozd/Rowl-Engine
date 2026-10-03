@@ -185,6 +185,25 @@ std::optional<ManifestDigestIndex> buildManifestDigestIndex(
     return index;
 }
 
+// P2-8 kilit sayaclari: readEntry()'nin GORUNUR birakildigi olcum.
+// Yayimlanan zstd akis sayaclari SADECE ZstdEntryStreamBuf::fill() icinde
+// artar; readEntry'in ZSTD_decompress() cagrisi onlara hic dokunmaz. Bu
+// yuzden "stream acilisi materyalize bir decode yapmadi" iddiasi o
+// sayaclarla OLÇULEMEZDI — tryOpenStream'i eski haline (readEntry'i dogrulama
+// gecisi olarak cagirmaya) geri almak testi yesil birakti (mutant canli
+// kalmadi). Bu iki sayac tam olarak o gecisi gorur:
+//  - Materialized: readEntry'in entry-genislik tampona kopyaladigi bayt.
+//  - Decoded:      readEntry'in ZSTD_decompress ile urettigi bayt.
+// Ucuncu sayaç, kapinin okudugu bayt toplamini olcer ve IKI yolun ikisinde
+// de artar (buradaki verifyHashHex ve asagidaki verifyEntryDigest), boylece
+// "bir acilis/okuma sakli baytlari tam olarak bir kez hashler" olcumu
+// uygulamadan bagimsiz olur; cift hash regresyonu onu 2x'e cikarir.
+// Hepsi surec-geneli monoton, yalnizca gozler, davranisi degistirmez; yine
+// baz-deger alip delta okunur.
+std::atomic<uint64_t> g_pkgEntryMaterializedBytes{0};
+std::atomic<uint64_t> g_pkgEntryDecodedBytes{0};
+std::atomic<uint64_t> g_pkgEntryDigestBytes{0};
+
 /// Shape check for a manifest digest key: exactly 64 hex characters. Kept
 /// separate from the comparison so a caller can fail closed BEFORE spending
 /// any I/O on a key that can never match.
@@ -223,6 +242,7 @@ bool digestMatchesHex(const uint8_t digest[32], const std::string& expectedHex) 
 /// never verifies).
 bool verifyHashHex(const std::vector<uint8_t>& bytes, const std::string& expectedHex) {
     if (!isSha256Hex(expectedHex)) return false;
+    g_pkgEntryDigestBytes.fetch_add(bytes.size(), std::memory_order_relaxed);
     Detail::RowlSha256 context;
     Detail::rowlSha256Init(&context);
     if (!bytes.empty()) {
@@ -639,6 +659,12 @@ std::optional<std::vector<uint8_t>> RowlPkgDataSource::readEntry(const PackageEn
         }
     }
 
+    // P2-8 kilidi: readEntry gercekten bu entry'yi TAMAMEN materyalize ediyor.
+    // Bu sayac gecisi gorunur kilar. tryOpenStream'in ZSTD kolu readEntry'i
+    // KULLANMAMALIDIR (o kol verifyEntryDigest ile dogrulanir) — ham kol ise
+    // readEntry'e duser ve materyalizasyon zaten zorunludur.
+    g_pkgEntryMaterializedBytes.fetch_add(entry.compressedSize, std::memory_order_relaxed);
+
     // D18a-runtime: verify the bytes as stored in the archive against the
     // manifest digest BEFORE decoding — a silently substituted, truncated or
     // hash-invalidating corrupted payload fails the read instead of serving
@@ -676,6 +702,11 @@ std::optional<std::vector<uint8_t>> RowlPkgDataSource::readEntry(const PackageEn
             return std::nullopt;
         }
 
+        // P2-8 kilidi: tam-bos decode olcumu. Bir akis acilisinda bu sayac
+        // ARTMAYI gorunur kilar — akis, donen decode eden akis kendisi
+        // uretir, dogrulama gecisi uretmez.
+        g_pkgEntryDecodedBytes.fetch_add(entry.uncompressedSize, std::memory_order_relaxed);
+
         return decompressedBuffer;
     }
 
@@ -710,12 +741,21 @@ std::unique_ptr<std::istream> RowlPkgDataSource::tryOpenStream(const std::string
     // chunks and hashes them in place — no entry-wide buffer, no decoder —
     // and the same on-disk range is then decoded once by the returned stream.
     // Verified bytes and consumed bytes are therefore the same bytes.
-    if (!verifyEntryDigest(it->second, path)) return nullptr;
-
     if (it->second.flags == 1) {
+        if (!verifyEntryDigest(it->second, path)) return nullptr;
         auto stream = std::make_unique<ZstdEntryIStream>(m_filepath, it->second);
         return stream->good() ? std::move(stream) : nullptr;
     }
+    // Raw entries: NO verifyEntryDigest here. The raw branch falls through to
+    // readEntry() below, and readEntry() already runs the SAME manifest gate
+    // (unconditional since P2-7) before it hands back a single byte. Calling
+    // verifyEntryDigest as well hashed the identical stored range twice — a
+    // pure 2x regression on the raw stream path (measured 37x wall clock for a
+    // 32 MiB raw entry, because the two SHA-256 passes over 32 MiB cost ~2x233 ms).
+    // This is NOT a security regression: raw is still verified, one hash pass,
+    // inside readEntry. It only holds for raw; the zstd branch above cannot
+    // use readEntry without resurrecting the dead decode, so it verifies here.
+    //
     // Raw entries remain bounded by package validation. They do not require a
     // decoder. A2a: single lookup via readEntry (no exists probe), and the
     // bytes move into the stream — the old read()+copy+copy is one copy now.
@@ -745,30 +785,46 @@ bool RowlPkgDataSource::verifyEntryDigest(const PackageEntry& entry, const std::
     Detail::RowlSha256 context;
     Detail::rowlSha256Init(&context);
 
-    {
-        // Same shared-stream discipline as readEntry: the mutex covers only
-        // seek+read; hashing touches only the local context.
-        std::lock_guard<std::mutex> lock(m_fileMutex);
-        m_fileStream.clear();
-        m_fileStream.seekg(static_cast<std::streamoff>(entry.offset), std::ios::beg);
-        if (!m_fileStream.good()) {
-            ROWL_LOG_ERROR("Failed to seek to entry offset in package: " + path);
-            return false;
-        }
-
-        std::array<uint8_t, kCompressedReadChunkBytes> chunk{};
-        uint64_t remaining = entry.compressedSize;
-        while (remaining > 0) {
-            const auto want =
-                static_cast<std::streamsize>(std::min<uint64_t>(remaining, chunk.size()));
+    // Aynı paylaşımlı-akış disiplini readEntry'inkinin kendisi: KİLİT yalnız
+    // seek+read'i kapsar, hash KİLİT DIŞINDA beslenir.
+    //
+    // Yarış-durum kanıtı (okunan baytlar degismez):
+    //  1. Her yineleme MUTLAK bir konuma (entry.offset + okunan) seek eder.
+    //     Göreli konum paylaşımlı akışın nereye baktığına bağlı olsaydı
+    //     başka bir is parçacığının araya girmesi doğru olmayan baytları
+    //     okutmamıza yol açardı; mutlak ofset bu bağımlılığı tamamen keser.
+    //  2. seekg ile read() aynı lock_guard kapsamındadır; aralarında başka bir
+    //     parçacık m_fileStream'e erişemez, dolayısıyla read() tam olarak
+    //     (offset + okunan .. offset + okunan + want) aralığını okur.
+    //  3. Hash, kilit bırakıldıktan SONRA, kilidi tutan parçacığın dokunamadığı
+    //     yerel `chunk` tamponu üzerinde beslenir.
+    // Sonuç: kilit tutma süresi I/O ile sınırlı, hash maliyeti kilit dışında —
+    // eşzamanlı akış açmaları artık serileşmez.
+    std::array<uint8_t, kCompressedReadChunkBytes> chunk{};
+    uint64_t consumed = 0;
+    while (consumed < entry.compressedSize) {
+        const auto want = static_cast<std::streamsize>(
+            std::min<uint64_t>(entry.compressedSize - consumed, chunk.size()));
+        {
+            std::lock_guard<std::mutex> lock(m_fileMutex);
+            // #143: sticky failbit — her teşebbüs bayrakları temizler.
+            m_fileStream.clear();
+            m_fileStream.seekg(static_cast<std::streamoff>(entry.offset + consumed),
+                               std::ios::beg);
+            if (!m_fileStream.good()) {
+                ROWL_LOG_ERROR("Failed to seek to entry offset in package: " + path);
+                return false;
+            }
             m_fileStream.read(reinterpret_cast<char*>(chunk.data()), want);
             if (m_fileStream.gcount() != want) {
                 ROWL_LOG_ERROR("Failed to read stored data for: " + path);
                 return false;
             }
-            Detail::rowlSha256Update(&context, chunk.data(), static_cast<size_t>(want));
-            remaining -= static_cast<uint64_t>(want);
         }
+        // KİLİT DIŞI: yalnız yerel bağlam (context) ve yerel tampon.
+        Detail::rowlSha256Update(&context, chunk.data(), static_cast<size_t>(want));
+        g_pkgEntryDigestBytes.fetch_add(static_cast<uint64_t>(want), std::memory_order_relaxed);
+        consumed += static_cast<uint64_t>(want);
     }
 
     uint8_t digest[32];
@@ -790,6 +846,18 @@ uint64_t zstdEntryStreamCompressedBytes() {
 
 uint64_t zstdEntryStreamDecompressedBytes() {
     return g_zstdEntryStreamDecompressedBytes.load(std::memory_order_relaxed);
+}
+
+uint64_t pkgEntryMaterializedBytes() {
+    return g_pkgEntryMaterializedBytes.load(std::memory_order_relaxed);
+}
+
+uint64_t pkgEntryDecodedBytes() {
+    return g_pkgEntryDecodedBytes.load(std::memory_order_relaxed);
+}
+
+uint64_t pkgEntryDigestBytes() {
+    return g_pkgEntryDigestBytes.load(std::memory_order_relaxed);
 }
 
 } // namespace Rowl::VFS

@@ -94,4 +94,20 @@ uint64_t zstdEntryStreamRewindCount();
 uint64_t zstdEntryStreamCompressedBytes();
 uint64_t zstdEntryStreamDecompressedBytes();
 
+// P2-8 kilit sayacları: readEntry()'in materyalizasyonunu GÖRÜNÜR kılar.
+// Yukarıdaki zstd akış sayaçları yalnız ZstdEntryStreamBuf::fill() içinde
+// artar; readEntry'in ZSTD_decompress() geçişine hiç dokunmazlar, dolayısıyla
+// "stream açılışı materyalize bir decode yapmıyor" iddiası onlarla ölçülemez.
+//  - Materialized: readEntry'in entry-genişlik tampona kopyaladığı bayt.
+//  - Decoded:      readEntry'in ZSTD_decompress ile ürettiği bayt.
+// Aynı sözleşme: süreç-geneli monoton, yalnız gözler, davranışı değiştirmez;
+// ölçüm öncesi baz-değeri alıp yalnız delta karşılaştırın.
+uint64_t pkgEntryMaterializedBytes();
+uint64_t pkgEntryDecodedBytes();
+// Manifest-digest KAPISININ toplamda hashledigi bayt: hem readEntry'in tam
+// tamponlu geçişi hem akış yolunun parça-parça geçişi sayar. Uygulamadan
+// bağımsız ölçüm: bir açılış/okuma, saklı baytları tam olarak BİR kez
+// hashler (çift hash regresyonu bu sayacı 2x'e çıkarır).
+uint64_t pkgEntryDigestBytes();
+
 } // namespace Rowl::VFS
