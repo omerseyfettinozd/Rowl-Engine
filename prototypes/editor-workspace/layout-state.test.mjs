@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { initialState, openView, setCapacity, togglePin, closeView } from './workspace-state.mjs';
+import { initialState, VIEWS, openView, togglePin, closeView } from './workspace-state.mjs';
 import { initialLayout, layoutViews, leaves, syncLayout, dockView, resizeSplit } from './layout-state.mjs';
 
 function check(layout, state) {
@@ -17,7 +17,7 @@ function check(layout, state) {
   checkNonoverlap(layout.tree);
 }
 function three() {
-  const state = setCapacity(initialState(), 3).state;
+  const state = openView(openView(initialState(),'game').state,'edit').state;
   return {state, layout:syncLayout(initialLayout(), initialState(), state)};
 }
 
@@ -35,17 +35,14 @@ test('Node yanında Game ve Edit Scene üst üste; kardeşi taşıma ağacı sad
   assert.deepEqual(leaves(layout.tree.a), ['edit', 'node']);
 });
 
-test('Sabit olmayan üçüncü ekran mevcut bölmeyi devralır', () => {
-  const initial = initialState();
-  let state = togglePin(openView(initial, 'game').state, 'game').state;
-  let layout = syncLayout(initialLayout(), initial, state);
-  const id = layout.tree.id;
-  const next = openView(state, 'edit').state;
-  layout = syncLayout(layout, state, next);
-  assert.equal(layout.tree.id,id);
-  assert.deepEqual(leaves(layout.tree), ['edit','game']);
-  assert.deepEqual(next.pinned, ['game']);
-  check(layout, next);
+test('Araç pencereleri ayrı bir sütunda toplanır; sabit kaynak taşınamaz', () => {
+  let {layout,state}=three();
+  for(const view of ['hierarchy','inspector','assets','console']){const next=openView(state,view).state;layout=syncLayout(layout,state,next);state=next;check(layout,state);}
+  assert.equal(layout.tree.ratio,.74);
+  assert.deepEqual(leaves(layout.tree.a),['node','game','edit']);
+  assert.deepEqual(leaves(layout.tree.b),['hierarchy','inspector','assets','console']);
+  state=togglePin(state,'hierarchy').state;
+  assert.equal(dockView(layout,'hierarchy','node','top',state.pinned),layout);
 });
 
 test('Pencereler dört yönde alan bölerek yerleşir ve kopyalanmaz', () => {
@@ -91,7 +88,7 @@ test('İç içe bölme uç boyutlarda da pencereleri üst üste bindirmez', () =
 });
 
 test('Mobil başlangıçtan üçlü görünüm pencere alanını eşit paylaşır', () => {
-  const state = setCapacity(initialState(),3).state;
+  const state = openView(openView(initialState(),'game').state,'edit').state;
   const layout = syncLayout(initialLayout(),initialState(),state,'y');
   assert.equal(layout.tree.axis,'y');
   assert.equal(layout.tree.ratio,1/3);
@@ -106,14 +103,10 @@ test('Geçersiz ve kendi üzerine bırakma mevcut yerleşimi korur', () => {
   assert.equal(dockView(layout,'game','node','wrong'),layout);
 });
 
-test('Kapasite düşürme sabit paneli korur, kapatılan dalı kaldırır', () => {
-  let {layout,state} = three();
-  state = togglePin(state,'game').state;
-  const next = setCapacity(state,2).state;
-  layout = syncLayout(layout,state,next); check(layout,next);
+test('Elle kapatma dalı kaldırır, diğer sabit pencereyi korur',()=>{
+  let {layout,state}=three();state=togglePin(state,'game').state;
+  const next=closeView(state,'edit').state;layout=syncLayout(layout,state,next);check(layout,next);
   assert.ok(leaves(layout.tree).includes('game'));
-  const after = closeView(next,'edit').state;
-  layout = syncLayout(layout,next,after); check(layout,after);
 });
 
 test('Yeniden boyutlandırma erişilebilir sınırları korur', () => {
@@ -127,12 +120,12 @@ test('1000 karma işlemde her ekran tek alanda bulunur ve alanlar çakışmaz', 
   let {state,layout} = three(), seed=7;
   const random = n => { seed=(seed*1664525+1013904223)>>>0; return seed%n; };
   for (let i=0;i<1000;i++) {
-    const view = ['node','game','edit'][random(3)], target = ['node','game','edit'][random(3)];
+    const view = VIEWS[random(VIEWS.length)], target = VIEWS[random(VIEWS.length)];
     const action = random(5);
-    if (action === 0) layout = dockView(layout,view,target,['left','right','top','bottom'][random(4)]);
+    if (action === 0) layout = dockView(layout,view,target,['left','right','top','bottom'][random(4)],state.pinned);
     else if (action === 1 && layout.tree?.type==='split') layout = resizeSplit(layout,layout.tree.id,random(101)/100);
     else {
-      const next = action === 2 ? openView(state,view).state : action === 3 ? closeView(state,view).state : setCapacity(state,random(2)?2:3).state;
+      const next = action === 2 ? openView(state,view).state : action === 3 ? closeView(state,view).state : togglePin(state,view).state;
       layout = syncLayout(layout,state,next); state = next;
     }
     check(layout,state);

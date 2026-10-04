@@ -1,6 +1,6 @@
 # Rowl çalışma alanı — tarayıcı prototipi
 
-Motor ve Avalonia editöründen bağımsız, örnek veri kullanan tasarım denemesi.
+Motor ve Avalonia editöründen bağımsız, yerel örnek veri kullanan tasarım denemesi.
 Paket kurulumu ve derleme gerektirmez:
 
 ```sh
@@ -9,57 +9,63 @@ python3 -m http.server 4173 --bind 127.0.0.1 --directory prototypes/editor-works
 
 Tarayıcı: `http://127.0.0.1:4173`.
 
-## Ekranlar
+## Ekranlar ve araçlar
 
 - **Node:** örnek hikâye akışı ve sahne seçimi.
 - **Game:** oyun sahnesinin önizlemesi.
-- **Edit Scene:** sahnenin doğrudan düzenlenebilir görünümü. Ay, Mira ve diyalog kutusu tutulup sürüklenebilir; oyun çalışmıyorken konumları Game'e anında yansır. Seçili obje ok tuşlarıyla da taşınabilir; Shift adımı büyütür.
+- **Edit Scene:** aynı sahnede Ay, Mira ve diyalog kutusunu sürükleyerek düzenle. Seçili obje ok tuşlarıyla da taşınır; Shift adımı büyütür.
+- **Hiyerarşi:** seçili node'un objeleri; seçim Edit Scene ve Inspector ile ortak.
+- **Inspector:** seçili objenin konum/boyut yüzdeleri, görünürlüğü ve diyalog metni. Değerler sahne sınırlarında tutulur.
+- **Varlıklar:** örnek varlıkları isimle filtrele, seçerek Edit Scene'e geç.
+- **Konsol:** gerçek prototip etkileşimlerinin oturum kayıtları; Temizle ile boşaltılır.
 
-Edit Scene, inspector formu değildir. Inspector için ayrı bir kullanıcı tasarımı bekleniyor.
-Üstte üç ekran simgesi, yanlarında başlat/kapat ve duraklat/devam et; sağda küçük seçenek düğmesi var.
-
-## Oynatma
-
-- **▶ Başlat:** seçili sahnenin kopyasını oynatır, Game penceresini açar. Aynı düğme **■ Oyunu kapat** olur. Mevcut pencere sınırı ve sabitleme kuralları korunur.
-- **Ⅱ Duraklat:** Game'in o anki karesini dondurur. Tekrar tıklamak kaldığı yerden devam eder; bekleme süresi oynatıma eklenmez.
-- Yerel örnekte Mira'nın hafif hareketi ve diyalog yazısının görünmesi oynatımı gösterir. Duraklatınca ikisi de donar; Game'deki Devam et devre dışı kalır.
-- Edit Scene ve Node kullanılabilir. Sahne seçimleri/düzenlemeleri çalışan veya donmuş Game kopyasını değiştirmez. Oyunu kapatınca Game yeniden düzenlenen sahnenin önizlemesini gösterir.
-- Ekran simgesi yalnız pencereyi açar/kapatır; oyunu kapatmak için ■ kullanılır. Oyun kapalıyken duraklat devre dışıdır.
-- Bu, tarayıcı prototipinin örnek oynatımıdır; motor çalıştırılmaz.
+Üstte üç ana ekran simgesi, başlat/kapat ve duraklat/devam et var.
+Sağ alttaki yuvarlak **+**, üstüne doğru isimli araç düğmeleri açar. Ana ekran ve araç düğmeleri ikinci tıklamada aynı pencereyi kapatır.
 
 ## Pencere yerleşimi
 
-- Başlığı sürükle: başka pencerenin sol/sağ/üst/alt tarafına bırakınca o alan bölünür. Ortasına bırakıldığında da en yakın tarafa göre bölünür. Bölmeler iç içe kurulabilir; örneğin Node solda, Game ve Edit Scene sağda alt alta.
-- Bütün pencereler kendi bölmesinde kalır; birbirinin üstüne binmez. Serbest pencere modu kaldırıldı. Sürüklerken pencere yerinde kalır, yalnız hedef bölmenin önizlemesi gösterilir.
-- Bölmeler arasındaki çizgiler sürüklenerek boyutlandırılır. Klavyede çizgiye odaklanıp ok tuşları kullanılabilir.
-- Pencere başlığındaki yerleşim düğmesi aynı işlemler için dokunmatik/klavye alternatifi sunar: hedef pencere ve dört yön.
-- Escape veya pointer iptali sürüklemeyi geri alır. Alan dışına bırakılan pencere önceki konumunda kalır.
-- Mobilde yeni açılan pencereler varsayılan olarak alt alta yerleşir; kullanıcı yönlerini ve boyutlarını değiştirebilir. Üçlü başlangıçta alan dengeli paylaşılır.
+- Açık pencere sınırı ve otomatik pencere değiştirme kaldırıldı. Yedi pencere birlikte açılabilir; ilk açılışta yalnız Node açık.
+- Başlığı başka pencerenin sol/sağ/üst/alt tarafına sürükle: hedef alan bölünür. Pencereler kendi bölmelerinde kalır, birbirine binmez. Örneğin Node solda; Game ve Edit Scene sağda alt alta.
+- Araçlar masaüstünde sağ sütunda, mobilde altta gruplanır. Mobil çalışma alanı gerektiğinde aşağı kayar; her araç kendi içinde de kaydırılabilir.
+- Bölme çizgisini sürükle veya klavyede odaklayıp ok tuşlarını kullan.
+- Başlıktaki yerleşim menüsü dokunmatik/klavye için hedef ve yön seçimi sunar.
+- **Sabitleme**, başlıktan sürüklemeyi ve menüden taşımayı kilitler. Bölme boyutları ayarlanabilir; sabit pencere elle kapatılabilir.
+- Görünür **×**, son pencere dahil herhangi bir pencereyi kapatır; kapanan pencerenin sabitlemesi temizlenir.
+- Escape/pointer iptali sürüklemeyi geri alır; alan dışına bırakma eski konumu korur.
 
-## Açık pencere sınırı ve sabitleme
+## Proje menüsü
 
-- Başlangıçta yalnız Node açık, sınır iki pencere. Üst simge gizli ekranı açar; aynı simgeye tekrar basmak açık ekranı kapatır. Sabit ve son pencere de böyle kapatılabilir.
-- Sağ üst seçenek menüsünde üç pencere seçimi tüm ekranları açar. İkiye dönüş sabit olmayan en eski pencereyi kapatır.
-- Her pencerenin başlığında yerleşim, sabitleme ve görünür **× kapatma** düğmeleri var. Çok dar pencerede sabitleme yerleşim menüsünden de kullanılabilir.
-- **Pencereyi sabitle**, otomatik ekran değiştirmede o pencerenin korunmasını sağlar. Kullanıcı sabit pencereyi bizzat taşıyabilir veya × ile kapatabilir.
-- İki pencere doluyken üçüncü simge, sabit olmayan en eski pencerenin aynı bölmesini devralır.
-- Bütün açık pencereler sabitse yeni ekran açılmaz; açıklama gösterilir. Üçü sabitse ikiye geçmeden sabitleme kaldırılmalıdır.
-- ×, son açık pencere dahil herhangi bir pencereyi kapatır. Boş çalışma alanında üst simgelerden yeniden ekran açılabilir. Kapatılan pencerenin sabitlemesi kaldırılır. Seçenek menüsündeki başlangıca dön eylemi örnek veriyi ve yerleşimi sıfırlar.
+Sağ üst **…** üzerinden:
 
-## Doğrulama — 2026-10-04
+- **Proje ayarları:** proje adı.
+- **Oyun ayarları:** yatay/dikey çözünürlük ve başlangıç sahnesi.
+- **Editör tercihleri:** Node ızgarası ve Edit Scene obje çerçeveleri.
+- **Dışa aktar:** sahne verileri, ayarlar ve yerleşimin yerel JSON taslağı; gerçek motor derlemesi değildir.
+- **Yerleşimi sıfırla:** açık pencereleri varsayılan yerleşime getirir; obje düzenlemeleri, ayarlar ve oynatma korunur.
 
-21 durum testi: pencere kuralları ve 1000 karma işlemde alanların çakışmamasına ek olarak üst simgeyle kapatma, oynatma kopyasının bağımsızlığı, hareket/yazının donması, devam etme ve yeniden başlatma.
+Ayarlar bu tarayıcının localStorage alanında saklanır. Örnek sahne düzenlemeleri, yerleşim ve oynatma sayfa yenilendiğinde sıfırlanır.
+
+## Oynatma
+
+- **▶ Başlat:** ayarlardaki başlangıç sahnesinin bağımsız kopyasını oynatır, Game'i açar; düğme **■ Oyunu kapat** olur.
+- **Ⅱ Duraklat:** Mira hareketi ve diyalog yazısını mevcut karede dondurur; tekrar tıklamak kaldığı yerden devam eder. Bekleme süresi oynatıma eklenmez.
+- Node, Edit Scene ve Inspector kullanılabilir; düzenleme verileri çalışan/donmuş Game kopyasını değiştirmez. ■ ile kapatınca Game düzenleme önizlemesine döner.
+- Ekran simgesi yalnız pencereyi açar/kapatır. Game'de Devam et duraklatılmışken; duraklat düğmesi oyun kapalıyken devre dışıdır.
+
+## Doğrulama — 2026-10-05
+
+22 durum testi: yedi pencere açma, sabit/son pencere kapatma, odak, dört yönlü yerleşim, pin kilidi, oran sınırları, 1000 karma işlemde alanların çakışmaması; ayar doğrulama ve Inspector sınırları; bağımsız oynatma kopyası, donma ve devam etme.
 
 ```sh
 node --test prototypes/editor-workspace/*.test.mjs
 ```
 
-Son düzeltmede masaüstü ve 390×844 görünümde başlığı başka pencerenin ortasına bırakma kontrol edildi; sonuçta pencerelerin gerçek DOM alanları çakışmadı. Bölme boyutlandırma ve dört yönlü yerleşim menüsü çalışıyor. Kapatma, sabitleme ve üst simgeden yeniden açma korunuyor.
-Yeni oynatma kontrolleri masaüstünde doğrulandı: başlat/kapat dönüşümü, duraklatılan karenin Node sahne seçimi değişse bile aynı kalması, kaldığı yerden devam ve kapatınca düzenleme önizlemesine dönüş. Üst simgeden son pencereyi ve Game'i kapatma da doğrulandı. 320×740 görünümde beş üst düğme ve seçenekler taşmadan sığıyor; 390×844 oynatma/duraklatma önizlemesi kaydedildi.
-Bu kontrol gerçek mobil cihaz kabulü değildir.
+Tarayıcıda 1440×900'de yedi pencere birlikte açıldı; DOM alanları çakışmadı. Hiyerarşi seçiminden Inspector konum/görünürlük düzenleme, Edit Scene'e yansıma ve donmuş Game kopyasının değişmemesi doğrulandı. Varlık filtreleme/seçim, Konsol kayıtları, sabit pencerenin yön düğmelerinin kapanması kontrol edildi. Çözünürlük ve başlangıç sahnesi uygulandı; yenileme sonrası korundu. Izgara/çerçeve tercihleri uygulandı. İndirilen JSON açılarak üç sahne, yedi pencere ve ayarlar doğrulandı.
 
-Siyah/kemik beyazı paleti mevcut KARAR-0 kararından gelir. SVG sahne yereldir; harici font, resim, API veya motor bağlantısı yoktur. Örnek veri sayfa yenilenince sıfırlanır.
+390×844'te beş pencere çakışmadan alt alta açıldı; Inspector'a kaydırarak ulaşıldı. 320×740'ta üst kontroller ve dört araç düğmesi ekrana sığdı. Gerçek mobil cihaz kabulü yapılmadı.
 
-![Masaüstü karma pencere düzeni](previews/desktop.jpg)
+Siyah/kemik beyazı palet, yerel SVG sahne. Harici font, resim, API veya motor bağlantısı yok.
 
-[Mobil ekran görüntüsü](previews/mobile.jpg)
+![Masaüstü araç pencereleri](previews/desktop.jpg)
+
+[Mobil araç pencereleri](previews/mobile.jpg)

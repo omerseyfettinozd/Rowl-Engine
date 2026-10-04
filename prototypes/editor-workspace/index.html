@@ -6,6 +6,7 @@
   <meta name="theme-color" content="#0a0a0b">
   <title>Rowl — Çalışma alanı prototipi</title>
   <link rel="stylesheet" href="./style.css">
+  <link rel="stylesheet" href="./tools.css">
 </head>
 <body>
   <svg class="icon-library" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -26,6 +27,11 @@
     <symbol id="i-reset" viewBox="0 0 24 24"><path d="M3 9a9 9 0 1 1 0 6M3 3v6h6"/></symbol>
     <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></symbol>
     <symbol id="i-layout" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M12 3v18m0-9h9"/></symbol>
+    <symbol id="i-hierarchy" viewBox="0 0 24 24"><path d="M5 4v15h5M5 7h5M5 13h5"/><rect x="10" y="4" width="10" height="6" rx="2"/><rect x="10" y="16" width="10" height="6" rx="2"/></symbol>
+    <symbol id="i-inspector" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16M8 3v6M16 9v6M10 15v6"/></symbol>
+    <symbol id="i-assets" viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 0 1 2-2h5l3 4h6a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></symbol>
+    <symbol id="i-console" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></symbol>
+    <symbol id="i-export" viewBox="0 0 24 24"><path d="M12 3v12m-4-4 4 4 4-4M4 16v5h16v-5"/></symbol>
     <symbol id="i-move" viewBox="0 0 24 24"><path d="M12 3v18M3 12h18m-12-6 3-3 3 3m-6 12 3 3 3-3m-9-9-3 3 3 3m12-6 3 3-3 3"/></symbol>
   </svg>
 
@@ -42,10 +48,13 @@
     </nav>
     <button class="icon-button" id="options" aria-label="Çalışma alanı seçenekleri" aria-expanded="false" aria-controls="options-menu" title="Seçenekler"><svg><use href="#i-more"/></svg></button>
     <div class="options-menu popover" id="options-menu" hidden>
-      <span class="menu-label">Açık pencere sınırı</span>
-      <div class="segmented" role="group" aria-label="Açık pencere sınırı"><button data-capacity="2">2 pencere</button><button data-capacity="3">3 pencere</button></div>
-      <button class="menu-row" id="reset"><svg><use href="#i-reset"/></svg>Başlangıca dön</button>
-      <p>Pencere başlığını sürükle.<br>Başka alana bırak: böl ve yerleştir.<br>Aradaki çizgiden boyutlandır.</p>
+      <span class="menu-label">PROJE</span>
+      <button class="menu-row" data-settings="project"><svg><use href="#i-assets"/></svg>Proje ayarları</button>
+      <button class="menu-row" data-settings="game"><svg><use href="#i-game"/></svg>Oyun ayarları</button>
+      <button class="menu-row" data-settings="export"><svg><use href="#i-export"/></svg>Dışa aktar</button>
+      <span class="menu-label menu-section">EDİTÖR</span>
+      <button class="menu-row" data-settings="editor"><svg><use href="#i-inspector"/></svg>Editör tercihleri</button>
+      <button class="menu-row" id="reset"><svg><use href="#i-reset"/></svg>Yerleşimi sıfırla</button>
     </div>
   </header>
   <main class="workspace" id="workspace" aria-label="Editör çalışma alanı"><div class="dock-root" id="dock-root"></div><div class="empty-state" id="empty-state" hidden><svg aria-hidden="true"><use href="#i-layout"/></svg><span>Üstteki simgelerden bir ekran aç.</span></div><div class="drop-preview" id="drop-preview" hidden><span></span></div><div class="drag-label" id="drag-label" hidden></div></main>
@@ -57,6 +66,27 @@
     <button class="menu-row" id="menu-pin"><svg><use href="#i-pin"/></svg><span>Paneli sabitle</span></button>
     <button class="menu-row" id="menu-close"><svg><use href="#i-close"/></svg>Pencereyi kapat</button>
   </div>
+  <div class="tools-launcher">
+    <div id="tools-menu" class="tool-shortcuts" hidden aria-label="Editör araçları">
+      <button data-tool="hierarchy" aria-pressed="false"><span>Hiyerarşi</span><svg><use href="#i-hierarchy"/></svg></button>
+      <button data-tool="inspector" aria-pressed="false"><span>Inspector</span><svg><use href="#i-inspector"/></svg></button>
+      <button data-tool="assets" aria-pressed="false"><span>Varlıklar</span><svg><use href="#i-assets"/></svg></button>
+      <button data-tool="console" aria-pressed="false"><span>Konsol</span><svg><use href="#i-console"/></svg></button>
+    </div>
+    <button id="tools-toggle" class="tools-toggle" aria-label="Araçları aç" aria-expanded="false" aria-controls="tools-menu"><svg><use href="#i-plus"/></svg></button>
+  </div>
+  <dialog id="settings-dialog" aria-labelledby="settings-title">
+    <form id="settings-form">
+      <header class="dialog-header"><div><span class="tool-caption">ROWL / ÇALIŞMA ALANI</span><h2 id="settings-title"></h2></div><button type="button" class="icon-button" data-dismiss aria-label="Ayarları kapat"><svg><use href="#i-close"/></svg></button></header>
+      <div class="dialog-body">
+        <section data-settings-section="project"><label>Proje adı<input name="project" maxlength="80" required></label></section>
+        <section data-settings-section="game"><label>Sahne çözünürlüğü<select name="resolution"><option value="1280x800">1280 × 800 · Yatay</option><option value="1920x1080">1920 × 1080 · Yatay</option><option value="1080x1920">1080 × 1920 · Dikey</option></select></label><label>Oyunun başlangıç sahnesi<select name="startScene"><option value="selected">Seçili node</option><option value="0">Bir gece, bir ışık</option><option value="1">Yol ayrımı</option><option value="2">Yeni bir sabah</option></select></label></section>
+        <section data-settings-section="editor"><label class="check-row"><input type="checkbox" name="grid"> Node ızgarası</label><label class="check-row"><input type="checkbox" name="guides"> Edit Scene obje çerçeveleri</label></section>
+        <section data-settings-section="export"><div class="export-card"><svg><use href="#i-export"/></svg><strong>Proje taslağı</strong><p>Sahneleri, obje özelliklerini, ayarları ve pencere yerleşimini JSON dosyası olarak indir.</p><span class="muted">Format · Rowl prototip JSON</span></div></section>
+      </div>
+      <footer class="dialog-footer"><button type="button" class="text-button" data-dismiss>Vazgeç</button><button type="submit" class="primary-button" id="settings-submit">Uygula</button></footer>
+    </form>
+  </dialog>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <template id="node-template">
     <div class="node-area">
