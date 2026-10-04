@@ -1,5 +1,5 @@
 import { initialState, focusView, openView, closeView, togglePin, setCapacity } from './workspace-state.mjs';
-import { initialLayout, syncLayout, dockView, dockToWorkspace, floatView, resizeSplit, clampRect } from './layout-state.mjs';
+import { initialLayout, syncLayout, dockView, resizeSplit } from './layout-state.mjs';
 
 const names = { node: 'Node', game: 'Game', edit: 'Edit Scene' };
 const defaults = [
@@ -12,13 +12,13 @@ const objectNames = { moon: 'Ay', character: 'Mira', dialogue: 'Diyalog' };
 const newScenes = () => defaults.map(scene => ({ ...scene, objects: structuredClone(baseObjects) }));
 let scenes = newScenes(), sceneIndex = 0, selectedObject = 'character';
 let state = initialState(), layout = initialLayout(), zoom = 1, toastTimer, gesture = null, placementView = null;
-const workspace = document.querySelector('#workspace'), dockRoot = document.querySelector('#dock-root'), floatLayer = document.querySelector('#float-layer');
+const workspace = document.querySelector('#workspace'), dockRoot = document.querySelector('#dock-root');
 const placement = document.querySelector('#placement-menu'), options = document.querySelector('#options-menu');
 const panels = new Map();
 for (const view of Object.keys(names)) {
   const panel = document.createElement('section');
   panel.className = 'panel'; panel.dataset.panel = view; panel.setAttribute('aria-label', `${names[view]} penceresi`);
-  panel.innerHTML = `<header class="panel-header" data-drag="${view}" title="Pencereyi taşımak için başlığı sürükle"><div class="panel-title"><svg aria-hidden="true"><use href="#i-${view}"/></svg><span>${names[view]}</span></div><div class="panel-actions"><button class="icon-button placement-button" data-placement="${view}" aria-label="${names[view]} pencere düzeni" title="Pencereyi yerleştir"><svg aria-hidden="true"><use href="#i-layout"/></svg></button><button class="icon-button pin-button" data-pin="${view}" aria-label="${names[view]} penceresini sabitle" title="Pencereyi sabitle"><svg aria-hidden="true"><use href="#i-pin"/></svg></button><button class="icon-button close-button" data-close="${view}" aria-label="${names[view]} penceresini kapat" title="Pencereyi kapat"><svg aria-hidden="true"><use href="#i-close"/></svg></button></div></header><div class="panel-content"></div><button class="resize-handle" data-resize="${view}" aria-label="${names[view]} pencere boyutunu değiştir"></button>`;
+  panel.innerHTML = `<header class="panel-header" data-drag="${view}" title="Pencereyi taşımak için başlığı sürükle"><div class="panel-title"><svg aria-hidden="true"><use href="#i-${view}"/></svg><span>${names[view]}</span></div><div class="panel-actions"><button class="icon-button placement-button" data-placement="${view}" aria-label="${names[view]} pencere düzeni" title="Pencereyi yerleştir"><svg aria-hidden="true"><use href="#i-layout"/></svg></button><button class="icon-button pin-button" data-pin="${view}" aria-label="${names[view]} penceresini sabitle" title="Pencereyi sabitle"><svg aria-hidden="true"><use href="#i-pin"/></svg></button><button class="icon-button close-button" data-close="${view}" aria-label="${names[view]} penceresini kapat" title="Pencereyi kapat"><svg aria-hidden="true"><use href="#i-close"/></svg></button></div></header><div class="panel-content"></div>`;
   const content = document.querySelector(view === 'node' ? '#node-template' : '#scene-template').content.cloneNode(true);
   if (view !== 'node') {
     // Each copy has its own SVG gradient identifiers.
@@ -62,7 +62,6 @@ function updateControls() {
     pin.setAttribute('aria-pressed', String(pinned));
     pin.setAttribute('aria-label', `${names[view]} penceresinin ${pinned ? 'sabitlemesini kaldır' : 'yerini sabitle'}`);
     pin.title = pinned ? 'Sabitlemeyi kaldır' : 'Pencereyi sabitle';
-    panel.style.zIndex = layout.floating[view] ? (state.focused === view ? 12 : 10) : '';
   }
 }
 function focus(view) { state = focusView(state, view); updateControls(); }
@@ -78,18 +77,11 @@ function treeElement(tree) {
   divider.setAttribute('aria-valuemin', '20'); divider.setAttribute('aria-valuemax', '80'); divider.setAttribute('aria-valuenow', String(Math.round(tree.ratio * 100)));
   element.append(a, divider, b); return element;
 }
-function positionFloat(view, rect) {
-  const panel = panels.get(view);
-  panel.style.left = `${rect.x}%`; panel.style.top = `${rect.y}%`; panel.style.width = `${rect.w}%`; panel.style.height = `${rect.h}%`;
-}
 function render() {
   const active = document.activeElement;
-  for (const panel of panels.values()) { panel.remove(); panel.classList.remove('is-floating'); panel.style.cssText = ''; }
-  dockRoot.replaceChildren(); floatLayer.replaceChildren();
+  for (const panel of panels.values()) panel.remove();
+  dockRoot.replaceChildren();
   const tree = treeElement(layout.tree); if (tree) dockRoot.append(tree);
-  for (const [view, rect] of Object.entries(layout.floating)) {
-    const panel = panels.get(view); panel.classList.add('is-floating'); positionFloat(view, rect); floatLayer.append(panel);
-  }
   updateControls(); updateScene(); fitViews();
   document.querySelector('#empty-state').hidden = state.visible.length > 0;
   if (active && active !== document.body && active.isConnected) active.focus({ preventScroll: true });
@@ -131,9 +123,8 @@ function showPlacement(view, button) {
   closeMenus(); placementView = view;
   document.querySelector('#placement-title').textContent = `${names[view]} · yerleştir`;
   const target = document.querySelector('#placement-target'); target.replaceChildren();
-  state.visible.filter(v => v !== view && !layout.floating[v]).forEach(v => { const option = document.createElement('option'); option.value = v; option.textContent = names[v]; target.append(option); });
+  state.visible.filter(v => v !== view).forEach(v => { const option = document.createElement('option'); option.value = v; option.textContent = names[v]; target.append(option); });
   placement.querySelectorAll('[data-edge]').forEach(el => { el.disabled = !target.options.length; });
-  placement.querySelector('[data-dock-root]').hidden = !layout.floating[view];
   document.querySelector('#menu-pin span').textContent = state.pinned.includes(view) ? 'Sabitlemeyi kaldır' : 'Pencereyi sabitle';
   document.querySelector('#menu-pin').title = 'Diğer ekran açıldığında bu pencere açık kalır.';
   placement.hidden = false;
@@ -141,35 +132,24 @@ function showPlacement(view, button) {
   placement.style.left = `${Math.max(8, Math.min(innerWidth - 250, rect.right - 242))}px`;
   placement.style.top = `${Math.max(60, Math.min(innerHeight - placement.offsetHeight - 8, rect.bottom + 5))}px`;
 }
-function floatRectAt(x, y, original) {
-  const bounds = workspace.getBoundingClientRect();
-  const w = Math.min(100, original.width / bounds.width * 100), h = Math.min(100, original.height / bounds.height * 100);
-  return clampRect({ x: (x - bounds.left - original.offsetX) / bounds.width * 100, y: (y - bounds.top - original.offsetY) / bounds.height * 100, w, h });
-}
 function dropTarget(x, y, source) {
-  const target = document.elementsFromPoint(x, y).map(el => el.closest?.('[data-panel]')).find(el => el && el.dataset.panel !== source && !layout.floating[el.dataset.panel]);
-  if (!target) {
-    const rect = workspace.getBoundingClientRect(), px=(x-rect.left)/rect.width, py=(y-rect.top)/rect.height;
-    if (!layout.tree && Math.min(px,1-px,py,1-py)<.18) return {target:'workspace',edge:'fill',rect};
-    return null;
-  }
+  const target = document.elementsFromPoint(x, y).map(el => el.closest?.('[data-panel]')).find(el => el && el.dataset.panel !== source);
+  if (!target) return null;
   const rect = target.getBoundingClientRect(), px = (x - rect.left) / rect.width, py = (y - rect.top) / rect.height;
   const distances = { left: px, right: 1 - px, top: py, bottom: 1 - py };
   const edge = Object.keys(distances).sort((a, b) => distances[a] - distances[b])[0];
-  if (distances[edge] > .28) return null;
   return { target: target.dataset.panel, edge, rect };
 }
-function showDrop(drop, rect) {
-  const preview = document.querySelector('#drop-preview'), bounds = workspace.getBoundingClientRect();
-  let x, y, w, h, label;
-  if (drop) {
-    ({ left:x, top:y, width:w, height:h } = drop.rect); x -= bounds.left; y -= bounds.top;
-    if (['left', 'right'].includes(drop.edge)) { w /= 2; if (drop.edge === 'right') x += w; }
-    else if (drop.edge !== 'fill') { h /= 2; if (drop.edge === 'bottom') y += h; }
-    label = { left:'Sola yerleştir', right:'Sağa yerleştir', top:'Üste yerleştir', bottom:'Alta yerleştir', fill:'Çalışma alanına yerleştir' }[drop.edge];
-  } else { x = rect.x / 100 * bounds.width; y = rect.y / 100 * bounds.height; w = rect.w / 100 * bounds.width; h = rect.h / 100 * bounds.height; label = 'Serbest pencere'; }
+function showDrop(drop) {
+  const preview = document.querySelector('#drop-preview');
+  if (!drop) { preview.hidden = true; return; }
+  const bounds = workspace.getBoundingClientRect();
+  let { left:x, top:y, width:w, height:h } = drop.rect;
+  x -= bounds.left; y -= bounds.top;
+  if (['left', 'right'].includes(drop.edge)) { w /= 2; if (drop.edge === 'right') x += w; }
+  else { h /= 2; if (drop.edge === 'bottom') y += h; }
   preview.hidden = false; preview.style.cssText = `left:${x}px;top:${y}px;width:${w}px;height:${h}px;`;
-  preview.querySelector('span').textContent = label;
+  preview.querySelector('span').textContent = { left:'Sola yerleştir', right:'Sağa yerleştir', top:'Üste yerleştir', bottom:'Alta yerleştir' }[drop.edge];
 }
 function startGesture(event, data) {
   gesture = { ...data, pointerId:event.pointerId, startX:event.clientX, startY:event.clientY };
@@ -179,15 +159,14 @@ workspace.addEventListener('pointerdown', event => {
   if (event.button !== 0 || gesture) return;
   const panel = event.target.closest('[data-panel]'); if (panel) focus(panel.dataset.panel);
   const object = event.target.closest('.editable [data-object]');
-  const divider = event.target.closest('[data-divider]'), resize = event.target.closest('[data-resize]'), header = event.target.closest('[data-drag]');
+  const divider = event.target.closest('[data-divider]'), header = event.target.closest('[data-drag]');
   if (object) {
     selectedObject = object.dataset.object; object.focus({preventScroll:true}); updateScene();
     startGesture(event, {type:'object', object:selectedObject, scene:sceneIndex, original:{...scenes[sceneIndex].objects[selectedObject]}, bounds:object.closest('.game-frame').getBoundingClientRect()});
   } else if (divider) startGesture(event, {type:'divider', id:divider.dataset.divider, element:divider, axis:divider.parentElement.dataset.axis, bounds:divider.parentElement.getBoundingClientRect(), originalLayout:layout});
-  else if (resize) startGesture(event, {type:'resize', view:resize.dataset.resize, original:{...layout.floating[resize.dataset.resize]}, bounds:workspace.getBoundingClientRect()});
   else if (header && !event.target.closest('button')) {
-    closeMenus(); const rect = panel.getBoundingClientRect();
-    startGesture(event, {type:'panel', view:panel.dataset.panel, original:{width:rect.width,height:rect.height,offsetX:event.clientX-rect.left,offsetY:event.clientY-rect.top}, moved:false});
+    closeMenus();
+    startGesture(event, {type:'panel', view:panel.dataset.panel, moved:false});
   }
 });
 workspace.addEventListener('pointermove', event => {
@@ -203,27 +182,20 @@ workspace.addEventListener('pointermove', event => {
     const value = Math.max(.2, Math.min(.8, ratio));
     gesture.element.previousElementSibling.style.flex = `${value} 1 0`; gesture.element.nextElementSibling.style.flex = `${1-value} 1 0`;
     gesture.element.setAttribute('aria-valuenow', String(Math.round(value*100))); fitViews();
-  } else if (gesture.type === 'resize') {
-    const rect = clampRect({...gesture.original,w:gesture.original.w+dx/gesture.bounds.width*100,h:gesture.original.h+dy/gesture.bounds.height*100});
-    // Keep the top-left fixed while limiting the resize to the workspace.
-    rect.x = gesture.original.x; rect.y = gesture.original.y; rect.w = Math.min(rect.w,100-rect.x); rect.h = Math.min(rect.h,100-rect.y);
-    layout = {...layout,floating:{...layout.floating,[gesture.view]:rect}}; positionFloat(gesture.view,rect); fitViews();
   } else if (Math.abs(dx)+Math.abs(dy)>7 || gesture.moved) {
     gesture.moved = true; document.body.classList.add('dragging');
     const label = document.querySelector('#drag-label'); label.hidden=false; label.textContent=names[gesture.view]; label.style.left=`${event.clientX+14}px`; label.style.top=`${event.clientY+14}px`;
-    gesture.rect = floatRectAt(event.clientX,event.clientY,gesture.original); gesture.drop = dropTarget(event.clientX,event.clientY,gesture.view);
+    gesture.drop = dropTarget(event.clientX,event.clientY,gesture.view);
     const bounds=workspace.getBoundingClientRect(); gesture.outside=event.clientX<bounds.left||event.clientX>bounds.right||event.clientY<bounds.top||event.clientY>bounds.bottom;
-    showDrop(gesture.drop,gesture.rect);
-    if (layout.floating[gesture.view]) positionFloat(gesture.view,gesture.rect);
+    showDrop(gesture.outside ? null : gesture.drop);
   }
 });
 function endGesture(cancel = false) {
   if (!gesture) return;
   const current = gesture; gesture = null;
   if (workspace.hasPointerCapture(current.pointerId)) workspace.releasePointerCapture(current.pointerId);
-  if (current.type === 'panel' && current.moved && !cancel && !current.outside) layout = current.drop ? current.drop.target==='workspace' ? dockToWorkspace(layout,current.view) : dockView(layout,current.view,current.drop.target,current.drop.edge) : floatView(layout,current.view,current.rect);
+  if (current.type === 'panel' && current.moved && !cancel && !current.outside && current.drop) layout = dockView(layout,current.view,current.drop.target,current.drop.edge);
   if (cancel && current.type === 'object') { scenes[current.scene].objects[current.object] = current.original; updateScene(); }
-  if (cancel && current.type === 'resize') layout = {...layout,floating:{...layout.floating,[current.view]:current.original}};
   if (cancel && current.type === 'divider') layout = current.originalLayout;
   document.body.classList.remove('dragging'); document.querySelector('#drop-preview').hidden=true; document.querySelector('#drag-label').hidden=true;
   if (current.type !== 'object') render();
@@ -261,8 +233,6 @@ document.querySelector('#options').addEventListener('click',()=>{ const open=opt
 placement.addEventListener('click',event=>{
   const edge=event.target.closest('[data-edge]');
   if (edge) { layout=dockView(layout,placementView,document.querySelector('#placement-target').value,edge.dataset.edge); closeMenus(); render(); }
-  else if (event.target.closest('[data-floating]')) { layout=floatView(layout,placementView,layout.floating[placementView]||{x:workspace.clientWidth<650?4:20,y:10,w:workspace.clientWidth<650?92:60,h:65}); closeMenus(); render(); }
-  else if (event.target.closest('[data-dock-root]')) { layout=dockToWorkspace(layout,placementView,workspace.clientWidth<650?'y':'x'); closeMenus(); render(); }
   else if (event.target.closest('#menu-pin')) apply(togglePin(state,placementView));
   else if (event.target.closest('#menu-close')) apply(closeView(state,placementView));
 });

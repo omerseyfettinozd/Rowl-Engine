@@ -23,7 +23,6 @@
     <symbol id="i-reset" viewBox="0 0 24 24"><path d="M3 9a9 9 0 1 1 0 6M3 3v6h6"/></symbol>
     <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></symbol>
     <symbol id="i-layout" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M12 3v18m0-9h9"/></symbol>
-    <symbol id="i-float" viewBox="0 0 24 24"><rect x="3" y="7" width="14" height="14" rx="2"/><rect x="8" y="3" width="13" height="13" rx="2"/></symbol>
     <symbol id="i-move" viewBox="0 0 24 24"><path d="M12 3v18M3 12h18m-12-6 3-3 3 3m-6 12 3 3 3-3m-9-9-3 3 3 3m12-6 3 3-3 3"/></symbol>
   </svg>
 
@@ -40,17 +39,15 @@
       <span class="menu-label">Açık pencere sınırı</span>
       <div class="segmented" role="group" aria-label="Açık pencere sınırı"><button data-capacity="2">2 pencere</button><button data-capacity="3">3 pencere</button></div>
       <button class="menu-row" id="reset"><svg><use href="#i-reset"/></svg>Başlangıca dön</button>
-      <p>Pencere başlığını sürükle.<br>Kenarına bırak: yerleştir.<br>Ortasına bırak: serbest pencere.</p>
+      <p>Pencere başlığını sürükle.<br>Başka alana bırak: böl ve yerleştir.<br>Aradaki çizgiden boyutlandır.</p>
     </div>
   </header>
-  <main class="workspace" id="workspace" aria-label="Editör çalışma alanı"><div class="dock-root" id="dock-root"></div><div class="float-layer" id="float-layer"></div><div class="empty-state" id="empty-state" hidden><svg aria-hidden="true"><use href="#i-layout"/></svg><span>Üstteki simgelerden bir ekran aç.</span></div><div class="drop-preview" id="drop-preview" hidden><span></span></div><div class="drag-label" id="drag-label" hidden></div></main>
+  <main class="workspace" id="workspace" aria-label="Editör çalışma alanı"><div class="dock-root" id="dock-root"></div><div class="empty-state" id="empty-state" hidden><svg aria-hidden="true"><use href="#i-layout"/></svg><span>Üstteki simgelerden bir ekran aç.</span></div><div class="drop-preview" id="drop-preview" hidden><span></span></div><div class="drag-label" id="drag-label" hidden></div></main>
   <div class="placement-menu popover" id="placement-menu" hidden>
     <span class="menu-label" id="placement-title">Pencereyi yerleştir</span>
     <label for="placement-target">Hedef pencere</label>
     <select id="placement-target"></select>
     <div class="placement-directions" role="group" aria-label="Hedefe göre konum"><button data-edge="left">← Sol</button><button data-edge="right">Sağ →</button><button data-edge="top">↑ Üst</button><button data-edge="bottom">Alt ↓</button></div>
-    <button class="menu-row" data-floating><svg><use href="#i-float"/></svg>Serbest pencere</button>
-    <button class="menu-row" data-dock-root><svg><use href="#i-layout"/></svg>Çalışma alanına yerleştir</button>
     <button class="menu-row" id="menu-pin"><svg><use href="#i-pin"/></svg><span>Paneli sabitle</span></button>
     <button class="menu-row" id="menu-close"><svg><use href="#i-close"/></svg>Pencereyi kapat</button>
   </div>

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { initialState, openView, setCapacity, togglePin, closeView } from './workspace-state.mjs';
-import { initialLayout, layoutViews, leaves, syncLayout, dockView, dockToWorkspace, floatView, clampRect, resizeSplit } from './layout-state.mjs';
+import { initialLayout, layoutViews, leaves, syncLayout, dockView, resizeSplit } from './layout-state.mjs';
 
 function check(layout, state) {
   const views = layoutViews(layout);
@@ -14,9 +14,7 @@ function check(layout, state) {
     visit(tree.a); visit(tree.b);
   }
   visit(layout.tree);
-  for (const rect of Object.values(layout.floating)) {
-    assert.ok(rect.x >= 0 && rect.y >= 0 && rect.x + rect.w <= 100 && rect.y + rect.h <= 100);
-  }
+  checkNonoverlap(layout.tree);
 }
 function three() {
   const state = setCapacity(initialState(), 3).state;
@@ -37,37 +35,59 @@ test('Node yanında Game ve Edit Scene üst üste; kardeşi taşıma ağacı sad
   assert.deepEqual(leaves(layout.tree.a), ['edit', 'node']);
 });
 
-test('Sabit olmayan üçüncü ekran aynı serbest pencere konumunu devralır', () => {
+test('Sabit olmayan üçüncü ekran mevcut bölmeyi devralır', () => {
   const initial = initialState();
   let state = togglePin(openView(initial, 'game').state, 'game').state;
   let layout = syncLayout(initialLayout(), initial, state);
-  layout = floatView(layout, 'node', {x:10,y:12,w:40,h:60});
+  const id = layout.tree.id;
   const next = openView(state, 'edit').state;
   layout = syncLayout(layout, state, next);
-  assert.deepEqual(layout.floating.edit, {x:10,y:12,w:40,h:60});
-  assert.deepEqual(leaves(layout.tree), ['game']);
+  assert.equal(layout.tree.id,id);
+  assert.deepEqual(leaves(layout.tree), ['edit','game']);
   assert.deepEqual(next.pinned, ['game']);
   check(layout, next);
 });
 
-test('Serbest pencereler tekrar dört yönde dock edilebilir ve kopyalanmaz', () => {
+test('Pencereler dört yönde alan bölerek yerleşir ve kopyalanmaz', () => {
   for (const edge of ['left','right','top','bottom']) {
     let {layout, state} = three();
-    layout = floatView(floatView(layout,'game'), 'edit');
-    layout = dockToWorkspace(layout,'game');
-    layout = dockView(layout,'edit','game',edge);
+    layout = dockView(layout,'edit','node',edge);
     check(layout,state);
-    assert.deepEqual(Object.keys(layout.floating), []);
-    assert.equal(layout.tree.b.axis, ['left','right'].includes(edge)?'x':'y');
+    assert.equal(layout.tree.a.axis, ['left','right'].includes(edge)?'x':'y');
+    assert.equal('floating' in layout,false);
   }
 });
 
-test('Tek serbest pencere boş çalışma alanına geri yerleşir', () => {
-  const floating = floatView(initialLayout(),'node');
-  assert.equal(floating.tree,null);
-  const docked = dockToWorkspace(floating,'node');
-  assert.deepEqual(docked.tree,{type:'leaf',view:'node'});
-  assert.deepEqual(docked.floating,{});
+// Project the split tree onto a unit workspace and check actual area separation.
+function checkNonoverlap(tree, rect={x:0,y:0,w:1,h:1}) {
+  function areas(node, box) {
+    if (!node) return [];
+    if (node.type === 'leaf') return [box];
+    const vertical=node.axis==='y', first=vertical?{...box,h:box.h*node.ratio}:{...box,w:box.w*node.ratio};
+    const second=vertical?{...box,y:box.y+first.h,h:box.h-first.h}:{...box,x:box.x+first.w,w:box.w-first.w};
+    return [...areas(node.a,first),...areas(node.b,second)];
+  }
+  const boxes=areas(tree,rect);
+  for (let i=0;i<boxes.length;i++) {
+    const a=boxes[i]; assert.ok(a.w>0 && a.h>0);
+    for (const b of boxes.slice(i+1)) {
+      const width=Math.min(a.x+a.w,b.x+b.w)-Math.max(a.x,b.x);
+      const height=Math.min(a.y+a.h,b.y+b.h)-Math.max(a.y,b.y);
+      assert.ok(width<=1e-10 || height<=1e-10, 'Pencere alanları üst üste bindi');
+    }
+  }
+  if (tree) assert.ok(Math.abs(boxes.reduce((sum,b)=>sum+b.w*b.h,0)-rect.w*rect.h)<1e-10);
+}
+
+test('İç içe bölme uç boyutlarda da pencereleri üst üste bindirmez', () => {
+  let {layout,state}=three();
+  for (const edge of ['left','right','top','bottom']) {
+    layout=dockView(layout,'node','edit',edge);
+    for (const ratio of [.2,.8,.35,.65]) {
+      layout=resizeSplit(layout,layout.tree.id,ratio);
+      check(layout,state);
+    }
+  }
 });
 
 test('Mobil başlangıçtan üçlü görünüm pencere alanını eşit paylaşır', () => {
@@ -86,13 +106,12 @@ test('Geçersiz ve kendi üzerine bırakma mevcut yerleşimi korur', () => {
   assert.equal(dockView(layout,'game','node','wrong'),layout);
 });
 
-test('Kapasite düşürme serbest sabit paneli korur, kapatılan dalı kaldırır', () => {
+test('Kapasite düşürme sabit paneli korur, kapatılan dalı kaldırır', () => {
   let {layout,state} = three();
-  layout = floatView(layout,'game');
   state = togglePin(state,'game').state;
   const next = setCapacity(state,2).state;
   layout = syncLayout(layout,state,next); check(layout,next);
-  assert.ok(layout.floating.game);
+  assert.ok(leaves(layout.tree).includes('game'));
   const after = closeView(next,'edit').state;
   layout = syncLayout(layout,next,after); check(layout,after);
 });
@@ -101,17 +120,17 @@ test('Yeniden boyutlandırma erişilebilir sınırları korur', () => {
   const {layout} = three();
   assert.equal(resizeSplit(layout,layout.tree.id,0).tree.ratio,.2);
   assert.equal(resizeSplit(layout,layout.tree.id,1).tree.ratio,.8);
-  assert.deepEqual(clampRect({x:-40,y:100,w:150,h:50}),{x:0,y:50,w:100,h:50});
+  checkNonoverlap(resizeSplit(layout,layout.tree.id,.8).tree);
 });
 
-test('1000 karma taşıma/açma/kapama adımında her ekran yalnız bir kez bulunur', () => {
+test('1000 karma işlemde her ekran tek alanda bulunur ve alanlar çakışmaz', () => {
   let {state,layout} = three(), seed=7;
   const random = n => { seed=(seed*1664525+1013904223)>>>0; return seed%n; };
   for (let i=0;i<1000;i++) {
     const view = ['node','game','edit'][random(3)], target = ['node','game','edit'][random(3)];
     const action = random(5);
     if (action === 0) layout = dockView(layout,view,target,['left','right','top','bottom'][random(4)]);
-    else if (action === 1) layout = floatView(layout,view,{x:random(90),y:random(90),w:30+random(60),h:30+random(60)});
+    else if (action === 1 && layout.tree?.type==='split') layout = resizeSplit(layout,layout.tree.id,random(101)/100);
     else {
       const next = action === 2 ? openView(state,view).state : action === 3 ? closeView(state,view).state : setCapacity(state,random(2)?2:3).state;
       layout = syncLayout(layout,state,next); state = next;

@@ -1,11 +1,11 @@
 let nextId = 0;
 const leaf = view => ({ type: 'leaf', view });
 const split = (a, b, axis = 'x') => ({ type: 'split', id: `split-${++nextId}`, axis, ratio: .5, a, b });
-export const initialLayout = () => ({ tree: leaf('node'), floating: {} });
+export const initialLayout = () => ({ tree: leaf('node') });
 export function leaves(tree) {
   return !tree ? [] : tree.type === 'leaf' ? [tree.view] : [...leaves(tree.a), ...leaves(tree.b)];
 }
-export const layoutViews = layout => [...leaves(layout.tree), ...Object.keys(layout.floating)];
+export const layoutViews = layout => leaves(layout.tree);
 function mapLeaf(tree, view, transform) {
   if (!tree) return null;
   if (tree.type === 'leaf') return tree.view === view ? transform(tree) : tree;
@@ -13,34 +13,17 @@ function mapLeaf(tree, view, transform) {
   return !a ? b : !b ? a : { ...tree, a, b };
 }
 export function removeView(layout, view) {
-  const floating = { ...layout.floating }; delete floating[view];
-  return { tree: mapLeaf(layout.tree, view, () => null), floating };
+  return { tree: mapLeaf(layout.tree, view, () => null) };
 }
 export function renameView(layout, oldView, newView) {
-  const floating = { ...layout.floating };
-  if (floating[oldView]) { floating[newView] = floating[oldView]; delete floating[oldView]; }
-  return { tree: mapLeaf(layout.tree, oldView, () => leaf(newView)), floating };
+  return { tree: mapLeaf(layout.tree, oldView, () => leaf(newView)) };
 }
 export function dockView(layout, source, target, edge) {
   const views = layoutViews(layout);
-  if (source === target || !views.includes(source) || !views.includes(target) || layout.floating[target] || !['left', 'right', 'top', 'bottom'].includes(edge)) return layout;
+  if (source === target || !views.includes(source) || !views.includes(target) || !['left', 'right', 'top', 'bottom'].includes(edge)) return layout;
   let next = removeView(layout, source);
   const before = ['left', 'top'].includes(edge), axis = ['left', 'right'].includes(edge) ? 'x' : 'y';
   return { ...next, tree: mapLeaf(next.tree, target, node => split(before ? leaf(source) : node, before ? node : leaf(source), axis)) };
-}
-export function dockToWorkspace(layout, view, axis = 'x') {
-  if (!layoutViews(layout).includes(view)) return layout;
-  const next = removeView(layout, view);
-  return { ...next, tree: next.tree ? split(next.tree, leaf(view), axis) : leaf(view) };
-}
-export function clampRect(rect) {
-  const w = Math.max(20, Math.min(100, rect.w)), h = Math.max(20, Math.min(100, rect.h));
-  return { w, h, x: Math.max(0, Math.min(100 - w, rect.x)), y: Math.max(0, Math.min(100 - h, rect.y)) };
-}
-export function floatView(layout, view, rect = { x: 20, y: 14, w: 60, h: 65 }) {
-  if (!layoutViews(layout).includes(view)) return layout;
-  const next = removeView(layout, view);
-  return { ...next, floating: { ...next.floating, [view]: clampRect(rect) } };
 }
 export function resizeSplit(layout, id, ratio) {
   function visit(tree) {
@@ -53,7 +36,7 @@ export function syncLayout(layout, previous, next, axis = 'x') {
   let result = layout;
   const removed = previous.visible.filter(v => !next.visible.includes(v));
   const added = next.visible.filter(v => !previous.visible.includes(v));
-  // Replacement inherits the exact dock slot or floating rectangle.
+  // Replacement inherits the existing split area.
   while (removed.length && added.length) result = renameView(result, removed.shift(), added.shift());
   for (const view of removed) result = removeView(result, view);
   for (const view of added) {
