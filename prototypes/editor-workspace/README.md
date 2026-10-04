@@ -19,8 +19,7 @@ Tarayıcı: `http://127.0.0.1:4173`.
 - **Varlıklar:** örnek varlıkları isimle filtrele, seçerek Edit Scene'e geç.
 - **Konsol:** gerçek prototip etkileşimlerinin oturum kayıtları; Temizle ile boşaltılır.
 
-Üstte üç ana ekran simgesi, başlat/kapat ve duraklat/devam et var.
-Sağ alttaki yuvarlak **+**, üstüne doğru isimli araç düğmeleri açar. Ana ekran ve araç düğmeleri ikinci tıklamada aynı pencereyi kapatır.
+PC ve mobilde aynı üst kapsül var: **Node · Game · Edit Scene | Başlat · Duraklat | Araçlar · …**. Yedi düğmenin dokunma alanı 44×44 piksel; kapsül 314 piksel genişliğiyle 320 piksel ekrana sığar. Sağ alttaki düğme kaldırıldı. **Araçlar**, kapsülün altında her iki cihazda da aynı 2×2 isimli menüyü açar. Açık araçlar menüde işaretlenir; ikinci tıklama aynı pencereyi kapatır. Lua kod editörü ileride bu menüye ayrı araç olarak eklenebilir; henüz uygulanmadı.
 
 ## Pencere yerleşimi
 
@@ -32,6 +31,10 @@ Sağ alttaki yuvarlak **+**, üstüne doğru isimli araç düğmeleri açar. Ana
 - **Sabitleme**, başlıktan sürüklemeyi ve menüden taşımayı kilitler. Bölme boyutları ayarlanabilir; sabit pencere elle kapatılabilir.
 - Görünür **×**, son pencere dahil herhangi bir pencereyi kapatır; kapanan pencerenin sabitlemesi temizlenir.
 - Escape/pointer iptali sürüklemeyi geri alır; alan dışına bırakma eski konumu korur.
+
+## Geçişler
+
+Pencere açılırken bölme oranları 200 ms içinde yumuşakça değişir; yeni içerik hafifçe belirir. Kapanırken içerik solar, kapanan bölme 180 ms içinde daralır. Mobilde çalışma alanının yüksekliği de geçişe katılır. Animasyonlar pencereyi diğerinin üzerine taşımak yerine flex bölmelerini değiştirir. Hızlı aç/kapat önceki geçişi sonlandırıp güncel duruma geçer. `prefers-reduced-motion` açıkken geçişler anında gerçekleşir.
 
 ## Proje menüsü
 
@@ -59,6 +62,8 @@ Ayarlar bu tarayıcının localStorage alanında saklanır. Örnek sahne düzenl
 ```sh
 node --test prototypes/editor-workspace/*.test.mjs
 ```
+
+Yeni kontrol kapsülü 1440×900 ve 320×740 görünümlerinde aynı sıra ve 44×44 düğmelerle doğrulandı. 2×2 araç menüsü 260 piksel genişlikte iki görünümde de aynı yerleşimi kullanır. Sekiz hızlı Game aç/kapat işleminden sonra pencere ve düğme durumları tutarlı kaldı; Inspector kapanıp kaldırıldı ve yeniden açıldı. Başlat/duraklat akışı korundu.
 
 Tarayıcıda 1440×900'de yedi pencere birlikte açıldı; DOM alanları çakışmadı. Hiyerarşi seçiminden Inspector konum/görünürlük düzenleme, Edit Scene'e yansıma ve donmuş Game kopyasının değişmemesi doğrulandı. Varlık filtreleme/seçim, Konsol kayıtları, sabit pencerenin yön düğmelerinin kapanması kontrol edildi. Çözünürlük ve başlangıç sahnesi uygulandı; yenileme sonrası korundu. Izgara/çerçeve tercihleri uygulandı. İndirilen JSON açılarak üç sahne, yedi pencere ve ayarlar doğrulandı.
 

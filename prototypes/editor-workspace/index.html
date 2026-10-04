@@ -32,21 +32,29 @@
     <symbol id="i-assets" viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 0 1 2-2h5l3 4h6a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></symbol>
     <symbol id="i-console" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></symbol>
     <symbol id="i-export" viewBox="0 0 24 24"><path d="M12 3v12m-4-4 4 4 4-4M4 16v5h16v-5"/></symbol>
+    <symbol id="i-tools" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><path d="M17.5 14v7M14 17.5h7"/></symbol>
     <symbol id="i-move" viewBox="0 0 24 24"><path d="M12 3v18M3 12h18m-12-6 3-3 3 3m-6 12 3 3 3-3m-9-9-3 3 3 3m12-6 3 3-3 3"/></symbol>
   </svg>
 
 
   <header class="app-header">
-    <span class="brand-mark" aria-label="Rowl">r.</span>
     <nav class="view-switcher" aria-label="Çalışma alanları">
       <button class="view-button" data-view="node" aria-label="Node ekranını aç" title="Node"><svg><use href="#i-node"/></svg><i></i></button>
       <button class="view-button" data-view="game" aria-label="Game ekranını aç" title="Game"><svg><use href="#i-game"/></svg><i></i></button>
       <button class="view-button" data-view="edit" aria-label="Edit Scene ekranını aç" title="Edit Scene"><svg><use href="#i-edit"/></svg><i></i></button>
-      <span class="toolbar-divider" aria-hidden="true"></span>
       <button class="view-button playback-button" id="play-toggle" aria-label="Oyunu başlat" title="Oyunu başlat"><svg aria-hidden="true"><use href="#i-play"/></svg></button>
       <button class="view-button playback-button" id="pause-toggle" aria-label="Oyunu duraklat" title="Oyunu duraklat" disabled><svg aria-hidden="true"><use href="#i-pause"/></svg></button>
-    </nav>
-    <button class="icon-button" id="options" aria-label="Çalışma alanı seçenekleri" aria-expanded="false" aria-controls="options-menu" title="Seçenekler"><svg><use href="#i-more"/></svg></button>
+  <div class="tools-launcher">
+    <button id="tools-toggle" class="view-button tools-toggle" title="Araçlar" aria-label="Araçları aç" aria-expanded="false" aria-controls="tools-menu"><svg><use href="#i-tools"/></svg></button>
+    <div id="tools-menu" class="tool-shortcuts popover" hidden aria-label="Editör araçları">
+      <button data-tool="hierarchy" aria-pressed="false"><span>Hiyerarşi</span><svg><use href="#i-hierarchy"/></svg></button>
+      <button data-tool="inspector" aria-pressed="false"><span>Inspector</span><svg><use href="#i-inspector"/></svg></button>
+      <button data-tool="assets" aria-pressed="false"><span>Varlıklar</span><svg><use href="#i-assets"/></svg></button>
+      <button data-tool="console" aria-pressed="false"><span>Konsol</span><svg><use href="#i-console"/></svg></button>
+    </div>
+
+  </div>
+    <button class="view-button" id="options" aria-label="Çalışma alanı seçenekleri" aria-expanded="false" aria-controls="options-menu" title="Seçenekler"><svg><use href="#i-more"/></svg></button>
     <div class="options-menu popover" id="options-menu" hidden>
       <span class="menu-label">PROJE</span>
       <button class="menu-row" data-settings="project"><svg><use href="#i-assets"/></svg>Proje ayarları</button>
@@ -56,6 +64,7 @@
       <button class="menu-row" data-settings="editor"><svg><use href="#i-inspector"/></svg>Editör tercihleri</button>
       <button class="menu-row" id="reset"><svg><use href="#i-reset"/></svg>Yerleşimi sıfırla</button>
     </div>
+    </nav>
   </header>
   <main class="workspace" id="workspace" aria-label="Editör çalışma alanı"><div class="dock-root" id="dock-root"></div><div class="empty-state" id="empty-state" hidden><svg aria-hidden="true"><use href="#i-layout"/></svg><span>Üstteki simgelerden bir ekran aç.</span></div><div class="drop-preview" id="drop-preview" hidden><span></span></div><div class="drag-label" id="drag-label" hidden></div></main>
   <div class="placement-menu popover" id="placement-menu" hidden>
@@ -65,15 +74,6 @@
     <div class="placement-directions" role="group" aria-label="Hedefe göre konum"><button data-edge="left">← Sol</button><button data-edge="right">Sağ →</button><button data-edge="top">↑ Üst</button><button data-edge="bottom">Alt ↓</button></div>
     <button class="menu-row" id="menu-pin"><svg><use href="#i-pin"/></svg><span>Paneli sabitle</span></button>
     <button class="menu-row" id="menu-close"><svg><use href="#i-close"/></svg>Pencereyi kapat</button>
-  </div>
-  <div class="tools-launcher">
-    <div id="tools-menu" class="tool-shortcuts" hidden aria-label="Editör araçları">
-      <button data-tool="hierarchy" aria-pressed="false"><span>Hiyerarşi</span><svg><use href="#i-hierarchy"/></svg></button>
-      <button data-tool="inspector" aria-pressed="false"><span>Inspector</span><svg><use href="#i-inspector"/></svg></button>
-      <button data-tool="assets" aria-pressed="false"><span>Varlıklar</span><svg><use href="#i-assets"/></svg></button>
-      <button data-tool="console" aria-pressed="false"><span>Konsol</span><svg><use href="#i-console"/></svg></button>
-    </div>
-    <button id="tools-toggle" class="tools-toggle" aria-label="Araçları aç" aria-expanded="false" aria-controls="tools-menu"><svg><use href="#i-plus"/></svg></button>
   </div>
   <dialog id="settings-dialog" aria-labelledby="settings-title">
     <form id="settings-form">

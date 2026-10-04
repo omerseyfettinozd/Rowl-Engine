@@ -3,6 +3,7 @@ import { initialLayout, syncLayout, dockView, resizeSplit } from './layout-state
 import { TOOL_VIEWS } from './workspace-state.mjs';
 import { defaultSettings, normalizeSettings, RESOLUTIONS, editObject } from './settings-state.mjs';
 import { toolContent, bindTools } from './tools.js';
+import { workspaceMotion } from './workspace-motion.js';
 import { initialPlayback, startPlayback, togglePause, advancePlayback, playbackFrame } from './playback-state.mjs';
 
 const names = { node: 'Node', game: 'Game', edit: 'Edit Scene', hierarchy: 'Hiyerarşi', inspector: 'Inspector', assets: 'Varlıklar', console: 'Konsol' };
@@ -42,6 +43,7 @@ for (const view of Object.keys(names)) {
   panels.set(view, panel);
 }
 
+const motion = workspaceMotion(dockRoot,panels);
 const tools = bindTools(panels, {
   get:()=>({scene:scenes[sceneIndex], selected:selectedObject, names:objectNames}),
   select:object=>{selectedObject=object;updateScene();tools.log(`${objectNames[object]} seçildi.`);},
@@ -59,10 +61,13 @@ function closeMenus() {
   options.hidden = true; placement.hidden = true; document.querySelector('#tools-menu').hidden=true; document.querySelector('#tools-toggle').setAttribute('aria-expanded','false'); document.querySelector('#tools-toggle').setAttribute('aria-label','Araçları aç'); document.querySelector('#options').setAttribute('aria-expanded', 'false');
 }
 function apply(result) {
+  motion.cancel();
+  const removed=state.visible.filter(view=>!result.state.visible.includes(view));
   layout = syncLayout(layout, state, result.state, workspace.clientWidth < 650 ? 'y' : 'x');
   state = result.state; closeMenus();
   if (result.message) notify(result.message);
-  render();
+  updateControls();
+  motion.exit(removed,state.visible,()=>render(!removed.length),workspaceHeight());
 }
 function updateControls() {
   document.querySelectorAll('[data-view]').forEach(button => {
@@ -105,7 +110,8 @@ function treeElement(tree) {
   divider.setAttribute('aria-valuemin', '20'); divider.setAttribute('aria-valuemax', '80'); divider.setAttribute('aria-valuenow', String(Math.round(tree.ratio * 100)));
   element.append(a, divider, b); return element;
 }
-function render() {
+function render(animated=false) {
+  const before=animated?motion.capture():null;
   const active = document.activeElement;
   for (const panel of panels.values()) panel.remove();
   dockRoot.replaceChildren();
@@ -113,6 +119,7 @@ function render() {
   updateControls(); updateScene(); fitViews();
   document.querySelector('#empty-state').hidden = state.visible.length > 0;
   if (active && active !== document.body && active.isConnected) active.focus({ preventScroll: true });
+  if(before) motion.enter(before);
 }
 function paintScene(view, scene) {
     const panel = panels.get(view);
@@ -146,9 +153,11 @@ function minimumHeight(tree) {
   const a=minimumHeight(tree.a), b=minimumHeight(tree.b);
   return tree.axis==='x'?Math.max(a,b):8+Math.max(a/tree.ratio,b/(1-tree.ratio));
 }
+function workspaceHeight() {
+  return workspace.clientWidth<650?Math.max(workspace.clientHeight,minimumHeight(layout.tree)):workspace.clientHeight;
+}
 function fitViews() {
-  const height=workspace.clientWidth<650?Math.max(workspace.clientHeight,minimumHeight(layout.tree)):workspace.clientHeight;
-  dockRoot.style.height=`${height}px`;
+  dockRoot.style.height=`${workspaceHeight()}px`;
   const viewport = panels.get('node').querySelector('.graph-viewport');
   if (viewport.isConnected && viewport.clientWidth) {
     const compact = viewport.clientWidth < 600; viewport.classList.toggle('is-compact', compact);
@@ -203,6 +212,8 @@ function startGesture(event, data) {
 }
 workspace.addEventListener('pointerdown', event => {
   if (event.button !== 0 || gesture) return;
+  motion.cancel();
+  if(!event.target.isConnected) return;
   const panel = event.target.closest('[data-panel]'); if (panel) focus(panel.dataset.panel);
   const object = event.target.closest('.editable [data-object]');
   const divider = event.target.closest('[data-divider]'), header = event.target.closest('[data-drag]');
@@ -252,7 +263,7 @@ workspace.addEventListener('pointercancel', event => { if (gesture?.pointerId===
 workspace.addEventListener('lostpointercapture', () => { if (gesture) endGesture(true); });
 workspace.addEventListener('click', event => {
   const menu = event.target.closest('[data-placement]'), node = event.target.closest('[data-scene]'), zoomButton = event.target.closest('[data-zoom]'), close = event.target.closest('[data-close]'), pin = event.target.closest('[data-pin]');
-  if (close) { apply(closeView(state,close.dataset.close)); document.querySelector(`[data-view="${close.dataset.close}"],[data-tool="${close.dataset.close}"]`)?.focus({preventScroll:true}); }
+  if (close) { apply(closeView(state,close.dataset.close)); (document.querySelector(`[data-view="${close.dataset.close}"]`)??document.querySelector("#tools-toggle")).focus({preventScroll:true}); }
   else if (pin) apply(togglePin(state,pin.dataset.pin));
   else if (menu) showPlacement(menu.dataset.placement,menu);
   else if (node) { sceneIndex = Number(node.dataset.scene); updateScene(); }
@@ -306,13 +317,13 @@ placement.addEventListener('click',event=>{
 document.addEventListener('pointerdown',event=>{ if (!event.target.closest('.popover,#options,[data-placement],.tools-launcher')) closeMenus(); });
 document.addEventListener('keydown',event=>{ if (event.key==='Escape') { endGesture(true); closeMenus(); } });
 document.querySelector('#reset').addEventListener('click',()=>{
-  endGesture(true); layout=syncLayout({tree:null},{visible:[]},state,workspace.clientWidth<650?'y':'x'); zoom=1; workspace.scrollTop=0; closeMenus(); render(); tools.log('Pencere yerleşimi sıfırlandı.');
+  endGesture(true); motion.cancel(); layout=syncLayout({tree:null},{visible:[]},state,workspace.clientWidth<650?'y':'x'); zoom=1; workspace.scrollTop=0; closeMenus(); render(); tools.log('Pencere yerleşimi sıfırlandı.');
 });
 document.querySelector('#tools-toggle').addEventListener('click',()=>{
   const open=document.querySelector('#tools-menu').hidden;closeMenus();document.querySelector('#tools-menu').hidden=!open;
   document.querySelector('#tools-toggle').setAttribute('aria-expanded',String(open));document.querySelector('#tools-toggle').setAttribute('aria-label',open?'Araçları kapat':'Araçları aç');
 });
-document.querySelectorAll('[data-tool]').forEach(button=>button.addEventListener('click',()=>{endGesture(true);apply(toggleView(state,button.dataset.tool));}));
+document.querySelectorAll('[data-tool]').forEach(button=>button.addEventListener('click',()=>{endGesture(true);apply(toggleView(state,button.dataset.tool));document.querySelector('#tools-toggle').focus({preventScroll:true});}));
 const settingsDialog=document.querySelector('#settings-dialog'), settingsForm=document.querySelector('#settings-form');
 let settingsCategory='project';
 document.querySelectorAll('[data-settings]').forEach(button=>button.addEventListener('click',()=>{
