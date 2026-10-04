@@ -326,6 +326,7 @@ void test_save_slot_transient_retry() {
     // (a) Bütçeden az geçici hata: yeniden deneme yolu hepsini yutar.
     constexpr int kTransient = 3;
     using Rowl::State::SaveDurabilityTransientSite;
+    using Rowl::State::kAllSaveDurabilityTransientSites;
     const int consumedBefore = Rowl::State::saveDurabilityTransientFailuresConsumed(
         SaveDurabilityTransientSite::Copy);
     Rowl::State::setSaveDurabilityInjectTransientFailures(
@@ -405,15 +406,13 @@ void test_save_slot_transient_retry() {
 
     // Kanca temizliği: TÜM site'ler silintide kalmamalı (yalnız Copy'e
     // bakmak, en son silintide bırakılan siteyi görmezdi). P2-9 sonrası site
-    // sayısı 6: liste enum'dan türetilir ki yeni site eklenince bu sızıntı
-    // kontrolü onu da kapsasın — elle yazılan DÖRTLÜ liste sessizce daralırdı.
-    SaveDurabilityTransientSite kAllSites[
-        static_cast<int>(SaveDurabilityTransientSite::Count)];
-    for (int site = 0; site < static_cast<int>(SaveDurabilityTransientSite::Count);
-         ++site) {
-        kAllSites[site] = static_cast<SaveDurabilityTransientSite>(site);
-    }
-    for (const SaveDurabilityTransientSite site : kAllSites) {
+    // sayısı 6: liste BAŞLIKTAKİ kAllSaveDurabilityTransientSites'tan gelir;
+    // test_p2_9_transient_site_isolation da AYNI listeyi kullanır, böylece iki
+    // kapının kapsamı yapısal olarak aynıdır. Liste enum'un Count elemanıyla
+    // static_assert ile bağlıdır: yeni site eklenip liste güncellenmezse
+    // DERLEME HATASI verir (kapı sessizce daralmaz).
+    for (const SaveDurabilityTransientSite site :
+         kAllSaveDurabilityTransientSites) {
         checkRetry(Rowl::State::saveDurabilityInjectTransientFailures(site) == 0,
                    "transient injection leaked past cleanup on a site");
         Rowl::State::setSaveDurabilityInjectTransientFailures(0, site);

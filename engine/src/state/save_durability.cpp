@@ -5,10 +5,12 @@
 
 #include <atomic>
 #include <cerrno>
+#include <cstddef>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
+#include <iterator>
 #include <mutex>
 #include <string>
 #include <system_error>
@@ -131,11 +133,21 @@ std::mutex g_slotCommitMutex;
 // Bütçe BİLEREK kısadır: kalıcı bir hatada (izin yok, salt-okunur dizin) kayıt
 // yine fail-closed döner. Gerçek tavan NOMİNALDEN YÜKSEKTİR: Sleep Windows
 // tanesi granülaritesine uyar (varsayılan ~15,6 ms), yani istenen 1 ms fiilen
-// ~15,6 ms sürebilir => site başına gerçekçi tavan ~63 ms. DÖRT site de tükerse
-// bu, commit bölgesi kilitliyken yaklaşık ~250 ms olur; yalnızca zaten
-// BAŞARISIZ olan bir kayıtta ve mutex'i başka yazarlara göre tutar (ölçülen
-// maliyet: 200 ardışık kayıt = 18 ms, CI bütçesinin %0,3'ü). Sayaç sabit
-// `for` ile sınırlıdır, hiçbir girdi onu uzatamaz.
+// ~15,6 ms sürebilir => site başına gerçekçi tavan ~63 ms (4 geri çekilme ×
+// ~15,6 ms; ilk denemede uyku yok). ALTı site de tükerse bu, commit bölgesi
+// kilitliyken yaklaşık ~375 ms olur (6 × ~63 ms); yalnızca zaten BAŞARISIZ
+// olan bir kayıtta ve mutex'i başka yazarlara göre tutar. Sayaç sabit `for`
+// ile sınırlıdır, hiçbir girdi onu uzatamaz.
+//
+// SAYILAR NEREDEN: "~375 ms" bir TAHMİN, ölçüm değil — Windows'un ~15,6 ms'lik
+// Sleep granülaritesi ve 6 sitenin tamamının aynı kayıtta tükmesi varsayımıyla
+// aritmetik olarak çıkar. Bu kötümser TAVANDIR: bir kayıt aynı anda altı siteyi
+// de tüketmez, tüketen site sayısı o kaydın hangi aşamalara girdiğine bağlıdır
+// ve geri çekilme süresi 15,6 ms'ye DEĞİL taneye uyar. ÖLÇÜLEN maliyet ise
+// ayrı ve çok daha küçüktür: 200 ardışık kayıt = 18 ms (CI bütçesinin %0,3'ü) —
+// bu ölçüm BAŞARILI kayıtların maliyetidir, en kötü durum değildir. Site sayısı
+// P2-9'da 4 -> 6 çıktığı için bu tahmin ~250 ms'den ~375 ms'ye güncellendi;
+// eşikler ve bütçe kalibrasyonu DEĞİŞMEDİ.
 constexpr int kMaxTransientAttempts = 5;
 constexpr int kCommitBackoffBaseMs = 1;
 
@@ -154,21 +166,49 @@ constexpr int kInjectedTransientCode = EAGAIN;
 constexpr int kTransientSiteCount =
     static_cast<int>(SaveDurabilityTransientSite::Count);
 
-// Site dizilerinin uzunluğu enum ile AYNI olmalı. Bu guard olmadan
-// kTransientSiteCount 3'e düşseydi BackupRemove=3 iki std::atomic<int>[3]
-// dizisinin sonunu aşar ve ASan/UBSan bacakları global-buffer-overflow ile
-// kırmızıya dönerdi; oysa normal Linux düzeninde hata .bss dolgusuna düşüp
-// sessizce "çalışır" gibi görünür. Enum genişletilirse burası derlemede
-// yakalar.
+// ---- Enum <-> dizi uzunlugu zinciri (derleme zamani kapisi) --------------
+// Bu guard'lar olmadan diziler yanlış boyutlanir ve BackupRemove=3 iki
+// std::atomic<int>[3] dizisinin sonunu aşar; ASan/UBSan bacakları
+// global-buffer-overflow ile kırmızıya dönerdi, oysa normal Linux düzeninde
+// hata .bss dolgusuna düşüp sessizce "çalışır" gibi görünür.
 //
-// P2-9: bu guard YENİ bir site eklendiğinde zaten kırılırdı — asıl derinlik
-// kazanımı, uzunluğun elle yazılan sabitten değil enum'un kendi Count
-// elemanından türetilmesidir. Yeni site eklemek artık iki yeri güncellemeyi
-// gerektirmez; unutulursa Count'i güncellemeden eklenen site sessizce .bss
-// dolgusuna yazar.
+// P2-9 DENETIMI: buradaki ilk sürüm TOPOLOJİYDI —
+//     static_assert(kTransientSiteCount == (int)Site::Count)
+// sol zaten sağdan türüyordu, derleyici katlayıp siliyordu. Denetim Count'u
+// 6->5 mutasyonladı: DERLEME BAŞARILI oldu, kapı YEŞİL kaldı. Bu, base'deki
+// gerçek `== 4` sabit karşılaştırmasının korumasını sessizce düşürmek demekti
+// (GERİLEME).
+//
+// Kapanis iki parcali:
+//   * Count artik enum'da SON ETIKETTEN TURETILIR (bkz. hpp) — elle kismak
+//     ya da buyutmek mumkun degil, yani mutasyonun kaynagi yok.
+//   * Asil karsilastirmalar, bu turetilmis sayidan BAGIMSIZ kaynaklardan
+//     gelen assert'lerdir: basliktaki kAllSaveDurabilityTransientSites listesi
+//     (elle yazilmis) ve buradaki dizilerin std::size'i. Birinin tutmasi
+//     digerinin tutmasini gerektirmez; ikisi de CopyAskeri degil.
+
+// (1) Enum 0'tan baslamali: aksi halde indeksleme (site) 0'i atlar ve
+//     "Count == son etiket + 1" denkligi tutmaz.
+static_assert(static_cast<int>(SaveDurabilityTransientSite::Probe) == 0,
+              "SaveDurabilityTransientSite ilk etiketi 0 olmali");
+
+// (2) Turetilmis Count, basliktaki ELLE YAZILMIS kapi listesinin uzunluguyla
+//     karsilastirilir. Iki kaynak BAGIMSIZDIR: Count enum'un son etiketinden
+//     gelir, liste ise insanin yazdigi ayri bir kaynaktir. Onceki surumdeki
+//     gibi `Count == FingerprintMeasure + 1` yazsaydik TOTOLOJI olurdu, cunku
+//     Count zaten o ifadeden turetiliyor.
+//
+//     Yakaladigi mutasyonlar:
+//       * Count elle kismaya calisilirsa      -> liste ile uyusmaz -> HATA
+//       * enum'a yeni site eklenir, liste
+//         guncellenmezse                      -> liste Count'tan kis kalir
+//                                                 -> HATA
 static_assert(kTransientSiteCount ==
-                  static_cast<int>(SaveDurabilityTransientSite::Count),
-              "kTransientSiteCount must track SaveDurabilityTransientSite");
+                  static_cast<int>(std::size(
+                      kAllSaveDurabilityTransientSites)),
+              "kTransientSiteCount, kAllSaveDurabilityTransientSites "
+              "listesinin uzunluguyla ayni olmali (yeni site eklendi ve "
+              "kapinin kapsam listesi guncellenmedi)");
 
 // Site-bazlı sayaçlar. Neden site-bazlı: kanca tek bir FIFO olsaydı, probe
 // denemelerini tüketip yedek kopyası yoluna hiç ulaşmak MÜMKÜN OLMAZDI
@@ -181,6 +221,21 @@ static_assert(kTransientSiteCount ==
 // gelir, veri ise default-init olur.
 std::atomic<int> g_injectTransientFailures[kTransientSiteCount] = {};
 std::atomic<int> g_consumedTransientFailures[kTransientSiteCount] = {};
+
+// (3) Dizilerin GERCEK boyutu Count ile ayni olmali. Yukaridaki (2) assert
+//     enum zincirini tutturur; bu assert ise dizinin kendisinin o zincirden
+//     kopmadigini tutturur: biri `[kTransientSiteCount]` yerine elle `[4]` gibi
+//     bir sabit yazarsa ya da Count yerine baska bir ifade kullanirsa burasi
+//     kirmiziya doner. Dizi tanimi Count'ten turseydi bu assert totoloji
+//     olurdu; yine de ileride birinin diziyi Count'ten ayirmasini engeller.
+static_assert(std::size(g_injectTransientFailures) ==
+                  static_cast<std::size_t>(kTransientSiteCount),
+              "g_injectTransientFailures boyutu SaveDurabilityTransientSite "
+              "Count ile ayni olmali");
+static_assert(std::size(g_consumedTransientFailures) ==
+                  static_cast<std::size_t>(kTransientSiteCount),
+              "g_consumedTransientFailures boyutu "
+              "SaveDurabilityTransientSite Count ile ayni olmali");
 
 // Test-only: "rakip yazar" simülasyonu. Yedek hazırlandıktan SONRA, replace
 // ÖNCESİ hedefe başka bir yazarın baytlarını yazar. Süreçler arası yarışın

@@ -1,6 +1,8 @@
 #pragma once
 
+#include <cstddef>
 #include <filesystem>
+#include <iterator>
 #include <string>
 
 namespace Rowl::State {
@@ -171,6 +173,20 @@ int saveDurabilityInjectErrno();
 //
 // Production default is 0 for every site; nothing arms it except this setter.
 // Never throws.
+//
+// P2-9 DENETIMI (BULGU 1): `Count` ELLE 6 yazilmaz, SON etiketten TURETILIR.
+//
+// Denetim, onceki surumdeki `Count = 6` + `static_assert(Count == (int)Count)`
+// kombinasyonunun TOTOLOJI oldugunu kanitladi: sol zaten sagdan turuyor,
+// derleyici katlayip siliyor, `Count` 6->5 mutasyonu DERLENIP kapiyi YESIL
+// birakti. Bu, base'deki gercek `== 4` sabit karsilastirmasinin korumasini
+// sessizce dusuruyordu (GERILEME).
+//
+// Simdi `Count` bir ifade olarak yaziliyor, bu yuzden onu elle kismak ya da
+// elle buyutmek mumkun degil: yeni site eklemek ZATEN bu satiri degistirmeyi
+// gerektirir. Karsilastirmayi yapan asil kapilar bir sonraki bloktaki liste
+// ve dizi boyutu assert'leridir; onlar bu turetilmis sayidan BAGIMSIZ
+// kaynaklardan gelir, yani ne totoloji ne de "Count'i elle kis" yolu.
 enum class SaveDurabilityTransientSite : int {
     Probe = 0,           // "is the existing slot a regular file?" backup probe
     Copy = 1,            // 490 pre-save backup copy
@@ -178,8 +194,56 @@ enum class SaveDurabilityTransientSite : int {
     BackupRemove = 3,    // best-effort removal of the staged backup
     OwnedTempRemove = 4, // best-effort removal of the OWNED UNIQUE temp
     FingerprintMeasure = 5, // baseline fingerprint re-measurement
-    Count = 6,           // dizi uzunlugu; enum ile ayni olmali (P2-9)
+    Count,               // == FingerprintMeasure + 1 (TURETILIR, P2-9)
 };
+
+// P2-9 DENETIMI (BULGU 2): "her site'i gez" demeyen kapilar kendi listesini
+// elle yazarak kapsamlarini daraltiyordu — 7. site eklenince kapı onu
+// KAPSAMAZDI, yani düzeltilen kusurun ta kendisi. Burada TEK bir liste
+// tanımlanır ve iki kapı da onu kullanır; kapsam artık iki yerde kopyalanmaz.
+//
+// Bu liste ELLE yazılmıştır ve DERLEME ZAMANINDA enum'a bağlanır. Neden
+// otomatik türetmek (0..Count-1 dönüşü) değil: otomatik türetme yeni site'i
+// sessizce kapsama ALIR ve kapı yeşil kalır — denetimin istediği "kapsam dışı
+// site eklenince kapı KIRMIZI olsun" davranışını bu vermez. Elle liste +
+// static_assert ikilisi ise yeni site eklenip burası güncellenmedikçe
+// DERLEME HATASI üretir, yani kapı kırmızıya düner (sessizce skip yok).
+inline constexpr SaveDurabilityTransientSite kAllSaveDurabilityTransientSites[] =
+    {
+        SaveDurabilityTransientSite::Probe,
+        SaveDurabilityTransientSite::Copy,
+        SaveDurabilityTransientSite::Replace,
+        SaveDurabilityTransientSite::BackupRemove,
+        SaveDurabilityTransientSite::OwnedTempRemove,
+        SaveDurabilityTransientSite::FingerprintMeasure,
+    };
+
+static_assert(std::size(kAllSaveDurabilityTransientSites) ==
+                  static_cast<std::size_t>(
+                      SaveDurabilityTransientSite::Count),
+              "kAllSaveDurabilityTransientSites, SaveDurabilityTransientSite "
+              "enum'unun TUM sitelerini icermeli; yeni site eklendi ve bu "
+              "liste guncellenmedi (kapi sessizce daralirdi)");
+
+// Listeye yeni site EKLENMEDEN, enum'a eklenmis olabilir: liste Count kadar
+// uzun oldugu icin "sadece uzunluk" buna bakmaz. Son gercek etiket listenin
+// SON elemani olmali; boylece "enum'a 7. site eklendi, kapinin listesi
+// guncellenmedi" durumu DERLEME HATASI verir.
+static_assert(
+    kAllSaveDurabilityTransientSites[
+        std::size(kAllSaveDurabilityTransientSites) - 1] ==
+        SaveDurabilityTransientSite::FingerprintMeasure,
+    "enum'a FingerprintMeasure'den SONRA yeni bir site eklendi ama "
+    "kAllSaveDurabilityTransientSites guncellenmedi; kapı o site'i KAPSAMAZ");
+
+// Ayni seyin ayna karsi yuzu: listenin ilk elemani enum'un ilk etiketi
+// olmali. Ilk etiket degistirilip Count elle kismis olsaydi (artik mumkun
+// degil) burasi da tutmazdi.
+static_assert(kAllSaveDurabilityTransientSites[0] ==
+                  SaveDurabilityTransientSite::Probe,
+              "kAllSaveDurabilityTransientSites ilk elemani enum'un ilk "
+              "etiketiyle ayni olmali");
+
 void setSaveDurabilityInjectTransientFailures(int count,
                                               SaveDurabilityTransientSite site);
 int saveDurabilityInjectTransientFailures(SaveDurabilityTransientSite site);

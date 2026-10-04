@@ -30,9 +30,11 @@
 
 #include "rowl/state/save_durability.hpp"
 
+#include <cstddef>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <iterator>
 #include <string>
 #include <thread>
 #include <vector>
@@ -62,20 +64,53 @@ int Injected(SaveDurabilityTransientSite site) {
 }
 
 // Kapsam: DÜRTÜ olmayan her site. Test bittiğinde hepsi 0 olmalı.
-const SaveDurabilityTransientSite kAllSites[] = {
-    SaveDurabilityTransientSite::Probe,
-    SaveDurabilityTransientSite::Copy,
-    SaveDurabilityTransientSite::Replace,
-    SaveDurabilityTransientSite::BackupRemove,
-    SaveDurabilityTransientSite::OwnedTempRemove,
-    SaveDurabilityTransientSite::FingerprintMeasure,
-};
+//
+// P2-9 DENETIMI (BULGU 2): bu liste ELLE yazılmış bir 6'lıydı; enum'a 7. bir
+// site eklenirse kapı onu KAPSAMAZDI — düzeltilen kusurun ta kendisi. Liste
+// artık başlıkta TEK bir yerden gelir ve enum'un Count elemanıyla
+// static_assert ile bağlıdır: yeni site eklenip liste güncellenmezse
+// DERLEME HATASI verir, kapı kırmızıya döner (sessizce skip etmez).
+// test_save_slot_concurrency da AYNI listeyi kullanır; iki kapının kapsamı
+// böylece yapısal olarak aynıdır.
+using Rowl::State::kAllSaveDurabilityTransientSites;
+constexpr std::size_t kAllSiteCount =
+    std::size(kAllSaveDurabilityTransientSites);
 
 constexpr int kSiteCount =
     static_cast<int>(SaveDurabilityTransientSite::Count);
 
+static_assert(kAllSiteCount == static_cast<std::size_t>(kSiteCount),
+              "kapinin site listesi enum ile ayni uzunlukta olmali");
+
+// Asıl kapsam kapısı DERLEME ZAMANINDA: yukarıdaki static_assert ile
+// birlikte basliktaki "listenin son elemani == FingerprintMeasure" assert'i.
+// Bunlar olmadan 7. site eklenip liste guncellenmezse kapı sessizce daralirdi.
+//
+// Buradaki ÇALIŞMA ZAMANI kontrolü onun ÜSTÜNE bir sey koyar: assert'ler
+// yalnizca uzunluk + ilk/son elemana bakar, listenin ORTASINDA tekrarlanan ya
+// da atlanan bir etiketi yakalamaz. Asagidaki dongu listenin enumun her
+// indeksini TAM OLARAK bir kez icerdigini dogrular; boylece "dogru uzunlukta
+// ama yanlis icerik" durumu da kirmiziya duser.
+void CheckScopeMatchesEnum() {
+    for (int site = 0; site < kSiteCount; ++site) {
+        int occurrences = 0;
+        for (const SaveDurabilityTransientSite listed :
+             kAllSaveDurabilityTransientSites) {
+            if (static_cast<int>(listed) == site) ++occurrences;
+        }
+        expect(occurrences == 1,
+               "kapinin site listesi " + std::to_string(site) +
+                   " etiketini " + std::to_string(occurrences) +
+                   " kez iceriyor (TAM 1 kez olmali)");
+    }
+    expect(static_cast<int>(kAllSiteCount) == kSiteCount,
+           "kapinin kapsami enum ile uyusmali (kAllSiteCount=" +
+               std::to_string(static_cast<int>(kAllSiteCount)) +
+               ", Count=" + std::to_string(kSiteCount) + ")");
+}
+
 void ResetAll() {
-    for (const SaveDurabilityTransientSite site : kAllSites) {
+    for (const SaveDurabilityTransientSite site : kAllSaveDurabilityTransientSites) {
         Rowl::State::setSaveDurabilityInjectTransientFailures(0, site);
     }
     Rowl::State::setSaveDurabilityInjectCompetingWrite(false);
@@ -260,10 +295,17 @@ void CheckConcurrentBudgetIsExact(const fs::path& root, int budget) {
 
 // ÖLÇÜM 5 — kapsam sızıntısı: probe bittikten sonra hiçbir site armed
 // kalmamalı. (Eski test yalnız Copy'e bakıyordu.)
+// P2-9 DENETIMI: liste artık enum'dan gelir; sızıntı mesajı HANGİ etiketin
+// kaldığını da yazar, böylece 7. site eklendiğinde "bir site" belirsizliği
+// yaşanmaz.
 void CheckNoLeak() {
-    for (const SaveDurabilityTransientSite site : kAllSites) {
-        expect(Injected(site) == 0,
-               "kanca temizligi: bir site silintide armed kaldi");
+    for (const SaveDurabilityTransientSite site :
+         kAllSaveDurabilityTransientSites) {
+        const int left = Injected(site);
+        expect(left == 0,
+               "kanca temizligi: bir site silintide armed kaldi (site=" +
+                   std::to_string(static_cast<int>(site)) +
+                   ", kalan=" + std::to_string(left) + ")");
     }
 }
 
@@ -281,6 +323,7 @@ int main() {
     fs::remove_all(root, ec);
     fs::create_directories(root, ec);
 
+    CheckScopeMatchesEnum();
     CheckProbeIsolated(root, attempts);
     CheckOwnedTempRemoveIsolated(root, attempts);
     CheckFingerprintMeasureIsolated(root, attempts);
