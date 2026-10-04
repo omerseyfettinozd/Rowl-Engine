@@ -158,8 +158,25 @@ budget on its lowest supported device:
 `rowl_tests --benchmark-json <path>` writes a versioned JSON report containing
 build type, OS/device identity, CPU architecture/model, fixture identity, VFS I/O, JSON update, first
 frame, steady frame, texture cache and process memory values.
-`tools/compare_benchmarks.py` rejects different OS/machine/CPU/build-type or
-fixture identities, then reports percentage deltas for compatible reports.
+`tools/compare_benchmarks.py` rejects different schema/fixture/build-type,
+OS, architecture or **CPU model** identities, then reports percentage deltas
+for compatible reports. The CPU model is part of the compatibility key on
+purpose: the `ubuntu-24.04` runner label spans six CPU classes whose results
+differ by roughly 2.2x, so a cross-host comparison reports host speed as a code
+regression. `machine` and `cpu_count` stay informational; `machine` is only
+`uname -m`.
+
+**Which run is the baseline.** The tool takes a *newest-first window* of
+candidate baselines and selects the first one whose compatibility key matches
+the run under test, so a comparison is never anchored to whatever host the
+previous run happened to land on. This matters because CI picks baselines with
+`gh run list --status success`, a query that cannot see this gate's own verdict:
+a run that *skipped* here still ends `success`, so without the rule a skipped
+run becomes the next baseline and a regression the gate missed is laundered into
+the reference point. A run with no matching baseline skips (exit 0) and prints a
+`SKIPPED:` banner naming the candidate host and every baseline it walked past —
+a skipped gate is *not* a passing one. This costs one run per newly seen host
+class; every later run on that host has a reference.
 These numbers are baselines, not universal pass/fail thresholds; compare
 like-for-like Release builds on the same device.
 

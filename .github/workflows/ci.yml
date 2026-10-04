@@ -19,14 +19,22 @@ permissions:
 # karışımları bugünün sahte yeşillerini üretti.
 #
 #  1. GÖRELİ REGRESYON KAPISI — ENFORCED, yalnız `linux`.
-#     tools/compare_benchmarks.py, bir önceki başarılı `main` koşusunun
-#     artifact'ıyla karşılaştırır (--warn-percent 20 / --fail-percent 35).
+#     tools/compare_benchmarks.py, son 10 başarılı `main` koşusunun artifact'ı
+#     arasından ADAYLA AYNI ORTAMI OLAN en yeniyi seçip karşılaştırır
+#     (--warn-percent 20 / --fail-percent 35).
 #     Makineden bağımsızdır çünkü aynı ortamın iki koşusunu kıyaslar.
 #     transition_fps metriği de bu tabloda yer alır
 #     (compare_benchmarks.py METRICS: higher_is_better, abs_floor 5.0 FPS).
-#     Zayıf noktaları BILEREK: önceki artifact yoksa/çekilemezse/ortam
-#     anahtarları tutmazsa exit 0 ile sessizce skip eder. Bu bir sonraki
-#     işin konusudur; burada gizlenmez, adımların logunda görünür.
+#     İki zayıf nokta BILEREK kapatıldı:
+#       (a) `ubuntu-24.04` tek etiket ama arkasında 6 CPU sınıfı var; cpu_model
+#           uyumluluk anahtarında, yoksa farklı hızda iki makine "aynı ortam"
+#           sanılır ve aradaki fark regresyon diye raporlanır.
+#       (b) `--status success` BU KAPININ verdict'ini göremez; atlanan koşu da
+#           başarılı biter ve bir sonraki baseline olur, yani kapının kaçırdığı
+#           regresyon referansa sızar. Bu yüzden tek baseline değil bir PENCERE
+#           indirilir ve seçim aracın içinde yapılır.
+#     Artık durum: eşleşen baseline yoksa kapı exit 0 ile SKIPPED verir ve bunu
+#     step-summary'ye yazar. "Gecti" degil "KOSMADI" — sessiz yesil yok.
 #
 #  2. ORAN KAPISI (transition/steady) — ENFORCED, HER YERDE.
 #     tests/test_camera_and_transition_pipeline.cpp içindedir ve
@@ -257,24 +265,53 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -u
-          PREV_ID=$(gh run list --workflow ci.yml --branch main --status success \
-            --limit 1 --json databaseId --jq '.[0].databaseId // empty')
-          if [ -z "$PREV_ID" ]; then
+          # NEDEN birden fazla baseline: `--status success --limit 1` BU KAPININ
+          # verdict'ini goremez. Atlanan bir kosu da conclusion=success biter,
+          # yani "atlanan kosu bir sonraki baseline OLUR" ve kapinin KACIRDIGI
+          # bir regresyon referans noktasina sizar. Onlem: son N basarili kosuyu
+          # indir, secimi araca birak (compare_benchmarks.py select_baseline).
+          # Olcum (59 artifact, gercek CI yonelimi): --limit 1 -> 15/59 kosuda
+          # kapi kiyaslar (%25.4); --limit 10 -> 34/59 (%57.6). Gereken derinlik
+          # olcumunde p95=3, maksimum=6; 10 guvenli marj.
+          BASELINE_WINDOW=10
+          PREV_IDS=$(gh run list --workflow ci.yml --branch main --status success \
+            --limit "$BASELINE_WINDOW" --json databaseId --jq '.[].databaseId')
+          if [ -z "$PREV_IDS" ]; then
             echo "[BenchmarkCompare] no previous successful run; skipping comparison."
             exit 0
           fi
           rm -rf /tmp/prev-bench && mkdir -p /tmp/prev-bench
-          if ! gh run download "$PREV_ID" -n linux-native-benchmark -D /tmp/prev-bench; then
-            echo "[BenchmarkCompare] previous baseline artifact unavailable; skipping."
+          # YENIDEN SIRALI: gh run list en yeniden en eskiye verir ve bu
+          # siranin KORUNMASI sart -- arac "ilk eslesen"i secer, yani sirayı
+          # ters verirsen en eski eslesmeyi baz alir.
+          BASELINES=()
+          for PREV_ID in $PREV_IDS; do
+            SLOT="/tmp/prev-bench/$PREV_ID"
+            mkdir -p "$SLOT"
+            # Tek artifact cokertisi cok nadir; yine de sessizce yutma.
+            if gh run download "$PREV_ID" -n linux-native-benchmark -D "$SLOT" 2>/dev/null; then
+              SLOT_JSON=$(find "$SLOT" -name '*.json' | head -n 1)
+              if [ -n "$SLOT_JSON" ]; then
+                BASELINES+=("$SLOT_JSON")
+              else
+                echo "[BenchmarkCompare] run $PREV_ID artifact empty; not a baseline."
+              fi
+            else
+              echo "[BenchmarkCompare] run $PREV_ID artifact unavailable; not a baseline."
+            fi
+          done
+          if [ "${#BASELINES[@]}" -eq 0 ]; then
+            echo "[BenchmarkCompare] no usable previous baseline artifact; skipping."
             exit 0
           fi
-          PREV_JSON=$(find /tmp/prev-bench -name '*.json' | head -n 1)
-          if [ -z "$PREV_JSON" ]; then
-            echo "[BenchmarkCompare] empty baseline artifact; skipping."
-            exit 0
-          fi
-          python3 tools/compare_benchmarks.py "$PREV_JSON" \
-            benchmark-results/linux-native.json --warn-percent 20 --fail-percent 35
+          # --summary: skip'ler step-summary'ye de yazilir. `runs-on: ubuntu-24.04`
+          # tek etiket ama arkasinda 6 CPU sinifi var (siniflar arasi ~2.22x,
+          # sinif ici CV ~%3.5). Eslesen baseline yoksa kapı exit 0 ile SKIPPED
+          # verir; bu "gecti" degil "KOSMADI" demektir ve summary'de gorunmezse
+          # kaybolur. exit kodu degismez: skip 0, gercek regresyon 2.
+          python3 tools/compare_benchmarks.py "${BASELINES[@]}" \
+            benchmark-results/linux-native.json --warn-percent 20 --fail-percent 35 \
+            --summary "$GITHUB_STEP_SUMMARY"
 
       - name: Record editor benchmark baseline
         run: |
