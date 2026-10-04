@@ -700,7 +700,11 @@ set_tests_properties(test_p1_7_resize_save PROPERTIES
 # Rewind dialogueHistory tahsis bütçesi probu. withDialogueHistory her
 # append'de geçmişin tam kopyasını alır ve kopya zincirin her halkasında
 # tutulur; std::vector 2x büyüme + erase'in kapasiteyi geri vermemesi
-# yüzünden tutulan alan ~2x şişer (ölçüm: 300 advance'te 9.7 MB -> 0.23 MB).
+# yüzünden tutulan alan ~2x şişer. shrink_to_fit bu sabit çarpanı kaldırır
+# (ölçüm, deterministik capacity — RSS değil: glibc serbest bıraktığı sayfaları
+# geri vermediği için RSS gerçek büyümeyi görmez):
+#   300 advance : 10.234.112 B -> 5.210.912 B (1,96x)
+#   1200 advance: 106.936.512 B -> 53.764.400 B (1,99x)
 # KIRMIZI: bir halka size() < capacity() taşır veya toplam bütçe aşılır.
 # YEŞİL: her halka size()==capacity() ve toplam bütçe içinde.
 add_executable(rowl_rewind_history_budget_probe test_rewind_history_budget_probe.cpp)
@@ -718,4 +722,29 @@ set_tests_properties(rewind_history_budget_probe PROPERTIES
     WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
     ENVIRONMENT "SDL_AUDIODRIVER=dummy;SDL_VIDEODRIVER=dummy"
     TIMEOUT 120
+)
+
+# P2-9 KAPI: gecici-hata kancasının SAYACI başına işlem izolasyonu.
+# Bulgu: SaveDurabilityTransientSite::Probe etiketi commit bolgesindeki UC ayri
+# isleme birden geciriliyordu; "per-site" iddiasi bu yuzden yanlisti.
+# RED (mutasyonlu kod): "P2-9-SITE RED: ..." + exit 1.
+# YESIL: exit 0. rowl_tests gomdesine girmez; D09 emsali.
+add_executable(rowl_p2_9_transient_site_isolation
+    test_p2_9_transient_site_isolation.cpp)
+target_include_directories(rowl_p2_9_transient_site_isolation PRIVATE
+    ${CMAKE_SOURCE_DIR}/engine/include
+)
+target_link_libraries(rowl_p2_9_transient_site_isolation PRIVATE
+    rowl_engine_objects
+    rowl_engine_thirdparty
+)
+target_compile_definitions(rowl_p2_9_transient_site_isolation PRIVATE
+    ROWL_BUILDING_DLL)
+
+add_test(NAME p2_9_transient_site_isolation
+         COMMAND rowl_p2_9_transient_site_isolation)
+set_tests_properties(p2_9_transient_site_isolation PROPERTIES
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    ENVIRONMENT "SDL_AUDIODRIVER=dummy;SDL_VIDEODRIVER=dummy"
+    TIMEOUT 180
 )

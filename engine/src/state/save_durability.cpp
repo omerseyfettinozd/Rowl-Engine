@@ -152,7 +152,7 @@ constexpr int kInjectedTransientCode = EAGAIN;
 #endif
 
 constexpr int kTransientSiteCount =
-    static_cast<int>(SaveDurabilityTransientSite::BackupRemove) + 1;
+    static_cast<int>(SaveDurabilityTransientSite::Count);
 
 // Site dizilerinin uzunluğu enum ile AYNI olmalı. Bu guard olmadan
 // kTransientSiteCount 3'e düşseydi BackupRemove=3 iki std::atomic<int>[3]
@@ -160,15 +160,27 @@ constexpr int kTransientSiteCount =
 // kırmızıya dönerdi; oysa normal Linux düzeninde hata .bss dolgusuna düşüp
 // sessizce "çalışır" gibi görünür. Enum genişletilirse burası derlemede
 // yakalar.
-static_assert(kTransientSiteCount == 4,
+//
+// P2-9: bu guard YENİ bir site eklendiğinde zaten kırılırdı — asıl derinlik
+// kazanımı, uzunluğun elle yazılan sabitten değil enum'un kendi Count
+// elemanından türetilmesidir. Yeni site eklemek artık iki yeri güncellemeyi
+// gerektirmez; unutulursa Count'i güncellemeden eklenen site sessizce .bss
+// dolgusuna yazar.
+static_assert(kTransientSiteCount ==
+                  static_cast<int>(SaveDurabilityTransientSite::Count),
               "kTransientSiteCount must track SaveDurabilityTransientSite");
 
 // Site-bazlı sayaçlar. Neden site-bazlı: kanca tek bir FIFO olsaydı, probe
 // denemelerini tüketip yedek kopyası yoluna hiç ulaşmak MÜMKÜN OLMAZDI
 // (probe yalnızca kuyruk boşken başarılı olur). Site-bazlı sayaç olmadan
 // yedekleme hata yolu ve 490 restore yolu hiçbir testte koşamazdı.
-std::atomic<int> g_injectTransientFailures[kTransientSiteCount] = {0, 0, 0};
-std::atomic<int> g_consumedTransientFailures[kTransientSiteCount] = {0, 0, 0};
+// Boş '{}' ile başlat: P2-9'da buradaki elle yazılmış '{0, 0, 0}' dizisi
+// 4 doluydu; site eklenince 6'ya çıktığında kalan elemanlar zaten
+// value-initialize olduğu için sessizce doğruydu, ama o üç sıfır yazı yanlış
+// bir "her şey elle sayılıyor" izlenimi veriyordu. Uzunluk artık Count'ten
+// gelir, veri ise default-init olur.
+std::atomic<int> g_injectTransientFailures[kTransientSiteCount] = {};
+std::atomic<int> g_consumedTransientFailures[kTransientSiteCount] = {};
 
 // Test-only: "rakip yazar" simülasyonu. Yedek hazırlandıktan SONRA, replace
 // ÖNCESİ hedefe başka bir yazarın baytlarını yazar. Süreçler arası yarışın
@@ -534,7 +546,7 @@ void removeOwnedTempQuietly(const std::filesystem::path& temporaryPath) {
             return !removeError;
         },
         removeError, /*copying=*/true,
-        static_cast<int>(SaveDurabilityTransientSite::Probe));
+        static_cast<int>(SaveDurabilityTransientSite::OwnedTempRemove));
 }
 
 // Commit bölümü: finalPath'e dokunan TEK yer. g_slotCommitMutex ALTINDA
@@ -644,8 +656,11 @@ static bool commitSlotLocked(const std::filesystem::path& finalPath,
             std::uintmax_t nowSize = 0;
             fs::file_time_type nowStamp{};
             // Ölçüm de geçici paylaşım hatalarına açıktır; aynı sınıflandırma
-            // ve bütçe burada da geçerli, ama ENJEKSİYON YOK: bu bir gözlem
-            // noktası, bir yazma işlemi değil.
+            // ve bütçe burada da geçerli. Bu bir GÖZLEM noktası (write değil),
+            // ama yine de enjekte edilebilir bir sitesi vardır — P2-9 öncesi
+            // burada `Probe` geçiyordu ve yukarıdaki "ENJEKSİYON YOK" yorumu
+            // kodla ÇELİŞİYORDU (yorum yanlıştı, kod doğruydu: bütçe
+            // gerçekten tüketiliyordu). Artık ayrı bir site.
             std::error_code measureError;
             const bool measured = withTransientCommitRetry(
                 kNoInjectedArtifact,
@@ -657,7 +672,7 @@ static bool commitSlotLocked(const std::filesystem::path& finalPath,
                     return !sizeError && !stampError;
                 },
                 measureError, /*copying=*/true,
-                static_cast<int>(SaveDurabilityTransientSite::Probe));
+                static_cast<int>(SaveDurabilityTransientSite::FingerprintMeasure));
             (void)measureError;
             if (!measured) {
                 // Bütçe bittiyse de ölçülemedi: durum bilinmiyor (aşağıda
