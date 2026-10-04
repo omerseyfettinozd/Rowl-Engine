@@ -696,3 +696,28 @@ set_tests_properties(test_p1_7_resize_save PROPERTIES
     ENVIRONMENT "SDL_AUDIODRIVER=dummy;SDL_VIDEODRIVER=dummy"
     TIMEOUT 300
 )
+
+# P2-9 KAPI: gecici-hata kancasının SAYACI başına işlem izolasyonu.
+# Bulgu: SaveDurabilityTransientSite::Probe etiketi commit bolgesindeki UC ayri
+# isleme birden geciriliyordu; "per-site" iddiasi bu yuzden yanlisti.
+# RED (mutasyonlu kod): "P2-9-SITE RED: ..." + exit 1.
+# YESIL: exit 0. rowl_tests gomdesine girmez; D09 emsali.
+add_executable(rowl_p2_9_transient_site_isolation
+    test_p2_9_transient_site_isolation.cpp)
+target_include_directories(rowl_p2_9_transient_site_isolation PRIVATE
+    ${CMAKE_SOURCE_DIR}/engine/include
+)
+target_link_libraries(rowl_p2_9_transient_site_isolation PRIVATE
+    rowl_engine_objects
+    rowl_engine_thirdparty
+)
+target_compile_definitions(rowl_p2_9_transient_site_isolation PRIVATE
+    ROWL_BUILDING_DLL)
+
+add_test(NAME p2_9_transient_site_isolation
+         COMMAND rowl_p2_9_transient_site_isolation)
+set_tests_properties(p2_9_transient_site_isolation PROPERTIES
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    ENVIRONMENT "SDL_AUDIODRIVER=dummy;SDL_VIDEODRIVER=dummy"
+    TIMEOUT 180
+)

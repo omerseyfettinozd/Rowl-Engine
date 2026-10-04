@@ -144,6 +144,20 @@ int saveDurabilityInjectErrno();
 // paths could never be reached by a test at all. Per-site counters are what
 // let a test drive the backup-staging failure and the 490 restore end to end.
 //
+// P2-9 — "per site" MUST mean one site == one operation, and it did not.
+// The three retry sites of the commit region (:363 backup probe, :537 owned
+// temp removal, :660 baseline fingerprint re-measurement) ALL passed the same
+// `Probe` label, so one enum value stood behind three different operations.
+// A test could arm a budget and could not tell which operation spent it, and
+// the consumption order across concurrent writers was schedule-dependent (the
+// commit mutex serialises writers, so which writer drains the budget depends
+// only on who grabs the mutex next). Each label now names exactly one
+// operation; see tests/test_p2_9_transient_site_isolation.cpp, which fails if
+// any two of them collapse back onto one counter.
+// NOT a data race: the counters are std::atomic<int> and the decrement is a
+// compare_exchange_weak CAS loop (see save_durability.cpp), and ThreadSanitizer
+// is clean on them. The defect was the SHARED MEANING, not the read/write.
+//
 // HONEST SCOPE — what this hook gates and what it does not:
 //   gates: the retry loop shape, the backoff, the bounded budget, the
 //          per-site failure accounting, the classifier's acceptance of the
@@ -158,10 +172,13 @@ int saveDurabilityInjectErrno();
 // Production default is 0 for every site; nothing arms it except this setter.
 // Never throws.
 enum class SaveDurabilityTransientSite : int {
-    Probe = 0,        // "is the existing slot a regular file?" backup probe
-    Copy = 1,         // 490 pre-save backup copy
-    Replace = 2,      // atomic rename over the target
-    BackupRemove = 3, // best-effort removal of the staged backup
+    Probe = 0,           // "is the existing slot a regular file?" backup probe
+    Copy = 1,            // 490 pre-save backup copy
+    Replace = 2,         // atomic rename over the target
+    BackupRemove = 3,    // best-effort removal of the staged backup
+    OwnedTempRemove = 4, // best-effort removal of the OWNED UNIQUE temp
+    FingerprintMeasure = 5, // baseline fingerprint re-measurement
+    Count = 6,           // dizi uzunlugu; enum ile ayni olmali (P2-9)
 };
 void setSaveDurabilityInjectTransientFailures(int count,
                                               SaveDurabilityTransientSite site);

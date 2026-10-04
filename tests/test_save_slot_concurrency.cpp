@@ -403,12 +403,16 @@ void test_save_slot_transient_retry() {
                "cross-process winner (fingerprint guard); slot holds the "
                "competing writer's bytes");
 
-    // Kanca temizliği: DÖRT site de silintide kalmamalı (yalnız Copy'e
-    // bakmak, en son silintide bırakılan siteyi görmezdi).
-    const SaveDurabilityTransientSite kAllSites[] = {
-        SaveDurabilityTransientSite::Probe, SaveDurabilityTransientSite::Copy,
-        SaveDurabilityTransientSite::Replace,
-        SaveDurabilityTransientSite::BackupRemove};
+    // Kanca temizliği: TÜM site'ler silintide kalmamalı (yalnız Copy'e
+    // bakmak, en son silintide bırakılan siteyi görmezdi). P2-9 sonrası site
+    // sayısı 6: liste enum'dan türetilir ki yeni site eklenince bu sızıntı
+    // kontrolü onu da kapsasın — elle yazılan DÖRTLÜ liste sessizce daralırdı.
+    SaveDurabilityTransientSite kAllSites[
+        static_cast<int>(SaveDurabilityTransientSite::Count)];
+    for (int site = 0; site < static_cast<int>(SaveDurabilityTransientSite::Count);
+         ++site) {
+        kAllSites[site] = static_cast<SaveDurabilityTransientSite>(site);
+    }
     for (const SaveDurabilityTransientSite site : kAllSites) {
         checkRetry(Rowl::State::saveDurabilityInjectTransientFailures(site) == 0,
                    "transient injection leaked past cleanup on a site");
