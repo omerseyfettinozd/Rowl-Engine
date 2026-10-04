@@ -22,6 +22,7 @@ import wave
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 PACKAGER = ROOT / "tools" / "package_assets.py"
 VERIFIER = ROOT / "tools" / "verify_release_package.py"
+LAUNCHER_TOOL = ROOT / "tools" / "make_release_launchers.py"
 SAMPLE = ROOT / "samples" / "first_light"
 
 
@@ -203,8 +204,30 @@ def main():
             "ROWL ENGINE - FIRST LIGHT SAMPLE RELEASE\n", encoding="utf-8")
         shutil.copy2(ROOT / "packaging" / "THIRD_PARTY_NOTICES.md",
                      release / "THIRD_PARTY_NOTICES.md")
-        (release / "run_game.sh").write_text(
-            "#!/bin/sh\nexec ./%s \"$@\"\n" % player_name, encoding="utf-8")
+        # P2-16: the launcher used to be written here as a POSIX script whose
+        # body happened to name the platform's player, so a Windows run
+        # produced run_game.sh containing `exec ./RowlGame.exe "$@"` — a .bat
+        # was never created anywhere in this suite (grep run_game.bat tests/
+        # returned nothing). The release now gets its launcher from the same
+        # producer the CI packaging steps use, for the platform under test,
+        # so the .bat really is a .bat here, CRLF and all, and the fixture
+        # cannot drift from what ships.
+        launcher_platform = "windows" if os.name == "nt" else "posix"
+        launcher = run(sys.executable, LAUNCHER_TOOL, release,
+                       "--platform", launcher_platform)
+        if launcher.returncode != 0:
+            print(f"launcher generation failed: "
+                  f"{launcher.stdout}{launcher.stderr}", file=sys.stderr)
+            return 1
+        launcher_name = "run_game.bat" if os.name == "nt" else "run_game.sh"
+        if not (release / launcher_name).is_file():
+            print(f"expected {launcher_name} in the staged release",
+                  file=sys.stderr)
+            return 1
+        if os.name == "nt" and (release / "run_game.sh").exists():
+            print("a Windows release must not ship a POSIX launcher",
+                  file=sys.stderr)
+            return 1
 
         verify = run(sys.executable, VERIFIER, release)
         if verify.returncode != 0:
