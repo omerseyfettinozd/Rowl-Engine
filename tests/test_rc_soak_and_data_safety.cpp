@@ -15,7 +15,9 @@
 #include <sstream>
 
 // RSS olcum platform bagimliliklari. psapi baglantisi tests/CMakeLists.txt'te
-// WIN32 icin zaten var (GetProcessMemoryInfo icin).
+// WIN32 icin zaten var (PROCESS_MEMORY_COUNTERS_EX yapisinin kendisi icin;
+// asagidaki Ex API cagrisi CALISMA ZAMANINDA cozumlenir, ayri bir import
+// kitapligi gerektirmez -- bkz. "PrivateUsage icin Ex API" blogu).
 #if defined(_WIN32)
 // windows.h min/max'i KORUMASIZ makro olarak tanimlar ve MSVC'nin STL'i
 // bunlari geri almaz; asagidaki std::min/std::max kullanimlari (RSS olcum
@@ -208,29 +210,106 @@ const char* rssObserveMetricName() {
 #endif
 }
 
+// ---------------------------------------------------------------------------
+// PrivateUsage okumasi (2026-10-04 derleme duzeltmesi)
+//
+// CI HATASI. 9ab0324 yazimi su cagriyi yapiyordu:
+//     PROCESS_MEMORY_COUNTERS_EX counters{};
+//     counters.cb = sizeof(PROCESS_MEMORY_COUNTERS_EX);
+//     GetProcessMemoryInfo(GetCurrentProcess(), &counters, sizeof(counters));
+// ve MSVC C2664 verdi:
+//     cannot convert argument 2 from 'PROCESS_MEMORY_COUNTERS_EX *'
+//                           to 'PPROCESS_MEMORY_COUNTERS'
+//
+// KOK NEDEN (psapi.h'ten dogrulanmis; asagida kaniti var):
+//     typedef struct _PROCESS_MEMORY_COUNTERS {      // 10 alan
+//         ... SIZE_T WorkingSetSize; ... SIZE_T PeakPagefileUsage;
+//     } PROCESS_MEMORY_COUNTERS;                   // PrivateUsage YOK
+//     typedef struct _PROCESS_MEMORY_COUNTERS_EX {   // 11. alan
+//         ... SIZE_T PeakPagefileUsage; SIZE_T PrivateUsage;
+//     } PROCESS_MEMORY_COUNTERS_EX;
+//     BOOL WINAPI GetProcessMemoryInfo(HANDLE, PPROCESS_MEMORY_COUNTERS, DWORD);
+// Yani PrivateUsage YALNIZCA _EX yapisindadir ve duz API _EX'i kabul ETMEZ.
+//
+// "Sadece ismi Ex yapalim" CALISMAZ: GetProcessMemoryInfoEx /
+// K32GetProcessMemoryInfoEx diye bir Win32 API YOKTUR. Dogrulanma:
+//
+//   * mingw-w64 basliklari: `grep -rn GetProcessMemoryInfoEx` HICBIR baslikta
+//     donus vermiyor; psapi.h yalnizca GetProcessMemoryInfo bildiriyor.
+//   * mingw-w64 import kitaplari: libkernel32.a ve libpsapi.a icinde yalnizca
+//     K32GetProcessMemoryInfo / GetProcessMemoryInfo var.
+//   * Wine (kernel32 + psapi) disa aktarma tablosu: yalniz K32GetProcessMemoryInfo.
+//   * kernel32 disa aktarma katalogu: yalniz K32GetProcessMemoryInfo (6.1+).
+//
+// Bu yuzden GetProcAddress ile cozmek de YANLIS olurdu: cozumleme her gercek
+// Windows'ta basarisiz olur ve kapi kalici olarak kirmizi kalirdi. Yani derleme
+// hatasi yerine kalici bir SAHTE kirmizi konulurdu.
+//
+// DOGRU YOL: belgelenen alisilmis bicim -- _EX yapisini indirgenmis bir isaretciyle
+// (downcast) gecirmek ve `cb` olarak yine TAM _EX boyutunu vermek:
+//     GetProcessMemoryInfo(h, (PPROCESS_MEMORY_COUNTERS*)&counters, sizeof(counters))
+// Bu GUVENLIDIR: _EX, _PMC'nin ilk 10 alaninin birebir ayni on ekidir, yani
+// ilk 10 alan aynen yazilir; ek alan yalnizca `cb` ile istenir. Castsiz hali
+// C2664 verir, castli hali sorunsuz derlenir (bu duzeltmenin derleme kaniti).
+//
+// SURUM KORUMASI. MSDN iki alani "ayni deger" olarak tanimlar:
+//     PagefileUsage: "Windows 7 ve Windows Server 2008 R2 ve onceki
+//                     surumlerde PagefileUsage daima sifirdir. Bunun yerine
+//                     PrivateUsage'a bakin."
+//     PrivateUsage : "Same as PagefileUsage."
+// Yani eski surumlerde degeri PagefileUsage degil PrivateUsage verir; yeni
+// surumlerde ikisi de doludur. Bu yuzden once PrivateUsage okunur, sifir
+// donerse PagefileUsage'ye dusulur. IKISI de sifirsa deger UYDURULMAZ:
+// acik bir sebep yazilir, readMemorySample false doner, gate
+// evaluateRss -> kUnmeasured -> exit(1) ile KIRMIZI olur. Boylece "olcemedim"
+// sessizce yesil gecmez.
+// ---------------------------------------------------------------------------
+#if defined(_WIN32)
+// Son basarisiz olcumun ACIK sebebi. nullptr = henuz hata yok.
+// Kapi kirmiziya dustugunde NEDEN kirmizi oldugunu da yazar.
+const char* g_rssReadFailureReason = nullptr;
+#endif // defined(_WIN32)
+
+// Tum platformlarda cagrilabilir; Linux/macOS'ta sebep yoktur (nullptr).
+const char* rssReadFailureReason() {
+#if defined(_WIN32)
+    return g_rssReadFailureReason;
+#else
+    return nullptr;
+#endif
+}
+
 // Gercek olcum yapar. Basariliysa true + `out` doldurulur.
 bool readMemorySample(MemorySample& out) {
 #if defined(_WIN32)
-    // PrivateUsage YALNIZCA PROCESS_MEMORY_COUNTERS_EX icinde vardir; eski
-    // PROCESS_MEMORY_COUNTERS'ta bu alan bulunmaz, bu yuzden _EX kullanilir ve
-    // `cb` MUTLAKA sizeof(yapi) olmalidir (yoksa alan doldurulmaz).
-    // Dokuman uyarisi: "Windows 7 and Windows Server 2008 R2 and earlier:
-    // PagefileUsage is always zero. Check PrivateUsage instead." — yani
-    // dogru alan PrivateUsage'dir, PagefileUsage DEGILDIR.
-    // (psapi baglantisi tests/CMakeLists.txt, yalniz WIN32.)
+    // PrivateUsage YALNIZCA PROCESS_MEMORY_COUNTERS_EX icinde vardir; duz
+    // _PMC'de bu alan bulunmaz, bu yuzden _EX kullanilir ve `cb` MUTLAKA
+    // sizeof(_EX) olmalidir (yoksa ek alan doldurulmaz). API ise _EX'i
+    // kabul etmez; indirgenmis isaretciyle cagrilir (yukaridaki blok).
+    // SAYI BILGISI KORUNDU: `sizeof(PROCESS_MEMORY_COUNTERS_EX)` oldugu gibi.
     PROCESS_MEMORY_COUNTERS_EX counters{};
     counters.cb = sizeof(PROCESS_MEMORY_COUNTERS_EX);
-    if (GetProcessMemoryInfo(GetCurrentProcess(), &counters,
+    if (GetProcessMemoryInfo(GetCurrentProcess(),
+                             reinterpret_cast<PPROCESS_MEMORY_COUNTERS>(&counters),
                              sizeof(counters)) == 0) {
+        g_rssReadFailureReason = "GetProcessMemoryInfo returned FALSE";
         return false;
     }
     const uint64_t privateUsage = static_cast<uint64_t>(counters.PrivateUsage);
-    // PrivateUsage sifir donerse (cok eski bir surum, ya da sayfa tablosu
-    // henuz kurulmamis) bu GECERLI BIR OLCUM DEGILDIR. 0'i "olcemedi"
-    // diye disari veriyoruz: evaluateRss'deki kMinPlausibleRss kilidi de
-    // ayni isi gorur, yani kapi sessizce yesil gecemez.
-    if (privateUsage == 0) return false;
-    out.decision = privateUsage;
+    const uint64_t pagefileUsage = static_cast<uint64_t>(counters.PagefileUsage);
+    const uint64_t commitCharge =
+        (privateUsage != 0) ? privateUsage : pagefileUsage;
+    // Ikisi de sifirsa bu GECERLI BIR OLCUM DEGILDIR (sayfa tablosu kurulmamis
+    // ya da surum bu alanlari doldurmuyor). 0'i "olcemedim" diye disari
+    // veriyoruz: evaluateRss'deki kMinPlausibleRss kilidi de ayni isi gorur,
+    // yani kapi sessizce yesil gecemez.
+    if (commitCharge == 0) {
+        g_rssReadFailureReason =
+            "GetProcessMemoryInfo succeeded but both PrivateUsage and "
+            "PagefileUsage were 0";
+        return false;
+    }
+    out.decision = commitCharge;
     out.observe = static_cast<uint64_t>(counters.WorkingSetSize);
     return true;
 #elif defined(__APPLE__)
@@ -612,7 +691,14 @@ void test_rc_soak_and_data_safety() {
                       << rssDecisionMetricName() << ") on platform '"
                       << rssPlatformName()
                       << "' — the RSS stability gate did NOT run and will NOT "
-                         "report a pass" << std::endl;
+                         "report a pass";
+            // Sebebini de yaz: kirmizi bir gate'in NEDEN kirmizi oldugu
+            // logda gorunmezse, ayni belirsizlik bir sonraki turda tekrarlar.
+            const char* reason = rssReadFailureReason();
+            if (reason != nullptr) {
+                std::cerr << "; reason: " << reason;
+            }
+            std::cerr << std::endl;
             exit(1);
         }
         const uint64_t firstRss = firstSample.decision;
