@@ -18,7 +18,7 @@ const panels = new Map();
 for (const view of Object.keys(names)) {
   const panel = document.createElement('section');
   panel.className = 'panel'; panel.dataset.panel = view; panel.setAttribute('aria-label', `${names[view]} penceresi`);
-  panel.innerHTML = `<header class="panel-header" data-drag="${view}" title="Pencereyi taşımak için başlığı sürükle"><div class="panel-title"><svg aria-hidden="true"><use href="#i-${view}"/></svg><span>${names[view]}</span><span class="pin-indicator" hidden aria-label="Sabit"><svg aria-hidden="true"><use href="#i-pin"/></svg></span></div><button class="icon-button" data-placement="${view}" aria-label="${names[view]} pencere düzeni" title="Yerleştir, sabitle veya kapat"><svg aria-hidden="true"><use href="#i-layout"/></svg></button></header><div class="panel-content"></div><button class="resize-handle" data-resize="${view}" aria-label="${names[view]} pencere boyutunu değiştir"></button>`;
+  panel.innerHTML = `<header class="panel-header" data-drag="${view}" title="Pencereyi taşımak için başlığı sürükle"><div class="panel-title"><svg aria-hidden="true"><use href="#i-${view}"/></svg><span>${names[view]}</span></div><div class="panel-actions"><button class="icon-button placement-button" data-placement="${view}" aria-label="${names[view]} pencere düzeni" title="Pencereyi yerleştir"><svg aria-hidden="true"><use href="#i-layout"/></svg></button><button class="icon-button pin-button" data-pin="${view}" aria-label="${names[view]} penceresini sabitle" title="Pencereyi sabitle"><svg aria-hidden="true"><use href="#i-pin"/></svg></button><button class="icon-button close-button" data-close="${view}" aria-label="${names[view]} penceresini kapat" title="Pencereyi kapat"><svg aria-hidden="true"><use href="#i-close"/></svg></button></div></header><div class="panel-content"></div><button class="resize-handle" data-resize="${view}" aria-label="${names[view]} pencere boyutunu değiştir"></button>`;
   const content = document.querySelector(view === 'node' ? '#node-template' : '#scene-template').content.cloneNode(true);
   if (view !== 'node') {
     // Each copy has its own SVG gradient identifiers.
@@ -58,7 +58,10 @@ function updateControls() {
   document.querySelectorAll('[data-capacity]').forEach(button => button.setAttribute('aria-pressed', String(Number(button.dataset.capacity) === state.capacity)));
   for (const [view, panel] of panels) {
     panel.classList.toggle('is-focused', state.focused === view); panel.classList.toggle('is-pinned', state.pinned.includes(view));
-    panel.querySelector('.pin-indicator').hidden = !state.pinned.includes(view);
+    const pin = panel.querySelector('[data-pin]'), pinned = state.pinned.includes(view);
+    pin.setAttribute('aria-pressed', String(pinned));
+    pin.setAttribute('aria-label', `${names[view]} penceresinin ${pinned ? 'sabitlemesini kaldır' : 'yerini sabitle'}`);
+    pin.title = pinned ? 'Sabitlemeyi kaldır' : 'Pencereyi sabitle';
     panel.style.zIndex = layout.floating[view] ? (state.focused === view ? 12 : 10) : '';
   }
 }
@@ -88,6 +91,7 @@ function render() {
     const panel = panels.get(view); panel.classList.add('is-floating'); positionFloat(view, rect); floatLayer.append(panel);
   }
   updateControls(); updateScene(); fitViews();
+  document.querySelector('#empty-state').hidden = state.visible.length > 0;
   if (active && active !== document.body && active.isConnected) active.focus({ preventScroll: true });
 }
 function updateScene() {
@@ -228,8 +232,10 @@ workspace.addEventListener('pointerup', event => { if (gesture?.pointerId===even
 workspace.addEventListener('pointercancel', event => { if (gesture?.pointerId===event.pointerId) endGesture(true); });
 workspace.addEventListener('lostpointercapture', () => { if (gesture) endGesture(true); });
 workspace.addEventListener('click', event => {
-  const menu = event.target.closest('[data-placement]'), node = event.target.closest('[data-scene]'), zoomButton = event.target.closest('[data-zoom]');
-  if (menu) showPlacement(menu.dataset.placement,menu);
+  const menu = event.target.closest('[data-placement]'), node = event.target.closest('[data-scene]'), zoomButton = event.target.closest('[data-zoom]'), close = event.target.closest('[data-close]'), pin = event.target.closest('[data-pin]');
+  if (close) { apply(closeView(state,close.dataset.close)); document.querySelector(`[data-view="${close.dataset.close}"]`).focus({preventScroll:true}); }
+  else if (pin) apply(togglePin(state,pin.dataset.pin));
+  else if (menu) showPlacement(menu.dataset.placement,menu);
   else if (node) { sceneIndex = Number(node.dataset.scene); updateScene(); }
   else if (event.target.closest('[data-continue]') && !event.target.closest('.editable')) { sceneIndex = (sceneIndex+1)%scenes.length; updateScene(); }
   else if (zoomButton) { zoom = zoomButton.dataset.zoom==='fit'?1:Math.max(.5,Math.min(2,zoom+(zoomButton.dataset.zoom==='in'?.15:-.15))); fitViews(); }

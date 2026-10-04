@@ -32,14 +32,15 @@ Edit Scene, inspector formu değildir. Inspector için ayrı bir kullanıcı tas
 
 - Başlangıçta yalnız Node açık, sınır iki pencere. Üst simge gizli ekranı açar, açık ekranı odaklar.
 - Sağ üst seçenek menüsünde üç pencere seçimi tüm ekranları açar. İkiye dönüş sabit olmayan en eski pencereyi kapatır.
-- Pencere menüsünde **Pencereyi sabitle**, otomatik ekran değiştirmede o pencerenin korunmasını sağlar. Kullanıcı sabit pencereyi bizzat taşıyabilir.
+- Her pencerenin başlığında yerleşim, sabitleme ve görünür **× kapatma** düğmeleri var. Çok dar pencerede sabitleme yerleşim menüsünden de kullanılabilir.
+- **Pencereyi sabitle**, otomatik ekran değiştirmede o pencerenin korunmasını sağlar. Kullanıcı sabit pencereyi bizzat taşıyabilir veya × ile kapatabilir.
 - İki pencere doluyken üçüncü simge, sabit olmayan en eski pencerenin aynı dock alanını veya serbest dikdörtgenini devralır.
 - Bütün açık pencereler sabitse yeni ekran açılmaz; açıklama gösterilir. Üçü sabitse ikiye geçmeden sabitleme kaldırılmalıdır.
-- Son açık pencere veya sabit pencere kapatılamaz. Seçenek menüsündeki başlangıca dön eylemi örnek veriyi ve yerleşimi sıfırlar.
+- ×, son açık pencere dahil herhangi bir pencereyi kapatır. Boş çalışma alanında üst simgelerden yeniden ekran açılabilir. Kapatılan pencerenin sabitlemesi kaldırılır. Seçenek menüsündeki başlangıca dön eylemi örnek veriyi ve yerleşimi sıfırlar.
 
 ## Doğrulama — 2026-10-04
 
-14 durum testi: kapasite/sabitleme, dört yönde iç içe yerleştirme, serbest/dock dönüşü, aynı konumu devralma, oran sınırları, mobil başlangıç ve 1000 karma işlemde pencere tekilliği.
+15 durum testi: kapasite/sabitleme, sabit ve son pencereyi elle kapatma, boş alandan yeniden açma, dört yönde iç içe yerleştirme, serbest/dock dönüşü, aynı konumu devralma, oran sınırları, mobil başlangıç ve 1000 karma işlemde pencere tekilliği.
 
 ```sh
 node --test prototypes/editor-workspace/*.test.mjs
@@ -48,6 +49,8 @@ node --test prototypes/editor-workspace/*.test.mjs
 Tarayıcıda masaüstü başlık sürükleme, üst/alt yerleştirme, bölme ve serbest pencere boyutlandırma, tek serbest pencerenin dock'a dönüşü, klavyeyle obje taşıma ve Game/Edit Scene ortak obje konumları kontrol edildi.
 390×844 görünümde de obje sürükleme ve pencere yerleşimi kontrol edildi; yatay sayfa taşması gözlenmedi.
 Bu kontrol gerçek mobil cihaz kabulü değildir. Tarayıcı hata/uyarı kaydı boştu.
+
+Son düzeltmede başlıktaki × ile sabit pencere, son pencere ve serbest pencere kapatma; üst simgeden yeniden açma masaüstünde doğrulandı. 390×844 görünümde de son pencereyi kapatma ve başka ekranla yeniden açma kontrol edildi.
 
 Siyah/kemik beyazı paleti mevcut KARAR-0 kararından gelir. SVG sahne yereldir; harici font, resim, API veya motor bağlantısı yoktur. Örnek veri sayfa yenilenince sıfırlanır.
 

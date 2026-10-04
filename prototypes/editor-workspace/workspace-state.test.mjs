@@ -34,12 +34,27 @@ test('Bütün paneller sabitken yer değiştirme ve kapasite daraltma açıklan�
   assert.ok(openView(state, 'edit').message);
 });
 
-test('Son panel ve sabit panel yanlışlıkla kapanmaz', () => {
+test('Elle kapatma sabit pencereyi de kapatır; sabitleme temizlenir', () => {
   const state = initialState();
-  assert.equal(closeView(state, 'node').state, state);
   const pinned = togglePin(openView(state, 'game').state, 'game').state;
-  assert.equal(closeView(pinned, 'game').state, pinned);
-  assert.deepEqual(closeView(pinned, 'node').state.visible, ['game']);
+  const closed = closeView(pinned, 'game').state;
+  assert.deepEqual(closed.visible, ['node']);
+  assert.deepEqual(closed.pinned, []);
+  assert.equal(closed.focused, 'node');
+});
+
+test('Son pencere kapanabilir; boş alandan herhangi bir ekran yeniden açılır', () => {
+  const closed = closeView(initialState(), 'node').state;
+  assert.deepEqual(closed.visible, []);
+  assert.equal(closed.focused, null);
+  for (const view of VIEWS) {
+    const reopened = openView(closed, view).state;
+    assert.deepEqual(reopened.visible, [view]);
+    assert.equal(reopened.focused, view);
+  }
+  const three = setCapacity(closed, 3).state;
+  assert.deepEqual(three.visible, VIEWS);
+  assert.equal(three.focused, 'node');
 });
 
 test('Erişilebilir tüm durumlarda kapasite, odak ve sabit panel kuralları korunur', () => {
@@ -48,16 +63,16 @@ test('Erişilebilir tüm durumlarda kapasite, odak ve sabit panel kuralları kor
     const state = queue.pop(), key = JSON.stringify(state);
     if (seen.has(key)) continue;
     seen.add(key);
-    assert.ok(state.visible.length >= 1 && state.visible.length <= state.capacity);
+    assert.ok(state.visible.length <= state.capacity);
     assert.equal(new Set(state.visible).size, state.visible.length);
-    assert.ok(state.visible.includes(state.focused));
+    assert.ok(state.visible.length ? state.visible.includes(state.focused) : state.focused === null);
     assert.ok(state.pinned.every(v => state.visible.includes(v)));
     assert.ok(state.visible.every(v => state.recent.includes(v)));
     for (const view of VIEWS) {
       for (const transition of [openView, closeView, togglePin]) {
         const next = transition(state, view).state;
-        // Only an explicit unpin/close action may remove a previously pinned view.
-        if (transition !== togglePin) assert.ok(state.pinned.every(v => next.visible.includes(v)));
+        // Automatic replacement preserves pins; explicit closing is allowed.
+        if (transition === openView) assert.ok(state.pinned.every(v => next.visible.includes(v)));
         queue.push(next);
       }
       queue.push(focusView(state, view));
