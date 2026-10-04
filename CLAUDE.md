@@ -1,22 +1,9 @@
-# Rowl Engine — Ajan Kuralları ve Hafıza Entegrasyonu
+# Rowl Engine — ajan yönlendiricisi
 
-## 🧠 İkinci Beyin (Obsidian) Bağlantısı
-- Bu projenin resmi mimari dökümantasyonu, hafızası ve kuralları kullanıcının Obsidian kasasındadır:
-  - **Kasa Yolu:** `/home/chaple/second-brain`
-  - **Rowl Engine Mimari Notları:** `/home/chaple/second-brain/300-Projects/`
-    - `Rowl-Engine.md` (Genel Mimari)
-    - `Rowl-Engine-Core.md` (Çekirdek Motor & C API)
-    - `Rowl-Engine-Render.md` (SDL3 Render Pipeline & Viewport)
-    - `Rowl-Engine-VFS.md` (Sanal Dosya Sistemi & .rowlpkg)
-    - `Rowl-Engine-Bridge.md` (C++ / C# P/Invoke Köprüsü)
-    - `Rowl-Engine-Editor.md` (C# Avalonia 11 Editör Mimarisi)
-  - **Genel Bilgi Bankası:** `/home/chaple/second-brain/500-Knowledge/`
-  - **Günlük Notlar / Kararlar:** `/home/chaple/second-brain/daily/`
+Ortak hafıza: `/home/chaple/second-brain`. Ortak kurallar `🔮 850-Companion/Kurallar.md`; proje kuralları `🔮 850-Companion/Scoped-Rules.md` içindeki **Rowl Engine** bölümüdür. Bağlamda zaten yüklüyse tekrar okuma.
 
-Kullanıcı "Obsidian", "İkinci Beyin", "hafıza", "dökümanlar" veya "notlar" dediğinde; doğrudan `/home/chaple/second-brain` altındaki bu dosyaları referans al, oku ve gerekirse güncellemeleri oraya da not düş.
+Mimari: `300-Projects/Rowl-Engine.md`; görevle ilgili `Rowl-Engine-Core`, `Render`, `VFS`, `Bridge` veya `Editor` notunu seç. Güncel durum `Rowl Engine Dökümantasyon Listesi/IMPLEMENTATION_STATUS.md`; yalnız devam/planlama işinde başvur.
 
-## 🛠️ Proje Standartları
-- **C++ Çekirdeği:** C++20 standardı, CMake derleme sistemi, SDL3 offscreen render hattı.
-- **Editör Katmanı:** .NET 10, Avalonia 11 UI framework, CommunityToolkit.Mvvm.
-- **Köprü (Bridge):** `RowlEngineCore` paylaşımlı kütüphanesi ile P/Invoke (`c_api.h`).
-- **Bellek Güvenliği:** Ham işaretçiler yerine modern RAII ve akıllı işaretçiler (`std::unique_ptr`, `std::shared_ptr`).
+Proje sınırları: C++20/CMake/SDL3; .NET 10/Avalonia 11/CommunityToolkit.Mvvm; `c_api.h` ile P/Invoke köprüsü. Kaynak ömrünü RAII ile yönet; köprü değişikliklerinde native/managed sözleşme uyumunu doğrula.
+
+Git işlemlerinde mevcut SSH ve doğrulanmış kullanıcı kimliğini koru. Görev kapsamıyla commit/push yap; mevcut dalı veya teslim düzenini izle, `main` varsayma.
