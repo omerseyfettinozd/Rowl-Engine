@@ -11,10 +11,40 @@ first frame) against a Zen 4 baseline (~128-150 ms) manufactures regressions
 that no code change caused. cpu_count and machine stay informational:
 cpu_count is the runner's core budget and machine is just $(uname -m).
 
-Skip rule: incompatible environments print a line containing "skipping" and
-exit 0 so CI can skip gracefully. Unreadable or malformed files exit 1.
---warn-percent (default 20) only prints WARNING lines and exits 0, while
---fail-percent (default off) exits 2 when any regression exceeds it.
+BASELINE SELECTION - the rule this tool owns (see select_baseline).
+
+The caller may pass SEVERAL baselines, newest first:
+
+    compare_benchmarks.py [BASELINE ...] CANDIDATE
+
+Pinning the host is only half the fix. The other half is WHICH artifact the
+gate is allowed to compare against. CI picks its baseline with
+`gh run list --status success --limit 1`, and that query cannot see this
+gate's own verdict: a run that SKIPPED here still ends conclusion=success.
+So the skipped run becomes the next run's baseline, and a regression this
+gate MISSED is laundered into the reference point -- it resurfaces only if a
+later same-host run is worse still. A skip is therefore not just lost
+coverage, it is lost coverage that actively anchors the next comparison.
+
+So the caller hands over every recent baseline and this tool picks the
+newest one whose compatibility key MATCHES the candidate. A run whose own
+comparison skipped can still be selected later (it is a legitimate same-host
+reference), but the run that skipped no longer *creates* the reference: when
+it ran, the tool walked back to a compatible baseline and gated it. That is
+the drift being closed -- the fix is at the producer, not the consumer.
+
+No matching baseline is NOT a silent pass. It is a loud `SKIPPED:` banner
+naming the candidate host and every baseline it walked past, because a brand
+new runner class legitimately has no reference yet and CI must show that
+coverage is missing rather than let a green job imply it was checked. The
+very next run on that host has a baseline, so this costs one run per host,
+not permanent coverage.
+
+Skip rule: an environment that cannot be matched prints a line containing
+"skipping" and exits 0 so CI can skip gracefully. Unreadable or malformed
+files exit 1. --warn-percent (default 20) only prints WARNING lines and
+exits 0, while --fail-percent (default off) exits 2 when any regression
+exceeds it.
 
 A skipped comparison is a gate that did NOT run, so it must never be silent:
 the skip reason is printed as a `SKIPPED:` banner (and written to
@@ -113,6 +143,45 @@ def compatibility_key(report):
     }
 
 
+def select_baseline(baseline_paths, candidate):
+    """Pick the newest baseline whose compatibility key matches the candidate.
+
+    `baseline_paths` is newest-first, exactly as the caller received them from
+    `gh run list`. The FIRST match wins, so the gate keeps comparing against
+    the most recent compatible reference and never silently falls back to an
+    old one.
+
+    A baseline that fails to load is skipped rather than fatal: one corrupt
+    artifact in the window must not blind the gate to the nine good ones
+    behind it. That is a deliberate trade -- a skipped unreadable file is
+    still reported, so the lost comparison is visible, but the run is not
+    failed for someone else's broken artifact.
+
+    Returns (path, report, skipped) where `skipped` is a list of
+    (path, reason) for every baseline that was passed over, so the caller can
+    name them in the log instead of dropping them silently.
+    """
+    candidate_key = compatibility_key(candidate)
+    skipped = []
+    for path in baseline_paths:
+        try:
+            report = load(path)
+        except (ValueError, OSError, KeyError, json.JSONDecodeError) as error:
+            # Unreadable or malformed: report it and keep walking.
+            skipped.append((path, f"unreadable baseline ({error})"))
+            continue
+        base_key = compatibility_key(report)
+        mismatches = [(name, base_key[name], candidate_key[name])
+                      for name in candidate_key if base_key[name] != candidate_key[name]]
+        if not mismatches:
+            return path, report, skipped
+        # Mismatching key: this baseline is a real run on a real host, just
+        # not THIS host. Keep walking instead of giving up.
+        details = ", ".join(f"{name}={value!r}" for name, value, _ in mismatches)
+        skipped.append((path, f"incompatible ({details})"))
+    return None, None, skipped
+
+
 def compare(baseline, candidate):
     base_key = compatibility_key(baseline)
     candidate_key = compatibility_key(candidate)
@@ -123,7 +192,6 @@ def compare(baseline, candidate):
         # Structured mismatch, so main() can report WHICH key failed without
         # re-parsing the human-readable string it would have to print.
         raise IncompatibleEnvironment(mismatches, details)
-
     rows = []
     skipped = []
     for name, (path, higher_is_better, abs_floor) in METRICS.items():
@@ -166,8 +234,11 @@ def emit(line, summary_path=None):
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("baseline")
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("baseline", nargs="*",
+                        help="one or more candidate baselines, NEWEST FIRST; the first "
+                             "one whose compatibility key matches the candidate is used")
     parser.add_argument("candidate")
     parser.add_argument("--output", help="write the machine-readable comparison JSON here")
     parser.add_argument("--summary", help="append the outcome to this step-summary markdown file")
@@ -177,11 +248,46 @@ def main():
                         help="exit nonzero when any regression exceeds this percent (default: off)")
     args = parser.parse_args()
     try:
-        result = compare(load(args.baseline), load(args.candidate))
+        candidate_report = load(args.candidate)
+    except ValueError as error:
+        print("[BenchmarkCompare] ERROR: " + str(error), file=sys.stderr)
+        return 1
+    except (OSError, KeyError, json.JSONDecodeError) as error:
+        print("[BenchmarkCompare] ERROR: " + str(error), file=sys.stderr)
+        return 1
+
+    # Pick the baseline HERE, not in the workflow. `gh run list --status success`
+    # cannot see this gate's verdict -- a run that skipped still ends
+    # 'success' -- so a caller that takes "the newest successful run" hands us
+    # whatever host that run happened to land on. Owning the choice keeps the
+    # rule in one place for every caller of the tool, not just this repo's CI.
+    baseline_path, baseline_report, passed_over = select_baseline(
+        args.baseline, candidate_report)
+
+    if baseline_report is None:
+        # No matching baseline. This is a skip, not a pass, and it must say so
+        # loudly: a green job that silently checked nothing is the failure mode
+        # this whole change exists to prevent.
+        candidate_host = compatibility_key(candidate_report).get("environment.cpu_model")
+        if not args.baseline:
+            emit("[BenchmarkCompare] no baseline artifacts were available; skipping comparison.",
+                 args.summary)
+        else:
+            emit(f"[BenchmarkCompare] none of the {len(args.baseline)} baseline(s) match this "
+                 f"run's environment; skipping comparison.", args.summary)
+        for path, reason in passed_over:
+            emit(f"[BenchmarkCompare]   walked past {path}: {reason}", args.summary)
+        emit(f"[BenchmarkCompare] SKIPPED: no compatible baseline for host "
+             f"{candidate_host or 'unpinned (schema v1 has no cpu_model)'} - this benchmark "
+             "gate did NOT run, it did not pass.", args.summary)
+        return 0
+
+    try:
+        result = compare(baseline_report, candidate_report)
     except IncompatibleEnvironment as error:
-        # A skipped gate is NOT a passing gate. Name every mismatching key and
-        # both values so the coverage this run LOST is impossible to miss on a
-        # green job. Exit stays 0 (skip is not failure), but it is now loud.
+        # Unreachable while select_baseline is the only caller (it already
+        # matched the key), but compare() stays a public function and must keep
+        # its own guard rather than trusting its caller.
         emit("[BenchmarkCompare] " + str(error) + "; skipping comparison.", args.summary)
         for name, before, after in error.mismatches:
             emit(f"[BenchmarkCompare] SKIPPED: {name} differs "
@@ -205,6 +311,15 @@ def main():
     host = result["environment"].get("environment.cpu_model")
     emit(f"[BenchmarkCompare] host: {host or 'unpinned (schema v1 has no cpu_model)'} "
          "(compatibility key matched; gate ran)", args.summary)
+    # Name the reference this run actually measured against. Without this the
+    # log cannot tell "compared against the run before it" from "compared
+    # against something six runs back because the ones between were on other
+    # hosts", which is exactly the distinction a drifting baseline hides.
+    emit(f"[BenchmarkCompare] baseline: {baseline_path} "
+         f"(passed over {len(passed_over)} newer incompatible/unreadable baseline(s))",
+         args.summary)
+    for path, reason in passed_over:
+        emit(f"[BenchmarkCompare]   passed over {path}: {reason}", args.summary)
     for row in result["metrics"]:
         print(f"  {row['metric']}: {row['baseline']:.6f} -> {row['candidate']:.6f} "
               f"({row['delta_percent']:+.2f}%)")
