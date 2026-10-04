@@ -1,6 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { VIEWS, initialState, focusView, openView, closeView, togglePin, setCapacity } from './workspace-state.mjs';
+import { VIEWS, initialState, focusView, openView, closeView, toggleView, togglePin, setCapacity } from './workspace-state.mjs';
+
+test('Üst simge ikinci tıklamada sabit ve son pencereyi de kapatır', () => {
+  for (const view of VIEWS) {
+    const empty = closeView(initialState(), 'node').state;
+    const opened = toggleView(empty, view).state;
+    const pinned = togglePin(opened, view).state;
+    const closed = toggleView(pinned, view).state;
+    assert.deepEqual(closed.visible, []);
+    assert.deepEqual(closed.pinned, []);
+    assert.equal(closed.focused, null);
+  }
+});
 
 test('Game sabitken üçüncü ekran Node alanını değiştirir', () => {
   let state = openView(initialState(), 'game').state;
@@ -69,7 +81,7 @@ test('Erişilebilir tüm durumlarda kapasite, odak ve sabit panel kuralları kor
     assert.ok(state.pinned.every(v => state.visible.includes(v)));
     assert.ok(state.visible.every(v => state.recent.includes(v)));
     for (const view of VIEWS) {
-      for (const transition of [openView, closeView, togglePin]) {
+      for (const transition of [openView, closeView, toggleView, togglePin]) {
         const next = transition(state, view).state;
         // Automatic replacement preserves pins; explicit closing is allowed.
         if (transition === openView) assert.ok(state.pinned.every(v => next.visible.includes(v)));

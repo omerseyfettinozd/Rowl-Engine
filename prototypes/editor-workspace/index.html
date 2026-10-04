@@ -14,6 +14,9 @@
     <symbol id="i-edit" viewBox="0 0 24 24"><path d="M10 3H5a2 2 0 0 0-2 2v5m0 4v5a2 2 0 0 0 2 2h5M14 3h5a2 2 0 0 1 2 2v5m-10 1 10 5-5 1-1 5Z"/></symbol>
     <symbol id="i-pin" viewBox="0 0 24 24"><path d="m9 3 6 0-1 6 4 4v2H6v-2l4-4-1-6ZM12 15v6"/></symbol>
     <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="m8 5 11 7-11 7Z"/></symbol>
+    <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></symbol>
     <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14m-6-6 6 6-6 6"/></symbol>
     <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
     <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
@@ -33,6 +36,9 @@
       <button class="view-button" data-view="node" aria-label="Node ekranını aç" title="Node"><svg><use href="#i-node"/></svg><i></i></button>
       <button class="view-button" data-view="game" aria-label="Game ekranını aç" title="Game"><svg><use href="#i-game"/></svg><i></i></button>
       <button class="view-button" data-view="edit" aria-label="Edit Scene ekranını aç" title="Edit Scene"><svg><use href="#i-edit"/></svg><i></i></button>
+      <span class="toolbar-divider" aria-hidden="true"></span>
+      <button class="view-button playback-button" id="play-toggle" aria-label="Oyunu başlat" title="Oyunu başlat"><svg aria-hidden="true"><use href="#i-play"/></svg></button>
+      <button class="view-button playback-button" id="pause-toggle" aria-label="Oyunu duraklat" title="Oyunu duraklat" disabled><svg aria-hidden="true"><use href="#i-pause"/></svg></button>
     </nav>
     <button class="icon-button" id="options" aria-label="Çalışma alanı seçenekleri" aria-expanded="false" aria-controls="options-menu" title="Seçenekler"><svg><use href="#i-more"/></svg></button>
     <div class="options-menu popover" id="options-menu" hidden>

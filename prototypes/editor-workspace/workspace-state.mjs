@@ -22,6 +22,9 @@ export function closeView(state, view) {
   const focused = visible.includes(state.focused) ? state.focused : [...recent].reverse().find(v => visible.includes(v)) ?? null;
   return { state: { ...state, visible, recent, focused, pinned: state.pinned.filter(v => v !== view) } };
 }
+export function toggleView(state, view) {
+  return state.visible.includes(view) ? closeView(state, view) : openView(state, view);
+}
 export function togglePin(state, view) {
   if (!state.visible.includes(view)) return { state };
   const pinned = state.pinned.includes(view) ? state.pinned.filter(v => v !== view) : [...state.pinned, view];

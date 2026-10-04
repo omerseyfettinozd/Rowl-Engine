@@ -1,5 +1,6 @@
-import { initialState, focusView, openView, closeView, togglePin, setCapacity } from './workspace-state.mjs';
+import { initialState, focusView, openView, closeView, toggleView, togglePin, setCapacity } from './workspace-state.mjs';
 import { initialLayout, syncLayout, dockView, resizeSplit } from './layout-state.mjs';
+import { initialPlayback, startPlayback, togglePause, advancePlayback, playbackFrame } from './playback-state.mjs';
 
 const names = { node: 'Node', game: 'Game', edit: 'Edit Scene' };
 const defaults = [
@@ -12,6 +13,7 @@ const objectNames = { moon: 'Ay', character: 'Mira', dialogue: 'Diyalog' };
 const newScenes = () => defaults.map(scene => ({ ...scene, objects: structuredClone(baseObjects) }));
 let scenes = newScenes(), sceneIndex = 0, selectedObject = 'character';
 let state = initialState(), layout = initialLayout(), zoom = 1, toastTimer, gesture = null, placementView = null;
+let playback = initialPlayback(), playbackSceneIndex = 0, lastFrameTime = null;
 const workspace = document.querySelector('#workspace'), dockRoot = document.querySelector('#dock-root');
 const placement = document.querySelector('#placement-menu'), options = document.querySelector('#options-menu');
 const panels = new Map();
@@ -52,7 +54,8 @@ function updateControls() {
   document.querySelectorAll('[data-view]').forEach(button => {
     const view = button.dataset.view, open = state.visible.includes(view), pinned = state.pinned.includes(view);
     button.setAttribute('aria-pressed', String(open));
-    button.setAttribute('aria-label', `${names[view]} ekranı${open ? ', açık' : 'nı aç'}${pinned ? ', sabit' : ''}`);
+    button.setAttribute('aria-label', `${names[view]} ekranını ${open ? 'kapat' : 'aç'}${pinned ? ', sabit' : ''}`);
+    button.title = `${names[view]} · ${open ? 'kapat' : 'aç'}`;
     button.classList.toggle('focused', state.focused === view);
   });
   document.querySelectorAll('[data-capacity]').forEach(button => button.setAttribute('aria-pressed', String(Number(button.dataset.capacity) === state.capacity)));
@@ -63,6 +66,17 @@ function updateControls() {
     pin.setAttribute('aria-label', `${names[view]} penceresinin ${pinned ? 'sabitlemesini kaldır' : 'yerini sabitle'}`);
     pin.title = pinned ? 'Sabitlemeyi kaldır' : 'Pencereyi sabitle';
   }
+  const running = playback.status !== 'stopped', paused = playback.status === 'paused';
+  const play = document.querySelector('#play-toggle'), pause = document.querySelector('#pause-toggle');
+  play.setAttribute('aria-label', running ? 'Oyunu kapat' : 'Oyunu başlat');
+  play.title = running ? 'Oyunu kapat' : 'Oyunu başlat';
+  play.classList.toggle('is-running', running);
+  play.querySelector('use').setAttribute('href', running ? '#i-stop' : '#i-play');
+  pause.disabled = !running;
+  pause.setAttribute('aria-pressed', String(paused));
+  pause.setAttribute('aria-label', paused ? 'Oyuna devam et' : 'Oyunu duraklat');
+  pause.title = paused ? 'Oyuna devam et' : 'Oyunu duraklat';
+  pause.querySelector('use').setAttribute('href', paused ? '#i-play' : '#i-pause');
 }
 function focus(view) { state = focusView(state, view); updateControls(); }
 function treeElement(tree) {
@@ -86,19 +100,24 @@ function render() {
   document.querySelector('#empty-state').hidden = state.visible.length > 0;
   if (active && active !== document.body && active.isConnected) active.focus({ preventScroll: true });
 }
-function updateScene() {
-  const scene = scenes[sceneIndex];
-  for (const view of ['game', 'edit']) {
+function paintScene(view, scene) {
     const panel = panels.get(view);
     panel.querySelector('.scene-title').textContent = scene.title;
     panel.querySelector('.speaker-name').textContent = 'Mira'; panel.querySelector('.dialogue-text').textContent = scene.dialogue;
-    panel.querySelector('.scene-help').textContent = view === 'edit' ? `${objectNames[selectedObject]} · tut ve sürükle` : 'Önizleme';
+    panel.querySelector('.scene-help').textContent = view === 'edit' ? `${objectNames[selectedObject]} · tut ve sürükle` : { stopped:'Önizleme', playing:'Çalışıyor', paused:'Duraklatıldı' }[playback.status];
+    if (view === 'game') {
+      panel.dataset.playback = playback.status;
+      panel.querySelector('[data-continue]').disabled = playback.status === 'paused';
+    }
     for (const [name, object] of Object.entries(scene.objects)) {
       const el = panel.querySelector(`[data-object="${name}"]`);
       el.style.left = `${object.x}%`; el.style.top = `${object.y}%`; el.style.width = `${object.w}%`; el.style.height = `${object.h}%`;
       el.classList.toggle('selected', view === 'edit' && selectedObject === name);
     }
-  }
+}
+function updateScene() {
+  paintScene('game', playbackFrame(playback) ?? scenes[sceneIndex]);
+  paintScene('edit', scenes[sceneIndex]);
   panels.get('node').querySelectorAll('[data-scene]').forEach(node => {
     const index = Number(node.dataset.scene); node.classList.toggle('selected', index === sceneIndex); node.setAttribute('aria-pressed', String(index === sceneIndex));
   });
@@ -209,7 +228,14 @@ workspace.addEventListener('click', event => {
   else if (pin) apply(togglePin(state,pin.dataset.pin));
   else if (menu) showPlacement(menu.dataset.placement,menu);
   else if (node) { sceneIndex = Number(node.dataset.scene); updateScene(); }
-  else if (event.target.closest('[data-continue]') && !event.target.closest('.editable')) { sceneIndex = (sceneIndex+1)%scenes.length; updateScene(); }
+  else if (event.target.closest('[data-continue]') && !event.target.closest('.editable')) {
+    if (playback.status === 'paused') return;
+    if (playback.status === 'playing') {
+      playbackSceneIndex = (playbackSceneIndex+1)%scenes.length;
+      playback = startPlayback(scenes[playbackSceneIndex]); lastFrameTime = null;
+    } else sceneIndex = (sceneIndex+1)%scenes.length;
+    updateScene();
+  }
   else if (zoomButton) { zoom = zoomButton.dataset.zoom==='fit'?1:Math.max(.5,Math.min(2,zoom+(zoomButton.dataset.zoom==='in'?.15:-.15))); fitViews(); }
 });
 workspace.addEventListener('focusin', event => { const panel = event.target.closest('[data-panel]'); if (panel) focus(panel.dataset.panel); });
@@ -227,7 +253,21 @@ workspace.addEventListener('keydown', event => {
     document.querySelector(`[data-divider="${divider.dataset.divider}"]`)?.focus({preventScroll:true});
   }
 });
-document.querySelectorAll('[data-view]').forEach(button => button.addEventListener('click',()=>apply(openView(state,button.dataset.view))));
+document.querySelectorAll('[data-view]').forEach(button => button.addEventListener('click',()=>{ endGesture(true); apply(toggleView(state,button.dataset.view)); }));
+document.querySelector('#play-toggle').addEventListener('click',()=>{
+  endGesture(true);
+  if (playback.status === 'stopped') {
+    const result = openView(state,'game');
+    if (!result.state.visible.includes('game')) { apply(result); return; }
+    playbackSceneIndex = sceneIndex; playback = startPlayback(scenes[sceneIndex]); lastFrameTime = null;
+    apply(result);
+  } else {
+    playback = initialPlayback(); lastFrameTime = null; closeMenus(); updateControls(); updateScene();
+  }
+});
+document.querySelector('#pause-toggle').addEventListener('click',()=>{
+  playback = togglePause(playback); lastFrameTime = null; updateControls(); updateScene();
+});
 document.querySelectorAll('[data-capacity]').forEach(button => button.addEventListener('click',()=>apply(setCapacity(state,Number(button.dataset.capacity)))));
 document.querySelector('#options').addEventListener('click',()=>{ const open=options.hidden; closeMenus(); options.hidden=!open; document.querySelector('#options').setAttribute('aria-expanded',String(open)); });
 placement.addEventListener('click',event=>{
@@ -239,9 +279,18 @@ placement.addEventListener('click',event=>{
 document.addEventListener('pointerdown',event=>{ if (!event.target.closest('.popover,#options,[data-placement]')) closeMenus(); });
 document.addEventListener('keydown',event=>{ if (event.key==='Escape') { endGesture(true); closeMenus(); } });
 document.querySelector('#reset').addEventListener('click',()=>{
-  endGesture(true); scenes=newScenes(); sceneIndex=0; selectedObject='character'; zoom=1; state=initialState(); layout=initialLayout(); closeMenus();
+  endGesture(true); scenes=newScenes(); sceneIndex=0; selectedObject='character'; zoom=1; state=initialState(); layout=initialLayout(); playback=initialPlayback(); lastFrameTime=null; closeMenus();
   panels.get('node').querySelector('.graph-viewport').scrollTop=0; render();
 });
 const observer=new ResizeObserver(fitViews); observer.observe(workspace); observer.observe(panels.get('node').querySelector('.graph-viewport'));
 for (const view of ['game','edit']) observer.observe(panels.get(view).querySelector('.scene-stage-wrap'));
 render();
+function animate(timestamp) {
+  if (playback.status === 'playing' && lastFrameTime !== null) {
+    playback = advancePlayback(playback, Math.min(.1, (timestamp-lastFrameTime)/1000));
+    paintScene('game', playbackFrame(playback));
+  }
+  lastFrameTime = timestamp;
+  requestAnimationFrame(animate);
+}
+requestAnimationFrame(animate);
