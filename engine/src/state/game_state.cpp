@@ -487,6 +487,23 @@ std::shared_ptr<const GameState> GameState::withDialogueHistory(
         history->erase(history->begin(), history->begin() +
             static_cast<std::ptrdiff_t>(history->size() - kMaxDialogueHistoryEntries));
     }
+    // Ölçüldü (probe_rw_accounting, deterministik capacity muhasebesi): her
+    // halka kendi dialogueHistory KOPYASINI taşıyor ve kopya std::vector'ün
+    // 2x büyüme politikası yüzünden BOYUTUN ~2 KATI kapasite ayırıyordu;
+    // erase() baştan sildiği için bu kapasite hiç geri dönmez. Zincir N halka
+    // olduğunda boşa ayrılan alan O(N·500·112).
+    //     300 advance : 10 234 112 B ->  5 210 912 B  (1,96x)
+    //     1200 advance: 106 936 512 B -> 53 764 400 B  (1,99x)
+    // Halkanın düğümleri 1200'de yalnızca 480 400 B (toplamın %0,9'u); asıl
+    // maliyet halka başına dialogueHistory kopyasıdır.
+    //
+    // Kırpma (previousState zincirini sınırlamak) UYGULANMADI: ölçüldü ki
+    // 1200 advance sonrası rewind(2000) köke (stepId=1) ulaşmak zorunda —
+    // K=4 halkaya kırpılırsa stepId 1197'de, K=64'te 1137'de kalır ve
+    // test_rc_soak 7. bölüm kırılır. Derin-rewind bir ÖZELLİK, yan etki
+    // değil; zincir derinliğine dokunmadan tahsis bütçesini daraltıyoruz.
+    // MUTASYON: bu satırı silerseniz rewind_history_budget_probe KIRMIZI döner.
+    history->shrink_to_fit();
     nextState->dialogueHistory = std::move(history);
     return nextState;
 }

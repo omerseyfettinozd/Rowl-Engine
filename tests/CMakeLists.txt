@@ -696,3 +696,26 @@ set_tests_properties(test_p1_7_resize_save PROPERTIES
     ENVIRONMENT "SDL_AUDIODRIVER=dummy;SDL_VIDEODRIVER=dummy"
     TIMEOUT 300
 )
+
+# Rewind dialogueHistory tahsis bütçesi probu. withDialogueHistory her
+# append'de geçmişin tam kopyasını alır ve kopya zincirin her halkasında
+# tutulur; std::vector 2x büyüme + erase'in kapasiteyi geri vermemesi
+# yüzünden tutulan alan ~2x şişer (ölçüm: 300 advance'te 9.7 MB -> 0.23 MB).
+# KIRMIZI: bir halka size() < capacity() taşır veya toplam bütçe aşılır.
+# YEŞİL: her halka size()==capacity() ve toplam bütçe içinde.
+add_executable(rowl_rewind_history_budget_probe test_rewind_history_budget_probe.cpp)
+target_include_directories(rowl_rewind_history_budget_probe PRIVATE
+    ${CMAKE_SOURCE_DIR}/engine/include
+)
+target_link_libraries(rowl_rewind_history_budget_probe PRIVATE
+    rowl_engine_objects
+    rowl_engine_thirdparty
+)
+target_compile_definitions(rowl_rewind_history_budget_probe PRIVATE ROWL_BUILDING_DLL)
+
+add_test(NAME rewind_history_budget_probe COMMAND rowl_rewind_history_budget_probe)
+set_tests_properties(rewind_history_budget_probe PROPERTIES
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    ENVIRONMENT "SDL_AUDIODRIVER=dummy;SDL_VIDEODRIVER=dummy"
+    TIMEOUT 120
+)
