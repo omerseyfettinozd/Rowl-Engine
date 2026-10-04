@@ -1,38 +1,56 @@
 # Rowl çalışma alanı — tarayıcı prototipi
 
 Motor ve Avalonia editöründen bağımsız, örnek veri kullanan tasarım denemesi.
-Paket kurulumu ve derleme gerektirmez. Dosyalar yerel HTTP sunucusuyla açılır:
+Paket kurulumu ve derleme gerektirmez:
 
 ```sh
 python3 -m http.server 4173 --bind 127.0.0.1 --directory prototypes/editor-workspace
 ```
 
-Tarayıcı: `http://127.0.0.1:4173`
+Tarayıcı: `http://127.0.0.1:4173`.
 
-## Davranış
+## Ekranlar
 
-- Başlangıçta Node açık; varsayılan sınır iki panel.
-- Üst ortadaki simgeler gizli ekranı açar, açık ekranı odaklar.
-- İki panel doluyken üçüncü simge, sabit olmayan ve en uzun süredir odaklanılmayan panelin yerini alır.
-- İğne simgesi panelin yerini korur. Bütün açık paneller sabitse yeni ekran açılmaz; açıklama gösterilir.
-- Üç panel seçimi bütün ekranları açar. İkiye dönünce sabit paneller korunur. Üçü de sabitse önce bir sabitleme kaldırılmalıdır.
-- Panel başlığındaki çarpı kapatır. Son panel veya sabit panel kapatılamaz.
-- Masaüstünde yan yana; 900 px ve altında alt alta. Boyut değişimi açık panel ve sabitleme durumunu değiştirmez.
-- Node paneli daralınca kartlar küçültülmek yerine dikey bir akışa geçer; panel içinde kaydırılabilir.
-- Node seçimi ve Game'deki devam düğmesi örnek sahneyi değiştirir. Düzenle alanındaki metin ve görünüm ayarları Game'e anında yansır.
-- Sağ üstteki sıfırlama düğmesi ilk örnek veriye ve tek Node görünümüne döndürür.
+- **Node:** örnek hikâye akışı ve sahne seçimi.
+- **Game:** oyun sahnesinin önizlemesi.
+- **Edit Scene:** Game ile aynı sahnenin doğrudan düzenlenebilir görünümü. Ay, Mira ve diyalog kutusu tutulup sürüklenebilir; konumları Game'e anında yansır. Seçili obje ok tuşlarıyla da taşınabilir; Shift adımı büyütür.
 
-Siyah ve kemik beyazı paleti mevcut `docs/C1_VISUAL_TOKENS_AND_MOCKS.md` içindeki güncel KARAR-0 kararından gelir.
-Örnek sahne görseli yerel SVG'dir. Harici font, resim, API veya motor bağlantısı yoktur. Değişiklikler sayfa yenilenince sıfırlanır.
+Edit Scene, inspector formu değildir. Inspector için ayrı bir kullanıcı tasarımı bekleniyor.
+Üst alan üç ekran simgesi ve küçük bir seçenek düğmesinden oluşur. Proje çubuğu, tasarım rozeti ve alt bilgi çubuğu kaldırıldı.
 
-Panel durum doğrulaması: `node --test prototypes/editor-workspace/workspace-state.test.mjs`
+## Pencere yerleşimi
 
-## İlk doğrulama — 2026-10-04
+- Başlığı sürükle: başka pencerenin sol/sağ/üst/alt kenarına bırakınca o alan bölünür. Bölmeler iç içe kurulabilir; örneğin Node solda, Game ve Edit Scene sağda üst üste.
+- Ortasına veya boş alana bırakınca serbest pencere olur. Serbest pencere başlıktan taşınır, sağ alt köşeden boyutlandırılır.
+- Bölmeler arasındaki çizgiler sürüklenerek boyutlandırılır. Klavyede çizgiye odaklanıp ok tuşları kullanılabilir.
+- Pencere başlığındaki yerleşim düğmesi aynı işlemler için dokunmatik/klavye alternatifi sunar: hedef pencere, dört yön, serbest pencere ve çalışma alanına geri yerleştirme.
+- Bir serbest pencereyi diğerinin yanına dock etmek için önce hedefi çalışma alanına yerleştir.
+- Escape veya pointer iptali sürüklemeyi geri alır. Alan dışına bırakılan pencere önceki konumunda kalır.
+- Mobilde yeni açılan pencereler varsayılan olarak alt alta yerleşir; kullanıcı yönlerini ve boyutlarını değiştirebilir. Üçlü başlangıçta alan dengeli paylaşılır. Serbest pencere konumları çalışma alanına göre oranla tutulur.
 
-Beş durum testi geçti. Tarayıcıda tek/iki/üç panel, sabit Game korunarak ekran değişimi ve canlı diyalog düzenleme kontrol edildi.
-1440×900, 390×844 ve 320×740 görünüm boyutları incelendi; mobilde yatay sayfa taşması gözlenmedi.
-Tarayıcı hata/uyarı kaydı boştu. Bu kontrol gerçek mobil cihaz kabulü değildir.
+## Açık pencere sınırı ve sabitleme
 
-![Masaüstü üçlü görünüm](previews/desktop.jpg)
+- Başlangıçta yalnız Node açık, sınır iki pencere. Üst simge gizli ekranı açar, açık ekranı odaklar.
+- Sağ üst seçenek menüsünde üç pencere seçimi tüm ekranları açar. İkiye dönüş sabit olmayan en eski pencereyi kapatır.
+- Pencere menüsünde **Pencereyi sabitle**, otomatik ekran değiştirmede o pencerenin korunmasını sağlar. Kullanıcı sabit pencereyi bizzat taşıyabilir.
+- İki pencere doluyken üçüncü simge, sabit olmayan en eski pencerenin aynı dock alanını veya serbest dikdörtgenini devralır.
+- Bütün açık pencereler sabitse yeni ekran açılmaz; açıklama gösterilir. Üçü sabitse ikiye geçmeden sabitleme kaldırılmalıdır.
+- Son açık pencere veya sabit pencere kapatılamaz. Seçenek menüsündeki başlangıca dön eylemi örnek veriyi ve yerleşimi sıfırlar.
+
+## Doğrulama — 2026-10-04
+
+14 durum testi: kapasite/sabitleme, dört yönde iç içe yerleştirme, serbest/dock dönüşü, aynı konumu devralma, oran sınırları, mobil başlangıç ve 1000 karma işlemde pencere tekilliği.
+
+```sh
+node --test prototypes/editor-workspace/*.test.mjs
+```
+
+Tarayıcıda masaüstü başlık sürükleme, üst/alt yerleştirme, bölme ve serbest pencere boyutlandırma, tek serbest pencerenin dock'a dönüşü, klavyeyle obje taşıma ve Game/Edit Scene ortak obje konumları kontrol edildi.
+390×844 görünümde de obje sürükleme ve pencere yerleşimi kontrol edildi; yatay sayfa taşması gözlenmedi.
+Bu kontrol gerçek mobil cihaz kabulü değildir. Tarayıcı hata/uyarı kaydı boştu.
+
+Siyah/kemik beyazı paleti mevcut KARAR-0 kararından gelir. SVG sahne yereldir; harici font, resim, API veya motor bağlantısı yoktur. Örnek veri sayfa yenilenince sıfırlanır.
+
+![Masaüstü karma pencere düzeni](previews/desktop.jpg)
 
 [Mobil ekran görüntüsü](previews/mobile.jpg)

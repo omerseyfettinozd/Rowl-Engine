@@ -11,7 +11,7 @@
   <svg class="icon-library" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
     <symbol id="i-node" viewBox="0 0 24 24"><rect x="3" y="3" width="6" height="6" rx="2"/><rect x="15" y="15" width="6" height="6" rx="2"/><path d="M6 9v7a2 2 0 0 0 2 2h7M9 6h7a2 2 0 0 1 2 2v7"/></symbol>
     <symbol id="i-game" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="3"/><path d="m10 8 5 3-5 3ZM8 21h8M12 17v4"/></symbol>
-    <symbol id="i-edit" viewBox="0 0 24 24"><path d="M5 4v16M12 4v16M19 4v16"/><rect x="3" y="7" width="4" height="4" rx="1"/><rect x="10" y="13" width="4" height="4" rx="1"/><rect x="17" y="6" width="4" height="4" rx="1"/></symbol>
+    <symbol id="i-edit" viewBox="0 0 24 24"><path d="M10 3H5a2 2 0 0 0-2 2v5m0 4v5a2 2 0 0 0 2 2h5M14 3h5a2 2 0 0 1 2 2v5m-10 1 10 5-5 1-1 5Z"/></symbol>
     <symbol id="i-pin" viewBox="0 0 24 24"><path d="m9 3 6 0-1 6 4 4v2H6v-2l4-4-1-6ZM12 15v6"/></symbol>
     <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
     <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14m-6-6 6 6-6 6"/></symbol>
@@ -21,27 +21,40 @@
     <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 15.5A8.5 8.5 0 0 1 8.5 4 8.5 8.5 0 1 0 20 15.5Z"/></symbol>
     <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
     <symbol id="i-reset" viewBox="0 0 24 24"><path d="M3 9a9 9 0 1 1 0 6M3 3v6h6"/></symbol>
+    <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></symbol>
+    <symbol id="i-layout" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M12 3v18m0-9h9"/></symbol>
+    <symbol id="i-float" viewBox="0 0 24 24"><rect x="3" y="7" width="14" height="14" rx="2"/><rect x="8" y="3" width="13" height="13" rx="2"/></symbol>
+    <symbol id="i-move" viewBox="0 0 24 24"><path d="M12 3v18M3 12h18m-12-6 3-3 3 3m-6 12 3 3 3-3m-9-9-3 3 3 3m12-6 3 3-3 3"/></symbol>
   </svg>
 
+
   <header class="app-header">
-    <a class="brand" href="./" aria-label="Rowl çalışma alanı başlangıcı"><span class="brand-mark">r.</span><span>rowl<span class="brand-sub">studio</span></span></a>
+    <span class="brand-mark" aria-label="Rowl">r.</span>
     <nav class="view-switcher" aria-label="Çalışma alanları">
-      <button class="view-button" data-view="node" aria-label="Node ekranını aç" title="Node"><svg><use href="#i-node"/></svg><span>Node</span><i></i></button>
-      <button class="view-button" data-view="game" aria-label="Game ekranını aç" title="Game"><svg><use href="#i-game"/></svg><span>Game</span><i></i></button>
-      <button class="view-button" data-view="edit" aria-label="Düzenleme ekranını aç" title="Düzenleme"><svg><use href="#i-edit"/></svg><span>Düzenle</span><i></i></button>
+      <button class="view-button" data-view="node" aria-label="Node ekranını aç" title="Node"><svg><use href="#i-node"/></svg><i></i></button>
+      <button class="view-button" data-view="game" aria-label="Game ekranını aç" title="Game"><svg><use href="#i-game"/></svg><i></i></button>
+      <button class="view-button" data-view="edit" aria-label="Edit Scene ekranını aç" title="Edit Scene"><svg><use href="#i-edit"/></svg><i></i></button>
     </nav>
-    <div class="header-right"><span class="prototype-badge">Tasarım denemesi</span><button class="icon-button reset-button" id="reset" aria-label="Prototipi başlangıca sıfırla" title="Başlangıca dön"><svg><use href="#i-reset"/></svg></button></div>
+    <button class="icon-button" id="options" aria-label="Çalışma alanı seçenekleri" aria-expanded="false" aria-controls="options-menu" title="Seçenekler"><svg><use href="#i-more"/></svg></button>
+    <div class="options-menu popover" id="options-menu" hidden>
+      <span class="menu-label">Açık pencere sınırı</span>
+      <div class="segmented" role="group" aria-label="Açık pencere sınırı"><button data-capacity="2">2 pencere</button><button data-capacity="3">3 pencere</button></div>
+      <button class="menu-row" id="reset"><svg><use href="#i-reset"/></svg>Başlangıca dön</button>
+      <p>Pencere başlığını sürükle.<br>Kenarına bırak: yerleştir.<br>Ortasına bırak: serbest pencere.</p>
+    </div>
   </header>
-
-  <div class="workspace-toolbar">
-    <div class="project-title"><span class="project-dot"></span><span>Ay Işığı</span><span class="project-divider">/</span><span class="muted">Çalışma alanı</span></div>
-    <div class="layout-choice"><span id="layout-label">Görünüm</span><div class="segmented" role="group" aria-labelledby="layout-label"><button data-capacity="2" title="En fazla iki panel">2<span> panel</span></button><button data-capacity="3" title="Üç paneli birlikte aç">3<span> panel</span></button></div></div>
+  <main class="workspace" id="workspace" aria-label="Editör çalışma alanı"><div class="dock-root" id="dock-root"></div><div class="float-layer" id="float-layer"></div><div class="drop-preview" id="drop-preview" hidden><span></span></div><div class="drag-label" id="drag-label" hidden></div></main>
+  <div class="placement-menu popover" id="placement-menu" hidden>
+    <span class="menu-label" id="placement-title">Pencereyi yerleştir</span>
+    <label for="placement-target">Hedef pencere</label>
+    <select id="placement-target"></select>
+    <div class="placement-directions" role="group" aria-label="Hedefe göre konum"><button data-edge="left">← Sol</button><button data-edge="right">Sağ →</button><button data-edge="top">↑ Üst</button><button data-edge="bottom">Alt ↓</button></div>
+    <button class="menu-row" data-floating><svg><use href="#i-float"/></svg>Serbest pencere</button>
+    <button class="menu-row" data-dock-root><svg><use href="#i-layout"/></svg>Çalışma alanına yerleştir</button>
+    <button class="menu-row" id="menu-pin"><svg><use href="#i-pin"/></svg><span>Paneli sabitle</span></button>
+    <button class="menu-row" id="menu-close"><svg><use href="#i-close"/></svg>Pencereyi kapat</button>
   </div>
-
-  <main class="workspace" id="workspace" aria-label="Editör çalışma alanı"></main>
-  <footer class="app-footer"><span class="footer-hint" id="hint">Üstteki simgelere dokunarak çalışma alanını böl.</span><span class="demo-status"><span></span>Örnek proje</span></footer>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-
   <template id="node-template">
     <div class="node-area">
       <div class="canvas-caption"><span>Hikâye akışı</span><span class="muted">03 sahne</span></div>
@@ -55,25 +68,16 @@
       <div class="canvas-bottom"><span class="canvas-note">Bir sahne seç, hikâyeyi gör.</span><div class="zoom-controls"><button class="icon-button" data-zoom="out" aria-label="Akışı uzaklaştır"><svg><use href="#i-minus"/></svg></button><span class="zoom-value">100%</span><button class="icon-button" data-zoom="in" aria-label="Akışı yakınlaştır"><svg><use href="#i-plus"/></svg></button><button class="icon-button" data-zoom="fit" aria-label="Akışı ekrana sığdır" title="Ekrana sığdır"><svg><use href="#i-fit"/></svg></button></div></div>
     </div>
   </template>
-
-  <template id="game-template">
-    <div class="game-area">
-      <div class="game-meta"><span class="scene-title">Bir gece, bir ışık</span><span class="preview-label">Canlı önizleme</span></div>
-      <div class="game-frame">
-        <svg class="landscape" viewBox="0 0 800 650" preserveAspectRatio="xMidYMid slice" aria-label="Ay ışığında tepeler, örnek oyun sahnesi" role="img"><defs><linearGradient id="sky" x2="0" y2="1"><stop stop-color="#292b36"/><stop offset="1" stop-color="#737078"/></linearGradient><linearGradient id="water" x2="0" y2="1"><stop stop-color="#797780"/><stop offset="1" stop-color="#373941"/></linearGradient></defs><path fill="url(#sky)" d="M0 0h800v650H0z"/><g fill="#ece7d9"><circle cx="510" cy="125" r="42"/><circle cx="103" cy="58" r="1.5"/><circle cx="192" cy="108" r="1"/><circle cx="340" cy="55" r="1.5"/><circle cx="639" cy="67" r="1"/><circle cx="710" cy="180" r="1.5"/><circle cx="422" cy="198" r="1"/></g><path fill="#50515d" d="M0 348 155 182 304 339 428 249 651 375 800 260v390H0Z"/><path fill="#343640" d="M0 315 150 395 335 296 512 414 711 293 800 360v290H0Z"/><path fill="url(#water)" d="M0 434q200-57 400 0t400 0v216H0Z"/><g fill="none" stroke="#c3bdba" stroke-width="2" opacity=".23"><path d="M442 460h111m-133 15h142m-119 17h123m-160 22h181m-149 23h130"/></g><path fill="#24262c" d="M0 526q99-111 211-63l182 187H0Zm800-52q-93-23-157 54l-85 122h242Z"/><g fill="#17191e"><path d="m110 272-33 82h21l-31 64h87l-30-64h19Zm598 69-22 51h15l-23 45h59l-20-45h12Z"/><path d="M105 389h10v108h-10m598-71h8v68h-8"/></g></svg>
-        <div class="scene-vignette"></div><span class="scene-chapter">BÖLÜM <span class="chapter-number">01</span></span>
-        <div class="dialogue-box"><div class="speaker-row"><span class="speaker-avatar">M</span><span class="speaker-name">Mira</span><span class="dialogue-line"></span><svg><use href="#i-moon"/></svg></div><p class="dialogue-text">Gece ne kadar sessiz… Sanki bütün dünya bir şey söylememi bekliyor.</p><button class="continue-button" id="continue-scene" aria-label="Sonraki örnek sahneye geç">Devam et <svg><use href="#i-arrow"/></svg></button></div>
-      </div>
-      <div class="game-bottom"><span>Örnek sahne · <span class="scene-counter">1 / 3</span></span><span class="muted">Önizleme</span></div>
-    </div>
-  </template>
-
-  <template id="edit-template">
-    <div class="edit-area">
-      <div class="edit-heading"><span class="eyebrow">SEÇİLİ SAHNE</span><h2 class="edit-scene-title">Bir gece, bir ışık</h2><p>Dokunuşların önizlemeye yansır.</p></div>
-      <div class="property-section"><h3>Hikâye</h3><label for="scene-name">Sahne adı</label><input id="scene-name" data-field="title" maxlength="70"><label for="speaker">Konuşan</label><input id="speaker" data-field="speaker" maxlength="35"><label for="dialogue">Diyalog</label><textarea id="dialogue" data-field="dialogue" rows="4" maxlength="500"></textarea></div>
-      <div class="property-section"><h3>Görünüm</h3><div class="range-label"><label for="text-size">Yazı boyutu</label><output id="text-size-output">18 px</output></div><input id="text-size" type="range" min="14" max="26" data-field="textSize"><div class="range-label"><label for="box-opacity">Diyalog kutusu</label><output id="box-opacity-output">88%</output></div><input id="box-opacity" type="range" min="40" max="100" data-field="opacity"></div>
-      <div class="edit-tip"><svg><use href="#i-pin"/></svg><span>Game'i sabitle.<br>Node ve Düzenle arasında geçiş yap.</span></div>
+  <template id="scene-template">
+    <div class="scene-area">
+      <div class="scene-stage-wrap"><div class="game-frame">
+<svg class="landscape" viewBox="0 0 800 650" preserveAspectRatio="xMidYMid slice" aria-label="Ay ışığında tepeler, örnek oyun sahnesi" role="img"><defs><linearGradient id="sky" x2="0" y2="1"><stop stop-color="#292b36"/><stop offset="1" stop-color="#737078"/></linearGradient><linearGradient id="water" x2="0" y2="1"><stop stop-color="#797780"/><stop offset="1" stop-color="#373941"/></linearGradient></defs><path fill="url(#sky)" d="M0 0h800v650H0z"/><g fill="#ece7d9"><circle cx="103" cy="58" r="1.5"/><circle cx="192" cy="108" r="1"/><circle cx="340" cy="55" r="1.5"/><circle cx="639" cy="67" r="1"/><circle cx="710" cy="180" r="1.5"/><circle cx="422" cy="198" r="1"/></g><path fill="#50515d" d="M0 348 155 182 304 339 428 249 651 375 800 260v390H0Z"/><path fill="#343640" d="M0 315 150 395 335 296 512 414 711 293 800 360v290H0Z"/><path fill="url(#water)" d="M0 434q200-57 400 0t400 0v216H0Z"/><g fill="none" stroke="#c3bdba" stroke-width="2" opacity=".23"><path d="M442 460h111m-133 15h142m-119 17h123m-160 22h181m-149 23h130"/></g><path fill="#24262c" d="M0 526q99-111 211-63l182 187H0Zm800-52q-93-23-157 54l-85 122h242Z"/><g fill="#17191e"><path d="m110 272-33 82h21l-31 64h87l-30-64h19Zm598 69-22 51h15l-23 45h59l-20-45h12Z"/><path d="M105 389h10v108h-10m598-71h8v68h-8"/></g></svg>
+        <div class="scene-vignette"></div>
+        <div class="scene-object moon-object" data-object="moon"><span class="object-label">Ay</span></div>
+        <div class="scene-object character-object" data-object="character"><svg viewBox="0 0 100 220" aria-hidden="true"><ellipse cx="50" cy="207" rx="35" ry="8" fill="#0004"/><path d="M35 103 29 175h13l6-45 5 45h15l-7-72Z" fill="#24252e"/><path d="M35 70q15-13 30 0l9 48-24-7-25 7Z" fill="#d5d1c3"/><path d="m30 74-13 46 8 4 17-41m21-9 19 38-7 4-20-35" fill="#d5d1c3"/><circle cx="50" cy="49" r="18" fill="#d6c8bb"/><path d="M30 55q-11-40 21-35 32-1 21 43L60 41 40 37Z" fill="#282831"/><path d="M37 173h-9v8h16v-8m10 0h13v8H53Z" fill="#15161b"/></svg><span class="object-label">Mira</span></div>
+        <div class="scene-object dialogue-box" data-object="dialogue"><div class="speaker-row"><span class="speaker-avatar">M</span><span class="speaker-name">Mira</span><span class="dialogue-line"></span></div><p class="dialogue-text"></p><button class="continue-button" data-continue aria-label="Sonraki örnek sahneye geç">Devam et <svg><use href="#i-arrow"/></svg></button><span class="object-label">Diyalog</span></div>
+      </div></div>
+      <div class="scene-bottom"><span class="scene-title"></span><span class="scene-help"></span></div>
     </div>
   </template>
   <script type="module" src="./app.js"></script>
