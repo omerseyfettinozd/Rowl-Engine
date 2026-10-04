@@ -12,6 +12,9 @@
  *    story'süz motorda mount akışı çalışır.
  *  - Destroy aux-map'leri temizler: Destroy->Create sonrası prefetch
  *    kirli-state'siz çalışır (#140).
+ *  - Shutdown da aux-map'leri temizler: aux dolu handle'da Shutdown sonrası
+ *    harita boş, Shutdown->Init taze-handle ile özdeş, çapraz-handle
+ *    temizliği korunur, N handle döngüsü girdi biriktirmez (P2-5).
  * Bilerek-boz: resetSessionProfile() çağrısı #if 0'lanırsa re-init
  * speaker/paused testleri kırmızıya döner; SetProjectDirectory guard'ı
  * kaldırılırsa story-yüklü ret testi kırmızıya döner.
@@ -37,6 +40,193 @@ std::string sweepSpeaker(RowlEngineHandle h) {
     uint32_t required = 0;
     RowlEngine_GetSpeakerUtf8(h, buf, sizeof(buf), &required);
     return std::string(buf);
+}
+
+// P2-5 yardımcıları: JSON tasiyıcısı (NULL/0 boyut-sorgu sonra dar tampon).
+using JsonCarrier = RowlEngine_ResultCode (*)(RowlEngineHandle, char*, uint32_t, uint32_t*);
+
+std::string auxJson(RowlEngineHandle h, JsonCarrier fn) {
+    uint32_t required = 0;
+    if (fn(h, nullptr, 0, &required) != ROWL_RESULT_OK) return {};
+    std::vector<char> buffer(required + 1u, '\0');
+    if (fn(h, buffer.data(), static_cast<uint32_t>(buffer.size()), &required) !=
+        ROWL_RESULT_OK) {
+        return {};
+    }
+    return std::string(buffer.data());
+}
+
+std::string auxSlotAsset(RowlEngineHandle h) {
+    uint32_t required = 0;
+    if (RowlEngine_GetCharacterSlotAssetUtf8(h, "body", nullptr, 0, &required) !=
+        ROWL_RESULT_OK) {
+        return {};
+    }
+    std::vector<char> buffer(required + 1u, '\0');
+    if (RowlEngine_GetCharacterSlotAssetUtf8(h, "body", buffer.data(),
+                                             static_cast<uint32_t>(buffer.size()),
+                                             &required) != ROWL_RESULT_OK) {
+        return {};
+    }
+    return std::string(buffer.data());
+}
+
+float auxSlotOpacity(RowlEngineHandle h) {
+    float value = -1.0f;
+    RowlEngine_GetCharacterSlotOpacity(h, "body", &value);
+    return value;
+}
+
+// P2-5 fixture'ı: aux-map'leri (prefetch ChapterLoader + kuyruk, character
+// slot varlığı) gerçek public C API yollarından DOLDURUR.
+const char* const kP25IndexJson =
+    R"json({"format_version":5,"start_node_id":1,
+            "chapters":[{"id":"a","order":0,"start_node_id":1},
+                        {"id":"b","order":1,"start_node_id":3}]})json";
+
+const char* const kP25FileA =
+    R"json({"chapter_id":"a","nodes":[
+             {"id":1,"chapter_id":"a","speaker":"S","dialogue":"hi",
+              "background":"PROJE_A/bg_1.png","character":"PROJE_A/hero.png",
+              "next_nodes":[{"id":2,"label":"n"}]},
+             {"id":2,"chapter_id":"a","speaker":"S","dialogue":"mid",
+              "background":"PROJE_A/bg_2.png"}]})json";
+
+const char* const kP25FileB =
+    R"json({"chapter_id":"b","nodes":[
+             {"id":3,"chapter_id":"b","speaker":"S","dialogue":"yo",
+              "background":"PROJE_A/bg_3.png",
+              "next_nodes":[{"id":4,"label":"n"}]},
+             {"id":4,"chapter_id":"b","speaker":"S","dialogue":"end",
+              "background":"PROJE_A/bg_4.png"}]})json";
+
+bool p25FillAux(RowlEngineHandle h) {
+    if (RowlEngine_LoadChapterIndexJson(h, kP25IndexJson) != ROWL_RESULT_OK) return false;
+    if (RowlEngine_AppendChapterFileJson(h, kP25FileA) != ROWL_RESULT_OK) return false;
+    if (RowlEngine_AppendChapterFileJson(h, kP25FileB) != ROWL_RESULT_OK) return false;
+    RowlEngine_LoadChapter(h, "b");
+    RowlEngine_PrefetchChapterAssets(h, "b", 33554432u);
+    if (RowlEngine_SetCharacterSlotAsset(h, "body", "PROJE_A/face.png") != ROWL_RESULT_OK)
+        return false;
+    if (RowlEngine_SetCharacterSlotOpacity(h, "body", 0.25f) != ROWL_RESULT_OK) return false;
+    return true;
+}
+
+uint64_t auxPrefetchCount() { return Rowl::Core::RowlTest_PrefetchAuxEntryCount(); }
+uint64_t auxCharacterCount() { return Rowl::Core::RowlTest_CharacterAuxEntryCount(); }
+
+// P2-5 kapısı: Shutdown per-handle aux-map'leri (prefetch + character)
+// boşaltır. Sözleşme c_api.h "aynı handle'da Shutdown→Init taze-handle ile
+// özdeş başlar" diyor; #140 bu temizliği yalnız Destroy'a eklemişti.
+// Kirpma (Shutdown'daki clear çağrıları silinirse) KIRMIZI döner:
+//  - aux girdi sayacı Shutdown'dan sonra 1 kalır,
+//  - re-Init + PumpPrefetch ESKI projenin yollarını "missing" sayar,
+//  - N handle döngüsünde girdi birikir.
+void checkShutdownAuxSweep() {
+    // 1) Tek handle: aux dolu -> Shutdown -> harita BOŞ.
+    RowlEngineHandle h = RowlEngine_Create();
+    if (h == nullptr) rowlLockFail("lifecycle-shutdown-sweep", "Create returned null");
+    if (RowlEngine_Init(h, 320, 180, 0) != 1)
+        rowlLockFail("lifecycle-shutdown-sweep", "Init must succeed");
+    if (!p25FillAux(h))
+        rowlLockFail("lifecycle-shutdown-sweep", "P2-5 aux fixture must fill both maps");
+    // Referans: girdiler gerçekten yazıldı (sayaç 0'da değil) — aksi hâlde
+    // aşağıdaki "0" kontrolleri boşuna yeşil olurdu.
+    if (auxPrefetchCount() < 1 || auxCharacterCount() < 1)
+        rowlLockFail("lifecycle-shutdown-sweep",
+                     "P2-5 aux fixture must create map entries before Shutdown");
+    if (auxJson(h, RowlEngine_GetLoadedChaptersJson).find("\"active\":\"a\"") ==
+        std::string::npos)
+        rowlLockFail("lifecycle-shutdown-sweep", "P2-5 fixture must load chapter 'a'");
+
+    RowlEngine_Shutdown(h);
+    if (auxPrefetchCount() != 0)
+        rowlLockFail("lifecycle-shutdown-sweep",
+                     "Shutdown must clear this handle's prefetch aux entry");
+    if (auxCharacterCount() != 0)
+        rowlLockFail("lifecycle-shutdown-sweep",
+                     "Shutdown must clear this handle's character aux entry");
+
+    // 2) Shutdown->Init izolasyonu: taze handle ile özdeş.
+    if (RowlEngine_Init(h, 320, 180, 0) != 1)
+        rowlLockFail("lifecycle-shutdown-sweep", "shutdown->re-init must succeed");
+    const std::string chapters = auxJson(h, RowlEngine_GetLoadedChaptersJson);
+    if (chapters.find("\"active\":\"a\"") != std::string::npos ||
+        chapters.find("PROJE_A") != std::string::npos)
+        rowlLockFail("lifecycle-shutdown-sweep",
+                     "re-init served the previous session's chapters (aux not swept)");
+    if (!auxSlotAsset(h).empty())
+        rowlLockFail("lifecycle-shutdown-sweep",
+                     "re-init inherited the previous session's slot asset");
+    if (auxSlotOpacity(h) < 0.99f)
+        rowlLockFail("lifecycle-shutdown-sweep",
+                     "re-init inherited the previous session's slot opacity");
+
+    // 3) Yeni oturumun I/O sonucu DOĞRU: hicbir sey yuklenmeden PumpPrefetch
+    //    ESKI projenin yollarini "missing" saymamali (#140'un kotu yolu).
+    RowlEngine_PumpPrefetch(h, 4.0f);
+    const std::string progress = auxJson(h, RowlEngine_GetPrefetchProgressJson);
+    if (progress.find("PROJE_A") != std::string::npos ||
+        progress.find("\"missing_assets\":0") == std::string::npos)
+        rowlLockFail("lifecycle-shutdown-sweep",
+                     "a fresh session's PumpPrefetch reported the previous project's assets");
+
+    // 4) Handle yeniden kullanilabilir (Shutdown kalici degildir).
+    if (RowlEngine_SetCharacterSlotAsset(h, "body", "yeni.png") != ROWL_RESULT_OK ||
+        RowlEngine_LoadChapterIndexJson(h, kP25IndexJson) != ROWL_RESULT_OK)
+        rowlLockFail("lifecycle-shutdown-sweep",
+                     "handle must stay reusable after Shutdown");
+    RowlEngine_Shutdown(h);
+    RowlEngine_Destroy(h);
+
+    // 5) Capraz-handle temizligi: bir handle'in Shutdown'u BASKASININ aux
+    //    girdisini silmemeli (haritalar handle-anahtarli; son-handle
+    //    ozel durumu YOK).
+    RowlEngineHandle a = RowlEngine_Create();
+    RowlEngineHandle b = RowlEngine_Create();
+    if (a == nullptr || b == nullptr)
+        rowlLockFail("lifecycle-shutdown-sweep", "Create returned null");
+    if (RowlEngine_Init(a, 320, 180, 0) != 1 || RowlEngine_Init(b, 320, 180, 0) != 1)
+        rowlLockFail("lifecycle-shutdown-sweep", "Init must succeed");
+    if (!p25FillAux(a) || !p25FillAux(b))
+        rowlLockFail("lifecycle-shutdown-sweep", "P2-5 aux fixture must fill both maps");
+    RowlEngine_Shutdown(b);
+    if (auxJson(b, RowlEngine_GetLoadedChaptersJson).find("\"active\":\"a\"") !=
+        std::string::npos)
+        rowlLockFail("lifecycle-shutdown-sweep", "Shutdown must sweep the handle's own aux");
+    if (auxJson(a, RowlEngine_GetLoadedChaptersJson).find("\"active\":\"a\"") ==
+        std::string::npos)
+        rowlLockFail("lifecycle-shutdown-sweep",
+                     "one handle's Shutdown erased another handle's aux state");
+    RowlEngine_Shutdown(a);
+    RowlEngine_Shutdown(b);
+    RowlEngine_Destroy(a);
+    RowlEngine_Destroy(b);
+
+    // 6) N handle ac/kapat dongusu: girdi BIRIKMEZ (asil olcum).
+    constexpr int kCycles = 64;
+    for (int i = 0; i < kCycles; ++i) {
+        RowlEngineHandle k = RowlEngine_Create();
+        if (k == nullptr) rowlLockFail("lifecycle-shutdown-sweep", "Create returned null");
+        if (RowlEngine_Init(k, 320, 180, 0) != 1)
+            rowlLockFail("lifecycle-shutdown-sweep", "Init must succeed");
+        if (!p25FillAux(k))
+            rowlLockFail("lifecycle-shutdown-sweep", "P2-5 aux fixture must fill both maps");
+        RowlEngine_Shutdown(k);
+        const uint64_t prefetch = auxPrefetchCount();
+        const uint64_t character = auxCharacterCount();
+        RowlEngine_Destroy(k);
+        if (prefetch != 0 || character != 0) {
+            rowlLockFail("lifecycle-shutdown-sweep",
+                         "cycle " + std::to_string(i) +
+                             ": Shutdown left aux entries behind (prefetch=" +
+                             std::to_string(prefetch) + ", character=" +
+                             std::to_string(character) + ")");
+        }
+    }
+    if (auxPrefetchCount() != 0 || auxCharacterCount() != 0)
+        rowlLockFail("lifecycle-shutdown-sweep",
+                     "aux maps must be empty after the Create/Shutdown/Destroy cycle");
 }
 
 }  // namespace
@@ -164,6 +354,10 @@ void test_lifecycle_shutdown_sweep() {
                      "fresh handle must pump 0 (stale aux state?)");
     RowlEngine_Shutdown(d2);
     RowlEngine_Destroy(d2);
+
+    // P2-5: Shutdown da per-handle aux-map'leri (prefetch + character)
+    // temizler — #140 bunu yalnız Destroy'a eklemişti.
+    checkShutdownAuxSweep();
 
     TEST_PASS("Lifecycle shutdown sweep isolates re-init sessions (D2)");
 }
