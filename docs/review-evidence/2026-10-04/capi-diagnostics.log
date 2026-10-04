@@ -1,0 +1,39 @@
+[2026-10-04 18:28:09.690] [[32mINFO[0m] ==================================================
+[2026-10-04 18:28:09.690] [[32mINFO[0m] Initializing Rowl Engine v1.0.0 (Embedded Library Mode)
+[2026-10-04 18:28:09.690] [[32mINFO[0m] App Name: Rowl Engine
+[2026-10-04 18:28:09.690] [[32mINFO[0m] Target Virtual Canvas: 320x180
+[2026-10-04 18:28:09.690] [[32mINFO[0m] Mode: STANDALONE
+[2026-10-04 18:28:09.690] [[32mINFO[0m] ==================================================
+[2026-10-04 18:28:09.690] [[32mINFO[0m] Initializing Hybrid Virtual File System (VFS)...
+[2026-10-04 18:28:09.690] [[32mINFO[0m] VFS Initialization Complete (0 mount points).
+[2026-10-04 18:28:09.690] [[32mINFO[0m] Initializing SDL3 Offscreen Surface & Software Renderer (320x180)...
+[2026-10-04 18:28:09.690] [[33mWARN[0m] VFS File not found: 'fonts/default.ttf'
+[2026-10-04 18:28:09.690] [[33mWARN[0m] VFS File not found: 'fonts/default_bold.ttf'
+[2026-10-04 18:28:09.690] [[33mWARN[0m] VFS File not found: 'Assets/fonts/default.ttf'
+[2026-10-04 18:28:09.690] [[33mWARN[0m] VFS File not found: 'Assets/fonts/default_bold.ttf'
+[2026-10-04 18:28:09.690] [[33mWARN[0m] VFS File not found: 'default.ttf'
+[2026-10-04 18:28:09.691] [[33mWARN[0m] VFS File not found: 'default_bold.ttf'
+[2026-10-04 18:28:09.691] [[32mINFO[0m] ✅ TrueType Font Loaded Successfully (HarfBuzz/FriBidi).
+[2026-10-04 18:28:09.691] [[32mINFO[0m] ✅ Loaded Visual Novel TTF Font from System: /usr/share/fonts/liberation/LiberationSans-Regular.ttf
+[2026-10-04 18:28:09.691] [[32mINFO[0m] SDL3 Offscreen Engine Surface initialized (320x180 RGBA32)
+[2026-10-04 18:28:09.691] [[32mINFO[0m] Initializing Dual-Path SDL3 Audio Engine Subsystem...
+[2026-10-04 18:28:09.691] [[32mINFO[0m] [AudioEngine] Physical audio device initialized successfully (BGM, Voice & SFX streams active).
+[2026-10-04 18:28:09.691] [[32mINFO[0m] Audio Engine Subsystem Initialized Successfully (Hardware Available: YES).
+[2026-10-04 18:28:09.691] [[32mINFO[0m] Initializing Sandboxed Lua 5.4 Environment...
+[2026-10-04 18:28:09.691] [[32mINFO[0m] Sandboxed Lua Environment Initialized Successfully.
+[2026-10-04 18:28:09.691] [[32mINFO[0m] Scene Updated (Components) → 3 comps, 1 chars, 1 dlgs, HasBg: true, HasDlg: true
+[2026-10-04 18:28:09.691] [[32mINFO[0m] Story graph loaded: 2 nodes. Start node #101
+AUDIT badFade= 2 last= 2
+AUDIT goodFade= 0 last= 2
+AUDIT conditionMutate= 1
+AUDIT existingGlobalMutated= 1 stdlibMutated= 1
+[2026-10-04 18:28:09.692] [[32mINFO[0m] Shutting down Rowl Engine...
+[2026-10-04 18:28:09.692] [[32mINFO[0m] Shutting down Audio Engine Subsystem...
+[2026-10-04 18:28:09.749] [[32mINFO[0m] Audio Engine Subsystem Shutdown Complete.
+[2026-10-04 18:28:09.749] [[32mINFO[0m] Shutting down Sandboxed Lua Environment...
+[2026-10-04 18:28:09.749] [[32mINFO[0m] Lua Environment Shutdown Complete.
+[2026-10-04 18:28:09.749] [[32mINFO[0m] Shutting down SDL3 Windowing & Graphics Subsystem...
+[2026-10-04 18:28:09.749] [[32mINFO[0m] Hardware Texture Cache Cleared (0 unique textures freed).
+[2026-10-04 18:28:09.749] [[32mINFO[0m] SDL3 Window Shutdown Complete.
+[2026-10-04 18:28:09.749] [[32mINFO[0m] VFS Mount Points Cleared.
+[2026-10-04 18:28:09.749] [[32mINFO[0m] Engine shutdown complete.

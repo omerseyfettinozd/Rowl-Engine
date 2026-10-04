@@ -1,0 +1,12 @@
+{
+  "commit": "37a5a49119a00f9c52fefdf6962809202ae12968",
+  "date": "2026-10-04",
+  "targeted_files": 124,
+  "coverage": "Selected sections and searches, not all files read end to end",
+  "ctest_registered": 71,
+  "native_tool_passed": 70,
+  "editor_passed": 510,
+  "gui_gpu_device_proof": false,
+  "performance_floor": "report",
+  "overall_score": 67
+}

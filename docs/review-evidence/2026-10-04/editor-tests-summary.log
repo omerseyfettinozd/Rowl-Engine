@@ -1,0 +1,18 @@
+[Test 43]: Unity kromu Dilim G3 — inspector overflow lock...
+  [PASS] Inspector overflow menus reuse existing commands
+[Test 44]: D17 drag-session RED probu (StoryGraphDragSession)...
+    [Step 44.1]: unplug cancel restores cable + no undo...
+    [Step 44.2]: node-drag cancel restores positions + no undo...
+    [Step 44.3]: EndWireDrag connects with undo...
+  [PASS] D17 drag-session RED probu verified
+=======================================================
+ALL EDITOR HEADLESS TESTS PASSED SUCCESSFULLY!
+=======================================================
+  Passed RowlEngine.Editor.EditorHeadlessSuiteTests.HeadlessSuitePreservesEditorRuntimeContracts [2 s]
+[xUnit.net 00:00:07.29]   Finished:    RowlEngine.Editor.Tests
+  Passed RowlEngine.Editor.Tests.EditorOffscreenRuntimeWorkerDisposeTests.Worker_NativeCallStall_TimesOutAndRejectsFurtherCommands [7 s]
+
+Test Run Successful.
+Total tests: 510
+     Passed: 510
+ Total time: 7.6459 Seconds

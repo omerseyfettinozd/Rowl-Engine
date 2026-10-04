@@ -1,0 +1,7 @@
+[ReleaseLaunchers] wrote run_game.sh (158 bytes) -> /tmp/rowl-audit-release-37a5a49/run_game.sh
+[ReleaseLaunchers] platform=posix
+[ReleaseVerifier] Valid release: game.rowlpkg contains 13 entries including json/full_story_graph.json.
+EMPTY_PLAYER_AND_LIBRARY_DIRECTORY_VERIFIER_EXIT= 0
+[ReleaseVerifier] Valid release: game.rowlpkg contains 13 entries including json/full_story_graph.json.
+REAL_PACKAGE_SMOKE_EXIT= 0
+[Player] Package smoke frame rendered from VFS story graph.

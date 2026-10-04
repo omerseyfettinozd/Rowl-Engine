@@ -1,0 +1,17 @@
+{
+  "schema_version": 2,
+  "build": {"id": "unknown", "type": "unknown"},
+  "environment": {"os": "Linux", "architecture": "x86_64", "cpu_model": "AMD Ryzen 9 8940HX with Radeon Graphics", "cpu_count": 16, "machine": "unknown"},
+  "fixture_id": "native-default-v2",
+  "metrics": {
+    "startup_ms": 0.826332,
+    "vfs_io": {"iterations": 5000, "total_ms": 45.091724, "avg_ms": 0.009018},
+    "json_update": {"iterations": 500, "total_ms": 9.910918, "avg_ms": 0.019822},
+    "first_frame_ms": 54.522623,
+    "startup_profile": {"texture_load_ms": 49.972319, "non_texture_render_ms": 4.532049},
+    "steady_frame_ms": 3.740868,
+    "transition_fps": 61.761223,
+    "texture_cache": {"texture_count": 2, "bytes": 33391168, "budget_bytes": 67108864, "eviction_count": 0},
+    "process_memory_bytes": 128876544
+  }
+}

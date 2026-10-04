@@ -1,0 +1,14 @@
+using RowlEngine.Editor.Services;
+string work = Path.Combine(Path.GetTempPath(), "rowl-saveas-probe-" + Guid.NewGuid().ToString("N"));
+string source = Path.Combine(work,"source");
+string target = Path.Combine(work,"target");
+Directory.CreateDirectory(Path.Combine(source,"Assets","json"));
+Directory.CreateDirectory(Path.Combine(source,"SourceAssets"));
+File.WriteAllText(Path.Combine(source,"Assets","json","full_story_graph.json"),"old-disk-document");
+File.WriteAllText(Path.Combine(source,"SourceAssets","tone.mp3"),"original-media");
+bool SaveNow() => false;
+var result = ProjectSaveAsCoordinator.SaveProjectCopy(source,target,2,101,() => SaveNow());
+Console.WriteLine($"SAVE_FAILED_BUT_COPY_SUCCEEDED={result.Succeeded}");
+Console.WriteLine($"COPIED_GRAPH={File.ReadAllText(Path.Combine(target,"Assets","json","full_story_graph.json"))}");
+Console.WriteLine($"SOURCEASSETS_COPIED={Directory.Exists(Path.Combine(target,"SourceAssets"))}");
+Directory.Delete(work,true);
