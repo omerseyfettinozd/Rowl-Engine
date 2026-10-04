@@ -7,6 +7,7 @@
   <title>Rowl — Çalışma alanı prototipi</title>
   <link rel="stylesheet" href="./style.css">
   <link rel="stylesheet" href="./tools.css">
+  <link rel="stylesheet" href="./design.css">
 </head>
 <body>
   <svg class="icon-library" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -33,6 +34,12 @@
     <symbol id="i-console" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></symbol>
     <symbol id="i-export" viewBox="0 0 24 24"><path d="M12 3v12m-4-4 4 4 4-4M4 16v5h16v-5"/></symbol>
     <symbol id="i-tools" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><path d="M17.5 14v7M14 17.5h7"/></symbol>
+    <symbol id="i-lua" viewBox="0 0 24 24"><path d="m8 7-5 5 5 5m8-10 5 5-5 5M14 4l-4 16"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10" cy="10" r="6"/><path d="m15 15 6 6"/></symbol>
+    <symbol id="i-audio" viewBox="0 0 24 24"><path d="m3 9 5 0 5-5v16l-5-5H3ZM17 8q5 4 0 8m2-11q8 7 0 14"/></symbol>
+    <symbol id="i-story" viewBox="0 0 24 24"><path d="M4 3h12a3 3 0 0 1 3 3v15H7a3 3 0 0 1-3-3Zm0 15q0-3 3-3h12M8 7h7m-7 4h5"/></symbol>
+    <symbol id="i-input" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="3"/><path d="M6 9h1m3 0h1m3 0h1m3 0h1M6 13h1m3 0h1m3 0h1m3 0h1M8 16h8"/></symbol>
+    <symbol id="i-save" viewBox="0 0 24 24"><path d="M4 3h14l3 3v15H3V3Zm3 0v7h10V3M7 21v-7h10v7"/></symbol>
     <symbol id="i-move" viewBox="0 0 24 24"><path d="M12 3v18M3 12h18m-12-6 3-3 3 3m-6 12 3 3 3-3m-9-9-3 3 3 3m12-6 3 3-3 3"/></symbol>
   </svg>
 
@@ -51,6 +58,7 @@
       <button data-tool="inspector" aria-pressed="false"><span>Inspector</span><svg><use href="#i-inspector"/></svg></button>
       <button data-tool="assets" aria-pressed="false"><span>Varlıklar</span><svg><use href="#i-assets"/></svg></button>
       <button data-tool="console" aria-pressed="false"><span>Konsol</span><svg><use href="#i-console"/></svg></button>
+      <button data-tool="lua" aria-pressed="false"><span>Lua editörü</span><svg><use href="#i-lua"/></svg></button>
     </div>
 
   </div>
@@ -58,10 +66,14 @@
     <div class="options-menu popover" id="options-menu" hidden>
       <span class="menu-label">PROJE</span>
       <button class="menu-row" data-settings="project"><svg><use href="#i-assets"/></svg>Proje ayarları</button>
-      <button class="menu-row" data-settings="game"><svg><use href="#i-game"/></svg>Oyun ayarları</button>
-      <button class="menu-row" data-settings="export"><svg><use href="#i-export"/></svg>Dışa aktar</button>
-      <span class="menu-label menu-section">EDİTÖR</span>
+      <button class="menu-row" data-settings="game"><svg><use href="#i-game"/></svg>Görüntü ve sahne</button>
+      <button class="menu-row" data-settings="story"><svg><use href="#i-story"/></svg>Hikâye ve metin</button>
+      <button class="menu-row" data-settings="audio"><svg><use href="#i-audio"/></svg>Ses ve müzik</button>
+      <button class="menu-row" data-settings="input"><svg><use href="#i-input"/></svg>Kontroller</button>
+      <button class="menu-row" data-settings="save"><svg><use href="#i-save"/></svg>Kayıt ve dil</button>
+      <span class="menu-label menu-section">ÇALIŞMA ALANI</span>
       <button class="menu-row" data-settings="editor"><svg><use href="#i-inspector"/></svg>Editör tercihleri</button>
+      <button class="menu-row" data-settings="export"><svg><use href="#i-export"/></svg>Dışa aktarma</button>
       <button class="menu-row" id="reset"><svg><use href="#i-reset"/></svg>Yerleşimi sıfırla</button>
     </div>
     </nav>
@@ -75,18 +87,7 @@
     <button class="menu-row" id="menu-pin"><svg><use href="#i-pin"/></svg><span>Paneli sabitle</span></button>
     <button class="menu-row" id="menu-close"><svg><use href="#i-close"/></svg>Pencereyi kapat</button>
   </div>
-  <dialog id="settings-dialog" aria-labelledby="settings-title">
-    <form id="settings-form">
-      <header class="dialog-header"><div><span class="tool-caption">ROWL / ÇALIŞMA ALANI</span><h2 id="settings-title"></h2></div><button type="button" class="icon-button" data-dismiss aria-label="Ayarları kapat"><svg><use href="#i-close"/></svg></button></header>
-      <div class="dialog-body">
-        <section data-settings-section="project"><label>Proje adı<input name="project" maxlength="80" required></label></section>
-        <section data-settings-section="game"><label>Sahne çözünürlüğü<select name="resolution"><option value="1280x800">1280 × 800 · Yatay</option><option value="1920x1080">1920 × 1080 · Yatay</option><option value="1080x1920">1080 × 1920 · Dikey</option></select></label><label>Oyunun başlangıç sahnesi<select name="startScene"><option value="selected">Seçili node</option><option value="0">Bir gece, bir ışık</option><option value="1">Yol ayrımı</option><option value="2">Yeni bir sabah</option></select></label></section>
-        <section data-settings-section="editor"><label class="check-row"><input type="checkbox" name="grid"> Node ızgarası</label><label class="check-row"><input type="checkbox" name="guides"> Edit Scene obje çerçeveleri</label></section>
-        <section data-settings-section="export"><div class="export-card"><svg><use href="#i-export"/></svg><strong>Proje taslağı</strong><p>Sahneleri, obje özelliklerini, ayarları ve pencere yerleşimini JSON dosyası olarak indir.</p><span class="muted">Format · Rowl prototip JSON</span></div></section>
-      </div>
-      <footer class="dialog-footer"><button type="button" class="text-button" data-dismiss>Vazgeç</button><button type="submit" class="primary-button" id="settings-submit">Uygula</button></footer>
-    </form>
-  </dialog>
+  <dialog id="settings-dialog" aria-labelledby="settings-title"></dialog>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <template id="node-template">
     <div class="node-area">

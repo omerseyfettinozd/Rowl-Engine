@@ -4,7 +4,7 @@ import { VIEWS, initialState, focusView, openView, closeView, toggleView, toggle
 test('Her simge ikinci tıklamada sabit ve son pencereyi de kapatır',()=>{
   for(const view of VIEWS){const empty=closeView(initialState(),'node').state;const pinned=togglePin(toggleView(empty,view).state,view).state;const closed=toggleView(pinned,view).state;assert.deepEqual(closed.visible,[]);assert.deepEqual(closed.pinned,[]);assert.equal(closed.focused,null);}
 });
-test('Yedi pencere sabitlemelerden bağımsız açılır; mevcut pencere kapanmaz',()=>{
+test('Sekiz pencere sabitlemelerden bağımsız açılır; mevcut pencere kapanmaz',()=>{
   let state=initialState();for(const view of VIEWS){const before=state.visible;state=openView(state,view).state;assert.ok(before.every(v=>state.visible.includes(v)));state=togglePin(state,view).state;}assert.deepEqual(state.visible,VIEWS);assert.deepEqual(state.pinned,VIEWS);assert.equal('capacity' in state,false);
 });
 test('Tekrar açma kopyalamaz ve yalnız odak değiştirir',()=>{

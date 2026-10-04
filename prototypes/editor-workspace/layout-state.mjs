@@ -37,11 +37,14 @@ export function syncLayout(layout, previous, next, axis = 'x') {
   for (const view of removed) result = removeView(result, view);
   for (const view of added) {
     let tree;
-    if (TOOL_VIEWS.includes(view) && result.tree) {
+    if(view==='lua' && result.tree){
+      const target=leaves(result.tree).includes('node')?'node':leaves(result.tree)[0];
+      tree=mapLeaf(result.tree,target,node=>split(node,leaf(view),axis==='x'&&leaves(result.tree).length===1?'x':'y',.42));
+    } else if (TOOL_VIEWS.includes(view) && result.tree) {
       let inserted = false;
       function addTool(node) {
         const views = leaves(node);
-        if (!inserted && views.every(v => TOOL_VIEWS.includes(v))) {
+        if (!inserted && views.every(v => v !== 'lua' && TOOL_VIEWS.includes(v))) {
           inserted = true;
           return split(node, leaf(view), 'y', views.length / (views.length + 1));
         }

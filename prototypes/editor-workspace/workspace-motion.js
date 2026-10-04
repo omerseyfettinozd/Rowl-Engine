@@ -1,7 +1,7 @@
 // Animate flex allocations, so the windows keep disjoint layout areas throughout.
 export function workspaceMotion(root, panels) {
   let animations = [], timer = null, complete = null;
-  const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches || document.documentElement.classList.contains('reduce-motion');
   function cancel() {
     clearTimeout(timer); timer = null;
     for (const animation of animations) animation.cancel();

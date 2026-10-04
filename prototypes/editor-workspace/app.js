@@ -3,10 +3,12 @@ import { initialLayout, syncLayout, dockView, resizeSplit } from './layout-state
 import { TOOL_VIEWS } from './workspace-state.mjs';
 import { defaultSettings, normalizeSettings, RESOLUTIONS, editObject } from './settings-state.mjs';
 import { toolContent, bindTools } from './tools.js';
+import { luaContent, bindLua } from './lua-editor.js';
+import { bindSettings } from './settings-ui.js';
 import { workspaceMotion } from './workspace-motion.js';
 import { initialPlayback, startPlayback, togglePause, advancePlayback, playbackFrame } from './playback-state.mjs';
 
-const names = { node: 'Node', game: 'Game', edit: 'Edit Scene', hierarchy: 'Hiyerarşi', inspector: 'Inspector', assets: 'Varlıklar', console: 'Konsol' };
+const names = { node: 'Node', game: 'Game', edit: 'Edit Scene', hierarchy: 'Hiyerarşi', inspector: 'Inspector', assets: 'Varlıklar', console: 'Konsol', lua: 'Lua editörü' };
 const defaults = [
   { title: 'Bir gece, bir ışık', dialogue: 'Gece ne kadar sessiz… Sanki bütün dünya bir şey söylememi bekliyor.' },
   { title: 'Yol ayrımı', dialogue: 'Soldaki yol ormana, sağdaki yol denize çıkıyor. Peki, kalbim hangisini seçer?' },
@@ -27,7 +29,7 @@ for (const view of Object.keys(names)) {
   const panel = document.createElement('section');
   panel.className = 'panel'; panel.dataset.panel = view; panel.setAttribute('aria-label', `${names[view]} penceresi`);
   panel.innerHTML = `<header class="panel-header" data-drag="${view}" title="Pencereyi taşımak için başlığı sürükle"><div class="panel-title"><svg aria-hidden="true"><use href="#i-${view}"/></svg><span>${names[view]}</span></div><div class="panel-actions"><button class="icon-button placement-button" data-placement="${view}" aria-label="${names[view]} pencere düzeni" title="Pencereyi yerleştir"><svg aria-hidden="true"><use href="#i-layout"/></svg></button><button class="icon-button pin-button" data-pin="${view}" aria-label="${names[view]} penceresini sabitle" title="Pencereyi sabitle"><svg aria-hidden="true"><use href="#i-pin"/></svg></button><button class="icon-button close-button" data-close="${view}" aria-label="${names[view]} penceresini kapat" title="Pencereyi kapat"><svg aria-hidden="true"><use href="#i-close"/></svg></button></div></header><div class="panel-content"></div>`;
-  const content = TOOL_VIEWS.includes(view) ? toolContent(view) : document.querySelector(view === 'node' ? '#node-template' : '#scene-template').content.cloneNode(true);
+  const content = view==='lua'?luaContent():TOOL_VIEWS.includes(view) ? toolContent(view) : document.querySelector(view === 'node' ? '#node-template' : '#scene-template').content.cloneNode(true);
   if (['game','edit'].includes(view)) {
     // Each copy has its own SVG gradient identifiers.
     content.querySelectorAll('[id]').forEach(el => { el.id = `${view}-${el.id}`; });
@@ -43,6 +45,7 @@ for (const view of Object.keys(names)) {
   panels.set(view, panel);
 }
 
+const lua = bindLua(panels.get('lua'),{notify});
 const motion = workspaceMotion(dockRoot,panels);
 const tools = bindTools(panels, {
   get:()=>({scene:scenes[sceneIndex], selected:selectedObject, names:objectNames}),
@@ -149,7 +152,7 @@ function updateScene() {
 }
 function minimumHeight(tree) {
   if (!tree) return 0;
-  if (tree.type==='leaf') return TOOL_VIEWS.includes(tree.view)?260:240;
+  if (tree.type==='leaf') return tree.view==='lua'?380:TOOL_VIEWS.includes(tree.view)?260:240;
   const a=minimumHeight(tree.a), b=minimumHeight(tree.b);
   return tree.axis==='x'?Math.max(a,b):8+Math.max(a/tree.ratio,b/(1-tree.ratio));
 }
@@ -324,32 +327,13 @@ document.querySelector('#tools-toggle').addEventListener('click',()=>{
   document.querySelector('#tools-toggle').setAttribute('aria-expanded',String(open));document.querySelector('#tools-toggle').setAttribute('aria-label',open?'Araçları kapat':'Araçları aç');
 });
 document.querySelectorAll('[data-tool]').forEach(button=>button.addEventListener('click',()=>{endGesture(true);apply(toggleView(state,button.dataset.tool));document.querySelector('#tools-toggle').focus({preventScroll:true});}));
-const settingsDialog=document.querySelector('#settings-dialog'), settingsForm=document.querySelector('#settings-form');
-let settingsCategory='project';
-document.querySelectorAll('[data-settings]').forEach(button=>button.addEventListener('click',()=>{
-  closeMenus(); settingsCategory=button.dataset.settings;
-  document.querySelector('#settings-title').textContent={project:'Proje ayarları',game:'Oyun ayarları',editor:'Editör tercihleri',export:'Dışa aktar'}[settingsCategory];
-  for(const section of settingsDialog.querySelectorAll('[data-settings-section]')) section.hidden=section.dataset.settingsSection!==settingsCategory;
-  for(const [name,value] of Object.entries(settings)){const input=settingsForm.elements.namedItem(name);if(typeof value==='boolean')input.checked=value;else input.value=value;}
-  // Hidden categories cannot block validation of the active form.
-  settingsForm.elements.namedItem('project').required=settingsCategory==='project';
-  document.querySelector('#settings-submit').textContent=settingsCategory==='export'?'JSON indir':'Uygula';settingsDialog.showModal();
-}));
-settingsDialog.querySelectorAll('[data-dismiss]').forEach(button=>button.addEventListener('click',()=>settingsDialog.close()));
-settingsForm.addEventListener('submit',event=>{
-  event.preventDefault();
-  if(settingsCategory==='export'){
-    const data={format:'rowl-workspace-prototype/v1',settings,scenes,workspace:{...state,layout}};
-    const url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));
-    const link=document.createElement('a');link.href=url;link.download='rowl-proje-taslagi.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);tools.log('Proje taslağı JSON olarak dışa aktarıldı.');
-  }else{
-    const changes=settingsCategory==='project'?{project:settingsForm.elements.project.value}:settingsCategory==='game'?{resolution:settingsForm.elements.resolution.value,startScene:settingsForm.elements.startScene.value}:{grid:settingsForm.elements.grid.checked,guides:settingsForm.elements.guides.checked};
-    settings=normalizeSettings({...settings,...changes});
-    try{localStorage.setItem('rowl-prototype-settings',JSON.stringify(settings));}catch{notify('Ayarlar bu oturumda uygulandı; tarayıcıya kaydedilemedi.');}
-    tools.log(`${document.querySelector('#settings-title').textContent} uygulandı.`);updateScene();fitViews();
-  }
-  settingsDialog.close();
+const preferences=bindSettings(document.querySelector('#settings-dialog'),{
+  get:()=>settings,
+  beforeOpen:()=>{motion.cancel();closeMenus();},
+  apply:changes=>{settings=normalizeSettings({...settings,...changes});try{localStorage.setItem('rowl-prototype-settings',JSON.stringify(settings));}catch{}updateScene();fitViews();tools.log('Tasarım tercihleri kaydedildi.');notify('Tercihler kaydedildi.');},
+  export:details=>{const data={format:'rowl-workspace-prototype/v2',settings,preferences:details,scenes,scripts:details.includeScripts?lua.snapshot():{},workspace:{...state,layout}};const url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));const link=document.createElement('a');link.href=url;link.download='rowl-proje-taslagi.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);notify('Proje taslağı indirildi.');}
 });
+document.querySelectorAll('[data-settings]').forEach(button=>button.addEventListener('click',()=>preferences.open(button.dataset.settings)));
 const observer=new ResizeObserver(fitViews); observer.observe(workspace); observer.observe(panels.get('node').querySelector('.graph-viewport'));
 for (const view of ['game','edit']) observer.observe(panels.get(view).querySelector('.scene-stage-wrap'));
 render();
