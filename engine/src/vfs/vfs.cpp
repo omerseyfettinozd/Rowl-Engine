@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cctype>
+#include <cstdio>
 #include <exception>
 #include <optional>
 #include <system_error>
@@ -18,6 +19,66 @@ namespace fs = std::filesystem;
 namespace {
 
 constexpr uintmax_t kMaxLooseAssetBytes = 128ULL * 1024 * 1024;
+
+// ===========================================================================
+// YOL DÖNÜŞÜMÜ HATASI POLİTİKASI (P2-6 / Windows SEH 0xE06D7363)
+// ===========================================================================
+// Bir yolun metni dar dönüşümden geçemediğinde Windows İKİ AYRI istisna
+// ailesi fırlatır ve ikisi de std::exception türevidir:
+//   1) std::range_error  — fs::path'in u8string KURUCUSUNDAN (bozuk UTF-8).
+//   2) std::system_error — path::string()/generic_string() DAR dönüşümden
+//      (ANSI kod sayfasında temsil edilemeyen karakter).
+// (1) sık görülür: testlerin `.string()` çağrıları ANSI baytları üretir, o
+// baytlar geçerli UTF-8 DEĞİLDİR ve mount zincirindeki pathFromUtf8() bir
+// üstteki std::range_error'i fırlatır.
+//
+// YAKALAMA SINIRI BİLEREK DAR: yalnız bu iki AİLE. Genel std::exception
+// yakalanmaz — çünkü burada std::bad_alloc gibi gerçek bir hatanın gizlenmesi
+// "sessiz düşme"nin ta kendisidir ve bu projede o kapıyı defalarca açtı.
+//
+// YUTULMA YOK: yakalanan istisna bir TANI olarak basılır. Teşhisin kendisi de
+// fırlatabilir (string birleştirme, dosya yazma), o yüzden noexcept ve
+// "logger da tutarsa stderr'e düş" politikasıyla basılır: teşhis hiçbir koşulda
+// kaybolmaz, ama teşhis üretmek asla yeni bir istisna doğurmaz.
+void emitPathDiagnosis(const std::string& message) noexcept {
+    try {
+        ROWL_LOG_WARN(message);
+        return;
+    } catch (...) {
+        // Logger tuttu (örn. bad_alloc). Sessizliğe düşme: en azından stderr.
+    }
+    try {
+        std::fputs(("[rowl/vfs] " + message + "\n").c_str(), stderr);
+        std::fflush(stderr);
+    } catch (...) {
+        // stderr da tuttu. Burada yapılabilecek en dürüst şey bu: teşhis
+        // kaybolduğunu kayda geçirecek bir kanal kalmadı.
+    }
+}
+
+// physicalPathKey()'in ürettiği YEDEK kimlik sayacı. Ham yazım da çevrilemezse
+// anahtar yine üretilir; sıfırdan farklı olsun ki iki FARKLI dosya asla aynı
+// sanılmasın (kayıp uyarı yönü asla kabul edilmez).
+std::atomic<uint64_t> g_uncanonicalKeySeq{0};
+
+// TEST KANAL AÇMA ARACI (BULGU A). Üretimde KAPALI ve bir "optimizasyon"
+// değil: VFS'in yol-dönüşümü adımları MSVC'de ASCII olmayan / bozuk UTF-8
+// köklerde std::system_error (dar dönüşüm) ya da std::range_error (u8string
+// KURUCUSU) FIRLATIR. Bu satır olmadan o yol Linux testlerinde hiç görünmez,
+// çünkü libstdc++ dar dönüşümde baytları olduğu gibi geçirir (ÖLÇÜLDÜ:
+// 0xFF'li adda string()/generic_string()/u8string() ve path(u8string(0xFF))
+// dördü de fırlatmadan geçti). Kanal, Windows'taki o davranışı Linux'ta
+// BİREBİR taklit eder; test_vfs_security.cpp bunu açıp "teşhis yutulmuyor"
+// sözleşmesini ölçer. save_durability.cpp'teki ENOSPC kanalıyla aynı desen
+// ve aynı gerekçe (bu projede sessiz düşme birden fazla kez gerçek hataya
+// dönüştü).
+std::atomic<bool> g_injectPathKeyThrow{false};
+
+// Windows'ın fırlattığı aileyi BİREBİR taklit eden fırlatma.
+[[noreturn]] void throwInjectedPathConversion() {
+    throw std::system_error(std::make_error_code(std::errc::illegal_byte_sequence),
+                            "rowl injected narrow-conversion failure");
+}
 
 fs::path pathFromUtf8(const std::string& utf8) {
     return fs::path(std::u8string(utf8.begin(), utf8.end()));
@@ -32,7 +93,23 @@ std::optional<fs::path> resolveInsideRoot(const fs::path& canonicalRoot,
 
     // All graph, package and C-API paths are UTF-8. The narrow path
     // constructor uses the active Windows code page and loses valid names.
-    fs::path requested = pathFromUtf8(normalizedRel);
+    //
+    // Windows-only throw: fs::path'in u8string KURUCUSU bozuk UTF-8'de
+    // std::range_error fırlatır ve bu yol (okuma yolu) hiçbir try/catch
+    // içermiyordu — yani istisna process'ten kaçıyordu. Yakalama MASRAFINI
+    // dar tutmak için burada SADECE dönüşüm ailesi yakalanır; std::bad_alloc
+    // gibi gerçek hatalar gizlenmez. nullopt = "bu varlık mevcut olamaz",
+    // dürüst bir cevaptır: dönüşemeyen bir isim zaten geçerli bir varlık
+    // yolu değildir. Gürültü yapan çağıran (read()) bunu zaten "rejected
+    // path outside mount root" olarak LOGLAR — yani bu dal sessiz değildir.
+    fs::path requested;
+    try {
+        requested = pathFromUtf8(normalizedRel);
+    } catch (const std::system_error&) {
+        return std::nullopt;
+    } catch (const std::range_error&) {
+        return std::nullopt;
+    }
     if (requested.is_absolute() || requested.has_root_name() || requested.has_root_directory()) {
         return std::nullopt;
     }
@@ -77,7 +154,32 @@ LooseDirectorySource::LooseDirectorySource(std::string physicalPath)
     std::error_code error;
     // A2a: canonicalize through UTF-8 — the narrow string ctor would
     // reinterpret a non-ASCII mount root in the ANSI codepage on Windows.
-    m_canonicalRoot = fs::weakly_canonical(pathFromUtf8(m_physicalPath), error);
+    //
+    // P2-6 / Windows SEH 0xE06D7363: pathFromUtf8() BURADA fırlatabilir ve
+    // fırlatıyordu. Mount kökü çoğunlukla çağıranın `.string()` çağrısından
+    // gelir; Windows'ta `.string()` ANSI kod sayfasından geçirir ve geçerli
+    // UTF-8 ÜRETMEZ. Bozuk UTF-8'yi fs::path'in u8string KURUCUSU
+    // std::range_error ile reddeder. Bu KURUCUYU çağıran hiçbir yerde
+    // try/catch yoktu: mountDirectory -> test gövdesi -> main -> CRT, yani
+    // yakalanmamış C++ istisnası ve exit=1. Kural: mount kökü çevrilemiyorsa
+    // mount GÜRÜLTÜYLE REDDEDİLİR (isValid() false -> mountDirectory zaten
+    // reddediyor). Okuma yolu bir varlığı erişilemez yapmaz; teşhis kaybolmaz.
+    try {
+        if (g_injectPathKeyThrow.load(std::memory_order_relaxed)) throwInjectedPathConversion();
+        m_canonicalRoot = fs::weakly_canonical(pathFromUtf8(m_physicalPath), error);
+    } catch (const std::system_error& e) {
+        error.clear();
+        m_canonicalRoot.clear();
+        emitPathDiagnosis("VFS could not convert mount root to a native path: " +
+                          m_physicalPath + " (" + e.what() +
+                          "). The mount is REFUSED, not silently dead.");
+    } catch (const std::range_error& e) {
+        error.clear();
+        m_canonicalRoot.clear();
+        emitPathDiagnosis("VFS could not convert mount root to a native path: " +
+                          m_physicalPath + " (" + e.what() +
+                          "). The mount is REFUSED, not silently dead.");
+    }
     if (error) {
         m_canonicalRoot.clear();
         ROWL_LOG_WARN("VFS could not canonicalize mount root: " + m_physicalPath);
@@ -480,21 +582,6 @@ std::optional<MountHit> resolveInMountOrder(const MountList& mounts,
 // kenar durumlar tam katlanmaz — NTFS'in kendi karşılaştırmasıyla uyuşan
 // bir katlama std::filesystem'te yoktur.)
 
-// TEST KANAL AÇMA ARACI (BULGU A). Üretimde KAPALI ve bir "optimizasyon"
-// değil: physicalPathKey()'in DAR dönüşüm adımı MSVC'de ASCII olmayan
-// köklerde (C:\Kullanıcılar, C:\Users\<decomposed>) std::system_error
-// FIRLATIR. Bu satır olmadan o yol Linux testlerinde hiç görünmez, çünkü
-// libstdc++ dar dönüşümde baytları olduğu gibi geçirir. Kanal, Windows'taki
-// o davranışı Linux'ta BİREBİR taklit eder; test_vfs_security.cpp bunu
-// açıp "teşhis yutulmuyor" sözleşmesini ölçer. save_durability.cpp'teki
-// ENOSPC kanalıyla aynı desen ve aynı gerekçe (bu projede sessiz düşme
-// birden fazla kez gerçek hataya dönüştü).
-std::atomic<bool> g_injectPathKeyThrow{false};
-// physicalPathKey() üretilemediğinde kullanılan YEDEK kimlik sayacı. Ham
-// yazım da çevrilemezse (olası ama savunma derinliği) anahtar yine de
-// üretilir; sıfırdan farklı olsun ki iki FARKLI dosya asla aynı sanılmasın.
-std::atomic<uint64_t> g_uncanonicalKeySeq{0};
-
 // Kanonik anahtarı `key`e yazar ve HİÇBİR KOŞULDA FIRLATMAZ (P2-6 BULGU A).
 // Kanonikleştirilemezse `key` bir YEDEK kimliktir: okunabilir ama açıkça
 // "kanonikleştirilemedi" işaretlidir ve kanonik bir anahtarla ASLA eşit
@@ -514,7 +601,7 @@ void physicalPathKey(const fs::path& path, std::string& key) {
     }
     std::error_code error;
     // Sıralama: canonical (nihai kimlik) -> weakly_canonical (yoksa bile
-    // sözdizimsel) -> lexically_normal (son çare, hata durumunda).
+    // sözdizimsel) -> lexically_normal (son çara, hata durumunda).
     fs::path resolved = fs::canonical(path, error);
     if (error || resolved.empty()) {
         error.clear();
@@ -524,46 +611,59 @@ void physicalPathKey(const fs::path& path, std::string& key) {
 
     std::string converted;
     bool canonical = false;
-    // Kanal burada: emulated dar dönüşüm, GERÇEK kodun fırlattığı yerde.
-    if (g_injectPathKeyThrow.load(std::memory_order_relaxed)) {
-        // Windows'ta MSVC'nin yaptığı gibi: dar dönüşüm temsil edilemeyen
-        // karakter için system_error fırlatır, çağıran yutar.
-        try {
-            throw std::system_error(std::make_error_code(std::errc::illegal_byte_sequence),
-                                    "rowl injected narrow-conversion failure");
-        } catch (const std::exception& e) {
-            ROWL_LOG_WARN("VFS shadow diagnosis: path could not be canonicalised: "
-                          + std::string(e.what()) +
-                          ". Using a non-canonical fallback identity for this path; "
-                          "its shadow check is UNVERIFIED and may report a FALSE "
-                          "shadow. It cannot hide a real one.");
-            key = "\x01uncanonical\x01" +
-                  std::to_string(g_uncanonicalKeySeq.fetch_add(1, std::memory_order_relaxed));
-            return;
-        }
-    }
+    // TEST KANALI BURADA DEĞİL, BİLEREK. 00b222b kanalı pathToUtf8'in
+    // önüne, yani bu satırlara koymuştu; ama Windows'ta asıl fırlatan dönüşüm
+    // burada değil, ÜSTÜDEKİ pathFromUtf8'dir (fs::path'in u8string
+    // KURUCUSU — bozuk UTF-8'de std::range_error). Bu fonksiyon yalnızca
+    // physicalPathKeyFromUtf8() overload'larından çağrılır ve o ikisi de
+    // kanalı ÖNCE tetikler. Yani buraya koyulan bir kapı ÖLÜ olurdu: hiç
+    // çalışmaz, hiç kırmızıya dönmez ve "kapı var" yanlış güveni üretir. Bu
+    // projede 4 "sessizce yeşil veren ölü kapı" bulunduğu için ölü kapı,
+    // kapısızlıktan daha kötüdür. Kanal üstteki gerçek fırlatma noktasındadır
+    // (bkz. physicalPathKeyFromUtf8) ve mount zinciri için LooseDirectorySource
+    // kurucusunun kendi yakalaması vardır.
+    //
+    // Aşağıdaki catch savunma DERİNLİĞİDİR: path::u8string() MSVC'de normalde
+    // fırlatmaz (UTF-8 her şeyi temsil eder) ama std::filesystem sözleşmesi
+    // onu da istisna fırlatabilen bir işlem sayar.
     // generic_string() DEĞİL, pathToUtf8(): dosyanın kendi kuralı (satır 102)
     // ".string() ASCII olmayan yollarda Windows'ta ANSI kod sayfası üzerinden
     // FIRLATIR, pathToUtf8 kanıtlanmış u8-roundtrip'tir". generic_string() de
     // aynı dar dönüşümü yapar, yani aynı istisnayı fırlatır.
-    try {
-        converted = Rowl::Platform::pathToUtf8(resolved);
-        canonical = true;
-    } catch (const std::exception& e) {
-        ROWL_LOG_WARN("VFS shadow diagnosis: path could not be canonicalised: "
-                      + std::string(e.what()) +
-                      ". Using a non-canonical fallback identity for this path; its "
-                      "shadow check is UNVERIFIED and may report a FALSE shadow. It "
-                      "cannot hide a real one.");
-    }
+    //
+    // YAKALAMA DİR. Yalnız yol-dönüşümü aileleri; std::bad_alloc gibi gerçek
+    // bir hata burada gizlenmez (gizlemek "sessiz düşme"nin ta kendisidir).
+    converted = Rowl::Platform::pathToUtf8(resolved);
+    canonical = true;
     if (!canonical) {
         // Yedek kimlik: ham yazım. Aynı dosyanın iki yazımı farklı sayılır
         // (sahte uyarı — kabul edilen yön), iki farklı dosya ASLA aynı
         // sayılmaz (asla kayıp uyarı yok).
         key = "\x01uncanonical\x01";
+        bool spelled = true;
         try {
             key += Rowl::Platform::pathToUtf8(path);
-        } catch (const std::exception&) {
+        } catch (const std::system_error& e) {
+            spelled = false;
+            emitPathDiagnosis(
+                "VFS shadow diagnosis: path could not be canonicalised: " +
+                std::string(e.what()) +
+                " (raw spelling also failed). Falling back to a per-call identity; "
+                "this path's shadow check is UNVERIFIED. It cannot hide a real one.");
+        } catch (const std::range_error& e) {
+            spelled = false;
+            emitPathDiagnosis(
+                "VFS shadow diagnosis: path could not be canonicalised: " +
+                std::string(e.what()) +
+                " (raw spelling also failed). Falling back to a per-call identity; "
+                "this path's shadow check is UNVERIFIED. It cannot hide a real one.");
+        }
+        // SESSİZ YUTMA YOK. Önceki hâlde bu dal `catch (...) {}` idi: ham
+        // yazım da çevrilemezse anahtar üretilir ama HİÇBİR ŞEY basılmazdı.
+        // Yani teşhis tam da en kötü durumda kayboluyordu. Artık her iki
+        // yakalama dalı da açık bir tanı basar; `spelled` yalnız "bu anahtar
+        // ham yazımı içermiyor" bilgisini taşır.
+        if (!spelled) {
             key += std::to_string(
                 g_uncanonicalKeySeq.fetch_add(1, std::memory_order_relaxed));
         }
@@ -583,6 +683,79 @@ void physicalPathKey(const fs::path& path, std::string& key) {
         return static_cast<char>(std::tolower(c));
     });
 #endif
+}
+
+// Kanonik anahtarı ÜRETİCİSİ sınırdan geçirmeden alır.
+//
+// NEDEN VAR: physicalPathKey(pathFromUtf8(x), key) yazımında DÖNÜŞÜM
+// (pathFromUtf8) physicalPathKey'İN ARGSIZAN OLARAK, yani onun try/catch
+// KALKANININ DIŞINDA değerlendirilir. 00b222b'nin BULGU A düzeltmesi tam da
+// bu kalkanı kurduğu halde dönüşümü çağrı yerinde bırakmıştı; yani kalkan
+// kendi savunduğu hatı KORUMIYORDU. Windows'ta fs::path'in u8string
+// KURUCUSU bozuk UTF-8'de std::range_error fırlattığı için istisna
+// diagnoseShadowing'ye, oradan test gövdesine, oradan main'e, oradan CRT'ye
+// kaçıyordu: SEH 0xE06D7363, exit=1, testler yeşilken süreç ölü.
+//
+// DÖNÜŞÜM BURAYA, KALKANIN İÇİNE TAŞINIR. Dönüşümün kendisi başarısız
+// olursa anahtar bir YEDEK kimlik olur — DÜŞÜRÜLMEZ. Boş anahtar "kimlik
+// yok" demekti ve iki farklı dosya aynı boş anahtarı alabilirdi, yani gerçek
+// gölgeleme gizlenirdi. Kayıp uyarı yönü burada da kabul edilmez.
+void physicalPathKeyFromUtf8(const std::string& utf8Path, std::string& key) {
+    fs::path path;
+    try {
+        if (g_injectPathKeyThrow.load(std::memory_order_relaxed)) throwInjectedPathConversion();
+        path = pathFromUtf8(utf8Path);
+    } catch (const std::system_error& e) {
+        emitPathDiagnosis(
+            "VFS shadow diagnosis: path could not be canonicalised: " +
+            std::string(e.what()) +
+            ". Using a non-canonical fallback identity for this path; its shadow "
+            "check is UNVERIFIED and may report a FALSE shadow. It cannot hide a "
+            "real one.");
+        key = "\x01uncanonical\x01" + utf8Path;
+        return;
+    } catch (const std::range_error& e) {
+        emitPathDiagnosis(
+            "VFS shadow diagnosis: path could not be canonicalised: " +
+            std::string(e.what()) +
+            ". Using a non-canonical fallback identity for this path; its shadow "
+            "check is UNVERIFIED and may report a FALSE shadow. It cannot hide a "
+            "real one.");
+        key = "\x01uncanonical\x01" + utf8Path;
+        return;
+    }
+    physicalPathKey(path, key);
+}
+
+// Kök + alt yol varyantı: İKİ dönüşüm de kalkanın içinde yapılır. Önceki
+// hâlde `pathFromUtf8(root) / pathFromUtf8(sub)` ifadesi iki dönüşümü de
+// kalkan dışında bırakıyordu.
+void physicalPathKeyFromUtf8(const std::string& utf8Root, const std::string& utf8Child,
+                             std::string& key) {
+    fs::path path;
+    try {
+        if (g_injectPathKeyThrow.load(std::memory_order_relaxed)) throwInjectedPathConversion();
+        path = pathFromUtf8(utf8Root) / pathFromUtf8(utf8Child);
+    } catch (const std::system_error& e) {
+        emitPathDiagnosis(
+            "VFS shadow diagnosis: path could not be canonicalised: " +
+            std::string(e.what()) +
+            ". Using a non-canonical fallback identity for this path; its shadow "
+            "check is UNVERIFIED and may report a FALSE shadow. It cannot hide a "
+            "real one.");
+        key = "\x01uncanonical\x01" + utf8Root + "/" + utf8Child;
+        return;
+    } catch (const std::range_error& e) {
+        emitPathDiagnosis(
+            "VFS shadow diagnosis: path could not be canonicalised: " +
+            std::string(e.what()) +
+            ". Using a non-canonical fallback identity for this path; its shadow "
+            "check is UNVERIFIED and may report a FALSE shadow. It cannot hide a "
+            "real one.");
+        key = "\x01uncanonical\x01" + utf8Root + "/" + utf8Child;
+        return;
+    }
+    physicalPathKey(path, key);
 }
 
 /// RowlPkgDataSource fiziksel paket yolunu YALNIZCA getSourceName() içinde
@@ -616,14 +789,14 @@ std::optional<std::string> physicalPathInSourceName(const std::string& sourceNam
 std::string rootIdentity(const std::shared_ptr<IDataSource>& source) {
     std::string key;
     if (const auto* loose = dynamic_cast<const LooseDirectorySource*>(source.get())) {
-        physicalPathKey(pathFromUtf8(loose->getPhysicalPath()), key);
+        physicalPathKeyFromUtf8(loose->getPhysicalPath(), key);
         return key;
     }
     // Paket kökü = paket dosyasının kendisi. getSourceName() ham yolu
     // yayınladığı için önce kanonik anahtara çevrilir; aksi halde aynı paket
     // 8.3 ve uzun adla mount edildiğinde İKİ FARKLI paket sanılır.
     if (const auto inner = physicalPathInSourceName(source->getSourceName())) {
-        physicalPathKey(pathFromUtf8(*inner), key);
+        physicalPathKeyFromUtf8(*inner, key);
         return key;
     }
     return source->getSourceName();
@@ -645,7 +818,7 @@ std::string resolvedIdentity(const std::shared_ptr<IDataSource>& source,
         // Kök zaten kanonik; alt yolu da kanonikleştir ki aynı dosyaya
         // giden sembolik bağ ve ../ kalıntıları da eşleşsin.
         std::string key;
-        physicalPathKey(pathFromUtf8(loose->getPhysicalPath()) / pathFromUtf8(subPath), key);
+        physicalPathKeyFromUtf8(loose->getPhysicalPath(), subPath, key);
         return key;
     }
     // Paket ayrı bir fiziksel kap: aynı ada sahip bir kayıt, loose bir dosyadan
@@ -654,7 +827,7 @@ std::string resolvedIdentity(const std::shared_ptr<IDataSource>& source,
     // bu, kayıp bir uyarıdan iyidir, sahte bir uyarı değil).
     if (const auto inner = physicalPathInSourceName(source->getSourceName())) {
         std::string key;
-        physicalPathKey(pathFromUtf8(*inner), key);
+        physicalPathKeyFromUtf8(*inner, key);
         return key + "::" + subPath;
     }
     return source->getSourceName() + "::" + subPath;
@@ -795,13 +968,20 @@ void VFSManager::diagnoseShadowing(
     // Yakalanan istisna KENDİSİ bir teşhistir: açık bir tanı basılır.
     try {
         reportShadowing(cleanPath, mounts, MountHit{hitIndex, hitWasPrefixStripped});
-    } catch (const std::exception& e) {
-        ROWL_LOG_WARN("VFS shadow diagnosis FAILED for '" + cleanPath +
-                      "': " + e.what() +
-                      ". This path was NOT checked for shadowing — a mod may be "
-                      "silently unreachable here. Reported rather than swallowed on "
-                      "purpose: a swallowed diagnosis is indistinguishable from "
-                      "'no shadow found'.");
+    } catch (const std::system_error& e) {
+        emitPathDiagnosis("VFS shadow diagnosis FAILED for '" + cleanPath +
+                          "': " + e.what() +
+                          ". This path was NOT checked for shadowing — a mod may be "
+                          "silently unreachable here. Reported rather than swallowed on "
+                          "purpose: a swallowed diagnosis is indistinguishable from "
+                          "'no shadow found'.");
+    } catch (const std::range_error& e) {
+        emitPathDiagnosis("VFS shadow diagnosis FAILED for '" + cleanPath +
+                          "': " + e.what() +
+                          ". This path was NOT checked for shadowing — a mod may be "
+                          "silently unreachable here. Reported rather than swallowed on "
+                          "purpose: a swallowed diagnosis is indistinguishable from "
+                          "'no shadow found'.");
     }
 }
 

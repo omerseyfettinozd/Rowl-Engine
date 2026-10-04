@@ -36,6 +36,22 @@ std::string p26LiveMarker() {
     return marker;
 }
 
+// Windows-only throw, dosyanın kendi kuralı (vfs.cpp satır 102):
+// path::string() DAR dönüşüm yapar — Windows'ta ETKIN ANSI KOD SAYFASI
+// üzerinden geçer ve yolda bu kod sayfasında temsil edilemeyen bir karakter
+// varsa std::system_error FIRLATIR. Bu dosyada 56 `.string()` çağrısı vardı ve
+// HİÇBİRİ kalkan içinde değildi: mountDirectory -> test gövdesi -> main ->
+// CRT. Sonuç, testler yeşilken sürecin SEH 0xE06D7363 ile ölmesiydi.
+// u8string() kanıtlanmış UTF-8 round-trip'tir ve dar dönüşüm YAPMAZ, yani
+// temsil edilemeyen karakter için fırlatma değil bayt üretir.
+//
+// Bu dosyadaki HER yol tüketimi bu yardımcıdan geçer; test kendi kendini
+// Windows'a bağımlı kılmaz.
+std::string utf8Path(const std::filesystem::path& value) {
+    const auto utf8 = value.u8string();
+    return std::string(utf8.begin(), utf8.end());
+}
+
 } // namespace
 
 void test_vfs_security() {
@@ -53,7 +69,7 @@ void test_vfs_security() {
         std::ofstream(testRoot / "outside.txt") << "outside";
     }
 
-    Rowl::VFS::LooseDirectorySource source(mountRoot.string());
+    Rowl::VFS::LooseDirectorySource source(utf8Path(mountRoot));
     if (!source.exists("inside.txt") || source.read("inside.txt").empty()) {
         std::cerr << "VFS failed to read a valid in-root asset" << std::endl;
         exit(1);
@@ -95,7 +111,7 @@ void test_vfs_security() {
         std::ofstream output(malformedPackage, std::ios::binary);
         output.write(reinterpret_cast<const char*>(&header), sizeof(header));
     }
-    Rowl::VFS::RowlPkgDataSource package(malformedPackage.string());
+    Rowl::VFS::RowlPkgDataSource package(utf8Path(malformedPackage));
     if (package.isValid()) {
         std::cerr << "Package with out-of-bounds index was accepted" << std::endl;
         exit(1);
@@ -109,7 +125,7 @@ void test_vfs_security() {
         std::ofstream output(impossibleCountPackage, std::ios::binary);
         output.write(reinterpret_cast<const char*>(&header), sizeof(header));
     }
-    if (Rowl::VFS::RowlPkgDataSource(impossibleCountPackage.string()).isValid()) {
+    if (Rowl::VFS::RowlPkgDataSource(utf8Path(impossibleCountPackage)).isValid()) {
         std::cerr << "Package accepted an impossible file count before index validation" << std::endl;
         exit(1);
     }
@@ -144,7 +160,7 @@ void test_vfs_security() {
                                           headerSize, 1, 1, 0};
 
     const auto validPackage = writePackage("valid.rowlpkg", validHeader, validEntry, safePath);
-    Rowl::VFS::RowlPkgDataSource validSource(validPackage.string());
+    Rowl::VFS::RowlPkgDataSource validSource(utf8Path(validPackage));
     if (!validSource.isValid() || validSource.read("dir\\safe.txt") != std::vector<uint8_t>{'x'} ||
         !validSource.read(safePath).size()) {
         std::cerr << "Valid package did not round-trip through normalized lookup" << std::endl;
@@ -197,7 +213,7 @@ void test_vfs_security() {
         output.write(reinterpret_cast<const char*>(&streamingEntry), sizeof(streamingEntry));
         output.write(streamingPath.data(), static_cast<std::streamsize>(streamingPath.size()));
     }
-    Rowl::VFS::RowlPkgDataSource streamingSource(streamingPackage.string());
+    Rowl::VFS::RowlPkgDataSource streamingSource(utf8Path(streamingPackage));
     auto streamingAsset = streamingSource.openStream(streamingPath);
     std::array<char, 97> streamingChunk{};
     const auto firstStreamingRead = streamingAsset ? streamingAsset->read(streamingChunk.data(), streamingChunk.size()).gcount() : 0;
@@ -288,7 +304,7 @@ void test_vfs_security() {
     // 1. No embedded manifest at all: a v1 package keeps loading untouched.
     const auto legacyNoManifest = writeZstdPackage("legacy_no_manifest.rowlpkg",
                                                    verifiedCompressed, std::nullopt);
-    Rowl::VFS::RowlPkgDataSource legacyNoManifestSource(legacyNoManifest.string());
+    Rowl::VFS::RowlPkgDataSource legacyNoManifestSource(utf8Path(legacyNoManifest));
     if (!legacyNoManifestSource.isValid() ||
         legacyNoManifestSource.read(hashedEntryPath) != expectedPayload) {
         std::cerr << "A v1 package without an embedded manifest stopped loading" << std::endl;
@@ -299,7 +315,7 @@ void test_vfs_security() {
     // pre-D18a packages keep the legacy skip (warn-open, unverified).
     const auto legacyWithoutKey = writeZstdPackage("legacy_without_key.rowlpkg",
                                                    verifiedCompressed, manifestWithoutKey);
-    Rowl::VFS::RowlPkgDataSource legacyWithoutKeySource(legacyWithoutKey.string());
+    Rowl::VFS::RowlPkgDataSource legacyWithoutKeySource(utf8Path(legacyWithoutKey));
     if (!legacyWithoutKeySource.isValid() ||
         legacyWithoutKeySource.read(hashedEntryPath) != expectedPayload) {
         std::cerr << "A manifest record without compressed_sha256 stopped loading" << std::endl;
@@ -309,7 +325,7 @@ void test_vfs_security() {
     // 3. Key present and the payload matches: verification passes silently.
     const auto verifiedPackage = writeZstdPackage("verified_hash.rowlpkg",
                                                   verifiedCompressed, manifestWithKey);
-    Rowl::VFS::RowlPkgDataSource verifiedSource(verifiedPackage.string());
+    Rowl::VFS::RowlPkgDataSource verifiedSource(utf8Path(verifiedPackage));
     if (!verifiedSource.isValid() ||
         verifiedSource.read(hashedEntryPath) != expectedPayload) {
         std::cerr << "A manifest-verified zstd payload failed to load" << std::endl;
@@ -328,7 +344,7 @@ void test_vfs_security() {
                                                substitutedPayload.data(), substitutedPayload.size(), 1));
     const auto substitutedPackage = writeZstdPackage("substituted_hash.rowlpkg",
                                                      substitutedCompressed, manifestWithKey);
-    Rowl::VFS::RowlPkgDataSource substitutedSource(substitutedPackage.string());
+    Rowl::VFS::RowlPkgDataSource substitutedSource(utf8Path(substitutedPackage));
     if (!substitutedSource.isValid() || !substitutedSource.read(hashedEntryPath).empty()) {
         std::cerr << "A substituted payload passed manifest sha256 verification" << std::endl;
         exit(1);
@@ -355,7 +371,7 @@ void test_vfs_security() {
         std::to_string(streamingPayload.size()) + "}]}";
     const auto backslashKeyPackage = writeZstdPackage("backslash_key.rowlpkg",
                                                      substitutedCompressed, manifestBackslashKey);
-    Rowl::VFS::RowlPkgDataSource backslashKeySource(backslashKeyPackage.string());
+    Rowl::VFS::RowlPkgDataSource backslashKeySource(utf8Path(backslashKeyPackage));
     if (!backslashKeySource.isValid() ||
         !backslashKeySource.read(hashedEntryPath).empty()) {
         std::cerr << "A backslash-separated manifest path bypassed sha256 "
@@ -367,7 +383,7 @@ void test_vfs_security() {
     // 5. A present-but-malformed key can never verify: fail closed.
     const auto malformedKeyPackage = writeZstdPackage("malformed_key.rowlpkg",
                                                       verifiedCompressed, manifestMalformedKey);
-    Rowl::VFS::RowlPkgDataSource malformedKeySource(malformedKeyPackage.string());
+    Rowl::VFS::RowlPkgDataSource malformedKeySource(utf8Path(malformedKeyPackage));
     if (!malformedKeySource.isValid() || !malformedKeySource.read(hashedEntryPath).empty()) {
         std::cerr << "A malformed compressed_sha256 key verified a payload" << std::endl;
         exit(1);
@@ -378,7 +394,7 @@ void test_vfs_security() {
     Rowl::VFS::RowlPkgEntryRaw traversalEntry{fnv1a64(traversalPath), static_cast<uint32_t>(traversalPath.size()),
                                                headerSize, 1, 1, 0};
     const auto traversalPackage = writePackage("traversal.rowlpkg", validHeader, traversalEntry, traversalPath);
-    Rowl::VFS::RowlPkgDataSource traversalSource(traversalPackage.string());
+    Rowl::VFS::RowlPkgDataSource traversalSource(utf8Path(traversalPackage));
     if (traversalSource.isValid()) {
         std::cerr << "Package accepted a traversal path" << std::endl;
         exit(1);
@@ -388,7 +404,7 @@ void test_vfs_security() {
     // the legacy hash field, is the sole lookup key.
     Rowl::VFS::RowlPkgEntryRaw badHashEntry{0, static_cast<uint32_t>(safePath.size()), headerSize, 1, 1, 0};
     const auto badHashPackage = writePackage("bad_hash.rowlpkg", validHeader, badHashEntry, safePath);
-    Rowl::VFS::RowlPkgDataSource badHashSource(badHashPackage.string());
+    Rowl::VFS::RowlPkgDataSource badHashSource(utf8Path(badHashPackage));
     if (!badHashSource.isValid() || badHashSource.read(safePath) != std::vector<uint8_t>{'x'}) {
         std::cerr << "Package path lookup incorrectly depends on legacy hash metadata" << std::endl;
         exit(1);
@@ -397,7 +413,7 @@ void test_vfs_security() {
     Rowl::VFS::RowlPkgEntryRaw indexPayloadEntry{fnv1a64(safePath), static_cast<uint32_t>(safePath.size()),
                                                   indexOffset, 1, 1, 0};
     const auto indexPayloadPackage = writePackage("index_payload.rowlpkg", validHeader, indexPayloadEntry, safePath);
-    Rowl::VFS::RowlPkgDataSource indexPayloadSource(indexPayloadPackage.string());
+    Rowl::VFS::RowlPkgDataSource indexPayloadSource(utf8Path(indexPayloadPackage));
     if (indexPayloadSource.isValid()) {
         std::cerr << "Package allowed an entry to read index bytes as payload" << std::endl;
         exit(1);
@@ -407,7 +423,7 @@ void test_vfs_security() {
                                                        headerSize, 1, 4'096, 1};
     const auto decompressionBombPackage = writePackage("decompression_bomb.rowlpkg", validHeader,
                                                        decompressionBombEntry, safePath);
-    if (Rowl::VFS::RowlPkgDataSource(decompressionBombPackage.string()).isValid()) {
+    if (Rowl::VFS::RowlPkgDataSource(utf8Path(decompressionBombPackage)).isValid()) {
         std::cerr << "Package accepted an unreasonable decompression ratio" << std::endl;
         exit(1);
     }
@@ -429,7 +445,7 @@ void test_vfs_security() {
         output.write(reinterpret_cast<const char*>(&secondEntry), sizeof(secondEntry));
         output.write(secondPath.data(), static_cast<std::streamsize>(secondPath.size()));
     }
-    Rowl::VFS::RowlPkgDataSource overlappingSource(overlappingPackage.string());
+    Rowl::VFS::RowlPkgDataSource overlappingSource(utf8Path(overlappingPackage));
     if (overlappingSource.isValid()) {
         std::cerr << "Package accepted overlapping payload ranges" << std::endl;
         exit(1);
@@ -456,7 +472,7 @@ void test_vfs_security() {
         output.write(reinterpret_cast<const char*>(bytes.data()),
                      static_cast<std::streamsize>(bytes.size()));
         output.close();
-        if (Rowl::VFS::RowlPkgDataSource(fuzzPath.string()).isValid()) {
+        if (Rowl::VFS::RowlPkgDataSource(utf8Path(fuzzPath)).isValid()) {
             std::cerr << "Malformed package fuzz input was accepted: case " << caseIndex << std::endl;
             exit(1);
         }
@@ -472,7 +488,7 @@ void test_vfs_security() {
             output.write("ROWL", 4);
             output.put(static_cast<char>(0x01));
         }
-        if (Rowl::VFS::RowlPkgDataSource(truncatedMagic.string()).isValid()) {
+        if (Rowl::VFS::RowlPkgDataSource(utf8Path(truncatedMagic)).isValid()) {
             std::cerr << "Truncated package with valid magic was accepted" << std::endl;
             exit(1);
         }
@@ -486,7 +502,7 @@ void test_vfs_security() {
                                              fakePayload.size(), 1};
         const auto fakePackage = writePackage("fake_zstd.rowlpkg", fakeHeader, fakeEntry,
                                               fakePath, fakePayload);
-        Rowl::VFS::RowlPkgDataSource fakeSource(fakePackage.string());
+        Rowl::VFS::RowlPkgDataSource fakeSource(utf8Path(fakePackage));
         if (!fakeSource.read(fakePath).empty()) {
             std::cerr << "Forged zstd payload decoded instead of failing safely" << std::endl;
             exit(1);
@@ -501,7 +517,7 @@ void test_vfs_security() {
     std::ofstream(isolatedProject / "project-secret.txt") << "not-an-asset";
     std::ofstream(isolatedProject / "Assets" / "images" / "allowed.txt") << "asset";
     Rowl::VFS::VFSManager vfs;
-    vfs.remountProject(isolatedProject.string());
+    vfs.remountProject(utf8Path(isolatedProject));
     if (vfs.exists("project-secret.txt") || !vfs.readBytes("project-secret.txt").empty() ||
         !vfs.exists("images/allowed.txt") ||
         vfs.readString("Assets/images/allowed.txt") != "asset") {
@@ -519,7 +535,7 @@ void test_vfs_security() {
                                packagedProject / "Assets" / "packages" / "game.rowlpkg",
                                std::filesystem::copy_options::overwrite_existing);
     std::ofstream(packagedProject / "mods" / "dir" / "safe.txt") << "mod";
-    vfs.remountProject(packagedProject.string());
+    vfs.remountProject(utf8Path(packagedProject));
     if (vfs.readString("dir/safe.txt") != "mod" ||
         vfs.readString("mods/dir/safe.txt") != "mod") {
         std::cerr << "Project mods did not override the matching package asset" << std::endl;
@@ -553,7 +569,7 @@ void test_vfs_security() {
     std::filesystem::copy_file(validPackage,
                                prioProject / "Assets" / "packages" / "game.rowlpkg",
                                std::filesystem::copy_options::overwrite_existing);
-    vfs.remountProject(prioProject.string());
+    vfs.remountProject(utf8Path(prioProject));
 
     const auto readViaStream = [](Rowl::VFS::VFSManager& m, const std::string& p) {
         auto s = m.openReadStream(p);
@@ -628,6 +644,11 @@ void test_vfs_security() {
         return false;
     };
 
+    // Kanonikleştirme/mount kökü dönüşümü reddinin AÇIK tanısı. vfs.cpp'teki
+    // emitPathDiagnosis() metniyle birebir eşleşir; metin kayarsa kapı
+    // kırmızıya düşer, yani teşhisin kendisi de kaza ile korunur.
+    const std::string kMountRefusedNeedle = "The mount is REFUSED, not silently dead.";
+
     // Logger 10 MB'ta döndürür (logger.cpp: MAX_LOG_FILE_SIZE) ve eskiyi
     // <yol>.1/.2/.3 yapar; sayım bu yüzden kuşakların toplamıdır.
     auto countShadowLines = [&](const std::filesystem::path& log, const std::string& needle) {
@@ -648,7 +669,23 @@ void test_vfs_security() {
         return count;
     };
 
-    // KAPI CANLI MI? Önce logger'ın gerçekten, BU SÜREÇTE, yazdığını kanıtla.
+    // countShadowLines'ın genel hâli: "VFS mount shadow" filtresi olmadan,
+    // verilen iğneyi sayar. Dönüşüm reddi teşhisi gölgeleme satırı DEĞİLDİR,
+    // yani onu saymak için ayrı sayım gerekir.
+    auto countDiagnosticLines = [&](const std::filesystem::path& log, const std::string& needle) {
+        int count = 0;
+        for (int generation = 0; generation <= 4; ++generation) {
+            std::filesystem::path file = log;
+            if (generation > 0) file += "." + std::to_string(generation);
+            std::ifstream in(file);
+            if (!in) continue;
+            std::string line;
+            while (std::getline(in, line)) {
+                if (line.find(needle) != std::string::npos) ++count;
+            }
+        }
+        return count;
+    };
     // Kanıtlanamazsa kapı "sessizce yeşil" olmaz — SERT kırmızı. Bu projede
     // bugün 4 "sessizce yeşil veren ölü kapı" bulundu; bir kapının kendini
     // doğrulayamaması sessiz yeşil demektir.
@@ -663,7 +700,7 @@ void test_vfs_security() {
         std::error_code ec;
         for (const auto& entry : std::filesystem::directory_iterator(
                  std::filesystem::temp_directory_path(), ec)) {
-            const std::string name = entry.path().filename().string();
+            const std::string name = utf8Path(entry.path().filename());
             if (name.rfind("rowl_logger_hermetic_", 0) != 0 ||
                 entry.path().extension() != ".log") {
                 continue;
@@ -698,7 +735,7 @@ void test_vfs_security() {
     // bir remountProject ile topoloji değişir ve teşhis DÜŞER (KAPI 3'ün
     // sözleşmesi) — yani ölçüm "henüz üretilmemiş" bir durumdan başlar.
     const std::string shadowNeedle = "images/hero.png";
-    if (!vfs.remountProject(prioProject.string())) {
+    if (!vfs.remountProject(utf8Path(prioProject))) {
         std::cerr << "P2-6: could not re-arm the fixture for the shadow gates"
                   << std::endl;
         exit(1);
@@ -736,7 +773,7 @@ void test_vfs_security() {
     // KAPI 2 — BELLEK BAYATLAMASI YOK. Mount topolojisi değişince teşhis
     // yeniden üretilmeli; aksi halde bir projede bulunan gölgeleme, proje
     // değiştikten sonra da bastırılır ve teşhis kalıcı olarak SESSİZLEŞİR.
-    if (!vfs.remountProject(prioProject.string())) {
+    if (!vfs.remountProject(utf8Path(prioProject))) {
         std::cerr << "P2-6: remount for the invalidation gate failed" << std::endl;
         exit(1);
     }
@@ -785,8 +822,8 @@ void test_vfs_security() {
 
     // Aynı katmanın İKİ FARKLI YOLLA mount'u: gerçek yol + sembolik bağ.
     Rowl::VFS::VFSManager canonVfs;
-    canonVfs.mountDirectory("", canonReal.string());
-    canonVfs.mountDirectory("", canonLink.string());
+    canonVfs.mountDirectory("", utf8Path(canonReal));
+    canonVfs.mountDirectory("", utf8Path(canonLink));
 
     const std::string canonNeedle = "images/hero.png";
     const int canonBefore = countShadowLines(hermeticLog, canonNeedle);
@@ -807,8 +844,8 @@ void test_vfs_security() {
     std::filesystem::create_directories(canonOther / "images");
     std::ofstream(canonOther / "images" / "hero.png") << "OTHER-HERO";
     Rowl::VFS::VFSManager realShadowVfs;
-    realShadowVfs.mountDirectory("", canonReal.string());
-    realShadowVfs.mountDirectory("", canonOther.string());
+    realShadowVfs.mountDirectory("", utf8Path(canonReal));
+    realShadowVfs.mountDirectory("", utf8Path(canonOther));
     const int realBefore = countShadowLines(hermeticLog, canonNeedle);
     if (realShadowVfs.readString(canonNeedle) != "CANON-HERO") {
         std::cerr << "P2-6: earlier mount lost priority after canonicalization"
@@ -856,8 +893,8 @@ void test_vfs_security() {
         std::ofstream(layerB / "images" / "throw_probe.png") << "THROW-B";
 
         Rowl::VFS::VFSManager throwVfs;
-        throwVfs.mountDirectory("", layerA.string());
-        throwVfs.mountDirectory("", layerB.string());
+        throwVfs.mountDirectory("", utf8Path(layerA));
+        throwVfs.mountDirectory("", utf8Path(layerB));
 
         // Kanalı AÇ ve oku. Önce okuma doğrulanır: teşhis patlarsa bir varlık
         // erişilemez olmamalıdır, yoksa "sessiz düşme" geri gelmiştir.
@@ -906,8 +943,56 @@ void test_vfs_security() {
                       << std::endl;
             exit(1);
         }
+
+        // (4) MOUNT KÖKÜ DÖNÜŞÜMÜ — Windows SEH 0xE06D7363'in ASIL KAYNAĞI.
+        //
+        // Yukarıdaki üç sözleşme teşhis YOLUNU ölçer. Oysa CI'daki çöküş
+        // teşhis yolunda değil, MOUNT yolundaydı: mountDirectory ->
+        // LooseDirectorySource::LooseDirectorySource -> pathFromUtf8, ve
+        // pathFromUtf8'in çağrıldığı yerde HİÇBİR try/catch yoktu. Windows'ta
+        // `.string()` ANSI kod sayfasından geçirip geçerli UTF-8 üretmediği
+        // için fs::path'in u8string KURUCUSU std::range_error fırlatıyor,
+        // istisna test gövdesinden ve main'den geçerek CRT'ye ulaşıyordu.
+        // 00b222b bunu "generic_string() tefsisi yutuyordu" diye teşhis etti
+        // ve KALANI physicalPathKey'in İÇİNE kurdu — ama mount zincirindeki
+        // dönüşümü hiç dokunmadı. Kalkan yanlış kapıyı koruyordu.
+        //
+        // SÖZLEŞME: dönüşemeyen mount kökü GÜRÜLTÜYLE REDDEDİLİR (istisna
+        // DEĞİL). Reddedilen mount isValid()==false olur, mountDirectory zaten
+        // onu reddeder; hiçbir varlık erişilemez hale gelmez ve teşhis
+        // kaybolmaz. Reddedildiği AÇIKça loglanır — "sessizce ölü mount"
+        // bu projede defalarca gerçek hataya dönüştü.
+        Rowl::VFS::setVfsInjectPathKeyThrow(true);
+        const int refuseBefore = countDiagnosticLines(hermeticLog, kMountRefusedNeedle);
+        bool mountThrew = false;
+        std::string mountWhat;
+        try {
+            Rowl::VFS::VFSManager refuseVfs;
+            refuseVfs.mountDirectory("", utf8Path(layerA));
+        } catch (const std::exception& e) {
+            mountThrew = true;
+            mountWhat = e.what();
+        }
+        Rowl::VFS::setVfsInjectPathKeyThrow(false);
+
+        if (mountThrew) {
+            std::cerr << "P2-6: a mount root that cannot be converted ESCAPED as an "
+                         "exception ('" << mountWhat << "'). This is the exact shape "
+                         "that killed the Windows CI run with an unhandled SEH "
+                         "(0xE06D7363): the mount must be REFUSED, not thrown from."
+                      << std::endl;
+            exit(1);
+        }
+        if (countDiagnosticLines(hermeticLog, kMountRefusedNeedle) != refuseBefore + 1) {
+            std::cerr << "P2-6: a mount root that cannot be converted was refused "
+                         "SILENTLY — no '" << kMountRefusedNeedle << "' line reached "
+                         "the log. A silently dead mount is indistinguishable from a "
+                         "mount that was never requested."
+                      << std::endl;
+            exit(1);
+        }
     }
-    TEST_PASS("P2-6 canonicalization failure is reported loudly, never swallowed");
+    TEST_PASS("P2-6 canonicalization failure and mount-root refusal are loud, never thrown");
 
     // ------------------------------------------------------------------
     // P2-6 — YENİ KODUN KENDİ ÖLÇÜMÜ (gate değil, bilgi amaçlı yazdırma)
@@ -931,9 +1016,9 @@ void test_vfs_security() {
             std::ofstream(probeRoot / "c" / base) << "C";
         }
         Rowl::VFS::VFSManager costVfs;
-        costVfs.mountDirectory("", (probeRoot / "a").string());
-        costVfs.mountDirectory("", (probeRoot / "b").string());
-        costVfs.mountDirectory("", (probeRoot / "c").string());
+        costVfs.mountDirectory("", utf8Path(probeRoot / "a"));
+        costVfs.mountDirectory("", utf8Path(probeRoot / "b"));
+        costVfs.mountDirectory("", utf8Path(probeRoot / "c"));
 
         // Aynı işi iki biçimde ölç: (1) her yol BİR KEZ — teşhis maliyeti
         // dâhil, gerçekçi "yeni varlık yükleniyor" şekli. (2) aynı yollar
@@ -970,14 +1055,14 @@ void test_vfs_security() {
     std::filesystem::create_directories(hostileProject / "Assets");
     std::ofstream(hostileProject / "Assets" / "packages") << "not-a-directory";
     std::ofstream(hostileProject / "Assets" / "loose.txt") << "loose";
-    vfs.remountProject(hostileProject.string());
+    vfs.remountProject(utf8Path(hostileProject));
     if (vfs.readString("loose.txt") != "loose") {
         std::cerr << "Remount with a file-as-packages-dir hid loose assets" << std::endl;
         exit(1);
     }
     const auto bareProject = testRoot / "bare_project";
     std::filesystem::create_directories(bareProject / "Assets");
-    vfs.remountProject(bareProject.string());
+    vfs.remountProject(utf8Path(bareProject));
     TEST_PASS("Hostile package-scan forms fail loudly without throwing");
 
     // Fail-open closure: an EMPTY project root used to return true — mounts
@@ -985,7 +1070,7 @@ void test_vfs_security() {
     // caller bug, not a legitimate clear request: it must be rejected like
     // any other missing root, leave the manager in a clean bare state, and
     // a valid remount afterwards must still work.
-    if (!vfs.remountProject(bareProject.string()) || vfs.getMountPoints().empty()) {
+    if (!vfs.remountProject(utf8Path(bareProject)) || vfs.getMountPoints().empty()) {
         std::cerr << "A valid project root must remount successfully with mounts" << std::endl;
         exit(1);
     }
@@ -997,7 +1082,7 @@ void test_vfs_security() {
         std::cerr << "Rejected empty-root remount left stale mounts behind" << std::endl;
         exit(1);
     }
-    if (!vfs.remountProject(packagedProject.string()) || vfs.readString("dir/safe.txt") != "x") {
+    if (!vfs.remountProject(utf8Path(packagedProject)) || vfs.readString("dir/safe.txt") != "x") {
         std::cerr << "A valid remount after an empty-root rejection failed" << std::endl;
         exit(1);
     }
@@ -1020,7 +1105,7 @@ void test_vfs_security() {
     std::filesystem::copy_file(validPackage,
                                isolateProject / "Assets" / "packages" / "game.rowlpkg",
                                std::filesystem::copy_options::overwrite_existing);
-    vfs.remountProject(isolateProject.string());
+    vfs.remountProject(utf8Path(isolateProject));
     if (vfs.readString("dir/safe.txt") != "x") {
         std::cerr << "A hostile packages sibling killed the scan: valid package not mounted"
                   << std::endl;
@@ -1062,7 +1147,7 @@ void test_vfs_security() {
         std::cerr << "Could not initialize engine for packaged graph test" << std::endl;
         exit(1);
     }
-    RowlEngine_SetProjectDirectory(packagedHandle, packagedProject.string().c_str());
+    RowlEngine_SetProjectDirectory(packagedHandle, utf8Path(packagedProject).c_str());
     if (!RowlEngine_LoadStoryGraphFromVfs(packagedHandle, graphVfsPath.c_str()) ||
         RowlEngine_GetCurrentNodeId(packagedHandle) != 101 ||
         RowlEngine_LoadStoryGraphFromVfs(packagedHandle, "json/missing.json") ||
@@ -1097,7 +1182,7 @@ void test_vfs_security() {
     }
     RowlEngineHandle vfsStoryHandle = RowlEngine_Create();
     if (vfsStoryHandle && RowlEngine_Init(vfsStoryHandle, 320, 180, 0)) {
-        RowlEngine_SetProjectDirectory(vfsStoryHandle, vfsProject.string().c_str());
+        RowlEngine_SetProjectDirectory(vfsStoryHandle, utf8Path(vfsProject).c_str());
         if (RowlEngine_GetCurrentNodeId(vfsStoryHandle) != 505) {
             std::cerr << "VFS-first story graph auto-load failed, expected node 505, got: "
                       << RowlEngine_GetCurrentNodeId(vfsStoryHandle) << std::endl;
@@ -1123,7 +1208,7 @@ void test_vfs_security() {
             exit(1);
         }
         Rowl::VFS::VFSManager emptyVfs;
-        emptyVfs.mountDirectory("", mountRoot.string());
+        emptyVfs.mountDirectory("", utf8Path(mountRoot));
         if (!emptyVfs.exists("empty.txt") || !emptyVfs.readBytes("empty.txt").empty() ||
             emptyVfs.readString("empty.txt") != "" || emptyVfs.exists("definitely-missing.txt") ||
             !emptyVfs.readBytes("definitely-missing.txt").empty()) {
@@ -1143,7 +1228,7 @@ void test_vfs_security() {
                                               headerSize, 0, 0, 0};
         const auto emptyPackage = writePackage("empty_entry.rowlpkg", emptyHeader, emptyEntry,
                                                emptyEntryPath, "");
-        Rowl::VFS::RowlPkgDataSource emptySource(emptyPackage.string());
+        Rowl::VFS::RowlPkgDataSource emptySource(utf8Path(emptyPackage));
         auto emptyEntryProbe = emptySource.tryRead(emptyEntryPath);
         if (!emptySource.isValid() || !emptyEntryProbe || !emptyEntryProbe->empty()) {
             std::cerr << "Package tryRead did not report an engaged-empty entry" << std::endl;
@@ -1177,7 +1262,7 @@ void test_vfs_security() {
                                                 static_cast<uint32_t>(unicodePayload.size()), 0};
         const auto unicodePackage = writePackage("unicode_entry.rowlpkg", unicodeHeader, unicodeEntry,
                                                  unicodeEntryPath, unicodePayload);
-        Rowl::VFS::RowlPkgDataSource unicodeSource(unicodePackage.string());
+        Rowl::VFS::RowlPkgDataSource unicodeSource(utf8Path(unicodePackage));
         auto unicodeProbe = unicodeSource.tryRead(unicodeEntryPath);
         const std::vector<uint8_t> unicodeExpected(unicodePayload.begin(), unicodePayload.end());
         if (!unicodeSource.isValid() || !unicodeProbe || *unicodeProbe != unicodeExpected) {
@@ -1204,9 +1289,9 @@ void test_vfs_security() {
         std::filesystem::create_symlink(testRoot / "loop-b", testRoot / "loop-a", linkEc);
         std::filesystem::create_symlink(testRoot / "loop-a", testRoot / "loop-b", linkEc);
         if (!linkEc) {
-            Rowl::VFS::LooseDirectorySource loopSource((testRoot / "loop-a").string());
+            Rowl::VFS::LooseDirectorySource loopSource(utf8Path(testRoot / "loop-a"));
             Rowl::VFS::VFSManager loopVfs;
-            loopVfs.mountDirectory("", (testRoot / "loop-a").string());
+            loopVfs.mountDirectory("", utf8Path(testRoot / "loop-a"));
             if (loopSource.isValid() || !loopVfs.getMountPoints().empty()) {
                 std::cerr << "VFS mounted a root it cannot canonicalize" << std::endl;
                 exit(1);
@@ -1229,7 +1314,7 @@ void test_vfs_security() {
         Rowl::VFS::VFSManager noReadVfs;
         bool threw = false;
         try {
-            noReadVfs.remountProject(noReadProject.string());
+            noReadVfs.remountProject(utf8Path(noReadProject));
         } catch (...) {
             threw = true;
         }
@@ -1287,11 +1372,11 @@ void test_vfs_security() {
             ("rowl_122_dead_root_" + uniqueSuffix);
         std::error_code deadEc;
         std::filesystem::remove_all(deadRoot, deadEc);
-        RowlEngine_SetProjectDirectory(missHandle, deadRoot.string().c_str());
+        RowlEngine_SetProjectDirectory(missHandle, utf8Path(deadRoot).c_str());
         const std::string missError =
             RowlEngine_GetLastStoryGraphError(missHandle);
         if (missError.find("missing or not a directory") == std::string::npos ||
-            missError.find(deadRoot.string()) == std::string::npos) {
+            missError.find(utf8Path(deadRoot)) == std::string::npos) {
             std::cerr << "#122: dead project root left no root-cause diagnosis, got: '"
                       << missError << "'" << std::endl;
             RowlEngine_Destroy(missHandle);
@@ -1367,7 +1452,7 @@ void test_vfs_security() {
         // Explicit kök hâlâ çalışmalı: bare init + remountProject(dirB).
         Rowl::VFS::VFSManager vfs;
         vfs.initialize();
-        if (!vfs.remountProject(dirB.string())) {
+        if (!vfs.remountProject(utf8Path(dirB))) {
             std::cerr << "#14: remountProject rejected a valid root" << std::endl;
             exit(1);
         }
@@ -1407,7 +1492,7 @@ void test_vfs_security() {
         }
         Rowl::VFS::VFSManager vfs142;
         vfs142.initialize();
-        if (!vfs142.remountProject(proj142.string())) {
+        if (!vfs142.remountProject(utf8Path(proj142))) {
             std::cerr << "#142: remountProject rejected a live project root" << std::endl;
             exit(1);
         }
@@ -1424,7 +1509,7 @@ void test_vfs_security() {
         // Sayaç proje-değişiminde sıfırlanmalı: temiz kök sıfır sayımla gelir.
         const auto empty142 = testRoot / "empty142";
         std::filesystem::create_directories(empty142, ec142);
-        if (ec142 || !vfs142.remountProject(empty142.string()) ||
+        if (ec142 || !vfs142.remountProject(utf8Path(empty142)) ||
             vfs142.skippedPackageCount() != 0) {
             std::cerr << "#142: skip count leaked across project switches" << std::endl;
             exit(1);
@@ -1460,7 +1545,7 @@ void test_vfs_security() {
             std::cerr << "#142 setup: bare init failed" << std::endl;
             exit(1);
         }
-        RowlEngine_SetProjectDirectory(h142, proj142.string().c_str());
+        RowlEngine_SetProjectDirectory(h142, utf8Path(proj142).c_str());
         const int32_t code142 = RowlEngine_GetLastResultCode(h142);
         const char* rawMsg142 = RowlEngine_GetLastResultMessage(h142);
         const std::string msg142 = rawMsg142 ? rawMsg142 : "";
@@ -1514,7 +1599,7 @@ void test_vfs_security() {
             output.write(stickyB.data(), static_cast<std::streamsize>(stickyB.size()));
         };
         writeStickyFull();
-        Rowl::VFS::RowlPkgDataSource stickySource(stickyPackage.string());
+        Rowl::VFS::RowlPkgDataSource stickySource(utf8Path(stickyPackage));
         if (!stickySource.isValid()) {
             std::cerr << "#143 setup: two-entry package rejected" << std::endl;
             exit(1);
@@ -1582,7 +1667,7 @@ void test_vfs_security() {
             std::error_code listEc;
             for (const auto& entry :
                  std::filesystem::directory_iterator(testRoot, listEc)) {
-                std::cerr << " [" << entry.path().filename().string() << "]";
+                std::cerr << " [" << utf8Path(entry.path().filename()) << "]";
             }
             std::cerr << std::endl;
             exit(1);
@@ -1618,7 +1703,7 @@ void test_vfs_security() {
                 std::cerr << "VFS test tree delete still locked after ~5 s of "
                              "retries (transient AV/indexer lock assumed); "
                              "continuing, OS will reclaim the unique temp dir: "
-                          << testRoot.string() << std::endl;
+                          << utf8Path(testRoot) << std::endl;
             }
         }
     }
