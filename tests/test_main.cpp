@@ -49,6 +49,26 @@ static LONG WINAPI RowlTestSehFilter(EXCEPTION_POINTERS* info) {
     std::fprintf(stderr, "\n[ROWL-TEST-DIAG] unhandled SEH 0x%08lX at %p\n",
                  (unsigned long)info->ExceptionRecord->ExceptionCode,
                  info->ExceptionRecord->ExceptionAddress);
+    // 0xE06D7363 = "msc" = MSVC C++ istisnası. Adres TEŞHİS DEĞİLDİR:
+    // _CxxThrowException CRT'nin içindedir ve HER C++ istisnası için aynı
+    // sistem adresini (0x7FFD...) gösterir — yani satırı işaret etmez.
+    //
+    // Burada istisna NESNESİ de okunmuyor: ExceptionInformation[1] fırlatılan
+    // nesnenin işaretçisidir ama std::exception TÜREVI olduğu garanti
+    // edilmez; `throw 42;` üzerinde what()/typeid() çağırmak geçersiz vptr
+    // okumasıdır ve teşhisi basmaya çalışırken süreci daha da kötü öldürür.
+    // Buna karşı std::terminate kancası da çalışmaz, çünkü SetUnhandled-
+    // ExceptionFilter CRT'nin filtresini DEVRALMIŞTIR (bilinçli: tur-6/tur-7).
+    // Yani 0xE06D7363 görüldüğünde "süreç, yakalanmamış bir C++ istisnasıyla
+    // öldü" demektir; istisnanın NEREDEN çıktığını yalnız kaynak kodu ve
+    // yakın test çıktısı söyler. BULGU A'nın asıl sebebi de buydu: teşhis
+    // edilebilir tek kanıt, fırlatan satırın kendisiydi.
+    if (info->ExceptionRecord->ExceptionCode == 0xE06D7363) {
+        std::fprintf(stderr,
+                     "[ROWL-TEST-DIAG] code 0xE06D7363 = an unhandled MSVC C++ "
+                     "exception; the address above is inside the CRT and does NOT "
+                     "identify the throwing line.\n");
+    }
     std::fflush(stderr);
     return EXCEPTION_CONTINUE_SEARCH;
 }
