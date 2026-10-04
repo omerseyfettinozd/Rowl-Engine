@@ -158,8 +158,14 @@ budget on its lowest supported device:
 `rowl_tests --benchmark-json <path>` writes a versioned JSON report containing
 build type, OS/device identity, CPU architecture/model, fixture identity, VFS I/O, JSON update, first
 frame, steady frame, texture cache and process memory values.
-`tools/compare_benchmarks.py` rejects different OS/machine/CPU/build-type or
-fixture identities, then reports percentage deltas for compatible reports.
+`tools/compare_benchmarks.py` rejects different schema/fixture/build-type,
+OS, architecture or **CPU model** identities, then reports percentage deltas
+for compatible reports. The CPU model is part of the compatibility key on
+purpose: the `ubuntu-24.04` runner label spans six CPU classes whose results
+differ by roughly 2.2x, so a cross-host comparison reports host speed as a code
+regression. A host mismatch skips the comparison (exit 0) and is printed as a
+`SKIPPED:` banner into the step summary — a skipped gate is *not* a passing one.
+`machine` and `cpu_count` stay informational; `machine` is only `uname -m`.
 These numbers are baselines, not universal pass/fail thresholds; compare
 like-for-like Release builds on the same device.
 

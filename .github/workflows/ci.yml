@@ -273,8 +273,15 @@ jobs:
             echo "[BenchmarkCompare] empty baseline artifact; skipping."
             exit 0
           fi
+          # --summary: host-mismatch skip'ler step-summary'ye de yazilir.
+          # `runs-on: ubuntu-24.04` tek etiket ama arkasinda 6 CPU sinifi
+          # var (siniflar arasi ~2.22x, sinif ici CV ~%3.5). Kapı eslesmeyen
+          # host'ta exit 0 ile SKIPPED verir; bu, "gecti" degil "KOSMADI"
+          # demektir ve summary'de gorunmezse kaybolur. exit kodu degismez:
+          # skip 0, gercek regresyon 2.
           python3 tools/compare_benchmarks.py "$PREV_JSON" \
-            benchmark-results/linux-native.json --warn-percent 20 --fail-percent 35
+            benchmark-results/linux-native.json --warn-percent 20 --fail-percent 35 \
+            --summary "$GITHUB_STEP_SUMMARY"
 
       - name: Record editor benchmark baseline
         run: |

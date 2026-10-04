@@ -2,19 +2,41 @@
 """Compare two compatible Rowl native benchmark JSON reports.
 
 Compatibility is decided by schema_version, fixture_id, build.type,
-environment.os and environment.architecture only. cpu_model, cpu_count and
-machine are informational and do not affect compatibility (machine is just
-$(uname -m), not a host pin).
+environment.os, environment.architecture and environment.cpu_model.
+
+cpu_model is part of the key because `runs-on: ubuntu-24.04` is ONE label
+behind SIX CPU classes. Within a class the coefficient of variation is ~3.5%,
+but ACROSS classes it is ~2.2x, so comparing a Zen 3 runner (197-266 ms
+first frame) against a Zen 4 baseline (~128-150 ms) manufactures regressions
+that no code change caused. cpu_count and machine stay informational:
+cpu_count is the runner's core budget and machine is just $(uname -m).
 
 Skip rule: incompatible environments print a line containing "skipping" and
 exit 0 so CI can skip gracefully. Unreadable or malformed files exit 1.
 --warn-percent (default 20) only prints WARNING lines and exits 0, while
 --fail-percent (default off) exits 2 when any regression exceeds it.
+
+A skipped comparison is a gate that did NOT run, so it must never be silent:
+the skip reason is printed as a `SKIPPED:` banner (and written to
+--summary when CI passes one) naming the mismatching key and both values.
 """
 
 import argparse
 import json
 import sys
+
+
+class IncompatibleEnvironment(ValueError):
+    """Raised when two reports describe different benchmark environments.
+
+    Kept as a ValueError subclass so the existing `except ValueError` contract
+    is unchanged, but carries the structured mismatch list so the skip can be
+    reported per key instead of being parsed back out of a message string.
+    """
+
+    def __init__(self, mismatches, details):
+        self.mismatches = mismatches
+        super().__init__("benchmark environments are incompatible: " + details)
 
 
 # name -> (document path, higher_is_better). Wall-clock costs regress upward;
@@ -84,16 +106,23 @@ def compatibility_key(report):
         "build.type": build.get("type"),
         "environment.os": environment.get("os"),
         "environment.architecture": environment.get("architecture"),
+        # Host pin. `runs-on: ubuntu-24.04` spans six CPU classes with a ~2.2x
+        # spread between the slowest and fastest; without this key the gate
+        # compares two different machines and calls the gap a regression.
+        "environment.cpu_model": environment.get("cpu_model"),
     }
 
 
 def compare(baseline, candidate):
     base_key = compatibility_key(baseline)
     candidate_key = compatibility_key(candidate)
-    mismatches = [name for name in base_key if base_key[name] != candidate_key[name]]
+    mismatches = [(name, base_key[name], candidate_key[name])
+                  for name in base_key if base_key[name] != candidate_key[name]]
     if mismatches:
-        details = ", ".join(f"{name}: {base_key[name]!r} != {candidate_key[name]!r}" for name in mismatches)
-        raise ValueError("benchmark environments are incompatible: " + details)
+        details = ", ".join(f"{name}: {before!r} != {after!r}" for name, before, after in mismatches)
+        # Structured mismatch, so main() can report WHICH key failed without
+        # re-parsing the human-readable string it would have to print.
+        raise IncompatibleEnvironment(mismatches, details)
 
     rows = []
     skipped = []
@@ -120,11 +149,28 @@ def compare(baseline, candidate):
             "skipped": skipped}
 
 
+def emit(line, summary_path=None):
+    """Print a line and, when a summary path is given, mirror it there.
+
+    The step summary is the one place a human reliably sees on a green run,
+    which is exactly where a gate that did NOT run has to be visible.
+    """
+    print(line)
+    if summary_path:
+        try:
+            with open(summary_path, "a", encoding="utf-8") as summary:
+                summary.write(line + "\n")
+        except OSError as error:
+            print("[BenchmarkCompare] WARNING: could not write step summary "
+                  f"{summary_path}: {error}", file=sys.stderr)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("baseline")
     parser.add_argument("candidate")
     parser.add_argument("--output", help="write the machine-readable comparison JSON here")
+    parser.add_argument("--summary", help="append the outcome to this step-summary markdown file")
     parser.add_argument("--warn-percent", type=float, default=20.0,
                         help="print a WARNING for regressions beyond this percent (default: 20)")
     parser.add_argument("--fail-percent", type=float, default=None,
@@ -132,10 +178,17 @@ def main():
     args = parser.parse_args()
     try:
         result = compare(load(args.baseline), load(args.candidate))
+    except IncompatibleEnvironment as error:
+        # A skipped gate is NOT a passing gate. Name every mismatching key and
+        # both values so the coverage this run LOST is impossible to miss on a
+        # green job. Exit stays 0 (skip is not failure), but it is now loud.
+        emit("[BenchmarkCompare] " + str(error) + "; skipping comparison.", args.summary)
+        for name, before, after in error.mismatches:
+            emit(f"[BenchmarkCompare] SKIPPED: {name} differs "
+                 f"(baseline={before!r} vs candidate={after!r}) - this benchmark "
+                 "gate did NOT run, it did not pass.", args.summary)
+        return 0
     except ValueError as error:
-        if str(error).startswith("benchmark environments are incompatible"):
-            print("[BenchmarkCompare] " + str(error) + "; skipping comparison.")
-            return 0
         print("[BenchmarkCompare] ERROR: " + str(error), file=sys.stderr)
         return 1
     except (OSError, KeyError, json.JSONDecodeError) as error:
@@ -147,6 +200,11 @@ def main():
             json.dump(result, destination, indent=2)
             destination.write("\n")
     print("[BenchmarkCompare] Compatible benchmark reports")
+    # Schema v1 reports predate the environment block, so cpu_model is absent
+    # and the host pin could not apply; say so rather than printing None.
+    host = result["environment"].get("environment.cpu_model")
+    emit(f"[BenchmarkCompare] host: {host or 'unpinned (schema v1 has no cpu_model)'} "
+         "(compatibility key matched; gate ran)", args.summary)
     for row in result["metrics"]:
         print(f"  {row['metric']}: {row['baseline']:.6f} -> {row['candidate']:.6f} "
               f"({row['delta_percent']:+.2f}%)")
@@ -156,13 +214,15 @@ def main():
     breached = [row for row in result["metrics"]
                 if row["counts"] and row["regression_percent"] > args.warn_percent]
     for row in breached:
-        print(f"[BenchmarkCompare] WARNING: {row['metric']} regressed "
-              f"{row['regression_percent']:.2f}% (warn at {args.warn_percent:.2f}%)")
+        emit(f"[BenchmarkCompare] WARNING: {row['metric']} regressed "
+             f"{row['regression_percent']:.2f}% (warn at {args.warn_percent:.2f}%)", args.summary)
     if args.fail_percent is not None:
         failures = [row for row in result["metrics"]
                     if row["counts"] and row["regression_percent"] > args.fail_percent]
         if failures:
             names = ", ".join(row["metric"] for row in failures)
+            emit(f"[BenchmarkCompare] ERROR: regression threshold breached: {names}",
+                 args.summary)
             print(f"[BenchmarkCompare] ERROR: regression threshold breached: {names}",
                   file=sys.stderr)
             return 2

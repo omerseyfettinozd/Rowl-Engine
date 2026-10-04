@@ -73,6 +73,59 @@ with tempfile.TemporaryDirectory() as directory:
     if rejected.returncode != 0 or "skipping" not in (rejected.stdout + rejected.stderr):
         raise SystemExit("incompatible benchmark environments did not skip with exit 0")
 
+    # Host pin (regression guard for the 149ddf4 false-red incident):
+    # `runs-on: ubuntu-24.04` spans six CPU classes with a ~2.2x spread, so a
+    # different cpu_model must NOT be compared as if it were the same host.
+    other_cpu = directory / "other-cpu.json"
+    other_cpu.write_text(json.dumps(report(cpu_model="AMD EPYC 7763 64-Core Processor")),
+                         encoding="utf-8")
+    cpu_rejected = subprocess.run(
+        [sys.executable, str(TOOL), str(baseline), str(other_cpu),
+         "--warn-percent", "20", "--fail-percent", "35"],
+        capture_output=True, text=True, check=False)
+    if cpu_rejected.returncode != 0:
+        raise SystemExit("different cpu_model must skip with exit 0, got "
+                         f"{cpu_rejected.returncode}")
+    cpu_output = cpu_rejected.stdout + cpu_rejected.stderr
+    if "skipping" not in cpu_output:
+        raise SystemExit("cpu_model mismatch did not report a skip")
+    # A skipped gate is not a passing gate: it must say so loudly and name both
+    # hosts, otherwise the lost coverage is invisible on a green job.
+    if "SKIPPED" not in cpu_output or "environment.cpu_model" not in cpu_output:
+        raise SystemExit("cpu_model mismatch did not emit a loud SKIPPED banner")
+    if "Test CPU" not in cpu_output or "AMD EPYC 7763" not in cpu_output:
+        raise SystemExit("SKIPPED banner did not name both baseline and candidate hosts")
+
+    # The skip must reach the step summary, not just the log.
+    summary = directory / "summary.md"
+    subprocess.run([sys.executable, str(TOOL), str(baseline), str(other_cpu),
+                    "--summary", str(summary)], capture_output=True, text=True, check=False)
+    if "SKIPPED" not in summary.read_text(encoding="utf-8"):
+        raise SystemExit("host-mismatch skip did not reach the step summary")
+
+    # Same host, worse numbers -> still a REAL gate failure (exit 2), never
+    # masked by the host pin.
+    slow_host = directory / "same-cpu-regression.json"
+    regressed_same_cpu = report()
+    regressed_same_cpu["metrics"]["steady_frame_ms"] = 8.0
+    regressed_same_cpu["metrics"]["transition_fps"] = 30.0
+    slow_host.write_text(json.dumps(regressed_same_cpu), encoding="utf-8")
+    still_red = subprocess.run(
+        [sys.executable, str(TOOL), str(baseline), str(slow_host),
+         "--warn-percent", "20", "--fail-percent", "35"],
+        capture_output=True, text=True, check=False)
+    if still_red.returncode != 2:
+        raise SystemExit("same-CPU regression must still fail with exit 2, got "
+                         f"{still_red.returncode}")
+
+    # A gate that ran must announce the host it ran on, so the summary shows
+    # "compared" rather than silence.
+    ran_summary = directory / "ran-summary.md"
+    subprocess.run([sys.executable, str(TOOL), str(baseline), str(candidate),
+                    "--summary", str(ran_summary)], capture_output=True, text=True, check=False)
+    if "Test CPU" not in ran_summary.read_text(encoding="utf-8"):
+        raise SystemExit("completed comparison did not record its host in the step summary")
+
     wrong_architecture = directory / "wrong-architecture.json"
     wrong_architecture.write_text(json.dumps(report(architecture="arm64")), encoding="utf-8")
     architecture_rejected = subprocess.run(
