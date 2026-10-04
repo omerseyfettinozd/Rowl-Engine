@@ -140,6 +140,11 @@ Engine* testEngineFromHandle(RowlEngineHandle handle);
 // canlı handle sayısı. Davranış-nötr gözlem.
 uint64_t RowlTest_HandleSlotCount();
 uint64_t RowlTest_LiveHandleCount();
+// P2-5 test-only sayaçları: TU-local per-handle aux-map girdi sayıları
+// (c_api_prefetch_chapters.cpp / c_api_character_layers.cpp). Shutdown'un
+// aux haritasını boşalttığını ÖLÇMEK için; davranış-nötr gözlem.
+uint64_t RowlTest_PrefetchAuxEntryCount();
+uint64_t RowlTest_CharacterAuxEntryCount();
 }
 void test_game_object_component_system();
 void test_pixel_pitch();

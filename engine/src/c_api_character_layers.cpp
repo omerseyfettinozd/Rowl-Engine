@@ -137,6 +137,19 @@ void clearCharacterStatesForHandle(RowlEngineHandle handle) noexcept {
     }
 }
 
+namespace Rowl::Core {
+// P2-5 test-only sayacı: aux-map girdi sayısı (prefetch TU'sundaki ikiz).
+// clearCharacterStatesForHandle ile aynı exclusive kilit; gözlem, nötr.
+uint64_t RowlTest_CharacterAuxEntryCount() noexcept {
+    try {
+        std::lock_guard<std::shared_mutex> lock(g_characterMutex);
+        return static_cast<uint64_t>(g_characterStates.size());
+    } catch (...) {
+        return 0;
+    }
+}
+} // namespace Rowl::Core
+
 extern "C" {
 
 RowlEngine_ResultCode RowlEngine_SetCharacterSlotAsset(

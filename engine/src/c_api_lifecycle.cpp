@@ -458,6 +458,21 @@ void RowlEngine_Shutdown(RowlEngineHandle handle) {
     }
     if (!isLiveHandle(handle)) return;
     invokeNoexcept([&] { if (auto checked = toEngineChecked(handle)) checked->shutdown(); });
+    // P2-5: per-handle aux-map'ler (prefetch + character) yalnız Destroy
+    // yolunda temizleniyordu. Sözleşme (c_api.h) "aynı handle'da
+    // Shutdown→Init taze-handle ile özdeş başlar" diyor; Shutdown'dan sonra
+    // map'te kalan ChapterLoader + prefetch kuyruğu + slot varlıkları YENİ
+    // oturuma sızıyordu (re-Init sonrası PumpPrefetch eski projenin
+    // yollarını "missing" sayıyordu). Destroy'daki ikiz temizlik.
+    //
+    // Kilit disiplini: aux clear yalnız kendi TU kilidini tutar, g_handleMutex
+    // TUTULMAZ (classify/isLiveHandle kilitlerini bırakmış durumda) — aux >
+    // handle sırası korunur, Destroy ile birebir aynı. Yabancı-thread dalı
+    // yukarıda erken döndüğü için aux STATE'e dokunulmaz (D3).
+    // Haritalar handle-anahtarlıdır (paylaşılan/static değil) — bu yalnız
+    // BU handle'ın girdisini siler, başka handle'ları kirletmez.
+    clearPrefetchStatesForHandle(handle);
+    clearCharacterStatesForHandle(handle);
 }
 
 int RowlEngine_IsRunning(RowlEngineHandle handle) {

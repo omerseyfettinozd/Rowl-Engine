@@ -148,6 +148,20 @@ void clearPrefetchStatesForHandle(RowlEngineHandle handle) noexcept {
     }
 }
 
+namespace Rowl::Core {
+// P2-5 test-only sayacı: aux-map girdi sayısı. clearPrefetchStatesForHandle
+// ile aynı exclusive kilidi alır — gözlem, davranış-nötr. Üretim yolu
+// (RowlEngine_* ABI'si) bu sayaca hiç dokunmaz.
+uint64_t RowlTest_PrefetchAuxEntryCount() noexcept {
+    try {
+        std::lock_guard<std::shared_mutex> lock(g_prefetchMutex);
+        return static_cast<uint64_t>(g_prefetchStates.size());
+    } catch (...) {
+        return 0;
+    }
+}
+} // namespace Rowl::Core
+
 extern "C" {
 
 RowlEngine_ResultCode RowlEngine_LoadChapterIndexJson(RowlEngineHandle handle,
