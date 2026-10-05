@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="./style.css">
   <link rel="stylesheet" href="./tools.css">
   <link rel="stylesheet" href="./design.css">
+  <link rel="stylesheet" href="./authoring.css">
 </head>
 <body>
   <svg class="icon-library" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -54,9 +55,11 @@
   <div class="tools-launcher">
     <button id="tools-toggle" class="view-button tools-toggle" title="Araçlar" aria-label="Araçları aç" aria-expanded="false" aria-controls="tools-menu"><svg><use href="#i-tools"/></svg></button>
     <div id="tools-menu" class="tool-shortcuts popover" hidden aria-label="Editör araçları">
+      <button data-tool="library" aria-pressed="false"><span>Düğüm kütüphanesi</span><svg><use href="#i-node"/></svg></button>
       <button data-tool="hierarchy" aria-pressed="false"><span>Hiyerarşi</span><svg><use href="#i-hierarchy"/></svg></button>
       <button data-tool="inspector" aria-pressed="false"><span>Inspector</span><svg><use href="#i-inspector"/></svg></button>
       <button data-tool="assets" aria-pressed="false"><span>Varlıklar</span><svg><use href="#i-assets"/></svg></button>
+      <button data-tool="store" aria-pressed="false"><span>Assets Store</span><svg><use href="#i-assets"/></svg></button>
       <button data-tool="console" aria-pressed="false"><span>Konsol</span><svg><use href="#i-console"/></svg></button>
       <button data-tool="lua" aria-pressed="false"><span>Lua editörü</span><svg><use href="#i-lua"/></svg></button>
     </div>
@@ -64,7 +67,9 @@
   </div>
     <button class="view-button" id="options" aria-label="Çalışma alanı seçenekleri" aria-expanded="false" aria-controls="options-menu" title="Seçenekler"><svg><use href="#i-more"/></svg></button>
     <div class="options-menu popover" id="options-menu" hidden>
-      <span class="menu-label">PROJE</span>
+      <button class="menu-row" data-author="hub"><svg><use href="#i-assets"/></svg>Hub’a dön</button>
+      <button class="menu-row" data-author="save"><svg><use href="#i-save"/></svg>Kaydet <small>Ctrl+S</small></button>
+      <span class="menu-label menu-section">AYARLAR</span>
       <button class="menu-row" data-settings="project"><svg><use href="#i-assets"/></svg>Proje ayarları</button>
       <button class="menu-row" data-settings="game"><svg><use href="#i-game"/></svg>Görüntü ve sahne</button>
       <button class="menu-row" data-settings="story"><svg><use href="#i-story"/></svg>Hikâye ve metin</button>

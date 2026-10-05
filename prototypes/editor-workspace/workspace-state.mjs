@@ -1,5 +1,5 @@
 export const CORE_VIEWS = ['node', 'game', 'edit'];
-export const TOOL_VIEWS = ['hierarchy', 'inspector', 'assets', 'console', 'lua'];
+export const TOOL_VIEWS = ['hierarchy', 'inspector', 'assets', 'console', 'lua', 'library', 'store'];
 export const VIEWS = [...CORE_VIEWS, ...TOOL_VIEWS];
 export function initialState() { return { visible: ['node'], pinned: [], focused: 'node', recent: ['node'] }; }
 export function focusView(state, view) {

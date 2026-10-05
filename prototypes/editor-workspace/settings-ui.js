@@ -45,5 +45,5 @@ export function bindSettings(dialog,context){
     if(active==='export')context.export({...values});dialog.close();
   });
   document.documentElement.classList.toggle('reduce-motion',values.reducedMotion);
-  return {open(category){context.beforeOpen();active=category in sections?category:'project';draft={...values,...context.get()};dirty=false;render();dialog.showModal();dialog.querySelector('[aria-current=page]').scrollIntoView({block:'nearest',inline:'center'});}};
+  return {snapshot:()=>({...values}),restore:data=>{values={...defaults};if(data&&typeof data==='object')for(const [key,value] of Object.entries(defaults))if(typeof data[key]===typeof value)values[key]=data[key];},open(category){context.beforeOpen();active=category in sections?category:'project';draft={...values,...context.get()};dirty=false;render();dialog.showModal();dialog.querySelector('[aria-current=page]').scrollIntoView({block:'nearest',inline:'center'});}};
 }

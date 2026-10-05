@@ -5,10 +5,12 @@ import { defaultSettings, normalizeSettings, RESOLUTIONS, editObject } from './s
 import { toolContent, bindTools } from './tools.js';
 import { luaContent, bindLua } from './lua-editor.js';
 import { bindSettings } from './settings-ui.js';
+import { libraryContent, bindLibrary } from './node-library.js';
+import { bindAuthoring } from './authoring-ui.js';
 import { workspaceMotion } from './workspace-motion.js';
 import { initialPlayback, startPlayback, togglePause, advancePlayback, playbackFrame } from './playback-state.mjs';
 
-const names = { node: 'Node', game: 'Game', edit: 'Edit Scene', hierarchy: 'Hiyerarşi', inspector: 'Inspector', assets: 'Varlıklar', console: 'Konsol', lua: 'Lua editörü' };
+const names = { node: 'Node', game: 'Game', edit: 'Edit Scene', hierarchy: 'Hiyerarşi', inspector: 'Inspector', assets: 'Varlıklar', store: 'Assets Store', console: 'Konsol', lua: 'Lua editörü', library: 'Düğüm kütüphanesi' };
 const defaults = [
   { title: 'Bir gece, bir ışık', dialogue: 'Gece ne kadar sessiz… Sanki bütün dünya bir şey söylememi bekliyor.' },
   { title: 'Yol ayrımı', dialogue: 'Soldaki yol ormana, sağdaki yol denize çıkıyor. Peki, kalbim hangisini seçer?' },
@@ -16,7 +18,7 @@ const defaults = [
 ];
 const baseObjects = { moon: { x: 64, y: 14, w: 10, h: 16 }, character: { x: 25, y: 35, w: 13, h: 36 }, dialogue: { x: 6, y: 65, w: 88, h: 32 } };
 const objectNames = { moon: 'Ay', character: 'Mira', dialogue: 'Diyalog' };
-const newScenes = () => defaults.map(scene => ({ ...scene, objects: structuredClone(baseObjects) }));
+const newScenes = () => defaults.map((scene,index) => ({ ...scene, id:`sample-${index}`, objects: structuredClone(baseObjects) }));
 let scenes = newScenes(), sceneIndex = 0, selectedObject = 'character';
 let state = initialState(), layout = initialLayout(), zoom = 1, toastTimer, gesture = null, placementView = null;
 let playback = initialPlayback(), playbackSceneIndex = 0, lastFrameTime = null;
@@ -28,8 +30,8 @@ const panels = new Map();
 for (const view of Object.keys(names)) {
   const panel = document.createElement('section');
   panel.className = 'panel'; panel.dataset.panel = view; panel.setAttribute('aria-label', `${names[view]} penceresi`);
-  panel.innerHTML = `<header class="panel-header" data-drag="${view}" title="Pencereyi taşımak için başlığı sürükle"><div class="panel-title"><svg aria-hidden="true"><use href="#i-${view}"/></svg><span>${names[view]}</span></div><div class="panel-actions"><button class="icon-button placement-button" data-placement="${view}" aria-label="${names[view]} pencere düzeni" title="Pencereyi yerleştir"><svg aria-hidden="true"><use href="#i-layout"/></svg></button><button class="icon-button pin-button" data-pin="${view}" aria-label="${names[view]} penceresini sabitle" title="Pencereyi sabitle"><svg aria-hidden="true"><use href="#i-pin"/></svg></button><button class="icon-button close-button" data-close="${view}" aria-label="${names[view]} penceresini kapat" title="Pencereyi kapat"><svg aria-hidden="true"><use href="#i-close"/></svg></button></div></header><div class="panel-content"></div>`;
-  const content = view==='lua'?luaContent():TOOL_VIEWS.includes(view) ? toolContent(view) : document.querySelector(view === 'node' ? '#node-template' : '#scene-template').content.cloneNode(true);
+  panel.innerHTML = `<header class="panel-header" data-drag="${view}" title="Pencereyi taşımak için başlığı sürükle"><div class="panel-title"><svg aria-hidden="true"><use href="#i-${view==='library'?'node':view==='store'?'assets':view}"/></svg><span>${names[view]}</span></div><div class="panel-actions"><button class="icon-button placement-button" data-placement="${view}" aria-label="${names[view]} pencere düzeni" title="Pencereyi yerleştir"><svg aria-hidden="true"><use href="#i-layout"/></svg></button><button class="icon-button pin-button" data-pin="${view}" aria-label="${names[view]} penceresini sabitle" title="Pencereyi sabitle"><svg aria-hidden="true"><use href="#i-pin"/></svg></button><button class="icon-button close-button" data-close="${view}" aria-label="${names[view]} penceresini kapat" title="Pencereyi kapat"><svg aria-hidden="true"><use href="#i-close"/></svg></button></div></header><div class="panel-content"></div>`;
+  const content = view==='library'?libraryContent():view==='lua'?luaContent():TOOL_VIEWS.includes(view) ? toolContent(view) : document.querySelector(view === 'node' ? '#node-template' : '#scene-template').content.cloneNode(true);
   if (['game','edit'].includes(view)) {
     // Each copy has its own SVG gradient identifiers.
     content.querySelectorAll('[id]').forEach(el => { el.id = `${view}-${el.id}`; });
@@ -53,6 +55,7 @@ const tools = bindTools(panels, {
   edit:(field,value)=>{scenes[sceneIndex].objects[selectedObject]=editObject(scenes[sceneIndex].objects[selectedObject],field,value);updateScene();},
   visibility:value=>{scenes[sceneIndex].objects[selectedObject].visible=value;updateScene();},
   dialogue:value=>{scenes[sceneIndex].dialogue=value;updateScene();},
+  nodeField:(field,value)=>{if(['title','speaker','dialogue'].includes(field)){scenes[sceneIndex][field]=value;if(field!=='title')for(const object of Object.values(scenes[sceneIndex].objects))for(const component of object.components??[])if(component.type==='dialogue')component.values[field==='dialogue'?'text':'speaker']=value;updateScene();}},
   openEdit:()=>apply(openView(state,'edit'))
 });
 tools.log('Çalışma alanı hazır.');
@@ -104,12 +107,12 @@ function focus(view) { state = focusView(state, view); updateControls(); }
 function treeElement(tree) {
   if (!tree) return null;
   if (tree.type === 'leaf') return panels.get(tree.view);
-  const element = document.createElement('div'); element.className = 'split'; element.dataset.axis = tree.axis; element.dataset.split = tree.id;
+  const element = document.createElement('div'); element.className = 'split'; element.dataset.axis = workspace.clientWidth<650?'y':tree.axis; element.dataset.split = tree.id;
   const a = document.createElement('div'), b = document.createElement('div'); a.className = b.className = 'split-child';
   a.style.flex = `${tree.ratio} 1 0`; b.style.flex = `${1 - tree.ratio} 1 0`;
   a.append(treeElement(tree.a)); b.append(treeElement(tree.b));
   const divider = document.createElement('div'); divider.className = 'splitter'; divider.dataset.divider = tree.id; divider.tabIndex = 0;
-  divider.setAttribute('role', 'separator'); divider.setAttribute('aria-label', 'Pencerelerin boyutunu ayarla'); divider.setAttribute('aria-orientation', tree.axis === 'x' ? 'vertical' : 'horizontal');
+  divider.setAttribute('role', 'separator'); divider.setAttribute('aria-label', 'Pencerelerin boyutunu ayarla'); divider.setAttribute('aria-orientation', workspace.clientWidth>=650 && tree.axis === 'x' ? 'vertical' : 'horizontal');
   divider.setAttribute('aria-valuemin', '20'); divider.setAttribute('aria-valuemax', '80'); divider.setAttribute('aria-valuenow', String(Math.round(tree.ratio * 100)));
   element.append(a, divider, b); return element;
 }
@@ -123,11 +126,13 @@ function render(animated=false) {
   document.querySelector('#empty-state').hidden = state.visible.length > 0;
   if (active && active !== document.body && active.isConnected) active.focus({ preventScroll: true });
   if(before) motion.enter(before);
+  if(workspace.clientWidth<650 && state.focused && TOOL_VIEWS.includes(state.focused))panels.get(state.focused).scrollIntoView({block:'nearest'});
 }
 function paintScene(view, scene) {
     const panel = panels.get(view);
     panel.querySelector('.scene-title').textContent = scene.title;
-    panel.querySelector('.speaker-name').textContent = 'Mira'; panel.querySelector('.dialogue-text').textContent = scene.dialogue;
+    panel.querySelector('.speaker-name').textContent = scene.speaker || 'Mira';
+    panel.querySelector('.dialogue-text').style.fontSize = scene.fontSize ? `${scene.fontSize / 8}cqw` : '';  panel.querySelector('.dialogue-text').textContent = scene.dialogue;
     panel.querySelector('.scene-help').textContent = view === 'edit' ? `${objectNames[selectedObject]} · tut ve sürükle` : { stopped:'Önizleme', playing:'Çalışıyor', paused:'Duraklatıldı' }[playback.status];
     if (view === 'game') {
       panel.dataset.playback = playback.status;
@@ -146,15 +151,21 @@ function updateScene() {
   panels.get('node').querySelector('.node-area').classList.toggle('no-grid',!settings.grid);
   panels.get('edit').querySelector('.editable').classList.toggle('hide-guides',!settings.guides);
   tools.update();
+  authoring?.update();
+  library?.update();
   panels.get('node').querySelectorAll('[data-scene]').forEach(node => {
     const index = Number(node.dataset.scene); node.classList.toggle('selected', index === sceneIndex); node.setAttribute('aria-pressed', String(index === sceneIndex));
+    node.querySelector('.node-type').childNodes[1].textContent=index===0?'BAŞLANGIÇ ':'DÜĞÜM ';
+    node.querySelector('strong').textContent=scenes[index].title;
+    node.querySelector('.node-description').textContent=scenes[index].dialogue.slice(0,75);
+    node.querySelector('.node-bottom').firstChild.textContent=scenes[index].speaker || 'Mira';
   });
 }
 function minimumHeight(tree) {
   if (!tree) return 0;
-  if (tree.type==='leaf') return tree.view==='lua'?380:TOOL_VIEWS.includes(tree.view)?260:240;
+  if (tree.type==='leaf') return tree.view==='library'?360:tree.view==='lua'?380:TOOL_VIEWS.includes(tree.view)?260:240;
   const a=minimumHeight(tree.a), b=minimumHeight(tree.b);
-  return tree.axis==='x'?Math.max(a,b):8+Math.max(a/tree.ratio,b/(1-tree.ratio));
+  return workspace.clientWidth>=650 && tree.axis==='x'?Math.max(a,b):8+Math.max(a/tree.ratio,b/(1-tree.ratio));
 }
 function workspaceHeight() {
   return workspace.clientWidth<650?Math.max(workspace.clientHeight,minimumHeight(layout.tree)):workspace.clientHeight;
@@ -164,7 +175,8 @@ function fitViews() {
   const viewport = panels.get('node').querySelector('.graph-viewport');
   if (viewport.isConnected && viewport.clientWidth) {
     const compact = viewport.clientWidth < 600; viewport.classList.toggle('is-compact', compact);
-    const width = compact ? 260 : 780, height = compact ? 560 : 440;
+    const width = compact ? 260 : Math.max(780, scenes.length*250+30), height = compact ? Math.max(560,scenes.length*185+20) : 440;
+    if(scenes.length!==3 || viewport.querySelector('.dynamic-graph')){const world=viewport.querySelector('.graph-world');world.style.width=`${width}px`;world.style.height=`${height}px`;}
     const scale = Math.max(.25, compact ? Math.min((viewport.clientWidth - 20) / width, 1) : Math.min((viewport.clientWidth - 24) / width, (viewport.clientHeight - 20) / height, 1.25)) * zoom;
     viewport.querySelector('.graph-world').style.transform = `translate(${Math.max(0, (viewport.clientWidth - width * scale) / 2)}px, ${Math.max(0, (viewport.clientHeight - height * scale) / 2)}px) scale(${scale})`;
     panels.get('node').querySelector('.zoom-value').textContent = `${Math.round(scale * 100)}%`;
@@ -176,6 +188,7 @@ function fitViews() {
     const width = Math.max(0, Math.min(wrap.clientWidth, wrap.clientHeight * aspect));
     const frame = wrap.querySelector('.game-frame'); frame.style.width = `${width}px`; frame.style.height = `${width / aspect}px`;
   }
+  library?.update();
 }
 function showPlacement(view, button) {
   closeMenus(); placementView = view;
@@ -213,6 +226,7 @@ function startGesture(event, data) {
   gesture = { ...data, pointerId:event.pointerId, startX:event.clientX, startY:event.clientY };
   event.currentTarget.setPointerCapture(event.pointerId); event.preventDefault();
 }
+workspace.addEventListener('dblclick',event=>{if(event.target.closest('[data-scene]'))apply(openView(state,'inspector'));});
 workspace.addEventListener('pointerdown', event => {
   if (event.button !== 0 || gesture) return;
   motion.cancel();
@@ -334,8 +348,48 @@ const preferences=bindSettings(document.querySelector('#settings-dialog'),{
   export:details=>{const data={format:'rowl-workspace-prototype/v2',settings,preferences:details,scenes,scripts:details.includeScripts?lua.snapshot():{},workspace:{...state,layout}};const url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));const link=document.createElement('a');link.href=url;link.download='rowl-proje-taslagi.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);notify('Proje taslağı indirildi.');}
 });
 document.querySelectorAll('[data-settings]').forEach(button=>button.addEventListener('click',()=>preferences.open(button.dataset.settings)));
-const observer=new ResizeObserver(fitViews); observer.observe(workspace); observer.observe(panels.get('node').querySelector('.graph-viewport'));
+let library=bindLibrary(panels.get('library'),panels.get('inspector'),{
+  scenes:()=>scenes,selectedScene:()=>scenes[sceneIndex],notify,
+  add:template=>{
+    if(scenes.length>=100){notify('Prototipte en fazla 100 düğüm kullanılabilir.');return;}
+    const scene=template?structuredClone(template):{id:crypto.randomUUID(),title:`Düğüm ${scenes.length+1}`,speaker:'Anlatıcı',dialogue:'Yeni diyalog…',objects:structuredClone(baseObjects)};
+    delete scene.kind;
+    scenes.push(scene);sceneIndex=scenes.length-1;selectedObject='dialogue';rebuildGraph();apply(openView(state,'inspector'));tools.log(`${scene.title} eklendi.`);
+  }
+});
+let authoring = bindAuthoring(panels, {
+  get:()=>({scene:scenes[sceneIndex],selected:selectedObject,names:objectNames}),
+  beforeOpen:()=>{endGesture(true);motion.cancel();closeMenus();},notify,log:message=>tools.log(message),
+  snapshot:()=>({format:'rowl-authoring-prototype/v1',settings,scenes:structuredClone(scenes),scripts:lua.snapshot(),designPreferences:preferences.snapshot()}),
+  component:entry=>{const object=scenes[sceneIndex].objects[selectedObject];object.components??=[];const old=object.components.findIndex(c=>c.type===entry.type);if(old<0)object.components.push(entry);else object.components[old]=entry;
+    if(entry.type==='dialogue'){Object.assign(scenes[sceneIndex],{speaker:entry.values.speaker,dialogue:entry.values.text,fontSize:Number(entry.values.fontSize)});}updateScene();},
+  restore:data=>{
+    if(data?.format!=='rowl-authoring-prototype/v1'||!Array.isArray(data.scenes)||!data.scenes.length||data.scenes.length>100||!data.settings)throw Error('Invalid project');
+    const restored=data.scenes.map(scene=>{
+      if(typeof scene.title!=='string'||typeof scene.dialogue!=='string'||!scene.objects)throw Error('Invalid scene');
+      const objects={};for(const name of Object.keys(baseObjects)){const object=scene.objects[name];if(!object||!['x','y','w','h'].every(key=>Number.isFinite(object[key])&&object[key]>=0&&object[key]<=100))throw Error('Invalid object');
+        if(object.components&&!Array.isArray(object.components))throw Error('Invalid components');
+        if(object.components?.some(c=>typeof c?.type!=='string'||!c.values||typeof c.values!=='object'))throw Error('Invalid component');objects[name]=structuredClone(object);}
+      const restoredScene={...scene,id:scene.id??crypto.randomUUID(),objects};delete restoredScene.kind;return restoredScene;
+    });
+    if(data.assets&&(!Array.isArray(data.assets)||data.assets.some(a=>typeof a?.name!=='string'||typeof a.type!=='string'||!Number.isFinite(a.size))))throw Error('Invalid assets');
+    if(data.scripts&&(!data.scripts||Array.isArray(data.scripts)||typeof data.scripts!=='object'||!Object.entries(data.scripts).every(([name,code])=>/^[\w-]+\.lua$/.test(name)&&typeof code==='string'&&code.length<50000)))throw Error('Invalid scripts');
+    scenes=restored;lua.restore(data.scripts??{});preferences.restore(data.designPreferences??{});settings=normalizeSettings(data.settings);sceneIndex=0;playback=initialPlayback();rebuildGraph();updateControls();updateScene();fitViews();
+  }
+});
+function rebuildGraph(){
+  const world=panels.get('node').querySelector('.graph-world');world.classList.add('dynamic-graph');world.style.width=`${Math.max(780,scenes.length*250+30)}px`;
+  const template=document.querySelector('#node-template .story-node')??document.querySelector('#node-template').content.querySelector('.story-node');
+  world.querySelectorAll('.story-node').forEach(node=>node.remove());
+  scenes.forEach((scene,index)=>{const node=template.cloneNode(true);node.className='story-node';node.querySelector('.node-type').childNodes[1].textContent=index===0?'BAŞLANGIÇ ':'DÜĞÜM ';node.dataset.scene=index;node.style.setProperty('--node-x',`${30+250*index}px`);node.style.setProperty('--node-y',`${20+185*index}px`);node.querySelector('.node-number').textContent=String(index+1).padStart(2,'0');world.append(node);});
+  const svg=world.querySelector('.connections');svg.setAttribute('viewBox',`0 0 ${Math.max(780,scenes.length*250+30)} 440`);svg.replaceChildren();
+  for(let i=0;i<scenes.length-1;i++){const path=document.createElementNS('http://www.w3.org/2000/svg','path');path.setAttribute('d',`M${220+250*i} 215H${280+250*i}`);svg.append(path);}
+  panels.get('node').querySelector('.canvas-caption .muted').textContent=`${scenes.length} sahne`;
+}
+let narrowWorkspace=workspace.clientWidth<650;
+const observer=new ResizeObserver(()=>{const next=workspace.clientWidth<650;if(next!==narrowWorkspace){narrowWorkspace=next;motion.cancel();render();}else fitViews();}); observer.observe(workspace); observer.observe(panels.get('node').querySelector('.graph-viewport'));
 for (const view of ['game','edit']) observer.observe(panels.get(view).querySelector('.scene-stage-wrap'));
+try{const stored=JSON.parse(localStorage.getItem('rowl-authoring-project'));if(stored)authoring.restore(stored);}catch{}
 render();
 function animate(timestamp) {
   if (playback.status === 'playing' && lastFrameTime !== null) {

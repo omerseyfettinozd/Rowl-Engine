@@ -20,11 +20,11 @@ Tarayıcı: `http://127.0.0.1:4173`.
 - **Konsol:** gerçek prototip etkileşimlerinin oturum kayıtları; Temizle ile boşaltılır.
 - **Lua editörü:** dosya sekmeleri, satır numaraları, renkli kod, obje seçimi, arama, yeni script ve kaydetme durumu. Kod yazılabilir; script taslakları bu tarayıcıda saklanır. Lua çalıştırılmaz.
 
-PC ve mobilde aynı üst kapsül var: **Node · Game · Edit Scene | Başlat · Duraklat | Araçlar · …**. Yedi düğmenin dokunma alanı 44×44 piksel; kapsül 314 piksel genişliğiyle 320 piksel ekrana sığar. Sağ alttaki düğme kaldırıldı. **Araçlar**, kapsülün altında her iki cihazda da aynı iki sütunlu isimli menüyü açar; Lua editörü alttaki geniş düğmedir. Açık araçlar menüde işaretlenir; ikinci tıklama aynı pencereyi kapatır.
+PC ve mobilde aynı üst kapsül var: **Node · Game · Edit Scene | Başlat · Duraklat | Araçlar · …**. Yedi düğmenin dokunma alanı 44×44 piksel; kapsül 314 piksel genişliğiyle 320 piksel ekrana sığar. Sağ alttaki düğme kaldırıldı. **Araçlar**, kapsülün altında her iki cihazda da aynı iki sütunlu isimli menüyü açar; Düğüm kütüphanesi de bu menüdedir. Açık araçlar menüde işaretlenir; ikinci tıklama aynı pencereyi kapatır.
 
 ## Pencere yerleşimi
 
-- Açık pencere sınırı ve otomatik pencere değiştirme kaldırıldı. Sekiz pencere birlikte açılabilir; ilk açılışta yalnız Node açık.
+- Açık pencere sınırı ve otomatik pencere değiştirme kaldırıldı. Dokuz pencere birlikte açılabilir; ilk açılışta yalnız Node açık.
 - Başlığı başka pencerenin sol/sağ/üst/alt tarafına sürükle: hedef alan bölünür. Pencereler kendi bölmelerinde kalır, birbirine binmez. Örneğin Node solda; Game ve Edit Scene sağda alt alta.
 - Lua, Node yanında veya altında geniş bir bölmede açılır. Diğer araçlar masaüstünde sağ sütunda, mobilde altta gruplanır. Mobil çalışma alanı gerektiğinde aşağı kayar; her araç kendi içinde de kaydırılabilir.
 - Bölme çizgisini sürükle veya klavyede odaklayıp ok tuşlarını kullan.
@@ -62,7 +62,7 @@ Bölüm değiştirmek uygulanmamış düzenlemeleri korur. **Vazgeç**, × ve Es
 
 Dışa aktarma sürümü `rowl-workspace-prototype/v2`: sahneler, temel ayarlar, tasarım tercihleri, seçiliyse Lua taslakları ve çalışma alanı yerleşimi. Gerçek motor paketi değildir. **Yerleşimi sıfırla** açık pencereleri varsayılan yerleşime getirir.
 
-Ayarlar ve kaydedilmiş script taslakları localStorage alanında kalır. Örnek sahne düzenlemeleri, yerleşim ve oynatma sayfa yenilendiğinde sıfırlanır.
+Ayarlar ve kaydedilmiş script taslakları localStorage alanında kalır. Kaydedilen örnek sahneler sayfa yenilenince geri yüklenir; yerleşim ve oynatma sıfırlanır.
 
 ## Oynatma
 
@@ -73,7 +73,7 @@ Ayarlar ve kaydedilmiş script taslakları localStorage alanında kalır. Örnek
 
 ## Doğrulama — 2026-10-05
 
-22 durum testi: sekiz pencere açma, sabit/son pencere kapatma, odak, dört yönlü yerleşim, pin kilidi, oran sınırları, 1000 karma işlemde alanların çakışmaması; ayar doğrulama ve Inspector sınırları; bağımsız oynatma kopyası, donma ve devam etme.
+23 durum testi: sekiz pencere açma, sabit/son pencere kapatma, odak, dört yönlü yerleşim, pin kilidi, oran sınırları, 1000 karma işlemde alanların çakışmaması; ayar doğrulama ve Inspector sınırları; bağımsız oynatma kopyası, donma ve devam etme.
 
 ```sh
 node --test prototypes/editor-workspace/*.test.mjs
@@ -96,3 +96,46 @@ Siyah/kemik beyazı palet, yerel SVG sahne. Harici font, resim, API veya motor b
 ![Hikâye ayarları](previews/settings.jpg)
 
 [Mobil ayarlar](previews/settings-mobile.jpg)
+
+## Sade içerik üretme akışı — 2026-10-05
+
+Çalışma alanında yalnız mevcut 56 px üst kapsül var. Son denemedeki **Proje / Kaydet / Paket kontrolü** barı, Node'daki **Düğüm ekle / Seçileni düzenle** barı ve Edit Scene işlem barı kaldırıldı. Düzenleme Inspector'da; kaydetme ve hub dönüşü **…** menüsünde. Dışa aktarma mevcut ayarlar bölümünde kaldı.
+
+- **Araçlar → Düğüm kütüphanesi:** Hazır paketler ve Benim düğümlerim sekmeleri bulunan dock paneli. Hazır paketler salt okunur; kullanıcı bölümü iç içe klasörler, düğüm kısayolları, düzenleme, taşıma ve arama içerir.
+- **Hazır paketler → Rowl → Standart düğüm:** gerçek editörün tek varsayılan düğüm ekleme akışını temsil eder ve Inspector’ı açar. Bileşenler düğüm çeşidi değildir. Hazır çeşit kataloğu ve Türler sekmesi kaldırıldı; gelecekteki çeşitler mevcutmuş gibi gösterilmez.
+- **Inspector → Düğüm kütüphanesi:** yıldızla o andaki düğümün tüm obje hiyerarşisini ve Inspector ayarlarını bağımsız şablon olarak kaydeder. Kayıt adı ve klasörü seçilir; sonraki değişiklikler Kaydı güncelle ile aktarılır. Kullanıcı kütüphanesinden eklemek yeni kimlikli bir kopya oluşturur. Eski bağlantı hedefleri temizlenir; yeni hedefler ayrıca atanır. Kopyayı düzenlemek kaynak düğümü veya şablonu değiştirmez. Yıldız veya kısayol kaldırma onay ister; sahnedeki kopyaları silmez. Klasör kaldırma da onay ister, içeriğini üst konuma taşır; ad çakışırsa klasöre numara eklenir.
+- **Inspector:** düğüm başlığı, konuşmacı ve diyalog doğrudan düzenlenir; seçili obje özellikleri ve bileşen ekleme burada bulunur. Node kartına çift tıklamak Inspector'ı açar. Ayrı düzenle düğmesi yok.
+- **… → Kaydet / Ctrl+S:** sahneler, ayarlar, bileşen özellikleri, script taslakları ve varlık metadata'sı yerelde saklanır; yenilemede geri yüklenir. Lua panelinin kendi kaydetme davranışı korunur.
+- **… → Hub’a dön:** taslağı saklar ve örnek proje seçim ekranını açar. Proje kartı çalışma alanına döner. Gerçek hub'ın dosya/şablon/son projeler hizmetleri bu tarayıcıya bağlanmadı.
+- **Mobil:** üst kapsül 56 px kalır; ek işlem barı yok. Dar ekranda dock bölmeleri alt alta ve tam genişlikte görünür. Kütüphane gerektiğinde kendi içinde kaydırılır. Masaüstünden dar ekrana geçişte bölme yönü yeniden hesaplanır.
+
+### Kaynakla karşılaştırma
+
+| Gerçek kaynak | Tasarımda kullanılan mevcut davranış |
+| --- | --- |
+| `editor/Views/ProjectHubWindow.axaml`, `ProjectHubViewModel.cs` | Proje seçimi hub üzerinden; çalışma alanında ikinci proje yöneticisi yok |
+| `editor/Views/MainWindow.axaml` | Kaydet, proje hub'ı, ayarlar, dışa aktarma ve mevcut paneller |
+| `editor/ViewModels/InspectorViewModel.cs`, `Views/Panels/NodeInspectorView.axaml` | Seçili düğüm/obje ve bileşen özellikleri |
+| `editor/ViewModels/MainWindowViewModel.cs::AddNode`, `Services/StoryGraphCanvasService.cs::CreateDefaultNode` | Varsayılan diyalog düğümü ekleme |
+| `editor/ViewModels/NodeViewModel.cs`, `Components/ComponentRegistry.cs`, `SearchViewModel.cs` | Düğüm bileşimi ve desteklenen davranış türleri |
+
+Klasörlü kütüphane ve yıldızlı kısayollar yeni prototip tasarımıdır; mevcut native ürün özelliği diye sunulmaz. Assets Store paneli yalnız **Yakında gelecek** gösterir; Varlıklar paneli arama ve sahne objesi seçme akışını korur; diyalog dışındaki bileşen davranışları çalıştırılmaz. Örnek graph sıralıdır; gerçek dallanma, native proje açma veya `.rowlpkg` üretimi yok.
+
+27 durum testi geçti; klasör taşıma döngüleri, kaldırma sonrası içerik koruması ve ad çakışmaları test edildi. Yıldızlı şablonun kopyadan bağımsızlığı ve eski hedefleri taşımaması ayrıca test edildi. Tarayıcıda yıldızla → kütüphanede gör → kopya ekle → Inspector'dan değiştir → kaydet/yenile ve hub dönüşü doğrulandı. 320×740'ta üst yükseklik 56 px, ek bar sayısı 0, yatay sayfa taşması yok; kütüphane 310 px tam panel genişliğinde. Bu çalışma native GUI kabulü veya tüm motorun denetimi değildir; inceleme ilgili editör akışlarıyla sınırlıdır.
+
+![Düğüm kütüphanesi](previews/library-categories.jpg)
+
+[Mobil düğüm kütüphanesi](previews/library-mobile.jpg)
+
+Kütüphane güncellemesi: tarayıcıda hazır paketin salt okunur görünümü, kullanıcı klasörü/alt klasörü oluşturma, seçili düğümü kaydetme, yenileme sonrası kalıcılık, kaldırmadan vazgeçme ve Assets Store boş ekranı doğrulandı. 320×740 kaldırma penceresi ekrana sığıyor, yatay sayfa taşması yok. Klasör kaldırma sonucu durum testlerinde doğrulandı.
+
+Assets / Assets Store düzeltmesi: mevcut Varlıklar panelinin arama ve seçim davranışı geri getirildi. Assets Store ayrı araç/pencere olarak eklendi; yalnız Yakında gelecek gösterir. Diğer araçlar korunuyor. Tarayıcıda Varlıklar filtreleme, ayrı Store paneli ve araç listesi doğrulandı; 26 test yeşil.
+
+Inspector yıldız güncellemesi: Node kartı yıldızları ve kütüphanedeki Seçileni kaydet düğmesi kaldırıldı; kayıt tek yerde Inspector içindedir. Tüm objeler, görünürlük/konum/boyut ve bileşen özellikleri kopyalanır. Bağımsız hiyerarşi kopyası durum testi eklendi. UI’da Mira X=40 ve gizli olarak kaydedildi, kaynak X=25/görünür yapıldı; kütüphaneden eklenen kopyanın X=40/gizli kaldığı doğrulandı. 27 test yeşil.
+
+
+### Kategori düzeni güncellemesi
+
+Benim düğümlerim içinde açılıp kapanan klasör ağacı, seçili klasör vurgusu, düğüm sayıları ve konum yolu var. + Klasör seçili konumda alt klasör oluşturur. Klasörün … ekranından isim ve üst klasör değişir; kendisi/alt klasörleri hedef listesinde gösterilmez. Düğümün … ekranından isim ve klasör değişir; taşınan kaydın konumu açılır. İçerik düzenleme Inspector’dadır; burada kaydedilen hiyerarşi salt okunur incelenebilir. Kaldırma … içine alındı ve onay korunur.
+
+Tarayıcıda düğümü Bölüm 1 / Giriş’e taşıma, yenileme sonrası korunması, seçili alt klasörde yeni klasör formunun doğru hedefi seçmesi, geçersiz üst klasör hedeflerinin gizlenmesi ve kaldırma onayından vazgeçme doğrulandı. 320×740’ta yatay sayfa taşması yok. 27 durum testi yeşil.

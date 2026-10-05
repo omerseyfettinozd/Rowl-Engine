@@ -44,5 +44,5 @@ export function bindLua(panel, context) {
   root.querySelector('[data-script-find]').addEventListener('click',()=>{root.querySelector('.script-search').hidden=false;root.querySelector('.script-search input').focus();});
   root.querySelector('[data-search-close]').addEventListener('click',()=>{root.querySelector('.script-search').hidden=true;input.focus();});root.querySelector('.script-search input').addEventListener('input',search);
   renderTabs();open(active);
-  return {snapshot:()=>({...files})};
+  return {snapshot:()=>({...files}),restore:value=>{files=Object.keys(value).length?{...value}:{...samples};saved={...files};renderTabs();open(Object.keys(files)[0]);}};
 }

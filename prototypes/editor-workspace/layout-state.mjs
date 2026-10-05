@@ -46,13 +46,13 @@ export function syncLayout(layout, previous, next, axis = 'x') {
         const views = leaves(node);
         if (!inserted && views.every(v => v !== 'lua' && TOOL_VIEWS.includes(v))) {
           inserted = true;
-          return split(node, leaf(view), 'y', views.length / (views.length + 1));
+          return split(node, leaf(view), 'y', Math.min(.8, views.length / (views.length + 1)));
         }
         if (node.type === 'leaf') return node;
         return { ...node, a: addTool(node.a), b: addTool(node.b) };
       }
       tree = addTool(result.tree);
-      if (!inserted) tree = split(tree, leaf(view), axis, axis === 'x' ? .74 : .6);
+      if (!inserted) tree = split(tree, leaf(view), axis, axis === 'x' ? .74 : view==='library'?.4:.6);
     } else {
       tree = view === 'edit' && leaves(result.tree).includes('game')
         ? mapLeaf(result.tree, 'game', node => split(node, leaf(view), 'y'))
