@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using RowlEngine.Editor.Views.Dialogs;
@@ -129,7 +130,9 @@ public static class EditorProjectLifecycleCoordinator
         int nodeCount,
         ulong startNodeId,
         Func<bool> saveSourceProjectAction,
-        Action<string>? logAction = null)
+        Action<string>? logAction = null,
+        CancellationToken cancellationToken = default,
+        Action<string>? reportCopiedFile = null)
     {
         try
         {
@@ -138,9 +141,15 @@ public static class EditorProjectLifecycleCoordinator
                 targetDirectory,
                 nodeCount,
                 startNodeId,
-                saveSourceProjectAction);
+                saveSourceProjectAction,
+                cancellationToken,
+                reportCopiedFile);
 
-            if (result.Succeeded)
+            if (result.Cancelled)
+            {
+                logAction?.Invoke(result.Message);
+            }
+            else if (result.Succeeded)
             {
                 logAction?.Invoke($"[FARKLI KAYDET] Proje başarıyla kopyalandı: {targetDirectory}");
             }

@@ -10,6 +10,11 @@ tamamlanması tek başına UI aktarım yetkisi değildir. Bu metnin aşağıdaki
 denetim sonuçları uygulama öncesi kaynak sürümüne aittir; uygulama sonuçları
 ayrı teslim kaydında tutulur.
 
+Uygulama takibi: [A02/A03 kayıt kararları](SAVE_DECISIONS_A02_A03_2026-10-06.md)
+ve [A04 staged SaveAs](SAVEAS_A04_2026-10-06.md) yerel davranış kapılarıyla
+tamamlandı. Sonraki dilim A05 build snapshot/linter/dispatch işidir. Uzaktan CI
+ve gerçek platform kabulü ilgili teslim kanıtından ayrıca değerlendirilir.
+
 ## Sonuç
 
 4 Ekim raporunun temel teknik teşhisi geçerli. Güncel sürümde kayıt kararları, Lua çağrısının sonlandırılması ve export edilen oyuncunun metin/input paritesi açık. UI web prototipi hazır bir tasarım referansı; motorla bağlanmış editör değildir. Entegrasyonun ana yeri **Aşama B: güvenilirlik kapısından sonra, genel stabilizasyondan önce**. Tasarım envanteri ve komut eşlemesi şimdi hazırlanabilir; üretim arayüzünün değişimi kapıya bağlı olmalı.
