@@ -24,3 +24,45 @@ export function resizeStackPair(first, second, delta, firstMin=240, secondMin=24
   const next = Math.max(firstMin, Math.min(total-secondMin, first+delta));
   return [next, total-next];
 }
+
+const views = tree => !tree ? [] : tree.type === 'leaf' ? [tree.view] : [...views(tree.a), ...views(tree.b)];
+const dockHeights = {node:520, lua:320, inspector:360, library:320, game:280, edit:280};
+export const minimumDockHeight = tree => !tree ? 0 : tree.type === 'leaf'
+  ? dockHeights[tree.view] ?? 240
+  : tree.axis === 'y' ? minimumDockHeight(tree.a)+minimumDockHeight(tree.b)+8 : Math.max(minimumDockHeight(tree.a),minimumDockHeight(tree.b));
+const columns = tree => tree?.type === 'split' && tree.axis === 'x' ? [...columns(tree.a),...columns(tree.b)] : tree ? [tree] : [];
+const sceneColumn = tree => views(tree).every(view=>['game','edit'].includes(view));
+const toolColumn = tree => views(tree).every(view=>!['node','lua','game','edit'].includes(view));
+function join(a,b,axis) {
+  const ratio=axis==='y'?minimumDockHeight(a)/(minimumDockHeight(a)+minimumDockHeight(b)):minimumWidth(a)/(minimumWidth(a)+minimumWidth(b));
+  return {type:'split',axis,ratio,id:`adaptive:${axis}:${views(a).join(',')}|${views(b).join(',')}`,a,b};
+}
+function projected(tree,width,height,ratios) {
+  if(tree.type==='leaf')return tree;
+  const id=`adaptive:${tree.axis}:${views(tree.a).join(',')}|${views(tree.b).join(',')}`;
+  const axis=tree.axis, space=(axis==='x'?width:height)-8;
+  const min=axis==='x'?minimumWidth:minimumDockHeight;
+  const preferred=ratios[id] ?? (axis==='y'?min(tree.a)/(min(tree.a)+min(tree.b)):tree.ratio);
+  const ratio=Math.max(min(tree.a)/space,Math.min(1-min(tree.b)/space,preferred));
+  return {...tree,id,ratio,a:projected(tree.a,axis==='x'?space*ratio:width,axis==='y'?space*ratio:height,ratios),b:projected(tree.b,axis==='x'?space*(1-ratio):width,axis==='y'?space*(1-ratio):height,ratios)};
+}
+// Reflow adjacent columns only; preserve leaf order and the user's canonical tree.
+export function responsivePresentation(tree,width,height,ratios={}) {
+  if(!stackLayout(tree,width))return {mode:'dock',tree:fitDockTree(tree,width),height};
+  if(width<1040 || !tree)return {mode:'stack',tree,height};
+  const groups=columns(tree);
+  const total=()=>groups.reduce((sum,group)=>sum+minimumWidth(group),0)+Math.max(0,groups.length-1)*8;
+  while(total()>width && groups.length>1) {
+    let best=0, bestScore=Infinity;
+    for(let i=0;i<groups.length-1;i++) {
+      const a=groups[i],b=groups[i+1];
+      const score=sceneColumn(a)&&sceneColumn(b)?0:toolColumn(a)&&toolColumn(b)?1:10;
+      if(score<bestScore){best=i;bestScore=score;}
+    }
+    groups.splice(best,2,join(groups[best],groups[best+1],'y'));
+  }
+  if(total()>width)return {mode:'stack',tree,height};
+  const merged=groups.reduce((a,b)=>a?join(a,b,'x'):b,null);
+  const nextHeight=Math.max(height,minimumDockHeight(merged));
+  return {mode:'adaptive',tree:projected(merged,width,nextHeight,ratios),height:nextHeight};
+}

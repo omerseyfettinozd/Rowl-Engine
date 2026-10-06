@@ -1,7 +1,7 @@
 import { initialState, focusView, openView, closeView, toggleView, togglePin } from './workspace-state.mjs';
 import { initialLayout, syncLayout, dockView, resizeSplit } from './layout-state.mjs';
 import { leaves } from './layout-state.mjs';
-import { stackLayout, fitDockTree, preferredStackHeight, minimumStackHeight, resizeStackPair } from './responsive-layout.mjs';
+import { responsivePresentation, preferredStackHeight, minimumStackHeight, resizeStackPair } from './responsive-layout.mjs';
 import { TOOL_VIEWS } from './workspace-state.mjs';
 import { defaultSettings, normalizeSettings, RESOLUTIONS, editObject } from './settings-state.mjs';
 import { toolContent, bindTools } from './tools.js';
@@ -31,7 +31,13 @@ let settings = defaultSettings();
 try { settings = normalizeSettings(JSON.parse(localStorage.getItem('rowl-prototype-settings'))); } catch {}
 const panels = new Map();
 const stackHeights = new Map();
-const isStacked = () => stackLayout(layout.tree,workspace.clientWidth);
+const adaptiveRatios = {};
+const presentation = () => responsivePresentation(layout.tree,workspace.clientWidth,workspace.clientHeight,adaptiveRatios);
+const isStacked = () => presentation().mode === 'stack';
+function resizePresentation(id,ratio) {
+  if(id.startsWith('adaptive:')) adaptiveRatios[id]=ratio;
+  else layout=resizeSplit(layout,id,ratio);
+}
 for (const view of Object.keys(names)) {
   const panel = document.createElement('section');
   panel.className = 'panel'; panel.dataset.panel = view; panel.setAttribute('aria-label', `${names[view]} penceresi`);
@@ -54,7 +60,7 @@ for (const view of Object.keys(names)) {
 
 const scenePreview=document.createElement('dialog');scenePreview.className='scene-preview-dialog';
 scenePreview.setAttribute('aria-labelledby','scene-preview-title');
-scenePreview.innerHTML='<div class="preview-shell"><header class="dialog-header"><h2 id="scene-preview-title">Sahne önizlemesi</h2><button class="icon-button" aria-label="Büyük önizlemeyi kapat"><svg><use href="#i-close"/></svg></button></header><div class="preview-stage"></div><div class="preview-reading"><strong></strong><p></p></div></div>';
+scenePreview.innerHTML='<div class="preview-shell"><header class="dialog-header"><h2 id="scene-preview-title">Sahne önizlemesi</h2><button class="icon-button" aria-label="Büyük önizlemeyi kapat"><svg><use href="#i-close"/></svg></button></header><div class="preview-stage"></div><div class="preview-reading"><span class="preview-caption">Açıldığı andaki sahne · canlı oynatım değil</span><strong></strong><p></p></div></div>';
 document.body.append(scenePreview);
 scenePreview.querySelector('button').addEventListener('click',()=>scenePreview.close());
 function fitPreview() {
@@ -123,7 +129,21 @@ function apply(result) {
   updateControls();
   motion.exit(removed,state.visible,()=>render(!removed.length,added.includes(state.focused)),workspaceHeight());
 }
+const windowLinks=document.createElement('div');windowLinks.className='window-links';
+options.prepend(windowLinks);
+function updateWindowLinks() {
+  windowLinks.replaceChildren();
+  if(!state.visible.length)return;
+  const label=document.createElement('span');label.className='menu-label';label.textContent='AÇIK PENCEREYE GİT';windowLinks.append(label);
+  for(const view of leaves(layout.tree)) {
+    const button=document.createElement('button');button.className='menu-row';button.textContent=names[view];
+    button.setAttribute('aria-label',`${names[view]} penceresine git`);button.setAttribute('aria-pressed',String(state.focused===view));
+    button.addEventListener('click',()=>{closeMenus();focus(view);panels.get(view).scrollIntoView({block:'nearest'});panels.get(view).querySelector('[data-placement]').focus({preventScroll:true});});
+    windowLinks.append(button);
+  }
+}
 function updateControls() {
+  updateWindowLinks();
   document.querySelectorAll('[data-view]').forEach(button => {
     const view = button.dataset.view, open = state.visible.includes(view), pinned = state.pinned.includes(view);
     button.setAttribute('aria-pressed', String(open));
@@ -171,6 +191,7 @@ function render(animated=false,reveal=false) {
   for (const panel of panels.values()) panel.remove();
   dockRoot.replaceChildren();
   dockRoot.classList.toggle('is-stacked',isStacked());
+  dockRoot.classList.toggle('is-adaptive',presentation().mode==='adaptive');
   if (isStacked()) {
     const views=leaves(layout.tree);
     views.forEach((view,index)=>{
@@ -183,7 +204,7 @@ function render(animated=false,reveal=false) {
     });
   } else {
     for(const panel of panels.values()) panel.style.height='';
-    const tree = treeElement(fitDockTree(layout.tree,workspace.clientWidth)); if (tree) dockRoot.append(tree);
+    const tree = treeElement(presentation().tree); if (tree) dockRoot.append(tree);
   }
   updateControls(); updateScene(); fitViews();
   document.querySelector('#empty-state').hidden = state.visible.length > 0;
@@ -232,7 +253,7 @@ function panelHeight(view) {
   return stackHeights.get(view) ?? preferredStackHeight(view,workspace.clientWidth,w/h);
 }
 function workspaceHeight() {
-  if(!isStacked()) return workspace.clientHeight;
+  if(!isStacked()) return presentation().height;
   const views=leaves(layout.tree);
   const total=views.reduce((sum,view)=>sum+panelHeight(view),0)+Math.max(0,views.length-1)*8;
   return Math.max(workspace.clientHeight,total);
@@ -256,7 +277,7 @@ function fitViews() {
       if(split){split.children[0].style.flex=`${tree.ratio} 1 0`;split.children[2].style.flex=`${1-tree.ratio} 1 0`;split.children[1].setAttribute('aria-valuenow',String(Math.round(tree.ratio*100)));}
       syncRatios(tree.a);syncRatios(tree.b);
     }
-    syncRatios(fitDockTree(layout.tree,workspace.clientWidth));
+    syncRatios(presentation().tree);
   }
   const viewport = panels.get('node').querySelector('.graph-viewport');
   if (viewport.isConnected && viewport.clientWidth) {
@@ -324,7 +345,7 @@ workspace.addEventListener('pointerdown', event => {
     selectedObject = object.dataset.object; object.focus({preventScroll:true}); updateScene(); tools.revealObject();
     startGesture(event, {type:'object', object:selectedObject, scene:sceneIndex, original:{...scenes[sceneIndex].objects[selectedObject]}, bounds:object.closest('.game-frame').getBoundingClientRect()});
   } else if (stackDivider) startGesture(event,{type:'stack-divider',before:stackDivider.dataset.stackBefore,after:stackDivider.dataset.stackAfter,first:panelHeight(stackDivider.dataset.stackBefore),second:panelHeight(stackDivider.dataset.stackAfter),originalHeights:new Map(stackHeights)});
-  else if (divider) startGesture(event, {type:'divider', id:divider.dataset.divider, element:divider, axis:divider.parentElement.dataset.axis, bounds:divider.parentElement.getBoundingClientRect(), originalLayout:layout});
+  else if (divider) startGesture(event, {type:'divider', id:divider.dataset.divider, element:divider, axis:divider.parentElement.dataset.axis, bounds:divider.parentElement.getBoundingClientRect(), originalLayout:layout,originalRatios:{...adaptiveRatios}});
   else if (header && !event.target.closest('button')) {
     if(state.pinned.includes(panel.dataset.panel)){notify('Yerleşim sabit. Taşımak için sabitlemeyi kaldır.');return;}
     closeMenus();
@@ -342,8 +363,8 @@ workspace.addEventListener('pointermove', event => {
     setStackPair(gesture.before,gesture.after,gesture.first,gesture.second,dy); fitViews();
   } else if (gesture.type === 'divider') {
     const ratio = gesture.axis === 'x' ? (event.clientX-gesture.bounds.left)/gesture.bounds.width : (event.clientY-gesture.bounds.top)/gesture.bounds.height;
-    layout = resizeSplit(layout, gesture.id, ratio);
-    const fitted=fitDockTree(layout.tree,workspace.clientWidth);
+    resizePresentation(gesture.id,ratio);
+    const fitted=presentation().tree;
     const find=node=>node.type==='leaf'?null:node.id===gesture.id?node:find(node.a)??find(node.b);
     const value = find(fitted).ratio;
     gesture.element.previousElementSibling.style.flex = `${value} 1 0`; gesture.element.nextElementSibling.style.flex = `${1-value} 1 0`;
@@ -362,7 +383,7 @@ function endGesture(cancel = false) {
   if (workspace.hasPointerCapture(current.pointerId)) workspace.releasePointerCapture(current.pointerId);
   if (current.type === 'panel' && current.moved && !cancel && !current.outside && current.drop) layout = dockView(layout,current.view,current.drop.target,current.drop.edge,state.pinned);
   if (cancel && current.type === 'object') { scenes[current.scene].objects[current.object] = current.original; updateScene(); }
-  if (cancel && current.type === 'divider') layout = current.originalLayout;
+  if (cancel && current.type === 'divider') {layout = current.originalLayout;for(const id of Object.keys(adaptiveRatios))delete adaptiveRatios[id];Object.assign(adaptiveRatios,current.originalRatios);}
   if(cancel && current.type==='stack-divider') {stackHeights.clear();for(const [view,height] of current.originalHeights)stackHeights.set(view,height);}
   document.body.classList.remove('dragging'); document.querySelector('#drop-preview').hidden=true; document.querySelector('#drag-label').hidden=true;
   if (current.type !== 'object') render();
@@ -410,7 +431,7 @@ workspace.addEventListener('keydown', event => {
   }
   if (divider && ['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(event.key)) {
     event.preventDefault(); const delta=['ArrowRight','ArrowDown'].includes(event.key)?.05:-.05;
-    layout=resizeSplit(layout,divider.dataset.divider,Number(divider.getAttribute('aria-valuenow'))/100+delta); render();
+    resizePresentation(divider.dataset.divider,Number(divider.getAttribute('aria-valuenow'))/100+delta); render();
     document.querySelector(`[data-divider="${divider.dataset.divider}"]`)?.focus({preventScroll:true});
   }
 });
@@ -439,7 +460,7 @@ placement.addEventListener('click',event=>{
 document.addEventListener('pointerdown',event=>{ if (!event.target.closest('.popover,#options,[data-placement],.tools-launcher')) closeMenus(); });
 document.addEventListener('keydown',event=>{ if (event.key==='Escape') { endGesture(true); closeMenus(); } });
 document.querySelector('#reset').addEventListener('click',()=>{
-  endGesture(true); motion.cancel(); stackHeights.clear(); layout=syncLayout({tree:null},{visible:[]},state,'x'); zoom=1; workspace.scrollTop=0; closeMenus(); render(); tools.log('Pencere yerleşimi sıfırlandı.');
+  endGesture(true); motion.cancel(); stackHeights.clear(); for(const id of Object.keys(adaptiveRatios))delete adaptiveRatios[id]; layout=syncLayout({tree:null},{visible:[]},state,'x'); zoom=1; workspace.scrollTop=0; closeMenus(); render(); tools.log('Pencere yerleşimi sıfırlandı.');
 });
 document.querySelector('#tools-toggle').addEventListener('click',()=>{
   const open=document.querySelector('#tools-menu').hidden;closeMenus();document.querySelector('#tools-menu').hidden=!open;

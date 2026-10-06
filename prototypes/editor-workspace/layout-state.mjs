@@ -39,7 +39,7 @@ export function syncLayout(layout, previous, next, axis = 'x') {
     let tree;
     if(view==='lua' && result.tree){
       const target=leaves(result.tree).includes('node')?'node':leaves(result.tree)[0];
-      tree=mapLeaf(result.tree,target,node=>split(node,leaf(view),axis==='x'&&leaves(result.tree).length===1?'x':'y',.42));
+      tree=mapLeaf(result.tree,target,node=>split(node,leaf(view),axis==='x'&&leaves(result.tree).length===1?'x':'y',.6));
     } else if (TOOL_VIEWS.includes(view) && result.tree) {
       let inserted = false;
       function addTool(node) {

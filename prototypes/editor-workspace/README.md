@@ -73,7 +73,7 @@ Ayarlar ve kaydedilmiş script taslakları localStorage alanında kalır. Kayded
 
 ## Doğrulama — 2026-10-05
 
-31 durum testi: pencere açma, sabit/son pencere kapatma, odak, dört yönlü yerleşim, pin kilidi, oran sınırları, 1000 karma işlemde alanların çakışmaması; ayar doğrulama ve Inspector sınırları; bağımsız oynatma kopyası, donma ve devam etme; kütüphane bağımsızlığı; mobil Game yeniden açma, minimum genişlik ve komşu panel yüksekliklerinin korunması.
+34 durum testi: pencere açma, sabit/son pencere kapatma, odak, dört yönlü yerleşim, pin kilidi, oran sınırları, 1000 karma işlemde alanların çakışmaması; ayar doğrulama ve Inspector sınırları; bağımsız oynatma kopyası, donma ve devam etme; kütüphane bağımsızlığı; mobil Game yeniden açma, minimum genişlik ve komşu panel yüksekliklerinin korunması.
 
 ```sh
 node --test prototypes/editor-workspace/*.test.mjs
@@ -142,7 +142,7 @@ Tarayıcıda düğümü Bölüm 1 / Giriş’e taşıma, yenileme sonrası korun
 
 ## 6 Ekim görsel inceleme iyileştirmeleri
 
-- Masaüstü dock ağacı ekran daralınca yeniden yazılmaz. 650 px altında veya açık ağacın minimum genişliği ekrana sığmadığında paneller tam genişlikte alt alta gösterilir. Geniş ekran yeniden uygun olduğunda dock düzeni geri gelir. Açık pencere sayısı sınırlandırılmaz.
+- Masaüstü dock ağacı ekran daralınca yeniden yazılmaz. 650 px altında paneller tam genişlikte alt alta gösterilir. Ağacın minimum genişliği sığmadığında 1040 px üzerinde komşu sütunlar birleştirilir; daha dar görünümde dikey sunum kullanılır. Geniş ekran yeniden uygun olduğunda dock düzeni geri gelir. Açık pencere sayısı sınırlandırılmaz.
 - Node/Lua minimum 360 px; Game/Edit Scene 340 px; Inspector/kütüphane/Konsol 320 px; diğer araçlar 280 px. Yatay bölme oranları bu okunabilir sınırlarla ekrana yansıtılır.
 - Dar düzende yükseklikler panel içeriğine göre hesaplanır; masaüstü oranları toplam yüksekliği katlamaz. Komşu ayırıcı sürüklenebilir; klavyede ↑/↓ 24 px değiştirir, toplam yükseklik korunur. Elle verilen yükseklikler bu oturumda korunur; Yerleşimi sıfırla varsayılana döndürür.
 - Yeni açılan panel animasyon bitince görünür alana gelir. Yalnız pin değişikliği paneli yeniden kaydırmaz. Dar yerleşimde yan yana yönler kapalıdır; üst/alt kullanılabilir.
@@ -152,3 +152,21 @@ Tarayıcıda düğümü Bölüm 1 / Giriş’e taşıma, yenileme sonrası korun
 - Sistem reduce-motion ve prototipteki Hareketi azalt tercihi geçişleri sadeleştirir. Native/Avalonia UI aktarımı başlamadı.
 
 [Değişiklik ve canlı kabul kaydı](../../docs/UI_PROTOTYPE_IMPROVEMENTS_2026-10-06.md).
+
+
+### Yoğun dizüstü yerleşimi (6 Ekim, ikinci tasarım dilimi)
+
+1040 px ve üzerinde kayıtlı dock ağacı sığmıyorsa yalnız görünüm için komşu
+sütunlar birleştirilir; önce iki sahne sütunu, sonra araç sütunları tercih
+edilir. Panel sırası/kimliği korunur, hiçbir açık panel kapatılmaz. Birleştirilmiş
+sunumdaki ayırıcı ölçüleri oturumda tutulur; geniş görünümde özgün dock oranları
+geri gelir. Yerleşimi sıfırla iki sunumun elle ölçülerini de temizler.
+
+1040 px altında sığmayan düzenler tam genişlikte dikey kalır. Seçenekler
+menüsünün «Açık pencereye git» listesi paneli kapatmadan görünür alana getirir
+ve başlıktaki düzen kontrolüne klavye odağı verir. Kapsül ikinci tıklamada
+kapatma davranışını korur. Yeni Node/Lua bölmesinde Node payı %60'tır.
+Büyük önizleme, açıldığı andaki sahne olduğunu açıkça belirtir.
+
+34 testin üç yeni regresyonu, raporlanan dizüstü ağacını, geçici ayırıcı
+ölçülerini/geniş dönüşü ve on panelin okunabilir ölçülerde korunmasını kapsar.

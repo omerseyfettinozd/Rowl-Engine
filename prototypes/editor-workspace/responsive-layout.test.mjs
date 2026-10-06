@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {initialLayout,syncLayout,removeView,leaves} from './layout-state.mjs';
 import {initialState,openView,closeView} from './workspace-state.mjs';
-import {minimumWidth,stackLayout,fitDockTree,preferredStackHeight,resizeStackPair} from './responsive-layout.mjs';
+import {minimumWidth,stackLayout,fitDockTree,preferredStackHeight,resizeStackPair,responsivePresentation,minimumDockHeight} from './responsive-layout.mjs';
 
 function dense() {
   let state=initialState(), layout=initialLayout();
@@ -50,4 +50,48 @@ test('stack resizing conserves total height and respects both minimums',()=>{
   assert.deepEqual(resizeStackPair(440,334,10000,320,240),[534,240]);
   assert.deepEqual(resizeStackPair(440,334,-10000,320,240),[320,454]);
   assert.deepEqual(resizeStackPair(440,334,24,320,240),[464,310]);
+});
+
+const leaf=view=>({type:'leaf',view});
+const split=(a,b,axis='x')=>({type:'split',id:leaves(a).join('-')+'-'+leaves(b).join('-'),axis,ratio:.5,a,b});
+const laptopTree=()=>split(split(split(leaf('assets'),leaf('inspector'),'y'),split(leaf('node'),leaf('lua'),'y')),split(leaf('edit'),leaf('game')));
+function verifyProjection(tree,width,height) {
+  assert.ok(width+1e-6>=minimumWidth(tree));
+  assert.ok(height+1e-6>=minimumDockHeight(tree));
+  if(tree.type==='leaf')return;
+  verifyProjection(tree.a,tree.axis==='x'?(width-8)*tree.ratio:width,tree.axis==='y'?(height-8)*tree.ratio:height);
+  verifyProjection(tree.b,tree.axis==='x'?(width-8)*(1-tree.ratio):width,tree.axis==='y'?(height-8)*(1-tree.ratio):height);
+}
+test('reviewed four-column laptop keeps all six panels in three readable columns',()=>{
+  const tree=laptopTree(),snapshot=structuredClone(tree);
+  const result=responsivePresentation(tree,1340,704);
+  assert.equal(result.mode,'adaptive');
+  assert.deepEqual(leaves(result.tree),leaves(tree));
+  assert.ok(result.height<=900,'no 3856-pixel all-panel stack');
+  verifyProjection(result.tree,1340,result.height);
+  assert.deepEqual(tree,snapshot);
+  assert.equal(responsivePresentation(tree,1424,836).mode,'dock');
+  assert.equal(responsivePresentation(tree,742,836).mode,'stack');
+});
+test('adaptive resizing clamps both dimensions and preserves canonical ratios on wide return',()=>{
+  const tree=laptopTree(),snapshot=structuredClone(tree);
+  const first=responsivePresentation(tree,1340,704);
+  for(const ratio of [-10,10]) {
+    const fitted=responsivePresentation(tree,1340,704,{[first.tree.id]:ratio});
+    verifyProjection(fitted.tree,1340,fitted.height);
+    assert.deepEqual(tree,snapshot);
+  }
+  assert.deepEqual(responsivePresentation(tree,1424,836).tree,fitDockTree(tree,1424));
+});
+test('ten open panels survive every sampled adaptive width without narrow columns',()=>{
+  const tree=['node','lua','game','edit','inspector','library','assets','store','console','hierarchy'].map(leaf).reduce((a,b)=>split(a,b));
+  const snapshot=structuredClone(tree);
+  for(const width of [1040,1100,1340,1424,1900]) {
+    const result=responsivePresentation(tree,width,704);
+    assert.equal(result.mode,'adaptive');
+    assert.deepEqual(leaves(result.tree),leaves(tree));
+    assert.equal(new Set(leaves(result.tree)).size,10);
+    verifyProjection(result.tree,width,result.height);
+  }
+  assert.deepEqual(tree,snapshot);
 });

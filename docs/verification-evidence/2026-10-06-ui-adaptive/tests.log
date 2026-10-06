@@ -1,0 +1,42 @@
+✔ Node yanında Game ve Edit Scene üst üste; kardeşi taşıma ağacı sadeleştirir (3.983649ms)
+✔ Araç pencereleri ayrı bir sütunda toplanır; sabit kaynak taşınamaz (0.801262ms)
+✔ Pencereler dört yönde alan bölerek yerleşir ve kopyalanmaz (0.42604ms)
+✔ İç içe bölme uç boyutlarda da pencereleri üst üste bindirmez (0.660725ms)
+✔ Mobil başlangıçtan üçlü görünüm pencere alanını eşit paylaşır (0.223575ms)
+✔ Geçersiz ve kendi üzerine bırakma mevcut yerleşimi korur (1.132973ms)
+✔ Elle kapatma dalı kaldırır, diğer sabit pencereyi korur (0.302915ms)
+✔ Yeniden boyutlandırma erişilebilir sınırları korur (0.173319ms)
+✔ 1000 karma işlemde her ekran tek alanda bulunur ve alanlar çakışmaz (12.853821ms)
+✔ Yıldızlı düğüm bağımsız şablondur; eski bağlantı hedeflerini taşımaz (1.672428ms)
+✔ İç içe klasörler aynı adı farklı konumda kabul eder, döngüye izin vermez (0.622212ms)
+✔ Klasör kaldırma düğüm ve alt klasörleri üst konuma taşır; kaynak sahneleri korur (4.891604ms)
+✔ Üst konuma taşınan aynı adlı klasör kaybolmaz; benzersiz ad alır (0.356247ms)
+✔ Kayıt tüm hiyerarşiyi ve Inspector ayarlarını kopyadan bağımsız korur (0.683809ms)
+✔ Başlatma seçili sahnenin bağımsız kopyasını oynatır (0.98434ms)
+✔ Çalışırken hareket ve yazı ilerler; duraklatınca kare aynı kalır (1.011983ms)
+✔ Devam etme donmuş kareden ilerler; duraklama süresi eklenmez (3.966927ms)
+✔ Kapatma ve yeniden başlatma oynatımı sıfırlar (0.342971ms)
+✔ Önizleme sınırların dışına çıkmaz ve düzenleme verisini değiştirmez (0.449424ms)
+✔ Game reopen does not multiply mobile panel heights by desktop ratios (5.853411ms)
+✔ dense tablet stacks, desktop preserves every panel and readable widths (0.511231ms)
+✔ extreme desktop ratio still keeps both columns readable (0.177658ms)
+✔ stack resizing conserves total height and respects both minimums (0.199178ms)
+✔ reviewed four-column laptop keeps all six panels in three readable columns (0.841378ms)
+✔ adaptive resizing clamps both dimensions and preserves canonical ratios on wide return (0.600521ms)
+✔ ten open panels survive every sampled adaptive width without narrow columns (1.707273ms)
+✔ Bozuk kayıt varsayılanlara döner; izin verilmeyen alanlar elenir (1.556017ms)
+✔ Geçerli ayarlar JSON kaydı sonrası aynı kalır (0.234245ms)
+✔ Inspector konum ve boyutu sınırlar; orijinal objeyi değiştirmez (0.258942ms)
+✔ Her simge ikinci tıklamada sabit ve son pencereyi de kapatır (1.857549ms)
+✔ Tüm pencereler sabitlemelerden bağımsız açılır; mevcut pencere kapanmaz (5.01114ms)
+✔ Tekrar açma kopyalamaz ve yalnız odak değiştirir (0.195812ms)
+✔ Elle kapatma sabitlemeyi temizler ve odak açık pencereye döner (0.183369ms)
+✔ 1000 karma işlemde açık pencereler, sabitlemeler ve odak tutarlı kalır (5.149855ms)
+ℹ tests 34
+ℹ suites 0
+ℹ pass 34
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 104.689838
