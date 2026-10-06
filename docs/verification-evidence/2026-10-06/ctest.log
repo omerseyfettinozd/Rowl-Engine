@@ -1,0 +1,143 @@
+Test project /home/chaple/.codex/worktrees/cc79/Rowl Engine/build
+      Start  1: rowl_benchmark_tool_tests
+ 1/69 Test  #1: rowl_benchmark_tool_tests ..............   Passed    0.89 sec
+      Start  2: rowl_abi_tool_tests
+ 2/69 Test  #2: rowl_abi_tool_tests ....................   Passed    0.20 sec
+      Start  3: rowl_platform_gate_tests
+ 3/69 Test  #3: rowl_platform_gate_tests ...............   Passed    0.03 sec
+      Start  4: rowl_story_gate_tests
+ 4/69 Test  #4: rowl_story_gate_tests ..................   Passed    0.03 sec
+      Start  5: rowl_aux_gate_tests
+ 5/69 Test  #5: rowl_aux_gate_tests ....................   Passed    0.03 sec
+      Start  6: rowl_d06_154_refutation_tests
+ 6/69 Test  #6: rowl_d06_154_refutation_tests ..........   Passed    0.12 sec
+      Start  7: rowl_release_package_tool_tests
+ 7/69 Test  #7: rowl_release_package_tool_tests ........   Passed    2.09 sec
+      Start  8: rowl_d18a_verify_depth_tests
+ 8/69 Test  #8: rowl_d18a_verify_depth_tests ...........   Passed    0.27 sec
+      Start  9: rowl_d18bi_i18n_sync_tests
+ 9/69 Test  #9: rowl_d18bi_i18n_sync_tests .............   Passed    0.03 sec
+      Start 10: rowl_w8b_docs_sync_tests
+10/69 Test #10: rowl_w8b_docs_sync_tests ...............   Passed    0.03 sec
+      Start 11: rowl_d18bii_abi_pin_tests
+11/69 Test #11: rowl_d18bii_abi_pin_tests ..............   Passed    0.25 sec
+      Start 12: rowl_d18bii_packaging_guard_tests
+12/69 Test #12: rowl_d18bii_packaging_guard_tests ......   Passed    0.05 sec
+      Start 13: rowl_d18bii_platform_lock_tests
+13/69 Test #13: rowl_d18bii_platform_lock_tests ........   Passed    0.04 sec
+      Start 14: rowl_package_determinism_tests
+14/69 Test #14: rowl_package_determinism_tests .........   Passed    0.27 sec
+      Start 15: rowl_package_ratio_gate_tests
+15/69 Test #15: rowl_package_ratio_gate_tests ..........   Passed    0.19 sec
+      Start 16: rowl_verifier_mirror_tests
+16/69 Test #16: rowl_verifier_mirror_tests .............   Passed    0.05 sec
+      Start 17: rowl_media_format_gate_tests
+17/69 Test #17: rowl_media_format_gate_tests ...........   Passed    0.33 sec
+      Start 18: rowl_no_internal_exports_tests
+18/69 Test #18: rowl_no_internal_exports_tests .........   Passed    0.05 sec
+      Start 19: rowl_converter_tool_tests
+19/69 Test #19: rowl_converter_tool_tests ..............   Passed    2.27 sec
+      Start 20: rowl_export_tool_tests
+20/69 Test #20: rowl_export_tool_tests .................   Passed    0.14 sec
+      Start 21: rowl_self_extracting_installer_tests
+21/69 Test #21: rowl_self_extracting_installer_tests ...   Passed    0.42 sec
+      Start 22: rowl_player_guide_tests
+22/69 Test #22: rowl_player_guide_tests ................   Passed    0.54 sec
+      Start 23: rowl_author_guide_tests
+23/69 Test #23: rowl_author_guide_tests ................   Passed    0.92 sec
+      Start 24: rowl_golden_manifest_tests
+24/69 Test #24: rowl_golden_manifest_tests .............   Passed    0.07 sec
+      Start 25: rowl_font_license_glyph_tests
+25/69 Test #25: rowl_font_license_glyph_tests ..........   Passed    0.03 sec
+      Start 26: rowl_third_party_license_tests
+26/69 Test #26: rowl_third_party_license_tests .........   Passed    0.04 sec
+      Start 27: rowl_player_cli_help
+27/69 Test #27: rowl_player_cli_help ...................   Passed    0.01 sec
+      Start 28: rowl_player_cli_invalid_width
+28/69 Test #28: rowl_player_cli_invalid_width ..........   Passed    0.00 sec
+      Start 29: rowl_player_cli_missing_option_value
+29/69 Test #29: rowl_player_cli_missing_option_value ...   Passed    0.01 sec
+      Start 30: rowl_player_cli_invalid_slot
+30/69 Test #30: rowl_player_cli_invalid_slot ...........   Passed    0.00 sec
+      Start 31: rowl_demo_first_light_packaged
+31/69 Test #31: rowl_demo_first_light_packaged .........   Passed    0.25 sec
+      Start 32: rowl_demo_second_signal_packaged
+32/69 Test #32: rowl_demo_second_signal_packaged .......   Passed    0.30 sec
+      Start 33: rowl_native_tests
+33/69 Test #33: rowl_native_tests ......................   Passed   84.99 sec
+      Start 34: embed_red_probe
+34/69 Test #34: embed_red_probe ........................   Passed    0.08 sec
+      Start 35: audio_snapshot_red_probe
+35/69 Test #35: audio_snapshot_red_probe ...............   Passed    0.08 sec
+      Start 36: thread_contract_red_probe
+36/69 Test #36: thread_contract_red_probe ..............   Passed    0.08 sec
+      Start 37: d13_aux_gate_red_probe
+37/69 Test #37: d13_aux_gate_red_probe .................   Passed    0.08 sec
+      Start 38: d06_probe_x
+38/69 Test #38: d06_probe_x ............................   Passed    0.08 sec
+      Start 39: d06_probe_m
+39/69 Test #39: d06_probe_m ............................   Passed    0.08 sec
+      Start 40: audio_volume_race_red_probe
+40/69 Test #40: audio_volume_race_red_probe ............   Passed    0.22 sec
+      Start 41: audio_pump_race_red_probe
+41/69 Test #41: audio_pump_race_red_probe ..............   Passed    0.08 sec
+      Start 42: d08_rewind_after_load_probe
+42/69 Test #42: d08_rewind_after_load_probe ............   Passed    0.08 sec
+      Start 43: d15_pause_mixer_probe
+43/69 Test #43: d15_pause_mixer_probe ..................   Passed    0.08 sec
+      Start 44: w8d_extraction_parity
+44/69 Test #44: w8d_extraction_parity ..................   Passed    0.08 sec
+      Start 45: d07_condition_vector_probe
+45/69 Test #45: d07_condition_vector_probe .............   Passed    0.01 sec
+      Start 46: g4_bridge_escalation_probe
+46/69 Test #46: g4_bridge_escalation_probe .............   Passed    0.01 sec
+      Start 47: text_fallback_red_probe
+47/69 Test #47: text_fallback_red_probe ................   Passed    0.00 sec
+      Start 48: d09_save_durability_probe
+48/69 Test #48: d09_save_durability_probe ..............   Passed    0.01 sec
+      Start 49: msdf_shaped_parity_red_probe
+49/69 Test #49: msdf_shaped_parity_red_probe ...........   Passed    0.01 sec
+      Start 50: d05_telemetry_latency_probe
+50/69 Test #50: d05_telemetry_latency_probe ............   Passed    0.08 sec
+      Start 51: d05_blip_queue_class_probe
+51/69 Test #51: d05_blip_queue_class_probe .............   Passed    0.08 sec
+      Start 52: d12_red1
+52/69 Test #52: d12_red1 ...............................   Passed    0.01 sec
+      Start 53: d12_red2
+53/69 Test #53: d12_red2 ...............................   Passed    0.15 sec
+      Start 54: w8a_p1
+54/69 Test #54: w8a_p1 .................................   Passed    0.08 sec
+      Start 55: w8a_p2
+55/69 Test #55: w8a_p2 .................................   Passed    0.08 sec
+      Start 56: w8a_p3
+56/69 Test #56: w8a_p3 .................................   Passed    0.08 sec
+      Start 57: w8a_p4
+57/69 Test #57: w8a_p4 .................................   Passed    0.08 sec
+      Start 58: w8a_p5
+58/69 Test #58: w8a_p5 .................................   Passed    0.08 sec
+      Start 59: w8a_p6
+59/69 Test #59: w8a_p6 .................................   Passed    0.08 sec
+      Start 60: w8a_p7
+60/69 Test #60: w8a_p7 .................................   Passed    0.06 sec
+      Start 61: w8e_userdata_fallback_probe
+61/69 Test #61: w8e_userdata_fallback_probe ............   Passed    0.01 sec
+      Start 62: w8e_video_serial_pin
+62/69 Test #62: w8e_video_serial_pin ...................   Passed    0.01 sec
+      Start 63: e2b_character_fx_red_probe
+63/69 Test #63: e2b_character_fx_red_probe .............   Passed    0.08 sec
+      Start 64: e2a_repertoire
+64/69 Test #64: e2a_repertoire .........................   Passed    0.28 sec
+      Start 65: p1_parity_presenter
+65/69 Test #65: p1_parity_presenter ....................   Passed    0.01 sec
+      Start 66: test_p1_7_resize_save
+66/69 Test #66: test_p1_7_resize_save ..................   Passed    0.10 sec
+      Start 67: rowl_test_p1_save_gate
+67/69 Test #67: rowl_test_p1_save_gate .................   Passed    0.19 sec
+      Start 68: rewind_history_budget_probe
+68/69 Test #68: rewind_history_budget_probe ............   Passed    0.01 sec
+      Start 69: p2_9_transient_site_isolation
+69/69 Test #69: p2_9_transient_site_isolation ..........   Passed    3.26 sec
+
+100% tests passed out of 69
+
+Total Test time (real) = 100.75 sec

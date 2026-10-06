@@ -1,0 +1,287 @@
+[1/218] Building CXX object engine/CMakeFiles/rowl_engine_objects.dir/src/core/runtime_context.cpp.o
+[2/218] Building CXX object engine/CMakeFiles/rowl_engine_objects.dir/src/core/logger.cpp.o
+[3/218] Building CXX object engine/CMakeFiles/rowl_engine_objects.dir/src/core/story_runtime.cpp.o
+[4/218] Building CXX object engine/CMakeFiles/rowl_engine_objects.dir/src/core/engine_pause_mixer.cpp.o
+[5/218] Building CXX object engine/CMakeFiles/rowl_engine_objects.dir/src/core/story_graph_vnext.cpp.o
+[6/218] Building CXX object engine/CMakeFiles/rowl_engine_objects.dir/src/core/story_graph_parser.cpp.o
+[7/218] Building CXX object engine/CMakeFiles/rowl_engine_objects.dir/src/core/prefetch.cpp.o
+[8/218] Building CXX object engine/CMakeFiles/rowl_engine_objects.dir/src/core/engine_render_facade.cpp.o
+[9/218] Building CXX object engine/CMakeFiles/rowl_engine_objects.dir/src/core/engine_pause_menu.cpp.o
+[10/218] Building CXX object engine/CMakeFiles/rowl_engine_objects.dir/src/render/window_pause_overlay.cpp.o
+[11/218] Building CXX object engine/CMakeFiles/rowl_engine_objects.dir/src/render/window_input.cpp.o
+/home/chaple/.codex/worktrees/cc79/Rowl Engine/engine/src/render/window_input.cpp: In member function ‘void Rowl::Render::Window::pollEvents(bool&)’:
+/home/chaple/.codex/worktrees/cc79/Rowl Engine/engine/src/render/window_input.cpp:99:69: warning: missing initializer for member ‘Rowl::Platform::RuntimeInputEvent::text’ [-Wmissing-field-initializers]
+   99 |                     Rowl::Platform::RuntimeInputEvent::Type::Advance};
+      |                                                                     ^
+/home/chaple/.codex/worktrees/cc79/Rowl Engine/engine/src/render/window_input.cpp:107:55: warning: missing initializer for member ‘Rowl::Platform::RuntimeInputEvent::text’ [-Wmissing-field-initializers]
+  107 |                     if (m_inputHandler) m_inputHandler({Rowl::Platform::RuntimeInputEvent::Type::PointerDown,
+      |                                         ~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  108 |                                                         event.button.x, event.button.y});
+      |                                                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/chaple/.codex/worktrees/cc79/Rowl Engine/engine/src/render/window_input.cpp:116:55: warning: missing initializer for member ‘Rowl::Platform::RuntimeInputEvent::text’ [-Wmissing-field-initializers]
+  116 |                     if (m_inputHandler) m_inputHandler({Rowl::Platform::RuntimeInputEvent::Type::PointerUp,
+      |                                         ~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  117 |                                                         event.button.x, event.button.y});
+      |                                                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/chaple/.codex/worktrees/cc79/Rowl Engine/engine/src/render/window_input.cpp:125:67: warning: missing initializer for member ‘Rowl::Platform::RuntimeInputEvent::text’ [-Wmissing-field-initializers]
+  125 |                     Rowl::Platform::RuntimeInputEvent::Type::KeyUp};
+      |                                                                   ^
+/home/chaple/.codex/worktrees/cc79/Rowl Engine/engine/src/render/window_input.cpp:133:51: warning: missing initializer for member ‘Rowl::Platform::RuntimeInputEvent::text’ [-Wmissing-field-initializers]
+  133 |                 if (m_inputHandler) m_inputHandler({Rowl::Platform::RuntimeInputEvent::Type::PointerMotion,
+      |                                     ~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  134 |                                                     event.motion.x, event.motion.y});
+      |                                                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/chaple/.codex/worktrees/cc79/Rowl Engine/engine/src/render/window_input.cpp:147:51: warning: missing initializer for member ‘Rowl::Platform::RuntimeInputEvent::text’ [-Wmissing-field-initializers]
+  147 |                 if (m_inputHandler) m_inputHandler({Rowl::Platform::RuntimeInputEvent::Type::Scroll, dx, dy});
+      |                                     ~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/chaple/.codex/worktrees/cc79/Rowl Engine/engine/src/render/window_input.cpp:155:71: warning: missing initializer for member ‘Rowl::Platform::RuntimeInputEvent::text’ [-Wmissing-field-initializers]
+  155 |                     Rowl::Platform::RuntimeInputEvent::Type::TextInput};
+      |                                                                       ^
+/home/chaple/.codex/worktrees/cc79/Rowl Engine/engine/src/render/window_input.cpp:165:73: warning: missing initializer for member ‘Rowl::Platform::RuntimeInputEvent::text’ [-Wmissing-field-initializers]
+  165 |                     Rowl::Platform::RuntimeInputEvent::Type::TextEditing};
+      |                                                                         ^
+/home/chaple/.codex/worktrees/cc79/Rowl Engine/engine/src/render/window_input.cpp:184:51: warning: missing initializer for member ‘Rowl::Platform::RuntimeInputEvent::text’ [-Wmissing-field-initializers]
+  184 |                 if (m_inputHandler) m_inputHandler({Rowl::Platform::RuntimeInputEvent::Type::PointerMotion, x, y});
+      |                                     ~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/chaple/.codex/worktrees/cc79/Rowl Engine/engine/src/render/window_input.cpp:204:55: warning: missing initializer for member ‘Rowl::Platform::RuntimeInputEvent::text’ [-Wmissing-field-initializers]
+  204 |                     if (m_inputHandler) m_inputHandler({Rowl::Platform::RuntimeInputEvent::Type::SwipeForward, x, y});
+      |                                         ~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/chaple/.codex/worktrees/cc79/Rowl Engine/engine/src/render/window_input.cpp:206:55: warning: missing initializer for member ‘Rowl::Platform::RuntimeInputEvent::text’ [-Wmissing-field-initializers]
+  206 |                     if (m_inputHandler) m_inputHandler({Rowl::Platform::RuntimeInputEvent::Type::SwipeBack, x, y});
+      |                                         ~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/chaple/.codex/worktrees/cc79/Rowl Engine/engine/src/render/window_input.cpp:208:35: warning: missing initializer for member ‘Rowl::Platform::RuntimeInputEvent::text’ [-Wmissing-field-initializers]
+  208 |                     m_inputHandler({Rowl::Platform::RuntimeInputEvent::Type::PointerDown, x, y});
+      |                     ~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+[12/218] Building CXX object engine/CMakeFiles/rowl_engine_objects.dir/src/render/window_font_resolve.cpp.o
+[13/218] Building CXX object engine/CMakeFiles/rowl_engine_objects.dir/src/core/chapter_loader.cpp.o
+[14/218] Building CXX object engine/CMakeFiles/rowl_engine_objects.dir/src/core/engine_parity_presenter.cpp.o
+[15/218] Building CXX object engine/CMakeFiles/rowl_engine_objects.dir/src/render/window_text_fallback.cpp.o
+[16/218] Building CXX object engine/CMakeFiles/rowl_engine_objects.dir/src/render/camera2d.cpp.o
+[17/218] Building CXX object engine/CMakeFiles/rowl_engine_objects.dir/src/render/window_msdf_shaped.cpp.o
+[18/218] Building CXX object engine/CMakeFiles/rowl_engine_objects.dir/src/render/window_texture_cache.cpp.o
+[19/218] Building CXX object engine/CMakeFiles/rowl_engine_objects.dir/src/render/aspect_guardian.cpp.o
+[20/218] Building CXX object engine/CMakeFiles/rowl_engine_objects.dir/src/render/transition_manager.cpp.o
+[21/218] Building CXX object engine/CMakeFiles/rowl_engine_objects.dir/src/render/font_renderer.cpp.o
+[22/218] Building CXX object engine/CMakeFiles/rowl_engine_objects.dir/src/vfs/vfs.cpp.o
+[23/218] Building CXX object engine/CMakeFiles/rowl_engine_objects.dir/src/render/msdf_renderer.cpp.o
+[24/218] Building CXX object engine/CMakeFiles/rowl_engine_objects.dir/src/render/window.cpp.o
+[25/218] Building CXX object engine/CMakeFiles/rowl_engine_objects.dir/src/state/save_metadata.cpp.o
+[26/218] Building CXX object engine/CMakeFiles/rowl_engine_objects.dir/src/state/session_persistence.cpp.o
+[27/218] Building CXX object engine/CMakeFiles/rowl_engine_objects.dir/src/state/save_durability.cpp.o
+[28/218] Building CXX object engine/CMakeFiles/rowl_engine_objects.dir/src/core/engine.cpp.o
+[29/218] Building CXX object engine/CMakeFiles/rowl_engine_objects.dir/src/vfs/rowlpkg_reader.cpp.o
+[30/218] Building CXX object engine/CMakeFiles/rowl_engine_objects.dir/src/scripting/lua_condition_purity.cpp.o
+[31/218] Building CXX object engine/CMakeFiles/rowl_engine_objects.dir/src/audio/ogg_stream_source.cpp.o
+[32/218] Building CXX object engine/CMakeFiles/rowl_engine_objects.dir/src/audio/audio_blip_error_channel.cpp.o
+[33/218] Building CXX object engine/CMakeFiles/rowl_engine_objects.dir/src/platform/mobile_input.cpp.o
+[34/218] Building CXX object engine/CMakeFiles/rowl_engine_objects.dir/src/platform/platform_host.cpp.o
+[35/218] Building CXX object engine/CMakeFiles/rowl_engine_objects.dir/src/platform/user_data_directories.cpp.o
+[36/218] Building CXX object engine/CMakeFiles/rowl_engine_objects.dir/src/platform/sdl_video_serial.cpp.o
+[37/218] Building CXX object engine/CMakeFiles/rowl_engine_objects.dir/src/platform/sdl_subsystem_lease.cpp.o
+[38/218] Building CXX object engine/CMakeFiles/rowl_engine_objects.dir/src/platform/sdl_event_dispatcher.cpp.o
+[39/218] Building CXX object engine/CMakeFiles/rowl_engine_objects.dir/src/scripting/lua_sandbox.cpp.o
+[40/218] Building CXX object engine/CMakeFiles/rowl_engine_objects.dir/src/scene/transform_component.cpp.o
+[41/218] Building CXX object engine/CMakeFiles/rowl_engine_objects.dir/src/scene/component.cpp.o
+[42/218] Building CXX object engine/CMakeFiles/rowl_engine_objects.dir/src/scene/scene.cpp.o
+[43/218] Building CXX object engine/CMakeFiles/rowl_engine_objects.dir/src/scene/sprite_component.cpp.o
+[44/218] Building CXX object engine/CMakeFiles/rowl_engine_objects.dir/src/state/game_state.cpp.o
+[45/218] Building CXX object engine/CMakeFiles/rowl_engine_objects.dir/src/audio/audio_engine.cpp.o
+[46/218] Building CXX object engine/CMakeFiles/rowl_engine_objects.dir/src/scene/game_object.cpp.o
+[47/218] Building CXX object engine/CMakeFiles/rowl_engine_objects.dir/src/c_api_accessibility.cpp.o
+[48/218] Building CXX object engine/CMakeFiles/rowl_engine_objects.dir/src/scene/character_layers.cpp.o
+[49/218] Building CXX object engine/CMakeFiles/rowl_engine_objects.dir/src/text/markup_parser.cpp.o
+[50/218] Building CXX object engine/CMakeFiles/rowl_engine_objects.dir/src/c_api_contract.cpp.o
+[51/218] Building CXX object engine/CMakeFiles/rowl_engine_objects.dir/src/c_api_markup.cpp.o
+[52/218] Building CXX object engine/CMakeFiles/rowl_engine_objects.dir/src/i18n/localization_manager.cpp.o
+[53/218] Building CXX object engine/CMakeFiles/rowl_engine_objects.dir/src/c_api_text_shaping.cpp.o
+[54/218] Building CXX object engine/CMakeFiles/rowl_engine_objects.dir/src/c_api_lifecycle.cpp.o
+[55/218] Building CXX object engine/CMakeFiles/rowl_engine_objects.dir/src/text/text_shaper.cpp.o
+[56/218] Building CXX object engine/CMakeFiles/rowl_engine_objects.dir/src/c_api_embed_guards.cpp.o
+[57/218] Building CXX object engine/CMakeFiles/rowl_engine_objects.dir/src/c_api_i18n.cpp.o
+[58/218] Building CXX object engine/CMakeFiles/rowl_engine_objects.dir/src/c_api_audio_error_stamp.cpp.o
+[59/218] Building CXX object engine/CMakeFiles/rowl_engine_objects.dir/src/c_api_render.cpp.o
+[60/218] Building CXX object engine/CMakeFiles/rowl_engine_objects.dir/src/c_api_character_fx.cpp.o
+[61/218] Building CXX object engine/CMakeFiles/rowl_engine_objects.dir/src/c_api_audio.cpp.o
+[62/218] Building CXX object engine/CMakeFiles/rowl_engine_objects.dir/src/c_api_e2a_repertoire.cpp.o
+[63/218] Building CXX object engine/CMakeFiles/rowl_engine_objects.dir/src/c_api_story.cpp.o
+[64/218] Building CXX object engine/CMakeFiles/rowl_engine_objects.dir/src/c_api_pause.cpp.o
+[65/218] Generating ../shaders/msdf_text.frag.spv
+[66/218] Building CXX object engine/CMakeFiles/rowl_engine_objects.dir/src/c_api_character_layers.cpp.o
+[67/218] Building CXX object engine/CMakeFiles/rowl_engine_objects.dir/src/c_api_prefetch_chapters.cpp.o
+[68/218] Building CXX object engine/CMakeFiles/rowl_player.dir/src/platform/crash_handler.cpp.o
+[69/218] Building CXX object engine/CMakeFiles/rowl_engine_objects.dir/src/c_api_thread_contract_guard.cpp.o
+[70/218] Building C object tests/CMakeFiles/rowl_tests.dir/test_c_api_header.c.o
+[71/218] Building C object tools/CMakeFiles/rowl_oggenc.dir/rowl_oggenc.c.o
+[72/218] Building C object tools/CMakeFiles/rowl_webp2png.dir/rowl_webp2png.c.o
+[73/218] Building CXX object engine/CMakeFiles/rowl_player.dir/src/player/main.cpp.o
+[74/218] Building CXX object engine/CMakeFiles/rowl_engine_objects.dir/src/c_api_provenance.cpp.o
+[75/218] Building CXX object engine/CMakeFiles/rowl_engine_objects.dir/src/c_api_state.cpp.o
+[76/218] Linking CXX shared library lib/libRowlEngineCore.so
+[77/218] Building CXX object tests/CMakeFiles/rowl_tests.dir/test_aspect_guardian.cpp.o
+[78/218] Building CXX object tests/CMakeFiles/rowl_tests.dir/test_main.cpp.o
+[79/218] Building CXX object tests/CMakeFiles/rowl_tests.dir/test_msdf_renderer.cpp.o
+[80/218] Building CXX object tests/CMakeFiles/rowl_tests.dir/test_logger.cpp.o
+[81/218] Building CXX object tests/CMakeFiles/rowl_tests.dir/test_game_state.cpp.o
+[82/218] Building CXX object tests/CMakeFiles/rowl_tests.dir/test_audio_device_recovery.cpp.o
+[83/218] Building CXX object tests/CMakeFiles/rowl_tests.dir/test_audio_error_channel.cpp.o
+[84/218] Building CXX object tests/CMakeFiles/rowl_tests.dir/test_audio_engine.cpp.o
+[85/218] Building CXX object tests/CMakeFiles/rowl_tests.dir/test_audio_mixer.cpp.o
+[86/218] Building CXX object tests/CMakeFiles/rowl_tests.dir/test_audio_streaming.cpp.o
+[87/218] Building CXX object tests/CMakeFiles/rowl_tests.dir/test_audio_ui_gain.cpp.o
+[88/218] Building CXX object tests/CMakeFiles/rowl_tests.dir/test_mobile_input.cpp.o
+[89/218] Building CXX object tests/CMakeFiles/rowl_tests.dir/test_lua_sandbox.cpp.o
+[90/218] Building CXX object tests/CMakeFiles/rowl_tests.dir/test_platform_host.cpp.o
+/home/chaple/.codex/worktrees/cc79/Rowl Engine/tests/test_platform_host.cpp: In function ‘void test_platform_host()’:
+/home/chaple/.codex/worktrees/cc79/Rowl Engine/tests/test_platform_host.cpp:135:26: warning: missing initializer for member ‘Rowl::Platform::RuntimeInputEvent::text’ [-Wmissing-field-initializers]
+  135 |     host->input.push_back({Rowl::Platform::RuntimeInputEvent::Type::Advance});
+      |     ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/chaple/.codex/worktrees/cc79/Rowl Engine/tests/test_platform_host.cpp:144:26: warning: missing initializer for member ‘Rowl::Platform::RuntimeInputEvent::text’ [-Wmissing-field-initializers]
+  144 |     host->input.push_back({Rowl::Platform::RuntimeInputEvent::Type::Advance});
+      |     ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+[91/218] Building CXX object tests/CMakeFiles/rowl_tests.dir/test_c_api_contract.cpp.o
+[92/218] Building CXX object tests/CMakeFiles/rowl_tests.dir/test_game_object_component_system.cpp.o
+[93/218] Building CXX object tests/CMakeFiles/rowl_tests.dir/test_pixel_pitch.cpp.o
+[94/218] Building CXX object tests/CMakeFiles/rowl_tests.dir/test_window_input_routing.cpp.o
+/home/chaple/.codex/worktrees/cc79/Rowl Engine/tests/test_window_input_routing.cpp: In lambda function:
+/home/chaple/.codex/worktrees/cc79/Rowl Engine/tests/test_window_input_routing.cpp:156:38: warning: missing initializer for member ‘Rowl::Platform::RuntimeInputEvent::text’ [-Wmissing-field-initializers]
+  156 |             Event event{Type::Advance};
+      |                                      ^
+/home/chaple/.codex/worktrees/cc79/Rowl Engine/tests/test_window_input_routing.cpp: In function ‘void test_window_input_routing()’:
+/home/chaple/.codex/worktrees/cc79/Rowl Engine/tests/test_window_input_routing.cpp:180:37: warning: missing initializer for member ‘Rowl::Platform::RuntimeInputEvent::text’ [-Wmissing-field-initializers]
+  180 |         Event unmapped{Type::Advance};
+      |                                     ^
+[95/218] Building CXX object tests/CMakeFiles/rowl_tests.dir/test_native_c_api.cpp.o
+[96/218] Building CXX object tests/CMakeFiles/rowl_tests.dir/test_runtime_context_and_diagnostics.cpp.o
+[97/218] Building CXX object tests/CMakeFiles/rowl_tests.dir/test_crash_log.cpp.o
+[98/218] Building CXX object tests/CMakeFiles/rowl_tests.dir/test_audio_lock.cpp.o
+[99/218] Building CXX object tests/CMakeFiles/rowl_tests.dir/test_vfs_security.cpp.o
+[100/218] Building CXX object tests/CMakeFiles/rowl_tests.dir/test_boot_story_diagnostics.cpp.o
+[101/218] Building CXX object tests/CMakeFiles/rowl_tests.dir/test_story_graph_parser.cpp.o
+[102/218] Building CXX object tests/CMakeFiles/rowl_tests.dir/test_save_slot_and_package_fuzz.cpp.o
+[103/218] Building CXX object tests/CMakeFiles/rowl_tests.dir/test_graph_vnext.cpp.o
+[104/218] Building CXX object tests/CMakeFiles/rowl_tests.dir/test_localization.cpp.o
+[105/218] Building CXX object tests/CMakeFiles/rowl_tests.dir/test_locale_cluster.cpp.o
+[106/218] Building CXX object tests/CMakeFiles/rowl_tests.dir/test_utf8_decoder.cpp.o
+[107/218] Building CXX object tests/CMakeFiles/rowl_tests.dir/test_text_shaping.cpp.o
+[108/218] Building CXX object tests/CMakeFiles/rowl_tests.dir/test_markup_parser.cpp.o
+[109/218] Building CXX object tests/CMakeFiles/rowl_tests.dir/test_accessibility.cpp.o
+[110/218] Building CXX object tests/CMakeFiles/rowl_tests.dir/test_character_layer_benchmarks.cpp.o
+[111/218] Building CXX object tests/CMakeFiles/rowl_tests.dir/test_character_layers.cpp.o
+[112/218] Building CXX object tests/CMakeFiles/rowl_tests.dir/test_native_performance_benchmarks.cpp.o
+[113/218] Building CXX object tests/CMakeFiles/rowl_tests.dir/test_hardening_and_reliability.cpp.o
+[114/218] Building CXX object tests/CMakeFiles/rowl_tests.dir/test_converter_provenance.cpp.o
+[115/218] Building CXX object tests/CMakeFiles/rowl_tests.dir/test_rc_soak_and_data_safety.cpp.o
+/home/chaple/.codex/worktrees/cc79/Rowl Engine/tests/test_rc_soak_and_data_safety.cpp: In function ‘void test_rc_soak_and_data_safety()’:
+/home/chaple/.codex/worktrees/cc79/Rowl Engine/tests/test_rc_soak_and_data_safety.cpp:246:34: warning: missing initializer for member ‘Rowl::Platform::RuntimeInputEvent::text’ [-Wmissing-field-initializers]
+  246 |             host->input.push_back({Rowl::Platform::RuntimeInputEvent::Type::Advance});
+      |             ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/chaple/.codex/worktrees/cc79/Rowl Engine/tests/test_rc_soak_and_data_safety.cpp:599:30: warning: missing initializer for member ‘Rowl::Platform::RuntimeInputEvent::text’ [-Wmissing-field-initializers]
+  599 |         host->input.push_back({Rowl::Platform::RuntimeInputEvent::Type::Advance});
+      |         ~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+[116/218] Building CXX object tests/CMakeFiles/rowl_tests.dir/test_camera_and_transition_pipeline.cpp.o
+[117/218] Building CXX object tests/CMakeFiles/rowl_tests.dir/test_frame_reuse_lock.cpp.o
+[118/218] Building CXX object tests/CMakeFiles/rowl_tests.dir/test_frame_hash_lock.cpp.o
+[119/218] Building CXX object tests/CMakeFiles/rowl_tests.dir/test_cache_hygiene.cpp.o
+[120/218] Building CXX object tests/CMakeFiles/rowl_tests.dir/test_prefetch_chapters.cpp.o
+[121/218] Building CXX object tests/CMakeFiles/rowl_tests.dir/test_font_hardening.cpp.o
+[122/218] Building CXX object tests/CMakeFiles/rowl_tests.dir/test_handle_hygiene.cpp.o
+[123/218] Building CXX object tests/CMakeFiles/rowl_tests.dir/test_lifecycle_init_guards.cpp.o
+[124/218] Building CXX object tests/CMakeFiles/rowl_tests.dir/test_lifecycle_shutdown_sweep.cpp.o
+[125/218] Building CXX object tests/CMakeFiles/rowl_tests.dir/test_lifecycle_thread_lease.cpp.o
+[126/218] Building CXX object tests/CMakeFiles/rowl_tests.dir/test_lifecycle_run_abort.cpp.o
+[127/218] Building CXX object tests/CMakeFiles/rowl_tests.dir/test_lifecycle_run_guard.cpp.o
+[128/218] Building CXX object tests/CMakeFiles/rowl_tests.dir/test_typewriter_gate.cpp.o
+[129/218] Building CXX object tests/CMakeFiles/rowl_tests.dir/test_autoadvance_freeze.cpp.o
+[130/218] Building CXX object tests/CMakeFiles/rowl_tests.dir/test_save_lock.cpp.o
+[131/218] Building CXX object tests/CMakeFiles/rowl_tests.dir/test_lifecycle_handle_reclamation.cpp.o
+[132/218] Building CXX object tests/CMakeFiles/rowl_tests.dir/test_scene_update_rollback.cpp.o
+[133/218] Building CXX object tests/CMakeFiles/rowl_tests.dir/test_render_transition_fixes.cpp.o
+[134/218] Building CXX object tests/CMakeFiles/rowl_tests.dir/test_numeric_guards.cpp.o
+[135/218] Building CXX object tests/CMakeFiles/rowl_tests.dir/test_save_slot_concurrency.cpp.o
+[136/218] Building CXX object tests/CMakeFiles/rowl_tests.dir/__/engine/src/platform/crash_handler.cpp.o
+[137/218] Building CXX object tests/CMakeFiles/rowl_tests.dir/test_lua_hardening.cpp.o
+[138/218] Building CXX object tests/CMakeFiles/rowl_tests.dir/test_single_engine_image.cpp.o
+[139/218] Building CXX object tests/CMakeFiles/rowl_tests.dir/test_lua_sandbox_dos_probe.cpp.o
+[140/218] Building CXX object tests/CMakeFiles/rowl_tests.dir/test_demo_first_light.cpp.o
+[141/218] Building CXX object tests/CMakeFiles/rowl_tests.dir/test_demo_second_signal.cpp.o
+[142/218] Building CXX object tests/CMakeFiles/rowl_embed_red_probe.dir/test_embed_red_probe.cpp.o
+[143/218] Building CXX object tests/CMakeFiles/rowl_audio_snapshot_red_probe.dir/test_audio_snapshot_red_probe.cpp.o
+[144/218] Building CXX object tests/CMakeFiles/rowl_thread_contract_red_probe.dir/test_thread_contract_red_probe.cpp.o
+[145/218] Building CXX object tests/CMakeFiles/rowl_d13_aux_gate_red_probe.dir/test_d13_aux_gate_red_probe.cpp.o
+[146/218] Building CXX object tests/CMakeFiles/rowl_d06_probe_x.dir/test_d06_probe_x.cpp.o
+[147/218] Building CXX object tests/CMakeFiles/rowl_d06_probe_m.dir/test_d06_probe_m.cpp.o
+[148/218] Building CXX object tests/CMakeFiles/rowl_audio_volume_race_red_probe.dir/test_audio_volume_race_red_probe.cpp.o
+[149/218] Building CXX object tests/CMakeFiles/rowl_d07_condition_vector_probe.dir/test_d07_condition_vector_probe.cpp.o
+[150/218] Building CXX object tests/CMakeFiles/rowl_audio_pump_race_red_probe.dir/test_audio_pump_race_red_probe.cpp.o
+[151/218] Building CXX object tests/CMakeFiles/rowl_g4_bridge_escalation_probe.dir/test_g4_bridge_escalation_probe.cpp.o
+[152/218] Building CXX object tests/CMakeFiles/rowl_d15_pause_mixer_probe.dir/test_d15_pause_mixer_probe.cpp.o
+[153/218] Building CXX object tests/CMakeFiles/rowl_d08_rewind_after_load_probe.dir/test_d08_rewind_after_load_probe.cpp.o
+[154/218] Building CXX object tests/CMakeFiles/rowl_w8d_extraction_parity.dir/test_w8d_extraction_parity.cpp.o
+/home/chaple/.codex/worktrees/cc79/Rowl Engine/tests/test_w8d_extraction_parity.cpp: In function ‘bool {anonymous}::mapKey(uint32_t, Type&, int32_t&)’:
+/home/chaple/.codex/worktrees/cc79/Rowl Engine/tests/test_w8d_extraction_parity.cpp:78:55: warning: missing initializer for member ‘Rowl::Platform::RuntimeInputEvent::text’ [-Wmissing-field-initializers]
+   78 |     Rowl::Platform::RuntimeInputEvent ev{Type::Advance};
+      |                                                       ^
+[155/218] Building CXX object tests/CMakeFiles/rowl_text_fallback_red_probe.dir/test_text_fallback_red_probe.cpp.o
+[156/218] Building CXX object tests/CMakeFiles/rowl_d09_save_durability_probe.dir/test_d09_save_durability_probe.cpp.o
+[157/218] Building CXX object tests/CMakeFiles/rowl_d05_blip_queue_class_probe.dir/test_d05_blip_queue_class_probe.cpp.o
+[158/218] Building CXX object tests/CMakeFiles/rowl_d05_telemetry_latency_probe.dir/test_d05_telemetry_latency_probe.cpp.o
+[159/218] Building CXX object tests/CMakeFiles/rowl_msdf_shaped_parity_red_probe.dir/test_msdf_shaped_parity_red_probe.cpp.o
+[160/218] Building CXX object tests/CMakeFiles/rowl_d12_red1_retention_comment.dir/test_d12_red1_retention_comment.cpp.o
+[161/218] Building CXX object tests/CMakeFiles/rowl_d12_red2_shadow_call.dir/test_d12_red2_shadow_call.cpp.o
+[162/218] Building CXX object tests/CMakeFiles/rowl_w8a_p1_provenance_foreign.dir/test_w8a_p1_provenance_foreign.cpp.o
+[163/218] Building CXX object tests/CMakeFiles/rowl_w8a_p4_run_foreign.dir/test_w8a_p4_run_foreign.cpp.o
+[164/218] Building CXX object tests/CMakeFiles/rowl_w8a_p2_pause_loud.dir/test_w8a_p2_pause_loud.cpp.o
+[165/218] Building CXX object tests/CMakeFiles/rowl_w8a_p3_projectdir_guards.dir/test_w8a_p3_projectdir_guards.cpp.o
+[166/218] Building CXX object tests/CMakeFiles/rowl_w8a_p5_audio_null.dir/test_w8a_p5_audio_null.cpp.o
+[167/218] Building CXX object tests/CMakeFiles/rowl_w8a_p6_getvariable_nullkey.dir/test_w8a_p6_getvariable_nullkey.cpp.o
+[168/218] Building CXX object tests/CMakeFiles/rowl_w8a_p7_pixelbuffer_race.dir/test_w8a_p7_pixelbuffer_race.cpp.o
+[169/218] Building CXX object tests/CMakeFiles/rowl_e2a_transition_spritesheet_red_probe.dir/test_e2a_transition_spritesheet_red_probe.cpp.o
+[170/218] Building CXX object tests/CMakeFiles/rowl_w8e_userdata_fallback_probe.dir/test_w8e_userdata_fallback_probe.cpp.o
+[171/218] Building CXX object tests/CMakeFiles/rowl_w8e_video_serial_pin.dir/test_w8e_video_serial_pin.cpp.o
+[172/218] Building CXX object tests/CMakeFiles/rowl_p1_parity_presenter.dir/test_p1_parity_presenter.cpp.o
+[173/218] Building CXX object tests/CMakeFiles/rowl_test_p1_save_gate.dir/test_p1_save_gate.cpp.o
+[174/218] Linking CXX executable bin/rowl_player
+[175/218] Linking C executable bin/rowl_oggenc
+[176/218] Linking C executable bin/rowl_webp2png
+[177/218] Building CXX object tests/CMakeFiles/test_p1_7_resize_save.dir/test_p1_7_resize_save.cpp.o
+[178/218] Linking CXX executable bin/rowl_embed_red_probe
+[179/218] Building CXX object tests/CMakeFiles/rowl_e2b_character_fx_red_probe.dir/test_e2b_character_fx_red_probe.cpp.o
+[180/218] Linking CXX executable bin/rowl_tests
+[181/218] Linking CXX executable bin/rowl_thread_contract_red_probe
+[182/218] Linking CXX executable bin/rowl_audio_snapshot_red_probe
+[183/218] Linking CXX executable bin/rowl_d06_probe_x
+[184/218] Linking CXX executable bin/rowl_d13_aux_gate_red_probe
+[185/218] Linking CXX executable bin/rowl_d06_probe_m
+[186/218] Building CXX object tests/CMakeFiles/rowl_rewind_history_budget_probe.dir/test_rewind_history_budget_probe.cpp.o
+[187/218] Building CXX object tests/CMakeFiles/rowl_p1_parity_presenter.dir/__/engine/src/core/engine_parity_presenter.cpp.o
+[188/218] Linking CXX executable bin/rowl_audio_pump_race_red_probe
+[189/218] Linking CXX executable bin/rowl_audio_volume_race_red_probe
+[190/218] Linking CXX executable bin/rowl_d08_rewind_after_load_probe
+[191/218] Linking CXX executable bin/rowl_d15_pause_mixer_probe
+[192/218] Linking CXX executable bin/rowl_w8d_extraction_parity
+[193/218] Linking CXX executable bin/rowl_g4_bridge_escalation_probe
+[194/218] Linking CXX executable bin/rowl_text_fallback_red_probe
+[195/218] Linking CXX executable bin/rowl_d07_condition_vector_probe
+[196/218] Linking CXX executable bin/rowl_d09_save_durability_probe
+[197/218] Linking CXX executable bin/rowl_msdf_shaped_parity_red_probe
+[198/218] Linking CXX executable bin/rowl_w8a_p1_provenance_foreign
+[199/218] Linking CXX executable bin/rowl_d12_red2_shadow_call
+[200/218] Linking CXX executable bin/rowl_d12_red1_retention_comment
+[201/218] Linking CXX executable bin/rowl_d05_telemetry_latency_probe
+[202/218] Linking CXX executable bin/rowl_d05_blip_queue_class_probe
+[203/218] Linking CXX executable bin/rowl_w8a_p3_projectdir_guards
+[204/218] Linking CXX executable bin/rowl_w8a_p4_run_foreign
+[205/218] Linking CXX executable bin/rowl_w8a_p2_pause_loud
+[206/218] Linking CXX executable bin/rowl_w8a_p6_getvariable_nullkey
+[207/218] Linking CXX executable bin/rowl_w8a_p5_audio_null
+[208/218] Linking CXX executable bin/rowl_w8a_p7_pixelbuffer_race
+[209/218] Linking CXX executable bin/rowl_e2a_transition_spritesheet_red_probe
+[210/218] Linking CXX executable bin/rowl_p1_parity_presenter
+[211/218] Linking CXX executable bin/rowl_w8e_video_serial_pin
+[212/218] Linking CXX executable bin/rowl_w8e_userdata_fallback_probe
+[213/218] Linking CXX executable bin/test_p1_7_resize_save
+[214/218] Linking CXX executable bin/rowl_e2b_character_fx_red_probe
+[215/218] Linking CXX executable bin/rowl_test_p1_save_gate
+[216/218] Linking CXX executable bin/rowl_rewind_history_budget_probe
+[217/218] Building CXX object tests/CMakeFiles/rowl_p2_9_transient_site_isolation.dir/test_p2_9_transient_site_isolation.cpp.o
+[218/218] Linking CXX executable bin/rowl_p2_9_transient_site_isolation

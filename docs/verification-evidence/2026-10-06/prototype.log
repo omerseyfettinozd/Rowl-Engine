@@ -1,0 +1,35 @@
+✔ Node yanında Game ve Edit Scene üst üste; kardeşi taşıma ağacı sadeleştirir (6.353019ms)
+✔ Araç pencereleri ayrı bir sütunda toplanır; sabit kaynak taşınamaz (0.716642ms)
+✔ Pencereler dört yönde alan bölerek yerleşir ve kopyalanmaz (0.390647ms)
+✔ İç içe bölme uç boyutlarda da pencereleri üst üste bindirmez (0.566192ms)
+✔ Mobil başlangıçtan üçlü görünüm pencere alanını eşit paylaşır (0.205351ms)
+✔ Geçersiz ve kendi üzerine bırakma mevcut yerleşimi korur (1.023933ms)
+✔ Elle kapatma dalı kaldırır, diğer sabit pencereyi korur (0.305147ms)
+✔ Yeniden boyutlandırma erişilebilir sınırları korur (0.173032ms)
+✔ 1000 karma işlemde her ekran tek alanda bulunur ve alanlar çakışmaz (10.413877ms)
+✔ Yıldızlı düğüm bağımsız şablondur; eski bağlantı hedeflerini taşımaz (1.597379ms)
+✔ İç içe klasörler aynı adı farklı konumda kabul eder, döngüye izin vermez (0.481835ms)
+✔ Klasör kaldırma düğüm ve alt klasörleri üst konuma taşır; kaynak sahneleri korur (1.03286ms)
+✔ Üst konuma taşınan aynı adlı klasör kaybolmaz; benzersiz ad alır (0.289719ms)
+✔ Kayıt tüm hiyerarşiyi ve Inspector ayarlarını kopyadan bağımsız korur (0.60782ms)
+✔ Başlatma seçili sahnenin bağımsız kopyasını oynatır (0.933805ms)
+✔ Çalışırken hareket ve yazı ilerler; duraklatınca kare aynı kalır (0.941239ms)
+✔ Devam etme donmuş kareden ilerler; duraklama süresi eklenmez (1.133958ms)
+✔ Kapatma ve yeniden başlatma oynatımı sıfırlar (0.228164ms)
+✔ Önizleme sınırların dışına çıkmaz ve düzenleme verisini değiştirmez (0.391628ms)
+✔ Bozuk kayıt varsayılanlara döner; izin verilmeyen alanlar elenir (1.53308ms)
+✔ Geçerli ayarlar JSON kaydı sonrası aynı kalır (0.219849ms)
+✔ Inspector konum ve boyutu sınırlar; orijinal objeyi değiştirmez (0.260755ms)
+✔ Her simge ikinci tıklamada sabit ve son pencereyi de kapatır (1.843246ms)
+✔ Tüm pencereler sabitlemelerden bağımsız açılır; mevcut pencere kapanmaz (1.561081ms)
+✔ Tekrar açma kopyalamaz ve yalnız odak değiştirir (0.175055ms)
+✔ Elle kapatma sabitlemeyi temizler ve odak açık pencereye döner (0.193049ms)
+✔ 1000 karma işlemde açık pencereler, sabitlemeler ve odak tutarlı kalır (3.393147ms)
+ℹ tests 27
+ℹ suites 0
+ℹ pass 27
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 97.035694

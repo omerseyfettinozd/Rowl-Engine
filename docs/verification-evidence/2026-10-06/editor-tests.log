@@ -1,0 +1,12 @@
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+  RowlEngine.Editor -> /home/chaple/.codex/worktrees/cc79/Rowl Engine/editor/bin/Debug/net10.0/RowlEngine.Editor.dll
+  ✅ Native Engine Library (/home/chaple/.codex/worktrees/cc79/Rowl Engine/editor/../build/lib/libRowlEngineCore.so) copied to bin/Debug/net10.0/
+  RowlEngine.Editor.Tests -> /home/chaple/.codex/worktrees/cc79/Rowl Engine/editor/Tests/bin/Debug/net10.0/RowlEngine.Editor.Tests.dll
+Test run for /home/chaple/.codex/worktrees/cc79/Rowl Engine/editor/Tests/bin/Debug/net10.0/RowlEngine.Editor.Tests.dll (.NETCoreApp,Version=v10.0)
+VSTest version 18.0.2-dev (x64)
+
+Starting test execution, please wait...
+A total of 1 test files matched the specified pattern.
+
+Passed!  - Failed:     0, Passed:   510, Skipped:     0, Total:   510, Duration: 7 s - RowlEngine.Editor.Tests.dll (net10.0)

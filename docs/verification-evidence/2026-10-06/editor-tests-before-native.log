@@ -1,0 +1,55 @@
+  Determining projects to restore...
+  Restored /home/chaple/.codex/worktrees/cc79/Rowl Engine/editor/Tests/RowlEngine.Editor.Tests.csproj (in 408 ms).
+  1 of 2 projects are up-to-date for restore.
+  RowlEngine.Editor -> /home/chaple/.codex/worktrees/cc79/Rowl Engine/editor/bin/Debug/net10.0/RowlEngine.Editor.dll
+/home/chaple/.codex/worktrees/cc79/Rowl Engine/editor/RowlEngine.Editor.csproj(53,5): warning : ⚠️ RowlEngineCore native library not found in build directory. Build the C++ engine first (cmake -B build && cmake --build build).
+/home/chaple/.codex/worktrees/cc79/Rowl Engine/editor/Tests/EditorConsoleCountersTests.cs(94,25): warning CS8600: Converting null literal or possible null value to non-nullable type. [/home/chaple/.codex/worktrees/cc79/Rowl Engine/editor/Tests/RowlEngine.Editor.Tests.csproj]
+/home/chaple/.codex/worktrees/cc79/Rowl Engine/editor/Tests/EditorConsoleCountersTests.cs(97,59): warning CS8602: Dereference of a possibly null reference. [/home/chaple/.codex/worktrees/cc79/Rowl Engine/editor/Tests/RowlEngine.Editor.Tests.csproj]
+/home/chaple/.codex/worktrees/cc79/Rowl Engine/editor/Tests/EditorConsoleCountersTests.cs(99,62): warning CS8604: Possible null reference argument for parameter 'value' in 'bool string.StartsWith(string value, StringComparison comparisonType)'. [/home/chaple/.codex/worktrees/cc79/Rowl Engine/editor/Tests/RowlEngine.Editor.Tests.csproj]
+/home/chaple/.codex/worktrees/cc79/Rowl Engine/editor/Tests/EditorGroupsSubgraphsChaptersSlice3Tests.cs(598,55): warning CS8604: Possible null reference argument for parameter 'document' in 'StoryGraphLoadResult StoryGraphLoaderService.Load(JsonDocument document, bool ensureDefaultObjects = true)'. [/home/chaple/.codex/worktrees/cc79/Rowl Engine/editor/Tests/RowlEngine.Editor.Tests.csproj]
+/home/chaple/.codex/worktrees/cc79/Rowl Engine/editor/Tests/EditorPlayerLoopSlice5Tests.cs(400,13): warning xUnit2012: Do not use Assert.True() to check if a value exists in a collection. Use Assert.Contains instead. (https://xunit.net/xunit.analyzers/rules/xUnit2012) [/home/chaple/.codex/worktrees/cc79/Rowl Engine/editor/Tests/RowlEngine.Editor.Tests.csproj]
+/home/chaple/.codex/worktrees/cc79/Rowl Engine/editor/Tests/EditorInspectorOverflowTests.cs(62,9): warning xUnit2013: Do not use Assert.Equal() to check for collection size. Use Assert.Single instead. (https://xunit.net/xunit.analyzers/rules/xUnit2013) [/home/chaple/.codex/worktrees/cc79/Rowl Engine/editor/Tests/RowlEngine.Editor.Tests.csproj]
+/home/chaple/.codex/worktrees/cc79/Rowl Engine/editor/Tests/EditorFadeCurveCheckedTests.cs(166,99): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [/home/chaple/.codex/worktrees/cc79/Rowl Engine/editor/Tests/RowlEngine.Editor.Tests.csproj]
+/home/chaple/.codex/worktrees/cc79/Rowl Engine/editor/Tests/EditorFadeCurveCheckedTests.cs(169,103): warning xUnit1031: Test methods should not use blocking task operations, as they can cause deadlocks. Use an async test method and await instead. (https://xunit.net/xunit.analyzers/rules/xUnit1031) [/home/chaple/.codex/worktrees/cc79/Rowl Engine/editor/Tests/RowlEngine.Editor.Tests.csproj]
+  RowlEngine.Editor.Tests -> /home/chaple/.codex/worktrees/cc79/Rowl Engine/editor/Tests/bin/Debug/net10.0/RowlEngine.Editor.Tests.dll
+Test run for /home/chaple/.codex/worktrees/cc79/Rowl Engine/editor/Tests/bin/Debug/net10.0/RowlEngine.Editor.Tests.dll (.NETCoreApp,Version=v10.0)
+VSTest version 18.0.2-dev (x64)
+
+Starting test execution, please wait...
+A total of 1 test files matched the specified pattern.
+[xUnit.net 00:00:04.76]     RowlEngine.Editor.EditorHeadlessSuiteTests.HeadlessSuitePreservesEditorRuntimeContracts [FAIL]
+  Failed RowlEngine.Editor.EditorHeadlessSuiteTests.HeadlessSuitePreservesEditorRuntimeContracts [199 ms]
+  Error Message:
+   System.Exception : run_game.sh missing in standalone build output: [System] Rowl Engine Editor initialized.
+[20:07:58] Selected Node #101 (Dialogue Node #101)
+[20:07:58] Loaded story graph from /tmp/RowlEditorTests_497322c99b2243d7971926a1deadb0a5/Assets/json/full_story_graph.json (2 nodes, 1 connections, format v4)
+[20:07:58] Selected Node #101 (Dialogue Node #101)
+[20:07:58] Loaded story graph from /tmp/RowlEditorTests_497322c99b2243d7971926a1deadb0a5/Assets/json/full_story_graph.json (2 nodes, 1 connections, format v4)
+[20:07:58] Selected Node #101 (Dialogue Node #101)
+[20:07:58] Loaded story graph from /tmp/RowlEditorTests_497322c99b2243d7971926a1deadb0a5/Assets/json/full_story_graph.json (5 nodes, 3 connections, format v4)
+[20:07:58] Deleted Node #9002 (First Target)
+[20:07:58] Failed to read story graph: Expected start of a property name or value, but instead reached end of data. LineNumber: 0 | BytePositionInLine: 21.
+[20:07:58] Auto-imported image 'test_external_character_sprite.png' into Assets/images/
+[20:07:58] OBS Assist: Arka plan 1920x1080 ekrana tam oturtuldu (Fitted to Screen)
+[20:07:58] OBS Assist: Karakter ortaya hizalandı (X: 810, Y: 600)
+[20:07:58] OBS Assist: Karakterler zemin hizasına oturtuldu (Ground Baseline)
+[20:07:58] Snap Assist: KAPALI (DISABLED)
+[20:07:58] Snap Assist: AÇIK (ENABLED)
+[20:07:58] [PROJE KAYDEDİLDİ] 4 düğüm ve tüm bileşenler başarıyla kaydedildi (20:07:58)
+[20:07:58] [PROJE KAYDEDİLDİ] 4 düğüm ve tüm bileşenler başarıyla kaydedildi (20:07:58)
+[20:07:58] [FARKLI KAYDET] Proje başarıyla kopyalandı: /tmp/RowlTestProject_SaveAs
+[20:07:58] [BUILD CHECK] Node #9001 ('Multi Choice') is unreachable from the start node.
+[20:07:58] [BUILD CHECK] Node #9003 ('Second Target') is unreachable from the start node.
+[20:07:58] [BUILD CHECK] Node #102 ('Dialogue Node #102') is a terminal node.
+[20:07:58]  [Build Tanı] MissingDependency — build_standalone: rowl_player or RowlEngineCore is missing; build the native runtime before export. Searched projectRoot='/tmp/RowlEditorTests_497322c99b2243d7971926a1deadb0a5', repoRoot='/home/chaple/.codex/worktrees/cc79/Rowl Engine', appBase='/home/chaple/.codex/worktrees/cc79/Rowl Engine/editor/Tests/bin/Debug/net10.0/'. (hedef: /tmp/RowlTest_Build_PC)
+
+  Stack Trace:
+     at RowlEngine.Editor.EditorProjectPersistenceTests.Run(MainWindowViewModel mainVm, String testProjectRoot) in /home/chaple/.codex/worktrees/cc79/Rowl Engine/editor/Tests/EditorProjectPersistenceTests.cs:line 54
+   at RowlEngine.Editor.EditorHeadlessTestSuite.Run(String benchmarkPath) in /home/chaple/.codex/worktrees/cc79/Rowl Engine/editor/Tests/EditorHeadlessSuiteTests.cs:line 60
+   at RowlEngine.Editor.EditorHeadlessSuiteTests.HeadlessSuitePreservesEditorRuntimeContracts() in /home/chaple/.codex/worktrees/cc79/Rowl Engine/editor/Tests/EditorHeadlessSuiteTests.cs:line 349
+   at System.RuntimeMethodHandle.InvokeMethod(ObjectHandleOnStack target, Void** arguments, ObjectHandleOnStack sig, BOOL isConstructor, ObjectHandleOnStack result)
+   at System.RuntimeMethodHandle.InvokeMethod(ObjectHandleOnStack target, Void** arguments, ObjectHandleOnStack sig, BOOL isConstructor, ObjectHandleOnStack result)
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+
+Failed!  - Failed:     1, Passed:   509, Skipped:     0, Total:   510, Duration: 7 s - RowlEngine.Editor.Tests.dll (net10.0)

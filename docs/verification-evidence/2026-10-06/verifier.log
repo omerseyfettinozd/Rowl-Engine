@@ -1,0 +1,4 @@
+control_fixture exit= 0
+[ReleaseVerifier] Valid release: game.rowlpkg contains 13 entries including json/full_story_graph.json. 
+empty_player_and_runtime_directory exit= 0
+[ReleaseVerifier] Valid release: game.rowlpkg contains 13 entries including json/full_story_graph.json. 

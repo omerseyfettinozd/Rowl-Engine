@@ -1,0 +1,4 @@
+Assets/fonts/default.ttf: ffi: return=0, backend=harfbuzz_freetype_fribidi_unibreak, glyph_indices=[73, 73, 76]
+Assets/fonts/default.ttf: لا: return=0, backend=harfbuzz_freetype_fribidi_unibreak, glyph_indices=[0, 0]
+/usr/share/fonts/TTF/DejaVuSans.ttf: ffi: return=0, backend=harfbuzz_freetype_fribidi_unibreak, glyph_indices=[5044]
+/usr/share/fonts/TTF/DejaVuSans.ttf: لا: return=0, backend=harfbuzz_freetype_fribidi_unibreak, glyph_indices=[5365]
