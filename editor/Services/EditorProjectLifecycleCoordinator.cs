@@ -21,17 +21,16 @@ public static class EditorProjectLifecycleCoordinator
     /// </summary>
     public static async Task<bool> ResolveUnsavedChangesAsync(
         Func<Task<string?>> showUnsavedDialog,
-        Action saveAction,
+        Func<bool> saveAction,
         Func<bool> isDirtyGetter,
-        Action<bool> isDirtySetter)
+        Func<bool> discardAction)
     {
         if (!isDirtyGetter()) return true;
 
         string? result = await showUnsavedDialog();
         if (result == "discard")
         {
-            isDirtySetter(false);
-            return true;
+            return discardAction();
         }
 
         if (result != "save")
@@ -39,8 +38,7 @@ public static class EditorProjectLifecycleCoordinator
             return false;
         }
 
-        saveAction();
-        return !isDirtyGetter();
+        return saveAction() && !isDirtyGetter();
     }
 
     /// <summary>
@@ -48,18 +46,18 @@ public static class EditorProjectLifecycleCoordinator
     /// </summary>
     public static async Task<bool> ResolveUnsavedChangesAsync(
         Window? window,
-        Action saveAction,
+        Func<bool> saveAction,
         Func<bool> isDirtyGetter,
-        Action<bool> isDirtySetter)
+        Func<bool> discardAction)
     {
         if (!isDirtyGetter()) return true;
-        if (window == null) return true;
+        if (window == null) return false;
 
         return await ResolveUnsavedChangesAsync(
             () => new UnsavedChangesDialog().ShowDialog<string?>(window),
             saveAction,
             isDirtyGetter,
-            isDirtySetter);
+            discardAction);
     }
 
     /// <summary>
@@ -130,12 +128,11 @@ public static class EditorProjectLifecycleCoordinator
         string targetDirectory,
         int nodeCount,
         ulong startNodeId,
-        Action saveSourceProjectAction,
+        Func<bool> saveSourceProjectAction,
         Action<string>? logAction = null)
     {
         try
         {
-            Directory.CreateDirectory(targetDirectory);
             var result = ProjectSaveAsCoordinator.SaveProjectCopy(
                 sourceProjectRoot,
                 targetDirectory,

@@ -121,7 +121,7 @@ internal static class EditorEndToEndFlowTests
                 flowVm.Nodes,
                 flowVm.Connections,
                 flowVm.GetStartNode()?.Id,
-                () => { flowVm.SaveProjectNow(); },
+                () => flowVm.SaveProjectNow(),
                 issues => reportedIssues = string.Join(" | ", issues.Select(i => (i.IsError ? "ERR " : "WARN ") + i.Message)),
                 msg => { }).GetAwaiter().GetResult();
             if (!buildResult.Succeeded || !Directory.Exists(buildResult.OutputDirectory))

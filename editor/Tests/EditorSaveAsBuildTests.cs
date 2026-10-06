@@ -21,7 +21,7 @@ internal static class EditorSaveAsBuildTests
             mainVm.GetStartNode()?.Id ?? 101,
             // MS-2: SaveProject is fire-and-forget; Save As must copy a
             // completed save, so use the synchronous completion point.
-            () => { mainVm.SaveProjectNow(); });
+            () => mainVm.SaveProjectNow());
 
         if (!saveAsResult.Succeeded || !Directory.Exists(testCoordSaveAsDir))
             throw new Exception("ProjectSaveAsCoordinator failed to copy project");
@@ -41,7 +41,7 @@ internal static class EditorSaveAsBuildTests
                 Path.Combine(testProjectRoot, "SubFolder"),
                 mainVm.Nodes.Count,
                 101,
-                () => { });
+                () => true);
         }
         catch (InvalidOperationException)
         {

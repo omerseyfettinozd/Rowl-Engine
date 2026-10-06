@@ -1692,7 +1692,7 @@ namespace RowlEngine.Editor.ViewModels
                 window,
                 () => SaveProjectNow(),
                 () => IsProjectDirty,
-                dirty => IsProjectDirty = dirty);
+                DiscardPendingProjectChanges);
         }
 
         [RelayCommand]
@@ -1771,6 +1771,7 @@ namespace RowlEngine.Editor.ViewModels
 
         public void ScheduleSave()
         {
+            if (_disposed) return;
             IsProjectDirty = true;
             CrashRecoveryService.MarkDirty(AssetsJsonPath);
             if (!Settings.AutoSaveEnabled) return;
@@ -2144,6 +2145,8 @@ namespace RowlEngine.Editor.ViewModels
         // monotonic number. A background write aborts when a newer save was
         // scheduled meanwhile, so an old save can never overwrite a new one.
         // Only the completion of the LATEST sequence clears the dirty flag.
+        private readonly object _projectSaveGate = new();
+        internal object ProjectSaveGateForTests => _projectSaveGate;
         private long _saveSequence;
         private long _saveCompletedSequence;
 
@@ -2165,6 +2168,7 @@ namespace RowlEngine.Editor.ViewModels
         /// </summary>
         public bool SaveProjectNow()
         {
+            if (_disposed) return false;
             _saveDebounceTimer?.Stop();
             long sequence = Interlocked.Increment(ref _saveSequence);
             StoryGraphSaveSnapshot snapshot;
@@ -2180,8 +2184,13 @@ namespace RowlEngine.Editor.ViewModels
                 return false;
             }
 
-            bool written = CrashRecoveryService.TryWriteSnapshotWithRecovery(
-                snapshot, AssetsJsonPath, sequence, () => Volatile.Read(ref _saveSequence), AppendLog);
+            bool written;
+            lock (_projectSaveGate)
+            {
+                if (_disposed || sequence != Volatile.Read(ref _saveSequence)) return false;
+                written = CrashRecoveryService.TryWriteSnapshotWithRecovery(
+                    snapshot, AssetsJsonPath, sequence, () => Volatile.Read(ref _saveSequence), AppendLog);
+            }
             if (written && sequence == Volatile.Read(ref _saveSequence))
             {
                 Volatile.Write(ref _saveCompletedSequence, sequence);
@@ -2197,6 +2206,7 @@ namespace RowlEngine.Editor.ViewModels
         /// </summary>
         public Task SaveProjectAsync()
         {
+            if (_disposed) return Task.CompletedTask;
             StoryGraphSaveSnapshot snapshot;
             try
             {
@@ -2218,8 +2228,12 @@ namespace RowlEngine.Editor.ViewModels
                 bool written = false;
                 try
                 {
-                    written = CrashRecoveryService.TryWriteSnapshotWithRecovery(
-                        snapshot, assetsJsonPath, sequence, () => Volatile.Read(ref _saveSequence), null);
+                    lock (_projectSaveGate)
+                    {
+                        if (_disposed || sequence != Volatile.Read(ref _saveSequence)) return;
+                        written = CrashRecoveryService.TryWriteSnapshotWithRecovery(
+                            snapshot, assetsJsonPath, sequence, () => Volatile.Read(ref _saveSequence), null);
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -2230,7 +2244,7 @@ namespace RowlEngine.Editor.ViewModels
                 }
                 Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                 {
-                    if (sequence != Volatile.Read(ref _saveSequence))
+                    if (_disposed || sequence != Volatile.Read(ref _saveSequence))
                         return; // superseded: a newer save owns the dirty flag now
                     if (sequence > Volatile.Read(ref _saveCompletedSequence))
                         Volatile.Write(ref _saveCompletedSequence, sequence);
@@ -2241,6 +2255,26 @@ namespace RowlEngine.Editor.ViewModels
                     }
                 });
             });
+        }
+
+        /// <summary>
+        /// Cancels queued saves and waits for an already committing save before
+        /// accepting discard. Completed autosaves are not rolled back.
+        /// </summary>
+        public bool DiscardPendingProjectChanges()
+        {
+            _saveDebounceTimer?.Stop();
+            lock (_projectSaveGate)
+            {
+                Interlocked.Increment(ref _saveSequence);
+                if (!CrashRecoveryService.TryClearDirty(AssetsJsonPath))
+                {
+                    AppendLog("Kurtarma işareti temizlenemedi; kapatma durduruldu.");
+                    return false;
+                }
+                IsProjectDirty = false;
+                return true;
+            }
         }
 
         /// <summary>Test hook: latest scheduled save sequence (monotonic).</summary>
@@ -2471,7 +2505,7 @@ namespace RowlEngine.Editor.ViewModels
                 Nodes,
                 Connections,
                 GetStartNode()?.Id,
-                () => { SaveActiveStoryFile(); SaveFullStoryGraphFile(); },
+                SaveProjectNow,
                 ProjectIssuesViewModel.SetIssues,
                 AppendLog,
                 diagnostic => NotificationService.ReportBuildDiagnostic(diagnostic, AppendLog));
@@ -2607,22 +2641,21 @@ namespace RowlEngine.Editor.ViewModels
             if (_disposed) return;
             _disposed = true;
 
-            // Faz 4 Dilim 5 — a pending debounce save OR a crash-flag left by
-            // ScheduleSave means unsaved edits exist; flush them synchronously.
-            bool hasPendingSave = _saveDebounceTimer?.IsEnabled == true ||
-                CrashRecoveryService.IsDirty(AssetsJsonPath);
             _saveDebounceTimer?.Stop();
             _enginePreviewDebounceTimer?.Stop();
             _smoothTimer.Stop();
-
-            if (hasPendingSave)
+            lock (_projectSaveGate)
             {
-                // Dirty-flag flush (replaces the old IsEnabled-only save):
-                // only a fully written pair clears the crash marker.
-                bool activeSaved = SaveActiveStoryFile();
-                bool fullSaved = SaveFullStoryGraphFile();
-                if (activeSaved && fullSaved)
-                    CrashRecoveryService.ClearDirty(AssetsJsonPath);
+                Interlocked.Increment(ref _saveSequence);
+                // Discard clears the marker and dirty flag before shutdown.
+                // A queued background snapshot is stale and cannot write later.
+                if (IsProjectDirty || CrashRecoveryService.IsDirty(AssetsJsonPath))
+                {
+                    bool activeSaved = SaveActiveStoryFile();
+                    bool fullSaved = SaveFullStoryGraphFile();
+                    if (activeSaved && fullSaved)
+                        CrashRecoveryService.ClearDirty(AssetsJsonPath);
+                }
             }
 
             if (_ownsEngineHost)

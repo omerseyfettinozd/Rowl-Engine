@@ -65,15 +65,23 @@ internal static class CrashRecoveryService
     }
 
     public static void ClearDirty(string assetsJsonPath)
+        => TryClearDirty(assetsJsonPath);
+
+    public static bool TryClearDirty(string assetsJsonPath)
     {
         try
         {
             string flag = Path.Combine(GetRecoveryDir(assetsJsonPath), DirtyFlagName);
-            if (File.Exists(flag))
-                File.Delete(flag);
+            File.Delete(flag);
+            return true;
+        }
+        catch (DirectoryNotFoundException)
+        {
+            return true; // No recovery directory means no marker to clear.
         }
         catch (Exception)
         {
+            return false;
         }
     }
 

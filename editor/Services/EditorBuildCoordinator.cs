@@ -24,12 +24,21 @@ public static class EditorBuildCoordinator
         IEnumerable<NodeViewModel> nodes,
         IEnumerable<ConnectionViewModel> connections,
         ulong? startNodeId,
-        Action persistFiles,
+        Func<bool> persistFiles,
         Action<IReadOnlyList<ProjectValidationIssue>> reportIssues,
         Action<string>? log = null,
         Action<BuildDiagnostic>? reportDiagnostic = null)
     {
-        persistFiles();
+        if (!persistFiles())
+        {
+            var diagnostic = new BuildDiagnostic(BuildDiagnosticCode.IoFailure,
+                BuildDiagnosticSeverity.Error, "save_project",
+                "Proje kaydedilemedi; build durduruldu.", projectRoot);
+            reportDiagnostic?.Invoke(diagnostic);
+            if (reportDiagnostic == null) log?.Invoke(diagnostic.Message);
+            return new PipelineExecutionResult(false, false, buildOutDir, diagnostic.Message,
+                Array.Empty<ProjectValidationIssue>()) { Diagnostic = diagnostic };
+        }
         // Faz 5 Dilim 5 fix: SourceAssets süpürmesi build'e bağlıdır (ölü-yüzey
         // kapanışı). Dönüştürülebilir kaynaklar doğrulama öncesi tazelenir;
         // SourceAssets yoksa no-op, araç yoksa fail-safe atlanır.
@@ -66,14 +75,23 @@ public static class EditorBuildCoordinator
         IEnumerable<NodeViewModel> nodes,
         IEnumerable<ConnectionViewModel> connections,
         ulong? startNodeId,
-        Action persistFiles,
+        Func<bool> persistFiles,
         Action<IReadOnlyList<ProjectValidationIssue>> reportIssues,
         Action<string>? log = null,
         Action<string>? reportProgress = null,
         CancellationToken cancellationToken = default,
         Action<BuildDiagnostic>? reportDiagnostic = null)
     {
-        persistFiles();
+        if (!persistFiles())
+        {
+            var diagnostic = new BuildDiagnostic(BuildDiagnosticCode.IoFailure,
+                BuildDiagnosticSeverity.Error, "save_project",
+                "Proje kaydedilemedi; build durduruldu.", projectRoot);
+            reportDiagnostic?.Invoke(diagnostic);
+            if (reportDiagnostic == null) log?.Invoke(diagnostic.Message);
+            return new StandaloneBuildResult(false, false, baseOutDir, diagnostic.Message)
+                { Diagnostic = diagnostic };
+        }
         // Faz 5 Dilim 5 fix: SourceAssets süpürmesi (ölü-yüzey kapanışı) —
         // doğrulama öncesi tazele; yoksa no-op, araç yoksa fail-safe atlanır.
         await MediaConverterService.ImportConvertedSourceAssetsAsync(

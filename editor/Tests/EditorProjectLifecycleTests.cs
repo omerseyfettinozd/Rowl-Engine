@@ -23,7 +23,7 @@ internal static class EditorProjectLifecycleTests
             () => Task.FromResult<string?>("cancel"),
             () => saved = true,
             () => isDirty,
-            d => isDirty = d).GetAwaiter().GetResult();
+            () => { isDirty = false; return true; }).GetAwaiter().GetResult();
         if (!cleanResult || saved)
             throw new Exception("Clean state should resolve immediately without saving.");
 
@@ -33,7 +33,7 @@ internal static class EditorProjectLifecycleTests
             () => Task.FromResult<string?>("cancel"),
             () => saved = true,
             () => isDirty,
-            d => isDirty = d).GetAwaiter().GetResult();
+            () => { isDirty = false; return true; }).GetAwaiter().GetResult();
         if (cancelResult || !isDirty || saved)
             throw new Exception("Cancel should abort resolution and leave project dirty.");
 
@@ -43,7 +43,7 @@ internal static class EditorProjectLifecycleTests
             () => Task.FromResult<string?>("discard"),
             () => saved = true,
             () => isDirty,
-            d => isDirty = d).GetAwaiter().GetResult();
+            () => { isDirty = false; return true; }).GetAwaiter().GetResult();
         if (!discardResult || isDirty || saved)
             throw new Exception("Discard should clear dirty flag and return true without saving.");
 
@@ -52,9 +52,9 @@ internal static class EditorProjectLifecycleTests
         saved = false;
         bool saveResult = EditorProjectLifecycleCoordinator.ResolveUnsavedChangesAsync(
             () => Task.FromResult<string?>("save"),
-            () => { saved = true; isDirty = false; },
+            () => { saved = true; isDirty = false; return true; },
             () => isDirty,
-            d => isDirty = d).GetAwaiter().GetResult();
+            () => { isDirty = false; return true; }).GetAwaiter().GetResult();
         if (!saveResult || isDirty || !saved)
             throw new Exception("Save choice should invoke save callback and mark clean.");
 

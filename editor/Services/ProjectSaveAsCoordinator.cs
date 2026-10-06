@@ -19,7 +19,7 @@ public static class ProjectSaveAsCoordinator
         string targetDirectory,
         int nodeCount,
         ulong startNodeId,
-        Action saveSourceProject)
+        Func<bool> saveSourceProject)
     {
         if (string.IsNullOrWhiteSpace(targetDirectory))
             return new(false, targetDirectory, "Hedef klasör belirtilmedi.");
@@ -27,10 +27,11 @@ public static class ProjectSaveAsCoordinator
         if (ProjectFileSystem.IsSameOrDescendant(targetDirectory, sourceProjectRoot))
             throw new InvalidOperationException("Farklı Kaydet hedefi açık projenin kendisi veya alt klasörü olamaz.");
 
-        Directory.CreateDirectory(targetDirectory);
-
         // 1. Ensure current in-memory edits are flushed to source project files
-        saveSourceProject();
+        if (!saveSourceProject())
+            return new(false, targetDirectory, "Kaynak proje kaydedilemedi; farklı kaydetme durduruldu.");
+
+        Directory.CreateDirectory(targetDirectory);
 
         // 2. Copy Assets directory
         string sourceAssets = Path.Combine(sourceProjectRoot, "Assets");

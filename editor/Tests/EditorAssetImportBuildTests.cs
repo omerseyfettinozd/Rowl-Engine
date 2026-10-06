@@ -79,7 +79,7 @@ internal static class EditorAssetImportBuildTests
             new[] { buildGateNode },
             new[] { buildGateConn },
             9901,
-            () => { persistInvoked = true; },
+            () => { persistInvoked = true; return true; },
             issues => { },
             msg => { }).GetAwaiter().GetResult();
 
@@ -95,7 +95,7 @@ internal static class EditorAssetImportBuildTests
             new[] { buildGateNode },
             new[] { buildGateConn },
             9901,
-            () => { pipePersistInvoked = true; },
+            () => { pipePersistInvoked = true; return true; },
             issues => { },
             msg => { });
 
