@@ -15,8 +15,8 @@ const field = (name,label,value,type='text',extra='') => `<label class="author-f
 const button = (action,label,icon) => `<button class="author-button" data-author="${action}">${icon?`<svg><use href="#i-${icon}"/></svg>`:''}${label}</button>`;
 export function bindAuthoring(panels, context) {
   const dialog = document.createElement('dialog'); dialog.id='author-dialog'; dialog.setAttribute('aria-labelledby','author-title'); document.body.append(dialog);
-  const inspectorTools=document.createElement('div');inspectorTools.className='author-toolbar';inspectorTools.innerHTML=button('component','Bileşen ekle','plus');panels.get('inspector').querySelector('.tool-content').append(inspectorTools);
-  const components=document.createElement('div');components.className='component-summary';panels.get('inspector').querySelector('.tool-content').append(components);
+  const inspectorTools=document.createElement('div');inspectorTools.className='author-toolbar';inspectorTools.innerHTML=button('component','Bileşen ekle','plus');panels.get('inspector').querySelector('.inspector-object-properties').append(inspectorTools);
+  const components=document.createElement('div');components.className='component-summary';panels.get('inspector').querySelector('.inspector-object-properties').append(components);
   let assets=[], activeType='dialogue', opener;
   const close=()=>dialog.close();
   dialog.addEventListener('close',()=>opener?.isConnected&&opener.focus({preventScroll:true}));

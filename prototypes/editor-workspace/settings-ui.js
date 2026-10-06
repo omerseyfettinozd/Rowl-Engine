@@ -21,10 +21,20 @@ export function bindSettings(dialog,context){
   try{const data=JSON.parse(localStorage.getItem('rowl-design-preferences'));if(data&&typeof data==='object')for(const [key,value] of Object.entries(defaults))if(typeof data[key]===typeof value)values[key]=data[key];}catch{}
   function render(){
     const [title,subtitle,description]=headings[active];
-    dialog.innerHTML=`<form id="settings-form"><header class="dialog-header"><div><span class="tool-caption">ROWL / AYARLAR</span><h2 id="settings-title">${title}</h2></div><button type="button" class="icon-button" data-dismiss aria-label="Ayarları kapat"><svg><use href="#i-close"/></svg></button></header><nav class="settings-nav" aria-label="Ayar bölümleri">${categories.map(([key,label,icon])=>`<button type="button" data-category="${key}" aria-current="${key===active?'page':'false'}"><svg><use href="#i-${icon}"/></svg><span>${label}</span></button>`).join('')}</nav><div class="settings-scroll"><div class="settings-intro"><span class="tool-caption">${String(categories.findIndex(([key])=>key===active)+1).padStart(2,'0')} / ${categories.length} BÖLÜM</span><h3>${subtitle}</h3><p>${description}</p></div>${sections[active]()}</div><footer class="dialog-footer"><span class="settings-dirty" data-dirty>${dirty?'Kaydedilmemiş değişiklikler':'Değişiklik yok'}</span><button type="button" class="text-button" data-dismiss>Vazgeç</button><button type="submit" class="primary-button">${active==='export'?'Taslağı indir':'Uygula'}</button></footer></form>`;
+    dialog.innerHTML=`<form id="settings-form"><header class="dialog-header"><div><span class="tool-caption">ROWL / AYARLAR</span><h2 id="settings-title">${title}</h2></div><button type="button" class="icon-button" data-dismiss aria-label="Ayarları kapat"><svg><use href="#i-close"/></svg></button></header><div class="settings-nav-shell"><button type="button" class="icon-button settings-nav-step" data-nav-step="-1" aria-label="Önceki ayar bölümleri">‹</button><nav class="settings-nav" aria-label="Ayar bölümleri">${categories.map(([key,label,icon])=>`<button type="button" data-category="${key}" aria-current="${key===active?'page':'false'}"><svg><use href="#i-${icon}"/></svg><span>${label}</span></button>`).join('')}</nav><button type="button" class="icon-button settings-nav-step" data-nav-step="1" aria-label="Sonraki ayar bölümleri">›</button></div><div class="settings-scroll"><div class="settings-intro"><span class="tool-caption">${String(categories.findIndex(([key])=>key===active)+1).padStart(2,'0')} / ${categories.length} BÖLÜM</span><h3>${subtitle}</h3><p>${description}</p></div>${sections[active]()}</div><footer class="dialog-footer"><span class="settings-dirty" data-dirty>${dirty?'Kaydedilmemiş değişiklikler':'Değişiklik yok'}</span><button type="button" class="text-button" data-dismiss>Vazgeç</button><button type="submit" class="primary-button">${active==='export'?'Taslağı indir':'Uygula'}</button></footer></form>`;
     for(const input of dialog.querySelectorAll('[name]')){const value=draft[input.name];if(input.type==='checkbox')input.checked=value;else if(input.type==='radio')input.checked=value===input.value;else input.value=value;}
-    previews();
+    previews(); updateNav();
+    dialog.querySelector('.settings-nav').addEventListener('scroll',updateNav);
   }
+  function updateNav(){
+    const nav=dialog.querySelector('.settings-nav'), shell=dialog.querySelector('.settings-nav-shell');if(!nav)return;
+    const overflow=nav.scrollWidth>shell.clientWidth-28;
+    const prev=dialog.querySelector('[data-nav-step="-1"]'), next=dialog.querySelector('[data-nav-step="1"]');
+    prev.hidden=next.hidden=!overflow;
+    prev.disabled=nav.scrollLeft<=1;next.disabled=nav.scrollLeft+nav.clientWidth>=nav.scrollWidth-1;
+    shell.dataset.start=String(!prev.disabled);shell.dataset.end=String(!next.disabled);
+  }
+  new ResizeObserver(updateNav).observe(dialog);
   function collect(){for(const input of dialog.querySelectorAll('[name]')){if(input.type==='radio'){if(input.checked)draft[input.name]=input.value;}else if(input.type==='checkbox')draft[input.name]=input.checked;else if(input.type==='range'||input.type==='number'){if(input.value!==''&&Number.isFinite(Number(input.value)))draft[input.name]=Number(input.value);}else draft[input.name]=input.value;}}
   function previews(){
     for(const output of dialog.querySelectorAll('[data-output]')){const input=dialog.querySelector(`[name="${output.dataset.output}"]`);output.textContent=`${input.value}${input.dataset.suffix}`;}
@@ -37,7 +47,7 @@ export function bindSettings(dialog,context){
   }
   dialog.addEventListener('input',()=>{collect();dirty=true;dialog.querySelector('[data-dirty]').textContent='Kaydedilmemiş değişiklikler';previews();});
   dialog.addEventListener('change',()=>{collect();dirty=true;dialog.querySelector('[data-dirty]').textContent='Kaydedilmemiş değişiklikler';previews();});
-  dialog.addEventListener('click',event=>{if(event.target.closest('[data-dismiss]'))dialog.close();const category=event.target.closest('[data-category]');if(category){collect();active=category.dataset.category;render();const selected=dialog.querySelector('[aria-current=page]');selected.focus({preventScroll:true});selected.scrollIntoView({block:'nearest',inline:'center'});}});
+  dialog.addEventListener('click',event=>{const step=event.target.closest('[data-nav-step]');if(step){const nav=dialog.querySelector('.settings-nav');nav.scrollBy({left:Number(step.dataset.navStep)*Math.max(160,nav.clientWidth*.7),behavior:document.documentElement.classList.contains('reduce-motion')||matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});return;}if(event.target.closest('[data-dismiss]'))dialog.close();const category=event.target.closest('[data-category]');if(category){collect();active=category.dataset.category;render();const selected=dialog.querySelector('[aria-current=page]');selected.focus({preventScroll:true});selected.scrollIntoView({block:'nearest',inline:'center'});}});
   dialog.addEventListener('submit',event=>{
     event.preventDefault();collect();values={...draft};try{localStorage.setItem('rowl-design-preferences',JSON.stringify(values));}catch{}
     context.apply({project:values.project,resolution:values.resolution,startScene:values.startScene,grid:values.grid,guides:values.guides});

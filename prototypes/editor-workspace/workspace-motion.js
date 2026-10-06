@@ -36,13 +36,14 @@ export function workspaceMotion(root, panels) {
       animate(b,[{flexGrow:1-start},{flexGrow:1-target}]);
     }
     for(const [view,panel] of panels) if(panel.isConnected&&!before.has(view)) {
+      if(root.classList.contains('is-stacked')) animate(panel,[{height:'0px',minHeight:'0px'},{height:panel.style.height,minHeight:'0px'}]);
       animate(panel.querySelector('.panel-content'),[{opacity:0,transform:'translateY(6px)'},{opacity:1,transform:'translateY(0)'}]);
     }
   }
   function exit(removed, visible, finish, height) {
     if(reduced()||!removed.length){finish();return;}
     if(Math.abs(root.clientHeight-height)>1) animate(root,[{height:`${root.clientHeight}px`},{height:`${height}px`}],180,'forwards');
-    for(const view of removed){const panel=panels.get(view);if(panel?.isConnected)animate(panel.querySelector('.panel-content'),[{opacity:1},{opacity:0}],100,'forwards');}
+    for(const view of removed){const panel=panels.get(view);if(panel?.isConnected){animate(panel.querySelector('.panel-content'),[{opacity:1},{opacity:0}],100,'forwards');if(root.classList.contains('is-stacked'))animate(panel,[{height:`${panel.clientHeight}px`},{height:'0px',minHeight:'0px'}],180,'forwards');}}
     for(const split of root.querySelectorAll('.split')) {
       const [a,,b]=split.children;
       const remains=element=>[...element.querySelectorAll('[data-panel]')].some(panel=>visible.includes(panel.dataset.panel));
@@ -54,5 +55,8 @@ export function workspaceMotion(root, panels) {
     complete=finish;
     timer=setTimeout(()=>{timer=null;complete=null;for(const animation of animations)animation.cancel();animations=[];finish();},180);
   }
-  return {cancel,capture,enter,exit};
+  function settled(callback) {
+    Promise.all(animations.map(animation=>animation.finished.catch(()=>{}))).then(callback);
+  }
+  return {cancel,capture,enter,exit,settled};
 }

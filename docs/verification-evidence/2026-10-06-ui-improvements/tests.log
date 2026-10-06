@@ -1,0 +1,39 @@
+✔ Node yanında Game ve Edit Scene üst üste; kardeşi taşıma ağacı sadeleştirir (5.82714ms)
+✔ Araç pencereleri ayrı bir sütunda toplanır; sabit kaynak taşınamaz (0.716956ms)
+✔ Pencereler dört yönde alan bölerek yerleşir ve kopyalanmaz (0.413451ms)
+✔ İç içe bölme uç boyutlarda da pencereleri üst üste bindirmez (0.551098ms)
+✔ Mobil başlangıçtan üçlü görünüm pencere alanını eşit paylaşır (0.205789ms)
+✔ Geçersiz ve kendi üzerine bırakma mevcut yerleşimi korur (0.815302ms)
+✔ Elle kapatma dalı kaldırır, diğer sabit pencereyi korur (0.292475ms)
+✔ Yeniden boyutlandırma erişilebilir sınırları korur (0.17285ms)
+✔ 1000 karma işlemde her ekran tek alanda bulunur ve alanlar çakışmaz (10.932035ms)
+✔ Yıldızlı düğüm bağımsız şablondur; eski bağlantı hedeflerini taşımaz (2.328075ms)
+✔ İç içe klasörler aynı adı farklı konumda kabul eder, döngüye izin vermez (0.496952ms)
+✔ Klasör kaldırma düğüm ve alt klasörleri üst konuma taşır; kaynak sahneleri korur (4.055233ms)
+✔ Üst konuma taşınan aynı adlı klasör kaybolmaz; benzersiz ad alır (0.302953ms)
+✔ Kayıt tüm hiyerarşiyi ve Inspector ayarlarını kopyadan bağımsız korur (0.778426ms)
+✔ Başlatma seçili sahnenin bağımsız kopyasını oynatır (0.956576ms)
+✔ Çalışırken hareket ve yazı ilerler; duraklatınca kare aynı kalır (0.954571ms)
+✔ Devam etme donmuş kareden ilerler; duraklama süresi eklenmez (3.77465ms)
+✔ Kapatma ve yeniden başlatma oynatımı sıfırlar (0.243146ms)
+✔ Önizleme sınırların dışına çıkmaz ve düzenleme verisini değiştirmez (0.40708ms)
+✔ Game reopen does not multiply mobile panel heights by desktop ratios (3.788905ms)
+✔ dense tablet stacks, desktop preserves every panel and readable widths (0.616215ms)
+✔ extreme desktop ratio still keeps both columns readable (0.330112ms)
+✔ stack resizing conserves total height and respects both minimums (0.191383ms)
+✔ Bozuk kayıt varsayılanlara döner; izin verilmeyen alanlar elenir (1.509487ms)
+✔ Geçerli ayarlar JSON kaydı sonrası aynı kalır (0.202173ms)
+✔ Inspector konum ve boyutu sınırlar; orijinal objeyi değiştirmez (0.248967ms)
+✔ Her simge ikinci tıklamada sabit ve son pencereyi de kapatır (1.952672ms)
+✔ Tüm pencereler sabitlemelerden bağımsız açılır; mevcut pencere kapanmaz (3.796278ms)
+✔ Tekrar açma kopyalamaz ve yalnız odak değiştirir (0.177017ms)
+✔ Elle kapatma sabitlemeyi temizler ve odak açık pencereye döner (0.172169ms)
+✔ 1000 karma işlemde açık pencereler, sabitlemeler ve odak tutarlı kalır (3.366658ms)
+ℹ tests 31
+ℹ suites 0
+ℹ pass 31
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 105.394987

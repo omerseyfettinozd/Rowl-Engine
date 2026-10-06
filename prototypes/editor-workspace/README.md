@@ -25,7 +25,7 @@ PC ve mobilde aynı üst kapsül var: **Node · Game · Edit Scene | Başlat · 
 ## Pencere yerleşimi
 
 - Açık pencere sınırı ve otomatik pencere değiştirme kaldırıldı. Dokuz pencere birlikte açılabilir; ilk açılışta yalnız Node açık.
-- Başlığı başka pencerenin sol/sağ/üst/alt tarafına sürükle: hedef alan bölünür. Pencereler kendi bölmelerinde kalır, birbirine binmez. Örneğin Node solda; Game ve Edit Scene sağda alt alta.
+- Geniş düzende başlığı başka pencerenin sol/sağ/üst/alt tarafına sürükle: hedef alan bölünür. Dar düzende üst/alt yönler panel sırasını değiştirir. Pencereler kendi bölmelerinde kalır, birbirine binmez. Örneğin Node solda; Game ve Edit Scene sağda alt alta.
 - Lua, Node yanında veya altında geniş bir bölmede açılır. Diğer araçlar masaüstünde sağ sütunda, mobilde altta gruplanır. Mobil çalışma alanı gerektiğinde aşağı kayar; her araç kendi içinde de kaydırılabilir.
 - Bölme çizgisini sürükle veya klavyede odaklayıp ok tuşlarını kullan.
 - Başlıktaki yerleşim menüsü dokunmatik/klavye için hedef ve yön seçimi sunar.
@@ -73,7 +73,7 @@ Ayarlar ve kaydedilmiş script taslakları localStorage alanında kalır. Kayded
 
 ## Doğrulama — 2026-10-05
 
-23 durum testi: sekiz pencere açma, sabit/son pencere kapatma, odak, dört yönlü yerleşim, pin kilidi, oran sınırları, 1000 karma işlemde alanların çakışmaması; ayar doğrulama ve Inspector sınırları; bağımsız oynatma kopyası, donma ve devam etme.
+31 durum testi: pencere açma, sabit/son pencere kapatma, odak, dört yönlü yerleşim, pin kilidi, oran sınırları, 1000 karma işlemde alanların çakışmaması; ayar doğrulama ve Inspector sınırları; bağımsız oynatma kopyası, donma ve devam etme; kütüphane bağımsızlığı; mobil Game yeniden açma, minimum genişlik ve komşu panel yüksekliklerinin korunması.
 
 ```sh
 node --test prototypes/editor-workspace/*.test.mjs
@@ -139,3 +139,16 @@ Inspector yıldız güncellemesi: Node kartı yıldızları ve kütüphanedeki S
 Benim düğümlerim içinde açılıp kapanan klasör ağacı, seçili klasör vurgusu, düğüm sayıları ve konum yolu var. + Klasör seçili konumda alt klasör oluşturur. Klasörün … ekranından isim ve üst klasör değişir; kendisi/alt klasörleri hedef listesinde gösterilmez. Düğümün … ekranından isim ve klasör değişir; taşınan kaydın konumu açılır. İçerik düzenleme Inspector’dadır; burada kaydedilen hiyerarşi salt okunur incelenebilir. Kaldırma … içine alındı ve onay korunur.
 
 Tarayıcıda düğümü Bölüm 1 / Giriş’e taşıma, yenileme sonrası korunması, seçili alt klasörde yeni klasör formunun doğru hedefi seçmesi, geçersiz üst klasör hedeflerinin gizlenmesi ve kaldırma onayından vazgeçme doğrulandı. 320×740’ta yatay sayfa taşması yok. 27 durum testi yeşil.
+
+## 6 Ekim görsel inceleme iyileştirmeleri
+
+- Masaüstü dock ağacı ekran daralınca yeniden yazılmaz. 650 px altında veya açık ağacın minimum genişliği ekrana sığmadığında paneller tam genişlikte alt alta gösterilir. Geniş ekran yeniden uygun olduğunda dock düzeni geri gelir. Açık pencere sayısı sınırlandırılmaz.
+- Node/Lua minimum 360 px; Game/Edit Scene 340 px; Inspector/kütüphane/Konsol 320 px; diğer araçlar 280 px. Yatay bölme oranları bu okunabilir sınırlarla ekrana yansıtılır.
+- Dar düzende yükseklikler panel içeriğine göre hesaplanır; masaüstü oranları toplam yüksekliği katlamaz. Komşu ayırıcı sürüklenebilir; klavyede ↑/↓ 24 px değiştirir, toplam yükseklik korunur. Elle verilen yükseklikler bu oturumda korunur; Yerleşimi sıfırla varsayılana döndürür.
+- Yeni açılan panel animasyon bitince görünür alana gelir. Yalnız pin değişikliği paneli yeniden kaydırmaz. Dar yerleşimde yan yana yönler kapalıdır; üst/alt kullanılabilir.
+- Editör yazıları 13 px, yardımcı metinler 12 px, bölüm etiketleri 11 px. Sahne içindeki yazı sahneyle birlikte ölçeklenir; Game/Edit Scene altındaki **Büyüt**, sahnenin anlık görüntüsünü ve 16 px okunabilir metnini ayrı pencerede açar. Bu pencere düzenleme veya oynatma komutu göndermez.
+- Inspector: düğüm alanları katlanabilir; obje seçimi ilgili alanları üste çıkarır. Bileşenler objeyle birlikte, kütüphaneye kaydetme yine Inspector'dadır. Node seçimi düğüm alanlarını yeniden açar.
+- Mobil ayar şeridinde önceki/sonraki okları ve kenar ipuçları var. Üst kapsül fareyle veya klavyeyle odaklanınca kısa isim gösterir. Açık panel, aktif odak ve pin görünümleri ayrıdır.
+- Sistem reduce-motion ve prototipteki Hareketi azalt tercihi geçişleri sadeleştirir. Native/Avalonia UI aktarımı başlamadı.
+
+[Değişiklik ve canlı kabul kaydı](../../docs/UI_PROTOTYPE_IMPROVEMENTS_2026-10-06.md).

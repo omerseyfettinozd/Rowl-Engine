@@ -1,5 +1,7 @@
 import { initialState, focusView, openView, closeView, toggleView, togglePin } from './workspace-state.mjs';
 import { initialLayout, syncLayout, dockView, resizeSplit } from './layout-state.mjs';
+import { leaves } from './layout-state.mjs';
+import { stackLayout, fitDockTree, preferredStackHeight, minimumStackHeight, resizeStackPair } from './responsive-layout.mjs';
 import { TOOL_VIEWS } from './workspace-state.mjs';
 import { defaultSettings, normalizeSettings, RESOLUTIONS, editObject } from './settings-state.mjs';
 import { toolContent, bindTools } from './tools.js';
@@ -22,11 +24,14 @@ const newScenes = () => defaults.map((scene,index) => ({ ...scene, id:`sample-${
 let scenes = newScenes(), sceneIndex = 0, selectedObject = 'character';
 let state = initialState(), layout = initialLayout(), zoom = 1, toastTimer, gesture = null, placementView = null;
 let playback = initialPlayback(), playbackSceneIndex = 0, lastFrameTime = null;
+let renderGeneration=0;
 const workspace = document.querySelector('#workspace'), dockRoot = document.querySelector('#dock-root');
 const placement = document.querySelector('#placement-menu'), options = document.querySelector('#options-menu');
 let settings = defaultSettings();
 try { settings = normalizeSettings(JSON.parse(localStorage.getItem('rowl-prototype-settings'))); } catch {}
 const panels = new Map();
+const stackHeights = new Map();
+const isStacked = () => stackLayout(layout.tree,workspace.clientWidth);
 for (const view of Object.keys(names)) {
   const panel = document.createElement('section');
   panel.className = 'panel'; panel.dataset.panel = view; panel.setAttribute('aria-label', `${names[view]} penceresi`);
@@ -47,11 +52,53 @@ for (const view of Object.keys(names)) {
   panels.set(view, panel);
 }
 
+const scenePreview=document.createElement('dialog');scenePreview.className='scene-preview-dialog';
+scenePreview.setAttribute('aria-labelledby','scene-preview-title');
+scenePreview.innerHTML='<div class="preview-shell"><header class="dialog-header"><h2 id="scene-preview-title">Sahne önizlemesi</h2><button class="icon-button" aria-label="Büyük önizlemeyi kapat"><svg><use href="#i-close"/></svg></button></header><div class="preview-stage"></div><div class="preview-reading"><strong></strong><p></p></div></div>';
+document.body.append(scenePreview);
+scenePreview.querySelector('button').addEventListener('click',()=>scenePreview.close());
+function fitPreview() {
+  const stage=scenePreview.querySelector('.preview-stage'), frame=stage.querySelector('.game-frame');if(!frame)return;
+  const [w,h]=RESOLUTIONS[settings.resolution], width=Math.min(stage.clientWidth,stage.clientHeight*w/h);
+  frame.style.width=`${width}px`;frame.style.height=`${width*h/w}px`;
+}
+new ResizeObserver(fitPreview).observe(scenePreview);
+for(const view of ['game','edit']) {
+  const button=document.createElement('button');button.className='scene-enlarge';button.textContent='Büyüt';
+  button.setAttribute('aria-label',`${names[view]} sahnesini ve metnini büyüt`);
+  panels.get(view).querySelector('.scene-bottom').append(button);
+  button.addEventListener('click',()=>{
+    const scene=view==='game'?(playbackFrame(playback)??scenes[sceneIndex]):scenes[sceneIndex];
+    const frame=panels.get(view).querySelector('.game-frame').cloneNode(true);frame.classList.remove('editable');
+    frame.querySelectorAll('[tabindex]').forEach(el=>el.removeAttribute('tabindex'));
+    frame.querySelectorAll('[data-object]').forEach(el=>{el.removeAttribute('role');el.removeAttribute('aria-label');});
+    frame.querySelectorAll('[id]').forEach(el=>{const id=el.id;el.id=`preview-${id}`;frame.querySelectorAll(`[fill="url(#${id})"]`).forEach(el=>el.setAttribute('fill',`url(#preview-${id})`));});
+    frame.querySelectorAll('.object-label,.continue-button').forEach(el=>el.remove());
+    scenePreview.querySelector('.preview-stage').replaceChildren(frame);
+    scenePreview.querySelector('h2').textContent=`${names[view]} · ${scene.title}`;
+    scenePreview.querySelector('.preview-reading strong').textContent=scene.speaker||'Mira';
+    scenePreview.querySelector('.preview-reading p').textContent=scene.dialogue;
+    scenePreview.showModal();fitPreview();scenePreview.querySelector('button').focus();
+  });
+}
+
+// A temporary caption explains icon controls without adding a second toolbar.
+const toolbarHint=document.createElement('div');toolbarHint.className='toolbar-hint';toolbarHint.hidden=true;
+document.querySelector('.app-header').append(toolbarHint);
+document.querySelectorAll('.view-button').forEach(button=>{
+  const show=()=>{if(button.disabled||button.getAttribute('aria-expanded')==='true')return;toolbarHint.textContent=button.title;toolbarHint.hidden=false;};
+  button.addEventListener('pointerenter',event=>{if(event.pointerType==='mouse')show();});
+  button.addEventListener('pointerleave',()=>toolbarHint.hidden=true);
+  button.addEventListener('focus',()=>{if(button.matches(':focus-visible'))show();});
+  button.addEventListener('blur',()=>toolbarHint.hidden=true);
+  button.addEventListener('click',()=>toolbarHint.hidden=true);
+});
+
 const lua = bindLua(panels.get('lua'),{notify});
 const motion = workspaceMotion(dockRoot,panels);
 const tools = bindTools(panels, {
   get:()=>({scene:scenes[sceneIndex], selected:selectedObject, names:objectNames}),
-  select:object=>{selectedObject=object;updateScene();tools.log(`${objectNames[object]} seçildi.`);},
+  select:object=>{selectedObject=object;updateScene();tools.revealObject();tools.log(`${objectNames[object]} seçildi.`);},
   edit:(field,value)=>{scenes[sceneIndex].objects[selectedObject]=editObject(scenes[sceneIndex].objects[selectedObject],field,value);updateScene();},
   visibility:value=>{scenes[sceneIndex].objects[selectedObject].visible=value;updateScene();},
   dialogue:value=>{scenes[sceneIndex].dialogue=value;updateScene();},
@@ -69,11 +116,12 @@ function closeMenus() {
 function apply(result) {
   motion.cancel();
   const removed=state.visible.filter(view=>!result.state.visible.includes(view));
-  layout = syncLayout(layout, state, result.state, workspace.clientWidth < 650 ? 'y' : 'x');
+  const added=result.state.visible.filter(view=>!state.visible.includes(view));
+  layout = syncLayout(layout, state, result.state, 'x');
   state = result.state; closeMenus();
   if (result.message) notify(result.message);
   updateControls();
-  motion.exit(removed,state.visible,()=>render(!removed.length),workspaceHeight());
+  motion.exit(removed,state.visible,()=>render(!removed.length,added.includes(state.focused)),workspaceHeight());
 }
 function updateControls() {
   document.querySelectorAll('[data-view]').forEach(button => {
@@ -107,26 +155,44 @@ function focus(view) { state = focusView(state, view); updateControls(); }
 function treeElement(tree) {
   if (!tree) return null;
   if (tree.type === 'leaf') return panels.get(tree.view);
-  const element = document.createElement('div'); element.className = 'split'; element.dataset.axis = workspace.clientWidth<650?'y':tree.axis; element.dataset.split = tree.id;
+  const element = document.createElement('div'); element.className = 'split'; element.dataset.axis = tree.axis; element.dataset.split = tree.id;
   const a = document.createElement('div'), b = document.createElement('div'); a.className = b.className = 'split-child';
   a.style.flex = `${tree.ratio} 1 0`; b.style.flex = `${1 - tree.ratio} 1 0`;
   a.append(treeElement(tree.a)); b.append(treeElement(tree.b));
   const divider = document.createElement('div'); divider.className = 'splitter'; divider.dataset.divider = tree.id; divider.tabIndex = 0;
-  divider.setAttribute('role', 'separator'); divider.setAttribute('aria-label', 'Pencerelerin boyutunu ayarla'); divider.setAttribute('aria-orientation', workspace.clientWidth>=650 && tree.axis === 'x' ? 'vertical' : 'horizontal');
-  divider.setAttribute('aria-valuemin', '20'); divider.setAttribute('aria-valuemax', '80'); divider.setAttribute('aria-valuenow', String(Math.round(tree.ratio * 100)));
+  divider.setAttribute('role', 'separator'); divider.setAttribute('aria-label', 'Pencerelerin boyutunu ayarla'); divider.setAttribute('aria-orientation', tree.axis === 'x' ? 'vertical' : 'horizontal');
+  divider.setAttribute('aria-valuemin', '0'); divider.setAttribute('aria-valuemax', '100'); divider.setAttribute('aria-valuenow', String(Math.round(tree.ratio * 100)));
   element.append(a, divider, b); return element;
 }
-function render(animated=false) {
+function render(animated=false,reveal=false) {
+  const generation=++renderGeneration;
   const before=animated?motion.capture():null;
   const active = document.activeElement;
   for (const panel of panels.values()) panel.remove();
   dockRoot.replaceChildren();
-  const tree = treeElement(layout.tree); if (tree) dockRoot.append(tree);
+  dockRoot.classList.toggle('is-stacked',isStacked());
+  if (isStacked()) {
+    const views=leaves(layout.tree);
+    views.forEach((view,index)=>{
+      dockRoot.append(panels.get(view));
+      if(index===views.length-1) return;
+      const divider=document.createElement('div'); divider.className='splitter stack-divider';
+      divider.dataset.stackBefore=view; divider.dataset.stackAfter=views[index+1]; divider.tabIndex=0;
+      divider.setAttribute('role','separator'); divider.setAttribute('aria-label',`${names[view]} ve ${names[views[index+1]]} boyutunu ayarla`);
+      divider.setAttribute('aria-orientation','horizontal'); dockRoot.append(divider);
+    });
+  } else {
+    for(const panel of panels.values()) panel.style.height='';
+    const tree = treeElement(fitDockTree(layout.tree,workspace.clientWidth)); if (tree) dockRoot.append(tree);
+  }
   updateControls(); updateScene(); fitViews();
   document.querySelector('#empty-state').hidden = state.visible.length > 0;
   if (active && active !== document.body && active.isConnected) active.focus({ preventScroll: true });
   if(before) motion.enter(before);
-  if(workspace.clientWidth<650 && state.focused && TOOL_VIEWS.includes(state.focused))panels.get(state.focused).scrollIntoView({block:'nearest'});
+  if(reveal && isStacked() && state.focused) {
+    const focused=state.focused;
+    motion.settled(()=>{if(generation===renderGeneration && state.focused===focused && state.visible.includes(focused))panels.get(focused).scrollIntoView({block:'start'});});
+  }
 }
 function paintScene(view, scene) {
     const panel = panels.get(view);
@@ -161,17 +227,37 @@ function updateScene() {
     node.querySelector('.node-bottom').firstChild.textContent=scenes[index].speaker || 'Mira';
   });
 }
-function minimumHeight(tree) {
-  if (!tree) return 0;
-  if (tree.type==='leaf') return tree.view==='library'?360:tree.view==='lua'?380:TOOL_VIEWS.includes(tree.view)?260:240;
-  const a=minimumHeight(tree.a), b=minimumHeight(tree.b);
-  return workspace.clientWidth>=650 && tree.axis==='x'?Math.max(a,b):8+Math.max(a/tree.ratio,b/(1-tree.ratio));
+function panelHeight(view) {
+  const [w,h]=RESOLUTIONS[settings.resolution];
+  return stackHeights.get(view) ?? preferredStackHeight(view,workspace.clientWidth,w/h);
 }
 function workspaceHeight() {
-  return workspace.clientWidth<650?Math.max(workspace.clientHeight,minimumHeight(layout.tree)):workspace.clientHeight;
+  if(!isStacked()) return workspace.clientHeight;
+  const views=leaves(layout.tree);
+  const total=views.reduce((sum,view)=>sum+panelHeight(view),0)+Math.max(0,views.length-1)*8;
+  return Math.max(workspace.clientHeight,total);
 }
 function fitViews() {
   dockRoot.style.height=`${workspaceHeight()}px`;
+  if(isStacked()) {
+    const views=leaves(layout.tree);
+    for(const view of views) panels.get(view).style.height=`${views.length===1?Math.max(workspace.clientHeight,panelHeight(view)):panelHeight(view)}px`;
+    for(const divider of dockRoot.querySelectorAll('[data-stack-before]')) {
+      const first=panelHeight(divider.dataset.stackBefore), second=panelHeight(divider.dataset.stackAfter);
+      divider.setAttribute('aria-valuemin',String(minimumStackHeight(divider.dataset.stackBefore)));
+      divider.setAttribute('aria-valuemax',String(first+second-minimumStackHeight(divider.dataset.stackAfter)));
+      divider.setAttribute('aria-valuenow',String(Math.round(first)));
+      divider.setAttribute('aria-valuetext',`${Math.round(first)} / ${Math.round(second)} piksel`);
+    }
+  } else {
+    function syncRatios(tree) {
+      if(!tree || tree.type==='leaf')return;
+      const split=dockRoot.querySelector(`[data-split="${tree.id}"]`);
+      if(split){split.children[0].style.flex=`${tree.ratio} 1 0`;split.children[2].style.flex=`${1-tree.ratio} 1 0`;split.children[1].setAttribute('aria-valuenow',String(Math.round(tree.ratio*100)));}
+      syncRatios(tree.a);syncRatios(tree.b);
+    }
+    syncRatios(fitDockTree(layout.tree,workspace.clientWidth));
+  }
   const viewport = panels.get('node').querySelector('.graph-viewport');
   if (viewport.isConnected && viewport.clientWidth) {
     const compact = viewport.clientWidth < 600; viewport.classList.toggle('is-compact', compact);
@@ -195,7 +281,7 @@ function showPlacement(view, button) {
   document.querySelector('#placement-title').textContent = `${names[view]} · yerleştir`;
   const target = document.querySelector('#placement-target'); target.replaceChildren();
   state.visible.filter(v => v !== view).forEach(v => { const option = document.createElement('option'); option.value = v; option.textContent = names[v]; target.append(option); });
-  placement.querySelectorAll('[data-edge]').forEach(el => { el.disabled = !target.options.length || state.pinned.includes(view); });
+  placement.querySelectorAll('[data-edge]').forEach(el => { el.disabled = !target.options.length || state.pinned.includes(view) || (isStacked() && ['left','right'].includes(el.dataset.edge)); });
   document.querySelector('#menu-pin span').textContent = state.pinned.includes(view) ? 'Sabitlemeyi kaldır' : 'Pencereyi sabitle';
   document.querySelector('#menu-pin').title = 'Sabitleme, pencere başlığının sürüklenmesini kilitler.';
   placement.hidden = false;
@@ -208,7 +294,7 @@ function dropTarget(x, y, source) {
   if (!target) return null;
   const rect = target.getBoundingClientRect(), px = (x - rect.left) / rect.width, py = (y - rect.top) / rect.height;
   const distances = { left: px, right: 1 - px, top: py, bottom: 1 - py };
-  const edge = Object.keys(distances).sort((a, b) => distances[a] - distances[b])[0];
+  const edge = isStacked() ? (py<.5?'top':'bottom') : Object.keys(distances).sort((a, b) => distances[a] - distances[b])[0];
   return { target: target.dataset.panel, edge, rect };
 }
 function showDrop(drop) {
@@ -233,11 +319,12 @@ workspace.addEventListener('pointerdown', event => {
   if(!event.target.isConnected) return;
   const panel = event.target.closest('[data-panel]'); if (panel) focus(panel.dataset.panel);
   const object = event.target.closest('.editable [data-object]');
-  const divider = event.target.closest('[data-divider]'), header = event.target.closest('[data-drag]');
+  const divider = event.target.closest('[data-divider]'), stackDivider=event.target.closest('[data-stack-before]'), header = event.target.closest('[data-drag]');
   if (object) {
-    selectedObject = object.dataset.object; object.focus({preventScroll:true}); updateScene();
+    selectedObject = object.dataset.object; object.focus({preventScroll:true}); updateScene(); tools.revealObject();
     startGesture(event, {type:'object', object:selectedObject, scene:sceneIndex, original:{...scenes[sceneIndex].objects[selectedObject]}, bounds:object.closest('.game-frame').getBoundingClientRect()});
-  } else if (divider) startGesture(event, {type:'divider', id:divider.dataset.divider, element:divider, axis:divider.parentElement.dataset.axis, bounds:divider.parentElement.getBoundingClientRect(), originalLayout:layout});
+  } else if (stackDivider) startGesture(event,{type:'stack-divider',before:stackDivider.dataset.stackBefore,after:stackDivider.dataset.stackAfter,first:panelHeight(stackDivider.dataset.stackBefore),second:panelHeight(stackDivider.dataset.stackAfter),originalHeights:new Map(stackHeights)});
+  else if (divider) startGesture(event, {type:'divider', id:divider.dataset.divider, element:divider, axis:divider.parentElement.dataset.axis, bounds:divider.parentElement.getBoundingClientRect(), originalLayout:layout});
   else if (header && !event.target.closest('button')) {
     if(state.pinned.includes(panel.dataset.panel)){notify('Yerleşim sabit. Taşımak için sabitlemeyi kaldır.');return;}
     closeMenus();
@@ -251,10 +338,14 @@ workspace.addEventListener('pointermove', event => {
     const object = gesture.original;
     scenes[gesture.scene].objects[gesture.object] = { ...object, x:Math.max(0,Math.min(100-object.w,object.x+dx/gesture.bounds.width*100)), y:Math.max(0,Math.min(100-object.h,object.y+dy/gesture.bounds.height*100)) };
     updateScene();
+  } else if(gesture.type==='stack-divider') {
+    setStackPair(gesture.before,gesture.after,gesture.first,gesture.second,dy); fitViews();
   } else if (gesture.type === 'divider') {
     const ratio = gesture.axis === 'x' ? (event.clientX-gesture.bounds.left)/gesture.bounds.width : (event.clientY-gesture.bounds.top)/gesture.bounds.height;
     layout = resizeSplit(layout, gesture.id, ratio);
-    const value = Math.max(.2, Math.min(.8, ratio));
+    const fitted=fitDockTree(layout.tree,workspace.clientWidth);
+    const find=node=>node.type==='leaf'?null:node.id===gesture.id?node:find(node.a)??find(node.b);
+    const value = find(fitted).ratio;
     gesture.element.previousElementSibling.style.flex = `${value} 1 0`; gesture.element.nextElementSibling.style.flex = `${1-value} 1 0`;
     gesture.element.setAttribute('aria-valuenow', String(Math.round(value*100))); fitViews();
   } else if (Math.abs(dx)+Math.abs(dy)>7 || gesture.moved) {
@@ -272,6 +363,7 @@ function endGesture(cancel = false) {
   if (current.type === 'panel' && current.moved && !cancel && !current.outside && current.drop) layout = dockView(layout,current.view,current.drop.target,current.drop.edge,state.pinned);
   if (cancel && current.type === 'object') { scenes[current.scene].objects[current.object] = current.original; updateScene(); }
   if (cancel && current.type === 'divider') layout = current.originalLayout;
+  if(cancel && current.type==='stack-divider') {stackHeights.clear();for(const [view,height] of current.originalHeights)stackHeights.set(view,height);}
   document.body.classList.remove('dragging'); document.querySelector('#drop-preview').hidden=true; document.querySelector('#drag-label').hidden=true;
   if (current.type !== 'object') render();
 }
@@ -283,7 +375,7 @@ workspace.addEventListener('click', event => {
   if (close) { apply(closeView(state,close.dataset.close)); (document.querySelector(`[data-view="${close.dataset.close}"]`)??document.querySelector("#tools-toggle")).focus({preventScroll:true}); }
   else if (pin) apply(togglePin(state,pin.dataset.pin));
   else if (menu) showPlacement(menu.dataset.placement,menu);
-  else if (node) { sceneIndex = Number(node.dataset.scene); updateScene(); }
+  else if (node) { sceneIndex = Number(node.dataset.scene); updateScene(); tools.revealNode(); }
   else if (event.target.closest('[data-continue]') && !event.target.closest('.editable')) {
     if (playback.status === 'paused') return;
     if (playback.status === 'playing') {
@@ -294,15 +386,28 @@ workspace.addEventListener('click', event => {
   }
   else if (zoomButton) { zoom = zoomButton.dataset.zoom==='fit'?1:Math.max(.5,Math.min(2,zoom+(zoomButton.dataset.zoom==='in'?.15:-.15))); fitViews(); }
 });
-workspace.addEventListener('focusin', event => { const panel = event.target.closest('[data-panel]'); if (panel) focus(panel.dataset.panel); });
+workspace.addEventListener('focusin', event => {
+  const panel = event.target.closest('[data-panel]'); if (panel) focus(panel.dataset.panel);
+  const object=event.target.closest('.editable [data-object]');
+  if(object && selectedObject!==object.dataset.object){selectedObject=object.dataset.object;updateScene();tools.revealObject();}
+});
+function setStackPair(before,after,first,second,delta) {
+  const heights=resizeStackPair(first,second,delta,minimumStackHeight(before),minimumStackHeight(after));
+  stackHeights.set(before,heights[0]);stackHeights.set(after,heights[1]);
+}
 workspace.addEventListener('keydown', event => {
   const object = event.target.closest('.editable [data-object]');
   if (object && ['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(event.key)) {
-    event.preventDefault(); selectedObject = object.dataset.object; const step=event.shiftKey?5:1, item=scenes[sceneIndex].objects[selectedObject];
+    event.preventDefault(); selectedObject = object.dataset.object; tools.revealObject(); const step=event.shiftKey?5:1, item=scenes[sceneIndex].objects[selectedObject];
     item.x=Math.max(0,Math.min(100-item.w,item.x+(event.key==='ArrowLeft'?-step:event.key==='ArrowRight'?step:0)));
     item.y=Math.max(0,Math.min(100-item.h,item.y+(event.key==='ArrowUp'?-step:event.key==='ArrowDown'?step:0))); updateScene();
   }
   const divider = event.target.closest('[data-divider]');
+  const stackDivider=event.target.closest('[data-stack-before]');
+  if(stackDivider && ['ArrowUp','ArrowDown'].includes(event.key)) {
+    event.preventDefault();const {stackBefore:before,stackAfter:after}=stackDivider.dataset;
+    setStackPair(before,after,panelHeight(before),panelHeight(after),event.key==='ArrowDown'?24:-24);fitViews();
+  }
   if (divider && ['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(event.key)) {
     event.preventDefault(); const delta=['ArrowRight','ArrowDown'].includes(event.key)?.05:-.05;
     layout=resizeSplit(layout,divider.dataset.divider,Number(divider.getAttribute('aria-valuenow'))/100+delta); render();
@@ -334,7 +439,7 @@ placement.addEventListener('click',event=>{
 document.addEventListener('pointerdown',event=>{ if (!event.target.closest('.popover,#options,[data-placement],.tools-launcher')) closeMenus(); });
 document.addEventListener('keydown',event=>{ if (event.key==='Escape') { endGesture(true); closeMenus(); } });
 document.querySelector('#reset').addEventListener('click',()=>{
-  endGesture(true); motion.cancel(); layout=syncLayout({tree:null},{visible:[]},state,workspace.clientWidth<650?'y':'x'); zoom=1; workspace.scrollTop=0; closeMenus(); render(); tools.log('Pencere yerleşimi sıfırlandı.');
+  endGesture(true); motion.cancel(); stackHeights.clear(); layout=syncLayout({tree:null},{visible:[]},state,'x'); zoom=1; workspace.scrollTop=0; closeMenus(); render(); tools.log('Pencere yerleşimi sıfırlandı.');
 });
 document.querySelector('#tools-toggle').addEventListener('click',()=>{
   const open=document.querySelector('#tools-menu').hidden;closeMenus();document.querySelector('#tools-menu').hidden=!open;
@@ -386,8 +491,8 @@ function rebuildGraph(){
   for(let i=0;i<scenes.length-1;i++){const path=document.createElementNS('http://www.w3.org/2000/svg','path');path.setAttribute('d',`M${220+250*i} 215H${280+250*i}`);svg.append(path);}
   panels.get('node').querySelector('.canvas-caption .muted').textContent=`${scenes.length} sahne`;
 }
-let narrowWorkspace=workspace.clientWidth<650;
-const observer=new ResizeObserver(()=>{const next=workspace.clientWidth<650;if(next!==narrowWorkspace){narrowWorkspace=next;motion.cancel();render();}else fitViews();}); observer.observe(workspace); observer.observe(panels.get('node').querySelector('.graph-viewport'));
+let previousWorkspaceWidth=workspace.clientWidth;
+const observer=new ResizeObserver(()=>{const width=workspace.clientWidth;if(width!==previousWorkspaceWidth){previousWorkspaceWidth=width;endGesture(true);motion.cancel();render();}else fitViews();}); observer.observe(workspace); observer.observe(panels.get('node').querySelector('.graph-viewport'));
 for (const view of ['game','edit']) observer.observe(panels.get(view).querySelector('.scene-stage-wrap'));
 try{const stored=JSON.parse(localStorage.getItem('rowl-authoring-project'));if(stored)authoring.restore(stored);}catch{}
 render();
