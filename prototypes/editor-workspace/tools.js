@@ -41,14 +41,19 @@ export function bindTools(panels, context) {
 
   });
   assets.addEventListener('click',event=>{const button=event.target.closest('[data-asset]'); if(button){ context.select(button.dataset.asset); context.openEdit(); }});
-  assets.querySelector('input').addEventListener('input',event=>{
-    const filter=event.target.value.toLocaleLowerCase('tr'); assets.querySelectorAll('[data-asset]').forEach(button=>{button.hidden=!button.textContent.toLocaleLowerCase('tr').includes(filter);});
-  });
+  const assetEmpty=document.createElement('p');assetEmpty.className='tool-hint asset-empty';assetEmpty.hidden=true;assetEmpty.setAttribute('role','status');assetEmpty.textContent='Bu isimde varlık bulunamadı. Aramayı temizle veya farklı bir isim dene.';assets.querySelector('.asset-grid').after(assetEmpty);
+  function filterAssets(){const filter=assets.querySelector('input').value.toLocaleLowerCase('tr');const buttons=[...assets.querySelectorAll('[data-asset]')];buttons.forEach(button=>button.hidden=!button.textContent.toLocaleLowerCase('tr').includes(filter));assetEmpty.hidden=buttons.some(button=>!button.hidden);}
+  assets.querySelector('input').addEventListener('input',filterAssets);
+  function setAssetCatalog(catalog){
+    const grid=assets.querySelector('.asset-grid');grid.replaceChildren();
+    for(const asset of catalog){const button=document.createElement('button');button.dataset.asset='moon';button.title='Örnek görsel · Ay objesini seçer';button.innerHTML='<div class="asset-preview"><svg><use href="#i-assets"/></svg></div><strong></strong><span>Örnek görsel</span>';button.querySelector('strong').textContent=asset.name;grid.append(button);}filterAssets();
+  }
+
   function paintLogs(){
     const list=consolePanel.querySelector('.console-lines'); list.replaceChildren();
     for(const log of logs){ const row=document.createElement('li'), time=document.createElement('time'), message=document.createElement('span'); time.textContent=log.time; message.textContent=log.message; row.append(time,message); list.append(row); }
     list.scrollTop=list.scrollHeight;
   }
   consolePanel.querySelector('[data-clear-log]').addEventListener('click',()=>{logs.length=0;paintLogs();});
-  return {update, revealObject(){inspector.querySelector('.inspector-node-properties').open=false;inspector.querySelector('.tool-content').scrollTop=0;}, revealNode(){inspector.querySelector('.inspector-node-properties').open=true;inspector.querySelector('.tool-content').scrollTop=0;}, log(message){logs.push({time:new Date().toLocaleTimeString('tr-TR'),message}); if(logs.length>100) logs.shift(); paintLogs();}};
+  return {update,setAssetCatalog, revealObject(){inspector.querySelector('.inspector-node-properties').open=false;inspector.querySelector('.tool-content').scrollTop=0;}, revealNode(){inspector.querySelector('.inspector-node-properties').open=true;inspector.querySelector('.tool-content').scrollTop=0;}, log(message){logs.push({time:new Date().toLocaleTimeString('tr-TR'),message}); if(logs.length>100) logs.shift(); paintLogs();}};
 }

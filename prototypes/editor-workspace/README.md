@@ -71,9 +71,11 @@ Ayarlar ve kaydedilmiş script taslakları localStorage alanında kalır. Kayded
 - Node, Edit Scene ve Inspector kullanılabilir; düzenleme verileri çalışan/donmuş Game kopyasını değiştirmez. ■ ile kapatınca Game düzenleme önizlemesine döner.
 - Ekran simgesi yalnız pencereyi açar/kapatır. Game'de Devam et duraklatılmışken; duraklat düğmesi oyun kapalıyken devre dışıdır.
 
-## Doğrulama — 2026-10-05
+## Güncel doğrulama — 2026-10-07
 
-34 durum testi: pencere açma, sabit/son pencere kapatma, odak, dört yönlü yerleşim, pin kilidi, oran sınırları, 1000 karma işlemde alanların çakışmaması; ayar doğrulama ve Inspector sınırları; bağımsız oynatma kopyası, donma ve devam etme; kütüphane bağımsızlığı; mobil Game yeniden açma, minimum genişlik ve komşu panel yüksekliklerinin korunması.
+41 durum testi geçti. Yeni sahne/graph geometrisi, dock yüksekliği, örnek veri ve depolama izolasyonu kontrolleri eklendi. [Güncel tasarım raporu](../../docs/UI_PROTOTYPE_DESIGN_COMPLETION_2026-10-07.md).
+
+Aşağıdaki canlı kontrol kayıtları önceki dilimlere aittir. Önceki 34 testin kapsamı: pencere açma, sabit/son pencere kapatma, odak, dört yönlü yerleşim, pin kilidi, oran sınırları, 1000 karma işlemde alanların çakışmaması; ayar doğrulama ve Inspector sınırları; bağımsız oynatma kopyası, donma ve devam etme; kütüphane bağımsızlığı; mobil Game yeniden açma, minimum genişlik ve komşu panel yüksekliklerinin korunması.
 
 ```sh
 node --test prototypes/editor-workspace/*.test.mjs
@@ -170,3 +172,12 @@ Büyük önizleme, açıldığı andaki sahne olduğunu açıkça belirtir.
 
 34 testin üç yeni regresyonu, raporlanan dizüstü ağacını, geçici ayırıcı
 ölçülerini/geniş dönüşü ve on panelin okunabilir ölçülerde korunmasını kapsar.
+
+
+## Sahne ve tasarım galerisi — 7 Ekim
+
+Game/Edit Scene altındaki − / + kontrolleri %100–300 yakınlaştırır; Sığdır %100'e döner. Büyük sahne panel içinde kaydırılır. **Oku** 16 px canlı metni panel içinde açar; Game'de oynatımın o an gösterdiği metni izler. **Büyüt** açıldığı andaki görüntü/metni ayrı pencerede tutmaya devam eder. Yakınlaştırma obje koordinatlarını değiştirmez; sürükleme gerçek çerçeve boyutuyla hesaplanır. Yakınlaştırma ve okuyucu durumu bu oturumda korunur.
+
+[review.html](review.html) standart, uzun/yoğun içerik, boş/12 projeli Hub ve işlem durumlarını ayrı örneklerle açar. `?review=` modunda gerçek tarayıcı kayıtları okunmaz/yazılmaz; proje, Lua, ayar ve kütüphane işlemleri örnek oturumunun belleğinde tutulur. Yenileme örneği sıfırlar. Normal çalışma alanının kayıt davranışı korunur. Hub kartları gerçek proje dosyası açmaz.
+
+Dock genişliği sığsa bile panel minimum yükseklikleri korunur; gerekirse çalışma alanı aşağı uzar. Birleştirme eşiği çalışma alanında 1040 px'tir. Yoğun graph varsayılan sığdırmada %75'in altına küçültülmez; büyük akışa gerçek kaydırma alanından ulaşılır. Native/Avalonia UI aktarımı başlamadı.

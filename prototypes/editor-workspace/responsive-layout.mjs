@@ -4,12 +4,16 @@ export const minimumWidth = tree => !tree ? 0 : tree.type === 'leaf'
   ? widths[tree.view] ?? 280
   : tree.axis === 'x' ? minimumWidth(tree.a) + minimumWidth(tree.b) + 8 : Math.max(minimumWidth(tree.a), minimumWidth(tree.b));
 export const stackLayout = (tree, width) => width < 650 || width < minimumWidth(tree);
-export function fitDockTree(tree, width) {
+export function fitDockTree(tree, width, height=Infinity) {
   if (!tree || tree.type === 'leaf') return tree;
-  if (tree.axis === 'y') return {...tree, a:fitDockTree(tree.a,width), b:fitDockTree(tree.b,width)};
+  if (tree.axis === 'y') {
+    const space=height-8;
+    const ratio=Number.isFinite(height)?Math.max(minimumDockHeight(tree.a)/space,Math.min(1-minimumDockHeight(tree.b)/space,tree.ratio)):tree.ratio;
+    return {...tree,ratio,a:fitDockTree(tree.a,width,space*ratio),b:fitDockTree(tree.b,width,space*(1-ratio))};
+  }
   const space = width - 8;
   const ratio = Math.max(minimumWidth(tree.a)/space, Math.min(1-minimumWidth(tree.b)/space, tree.ratio));
-  return {...tree, ratio, a:fitDockTree(tree.a,space*ratio), b:fitDockTree(tree.b,space*(1-ratio))};
+  return {...tree, ratio, a:fitDockTree(tree.a,space*ratio,height), b:fitDockTree(tree.b,space*(1-ratio),height)};
 }
 export const minimumStackHeight = view => view === 'node' ? 360 : view === 'lua' ? 320 : 240;
 export function preferredStackHeight(view, width, aspect=1.6) {
@@ -48,16 +52,19 @@ function projected(tree,width,height,ratios) {
 }
 // Reflow adjacent columns only; preserve leaf order and the user's canonical tree.
 export function responsivePresentation(tree,width,height,ratios={}) {
-  if(!stackLayout(tree,width))return {mode:'dock',tree:fitDockTree(tree,width),height};
+  if(!stackLayout(tree,width)){const nextHeight=Math.max(height,minimumDockHeight(tree));return {mode:'dock',tree:fitDockTree(tree,width,nextHeight),height:nextHeight};}
   if(width<1040 || !tree)return {mode:'stack',tree,height};
   const groups=columns(tree);
   const total=()=>groups.reduce((sum,group)=>sum+minimumWidth(group),0)+Math.max(0,groups.length-1)*8;
   while(total()>width && groups.length>1) {
-    let best=0, bestScore=Infinity;
+    let best=0, bestScore=null;
     for(let i=0;i<groups.length-1;i++) {
       const a=groups[i],b=groups[i+1];
-      const score=sceneColumn(a)&&sceneColumn(b)?0:toolColumn(a)&&toolColumn(b)?1:10;
-      if(score<bestScore){best=i;bestScore=score;}
+      const priority=sceneColumn(a)&&sceneColumn(b)?0:toolColumn(a)&&toolColumn(b)?1:10;
+      const merged=join(a,b,'y'),others=groups.filter((_,index)=>index!==i && index!==i+1);
+      const score=[priority,Math.max(minimumDockHeight(merged),...others.map(minimumDockHeight)),minimumWidth(merged)+others.reduce((sum,t)=>sum+minimumWidth(t),0)];
+      const compare=bestScore?score.findIndex((value,index)=>value!==bestScore[index]):-1;
+      if(!bestScore || compare>=0 && score[compare]<bestScore[compare]){best=i;bestScore=score;}
     }
     groups.splice(best,2,join(groups[best],groups[best+1],'y'));
   }

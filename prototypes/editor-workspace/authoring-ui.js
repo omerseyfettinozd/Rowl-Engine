@@ -1,3 +1,5 @@
+import {bindFormFeedback} from './design-status.js';
+import {prototypeStorage} from './prototype-storage.mjs';
 const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const types = [
   ['dialogue','Diyalog','Konuşmacı, metin ve yazı boyutu','story'],
@@ -24,11 +26,12 @@ export function bindAuthoring(panels, context) {
     if(!dialog.open)opener=document.activeElement;
     dialog.innerHTML=`<form><header class="author-heading"><div><span class="tool-caption">ROWL / EDİTÖR</span><h2 id="author-title">${title}</h2><p>${subtitle}</p></div><button type="button" class="icon-button" data-dismiss aria-label="Pencereyi kapat"><svg><use href="#i-close"/></svg></button></header><div class="author-body">${body}</div><footer class="author-footer"><span>Tarayıcı prototipi</span><button type="button" class="author-button" data-dismiss>Vazgeç</button>${primary?`<button class="primary-button" type="submit">${primary}</button>`:''}</footer></form>`;
     dialog.querySelectorAll('[data-dismiss]').forEach(el=>el.onclick=close);
+    bindFormFeedback(dialog.querySelector('form'));
     dialog.querySelector('form').onsubmit=event=>{event.preventDefault();submit?.(new FormData(event.currentTarget));};
     if(!dialog.open)dialog.showModal();
   }
   function snapshot(){return {...context.snapshot(),assets};}
-  function save(){try{localStorage.setItem('rowl-authoring-project',JSON.stringify(snapshot()));context.notify('Proje bu tarayıcıda kaydedildi.');context.log('Yerel proje kaydedildi.');}catch{context.notify('Yerel kayıt alanı dolu. Ayarların dışa aktarma bölümünden JSON indirebilirsin.');}}
+  function save(){try{prototypeStorage.setItem('rowl-authoring-project',JSON.stringify(snapshot()));context.notify(context.review?'Örnek proje bu oturumda tutuluyor.':'Proje bu tarayıcıda kaydedildi.');context.log('Yerel proje kaydedildi.');}catch{context.notify('Yerel kayıt alanı dolu. Ayarların dışa aktarma bölümünden JSON indirebilirsin.');}}
   function summary(){const {scene,selected}=context.get();components.replaceChildren();for(const entry of scene.objects[selected].components??[]){const row=document.createElement('button');row.className='component-row';row.textContent=`${types.find(type=>type[0]===entry.type)?.[1]??entry.type} · Düzenle`;row.onclick=()=>configure(entry.type,entry);components.append(row);}}
   function picker(){const {names,selected}=context.get();show('Bileşen ekle',`${names[selected]} objesine bir davranış veya içerik ekle.`,`<label class="author-field">Bileşen ara<input type="search" placeholder="Diyalog, ses, kamera…" data-component-search></label><div class="component-catalog">${types.map(([id,label,description,icon])=>`<button type="button" data-component="${id}"><svg><use href="#i-${icon}"/></svg><span><strong>${label}</strong><small>${description}</small></span><span>→</span></button>`).join('')}</div><p class="catalog-empty" hidden>Bu isimde bileşen bulunamadı.</p>`,null);
     dialog.querySelector('[data-component-search]').oninput=event=>{let count=0;dialog.querySelectorAll('[data-component]').forEach(el=>{el.hidden=!el.textContent.toLocaleLowerCase('tr').includes(event.target.value.toLocaleLowerCase('tr'));if(!el.hidden)count++;});dialog.querySelector('.catalog-empty').hidden=count>0;};
@@ -50,13 +53,24 @@ export function bindAuthoring(panels, context) {
   }
   function hub(){
     save();
-    show('Projeler','Çalışma alanından proje listesine dön.',`<div class="hub-projects"><button type="button" class="hub-project" data-resume><svg><use href="#i-moon"/></svg><strong></strong><span></span><small>Çalışma alanına dön →</small></button></div>` ,null);
+    const current=context.snapshot();
+    const projects=context.projects??[{id:'current',name:current.settings.project,nodes:current.scenes.length}];
+    show('Projeler',context.review?'Tasarım örneği · kartlar gerçek proje dosyası açmaz.':'Çalışma alanından proje listesine dön.',`<label class="author-field">Proje ara<input type="search" aria-label="Proje ara" placeholder="İsimle ara…"></label><div class="hub-projects"></div><p class="hub-empty" hidden></p>`,null);
     dialog.classList.add('hub-dialog');dialog.addEventListener('close',()=>dialog.classList.remove('hub-dialog'),{once:true});
-    dialog.querySelector('.hub-project strong').textContent=context.snapshot().settings.project;
-    dialog.querySelector('.hub-project span').textContent=`${context.snapshot().scenes.length} düğüm · Bu tarayıcıdaki örnek proje`;
-    dialog.querySelector('[data-resume]').onclick=close;
+    function paint(query=''){
+      const list=dialog.querySelector('.hub-projects'),empty=dialog.querySelector('.hub-empty');list.replaceChildren();
+      for(const project of projects.filter(p=>p.name.toLocaleLowerCase('tr').includes(query.toLocaleLowerCase('tr')))){
+        const button=document.createElement('button');button.type='button';button.className='hub-project';button.innerHTML='<svg><use href="#i-moon"/></svg><strong></strong><span></span><small></small>';
+        button.querySelector('strong').textContent=project.name;button.querySelector('span').textContent=`${project.nodes} düğüm · ${context.review?'Tasarım örneği':'Bu tarayıcıdaki örnek proje'}`;
+        button.querySelector('small').textContent=context.review?'Kart önizlemesini aç →':'Çalışma alanına dön →';
+        button.onclick=()=>{if(!context.review){close();return;}show(project.name,'Tasarım örneği',`<div class="author-preview"><h3>Proje kartı</h3><p>${project.nodes} düğüm · Örnek içerik</p><p>Bu görünüm proje listesinin tasarımını gösterir.</p><button type="button" class="author-button" data-back>Proje listesine dön</button></div>`,null);dialog.querySelector('[data-back]').onclick=hub;};list.append(button);
+      }
+      empty.hidden=!!list.children.length;empty.textContent=projects.length?'Bu isimde proje bulunamadı.':'Henüz proje yok. İlk hikâyen için bir proje oluştur.';
+      if(!projects.length){const button=document.createElement('button');button.type='button';button.className='author-button';button.textContent='Örnek projeleri gör';button.onclick=()=>{projects.push(...Array.from({length:3},(_,i)=>({id:`sample-${i}`,name:`Örnek hikâye ${i+1}`,nodes:3})));paint();};empty.append(button);}
+    }
+    dialog.querySelector('[aria-label="Proje ara"]').oninput=event=>paint(event.target.value);paint();
   }
   document.addEventListener('click',event=>{const action=event.target.closest('[data-author]')?.dataset.author;if(!action)return;context.beforeOpen();({save,hub,component:picker})[action]?.();});
   document.addEventListener('keydown',event=>{if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='s'&&!dialog.open&&!document.querySelector('#settings-dialog').open&&!event.target.closest('[data-panel="lua"]')){event.preventDefault();save();}});
-  return {update:summary,restore:data=>{context.restore(data);assets=Array.isArray(data.assets)?data.assets:[];}};
+  return {update:summary,openHub:hub,restore:data=>{context.restore(data);assets=Array.isArray(data.assets)?data.assets:[];}};
 }

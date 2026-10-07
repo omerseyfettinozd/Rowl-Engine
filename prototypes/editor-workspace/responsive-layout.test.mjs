@@ -81,7 +81,8 @@ test('adaptive resizing clamps both dimensions and preserves canonical ratios on
     verifyProjection(fitted.tree,1340,fitted.height);
     assert.deepEqual(tree,snapshot);
   }
-  assert.deepEqual(responsivePresentation(tree,1424,836).tree,fitDockTree(tree,1424));
+  const wide=responsivePresentation(tree,1424,836);
+  assert.deepEqual(wide.tree,fitDockTree(tree,1424,wide.height));
 });
 test('ten open panels survive every sampled adaptive width without narrow columns',()=>{
   const tree=['node','lua','game','edit','inspector','library','assets','store','console','hierarchy'].map(leaf).reduce((a,b)=>split(a,b));
@@ -94,4 +95,14 @@ test('ten open panels survive every sampled adaptive width without narrow column
     verifyProjection(result.tree,width,result.height);
   }
   assert.deepEqual(tree,snapshot);
+});
+
+test('readable columns also keep Inspector and Lua tall enough in normal docking',()=>{
+  const tree=split(split(leaf('node'),leaf('lua'),'y'),split(split(leaf('inspector'),leaf('library'),'y'),leaf('assets'),'y'));
+  const snapshot=structuredClone(tree),result=responsivePresentation(tree,1340,704);
+  assert.equal(result.mode,'dock');assert.ok(result.height>704);verifyProjection(result.tree,1340,result.height);assert.deepEqual(tree,snapshot);
+});
+test('nested and reordered layouts retain unique leaves and immutable source across breakpoints',()=>{
+  const trees=[laptopTree(),split(laptopTree(),split(leaf('store'),leaf('console')),'y'),split(split(leaf('lua'),leaf('game')),split(leaf('node'),leaf('inspector')))];
+  for(const tree of trees){const original=structuredClone(tree);for(const width of [1039,1040,1340,1424,1900]){const result=responsivePresentation(tree,width,704);assert.deepEqual(leaves(result.tree),leaves(tree));assert.equal(new Set(leaves(result.tree)).size,leaves(tree).length);if(result.mode!=='stack')verifyProjection(result.tree,width,result.height);}assert.deepEqual(tree,original);}
 });

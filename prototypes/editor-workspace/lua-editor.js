@@ -1,3 +1,4 @@
+import {prototypeStorage} from './prototype-storage.mjs';
 const samples = {
   'mira.lua': `-- Mira · sahneye giriş\nlocal mira = {\n  name = "Mira",\n  visible = true,\n  position = { x = 25, y = 35 }\n}\n\nfunction on_start()\n  -- Karakterin hikâyesi burada başlar.\n  local greeting = "Gece ne kadar sessiz…"\n  return greeting\nend\n\nreturn mira\n`,
   'sahne.lua': `-- Bir gece, bir ışık\nlocal scene = {\n  title = "Bir gece, bir ışık",\n  background = "ay-isigi",\n  music = "gece-ambiyansi"\n}\n\nreturn scene\n`,
@@ -22,7 +23,7 @@ export function luaContent() {
 export function bindLua(panel, context) {
   const root=panel.querySelector('.lua-editor'), input=root.querySelector('textarea'), tabs=root.querySelector('.script-tabs');
   let files={...samples},saved={...samples},active='mira.lua';
-  try{const value=JSON.parse(localStorage.getItem('rowl-script-drafts'));if(value&&typeof value==='object'&&!Array.isArray(value))for(const [name,code] of Object.entries(value))if(/^[\w-]+\.lua$/.test(name)&&typeof code==='string'&&code.length<50000)files[name]=code;saved={...files};}catch{}
+  try{const value=JSON.parse(prototypeStorage.getItem('rowl-script-drafts'));if(value&&typeof value==='object'&&!Array.isArray(value))for(const [name,code] of Object.entries(value))if(/^[\w-]+\.lua$/.test(name)&&typeof code==='string'&&code.length<50000)files[name]=code;saved={...files};}catch{}
   function cursor(){const before=input.value.slice(0,input.selectionStart),lines=before.split('\n');root.querySelector('[data-cursor]').textContent=`Satır ${lines.length} · Sütun ${lines.at(-1).length+1}`;}
   function search(){const query=root.querySelector('.script-search input').value;const count=query?input.value.split(query).length-1:0;root.querySelector('[data-search-result]').textContent=query?`${count} eşleşme`:'';}
   function paint(){
@@ -38,7 +39,7 @@ export function bindLua(panel, context) {
   input.addEventListener('click',cursor);input.addEventListener('keyup',cursor);
   input.addEventListener('keydown',event=>{if(event.key==='Tab'){event.preventDefault();const start=input.selectionStart,end=input.selectionEnd;input.value=input.value.slice(0,start)+'  '+input.value.slice(end);input.selectionStart=input.selectionEnd=start+2;files[active]=input.value;paint();}if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='s'){event.preventDefault();save();}});
   tabs.addEventListener('click',event=>{const button=event.target.closest('[data-file]');if(button)open(button.dataset.file);});
-  function save(){try{localStorage.setItem('rowl-script-drafts',JSON.stringify(files));saved={...files};paint();context.notify('Script taslağı kaydedildi.');}catch{context.notify('Taslak bu oturumda tutuluyor; tarayıcıya kaydedilemedi.');}}
+  function save(){try{prototypeStorage.setItem('rowl-script-drafts',JSON.stringify(files));saved={...files};paint();context.notify(context.review?'Script bu tasarım oturumunda tutuluyor.':'Script taslağı kaydedildi.');}catch{context.notify('Taslak bu oturumda tutuluyor; tarayıcıya kaydedilemedi.');}}
   root.querySelector('[data-script-save]').addEventListener('click',save);
   root.querySelector('[data-script-new]').addEventListener('click',()=>{let n=1;while(files[`script-${n}.lua`]!==undefined)n++;const name=`script-${n}.lua`;files[name]='-- Yeni bir hikâye\n\n';renderTabs();open(name);input.focus();});
   root.querySelector('[data-script-find]').addEventListener('click',()=>{root.querySelector('.script-search').hidden=false;root.querySelector('.script-search input').focus();});

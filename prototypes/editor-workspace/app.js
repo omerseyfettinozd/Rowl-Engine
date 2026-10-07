@@ -1,3 +1,8 @@
+import {activeScenario,makeDesignData} from './design-scenarios.mjs';
+import {mountReviewState} from './design-review.js';
+import {prototypeStorage} from './prototype-storage.mjs';
+import {bindSceneView} from './scene-view.js';
+import {percentDelta,graphGeometry} from './scene-view-state.mjs';
 import { initialState, focusView, openView, closeView, toggleView, togglePin } from './workspace-state.mjs';
 import { initialLayout, syncLayout, dockView, resizeSplit } from './layout-state.mjs';
 import { leaves } from './layout-state.mjs';
@@ -28,7 +33,9 @@ let renderGeneration=0;
 const workspace = document.querySelector('#workspace'), dockRoot = document.querySelector('#dock-root');
 const placement = document.querySelector('#placement-menu'), options = document.querySelector('#options-menu');
 let settings = defaultSettings();
-try { settings = normalizeSettings(JSON.parse(localStorage.getItem('rowl-prototype-settings'))); } catch {}
+try { settings = normalizeSettings(JSON.parse(prototypeStorage.getItem('rowl-prototype-settings'))); } catch {}
+const reviewData=activeScenario?makeDesignData(activeScenario,{settings,scenes}):null;
+if(reviewData){prototypeStorage.setItem('rowl-script-drafts',JSON.stringify(reviewData.scripts));prototypeStorage.setItem('rowl-user-node-library',JSON.stringify({folders:[],items:activeScenario==='crowded'?reviewData.scenes.map(scene=>({id:scene.id,scene,folderId:null})):[]}));}
 const panels = new Map();
 const stackHeights = new Map();
 const adaptiveRatios = {};
@@ -58,6 +65,11 @@ for (const view of Object.keys(names)) {
   panels.set(view, panel);
 }
 
+const graphViewport=panels.get('node').querySelector('.graph-viewport');
+const graphSpace=document.createElement('div');graphSpace.className='graph-scroll-space';graphSpace.append(graphViewport.querySelector('.graph-world'));graphViewport.append(graphSpace);
+graphViewport.tabIndex=0;graphViewport.setAttribute('role','region');graphViewport.setAttribute('aria-label','Hikâye akışı gezinmesi');
+const sceneViews=new Map(['game','edit'].map(view=>[view,bindSceneView(panels.get(view),names[view])]));
+
 const scenePreview=document.createElement('dialog');scenePreview.className='scene-preview-dialog';
 scenePreview.setAttribute('aria-labelledby','scene-preview-title');
 scenePreview.innerHTML='<div class="preview-shell"><header class="dialog-header"><h2 id="scene-preview-title">Sahne önizlemesi</h2><button class="icon-button" aria-label="Büyük önizlemeyi kapat"><svg><use href="#i-close"/></svg></button></header><div class="preview-stage"></div><div class="preview-reading"><span class="preview-caption">Açıldığı andaki sahne · canlı oynatım değil</span><strong></strong><p></p></div></div>';
@@ -72,7 +84,7 @@ new ResizeObserver(fitPreview).observe(scenePreview);
 for(const view of ['game','edit']) {
   const button=document.createElement('button');button.className='scene-enlarge';button.textContent='Büyüt';
   button.setAttribute('aria-label',`${names[view]} sahnesini ve metnini büyüt`);
-  panels.get(view).querySelector('.scene-bottom').append(button);
+  panels.get(view).querySelector('.scene-controls').append(button);
   button.addEventListener('click',()=>{
     const scene=view==='game'?(playbackFrame(playback)??scenes[sceneIndex]):scenes[sceneIndex];
     const frame=panels.get(view).querySelector('.game-frame').cloneNode(true);frame.classList.remove('editable');
@@ -100,7 +112,7 @@ document.querySelectorAll('.view-button').forEach(button=>{
   button.addEventListener('click',()=>toolbarHint.hidden=true);
 });
 
-const lua = bindLua(panels.get('lua'),{notify});
+const lua = bindLua(panels.get('lua'),{notify,review:activeScenario});
 const motion = workspaceMotion(dockRoot,panels);
 const tools = bindTools(panels, {
   get:()=>({scene:scenes[sceneIndex], selected:selectedObject, names:objectNames}),
@@ -113,7 +125,7 @@ const tools = bindTools(panels, {
 });
 tools.log('Çalışma alanı hazır.');
 function notify(message) {
-  const toast = document.querySelector('#toast'); toast.textContent = message; toast.classList.add('visible');
+  const toast = document.querySelector('#toast'); toast.setAttribute('role','status');toast.setAttribute('aria-live','polite');toast.textContent = message; toast.classList.add('visible');
   clearTimeout(toastTimer); toastTimer = setTimeout(() => toast.classList.remove('visible'), 3200);
 }
 function closeMenus() {
@@ -217,6 +229,7 @@ function render(animated=false,reveal=false) {
 }
 function paintScene(view, scene) {
     const panel = panels.get(view);
+    sceneViews.get(view).update(scene);
     panel.querySelector('.scene-title').textContent = scene.title;
     panel.querySelector('.speaker-name').textContent = scene.speaker || 'Mira';
     panel.querySelector('.dialogue-text').style.fontSize = scene.fontSize ? `${scene.fontSize / 8}cqw` : '';  panel.querySelector('.dialogue-text').textContent = scene.dialogue;
@@ -243,7 +256,7 @@ function updateScene() {
   panels.get('node').querySelectorAll('[data-scene]').forEach(node => {
     const index = Number(node.dataset.scene); node.classList.toggle('selected', index === sceneIndex); node.setAttribute('aria-pressed', String(index === sceneIndex));
     node.querySelector('.node-type').childNodes[1].textContent=index===0?'BAŞLANGIÇ ':'DÜĞÜM ';
-    node.querySelector('strong').textContent=scenes[index].title;
+    node.querySelector('strong').textContent=scenes[index].title;node.querySelector('strong').title=scenes[index].title;
     node.querySelector('.node-description').textContent=scenes[index].dialogue.slice(0,75);
     node.querySelector('.node-bottom').firstChild.textContent=scenes[index].speaker || 'Mira';
   });
@@ -283,18 +296,14 @@ function fitViews() {
   if (viewport.isConnected && viewport.clientWidth) {
     const compact = viewport.clientWidth < 600; viewport.classList.toggle('is-compact', compact);
     const width = compact ? 260 : Math.max(780, scenes.length*250+30), height = compact ? Math.max(560,scenes.length*185+20) : 440;
-    if(scenes.length!==3 || viewport.querySelector('.dynamic-graph')){const world=viewport.querySelector('.graph-world');world.style.width=`${width}px`;world.style.height=`${height}px`;}
-    const scale = Math.max(.25, compact ? Math.min((viewport.clientWidth - 20) / width, 1) : Math.min((viewport.clientWidth - 24) / width, (viewport.clientHeight - 20) / height, 1.25)) * zoom;
-    viewport.querySelector('.graph-world').style.transform = `translate(${Math.max(0, (viewport.clientWidth - width * scale) / 2)}px, ${Math.max(0, (viewport.clientHeight - height * scale) / 2)}px) scale(${scale})`;
-    panels.get('node').querySelector('.zoom-value').textContent = `${Math.round(scale * 100)}%`;
+    const world=viewport.querySelector('.graph-world');world.style.width=`${width}px`;world.style.height=`${height}px`;
+    const fitted=graphGeometry(viewport.clientWidth,viewport.clientHeight,width,height,compact,zoom);
+    graphSpace.style.width=`${fitted.width}px`;graphSpace.style.height=`${fitted.height}px`;
+    world.style.transform=`translate(${fitted.left}px,${fitted.top}px) scale(${fitted.scale})`;
+    panels.get('node').querySelector('.zoom-value').textContent=`${Math.round(fitted.scale*100)}%`;
   }
-  for (const view of ['game', 'edit']) {
-    const wrap = panels.get(view).querySelector('.scene-stage-wrap');
-    if (!wrap.isConnected) continue;
-    const [rw,rh]=RESOLUTIONS[settings.resolution], aspect=rw/rh;
-    const width = Math.max(0, Math.min(wrap.clientWidth, wrap.clientHeight * aspect));
-    const frame = wrap.querySelector('.game-frame'); frame.style.width = `${width}px`; frame.style.height = `${width / aspect}px`;
-  }
+  const [rw,rh]=RESOLUTIONS[settings.resolution];
+  for(const view of ['game','edit'])sceneViews.get(view).fit(rh/rw);
   library?.update();
 }
 function showPlacement(view, button) {
@@ -356,8 +365,8 @@ workspace.addEventListener('pointermove', event => {
   if (!gesture || gesture.pointerId !== event.pointerId) return;
   const dx = event.clientX - gesture.startX, dy = event.clientY - gesture.startY;
   if (gesture.type === 'object') {
-    const object = gesture.original;
-    scenes[gesture.scene].objects[gesture.object] = { ...object, x:Math.max(0,Math.min(100-object.w,object.x+dx/gesture.bounds.width*100)), y:Math.max(0,Math.min(100-object.h,object.y+dy/gesture.bounds.height*100)) };
+    const object = gesture.original, delta=percentDelta(dx,dy,gesture.bounds.width,gesture.bounds.height);
+    scenes[gesture.scene].objects[gesture.object] = { ...object, x:Math.max(0,Math.min(100-object.w,object.x+delta.x)), y:Math.max(0,Math.min(100-object.h,object.y+delta.y)) };
     updateScene();
   } else if(gesture.type==='stack-divider') {
     setStackPair(gesture.before,gesture.after,gesture.first,gesture.second,dy); fitViews();
@@ -470,7 +479,7 @@ document.querySelectorAll('[data-tool]').forEach(button=>button.addEventListener
 const preferences=bindSettings(document.querySelector('#settings-dialog'),{
   get:()=>settings,
   beforeOpen:()=>{motion.cancel();closeMenus();},
-  apply:changes=>{settings=normalizeSettings({...settings,...changes});try{localStorage.setItem('rowl-prototype-settings',JSON.stringify(settings));}catch{}updateScene();fitViews();tools.log('Tasarım tercihleri kaydedildi.');notify('Tercihler kaydedildi.');},
+  apply:changes=>{settings=normalizeSettings({...settings,...changes});try{prototypeStorage.setItem('rowl-prototype-settings',JSON.stringify(settings));}catch{}updateScene();fitViews();tools.log('Tasarım tercihleri kaydedildi.');notify(activeScenario?'Tercihler bu tasarım oturumunda tutuluyor.':'Tercihler kaydedildi.');},
   export:details=>{const data={format:'rowl-workspace-prototype/v2',settings,preferences:details,scenes,scripts:details.includeScripts?lua.snapshot():{},workspace:{...state,layout}};const url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));const link=document.createElement('a');link.href=url;link.download='rowl-proje-taslagi.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);notify('Proje taslağı indirildi.');}
 });
 document.querySelectorAll('[data-settings]').forEach(button=>button.addEventListener('click',()=>preferences.open(button.dataset.settings)));
@@ -485,6 +494,7 @@ let library=bindLibrary(panels.get('library'),panels.get('inspector'),{
 });
 let authoring = bindAuthoring(panels, {
   get:()=>({scene:scenes[sceneIndex],selected:selectedObject,names:objectNames}),
+  review:activeScenario,projects:reviewData?.projects,
   beforeOpen:()=>{endGesture(true);motion.cancel();closeMenus();},notify,log:message=>tools.log(message),
   snapshot:()=>({format:'rowl-authoring-prototype/v1',settings,scenes:structuredClone(scenes),scripts:lua.snapshot(),designPreferences:preferences.snapshot()}),
   component:entry=>{const object=scenes[sceneIndex].objects[selectedObject];object.components??=[];const old=object.components.findIndex(c=>c.type===entry.type);if(old<0)object.components.push(entry);else object.components[old]=entry;
@@ -513,10 +523,19 @@ function rebuildGraph(){
   panels.get('node').querySelector('.canvas-caption .muted').textContent=`${scenes.length} sahne`;
 }
 let previousWorkspaceWidth=workspace.clientWidth;
-const observer=new ResizeObserver(()=>{const width=workspace.clientWidth;if(width!==previousWorkspaceWidth){previousWorkspaceWidth=width;endGesture(true);motion.cancel();render();}else fitViews();}); observer.observe(workspace); observer.observe(panels.get('node').querySelector('.graph-viewport'));
+const observer=new ResizeObserver(()=>{const width=workspace.clientWidth;if(width!==previousWorkspaceWidth){previousWorkspaceWidth=width;endGesture(true);motion.cancel();render(false,true);}else fitViews();}); observer.observe(workspace); observer.observe(panels.get('node').querySelector('.graph-viewport'));
 for (const view of ['game','edit']) observer.observe(panels.get(view).querySelector('.scene-stage-wrap'));
-try{const stored=JSON.parse(localStorage.getItem('rowl-authoring-project'));if(stored)authoring.restore(stored);}catch{}
+try{const stored=reviewData??JSON.parse(prototypeStorage.getItem('rowl-authoring-project'));if(stored)authoring.restore(stored);}catch{}
+if(reviewData){
+  document.title+=' · Tasarım örneği';
+  const label=document.createElement('span');label.className='menu-label review-label';label.textContent=`TASARIM ÖRNEĞİ · ${activeScenario}`;options.prepend(label);
+  for(const view of ['game','edit','inspector',...(activeScenario==='crowded'?['lua','library','assets']:[])]){const next=openView(state,view);layout=syncLayout(layout,state,next.state);state=next.state;}
+  if(reviewData.assets.length)tools.setAssetCatalog(reviewData.assets);
+  if(activeScenario==='crowded')tools.revealObject();
+  mountReviewState(activeScenario,panels,authoring);
+}
 render();
+if(activeScenario && !['normal','long','crowded','hub-empty','hub-many'].includes(activeScenario))panels.get('inspector').scrollIntoView({block:'start'});
 function animate(timestamp) {
   if (playback.status === 'playing' && lastFrameTime !== null) {
     playback = advancePlayback(playback, Math.min(.1, (timestamp-lastFrameTime)/1000));
