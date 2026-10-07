@@ -31,3 +31,12 @@ test('large graph retains a readable default scale and every node stays reachabl
   assert.ok(wide.left+(30+29*250+240)*wide.scale<=wide.width);
   assert.ok(compact.top+(20+29*185+150)*compact.scale<=compact.height);
 });
+
+test('reader keeps short scene viewports intact and uses side space only when sufficient',async()=>{
+ const {readingPresentation}=await import('./scene-view-state.mjs');
+ assert.equal(readingPresentation(480,200,true),'overlay');
+ assert.equal(readingPresentation(800,180,true),'overlay');
+ assert.equal(readingPresentation(800,400,true),'side');
+ assert.equal(readingPresentation(390,460,true),'inline');
+ assert.equal(readingPresentation(800,400,false),'closed');
+});

@@ -263,7 +263,7 @@ function updateScene() {
 }
 function panelHeight(view) {
   const [w,h]=RESOLUTIONS[settings.resolution];
-  return stackHeights.get(view) ?? preferredStackHeight(view,workspace.clientWidth,w/h);
+  return stackHeights.get(view) ?? preferredStackHeight(view,workspace.clientWidth,w/h,workspace.clientHeight);
 }
 function workspaceHeight() {
   if(!isStacked()) return presentation().height;

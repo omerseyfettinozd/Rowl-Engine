@@ -106,3 +106,10 @@ test('nested and reordered layouts retain unique leaves and immutable source acr
   const trees=[laptopTree(),split(laptopTree(),split(leaf('store'),leaf('console')),'y'),split(split(leaf('lua'),leaf('game')),split(leaf('node'),leaf('inspector')))];
   for(const tree of trees){const original=structuredClone(tree);for(const width of [1039,1040,1340,1424,1900]){const result=responsivePresentation(tree,width,704);assert.deepEqual(leaves(result.tree),leaves(tree));assert.equal(new Set(leaves(result.tree)).size,leaves(tree).length);if(result.mode!=='stack')verifyProjection(result.tree,width,result.height);}assert.deepEqual(tree,original);}
 });
+
+test('landscape scene defaults fit the available height without changing other panel preferences',()=>{
+ assert.equal(preferredStackHeight('edit',844,1.6,326),326);
+ assert.equal(preferredStackHeight('game',932,1.6,366),366);
+ assert.equal(preferredStackHeight('edit',390,1.6,780),334);
+ assert.equal(preferredStackHeight('lua',844,1.6,326),440);
+});

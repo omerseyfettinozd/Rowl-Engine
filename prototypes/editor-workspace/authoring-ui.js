@@ -18,10 +18,12 @@ const button = (action,label,icon) => `<button class="author-button" data-author
 export function bindAuthoring(panels, context) {
   const dialog = document.createElement('dialog'); dialog.id='author-dialog'; dialog.setAttribute('aria-labelledby','author-title'); document.body.append(dialog);
   const inspectorTools=document.createElement('div');inspectorTools.className='author-toolbar';inspectorTools.innerHTML=button('component','Bileşen ekle','plus');panels.get('inspector').querySelector('.inspector-object-properties').append(inspectorTools);
-  const components=document.createElement('div');components.className='component-summary';panels.get('inspector').querySelector('.inspector-object-properties').append(components);
+  const group=document.createElement('details');group.className='inspector-components';group.open=true;
+  const groupTitle=document.createElement('summary');groupTitle.textContent='Bileşenler';group.append(groupTitle);
+  const components=document.createElement('div');components.className='component-summary';group.append(components);panels.get('inspector').querySelector('.inspector-object-properties').append(group);
   let assets=[], activeType='dialogue', opener;
   const close=()=>dialog.close();
-  dialog.addEventListener('close',()=>opener?.isConnected&&opener.focus({preventScroll:true}));
+  dialog.addEventListener('close',()=>{const target=opener?.isConnected&&opener.getClientRects().length?opener:panels.get('inspector').querySelector(`[data-component-type="${activeType}"]`)??document.querySelector('#options');target?.focus({preventScroll:true});});
   function show(title, subtitle, body, primary, submit) {
     if(!dialog.open)opener=document.activeElement;
     dialog.innerHTML=`<form><header class="author-heading"><div><span class="tool-caption">ROWL / EDİTÖR</span><h2 id="author-title">${title}</h2><p>${subtitle}</p></div><button type="button" class="icon-button" data-dismiss aria-label="Pencereyi kapat"><svg><use href="#i-close"/></svg></button></header><div class="author-body">${body}</div><footer class="author-footer"><span>Tarayıcı prototipi</span><button type="button" class="author-button" data-dismiss>Vazgeç</button>${primary?`<button class="primary-button" type="submit">${primary}</button>`:''}</footer></form>`;
@@ -32,7 +34,18 @@ export function bindAuthoring(panels, context) {
   }
   function snapshot(){return {...context.snapshot(),assets};}
   function save(){try{prototypeStorage.setItem('rowl-authoring-project',JSON.stringify(snapshot()));context.notify(context.review?'Örnek proje bu oturumda tutuluyor.':'Proje bu tarayıcıda kaydedildi.');context.log('Yerel proje kaydedildi.');}catch{context.notify('Yerel kayıt alanı dolu. Ayarların dışa aktarma bölümünden JSON indirebilirsin.');}}
-  function summary(){const {scene,selected}=context.get();components.replaceChildren();for(const entry of scene.objects[selected].components??[]){const row=document.createElement('button');row.className='component-row';row.textContent=`${types.find(type=>type[0]===entry.type)?.[1]??entry.type} · Düzenle`;row.onclick=()=>configure(entry.type,entry);components.append(row);}}
+  function summary(){
+    const {scene,selected}=context.get(),entries=scene.objects[selected].components??[];
+    groupTitle.textContent=`Bileşenler · ${entries.length}`;components.replaceChildren();
+    const labels={source:'Varlık',speaker:'Konuşmacı',fontSize:'Yazı boyutu',key:'Değişken',value:'Değer',duration:'Süre',volume:'Ses düzeyi',option1:'İlk seçenek',target1:'Hedef',operator:'Karşılaştırma',x:'X',y:'Y',zoom:'Zoom',effect:'Geçiş'};
+    const fields={dialogue:['speaker','fontSize'],choice:['option1','target1'],variable:['key','value'],condition:['key','operator'],camera:['zoom','duration'],transition:['effect','duration'],audio:['source','volume'],background:['source'],character:['source'],script:['source']};
+    for(const entry of entries){
+      const row=document.createElement('button');row.className='component-row';row.dataset.componentType=entry.type;
+      const title=document.createElement('strong');title.textContent=types.find(type=>type[0]===entry.type)?.[1]??entry.type;
+      const detail=document.createElement('span');detail.textContent=(fields[entry.type]??[]).filter(key=>entry.values[key]!==undefined).slice(0,2).map(key=>`${labels[key]}: ${entry.values[key]}`).join(' · ')||'Özellikleri düzenle';
+      row.append(title,detail);row.onclick=()=>configure(entry.type,entry);components.append(row);
+    }
+  }
   function picker(){const {names,selected}=context.get();show('Bileşen ekle',`${names[selected]} objesine bir davranış veya içerik ekle.`,`<label class="author-field">Bileşen ara<input type="search" placeholder="Diyalog, ses, kamera…" data-component-search></label><div class="component-catalog">${types.map(([id,label,description,icon])=>`<button type="button" data-component="${id}"><svg><use href="#i-${icon}"/></svg><span><strong>${label}</strong><small>${description}</small></span><span>→</span></button>`).join('')}</div><p class="catalog-empty" hidden>Bu isimde bileşen bulunamadı.</p>`,null);
     dialog.querySelector('[data-component-search]').oninput=event=>{let count=0;dialog.querySelectorAll('[data-component]').forEach(el=>{el.hidden=!el.textContent.toLocaleLowerCase('tr').includes(event.target.value.toLocaleLowerCase('tr'));if(!el.hidden)count++;});dialog.querySelector('.catalog-empty').hidden=count>0;};
     dialog.querySelectorAll('[data-component]').forEach(el=>el.onclick=()=>configure(el.dataset.component));

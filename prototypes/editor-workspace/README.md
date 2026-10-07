@@ -73,7 +73,7 @@ Ayarlar ve kaydedilmiş script taslakları localStorage alanında kalır. Kayded
 
 ## Güncel doğrulama — 2026-10-07
 
-41 durum testi geçti. Yeni sahne/graph geometrisi, dock yüksekliği, örnek veri ve depolama izolasyonu kontrolleri eklendi. [Güncel tasarım raporu](../../docs/UI_PROTOTYPE_DESIGN_COMPLETION_2026-10-07.md).
+43 durum testi geçti. Önceki 41 teste kısa yatay ekran yüksekliği ve okuyucu sunum biçimi kontrolleri eklendi. [Oyun motoru iş akışı incelemesi ve geliştirme sırası](../../docs/UI_PROTOTYPE_ENGINE_WORKFLOW_AUDIT_2026-10-07.md). Önceki [tasarım raporu](../../docs/UI_PROTOTYPE_DESIGN_COMPLETION_2026-10-07.md) önceki dilimin kaydıdır.
 
 Aşağıdaki canlı kontrol kayıtları önceki dilimlere aittir. Önceki 34 testin kapsamı: pencere açma, sabit/son pencere kapatma, odak, dört yönlü yerleşim, pin kilidi, oran sınırları, 1000 karma işlemde alanların çakışmaması; ayar doğrulama ve Inspector sınırları; bağımsız oynatma kopyası, donma ve devam etme; kütüphane bağımsızlığı; mobil Game yeniden açma, minimum genişlik ve komşu panel yüksekliklerinin korunması.
 
@@ -181,3 +181,9 @@ Game/Edit Scene altındaki − / + kontrolleri %100–300 yakınlaştırır; Sı
 [review.html](review.html) standart, uzun/yoğun içerik, boş/12 projeli Hub ve işlem durumlarını ayrı örneklerle açar. `?review=` modunda gerçek tarayıcı kayıtları okunmaz/yazılmaz; proje, Lua, ayar ve kütüphane işlemleri örnek oturumunun belleğinde tutulur. Yenileme örneği sıfırlar. Normal çalışma alanının kayıt davranışı korunur. Hub kartları gerçek proje dosyası açmaz.
 
 Dock genişliği sığsa bile panel minimum yükseklikleri korunur; gerekirse çalışma alanı aşağı uzar. Birleştirme eşiği çalışma alanında 1040 px'tir. Yoğun graph varsayılan sığdırmada %75'in altına küçültülmez; büyük akışa gerçek kaydırma alanından ulaşılır. Native/Avalonia UI aktarımı başlamadı.
+
+## Oyun motoru iş akışı incelemesi — 7 Ekim
+
+Kısa yatay ekranda varsayılan Game/Edit Scene paneli çalışma alanının yüksekliğine sığar; elle verilen yükseklikler korunur. Oku, geniş panelde sahnenin yanında; yeterince uzun dar panelde altında; küçük panelde sahnenin yerini geçici olarak alan okuyucuda açılır. Kapat sahneye döner. Overlay modunda görünmeyen sahne klavye odağı almaz.
+
+Inspector bileşenleri kapatılabilir bir grupta, türüne uygun iki özellik özetiyle gösterilir. Özellik uygulandıktan sonra odak güncel bileşen satırına döner. Kütüphane açıklamalarının 10 px eski kuralı 12 px ortak metin ölçeğine getirildi. Bu değişiklikler native editöre aktarılmadı.

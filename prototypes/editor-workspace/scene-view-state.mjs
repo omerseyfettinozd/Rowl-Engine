@@ -11,3 +11,5 @@ export function graphGeometry(viewWidth,viewHeight,worldWidth,worldHeight,compac
   const width=worldWidth*scale,height=worldHeight*scale;
   return {scale,width:Math.max(viewWidth,width),height:Math.max(viewHeight,height),left:Math.max(0,(viewWidth-width)/2),top:Math.max(0,(viewHeight-height)/2)};
 }
+
+export const readingPresentation = (width,height,open) => !open?'closed':width>=700 && height>=280?'side':height>=440?'inline':'overlay';

@@ -16,11 +16,11 @@ export function fitDockTree(tree, width, height=Infinity) {
   return {...tree, ratio, a:fitDockTree(tree.a,space*ratio,height), b:fitDockTree(tree.b,space*(1-ratio),height)};
 }
 export const minimumStackHeight = view => view === 'node' ? 360 : view === 'lua' ? 320 : 240;
-export function preferredStackHeight(view, width, aspect=1.6) {
+export function preferredStackHeight(view, width, aspect=1.6, availableHeight=Infinity) {
   if (view === 'node') return 620;
   if (view === 'lua' || view === 'library') return 440;
   if (view === 'inspector') return 560;
-  if (view === 'game' || view === 'edit') return Math.max(280, Math.round((width-22)/aspect+104));
+  if (view === 'game' || view === 'edit') return Math.max(240, Math.min(availableHeight, Math.max(280, Math.round((width-22)/aspect+104))));
   return 340;
 }
 export function resizeStackPair(first, second, delta, firstMin=240, secondMin=240) {

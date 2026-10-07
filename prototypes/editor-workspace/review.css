@@ -113,3 +113,25 @@
 .hub-empty .author-button {display:block;margin-top:18px;width:100%}
 .graph-viewport {overflow:auto;scrollbar-width:thin;overscroll-behavior:contain;scrollbar-gutter:stable both-edges}
 .graph-scroll-space {position:relative;overflow:hidden;min-width:100%;min-height:100%}
+
+/* Shared text and inspector density, including the more specific legacy selectors. */
+.library-content .library-description,.library-content .library-path,
+.library-empty,.library-add small {font-size:var(--editor-small)}
+.author-button {font-size:var(--editor-small);min-height:44px}
+.inspector-components {border-top:1px solid var(--line);padding-top:4px}
+.inspector-components summary {min-height:44px;padding:12px 0;cursor:pointer;font-size:var(--editor-body)}
+.component-row strong,.component-row span {display:block;overflow-wrap:anywhere}
+.component-row strong {font-size:var(--editor-body);font-weight:500}
+.component-row span {font-size:var(--editor-small);color:var(--muted);line-height:1.6;margin-top:4px}
+.scene-body {flex:1;min-height:0;min-width:0;display:flex;flex-direction:column;position:relative;gap:8px}
+.scene-body .scene-reading {margin:0}
+.scene-body[data-reading="side"] {flex-direction:row}
+.scene-body[data-reading="side"] .scene-reading {flex:0 0 36%;max-height:none;min-width:240px}
+.scene-body[data-reading="overlay"] .scene-stage-wrap {visibility:hidden}
+.scene-body[data-reading="overlay"] .scene-reading {position:absolute;inset:0;max-height:none;background:#17171a}
+@media(max-height:500px) {
+ .scene-area {padding:5px}
+ .scene-bottom {gap:4px;padding-top:4px}
+ .scene-bottom .scene-help {overflow:hidden;text-overflow:ellipsis}
+ .scene-controls {gap:4px}
+}
