@@ -7,7 +7,7 @@
         mc:Ignorable="d"
         x:Class="RowlEngine.Editor.Views.Dialogs.SettingsDialog"
         x:DataType="vm:SettingsViewModel"
-        Title="Ayarlar — Rowl Engine"
+        Title="{l:T Settings.Window.Title}"
         Width="720" Height="560"
         MinWidth="600" MinHeight="450"
         WindowStartupLocation="CenterOwner"
@@ -16,66 +16,63 @@
 
     <Grid RowDefinitions="Auto, *, Auto">
 
-        <!-- Başlık Çubuğu -->
+        <!-- Başlık -->
         <Border Grid.Row="0" Background="{DynamicResource SurfaceBackground}"
-                BorderBrush="{DynamicResource BorderColor}" BorderThickness="0,0,0,1" Padding="20,14">
-            <StackPanel Orientation="Horizontal" Spacing="10">
-                <TextBlock Text="Ayarlar" FontSize="16" FontWeight="Bold"
-                           Foreground="{DynamicResource PrimaryText}" VerticalAlignment="Center"/>
+                BorderBrush="{DynamicResource BorderColor}" BorderThickness="0,0,0,1" Padding="24,16">
+            <StackPanel Spacing="4">
+                <TextBlock Classes="caption" Text="{l:T Settings.Header.Eyebrow}"/>
+                <TextBlock Classes="heading" Text="{l:T Menu.Settings}"/>
             </StackPanel>
         </Border>
 
-        <!-- Ana İçerik - TabControl -->
+        <!-- Ana içerik: sekmeler -->
         <TabControl Grid.Row="1" SelectedIndex="{Binding SelectedTabIndex}" Margin="0" Padding="0"
                     Background="Transparent">
 
-            <!-- SEKME 1: Tema ve Görünüm -->
-            <TabItem Header="Tema">
-                <ScrollViewer Padding="24,16">
-                    <StackPanel Spacing="18">
-                        <TextBlock Text="Tema &amp; Görünüm" FontSize="15" FontWeight="Bold" 
-                                   Foreground="{DynamicResource PrimaryText}"/>
-
-                        <StackPanel Spacing="6">
-                            <TextBlock Text="Editör Teması" FontSize="12" 
-                                       Foreground="{DynamicResource MutedText}"/>
-                            <ComboBox ItemsSource="{Binding AvailableThemes}" 
-                                      SelectedItem="{Binding SelectedTheme}"
-                                      HorizontalAlignment="Stretch"
-                                      Background="{DynamicResource InputBackground}" 
-                                      Foreground="{DynamicResource PrimaryText}"
-                                      BorderBrush="{DynamicResource BorderSubtle}"/>
+            <!-- TERCİHLER (bu cihaz): Tema / Genel / Oyuncu -->
+            <TabItem Header="{l:T Settings.Tab.Theme}">
+                <ScrollViewer Padding="24,20">
+                    <StackPanel Spacing="16" MaxWidth="560" HorizontalAlignment="Left">
+                        <StackPanel Spacing="4">
+                            <TextBlock Classes="caption" Text="{l:T Settings.Scope.Preferences}"/>
+                            <TextBlock Classes="title" Text="{l:T Settings.Theme.Title}"/>
+                        <TextBlock Classes="hint" Text="{l:T Settings.Theme.Desc}" TextWrapping="Wrap"/>
                         </StackPanel>
+                        <Border Classes="panel" Padding="16">
+                            <StackPanel Spacing="10">
+                                <TextBlock Classes="body" Text="{l:T Settings.Theme.Label}"/>
+                                <ComboBox ItemsSource="{Binding AvailableThemes}"
+                                          SelectedItem="{Binding SelectedTheme}"
+                                          HorizontalAlignment="Stretch"
+                                          Background="{DynamicResource InputBackground}"
+                                          Foreground="{DynamicResource PrimaryText}"
+                                          BorderBrush="{DynamicResource BorderSubtle}"/>
+                                <Button Classes="primary" Content="{l:T Settings.Theme.Apply}"
+                                        Command="{Binding ApplyThemeCommand}"
+                                        HorizontalAlignment="Left"/>
+                            </StackPanel>
+                        </Border>
 
-                        <Button Content="Temayı Uygula"
-                                FontSize="12"
-                                Command="{Binding ApplyThemeCommand}"
-                                HorizontalAlignment="Left"
-                                Background="{DynamicResource AccentButtonBg}"
-                                Foreground="{DynamicResource PrimaryText}"
-                                FontWeight="SemiBold"
-                                CornerRadius="6" Padding="16,8"/>
-
-                        <!-- Tema Önizleme Kartları (sabit: iki tema) -->
+                        <!-- Tema önizleme kartları: her temanın gerçek paleti (sabit swatch) -->
                         <WrapPanel Orientation="Horizontal">
-                            <Border Width="140" Height="70" CornerRadius="8" Margin="4"
+                            <Border Width="140" Height="70" CornerRadius="{DynamicResource RadiusMedium}" Margin="0,0,8,8"
                                     BorderBrush="{DynamicResource BorderSubtle}" BorderThickness="1"
                                     Background="#19191C" Padding="10">
                                 <StackPanel VerticalAlignment="Center" Spacing="2">
-                                    <TextBlock Text="Aa" FontSize="16" FontWeight="Bold"
+                                    <TextBlock Text="{l:T Settings.Theme.Sample}" FontSize="{DynamicResource FontSizeTitle}" FontWeight="Bold"
                                                Foreground="#F2EFE6" HorizontalAlignment="Center"/>
-                                    <TextBlock Text="Kemik Beyazı (Karanlık)" FontSize="10"
+                                    <TextBlock Text="{l:T Settings.Theme.Preview.Dark}" FontSize="{DynamicResource FontSizeSmall}"
                                                Foreground="#85858B" HorizontalAlignment="Center"
                                                TextAlignment="Center" TextWrapping="Wrap"/>
                                 </StackPanel>
                             </Border>
-                            <Border Width="140" Height="70" CornerRadius="8" Margin="4"
+                            <Border Width="140" Height="70" CornerRadius="{DynamicResource RadiusMedium}" Margin="0,0,8,8"
                                     BorderBrush="{DynamicResource BorderSubtle}" BorderThickness="1"
                                     Background="#111113" Padding="10">
                                 <StackPanel VerticalAlignment="Center" Spacing="2">
-                                    <TextBlock Text="Aa" FontSize="16" FontWeight="Bold"
+                                    <TextBlock Text="{l:T Settings.Theme.Sample}" FontSize="{DynamicResource FontSizeTitle}" FontWeight="Bold"
                                                Foreground="#F2EFE6" HorizontalAlignment="Center"/>
-                                    <TextBlock Text="Saf Siyah (OLED)" FontSize="10"
+                                    <TextBlock Text="{l:T Settings.Theme.Preview.Oled}" FontSize="{DynamicResource FontSizeSmall}"
                                                Foreground="#85858B" HorizontalAlignment="Center"
                                                TextAlignment="Center" TextWrapping="Wrap"/>
                                 </StackPanel>
@@ -85,19 +82,18 @@
                 </ScrollViewer>
             </TabItem>
 
-            <!-- SEKME 2: Genel Editör -->
-            <TabItem Header="Genel">
-                <ScrollViewer Padding="24,16">
-                    <StackPanel Spacing="18">
-                        <TextBlock Text="Genel Editör Ayarları" FontSize="15" FontWeight="Bold" 
-                                   Foreground="{DynamicResource PrimaryText}"/>
-
+            <TabItem Header="{l:T Settings.Tab.General}">
+                <ScrollViewer Padding="24,20">
+                    <StackPanel Spacing="16" MaxWidth="560" HorizontalAlignment="Left">
+                        <StackPanel Spacing="4">
+                            <TextBlock Classes="caption" Text="{l:T Settings.Scope.Preferences}"/>
+                            <TextBlock Classes="title" Text="{l:T Settings.General.Title}"/>
+                        <TextBlock Classes="hint" Text="{l:T Settings.General.Desc}" TextWrapping="Wrap"/>
+                        </StackPanel>
                         <!-- Faz 2b: arayüz dili (K5/K7/K9) -->
-                        <Border Background="{DynamicResource PanelBackground}" CornerRadius="8"
-                                Padding="16" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1">
+                        <Border Classes="panel" Padding="16">
                             <StackPanel Spacing="8">
-                                <TextBlock Text="{l:T Settings.Language}" FontSize="12" FontWeight="SemiBold"
-                                           Foreground="{DynamicResource PrimaryText}"/>
+                                <TextBlock Classes="body" FontWeight="SemiBold" Text="{l:T Settings.Language}"/>
                                 <ComboBox x:Name="EditorLanguageCombo" ItemsSource="{Binding EditorLanguageOptions}"
                                           SelectedItem="{Binding SelectedEditorLanguageOption}" MinWidth="220">
                                     <ComboBox.ItemTemplate>
@@ -106,171 +102,219 @@
                                         </DataTemplate>
                                     </ComboBox.ItemTemplate>
                                 </ComboBox>
-                                <TextBlock Text="{l:T Settings.Language.Hint}" FontSize="11" TextWrapping="Wrap"
-                                           Foreground="{DynamicResource MutedText}"/>
+                                <TextBlock Classes="hint" Text="{l:T Settings.Language.Hint}" TextWrapping="Wrap"/>
                             </StackPanel>
                         </Border>
 
-                        <!-- Otomatik Kaydetme -->
-                        <Border Background="{DynamicResource PanelBackground}" CornerRadius="8" 
-                                Padding="16" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1">
+                        <!-- Otomatik kaydetme -->
+                        <Border Classes="panel" Padding="16">
                             <StackPanel Spacing="10">
-                                <CheckBox Content="Otomatik Kaydetme" FontSize="12"
+                                <CheckBox Content="{l:T Settings.AutoSave}" FontSize="{DynamicResource FontSizeBodyLarge}"
                                           IsChecked="{Binding AutoSaveEnabled}"
                                           Foreground="{DynamicResource PrimaryText}" FontWeight="SemiBold"/>
                                 <StackPanel Spacing="4" IsVisible="{Binding AutoSaveEnabled}">
-                                    <TextBlock Text="Kaydetme Aralığı (saniye)" FontSize="12" 
-                                               Foreground="{DynamicResource MutedText}"/>
-                                    <ComboBox ItemsSource="{Binding AutoSaveIntervals}" 
+                                    <TextBlock Classes="body" Text="{l:T Settings.AutoSave.Interval}"/>
+                                    <ComboBox ItemsSource="{Binding AutoSaveIntervals}"
                                               SelectedItem="{Binding AutoSaveIntervalSeconds}"
                                               HorizontalAlignment="Stretch"
-                                              Background="{DynamicResource InputBackground}" 
+                                              Background="{DynamicResource InputBackground}"
                                               Foreground="{DynamicResource PrimaryText}"
                                               BorderBrush="{DynamicResource BorderSubtle}"/>
                                 </StackPanel>
                             </StackPanel>
                         </Border>
-
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
 
-            <!-- SEKME 3: Oyuncu -->
-            <TabItem Header="Oyuncu">
-                <ScrollViewer Padding="24,16">
-                    <StackPanel Spacing="18">
-                        <TextBlock Text="Oyuncu Tercihleri" FontSize="15" FontWeight="Bold"
-                                   Foreground="{DynamicResource PrimaryText}"/>
-                        <TextBlock Text="Bu tercihler cihazda saklanır; proje dosyasına veya oyun kayıtlarına eklenmez."
-                                   TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource MutedText}"/>
-                        <StackPanel Spacing="6">
-                            <TextBlock Text="Ana Ses" FontSize="12" Foreground="{DynamicResource SecondaryText}"/>
-                            <Slider Minimum="0" Maximum="1" Value="{Binding MasterVolume}"/>
+            <TabItem Header="{l:T Settings.Tab.Player}">
+                <ScrollViewer Padding="24,20">
+                    <StackPanel Spacing="16" MaxWidth="560" HorizontalAlignment="Left">
+                        <StackPanel Spacing="4">
+                            <TextBlock Classes="caption" Text="{l:T Settings.Scope.Preferences}"/>
+                            <TextBlock Classes="title" Text="{l:T Settings.Player.Title}"/>
+                        <TextBlock Classes="hint" Text="{l:T Settings.Player.Desc}" TextWrapping="Wrap"/>
                         </StackPanel>
-                        <StackPanel Spacing="6">
-                            <TextBlock Text="Müzik" FontSize="12" Foreground="{DynamicResource SecondaryText}"/>
-                            <Slider Minimum="0" Maximum="1" Value="{Binding BgmVolume}"/>
-                        </StackPanel>
-                        <StackPanel Spacing="6">
-                            <TextBlock Text="Konuşma" FontSize="12" Foreground="{DynamicResource SecondaryText}"/>
-                            <Slider Minimum="0" Maximum="1" Value="{Binding VoiceVolume}"/>
-                        </StackPanel>
-                        <StackPanel Spacing="6">
-                            <TextBlock Text="Efekt" FontSize="12" Foreground="{DynamicResource SecondaryText}"/>
-                            <Slider Minimum="0" Maximum="1" Value="{Binding SfxVolume}"/>
-                        </StackPanel>
-                        <StackPanel Spacing="6">
-                            <TextBlock Text="Metin Hızı Çarpanı" FontSize="12" Foreground="{DynamicResource SecondaryText}"/>
-                            <Slider Minimum="0.25" Maximum="4" Value="{Binding TextSpeedMultiplier}"/>
-                        </StackPanel>
-                        <StackPanel Spacing="6">
-                            <TextBlock Text="Otomatik İlerleme Ek Gecikmesi (sn)" FontSize="12" Foreground="{DynamicResource SecondaryText}"/>
-                            <Slider Minimum="0" Maximum="60" Value="{Binding AutoAdvanceDelay}"/>
-                        </StackPanel>
+                        <Border Classes="panel" Padding="16">
+                            <StackPanel Spacing="16">
+                                <StackPanel Spacing="6">
+                                    <TextBlock Classes="body" Text="{l:T Settings.Player.Master}"/>
+                                    <Slider Minimum="0" Maximum="1" Value="{Binding MasterVolume}"/>
+                                </StackPanel>
+                                <StackPanel Spacing="6">
+                                    <TextBlock Classes="body" Text="{l:T Settings.Player.Music}"/>
+                                    <Slider Minimum="0" Maximum="1" Value="{Binding BgmVolume}"/>
+                                </StackPanel>
+                                <StackPanel Spacing="6">
+                                    <TextBlock Classes="body" Text="{l:T Settings.Player.Voice}"/>
+                                    <Slider Minimum="0" Maximum="1" Value="{Binding VoiceVolume}"/>
+                                </StackPanel>
+                                <StackPanel Spacing="6">
+                                    <TextBlock Classes="body" Text="{l:T Settings.Player.Sfx}"/>
+                                    <Slider Minimum="0" Maximum="1" Value="{Binding SfxVolume}"/>
+                                </StackPanel>
+                                <StackPanel Spacing="6">
+                                    <TextBlock Classes="body" Text="{l:T Settings.Player.TextSpeed}"/>
+                                    <Slider Minimum="0.25" Maximum="4" Value="{Binding TextSpeedMultiplier}"/>
+                                </StackPanel>
+                                <StackPanel Spacing="6">
+                                    <TextBlock Classes="body" Text="{l:T Settings.Player.AutoAdvance}"/>
+                                    <Slider Minimum="0" Maximum="60" Value="{Binding AutoAdvanceDelay}"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
 
-            <!-- SEKME 4: Proje Runtime -->
-            <TabItem Header="Proje">
-                <ScrollViewer Padding="24,16">
-                    <StackPanel Spacing="18">
-                        <TextBlock Text="Proje Runtime Ayarları" FontSize="15" FontWeight="Bold"
-                                   Foreground="{DynamicResource PrimaryText}"/>
-                        <TextBlock Text="Bu değerler açık projenin project.rowlproj dosyasına kaydedilir."
-                                   TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource MutedText}"/>
-                        <StackPanel Spacing="6">
-                            <TextBlock Text="Kayıt Slotu Sayısı" FontSize="12" Foreground="{DynamicResource SecondaryText}"/>
-                            <NumericUpDown Minimum="1" Maximum="100" Value="{Binding ProjectSaveSlotCount}"/>
+            <!-- PROJE AYARLARI (project.rowlproj) -->
+            <TabItem Header="{l:T Settings.Tab.Project}">
+                <ScrollViewer Padding="24,20">
+                    <StackPanel Spacing="16" MaxWidth="560" HorizontalAlignment="Left">
+                        <StackPanel Spacing="4">
+                            <TextBlock Classes="caption" Text="{l:T Settings.Scope.Project}"/>
+                            <TextBlock Classes="title" Text="{l:T Settings.Project.Title}"/>
+                        <TextBlock Classes="hint" Text="{l:T Settings.Project.Desc}" TextWrapping="Wrap"/>
                         </StackPanel>
-                        <StackPanel Spacing="6">
-                            <TextBlock Text="Varsayılan BGM Geçişi" FontSize="12" Foreground="{DynamicResource SecondaryText}"/>
-                            <ComboBox ItemsSource="{Binding ProjectBgmTransitionOptions}"
-                                      SelectedItem="{Binding ProjectDefaultBgmTransition}"/>
-                        </StackPanel>
-                        <StackPanel Spacing="6">
-                            <TextBlock Text="Varsayılan Geçiş Süresi (sn)" FontSize="12" Foreground="{DynamicResource SecondaryText}"/>
-                            <NumericUpDown Minimum="0" Maximum="60" Increment="0.1"
-                                           Value="{Binding ProjectDefaultBgmTransitionDurationSeconds}"/>
-                        </StackPanel>
+                        <Border Classes="panel" Padding="16">
+                            <StackPanel Spacing="16">
+                                <StackPanel Spacing="6">
+                                    <TextBlock Classes="body" Text="{l:T Settings.Project.SaveSlots}"/>
+                                    <NumericUpDown Minimum="1" Maximum="100" Value="{Binding ProjectSaveSlotCount}"/>
+                                </StackPanel>
+                                <StackPanel Spacing="6">
+                                    <TextBlock Classes="body" Text="{l:T Settings.Project.BgmTransition}"/>
+                                    <ComboBox ItemsSource="{Binding ProjectBgmTransitionOptions}"
+                                              SelectedItem="{Binding ProjectDefaultBgmTransition}"/>
+                                </StackPanel>
+                                <StackPanel Spacing="6">
+                                    <TextBlock Classes="body" Text="{l:T Settings.Project.TransitionDuration}"/>
+                                    <NumericUpDown Minimum="0" Maximum="60" Increment="0.1"
+                                                   Value="{Binding ProjectDefaultBgmTransitionDurationSeconds}"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
 
-            <!-- SEKME 5: Kısayollar -->
-            <TabItem Header="Kısayollar">
-                <ScrollViewer Padding="24,16">
-                    <StackPanel Spacing="12">
-                        <TextBlock Text="Klavye Kısayolları" FontSize="15" FontWeight="Bold" 
-                                   Foreground="{DynamicResource PrimaryText}"/>
-
-                        <Border Background="{DynamicResource PanelBackground}" CornerRadius="8" 
-                                Padding="16" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1">
+            <TabItem Header="{l:T Settings.Tab.Shortcuts}">
+                <ScrollViewer Padding="24,20">
+                    <StackPanel Spacing="12" MaxWidth="560" HorizontalAlignment="Left">
+                        <StackPanel Spacing="4">
+                            <TextBlock Classes="caption" Text="{l:T Settings.Scope.Preferences}"/>
+                            <TextBlock Classes="title" Text="{l:T Settings.Shortcuts.Title}"/>
+                        </StackPanel>
+                        <Border Classes="panel" Padding="16">
                             <StackPanel Spacing="6">
-                                <Grid ColumnDefinitions="*, Auto"><TextBlock Grid.Column="0" Text="Kaydet" Foreground="{DynamicResource SecondaryText}" FontSize="12"/><TextBlock Grid.Column="1" Text="Ctrl + S" Foreground="{DynamicResource AccentColor}" FontSize="12" FontWeight="Bold" FontFamily="Consolas, Monospace"/></Grid>
-                                <Grid ColumnDefinitions="*, Auto"><TextBlock Grid.Column="0" Text="Farklı Kaydet" Foreground="{DynamicResource SecondaryText}" FontSize="12"/><TextBlock Grid.Column="1" Text="Ctrl + Shift + S" Foreground="{DynamicResource AccentColor}" FontSize="12" FontWeight="Bold" FontFamily="Consolas, Monospace"/></Grid>
-                                <Grid ColumnDefinitions="*, Auto"><TextBlock Grid.Column="0" Text="Geri Al (Undo)" Foreground="{DynamicResource SecondaryText}" FontSize="12"/><TextBlock Grid.Column="1" Text="Ctrl + Z" Foreground="{DynamicResource AccentColor}" FontSize="12" FontWeight="Bold" FontFamily="Consolas, Monospace"/></Grid>
-                                <Grid ColumnDefinitions="*, Auto"><TextBlock Grid.Column="0" Text="Yinele (Redo)" Foreground="{DynamicResource SecondaryText}" FontSize="12"/><TextBlock Grid.Column="1" Text="Ctrl + Y" Foreground="{DynamicResource AccentColor}" FontSize="12" FontWeight="Bold" FontFamily="Consolas, Monospace"/></Grid>
+                                <Grid ColumnDefinitions="*, Auto">
+                                    <TextBlock Grid.Column="0" Classes="body" Text="{l:T Settings.Shortcut.Save}"/>
+                                    <TextBlock Grid.Column="1" Classes="fieldValue" Foreground="{DynamicResource Accent}" FontFamily="Consolas, Monospace">Ctrl + S</TextBlock>
+                                </Grid>
+                                <Grid ColumnDefinitions="*, Auto">
+                                    <TextBlock Grid.Column="0" Classes="body" Text="{l:T Settings.Shortcut.SaveAs}"/>
+                                    <TextBlock Grid.Column="1" Classes="fieldValue" Foreground="{DynamicResource Accent}" FontFamily="Consolas, Monospace">Ctrl + Shift + S</TextBlock>
+                                </Grid>
+                                <Grid ColumnDefinitions="*, Auto">
+                                    <TextBlock Grid.Column="0" Classes="body" Text="{l:T Settings.Shortcut.Undo}"/>
+                                    <TextBlock Grid.Column="1" Classes="fieldValue" Foreground="{DynamicResource Accent}" FontFamily="Consolas, Monospace">Ctrl + Z</TextBlock>
+                                </Grid>
+                                <Grid ColumnDefinitions="*, Auto">
+                                    <TextBlock Grid.Column="0" Classes="body" Text="{l:T Settings.Shortcut.Redo}"/>
+                                    <TextBlock Grid.Column="1" Classes="fieldValue" Foreground="{DynamicResource Accent}" FontFamily="Consolas, Monospace">Ctrl + Y</TextBlock>
+                                </Grid>
                                 <Separator Background="{DynamicResource BorderColor}" Height="1" Margin="0,4"/>
-                                <Grid ColumnDefinitions="*, Auto"><TextBlock Grid.Column="0" Text="Yeni Node Ekle" Foreground="{DynamicResource SecondaryText}" FontSize="12"/><TextBlock Grid.Column="1" Text="Ctrl + N" Foreground="{DynamicResource AccentColor}" FontSize="12" FontWeight="Bold" FontFamily="Consolas, Monospace"/></Grid>
-                                <Grid ColumnDefinitions="*, Auto"><TextBlock Grid.Column="0" Text="Seçili Node Sil" Foreground="{DynamicResource SecondaryText}" FontSize="12"/><TextBlock Grid.Column="1" Text="Delete" Foreground="{DynamicResource AccentColor}" FontSize="12" FontWeight="Bold" FontFamily="Consolas, Monospace"/></Grid>
-                                <Grid ColumnDefinitions="*, Auto"><TextBlock Grid.Column="0" Text="Yeniden Adlandır" Foreground="{DynamicResource SecondaryText}" FontSize="12"/><TextBlock Grid.Column="1" Text="F2" Foreground="{DynamicResource AccentColor}" FontSize="12" FontWeight="Bold" FontFamily="Consolas, Monospace"/></Grid>
+                                <Grid ColumnDefinitions="*, Auto">
+                                    <TextBlock Grid.Column="0" Classes="body" Text="{l:T Settings.Shortcut.NewNode}"/>
+                                    <TextBlock Grid.Column="1" Classes="fieldValue" Foreground="{DynamicResource Accent}" FontFamily="Consolas, Monospace">Ctrl + N</TextBlock>
+                                </Grid>
+                                <Grid ColumnDefinitions="*, Auto">
+                                    <TextBlock Grid.Column="0" Classes="body" Text="{l:T Settings.Shortcut.DeleteNode}"/>
+                                    <TextBlock Grid.Column="1" Classes="fieldValue" Foreground="{DynamicResource Accent}" FontFamily="Consolas, Monospace">Delete</TextBlock>
+                                </Grid>
+                                <Grid ColumnDefinitions="*, Auto">
+                                    <TextBlock Grid.Column="0" Classes="body" Text="{l:T Settings.Shortcut.Rename}"/>
+                                    <TextBlock Grid.Column="1" Classes="fieldValue" Foreground="{DynamicResource Accent}" FontFamily="Consolas, Monospace">F2</TextBlock>
+                                </Grid>
                                 <Separator Background="{DynamicResource BorderColor}" Height="1" Margin="0,4"/>
-                                <Grid ColumnDefinitions="*, Auto"><TextBlock Grid.Column="0" Text="Build Al" Foreground="{DynamicResource SecondaryText}" FontSize="12"/><TextBlock Grid.Column="1" Text="Ctrl + B" Foreground="{DynamicResource AccentColor}" FontSize="12" FontWeight="Bold" FontFamily="Consolas, Monospace"/></Grid>
-                                <Grid ColumnDefinitions="*, Auto"><TextBlock Grid.Column="0" Text="Play Mode" Foreground="{DynamicResource SecondaryText}" FontSize="12"/><TextBlock Grid.Column="1" Text="F5" Foreground="{DynamicResource AccentColor}" FontSize="12" FontWeight="Bold" FontFamily="Consolas, Monospace"/></Grid>
-                                <Grid ColumnDefinitions="*, Auto"><TextBlock Grid.Column="0" Text="Tam Ekran" Foreground="{DynamicResource SecondaryText}" FontSize="12"/><TextBlock Grid.Column="1" Text="F11" Foreground="{DynamicResource AccentColor}" FontSize="12" FontWeight="Bold" FontFamily="Consolas, Monospace"/></Grid>
-                                <Grid ColumnDefinitions="*, Auto"><TextBlock Grid.Column="0" Text="Hızlı Arama" Foreground="{DynamicResource SecondaryText}" FontSize="12"/><TextBlock Grid.Column="1" Text="Ctrl + F" Foreground="{DynamicResource AccentColor}" FontSize="12" FontWeight="Bold" FontFamily="Consolas, Monospace"/></Grid>
-                                <Grid ColumnDefinitions="*, Auto"><TextBlock Grid.Column="0" Text="Hub'ı Aç" Foreground="{DynamicResource SecondaryText}" FontSize="12"/><TextBlock Grid.Column="1" Text="Ctrl + H" Foreground="{DynamicResource AccentColor}" FontSize="12" FontWeight="Bold" FontFamily="Consolas, Monospace"/></Grid>
-                                <Grid ColumnDefinitions="*, Auto"><TextBlock Grid.Column="0" Text="Ayarlar" Foreground="{DynamicResource SecondaryText}" FontSize="12"/><TextBlock Grid.Column="1" Text="Ctrl + ," Foreground="{DynamicResource AccentColor}" FontSize="12" FontWeight="Bold" FontFamily="Consolas, Monospace"/></Grid>
+                                <Grid ColumnDefinitions="*, Auto">
+                                    <TextBlock Grid.Column="0" Classes="body" Text="{l:T Settings.Shortcut.Build}"/>
+                                    <TextBlock Grid.Column="1" Classes="fieldValue" Foreground="{DynamicResource Accent}" FontFamily="Consolas, Monospace">Ctrl + B</TextBlock>
+                                </Grid>
+                                <Grid ColumnDefinitions="*, Auto">
+                                    <TextBlock Grid.Column="0" Classes="body" Text="{l:T Settings.Shortcut.PlayMode}"/>
+                                    <TextBlock Grid.Column="1" Classes="fieldValue" Foreground="{DynamicResource Accent}" FontFamily="Consolas, Monospace">F5</TextBlock>
+                                </Grid>
+                                <Grid ColumnDefinitions="*, Auto">
+                                    <TextBlock Grid.Column="0" Classes="body" Text="{l:T Settings.Shortcut.Fullscreen}"/>
+                                    <TextBlock Grid.Column="1" Classes="fieldValue" Foreground="{DynamicResource Accent}" FontFamily="Consolas, Monospace">F11</TextBlock>
+                                </Grid>
+                                <Grid ColumnDefinitions="*, Auto">
+                                    <TextBlock Grid.Column="0" Classes="body" Text="{l:T Settings.Shortcut.QuickSearch}"/>
+                                    <TextBlock Grid.Column="1" Classes="fieldValue" Foreground="{DynamicResource Accent}" FontFamily="Consolas, Monospace">Ctrl + F</TextBlock>
+                                </Grid>
+                                <Grid ColumnDefinitions="*, Auto">
+                                    <TextBlock Grid.Column="0" Classes="body" Text="{l:T Settings.Shortcut.OpenHub}"/>
+                                    <TextBlock Grid.Column="1" Classes="fieldValue" Foreground="{DynamicResource Accent}" FontFamily="Consolas, Monospace">Ctrl + H</TextBlock>
+                                </Grid>
+                                <Grid ColumnDefinitions="*, Auto">
+                                    <TextBlock Grid.Column="0" Classes="body" Text="{l:T Settings.Shortcut.Settings}"/>
+                                    <TextBlock Grid.Column="1" Classes="fieldValue" Foreground="{DynamicResource Accent}" FontFamily="Consolas, Monospace">Ctrl + ,</TextBlock>
+                                </Grid>
                             </StackPanel>
                         </Border>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
 
-            <!-- SEKME 6: Hakkında -->
-            <TabItem Header="Hakkında">
-                <ScrollViewer Padding="24,16">
+            <TabItem Header="{l:T Settings.Tab.About}">
+                <ScrollViewer Padding="24,20">
                     <StackPanel Spacing="18" HorizontalAlignment="Center" VerticalAlignment="Center">
-                        <TextBlock Text="ROWL ENGINE" FontSize="28" FontWeight="Bold"
-                                   Foreground="{DynamicResource AccentColor}" HorizontalAlignment="Center"/>
-                        <TextBlock Text="Visual Novel &amp; Interactive Storytelling Engine" 
-                                   FontSize="13" Foreground="{DynamicResource MutedText}" HorizontalAlignment="Center"/>
+                        <TextBlock Classes="heading" Foreground="{DynamicResource Accent}" HorizontalAlignment="Center">ROWL ENGINE</TextBlock>
+                        <TextBlock Classes="muted" FontSize="{DynamicResource FontSizeBodyLarge}" HorizontalAlignment="Center"
+                                   Text="{l:T Settings.About.Tagline}"/>
 
-                        <Border Background="{DynamicResource PanelBackground}" CornerRadius="8" 
-                                Padding="20" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1"
-                                MinWidth="400">
+                        <Border Classes="panel" Padding="20" MinWidth="400">
                             <StackPanel Spacing="8">
-                                <Grid ColumnDefinitions="Auto, *"><TextBlock Grid.Column="0" Text="Sürüm:" Foreground="{DynamicResource MutedText}" FontSize="12" Margin="0,0,12,0"/><TextBlock Grid.Column="1" Text="v1.0.0" Foreground="{DynamicResource PrimaryText}" FontSize="12" FontWeight="SemiBold"/></Grid>
-                                <Grid ColumnDefinitions="Auto, *"><TextBlock Grid.Column="0" Text="Motor:" Foreground="{DynamicResource MutedText}" FontSize="12" Margin="0,0,12,0"/><TextBlock Grid.Column="1" Text="SDL3 Hardware Canvas + C++ Core" Foreground="{DynamicResource PrimaryText}" FontSize="12"/></Grid>
-                                <Grid ColumnDefinitions="Auto, *"><TextBlock Grid.Column="0" Text="Editör:" Foreground="{DynamicResource MutedText}" FontSize="12" Margin="0,0,12,0"/><TextBlock Grid.Column="1" Text="Avalonia UI (.NET) + Zero-Copy P/Invoke" Foreground="{DynamicResource PrimaryText}" FontSize="12"/></Grid>
-                                <Grid ColumnDefinitions="Auto, *"><TextBlock Grid.Column="0" Text="Paketleme:" Foreground="{DynamicResource MutedText}" FontSize="12" Margin="0,0,12,0"/><TextBlock Grid.Column="1" Text="Zstd Sıkıştırma + .rowlpkg Arşivi" Foreground="{DynamicResource PrimaryText}" FontSize="12"/></Grid>
-                                <Grid ColumnDefinitions="Auto, *"><TextBlock Grid.Column="0" Text="Platformlar:" Foreground="{DynamicResource MutedText}" FontSize="12" Margin="0,0,12,0"/><TextBlock Grid.Column="1" Text="Windows  Linux  macOS  Android  iOS" Foreground="{DynamicResource PrimaryText}" FontSize="12"/></Grid>
+                                <Grid ColumnDefinitions="Auto, *">
+                                    <TextBlock Grid.Column="0" Classes="muted" FontSize="{DynamicResource FontSizeBodyLarge}" Margin="0,0,12,0" Text="{l:T Settings.About.Version}"/>
+                                    <TextBlock Grid.Column="1" Classes="body" Foreground="{DynamicResource PrimaryText}">v1.0.0</TextBlock>
+                                </Grid>
+                                <Grid ColumnDefinitions="Auto, *">
+                                    <TextBlock Grid.Column="0" Classes="muted" FontSize="{DynamicResource FontSizeBodyLarge}" Margin="0,0,12,0" Text="{l:T Settings.About.Engine}"/>
+                                    <TextBlock Grid.Column="1" Classes="body" Foreground="{DynamicResource PrimaryText}">SDL3 Hardware Canvas + C++ Core</TextBlock>
+                                </Grid>
+                                <Grid ColumnDefinitions="Auto, *">
+                                    <TextBlock Grid.Column="0" Classes="muted" FontSize="{DynamicResource FontSizeBodyLarge}" Margin="0,0,12,0" Text="{l:T Settings.About.Editor}"/>
+                                    <TextBlock Grid.Column="1" Classes="body" Foreground="{DynamicResource PrimaryText}">Avalonia UI (.NET) + Zero-Copy P/Invoke</TextBlock>
+                                </Grid>
+                                <Grid ColumnDefinitions="Auto, *">
+                                    <TextBlock Grid.Column="0" Classes="muted" FontSize="{DynamicResource FontSizeBodyLarge}" Margin="0,0,12,0" Text="{l:T Settings.About.Packaging}"/>
+                                    <TextBlock Grid.Column="1" Classes="body" Foreground="{DynamicResource PrimaryText}" Text="{l:T Settings.About.Packaging.Value}"/>
+                                </Grid>
+                                <Grid ColumnDefinitions="Auto, *">
+                                    <TextBlock Grid.Column="0" Classes="muted" FontSize="{DynamicResource FontSizeBodyLarge}" Margin="0,0,12,0" Text="{l:T Settings.About.Platforms}"/>
+                                    <TextBlock Grid.Column="1" Classes="body" Foreground="{DynamicResource PrimaryText}">Windows  Linux  macOS  Android  iOS</TextBlock>
+                                </Grid>
                             </StackPanel>
                         </Border>
 
-                        <TextBlock Text="© 2024–2026 Rowl Engine Team" FontSize="11" 
-                                   Foreground="{DynamicResource DimText}" HorizontalAlignment="Center"/>
+                        <TextBlock Classes="hint" Foreground="{DynamicResource DimText}" HorizontalAlignment="Center">© 2024–2026 Rowl Engine Team</TextBlock>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
         </TabControl>
 
-        <!-- Alt Butonlar -->
-        <Border Grid.Row="2" Background="{DynamicResource SurfaceBackground}" 
+        <!-- Alt düğmeler -->
+        <Border Grid.Row="2" Background="{DynamicResource SurfaceBackground}"
                 BorderBrush="{DynamicResource BorderColor}" BorderThickness="0,1,0,0" Padding="16,10">
             <DockPanel>
-                <Button DockPanel.Dock="Left" Content="Varsayılanlara Sıfırla"
+                <Button DockPanel.Dock="Left" Classes="ghost" Content="{l:T Settings.ResetDefaults}"
                         Command="{Binding ResetDefaultsCommand}"
-                        Background="Transparent" Foreground="{DynamicResource MutedText}" 
-                        BorderBrush="{DynamicResource BorderColor}" BorderThickness="1"
-                        CornerRadius="6" Padding="12,6" FontSize="12"/>
-                <Button DockPanel.Dock="Right" Content="Kapat" 
+                        Foreground="{DynamicResource MutedText}"/>
+                <Button DockPanel.Dock="Right" Classes="primary" Content="{l:T Settings.Close}"
                         Name="CloseButton"
-                        HorizontalAlignment="Right"
-                        Background="{DynamicResource ToolbarButtonBg}" 
-                        Foreground="{DynamicResource PrimaryText}"
-                        CornerRadius="6" Padding="20,6" FontSize="12" FontWeight="SemiBold"/>
+                        HorizontalAlignment="Right"/>
             </DockPanel>
         </Border>
     </Grid>

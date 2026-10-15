@@ -926,6 +926,306 @@
     },
     "Hierarchy.Delete": {
       "text": "Nesneyi Sil"
+    },
+    "Assets.Title": {
+      "text": "Varlıklar"
+    },
+    "Assets.NewFolder": {
+      "text": "Yeni Klasör"
+    },
+    "Assets.NewFolder.Tip": {
+      "text": "Seçili konumun altında klasör oluştur"
+    },
+    "Assets.Import": {
+      "text": "İçe Aktar"
+    },
+    "Assets.Import.Tip": {
+      "text": "Dosyayı proje Assets klasörüne içe aktar"
+    },
+    "Assets.ImportFile": {
+      "text": "Dosya İçe Aktar"
+    },
+    "Assets.Refresh": {
+      "text": "Yenile"
+    },
+    "Assets.Refresh.Tip": {
+      "text": "Varlık listesini yenile"
+    },
+    "Assets.ViewToggle.Tip": {
+      "text": "Izgara/Liste görünümü arasında geç"
+    },
+    "Assets.Up": {
+      "text": "↑ Üst"
+    },
+    "Assets.Up.Tip": {
+      "text": "Üst klasöre git"
+    },
+    "Assets.Search.Watermark": {
+      "text": "Ara: ad veya uzantı"
+    },
+    "Assets.Menu.NewFolder": {
+      "text": "Yeni Klasör Oluştur"
+    },
+    "Assets.Menu.Import": {
+      "text": "Dosya İçe Aktar..."
+    },
+    "Assets.Menu.Rename": {
+      "text": "Yeniden Adlandır (F2)"
+    },
+    "Assets.Menu.OpenInExplorer": {
+      "text": "Dosya Yöneticisinde Aç"
+    },
+    "Assets.Badge.Info": {
+      "text": "bilgi"
+    },
+    "Assets.Badge.Missing": {
+      "text": "KAYIP"
+    },
+    "Assets.ShowMore.Tip": {
+      "text": "Sonraki 200 öğeyi göster"
+    },
+    "Assets.Empty": {
+      "text": "Bu projede henüz dosya yok."
+    },
+    "Assets.NoMatch": {
+      "text": "Arama filtresi sonuç vermedi."
+    },
+    "Assets.ClearFilter": {
+      "text": "Filtreyi Temizle"
+    },
+    "Assets.ClearFilter.Tip": {
+      "text": "Arama ve tür filtresini temizle"
+    },
+    "Assets.Size": {
+      "text": "Boyut"
+    },
+    "Assets.Size.Tip": {
+      "text": "Simge boyutu"
+    },
+    "Log.Clear": {
+      "text": "Temizle"
+    },
+    "Log.Clear.Tip": {
+      "text": "Konsolu temizle"
+    },
+    "Log.Errors": {
+      "text": "Hata:"
+    },
+    "Log.Errors.Tip": {
+      "text": "Hata sayısı"
+    },
+    "Log.Warnings": {
+      "text": "Uyarı:"
+    },
+    "Log.Warnings.Tip": {
+      "text": "Uyarı sayısı"
+    },
+    "Log.Infos": {
+      "text": "Bilgi:"
+    },
+    "Log.Infos.Tip": {
+      "text": "Bilgi sayısı"
+    },
+    "Issues.Analyze": {
+      "text": "Analiz"
+    },
+    "Issues.Analyze.Tip": {
+      "text": "Hikaye grafiğini analiz et"
+    },
+    "Issues.Empty": {
+      "text": "Sorun bulunamadı."
+    },
+    "Issues.Reanalyze": {
+      "text": "Yeniden Analiz Et"
+    },
+    "Backlog.Empty": {
+      "text": "Henüz diyalog kaydı yok."
+    },
+    "Backlog.Empty.Hint": {
+      "text": "Oyuncu önizlemedeki konuşmalar burada birikir."
+    },
+    "Backlog.OpenPlayer": {
+      "text": "Oyuncu Önizlemeyi Aç"
+    },
+    "Backlog.OpenPlayer.Tip": {
+      "text": "Oyuncu önizleme panelini aç"
+    },
+    "SaveSlots.Save": {
+      "text": "Kaydet"
+    },
+    "SaveSlots.Load": {
+      "text": "Yükle"
+    },
+    "Settings.Window.Title": {
+      "text": "Ayarlar — Rowl Engine"
+    },
+    "Settings.Header.Eyebrow": {
+      "text": "ROWL / AYARLAR"
+    },
+    "Settings.Scope.Preferences": {
+      "text": "TERCİHLER · BU CİHAZ"
+    },
+    "Settings.Scope.Project": {
+      "text": "PROJE AYARLARI · PROJE DOSYASI"
+    },
+    "Settings.Tab.Theme": {
+      "text": "Tema"
+    },
+    "Settings.Tab.General": {
+      "text": "Genel"
+    },
+    "Settings.Tab.Player": {
+      "text": "Oyuncu"
+    },
+    "Settings.Tab.Project": {
+      "text": "Proje"
+    },
+    "Settings.Tab.Shortcuts": {
+      "text": "Kısayollar"
+    },
+    "Settings.Tab.About": {
+      "text": "Hakkında"
+    },
+    "Settings.Theme.Title": {
+      "text": "Tema & Görünüm"
+    },
+    "Settings.Theme.Desc": {
+      "text": "Editör arayüzünün renk teması."
+    },
+    "Settings.Theme.Label": {
+      "text": "Editör Teması"
+    },
+    "Settings.Theme.Apply": {
+      "text": "Temayı Uygula"
+    },
+    "Settings.Theme.Sample": {
+      "text": "Aa"
+    },
+    "Settings.Theme.Preview.Dark": {
+      "text": "Kemik Beyazı (Karanlık)"
+    },
+    "Settings.Theme.Preview.Oled": {
+      "text": "Saf Siyah (OLED)"
+    },
+    "Settings.General.Title": {
+      "text": "Genel Editör Ayarları"
+    },
+    "Settings.General.Desc": {
+      "text": "Arayüz dili ve otomatik kaydetme."
+    },
+    "Settings.AutoSave": {
+      "text": "Otomatik Kaydetme"
+    },
+    "Settings.AutoSave.Interval": {
+      "text": "Kaydetme Aralığı (saniye)"
+    },
+    "Settings.Player.Title": {
+      "text": "Oyuncu Tercihleri"
+    },
+    "Settings.Player.Desc": {
+      "text": "Bu tercihler cihazda saklanır; proje dosyasına veya oyun kayıtlarına eklenmez."
+    },
+    "Settings.Player.Master": {
+      "text": "Ana Ses"
+    },
+    "Settings.Player.Music": {
+      "text": "Müzik"
+    },
+    "Settings.Player.Voice": {
+      "text": "Konuşma"
+    },
+    "Settings.Player.Sfx": {
+      "text": "Efekt"
+    },
+    "Settings.Player.TextSpeed": {
+      "text": "Metin Hızı Çarpanı"
+    },
+    "Settings.Player.AutoAdvance": {
+      "text": "Otomatik İlerleme Ek Gecikmesi (sn)"
+    },
+    "Settings.Project.Title": {
+      "text": "Proje Runtime Ayarları"
+    },
+    "Settings.Project.Desc": {
+      "text": "Bu değerler açık projenin project.rowlproj dosyasına kaydedilir."
+    },
+    "Settings.Project.SaveSlots": {
+      "text": "Kayıt Slotu Sayısı"
+    },
+    "Settings.Project.BgmTransition": {
+      "text": "Varsayılan BGM Geçişi"
+    },
+    "Settings.Project.TransitionDuration": {
+      "text": "Varsayılan Geçiş Süresi (sn)"
+    },
+    "Settings.Shortcuts.Title": {
+      "text": "Klavye Kısayolları"
+    },
+    "Settings.Shortcut.Save": {
+      "text": "Kaydet"
+    },
+    "Settings.Shortcut.SaveAs": {
+      "text": "Farklı Kaydet"
+    },
+    "Settings.Shortcut.Undo": {
+      "text": "Geri Al (Undo)"
+    },
+    "Settings.Shortcut.Redo": {
+      "text": "Yinele (Redo)"
+    },
+    "Settings.Shortcut.NewNode": {
+      "text": "Yeni Node Ekle"
+    },
+    "Settings.Shortcut.DeleteNode": {
+      "text": "Seçili Node Sil"
+    },
+    "Settings.Shortcut.Rename": {
+      "text": "Yeniden Adlandır"
+    },
+    "Settings.Shortcut.Build": {
+      "text": "Build Al"
+    },
+    "Settings.Shortcut.PlayMode": {
+      "text": "Play Mode"
+    },
+    "Settings.Shortcut.Fullscreen": {
+      "text": "Tam Ekran"
+    },
+    "Settings.Shortcut.QuickSearch": {
+      "text": "Hızlı Arama"
+    },
+    "Settings.Shortcut.OpenHub": {
+      "text": "Hub'ı Aç"
+    },
+    "Settings.Shortcut.Settings": {
+      "text": "Ayarlar"
+    },
+    "Settings.About.Tagline": {
+      "text": "Visual Novel & Interactive Storytelling Engine"
+    },
+    "Settings.About.Version": {
+      "text": "Sürüm:"
+    },
+    "Settings.About.Engine": {
+      "text": "Motor:"
+    },
+    "Settings.About.Editor": {
+      "text": "Editör:"
+    },
+    "Settings.About.Packaging": {
+      "text": "Paketleme:"
+    },
+    "Settings.About.Packaging.Value": {
+      "text": "Zstd Sıkıştırma + .rowlpkg Arşivi"
+    },
+    "Settings.About.Platforms": {
+      "text": "Platformlar:"
+    },
+    "Settings.ResetDefaults": {
+      "text": "Varsayılanlara Sıfırla"
+    },
+    "Settings.Close": {
+      "text": "Kapat"
     }
   }
 }

@@ -926,6 +926,306 @@
     },
     "Hierarchy.Delete": {
       "text": "Delete Object"
+    },
+    "Assets.Title": {
+      "text": "Assets"
+    },
+    "Assets.NewFolder": {
+      "text": "New folder"
+    },
+    "Assets.NewFolder.Tip": {
+      "text": "Create a folder in the selected location"
+    },
+    "Assets.Import": {
+      "text": "Import"
+    },
+    "Assets.Import.Tip": {
+      "text": "Import a file into the project Assets folder"
+    },
+    "Assets.ImportFile": {
+      "text": "Import file"
+    },
+    "Assets.Refresh": {
+      "text": "Refresh"
+    },
+    "Assets.Refresh.Tip": {
+      "text": "Refresh the asset list"
+    },
+    "Assets.ViewToggle.Tip": {
+      "text": "Switch between grid and list view"
+    },
+    "Assets.Up": {
+      "text": "↑ Up"
+    },
+    "Assets.Up.Tip": {
+      "text": "Go to parent folder"
+    },
+    "Assets.Search.Watermark": {
+      "text": "Search by name or extension"
+    },
+    "Assets.Menu.NewFolder": {
+      "text": "Create new folder"
+    },
+    "Assets.Menu.Import": {
+      "text": "Import file..."
+    },
+    "Assets.Menu.Rename": {
+      "text": "Rename (F2)"
+    },
+    "Assets.Menu.OpenInExplorer": {
+      "text": "Show in file manager"
+    },
+    "Assets.Badge.Info": {
+      "text": "info"
+    },
+    "Assets.Badge.Missing": {
+      "text": "MISSING"
+    },
+    "Assets.ShowMore.Tip": {
+      "text": "Show the next 200 items"
+    },
+    "Assets.Empty": {
+      "text": "This project has no files yet."
+    },
+    "Assets.NoMatch": {
+      "text": "No results match the filter."
+    },
+    "Assets.ClearFilter": {
+      "text": "Clear filter"
+    },
+    "Assets.ClearFilter.Tip": {
+      "text": "Clear the search and type filter"
+    },
+    "Assets.Size": {
+      "text": "Size"
+    },
+    "Assets.Size.Tip": {
+      "text": "Icon size"
+    },
+    "Log.Clear": {
+      "text": "Clear"
+    },
+    "Log.Clear.Tip": {
+      "text": "Clear console"
+    },
+    "Log.Errors": {
+      "text": "Errors:"
+    },
+    "Log.Errors.Tip": {
+      "text": "Error count"
+    },
+    "Log.Warnings": {
+      "text": "Warnings:"
+    },
+    "Log.Warnings.Tip": {
+      "text": "Warning count"
+    },
+    "Log.Infos": {
+      "text": "Info:"
+    },
+    "Log.Infos.Tip": {
+      "text": "Info count"
+    },
+    "Issues.Analyze": {
+      "text": "Analyze"
+    },
+    "Issues.Analyze.Tip": {
+      "text": "Analyze the story graph"
+    },
+    "Issues.Empty": {
+      "text": "No issues found."
+    },
+    "Issues.Reanalyze": {
+      "text": "Re-analyze"
+    },
+    "Backlog.Empty": {
+      "text": "No dialogue recorded yet."
+    },
+    "Backlog.Empty.Hint": {
+      "text": "Dialogue from the player preview collects here."
+    },
+    "Backlog.OpenPlayer": {
+      "text": "Open Player Preview"
+    },
+    "Backlog.OpenPlayer.Tip": {
+      "text": "Open the player preview panel"
+    },
+    "SaveSlots.Save": {
+      "text": "Save"
+    },
+    "SaveSlots.Load": {
+      "text": "Load"
+    },
+    "Settings.Window.Title": {
+      "text": "Settings — Rowl Engine"
+    },
+    "Settings.Header.Eyebrow": {
+      "text": "ROWL / SETTINGS"
+    },
+    "Settings.Scope.Preferences": {
+      "text": "PREFERENCES · THIS DEVICE"
+    },
+    "Settings.Scope.Project": {
+      "text": "PROJECT SETTINGS · PROJECT FILE"
+    },
+    "Settings.Tab.Theme": {
+      "text": "Theme"
+    },
+    "Settings.Tab.General": {
+      "text": "General"
+    },
+    "Settings.Tab.Player": {
+      "text": "Player"
+    },
+    "Settings.Tab.Project": {
+      "text": "Project"
+    },
+    "Settings.Tab.Shortcuts": {
+      "text": "Shortcuts"
+    },
+    "Settings.Tab.About": {
+      "text": "About"
+    },
+    "Settings.Theme.Title": {
+      "text": "Theme & Appearance"
+    },
+    "Settings.Theme.Desc": {
+      "text": "Color theme of the editor interface."
+    },
+    "Settings.Theme.Label": {
+      "text": "Editor Theme"
+    },
+    "Settings.Theme.Apply": {
+      "text": "Apply Theme"
+    },
+    "Settings.Theme.Sample": {
+      "text": "Aa"
+    },
+    "Settings.Theme.Preview.Dark": {
+      "text": "Bone White (Dark)"
+    },
+    "Settings.Theme.Preview.Oled": {
+      "text": "Pure Black (OLED)"
+    },
+    "Settings.General.Title": {
+      "text": "General Editor Settings"
+    },
+    "Settings.General.Desc": {
+      "text": "Interface language and autosave."
+    },
+    "Settings.AutoSave": {
+      "text": "Autosave"
+    },
+    "Settings.AutoSave.Interval": {
+      "text": "Save Interval (seconds)"
+    },
+    "Settings.Player.Title": {
+      "text": "Player Preferences"
+    },
+    "Settings.Player.Desc": {
+      "text": "These preferences are stored on this device; they are not added to the project file or game saves."
+    },
+    "Settings.Player.Master": {
+      "text": "Master Volume"
+    },
+    "Settings.Player.Music": {
+      "text": "Music"
+    },
+    "Settings.Player.Voice": {
+      "text": "Voice"
+    },
+    "Settings.Player.Sfx": {
+      "text": "Effects"
+    },
+    "Settings.Player.TextSpeed": {
+      "text": "Text Speed Multiplier"
+    },
+    "Settings.Player.AutoAdvance": {
+      "text": "Auto-Advance Extra Delay (s)"
+    },
+    "Settings.Project.Title": {
+      "text": "Project Runtime Settings"
+    },
+    "Settings.Project.Desc": {
+      "text": "These values are saved to the open project's project.rowlproj file."
+    },
+    "Settings.Project.SaveSlots": {
+      "text": "Save Slot Count"
+    },
+    "Settings.Project.BgmTransition": {
+      "text": "Default BGM Transition"
+    },
+    "Settings.Project.TransitionDuration": {
+      "text": "Default Transition Duration (s)"
+    },
+    "Settings.Shortcuts.Title": {
+      "text": "Keyboard Shortcuts"
+    },
+    "Settings.Shortcut.Save": {
+      "text": "Save"
+    },
+    "Settings.Shortcut.SaveAs": {
+      "text": "Save As"
+    },
+    "Settings.Shortcut.Undo": {
+      "text": "Undo"
+    },
+    "Settings.Shortcut.Redo": {
+      "text": "Redo"
+    },
+    "Settings.Shortcut.NewNode": {
+      "text": "Add New Node"
+    },
+    "Settings.Shortcut.DeleteNode": {
+      "text": "Delete Selected Node"
+    },
+    "Settings.Shortcut.Rename": {
+      "text": "Rename"
+    },
+    "Settings.Shortcut.Build": {
+      "text": "Build"
+    },
+    "Settings.Shortcut.PlayMode": {
+      "text": "Play Mode"
+    },
+    "Settings.Shortcut.Fullscreen": {
+      "text": "Fullscreen"
+    },
+    "Settings.Shortcut.QuickSearch": {
+      "text": "Quick Search"
+    },
+    "Settings.Shortcut.OpenHub": {
+      "text": "Open Hub"
+    },
+    "Settings.Shortcut.Settings": {
+      "text": "Settings"
+    },
+    "Settings.About.Tagline": {
+      "text": "Visual Novel & Interactive Storytelling Engine"
+    },
+    "Settings.About.Version": {
+      "text": "Version:"
+    },
+    "Settings.About.Engine": {
+      "text": "Engine:"
+    },
+    "Settings.About.Editor": {
+      "text": "Editor:"
+    },
+    "Settings.About.Packaging": {
+      "text": "Packaging:"
+    },
+    "Settings.About.Packaging.Value": {
+      "text": "Zstd Compression + .rowlpkg Archive"
+    },
+    "Settings.About.Platforms": {
+      "text": "Platforms:"
+    },
+    "Settings.ResetDefaults": {
+      "text": "Reset to Defaults"
+    },
+    "Settings.Close": {
+      "text": "Close"
     }
   }
 }

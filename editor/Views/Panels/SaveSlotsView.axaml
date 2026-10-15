@@ -1,17 +1,18 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:RowlEngine.Editor.ViewModels"
+             xmlns:l="using:RowlEngine.Editor.Services.Strings"
              x:Class="RowlEngine.Editor.Views.Panels.SaveSlotsView"
              x:DataType="vm:SaveSlotsViewModel" x:Name="Root">
-  <Border Background="{DynamicResource LogConsoleBg}" Padding="8">
+  <Border Background="{DynamicResource PanelBackground}" Padding="8">
     <ScrollViewer VerticalScrollBarVisibility="Auto"><ItemsControl ItemsSource="{Binding Slots}"><ItemsControl.ItemTemplate><DataTemplate>
       <Grid ColumnDefinitions="*,Auto,Auto,Auto" Margin="4" ColumnSpacing="6">
-        <TextBlock Text="{Binding Label}" FontSize="12" Foreground="{DynamicResource PrimaryText}" VerticalAlignment="Center"/>
-        <TextBlock Grid.Column="1" Text="{Binding State}" FontSize="11" Foreground="{DynamicResource MutedText}" VerticalAlignment="Center"/>
-        <Button Grid.Column="2" Content="Kaydet" FontSize="11" Command="{Binding #Root.DataContext.SaveCommand}" CommandParameter="{Binding}"/>
+        <TextBlock Text="{Binding Label}" FontSize="{DynamicResource FontSizeBodyLarge}" Foreground="{DynamicResource PrimaryText}" VerticalAlignment="Center"/>
+        <TextBlock Grid.Column="1" Classes="muted" Text="{Binding State}" FontSize="{DynamicResource FontSizeBody}" VerticalAlignment="Center"/>
+        <Button Grid.Column="2" Classes="ghost" Content="{l:T SaveSlots.Save}" Command="{Binding #Root.DataContext.SaveCommand}" CommandParameter="{Binding}"/>
         <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="4">
-          <Button Content="Yükle" FontSize="11" IsEnabled="{Binding IsOccupied}" Command="{Binding #Root.DataContext.LoadCommand}" CommandParameter="{Binding}"/>
-          <Button Content="Sil" FontSize="11" IsEnabled="{Binding IsOccupied}" Command="{Binding #Root.DataContext.DeleteCommand}" CommandParameter="{Binding}"/>
+          <Button Classes="ghost" Content="{l:T SaveSlots.Load}" IsEnabled="{Binding IsOccupied}" Command="{Binding #Root.DataContext.LoadCommand}" CommandParameter="{Binding}"/>
+          <Button Classes="ghost" Content="{l:T Common.Delete}" IsEnabled="{Binding IsOccupied}" Command="{Binding #Root.DataContext.DeleteCommand}" CommandParameter="{Binding}"/>
         </StackPanel>
       </Grid>
     </DataTemplate></ItemsControl.ItemTemplate></ItemsControl></ScrollViewer>
