@@ -4,6 +4,7 @@
              RequestedThemeVariant="Dark">
     <Application.Styles>
         <FluentTheme />
+        <StyleInclude Source="avares://RowlEngine.Editor/Styles/ControlStyles.axaml"/>
     </Application.Styles>
 
     <Application.Resources>

@@ -46,6 +46,33 @@ internal static class EditorWorkspaceThemeTests
             throw new Exception("Default theme did not apply shifted PanelBackgroundColor");
         Console.WriteLine("  [PASS] Theme switch (Kemik Beyazı <-> Saf Siyah OLED) verified");
 
+        // Faz 2: ölçek token'ları, Fluent vurgu tek renk (K3) ve stil sınıfları
+        // gerçekten uygulanıyor (yalnız tanımlı değil).
+        if (!app.TryGetResource("FontSizeCaption", null, out var caption) || caption is not double cs || cs != 9)
+            throw new Exception("FontSizeCaption token missing or not 9");
+        if (!app.TryGetResource("ControlHeight", null, out var ch) || ch is not double chv || chv != 32)
+            throw new Exception("ControlHeight token missing or not 32 (K2)");
+        if (!app.TryGetResource("SystemAccentColor", Avalonia.Styling.ThemeVariant.Dark, out var accent) ||
+            accent is not Avalonia.Media.Color ac || ac != Avalonia.Media.Color.Parse("#D4CBB6"))
+            throw new Exception("Fluent accent still blue: SystemAccentColor override not applied (K3)");
+        Avalonia.Threading.Dispatcher.UIThread.Invoke(() =>
+        {
+            var probe = new Avalonia.Controls.TextBlock { Text = "x" };
+            probe.Classes.Add("caption");
+            var probeWindow = new Avalonia.Controls.Window { Content = probe };
+            probeWindow.Show();
+            try
+            {
+                if (probe.FontSize != 9)
+                    throw new Exception($"TextBlock.caption style not applied (FontSize={probe.FontSize})");
+            }
+            finally
+            {
+                probeWindow.Close();
+            }
+        });
+        Console.WriteLine("  [PASS] Faz 2 scale tokens, accent override and style classes applied");
+
         mainVm.ShowPanel("Hierarchy");
         if (mainVm.HierarchyPanelWidth.Value != 0 || mainVm.HierarchySplitterWidth.Value != 0)
             throw new Exception("Hidden Hierarchy still reserved workspace width");

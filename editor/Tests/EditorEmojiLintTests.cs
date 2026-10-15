@@ -32,7 +32,7 @@ namespace RowlEngine.Editor.Tests
             ["TransitionComponentView.axaml"] = new[] { "#000000", "#FFFFFF", "#0A183D" },
             ["TransitionComponentViewModel.cs"] = new[] { "#000000", "#FFFFFF", "#0A183D" },
             ["NodeColorTags.cs"] = new[] { "#EF4444", "#F59E0B", "#EAB308", "#22C55E", "#3B82F6", "#A855F7", "#EC4899", "#6B7280", "#64748B", "#38BDF8" },
-            ["SettingsViewModel.cs"] = new[] { "#000000", "#070709", "#0A0A0B", "#0B0B0D", "#0F0F12", "#111113", "#111114", "#131315", "#18181B", "#19191C", "#19191D", "#1A1A1E", "#1E1E22", "#202023", "#222226", "#26262B", "#29292D", "#2B2A36", "#2C332C", "#3A3124", "#3E2B26", "#4A4A52", "#66666D", "#74736C", "#85858B", "#9DB58F", "#A9A3C9", "#D9B47A", "#DAD7CF", "#E3A296", "#F2EFE6", "#FFFFFF" },
+            ["SettingsViewModel.cs"] = new[] { "#000000", "#070709", "#0A0A0B", "#0B0B0D", "#0F0F12", "#111113", "#111114", "#131315", "#18181B", "#19191C", "#19191D", "#1A1A1E", "#1E1E22", "#202023", "#222226", "#26262B", "#29292D", "#2B2A36", "#2C332C", "#3A3124", "#3E2B26", "#4A4A52", "#66666D", "#74736C", "#847F73", "#85858B", "#9DB58F", "#9E988A", "#A9A3C9", "#B9B3A3", "#D4CBB6", "#D9B47A", "#DAD7CF", "#E2DBC9", "#E3A296", "#EDE8DC", "#F2EFE6", "#FFFFFF" },
         };
         private static readonly string[] BannedSymbols = new[]
         {

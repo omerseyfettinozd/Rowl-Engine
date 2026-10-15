@@ -123,6 +123,13 @@ namespace RowlEngine.Editor.ViewModels
                 ["WarningSurfaceColor"] = Color.Parse("#3A3124"),
                 ["ErrorSurfaceColor"] = Color.Parse("#3E2B26"),
                 ["InfoSurfaceColor"] = Color.Parse("#2B2A36"),
+                ["SystemAccentColor"] = Color.Parse("#D4CBB6"),
+                ["SystemAccentColorDark1"] = Color.Parse("#B9B3A3"),
+                ["SystemAccentColorDark2"] = Color.Parse("#9E988A"),
+                ["SystemAccentColorDark3"] = Color.Parse("#847F73"),
+                ["SystemAccentColorLight1"] = Color.Parse("#E2DBC9"),
+                ["SystemAccentColorLight2"] = Color.Parse("#EDE8DC"),
+                ["SystemAccentColorLight3"] = Color.Parse("#F2EFE6"),
             },
             ["Saf Siyah (OLED)"] = new()
             {
@@ -159,6 +166,13 @@ namespace RowlEngine.Editor.ViewModels
                 ["WarningSurfaceColor"] = Color.Parse("#3A3124"),
                 ["ErrorSurfaceColor"] = Color.Parse("#3E2B26"),
                 ["InfoSurfaceColor"] = Color.Parse("#2B2A36"),
+                ["SystemAccentColor"] = Color.Parse("#D4CBB6"),
+                ["SystemAccentColorDark1"] = Color.Parse("#B9B3A3"),
+                ["SystemAccentColorDark2"] = Color.Parse("#9E988A"),
+                ["SystemAccentColorDark3"] = Color.Parse("#847F73"),
+                ["SystemAccentColorLight1"] = Color.Parse("#E2DBC9"),
+                ["SystemAccentColorLight2"] = Color.Parse("#EDE8DC"),
+                ["SystemAccentColorLight3"] = Color.Parse("#F2EFE6"),
             },
         };
 
