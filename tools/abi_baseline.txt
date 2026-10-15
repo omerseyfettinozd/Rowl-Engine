@@ -15,6 +15,7 @@ RowlEngine_Destroy
 RowlEngine_EndSession
 RowlEngine_EvaluateCondition
 RowlEngine_ExecuteScript
+RowlEngine_FreeObservabilityString
 RowlEngine_GetActiveDialogueContentIdsJson
 RowlEngine_GetActiveDspFilter
 RowlEngine_GetAmbienceBedVolume
@@ -25,6 +26,7 @@ RowlEngine_GetAudioChannelPeak
 RowlEngine_GetAudioChannelRms
 RowlEngine_GetAudioDropCount
 RowlEngine_GetAudioSpectrum
+RowlEngine_GetAudioStatsJson
 RowlEngine_GetBackgroundOpacity
 RowlEngine_GetBackgroundParallaxX
 RowlEngine_GetBackgroundParallaxY
@@ -98,6 +100,7 @@ RowlEngine_GetPixelBufferEx
 RowlEngine_GetPrefetchProgressJson
 RowlEngine_GetProfileDirectoryUtf8
 RowlEngine_GetQuickSaveSlot
+RowlEngine_GetRecentLogsJson
 RowlEngine_GetSaveDirectoryUtf8
 RowlEngine_GetSaveSlotMetadataJson
 RowlEngine_GetScreenTintOpacity
@@ -132,6 +135,7 @@ RowlEngine_GetVoiceVolume
 RowlEngine_HasSaveSlot
 RowlEngine_Init
 RowlEngine_InitStandalone
+RowlEngine_InjectInputJson
 RowlEngine_IsAmbienceBedPlaying
 RowlEngine_IsAmbienceCrossfadeActive
 RowlEngine_IsAudioDeviceAvailable
@@ -165,6 +169,8 @@ RowlEngine_PlayVoiceBlip
 RowlEngine_PointerDown
 RowlEngine_PrefetchChapterAssets
 RowlEngine_PumpPrefetch
+RowlEngine_QueryVfsStatusJson
+RowlEngine_QueryWorldJson
 RowlEngine_QuickLoad
 RowlEngine_QuickSave
 RowlEngine_ReclaimHandle
@@ -198,6 +204,7 @@ RowlEngine_SetFadeCurveChecked
 RowlEngine_SetHighContrast
 RowlEngine_SetLipSyncEnabled
 RowlEngine_SetLocale
+RowlEngine_SetLogCallback
 RowlEngine_SetMasterVolume
 RowlEngine_SetPaused
 RowlEngine_SetPlayState

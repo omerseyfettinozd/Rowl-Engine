@@ -1,0 +1,1126 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Rowl.Eye — Local Web Inspector & Visual Tree</title>
+  <style>
+    :root {
+      --bg: #090c10;
+      --panel: #111622;
+      --panel2: #182030;
+      --line: #222d42;
+      --txt: #e6edf3;
+      --dim: #8b949e;
+      --acc: #00e5cc;
+      --acc-hover: #00ffd9;
+      --warn: #d29922;
+      --bad: #f85149;
+      --good: #3fb950;
+      --inspect: #38bdf8;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--txt);
+      font: 13px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+    header.topbar {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      padding: 10px 18px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--line);
+      flex-shrink: 0;
+    }
+    .topbar .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--acc);
+      box-shadow: 0 0 10px var(--acc);
+    }
+    .brand { font-size: 15px; font-weight: 800; letter-spacing: 0.5px; color: var(--txt); }
+    .brand-sub { color: var(--acc); font-weight: 600; font-size: 12px; margin-left: 4px; }
+    .spacer { flex: 1; }
+    .btn {
+      background: var(--acc);
+      color: #041c19;
+      border: 0;
+      border-radius: 6px;
+      padding: 7px 14px;
+      font-weight: 700;
+      cursor: pointer;
+      font-size: 12px;
+      transition: all 0.15s ease;
+    }
+    .btn:hover { background: var(--acc-hover); }
+    .btn.ghost {
+      background: var(--panel2);
+      color: var(--txt);
+      border: 1px solid var(--line);
+    }
+    .btn.ghost:hover {
+      background: #202b40;
+      border-color: var(--acc);
+    }
+    .btn.active-inspect {
+      background: var(--inspect);
+      color: #032030;
+      box-shadow: 0 0 10px rgba(56, 189, 248, 0.4);
+    }
+    .layout {
+      display: grid;
+      grid-template-columns: 270px 1fr;
+      flex: 1;
+      height: calc(100vh - 54px);
+      overflow: hidden;
+    }
+    aside.sidebar {
+      background: var(--panel);
+      border-right: 1px solid var(--line);
+      padding: 16px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .section-title {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--dim);
+      margin-bottom: 6px;
+    }
+    aside.sidebar ul {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    aside.sidebar li {
+      padding: 8px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      color: var(--dim);
+      font-weight: 500;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: all 0.1s;
+    }
+    aside.sidebar li:hover {
+      background: var(--panel2);
+      color: var(--txt);
+    }
+    aside.sidebar li.active {
+      background: var(--panel2);
+      color: var(--acc);
+      font-weight: 700;
+      outline: 1px solid var(--line);
+    }
+    .seg {
+      display: flex;
+      background: var(--panel2);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .seg button {
+      flex: 1;
+      background: none;
+      border: 0;
+      color: var(--dim);
+      padding: 7px 10px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 12px;
+    }
+    .seg button.on {
+      background: var(--acc);
+      color: #041c19;
+    }
+    select.select-box {
+      width: 100%;
+      background: var(--panel2);
+      color: var(--txt);
+      padding: 8px 10px;
+      border-radius: 6px;
+      border: 1px solid var(--line);
+      font-size: 12px;
+      outline: none;
+    }
+    select.select-box:focus { border-color: var(--acc); }
+    .status-card {
+      background: var(--panel2);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      font-size: 12px;
+    }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .badge.passed { background: rgba(63, 185, 80, 0.2); color: var(--good); border: 1px solid rgba(63, 185, 80, 0.4); }
+    .badge.failed { background: rgba(248, 81, 73, 0.2); color: var(--bad); border: 1px solid rgba(248, 81, 73, 0.4); }
+    .badge.baseline { background: rgba(210, 153, 34, 0.2); color: var(--warn); border: 1px solid rgba(210, 153, 34, 0.4); }
+    
+    main.viewport {
+      display: flex;
+      flex-direction: column;
+      padding: 16px 20px;
+      overflow-y: auto;
+      gap: 12px;
+    }
+    .tabs {
+      display: flex;
+      gap: 8px;
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 10px;
+    }
+    .tabs button {
+      background: var(--panel);
+      color: var(--dim);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 7px 16px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      transition: all 0.15s;
+    }
+    .tabs button:hover { color: var(--txt); }
+    .tabs button.on {
+      background: var(--panel2);
+      color: var(--acc);
+      border-color: var(--acc);
+    }
+    .content-card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 16px;
+      min-height: 480px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+    .live-wrapper {
+      position: relative;
+      display: inline-block;
+      max-width: 100%;
+    }
+    .img-preview {
+      display: block;
+      max-width: 100%;
+      max-height: 75vh;
+      border-radius: 6px;
+      border: 1px solid var(--line);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+      background: #000;
+      object-fit: contain;
+    }
+    /* Inspect Highlight Box */
+    .inspect-box {
+      position: absolute;
+      border: 2px solid var(--inspect);
+      background: rgba(56, 189, 248, 0.2);
+      pointer-events: none;
+      transition: all 0.05s ease-out;
+      border-radius: 2px;
+      z-index: 10;
+      display: none;
+    }
+    .inspect-label {
+      position: absolute;
+      top: -24px;
+      left: 0;
+      background: #000;
+      color: var(--inspect);
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+      border: 1px solid var(--inspect);
+      white-space: nowrap;
+      pointer-events: none;
+    }
+    /* AI Agent Laser Highlight Box */
+    .agent-laser {
+      position: absolute;
+      top: 0;
+      left: 0;
+      border: 2px solid #00e5ff;
+      border-radius: 4px;
+      box-shadow: 0 0 16px rgba(0, 229, 255, 0.8), inset 0 0 10px rgba(0, 229, 255, 0.4);
+      background: rgba(0, 229, 255, 0.15);
+      pointer-events: none;
+      z-index: 25;
+      display: none;
+      will-change: transform, width, height;
+      transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), width 0.2s ease, height 0.2s ease;
+    }
+    .agent-tooltip {
+      position: absolute;
+      bottom: calc(100% + 6px);
+      left: 0;
+      background: #04141c;
+      color: #00e5ff;
+      border: 1px solid #00e5ff;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.7);
+      border-radius: 4px;
+      padding: 4px 8px;
+      font-size: 11px;
+      font-weight: 700;
+      white-space: nowrap;
+      max-width: 420px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      pointer-events: none;
+    }
+    .agent-dot-live {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #00e5ff;
+      box-shadow: 0 0 8px #00e5ff;
+      animation: agentPulse 1.4s infinite;
+      margin-right: 6px;
+    }
+    @keyframes agentPulse {
+      0% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+      100% { opacity: 1; transform: scale(1); }
+    }
+    .telemetry-row {
+      display: flex;
+      gap: 8px;
+      padding: 6px 0;
+      border-bottom: 1px solid var(--line);
+      font-family: ui-monospace, monospace;
+      font-size: 11px;
+    }
+    .telemetry-time { color: var(--dim); min-width: 60px; }
+    .telemetry-action { color: #00e5ff; font-weight: 700; min-width: 90px; }
+    .telemetry-msg { color: var(--txt); flex: 1; word-break: break-all; }
+
+    /* Split comparison slider */
+    .compare-container {
+      position: relative;
+      width: 100%;
+      max-width: 1200px;
+      min-height: 360px;
+      overflow: hidden;
+      border-radius: 6px;
+      border: 1px solid var(--line);
+      background: #000;
+      user-select: none;
+    }
+    .compare-container img {
+      display: block;
+      width: 100%;
+      height: auto;
+      object-fit: contain;
+    }
+    .compare-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      height: 100%;
+      width: 50%;
+      overflow: hidden;
+      border-right: 3px solid var(--acc);
+      box-shadow: 2px 0 10px rgba(0, 229, 204, 0.5);
+    }
+    .compare-overlay img {
+      position: absolute;
+      top: 0;
+      left: 0;
+      height: 100%;
+      max-width: none;
+    }
+    .slider-range {
+      width: 100%;
+      max-width: 600px;
+      margin-top: 14px;
+      accent-color: var(--acc);
+    }
+    pre.code-block {
+      background: #07090e;
+      border: 1px solid var(--line);
+      padding: 14px;
+      border-radius: 8px;
+      overflow: auto;
+      max-height: 600px;
+      width: 100%;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 12px;
+      color: #9cdcfe;
+    }
+    .hint {
+      color: var(--dim);
+      font-size: 11px;
+      margin-top: 4px;
+    }
+    .info-kv {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 4px;
+    }
+    .info-k { color: var(--dim); }
+    .info-v { font-weight: 600; color: var(--txt); }
+  </style>
+</head>
+<body>
+
+  <header class="topbar">
+    <span class="dot"></span>
+    <span class="brand">ROWL.EYE <span class="brand-sub">LOCAL INSPECTOR & DEVTOOLS</span></span>
+    <div style="display:flex; align-items:center; gap:6px; background:rgba(0,229,255,0.08); border:1px solid rgba(0,229,255,0.3); padding:4px 10px; border-radius:16px; font-size:11px; font-weight:700; color:#00e5ff; margin-left:8px;">
+      <span class="agent-dot-live"></span>
+      <span id="agentStatusBadge">AI CANLI İZLEME: BAĞLANIYOR...</span>
+    </div>
+    <span class="spacer"></span>
+    <button class="btn ghost" id="inspectToggleBtn" onclick="toggleInspectMode()">🔍 Inspect Modu</button>
+    <button class="btn ghost" onclick="refreshAll()">⟳ Yenile</button>
+    <button class="btn" onclick="approveGolden()">✓ Golden Olarak Onayla</button>
+    <button class="btn ghost" onclick="window.open('/api/audit', '_blank')">📊 JSON Audit</button>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <!-- AI Agent Canlı Durum Kartı -->
+      <div class="status-card" id="agentCard" style="border-color: rgba(0, 229, 255, 0.4);">
+        <div class="section-title" style="color: #00e5ff; display:flex; justify-content:space-between;">
+          <span>🤖 AI Ajan Durumu</span>
+          <span id="agentSessionTag" style="font-size:10px; opacity:0.8;">idle</span>
+        </div>
+        <div id="agentStatusContent">
+          <div class="info-kv"><span class="info-k">Eylem:</span><span class="info-v" id="agentActionText" style="color:#00e5ff;">—</span></div>
+          <div class="info-kv"><span class="info-k">Odak:</span><span class="info-v" id="agentFocusText" style="font-size:11px; word-break:break-all;">—</span></div>
+          <div style="margin-top:6px; font-size:11px; color:var(--txt); background:#0c121e; padding:6px; border-radius:4px; border:1px solid var(--line);">
+            <div style="color:var(--dim); font-size:10px; font-weight:700;">SON DÜŞÜNCE / GEREKÇE:</div>
+            <div id="agentReasoningText" style="margin-top:2px; font-style:italic;">Henüz aktif bir inceleme başlatılmadı.</div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="section-title">Hedef Kontroller</div>
+        <ul id="targetsList"></ul>
+      </div>
+
+      <div>
+        <div class="section-title">Tema & Varyant</div>
+        <div class="seg" id="themeSeg">
+          <button data-theme="Dark" class="on">Dark</button>
+          <button data-theme="Light">Light</button>
+        </div>
+      </div>
+
+      <div>
+        <div class="section-title">HiDPI Ölçek (Scale)</div>
+        <select id="scaleSelect" class="select-box">
+          <option value="1.0" selected>1.0x (96 DPI)</option>
+          <option value="1.25">1.25x (120 DPI)</option>
+          <option value="2.0">2.0x (192 DPI - Retina)</option>
+        </select>
+      </div>
+
+      <!-- Seçili Kontrol Bilgi Kutusu -->
+      <div class="status-card" id="inspectNodeCard">
+        <div class="section-title">Seçili Kontrol (Visual Tree)</div>
+        <div id="inspectNodeContent" class="hint">Görsel üzerinde fareyi gezdirin...</div>
+      </div>
+
+      <div class="status-card" id="auditCard">
+        <div class="section-title">Audit Durumu</div>
+        <div id="auditStatusContent">Yükleniyor...</div>
+      </div>
+    </aside>
+
+    <main class="viewport">
+      <div class="tabs">
+        <button data-tab="live" class="on">Canlı Görünüm (Live Skia)</button>
+        <button data-tab="engine">🎮 Engine Eye (Native Motor)</button>
+        <button data-tab="telemetry">🤖 AI Telemetri Akışı (<span id="telemetryCount">0</span>)</button>
+        <button data-tab="compare">Golden Karşılaştırma (Slider)</button>
+        <button data-tab="diff">Diff Heatmap</button>
+        <button data-tab="viewmodel">ViewModel JSON</button>
+        <button data-tab="visualtree">Visual Tree JSON</button>
+      </div>
+
+      <!-- TAB 1: LIVE SNAPSHOT WITH INSPECTION OVERLAY -->
+      <div class="content-card" id="tab-live">
+        <div class="live-wrapper" id="liveWrapper">
+          <img id="liveImg" class="img-preview" alt="Canlı Avalonia Görünümü">
+          <div class="inspect-box" id="inspectBox">
+            <span class="inspect-label" id="inspectLabel"></span>
+          </div>
+          <!-- AI Agent Laser Focus Box -->
+          <div class="agent-laser" id="agentLaser">
+            <span class="agent-tooltip" id="agentTooltip"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB ENGINE: NATIVE ENGINE FRAMEBUFFER & TELEMETRY -->
+      <div class="content-card" id="tab-engine" style="display:none; align-items: stretch; justify-content: flex-start; gap:12px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; background:var(--panel2); padding:10px 14px; border-radius:8px; border:1px solid var(--line);">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span style="font-weight:700; color:#00e5ff; font-size:12px;">DIRECTOR QA KONTROLÜ:</span>
+            <button class="btn ghost" onclick="sendEngineCmd('play')" style="padding:4px 10px;">▶ Play</button>
+            <button class="btn ghost" onclick="sendEngineCmd('pause')" style="padding:4px 10px;">⏸ Pause</button>
+            <button class="btn" onclick="sendEngineCmd('step', 1)" style="padding:4px 10px;">⏭ Step 1 Frame</button>
+            <button class="btn ghost" onclick="sendEngineCmd('step', 10)" style="padding:4px 10px;">⏩ Step 10 Frames</button>
+          </div>
+          <button class="btn ghost" onclick="refreshEngineView()" style="padding:4px 10px;">⟳ Yenile</button>
+        </div>
+
+        <div style="display:flex; justify-content:center; align-items:center; background:#000; border-radius:8px; border:1px solid var(--line); padding:10px; min-height:360px;">
+          <img id="engineImg" class="img-preview" alt="Native Engine Framebuffer (Offscreen)" style="max-height:60vh;">
+        </div>
+
+        <!-- Engine Profiler Stats Grid -->
+        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap:10px; width:100%;" id="engineMetricsGrid">
+          <div class="status-card" style="text-align:center;">
+            <div class="info-k">FPS TAHMİNİ</div>
+            <div id="statFps" style="font-size:18px; font-weight:800; color:var(--good); margin-top:4px;">—</div>
+          </div>
+          <div class="status-card" style="text-align:center;">
+            <div class="info-k">TOPLAM FRAME</div>
+            <div id="statTotalMs" style="font-size:16px; font-weight:700; color:var(--txt); margin-top:4px;">— ms</div>
+          </div>
+          <div class="status-card" style="text-align:center;">
+            <div class="info-k">TEXTURE LOAD</div>
+            <div id="statTexMs" style="font-size:15px; font-weight:600; color:#9cdcfe; margin-top:4px;">— ms</div>
+          </div>
+          <div class="status-card" style="text-align:center;">
+            <div class="info-k">RENDER WORK</div>
+            <div id="statRenderMs" style="font-size:15px; font-weight:600; color:#9cdcfe; margin-top:4px;">— ms</div>
+          </div>
+          <div class="status-card" style="text-align:center;">
+            <div class="info-k">TEXT RASTER</div>
+            <div id="statRasterMs" style="font-size:15px; font-weight:600; color:#9cdcfe; margin-top:4px;">— ms</div>
+          </div>
+          <div class="status-card" style="text-align:center;">
+            <div class="info-k">SDL FLUSH</div>
+            <div id="statFlushMs" style="font-size:15px; font-weight:600; color:#9cdcfe; margin-top:4px;">— ms</div>
+          </div>
+          <div class="status-card" style="text-align:center;">
+            <div class="info-k">FRAME ID</div>
+            <div id="statFrameId" style="font-size:15px; font-weight:700; color:var(--acc); margin-top:4px;">0</div>
+          </div>
+        </div>
+
+        <!-- Native C++ Logs Terminal -->
+        <div style="background:#0d1117; border-radius:8px; border:1px solid var(--line); padding:10px; margin-top:4px; width:100%;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <span style="font-weight:700; color:#58a6ff; font-size:11px; letter-spacing:0.5px;">C++ ENGINE CORE LOGLARI & KONSOLU</span>
+            <button class="btn ghost" onclick="refreshEngineLogs()" style="padding:2px 8px; font-size:10px;">Yenile</button>
+          </div>
+          <pre id="nativeLogConsole" style="margin:0; font-family:monospace; font-size:11px; color:#c9d1d9; max-height:160px; overflow-y:auto; white-space:pre-wrap; line-height:1.4;">[Logger] Native log akışı dinleniyor...</pre>
+        </div>
+      </div>
+
+      <!-- TAB TELEMETRY: AI AGENT STREAM -->
+      <div class="content-card" id="tab-telemetry" style="display:none; align-items: stretch; justify-content: flex-start;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; border-bottom:1px solid var(--line); padding-bottom:6px;">
+          <div style="font-weight:700; color:#00e5ff; font-size:12px;">CANLI AI TELEMETRİ & DENETİM AKIŞI</div>
+          <button class="btn ghost" onclick="clearTelemetry()" style="padding:3px 8px; font-size:11px;">Temizle</button>
+        </div>
+        <div id="telemetryList" style="overflow-y:auto; max-height:550px; display:flex; flex-direction:column; gap:4px;"></div>
+      </div>
+
+      <!-- TAB 2: GOLDEN COMPARISON -->
+      <div class="content-card" id="tab-compare" style="display:none;">
+        <div id="goldenMissing" style="display:none; text-align:center; padding:32px; border:2px dashed var(--line); border-radius:12px; background:var(--panel2); width:100%; max-width:900px;">
+          <div style="font-size:36px; margin-bottom:8px; opacity:0.8;">◈</div>
+          <h3 style="margin:0 0 8px 0; color:var(--txt);">Henüz Golden Master Referansı Yok</h3>
+          <p style="color:var(--dim); margin:0 0 16px 0; font-size:13px;">
+            <code id="missingTargetName" style="color:var(--acc); font-weight:bold;"></code> için onaylı altın referans bulunamadı.<br>
+            Aşağıdaki canlı ekran çıktısını referans olarak onaylayabilirsiniz.
+          </p>
+          <button class="btn" onclick="approveGolden()" style="margin-bottom:20px;">✓ Bu Görünümü Golden Olarak Onayla</button>
+          <div>
+            <img id="liveImgFallback" class="img-preview" alt="Canlı Referans Adayı" style="margin:0 auto;">
+          </div>
+        </div>
+
+        <div id="cmpSliderWrap" style="width:100%; display:flex; flex-direction:column; align-items:center;">
+          <div class="compare-container" id="cmpContainer">
+            <img id="cmpGoldenImg" alt="Golden Master">
+            <div class="compare-overlay" id="cmpClip">
+              <img id="cmpLiveImg" alt="Live Capture">
+            </div>
+          </div>
+          <input type="range" min="0" max="100" value="50" class="slider-range" id="cmpSlider">
+          <div class="hint">Altın Referans (Sol) ⟵ Sürükleyin ⟶ Canlı Çıktı (Sağ)</div>
+        </div>
+      </div>
+
+      <!-- TAB 3: DIFF HEATMAP -->
+      <div class="content-card" id="tab-diff" style="display:none;">
+        <img id="diffImg" class="img-preview" alt="Fark Isı Haritası">
+        <div id="diffText" class="hint" style="margin-top:8px;"></div>
+      </div>
+
+      <!-- TAB 4: VIEWMODEL JSON -->
+      <div class="content-card" id="tab-viewmodel" style="display:none; align-items: stretch;">
+        <pre id="vmJson" class="code-block">// ViewModel state bekleniyor...</pre>
+      </div>
+
+      <!-- TAB 5: VISUAL TREE JSON -->
+      <div class="content-card" id="tab-visualtree" style="display:none; align-items: stretch;">
+        <pre id="treeJson" class="code-block">// Visual Tree hiyerarşisi bekleniyor...</pre>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    const state = {
+      target: 'MainWindow',
+      theme: 'Dark',
+      scale: '1.0',
+      activeTab: 'live',
+      inspectMode: true,
+      visualTree: null,
+      flatNodes: []
+    };
+
+    async function fetchJson(url, opts) {
+      const res = await fetch(url, opts);
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || res.statusText);
+      }
+      return res.json();
+    }
+
+    async function initTargets() {
+      try {
+        const targets = await fetchJson('/api/targets');
+        const list = document.getElementById('targetsList');
+        list.innerHTML = '';
+        targets.forEach(t => {
+          const li = document.createElement('li');
+          li.textContent = t;
+          if (t === state.target) li.classList.add('active');
+          li.onclick = () => {
+            state.target = t;
+            [...list.children].forEach(c => c.classList.remove('active'));
+            li.classList.add('active');
+            refreshAll();
+          };
+          list.appendChild(li);
+        });
+      } catch (err) {
+        console.error('Failed to load targets', err);
+      }
+    }
+
+    function getSnapshotUrl(timestamp) {
+      return `/api/snapshot?target=${state.target}&theme=${state.theme}&scale=${state.scale}&t=${timestamp || Date.now()}`;
+    }
+
+    function getGoldenUrl(timestamp) {
+      return `/api/golden-image?target=${state.target}&theme=${state.theme}&scale=${state.scale}&t=${timestamp || Date.now()}`;
+    }
+
+    function getDiffUrl(timestamp) {
+      return `/api/diff-image?target=${state.target}&theme=${state.theme}&scale=${state.scale}&t=${timestamp || Date.now()}`;
+    }
+
+    function flattenTree(node, list = []) {
+      if (!node) return list;
+      if (node.width > 0 && node.height > 0 && node.isVisible) {
+        list.push(node);
+      }
+      if (node.children) {
+        node.children.forEach(c => flattenTree(c, list));
+      }
+      return list;
+    }
+
+    async function refreshAll() {
+      const ts = Date.now();
+      const liveUrl = getSnapshotUrl(ts);
+      const goldenUrl = getGoldenUrl(ts);
+      const diffUrl = getDiffUrl(ts);
+
+      // 1. Live image
+      const liveImg = document.getElementById('liveImg');
+      liveImg.src = liveUrl;
+
+      // 2. Comparison images with probe & graceful fallback
+      const cmpSliderWrap = document.getElementById('cmpSliderWrap');
+      const goldenMissing = document.getElementById('goldenMissing');
+      const missingTargetName = document.getElementById('missingTargetName');
+      const liveImgFallback = document.getElementById('liveImgFallback');
+      const cmpGolden = document.getElementById('cmpGoldenImg');
+      const cmpLive = document.getElementById('cmpLiveImg');
+
+      missingTargetName.textContent = state.target;
+      liveImgFallback.src = liveUrl;
+
+      const probe = new Image();
+      probe.onload = () => {
+        goldenMissing.style.display = 'none';
+        cmpSliderWrap.style.display = 'flex';
+        cmpGolden.src = goldenUrl;
+        cmpLive.src = liveUrl;
+        cmpGolden.onload = () => {
+          if (cmpGolden.clientWidth > 0) {
+            cmpLive.style.width = cmpGolden.clientWidth + 'px';
+            cmpLive.style.height = cmpGolden.clientHeight + 'px';
+          }
+        };
+      };
+      probe.onerror = () => {
+        goldenMissing.style.display = 'block';
+        cmpSliderWrap.style.display = 'none';
+      };
+      probe.src = goldenUrl;
+
+      // 3. Diff image
+      const diffImg = document.getElementById('diffImg');
+      diffImg.src = diffUrl;
+
+      // 4. ViewModel JSON
+      try {
+        const vm = await fetchJson(`/api/viewmodel?target=${state.target}&theme=${state.theme}`);
+        document.getElementById('vmJson').textContent = JSON.stringify(vm, null, 2);
+      } catch (err) {
+        document.getElementById('vmJson').textContent = `// ViewModel alınamadı: ${err.message}`;
+      }
+
+      // 5. Visual Tree API
+      try {
+        const tree = await fetchJson(`/api/visual-tree?target=${state.target}&theme=${state.theme}`);
+        state.visualTree = tree;
+        state.flatNodes = flattenTree(tree);
+        document.getElementById('treeJson').textContent = JSON.stringify(tree, null, 2);
+      } catch (err) {
+        state.visualTree = null;
+        state.flatNodes = [];
+        document.getElementById('treeJson').textContent = `// Visual Tree alınamadı: ${err.message}`;
+      }
+
+      // 6. Audit Status
+      try {
+        const auditList = await fetchJson(`/api/audit?theme=${state.theme}`);
+        const currentAudit = auditList.find(a => a.target === state.target);
+        const card = document.getElementById('auditStatusContent');
+        if (currentAudit) {
+          let badgeCls = 'baseline';
+          if (currentAudit.status === 'Passed') badgeCls = 'passed';
+          else if (currentAudit.status === 'Failed') badgeCls = 'failed';
+
+          card.innerHTML = `
+            <div><span class="badge ${badgeCls}">${currentAudit.status}</span></div>
+            <div style="margin-top:6px;">Fark: <b>${currentAudit.diffPercent.toFixed(3)}%</b></div>
+            <div class="hint">Eşik: ${currentAudit.thresholdPercent}% | Piksel: ${currentAudit.mismatchedPixels}</div>
+          `;
+          document.getElementById('diffText').textContent = `Fark: ${currentAudit.diffPercent.toFixed(3)}% (${currentAudit.mismatchedPixels} piksel) - Durum: ${currentAudit.status}`;
+        } else {
+          card.innerHTML = `<span class="badge baseline">NeedsBaseline</span><div class="hint">Altın referans henüz onaylanmamış.</div>`;
+          document.getElementById('diffText').textContent = 'Altın referans bulunamadı.';
+        }
+      } catch (err) {
+        document.getElementById('auditStatusContent').innerHTML = `<span style="color:var(--bad)">Hata: ${err.message}</span>`;
+      }
+    }
+
+    function toggleInspectMode() {
+      state.inspectMode = !state.inspectMode;
+      const btn = document.getElementById('inspectToggleBtn');
+      if (state.inspectMode) {
+        btn.classList.add('active-inspect');
+      } else {
+        btn.classList.remove('active-inspect');
+        document.getElementById('inspectBox').style.display = 'none';
+      }
+    }
+
+    // Visual Tree Hover Inspect Engine
+    const liveImg = document.getElementById('liveImg');
+    const inspectBox = document.getElementById('inspectBox');
+    const inspectLabel = document.getElementById('inspectLabel');
+    const inspectNodeContent = document.getElementById('inspectNodeContent');
+
+    liveImg.addEventListener('mousemove', (e) => {
+      if (!state.inspectMode || state.flatNodes.length === 0) return;
+
+      const rect = liveImg.getBoundingClientRect();
+      const clientX = e.clientX - rect.left;
+      const clientY = e.clientY - rect.top;
+
+      // Ratio of natural rendered width to displayed client width
+      const scaleX = liveImg.naturalWidth / liveImg.clientWidth;
+      const scaleY = liveImg.naturalHeight / liveImg.clientHeight;
+
+      const logicalScale = parseFloat(state.scale) || 1.0;
+      // In logical coordinates
+      const logicalX = (clientX * scaleX) / logicalScale;
+      const logicalY = (clientY * scaleY) / logicalScale;
+
+      // Find the deepest (smallest area) node containing this point
+      let bestNode = null;
+      let minArea = Infinity;
+
+      for (const node of state.flatNodes) {
+        if (logicalX >= node.x && logicalX <= node.x + node.width &&
+            logicalY >= node.y && logicalY <= node.y + node.height) {
+          const area = node.width * node.height;
+          if (area < minArea) {
+            minArea = area;
+            bestNode = node;
+          }
+        }
+      }
+
+      if (bestNode) {
+        const factor = logicalScale / scaleX;
+        const dispX = bestNode.x * factor;
+        const dispY = bestNode.y * factor;
+        const dispW = bestNode.width * factor;
+        const dispH = bestNode.height * factor;
+
+        inspectBox.style.display = 'block';
+        inspectBox.style.left = dispX + 'px';
+        inspectBox.style.top = dispY + 'px';
+        inspectBox.style.width = dispW + 'px';
+        inspectBox.style.height = dispH + 'px';
+
+        const labelText = `<${bestNode.type}> ${bestNode.name ? '#' + bestNode.name : ''} (${Math.round(bestNode.width)}x${Math.round(bestNode.height)})`;
+        inspectLabel.textContent = labelText;
+
+        inspectNodeContent.innerHTML = `
+          <div class="info-kv"><span class="info-k">Tür:</span><span class="info-v">${bestNode.type}</span></div>
+          <div class="info-kv"><span class="info-k">Ad:</span><span class="info-v">${bestNode.name || '—'}</span></div>
+          <div class="info-kv"><span class="info-k">Boyut:</span><span class="info-v">${Math.round(bestNode.width)} × ${Math.round(bestNode.height)} px</span></div>
+          <div class="info-kv"><span class="info-k">Konum:</span><span class="info-v">X:${Math.round(bestNode.x)}, Y:${Math.round(bestNode.y)}</span></div>
+        `;
+      } else {
+        inspectBox.style.display = 'none';
+      }
+    });
+
+    liveImg.addEventListener('mouseleave', () => {
+      inspectBox.style.display = 'none';
+    });
+
+    async function approveGolden() {
+      if (!confirm(`'${state.target}' (${state.theme}, ${state.scale}x) çıktısını Golden Master olarak kaydetmek istiyor musunuz?`)) {
+        return;
+      }
+      try {
+        const res = await fetchJson(`/api/goldens/update?target=${state.target}&theme=${state.theme}&scale=${state.scale}`, {
+          method: 'POST'
+        });
+        alert(`✓ Başarıyla onaylandı:\n${res.goldenPath || 'Golden kaydedildi.'}`);
+        refreshAll();
+      } catch (err) {
+        alert(`Hata: ${err.message}`);
+      }
+    }
+
+    // Slider listener
+    document.getElementById('cmpSlider').oninput = (e) => {
+      document.getElementById('cmpClip').style.width = e.target.value + '%';
+    };
+
+    // Tab buttons
+    document.querySelectorAll('.tabs button').forEach(btn => {
+      btn.onclick = () => {
+        document.querySelectorAll('.tabs button').forEach(b => b.classList.remove('on'));
+        btn.classList.add('on');
+        state.activeTab = btn.dataset.tab;
+
+        ['live', 'engine', 'telemetry', 'compare', 'diff', 'viewmodel', 'visualtree'].forEach(tab => {
+          const el = document.getElementById('tab-' + tab);
+          if (el) el.style.display = (tab === state.activeTab) ? 'flex' : 'none';
+        });
+
+        if (state.activeTab === 'engine') {
+          refreshEngineView();
+        }
+
+        if (state.activeTab === 'compare') {
+          const cmpGolden = document.getElementById('cmpGoldenImg');
+          const cmpLive = document.getElementById('cmpLiveImg');
+          if (cmpGolden && cmpGolden.complete && cmpGolden.naturalWidth > 0 && cmpGolden.clientWidth > 0) {
+            cmpLive.style.width = cmpGolden.clientWidth + 'px';
+            cmpLive.style.height = cmpGolden.clientHeight + 'px';
+          }
+        }
+      };
+    });
+
+    async function refreshEngineView() {
+      const ts = Date.now();
+      const img = document.getElementById('engineImg');
+      img.src = `/api/v1/ai/engine/framebuffer?width=640&format=jpeg&t=${ts}`;
+
+      try {
+        const ctx = await fetchJson('/api/v1/ai/engine/context');
+        document.getElementById('statFps').textContent = ctx.fpsEstimate > 0 ? `${ctx.fpsEstimate} FPS` : '0 FPS';
+        document.getElementById('statTotalMs').textContent = `${ctx.totalFrameMs} ms`;
+        document.getElementById('statTexMs').textContent = `${ctx.textureLoadMs} ms`;
+        document.getElementById('statRenderMs').textContent = `${ctx.nonTextureMs} ms`;
+        document.getElementById('statRasterMs').textContent = `${ctx.textRasterMs} ms`;
+        document.getElementById('statFlushMs').textContent = `${ctx.rendererFlushMs} ms`;
+        document.getElementById('statFrameId').textContent = ctx.frameId;
+        refreshEngineLogs();
+      } catch (err) {
+        console.error('Failed to fetch engine context', err);
+      }
+    }
+
+    async function refreshEngineLogs() {
+      try {
+        const logs = await fetchJson('/api/v1/ai/logs/recent?limit=50');
+        const consoleEl = document.getElementById('nativeLogConsole');
+        if (Array.isArray(logs) && logs.length > 0) {
+          consoleEl.textContent = logs.map(l => `[${l.timestamp}] [${l.levelStr}] ${l.message}`).join('\n');
+          consoleEl.scrollTop = consoleEl.scrollHeight;
+        } else {
+          consoleEl.textContent = '// Henüz C++ motor log kaydı yok (veya loglar filtrelendi).';
+        }
+      } catch (err) {
+        console.error('Failed to fetch engine logs', err);
+      }
+    }
+
+    async function sendEngineCmd(cmd, frames = 1) {
+      try {
+        const payload = { cmd, frames };
+        await fetchJson('/api/v1/ai/engine/playback', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        refreshEngineView();
+      } catch (err) {
+        alert(`Motor komutu hatası: ${err.message}`);
+      }
+    }
+
+    // Theme selector
+    document.querySelectorAll('#themeSeg button').forEach(btn => {
+      btn.onclick = () => {
+        document.querySelectorAll('#themeSeg button').forEach(b => b.classList.remove('on'));
+        btn.classList.add('on');
+        state.theme = btn.dataset.theme;
+        refreshAll();
+      };
+    });
+
+    // Scale selector
+    document.getElementById('scaleSelect').onchange = (e) => {
+      state.scale = e.target.value;
+      refreshAll();
+    };
+
+    // ==========================================
+    // AI AGENT TELEMETRY & LIVE LASER ENGINE
+    // ==========================================
+    let telemetryCount = 0;
+    const agentLaser = document.getElementById('agentLaser');
+    const agentTooltip = document.getElementById('agentTooltip');
+    const agentStatusBadge = document.getElementById('agentStatusBadge');
+    const agentSessionTag = document.getElementById('agentSessionTag');
+    const agentActionText = document.getElementById('agentActionText');
+    const agentFocusText = document.getElementById('agentFocusText');
+    const agentReasoningText = document.getElementById('agentReasoningText');
+    const telemetryList = document.getElementById('telemetryList');
+    const telemetryCountEl = document.getElementById('telemetryCount');
+
+    function clearTelemetry() {
+      telemetryList.innerHTML = '';
+      telemetryCount = 0;
+      telemetryCountEl.textContent = '0';
+    }
+
+    function addTelemetryLog(action, msg, timeStr) {
+      telemetryCount++;
+      telemetryCountEl.textContent = telemetryCount;
+
+      const row = document.createElement('div');
+      row.className = 'telemetry-row';
+
+      const timeEl = document.createElement('span');
+      timeEl.className = 'telemetry-time';
+      timeEl.textContent = timeStr || new Date().toLocaleTimeString();
+
+      const actionEl = document.createElement('span');
+      actionEl.className = 'telemetry-action';
+      actionEl.textContent = `[${action}]`;
+
+      const msgEl = document.createElement('span');
+      msgEl.className = 'telemetry-msg';
+      msgEl.textContent = msg;
+
+      row.appendChild(timeEl);
+      row.appendChild(actionEl);
+      row.appendChild(msgEl);
+
+      telemetryList.insertBefore(row, telemetryList.firstChild);
+      if (telemetryList.children.length > 100) {
+        telemetryList.removeChild(telemetryList.lastChild);
+      }
+    }
+
+    function renderAgentLaser(bounds, action, reasoning) {
+      if (!bounds || bounds.w <= 0 || bounds.h <= 0) {
+        agentLaser.style.display = 'none';
+        return;
+      }
+
+      const img = document.getElementById('liveImg');
+      if (!img.clientWidth || !img.clientHeight || !img.naturalWidth) {
+        return;
+      }
+
+      // Logical coordinates -> Display pixel coordinates
+      const scaleX = img.naturalWidth / img.clientWidth;
+      const logicalScale = parseFloat(state.scale) || 1.0;
+      const factor = logicalScale / scaleX;
+
+      const dispX = Math.round(bounds.x * factor);
+      const dispY = Math.round(bounds.y * factor);
+      const dispW = Math.round(bounds.w * factor);
+      const dispH = Math.round(bounds.h * factor);
+
+      window.requestAnimationFrame(() => {
+        agentLaser.style.display = 'block';
+        agentLaser.style.transform = `translate3d(${dispX}px, ${dispY}px, 0)`;
+        agentLaser.style.width = `${dispW}px`;
+        agentLaser.style.height = `${dispH}px`;
+
+        const tooltipText = `AI [${action || 'INSPECT'}]: ${reasoning || 'İnceleniyor...'}`;
+        agentTooltip.textContent = tooltipText;
+      });
+    }
+
+    function updateAgentCard(session, action, focus, reasoning) {
+      if (session) agentSessionTag.textContent = session;
+      if (action) agentActionText.textContent = action;
+      if (focus) agentFocusText.textContent = focus;
+      if (reasoning) agentReasoningText.textContent = reasoning;
+    }
+
+    function initAgentSse() {
+      if (!window.EventSource) {
+        agentStatusBadge.textContent = 'SSE DESTEKLENMIYOR';
+        return;
+      }
+
+      const sse = new EventSource('/api/v1/ai/agent-stream');
+
+      sse.onopen = () => {
+        agentStatusBadge.textContent = 'AI CANLI İZLEME: AKTİF';
+        agentStatusBadge.style.color = '#00e5ff';
+      };
+
+      sse.onerror = () => {
+        agentStatusBadge.textContent = 'AI CANLI İZLEME: BAĞLANIYOR...';
+        agentStatusBadge.style.color = 'var(--warn)';
+      };
+
+      sse.addEventListener('state', (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          updateAgentCard(data.sessionId, data.lastAction, data.focusedPath, data.lastReasoning);
+          if (data.currentBounds) {
+            renderAgentLaser(data.currentBounds, data.lastAction, data.lastReasoning);
+          }
+        } catch (err) { }
+      });
+
+      sse.addEventListener('FocusChanged', (e) => {
+        try {
+          const req = JSON.parse(e.data);
+          updateAgentCard(req.sessionId, req.action, req.controlPath, req.reasoning);
+
+          // If AI changed target, sync with it!
+          if (req.target && req.target !== state.target) {
+            state.target = req.target;
+            const targetItems = document.querySelectorAll('#targetsList li');
+            targetItems.forEach(li => {
+              if (li.textContent === req.target) {
+                targetItems.forEach(c => c.classList.remove('active'));
+                li.classList.add('active');
+              }
+            });
+            refreshAll().then(() => {
+              renderAgentLaser(req.bounds, req.action, req.reasoning);
+            });
+          } else {
+            renderAgentLaser(req.bounds, req.action, req.reasoning);
+          }
+
+          addTelemetryLog(req.action || 'FOCUS', `${req.controlPath} — ${req.reasoning}`);
+        } catch (err) { }
+      });
+
+      sse.addEventListener('Reasoning', (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          updateAgentCard(data.sessionId, null, null, data.reasoning);
+          addTelemetryLog('REASON', data.reasoning);
+        } catch (err) { }
+      });
+
+      sse.addEventListener('AnomalyDetected', (e) => {
+        try {
+          const anom = JSON.parse(e.data);
+          addTelemetryLog(`ANOMALY:${anom.severity}`, `${anom.path}: ${anom.detail}`);
+        } catch (err) { }
+      });
+
+      sse.addEventListener('ActionExecuted', (e) => {
+        try {
+          const act = JSON.parse(e.data);
+          addTelemetryLog(act.action || 'ACTION', act.detail || act.reasoning || '');
+        } catch (err) { }
+      });
+
+      sse.addEventListener('NativeLog', (e) => {
+        try {
+          const l = JSON.parse(e.data);
+          addTelemetryLog(`C++:${l.levelStr}`, `[${l.timestamp}] ${l.message}`);
+          const consoleEl = document.getElementById('nativeLogConsole');
+          if (consoleEl) {
+            consoleEl.textContent += `\n[${l.timestamp}] [${l.levelStr}] ${l.message}`;
+            consoleEl.scrollTop = consoleEl.scrollHeight;
+          }
+        } catch (err) { }
+      });
+    }
+
+    // Initialize
+    toggleInspectMode();
+    initTargets().then(() => {
+      refreshAll();
+      initAgentSse();
+    });
+  </script>
+</body>
+</html>

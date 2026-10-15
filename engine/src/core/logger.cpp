@@ -12,6 +12,9 @@ LogLevel Logger::s_logLevel = LogLevel::Trace;
 std::mutex Logger::s_logMutex;
 bool Logger::s_initialized = false;
 std::unique_ptr<std::ofstream> Logger::s_logFile;
+std::atomic<RowlLogCallbackFn> Logger::s_callback{nullptr};
+std::mutex Logger::s_bufferMutex;
+std::deque<LogEntryRecord> Logger::s_recentLogs;
 size_t Logger::s_logFileSize = 0;
 std::string Logger::s_logPath;
 
@@ -41,6 +44,40 @@ void Logger::setLogLevel(LogLevel level) {
 LogLevel Logger::getLogLevel() {
     std::lock_guard<std::mutex> lock(s_logMutex);
     return s_logLevel;
+}
+
+void Logger::setLogCallback(RowlLogCallbackFn cb) {
+    s_callback.store(cb, std::memory_order_release);
+}
+
+std::string Logger::getRecentLogsJson(int minLevel, size_t maxCount) {
+    std::lock_guard<std::mutex> lock(s_bufferMutex);
+    std::stringstream ss;
+    ss << "[";
+    bool first = true;
+    size_t count = 0;
+    for (auto it = s_recentLogs.rbegin(); it != s_recentLogs.rend() && count < maxCount; ++it) {
+        if (static_cast<int>(it->level) < minLevel) continue;
+        if (!first) ss << ",";
+        first = false;
+        ss << "{\"level\":" << static_cast<int>(it->level)
+           << ",\"levelStr\":\"" << it->levelStr << "\""
+           << ",\"timestamp\":\"" << it->timestamp << "\""
+           << ",\"message\":\"";
+        for (char c : it->message) {
+            if (c == '"') ss << "\\\"";
+            else if (c == '\\') ss << "\\\\";
+            else if (c == '\n') ss << "\\n";
+            else if (c == '\r') ss << "\\r";
+            else if (c == '\t') ss << "\\t";
+            else if (static_cast<unsigned char>(c) < 32) ss << " ";
+            else ss << c;
+        }
+        ss << "\"}";
+        count++;
+    }
+    ss << "]";
+    return ss.str();
 }
 
 std::string_view Logger::logLevelToString(LogLevel level) {
@@ -109,45 +146,65 @@ void Logger::rotateLogFile() {
 }
 
 void Logger::log(LogLevel level, std::string_view msg) {
-    std::lock_guard<std::mutex> lock(s_logMutex);
-    if (level < s_logLevel) {
-        return;
-    }
+    std::string timestamp;
+    std::string levelStrStr;
+    std::string msgStr(msg);
 
-    std::string timestamp = formatTimestamp();
-    std::string_view levelStr = logLevelToString(level);
+    {
+        std::lock_guard<std::mutex> lock(s_logMutex);
+        if (level < s_logLevel) {
+            return;
+        }
 
-    // Terminal ANSI colors
-    const char* colorReset = "\033[0m";
-    const char* colorCode = "";
+        timestamp = formatTimestamp();
+        std::string_view levelStr = logLevelToString(level);
+        levelStrStr = std::string(levelStr);
 
-    switch (level) {
-        case LogLevel::Trace:    colorCode = "\033[37m"; break; // White
-        case LogLevel::Debug:    colorCode = "\033[36m"; break; // Cyan
-        case LogLevel::Info:     colorCode = "\033[32m"; break; // Green
-        case LogLevel::Warn:     colorCode = "\033[33m"; break; // Yellow
-        case LogLevel::Error:    colorCode = "\033[31m"; break; // Red
-        case LogLevel::Critical: colorCode = "\033[35m"; break; // Magenta
-    }
+        // Terminal ANSI colors
+        const char* colorReset = "\033[0m";
+        const char* colorCode = "";
 
-    std::string logLine = "[" + timestamp + "] [" + std::string(colorCode) + std::string(levelStr) + colorReset + "] " + std::string(msg);
+        switch (level) {
+            case LogLevel::Trace:    colorCode = "\033[37m"; break; // White
+            case LogLevel::Debug:    colorCode = "\033[36m"; break; // Cyan
+            case LogLevel::Info:     colorCode = "\033[32m"; break; // Green
+            case LogLevel::Warn:     colorCode = "\033[33m"; break; // Yellow
+            case LogLevel::Error:    colorCode = "\033[31m"; break; // Red
+            case LogLevel::Critical: colorCode = "\033[35m"; break; // Magenta
+        }
 
-    // Console output
-    std::cout << logLine << std::endl;
+        std::string logLine = "[" + timestamp + "] [" + std::string(colorCode) + std::string(levelStr) + colorReset + "] " + msgStr;
 
-    // File output with rotation
-    if (s_logFile && s_logFile->is_open()) {
-        rotateLogFile();
-        // rotateLogFile() yeniden acma basarisiz olursa s_logFile'i SIFIRLAR
-        // (asagida). Korumayi YENIDEN degerlendirmeden *s_logFile yazmak null'a
-        // basvururdu: cok dusunuk adresli erisim ihlali, yakalanmayan SEH,
-        // std::terminate yok — yani DIAG hatasi basmayan sert bir olum. Yazi
-        // yolunun kendisi ayni seyden sonra da hicbir sey yapamaz, bu yuzden
-        // koruma tekrarlanir ve akis sessizce atlanir.
+        // Console output
+        std::cout << logLine << std::endl;
+
+        // File output with rotation
         if (s_logFile && s_logFile->is_open()) {
-            *s_logFile << "[" << timestamp << "] [" << levelStr << "] " << msg << std::endl;
-            s_logFile->flush();
-            s_logFileSize += logLine.size() + 1;
+            rotateLogFile();
+            if (s_logFile && s_logFile->is_open()) {
+                *s_logFile << "[" << timestamp << "] [" << levelStr << "] " << msgStr << std::endl;
+                s_logFile->flush();
+                s_logFileSize += logLine.size() + 1;
+            }
+        }
+    }
+
+    // Save to ring buffer
+    {
+        std::lock_guard<std::mutex> bLock(s_bufferMutex);
+        s_recentLogs.push_back({level, levelStrStr, msgStr, timestamp});
+        while (s_recentLogs.size() > MAX_RECENT_LOGS) {
+            s_recentLogs.pop_front();
+        }
+    }
+
+    // Invoke callback outside lock
+    auto cb = s_callback.load(std::memory_order_acquire);
+    if (cb) {
+        try {
+            cb(static_cast<int>(level), levelStrStr.c_str(), msgStr.c_str(), timestamp.c_str());
+        } catch (...) {
+            // Guarantee no exception leaks across boundary
         }
     }
 }

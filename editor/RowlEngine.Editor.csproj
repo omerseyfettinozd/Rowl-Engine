@@ -35,6 +35,13 @@
     <Compile Remove="Tests/**/*.cs" />
   </ItemGroup>
 
+  <ItemGroup>
+    <EmbeddedResource Include="Tools/RowlEye/Serve/inspector.html" />
+    <None Update="Tools/RowlEye/Serve/inspector.html">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
   <!-- Auto-copy native library to output directory after build across all platforms -->
   <Target Name="CopyNativeLib" AfterTargets="Build">
     <ItemGroup>

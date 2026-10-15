@@ -1,0 +1,6 @@
+<Project>
+  <PropertyGroup>
+    <!-- Prevent workload manifest resolution errors on environments with partial SDK workloads -->
+    <MSBuildEnableWorkloadResolver>false</MSBuildEnableWorkloadResolver>
+  </PropertyGroup>
+</Project>

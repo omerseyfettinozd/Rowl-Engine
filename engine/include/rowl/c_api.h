@@ -1515,6 +1515,75 @@ ROWL_API RowlEngine_ResultCode RowlEngine_GetSpriteSheetStateJson(
     RowlEngineHandle handle, char* buffer, uint32_t bufferSize,
     uint32_t* outRequiredSize);
 
+/* ── AI Observability & Logging ─────────────────────────────────────────── */
+
+typedef void (*RowlEngine_LogCallbackFn)(int level, const char* levelStr, const char* message, const char* timestamp);
+
+ROWL_API void RowlEngine_SetLogCallback(RowlEngine_LogCallbackFn callback);
+ROWL_API int RowlEngine_GetRecentLogsJson(char* outBuffer, int bufferCap, int minLevel, int maxCount);
+
+/**
+ * AI Observability: Serbest bırakma kancası. Mevcut sorgular arayan-tahsisli
+ * arabelleğe yazdığı için gövde no-op'tur; imza P/Invoke sözleşmesi için korunur.
+ */
+ROWL_API void RowlEngine_FreeObservabilityString(char* str);
+
+/**
+ * AI Observability: Queries active scene, story dialogue, character transforms, and game state variables.
+ * Supports compact mode, dirty-tracking, and automated anomaly detection (NaN/Inf coordinates, missing assets).
+ *
+ * @param handle       Engine handle.
+ * @param filterJson   Optional JSON string configuring query (NULL for default full-lite snapshot).
+ * @param outBuffer    Destination buffer for JSON output. If NULL or bufferCap <= 0, returns required size.
+ * @param bufferCap    Capacity of outBuffer.
+ * @return Positive byte length written on success, negative required size if buffer too small, 0 on invalid handle.
+ */
+ROWL_API int RowlEngine_QueryWorldJson(
+    RowlEngineHandle handle,
+    const char* filterJson,
+    char* outBuffer,
+    int bufferCap);
+
+/**
+ * AI Telemetry: Injects synthetic/virtual input into the engine (tap, choice, advance).
+ *
+ * @param handle     Engine handle.
+ * @param inputJson  JSON string containing array or object of input events:
+ *                   e.g. [{"t":"tap","x":640,"y":360},{"t":"choice","index":0}]
+ * @return 1 on success, 0 on error / invalid handle.
+ */
+ROWL_API int RowlEngine_InjectInputJson(
+    RowlEngineHandle handle,
+    const char* inputJson);
+
+/**
+ * AI Observability: Audio telemetry stats (channels playing, volumes, RMS estimate, clipping risk, errors).
+ *
+ * @param handle     Engine handle.
+ * @param outBuffer  Destination buffer. If NULL or bufferCap <= 0, returns required size.
+ * @param bufferCap  Capacity of outBuffer.
+ * @return Positive byte length on success, negative required size if buffer too small, 0 on invalid handle.
+ */
+ROWL_API int RowlEngine_GetAudioStatsJson(
+    RowlEngineHandle handle,
+    char* outBuffer,
+    int bufferCap);
+
+/**
+ * AI Observability: Queries VFS mount hierarchy, skipped package diagnostics, and probes asset path existence.
+ *
+ * @param handle     Engine handle.
+ * @param probePath  Optional asset path to query existence for (e.g. "json/full_story_graph.json").
+ * @param outBuffer  Destination buffer. If NULL or bufferCap <= 0, returns required size.
+ * @param bufferCap  Capacity of outBuffer.
+ * @return Positive byte length on success, negative required size if buffer too small, 0 on invalid handle.
+ */
+ROWL_API int RowlEngine_QueryVfsStatusJson(
+    RowlEngineHandle handle,
+    const char* probePath,
+    char* outBuffer,
+    int bufferCap);
+
 #ifdef __cplusplus
 } /* extern "C" */
 #endif

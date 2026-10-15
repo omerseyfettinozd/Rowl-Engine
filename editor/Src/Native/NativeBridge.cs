@@ -1160,5 +1160,52 @@ namespace RowlEngine.Editor.Native
 
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
         internal static extern IntPtr RowlEngine_GetLastResultTargetWithLength(IntPtr handle, out uint outLen);
+
+        // ── Observability & Log Pipe (Rowl.Eye AI Telemetry) ──────────
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        internal delegate void NativeLogCallback(
+            int level,
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string levelStr,
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string message,
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string timestamp);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern void RowlEngine_SetLogCallback(NativeLogCallback? callback);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern int RowlEngine_GetRecentLogsJson(
+            IntPtr outBuffer,
+            int bufferCap,
+            int minLevel,
+            int maxCount);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern void RowlEngine_FreeObservabilityString(IntPtr str);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern int RowlEngine_QueryWorldJson(
+            IntPtr handle,
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string? filterJson,
+            IntPtr outBuffer,
+            int bufferCap);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern int RowlEngine_InjectInputJson(
+            IntPtr handle,
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string inputJson);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern int RowlEngine_GetAudioStatsJson(
+            IntPtr handle,
+            IntPtr outBuffer,
+            int bufferCap);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern int RowlEngine_QueryVfsStatusJson(
+            IntPtr handle,
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string? probePath,
+            IntPtr outBuffer,
+            int bufferCap);
     }
 }

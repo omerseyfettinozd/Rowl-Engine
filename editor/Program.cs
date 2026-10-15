@@ -32,6 +32,9 @@ namespace RowlEngine.Editor
                 if (args != null && args.Any(a => string.Equals(a, "--headless-test", StringComparison.OrdinalIgnoreCase)))
                     return HeadlessSmoke.Run(Environment.GetEnvironmentVariable("ROWL_EDITOR_BENCHMARK_JSON"));
 
+                if (args != null && args.Any(a => string.Equals(a, "--rowl-eye", StringComparison.OrdinalIgnoreCase)))
+                    return Tools.RowlEye.RowlEyeRunner.Run(args);
+
                 BuildAvaloniaApp().StartWithClassicDesktopLifetime(args ?? Array.Empty<string>());
                 return 0;
             }
@@ -55,7 +58,8 @@ namespace RowlEngine.Editor
         /// </summary>
         public static AppBuilder BuildAvaloniaAppHeadless()
             => AppBuilder.Configure<App>()
-                .UseHeadless(new AvaloniaHeadlessPlatformOptions())
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .UseSkia()
                 .WithInterFont()
                 .LogToTrace();
     }
