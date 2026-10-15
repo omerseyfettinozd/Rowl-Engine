@@ -488,11 +488,11 @@ public sealed class EditorGlobalSearchSlice2Tests
         Assert.Equal(640 - (x + w / 2), vm.PanX, precision: 3);
         Assert.Equal(400 - (y + h / 2), vm.PanY, precision: 3);
         Assert.True(node.IsSearchHighlighted);
-        Assert.Equal("#DCA85A", node.BorderColor);
+        Assert.Equal(ThemeTestColors.Hex("WarningColor"), node.BorderColor);
 
         vm.Search.ClearHighlight();
         Assert.False(node.IsSearchHighlighted);
-        Assert.NotEqual("#DCA85A", node.BorderColor);
+        Assert.NotEqual(ThemeTestColors.Hex("WarningColor"), node.BorderColor);
     }
 
     [Fact]

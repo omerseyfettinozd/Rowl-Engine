@@ -194,7 +194,7 @@
                             <Button Content="Sil"
                                     ToolTip.Tip="Seçili Node'u Sil (Delete)"
                                     Command="{Binding DeleteSelectedNodeCommand}"
-                                    Background="{DynamicResource DangerButtonBg}"
+                                    Background="{DynamicResource ToolbarButtonBg}"
                                     Foreground="{DynamicResource AccentButtonFg}" CornerRadius="6" Padding="10,5" FontSize="11"/>
 
                             <Border Width="1" Height="22" Background="{DynamicResource BorderColor}" Margin="2,0"/>

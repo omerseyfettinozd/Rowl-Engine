@@ -8,12 +8,14 @@
          ═══════════════════════════════════════════════════════════════════════ -->
 
     <!-- ── Arka Plan Katmanları ─────────────────────────────────────────── -->
-    <!-- Unity kromu Dilim F: yüzeyler nötr Unity grilerine kaydı; App arka
-         planı (#0A0A0B) ve ana metin sabittir (Test 2 kilidi). -->
+    <!-- Faz 1 (docs/EDITOR_UI_PORT_PLAN.md): değerler web prototipinden
+         (prototypes/editor-workspace) kuantalandı. Bu varsayılan palet,
+         SettingsViewModel "Kemik Beyazı" paleti ve ThemeFallbackColors ile
+         BİREBİR aynı olmak zorunda (EditorThemePaletteDriftTests). -->
     <Color x:Key="AppBackgroundColor">#0A0A0B</Color>
-    <Color x:Key="SurfaceBackgroundColor">#232327</Color>
-    <Color x:Key="PanelBackgroundColor">#2A2A2E</Color>
-    <Color x:Key="InputBackgroundColor">#1B1B1E</Color>
+    <Color x:Key="SurfaceBackgroundColor">#131315</Color>
+    <Color x:Key="PanelBackgroundColor">#19191C</Color>
+    <Color x:Key="InputBackgroundColor">#0F0F12</Color>
     <Color x:Key="CanvasBackgroundColor">#000000</Color>
 
     <SolidColorBrush x:Key="AppBackground" Color="{DynamicResource AppBackgroundColor}"/>
@@ -23,16 +25,16 @@
     <SolidColorBrush x:Key="CanvasBackground" Color="{DynamicResource CanvasBackgroundColor}"/>
 
     <!-- ── Kenarlıklar ─────────────────────────────────────────────────── -->
-    <Color x:Key="BorderColorValue">#3A3A40</Color>
+    <Color x:Key="BorderColorValue">#29292D</Color>
     <Color x:Key="BorderSubtleColorValue">#4A4A52</Color>
     <SolidColorBrush x:Key="BorderColor" Color="{DynamicResource BorderColorValue}"/>
     <SolidColorBrush x:Key="BorderSubtle" Color="{DynamicResource BorderSubtleColorValue}"/>
 
     <!-- ── Metin Renkleri ──────────────────────────────────────────────── -->
     <Color x:Key="PrimaryTextColor">#F2EFE6</Color>
-    <Color x:Key="SecondaryTextColor">#D8D4CC</Color>
-    <Color x:Key="MutedTextColor">#A8A49C</Color>
-    <Color x:Key="DimTextColor">#6E6C66</Color>
+    <Color x:Key="SecondaryTextColor">#DAD7CF</Color>
+    <Color x:Key="MutedTextColor">#85858B</Color>
+    <Color x:Key="DimTextColor">#66666D</Color>
 
     <SolidColorBrush x:Key="PrimaryText" Color="{DynamicResource PrimaryTextColor}"/>
     <SolidColorBrush x:Key="SecondaryText" Color="{DynamicResource SecondaryTextColor}"/>
@@ -42,8 +44,8 @@
     <!-- ── Vurgu (Accent) Renkleri ─────────────────────────────────────── -->
     <Color x:Key="AccentColor">#F2EFE6</Color>
     <Color x:Key="AccentHoverColor">#FFFFFF</Color>
-    <Color x:Key="AccentButtonBgColor">#3B3B42</Color>
-    <Color x:Key="AccentButtonHoverColor">#4C4C55</Color>
+    <Color x:Key="AccentButtonBgColor">#19191D</Color>
+    <Color x:Key="AccentButtonHoverColor">#26262B</Color>
 
     <SolidColorBrush x:Key="Accent" Color="{DynamicResource AccentColor}"/>
     <SolidColorBrush x:Key="AccentHover" Color="{DynamicResource AccentHoverColor}"/>
@@ -51,22 +53,33 @@
     <SolidColorBrush x:Key="AccentButtonHover" Color="{DynamicResource AccentButtonHoverColor}"/>
 
     <!-- ── İşlevsel Renkler ────────────────────────────────────────────── -->
-    <Color x:Key="SuccessColor">#7DA56D</Color>
-    <Color x:Key="WarningColor">#DCA85A</Color>
-    <Color x:Key="ErrorColor">#D96868</Color>
-    <Color x:Key="InfoColor">#9C7FD1</Color>
+    <Color x:Key="SuccessColor">#9DB58F</Color>
+    <Color x:Key="WarningColor">#D9B47A</Color>
+    <Color x:Key="ErrorColor">#E3A296</Color>
+    <Color x:Key="InfoColor">#A9A3C9</Color>
 
     <SolidColorBrush x:Key="SuccessBrush" Color="{DynamicResource SuccessColor}"/>
     <SolidColorBrush x:Key="WarningBrush" Color="{DynamicResource WarningColor}"/>
     <SolidColorBrush x:Key="ErrorBrush" Color="{DynamicResource ErrorColor}"/>
     <SolidColorBrush x:Key="InfoBrush" Color="{DynamicResource InfoColor}"/>
 
+    <!-- K3: durum rozetleri soluk zemin + aynı aileden açık metin (prototip
+         .build-result). Zemin üzerinde metin ≥ 5.8:1. -->
+    <Color x:Key="SuccessSurfaceColor">#2C332C</Color>
+    <Color x:Key="WarningSurfaceColor">#3A3124</Color>
+    <Color x:Key="ErrorSurfaceColor">#3E2B26</Color>
+    <Color x:Key="InfoSurfaceColor">#2B2A36</Color>
+    <SolidColorBrush x:Key="SuccessSurface" Color="{DynamicResource SuccessSurfaceColor}"/>
+    <SolidColorBrush x:Key="WarningSurface" Color="{DynamicResource WarningSurfaceColor}"/>
+    <SolidColorBrush x:Key="ErrorSurface" Color="{DynamicResource ErrorSurfaceColor}"/>
+    <SolidColorBrush x:Key="InfoSurface" Color="{DynamicResource InfoSurfaceColor}"/>
+
     <!-- ── Buton Renkleri ──────────────────────────────────────────────── -->
-    <Color x:Key="ToolbarButtonBgColor">#323237</Color>
-    <Color x:Key="ToolbarButtonHoverColor">#43434A</Color>
-    <Color x:Key="DangerButtonBgColor">#6E3235</Color>
-    <Color x:Key="PlayButtonGreenColor">#4A5D4C</Color>
-    <Color x:Key="PlayButtonRedColor">#6E3235</Color>
+    <Color x:Key="ToolbarButtonBgColor">#111113</Color>
+    <Color x:Key="ToolbarButtonHoverColor">#1E1E22</Color>
+    <Color x:Key="DangerButtonBgColor">#3E2B26</Color>
+    <Color x:Key="PlayButtonGreenColor">#111113</Color>
+    <Color x:Key="PlayButtonRedColor">#26262B</Color>
 
     <SolidColorBrush x:Key="ToolbarButtonBg" Color="{DynamicResource ToolbarButtonBgColor}"/>
     <SolidColorBrush x:Key="ToolbarButtonHover" Color="{DynamicResource ToolbarButtonHoverColor}"/>
@@ -77,9 +90,9 @@
     <SolidColorBrush x:Key="StatusBarBg" Color="{DynamicResource StatusBarBgColor}"/>
 
     <!-- ── Node Graph ──────────────────────────────────────────────────── -->
-    <Color x:Key="NodeCardBgColor">#232327</Color>
-    <Color x:Key="NodeHeaderBgColor">#323237</Color>
-    <Color x:Key="WireColor">#8E8E96</Color>
+    <Color x:Key="NodeCardBgColor">#19191D</Color>
+    <Color x:Key="NodeHeaderBgColor">#202023</Color>
+    <Color x:Key="WireColor">#74736C</Color>
     <Color x:Key="WireDragColor">#F2EFE6</Color>
 
     <SolidColorBrush x:Key="NodeCardBg" Color="{DynamicResource NodeCardBgColor}"/>
