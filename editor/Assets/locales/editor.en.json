@@ -194,6 +194,738 @@
     },
     "Graph.Crumb.Tip": {
       "text": "Return to this level"
+    },
+    "Common.Center": {
+      "text": "Center"
+    },
+    "Common.Delete": {
+      "text": "Delete"
+    },
+    "Common.Enable.Tip": {
+      "text": "Enable/Disable"
+    },
+    "Common.ExpandCollapse.Tip": {
+      "text": "Expand/Collapse"
+    },
+    "Common.Height": {
+      "text": "Height"
+    },
+    "Common.Left": {
+      "text": "Left"
+    },
+    "Common.MoveDown": {
+      "text": "Down"
+    },
+    "Common.MoveDown.Tip": {
+      "text": "Move down"
+    },
+    "Common.MoveUp": {
+      "text": "Up"
+    },
+    "Common.MoveUp.Tip": {
+      "text": "Move up"
+    },
+    "Common.RemoveComponent.Tip": {
+      "text": "Remove component"
+    },
+    "Common.Right": {
+      "text": "Right"
+    },
+    "Common.Settings": {
+      "text": "Settings"
+    },
+    "Common.Width": {
+      "text": "Width"
+    },
+    "Component.Dialogue.Align.Label": {
+      "text": "Alignment"
+    },
+    "Component.Dialogue.AutoAdvance": {
+      "text": "Auto advance"
+    },
+    "Component.Dialogue.Blip.Asset.Label": {
+      "text": "Sound asset (.wav / .ogg - synth blip if empty)"
+    },
+    "Component.Dialogue.Blip.Asset.Watermark": {
+      "text": "e.g. blip_voice.wav or empty (procedural synth)"
+    },
+    "Component.Dialogue.Blip.Preview": {
+      "text": "Preview (test blip)"
+    },
+    "Component.Dialogue.Blip.Preview.Tip": {
+      "text": "Test character voice blip sound"
+    },
+    "Component.Dialogue.Blip.Title": {
+      "text": "Character voice blip (sound FX)"
+    },
+    "Component.Dialogue.BorderColor.Label": {
+      "text": "Border color (HEX)"
+    },
+    "Component.Dialogue.BoxColor.Label": {
+      "text": "Box color (HEX)"
+    },
+    "Component.Dialogue.BoxOpacity.Label": {
+      "text": "Box opacity"
+    },
+    "Component.Dialogue.BoxX.Label": {
+      "text": "Box X"
+    },
+    "Component.Dialogue.BoxY.Label": {
+      "text": "Box Y"
+    },
+    "Component.Dialogue.Cadence.Label": {
+      "text": "Cadence (every N characters)"
+    },
+    "Component.Dialogue.Channel.Label": {
+      "text": "Channel:"
+    },
+    "Component.Dialogue.ContentId.Generate": {
+      "text": "Generate"
+    },
+    "Component.Dialogue.ContentId.Generate.Tip": {
+      "text": "Generate a new unique ID"
+    },
+    "Component.Dialogue.ContentId.Label": {
+      "text": "Content ID (permanent)"
+    },
+    "Component.Dialogue.FontSize.Label": {
+      "text": "Font size (px)"
+    },
+    "Component.Dialogue.Modulation.Label": {
+      "text": "Modulation (±)"
+    },
+    "Component.Dialogue.Pitch.Label": {
+      "text": "Base pitch"
+    },
+    "Component.Dialogue.Preset.Comic": {
+      "text": "Comic Bubble"
+    },
+    "Component.Dialogue.Preset.Nvl": {
+      "text": "NVL Novel"
+    },
+    "Component.Dialogue.Preset.Square": {
+      "text": "Square Avatar"
+    },
+    "Component.Dialogue.Preset.Standard": {
+      "text": "Standard Banner"
+    },
+    "Component.Dialogue.Preset.TopSubtitle": {
+      "text": "Top Subtitle"
+    },
+    "Component.Dialogue.Presets.Label": {
+      "text": "Quick layout presets"
+    },
+    "Component.Dialogue.Scale.Label": {
+      "text": "Scale (1.0 = 100%)"
+    },
+    "Component.Dialogue.Section.Box": {
+      "text": "BOX THEME & OPACITY"
+    },
+    "Component.Dialogue.Section.Speaker": {
+      "text": "SPEAKER & TEXT"
+    },
+    "Component.Dialogue.Section.Transform": {
+      "text": "TRANSFORM & PRESETS"
+    },
+    "Component.Dialogue.Section.Typewriter": {
+      "text": "TYPEWRITER & TIMING"
+    },
+    "Component.Dialogue.Section.Typography": {
+      "text": "TYPOGRAPHY & STYLING"
+    },
+    "Component.Dialogue.SkipPunctuation": {
+      "text": "Skip punctuation/spaces"
+    },
+    "Component.Dialogue.Speaker.Label": {
+      "text": "Speaker name"
+    },
+    "Component.Dialogue.Speed.Label": {
+      "text": "Speed (ms/char)"
+    },
+    "Component.Dialogue.Text.Label": {
+      "text": "Dialogue text"
+    },
+    "Component.Dialogue.TextColor.Label": {
+      "text": "Text color (HEX)"
+    },
+    "Component.Dialogue.Title": {
+      "text": "Dialogue"
+    },
+    "Component.Dialogue.TitleColor.Label": {
+      "text": "Title color"
+    },
+    "Component.Dialogue.TitleFont.Label": {
+      "text": "Title font size (px)"
+    },
+    "Component.Dialogue.Typewriter.Enable": {
+      "text": "Enable typewriter"
+    },
+    "Component.Dialogue.Volume.Label": {
+      "text": "Blip volume"
+    },
+    "Component.Dialogue.WaitDelay.Label": {
+      "text": "Wait delay"
+    },
+    "Component.Script.Inline.Label": {
+      "text": "Inline code (optional)"
+    },
+    "Component.Script.Inline.Watermark": {
+      "text": "function on_enter() end"
+    },
+    "Component.Script.Path.Label": {
+      "text": "Project-relative script path"
+    },
+    "Component.Script.Path.Watermark": {
+      "text": "scripts/example.lua"
+    },
+    "Component.Script.Runtime.Label": {
+      "text": "Runtime:"
+    },
+    "Component.Script.Title": {
+      "text": "Lua Script"
+    },
+    "Inspector.Components.Actions.Tip": {
+      "text": "Component actions"
+    },
+    "Inspector.Components.Add": {
+      "text": "Add Component"
+    },
+    "Inspector.Components.Add.Audio": {
+      "text": "Audio & DSP"
+    },
+    "Inspector.Components.Add.Background": {
+      "text": "Background Layer"
+    },
+    "Inspector.Components.Add.Camera": {
+      "text": "Camera (2D)"
+    },
+    "Inspector.Components.Add.Character": {
+      "text": "Character Sprite"
+    },
+    "Inspector.Components.Add.Choice": {
+      "text": "Player Choices"
+    },
+    "Inspector.Components.Add.Dialogue": {
+      "text": "Dialogue & Speaker"
+    },
+    "Inspector.Components.Add.Prompt": {
+      "text": "Choose a component to add"
+    },
+    "Inspector.Components.Add.Script": {
+      "text": "Lua Script"
+    },
+    "Inspector.Components.Add.Transition": {
+      "text": "Scene Transition"
+    },
+    "Inspector.Components.CountSuffix": {
+      "text": "active"
+    },
+    "Inspector.Components.Empty": {
+      "text": "No components on this object yet - use Add component to add the first one."
+    },
+    "Inspector.Components.Title": {
+      "text": "COMPONENTS"
+    },
+    "Inspector.Empty.Hint": {
+      "text": "Pick an object in the Hierarchy panel; its components are listed here."
+    },
+    "Inspector.Empty.Title": {
+      "text": "No GameObject selected"
+    },
+    "Inspector.Header.Subtitle": {
+      "text": "Selected scene object"
+    },
+    "Inspector.Header.Title": {
+      "text": "INSPECTOR"
+    },
+    "Inspector.Menu.Duplicate": {
+      "text": "Duplicate"
+    },
+    "Inspector.Menu.MoveDown": {
+      "text": "Move Down"
+    },
+    "Inspector.Menu.MoveUp": {
+      "text": "Move Up"
+    },
+    "Inspector.Node.Chapter.Label": {
+      "text": "Chapter:"
+    },
+    "Inspector.Node.Chapter.Tip": {
+      "text": "Save/load boundary (None = unset)"
+    },
+    "Inspector.Node.Color.Label": {
+      "text": "Tag:"
+    },
+    "Inspector.Node.Color.Tip": {
+      "text": "Assign a color tag to the node (card strip + minimap)"
+    },
+    "Inspector.Node.Group.Join.Button": {
+      "text": "+ Add"
+    },
+    "Inspector.Node.Group.Join.Placeholder": {
+      "text": "Add to group…"
+    },
+    "Inspector.Node.Group.Remove.Tip": {
+      "text": "Remove from group (the group is kept)"
+    },
+    "Inspector.Node.Groups.Empty": {
+      "text": "No groups yet - pick one from the list and press + Add."
+    },
+    "Inspector.Node.Groups.Label": {
+      "text": "Groups"
+    },
+    "Inspector.Node.Issues.Suffix": {
+      "text": "issues"
+    },
+    "Inspector.Node.Section": {
+      "text": "NODE"
+    },
+    "Inspector.Node.Title.Label": {
+      "text": "Title"
+    },
+    "Inspector.Node.Title.Watermark": {
+      "text": "Node title"
+    },
+    "Inspector.Object.Actions.Tip": {
+      "text": "Object actions"
+    },
+    "Inspector.Object.Active": {
+      "text": "Active"
+    },
+    "Inspector.Object.Active.Tip": {
+      "text": "GameObject active state"
+    },
+    "Inspector.Object.Name.Watermark": {
+      "text": "GameObject name"
+    },
+    "Inspector.Provenance.Title": {
+      "text": "CONVERSION PROVENANCE"
+    },
+    "Common.Remove": {
+      "text": "Remove"
+    },
+    "Common.Reset": {
+      "text": "Reset"
+    },
+    "Common.X": {
+      "text": "X"
+    },
+    "Common.Y": {
+      "text": "Y"
+    },
+    "Common.Rotation": {
+      "text": "Rotation"
+    },
+    "Common.Opacity": {
+      "text": "Opacity"
+    },
+    "Component.Character.Name": {
+      "text": "Character"
+    },
+    "Component.Character.Sprite.Label": {
+      "text": "Character image (drag and drop)"
+    },
+    "Component.Character.Sprite.Watermark": {
+      "text": "e.g. characters/example.png or empty"
+    },
+    "Component.Character.Sprite.Drop": {
+      "text": "Drop the image here"
+    },
+    "Component.Character.Sprite.DropHint": {
+      "text": "Drag from the Assets panel or click Browse"
+    },
+    "Component.Character.Layers.Title": {
+      "text": "LAYERS (body < face < outfit < accessory)"
+    },
+    "Component.Character.Layers.Body": {
+      "text": "Body (uses the sprite above if empty)"
+    },
+    "Component.Character.Layers.Face": {
+      "text": "Face"
+    },
+    "Component.Character.Layers.Outfit": {
+      "text": "Outfit"
+    },
+    "Component.Character.Layers.Accessory": {
+      "text": "Accessory"
+    },
+    "Component.Character.Layers.Expression": {
+      "text": "Expression (selection applies to the preview atomically)"
+    },
+    "Component.Character.Scale": {
+      "text": "Scale (1.0 = 100%)"
+    },
+    "Component.Character.Rotation.Reset.Tip": {
+      "text": "Reset rotation (0°)"
+    },
+    "Component.Character.AspectRatio": {
+      "text": "Keep aspect ratio"
+    },
+    "Component.Character.Assist.Title": {
+      "text": "OBS QUICK ALIGN"
+    },
+    "Component.Character.Assist.Center": {
+      "text": "Center"
+    },
+    "Component.Character.Assist.Center.Tip": {
+      "text": "Centers the character horizontally on screen"
+    },
+    "Component.Character.Assist.Ground": {
+      "text": "To floor"
+    },
+    "Component.Character.Assist.Ground.Tip": {
+      "text": "Snaps the character to the bottom floor line"
+    },
+    "Component.Character.Assist.Reset.Tip": {
+      "text": "Resets to the standard character size (600x900)"
+    },
+    "Component.Character.Voice.Title": {
+      "text": "CHARACTER VOICE BLIP"
+    },
+    "Component.Character.Voice.Preview": {
+      "text": "Preview"
+    },
+    "Component.Character.Voice.Preview.Tip": {
+      "text": "Test the character voice blip"
+    },
+    "Component.Character.Voice.File": {
+      "text": "Default sound file (.wav / .ogg, synth if empty)"
+    },
+    "Component.Character.Voice.File.Watermark": {
+      "text": "e.g. voice_evelyn.wav or empty"
+    },
+    "Component.Character.Voice.Pitch": {
+      "text": "Base pitch"
+    },
+    "Component.Character.Voice.Cadence": {
+      "text": "Cadence"
+    },
+    "Component.Choice.Name": {
+      "text": "Player choices"
+    },
+    "Component.Choice.Title.Watermark": {
+      "text": "Choice title"
+    },
+    "Component.Choice.Option.Text.Watermark": {
+      "text": "Button text"
+    },
+    "Component.Choice.Option.Enable.Tip": {
+      "text": "Enable this button"
+    },
+    "Component.Choice.Option.Appearance.Tip": {
+      "text": "Button appearance"
+    },
+    "Component.Choice.Option.Condition.Watermark": {
+      "text": "Condition (e.g. affinity_evelyn >= 3)"
+    },
+    "Component.Choice.Option.Target.Note": {
+      "text": "The graph wire sets the target"
+    },
+    "Component.Choice.Option.Preset": {
+      "text": "Style preset"
+    },
+    "Component.Choice.Option.FontSize": {
+      "text": "Font size"
+    },
+    "Component.Choice.Option.W": {
+      "text": "W"
+    },
+    "Component.Choice.Option.H": {
+      "text": "H"
+    },
+    "Component.Choice.Option.Radius": {
+      "text": "Radius"
+    },
+    "Component.Choice.Option.Font.Watermark": {
+      "text": "Font: drag a .ttf/.otf from the Assets panel"
+    },
+    "Component.Choice.Option.TextColor.Watermark": {
+      "text": "Text #RRGGBB"
+    },
+    "Component.Choice.Option.BackgroundColor.Watermark": {
+      "text": "Background #RRGGBB"
+    },
+    "Component.Choice.Option.HoverColor.Watermark": {
+      "text": "Hover #RRGGBB"
+    },
+    "Component.Choice.Option.BorderColor.Watermark": {
+      "text": "Border #RRGGBB"
+    },
+    "Component.Choice.Option.Images.Hint": {
+      "text": "Button images — drag from the Assets panel onto the matching field"
+    },
+    "Component.Choice.Option.NormalImage.Watermark": {
+      "text": "Drop the normal image here"
+    },
+    "Component.Choice.Option.HoverImage.Watermark": {
+      "text": "Drop the hover image here"
+    },
+    "Component.Choice.Option.PressedImage.Watermark": {
+      "text": "Drop the pressed image here"
+    },
+    "Component.Choice.Option.DisabledImage.Watermark": {
+      "text": "Drop the disabled image here"
+    },
+    "Component.Choice.Add": {
+      "text": "+ Add choice"
+    },
+    "Component.Choice.Empty": {
+      "text": "No options yet — press + Add choice, then set the target with a graph wire."
+    },
+    "Component.Choice.Note": {
+      "text": "Each option has a fixed ID and a target node; set the target with a graph wire."
+    },
+    "Component.Audio.Title": {
+      "text": "Audio"
+    },
+    "Component.Audio.Bgm.Label": {
+      "text": "BGM track (background music)"
+    },
+    "Component.Audio.Bgm.Watermark": {
+      "text": "e.g. bgm_theme.ogg"
+    },
+    "Component.Audio.Bgm.Preview.Tip": {
+      "text": "Play / stop BGM preview"
+    },
+    "Component.Audio.Preview": {
+      "text": "Preview"
+    },
+    "Component.Audio.Stop": {
+      "text": "Stop"
+    },
+    "Component.Audio.ChannelLeft": {
+      "text": "L"
+    },
+    "Component.Audio.ChannelRight": {
+      "text": "R"
+    },
+    "Component.Audio.Sfx.Label": {
+      "text": "SFX track (sound effect)"
+    },
+    "Component.Audio.Sfx.Watermark": {
+      "text": "e.g. sfx_click.wav"
+    },
+    "Component.Audio.Sfx.Preview.Tip": {
+      "text": "Play / stop SFX preview"
+    },
+    "Component.Audio.Volume.Label": {
+      "text": "Volume"
+    },
+    "Component.Audio.Dsp.Label": {
+      "text": "DSP filter"
+    },
+    "Component.Audio.BgmTransition.Label": {
+      "text": "BGM transition"
+    },
+    "Component.Audio.BgmTransitionDuration.Label": {
+      "text": "BGM transition duration (s, 0 = project default)"
+    },
+    "Component.Background.Title": {
+      "text": "Image"
+    },
+    "Component.Background.Texture.Label": {
+      "text": "Background texture (drag and drop)"
+    },
+    "Component.Background.Texture.Watermark": {
+      "text": "e.g. backgrounds/sample.png or empty"
+    },
+    "Component.Background.Drop.Title": {
+      "text": "Drag and drop an image here"
+    },
+    "Component.Background.Drop.Hint": {
+      "text": "Drag from the Assets panel or click Browse"
+    },
+    "Component.Background.X": {
+      "text": "X"
+    },
+    "Component.Background.Y": {
+      "text": "Y"
+    },
+    "Component.Background.Width": {
+      "text": "Width"
+    },
+    "Component.Background.Height": {
+      "text": "Height"
+    },
+    "Component.Background.Scale": {
+      "text": "Scale (1.0 = 100%)"
+    },
+    "Component.Background.ResetRotation.Tip": {
+      "text": "Reset rotation (0°)"
+    },
+    "Component.Background.Rotation": {
+      "text": "Rotation"
+    },
+    "Component.Background.ParallaxX": {
+      "text": "Parallax X"
+    },
+    "Component.Background.ParallaxY": {
+      "text": "Parallax Y"
+    },
+    "Component.Background.Opacity": {
+      "text": "Layer opacity"
+    },
+    "Component.Background.Assist.Label": {
+      "text": "OBS quick align"
+    },
+    "Component.Background.Center": {
+      "text": "Center"
+    },
+    "Component.Background.Fit1080": {
+      "text": "Fit to 1080p"
+    },
+    "Component.Camera.Title": {
+      "text": "2D camera"
+    },
+    "Component.Camera.FocusX": {
+      "text": "Focus X (center)"
+    },
+    "Component.Camera.FocusY": {
+      "text": "Focus Y (center)"
+    },
+    "Component.Camera.Zoom": {
+      "text": "Zoom factor"
+    },
+    "Component.Camera.Rotation.Tip": {
+      "text": "Camera rotation is ignored by the engine (Phase 4.5 Slice 2 no-op, capability ROWL_ENGINE_CAPABILITY_CAMERA_ROTATION_IGNORED). The value stays 0."
+    },
+    "Component.Camera.Rotation.Label": {
+      "text": "Rotation (deg) — ignored"
+    },
+    "Component.Camera.Rotation.Note": {
+      "text": "Engine no-op: camera rotation has no render effect."
+    },
+    "Component.Camera.Tween.Label": {
+      "text": "Smooth tween (seconds)"
+    },
+    "Component.Camera.PanTime": {
+      "text": "Pan time"
+    },
+    "Component.Camera.ZoomTime": {
+      "text": "Zoom time"
+    },
+    "Component.Camera.Easing": {
+      "text": "Easing"
+    },
+    "Component.Camera.Easing.Watermark": {
+      "text": "ease_in_out"
+    },
+    "Component.Camera.Shake.Label": {
+      "text": "Cinematic screen shake"
+    },
+    "Component.Camera.Shake.Preset": {
+      "text": "Shake preset"
+    },
+    "Component.Camera.Shake.Intensity": {
+      "text": "Intensity (px)"
+    },
+    "Component.Camera.Shake.Duration": {
+      "text": "Duration (s)"
+    },
+    "Component.Camera.Shake.Frequency": {
+      "text": "Freq (Hz)"
+    },
+    "Component.Camera.Shake.Damping": {
+      "text": "Damping"
+    },
+    "Component.Camera.Shake.DirX": {
+      "text": "Dir X (0-1)"
+    },
+    "Component.Camera.Shake.DirY": {
+      "text": "Dir Y (0-1)"
+    },
+    "Component.Transition.Title": {
+      "text": "Scene transition"
+    },
+    "Component.Transition.Kind": {
+      "text": "Transition type"
+    },
+    "Component.Transition.Duration": {
+      "text": "Duration (seconds)"
+    },
+    "Component.Transition.FadeColor": {
+      "text": "Color hex (fade color)"
+    },
+    "Component.Transition.Flash.Label": {
+      "text": "Screen flash FX"
+    },
+    "Component.Transition.ColorHex": {
+      "text": "Color hex"
+    },
+    "Component.Transition.Flash.Watermark": {
+      "text": "#FFFFFF"
+    },
+    "Component.Transition.Flash.Duration": {
+      "text": "Duration (s)"
+    },
+    "Component.Transition.Intensity": {
+      "text": "Intensity"
+    },
+    "Component.Transition.Post.Label": {
+      "text": "Post-process color tint &amp; vignette"
+    },
+    "Component.Transition.Tint.Label": {
+      "text": "Screen color tint overlay"
+    },
+    "Component.Transition.Tint.Color": {
+      "text": "Tint color hex"
+    },
+    "Component.Transition.Tint.Watermark": {
+      "text": "#0A183D"
+    },
+    "Component.Transition.Tint.Opacity": {
+      "text": "Tint opacity (0-1)"
+    },
+    "Component.Transition.Vignette.Label": {
+      "text": "Cinematic vignette darkening"
+    },
+    "Component.Transition.Vignette.Radius": {
+      "text": "Radius"
+    },
+    "Hierarchy.Create": {
+      "text": "Create"
+    },
+    "Hierarchy.Create.Empty": {
+      "text": "Empty GameObject"
+    },
+    "Hierarchy.Create.Background": {
+      "text": "Background Object"
+    },
+    "Hierarchy.Create.Character": {
+      "text": "Character Object"
+    },
+    "Hierarchy.Create.Dialogue": {
+      "text": "Dialogue Object"
+    },
+    "Hierarchy.Create.Audio": {
+      "text": "Audio Object"
+    },
+    "Hierarchy.Search": {
+      "text": "Search: object name"
+    },
+    "Hierarchy.SelectedNode": {
+      "text": "SELECTED NODE"
+    },
+    "Hierarchy.SelectNode": {
+      "text": "Select a node from the graph"
+    },
+    "Hierarchy.SceneObjects": {
+      "text": "Scene objects"
+    },
+    "Hierarchy.Empty": {
+      "text": "No GameObjects in this frame."
+    },
+    "Hierarchy.Duplicate": {
+      "text": "Duplicate Object"
+    },
+    "Hierarchy.MoveUp": {
+      "text": "Move Up"
+    },
+    "Hierarchy.MoveDown": {
+      "text": "Move Down"
+    },
+    "Hierarchy.Delete": {
+      "text": "Delete Object"
     }
   }
 }

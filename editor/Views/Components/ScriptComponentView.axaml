@@ -1,41 +1,46 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:l="using:RowlEngine.Editor.Services.Strings"
              xmlns:comp="using:RowlEngine.Editor.ViewModels.Components"
              xmlns:vm="using:RowlEngine.Editor.ViewModels"
              xmlns:ctrl="using:RowlEngine.Editor.Controls"
              x:Class="RowlEngine.Editor.Views.Components.ScriptComponentView"
              x:DataType="comp:ScriptComponentViewModel">
-  <Border Background="{DynamicResource CardBackground}" CornerRadius="2" Margin="0,4" Padding="0" BorderBrush="{DynamicResource CardBorderColor}" BorderThickness="1">
+  <Border Classes="card" ClipToBounds="True" Margin="0,4">
     <StackPanel>
-      <Border Background="{DynamicResource CardHeaderBackground}" CornerRadius="2,2,0,0" Padding="8,6">
+      <Border Background="{DynamicResource CardHeaderBackground}" Padding="8,6">
         <Grid ColumnDefinitions="*, Auto">
           <Grid Grid.Column="0" ColumnDefinitions="Auto,*" VerticalAlignment="Center">
-            <CheckBox Grid.Column="0" IsChecked="{Binding IsEnabled}" ToolTip.Tip="Enable/Disable" MinWidth="0" Padding="0" Margin="0,0,2,0" VerticalAlignment="Center"/>
-            <ToggleButton Grid.Column="1" Classes="header" IsChecked="{Binding IsExpanded}" ToolTip.Tip="Genişlet/Daralt"
+            <CheckBox Grid.Column="0" IsChecked="{Binding IsEnabled}" ToolTip.Tip="{l:T Common.Enable.Tip}" MinWidth="0" Padding="0" Margin="0,0,2,0" VerticalAlignment="Center"/>
+            <ToggleButton Grid.Column="1" Classes="header" IsChecked="{Binding IsExpanded}" ToolTip.Tip="{l:T Common.ExpandCollapse.Tip}"
                           Background="Transparent" BorderThickness="0" Padding="4,2"
                           HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" VerticalAlignment="Center">
-              <TextBlock Text="Lua Script" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource PrimaryText}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+              <TextBlock Text="{l:T Component.Script.Title}" Classes="cardTitle" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                         ToolTip.Tip="{l:T Component.Script.Title}"/>
             </ToggleButton>
           </Grid>
           <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="3" VerticalAlignment="Center">
-            <Button Content="Yukarı" Command="{Binding MoveUpCommand}" ToolTip.Tip="Move Up" FontSize="10" Padding="4,2" MinWidth="0" Background="Transparent" Foreground="{DynamicResource MutedText}" BorderThickness="0"/>
-            <Button Content="Aşağı" Command="{Binding MoveDownCommand}" ToolTip.Tip="Move Down" FontSize="10" Padding="4,2" MinWidth="0" Background="Transparent" Foreground="{DynamicResource MutedText}" BorderThickness="0"/>
-            <ToggleButton IsChecked="{Binding IsExpanded}" Content="Ayar" FontSize="10" Padding="4,2" MinWidth="0" Background="Transparent" Foreground="{DynamicResource MutedText}" BorderThickness="0"/>
-            <Button Content="Sil" FontSize="10" Padding="4,2" MinWidth="0" Background="Transparent" Foreground="{DynamicResource ErrorColor}" BorderThickness="0" ToolTip.Tip="Remove Component" Command="{Binding RemoveSelfCommand}"/>
+            <Button Content="{l:T Common.MoveUp}" Command="{Binding MoveUpCommand}" ToolTip.Tip="{l:T Common.MoveUp.Tip}" Classes="compact"/>
+            <Button Content="{l:T Common.MoveDown}" Command="{Binding MoveDownCommand}" ToolTip.Tip="{l:T Common.MoveDown.Tip}" Classes="compact"/>
+            <ToggleButton IsChecked="{Binding IsExpanded}" Content="{l:T Common.Settings}" Classes="compact"/>
+            <Button Content="{l:T Common.Delete}" Classes="compact" ToolTip.Tip="{l:T Common.RemoveComponent.Tip}" Command="{Binding RemoveSelfCommand}"/>
           </StackPanel>
         </Grid>
       </Border>
       <StackPanel IsVisible="{Binding IsExpanded}" Spacing="6" Margin="8,6">
-      <TextBlock Text="Project-relative script path" FontSize="10" Foreground="{DynamicResource MutedText}" />
-      <TextBox Text="{Binding ScriptPath}" Watermark="scripts/example.lua" />
+      <TextBlock Text="{l:T Component.Script.Path.Label}" Classes="fieldLabel"/>
+      <TextBox Text="{Binding ScriptPath}" Watermark="{l:T Component.Script.Path.Watermark}" />
       <ctrl:FieldValidationBadge Validation="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).InspectorViewModel.Validation}"
                                  NodeId="{Binding Node.Id}" FieldKey="script.script_path" />
-      <TextBlock Text="Inline code (optional)" FontSize="10" Foreground="{DynamicResource MutedText}" />
-      <TextBox Text="{Binding InlineCode}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="72" Watermark="function on_enter() end" />
-      <Border Background="{DynamicResource SurfaceBackground}" CornerRadius="4" Padding="6">
+      <TextBlock Text="{l:T Component.Script.Inline.Label}" Classes="fieldLabel"/>
+      <TextBox Text="{Binding InlineCode}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="72" Watermark="{l:T Component.Script.Inline.Watermark}" />
+      <Border Background="{DynamicResource SurfaceBackground}" CornerRadius="{DynamicResource RadiusSmall}" Padding="8,6">
         <StackPanel Spacing="2">
-          <TextBlock Text="{Binding RuntimeState, StringFormat='Runtime: {0}'}" FontSize="11" Foreground="{DynamicResource MutedText}" />
-          <TextBlock Text="{Binding RuntimeError}" IsVisible="{Binding HasRuntimeError}" TextWrapping="Wrap" FontSize="11" Foreground="{DynamicResource ErrorColor}" />
+          <StackPanel Orientation="Horizontal" Spacing="4">
+            <TextBlock Text="{l:T Component.Script.Runtime.Label}" Classes="muted" FontSize="{DynamicResource FontSizeBody}"/>
+            <TextBlock Text="{Binding RuntimeState}" Classes="muted" FontSize="{DynamicResource FontSizeBody}"/>
+          </StackPanel>
+          <TextBlock Text="{Binding RuntimeError}" IsVisible="{Binding HasRuntimeError}" TextWrapping="Wrap" FontSize="{DynamicResource FontSizeBody}" Foreground="{DynamicResource ErrorColor}" />
         </StackPanel>
       </Border>
       </StackPanel>
