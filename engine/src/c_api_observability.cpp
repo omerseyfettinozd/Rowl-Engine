@@ -7,8 +7,156 @@
 #include <algorithm>
 #include <cmath>
 #include <atomic>
+#include <cstdint>
+#include <string>
+#include <utility>
+#include <vector>
 
 static std::atomic<uint64_t> s_worldQuerySeq{1};
+
+namespace {
+
+// Gözlem uçları da sahip-thread sözleşmesine tabidir: sahipsiz kopya
+// yalnızca ömrü uzatır, ÇAĞRI HAKKI VERMEZ (c_api_internal.hpp). Engine
+// okumaları kilitsizdir; InjectInput motoru değiştirir. Emsal:
+// RowlEngine_IsCharacterTweenActive — ölü 0, yabancı damga + 0.
+std::shared_ptr<Rowl::Core::Engine> ownerEngineOrReject(RowlEngineHandle handle,
+                                                        const char* op) noexcept {
+    switch (classifyHandle(handle)) {
+        case HandleStanding::Dead:
+            return nullptr;
+        case HandleStanding::Foreign:
+            stampWrongThread(handle, op);
+            return nullptr;
+        case HandleStanding::Mine:
+            return toEngineChecked(handle);
+    }
+    return nullptr;
+}
+
+// InjectInput iki aşamalıdır: önce TÜM olaylar doğrulanır, sonra uygulanır.
+// Tek geçişte bozuk bir olay öncekileri uygulanmış bırakıp 0 döndürüyordu;
+// arayan "hiçbir şey olmadı" sanırken hikâye ilerlemiş oluyordu.
+struct InputAction {
+    enum class Kind { Tap, ChoiceId, ChoiceIndex, Advance, Rewind, Drag };
+    Kind kind = Kind::Advance;
+    float x = 0.0f, y = 0.0f, toX = 0.0f, toY = 0.0f;
+    uint32_t count = 0;
+    std::string id;
+};
+
+bool readFloat(const nlohmann::json& ev, const char* key, float& out) {
+    const auto it = ev.find(key);
+    if (it == ev.end()) return true;  // yoksa varsayılan
+    if (!it->is_number()) return false;
+    const double value = it->get<double>();
+    if (!std::isfinite(value)) return false;
+    out = static_cast<float>(value);
+    return true;
+}
+
+bool readCount(const nlohmann::json& ev, const char* key, uint32_t& out) {
+    const auto it = ev.find(key);
+    if (it == ev.end()) return true;
+    // Negatif tamsayı is_number_unsigned değildir: -1 → 4294967295 sarması reddedilir.
+    if (!it->is_number_unsigned()) return false;
+    const auto value = it->get<uint64_t>();
+    if (value > UINT32_MAX) return false;
+    out = static_cast<uint32_t>(value);
+    return true;
+}
+
+bool readId(const nlohmann::json& ev, const char* first, const char* second, std::string& out) {
+    for (const char* key : {first, second}) {
+        const auto it = ev.find(key);
+        if (it == ev.end()) continue;
+        if (!it->is_string()) return false;
+        out = it->get<std::string>();
+        if (!out.empty()) return true;
+    }
+    return true;
+}
+
+bool parseInputAction(const nlohmann::json& ev, InputAction& action) {
+    if (!ev.is_object()) return false;
+    std::string t;
+    for (const char* key : {"t", "type"}) {
+        const auto it = ev.find(key);
+        if (it == ev.end()) continue;
+        if (!it->is_string()) return false;
+        t = it->get<std::string>();
+        break;
+    }
+    using Kind = InputAction::Kind;
+    if (t == "tap" || t == "pointer_down" || t == "click") {
+        action.kind = Kind::Tap;
+        return readFloat(ev, "x", action.x) && readFloat(ev, "y", action.y);
+    }
+    if (t == "choice") {
+        if (!readId(ev, "optionId", "id", action.id)) return false;
+        action.kind = action.id.empty() ? Kind::ChoiceIndex : Kind::ChoiceId;
+        return readCount(ev, "index", action.count);
+    }
+    if (t == "choice_id") {
+        action.kind = Kind::ChoiceId;
+        return readId(ev, "id", "optionId", action.id);
+    }
+    if (t == "advance" || t == "next") {
+        action.kind = Kind::Advance;
+        return true;
+    }
+    if (t == "rewind" || t == "back") {
+        action.kind = Kind::Rewind;
+        action.count = 1;
+        return readCount(ev, "steps", action.count);
+    }
+    if (t == "swipe_back") {
+        action.kind = Kind::Rewind;
+        action.count = 1;
+        return true;
+    }
+    if (t == "drag" || t == "swipe") {
+        action.kind = Kind::Drag;
+        return readFloat(ev, "fromX", action.x) && readFloat(ev, "fromY", action.y) &&
+               readFloat(ev, "toX", action.toX) && readFloat(ev, "toY", action.toY);
+    }
+    return false;
+}
+
+void applyInputAction(Rowl::Core::Engine& engine, const InputAction& action) {
+    using Kind = InputAction::Kind;
+    switch (action.kind) {
+        case Kind::Tap:
+            engine.handlePointerDown(action.x, action.y);
+            break;
+        case Kind::ChoiceId:
+            if (!action.id.empty()) engine.advanceToChoice(action.id);
+            break;
+        case Kind::ChoiceIndex:
+            engine.advanceToNextNode(action.count);
+            break;
+        case Kind::Advance:
+            engine.advanceToNextNode(0);
+            break;
+        case Kind::Rewind:
+            engine.rewind(action.count);
+            break;
+        case Kind::Drag: {
+            const float dx = action.toX - action.x;
+            const float dy = action.toY - action.y;
+            if (dx < -50.0f && std::fabs(dx) >= std::fabs(dy)) {
+                engine.advanceToNextNode(0);  // Swipe forward
+            } else if (dx > 50.0f && std::fabs(dx) >= std::fabs(dy)) {
+                engine.rewind(1);  // Swipe back
+            } else if (!engine.handlePointerDown(action.x, action.y)) {
+                engine.advanceToNextNode(0);
+            }
+            break;
+        }
+    }
+}
+
+}  // namespace
 
 extern "C" {
 
@@ -48,26 +196,38 @@ ROWL_API int RowlEngine_QueryWorldJson(
     char* outBuffer,
     int bufferCap) {
     return invokeNoexcept([&]() -> int {
-        auto engine = copyEngineAnyThread(handle);
+        auto engine = ownerEngineOrReject(handle, "query_world_json");
         if (!engine) return 0;
 
         bool compact = true;
         bool checkAnomalies = true;
 
+        // Filtre katıdır: anlaşılmayan filtre varsayılan anlık görüntüye
+        // DÜŞMEZ, reddedilir — arayan filtrelenmemiş tam görüntüyü filtreli
+        // sanmasın. (Eski get<bool> istisnası catch(...) ile yutulunca
+        // seq_since reddi de atlanıyordu.)
         if (filterJson && filterJson[0] != '\0') {
-            try {
-                auto parsed = nlohmann::json::parse(filterJson, nullptr, false);
-                if (!parsed.is_discarded() && parsed.is_object()) {
-                    if (parsed.contains("compact")) compact = parsed["compact"].get<bool>();
-                    if (parsed.contains("anomalies")) checkAnomalies = parsed["anomalies"].get<bool>();
-                    // seq_since / dirty_only desteklenmez: sessizce yoksaymak yerine
-                    // reddet ki arayan filtrelenmemiş tam anlık görüntüyü filtreli sanmasın.
-                    if (parsed.contains("seq_since") || parsed.contains("dirty_only")) {
-                        Rowl::Core::Logger::warn("QueryWorldJson: seq_since/dirty_only filter rejected; differential snapshot is not supported.");
-                        return 0;
-                    }
+            const auto parsed = nlohmann::json::parse(filterJson, nullptr, false);
+            if (parsed.is_discarded() || !parsed.is_object()) {
+                Rowl::Core::Logger::warn("QueryWorldJson: filter rejected; expected a JSON object.");
+                return 0;
+            }
+            // seq_since / dirty_only desteklenmez.
+            if (parsed.contains("seq_since") || parsed.contains("dirty_only")) {
+                Rowl::Core::Logger::warn("QueryWorldJson: seq_since/dirty_only filter rejected; differential snapshot is not supported.");
+                return 0;
+            }
+            for (auto [key, target] : {std::pair<const char*, bool*>{"compact", &compact},
+                                       std::pair<const char*, bool*>{"anomalies", &checkAnomalies}}) {
+                const auto it = parsed.find(key);
+                if (it == parsed.end()) continue;
+                if (!it->is_boolean()) {
+                    Rowl::Core::Logger::warn(std::string("QueryWorldJson: filter rejected; '") + key +
+                                             "' must be a boolean.");
+                    return 0;
                 }
-            } catch (...) {}
+                *target = it->get<bool>();
+            }
         }
 
         uint64_t currentSeq = s_worldQuerySeq.fetch_add(1, std::memory_order_relaxed);
@@ -198,76 +358,29 @@ ROWL_API int RowlEngine_InjectInputJson(
     const char* inputJson) {
     return invokeNoexcept([&]() -> int {
         if (!inputJson || inputJson[0] == '\0') return 0;
-        auto engine = copyEngineAnyThread(handle);
+        auto engine = ownerEngineOrReject(handle, "inject_input_json");
         if (!engine) return 0;
 
-        auto parsed = nlohmann::json::parse(inputJson, nullptr, false);
+        const auto parsed = nlohmann::json::parse(inputJson, nullptr, false);
         if (parsed.is_discarded()) return 0;
 
-        int handledEvents = 0;
-        auto processEvent = [&](const nlohmann::json& ev) -> bool {
-            if (!ev.is_object()) return false;
-            std::string t = ev.value("t", ev.value("type", ""));
-            if (t == "tap" || t == "pointer_down" || t == "click") {
-                float x = ev.value("x", 0.0f);
-                float y = ev.value("y", 0.0f);
-                engine->handlePointerDown(x, y);
-                return true;
-            } else if (t == "choice") {
-                std::string optId = ev.value("optionId", ev.value("id", ""));
-                if (!optId.empty()) {
-                    engine->advanceToChoice(optId);
-                } else {
-                    uint32_t idx = ev.value("index", 0u);
-                    engine->advanceToNextNode(idx);
-                }
-                return true;
-            } else if (t == "choice_id") {
-                std::string optId = ev.value("id", ev.value("optionId", ""));
-                if (!optId.empty()) {
-                    engine->advanceToChoice(optId);
-                }
-                return true;
-            } else if (t == "advance" || t == "next") {
-                engine->advanceToNextNode(0);
-                return true;
-            } else if (t == "rewind" || t == "back") {
-                uint32_t steps = ev.value("steps", 1u);
-                engine->rewind(steps);
-                return true;
-            } else if (t == "swipe_back") {
-                engine->rewind(1);
-                return true;
-            } else if (t == "drag" || t == "swipe") {
-                float fromX = ev.value("fromX", 0.0f);
-                float fromY = ev.value("fromY", 0.0f);
-                float toX = ev.value("toX", 0.0f);
-                float toY = ev.value("toY", 0.0f);
-                float dx = toX - fromX;
-                float dy = toY - fromY;
-                if (dx < -50.0f && std::fabs(dx) >= std::fabs(dy)) {
-                    engine->advanceToNextNode(0); // Swipe forward
-                } else if (dx > 50.0f && std::fabs(dx) >= std::fabs(dy)) {
-                    engine->rewind(1); // Swipe back
-                } else {
-                    if (!engine->handlePointerDown(fromX, fromY)) {
-                        engine->advanceToNextNode(0);
-                    }
-                }
-                return true;
-            }
-            return false;
-        };
-
+        std::vector<InputAction> actions;
         if (parsed.is_array()) {
+            actions.reserve(parsed.size());
             for (const auto& item : parsed) {
-                if (processEvent(item)) ++handledEvents;
+                InputAction action;
+                if (!parseInputAction(item, action)) return 0;
+                actions.push_back(std::move(action));
             }
         } else {
-            if (processEvent(parsed)) ++handledEvents;
+            InputAction action;
+            if (!parseInputAction(parsed, action)) return 0;
+            actions.push_back(std::move(action));
         }
+        if (actions.empty()) return 0;
 
-        return handledEvents > 0 ? 1 : 0;
+        for (const auto& action : actions) applyInputAction(*engine, action);
+        return 1;
     }, 0);
 }
 
@@ -276,7 +389,7 @@ ROWL_API int RowlEngine_GetAudioStatsJson(
     char* outBuffer,
     int bufferCap) {
     return invokeNoexcept([&]() -> int {
-        auto engine = copyEngineAnyThread(handle);
+        auto engine = ownerEngineOrReject(handle, "get_audio_stats_json");
         if (!engine) return 0;
 
         auto audio = engine->getAudio();
@@ -400,7 +513,7 @@ ROWL_API int RowlEngine_QueryVfsStatusJson(
     char* outBuffer,
     int bufferCap) {
     return invokeNoexcept([&]() -> int {
-        auto engine = copyEngineAnyThread(handle);
+        auto engine = ownerEngineOrReject(handle, "query_vfs_status_json");
         if (!engine) return 0;
 
         auto* vfs = engine->getVfs();

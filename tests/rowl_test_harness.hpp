@@ -155,6 +155,7 @@ void test_frame_reuse_lock();  // A3-tur5: identical-frame reuse D2 kilidi
 void test_cache_hygiene();  // A3-tur6: negatif-onbellek hijyen kilidi
 void test_font_hardening();  // A3-tur7: font-yukleme fail-closed kilidi
 void test_handle_hygiene();  // A4-tur1: handle-once siralama kilidi
+void test_observability_c_api();  // RowlEye gozlem C API: sahip-thread + boyut + log kilidi
 void test_lifecycle_init_guards();  // B1a: fail-loud init kilitleri
 void test_lifecycle_shutdown_sweep();  // D2: shutdown-supurme + re-init kilitleri
 void test_lifecycle_thread_lease();  // D3: thread/lease + dispatch-pin kilitleri

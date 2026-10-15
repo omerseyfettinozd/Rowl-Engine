@@ -181,12 +181,14 @@ public sealed class EditorSavePerformanceFacts
             long seq = 1;
             using var workerStarted = new ManualResetEventSlim();
             using var releaseWorker = new ManualResetEventSlim();
-            Task saveTask = Task.Run(() =>
+            // Adanmış thread: Task.Run havuz doluyken 5 sn içinde başlamayabilir
+            // (EditorOffscreenRuntimeWorkerDisposeTests'teki nightly düşüşü).
+            Task saveTask = Task.Factory.StartNew(() =>
             {
                 workerStarted.Set();
                 Assert.True(releaseWorker.Wait(TimeSpan.FromSeconds(5)));
                 Assert.True(StoryGraphSaveService.TryWriteSnapshot(snapshot, jsonDir, seq, () => seq));
-            });
+            }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
             Assert.True(workerStarted.Wait(TimeSpan.FromSeconds(5)));
             try
             {

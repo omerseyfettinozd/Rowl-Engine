@@ -1532,12 +1532,17 @@ ROWL_API void RowlEngine_FreeObservabilityString(char* str);
  * AI Observability: Queries active scene, story dialogue, character transforms, and game state variables.
  * Supports compact mode and automated anomaly detection (NaN/Inf coordinates, zero dimension, empty dialogue).
  * Note: seq_since/dirty_only differential queries are unsupported and rejected (returns 0).
+ * The filter is strict: malformed JSON, a non-object, or a non-boolean
+ * "compact"/"anomalies" is rejected (returns 0) instead of falling back to the default snapshot.
+ * Owner-thread only (like every handle call): a foreign-thread call returns 0
+ * and stamps ROWL_RESULT_WRONG_THREAD (read via RowlEngine_GetLastResultCode).
  *
  * @param handle       Engine handle.
  * @param filterJson   Optional JSON string configuring query (NULL for default full-lite snapshot).
  * @param outBuffer    Destination buffer for JSON output. If NULL or bufferCap <= 0, returns required size.
  * @param bufferCap    Capacity of outBuffer.
- * @return Positive byte length written on success, negative required size if buffer too small, 0 on invalid handle or unsupported filter.
+ * @return Positive byte length written on success, negative required size if buffer too small,
+ *         0 on invalid handle, foreign thread, or rejected filter.
  */
 ROWL_API int RowlEngine_QueryWorldJson(
     RowlEngineHandle handle,
@@ -1551,7 +1556,10 @@ ROWL_API int RowlEngine_QueryWorldJson(
  * @param handle     Engine handle.
  * @param inputJson  JSON string containing array or object of input events:
  *                   e.g. [{"t":"tap","x":640,"y":360},{"t":"choice","index":0}]
- * @return 1 on success, 0 on error / invalid handle.
+ *                   All-or-nothing: every event is validated before any is applied;
+ *                   an unknown/mistyped event, a negative count, or an empty array
+ *                   rejects the whole batch with no engine change.
+ * @return 1 on success, 0 on error / invalid handle / foreign thread (WRONG_THREAD stamped).
  */
 ROWL_API int RowlEngine_InjectInputJson(
     RowlEngineHandle handle,
@@ -1563,7 +1571,8 @@ ROWL_API int RowlEngine_InjectInputJson(
  * @param handle     Engine handle.
  * @param outBuffer  Destination buffer. If NULL or bufferCap <= 0, returns required size.
  * @param bufferCap  Capacity of outBuffer.
- * @return Positive byte length on success, negative required size if buffer too small, 0 on invalid handle.
+ * @return Positive byte length on success, negative required size if buffer too small,
+ *         0 on invalid handle or foreign thread (WRONG_THREAD stamped).
  */
 ROWL_API int RowlEngine_GetAudioStatsJson(
     RowlEngineHandle handle,
@@ -1577,7 +1586,8 @@ ROWL_API int RowlEngine_GetAudioStatsJson(
  * @param probePath  Optional asset path to query existence for (e.g. "json/full_story_graph.json").
  * @param outBuffer  Destination buffer. If NULL or bufferCap <= 0, returns required size.
  * @param bufferCap  Capacity of outBuffer.
- * @return Positive byte length on success, negative required size if buffer too small, 0 on invalid handle.
+ * @return Positive byte length on success, negative required size if buffer too small,
+ *         0 on invalid handle or foreign thread (WRONG_THREAD stamped).
  */
 ROWL_API int RowlEngine_QueryVfsStatusJson(
     RowlEngineHandle handle,
