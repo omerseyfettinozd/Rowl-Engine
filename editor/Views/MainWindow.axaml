@@ -5,11 +5,13 @@
         xmlns:panels="using:RowlEngine.Editor.Views.Panels"
         xmlns:search="using:RowlEngine.Editor.Services.Search"
         xmlns:conv="using:Avalonia.Data.Converters"
+        xmlns:l="using:RowlEngine.Editor.Services.Strings"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d" d:DesignWidth="1600" d:DesignHeight="900"
         x:Class="RowlEngine.Editor.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
+        FlowDirection="{l:Direction}"
         Title="Rowl Engine Editor"
         Width="1600" Height="900"
         MinWidth="1100" MinHeight="700"
@@ -38,14 +40,14 @@
                     <DockPanel>
                         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
                             <Menu Background="Transparent">
-                                <MenuItem x:Name="WindowsMenu" Header="Pencereler" Foreground="{DynamicResource PrimaryText}" FontSize="12" FontWeight="SemiBold">
-                                    <MenuItem Header="Hiyerarşi" InputGesture="Ctrl+1" Command="{Binding ShowPanelCommand}" CommandParameter="Hierarchy"/>
-                                    <MenuItem Header="Denetçi" InputGesture="Ctrl+2" Command="{Binding ShowPanelCommand}" CommandParameter="Inspector"/>
-                                    <MenuItem Header="Günlük" InputGesture="Ctrl+3" Command="{Binding ShowPanelCommand}" CommandParameter="Log"/>
-                                <MenuItem Header="Varlıklar" InputGesture="Ctrl+4" Command="{Binding ShowPanelCommand}" CommandParameter="Assets"/>
-                                <MenuItem Header="Diyalog Geçmişi" InputGesture="Ctrl+5" Command="{Binding ShowPanelCommand}" CommandParameter="Backlog"/>
-                                <MenuItem Header="Kayıt Slotları" InputGesture="Ctrl+6" Command="{Binding ShowPanelCommand}" CommandParameter="SaveSlots"/>
-                                <MenuItem Header="Sorunlar" InputGesture="Ctrl+7" Command="{Binding ShowPanelCommand}" CommandParameter="ProjectIssues"/>
+                                <MenuItem x:Name="WindowsMenu" Header="{l:T Menu.Windows}" Foreground="{DynamicResource PrimaryText}" FontSize="12" FontWeight="SemiBold">
+                                    <MenuItem Header="{l:T Panel.Hierarchy}" InputGesture="Ctrl+1" Command="{Binding ShowPanelCommand}" CommandParameter="Hierarchy"/>
+                                    <MenuItem Header="{l:T Panel.Inspector}" InputGesture="Ctrl+2" Command="{Binding ShowPanelCommand}" CommandParameter="Inspector"/>
+                                    <MenuItem Header="{l:T Panel.Log}" InputGesture="Ctrl+3" Command="{Binding ShowPanelCommand}" CommandParameter="Log"/>
+                                <MenuItem Header="{l:T Panel.Assets}" InputGesture="Ctrl+4" Command="{Binding ShowPanelCommand}" CommandParameter="Assets"/>
+                                <MenuItem Header="{l:T Panel.Backlog}" InputGesture="Ctrl+5" Command="{Binding ShowPanelCommand}" CommandParameter="Backlog"/>
+                                <MenuItem Header="{l:T Panel.SaveSlots}" InputGesture="Ctrl+6" Command="{Binding ShowPanelCommand}" CommandParameter="SaveSlots"/>
+                                <MenuItem Header="{l:T Panel.Issues}" InputGesture="Ctrl+7" Command="{Binding ShowPanelCommand}" CommandParameter="ProjectIssues"/>
                                 </MenuItem>
                             </Menu>
                         </StackPanel>
@@ -57,10 +59,10 @@
                             <Border Width="1" Height="18" Background="{DynamicResource BorderColor}" Margin="8,0"/>
 
                             <Menu Background="Transparent" VerticalAlignment="Center">
-                                <MenuItem x:Name="ProjectsMenu" Header="Projeler" Foreground="{DynamicResource PrimaryText}" FontSize="11" FontWeight="SemiBold">
-                                    <MenuItem Header="Proje Listesi" Command="{Binding OpenProjectHubCommand}"
+                                <MenuItem x:Name="ProjectsMenu" Header="{l:T Menu.Projects}" Foreground="{DynamicResource PrimaryText}" FontSize="11" FontWeight="SemiBold">
+                                    <MenuItem Header="{l:T Menu.ProjectList}" Command="{Binding OpenProjectHubCommand}"
                                               Foreground="{DynamicResource PrimaryText}" FontSize="11"/>
-                                    <MenuItem Header="Çeviri Masası" Command="{Binding OpenLocalizationDeskCommand}"
+                                    <MenuItem Header="{l:T Menu.LocalizationDesk}" Command="{Binding OpenLocalizationDeskCommand}"
                                               Foreground="{DynamicResource PrimaryText}" FontSize="11"/>
                                 </MenuItem>
                             </Menu>
@@ -95,7 +97,7 @@
                                 </StackPanel>
                                 <Button.ContextMenu>
                                     <ContextMenu>
-                                        <MenuItem Header="Bağımsız Pencerede Aç" Command="{Binding OpenPlayerWindowCommand}"/>
+                                        <MenuItem Header="{l:T Menu.OpenInSeparateWindow}" Command="{Binding OpenPlayerWindowCommand}"/>
                                     </ContextMenu>
                                 </Button.ContextMenu>
                             </Button>
@@ -396,19 +398,19 @@
                                 <Setter Property="Foreground" Value="{DynamicResource PrimaryText}"/>
                             </Style>
                         </TabControl.Styles>
-                        <TabItem Header="Varlıklar" IsVisible="{Binding IsAssetsPanelVisible}">
+                        <TabItem Header="{l:T Panel.Assets}" IsVisible="{Binding IsAssetsPanelVisible}">
                             <panels:ProjectAssetsView/>
                         </TabItem>
-                        <TabItem Header="Günlük" IsVisible="{Binding IsLogPanelVisible}">
+                        <TabItem Header="{l:T Panel.Log}" IsVisible="{Binding IsLogPanelVisible}">
                             <panels:OutputLogView/>
                         </TabItem>
-                        <TabItem Header="Diyalog Geçmişi" IsVisible="{Binding IsBacklogPanelVisible}">
+                        <TabItem Header="{l:T Panel.Backlog}" IsVisible="{Binding IsBacklogPanelVisible}">
                             <panels:BacklogView DataContext="{Binding BacklogViewModel}"/>
                         </TabItem>
-                        <TabItem Header="Kayıt Slotları" IsVisible="{Binding IsSaveSlotsPanelVisible}">
+                        <TabItem Header="{l:T Panel.SaveSlots}" IsVisible="{Binding IsSaveSlotsPanelVisible}">
                             <panels:SaveSlotsView DataContext="{Binding SaveSlotsViewModel}"/>
                         </TabItem>
-                        <TabItem Header="Sorunlar" IsVisible="{Binding IsProjectIssuesPanelVisible}">
+                        <TabItem Header="{l:T Panel.Issues}" IsVisible="{Binding IsProjectIssuesPanelVisible}">
                             <panels:ProjectIssuesView DataContext="{Binding ProjectIssuesViewModel}"/>
                         </TabItem>
                     </TabControl>

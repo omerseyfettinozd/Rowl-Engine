@@ -4,6 +4,7 @@ using Avalonia;
 using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using RowlEngine.Editor.Services.Strings;
 
 namespace RowlEngine.Editor.ViewModels
 {
@@ -32,6 +33,35 @@ namespace RowlEngine.Editor.ViewModels
         private double _assetGridItemSize = 72;
 
         public List<int> AutoSaveIntervals { get; } = new() { 15, 30, 60, 120, 300 };
+
+        // Faz 2b (K5/K7): editör arayüzü dili — makine profiline kalıcı, canlı uygulanır.
+        public sealed record EditorLanguageOption(string Code, string Label);
+
+        public List<EditorLanguageOption> EditorLanguageOptions { get; } = BuildLanguageOptions();
+
+        [ObservableProperty]
+        private string _editorLanguage = EditorStrings.SourceLanguage;
+
+        public EditorLanguageOption? SelectedEditorLanguageOption
+        {
+            get => EditorLanguageOptions.Find(o => o.Code == EditorLanguage);
+            set { if (value is not null) EditorLanguage = value.Code; }
+        }
+
+        partial void OnEditorLanguageChanged(string value)
+        {
+            EditorStrings.Instance.SetLanguage(value);
+            OnPropertyChanged(nameof(SelectedEditorLanguageOption));
+        }
+
+        private static List<EditorLanguageOption> BuildLanguageOptions()
+        {
+            var options = new List<EditorLanguageOption>();
+            foreach (string code in EditorStrings.AvailableLanguages)
+                options.Add(new EditorLanguageOption(code, EditorStrings.T("Language." + code)));
+            options.Add(new EditorLanguageOption(EditorStrings.PseudoLanguage, EditorStrings.T("Language." + EditorStrings.PseudoLanguage)));
+            return options;
+        }
 
         [ObservableProperty]
         private int _selectedTabIndex = 0;
@@ -157,6 +187,7 @@ namespace RowlEngine.Editor.ViewModels
             SelectedTheme = "Kemik Beyazı (Karanlık)";
             AutoSaveEnabled = true;
             AutoSaveIntervalSeconds = 60;
+            EditorLanguage = EditorStrings.SourceLanguage;
             MasterVolume = BgmVolume = VoiceVolume = SfxVolume = 1;
             TextSpeedMultiplier = 1;
             AutoAdvanceDelay = 2;

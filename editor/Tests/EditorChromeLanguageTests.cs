@@ -87,6 +87,33 @@ namespace RowlEngine.Editor
                     .Select(t => t.Text ?? string.Empty).ToArray();
                 if (!titles.Contains("DENETÇİ") || titles.Any(t => t == "INSPECTOR"))
                     throw new Exception("Inspector panel title diverged.");
+
+                // Faz 2b (K7): canlı dil değişimi — yeniden başlatmadan menü
+                // başlıkları İngilizceye döner; kimlikler (CommandParameter) aynı kalır.
+                var strings = RowlEngine.Editor.Services.Strings.EditorStrings.Instance;
+                strings.SetLanguage("en");
+                try
+                {
+                    string[] english = windowsMenu.Items.OfType<MenuItem>()
+                        .Select(m => m.Header as string ?? string.Empty).ToArray();
+                    string[] expectedEnglish = new[]
+                    {
+                        "Hierarchy", "Inspector", "Log", "Assets",
+                        "Dialogue History", "Save Slots", "Issues"
+                    };
+                    if (!english.SequenceEqual(expectedEnglish))
+                        throw new Exception($"Live language switch failed: [{string.Join(", ", english)}]");
+                    string[] idsAfter = windowsMenu.Items.OfType<MenuItem>()
+                        .Select(m => m.CommandParameter as string ?? string.Empty).ToArray();
+                    if (!idsAfter.SequenceEqual(expectedIds))
+                        throw new Exception("Language switch changed command identifiers.");
+                }
+                finally
+                {
+                    strings.SetLanguage("tr");
+                }
+                if (!windowsMenu.Items.OfType<MenuItem>().Select(m => m.Header as string).SequenceEqual(expectedHeaders))
+                    throw new Exception("Switching back to Turkish did not restore the menu headers.");
             }
             finally
             {

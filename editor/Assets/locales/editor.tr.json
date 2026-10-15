@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "locale": "tr",
+  "scope": "editor-ui",
+  "entries": {
+    "Menu.Windows": {
+      "text": "Pencereler"
+    },
+    "Menu.Projects": {
+      "text": "Projeler"
+    },
+    "Menu.ProjectList": {
+      "text": "Proje Listesi"
+    },
+    "Menu.LocalizationDesk": {
+      "text": "Çeviri Masası"
+    },
+    "Menu.OpenInSeparateWindow": {
+      "text": "Bağımsız Pencerede Aç"
+    },
+    "Panel.Hierarchy": {
+      "text": "Hiyerarşi"
+    },
+    "Panel.Inspector": {
+      "text": "Denetçi"
+    },
+    "Panel.Log": {
+      "text": "Günlük"
+    },
+    "Panel.Assets": {
+      "text": "Varlıklar"
+    },
+    "Panel.Backlog": {
+      "text": "Diyalog Geçmişi"
+    },
+    "Panel.SaveSlots": {
+      "text": "Kayıt Slotları"
+    },
+    "Panel.Issues": {
+      "text": "Sorunlar"
+    },
+    "Settings.Language": {
+      "text": "Arayüz dili"
+    },
+    "Settings.Language.Hint": {
+      "text": "Editör arayüzünün dili; oyun önizleme dilinden ayrıdır. Değişiklik anında uygulanır."
+    },
+    "Language.tr": {
+      "text": "Türkçe"
+    },
+    "Language.en": {
+      "text": "English"
+    },
+    "Language.qps-ploc": {
+      "text": "Sahte dil (taşma testi)"
+    }
+  }
+}

@@ -37,6 +37,9 @@
 
   <ItemGroup>
     <EmbeddedResource Include="Tools/RowlEye/Serve/inspector.html" />
+    <!-- Faz 2b: editör arayüzü katalogları (EditorStrings). Çıktıya dosya olarak
+         kopyalanır: yeni dil yeniden derlemeden eklenebilir; testler de okur. -->
+    <None Include="Assets/locales/editor.*.json" Link="locales/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Update="Tools/RowlEye/Serve/inspector.html">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>

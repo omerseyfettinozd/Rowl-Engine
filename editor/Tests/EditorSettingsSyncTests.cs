@@ -20,7 +20,7 @@ internal static class EditorSettingsSyncTests
         string[] removedNoOpSettings =
         {
             "DefaultBuildTarget", "DefaultExportPath", "ShowFpsOverlay",
-            "GridSnapping", "CableStyle", "ShowNodeMinimap", "EditorLanguage"
+            "GridSnapping", "CableStyle", "ShowNodeMinimap"
         };
         foreach (string property in removedNoOpSettings)
         {
@@ -33,6 +33,26 @@ internal static class EditorSettingsSyncTests
         EditorSettingsSyncService.LoadEditorSettings(testEditorSettingsPath, testSettingsVm);
         if (testSettingsVm.AutoSaveEnabled || testSettingsVm.AutoSaveIntervalSeconds != 120)
             throw new Exception("EditorSettingsSyncService.LoadEditorSettings mismatch");
+
+        // Faz 2b: EditorLanguage artık İŞLEVSEL (eskiden no-op olduğu için yukarıdaki
+        // listedeydi). Kalıcılık + canlı uygulama kanıtlanır; paylaşılan dil sonda geri alınır.
+        var languageProfile = new EditorSettingsProfile { EditorLanguage = "en" };
+        languageProfile.Save(testEditorSettingsPath);
+        try
+        {
+            EditorSettingsSyncService.LoadEditorSettings(testEditorSettingsPath, testSettingsVm);
+            if (testSettingsVm.EditorLanguage != "en" ||
+                RowlEngine.Editor.Services.Strings.EditorStrings.Instance.Language != "en")
+                throw new Exception("EditorLanguage did not load and apply from the editor profile");
+            if (EditorSettingsProfile.Load(testEditorSettingsPath).EditorLanguage != "en")
+                throw new Exception("EditorLanguage did not persist in the editor profile");
+        }
+        finally
+        {
+            testSettingsVm.EditorLanguage = "tr";
+        }
+        if (RowlEngine.Editor.Services.Strings.EditorStrings.Instance.Language != "tr")
+            throw new Exception("EditorLanguage reset did not restore the shared interface language");
 
         var playerProfile = new PlayerSettingsProfile
         {

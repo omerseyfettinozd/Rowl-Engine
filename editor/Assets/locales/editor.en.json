@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "locale": "en",
+  "scope": "editor-ui",
+  "entries": {
+    "Menu.Windows": {
+      "text": "Windows"
+    },
+    "Menu.Projects": {
+      "text": "Projects"
+    },
+    "Menu.ProjectList": {
+      "text": "Project List"
+    },
+    "Menu.LocalizationDesk": {
+      "text": "Translation Desk"
+    },
+    "Menu.OpenInSeparateWindow": {
+      "text": "Open in Separate Window"
+    },
+    "Panel.Hierarchy": {
+      "text": "Hierarchy"
+    },
+    "Panel.Inspector": {
+      "text": "Inspector"
+    },
+    "Panel.Log": {
+      "text": "Log"
+    },
+    "Panel.Assets": {
+      "text": "Assets"
+    },
+    "Panel.Backlog": {
+      "text": "Dialogue History"
+    },
+    "Panel.SaveSlots": {
+      "text": "Save Slots"
+    },
+    "Panel.Issues": {
+      "text": "Issues"
+    },
+    "Settings.Language": {
+      "text": "Interface language"
+    },
+    "Settings.Language.Hint": {
+      "text": "Language of the editor interface; separate from the game preview language. Applies immediately."
+    },
+    "Language.tr": {
+      "text": "Türkçe"
+    },
+    "Language.en": {
+      "text": "English"
+    },
+    "Language.qps-ploc": {
+      "text": "Pseudo-locale (overflow test)"
+    }
+  }
+}
