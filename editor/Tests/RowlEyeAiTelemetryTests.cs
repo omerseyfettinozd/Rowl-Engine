@@ -8,6 +8,7 @@ using Xunit;
 
 namespace RowlEngine.Editor.Tests;
 
+[Collection("StaticRootSequential")]
 public class RowlEyeAiTelemetryTests
 {
     [Fact]

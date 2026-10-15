@@ -12,10 +12,7 @@ using Xunit;
 
 namespace RowlEngine.Editor.Tests.RowlEye;
 
-[CollectionDefinition("RowlEyeServe", DisableParallelization = true)]
-public class RowlEyeServeCollection { }
-
-[Collection("RowlEyeServe")]
+[Collection("StaticRootSequential")]
 public class RowlEyeServeTests : IAsyncLifetime
 {
     private RowlEyeWebServer? _server;

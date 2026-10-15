@@ -27,7 +27,7 @@ internal static class EditorHeadlessTestSuite
             // Display-free platform: the suite is named "headless" and must run
             // on CI/sandbox machines without an X server. Interactive desktop
             // startup (Program.Main without flags) still uses UsePlatformDetect.
-            Program.BuildAvaloniaAppHeadless().SetupWithoutStarting();
+            RowlEngine.Editor.Tools.RowlEye.RowlEyeHeadlessRuntime.EnsureInitialized();
             VerifyPlatformSpecificProjectRootResolution();
             string sourceAssets = MainWindowViewModel.AssetsPath;
             string testProjectRoot = Path.Combine(

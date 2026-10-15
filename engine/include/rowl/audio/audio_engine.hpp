@@ -447,6 +447,10 @@ private:
     // görülmediyse kullanılır).
     int m_uiChannels = 2;
     int m_uiRateHz = 48000;
+    int m_bgmChannels = 2;
+    int m_bgmRateHz = 48000;
+    int m_transitionBgmChannels = 2;
+    int m_transitionBgmRateHz = 48000;
     ChannelTelemetry m_telemetryAmbience;
     ChannelTelemetry m_telemetryUi;
     StreamInfo m_streamInfo; // snapshot: tek karar kaynağı

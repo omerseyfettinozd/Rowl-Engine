@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Avalonia.Media;
+using Avalonia.Threading;
 
 namespace RowlEngine.Editor.Services.Search;
 
@@ -82,6 +83,11 @@ public static class NodeColorTags
     /// <summary>Cached brush for card strips and minimap dots (dim variant for filtered-out nodes).</summary>
     public static IBrush GetBrush(string? tag, bool dimmed = false)
     {
+        if (Avalonia.Application.Current != null && !Dispatcher.UIThread.CheckAccess())
+        {
+            return Dispatcher.UIThread.Invoke(() => GetBrush(tag, dimmed));
+        }
+
         string key = (Normalize(tag) is string n && n.Length > 0 ? n : "none") + (dimmed ? ":dim" : string.Empty);
         var cache = dimmed ? DimBrushCache : BrushCache;
         lock (cache)

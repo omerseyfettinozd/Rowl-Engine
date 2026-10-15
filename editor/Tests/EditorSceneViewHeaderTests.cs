@@ -47,54 +47,69 @@ public sealed class EditorSceneViewHeaderTests : IDisposable
         catch (Exception) { }
     }
 
+    private static void RunOnUi(Action action)
+    {
+        if (Avalonia.Application.Current != null && !Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
+        {
+            Avalonia.Threading.Dispatcher.UIThread.Invoke(action);
+        }
+        else
+        {
+            action();
+        }
+    }
+
     [Fact]
     public void SceneViewHeader_HostsZoomFitAndMinimapToggle()
     {
-        var view = new NodeGraphView { DataContext = _vm };
-        var header = view.FindControl<Border>("SceneViewHeader")
-            ?? throw new Exception("SceneViewHeader not found");
+        RunOnUi(() =>
+        {
+            var view = new NodeGraphView { DataContext = _vm };
+            var header = view.FindControl<Border>("SceneViewHeader")
+                ?? throw new Exception("SceneViewHeader not found");
 
-        // NOT: CheckBox ToggleButton'dan (o da Button'dan) türer; sayımda
-        // Harita anahtarı elenir.
-        var buttons = header.GetLogicalDescendants().OfType<Button>()
-            .Where(b => b is not CheckBox).ToList();
-        if (buttons.Count != 4)
-            throw new Exception($"SceneViewHeader should have 4 buttons, has {buttons.Count}");
-        if (buttons.Any(b => b.Command is null))
-            throw new Exception("SceneViewHeader buttons must all be wired to commands");
-        string?[] tips = buttons.Select(b => ToolTip.GetTip(b) as string).ToArray();
-        string?[] expectedTips =
-            { "Uzaklaştır", "Yakınlaştır", "Tüm grafı ekrana sığdır", "Seçili düğüme odaklan (F)" };
-        if (!tips.SequenceEqual(expectedTips))
-            throw new Exception($"SceneViewHeader tooltips changed: [{string.Join(", ", tips)}]");
+            // NOT: CheckBox ToggleButton'dan (o da Button'dan) türer; sayımda
+            // Harita anahtarı elenir.
+            var buttons = header.GetLogicalDescendants().OfType<Button>()
+                .Where(b => b is not CheckBox).ToList();
+            if (buttons.Count != 4)
+                throw new Exception($"SceneViewHeader should have 4 buttons, has {buttons.Count}");
+            if (buttons.Any(b => b.Command is null))
+                throw new Exception("SceneViewHeader buttons must all be wired to commands");
+            string?[] tips = buttons.Select(b => ToolTip.GetTip(b) as string).ToArray();
+            string?[] expectedTips =
+                { "Uzaklaştır", "Yakınlaştır", "Tüm grafı ekrana sığdır", "Seçili düğüme odaklan (F)" };
+            if (!tips.SequenceEqual(expectedTips))
+                throw new Exception($"SceneViewHeader tooltips changed: [{string.Join(", ", tips)}]");
 
-        // Zoom rozeti başlıkta yaşar (Test 37'nin overlay yasağı delinmez).
-        var zoomLabel = header.GetLogicalDescendants().OfType<TextBlock>()
-            .FirstOrDefault(t => (ToolTip.GetTip(t) as string) == "Yakınlaştırma")
-            ?? throw new Exception("Zoom label lost from SceneViewHeader");
-        if (string.IsNullOrEmpty(zoomLabel.Text))
-            throw new Exception("Zoom label is not bound");
+            // Zoom rozeti başlıkta yaşar (Test 37'nin overlay yasağı delinmez).
+            var zoomLabel = header.GetLogicalDescendants().OfType<TextBlock>()
+                .FirstOrDefault(t => (ToolTip.GetTip(t) as string) == "Yakınlaştırma")
+                ?? throw new Exception("Zoom label lost from SceneViewHeader");
+            if (string.IsNullOrEmpty(zoomLabel.Text))
+                throw new Exception("Zoom label is not bound");
 
-        // Minimap anahtarı kartı açıp kapatır.
-        var card = view.FindControl<Border>("MinimapCard")
-            ?? throw new Exception("MinimapCard not found");
-        if (!card.IsVisible)
-            throw new Exception("MinimapCard must be visible by default");
-        _vm.IsMinimapVisible = false;
-        if (card.IsVisible)
-            throw new Exception("Minimap toggle did not hide the card");
-        _vm.IsMinimapVisible = true;
-        if (!card.IsVisible)
-            throw new Exception("Minimap toggle did not restore the card");
+            // Minimap anahtarı kartı açıp kapatır.
+            var card = view.FindControl<Border>("MinimapCard")
+                ?? throw new Exception("MinimapCard not found");
+            if (!card.IsVisible)
+                throw new Exception("MinimapCard must be visible by default");
+            _vm.IsMinimapVisible = false;
+            if (card.IsVisible)
+                throw new Exception("Minimap toggle did not hide the card");
+            _vm.IsMinimapVisible = true;
+            if (!card.IsVisible)
+                throw new Exception("Minimap toggle did not restore the card");
 
-        // Reset butonu yerinde, metni kilitli (Test 39 ile aynı beklenti).
-        var reset = view.FindControl<Button>("ResetViewButton")
-            ?? throw new Exception("ResetViewButton lost from NodeGraphView");
-        if ((reset.Content as string) != "Görünümü Sıfırla (0,0)")
-            throw new Exception("ResetViewButton text changed");
+            // Reset butonu yerinde, metni kilitli (Test 39 ile aynı beklenti).
+            var reset = view.FindControl<Button>("ResetViewButton")
+                ?? throw new Exception("ResetViewButton lost from NodeGraphView");
+            if ((reset.Content as string) != "Görünümü Sıfırla (0,0)")
+                throw new Exception("ResetViewButton text changed");
 
-        // Boş sahnede Sığdır çökmez.
-        _vm.NodeGraphViewModel.ZoomToFitCommand.Execute(null);
+            // Boş sahnede Sığdır çökmez.
+            _vm.NodeGraphViewModel.ZoomToFitCommand.Execute(null);
+        });
     }
 
     [Fact]

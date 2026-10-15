@@ -5,8 +5,13 @@ using Xunit;
 
 namespace RowlEngine.Editor.Tests;
 
-public sealed class RowlEyeAudioTelemetryTests
+[Collection("StaticRootSequential")]
+public sealed class RowlEyeAudioTelemetryTests : IDisposable
 {
+    public void Dispose()
+    {
+        RowlEyeEngineService.Instance.Shutdown();
+    }
     [Fact]
     public void GetAudioStatsJson_Returns_ValidStructure_With_Metrics()
     {

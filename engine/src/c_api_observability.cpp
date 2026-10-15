@@ -17,27 +17,29 @@ ROWL_API void RowlEngine_SetLogCallback(RowlEngine_LogCallbackFn callback) {
 }
 
 ROWL_API int RowlEngine_GetRecentLogsJson(char* outBuffer, int bufferCap, int minLevel, int maxCount) {
-    if (minLevel < 0) minLevel = 0;
-    if (minLevel > 5) minLevel = 5;
-    if (maxCount <= 0) maxCount = 50;
-    if (maxCount > 256) maxCount = 256;
+    return invokeNoexcept([&]() -> int {
+        if (minLevel < 0) minLevel = 0;
+        if (minLevel > 5) minLevel = 5;
+        if (maxCount <= 0) maxCount = 50;
+        if (maxCount > 256) maxCount = 256;
 
-    std::string json = Rowl::Core::Logger::getRecentLogsJson(minLevel, static_cast<size_t>(maxCount));
-    int requiredSize = static_cast<int>(json.size() + 1);
+        std::string json = Rowl::Core::Logger::getRecentLogsJson(minLevel, static_cast<size_t>(maxCount));
+        int requiredSize = static_cast<int>(json.size() + 1);
 
-    if (!outBuffer || bufferCap <= 0) {
-        return requiredSize;
-    }
+        if (!outBuffer || bufferCap <= 0) {
+            return requiredSize;
+        }
 
-    if (bufferCap < requiredSize) {
-        std::memcpy(outBuffer, json.data(), bufferCap - 1);
-        outBuffer[bufferCap - 1] = '\0';
-        return -requiredSize;
-    }
+        if (bufferCap < requiredSize) {
+            std::memcpy(outBuffer, json.data(), bufferCap - 1);
+            outBuffer[bufferCap - 1] = '\0';
+            return -requiredSize;
+        }
 
-    std::memcpy(outBuffer, json.data(), json.size());
-    outBuffer[json.size()] = '\0';
-    return static_cast<int>(json.size());
+        std::memcpy(outBuffer, json.data(), json.size());
+        outBuffer[json.size()] = '\0';
+        return static_cast<int>(json.size());
+    }, 0);
 }
 
 ROWL_API int RowlEngine_QueryWorldJson(
@@ -60,7 +62,10 @@ ROWL_API int RowlEngine_QueryWorldJson(
                     if (parsed.contains("anomalies")) checkAnomalies = parsed["anomalies"].get<bool>();
                     // seq_since / dirty_only desteklenmez: sessizce yoksaymak yerine
                     // reddet ki arayan filtrelenmemiş tam anlık görüntüyü filtreli sanmasın.
-                    if (parsed.contains("seq_since") || parsed.contains("dirty_only")) return 0;
+                    if (parsed.contains("seq_since") || parsed.contains("dirty_only")) {
+                        Rowl::Core::Logger::warn("QueryWorldJson: seq_since/dirty_only filter rejected; differential snapshot is not supported.");
+                        return 0;
+                    }
                 }
             } catch (...) {}
         }
@@ -199,28 +204,40 @@ ROWL_API int RowlEngine_InjectInputJson(
         auto parsed = nlohmann::json::parse(inputJson, nullptr, false);
         if (parsed.is_discarded()) return 0;
 
-        auto processEvent = [&](const nlohmann::json& ev) {
-            if (!ev.is_object()) return;
+        int handledEvents = 0;
+        auto processEvent = [&](const nlohmann::json& ev) -> bool {
+            if (!ev.is_object()) return false;
             std::string t = ev.value("t", ev.value("type", ""));
             if (t == "tap" || t == "pointer_down" || t == "click") {
                 float x = ev.value("x", 0.0f);
                 float y = ev.value("y", 0.0f);
                 engine->handlePointerDown(x, y);
+                return true;
             } else if (t == "choice") {
-                uint32_t idx = ev.value("index", 0u);
-                engine->advanceToNextNode(idx);
+                std::string optId = ev.value("optionId", ev.value("id", ""));
+                if (!optId.empty()) {
+                    engine->advanceToChoice(optId);
+                } else {
+                    uint32_t idx = ev.value("index", 0u);
+                    engine->advanceToNextNode(idx);
+                }
+                return true;
             } else if (t == "choice_id") {
-                std::string optId = ev.value("id", "");
+                std::string optId = ev.value("id", ev.value("optionId", ""));
                 if (!optId.empty()) {
                     engine->advanceToChoice(optId);
                 }
+                return true;
             } else if (t == "advance" || t == "next") {
                 engine->advanceToNextNode(0);
+                return true;
             } else if (t == "rewind" || t == "back") {
                 uint32_t steps = ev.value("steps", 1u);
                 engine->rewind(steps);
+                return true;
             } else if (t == "swipe_back") {
                 engine->rewind(1);
+                return true;
             } else if (t == "drag" || t == "swipe") {
                 float fromX = ev.value("fromX", 0.0f);
                 float fromY = ev.value("fromY", 0.0f);
@@ -237,18 +254,20 @@ ROWL_API int RowlEngine_InjectInputJson(
                         engine->advanceToNextNode(0);
                     }
                 }
+                return true;
             }
+            return false;
         };
 
         if (parsed.is_array()) {
             for (const auto& item : parsed) {
-                processEvent(item);
+                if (processEvent(item)) ++handledEvents;
             }
         } else {
-            processEvent(parsed);
+            if (processEvent(parsed)) ++handledEvents;
         }
 
-        return 1;
+        return handledEvents > 0 ? 1 : 0;
     }, 0);
 }
 

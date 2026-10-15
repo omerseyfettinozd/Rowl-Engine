@@ -6,8 +6,13 @@ using Xunit;
 
 namespace RowlEngine.Editor.Tests;
 
-public sealed class RowlEyeGlmP0AuditedFeaturesTests
+[Collection("StaticRootSequential")]
+public sealed class RowlEyeGlmP0AuditedFeaturesTests : IDisposable
 {
+    public void Dispose()
+    {
+        RowlEyeEngineService.Instance.Shutdown();
+    }
     [Fact]
     public void AudioStats_Contains_RealChannels_Spectrum_And_HeuristicFlag()
     {

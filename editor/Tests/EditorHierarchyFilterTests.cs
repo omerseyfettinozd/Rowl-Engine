@@ -86,25 +86,40 @@ public sealed class EditorHierarchyFilterTests : IDisposable
         Assert.Same(added, hvm.FilteredObjects[0]);
     }
 
+    private static void RunOnUi(Action action)
+    {
+        if (Avalonia.Application.Current != null && !Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
+        {
+            Avalonia.Threading.Dispatcher.UIThread.Invoke(action);
+        }
+        else
+        {
+            action();
+        }
+    }
+
     [Fact]
     public void SearchBox_BindsToFilterAndListShowsFilteredObjects()
     {
-        var node = new NodeViewModel(902, "ChromeNode", 0, 0, bare: true);
-        node.CreateObject("Alpha");
-        _vm.SelectedNode = node;
+        RunOnUi(() =>
+        {
+            var node = new NodeViewModel(902, "ChromeNode", 0, 0, bare: true);
+            node.CreateObject("Alpha");
+            _vm.SelectedNode = node;
 
-        var view = new NodeHierarchyView { DataContext = _vm };
-        var box = view.GetLogicalDescendants().OfType<TextBox>()
-            .FirstOrDefault(t => Equals(t.Watermark, "Ara: nesne adı"))
-            ?? throw new Exception("Hierarchy search box not found");
-        var list = view.GetLogicalDescendants().OfType<ListBox>().FirstOrDefault()
-            ?? throw new Exception("Hierarchy ListBox not found");
-        if (!ReferenceEquals(_vm.HierarchyViewModel.FilteredObjects, list.ItemsSource))
-            throw new Exception("Hierarchy ListBox must bind FilteredObjects");
+            var view = new NodeHierarchyView { DataContext = _vm };
+            var box = view.GetLogicalDescendants().OfType<TextBox>()
+                .FirstOrDefault(t => Equals(t.Watermark, "Ara: nesne adı"))
+                ?? throw new Exception("Hierarchy search box not found");
+            var list = view.GetLogicalDescendants().OfType<ListBox>().FirstOrDefault()
+                ?? throw new Exception("Hierarchy ListBox not found");
+            if (!ReferenceEquals(_vm.HierarchyViewModel.FilteredObjects, list.ItemsSource))
+                throw new Exception("Hierarchy ListBox must bind FilteredObjects");
 
-        // Kutuya yazmak filtreyi sürer (TwoWay bağ).
-        box.Text = "alpha";
-        Assert.Equal("alpha", _vm.HierarchyViewModel.HierarchyFilterText);
-        Assert.Single(_vm.HierarchyViewModel.FilteredObjects);
+            // Kutuya yazmak filtreyi sürer (TwoWay bağ).
+            box.Text = "alpha";
+            Assert.Equal("alpha", _vm.HierarchyViewModel.HierarchyFilterText);
+            Assert.Single(_vm.HierarchyViewModel.FilteredObjects);
+        });
     }
 }

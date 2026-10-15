@@ -58,5 +58,8 @@ Testing/
 # Local conversation logs
 conversation*.txt
 
+# Test artifacts
+TestResults/
+
 # Agent worktree checkouts (workflow isolation, never source)
 .claude/worktrees/

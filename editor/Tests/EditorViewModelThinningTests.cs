@@ -1,6 +1,8 @@
 using Avalonia;
+using Avalonia.Threading;
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using RowlEngine.Editor.Models;
 using RowlEngine.Editor.Native;
 using RowlEngine.Editor.Services;
@@ -13,6 +15,12 @@ internal static class EditorViewModelThinningTests
 {
     public static void Run(MainWindowViewModel mainVm)
     {
+        if (Avalonia.Application.Current != null && !Dispatcher.UIThread.CheckAccess())
+        {
+            Dispatcher.UIThread.Invoke(() => Run(mainVm));
+            return;
+        }
+
         Console.WriteLine("\n[Test 28]: ViewModel Thinning Equivalence (Rotation, Selection-Rect, Diagnostics, Telemetry Routing)...");
 
         Console.WriteLine("    [Step 28.1]: Selection-rect normalization...");
@@ -47,11 +55,13 @@ internal static class EditorViewModelThinningTests
         if (diagnostics.Notifications.Count != 0 || diagnosticLogs.Count != 0)
             throw new Exception("Ok diagnostic must be a no-op");
         diagnostics.ReportEngineDiagnostic(RuntimeErrorCode.FileNotFound, "LoadGraph", "", "graph.json", diagnosticLogs.Add);
+        for (int i = 0; i < 50 && diagnostics.Notifications.Count == 0; i++) Thread.Sleep(10);
         if (diagnostics.Notifications.Count != 1 || diagnostics.Notifications[0].Type != NotificationType.Warning)
             throw new Exception("FileNotFound must route to a warning notification");
         if (diagnosticLogs.Count != 1 || !diagnosticLogs[0].Contains("LoadGraph"))
             throw new Exception("Diagnostic log format mismatch");
         diagnostics.ReportEngineDiagnostic(RuntimeErrorCode.ParseError, "Parse", "bad json", "story.json", diagnosticLogs.Add);
+        for (int i = 0; i < 50 && diagnostics.Notifications.Count < 2; i++) Thread.Sleep(10);
         if (diagnostics.Notifications.Count != 2 || diagnostics.Notifications[1].Type != NotificationType.Error)
             throw new Exception("ParseError must route to an error notification");
 
@@ -60,6 +70,7 @@ internal static class EditorViewModelThinningTests
         var audioLogs = new List<string>();
         if (!audioNotifications.ReportAudioDeviceTransition(false, audioLogs.Add))
             throw new Exception("Loss transition must report true");
+        for (int i = 0; i < 50 && audioNotifications.Notifications.Count == 0; i++) Thread.Sleep(10);
         if (audioNotifications.Notifications.Count != 1 || audioNotifications.Notifications[0].Type != NotificationType.Warning)
             throw new Exception("Loss transition must toast a warning");
         if (audioNotifications.ReportAudioDeviceTransition(false, audioLogs.Add))
@@ -68,6 +79,7 @@ internal static class EditorViewModelThinningTests
             throw new Exception("Repeated loss poll must stay silent");
         if (!audioNotifications.ReportAudioDeviceTransition(true, audioLogs.Add))
             throw new Exception("Recovery transition must report true");
+        for (int i = 0; i < 50 && audioNotifications.Notifications.Count < 2; i++) Thread.Sleep(10);
         if (audioNotifications.Notifications.Count != 2 || audioNotifications.Notifications[1].Type != NotificationType.Success)
             throw new Exception("Recovery transition must toast a success");
 

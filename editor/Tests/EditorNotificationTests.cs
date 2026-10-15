@@ -1,4 +1,7 @@
 using System;
+using System.Linq;
+using System.Threading;
+using Avalonia.Threading;
 using RowlEngine.Editor.Models;
 using RowlEngine.Editor.Services;
 using RowlEngine.Editor.ViewModels;
@@ -9,6 +12,12 @@ internal static class EditorNotificationTests
 {
     public static void Run(MainWindowViewModel mainVm)
     {
+        if (Avalonia.Application.Current != null && !Dispatcher.UIThread.CheckAccess())
+        {
+            Dispatcher.UIThread.Invoke(() => Run(mainVm));
+            return;
+        }
+
         Console.WriteLine("\n[Test 21]: EditorNotificationService & Runtime Diagnostic Toasts...");
 
         // Step 21.1: Notification creation, severity, accent colors and icon symbols
@@ -38,10 +47,14 @@ internal static class EditorNotificationTests
         // Step 21.3: Dismissal
         Console.WriteLine("    [Step 21.3]: Dismissal & ClearAll...");
         notifService.Dismiss(error);
+        for (int i = 0; i < 50 && notifService.Notifications.Contains(error); i++)
+            Thread.Sleep(10);
         if (notifService.Notifications.Contains(error))
             throw new Exception("Dismiss failed to remove notification.");
 
         notifService.ClearAll();
+        for (int i = 0; i < 50 && notifService.Notifications.Count != 0; i++)
+            Thread.Sleep(10);
         if (notifService.Notifications.Count != 0)
             throw new Exception("ClearAll failed to empty notifications.");
 
@@ -55,6 +68,8 @@ internal static class EditorNotificationTests
             "game.rowlpkg",
             7,
             "invalid archive"), line => buildLog = line);
+        for (int i = 0; i < 50 && notifService.Notifications.Count == 0; i++)
+            Thread.Sleep(10);
         if (notifService.Notifications.Count != 1 ||
             notifService.Notifications[0].Type != NotificationType.Error ||
             !buildLog.Contains("ToolFailed", StringComparison.Ordinal) ||

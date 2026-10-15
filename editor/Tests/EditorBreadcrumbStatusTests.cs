@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using Avalonia.Controls;
 using Avalonia.LogicalTree;
+using Avalonia.Threading;
 using RowlEngine.Editor.ViewModels;
 using RowlEngine.Editor.Views;
 
@@ -17,6 +18,12 @@ namespace RowlEngine.Editor
     {
         public static void Run(MainWindowViewModel mainVm)
         {
+            if (Avalonia.Application.Current != null && !Dispatcher.UIThread.CheckAccess())
+            {
+                Dispatcher.UIThread.Invoke(() => Run(mainVm));
+                return;
+            }
+
             Console.WriteLine("\n[Test 37]: Breadcrumb/status merge lock (single zoom, slim breadcrumb, soft shadows)...");
             var window = new MainWindow(mainVm);
             try

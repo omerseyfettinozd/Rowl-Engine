@@ -169,6 +169,7 @@ void test_save_slot_transient_retry();  // Windows paylasim yarisinda sinirli re
 void test_numeric_guards();  // B6: sayisal-uc/native guard dilimi bilerek-boz kilitleri
 void test_lua_hardening();  // B7: lua-sandbox sertlestirme dilimi bilerek-boz kilitleri
 void test_lua_module_rowl_impostor();  // D6 #158: module-env rowl impostor RED kilidi
+void test_lua_sandbox_dos_probe();
 void test_runtime_context_and_diagnostics();
 void test_crash_log();
 void test_story_graph_parser();

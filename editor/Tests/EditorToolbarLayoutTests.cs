@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Layout;
+using Avalonia.Threading;
 using RowlEngine.Editor.ViewModels;
 using RowlEngine.Editor.Views;
 
@@ -17,6 +18,12 @@ namespace RowlEngine.Editor
     {
         public static void Run(MainWindowViewModel mainVm)
         {
+            if (Avalonia.Application.Current != null && !Dispatcher.UIThread.CheckAccess())
+            {
+                Dispatcher.UIThread.Invoke(() => Run(mainVm));
+                return;
+            }
+
             Console.WriteLine("\n[Test 35]: Toolbar layout lock (button order, menus, relocated commands)...");
             // NOT: pencere headless'ta Show() edilmez — boş engine
             // bitmap'li Image kontrolleri layout ölçümünde patlar. İçerik

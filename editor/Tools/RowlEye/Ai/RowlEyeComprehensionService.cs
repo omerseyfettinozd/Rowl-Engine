@@ -110,12 +110,28 @@ public sealed class RowlEyeComprehensionService
         try
         {
             using var doc = JsonDocument.Parse(worldJson);
+            JsonElement chArray = default;
+            bool found = false;
             if (doc.RootElement.TryGetProperty("choices", out var chProp) && chProp.ValueKind == JsonValueKind.Array)
             {
-                foreach (var c in chProp.EnumerateArray())
+                chArray = chProp;
+                found = true;
+            }
+            else if (doc.RootElement.TryGetProperty("story", out var storyProp) &&
+                     storyProp.TryGetProperty("choices", out var scProp) && scProp.ValueKind == JsonValueKind.Array)
+            {
+                chArray = scProp;
+                found = true;
+            }
+
+            if (found)
+            {
+                foreach (var c in chArray.EnumerateArray())
                 {
-                    string label = c.TryGetProperty("label", out var l) ? l.GetString() ?? "" : "";
-                    string optId = c.TryGetProperty("optionId", out var o) ? o.GetString() ?? "" : "";
+                    string label = c.TryGetProperty("text", out var t) ? t.GetString() ?? "" :
+                                  (c.TryGetProperty("label", out var l) ? l.GetString() ?? "" : "");
+                    string optId = c.TryGetProperty("id", out var idProp) ? idProp.GetString() ?? "" :
+                                  (c.TryGetProperty("optionId", out var o) ? o.GetString() ?? "" : "");
                     choices.Add(string.IsNullOrEmpty(optId) ? label : $"{optId}: {label}");
                 }
             }
@@ -146,7 +162,8 @@ public sealed class RowlEyeComprehensionService
             {
                 foreach (var item in lDoc.RootElement.EnumerateArray())
                 {
-                    string msg = item.TryGetProperty("msg", out var m) ? m.GetString() ?? "" : "";
+                    string msg = item.TryGetProperty("message", out var m) ? m.GetString() ?? "" :
+                                (item.TryGetProperty("msg", out var mFallback) ? mFallback.GetString() ?? "" : "");
                     if (!string.IsNullOrEmpty(msg)) recentErrors.Add(msg);
                 }
             }

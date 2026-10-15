@@ -5,8 +5,13 @@ using Xunit;
 
 namespace RowlEngine.Editor.Tests;
 
-public sealed class RowlEyeWorldQueryTests
+[Collection("StaticRootSequential")]
+public sealed class RowlEyeWorldQueryTests : IDisposable
 {
+    public void Dispose()
+    {
+        RowlEyeEngineService.Instance.Shutdown();
+    }
     [Fact]
     public void QueryWorldJson_Returns_ValidSnapshot_With_Story_And_Anomalies()
     {

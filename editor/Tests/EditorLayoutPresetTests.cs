@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using Avalonia.Controls;
+using Avalonia.Threading;
 using RowlEngine.Editor.Services;
 using RowlEngine.Editor.ViewModels;
 
@@ -88,6 +89,12 @@ public sealed class EditorLayoutPresetTests : IDisposable
     /// </summary>
     internal static void Run(MainWindowViewModel mainVm)
     {
+        if (Avalonia.Application.Current != null && !Dispatcher.UIThread.CheckAccess())
+        {
+            Dispatcher.UIThread.Invoke(() => Run(mainVm));
+            return;
+        }
+
         Console.WriteLine("\n[Test 42]: Unity kromu Dilim G2 — layout preset lock...");
         var window = new Views.MainWindow(mainVm);
         try

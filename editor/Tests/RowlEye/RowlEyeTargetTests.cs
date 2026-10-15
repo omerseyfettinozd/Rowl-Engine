@@ -6,6 +6,7 @@ using Xunit;
 
 namespace RowlEngine.Editor.Tests.RowlEye;
 
+[Collection("StaticRootSequential")]
 public class RowlEyeTargetTests
 {
     [Theory]

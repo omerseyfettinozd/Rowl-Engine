@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using Avalonia.Controls;
 using Avalonia.LogicalTree;
+using Avalonia.Threading;
 using RowlEngine.Editor.Services;
 using RowlEngine.Editor.ViewModels;
 using RowlEngine.Editor.Views;
@@ -19,6 +20,12 @@ namespace RowlEngine.Editor
     {
         public static void Run(MainWindowViewModel mainVm)
         {
+            if (Avalonia.Application.Current != null && !Dispatcher.UIThread.CheckAccess())
+            {
+                Dispatcher.UIThread.Invoke(() => Run(mainVm));
+                return;
+            }
+
             Console.WriteLine("\n[Test 38]: Empty-state lock (text + action for Assets, Issues, Backlog)...");
             var window = new MainWindow(mainVm);
             // Issues listesi test sonunda geri yüklenir.

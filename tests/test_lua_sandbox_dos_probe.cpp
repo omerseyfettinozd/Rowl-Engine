@@ -35,11 +35,8 @@
  *   • Gerçek abort'u (SIGABRT) canlandırmak için: ROWL_DOS_PROBE_LIVE=1
  *     — varsayılan KAPALI çünkü o probe bilerek süreci öldürür.
  *
- * KAYIT NOTU: test_main.cpp bu dosyayı çağırmaz (o dosya bu ajana tahsisli
- * değildir). Bu yüzden dosya hem normal giriş noktası sunar hem de
- * statik başlatıcıyla kendini kaydeder — rowl_tests koştuğunda probs
- * GERÇEKTEN koşar. test_main.cpp'ye `test_lua_sandbox_dos_probe();`
- * eklenirse aşağıdaki bayrak ikinci koşuyu atlar.
+ * KAYIT NOTU: test_main.cpp tarafından test_lua_sandbox() sonrasında
+ * doğrudan çağrılır.
  */
 #include "rowl_test_harness.hpp"
 #include "rowl/scripting/lua_sandbox.hpp"
@@ -1094,10 +1091,3 @@ void test_lua_sandbox_dos_probe() {
     TEST_PASS("Lua Sandbox Dinamik Tarama (" + std::to_string(g_probeCount) +
               " probe, " + std::to_string(g_surfacesPresent) + " kaçış yüzeyi)");
 }
-
-namespace {
-struct DosProbeAutoRun {
-    DosProbeAutoRun() { test_lua_sandbox_dos_probe(); }
-};
-const DosProbeAutoRun g_dosProbeAutoRun{};
-} // namespace

@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using Avalonia.Controls;
 using Avalonia.LogicalTree;
+using Avalonia.Threading;
 using RowlEngine.Editor.Services;
 using RowlEngine.Editor.ViewModels;
 using RowlEngine.Editor.Views.Panels;
@@ -81,6 +82,12 @@ public sealed class EditorInspectorOverflowTests : IDisposable
     /// </summary>
     internal static void Run(MainWindowViewModel mainVm)
     {
+        if (Avalonia.Application.Current != null && !Dispatcher.UIThread.CheckAccess())
+        {
+            Dispatcher.UIThread.Invoke(() => Run(mainVm));
+            return;
+        }
+
         Console.WriteLine("\n[Test 43]: Unity kromu Dilim G3 — inspector overflow lock...");
         var previous = mainVm.SelectedNode;
         var node = new NodeViewModel(904, "InspectorMenuNode", 0, 0, bare: true);

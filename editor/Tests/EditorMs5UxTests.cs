@@ -241,7 +241,14 @@ internal static class EditorMs5UxTests
 
     private static void DrainWatcherQueue()
     {
-        try { Dispatcher.UIThread.RunJobs(); } catch { }
+        try
+        {
+            if (Dispatcher.UIThread.CheckAccess())
+                Dispatcher.UIThread.RunJobs();
+            else
+                Dispatcher.UIThread.Invoke(() => { });
+        }
+        catch { }
     }
 
     /// <summary>

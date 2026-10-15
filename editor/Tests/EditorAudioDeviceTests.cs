@@ -1,4 +1,6 @@
 using System;
+using System.Threading;
+using Avalonia.Threading;
 using RowlEngine.Editor.Models;
 using RowlEngine.Editor.ViewModels;
 
@@ -8,11 +10,21 @@ internal static class EditorAudioDeviceTests
 {
     public static void Run(MainWindowViewModel mainVm)
     {
+        if (Avalonia.Application.Current != null && !Dispatcher.UIThread.CheckAccess())
+        {
+            Dispatcher.UIThread.Invoke(() => Run(mainVm));
+            return;
+        }
+
         Console.WriteLine("\n[Test 27]: Audio Device Status Observer & Edge-Triggered Toasts...");
         mainVm.NotificationService.ClearAll();
+        for (int i = 0; i < 50 && mainVm.NotificationService.Notifications.Count != 0; i++)
+            Thread.Sleep(10);
 
         Console.WriteLine("    [Step 27.1]: Device-loss transition...");
         mainVm.CheckAudioDeviceStatus(false);
+        for (int i = 0; i < 50 && mainVm.NotificationService.Notifications.Count != 1; i++)
+            Thread.Sleep(10);
         if (mainVm.NotificationService.Notifications.Count != 1)
             throw new Exception($"Device loss should toast exactly once, count={mainVm.NotificationService.Notifications.Count}");
         if (mainVm.NotificationService.Notifications[0].Type != NotificationType.Warning)
@@ -26,6 +38,8 @@ internal static class EditorAudioDeviceTests
 
         Console.WriteLine("    [Step 27.3]: Device-recovery transition...");
         mainVm.CheckAudioDeviceStatus(true);
+        for (int i = 0; i < 50 && mainVm.NotificationService.Notifications.Count != 2; i++)
+            Thread.Sleep(10);
         if (mainVm.NotificationService.Notifications.Count != 2)
             throw new Exception($"Device recovery should toast exactly once, count={mainVm.NotificationService.Notifications.Count}");
         if (mainVm.NotificationService.Notifications[1].Type != NotificationType.Success)
@@ -50,6 +64,8 @@ internal static class EditorAudioDeviceTests
 
         Console.WriteLine("    [Step 27.6]: Save-slot failure diagnostics path...");
         mainVm.SaveSlotsViewModel.SaveCommand.Execute(new SaveSlotEntry(999, false));
+        for (int i = 0; i < 50 && !mainVm.LogOutput.Contains("kaydedilemedi"); i++)
+            Thread.Sleep(10);
         if (!mainVm.LogOutput.Contains("kaydedilemedi"))
             throw new Exception("Save failure did not log the expected message");
 

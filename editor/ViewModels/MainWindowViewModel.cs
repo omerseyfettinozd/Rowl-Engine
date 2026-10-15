@@ -1719,7 +1719,7 @@ namespace RowlEngine.Editor.ViewModels
 
         public void AppendLog(string message)
         {
-            if (!Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
+            if (Avalonia.Application.Current != null && !Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
             {
                 Avalonia.Threading.Dispatcher.UIThread.Post(() => AppendLog(message));
                 return;

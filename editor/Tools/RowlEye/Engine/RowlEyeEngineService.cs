@@ -619,6 +619,7 @@ public sealed class RowlEyeEngineService : IDisposable
             {
                 // Buffer too small, reallocate (-res is required size)
                 Marshal.FreeHGlobal(buffer);
+                buffer = IntPtr.Zero;
                 bufferCap = (-res) + 1024;
                 buffer = Marshal.AllocHGlobal(bufferCap);
                 res = NativeBridge.RowlEngine_GetRecentLogsJson(buffer, bufferCap, minLevel, maxCount);
@@ -666,6 +667,7 @@ public sealed class RowlEyeEngineService : IDisposable
                     {
                         // Buffer too small, reallocate
                         Marshal.FreeHGlobal(buffer);
+                        buffer = IntPtr.Zero;
                         bufferCap = (-res) + 512;
                         buffer = Marshal.AllocHGlobal(bufferCap);
                         res = NativeBridge.RowlEngine_QueryWorldJson(handle, filterJson, buffer, bufferCap);
@@ -728,6 +730,7 @@ public sealed class RowlEyeEngineService : IDisposable
                     if (res < 0)
                     {
                         Marshal.FreeHGlobal(buffer);
+                        buffer = IntPtr.Zero;
                         bufferCap = (-res) + 256;
                         buffer = Marshal.AllocHGlobal(bufferCap);
                         res = NativeBridge.RowlEngine_GetAudioStatsJson(handle, buffer, bufferCap);
@@ -843,6 +846,7 @@ public sealed class RowlEyeEngineService : IDisposable
                     if (res < 0)
                     {
                         Marshal.FreeHGlobal(buffer);
+                        buffer = IntPtr.Zero;
                         bufferCap = (-res) + 512;
                         buffer = Marshal.AllocHGlobal(bufferCap);
                         res = NativeBridge.RowlEngine_QueryVfsStatusJson(handle, probePath, buffer, bufferCap);
@@ -911,12 +915,35 @@ public sealed class RowlEyeEngineService : IDisposable
         return new DeadAssetsResultDto(totalScanned, unreferenced, reclaimableBytes);
     }
 
+    /// <summary>
+    /// Releases the active engine host and offscreen video lease without marking the service permanently disposed.
+    /// Allows subsequent EnsureInitialized calls to recreate the host on demand.
+    /// </summary>
+    public void Shutdown()
+    {
+        lock (_lock)
+        {
+            try
+            {
+                _engineHost?.Dispose();
+            }
+            catch { }
+            _engineHost = null;
+            _cachedFrameBytes = null;
+        }
+    }
+
     public void Dispose()
     {
         lock (_lock)
         {
             if (_isDisposed) return;
             _isDisposed = true;
+            try
+            {
+                NativeBridge.RowlEngine_SetLogCallback(null);
+            }
+            catch { }
             _engineHost?.Dispose();
             _engineHost = null;
         }

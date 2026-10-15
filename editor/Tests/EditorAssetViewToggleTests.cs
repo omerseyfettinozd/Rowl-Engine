@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using Avalonia.Controls;
 using Avalonia.LogicalTree;
+using Avalonia.Threading;
 using RowlEngine.Editor.Services;
 using RowlEngine.Editor.ViewModels;
 using RowlEngine.Editor.Views.Panels;
@@ -80,6 +81,12 @@ public sealed class EditorAssetViewToggleTests : IDisposable
     /// </summary>
     internal static void Run(MainWindowViewModel mainVm)
     {
+        if (Avalonia.Application.Current != null && !Dispatcher.UIThread.CheckAccess())
+        {
+            Dispatcher.UIThread.Invoke(() => Run(mainVm));
+            return;
+        }
+
         Console.WriteLine("\n[Test 41]: Unity kromu Dilim G1 — asset view toggle lock...");
         var view = new ProjectAssetsView { DataContext = mainVm };
         var browser = mainVm.AssetBrowserViewModel;

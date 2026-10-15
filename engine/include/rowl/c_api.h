@@ -1530,13 +1530,14 @@ ROWL_API void RowlEngine_FreeObservabilityString(char* str);
 
 /**
  * AI Observability: Queries active scene, story dialogue, character transforms, and game state variables.
- * Supports compact mode, dirty-tracking, and automated anomaly detection (NaN/Inf coordinates, missing assets).
+ * Supports compact mode and automated anomaly detection (NaN/Inf coordinates, zero dimension, empty dialogue).
+ * Note: seq_since/dirty_only differential queries are unsupported and rejected (returns 0).
  *
  * @param handle       Engine handle.
  * @param filterJson   Optional JSON string configuring query (NULL for default full-lite snapshot).
  * @param outBuffer    Destination buffer for JSON output. If NULL or bufferCap <= 0, returns required size.
  * @param bufferCap    Capacity of outBuffer.
- * @return Positive byte length written on success, negative required size if buffer too small, 0 on invalid handle.
+ * @return Positive byte length written on success, negative required size if buffer too small, 0 on invalid handle or unsupported filter.
  */
 ROWL_API int RowlEngine_QueryWorldJson(
     RowlEngineHandle handle,

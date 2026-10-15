@@ -11,8 +11,13 @@ using Xunit;
 
 namespace RowlEngine.Editor.Tests;
 
-public sealed class RowlEyeWebServerIntegrationTests
+[Collection("StaticRootSequential")]
+public sealed class RowlEyeWebServerIntegrationTests : IDisposable
 {
+    public void Dispose()
+    {
+        RowlEyeEngineService.Instance.Shutdown();
+    }
     private const int TestPort = 7088;
     private static readonly string BaseUrl = $"http://127.0.0.1:{TestPort}";
 

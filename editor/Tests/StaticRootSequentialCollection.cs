@@ -1,5 +1,7 @@
 using Xunit;
 
+[assembly: CollectionBehavior(DisableTestParallelization = true)]
+
 namespace RowlEngine.Editor.Tests;
 
 /// <summary>
@@ -8,7 +10,7 @@ namespace RowlEngine.Editor.Tests;
 /// save/load/validate flow reads. They run sequentially with each other
 /// (never in parallel) so temp-project file operations cannot interleave.
 /// </summary>
-[CollectionDefinition("StaticRootSequential")]
+[CollectionDefinition("StaticRootSequential", DisableParallelization = true)]
 public class StaticRootSequentialCollection
 {
 }

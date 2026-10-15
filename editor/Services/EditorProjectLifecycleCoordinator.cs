@@ -53,7 +53,7 @@ public static class EditorProjectLifecycleCoordinator
         Action<bool> isDirtySetter)
     {
         if (!isDirtyGetter()) return true;
-        if (window == null) return true;
+        if (window == null || !window.IsVisible) return true;
 
         return await ResolveUnsavedChangesAsync(
             () => new UnsavedChangesDialog().ShowDialog<string?>(window),

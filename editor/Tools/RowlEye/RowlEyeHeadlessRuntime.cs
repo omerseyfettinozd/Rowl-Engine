@@ -32,24 +32,26 @@ public static class RowlEyeHeadlessRuntime
 
             _uiThread = new Thread(() =>
             {
-                if (Avalonia.Application.Current == null)
-                {
-                    Program.BuildAvaloniaAppHeadless().SetupWithoutStarting();
-                }
-
-                _ready.Set();
-
                 try
                 {
-                    Dispatcher.UIThread.MainLoop(_cts.Token);
+                    if (Avalonia.Application.Current == null)
+                    {
+                        Program.BuildAvaloniaAppHeadless().SetupWithoutStarting();
+                    }
+
+                    _ready.Set();
+
+                    while (!_cts.Token.IsCancellationRequested)
+                    {
+                        try
+                        {
+                            Dispatcher.UIThread.RunJobs();
+                        }
+                        catch { }
+                        Thread.Sleep(5);
+                    }
                 }
-                catch (OperationCanceledException) { }
-                catch (PlatformNotSupportedException)
-                {
-                    // Headless platform on Linux does not support Dispatcher.MainLoop; keep thread alive
-                    _cts.Token.WaitHandle.WaitOne();
-                }
-                catch (Exception) { }
+                catch { }
             })
             {
                 IsBackground = true,

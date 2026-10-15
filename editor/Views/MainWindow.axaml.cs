@@ -27,7 +27,7 @@ namespace RowlEngine.Editor.Views
             Closing += async (_, e) =>
             {
                 if (_allowClose) return;
-                if (!vm.IsProjectDirty) return;
+                if (!vm.IsProjectDirty || !IsVisible) return;
                 e.Cancel = true;
                 if (await vm.ResolveUnsavedChangesAsync(this))
                 {

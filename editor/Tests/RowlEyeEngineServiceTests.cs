@@ -4,8 +4,13 @@ using Xunit;
 
 namespace RowlEngine.Editor.Tests;
 
-public class RowlEyeEngineServiceTests
+[Collection("StaticRootSequential")]
+public class RowlEyeEngineServiceTests : IDisposable
 {
+    public void Dispose()
+    {
+        RowlEyeEngineService.Instance.Shutdown();
+    }
     [Fact]
     public void RowlEyeEngineService_LifecycleAndContext_WorksCorrectly()
     {

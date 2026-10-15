@@ -1021,12 +1021,16 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
                     // The old stream remains entirely intact until this queue
                     // succeeds, so decode/format/device errors cannot stop it.
                     m_transitionBgmData.assign(floatBuffer, floatBuffer + floatLength);
+                    m_transitionBgmChannels = (floatSpec.channels >= 1 && floatSpec.channels <= 8) ? floatSpec.channels : 2;
+                    m_transitionBgmRateHz = (floatSpec.freq > 0) ? floatSpec.freq : 48000;
                     m_activeBgmTransition = m_requestedBgmTransition;
                     m_bgmTransitionDurationSeconds = m_requestedBgmTransitionDurationSeconds;
                     m_bgmTransitionElapsedSeconds = 0.0f;
                     m_bgmTransitionActive = true;
                 } else {
                     m_bgmData.assign(floatBuffer, floatBuffer + floatLength);
+                    m_bgmChannels = (floatSpec.channels >= 1 && floatSpec.channels <= 8) ? floatSpec.channels : 2;
+                    m_bgmRateHz = (floatSpec.freq > 0) ? floatSpec.freq : 48000;
                     m_bgmTransitionActive = false;
                 }
                 // Faz 5 Dilim 1: RAM taahhüdü snapshot'ı (önceki stream
@@ -1086,6 +1090,8 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
             // Headless / fallback playback without physical stream
             if (channel == AudioChannelType::Bgm) {
                 m_bgmData.assign(floatBuffer, floatBuffer + floatLength);
+                m_bgmChannels = (floatSpec.channels >= 1 && floatSpec.channels <= 8) ? floatSpec.channels : 2;
+                m_bgmRateHz = (floatSpec.freq > 0) ? floatSpec.freq : 48000;
                 m_currentBgmPath = assetPath;
                 m_isBgmPlaying = true;
                 m_bgmSampleOffset = 0;
@@ -1353,6 +1359,11 @@ void AudioEngine::update(float deltaSeconds) {
         if (m_bgmStream && !m_bgmData.empty() && m_bgmLoop) {
             int available = SDL_GetAudioStreamAvailable(m_bgmStream);
             if (available <= 0) {
+                SDL_AudioSpec bgmSpec{};
+                bgmSpec.format = SDL_AUDIO_F32;
+                bgmSpec.channels = static_cast<Uint8>(std::clamp(m_bgmChannels, 1, 8));
+                bgmSpec.freq = (m_bgmRateHz > 0) ? m_bgmRateHz : 48000;
+                SDL_SetAudioStreamFormat(m_bgmStream, &bgmSpec, nullptr);
                 if (!SDL_PutAudioStreamData(m_bgmStream, m_bgmData.data(), static_cast<int>(m_bgmData.size()))) {
                     warnAudioOnce("BGM loop re-queue failed: " + std::string(SDL_GetError()));
                     // A5-tur3: kuyruğa giremeyen chunk drop sayılır.
@@ -1364,6 +1375,11 @@ void AudioEngine::update(float deltaSeconds) {
         }
         if (m_transitionBgmStream && !m_transitionBgmData.empty() && m_bgmLoop) {
             if (SDL_GetAudioStreamAvailable(m_transitionBgmStream) <= 0) {
+                SDL_AudioSpec transSpec{};
+                transSpec.format = SDL_AUDIO_F32;
+                transSpec.channels = static_cast<Uint8>(std::clamp(m_transitionBgmChannels, 1, 8));
+                transSpec.freq = (m_transitionBgmRateHz > 0) ? m_transitionBgmRateHz : 48000;
+                SDL_SetAudioStreamFormat(m_transitionBgmStream, &transSpec, nullptr);
                 if (!SDL_PutAudioStreamData(m_transitionBgmStream, m_transitionBgmData.data(), static_cast<int>(m_transitionBgmData.size()))) {
                     warnAudioOnce("Transition BGM loop re-queue failed: " + std::string(SDL_GetError()));
                     ++m_dropCount;
@@ -1443,6 +1459,8 @@ void AudioEngine::updateBgmTransition(float deltaSeconds) {
     }
     std::swap(m_bgmStream, m_transitionBgmStream);
     std::swap(m_bgmData, m_transitionBgmData);
+    std::swap(m_bgmChannels, m_transitionBgmChannels);
+    std::swap(m_bgmRateHz, m_transitionBgmRateHz);
     m_bgmTransitionActive = false;
     applyChannelGains();
 }
@@ -1657,6 +1675,13 @@ bool AudioEngine::reopenDeviceStreams() {
                 setLastErrorIfEmpty("Reopened BGM stream resume failed: " + std::string(SDL_GetError()),
                                     AudioErrorClass::Device);
             }
+        }
+        if (m_bgmStream && !m_isBgmStreamed && m_isBgmPlaying && !m_bgmData.empty()) {
+            SDL_AudioSpec bgmSpec{};
+            bgmSpec.format = SDL_AUDIO_F32;
+            bgmSpec.channels = static_cast<Uint8>(std::clamp(m_bgmChannels, 1, 8));
+            bgmSpec.freq = (m_bgmRateHz > 0) ? m_bgmRateHz : 48000;
+            SDL_SetAudioStreamFormat(m_bgmStream, &bgmSpec, nullptr);
         }
         // Faz 5 Dilim 2: havuz sesleri kalan baytlarıyla geri kuyruğa girer
         // (offset korunur, baştan başlama YOKTUR); bed'ler loop niyetiyle

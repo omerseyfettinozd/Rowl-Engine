@@ -5,8 +5,13 @@ using Xunit;
 
 namespace RowlEngine.Editor.Tests;
 
-public sealed class RowlEyeP0ExtensionsTests
+[Collection("StaticRootSequential")]
+public sealed class RowlEyeP0ExtensionsTests : IDisposable
 {
+    public void Dispose()
+    {
+        RowlEyeEngineService.Instance.Shutdown();
+    }
     [Fact]
     public void StoryGraphTopology_Returns_Valid_Nodes_Edges_And_Analysis()
     {

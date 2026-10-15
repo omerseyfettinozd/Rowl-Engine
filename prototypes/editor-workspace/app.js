@@ -362,7 +362,15 @@ const preferences = bindSettings(document.querySelector('#settings-dialog'), {
   }
 });
 
-document.querySelectorAll('[data-open-prefs], [data-settings]').forEach(btn => btn.addEventListener('click', () => preferences.open(btn.dataset.settings)));
+document.querySelectorAll('[data-open-prefs], [data-settings]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (btn.dataset.settings === 'project') {
+      projectSettings.open();
+    } else {
+      preferences.open(btn.dataset.settings);
+    }
+  });
+});
 document.querySelectorAll('[data-open-project-settings]').forEach(btn => btn.addEventListener('click', () => projectSettings.open()));
 
 document.addEventListener('keydown', event => {
@@ -372,7 +380,6 @@ document.addEventListener('keydown', event => {
     preferences.open();
   }
 });
-document.querySelectorAll('[data-settings]').forEach(button=>button.addEventListener('click',()=>preferences.open(button.dataset.settings)));
 let library=bindLibrary(panels.get('library'),panels.get('inspector'),{
   scenes:()=>scenes,selectedScene:()=>scenes[sceneIndex],notify,
   add:template=>{

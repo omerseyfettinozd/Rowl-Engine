@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
 using Avalonia.Controls;
+using Avalonia.Threading;
 using RowlEngine.Editor.Services;
 using RowlEngine.Editor.ViewModels;
 using RowlEngine.Editor.ViewModels.Components;
@@ -91,8 +92,11 @@ internal static class EditorAudioPickerTests
 
         // Step 19.5: EditorModalDialogCoordinator Unsaved Changes Resolution Gating
         Console.WriteLine("    [Step 19.5]: EditorModalDialogCoordinator Unsaved Gating...");
+        Window testWindow = (Avalonia.Application.Current != null && !Dispatcher.UIThread.CheckAccess())
+            ? Dispatcher.UIThread.Invoke(() => new Window())
+            : new Window();
         bool blockedTransition = EditorModalDialogCoordinator.OpenProjectHubAsync(
-            new Window(),
+            testWindow,
             () => Task.FromResult(false)).GetAwaiter().GetResult();
         if (blockedTransition)
             throw new Exception("OpenProjectHubAsync should abort transition when unsaved changes resolution returns false.");

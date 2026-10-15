@@ -331,6 +331,24 @@ jobs:
           name: linux-editor-benchmark
           path: benchmark-results/linux-editor.json
 
+      - name: Verify RowlEye headless visual inspection and AI observability
+        run: |
+          GOLDENS_DIR="$RUNNER_TEMP/rowl-eye-goldens"
+          AUDIT_OUT="$RUNNER_TEMP/rowl-eye-audit"
+          mkdir -p "$GOLDENS_DIR" "$AUDIT_OUT"
+          SDL_AUDIODRIVER=dummy SDL_VIDEODRIVER=dummy \
+          xvfb-run -a dotnet run --project editor/RowlEngine.Editor.csproj --configuration Debug -- \
+            --rowl-eye --update-goldens --goldens "$GOLDENS_DIR" --out "$AUDIT_OUT"
+          SDL_AUDIODRIVER=dummy SDL_VIDEODRIVER=dummy \
+          xvfb-run -a dotnet run --project editor/RowlEngine.Editor.csproj --configuration Debug -- \
+            --rowl-eye --audit --goldens "$GOLDENS_DIR" --out "$AUDIT_OUT"
+
+      - name: Run RowlEye unit and integration tests
+        run: |
+          SDL_AUDIODRIVER=dummy SDL_VIDEODRIVER=dummy \
+          xvfb-run -a dotnet test editor/Tests/RowlEngine.Editor.Tests.csproj \
+            --configuration Debug --filter "FullyQualifiedName~RowlEye" --logger "console;verbosity=normal"
+
       - name: Verify shaderless fallback build
         # Bu adim linux isinde IKINCI ctest turunu calistirir (ilk tur "Test"
         # adiminda, ci.yml:96). Iki tur ayni $HOME'u paylasirken kayit dosyalari
