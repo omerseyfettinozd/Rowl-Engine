@@ -1301,7 +1301,7 @@ namespace RowlEngine.Editor.ViewModels
 
         [ObservableProperty]
         private string _playButtonColor =
-            ThemeFallbackColors.BrushHex("PlayButtonGreenColor", ThemeFallbackColors.Success);
+            ThemeFallbackColors.BrushHex("PlayButtonGreenColor", ThemeFallbackColors.Surface);
 
         [ObservableProperty]
         private bool _isPlayPaused = false;
@@ -1418,7 +1418,7 @@ namespace RowlEngine.Editor.ViewModels
                     if (EngineHost.IsInitialized)
                         EngineHost.SetPaused(false);
                     PlayButtonText = "Stop";
-                    PlayButtonColor = ThemeFallbackColors.BrushHex("DangerButtonBg", ThemeFallbackColors.Error);
+                    PlayButtonColor = ThemeFallbackColors.BrushHex("PlayButtonRedColor", ThemeFallbackColors.Surface);
                     StatusText = "Offscreen Play Mode Active";
                 }
             }
@@ -1445,7 +1445,7 @@ namespace RowlEngine.Editor.ViewModels
             if (EngineHost.IsInitialized)
                 EngineHost.SetPaused(false);
             PlayButtonText = "Play";
-            PlayButtonColor = ThemeFallbackColors.BrushHex("PlayButtonGreenColor", ThemeFallbackColors.Success);
+            PlayButtonColor = ThemeFallbackColors.BrushHex("PlayButtonGreenColor", ThemeFallbackColors.Surface);
             StatusText = "Engine Ready — Offscreen C++ Runtime Active";
         }
 

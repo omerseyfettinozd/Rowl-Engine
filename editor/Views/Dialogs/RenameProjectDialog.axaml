@@ -13,7 +13,7 @@
         <StackPanel Grid.Row="1" Spacing="8">
             <TextBlock Name="FieldLabelText" Text="Yeni Proje Adı" FontSize="12" Foreground="{DynamicResource MutedText}"/>
             <TextBox Name="NameBox" FontSize="12" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderSubtle}"/>
-            <TextBlock Name="ErrorText" Foreground="{DynamicResource DangerButtonBg}" FontSize="11" IsVisible="False"/>
+            <TextBlock Name="ErrorText" Foreground="{DynamicResource ErrorBrush}" FontSize="11" IsVisible="False"/>
         </StackPanel>
 
         <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10" Margin="0,12,0,0">

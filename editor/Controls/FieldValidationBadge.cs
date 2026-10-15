@@ -109,12 +109,14 @@ namespace RowlEngine.Editor.Controls
             }
             _label.Text = first.IsError ? $"Hata: {first.Message}" : $"Uyarı: {first.Message}";
             bool isError = first.IsError;
-            Background = this.FindResource(isError ? "ErrorBrush" : "WarningBrush") as Avalonia.Media.IBrush
+            // Zemin ile metin aynı renkti → mesaj okunmuyordu. Soluk durum zemini
+            // + aynı aileden açık metin (Faz 1 / K3).
+            Background = this.FindResource(isError ? "ErrorSurface" : "WarningSurface") as Avalonia.Media.IBrush
                 ?? ThemeFallbackColors.SurfaceBrush;
             BorderBrush = this.FindResource(isError ? "ErrorBrush" : "WarningBrush") as Avalonia.Media.IBrush
                 ?? ThemeFallbackColors.BorderBrush;
             BorderThickness = new Thickness(1);
-            _label.Foreground = this.FindResource(isError ? "ErrorColor" : "MutedText") as Avalonia.Media.IBrush
+            _label.Foreground = this.FindResource(isError ? "ErrorBrush" : "WarningBrush") as Avalonia.Media.IBrush
                 ?? ThemeFallbackColors.TextBrush;
             ToolTip.SetTip(this, first.Message);
             IsVisible = true;

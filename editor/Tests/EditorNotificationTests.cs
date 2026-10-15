@@ -5,6 +5,7 @@ using Avalonia.Threading;
 using RowlEngine.Editor.Models;
 using RowlEngine.Editor.Services;
 using RowlEngine.Editor.ViewModels;
+using RowlEngine.Editor.Tests;
 
 namespace RowlEngine.Editor;
 
@@ -28,13 +29,13 @@ internal static class EditorNotificationTests
         var warning = notifService.ShowWarning("Disk slot nearly full");
         var error = notifService.ShowError("Compilation failed");
 
-        if (info.Type != NotificationType.Info || info.IconSymbol != "" || info.AccentColor != "#9C7FD1")
+        if (info.Type != NotificationType.Info || info.IconSymbol != "" || info.AccentColor != ThemeTestColors.Hex("InfoColor"))
             throw new Exception("NotificationType.Info properties mismatch");
-        if (success.Type != NotificationType.Success || success.IconSymbol != "" || success.AccentColor != "#7DA56D")
+        if (success.Type != NotificationType.Success || success.IconSymbol != "" || success.AccentColor != ThemeTestColors.Hex("SuccessColor"))
             throw new Exception("NotificationType.Success properties mismatch");
-        if (warning.Type != NotificationType.Warning || warning.IconSymbol != "" || warning.AccentColor != "#DCA85A")
+        if (warning.Type != NotificationType.Warning || warning.IconSymbol != "" || warning.AccentColor != ThemeTestColors.Hex("WarningColor"))
             throw new Exception("NotificationType.Warning properties mismatch");
-        if (error.Type != NotificationType.Error || error.IconSymbol != "" || error.AccentColor != "#D96868")
+        if (error.Type != NotificationType.Error || error.IconSymbol != "" || error.AccentColor != ThemeTestColors.Hex("ErrorColor"))
             throw new Exception("NotificationType.Error properties mismatch");
 
         // Step 21.2: Queue capping

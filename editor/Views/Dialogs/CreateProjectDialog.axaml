@@ -30,7 +30,7 @@
                 </Grid>
             </StackPanel>
 
-            <TextBlock Name="ErrorText" Foreground="{DynamicResource DangerButtonBg}" FontSize="11" IsVisible="False" TextWrapping="Wrap"/>
+            <TextBlock Name="ErrorText" Foreground="{DynamicResource ErrorBrush}" FontSize="11" IsVisible="False" TextWrapping="Wrap"/>
         </StackPanel>
 
         <!-- Actions -->

@@ -59,23 +59,23 @@
                         <WrapPanel Orientation="Horizontal">
                             <Border Width="140" Height="70" CornerRadius="8" Margin="4"
                                     BorderBrush="{DynamicResource BorderSubtle}" BorderThickness="1"
-                                    Background="#2A2A2E" Padding="10">
+                                    Background="#19191C" Padding="10">
                                 <StackPanel VerticalAlignment="Center" Spacing="2">
                                     <TextBlock Text="Aa" FontSize="16" FontWeight="Bold"
                                                Foreground="#F2EFE6" HorizontalAlignment="Center"/>
                                     <TextBlock Text="Kemik Beyazı (Karanlık)" FontSize="10"
-                                               Foreground="#A8A49C" HorizontalAlignment="Center"
+                                               Foreground="#85858B" HorizontalAlignment="Center"
                                                TextAlignment="Center" TextWrapping="Wrap"/>
                                 </StackPanel>
                             </Border>
                             <Border Width="140" Height="70" CornerRadius="8" Margin="4"
                                     BorderBrush="{DynamicResource BorderSubtle}" BorderThickness="1"
-                                    Background="#1B1B1F" Padding="10">
+                                    Background="#111113" Padding="10">
                                 <StackPanel VerticalAlignment="Center" Spacing="2">
                                     <TextBlock Text="Aa" FontSize="16" FontWeight="Bold"
                                                Foreground="#F2EFE6" HorizontalAlignment="Center"/>
                                     <TextBlock Text="Saf Siyah (OLED)" FontSize="10"
-                                               Foreground="#A8A49C" HorizontalAlignment="Center"
+                                               Foreground="#85858B" HorizontalAlignment="Center"
                                                TextAlignment="Center" TextWrapping="Wrap"/>
                                 </StackPanel>
                             </Border>
