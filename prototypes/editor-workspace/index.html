@@ -69,6 +69,8 @@
     <div class="options-menu popover" id="options-menu" hidden>
       <button class="menu-row" data-author="hub"><svg><use href="#i-assets"/></svg>Hub’a dön</button>
       <button class="menu-row" data-author="save"><svg><use href="#i-save"/></svg>Kaydet <small>Ctrl+S</small></button>
+      <span class="menu-label">EDİTÖR TERCİHLERİ</span>
+      <button class="menu-row" data-open-prefs><svg><use href="#i-tools"/></svg>Editör Tercihleri... <kbd class="shortcut-key" style="margin-left: auto; font-size: 9px; padding: 1px 5px;">Ctrl+,</kbd></button>
       <span class="menu-label menu-section">AYARLAR</span>
       <button class="menu-row" data-settings="project"><svg><use href="#i-assets"/></svg>Proje ayarları</button>
       <button class="menu-row" data-settings="game"><svg><use href="#i-game"/></svg>Görüntü ve sahne</button>
@@ -76,9 +78,9 @@
       <button class="menu-row" data-settings="audio"><svg><use href="#i-audio"/></svg>Ses ve müzik</button>
       <button class="menu-row" data-settings="input"><svg><use href="#i-input"/></svg>Kontroller</button>
       <button class="menu-row" data-settings="save"><svg><use href="#i-save"/></svg>Kayıt ve dil</button>
+      <span class="menu-label menu-section">OYUN VE PROJE</span>
+      <button class="menu-row" data-open-project-settings><svg><use href="#i-assets"/></svg>Proje Ayarları (Oyun)...</button>
       <span class="menu-label menu-section">ÇALIŞMA ALANI</span>
-      <button class="menu-row" data-settings="editor"><svg><use href="#i-inspector"/></svg>Editör tercihleri</button>
-      <button class="menu-row" data-settings="export"><svg><use href="#i-export"/></svg>Dışa aktarma</button>
       <button class="menu-row" id="reset"><svg><use href="#i-reset"/></svg>Yerleşimi sıfırla</button>
     </div>
     </nav>
@@ -93,6 +95,7 @@
     <button class="menu-row" id="menu-close"><svg><use href="#i-close"/></svg>Pencereyi kapat</button>
   </div>
   <dialog id="settings-dialog" aria-labelledby="settings-title"></dialog>
+  <dialog id="project-settings-dialog" aria-labelledby="project-settings-title"></dialog>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <template id="node-template">
     <div class="node-area">
@@ -119,6 +122,6 @@
       <div class="scene-bottom"><span class="scene-title"></span><span class="scene-help"></span></div>
     </div>
   </template>
-  <script type="module" src="./app.js"></script>
+  <script type="module" src="./app.js?v=sidebar1"></script>
 </body>
 </html>

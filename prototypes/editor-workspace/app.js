@@ -5,6 +5,7 @@ import { defaultSettings, normalizeSettings, RESOLUTIONS, editObject } from './s
 import { toolContent, bindTools } from './tools.js';
 import { luaContent, bindLua } from './lua-editor.js';
 import { bindSettings } from './settings-ui.js';
+import { bindProjectSettings } from './project-settings-ui.js?v=proj1';
 import { libraryContent, bindLibrary } from './node-library.js';
 import { bindAuthoring } from './authoring-ui.js';
 import { workspaceMotion } from './workspace-motion.js';
@@ -341,11 +342,35 @@ document.querySelector('#tools-toggle').addEventListener('click',()=>{
   document.querySelector('#tools-toggle').setAttribute('aria-expanded',String(open));document.querySelector('#tools-toggle').setAttribute('aria-label',open?'Araçları kapat':'Araçları aç');
 });
 document.querySelectorAll('[data-tool]').forEach(button=>button.addEventListener('click',()=>{endGesture(true);apply(toggleView(state,button.dataset.tool));document.querySelector('#tools-toggle').focus({preventScroll:true});}));
-const preferences=bindSettings(document.querySelector('#settings-dialog'),{
-  get:()=>settings,
-  beforeOpen:()=>{motion.cancel();closeMenus();},
-  apply:changes=>{settings=normalizeSettings({...settings,...changes});try{localStorage.setItem('rowl-prototype-settings',JSON.stringify(settings));}catch{}updateScene();fitViews();tools.log('Tasarım tercihleri kaydedildi.');notify('Tercihler kaydedildi.');},
-  export:details=>{const data={format:'rowl-workspace-prototype/v2',settings,preferences:details,scenes,scripts:details.includeScripts?lua.snapshot():{},workspace:{...state,layout}};const url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));const link=document.createElement('a');link.href=url;link.download='rowl-proje-taslagi.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);notify('Proje taslağı indirildi.');}
+const projectSettings = bindProjectSettings(document.querySelector('#project-settings-dialog'), {
+  beforeOpen: () => { motion.cancel(); closeMenus(); },
+  apply: changes => {
+    settings = normalizeSettings({ ...settings, ...changes });
+    try { localStorage.setItem('rowl-prototype-settings', JSON.stringify(settings)); } catch {}
+    updateScene(); fitViews(); tools.log('Proje ayarları güncellendi.'); notify('Proje ayarları kaydedildi.');
+  }
+});
+
+const preferences = bindSettings(document.querySelector('#settings-dialog'), {
+  get: () => settings,
+  beforeOpen: () => { motion.cancel(); closeMenus(); },
+  openProjectSettings: () => projectSettings.open(),
+  apply: changes => {
+    settings = normalizeSettings({ ...settings, ...changes });
+    try { localStorage.setItem('rowl-prototype-settings', JSON.stringify(settings)); } catch {}
+    updateScene(); fitViews(); tools.log('Editör tercihleri kaydedildi.'); notify('Tercihler kaydedildi.');
+  }
+});
+
+document.querySelectorAll('[data-open-prefs], [data-settings]').forEach(btn => btn.addEventListener('click', () => preferences.open(btn.dataset.settings)));
+document.querySelectorAll('[data-open-project-settings]').forEach(btn => btn.addEventListener('click', () => projectSettings.open()));
+
+document.addEventListener('keydown', event => {
+  if (['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return;
+  if ((event.ctrlKey || event.metaKey) && event.key === ',') {
+    event.preventDefault();
+    preferences.open();
+  }
 });
 document.querySelectorAll('[data-settings]').forEach(button=>button.addEventListener('click',()=>preferences.open(button.dataset.settings)));
 let library=bindLibrary(panels.get('library'),panels.get('inspector'),{

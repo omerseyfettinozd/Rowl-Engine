@@ -1,49 +1,619 @@
-const categories=[['project','Proje','assets'],['game','Görüntü','game'],['story','Hikâye','story'],['audio','Ses','audio'],['input','Kontroller','input'],['save','Kayıt / dil','save'],['editor','Editör','inspector'],['export','Dışa aktar','export']];
-const headings={project:['Proje ayarları','Hikâyenin kimliği','Oyuncunun ilk karşılaşacağı isim, kapak ve proje bilgileri.'],game:['Görüntü ve sahne','Sahneye bir çerçeve','Oyunun ekranını, oranını ve ilk sahnesini belirle.'],story:['Hikâye ve metin','Hikâyenin ritmi','Diyalogların okunma, ilerleme ve seçim biçimini tasarla.'],audio:['Ses ve müzik','Hikâyenin sesi','Müzik, efekt ve seslendirme arasında bir denge kur.'],input:['Kontroller','Oyuncunun dokunuşu','Klavye ve dokunmatik hareketleri aynı akışa bağla.'],save:['Kayıt ve dil','Kaldığın yerden','Kayıt düzeni, diller ve daha rahat okuma seçenekleri.'],editor:['Editör tercihleri','Sana ait çalışma alanı','Görünüm, yardımcı çizgiler ve çalışma alışkanlıkları.'],export:['Dışa aktarma','Paylaşmaya hazır','Hedefi ve paketin görünümünü seç; proje taslağını indir.']};
-const defaults={project:'Bir gece, bir ışık',author:'Rowl Studio',version:'0.1.0',description:'Ay ışığında başlayan küçük bir yolculuk.',cover:'night',resolution:'1280x800',startScene:'selected',windowMode:'Pencere',scaleMode:'Oranı koru',background:'#101014',fps:'60',textSpeed:32,textSize:18,font:'Sade',autoAdvance:false,autoDelay:2,skip:'Yalnız okunmuş metin',choiceTimer:false,choiceSeconds:15,master:85,music:70,effects:80,voice:100,mute:false,backgroundAudio:false,fade:1,continueKey:'Enter / Boşluk',historyKey:'H',autoKey:'A',skipKey:'Ctrl',menuKey:'Esc',quickSaveKey:'F5',quickLoadKey:'F9',tap:true,swipe:true,hold:false,gamepad:false,language:'Türkçe',english:true,slots:12,autosave:true,savePoint:'Sahne geçişlerinde',history:100,largeText:false,reducedMotion:false,theme:'Gece',accent:'Kemik',grid:true,guides:true,snap:true,rulers:false,platform:'Windows',packageName:'Bir-gece-bir-isik',includeMusic:true,includeScripts:true,includeLanguages:true,compression:'Dengeli'};
-const field=(key,label,type='text',extra='')=>`<label class="setting-field">${label}<input name="${key}" type="${type}" ${extra}></label>`;
-const select=(key,label,options)=>`<label class="setting-field">${label}<select name="${key}">${options.map(item=>{const [value,text]=Array.isArray(item)?item:[item,item];return `<option value="${value}">${text}</option>`;}).join('')}</select></label>`;
-const toggle=(key,title,description)=>`<label class="setting-toggle"><span><strong>${title}</strong><small>${description}</small></span><input name="${key}" type="checkbox"><i aria-hidden="true"></i></label>`;
-const range=(key,title,min,max,step=1,suffix='%')=>`<label class="setting-range"><span>${title}<output data-output="${key}"></output></span><input name="${key}" type="range" min="${min}" max="${max}" step="${step}" data-suffix="${suffix}" aria-label="${title}"></label>`;
-const card=(title,description,content)=>`<section class="settings-card"><header><h3>${title}</h3><p>${description}</p></header>${content}</section>`;
-const sections={
-  project:()=>`<div class="project-identity"><div class="project-cover" data-cover-preview><svg><use href="#i-moon"/></svg><span>ROWL / HİKÂYE</span></div><div><span class="tool-caption">PROJE KAPAĞI</span><strong data-project-preview></strong><p>Hikâyenin ilk izlenimi.</p>${select('cover','Kapak görünümü',[['night','Ay ışığı'],['dawn','Yeni bir sabah'],['forest','Orman yolu']])}</div></div><div class="settings-columns">${card('Kimlik','Oyun listesinde ve başlangıç ekranında görünen bilgiler.',`${field('project','Proje adı','text','maxlength="80" required')}${field('author','Yapımcı / stüdyo','text','maxlength="80"')}${field('version','Sürüm','text','maxlength="24"')}`)}${card('Hakkında','Hikâyeyi birkaç cümleyle anlat.',`<label class="setting-field">Kısa açıklama<textarea name="description" rows="5" maxlength="400"></textarea></label><div class="info-note"><svg><use href="#i-story"/></svg><span>3 sahne · 1 karakter · Türkçe</span></div>`)}</div>`,
-  game:()=>`<div class="settings-columns">${card('Ekran','Görüntünün boyutu ve yerleşimi.',`${select('resolution','Sahne çözünürlüğü',[['1280x800','1280 × 800 · 16:10'],['1920x1080','1920 × 1080 · 16:9'],['1080x1920','1080 × 1920 · 9:16']])}${select('windowMode','Pencere biçimi',['Pencere','Kenarlıksız','Tam ekran'])}${select('scaleMode','Farklı ekranlara uyum',['Oranı koru','Ekranı doldur'])}<div class="field-pair">${field('background','Boş alan rengi','color')}${select('fps','Kare hızı',['30','60','120'])}</div>`)}${card('Sahne önizlemesi','Seçtiğin ekran oranı burada görünür.',`<div class="display-preview"><div data-display-frame><span class="preview-moon"></span><span class="preview-hill"></span><div>Mira<br><small>Bir gece, bir ışık</small></div></div></div><div class="preview-caption" data-resolution-preview></div>${select('startScene','Başlangıç sahnesi',[['selected','Seçili node'],['0','Bir gece, bir ışık'],['1','Yol ayrımı'],['2','Yeni bir sabah']])}`)}</div>`,
-  story:()=>`<div class="settings-columns">${card('Diyalog görünümü','Metnin biçimi ve okuma hızı.',`${range('textSpeed','Metin hızı',10,60,1,' harf/sn')}${range('textSize','Yazı boyutu',14,28,1,' px')}${select('font','Yazı karakteri',['Sade','Kitap'])}<div class="reading-preview"><span>MIRA</span><p>Gece ne kadar sessiz… Sanki bütün dünya bir şey söylememi bekliyor.</p><small data-reading-speed></small></div>`)}${card('İlerleme ve seçim','Oyuncunun hikâye içinde nasıl ilerleyeceği.',`${toggle('autoAdvance','Otomatik ilerleme','Satır bittikten sonra sonraki diyaloğa geç.')}${range('autoDelay','Satır bekleme süresi',1,6,.5,' sn')}${select('skip','Atlama davranışı',['Yalnız okunmuş metin','Tüm metin'])}${toggle('choiceTimer','Süreli seçimler','Seçenekler için geri sayım göster.')}${field('choiceSeconds','Seçim süresi · saniye','number','min="5" max="60"')}`)}</div>`,
-  audio:()=>`<div class="settings-columns">${card('Ses dengesi','Her ses grubunu ayrı ayarla.',`${range('master','Genel ses',0,100)}${range('music','Müzik',0,100)}${range('effects','Efektler',0,100)}${range('voice','Seslendirme',0,100)}`)}${card('Oynatma davranışı','Sahneler arasındaki geçişleri yumuşat.',`<div class="audio-art" aria-label="Ses dengesi görünümü"><svg><use href="#i-audio"/></svg><div>${Array.from({length:15},(_,i)=>`<i style="--bar:${18+(i*23)%64}%"></i>`).join('')}</div><span>Gece ambiyansı</span></div>${toggle('mute','Sessiz başlat','Oyun açılırken sesleri kapalı tut.')}${toggle('backgroundAudio','Arka planda müzik','Başka pencereye geçildiğinde müzik sürsün.')}${range('fade','Müzik geçişi',0,4,.5,' sn')}`)}</div>`,
-  input:()=>`<div class="settings-columns">${card('Klavye kısayolları','Bir alana tıklayıp istediğin kısayolu yaz.',`<div class="binding-list">${[['continueKey','Diyaloğa devam et'],['historyKey','Diyalog geçmişi'],['autoKey','Otomatik ilerleme'],['skipKey','Metni atla'],['menuKey','Oyun menüsü'],['quickSaveKey','Hızlı kayıt'],['quickLoadKey','Hızlı yükleme']].map(([key,label])=>`<label><span>${label}</span><input name="${key}" maxlength="20" aria-label="${label} kısayolu"></label>`).join('')}</div>`)}${card('Dokunmatik ve kontrolcü','Aynı eylemler için farklı giriş biçimleri.',`${toggle('tap','Dokunarak devam','Sahneye dokunmak diyaloğu ilerletir.')}${toggle('swipe','Kaydırarak geçmiş','Yukarı kaydırarak önceki satırları aç.')}${toggle('hold','Basılı tutarak atla','Uzun dokunma metni hızlandırır.')}${toggle('gamepad','Kontrolcü desteği','Seçimler arasında yön tuşlarıyla gez.')}<div class="gesture-art"><svg aria-hidden="true"><use href="#i-edit"/></svg><div><strong>Bir dokunuş, bir sonraki cümle.</strong><small>Dokunma bölgeleri sahne boyunca tutarlı kalır.</small></div></div>`)}</div>`,
-  save:()=>`<div class="settings-columns">${card('Kayıt düzeni','Oyuncunun hikâyeye geri dönüş yolu.',`<div class="field-pair">${field('slots','Kayıt yuvası','number','min="3" max="30"')}${field('history','Geçmiş satır sayısı','number','min="20" max="500"')}</div>${toggle('autosave','Otomatik kayıt','Hikâye ilerledikçe kaldığın yeri sakla.')}${select('savePoint','Kayıt noktası',['Sahne geçişlerinde','Bölüm sonlarında'])}<div class="save-slot-preview"><svg><use href="#i-moon"/></svg><div><strong>Bir gece, bir ışık</strong><span>Mira · Başlangıç sahnesi</span></div><small>01</small></div>`)}${card('Dil ve okuma','Hikâyeyi rahat ve anlaşılır kıl.',`${select('language','Ana dil',['Türkçe','English','日本語'])}${toggle('english','İngilizce seçeneği','Oyun menüsünde ikinci bir dil göster.')}${toggle('largeText','Büyük metin seçeneği','Oyuncuya daha büyük yazı seçimi sun.')}${toggle('reducedMotion','Hareketi azalt','Arayüz geçişlerini sadeleştir.')}`)}</div>`,
-  editor:()=>`<div class="settings-columns">${card('Görünüm','Çalışma alanının tonunu seç.',`${select('theme','Tema',['Gece','Grafit'])}${select('accent','Vurgu rengi',['Kemik','Lavanta','Adaçayı'])}<div class="theme-preview"><div><i></i><i></i><i></i></div><span></span><span></span><span></span></div>`)}${card('Sahne yardımcıları','Düzenlerken görmek istediğin işaretler.',`${toggle('grid','Node ızgarası','Hikâye akışının arkasında noktalı zemin.')}${toggle('guides','Obje çerçeveleri','Edit Scene’de seçimi ve sınırları göster.')}${toggle('snap','Hizalama rehberleri','Objeler arasında hizalama işaretleri.')}${toggle('rulers','Cetveller','Sahne kenarlarında ölçü rehberleri.')}`)}</div>`,
-  export:()=>`<div class="settings-columns">${card('Hedef platform','Paket taslağının kullanılacağı yeri seç.',`<div class="platform-options">${['Windows','Linux','macOS','Android'].map(name=>`<label><input type="radio" name="platform" value="${name}"><span>${name==='Android'?'▯':'▱'}</span><strong>${name}</strong></label>`).join('')}</div>${field('packageName','Paket adı','text','maxlength="80"')}${select('compression','Paket boyutu',['Dengeli','Küçük boyut','Yüksek kalite'])}`)}${card('Paket içeriği','Paylaşılacak taslağın kapsamı.',`${toggle('includeMusic','Ses ve müzik','Müzik, efekt ve seslendirme varlıkları.')}${toggle('includeScripts','Lua scriptleri','Kod editöründeki taslak dosyalar.')}${toggle('includeLanguages','Dil seçenekleri','Seçili dil ve çeviri tercihleri.')}<div class="export-summary"><span class="tool-caption">TASLAK ÖZETİ</span><strong data-package-preview></strong><p data-export-preview></p><span class="export-format">Proje taslağı · JSON</span></div>`)}</div>`
+// prototypes/editor-workspace/settings-ui.js
+// Meta Muse Spark 1.3 Contributor Mimari Tasarımı
+// Unity Preferences Paritesi: Yalnızca Makine-Yerel Editör Tercihleri
+// Asla oyun projesine veya dağıtım paketine dahil edilmez.
+
+const STORE_KEY = 'rowl.editor.preferences.v1';
+const VERSION = 1;
+
+export const DEFAULT_PROFILE = {
+  version: VERSION,
+  general: {
+    language: 'system',
+    openLastProject: true,
+    showSplash: false,
+    confirmOnExit: true,
+    autoSaveEnabled: true,
+    autoSaveIntervalMin: 5,
+    backupCount: 5
+  },
+  appearance: {
+    theme: 'dark',
+    accent: '#4cc2ff',
+    fontSize: 13,
+    fontFamily: 'Inter',
+    density: 'comfortable',
+    showIcons: true
+  },
+  viewport: {
+    bgColor: '#1e1e24',
+    gridVisibleDefault: true,
+    cameraSpeed: 5.0,
+    orbitSensitivity: 1.0,
+    showGizmosDefault: true,
+    showStatsOverlay: false
+  },
+  gridSnapping: {
+    sizeX: 1.0,
+    sizeY: 1.0,
+    divisions: 10,
+    colorMinor: '#2a2a33',
+    colorMajor: '#3a3a44',
+    snapMove: true,
+    snapRotate: true,
+    snapScale: false,
+    stepMove: 0.25,
+    stepRotate: 15,
+    stepScale: 0.1
+  },
+  external: {
+    ide: 'vscode',
+    idePath: '',
+    ideArgs: '{file}:{line}',
+    terminalPath: '',
+    blenderPath: '',
+    gitPath: ''
+  },
+  shortcuts: {
+    profile: 'rowl-default',
+    bindings: {
+      'save': 'Ctrl + S',
+      'saveAs': 'Ctrl + Shift + S',
+      'undo': 'Ctrl + Z',
+      'redo': 'Ctrl + Y',
+      'newNode': 'Ctrl + N',
+      'delete': 'Delete',
+      'rename': 'F2',
+      'build': 'Ctrl + B',
+      'play': 'F5',
+      'fullscreen': 'F11',
+      'find': 'Ctrl + F',
+      'hub': 'Ctrl + H',
+      'preferences': 'Ctrl + ,'
+    }
+  },
+  pipeline: {
+    cachePath: '~/.cache/rowl',
+    maxCacheSizeGB: 10,
+    autoReimport: true,
+    compressThumbnails: true,
+    thumbnailSize: 128
+  },
+  performance: {
+    vsyncEditor: true,
+    fpsCap: 120,
+    hardwareAccel: true,
+    logLevel: 'Info',
+    showProfilerOnPlay: false,
+    telemetry: false,
+    crashReport: true
+  }
 };
-export function bindSettings(dialog,context){
-  let values={...defaults},active='project',draft={...defaults},dirty=false;
-  try{const data=JSON.parse(localStorage.getItem('rowl-design-preferences'));if(data&&typeof data==='object')for(const [key,value] of Object.entries(defaults))if(typeof data[key]===typeof value)values[key]=data[key];}catch{}
-  function render(){
-    const [title,subtitle,description]=headings[active];
-    dialog.innerHTML=`<form id="settings-form"><header class="dialog-header"><div><span class="tool-caption">ROWL / AYARLAR</span><h2 id="settings-title">${title}</h2></div><button type="button" class="icon-button" data-dismiss aria-label="Ayarları kapat"><svg><use href="#i-close"/></svg></button></header><nav class="settings-nav" aria-label="Ayar bölümleri">${categories.map(([key,label,icon])=>`<button type="button" data-category="${key}" aria-current="${key===active?'page':'false'}"><svg><use href="#i-${icon}"/></svg><span>${label}</span></button>`).join('')}</nav><div class="settings-scroll"><div class="settings-intro"><span class="tool-caption">${String(categories.findIndex(([key])=>key===active)+1).padStart(2,'0')} / ${categories.length} BÖLÜM</span><h3>${subtitle}</h3><p>${description}</p></div>${sections[active]()}</div><footer class="dialog-footer"><span class="settings-dirty" data-dirty>${dirty?'Kaydedilmemiş değişiklikler':'Değişiklik yok'}</span><button type="button" class="text-button" data-dismiss>Vazgeç</button><button type="submit" class="primary-button">${active==='export'?'Taslağı indir':'Uygula'}</button></footer></form>`;
-    for(const input of dialog.querySelectorAll('[name]')){const value=draft[input.name];if(input.type==='checkbox')input.checked=value;else if(input.type==='radio')input.checked=value===input.value;else input.value=value;}
-    previews();
+
+// Yasak anahtar guard'ı - Oyun ayarlarının Preferences içine sızmasını kesin olarak engeller
+const FORBIDDEN_PATTERNS = [
+  /^game\./i,
+  /^project\./i,
+  /resolution/i,
+  /masterVolume/i,
+  /musicVolume/i,
+  /voiceVolume/i,
+  /sfxVolume/i,
+  /textSpeed/i,
+  /startupScene/i,
+  /saveSlot/i,
+  /gameplay/i,
+  /difficulty/i
+];
+
+function assertPreferencesOnly(obj, path = '') {
+  for (const [key, value] of Object.entries(obj)) {
+    const full = path ? `${path}.${key}` : key;
+    if (FORBIDDEN_PATTERNS.some(p => p.test(full))) {
+      throw new Error(`[Preferences Mimarisi Hatası] Yasak oyun anahtarı saptandı: '${full}'. Oyun ayarları yalnızca Proje Ayarları'nda yer alabilir.`);
+    }
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      assertPreferencesOnly(value, full);
+    }
   }
-  function collect(){for(const input of dialog.querySelectorAll('[name]')){if(input.type==='radio'){if(input.checked)draft[input.name]=input.value;}else if(input.type==='checkbox')draft[input.name]=input.checked;else if(input.type==='range'||input.type==='number'){if(input.value!==''&&Number.isFinite(Number(input.value)))draft[input.name]=Number(input.value);}else draft[input.name]=input.value;}}
-  function previews(){
-    for(const output of dialog.querySelectorAll('[data-output]')){const input=dialog.querySelector(`[name="${output.dataset.output}"]`);output.textContent=`${input.value}${input.dataset.suffix}`;}
-    const project=dialog.querySelector('[data-project-preview]');if(project){project.textContent=draft.project||'İsimsiz hikâye';dialog.querySelector('[data-cover-preview]').dataset.cover=draft.cover;}
-    const frame=dialog.querySelector('[data-display-frame]');if(frame){const [w,h]=draft.resolution.split('x').map(Number);frame.style.aspectRatio=`${w}/${h}`;frame.parentElement.style.background=draft.background;dialog.querySelector('[data-resolution-preview]').textContent=`${w} × ${h} · ${draft.windowMode}`;}
-    const reading=dialog.querySelector('.reading-preview');if(reading){reading.querySelector('p').style.fontSize=`${draft.textSize}px`;reading.querySelector('p').style.fontFamily=draft.font==='Kitap'?'Georgia,serif':'inherit';dialog.querySelector('[data-reading-speed]').textContent=`${draft.textSpeed} harf / saniye`;}
-    const art=dialog.querySelector('.audio-art');if(art){art.style.opacity=draft.mute?.3:.3+draft.master/100*.7;}
-    const theme=dialog.querySelector('.theme-preview');if(theme){theme.style.background=draft.theme==='Grafit'?'#28282d':'#101013';theme.style.setProperty('--preview-accent',{Kemik:'#e5dfd0',Lavanta:'#bfb4df',Adaçayı:'#b5c6b2'}[draft.accent]);}
-    const summary=dialog.querySelector('[data-package-preview]');if(summary){summary.textContent=draft.packageName||'İsimsiz paket';dialog.querySelector('[data-export-preview]').textContent=`${draft.platform} · ${draft.resolution.replace('x',' × ')} · ${draft.language}`;}
+}
+
+export const CATEGORIES = [
+  { id: 'general', icon: 'tools', title: 'Genel', desc: 'Başlangıç, bildirimler, otomatik kaydetme' },
+  { id: 'appearance', icon: 'layout', title: 'Görünüm & Tema', desc: 'Tema, yazı tipi, arayüz yoğunluğu' },
+  { id: 'viewport', icon: 'game', title: 'Sahne Görünümü / Tuval', desc: 'Editör kamerası, kılavuzlar, arka plan' },
+  { id: 'gridSnapping', icon: 'node', title: 'Izgara & Yapışma', desc: 'Tuval ızgarası, snap adımları' },
+  { id: 'external', icon: 'lua', title: 'Harici Araçlar', desc: 'IDE, kod editörü, terminal, Git' },
+  { id: 'shortcuts', icon: 'input', title: 'Kısayollar', desc: 'Editör klavye tuş eşlemleri' },
+  { id: 'pipeline', icon: 'assets', title: 'Varlık Hattı & Önbellek', desc: 'Varlık önbelleği, küçük resim boyutu' },
+  { id: 'performance', icon: 'tools', title: 'Performans & Tanılama', desc: 'Editör FPS, GPU hızlandırma, loglar' }
+];
+
+const GAME_SEARCH_TERMS = ['çözünürlük', 'ses', 'müzik', 'volume', 'kayıt', 'slot', 'metin hızı', 'sahne', 'fps oyunu', 'zorluk', 'oyuncu'];
+
+export function bindSettings(dialog, context) {
+  let profile = loadProfile();
+  let activeCategory = 'general';
+  let searchText = '';
+  let dirty = false;
+
+  function loadProfile() {
+    try {
+      const raw = localStorage.getItem(STORE_KEY);
+      if (!raw) return structuredClone(DEFAULT_PROFILE);
+      const parsed = JSON.parse(raw);
+      const merged = { ...structuredClone(DEFAULT_PROFILE), ...parsed };
+      assertPreferencesOnly(merged);
+      return merged;
+    } catch (err) {
+      console.warn('[Rowl Preferences] Kayıtlı tercihler yüklenirken hata oluştu veya yasak anahtar bulundu, varsayılana dönülüyor:', err);
+      return structuredClone(DEFAULT_PROFILE);
+    }
   }
-  dialog.addEventListener('input',()=>{collect();dirty=true;dialog.querySelector('[data-dirty]').textContent='Kaydedilmemiş değişiklikler';previews();});
-  dialog.addEventListener('change',()=>{collect();dirty=true;dialog.querySelector('[data-dirty]').textContent='Kaydedilmemiş değişiklikler';previews();});
-  dialog.addEventListener('click',event=>{if(event.target.closest('[data-dismiss]'))dialog.close();const category=event.target.closest('[data-category]');if(category){collect();active=category.dataset.category;render();const selected=dialog.querySelector('[aria-current=page]');selected.focus({preventScroll:true});selected.scrollIntoView({block:'nearest',inline:'center'});}});
-  dialog.addEventListener('submit',event=>{
-    event.preventDefault();collect();values={...draft};try{localStorage.setItem('rowl-design-preferences',JSON.stringify(values));}catch{}
-    context.apply({project:values.project,resolution:values.resolution,startScene:values.startScene,grid:values.grid,guides:values.guides});
-    document.documentElement.classList.toggle('reduce-motion',values.reducedMotion);
-    if(active==='export')context.export({...values});dialog.close();
+
+  function saveProfile() {
+    try {
+      assertPreferencesOnly(profile);
+      localStorage.setItem(STORE_KEY, JSON.stringify(profile));
+      dirty = false;
+      render();
+      context.apply({
+        grid: profile.gridSnapping.snapMove,
+        guides: profile.viewport.showGizmosDefault
+      });
+      document.documentElement.classList.toggle('reduce-motion', profile.appearance.density === 'compact');
+    } catch (err) {
+      alert(`Tercihler kaydedilemedi: ${err.message}`);
+    }
+  }
+
+  const toggle = (path, title, desc, checked) => `
+    <label class="setting-toggle" for="toggle-${path}">
+      <span><strong>${title}</strong><small>${desc}</small></span>
+      <input id="toggle-${path}" data-path="${path}" type="checkbox" ${checked ? 'checked' : ''}>
+      <i aria-hidden="true"></i>
+    </label>`;
+
+  const field = (path, title, value, type = 'text', extra = '') => `
+    <label class="setting-field" for="field-${path}">
+      ${title}
+      <input id="field-${path}" data-path="${path}" type="${type}" value="${value}" ${extra}>
+    </label>`;
+
+  const select = (path, title, value, options) => `
+    <label class="setting-field" for="select-${path}">
+      ${title}
+      <select id="select-${path}" data-path="${path}">
+        ${options.map(item => {
+          const [val, label] = Array.isArray(item) ? item : [item, item];
+          return `<option value="${val}" ${String(val) === String(value) ? 'selected' : ''}>${label}</option>`;
+        }).join('')}
+      </select>
+    </label>`;
+
+  const range = (path, title, value, min, max, step = 1, suffix = '') => `
+    <label class="setting-range" for="range-${path}">
+      <span>${title} <output data-out="${path}">${value}${suffix}</output></span>
+      <input id="range-${path}" data-path="${path}" type="range" min="${min}" max="${max}" step="${step}" value="${value}" data-suffix="${suffix}">
+    </label>`;
+
+  const card = (title, desc, content) => `
+    <section class="settings-card">
+      <header><h3>${title}</h3><p>${desc}</p></header>
+      ${content}
+    </section>`;
+
+  const sections = {
+    general: () => `
+      <div class="settings-columns">
+        ${card('Otomasyon ve Yedekleme (EditorSettingsProfile)', 'Makine-yerel çalışma alanı yedekleme ve oturum davranışı.', `
+          ${toggle('general.autoSaveEnabled', 'Editör Otomatik Kaydetme', 'Düzenlenen hikâye grafiğini ve sahneleri arka planda periyodik olarak kaydeder.', profile.general.autoSaveEnabled)}
+          <div class="field-pair">
+            ${range('general.autoSaveIntervalMin', 'Kayıt Aralığı', profile.general.autoSaveIntervalMin, 1, 30, 1, ' dk')}
+            ${range('general.backupCount', 'Maksimum Yedek Sayısı', profile.general.backupCount, 1, 20, 1, ' adet')}
+          </div>
+          <div class="info-note">
+            <svg><use href="#i-tools"/></svg>
+            <span>Not: Bu ayar sahne veya oyun kayıt dosyalarını değil, editör oturum durumunu yönetir.</span>
+          </div>
+        `)}
+        ${card('Başlangıç ve Oturum Davranışı', 'Editörün açılış ve kapanış süreçlerini yapılandır.', `
+          ${toggle('general.openLastProject', 'Son Projeyi Otomatik Aç', 'Editör başlatıldığında son çalışılan projeyi doğrudan yükle.', profile.general.openLastProject)}
+          ${toggle('general.confirmOnExit', 'Çıkışta Kaydedilmemiş Değişiklikleri Sor', 'Kaydedilmemiş değişiklik varken kapatma onayı iste.', profile.general.confirmOnExit)}
+          ${select('general.language', 'Editör Arayüz Dili', profile.general.language, [
+            ['system', 'Sistem Varsayılanı'],
+            ['tr', 'Türkçe'],
+            ['en', 'English']
+          ])}
+        `)}
+      </div>`,
+
+    appearance: () => `
+      <div class="settings-columns">
+        ${card('Editör Teması ve Renkleri (Avalonia)', 'Rowl Engine editör kabuk görünümü ve tema paleti.', `
+          ${select('appearance.theme', 'Tema', profile.appearance.theme, [
+            ['dark', 'Kemik Beyazı (Koyu) — Unity Dark Paritesi'],
+            ['oled', 'Saf Siyah (OLED) — Yüksek Kontrast'],
+            ['light', 'Açık Tema (Deneysel)']
+          ])}
+          <div class="theme-preview">
+            <div><i></i><i></i><i></i></div>
+            <span></span><span></span><span></span>
+          </div>
+          <div class="field-pair" style="margin-top: 12px;">
+            ${select('appearance.accent', 'Vurgu Rengi', profile.appearance.accent, [
+              ['#4cc2ff', 'Rowl Mavisi (#4CC2FF)'],
+              ['#e5dfd0', 'Kemik Beyazı (#E5DFD0)'],
+              ['#b5c6b2', 'Adaçayı Yeşili (#B5C6B2)'],
+              ['#bfb4df', 'Lavanta (#BFB4DF)']
+            ])}
+            ${select('appearance.density', 'Yerleşim Yoğunluğu', profile.appearance.density, [
+              ['comfortable', 'Rahat (Varsayılan)'],
+              ['compact', 'Kompakt (Yüksek Bilgi Yoğunluğu)']
+            ])}
+          </div>
+        `)}
+        ${card('Tipografi ve İkonlar', 'Arayüz metin ölçeği ve simge görünürlüğü.', `
+          ${range('appearance.fontSize', 'Temel Yazı Boyutu', profile.appearance.fontSize, 11, 16, 1, ' px')}
+          ${select('appearance.fontFamily', 'Arayüz Font Ailesi', profile.appearance.fontFamily, [
+            ['Inter', 'Inter (Varsayılan)'],
+            ['Segoe UI', 'Segoe UI'],
+            ['Roboto', 'Roboto'],
+            ['Ubuntu', 'Ubuntu Sans']
+          ])}
+          ${toggle('appearance.showIcons', 'Menü ve Panel İkonlarını Göster', 'Arayüz butonlarında simge grafiklerini aktif kıl.', profile.appearance.showIcons)}
+        `)}
+      </div>`,
+
+    viewport: () => `
+      <div class="settings-columns">
+        ${card('Editör Sahne Kamerası ve Tuvali', 'Sahne editörü kamerası ve arka plan görünümü (Oyun kamerası değildir).', `
+          <div class="field-pair">
+            ${field('viewport.bgColor', 'Tuval Zemin Rengi', profile.viewport.bgColor, 'color')}
+            ${range('viewport.cameraSpeed', 'Kamera Kaydırma Hızı', profile.viewport.cameraSpeed, 1.0, 15.0, 0.5, 'x')}
+          </div>
+          ${range('viewport.orbitSensitivity', 'Yörünge / Pan Hassasiyeti', profile.viewport.orbitSensitivity, 0.2, 3.0, 0.1, 'x')}
+          <div class="info-note">
+            <svg><use href="#i-game"/></svg>
+            <span>Kamera ayarları yalnızca Edit Scene içinde objeleri incelerken geçerlidir.</span>
+          </div>
+        `)}
+        ${card('Kılavuzlar ve Görsel Göstergeler (Gizmos)', 'Editörde objeleri konumlandırırken yardımcı olan görsel rehberler.', `
+          ${toggle('viewport.gridVisibleDefault', 'Varsayılan Olarak Izgarayı Aç', 'Yeni tuval açıldığında ızgarayı görünür tut.', profile.viewport.gridVisibleDefault)}
+          ${toggle('viewport.showGizmosDefault', 'Obje Tutamaçları ve Çerçeveleri (Gizmos)', 'Seçili objelerde taşıma, döndürme ve sınır çizgilerini göster.', profile.viewport.showGizmosDefault)}
+          ${toggle('viewport.showStatsOverlay', 'Editör FPS ve Bellek Göstergesi', 'Tuval köşesinde anlık editör render FPS sayacını göster.', profile.viewport.showStatsOverlay)}
+        `)}
+      </div>`,
+
+    gridSnapping: () => `
+      <div class="settings-columns">
+        ${card('Izgara Yapılandırması (Grid Settings)', 'Hikâye grafiği ve sahne tuvali ızgara boyutları.', `
+          <div class="field-pair">
+            ${field('gridSnapping.sizeX', 'Hücre Genişliği (X)', profile.gridSnapping.sizeX, 'number', 'step="0.1" min="0.1"')}
+            ${field('gridSnapping.sizeY', 'Hücre Yüksekliği (Y)', profile.gridSnapping.sizeY, 'number', 'step="0.1" min="0.1"')}
+          </div>
+          <div class="field-pair">
+            ${field('gridSnapping.divisions', 'Bölüm Çizgisi Sayısı', profile.gridSnapping.divisions, 'number', 'min="2" max="20"')}
+            ${field('gridSnapping.colorMajor', 'Ana Çizgi Rengi', profile.gridSnapping.colorMajor, 'color')}
+          </div>
+        `)}
+        ${card('Manyetik Yapışma Adımları (Snapping)', 'Objeleri taşırken ve boyutlandırırken kenetlenme artışları.', `
+          ${toggle('gridSnapping.snapMove', 'Konum Yapışması (Move Snap)', 'Objeleri ve düğümleri taşırken ızgaraya kenetle.', profile.gridSnapping.snapMove)}
+          ${toggle('gridSnapping.snapRotate', 'Döndürme Yapışması (Rotate Snap)', 'Açı tutamaçlarını belirli adımlara kilitle.', profile.gridSnapping.snapRotate)}
+          <div class="field-pair">
+            ${select('gridSnapping.stepMove', 'Taşıma Adımı', profile.gridSnapping.stepMove, [
+              ['0.1', '0.1 birim'],
+              ['0.25', '0.25 birim (Önerilen)'],
+              ['0.5', '0.5 birim'],
+              ['1.0', '1.0 birim']
+            ])}
+            ${select('gridSnapping.stepRotate', 'Döndürme Adımı', profile.gridSnapping.stepRotate, [
+              ['5', '5° derece'],
+              ['15', '15° derece (Standart)'],
+              ['45', '45° derece'],
+              ['90', '90° derece']
+            ])}
+          </div>
+        `)}
+      </div>`,
+
+    external: () => `
+      <div class="settings-columns">
+        ${card('Harici Kod Editörü (IDE)', 'Script ve metin dosyalarını çift tıklayınca açılacak geliştirici ortamı.', `
+          ${select('external.ide', 'Tercih Edilen Kod Editörü', profile.external.ide, [
+            ['vscode', 'Visual Studio Code (code)'],
+            ['cursor', 'Cursor AI Editor (cursor)'],
+            ['zed', 'Zed Editor (zed)'],
+            ['sublime', 'Sublime Text (subl)'],
+            ['custom', 'Özel Komut']
+          ])}
+          ${field('external.idePath', 'Özel Editör Yolu (Boşsa otomatik algılanır)', profile.external.idePath, 'text', 'placeholder="/usr/bin/code"')}
+          ${field('external.ideArgs', 'Başlatma Parametresi', profile.external.ideArgs, 'text', 'placeholder="{file}:{line}"')}
+        `)}
+        ${card('Harici Sistem Araçları', 'İşletim sistemi terminali, Blender ve Git entegrasyonu.', `
+          ${field('external.terminalPath', 'Terminal Yolu (Boş = Sistem Varsayılanı)', profile.external.terminalPath, 'text', 'placeholder="gnome-terminal, alacritty, kitty"')}
+          ${field('external.gitPath', 'Git Yürütülebilir Dosyası', profile.external.gitPath, 'text', 'placeholder="git"')}
+          ${field('external.blenderPath', 'Blender Yolu (İsteğe bağlı 3D model içe aktarımı)', profile.external.blenderPath, 'text', 'placeholder="blender"')}
+        `)}
+      </div>`,
+
+    shortcuts: () => `
+      <div class="settings-columns">
+        ${card('Editör ve Proje Kısayolları (Keymap)', 'Unity ve Rowl Engine tuş eşlemleri.', `
+          <div class="binding-list">
+            <label><span>Kaydet (Save)</span><kbd class="shortcut-key">${profile.shortcuts.bindings.save || 'Ctrl + S'}</kbd></label>
+            <label><span>Farklı Kaydet (Save As)</span><kbd class="shortcut-key">${profile.shortcuts.bindings.saveAs || 'Ctrl + Shift + S'}</kbd></label>
+            <label><span>Geri Al (Undo)</span><kbd class="shortcut-key">${profile.shortcuts.bindings.undo || 'Ctrl + Z'}</kbd></label>
+            <label><span>Yinele (Redo)</span><kbd class="shortcut-key">${profile.shortcuts.bindings.redo || 'Ctrl + Y'}</kbd></label>
+            <label><span>Yeni Düğüm (New Node)</span><kbd class="shortcut-key">${profile.shortcuts.bindings.newNode || 'Ctrl + N'}</kbd></label>
+            <label><span>Seçiliyi Sil (Delete)</span><kbd class="shortcut-key">${profile.shortcuts.bindings.delete || 'Delete'}</kbd></label>
+            <label><span>Yeniden Adlandır (Rename)</span><kbd class="shortcut-key">${profile.shortcuts.bindings.rename || 'F2'}</kbd></label>
+          </div>
+        `)}
+        ${card('Navigasyon ve Test Kontrolleri', 'Pencere yönetimi ve Play Mode tuşları.', `
+          <div class="binding-list">
+            <label><span>Build Al (Paketle)</span><kbd class="shortcut-key">${profile.shortcuts.bindings.build || 'Ctrl + B'}</kbd></label>
+            <label><span>Play Mode (Önizleme)</span><kbd class="shortcut-key">${profile.shortcuts.bindings.play || 'F5'}</kbd></label>
+            <label><span>Tam Ekran (Fullscreen)</span><kbd class="shortcut-key">${profile.shortcuts.bindings.fullscreen || 'F11'}</kbd></label>
+            <label><span>Hızlı Arama (Find)</span><kbd class="shortcut-key">${profile.shortcuts.bindings.find || 'Ctrl + F'}</kbd></label>
+            <label><span>Proje Hub\\\'ı</span><kbd class="shortcut-key">${profile.shortcuts.bindings.hub || 'Ctrl + H'}</kbd></label>
+            <label><span>Editör Ayarları (Preferences)</span><kbd class="shortcut-key">${profile.shortcuts.bindings.preferences || 'Ctrl + ,'}</kbd></label>
+          </div>
+        `)}
+      </div>`,
+
+    pipeline: () => `
+      <div class="settings-columns">
+        ${card('Varlık Önbelleği (Asset Cache)', 'Dönüştürülen dokular ve optimize edilmiş seslerin yerel önbelleği.', `
+          ${field('pipeline.cachePath', 'Yerel Önbellek Klasörü', profile.pipeline.cachePath, 'text')}
+          ${range('pipeline.maxCacheSizeGB', 'Maksimum Önbellek Boyutu', profile.pipeline.maxCacheSizeGB, 1, 50, 1, ' GB')}
+          <div class="field-pair" style="margin-top: 10px;">
+            <button type="button" class="text-button" id="btn-clear-cache" style="border: 1px solid #3c3944; border-radius: 6px; padding: 6px 12px; font-size: 11px;">Önbelleği Temizle</button>
+            <span style="font-size: 10px; color: #8c8893; display: flex; align-items: center;">Mevcut kullanım: ~14.2 MB</span>
+          </div>
+        `)}
+        ${card('İçe Aktarma ve Küçük Resimler (Thumbnails)', 'Asset Browser için görsel önizleme ayarları.', `
+          ${toggle('pipeline.autoReimport', 'Değişen Dosyaları Otomatik İçe Aktar', 'Disk üzerinde varlık güncellendiğinde editörde anında yeniden işle.', profile.pipeline.autoReimport)}
+          ${toggle('pipeline.compressThumbnails', 'Küçük Resimleri Sıkıştır', 'Thumbnail önbelleğinde RAM tasarrufu sağla.', profile.pipeline.compressThumbnails)}
+          ${select('pipeline.thumbnailSize', 'Varsayılan Önizleme Çözünürlüğü', profile.pipeline.thumbnailSize, [
+            ['64', '64 × 64 px (Düşük RAM)'],
+            ['128', '128 × 128 px (Dengeli)'],
+            ['256', '256 × 256 px (Yüksek Kalite)']
+          ])}
+        `)}
+      </div>`,
+
+    performance: () => `
+      <div class="settings-columns">
+        ${card('Editör Render Motoru ve FPS', 'Editörün GPU/CPU tüketimi ve donanım hızlandırma seçenekleri.', `
+          ${select('performance.fpsCap', 'Editör Tuval FPS Sınırı', profile.performance.fpsCap, [
+            ['30', '30 FPS (Pil Tasarrufu)'],
+            ['60', '60 FPS (Önerilen)'],
+            ['120', '120 FPS (Yüksek Yenileme)'],
+            ['0', 'Sınırsız']
+          ])}
+          ${toggle('performance.vsyncEditor', 'Editör VSync (Dikey Senkronizasyon)', 'Editör arayüzünde ekran yırtılmalarını önle.', profile.performance.vsyncEditor)}
+          ${toggle('performance.hardwareAccel', 'GPU Donanım Hızlandırma', 'SDL3 render yüzeyinde donanım hızlandırmasını aktif tut.', profile.performance.hardwareAccel)}
+        `)}
+        ${card('Günlükleme ve Hata Ayıklama (Logger)', 'C++ çekirdek ve Avalonia editör log filtreleme seviyeleri.', `
+          ${select('performance.logLevel', 'Konsol Log Seviyesi', profile.performance.logLevel, [
+            ['Verbose', 'Verbose (Tüm Çağrılar)'],
+            ['Info', 'Info (Bilgilendirme)'],
+            ['Warning', 'Warning (Uyarılar ve Hatalar)'],
+            ['Error', 'Error (Yalnızca Kritik Hatalar)']
+          ])}
+          ${toggle('performance.showProfilerOnPlay', 'Play Mode Sırasında Profiler Aç', 'Önizleme başlatıldığında bellek ve kare süresi panelini göster.', profile.performance.showProfilerOnPlay)}
+          ${toggle('performance.crashReport', 'Çökme Durumunda Hata Raporu Üret', 'Olası beklenmedik çökmede kaza günlüğü oluştur.', profile.performance.crashReport)}
+        `)}
+      </div>`,
+
+    about: () => `
+      <div class="settings-columns">
+        ${card('Rowl Engine Editör Hakkında', 'Görsel Roman ve Etkileşimli Hikâye Editörü.', `
+          <div style="padding: 10px 0; text-align: center;">
+            <h2 style="font-size: 20px; font-weight: 700; color: #f2efe6; margin: 0 0 4px; letter-spacing: 1px;">ROWL ENGINE EDITOR</h2>
+            <span style="font-size: 11px; color: #a8a49c;">Sürüm 1.0.0 (Preferences & Environment)</span>
+          </div>
+          <div class="info-note" style="margin-bottom: 12px;">
+            <svg><use href="#i-tools"/></svg>
+            <span>Yalnızca Makine-Yerel Editör Tercihleri (Unity Preferences Eşdeğeri)</span>
+          </div>
+          <p style="font-size: 11px; line-height: 1.6; color: #d8d4cc; margin: 0 0 10px;">
+            Bu penceredeki tüm tercihler doğrudan yerel <code>EditorSettings.v1.json</code> dosyasına kaydedilir. Oyunun hikâye metni, çözünürlüğü, ses seviyeleri veya sahne başlangıçları gibi oyun içi ayarlar asla bu pencereye dahil edilmez.
+          </p>
+        `)}
+        ${card('Editör Sistem Mimarisi', 'Makine ve ortam bileşenleri.', `
+          <div class="binding-list">
+            <label><span>Arayüz Çatısı</span><span class="spec-value">Avalonia 11 + .NET 10</span></label>
+            <label><span>MVVM Mimarisi</span><span class="spec-value">CommunityToolkit.Mvvm</span></label>
+            <label><span>Platform Host</span><span class="spec-value">Linux x86_64 · Zero-Copy Host</span></label>
+            <label><span>Native Çekirdek</span><span class="spec-value">C++20 libRowlEngineCore</span></label>
+            <label><span>Grafik Tuvali</span><span class="spec-value">SDL3 Hardware Surface</span></label>
+            <label><span>Profil Dosyası</span><span class="spec-value">EditorSettingsProfile.cs</span></label>
+          </div>
+        `)}
+      </div>`
+  };
+
+  function render() {
+    const isGameQuery = searchText && GAME_SEARCH_TERMS.some(t => searchText.includes(t));
+    const activeData = CATEGORIES.find(c => c.id === activeCategory) || CATEGORIES[0];
+
+    dialog.innerHTML = `
+      <form id="settings-form" class="settings-layout">
+        <aside class="settings-sidebar">
+          <div class="settings-sidebar-header">
+            <span class="settings-badge">Rowl Engine</span>
+            <h2>Ayarlar</h2>
+          </div>
+          <div class="settings-search-wrap" style="padding: 0 10px 10px;">
+            <input type="search" id="settings-search-input" value="${searchText}" placeholder="Tercih ara (tema, ızgara, IDE)..." style="width: 100%; min-height: 30px; font-size: 11px; padding: 4px 8px; background: #121215; border: 1px solid #36343e; border-radius: 6px; color: #dcd6c5;">
+          </div>
+          <nav class="settings-nav" aria-label="Editör tercih kategorileri">
+            ${CATEGORIES.map(c => `
+              <button type="button" class="settings-nav-item" data-category="${c.id}" aria-current="${c.id === activeCategory ? 'page' : 'false'}">
+                <svg class="settings-nav-icon"><use href="#i-${c.icon}"/></svg>
+                <span class="settings-nav-label">${c.title}</span>
+              </button>
+            `).join('')}
+          </nav>
+          <div class="settings-sidebar-footer">
+            <span class="settings-dirty" data-dirty>${dirty ? 'Değişiklikler var' : 'Kayıtlı'}</span>
+          </div>
+        </aside>
+
+        <section class="settings-main">
+          <header class="settings-main-header">
+            <div class="settings-title-group">
+              <h3 id="settings-title">${activeData.title}</h3>
+              <p class="settings-desc">${activeData.desc}</p>
+            </div>
+            <button type="button" class="icon-button settings-close-btn" data-dismiss aria-label="Ayarları kapat" title="Kapat">
+              <svg><use href="#i-close"/></svg>
+            </button>
+          </header>
+
+          <div class="settings-scroll">
+            ${isGameQuery ? `
+              <div class="info-note" style="border: 1px solid #baa88c; background: #23201d; padding: 16px; margin: 20px 0;">
+                <svg style="color: #baa88c;"><use href="#i-tools"/></svg>
+                <div>
+                  <strong style="color: #f2efe6; display: block; font-size: 12px; margin-bottom: 4px;">Aradığınız öğe bir Oyun / Proje ayarıdır</strong>
+                  <span style="font-size: 11px; color: #d8d4cc; line-height: 1.5;">Oyun çözünürlüğü, ses seviyeleri, kayıt slotları veya metin yazım hızı gibi oyun içi ayarlar <strong>Proje Ayarları</strong> (Project Settings) kapsamındadır. <strong>Editör Ayarları</strong> (Preferences) yalnızca editörün kendi çalışma ortamı, teması, tuvali ve donanım tercihlerini içerir.</span>
+                  <div style="margin-top: 12px;">
+                    <button type="button" class="primary-button" id="btn-jump-project-settings" style="font-size: 11px; padding: 6px 14px; background: #baa88c; color: #1b1a18; font-weight: 600;">Proje Ayarlarını Aç</button>
+                  </div>
+                </div>
+              </div>
+            ` : (sections[activeCategory] ? sections[activeCategory]() : sections.general())}
+          </div>
+
+          <footer class="settings-main-footer">
+            <div style="margin-right: auto; display: flex; gap: 8px;">
+              <button type="button" class="text-button" id="btn-export-prefs" style="font-size: 11px; color: #a8a49c;">Dışa Aktar</button>
+              <button type="button" class="text-button" id="btn-reset-cat" style="font-size: 11px; color: #a8a49c;">Kategoriyi Sıfırla</button>
+            </div>
+            <button type="button" class="text-button" data-dismiss>Vazgeç</button>
+            <button type="submit" class="primary-button">Tercihleri kaydet</button>
+          </footer>
+        </section>
+      </form>
+    `;
+
+    bindFormEvents();
+  }
+
+  function bindFormEvents() {
+    const jumpBtn = dialog.querySelector('#btn-jump-project-settings');
+    if (jumpBtn) {
+      jumpBtn.addEventListener('click', () => {
+        dialog.close();
+        if (context?.openProjectSettings) context.openProjectSettings();
+      });
+    }
+
+    const searchInput = dialog.querySelector('#settings-search-input');
+    if (searchInput) {
+      searchInput.addEventListener('input', e => {
+        searchText = e.target.value.toLowerCase().trim();
+        render();
+        const nextInput = dialog.querySelector('#settings-search-input');
+        if (nextInput) {
+          nextInput.focus();
+          nextInput.selectionStart = nextInput.selectionEnd = nextInput.value.length;
+        }
+      });
+    }
+
+    dialog.querySelectorAll('[data-path]').forEach(el => {
+      const path = el.dataset.path.split('.');
+      el.addEventListener('change', () => {
+        setNestedValue(profile, path, el.type === 'checkbox' ? el.checked : el.value);
+        dirty = true;
+        const dirtyEl = dialog.querySelector('[data-dirty]');
+        if (dirtyEl) dirtyEl.textContent = 'Değişiklikler var';
+      });
+      el.addEventListener('input', () => {
+        if (el.type === 'range') {
+          const out = dialog.querySelector(`[data-out="${el.dataset.path}"]`);
+          if (out) out.textContent = `${el.value}${el.dataset.suffix || ''}`;
+        }
+        setNestedValue(profile, path, el.type === 'checkbox' ? el.checked : (el.type === 'range' || el.type === 'number' ? Number(el.value) : el.value));
+        dirty = true;
+        const dirtyEl = dialog.querySelector('[data-dirty]');
+        if (dirtyEl) dirtyEl.textContent = 'Değişiklikler var';
+      });
+    });
+
+    const resetBtn = dialog.querySelector('#btn-reset-cat');
+    if (resetBtn) {
+      resetBtn.addEventListener('click', () => {
+        if (DEFAULT_PROFILE[activeCategory]) {
+          profile[activeCategory] = structuredClone(DEFAULT_PROFILE[activeCategory]);
+          dirty = true;
+          render();
+        }
+      });
+    }
+
+    const exportBtn = dialog.querySelector('#btn-export-prefs');
+    if (exportBtn) {
+      exportBtn.addEventListener('click', () => {
+        const blob = new Blob([JSON.stringify(profile, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'rowl-editor-preferences.json';
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      });
+    }
+  }
+
+  function setNestedValue(obj, pathArr, val) {
+    let curr = obj;
+    for (let i = 0; i < pathArr.length - 1; i++) {
+      if (!curr[pathArr[i]]) curr[pathArr[i]] = {};
+      curr = curr[pathArr[i]];
+    }
+    curr[pathArr[pathArr.length - 1]] = val;
+  }
+
+  dialog.addEventListener('click', event => {
+    if (event.target.closest('[data-dismiss]')) {
+      dialog.close();
+      return;
+    }
+    const catBtn = event.target.closest('[data-category]');
+    if (catBtn) {
+      activeCategory = catBtn.dataset.category;
+      render();
+      const selected = dialog.querySelector('[aria-current=page]');
+      if (selected) {
+        selected.focus({ preventScroll: true });
+        selected.scrollIntoView({ block: 'nearest', inline: 'center' });
+      }
+    }
   });
-  document.documentElement.classList.toggle('reduce-motion',values.reducedMotion);
-  return {snapshot:()=>({...values}),restore:data=>{values={...defaults};if(data&&typeof data==='object')for(const [key,value] of Object.entries(defaults))if(typeof data[key]===typeof value)values[key]=data[key];},open(category){context.beforeOpen();active=category in sections?category:'project';draft={...values,...context.get()};dirty=false;render();dialog.showModal();dialog.querySelector('[aria-current=page]').scrollIntoView({block:'nearest',inline:'center'});}};
+
+  dialog.addEventListener('submit', event => {
+    event.preventDefault();
+    saveProfile();
+    dialog.close();
+  });
+  return {
+    snapshot: () => structuredClone(profile),
+    restore: data => { if (data && typeof data === 'object') { profile = { ...loadProfile(), ...data }; render(); } },
+    open(catId) {
+      context.beforeOpen();
+      activeCategory = CATEGORIES.some(c => c.id === catId) ? catId : 'general';
+      profile = loadProfile();
+      dirty = false;
+      searchText = '';
+      render();
+      dialog.showModal();
+      const selected = dialog.querySelector('[aria-current=page]');
+      if (selected) selected.scrollIntoView({ block: 'nearest', inline: 'center' });
+    }
+  };
 }
