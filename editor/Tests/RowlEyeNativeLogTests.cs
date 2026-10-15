@@ -28,45 +28,47 @@ public sealed class RowlEyeNativeLogTests
     [Fact]
     public async Task NativeLogReceived_Publishes_To_TelemetryHub()
     {
+        const string marker = "seq_since/dirty_only filter rejected";
         var hub = AiTelemetryHub.Instance;
         var service = RowlEyeEngineService.Instance;
         service.HookLogCallback();
+        service.EnsureInitialized(640, 360);
 
-        bool receivedLog = false;
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-
+        // Abonelik tetikten ÖNCE: istemci kanalı tamponludur, olay kaçmaz.
         var (subId, reader) = hub.Subscribe();
-        var subTask = Task.Run(async () =>
+        try
         {
+            // Gerçek native yol: reddedilen filtre motor içinde WARN üretir →
+            // Logger callback → OnNativeLogReceived → hub. Test olayı kendisi
+            // YAYINLAMAZ; eski hali sahte bir NativeLog yayınladığından
+            // callback köprüsü kırıkken de yeşildi.
+            Assert.Equal("{}", service.QueryWorldJson("{\"seq_since\":1}"));
+
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
             try
             {
-                while (await reader.WaitToReadAsync(cts.Token).ConfigureAwait(false))
+                while (await reader.WaitToReadAsync(cts.Token))
                 {
                     while (reader.TryRead(out var evt))
                     {
-                        if (evt.Type == AiTelemetryEventType.NativeLog)
+                        if (evt.Type == AiTelemetryEventType.NativeLog &&
+                            evt.Payload is NativeLogPayloadDto log &&
+                            log.Message.Contains(marker, StringComparison.Ordinal))
                         {
-                            receivedLog = true;
+                            Assert.Equal(3, log.Level); // WARN
                             return;
                         }
                     }
                 }
             }
-            catch (OperationCanceledException) { }
-            finally
+            catch (OperationCanceledException)
             {
-                hub.Unsubscribe(subId);
             }
-        });
-
-        // Trigger native engine step which produces log/telemetry
-        service.EnsureInitialized(640, 360);
-        service.Step(0.016f);
-
-        // Publish a test native log event to guarantee coverage
-        hub.Publish(AiTelemetryEventType.NativeLog, new NativeLogPayloadDto(2, "Info", "Rowl.Eye AI Test Log", DateTime.UtcNow.ToString("o")));
-
-        await subTask.ConfigureAwait(false);
-        Assert.True(receivedLog, "AiTelemetryHub should broadcast NativeLog event");
+            Assert.Fail("Native WARN did not reach AiTelemetryHub through the log callback.");
+        }
+        finally
+        {
+            hub.Unsubscribe(subId);
+        }
     }
 }

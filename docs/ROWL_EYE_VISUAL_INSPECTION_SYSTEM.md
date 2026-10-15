@@ -101,18 +101,70 @@ dotnet run --project editor/RowlEngine.Editor.csproj -- --rowl-eye --target Main
 
 ---
 
-## 4. Test Paketi & Doğrulama (22/22 Test Yeşil)
+### E. AI Gözlemlenebilirlik Uç Noktaları (`/api/v1/ai/*`)
+`--serve` aynı sunucuda motoru ve editörü bir AI ajanına açan uç noktaları da yayınlar
+(liste `RowlEyeWebServer.cs` yönlendirme tablosundan alınmıştır):
 
-Sistem `editor/Tests/RowlEye/` altında 5 test sınıfı ve 22 xUnit testi ile %100 kapsama sahiptir:
+| Grup | Yollar |
+| :--- | :--- |
+| Ajan durumu | `agent-state`, `agent-stream` (SSE), `context`, `focus`, `comprehension`, `tools` |
+| Motor | `engine/context`, `engine/framebuffer`, `engine/memory_stats`, `engine/playback`, `engine/resize`, `engine/rng_seed`, `engine/time_scale` |
+| Dünya / girdi | `world/query`, `input/inject`, `history/rewind` |
+| Hikâye | `story/graph`, `story/coverage`, `story/drive`, `story/mutate` |
+| Ses / VFS / log | `audio/stats`, `vfs/status`, `vfs/dead_assets`, `logs/recent` |
+| Editör | `editor/inject`, `editor/undo_redo`, `editor/dialog_answer`, `editor/dialog_answers` |
+| Diğer | `script/eval`, `project/lint`, `report/aggregate`, `watchdog/status` |
+
+---
+
+## 4. Native Gözlem C API Sözleşmesi (`engine/src/c_api_observability.cpp`)
+
+| Sembol | Davranış |
+| :--- | :--- |
+| `RowlEngine_QueryWorldJson` | Sahne/hikâye/değişken/anomali anlık görüntüsü. Filtre katıdır: bozuk JSON, nesne olmayan filtre, bool olmayan `compact`/`anomalies`, `seq_since`/`dirty_only` → `0` (varsayılan görüntüye düşmez). |
+| `RowlEngine_InjectInputJson` | `tap`/`choice`/`advance`/`rewind`/`drag` olayları. **Hep-ya-hiç:** tüm olaylar önce doğrulanır; bilinmeyen/yanlış tipli olay, negatif adım/indeks veya boş dizi tüm grubu motoru değiştirmeden reddeder. |
+| `RowlEngine_GetAudioStatsJson` | Kanal RMS/peak, spektrum, sezgisel kırpılma riski. |
+| `RowlEngine_QueryVfsStatusJson` | Mount listesi, atlanan paketler, isteğe bağlı yol teşhisi. |
+| `RowlEngine_GetRecentLogsJson` | Son 256 log; her zaman geçerli UTF-8 JSON (geçersiz baytlar U+FFFD). Handle almaz. |
+| `RowlEngine_SetLogCallback` | Native logu yönetilen tarafa iletir; `NULL` ile kapatılır. Callback log üreten herhangi bir threadden çağrılabilir. |
+| `RowlEngine_FreeObservabilityString` | No-op; arayan-tahsisli arabellek sözleşmesi için imza korunur. |
+
+**Thread sözleşmesi:** handle alan dört uç, motorun diğer çağrıları gibi yalnız sahip
+threadden çağrılır. Yabancı threadden çağrı `0` döner, arabelleğe dokunmaz ve
+`ROWL_RESULT_WRONG_THREAD` damgalar (`RowlEngine_GetLastResultCode`). Editörde bu çağrılar
+`OffscreenRuntimeWorker.Invoke` üzerinden sahip threade taşınır.
+
+**Arabellek protokolü:** `outBuffer == NULL` veya `bufferCap <= 0` → gereken boyut (NUL dahil);
+küçük arabellek → `-gereken` + NUL ile kesilmiş içerik; yeterli arabellek → yazılan bayt
+sayısı (NUL hariç). Ölü/geçersiz handle → `0`.
+
+**Kilit:** `tests/test_observability_c_api.cpp` (`rowl_native_tests` gövdesinde; gece
+ASan/UBSan ve TSan tam-süit işleri de koşar).
+
+---
+
+## 5. Test Paketi & Doğrulama
+
 ```bash
 dotnet test editor/Tests/RowlEngine.Editor.Tests.csproj --filter "FullyQualifiedName~RowlEye"
 ```
 
-| Test Sınıfı | Test Sayısı | Doğrulanan Kapsam |
+Motora bağlı testler `RowlEngineCore` native kütüphanesine ihtiyaç duyar (`cmake --build build`).
+2026-10-15 itibarıyla **56 test**:
+
+| Test Sınıfı | Test | Kapsam |
 | :--- | :---: | :--- |
-| `RowlEyeSmokeTests` | 6 | Argüman ayrıştırma, mühürlü yapıtlar, özdeş fark (%0.000), sentetik ısı haritası, IgnoreRegion maskeleme baypası ve State Variants üretimi |
-| `RowlEyeTargetTests` | 6 | 6 izole panelin (SettingsDialog, NodeGraph, Hierarchy, Inspector, AssetBrowser, LivePreview) render'ı |
-| `RowlEyeGoldenTests` | 3 | Altın referans güncelleme döngüsü, kırık görsel tespiti ve eksik referans kapısı |
-| `RowlEyeReportTests` | 1 | Zero-dependency interaktif HTML raporunun üretimi, filtreler ve DOM doğrulaması |
-| `RowlEyeServeTests` | 6 | Dinamik port dinleme, offline HTML sunumu, Skia PNG sihirli baytları, ViewModel JSON, Audit roundtrip ve Visual Tree API doğrulaması |
-| **Toplam** | **22** | **Tümü Başarılı (0 Hata, ~4 saniye)** |
+| `RowlEye/RowlEyeSmokeTests` | 6 | Argüman ayrıştırma, mühür, özdeş/sentetik fark, maskeleme, durum varyantları |
+| `RowlEye/RowlEyeTargetTests` | 6 | 6 izole panelin render'ı |
+| `RowlEye/RowlEyeGoldenTests` | 3 | Altın referans güncelleme, kırık görsel, eksik referans |
+| `RowlEye/RowlEyeReportTests` | 1 | HTML raporu |
+| `RowlEye/RowlEyeServeTests` | 6 | Web denetçi uç noktaları (PNG, ViewModel, audit, visual tree) |
+| `RowlEyeGlmP0AuditedFeaturesTests` | 17 | AI uç noktalarının servis katmanı (hikâye, VFS, watchdog, rapor, kare özeti) |
+| `RowlEyeP0ExtensionsTests` | 6 | Girdi enjeksiyonu, geri sarma, betik, VFS, dünya sorgusu |
+| `RowlEyeAiTelemetryTests` | 3 | Telemetri hub'ı ve bağlam üretimi |
+| `RowlEyeEngineServiceTests` | 2 | Motor yaşam döngüsü ve kare yakalama |
+| `RowlEyeWorldQueryTests` | 2 | Dünya sorgusu ve girdi enjeksiyonu |
+| `RowlEyeNativeLogTests` | 2 | Native log → callback → hub (gerçek native WARN ile) |
+| `RowlEyeAudioTelemetryTests` | 1 | Ses istatistikleri |
+| `RowlEyeWebServerIntegrationTests` | 1 | AI uç noktaları uçtan uca |
+| **Toplam** | **56** | |

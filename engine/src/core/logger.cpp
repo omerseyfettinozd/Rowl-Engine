@@ -5,6 +5,7 @@
 #include <sstream>
 #include <iostream>
 #include <filesystem>
+#include <nlohmann/json.hpp>
 
 namespace Rowl::Core {
 
@@ -51,33 +52,23 @@ void Logger::setLogCallback(RowlLogCallbackFn cb) {
 }
 
 std::string Logger::getRecentLogsJson(int minLevel, size_t maxCount) {
-    std::lock_guard<std::mutex> lock(s_bufferMutex);
-    std::stringstream ss;
-    ss << "[";
-    bool first = true;
-    size_t count = 0;
-    for (auto it = s_recentLogs.rbegin(); it != s_recentLogs.rend() && count < maxCount; ++it) {
-        if (static_cast<int>(it->level) < minLevel) continue;
-        if (!first) ss << ",";
-        first = false;
-        ss << "{\"level\":" << static_cast<int>(it->level)
-           << ",\"levelStr\":\"" << it->levelStr << "\""
-           << ",\"timestamp\":\"" << it->timestamp << "\""
-           << ",\"message\":\"";
-        for (char c : it->message) {
-            if (c == '"') ss << "\\\"";
-            else if (c == '\\') ss << "\\\\";
-            else if (c == '\n') ss << "\\n";
-            else if (c == '\r') ss << "\\r";
-            else if (c == '\t') ss << "\\t";
-            else if (static_cast<unsigned char>(c) < 32) ss << " ";
-            else ss << c;
+    // Elle kurulan JSON geçersiz UTF-8 baytlarını aynen geçiriyordu; katı
+    // ayrıştırıcı (RowlEye denetçisi) tüm listeyi reddederdi. nlohmann
+    // kaçışı + error_handler_t::replace her zaman geçerli UTF-8 JSON üretir.
+    nlohmann::json entries = nlohmann::json::array();
+    {
+        std::lock_guard<std::mutex> lock(s_bufferMutex);
+        for (auto it = s_recentLogs.rbegin(); it != s_recentLogs.rend() && entries.size() < maxCount; ++it) {
+            if (static_cast<int>(it->level) < minLevel) continue;
+            entries.push_back({
+                {"level", static_cast<int>(it->level)},
+                {"levelStr", it->levelStr},
+                {"timestamp", it->timestamp},
+                {"message", it->message},
+            });
         }
-        ss << "\"}";
-        count++;
     }
-    ss << "]";
-    return ss.str();
+    return entries.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
 }
 
 std::string_view Logger::logLevelToString(LogLevel level) {

@@ -21,12 +21,15 @@ public sealed class EditorOffscreenRuntimeWorkerDisposeTests
             destroyHandle: _ => destroyed.Set());
         try
         {
-            var pending = Task.Run(() => worker.Invoke(_ =>
+            // Takılan çağrı adanmış threadde bekler: Task.Run paylaşılan
+            // havuza bağlıydı; paralel testler havuzu doldurunca komut 2 sn
+            // içinde hiç kuyruğa girmiyordu (Windows nightly, 13-14 Eki).
+            var pending = Task.Factory.StartNew(() => worker.Invoke(_ =>
             {
                 entered.Set();
                 release.Wait();
                 return 1;
-            }));
+            }), CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
             Assert.True(entered.Wait(TimeSpan.FromSeconds(2)));
             await Assert.ThrowsAsync<TimeoutException>(async () => await pending);
             Assert.False(worker.IsAvailable);

@@ -48,6 +48,7 @@ add_executable(rowl_tests
     test_cache_hygiene.cpp
     test_font_hardening.cpp
     test_handle_hygiene.cpp
+    test_observability_c_api.cpp
     test_lifecycle_init_guards.cpp
     test_lifecycle_shutdown_sweep.cpp
     test_lifecycle_thread_lease.cpp
