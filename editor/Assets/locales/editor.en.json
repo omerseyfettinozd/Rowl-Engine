@@ -146,6 +146,54 @@
     },
     "Status.Unsaved": {
       "text": "There are unsaved changes"
+    },
+    "Graph.Group.Drag.Tip": {
+      "text": "Drag: move with group • Double-click: fit to members"
+    },
+    "Graph.Group.Delete.Tip": {
+      "text": "Delete group (nodes stay)"
+    },
+    "Graph.Group.Resize.Tip": {
+      "text": "Resize"
+    },
+    "Graph.ZoomOut": {
+      "text": "Zoom out"
+    },
+    "Graph.ZoomLevel": {
+      "text": "Zoom level"
+    },
+    "Graph.ZoomIn": {
+      "text": "Zoom in"
+    },
+    "Graph.Fit": {
+      "text": "Fit"
+    },
+    "Graph.Fit.Tip": {
+      "text": "Fit the whole graph on screen"
+    },
+    "Graph.FitSelection": {
+      "text": "Selection"
+    },
+    "Graph.FitSelection.Tip": {
+      "text": "Focus the selected node (F)"
+    },
+    "Graph.Minimap": {
+      "text": "Map"
+    },
+    "Graph.Minimap.Tip": {
+      "text": "Minimap visibility"
+    },
+    "Graph.ResetView": {
+      "text": "Reset View (0,0)"
+    },
+    "Graph.Chapter": {
+      "text": "Chapter:"
+    },
+    "Graph.Chapter.Tip": {
+      "text": "Narrow the canvas to one chapter"
+    },
+    "Graph.Crumb.Tip": {
+      "text": "Return to this level"
     }
   }
 }

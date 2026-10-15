@@ -179,12 +179,8 @@
                 <Grid Grid.Row="0" ClipToBounds="True">
 
                     <!-- BREADCRUMB + CHAPTER SCOPE (Faz 4 Dilim 3) -->
-                    <Border x:Name="BreadcrumbPanel" HorizontalAlignment="Left" VerticalAlignment="Top"
-                            Margin="12,12,0,0" ZIndex="90"
-                            Background="{DynamicResource SurfaceBackground}"
-                            BorderBrush="{DynamicResource BorderColor}" BorderThickness="1"
-                            CornerRadius="6" Padding="8,4"
-                            BoxShadow="0 4 16 0 #40000000">
+                    <Border x:Name="BreadcrumbPanel" Classes="floating" HorizontalAlignment="Left" VerticalAlignment="Top"
+                            Margin="12,12,0,0" ZIndex="90" Padding="8,4">
                         <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                             <ItemsControl ItemsSource="{Binding Subgraphs.Crumbs}">
                                 <ItemsControl.ItemsPanel>
@@ -197,34 +193,30 @@
                                         <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
                                             <TextBlock Text="/" Foreground="{DynamicResource MutedText}" FontSize="12" VerticalAlignment="Center"/>
                                             <Button Tag="CrumbNav" Content="{Binding Title}" Padding="6,2" FontSize="11"
-                                                    ToolTip.Tip="Bu düzeye dön"/>
+                                                    ToolTip.Tip="{l:T Graph.Crumb.Tip}"/>
                                         </StackPanel>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
                             <Border Width="1" Height="14" Background="{DynamicResource BorderColor}"/>
-                            <TextBlock Text="Bölüm:" Foreground="{DynamicResource MutedText}" FontSize="11" VerticalAlignment="Center"/>
+                            <TextBlock Text="{l:T Graph.Chapter}" Classes="muted" FontSize="{DynamicResource FontSizeBody}" VerticalAlignment="Center"/>
                             <ComboBox ItemsSource="{Binding Subgraphs.AvailableChapterOptions}"
                                       SelectedItem="{Binding Subgraphs.ChapterFilterOption}"
-                                      FontSize="11" MinWidth="110" ToolTip.Tip="Tuvali tek bölüme daralt"/>
+                                      FontSize="11" MinWidth="110" ToolTip.Tip="{l:T Graph.Chapter.Tip}"/>
                         </StackPanel>
                     </Border>
 
                     <!-- FAZ 3 (K4): Node paneli araç çubuğu — düğüm komutları üst çubuktan
                          buraya taşındı; yalnız düğüm grafiği açıkken görünür. -->
                     <Border x:Name="NodeToolbarPanel" HorizontalAlignment="Left" VerticalAlignment="Top"
-                            Margin="12,58,0,0" ZIndex="90" IsVisible="{Binding IsNodeGraphActive}"
-                            Background="{DynamicResource SurfaceBackground}"
-                            BorderBrush="{DynamicResource BorderColor}" BorderThickness="1"
-                            CornerRadius="8" Padding="4"
-                            BoxShadow="0 4 16 0 #40000000">
+                            Classes="floating" Margin="12,58,0,0" ZIndex="90" IsVisible="{Binding IsNodeGraphActive}">
                         <StackPanel x:Name="NodeToolbar" Orientation="Horizontal" Spacing="4">
-                            <Button Classes="ghost" Content="{l:T Node.Add}" ToolTip.Tip="{l:T Node.Add.Tip}" Command="{Binding AddNodeCommand}"/>
-                            <Button Classes="ghost" Content="{l:T Node.Disconnect}" ToolTip.Tip="{l:T Node.Disconnect.Tip}" Command="{Binding DisconnectSelectedNodeCablesCommand}"/>
-                            <Button Classes="ghost" Content="{l:T Node.Delete}" ToolTip.Tip="{l:T Node.Delete.Tip}" Command="{Binding DeleteSelectedNodeCommand}"/>
+                            <Button Classes="tool" Content="{l:T Node.Add}" ToolTip.Tip="{l:T Node.Add.Tip}" Command="{Binding AddNodeCommand}"/>
+                            <Button Classes="tool" Content="{l:T Node.Disconnect}" ToolTip.Tip="{l:T Node.Disconnect.Tip}" Command="{Binding DisconnectSelectedNodeCablesCommand}"/>
+                            <Button Classes="tool" Content="{l:T Node.Delete}" ToolTip.Tip="{l:T Node.Delete.Tip}" Command="{Binding DeleteSelectedNodeCommand}"/>
                             <Border Classes="capsuleDivider"/>
-                            <Button Classes="ghost" Content="{l:T Node.Group}" ToolTip.Tip="{l:T Node.Group.Tip}" Command="{Binding CreateGroupFromSelectionCommand}"/>
-                            <Button Classes="ghost" Content="{l:T Node.Up}" ToolTip.Tip="{l:T Node.Up.Tip}" Command="{Binding ExitSubgraphCommand}"/>
+                            <Button Classes="tool" Content="{l:T Node.Group}" ToolTip.Tip="{l:T Node.Group.Tip}" Command="{Binding CreateGroupFromSelectionCommand}"/>
+                            <Button Classes="tool" Content="{l:T Node.Up}" ToolTip.Tip="{l:T Node.Up.Tip}" Command="{Binding ExitSubgraphCommand}"/>
                         </StackPanel>
                     </Border>
 

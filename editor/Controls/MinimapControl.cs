@@ -237,7 +237,8 @@ namespace RowlEngine.Editor.Controls
             }
 
             // Faz 6 Dilim 4: çerçeve dünyaya kelepçelenir — görünüm
-            // dışarı taşsa bile mavi çerçeve harita dışına çıkmaz.
+            // dışarı taşsa bile görüş çerçevesi harita dışına çıkmaz. (Faz 4/K3: mavi/camgöbeği
+            // yerine prototipin kemik tonları — renk anlam taşımıyor.)
             Rect view = ViewportRect.Intersect(WorldBounds);
             if (view.Width <= 0 || view.Height <= 0)
                 return;
@@ -290,13 +291,13 @@ namespace RowlEngine.Editor.Controls
         }
 
         private static readonly IBrush s_nodeBrush =
-            new SolidColorBrush(Color.FromArgb(160, 56, 189, 248));
+            new SolidColorBrush(Color.FromArgb(150, 185, 179, 163));
 
         private static readonly IBrush s_nodeDimBrush =
-            new SolidColorBrush(Color.FromArgb(48, 56, 189, 248));
+            new SolidColorBrush(Color.FromArgb(45, 185, 179, 163));
 
         private static readonly IPen s_viewportPen =
-            new Pen(new SolidColorBrush(Color.FromArgb(255, 0, 240, 255)), 1.5);
+            new Pen(new SolidColorBrush(Color.FromArgb(255, 242, 239, 230)), 1.5);
 
         private static readonly Dictionary<string, IBrush> s_groupBrushes = new(StringComparer.OrdinalIgnoreCase);
 

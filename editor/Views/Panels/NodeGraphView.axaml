@@ -1,5 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:l="using:RowlEngine.Editor.Services.Strings"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="using:RowlEngine.Editor.ViewModels"
@@ -50,11 +51,11 @@
                             <Grid RowDefinitions="28,*,16">
                                 <!-- Header: drag moves the frame + its members; double-click reframes -->
                                 <Border Tag="GroupHeader" Background="{Binding Color}" CornerRadius="6,6,0,0"
-                                        Cursor="Hand" ToolTip.Tip="Sürükle: grupla taşı • Çift tık: üyelere sar">
+                                        Cursor="Hand" ToolTip.Tip="{l:T Graph.Group.Drag.Tip}">
                                     <DockPanel Margin="10,0,6,0" VerticalAlignment="Center">
                                         <TextBlock Tag="GroupDelete" DockPanel.Dock="Right" Text="×" FontSize="14"
                                                    FontWeight="Bold" Foreground="{DynamicResource PrimaryText}" VerticalAlignment="Center"
-                                                   Cursor="Hand" ToolTip.Tip="Grubu sil (düğümler kalır)"/>
+                                                   Cursor="Hand" ToolTip.Tip="{l:T Graph.Group.Delete.Tip}"/>
                                         <TextBlock Text="{Binding Title}" FontWeight="Bold" Foreground="{DynamicResource PrimaryText}"
                                                    FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                                     </DockPanel>
@@ -65,7 +66,7 @@
                                 <Rectangle Grid.Row="2" Tag="GroupResize" Width="16" Height="14"
                                            HorizontalAlignment="Right" VerticalAlignment="Bottom"
                                            Fill="{Binding Color}" Opacity="0.7" RadiusX="3" RadiusY="3"
-                                           Cursor="SizeNorthwestSoutheast" ToolTip.Tip="Yeniden boyutlandır"/>
+                                           Cursor="SizeNorthwestSoutheast" ToolTip.Tip="{l:T Graph.Group.Resize.Tip}"/>
                             </Grid>
                         </Border>
                     </DataTemplate>
@@ -124,42 +125,33 @@
 
         <!-- Sahne başlık şeridi (Unity görünüm kontrolleri): zoom, sığdır, harita.
              Breadcrumb overlay'i (sol üst) ve minimap (sağ üst) yerinden oynamaz. -->
-        <Border x:Name="SceneViewHeader" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,12,0,0"
-                Background="{DynamicResource SurfaceBackground}" BorderBrush="{DynamicResource BorderColor}"
-                BorderThickness="1" CornerRadius="6" Padding="8,4">
-            <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-                <Button Content="−" Command="{Binding ZoomOutViewCommand}"
-                        ToolTip.Tip="Uzaklaştır" Padding="8,2" FontSize="12" FontWeight="Bold"
-                        Background="{DynamicResource ToolbarButtonBg}" Foreground="{DynamicResource PrimaryText}"
-                        CornerRadius="4"/>
-                <TextBlock Text="{Binding ZoomScale, StringFormat='{}{0:P0}'}" Foreground="{DynamicResource SecondaryText}"
-                           FontSize="11" VerticalAlignment="Center" MinWidth="42" TextAlignment="Center"
-                           ToolTip.Tip="Yakınlaştırma"/>
-                <Button Content="+" Command="{Binding ZoomInViewCommand}"
-                        ToolTip.Tip="Yakınlaştır" Padding="8,2" FontSize="12" FontWeight="Bold"
-                        Background="{DynamicResource ToolbarButtonBg}" Foreground="{DynamicResource PrimaryText}"
-                        CornerRadius="4"/>
-                <Border Width="1" Height="20" Background="{DynamicResource BorderColor}" Margin="4,0"/>
-                <Button Content="Sığdır" Command="{Binding NodeGraphViewModel.ZoomToFitCommand}"
-                        Padding="8,2" FontSize="11" ToolTip.Tip="Tüm grafı ekrana sığdır"
-                        Background="{DynamicResource ToolbarButtonBg}" Foreground="{DynamicResource PrimaryText}"
-                        CornerRadius="4"/>
-                <Button Content="Seçim" Command="{Binding NodeGraphViewModel.FitToSelectionCommand}"
-                        Padding="8,2" FontSize="11" ToolTip.Tip="Seçili düğüme odaklan (F)"
-                        Background="{DynamicResource ToolbarButtonBg}" Foreground="{DynamicResource PrimaryText}"
-                        CornerRadius="4"/>
-                <Border Width="1" Height="20" Background="{DynamicResource BorderColor}" Margin="4,0"/>
-                <CheckBox Content="Harita" IsChecked="{Binding IsMinimapVisible, Mode=TwoWay}"
-                          ToolTip.Tip="Minimap görünürlüğü" FontSize="11"
-                          Foreground="{DynamicResource SecondaryText}" VerticalAlignment="Center"/>
+        <!-- Görünüm kontrolleri (prototip: Node panelinin sol altı): zoom, sığdır,
+             seçime odaklan, harita. Kırıntı yolu + Node araç çubuğu sol üstte,
+             mini harita sağ üstte. -->
+        <Border x:Name="SceneViewHeader" Classes="floating" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="16">
+            <StackPanel Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+                <Button Classes="tool" Content="−" Command="{Binding ZoomOutViewCommand}"
+                        ToolTip.Tip="{l:T Graph.ZoomOut}" FontWeight="Bold"/>
+                <TextBlock Text="{Binding ZoomScale, StringFormat='{}{0:P0}'}" Classes="body"
+                           VerticalAlignment="Center" MinWidth="42" TextAlignment="Center"
+                           ToolTip.Tip="{l:T Graph.ZoomLevel}"/>
+                <Button Classes="tool" Content="+" Command="{Binding ZoomInViewCommand}"
+                        ToolTip.Tip="{l:T Graph.ZoomIn}" FontWeight="Bold"/>
+                <Border Classes="capsuleDivider"/>
+                <Button Classes="tool" Content="{l:T Graph.Fit}" Command="{Binding NodeGraphViewModel.ZoomToFitCommand}"
+                        ToolTip.Tip="{l:T Graph.Fit.Tip}"/>
+                <Button Classes="tool" Content="{l:T Graph.FitSelection}" Command="{Binding NodeGraphViewModel.FitToSelectionCommand}"
+                        ToolTip.Tip="{l:T Graph.FitSelection.Tip}"/>
+                <Border Classes="capsuleDivider"/>
+                <CheckBox Content="{l:T Graph.Minimap}" IsChecked="{Binding IsMinimapVisible, Mode=TwoWay}"
+                          ToolTip.Tip="{l:T Graph.Minimap.Tip}" FontSize="{DynamicResource FontSizeBody}"
+                          Foreground="{DynamicResource SecondaryText}" VerticalAlignment="Center" Margin="4,0"/>
             </StackPanel>
         </Border>
 
-        <!-- Minimap (bird's-eye, drag to pan) -->
-        <Border x:Name="MinimapCard" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="16"
-                IsVisible="{Binding IsMinimapVisible}"
-                Background="{DynamicResource SurfaceBackground}" BorderBrush="{DynamicResource BorderColor}"
-                BorderThickness="1" CornerRadius="6" Padding="6">
+        <!-- Mini harita (kuş bakışı, sürükleyerek kaydır) -->
+        <Border x:Name="MinimapCard" Classes="floating" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="16"
+                IsVisible="{Binding IsMinimapVisible}" Padding="6">
             <controls:MinimapControl x:Name="CanvasMinimap" Width="220" Height="150"
                                      Background="{DynamicResource GraphCanvasBg}"
                                      NodesSource="{Binding NodeGraphViewModel.Nodes}"
@@ -168,9 +160,9 @@
                                      ViewportRect="{Binding NodeGraphViewModel.ViewportRect}"/>
         </Border>
 
-        <!-- Canvas Viewport Controls Overlay (yalnizca Reset (0,0) — zoom rozeti status barda) -->
-        <Border x:Name="CanvasViewportOverlay" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="16" Background="{DynamicResource SurfaceBackground}" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1" CornerRadius="6" Padding="8,4">
-            <Button x:Name="ResetViewButton" Content="Görünümü Sıfırla (0,0)" Command="{Binding ResetCanvasViewCommand}" Padding="6,2" FontSize="11" Background="{DynamicResource AccentButtonBg}" Foreground="{DynamicResource AccentButtonFg}" CornerRadius="4"/>
+        <!-- Görünümü sıfırla (sağ alt) -->
+        <Border x:Name="CanvasViewportOverlay" Classes="floating" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="16">
+            <Button x:Name="ResetViewButton" Classes="tool" Content="{l:T Graph.ResetView}" Command="{Binding ResetCanvasViewCommand}"/>
         </Border>
     </Grid>
 </UserControl>

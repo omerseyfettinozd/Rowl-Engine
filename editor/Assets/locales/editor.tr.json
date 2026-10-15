@@ -146,6 +146,54 @@
     },
     "Status.Unsaved": {
       "text": "Kaydedilmemiş değişiklikler var"
+    },
+    "Graph.Group.Drag.Tip": {
+      "text": "Sürükle: grupla taşı • Çift tık: üyelere sar"
+    },
+    "Graph.Group.Delete.Tip": {
+      "text": "Grubu sil (düğümler kalır)"
+    },
+    "Graph.Group.Resize.Tip": {
+      "text": "Yeniden boyutlandır"
+    },
+    "Graph.ZoomOut": {
+      "text": "Uzaklaştır"
+    },
+    "Graph.ZoomLevel": {
+      "text": "Yakınlaştırma"
+    },
+    "Graph.ZoomIn": {
+      "text": "Yakınlaştır"
+    },
+    "Graph.Fit": {
+      "text": "Sığdır"
+    },
+    "Graph.Fit.Tip": {
+      "text": "Tüm grafı ekrana sığdır"
+    },
+    "Graph.FitSelection": {
+      "text": "Seçim"
+    },
+    "Graph.FitSelection.Tip": {
+      "text": "Seçili düğüme odaklan (F)"
+    },
+    "Graph.Minimap": {
+      "text": "Harita"
+    },
+    "Graph.Minimap.Tip": {
+      "text": "Minimap görünürlüğü"
+    },
+    "Graph.ResetView": {
+      "text": "Görünümü Sıfırla (0,0)"
+    },
+    "Graph.Chapter": {
+      "text": "Bölüm:"
+    },
+    "Graph.Chapter.Tip": {
+      "text": "Tuvali tek bölüme daralt"
+    },
+    "Graph.Crumb.Tip": {
+      "text": "Bu düzeye dön"
     }
   }
 }

@@ -128,12 +128,37 @@
         <Setter Property="Foreground" Value="{DynamicResource PrimaryText}"/>
     </Style>
 
+    <!-- Faz 4: araç düğmesi (yüzen panellerde: zoom, sığdır, seçim) -->
+    <Style Selector="Button.tool">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="CornerRadius" Value="{DynamicResource RadiusSmall}"/>
+        <Setter Property="MinHeight" Value="28"/>
+        <Setter Property="Padding" Value="8,4"/>
+        <Setter Property="FontSize" Value="{DynamicResource FontSizeBody}"/>
+        <Setter Property="Foreground" Value="{DynamicResource PrimaryText}"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+    </Style>
+    <Style Selector="Button.tool:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource AccentButtonHover}"/>
+    </Style>
+
     <!-- Yüzeyler -->
     <Style Selector="Border.panel">
         <Setter Property="Background" Value="{DynamicResource PanelBackground}"/>
         <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="CornerRadius" Value="{DynamicResource RadiusLarge}"/>
+    </Style>
+    <!-- Faz 4: kanvas üstünde yüzen paneller (kırıntı yolu, Node araç çubuğu,
+         zoom şeridi, mini harita, görünümü sıfırla) -->
+    <Style Selector="Border.floating">
+        <Setter Property="Background" Value="{DynamicResource SurfaceBackground}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="{DynamicResource RadiusMedium}"/>
+        <Setter Property="Padding" Value="4"/>
+        <Setter Property="BoxShadow" Value="0 4 16 0 #40000000"/>
     </Style>
     <Style Selector="Border.card">
         <Setter Property="Background" Value="{DynamicResource NodeCardBg}"/>
