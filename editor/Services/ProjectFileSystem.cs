@@ -65,6 +65,13 @@ internal static class ProjectFileSystem
             if (hasAssets && hasEditor)
             {
                 best = dir;
+                // A git checkout boundary (.git directory, or the .git FILE of a
+                // worktree) ends the search: a worktree nested inside another
+                // checkout (.claude/worktrees/x) must not resolve to the outer
+                // repository, or tests and the editor silently read the other
+                // checkout's files.
+                if (Directory.Exists(Path.Combine(dir, ".git")) || File.Exists(Path.Combine(dir, ".git")))
+                    break;
                 // Keep going up — parent may also qualify (repo root is the highest match)
             }
 
