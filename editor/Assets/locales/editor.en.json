@@ -4,7 +4,7 @@
   "scope": "editor-ui",
   "entries": {
     "Menu.Windows": {
-      "text": "Windows"
+      "text": "Tools"
     },
     "Menu.Projects": {
       "text": "Projects"
@@ -53,6 +53,99 @@
     },
     "Language.qps-ploc": {
       "text": "Pseudo-locale (overflow test)"
+    },
+    "Menu.More": {
+      "text": "More"
+    },
+    "Menu.Save": {
+      "text": "Save"
+    },
+    "Menu.Undo": {
+      "text": "Undo"
+    },
+    "Menu.Redo": {
+      "text": "Redo"
+    },
+    "Menu.Export": {
+      "text": "Export"
+    },
+    "Menu.CancelBuild": {
+      "text": "Cancel Export"
+    },
+    "Menu.Layout": {
+      "text": "Layout"
+    },
+    "Menu.Settings": {
+      "text": "Settings"
+    },
+    "Layout.Default": {
+      "text": "Default"
+    },
+    "Layout.SceneFocus": {
+      "text": "Scene Focus"
+    },
+    "Layout.PlayTest": {
+      "text": "Play Test"
+    },
+    "View.Node": {
+      "text": "Node"
+    },
+    "View.Node.Tip": {
+      "text": "Story flow (node graph)"
+    },
+    "View.Game": {
+      "text": "Game"
+    },
+    "View.Game.Tip": {
+      "text": "Game preview (right-click: separate window)"
+    },
+    "View.SceneEdit": {
+      "text": "Edit Scene"
+    },
+    "View.SceneEdit.Tip": {
+      "text": "Edit the scene"
+    },
+    "Transport.Play": {
+      "text": "Play / Stop"
+    },
+    "Transport.Pause": {
+      "text": "Pause"
+    },
+    "Transport.Step": {
+      "text": "Step Frame (1/60 s)"
+    },
+    "Node.Add": {
+      "text": "+ Node"
+    },
+    "Node.Add.Tip": {
+      "text": "Add a node (Ctrl+N)"
+    },
+    "Node.Disconnect": {
+      "text": "Disconnect"
+    },
+    "Node.Disconnect.Tip": {
+      "text": "Disconnect the selected node's links"
+    },
+    "Node.Delete": {
+      "text": "Delete"
+    },
+    "Node.Delete.Tip": {
+      "text": "Delete the selected node (Delete)"
+    },
+    "Node.Group": {
+      "text": "+ Group"
+    },
+    "Node.Group.Tip": {
+      "text": "Group the selected nodes"
+    },
+    "Node.Up": {
+      "text": "Up"
+    },
+    "Node.Up.Tip": {
+      "text": "Go up one level"
+    },
+    "Status.Unsaved": {
+      "text": "There are unsaved changes"
     }
   }
 }

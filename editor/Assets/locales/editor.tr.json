@@ -4,7 +4,7 @@
   "scope": "editor-ui",
   "entries": {
     "Menu.Windows": {
-      "text": "Pencereler"
+      "text": "Araçlar"
     },
     "Menu.Projects": {
       "text": "Projeler"
@@ -53,6 +53,99 @@
     },
     "Language.qps-ploc": {
       "text": "Sahte dil (taşma testi)"
+    },
+    "Menu.More": {
+      "text": "Diğer"
+    },
+    "Menu.Save": {
+      "text": "Kaydet"
+    },
+    "Menu.Undo": {
+      "text": "Geri Al"
+    },
+    "Menu.Redo": {
+      "text": "Yinele"
+    },
+    "Menu.Export": {
+      "text": "Dışa Aktar"
+    },
+    "Menu.CancelBuild": {
+      "text": "Dışa Aktarmayı İptal Et"
+    },
+    "Menu.Layout": {
+      "text": "Düzen"
+    },
+    "Menu.Settings": {
+      "text": "Ayarlar"
+    },
+    "Layout.Default": {
+      "text": "Varsayılan"
+    },
+    "Layout.SceneFocus": {
+      "text": "Sahne Odağı"
+    },
+    "Layout.PlayTest": {
+      "text": "Oyun Testi"
+    },
+    "View.Node": {
+      "text": "Node"
+    },
+    "View.Node.Tip": {
+      "text": "Hikâye akışı (düğüm grafiği)"
+    },
+    "View.Game": {
+      "text": "Oyun"
+    },
+    "View.Game.Tip": {
+      "text": "Oyun önizlemesi (sağ tık: bağımsız pencere)"
+    },
+    "View.SceneEdit": {
+      "text": "Sahne Düzenle"
+    },
+    "View.SceneEdit.Tip": {
+      "text": "Sahneyi düzenle"
+    },
+    "Transport.Play": {
+      "text": "Oynat / Durdur"
+    },
+    "Transport.Pause": {
+      "text": "Duraklat"
+    },
+    "Transport.Step": {
+      "text": "Kare Adım (1/60 sn)"
+    },
+    "Node.Add": {
+      "text": "+ Node"
+    },
+    "Node.Add.Tip": {
+      "text": "Yeni Node ekle (Ctrl+N)"
+    },
+    "Node.Disconnect": {
+      "text": "Bağlantıyı Kes"
+    },
+    "Node.Disconnect.Tip": {
+      "text": "Seçili Node bağlantılarını kes"
+    },
+    "Node.Delete": {
+      "text": "Sil"
+    },
+    "Node.Delete.Tip": {
+      "text": "Seçili Node'u sil (Delete)"
+    },
+    "Node.Group": {
+      "text": "+ Grup"
+    },
+    "Node.Group.Tip": {
+      "text": "Seçili düğümlerden grup oluştur"
+    },
+    "Node.Up": {
+      "text": "Üst"
+    },
+    "Node.Up.Tip": {
+      "text": "Bir üst düzeye çık"
+    },
+    "Status.Unsaved": {
+      "text": "Kaydedilmemiş değişiklikler var"
     }
   }
 }

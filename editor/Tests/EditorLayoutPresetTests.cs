@@ -99,23 +99,30 @@ public sealed class EditorLayoutPresetTests : IDisposable
         var window = new Views.MainWindow(mainVm);
         try
         {
-            var combo = window.FindControl<ComboBox>("LayoutPresetCombo")
-                ?? throw new Exception("LayoutPresetCombo not found");
-            if (!ReferenceEquals(mainVm.AvailableLayoutPresets, combo.ItemsSource))
-                throw new Exception("LayoutPresetCombo must bind AvailableLayoutPresets");
-            if ((combo.SelectedItem as string) != "Varsayılan")
-                throw new Exception("LayoutPresetCombo must default to Varsayılan");
+            // Faz 3 (K4): açılır kutu yerine "…" > Düzen menüsü.
+            var layoutMenu = window.FindControl<MenuItem>("LayoutMenu")
+                ?? throw new Exception("LayoutMenu not found");
+            var presetItems = layoutMenu.Items.OfType<MenuItem>().ToList();
+            string?[] presetParams = presetItems.Select(m => m.CommandParameter as string).ToArray();
+            if (!presetParams.SequenceEqual(mainVm.AvailableLayoutPresets))
+                throw new Exception("Layout menu must list AvailableLayoutPresets in order");
+            if (mainVm.SelectedLayoutPreset != "Varsayılan")
+                throw new Exception("Layout preset must default to Varsayılan");
 
-            mainVm.SelectedLayoutPreset = "Sahne Odağı";
-            if ((combo.SelectedItem as string) != "Sahne Odağı")
-                throw new Exception("LayoutPresetCombo selection did not follow view-model");
+            var sceneFocus = presetItems.Single(m => (m.CommandParameter as string) == "Sahne Odağı");
+            sceneFocus.Command!.Execute(sceneFocus.CommandParameter);
+            if (mainVm.SelectedLayoutPreset != "Sahne Odağı")
+                throw new Exception("Layout menu did not select Sahne Odağı");
             if (mainVm.IsHierarchyPanelVisible || mainVm.IsInspectorPanelVisible)
                 throw new Exception("Sahne Odağı did not hide side panels");
+            mainVm.SelectLayoutPresetCommand.Execute("Bilinmeyen");
+            if (mainVm.SelectedLayoutPreset != "Sahne Odağı")
+                throw new Exception("Unknown preset name must be ignored");
         }
         finally
         {
             mainVm.SelectedLayoutPreset = "Varsayılan";
         }
-        Console.WriteLine("  [PASS] Layout presets assign panels and combo stays wired");
+        Console.WriteLine("  [PASS] Layout presets assign panels and the … > Düzen menu stays wired");
     }
 }

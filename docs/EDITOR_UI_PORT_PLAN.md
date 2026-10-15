@@ -1,6 +1,6 @@
 # Editör arayüzü — prototipten Avalonia'ya taşıma planı
 
-**Durum:** Faz 1 ✅ (PR #11) · Faz 2 + 2b ✅ (2026-10-16) · sıradaki Faz 3. Kod değişikliği yok. Kaynak tasarım:
+**Durum:** Faz 1 ✅ · Faz 2 + 2b ✅ · Faz 3 ✅ (2026-10-16) · sıradaki Faz 4. Kod değişikliği yok. Kaynak tasarım:
 `prototypes/editor-workspace/` (tasarım şartnamesi olarak dondurulur). Hedef:
 `editor/` (Avalonia 11.3, Fluent tema).
 
@@ -74,6 +74,13 @@ süs metni) · input kenarı: prototip #3B3B40 **1.72:1** → K1 ile #4A4A52 = 2
   14px köşe, #111113 zemin, 44×44 düğme).
 - Panel başlığı: ikon + başlık + yerleşim/sabitle/kapat düğmeleri.
 - Düğme dağılımı K4'e göre; boyutlar K2 (32–36 px).
+
+**Yapılan (2026-10-16):** tek satır üst çubuk; ortada kapsül (`TopCapsule`: Node · Oyun ·
+Sahne Düzenle | Oynat · Duraklat · Adım | Araçlar · `…`); `…` menüsü (Projeler, Kaydet,
+Geri Al/Yinele, Dışa Aktar/İptal, Düzen önayarları, Bölünmüş Ekran, Ayarlar); kanvasta Node
+araç çubuğu; kaydedilmemiş değişiklik noktası (`IsProjectDirty`); tüm metinler katalogda.
+Kısayollar değişmedi (pencere kodunda). **Faz 4'e devredildi:** panel başlıkları (sabitle/kapat
+davranışı Faz 5 pencere sistemiyle birlikte anlamlı).
 
 ## Faz 4 — Paneller tek tek
 

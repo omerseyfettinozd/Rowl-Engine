@@ -28,13 +28,13 @@ public sealed class EditorStringsTests
     public void Get_FallsBackAndNeverThrows()
     {
         var strings = new EditorStrings();
-        Assert.Equal("Pencereler", strings.Get("Menu.Windows"));
+        Assert.Equal("Hiyerarşi", strings.Get("Panel.Hierarchy"));
         Assert.Equal("Yok.Böyle.Anahtar", strings.Get("Yok.Böyle.Anahtar"));
         strings.SetLanguage("xx-YY");
         Assert.Equal(EditorStrings.SourceLanguage, strings.Language);
         strings.SetLanguage("EN");
         Assert.Equal("en", strings.Language);
-        Assert.Equal("Windows", strings.Get("Menu.Windows"));
+        Assert.Equal("Hierarchy", strings.Get("Panel.Hierarchy"));
     }
 
     [Fact]
@@ -42,9 +42,9 @@ public sealed class EditorStringsTests
     {
         var strings = new EditorStrings();
         strings.SetLanguage(EditorStrings.PseudoLanguage);
-        string pseudo = strings.Get("Menu.Windows");
-        Assert.NotEqual("Windows", pseudo);
-        Assert.True(pseudo.Length > "Windows".Length, "Sahte dil metni uzatmalı (taşma testi).");
+        string pseudo = strings.Get("Panel.Hierarchy");
+        Assert.NotEqual("Hierarchy", pseudo);
+        Assert.True(pseudo.Length > "Hierarchy".Length, "Sahte dil metni uzatmalı (taşma testi).");
     }
 
     [Fact]
