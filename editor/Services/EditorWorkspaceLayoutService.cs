@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Avalonia.Controls;
+using RowlEngine.Editor.Services.Workspace;
 using RowlEngine.Editor.ViewModels;
 
 namespace RowlEngine.Editor.Services
@@ -31,36 +32,12 @@ namespace RowlEngine.Editor.Services
             isVisible ? new GridLength(width) : new GridLength(0);
 
         /// <summary>
-        /// Toggles a bottom panel tab. If the tab is already active and visible, it closes it.
-        /// Otherwise, opens the drawer and switches to the target tab index.
-        /// </summary>
-        public static void ToggleBottomTab(
-            ref bool panelVisible,
-            ref int activeTab,
-            int targetTabIndex)
-        {
-            if (panelVisible && activeTab == targetTabIndex)
-            {
-                panelVisible = false;
-            }
-            else
-            {
-                panelVisible = true;
-                activeTab = targetTabIndex;
-            }
-        }
-
-        /// <summary>
-        /// Alt şerit tek sekmeli yapıdadır: Varlıklar ilk sekmedir
-        /// (Unity alt panel düzeni). Bayat sekme indeksleri yeni aralığa
-        /// kelepçelenir. Sekme kimlikleri ve Ctrl+1..7 eşleşmesi:
-        /// 0 = Varlıklar, 1 = Günlük, 2 = Diyalog Geçmişi,
-        /// 3 = Kayıt Slotları, 4 = Sorunlar.
-        /// </summary>
-        public static int ClampBottomTab(int index) => Math.Clamp(index, 0, 4);
-
-        /// <summary>
-        /// Handles switching and toggling of workspace panels and views.
+        /// Legacy flag API (kept for callers/tests that hold the workspace as
+        /// loose flags). Faz 5 D2: no logic of its own — the flags become an
+        /// <see cref="EditorWorkspaceState"/> (canonical tree), the pure
+        /// <see cref="EditorWorkspaceState.HandlePanelAction"/> runs, and the
+        /// derived flags are written back. Bottom tab ids / Ctrl+3..7: 0 = Varlıklar,
+        /// 1 = Günlük, 2 = Diyalog Geçmişi, 3 = Kayıt Slotları, 4 = Sorunlar.
         /// </summary>
         public static void HandlePanelAction(
             string panelName,
@@ -78,109 +55,22 @@ namespace RowlEngine.Editor.Services
             ref int splitScreenMode,
             Action? refreshSaveSlots = null)
         {
-            switch (panelName)
-            {
-                case "Hierarchy":
-                    isHierarchyVisible = !isHierarchyVisible;
-                    break;
-                case "Assets":
-                    // Tek şerit: ilk sekme (diğer sekmelerle aynı davranış).
-                    ToggleBottomTab(ref isAssetsVisible, ref bottomPanelActiveTab, 0);
-                    break;
-                case "Inspector":
-                    isInspectorVisible = !isInspectorVisible;
-                    break;
-                case "Log":
-                    ToggleBottomTab(ref isLogVisible, ref bottomPanelActiveTab, 1);
-                    break;
-                case "Backlog":
-                    ToggleBottomTab(ref isBacklogVisible, ref bottomPanelActiveTab, 2);
-                    break;
-                case "SaveSlots":
-                    isSaveSlotsVisible = !isSaveSlotsVisible;
-                    if (isSaveSlotsVisible)
-                    {
-                        refreshSaveSlots?.Invoke();
-                        bottomPanelActiveTab = 3;
-                    }
-                    break;
-                case "ProjectIssues":
-                    isProjectIssuesVisible = !isProjectIssuesVisible;
-                    if (isProjectIssuesVisible) bottomPanelActiveTab = 4;
-                    break;
-                case "NodeGraph":
-                    isNodeGraphActive = true;
-                    isPreviewActive = false;
-                    isEnginePreviewActive = false;
-                    splitScreenMode = 0;
-                    break;
-                case "Preview":
-                    isPreviewActive = true;
-                    isNodeGraphActive = false;
-                    isEnginePreviewActive = false;
-                    splitScreenMode = 0;
-                    break;
-                case "EnginePreview":
-                    isEnginePreviewActive = true;
-                    isNodeGraphActive = false;
-                    isPreviewActive = false;
-                    splitScreenMode = 0;
-                    break;
-                case "SplitScreen":
-                    splitScreenMode = CycleSplitScreen(splitScreenMode, out isNodeGraphActive, out isEnginePreviewActive, out isPreviewActive);
-                    break;
-            }
-
-            // Aktif sekme kapatılınca indeks gizli sekmede kör kalır ve
-            // şerit başlıksız içerik gösterirdi — görünen ilk sekmeye çek.
-            if (!IsBottomTabVisible(
-                bottomPanelActiveTab,
-                isAssetsVisible, isLogVisible, isBacklogVisible,
-                isSaveSlotsVisible, isProjectIssuesVisible))
-            {
-                bottomPanelActiveTab = FirstVisibleBottomTab(
-                    isAssetsVisible, isLogVisible, isBacklogVisible,
-                    isSaveSlotsVisible, isProjectIssuesVisible);
-            }
-        }
-
-        private static bool IsBottomTabVisible(
-            int index,
-            bool isAssetsVisible,
-            bool isLogVisible,
-            bool isBacklogVisible,
-            bool isSaveSlotsVisible,
-            bool isProjectIssuesVisible) => index switch
-            {
-                0 => isAssetsVisible,
-                1 => isLogVisible,
-                2 => isBacklogVisible,
-                3 => isSaveSlotsVisible,
-                4 => isProjectIssuesVisible,
-                _ => false
-            };
-
-        private static int FirstVisibleBottomTab(
-            bool isAssetsVisible,
-            bool isLogVisible,
-            bool isBacklogVisible,
-            bool isSaveSlotsVisible,
-            bool isProjectIssuesVisible)
-        {
-            if (isAssetsVisible) return 0;
-            if (isLogVisible) return 1;
-            if (isBacklogVisible) return 2;
-            if (isSaveSlotsVisible) return 3;
-            if (isProjectIssuesVisible) return 4;
-            return 0; // Hepsi kapalı: şerit çöker, indeks önemsiz.
+            EditorWorkspaceState state = FromFlags(
+                isHierarchyVisible, isAssetsVisible, isInspectorVisible, isLogVisible,
+                isBacklogVisible, isSaveSlotsVisible, isProjectIssuesVisible, bottomPanelActiveTab,
+                isNodeGraphActive, isPreviewActive, isEnginePreviewActive, splitScreenMode);
+            ToFlags(
+                state.HandlePanelAction(panelName, refreshSaveSlots),
+                out isHierarchyVisible, out isAssetsVisible, out isInspectorVisible, out isLogVisible,
+                out isBacklogVisible, out isSaveSlotsVisible, out isProjectIssuesVisible, out bottomPanelActiveTab,
+                out isNodeGraphActive, out isPreviewActive, out isEnginePreviewActive, out splitScreenMode);
         }
 
         /// <summary>
-        /// Unity kromu Dilim G2: düzen önayarı — panelleri AÇIK/KAPALI olarak
-        /// atar (HandlePanelAction gibi geçiş yapmaz). Bilinmeyen ad no-op'tur.
-        /// Önayarlar: "Varsayılan" (tam çalışma düzeni), "Sahne Odağı"
-        /// (yan paneller kapalı, tuval + şerit), "Oyun Testi" (Oyuncu merkezde,
-        /// şerit kapalı, Denetçi açık).
+        /// Legacy flag API: düzen önayarı — panelleri AÇIK/KAPALI olarak atar
+        /// (geçiş yapmaz); bilinmeyen ad no-op'tur. Faz 5 D2: önayarlar
+        /// <see cref="EditorWorkspaceLayouts.Preset"/> ile ağaç üretir; burada
+        /// yalnız bayraklara çevrilir.
         /// </summary>
         public static void ApplyLayoutPreset(
             string presetName,
@@ -197,51 +87,82 @@ namespace RowlEngine.Editor.Services
             ref bool isEnginePreviewActive,
             ref int splitScreenMode)
         {
-            switch (presetName)
-            {
-                case "Varsayılan":
-                    isHierarchyVisible = true;
-                    isInspectorVisible = true;
-                    isAssetsVisible = true;
-                    isLogVisible = true;
-                    isBacklogVisible = false;
-                    isSaveSlotsVisible = false;
-                    isProjectIssuesVisible = false;
-                    bottomPanelActiveTab = 0;
-                    isNodeGraphActive = true;
-                    isPreviewActive = false;
-                    isEnginePreviewActive = false;
-                    splitScreenMode = 0;
-                    break;
-                case "Sahne Odağı":
-                    isHierarchyVisible = false;
-                    isInspectorVisible = false;
-                    isAssetsVisible = true;
-                    isLogVisible = false;
-                    isBacklogVisible = false;
-                    isSaveSlotsVisible = false;
-                    isProjectIssuesVisible = false;
-                    bottomPanelActiveTab = 0;
-                    isNodeGraphActive = true;
-                    isPreviewActive = false;
-                    isEnginePreviewActive = false;
-                    splitScreenMode = 0;
-                    break;
-                case "Oyun Testi":
-                    isHierarchyVisible = false;
-                    isInspectorVisible = true;
-                    isAssetsVisible = false;
-                    isLogVisible = false;
-                    isBacklogVisible = false;
-                    isSaveSlotsVisible = false;
-                    isProjectIssuesVisible = false;
-                    bottomPanelActiveTab = 0;
-                    isNodeGraphActive = false;
-                    isPreviewActive = false;
-                    isEnginePreviewActive = true;
-                    splitScreenMode = 0;
-                    break;
-            }
+            EditorWorkspaceState? preset = EditorWorkspaceLayouts.Preset(presetName);
+            if (preset is null)
+                return;
+            ToFlags(
+                preset,
+                out isHierarchyVisible, out isAssetsVisible, out isInspectorVisible, out isLogVisible,
+                out isBacklogVisible, out isSaveSlotsVisible, out isProjectIssuesVisible, out bottomPanelActiveTab,
+                out isNodeGraphActive, out isPreviewActive, out isEnginePreviewActive, out splitScreenMode);
+        }
+
+        /// <summary>
+        /// Legacy flags → canonical workspace. Center: split mode 1/2 puts Node
+        /// first and Game (if active) or Sahne Düzenle second; single mode shows
+        /// the first active of Node, Sahne Düzenle, Game (Node if none).
+        /// </summary>
+        public static EditorWorkspaceState FromFlags(
+            bool isHierarchyVisible,
+            bool isAssetsVisible,
+            bool isInspectorVisible,
+            bool isLogVisible,
+            bool isBacklogVisible,
+            bool isSaveSlotsVisible,
+            bool isProjectIssuesVisible,
+            int bottomPanelActiveTab,
+            bool isNodeGraphActive,
+            bool isPreviewActive,
+            bool isEnginePreviewActive,
+            int splitScreenMode)
+        {
+            BottomTabs tabs = BottomTabs.None;
+            if (isAssetsVisible) tabs |= BottomTabs.Assets;
+            if (isLogVisible) tabs |= BottomTabs.Log;
+            if (isBacklogVisible) tabs |= BottomTabs.Backlog;
+            if (isSaveSlotsVisible) tabs |= BottomTabs.SaveSlots;
+            if (isProjectIssuesVisible) tabs |= BottomTabs.Issues;
+
+            bool split = splitScreenMode is 1 or 2;
+            string center = split
+                ? (isEnginePreviewActive ? PanelIds.Game : PanelIds.Edit)
+                : isNodeGraphActive ? PanelIds.Node
+                : isPreviewActive ? PanelIds.Edit
+                : isEnginePreviewActive ? PanelIds.Game
+                : PanelIds.Node;
+            return EditorWorkspaceLayouts.Build(
+                isHierarchyVisible, isInspectorVisible, tabs, bottomPanelActiveTab,
+                center, split ? splitScreenMode : 0);
+        }
+
+        /// <summary>Workspace → the legacy flags (all derived from the tree / strip state).</summary>
+        public static void ToFlags(
+            EditorWorkspaceState state,
+            out bool isHierarchyVisible,
+            out bool isAssetsVisible,
+            out bool isInspectorVisible,
+            out bool isLogVisible,
+            out bool isBacklogVisible,
+            out bool isSaveSlotsVisible,
+            out bool isProjectIssuesVisible,
+            out int bottomPanelActiveTab,
+            out bool isNodeGraphActive,
+            out bool isPreviewActive,
+            out bool isEnginePreviewActive,
+            out int splitScreenMode)
+        {
+            isHierarchyVisible = state.IsHierarchyVisible;
+            isInspectorVisible = state.IsInspectorVisible;
+            isAssetsVisible = state.Bottom.IsOpen(BottomStripState.AssetsTab);
+            isLogVisible = state.Bottom.IsOpen(BottomStripState.LogTab);
+            isBacklogVisible = state.Bottom.IsOpen(BottomStripState.BacklogTab);
+            isSaveSlotsVisible = state.Bottom.IsOpen(BottomStripState.SaveSlotsTab);
+            isProjectIssuesVisible = state.Bottom.IsOpen(BottomStripState.IssuesTab);
+            bottomPanelActiveTab = state.Bottom.ActiveTab;
+            isNodeGraphActive = state.IsNodeGraphActive;
+            isPreviewActive = state.IsPreviewActive;
+            isEnginePreviewActive = state.IsEnginePreviewActive;
+            splitScreenMode = state.SplitScreenMode;
         }
 
         /// <summary>
@@ -253,20 +174,11 @@ namespace RowlEngine.Editor.Services
             out bool isEnginePreviewActive,
             out bool isPreviewActive)
         {
-            int nextMode = (currentMode + 1) % 3;
-            if (nextMode > 0)
-            {
-                isNodeGraphActive = true;
-                isEnginePreviewActive = false;
-                isPreviewActive = false;
-            }
-            else
-            {
-                isNodeGraphActive = true;
-                isEnginePreviewActive = false;
-                isPreviewActive = false;
-            }
-            return nextMode;
+            // Every mode (split or back to off) shows the Node graph; split's second pane is Sahne Düzenle.
+            isNodeGraphActive = true;
+            isEnginePreviewActive = false;
+            isPreviewActive = false;
+            return EditorWorkspaceState.NextSplitScreenMode(currentMode);
         }
 
         /// <summary>
