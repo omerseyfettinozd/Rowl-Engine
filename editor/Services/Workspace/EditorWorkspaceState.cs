@@ -164,7 +164,7 @@ public sealed record EditorWorkspaceState(WorkspaceLayout Layout, BottomStripSta
             return this;
         return panelId switch
         {
-            PanelIds.Hierarchy or PanelIds.Inspector => WithPanel(panelId, false),
+            PanelIds.Hierarchy or PanelIds.Inspector or PanelIds.Library or PanelIds.Lua => WithPanel(panelId, false),
             PanelIds.Bottom => (this with
             {
                 Layout = Layout.RemoveView(PanelIds.Bottom),
@@ -175,15 +175,24 @@ public sealed record EditorWorkspaceState(WorkspaceLayout Layout, BottomStripSta
         };
     }
 
-    /// <summary>Opens or closes a side panel (<see cref="PanelIds.Hierarchy"/> / <see cref="PanelIds.Inspector"/>).</summary>
+    /// <summary>
+    /// Opens or closes a side / tool panel (<see cref="PanelIds.Hierarchy"/>, <see cref="PanelIds.Inspector"/>,
+    /// Faz 7: <see cref="PanelIds.Library"/>, <see cref="PanelIds.Lua"/>).
+    /// </summary>
     public EditorWorkspaceState WithPanel(string panelId, bool visible)
     {
-        if (panelId != PanelIds.Hierarchy && panelId != PanelIds.Inspector)
-            throw new ArgumentException("Only side panels are toggled directly; use WithBottomTab / WithCenter.", nameof(panelId));
+        if (panelId is not (PanelIds.Hierarchy or PanelIds.Inspector or PanelIds.Library or PanelIds.Lua))
+            throw new ArgumentException("Only side / tool panels are toggled directly; use WithBottomTab / WithCenter.", nameof(panelId));
         if (IsVisible(panelId) == visible)
             return this;
         WorkspaceLayout layout = visible
-            ? (panelId == PanelIds.Hierarchy ? EditorWorkspaceLayouts.OpenHierarchy(Layout, Shares) : EditorWorkspaceLayouts.OpenInspector(Layout, Shares))
+            ? panelId switch
+            {
+                PanelIds.Hierarchy => EditorWorkspaceLayouts.OpenHierarchy(Layout, Shares),
+                PanelIds.Inspector => EditorWorkspaceLayouts.OpenInspector(Layout, Shares),
+                PanelIds.Library => EditorWorkspaceLayouts.OpenLibrary(Layout, Shares),
+                _ => EditorWorkspaceLayouts.OpenLua(Layout, Shares),
+            }
             : Layout.RemoveView(panelId);
         return (this with { Layout = layout, Shares = visible ? Shares : RememberShare(panelId) }).Pruned();
     }
@@ -254,6 +263,12 @@ public sealed record EditorWorkspaceState(WorkspaceLayout Layout, BottomStripSta
                 break;
             case "Inspector":
                 next = WithPanel(PanelIds.Inspector, !IsInspectorVisible);
+                break;
+            case "Library":
+                next = WithPanel(PanelIds.Library, !IsVisible(PanelIds.Library));
+                break;
+            case "Lua":
+                next = WithPanel(PanelIds.Lua, !IsVisible(PanelIds.Lua));
                 break;
             case "Assets":
                 next = ToggleSelectedTab(BottomStripState.AssetsTab);
@@ -361,6 +376,12 @@ public static class EditorWorkspaceLayouts
     /// <summary>Split screen halves.</summary>
     public const double SplitScreenRatio = 0.5;
 
+    /// <summary>Faz 7: center area's share beside the Node library (prototype library-categories: ≈ ½ … ⅔).</summary>
+    public const double LibrarySplitRatio = 0.62;
+
+    /// <summary>Faz 7: center area's share above the Lua editor (prototype desktop.jpg: Node and Lua editor ≈ half each).</summary>
+    public const double LuaSplitRatio = 0.5;
+
     private static readonly string[] CenterViews = { PanelIds.Node, PanelIds.Game, PanelIds.Edit };
 
     public static bool IsCenter(string? view) => view is not null && Array.IndexOf(CenterViews, view) >= 0;
@@ -457,6 +478,29 @@ public static class EditorWorkspaceLayouts
         return new WorkspaceLayout(tree, last);
     }
 
+    /// <summary>Faz 7: the Node library opens right of the center area (falls back to right of the whole tree).</summary>
+    internal static WorkspaceLayout OpenLibrary(WorkspaceLayout layout, PanelShares? shares = null) =>
+        OpenBesideCenter(layout, PanelIds.Library, SplitAxis.Horizontal,
+            RememberedOr(shares, PanelIds.Library, LibrarySplitRatio, firstSide: false));
+
+    /// <summary>Faz 7: the Lua editor opens under the center area (prototype desktop.jpg: under Node).</summary>
+    internal static WorkspaceLayout OpenLua(WorkspaceLayout layout, PanelShares? shares = null) =>
+        OpenBesideCenter(layout, PanelIds.Lua, SplitAxis.Vertical,
+            RememberedOr(shares, PanelIds.Lua, LuaSplitRatio, firstSide: false));
+
+    private static WorkspaceLayout OpenBesideCenter(WorkspaceLayout layout, string panelId, SplitAxis axis, double ratio)
+    {
+        var leaf = new LeafNode(panelId);
+        int last = layout.LastSplitId;
+        LayoutNode? center = FindCenter(layout.Tree);
+        LayoutNode tree = layout.Tree is null
+            ? leaf
+            : center is null
+                ? new SplitNode(NextId(ref last), axis, ratio, layout.Tree, leaf)
+                : Replace(layout.Tree, center, new SplitNode(NextId(ref last), axis, ratio, center, leaf));
+        return new WorkspaceLayout(tree, last);
+    }
+
     /// <summary>The bottom strip opens under the center area (falls back to under the whole tree).</summary>
     internal static WorkspaceLayout OpenBottom(WorkspaceLayout layout, PanelShares? shares = null)
     {
@@ -481,7 +525,7 @@ public static class EditorWorkspaceLayouts
     /// </summary>
     internal static double? ShareOf(WorkspaceLayout layout, string panelId)
     {
-        SplitAxis axis = panelId == PanelIds.Bottom ? SplitAxis.Vertical : SplitAxis.Horizontal;
+        SplitAxis axis = panelId is PanelIds.Bottom or PanelIds.Lua ? SplitAxis.Vertical : SplitAxis.Horizontal;
         return ShareIn(layout.Tree, panelId, axis);
     }
 

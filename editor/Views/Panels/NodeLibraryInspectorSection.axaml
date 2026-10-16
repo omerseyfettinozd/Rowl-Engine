@@ -1,0 +1,51 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:l="using:RowlEngine.Editor.Services.Strings"
+             xmlns:vm="using:RowlEngine.Editor.ViewModels"
+             x:Class="RowlEngine.Editor.Views.Panels.NodeLibraryInspectorSection"
+             x:DataType="vm:NodeLibraryViewModel">
+  <!-- Seçim yokken gizlenir; Inspector kendi kartını çizer -->
+  <StackPanel Spacing="8" IsVisible="{Binding HasSelectedNode}">
+    <!-- Bölüm başlığı -->
+    <TextBlock Classes="caption" Text="{l:T Library.Inspector.Caption}"/>
+    <!-- Henüz kaydedilmedi -->
+    <Button x:Name="PART_SaveButton"
+            Classes="secondary"
+            Command="{Binding ToggleSaveSelectedNodeCommand}"
+            IsVisible="{Binding !IsSelectedNodeSaved}"
+            HorizontalAlignment="Stretch"
+            HorizontalContentAlignment="Center">
+      <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center" VerticalAlignment="Center">
+        <Path Classes="libraryStar" Data="M7,2 L8.8,5.5 L12.5,6 L9.7,8.7 L10.4,12.4 L7,10.5 L3.6,12.4 L4.3,8.7 L1.5,6 L5.2,5.5 Z"/>
+        <TextBlock Text="{l:T Library.Inspector.Save}" VerticalAlignment="Center"/>
+      </StackPanel>
+    </Button>
+    <TextBlock Text="{l:T Library.Inspector.Hint}"
+               Classes="hint"
+               TextWrapping="Wrap"
+               IsVisible="{Binding !IsSelectedNodeSaved}"/>
+    <!-- Kayıtlı -->
+    <StackPanel Spacing="8" IsVisible="{Binding IsSelectedNodeSaved}">
+      <Button x:Name="PART_RemoveButton"
+              Classes="secondary"
+              Command="{Binding ToggleSaveSelectedNodeCommand}"
+              HorizontalAlignment="Stretch"
+              HorizontalContentAlignment="Center">
+        <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center" VerticalAlignment="Center">
+          <Path Classes="libraryStarFilled" Data="M7,2 L8.8,5.5 L12.5,6 L9.7,8.7 L10.4,12.4 L7,10.5 L3.6,12.4 L4.3,8.7 L1.5,6 L5.2,5.5 Z"/>
+          <TextBlock Text="{l:T Library.Inspector.Remove}" VerticalAlignment="Center"/>
+        </StackPanel>
+      </Button>
+      <Button x:Name="PART_UpdateButton"
+              Classes="secondary"
+              Command="{Binding UpdateSelectedNodeRecordCommand}"
+              Content="{l:T Library.Inspector.Update}"
+              HorizontalAlignment="Stretch"
+              HorizontalContentAlignment="Center"/>
+      <TextBlock x:Name="PART_Hint"
+                 Text="{Binding SelectedNodeRecordHint}"
+                 Classes="hint"
+                 TextWrapping="Wrap"/>
+    </StackPanel>
+  </StackPanel>
+</UserControl>

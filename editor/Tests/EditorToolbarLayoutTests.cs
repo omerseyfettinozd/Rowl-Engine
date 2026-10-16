@@ -120,9 +120,9 @@ namespace RowlEngine.Editor
 
                 var windowsMenu = window.FindControl<MenuItem>("WindowsMenu")
                     ?? throw new Exception("WindowsMenu not found");
-                if (windowsMenu.Items.Count != 7)
+                if (windowsMenu.Items.Count != 9)
                     throw new Exception(
-                        $"Pencereler menu should have 7 items, has {windowsMenu.Items.Count}");
+                        $"Pencereler menu should have 9 items (Faz 7: + Library, Lua), has {windowsMenu.Items.Count}");
 
                 // Faz 5: panel kısayolları menüde yazar (InputGesture) ve
                 // gerçekten yönlendirilir (TryPanelShortcut + KeyDown).
@@ -130,23 +130,23 @@ namespace RowlEngine.Editor
                 // yalnızca rozet varlığı denetlenir; eşleşme TryPanelShortcut
                 // tablosuyla aşağıda kilitlenir.
                 var menuItems = windowsMenu.Items.OfType<MenuItem>().ToArray();
-                if (menuItems.Length != 7
+                if (menuItems.Length != 9
                     || menuItems.Any(m => m.InputGesture is null))
                     throw new Exception(
                         $"Panel shortcut gestures changed: [{string.Join(", ", menuItems.Select(m => m.InputGesture?.ToString() ?? "-"))}]");
                 string?[] expectedPanels = new[]
                 {
                     "Hierarchy", "Inspector", "Log", "Assets",
-                    "Backlog", "SaveSlots", "ProjectIssues"
+                    "Backlog", "SaveSlots", "ProjectIssues", "Library", "Lua"
                 };
-                for (int i = 0; i < 7; i++)
+                for (int i = 0; i < 9; i++)
                 {
                     var key = (Avalonia.Input.Key)((int)Avalonia.Input.Key.D1 + i);
                     if (!MainWindow.TryPanelShortcut(key, out string? panel) || panel != expectedPanels[i])
                         throw new Exception($"TryPanelShortcut({key}) did not map to {expectedPanels[i]}");
                 }
-                if (MainWindow.TryPanelShortcut(Avalonia.Input.Key.D8, out _))
-                    throw new Exception("TryPanelShortcut must reject keys outside Ctrl+1..7");
+                if (MainWindow.TryPanelShortcut(Avalonia.Input.Key.D0, out _))
+                    throw new Exception("TryPanelShortcut must reject keys outside Ctrl+1..9");
 
                 // Gerçek tuş yönlendirme: Ctrl+3 Log paneline ulaşır (durum geri alınır).
                 bool logBefore = mainVm.IsLogPanelVisible;

@@ -117,7 +117,8 @@ public sealed class WorkspaceStateJsonTests
         yield return new object?[] { "layout old version", Doc(layout.Replace("\"version\":1", "\"version\":0")) };
         yield return new object?[] { "layout empty tree", Doc(LayoutOf(null), "{\"open\":[],\"active\":0}") };
         yield return new object?[] { "all unknown panels", Doc(LayoutOf(new SplitNode("split-1", SplitAxis.Horizontal, 0.5, new LeafNode("ghost-a"), new LeafNode("ghost-b")), 1), "{\"open\":[],\"active\":0}") };
-        yield return new object?[] { "all prototype-only panels", Doc(LayoutOf(new SplitNode("split-1", SplitAxis.Horizontal, 0.5, new LeafNode("lua"), new LeafNode("store")), 1), "{\"open\":[],\"active\":0}") };
+        // Faz 7: Library and Lua are real panels now; "store" is the remaining prototype-only id.
+        yield return new object?[] { "all prototype-only panels", Doc(LayoutOf(new SplitNode("split-1", SplitAxis.Horizontal, 0.5, new LeafNode("store"), new LeafNode("ghost-c")), 1), "{\"open\":[],\"active\":0}") };
         yield return new object?[] { "duplicate panel", Doc(LayoutOf(new SplitNode("split-1", SplitAxis.Horizontal, 0.5, new LeafNode("node"), new LeafNode("node")), 1), "{\"open\":[],\"active\":0}") };
         yield return new object?[] { "ratio zero", Doc(layout.Replace("0.14", "0")) };
         yield return new object?[] { "ratio one", Doc(layout.Replace("0.14", "1")) };
@@ -180,11 +181,17 @@ public sealed class WorkspaceStateJsonTests
         Assert.True(result.State.IsPinned(PanelIds.Edit));
         Assert.False(result.State.IsPinned("ghost"));
 
-        // Prototype-only leaf ("lua") is also pruned while hosted sibling ("node") survives.
+        // Prototype-only leaf ("store") is also pruned while hosted sibling ("node") survives.
+        string withStore = LayoutOf(new SplitNode("split-1", SplitAxis.Horizontal, 0.5, new LeafNode("node"), new LeafNode("store")), 1);
+        WorkspaceStateLoadResult storeResult = WorkspaceStateJson.Parse(Doc(withStore, "{\"open\":[],\"active\":0}"));
+        Assert.True(storeResult.IsValid, storeResult.Error);
+        Assert.Equal(new[] { PanelIds.Node }, storeResult.State!.Layout.Views);
+
+        // Faz 7: a saved Lua editor / Node library leaf is a real panel and survives.
         string withLua = LayoutOf(new SplitNode("split-1", SplitAxis.Horizontal, 0.5, new LeafNode("node"), new LeafNode("lua")), 1);
         WorkspaceStateLoadResult luaResult = WorkspaceStateJson.Parse(Doc(withLua, "{\"open\":[],\"active\":0}"));
         Assert.True(luaResult.IsValid, luaResult.Error);
-        Assert.Equal(new[] { PanelIds.Node }, luaResult.State!.Layout.Views);
+        Assert.Equal(new[] { PanelIds.Node, PanelIds.Lua }, luaResult.State!.Layout.Views);
     }
 
     [Fact]

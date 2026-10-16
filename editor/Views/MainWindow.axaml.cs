@@ -238,7 +238,7 @@ namespace RowlEngine.Editor.Views
                 e.Handled = true;
             }
 
-            // ── Paneller (Faz 5: Pencereler menüsü kısayolları Ctrl+1..7) ──
+            // ── Paneller (Faz 5: Pencereler menüsü kısayolları Ctrl+1..9; Faz 7: 8 kütüphane, 9 Lua) ──
             else if (ctrl && !shift && !isTextInput && TryPanelShortcut(e.Key, out string? panel))
             {
                 vm.ShowPanel(panel!);
@@ -268,7 +268,7 @@ namespace RowlEngine.Editor.Views
         }
 
         /// <summary>
-        /// Faz 5: Pencereler menüsü kısayolları (Ctrl+1..7, menü sırasıyla).
+        /// Faz 5: Pencereler menüsü kısayolları (Ctrl+1..9, menü sırasıyla; Faz 7: Ctrl+8 Düğüm kütüphanesi, Ctrl+9 Lua editörü).
         /// Metin girişinde çalışmaz (MS-5 kuralı).
         /// </summary>
         internal static bool TryPanelShortcut(Key key, out string? panel)
@@ -282,6 +282,8 @@ namespace RowlEngine.Editor.Views
                 Key.D5 or Key.NumPad5 => "Backlog",
                 Key.D6 or Key.NumPad6 => "SaveSlots",
                 Key.D7 or Key.NumPad7 => "ProjectIssues",
+                Key.D8 or Key.NumPad8 => "Library",
+                Key.D9 or Key.NumPad9 => "Lua",
                 _ => null,
             };
             return panel != null;

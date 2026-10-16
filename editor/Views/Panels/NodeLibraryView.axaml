@@ -1,0 +1,264 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:l="using:RowlEngine.Editor.Services.Strings"
+             xmlns:vm="using:RowlEngine.Editor.ViewModels"
+             xmlns:conv="using:Avalonia.Data.Converters"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="300" d:DesignHeight="700"
+             x:Class="RowlEngine.Editor.Views.Panels.NodeLibraryView"
+             x:DataType="vm:NodeLibraryViewModel">
+  <UserControl.Styles>
+    <!-- İlk kırıntıda baştaki ayraç gizlenir -->
+    <Style Selector="ItemsControl#PART_Crumbs ContentPresenter:nth-child(1) Path.librarySeparator">
+      <Setter Property="IsVisible" Value="False"/>
+    </Style>
+  </UserControl.Styles>
+  <!-- Kart çerçevesini WorkspacePanel çizer; burada yalnız zemin -->
+  <Border Background="{DynamicResource PanelBackground}">
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+      <StackPanel Spacing="10" Margin="12,12,12,16">
+        <!-- Salt okunur / yükleme uyarısı -->
+        <Border Classes="libraryWarning"
+                IsVisible="{Binding LoadWarning, Converter={x:Static conv:ObjectConverters.IsNotNull}}">
+          <TextBlock Text="{Binding LoadWarning}" Classes="hint" TextWrapping="Wrap"/>
+        </Border>
+
+        <!-- Kaynak seçimi -->
+        <Border Classes="librarySegments">
+          <Grid ColumnDefinitions="*,*">
+            <Button x:Name="PART_SourceBuiltinButton"
+                    Grid.Column="0"
+                    Classes="librarySegment"
+                    Classes.libraryActive="{Binding IsBuiltinSource}"
+                    Command="{Binding ShowBuiltinCommand}"
+                    Content="{l:T Library.Source.Builtin}"/>
+            <Button x:Name="PART_SourceUserButton"
+                    Grid.Column="1"
+                    Classes="librarySegment"
+                    Classes.libraryActive="{Binding IsUserSource}"
+                    Command="{Binding ShowUserCommand}"
+                    Content="{l:T Library.Source.User}"/>
+          </Grid>
+        </Border>
+
+        <!-- Klasör ağacı -->
+        <Border Classes="libraryFolders" IsVisible="{Binding IsUserSource}">
+          <StackPanel Spacing="4">
+            <TextBlock Classes="caption" Text="{l:T Library.Folders.Caption}"/>
+            <TreeView x:Name="PART_FolderTree"
+                      ItemsSource="{Binding FolderTree}"
+                      Background="Transparent"
+                      BorderThickness="0">
+              <TreeView.DataTemplates>
+                <TreeDataTemplate x:DataType="vm:LibraryFolderNodeViewModel" ItemsSource="{Binding Children}">
+                  <Grid ColumnDefinitions="*,Auto,Auto">
+                    <!-- Klasör adı -->
+                    <Button Command="{Binding SelectCommand}"
+                            Classes="libraryFolderName"
+                            Classes.librarySelected="{Binding IsSelected}"
+                            ToolTip.Tip="{Binding Name}">
+                      <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Grid.Column="0"
+                                   Text="{Binding Name}"
+                                   Classes="libraryFolderTitle"
+                                   VerticalAlignment="Center"
+                                   TextTrimming="CharacterEllipsis"/>
+                        <TextBlock Grid.Column="1"
+                                   Text="{Binding ItemCount}"
+                                   Classes="libraryCount"
+                                   VerticalAlignment="Center"/>
+                      </Grid>
+                    </Button>
+                    <!-- Satır menüsü -->
+                    <Button Grid.Column="2"
+                            Classes="libraryDots"
+                            IsVisible="{Binding CanManage}">
+                      <StackPanel Orientation="Horizontal" Spacing="3"
+                                  HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <Ellipse Width="3" Height="3" Fill="{DynamicResource MutedText}"/>
+                        <Ellipse Width="3" Height="3" Fill="{DynamicResource MutedText}"/>
+                        <Ellipse Width="3" Height="3" Fill="{DynamicResource MutedText}"/>
+                      </StackPanel>
+                      <Button.Flyout>
+                        <MenuFlyout Placement="BottomEdgeAlignedRight">
+                          <MenuItem Header="{l:T Library.Folder.Manage}" Command="{Binding ManageCommand}"/>
+                          <MenuItem Header="{l:T Library.Folder.Remove}" Command="{Binding RemoveCommand}"/>
+                        </MenuFlyout>
+                      </Button.Flyout>
+                    </Button>
+                  </Grid>
+                </TreeDataTemplate>
+              </TreeView.DataTemplates>
+            </TreeView>
+          </StackPanel>
+        </Border>
+
+        <!-- Ekmek kırıntısı -->
+        <ItemsControl x:Name="PART_Crumbs" ItemsSource="{Binding Crumbs}">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <StackPanel Orientation="Horizontal" Spacing="4"/>
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:LibraryCrumbViewModel">
+              <StackPanel Orientation="Horizontal" Spacing="4">
+                <Path Classes="librarySeparator" Data="M8,3 L4,11"/>
+                <Button Classes="libraryCrumb"
+                        Command="{Binding NavigateCommand}"
+                        Content="{Binding Title}"
+                        IsEnabled="{Binding IsNavigable}"/>
+              </StackPanel>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <!-- Arama + klasör ekle -->
+        <Grid ColumnDefinitions="*,Auto">
+          <TextBox x:Name="PART_SearchBox"
+                   Grid.Column="0"
+                   Watermark="{l:T Library.Search.Watermark}"
+                   Text="{Binding Query, Mode=TwoWay}"
+                   MinHeight="{DynamicResource ControlHeight}"
+                   VerticalContentAlignment="Center"/>
+          <Button x:Name="PART_NewFolderButton"
+                  Grid.Column="1"
+                  Classes="secondary"
+                  Margin="8,0,0,0"
+                  Command="{Binding ShowNewFolderFormCommand}"
+                  IsVisible="{Binding IsUserSource}">
+            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+              <Path Classes="libraryIcon" Data="M7,3 L7,11 M3,7 L11,7"
+                    Stroke="{Binding $parent[Button].Foreground}"/>
+              <TextBlock Text="{l:T Library.Folder.New}" VerticalAlignment="Center"/>
+            </StackPanel>
+          </Button>
+        </Grid>
+
+        <!-- Açıklama -->
+        <TextBlock Text="{Binding Description}" Classes="hint" TextWrapping="Wrap"/>
+
+        <!-- Yeni klasör formu -->
+        <Border Classes="libraryForm" IsVisible="{Binding IsNewFolderFormOpen}">
+          <StackPanel Spacing="8">
+            <TextBlock Classes="caption" Text="{l:T Library.Folder.NewTitle}"/>
+            <TextBox x:Name="PART_NewFolderName"
+                     Watermark="{l:T Library.Folder.NameLabel}"
+                     Text="{Binding NewFolderName, Mode=TwoWay}"
+                     MinHeight="{DynamicResource ControlHeight}"/>
+            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+              <Button Content="{l:T Library.Confirm.Cancel}" Classes="ghost" Command="{Binding CancelNewFolderFormCommand}"/>
+              <Button Content="{l:T Library.Folder.Save}" Classes="secondary" Command="{Binding ConfirmNewFolderCommand}"/>
+            </StackPanel>
+          </StackPanel>
+        </Border>
+
+        <!-- Klasör yönet formu -->
+        <Border Classes="libraryForm" IsVisible="{Binding IsManageFolderFormOpen}">
+          <StackPanel Spacing="8">
+            <TextBlock Classes="caption" Text="{l:T Library.Folder.Manage}"/>
+            <TextBox Watermark="{l:T Library.Folder.NameLabel}"
+                     Text="{Binding ManageFolderName, Mode=TwoWay}"
+                     MinHeight="{DynamicResource ControlHeight}"/>
+            <TextBlock Classes="fieldLabel" Text="{l:T Library.Folder.ParentLabel}"/>
+            <ComboBox ItemsSource="{Binding ManageFolderParentOptions}"
+                      SelectedItem="{Binding SelectedManageParentOption, Mode=TwoWay}"
+                      PlaceholderText="{l:T Library.Folder.ParentLabel}"
+                      MinHeight="{DynamicResource ControlHeight}"
+                      HorizontalAlignment="Stretch">
+              <ComboBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:LibraryParentOptionViewModel">
+                  <TextBlock Text="{Binding Title}"/>
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
+            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+              <Button Content="{l:T Library.Confirm.Cancel}" Classes="ghost" Command="{Binding CancelManageFolderCommand}"/>
+              <Button Content="{l:T Library.Folder.Save}" Classes="secondary" Command="{Binding ConfirmManageFolderCommand}"/>
+            </StackPanel>
+          </StackPanel>
+        </Border>
+
+        <!-- Klasör kaldırma onayı -->
+        <Border Classes="libraryForm" IsVisible="{Binding IsRemoveFolderConfirmOpen}">
+          <StackPanel Spacing="8">
+            <TextBlock Classes="caption" Text="{l:T Library.Folder.RemoveTitle}"/>
+            <TextBlock Text="{Binding PendingRemoveFolderName}" Classes="libraryTitle" TextWrapping="Wrap"/>
+            <TextBlock Text="{l:T Library.Folder.RemoveConfirm}" Classes="hint" TextWrapping="Wrap"/>
+            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+              <Button Content="{l:T Library.Confirm.Cancel}" Classes="ghost" Command="{Binding CancelRemoveFolderCommand}"/>
+              <Button Content="{l:T Library.Confirm.Remove}" Classes="secondary" Command="{Binding ConfirmRemoveFolderCommand}"/>
+            </StackPanel>
+          </StackPanel>
+        </Border>
+
+        <!-- Kayıt kaldırma onayı -->
+        <Border Classes="libraryForm" IsVisible="{Binding IsRemoveItemConfirmOpen}">
+          <StackPanel Spacing="8">
+            <TextBlock Classes="caption" Text="{l:T Library.Item.RemoveTitle}"/>
+            <TextBlock Text="{Binding PendingRemoveItemTitle}" Classes="libraryTitle" TextWrapping="Wrap"/>
+            <TextBlock Text="{l:T Library.Item.RemoveConfirm}" Classes="hint" TextWrapping="Wrap"/>
+            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+              <Button Content="{l:T Library.Confirm.Cancel}" Classes="ghost" Command="{Binding CancelRemoveItemCommand}"/>
+              <Button Content="{l:T Library.Confirm.Remove}" Classes="secondary" Command="{Binding ConfirmRemoveItemCommand}"/>
+            </StackPanel>
+          </StackPanel>
+        </Border>
+
+        <!-- Satırlar -->
+        <ItemsControl x:Name="PART_Rows" ItemsSource="{Binding Rows}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:LibraryRowViewModel">
+              <Border Classes="libraryRow" Margin="0,0,0,8">
+                <Grid ColumnDefinitions="*,Auto">
+                  <Button Command="{Binding ActivateCommand}" Classes="libraryRowMain">
+                    <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                      <Path Classes="libraryIcon" Data="M2,4 L8,4 L8,10 L2,10 Z M6,7 L12,7 L12,13 L6,13 Z"/>
+                      <StackPanel Spacing="2" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding Title}" Classes="libraryTitle" TextTrimming="CharacterEllipsis"/>
+                        <TextBlock Text="{Binding Summary}" Classes="hint" TextTrimming="CharacterEllipsis"/>
+                      </StackPanel>
+                    </StackPanel>
+                  </Button>
+                  <Button Grid.Column="1"
+                          Classes="libraryDots"
+                          IsVisible="{Binding CanMove}"
+                          VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal" Spacing="3"
+                                HorizontalAlignment="Center" VerticalAlignment="Center">
+                      <Ellipse Width="3" Height="3" Fill="{DynamicResource MutedText}"/>
+                      <Ellipse Width="3" Height="3" Fill="{DynamicResource MutedText}"/>
+                      <Ellipse Width="3" Height="3" Fill="{DynamicResource MutedText}"/>
+                    </StackPanel>
+                    <Button.Flyout>
+                      <MenuFlyout Placement="BottomEdgeAlignedRight">
+                        <MenuItem Header="{l:T Library.Item.Move}" ItemsSource="{Binding MoveTargets}">
+                          <MenuItem.ItemTemplate>
+                            <DataTemplate x:DataType="vm:LibraryMoveTargetViewModel">
+                              <MenuItem Header="{Binding Title}" Command="{Binding MoveCommand}"/>
+                            </DataTemplate>
+                          </MenuItem.ItemTemplate>
+                        </MenuItem>
+                        <MenuItem Header="{l:T Library.Item.Remove}" Command="{Binding RemoveCommand}"/>
+                      </MenuFlyout>
+                    </Button.Flyout>
+                  </Button>
+                </Grid>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <!-- Boş durum -->
+        <TextBlock x:Name="PART_Empty"
+                   Text="{Binding EmptyMessage}"
+                   Classes="hint"
+                   IsVisible="{Binding IsEmpty}"
+                   TextWrapping="Wrap"
+                   HorizontalAlignment="Center"
+                   Margin="8,12,8,0"/>
+      </StackPanel>
+    </ScrollViewer>
+  </Border>
+</UserControl>

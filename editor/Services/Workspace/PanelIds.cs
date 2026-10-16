@@ -14,7 +14,7 @@ namespace RowlEngine.Editor.Services.Workspace;
 /// Assets / Log / Backlog / Save Slots / Issues). <see cref="Assets"/> and
 /// <see cref="Console"/> name bottom-strip tabs that may become their own leaves
 /// (D3 decision); <see cref="Lua"/>, <see cref="Library"/> and
-/// <see cref="Store"/> are prototype-only (no editor panel yet) and are kept so
+/// <see cref="Store"/> are prototype-only (Faz 7: Library and Lua are now real panels; Store stays prototype-only) and are kept so
 /// the prototype layout rules and their ported tests stay intact.
 /// </para>
 /// </summary>
@@ -43,8 +43,8 @@ public static class PanelIds
     /// <summary>Every panel, in canonical order (<see cref="Core"/> then <see cref="Tools"/>).</summary>
     public static readonly string[] All = { Node, Game, Edit, Hierarchy, Inspector, Assets, Console, Lua, Library, Store, Bottom };
 
-    /// <summary>D2: panels the editor window actually hosts today.</summary>
-    public static readonly string[] Editor = { Node, Game, Edit, Hierarchy, Inspector, Bottom };
+    /// <summary>D2: panels the editor window actually hosts today (Faz 7: + Library, Lua).</summary>
+    public static readonly string[] Editor = { Node, Game, Edit, Hierarchy, Inspector, Library, Lua, Bottom };
 
     public static bool IsKnown(string? id) => id is not null && Array.IndexOf(All, id) >= 0;
 

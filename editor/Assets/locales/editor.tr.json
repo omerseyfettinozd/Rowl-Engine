@@ -1050,6 +1050,159 @@
     "Layout.SceneFocus": {
       "text": "Sahne Odağı"
     },
+    "Library.Builtin.Summary": {
+      "text": "Mevcut varsayılan düğüm · Ekle"
+    },
+    "Library.Builtin.Title": {
+      "text": "Standart düğüm"
+    },
+    "Library.Confirm.Cancel": {
+      "text": "Vazgeç"
+    },
+    "Library.Confirm.Remove": {
+      "text": "Kaldır"
+    },
+    "Library.Desc.Builtin": {
+      "text": "Salt okunur · Sahneye eklenen kopyayı düzenleyebilirsin."
+    },
+    "Library.Desc.User": {
+      "text": "Düğümün tamamını Inspector'daki yıldızla kaydet."
+    },
+    "Library.Empty.Folder": {
+      "text": "Bu klasörde düğüm yok. Inspector'daki yıldızla buraya kaydet veya bir kaydı bu klasöre taşı."
+    },
+    "Library.Empty.NoMatch": {
+      "text": "Bu klasörde eşleşme yok."
+    },
+    "Library.Error.AlreadySaved": {
+      "text": "Bu düğüm zaten kütüphanede kayıtlı."
+    },
+    "Library.Error.CycleNotAllowed": {
+      "text": "Klasör kendisinin ya da alt klasörlerinden birinin içine taşınamaz."
+    },
+    "Library.Error.DuplicateName": {
+      "text": "Bu konumda aynı adda bir klasör zaten var."
+    },
+    "Library.Error.FolderNotFound": {
+      "text": "Klasör bulunamadı."
+    },
+    "Library.Error.InvalidName": {
+      "text": "Klasör adı geçersiz."
+    },
+    "Library.Error.ItemNotFound": {
+      "text": "Kütüphane kaydı bulunamadı."
+    },
+    "Library.Error.ParentNotFound": {
+      "text": "Üst klasör bulunamadı."
+    },
+    "Library.Folder.Manage": {
+      "text": "Klasörü yönet"
+    },
+    "Library.Folder.NameLabel": {
+      "text": "Klasör adı"
+    },
+    "Library.Folder.New": {
+      "text": "Klasör"
+    },
+    "Library.Folder.NewTitle": {
+      "text": "Yeni klasör"
+    },
+    "Library.Folder.ParentLabel": {
+      "text": "Üst klasör"
+    },
+    "Library.Folder.Remove": {
+      "text": "Klasörü kaldır…"
+    },
+    "Library.Folder.RemoveConfirm": {
+      "text": "Klasör kaldırılsın mı? İçindekiler üst klasöre taşınır."
+    },
+    "Library.Folder.RemoveTitle": {
+      "text": "Klasörü kaldır"
+    },
+    "Library.Folder.Save": {
+      "text": "Kaydet"
+    },
+    "Library.Folders.Caption": {
+      "text": "KLASÖRLER"
+    },
+    "Library.Inspector.Caption": {
+      "text": "DÜĞÜM KÜTÜPHANESİ"
+    },
+    "Library.Inspector.Hint": {
+      "text": "Tüm hiyerarşi, obje özellikleri ve bileşen ayarları kaydedilir."
+    },
+    "Library.Inspector.Remove": {
+      "text": "Kütüphaneden kaldır"
+    },
+    "Library.Inspector.Save": {
+      "text": "Kütüphaneye kaydet"
+    },
+    "Library.Inspector.SavedHint": {
+      "text": "Kayıt: {0}. Değişiklikleri kayda aktarmak için Kaydı güncelle'yi kullan."
+    },
+    "Library.Inspector.Update": {
+      "text": "Kaydı güncelle"
+    },
+    "Library.Item.Move": {
+      "text": "Klasöre taşı"
+    },
+    "Library.Item.Remove": {
+      "text": "Kaldır…"
+    },
+    "Library.Item.RemoveConfirm": {
+      "text": "Sahneye eklenmiş kopyalar korunur."
+    },
+    "Library.Item.RemoveTitle": {
+      "text": "Kaydı kaldır"
+    },
+    "Library.Item.Summary": {
+      "text": "{0} obje · {1} bileşen · Sahneye ekle"
+    },
+    "Library.Package.Name": {
+      "text": "Rowl"
+    },
+    "Library.Package.Summary": {
+      "text": "Hazır paket · Salt okunur"
+    },
+    "Library.Search.Watermark": {
+      "text": "Bu klasörde ara…"
+    },
+    "Library.Source.Builtin": {
+      "text": "Hazır paketler"
+    },
+    "Library.Source.User": {
+      "text": "Benim düğümlerim"
+    },
+    "Library.Toast.Added": {
+      "text": "Düğüm sahneye eklendi."
+    },
+    "Library.Toast.FolderCreated": {
+      "text": "Klasör oluşturuldu."
+    },
+    "Library.Toast.FolderRemoved": {
+      "text": "Klasör kaldırıldı."
+    },
+    "Library.Toast.FolderUpdated": {
+      "text": "Klasör güncellendi."
+    },
+    "Library.Toast.ItemMoved": {
+      "text": "Kayıt taşındı."
+    },
+    "Library.Toast.ReadOnly": {
+      "text": "Salt okunur kütüphane; değişiklik yapılamaz."
+    },
+    "Library.Toast.Removed": {
+      "text": "Kütüphane kaydı kaldırıldı."
+    },
+    "Library.Toast.SaveFailed": {
+      "text": "Kütüphane dosyasına yazılamadı."
+    },
+    "Library.Toast.Saved": {
+      "text": "Düğüm kütüphaneye kaydedildi."
+    },
+    "Library.Toast.Updated": {
+      "text": "Kütüphane kaydı güncellendi."
+    },
     "LivePreview.Background.ResizeTooltip": {
       "text": "Resize Background"
     },
@@ -1203,6 +1356,78 @@
     "Log.Warnings.Tip": {
       "text": "Uyarı sayısı"
     },
+    "Lua.BoundObject": {
+      "text": "BAĞLI OBJE"
+    },
+    "Lua.BoundObject.None": {
+      "text": "(yok)"
+    },
+    "Lua.Close.Cancel": {
+      "text": "Vazgeç"
+    },
+    "Lua.Close.Confirm": {
+      "text": "Kaydedilmemiş değişiklikler var."
+    },
+    "Lua.Close.Discard": {
+      "text": "At"
+    },
+    "Lua.Empty.New": {
+      "text": "Yeni betik"
+    },
+    "Lua.Empty.Title": {
+      "text": "Henüz betik yok."
+    },
+    "Lua.External.Keep": {
+      "text": "Tut"
+    },
+    "Lua.External.Reload": {
+      "text": "Yeniden yükle"
+    },
+    "Lua.ExternalChange": {
+      "text": "Dosya diskte değişti."
+    },
+    "Lua.Files": {
+      "text": "Dosyalar"
+    },
+    "Lua.Files.Tip": {
+      "text": "Dosya aç"
+    },
+    "Lua.Find.Tip": {
+      "text": "Kodda ara"
+    },
+    "Lua.New.Content": {
+      "text": "-- Yeni bir hikâye\n\n"
+    },
+    "Lua.New.Tip": {
+      "text": "Yeni betik"
+    },
+    "Lua.Panel.Title": {
+      "text": "Lua editörü"
+    },
+    "Lua.Save": {
+      "text": "Kaydet"
+    },
+    "Lua.Saved": {
+      "text": "Betik kaydedildi."
+    },
+    "Lua.Skipped.Tip": {
+      "text": "Dosya çok büyük, atlandı"
+    },
+    "Lua.Status.Caret": {
+      "text": "Satır {0} · Sütun {1}"
+    },
+    "Lua.Status.Edited": {
+      "text": "Düzenlendi"
+    },
+    "Lua.Status.Language": {
+      "text": "Lua"
+    },
+    "Lua.Status.Saved": {
+      "text": "Kaydedildi"
+    },
+    "Lua.Tab.CloseTip": {
+      "text": "Kapat"
+    },
     "Menu.CancelBuild": {
       "text": "Dışa Aktarmayı İptal Et"
     },
@@ -1311,8 +1536,14 @@
     "Panel.Issues": {
       "text": "Sorunlar"
     },
+    "Panel.Library": {
+      "text": "Düğüm kütüphanesi"
+    },
     "Panel.Log": {
       "text": "Günlük"
+    },
+    "Panel.Lua": {
+      "text": "Lua editörü"
     },
     "Panel.SaveSlots": {
       "text": "Kayıt Slotları"

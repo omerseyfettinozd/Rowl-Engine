@@ -112,6 +112,15 @@
     <SolidColorBrush x:Key="CanvasControlBg" Color="{DynamicResource CanvasControlBgColor}"/>
     <SolidColorBrush x:Key="CanvasControlText" Color="{DynamicResource CanvasControlTextColor}"/>
     <SolidColorBrush x:Key="ToolCardIcon" Color="{DynamicResource ToolCardIconColor}"/>
+    <!-- Faz 7 Lua editörü renklendirmesi (prototip .lua-comment / keyword / string / number). -->
+    <Color x:Key="LuaCommentColor">#727E78</Color>
+    <Color x:Key="LuaKeywordColor">#BFA8DA</Color>
+    <Color x:Key="LuaStringColor">#C5CDA9</Color>
+    <Color x:Key="LuaNumberColor">#C9B089</Color>
+    <SolidColorBrush x:Key="LuaCommentBrush" Color="{DynamicResource LuaCommentColor}"/>
+    <SolidColorBrush x:Key="LuaKeywordBrush" Color="{DynamicResource LuaKeywordColor}"/>
+    <SolidColorBrush x:Key="LuaStringBrush" Color="{DynamicResource LuaStringColor}"/>
+    <SolidColorBrush x:Key="LuaNumberBrush" Color="{DynamicResource LuaNumberColor}"/>
 
     <!-- ── Faz 2: ölçek token'ları (EDITOR_UI_PORT_PLAN) ──────────────────
          Yazı ölçeği prototipin dağılımından; K2: masaüstü denetim yüksekliği 32. -->

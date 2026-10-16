@@ -10,6 +10,7 @@
              xmlns:conv="using:Avalonia.Data.Converters"
              xmlns:views="using:RowlEngine.Editor.Views.Components"
              xmlns:ctrl="using:RowlEngine.Editor.Controls"
+             xmlns:panels="using:RowlEngine.Editor.Views.Panels"
              mc:Ignorable="d" d:DesignWidth="320" d:DesignHeight="700"
              x:Class="RowlEngine.Editor.Views.Panels.NodeInspectorView"
              x:DataType="vm:MainWindowViewModel">
@@ -193,6 +194,8 @@
                             <TextBlock Text="{l:T Inspector.Node.Issues.Suffix}"
                                        Classes="fieldValue" Foreground="{DynamicResource ErrorBrush}"/>
                         </StackPanel>
+                        <!-- Faz 7 D3: Düğüm kütüphanesi bölümü (prototip inspector-library.jpg). -->
+                        <panels:NodeLibraryInspectorSection DataContext="{Binding NodeLibrary}"/>
                         <!-- Faz 5 Dilim 5 fix: dönüştürülmüş asset provenance rozeti.
                              Sidecar yoksa HasSelectedAssetProvenance=false → gizli (fail-closed).
                              Unity çizgisi: düz satır + hairline, standart etiket. -->

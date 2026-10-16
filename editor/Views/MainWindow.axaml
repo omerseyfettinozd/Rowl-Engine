@@ -174,6 +174,20 @@
                                               Fill="Transparent" Stroke="{DynamicResource ToolCardIcon}"/>
                                     </MenuItem.Icon>
                                 </MenuItem>
+                                <MenuItem Classes="toolCard" Header="{l:T Panel.Library}" InputGesture="Ctrl+8" Command="{Binding ShowPanelCommand}" CommandParameter="Library">
+                                    <MenuItem.Icon>
+                                        <Path Data="M4,4 h6 v6 h-6 Z M14,4 h6 v6 h-6 Z M4,14 h6 v6 h-6 Z M17,13.5 l1.1,2.3 l2.4,.3 l-1.8,1.7 l.5,2.4 l-2.2,-1.2 l-2.2,1.2 l.5,-2.4 l-1.8,-1.7 l2.4,-.3 Z"
+                                              Width="19" Height="19" Stretch="Uniform" StrokeThickness="1.5" StrokeLineCap="Round" StrokeJoin="Round"
+                                              Fill="Transparent" Stroke="{DynamicResource ToolCardIcon}"/>
+                                    </MenuItem.Icon>
+                                </MenuItem>
+                                <MenuItem Classes="toolCard" Header="{l:T Panel.Lua}" InputGesture="Ctrl+9" Command="{Binding ShowPanelCommand}" CommandParameter="Lua">
+                                    <MenuItem.Icon>
+                                        <Path Data="M8,7 L3,12 L8,17 M16,7 L21,12 L16,17 M14,4 L10,20"
+                                              Width="19" Height="19" Stretch="Uniform" StrokeThickness="1.5" StrokeLineCap="Round" StrokeJoin="Round"
+                                              Fill="Transparent" Stroke="{DynamicResource ToolCardIcon}"/>
+                                    </MenuItem.Icon>
+                                </MenuItem>
                             </MenuItem>
                             <MenuItem x:Name="MoreMenu" Classes="capsuleMenu moreMenu" ToolTip.Tip="{l:T Menu.More}">
                                 <MenuItem.Header>
@@ -334,6 +348,21 @@
                             <panels:ProjectIssuesView DataContext="{Binding ProjectIssuesViewModel}"/>
                         </TabItem>
                     </TabControl>
+                </ws:WorkspacePanel>
+
+                <!-- Faz 7 D3: Düğüm kütüphanesi (prototip library-categories.jpg; merkez alanın sağında açılır). -->
+                <ws:WorkspacePanel PanelId="{x:Static wsm:PanelIds.Library}" Title="{l:T Panel.Library}"
+                                   PanelMinWidth="{x:Static ws:WorkspacePanelMetrics.InspectorMinWidth}"
+                                   Background="{DynamicResource PanelBackground}">
+                    <panels:NodeLibraryView DataContext="{Binding NodeLibrary}"/>
+                </ws:WorkspacePanel>
+
+                <!-- Faz 7 D5: Lua editörü (prototip desktop.jpg; merkez alanın altında açılır). -->
+                <ws:WorkspacePanel PanelId="{x:Static wsm:PanelIds.Lua}" Title="{l:T Panel.Lua}"
+                                   PanelMinWidth="{x:Static ws:WorkspacePanelMetrics.CenterMinWidth}"
+                                   PanelMinHeight="{x:Static ws:WorkspacePanelMetrics.CenterMinHeight}"
+                                   Background="{DynamicResource PanelBackground}">
+                    <panels:LuaEditorView DataContext="{Binding LuaEditor}"/>
                 </ws:WorkspacePanel>
 
                 <ws:WorkspacePanel PanelId="{x:Static wsm:PanelIds.Inspector}" OwnsHeader="True" HeaderActionsInContent="True"

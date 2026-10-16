@@ -6,9 +6,18 @@ using RowlEngine.Editor.Services.NodeLibrary;
 
 namespace RowlEngine.Editor.ViewModels
 {
-    /// <summary>Faz 7 D2 — düğüm kütüphanesinin ana pencere tarafı (şablonu sahneye ekleme).</summary>
+    /// <summary>Faz 7 — düğüm kütüphanesi (D2: şablonu sahneye ekleme) ve Lua editörü (D5) panellerinin ana pencere tarafı.</summary>
     public partial class MainWindowViewModel
     {
+        private LuaEditorViewModel? _luaEditor;
+        private NodeLibraryViewModel? _nodeLibrary;
+
+        /// <summary>Faz 7 D3 — düğüm kütüphanesi paneli ve Denetçi bölümü (ortak durum); ilk erişimde yüklenir.</summary>
+        public NodeLibraryViewModel NodeLibrary => _nodeLibrary ??= new NodeLibraryViewModel(this);
+
+        /// <summary>Faz 7 D5 — Lua editörü paneli (projenin Assets altındaki .lua dosyaları); ilk erişimde kurulur.</summary>
+        public LuaEditorViewModel LuaEditor => _luaEditor ??= new LuaEditorViewModel(this);
+
         /// <summary>Kullanıcı düzeyi kütüphane dosyası: editör ayar profiliyle aynı dizin.</summary>
         public string NodeLibraryPath { get; } = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),

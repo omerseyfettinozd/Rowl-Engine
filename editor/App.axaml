@@ -4,6 +4,8 @@
              RequestedThemeVariant="Dark">
     <Application.Styles>
         <FluentTheme />
+        <!-- Faz 7: Lua editörü kod alanı (AvaloniaEdit) -->
+        <StyleInclude Source="avares://AvaloniaEdit/Themes/Fluent/AvaloniaEdit.xaml"/>
         <StyleInclude Source="avares://RowlEngine.Editor/Styles/ControlStyles.axaml"/>
     </Application.Styles>
 
