@@ -3,197 +3,101 @@
   "locale": "tr",
   "scope": "editor-ui",
   "entries": {
-    "Menu.Windows": {
-      "text": "Araçlar"
+    "App.Brand.Name": {
+      "text": "ROWL"
     },
-    "Menu.Projects": {
-      "text": "Projeler"
+    "App.Brand.Tagline": {
+      "text": "STORY STUDIO"
     },
-    "Menu.ProjectList": {
-      "text": "Proje Listesi"
+    "App.Window.Title": {
+      "text": "Rowl Engine Editor"
     },
-    "Menu.LocalizationDesk": {
-      "text": "Çeviri Masası"
+    "Assets.Badge.Info": {
+      "text": "bilgi"
     },
-    "Menu.OpenInSeparateWindow": {
-      "text": "Bağımsız Pencerede Aç"
+    "Assets.Badge.Missing": {
+      "text": "KAYIP"
     },
-    "Panel.Hierarchy": {
-      "text": "Hiyerarşi"
+    "Assets.ClearFilter": {
+      "text": "Filtreyi Temizle"
     },
-    "Panel.Inspector": {
-      "text": "Denetçi"
+    "Assets.ClearFilter.Tip": {
+      "text": "Arama ve tür filtresini temizle"
     },
-    "Panel.Log": {
-      "text": "Günlük"
+    "Assets.Empty": {
+      "text": "Bu projede henüz dosya yok."
     },
-    "Panel.Assets": {
+    "Assets.Import": {
+      "text": "İçe Aktar"
+    },
+    "Assets.Import.Tip": {
+      "text": "Dosyayı proje Assets klasörüne içe aktar"
+    },
+    "Assets.ImportFile": {
+      "text": "Dosya İçe Aktar"
+    },
+    "Assets.Menu.Import": {
+      "text": "Dosya İçe Aktar..."
+    },
+    "Assets.Menu.NewFolder": {
+      "text": "Yeni Klasör Oluştur"
+    },
+    "Assets.Menu.OpenInExplorer": {
+      "text": "Dosya Yöneticisinde Aç"
+    },
+    "Assets.Menu.Rename": {
+      "text": "Yeniden Adlandır (F2)"
+    },
+    "Assets.NewFolder": {
+      "text": "Yeni Klasör"
+    },
+    "Assets.NewFolder.Tip": {
+      "text": "Seçili konumun altında klasör oluştur"
+    },
+    "Assets.NoMatch": {
+      "text": "Arama filtresi sonuç vermedi."
+    },
+    "Assets.Refresh": {
+      "text": "Yenile"
+    },
+    "Assets.Refresh.Tip": {
+      "text": "Varlık listesini yenile"
+    },
+    "Assets.Search.Watermark": {
+      "text": "Ara: ad veya uzantı"
+    },
+    "Assets.ShowMore.Tip": {
+      "text": "Sonraki 200 öğeyi göster"
+    },
+    "Assets.Size": {
+      "text": "Boyut"
+    },
+    "Assets.Size.Tip": {
+      "text": "Simge boyutu"
+    },
+    "Assets.Title": {
       "text": "Varlıklar"
     },
-    "Panel.Backlog": {
-      "text": "Diyalog Geçmişi"
+    "Assets.Up": {
+      "text": "↑ Üst"
     },
-    "Panel.SaveSlots": {
-      "text": "Kayıt Slotları"
+    "Assets.Up.Tip": {
+      "text": "Üst klasöre git"
     },
-    "Panel.Issues": {
-      "text": "Sorunlar"
+    "Assets.ViewToggle.Tip": {
+      "text": "Izgara/Liste görünümü arasında geç"
     },
-    "Settings.Language": {
-      "text": "Arayüz dili"
+    "Backlog.Empty": {
+      "text": "Henüz diyalog kaydı yok."
     },
-    "Settings.Language.Hint": {
-      "text": "Editör arayüzünün dili; oyun önizleme dilinden ayrıdır. Değişiklik anında uygulanır."
+    "Backlog.Empty.Hint": {
+      "text": "Oyuncu önizlemedeki konuşmalar burada birikir."
     },
-    "Language.tr": {
-      "text": "Türkçe"
+    "Backlog.OpenPlayer": {
+      "text": "Oyuncu Önizlemeyi Aç"
     },
-    "Language.en": {
-      "text": "English"
-    },
-    "Language.qps-ploc": {
-      "text": "Sahte dil (taşma testi)"
-    },
-    "Menu.More": {
-      "text": "Diğer"
-    },
-    "Menu.Save": {
-      "text": "Kaydet"
-    },
-    "Menu.Undo": {
-      "text": "Geri Al"
-    },
-    "Menu.Redo": {
-      "text": "Yinele"
-    },
-    "Menu.Export": {
-      "text": "Dışa Aktar"
-    },
-    "Menu.CancelBuild": {
-      "text": "Dışa Aktarmayı İptal Et"
-    },
-    "Menu.Layout": {
-      "text": "Düzen"
-    },
-    "Menu.Settings": {
-      "text": "Ayarlar"
-    },
-    "Layout.Default": {
-      "text": "Varsayılan"
-    },
-    "Layout.SceneFocus": {
-      "text": "Sahne Odağı"
-    },
-    "Layout.PlayTest": {
-      "text": "Oyun Testi"
-    },
-    "View.Node": {
-      "text": "Node"
-    },
-    "View.Node.Tip": {
-      "text": "Hikâye akışı (düğüm grafiği)"
-    },
-    "View.Game": {
-      "text": "Oyun"
-    },
-    "View.Game.Tip": {
-      "text": "Oyun önizlemesi (sağ tık: bağımsız pencere)"
-    },
-    "View.SceneEdit": {
-      "text": "Sahne Düzenle"
-    },
-    "View.SceneEdit.Tip": {
-      "text": "Sahneyi düzenle"
-    },
-    "Transport.Play": {
-      "text": "Oynat / Durdur"
-    },
-    "Transport.Pause": {
-      "text": "Duraklat"
-    },
-    "Transport.Step": {
-      "text": "Kare Adım (1/60 sn)"
-    },
-    "Node.Add": {
-      "text": "+ Node"
-    },
-    "Node.Add.Tip": {
-      "text": "Yeni Node ekle (Ctrl+N)"
-    },
-    "Node.Disconnect": {
-      "text": "Bağlantıyı Kes"
-    },
-    "Node.Disconnect.Tip": {
-      "text": "Seçili Node bağlantılarını kes"
-    },
-    "Node.Delete": {
-      "text": "Sil"
-    },
-    "Node.Delete.Tip": {
-      "text": "Seçili Node'u sil (Delete)"
-    },
-    "Node.Group": {
-      "text": "+ Grup"
-    },
-    "Node.Group.Tip": {
-      "text": "Seçili düğümlerden grup oluştur"
-    },
-    "Node.Up": {
-      "text": "Üst"
-    },
-    "Node.Up.Tip": {
-      "text": "Bir üst düzeye çık"
-    },
-    "Status.Unsaved": {
-      "text": "Kaydedilmemiş değişiklikler var"
-    },
-    "Graph.Group.Drag.Tip": {
-      "text": "Sürükle: grupla taşı • Çift tık: üyelere sar"
-    },
-    "Graph.Group.Delete.Tip": {
-      "text": "Grubu sil (düğümler kalır)"
-    },
-    "Graph.Group.Resize.Tip": {
-      "text": "Yeniden boyutlandır"
-    },
-    "Graph.ZoomOut": {
-      "text": "Uzaklaştır"
-    },
-    "Graph.ZoomLevel": {
-      "text": "Yakınlaştırma"
-    },
-    "Graph.ZoomIn": {
-      "text": "Yakınlaştır"
-    },
-    "Graph.Fit": {
-      "text": "Sığdır"
-    },
-    "Graph.Fit.Tip": {
-      "text": "Tüm grafı ekrana sığdır"
-    },
-    "Graph.FitSelection": {
-      "text": "Seçim"
-    },
-    "Graph.FitSelection.Tip": {
-      "text": "Seçili düğüme odaklan (F)"
-    },
-    "Graph.Minimap": {
-      "text": "Harita"
-    },
-    "Graph.Minimap.Tip": {
-      "text": "Minimap görünürlüğü"
-    },
-    "Graph.ResetView": {
-      "text": "Görünümü Sıfırla (0,0)"
-    },
-    "Graph.Chapter": {
-      "text": "Bölüm:"
-    },
-    "Graph.Chapter.Tip": {
-      "text": "Tuvali tek bölüme daralt"
-    },
-    "Graph.Crumb.Tip": {
-      "text": "Bu düzeye dön"
+    "Backlog.OpenPlayer.Tip": {
+      "text": "Oyuncu önizleme panelini aç"
     },
     "Common.Center": {
       "text": "Orta"
@@ -225,17 +129,350 @@
     "Common.MoveUp.Tip": {
       "text": "Yukarı taşı"
     },
+    "Common.Opacity": {
+      "text": "Opaklık"
+    },
+    "Common.Remove": {
+      "text": "Kaldır"
+    },
     "Common.RemoveComponent.Tip": {
       "text": "Bileşeni kaldır"
     },
+    "Common.Reset": {
+      "text": "Sıfırla"
+    },
     "Common.Right": {
       "text": "Sağ"
+    },
+    "Common.Rotation": {
+      "text": "Döndürme"
     },
     "Common.Settings": {
       "text": "Ayar"
     },
     "Common.Width": {
       "text": "Genişlik"
+    },
+    "Common.X": {
+      "text": "X"
+    },
+    "Common.Y": {
+      "text": "Y"
+    },
+    "Component.Audio.Bgm.Label": {
+      "text": "BGM parçası (arka plan müziği)"
+    },
+    "Component.Audio.Bgm.Preview.Tip": {
+      "text": "BGM önizlemesini çal / durdur"
+    },
+    "Component.Audio.Bgm.Watermark": {
+      "text": "Örn: bgm_theme.ogg"
+    },
+    "Component.Audio.BgmTransition.Label": {
+      "text": "BGM geçişi"
+    },
+    "Component.Audio.BgmTransitionDuration.Label": {
+      "text": "BGM geçiş süresi (sn, 0 = proje varsayılanı)"
+    },
+    "Component.Audio.ChannelLeft": {
+      "text": "L"
+    },
+    "Component.Audio.ChannelRight": {
+      "text": "R"
+    },
+    "Component.Audio.Dsp.Label": {
+      "text": "DSP filtresi"
+    },
+    "Component.Audio.Preview": {
+      "text": "Önizle"
+    },
+    "Component.Audio.Sfx.Label": {
+      "text": "SFX parçası (ses efekti)"
+    },
+    "Component.Audio.Sfx.Preview.Tip": {
+      "text": "SFX önizlemesini çal / durdur"
+    },
+    "Component.Audio.Sfx.Watermark": {
+      "text": "Örn: sfx_click.wav"
+    },
+    "Component.Audio.Stop": {
+      "text": "Durdur"
+    },
+    "Component.Audio.Title": {
+      "text": "Ses"
+    },
+    "Component.Audio.Volume.Label": {
+      "text": "Ses seviyesi (Volume)"
+    },
+    "Component.Background.Assist.Label": {
+      "text": "OBS hızlı hizalama"
+    },
+    "Component.Background.Center": {
+      "text": "Merkeze ortala"
+    },
+    "Component.Background.Drop.Hint": {
+      "text": "Assets panelinden sürükleyin veya Gözat'a tıklayın"
+    },
+    "Component.Background.Drop.Title": {
+      "text": "Görseli buraya sürükle-bırak"
+    },
+    "Component.Background.Fit1080": {
+      "text": "1080p tam sığdır"
+    },
+    "Component.Background.Height": {
+      "text": "Yükseklik"
+    },
+    "Component.Background.Opacity": {
+      "text": "Katman opaklığı"
+    },
+    "Component.Background.ParallaxX": {
+      "text": "Parallax X"
+    },
+    "Component.Background.ParallaxY": {
+      "text": "Parallax Y"
+    },
+    "Component.Background.ResetRotation.Tip": {
+      "text": "Dönüşü sıfırla (0°)"
+    },
+    "Component.Background.Rotation": {
+      "text": "Dönüş"
+    },
+    "Component.Background.Scale": {
+      "text": "Ölçek (1.0 = %100)"
+    },
+    "Component.Background.Texture.Label": {
+      "text": "Arka plan dokusu (sürükle-bırak)"
+    },
+    "Component.Background.Texture.Watermark": {
+      "text": "Örn: backgrounds/ornek.png veya boş"
+    },
+    "Component.Background.Title": {
+      "text": "Görsel"
+    },
+    "Component.Background.Width": {
+      "text": "Genişlik"
+    },
+    "Component.Background.X": {
+      "text": "X"
+    },
+    "Component.Background.Y": {
+      "text": "Y"
+    },
+    "Component.Camera.Easing": {
+      "text": "Yumuşatma"
+    },
+    "Component.Camera.Easing.Watermark": {
+      "text": "ease_in_out"
+    },
+    "Component.Camera.FocusX": {
+      "text": "Odak X (merkez)"
+    },
+    "Component.Camera.FocusY": {
+      "text": "Odak Y (merkez)"
+    },
+    "Component.Camera.PanTime": {
+      "text": "Kaydırma süresi"
+    },
+    "Component.Camera.Rotation.Label": {
+      "text": "Dönüş (derece) — yok sayılır"
+    },
+    "Component.Camera.Rotation.Note": {
+      "text": "Motorda işlem yok: kamera dönüşünün çizime etkisi yoktur."
+    },
+    "Component.Camera.Rotation.Tip": {
+      "text": "Kamera dönüşü motor tarafından yok sayılır (Faz 4.5 Dilim 2 no-op, yetenek ROWL_ENGINE_CAPABILITY_CAMERA_ROTATION_IGNORED). Değer 0 kalır."
+    },
+    "Component.Camera.Shake.Damping": {
+      "text": "Sönümleme"
+    },
+    "Component.Camera.Shake.DirX": {
+      "text": "Yön X (0-1)"
+    },
+    "Component.Camera.Shake.DirY": {
+      "text": "Yön Y (0-1)"
+    },
+    "Component.Camera.Shake.Duration": {
+      "text": "Süre (sn)"
+    },
+    "Component.Camera.Shake.Frequency": {
+      "text": "Sıklık (Hz)"
+    },
+    "Component.Camera.Shake.Intensity": {
+      "text": "Şiddet (px)"
+    },
+    "Component.Camera.Shake.Label": {
+      "text": "Sinematik ekran sarsıntısı"
+    },
+    "Component.Camera.Shake.Preset": {
+      "text": "Sarsıntı ön ayarı"
+    },
+    "Component.Camera.Title": {
+      "text": "2D Kamera"
+    },
+    "Component.Camera.Tween.Label": {
+      "text": "Yumuşak geçiş (saniye)"
+    },
+    "Component.Camera.Zoom": {
+      "text": "Yakınlaştırma çarpanı"
+    },
+    "Component.Camera.ZoomTime": {
+      "text": "Yakınlaştırma süresi"
+    },
+    "Component.Character.AspectRatio": {
+      "text": "En/Boy Oranını Koru (Aspect Ratio)"
+    },
+    "Component.Character.Assist.Center": {
+      "text": "Ortala"
+    },
+    "Component.Character.Assist.Center.Tip": {
+      "text": "Karakteri yatay olarak ekranda ortalar"
+    },
+    "Component.Character.Assist.Ground": {
+      "text": "Zemine"
+    },
+    "Component.Character.Assist.Ground.Tip": {
+      "text": "Karakteri alt zemin çizgisine oturtur"
+    },
+    "Component.Character.Assist.Reset.Tip": {
+      "text": "Standart karakter boyutuna sıfırlar (600x900)"
+    },
+    "Component.Character.Assist.Title": {
+      "text": "OBS Hızlı Hizalama (Assist)"
+    },
+    "Component.Character.Layers.Accessory": {
+      "text": "Accessory"
+    },
+    "Component.Character.Layers.Body": {
+      "text": "Body (boşsa üstteki sprite kullanılır)"
+    },
+    "Component.Character.Layers.Expression": {
+      "text": "Expression (seçim önizlemeye atomik uygulanır)"
+    },
+    "Component.Character.Layers.Face": {
+      "text": "Face"
+    },
+    "Component.Character.Layers.Outfit": {
+      "text": "Outfit"
+    },
+    "Component.Character.Layers.Title": {
+      "text": "KATMANLAR (LAYERS — body < face < outfit < accessory)"
+    },
+    "Component.Character.Name": {
+      "text": "Karakter"
+    },
+    "Component.Character.Rotation.Reset.Tip": {
+      "text": "Rotasyonu Sıfırla (0°)"
+    },
+    "Component.Character.Scale": {
+      "text": "Ölçek (1.0 = %100)"
+    },
+    "Component.Character.Sprite.Drop": {
+      "text": "Görseli Buraya Sürükle-Bırak"
+    },
+    "Component.Character.Sprite.DropHint": {
+      "text": "Assets panelinden sürükleyin veya Gözat'a tıklayın"
+    },
+    "Component.Character.Sprite.Label": {
+      "text": "Karakter Görseli (Sürükle-Bırak)"
+    },
+    "Component.Character.Sprite.Watermark": {
+      "text": "Örn: characters/ornek.png veya boş"
+    },
+    "Component.Character.Voice.Cadence": {
+      "text": "Ritim (Cadence)"
+    },
+    "Component.Character.Voice.File": {
+      "text": "Varsayılan Ses Dosyası (.wav / .ogg - boşsa synth)"
+    },
+    "Component.Character.Voice.File.Watermark": {
+      "text": "Örn: voice_evelyn.wav veya boş"
+    },
+    "Component.Character.Voice.Pitch": {
+      "text": "Temel perde (Base Pitch)"
+    },
+    "Component.Character.Voice.Preview": {
+      "text": "Önizle"
+    },
+    "Component.Character.Voice.Preview.Tip": {
+      "text": "Karakter ses tonunu test et"
+    },
+    "Component.Character.Voice.Title": {
+      "text": "KARAKTER SES TONU (VOICE BLIP)"
+    },
+    "Component.Choice.Add": {
+      "text": "+ Seçim ekle"
+    },
+    "Component.Choice.Empty": {
+      "text": "Henüz seçenek yok — + Seçim ekle'ye bas, hedefi graf kablosuyla ver."
+    },
+    "Component.Choice.Name": {
+      "text": "Oyuncu Seçimleri"
+    },
+    "Component.Choice.Note": {
+      "text": "Her seçeneğin sabit bir kimliği ve hedef düğümü vardır; hedefi graf kablosuyla ver."
+    },
+    "Component.Choice.Option.Appearance.Tip": {
+      "text": "Düğme görünümü"
+    },
+    "Component.Choice.Option.BackgroundColor.Watermark": {
+      "text": "Arka plan #RRGGBB"
+    },
+    "Component.Choice.Option.BorderColor.Watermark": {
+      "text": "Kenarlık #RRGGBB"
+    },
+    "Component.Choice.Option.Condition.Watermark": {
+      "text": "Koşul (örn. affinity_evelyn >= 3)"
+    },
+    "Component.Choice.Option.DisabledImage.Watermark": {
+      "text": "Disabled görselini buraya bırak"
+    },
+    "Component.Choice.Option.Enable.Tip": {
+      "text": "Bu düğmeyi etkinleştir"
+    },
+    "Component.Choice.Option.Font.Watermark": {
+      "text": "Font: Assets panelinden .ttf/.otf sürükle"
+    },
+    "Component.Choice.Option.FontSize": {
+      "text": "Yazı Tipi"
+    },
+    "Component.Choice.Option.H": {
+      "text": "H"
+    },
+    "Component.Choice.Option.HoverColor.Watermark": {
+      "text": "Üzerine gelince #RRGGBB"
+    },
+    "Component.Choice.Option.HoverImage.Watermark": {
+      "text": "Hover görselini buraya bırak"
+    },
+    "Component.Choice.Option.Images.Hint": {
+      "text": "Buton görselleri — Assets panelinden ilgili alana sürükle bırak"
+    },
+    "Component.Choice.Option.NormalImage.Watermark": {
+      "text": "Normal görseli buraya bırak"
+    },
+    "Component.Choice.Option.Preset": {
+      "text": "Hazır Stil"
+    },
+    "Component.Choice.Option.PressedImage.Watermark": {
+      "text": "Pressed görselini buraya bırak"
+    },
+    "Component.Choice.Option.Radius": {
+      "text": "Yarıçap"
+    },
+    "Component.Choice.Option.Target.Note": {
+      "text": "Hedefi graf kablosu belirler"
+    },
+    "Component.Choice.Option.Text.Watermark": {
+      "text": "Düğme metni"
+    },
+    "Component.Choice.Option.TextColor.Watermark": {
+      "text": "Yazı #RRGGBB"
+    },
+    "Component.Choice.Option.W": {
+      "text": "W"
+    },
+    "Component.Choice.Title.Watermark": {
+      "text": "Seçim başlığı"
     },
     "Component.Dialogue.Align.Label": {
       "text": "Hizalama"
@@ -384,6 +621,258 @@
     "Component.Script.Title": {
       "text": "Lua Betiği"
     },
+    "Component.Transition.ColorHex": {
+      "text": "Renk hex"
+    },
+    "Component.Transition.Duration": {
+      "text": "Süre (saniye)"
+    },
+    "Component.Transition.FadeColor": {
+      "text": "Renk hex (solma rengi)"
+    },
+    "Component.Transition.Flash.Duration": {
+      "text": "Süre (sn)"
+    },
+    "Component.Transition.Flash.Label": {
+      "text": "Ekran flaş efekti"
+    },
+    "Component.Transition.Flash.Watermark": {
+      "text": "#FFFFFF"
+    },
+    "Component.Transition.Intensity": {
+      "text": "Şiddet"
+    },
+    "Component.Transition.Kind": {
+      "text": "Geçiş türü"
+    },
+    "Component.Transition.Post.Label": {
+      "text": "Son işlem renk tonu ve vinyet"
+    },
+    "Component.Transition.Tint.Color": {
+      "text": "Ton rengi hex"
+    },
+    "Component.Transition.Tint.Label": {
+      "text": "Ekran renk tonu katmanı"
+    },
+    "Component.Transition.Tint.Opacity": {
+      "text": "Ton opaklığı (0-1)"
+    },
+    "Component.Transition.Tint.Watermark": {
+      "text": "#0A183D"
+    },
+    "Component.Transition.Title": {
+      "text": "Sahne geçişi"
+    },
+    "Component.Transition.Vignette.Label": {
+      "text": "Sinematik vinyet karartması"
+    },
+    "Component.Transition.Vignette.Radius": {
+      "text": "Yarıçap"
+    },
+    "Dialog.Confirm.Cancel": {
+      "text": "İptal"
+    },
+    "Dialog.Confirm.Heading": {
+      "text": "İşlemi Onaylayın"
+    },
+    "Dialog.Confirm.Message": {
+      "text": "Bu işlemi gerçekleştirmek istediğinize emin misiniz?"
+    },
+    "Dialog.Confirm.Title": {
+      "text": "Onay"
+    },
+    "Dialog.Confirm.Yes": {
+      "text": "Evet"
+    },
+    "Dialog.CreateProject.Browse": {
+      "text": "Gözat..."
+    },
+    "Dialog.CreateProject.Cancel": {
+      "text": "İptal"
+    },
+    "Dialog.CreateProject.Create": {
+      "text": "Oluştur"
+    },
+    "Dialog.CreateProject.Description": {
+      "text": "Yeni bir görsel roman veya etkileşimli hikaye projesi başlatın"
+    },
+    "Dialog.CreateProject.LocationLabel": {
+      "text": "Kayıt Konumu"
+    },
+    "Dialog.CreateProject.ProjectNameDefault": {
+      "text": "Yeni Proje"
+    },
+    "Dialog.CreateProject.ProjectNameLabel": {
+      "text": "Proje Adı"
+    },
+    "Dialog.CreateProject.Title": {
+      "text": "Yeni Proje Oluştur"
+    },
+    "Dialog.RenameProject.Cancel": {
+      "text": "İptal"
+    },
+    "Dialog.RenameProject.NewNameLabel": {
+      "text": "Yeni Proje Adı"
+    },
+    "Dialog.RenameProject.Save": {
+      "text": "Kaydet"
+    },
+    "Dialog.RenameProject.Title": {
+      "text": "Projeyi Yeniden Adlandır"
+    },
+    "Dialog.UnsavedChanges.Cancel": {
+      "text": "İptal"
+    },
+    "Dialog.UnsavedChanges.Discard": {
+      "text": "Vazgeç"
+    },
+    "Dialog.UnsavedChanges.Message": {
+      "text": "Projede kaydedilmemiş değişiklikler var."
+    },
+    "Dialog.UnsavedChanges.Save": {
+      "text": "Kaydet"
+    },
+    "Dialog.UnsavedChanges.Title": {
+      "text": "Kaydedilmemiş Değişiklikler"
+    },
+    "Graph.Chapter": {
+      "text": "Bölüm:"
+    },
+    "Graph.Chapter.Tip": {
+      "text": "Tuvali tek bölüme daralt"
+    },
+    "Graph.Crumb.Tip": {
+      "text": "Bu düzeye dön"
+    },
+    "Graph.Fit": {
+      "text": "Sığdır"
+    },
+    "Graph.Fit.Tip": {
+      "text": "Tüm grafı ekrana sığdır"
+    },
+    "Graph.FitSelection": {
+      "text": "Seçim"
+    },
+    "Graph.FitSelection.Tip": {
+      "text": "Seçili düğüme odaklan (F)"
+    },
+    "Graph.Group.Delete.Tip": {
+      "text": "Grubu sil (düğümler kalır)"
+    },
+    "Graph.Group.Drag.Tip": {
+      "text": "Sürükle: grupla taşı • Çift tık: üyelere sar"
+    },
+    "Graph.Group.Resize.Tip": {
+      "text": "Yeniden boyutlandır"
+    },
+    "Graph.Minimap": {
+      "text": "Harita"
+    },
+    "Graph.Minimap.Tip": {
+      "text": "Minimap görünürlüğü"
+    },
+    "Graph.ResetView": {
+      "text": "Görünümü Sıfırla (0,0)"
+    },
+    "Graph.ZoomIn": {
+      "text": "Yakınlaştır"
+    },
+    "Graph.ZoomLevel": {
+      "text": "Yakınlaştırma"
+    },
+    "Graph.ZoomOut": {
+      "text": "Uzaklaştır"
+    },
+    "Hierarchy.Create": {
+      "text": "Oluştur"
+    },
+    "Hierarchy.Create.Audio": {
+      "text": "Ses Nesnesi"
+    },
+    "Hierarchy.Create.Background": {
+      "text": "Arka Plan Nesnesi"
+    },
+    "Hierarchy.Create.Character": {
+      "text": "Karakter Nesnesi"
+    },
+    "Hierarchy.Create.Dialogue": {
+      "text": "Diyalog Nesnesi"
+    },
+    "Hierarchy.Create.Empty": {
+      "text": "Boş Nesne"
+    },
+    "Hierarchy.Delete": {
+      "text": "Nesneyi Sil"
+    },
+    "Hierarchy.Duplicate": {
+      "text": "Nesneyi Çoğalt"
+    },
+    "Hierarchy.Empty": {
+      "text": "Bu karede nesne yok."
+    },
+    "Hierarchy.MoveDown": {
+      "text": "Aşağı Taşı"
+    },
+    "Hierarchy.MoveUp": {
+      "text": "Yukarı Taşı"
+    },
+    "Hierarchy.SceneObjects": {
+      "text": "Sahne nesneleri"
+    },
+    "Hierarchy.Search": {
+      "text": "Ara: nesne adı"
+    },
+    "Hierarchy.SelectNode": {
+      "text": "Grafikten bir Node seç"
+    },
+    "Hierarchy.SelectedNode": {
+      "text": "SEÇİLİ NODE"
+    },
+    "Hub.BrandRowl": {
+      "text": "ROWL"
+    },
+    "Hub.BrandStudio": {
+      "text": "STORY STUDIO"
+    },
+    "Hub.ChangeCover": {
+      "text": "Kapak Değiştir"
+    },
+    "Hub.CreateNewStory": {
+      "text": "Yeni hikâye oluştur"
+    },
+    "Hub.Delete": {
+      "text": "Sil"
+    },
+    "Hub.EmptyDescriptionPanel": {
+      "text": "Bir proje oluştur; sahneleri, seçimleri ve önizlemeyi sırayla kur."
+    },
+    "Hub.EmptyDescriptionWindow": {
+      "text": "Bir proje oluştur; sonra sahneleri, seçimleri ve önizlemeyi aynı çalışma alanında kur."
+    },
+    "Hub.EmptyTitle": {
+      "text": "İlk hikâyeni kur"
+    },
+    "Hub.Import": {
+      "text": "İçe Aktar"
+    },
+    "Hub.NewStory": {
+      "text": "Yeni hikâye"
+    },
+    "Hub.Open": {
+      "text": "Aç"
+    },
+    "Hub.Other": {
+      "text": "Diğer"
+    },
+    "Hub.Projects": {
+      "text": "Projeler"
+    },
+    "Hub.Rename": {
+      "text": "İsim Değiştir"
+    },
+    "Hub.Title": {
+      "text": "Rowl Engine — Projeler"
+    },
     "Inspector.Components.Actions.Tip": {
       "text": "Bileşen işlemleri"
     },
@@ -501,506 +990,164 @@
     "Inspector.Provenance.Title": {
       "text": "DÖNÜŞTÜRME KÖKENİ"
     },
-    "Common.Remove": {
-      "text": "Kaldır"
+    "Issues.Analyze": {
+      "text": "Analiz"
     },
-    "Common.Reset": {
-      "text": "Sıfırla"
+    "Issues.Analyze.Tip": {
+      "text": "Hikaye grafiğini analiz et"
     },
-    "Common.X": {
-      "text": "X"
+    "Issues.Empty": {
+      "text": "Sorun bulunamadı."
     },
-    "Common.Y": {
-      "text": "Y"
+    "Issues.Reanalyze": {
+      "text": "Yeniden Analiz Et"
     },
-    "Common.Rotation": {
-      "text": "Döndürme"
+    "Language.en": {
+      "text": "English"
     },
-    "Common.Opacity": {
-      "text": "Opaklık"
+    "Language.qps-ploc": {
+      "text": "Sahte dil (taşma testi)"
     },
-    "Component.Character.Name": {
-      "text": "Karakter"
+    "Language.tr": {
+      "text": "Türkçe"
     },
-    "Component.Character.Sprite.Label": {
-      "text": "Karakter Görseli (Sürükle-Bırak)"
+    "Layout.Default": {
+      "text": "Varsayılan"
     },
-    "Component.Character.Sprite.Watermark": {
-      "text": "Örn: characters/ornek.png veya boş"
+    "Layout.PlayTest": {
+      "text": "Oyun Testi"
     },
-    "Component.Character.Sprite.Drop": {
-      "text": "Görseli Buraya Sürükle-Bırak"
+    "Layout.SceneFocus": {
+      "text": "Sahne Odağı"
     },
-    "Component.Character.Sprite.DropHint": {
-      "text": "Assets panelinden sürükleyin veya Gözat'a tıklayın"
+    "LivePreview.Background.ResizeTooltip": {
+      "text": "Resize Background"
     },
-    "Component.Character.Layers.Title": {
-      "text": "KATMANLAR (LAYERS — body < face < outfit < accessory)"
+    "LivePreview.Background.RotateTooltip": {
+      "text": "Rotate Background (Drag to Rotate, Right-Click to Reset)"
     },
-    "Component.Character.Layers.Body": {
-      "text": "Body (boşsa üstteki sprite kullanılır)"
+    "LivePreview.Character.DimSeparator": {
+      "text": "x"
     },
-    "Component.Character.Layers.Face": {
-      "text": "Face"
+    "LivePreview.Character.Label": {
+      "text": "Character"
     },
-    "Component.Character.Layers.Outfit": {
-      "text": "Outfit"
+    "LivePreview.Character.ResizeTooltip": {
+      "text": "Resize Character"
     },
-    "Component.Character.Layers.Accessory": {
-      "text": "Accessory"
+    "LivePreview.Character.RotateTooltip": {
+      "text": "Rotate Character (Drag to Rotate, Right-Click to Reset)"
     },
-    "Component.Character.Layers.Expression": {
-      "text": "Expression (seçim önizlemeye atomik uygulanır)"
+    "LivePreview.ContextMenu.CenterDialogueBox": {
+      "text": "Diyalog Kutusunu Ortala"
     },
-    "Component.Character.Scale": {
-      "text": "Ölçek (1.0 = %100)"
+    "LivePreview.ContextMenu.CenterToScreen": {
+      "text": "Merkeze Hizala (Center to Screen)"
     },
-    "Component.Character.Rotation.Reset.Tip": {
-      "text": "Rotasyonu Sıfırla (0°)"
+    "LivePreview.ContextMenu.DialogueBottomBanner": {
+      "text": "Diyalog Alt Banner (1720x220)"
     },
-    "Component.Character.AspectRatio": {
-      "text": "En/Boy Oranını Koru (Aspect Ratio)"
+    "LivePreview.ContextMenu.FitToCanvas": {
+      "text": "Çerçeveye Sığdır (Fit to Canvas)"
     },
-    "Component.Character.Assist.Title": {
-      "text": "OBS Hızlı Hizalama (Assist)"
+    "LivePreview.ContextMenu.GroundBaseline": {
+      "text": "Karakterleri Zemine Oturt (Ground Baseline)"
     },
-    "Component.Character.Assist.Center": {
-      "text": "Ortala"
+    "LivePreview.ContextMenu.ResetRotation": {
+      "text": "Rotasyonu Sıfırla (Reset Rotation)"
     },
-    "Component.Character.Assist.Center.Tip": {
-      "text": "Karakteri yatay olarak ekranda ortalar"
+    "LivePreview.ContextMenu.SnapAssist": {
+      "text": "Manyetik Snap Kılavuzları (Snap Assist)"
     },
-    "Component.Character.Assist.Ground": {
-      "text": "Zemine"
+    "LivePreview.ContextMenu.StretchFullHd": {
+      "text": "Arka Planı 1920x1080 Yap (Stretch Full HD)"
     },
-    "Component.Character.Assist.Ground.Tip": {
-      "text": "Karakteri alt zemin çizgisine oturtur"
+    "LivePreview.Dialogue.DimSeparator": {
+      "text": "x"
     },
-    "Component.Character.Assist.Reset.Tip": {
-      "text": "Standart karakter boyutuna sıfırlar (600x900)"
+    "LivePreview.Dialogue.Label": {
+      "text": "Dialogue Box"
     },
-    "Component.Character.Voice.Title": {
-      "text": "KARAKTER SES TONU (VOICE BLIP)"
+    "LivePreview.Dialogue.ResizeBottomLeft": {
+      "text": "Resize Bottom-Left"
     },
-    "Component.Character.Voice.Preview": {
-      "text": "Önizle"
+    "LivePreview.Dialogue.ResizeBottomRight": {
+      "text": "Resize Bottom-Right"
     },
-    "Component.Character.Voice.Preview.Tip": {
-      "text": "Karakter ses tonunu test et"
+    "LivePreview.Dialogue.ResizeTopLeft": {
+      "text": "Resize Top-Left"
     },
-    "Component.Character.Voice.File": {
-      "text": "Varsayılan Ses Dosyası (.wav / .ogg - boşsa synth)"
+    "LivePreview.Dialogue.ResizeTopRight": {
+      "text": "Resize Top-Right"
     },
-    "Component.Character.Voice.File.Watermark": {
-      "text": "Örn: voice_evelyn.wav veya boş"
+    "LivePreview.SnapBadge.Snapped": {
+      "text": "Snapped"
     },
-    "Component.Character.Voice.Pitch": {
-      "text": "Temel perde (Base Pitch)"
-    },
-    "Component.Character.Voice.Cadence": {
-      "text": "Ritim (Cadence)"
-    },
-    "Component.Choice.Name": {
-      "text": "Oyuncu Seçimleri"
-    },
-    "Component.Choice.Title.Watermark": {
-      "text": "Seçim başlığı"
-    },
-    "Component.Choice.Option.Text.Watermark": {
-      "text": "Düğme metni"
-    },
-    "Component.Choice.Option.Enable.Tip": {
-      "text": "Bu düğmeyi etkinleştir"
-    },
-    "Component.Choice.Option.Appearance.Tip": {
-      "text": "Düğme görünümü"
-    },
-    "Component.Choice.Option.Condition.Watermark": {
-      "text": "Koşul (örn. affinity_evelyn >= 3)"
-    },
-    "Component.Choice.Option.Target.Note": {
-      "text": "Hedefi graf kablosu belirler"
-    },
-    "Component.Choice.Option.Preset": {
-      "text": "Hazır Stil"
-    },
-    "Component.Choice.Option.FontSize": {
-      "text": "Yazı Tipi"
-    },
-    "Component.Choice.Option.W": {
-      "text": "W"
-    },
-    "Component.Choice.Option.H": {
-      "text": "H"
-    },
-    "Component.Choice.Option.Radius": {
-      "text": "Yarıçap"
-    },
-    "Component.Choice.Option.Font.Watermark": {
-      "text": "Font: Assets panelinden .ttf/.otf sürükle"
-    },
-    "Component.Choice.Option.TextColor.Watermark": {
-      "text": "Yazı #RRGGBB"
-    },
-    "Component.Choice.Option.BackgroundColor.Watermark": {
-      "text": "Arka plan #RRGGBB"
-    },
-    "Component.Choice.Option.HoverColor.Watermark": {
-      "text": "Üzerine gelince #RRGGBB"
-    },
-    "Component.Choice.Option.BorderColor.Watermark": {
-      "text": "Kenarlık #RRGGBB"
-    },
-    "Component.Choice.Option.Images.Hint": {
-      "text": "Buton görselleri — Assets panelinden ilgili alana sürükle bırak"
-    },
-    "Component.Choice.Option.NormalImage.Watermark": {
-      "text": "Normal görseli buraya bırak"
-    },
-    "Component.Choice.Option.HoverImage.Watermark": {
-      "text": "Hover görselini buraya bırak"
-    },
-    "Component.Choice.Option.PressedImage.Watermark": {
-      "text": "Pressed görselini buraya bırak"
-    },
-    "Component.Choice.Option.DisabledImage.Watermark": {
-      "text": "Disabled görselini buraya bırak"
-    },
-    "Component.Choice.Add": {
-      "text": "+ Seçim ekle"
-    },
-    "Component.Choice.Empty": {
-      "text": "Henüz seçenek yok — + Seçim ekle'ye bas, hedefi graf kablosuyla ver."
-    },
-    "Component.Choice.Note": {
-      "text": "Her seçeneğin sabit bir kimliği ve hedef düğümü vardır; hedefi graf kablosuyla ver."
-    },
-    "Component.Audio.Title": {
-      "text": "Ses"
-    },
-    "Component.Audio.Bgm.Label": {
-      "text": "BGM parçası (arka plan müziği)"
-    },
-    "Component.Audio.Bgm.Watermark": {
-      "text": "Örn: bgm_theme.ogg"
-    },
-    "Component.Audio.Bgm.Preview.Tip": {
-      "text": "BGM önizlemesini çal / durdur"
-    },
-    "Component.Audio.Preview": {
-      "text": "Önizle"
-    },
-    "Component.Audio.Stop": {
-      "text": "Durdur"
-    },
-    "Component.Audio.ChannelLeft": {
+    "LivePreview.VuMeter.Left": {
       "text": "L"
     },
-    "Component.Audio.ChannelRight": {
+    "LivePreview.VuMeter.Right": {
       "text": "R"
     },
-    "Component.Audio.Sfx.Label": {
-      "text": "SFX parçası (ses efekti)"
+    "LocalizationDesk.Actions.ExportCsv": {
+      "text": "CSV Dışa Aktar"
     },
-    "Component.Audio.Sfx.Watermark": {
-      "text": "Örn: sfx_click.wav"
+    "LocalizationDesk.Actions.ExportJson": {
+      "text": "JSON Dışa Aktar"
     },
-    "Component.Audio.Sfx.Preview.Tip": {
-      "text": "SFX önizlemesini çal / durdur"
+    "LocalizationDesk.Actions.GeneratePseudo": {
+      "text": "Pseudo Üret"
     },
-    "Component.Audio.Volume.Label": {
-      "text": "Ses seviyesi (Volume)"
+    "LocalizationDesk.Actions.GeneratePseudoTooltip": {
+      "text": "Taşma testi için Assets/locales/qps-ploc.json üretir"
     },
-    "Component.Audio.Dsp.Label": {
-      "text": "DSP filtresi"
+    "LocalizationDesk.Actions.ImportCsv": {
+      "text": "CSV İçe Aktar"
     },
-    "Component.Audio.BgmTransition.Label": {
-      "text": "BGM geçişi"
+    "LocalizationDesk.Editor.AltTextLabel": {
+      "text": "Alternatif metin (alt_text)"
     },
-    "Component.Audio.BgmTransitionDuration.Label": {
-      "text": "BGM geçiş süresi (sn, 0 = proje varsayılanı)"
+    "LocalizationDesk.Editor.SaveRow": {
+      "text": "Satırı Kaydet"
     },
-    "Component.Background.Title": {
-      "text": "Görsel"
+    "LocalizationDesk.Editor.SpeakerLabel": {
+      "text": "Konuşmacı (çeviri)"
     },
-    "Component.Background.Texture.Label": {
-      "text": "Arka plan dokusu (sürükle-bırak)"
+    "LocalizationDesk.Editor.TranslationLabel": {
+      "text": "Çeviri"
     },
-    "Component.Background.Texture.Watermark": {
-      "text": "Örn: backgrounds/ornek.png veya boş"
+    "LocalizationDesk.Filter.All": {
+      "text": "Tümü"
     },
-    "Component.Background.Drop.Title": {
-      "text": "Görseli buraya sürükle-bırak"
+    "LocalizationDesk.Filter.ChangedOnly": {
+      "text": "Yalnızca Değişenler"
     },
-    "Component.Background.Drop.Hint": {
-      "text": "Assets panelinden sürükleyin veya Gözat'a tıklayın"
+    "LocalizationDesk.Filter.FilterLabel": {
+      "text": "Filtre"
     },
-    "Component.Background.X": {
-      "text": "X"
+    "LocalizationDesk.Filter.MissingOnly": {
+      "text": "Yalnızca Eksikler"
     },
-    "Component.Background.Y": {
-      "text": "Y"
-    },
-    "Component.Background.Width": {
-      "text": "Genişlik"
-    },
-    "Component.Background.Height": {
-      "text": "Yükseklik"
-    },
-    "Component.Background.Scale": {
-      "text": "Ölçek (1.0 = %100)"
-    },
-    "Component.Background.ResetRotation.Tip": {
-      "text": "Dönüşü sıfırla (0°)"
-    },
-    "Component.Background.Rotation": {
-      "text": "Dönüş"
-    },
-    "Component.Background.ParallaxX": {
-      "text": "Parallax X"
-    },
-    "Component.Background.ParallaxY": {
-      "text": "Parallax Y"
-    },
-    "Component.Background.Opacity": {
-      "text": "Katman opaklığı"
-    },
-    "Component.Background.Assist.Label": {
-      "text": "OBS hızlı hizalama"
-    },
-    "Component.Background.Center": {
-      "text": "Merkeze ortala"
-    },
-    "Component.Background.Fit1080": {
-      "text": "1080p tam sığdır"
-    },
-    "Component.Camera.Title": {
-      "text": "2D Kamera"
-    },
-    "Component.Camera.FocusX": {
-      "text": "Odak X (merkez)"
-    },
-    "Component.Camera.FocusY": {
-      "text": "Odak Y (merkez)"
-    },
-    "Component.Camera.Zoom": {
-      "text": "Yakınlaştırma çarpanı"
-    },
-    "Component.Camera.Rotation.Tip": {
-      "text": "Kamera dönüşü motor tarafından yok sayılır (Faz 4.5 Dilim 2 no-op, yetenek ROWL_ENGINE_CAPABILITY_CAMERA_ROTATION_IGNORED). Değer 0 kalır."
-    },
-    "Component.Camera.Rotation.Label": {
-      "text": "Dönüş (derece) — yok sayılır"
-    },
-    "Component.Camera.Rotation.Note": {
-      "text": "Motorda işlem yok: kamera dönüşünün çizime etkisi yoktur."
-    },
-    "Component.Camera.Tween.Label": {
-      "text": "Yumuşak geçiş (saniye)"
-    },
-    "Component.Camera.PanTime": {
-      "text": "Kaydırma süresi"
-    },
-    "Component.Camera.ZoomTime": {
-      "text": "Yakınlaştırma süresi"
-    },
-    "Component.Camera.Easing": {
-      "text": "Yumuşatma"
-    },
-    "Component.Camera.Easing.Watermark": {
-      "text": "ease_in_out"
-    },
-    "Component.Camera.Shake.Label": {
-      "text": "Sinematik ekran sarsıntısı"
-    },
-    "Component.Camera.Shake.Preset": {
-      "text": "Sarsıntı ön ayarı"
-    },
-    "Component.Camera.Shake.Intensity": {
-      "text": "Şiddet (px)"
-    },
-    "Component.Camera.Shake.Duration": {
-      "text": "Süre (sn)"
-    },
-    "Component.Camera.Shake.Frequency": {
-      "text": "Sıklık (Hz)"
-    },
-    "Component.Camera.Shake.Damping": {
-      "text": "Sönümleme"
-    },
-    "Component.Camera.Shake.DirX": {
-      "text": "Yön X (0-1)"
-    },
-    "Component.Camera.Shake.DirY": {
-      "text": "Yön Y (0-1)"
-    },
-    "Component.Transition.Title": {
-      "text": "Sahne geçişi"
-    },
-    "Component.Transition.Kind": {
-      "text": "Geçiş türü"
-    },
-    "Component.Transition.Duration": {
-      "text": "Süre (saniye)"
-    },
-    "Component.Transition.FadeColor": {
-      "text": "Renk hex (solma rengi)"
-    },
-    "Component.Transition.Flash.Label": {
-      "text": "Ekran flaş efekti"
-    },
-    "Component.Transition.ColorHex": {
-      "text": "Renk hex"
-    },
-    "Component.Transition.Flash.Watermark": {
-      "text": "#FFFFFF"
-    },
-    "Component.Transition.Flash.Duration": {
-      "text": "Süre (sn)"
-    },
-    "Component.Transition.Intensity": {
-      "text": "Şiddet"
-    },
-    "Component.Transition.Post.Label": {
-      "text": "Son işlem renk tonu ve vinyet"
-    },
-    "Component.Transition.Tint.Label": {
-      "text": "Ekran renk tonu katmanı"
-    },
-    "Component.Transition.Tint.Color": {
-      "text": "Ton rengi hex"
-    },
-    "Component.Transition.Tint.Watermark": {
-      "text": "#0A183D"
-    },
-    "Component.Transition.Tint.Opacity": {
-      "text": "Ton opaklığı (0-1)"
-    },
-    "Component.Transition.Vignette.Label": {
-      "text": "Sinematik vinyet karartması"
-    },
-    "Component.Transition.Vignette.Radius": {
-      "text": "Yarıçap"
-    },
-    "Hierarchy.Create": {
-      "text": "Oluştur"
-    },
-    "Hierarchy.Create.Empty": {
-      "text": "Boş Nesne"
-    },
-    "Hierarchy.Create.Background": {
-      "text": "Arka Plan Nesnesi"
-    },
-    "Hierarchy.Create.Character": {
-      "text": "Karakter Nesnesi"
-    },
-    "Hierarchy.Create.Dialogue": {
-      "text": "Diyalog Nesnesi"
-    },
-    "Hierarchy.Create.Audio": {
-      "text": "Ses Nesnesi"
-    },
-    "Hierarchy.Search": {
-      "text": "Ara: nesne adı"
-    },
-    "Hierarchy.SelectedNode": {
-      "text": "SEÇİLİ NODE"
-    },
-    "Hierarchy.SelectNode": {
-      "text": "Grafikten bir Node seç"
-    },
-    "Hierarchy.SceneObjects": {
-      "text": "Sahne nesneleri"
-    },
-    "Hierarchy.Empty": {
-      "text": "Bu karede nesne yok."
-    },
-    "Hierarchy.Duplicate": {
-      "text": "Nesneyi Çoğalt"
-    },
-    "Hierarchy.MoveUp": {
-      "text": "Yukarı Taşı"
-    },
-    "Hierarchy.MoveDown": {
-      "text": "Aşağı Taşı"
-    },
-    "Hierarchy.Delete": {
-      "text": "Nesneyi Sil"
-    },
-    "Assets.Title": {
-      "text": "Varlıklar"
-    },
-    "Assets.NewFolder": {
-      "text": "Yeni Klasör"
-    },
-    "Assets.NewFolder.Tip": {
-      "text": "Seçili konumun altında klasör oluştur"
-    },
-    "Assets.Import": {
-      "text": "İçe Aktar"
-    },
-    "Assets.Import.Tip": {
-      "text": "Dosyayı proje Assets klasörüne içe aktar"
-    },
-    "Assets.ImportFile": {
-      "text": "Dosya İçe Aktar"
-    },
-    "Assets.Refresh": {
+    "LocalizationDesk.Filter.Refresh": {
       "text": "Yenile"
     },
-    "Assets.Refresh.Tip": {
-      "text": "Varlık listesini yenile"
+    "LocalizationDesk.Filter.SearchLabel": {
+      "text": "Ara (konuşmacı / metin / id)"
     },
-    "Assets.ViewToggle.Tip": {
-      "text": "Izgara/Liste görünümü arasında geç"
+    "LocalizationDesk.Filter.SearchWatermark": {
+      "text": "örn. Margot ya da relay"
     },
-    "Assets.Up": {
-      "text": "↑ Üst"
+    "LocalizationDesk.Filter.SourceLabel": {
+      "text": "Kaynak"
     },
-    "Assets.Up.Tip": {
-      "text": "Üst klasöre git"
+    "LocalizationDesk.Filter.TargetLabel": {
+      "text": "Hedef"
     },
-    "Assets.Search.Watermark": {
-      "text": "Ara: ad veya uzantı"
+    "LocalizationDesk.Header.Title": {
+      "text": "Çeviri Masası"
     },
-    "Assets.Menu.NewFolder": {
-      "text": "Yeni Klasör Oluştur"
-    },
-    "Assets.Menu.Import": {
-      "text": "Dosya İçe Aktar..."
-    },
-    "Assets.Menu.Rename": {
-      "text": "Yeniden Adlandır (F2)"
-    },
-    "Assets.Menu.OpenInExplorer": {
-      "text": "Dosya Yöneticisinde Aç"
-    },
-    "Assets.Badge.Info": {
-      "text": "bilgi"
-    },
-    "Assets.Badge.Missing": {
-      "text": "KAYIP"
-    },
-    "Assets.ShowMore.Tip": {
-      "text": "Sonraki 200 öğeyi göster"
-    },
-    "Assets.Empty": {
-      "text": "Bu projede henüz dosya yok."
-    },
-    "Assets.NoMatch": {
-      "text": "Arama filtresi sonuç vermedi."
-    },
-    "Assets.ClearFilter": {
-      "text": "Filtreyi Temizle"
-    },
-    "Assets.ClearFilter.Tip": {
-      "text": "Arama ve tür filtresini temizle"
-    },
-    "Assets.Size": {
-      "text": "Boyut"
-    },
-    "Assets.Size.Tip": {
-      "text": "Simge boyutu"
+    "LocalizationDesk.Window.Title": {
+      "text": "Çeviri Masası — Rowl Engine"
     },
     "Log.Clear": {
       "text": "Temizle"
@@ -1014,53 +1161,386 @@
     "Log.Errors.Tip": {
       "text": "Hata sayısı"
     },
-    "Log.Warnings": {
-      "text": "Uyarı:"
-    },
-    "Log.Warnings.Tip": {
-      "text": "Uyarı sayısı"
-    },
     "Log.Infos": {
       "text": "Bilgi:"
     },
     "Log.Infos.Tip": {
       "text": "Bilgi sayısı"
     },
-    "Issues.Analyze": {
-      "text": "Analiz"
+    "Log.Warnings": {
+      "text": "Uyarı:"
     },
-    "Issues.Analyze.Tip": {
-      "text": "Hikaye grafiğini analiz et"
+    "Log.Warnings.Tip": {
+      "text": "Uyarı sayısı"
     },
-    "Issues.Empty": {
-      "text": "Sorun bulunamadı."
+    "Menu.CancelBuild": {
+      "text": "Dışa Aktarmayı İptal Et"
     },
-    "Issues.Reanalyze": {
-      "text": "Yeniden Analiz Et"
+    "Menu.Export": {
+      "text": "Dışa Aktar"
     },
-    "Backlog.Empty": {
-      "text": "Henüz diyalog kaydı yok."
+    "Menu.Layout": {
+      "text": "Düzen"
     },
-    "Backlog.Empty.Hint": {
-      "text": "Oyuncu önizlemedeki konuşmalar burada birikir."
+    "Menu.LocalizationDesk": {
+      "text": "Çeviri Masası"
     },
-    "Backlog.OpenPlayer": {
-      "text": "Oyuncu Önizlemeyi Aç"
+    "Menu.More": {
+      "text": "Diğer"
     },
-    "Backlog.OpenPlayer.Tip": {
-      "text": "Oyuncu önizleme panelini aç"
+    "Menu.OpenInSeparateWindow": {
+      "text": "Bağımsız Pencerede Aç"
     },
-    "SaveSlots.Save": {
+    "Menu.ProjectList": {
+      "text": "Proje Listesi"
+    },
+    "Menu.Projects": {
+      "text": "Projeler"
+    },
+    "Menu.Redo": {
+      "text": "Yinele"
+    },
+    "Menu.Save": {
       "text": "Kaydet"
+    },
+    "Menu.Settings": {
+      "text": "Ayarlar"
+    },
+    "Menu.Undo": {
+      "text": "Geri Al"
+    },
+    "Menu.Windows": {
+      "text": "Araçlar"
+    },
+    "Node.Add": {
+      "text": "+ Node"
+    },
+    "Node.Add.Tip": {
+      "text": "Yeni Node ekle (Ctrl+N)"
+    },
+    "Node.Delete": {
+      "text": "Sil"
+    },
+    "Node.Delete.Tip": {
+      "text": "Seçili Node'u sil (Delete)"
+    },
+    "Node.Disconnect": {
+      "text": "Bağlantıyı Kes"
+    },
+    "Node.Disconnect.Tip": {
+      "text": "Seçili Node bağlantılarını kes"
+    },
+    "Node.Group": {
+      "text": "+ Grup"
+    },
+    "Node.Group.Tip": {
+      "text": "Seçili düğümlerden grup oluştur"
+    },
+    "Node.Up": {
+      "text": "Üst"
+    },
+    "Node.Up.Tip": {
+      "text": "Bir üst düzeye çık"
+    },
+    "NodeControl.Choice": {
+      "text": "SEÇİM"
+    },
+    "NodeControl.ChoiceOutputTooltip": {
+      "text": "Choice output — drag to its target node"
+    },
+    "NodeControl.Dialog": {
+      "text": "DİYALOG"
+    },
+    "NodeControl.FlowInputTooltip": {
+      "text": "Flow Input Pin (Left Click: Drag Cable / Right Click: Disconnect)"
+    },
+    "NodeControl.FlowOutputTooltip": {
+      "text": "Flow Output Pin"
+    },
+    "NodeControl.Start": {
+      "text": "START"
+    },
+    "NodeControl.SubgraphBorderTooltip": {
+      "text": "Subgraph sınırı — içeri girmek için çift tıklayın"
+    },
+    "Panel.Assets": {
+      "text": "Varlıklar"
+    },
+    "Panel.Backlog": {
+      "text": "Diyalog Geçmişi"
+    },
+    "Panel.Hierarchy": {
+      "text": "Hiyerarşi"
+    },
+    "Panel.Inspector": {
+      "text": "Denetçi"
+    },
+    "Panel.Issues": {
+      "text": "Sorunlar"
+    },
+    "Panel.Log": {
+      "text": "Günlük"
+    },
+    "Panel.SaveSlots": {
+      "text": "Kayıt Slotları"
+    },
+    "Player.Backlog.Back": {
+      "text": "Geri"
+    },
+    "Player.Hud.Auto": {
+      "text": "Auto"
+    },
+    "Player.Hud.Load": {
+      "text": "Load"
+    },
+    "Player.Hud.Log": {
+      "text": "Log"
+    },
+    "Player.Hud.Menu": {
+      "text": "Menu"
+    },
+    "Player.Hud.Save": {
+      "text": "Save"
+    },
+    "Player.Hud.Skip": {
+      "text": "Skip"
+    },
+    "Player.Pause.ExitGame": {
+      "text": "Oyundan Çık"
+    },
+    "Player.Pause.Load": {
+      "text": "Yükle"
+    },
+    "Player.Pause.MainMenu": {
+      "text": "Ana Menü"
+    },
+    "Player.Pause.Preferences": {
+      "text": "Tercihler"
+    },
+    "Player.Pause.Resume": {
+      "text": "Devam Et"
+    },
+    "Player.Pause.Save": {
+      "text": "Kaydet"
+    },
+    "Player.Pause.Title": {
+      "text": "Duraklatıldı"
+    },
+    "Player.Prefs.Accessibility": {
+      "text": "Erişilebilirlik"
+    },
+    "Player.Prefs.AmbienceVolume": {
+      "text": "Ortam:"
+    },
+    "Player.Prefs.AutoAdvance": {
+      "text": "Otomatik Geçiş:"
+    },
+    "Player.Prefs.AutoEnabled": {
+      "text": "Auto açık"
+    },
+    "Player.Prefs.Back": {
+      "text": "Geri"
+    },
+    "Player.Prefs.BgmVolume": {
+      "text": "Müzik:"
+    },
+    "Player.Prefs.HighContrast": {
+      "text": "Yüksek Kontrast:"
+    },
+    "Player.Prefs.HighContrastDesc": {
+      "text": "Koyu ana hatlı okuma modu"
+    },
+    "Player.Prefs.Language": {
+      "text": "Dil:"
+    },
+    "Player.Prefs.MasterVolume": {
+      "text": "Ana Ses:"
+    },
+    "Player.Prefs.ReducedMotion": {
+      "text": "Azaltılmış Hareket:"
+    },
+    "Player.Prefs.ReducedMotionDesc": {
+      "text": "Sarsıntı ve flaşı kapat"
+    },
+    "Player.Prefs.Save": {
+      "text": "Kaydet"
+    },
+    "Player.Prefs.SfxVolume": {
+      "text": "Efekt:"
+    },
+    "Player.Prefs.SkipMode": {
+      "text": "Skip Modu:"
+    },
+    "Player.Prefs.TextSize": {
+      "text": "Metin Boyutu:"
+    },
+    "Player.Prefs.TextSpeed": {
+      "text": "Metin Hızı:"
+    },
+    "Player.Prefs.Title": {
+      "text": "Tercihler"
+    },
+    "Player.Prefs.UiVolume": {
+      "text": "Arayüz:"
+    },
+    "Player.Prefs.VoiceVolume": {
+      "text": "Seslendirme:"
+    },
+    "Player.SaveLoad.Back": {
+      "text": "Geri"
+    },
+    "Player.SaveLoad.Load": {
+      "text": "Yükle"
+    },
+    "Player.SaveLoad.Next": {
+      "text": "Sonraki"
+    },
+    "Player.SaveLoad.Previous": {
+      "text": "Önceki"
+    },
+    "Player.SaveLoad.Save": {
+      "text": "Kaydet"
+    },
+    "Player.Shell.Cancel": {
+      "text": "Vazgeç"
+    },
+    "Player.Shell.ConfirmExit": {
+      "text": "Çıkmak istiyor musunuz?"
+    },
+    "Player.Shell.Yes": {
+      "text": "Evet"
+    },
+    "Player.Title.Continue": {
+      "text": "Devam Et"
+    },
+    "Player.Title.Exit": {
+      "text": "Çıkış"
+    },
+    "Player.Title.LoadGame": {
+      "text": "Kayıt Yükle"
+    },
+    "Player.Title.Logo": {
+      "text": "ROWL"
+    },
+    "Player.Title.NewGame": {
+      "text": "Yeni Oyun"
+    },
+    "Player.Title.Preferences": {
+      "text": "Tercihler"
+    },
+    "Player.Window.Title": {
+      "text": "Rowl — Oyuncu"
     },
     "SaveSlots.Load": {
       "text": "Yükle"
     },
-    "Settings.Window.Title": {
-      "text": "Ayarlar — Rowl Engine"
+    "SaveSlots.Save": {
+      "text": "Kaydet"
+    },
+    "Search.Filter.Color": {
+      "text": "Renk:"
+    },
+    "Search.Filter.Kind": {
+      "text": "Tür:"
+    },
+    "Search.Filter.Speaker": {
+      "text": "Konuşmacı:"
+    },
+    "Search.Overlay.Watermark": {
+      "text": "Ara: başlık, konuşmacı, metin, speaker:Evelyn, type:choice… (Esc kapat)"
+    },
+    "Settings.About.Editor": {
+      "text": "Editör:"
+    },
+    "Settings.About.Engine": {
+      "text": "Motor:"
+    },
+    "Settings.About.Packaging": {
+      "text": "Paketleme:"
+    },
+    "Settings.About.Packaging.Value": {
+      "text": "Zstd Sıkıştırma + .rowlpkg Arşivi"
+    },
+    "Settings.About.Platforms": {
+      "text": "Platformlar:"
+    },
+    "Settings.About.Tagline": {
+      "text": "Visual Novel & Interactive Storytelling Engine"
+    },
+    "Settings.About.Version": {
+      "text": "Sürüm:"
+    },
+    "Settings.AutoSave": {
+      "text": "Otomatik Kaydetme"
+    },
+    "Settings.AutoSave.Interval": {
+      "text": "Kaydetme Aralığı (saniye)"
+    },
+    "Settings.Close": {
+      "text": "Kapat"
+    },
+    "Settings.General.Desc": {
+      "text": "Arayüz dili ve otomatik kaydetme."
+    },
+    "Settings.General.ReduceMotion": {
+      "text": "Hareketi azalt"
+    },
+    "Settings.General.ReduceMotion.Hint": {
+      "text": "Çalışma alanı panel geçişlerini ve bırakma hedefi animasyonlarını devre dışı bırakır."
+    },
+    "Settings.General.Title": {
+      "text": "Genel Editör Ayarları"
     },
     "Settings.Header.Eyebrow": {
       "text": "ROWL / AYARLAR"
+    },
+    "Settings.Language": {
+      "text": "Arayüz dili"
+    },
+    "Settings.Language.Hint": {
+      "text": "Editör arayüzünün dili; oyun önizleme dilinden ayrıdır. Değişiklik anında uygulanır."
+    },
+    "Settings.Player.AutoAdvance": {
+      "text": "Otomatik İlerleme Ek Gecikmesi (sn)"
+    },
+    "Settings.Player.Desc": {
+      "text": "Bu tercihler cihazda saklanır; proje dosyasına veya oyun kayıtlarına eklenmez."
+    },
+    "Settings.Player.Master": {
+      "text": "Ana Ses"
+    },
+    "Settings.Player.Music": {
+      "text": "Müzik"
+    },
+    "Settings.Player.Sfx": {
+      "text": "Efekt"
+    },
+    "Settings.Player.TextSpeed": {
+      "text": "Metin Hızı Çarpanı"
+    },
+    "Settings.Player.Title": {
+      "text": "Oyuncu Tercihleri"
+    },
+    "Settings.Player.Voice": {
+      "text": "Konuşma"
+    },
+    "Settings.Project.BgmTransition": {
+      "text": "Varsayılan BGM Geçişi"
+    },
+    "Settings.Project.Desc": {
+      "text": "Bu değerler açık projenin project.rowlproj dosyasına kaydedilir."
+    },
+    "Settings.Project.SaveSlots": {
+      "text": "Kayıt Slotu Sayısı"
+    },
+    "Settings.Project.Title": {
+      "text": "Proje Runtime Ayarları"
+    },
+    "Settings.Project.TransitionDuration": {
+      "text": "Varsayılan Geçiş Süresi (sn)"
+    },
+    "Settings.ResetDefaults": {
+      "text": "Varsayılanlara Sıfırla"
     },
     "Settings.Scope.Preferences": {
       "text": "TERCİHLER · BU CİHAZ"
@@ -1068,8 +1548,50 @@
     "Settings.Scope.Project": {
       "text": "PROJE AYARLARI · PROJE DOSYASI"
     },
-    "Settings.Tab.Theme": {
-      "text": "Tema"
+    "Settings.Shortcut.Build": {
+      "text": "Build Al"
+    },
+    "Settings.Shortcut.DeleteNode": {
+      "text": "Seçili Node Sil"
+    },
+    "Settings.Shortcut.Fullscreen": {
+      "text": "Tam Ekran"
+    },
+    "Settings.Shortcut.NewNode": {
+      "text": "Yeni Node Ekle"
+    },
+    "Settings.Shortcut.OpenHub": {
+      "text": "Hub'ı Aç"
+    },
+    "Settings.Shortcut.PlayMode": {
+      "text": "Play Mode"
+    },
+    "Settings.Shortcut.QuickSearch": {
+      "text": "Hızlı Arama"
+    },
+    "Settings.Shortcut.Redo": {
+      "text": "Yinele (Redo)"
+    },
+    "Settings.Shortcut.Rename": {
+      "text": "Yeniden Adlandır"
+    },
+    "Settings.Shortcut.Save": {
+      "text": "Kaydet"
+    },
+    "Settings.Shortcut.SaveAs": {
+      "text": "Farklı Kaydet"
+    },
+    "Settings.Shortcut.Settings": {
+      "text": "Ayarlar"
+    },
+    "Settings.Shortcut.Undo": {
+      "text": "Geri Al (Undo)"
+    },
+    "Settings.Shortcuts.Title": {
+      "text": "Klavye Kısayolları"
+    },
+    "Settings.Tab.About": {
+      "text": "Hakkında"
     },
     "Settings.Tab.General": {
       "text": "Genel"
@@ -1083,11 +1605,11 @@
     "Settings.Tab.Shortcuts": {
       "text": "Kısayollar"
     },
-    "Settings.Tab.About": {
-      "text": "Hakkında"
+    "Settings.Tab.Theme": {
+      "text": "Tema"
     },
-    "Settings.Theme.Title": {
-      "text": "Tema & Görünüm"
+    "Settings.Theme.Apply": {
+      "text": "Temayı Uygula"
     },
     "Settings.Theme.Desc": {
       "text": "Editör arayüzünün renk teması."
@@ -1095,164 +1617,50 @@
     "Settings.Theme.Label": {
       "text": "Editör Teması"
     },
-    "Settings.Theme.Apply": {
-      "text": "Temayı Uygula"
-    },
-    "Settings.Theme.Sample": {
-      "text": "Aa"
-    },
     "Settings.Theme.Preview.Dark": {
       "text": "Kemik Beyazı (Karanlık)"
     },
     "Settings.Theme.Preview.Oled": {
       "text": "Saf Siyah (OLED)"
     },
-    "Settings.General.Title": {
-      "text": "Genel Editör Ayarları"
+    "Settings.Theme.Sample": {
+      "text": "Aa"
     },
-    "Settings.General.Desc": {
-      "text": "Arayüz dili ve otomatik kaydetme."
+    "Settings.Theme.Title": {
+      "text": "Tema & Görünüm"
     },
-    "Settings.AutoSave": {
-      "text": "Otomatik Kaydetme"
+    "Settings.Window.Title": {
+      "text": "Ayarlar — Rowl Engine"
     },
-    "Settings.AutoSave.Interval": {
-      "text": "Kaydetme Aralığı (saniye)"
+    "Status.Unsaved": {
+      "text": "Kaydedilmemiş değişiklikler var"
     },
-    "Settings.Player.Title": {
-      "text": "Oyuncu Tercihleri"
+    "Transport.Pause": {
+      "text": "Duraklat"
     },
-    "Settings.Player.Desc": {
-      "text": "Bu tercihler cihazda saklanır; proje dosyasına veya oyun kayıtlarına eklenmez."
+    "Transport.Play": {
+      "text": "Oynat / Durdur"
     },
-    "Settings.Player.Master": {
-      "text": "Ana Ses"
+    "Transport.Step": {
+      "text": "Kare Adım (1/60 sn)"
     },
-    "Settings.Player.Music": {
-      "text": "Müzik"
+    "View.Game": {
+      "text": "Oyun"
     },
-    "Settings.Player.Voice": {
-      "text": "Konuşma"
+    "View.Game.Tip": {
+      "text": "Oyun önizlemesi (sağ tık: bağımsız pencere)"
     },
-    "Settings.Player.Sfx": {
-      "text": "Efekt"
+    "View.Node": {
+      "text": "Node"
     },
-    "Settings.Player.TextSpeed": {
-      "text": "Metin Hızı Çarpanı"
+    "View.Node.Tip": {
+      "text": "Hikâye akışı (düğüm grafiği)"
     },
-    "Settings.Player.AutoAdvance": {
-      "text": "Otomatik İlerleme Ek Gecikmesi (sn)"
+    "View.SceneEdit": {
+      "text": "Sahne Düzenle"
     },
-    "Settings.Project.Title": {
-      "text": "Proje Runtime Ayarları"
-    },
-    "Settings.Project.Desc": {
-      "text": "Bu değerler açık projenin project.rowlproj dosyasına kaydedilir."
-    },
-    "Settings.Project.SaveSlots": {
-      "text": "Kayıt Slotu Sayısı"
-    },
-    "Settings.Project.BgmTransition": {
-      "text": "Varsayılan BGM Geçişi"
-    },
-    "Settings.Project.TransitionDuration": {
-      "text": "Varsayılan Geçiş Süresi (sn)"
-    },
-    "Settings.Shortcuts.Title": {
-      "text": "Klavye Kısayolları"
-    },
-    "Settings.Shortcut.Save": {
-      "text": "Kaydet"
-    },
-    "Settings.Shortcut.SaveAs": {
-      "text": "Farklı Kaydet"
-    },
-    "Settings.Shortcut.Undo": {
-      "text": "Geri Al (Undo)"
-    },
-    "Settings.Shortcut.Redo": {
-      "text": "Yinele (Redo)"
-    },
-    "Settings.Shortcut.NewNode": {
-      "text": "Yeni Node Ekle"
-    },
-    "Settings.Shortcut.DeleteNode": {
-      "text": "Seçili Node Sil"
-    },
-    "Settings.Shortcut.Rename": {
-      "text": "Yeniden Adlandır"
-    },
-    "Settings.Shortcut.Build": {
-      "text": "Build Al"
-    },
-    "Settings.Shortcut.PlayMode": {
-      "text": "Play Mode"
-    },
-    "Settings.Shortcut.Fullscreen": {
-      "text": "Tam Ekran"
-    },
-    "Settings.Shortcut.QuickSearch": {
-      "text": "Hızlı Arama"
-    },
-    "Settings.Shortcut.OpenHub": {
-      "text": "Hub'ı Aç"
-    },
-    "Settings.Shortcut.Settings": {
-      "text": "Ayarlar"
-    },
-    "Settings.About.Tagline": {
-      "text": "Visual Novel & Interactive Storytelling Engine"
-    },
-    "Settings.About.Version": {
-      "text": "Sürüm:"
-    },
-    "Settings.About.Engine": {
-      "text": "Motor:"
-    },
-    "Settings.About.Editor": {
-      "text": "Editör:"
-    },
-    "Settings.About.Packaging": {
-      "text": "Paketleme:"
-    },
-    "Settings.About.Packaging.Value": {
-      "text": "Zstd Sıkıştırma + .rowlpkg Arşivi"
-    },
-    "Settings.About.Platforms": {
-      "text": "Platformlar:"
-    },
-    "Settings.ResetDefaults": {
-      "text": "Varsayılanlara Sıfırla"
-    },
-    "Settings.Close": {
-      "text": "Kapat"
-    },
-    "App.Window.Title": {
-      "text": "Rowl Engine Editor"
-    },
-    "App.Brand.Name": {
-      "text": "ROWL"
-    },
-    "App.Brand.Tagline": {
-      "text": "STORY STUDIO"
-    },
-    "Search.Overlay.Watermark": {
-      "text": "Ara: başlık, konuşmacı, metin, speaker:Evelyn, type:choice… (Esc kapat)"
-    },
-    "Search.Filter.Kind": {
-      "text": "Tür:"
-    },
-    "Search.Filter.Speaker": {
-      "text": "Konuşmacı:"
-    },
-    "Search.Filter.Color": {
-      "text": "Renk:"
-    },
-    "Workspace.Pin": {
-      "text": "Sabitle"
-    },
-    "Workspace.Pin.Tip": {
-      "text": "Pencereyi sabitle (başlıktan taşınamaz)"
+    "View.SceneEdit.Tip": {
+      "text": "Sahneyi düzenle"
     },
     "Workspace.Close": {
       "text": "Kapat"
@@ -1260,20 +1668,8 @@
     "Workspace.Close.Tip": {
       "text": "Pencereyi kapat"
     },
-    "Workspace.Move": {
-      "text": "Taşı"
-    },
-    "Workspace.Move.Left": {
-      "text": "Soluna"
-    },
-    "Workspace.Move.Right": {
-      "text": "Sağına"
-    },
-    "Workspace.Move.Top": {
-      "text": "Üstüne"
-    },
-    "Workspace.Move.Bottom": {
-      "text": "Altına"
+    "Workspace.Drop.Bottom": {
+      "text": "Alta yerleştir"
     },
     "Workspace.Drop.Left": {
       "text": "Sola yerleştir"
@@ -1284,14 +1680,32 @@
     "Workspace.Drop.Top": {
       "text": "Üste yerleştir"
     },
-    "Workspace.Drop.Bottom": {
-      "text": "Alta yerleştir"
-    },
     "Workspace.Header.Help": {
       "text": "Taşımak için başlığı sürükle; seçenekler için sağ tıkla veya Enter'a bas"
     },
+    "Workspace.Move": {
+      "text": "Taşı"
+    },
+    "Workspace.Move.Bottom": {
+      "text": "Altına"
+    },
+    "Workspace.Move.Left": {
+      "text": "Soluna"
+    },
+    "Workspace.Move.Right": {
+      "text": "Sağına"
+    },
+    "Workspace.Move.Top": {
+      "text": "Üstüne"
+    },
     "Workspace.Panel.Bottom": {
       "text": "Alt panel"
+    },
+    "Workspace.Pin": {
+      "text": "Sabitle"
+    },
+    "Workspace.Pin.Tip": {
+      "text": "Pencereyi sabitle (başlıktan taşınamaz)"
     }
   }
 }

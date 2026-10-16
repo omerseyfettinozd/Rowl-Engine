@@ -1,17 +1,18 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:RowlEngine.Editor.ViewModels.Player"
+             xmlns:l="using:RowlEngine.Editor.Services.Strings"
              x:Class="RowlEngine.Editor.Views.Player.PlayerHudView"
              x:DataType="vm:PlayerViewModel">
   <Grid RowDefinitions="Auto, *, Auto, Auto">
     <!-- Top control strip -->
     <StackPanel Grid.Row="0" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="6" Margin="8">
-      <Button Content="Auto" Command="{Binding ToggleAutoCommand}" Padding="10,4" />
-      <Button Content="Skip" Command="{Binding ToggleSkipCommand}" Padding="10,4" />
-      <Button Content="Log" Command="{Binding OpenPlayerBacklogCommand}" Padding="10,4" />
-      <Button Content="Save" Command="{Binding QuickSaveCommand}" Padding="10,4" />
-      <Button Content="Load" Command="{Binding QuickLoadCommand}" Padding="10,4" />
-      <Button Content="Menu" Command="{Binding OpenPauseCommand}" Padding="10,4" />
+      <Button Content="{l:T Player.Hud.Auto}" Command="{Binding ToggleAutoCommand}" Padding="10,4" />
+      <Button Content="{l:T Player.Hud.Skip}" Command="{Binding ToggleSkipCommand}" Padding="10,4" />
+      <Button Content="{l:T Player.Hud.Log}" Command="{Binding OpenPlayerBacklogCommand}" Padding="10,4" />
+      <Button Content="{l:T Player.Hud.Save}" Command="{Binding QuickSaveCommand}" Padding="10,4" />
+      <Button Content="{l:T Player.Hud.Load}" Command="{Binding QuickLoadCommand}" Padding="10,4" />
+      <Button Content="{l:T Player.Hud.Menu}" Command="{Binding OpenPauseCommand}" Padding="10,4" />
     </StackPanel>
     <Border Grid.Row="1" />
     <!-- Dialogue box -->

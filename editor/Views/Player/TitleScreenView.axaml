@@ -2,25 +2,26 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:RowlEngine.Editor.ViewModels.Player"
              xmlns:services="using:RowlEngine.Editor.Services"
+             xmlns:l="using:RowlEngine.Editor.Services.Strings"
              x:Class="RowlEngine.Editor.Views.Player.TitleScreenView"
              x:DataType="vm:PlayerViewModel">
   <Grid RowDefinitions="*, Auto, Auto, Auto, Auto, Auto, *" Margin="0,24">
-    <TextBlock Grid.Row="0" Text="ROWL" FontSize="64" FontWeight="Bold"
+    <TextBlock Grid.Row="0" Text="{l:T Player.Title.Logo}" FontSize="64" FontWeight="Bold"
                HorizontalAlignment="Center" VerticalAlignment="Bottom" Opacity="0.9" />
-    <Button Grid.Row="1" Content="Yeni Oyun" Command="{Binding NewGameCommand}"
+    <Button Grid.Row="1" Content="{l:T Player.Title.NewGame}" Command="{Binding NewGameCommand}"
             HorizontalAlignment="Center" Width="240" Margin="0,6" Padding="0,10" />
-    <Button Grid.Row="2" Content="Devam Et" Command="{Binding ContinueCommand}"
+    <Button Grid.Row="2" Content="{l:T Player.Title.Continue}" Command="{Binding ContinueCommand}"
             IsEnabled="{Binding CanContinue}"
             HorizontalAlignment="Center" Width="240" Margin="0,6" Padding="0,10" />
     <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="12" Margin="0,6">
-      <Button Content="Kayıt Yükle" Width="114" Padding="0,10"
+      <Button Content="{l:T Player.Title.LoadGame}" Width="114" Padding="0,10"
               Command="{Binding RequestIntentCommand}"
               CommandParameter="{x:Static services:PlayerIntent.OpenLoad}" />
-      <Button Content="Tercihler" Width="114" Padding="0,10"
+      <Button Content="{l:T Player.Title.Preferences}" Width="114" Padding="0,10"
               Command="{Binding RequestIntentCommand}"
               CommandParameter="{x:Static services:PlayerIntent.OpenPreferences}" />
     </StackPanel>
-    <Button Grid.Row="4" Content="Çıkış" HorizontalAlignment="Center" Width="240" Margin="0,6" Padding="0,10"
+    <Button Grid.Row="4" Content="{l:T Player.Title.Exit}" HorizontalAlignment="Center" Width="240" Margin="0,6" Padding="0,10"
             Command="{Binding RequestIntentCommand}"
             CommandParameter="{x:Static services:PlayerIntent.RequestExitToApp}" />
     <TextBlock Grid.Row="5" Text="{Binding LastError}" Foreground="Red"
