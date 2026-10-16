@@ -2137,10 +2137,16 @@
       "text": "Copy selected nodes"
     },
     "Shortcut.DeleteNode": {
-      "text": "Delete selected node"
+      "text": "Delete selected nodes"
     },
     "Shortcut.Duplicate": {
       "text": "Duplicate selected nodes"
+    },
+    "Shortcut.FitAll": {
+      "text": "Fit all"
+    },
+    "Shortcut.FitSelection": {
+      "text": "Fit selection"
     },
     "Shortcut.FocusNextPanel": {
       "text": "Focus next panel"
@@ -2154,6 +2160,9 @@
     "Shortcut.NewNode": {
       "text": "New node"
     },
+    "Shortcut.NextNode": {
+      "text": "Next node"
+    },
     "Shortcut.OpenHub": {
       "text": "Open hub"
     },
@@ -2162,6 +2171,9 @@
     },
     "Shortcut.Play": {
       "text": "Toggle play mode"
+    },
+    "Shortcut.PrevNode": {
+      "text": "Previous node"
     },
     "Shortcut.Redo": {
       "text": "Redo"

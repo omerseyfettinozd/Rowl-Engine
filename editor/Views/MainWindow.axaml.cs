@@ -151,6 +151,29 @@ namespace RowlEngine.Editor.Views
             return input?.Focus(NavigationMethod.Tab) ?? false;
         }
 
+        /// <summary>
+        /// Faz 9 E1: metin girişi kontrolü (TextBox içi + AvaloniaEdit TextArea).
+        /// AvaloniaEdit'e doğrudan bağımlı olmamak için tür adı ile bakılır.
+        /// </summary>
+        internal static bool IsTextInputSource(object? source, Visual? focused = null) =>
+            IsTextInputVisual(source) || IsTextInputVisual(focused);
+
+        private static bool IsTextInputVisual(object? target)
+        {
+            if (target is TextBox)
+                return true;
+            if (target is not Visual visual)
+                return target is not null && IsCodeEditorType(target);
+            return visual.GetSelfAndVisualAncestors().Any(a => a is TextBox || IsCodeEditorType(a));
+        }
+
+        private static bool IsCodeEditorType(object target)
+        {
+            string name = target.GetType().FullName ?? string.Empty;
+            return name.Contains("TextArea", StringComparison.Ordinal)
+                || name.Contains("AvaloniaEdit", StringComparison.Ordinal);
+        }
+
         private void MainWindow_KeyDown(object? sender, KeyEventArgs e)
         {
             if (DataContext is not MainWindowViewModel vm) return;
@@ -167,7 +190,7 @@ namespace RowlEngine.Editor.Views
             }
 
             // MS-5: canvas shortcuts must not steal keystrokes from text inputs.
-            bool isTextInput = e.Source is Avalonia.Controls.TextBox;
+            bool isTextInput = IsTextInputSource(e.Source, FocusManager?.GetFocusedElement() as Visual);
 
             // ── Undo / Redo ──────────────────────────────────────────
             if (ctrl && !shift && e.Key == Key.Z)
@@ -229,6 +252,11 @@ namespace RowlEngine.Editor.Views
             }
             else if (e.Key == Key.Delete)
             {
+                // Faz 9 E1: metin girişinde Delete hiçbir şey yapmaz, handled da olmaz.
+                if (isTextInput)
+                {
+                    return;
+                }
                 vm.DeleteSelectedNodeCommand.Execute(null);
                 e.Handled = true;
             }

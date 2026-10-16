@@ -108,19 +108,40 @@ namespace RowlEngine.Editor.Views.Panels
             if (DataContext is not MainWindowViewModel vm) return;
             if (sender is not Control control) return;
             var graph = vm.NodeGraphViewModel;
-            if (control.Bounds.Width > 0)
-                graph.ViewportWidth = control.Bounds.Width;
-            if (control.Bounds.Height > 0)
-                graph.ViewportHeight = control.Bounds.Height;
+            if (control.Bounds.Width > 0 || control.Bounds.Height > 0)
+            {
+                // Faz 9 E1: görünüm boyutu tek kaynaktan (Bounds) beslenir.
+                graph.ViewportSize = control.Bounds.Size;
+            }
         }
 
         private void NodeGraphView_KeyDown(object? sender, KeyEventArgs e)
         {
-            if (e.KeyModifiers != KeyModifiers.None) return;
             if (DataContext is not MainWindowViewModel vm) return;
-            if (e.Key == Key.F)
+            // Metin girişinde normal yazım/odak davranışı bozulmaz.
+            if (MainWindow.IsTextInputSource(e.Source))
+                return;
+            bool shift = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
+            bool noCtrlAlt = !e.KeyModifiers.HasFlag(KeyModifiers.Control) &&
+                !e.KeyModifiers.HasFlag(KeyModifiers.Meta) &&
+                !e.KeyModifiers.HasFlag(KeyModifiers.Alt);
+            if (e.Key == Key.F && noCtrlAlt && !shift)
             {
                 vm.NodeGraphViewModel.FitToSelectionCommand.Execute(null);
+                e.Handled = true;
+                return;
+            }
+            if (e.Key == Key.F && noCtrlAlt && shift)
+            {
+                vm.NodeGraphViewModel.ZoomToFitCommand.Execute(null);
+                e.Handled = true;
+                return;
+            }
+            if (e.Key == Key.Tab && noCtrlAlt)
+            {
+                // Bu işleyici yalnız tuval içinden kabaran tuşlarda çalışır;
+                // dış panellerdeki Tab buraya uğramaz.
+                vm.CycleNodeSelection(backwards: shift);
                 e.Handled = true;
             }
         }
@@ -227,6 +248,9 @@ namespace RowlEngine.Editor.Views.Panels
 
             if (!isBackground) return;
 
+            // Faz 9 E1: boş tuvale basınca klavye odağı tuvale gelir (F/Tab çalışır).
+            Focus(NavigationMethod.Pointer);
+
             _pressStartPos = e.GetPosition(control);
 
             if (pProps.IsMiddleButtonPressed || pProps.IsRightButtonPressed)
@@ -310,19 +334,16 @@ namespace RowlEngine.Editor.Views.Panels
 
         private void NodeGraphContainer_PointerWheelChanged(object? sender, PointerWheelEventArgs e)
         {
-            if (DataContext is MainWindowViewModel vm)
-            {
-                // MUST hold Ctrl key to zoom
-                if (!e.KeyModifiers.HasFlag(KeyModifiers.Control))
-                {
-                    return;
-                }
+            if (DataContext is not MainWindowViewModel vm)
+                return;
+            Control? container = sender as Control;
+            if (container == null) return;
 
+            // Ctrl+tekerlek: mevcut imleç merkezli zoom.
+            if (e.KeyModifiers.HasFlag(KeyModifiers.Control))
+            {
                 double delta = e.Delta.Y;
                 if (System.Math.Abs(delta) < 0.001) return;
-
-                Control? container = sender as Control;
-                if (container == null) return;
 
                 // Get mouse position relative to NodeGraphContainer
                 Point mousePos = e.GetPosition(container);
@@ -345,7 +366,21 @@ namespace RowlEngine.Editor.Views.Panels
                 vm.StartSmoothViewAnimation();
 
                 e.Handled = true;
+                return;
             }
+
+            // Faz 9 E1: düz tekerlek dikey, Shift+tekerlek yatay kaydırır; adım ekran
+            // pikselinde sabit (60 px), böylece her zoom düzeyinde aynı hissettirir.
+            const double stepScreen = 60.0;
+            double dx = e.Delta.X, dy = e.Delta.Y;
+            if (e.KeyModifiers.HasFlag(KeyModifiers.Shift) && Math.Abs(dx) < 0.001)
+                (dx, dy) = (dy, 0);
+            if (Math.Abs(dx) < 0.001 && Math.Abs(dy) < 0.001) return;
+            vm.PanX += dx * stepScreen;
+            vm.PanY += dy * stepScreen;
+            vm.TargetPanX = vm.PanX;
+            vm.TargetPanY = vm.PanY;
+            e.Handled = true;
         }
     }
 }

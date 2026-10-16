@@ -46,5 +46,9 @@ public static class EditorShortcutCatalog
         new("Ctrl+H", "Shortcut.OpenHub"),
         new("F6", "Shortcut.FocusNextPanel"),
         new("Shift+F6", "Shortcut.FocusPrevPanel"),
+        new("F", "Shortcut.FitSelection"),
+        new("Shift+F", "Shortcut.FitAll"),
+        new("Tab", "Shortcut.NextNode"),
+        new("Shift+Tab", "Shortcut.PrevNode"),
     };
 }

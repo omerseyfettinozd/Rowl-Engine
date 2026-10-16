@@ -2137,10 +2137,16 @@
       "text": "Seçili düğümleri kopyala"
     },
     "Shortcut.DeleteNode": {
-      "text": "Seçili düğümü sil"
+      "text": "Seçili düğümleri sil"
     },
     "Shortcut.Duplicate": {
       "text": "Seçili düğümleri çoğalt"
+    },
+    "Shortcut.FitAll": {
+      "text": "Tümünü sığdır"
+    },
+    "Shortcut.FitSelection": {
+      "text": "Seçimi sığdır"
     },
     "Shortcut.FocusNextPanel": {
       "text": "Sonraki panele odaklan"
@@ -2154,6 +2160,9 @@
     "Shortcut.NewNode": {
       "text": "Yeni düğüm"
     },
+    "Shortcut.NextNode": {
+      "text": "Sonraki düğüm"
+    },
     "Shortcut.OpenHub": {
       "text": "Hub'ı aç"
     },
@@ -2162,6 +2171,9 @@
     },
     "Shortcut.Play": {
       "text": "Oynatma modunu aç/kapat"
+    },
+    "Shortcut.PrevNode": {
+      "text": "Önceki düğüm"
     },
     "Shortcut.Redo": {
       "text": "Yinele"

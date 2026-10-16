@@ -587,8 +587,46 @@ namespace RowlEngine.Editor.ViewModels
 
         private void ZoomStep(double delta)
         {
-            TargetZoom = Math.Clamp(Math.Round(TargetZoom + delta, 4), NodeGraphViewModel.MinZoom, NodeGraphViewModel.MaxZoom);
+            // Faz 9 E1: merkez sabit zoom; görünüm merkezindeki dünya noktası korunur.
+            double oldZoom = TargetZoom > 0 ? TargetZoom : 1.0;
+            double newZoom = Math.Clamp(Math.Round(oldZoom + delta, 4), NodeGraphViewModel.MinZoom, NodeGraphViewModel.MaxZoom);
+            double vw = this.NodeGraphViewModel.ViewportWidth;
+            double vh = this.NodeGraphViewModel.ViewportHeight;
+            if (vw > 0 && vh > 0 && Math.Abs(newZoom - oldZoom) > 0.0001)
+            {
+                double worldX = (vw / 2.0 - TargetPanX) / oldZoom;
+                double worldY = (vh / 2.0 - TargetPanY) / oldZoom;
+                TargetPanX = vw / 2.0 - worldX * newZoom;
+                TargetPanY = vh / 2.0 - worldY * newZoom;
+            }
+            TargetZoom = newZoom;
             StartSmoothViewAnimation();
+        }
+
+        /// <summary>
+        /// Faz 9 E1: Tab ile düğümler arasında gezinme (Nodes sırası, döner).
+        /// Tek seçim yapar; görünümde değilse ortalar.
+        /// </summary>
+        public void CycleNodeSelection(bool backwards)
+        {
+            if (Nodes.Count == 0) return;
+            int idx = SelectedNode != null ? Nodes.IndexOf(SelectedNode) : -1;
+            int nextIdx;
+            if (idx < 0)
+                nextIdx = backwards ? Nodes.Count - 1 : 0;
+            else
+                nextIdx = backwards ? (idx - 1 + Nodes.Count) % Nodes.Count : (idx + 1) % Nodes.Count;
+            var next = Nodes[nextIdx];
+            foreach (var n in Nodes)
+                n.IsSelected = n == next;
+            SelectedNodes.Clear();
+            SelectedNodes.Add(next);
+            SelectedNode = next;
+            var (x, y, w, h) = NodeGraphViewModel.NodeBounds(next);
+            var center = new Avalonia.Point(x + w / 2.0, y + h / 2.0);
+            var view = this.NodeGraphViewModel.ViewportRect;
+            if (!view.Contains(center))
+                this.NodeGraphViewModel.PanTo(center.X, center.Y);
         }
 
         public ObservableCollection<NodeViewModel> Nodes { get; } = new();
@@ -1004,6 +1042,12 @@ namespace RowlEngine.Editor.ViewModels
         [RelayCommand]
         public void DeleteSelectedNode()
         {
+            // Faz 9 E1: çoklu seçim tek geri alma adımında silinir.
+            if (SelectedNodes.Count > 1)
+            {
+                DeleteSelectedNodes();
+                return;
+            }
             if (SelectedNode == null) return;
             DeleteNode(SelectedNode);
         }
