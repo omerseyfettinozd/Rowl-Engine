@@ -291,3 +291,9 @@ B04/B05/B06 paketleri; tuval zemini prototip yüzeyi **#131315** (#000 değil).
 - Kök neden düzeltmeleri: kayıt servisinin ev dizininden örnek proje içe aktarması (test makineye
   bağlıydı); yüksek kontrastın her viewmodel kurulumunda kaynak yazması (UI dışı iş parçacığında 50 test).
 - Yerel: editör 929/929, RowlEye golden + denetim 3/3, taşınabilirlik + launcher yeşil.
+- B `d19583e`: kurtarma kartı (incele / iki adımlı geri yükle / yoksay — dosyalar silinmez);
+  içe aktarma UI dışı + ilerleme + iptal + atomik `.part` kopya; aynı adlı varlık kararı
+  (atla / ikisini de tut / üzerine yaz, kalanlara uygula). Sürükle-bırak yolları ezmez, yeni ad verir.
+  Kök neden: içe aktarma viewmodel'i sonucu UI dışında yazıyordu, son ilerleme kuyrukta kalabiliyordu.
+- Faz 8 sonu yerel: editör 951/951 (iki kez), RowlEye golden + denetim 3/3, taşınabilirlik + launcher
+  yeşil; native değişmedi.
