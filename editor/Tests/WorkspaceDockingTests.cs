@@ -805,6 +805,8 @@ public sealed class WorkspaceDockingTests : IDisposable
                 window.UpdateLayout();
                 Assert.True(hierarchy.IsEffectivelyVisible);
                 Assert.Same(hierarchy, window.GetLogicalDescendants().OfType<NodeHierarchyView>().Single());
+                host.CompleteMotion(); // D6: the reopen eases in; settle before the next real click aims at a header
+                window.UpdateLayout();
 
                 // Node graph: host header ×.
                 WorkspacePanel nodePanel = host.FindPanel(PanelIds.Node)!;
@@ -815,6 +817,8 @@ public sealed class WorkspaceDockingTests : IDisposable
                 window.UpdateLayout();
                 Assert.True(graph.IsEffectivelyVisible);
                 Assert.Same(graph, window.GetLogicalDescendants().OfType<NodeGraphView>().Single());
+                host.CompleteMotion();
+                window.UpdateLayout();
 
                 // Bottom strip: its × floats over the tab row; closing closes every tab.
                 PanelHeaderActions bottomActions = host.FindPanel(PanelIds.Bottom)!.TemplateHeaderActions!;

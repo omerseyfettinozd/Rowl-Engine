@@ -63,6 +63,7 @@ public partial class WorkspaceHost : Control
     {
         Panels.CollectionChanged += OnPanelsChanged;
         InitializeDocking();
+        InitializeMotion();
     }
 
     /// <summary>The split tree to draw (bind to the view model's layout; read-only for the view).</summary>
@@ -123,6 +124,8 @@ public partial class WorkspaceHost : Control
             UpdatePanelStates();
         else if (change.Property == FlowDirectionProperty && _gesture is not null)
             CancelDrag();
+        else if (change.Property == ReduceMotionProperty)
+            OnReduceMotionChanged();
     }
 
     // ---- panels ----
@@ -190,6 +193,7 @@ public partial class WorkspaceHost : Control
 
     private void Apply()
     {
+        CaptureMotion();
         LayoutNode? tree = Layout?.Tree;
         string shape = Shape(tree);
         if (shape == _shape && _skeleton is not null)
@@ -296,8 +300,39 @@ public partial class WorkspaceHost : Control
         splitter.DragCompleted += (_, _) => Commit(parts);
         // Keyboard moves (arrow keys on a focused splitter) resize without drag events.
         splitter.AddHandler(KeyUpEvent, (_, _) => Commit(parts), RoutingStrategies.Bubble, handledEventsToo: true);
+        splitter.AddHandler(KeyDownEvent, (_, e) => OnSplitterKeyDown(parts, e), RoutingStrategies.Tunnel);
         _splits[split.Id] = parts;
         return grid;
+    }
+
+    /// <summary>Keyboard step for a focused splitter (px), and with Shift.</summary>
+    public const double KeyboardStep = 16;
+
+    public const double KeyboardStepLarge = 64;
+
+    /// <summary>
+    /// Arrow keys move the focused splitter by <see cref="KeyboardStep"/> px (Shift:
+    /// <see cref="KeyboardStepLarge"/>). The arrow means the <i>screen</i> direction: in a
+    /// right-to-left (mirrored) window the divider still follows the arrow it was given.
+    /// The ratio is written to the tree on key up, as before (no animation).
+    /// </summary>
+    private void OnSplitterKeyDown(SplitParts parts, KeyEventArgs e)
+    {
+        int screen = e.Key switch
+        {
+            Key.Left or Key.Up => -1,
+            Key.Right or Key.Down => 1,
+            _ => 0,
+        };
+        bool along = parts.Columns ? e.Key is Key.Left or Key.Right : e.Key is Key.Up or Key.Down;
+        if (screen == 0 || !along)
+            return;
+        e.Handled = true; // with any modifier: the splitter's own fixed 10 px step must not run
+        if (e.KeyModifiers is not (KeyModifiers.None or KeyModifiers.Shift))
+            return;
+        double step = e.KeyModifiers == KeyModifiers.Shift ? KeyboardStepLarge : KeyboardStep;
+        bool mirrored = parts.Columns && parts.Splitter.FlowDirection == Avalonia.Media.FlowDirection.RightToLeft;
+        parts.MovePixels(screen * step * (mirrored ? -1 : 1));
     }
 
     private void UpdateRatios(LayoutNode? node)
@@ -330,7 +365,17 @@ public partial class WorkspaceHost : Control
         SplitNode? split = FindSplit(Layout?.Tree, parts.Id);
         if (split is null || Math.Abs(split.Ratio - ratio) <= 1e-9)
             return;
-        SplitResized?.Invoke(this, new WorkspaceSplitResizedEventArgs(parts.Id, ratio));
+        // The user already moved the splitter: whatever the owner writes back (a clamped ratio)
+        // must not be animated (D6: splitter drags and keyboard moves stay instant).
+        _suppressMotion = true;
+        try
+        {
+            SplitResized?.Invoke(this, new WorkspaceSplitResizedEventArgs(parts.Id, ratio));
+        }
+        finally
+        {
+            _suppressMotion = false;
+        }
     }
 
     private static SplitNode? FindSplit(LayoutNode? node, string id) => node switch
@@ -389,21 +434,7 @@ public partial class WorkspaceHost : Control
     protected override Size ArrangeOverride(Size finalSize)
     {
         _skeleton?.Arrange(new Rect(finalSize));
-        foreach ((string id, WorkspacePanel panel) in _panels)
-        {
-            if (panel.IsVisible && _slots.TryGetValue(id, out Control? slot))
-            {
-                Rect rect = SlotRect(slot);
-                _panelRects[id] = rect;
-                panel.Measure(rect.Size);
-                panel.Arrange(rect);
-            }
-            else
-            {
-                _panelRects.Remove(id);
-                panel.Arrange(default);
-            }
-        }
+        ArrangePanelsAndSplitters();
         ArrangeDockingOverlays();
         PrepareHeaders();
         return finalSize;
@@ -441,6 +472,40 @@ public partial class WorkspaceHost : Control
             double sb = Actual(b);
             return sa + sb > 0 ? sa / (sa + sb) : double.NaN;
         }
+
+        /// <summary>
+        /// Moves the divider by <paramref name="pixels"/> in layout space (positive = A grows), within both
+        /// sides' minimum sizes; false when nothing moved. Writes pixel-proportional stars like GridSplitter.
+        /// </summary>
+        public bool MovePixels(double pixels)
+        {
+            double sa = Actual(a);
+            double sb = Actual(b);
+            double total = sa + sb;
+            double minA = Min(a);
+            double minB = Min(b);
+            if (total <= 0 || total - minB < minA)
+                return false;
+            double next = Math.Clamp(sa + pixels, minA, total - minB);
+            if (Math.Abs(next - sa) < 1e-6)
+                return false;
+            if (columns)
+            {
+                ((ColumnDefinition)a).Width = new GridLength(next, GridUnitType.Star);
+                ((ColumnDefinition)b).Width = new GridLength(total - next, GridUnitType.Star);
+            }
+            else
+            {
+                ((RowDefinition)a).Height = new GridLength(next, GridUnitType.Star);
+                ((RowDefinition)b).Height = new GridLength(total - next, GridUnitType.Star);
+            }
+            return true;
+        }
+
+        public bool Columns => columns;
+
+        private double Min(DefinitionBase d) =>
+            columns ? ((ColumnDefinition)d).MinWidth : ((RowDefinition)d).MinHeight;
 
         public void SetRatio(double ratio)
         {

@@ -230,6 +230,13 @@
     <Style Selector="GridSplitter.workspaceSplitter">
         <Setter Property="Background" Value="{DynamicResource BorderColor}"/>
     </Style>
+    <!-- Faz 5 D6: prototip .splitter:hover / :focus-visible belirginleşir; odak = D4 başlık odağıyla aynı Accent. -->
+    <Style Selector="GridSplitter.workspaceSplitter:pointerover">
+        <Setter Property="Background" Value="{DynamicResource BorderSubtle}"/>
+    </Style>
+    <Style Selector="GridSplitter.workspaceSplitter:focus-visible">
+        <Setter Property="Background" Value="{DynamicResource Accent}"/>
+    </Style>
     <!-- Faz 5 D4: başlık = sürükleme tutamağı; klavye odağı K1 gibi kenarla belirginleşir. -->
     <Style Selector="Border.workspaceDragHandle:focus-visible">
         <Setter Property="BorderBrush" Value="{DynamicResource Accent}"/>

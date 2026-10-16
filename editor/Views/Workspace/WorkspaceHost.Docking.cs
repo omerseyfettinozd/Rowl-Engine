@@ -315,6 +315,7 @@ public partial class WorkspaceHost
         }
         g.Drop = new Rect(Bounds.Size).Contains(p) ? DropAt(p, g.Source) : null;
         _dropPreview.IsVisible = g.Drop is not null;
+        NoteDropTarget(g.Drop?.PreviewRect);
         if (g.Drop is { } drop)
             _dropText.Text = EditorStrings.T(WorkspaceDockEdges.DropLabelKey(drop.VisualEdge));
         InvalidateArrange();
@@ -360,6 +361,8 @@ public partial class WorkspaceHost
             return;
         _gesture = null; // first: releasing the capture below must not re-enter
         _dropPreview.IsVisible = false;
+        _dropPreview.Opacity = 1;
+        NoteDropTarget(null);
         _dragLabel.IsVisible = false;
         if (ReferenceEquals(g.Pointer.Captured, this))
             g.Pointer.Capture(null);
@@ -415,8 +418,9 @@ public partial class WorkspaceHost
     private void ArrangeDockingOverlays()
     {
         WorkspaceDropTarget? drop = CurrentDropTarget;
-        _dropPreview.Measure(drop?.PreviewRect.Size ?? default);
-        _dropPreview.Arrange(drop?.PreviewRect ?? default);
+        Rect shown = drop is null ? default : ShownDropRect(drop.PreviewRect);
+        _dropPreview.Measure(shown.Size);
+        _dropPreview.Arrange(shown);
         if (_gesture is { Dragging: true } g)
             _dragLabel.Arrange(new Rect(g.Last + DragLabelOffset, _dragLabel.DesiredSize));
         else
