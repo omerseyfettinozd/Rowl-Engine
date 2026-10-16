@@ -32,12 +32,13 @@ namespace RowlEngine.Editor
                 string[] expectedHeaders = new[]
                 {
                     "Hiyerarşi", "Denetçi", "Günlük", "Varlıklar",
-                    "Diyalog Geçmişi", "Kayıt Slotları", "Sorunlar"
+                    "Diyalog Geçmişi", "Kayıt Slotları", "Sorunlar",
+                    "Düğüm kütüphanesi", "Lua editörü"
                 };
                 string[] expectedIds = new[]
                 {
                     "Hierarchy", "Inspector", "Log", "Assets",
-                    "Backlog", "SaveSlots", "ProjectIssues"
+                    "Backlog", "SaveSlots", "ProjectIssues", "Library", "Lua"
                 };
 
                 var windowsMenu = window.FindControl<MenuItem>("WindowsMenu")
@@ -99,7 +100,8 @@ namespace RowlEngine.Editor
                     string[] expectedEnglish = new[]
                     {
                         "Hierarchy", "Inspector", "Log", "Assets",
-                        "Dialogue History", "Save Slots", "Issues"
+                        "Dialogue History", "Save Slots", "Issues",
+                        "Node library", "Lua editor"
                     };
                     if (!english.SequenceEqual(expectedEnglish))
                         throw new Exception($"Live language switch failed: [{string.Join(", ", english)}]");

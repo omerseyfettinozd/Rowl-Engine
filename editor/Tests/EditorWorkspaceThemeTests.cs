@@ -10,6 +10,13 @@ internal static class EditorWorkspaceThemeTests
 {
     public static void Run(MainWindowViewModel mainVm)
     {
+        // Uygulama kaynakları UI thread'ine bağlı: Avalonia başka bir testte UI thread'iyle
+        // başlatıldıysa tema değişimi o thread'de yapılmalı (süitin diğer adımlarıyla aynı kalıp).
+        if (Application.Current != null && !Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
+        {
+            Avalonia.Threading.Dispatcher.UIThread.Invoke(() => Run(mainVm));
+            return;
+        }
         Console.WriteLine("\n[Test 2]: Theming (Kemik Beyazı + Saf Siyah OLED)...");
         var settings = new SettingsViewModel();
         if (settings.SelectedTheme != "Kemik Beyazı (Karanlık)")
@@ -120,6 +127,10 @@ internal static class EditorWorkspaceThemeTests
         {
             Rect Measure(string id)
             {
+                // Faz 5 D6 sözleşmesi: düzen geçişi CompleteMotion'a (ya da bir render tick'ine)
+                // kadar 0'dan başlar; son yerleşimi ölçmek için geçişi bitir.
+                window.UpdateLayout();
+                host.CompleteMotion();
                 window.UpdateLayout();
                 return host.GetPanelRect(id);
             }

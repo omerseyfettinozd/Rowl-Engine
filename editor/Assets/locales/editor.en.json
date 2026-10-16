@@ -1050,6 +1050,159 @@
     "Layout.SceneFocus": {
       "text": "Scene Focus"
     },
+    "Library.Builtin.Summary": {
+      "text": "Current default node · Add"
+    },
+    "Library.Builtin.Title": {
+      "text": "Default node"
+    },
+    "Library.Confirm.Cancel": {
+      "text": "Cancel"
+    },
+    "Library.Confirm.Remove": {
+      "text": "Remove"
+    },
+    "Library.Desc.Builtin": {
+      "text": "Read-only · You can edit the copy added to the scene."
+    },
+    "Library.Desc.User": {
+      "text": "Save the whole node with the star in the Inspector."
+    },
+    "Library.Empty.Folder": {
+      "text": "No nodes in this folder. Save here with the star in the Inspector or move a record to this folder."
+    },
+    "Library.Empty.NoMatch": {
+      "text": "No matches in this folder."
+    },
+    "Library.Error.AlreadySaved": {
+      "text": "This node is already saved in the library."
+    },
+    "Library.Error.CycleNotAllowed": {
+      "text": "A folder cannot be moved into itself or one of its descendants."
+    },
+    "Library.Error.DuplicateName": {
+      "text": "A folder with the same name already exists here."
+    },
+    "Library.Error.FolderNotFound": {
+      "text": "Folder not found."
+    },
+    "Library.Error.InvalidName": {
+      "text": "Invalid folder name."
+    },
+    "Library.Error.ItemNotFound": {
+      "text": "Library item not found."
+    },
+    "Library.Error.ParentNotFound": {
+      "text": "Parent folder not found."
+    },
+    "Library.Folder.Manage": {
+      "text": "Manage folder"
+    },
+    "Library.Folder.NameLabel": {
+      "text": "Folder name"
+    },
+    "Library.Folder.New": {
+      "text": "Folder"
+    },
+    "Library.Folder.NewTitle": {
+      "text": "New folder"
+    },
+    "Library.Folder.ParentLabel": {
+      "text": "Parent folder"
+    },
+    "Library.Folder.Remove": {
+      "text": "Remove folder…"
+    },
+    "Library.Folder.RemoveConfirm": {
+      "text": "Remove this folder? Its contents move to the parent folder."
+    },
+    "Library.Folder.RemoveTitle": {
+      "text": "Remove folder"
+    },
+    "Library.Folder.Save": {
+      "text": "Save"
+    },
+    "Library.Folders.Caption": {
+      "text": "FOLDERS"
+    },
+    "Library.Inspector.Caption": {
+      "text": "NODE LIBRARY"
+    },
+    "Library.Inspector.Hint": {
+      "text": "The whole hierarchy, object properties and component settings are saved."
+    },
+    "Library.Inspector.Remove": {
+      "text": "Remove from library"
+    },
+    "Library.Inspector.Save": {
+      "text": "Save to library"
+    },
+    "Library.Inspector.SavedHint": {
+      "text": "Record: {0}. Use Update record to apply changes to the record."
+    },
+    "Library.Inspector.Update": {
+      "text": "Update record"
+    },
+    "Library.Item.Move": {
+      "text": "Move to folder"
+    },
+    "Library.Item.Remove": {
+      "text": "Remove…"
+    },
+    "Library.Item.RemoveConfirm": {
+      "text": "Copies already added to the scene are kept."
+    },
+    "Library.Item.RemoveTitle": {
+      "text": "Remove record"
+    },
+    "Library.Item.Summary": {
+      "text": "{0} objects · {1} components · Add to scene"
+    },
+    "Library.Package.Name": {
+      "text": "Rowl"
+    },
+    "Library.Package.Summary": {
+      "text": "Ready-made package · Read-only"
+    },
+    "Library.Search.Watermark": {
+      "text": "Search in this folder…"
+    },
+    "Library.Source.Builtin": {
+      "text": "Ready-made packages"
+    },
+    "Library.Source.User": {
+      "text": "My nodes"
+    },
+    "Library.Toast.Added": {
+      "text": "Node added to the scene."
+    },
+    "Library.Toast.FolderCreated": {
+      "text": "Folder created."
+    },
+    "Library.Toast.FolderRemoved": {
+      "text": "Folder removed."
+    },
+    "Library.Toast.FolderUpdated": {
+      "text": "Folder updated."
+    },
+    "Library.Toast.ItemMoved": {
+      "text": "Record moved."
+    },
+    "Library.Toast.ReadOnly": {
+      "text": "Read-only library; changes are not allowed."
+    },
+    "Library.Toast.Removed": {
+      "text": "Library record removed."
+    },
+    "Library.Toast.SaveFailed": {
+      "text": "Could not write the library file."
+    },
+    "Library.Toast.Saved": {
+      "text": "Node saved to the library."
+    },
+    "Library.Toast.Updated": {
+      "text": "Library record updated."
+    },
     "LivePreview.Background.ResizeTooltip": {
       "text": "Resize Background"
     },
@@ -1203,6 +1356,78 @@
     "Log.Warnings.Tip": {
       "text": "Warning count"
     },
+    "Lua.BoundObject": {
+      "text": "BOUND OBJECT"
+    },
+    "Lua.BoundObject.None": {
+      "text": "(none)"
+    },
+    "Lua.Close.Cancel": {
+      "text": "Cancel"
+    },
+    "Lua.Close.Confirm": {
+      "text": "There are unsaved changes."
+    },
+    "Lua.Close.Discard": {
+      "text": "Discard"
+    },
+    "Lua.Empty.New": {
+      "text": "New script"
+    },
+    "Lua.Empty.Title": {
+      "text": "No scripts yet."
+    },
+    "Lua.External.Keep": {
+      "text": "Keep"
+    },
+    "Lua.External.Reload": {
+      "text": "Reload"
+    },
+    "Lua.ExternalChange": {
+      "text": "File changed on disk."
+    },
+    "Lua.Files": {
+      "text": "Files"
+    },
+    "Lua.Files.Tip": {
+      "text": "Open file"
+    },
+    "Lua.Find.Tip": {
+      "text": "Find in code"
+    },
+    "Lua.New.Content": {
+      "text": "-- New story\n\n"
+    },
+    "Lua.New.Tip": {
+      "text": "New script"
+    },
+    "Lua.Panel.Title": {
+      "text": "Lua editor"
+    },
+    "Lua.Save": {
+      "text": "Save"
+    },
+    "Lua.Saved": {
+      "text": "Script saved."
+    },
+    "Lua.Skipped.Tip": {
+      "text": "File too large, skipped"
+    },
+    "Lua.Status.Caret": {
+      "text": "Line {0} · Column {1}"
+    },
+    "Lua.Status.Edited": {
+      "text": "Modified"
+    },
+    "Lua.Status.Language": {
+      "text": "Lua"
+    },
+    "Lua.Status.Saved": {
+      "text": "Saved"
+    },
+    "Lua.Tab.CloseTip": {
+      "text": "Close"
+    },
     "Menu.CancelBuild": {
       "text": "Cancel Export"
     },
@@ -1311,8 +1536,14 @@
     "Panel.Issues": {
       "text": "Issues"
     },
+    "Panel.Library": {
+      "text": "Node library"
+    },
     "Panel.Log": {
       "text": "Log"
+    },
+    "Panel.Lua": {
+      "text": "Lua editor"
     },
     "Panel.SaveSlots": {
       "text": "Save Slots"

@@ -57,6 +57,7 @@ bağlantı (link) YOKTUR.** Kanıtlar:
 | Avalonia.Themes.Fluent (NuGet) | 11.3.11 | MIT | editor/RowlEngine.Editor.csproj: PackageReference; NuGet önbelleği: avalonia.themes.fluent/11.3.11/*.nuspec (MIT) |
 | Avalonia.Fonts.Inter (NuGet) | 11.3.11 | MIT | editor/RowlEngine.Editor.csproj: PackageReference; NuGet önbelleği: avalonia.fonts.inter/11.3.11/*.nuspec (MIT) |
 | CommunityToolkit.Mvvm (NuGet) | 8.4.0 | MIT | editor/RowlEngine.Editor.csproj: PackageReference; NuGet önbelleği: communitytoolkit.mvvm/8.4.0/communitytoolkit.mvvm.nuspec (MIT) |
+| Avalonia.AvaloniaEdit (NuGet) | 11.3.0 | MIT | editor/RowlEngine.Editor.csproj: PackageReference (Faz 7 Lua editörü); NuGet önbelleği: avalonia.avaloniaedit/11.3.0/avalonia.avaloniaedit.nuspec (license type=expression MIT) |
 | Tmds.DBus.Protocol (NuGet) | 0.21.3 | MIT | editor/RowlEngine.Editor.csproj: PackageReference; NuGet önbelleği: tmds.dbus.protocol/0.21.3/tmds.dbus.protocol.nuspec (MIT) |
 
 Satır sayısı: 24.

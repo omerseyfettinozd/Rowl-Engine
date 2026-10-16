@@ -190,3 +190,44 @@ kenar/odak, liste/ağaç seçimi prototip grisi.
 - `dotnet test` (RowlEye + editör testleri) yeşil; RowlEye golden'ları yalnız o fazın
   hedef panelleri için ve bilerek güncellenir.
 - Önce/sonra RowlEye görüntüsü + prototip görseli yan yana (PR açıklamasına eklenir).
+
+## Faz 7 — Düğüm kütüphanesi ve Lua editörü panelleri (2026-10-16)
+
+Kaynak: prototip `node-library.js` + `node-library-state.mjs` (+ testleri), `lua-editor.js`,
+görseller `library-categories.jpg`, `inspector-library.jpg`, `desktop.jpg` (Lua editörü).
+Kapsam prototipteki davranıştır; yeni ürün özelliği eklenmez.
+
+**Kararlar**
+- *Benim düğümlerim* kullanıcı düzeyinde saklanır (prototipte tarayıcı başına `localStorage`):
+  editör ayar profiliyle aynı dizinde `node-library.json`, sürümlü, atomik yazım; bozuk dosya
+  sessizce sıfırlanmaz (yedeklenir + uyarı). *Hazır paketler* salt okunur: prototipteki gibi
+  `Rowl` paketi → `Standart düğüm` (bugünkü varsayılan yeni düğüm). Uydurma içerik yok.
+- Kütüphane kaydı bağımsız şablondur: düğümün tüm objeleri, konum/görünürlük ve bileşen
+  değerleri; bağlantı hedefleri (seçenek/koşul hedefleri) boşaltılır; sahneye eklenen kopya yeni
+  kimlik ve yeni diyalog `content_id` alır (çoğaltma kuralıyla aynı); ekleme geri alınabilir.
+- Klasör kuralları prototiple aynı: iç içe, aynı konumda aynı ad yok (TR büyük/küçük harf),
+  kendi içine taşınamaz, silinen klasörün alt klasör/öğeleri üst konuma taşınır (çakışan ad
+  `Ad (2)` alır), kaynak kayıtlar korunur.
+- Lua editörü projedeki `.lua` dosyalarını sekme olarak açar; kayıt diske (atomik) yazar;
+  kirli nokta, Ctrl+S, `+` → `script-N.lua`, arama, satır/sütun, Tab = 2 boşluk. *Bağlı obje*
+  seçimi o objenin Betik bileşeninin `ScriptPath`'ini etkin dosyaya bağlar (geri alınabilir).
+  Kod alanı: `Avalonia.AvaloniaEdit` 11.3.0 (MIT); Lua renklendirmesi tema token'larıyla
+  (prototip `.lua-comment/keyword/string/number`).
+
+**Dilimler**
+- D1 Kütüphane modeli (saf C#) + JSON kalıcılık + prototip testlerinin taşınması.
+- D2 Düğüm ↔ şablon dönüşümü (yakala / sahneye ekle, geri al) + testler.
+- D3 Kütüphane paneli (`PanelIds.Library`: Hazır paketler / Benim düğümlerim, klasör ağacı,
+  yol, arama, Sahneye ekle, klasör yönet) + Denetçi'de *Düğüm kütüphanesi* bölümü
+  (yıldızla kaydet / kaldır, Kaydı güncelle) + Araçlar menüsünde kart.
+- D4 Lua çalışma alanı modeli (dosya listesi, aç/kirli/kaydet/yeni, obje bağlama) + testler.
+- D5 Lua editörü paneli (`PanelIds.Lua`, AvaloniaEdit) + Araçlar kartı.
+- D6 Yerleşim/kısayol, RowlEye görüntüsü + prototip karşılaştırması, kilit testleri.
+
+Test kilitleri bilinçli güncellenir: Araçlar menüsü 7 → 9 kart (Ctrl+8 / Ctrl+9 kısayolları).
+
+**Faz 7 yapılan (2026-10-16):** D1 `b75f77d`, D4 `5c9b309`, D2 `b7d55d3`, D3+D5+entegrasyon `5972271`,
+görsel düzeltmeler (Muse Wonder denetimi: kütüphane 8/10, Lua 7/10 → düğüm ikonu, ayrık "…" hücresi,
+kutusuz bağlı obje seçici, düz "Lua" etiketi, Denetçi düğmelerinde normal ağırlık). Bilerek alınmayanlar:
+başlıkta sürekli üç düğme (sessiz başlık kararı), Lua'da "Dosyalar" ve sekme kapatmanın kaldırılması
+(gerçek projede dosya sayısı sınırsız). Yerel: editör 877/877, RowlEye golden + denetim 3/3.

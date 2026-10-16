@@ -13,7 +13,7 @@ namespace RowlEngine.Editor.Tests;
 /// <summary>
 /// Faz 6 görsel uyum kilidi: üst kapsüldeki Araçlar (WindowsMenu) açıldığında
 /// prototipin .tool-shortcuts kartı gibi 2 sütunlu, 68 px yüksek kartlar dizer
-/// (7 panel → 4 satır). Menü yapısı (7 MenuItem, başlık metni) EditorToolbarLayoutTests'te.
+/// (Faz 7: 9 panel → 5 satır). Menü yapısı (9 MenuItem, başlık metni) EditorToolbarLayoutTests'te.
 /// </summary>
 [Collection("StaticRootSequential")]
 public sealed class EditorToolsPopoverTests : IDisposable
@@ -65,7 +65,7 @@ public sealed class EditorToolsPopoverTests : IDisposable
                 Dispatcher.UIThread.RunJobs();
 
                 var cards = tools.Items.OfType<MenuItem>().ToArray();
-                Assert.Equal(7, cards.Length);
+                Assert.Equal(9, cards.Length); // Faz 7: + Düğüm kütüphanesi, Lua editörü
                 Assert.All(cards, c => Assert.Contains("toolCard", c.Classes));
                 Assert.All(cards, c => Assert.NotNull(c.Icon));
 
@@ -81,7 +81,7 @@ public sealed class EditorToolsPopoverTests : IDisposable
                 int columns = rects.Select(r => Math.Round(r.X)).Distinct().Count();
                 int rows = rects.Select(r => Math.Round(r.Y)).Distinct().Count();
                 Assert.True(columns == 2, $"tools popover should have 2 columns, has {columns}");
-                Assert.True(rows == 4, $"7 cards in 2 columns should make 4 rows, has {rows}");
+                Assert.True(rows == 5, $"9 cards in 2 columns should make 5 rows, has {rows}");
                 Assert.All(rects, r => Assert.True(r.Height >= 68, $"card height {r.Height} < 68"));
                 // Aynı satırdaki kartlar yan yana, eşit genişlikte (UniformGrid).
                 Assert.True(Math.Abs(rects[0].Y - rects[1].Y) < 0.5 && rects[1].X > rects[0].X,
