@@ -431,7 +431,7 @@ namespace RowlEngine.Editor.Services
         }
     }
 
-    public partial class UndoRedoService : ObservableObject
+    public partial class UndoRedoService : ObservableObject, IUndoActionSink
     {
         private static readonly Lazy<UndoRedoService> _instance = new(() => new UndoRedoService());
         public static UndoRedoService Instance => _instance.Value;
