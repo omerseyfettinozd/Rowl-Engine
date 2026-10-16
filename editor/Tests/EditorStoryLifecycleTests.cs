@@ -132,10 +132,12 @@ internal static class EditorStoryLifecycleTests
         if (mode1 != 1 || mode2 != 2 || mode3 != 0 || !g1)
             throw new Exception($"Split screen cycle invalid: {mode1}, {mode2}, {mode3}");
 
-        var bottomOpen = EditorWorkspaceLayoutService.CalculateBottomPanelHeight(true, 180);
-        var bottomClosed = EditorWorkspaceLayoutService.CalculateBottomPanelHeight(false, 180);
-        if (bottomOpen.Value != 180 || bottomClosed.Value != 0)
-            throw new Exception("CalculateBottomPanelHeight failed.");
+        // Faz 5 D3: alt şerit boyutu ağaçtan çizilir (piksel yardımcıları kalktı);
+        // eşdeğer: şerit yaprağı yalnız bir sekme açıkken ağaçtadır.
+        var bottomOpen = RowlEngine.Editor.Services.Workspace.EditorWorkspaceState.Default;
+        var bottomClosed = bottomOpen.WithBottomTab(0, false).WithBottomTab(1, false);
+        if (!bottomOpen.IsBottomVisible || bottomClosed.IsBottomVisible)
+            throw new Exception("Bottom strip leaf does not follow its tabs.");
 
         // Step 17.6: Quick Search Matching, Pan Target & Smooth Step
         Console.WriteLine("    [Step 17.6]: Quick Search & Smooth Camera Interpolation...");

@@ -53,13 +53,15 @@ public static class EditorSettingsSyncService
         if (propertyName is nameof(SettingsViewModel.AutoSaveEnabled) or nameof(SettingsViewModel.AutoSaveIntervalSeconds)
             or nameof(SettingsViewModel.AssetGridItemSize) or nameof(SettingsViewModel.EditorLanguage))
         {
-            new EditorSettingsProfile
+            // Faz 5 D5: read-modify-write — the profile also holds the dock workspace
+            // (written by its own debounced save), which a fresh profile would wipe.
+            EditorSettingsProfile.Update(editorSettingsPath, profile =>
             {
-                AutoSaveEnabled = settings.AutoSaveEnabled,
-                AutoSaveIntervalSeconds = settings.AutoSaveIntervalSeconds,
-                AssetGridItemSize = settings.AssetGridItemSize,
-                EditorLanguage = settings.EditorLanguage
-            }.Save(editorSettingsPath);
+                profile.AutoSaveEnabled = settings.AutoSaveEnabled;
+                profile.AutoSaveIntervalSeconds = settings.AutoSaveIntervalSeconds;
+                profile.AssetGridItemSize = settings.AssetGridItemSize;
+                profile.EditorLanguage = settings.EditorLanguage;
+            });
             return;
         }
 

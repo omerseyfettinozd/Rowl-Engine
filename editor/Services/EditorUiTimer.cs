@@ -49,3 +49,22 @@ internal sealed class EditorUiTimer : IDisposable
         _timer.Stop();
     }
 }
+
+/// <summary>
+/// Faz 5 D5: <see cref="Workspace.IDebounceTimer"/> on the UI dispatcher
+/// (<see cref="EditorUiTimer"/> in debounce mode) for the workspace autosave.
+/// </summary>
+internal sealed class EditorUiDebounceTimer : Workspace.IDebounceTimer
+{
+    private readonly EditorUiTimer _timer;
+
+    internal EditorUiDebounceTimer(TimeSpan delay, Action elapsed) => _timer = new EditorUiTimer(delay, elapsed);
+
+    internal static Workspace.IDebounceTimer Create(TimeSpan delay, Action elapsed) => new EditorUiDebounceTimer(delay, elapsed);
+
+    public void Restart() => _timer.Start();
+
+    public void Stop() => _timer.Stop();
+
+    public void Dispose() => _timer.Dispose();
+}

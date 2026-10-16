@@ -1,5 +1,8 @@
 using System;
+using Avalonia;
+using RowlEngine.Editor.Services.Workspace;
 using RowlEngine.Editor.ViewModels;
+using RowlEngine.Editor.Views.Workspace;
 
 namespace RowlEngine.Editor;
 
@@ -73,55 +76,12 @@ internal static class EditorWorkspaceThemeTests
         });
         Console.WriteLine("  [PASS] Faz 2 scale tokens, accent override and style classes applied");
 
-        mainVm.ShowPanel("Hierarchy");
-        if (mainVm.HierarchyPanelWidth.Value != 0 || mainVm.HierarchySplitterWidth.Value != 0)
-            throw new Exception("Hidden Hierarchy still reserved workspace width");
-        mainVm.ShowPanel("Hierarchy");
-        if (mainVm.HierarchyPanelWidth.Value != 200 || mainVm.HierarchySplitterWidth.Value != 6)
-            throw new Exception("Hierarchy did not restore its workspace width");
-        mainVm.ShowPanel("Inspector");
-        if (mainVm.InspectorPanelWidth.Value != 0 || mainVm.InspectorSplitterWidth.Value != 0)
-            throw new Exception("Hidden Inspector still reserved workspace width");
-        mainVm.ShowPanel("Inspector");
-        if (mainVm.InspectorPanelWidth.Value != 280 || mainVm.InspectorSplitterWidth.Value != 6)
-            throw new Exception("Inspector did not restore its workspace width");
+        // Faz 5 D3: panel boyutları sabit piksel özelliklerinden değil, ağaç oranlarından
+        // WorkspaceHost'ta çizilir. Davranış eşdeğeri ölçülür: 1440 px genişlikte (çalışma
+        // alanı 1440×820 = 1440×900 pencere − üst çubuk/durum çubuğu) varsayılan yerleşim
+        // Hiyerarşi ≈ 200, Denetçi ≈ 280, alt şerit ≈ 180 px (±%10); gizli panel yer tutmaz.
+        Avalonia.Threading.Dispatcher.UIThread.Invoke(() => RunWorkspaceSizes(mainVm));
         Console.WriteLine("  [PASS] Hidden side panels release workspace width");
-
-        // Tek şerit: Varlıklar ilk sekme (0), Günlük ikinci (1);
-        // ikisi aynı alanı paylaşır, bağımsız açılıp kapanır. Şerit,
-        // sekmelerden en az biri açıkken yüksekliğini korur. Kapanan
-        // aktif sekmede indeks görünen ilk sekmeye çekilir.
-        mainVm.ShowPanel("Assets");
-        if (mainVm.IsAssetsPanelVisible)
-            throw new Exception("Assets tab did not close independently");
-        if (!mainVm.IsBottomPanelVisible)
-            throw new Exception("Closing Assets incorrectly hid the shared strip");
-        if (mainVm.BottomPanelActiveTab != 1)
-            throw new Exception("Active tab did not fall back to the visible Log tab");
-        if (mainVm.BottomPanelHeight.Value != 180 || mainVm.BottomSplitterHeight.Value != 6)
-            throw new Exception("Shared strip did not keep its height after Assets closed");
-        mainVm.ShowPanel("Log");
-        if (mainVm.IsLogPanelVisible || mainVm.IsBottomPanelVisible)
-            throw new Exception("Bottom workspace remained visible after both tabs were closed");
-        if (mainVm.BottomPanelHeight.Value != 0 || mainVm.BottomSplitterHeight.Value != 0)
-            throw new Exception("Hidden bottom workspace still reserved height");
-        mainVm.ShowPanel("Assets");
-        if (!mainVm.IsAssetsPanelVisible || !mainVm.IsBottomPanelVisible
-            || mainVm.BottomPanelHeight.Value != 180 || mainVm.BottomSplitterHeight.Value != 6
-            || mainVm.BottomPanelActiveTab != 0)
-        {
-            throw new Exception("Assets tab did not restore the shared strip");
-        }
-        mainVm.ShowPanel("Backlog");
-        if (!mainVm.IsBacklogPanelVisible || mainVm.BottomPanelActiveTab != 2 || !mainVm.IsBottomPanelVisible)
-            throw new Exception("Dialogue backlog panel did not become an independent bottom workspace");
-        mainVm.ShowPanel("Backlog");
-        if (mainVm.IsBacklogPanelVisible)
-            throw new Exception("Dialogue backlog panel did not close independently");
-        if (mainVm.BottomPanelActiveTab != 0)
-            throw new Exception("Active tab did not fall back to the visible Assets tab");
-        if (mainVm.IsLogPanelVisible || !mainVm.IsAssetsPanelVisible)
-            throw new Exception("Bottom tabs did not restore their default state");
         Console.WriteLine(
             "  [PASS] Bottom tabs share one strip, toggle independently and reclaim height");
 
@@ -135,5 +95,93 @@ internal static class EditorWorkspaceThemeTests
             throw new Exception("Game preview mode did not exit split screen cleanly");
         mainVm.ShowPanel("NodeGraph");
         Console.WriteLine("  [PASS] Single preview modes exit split screen consistently");
+    }
+
+    private static void RunWorkspaceSizes(MainWindowViewModel mainVm)
+    {
+        var host = new WorkspaceHost();
+        host.Bind(WorkspaceHost.LayoutProperty, new Avalonia.Data.Binding(nameof(MainWindowViewModel.WorkspaceLayout)) { Source = mainVm });
+        host.SplitResized += (_, e) => mainVm.ResizeWorkspaceSplit(e.SplitId, e.Ratio);
+        foreach ((string id, double minW, double minH) in new[]
+        {
+            (PanelIds.Hierarchy, WorkspacePanelMetrics.HierarchyMinWidth, WorkspacePanel.DefaultMinHeight),
+            (PanelIds.Node, WorkspacePanelMetrics.CenterMinWidth, WorkspacePanelMetrics.CenterMinHeight),
+            (PanelIds.Edit, WorkspacePanelMetrics.CenterMinWidth, WorkspacePanelMetrics.CenterMinHeight),
+            (PanelIds.Game, WorkspacePanelMetrics.CenterMinWidth, WorkspacePanelMetrics.CenterMinHeight),
+            (PanelIds.Bottom, WorkspacePanel.DefaultMinWidth, WorkspacePanelMetrics.BottomMinHeight),
+            (PanelIds.Inspector, WorkspacePanelMetrics.InspectorMinWidth, WorkspacePanel.DefaultMinHeight),
+        })
+        {
+            host.Panels.Add(new WorkspacePanel { PanelId = id, PanelMinWidth = minW, PanelMinHeight = minH, Content = new Avalonia.Controls.Border() });
+        }
+        var window = new Avalonia.Controls.Window { Width = 1440, Height = 820, Content = host };
+        window.Show();
+        try
+        {
+            Rect Measure(string id)
+            {
+                window.UpdateLayout();
+                return host.GetPanelRect(id);
+            }
+            void Near(string what, double actual, double expected)
+            {
+                if (Math.Abs(actual - expected) > expected * 0.10)
+                    throw new Exception($"{what}: {actual:0.#} px, expected {expected} ±10%");
+            }
+
+            Near("Default Hierarchy width", Measure(PanelIds.Hierarchy).Width, 200);
+            Near("Default Inspector width", Measure(PanelIds.Inspector).Width, 280);
+            Near("Default bottom strip height", Measure(PanelIds.Bottom).Height, 180);
+            double nodeWidth = Measure(PanelIds.Node).Width;
+
+            mainVm.ShowPanel("Hierarchy");
+            if (Measure(PanelIds.Hierarchy).Width != 0 || host.FindPanel(PanelIds.Hierarchy)!.IsVisible)
+                throw new Exception("Hidden Hierarchy still reserved workspace width");
+            if (Measure(PanelIds.Node).Width <= nodeWidth + 150)
+                throw new Exception("Center did not take the hidden Hierarchy's width");
+            mainVm.ShowPanel("Hierarchy");
+            Near("Restored Hierarchy width", Measure(PanelIds.Hierarchy).Width, 200);
+            mainVm.ShowPanel("Inspector");
+            if (Measure(PanelIds.Inspector).Width != 0 || host.FindPanel(PanelIds.Inspector)!.IsVisible)
+                throw new Exception("Hidden Inspector still reserved workspace width");
+            mainVm.ShowPanel("Inspector");
+            Near("Restored Inspector width", Measure(PanelIds.Inspector).Width, 280);
+
+            // Tek şerit: Varlıklar ilk sekme (0), Günlük ikinci (1);
+            // ikisi aynı alanı paylaşır, bağımsız açılıp kapanır. Şerit,
+            // sekmelerden en az biri açıkken yüksekliğini korur. Kapanan
+            // aktif sekmede indeks görünen ilk sekmeye çekilir.
+            mainVm.ShowPanel("Assets");
+            if (mainVm.IsAssetsPanelVisible)
+                throw new Exception("Assets tab did not close independently");
+            if (!mainVm.IsBottomPanelVisible)
+                throw new Exception("Closing Assets incorrectly hid the shared strip");
+            if (mainVm.BottomPanelActiveTab != 1)
+                throw new Exception("Active tab did not fall back to the visible Log tab");
+            Near("Shared strip height after Assets closed", Measure(PanelIds.Bottom).Height, 180);
+            mainVm.ShowPanel("Log");
+            if (mainVm.IsLogPanelVisible || mainVm.IsBottomPanelVisible)
+                throw new Exception("Bottom workspace remained visible after both tabs were closed");
+            if (Measure(PanelIds.Bottom).Height != 0 || Measure(PanelIds.Node).Height < 800)
+                throw new Exception("Hidden bottom workspace still reserved height");
+            mainVm.ShowPanel("Assets");
+            if (!mainVm.IsAssetsPanelVisible || !mainVm.IsBottomPanelVisible || mainVm.BottomPanelActiveTab != 0)
+                throw new Exception("Assets tab did not restore the shared strip");
+            Near("Restored strip height", Measure(PanelIds.Bottom).Height, 180);
+            mainVm.ShowPanel("Backlog");
+            if (!mainVm.IsBacklogPanelVisible || mainVm.BottomPanelActiveTab != 2 || !mainVm.IsBottomPanelVisible)
+                throw new Exception("Dialogue backlog panel did not become an independent bottom workspace");
+            mainVm.ShowPanel("Backlog");
+            if (mainVm.IsBacklogPanelVisible)
+                throw new Exception("Dialogue backlog panel did not close independently");
+            if (mainVm.BottomPanelActiveTab != 0)
+                throw new Exception("Active tab did not fall back to the visible Assets tab");
+            if (mainVm.IsLogPanelVisible || !mainVm.IsAssetsPanelVisible)
+                throw new Exception("Bottom tabs did not restore their default state");
+        }
+        finally
+        {
+            window.Close();
+        }
     }
 }

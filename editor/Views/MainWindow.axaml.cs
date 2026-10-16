@@ -11,8 +11,21 @@ namespace RowlEngine.Editor.Views
         {
         }
 
-        public MainWindow(string projectPath) : this(new MainWindowViewModel(projectPath))
+        public MainWindow(string projectPath) : this(CreateAppViewModel(projectPath))
         {
+        }
+
+        /// <summary>
+        /// Faz 5 D5: the real app opens a project with the user's saved workspace
+        /// layout and keeps saving it (loaded before the window binds, so it never
+        /// flashes the default). Tests and RowlEye build the view model themselves
+        /// and so never touch the user's profile.
+        /// </summary>
+        private static MainWindowViewModel CreateAppViewModel(string projectPath)
+        {
+            var vm = new MainWindowViewModel(projectPath);
+            vm.AttachWorkspacePersistence();
+            return vm;
         }
 
         public MainWindow(MainWindowViewModel vm)
@@ -21,6 +34,28 @@ namespace RowlEngine.Editor.Views
             DataContext = vm;
             vm.TopLevelHint = this;
             KeyDown += MainWindow_KeyDown;
+            // Faz 5 D3 — tek yön: bölücü taşınınca görünüm yalnız ağaç işlemini çağırır.
+            WorkspaceHost.SplitResized += (_, e) =>
+            {
+                if (DataContext is MainWindowViewModel current)
+                    current.ResizeWorkspaceSplit(e.SplitId, e.Ratio);
+            };
+            // Faz 5 D4 — başlıktan taşıma / sabitle / kapat: görünüm yalnız isteği iletir.
+            WorkspaceHost.PanelDockRequested += (_, e) =>
+            {
+                if (DataContext is MainWindowViewModel current)
+                    current.DockWorkspacePanel(e.SourcePanelId, e.TargetPanelId, e.Edge);
+            };
+            WorkspaceHost.PanelPinRequested += (_, e) =>
+            {
+                if (DataContext is MainWindowViewModel current)
+                    current.SetWorkspacePanelPinned(e.PanelId, e.Pinned);
+            };
+            WorkspaceHost.PanelCloseRequested += (_, e) =>
+            {
+                if (DataContext is MainWindowViewModel current)
+                    current.CloseWorkspacePanel(e.PanelId);
+            };
             // Faz 4 Dilim 3 — breadcrumb navigation (Tag="CrumbNav" buttons).
             AddHandler(Button.ClickEvent, OnCrumbButtonClick,
                 Avalonia.Interactivity.RoutingStrategies.Bubble);

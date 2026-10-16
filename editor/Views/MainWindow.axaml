@@ -6,6 +6,8 @@
         xmlns:search="using:RowlEngine.Editor.Services.Search"
         xmlns:conv="using:Avalonia.Data.Converters"
         xmlns:l="using:RowlEngine.Editor.Services.Strings"
+        xmlns:ws="using:RowlEngine.Editor.Views.Workspace"
+        xmlns:wsm="using:RowlEngine.Editor.Services.Workspace"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d" d:DesignWidth="1600" d:DesignHeight="900"
@@ -151,159 +153,92 @@
             </Grid>
         </Border>
 
-        <!-- MAIN WORKSPACE -->
+        <!-- MAIN WORKSPACE (Faz 5 D3): yerleşim ağacı (VM.WorkspaceLayout) WorkspaceHost ile
+             çizilir. Her panel burada BİR KEZ bildirilir; host yalnız konumlar / gizler
+             (yeniden yaratmaz, yeniden ebeveynlemez). Bölücü sürüklemesi oranı ağaca
+             yazar (MainWindow.axaml.cs → ResizeWorkspaceSplit). Başlık kuralı: içerik
+             kendi başlığını çiziyorsa OwnsHeader (Hiyerarşi, Denetçi, alt şerit sekmeleri),
+             yoksa host Border.panelHeader çizer. Faz 5 D4: başlıktan sürükle-bırak, sabitle,
+             kapat ve panel menüsü host'ta; istekler code-behind'dan VM ağaç işlemlerine gider. -->
         <Grid Grid.Row="1">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="{Binding HierarchyPanelWidth}"/>
-                <ColumnDefinition Width="{Binding HierarchySplitterWidth}"/>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="{Binding InspectorSplitterWidth}"/>
-                <ColumnDefinition Width="{Binding InspectorPanelWidth}"/>
-            </Grid.ColumnDefinitions>
+            <ws:WorkspaceHost x:Name="WorkspaceHost" Layout="{Binding WorkspaceLayout}" PinnedPanels="{Binding WorkspacePinnedPanels}">
 
-            <!-- LEFT: Story structure; central canvas, preview, and inspector retain their behaviour. -->
-            <Grid Grid.Column="0" IsVisible="{Binding IsHierarchyPanelVisible}" Background="{DynamicResource PanelBackground}">
-                <panels:NodeHierarchyView/>
-            </Grid>
-            <GridSplitter Grid.Column="1" IsVisible="{Binding IsHierarchyPanelVisible}"
-                          Background="{DynamicResource BorderColor}" ResizeDirection="Columns" Width="6"/>
+                <ws:WorkspacePanel PanelId="{x:Static wsm:PanelIds.Hierarchy}" OwnsHeader="True" HeaderActionsInContent="True"
+                                   Title="{l:T Panel.Hierarchy}"
+                                   PanelMinWidth="{x:Static ws:WorkspacePanelMetrics.HierarchyMinWidth}" Background="{DynamicResource PanelBackground}">
+                    <panels:NodeHierarchyView/>
+                </ws:WorkspacePanel>
 
-            <!-- CENTER workspace -->
-            <Grid Grid.Column="2" MinWidth="520" Background="{DynamicResource CanvasBackground}">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="*"/>
-                    <RowDefinition Height="{Binding BottomSplitterHeight}"/>
-                    <RowDefinition Height="{Binding BottomPanelHeight}"/>
-                </Grid.RowDefinitions>
+                <ws:WorkspacePanel PanelId="{x:Static wsm:PanelIds.Node}" Title="{l:T View.Node}"
+                                   PanelMinWidth="{x:Static ws:WorkspacePanelMetrics.CenterMinWidth}"
+                                   PanelMinHeight="{x:Static ws:WorkspacePanelMetrics.CenterMinHeight}"
+                                   Background="{DynamicResource CanvasBackground}">
+                    <Grid ClipToBounds="True">
+                        <panels:NodeGraphView/>
 
-                <Grid Grid.Row="0" ClipToBounds="True">
-
-                    <!-- BREADCRUMB + CHAPTER SCOPE (Faz 4 Dilim 3) -->
-                    <Border x:Name="BreadcrumbPanel" Classes="floating" HorizontalAlignment="Left" VerticalAlignment="Top"
-                            Margin="12,12,0,0" ZIndex="90" Padding="8,4">
-                        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                            <ItemsControl ItemsSource="{Binding Subgraphs.Crumbs}">
-                                <ItemsControl.ItemsPanel>
-                                    <ItemsPanelTemplate>
-                                        <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center"/>
-                                    </ItemsPanelTemplate>
-                                </ItemsControl.ItemsPanel>
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-                                            <TextBlock Text="/" Foreground="{DynamicResource MutedText}" FontSize="12" VerticalAlignment="Center"/>
-                                            <Button Tag="CrumbNav" Content="{Binding Title}" Padding="6,2" FontSize="11"
-                                                    ToolTip.Tip="{l:T Graph.Crumb.Tip}"/>
-                                        </StackPanel>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                            <Border Width="1" Height="14" Background="{DynamicResource BorderColor}"/>
-                            <TextBlock Text="{l:T Graph.Chapter}" Classes="muted" FontSize="{DynamicResource FontSizeBody}" VerticalAlignment="Center"/>
-                            <ComboBox ItemsSource="{Binding Subgraphs.AvailableChapterOptions}"
-                                      SelectedItem="{Binding Subgraphs.ChapterFilterOption}"
-                                      FontSize="11" MinWidth="110" ToolTip.Tip="{l:T Graph.Chapter.Tip}"/>
-                        </StackPanel>
-                    </Border>
-
-                    <!-- FAZ 3 (K4): Node paneli araç çubuğu — düğüm komutları üst çubuktan
-                         buraya taşındı; yalnız düğüm grafiği açıkken görünür. -->
-                    <Border x:Name="NodeToolbarPanel" HorizontalAlignment="Left" VerticalAlignment="Top"
-                            Classes="floating" Margin="12,58,0,0" ZIndex="90" IsVisible="{Binding IsNodeGraphActive}">
-                        <StackPanel x:Name="NodeToolbar" Orientation="Horizontal" Spacing="4">
-                            <Button Classes="tool" Content="{l:T Node.Add}" ToolTip.Tip="{l:T Node.Add.Tip}" Command="{Binding AddNodeCommand}"/>
-                            <Button Classes="tool" Content="{l:T Node.Disconnect}" ToolTip.Tip="{l:T Node.Disconnect.Tip}" Command="{Binding DisconnectSelectedNodeCablesCommand}"/>
-                            <Button Classes="tool" Content="{l:T Node.Delete}" ToolTip.Tip="{l:T Node.Delete.Tip}" Command="{Binding DeleteSelectedNodeCommand}"/>
-                            <Border Classes="capsuleDivider"/>
-                            <Button Classes="tool" Content="{l:T Node.Group}" ToolTip.Tip="{l:T Node.Group.Tip}" Command="{Binding CreateGroupFromSelectionCommand}"/>
-                            <Button Classes="tool" Content="{l:T Node.Up}" ToolTip.Tip="{l:T Node.Up.Tip}" Command="{Binding ExitSubgraphCommand}"/>
-                        </StackPanel>
-                    </Border>
-
-                    <!-- SINGLE MODE -->
-                    <Grid IsVisible="{Binding IsSplitScreenOff}">
-                        <panels:NodeGraphView IsVisible="{Binding IsNodeGraphActive}"/>
-                        <views:LivePreviewControl IsVisible="{Binding IsPreviewActive}"/>
-                        <views:EnginePreviewControl IsVisible="{Binding IsEnginePreviewActive}"/>
-                    </Grid>
-
-                    <!-- SPLIT SCREEN MODE (HORIZONTAL) -->
-                    <Grid IsVisible="{Binding IsSplitScreenHorizontal}" RowDefinitions="*, 6, *" ClipToBounds="True">
-                        <panels:NodeGraphView Grid.Row="0"/>
-                        <GridSplitter Grid.Row="1" Background="{DynamicResource BorderColor}" ResizeDirection="Rows" Height="6"/>
-                        <Grid Grid.Row="2">
-                            <views:EnginePreviewControl IsVisible="{Binding IsEnginePreviewActive}"/>
-                            <views:LivePreviewControl IsVisible="{Binding !IsEnginePreviewActive}"/>
-                        </Grid>
-                    </Grid>
-                    
-                    <!-- SPLIT SCREEN MODE (VERTICAL) -->
-                    <Grid IsVisible="{Binding IsSplitScreenVertical}" ColumnDefinitions="*, 6, *" ClipToBounds="True">
-                        <panels:NodeGraphView Grid.Column="0"/>
-                        <GridSplitter Grid.Column="1" Background="{DynamicResource BorderColor}" ResizeDirection="Columns" Width="6"/>
-                        <Grid Grid.Column="2">
-                            <views:EnginePreviewControl IsVisible="{Binding IsEnginePreviewActive}"/>
-                            <views:LivePreviewControl IsVisible="{Binding !IsEnginePreviewActive}"/>
-                        </Grid>
-                    </Grid>
-
-                    <!-- GLOBAL SEARCH OVERLAY (Faz 4 Dilim 2) -->
-                    <Border x:Name="SearchOverlayPanel" IsVisible="{Binding IsSearchVisible}"
-                            VerticalAlignment="Top" HorizontalAlignment="Center"
-                            Margin="0,12,0,0" ZIndex="100"
-                            Background="{DynamicResource SurfaceBackground}"
-                            BorderBrush="{DynamicResource Accent}" BorderThickness="1"
-                            CornerRadius="8" Padding="10" Width="520"
-                            BoxShadow="0 8 24 0 #40000000">
-                        <StackPanel Spacing="8">
-                            <TextBox Text="{Binding SearchQuery}"
-                                     Watermark="{l:T Search.Overlay.Watermark}"
-                                     Background="{DynamicResource InputBackground}"
-                                     Foreground="{DynamicResource PrimaryText}"
-                                     BorderThickness="0" Padding="12,8" FontSize="14"/>
-                            <!-- Filtre çubuğu: tür / konuşmacı / renk etiketi -->
-                            <Grid ColumnDefinitions="Auto,*,Auto,*,Auto,*" VerticalAlignment="Center">
-                                <TextBlock Grid.Column="0" Text="{l:T Search.Filter.Kind}" Foreground="{DynamicResource MutedText}" FontSize="11" VerticalAlignment="Center" Margin="0,0,4,0"/>
-                                <ComboBox Grid.Column="1" ItemsSource="{Binding Search.AvailableNodeKinds}" SelectedItem="{Binding Search.SelectedNodeKind}" FontSize="11" Margin="0,0,8,0"/>
-                                <TextBlock Grid.Column="2" Text="{l:T Search.Filter.Speaker}" Foreground="{DynamicResource MutedText}" FontSize="11" VerticalAlignment="Center" Margin="0,0,4,0"/>
-                                <ComboBox Grid.Column="3" ItemsSource="{Binding Search.AvailableSpeakers}" SelectedItem="{Binding Search.SelectedSpeaker}" FontSize="11" Margin="0,0,8,0"/>
-                                <TextBlock Grid.Column="4" Text="{l:T Search.Filter.Color}" Foreground="{DynamicResource MutedText}" FontSize="11" VerticalAlignment="Center" Margin="0,0,4,0"/>
-                                <ComboBox Grid.Column="5" ItemsSource="{Binding Search.AvailableColorTags}" SelectedItem="{Binding Search.SelectedColorTag}" FontSize="11"/>
-                            </Grid>
-                            <!-- Sonuç listesi: başlık + alan rozeti + metin kesiti -->
-                            <ListBox ItemsSource="{Binding Search.Results}"
-                                     SelectedItem="{Binding Search.SelectedResult}"
-                                     MaxHeight="300"
-                                     Background="{DynamicResource InputBackground}"
-                                     BorderThickness="0" CornerRadius="6">
-                                <ListBox.ItemTemplate>
-                                    <DataTemplate x:DataType="search:NodeSearchHit">
-                                        <StackPanel Spacing="2" Margin="0,4">
-                                            <StackPanel Orientation="Horizontal" Spacing="6">
-                                                <TextBlock Text="{Binding NodeTitle}" FontWeight="Bold" Foreground="{DynamicResource PrimaryText}" FontSize="12"/>
-                                                <TextBlock Text="{Binding NodeId, StringFormat='#{0}'}" Foreground="{DynamicResource MutedText}" FontSize="11" VerticalAlignment="Center"/>
-                                                <Border Background="{DynamicResource AccentButtonBg}" CornerRadius="3" Padding="5,1" VerticalAlignment="Center">
-                                                    <TextBlock Text="{Binding FieldLabel}" FontSize="9" Foreground="{DynamicResource AccentButtonFg}" FontWeight="Bold"/>
-                                                </Border>
+                        <!-- BREADCRUMB + CHAPTER SCOPE (Faz 4 Dilim 3) -->
+                        <Border x:Name="BreadcrumbPanel" Classes="floating" HorizontalAlignment="Left" VerticalAlignment="Top"
+                                Margin="12,12,0,0" ZIndex="90" Padding="8,4">
+                            <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                <ItemsControl ItemsSource="{Binding Subgraphs.Crumbs}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center"/>
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                                                <TextBlock Text="/" Foreground="{DynamicResource MutedText}" FontSize="12" VerticalAlignment="Center"/>
+                                                <Button Tag="CrumbNav" Content="{Binding Title}" Padding="6,2" FontSize="11"
+                                                        ToolTip.Tip="{l:T Graph.Crumb.Tip}"/>
                                             </StackPanel>
-                                            <TextBlock Text="{Binding Snippet}" FontSize="11" Foreground="{DynamicResource SecondaryText}" TextWrapping="Wrap" MaxLines="2"/>
-                                        </StackPanel>
-                                    </DataTemplate>
-                                </ListBox.ItemTemplate>
-                            </ListBox>
-                            <TextBlock Text="{Binding Search.StatusText}"
-                                       Foreground="{DynamicResource MutedText}" FontSize="11"
-                                       HorizontalAlignment="Right" IsVisible="{Binding Search.StatusText, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}"/>
-                        </StackPanel>
-                    </Border>
-                </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <Border Width="1" Height="14" Background="{DynamicResource BorderColor}"/>
+                                <TextBlock Text="{l:T Graph.Chapter}" Classes="muted" FontSize="{DynamicResource FontSizeBody}" VerticalAlignment="Center"/>
+                                <ComboBox ItemsSource="{Binding Subgraphs.AvailableChapterOptions}"
+                                          SelectedItem="{Binding Subgraphs.ChapterFilterOption}"
+                                          FontSize="11" MinWidth="110" ToolTip.Tip="{l:T Graph.Chapter.Tip}"/>
+                            </StackPanel>
+                        </Border>
 
-                <GridSplitter Grid.Row="1" IsVisible="{Binding IsBottomPanelVisible}"
-                              Background="{DynamicResource BorderColor}" ResizeDirection="Rows" Height="6"/>
+                        <!-- FAZ 3 (K4): Node paneli araç çubuğu — düğüm komutları üst çubuktan
+                             buraya taşındı; yalnız düğüm grafiği açıkken görünür. -->
+                        <Border x:Name="NodeToolbarPanel" HorizontalAlignment="Left" VerticalAlignment="Top"
+                                Classes="floating" Margin="12,58,0,0" ZIndex="90" IsVisible="{Binding IsNodeGraphActive}">
+                            <StackPanel x:Name="NodeToolbar" Orientation="Horizontal" Spacing="4">
+                                <Button Classes="tool" Content="{l:T Node.Add}" ToolTip.Tip="{l:T Node.Add.Tip}" Command="{Binding AddNodeCommand}"/>
+                                <Button Classes="tool" Content="{l:T Node.Disconnect}" ToolTip.Tip="{l:T Node.Disconnect.Tip}" Command="{Binding DisconnectSelectedNodeCablesCommand}"/>
+                                <Button Classes="tool" Content="{l:T Node.Delete}" ToolTip.Tip="{l:T Node.Delete.Tip}" Command="{Binding DeleteSelectedNodeCommand}"/>
+                                <Border Classes="capsuleDivider"/>
+                                <Button Classes="tool" Content="{l:T Node.Group}" ToolTip.Tip="{l:T Node.Group.Tip}" Command="{Binding CreateGroupFromSelectionCommand}"/>
+                                <Button Classes="tool" Content="{l:T Node.Up}" ToolTip.Tip="{l:T Node.Up.Tip}" Command="{Binding ExitSubgraphCommand}"/>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+                </ws:WorkspacePanel>
 
-                <!-- Alt şerit: Varlıklar + Günlük + diğerleri tek
-                     sekmeli yapıda (Unity alt panel düzeni) -->
-                <Grid Grid.Row="2" MinHeight="140" IsVisible="{Binding IsBottomPanelVisible}">
+                <ws:WorkspacePanel PanelId="{x:Static wsm:PanelIds.Edit}" Title="{l:T View.SceneEdit}"
+                                   PanelMinWidth="{x:Static ws:WorkspacePanelMetrics.CenterMinWidth}"
+                                   PanelMinHeight="{x:Static ws:WorkspacePanelMetrics.CenterMinHeight}"
+                                   Background="{DynamicResource CanvasBackground}">
+                    <views:LivePreviewControl/>
+                </ws:WorkspacePanel>
+
+                <ws:WorkspacePanel PanelId="{x:Static wsm:PanelIds.Game}" Title="{l:T View.Game}"
+                                   PanelMinWidth="{x:Static ws:WorkspacePanelMetrics.CenterMinWidth}"
+                                   PanelMinHeight="{x:Static ws:WorkspacePanelMetrics.CenterMinHeight}"
+                                   Background="{DynamicResource CanvasBackground}">
+                    <views:EnginePreviewControl/>
+                </ws:WorkspacePanel>
+
+                <!-- Alt şerit: Varlıklar + Günlük + diğerleri tek sekmeli yaprak
+                     (Unity alt panel düzeni); sekme satırı yaprağın başlığıdır. -->
+                <ws:WorkspacePanel PanelId="{x:Static wsm:PanelIds.Bottom}" OwnsHeader="True"
+                                   Title="{l:T Workspace.Panel.Bottom}"
+                                   PanelMinHeight="{x:Static ws:WorkspacePanelMetrics.BottomMinHeight}" Background="{DynamicResource PanelBackground}">
                     <TabControl SelectedIndex="{Binding BottomPanelActiveTab}"
                                 Background="{DynamicResource PanelBackground}">
                         <TabItem Classes="compact" Header="{l:T Panel.Assets}" IsVisible="{Binding IsAssetsPanelVisible}">
@@ -322,16 +257,64 @@
                             <panels:ProjectIssuesView DataContext="{Binding ProjectIssuesViewModel}"/>
                         </TabItem>
                     </TabControl>
-                </Grid>
-            </Grid>
+                </ws:WorkspacePanel>
 
-            <GridSplitter Grid.Column="3" IsVisible="{Binding IsInspectorPanelVisible}"
-                          Background="{DynamicResource BorderColor}" ResizeDirection="Columns" Width="6"/>
+                <ws:WorkspacePanel PanelId="{x:Static wsm:PanelIds.Inspector}" OwnsHeader="True" HeaderActionsInContent="True"
+                                   Title="{l:T Panel.Inspector}"
+                                   PanelMinWidth="{x:Static ws:WorkspacePanelMetrics.InspectorMinWidth}" Background="{DynamicResource PanelBackground}">
+                    <panels:NodeInspectorView/>
+                </ws:WorkspacePanel>
+            </ws:WorkspaceHost>
 
-            <!-- RIGHT: Node Inspector -->
-            <Grid Grid.Column="4" IsVisible="{Binding IsInspectorPanelVisible}" Background="{DynamicResource PanelBackground}">
-                <panels:NodeInspectorView/>
-            </Grid>
+            <!-- GLOBAL SEARCH OVERLAY (Faz 4 Dilim 2) -->
+            <Border x:Name="SearchOverlayPanel" IsVisible="{Binding IsSearchVisible}"
+                    VerticalAlignment="Top" HorizontalAlignment="Center"
+                    Margin="0,12,0,0" ZIndex="100"
+                    Background="{DynamicResource SurfaceBackground}"
+                    BorderBrush="{DynamicResource Accent}" BorderThickness="1"
+                    CornerRadius="8" Padding="10" Width="520"
+                    BoxShadow="0 8 24 0 #40000000">
+                <StackPanel Spacing="8">
+                    <TextBox Text="{Binding SearchQuery}"
+                             Watermark="{l:T Search.Overlay.Watermark}"
+                             Background="{DynamicResource InputBackground}"
+                             Foreground="{DynamicResource PrimaryText}"
+                             BorderThickness="0" Padding="12,8" FontSize="14"/>
+                    <!-- Filtre çubuğu: tür / konuşmacı / renk etiketi -->
+                    <Grid ColumnDefinitions="Auto,*,Auto,*,Auto,*" VerticalAlignment="Center">
+                        <TextBlock Grid.Column="0" Text="{l:T Search.Filter.Kind}" Foreground="{DynamicResource MutedText}" FontSize="11" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                        <ComboBox Grid.Column="1" ItemsSource="{Binding Search.AvailableNodeKinds}" SelectedItem="{Binding Search.SelectedNodeKind}" FontSize="11" Margin="0,0,8,0"/>
+                        <TextBlock Grid.Column="2" Text="{l:T Search.Filter.Speaker}" Foreground="{DynamicResource MutedText}" FontSize="11" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                        <ComboBox Grid.Column="3" ItemsSource="{Binding Search.AvailableSpeakers}" SelectedItem="{Binding Search.SelectedSpeaker}" FontSize="11" Margin="0,0,8,0"/>
+                        <TextBlock Grid.Column="4" Text="{l:T Search.Filter.Color}" Foreground="{DynamicResource MutedText}" FontSize="11" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                        <ComboBox Grid.Column="5" ItemsSource="{Binding Search.AvailableColorTags}" SelectedItem="{Binding Search.SelectedColorTag}" FontSize="11"/>
+                    </Grid>
+                    <!-- Sonuç listesi: başlık + alan rozeti + metin kesiti -->
+                    <ListBox ItemsSource="{Binding Search.Results}"
+                             SelectedItem="{Binding Search.SelectedResult}"
+                             MaxHeight="300"
+                             Background="{DynamicResource InputBackground}"
+                             BorderThickness="0" CornerRadius="6">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate x:DataType="search:NodeSearchHit">
+                                <StackPanel Spacing="2" Margin="0,4">
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <TextBlock Text="{Binding NodeTitle}" FontWeight="Bold" Foreground="{DynamicResource PrimaryText}" FontSize="12"/>
+                                        <TextBlock Text="{Binding NodeId, StringFormat='#{0}'}" Foreground="{DynamicResource MutedText}" FontSize="11" VerticalAlignment="Center"/>
+                                        <Border Background="{DynamicResource AccentButtonBg}" CornerRadius="3" Padding="5,1" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding FieldLabel}" FontSize="9" Foreground="{DynamicResource AccentButtonFg}" FontWeight="Bold"/>
+                                        </Border>
+                                    </StackPanel>
+                                    <TextBlock Text="{Binding Snippet}" FontSize="11" Foreground="{DynamicResource SecondaryText}" TextWrapping="Wrap" MaxLines="2"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                    <TextBlock Text="{Binding Search.StatusText}"
+                               Foreground="{DynamicResource MutedText}" FontSize="11"
+                               HorizontalAlignment="Right" IsVisible="{Binding Search.StatusText, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}"/>
+                </StackPanel>
+            </Border>
         </Grid>
 
         <!-- STATUS BAR (Alt Durum Çubuğu) -->

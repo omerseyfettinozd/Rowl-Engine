@@ -1247,6 +1247,51 @@
     },
     "Search.Filter.Color": {
       "text": "Color:"
+    },
+    "Workspace.Pin": {
+      "text": "Pin"
+    },
+    "Workspace.Pin.Tip": {
+      "text": "Pin panel (can't be moved by its header)"
+    },
+    "Workspace.Close": {
+      "text": "Close"
+    },
+    "Workspace.Close.Tip": {
+      "text": "Close panel"
+    },
+    "Workspace.Move": {
+      "text": "Move"
+    },
+    "Workspace.Move.Left": {
+      "text": "To the left of"
+    },
+    "Workspace.Move.Right": {
+      "text": "To the right of"
+    },
+    "Workspace.Move.Top": {
+      "text": "Above"
+    },
+    "Workspace.Move.Bottom": {
+      "text": "Below"
+    },
+    "Workspace.Drop.Left": {
+      "text": "Dock left"
+    },
+    "Workspace.Drop.Right": {
+      "text": "Dock right"
+    },
+    "Workspace.Drop.Top": {
+      "text": "Dock top"
+    },
+    "Workspace.Drop.Bottom": {
+      "text": "Dock bottom"
+    },
+    "Workspace.Header.Help": {
+      "text": "Drag the header to move the panel; right-click or press Enter for options"
+    },
+    "Workspace.Panel.Bottom": {
+      "text": "Bottom panel"
     }
   }
 }

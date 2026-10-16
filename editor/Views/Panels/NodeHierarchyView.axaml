@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:l="using:RowlEngine.Editor.Services.Strings"
+             xmlns:ws="using:RowlEngine.Editor.Views.Workspace"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="using:RowlEngine.Editor.ViewModels"
@@ -14,6 +15,8 @@
             <!-- Panel başlığı (ortak kalıp: Border.panelHeader) + Oluştur -->
             <Border Grid.Row="0" Classes="panelHeader">
                 <DockPanel>
+                    <!-- Faz 5 D4: çalışma alanı sabitle / kapat (panel bu başlığı kendi çizer) -->
+                    <ws:PanelHeaderActions DockPanel.Dock="Right" Margin="4,0,-6,0"/>
                     <!-- Create Object Button -->
                     <Button DockPanel.Dock="Right" Classes="ghost"
                             Content="{l:T Hierarchy.Create}"

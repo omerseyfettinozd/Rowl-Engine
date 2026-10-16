@@ -225,6 +225,76 @@
         <Setter Property="Foreground" Value="{DynamicResource PrimaryText}"/>
         <Setter Property="VerticalAlignment" Value="Center"/>
     </Style>
+    <!-- Faz 5 D3: çalışma alanı bölücüsü (WorkspaceHost, 6 px) — eski sabit
+         GridSplitter'larla aynı kenar rengi. -->
+    <Style Selector="GridSplitter.workspaceSplitter">
+        <Setter Property="Background" Value="{DynamicResource BorderColor}"/>
+    </Style>
+    <!-- Faz 5 D6: prototip .splitter:hover / :focus-visible belirginleşir; odak = D4 başlık odağıyla aynı Accent. -->
+    <Style Selector="GridSplitter.workspaceSplitter:pointerover">
+        <Setter Property="Background" Value="{DynamicResource BorderSubtle}"/>
+    </Style>
+    <Style Selector="GridSplitter.workspaceSplitter:focus-visible">
+        <Setter Property="Background" Value="{DynamicResource Accent}"/>
+    </Style>
+    <!-- Faz 5 D4: başlık = sürükleme tutamağı; klavye odağı K1 gibi kenarla belirginleşir. -->
+    <Style Selector="Border.workspaceDragHandle:focus-visible">
+        <Setter Property="BorderBrush" Value="{DynamicResource Accent}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+    </Style>
+    <!-- Başlıktaki sabitle / kapat (prototip .pin-button / .close-button; K3: tek renk). -->
+    <Style Selector="Button.workspaceHeaderButton, ToggleButton.workspaceHeaderButton">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Width" Value="26"/>
+        <Setter Property="Height" Value="28"/>
+        <Setter Property="MinWidth" Value="0"/>
+        <Setter Property="MinHeight" Value="0"/>
+        <Setter Property="Padding" Value="0"/>
+        <Setter Property="CornerRadius" Value="{DynamicResource RadiusSmall}"/>
+        <Setter Property="HorizontalContentAlignment" Value="Center"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+        <Setter Property="Foreground" Value="{DynamicResource MutedText}"/>
+        <Setter Property="Cursor" Value="Arrow"/>
+    </Style>
+    <Style Selector="Button.workspaceHeaderButton:pointerover, ToggleButton.workspaceHeaderButton:pointerover, ToggleButton.workspaceHeaderButton:checked">
+        <Setter Property="Foreground" Value="{DynamicResource PrimaryText}"/>
+    </Style>
+    <Style Selector="Button.workspaceHeaderButton:pointerover /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.workspaceHeaderButton:pointerover /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.workspaceHeaderButton:checked /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource AccentButtonHover}"/>
+        <Setter Property="BorderBrush" Value="Transparent"/>
+    </Style>
+    <Style Selector="Button.workspaceHeaderButton:disabled /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="Transparent"/>
+    </Style>
+    <Style Selector="Button.workspaceHeaderButton:disabled">
+        <Setter Property="Opacity" Value="0.35"/>
+    </Style>
+    <!-- Sabit panel: prototip .panel.is-pinned gibi belirgin kenar (yerleşimi kaydırmayan katman). -->
+    <Style Selector="Border.workspacePinnedOutline">
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtle}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+    </Style>
+    <!-- Bırakma vurgusu (prototip .drop-preview / .drag-label): kemik kenar + soluk dolgu + etiket. -->
+    <Style Selector="Border.workspaceDropFill">
+        <Setter Property="Background" Value="{DynamicResource Accent}"/>
+        <Setter Property="Opacity" Value="0.1"/>
+        <Setter Property="CornerRadius" Value="{DynamicResource RadiusLarge}"/>
+    </Style>
+    <Style Selector="Border.workspaceDropOutline">
+        <Setter Property="BorderBrush" Value="{DynamicResource Accent}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="{DynamicResource RadiusLarge}"/>
+    </Style>
+    <Style Selector="Border.workspaceDropLabel, Border.workspaceDragLabel">
+        <Setter Property="Background" Value="{DynamicResource Accent}"/>
+        <Setter Property="CornerRadius" Value="{DynamicResource RadiusMedium}"/>
+        <Setter Property="Padding" Value="11,8"/>
+    </Style>
+    <Style Selector="Border.workspaceDropLabel > TextBlock, Border.workspaceDragLabel > TextBlock">
+        <Setter Property="Foreground" Value="{DynamicResource OnAccentForeground}"/>
+        <Setter Property="FontSize" Value="{DynamicResource FontSizeBody}"/>
+    </Style>
     <Style Selector="TextBlock.panelSubtitle">
         <Setter Property="FontSize" Value="{DynamicResource FontSizeSmall}"/>
         <Setter Property="Foreground" Value="{DynamicResource MutedText}"/>

@@ -6,6 +6,7 @@ using CommunityToolkit.Mvvm.Input;
 using RowlEngine.Editor.Native;
 using RowlEngine.Editor.Services;
 using RowlEngine.Editor.Services.Localization;
+using RowlEngine.Editor.Services.Workspace;
 using RowlEngine.Editor.Models;
 using RowlEngine.Editor.ViewModels.Components;
 using System;
@@ -299,91 +300,148 @@ namespace RowlEngine.Editor.ViewModels
         [ObservableProperty]
         private bool _isMinimapVisible = true;
 
-        // Panel visibility (menu toggles). Lightweight, deterministic, mobile-friendly — no floating windows.
+        // ── Faz 5 D2: çalışma alanı — TEK doğruluk kaynağı ─────────────────
+        /// <summary>
+        /// Çalışma alanı: düzen ağacı (<see cref="Services.Workspace.WorkspaceLayout"/>)
+        /// + alt şerit yaprağının sekmeleri, tek değişmez değerde. Aşağıdaki panel
+        /// bayrakları, orta görünüm ve bölünmüş ekran durumu buradan
+        /// TÜRETİLİR (tek yön); ayarlayıcıları yalnız yeni bir durum atar (ağaç işlemi).
+        /// Başlangıç = "Varsayılan" önayarı.
+        /// </summary>
         [ObservableProperty]
-        private bool _isAssetsPanelVisible = true;
+        private EditorWorkspaceState _workspace = EditorWorkspaceState.Default;
 
-        [ObservableProperty]
-        private bool _isInspectorPanelVisible = true;
+        /// <summary>Düzen ağacı (D3: MainWindow'daki WorkspaceHost bunu çizer; salt-okur).</summary>
+        public WorkspaceLayout WorkspaceLayout => Workspace.Layout;
 
-        [ObservableProperty]
-        private bool _isLogPanelVisible = true;
+        /// <summary>
+        /// Faz 5 D3: bir bölücü taşındı — oran ağaca yazılır (sınırlar
+        /// <see cref="WorkspaceLayout.ResizeSplit"/>'te). Görünüm yalnız bu işlemi
+        /// çağırır; yeni ağaç <see cref="WorkspaceLayout"/> bağıyla geri akar.
+        /// </summary>
+        public void ResizeWorkspaceSplit(string splitId, double ratio) =>
+            Workspace = Workspace.WithSplitRatio(splitId, ratio);
 
-        [ObservableProperty]
-        private bool _isBacklogPanelVisible = false;
+        private WorkspaceAutosave? _workspaceAutosave;
 
-        [ObservableProperty]
-        private bool _isSaveSlotsPanelVisible = false;
+        /// <summary>
+        /// Faz 5 D5: çalışma alanı düzeninin kalıcılığını açar. Kayıtlı düzeni yükler
+        /// (<see cref="EditorSettingsProfile.WorkspaceState"/>; yok/bozuk/eski sürüm/bilinmeyen
+        /// panel = sessizce varsayılan + geliştirme uyarısı), sonra her düzen değişimini kısa
+        /// bir sessizlik süresinden sonra TEK yazmada diske işler; pencere kapanırken bekleyen
+        /// değişiklik hemen yazılır. Gerçek uygulama (<c>MainWindow(string)</c>) çağırır; testler
+        /// ve RowlEye çağırmaz, böylece kullanıcı profiline dokunmaz.
+        /// </summary>
+        /// <param name="settingsPath">Profil dosyası; <c>null</c> = bu cihazın editor-settings.json'u.</param>
+        /// <param name="timers">Zamanlayıcı kaynağı; <c>null</c> = arayüz iş parçacığı zamanlayıcısı.</param>
+        /// <param name="delay">Sessizlik süresi; <c>null</c> = <see cref="WorkspaceAutosave.DefaultDelay"/>.</param>
+        public void AttachWorkspacePersistence(string? settingsPath = null, DebounceTimerFactory? timers = null, TimeSpan? delay = null)
+        {
+            string path = settingsPath ?? _editorSettingsPath;
+            _workspaceAutosave?.Dispose();
+            _workspaceAutosave = null;
 
-        [ObservableProperty]
-        private bool _isProjectIssuesPanelVisible = false;
+            EditorWorkspaceState loaded = WorkspaceStatePersistence.Load(path, WorkspaceWarning);
+            Workspace = loaded;
+            if (loaded.Bottom.IsOpen(BottomStripState.SaveSlotsTab))
+                SaveSlotsViewModel?.Refresh();
 
-        [ObservableProperty]
-        private bool _isHierarchyPanelVisible = true;
+            _workspaceAutosave = new WorkspaceAutosave(
+                state => WorkspaceStatePersistence.Save(path, state),
+                timers ?? EditorUiDebounceTimer.Create,
+                delay ?? WorkspaceAutosave.DefaultDelay,
+                loaded,
+                WorkspaceWarning);
+        }
+
+        private static void WorkspaceWarning(string message) =>
+            System.Diagnostics.Debug.WriteLine("[Workspace] " + message);
+
+        /// <summary>Faz 5 D4: sabit (taşınamaz) paneller — WorkspaceHost başlıkları bunu gösterir (salt-okur).</summary>
+        public PanelSet WorkspacePinnedPanels => Workspace.Pinned;
+
+        /// <summary>
+        /// Faz 5 D4: başlık sürükle-bırak / "Taşı" menüsü. Kenar mantıksaldır
+        /// (Left = bölmenin ilk tarafı); görünüm RTL'de görsel kenarı çevirir.
+        /// Sabit kaynak, kendi üzerine ve bilinmeyen panel değişiklik yapmaz.
+        /// </summary>
+        public void DockWorkspacePanel(string source, string target, DockEdge edge) =>
+            Workspace = Workspace.Dock(source, target, edge);
+
+        /// <summary>Faz 5 D4: başlıktaki sabitle düğmesi / menü.</summary>
+        public void SetWorkspacePanelPinned(string panelId, bool pinned) =>
+            Workspace = Workspace.WithPinned(panelId, pinned);
+
+        /// <summary>Faz 5 D4: başlıktaki kapat (×); son panel kapanmaz. Panel menü/kısayolla geri açılır.</summary>
+        public void CloseWorkspacePanel(string panelId) =>
+            Workspace = Workspace.ClosePanel(panelId);
+
+        // Panel görünürlüğü (menü/kısayol). Ayarlayıcılar geriye uyum için: ağaç işlemine çevrilir.
+        public bool IsAssetsPanelVisible
+        {
+            get => Workspace.Bottom.IsOpen(BottomStripState.AssetsTab);
+            set => Workspace = Workspace.WithBottomTab(BottomStripState.AssetsTab, value);
+        }
+
+        public bool IsLogPanelVisible
+        {
+            get => Workspace.Bottom.IsOpen(BottomStripState.LogTab);
+            set => Workspace = Workspace.WithBottomTab(BottomStripState.LogTab, value);
+        }
+
+        public bool IsBacklogPanelVisible
+        {
+            get => Workspace.Bottom.IsOpen(BottomStripState.BacklogTab);
+            set => Workspace = Workspace.WithBottomTab(BottomStripState.BacklogTab, value);
+        }
+
+        public bool IsSaveSlotsPanelVisible
+        {
+            get => Workspace.Bottom.IsOpen(BottomStripState.SaveSlotsTab);
+            set => Workspace = Workspace.WithBottomTab(BottomStripState.SaveSlotsTab, value);
+        }
+
+        public bool IsProjectIssuesPanelVisible
+        {
+            get => Workspace.Bottom.IsOpen(BottomStripState.IssuesTab);
+            set => Workspace = Workspace.WithBottomTab(BottomStripState.IssuesTab, value);
+        }
+
+        public bool IsInspectorPanelVisible
+        {
+            get => Workspace.IsInspectorVisible;
+            set => Workspace = Workspace.WithPanel(PanelIds.Inspector, value);
+        }
+
+        public bool IsHierarchyPanelVisible
+        {
+            get => Workspace.IsHierarchyVisible;
+            set => Workspace = Workspace.WithPanel(PanelIds.Hierarchy, value);
+        }
 
         /// <summary>
         /// Alt şerit tek sekmeli yapıdadır: Varlıklar (0) + Günlük (1) +
         /// Diyalog Geçmişi (2) + Kayıt Slotları (3) + Sorunlar (4).
-        /// Bu sekmelerden herhangi biri açıksa şerit görünür.
+        /// Ağaçta tek <c>bottom</c> yaprağı; sekmelerden biri açıksa vardır.
         /// </summary>
-        public bool IsBottomPanelVisible => IsAssetsPanelVisible || IsLogPanelVisible || IsBacklogPanelVisible || IsSaveSlotsPanelVisible || IsProjectIssuesPanelVisible;
-        public GridLength BottomPanelHeight => EditorWorkspaceLayoutService.CalculateBottomPanelHeight(IsBottomPanelVisible);
-        public GridLength BottomSplitterHeight => EditorWorkspaceLayoutService.CalculateBottomSplitterHeight(IsBottomPanelVisible);
-        public GridLength HierarchyPanelWidth => EditorWorkspaceLayoutService.CalculateHierarchyPanelWidth(IsHierarchyPanelVisible);
-        public GridLength HierarchySplitterWidth => EditorWorkspaceLayoutService.CalculateHierarchySplitterWidth(IsHierarchyPanelVisible);
-        public GridLength InspectorPanelWidth => EditorWorkspaceLayoutService.CalculateInspectorPanelWidth(IsInspectorPanelVisible);
-        public GridLength InspectorSplitterWidth => EditorWorkspaceLayoutService.CalculateInspectorSplitterWidth(IsInspectorPanelVisible);
-
-        partial void OnIsAssetsPanelVisibleChanged(bool value) =>
-            NotifyBottomPanelLayoutChanged();
-
-        partial void OnIsLogPanelVisibleChanged(bool value) =>
-            NotifyBottomPanelLayoutChanged();
-
-        partial void OnIsBacklogPanelVisibleChanged(bool value) =>
-            NotifyBottomPanelLayoutChanged();
-
-        partial void OnIsSaveSlotsPanelVisibleChanged(bool value) =>
-            NotifyBottomPanelLayoutChanged();
-
-        partial void OnIsProjectIssuesPanelVisibleChanged(bool value) =>
-            NotifyBottomPanelLayoutChanged();
-
-        private void NotifyBottomPanelLayoutChanged()
-        {
-            OnPropertyChanged(nameof(IsBottomPanelVisible));
-            OnPropertyChanged(nameof(BottomPanelHeight));
-            OnPropertyChanged(nameof(BottomSplitterHeight));
-        }
-
-        partial void OnIsHierarchyPanelVisibleChanged(bool value)
-        {
-            OnPropertyChanged(nameof(HierarchyPanelWidth));
-            OnPropertyChanged(nameof(HierarchySplitterWidth));
-        }
-
-        partial void OnIsInspectorPanelVisibleChanged(bool value)
-        {
-            OnPropertyChanged(nameof(InspectorPanelWidth));
-            OnPropertyChanged(nameof(InspectorSplitterWidth));
-        }
+        public bool IsBottomPanelVisible => Workspace.IsBottomVisible;
 
         /// <summary>
         /// Active tab index in the bottom panel: 0 = Assets, 1 = Log,
-        /// 2 = Backlog, 3 = SaveSlots, 4 = ProjectIssues.
+        /// 2 = Backlog, 3 = SaveSlots, 4 = ProjectIssues. (TabControl'e iki yönlü bağlı.)
         /// </summary>
-        [ObservableProperty]
-        private int _bottomPanelActiveTab = 0;
+        public int BottomPanelActiveTab
+        {
+            get => Workspace.Bottom.ActiveTab;
+            set => Workspace = Workspace.WithActiveBottomTab(value);
+        }
 
-        // Center view: single active tab (radio semantics). Node Graph is default.
-        [ObservableProperty]
-        private bool _isNodeGraphActive = true;
+        // Orta görünüm (radyo): ağaçtaki orta yapraklardan türetilir. Değiştirmek için ShowPanel.
+        public bool IsNodeGraphActive => Workspace.IsNodeGraphActive;
 
-        [ObservableProperty]
-        private bool _isPreviewActive = false;
+        public bool IsPreviewActive => Workspace.IsPreviewActive;
 
-        [ObservableProperty]
-        private bool _isEnginePreviewActive = false;
+        public bool IsEnginePreviewActive => Workspace.IsEnginePreviewActive;
 
         /// <summary>
         /// Unity sekme şeridi vurguları: aktif görünümün alt çizgisi
@@ -394,14 +452,12 @@ namespace RowlEngine.Editor.ViewModels
         public string PreviewTabBrush => IsPreviewActive ? ThemeFallbackColors.BrushHex("Accent", ThemeFallbackColors.Text) : "Transparent";
         public string GameTabBrush => IsEnginePreviewActive ? ThemeFallbackColors.BrushHex("Accent", ThemeFallbackColors.Text) : "Transparent";
 
-        partial void OnIsNodeGraphActiveChanged(bool value) => OnPropertyChanged(nameof(SceneTabBrush));
-        partial void OnIsPreviewActiveChanged(bool value) => OnPropertyChanged(nameof(PreviewTabBrush));
-        partial void OnIsEnginePreviewActiveChanged(bool value) => OnPropertyChanged(nameof(GameTabBrush));
-
-        // Split-screen mode: both Node Graph + Live Preview visible side-by-side.
-        // Toggled via toolbar button; when off, center area goes back to radio toggle.
-        [ObservableProperty]
-        private int _splitScreenMode = 0; // 0: Off, 1: Horizontal, 2: Vertical
+        /// <summary>
+        /// Bölünmüş ekran: 0 kapalı, 1 "Horizontal" (Node üstte, önizleme altta —
+        /// ağaçta <see cref="SplitAxis.Vertical"/>), 2 "Vertical" (yan yana —
+        /// <see cref="SplitAxis.Horizontal"/>). Ağaçtan türetilir.
+        /// </summary>
+        public int SplitScreenMode => Workspace.SplitScreenMode;
 
         public bool IsSplitScreenOff => SplitScreenMode == 0;
         public bool IsSplitScreenHorizontal => SplitScreenMode == 1;
@@ -415,14 +471,59 @@ namespace RowlEngine.Editor.ViewModels
             ? ThemeFallbackColors.BrushHex("AppBackground", ThemeFallbackColors.Surface)
             : ThemeFallbackColors.BrushHex("MutedText", ThemeFallbackColors.Muted);
 
-        partial void OnSplitScreenModeChanged(int value)
+        /// <summary>
+        /// Türetilmiş özelliklerin bildirimi: D2 öncesi ayrı alanlar hangi
+        /// değişimde hangi adları bildiriyorsa aynısı (yalnız değişen değerde).
+        /// Bağlardan aynı değer geri yazılırsa durum eşit kalır → döngü yok.
+        /// </summary>
+        partial void OnWorkspaceChanged(EditorWorkspaceState? oldValue, EditorWorkspaceState newValue)
         {
-            OnPropertyChanged(nameof(IsSplitScreenOff));
-            OnPropertyChanged(nameof(IsSplitScreenHorizontal));
-            OnPropertyChanged(nameof(IsSplitScreenVertical));
-            OnPropertyChanged(nameof(SplitScreenButtonText));
-            OnPropertyChanged(nameof(SplitScreenButtonColor));
-            OnPropertyChanged(nameof(SplitScreenButtonForeground));
+            EditorWorkspaceState before = oldValue ?? newValue;
+            _workspaceAutosave?.Notify(newValue);
+            if (!ReferenceEquals(before.Layout, newValue.Layout))
+                OnPropertyChanged(nameof(WorkspaceLayout));
+            NotifyIfChanged(nameof(WorkspacePinnedPanels), before.Pinned, newValue.Pinned);
+
+            bool bottomTabsChanged = false;
+            bottomTabsChanged |= NotifyIfChanged(nameof(IsAssetsPanelVisible), before.Bottom.IsOpen(BottomStripState.AssetsTab), newValue.Bottom.IsOpen(BottomStripState.AssetsTab));
+            bottomTabsChanged |= NotifyIfChanged(nameof(IsLogPanelVisible), before.Bottom.IsOpen(BottomStripState.LogTab), newValue.Bottom.IsOpen(BottomStripState.LogTab));
+            bottomTabsChanged |= NotifyIfChanged(nameof(IsBacklogPanelVisible), before.Bottom.IsOpen(BottomStripState.BacklogTab), newValue.Bottom.IsOpen(BottomStripState.BacklogTab));
+            bottomTabsChanged |= NotifyIfChanged(nameof(IsSaveSlotsPanelVisible), before.Bottom.IsOpen(BottomStripState.SaveSlotsTab), newValue.Bottom.IsOpen(BottomStripState.SaveSlotsTab));
+            bottomTabsChanged |= NotifyIfChanged(nameof(IsProjectIssuesPanelVisible), before.Bottom.IsOpen(BottomStripState.IssuesTab), newValue.Bottom.IsOpen(BottomStripState.IssuesTab));
+            // Faz 5 D3: panel boyutları ağaçtaki oranlardan WorkspaceHost'ta çizilir
+            // (eski *PanelWidth/*Height piksel özellikleri kalktı).
+            if (bottomTabsChanged)
+                OnPropertyChanged(nameof(IsBottomPanelVisible));
+
+            NotifyIfChanged(nameof(IsHierarchyPanelVisible), before.IsHierarchyVisible, newValue.IsHierarchyVisible);
+            NotifyIfChanged(nameof(IsInspectorPanelVisible), before.IsInspectorVisible, newValue.IsInspectorVisible);
+
+            NotifyIfChanged(nameof(BottomPanelActiveTab), before.Bottom.ActiveTab, newValue.Bottom.ActiveTab);
+
+            if (NotifyIfChanged(nameof(IsNodeGraphActive), before.IsNodeGraphActive, newValue.IsNodeGraphActive))
+                OnPropertyChanged(nameof(SceneTabBrush));
+            if (NotifyIfChanged(nameof(IsPreviewActive), before.IsPreviewActive, newValue.IsPreviewActive))
+                OnPropertyChanged(nameof(PreviewTabBrush));
+            if (NotifyIfChanged(nameof(IsEnginePreviewActive), before.IsEnginePreviewActive, newValue.IsEnginePreviewActive))
+                OnPropertyChanged(nameof(GameTabBrush));
+
+            if (NotifyIfChanged(nameof(SplitScreenMode), before.SplitScreenMode, newValue.SplitScreenMode))
+            {
+                OnPropertyChanged(nameof(IsSplitScreenOff));
+                OnPropertyChanged(nameof(IsSplitScreenHorizontal));
+                OnPropertyChanged(nameof(IsSplitScreenVertical));
+                OnPropertyChanged(nameof(SplitScreenButtonText));
+                OnPropertyChanged(nameof(SplitScreenButtonColor));
+                OnPropertyChanged(nameof(SplitScreenButtonForeground));
+            }
+        }
+
+        private bool NotifyIfChanged<T>(string propertyName, T before, T after)
+        {
+            if (EqualityComparer<T>.Default.Equals(before, after))
+                return false;
+            OnPropertyChanged(propertyName);
+            return true;
         }
 
         public string ConnectButtonColor => IsConnected
@@ -1403,11 +1504,7 @@ namespace RowlEngine.Editor.ViewModels
                     () =>
                     {
                         if (SplitScreenMode == 0)
-                        {
-                            IsEnginePreviewActive = true;
-                            IsPreviewActive = false;
-                            IsNodeGraphActive = false;
-                        }
+                            Workspace = Workspace.WithCenter(PanelIds.Game);
                     },
                     AssetsJsonPath);
 
@@ -1787,51 +1884,10 @@ namespace RowlEngine.Editor.ViewModels
         [RelayCommand]
         public void ShowPanel(string panelName)
         {
-            bool isHierarchy = IsHierarchyPanelVisible;
-            bool isAssets = IsAssetsPanelVisible;
-            bool isInspector = IsInspectorPanelVisible;
-            bool isLog = IsLogPanelVisible;
-            bool isBacklog = IsBacklogPanelVisible;
-            bool isSaveSlots = IsSaveSlotsPanelVisible;
-            bool isProjectIssues = IsProjectIssuesPanelVisible;
-            int bottomActiveTab = BottomPanelActiveTab;
-            bool isNodeGraph = IsNodeGraphActive;
-            bool isPreview = IsPreviewActive;
-            bool isEnginePreview = IsEnginePreviewActive;
-            int splitMode = SplitScreenMode;
-
-            EditorWorkspaceLayoutService.HandlePanelAction(
-                panelName,
-                ref isHierarchy,
-                ref isAssets,
-                ref isInspector,
-                ref isLog,
-                ref isBacklog,
-                ref isSaveSlots,
-                ref isProjectIssues,
-                ref bottomActiveTab,
-                ref isNodeGraph,
-                ref isPreview,
-                ref isEnginePreview,
-                ref splitMode,
-                () => SaveSlotsViewModel?.Refresh());
-
-            // Eski kayıtlardan/eylemlerden gelen bayat indeksler
-            // yeni aralığa (0..4) kelepçelenir.
-            bottomActiveTab = EditorWorkspaceLayoutService.ClampBottomTab(bottomActiveTab);
-
-            IsHierarchyPanelVisible = isHierarchy;
-            IsAssetsPanelVisible = isAssets;
-            IsInspectorPanelVisible = isInspector;
-            IsLogPanelVisible = isLog;
-            IsBacklogPanelVisible = isBacklog;
-            IsSaveSlotsPanelVisible = isSaveSlots;
-            IsProjectIssuesPanelVisible = isProjectIssues;
-            BottomPanelActiveTab = bottomActiveTab;
-            IsNodeGraphActive = isNodeGraph;
-            IsPreviewActive = isPreview;
-            IsEnginePreviewActive = isEnginePreview;
-            SplitScreenMode = splitMode;
+            // Faz 5 D2: panel eylemi bir ağaç işlemidir; bayraklar yeni durumdan türer.
+            EditorWorkspaceState next = Workspace.HandlePanelAction(panelName, () => SaveSlotsViewModel?.Refresh());
+            // Eski kayıtlardan/eylemlerden gelen bayat indeksler yeni aralığa (0..4) kelepçelenir.
+            Workspace = next.WithActiveBottomTab(BottomStripState.ClampTab(next.Bottom.ActiveTab));
         }
 
         /// <summary>
@@ -1839,7 +1895,7 @@ namespace RowlEngine.Editor.ViewModels
         /// Seçim değişimi anında uygular; sonradan elle panel açılıp
         /// kapanırsa ad etiketi kalır (Unity davranışı).
         /// </summary>
-        public List<string> AvailableLayoutPresets { get; } = new() { "Varsayılan", "Sahne Odağı", "Oyun Testi" };
+        public List<string> AvailableLayoutPresets { get; } = new(EditorWorkspaceLayouts.PresetNames);
 
         [ObservableProperty]
         private string _selectedLayoutPreset = "Varsayılan";
@@ -1850,55 +1906,23 @@ namespace RowlEngine.Editor.ViewModels
         [RelayCommand]
         private void SelectLayoutPreset(string? presetName)
         {
-            if (presetName is not null && AvailableLayoutPresets.Contains(presetName))
+            if (presetName is null || !AvailableLayoutPresets.Contains(presetName))
+                return;
+            // Faz 5 D5: yeniden seçmek de uygulanır — elle bozulmuş düzen etiketi "Varsayılan"
+            // kalır, aynı önayarı seçmek "düzeni sıfırla" yoludur (özellik değişmediği için
+            // OnSelectedLayoutPresetChanged tetiklenmezdi).
+            if (SelectedLayoutPreset == presetName)
+                ApplyLayoutPresetState(presetName);
+            else
                 SelectedLayoutPreset = presetName;
         }
 
         private void ApplyLayoutPresetState(string? presetName)
         {
             if (string.IsNullOrEmpty(presetName)) return;
-            bool isHierarchy = IsHierarchyPanelVisible;
-            bool isAssets = IsAssetsPanelVisible;
-            bool isInspector = IsInspectorPanelVisible;
-            bool isLog = IsLogPanelVisible;
-            bool isBacklog = IsBacklogPanelVisible;
-            bool isSaveSlots = IsSaveSlotsPanelVisible;
-            bool isProjectIssues = IsProjectIssuesPanelVisible;
-            int bottomActiveTab = BottomPanelActiveTab;
-            bool isNodeGraph = IsNodeGraphActive;
-            bool isPreview = IsPreviewActive;
-            bool isEnginePreview = IsEnginePreviewActive;
-            int splitMode = SplitScreenMode;
-
-            EditorWorkspaceLayoutService.ApplyLayoutPreset(
-                presetName,
-                ref isHierarchy,
-                ref isAssets,
-                ref isInspector,
-                ref isLog,
-                ref isBacklog,
-                ref isSaveSlots,
-                ref isProjectIssues,
-                ref bottomActiveTab,
-                ref isNodeGraph,
-                ref isPreview,
-                ref isEnginePreview,
-                ref splitMode);
-
-            bottomActiveTab = EditorWorkspaceLayoutService.ClampBottomTab(bottomActiveTab);
-
-            IsHierarchyPanelVisible = isHierarchy;
-            IsAssetsPanelVisible = isAssets;
-            IsInspectorPanelVisible = isInspector;
-            IsLogPanelVisible = isLog;
-            IsBacklogPanelVisible = isBacklog;
-            IsSaveSlotsPanelVisible = isSaveSlots;
-            IsProjectIssuesPanelVisible = isProjectIssues;
-            BottomPanelActiveTab = bottomActiveTab;
-            IsNodeGraphActive = isNodeGraph;
-            IsPreviewActive = isPreview;
-            IsEnginePreviewActive = isEnginePreview;
-            SplitScreenMode = splitMode;
+            // Faz 5 D2: önayar ağacı üretir (EditorWorkspaceLayouts.Preset); bilinmeyen ad no-op.
+            EditorWorkspaceState next = Workspace.ApplyPreset(presetName);
+            Workspace = next.WithActiveBottomTab(BottomStripState.ClampTab(next.Bottom.ActiveTab));
         }
 
         // COMPONENT MANAGEMENT
@@ -2622,6 +2646,9 @@ namespace RowlEngine.Editor.ViewModels
             _saveDebounceTimer?.Stop();
             _enginePreviewDebounceTimer?.Stop();
             _smoothTimer.Stop();
+            // Faz 5 D5: bekleyen düzen değişikliği kapanırken hemen yazılır.
+            try { _workspaceAutosave?.Dispose(); } catch { }
+            _workspaceAutosave = null;
 
             if (hasPendingSave)
             {

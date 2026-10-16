@@ -96,6 +96,42 @@ Prototipte: sürükle-bırak ile bölme, sabitleme, 180–200 ms geçiş. Önce 
 **deneme (spike)**: Dock.Avalonia kütüphanesi mi, kendi `Grid`+`GridSplitter`
 düzenimiz mi? Karar spike ölçümüyle verilir, sonra uygulanır.
 
+**Karar (2026-10-16): kendi `Grid`+`GridSplitter` düzenimiz** — prototipteki ikili bölme
+ağacının (`layout-state.mjs`) C# karşılığı. Spike ölçümleri (net10.0 + Avalonia 11.3.11):
+- Model uyumu: prototipte sekme/yüzen pencere yok, "sabitle" = taşıma kilidi. Dock.Avalonia
+  IDE tarzı (sekme, yüzen pencere, pusula; "pin" = kenara otomatik gizle); uydurmak için
+  `CanDrag/CanFloat=false` + pusulanın yeniden stillenmesi gerekir. Kendi model ~100 satır.
+- Kaydet/yükle: kendi model 454 bayt JSON, geri yükleme bayt bayt aynı. Dock: System.Text.Json
+  serileştiricisi döngü hatası; Newtonsoft yolu 25 KB + `$type` sınıf adları (yeniden adlandırma
+  kayıtlı düzeni bozar) + ek bağımlılık.
+- Tema (K2): kendi yol `Border.panelHeader` ile doğrudan 40 px; Dock'ta ~21 token eşlemesi
+  gerekti, başlık yüksekliği yine ~24 px'te kaldı (şablon yeniden yazımı gerekir).
+- Avalonia 12: Dock 11.x serisi durdu; geçişte Dock da kilitli yükseltilmeli. Kendi yol yalnız
+  çekirdek Grid/GridSplitter/işaretçi API'si.
+- Test: kendi yolun headless fare testleri 9/9 (bölme, sabit kilidi, kapatma, JSON, RTL bırakma).
+  Bağımlılık: Dock 11 paket ~1.7 MB; kendi yol 0.
+- Dock'un artıları: MIT, aktif, RTL hazır — yüzen pencere/sekmeli grup istenirse yeniden düşünülür.
+
+**Dilimler (her biri ayrı test edilir; push yalnız faz sonunda):**
+- D1 — Saf model (`layout-state.mjs` karşılığı) + xUnit (`layout-state.test.mjs` senaryoları,
+  1000 rastgele işlem değişmezliği dahil).
+- D2 — ViewModel panel bayrakları ↔ ağaç eşitlemesi; düzen önayarları ve Bölünmüş Ekran ağaç
+  üretir; önayar/tema testleri güncellenir.
+- D3 — `WorkspaceHost` görünümü: `panelHeader` başlıklar, `{l:T}` metinler, tek `NodeGraphView`
+  örneği; MainWindow geçişi; RowlEye altın görüntüsü yenilenir.
+- D4 — Başlıktan sürükle-bırak: kenar vurgusu, Escape iptali, sabit kilidi, klavye/menü
+  alternatifi; headless fare + RTL testleri.
+- D5 — Düzenin `EditorSettingsProfile`'a kalıcı kaydı, sürüm alanı, bozuk dosyada varsayılan.
+- D6 — 200/180 ms geçişler, azaltılmış hareket, bölücüyü klavyeyle taşıma.
+- Alt şerit kararı (D3): tek yaprak, içi sekmeli (beş ince panel ayrı yaprak olarak sıkışık).
+
+**Yapılan (2026-10-16):** D1–D6 tamam (9f01837, df3e174, ca88fa7, a881c21, bc2c8c3, b5548a2);
+editör süiti 577 → 814 test. Bilinen/sonraya: kapanan panelin çıkış animasyonu yok; OS
+"azaltılmış hareket" yalnız `ROWL_REDUCE_MOTION` ile (Tercihler'e bağlanmadı); kayıtlı düzende
+bilinmeyen panel tüm düzeni varsayılana düşürür (kısmi kurtarma yok); `new MainWindowViewModel`
+kuran eski test sınıfları UI iş parçacığı dışında kuruyor (D5'teki kirlilik deseni — denenen
+sırada üretilmedi, ortak test temeliyle kapatılmalı).
+
 ## Kararlar (Chaple, 2026-10-15)
 
 | # | Konu | Karar |
