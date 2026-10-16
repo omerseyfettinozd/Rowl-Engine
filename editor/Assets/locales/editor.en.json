@@ -990,6 +990,42 @@
     "Hub.Title": {
       "text": "Rowl Engine — Projects"
     },
+    "Import.Cancel": {
+      "text": "Cancel"
+    },
+    "Import.Conflict.ApplyToAll": {
+      "text": "Apply to remaining"
+    },
+    "Import.Conflict.KeepBoth": {
+      "text": "Keep both"
+    },
+    "Import.Conflict.Message": {
+      "text": "{0} already exists in the project and content differs."
+    },
+    "Import.Conflict.Overwrite": {
+      "text": "Overwrite"
+    },
+    "Import.Conflict.Skip": {
+      "text": "Skip"
+    },
+    "Import.Conflict.Title": {
+      "text": "Asset with same name exists"
+    },
+    "Import.Progress": {
+      "text": "{0} / {1}"
+    },
+    "Import.Result.Cancelled": {
+      "text": "Import cancelled"
+    },
+    "Import.Result.Done": {
+      "text": "{0} file(s) imported"
+    },
+    "Import.Result.Failed": {
+      "text": "Import failed: {0}"
+    },
+    "Import.Title": {
+      "text": "Importing"
+    },
     "Inspector.Components.Actions.Tip": {
       "text": "Component actions"
     },
@@ -1829,6 +1865,48 @@
     },
     "Player.Window.Title": {
       "text": "Rowl — Player"
+    },
+    "Recovery.Back": {
+      "text": "Back"
+    },
+    "Recovery.Dismiss": {
+      "text": "Dismiss"
+    },
+    "Recovery.Dismiss.Tip": {
+      "text": "Recovery files are not deleted; hidden for this session"
+    },
+    "Recovery.Failed": {
+      "text": "Recovery could not be applied"
+    },
+    "Recovery.Inspect": {
+      "text": "Inspect"
+    },
+    "Recovery.MoreNodes": {
+      "text": "… and {0} more nodes"
+    },
+    "Recovery.Reason.Unknown": {
+      "text": "Project file could not be read"
+    },
+    "Recovery.Restore": {
+      "text": "Restore"
+    },
+    "Recovery.Restore.Confirm": {
+      "text": "The current corrupt file will be replaced. Restore it?"
+    },
+    "Recovery.Restore.Yes": {
+      "text": "Yes, restore"
+    },
+    "Recovery.Source.Journal": {
+      "text": "Unsaved change journal"
+    },
+    "Recovery.Source.LastGood": {
+      "text": "Last good save"
+    },
+    "Recovery.Summary": {
+      "text": "{0} · {1} nodes"
+    },
+    "Recovery.Title": {
+      "text": "Recovery ready"
     },
     "SaveSlots.Load": {
       "text": "Load"

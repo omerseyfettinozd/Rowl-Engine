@@ -1,0 +1,126 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:RowlEngine.Editor.ViewModels"
+             xmlns:l="using:RowlEngine.Editor.Services.Strings"
+             x:Class="RowlEngine.Editor.Views.Panels.RecoveryOfferCard"
+             x:DataType="vm:RecoveryOfferViewModel">
+    <UserControl.Styles>
+        <!-- Kenar rengi stilde: yerel değer stil setter'ını ezerdi (uyarı kenarı görünmezdi). -->
+        <Style Selector="Border.statusCard">
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}"/>
+        </Style>
+        <Style Selector="Border.statusCard.warning">
+            <Setter Property="BorderBrush" Value="{DynamicResource WarningBrush}"/>
+        </Style>
+    </UserControl.Styles>
+
+    <Border Classes="statusCard warning"
+            Background="{DynamicResource PanelBackground}"
+            BorderThickness="1"
+            CornerRadius="{DynamicResource RadiusMedium}"
+            Padding="12,10"
+            MinWidth="280"
+            MaxWidth="420"
+            BoxShadow="0 8 24 0 #66000000">
+        <StackPanel>
+            <Grid ColumnDefinitions="Auto,*">
+                <Panel Width="14" Height="14" VerticalAlignment="Center">
+                    <Ellipse Width="8" Height="8"
+                             HorizontalAlignment="Center"
+                             VerticalAlignment="Center"
+                             Fill="{DynamicResource WarningBrush}"/>
+                </Panel>
+                <TextBlock Grid.Column="1"
+                           Text="{l:T Recovery.Title}"
+                           Foreground="{DynamicResource PrimaryText}"
+                           FontSize="{DynamicResource FontSizeBody}"
+                           FontWeight="SemiBold"
+                           Margin="8,0,0,0"
+                           VerticalAlignment="Center"/>
+            </Grid>
+
+            <TextBlock Classes="muted"
+                       Text="{Binding Summary}"
+                       FontSize="{DynamicResource FontSizeCaption}"
+                       TextWrapping="Wrap"
+                       Margin="22,4,0,0"/>
+
+            <TextBlock Text="{Binding Reason}"
+                       Foreground="{DynamicResource DimText}"
+                       FontSize="{DynamicResource FontSizeCaption}"
+                       TextWrapping="Wrap"
+                       TextTrimming="CharacterEllipsis"
+                       MaxLines="2"
+                       Margin="22,2,0,0"/>
+
+            <StackPanel IsVisible="{Binding IsInspecting}"
+                        Margin="22,8,0,0">
+                <ScrollViewer MaxHeight="140"
+                              HorizontalScrollBarVisibility="Disabled">
+                    <ItemsControl ItemsSource="{Binding NodeTitles}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="x:String">
+                                <Grid ColumnDefinitions="Auto,*" Margin="0,2,0,0">
+                                    <Ellipse Width="4" Height="4"
+                                             VerticalAlignment="Center"
+                                             Fill="{DynamicResource MutedText}"/>
+                                    <TextBlock Grid.Column="1"
+                                               Classes="body"
+                                               Text="{Binding}"
+                                               FontSize="{DynamicResource FontSizeCaption}"
+                                               TextWrapping="Wrap"
+                                               Margin="6,0,0,0"
+                                               VerticalAlignment="Center"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </StackPanel>
+
+            <TextBlock Text="{Binding ErrorText}"
+                       Foreground="{DynamicResource ErrorBrush}"
+                       FontSize="{DynamicResource FontSizeCaption}"
+                       TextTrimming="CharacterEllipsis"
+                       MaxLines="1"
+                       Margin="22,8,0,0"
+                       IsVisible="{Binding ErrorText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+
+            <StackPanel IsVisible="{Binding IsConfirmingRestore}"
+                        Margin="22,8,0,0">
+                <TextBlock Text="{l:T Recovery.Restore.Confirm}"
+                           Foreground="{DynamicResource SecondaryText}"
+                           FontSize="{DynamicResource FontSizeBody}"
+                           TextWrapping="Wrap"/>
+                <StackPanel Orientation="Horizontal"
+                            HorizontalAlignment="Right"
+                            Spacing="6"
+                            Margin="0,8,0,0">
+                    <Button Classes="text"
+                            Content="{l:T Recovery.Back}"
+                            Command="{Binding CancelRestoreCommand}"/>
+                    <Button Classes="secondary"
+                            Content="{l:T Recovery.Restore.Yes}"
+                            Command="{Binding RestoreCommand}"/>
+                </StackPanel>
+            </StackPanel>
+
+            <StackPanel Orientation="Horizontal"
+                        HorizontalAlignment="Right"
+                        Spacing="6"
+                        Margin="0,8,0,0"
+                        IsVisible="{Binding !IsConfirmingRestore}">
+                <Button Classes="text"
+                        Content="{l:T Recovery.Dismiss}"
+                        ToolTip.Tip="{l:T Recovery.Dismiss.Tip}"
+                        Command="{Binding DismissCommand}"/>
+                <Button Classes="text"
+                        Content="{l:T Recovery.Inspect}"
+                        Command="{Binding ToggleInspectCommand}"/>
+                <Button Classes="secondary"
+                        Content="{l:T Recovery.Restore}"
+                        Command="{Binding RestoreCommand}"/>
+            </StackPanel>
+        </StackPanel>
+    </Border>
+</UserControl>

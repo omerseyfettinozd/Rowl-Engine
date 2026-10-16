@@ -59,6 +59,19 @@ public static class RowlEyeFixtureFactory
         if (double.TryParse(Environment.GetEnvironmentVariable("ROWL_EYE_UI_SCALE"),
                 System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double uiScale))
             RowlEngine.Editor.Services.EditorUiScale.Apply(uiScale);
+        // Faz 8 B: kurtarma + içe aktarma kartları örnek durumda (ROWL_EYE_CARDS=1); golden koşusu dokunmaz.
+        if (Environment.GetEnvironmentVariable("ROWL_EYE_CARDS") == "1")
+        {
+            vm.RecoveryOffer = new RecoveryOfferViewModel(
+                new RowlEngine.Editor.Services.RestoreOffer("journal",
+                    "{\"format_version\":5,\"nodes\":[{\"title\":\"Başlangıç\"},{\"title\":\"Koridor\"},{\"title\":\"Final\"}]}", 5, 3),
+                "Unexpected end of JSON (satır 1, konum 11)", () => true, () => { });
+            vm.AssetImport.IsRunning = true;
+            vm.AssetImport.Total = 12;
+            vm.AssetImport.Completed = 5;
+            vm.AssetImport.CurrentFile = "koridor_gece.png";
+            vm.AssetImport.PendingConflict = new RowlEngine.Editor.Services.ImportConflict("/tmp/koridor_gece.png", "images/koridor_gece.png");
+        }
         return (win, vm, new Size(1920, 1080));
     }
 

@@ -465,6 +465,12 @@
         <StackPanel Grid.Row="1" Grid.RowSpan="2"
                     HorizontalAlignment="Right" VerticalAlignment="Bottom"
                     Margin="0,0,20,40" ZIndex="200" Spacing="8">
+            <!-- Faz 8 B1: açılış kurtarma teklifi (incele / geri yükle / yoksay). -->
+            <Panel IsVisible="{Binding RecoveryOffer, Converter={x:Static ObjectConverters.IsNotNull}}">
+                <panels:RecoveryOfferCard DataContext="{Binding RecoveryOffer}"/>
+            </Panel>
+            <!-- Faz 8 B2–B3: içe aktarma ilerleme / iptal / aynı adlı varlık kararı. -->
+            <panels:AssetImportCard DataContext="{Binding AssetImport}"/>
             <!-- Faz 8 C2: Kaydet / Farklı kaydet / Dışa aktar sonucu (çalışıyor / başarılı / hatalı). -->
             <panels:OperationStatusCard DataContext="{Binding OperationStatus}"/>
             <Border x:Name="ToastPanel" IsVisible="{Binding Toast.IsVisible}"

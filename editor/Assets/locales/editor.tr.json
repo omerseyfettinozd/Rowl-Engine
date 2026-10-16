@@ -990,6 +990,42 @@
     "Hub.Title": {
       "text": "Rowl Engine — Projeler"
     },
+    "Import.Cancel": {
+      "text": "İptal"
+    },
+    "Import.Conflict.ApplyToAll": {
+      "text": "Kalanlara da uygula"
+    },
+    "Import.Conflict.KeepBoth": {
+      "text": "İkisini de tut"
+    },
+    "Import.Conflict.Message": {
+      "text": "{0} projede zaten var ve içeriği farklı."
+    },
+    "Import.Conflict.Overwrite": {
+      "text": "Üzerine yaz"
+    },
+    "Import.Conflict.Skip": {
+      "text": "Atla"
+    },
+    "Import.Conflict.Title": {
+      "text": "Aynı adlı varlık var"
+    },
+    "Import.Progress": {
+      "text": "{0} / {1}"
+    },
+    "Import.Result.Cancelled": {
+      "text": "İçe aktarma iptal edildi"
+    },
+    "Import.Result.Done": {
+      "text": "{0} dosya içe aktarıldı"
+    },
+    "Import.Result.Failed": {
+      "text": "İçe aktarma başarısız: {0}"
+    },
+    "Import.Title": {
+      "text": "İçe aktarılıyor"
+    },
     "Inspector.Components.Actions.Tip": {
       "text": "Bileşen işlemleri"
     },
@@ -1829,6 +1865,48 @@
     },
     "Player.Window.Title": {
       "text": "Rowl — Oyuncu"
+    },
+    "Recovery.Back": {
+      "text": "Vazgeç"
+    },
+    "Recovery.Dismiss": {
+      "text": "Yoksay"
+    },
+    "Recovery.Dismiss.Tip": {
+      "text": "Kurtarma dosyaları silinmez; bu oturumda gizlenir"
+    },
+    "Recovery.Failed": {
+      "text": "Kurtarma uygulanamadı"
+    },
+    "Recovery.Inspect": {
+      "text": "İncele"
+    },
+    "Recovery.MoreNodes": {
+      "text": "… ve {0} düğüm daha"
+    },
+    "Recovery.Reason.Unknown": {
+      "text": "Proje dosyası okunamadı"
+    },
+    "Recovery.Restore": {
+      "text": "Geri yükle"
+    },
+    "Recovery.Restore.Confirm": {
+      "text": "Mevcut bozuk dosya değiştirilecek. Geri yüklensin mi?"
+    },
+    "Recovery.Restore.Yes": {
+      "text": "Evet, geri yükle"
+    },
+    "Recovery.Source.Journal": {
+      "text": "Kaydedilmemiş değişiklik günlüğü"
+    },
+    "Recovery.Source.LastGood": {
+      "text": "Son sağlam kayıt"
+    },
+    "Recovery.Summary": {
+      "text": "{0} · {1} düğüm"
+    },
+    "Recovery.Title": {
+      "text": "Kurtarma hazır"
     },
     "SaveSlots.Load": {
       "text": "Yükle"

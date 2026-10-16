@@ -769,8 +769,8 @@ namespace RowlEngine.Editor.ViewModels
                 if (CrashRecoveryService.TryBuildRestoreOffer(AssetsPath, AssetsJsonPath, out var offer, out _) &&
                     offer is not null)
                 {
-                    PendingRecoveryOffer = offer;
-                    AppendLog($"Proje dosyası bozuk/eksik ({status.CanonicalError}); kurtarma hazır ({offer.Source}, {offer.NodeCount} düğüm). RestoreFromRecovery ile geri yükleyin.");
+                    OfferRecovery(offer, status.CanonicalError);
+                    AppendLog($"Proje dosyası bozuk/eksik ({status.CanonicalError}); kurtarma hazır ({offer.Source}, {offer.NodeCount} düğüm). Kurtarma kartından geri yükleyin.");
                 }
             }
         }
@@ -1790,28 +1790,6 @@ namespace RowlEngine.Editor.ViewModels
                 () => SaveProjectNow(),
                 () => IsProjectDirty,
                 dirty => IsProjectDirty = dirty);
-        }
-
-        [RelayCommand]
-        public async Task ImportAssetAsync()
-        {
-            try
-            {
-                if (EditorDialogService.GetMainWindow() == null) return;
-
-                var files = await EditorDialogService.PickAssetFilesAsync();
-
-                if (files != null && files.Count > 0)
-                {
-                    var filePaths = files.Select(f => f.Path.LocalPath);
-                    EditorAssetImportService.ImportAssetFiles(filePaths, MainWindowViewModel.AssetsPath, AppendLog);
-                    AssetBrowserViewModel.RefreshAssets();
-                }
-            }
-            catch (Exception ex)
-            {
-                AppendLog($"Failed to import asset: {ex.Message}");
-            }
         }
 
         public void AppendLog(string message)
