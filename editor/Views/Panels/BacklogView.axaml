@@ -1,17 +1,18 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:RowlEngine.Editor.ViewModels"
+             xmlns:l="using:RowlEngine.Editor.Services.Strings"
              x:Class="RowlEngine.Editor.Views.Panels.BacklogView"
              x:DataType="vm:BacklogViewModel">
-  <Border Background="{DynamicResource LogConsoleBg}" Padding="8">
+  <Border Background="{DynamicResource PanelBackground}" Padding="8">
     <Grid>
     <ScrollViewer VerticalScrollBarVisibility="Auto">
       <ItemsControl ItemsSource="{Binding Entries}">
         <ItemsControl.ItemTemplate>
           <DataTemplate>
             <StackPanel Margin="0,0,0,8">
-              <TextBlock Text="{Binding speaker}" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource AccentColor}" />
-              <TextBlock Text="{Binding dialogue}" FontSize="12" TextWrapping="Wrap" Foreground="{DynamicResource PrimaryText}" />
+              <TextBlock Text="{Binding speaker}" FontSize="{DynamicResource FontSizeBodyLarge}" FontWeight="Bold" Foreground="{DynamicResource Accent}" />
+              <TextBlock Text="{Binding dialogue}" FontSize="{DynamicResource FontSizeBodyLarge}" TextWrapping="Wrap" Foreground="{DynamicResource PrimaryText}" />
             </StackPanel>
           </DataTemplate>
         </ItemsControl.ItemTemplate>
@@ -20,15 +21,13 @@
     <!-- Faz 5: boş-durum — kayıt yok (eylem: oyuncuyu aç) -->
     <StackPanel x:Name="BacklogEmptyPanel" IsVisible="{Binding IsEmpty}"
                 VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="8" Margin="16">
-      <TextBlock Text="Henüz diyalog kaydı yok." FontSize="11" FontStyle="Italic"
-                 Foreground="{DynamicResource MutedText}" HorizontalAlignment="Center"/>
-      <TextBlock Text="Oyuncu önizlemedeki konuşmalar burada birikir." FontSize="10"
-                 Foreground="{DynamicResource DimText}" HorizontalAlignment="Center"
-                 TextWrapping="Wrap" TextAlignment="Center"/>
-      <Button Content="Oyuncu Önizlemeyi Aç" Command="{Binding OpenPlayerCommand}"
-              ToolTip.Tip="Oyuncu önizleme panelini aç"
-              Background="{DynamicResource AccentButtonBg}" Foreground="{DynamicResource AccentButtonFg}"
-              CornerRadius="6" Padding="12,5" FontSize="11" HorizontalAlignment="Center"/>
+      <TextBlock Classes="muted" Text="{l:T Backlog.Empty}" FontSize="{DynamicResource FontSizeBody}" FontStyle="Italic"
+                 HorizontalAlignment="Center"/>
+      <TextBlock Classes="hint" Text="{l:T Backlog.Empty.Hint}" Foreground="{DynamicResource DimText}"
+                 HorizontalAlignment="Center" TextWrapping="Wrap" TextAlignment="Center"/>
+      <Button Classes="primary" Content="{l:T Backlog.OpenPlayer}" Command="{Binding OpenPlayerCommand}"
+              ToolTip.Tip="{l:T Backlog.OpenPlayer.Tip}"
+              HorizontalAlignment="Center"/>
     </StackPanel>
     </Grid>
   </Border>

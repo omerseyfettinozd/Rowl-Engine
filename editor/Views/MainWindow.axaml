@@ -12,7 +12,7 @@
         x:Class="RowlEngine.Editor.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         FlowDirection="{l:Direction}"
-        Title="Rowl Engine Editor"
+        Title="{l:T App.Window.Title}"
         Width="1600" Height="900"
         MinWidth="1100" MinHeight="700"
         WindowStartupLocation="CenterScreen"
@@ -40,8 +40,8 @@
             <Grid ColumnDefinitions="*,Auto,*">
 
                 <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                    <TextBlock Text="ROWL" FontWeight="Black" Foreground="{DynamicResource Accent}" FontSize="13" VerticalAlignment="Center" LetterSpacing="0.5"/>
-                    <TextBlock Text="STORY STUDIO" FontWeight="Light" Foreground="{DynamicResource MutedText}" FontSize="13" VerticalAlignment="Center" Margin="-2,0,0,0"/>
+                    <TextBlock Text="{l:T App.Brand.Name}" FontWeight="Black" Foreground="{DynamicResource Accent}" FontSize="13" VerticalAlignment="Center" LetterSpacing="0.5"/>
+                    <TextBlock Text="{l:T App.Brand.Tagline}" FontWeight="Light" Foreground="{DynamicResource MutedText}" FontSize="13" VerticalAlignment="Center" Margin="-2,0,0,0"/>
                 </StackPanel>
 
                 <!-- Kapsül (prototip .view-switcher) -->
@@ -179,12 +179,8 @@
                 <Grid Grid.Row="0" ClipToBounds="True">
 
                     <!-- BREADCRUMB + CHAPTER SCOPE (Faz 4 Dilim 3) -->
-                    <Border x:Name="BreadcrumbPanel" HorizontalAlignment="Left" VerticalAlignment="Top"
-                            Margin="12,12,0,0" ZIndex="90"
-                            Background="{DynamicResource SurfaceBackground}"
-                            BorderBrush="{DynamicResource BorderColor}" BorderThickness="1"
-                            CornerRadius="6" Padding="8,4"
-                            BoxShadow="0 4 16 0 #40000000">
+                    <Border x:Name="BreadcrumbPanel" Classes="floating" HorizontalAlignment="Left" VerticalAlignment="Top"
+                            Margin="12,12,0,0" ZIndex="90" Padding="8,4">
                         <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                             <ItemsControl ItemsSource="{Binding Subgraphs.Crumbs}">
                                 <ItemsControl.ItemsPanel>
@@ -197,34 +193,30 @@
                                         <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
                                             <TextBlock Text="/" Foreground="{DynamicResource MutedText}" FontSize="12" VerticalAlignment="Center"/>
                                             <Button Tag="CrumbNav" Content="{Binding Title}" Padding="6,2" FontSize="11"
-                                                    ToolTip.Tip="Bu düzeye dön"/>
+                                                    ToolTip.Tip="{l:T Graph.Crumb.Tip}"/>
                                         </StackPanel>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
                             <Border Width="1" Height="14" Background="{DynamicResource BorderColor}"/>
-                            <TextBlock Text="Bölüm:" Foreground="{DynamicResource MutedText}" FontSize="11" VerticalAlignment="Center"/>
+                            <TextBlock Text="{l:T Graph.Chapter}" Classes="muted" FontSize="{DynamicResource FontSizeBody}" VerticalAlignment="Center"/>
                             <ComboBox ItemsSource="{Binding Subgraphs.AvailableChapterOptions}"
                                       SelectedItem="{Binding Subgraphs.ChapterFilterOption}"
-                                      FontSize="11" MinWidth="110" ToolTip.Tip="Tuvali tek bölüme daralt"/>
+                                      FontSize="11" MinWidth="110" ToolTip.Tip="{l:T Graph.Chapter.Tip}"/>
                         </StackPanel>
                     </Border>
 
                     <!-- FAZ 3 (K4): Node paneli araç çubuğu — düğüm komutları üst çubuktan
                          buraya taşındı; yalnız düğüm grafiği açıkken görünür. -->
                     <Border x:Name="NodeToolbarPanel" HorizontalAlignment="Left" VerticalAlignment="Top"
-                            Margin="12,58,0,0" ZIndex="90" IsVisible="{Binding IsNodeGraphActive}"
-                            Background="{DynamicResource SurfaceBackground}"
-                            BorderBrush="{DynamicResource BorderColor}" BorderThickness="1"
-                            CornerRadius="8" Padding="4"
-                            BoxShadow="0 4 16 0 #40000000">
+                            Classes="floating" Margin="12,58,0,0" ZIndex="90" IsVisible="{Binding IsNodeGraphActive}">
                         <StackPanel x:Name="NodeToolbar" Orientation="Horizontal" Spacing="4">
-                            <Button Classes="ghost" Content="{l:T Node.Add}" ToolTip.Tip="{l:T Node.Add.Tip}" Command="{Binding AddNodeCommand}"/>
-                            <Button Classes="ghost" Content="{l:T Node.Disconnect}" ToolTip.Tip="{l:T Node.Disconnect.Tip}" Command="{Binding DisconnectSelectedNodeCablesCommand}"/>
-                            <Button Classes="ghost" Content="{l:T Node.Delete}" ToolTip.Tip="{l:T Node.Delete.Tip}" Command="{Binding DeleteSelectedNodeCommand}"/>
+                            <Button Classes="tool" Content="{l:T Node.Add}" ToolTip.Tip="{l:T Node.Add.Tip}" Command="{Binding AddNodeCommand}"/>
+                            <Button Classes="tool" Content="{l:T Node.Disconnect}" ToolTip.Tip="{l:T Node.Disconnect.Tip}" Command="{Binding DisconnectSelectedNodeCablesCommand}"/>
+                            <Button Classes="tool" Content="{l:T Node.Delete}" ToolTip.Tip="{l:T Node.Delete.Tip}" Command="{Binding DeleteSelectedNodeCommand}"/>
                             <Border Classes="capsuleDivider"/>
-                            <Button Classes="ghost" Content="{l:T Node.Group}" ToolTip.Tip="{l:T Node.Group.Tip}" Command="{Binding CreateGroupFromSelectionCommand}"/>
-                            <Button Classes="ghost" Content="{l:T Node.Up}" ToolTip.Tip="{l:T Node.Up.Tip}" Command="{Binding ExitSubgraphCommand}"/>
+                            <Button Classes="tool" Content="{l:T Node.Group}" ToolTip.Tip="{l:T Node.Group.Tip}" Command="{Binding CreateGroupFromSelectionCommand}"/>
+                            <Button Classes="tool" Content="{l:T Node.Up}" ToolTip.Tip="{l:T Node.Up.Tip}" Command="{Binding ExitSubgraphCommand}"/>
                         </StackPanel>
                     </Border>
 
@@ -265,17 +257,17 @@
                             BoxShadow="0 8 24 0 #40000000">
                         <StackPanel Spacing="8">
                             <TextBox Text="{Binding SearchQuery}"
-                                     Watermark="Ara: başlık, konuşmacı, metin, speaker:Evelyn, type:choice… (Esc kapat)"
+                                     Watermark="{l:T Search.Overlay.Watermark}"
                                      Background="{DynamicResource InputBackground}"
                                      Foreground="{DynamicResource PrimaryText}"
                                      BorderThickness="0" Padding="12,8" FontSize="14"/>
                             <!-- Filtre çubuğu: tür / konuşmacı / renk etiketi -->
                             <Grid ColumnDefinitions="Auto,*,Auto,*,Auto,*" VerticalAlignment="Center">
-                                <TextBlock Grid.Column="0" Text="Tür:" Foreground="{DynamicResource MutedText}" FontSize="11" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                <TextBlock Grid.Column="0" Text="{l:T Search.Filter.Kind}" Foreground="{DynamicResource MutedText}" FontSize="11" VerticalAlignment="Center" Margin="0,0,4,0"/>
                                 <ComboBox Grid.Column="1" ItemsSource="{Binding Search.AvailableNodeKinds}" SelectedItem="{Binding Search.SelectedNodeKind}" FontSize="11" Margin="0,0,8,0"/>
-                                <TextBlock Grid.Column="2" Text="Konuşmacı:" Foreground="{DynamicResource MutedText}" FontSize="11" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                <TextBlock Grid.Column="2" Text="{l:T Search.Filter.Speaker}" Foreground="{DynamicResource MutedText}" FontSize="11" VerticalAlignment="Center" Margin="0,0,4,0"/>
                                 <ComboBox Grid.Column="3" ItemsSource="{Binding Search.AvailableSpeakers}" SelectedItem="{Binding Search.SelectedSpeaker}" FontSize="11" Margin="0,0,8,0"/>
-                                <TextBlock Grid.Column="4" Text="Renk:" Foreground="{DynamicResource MutedText}" FontSize="11" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                <TextBlock Grid.Column="4" Text="{l:T Search.Filter.Color}" Foreground="{DynamicResource MutedText}" FontSize="11" VerticalAlignment="Center" Margin="0,0,4,0"/>
                                 <ComboBox Grid.Column="5" ItemsSource="{Binding Search.AvailableColorTags}" SelectedItem="{Binding Search.SelectedColorTag}" FontSize="11"/>
                             </Grid>
                             <!-- Sonuç listesi: başlık + alan rozeti + metin kesiti -->
@@ -314,26 +306,19 @@
                 <Grid Grid.Row="2" MinHeight="140" IsVisible="{Binding IsBottomPanelVisible}">
                     <TabControl SelectedIndex="{Binding BottomPanelActiveTab}"
                                 Background="{DynamicResource PanelBackground}">
-                        <TabControl.Styles>
-                            <Style Selector="TabItem">
-                                <Setter Property="FontSize" Value="12"/>
-                                <Setter Property="Padding" Value="10,5"/>
-                                <Setter Property="Foreground" Value="{DynamicResource PrimaryText}"/>
-                            </Style>
-                        </TabControl.Styles>
-                        <TabItem Header="{l:T Panel.Assets}" IsVisible="{Binding IsAssetsPanelVisible}">
+                        <TabItem Classes="compact" Header="{l:T Panel.Assets}" IsVisible="{Binding IsAssetsPanelVisible}">
                             <panels:ProjectAssetsView/>
                         </TabItem>
-                        <TabItem Header="{l:T Panel.Log}" IsVisible="{Binding IsLogPanelVisible}">
+                        <TabItem Classes="compact" Header="{l:T Panel.Log}" IsVisible="{Binding IsLogPanelVisible}">
                             <panels:OutputLogView/>
                         </TabItem>
-                        <TabItem Header="{l:T Panel.Backlog}" IsVisible="{Binding IsBacklogPanelVisible}">
+                        <TabItem Classes="compact" Header="{l:T Panel.Backlog}" IsVisible="{Binding IsBacklogPanelVisible}">
                             <panels:BacklogView DataContext="{Binding BacklogViewModel}"/>
                         </TabItem>
-                        <TabItem Header="{l:T Panel.SaveSlots}" IsVisible="{Binding IsSaveSlotsPanelVisible}">
+                        <TabItem Classes="compact" Header="{l:T Panel.SaveSlots}" IsVisible="{Binding IsSaveSlotsPanelVisible}">
                             <panels:SaveSlotsView DataContext="{Binding SaveSlotsViewModel}"/>
                         </TabItem>
-                        <TabItem Header="{l:T Panel.Issues}" IsVisible="{Binding IsProjectIssuesPanelVisible}">
+                        <TabItem Classes="compact" Header="{l:T Panel.Issues}" IsVisible="{Binding IsProjectIssuesPanelVisible}">
                             <panels:ProjectIssuesView DataContext="{Binding ProjectIssuesViewModel}"/>
                         </TabItem>
                     </TabControl>

@@ -5,62 +5,68 @@
              xmlns:comp="using:RowlEngine.Editor.ViewModels.Components"
              xmlns:ctrl="using:RowlEngine.Editor.Controls"
              xmlns:vm="using:RowlEngine.Editor.ViewModels"
+             xmlns:l="using:RowlEngine.Editor.Services.Strings"
              mc:Ignorable="d"
              x:Class="RowlEngine.Editor.Views.Components.CharacterComponentView"
              x:DataType="comp:CharacterComponentViewModel">
 
-    <Border Background="{DynamicResource CardBackground}" CornerRadius="2" Margin="0,4" Padding="0" BorderBrush="{DynamicResource CardBorderColor}" BorderThickness="1">
+    <Border Classes="card" Margin="0,4" Padding="0" ClipToBounds="True">
         <StackPanel>
-            <!-- Component Header -->
-            <Border Background="{DynamicResource CardHeaderBackground}" CornerRadius="2,2,0,0" Padding="8,6">
-                <Grid ColumnDefinitions="*, Auto">
-                    <Grid Grid.Column="0" ColumnDefinitions="Auto,*" VerticalAlignment="Center">
-                        <CheckBox Grid.Column="0" IsChecked="{Binding IsEnabled}" ToolTip.Tip="Enable/Disable" MinWidth="0" Padding="0" Margin="0,0,2,0" VerticalAlignment="Center"/>
-                        <ToggleButton Grid.Column="1" Classes="header" IsChecked="{Binding IsExpanded}" ToolTip.Tip="Genişlet/Daralt"
-                                      Background="Transparent" BorderThickness="0" Padding="4,2"
-                                      HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" VerticalAlignment="Center">
-                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6">
-                                <TextBlock Grid.Column="0" Text="Karakter" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource MutedText}" VerticalAlignment="Center"/>
-                                <TextBlock Grid.Column="1" Text="{Binding DisplayName}" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource PrimaryText}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-                            </Grid>
-                        </ToggleButton>
-                    </Grid>
-                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="3" VerticalAlignment="Center">
-                        <Button Content="Yukarı" Command="{Binding MoveUpCommand}" ToolTip.Tip="Move Up" FontSize="10" Padding="4,2" MinWidth="0" Background="Transparent" Foreground="{DynamicResource MutedText}" BorderThickness="0"/>
-                        <Button Content="Aşağı" Command="{Binding MoveDownCommand}" ToolTip.Tip="Move Down" FontSize="10" Padding="4,2" MinWidth="0" Background="Transparent" Foreground="{DynamicResource MutedText}" BorderThickness="0"/>
-                        <ToggleButton IsChecked="{Binding IsExpanded}" Content="Ayar" FontSize="10" Padding="4,2" MinWidth="0" Background="Transparent" Foreground="{DynamicResource MutedText}" BorderThickness="0"/>
-                        <Button Content="Sil" FontSize="10" Padding="4,2" MinWidth="0" Background="Transparent" Foreground="{DynamicResource ErrorColor}" BorderThickness="0" ToolTip.Tip="Remove Component" Command="{Binding RemoveSelfCommand}"/>
-                    </StackPanel>
-                </Grid>
+            <!-- Bileşen kartı başlığı (8 kartta aynı kalıp): onay kutusu | ad (yıldız sütun, kırpılır) | Ayar | "..." menüsü.
+                 Yukarı/Aşağı/Sil menüde; böylece dar Denetçide başlık taşmaz. Komutlar aynı. -->
+            <Border Background="{DynamicResource CardHeaderBackground}" Padding="8,6">
+              <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="2">
+                <CheckBox Grid.Column="0" IsChecked="{Binding IsEnabled}" ToolTip.Tip="{l:T Common.Enable.Tip}" MinWidth="0" Padding="0" Margin="0,0,2,0" VerticalAlignment="Center"/>
+                <ToggleButton Grid.Column="1" Classes="header" IsChecked="{Binding IsExpanded}" ToolTip.Tip="{l:T Common.ExpandCollapse.Tip}"
+                              Background="Transparent" BorderThickness="0" Padding="4,2" MinWidth="0"
+                              HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" VerticalAlignment="Center">
+                  <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6">
+                    <TextBlock Grid.Column="0" Classes="cardKind" Text="{l:T Component.Character.Name}" VerticalAlignment="Center"/>
+                    <TextBlock Grid.Column="1" Classes="cardTitle" Text="{Binding DisplayName}" VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding DisplayName}"/>
+                  </Grid>
+                </ToggleButton>
+                <ToggleButton Grid.Column="2" Classes="compact" IsChecked="{Binding IsExpanded}" Content="{l:T Common.Settings}" VerticalAlignment="Center"/>
+                <Button Grid.Column="3" Classes="compact" Content="..." ToolTip.Tip="{l:T Inspector.Components.Actions.Tip}" VerticalAlignment="Center">
+                  <Button.Flyout>
+                    <MenuFlyout Placement="BottomEdgeAlignedRight">
+                      <MenuItem Header="{l:T Common.MoveUp.Tip}" Command="{Binding MoveUpCommand}"/>
+                      <MenuItem Header="{l:T Common.MoveDown.Tip}" Command="{Binding MoveDownCommand}"/>
+                      <Separator/>
+                      <MenuItem Header="{l:T Common.Delete}" Command="{Binding RemoveSelfCommand}"/>
+                    </MenuFlyout>
+                  </Button.Flyout>
+                </Button>
+              </Grid>
             </Border>
 
             <!-- Component Body -->
             <StackPanel IsVisible="{Binding IsExpanded}" Spacing="8" Margin="8,6">
                 <StackPanel Spacing="2">
-                    <TextBlock Text="Karakter Görseli (Sürükle-Bırak)" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                    <TextBlock Classes="fieldLabel" Text="{l:T Component.Character.Sprite.Label}"/>
                     <Border x:Name="DropZoneBorder"
                             DragDrop.AllowDrop="True"
                             Background="{DynamicResource InputBackground}"
                             BorderBrush="{DynamicResource BorderColor}"
                             BorderThickness="1.5"
-                            CornerRadius="4"
+                            CornerRadius="{DynamicResource RadiusSmall}"
                             Padding="6">
                         <StackPanel Spacing="6">
                             <ctrl:AssetPickerControl AssetPath="{Binding Sprite, Mode=TwoWay}"
-                                                             Watermark="Örn: characters/ornek.png veya boş"
+                                                             Watermark="{l:T Component.Character.Sprite.Watermark}"
                                                              BrowseCommand="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).SelectImageForComponentCommand}"
                                                              BrowseParameter="{Binding}"/>
                             <ctrl:FieldValidationBadge Validation="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).InspectorViewModel.Validation}"
                                                        NodeId="{Binding Node.Id}" FieldKey="character.sprite"/>
                             <!-- Sprite Preview Thumbnail / Drop Area -->
-                            <Border Background="{DynamicResource CardHeaderBackground}" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1" CornerRadius="4" Padding="4" MinHeight="65" MaxHeight="130">
+                            <Border Background="{DynamicResource CardHeaderBackground}" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1" CornerRadius="{DynamicResource RadiusSmall}" Padding="4" MinHeight="65" MaxHeight="130">
                                 <Panel>
                                     <Image Source="{Binding SpriteBitmap}" Stretch="Uniform" MaxHeight="120"
                                            IsVisible="{Binding SpriteBitmap, Converter={x:Static ObjectConverters.IsNotNull}}"/>
                                     <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="2"
                                                 IsVisible="{Binding SpriteBitmap, Converter={x:Static ObjectConverters.IsNull}}">
-                                        <TextBlock Text="Görseli Buraya Sürükle-Bırak" FontSize="11" Foreground="{DynamicResource MutedText}" HorizontalAlignment="Center" FontWeight="SemiBold"/>
-                                        <TextBlock Text="Assets panelinden sürükleyin veya Gözat'a tıklayın" FontSize="9" Foreground="{DynamicResource MutedText}" HorizontalAlignment="Center" FontStyle="Italic"/>
+                                        <TextBlock Classes="fieldLabel" Text="{l:T Component.Character.Sprite.Drop}" HorizontalAlignment="Center" FontWeight="SemiBold"/>
+                                        <TextBlock Classes="hint" Text="{l:T Component.Character.Sprite.DropHint}" HorizontalAlignment="Center" FontStyle="Italic"/>
                                     </StackPanel>
                                 </Panel>
                             </Border>
@@ -70,11 +76,11 @@
 
                 <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
                     <StackPanel Grid.Column="0" Spacing="2">
-                        <TextBlock Text="X" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                        <TextBlock Classes="fieldLabel" Text="{l:T Common.X}"/>
                         <NumericUpDown Value="{Binding X}" Minimum="-500" Maximum="2500" Increment="20" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}"/>
                     </StackPanel>
                     <StackPanel Grid.Column="1" Spacing="2">
-                        <TextBlock Text="Y" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                        <TextBlock Classes="fieldLabel" Text="{l:T Common.Y}"/>
                         <NumericUpDown Value="{Binding Y}" Minimum="-500" Maximum="2500" Increment="20" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}"/>
                     </StackPanel>
                 </Grid>
@@ -82,70 +88,70 @@
                 <!-- Faz 5 Dilim 3: katmanlı karakter kütüphanesi (body/face/outfit/accessory) -->
                 <Separator Background="{DynamicResource BorderColor}" Height="1"/>
                 <StackPanel Spacing="4">
-                    <TextBlock Text="KATMANLAR (LAYERS — body &lt; face &lt; outfit &lt; accessory)" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource MutedText}"/>
+                    <TextBlock Classes="caption" Text="{l:T Component.Character.Layers.Title}"/>
                     <StackPanel Spacing="2">
-                        <TextBlock Text="Body (boşsa üstteki sprite kullanılır)" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                        <TextBlock Classes="fieldLabel" Text="{l:T Component.Character.Layers.Body}"/>
                         <TextBox Text="{Binding LayerBodyAsset}" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}"/>
                     </StackPanel>
                     <StackPanel Spacing="2">
-                        <TextBlock Text="Face" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                        <TextBlock Classes="fieldLabel" Text="{l:T Component.Character.Layers.Face}"/>
                         <TextBox Text="{Binding LayerFaceAsset}" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}"/>
                     </StackPanel>
                     <StackPanel Spacing="2">
-                        <TextBlock Text="Outfit" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                        <TextBlock Classes="fieldLabel" Text="{l:T Component.Character.Layers.Outfit}"/>
                         <TextBox Text="{Binding LayerOutfitAsset}" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}"/>
                     </StackPanel>
                     <StackPanel Spacing="2">
-                        <TextBlock Text="Accessory" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                        <TextBlock Classes="fieldLabel" Text="{l:T Component.Character.Layers.Accessory}"/>
                         <TextBox Text="{Binding LayerAccessoryAsset}" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}"/>
                     </StackPanel>
                     <StackPanel Spacing="2">
-                        <TextBlock Text="Expression (seçim önizlemeye atomik uygulanır)" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                        <TextBlock Classes="fieldLabel" Text="{l:T Component.Character.Layers.Expression}"/>
                         <ComboBox ItemsSource="{Binding ExpressionNames}" SelectedItem="{Binding SelectedExpressionName, Mode=TwoWay}" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}" HorizontalAlignment="Stretch"/>
                     </StackPanel>
-                    <TextBlock Text="{Binding LayersBadgeText}" IsVisible="{Binding IsLayersBadgeVisible}" FontSize="10" Foreground="{DynamicResource WarningBrush}" TextWrapping="Wrap"/>
+                    <TextBlock Classes="hint" Text="{Binding LayersBadgeText}" IsVisible="{Binding IsLayersBadgeVisible}" Foreground="{DynamicResource WarningBrush}" TextWrapping="Wrap"/>
                 </StackPanel>
 
                 <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
                     <StackPanel Grid.Column="0" Spacing="2">
-                        <TextBlock Text="Width" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                        <TextBlock Classes="fieldLabel" Text="{l:T Common.Width}"/>
                         <NumericUpDown Value="{Binding Width}" Minimum="60" Maximum="2000" Increment="20" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}"/>
                     </StackPanel>
                     <StackPanel Grid.Column="1" Spacing="2">
-                        <TextBlock Text="Height" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                        <TextBlock Classes="fieldLabel" Text="{l:T Common.Height}"/>
                         <NumericUpDown Value="{Binding Height}" Minimum="60" Maximum="2000" Increment="20" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}"/>
                     </StackPanel>
                 </Grid>
 
                 <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
                     <StackPanel Grid.Column="0" Spacing="2">
-                        <TextBlock Text="Scale (1.0 = 100%)" FontSize="10" Foreground="{DynamicResource MutedText}"/>
-                        <NumericUpDown Value="{Binding Scale}" Minimum="0.05" Maximum="10.0" Increment="0.1" FormatString="0.00" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource AccentColor}" BorderBrush="{DynamicResource BorderColor}"/>
+                        <TextBlock Classes="fieldLabel" Text="{l:T Component.Character.Scale}"/>
+                        <NumericUpDown Value="{Binding Scale}" Minimum="0.05" Maximum="10.0" Increment="0.1" FormatString="0.00" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource Accent}" BorderBrush="{DynamicResource BorderColor}"/>
                     </StackPanel>
                     <StackPanel Grid.Column="1" Spacing="2">
                         <DockPanel>
-                            <Button DockPanel.Dock="Right" Content="Sıfırla" Command="{Binding ResetRotation}" ToolTip.Tip="Rotasyonu Sıfırla (0°)" Background="Transparent" Foreground="{DynamicResource MutedText}" FontSize="10" Padding="4,1" Margin="2,0,0,0" BorderThickness="0"/>
-                            <TextBlock Text="Rotation" FontSize="10" Foreground="{DynamicResource MutedText}" VerticalAlignment="Center"/>
+                            <Button DockPanel.Dock="Right" Classes="compact" Content="{l:T Common.Reset}" Command="{Binding ResetRotation}" ToolTip.Tip="{l:T Component.Character.Rotation.Reset.Tip}" Margin="2,0,0,0"/>
+                            <TextBlock Classes="fieldLabel" Text="{l:T Common.Rotation}" VerticalAlignment="Center"/>
                         </DockPanel>
                         <NumericUpDown Value="{Binding Rotation}" Minimum="-360" Maximum="360" Increment="5" FormatString="0.0°" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}"/>
                     </StackPanel>
                 </Grid>
 
-                <CheckBox IsChecked="{Binding MaintainAspectRatio}" Content="En/Boy Oranını Koru (Aspect Ratio)" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                <CheckBox IsChecked="{Binding MaintainAspectRatio}" Content="{l:T Component.Character.AspectRatio}" FontSize="{DynamicResource FontSizeSmall}" Foreground="{DynamicResource MutedText}"/>
 
                 <!-- OBS Quick Assist Buttons -->
                 <StackPanel Spacing="4">
-                    <TextBlock Text="OBS Hızlı Hizalama (Assist)" FontSize="10" Foreground="{DynamicResource MutedText}" FontWeight="SemiBold"/>
+                    <TextBlock Classes="caption" Text="{l:T Component.Character.Assist.Title}"/>
                     <Grid ColumnDefinitions="*, *, *" ColumnSpacing="8">
-                        <Button Grid.Column="0" Content="Ortala" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).CenterSelectedElementCommand}"
-                                ToolTip.Tip="Karakteri yatay olarak ekranda ortalar"
-                                Background="{DynamicResource ToolbarButtonBg}" Foreground="{DynamicResource PrimaryText}" FontSize="10" Padding="4,4" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" CornerRadius="4"/>
-                        <Button Grid.Column="1" Content="Zemine" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AlignCharacterToBottomCommand}"
-                                ToolTip.Tip="Karakteri alt zemin çizgisine oturtur"
-                                Background="{DynamicResource ToolbarButtonBg}" Foreground="{DynamicResource PrimaryText}" FontSize="10" Padding="4,4" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" CornerRadius="4"/>
-                        <Button Grid.Column="2" Content="Sıfırla" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ResetCharacterSizeCommand}" CommandParameter="{Binding}"
-                                ToolTip.Tip="Standart karakter boyutuna sıfırlar (600x900)"
-                                Background="{DynamicResource ToolbarButtonBg}" Foreground="{DynamicResource PrimaryText}" FontSize="10" Padding="4,4" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" CornerRadius="4"/>
+                        <Button Grid.Column="0" Classes="ghost" Content="{l:T Component.Character.Assist.Center}" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).CenterSelectedElementCommand}"
+                                ToolTip.Tip="{l:T Component.Character.Assist.Center.Tip}"
+                               />
+                        <Button Grid.Column="1" Classes="ghost" Content="{l:T Component.Character.Assist.Ground}" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AlignCharacterToBottomCommand}"
+                                ToolTip.Tip="{l:T Component.Character.Assist.Ground.Tip}"
+                               />
+                        <Button Grid.Column="2" Classes="ghost" Content="{l:T Common.Reset}" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ResetCharacterSizeCommand}" CommandParameter="{Binding}"
+                                ToolTip.Tip="{l:T Component.Character.Assist.Reset.Tip}"
+                               />
                     </Grid>
                 </StackPanel>
 
@@ -153,15 +159,15 @@
                 <Separator Background="{DynamicResource BorderColor}" Height="1"/>
                 <StackPanel Spacing="4">
                     <Grid ColumnDefinitions="*, Auto">
-                        <TextBlock Grid.Column="0" Text="KARAKTER SES TONU (VOICE BLIP)" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource MutedText}" VerticalAlignment="Center"/>
-                        <Button Grid.Column="1" Content="Önizle" Command="{Binding PreviewVoiceBlipCommand}"
-                                ToolTip.Tip="Karakter ses tonunu test et"
-                                FontSize="10" Padding="6,2" Background="{DynamicResource AccentButtonBg}" Foreground="{DynamicResource AccentButtonFg}" CornerRadius="4"/>
+                        <TextBlock Grid.Column="0" Classes="caption" Text="{l:T Component.Character.Voice.Title}" VerticalAlignment="Center"/>
+                        <Button Grid.Column="1" Classes="ghost" Content="{l:T Component.Character.Voice.Preview}" Command="{Binding PreviewVoiceBlipCommand}"
+                                ToolTip.Tip="{l:T Component.Character.Voice.Preview.Tip}"
+                                Padding="6,2" MinHeight="0"/>
                     </Grid>
 
                     <StackPanel Spacing="2">
-                        <TextBlock Text="Varsayılan Ses Dosyası (.wav / .ogg - boşsa synth)" FontSize="10" Foreground="{DynamicResource MutedText}"/>
-                        <ctrl:AssetPickerControl AssetPath="{Binding VoiceBlipSound, Mode=TwoWay}" Watermark="Örn: voice_evelyn.wav veya boş"/>
+                        <TextBlock Classes="fieldLabel" Text="{l:T Component.Character.Voice.File}"/>
+                        <ctrl:AssetPickerControl AssetPath="{Binding VoiceBlipSound, Mode=TwoWay}" Watermark="{l:T Component.Character.Voice.File.Watermark}"/>
                         <ctrl:FieldValidationBadge Validation="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).InspectorViewModel.Validation}"
                                                    NodeId="{Binding Node.Id}" FieldKey="character.voice_blip"/>
                     </StackPanel>
@@ -169,16 +175,16 @@
                     <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
                         <StackPanel Grid.Column="0" Spacing="2">
                             <Grid ColumnDefinitions="*, Auto">
-                                <TextBlock Grid.Column="0" Text="Base Pitch" FontSize="10" Foreground="{DynamicResource MutedText}"/>
-                                <TextBlock Grid.Column="1" Text="{Binding VoiceBlipPitch, StringFormat='{}{0:F2}x'}" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource PrimaryText}"/>
+                                <TextBlock Grid.Column="0" Classes="fieldLabel" Text="{l:T Component.Character.Voice.Pitch}"/>
+                                <TextBlock Grid.Column="1" Classes="fieldValue" Text="{Binding VoiceBlipPitch, StringFormat='{}{0:F2}x'}"/>
                             </Grid>
                             <Slider Value="{Binding VoiceBlipPitch}" Minimum="0.5" Maximum="2.0" SmallChange="0.05" LargeChange="0.1"/>
                         </StackPanel>
 
                         <StackPanel Grid.Column="1" Spacing="2">
                             <Grid ColumnDefinitions="*, Auto">
-                                <TextBlock Grid.Column="0" Text="Cadence" FontSize="10" Foreground="{DynamicResource MutedText}"/>
-                                <TextBlock Grid.Column="1" Text="{Binding VoiceBlipCadence, StringFormat='{}Her {0}.'}" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource PrimaryText}"/>
+                                <TextBlock Grid.Column="0" Classes="fieldLabel" Text="{l:T Component.Character.Voice.Cadence}"/>
+                                <TextBlock Grid.Column="1" Classes="fieldValue" Text="{Binding VoiceBlipCadence, StringFormat='{}Her {0}.'}"/>
                             </Grid>
                             <Slider Value="{Binding VoiceBlipCadence}" Minimum="1" Maximum="5" SmallChange="1" LargeChange="1"/>
                         </StackPanel>

@@ -3,82 +3,72 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="using:RowlEngine.Editor.ViewModels"
+             xmlns:l="using:RowlEngine.Editor.Services.Strings"
              mc:Ignorable="d" d:DesignWidth="300" d:DesignHeight="600"
              x:Class="RowlEngine.Editor.Views.Panels.ProjectAssetsView"
              x:DataType="vm:MainWindowViewModel">
     <Border Background="{DynamicResource PanelBackground}">
-        <Grid RowDefinitions="Auto, Auto, *, Auto">
-            <!-- Unity kromu: tek satır araç çubuğu — başlık + yol çipi +
-                 üst klasör + 4 aksiyon (sıra + komutlar aynen). -->
-            <Border Grid.Row="0" Background="{DynamicResource SurfaceBackground}"
-                    BorderBrush="{DynamicResource BorderColor}" BorderThickness="0,0,0,1"
-                    Padding="8,4">
+        <Grid RowDefinitions="Auto, Auto, Auto, *, Auto">
+            <!-- Araç çubuğu: başlık + 4 aksiyon (sıra + komutlar aynen). -->
+            <Border Grid.Row="0" Classes="panelHeader">
                 <DockPanel LastChildFill="True">
-                    <TextBlock Text="Varlıklar" FontWeight="Bold" FontSize="12"
-                               Foreground="{DynamicResource PrimaryText}" VerticalAlignment="Center"
-                               Margin="0,0,6,0"/>
                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="4"
                                 VerticalAlignment="Center">
-                        <Button Content="Yeni Klasör"
-                                ToolTip.Tip="Seçili konumun altında klasör oluştur"
-                                Command="{Binding AssetBrowserViewModel.CreateFolderCommand}"
-                                Background="Transparent" Foreground="{DynamicResource PrimaryText}"
-                                BorderBrush="{DynamicResource BorderColor}" BorderThickness="1"
-                                CornerRadius="2" Padding="6,2" FontSize="10"/>
-                        <Button Content="İçe Aktar"
-                                ToolTip.Tip="Dosyayı proje Assets klasörüne içe aktar"
-                                Command="{Binding ImportAssetCommand}"
-                                Background="{DynamicResource AccentButtonBg}" Foreground="{DynamicResource AccentButtonFg}"
-                                CornerRadius="2" Padding="6,2" FontSize="10"/>
-                        <Button Content="Yenile"
-                                ToolTip.Tip="Varlık listesini yenile"
-                                Command="{Binding AssetBrowserViewModel.RefreshAssetsCommand}"
-                                Background="Transparent" Foreground="{DynamicResource PrimaryText}"
-                                BorderBrush="{DynamicResource BorderColor}" BorderThickness="1"
-                                CornerRadius="2" Padding="6,2" FontSize="12"/>
+                        <Button Classes="ghost" Padding="8,4" Content="{l:T Assets.NewFolder}"
+                                ToolTip.Tip="{l:T Assets.NewFolder.Tip}"
+                                Command="{Binding AssetBrowserViewModel.CreateFolderCommand}"/>
+                        <Button Classes="primary" Padding="10,4" Content="{l:T Assets.Import}"
+                                ToolTip.Tip="{l:T Assets.Import.Tip}"
+                                Command="{Binding ImportAssetCommand}"/>
+                        <Button Classes="ghost" Padding="8,4" Content="{l:T Assets.Refresh}"
+                                ToolTip.Tip="{l:T Assets.Refresh.Tip}"
+                                Command="{Binding AssetBrowserViewModel.RefreshAssetsCommand}"/>
                         <!-- Unity kromu Dilim G1: ızgara/liste anahtarı -->
-                        <Button Content="{Binding AssetBrowserViewModel.AssetViewToggleText}"
-                                ToolTip.Tip="Izgara/Liste görünümü arasında geç"
-                                Command="{Binding AssetBrowserViewModel.ToggleAssetViewCommand}"
-                                Background="Transparent" Foreground="{DynamicResource PrimaryText}"
-                                BorderBrush="{DynamicResource BorderColor}" BorderThickness="1"
-                                CornerRadius="2" Padding="6,2" FontSize="10"/>
+                        <Button Classes="ghost" Padding="8,4"
+                                Content="{Binding AssetBrowserViewModel.AssetViewToggleText}"
+                                ToolTip.Tip="{l:T Assets.ViewToggle.Tip}"
+                                Command="{Binding AssetBrowserViewModel.ToggleAssetViewCommand}"/>
                     </StackPanel>
-                    <Button DockPanel.Dock="Left" Content="↑ Üst"
-                            ToolTip.Tip="Üst klasöre git"
-                            Command="{Binding AssetBrowserViewModel.GoToParentFolderCommand}"
-                            Background="Transparent" Foreground="{DynamicResource PrimaryText}"
-                            BorderBrush="{DynamicResource BorderColor}" BorderThickness="1"
-                            CornerRadius="2" Padding="6,2" FontSize="10" Margin="0,0,6,0"
-                            VerticalAlignment="Center"/>
-                    <Border Background="{DynamicResource SurfaceBackground}"
-                            BorderBrush="{DynamicResource BorderSubtle}" BorderThickness="1"
-                            CornerRadius="2" Padding="8,2" VerticalAlignment="Center"
-                            MinWidth="80" Margin="0,0,6,0">
-                        <TextBlock Text="{Binding AssetBrowserViewModel.SelectedFolder.RelativePath, FallbackValue=Assets}"
-                                   Foreground="{DynamicResource SecondaryText}" FontSize="11"
-                                   TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding AssetBrowserViewModel.SelectedFolder.FullPath}"/>
-                    </Border>
+                    <TextBlock Text="{l:T Assets.Title}" Classes="panelTitle" Margin="0,0,8,0"/>
                 </DockPanel>
             </Border>
 
-            <!-- Faz 4: arama + tür filtresi (ince satır) -->
-            <Grid Grid.Row="1" ColumnDefinitions="*, Auto" Margin="8,4,8,2">
-                <TextBox Grid.Column="0" Watermark="Ara: ad veya uzantı"
+            <!-- Konum satırı: üst klasör + yol çipi -->
+            <Grid Grid.Row="1" ColumnDefinitions="Auto,*" Margin="8,6,8,0">
+                <Button Grid.Column="0" Classes="ghost" Padding="8,4"
+                        Content="{l:T Assets.Up}"
+                        ToolTip.Tip="{l:T Assets.Up.Tip}"
+                        Command="{Binding AssetBrowserViewModel.GoToParentFolderCommand}"
+                        Margin="0,0,6,0" VerticalAlignment="Center"/>
+                <Border Grid.Column="1" Background="{DynamicResource InputBackground}"
+                        BorderBrush="{DynamicResource BorderSubtle}" BorderThickness="1"
+                        CornerRadius="{DynamicResource RadiusSmall}" Padding="8,0"
+                        MinHeight="{DynamicResource ControlHeight}" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding AssetBrowserViewModel.SelectedFolder.RelativePath, FallbackValue=Assets}"
+                               Classes="body" VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis"
+                               ToolTip.Tip="{Binding AssetBrowserViewModel.SelectedFolder.FullPath}"/>
+                </Border>
+            </Grid>
+
+            <!-- Arama + tür filtresi -->
+            <Grid Grid.Row="2" ColumnDefinitions="*, Auto" Margin="8,6,8,6">
+                <TextBox Grid.Column="0" Watermark="{l:T Assets.Search.Watermark}"
                          Text="{Binding AssetBrowserViewModel.SearchText}"
-                         Background="{DynamicResource InputBackground}"
-                         Foreground="{DynamicResource PrimaryText}"
-                         BorderBrush="{DynamicResource BorderSubtle}"
-                         CornerRadius="2" Padding="6,2" FontSize="11" Margin="0,0,6,0"/>
+                         MinHeight="{DynamicResource ControlHeight}"
+                         CornerRadius="{DynamicResource RadiusSmall}"
+                         FontSize="{DynamicResource FontSizeBody}" Margin="0,0,6,0"/>
                 <ComboBox Grid.Column="1"
                           ItemsSource="{Binding AssetBrowserViewModel.AssetTypeFilters}"
                           SelectedItem="{Binding AssetBrowserViewModel.SelectedTypeFilter, Mode=TwoWay}"
-                          FontSize="11" MinWidth="90"/>
+                          MinHeight="{DynamicResource ControlHeight}"
+                          CornerRadius="{DynamicResource RadiusSmall}"
+                          FontSize="{DynamicResource FontSizeBody}" MinWidth="90"/>
             </Grid>
 
             <!-- Faz 6 Dilim 3: sol klasör ağacı + sağ simge ızgarası
                  (yol çipi üst araç çubuğunda). -->
-            <Grid Grid.Row="2" ColumnDefinitions="220,6,*">
+            <Grid Grid.Row="3" ColumnDefinitions="220,6,*">
             <TreeView Grid.Column="0"
                       Background="Transparent"
                       ItemsSource="{Binding AssetBrowserViewModel.AssetTree}"
@@ -102,14 +92,14 @@
                                     DoubleTapped="OnAssetDoubleTapped">
                             <StackPanel.ContextMenu>
                                 <ContextMenu>
-                                    <MenuItem Header="Yeni Klasör Oluştur" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.CreateFolderCommand}"/>
-                                    <MenuItem Header="Dosya İçe Aktar..." Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ImportAssetCommand}"/>
+                                    <MenuItem Header="{l:T Assets.Menu.NewFolder}" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.CreateFolderCommand}"/>
+                                    <MenuItem Header="{l:T Assets.Menu.Import}" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ImportAssetCommand}"/>
                                     <Separator/>
-                                    <MenuItem Header="Yeniden Adlandır (F2)" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.StartRenameCommand}"/>
-                                    <MenuItem Header="Dosya Yöneticisinde Aç" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.OpenInExplorerCommand}"/>
+                                    <MenuItem Header="{l:T Assets.Menu.Rename}" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.StartRenameCommand}"/>
+                                    <MenuItem Header="{l:T Assets.Menu.OpenInExplorer}" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.OpenInExplorerCommand}"/>
                                     <Separator/>
-                                    <MenuItem Header="Sil" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.DeleteAssetCommand}"/>
-                                    <MenuItem Header="Yenile" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.RefreshAssetsCommand}"/>
+                                    <MenuItem Header="{l:T Common.Delete}" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.DeleteAssetCommand}"/>
+                                    <MenuItem Header="{l:T Assets.Refresh}" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.RefreshAssetsCommand}"/>
                                 </ContextMenu>
                             </StackPanel.ContextMenu>
                             <Image Source="{Binding Thumbnail}" IsVisible="{Binding HasThumbnail}"
@@ -117,17 +107,16 @@
                             <Border IsVisible="{Binding !HasThumbnail}"
                                     Background="{DynamicResource ToolbarButtonBg}"
                                     BorderBrush="{DynamicResource BorderColor}" BorderThickness="1"
-                                    CornerRadius="3" Padding="4,1" MinWidth="40"
+                                    CornerRadius="{DynamicResource RadiusSmall}" Padding="4,1" MinWidth="40"
                                     VerticalAlignment="Center">
-                                <TextBlock Text="{Binding TypeLabel}" FontSize="9"
-                                           Foreground="{DynamicResource MutedText}"
+                                <TextBlock Text="{Binding TypeLabel}" Classes="fieldLabel"
                                            HorizontalAlignment="Center" VerticalAlignment="Center"/>
                             </Border>
 
                             <TextBlock Text="{Binding Name}"
                                        IsVisible="{Binding !IsEditing}"
                                        Foreground="{DynamicResource PrimaryText}"
-                                       FontSize="12"
+                                       FontSize="{DynamicResource FontSizeBodyLarge}"
                                        TextTrimming="CharacterEllipsis"
                                        ToolTip.Tip="{Binding Name}"
                                        VerticalAlignment="Center"/>
@@ -135,28 +124,28 @@
                             <!-- Faz 4: kayıp-grup bilgi çipi (grup satırı seçilemez). -->
                             <Border IsVisible="{Binding IsMissingGroup}"
                                     Background="Transparent"
-                                    BorderBrush="{DynamicResource ErrorColor}" BorderThickness="1"
-                                    CornerRadius="3" Padding="4,1"
+                                    BorderBrush="{DynamicResource ErrorBrush}" BorderThickness="1"
+                                    CornerRadius="{DynamicResource RadiusSmall}" Padding="4,1"
                                     VerticalAlignment="Center">
-                                <TextBlock Text="bilgi" FontSize="9" Foreground="{DynamicResource ErrorColor}"/>
+                                <TextBlock Text="{l:T Assets.Badge.Info}" Classes="fieldLabel" Foreground="{DynamicResource ErrorBrush}"/>
                             </Border>
 
                             <!-- MS-5: kayıp dosya rozeti (diskten silinen varlık) -->
                             <Border IsVisible="{Binding IsMissing}"
-                                    Background="{DynamicResource DangerButtonBg}" CornerRadius="3" Padding="4,1"
+                                    Background="{DynamicResource ErrorSurface}" CornerRadius="{DynamicResource RadiusSmall}" Padding="4,1"
                                     VerticalAlignment="Center">
-                                <TextBlock Text="KAYIP" FontSize="9" Foreground="{DynamicResource ErrorColor}" FontWeight="Bold"/>
+                                <TextBlock Text="{l:T Assets.Badge.Missing}" Classes="fieldValue" Foreground="{DynamicResource ErrorBrush}"/>
                             </Border>
 
                             <TextBox Text="{Binding EditingName, Mode=TwoWay}" 
                                      IsVisible="{Binding IsEditing}" 
-                                     FontSize="12" 
+                                     FontSize="{DynamicResource FontSizeBodyLarge}" 
                                      Padding="4,2" 
                                      Margin="0,-2,0,-2" 
                                      MinHeight="22" 
                                      Background="{DynamicResource InputBackground}" 
                                      Foreground="{DynamicResource PrimaryText}" 
-                                     BorderBrush="{DynamicResource AccentColor}">
+                                     BorderBrush="{DynamicResource Accent}">
                                 <TextBox.KeyBindings>
                                     <KeyBinding Gesture="Enter" Command="{Binding CommitRenameCommand}"/>
                                     <KeyBinding Gesture="Escape" Command="{Binding CancelRenameCommand}"/>
@@ -207,33 +196,33 @@
                                 <!-- Faz 4 menüsüyle aynı 7 öğe (ızgara paritesi). -->
                                 <StackPanel.ContextMenu>
                                     <ContextMenu>
-                                        <MenuItem Header="Yeni Klasör Oluştur" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.CreateFolderCommand}"/>
-                                        <MenuItem Header="Dosya İçe Aktar..." Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ImportAssetCommand}"/>
+                                        <MenuItem Header="{l:T Assets.Menu.NewFolder}" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.CreateFolderCommand}"/>
+                                        <MenuItem Header="{l:T Assets.Menu.Import}" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ImportAssetCommand}"/>
                                         <Separator/>
-                                        <MenuItem Header="Yeniden Adlandır (F2)" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.StartRenameCommand}"/>
-                                        <MenuItem Header="Dosya Yöneticisinde Aç" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.OpenInExplorerCommand}"/>
+                                        <MenuItem Header="{l:T Assets.Menu.Rename}" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.StartRenameCommand}"/>
+                                        <MenuItem Header="{l:T Assets.Menu.OpenInExplorer}" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.OpenInExplorerCommand}"/>
                                         <Separator/>
-                                        <MenuItem Header="Sil" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.DeleteAssetCommand}"/>
-                                        <MenuItem Header="Yenile" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.RefreshAssetsCommand}"/>
+                                        <MenuItem Header="{l:T Common.Delete}" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.DeleteAssetCommand}"/>
+                                        <MenuItem Header="{l:T Assets.Refresh}" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.RefreshAssetsCommand}"/>
                                     </ContextMenu>
                                 </StackPanel.ContextMenu>
                                 <Border Background="{DynamicResource ToolbarButtonBg}"
                                         BorderBrush="{DynamicResource BorderColor}" BorderThickness="1"
-                                        CornerRadius="2" Padding="6" HorizontalAlignment="Center"
+                                        CornerRadius="{DynamicResource RadiusSmall}" Padding="6" HorizontalAlignment="Center"
                                         Width="{Binding $parent[UserControl].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.GridItemImageSize}"
                                         Height="{Binding $parent[UserControl].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.GridItemImageSize}">
                                     <Panel VerticalAlignment="Center" HorizontalAlignment="Center">
                                         <Image Source="{Binding Thumbnail}" IsVisible="{Binding HasThumbnail}"
                                                Stretch="Uniform" VerticalAlignment="Center" HorizontalAlignment="Center"/>
                                         <TextBlock Text="{Binding TypeLabel}" IsVisible="{Binding !HasThumbnail}"
-                                                   FontSize="10" Foreground="{DynamicResource MutedText}"
+                                                   Classes="fieldLabel"
                                                    HorizontalAlignment="Center" VerticalAlignment="Center"
                                                    TextWrapping="Wrap" TextAlignment="Center"/>
                                     </Panel>
                                 </Border>
                                 <TextBlock Text="{Binding Name}"
                                            Foreground="{DynamicResource PrimaryText}"
-                                           FontSize="11" TextTrimming="CharacterEllipsis"
+                                           FontSize="{DynamicResource FontSizeBody}" TextTrimming="CharacterEllipsis"
                                            MaxLines="1"
                                            TextAlignment="Center" HorizontalAlignment="Stretch"/>
                             </StackPanel>
@@ -256,38 +245,36 @@
                     </ListBox.KeyBindings>
                     <ListBox.ItemTemplate>
                         <DataTemplate x:DataType="vm:AssetNodeViewModel">
-                            <Grid ColumnDefinitions="Auto,*,Auto" Margin="2,1"
+                            <Grid ColumnDefinitions="Auto,*,Auto" Margin="2,3"
                                   DoubleTapped="OnAssetDoubleTapped"
                                   ToolTip.Tip="{Binding Name}">
                                 <!-- Faz 4 menüsüyle aynı 7 öğe (liste paritesi). -->
                                 <Grid.ContextMenu>
                                     <ContextMenu>
-                                        <MenuItem Header="Yeni Klasör Oluştur" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.CreateFolderCommand}"/>
-                                        <MenuItem Header="Dosya İçe Aktar..." Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ImportAssetCommand}"/>
+                                        <MenuItem Header="{l:T Assets.Menu.NewFolder}" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.CreateFolderCommand}"/>
+                                        <MenuItem Header="{l:T Assets.Menu.Import}" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ImportAssetCommand}"/>
                                         <Separator/>
-                                        <MenuItem Header="Yeniden Adlandır (F2)" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.StartRenameCommand}"/>
-                                        <MenuItem Header="Dosya Yöneticisinde Aç" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.OpenInExplorerCommand}"/>
+                                        <MenuItem Header="{l:T Assets.Menu.Rename}" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.StartRenameCommand}"/>
+                                        <MenuItem Header="{l:T Assets.Menu.OpenInExplorer}" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.OpenInExplorerCommand}"/>
                                         <Separator/>
-                                        <MenuItem Header="Sil" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.DeleteAssetCommand}"/>
-                                        <MenuItem Header="Yenile" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.RefreshAssetsCommand}"/>
+                                        <MenuItem Header="{l:T Common.Delete}" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.DeleteAssetCommand}"/>
+                                        <MenuItem Header="{l:T Assets.Refresh}" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.RefreshAssetsCommand}"/>
                                     </ContextMenu>
                                 </Grid.ContextMenu>
                                 <Border Grid.Column="0"
                                         Background="{DynamicResource ToolbarButtonBg}"
                                         BorderBrush="{DynamicResource BorderColor}" BorderThickness="1"
-                                        CornerRadius="3" Padding="4,1" MinWidth="40"
+                                        CornerRadius="{DynamicResource RadiusSmall}" Padding="4,1" MinWidth="40"
                                         VerticalAlignment="Center" Margin="0,0,8,0">
-                                    <TextBlock Text="{Binding TypeLabel}" FontSize="9"
-                                               Foreground="{DynamicResource MutedText}"
+                                    <TextBlock Text="{Binding TypeLabel}" Classes="fieldLabel"
                                                HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                 </Border>
                                 <TextBlock Grid.Column="1" Text="{Binding Name}"
                                            Foreground="{DynamicResource PrimaryText}"
-                                           FontSize="12" TextTrimming="CharacterEllipsis"
+                                           FontSize="{DynamicResource FontSizeBodyLarge}" TextTrimming="CharacterEllipsis"
                                            VerticalAlignment="Center"/>
                                 <TextBlock Grid.Column="2" Text="{Binding RelativePath}"
-                                           Foreground="{DynamicResource MutedText}"
-                                           FontSize="10" TextTrimming="CharacterEllipsis"
+                                           Classes="fieldLabel" TextTrimming="CharacterEllipsis"
                                            VerticalAlignment="Center" Margin="8,0,0,0"/>
                             </Grid>
                         </DataTemplate>
@@ -298,26 +285,21 @@
                      ızgara dilim dilim çizilir (200'erlik adımlar). -->
                 <Button Grid.Row="0" Content="{Binding AssetBrowserViewModel.GridItemsStatus}"
                         Command="{Binding AssetBrowserViewModel.ShowMoreGridItemsCommand}"
-                        ToolTip.Tip="Sonraki 200 öğeyi göster"
+                        ToolTip.Tip="{l:T Assets.ShowMore.Tip}"
                         IsVisible="{Binding AssetBrowserViewModel.HasMoreGridItems}"
-                        VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,8"
-                        Background="{DynamicResource SurfaceBackground}"
-                        Foreground="{DynamicResource PrimaryText}"
-                        BorderBrush="{DynamicResource BorderColor}" BorderThickness="1"
-                        CornerRadius="2" Padding="12,5" FontSize="11"/>
+                        Classes="ghost" Background="{DynamicResource SurfaceBackground}"
+                        VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,8"/>
 
             <!-- Faz 5: boş-durum — dosyası yok (eylem: içe aktar) -->
             <StackPanel x:Name="AssetsEmptyPanel"
                         IsVisible="{Binding AssetBrowserViewModel.IsTreeEmpty}"
                         VerticalAlignment="Center" HorizontalAlignment="Center"
                         Spacing="8" Margin="16">
-                <TextBlock Text="Bu projede henüz dosya yok." FontSize="11" FontStyle="Italic"
-                           Foreground="{DynamicResource MutedText}" HorizontalAlignment="Center"
+                <TextBlock Text="{l:T Assets.Empty}" Classes="hint" FontStyle="Italic"
+                           HorizontalAlignment="Center"
                            TextWrapping="Wrap" TextAlignment="Center"/>
-                <Button Content="Dosya İçe Aktar" Command="{Binding ImportAssetCommand}"
-                        ToolTip.Tip="Dosyayı proje Assets klasörüne içe aktar"
-                        Background="{DynamicResource AccentButtonBg}" Foreground="{DynamicResource AccentButtonFg}"
-                        CornerRadius="2" Padding="12,5" FontSize="11"
+                <Button Classes="primary" Content="{l:T Assets.ImportFile}" Command="{Binding ImportAssetCommand}"
+                        ToolTip.Tip="{l:T Assets.Import.Tip}"
                         HorizontalAlignment="Center"/>
             </StackPanel>
 
@@ -326,14 +308,12 @@
                         IsVisible="{Binding AssetBrowserViewModel.IsFilterNoMatch}"
                         VerticalAlignment="Center" HorizontalAlignment="Center"
                         Spacing="8" Margin="16">
-                <TextBlock Text="Arama filtresi sonuç vermedi." FontSize="11" FontStyle="Italic"
-                           Foreground="{DynamicResource MutedText}" HorizontalAlignment="Center"
+                <TextBlock Text="{l:T Assets.NoMatch}" Classes="hint" FontStyle="Italic"
+                           HorizontalAlignment="Center"
                            TextWrapping="Wrap" TextAlignment="Center"/>
-                <Button Content="Filtreyi Temizle"
+                <Button Classes="primary" Content="{l:T Assets.ClearFilter}"
                         Command="{Binding AssetBrowserViewModel.ClearFilterCommand}"
-                        ToolTip.Tip="Arama ve tür filtresini temizle"
-                        Background="{DynamicResource AccentButtonBg}" Foreground="{DynamicResource AccentButtonFg}"
-                        CornerRadius="2" Padding="12,5" FontSize="11"
+                        ToolTip.Tip="{l:T Assets.ClearFilter.Tip}"
                         HorizontalAlignment="Center"/>
             </StackPanel>
             </Grid>
@@ -341,21 +321,19 @@
 
             <!-- Faz 4: durum satırı + Faz 6 Dilim 3: ızgara boyut kaydırıcısı
                  (ince şerit: kaydırıcı yüksekliği kilitli). -->
-            <Border Grid.Row="3" Background="{DynamicResource SurfaceBackground}"
+            <Border Grid.Row="4" Background="{DynamicResource SurfaceBackground}"
                     BorderBrush="{DynamicResource BorderColor}" BorderThickness="0,1,0,0"
-                    Padding="8,2">
+                    Padding="8,4">
                 <DockPanel LastChildFill="True">
                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6"
                                 VerticalAlignment="Center">
-                        <TextBlock Text="Boyut" Foreground="{DynamicResource MutedText}"
-                                   FontSize="10" VerticalAlignment="Center"/>
+                        <TextBlock Text="{l:T Assets.Size}" Classes="hint" VerticalAlignment="Center"/>
                         <Slider Minimum="40" Maximum="128"
                                 Value="{Binding AssetBrowserViewModel.GridItemSize, Mode=TwoWay}"
-                                ToolTip.Tip="Simge boyutu"
+                                ToolTip.Tip="{l:T Assets.Size.Tip}"
                                 Width="110" Height="24" VerticalAlignment="Center"/>
                     </StackPanel>
-                    <TextBlock Text="{Binding AssetBrowserViewModel.StatusText}"
-                               Foreground="{DynamicResource MutedText}" FontSize="10"
+                    <TextBlock Text="{Binding AssetBrowserViewModel.StatusText}" Classes="hint"
                                VerticalAlignment="Center"/>
                 </DockPanel>
             </Border>

@@ -1,5 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:l="using:RowlEngine.Editor.Services.Strings"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="using:RowlEngine.Editor.ViewModels"
@@ -8,138 +9,147 @@
              x:Class="RowlEngine.Editor.Views.Panels.NodeHierarchyView"
              x:DataType="vm:MainWindowViewModel">
     <Border Background="{DynamicResource PanelBackground}">
-        <Grid RowDefinitions="Auto, *">
+        <Grid RowDefinitions="Auto, Auto, *">
 
-            <!-- Panel Header + Node Info + Create Object Button -->
-            <Border Grid.Row="0" Background="{DynamicResource SurfaceBackground}"
+            <!-- Panel başlığı (ortak kalıp: Border.panelHeader) + Oluştur -->
+            <Border Grid.Row="0" Classes="panelHeader">
+                <DockPanel>
+                    <!-- Create Object Button -->
+                    <Button DockPanel.Dock="Right" Classes="ghost"
+                            Content="{l:T Hierarchy.Create}"
+                            Command="{Binding HierarchyViewModel.ToggleCreateObjectMenuCommand}"
+                            IsEnabled="{Binding HierarchyViewModel.HasCurrentNode}"
+                            HorizontalAlignment="Right">
+                        <Button.Flyout>
+                            <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                <MenuItem Header="{l:T Hierarchy.Create.Empty}"
+                                          Command="{Binding HierarchyViewModel.CreateObjectCommand}"
+                                          CommandParameter="empty"/>
+                                <Separator/>
+                                <MenuItem Header="{l:T Hierarchy.Create.Background}"
+                                          Command="{Binding HierarchyViewModel.CreateObjectCommand}"
+                                          CommandParameter="background"/>
+                                <MenuItem Header="{l:T Hierarchy.Create.Character}"
+                                          Command="{Binding HierarchyViewModel.CreateObjectCommand}"
+                                          CommandParameter="character"/>
+                                <MenuItem Header="{l:T Hierarchy.Create.Dialogue}"
+                                          Command="{Binding HierarchyViewModel.CreateObjectCommand}"
+                                          CommandParameter="dialogue"/>
+                                <MenuItem Header="{l:T Hierarchy.Create.Audio}"
+                                          Command="{Binding HierarchyViewModel.CreateObjectCommand}"
+                                          CommandParameter="audio"/>
+                            </MenuFlyout>
+                        </Button.Flyout>
+                    </Button>
+                    <TextBlock Classes="panelTitle" Text="{l:T Panel.Hierarchy}"/>
+                </DockPanel>
+            </Border>
+
+            <!-- Arama + seçili Node (prototip: tool-caption / hierarchy-scene; K2: 32 px) -->
+            <Border Grid.Row="1" Background="{DynamicResource SurfaceBackground}"
                     BorderBrush="{DynamicResource BorderColor}" BorderThickness="0,0,0,1"
-                    Padding="8,5">
-                <StackPanel Spacing="5">
-                    <DockPanel>
-                        <TextBlock Text="Hierarchy" FontWeight="Bold" FontSize="12"
-                                   Foreground="{DynamicResource PrimaryText}" VerticalAlignment="Center"/>
-
-                        <!-- Create Object Button -->
-                        <Button DockPanel.Dock="Right"
-                                Content="Create"
-                                Command="{Binding HierarchyViewModel.ToggleCreateObjectMenuCommand}"
-                                IsEnabled="{Binding HierarchyViewModel.HasCurrentNode}"
-                                Background="{DynamicResource AccentButtonBg}"
-                                Foreground="{DynamicResource AccentButtonFg}"
-                                FontWeight="SemiBold"
-                                FontSize="11"
-                                Padding="8,2"
-                                CornerRadius="2"
-                                HorizontalAlignment="Right">
-                            <Button.Flyout>
-                                <MenuFlyout Placement="BottomEdgeAlignedRight">
-                                    <MenuItem Header="Empty GameObject"
-                                              Command="{Binding HierarchyViewModel.CreateObjectCommand}"
-                                              CommandParameter="empty"/>
-                                    <Separator/>
-                                    <MenuItem Header="Background Object"
-                                              Command="{Binding HierarchyViewModel.CreateObjectCommand}"
-                                              CommandParameter="background"/>
-                                    <MenuItem Header="Character Object"
-                                              Command="{Binding HierarchyViewModel.CreateObjectCommand}"
-                                              CommandParameter="character"/>
-                                    <MenuItem Header="Dialogue Object"
-                                              Command="{Binding HierarchyViewModel.CreateObjectCommand}"
-                                              CommandParameter="dialogue"/>
-                                    <MenuItem Header="Audio Object"
-                                              Command="{Binding HierarchyViewModel.CreateObjectCommand}"
-                                              CommandParameter="audio"/>
-                                </MenuFlyout>
-                            </Button.Flyout>
-                        </Button>
-                    </DockPanel>
-
+                    Padding="12,10">
+                <StackPanel Spacing="8">
                     <!-- Unity kromu: nesne adı filtresi -->
-                    <TextBox Watermark="Ara: nesne adı"
+                    <TextBox Watermark="{l:T Hierarchy.Search}"
                              Text="{Binding HierarchyViewModel.HierarchyFilterText}"
                              IsVisible="{Binding HierarchyViewModel.HasCurrentNode}"
-                             Background="{DynamicResource InputBackground}"
                              Foreground="{DynamicResource PrimaryText}"
-                             BorderBrush="{DynamicResource BorderSubtle}"
-                             CornerRadius="2" Padding="6,2" FontSize="11"/>
+                             MinHeight="{DynamicResource ControlHeight}"
+                             CornerRadius="{DynamicResource RadiusSmall}"
+                             Padding="10,4"
+                             FontSize="{DynamicResource FontSizeBody}"/>
 
-                    <!-- Active Node Info: Unity tarzı tek satır alt yazı
-                         (başlık + kimlik; işlevsel bağlar aynen). -->
-                    <TextBlock IsVisible="{Binding HierarchyViewModel.HasCurrentNode}"
-                               Text="{Binding HierarchyViewModel.CurrentNodeTitle}"
-                               ToolTip.Tip="{Binding HierarchyViewModel.CurrentNodeId}"
-                               FontSize="11"
-                               Foreground="{DynamicResource MutedText}"
-                               TextTrimming="CharacterEllipsis"/>
-                    <TextBlock IsVisible="{Binding !HierarchyViewModel.HasCurrentNode}"
-                               Text="Select a node from the graph"
-                               FontSize="11" FontStyle="Italic"
-                               Foreground="{DynamicResource MutedText}"/>
+                    <!-- Seçili Node: küçük başlık + Node adı (kimlik ipucu olarak) -->
+                    <StackPanel Spacing="2" IsVisible="{Binding HierarchyViewModel.HasCurrentNode}">
+                        <TextBlock Classes="caption" Text="{l:T Hierarchy.SelectedNode}"/>
+                        <TextBlock Classes="title"
+                                   Text="{Binding HierarchyViewModel.CurrentNodeTitle}"
+                                   ToolTip.Tip="{Binding HierarchyViewModel.CurrentNodeId}"
+                                   TextTrimming="CharacterEllipsis"/>
+                    </StackPanel>
+                    <TextBlock Classes="muted" IsVisible="{Binding !HierarchyViewModel.HasCurrentNode}"
+                               Text="{l:T Hierarchy.SelectNode}"
+                               FontSize="{DynamicResource FontSizeBody}" FontStyle="Italic"/>
                 </StackPanel>
             </Border>
 
-            <!-- GameObject List (Unity tarzı tek satır) -->
-            <Grid Grid.Row="1">
-                <ListBox ItemsSource="{Binding HierarchyViewModel.FilteredObjects}"
-                         SelectedItem="{Binding HierarchyViewModel.SelectedObject, Mode=TwoWay}"
-                         Background="Transparent"
-                         Margin="0,2"
-                         SelectionMode="Single"
-                         IsVisible="{Binding HierarchyViewModel.HasCurrentNode}">
-                    <ListBox.Styles>
-                        <Style Selector="ListBoxItem">
-                            <Setter Property="Padding" Value="4,2"/>
-                            <Setter Property="CornerRadius" Value="0"/>
-                            <Setter Property="Margin" Value="0"/>
-                        </Style>
-                        <Style Selector="ListBoxItem:selected /template/ ContentPresenter">
-                            <Setter Property="Background" Value="{DynamicResource AccentButtonBg}"/>
-                        </Style>
-                    </ListBox.Styles>
-                    <ListBox.ItemTemplate>
-                        <DataTemplate x:DataType="vm:FrameObjectViewModel">
-                            <Grid ColumnDefinitions="Auto, *">
-                                <!-- GameObject Icon -->
-                                <TextBlock Grid.Column="0" Text="{Binding Icon}" FontSize="13"
-                                           VerticalAlignment="Center" Margin="0,0,6,0"/>
+            <!-- Nesne listesi: prototipteki gibi "Sahne nesneleri" kökü + sol çizgili
+                 girintili ağaç; satır 34 px (K2) -->
+            <Grid Grid.Row="2" RowDefinitions="Auto, *"
+                  IsVisible="{Binding HierarchyViewModel.HasCurrentNode}">
+                <TextBlock Grid.Row="0" Classes="muted" Text="{l:T Hierarchy.SceneObjects}"
+                           FontSize="{DynamicResource FontSizeBody}"
+                           Margin="12,10,12,6"/>
+                <Border Grid.Row="1" Margin="16,0,8,8" Padding="8,0,0,0"
+                        BorderBrush="{DynamicResource BorderSubtle}" BorderThickness="1,0,0,0">
+                    <ListBox ItemsSource="{Binding HierarchyViewModel.FilteredObjects}"
+                             SelectedItem="{Binding HierarchyViewModel.SelectedObject, Mode=TwoWay}"
+                             Background="Transparent"
+                             SelectionMode="Single">
+                        <ListBox.Styles>
+                            <Style Selector="ListBoxItem">
+                                <Setter Property="MinHeight" Value="34"/>
+                                <Setter Property="Padding" Value="8,0"/>
+                                <Setter Property="CornerRadius" Value="{DynamicResource RadiusSmall}"/>
+                                <Setter Property="Margin" Value="0,1"/>
+                            </Style>
+                            <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter">
+                                <Setter Property="Background" Value="{DynamicResource AccentButtonHover}"/>
+                            </Style>
+                            <Style Selector="ListBoxItem:selected /template/ ContentPresenter, ListBoxItem:selected:pointerover /template/ ContentPresenter">
+                                <Setter Property="Background" Value="{DynamicResource AccentButtonHover}"/>
+                                <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtle}"/>
+                                <Setter Property="BorderThickness" Value="1"/>
+                            </Style>
+                        </ListBox.Styles>
+                        <ListBox.ItemTemplate>
+                            <DataTemplate x:DataType="vm:FrameObjectViewModel">
+                                <Grid ColumnDefinitions="*, Auto">
+                                    <!-- GameObject Name (ana metin; tek satır; Etkin anahtarı
+                                         Denetçi kartındadır) -->
+                                    <TextBlock Grid.Column="0" Text="{Binding Name}"
+                                               FontSize="{DynamicResource FontSizeBodyLarge}"
+                                               Foreground="{DynamicResource PrimaryText}"
+                                               VerticalAlignment="Center"
+                                               TextTrimming="CharacterEllipsis"/>
 
-                                <!-- GameObject Name (tek satır; Etkin anahtarı
-                                     Denetçi kartındadır) -->
-                                <TextBlock Grid.Column="1" Text="{Binding Name}"
-                                           FontSize="12"
-                                           Foreground="{DynamicResource PrimaryText}"
-                                           VerticalAlignment="Center"
-                                           TextTrimming="CharacterEllipsis"/>
-                            </Grid>
-                        </DataTemplate>
-                    </ListBox.ItemTemplate>
-                    <ListBox.ContextMenu>
-                        <ContextMenu>
-                            <MenuItem Header="Duplicate Object"
-                                      Command="{Binding HierarchyViewModel.DuplicateObjectCommand}"
-                                      CommandParameter="{Binding HierarchyViewModel.SelectedObject}"/>
-                            <Separator/>
-                            <MenuItem Header="Move Up"
-                                      Command="{Binding HierarchyViewModel.MoveObjectUpCommand}"
-                                      CommandParameter="{Binding HierarchyViewModel.SelectedObject}"/>
-                            <MenuItem Header="Move Down"
-                                      Command="{Binding HierarchyViewModel.MoveObjectDownCommand}"
-                                      CommandParameter="{Binding HierarchyViewModel.SelectedObject}"/>
-                            <Separator/>
-                            <MenuItem Header="Delete Object"
-                                      Command="{Binding HierarchyViewModel.DeleteObjectCommand}"
-                                      CommandParameter="{Binding HierarchyViewModel.SelectedObject}"/>
-                        </ContextMenu>
-                    </ListBox.ContextMenu>
-                </ListBox>
-
-                <!-- Placeholder when node has no objects -->
-                <StackPanel IsVisible="{Binding HierarchyViewModel.IsCurrentNodeEmpty}"
-                            VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="6" Margin="16">
-                    <TextBlock Text="No GameObjects in this frame." FontSize="11" FontStyle="Italic"
-                               Foreground="{DynamicResource MutedText}" HorizontalAlignment="Center"/>
-                </StackPanel>
+                                    <!-- Tür etiketi (VM Icon metni): prototipteki .tree-status gibi
+                                         sağda soluk küçük metin -->
+                                    <TextBlock Grid.Column="1" Classes="fieldLabel" Text="{Binding Icon}"
+                                               VerticalAlignment="Center" Margin="8,0,0,0"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                        <ListBox.ContextMenu>
+                            <ContextMenu>
+                                <MenuItem Header="{l:T Hierarchy.Duplicate}"
+                                          Command="{Binding HierarchyViewModel.DuplicateObjectCommand}"
+                                          CommandParameter="{Binding HierarchyViewModel.SelectedObject}"/>
+                                <Separator/>
+                                <MenuItem Header="{l:T Hierarchy.MoveUp}"
+                                          Command="{Binding HierarchyViewModel.MoveObjectUpCommand}"
+                                          CommandParameter="{Binding HierarchyViewModel.SelectedObject}"/>
+                                <MenuItem Header="{l:T Hierarchy.MoveDown}"
+                                          Command="{Binding HierarchyViewModel.MoveObjectDownCommand}"
+                                          CommandParameter="{Binding HierarchyViewModel.SelectedObject}"/>
+                                <Separator/>
+                                <MenuItem Header="{l:T Hierarchy.Delete}"
+                                          Command="{Binding HierarchyViewModel.DeleteObjectCommand}"
+                                          CommandParameter="{Binding HierarchyViewModel.SelectedObject}"/>
+                            </ContextMenu>
+                        </ListBox.ContextMenu>
+                    </ListBox>
+                </Border>
             </Grid>
+
+            <!-- Placeholder when node has no objects -->
+            <StackPanel Grid.Row="2" IsVisible="{Binding HierarchyViewModel.IsCurrentNodeEmpty}"
+                        VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="6" Margin="16">
+                <TextBlock Classes="muted" Text="{l:T Hierarchy.Empty}"
+                           FontSize="{DynamicResource FontSizeBody}" FontStyle="Italic"
+                           HorizontalAlignment="Center"/>
+            </StackPanel>
         </Grid>
     </Border>
 </UserControl>

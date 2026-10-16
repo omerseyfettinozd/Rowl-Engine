@@ -1,28 +1,25 @@
-<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:vm="using:RowlEngine.Editor.ViewModels" x:Class="RowlEngine.Editor.Views.Panels.ProjectIssuesView" x:DataType="vm:ProjectIssuesViewModel" x:Name="Root">
-  <Border Background="{DynamicResource LogConsoleBg}" Padding="8">
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:vm="using:RowlEngine.Editor.ViewModels" xmlns:l="using:RowlEngine.Editor.Services.Strings" x:Class="RowlEngine.Editor.Views.Panels.ProjectIssuesView" x:DataType="vm:ProjectIssuesViewModel" x:Name="Root">
+  <Border Background="{DynamicResource PanelBackground}" Padding="8">
     <DockPanel>
       <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6" VerticalAlignment="Center">
-        <TextBlock Text="Sorunlar" Foreground="{DynamicResource MutedText}" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center"/>
-        <Button DockPanel.Dock="Right" Content="Analiz"
+        <TextBlock Classes="caption" Text="{l:T Panel.Issues}" VerticalAlignment="Center"/>
+        <Button DockPanel.Dock="Right" Classes="ghost" Content="{l:T Issues.Analyze}"
                 Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AnalyzeStoryGraphCommand}"
-                ToolTip.Tip="Hikaye grafiğini analiz et"
-                Background="{DynamicResource ToolbarButtonBg}" Foreground="{DynamicResource PrimaryText}"
-                CornerRadius="6" Padding="10,4" FontSize="11"/>
+                ToolTip.Tip="{l:T Issues.Analyze.Tip}"/>
       </DockPanel>
       <Grid>
       <ScrollViewer><ItemsControl ItemsSource="{Binding Issues}"><ItemsControl.ItemTemplate><DataTemplate>
-        <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" FontSize="11" Command="{Binding #Root.DataContext.FocusCommand}" CommandParameter="{Binding}"><TextBlock Text="{Binding Message}" FontSize="12" TextWrapping="Wrap" Foreground="{DynamicResource PrimaryText}"/></Button>
+        <Button Classes="compact" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Padding="6,4" Command="{Binding #Root.DataContext.FocusCommand}" CommandParameter="{Binding}"><TextBlock Classes="body" Text="{Binding Message}" TextWrapping="Wrap" Foreground="{DynamicResource PrimaryText}"/></Button>
       </DataTemplate></ItemsControl.ItemTemplate></ItemsControl></ScrollViewer>
       <!-- Faz 5: boş-durum — sorun yok (eylem: yeniden analiz) -->
       <StackPanel x:Name="IssuesEmptyPanel" IsVisible="{Binding #Root.DataContext.IsEmpty}"
                   VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="8" Margin="16">
-        <TextBlock Text="Sorun bulunamadı." FontSize="11" FontStyle="Italic"
-                   Foreground="{DynamicResource MutedText}" HorizontalAlignment="Center"/>
-        <Button Content="Yeniden Analiz Et"
+        <TextBlock Classes="muted" Text="{l:T Issues.Empty}" FontSize="{DynamicResource FontSizeBody}" FontStyle="Italic"
+                   HorizontalAlignment="Center"/>
+        <Button Classes="primary" Content="{l:T Issues.Reanalyze}"
                 Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AnalyzeStoryGraphCommand}"
-                ToolTip.Tip="Hikaye grafiğini analiz et"
-                Background="{DynamicResource AccentButtonBg}" Foreground="{DynamicResource AccentButtonFg}"
-                CornerRadius="6" Padding="12,5" FontSize="11" HorizontalAlignment="Center"/>
+                ToolTip.Tip="{l:T Issues.Analyze.Tip}"
+                HorizontalAlignment="Center"/>
       </StackPanel>
       </Grid>
     </DockPanel>

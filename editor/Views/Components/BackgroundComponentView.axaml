@@ -1,5 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:l="using:RowlEngine.Editor.Services.Strings"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:comp="using:RowlEngine.Editor.ViewModels.Components"
@@ -9,58 +10,63 @@
              x:Class="RowlEngine.Editor.Views.Components.BackgroundComponentView"
              x:DataType="comp:BackgroundComponentViewModel">
 
-    <Border Background="{DynamicResource CardBackground}" CornerRadius="2" Margin="0,4" Padding="0" BorderBrush="{DynamicResource CardBorderColor}" BorderThickness="1">
+    <Border Classes="card" ClipToBounds="True" Margin="0,4">
         <StackPanel>
-            <!-- Component Header -->
-            <Border Background="{DynamicResource CardHeaderBackground}" CornerRadius="2,2,0,0" Padding="8,6">
-                <Grid ColumnDefinitions="*, Auto">
-                    <Grid Grid.Column="0" ColumnDefinitions="Auto,*" VerticalAlignment="Center">
-                        <CheckBox Grid.Column="0" IsChecked="{Binding IsEnabled}" ToolTip.Tip="Enable/Disable" MinWidth="0" Padding="0" Margin="0,0,2,0" VerticalAlignment="Center"/>
-                        <ToggleButton Grid.Column="1" Classes="header" IsChecked="{Binding IsExpanded}" ToolTip.Tip="Genişlet/Daralt"
-                                      Background="Transparent" BorderThickness="0" Padding="4,2"
-                                      HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" VerticalAlignment="Center">
-                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6">
-                                <TextBlock Grid.Column="0" Text="Görsel" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource MutedText}" VerticalAlignment="Center"/>
-                                <TextBlock Grid.Column="1" Text="{Binding DisplayName}" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource PrimaryText}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-                            </Grid>
-                        </ToggleButton>
-                    </Grid>
-                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="3" VerticalAlignment="Center">
-                        <Button Content="Yukarı" Command="{Binding MoveUpCommand}" ToolTip.Tip="Move Up" FontSize="10" Padding="4,2" MinWidth="0" Background="Transparent" Foreground="{DynamicResource MutedText}" BorderThickness="0"/>
-                        <Button Content="Aşağı" Command="{Binding MoveDownCommand}" ToolTip.Tip="Move Down" FontSize="10" Padding="4,2" MinWidth="0" Background="Transparent" Foreground="{DynamicResource MutedText}" BorderThickness="0"/>
-                        <ToggleButton IsChecked="{Binding IsExpanded}" Content="Ayar" FontSize="10" Padding="4,2" MinWidth="0" Background="Transparent" Foreground="{DynamicResource MutedText}" BorderThickness="0"/>
-                        <Button Content="Sil" FontSize="10" Padding="4,2" MinWidth="0" Background="Transparent" Foreground="{DynamicResource ErrorColor}" BorderThickness="0" ToolTip.Tip="Remove Component" Command="{Binding RemoveSelfCommand}"/>
-                    </StackPanel>
-                </Grid>
+            <!-- Bileşen kartı başlığı (8 kartta aynı kalıp): onay kutusu | ad (yıldız sütun, kırpılır) | Ayar | "..." menüsü.
+                 Yukarı/Aşağı/Sil menüde; böylece dar Denetçide başlık taşmaz. Komutlar aynı. -->
+            <Border Background="{DynamicResource CardHeaderBackground}" Padding="8,6">
+              <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="2">
+                <CheckBox Grid.Column="0" IsChecked="{Binding IsEnabled}" ToolTip.Tip="{l:T Common.Enable.Tip}" MinWidth="0" Padding="0" Margin="0,0,2,0" VerticalAlignment="Center"/>
+                <ToggleButton Grid.Column="1" Classes="header" IsChecked="{Binding IsExpanded}" ToolTip.Tip="{l:T Common.ExpandCollapse.Tip}"
+                              Background="Transparent" BorderThickness="0" Padding="4,2" MinWidth="0"
+                              HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" VerticalAlignment="Center">
+                  <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6">
+                    <TextBlock Grid.Column="0" Classes="cardKind" Text="{l:T Component.Background.Title}" VerticalAlignment="Center"/>
+                    <TextBlock Grid.Column="1" Classes="cardTitle" Text="{Binding DisplayName}" VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding DisplayName}"/>
+                  </Grid>
+                </ToggleButton>
+                <ToggleButton Grid.Column="2" Classes="compact" IsChecked="{Binding IsExpanded}" Content="{l:T Common.Settings}" VerticalAlignment="Center"/>
+                <Button Grid.Column="3" Classes="compact" Content="..." ToolTip.Tip="{l:T Inspector.Components.Actions.Tip}" VerticalAlignment="Center">
+                  <Button.Flyout>
+                    <MenuFlyout Placement="BottomEdgeAlignedRight">
+                      <MenuItem Header="{l:T Common.MoveUp.Tip}" Command="{Binding MoveUpCommand}"/>
+                      <MenuItem Header="{l:T Common.MoveDown.Tip}" Command="{Binding MoveDownCommand}"/>
+                      <Separator/>
+                      <MenuItem Header="{l:T Common.Delete}" Command="{Binding RemoveSelfCommand}"/>
+                    </MenuFlyout>
+                  </Button.Flyout>
+                </Button>
+              </Grid>
             </Border>
 
             <!-- Component Body -->
             <StackPanel IsVisible="{Binding IsExpanded}" Spacing="8" Margin="8,6">
                 <StackPanel Spacing="2">
-                    <TextBlock Text="Arka Plan Dokusu (Sürükle-Bırak)" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                    <TextBlock Text="{l:T Component.Background.Texture.Label}" Classes="body"/>
                     <Border x:Name="DropZoneBorder"
                             DragDrop.AllowDrop="True"
                             Background="{DynamicResource InputBackground}"
                             BorderBrush="{DynamicResource BorderColor}"
                             BorderThickness="1.5"
-                            CornerRadius="4"
+                            CornerRadius="{DynamicResource RadiusSmall}"
                             Padding="6">
                         <StackPanel Spacing="6">
                             <ctrl:AssetPickerControl AssetPath="{Binding Texture, Mode=TwoWay}"
-                                                             Watermark="Örn: backgrounds/ornek.png veya boş"
+                                                             Watermark="{l:T Component.Background.Texture.Watermark}"
                                                              BrowseCommand="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).SelectImageForComponentCommand}"
                                                              BrowseParameter="{Binding}"/>
                             <ctrl:FieldValidationBadge Validation="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).InspectorViewModel.Validation}"
                                                        NodeId="{Binding Node.Id}" FieldKey="background.texture"/>
                             <!-- Texture Preview Thumbnail / Drop Area -->
-                            <Border Background="{DynamicResource CardHeaderBackground}" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1" CornerRadius="4" Padding="4" MinHeight="65" MaxHeight="130">
+                            <Border Background="{DynamicResource CardHeaderBackground}" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1" CornerRadius="{DynamicResource RadiusSmall}" Padding="4" MinHeight="65" MaxHeight="130">
                                 <Panel>
                                     <Image Source="{Binding TextureBitmap}" Stretch="Uniform" MaxHeight="120"
                                            IsVisible="{Binding TextureBitmap, Converter={x:Static ObjectConverters.IsNotNull}}"/>
                                     <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="2"
                                                 IsVisible="{Binding TextureBitmap, Converter={x:Static ObjectConverters.IsNull}}">
-                                        <TextBlock Text="Görseli Buraya Sürükle-Bırak" FontSize="11" Foreground="{DynamicResource MutedText}" HorizontalAlignment="Center" FontWeight="SemiBold"/>
-                                        <TextBlock Text="Assets panelinden sürükleyin veya Gözat'a tıklayın" FontSize="9" Foreground="{DynamicResource MutedText}" HorizontalAlignment="Center" FontStyle="Italic"/>
+                                        <TextBlock Text="{l:T Component.Background.Drop.Title}" Classes="body" HorizontalAlignment="Center" FontWeight="SemiBold"/>
+                                        <TextBlock Text="{l:T Component.Background.Drop.Hint}" Classes="caption" HorizontalAlignment="Center" FontStyle="Italic"/>
                                     </StackPanel>
                                 </Panel>
                             </Border>
@@ -70,35 +76,35 @@
 
                 <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
                     <StackPanel Grid.Column="0" Spacing="2">
-                        <TextBlock Text="X" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                        <TextBlock Text="{l:T Component.Background.X}" Classes="body"/>
                         <NumericUpDown Value="{Binding X}" Minimum="-1000" Maximum="3000" Increment="20" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}"/>
                     </StackPanel>
                     <StackPanel Grid.Column="1" Spacing="2">
-                        <TextBlock Text="Y" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                        <TextBlock Text="{l:T Component.Background.Y}" Classes="body"/>
                         <NumericUpDown Value="{Binding Y}" Minimum="-1000" Maximum="3000" Increment="20" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}"/>
                     </StackPanel>
                 </Grid>
 
                 <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
                     <StackPanel Grid.Column="0" Spacing="2">
-                        <TextBlock Text="Width" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                        <TextBlock Text="{l:T Component.Background.Width}" Classes="body"/>
                         <NumericUpDown Value="{Binding Width}" Minimum="100" Maximum="4000" Increment="40" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}"/>
                     </StackPanel>
                     <StackPanel Grid.Column="1" Spacing="2">
-                        <TextBlock Text="Height" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                        <TextBlock Text="{l:T Component.Background.Height}" Classes="body"/>
                         <NumericUpDown Value="{Binding Height}" Minimum="100" Maximum="4000" Increment="40" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}"/>
                     </StackPanel>
                 </Grid>
 
                 <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
                     <StackPanel Grid.Column="0" Spacing="2">
-                        <TextBlock Text="Scale (1.0 = 100%)" FontSize="10" Foreground="{DynamicResource MutedText}"/>
-                        <NumericUpDown Value="{Binding Scale}" Minimum="0.1" Maximum="5.0" Increment="0.1" FormatString="0.00" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource AccentColor}" BorderBrush="{DynamicResource BorderColor}"/>
+                        <TextBlock Text="{l:T Component.Background.Scale}" Classes="body"/>
+                        <NumericUpDown Value="{Binding Scale}" Minimum="0.1" Maximum="5.0" Increment="0.1" FormatString="0.00" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource Accent}" BorderBrush="{DynamicResource BorderColor}"/>
                     </StackPanel>
                     <StackPanel Grid.Column="1" Spacing="2">
                         <DockPanel>
-                            <Button DockPanel.Dock="Right" Content="Sıfırla" Command="{Binding ResetRotation}" ToolTip.Tip="Rotasyonu Sıfırla (0°)" Background="Transparent" Foreground="{DynamicResource MutedText}" FontSize="10" Padding="4,1" Margin="2,0,0,0" BorderThickness="0"/>
-                            <TextBlock Text="Rotation" FontSize="10" Foreground="{DynamicResource MutedText}" VerticalAlignment="Center"/>
+                            <Button DockPanel.Dock="Right" Content="{l:T Common.Reset}" Command="{Binding ResetRotation}" ToolTip.Tip="{l:T Component.Background.ResetRotation.Tip}" Classes="tool" Foreground="{DynamicResource MutedText}" Padding="4,1" MinHeight="0" MinWidth="0" Margin="2,0,0,0"/>
+                            <TextBlock Text="{l:T Component.Background.Rotation}" Classes="body" VerticalAlignment="Center"/>
                         </DockPanel>
                         <NumericUpDown Value="{Binding Rotation}" Minimum="-360" Maximum="360" Increment="5" FormatString="0.0°" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}"/>
                     </StackPanel>
@@ -107,31 +113,31 @@
                 <!-- 2.5D Parallax Depth & Opacity -->
                 <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
                     <StackPanel Grid.Column="0" Spacing="2">
-                        <TextBlock Text="Parallax X" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                        <TextBlock Text="{l:T Component.Background.ParallaxX}" Classes="body"/>
                         <NumericUpDown Value="{Binding ParallaxFactorX}" Minimum="0.0" Maximum="3.0" Increment="0.1" FormatString="0.00x" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}"/>
                     </StackPanel>
                     <StackPanel Grid.Column="1" Spacing="2">
-                        <TextBlock Text="Parallax Y" FontSize="10" Foreground="{DynamicResource MutedText}"/>
+                        <TextBlock Text="{l:T Component.Background.ParallaxY}" Classes="body"/>
                         <NumericUpDown Value="{Binding ParallaxFactorY}" Minimum="0.0" Maximum="3.0" Increment="0.1" FormatString="0.00x" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}"/>
                     </StackPanel>
                 </Grid>
 
                 <StackPanel Spacing="2">
                     <Grid ColumnDefinitions="*, Auto">
-                        <TextBlock Grid.Column="0" Text="Layer Opacity" FontSize="10" Foreground="{DynamicResource MutedText}"/>
-                        <TextBlock Grid.Column="1" Text="{Binding Opacity, StringFormat={}{0:P0}}" FontSize="10" Foreground="{DynamicResource PrimaryText}"/>
+                        <TextBlock Grid.Column="0" Text="{l:T Component.Background.Opacity}" Classes="body"/>
+                        <TextBlock Grid.Column="1" Text="{Binding Opacity, StringFormat={}{0:P0}}" Classes="body" Foreground="{DynamicResource PrimaryText}"/>
                     </Grid>
                     <Slider Value="{Binding Opacity}" Minimum="0.0" Maximum="1.0" SmallChange="0.05" LargeChange="0.1"/>
                 </StackPanel>
 
                 <!-- OBS Quick Assist Buttons -->
                 <StackPanel Spacing="4">
-                    <TextBlock Text="OBS Hızlı Hizalama (Assist)" FontSize="10" Foreground="{DynamicResource MutedText}" FontWeight="SemiBold"/>
+                    <TextBlock Text="{l:T Component.Background.Assist.Label}" Classes="caption" FontWeight="SemiBold"/>
                     <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
-                        <Button Grid.Column="0" Content="Merkeze Ortala" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).CenterSelectedElementCommand}"
-                                Background="{DynamicResource ToolbarButtonBg}" Foreground="{DynamicResource PrimaryText}" FontSize="11" Padding="6,4" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" CornerRadius="4"/>
-                        <Button Grid.Column="1" Content="1080p Tam Sığdır" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).FitBackgroundToScreenCommand}"
-                                Background="{DynamicResource ToolbarButtonBg}" Foreground="{DynamicResource PrimaryText}" FontSize="11" Padding="6,4" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" CornerRadius="4"/>
+                        <Button Classes="ghost" Grid.Column="0" Content="{l:T Component.Background.Center}" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).CenterSelectedElementCommand}"
+                                HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"/>
+                        <Button Classes="ghost" Grid.Column="1" Content="{l:T Component.Background.Fit1080}" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).FitBackgroundToScreenCommand}"
+                                HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"/>
                     </Grid>
                 </StackPanel>
             </StackPanel>

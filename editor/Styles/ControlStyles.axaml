@@ -128,6 +128,21 @@
         <Setter Property="Foreground" Value="{DynamicResource PrimaryText}"/>
     </Style>
 
+    <!-- Faz 4: araç düğmesi (yüzen panellerde: zoom, sığdır, seçim) -->
+    <Style Selector="Button.tool">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="CornerRadius" Value="{DynamicResource RadiusSmall}"/>
+        <Setter Property="MinHeight" Value="28"/>
+        <Setter Property="Padding" Value="8,4"/>
+        <Setter Property="FontSize" Value="{DynamicResource FontSizeBody}"/>
+        <Setter Property="Foreground" Value="{DynamicResource PrimaryText}"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+    </Style>
+    <Style Selector="Button.tool:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource AccentButtonHover}"/>
+    </Style>
+
     <!-- Yüzeyler -->
     <Style Selector="Border.panel">
         <Setter Property="Background" Value="{DynamicResource PanelBackground}"/>
@@ -135,10 +150,95 @@
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="CornerRadius" Value="{DynamicResource RadiusLarge}"/>
     </Style>
+    <!-- Faz 4: kanvas üstünde yüzen paneller (kırıntı yolu, Node araç çubuğu,
+         zoom şeridi, mini harita, görünümü sıfırla) -->
+    <Style Selector="Border.floating">
+        <Setter Property="Background" Value="{DynamicResource SurfaceBackground}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="{DynamicResource RadiusMedium}"/>
+        <Setter Property="Padding" Value="4"/>
+        <Setter Property="BoxShadow" Value="0 4 16 0 #40000000"/>
+    </Style>
     <Style Selector="Border.card">
         <Setter Property="Background" Value="{DynamicResource NodeCardBg}"/>
         <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="CornerRadius" Value="{DynamicResource RadiusMedium}"/>
+    </Style>
+
+    <!-- Faz 4 (insB): bileşen kartı başlığı/alan metinleri -->
+    <Style Selector="TextBlock.cardTitle">
+        <Setter Property="FontSize" Value="{DynamicResource FontSizeBodyLarge}"/>
+        <Setter Property="FontWeight" Value="Bold"/>
+        <Setter Property="Foreground" Value="{DynamicResource PrimaryText}"/>
+    </Style>
+    <Style Selector="TextBlock.cardKind">
+        <Setter Property="FontSize" Value="{DynamicResource FontSizeBodyLarge}"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Foreground" Value="{DynamicResource MutedText}"/>
+    </Style>
+    <Style Selector="TextBlock.fieldLabel">
+        <Setter Property="FontSize" Value="{DynamicResource FontSizeSmall}"/>
+        <Setter Property="Foreground" Value="{DynamicResource MutedText}"/>
+    </Style>
+    <Style Selector="TextBlock.fieldValue">
+        <Setter Property="FontSize" Value="{DynamicResource FontSizeSmall}"/>
+        <Setter Property="FontWeight" Value="Bold"/>
+        <Setter Property="Foreground" Value="{DynamicResource PrimaryText}"/>
+    </Style>
+    <Style Selector="TextBlock.hint">
+        <Setter Property="FontSize" Value="{DynamicResource FontSizeSmall}"/>
+        <Setter Property="Foreground" Value="{DynamicResource MutedText}"/>
+    </Style>
+
+    <!-- Kart başlığındaki küçük metin düğmeleri (Yukarı/Aşağı/Ayar/Sil) -->
+    <Style Selector="Button.compact, ToggleButton.compact">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="MinWidth" Value="0"/>
+        <Setter Property="Padding" Value="4,2"/>
+        <Setter Property="FontSize" Value="{DynamicResource FontSizeSmall}"/>
+        <Setter Property="Foreground" Value="{DynamicResource MutedText}"/>
+    </Style>
+    <Style Selector="Button.compact:pointerover /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.compact:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource AccentButtonHover}"/>
+    </Style>
+    <Style Selector="ToggleButton.compact:checked /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource AccentButtonHover}"/>
+        <Setter Property="Foreground" Value="{DynamicResource PrimaryText}"/>
+    </Style>
+
+    <!-- Faz 4 (headers): ortak panel başlığı (prototip .panel-header / .panel-title).
+         Hiyerarşi, Varlıklar, Denetçi vb. aynı kalıbı kullanır; sabitle/kapat
+         düğmeleri Faz 5 pencere sistemiyle gelir. -->
+    <Style Selector="Border.panelHeader">
+        <Setter Property="Background" Value="{DynamicResource SurfaceBackground}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}"/>
+        <Setter Property="BorderThickness" Value="0,0,0,1"/>
+        <Setter Property="MinHeight" Value="40"/>
+        <Setter Property="Padding" Value="12,4"/>
+    </Style>
+    <Style Selector="TextBlock.panelTitle">
+        <Setter Property="FontSize" Value="{DynamicResource FontSizeBodyLarge}"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Foreground" Value="{DynamicResource PrimaryText}"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+    <Style Selector="TextBlock.panelSubtitle">
+        <Setter Property="FontSize" Value="{DynamicResource FontSizeSmall}"/>
+        <Setter Property="Foreground" Value="{DynamicResource MutedText}"/>
+    </Style>
+
+    <!-- Sekme başlığı: Fluent varsayılanı (~28 px) yerine prototipin küçük sekmesi.
+         Ayarlar diyaloğu ve alt panel şeridi kullanır. -->
+    <Style Selector="TabItem.compact">
+        <Setter Property="FontSize" Value="{DynamicResource FontSizeBodyLarge}"/>
+        <Setter Property="MinHeight" Value="{DynamicResource ControlHeight}"/>
+        <Setter Property="Padding" Value="12,4"/>
+        <Setter Property="Foreground" Value="{DynamicResource PrimaryText}"/>
+    </Style>
+    <Style Selector="TabItem.compact:not(:selected) /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Foreground" Value="{DynamicResource MutedText}"/>
     </Style>
 </Styles>
