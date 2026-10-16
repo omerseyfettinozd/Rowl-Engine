@@ -9,7 +9,7 @@
              x:DataType="vm:MainWindowViewModel">
     <Border Background="{DynamicResource PanelBackground}">
         <Grid RowDefinitions="Auto, Auto, Auto, *, Auto">
-            <!-- Araç çubuğu: başlık + 4 aksiyon (sıra + komutlar aynen). -->
+            <!-- Araç çubuğu: 4 aksiyon (başlık sekmede; sıra + komutlar aynen). -->
             <Border Grid.Row="0" Classes="panelHeader">
                 <DockPanel LastChildFill="True">
                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="4"
@@ -29,7 +29,6 @@
                                 ToolTip.Tip="{l:T Assets.ViewToggle.Tip}"
                                 Command="{Binding AssetBrowserViewModel.ToggleAssetViewCommand}"/>
                     </StackPanel>
-                    <TextBlock Text="{l:T Assets.Title}" Classes="panelTitle" Margin="0,0,8,0"/>
                 </DockPanel>
             </Border>
 
@@ -137,14 +136,14 @@
                                 <TextBlock Text="{l:T Assets.Badge.Missing}" Classes="fieldValue" Foreground="{DynamicResource ErrorBrush}"/>
                             </Border>
 
-                            <TextBox Text="{Binding EditingName, Mode=TwoWay}" 
-                                     IsVisible="{Binding IsEditing}" 
-                                     FontSize="{DynamicResource FontSizeBodyLarge}" 
-                                     Padding="4,2" 
-                                     Margin="0,-2,0,-2" 
-                                     MinHeight="22" 
-                                     Background="{DynamicResource InputBackground}" 
-                                     Foreground="{DynamicResource PrimaryText}" 
+                            <TextBox Text="{Binding EditingName, Mode=TwoWay}"
+                                     IsVisible="{Binding IsEditing}"
+                                     FontSize="{DynamicResource FontSizeBodyLarge}"
+                                     Padding="4,2"
+                                     Margin="0,-2,0,-2"
+                                     MinHeight="22"
+                                     Background="{DynamicResource InputBackground}"
+                                     Foreground="{DynamicResource PrimaryText}"
                                      BorderBrush="{DynamicResource Accent}">
                                 <TextBox.KeyBindings>
                                     <KeyBinding Gesture="Enter" Command="{Binding CommitRenameCommand}"/>

@@ -44,7 +44,7 @@
                     <ws:PanelHeaderActions DockPanel.Dock="Right" Margin="4,0,-6,0"/>
                     <TextBlock DockPanel.Dock="Right"
                                Text="{Binding HierarchyViewModel.SelectedObject.Id, StringFormat='ID: {0}', FallbackValue=''}"
-                               Classes="panelSubtitle" MaxWidth="110" TextTrimming="CharacterEllipsis"
+                               Classes="panelSubtitle" MaxWidth="80" TextTrimming="CharacterEllipsis"
                                ToolTip.Tip="{Binding HierarchyViewModel.SelectedObject.Id}"
                                VerticalAlignment="Center"/>
                             <!-- Unity kromu Dilim G3: nesne işlemleri
@@ -74,10 +74,11 @@
                                     </MenuFlyout>
                                 </Button.Flyout>
                             </Button>
-                    <StackPanel VerticalAlignment="Center">
-                        <TextBlock Text="{l:T Inspector.Header.Title}" Classes="panelTitle"/>
-                        <TextBlock Text="{l:T Inspector.Header.Subtitle}" Classes="panelSubtitle"/>
-                    </StackPanel>
+                    <!-- Prototip başlığı: ikon + ad (alt başlık kaldırıldı; dar panelde taşıyordu). -->
+                    <Path DockPanel.Dock="Left" Classes="panelHeaderIcon"
+                          Data="M4,7 h10 M18,7 h2 M4,17 h2 M10,17 h10 M14,5 v4 M6,15 v4"/>
+                    <TextBlock Text="{l:T Inspector.Header.Title}" Classes="panelTitle" TextTrimming="CharacterEllipsis"
+                               ToolTip.Tip="{l:T Inspector.Header.Subtitle}"/>
                 </DockPanel>
             </Border>
 

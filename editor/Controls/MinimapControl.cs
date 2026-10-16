@@ -232,7 +232,7 @@ namespace RowlEngine.Editor.Controls
                     IBrush brush = string.IsNullOrEmpty(node.ColorTag)
                         ? (dimmed ? s_nodeDimBrush : s_nodeBrush)
                         : NodeColorTags.GetBrush(node.ColorTag, dimmed);
-                    context.FillRectangle(brush, dot);
+                    context.DrawRectangle(brush, null, new RoundedRect(dot, 2));
                 }
             }
 
@@ -247,6 +247,8 @@ namespace RowlEngine.Editor.Controls
                 offsetY + (view.Y - world.Y) * scale,
                 Math.Max(4.0, view.Width * scale),
                 Math.Max(4.0, view.Height * scale));
+            // sessiz kemik çerçeve: silik dolgu + ince çizgi
+            context.FillRectangle(s_viewportFillBrush, viewport);
             context.DrawRectangle(s_viewportPen, viewport);
         }
 
@@ -291,13 +293,16 @@ namespace RowlEngine.Editor.Controls
         }
 
         private static readonly IBrush s_nodeBrush =
-            new SolidColorBrush(Color.FromArgb(150, 185, 179, 163));
+            new SolidColorBrush(Color.FromArgb(255, 58, 58, 64));
 
         private static readonly IBrush s_nodeDimBrush =
-            new SolidColorBrush(Color.FromArgb(45, 185, 179, 163));
+            new SolidColorBrush(Color.FromArgb(45, 58, 58, 64));
 
         private static readonly IPen s_viewportPen =
-            new Pen(new SolidColorBrush(Color.FromArgb(255, 242, 239, 230)), 1.5);
+            new Pen(new SolidColorBrush(Color.FromArgb(115, 242, 239, 230)), 1);
+
+        private static readonly IBrush s_viewportFillBrush =
+            new SolidColorBrush(Color.FromArgb(18, 242, 239, 230));
 
         private static readonly Dictionary<string, IBrush> s_groupBrushes = new(StringComparer.OrdinalIgnoreCase);
 

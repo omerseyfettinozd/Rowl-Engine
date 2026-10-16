@@ -1287,8 +1287,11 @@
     "NodeControl.FlowOutputTooltip": {
       "text": "Flow Output Pin"
     },
+    "NodeControl.Node": {
+      "text": "DÜĞÜM"
+    },
     "NodeControl.Start": {
-      "text": "START"
+      "text": "BAŞLANGIÇ"
     },
     "NodeControl.SubgraphBorderTooltip": {
       "text": "Subgraph sınırı — içeri girmek için çift tıklayın"
@@ -1712,6 +1715,9 @@
     },
     "Workspace.Header.Help": {
       "text": "Taşımak için başlığı sürükle; seçenekler için sağ tıkla veya Enter'a bas"
+    },
+    "Workspace.Layout.Tip": {
+      "text": "Yerleşim"
     },
     "Workspace.Move": {
       "text": "Taşı"

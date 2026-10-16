@@ -1287,6 +1287,9 @@
     "NodeControl.FlowOutputTooltip": {
       "text": "Flow Output Pin"
     },
+    "NodeControl.Node": {
+      "text": "NODE"
+    },
     "NodeControl.Start": {
       "text": "START"
     },
@@ -1712,6 +1715,9 @@
     },
     "Workspace.Header.Help": {
       "text": "Drag the header to move the panel; right-click or press Enter for options"
+    },
+    "Workspace.Layout.Tip": {
+      "text": "Layout"
     },
     "Workspace.Move": {
       "text": "Move"
