@@ -1247,6 +1247,51 @@
     },
     "Search.Filter.Color": {
       "text": "Renk:"
+    },
+    "Workspace.Pin": {
+      "text": "Sabitle"
+    },
+    "Workspace.Pin.Tip": {
+      "text": "Pencereyi sabitle (başlıktan taşınamaz)"
+    },
+    "Workspace.Close": {
+      "text": "Kapat"
+    },
+    "Workspace.Close.Tip": {
+      "text": "Pencereyi kapat"
+    },
+    "Workspace.Move": {
+      "text": "Taşı"
+    },
+    "Workspace.Move.Left": {
+      "text": "Soluna"
+    },
+    "Workspace.Move.Right": {
+      "text": "Sağına"
+    },
+    "Workspace.Move.Top": {
+      "text": "Üstüne"
+    },
+    "Workspace.Move.Bottom": {
+      "text": "Altına"
+    },
+    "Workspace.Drop.Left": {
+      "text": "Sola yerleştir"
+    },
+    "Workspace.Drop.Right": {
+      "text": "Sağa yerleştir"
+    },
+    "Workspace.Drop.Top": {
+      "text": "Üste yerleştir"
+    },
+    "Workspace.Drop.Bottom": {
+      "text": "Alta yerleştir"
+    },
+    "Workspace.Header.Help": {
+      "text": "Taşımak için başlığı sürükle; seçenekler için sağ tıkla veya Enter'a bas"
+    },
+    "Workspace.Panel.Bottom": {
+      "text": "Alt panel"
     }
   }
 }

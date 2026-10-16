@@ -39,8 +39,11 @@ public sealed class WorkspaceSplitResizedEventArgs(string splitId, double ratio)
 /// move) ends, <see cref="SplitResized"/> reports the new ratio; the owner
 /// applies <c>WorkspaceLayout.ResizeSplit</c> and the new tree flows back in.
 /// </para>
+/// <para>
+/// Faz 5 D4: header drag &amp; drop, pin and close — see <c>WorkspaceHost.Docking.cs</c>.
+/// </para>
 /// </summary>
-public class WorkspaceHost : Control
+public partial class WorkspaceHost : Control
 {
     /// <summary>Splitter thickness between two areas (px).</summary>
     public const double SplitterThickness = 6;
@@ -59,6 +62,7 @@ public class WorkspaceHost : Control
     public WorkspaceHost()
     {
         Panels.CollectionChanged += OnPanelsChanged;
+        InitializeDocking();
     }
 
     /// <summary>The split tree to draw (bind to the view model's layout; read-only for the view).</summary>
@@ -115,6 +119,10 @@ public class WorkspaceHost : Control
         base.OnPropertyChanged(change);
         if (change.Property == LayoutProperty)
             Apply();
+        else if (change.Property == PinnedPanelsProperty)
+            UpdatePanelStates();
+        else if (change.Property == FlowDirectionProperty && _gesture is not null)
+            CancelDrag();
     }
 
     // ---- panels ----
@@ -138,6 +146,7 @@ public class WorkspaceHost : Control
                 LogicalChildren.Add(panel);
                 VisualChildren.Add(panel);
                 panel.PropertyChanged += OnPanelPropertyChanged;
+                panel.Host = this;
             }
         }
         Reindex();
@@ -146,6 +155,7 @@ public class WorkspaceHost : Control
     private void Detach(WorkspacePanel panel)
     {
         panel.PropertyChanged -= OnPanelPropertyChanged;
+        panel.Host = null;
         LogicalChildren.Remove(panel);
         VisualChildren.Remove(panel);
     }
@@ -200,6 +210,7 @@ public class WorkspaceHost : Control
             if (!show)
                 _panelRects.Remove(id);
         }
+        UpdatePanelStates();
         InvalidateMeasure();
         InvalidateArrange();
     }
@@ -371,6 +382,7 @@ public class WorkspaceHost : Control
             Size size = _panelRects.TryGetValue(id, out Rect rect) ? rect.Size : availableSize;
             panel.Measure(size);
         }
+        MeasureDockingOverlays(availableSize);
         return _skeleton?.DesiredSize ?? default;
     }
 
@@ -392,6 +404,8 @@ public class WorkspaceHost : Control
                 panel.Arrange(default);
             }
         }
+        ArrangeDockingOverlays();
+        PrepareHeaders();
         return finalSize;
     }
 

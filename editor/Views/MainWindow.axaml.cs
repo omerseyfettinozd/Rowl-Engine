@@ -27,6 +27,22 @@ namespace RowlEngine.Editor.Views
                 if (DataContext is MainWindowViewModel current)
                     current.ResizeWorkspaceSplit(e.SplitId, e.Ratio);
             };
+            // Faz 5 D4 — başlıktan taşıma / sabitle / kapat: görünüm yalnız isteği iletir.
+            WorkspaceHost.PanelDockRequested += (_, e) =>
+            {
+                if (DataContext is MainWindowViewModel current)
+                    current.DockWorkspacePanel(e.SourcePanelId, e.TargetPanelId, e.Edge);
+            };
+            WorkspaceHost.PanelPinRequested += (_, e) =>
+            {
+                if (DataContext is MainWindowViewModel current)
+                    current.SetWorkspacePanelPinned(e.PanelId, e.Pinned);
+            };
+            WorkspaceHost.PanelCloseRequested += (_, e) =>
+            {
+                if (DataContext is MainWindowViewModel current)
+                    current.CloseWorkspacePanel(e.PanelId);
+            };
             // Faz 4 Dilim 3 — breadcrumb navigation (Tag="CrumbNav" buttons).
             AddHandler(Button.ClickEvent, OnCrumbButtonClick,
                 Avalonia.Interactivity.RoutingStrategies.Bubble);

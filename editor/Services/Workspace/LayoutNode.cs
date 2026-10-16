@@ -10,7 +10,17 @@ public enum SplitAxis
     Vertical,
 }
 
-/// <summary>Edge of a target panel that a dragged panel docks to.</summary>
+/// <summary>
+/// Edge of a target panel that a dragged panel docks to.
+/// <para>
+/// Faz 5 D4: the edge is <b>logical</b> (tree order), not visual: <see cref="Left"/>
+/// / <see cref="Top"/> put the source in the split's first side (A), <see cref="Right"/>
+/// / <see cref="Bottom"/> in the second (B). In a left-to-right window that is the
+/// visual left / right; in a right-to-left window the drawn workspace is mirrored,
+/// so <see cref="Left"/> appears on the visual right. The view converts visual
+/// edges (pointer position, menu labels) with <c>WorkspaceDockEdges.FromVisual</c>.
+/// </para>
+/// </summary>
 public enum DockEdge
 {
     Left,

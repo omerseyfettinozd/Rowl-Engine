@@ -86,6 +86,14 @@ public sealed record BottomStripState(BottomTabs Open, int ActiveTab)
 /// </summary>
 public sealed record EditorWorkspaceState(WorkspaceLayout Layout, BottomStripState Bottom)
 {
+    /// <summary>
+    /// Faz 5 D4 — pinned panels: locked against drag / menu moves
+    /// (<see cref="WorkspaceLayout.DockView"/> rejects them as a source).
+    /// Invariant: only panels in the tree; a closed panel loses its pin
+    /// (prototype <c>closeView</c>). Not part of the tree (D5 persists it).
+    /// </summary>
+    public PanelSet Pinned { get; init; } = PanelSet.Empty;
+
     /// <summary>"Varsayılan" preset — also the editor's start-up workspace.</summary>
     public static EditorWorkspaceState Default => EditorWorkspaceLayouts.Preset(EditorWorkspaceLayouts.DefaultPreset)!;
 
@@ -110,7 +118,54 @@ public sealed record EditorWorkspaceState(WorkspaceLayout Layout, BottomStripSta
 
     public bool IsEnginePreviewActive => IsVisible(PanelIds.Game);
 
+    public bool IsPinned(string panelId) => Pinned.Contains(panelId);
+
+    /// <summary>A panel can be closed from its header unless it is the last one in the workspace.</summary>
+    public bool CanClose(string panelId) => IsVisible(panelId) && Layout.Views.Count > 1;
+
     // ---- operations ----
+
+    /// <summary>
+    /// Faz 5 D4 — header drag / "Move" menu: docks <paramref name="source"/> on
+    /// <paramref name="edge"/> of <paramref name="target"/> (<see cref="WorkspaceLayout.DockView"/>;
+    /// the edge is logical: Left = the split's first side). Pinned sources,
+    /// self drops and unknown panels return the same instance.
+    /// </summary>
+    public EditorWorkspaceState Dock(string source, string target, DockEdge edge) =>
+        WithLayout(Layout.DockView(source, target, edge, Pinned));
+
+    /// <summary>Faz 5 D4 — pins / unpins a panel that is in the workspace (others: same instance).</summary>
+    public EditorWorkspaceState WithPinned(string panelId, bool pinned)
+    {
+        if (!IsVisible(panelId) || IsPinned(panelId) == pinned)
+            return this;
+        return this with { Pinned = pinned ? Pinned.With(panelId) : Pinned.Without(panelId) };
+    }
+
+    public EditorWorkspaceState TogglePin(string panelId) => WithPinned(panelId, !IsPinned(panelId));
+
+    /// <summary>
+    /// Faz 5 D4 — the header's close (×): side panels close like their menu
+    /// toggle, the bottom strip closes all its tabs, a center view leaves the
+    /// tree (its sibling takes the area). The last panel is never closed.
+    /// Every panel comes back through the existing menu / shortcut actions
+    /// (<see cref="HandlePanelAction"/>).
+    /// </summary>
+    public EditorWorkspaceState ClosePanel(string panelId)
+    {
+        if (!CanClose(panelId))
+            return this;
+        return panelId switch
+        {
+            PanelIds.Hierarchy or PanelIds.Inspector => WithPanel(panelId, false),
+            PanelIds.Bottom => (this with
+            {
+                Layout = Layout.RemoveView(PanelIds.Bottom),
+                Bottom = Bottom with { Open = BottomTabs.None },
+            }).Pruned(),
+            _ => WithLayout(Layout.RemoveView(panelId)),
+        };
+    }
 
     /// <summary>Opens or closes a side panel (<see cref="PanelIds.Hierarchy"/> / <see cref="PanelIds.Inspector"/>).</summary>
     public EditorWorkspaceState WithPanel(string panelId, bool visible)
@@ -122,7 +177,7 @@ public sealed record EditorWorkspaceState(WorkspaceLayout Layout, BottomStripSta
         WorkspaceLayout layout = visible
             ? (panelId == PanelIds.Hierarchy ? EditorWorkspaceLayouts.OpenHierarchy(Layout) : EditorWorkspaceLayouts.OpenInspector(Layout))
             : Layout.RemoveView(panelId);
-        return this with { Layout = layout };
+        return (this with { Layout = layout }).Pruned();
     }
 
     /// <summary>Opens or closes one bottom tab; the strip leaf follows (first tab opens it, last closes it).</summary>
@@ -136,7 +191,7 @@ public sealed record EditorWorkspaceState(WorkspaceLayout Layout, BottomStripSta
             layout = EditorWorkspaceLayouts.OpenBottom(layout);
         else if (!bottom.AnyOpen && IsBottomVisible)
             layout = layout.RemoveView(PanelIds.Bottom);
-        return new EditorWorkspaceState(layout, bottom);
+        return (this with { Layout = layout, Bottom = bottom }).Pruned();
     }
 
     /// <summary>
@@ -231,8 +286,11 @@ public sealed record EditorWorkspaceState(WorkspaceLayout Layout, BottomStripSta
     }
 
     /// <summary>Applies a layout preset; unknown names return the same instance.</summary>
+    /// <remarks>Faz 5 D4: pins of panels the preset keeps open stay (a preset is not a drag move).</remarks>
     public EditorWorkspaceState ApplyPreset(string? presetName) =>
-        EditorWorkspaceLayouts.Preset(presetName) ?? this;
+        EditorWorkspaceLayouts.Preset(presetName) is { } preset
+            ? (preset with { Pinned = Pinned }).Pruned()
+            : this;
 
     private EditorWorkspaceState ToggleSelectedTab(int index) =>
         Bottom.IsOpen(index) && Bottom.ActiveTab == index
@@ -240,7 +298,14 @@ public sealed record EditorWorkspaceState(WorkspaceLayout Layout, BottomStripSta
             : WithBottomTab(index, true).WithActiveBottomTab(index);
 
     private EditorWorkspaceState WithLayout(WorkspaceLayout layout) =>
-        ReferenceEquals(layout, Layout) || layout == Layout ? this : this with { Layout = layout };
+        ReferenceEquals(layout, Layout) || layout == Layout ? this : (this with { Layout = layout }).Pruned();
+
+    /// <summary>Keeps <see cref="Pinned"/> ⊆ the tree's panels (same instance when already true).</summary>
+    private EditorWorkspaceState Pruned()
+    {
+        PanelSet pinned = Pinned.Intersect(Layout.Views.ToArray());
+        return ReferenceEquals(pinned, Pinned) ? this : this with { Pinned = pinned };
+    }
 }
 
 /// <summary>

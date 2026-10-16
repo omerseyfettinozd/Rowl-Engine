@@ -158,11 +158,13 @@
              (yeniden yaratmaz, yeniden ebeveynlemez). Bölücü sürüklemesi oranı ağaca
              yazar (MainWindow.axaml.cs → ResizeWorkspaceSplit). Başlık kuralı: içerik
              kendi başlığını çiziyorsa OwnsHeader (Hiyerarşi, Denetçi, alt şerit sekmeleri),
-             yoksa host Border.panelHeader çizer. -->
+             yoksa host Border.panelHeader çizer. Faz 5 D4: başlıktan sürükle-bırak, sabitle,
+             kapat ve panel menüsü host'ta; istekler code-behind'dan VM ağaç işlemlerine gider. -->
         <Grid Grid.Row="1">
-            <ws:WorkspaceHost x:Name="WorkspaceHost" Layout="{Binding WorkspaceLayout}">
+            <ws:WorkspaceHost x:Name="WorkspaceHost" Layout="{Binding WorkspaceLayout}" PinnedPanels="{Binding WorkspacePinnedPanels}">
 
-                <ws:WorkspacePanel PanelId="{x:Static wsm:PanelIds.Hierarchy}" OwnsHeader="True"
+                <ws:WorkspacePanel PanelId="{x:Static wsm:PanelIds.Hierarchy}" OwnsHeader="True" HeaderActionsInContent="True"
+                                   Title="{l:T Panel.Hierarchy}"
                                    PanelMinWidth="{x:Static ws:WorkspacePanelMetrics.HierarchyMinWidth}" Background="{DynamicResource PanelBackground}">
                     <panels:NodeHierarchyView/>
                 </ws:WorkspacePanel>
@@ -235,6 +237,7 @@
                 <!-- Alt şerit: Varlıklar + Günlük + diğerleri tek sekmeli yaprak
                      (Unity alt panel düzeni); sekme satırı yaprağın başlığıdır. -->
                 <ws:WorkspacePanel PanelId="{x:Static wsm:PanelIds.Bottom}" OwnsHeader="True"
+                                   Title="{l:T Workspace.Panel.Bottom}"
                                    PanelMinHeight="{x:Static ws:WorkspacePanelMetrics.BottomMinHeight}" Background="{DynamicResource PanelBackground}">
                     <TabControl SelectedIndex="{Binding BottomPanelActiveTab}"
                                 Background="{DynamicResource PanelBackground}">
@@ -256,7 +259,8 @@
                     </TabControl>
                 </ws:WorkspacePanel>
 
-                <ws:WorkspacePanel PanelId="{x:Static wsm:PanelIds.Inspector}" OwnsHeader="True"
+                <ws:WorkspacePanel PanelId="{x:Static wsm:PanelIds.Inspector}" OwnsHeader="True" HeaderActionsInContent="True"
+                                   Title="{l:T Panel.Inspector}"
                                    PanelMinWidth="{x:Static ws:WorkspacePanelMetrics.InspectorMinWidth}" Background="{DynamicResource PanelBackground}">
                     <panels:NodeInspectorView/>
                 </ws:WorkspacePanel>

@@ -322,6 +322,25 @@ namespace RowlEngine.Editor.ViewModels
         public void ResizeWorkspaceSplit(string splitId, double ratio) =>
             Workspace = Workspace.WithSplitRatio(splitId, ratio);
 
+        /// <summary>Faz 5 D4: sabit (taşınamaz) paneller — WorkspaceHost başlıkları bunu gösterir (salt-okur).</summary>
+        public PanelSet WorkspacePinnedPanels => Workspace.Pinned;
+
+        /// <summary>
+        /// Faz 5 D4: başlık sürükle-bırak / "Taşı" menüsü. Kenar mantıksaldır
+        /// (Left = bölmenin ilk tarafı); görünüm RTL'de görsel kenarı çevirir.
+        /// Sabit kaynak, kendi üzerine ve bilinmeyen panel değişiklik yapmaz.
+        /// </summary>
+        public void DockWorkspacePanel(string source, string target, DockEdge edge) =>
+            Workspace = Workspace.Dock(source, target, edge);
+
+        /// <summary>Faz 5 D4: başlıktaki sabitle düğmesi / menü.</summary>
+        public void SetWorkspacePanelPinned(string panelId, bool pinned) =>
+            Workspace = Workspace.WithPinned(panelId, pinned);
+
+        /// <summary>Faz 5 D4: başlıktaki kapat (×); son panel kapanmaz. Panel menü/kısayolla geri açılır.</summary>
+        public void CloseWorkspacePanel(string panelId) =>
+            Workspace = Workspace.ClosePanel(panelId);
+
         // Panel görünürlüğü (menü/kısayol). Ayarlayıcılar geriye uyum için: ağaç işlemine çevrilir.
         public bool IsAssetsPanelVisible
         {
@@ -427,6 +446,7 @@ namespace RowlEngine.Editor.ViewModels
             EditorWorkspaceState before = oldValue ?? newValue;
             if (!ReferenceEquals(before.Layout, newValue.Layout))
                 OnPropertyChanged(nameof(WorkspaceLayout));
+            NotifyIfChanged(nameof(WorkspacePinnedPanels), before.Pinned, newValue.Pinned);
 
             bool bottomTabsChanged = false;
             bottomTabsChanged |= NotifyIfChanged(nameof(IsAssetsPanelVisible), before.Bottom.IsOpen(BottomStripState.AssetsTab), newValue.Bottom.IsOpen(BottomStripState.AssetsTab));
