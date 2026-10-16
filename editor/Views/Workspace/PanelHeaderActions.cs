@@ -1,9 +1,11 @@
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Metadata;
 using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Shapes;
 using Avalonia.Data;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -21,6 +23,7 @@ namespace RowlEngine.Editor.Views.Workspace;
 /// on attach and hides itself outside a workspace. The buttons only request the
 /// change (one-way flow: the owner updates the tree, the pin state flows back).
 /// </summary>
+[PseudoClasses(":revealed", ":pinned")]
 public class PanelHeaderActions : StackPanel
 {
     // 16 px çizili ikonlar (dolgusuz, Foreground ile boyanır).
@@ -35,6 +38,7 @@ public class PanelHeaderActions : StackPanel
         Orientation = Orientation.Horizontal;
         Spacing = 0;
         VerticalAlignment = VerticalAlignment.Center;
+        Classes.Add("panelHeaderActions");
 
         LayoutButton = new Button { Name = "PART_LayoutButton" };
         LayoutButton.Classes.Add("workspaceHeaderButton");
@@ -77,16 +81,26 @@ public class PanelHeaderActions : StackPanel
         base.OnAttachedToVisualTree(e);
         _panel = this.FindAncestorOfType<WorkspacePanel>();
         if (_panel is not null)
+        {
             _panel.PropertyChanged += OnPanelPropertyChanged;
+            _panel.PointerEntered += OnPanelPointerEntered;
+            _panel.PointerExited += OnPanelPointerExited;
+        }
         Sync();
+        UpdateReveal();
     }
 
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
     {
         base.OnDetachedFromVisualTree(e);
         if (_panel is not null)
+        {
             _panel.PropertyChanged -= OnPanelPropertyChanged;
+            _panel.PointerEntered -= OnPanelPointerEntered;
+            _panel.PointerExited -= OnPanelPointerExited;
+        }
         _panel = null;
+        UpdateReveal();
     }
 
     private void OnPanelPropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
@@ -98,6 +112,24 @@ public class PanelHeaderActions : StackPanel
         {
             Sync();
         }
+
+        if (e.Property == InputElement.IsKeyboardFocusWithinProperty
+            || e.Property == WorkspacePanel.IsPinnedProperty)
+        {
+            UpdateReveal();
+        }
+    }
+
+    private void OnPanelPointerEntered(object? sender, PointerEventArgs e) => UpdateReveal();
+
+    private void OnPanelPointerExited(object? sender, PointerEventArgs e) => UpdateReveal();
+
+    private void UpdateReveal()
+    {
+        // Sessiz başlık: işaretçi üstteyken ya da klavye odağı paneldeyken göster.
+        bool revealed = _panel is not null && (_panel.IsPointerOver || _panel.IsKeyboardFocusWithin);
+        PseudoClasses.Set(":revealed", revealed);
+        PseudoClasses.Set(":pinned", _panel?.IsPinned == true);
     }
 
     private void Sync()

@@ -44,18 +44,23 @@
         <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtle}"/>
         <Setter Property="Foreground" Value="{DynamicResource PrimaryText}"/>
     </Style>
+    <!-- Faz 6 görsel uyum: prototipte beyaz dolgulu düğme yok (.script-save: koyu zemin + ince kenar);
+         birincil eylem kenar ve yazı ağırlığıyla ayrışır. -->
     <Style Selector="Button.primary">
-        <Setter Property="Background" Value="{DynamicResource Accent}"/>
-        <Setter Property="Foreground" Value="{DynamicResource OnAccentForeground}"/>
-        <Setter Property="CornerRadius" Value="{DynamicResource RadiusSmall}"/>
+        <Setter Property="Background" Value="{DynamicResource AccentButtonHover}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtle}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Foreground" Value="{DynamicResource PrimaryText}"/>
+        <Setter Property="CornerRadius" Value="{DynamicResource RadiusMedium}"/>
         <Setter Property="MinHeight" Value="{DynamicResource ControlHeight}"/>
-        <Setter Property="Padding" Value="16,6"/>
-        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Padding" Value="14,6"/>
+        <Setter Property="FontWeight" Value="Medium"/>
         <Setter Property="FontSize" Value="{DynamicResource FontSizeBody}"/>
     </Style>
     <Style Selector="Button.primary:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-        <Setter Property="Background" Value="{DynamicResource AccentHover}"/>
-        <Setter Property="Foreground" Value="{DynamicResource OnAccentForeground}"/>
+        <Setter Property="Background" Value="{DynamicResource BorderColor}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource MutedText}"/>
+        <Setter Property="Foreground" Value="{DynamicResource PrimaryText}"/>
     </Style>
     <Style Selector="Button.icon">
         <Setter Property="Background" Value="Transparent"/>
@@ -445,5 +450,128 @@
     </Style>
     <Style Selector="Button.capsule.active /template/ ContentPresenter#PART_ContentPresenter">
         <Setter Property="Background" Value="{DynamicResource AccentButtonHover}"/>
+    </Style>
+    <!-- Faz 6 görsel uyum: prototip alanları düz input (stepper yok); ok tuşları ve tekerlek çalışmaya devam eder. -->
+    <Style Selector="NumericUpDown">
+        <Setter Property="ShowButtonSpinner" Value="False"/>
+    </Style>
+    <!-- Faz 6: sessiz başlık — Yerleşim/Sabitle yalnız işaretçi/klavye odağı paneldeyken (anında; azaltılmış hareketle uyumlu). -->
+    <Style Selector=":is(StackPanel).panelHeaderActions &gt; Button#PART_LayoutButton, :is(StackPanel).panelHeaderActions &gt; ToggleButton#PART_PinButton">
+        <Setter Property="Opacity" Value="0"/>
+    </Style>
+    <Style Selector=":is(StackPanel).panelHeaderActions:revealed &gt; Button#PART_LayoutButton, :is(StackPanel).panelHeaderActions:revealed &gt; ToggleButton#PART_PinButton, :is(StackPanel).panelHeaderActions:pinned &gt; ToggleButton#PART_PinButton">
+        <Setter Property="Opacity" Value="1"/>
+    </Style>
+    <Style Selector="Button.assetTool">
+        <Setter Property="Width" Value="32"/>
+        <Setter Property="Height" Value="32"/>
+        <Setter Property="Padding" Value="0"/>
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderBrush" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="CornerRadius" Value="{DynamicResource RadiusSmall}"/>
+        <Setter Property="Foreground" Value="{DynamicResource MutedText}"/>
+        <Setter Property="HorizontalContentAlignment" Value="Center"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+    </Style>
+    <Style Selector="Button.assetTool:pointerover">
+        <Setter Property="Foreground" Value="{DynamicResource PrimaryText}"/>
+    </Style>
+    <Style Selector="Button.assetTool:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource ToolbarButtonHover}"/>
+        <Setter Property="BorderBrush" Value="Transparent"/>
+    </Style>
+    <Style Selector="Button.assetTool:pressed /template/ ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource ToolbarButtonHover}"/>
+        <Setter Property="BorderBrush" Value="Transparent"/>
+    </Style>
+    <!-- Faz 6: kanvas kapsül dili (tüm yüzen tuval kontrolleri tek tip) -->
+    <Style Selector="Border.canvasCapsule">
+        <Setter Property="Background" Value="{DynamicResource CanvasControlBg}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="12"/>
+        <Setter Property="Padding" Value="1"/>
+        <Setter Property="BoxShadow" Value="0 4 16 0 #33000000"/>
+    </Style>
+    <Style Selector="Button.canvasTool">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="CornerRadius" Value="10"/>
+        <Setter Property="Width" Value="35"/>
+        <Setter Property="Height" Value="36"/>
+        <Setter Property="MinWidth" Value="0"/>
+        <Setter Property="MinHeight" Value="0"/>
+        <Setter Property="Padding" Value="0"/>
+        <Setter Property="HorizontalContentAlignment" Value="Center"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+        <Setter Property="Foreground" Value="{DynamicResource CanvasControlText}"/>
+    </Style>
+    <Style Selector="Button.canvasTool:pointerover">
+        <Setter Property="Foreground" Value="{DynamicResource PrimaryText}"/>
+    </Style>
+    <Style Selector="Button.canvasTool:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource AccentButtonHover}"/>
+        <Setter Property="BorderBrush" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{DynamicResource PrimaryText}"/>
+    </Style>
+    <Style Selector="Button.canvasTool:disabled">
+        <Setter Property="Opacity" Value="0.35"/>
+    </Style>
+    <Style Selector="Button.canvasTool:disabled /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="Transparent"/>
+    </Style>
+    <Style Selector="ToggleButton.canvasTool">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="CornerRadius" Value="10"/>
+        <Setter Property="Width" Value="35"/>
+        <Setter Property="Height" Value="36"/>
+        <Setter Property="MinWidth" Value="0"/>
+        <Setter Property="MinHeight" Value="0"/>
+        <Setter Property="Padding" Value="0"/>
+        <Setter Property="HorizontalContentAlignment" Value="Center"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+        <Setter Property="Foreground" Value="{DynamicResource CanvasControlText}"/>
+    </Style>
+    <Style Selector="ToggleButton.canvasTool:pointerover">
+        <Setter Property="Foreground" Value="{DynamicResource PrimaryText}"/>
+    </Style>
+    <Style Selector="ToggleButton.canvasTool:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource AccentButtonHover}"/>
+        <Setter Property="BorderBrush" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{DynamicResource PrimaryText}"/>
+    </Style>
+    <Style Selector="ToggleButton.canvasTool:checked /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource BorderColor}"/>
+        <Setter Property="BorderBrush" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{DynamicResource PrimaryText}"/>
+    </Style>
+    <Style Selector="ToggleButton.canvasTool:disabled">
+        <Setter Property="Opacity" Value="0.35"/>
+    </Style>
+    <Style Selector="ToggleButton.canvasTool:disabled /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="Transparent"/>
+    </Style>
+    <Style Selector="Path.canvasIcon">
+        <Setter Property="Width" Value="14"/>
+        <Setter Property="Height" Value="14"/>
+        <Setter Property="Stretch" Value="Uniform"/>
+        <Setter Property="StrokeThickness" Value="1.5"/>
+        <Setter Property="StrokeLineCap" Value="Round"/>
+        <Setter Property="StrokeJoin" Value="Round"/>
+        <Setter Property="Fill" Value="Transparent"/>
+        <Setter Property="Stroke" Value="{DynamicResource CanvasControlText}"/>
+        <Setter Property="HorizontalAlignment" Value="Center"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+    <Style Selector="Button.canvasTool:pointerover Path.canvasIcon">
+        <Setter Property="Stroke" Value="{DynamicResource PrimaryText}"/>
+    </Style>
+    <Style Selector="ToggleButton.canvasTool:pointerover Path.canvasIcon">
+        <Setter Property="Stroke" Value="{DynamicResource PrimaryText}"/>
+    </Style>
+    <Style Selector="ToggleButton.canvasTool:checked Path.canvasIcon">
+        <Setter Property="Stroke" Value="{DynamicResource PrimaryText}"/>
     </Style>
 </Styles>

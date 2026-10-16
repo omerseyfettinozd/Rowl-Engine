@@ -185,5 +185,15 @@
     <SolidColorBrush x:Key="CardBorderColor" Color="{DynamicResource BorderColorValue}"/>
     <SolidColorBrush x:Key="AccentButtonFg" Color="{DynamicResource PrimaryTextColor}"/>
     <SolidColorBrush x:Key="GraphCanvasBg" Color="{DynamicResource CanvasBackgroundColor}"/>
+    <!-- Faz 6 görsel uyum: prototip .node-area nokta ızgarası (20 px karo, 1.6 px nokta).
+         Fırçalar aynı sözlükteki örneklere bağlı → tema rengi değişince ızgara da değişir. -->
+    <DrawingBrush x:Key="GraphDotGridBrush" TileMode="Tile" Stretch="None" DestinationRect="0,0,20,20">
+        <DrawingBrush.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="{StaticResource GraphCanvasBg}" Geometry="M0,0 H20 V20 H0 Z"/>
+                <GeometryDrawing Brush="{StaticResource BorderColor}" Geometry="M9.2,10 A0.8,0.8 0 1 0 10.8,10 A0.8,0.8 0 1 0 9.2,10 Z"/>
+            </DrawingGroup>
+        </DrawingBrush.Drawing>
+    </DrawingBrush>
 
 </ResourceDictionary>
