@@ -2,77 +2,72 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:RowlEngine.Editor.ViewModels"
              xmlns:comp="using:RowlEngine.Editor.ViewModels.Components"
+             xmlns:l="using:RowlEngine.Editor.Services.Strings"
              x:Class="RowlEngine.Editor.Views.NodeControl"
              x:DataType="vm:NodeViewModel">
 
     <Canvas Width="300" Height="{Binding NodeCardHeight}" Background="Transparent" ClipToBounds="False" Opacity="{Binding FilterOpacity}">
-        <!-- Faz 4 Dilim 2 — renk etiketi şeridi (yoksa gizli, yerleşimi kaydırmaz) -->
-        <Border Canvas.Left="10" Canvas.Top="0" ZIndex="5" Width="240" Height="5"
-                CornerRadius="11,11,0,0" Background="{Binding ColorTagBrush}" IsVisible="{Binding HasColorTag}"/>
-        <!-- Faz 4 Dilim 3 — subgraph sınır rozeti (çift tıkla içeri gir) -->
+        <!-- renk etiketi şeridi (yoksa gizli) -->
+        <Border Canvas.Left="10" Canvas.Top="0" ZIndex="5" Width="240" Height="3"
+                CornerRadius="12,12,0,0" Background="{Binding ColorTagBrush}" IsVisible="{Binding HasColorTag}"/>
+        <!-- subgraph rozeti (çift tıkla içeri gir) -->
         <Border Canvas.Left="10" Canvas.Top="-20" ZIndex="6" Background="{DynamicResource AccentButtonBg}" CornerRadius="4" Padding="6,2"
-                IsVisible="{Binding IsSubgraphBoundary}" ToolTip.Tip="Subgraph sınırı — içeri girmek için çift tıklayın">
+                IsVisible="{Binding IsSubgraphBoundary}" ToolTip.Tip="{l:T NodeControl.SubgraphBorderTooltip}">
             <TextBlock Text="{Binding SubgraphBadge}" FontSize="9" Foreground="{DynamicResource PrimaryText}" FontWeight="Bold"/>
         </Border>
-        <!-- Main Card Body -->
+        <!-- kart gövdesi (prototip .story-node) -->
         <Border Canvas.Left="10" Canvas.Top="0" Width="240" Height="{Binding NodeCardHeight}"
-                Background="{DynamicResource NodeCardBg}" BorderBrush="{Binding BorderColor}" BorderThickness="1.5" CornerRadius="12"
-                BoxShadow="0 4 12 0 #30000000">
-            <Grid RowDefinitions="36, *">
-                <!-- Node Header (ComfyUI Style Header Bar) -->
-                <Border Grid.Row="0" Background="{DynamicResource NodeHeaderBg}" CornerRadius="11,11,0,0" Padding="12,0">
-                    <DockPanel VerticalAlignment="Center">
-                        <Border DockPanel.Dock="Left" Width="8" Height="8" CornerRadius="4" Background="{DynamicResource AccentColor}" Margin="0,0,8,0" VerticalAlignment="Center"/>
-                        <Border IsVisible="{Binding IsStartNode}" Background="{DynamicResource SuccessSurface}" CornerRadius="3" Padding="4,1" Margin="0,0,6,0" VerticalAlignment="Center" DockPanel.Dock="Right">
-                            <TextBlock Text="START" FontSize="9" Foreground="{DynamicResource SuccessBrush}" FontWeight="Black"/>
-                        </Border>
-                        <TextBlock Text="{Binding Id, StringFormat='#{0}'}" Foreground="{DynamicResource MutedText}" FontSize="11" HorizontalAlignment="Right" VerticalAlignment="Center" DockPanel.Dock="Right" Margin="0,0,6,0"/>
-                        <TextBlock Text="{Binding Title}" FontWeight="Bold" Foreground="{DynamicResource PrimaryText}" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                Background="{DynamicResource NodeCardBg}" BorderBrush="{Binding BorderColor}" BorderThickness="1" CornerRadius="12"
+                Padding="15" BoxShadow="0 10 40 0 #33000000" ToolTip.Tip="{Binding ComponentSummary}">
+            <DockPanel LastChildFill="True">
+                <!-- tip satırı (prototip .story-node: kimlik numarası gösterilmez; kimlik Denetçi'de ve aramada) -->
+                <DockPanel DockPanel.Dock="Top" LastChildFill="False" VerticalAlignment="Center">
+                    <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+                        <Ellipse Width="4" Height="4" Fill="{DynamicResource PrimaryText}" VerticalAlignment="Center"/>
+                        <TextBlock Text="{l:T NodeControl.Start}" IsVisible="{Binding IsStartNode}" FontSize="8" Foreground="{DynamicResource NodeKindText}" LetterSpacing="1" VerticalAlignment="Center"/>
+                        <TextBlock Text="{l:T NodeControl.Node}" IsVisible="{Binding !IsStartNode}" FontSize="8" Foreground="{DynamicResource NodeKindText}" LetterSpacing="1" VerticalAlignment="Center"/>
+                        <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center" IsVisible="{Binding HasChoices}">
+                            <Ellipse Width="2" Height="2" Fill="{DynamicResource NodeKindText}" VerticalAlignment="Center"/>
+                            <TextBlock Text="{l:T NodeControl.Choice}" FontSize="8" Foreground="{DynamicResource NodeKindText}" LetterSpacing="1" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </StackPanel>
+                </DockPanel>
+                <!-- alt satır (alta yaslı) -->
+                <Border DockPanel.Dock="Bottom" BorderBrush="{DynamicResource NodeFooterLine}" BorderThickness="0,1,0,0" Padding="0,9,0,0" Margin="0,8,0,0" VerticalAlignment="Bottom">
+                    <DockPanel LastChildFill="True" VerticalAlignment="Center">
+                        <Path DockPanel.Dock="Right" Data="M5,12 h14 M13,6 l6,6 l-6,6" Stroke="{DynamicResource NodeFooterText}" StrokeThickness="1.5" Fill="Transparent" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
+                        <TextBlock Text="{Binding Speaker}" FontSize="9" Foreground="{DynamicResource NodeFooterText}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                     </DockPanel>
                 </Border>
-
-                <!-- Node Body Content -->
-                <Border Grid.Row="1" Padding="12,8">
-                    <StackPanel Spacing="6">
-                        <StackPanel Orientation="Horizontal" Spacing="6">
-                            <Border Background="{DynamicResource AccentButtonBg}" CornerRadius="3" Padding="4,1">
-                                <TextBlock Text="{Binding Speaker}" FontSize="10" Foreground="{DynamicResource AccentButtonFg}" FontWeight="Bold"/>
-                            </Border>
-                            <Border Background="{DynamicResource SuccessSurface}" IsVisible="{Binding HasDialogueBox}" CornerRadius="3" Padding="4,1">
-                                <TextBlock Text="DİYALOG" FontSize="8" Foreground="{DynamicResource SuccessBrush}" FontWeight="Bold"/>
-                            </Border>
-                            <Border Background="{DynamicResource AccentButtonBg}" IsVisible="{Binding HasChoices}" CornerRadius="3" Padding="4,1">
-                                <TextBlock Text="SEÇİM" FontSize="8" Foreground="{DynamicResource Accent}" FontWeight="Bold"/>
-                            </Border>
-                            <TextBlock Text="{Binding BackgroundTexture}" FontSize="10" Foreground="{DynamicResource MutedText}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-                        </StackPanel>
-                        <TextBlock Text="{Binding DialogueText}" FontSize="11" Foreground="{DynamicResource SecondaryText}" TextWrapping="Wrap" MaxLines="2" LineHeight="15"/>
-                        <TextBlock Text="{Binding ComponentSummary}" FontSize="9" Foreground="{DynamicResource DimText}" FontWeight="SemiBold"/>
-                    </StackPanel>
-                </Border>
-            </Grid>
+                <!-- başlık + diyalog -->
+                <StackPanel VerticalAlignment="Top">
+                    <TextBlock Text="{Binding Title}" FontSize="14" FontWeight="Medium" Foreground="{DynamicResource PrimaryText}" LetterSpacing="-0.3" Margin="0,14,0,0" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis"/>
+                    <TextBlock Text="{Binding DialogueText}" FontSize="10" Foreground="{DynamicResource MutedText}" LineHeight="16.5" Margin="0,7,0,0" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis"/>
+                </StackPanel>
+            </DockPanel>
         </Border>
 
-        <!-- Left Input Handle (Green Pin Centered Exactly at X=0, Y=60) -->
-        <Border Name="InputPinHandle" Canvas.Left="-5" Canvas.Top="45" Width="30" Height="30" Background="Transparent" Cursor="Hand" ToolTip.Tip="Flow Input Pin (Left Click: Drag Cable / Right Click: Disconnect)">
-            <Ellipse Width="16" Height="16" Fill="{DynamicResource MutedText}" Stroke="{DynamicResource PrimaryText}" StrokeThickness="2" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+        <!-- sol giriş pini (merkez X+10, Y+60 korunur) -->
+        <Border Name="InputPinHandle" Canvas.Left="-5" Canvas.Top="45" Width="30" Height="30" Background="Transparent" Cursor="Hand" ToolTip.Tip="{l:T NodeControl.FlowInputTooltip}">
+            <Ellipse Width="10" Height="10" Fill="{DynamicResource NodeCardBg}" Stroke="{DynamicResource NodePortStroke}" StrokeThickness="1.5" HorizontalAlignment="Center" VerticalAlignment="Center"/>
         </Border>
 
-        <!-- Default output remains for linear nodes. Choice nodes get one pin per option. -->
-        <Border Name="OutputPinHandle" IsVisible="{Binding !HasChoices}" Canvas.Left="250" Canvas.Top="45" Width="30" Height="30" Background="Transparent" Cursor="Hand" ToolTip.Tip="Flow Output Pin">
-            <Ellipse Width="16" Height="16" Fill="{DynamicResource MutedText}" Stroke="{DynamicResource PrimaryText}" StrokeThickness="2" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+        <!-- varsayılan çıkış (düz düğümler) -->
+        <Border Name="OutputPinHandle" IsVisible="{Binding !HasChoices}" Canvas.Left="250" Canvas.Top="45" Width="30" Height="30" Background="Transparent" Cursor="Hand" ToolTip.Tip="{l:T NodeControl.FlowOutputTooltip}">
+            <Ellipse Width="10" Height="10" Fill="{DynamicResource NodeCardBg}" Stroke="{DynamicResource NodePortStroke}" StrokeThickness="1.5" HorizontalAlignment="Center" VerticalAlignment="Center"/>
         </Border>
 
+        <!-- seçim çıkışları (seçimli düğümler) -->
         <ItemsControl ItemsSource="{Binding ChoiceOptions}" Canvas.Left="245" Canvas.Top="45" ClipToBounds="False">
             <ItemsControl.ItemsPanel>
                 <ItemsPanelTemplate><StackPanel Spacing="0"/></ItemsPanelTemplate>
             </ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="comp:ChoiceOptionViewModel">
-                    <Border Tag="{Binding OptionId}" Width="90" Height="30" Background="Transparent" Cursor="Hand" ToolTip.Tip="Choice output — drag to its target node">
+                    <Border Tag="{Binding OptionId}" Width="90" Height="30" Background="Transparent" Cursor="Hand" ToolTip.Tip="{l:T NodeControl.ChoiceOutputTooltip}">
                         <Grid ColumnDefinitions="*,24">
                             <TextBlock Text="{Binding Text}" FontSize="9" Foreground="{DynamicResource MutedText}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,4,0"/>
-                            <Ellipse Grid.Column="1" Width="16" Height="16" Fill="{DynamicResource Accent}" Stroke="{DynamicResource PrimaryText}" StrokeThickness="2" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                            <Ellipse Grid.Column="1" Width="10" Height="10" Fill="{DynamicResource Accent}" VerticalAlignment="Center" HorizontalAlignment="Center"/>
                         </Grid>
                     </Border>
                 </DataTemplate>

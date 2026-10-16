@@ -2,32 +2,33 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:RowlEngine.Editor.ViewModels.Player"
              xmlns:services="using:RowlEngine.Editor.Services"
+             xmlns:l="using:RowlEngine.Editor.Services.Strings"
              x:Class="RowlEngine.Editor.Views.Player.PauseMenuView"
              x:DataType="vm:PlayerViewModel">
   <Grid RowDefinitions="Auto, Auto, Auto, Auto, Auto, Auto, Auto">
-    <TextBlock Grid.Row="0" Text="Duraklatıldı" FontSize="28" FontWeight="Bold"
+    <TextBlock Grid.Row="0" Text="{l:T Player.Pause.Title}" FontSize="28" FontWeight="Bold"
                HorizontalAlignment="Center" Margin="0,0,0,16" />
-    <Button Grid.Row="1" Content="Devam Et" Width="240" Margin="0,4" Padding="0,8"
+    <Button Grid.Row="1" Content="{l:T Player.Pause.Resume}" Width="240" Margin="0,4" Padding="0,8"
             HorizontalAlignment="Center"
             Command="{Binding RequestIntentCommand}"
             CommandParameter="{x:Static services:PlayerIntent.Resume}" />
-    <Button Grid.Row="2" Content="Kaydet" Width="240" Margin="0,4" Padding="0,8"
+    <Button Grid.Row="2" Content="{l:T Player.Pause.Save}" Width="240" Margin="0,4" Padding="0,8"
             HorizontalAlignment="Center"
             Command="{Binding RequestIntentCommand}"
             CommandParameter="{x:Static services:PlayerIntent.OpenSave}" />
-    <Button Grid.Row="3" Content="Yükle" Width="240" Margin="0,4" Padding="0,8"
+    <Button Grid.Row="3" Content="{l:T Player.Pause.Load}" Width="240" Margin="0,4" Padding="0,8"
             HorizontalAlignment="Center"
             Command="{Binding RequestIntentCommand}"
             CommandParameter="{x:Static services:PlayerIntent.OpenLoad}" />
-    <Button Grid.Row="4" Content="Tercihler" Width="240" Margin="0,4" Padding="0,8"
+    <Button Grid.Row="4" Content="{l:T Player.Pause.Preferences}" Width="240" Margin="0,4" Padding="0,8"
             HorizontalAlignment="Center"
             Command="{Binding RequestIntentCommand}"
             CommandParameter="{x:Static services:PlayerIntent.OpenPreferences}" />
-    <Button Grid.Row="5" Content="Ana Menü" Width="240" Margin="0,4" Padding="0,8"
+    <Button Grid.Row="5" Content="{l:T Player.Pause.MainMenu}" Width="240" Margin="0,4" Padding="0,8"
             HorizontalAlignment="Center"
             Command="{Binding RequestIntentCommand}"
             CommandParameter="{x:Static services:PlayerIntent.QuitToTitle}" />
-    <Button Grid.Row="6" Content="Oyundan Çık" Width="240" Margin="0,4" Padding="0,8"
+    <Button Grid.Row="6" Content="{l:T Player.Pause.ExitGame}" Width="240" Margin="0,4" Padding="0,8"
             HorizontalAlignment="Center"
             Command="{Binding RequestIntentCommand}"
             CommandParameter="{x:Static services:PlayerIntent.RequestExitToApp}" />

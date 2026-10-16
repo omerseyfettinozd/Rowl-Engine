@@ -78,18 +78,46 @@ public static class WorkspaceLayoutJson
         }
     }
 
+    internal readonly record struct PrunedLayoutLoadResult(
+        WorkspaceLayout? Layout,
+        string? Error,
+        IReadOnlySet<string> OriginalViews,
+        IReadOnlySet<string> PrunedViews)
+    {
+        public bool IsValid => Layout is not null;
+    }
+
+    private static readonly HashSet<string> EmptyViews = new(StringComparer.Ordinal);
+
     /// <summary>
-    /// Parses and validates saved layout text. Never throws: malformed or
-    /// semantically invalid input yields <see cref="WorkspaceLayoutLoadResult.IsValid"/> = false.
+    /// Parses and validates saved layout text, pruning unknown panel leaves so
+    /// valid sibling panels and their splits survive version drift. Never throws:
+    /// malformed input or a tree with no remaining valid leaves yields
+    /// <see cref="WorkspaceLayoutLoadResult.IsValid"/> = false.
     /// </summary>
     public static WorkspaceLayoutLoadResult Parse(string? json)
+    {
+        PrunedLayoutLoadResult result = ParseCore(json, PanelIds.IsKnown);
+        return new WorkspaceLayoutLoadResult(result.Layout, result.Error);
+    }
+
+    /// <summary>
+    /// Parses saved layout text with partial recovery and returns the recovered
+    /// layout when at least one valid leaf remains, otherwise <see cref="WorkspaceLayout.Initial"/>.
+    /// </summary>
+    public static WorkspaceLayout LoadOrInitial(string? json) =>
+        Parse(json) is { IsValid: true, Layout: { Tree: not null } layout }
+            ? layout
+            : WorkspaceLayout.Initial();
+
+    internal static PrunedLayoutLoadResult ParseCore(string? json, Func<string, bool> isSupported)
     {
         if (string.IsNullOrWhiteSpace(json))
             return Fail("empty text");
         try
         {
             using JsonDocument document = JsonDocument.Parse(json, new JsonDocumentOptions { MaxDepth = MaxDepth });
-            return ReadLayout(document.RootElement);
+            return ReadLayout(document.RootElement, isSupported);
         }
         catch (JsonException ex)
         {
@@ -101,14 +129,14 @@ public static class WorkspaceLayoutJson
         }
     }
 
-    private static WorkspaceLayoutLoadResult Fail(string error) => new(null, error);
+    private static PrunedLayoutLoadResult Fail(string error) => new(null, error, EmptyViews, EmptyViews);
 
-    private static WorkspaceLayoutLoadResult ReadLayout(JsonElement root)
+    private static PrunedLayoutLoadResult ReadLayout(JsonElement root, Func<string, bool> isSupported)
     {
         if (root.ValueKind != JsonValueKind.Object)
             return Fail("root is not an object");
 
-        bool hasVersion = false, hasLast = false, hasTree = false;
+        bool hasVersion = false, hasLast = false, hasTree = false, hadNonNullTree = false;
         int version = 0, last = 0;
         LayoutNode? tree = null;
         string? treeError = null;
@@ -133,7 +161,10 @@ public static class WorkspaceLayoutJson
                     if (hasTree) return Fail("duplicate tree");
                     hasTree = true;
                     if (property.Value.ValueKind != JsonValueKind.Null)
+                    {
+                        hadNonNullTree = true;
                         tree = ReadNode(property.Value, out treeError);
+                    }
                     break;
                 default:
                     return Fail("unknown property '" + property.Name + "'");
@@ -146,10 +177,63 @@ public static class WorkspaceLayoutJson
             return Fail("unsupported version " + version.ToString(CultureInfo.InvariantCulture));
         if (treeError is not null)
             return Fail(treeError);
+        if (last < 0)
+            return Fail("lastSplitId is negative");
 
-        var layout = new WorkspaceLayout(tree, last);
+        if (tree is not null)
+        {
+            var supportedViews = new HashSet<string>(StringComparer.Ordinal);
+            var splitIds = new HashSet<string>(StringComparer.Ordinal);
+            string? prePruneError = ValidateBeforePrune(tree, last, isSupported, supportedViews, splitIds);
+            if (prePruneError is not null)
+                return Fail(prePruneError);
+        }
+
+        HashSet<string> originalViews = WorkspaceLayout.CollectViews(tree);
+        LayoutNode? prunedTree = WorkspaceLayout.PruneNode(tree, isSupported);
+        if (hadNonNullTree && prunedTree is null)
+            return Fail("unknown panel id");
+
+        HashSet<string> survivingViews = WorkspaceLayout.CollectViews(prunedTree);
+        var prunedViews = new HashSet<string>(originalViews, StringComparer.Ordinal);
+        prunedViews.ExceptWith(survivingViews);
+
+        var layout = new WorkspaceLayout(prunedTree, last);
         string? violation = layout.Validate();
-        return violation is null ? new WorkspaceLayoutLoadResult(layout, null) : Fail(violation);
+        return violation is null
+            ? new PrunedLayoutLoadResult(layout, null, originalViews, prunedViews)
+            : Fail(violation);
+    }
+
+    private static string? ValidateBeforePrune(
+        LayoutNode? node,
+        int lastSplitId,
+        Func<string, bool> isSupported,
+        HashSet<string> supportedViews,
+        HashSet<string> splitIds)
+    {
+        switch (node)
+        {
+            case null:
+                return "split has a missing child";
+            case LeafNode leaf:
+                if (isSupported(leaf.View) && !supportedViews.Add(leaf.View))
+                    return "panel appears more than once";
+                return null;
+            case SplitNode split:
+                if (!(split.Ratio > 0 && split.Ratio < 1))
+                    return "split ratio is outside (0, 1)";
+                if (!Enum.IsDefined(split.Axis))
+                    return "unknown split axis";
+                if (string.IsNullOrEmpty(split.Id) || !splitIds.Add(split.Id))
+                    return "split id is empty or duplicated";
+                if (WorkspaceLayout.TryParseSplitNumber(split.Id, out int number) && number > lastSplitId)
+                    return "split id is beyond lastSplitId";
+                return ValidateBeforePrune(split.A, lastSplitId, isSupported, supportedViews, splitIds)
+                    ?? ValidateBeforePrune(split.B, lastSplitId, isSupported, supportedViews, splitIds);
+            default:
+                return "unknown node kind";
+        }
     }
 
     private static LayoutNode? ReadNode(JsonElement element, out string? error)

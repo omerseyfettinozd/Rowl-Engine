@@ -3,10 +3,12 @@ using System.Globalization;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Shapes;
 using Avalonia.Data;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
+using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
 using RowlEngine.Editor.Services.Search;
 
@@ -14,12 +16,13 @@ namespace RowlEngine.Editor.Controls
 {
     /// <summary>
     /// Faz 4 Dilim 4 + U1 — color editor with two modes. <c>Palette</c> assigns a
-    /// node color tag (preset swatches + clear, hex readout via
-    /// <c>NodeColorTags.ToHex</c>); <c>Hex</c> edits a raw #RRGGBB string
-    /// (preview chip + commit-on-valid, invalid input never propagates) with
-    /// Unity-style R/G/B sliders writing the same hex value, so every color
-    /// is reachable without typing. The top row wraps, so a narrow Inspector
-    /// never clips the control.
+    /// node color tag (16 px preset swatches in a wrapping row plus one circular
+    /// slash clear button at the end of that row; the empty state is shown by
+    /// that button's selected ring instead of a text label); <c>Hex</c> edits a
+    /// raw #RRGGBB string (preview chip + commit-on-valid, invalid input never
+    /// propagates) with Unity-style R/G/B sliders writing the same hex value,
+    /// so every color is reachable without typing. The top row wraps, so a
+    /// narrow Inspector never clips the control.
     /// </summary>
     public enum ColorPickerMode
     {
@@ -52,6 +55,32 @@ namespace RowlEngine.Editor.Controls
         private readonly TextBlock _hexReadout = new() { FontSize = 10, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0, 0, 0) };
         private readonly TextBox _hexBox = new() { FontSize = 11, Width = 92, Watermark = "#RRGGBB", Margin = new Thickness(4, 0, 0, 0) };
         private readonly Border _preview = new() { Width = 22, Height = 22, CornerRadius = new CornerRadius(4), Margin = new Thickness(4, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+        private readonly Button _clearButton = new()
+        {
+            Width = 16,
+            Height = 16,
+            MinWidth = 16,
+            MinHeight = 16,
+            Padding = new Thickness(0),
+            Margin = new Thickness(0, 0, 0, 4),
+            Background = Brushes.Transparent,
+            BorderBrush = Brushes.Transparent,
+            BorderThickness = new Thickness(0),
+            CornerRadius = new CornerRadius(8),
+            Cursor = new Cursor(StandardCursorType.Hand),
+            VerticalAlignment = VerticalAlignment.Center,
+            [ToolTip.TipProperty] = "Temizle",
+        };
+        private readonly Ellipse _clearRing = new() { Width = 16, Height = 16, StrokeThickness = 1 };
+        private readonly Ellipse _clearSelectedRing = new() { Width = 16, Height = 16, StrokeThickness = 1.5 };
+        private readonly Path _clearSlash = new()
+        {
+            Width = 16,
+            Height = 16,
+            Data = Geometry.Parse("M4,12 L12,4"),
+            StrokeThickness = 1,
+            Stretch = Stretch.None,
+        };
 
         private readonly StackPanel _rgbPanel = new() { Spacing = 2, Orientation = Orientation.Vertical };
         private readonly Slider _rSlider = new() { Minimum = 0, Maximum = 255, SmallChange = 1, LargeChange = 16 };
@@ -66,22 +95,21 @@ namespace RowlEngine.Editor.Controls
         {
             var root = new StackPanel { Spacing = 4, Orientation = Orientation.Vertical };
             var top = new WrapPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-            var clear = new Button
+            _clearRing.Bind(Shape.StrokeProperty, new DynamicResourceExtension("MutedText"));
+            _clearSlash.Bind(Shape.StrokeProperty, new DynamicResourceExtension("MutedText"));
+            _clearSelectedRing.Bind(Shape.StrokeProperty, new DynamicResourceExtension("PrimaryText"));
+            _clearButton.Content = new Panel
             {
-                Content = "X",
-                FontSize = 10,
-                Padding = new Thickness(6, 2),
-                Margin = new Thickness(4, 0, 0, 0),
-                VerticalAlignment = VerticalAlignment.Center,
-                [ToolTip.TipProperty] = "Temizle",
+                Width = 16,
+                Height = 16,
+                Children = { _clearRing, _clearSlash, _clearSelectedRing },
             };
-            clear.Click += (_, _) => SelectedValue = string.Empty;
+            _clearButton.Click += (_, _) => SelectedValue = string.Empty;
             BuildSwatches();
             top.Children.Add(_swatches);
             top.Children.Add(_preview);
             top.Children.Add(_hexBox);
             top.Children.Add(_hexReadout);
-            top.Children.Add(clear);
             _rgbPanel.Children.Add(BuildChannelRow("R", _rSlider, _rValue));
             _rgbPanel.Children.Add(BuildChannelRow("G", _gSlider, _gValue));
             _rgbPanel.Children.Add(BuildChannelRow("B", _bSlider, _bValue));
@@ -130,9 +158,10 @@ namespace RowlEngine.Editor.Controls
             {
                 var swatch = new Border
                 {
-                    Width = 20,
-                    Height = 20,
-                    CornerRadius = new CornerRadius(10),
+                    Width = 16,
+                    Height = 16,
+                    CornerRadius = new CornerRadius(8),
+                    Margin = new Thickness(0, 0, 4, 4),
                     Background = NodeColorTags.GetBrush(name),
                     BorderBrush = new SolidColorBrush(Colors.White),
                     BorderThickness = new Thickness(0),
@@ -147,13 +176,15 @@ namespace RowlEngine.Editor.Controls
                 };
                 _swatches.Children.Add(swatch);
             }
+            _swatches.Children.Add(_clearButton);
         }
 
         private void ApplyMode()
         {
             bool hex = Mode == ColorPickerMode.Hex;
             _hexBox.IsVisible = hex;
-            _hexReadout.IsVisible = !hex;
+            _hexReadout.IsVisible = !hex && !string.IsNullOrEmpty(SelectedValue);
+            _preview.IsVisible = hex || !string.IsNullOrEmpty(SelectedValue);
             _rgbPanel.IsVisible = hex;
             Refresh();
         }
@@ -188,9 +219,10 @@ namespace RowlEngine.Editor.Controls
 
         private void Refresh()
         {
+            string value = SelectedValue ?? string.Empty;
+            _clearSelectedRing.IsVisible = string.IsNullOrEmpty(value);
             if (_syncing)
                 return;
-            string value = SelectedValue ?? string.Empty;
             foreach (var child in _swatches.Children.OfType<Border>())
             {
                 bool active = Mode == ColorPickerMode.Palette
@@ -200,13 +232,16 @@ namespace RowlEngine.Editor.Controls
             }
             if (Mode == ColorPickerMode.Palette)
             {
-                _hexReadout.Text = string.IsNullOrEmpty(value) ? "yok" : NodeColorTags.ToHex(value);
+                _hexReadout.Text = string.IsNullOrEmpty(value) ? string.Empty : NodeColorTags.ToHex(value);
+                _hexReadout.IsVisible = !string.IsNullOrEmpty(value);
+                _preview.IsVisible = !string.IsNullOrEmpty(value);
                 _preview.Background = string.IsNullOrEmpty(value)
                     ? Brushes.Transparent
                     : NodeColorTags.GetBrush(value);
             }
             else
             {
+                _preview.IsVisible = true;
                 if (TryParseHex(value, out Color color))
                 {
                     _rValue.Text = color.R.ToString(CultureInfo.InvariantCulture);

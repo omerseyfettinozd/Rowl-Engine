@@ -54,6 +54,15 @@ namespace RowlEngine.Editor.ViewModels
             OnPropertyChanged(nameof(SelectedEditorLanguageOption));
         }
 
+        // Faz 5 D6: azaltılmış hareket tercihi — makine profiline kalıcı, WorkspaceHost'a canlı uygulanır.
+        [ObservableProperty]
+        private bool _reduceMotion;
+
+        partial void OnReduceMotionChanged(bool value)
+        {
+            Views.Workspace.WorkspaceHost.ProfilePrefersReducedMotion = value;
+        }
+
         private static List<EditorLanguageOption> BuildLanguageOptions()
         {
             var options = new List<EditorLanguageOption>();
@@ -114,6 +123,12 @@ namespace RowlEngine.Editor.ViewModels
                 ["NodeCardBgColor"] = Color.Parse("#19191D"),
                 ["NodeHeaderBgColor"] = Color.Parse("#202023"),
                 ["WireColor"] = Color.Parse("#74736C"),
+                ["NodeKindTextColor"] = Color.Parse("#999991"),
+                ["NodeFooterTextColor"] = Color.Parse("#A5A49E"),
+                ["NodeFooterLineColor"] = Color.Parse("#2E2E32"),
+                ["CanvasControlBgColor"] = Color.Parse("#171719"),
+                ["CanvasControlTextColor"] = Color.Parse("#ADABA4"),
+                ["ToolCardIconColor"] = Color.Parse("#ACA89D"),
                 ["WireDragColor"] = Color.Parse("#F2EFE6"),
                 ["SuccessColor"] = Color.Parse("#9DB58F"),
                 ["WarningColor"] = Color.Parse("#D9B47A"),
@@ -157,6 +172,12 @@ namespace RowlEngine.Editor.ViewModels
                 ["NodeCardBgColor"] = Color.Parse("#111114"),
                 ["NodeHeaderBgColor"] = Color.Parse("#18181B"),
                 ["WireColor"] = Color.Parse("#74736C"),
+                ["NodeKindTextColor"] = Color.Parse("#999991"),
+                ["NodeFooterTextColor"] = Color.Parse("#A5A49E"),
+                ["NodeFooterLineColor"] = Color.Parse("#2E2E32"),
+                ["CanvasControlBgColor"] = Color.Parse("#171719"),
+                ["CanvasControlTextColor"] = Color.Parse("#ADABA4"),
+                ["ToolCardIconColor"] = Color.Parse("#ACA89D"),
                 ["WireDragColor"] = Color.Parse("#F2EFE6"),
                 ["SuccessColor"] = Color.Parse("#9DB58F"),
                 ["WarningColor"] = Color.Parse("#D9B47A"),
@@ -202,6 +223,7 @@ namespace RowlEngine.Editor.ViewModels
             AutoSaveEnabled = true;
             AutoSaveIntervalSeconds = 60;
             EditorLanguage = EditorStrings.SourceLanguage;
+            ReduceMotion = false;
             MasterVolume = BgmVolume = VoiceVolume = SfxVolume = 1;
             TextSpeedMultiplier = 1;
             AutoAdvanceDelay = 2;

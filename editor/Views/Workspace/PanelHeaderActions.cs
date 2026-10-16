@@ -1,9 +1,11 @@
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Metadata;
 using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Shapes;
 using Avalonia.Data;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -21,11 +23,13 @@ namespace RowlEngine.Editor.Views.Workspace;
 /// on attach and hides itself outside a workspace. The buttons only request the
 /// change (one-way flow: the owner updates the tree, the pin state flows back).
 /// </summary>
+[PseudoClasses(":revealed", ":pinned")]
 public class PanelHeaderActions : StackPanel
 {
-    // 12×12 icons (drawn, not glyphs).
-    private const string PinIconData = "M4,1 H8 V2 L7,3 V6 L9,8 V9 H6.5 V12 H5.5 V9 H3 V8 L5,6 V3 L4,2 Z";
-    private const string CloseIconData = "M3,3 L9,9 M9,3 L3,9";
+    // 16 px çizili ikonlar (dolgusuz, Foreground ile boyanır).
+    private const string LayoutIconData = "M4,4 h16 v16 h-16 Z M12,4 v16 M12,12 h8";
+    private const string PinIconData = "M9,4 h6 M10,4 v5 l-3,4 h10 l-3,-4 v-5 M12,13 v7";
+    private const string CloseIconData = "M6,6 L18,18 M18,6 L6,18";
 
     private WorkspacePanel? _panel;
 
@@ -34,23 +38,33 @@ public class PanelHeaderActions : StackPanel
         Orientation = Orientation.Horizontal;
         Spacing = 0;
         VerticalAlignment = VerticalAlignment.Center;
+        Classes.Add("panelHeaderActions");
+
+        LayoutButton = new Button { Name = "PART_LayoutButton" };
+        LayoutButton.Classes.Add("workspaceHeaderButton");
+        LayoutButton.Content = Icon(LayoutButton, LayoutIconData);
+        Localize(LayoutButton, "Workspace.Layout.Tip");
+        LayoutButton.Click += OnLayoutClick;
 
         PinButton = new ToggleButton { Name = "PART_PinButton" };
         PinButton.Classes.Add("workspaceHeaderButton");
-        PinButton.Content = Icon(PinButton, PinIconData, filled: true);
+        PinButton.Content = Icon(PinButton, PinIconData);
         Localize(PinButton, "Workspace.Pin.Tip");
         PinButton.Click += OnPinClick;
 
         CloseButton = new Button { Name = "PART_CloseButton" };
         CloseButton.Classes.Add("workspaceHeaderButton");
-        CloseButton.Content = Icon(CloseButton, CloseIconData, filled: false);
+        CloseButton.Content = Icon(CloseButton, CloseIconData);
         Localize(CloseButton, "Workspace.Close.Tip");
         CloseButton.Click += OnCloseClick;
 
+        Children.Add(LayoutButton);
         Children.Add(PinButton);
         Children.Add(CloseButton);
         IsVisible = false;
     }
+
+    public Button LayoutButton { get; }
 
     public ToggleButton PinButton { get; }
 
@@ -67,16 +81,26 @@ public class PanelHeaderActions : StackPanel
         base.OnAttachedToVisualTree(e);
         _panel = this.FindAncestorOfType<WorkspacePanel>();
         if (_panel is not null)
+        {
             _panel.PropertyChanged += OnPanelPropertyChanged;
+            _panel.PointerEntered += OnPanelPointerEntered;
+            _panel.PointerExited += OnPanelPointerExited;
+        }
         Sync();
+        UpdateReveal();
     }
 
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
     {
         base.OnDetachedFromVisualTree(e);
         if (_panel is not null)
+        {
             _panel.PropertyChanged -= OnPanelPropertyChanged;
+            _panel.PointerEntered -= OnPanelPointerEntered;
+            _panel.PointerExited -= OnPanelPointerExited;
+        }
         _panel = null;
+        UpdateReveal();
     }
 
     private void OnPanelPropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
@@ -88,6 +112,24 @@ public class PanelHeaderActions : StackPanel
         {
             Sync();
         }
+
+        if (e.Property == InputElement.IsKeyboardFocusWithinProperty
+            || e.Property == WorkspacePanel.IsPinnedProperty)
+        {
+            UpdateReveal();
+        }
+    }
+
+    private void OnPanelPointerEntered(object? sender, PointerEventArgs e) => UpdateReveal();
+
+    private void OnPanelPointerExited(object? sender, PointerEventArgs e) => UpdateReveal();
+
+    private void UpdateReveal()
+    {
+        // Sessiz başlık: işaretçi üstteyken ya da klavye odağı paneldeyken göster.
+        bool revealed = _panel is not null && (_panel.IsPointerOver || _panel.IsKeyboardFocusWithin);
+        PseudoClasses.Set(":revealed", revealed);
+        PseudoClasses.Set(":pinned", _panel?.IsPinned == true);
     }
 
     private void Sync()
@@ -98,6 +140,13 @@ public class PanelHeaderActions : StackPanel
             : _panel.HeaderActionsInContent);
         PinButton.IsChecked = _panel?.IsPinned == true;
         CloseButton.IsEnabled = _panel?.CanClose == true;
+    }
+
+    private void OnLayoutClick(object? sender, RoutedEventArgs e)
+    {
+        if (_panel?.PanelId is { } id)
+            _panel.Host?.OpenPanelMenu(id, LayoutButton);
+        e.Handled = true;
     }
 
     private void OnPinClick(object? sender, RoutedEventArgs e)
@@ -114,19 +163,20 @@ public class PanelHeaderActions : StackPanel
         e.Handled = true;
     }
 
-    private static Control Icon(TemplatedControl owner, string data, bool filled)
+    private static Control Icon(TemplatedControl owner, string data)
     {
         var path = new Path
         {
             Data = Geometry.Parse(data),
-            Width = 12,
-            Height = 12,
+            Width = 14,
+            Height = 14,
             Stretch = Stretch.Uniform,
-            StrokeThickness = filled ? 0 : 1.5,
+            StrokeThickness = 1.5,
             StrokeLineCap = PenLineCap.Round,
+            StrokeJoin = PenLineJoin.Round,
         };
         // Icon colour follows the button's Foreground (styled in ControlStyles: muted / pinned / hover).
-        path.Bind(filled ? Shape.FillProperty : Shape.StrokeProperty, owner.GetObservable(TemplatedControl.ForegroundProperty));
+        path.Bind(Shape.StrokeProperty, owner.GetObservable(TemplatedControl.ForegroundProperty));
         return path;
     }
 

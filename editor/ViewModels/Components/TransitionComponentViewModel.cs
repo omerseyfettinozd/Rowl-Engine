@@ -9,7 +9,9 @@ namespace RowlEngine.Editor.ViewModels.Components
     /// </summary>
     public partial class TransitionComponentViewModel : NodeComponentViewModel
     {
-        public override string DisplayName => "Scene Transition";
+        public override string DisplayNameKey => "Component.Transition.DisplayName";
+        protected override string DisplayNameTrFallback => "Sahne Geçişi";
+        protected override string DisplayNameEnFallback => "Scene Transition";
         public override string Icon => "Geçiş";
         public override string TypeKey => "transition";
 

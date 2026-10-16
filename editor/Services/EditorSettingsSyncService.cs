@@ -28,6 +28,8 @@ public static class EditorSettingsSyncService
         settings.AutoSaveIntervalSeconds = profile.AutoSaveIntervalSeconds;
         settings.AssetGridItemSize = profile.AssetGridItemSize;
         settings.EditorLanguage = profile.EditorLanguage;
+        settings.ReduceMotion = profile.ReduceMotion;
+        Views.Workspace.WorkspaceHost.ProfilePrefersReducedMotion = profile.ReduceMotion;
     }
 
     public static void LoadProjectRuntimeSettings(ProjectRuntimeSettings projectSettings, SettingsViewModel settings)
@@ -51,8 +53,10 @@ public static class EditorSettingsSyncService
         if (string.IsNullOrEmpty(propertyName)) return;
 
         if (propertyName is nameof(SettingsViewModel.AutoSaveEnabled) or nameof(SettingsViewModel.AutoSaveIntervalSeconds)
-            or nameof(SettingsViewModel.AssetGridItemSize) or nameof(SettingsViewModel.EditorLanguage))
+            or nameof(SettingsViewModel.AssetGridItemSize) or nameof(SettingsViewModel.EditorLanguage)
+            or nameof(SettingsViewModel.ReduceMotion))
         {
+            Views.Workspace.WorkspaceHost.ProfilePrefersReducedMotion = settings.ReduceMotion;
             // Faz 5 D5: read-modify-write — the profile also holds the dock workspace
             // (written by its own debounced save), which a fresh profile would wipe.
             EditorSettingsProfile.Update(editorSettingsPath, profile =>
@@ -61,6 +65,7 @@ public static class EditorSettingsSyncService
                 profile.AutoSaveIntervalSeconds = settings.AutoSaveIntervalSeconds;
                 profile.AssetGridItemSize = settings.AssetGridItemSize;
                 profile.EditorLanguage = settings.EditorLanguage;
+                profile.ReduceMotion = settings.ReduceMotion;
             });
             return;
         }

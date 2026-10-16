@@ -3,197 +3,101 @@
   "locale": "en",
   "scope": "editor-ui",
   "entries": {
-    "Menu.Windows": {
-      "text": "Tools"
+    "App.Brand.Name": {
+      "text": "ROWL"
     },
-    "Menu.Projects": {
-      "text": "Projects"
+    "App.Brand.Tagline": {
+      "text": "STORY STUDIO"
     },
-    "Menu.ProjectList": {
-      "text": "Project List"
+    "App.Window.Title": {
+      "text": "Rowl Engine Editor"
     },
-    "Menu.LocalizationDesk": {
-      "text": "Translation Desk"
+    "Assets.Badge.Info": {
+      "text": "info"
     },
-    "Menu.OpenInSeparateWindow": {
-      "text": "Open in Separate Window"
+    "Assets.Badge.Missing": {
+      "text": "MISSING"
     },
-    "Panel.Hierarchy": {
-      "text": "Hierarchy"
+    "Assets.ClearFilter": {
+      "text": "Clear filter"
     },
-    "Panel.Inspector": {
-      "text": "Inspector"
+    "Assets.ClearFilter.Tip": {
+      "text": "Clear the search and type filter"
     },
-    "Panel.Log": {
-      "text": "Log"
+    "Assets.Empty": {
+      "text": "This project has no files yet."
     },
-    "Panel.Assets": {
+    "Assets.Import": {
+      "text": "Import"
+    },
+    "Assets.Import.Tip": {
+      "text": "Import a file into the project Assets folder"
+    },
+    "Assets.ImportFile": {
+      "text": "Import file"
+    },
+    "Assets.Menu.Import": {
+      "text": "Import file..."
+    },
+    "Assets.Menu.NewFolder": {
+      "text": "Create new folder"
+    },
+    "Assets.Menu.OpenInExplorer": {
+      "text": "Show in file manager"
+    },
+    "Assets.Menu.Rename": {
+      "text": "Rename (F2)"
+    },
+    "Assets.NewFolder": {
+      "text": "New folder"
+    },
+    "Assets.NewFolder.Tip": {
+      "text": "Create a folder in the selected location"
+    },
+    "Assets.NoMatch": {
+      "text": "No results match the filter."
+    },
+    "Assets.Refresh": {
+      "text": "Refresh"
+    },
+    "Assets.Refresh.Tip": {
+      "text": "Refresh the asset list"
+    },
+    "Assets.Search.Watermark": {
+      "text": "Search by name or extension"
+    },
+    "Assets.ShowMore.Tip": {
+      "text": "Show the next 200 items"
+    },
+    "Assets.Size": {
+      "text": "Size"
+    },
+    "Assets.Size.Tip": {
+      "text": "Icon size"
+    },
+    "Assets.Title": {
       "text": "Assets"
     },
-    "Panel.Backlog": {
-      "text": "Dialogue History"
+    "Assets.Up": {
+      "text": "↑ Up"
     },
-    "Panel.SaveSlots": {
-      "text": "Save Slots"
+    "Assets.Up.Tip": {
+      "text": "Go to parent folder"
     },
-    "Panel.Issues": {
-      "text": "Issues"
+    "Assets.ViewToggle.Tip": {
+      "text": "Switch between grid and list view"
     },
-    "Settings.Language": {
-      "text": "Interface language"
+    "Backlog.Empty": {
+      "text": "No dialogue recorded yet."
     },
-    "Settings.Language.Hint": {
-      "text": "Language of the editor interface; separate from the game preview language. Applies immediately."
+    "Backlog.Empty.Hint": {
+      "text": "Dialogue from the player preview collects here."
     },
-    "Language.tr": {
-      "text": "Türkçe"
+    "Backlog.OpenPlayer": {
+      "text": "Open Player Preview"
     },
-    "Language.en": {
-      "text": "English"
-    },
-    "Language.qps-ploc": {
-      "text": "Pseudo-locale (overflow test)"
-    },
-    "Menu.More": {
-      "text": "More"
-    },
-    "Menu.Save": {
-      "text": "Save"
-    },
-    "Menu.Undo": {
-      "text": "Undo"
-    },
-    "Menu.Redo": {
-      "text": "Redo"
-    },
-    "Menu.Export": {
-      "text": "Export"
-    },
-    "Menu.CancelBuild": {
-      "text": "Cancel Export"
-    },
-    "Menu.Layout": {
-      "text": "Layout"
-    },
-    "Menu.Settings": {
-      "text": "Settings"
-    },
-    "Layout.Default": {
-      "text": "Default"
-    },
-    "Layout.SceneFocus": {
-      "text": "Scene Focus"
-    },
-    "Layout.PlayTest": {
-      "text": "Play Test"
-    },
-    "View.Node": {
-      "text": "Node"
-    },
-    "View.Node.Tip": {
-      "text": "Story flow (node graph)"
-    },
-    "View.Game": {
-      "text": "Game"
-    },
-    "View.Game.Tip": {
-      "text": "Game preview (right-click: separate window)"
-    },
-    "View.SceneEdit": {
-      "text": "Edit Scene"
-    },
-    "View.SceneEdit.Tip": {
-      "text": "Edit the scene"
-    },
-    "Transport.Play": {
-      "text": "Play / Stop"
-    },
-    "Transport.Pause": {
-      "text": "Pause"
-    },
-    "Transport.Step": {
-      "text": "Step Frame (1/60 s)"
-    },
-    "Node.Add": {
-      "text": "+ Node"
-    },
-    "Node.Add.Tip": {
-      "text": "Add a node (Ctrl+N)"
-    },
-    "Node.Disconnect": {
-      "text": "Disconnect"
-    },
-    "Node.Disconnect.Tip": {
-      "text": "Disconnect the selected node's links"
-    },
-    "Node.Delete": {
-      "text": "Delete"
-    },
-    "Node.Delete.Tip": {
-      "text": "Delete the selected node (Delete)"
-    },
-    "Node.Group": {
-      "text": "+ Group"
-    },
-    "Node.Group.Tip": {
-      "text": "Group the selected nodes"
-    },
-    "Node.Up": {
-      "text": "Up"
-    },
-    "Node.Up.Tip": {
-      "text": "Go up one level"
-    },
-    "Status.Unsaved": {
-      "text": "There are unsaved changes"
-    },
-    "Graph.Group.Drag.Tip": {
-      "text": "Drag: move with group • Double-click: fit to members"
-    },
-    "Graph.Group.Delete.Tip": {
-      "text": "Delete group (nodes stay)"
-    },
-    "Graph.Group.Resize.Tip": {
-      "text": "Resize"
-    },
-    "Graph.ZoomOut": {
-      "text": "Zoom out"
-    },
-    "Graph.ZoomLevel": {
-      "text": "Zoom level"
-    },
-    "Graph.ZoomIn": {
-      "text": "Zoom in"
-    },
-    "Graph.Fit": {
-      "text": "Fit"
-    },
-    "Graph.Fit.Tip": {
-      "text": "Fit the whole graph on screen"
-    },
-    "Graph.FitSelection": {
-      "text": "Selection"
-    },
-    "Graph.FitSelection.Tip": {
-      "text": "Focus the selected node (F)"
-    },
-    "Graph.Minimap": {
-      "text": "Map"
-    },
-    "Graph.Minimap.Tip": {
-      "text": "Minimap visibility"
-    },
-    "Graph.ResetView": {
-      "text": "Reset View (0,0)"
-    },
-    "Graph.Chapter": {
-      "text": "Chapter:"
-    },
-    "Graph.Chapter.Tip": {
-      "text": "Narrow the canvas to one chapter"
-    },
-    "Graph.Crumb.Tip": {
-      "text": "Return to this level"
+    "Backlog.OpenPlayer.Tip": {
+      "text": "Open the player preview panel"
     },
     "Common.Center": {
       "text": "Center"
@@ -225,17 +129,368 @@
     "Common.MoveUp.Tip": {
       "text": "Move up"
     },
+    "Common.Opacity": {
+      "text": "Opacity"
+    },
+    "Common.Remove": {
+      "text": "Remove"
+    },
     "Common.RemoveComponent.Tip": {
       "text": "Remove component"
     },
+    "Common.Reset": {
+      "text": "Reset"
+    },
     "Common.Right": {
       "text": "Right"
+    },
+    "Common.Rotation": {
+      "text": "Rotation"
     },
     "Common.Settings": {
       "text": "Settings"
     },
     "Common.Width": {
       "text": "Width"
+    },
+    "Common.X": {
+      "text": "X"
+    },
+    "Common.Y": {
+      "text": "Y"
+    },
+    "Component.Audio.Bgm.Label": {
+      "text": "BGM track (background music)"
+    },
+    "Component.Audio.Bgm.Preview.Tip": {
+      "text": "Play / stop BGM preview"
+    },
+    "Component.Audio.Bgm.Watermark": {
+      "text": "e.g. bgm_theme.ogg"
+    },
+    "Component.Audio.BgmTransition.Label": {
+      "text": "BGM transition"
+    },
+    "Component.Audio.BgmTransitionDuration.Label": {
+      "text": "BGM transition duration (s, 0 = project default)"
+    },
+    "Component.Audio.ChannelLeft": {
+      "text": "L"
+    },
+    "Component.Audio.ChannelRight": {
+      "text": "R"
+    },
+    "Component.Audio.DisplayName": {
+      "text": "Audio & DSP"
+    },
+    "Component.Audio.Dsp.Label": {
+      "text": "DSP filter"
+    },
+    "Component.Audio.Preview": {
+      "text": "Preview"
+    },
+    "Component.Audio.Sfx.Label": {
+      "text": "SFX track (sound effect)"
+    },
+    "Component.Audio.Sfx.Preview.Tip": {
+      "text": "Play / stop SFX preview"
+    },
+    "Component.Audio.Sfx.Watermark": {
+      "text": "e.g. sfx_click.wav"
+    },
+    "Component.Audio.Stop": {
+      "text": "Stop"
+    },
+    "Component.Audio.Title": {
+      "text": "Audio"
+    },
+    "Component.Audio.Volume.Label": {
+      "text": "Volume"
+    },
+    "Component.Background.Assist.Label": {
+      "text": "OBS quick align"
+    },
+    "Component.Background.Center": {
+      "text": "Center"
+    },
+    "Component.Background.DisplayName": {
+      "text": "Background Layer"
+    },
+    "Component.Background.Drop.Hint": {
+      "text": "Drag from the Assets panel or click Browse"
+    },
+    "Component.Background.Drop.Title": {
+      "text": "Drag and drop an image here"
+    },
+    "Component.Background.Fit1080": {
+      "text": "Fit to 1080p"
+    },
+    "Component.Background.Height": {
+      "text": "Height"
+    },
+    "Component.Background.Opacity": {
+      "text": "Layer opacity"
+    },
+    "Component.Background.ParallaxX": {
+      "text": "Parallax X"
+    },
+    "Component.Background.ParallaxY": {
+      "text": "Parallax Y"
+    },
+    "Component.Background.ResetRotation.Tip": {
+      "text": "Reset rotation (0°)"
+    },
+    "Component.Background.Rotation": {
+      "text": "Rotation"
+    },
+    "Component.Background.Scale": {
+      "text": "Scale (1.0 = 100%)"
+    },
+    "Component.Background.Texture.Label": {
+      "text": "Background texture (drag and drop)"
+    },
+    "Component.Background.Texture.Watermark": {
+      "text": "e.g. backgrounds/sample.png or empty"
+    },
+    "Component.Background.Title": {
+      "text": "Image"
+    },
+    "Component.Background.Width": {
+      "text": "Width"
+    },
+    "Component.Background.X": {
+      "text": "X"
+    },
+    "Component.Background.Y": {
+      "text": "Y"
+    },
+    "Component.Camera.DisplayName": {
+      "text": "2D Camera"
+    },
+    "Component.Camera.Easing": {
+      "text": "Easing"
+    },
+    "Component.Camera.Easing.Watermark": {
+      "text": "ease_in_out"
+    },
+    "Component.Camera.FocusX": {
+      "text": "Focus X (center)"
+    },
+    "Component.Camera.FocusY": {
+      "text": "Focus Y (center)"
+    },
+    "Component.Camera.PanTime": {
+      "text": "Pan time"
+    },
+    "Component.Camera.Rotation.Label": {
+      "text": "Rotation (deg) — ignored"
+    },
+    "Component.Camera.Rotation.Note": {
+      "text": "Engine no-op: camera rotation has no render effect."
+    },
+    "Component.Camera.Rotation.Tip": {
+      "text": "Camera rotation is ignored by the engine (Phase 4.5 Slice 2 no-op, capability ROWL_ENGINE_CAPABILITY_CAMERA_ROTATION_IGNORED). The value stays 0."
+    },
+    "Component.Camera.Shake.Damping": {
+      "text": "Damping"
+    },
+    "Component.Camera.Shake.DirX": {
+      "text": "Dir X (0-1)"
+    },
+    "Component.Camera.Shake.DirY": {
+      "text": "Dir Y (0-1)"
+    },
+    "Component.Camera.Shake.Duration": {
+      "text": "Duration (s)"
+    },
+    "Component.Camera.Shake.Frequency": {
+      "text": "Freq (Hz)"
+    },
+    "Component.Camera.Shake.Intensity": {
+      "text": "Intensity (px)"
+    },
+    "Component.Camera.Shake.Label": {
+      "text": "Cinematic screen shake"
+    },
+    "Component.Camera.Shake.Preset": {
+      "text": "Shake preset"
+    },
+    "Component.Camera.Title": {
+      "text": "2D camera"
+    },
+    "Component.Camera.Tween.Label": {
+      "text": "Smooth tween (seconds)"
+    },
+    "Component.Camera.Zoom": {
+      "text": "Zoom factor"
+    },
+    "Component.Camera.ZoomTime": {
+      "text": "Zoom time"
+    },
+    "Component.Character.AspectRatio": {
+      "text": "Keep aspect ratio"
+    },
+    "Component.Character.Assist.Center": {
+      "text": "Center"
+    },
+    "Component.Character.Assist.Center.Tip": {
+      "text": "Centers the character horizontally on screen"
+    },
+    "Component.Character.Assist.Ground": {
+      "text": "To floor"
+    },
+    "Component.Character.Assist.Ground.Tip": {
+      "text": "Snaps the character to the bottom floor line"
+    },
+    "Component.Character.Assist.Reset.Tip": {
+      "text": "Resets to the standard character size (600x900)"
+    },
+    "Component.Character.Assist.Title": {
+      "text": "OBS QUICK ALIGN"
+    },
+    "Component.Character.DisplayName": {
+      "text": "Character Sprite"
+    },
+    "Component.Character.Layers.Accessory": {
+      "text": "Accessory"
+    },
+    "Component.Character.Layers.Body": {
+      "text": "Body (uses the sprite above if empty)"
+    },
+    "Component.Character.Layers.Expression": {
+      "text": "Expression (selection applies to the preview atomically)"
+    },
+    "Component.Character.Layers.Face": {
+      "text": "Face"
+    },
+    "Component.Character.Layers.Outfit": {
+      "text": "Outfit"
+    },
+    "Component.Character.Layers.Title": {
+      "text": "LAYERS (body < face < outfit < accessory)"
+    },
+    "Component.Character.Name": {
+      "text": "Character"
+    },
+    "Component.Character.Rotation.Reset.Tip": {
+      "text": "Reset rotation (0°)"
+    },
+    "Component.Character.Scale": {
+      "text": "Scale (1.0 = 100%)"
+    },
+    "Component.Character.Sprite.Drop": {
+      "text": "Drop the image here"
+    },
+    "Component.Character.Sprite.DropHint": {
+      "text": "Drag from the Assets panel or click Browse"
+    },
+    "Component.Character.Sprite.Label": {
+      "text": "Character image (drag and drop)"
+    },
+    "Component.Character.Sprite.Watermark": {
+      "text": "e.g. characters/example.png or empty"
+    },
+    "Component.Character.Voice.Cadence": {
+      "text": "Cadence"
+    },
+    "Component.Character.Voice.File": {
+      "text": "Default sound file (.wav / .ogg, synth if empty)"
+    },
+    "Component.Character.Voice.File.Watermark": {
+      "text": "e.g. voice_evelyn.wav or empty"
+    },
+    "Component.Character.Voice.Pitch": {
+      "text": "Base pitch"
+    },
+    "Component.Character.Voice.Preview": {
+      "text": "Preview"
+    },
+    "Component.Character.Voice.Preview.Tip": {
+      "text": "Test the character voice blip"
+    },
+    "Component.Character.Voice.Title": {
+      "text": "CHARACTER VOICE BLIP"
+    },
+    "Component.Choice.Add": {
+      "text": "+ Add choice"
+    },
+    "Component.Choice.DisplayName": {
+      "text": "Player Choices"
+    },
+    "Component.Choice.Empty": {
+      "text": "No options yet — press + Add choice, then set the target with a graph wire."
+    },
+    "Component.Choice.Name": {
+      "text": "Player choices"
+    },
+    "Component.Choice.Note": {
+      "text": "Each option has a fixed ID and a target node; set the target with a graph wire."
+    },
+    "Component.Choice.Option.Appearance.Tip": {
+      "text": "Button appearance"
+    },
+    "Component.Choice.Option.BackgroundColor.Watermark": {
+      "text": "Background #RRGGBB"
+    },
+    "Component.Choice.Option.BorderColor.Watermark": {
+      "text": "Border #RRGGBB"
+    },
+    "Component.Choice.Option.Condition.Watermark": {
+      "text": "Condition (e.g. affinity_evelyn >= 3)"
+    },
+    "Component.Choice.Option.DisabledImage.Watermark": {
+      "text": "Drop the disabled image here"
+    },
+    "Component.Choice.Option.Enable.Tip": {
+      "text": "Enable this button"
+    },
+    "Component.Choice.Option.Font.Watermark": {
+      "text": "Font: drag a .ttf/.otf from the Assets panel"
+    },
+    "Component.Choice.Option.FontSize": {
+      "text": "Font size"
+    },
+    "Component.Choice.Option.H": {
+      "text": "H"
+    },
+    "Component.Choice.Option.HoverColor.Watermark": {
+      "text": "Hover #RRGGBB"
+    },
+    "Component.Choice.Option.HoverImage.Watermark": {
+      "text": "Drop the hover image here"
+    },
+    "Component.Choice.Option.Images.Hint": {
+      "text": "Button images — drag from the Assets panel onto the matching field"
+    },
+    "Component.Choice.Option.NormalImage.Watermark": {
+      "text": "Drop the normal image here"
+    },
+    "Component.Choice.Option.Preset": {
+      "text": "Style preset"
+    },
+    "Component.Choice.Option.PressedImage.Watermark": {
+      "text": "Drop the pressed image here"
+    },
+    "Component.Choice.Option.Radius": {
+      "text": "Radius"
+    },
+    "Component.Choice.Option.Target.Note": {
+      "text": "The graph wire sets the target"
+    },
+    "Component.Choice.Option.Text.Watermark": {
+      "text": "Button text"
+    },
+    "Component.Choice.Option.TextColor.Watermark": {
+      "text": "Text #RRGGBB"
+    },
+    "Component.Choice.Option.W": {
+      "text": "W"
+    },
+    "Component.Choice.Title.Watermark": {
+      "text": "Choice title"
+    },
+    "Component.Condition.DisplayName": {
+      "text": "Condition (Lua)"
     },
     "Component.Dialogue.Align.Label": {
       "text": "Alignment"
@@ -287,6 +542,9 @@
     },
     "Component.Dialogue.ContentId.Label": {
       "text": "Content ID (permanent)"
+    },
+    "Component.Dialogue.DisplayName": {
+      "text": "Dialogue"
     },
     "Component.Dialogue.FontSize.Label": {
       "text": "Font size (px)"
@@ -366,6 +624,9 @@
     "Component.Dialogue.WaitDelay.Label": {
       "text": "Wait delay"
     },
+    "Component.Script.DisplayName": {
+      "text": "Lua Script"
+    },
     "Component.Script.Inline.Label": {
       "text": "Inline code (optional)"
     },
@@ -383,6 +644,264 @@
     },
     "Component.Script.Title": {
       "text": "Lua Script"
+    },
+    "Component.Transition.ColorHex": {
+      "text": "Color hex"
+    },
+    "Component.Transition.DisplayName": {
+      "text": "Scene Transition"
+    },
+    "Component.Transition.Duration": {
+      "text": "Duration (seconds)"
+    },
+    "Component.Transition.FadeColor": {
+      "text": "Color hex (fade color)"
+    },
+    "Component.Transition.Flash.Duration": {
+      "text": "Duration (s)"
+    },
+    "Component.Transition.Flash.Label": {
+      "text": "Screen flash FX"
+    },
+    "Component.Transition.Flash.Watermark": {
+      "text": "#FFFFFF"
+    },
+    "Component.Transition.Intensity": {
+      "text": "Intensity"
+    },
+    "Component.Transition.Kind": {
+      "text": "Transition type"
+    },
+    "Component.Transition.Post.Label": {
+      "text": "Post-process color tint &amp; vignette"
+    },
+    "Component.Transition.Tint.Color": {
+      "text": "Tint color hex"
+    },
+    "Component.Transition.Tint.Label": {
+      "text": "Screen color tint overlay"
+    },
+    "Component.Transition.Tint.Opacity": {
+      "text": "Tint opacity (0-1)"
+    },
+    "Component.Transition.Tint.Watermark": {
+      "text": "#0A183D"
+    },
+    "Component.Transition.Title": {
+      "text": "Scene transition"
+    },
+    "Component.Transition.Vignette.Label": {
+      "text": "Cinematic vignette darkening"
+    },
+    "Component.Transition.Vignette.Radius": {
+      "text": "Radius"
+    },
+    "Component.Variable.DisplayName": {
+      "text": "Variable Modifier"
+    },
+    "Dialog.Confirm.Cancel": {
+      "text": "Cancel"
+    },
+    "Dialog.Confirm.Heading": {
+      "text": "Confirm Action"
+    },
+    "Dialog.Confirm.Message": {
+      "text": "Are you sure you want to perform this action?"
+    },
+    "Dialog.Confirm.Title": {
+      "text": "Confirmation"
+    },
+    "Dialog.Confirm.Yes": {
+      "text": "Yes"
+    },
+    "Dialog.CreateProject.Browse": {
+      "text": "Browse..."
+    },
+    "Dialog.CreateProject.Cancel": {
+      "text": "Cancel"
+    },
+    "Dialog.CreateProject.Create": {
+      "text": "Create"
+    },
+    "Dialog.CreateProject.Description": {
+      "text": "Start a new visual novel or interactive story project"
+    },
+    "Dialog.CreateProject.LocationLabel": {
+      "text": "Save Location"
+    },
+    "Dialog.CreateProject.ProjectNameDefault": {
+      "text": "New Project"
+    },
+    "Dialog.CreateProject.ProjectNameLabel": {
+      "text": "Project Name"
+    },
+    "Dialog.CreateProject.Title": {
+      "text": "Create New Project"
+    },
+    "Dialog.RenameProject.Cancel": {
+      "text": "Cancel"
+    },
+    "Dialog.RenameProject.NewNameLabel": {
+      "text": "New Project Name"
+    },
+    "Dialog.RenameProject.Save": {
+      "text": "Save"
+    },
+    "Dialog.RenameProject.Title": {
+      "text": "Rename Project"
+    },
+    "Dialog.UnsavedChanges.Cancel": {
+      "text": "Cancel"
+    },
+    "Dialog.UnsavedChanges.Discard": {
+      "text": "Discard"
+    },
+    "Dialog.UnsavedChanges.Message": {
+      "text": "There are unsaved changes in the project."
+    },
+    "Dialog.UnsavedChanges.Save": {
+      "text": "Save"
+    },
+    "Dialog.UnsavedChanges.Title": {
+      "text": "Unsaved Changes"
+    },
+    "Graph.Chapter": {
+      "text": "Chapter:"
+    },
+    "Graph.Chapter.Tip": {
+      "text": "Narrow the canvas to one chapter"
+    },
+    "Graph.Crumb.Tip": {
+      "text": "Return to this level"
+    },
+    "Graph.Fit": {
+      "text": "Fit"
+    },
+    "Graph.Fit.Tip": {
+      "text": "Fit the whole graph on screen"
+    },
+    "Graph.FitSelection": {
+      "text": "Selection"
+    },
+    "Graph.FitSelection.Tip": {
+      "text": "Focus the selected node (F)"
+    },
+    "Graph.Group.Delete.Tip": {
+      "text": "Delete group (nodes stay)"
+    },
+    "Graph.Group.Drag.Tip": {
+      "text": "Drag: move with group • Double-click: fit to members"
+    },
+    "Graph.Group.Resize.Tip": {
+      "text": "Resize"
+    },
+    "Graph.Minimap": {
+      "text": "Map"
+    },
+    "Graph.Minimap.Tip": {
+      "text": "Minimap visibility"
+    },
+    "Graph.ResetView": {
+      "text": "Reset View (0,0)"
+    },
+    "Graph.ZoomIn": {
+      "text": "Zoom in"
+    },
+    "Graph.ZoomLevel": {
+      "text": "Zoom level"
+    },
+    "Graph.ZoomOut": {
+      "text": "Zoom out"
+    },
+    "Hierarchy.Create": {
+      "text": "Create"
+    },
+    "Hierarchy.Create.Audio": {
+      "text": "Audio Object"
+    },
+    "Hierarchy.Create.Background": {
+      "text": "Background Object"
+    },
+    "Hierarchy.Create.Character": {
+      "text": "Character Object"
+    },
+    "Hierarchy.Create.Dialogue": {
+      "text": "Dialogue Object"
+    },
+    "Hierarchy.Create.Empty": {
+      "text": "Empty GameObject"
+    },
+    "Hierarchy.Delete": {
+      "text": "Delete Object"
+    },
+    "Hierarchy.Duplicate": {
+      "text": "Duplicate Object"
+    },
+    "Hierarchy.Empty": {
+      "text": "No GameObjects in this frame."
+    },
+    "Hierarchy.MoveDown": {
+      "text": "Move Down"
+    },
+    "Hierarchy.MoveUp": {
+      "text": "Move Up"
+    },
+    "Hierarchy.SceneObjects": {
+      "text": "Scene objects"
+    },
+    "Hierarchy.Search": {
+      "text": "Search: object name"
+    },
+    "Hierarchy.SelectNode": {
+      "text": "Select a node from the graph"
+    },
+    "Hierarchy.SelectedNode": {
+      "text": "SELECTED NODE"
+    },
+    "Hub.BrandRowl": {
+      "text": "ROWL"
+    },
+    "Hub.BrandStudio": {
+      "text": "STORY STUDIO"
+    },
+    "Hub.ChangeCover": {
+      "text": "Change Cover"
+    },
+    "Hub.CreateNewStory": {
+      "text": "Create new story"
+    },
+    "Hub.Delete": {
+      "text": "Delete"
+    },
+    "Hub.EmptyDescriptionPanel": {
+      "text": "Create a project; then set up scenes, choices and preview in order."
+    },
+    "Hub.EmptyDescriptionWindow": {
+      "text": "Create a project; then set up scenes, choices and preview in the same workspace."
+    },
+    "Hub.EmptyTitle": {
+      "text": "Set up your first story"
+    },
+    "Hub.Import": {
+      "text": "Import"
+    },
+    "Hub.NewStory": {
+      "text": "New story"
+    },
+    "Hub.Open": {
+      "text": "Open"
+    },
+    "Hub.Other": {
+      "text": "More"
+    },
+    "Hub.Projects": {
+      "text": "Projects"
+    },
+    "Hub.Rename": {
+      "text": "Rename"
+    },
+    "Hub.Title": {
+      "text": "Rowl Engine — Projects"
     },
     "Inspector.Components.Actions.Tip": {
       "text": "Component actions"
@@ -501,506 +1020,164 @@
     "Inspector.Provenance.Title": {
       "text": "CONVERSION PROVENANCE"
     },
-    "Common.Remove": {
-      "text": "Remove"
+    "Issues.Analyze": {
+      "text": "Analyze"
     },
-    "Common.Reset": {
-      "text": "Reset"
+    "Issues.Analyze.Tip": {
+      "text": "Analyze the story graph"
     },
-    "Common.X": {
-      "text": "X"
+    "Issues.Empty": {
+      "text": "No issues found."
     },
-    "Common.Y": {
-      "text": "Y"
+    "Issues.Reanalyze": {
+      "text": "Re-analyze"
     },
-    "Common.Rotation": {
-      "text": "Rotation"
+    "Language.en": {
+      "text": "English"
     },
-    "Common.Opacity": {
-      "text": "Opacity"
+    "Language.qps-ploc": {
+      "text": "Pseudo-locale (overflow test)"
     },
-    "Component.Character.Name": {
+    "Language.tr": {
+      "text": "Türkçe"
+    },
+    "Layout.Default": {
+      "text": "Default"
+    },
+    "Layout.PlayTest": {
+      "text": "Play Test"
+    },
+    "Layout.SceneFocus": {
+      "text": "Scene Focus"
+    },
+    "LivePreview.Background.ResizeTooltip": {
+      "text": "Resize Background"
+    },
+    "LivePreview.Background.RotateTooltip": {
+      "text": "Rotate Background (Drag to Rotate, Right-Click to Reset)"
+    },
+    "LivePreview.Character.DimSeparator": {
+      "text": "x"
+    },
+    "LivePreview.Character.Label": {
       "text": "Character"
     },
-    "Component.Character.Sprite.Label": {
-      "text": "Character image (drag and drop)"
+    "LivePreview.Character.ResizeTooltip": {
+      "text": "Resize Character"
     },
-    "Component.Character.Sprite.Watermark": {
-      "text": "e.g. characters/example.png or empty"
+    "LivePreview.Character.RotateTooltip": {
+      "text": "Rotate Character (Drag to Rotate, Right-Click to Reset)"
     },
-    "Component.Character.Sprite.Drop": {
-      "text": "Drop the image here"
+    "LivePreview.ContextMenu.CenterDialogueBox": {
+      "text": "Center Dialogue Box"
     },
-    "Component.Character.Sprite.DropHint": {
-      "text": "Drag from the Assets panel or click Browse"
+    "LivePreview.ContextMenu.CenterToScreen": {
+      "text": "Center to Screen"
     },
-    "Component.Character.Layers.Title": {
-      "text": "LAYERS (body < face < outfit < accessory)"
+    "LivePreview.ContextMenu.DialogueBottomBanner": {
+      "text": "Dialogue Bottom Banner (1720x220)"
     },
-    "Component.Character.Layers.Body": {
-      "text": "Body (uses the sprite above if empty)"
+    "LivePreview.ContextMenu.FitToCanvas": {
+      "text": "Fit to Canvas"
     },
-    "Component.Character.Layers.Face": {
-      "text": "Face"
+    "LivePreview.ContextMenu.GroundBaseline": {
+      "text": "Snap Characters to Ground (Ground Baseline)"
     },
-    "Component.Character.Layers.Outfit": {
-      "text": "Outfit"
+    "LivePreview.ContextMenu.ResetRotation": {
+      "text": "Reset Rotation"
     },
-    "Component.Character.Layers.Accessory": {
-      "text": "Accessory"
+    "LivePreview.ContextMenu.SnapAssist": {
+      "text": "Magnetic Snap Guides (Snap Assist)"
     },
-    "Component.Character.Layers.Expression": {
-      "text": "Expression (selection applies to the preview atomically)"
+    "LivePreview.ContextMenu.StretchFullHd": {
+      "text": "Stretch Background to 1920x1080 (Full HD)"
     },
-    "Component.Character.Scale": {
-      "text": "Scale (1.0 = 100%)"
+    "LivePreview.Dialogue.DimSeparator": {
+      "text": "x"
     },
-    "Component.Character.Rotation.Reset.Tip": {
-      "text": "Reset rotation (0°)"
+    "LivePreview.Dialogue.Label": {
+      "text": "Dialogue Box"
     },
-    "Component.Character.AspectRatio": {
-      "text": "Keep aspect ratio"
+    "LivePreview.Dialogue.ResizeBottomLeft": {
+      "text": "Resize Bottom-Left"
     },
-    "Component.Character.Assist.Title": {
-      "text": "OBS QUICK ALIGN"
+    "LivePreview.Dialogue.ResizeBottomRight": {
+      "text": "Resize Bottom-Right"
     },
-    "Component.Character.Assist.Center": {
-      "text": "Center"
+    "LivePreview.Dialogue.ResizeTopLeft": {
+      "text": "Resize Top-Left"
     },
-    "Component.Character.Assist.Center.Tip": {
-      "text": "Centers the character horizontally on screen"
+    "LivePreview.Dialogue.ResizeTopRight": {
+      "text": "Resize Top-Right"
     },
-    "Component.Character.Assist.Ground": {
-      "text": "To floor"
+    "LivePreview.SnapBadge.Snapped": {
+      "text": "Snapped"
     },
-    "Component.Character.Assist.Ground.Tip": {
-      "text": "Snaps the character to the bottom floor line"
-    },
-    "Component.Character.Assist.Reset.Tip": {
-      "text": "Resets to the standard character size (600x900)"
-    },
-    "Component.Character.Voice.Title": {
-      "text": "CHARACTER VOICE BLIP"
-    },
-    "Component.Character.Voice.Preview": {
-      "text": "Preview"
-    },
-    "Component.Character.Voice.Preview.Tip": {
-      "text": "Test the character voice blip"
-    },
-    "Component.Character.Voice.File": {
-      "text": "Default sound file (.wav / .ogg, synth if empty)"
-    },
-    "Component.Character.Voice.File.Watermark": {
-      "text": "e.g. voice_evelyn.wav or empty"
-    },
-    "Component.Character.Voice.Pitch": {
-      "text": "Base pitch"
-    },
-    "Component.Character.Voice.Cadence": {
-      "text": "Cadence"
-    },
-    "Component.Choice.Name": {
-      "text": "Player choices"
-    },
-    "Component.Choice.Title.Watermark": {
-      "text": "Choice title"
-    },
-    "Component.Choice.Option.Text.Watermark": {
-      "text": "Button text"
-    },
-    "Component.Choice.Option.Enable.Tip": {
-      "text": "Enable this button"
-    },
-    "Component.Choice.Option.Appearance.Tip": {
-      "text": "Button appearance"
-    },
-    "Component.Choice.Option.Condition.Watermark": {
-      "text": "Condition (e.g. affinity_evelyn >= 3)"
-    },
-    "Component.Choice.Option.Target.Note": {
-      "text": "The graph wire sets the target"
-    },
-    "Component.Choice.Option.Preset": {
-      "text": "Style preset"
-    },
-    "Component.Choice.Option.FontSize": {
-      "text": "Font size"
-    },
-    "Component.Choice.Option.W": {
-      "text": "W"
-    },
-    "Component.Choice.Option.H": {
-      "text": "H"
-    },
-    "Component.Choice.Option.Radius": {
-      "text": "Radius"
-    },
-    "Component.Choice.Option.Font.Watermark": {
-      "text": "Font: drag a .ttf/.otf from the Assets panel"
-    },
-    "Component.Choice.Option.TextColor.Watermark": {
-      "text": "Text #RRGGBB"
-    },
-    "Component.Choice.Option.BackgroundColor.Watermark": {
-      "text": "Background #RRGGBB"
-    },
-    "Component.Choice.Option.HoverColor.Watermark": {
-      "text": "Hover #RRGGBB"
-    },
-    "Component.Choice.Option.BorderColor.Watermark": {
-      "text": "Border #RRGGBB"
-    },
-    "Component.Choice.Option.Images.Hint": {
-      "text": "Button images — drag from the Assets panel onto the matching field"
-    },
-    "Component.Choice.Option.NormalImage.Watermark": {
-      "text": "Drop the normal image here"
-    },
-    "Component.Choice.Option.HoverImage.Watermark": {
-      "text": "Drop the hover image here"
-    },
-    "Component.Choice.Option.PressedImage.Watermark": {
-      "text": "Drop the pressed image here"
-    },
-    "Component.Choice.Option.DisabledImage.Watermark": {
-      "text": "Drop the disabled image here"
-    },
-    "Component.Choice.Add": {
-      "text": "+ Add choice"
-    },
-    "Component.Choice.Empty": {
-      "text": "No options yet — press + Add choice, then set the target with a graph wire."
-    },
-    "Component.Choice.Note": {
-      "text": "Each option has a fixed ID and a target node; set the target with a graph wire."
-    },
-    "Component.Audio.Title": {
-      "text": "Audio"
-    },
-    "Component.Audio.Bgm.Label": {
-      "text": "BGM track (background music)"
-    },
-    "Component.Audio.Bgm.Watermark": {
-      "text": "e.g. bgm_theme.ogg"
-    },
-    "Component.Audio.Bgm.Preview.Tip": {
-      "text": "Play / stop BGM preview"
-    },
-    "Component.Audio.Preview": {
-      "text": "Preview"
-    },
-    "Component.Audio.Stop": {
-      "text": "Stop"
-    },
-    "Component.Audio.ChannelLeft": {
+    "LivePreview.VuMeter.Left": {
       "text": "L"
     },
-    "Component.Audio.ChannelRight": {
+    "LivePreview.VuMeter.Right": {
       "text": "R"
     },
-    "Component.Audio.Sfx.Label": {
-      "text": "SFX track (sound effect)"
+    "LocalizationDesk.Actions.ExportCsv": {
+      "text": "Export CSV"
     },
-    "Component.Audio.Sfx.Watermark": {
-      "text": "e.g. sfx_click.wav"
+    "LocalizationDesk.Actions.ExportJson": {
+      "text": "Export JSON"
     },
-    "Component.Audio.Sfx.Preview.Tip": {
-      "text": "Play / stop SFX preview"
+    "LocalizationDesk.Actions.GeneratePseudo": {
+      "text": "Generate Pseudo"
     },
-    "Component.Audio.Volume.Label": {
-      "text": "Volume"
+    "LocalizationDesk.Actions.GeneratePseudoTooltip": {
+      "text": "Generates Assets/locales/qps-ploc.json for overflow testing"
     },
-    "Component.Audio.Dsp.Label": {
-      "text": "DSP filter"
+    "LocalizationDesk.Actions.ImportCsv": {
+      "text": "Import CSV"
     },
-    "Component.Audio.BgmTransition.Label": {
-      "text": "BGM transition"
+    "LocalizationDesk.Editor.AltTextLabel": {
+      "text": "Alternative text (alt_text)"
     },
-    "Component.Audio.BgmTransitionDuration.Label": {
-      "text": "BGM transition duration (s, 0 = project default)"
+    "LocalizationDesk.Editor.SaveRow": {
+      "text": "Save Row"
     },
-    "Component.Background.Title": {
-      "text": "Image"
+    "LocalizationDesk.Editor.SpeakerLabel": {
+      "text": "Speaker (translation)"
     },
-    "Component.Background.Texture.Label": {
-      "text": "Background texture (drag and drop)"
+    "LocalizationDesk.Editor.TranslationLabel": {
+      "text": "Translation"
     },
-    "Component.Background.Texture.Watermark": {
-      "text": "e.g. backgrounds/sample.png or empty"
+    "LocalizationDesk.Filter.All": {
+      "text": "All"
     },
-    "Component.Background.Drop.Title": {
-      "text": "Drag and drop an image here"
+    "LocalizationDesk.Filter.ChangedOnly": {
+      "text": "Changed only"
     },
-    "Component.Background.Drop.Hint": {
-      "text": "Drag from the Assets panel or click Browse"
+    "LocalizationDesk.Filter.FilterLabel": {
+      "text": "Filter"
     },
-    "Component.Background.X": {
-      "text": "X"
+    "LocalizationDesk.Filter.MissingOnly": {
+      "text": "Missing only"
     },
-    "Component.Background.Y": {
-      "text": "Y"
-    },
-    "Component.Background.Width": {
-      "text": "Width"
-    },
-    "Component.Background.Height": {
-      "text": "Height"
-    },
-    "Component.Background.Scale": {
-      "text": "Scale (1.0 = 100%)"
-    },
-    "Component.Background.ResetRotation.Tip": {
-      "text": "Reset rotation (0°)"
-    },
-    "Component.Background.Rotation": {
-      "text": "Rotation"
-    },
-    "Component.Background.ParallaxX": {
-      "text": "Parallax X"
-    },
-    "Component.Background.ParallaxY": {
-      "text": "Parallax Y"
-    },
-    "Component.Background.Opacity": {
-      "text": "Layer opacity"
-    },
-    "Component.Background.Assist.Label": {
-      "text": "OBS quick align"
-    },
-    "Component.Background.Center": {
-      "text": "Center"
-    },
-    "Component.Background.Fit1080": {
-      "text": "Fit to 1080p"
-    },
-    "Component.Camera.Title": {
-      "text": "2D camera"
-    },
-    "Component.Camera.FocusX": {
-      "text": "Focus X (center)"
-    },
-    "Component.Camera.FocusY": {
-      "text": "Focus Y (center)"
-    },
-    "Component.Camera.Zoom": {
-      "text": "Zoom factor"
-    },
-    "Component.Camera.Rotation.Tip": {
-      "text": "Camera rotation is ignored by the engine (Phase 4.5 Slice 2 no-op, capability ROWL_ENGINE_CAPABILITY_CAMERA_ROTATION_IGNORED). The value stays 0."
-    },
-    "Component.Camera.Rotation.Label": {
-      "text": "Rotation (deg) — ignored"
-    },
-    "Component.Camera.Rotation.Note": {
-      "text": "Engine no-op: camera rotation has no render effect."
-    },
-    "Component.Camera.Tween.Label": {
-      "text": "Smooth tween (seconds)"
-    },
-    "Component.Camera.PanTime": {
-      "text": "Pan time"
-    },
-    "Component.Camera.ZoomTime": {
-      "text": "Zoom time"
-    },
-    "Component.Camera.Easing": {
-      "text": "Easing"
-    },
-    "Component.Camera.Easing.Watermark": {
-      "text": "ease_in_out"
-    },
-    "Component.Camera.Shake.Label": {
-      "text": "Cinematic screen shake"
-    },
-    "Component.Camera.Shake.Preset": {
-      "text": "Shake preset"
-    },
-    "Component.Camera.Shake.Intensity": {
-      "text": "Intensity (px)"
-    },
-    "Component.Camera.Shake.Duration": {
-      "text": "Duration (s)"
-    },
-    "Component.Camera.Shake.Frequency": {
-      "text": "Freq (Hz)"
-    },
-    "Component.Camera.Shake.Damping": {
-      "text": "Damping"
-    },
-    "Component.Camera.Shake.DirX": {
-      "text": "Dir X (0-1)"
-    },
-    "Component.Camera.Shake.DirY": {
-      "text": "Dir Y (0-1)"
-    },
-    "Component.Transition.Title": {
-      "text": "Scene transition"
-    },
-    "Component.Transition.Kind": {
-      "text": "Transition type"
-    },
-    "Component.Transition.Duration": {
-      "text": "Duration (seconds)"
-    },
-    "Component.Transition.FadeColor": {
-      "text": "Color hex (fade color)"
-    },
-    "Component.Transition.Flash.Label": {
-      "text": "Screen flash FX"
-    },
-    "Component.Transition.ColorHex": {
-      "text": "Color hex"
-    },
-    "Component.Transition.Flash.Watermark": {
-      "text": "#FFFFFF"
-    },
-    "Component.Transition.Flash.Duration": {
-      "text": "Duration (s)"
-    },
-    "Component.Transition.Intensity": {
-      "text": "Intensity"
-    },
-    "Component.Transition.Post.Label": {
-      "text": "Post-process color tint &amp; vignette"
-    },
-    "Component.Transition.Tint.Label": {
-      "text": "Screen color tint overlay"
-    },
-    "Component.Transition.Tint.Color": {
-      "text": "Tint color hex"
-    },
-    "Component.Transition.Tint.Watermark": {
-      "text": "#0A183D"
-    },
-    "Component.Transition.Tint.Opacity": {
-      "text": "Tint opacity (0-1)"
-    },
-    "Component.Transition.Vignette.Label": {
-      "text": "Cinematic vignette darkening"
-    },
-    "Component.Transition.Vignette.Radius": {
-      "text": "Radius"
-    },
-    "Hierarchy.Create": {
-      "text": "Create"
-    },
-    "Hierarchy.Create.Empty": {
-      "text": "Empty GameObject"
-    },
-    "Hierarchy.Create.Background": {
-      "text": "Background Object"
-    },
-    "Hierarchy.Create.Character": {
-      "text": "Character Object"
-    },
-    "Hierarchy.Create.Dialogue": {
-      "text": "Dialogue Object"
-    },
-    "Hierarchy.Create.Audio": {
-      "text": "Audio Object"
-    },
-    "Hierarchy.Search": {
-      "text": "Search: object name"
-    },
-    "Hierarchy.SelectedNode": {
-      "text": "SELECTED NODE"
-    },
-    "Hierarchy.SelectNode": {
-      "text": "Select a node from the graph"
-    },
-    "Hierarchy.SceneObjects": {
-      "text": "Scene objects"
-    },
-    "Hierarchy.Empty": {
-      "text": "No GameObjects in this frame."
-    },
-    "Hierarchy.Duplicate": {
-      "text": "Duplicate Object"
-    },
-    "Hierarchy.MoveUp": {
-      "text": "Move Up"
-    },
-    "Hierarchy.MoveDown": {
-      "text": "Move Down"
-    },
-    "Hierarchy.Delete": {
-      "text": "Delete Object"
-    },
-    "Assets.Title": {
-      "text": "Assets"
-    },
-    "Assets.NewFolder": {
-      "text": "New folder"
-    },
-    "Assets.NewFolder.Tip": {
-      "text": "Create a folder in the selected location"
-    },
-    "Assets.Import": {
-      "text": "Import"
-    },
-    "Assets.Import.Tip": {
-      "text": "Import a file into the project Assets folder"
-    },
-    "Assets.ImportFile": {
-      "text": "Import file"
-    },
-    "Assets.Refresh": {
+    "LocalizationDesk.Filter.Refresh": {
       "text": "Refresh"
     },
-    "Assets.Refresh.Tip": {
-      "text": "Refresh the asset list"
+    "LocalizationDesk.Filter.SearchLabel": {
+      "text": "Search (speaker / text / id)"
     },
-    "Assets.ViewToggle.Tip": {
-      "text": "Switch between grid and list view"
+    "LocalizationDesk.Filter.SearchWatermark": {
+      "text": "e.g. Margot or relay"
     },
-    "Assets.Up": {
-      "text": "↑ Up"
+    "LocalizationDesk.Filter.SourceLabel": {
+      "text": "Source"
     },
-    "Assets.Up.Tip": {
-      "text": "Go to parent folder"
+    "LocalizationDesk.Filter.TargetLabel": {
+      "text": "Target"
     },
-    "Assets.Search.Watermark": {
-      "text": "Search by name or extension"
+    "LocalizationDesk.Header.Title": {
+      "text": "Translation Desk"
     },
-    "Assets.Menu.NewFolder": {
-      "text": "Create new folder"
-    },
-    "Assets.Menu.Import": {
-      "text": "Import file..."
-    },
-    "Assets.Menu.Rename": {
-      "text": "Rename (F2)"
-    },
-    "Assets.Menu.OpenInExplorer": {
-      "text": "Show in file manager"
-    },
-    "Assets.Badge.Info": {
-      "text": "info"
-    },
-    "Assets.Badge.Missing": {
-      "text": "MISSING"
-    },
-    "Assets.ShowMore.Tip": {
-      "text": "Show the next 200 items"
-    },
-    "Assets.Empty": {
-      "text": "This project has no files yet."
-    },
-    "Assets.NoMatch": {
-      "text": "No results match the filter."
-    },
-    "Assets.ClearFilter": {
-      "text": "Clear filter"
-    },
-    "Assets.ClearFilter.Tip": {
-      "text": "Clear the search and type filter"
-    },
-    "Assets.Size": {
-      "text": "Size"
-    },
-    "Assets.Size.Tip": {
-      "text": "Icon size"
+    "LocalizationDesk.Window.Title": {
+      "text": "Translation Desk — Rowl Engine"
     },
     "Log.Clear": {
       "text": "Clear"
@@ -1014,53 +1191,389 @@
     "Log.Errors.Tip": {
       "text": "Error count"
     },
-    "Log.Warnings": {
-      "text": "Warnings:"
-    },
-    "Log.Warnings.Tip": {
-      "text": "Warning count"
-    },
     "Log.Infos": {
       "text": "Info:"
     },
     "Log.Infos.Tip": {
       "text": "Info count"
     },
-    "Issues.Analyze": {
-      "text": "Analyze"
+    "Log.Warnings": {
+      "text": "Warnings:"
     },
-    "Issues.Analyze.Tip": {
-      "text": "Analyze the story graph"
+    "Log.Warnings.Tip": {
+      "text": "Warning count"
     },
-    "Issues.Empty": {
-      "text": "No issues found."
+    "Menu.CancelBuild": {
+      "text": "Cancel Export"
     },
-    "Issues.Reanalyze": {
-      "text": "Re-analyze"
+    "Menu.Export": {
+      "text": "Export"
     },
-    "Backlog.Empty": {
-      "text": "No dialogue recorded yet."
+    "Menu.Layout": {
+      "text": "Layout"
     },
-    "Backlog.Empty.Hint": {
-      "text": "Dialogue from the player preview collects here."
+    "Menu.LocalizationDesk": {
+      "text": "Translation Desk"
     },
-    "Backlog.OpenPlayer": {
-      "text": "Open Player Preview"
+    "Menu.More": {
+      "text": "More"
     },
-    "Backlog.OpenPlayer.Tip": {
-      "text": "Open the player preview panel"
+    "Menu.OpenInSeparateWindow": {
+      "text": "Open in Separate Window"
     },
-    "SaveSlots.Save": {
+    "Menu.ProjectList": {
+      "text": "Project List"
+    },
+    "Menu.Projects": {
+      "text": "Projects"
+    },
+    "Menu.Redo": {
+      "text": "Redo"
+    },
+    "Menu.Save": {
       "text": "Save"
+    },
+    "Menu.Settings": {
+      "text": "Settings"
+    },
+    "Menu.Undo": {
+      "text": "Undo"
+    },
+    "Menu.Windows": {
+      "text": "Tools"
+    },
+    "Node.Add": {
+      "text": "+ Node"
+    },
+    "Node.Add.Tip": {
+      "text": "Add a node (Ctrl+N)"
+    },
+    "Node.Delete": {
+      "text": "Delete"
+    },
+    "Node.Delete.Tip": {
+      "text": "Delete the selected node (Delete)"
+    },
+    "Node.Disconnect": {
+      "text": "Disconnect"
+    },
+    "Node.Disconnect.Tip": {
+      "text": "Disconnect the selected node's links"
+    },
+    "Node.Group": {
+      "text": "+ Group"
+    },
+    "Node.Group.Tip": {
+      "text": "Group the selected nodes"
+    },
+    "Node.Up": {
+      "text": "Up"
+    },
+    "Node.Up.Tip": {
+      "text": "Go up one level"
+    },
+    "NodeControl.Choice": {
+      "text": "CHOICE"
+    },
+    "NodeControl.ChoiceOutputTooltip": {
+      "text": "Choice output — drag to its target node"
+    },
+    "NodeControl.Dialog": {
+      "text": "DIALOG"
+    },
+    "NodeControl.FlowInputTooltip": {
+      "text": "Flow Input Pin (Left Click: Drag Cable / Right Click: Disconnect)"
+    },
+    "NodeControl.FlowOutputTooltip": {
+      "text": "Flow Output Pin"
+    },
+    "NodeControl.Node": {
+      "text": "NODE"
+    },
+    "NodeControl.Start": {
+      "text": "START"
+    },
+    "NodeControl.SubgraphBorderTooltip": {
+      "text": "Subgraph boundary — double-click to enter"
+    },
+    "Panel.Assets": {
+      "text": "Assets"
+    },
+    "Panel.Backlog": {
+      "text": "Dialogue History"
+    },
+    "Panel.Hierarchy": {
+      "text": "Hierarchy"
+    },
+    "Panel.Inspector": {
+      "text": "Inspector"
+    },
+    "Panel.Issues": {
+      "text": "Issues"
+    },
+    "Panel.Log": {
+      "text": "Log"
+    },
+    "Panel.SaveSlots": {
+      "text": "Save Slots"
+    },
+    "Player.Backlog.Back": {
+      "text": "Back"
+    },
+    "Player.Hud.Auto": {
+      "text": "Auto"
+    },
+    "Player.Hud.Load": {
+      "text": "Load"
+    },
+    "Player.Hud.Log": {
+      "text": "Log"
+    },
+    "Player.Hud.Menu": {
+      "text": "Menu"
+    },
+    "Player.Hud.Save": {
+      "text": "Save"
+    },
+    "Player.Hud.Skip": {
+      "text": "Skip"
+    },
+    "Player.Pause.ExitGame": {
+      "text": "Exit Game"
+    },
+    "Player.Pause.Load": {
+      "text": "Load"
+    },
+    "Player.Pause.MainMenu": {
+      "text": "Main Menu"
+    },
+    "Player.Pause.Preferences": {
+      "text": "Preferences"
+    },
+    "Player.Pause.Resume": {
+      "text": "Resume"
+    },
+    "Player.Pause.Save": {
+      "text": "Save"
+    },
+    "Player.Pause.Title": {
+      "text": "Paused"
+    },
+    "Player.Prefs.Accessibility": {
+      "text": "Accessibility"
+    },
+    "Player.Prefs.AmbienceVolume": {
+      "text": "Ambience:"
+    },
+    "Player.Prefs.AutoAdvance": {
+      "text": "Auto Forward:"
+    },
+    "Player.Prefs.AutoEnabled": {
+      "text": "Auto on"
+    },
+    "Player.Prefs.Back": {
+      "text": "Back"
+    },
+    "Player.Prefs.BgmVolume": {
+      "text": "Music:"
+    },
+    "Player.Prefs.HighContrast": {
+      "text": "High Contrast:"
+    },
+    "Player.Prefs.HighContrastDesc": {
+      "text": "Dark outline reading mode"
+    },
+    "Player.Prefs.Language": {
+      "text": "Language:"
+    },
+    "Player.Prefs.MasterVolume": {
+      "text": "Master:"
+    },
+    "Player.Prefs.ReducedMotion": {
+      "text": "Reduced Motion:"
+    },
+    "Player.Prefs.ReducedMotionDesc": {
+      "text": "Disable shake and flash"
+    },
+    "Player.Prefs.Save": {
+      "text": "Save"
+    },
+    "Player.Prefs.SfxVolume": {
+      "text": "Effects:"
+    },
+    "Player.Prefs.SkipMode": {
+      "text": "Skip Mode:"
+    },
+    "Player.Prefs.TextSize": {
+      "text": "Text Size:"
+    },
+    "Player.Prefs.TextSpeed": {
+      "text": "Text Speed:"
+    },
+    "Player.Prefs.Title": {
+      "text": "Preferences"
+    },
+    "Player.Prefs.UiVolume": {
+      "text": "Interface:"
+    },
+    "Player.Prefs.VoiceVolume": {
+      "text": "Voice:"
+    },
+    "Player.SaveLoad.Back": {
+      "text": "Back"
+    },
+    "Player.SaveLoad.Load": {
+      "text": "Load"
+    },
+    "Player.SaveLoad.Next": {
+      "text": "Next"
+    },
+    "Player.SaveLoad.Previous": {
+      "text": "Previous"
+    },
+    "Player.SaveLoad.Save": {
+      "text": "Save"
+    },
+    "Player.Shell.Cancel": {
+      "text": "Cancel"
+    },
+    "Player.Shell.ConfirmExit": {
+      "text": "Do you want to exit?"
+    },
+    "Player.Shell.Yes": {
+      "text": "Yes"
+    },
+    "Player.Title.Continue": {
+      "text": "Continue"
+    },
+    "Player.Title.Exit": {
+      "text": "Exit"
+    },
+    "Player.Title.LoadGame": {
+      "text": "Load Game"
+    },
+    "Player.Title.Logo": {
+      "text": "ROWL"
+    },
+    "Player.Title.NewGame": {
+      "text": "New Game"
+    },
+    "Player.Title.Preferences": {
+      "text": "Preferences"
+    },
+    "Player.Window.Title": {
+      "text": "Rowl — Player"
     },
     "SaveSlots.Load": {
       "text": "Load"
     },
-    "Settings.Window.Title": {
-      "text": "Settings — Rowl Engine"
+    "SaveSlots.Save": {
+      "text": "Save"
+    },
+    "Search.Filter.Color": {
+      "text": "Color:"
+    },
+    "Search.Filter.Kind": {
+      "text": "Type:"
+    },
+    "Search.Filter.Speaker": {
+      "text": "Speaker:"
+    },
+    "Search.Overlay.Watermark": {
+      "text": "Search: title, speaker, text, speaker:Evelyn, type:choice… (Esc to close)"
+    },
+    "Settings.About.Editor": {
+      "text": "Editor:"
+    },
+    "Settings.About.Engine": {
+      "text": "Engine:"
+    },
+    "Settings.About.Packaging": {
+      "text": "Packaging:"
+    },
+    "Settings.About.Packaging.Value": {
+      "text": "Zstd Compression + .rowlpkg Archive"
+    },
+    "Settings.About.Platforms": {
+      "text": "Platforms:"
+    },
+    "Settings.About.Tagline": {
+      "text": "Visual Novel & Interactive Storytelling Engine"
+    },
+    "Settings.About.Version": {
+      "text": "Version:"
+    },
+    "Settings.AutoSave": {
+      "text": "Autosave"
+    },
+    "Settings.AutoSave.Interval": {
+      "text": "Save Interval (seconds)"
+    },
+    "Settings.Close": {
+      "text": "Close"
+    },
+    "Settings.General.Desc": {
+      "text": "Interface language and autosave."
+    },
+    "Settings.General.ReduceMotion": {
+      "text": "Reduce motion"
+    },
+    "Settings.General.ReduceMotion.Hint": {
+      "text": "Disables workspace panel transitions and drop target animations."
+    },
+    "Settings.General.Title": {
+      "text": "General Editor Settings"
     },
     "Settings.Header.Eyebrow": {
       "text": "ROWL / SETTINGS"
+    },
+    "Settings.Language": {
+      "text": "Interface language"
+    },
+    "Settings.Language.Hint": {
+      "text": "Language of the editor interface; separate from the game preview language. Applies immediately."
+    },
+    "Settings.Player.AutoAdvance": {
+      "text": "Auto-Advance Extra Delay (s)"
+    },
+    "Settings.Player.Desc": {
+      "text": "These preferences are stored on this device; they are not added to the project file or game saves."
+    },
+    "Settings.Player.Master": {
+      "text": "Master Volume"
+    },
+    "Settings.Player.Music": {
+      "text": "Music"
+    },
+    "Settings.Player.Sfx": {
+      "text": "Effects"
+    },
+    "Settings.Player.TextSpeed": {
+      "text": "Text Speed Multiplier"
+    },
+    "Settings.Player.Title": {
+      "text": "Player Preferences"
+    },
+    "Settings.Player.Voice": {
+      "text": "Voice"
+    },
+    "Settings.Project.BgmTransition": {
+      "text": "Default BGM Transition"
+    },
+    "Settings.Project.Desc": {
+      "text": "These values are saved to the open project's project.rowlproj file."
+    },
+    "Settings.Project.SaveSlots": {
+      "text": "Save Slot Count"
+    },
+    "Settings.Project.Title": {
+      "text": "Project Runtime Settings"
+    },
+    "Settings.Project.TransitionDuration": {
+      "text": "Default Transition Duration (s)"
+    },
+    "Settings.ResetDefaults": {
+      "text": "Reset to Defaults"
     },
     "Settings.Scope.Preferences": {
       "text": "PREFERENCES · THIS DEVICE"
@@ -1068,8 +1581,50 @@
     "Settings.Scope.Project": {
       "text": "PROJECT SETTINGS · PROJECT FILE"
     },
-    "Settings.Tab.Theme": {
-      "text": "Theme"
+    "Settings.Shortcut.Build": {
+      "text": "Build"
+    },
+    "Settings.Shortcut.DeleteNode": {
+      "text": "Delete Selected Node"
+    },
+    "Settings.Shortcut.Fullscreen": {
+      "text": "Fullscreen"
+    },
+    "Settings.Shortcut.NewNode": {
+      "text": "Add New Node"
+    },
+    "Settings.Shortcut.OpenHub": {
+      "text": "Open Hub"
+    },
+    "Settings.Shortcut.PlayMode": {
+      "text": "Play Mode"
+    },
+    "Settings.Shortcut.QuickSearch": {
+      "text": "Quick Search"
+    },
+    "Settings.Shortcut.Redo": {
+      "text": "Redo"
+    },
+    "Settings.Shortcut.Rename": {
+      "text": "Rename"
+    },
+    "Settings.Shortcut.Save": {
+      "text": "Save"
+    },
+    "Settings.Shortcut.SaveAs": {
+      "text": "Save As"
+    },
+    "Settings.Shortcut.Settings": {
+      "text": "Settings"
+    },
+    "Settings.Shortcut.Undo": {
+      "text": "Undo"
+    },
+    "Settings.Shortcuts.Title": {
+      "text": "Keyboard Shortcuts"
+    },
+    "Settings.Tab.About": {
+      "text": "About"
     },
     "Settings.Tab.General": {
       "text": "General"
@@ -1083,11 +1638,11 @@
     "Settings.Tab.Shortcuts": {
       "text": "Shortcuts"
     },
-    "Settings.Tab.About": {
-      "text": "About"
+    "Settings.Tab.Theme": {
+      "text": "Theme"
     },
-    "Settings.Theme.Title": {
-      "text": "Theme & Appearance"
+    "Settings.Theme.Apply": {
+      "text": "Apply Theme"
     },
     "Settings.Theme.Desc": {
       "text": "Color theme of the editor interface."
@@ -1095,164 +1650,50 @@
     "Settings.Theme.Label": {
       "text": "Editor Theme"
     },
-    "Settings.Theme.Apply": {
-      "text": "Apply Theme"
-    },
-    "Settings.Theme.Sample": {
-      "text": "Aa"
-    },
     "Settings.Theme.Preview.Dark": {
       "text": "Bone White (Dark)"
     },
     "Settings.Theme.Preview.Oled": {
       "text": "Pure Black (OLED)"
     },
-    "Settings.General.Title": {
-      "text": "General Editor Settings"
+    "Settings.Theme.Sample": {
+      "text": "Aa"
     },
-    "Settings.General.Desc": {
-      "text": "Interface language and autosave."
+    "Settings.Theme.Title": {
+      "text": "Theme & Appearance"
     },
-    "Settings.AutoSave": {
-      "text": "Autosave"
+    "Settings.Window.Title": {
+      "text": "Settings — Rowl Engine"
     },
-    "Settings.AutoSave.Interval": {
-      "text": "Save Interval (seconds)"
+    "Status.Unsaved": {
+      "text": "There are unsaved changes"
     },
-    "Settings.Player.Title": {
-      "text": "Player Preferences"
+    "Transport.Pause": {
+      "text": "Pause"
     },
-    "Settings.Player.Desc": {
-      "text": "These preferences are stored on this device; they are not added to the project file or game saves."
+    "Transport.Play": {
+      "text": "Play / Stop"
     },
-    "Settings.Player.Master": {
-      "text": "Master Volume"
+    "Transport.Step": {
+      "text": "Step Frame (1/60 s)"
     },
-    "Settings.Player.Music": {
-      "text": "Music"
+    "View.Game": {
+      "text": "Game"
     },
-    "Settings.Player.Voice": {
-      "text": "Voice"
+    "View.Game.Tip": {
+      "text": "Game preview (right-click: separate window)"
     },
-    "Settings.Player.Sfx": {
-      "text": "Effects"
+    "View.Node": {
+      "text": "Node"
     },
-    "Settings.Player.TextSpeed": {
-      "text": "Text Speed Multiplier"
+    "View.Node.Tip": {
+      "text": "Story flow (node graph)"
     },
-    "Settings.Player.AutoAdvance": {
-      "text": "Auto-Advance Extra Delay (s)"
+    "View.SceneEdit": {
+      "text": "Edit Scene"
     },
-    "Settings.Project.Title": {
-      "text": "Project Runtime Settings"
-    },
-    "Settings.Project.Desc": {
-      "text": "These values are saved to the open project's project.rowlproj file."
-    },
-    "Settings.Project.SaveSlots": {
-      "text": "Save Slot Count"
-    },
-    "Settings.Project.BgmTransition": {
-      "text": "Default BGM Transition"
-    },
-    "Settings.Project.TransitionDuration": {
-      "text": "Default Transition Duration (s)"
-    },
-    "Settings.Shortcuts.Title": {
-      "text": "Keyboard Shortcuts"
-    },
-    "Settings.Shortcut.Save": {
-      "text": "Save"
-    },
-    "Settings.Shortcut.SaveAs": {
-      "text": "Save As"
-    },
-    "Settings.Shortcut.Undo": {
-      "text": "Undo"
-    },
-    "Settings.Shortcut.Redo": {
-      "text": "Redo"
-    },
-    "Settings.Shortcut.NewNode": {
-      "text": "Add New Node"
-    },
-    "Settings.Shortcut.DeleteNode": {
-      "text": "Delete Selected Node"
-    },
-    "Settings.Shortcut.Rename": {
-      "text": "Rename"
-    },
-    "Settings.Shortcut.Build": {
-      "text": "Build"
-    },
-    "Settings.Shortcut.PlayMode": {
-      "text": "Play Mode"
-    },
-    "Settings.Shortcut.Fullscreen": {
-      "text": "Fullscreen"
-    },
-    "Settings.Shortcut.QuickSearch": {
-      "text": "Quick Search"
-    },
-    "Settings.Shortcut.OpenHub": {
-      "text": "Open Hub"
-    },
-    "Settings.Shortcut.Settings": {
-      "text": "Settings"
-    },
-    "Settings.About.Tagline": {
-      "text": "Visual Novel & Interactive Storytelling Engine"
-    },
-    "Settings.About.Version": {
-      "text": "Version:"
-    },
-    "Settings.About.Engine": {
-      "text": "Engine:"
-    },
-    "Settings.About.Editor": {
-      "text": "Editor:"
-    },
-    "Settings.About.Packaging": {
-      "text": "Packaging:"
-    },
-    "Settings.About.Packaging.Value": {
-      "text": "Zstd Compression + .rowlpkg Archive"
-    },
-    "Settings.About.Platforms": {
-      "text": "Platforms:"
-    },
-    "Settings.ResetDefaults": {
-      "text": "Reset to Defaults"
-    },
-    "Settings.Close": {
-      "text": "Close"
-    },
-    "App.Window.Title": {
-      "text": "Rowl Engine Editor"
-    },
-    "App.Brand.Name": {
-      "text": "ROWL"
-    },
-    "App.Brand.Tagline": {
-      "text": "STORY STUDIO"
-    },
-    "Search.Overlay.Watermark": {
-      "text": "Search: title, speaker, text, speaker:Evelyn, type:choice… (Esc to close)"
-    },
-    "Search.Filter.Kind": {
-      "text": "Type:"
-    },
-    "Search.Filter.Speaker": {
-      "text": "Speaker:"
-    },
-    "Search.Filter.Color": {
-      "text": "Color:"
-    },
-    "Workspace.Pin": {
-      "text": "Pin"
-    },
-    "Workspace.Pin.Tip": {
-      "text": "Pin panel (can't be moved by its header)"
+    "View.SceneEdit.Tip": {
+      "text": "Edit the scene"
     },
     "Workspace.Close": {
       "text": "Close"
@@ -1260,20 +1701,8 @@
     "Workspace.Close.Tip": {
       "text": "Close panel"
     },
-    "Workspace.Move": {
-      "text": "Move"
-    },
-    "Workspace.Move.Left": {
-      "text": "To the left of"
-    },
-    "Workspace.Move.Right": {
-      "text": "To the right of"
-    },
-    "Workspace.Move.Top": {
-      "text": "Above"
-    },
-    "Workspace.Move.Bottom": {
-      "text": "Below"
+    "Workspace.Drop.Bottom": {
+      "text": "Dock bottom"
     },
     "Workspace.Drop.Left": {
       "text": "Dock left"
@@ -1284,14 +1713,35 @@
     "Workspace.Drop.Top": {
       "text": "Dock top"
     },
-    "Workspace.Drop.Bottom": {
-      "text": "Dock bottom"
-    },
     "Workspace.Header.Help": {
       "text": "Drag the header to move the panel; right-click or press Enter for options"
     },
+    "Workspace.Layout.Tip": {
+      "text": "Layout"
+    },
+    "Workspace.Move": {
+      "text": "Move"
+    },
+    "Workspace.Move.Bottom": {
+      "text": "Below"
+    },
+    "Workspace.Move.Left": {
+      "text": "To the left of"
+    },
+    "Workspace.Move.Right": {
+      "text": "To the right of"
+    },
+    "Workspace.Move.Top": {
+      "text": "Above"
+    },
     "Workspace.Panel.Bottom": {
       "text": "Bottom panel"
+    },
+    "Workspace.Pin": {
+      "text": "Pin"
+    },
+    "Workspace.Pin.Tip": {
+      "text": "Pin panel (can't be moved by its header)"
     }
   }
 }

@@ -24,7 +24,9 @@ namespace RowlEngine.Editor.ViewModels.Components
 
         private bool _isUpdatingDimensions = false;
 
-        public override string DisplayName => "Character Sprite";
+        public override string DisplayNameKey => "Component.Character.DisplayName";
+        protected override string DisplayNameTrFallback => "Karakter Spritesı";
+        protected override string DisplayNameEnFallback => "Character Sprite";
         public override string Icon => "Karakter";
         public override string TypeKey => "character";
 

@@ -17,7 +17,9 @@ namespace RowlEngine.Editor.ViewModels.Components
         internal const string DefaultBorderColor = "#00F0FF";
         internal const string DefaultTextColor = "#F1F5F9";
         internal const string DefaultSpeakerColor = "#38BDF8";
-        public override string DisplayName => "Dialogue";
+        public override string DisplayNameKey => "Component.Dialogue.DisplayName";
+        protected override string DisplayNameTrFallback => "Diyalog";
+        protected override string DisplayNameEnFallback => "Dialogue";
         public override string Icon => "Diyalog";
         public override string TypeKey => "dialogue";
 

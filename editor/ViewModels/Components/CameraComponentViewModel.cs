@@ -10,7 +10,9 @@ namespace RowlEngine.Editor.ViewModels.Components
     /// </summary>
     public partial class CameraComponentViewModel : NodeComponentViewModel
     {
-        public override string DisplayName => "2D Camera";
+        public override string DisplayNameKey => "Component.Camera.DisplayName";
+        protected override string DisplayNameTrFallback => "2D Kamera";
+        protected override string DisplayNameEnFallback => "2D Camera";
         public override string Icon => "Kamera";
         public override string TypeKey => "camera";
 

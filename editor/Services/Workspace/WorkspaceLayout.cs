@@ -112,14 +112,76 @@ public sealed record WorkspaceLayout(LayoutNode? Tree, int LastSplitId)
         }
     }
 
-    private static bool TryParseSplitNumber(string id, out int number)
+    internal static bool TryParseSplitNumber(string id, out int number)
     {
         number = 0;
         return id.StartsWith(SplitIdPrefix, StringComparison.Ordinal)
             && int.TryParse(id.AsSpan(SplitIdPrefix.Length), NumberStyles.None, CultureInfo.InvariantCulture, out number);
     }
 
+    /// <summary>Distinct leaf panel ids present in <paramref name="node"/>.</summary>
+    public static HashSet<string> CollectViews(LayoutNode? node)
+    {
+        var views = new HashSet<string>(StringComparer.Ordinal);
+        Walk(node);
+        return views;
+
+        void Walk(LayoutNode? current)
+        {
+            switch (current)
+            {
+                case LeafNode leaf:
+                    views.Add(leaf.View);
+                    break;
+                case SplitNode split:
+                    Walk(split.A);
+                    Walk(split.B);
+                    break;
+            }
+        }
+    }
+
     // ---- operations ----
+
+    /// <summary>
+    /// Prunes every leaf for which <paramref name="isSupported"/> returns <c>false</c>;
+    /// when one side of a split is pruned, the surviving sibling takes the split's place
+    /// while preserving all inner splits, ratios and ids. <see cref="LastSplitId"/> is kept.
+    /// </summary>
+    public WorkspaceLayout PruneLeaves(Func<string, bool> isSupported)
+    {
+        ArgumentNullException.ThrowIfNull(isSupported);
+        LayoutNode? pruned = PruneNode(Tree, isSupported);
+        return ReferenceEquals(pruned, Tree) ? this : new WorkspaceLayout(pruned, LastSplitId);
+    }
+
+    /// <summary>Prunes leaves whose panel id is not in <see cref="PanelIds.IsKnown"/>.</summary>
+    public WorkspaceLayout PruneUnknownLeaves() => PruneLeaves(PanelIds.IsKnown);
+
+    /// <summary>Recursively removes unsupported leaves from <paramref name="node"/>, collapsing single-child splits.</summary>
+    public static LayoutNode? PruneNode(LayoutNode? node, Func<string, bool> isSupported)
+    {
+        ArgumentNullException.ThrowIfNull(isSupported);
+        switch (node)
+        {
+            case null:
+                return null;
+            case LeafNode leaf:
+                return isSupported(leaf.View) ? leaf : null;
+            case SplitNode split:
+                LayoutNode? a = PruneNode(split.A, isSupported);
+                LayoutNode? b = PruneNode(split.B, isSupported);
+                if (a is null)
+                    return b;
+                if (b is null)
+                    return a;
+                return ReferenceEquals(a, split.A) && ReferenceEquals(b, split.B)
+                    ? split
+                    : split with { A = a, B = b };
+            default:
+                return node;
+        }
+    }
 
     /// <summary>Removes the panel's leaf; its sibling takes the freed area.</summary>
     public WorkspaceLayout RemoveView(string view)

@@ -25,7 +25,7 @@
                  HorizontalAlignment="Center"/>
       <TextBlock Classes="hint" Text="{l:T Backlog.Empty.Hint}" Foreground="{DynamicResource DimText}"
                  HorizontalAlignment="Center" TextWrapping="Wrap" TextAlignment="Center"/>
-      <Button Classes="primary" Content="{l:T Backlog.OpenPlayer}" Command="{Binding OpenPlayerCommand}"
+      <Button Classes="secondary" Content="{l:T Backlog.OpenPlayer}" Command="{Binding OpenPlayerCommand}"
               ToolTip.Tip="{l:T Backlog.OpenPlayer.Tip}"
               HorizontalAlignment="Center"/>
     </StackPanel>

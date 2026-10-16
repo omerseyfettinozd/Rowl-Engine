@@ -98,6 +98,21 @@
     <SolidColorBrush x:Key="NodeCardBg" Color="{DynamicResource NodeCardBgColor}"/>
     <SolidColorBrush x:Key="NodeHeaderBg" Color="{DynamicResource NodeHeaderBgColor}"/>
 
+    <!-- Faz 6 görsel uyum: prototip .story-node / .zoom-controls / .tool-shortcuts tonları. -->
+    <Color x:Key="NodeKindTextColor">#999991</Color>
+    <Color x:Key="NodeFooterTextColor">#A5A49E</Color>
+    <Color x:Key="NodeFooterLineColor">#2E2E32</Color>
+    <Color x:Key="CanvasControlBgColor">#171719</Color>
+    <Color x:Key="CanvasControlTextColor">#ADABA4</Color>
+    <Color x:Key="ToolCardIconColor">#ACA89D</Color>
+    <SolidColorBrush x:Key="NodeKindText" Color="{DynamicResource NodeKindTextColor}"/>
+    <SolidColorBrush x:Key="NodeFooterText" Color="{DynamicResource NodeFooterTextColor}"/>
+    <SolidColorBrush x:Key="NodeFooterLine" Color="{DynamicResource NodeFooterLineColor}"/>
+    <SolidColorBrush x:Key="NodePortStroke" Color="{DynamicResource WireColor}"/>
+    <SolidColorBrush x:Key="CanvasControlBg" Color="{DynamicResource CanvasControlBgColor}"/>
+    <SolidColorBrush x:Key="CanvasControlText" Color="{DynamicResource CanvasControlTextColor}"/>
+    <SolidColorBrush x:Key="ToolCardIcon" Color="{DynamicResource ToolCardIconColor}"/>
+
     <!-- ── Faz 2: ölçek token'ları (EDITOR_UI_PORT_PLAN) ──────────────────
          Yazı ölçeği prototipin dağılımından; K2: masaüstü denetim yüksekliği 32. -->
     <x:Double x:Key="FontSizeCaption">9</x:Double>
@@ -170,5 +185,15 @@
     <SolidColorBrush x:Key="CardBorderColor" Color="{DynamicResource BorderColorValue}"/>
     <SolidColorBrush x:Key="AccentButtonFg" Color="{DynamicResource PrimaryTextColor}"/>
     <SolidColorBrush x:Key="GraphCanvasBg" Color="{DynamicResource CanvasBackgroundColor}"/>
+    <!-- Faz 6 görsel uyum: prototip .node-area nokta ızgarası (20 px karo, 1.6 px nokta).
+         Fırçalar aynı sözlükteki örneklere bağlı → tema rengi değişince ızgara da değişir. -->
+    <DrawingBrush x:Key="GraphDotGridBrush" TileMode="Tile" Stretch="None" DestinationRect="0,0,20,20">
+        <DrawingBrush.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="{StaticResource GraphCanvasBg}" Geometry="M0,0 H20 V20 H0 Z"/>
+                <GeometryDrawing Brush="{StaticResource BorderColor}" Geometry="M9.2,10 A0.8,0.8 0 1 0 10.8,10 A0.8,0.8 0 1 0 9.2,10 Z"/>
+            </DrawingGroup>
+        </DrawingBrush.Drawing>
+    </DrawingBrush>
 
 </ResourceDictionary>

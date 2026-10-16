@@ -8,6 +8,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
+using Avalonia.Threading;
 using RowlEngine.Editor.Services.Workspace;
 
 namespace RowlEngine.Editor.Views.Workspace;
@@ -36,8 +37,10 @@ public partial class WorkspaceHost
     /// <summary>Prototype <c>workspace-motion.js</c> <c>exit()</c>: 180 ms (also used for the drop highlight, which has no value of its own).</summary>
     public static readonly TimeSpan DropMotionDuration = TimeSpan.FromMilliseconds(180);
 
+    private static Easing? _motionEasing;
+
     /// <summary>Prototype easing: <c>cubic-bezier(.22,1,.36,1)</c>.</summary>
-    public static readonly Easing MotionEasing = new SplineEasing(0.22, 1, 0.36, 1);
+    public static Easing MotionEasing => _motionEasing ??= new SplineEasing(0.22, 1, 0.36, 1);
 
     /// <summary>Prototype <c>enter</c>: a new panel rises from <c>translateY(6px)</c>.</summary>
     public const double EnterRise = 6;
@@ -45,7 +48,8 @@ public partial class WorkspaceHost
     /// <summary>
     /// "Reduce motion": every transition is 0 ms. Avalonia 11.3 has no operating
     /// system reduced-motion query; the default comes from <see cref="SystemPrefersReducedMotion"/>
-    /// (the <c>ROWL_REDUCE_MOTION</c> environment variable) and a settings page can bind to the property later.
+    /// (the <c>ROWL_REDUCE_MOTION</c> environment variable) and the active editor settings profile
+    /// (<see cref="ProfilePrefersReducedMotion"/>), and can also be bound or set per host.
     /// </summary>
     public static readonly StyledProperty<bool> ReduceMotionProperty =
         AvaloniaProperty.Register<WorkspaceHost, bool>(nameof(ReduceMotion), ReadSystemPreference());
@@ -61,6 +65,25 @@ public partial class WorkspaceHost
     /// <summary>Best-effort operating-system preference (env <c>ROWL_REDUCE_MOTION</c> = 1 / true); false when unknown.</summary>
     public static bool SystemPrefersReducedMotion => ReadSystemPreference();
 
+    private static readonly List<WeakReference<WorkspaceHost>> LiveHosts = new();
+    private static bool _profilePrefersReducedMotion;
+
+    /// <summary>
+    /// Active editor settings profile preference (<c>EditorSettingsProfile.ReduceMotion</c>),
+    /// synchronized by <c>EditorSettingsSyncService</c> and <c>SettingsViewModel</c>.
+    /// </summary>
+    public static bool ProfilePrefersReducedMotion
+    {
+        get => _profilePrefersReducedMotion;
+        set
+        {
+            if (_profilePrefersReducedMotion == value)
+                return;
+            _profilePrefersReducedMotion = value;
+            NotifyLiveHosts();
+        }
+    }
+
     private readonly Dictionary<string, TranslateTransform> _enterTransforms = new(StringComparer.Ordinal);
     private readonly Dictionary<string, TranslateTransform> _splitterTransforms = new(StringComparer.Ordinal);
     private readonly Dictionary<string, Rect> _displayRects = new(StringComparer.Ordinal);
@@ -70,6 +93,8 @@ public partial class WorkspaceHost
     private MotionPlan? _pendingPlan;
     private MotionPlan? _plan;
     private bool _suppressMotion;
+    private bool _hasExplicitReduceMotion;
+    private bool _updatingFromExternal;
     private Rect? _dropTargetRect;
     private Rect _dropFrom;
     private bool _dropFresh;
@@ -87,6 +112,13 @@ public partial class WorkspaceHost
         set => SetValue(ReduceMotionProperty, value);
     }
 
+    /// <summary>
+    /// True when this host, the active editor settings profile, or the
+    /// <c>ROWL_REDUCE_MOTION</c> environment variable requests reduced motion.
+    /// </summary>
+    public bool EffectiveReduceMotion =>
+        ReduceMotion || _profilePrefersReducedMotion || ReadSystemPreference();
+
     public double LayoutProgress => GetValue(LayoutProgressProperty);
 
     public double DropProgress => GetValue(DropProgressProperty);
@@ -101,8 +133,45 @@ public partial class WorkspaceHost
             && (value == "1" || value.Equals("true", StringComparison.OrdinalIgnoreCase));
     }
 
+    private static void NotifyLiveHosts()
+    {
+        WorkspaceHost[] hosts;
+        lock (LiveHosts)
+        {
+            LiveHosts.RemoveAll(r => !r.TryGetTarget(out _));
+            hosts = LiveHosts
+                .Select(r => r.TryGetTarget(out WorkspaceHost? h) ? h : null)
+                .Where(h => h is not null)
+                .ToArray()!;
+        }
+        foreach (WorkspaceHost host in hosts)
+        {
+            if (Dispatcher.UIThread.CheckAccess())
+                host.ApplyExternalReduceMotion();
+            else
+                Dispatcher.UIThread.Post(host.ApplyExternalReduceMotion);
+        }
+    }
+
+    private void ApplyExternalReduceMotion()
+    {
+        if (!_hasExplicitReduceMotion)
+        {
+            _updatingFromExternal = true;
+            try
+            {
+                SetCurrentValue(ReduceMotionProperty, ReadSystemPreference() || _profilePrefersReducedMotion);
+            }
+            finally
+            {
+                _updatingFromExternal = false;
+            }
+        }
+        OnReduceMotionChanged(externalUpdate: true);
+    }
+
     /// <summary>The transitions of the current mode: two eased double transitions, or none when reduced.</summary>
-    private Transitions? BuildTransitions() => ReduceMotion
+    private Transitions? BuildTransitions() => EffectiveReduceMotion
         ? null
         : new Transitions
         {
@@ -112,13 +181,29 @@ public partial class WorkspaceHost
 
     private void InitializeMotion()
     {
+        lock (LiveHosts)
+            LiveHosts.Add(new WeakReference<WorkspaceHost>(this));
+        if (!IsSet(ReduceMotionProperty) && (ReadSystemPreference() || _profilePrefersReducedMotion))
+        {
+            _updatingFromExternal = true;
+            try
+            {
+                SetCurrentValue(ReduceMotionProperty, true);
+            }
+            finally
+            {
+                _updatingFromExternal = false;
+            }
+        }
         Transitions = BuildTransitions();
         // Before any child sees the press (a splitter drag starts from it): settle what is moving.
         AddHandler(PointerPressedEvent, OnMotionPointerPressed, RoutingStrategies.Tunnel, handledEventsToo: true);
     }
 
-    private void OnReduceMotionChanged()
+    private void OnReduceMotionChanged(bool externalUpdate = false)
     {
+        if (!externalUpdate && !_updatingFromExternal)
+            _hasExplicitReduceMotion = IsSet(ReduceMotionProperty);
         CompleteMotion();
         Transitions = BuildTransitions();
     }
@@ -163,7 +248,7 @@ public partial class WorkspaceHost
     /// <summary>Called when the tree is about to change: remember where everything is displayed now.</summary>
     private void CaptureMotion()
     {
-        if (ReduceMotion || _suppressMotion || _pendingPlan is not null || _displayRects.Count == 0)
+        if (EffectiveReduceMotion || _suppressMotion || _pendingPlan is not null || _displayRects.Count == 0)
             return;
         _pendingPlan = new MotionPlan(new Dictionary<string, Rect>(_displayRects, StringComparer.Ordinal),
             new Dictionary<string, Rect>(_displaySplitters, StringComparer.Ordinal));
@@ -235,7 +320,7 @@ public partial class WorkspaceHost
         if (_pendingPlan is { } pending)
         {
             _pendingPlan = null;
-            if (!ReduceMotion && PlanChangesLayout(pending, targets, splitTargets))
+            if (!EffectiveReduceMotion && PlanChangesLayout(pending, targets, splitTargets))
             {
                 _plan = pending;
                 RunProgress(LayoutProgressProperty);
@@ -332,7 +417,7 @@ public partial class WorkspaceHost
         _dropFrom = fresh ? target.Value : _dropShown;
         _dropFresh = fresh;
         _dropTargetRect = target;
-        if (ReduceMotion)
+        if (EffectiveReduceMotion)
         {
             _dropFresh = false;
             _dropFrom = target.Value;

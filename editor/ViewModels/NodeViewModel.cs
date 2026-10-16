@@ -243,7 +243,9 @@ namespace RowlEngine.Editor.ViewModels
 
         public bool HasChoices => ChoiceOptions.Count > 0;
         public string ComponentSummary => $"{Components.Count} BİLEŞEN";
-        public double NodeCardHeight => Math.Max(120, 52 + (ChoiceOptions.Count * 30));
+        /// <summary>Kart yüksekliği: prototip .story-node 150 px (tip satırı + 2 satır başlık/diyalog + alt satır
+        /// 15 px dolguyla ~144 px tutar); seçenek pinleri (60 + 30·i) daha uzun kart isterse o kazanır.</summary>
+        public double NodeCardHeight => Math.Max(150, 52 + (ChoiceOptions.Count * 30));
         public bool ChoiceDataChanged => true;
         public double GetOutputPortY(string optionId) => string.IsNullOrEmpty(optionId)
             ? 60 : 60 + (Math.Max(0, ChoiceOptions.ToList().FindIndex(option => option.OptionId == optionId)) * 30);

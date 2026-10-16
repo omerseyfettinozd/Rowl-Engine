@@ -6,7 +6,9 @@ namespace RowlEngine.Editor.ViewModels.Components
     /// <summary>Runs a project-local Lua script when its story node becomes active.</summary>
     public partial class ScriptComponentViewModel : NodeComponentViewModel
     {
-        public override string DisplayName => "Lua Script";
+        public override string DisplayNameKey => "Component.Script.DisplayName";
+        protected override string DisplayNameTrFallback => "Lua Betiği";
+        protected override string DisplayNameEnFallback => "Lua Script";
         public override string Icon => "Betik";
         public override string TypeKey => "script";
 

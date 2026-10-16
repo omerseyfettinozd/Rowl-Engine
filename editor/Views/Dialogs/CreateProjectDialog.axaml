@@ -1,7 +1,8 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:l="using:RowlEngine.Editor.Services.Strings"
         x:Class="RowlEngine.Editor.Views.Dialogs.CreateProjectDialog"
-        Title="Yeni Proje Oluştur"
+        Title="{l:T Dialog.CreateProject.Title}"
         Width="520" Height="360"
         MinWidth="450" MinHeight="320"
         WindowStartupLocation="CenterOwner"
@@ -11,22 +12,22 @@
     <Grid RowDefinitions="Auto, *, Auto" Margin="20">
         <!-- Header -->
         <StackPanel Grid.Row="0" Spacing="4" Margin="0,0,0,16">
-            <TextBlock Text="Yeni Proje Oluştur" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource PrimaryText}"/>
-            <TextBlock Text="Yeni bir görsel roman veya etkileşimli hikaye projesi başlatın" FontSize="12" Foreground="{DynamicResource MutedText}"/>
+            <TextBlock Text="{l:T Dialog.CreateProject.Title}" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource PrimaryText}"/>
+            <TextBlock Text="{l:T Dialog.CreateProject.Description}" FontSize="12" Foreground="{DynamicResource MutedText}"/>
         </StackPanel>
 
         <!-- Form -->
         <StackPanel Grid.Row="1" Spacing="14">
             <StackPanel Spacing="6">
-                <TextBlock Text="Proje Adı" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource PrimaryText}"/>
-                <TextBox Name="NameBox" Text="Yeni Proje" FontSize="12" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderSubtle}"/>
+                <TextBlock Text="{l:T Dialog.CreateProject.ProjectNameLabel}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource PrimaryText}"/>
+                <TextBox Name="NameBox" Text="{l:T Dialog.CreateProject.ProjectNameDefault}" FontSize="12" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderSubtle}"/>
             </StackPanel>
 
             <StackPanel Spacing="6">
-                <TextBlock Text="Kayıt Konumu" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource PrimaryText}"/>
+                <TextBlock Text="{l:T Dialog.CreateProject.LocationLabel}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource PrimaryText}"/>
                 <Grid ColumnDefinitions="*, 8, Auto">
                     <TextBox Grid.Column="0" Name="FolderBox" FontSize="12" Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderSubtle}"/>
-                    <Button Grid.Column="2" Name="BrowseButton" Content="Gözat..." FontSize="12" Background="{DynamicResource ToolbarButtonBg}" Foreground="{DynamicResource PrimaryText}" CornerRadius="4" Padding="12,6"/>
+                    <Button Grid.Column="2" Name="BrowseButton" Content="{l:T Dialog.CreateProject.Browse}" FontSize="12" Background="{DynamicResource ToolbarButtonBg}" Foreground="{DynamicResource PrimaryText}" CornerRadius="4" Padding="12,6"/>
                 </Grid>
             </StackPanel>
 
@@ -35,8 +36,8 @@
 
         <!-- Actions -->
         <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10" Margin="0,16,0,0">
-            <Button Name="CancelButton" Content="İptal" FontSize="12" Background="Transparent" Foreground="{DynamicResource MutedText}" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1" CornerRadius="6" Padding="16,8"/>
-            <Button Name="CreateButton" Content="Oluştur" FontSize="12" Background="{DynamicResource AccentButtonBg}" Foreground="{DynamicResource AccentButtonFg}" FontWeight="Bold" CornerRadius="6" Padding="20,8"/>
+            <Button Name="CancelButton" Content="{l:T Dialog.CreateProject.Cancel}" FontSize="12" Background="Transparent" Foreground="{DynamicResource MutedText}" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1" CornerRadius="6" Padding="16,8"/>
+            <Button Name="CreateButton" Content="{l:T Dialog.CreateProject.Create}" FontSize="12" Background="{DynamicResource AccentButtonBg}" Foreground="{DynamicResource AccentButtonFg}" FontWeight="Bold" CornerRadius="6" Padding="20,8"/>
         </StackPanel>
     </Grid>
 </Window>

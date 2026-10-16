@@ -3,6 +3,7 @@
              xmlns:vm="using:RowlEngine.Editor.ViewModels.Player"
              xmlns:player="using:RowlEngine.Editor.Views.Player"
              xmlns:services="using:RowlEngine.Editor.Services"
+             xmlns:l="using:RowlEngine.Editor.Services.Strings"
              x:Class="RowlEngine.Editor.Views.Player.PlayerShellView"
              x:DataType="vm:PlayerViewModel"
              Focusable="True">
@@ -27,12 +28,12 @@
     </Border>
     <Border IsVisible="{Binding IsConfirmExit}" Background="{DynamicResource CanvasBackground}" Padding="32">
       <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8">
-        <TextBlock Text="Çıkmak istiyor musunuz?" FontSize="20" HorizontalAlignment="Center" />
+        <TextBlock Text="{l:T Player.Shell.ConfirmExit}" FontSize="20" HorizontalAlignment="Center" />
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="12">
-          <Button Content="Evet" Width="120" Padding="0,8"
+          <Button Content="{l:T Player.Shell.Yes}" Width="120" Padding="0,8"
                   Command="{Binding RequestIntentCommand}"
                   CommandParameter="{x:Static services:PlayerIntent.ConfirmExit}" />
-          <Button Content="Vazgeç" Width="120" Padding="0,8"
+          <Button Content="{l:T Player.Shell.Cancel}" Width="120" Padding="0,8"
                   Command="{Binding RequestIntentCommand}"
                   CommandParameter="{x:Static services:PlayerIntent.CancelExit}" />
         </StackPanel>
