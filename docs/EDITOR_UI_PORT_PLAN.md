@@ -297,3 +297,41 @@ B04/B05/B06 paketleri; tuval zemini prototip yüzeyi **#131315** (#000 değil).
   Kök neden: içe aktarma viewmodel'i sonucu UI dışında yazıyordu, son ilerleme kuyrukta kalabiliyordu.
 - Faz 8 sonu yerel: editör 951/951 (iki kez), RowlEye golden + denetim 3/3, taşınabilirlik + launcher
   yeşil; native değişmedi.
+
+## Faz 9 — Aşama B kapanışı (B02 tuval, B03 hata dili, B kabulü) (2026-10-17)
+
+Karar (Chaple, 2026-10-17): Aşama B'yi kapat — B02/B03 açıkları + gerçek akış kabul turu.
+
+**Ölçülen başlangıç (koddan, 958/958 yeşil):**
+- Delete tuşu ve araç çubuğu yalnız tek `SelectedNode`'u siliyor; atomik `DeleteSelectedNodes`
+  (`BatchDeleteNodesUndoAction`) hiçbir yere bağlı değil; Delete dalında metin kutusu koruması yok.
+- Geri alma dışında kalan mutasyonlar: grup oluştur/sil/taşı/boyutlandır, Denetçi alan düzenlemeleri
+  (başlık, metin, konuşmacı, seçenek metni/hedefi), başlangıç düğümü değişikliği.
+- Zoom yalnız Ctrl+tekerlek; düz tekerlek bir şey yapmıyor. F yalnız tek düğümü ortalıyor (zoom yok,
+  çoklu seçim yok); "hepsini sığdır" kısayolu yok; +/- pan'ı korumuyor. Tuvalde Tab ile düğüm gezme yok.
+- Bağlantı reddi (kendine, yinelenen, hedef yok) sessiz; boş tuvale bırakılan kablo yalnız günlük satırı.
+- Sorunlar paneli: `AssetPath` hiç okunmuyor (varlığa gidilmiyor); hata/uyarı simgesi yok.
+- Varlık ızgara kartlarında eksik dosya rozeti yok; Çeviri Masası satır durumu çıplak enum metni.
+- Denetçi silinmiş düğüme işaret eden seçenek hedefini göstermiyor (yalnız toplu lint).
+
+**Dilimler**
+- **E1 Tuval klavye + zoom** — Delete/araç çubuğu çoklu seçimi tek adımda siler (metin girişinde
+  çalışmaz); düz tekerlek kaydırır (Shift yatay), Ctrl+tekerlek zoom; F seçimi (çoklu dahil) sığdırır,
+  Shift+F hepsini; +/- görünüm merkezine sabit; Tab / Shift+Tab düğümler arasında seçim gezdirir;
+  boş tuvale tıklamak tuvale odak verir.
+- **E2 Grup + başlangıç düğümü geri alma** — oluştur/sil/taşı/boyutlandır ve başlangıç düğümü değişimi
+  geri alınabilir; grup sürükleme tek adım.
+- **E3 Denetçi düzenleme geri alma** — Denetçi içindeki alan düzenlemeleri (odak oturumu başına tek
+  adım) geri alınır/yinelenir; tuval taşıma gibi Denetçi dışı değişimler karışmaz.
+- **E4 Bağlantı dili** — reddedilen bağlantı nedenini kullanıcıya gösterir (kendine, yinelenen, hedef
+  yok); boş tuvale bırakılan kablo Oluştur menüsünü açar, seçilen düğüm bırakılan yerde oluşur ve
+  bağlanır (tek geri alma adımı).
+- **F1 Hata dili (B03)** — Sorunlar satırı varlık sorununda varlığı seçer; hata/uyarı simgesi ve
+  hedefsiz sorun ayrımı; ızgara kartında eksik rozeti; Çeviri Masası durum rozeti (yerelleştirilmiş,
+  renkli); Denetçi'de silinmiş düğüm hedefi uyarısı.
+- **K1 B kabulü** — gerçek `MainWindow` üzerinde betikli yolculuk: oluştur → düzenle → içe aktar →
+  önizle → kaydet → farklı kaydet → dışa aktar; vazgeç, kurtarma, iptal. RowlEye görüntüsü + Wonder
+  görsel denetimi; gerçek pencere kanıtının sınırı açıkça yazılır.
+
+Çalışma düzeni: kodlama Spark, küçük iş + görsel denetim Wonder; şef uygular, derler, tam editör
+süitini koşar. Dilim başına yerel commit; push gün sonunda tek sefer.
