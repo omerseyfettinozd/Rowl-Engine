@@ -44,6 +44,16 @@ namespace RowlEngine.Editor.Views
             ApplyUiScale(EditorUiScale.Current);
             EditorUiScale.Changed += ApplyUiScale;
             Closed += (_, _) => EditorUiScale.Changed -= ApplyUiScale;
+            // Bildirim kartları birlikte açılınca panelleri örtmesin: alan pencereye göre sınırlı.
+            if (this.FindControl<StackPanel>("NotificationStack") is { Parent: Control shell } &&
+                this.FindControl<ScrollViewer>("NotificationCardScroller") is { } cardScroller)
+            {
+                shell.PropertyChanged += (_, e) =>
+                {
+                    if (e.Property == BoundsProperty)
+                        cardScroller.MaxHeight = NotificationStackMetrics.MaxCardsHeight(shell.Bounds.Height);
+                };
+            }
             // Faz 5 D3 — tek yön: bölücü taşınınca görünüm yalnız ağaç işlemini çağırır.
             WorkspaceHost.SplitResized += (_, e) =>
             {

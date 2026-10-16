@@ -23,6 +23,47 @@ namespace RowlEngine.Editor.Views.Panels
         private double _groupResizeStartH;
         private Point _groupResizeStartPos;
 
+        /// <summary>
+        /// Tuvalin sol üstünü kaplayan araç satırının (kırıntı + düğüm komutları) bu görünümle
+        /// aynı koordinat düzlemindeki sınırları. Ana pencere satırın <c>Bounds</c>'una bağlar;
+        /// mini harita buna göre yer değiştirir (bkz. <see cref="Controls.MinimapPlacement"/>).
+        /// </summary>
+        public static readonly StyledProperty<Rect> MinimapObstacleProperty =
+            AvaloniaProperty.Register<NodeGraphView, Rect>(nameof(MinimapObstacle));
+
+        public Rect MinimapObstacle
+        {
+            get => GetValue(MinimapObstacleProperty);
+            set => SetValue(MinimapObstacleProperty, value);
+        }
+
+        protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+        {
+            base.OnPropertyChanged(change);
+            if (change.Property == MinimapObstacleProperty || change.Property == BoundsProperty)
+                UpdateMinimapPlacement();
+        }
+
+        private void UpdateMinimapPlacement()
+        {
+            if (this.FindControl<Panel>("MinimapSlot") is not { } slot ||
+                this.FindControl<Border>("MinimapCard") is not { } card ||
+                this.FindControl<Controls.MinimapControl>("CanvasMinimap") is not { } minimap)
+                return;
+            var cardSize = new Size(
+                minimap.Width + card.Padding.Left + card.Padding.Right + card.BorderThickness.Left + card.BorderThickness.Right,
+                minimap.Height + card.Padding.Top + card.Padding.Bottom + card.BorderThickness.Top + card.BorderThickness.Bottom);
+            var placement = Controls.MinimapPlacement.Resolve(Bounds.Size, MinimapObstacle, cardSize);
+            // Margin yerine çizim kaydırması: yeniden düzen istemez, bir sonraki karede hep güncel.
+            double offset = placement.Top - Controls.MinimapPlacement.EdgeMargin;
+            if (slot.RenderTransform is not Avalonia.Media.TranslateTransform shift)
+                slot.RenderTransform = shift = new Avalonia.Media.TranslateTransform();
+            if (shift.Y != offset)
+                shift.Y = offset;
+            if (slot.IsVisible != placement.IsVisible)
+                slot.IsVisible = placement.IsVisible;
+        }
+
         public NodeGraphView()
         {
             InitializeComponent();
