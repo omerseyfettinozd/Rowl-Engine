@@ -34,7 +34,7 @@ internal static class EditorEndToEndFlowTests
                 throw new Exception("Project creation did not publish the starter story graph");
 
             // Step 29.2: Project open path (fresh ViewModel on the new root).
-            flowVm = new MainWindowViewModel(e2eRoot, connectEngine: false);
+            flowVm = RowlEngine.Editor.Tests.UiTestHost.CreateViewModel(e2eRoot);
             if (!flowVm.LoadFullStoryGraphFile())
                 throw new Exception("Fresh project graph did not load on open");
             var startNode = flowVm.Nodes.FirstOrDefault(n => n.Id == 101);
@@ -145,7 +145,7 @@ internal static class EditorEndToEndFlowTests
         }
         finally
         {
-            flowVm?.Dispose();
+            RowlEngine.Editor.Tests.UiTestHost.DisposeViewModel(flowVm);
             MainWindowViewModel.ProjectRoot = previousProjectRoot;
             foreach (string? dir in new[] { e2eParent, saveAsDir, buildBaseDir, packageOutDir, importSrcDir })
             {

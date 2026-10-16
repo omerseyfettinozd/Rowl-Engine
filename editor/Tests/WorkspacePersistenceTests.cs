@@ -754,7 +754,7 @@ public sealed class WorkspacePersistenceViewModelTests : IDisposable
 
     private MainWindowViewModel NewVm(ManualTimers? timers = null, bool attach = true)
     {
-        MainWindowViewModel vm = Dispatcher.UIThread.Invoke(() => new MainWindowViewModel(_root, connectEngine: false));
+        MainWindowViewModel vm = UiTestHost.CreateViewModel(_root);
         _vms.Add(vm);
         if (attach)
             vm.AttachWorkspacePersistence(_profile, (timers ?? new ManualTimers()).Create);

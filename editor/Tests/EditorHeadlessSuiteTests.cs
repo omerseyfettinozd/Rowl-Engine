@@ -33,7 +33,7 @@ internal static class EditorHeadlessTestSuite
             string testProjectRoot = Path.Combine(
                 Path.GetTempPath(), $"RowlEditorTests_{Guid.NewGuid():N}");
             CopyDirectoryForTests(sourceAssets, Path.Combine(testProjectRoot, "Assets"));
-            var mainVm = new MainWindowViewModel(testProjectRoot, connectEngine: false);
+            var mainVm = RowlEngine.Editor.Tests.UiTestHost.CreateViewModel(testProjectRoot);
 
             try
             {
@@ -296,7 +296,7 @@ internal static class EditorHeadlessTestSuite
             }
             finally
             {
-                mainVm.Dispose();
+                RowlEngine.Editor.Tests.UiTestHost.DisposeViewModel(mainVm);
                 try { Directory.Delete(testProjectRoot, true); } catch { }
             }
         }

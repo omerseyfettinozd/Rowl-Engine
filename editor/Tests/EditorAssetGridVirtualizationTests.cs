@@ -30,7 +30,7 @@ public sealed class EditorAssetGridVirtualizationTests : IDisposable
         if (!created.Success || created.Info == null)
             throw new Exception("ProjectFactory.CreateNewProject failed: " + created.Error);
         _root = created.Info.Path;
-        _vm = new MainWindowViewModel(_root, connectEngine: false);
+        _vm = UiTestHost.CreateViewModel(_root);
         // KÖK GERİ VERİLMEZ: tarama statik AssetsPath üzerinden yapıldığı
         // için kök test boyunca bizde kalır (koleksiyon zaten ardışıldır);
         // Dispose geri verir.
@@ -38,7 +38,7 @@ public sealed class EditorAssetGridVirtualizationTests : IDisposable
 
     public void Dispose()
     {
-        try { _vm.Dispose(); } catch (Exception) { }
+        UiTestHost.DisposeViewModel(_vm);
         try { Directory.Delete(Path.GetDirectoryName(_root)!, recursive: true); }
         catch (Exception) { }
         try

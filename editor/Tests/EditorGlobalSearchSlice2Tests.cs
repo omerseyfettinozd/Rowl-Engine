@@ -37,7 +37,7 @@ public sealed class EditorGlobalSearchSlice2Tests
             if (!created.Success || created.Info == null)
                 throw new Exception("ProjectFactory.CreateNewProject failed: " + created.Error);
             Root = created.Info.Path;
-            Vm = new MainWindowViewModel(Root, connectEngine: false);
+            Vm = UiTestHost.CreateViewModel(Root);
             Vm.Nodes.Clear();
             Vm.Connections.Clear();
             try
@@ -50,6 +50,7 @@ public sealed class EditorGlobalSearchSlice2Tests
 
         public void Dispose()
         {
+            UiTestHost.DisposeViewModel(Vm);
             try { Directory.Delete(Path.GetDirectoryName(Root)!, recursive: true); }
             catch (Exception) { }
             try

@@ -44,13 +44,13 @@ public sealed class WorkspaceHostTests : IDisposable
         if (!created.Success || created.Info == null)
             throw new Exception("ProjectFactory.CreateNewProject failed: " + created.Error);
         _root = created.Info.Path;
-        _vm = Dispatcher.UIThread.Invoke(() => new MainWindowViewModel(_root, connectEngine: false));
+        _vm = UiTestHost.CreateViewModel(_root);
         // KÖK GERİ VERİLMEZ: bkz. EditorAssetGridVirtualizationTests.
     }
 
     public void Dispose()
     {
-        try { Dispatcher.UIThread.Invoke(() => _vm.Dispose()); } catch (Exception) { }
+        UiTestHost.DisposeViewModel(_vm);
         try { Directory.Delete(Path.GetDirectoryName(_root)!, recursive: true); }
         catch (Exception) { }
         try

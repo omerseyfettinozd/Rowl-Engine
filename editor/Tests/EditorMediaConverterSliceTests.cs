@@ -550,7 +550,7 @@ public sealed class EditorMediaConverterSliceTests
             var created = ProjectFactory.CreateNewProject("ProvTest", parent);
             Assert.True(created.Success && created.Info is not null);
             string root = created.Info.Path;
-            var vm = new MainWindowViewModel(root, connectEngine: false);
+            var vm = UiTestHost.CreateViewModel(root);
             try
             {
                 string assets = Path.Combine(root, "Assets");

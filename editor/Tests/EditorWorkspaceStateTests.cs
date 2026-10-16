@@ -382,13 +382,13 @@ public sealed class EditorWorkspaceViewModelTests : IDisposable
         if (!created.Success || created.Info == null)
             throw new Exception("ProjectFactory.CreateNewProject failed: " + created.Error);
         _root = created.Info.Path;
-        _vm = Avalonia.Threading.Dispatcher.UIThread.Invoke(() => new MainWindowViewModel(_root, connectEngine: false));
+        _vm = UiTestHost.CreateViewModel(_root);
         // KÖK GERİ VERİLMEZ: bkz. EditorAssetGridVirtualizationTests.
     }
 
     public void Dispose()
     {
-        try { Avalonia.Threading.Dispatcher.UIThread.Invoke(() => _vm.Dispose()); } catch (Exception) { }
+        UiTestHost.DisposeViewModel(_vm);
         try { Directory.Delete(Path.GetDirectoryName(_root)!, recursive: true); }
         catch (Exception) { }
         try

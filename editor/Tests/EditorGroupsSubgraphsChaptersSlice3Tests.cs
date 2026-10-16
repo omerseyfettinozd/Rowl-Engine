@@ -39,7 +39,7 @@ public sealed class EditorGroupsSubgraphsChaptersSlice3Tests
             if (!created.Success || created.Info == null)
                 throw new Exception("ProjectFactory.CreateNewProject failed: " + created.Error);
             Root = created.Info.Path;
-            Vm = new MainWindowViewModel(Root, connectEngine: false);
+            Vm = UiTestHost.CreateViewModel(Root);
             Vm.Nodes.Clear();
             Vm.Connections.Clear();
             Vm.Groups.Clear();
@@ -55,6 +55,7 @@ public sealed class EditorGroupsSubgraphsChaptersSlice3Tests
 
         public void Dispose()
         {
+            UiTestHost.DisposeViewModel(Vm);
             try { Directory.Delete(Path.GetDirectoryName(Root)!, recursive: true); }
             catch (Exception) { }
             try

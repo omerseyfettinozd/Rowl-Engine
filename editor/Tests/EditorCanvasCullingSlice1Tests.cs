@@ -42,7 +42,7 @@ public sealed class EditorCanvasCullingSlice1Tests
             if (!created.Success || created.Info == null)
                 throw new Exception("ProjectFactory.CreateNewProject failed: " + created.Error);
             Root = created.Info.Path;
-            Vm = new MainWindowViewModel(Root, connectEngine: false);
+            Vm = UiTestHost.CreateViewModel(Root);
             Vm.Nodes.Clear();
             Vm.Connections.Clear();
             // The shell only needs its instance from here on: hand the
@@ -60,6 +60,7 @@ public sealed class EditorCanvasCullingSlice1Tests
 
         public void Dispose()
         {
+            UiTestHost.DisposeViewModel(Vm);
             try { Directory.Delete(Path.GetDirectoryName(Root)!, recursive: true); }
             catch (Exception) { }
             // Compare-and-swap: only restore when nobody else claimed the
