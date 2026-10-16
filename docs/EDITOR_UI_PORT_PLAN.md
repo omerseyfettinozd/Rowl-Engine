@@ -231,3 +231,51 @@ görsel düzeltmeler (Muse Wonder denetimi: kütüphane 8/10, Lua 7/10 → düğ
 kutusuz bağlı obje seçici, düz "Lua" etiketi, Denetçi düğmelerinde normal ağırlık). Bilerek alınmayanlar:
 başlıkta sürekli üç düğme (sessiz başlık kararı), Lua'da "Dosyalar" ve sekme kapatmanın kaldırılması
 (gerçek projede dosya sayısı sınırsız). Yerel: editör 877/877, RowlEye golden + denetim 3/3.
+
+## Faz 8 — Prototip kalanları + Aşama B (B04, B05, B06) (2026-10-16)
+
+Karar (Chaple, 2026-10-16): kapsam **hepsi** — prototipte kalanlar ve yol haritası Aşama B'nin
+B04/B05/B06 paketleri; tuval zemini prototip yüzeyi **#131315** (#000 değil).
+
+**Ölçülen başlangıç (koddan):**
+- `PanelIds.Console` ve `PanelIds.Store` tanımlı ama ayrı panel olarak barındırılmıyor; günlük alt
+  şeritte (`OutputLogView`). Araçlar menüsünde Konsol / Assets Store kartı yok (prototipte var).
+- Kurtarma: `CrashRecoveryService` teklif üretiyor, ama kullanıcı yüzeyi yok — yalnız günlüğe
+  "RestoreFromRecovery ile geri yükleyin" yazılıyor; yoksay (dismiss) yolu yok.
+- İçe aktarma: `ImportAssetAsync` async çekirdeği **senkron** çağırıyor (UI donar), ilerleme/iptal
+  yok; aynı adlı varlık `File.Copy(overwrite: true)` ile **sessizce eziliyor** (B04 bitiş kriterini çiğner).
+- Proje Merkezi: kart yolu silinmiş projeyi ayırt etmiyor; işlem sonuçları yalnız durum metni.
+- Erişilebilirlik: editör tarafında yalnız "azaltılmış hareket" tercihi var; arayüz metin ölçeği,
+  panel odak döngüsü, görünür odak halkası yok.
+
+**Dilimler**
+- **A1 Tuval zemini** — `CanvasBackgroundColor` #000000 → #131315 (ızgara/minimap kontrastı korunur);
+  tema kilit testi ve RowlEye golden'ı bilerek yeni değere taşınır.
+- **A2 Konsol paneli** — `PanelIds.Console` kendi yaprağı: prototip `.console-toolbar` (soluk
+  "Oturum olayları" + Temizle) ve zaman + mesaj satırları (eş aralıklı, ayırıcı çizgi); mevcut
+  günlük kaynağı (`LogOutput`) ve sayaçlar korunur. Araçlar menüsüne kart.
+- **A3 Assets Store** — `PanelIds.Store` "Yakında gelecek" boş ekranı (ikon + başlık + alt satır),
+  Araçlar kartı. Araçlar menüsü kilidi 9 → 11 kart, prototip sırasıyla.
+- **B1 Kurtarma kartı** — açılışta teklif varsa ana pencerede kart: kaynak (günlük/son sağlam kopya),
+  düğüm sayısı, bozulma nedeni; **Geri yükle** (geri alınamaz uyarısı, onay) / **İncele** (teklifin
+  özeti: düğüm başlıkları) / **Yoksay** (kurtarma dosyaları silinmez, teklif bu oturumda kapanır).
+- **B2 İçe aktarma ilerleme + iptal** — async çekirdek UI iş parçacığı dışında; ilerleme şeridi
+  (n / toplam, dosya adı) + İptal; iptalde yarım dosya kalmaz; UI yanıt verir (test: uzun dönüşümde
+  dispatcher kilitlenmez).
+- **B3 Çakışma kararı** — hedefte aynı adlı varlık varsa: içerik aynıysa atla; farklıysa kullanıcıya
+  **Üzerine yaz / İkisini de tut (`ad (2).ext`) / Atla** (+ "hepsine uygula"); karar verilmeden dosya
+  değişmez. Servis karar geri çağrısı alır; saf testler.
+- **C1 Proje Merkezi kart durumları** — yolu eksik proje "Bulunamadı" rozeti, Aç devre dışı, "Listeden
+  kaldır"; boş / yükleniyor / hata durumları; açma hatası başarı görünümü bırakmaz.
+- **C2 İşlem sonucu dili** — Kaydet / Farklı kaydet / Dışa aktar için ortak durum: çalışıyor →
+  başarılı (çıktı konumu + Klasörü aç) / hatalı (neden + Günlük'e git); başarısızlık asla başarı
+  bildirimi göstermez.
+- **D1 Klavye** — F6 / Shift+F6 panel odak döngüsü, Esc ile tuvale dönüş, görünür odak halkası (tema
+  token'ı), kısayol listesi Ayarlar'da; temel yazar yolu (düğüm ekle → düzenle → kaydet) yalnız klavyeyle.
+- **D2 Metin ölçeği + kontrast** — Ayarlar → Erişilebilirlik: arayüz metin ölçeği %100/%115/%130
+  (yazı token'ları ölçeklenir, canlı), yüksek kontrast teması (kenar/soluk metin tonları), mevcut
+  azaltılmış hareket; tercihler profilde kalıcı (test).
+- **D3 Ölçek denetimi** — RowlEye %130 ölçekte kesilme/taşma denetimi; kilit testleri.
+
+Çalışma düzeni: kodlama Spark (`muse-spark-1.3-contributor`), küçük iş + görsel denetim Wonder;
+şef derler, tam editör süitini koşar, ekran görüntüsüne kendisi bakar. Dilim başına yerel commit.
