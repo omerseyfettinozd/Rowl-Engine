@@ -225,6 +225,11 @@
         <Setter Property="Foreground" Value="{DynamicResource PrimaryText}"/>
         <Setter Property="VerticalAlignment" Value="Center"/>
     </Style>
+    <!-- Faz 5 D3: çalışma alanı bölücüsü (WorkspaceHost, 6 px) — eski sabit
+         GridSplitter'larla aynı kenar rengi. -->
+    <Style Selector="GridSplitter.workspaceSplitter">
+        <Setter Property="Background" Value="{DynamicResource BorderColor}"/>
+    </Style>
     <Style Selector="TextBlock.panelSubtitle">
         <Setter Property="FontSize" Value="{DynamicResource FontSizeSmall}"/>
         <Setter Property="Foreground" Value="{DynamicResource MutedText}"/>

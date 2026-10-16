@@ -304,15 +304,23 @@ namespace RowlEngine.Editor.ViewModels
         /// <summary>
         /// Çalışma alanı: düzen ağacı (<see cref="Services.Workspace.WorkspaceLayout"/>)
         /// + alt şerit yaprağının sekmeleri, tek değişmez değerde. Aşağıdaki panel
-        /// bayrakları, genişlikler, orta görünüm ve bölünmüş ekran durumu buradan
+        /// bayrakları, orta görünüm ve bölünmüş ekran durumu buradan
         /// TÜRETİLİR (tek yön); ayarlayıcıları yalnız yeni bir durum atar (ağaç işlemi).
         /// Başlangıç = "Varsayılan" önayarı.
         /// </summary>
         [ObservableProperty]
         private EditorWorkspaceState _workspace = EditorWorkspaceState.Default;
 
-        /// <summary>Düzen ağacı (D3'te WorkspaceHost bunu çizer).</summary>
+        /// <summary>Düzen ağacı (D3: MainWindow'daki WorkspaceHost bunu çizer; salt-okur).</summary>
         public WorkspaceLayout WorkspaceLayout => Workspace.Layout;
+
+        /// <summary>
+        /// Faz 5 D3: bir bölücü taşındı — oran ağaca yazılır (sınırlar
+        /// <see cref="WorkspaceLayout.ResizeSplit"/>'te). Görünüm yalnız bu işlemi
+        /// çağırır; yeni ağaç <see cref="WorkspaceLayout"/> bağıyla geri akar.
+        /// </summary>
+        public void ResizeWorkspaceSplit(string splitId, double ratio) =>
+            Workspace = Workspace.WithSplitRatio(splitId, ratio);
 
         // Panel görünürlüğü (menü/kısayol). Ayarlayıcılar geriye uyum için: ağaç işlemine çevrilir.
         public bool IsAssetsPanelVisible
@@ -363,12 +371,6 @@ namespace RowlEngine.Editor.ViewModels
         /// Ağaçta tek <c>bottom</c> yaprağı; sekmelerden biri açıksa vardır.
         /// </summary>
         public bool IsBottomPanelVisible => Workspace.IsBottomVisible;
-        public GridLength BottomPanelHeight => EditorWorkspaceLayoutService.CalculateBottomPanelHeight(IsBottomPanelVisible);
-        public GridLength BottomSplitterHeight => EditorWorkspaceLayoutService.CalculateBottomSplitterHeight(IsBottomPanelVisible);
-        public GridLength HierarchyPanelWidth => EditorWorkspaceLayoutService.CalculateHierarchyPanelWidth(IsHierarchyPanelVisible);
-        public GridLength HierarchySplitterWidth => EditorWorkspaceLayoutService.CalculateHierarchySplitterWidth(IsHierarchyPanelVisible);
-        public GridLength InspectorPanelWidth => EditorWorkspaceLayoutService.CalculateInspectorPanelWidth(IsInspectorPanelVisible);
-        public GridLength InspectorSplitterWidth => EditorWorkspaceLayoutService.CalculateInspectorSplitterWidth(IsInspectorPanelVisible);
 
         /// <summary>
         /// Active tab index in the bottom panel: 0 = Assets, 1 = Log,
@@ -432,24 +434,13 @@ namespace RowlEngine.Editor.ViewModels
             bottomTabsChanged |= NotifyIfChanged(nameof(IsBacklogPanelVisible), before.Bottom.IsOpen(BottomStripState.BacklogTab), newValue.Bottom.IsOpen(BottomStripState.BacklogTab));
             bottomTabsChanged |= NotifyIfChanged(nameof(IsSaveSlotsPanelVisible), before.Bottom.IsOpen(BottomStripState.SaveSlotsTab), newValue.Bottom.IsOpen(BottomStripState.SaveSlotsTab));
             bottomTabsChanged |= NotifyIfChanged(nameof(IsProjectIssuesPanelVisible), before.Bottom.IsOpen(BottomStripState.IssuesTab), newValue.Bottom.IsOpen(BottomStripState.IssuesTab));
+            // Faz 5 D3: panel boyutları ağaçtaki oranlardan WorkspaceHost'ta çizilir
+            // (eski *PanelWidth/*Height piksel özellikleri kalktı).
             if (bottomTabsChanged)
-            {
                 OnPropertyChanged(nameof(IsBottomPanelVisible));
-                OnPropertyChanged(nameof(BottomPanelHeight));
-                OnPropertyChanged(nameof(BottomSplitterHeight));
-            }
 
-            if (NotifyIfChanged(nameof(IsHierarchyPanelVisible), before.IsHierarchyVisible, newValue.IsHierarchyVisible))
-            {
-                OnPropertyChanged(nameof(HierarchyPanelWidth));
-                OnPropertyChanged(nameof(HierarchySplitterWidth));
-            }
-
-            if (NotifyIfChanged(nameof(IsInspectorPanelVisible), before.IsInspectorVisible, newValue.IsInspectorVisible))
-            {
-                OnPropertyChanged(nameof(InspectorPanelWidth));
-                OnPropertyChanged(nameof(InspectorSplitterWidth));
-            }
+            NotifyIfChanged(nameof(IsHierarchyPanelVisible), before.IsHierarchyVisible, newValue.IsHierarchyVisible);
+            NotifyIfChanged(nameof(IsInspectorPanelVisible), before.IsInspectorVisible, newValue.IsInspectorVisible);
 
             NotifyIfChanged(nameof(BottomPanelActiveTab), before.Bottom.ActiveTab, newValue.Bottom.ActiveTab);
 

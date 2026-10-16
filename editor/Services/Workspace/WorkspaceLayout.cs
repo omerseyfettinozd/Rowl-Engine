@@ -21,11 +21,23 @@ namespace RowlEngine.Editor.Services.Workspace;
 /// <param name="LastSplitId">Counter behind the generated <c>split-N</c> ids; persisted so ids stay unique.</param>
 public sealed record WorkspaceLayout(LayoutNode? Tree, int LastSplitId)
 {
-    /// <summary>Smallest share a split may give either side.</summary>
-    public const double MinRatio = 0.2;
+    /// <summary>
+    /// Smallest share a split may give either side. Faz 5 D3: loosened from the
+    /// prototype's 0.2 so a 200 px Hierarchy column fits a 1440 px window
+    /// (≈ 0.14); the prototype limit's purpose — every panel stays reachable —
+    /// is kept by per-panel pixel minimums in the view (<c>WorkspacePanel</c>).
+    /// </summary>
+    public const double MinRatio = 0.08;
 
-    /// <summary>Largest share a split may give its first side.</summary>
-    public const double MaxRatio = 0.8;
+    /// <summary>Largest share a split may give its first side (see <see cref="MinRatio"/>).</summary>
+    public const double MaxRatio = 0.92;
+
+    /// <summary>
+    /// Prototype cap for the share of an existing tool stack when another tool
+    /// is stacked under it (<c>layout-state.mjs</c>: <c>Math.min(.8, …)</c>);
+    /// kept at 0.8 so <see cref="Sync(IReadOnlyList{string}, IReadOnlyList{string}, SplitAxis)"/> matches the prototype.
+    /// </summary>
+    public const double ToolStackMaxRatio = 0.8;
 
     private const string SplitIdPrefix = "split-";
 
@@ -239,7 +251,7 @@ public sealed record WorkspaceLayout(LayoutNode? Tree, int LastSplitId)
                 if (!inserted && views.All(v => v != PanelIds.Lua && PanelIds.IsTool(v)))
                 {
                     inserted = true;
-                    return NewSplit(ids, node, leaf, SplitAxis.Vertical, Math.Min(MaxRatio, (double)views.Count / (views.Count + 1)));
+                    return NewSplit(ids, node, leaf, SplitAxis.Vertical, Math.Min(ToolStackMaxRatio, (double)views.Count / (views.Count + 1)));
                 }
                 if (node is not SplitNode split)
                     return node;

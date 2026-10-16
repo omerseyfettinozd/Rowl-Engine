@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Avalonia.Controls;
 using RowlEngine.Editor.Services.Workspace;
 using RowlEngine.Editor.ViewModels;
 
@@ -13,24 +12,6 @@ namespace RowlEngine.Editor.Services
     /// </summary>
     public static class EditorWorkspaceLayoutService
     {
-        public static GridLength CalculateBottomPanelHeight(bool isVisible, double height = 180) =>
-            isVisible ? new GridLength(height) : new GridLength(0);
-
-        public static GridLength CalculateBottomSplitterHeight(bool isVisible, double height = 6) =>
-            isVisible ? new GridLength(height) : new GridLength(0);
-
-        public static GridLength CalculateHierarchyPanelWidth(bool isVisible, double width = 200) =>
-            isVisible ? new GridLength(width) : new GridLength(0);
-
-        public static GridLength CalculateHierarchySplitterWidth(bool isVisible, double width = 6) =>
-            isVisible ? new GridLength(width) : new GridLength(0);
-
-        public static GridLength CalculateInspectorPanelWidth(bool isVisible, double width = 280) =>
-            isVisible ? new GridLength(width) : new GridLength(0);
-
-        public static GridLength CalculateInspectorSplitterWidth(bool isVisible, double width = 6) =>
-            isVisible ? new GridLength(width) : new GridLength(0);
-
         /// <summary>
         /// Legacy flag API (kept for callers/tests that hold the workspace as
         /// loose flags). Faz 5 D2: no logic of its own — the flags become an

@@ -66,9 +66,9 @@ public sealed class EditorWorkspaceStateTests
         Assert.Equal(EditorWorkspaceLayouts.InspectorSplitRatio, rest.Ratio);
         Assert.Equal(EditorWorkspaceLayouts.BottomSplitRatio, Assert.IsType<SplitNode>(rest.A).Ratio);
         Assert.Equal(
-            "{\"version\":1,\"lastSplitId\":3,\"tree\":{\"type\":\"split\",\"id\":\"split-3\",\"axis\":\"x\",\"ratio\":0.2,"
-            + "\"a\":{\"type\":\"leaf\",\"view\":\"hierarchy\"},\"b\":{\"type\":\"split\",\"id\":\"split-2\",\"axis\":\"x\",\"ratio\":0.77,"
-            + "\"a\":{\"type\":\"split\",\"id\":\"split-1\",\"axis\":\"y\",\"ratio\":0.77,\"a\":{\"type\":\"leaf\",\"view\":\"node\"},"
+            "{\"version\":1,\"lastSplitId\":3,\"tree\":{\"type\":\"split\",\"id\":\"split-3\",\"axis\":\"x\",\"ratio\":0.14,"
+            + "\"a\":{\"type\":\"leaf\",\"view\":\"hierarchy\"},\"b\":{\"type\":\"split\",\"id\":\"split-2\",\"axis\":\"x\",\"ratio\":0.772,"
+            + "\"a\":{\"type\":\"split\",\"id\":\"split-1\",\"axis\":\"y\",\"ratio\":0.78,\"a\":{\"type\":\"leaf\",\"view\":\"node\"},"
             + "\"b\":{\"type\":\"leaf\",\"view\":\"bottom\"}},\"b\":{\"type\":\"leaf\",\"view\":\"inspector\"}}}}",
             WorkspaceLayoutJson.Serialize(state.Layout));
     }
@@ -407,25 +407,20 @@ public sealed class EditorWorkspaceViewModelTests : IDisposable
     {
         Assert.Equal(EditorWorkspaceState.Default, _vm.Workspace);
         Assert.Same(_vm.Workspace.Layout, _vm.WorkspaceLayout);
-        Assert.Equal(200, _vm.HierarchyPanelWidth.Value);
-        Assert.Equal(280, _vm.InspectorPanelWidth.Value);
-        Assert.Equal(180, _vm.BottomPanelHeight.Value);
+        // D3: pixel widths are drawn by WorkspaceHost from the tree's ratios (WorkspaceHostTests).
+        Assert.True(_vm.IsHierarchyPanelVisible && _vm.IsInspectorPanelVisible && _vm.IsBottomPanelVisible);
         Assert.True(_vm.IsNodeGraphActive && _vm.IsSplitScreenOff);
     }
 
     [Fact]
-    public void FlagsAndWidths_AreReadFromTheTree()
+    public void Flags_AreReadFromTheTree()
     {
         List<string> changed = Record();
         _vm.Workspace = EditorWorkspaceLayouts.Preset("Oyun Testi")!;
 
         Assert.False(_vm.IsHierarchyPanelVisible);
-        Assert.Equal(0, _vm.HierarchyPanelWidth.Value);
-        Assert.Equal(0, _vm.HierarchySplitterWidth.Value);
         Assert.True(_vm.IsInspectorPanelVisible);
-        Assert.Equal(280, _vm.InspectorPanelWidth.Value);
         Assert.False(_vm.IsBottomPanelVisible);
-        Assert.Equal(0, _vm.BottomPanelHeight.Value);
         Assert.True(_vm.IsEnginePreviewActive);
         Assert.False(_vm.IsNodeGraphActive);
         Assert.NotEqual("Transparent", _vm.GameTabBrush);
@@ -435,15 +430,15 @@ public sealed class EditorWorkspaceViewModelTests : IDisposable
         Assert.Contains(nameof(MainWindowViewModel.WorkspaceLayout), changed);
         foreach (string name in new[]
         {
-            "IsHierarchyPanelVisible", "HierarchyPanelWidth", "HierarchySplitterWidth",
-            "IsAssetsPanelVisible", "IsLogPanelVisible", "IsBottomPanelVisible", "BottomPanelHeight", "BottomSplitterHeight",
+            "IsHierarchyPanelVisible",
+            "IsAssetsPanelVisible", "IsLogPanelVisible", "IsBottomPanelVisible",
             "IsNodeGraphActive", "SceneTabBrush", "IsEnginePreviewActive", "GameTabBrush",
         })
         {
             Assert.Contains(name, changed);
         }
         // Unchanged values are not re-announced.
-        foreach (string name in new[] { "IsInspectorPanelVisible", "InspectorPanelWidth", "SplitScreenMode", "IsPreviewActive", "BottomPanelActiveTab" })
+        foreach (string name in new[] { "IsInspectorPanelVisible", "SplitScreenMode", "IsPreviewActive", "BottomPanelActiveTab" })
             Assert.DoesNotContain(name, changed);
     }
 

@@ -168,7 +168,7 @@ public sealed class WorkspaceLayoutTests
         foreach (DockEdge edge in Edges)
         {
             layout = layout.DockView(PanelIds.Node, PanelIds.Edit, edge);
-            foreach (double ratio in new[] { 0.2, 0.8, 0.35, 0.65 })
+            foreach (double ratio in new[] { WorkspaceLayout.MinRatio, WorkspaceLayout.MaxRatio, 0.2, 0.8, 0.35, 0.65 })
             {
                 layout = layout.ResizeSplit(Root(layout).Id, ratio);
                 Check(layout, state);
@@ -212,9 +212,43 @@ public sealed class WorkspaceLayoutTests
     {
         var (layout, _) = Three();
         string id = Root(layout).Id;
-        Assert.Equal(0.2, Root(layout.ResizeSplit(id, 0)).Ratio);
-        Assert.Equal(0.8, Root(layout.ResizeSplit(id, 1)).Ratio);
-        CheckNonOverlap(layout.ResizeSplit(id, 0.8).Tree);
+        // D3: the prototype's 0.2 / 0.8 bound became 0.08 / 0.92 so a 200 px Hierarchy
+        // column fits a 1440 px window; reachability is kept by the view's pixel
+        // minimums (WorkspacePanel.PanelMinWidth / PanelMinHeight, WorkspaceHostTests).
+        Assert.Equal(WorkspaceLayout.MinRatio, Root(layout.ResizeSplit(id, 0)).Ratio);
+        Assert.Equal(WorkspaceLayout.MaxRatio, Root(layout.ResizeSplit(id, 1)).Ratio);
+        Assert.Equal(0.08, WorkspaceLayout.MinRatio);
+        Assert.Equal(0.92, WorkspaceLayout.MaxRatio);
+        Assert.Equal(0.5, Root(layout.ResizeSplit(id, 0.5)).Ratio);
+        CheckNonOverlap(layout.ResizeSplit(id, WorkspaceLayout.MaxRatio).Tree);
+    }
+
+    [Fact]
+    public void ToolStack_KeepsPrototypeCap_AfterResizeBoundsLoosened()
+    {
+        // D3 loosened MinRatio/MaxRatio for resizing only; Sync's tool stacking keeps
+        // the prototype's Math.min(.8, n / (n + 1)) (sixth tool: 5/6 → 0.8).
+        WorkspaceViewState state = WorkspaceViewState.Initial();
+        WorkspaceLayout layout = WorkspaceLayout.Initial();
+        foreach (string tool in new[] { PanelIds.Hierarchy, PanelIds.Inspector, PanelIds.Assets, PanelIds.Console, PanelIds.Library, PanelIds.Store })
+        {
+            WorkspaceViewState next = state.OpenView(tool);
+            layout = layout.Sync(state, next);
+            state = next;
+        }
+        Check(layout, state);
+        var ratios = new List<double>();
+        void Collect(LayoutNode? node)
+        {
+            if (node is not SplitNode split)
+                return;
+            ratios.Add(split.Ratio);
+            Collect(split.A);
+            Collect(split.B);
+        }
+        Collect(layout.Tree);
+        Assert.All(ratios, r => Assert.True(r <= WorkspaceLayout.ToolStackMaxRatio));
+        Assert.Contains(WorkspaceLayout.ToolStackMaxRatio, ratios);
     }
 
     [Fact]

@@ -139,6 +139,14 @@ public sealed record EditorWorkspaceState(WorkspaceLayout Layout, BottomStripSta
         return new EditorWorkspaceState(layout, bottom);
     }
 
+    /// <summary>
+    /// Faz 5 D3 — a splitter was moved: the split's ratio is written to the tree
+    /// (clamped by <see cref="WorkspaceLayout.ResizeSplit"/>). Unknown ids and
+    /// unchanged ratios return the same instance.
+    /// </summary>
+    public EditorWorkspaceState WithSplitRatio(string splitId, double ratio) =>
+        WithLayout(Layout.ResizeSplit(splitId, ratio));
+
     public EditorWorkspaceState WithActiveBottomTab(int index) =>
         Bottom.ActiveTab == index ? this : this with { Bottom = Bottom with { ActiveTab = index } };
 
@@ -244,9 +252,10 @@ public sealed record EditorWorkspaceState(WorkspaceLayout Layout, BottomStripSta
 ///                     │          └ bottom
 ///                     └ inspector
 /// </code>
-/// Ratios are nominal in D2 (the window still sizes panels in pixels: 200 / 280 /
-/// 180); they approximate the 1440×900 reference window inside the model's
-/// [<see cref="WorkspaceLayout.MinRatio"/>, <see cref="WorkspaceLayout.MaxRatio"/>] range.
+/// Faz 5 D3: the window draws these ratios (star sizes, 6 px splitters, per-panel
+/// pixel minimums). The defaults reproduce the pre-tree pixel layout in the
+/// 1440×900 reference window: Hierarchy ≈ 200, Inspector ≈ 280, bottom strip
+/// ≈ 180 px (workspace 1440×820); panels scale with the window from there.
 /// </summary>
 public static class EditorWorkspaceLayouts
 {
@@ -257,14 +266,14 @@ public static class EditorWorkspaceLayouts
     /// <summary>Preset names in menu order (command parameters; never translated).</summary>
     public static readonly IReadOnlyList<string> PresetNames = new[] { DefaultPreset, SceneFocusPreset, PlayTestPreset };
 
-    /// <summary>Hierarchy's share of the window (≈ 200 px of 1440, clamped to the model minimum).</summary>
-    public const double HierarchyRatio = WorkspaceLayout.MinRatio;
+    /// <summary>Hierarchy's share of the window: 0.14 × (1440 − 6) ≈ 201 px.</summary>
+    public const double HierarchyRatio = 0.14;
 
-    /// <summary>Center column's share next to the Inspector (≈ 948 / 1234 px).</summary>
-    public const double InspectorSplitRatio = 0.77;
+    /// <summary>Center column's share next to the Inspector: Inspector = 0.228 × (1233 − 6) ≈ 280 px.</summary>
+    public const double InspectorSplitRatio = 0.772;
 
-    /// <summary>Center's share above the bottom strip (≈ 634 / 820 px).</summary>
-    public const double BottomSplitRatio = 0.77;
+    /// <summary>Center's share above the bottom strip: strip = 0.22 × (820 − 6) ≈ 179 px.</summary>
+    public const double BottomSplitRatio = 0.78;
 
     /// <summary>Split screen halves.</summary>
     public const double SplitScreenRatio = 0.5;

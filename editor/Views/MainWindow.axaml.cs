@@ -21,6 +21,12 @@ namespace RowlEngine.Editor.Views
             DataContext = vm;
             vm.TopLevelHint = this;
             KeyDown += MainWindow_KeyDown;
+            // Faz 5 D3 — tek yön: bölücü taşınınca görünüm yalnız ağaç işlemini çağırır.
+            WorkspaceHost.SplitResized += (_, e) =>
+            {
+                if (DataContext is MainWindowViewModel current)
+                    current.ResizeWorkspaceSplit(e.SplitId, e.Ratio);
+            };
             // Faz 4 Dilim 3 — breadcrumb navigation (Tag="CrumbNav" buttons).
             AddHandler(Button.ClickEvent, OnCrumbButtonClick,
                 Avalonia.Interactivity.RoutingStrategies.Bubble);
