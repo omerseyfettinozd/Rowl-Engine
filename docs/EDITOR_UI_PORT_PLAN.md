@@ -279,3 +279,15 @@ B04/B05/B06 paketleri; tuval zemini prototip yüzeyi **#131315** (#000 değil).
 
 Çalışma düzeni: kodlama Spark (`muse-spark-1.3-contributor`), küçük iş + görsel denetim Wonder;
 şef derler, tam editör süitini koşar, ekran görüntüsüne kendisi bakar. Dilim başına yerel commit.
+
+**Faz 8 yapılan (2026-10-16):**
+- A `1176ffb`: zemin #131315 + `GraphDotColor` (#303034). Konsol = alt şeridin Günlük sekmesi
+  (yeniden adlandırma + prototip görünümü). Ayrı yaprak yapılmadı, çünkü kayıtlı düzen sekme
+  indekslerini bozardı. Store gerçek panel, Araçlar 10 kart.
+- C+D `36a5c6b`: Proje Merkezi kart durumları + içe aktarma doğrulaması; işlem sonucu kartı.
+  Sessiz arka plan kayıt hatası artık görünür. F6 / Shift+F6, tema odak halkası, Kısayollar sekmesi
+  tek kaynaktan. Arayüz ölçeği %100/%115/%130 ve yüksek kontrast. %115/%130'da Denetçi başlığı
+  kesiliyordu; düzeltildi, kilit testi var.
+- Kök neden düzeltmeleri: kayıt servisinin ev dizininden örnek proje içe aktarması (test makineye
+  bağlıydı); yüksek kontrastın her viewmodel kurulumunda kaynak yazması (UI dışı iş parçacığında 50 test).
+- Yerel: editör 929/929, RowlEye golden + denetim 3/3, taşınabilirlik + launcher yeşil.
