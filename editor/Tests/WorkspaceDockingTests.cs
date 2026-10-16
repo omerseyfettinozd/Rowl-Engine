@@ -180,6 +180,11 @@ public sealed class WorkspaceDockingTests : IDisposable
 
     private static void Click(Window window, Control control)
     {
+        if (control.FindAncestorOfType<WorkspaceHost>() is { IsMotionRunning: true } host)
+        {
+            host.CompleteMotion();
+            window.UpdateLayout();
+        }
         Point p = InWindow(control, new Rect(control.Bounds.Size).Center, window);
         window.MouseDown(p, MouseButton.Left);
         window.MouseUp(p, MouseButton.Left);
@@ -508,6 +513,8 @@ public sealed class WorkspaceDockingTests : IDisposable
                 DragTo(window, HeaderGrip(host, PanelIds.Node, window), onEdit);
                 Release(window, onEdit);
                 Assert.Equal(pinned.Layout.DockView(PanelIds.Node, PanelIds.Edit, DockEdge.Top), owner.State.Layout);
+                host.CompleteMotion();
+                window.UpdateLayout();
 
                 Click(window, actions.PinButton); // unpin
                 Assert.False(owner.State.IsPinned(PanelIds.Edit));
