@@ -8,39 +8,69 @@
         x:Class="RowlEngine.Editor.Views.Dialogs.SettingsDialog"
         x:DataType="vm:SettingsViewModel"
         Title="{l:T Settings.Window.Title}"
-        Width="720" Height="560"
+        Width="860" Height="620"
         MinWidth="600" MinHeight="450"
         WindowStartupLocation="CenterOwner"
-        Background="{DynamicResource AppBackground}"
+        Background="{DynamicResource SurfaceBackground}"
         CanResize="True">
+
+    <Window.Styles>
+        <!-- Sekme şeridi (prototip .settings-nav): üstte başlık çizgisi, sekme panelinde 12,8 boşluk (+4 öğe kenarı = 16), altta içerik çizgisi.
+             Avalonia 11 Fluent TabControl şablonunda TabStrip yok; şablon parçaları hedeflenir. -->
+        <Style Selector="TabControl /template/ ContentPresenter#PART_SelectedContentHost">
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}"/>
+            <Setter Property="BorderThickness" Value="0,1,0,0"/>
+        </Style>
+    </Window.Styles>
 
     <Grid RowDefinitions="Auto, *, Auto">
 
         <!-- Başlık -->
         <Border Grid.Row="0" Background="{DynamicResource SurfaceBackground}"
-                BorderBrush="{DynamicResource BorderColor}" BorderThickness="0,0,0,1" Padding="24,16">
+                BorderBrush="{DynamicResource BorderColor}" BorderThickness="0,0,0,1" Padding="26,22,26,16">
             <StackPanel Spacing="4">
-                <TextBlock Classes="caption" Text="{l:T Settings.Header.Eyebrow}"/>
-                <TextBlock Classes="heading" Text="{l:T Menu.Settings}"/>
+                <TextBlock FontSize="{DynamicResource FontSizeCaption}" LetterSpacing="1.5"
+                           Foreground="{DynamicResource MutedText}"
+                           Text="{l:T Settings.Header.Eyebrow}"/>
+                <TextBlock FontSize="21" FontWeight="SemiBold"
+                           Foreground="{DynamicResource PrimaryText}"
+                           Text="{l:T Menu.Settings}"/>
             </StackPanel>
         </Border>
 
         <!-- Ana içerik: sekmeler -->
         <TabControl Grid.Row="1" SelectedIndex="{Binding SelectedTabIndex}" Margin="0" Padding="0"
                     Background="Transparent">
+            <TabControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <UniformGrid Rows="1" Margin="12,8"/>
+                </ItemsPanelTemplate>
+            </TabControl.ItemsPanel>
 
-            <!-- TERCİHLER (bu cihaz): Tema / Genel / Oyuncu -->
-            <TabItem Classes="compact" Header="{l:T Settings.Tab.Theme}">
-                <ScrollViewer Padding="24,20">
+            <!-- TERCİHLER (bu cihaz): Tema -->
+            <TabItem Classes="compact settingsTab">
+                <TabItem.Header>
+                    <StackPanel Orientation="Vertical" Spacing="4" HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <Path Data="M12,3 a9,9 0 1 0 0,18 a4.5,4.5 0 0 1 0,-9 a4.5,4.5 0 0 0 0,-9 Z"
+                              Width="16" Height="16" Stretch="Uniform"
+                              StrokeThickness="1.5" StrokeLineCap="Round" StrokeJoin="Round"
+                              Fill="Transparent" HorizontalAlignment="Center"
+                              Stroke="{Binding $parent[TabItem].Foreground}"/>
+                        <TextBlock Text="{l:T Settings.Tab.Theme}" FontSize="{DynamicResource FontSizeBody}"
+                                   HorizontalAlignment="Center"
+                                   Foreground="{Binding $parent[TabItem].Foreground}"/>
+                    </StackPanel>
+                </TabItem.Header>
+                <ScrollViewer Padding="26,24">
                     <StackPanel Spacing="16" MaxWidth="560" HorizontalAlignment="Left">
                         <StackPanel Spacing="4">
-                            <TextBlock Classes="caption" Text="{l:T Settings.Scope.Preferences}"/>
-                            <TextBlock Classes="title" Text="{l:T Settings.Theme.Title}"/>
-                        <TextBlock Classes="hint" Text="{l:T Settings.Theme.Desc}" TextWrapping="Wrap"/>
+                            <TextBlock FontSize="{DynamicResource FontSizeCaption}" LetterSpacing="1.5" Foreground="{DynamicResource MutedText}" Text="{l:T Settings.Scope.Preferences}"/>
+                            <TextBlock FontSize="21" FontWeight="Normal" Foreground="{DynamicResource PrimaryText}" Text="{l:T Settings.Theme.Title}"/>
+                            <TextBlock FontSize="{DynamicResource FontSizeBodyLarge}" Foreground="{DynamicResource MutedText}" TextWrapping="Wrap" Text="{l:T Settings.Theme.Desc}"/>
                         </StackPanel>
-                        <Border Classes="panel" Padding="16">
+                        <Border Classes="settingsCard">
                             <StackPanel Spacing="10">
-                                <TextBlock Classes="body" Text="{l:T Settings.Theme.Label}"/>
+                                <TextBlock Classes="settingsCardTitle" Text="{l:T Settings.Theme.Label}"/>
                                 <ComboBox ItemsSource="{Binding AvailableThemes}"
                                           SelectedItem="{Binding SelectedTheme}"
                                           HorizontalAlignment="Stretch"
@@ -82,72 +112,101 @@
                 </ScrollViewer>
             </TabItem>
 
-            <TabItem Classes="compact" Header="{l:T Settings.Tab.General}">
-                <ScrollViewer Padding="24,20">
-                    <StackPanel Spacing="16" MaxWidth="560" HorizontalAlignment="Left">
+            <!-- TERCİHLER (bu cihaz): Genel -->
+            <TabItem Classes="compact settingsTab">
+                <TabItem.Header>
+                    <StackPanel Orientation="Vertical" Spacing="4" HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <Path Data="M4,7 h10 M18,7 h2 M4,17 h2 M10,17 h10 M14,5 v4 M6,15 v4"
+                              Width="16" Height="16" Stretch="Uniform"
+                              StrokeThickness="1.5" StrokeLineCap="Round" StrokeJoin="Round"
+                              Fill="Transparent" HorizontalAlignment="Center"
+                              Stroke="{Binding $parent[TabItem].Foreground}"/>
+                        <TextBlock Text="{l:T Settings.Tab.General}" FontSize="{DynamicResource FontSizeBody}"
+                                   HorizontalAlignment="Center"
+                                   Foreground="{Binding $parent[TabItem].Foreground}"/>
+                    </StackPanel>
+                </TabItem.Header>
+                <ScrollViewer Padding="26,24">
+                    <StackPanel Spacing="16" HorizontalAlignment="Stretch">
                         <StackPanel Spacing="4">
-                            <TextBlock Classes="caption" Text="{l:T Settings.Scope.Preferences}"/>
-                            <TextBlock Classes="title" Text="{l:T Settings.General.Title}"/>
-                        <TextBlock Classes="hint" Text="{l:T Settings.General.Desc}" TextWrapping="Wrap"/>
+                            <TextBlock FontSize="{DynamicResource FontSizeCaption}" LetterSpacing="1.5" Foreground="{DynamicResource MutedText}" Text="{l:T Settings.Scope.Preferences}"/>
+                            <TextBlock FontSize="21" FontWeight="Normal" Foreground="{DynamicResource PrimaryText}" Text="{l:T Settings.General.Title}"/>
+                            <TextBlock FontSize="{DynamicResource FontSizeBodyLarge}" Foreground="{DynamicResource MutedText}" TextWrapping="Wrap" Text="{l:T Settings.General.Desc}"/>
                         </StackPanel>
-                        <!-- Faz 2b: arayüz dili (K5/K7/K9) -->
-                        <Border Classes="panel" Padding="16">
-                            <StackPanel Spacing="8">
-                                <TextBlock Classes="body" FontWeight="SemiBold" Text="{l:T Settings.Language}"/>
-                                <ComboBox x:Name="EditorLanguageCombo" ItemsSource="{Binding EditorLanguageOptions}"
-                                          SelectedItem="{Binding SelectedEditorLanguageOption}" MinWidth="220">
-                                    <ComboBox.ItemTemplate>
-                                        <DataTemplate x:DataType="vm:SettingsViewModel+EditorLanguageOption">
-                                            <TextBlock Text="{Binding Label}"/>
-                                        </DataTemplate>
-                                    </ComboBox.ItemTemplate>
-                                </ComboBox>
-                                <TextBlock Classes="hint" Text="{l:T Settings.Language.Hint}" TextWrapping="Wrap"/>
-                            </StackPanel>
-                        </Border>
-
-                        <!-- Otomatik kaydetme -->
-                        <Border Classes="panel" Padding="16">
-                            <StackPanel Spacing="10">
-                                <CheckBox Content="{l:T Settings.AutoSave}" FontSize="{DynamicResource FontSizeBodyLarge}"
-                                          IsChecked="{Binding AutoSaveEnabled}"
-                                          Foreground="{DynamicResource PrimaryText}" FontWeight="SemiBold"/>
-                                <StackPanel Spacing="4" IsVisible="{Binding AutoSaveEnabled}">
-                                    <TextBlock Classes="body" Text="{l:T Settings.AutoSave.Interval}"/>
-                                    <ComboBox ItemsSource="{Binding AutoSaveIntervals}"
-                                              SelectedItem="{Binding AutoSaveIntervalSeconds}"
-                                              HorizontalAlignment="Stretch"
-                                              Background="{DynamicResource InputBackground}"
-                                              Foreground="{DynamicResource PrimaryText}"
-                                              BorderBrush="{DynamicResource BorderSubtle}"/>
+                        <!-- 2 sütun kart ızgarası -->
+                        <UniformGrid Columns="2">
+                            <!-- Faz 2b: arayüz dili (K5/K7/K9) -->
+                            <Border Classes="settingsCard" Margin="0,0,12,12">
+                                <StackPanel Spacing="8">
+                                    <TextBlock Classes="settingsCardTitle" Text="{l:T Settings.Language}"/>
+                                    <ComboBox x:Name="EditorLanguageCombo" ItemsSource="{Binding EditorLanguageOptions}"
+                                              SelectedItem="{Binding SelectedEditorLanguageOption}" MinWidth="220">
+                                        <ComboBox.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:SettingsViewModel+EditorLanguageOption">
+                                                <TextBlock Text="{Binding Label}"/>
+                                            </DataTemplate>
+                                        </ComboBox.ItemTemplate>
+                                    </ComboBox>
+                                    <TextBlock Classes="hint" Text="{l:T Settings.Language.Hint}" TextWrapping="Wrap"/>
                                 </StackPanel>
-                            </StackPanel>
-                        </Border>
+                            </Border>
 
-                        <!-- Faz 5 D6: azaltılmış hareket (erişilebilirlik) -->
-                        <Border Classes="panel" Padding="16">
-                            <StackPanel Spacing="6">
-                                <CheckBox x:Name="ReduceMotionCheckBox"
-                                          Content="{l:T Settings.General.ReduceMotion}"
-                                          FontSize="{DynamicResource FontSizeBodyLarge}"
-                                          IsChecked="{Binding ReduceMotion}"
-                                          Foreground="{DynamicResource PrimaryText}" FontWeight="SemiBold"/>
-                                <TextBlock Classes="hint" Text="{l:T Settings.General.ReduceMotion.Hint}" TextWrapping="Wrap"/>
-                            </StackPanel>
-                        </Border>
+                            <!-- Otomatik kaydetme -->
+                            <Border Classes="settingsCard" Margin="0,0,12,12">
+                                <StackPanel Spacing="10">
+                                    <CheckBox Content="{l:T Settings.AutoSave}" FontSize="13"
+                                              IsChecked="{Binding AutoSaveEnabled}"
+                                              Foreground="{DynamicResource PrimaryText}" FontWeight="SemiBold"/>
+                                    <StackPanel Spacing="4" IsVisible="{Binding AutoSaveEnabled}">
+                                        <TextBlock Classes="body" Text="{l:T Settings.AutoSave.Interval}"/>
+                                        <ComboBox ItemsSource="{Binding AutoSaveIntervals}"
+                                                  SelectedItem="{Binding AutoSaveIntervalSeconds}"
+                                                  HorizontalAlignment="Stretch"
+                                                  Background="{DynamicResource InputBackground}"
+                                                  Foreground="{DynamicResource PrimaryText}"
+                                                  BorderBrush="{DynamicResource BorderSubtle}"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Faz 5 D6: azaltılmış hareket (erişilebilirlik) -->
+                            <Border Classes="settingsCard" Margin="0,0,12,12">
+                                <StackPanel Spacing="6">
+                                    <CheckBox x:Name="ReduceMotionCheckBox"
+                                              Content="{l:T Settings.General.ReduceMotion}"
+                                              FontSize="13"
+                                              IsChecked="{Binding ReduceMotion}"
+                                              Foreground="{DynamicResource PrimaryText}" FontWeight="SemiBold"/>
+                                    <TextBlock Classes="hint" Text="{l:T Settings.General.ReduceMotion.Hint}" TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </Border>
+                        </UniformGrid>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
 
-            <TabItem Classes="compact" Header="{l:T Settings.Tab.Player}">
-                <ScrollViewer Padding="24,20">
+            <!-- TERCİHLER (bu cihaz): Oyuncu -->
+            <TabItem Classes="compact settingsTab">
+                <TabItem.Header>
+                    <StackPanel Orientation="Vertical" Spacing="4" HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <Path Data="M4,6 h16 v12 h-16 Z M10,9.5 L15,12 L10,14.5 Z"
+                              Width="16" Height="16" Stretch="Uniform"
+                              StrokeThickness="1.5" StrokeLineCap="Round" StrokeJoin="Round"
+                              Fill="Transparent" HorizontalAlignment="Center"
+                              Stroke="{Binding $parent[TabItem].Foreground}"/>
+                        <TextBlock Text="{l:T Settings.Tab.Player}" FontSize="{DynamicResource FontSizeBody}"
+                                   HorizontalAlignment="Center"
+                                   Foreground="{Binding $parent[TabItem].Foreground}"/>
+                    </StackPanel>
+                </TabItem.Header>
+                <ScrollViewer Padding="26,24">
                     <StackPanel Spacing="16" MaxWidth="560" HorizontalAlignment="Left">
                         <StackPanel Spacing="4">
-                            <TextBlock Classes="caption" Text="{l:T Settings.Scope.Preferences}"/>
-                            <TextBlock Classes="title" Text="{l:T Settings.Player.Title}"/>
-                        <TextBlock Classes="hint" Text="{l:T Settings.Player.Desc}" TextWrapping="Wrap"/>
+                            <TextBlock FontSize="{DynamicResource FontSizeCaption}" LetterSpacing="1.5" Foreground="{DynamicResource MutedText}" Text="{l:T Settings.Scope.Preferences}"/>
+                            <TextBlock FontSize="21" FontWeight="Normal" Foreground="{DynamicResource PrimaryText}" Text="{l:T Settings.Player.Title}"/>
+                            <TextBlock FontSize="{DynamicResource FontSizeBodyLarge}" Foreground="{DynamicResource MutedText}" TextWrapping="Wrap" Text="{l:T Settings.Player.Desc}"/>
                         </StackPanel>
-                        <Border Classes="panel" Padding="16">
+                        <Border Classes="settingsCard">
                             <StackPanel Spacing="16">
                                 <StackPanel Spacing="6">
                                     <TextBlock Classes="body" Text="{l:T Settings.Player.Master}"/>
@@ -180,15 +239,27 @@
             </TabItem>
 
             <!-- PROJE AYARLARI (project.rowlproj) -->
-            <TabItem Classes="compact" Header="{l:T Settings.Tab.Project}">
-                <ScrollViewer Padding="24,20">
+            <TabItem Classes="compact settingsTab">
+                <TabItem.Header>
+                    <StackPanel Orientation="Vertical" Spacing="4" HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <Path Data="M3,8 a1,1 0 0 1 1,-1 h5 l2,2 h8 a1,1 0 0 1 1,1 v8 a1,1 0 0 1 -1,1 H4 a1,1 0 0 1 -1,-1 Z"
+                              Width="16" Height="16" Stretch="Uniform"
+                              StrokeThickness="1.5" StrokeLineCap="Round" StrokeJoin="Round"
+                              Fill="Transparent" HorizontalAlignment="Center"
+                              Stroke="{Binding $parent[TabItem].Foreground}"/>
+                        <TextBlock Text="{l:T Settings.Tab.Project}" FontSize="{DynamicResource FontSizeBody}"
+                                   HorizontalAlignment="Center"
+                                   Foreground="{Binding $parent[TabItem].Foreground}"/>
+                    </StackPanel>
+                </TabItem.Header>
+                <ScrollViewer Padding="26,24">
                     <StackPanel Spacing="16" MaxWidth="560" HorizontalAlignment="Left">
                         <StackPanel Spacing="4">
-                            <TextBlock Classes="caption" Text="{l:T Settings.Scope.Project}"/>
-                            <TextBlock Classes="title" Text="{l:T Settings.Project.Title}"/>
-                        <TextBlock Classes="hint" Text="{l:T Settings.Project.Desc}" TextWrapping="Wrap"/>
+                            <TextBlock FontSize="{DynamicResource FontSizeCaption}" LetterSpacing="1.5" Foreground="{DynamicResource MutedText}" Text="{l:T Settings.Scope.Project}"/>
+                            <TextBlock FontSize="21" FontWeight="Normal" Foreground="{DynamicResource PrimaryText}" Text="{l:T Settings.Project.Title}"/>
+                            <TextBlock FontSize="{DynamicResource FontSizeBodyLarge}" Foreground="{DynamicResource MutedText}" TextWrapping="Wrap" Text="{l:T Settings.Project.Desc}"/>
                         </StackPanel>
-                        <Border Classes="panel" Padding="16">
+                        <Border Classes="settingsCard">
                             <StackPanel Spacing="16">
                                 <StackPanel Spacing="6">
                                     <TextBlock Classes="body" Text="{l:T Settings.Project.SaveSlots}"/>
@@ -210,14 +281,27 @@
                 </ScrollViewer>
             </TabItem>
 
-            <TabItem Classes="compact" Header="{l:T Settings.Tab.Shortcuts}">
-                <ScrollViewer Padding="24,20">
-                    <StackPanel Spacing="12" MaxWidth="560" HorizontalAlignment="Left">
+            <!-- TERCİHLER (bu cihaz): Kısayollar -->
+            <TabItem Classes="compact settingsTab">
+                <TabItem.Header>
+                    <StackPanel Orientation="Vertical" Spacing="4" HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <Path Data="M3,7 h18 v10 h-18 Z M7,11 h.01 M11,11 h.01 M15,11 h.01 M8,14 h8"
+                              Width="16" Height="16" Stretch="Uniform"
+                              StrokeThickness="1.5" StrokeLineCap="Round" StrokeJoin="Round"
+                              Fill="Transparent" HorizontalAlignment="Center"
+                              Stroke="{Binding $parent[TabItem].Foreground}"/>
+                        <TextBlock Text="{l:T Settings.Tab.Shortcuts}" FontSize="{DynamicResource FontSizeBody}"
+                                   HorizontalAlignment="Center"
+                                   Foreground="{Binding $parent[TabItem].Foreground}"/>
+                    </StackPanel>
+                </TabItem.Header>
+                <ScrollViewer Padding="26,24">
+                    <StackPanel Spacing="16" MaxWidth="560" HorizontalAlignment="Left">
                         <StackPanel Spacing="4">
-                            <TextBlock Classes="caption" Text="{l:T Settings.Scope.Preferences}"/>
-                            <TextBlock Classes="title" Text="{l:T Settings.Shortcuts.Title}"/>
+                            <TextBlock FontSize="{DynamicResource FontSizeCaption}" LetterSpacing="1.5" Foreground="{DynamicResource MutedText}" Text="{l:T Settings.Scope.Preferences}"/>
+                            <TextBlock FontSize="21" FontWeight="Normal" Foreground="{DynamicResource PrimaryText}" Text="{l:T Settings.Shortcuts.Title}"/>
                         </StackPanel>
-                        <Border Classes="panel" Padding="16">
+                        <Border Classes="settingsCard">
                             <StackPanel Spacing="6">
                                 <Grid ColumnDefinitions="*, Auto">
                                     <TextBlock Grid.Column="0" Classes="body" Text="{l:T Settings.Shortcut.Save}"/>
@@ -279,14 +363,27 @@
                 </ScrollViewer>
             </TabItem>
 
-            <TabItem Classes="compact" Header="{l:T Settings.Tab.About}">
-                <ScrollViewer Padding="24,20">
-                    <StackPanel Spacing="18" HorizontalAlignment="Center" VerticalAlignment="Center">
+            <!-- Hakkında -->
+            <TabItem Classes="compact settingsTab">
+                <TabItem.Header>
+                    <StackPanel Orientation="Vertical" Spacing="4" HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <Path Data="M12,3 a9,9 0 1 0 0,18 a9,9 0 1 0 0,-18 Z M12,11 v5 M12,8 h.01"
+                              Width="16" Height="16" Stretch="Uniform"
+                              StrokeThickness="1.5" StrokeLineCap="Round" StrokeJoin="Round"
+                              Fill="Transparent" HorizontalAlignment="Center"
+                              Stroke="{Binding $parent[TabItem].Foreground}"/>
+                        <TextBlock Text="{l:T Settings.Tab.About}" FontSize="{DynamicResource FontSizeBody}"
+                                   HorizontalAlignment="Center"
+                                   Foreground="{Binding $parent[TabItem].Foreground}"/>
+                    </StackPanel>
+                </TabItem.Header>
+                <ScrollViewer Padding="26,24">
+                    <StackPanel Spacing="18" MaxWidth="560" HorizontalAlignment="Center" VerticalAlignment="Center">
                         <TextBlock Classes="heading" Foreground="{DynamicResource Accent}" HorizontalAlignment="Center">ROWL ENGINE</TextBlock>
                         <TextBlock Classes="muted" FontSize="{DynamicResource FontSizeBodyLarge}" HorizontalAlignment="Center"
                                    Text="{l:T Settings.About.Tagline}"/>
 
-                        <Border Classes="panel" Padding="20" MinWidth="400">
+                        <Border Classes="settingsCard" MinWidth="400">
                             <StackPanel Spacing="8">
                                 <Grid ColumnDefinitions="Auto, *">
                                     <TextBlock Grid.Column="0" Classes="muted" FontSize="{DynamicResource FontSizeBodyLarge}" Margin="0,0,12,0" Text="{l:T Settings.About.Version}"/>
@@ -319,13 +416,13 @@
 
         <!-- Alt düğmeler -->
         <Border Grid.Row="2" Background="{DynamicResource SurfaceBackground}"
-                BorderBrush="{DynamicResource BorderColor}" BorderThickness="0,1,0,0" Padding="16,10">
+                BorderBrush="{DynamicResource BorderColor}" BorderThickness="0,1,0,0" Padding="24,14">
             <DockPanel>
                 <Button DockPanel.Dock="Left" Classes="ghost" Content="{l:T Settings.ResetDefaults}"
                         Command="{Binding ResetDefaultsCommand}"
                         Foreground="{DynamicResource MutedText}"/>
                 <Button DockPanel.Dock="Right" Classes="primary" Content="{l:T Settings.Close}"
-                        Name="CloseButton"
+                        Name="CloseButton" CornerRadius="10" Padding="20,10"
                         HorizontalAlignment="Right"/>
             </DockPanel>
         </Border>

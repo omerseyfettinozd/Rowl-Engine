@@ -20,9 +20,8 @@
                 Background="{DynamicResource NodeCardBg}" BorderBrush="{Binding BorderColor}" BorderThickness="1" CornerRadius="12"
                 Padding="15" BoxShadow="0 10 40 0 #33000000" ToolTip.Tip="{Binding ComponentSummary}">
             <DockPanel LastChildFill="True">
-                <!-- tip satırı -->
+                <!-- tip satırı (prototip .story-node: kimlik numarası gösterilmez; kimlik Denetçi'de ve aramada) -->
                 <DockPanel DockPanel.Dock="Top" LastChildFill="False" VerticalAlignment="Center">
-                    <TextBlock DockPanel.Dock="Right" Text="{Binding Id, StringFormat='#{0}'}" Foreground="{DynamicResource DimText}" FontSize="9" VerticalAlignment="Center"/>
                     <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
                         <Ellipse Width="4" Height="4" Fill="{DynamicResource PrimaryText}" VerticalAlignment="Center"/>
                         <TextBlock Text="{l:T NodeControl.Start}" IsVisible="{Binding IsStartNode}" FontSize="8" Foreground="{DynamicResource NodeKindText}" LetterSpacing="1" VerticalAlignment="Center"/>

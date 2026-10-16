@@ -37,7 +37,7 @@ public static class RowlEyeFixtureFactory
     {
         var win = new SettingsDialog();
         ApplyTheme(win, theme);
-        return (win, win.DataContext, new Size(720, 560));
+        return (win, win.DataContext, new Size(860, 620));
     }
 
     private static (Window, object?, Size) CreateMainWindow(string theme, string variant)
