@@ -54,6 +54,15 @@ namespace RowlEngine.Editor.ViewModels
             OnPropertyChanged(nameof(SelectedEditorLanguageOption));
         }
 
+        // Faz 5 D6: azaltılmış hareket tercihi — makine profiline kalıcı, WorkspaceHost'a canlı uygulanır.
+        [ObservableProperty]
+        private bool _reduceMotion;
+
+        partial void OnReduceMotionChanged(bool value)
+        {
+            Views.Workspace.WorkspaceHost.ProfilePrefersReducedMotion = value;
+        }
+
         private static List<EditorLanguageOption> BuildLanguageOptions()
         {
             var options = new List<EditorLanguageOption>();
@@ -202,6 +211,7 @@ namespace RowlEngine.Editor.ViewModels
             AutoSaveEnabled = true;
             AutoSaveIntervalSeconds = 60;
             EditorLanguage = EditorStrings.SourceLanguage;
+            ReduceMotion = false;
             MasterVolume = BgmVolume = VoiceVolume = SfxVolume = 1;
             TextSpeedMultiplier = 1;
             AutoAdvanceDelay = 2;

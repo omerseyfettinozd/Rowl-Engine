@@ -116,8 +116,8 @@ public sealed class WorkspaceStateJsonTests
         yield return new object?[] { "layout null", Doc("null") };
         yield return new object?[] { "layout old version", Doc(layout.Replace("\"version\":1", "\"version\":0")) };
         yield return new object?[] { "layout empty tree", Doc(LayoutOf(null), "{\"open\":[],\"active\":0}") };
-        yield return new object?[] { "unknown panel", Doc(LayoutOf(new SplitNode("split-1", SplitAxis.Horizontal, 0.5, new LeafNode("node"), new LeafNode("ghost")), 1), "{\"open\":[],\"active\":0}") };
-        yield return new object?[] { "prototype-only panel", Doc(LayoutOf(new SplitNode("split-1", SplitAxis.Horizontal, 0.5, new LeafNode("node"), new LeafNode("lua")), 1), "{\"open\":[],\"active\":0}") };
+        yield return new object?[] { "all unknown panels", Doc(LayoutOf(new SplitNode("split-1", SplitAxis.Horizontal, 0.5, new LeafNode("ghost-a"), new LeafNode("ghost-b")), 1), "{\"open\":[],\"active\":0}") };
+        yield return new object?[] { "all prototype-only panels", Doc(LayoutOf(new SplitNode("split-1", SplitAxis.Horizontal, 0.5, new LeafNode("lua"), new LeafNode("store")), 1), "{\"open\":[],\"active\":0}") };
         yield return new object?[] { "duplicate panel", Doc(LayoutOf(new SplitNode("split-1", SplitAxis.Horizontal, 0.5, new LeafNode("node"), new LeafNode("node")), 1), "{\"open\":[],\"active\":0}") };
         yield return new object?[] { "ratio zero", Doc(layout.Replace("0.14", "0")) };
         yield return new object?[] { "ratio one", Doc(layout.Replace("0.14", "1")) };
@@ -156,6 +156,35 @@ public sealed class WorkspaceStateJsonTests
         Assert.False(result.IsValid, name);
         Assert.Null(result.State);
         Assert.False(string.IsNullOrEmpty(result.Error), name);
+    }
+
+    [Fact]
+    public void UnknownPanelId_PrunesLeafAndKeepsValidSiblings()
+    {
+        string layout = LayoutOf(
+            new SplitNode(
+                "split-2",
+                SplitAxis.Horizontal,
+                0.25,
+                new LeafNode("ghost"),
+                new SplitNode("split-1", SplitAxis.Vertical, 0.6, new LeafNode("game"), new LeafNode("edit"))),
+            2);
+        WorkspaceStateLoadResult result = WorkspaceStateJson.Parse(
+            Doc(layout, "{\"open\":[],\"active\":0}", "[\"edit\",\"ghost\"]", "{\"inspector\":0.25}"));
+
+        Assert.True(result.IsValid, result.Error);
+        Assert.Equal(new[] { "game", "edit" }, result.State!.Layout.Views);
+        SplitNode survivingRoot = Assert.IsType<SplitNode>(result.State.Layout.Tree);
+        Assert.Equal("split-1", survivingRoot.Id);
+        Assert.Equal(0.6, survivingRoot.Ratio);
+        Assert.True(result.State.IsPinned(PanelIds.Edit));
+        Assert.False(result.State.IsPinned("ghost"));
+
+        // Prototype-only leaf ("lua") is also pruned while hosted sibling ("node") survives.
+        string withLua = LayoutOf(new SplitNode("split-1", SplitAxis.Horizontal, 0.5, new LeafNode("node"), new LeafNode("lua")), 1);
+        WorkspaceStateLoadResult luaResult = WorkspaceStateJson.Parse(Doc(withLua, "{\"open\":[],\"active\":0}"));
+        Assert.True(luaResult.IsValid, luaResult.Error);
+        Assert.Equal(new[] { PanelIds.Node }, luaResult.State!.Layout.Views);
     }
 
     [Fact]
@@ -447,7 +476,15 @@ public sealed class WorkspaceStatePersistenceTests : IDisposable
         new object[] { "empty", "" },
         new object[] { "old version", "{\"version\":0,\"layout\":{},\"bottom\":{},\"pinned\":[],\"shares\":{}}" },
         new object[] { "future version", WorkspaceStateJson.Serialize(EditorWorkspaceState.Default).Replace("\"version\":1,\"layout\"", "\"version\":9,\"layout\"") },
-        new object[] { "unknown panel", WorkspaceStateJson.Serialize(EditorWorkspaceState.Default).Replace("\"inspector\"", "\"removed-panel\"") },
+        new object[]
+        {
+            "all unknown panels",
+            WorkspaceStateJson.Serialize(EditorWorkspaceState.Default)
+                .Replace("\"hierarchy\"", "\"removed-1\"")
+                .Replace("\"node\"", "\"removed-2\"")
+                .Replace("\"bottom\"", "\"removed-3\"")
+                .Replace("\"inspector\"", "\"removed-4\"")
+        },
         new object[] { "layout from D1 only", WorkspaceLayoutJson.Serialize(EditorWorkspaceState.Default.Layout) },
     };
 
@@ -465,6 +502,23 @@ public sealed class WorkspaceStatePersistenceTests : IDisposable
         // The rest of the profile is untouched by the failed layout.
         Assert.Equal(90, EditorSettingsProfile.Load(Profile).AutoSaveIntervalSeconds);
         Assert.False(string.IsNullOrEmpty(name));
+    }
+
+    [Fact]
+    public void UnknownPanelId_PrunesLeafAndKeepsValidSiblings_OnLoad()
+    {
+        string withRetiredInspector = WorkspaceStateJson.Serialize(EditorWorkspaceState.Default)
+            .Replace("\"inspector\"", "\"removed-panel\"");
+        new EditorSettingsProfile { AutoSaveIntervalSeconds = 90, WorkspaceState = withRetiredInspector }.Save(Profile);
+
+        EditorWorkspaceState loaded = Load();
+
+        Assert.Empty(_warnings);
+        Assert.True(loaded.IsHierarchyVisible);
+        Assert.True(loaded.IsNodeGraphActive);
+        Assert.True(loaded.IsBottomVisible);
+        Assert.False(loaded.IsInspectorVisible);
+        Assert.Equal(EditorWorkspaceState.Default.Layout.RemoveView(PanelIds.Inspector), loaded.Layout);
     }
 
     [Fact]
@@ -887,13 +941,33 @@ public sealed class WorkspacePersistenceViewModelTests : IDisposable
     }
 
     [Fact]
-    public void SavedLayout_WithAPanelThatNoLongerExists_FallsBackToTheDefault()
+    public void SavedLayout_WithAPanelThatNoLongerExists_PrunesLeafAndKeepsValidSiblings()
     {
         Ui(() =>
         {
             Directory.CreateDirectory(Path.GetDirectoryName(_profile)!);
             string withGhost = WorkspaceStateJson.Serialize(EditorWorkspaceState.Default).Replace("\"hierarchy\"", "\"retired-panel\"");
             new EditorSettingsProfile { WorkspaceState = withGhost }.Save(_profile);
+
+            MainWindowViewModel vm = NewVm();
+            Assert.False(vm.IsHierarchyPanelVisible);
+            Assert.True(vm.IsInspectorPanelVisible);
+            Assert.Equal(EditorWorkspaceState.Default.Layout.RemoveView(PanelIds.Hierarchy), vm.Workspace.Layout);
+        });
+    }
+
+    [Fact]
+    public void SavedLayout_WithAPanelThatNoLongerExists_FallsBackToTheDefault()
+    {
+        Ui(() =>
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(_profile)!);
+            string allRetired = WorkspaceStateJson.Serialize(EditorWorkspaceState.Default)
+                .Replace("\"hierarchy\"", "\"retired-1\"")
+                .Replace("\"node\"", "\"retired-2\"")
+                .Replace("\"bottom\"", "\"retired-3\"")
+                .Replace("\"inspector\"", "\"retired-4\"");
+            new EditorSettingsProfile { WorkspaceState = allRetired }.Save(_profile);
 
             Assert.Equal(EditorWorkspaceState.Default, NewVm().Workspace);
         });

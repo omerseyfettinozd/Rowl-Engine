@@ -16,6 +16,9 @@ public sealed class EditorSettingsProfile
     /// <summary>Faz 2b: editör arayüzü dili (oyun önizleme dilinden ayrı, K9).</summary>
     public string EditorLanguage { get; set; } = Strings.EditorStrings.SourceLanguage;
 
+    /// <summary>Faz 5 D6: çalışma alanı panel geçişlerini azaltma / devre dışı bırakma tercihi.</summary>
+    public bool ReduceMotion { get; set; }
+
     /// <summary>
     /// Faz 5 D5: dock workspace (split tree, bottom-strip tabs, pinned panels) as
     /// <see cref="Workspace.WorkspaceStateJson"/> text, or <c>null</c> = default

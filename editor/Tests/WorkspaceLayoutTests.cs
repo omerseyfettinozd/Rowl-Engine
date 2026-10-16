@@ -590,4 +590,48 @@ public sealed class WorkspaceLayoutTests
         Assert.Null(new WorkspaceLayout(null, 0).Validate());
         Assert.Null(WorkspaceLayout.Initial().Validate());
     }
+
+    [Fact]
+    public void UnknownPanelId_PrunesLeafAndKeepsValidSiblings()
+    {
+        string unknownLeaf = "{\"type\":\"leaf\",\"view\":\"retired-panel\"}";
+        string validSiblingSplit = Split("split-2", "y", "0.35", Leaf1, Leaf2);
+        string json = Doc(Split("split-1", "x", "0.65", unknownLeaf, validSiblingSplit), last: "2");
+
+        WorkspaceLayoutLoadResult result = WorkspaceLayoutJson.Parse(json);
+
+        Assert.True(result.IsValid, result.Error);
+        Assert.Equal(2, result.Layout!.LastSplitId);
+        Assert.Equal(new[] { PanelIds.Node, PanelIds.Game }, result.Layout.Views);
+        SplitNode survivingRoot = Root(result.Layout);
+        Assert.Equal("split-2", survivingRoot.Id);
+        Assert.Equal(SplitAxis.Vertical, survivingRoot.Axis);
+        Assert.Equal(0.35, survivingRoot.Ratio);
+        Assert.Equal(result.Layout, WorkspaceLayoutJson.LoadOrInitial(json));
+    }
+
+    [Fact]
+    public void UnknownPanelId_WhenAllLeavesAreUnknown_RejectsAndLoadOrInitialFallsBackToInitial()
+    {
+        string unknownA = "{\"type\":\"leaf\",\"view\":\"retired-a\"}";
+        string unknownB = "{\"type\":\"leaf\",\"view\":\"retired-b\"}";
+        string json = Doc(Split("split-1", "x", "0.5", unknownA, unknownB), last: "1");
+
+        WorkspaceLayoutLoadResult result = WorkspaceLayoutJson.Parse(json);
+
+        Assert.False(result.IsValid);
+        Assert.Equal("unknown panel id", result.Error);
+        Assert.Equal(WorkspaceLayout.Initial(), WorkspaceLayoutJson.LoadOrInitial(json));
+    }
+
+    [Fact]
+    public void UnknownPanelId_DuplicateKnownPanelOrBadStructure_StillRejects()
+    {
+        string unknownLeaf = "{\"type\":\"leaf\",\"view\":\"retired-panel\"}";
+        string duplicateKnown = Doc(Split("split-2", "x", "0.5", unknownLeaf, Split("split-1", "y", "0.5", Leaf1, Leaf1)), last: "2");
+        Assert.False(WorkspaceLayoutJson.Parse(duplicateKnown).IsValid);
+
+        string badRatioOnPrunedSplit = Doc(Split("split-1", "x", "1.5", unknownLeaf, Leaf1), last: "1");
+        Assert.False(WorkspaceLayoutJson.Parse(badRatioOnPrunedSplit).IsValid);
+    }
 }

@@ -161,7 +161,10 @@
              yoksa host Border.panelHeader çizer. Faz 5 D4: başlıktan sürükle-bırak, sabitle,
              kapat ve panel menüsü host'ta; istekler code-behind'dan VM ağaç işlemlerine gider. -->
         <Grid Grid.Row="1">
-            <ws:WorkspaceHost x:Name="WorkspaceHost" Layout="{Binding WorkspaceLayout}" PinnedPanels="{Binding WorkspacePinnedPanels}">
+            <ws:WorkspaceHost x:Name="WorkspaceHost"
+                              Layout="{Binding WorkspaceLayout}"
+                              PinnedPanels="{Binding WorkspacePinnedPanels}"
+                              ReduceMotion="{Binding Settings.ReduceMotion}">
 
                 <ws:WorkspacePanel PanelId="{x:Static wsm:PanelIds.Hierarchy}" OwnsHeader="True" HeaderActionsInContent="True"
                                    Title="{l:T Panel.Hierarchy}"

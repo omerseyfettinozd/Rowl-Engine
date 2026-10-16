@@ -152,6 +152,61 @@ public sealed class WorkspaceMotionTests
         });
     }
 
+    [Fact]
+    public void ReduceMotion_FollowsSettingsProfile_AndUpdatesLiveHosts()
+    {
+        Ui(() =>
+        {
+            string tempDir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "RowlMotionProfile_" + Guid.NewGuid().ToString("N"));
+            System.IO.Directory.CreateDirectory(tempDir);
+            string settingsPath = System.IO.Path.Combine(tempDir, "editor-settings.json");
+            string playerPath = System.IO.Path.Combine(tempDir, "player-settings.json");
+            var host = new WorkspaceHost();
+            using var engineHost = new RowlEngine.Editor.Native.EngineHost();
+            try
+            {
+                Assert.False(host.EffectiveReduceMotion);
+                Assert.Equal(2, host.Transitions!.Count);
+
+                var settings = new RowlEngine.Editor.ViewModels.SettingsViewModel { ReduceMotion = true };
+                Assert.True(WorkspaceHost.ProfilePrefersReducedMotion);
+                Assert.True(host.ReduceMotion);
+                Assert.True(host.EffectiveReduceMotion);
+                Assert.True(host.Transitions is null || host.Transitions.Count == 0);
+
+                RowlEngine.Editor.Services.EditorSettingsSyncService.HandleSettingsPropertyChanged(
+                    nameof(RowlEngine.Editor.ViewModels.SettingsViewModel.ReduceMotion),
+                    settings,
+                    settingsPath,
+                    playerPath,
+                    tempDir,
+                    engineHost,
+                    () => new RowlEngine.Editor.Services.ProjectRuntimeSettings(),
+                    _ => { },
+                    () => { });
+
+                Assert.True(RowlEngine.Editor.Services.EditorSettingsProfile.Load(settingsPath).ReduceMotion);
+
+                settings.ResetDefaults();
+                Assert.False(settings.ReduceMotion);
+                Assert.False(WorkspaceHost.ProfilePrefersReducedMotion);
+                Assert.False(host.EffectiveReduceMotion);
+                Assert.Equal(2, host.Transitions!.Count);
+
+                RowlEngine.Editor.Services.EditorSettingsSyncService.LoadEditorSettings(settingsPath, settings);
+                Assert.True(settings.ReduceMotion);
+                Assert.True(WorkspaceHost.ProfilePrefersReducedMotion);
+                Assert.True(host.EffectiveReduceMotion);
+                Assert.True(host.Transitions is null || host.Transitions.Count == 0);
+            }
+            finally
+            {
+                WorkspaceHost.ProfilePrefersReducedMotion = false;
+                try { System.IO.Directory.Delete(tempDir, recursive: true); } catch (Exception) { }
+            }
+        });
+    }
+
     // ---- layout changes ----
 
     [Fact]

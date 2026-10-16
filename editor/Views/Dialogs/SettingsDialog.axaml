@@ -123,6 +123,18 @@
                                 </StackPanel>
                             </StackPanel>
                         </Border>
+
+                        <!-- Faz 5 D6: azaltılmış hareket (erişilebilirlik) -->
+                        <Border Classes="panel" Padding="16">
+                            <StackPanel Spacing="6">
+                                <CheckBox x:Name="ReduceMotionCheckBox"
+                                          Content="{l:T Settings.General.ReduceMotion}"
+                                          FontSize="{DynamicResource FontSizeBodyLarge}"
+                                          IsChecked="{Binding ReduceMotion}"
+                                          Foreground="{DynamicResource PrimaryText}" FontWeight="SemiBold"/>
+                                <TextBlock Classes="hint" Text="{l:T Settings.General.ReduceMotion.Hint}" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Border>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
