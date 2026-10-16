@@ -1350,6 +1350,9 @@
     "Log.Infos.Tip": {
       "text": "Bilgi sayısı"
     },
+    "Log.SessionEvents": {
+      "text": "Oturum olayları"
+    },
     "Log.Warnings": {
       "text": "Uyarı:"
     },
@@ -1540,13 +1543,16 @@
       "text": "Düğüm kütüphanesi"
     },
     "Panel.Log": {
-      "text": "Günlük"
+      "text": "Konsol"
     },
     "Panel.Lua": {
       "text": "Lua editörü"
     },
     "Panel.SaveSlots": {
       "text": "Kayıt Slotları"
+    },
+    "Panel.Store": {
+      "text": "Assets Store"
     },
     "Player.Backlog.Back": {
       "text": "Geri"
@@ -1898,6 +1904,12 @@
     },
     "Status.Unsaved": {
       "text": "Kaydedilmemiş değişiklikler var"
+    },
+    "Store.ComingSoon": {
+      "text": "Yakında gelecek"
+    },
+    "Store.Name": {
+      "text": "Assets Store"
     },
     "Transport.Pause": {
       "text": "Duraklat"

@@ -96,6 +96,7 @@ public class WorkspacePanel : ContentControl
         [PanelIds.Hierarchy] = "M5,4 h5 v4 h-5 Z M8,8 v8 h5 M8,12 h5 M13,10 h6 v4 h-6 Z M13,14 h6 v4 h-6 Z",
         [PanelIds.Inspector] = "M4,7 h10 M18,7 h2 M4,17 h2 M10,17 h10 M14,5 v4 M6,15 v4",
         [PanelIds.Library] = "M4,4 h6 v6 h-6 Z M14,4 h6 v6 h-6 Z M4,14 h6 v6 h-6 Z M17,13.5 l1.1,2.3 l2.4,.3 l-1.8,1.7 l.5,2.4 l-2.2,-1.2 l-2.2,1.2 l.5,-2.4 l-1.8,-1.7 l2.4,-.3 Z",
+        [PanelIds.Store] = "M3,8 a1,1 0 0 1 1,-1 h5 l2,2 h6 a1,1 0 0 1 1,1 v8 a1,1 0 0 1 -1,1 H4 a1,1 0 0 1 -1,-1 Z",
         [PanelIds.Lua] = "M8,7 L3,12 L8,17 M16,7 L21,12 L16,17 M14,4 L10,20",
         [PanelIds.Bottom] = "M3,7 a2,2 0 0 1 2,-2 h4 l2,2 h8 a2,2 0 0 1 2,2 v8 a2,2 0 0 1 -2,2 h-14 a2,2 0 0 1 -2,-2 Z",
     };

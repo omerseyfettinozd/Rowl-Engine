@@ -16,13 +16,16 @@
     <Color x:Key="SurfaceBackgroundColor">#131315</Color>
     <Color x:Key="PanelBackgroundColor">#19191C</Color>
     <Color x:Key="InputBackgroundColor">#0F0F12</Color>
-    <Color x:Key="CanvasBackgroundColor">#000000</Color>
+    <Color x:Key="CanvasBackgroundColor">#131315</Color>
 
     <SolidColorBrush x:Key="AppBackground" Color="{DynamicResource AppBackgroundColor}"/>
     <SolidColorBrush x:Key="SurfaceBackground" Color="{DynamicResource SurfaceBackgroundColor}"/>
     <SolidColorBrush x:Key="PanelBackground" Color="{DynamicResource PanelBackgroundColor}"/>
     <SolidColorBrush x:Key="InputBackground" Color="{DynamicResource InputBackgroundColor}"/>
     <SolidColorBrush x:Key="CanvasBackground" Color="{DynamicResource CanvasBackgroundColor}"/>
+    <!-- Faz 8 A1: tuval zemini prototip yüzeyi (#131315); nokta ızgara prototip .node-area tonu. -->
+    <Color x:Key="GraphDotColorValue">#303034</Color>
+    <SolidColorBrush x:Key="GraphDotColor" Color="{DynamicResource GraphDotColorValue}"/>
 
     <!-- ── Kenarlıklar ─────────────────────────────────────────────────── -->
     <Color x:Key="BorderColorValue">#29292D</Color>
@@ -200,7 +203,7 @@
         <DrawingBrush.Drawing>
             <DrawingGroup>
                 <GeometryDrawing Brush="{StaticResource GraphCanvasBg}" Geometry="M0,0 H20 V20 H0 Z"/>
-                <GeometryDrawing Brush="{StaticResource BorderColor}" Geometry="M9.2,10 A0.8,0.8 0 1 0 10.8,10 A0.8,0.8 0 1 0 9.2,10 Z"/>
+                <GeometryDrawing Brush="{StaticResource GraphDotColor}" Geometry="M9.2,10 A0.8,0.8 0 1 0 10.8,10 A0.8,0.8 0 1 0 9.2,10 Z"/>
             </DrawingGroup>
         </DrawingBrush.Drawing>
     </DrawingBrush>

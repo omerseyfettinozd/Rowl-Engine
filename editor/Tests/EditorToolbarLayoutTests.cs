@@ -120,18 +120,20 @@ namespace RowlEngine.Editor
 
                 var windowsMenu = window.FindControl<MenuItem>("WindowsMenu")
                     ?? throw new Exception("WindowsMenu not found");
-                if (windowsMenu.Items.Count != 9)
+                if (windowsMenu.Items.Count != 10)
                     throw new Exception(
-                        $"Pencereler menu should have 9 items (Faz 7: + Library, Lua), has {windowsMenu.Items.Count}");
+                        $"Pencereler menu should have 10 items (Faz 7: + Library, Lua; Faz 8: + Store), has {windowsMenu.Items.Count}");
 
                 // Faz 5: panel kısayolları menüde yazar (InputGesture) ve
                 // gerçekten yönlendirilir (TryPanelShortcut + KeyDown).
                 // KeyGesture.ToString() sürüm-formatına kilitlenmemek için
                 // yalnızca rozet varlığı denetlenir; eşleşme TryPanelShortcut
                 // tablosuyla aşağıda kilitlenir.
-                var menuItems = windowsMenu.Items.OfType<MenuItem>().ToArray();
+                // Faz 8: Assets Store kartı prototipteki gibi kısayolsuz (son kart).
+                var menuItems = windowsMenu.Items.OfType<MenuItem>().Take(9).ToArray();
                 if (menuItems.Length != 9
-                    || menuItems.Any(m => m.InputGesture is null))
+                    || menuItems.Any(m => m.InputGesture is null)
+                    || windowsMenu.Items.OfType<MenuItem>().Last().InputGesture is not null)
                     throw new Exception(
                         $"Panel shortcut gestures changed: [{string.Join(", ", menuItems.Select(m => m.InputGesture?.ToString() ?? "-"))}]");
                 string?[] expectedPanels = new[]

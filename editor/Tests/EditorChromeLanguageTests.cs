@@ -31,14 +31,14 @@ namespace RowlEngine.Editor
             {
                 string[] expectedHeaders = new[]
                 {
-                    "Hiyerarşi", "Denetçi", "Günlük", "Varlıklar",
+                    "Hiyerarşi", "Denetçi", "Konsol", "Varlıklar",
                     "Diyalog Geçmişi", "Kayıt Slotları", "Sorunlar",
-                    "Düğüm kütüphanesi", "Lua editörü"
+                    "Düğüm kütüphanesi", "Lua editörü", "Assets Store"
                 };
                 string[] expectedIds = new[]
                 {
                     "Hierarchy", "Inspector", "Log", "Assets",
-                    "Backlog", "SaveSlots", "ProjectIssues", "Library", "Lua"
+                    "Backlog", "SaveSlots", "ProjectIssues", "Library", "Lua", "Store"
                 };
 
                 var windowsMenu = window.FindControl<MenuItem>("WindowsMenu")
@@ -56,12 +56,12 @@ namespace RowlEngine.Editor
                 // Varlıklar ilk sekme — 5 sekme).
                 string[] tabs = window.GetLogicalDescendants().OfType<TabItem>()
                     .Select(t => t.Header as string ?? string.Empty)
-                    .Where(h => expectedHeaders.Contains(h) || h == "Log" || h == "Assets"
+                    .Where(h => expectedHeaders.Contains(h) || h == "Log" || h == "Console" || h == "Assets"
                         || h == "Backlog" || h == "Save Slots" || h == "Issues")
                     .ToArray();
                 string[] expectedTabs = new[]
                 {
-                    "Varlıklar", "Günlük", "Diyalog Geçmişi", "Kayıt Slotları", "Sorunlar"
+                    "Varlıklar", "Konsol", "Diyalog Geçmişi", "Kayıt Slotları", "Sorunlar"
                 };
                 if (!tabs.SequenceEqual(expectedTabs))
                     throw new Exception($"Tab headers diverged: [{string.Join(", ", tabs)}]");
@@ -99,9 +99,9 @@ namespace RowlEngine.Editor
                         .Select(m => m.Header as string ?? string.Empty).ToArray();
                     string[] expectedEnglish = new[]
                     {
-                        "Hierarchy", "Inspector", "Log", "Assets",
+                        "Hierarchy", "Inspector", "Console", "Assets",
                         "Dialogue History", "Save Slots", "Issues",
-                        "Node library", "Lua editor"
+                        "Node library", "Lua editor", "Assets Store"
                     };
                     if (!english.SequenceEqual(expectedEnglish))
                         throw new Exception($"Live language switch failed: [{string.Join(", ", english)}]");

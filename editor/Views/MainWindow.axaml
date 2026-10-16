@@ -188,6 +188,14 @@
                                               Fill="Transparent" Stroke="{DynamicResource ToolCardIcon}"/>
                                     </MenuItem.Icon>
                                 </MenuItem>
+                                <!-- Faz 8 A3: prototip "Assets Store" kartı (kısayolsuz, prototipteki gibi). -->
+                                <MenuItem Classes="toolCard" Header="{l:T Panel.Store}" Command="{Binding ShowPanelCommand}" CommandParameter="Store">
+                                    <MenuItem.Icon>
+                                        <Path Data="M3,8 a1,1 0 0 1 1,-1 h5 l2,2 h6 a1,1 0 0 1 1,1 v8 a1,1 0 0 1 -1,1 H4 a1,1 0 0 1 -1,-1 Z M9,13.5 h6"
+                                              Width="19" Height="19" Stretch="Uniform" StrokeThickness="1.5" StrokeLineCap="Round" StrokeJoin="Round"
+                                              Fill="Transparent" Stroke="{DynamicResource ToolCardIcon}"/>
+                                    </MenuItem.Icon>
+                                </MenuItem>
                             </MenuItem>
                             <MenuItem x:Name="MoreMenu" Classes="capsuleMenu moreMenu" ToolTip.Tip="{l:T Menu.More}">
                                 <MenuItem.Header>
@@ -355,6 +363,13 @@
                                    PanelMinWidth="{x:Static ws:WorkspacePanelMetrics.InspectorMinWidth}"
                                    Background="{DynamicResource PanelBackground}">
                     <panels:NodeLibraryView DataContext="{Binding NodeLibrary}"/>
+                </ws:WorkspacePanel>
+
+                <!-- Faz 8 A3: Assets Store "Yakında" ekranı (prototip assets-store.jpg; Kütüphane gibi sağda açılır). -->
+                <ws:WorkspacePanel PanelId="{x:Static wsm:PanelIds.Store}" Title="{l:T Panel.Store}"
+                                   PanelMinWidth="{x:Static ws:WorkspacePanelMetrics.InspectorMinWidth}"
+                                   Background="{DynamicResource PanelBackground}">
+                    <panels:AssetStoreView/>
                 </ws:WorkspacePanel>
 
                 <!-- Faz 7 D5: Lua editörü (prototip desktop.jpg; merkez alanın altında açılır). -->

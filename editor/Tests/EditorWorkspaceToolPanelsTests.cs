@@ -35,6 +35,22 @@ public sealed class EditorWorkspaceToolPanelsTests
     }
 
     [Fact]
+    public void Store_OpensRightOfTheCenterArea_AndToggles()
+    {
+        // Faz 8 A3: Assets Store ("Yakında") gerçek panel; Kütüphane gibi merkezin sağında açılır.
+        EditorWorkspaceState state = EditorWorkspaceState.Default.HandlePanelAction("Store");
+
+        Assert.True(state.IsVisible(PanelIds.Store));
+        SplitNode parent = ParentOf(state.Layout.Tree, PanelIds.Store);
+        Assert.Equal(SplitAxis.Horizontal, parent.Axis);
+        Assert.Equal(new LeafNode(PanelIds.Store), parent.B);
+        Assert.Contains(PanelIds.Node, new WorkspaceLayout(parent.A, 0).Views);
+        Assert.Contains(PanelIds.Store, PanelIds.Editor);
+
+        Assert.False(state.HandlePanelAction("Store").IsVisible(PanelIds.Store));
+    }
+
+    [Fact]
     public void Lua_OpensUnderTheCenterArea_AboveTheBottomStrip()
     {
         EditorWorkspaceState state = EditorWorkspaceState.Default.HandlePanelAction("Lua");

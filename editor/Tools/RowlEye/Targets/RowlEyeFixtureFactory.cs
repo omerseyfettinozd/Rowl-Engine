@@ -45,6 +45,13 @@ public static class RowlEyeFixtureFactory
         var vm = CreateSealedMainViewModel();
         var win = new MainWindow(vm) { Width = 1920, Height = 1080 };
         ApplyTheme(win, theme);
+        // Faz 8: elle görsel denetim için panel aç (ör. ROWL_EYE_PANELS=Store,Log); golden koşusunda boş kalır.
+        string? panels = Environment.GetEnvironmentVariable("ROWL_EYE_PANELS");
+        if (!string.IsNullOrWhiteSpace(panels))
+        {
+            foreach (string panel in panels.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                vm.ShowPanel(panel);
+        }
         return (win, vm, new Size(1920, 1080));
     }
 

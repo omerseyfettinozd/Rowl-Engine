@@ -164,7 +164,7 @@ public sealed record EditorWorkspaceState(WorkspaceLayout Layout, BottomStripSta
             return this;
         return panelId switch
         {
-            PanelIds.Hierarchy or PanelIds.Inspector or PanelIds.Library or PanelIds.Lua => WithPanel(panelId, false),
+            PanelIds.Hierarchy or PanelIds.Inspector or PanelIds.Library or PanelIds.Lua or PanelIds.Store => WithPanel(panelId, false),
             PanelIds.Bottom => (this with
             {
                 Layout = Layout.RemoveView(PanelIds.Bottom),
@@ -177,11 +177,11 @@ public sealed record EditorWorkspaceState(WorkspaceLayout Layout, BottomStripSta
 
     /// <summary>
     /// Opens or closes a side / tool panel (<see cref="PanelIds.Hierarchy"/>, <see cref="PanelIds.Inspector"/>,
-    /// Faz 7: <see cref="PanelIds.Library"/>, <see cref="PanelIds.Lua"/>).
+    /// Faz 7: <see cref="PanelIds.Library"/>, <see cref="PanelIds.Lua"/>; Faz 8: <see cref="PanelIds.Store"/>).
     /// </summary>
     public EditorWorkspaceState WithPanel(string panelId, bool visible)
     {
-        if (panelId is not (PanelIds.Hierarchy or PanelIds.Inspector or PanelIds.Library or PanelIds.Lua))
+        if (panelId is not (PanelIds.Hierarchy or PanelIds.Inspector or PanelIds.Library or PanelIds.Lua or PanelIds.Store))
             throw new ArgumentException("Only side / tool panels are toggled directly; use WithBottomTab / WithCenter.", nameof(panelId));
         if (IsVisible(panelId) == visible)
             return this;
@@ -191,6 +191,7 @@ public sealed record EditorWorkspaceState(WorkspaceLayout Layout, BottomStripSta
                 PanelIds.Hierarchy => EditorWorkspaceLayouts.OpenHierarchy(Layout, Shares),
                 PanelIds.Inspector => EditorWorkspaceLayouts.OpenInspector(Layout, Shares),
                 PanelIds.Library => EditorWorkspaceLayouts.OpenLibrary(Layout, Shares),
+                PanelIds.Store => EditorWorkspaceLayouts.OpenStore(Layout, Shares),
                 _ => EditorWorkspaceLayouts.OpenLua(Layout, Shares),
             }
             : Layout.RemoveView(panelId);
@@ -269,6 +270,9 @@ public sealed record EditorWorkspaceState(WorkspaceLayout Layout, BottomStripSta
                 break;
             case "Lua":
                 next = WithPanel(PanelIds.Lua, !IsVisible(PanelIds.Lua));
+                break;
+            case "Store":
+                next = WithPanel(PanelIds.Store, !IsVisible(PanelIds.Store));
                 break;
             case "Assets":
                 next = ToggleSelectedTab(BottomStripState.AssetsTab);
@@ -482,6 +486,11 @@ public static class EditorWorkspaceLayouts
     internal static WorkspaceLayout OpenLibrary(WorkspaceLayout layout, PanelShares? shares = null) =>
         OpenBesideCenter(layout, PanelIds.Library, SplitAxis.Horizontal,
             RememberedOr(shares, PanelIds.Library, LibrarySplitRatio, firstSide: false));
+
+    /// <summary>Faz 8: Assets Store ("Yakında") opens right of the center area, like the Node library.</summary>
+    internal static WorkspaceLayout OpenStore(WorkspaceLayout layout, PanelShares? shares = null) =>
+        OpenBesideCenter(layout, PanelIds.Store, SplitAxis.Horizontal,
+            RememberedOr(shares, PanelIds.Store, LibrarySplitRatio, firstSide: false));
 
     /// <summary>Faz 7: the Lua editor opens under the center area (prototype desktop.jpg: under Node).</summary>
     internal static WorkspaceLayout OpenLua(WorkspaceLayout layout, PanelShares? shares = null) =>

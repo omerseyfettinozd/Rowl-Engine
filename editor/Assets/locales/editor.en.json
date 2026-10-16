@@ -1350,6 +1350,9 @@
     "Log.Infos.Tip": {
       "text": "Info count"
     },
+    "Log.SessionEvents": {
+      "text": "Session events"
+    },
     "Log.Warnings": {
       "text": "Warnings:"
     },
@@ -1540,13 +1543,16 @@
       "text": "Node library"
     },
     "Panel.Log": {
-      "text": "Log"
+      "text": "Console"
     },
     "Panel.Lua": {
       "text": "Lua editor"
     },
     "Panel.SaveSlots": {
       "text": "Save Slots"
+    },
+    "Panel.Store": {
+      "text": "Assets Store"
     },
     "Player.Backlog.Back": {
       "text": "Back"
@@ -1898,6 +1904,12 @@
     },
     "Status.Unsaved": {
       "text": "There are unsaved changes"
+    },
+    "Store.ComingSoon": {
+      "text": "Coming soon"
+    },
+    "Store.Name": {
+      "text": "Assets Store"
     },
     "Transport.Pause": {
       "text": "Pause"
