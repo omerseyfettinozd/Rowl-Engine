@@ -123,8 +123,14 @@ ağacının (`layout-state.mjs`) C# karşılığı. Spike ölçümleri (net10.0 
   alternatifi; headless fare + RTL testleri.
 - D5 — Düzenin `EditorSettingsProfile`'a kalıcı kaydı, sürüm alanı, bozuk dosyada varsayılan.
 - D6 — 200/180 ms geçişler, azaltılmış hareket, bölücüyü klavyeyle taşıma.
-- Açık soru (D3'e kadar): alt şerit (Varlıklar/Günlük/…) tek yaprakta sekmeli mi kalır,
-  prototipteki gibi her biri ayrı yaprak mı olur?
+- Alt şerit kararı (D3): tek yaprak, içi sekmeli (beş ince panel ayrı yaprak olarak sıkışık).
+
+**Yapılan (2026-10-16):** D1–D6 tamam (9f01837, df3e174, ca88fa7, a881c21, bc2c8c3, b5548a2);
+editör süiti 577 → 814 test. Bilinen/sonraya: kapanan panelin çıkış animasyonu yok; OS
+"azaltılmış hareket" yalnız `ROWL_REDUCE_MOTION` ile (Tercihler'e bağlanmadı); kayıtlı düzende
+bilinmeyen panel tüm düzeni varsayılana düşürür (kısmi kurtarma yok); `new MainWindowViewModel`
+kuran eski test sınıfları UI iş parçacığı dışında kuruyor (D5'teki kirlilik deseni — denenen
+sırada üretilmedi, ortak test temeliyle kapatılmalı).
 
 ## Kararlar (Chaple, 2026-10-15)
 
