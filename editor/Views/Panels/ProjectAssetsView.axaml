@@ -337,7 +337,7 @@
                 <TextBlock Text="{l:T Assets.Empty}" Classes="hint" FontStyle="Italic"
                            HorizontalAlignment="Center"
                            TextWrapping="Wrap" TextAlignment="Center"/>
-                <Button Classes="primary" Content="{l:T Assets.ImportFile}" Command="{Binding ImportAssetCommand}"
+                <Button Classes="secondary" Content="{l:T Assets.ImportFile}" Command="{Binding ImportAssetCommand}"
                         ToolTip.Tip="{l:T Assets.Import.Tip}"
                         HorizontalAlignment="Center"/>
             </StackPanel>
@@ -350,7 +350,7 @@
                 <TextBlock Text="{l:T Assets.NoMatch}" Classes="hint" FontStyle="Italic"
                            HorizontalAlignment="Center"
                            TextWrapping="Wrap" TextAlignment="Center"/>
-                <Button Classes="primary" Content="{l:T Assets.ClearFilter}"
+                <Button Classes="secondary" Content="{l:T Assets.ClearFilter}"
                         Command="{Binding AssetBrowserViewModel.ClearFilterCommand}"
                         ToolTip.Tip="{l:T Assets.ClearFilter.Tip}"
                         HorizontalAlignment="Center"/>

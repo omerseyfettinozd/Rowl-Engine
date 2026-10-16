@@ -47,7 +47,7 @@
                                           Background="{DynamicResource InputBackground}"
                                           Foreground="{DynamicResource PrimaryText}"
                                           BorderBrush="{DynamicResource BorderSubtle}"/>
-                                <Button Classes="primary" Content="{l:T Settings.Theme.Apply}"
+                                <Button Classes="secondary" Content="{l:T Settings.Theme.Apply}"
                                         Command="{Binding ApplyThemeCommand}"
                                         HorizontalAlignment="Left"/>
                             </StackPanel>

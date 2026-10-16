@@ -44,9 +44,23 @@
         <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtle}"/>
         <Setter Property="Foreground" Value="{DynamicResource PrimaryText}"/>
     </Style>
-    <!-- Faz 6 görsel uyum: prototipte beyaz dolgulu düğme yok (.script-save: koyu zemin + ince kenar);
-         birincil eylem kenar ve yazı ağırlığıyla ayrışır. -->
+    <!-- Birincil = diyalog onayı (prototip ayarlar .Uygula: kemik dolgu, koyu yazı). -->
     <Style Selector="Button.primary">
+        <Setter Property="Background" Value="{DynamicResource Accent}"/>
+        <Setter Property="Foreground" Value="{DynamicResource OnAccentForeground}"/>
+        <Setter Property="CornerRadius" Value="{DynamicResource RadiusMedium}"/>
+        <Setter Property="MinHeight" Value="{DynamicResource ControlHeight}"/>
+        <Setter Property="Padding" Value="16,6"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="FontSize" Value="{DynamicResource FontSizeBody}"/>
+    </Style>
+    <Style Selector="Button.primary:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource AccentHover}"/>
+        <Setter Property="Foreground" Value="{DynamicResource OnAccentForeground}"/>
+    </Style>
+    <!-- Faz 6 görsel uyum: panel içi eylem (prototip .script-save / Kaydet): koyu zemin + ince kenar;
+         kemik dolgu yalnız diyalog onayında. -->
+    <Style Selector="Button.secondary">
         <Setter Property="Background" Value="{DynamicResource AccentButtonHover}"/>
         <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtle}"/>
         <Setter Property="BorderThickness" Value="1"/>
@@ -57,7 +71,7 @@
         <Setter Property="FontWeight" Value="Medium"/>
         <Setter Property="FontSize" Value="{DynamicResource FontSizeBody}"/>
     </Style>
-    <Style Selector="Button.primary:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Style Selector="Button.secondary:pointerover /template/ ContentPresenter#PART_ContentPresenter">
         <Setter Property="Background" Value="{DynamicResource BorderColor}"/>
         <Setter Property="BorderBrush" Value="{DynamicResource MutedText}"/>
         <Setter Property="Foreground" Value="{DynamicResource PrimaryText}"/>

@@ -16,7 +16,7 @@
                   VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="8" Margin="16">
         <TextBlock Classes="muted" Text="{l:T Issues.Empty}" FontSize="{DynamicResource FontSizeBody}" FontStyle="Italic"
                    HorizontalAlignment="Center"/>
-        <Button Classes="primary" Content="{l:T Issues.Reanalyze}"
+        <Button Classes="secondary" Content="{l:T Issues.Reanalyze}"
                 Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AnalyzeStoryGraphCommand}"
                 ToolTip.Tip="{l:T Issues.Analyze.Tip}"
                 HorizontalAlignment="Center"/>
