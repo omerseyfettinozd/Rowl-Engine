@@ -297,3 +297,32 @@ B04/B05/B06 paketleri; tuval zemini prototip yüzeyi **#131315** (#000 değil).
   Kök neden: içe aktarma viewmodel'i sonucu UI dışında yazıyordu, son ilerleme kuyrukta kalabiliyordu.
 - Faz 8 sonu yerel: editör 951/951 (iki kez), RowlEye golden + denetim 3/3, taşınabilirlik + launcher
   yeşil; native değişmedi.
+
+## Faz 9 — Aşama B kabul turu (2026-10-16)
+
+Karar (Chaple, 2026-10-16): yol haritası B kabulü — klavyeyle tam yazar yolculuğu, hedef
+ölçeklerde kesilme / odak kaybı, B02 tuval ergonomisi gerçek arayüzde; bulunan açıklar düzeltilir.
+
+**Denetim (gerçek `MainWindow`, 1440×900, başsız gerçek klavye/fare girdisi):**
+- Çalışan: F6 panel döngüsü; Denetçi alanlarına Tab; Ctrl+N; metin kutusunda Delete düğümü silmez;
+  Ctrl+S; tuvalde fareyle sürükle + geri al, kablo bağla + geri al, kutu seçimi, orta tuşla kaydırma.
+- Açıklar:
+  - K1 Ctrl+F arama kutusunu açıyor ama odağı ona vermiyor; yazılan metin tuvale gidiyor,
+    ok tuşu seçili düğümü kaydırıyor.
+  - K2 Tab ile düğüm kartına gelinince seçim değişmiyor (Denetçi eski düğümü gösteriyor).
+  - K3 Düğümleri klavyeyle bağlamanın yolu yok (yalnız fareyle kablo).
+  - O1 Odaklı düğüm silinince, O2 panel klavyeyle kapatılınca odak kayboluyor (null).
+  - O3 Ctrl+1..9 paneli açıyor ama odağı oraya taşımıyor.
+  - S1 %130'da Düğüm kütüphanesi sekmesi "Benim düğümlerim" üç noktasız kırpılıyor; panel başlığı kısalıyor.
+  - S2 Denetçi kimlik etiketi %115/%130'da kısalıyor; tam kimliği görmenin yolu yok.
+  - Tekerlek yalnız Ctrl ile yakınlaştırır (tasarım; değiştirilmedi).
+
+**Dilimler:**
+- **D1 Klavye yolculuğu** — K1, K2, O1–O3; K3: Denetçi'de "Bağlantılar" bölümü (giden bağlantılar
+  + Kaldır; çıkış + hedef seç + Bağla). Sürükleme semantiği birebir: seçenek çıkışı hedefini
+  değiştirir, ana çıkış yeni kablo ekler; geri alınabilir.
+- **D2 Ölçek** — S1, S2; ölçek kilit testi Kütüphane paneli açıkken de koşar.
+- **D3 Tuval** — gerçek fare girdisiyle kilit testleri (sürükle, kablo, kutu seçimi, kaydırma,
+  Ctrl+tekerlek, geri al).
+- **D4 Kabul** — yalnız klavyeyle yolculuk kilit testi (oluştur → başlık → bağla → kaydet → geri al),
+  RowlEye görüntüleri, B kabul kaydı.
