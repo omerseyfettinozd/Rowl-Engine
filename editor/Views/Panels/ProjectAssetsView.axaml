@@ -10,9 +10,7 @@
     <Border Background="{DynamicResource PanelBackground}">
         <Grid RowDefinitions="Auto, Auto, Auto, *, Auto">
             <!-- Araç çubuğu: başlık + 4 aksiyon (sıra + komutlar aynen). -->
-            <Border Grid.Row="0" Background="{DynamicResource SurfaceBackground}"
-                    BorderBrush="{DynamicResource BorderColor}" BorderThickness="0,0,0,1"
-                    Padding="8,4">
+            <Border Grid.Row="0" Classes="panelHeader">
                 <DockPanel LastChildFill="True">
                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="4"
                                 VerticalAlignment="Center">
@@ -31,8 +29,7 @@
                                 ToolTip.Tip="{l:T Assets.ViewToggle.Tip}"
                                 Command="{Binding AssetBrowserViewModel.ToggleAssetViewCommand}"/>
                     </StackPanel>
-                    <TextBlock Text="{l:T Assets.Title}" Classes="cardTitle"
-                               VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <TextBlock Text="{l:T Assets.Title}" Classes="panelTitle" Margin="0,0,8,0"/>
                 </DockPanel>
             </Border>
 

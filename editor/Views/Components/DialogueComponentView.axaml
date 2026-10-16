@@ -12,28 +12,32 @@
 
     <Border Classes="card" ClipToBounds="True" Margin="0,4">
         <StackPanel>
-            <!-- Component Header -->
+            <!-- Bileşen kartı başlığı (8 kartta aynı kalıp): onay kutusu | ad (yıldız sütun, kırpılır) | Ayar | "..." menüsü.
+                 Yukarı/Aşağı/Sil menüde; böylece dar Denetçide başlık taşmaz. Komutlar aynı. -->
             <Border Background="{DynamicResource CardHeaderBackground}" Padding="8,6">
-                <Grid ColumnDefinitions="*, Auto">
-                    <Grid Grid.Column="0" ColumnDefinitions="Auto,*" VerticalAlignment="Center">
-                        <CheckBox Grid.Column="0" IsChecked="{Binding IsEnabled}" ToolTip.Tip="{l:T Common.Enable.Tip}" MinWidth="0" Padding="0" Margin="0,0,2,0" VerticalAlignment="Center"/>
-                        <ToggleButton Grid.Column="1" Classes="header" IsChecked="{Binding IsExpanded}" ToolTip.Tip="{l:T Common.ExpandCollapse.Tip}"
-                                      Background="Transparent" BorderThickness="0" Padding="4,2"
-                                      HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" VerticalAlignment="Center">
-                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6">
-                                <TextBlock Grid.Column="0" Text="{l:T Component.Dialogue.Title}" Classes="cardKind" VerticalAlignment="Center"/>
-                                <TextBlock Grid.Column="1" Text="{Binding DisplayName}" Classes="cardTitle" VerticalAlignment="Center"
-                                           TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding DisplayName}"/>
-                            </Grid>
-                        </ToggleButton>
-                    </Grid>
-                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="3" VerticalAlignment="Center">
-                        <Button Content="{l:T Common.MoveUp}" Command="{Binding MoveUpCommand}" ToolTip.Tip="{l:T Common.MoveUp.Tip}" Classes="compact"/>
-                        <Button Content="{l:T Common.MoveDown}" Command="{Binding MoveDownCommand}" ToolTip.Tip="{l:T Common.MoveDown.Tip}" Classes="compact"/>
-                        <ToggleButton IsChecked="{Binding IsExpanded}" Content="{l:T Common.Settings}" Classes="compact"/>
-                        <Button Content="{l:T Common.Delete}" Classes="compact" ToolTip.Tip="{l:T Common.RemoveComponent.Tip}" Command="{Binding RemoveSelfCommand}"/>
-                    </StackPanel>
-                </Grid>
+              <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="2">
+                <CheckBox Grid.Column="0" IsChecked="{Binding IsEnabled}" ToolTip.Tip="{l:T Common.Enable.Tip}" MinWidth="0" Padding="0" Margin="0,0,2,0" VerticalAlignment="Center"/>
+                <ToggleButton Grid.Column="1" Classes="header" IsChecked="{Binding IsExpanded}" ToolTip.Tip="{l:T Common.ExpandCollapse.Tip}"
+                              Background="Transparent" BorderThickness="0" Padding="4,2" MinWidth="0"
+                              HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" VerticalAlignment="Center">
+                  <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6">
+                    <TextBlock Grid.Column="0" Classes="cardKind" Text="{l:T Component.Dialogue.Title}" VerticalAlignment="Center"/>
+                    <TextBlock Grid.Column="1" Classes="cardTitle" Text="{Binding DisplayName}" VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding DisplayName}"/>
+                  </Grid>
+                </ToggleButton>
+                <ToggleButton Grid.Column="2" Classes="compact" IsChecked="{Binding IsExpanded}" Content="{l:T Common.Settings}" VerticalAlignment="Center"/>
+                <Button Grid.Column="3" Classes="compact" Content="..." ToolTip.Tip="{l:T Inspector.Components.Actions.Tip}" VerticalAlignment="Center">
+                  <Button.Flyout>
+                    <MenuFlyout Placement="BottomEdgeAlignedRight">
+                      <MenuItem Header="{l:T Common.MoveUp.Tip}" Command="{Binding MoveUpCommand}"/>
+                      <MenuItem Header="{l:T Common.MoveDown.Tip}" Command="{Binding MoveDownCommand}"/>
+                      <Separator/>
+                      <MenuItem Header="{l:T Common.Delete}" Command="{Binding RemoveSelfCommand}"/>
+                    </MenuFlyout>
+                  </Button.Flyout>
+                </Button>
+              </Grid>
             </Border>
 
             <!-- Component Body -->
@@ -168,13 +172,14 @@
                             </StackPanel>
                         </Grid>
 
-                        <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
-                            <CheckBox Grid.Column="0" IsChecked="{Binding VoiceBlipSkipPunctuation}" Content="{l:T Component.Dialogue.SkipPunctuation}" FontSize="{DynamicResource FontSizeBody}"/>
+                        <!-- Dar panelde yan yana sığmıyordu (iç Grid sütun atamasızdı, onay kutusunun üstüne biniyordu): alt alta. -->
+                        <StackPanel Spacing="4">
+                            <CheckBox IsChecked="{Binding VoiceBlipSkipPunctuation}" Content="{l:T Component.Dialogue.SkipPunctuation}" FontSize="{DynamicResource FontSizeBody}"/>
                             <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6" VerticalAlignment="Center">
                                 <TextBlock Grid.Column="0" Text="{l:T Component.Dialogue.Channel.Label}" Classes="fieldLabel" VerticalAlignment="Center"/>
                                 <TextBox Grid.Column="1" Text="{Binding VoiceBlipChannel, Mode=TwoWay}" FontSize="{DynamicResource FontSizeSmall}" HorizontalAlignment="Stretch"/>
                             </Grid>
-                        </Grid>
+                        </StackPanel>
                     </StackPanel>
                 </StackPanel>
 
@@ -183,16 +188,15 @@
                 <StackPanel Spacing="4">
                     <TextBlock Text="{l:T Component.Dialogue.Section.Typography}" Classes="caption"/>
 
-                    <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
-                        <StackPanel Grid.Column="0" Spacing="2">
-                            <TextBlock Text="{l:T Component.Dialogue.FontSize.Label}" Classes="fieldLabel"/>
-                            <ctrl:RangedNumberControl Value="{Binding FontSize}" Minimum="12" Maximum="64" Step="2"/>
-                        </StackPanel>
-                        <StackPanel Grid.Column="1" Spacing="2">
-                            <TextBlock Text="{l:T Component.Dialogue.TextColor.Label}" Classes="fieldLabel"/>
-                            <ctrl:ColorPickerControl Mode="Hex" SelectedValue="{Binding TextColor, Mode=TwoWay}"/>
-                        </StackPanel>
-                    </Grid>
+                    <!-- Kaydırıcı + sayı ve renk seçici yarım genişliğe sığmıyor: alt alta. -->
+                    <StackPanel Spacing="2">
+                        <TextBlock Text="{l:T Component.Dialogue.FontSize.Label}" Classes="fieldLabel"/>
+                        <ctrl:RangedNumberControl Value="{Binding FontSize}" Minimum="12" Maximum="64" Step="2" HorizontalAlignment="Stretch"/>
+                    </StackPanel>
+                    <StackPanel Spacing="2">
+                        <TextBlock Text="{l:T Component.Dialogue.TextColor.Label}" Classes="fieldLabel"/>
+                        <ctrl:ColorPickerControl Mode="Hex" SelectedValue="{Binding TextColor, Mode=TwoWay}"/>
+                    </StackPanel>
 
                     <StackPanel Spacing="2">
                         <TextBlock Text="{l:T Component.Dialogue.Align.Label}" Classes="fieldLabel"/>

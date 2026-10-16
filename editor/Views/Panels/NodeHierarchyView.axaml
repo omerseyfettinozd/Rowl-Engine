@@ -9,47 +9,47 @@
              x:Class="RowlEngine.Editor.Views.Panels.NodeHierarchyView"
              x:DataType="vm:MainWindowViewModel">
     <Border Background="{DynamicResource PanelBackground}">
-        <Grid RowDefinitions="Auto, *">
+        <Grid RowDefinitions="Auto, Auto, *">
 
-            <!-- Panel başlığı + Oluştur + arama + seçili Node (prototip: tool-caption /
-                 hierarchy-scene; K2: 32 px denetim yüksekliği) -->
-            <Border Grid.Row="0" Background="{DynamicResource SurfaceBackground}"
+            <!-- Panel başlığı (ortak kalıp: Border.panelHeader) + Oluştur -->
+            <Border Grid.Row="0" Classes="panelHeader">
+                <DockPanel>
+                    <!-- Create Object Button -->
+                    <Button DockPanel.Dock="Right" Classes="ghost"
+                            Content="{l:T Hierarchy.Create}"
+                            Command="{Binding HierarchyViewModel.ToggleCreateObjectMenuCommand}"
+                            IsEnabled="{Binding HierarchyViewModel.HasCurrentNode}"
+                            HorizontalAlignment="Right">
+                        <Button.Flyout>
+                            <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                <MenuItem Header="{l:T Hierarchy.Create.Empty}"
+                                          Command="{Binding HierarchyViewModel.CreateObjectCommand}"
+                                          CommandParameter="empty"/>
+                                <Separator/>
+                                <MenuItem Header="{l:T Hierarchy.Create.Background}"
+                                          Command="{Binding HierarchyViewModel.CreateObjectCommand}"
+                                          CommandParameter="background"/>
+                                <MenuItem Header="{l:T Hierarchy.Create.Character}"
+                                          Command="{Binding HierarchyViewModel.CreateObjectCommand}"
+                                          CommandParameter="character"/>
+                                <MenuItem Header="{l:T Hierarchy.Create.Dialogue}"
+                                          Command="{Binding HierarchyViewModel.CreateObjectCommand}"
+                                          CommandParameter="dialogue"/>
+                                <MenuItem Header="{l:T Hierarchy.Create.Audio}"
+                                          Command="{Binding HierarchyViewModel.CreateObjectCommand}"
+                                          CommandParameter="audio"/>
+                            </MenuFlyout>
+                        </Button.Flyout>
+                    </Button>
+                    <TextBlock Classes="panelTitle" Text="{l:T Panel.Hierarchy}"/>
+                </DockPanel>
+            </Border>
+
+            <!-- Arama + seçili Node (prototip: tool-caption / hierarchy-scene; K2: 32 px) -->
+            <Border Grid.Row="1" Background="{DynamicResource SurfaceBackground}"
                     BorderBrush="{DynamicResource BorderColor}" BorderThickness="0,0,0,1"
                     Padding="12,10">
                 <StackPanel Spacing="8">
-                    <DockPanel>
-                        <TextBlock Classes="body" Text="{l:T Panel.Hierarchy}" FontWeight="SemiBold"
-                                   VerticalAlignment="Center"/>
-
-                        <!-- Create Object Button -->
-                        <Button DockPanel.Dock="Right" Classes="ghost"
-                                Content="{l:T Hierarchy.Create}"
-                                Command="{Binding HierarchyViewModel.ToggleCreateObjectMenuCommand}"
-                                IsEnabled="{Binding HierarchyViewModel.HasCurrentNode}"
-                                HorizontalAlignment="Right">
-                            <Button.Flyout>
-                                <MenuFlyout Placement="BottomEdgeAlignedRight">
-                                    <MenuItem Header="{l:T Hierarchy.Create.Empty}"
-                                              Command="{Binding HierarchyViewModel.CreateObjectCommand}"
-                                              CommandParameter="empty"/>
-                                    <Separator/>
-                                    <MenuItem Header="{l:T Hierarchy.Create.Background}"
-                                              Command="{Binding HierarchyViewModel.CreateObjectCommand}"
-                                              CommandParameter="background"/>
-                                    <MenuItem Header="{l:T Hierarchy.Create.Character}"
-                                              Command="{Binding HierarchyViewModel.CreateObjectCommand}"
-                                              CommandParameter="character"/>
-                                    <MenuItem Header="{l:T Hierarchy.Create.Dialogue}"
-                                              Command="{Binding HierarchyViewModel.CreateObjectCommand}"
-                                              CommandParameter="dialogue"/>
-                                    <MenuItem Header="{l:T Hierarchy.Create.Audio}"
-                                              Command="{Binding HierarchyViewModel.CreateObjectCommand}"
-                                              CommandParameter="audio"/>
-                                </MenuFlyout>
-                            </Button.Flyout>
-                        </Button>
-                    </DockPanel>
-
                     <!-- Unity kromu: nesne adı filtresi -->
                     <TextBox Watermark="{l:T Hierarchy.Search}"
                              Text="{Binding HierarchyViewModel.HierarchyFilterText}"
@@ -76,7 +76,7 @@
 
             <!-- Nesne listesi: prototipteki gibi "Sahne nesneleri" kökü + sol çizgili
                  girintili ağaç; satır 34 px (K2) -->
-            <Grid Grid.Row="1" RowDefinitions="Auto, *"
+            <Grid Grid.Row="2" RowDefinitions="Auto, *"
                   IsVisible="{Binding HierarchyViewModel.HasCurrentNode}">
                 <TextBlock Grid.Row="0" Classes="muted" Text="{l:T Hierarchy.SceneObjects}"
                            FontSize="{DynamicResource FontSizeBody}"
@@ -105,19 +105,19 @@
                         </ListBox.Styles>
                         <ListBox.ItemTemplate>
                             <DataTemplate x:DataType="vm:FrameObjectViewModel">
-                                <Grid ColumnDefinitions="Auto, *">
-                                    <!-- GameObject Icon -->
-                                    <TextBlock Grid.Column="0" Text="{Binding Icon}"
-                                               FontSize="{DynamicResource FontSizeTitle}"
-                                               VerticalAlignment="Center" Margin="0,0,9,0"/>
-
-                                    <!-- GameObject Name (tek satır; Etkin anahtarı
+                                <Grid ColumnDefinitions="*, Auto">
+                                    <!-- GameObject Name (ana metin; tek satır; Etkin anahtarı
                                          Denetçi kartındadır) -->
-                                    <TextBlock Grid.Column="1" Text="{Binding Name}"
+                                    <TextBlock Grid.Column="0" Text="{Binding Name}"
                                                FontSize="{DynamicResource FontSizeBodyLarge}"
                                                Foreground="{DynamicResource PrimaryText}"
                                                VerticalAlignment="Center"
                                                TextTrimming="CharacterEllipsis"/>
+
+                                    <!-- Tür etiketi (VM Icon metni): prototipteki .tree-status gibi
+                                         sağda soluk küçük metin -->
+                                    <TextBlock Grid.Column="1" Classes="fieldLabel" Text="{Binding Icon}"
+                                               VerticalAlignment="Center" Margin="8,0,0,0"/>
                                 </Grid>
                             </DataTemplate>
                         </ListBox.ItemTemplate>
@@ -144,7 +144,7 @@
             </Grid>
 
             <!-- Placeholder when node has no objects -->
-            <StackPanel Grid.Row="1" IsVisible="{Binding HierarchyViewModel.IsCurrentNodeEmpty}"
+            <StackPanel Grid.Row="2" IsVisible="{Binding HierarchyViewModel.IsCurrentNodeEmpty}"
                         VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="6" Margin="16">
                 <TextBlock Classes="muted" Text="{l:T Hierarchy.Empty}"
                            FontSize="{DynamicResource FontSizeBody}" FontStyle="Italic"

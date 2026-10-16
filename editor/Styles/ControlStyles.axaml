@@ -208,4 +208,37 @@
         <Setter Property="Background" Value="{DynamicResource AccentButtonHover}"/>
         <Setter Property="Foreground" Value="{DynamicResource PrimaryText}"/>
     </Style>
+
+    <!-- Faz 4 (headers): ortak panel başlığı (prototip .panel-header / .panel-title).
+         Hiyerarşi, Varlıklar, Denetçi vb. aynı kalıbı kullanır; sabitle/kapat
+         düğmeleri Faz 5 pencere sistemiyle gelir. -->
+    <Style Selector="Border.panelHeader">
+        <Setter Property="Background" Value="{DynamicResource SurfaceBackground}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}"/>
+        <Setter Property="BorderThickness" Value="0,0,0,1"/>
+        <Setter Property="MinHeight" Value="40"/>
+        <Setter Property="Padding" Value="12,4"/>
+    </Style>
+    <Style Selector="TextBlock.panelTitle">
+        <Setter Property="FontSize" Value="{DynamicResource FontSizeBodyLarge}"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Foreground" Value="{DynamicResource PrimaryText}"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+    <Style Selector="TextBlock.panelSubtitle">
+        <Setter Property="FontSize" Value="{DynamicResource FontSizeSmall}"/>
+        <Setter Property="Foreground" Value="{DynamicResource MutedText}"/>
+    </Style>
+
+    <!-- Sekme başlığı: Fluent varsayılanı (~28 px) yerine prototipin küçük sekmesi.
+         Ayarlar diyaloğu ve alt panel şeridi kullanır. -->
+    <Style Selector="TabItem.compact">
+        <Setter Property="FontSize" Value="{DynamicResource FontSizeBodyLarge}"/>
+        <Setter Property="MinHeight" Value="{DynamicResource ControlHeight}"/>
+        <Setter Property="Padding" Value="12,4"/>
+        <Setter Property="Foreground" Value="{DynamicResource PrimaryText}"/>
+    </Style>
+    <Style Selector="TabItem.compact:not(:selected) /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Foreground" Value="{DynamicResource MutedText}"/>
+    </Style>
 </Styles>

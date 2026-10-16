@@ -12,27 +12,32 @@
 
     <Border Classes="card" ClipToBounds="True" Margin="0,4">
         <StackPanel>
-            <!-- Component Header -->
+            <!-- Bileşen kartı başlığı (8 kartta aynı kalıp): onay kutusu | ad (yıldız sütun, kırpılır) | Ayar | "..." menüsü.
+                 Yukarı/Aşağı/Sil menüde; böylece dar Denetçide başlık taşmaz. Komutlar aynı. -->
             <Border Background="{DynamicResource CardHeaderBackground}" Padding="8,6">
-                <Grid ColumnDefinitions="*, Auto">
-                    <Grid Grid.Column="0" ColumnDefinitions="Auto,*" VerticalAlignment="Center">
-                        <CheckBox Grid.Column="0" IsChecked="{Binding IsEnabled}" ToolTip.Tip="{l:T Common.Enable.Tip}" MinWidth="0" Padding="0" Margin="0,0,2,0" VerticalAlignment="Center"/>
-                        <ToggleButton Grid.Column="1" Classes="header" IsChecked="{Binding IsExpanded}" ToolTip.Tip="{l:T Common.ExpandCollapse.Tip}"
-                                      Background="Transparent" BorderThickness="0" Padding="4,2"
-                                      HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" VerticalAlignment="Center">
-                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6">
-                                <TextBlock Grid.Column="0" Text="{l:T Component.Background.Title}" Classes="muted" FontSize="{DynamicResource FontSizeBodyLarge}" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                                <TextBlock Grid.Column="1" Text="{Binding DisplayName}" FontSize="{DynamicResource FontSizeBodyLarge}" FontWeight="Bold" Foreground="{DynamicResource PrimaryText}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-                            </Grid>
-                        </ToggleButton>
-                    </Grid>
-                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="3" VerticalAlignment="Center">
-                        <Button Classes="compact" Content="{l:T Common.MoveUp}" Command="{Binding MoveUpCommand}" ToolTip.Tip="{l:T Common.MoveUp.Tip}"/>
-                        <Button Classes="compact" Content="{l:T Common.MoveDown}" Command="{Binding MoveDownCommand}" ToolTip.Tip="{l:T Common.MoveDown.Tip}"/>
-                        <ToggleButton Classes="compact" IsChecked="{Binding IsExpanded}" Content="{l:T Common.Settings}"/>
-                        <Button Classes="compact" Content="{l:T Common.Delete}" Command="{Binding RemoveSelfCommand}" ToolTip.Tip="{l:T Common.RemoveComponent.Tip}"/>
-                    </StackPanel>
-                </Grid>
+              <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="2">
+                <CheckBox Grid.Column="0" IsChecked="{Binding IsEnabled}" ToolTip.Tip="{l:T Common.Enable.Tip}" MinWidth="0" Padding="0" Margin="0,0,2,0" VerticalAlignment="Center"/>
+                <ToggleButton Grid.Column="1" Classes="header" IsChecked="{Binding IsExpanded}" ToolTip.Tip="{l:T Common.ExpandCollapse.Tip}"
+                              Background="Transparent" BorderThickness="0" Padding="4,2" MinWidth="0"
+                              HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" VerticalAlignment="Center">
+                  <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6">
+                    <TextBlock Grid.Column="0" Classes="cardKind" Text="{l:T Component.Background.Title}" VerticalAlignment="Center"/>
+                    <TextBlock Grid.Column="1" Classes="cardTitle" Text="{Binding DisplayName}" VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding DisplayName}"/>
+                  </Grid>
+                </ToggleButton>
+                <ToggleButton Grid.Column="2" Classes="compact" IsChecked="{Binding IsExpanded}" Content="{l:T Common.Settings}" VerticalAlignment="Center"/>
+                <Button Grid.Column="3" Classes="compact" Content="..." ToolTip.Tip="{l:T Inspector.Components.Actions.Tip}" VerticalAlignment="Center">
+                  <Button.Flyout>
+                    <MenuFlyout Placement="BottomEdgeAlignedRight">
+                      <MenuItem Header="{l:T Common.MoveUp.Tip}" Command="{Binding MoveUpCommand}"/>
+                      <MenuItem Header="{l:T Common.MoveDown.Tip}" Command="{Binding MoveDownCommand}"/>
+                      <Separator/>
+                      <MenuItem Header="{l:T Common.Delete}" Command="{Binding RemoveSelfCommand}"/>
+                    </MenuFlyout>
+                  </Button.Flyout>
+                </Button>
+              </Grid>
             </Border>
 
             <!-- Component Body -->

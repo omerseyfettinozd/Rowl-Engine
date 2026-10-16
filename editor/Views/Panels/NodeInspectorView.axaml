@@ -12,26 +12,38 @@
              mc:Ignorable="d" d:DesignWidth="320" d:DesignHeight="700"
              x:Class="RowlEngine.Editor.Views.Panels.NodeInspectorView"
              x:DataType="vm:MainWindowViewModel">
+    <UserControl.Styles>
+        <!-- Dar Denetçide (240-420 px) iki sütunlu sayı satırları taşmasın: Fluent NumericUpDown
+             şablonundaki TextBox MinWidth=64 ve geniş (34 px) ok düğmeleri satırı ~250 px'e zorluyordu. -->
+        <Style Selector="NumericUpDown:not(:disabled)">
+            <Setter Property="MinWidth" Value="0"/>
+            <Setter Property="Padding" Value="6,5,2,5"/>
+        </Style>
+        <Style Selector="NumericUpDown /template/ TextBox#PART_TextBox">
+            <Setter Property="MinWidth" Value="0"/>
+        </Style>
+        <!-- ":not(:disabled)" bilinçli: ControlTheme'deki MinWidth=34 / Width değerini yalnız etkinleştirilmiş
+             (StyleTrigger öncelikli) bir seçici ezebiliyor; ok düğmeleri 34 yerine 22 px olur. -->
+        <Style Selector="NumericUpDown RepeatButton:not(:disabled)">
+            <Setter Property="MinWidth" Value="0"/>
+            <Setter Property="Width" Value="22"/>
+        </Style>
+        <!-- Uzun etiket/ipucu metinleri kartın dışına taşıp kırpılmasın, satır kaydırsın. -->
+        <Style Selector="TextBlock.caption, TextBlock.fieldLabel, TextBlock.hint, TextBlock.body">
+            <Setter Property="TextWrapping" Value="Wrap"/>
+        </Style>
+    </UserControl.Styles>
     <Border Background="{DynamicResource PanelBackground}">
-        <Grid RowDefinitions="Auto, *">
+        <Grid RowDefinitions="Auto, Auto, *">
 
-            <!-- Panel Header: GameObject Inspector (Unity Style) -->
-            <Border Grid.Row="0" Background="{DynamicResource SurfaceBackground}" 
-                    BorderBrush="{DynamicResource BorderColor}" BorderThickness="0,0,0,1"
-                    Padding="10,8">
-                <StackPanel Spacing="8">
-                    <!-- Kart 1: GameObject (Unity tarzı düz bölüm) -->
-                    <StackPanel>
-                        <DockPanel Margin="0,2,0,0">
-                            <StackPanel Spacing="0">
-                                <TextBlock Text="{l:T Inspector.Header.Title}" Classes="cardTitle" VerticalAlignment="Center"/>
-                                <TextBlock Text="{l:T Inspector.Header.Subtitle}" Classes="hint"/>
-                            </StackPanel>
-                            <TextBlock DockPanel.Dock="Right"
-                                       Text="{Binding HierarchyViewModel.SelectedObject.Id, StringFormat='ID: {0}', FallbackValue=''}"
-                                       Classes="hint" MaxWidth="110" TextTrimming="CharacterEllipsis"
-                                       ToolTip.Tip="{Binding HierarchyViewModel.SelectedObject.Id}"
-                                       VerticalAlignment="Center"/>
+            <!-- Panel başlığı (ortak kalıp: Border.panelHeader) + nesne kimliği + "..." menüsü -->
+            <Border Grid.Row="0" Classes="panelHeader">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Right"
+                               Text="{Binding HierarchyViewModel.SelectedObject.Id, StringFormat='ID: {0}', FallbackValue=''}"
+                               Classes="panelSubtitle" MaxWidth="110" TextTrimming="CharacterEllipsis"
+                               ToolTip.Tip="{Binding HierarchyViewModel.SelectedObject.Id}"
+                               VerticalAlignment="Center"/>
                             <!-- Unity kromu Dilim G3: nesne işlemleri
                                  taşma menüsü (yalnızca mevcut komutlar).
                                  Üç-nokta glifi lintte yasaktır, o
@@ -59,18 +71,27 @@
                                     </MenuFlyout>
                                 </Button.Flyout>
                             </Button>
-                        </DockPanel>
-                        <Border BorderBrush="{DynamicResource BorderColor}" BorderThickness="0,0,0,1"
-                                Margin="0,4,0,0"/>
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="{l:T Inspector.Header.Title}" Classes="panelTitle"/>
+                        <TextBlock Text="{l:T Inspector.Header.Subtitle}" Classes="panelSubtitle"/>
+                    </StackPanel>
+                </DockPanel>
+            </Border>
 
+            <!-- Seçili nesne adı + Etkin, ardından Düğüm bölümü -->
+            <Border Grid.Row="1" Background="{DynamicResource SurfaceBackground}"
+                    BorderBrush="{DynamicResource BorderColor}" BorderThickness="0,0,0,1"
+                    Padding="10,8">
+                <StackPanel Spacing="8">
+                    <StackPanel>
                         <!-- Selected GameObject Name & Active State -->
-                        <Grid ColumnDefinitions="*, Auto" Margin="0,6,0,0"
+                        <Grid ColumnDefinitions="*, Auto"
                               IsVisible="{Binding InspectorViewModel.HasSelectedObject}">
                             <!-- Editable GameObject Name -->
                             <TextBox Grid.Column="0"
                                      Text="{Binding HierarchyViewModel.SelectedObject.Name, FallbackValue='GameObject'}"
                                      Watermark="{l:T Inspector.Object.Name.Watermark}"
-                                     FontSize="{DynamicResource FontSizeBodyLarge}" Padding="8,4" Margin="0,0,8,0"/>
+                                     FontSize="{DynamicResource FontSizeBodyLarge}" Padding="8,4" Margin="0,0,8,0" MinWidth="0"/>
 
                             <!-- Active Toggle -->
                             <CheckBox Grid.Column="1"
@@ -153,19 +174,20 @@
                                        IsVisible="{Binding InspectorViewModel.HasNoMemberGroups}"
                                        Classes="hint" FontStyle="Italic" TextWrapping="Wrap"/>
                         </StackPanel>
-                        <StackPanel Spacing="2" Orientation="Horizontal">
-                            <TextBlock Text="{l:T Inspector.Node.Color.Label}" Classes="muted" FontSize="{DynamicResource FontSizeBody}"
+                        <!-- Yıldız sütun: renk paleti (WrapPanel) panel genişliğine sarılır, taşmaz. -->
+                        <Grid ColumnDefinitions="Auto,*">
+                            <TextBlock Grid.Column="0" Text="{l:T Inspector.Node.Color.Label}" Classes="muted" FontSize="{DynamicResource FontSizeBody}"
                                        VerticalAlignment="Center" Margin="0,0,8,0"/>
-                            <ctrl:ColorPickerControl Mode="Palette"
+                            <ctrl:ColorPickerControl Grid.Column="1" Mode="Palette" HorizontalAlignment="Left"
                                                      SelectedValue="{Binding SelectedNode.ColorTag, Mode=TwoWay}"
                                                      ToolTip.Tip="{l:T Inspector.Node.Color.Tip}"/>
-                        </StackPanel>
+                        </Grid>
                         <StackPanel Orientation="Horizontal" Spacing="3"
                                     IsVisible="{Binding InspectorViewModel.SelectedNodeHasErrors}">
                             <TextBlock Text="{Binding InspectorViewModel.SelectedNodeIssues.Count}"
-                                       Classes="fieldValue" Foreground="{DynamicResource ErrorColor}"/>
+                                       Classes="fieldValue" Foreground="{DynamicResource ErrorBrush}"/>
                             <TextBlock Text="{l:T Inspector.Node.Issues.Suffix}"
-                                       Classes="fieldValue" Foreground="{DynamicResource ErrorColor}"/>
+                                       Classes="fieldValue" Foreground="{DynamicResource ErrorBrush}"/>
                         </StackPanel>
                         <!-- Faz 5 Dilim 5 fix: dönüştürülmüş asset provenance rozeti.
                              Sidecar yoksa HasSelectedAssetProvenance=false → gizli (fail-closed).
@@ -191,8 +213,10 @@
             </Border>
 
             <!-- Components List & Add Component Button -->
-            <ScrollViewer Grid.Row="1" Padding="8,8" HorizontalScrollBarVisibility="Disabled">
-                <StackPanel Spacing="8">
+            <!-- Kök neden: ScrollViewer.Padding ölçümde düşülmüyor (yalnız yerleştirmede), içerik panelden
+                 16 px geniş ölçülüp sağdan taşıyordu. İç boşluk Padding yerine Margin ile verilir. -->
+            <ScrollViewer Grid.Row="2" HorizontalScrollBarVisibility="Disabled">
+                <StackPanel Spacing="8" Margin="8">
 
                     <!-- Empty State: No GameObject Selected -->
                     <StackPanel IsVisible="{Binding !InspectorViewModel.HasSelectedObject}" 

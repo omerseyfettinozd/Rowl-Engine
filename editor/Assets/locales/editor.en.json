@@ -1226,6 +1226,27 @@
     },
     "Settings.Close": {
       "text": "Close"
+    },
+    "App.Window.Title": {
+      "text": "Rowl Engine Editor"
+    },
+    "App.Brand.Name": {
+      "text": "ROWL"
+    },
+    "App.Brand.Tagline": {
+      "text": "STORY STUDIO"
+    },
+    "Search.Overlay.Watermark": {
+      "text": "Search: title, speaker, text, speaker:Evelyn, type:choice… (Esc to close)"
+    },
+    "Search.Filter.Kind": {
+      "text": "Type:"
+    },
+    "Search.Filter.Speaker": {
+      "text": "Speaker:"
+    },
+    "Search.Filter.Color": {
+      "text": "Color:"
     }
   }
 }

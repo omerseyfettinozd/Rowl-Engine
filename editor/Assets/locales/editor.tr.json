@@ -1226,6 +1226,27 @@
     },
     "Settings.Close": {
       "text": "Kapat"
+    },
+    "App.Window.Title": {
+      "text": "Rowl Engine Editor"
+    },
+    "App.Brand.Name": {
+      "text": "ROWL"
+    },
+    "App.Brand.Tagline": {
+      "text": "STORY STUDIO"
+    },
+    "Search.Overlay.Watermark": {
+      "text": "Ara: başlık, konuşmacı, metin, speaker:Evelyn, type:choice… (Esc kapat)"
+    },
+    "Search.Filter.Kind": {
+      "text": "Tür:"
+    },
+    "Search.Filter.Speaker": {
+      "text": "Konuşmacı:"
+    },
+    "Search.Filter.Color": {
+      "text": "Renk:"
     }
   }
 }

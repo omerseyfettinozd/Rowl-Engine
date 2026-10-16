@@ -6,22 +6,28 @@
              x:DataType="comp:CameraComponentViewModel">
   <Border Classes="card" ClipToBounds="True" Margin="0,4">
     <StackPanel>
+      <!-- Bileşen kartı başlığı (8 kartta aynı kalıp): onay kutusu | ad (yıldız sütun, kırpılır) | Ayar | "..." menüsü.
+           Yukarı/Aşağı/Sil menüde; böylece dar Denetçide başlık taşmaz. Komutlar aynı. -->
       <Border Background="{DynamicResource CardHeaderBackground}" Padding="8,6">
-        <Grid ColumnDefinitions="*, Auto">
-          <Grid Grid.Column="0" ColumnDefinitions="Auto,*" VerticalAlignment="Center">
-            <CheckBox Grid.Column="0" IsChecked="{Binding IsEnabled}" ToolTip.Tip="{l:T Common.Enable.Tip}" MinWidth="0" Padding="0" Margin="0,0,2,0" VerticalAlignment="Center"/>
-            <ToggleButton Grid.Column="1" Classes="header" IsChecked="{Binding IsExpanded}" ToolTip.Tip="{l:T Common.ExpandCollapse.Tip}"
-                          Background="Transparent" BorderThickness="0" Padding="4,2"
-                          HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" VerticalAlignment="Center">
-              <TextBlock Text="{l:T Component.Camera.Title}" FontSize="{DynamicResource FontSizeBodyLarge}" FontWeight="Bold" Foreground="{DynamicResource PrimaryText}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-            </ToggleButton>
-          </Grid>
-          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="3" VerticalAlignment="Center">
-            <Button Classes="compact" Content="{l:T Common.MoveUp}" Command="{Binding MoveUpCommand}" ToolTip.Tip="{l:T Common.MoveUp.Tip}"/>
-            <Button Classes="compact" Content="{l:T Common.MoveDown}" Command="{Binding MoveDownCommand}" ToolTip.Tip="{l:T Common.MoveDown.Tip}"/>
-            <ToggleButton Classes="compact" IsChecked="{Binding IsExpanded}" Content="{l:T Common.Settings}"/>
-            <Button Classes="compact" Content="{l:T Common.Delete}" Command="{Binding RemoveSelfCommand}" ToolTip.Tip="{l:T Common.RemoveComponent.Tip}"/>
-          </StackPanel>
+        <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="2">
+          <CheckBox Grid.Column="0" IsChecked="{Binding IsEnabled}" ToolTip.Tip="{l:T Common.Enable.Tip}" MinWidth="0" Padding="0" Margin="0,0,2,0" VerticalAlignment="Center"/>
+          <ToggleButton Grid.Column="1" Classes="header" IsChecked="{Binding IsExpanded}" ToolTip.Tip="{l:T Common.ExpandCollapse.Tip}"
+                        Background="Transparent" BorderThickness="0" Padding="4,2" MinWidth="0"
+                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" VerticalAlignment="Center">
+            <TextBlock Classes="cardTitle" Text="{l:T Component.Camera.Title}" VerticalAlignment="Center"
+                       TextTrimming="CharacterEllipsis" ToolTip.Tip="{l:T Component.Camera.Title}"/>
+          </ToggleButton>
+          <ToggleButton Grid.Column="2" Classes="compact" IsChecked="{Binding IsExpanded}" Content="{l:T Common.Settings}" VerticalAlignment="Center"/>
+          <Button Grid.Column="3" Classes="compact" Content="..." ToolTip.Tip="{l:T Inspector.Components.Actions.Tip}" VerticalAlignment="Center">
+            <Button.Flyout>
+              <MenuFlyout Placement="BottomEdgeAlignedRight">
+                <MenuItem Header="{l:T Common.MoveUp.Tip}" Command="{Binding MoveUpCommand}"/>
+                <MenuItem Header="{l:T Common.MoveDown.Tip}" Command="{Binding MoveDownCommand}"/>
+                <Separator/>
+                <MenuItem Header="{l:T Common.Delete}" Command="{Binding RemoveSelfCommand}"/>
+              </MenuFlyout>
+            </Button.Flyout>
+          </Button>
         </Grid>
       </Border>
       <StackPanel IsVisible="{Binding IsExpanded}" Spacing="8" Margin="8,6">
@@ -56,7 +62,7 @@
       <Separator Background="{DynamicResource BorderColor}" Height="1"/>
       <StackPanel Spacing="6">
         <TextBlock Text="{l:T Component.Camera.Tween.Label}" Classes="caption" FontWeight="SemiBold" />
-        <Grid ColumnDefinitions="*,*,*" ColumnSpacing="8">
+        <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto" ColumnSpacing="8" RowSpacing="6">
           <StackPanel Grid.Column="0" Spacing="2">
             <TextBlock Text="{l:T Component.Camera.PanTime}" Classes="body" />
             <NumericUpDown Value="{Binding PanDuration}" Increment="0.25" Minimum="0" Maximum="60" FormatString="F2" />
@@ -65,7 +71,7 @@
             <TextBlock Text="{l:T Component.Camera.ZoomTime}" Classes="body" />
             <NumericUpDown Value="{Binding ZoomDuration}" Increment="0.25" Minimum="0" Maximum="60" FormatString="F2" />
           </StackPanel>
-          <StackPanel Grid.Column="2" Spacing="2">
+          <StackPanel Grid.Row="1" Grid.Column="0" Spacing="2">
             <TextBlock Text="{l:T Component.Camera.Easing}" Classes="body" />
             <TextBox Text="{Binding Easing}" Watermark="{l:T Component.Camera.Easing.Watermark}" />
           </StackPanel>
@@ -85,7 +91,7 @@
                     HorizontalAlignment="Stretch" />
         </StackPanel>
 
-        <Grid ColumnDefinitions="*,*,*" ColumnSpacing="8">
+        <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto" ColumnSpacing="8" RowSpacing="6">
           <StackPanel Grid.Column="0" Spacing="2">
             <TextBlock Text="{l:T Component.Camera.Shake.Intensity}" Classes="body" />
             <NumericUpDown Value="{Binding ShakeIntensity}" Increment="5" Minimum="0" Maximum="1000" />
@@ -94,14 +100,14 @@
             <TextBlock Text="{l:T Component.Camera.Shake.Duration}" Classes="body" />
             <NumericUpDown Value="{Binding ShakeDuration}" Increment="0.1" Minimum="0" Maximum="60" FormatString="F2" />
           </StackPanel>
-          <StackPanel Grid.Column="2" Spacing="2">
+          <StackPanel Grid.Row="1" Grid.Column="0" Spacing="2">
             <TextBlock Text="{l:T Component.Camera.Shake.Frequency}" Classes="body" />
             <NumericUpDown Value="{Binding ShakeFrequency}" Increment="5" Minimum="1" Maximum="100" />
           </StackPanel>
         </Grid>
 
         <!-- Damping and Directional Constraints -->
-        <Grid ColumnDefinitions="*,*,*" ColumnSpacing="8">
+        <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto" ColumnSpacing="8" RowSpacing="6">
           <StackPanel Grid.Column="0" Spacing="2">
             <TextBlock Text="{l:T Component.Camera.Shake.Damping}" Classes="body" />
             <NumericUpDown Value="{Binding ShakeDamping}" Increment="0.1" Minimum="0.1" Maximum="5.0" FormatString="F2" />
@@ -110,7 +116,7 @@
             <TextBlock Text="{l:T Component.Camera.Shake.DirX}" Classes="body" />
             <NumericUpDown Value="{Binding ShakeDirectionX}" Increment="0.1" Minimum="0" Maximum="1.0" FormatString="F2" />
           </StackPanel>
-          <StackPanel Grid.Column="2" Spacing="2">
+          <StackPanel Grid.Row="1" Grid.Column="0" Spacing="2">
             <TextBlock Text="{l:T Component.Camera.Shake.DirY}" Classes="body" />
             <NumericUpDown Value="{Binding ShakeDirectionY}" Increment="0.1" Minimum="0" Maximum="1.0" FormatString="F2" />
           </StackPanel>

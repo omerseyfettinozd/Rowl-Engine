@@ -30,7 +30,7 @@
                     Background="Transparent">
 
             <!-- TERCİHLER (bu cihaz): Tema / Genel / Oyuncu -->
-            <TabItem Header="{l:T Settings.Tab.Theme}">
+            <TabItem Classes="compact" Header="{l:T Settings.Tab.Theme}">
                 <ScrollViewer Padding="24,20">
                     <StackPanel Spacing="16" MaxWidth="560" HorizontalAlignment="Left">
                         <StackPanel Spacing="4">
@@ -82,7 +82,7 @@
                 </ScrollViewer>
             </TabItem>
 
-            <TabItem Header="{l:T Settings.Tab.General}">
+            <TabItem Classes="compact" Header="{l:T Settings.Tab.General}">
                 <ScrollViewer Padding="24,20">
                     <StackPanel Spacing="16" MaxWidth="560" HorizontalAlignment="Left">
                         <StackPanel Spacing="4">
@@ -127,7 +127,7 @@
                 </ScrollViewer>
             </TabItem>
 
-            <TabItem Header="{l:T Settings.Tab.Player}">
+            <TabItem Classes="compact" Header="{l:T Settings.Tab.Player}">
                 <ScrollViewer Padding="24,20">
                     <StackPanel Spacing="16" MaxWidth="560" HorizontalAlignment="Left">
                         <StackPanel Spacing="4">
@@ -168,7 +168,7 @@
             </TabItem>
 
             <!-- PROJE AYARLARI (project.rowlproj) -->
-            <TabItem Header="{l:T Settings.Tab.Project}">
+            <TabItem Classes="compact" Header="{l:T Settings.Tab.Project}">
                 <ScrollViewer Padding="24,20">
                     <StackPanel Spacing="16" MaxWidth="560" HorizontalAlignment="Left">
                         <StackPanel Spacing="4">
@@ -198,7 +198,7 @@
                 </ScrollViewer>
             </TabItem>
 
-            <TabItem Header="{l:T Settings.Tab.Shortcuts}">
+            <TabItem Classes="compact" Header="{l:T Settings.Tab.Shortcuts}">
                 <ScrollViewer Padding="24,20">
                     <StackPanel Spacing="12" MaxWidth="560" HorizontalAlignment="Left">
                         <StackPanel Spacing="4">
@@ -267,7 +267,7 @@
                 </ScrollViewer>
             </TabItem>
 
-            <TabItem Header="{l:T Settings.Tab.About}">
+            <TabItem Classes="compact" Header="{l:T Settings.Tab.About}">
                 <ScrollViewer Padding="24,20">
                     <StackPanel Spacing="18" HorizontalAlignment="Center" VerticalAlignment="Center">
                         <TextBlock Classes="heading" Foreground="{DynamicResource Accent}" HorizontalAlignment="Center">ROWL ENGINE</TextBlock>
