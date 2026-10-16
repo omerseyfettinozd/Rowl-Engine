@@ -13,10 +13,15 @@ public sealed class EditorSettingsProfile
     /// <summary>Faz 6: varlık ızgarası simge boyutu, piksel (40–128).</summary>
     public double AssetGridItemSize { get; set; } = 72;
 
+    /// <summary>Faz 2b: editör arayüzü dili (oyun önizleme dilinden ayrı, K9).</summary>
+    public string EditorLanguage { get; set; } = Strings.EditorStrings.SourceLanguage;
+
     public EditorSettingsProfile Sanitized()
     {
         AutoSaveIntervalSeconds = Math.Clamp(AutoSaveIntervalSeconds, 15, 300);
         AssetGridItemSize = Math.Clamp(AssetGridItemSize, 40, 128);
+        if (string.IsNullOrWhiteSpace(EditorLanguage))
+            EditorLanguage = Strings.EditorStrings.SourceLanguage;
         return this;
     }
 

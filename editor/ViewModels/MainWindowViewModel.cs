@@ -1846,6 +1846,14 @@ namespace RowlEngine.Editor.ViewModels
 
         partial void OnSelectedLayoutPresetChanged(string value) => ApplyLayoutPresetState(value);
 
+        /// <summary>Faz 3 (K4): "…" > Düzen menüsü önayarı seçer (eski açılır kutunun yerine).</summary>
+        [RelayCommand]
+        private void SelectLayoutPreset(string? presetName)
+        {
+            if (presetName is not null && AvailableLayoutPresets.Contains(presetName))
+                SelectedLayoutPreset = presetName;
+        }
+
         private void ApplyLayoutPresetState(string? presetName)
         {
             if (string.IsNullOrEmpty(presetName)) return;

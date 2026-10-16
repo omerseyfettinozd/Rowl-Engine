@@ -16,7 +16,7 @@
                 <Grid ColumnDefinitions="*, Auto">
                     <Grid Grid.Column="0" ColumnDefinitions="Auto,*" VerticalAlignment="Center">
                         <CheckBox Grid.Column="0" IsChecked="{Binding IsEnabled}" ToolTip.Tip="Enable/Disable" MinWidth="0" Padding="0" Margin="0,0,2,0" VerticalAlignment="Center"/>
-                        <ToggleButton Grid.Column="1" IsChecked="{Binding IsExpanded}" ToolTip.Tip="Genişlet/Daralt"
+                        <ToggleButton Grid.Column="1" Classes="header" IsChecked="{Binding IsExpanded}" ToolTip.Tip="Genişlet/Daralt"
                                       Background="Transparent" BorderThickness="0" Padding="4,2"
                                       HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" VerticalAlignment="Center">
                             <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6">

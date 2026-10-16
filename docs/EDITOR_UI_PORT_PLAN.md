@@ -1,6 +1,6 @@
 # Editör arayüzü — prototipten Avalonia'ya taşıma planı
 
-**Durum:** plan, kararlar netleşti (2026-10-15). Kod değişikliği yok. Kaynak tasarım:
+**Durum:** Faz 1 ✅ · Faz 2 + 2b ✅ · Faz 3 ✅ (2026-10-16) · sıradaki Faz 4. Kod değişikliği yok. Kaynak tasarım:
 `prototypes/editor-workspace/` (tasarım şartnamesi olarak dondurulur). Hedef:
 `editor/` (Avalonia 11.3, Fluent tema).
 
@@ -75,6 +75,13 @@ süs metni) · input kenarı: prototip #3B3B40 **1.72:1** → K1 ile #4A4A52 = 2
 - Panel başlığı: ikon + başlık + yerleşim/sabitle/kapat düğmeleri.
 - Düğme dağılımı K4'e göre; boyutlar K2 (32–36 px).
 
+**Yapılan (2026-10-16):** tek satır üst çubuk; ortada kapsül (`TopCapsule`: Node · Oyun ·
+Sahne Düzenle | Oynat · Duraklat · Adım | Araçlar · `…`); `…` menüsü (Projeler, Kaydet,
+Geri Al/Yinele, Dışa Aktar/İptal, Düzen önayarları, Bölünmüş Ekran, Ayarlar); kanvasta Node
+araç çubuğu; kaydedilmemiş değişiklik noktası (`IsProjectDirty`); tüm metinler katalogda.
+Kısayollar değişmedi (pencere kodunda). **Faz 4'e devredildi:** panel başlıkları (sabitle/kapat
+davranışı Faz 5 pencere sistemiyle birlikte anlamlı).
+
 ## Faz 4 — Paneller tek tek
 
 Sıra (görünürlük × risk): Node grafiği → Inspector → Hiyerarşi → Varlıklar →
@@ -110,12 +117,12 @@ Türkçe birliği testle kilitli: `EditorChromeLanguageTests`). Oyun tarafında 
 diller, geri dönüş zinciri, HarfBuzz/FriBidi şekillendirme, `qps-ploc` ve CSV hazır.
 Oyuncu profili şu an yalnız `en`, `tr` listeliyor.
 
-1. **Servis:** `EditorStrings` — aktif dil, geri dönüş (`tr` → `en` → anahtar), canlı
+1. **Servis:** `EditorStrings` — aktif dil, geri dönüş (etkin → `en` → `tr` → anahtar), canlı
    değişimde `PropertyChanged` ile tüm bağlı metinleri yeniler (K7).
 2. **XAML kullanımı:** işaretleme uzantısı, ör. `Text="{l:T Inspector.Title}"`;
    C# tarafı `EditorStrings.Get("…")`. Komut kimlikleri (CommandParameter) çevrilmez.
-3. **Dosyalar:** `editor/Assets/locales/editor.<dil>.json` — K8 katalog şeması; `tr`
-   kaynak dil, `en` ikinci dil. Eksik anahtar sessiz değil: geliştirmede uyarı logu.
+3. **Dosyalar:** `editor/Assets/locales/editor.<dil>.json` → çıktıda `locales/` (gömülü kaynak
+   değil: yeni dil yeniden derlemeden eklenir) — K8 katalog şeması; `tr` kaynak dil, `en` ikinci dil. Eksik anahtar sessiz değil: geliştirmede uyarı logu.
 4. **RTL:** `FlowDirection` dil özelliğinden; paneller sola/sağa sabit koordinat yerine
    `Start/End` mantığıyla kurulur; ikon yönleri (oklar) aynalanabilir.
 5. **Yazı tipi zinciri:** Inter → Noto Sans (Arapça/İbranice) → Noto Sans CJK; CJK
@@ -130,6 +137,17 @@ Oyuncu profili şu an yalnız `en`, `tr` listeliyor.
 
 Faz 4'te her panel taşınırken metinleri de anahtarlara çıkarılır (ayrı bir "çeviri
 seferi" yok).
+
+**Yapılan (2026-10-16):** 1, 2, 3, 4 (FlowDirection bağlı), 6 (ordinal anahtar), 7(b) mandal
+(taban 651 metin / 35 dosya, `editor/Tests/editor-hardcoded-text-baseline.json`), 7(c);
+ayarlarda dil seçici; ilk dilim ana pencere menü/sekmeleri. **Kalan:** 5 (CJK/RTL yazı tipi
+paketleme — çeviri gelince), 7(a) `qps-ploc` RowlEye denetimi, 8 önizleme dili seçici (Faz 3
+kapsülüyle). Not: Avalonia indeksleyici bildirimi `"Item"` adını dinler (WPF'teki `"Item[]"` değil).
+
+**Faz 2 yapılan:** yazı/köşe/boşluk/yükseklik token'ları, `Styles/ControlStyles.axaml`
+sınıfları (caption, muted, body, title, heading; ghost, primary, icon; panel, card;
+ToggleButton.header), Fluent vurgusu kemik tonuna (vurgu üstü ön planlar koyu), K1 input
+kenar/odak, liste/ağaç seçimi prototip grisi.
 
 ## Her fazda kapı
 

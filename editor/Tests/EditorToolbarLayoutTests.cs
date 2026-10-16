@@ -24,7 +24,7 @@ namespace RowlEngine.Editor
                 return;
             }
 
-            Console.WriteLine("\n[Test 35]: Toolbar layout lock (button order, menus, relocated commands)...");
+            Console.WriteLine("\n[Test 35]: Toolbar layout lock (Faz 3 capsule, … menu, node toolbar, shortcuts)...");
             // NOT: pencere headless'ta Show() edilmez — boş engine
             // bitmap'li Image kontrolleri layout ölçümünde patlar. İçerik
             // bağlamaları DataContext atanır atanmaz çözüldüğü için
@@ -32,38 +32,22 @@ namespace RowlEngine.Editor
             var window = new MainWindow(mainVm);
             try
             {
-                var left = window.FindControl<StackPanel>("ToolbarLeftGroups")
-                    ?? throw new Exception("ToolbarLeftGroups not found");
-                string[] leftContents = left.Children.OfType<Button>()
-                    .Select(b => b.Content as string ?? string.Empty).ToArray();
-                string[] expectedLeft = new[]
-                {
-                    "Kaydet", "Geri Al", "Yinele",
-                    "+ Node", "Bağlantıyı Kes", "Sil",
-                    "+ Grup", "Üst"
-                };
-                if (!leftContents.SequenceEqual(expectedLeft))
-                    throw new Exception(
-                        $"Left toolbar order changed: [{string.Join(", ", leftContents)}]");
+                // EDITOR_UI_PORT_PLAN Faz 3 (K4): tek satır üst çubuk, ortada
+                // kapsül = görünümler | taşıma | Araçlar · Diğer (…). Eski iki
+                // sıralı sol/sağ düğme grupları bilerek kaldırıldı.
+                var capsule = window.FindControl<Border>("TopCapsule")
+                    ?? throw new Exception("TopCapsule not found");
+                if (Grid.GetColumn(capsule) != 1 || capsule.Parent is not Grid topGrid
+                    || topGrid.ColumnDefinitions.Count != 3)
+                    throw new Exception("TopCapsule must sit in the centre column of the top bar");
+                foreach (string gone in new[] { "ToolbarLeftGroups", "ToolbarRightGroups", "LayoutPresetCombo" })
+                    if (window.FindControl<Control>(gone) is not null)
+                        throw new Exception($"Removed two-row toolbar element '{gone}' is back");
 
-                var right = window.FindControl<StackPanel>("ToolbarRightGroups")
-                    ?? throw new Exception("ToolbarRightGroups not found");
-                var rightButtons = right.Children.OfType<Button>().ToList();
-                // Unity düzeni: Play ortadaki TransportCluster'a taşındı,
-                // sağda Build/İptal/Ayarlar kaldı.
-                if (rightButtons.Count != 3)
-                    throw new Exception(
-                        $"Right toolbar should have 3 buttons, has {rightButtons.Count}");
-                if ((rightButtons[^1].Content as string) != "Ayarlar")
-                    throw new Exception("Ayarlar must be the last (standalone) right toolbar button");
-
-                // Unity düzeni Dilim A: ortalanmış taşıma kümesi
-                // (Oynat/Duraklat/Adım), komutlara bağlı, oynamıyorken
-                // Duraklat/Adım kapalı.
+                // Taşıma kümesi (Oynat/Duraklat/Adım), komutlara bağlı,
+                // oynamıyorken Duraklat/Adım kapalı.
                 var cluster = window.FindControl<StackPanel>("TransportCluster")
                     ?? throw new Exception("TransportCluster not found");
-                if (cluster.HorizontalAlignment != HorizontalAlignment.Center)
-                    throw new Exception("TransportCluster must be centered");
                 var transportButtons = cluster.Children.OfType<Button>().ToList();
                 if (transportButtons.Count != 3
                     || transportButtons.Any(b => b.Command is null))
@@ -77,17 +61,13 @@ namespace RowlEngine.Editor
                 if (transportButtons[1].IsEnabled || transportButtons[2].IsEnabled)
                     throw new Exception("Pause/Step must be disabled while not playing");
 
-                // Unity düzeni Dilim B: Scene/Game sekme şeridi — komut
+                // Görünüm sekmeleri: Node · Oyun · Sahne Düzenle (K4). Komut
                 // parametreleri EN kalır, vurgu aktif görünümü izler.
                 var tabs = window.FindControl<StackPanel>("CenterViewTabs")
                     ?? throw new Exception("CenterViewTabs not found");
-                var tabButtons = tabs.Children.OfType<Button>().ToList();
-                if (tabButtons.Count != 4)
-                    throw new Exception(
-                        $"CenterViewTabs should have 4 buttons, has {tabButtons.Count}");
-                string?[] tabParams = tabButtons
+                string?[] tabParams = tabs.Children.OfType<Button>()
                     .Select(b => b.CommandParameter as string).ToArray();
-                string?[] expectedParams = new[] { "NodeGraph", "Preview", "EnginePreview", "SplitScreen" };
+                string?[] expectedParams = new[] { "NodeGraph", "EnginePreview", "Preview" };
                 if (!tabParams.SequenceEqual(expectedParams))
                     throw new Exception(
                         $"CenterViewTabs params changed: [{string.Join(", ", tabParams)}]");
@@ -98,12 +78,45 @@ namespace RowlEngine.Editor
                 if (!mainVm.IsNodeGraphActive || mainVm.SceneTabBrush == "Transparent")
                     throw new Exception("Scene tab highlight did not follow NodeGraph");
 
-                string[] allToolbar = leftContents
-                    .Concat(rightButtons.Select(b => b.Content as string ?? string.Empty))
-                    .ToArray();
-                foreach (string gone in new[] { "Ara", "Oyuncu" })
-                    if (allToolbar.Contains(gone))
-                        throw new Exception($"Removed toolbar button '{gone}' is back");
+                // "…" menüsü: proje, kayıt, dışa aktarma, düzen, bölünmüş ekran, ayarlar.
+                var more = window.FindControl<MenuItem>("MoreMenu")
+                    ?? throw new Exception("MoreMenu not found");
+                var moreCommands = more.Items.OfType<MenuItem>().Select(m => m.Command).ToList();
+                foreach (var (command, name) in new (object?, string)[]
+                {
+                    (mainVm.SaveProjectCommand, "Kaydet"), (mainVm.UndoCommand, "Geri Al"),
+                    (mainVm.RedoCommand, "Yinele"), (mainVm.BuildGameCommand, "Dışa Aktar"),
+                    (mainVm.CancelBuildCommand, "İptal"), (mainVm.OpenSettingsCommand, "Ayarlar"),
+                })
+                {
+                    if (!moreCommands.Contains(command))
+                        throw new Exception($"'{name}' is missing from the … menu");
+                }
+
+                // Node araç çubuğu kanvasta (K4): 5 düğüm komutu, sırayla.
+                var nodeBar = window.FindControl<StackPanel>("NodeToolbar")
+                    ?? throw new Exception("NodeToolbar not found");
+                var nodeCommands = nodeBar.Children.OfType<Button>().Select(b => b.Command).ToList();
+                var expectedNode = new object?[]
+                {
+                    mainVm.AddNodeCommand, mainVm.DisconnectSelectedNodeCablesCommand,
+                    mainVm.DeleteSelectedNodeCommand, mainVm.CreateGroupFromSelectionCommand,
+                    mainVm.ExitSubgraphCommand,
+                };
+                if (!nodeCommands.SequenceEqual(expectedNode))
+                    throw new Exception("Node toolbar commands/order changed");
+
+                // Kaydedilmemiş değişiklik noktası projenin kirli durumunu izler.
+                var dot = window.FindControl<Avalonia.Controls.Shapes.Ellipse>("UnsavedDot")
+                    ?? throw new Exception("UnsavedDot not found");
+                bool dirtyBefore = mainVm.IsProjectDirty;
+                mainVm.IsProjectDirty = true;
+                bool shownWhenDirty = dot.IsVisible;
+                mainVm.IsProjectDirty = false;
+                bool hiddenWhenClean = !dot.IsVisible;
+                mainVm.IsProjectDirty = dirtyBefore;
+                if (!shownWhenDirty || !hiddenWhenClean)
+                    throw new Exception("UnsavedDot does not follow IsProjectDirty");
 
                 var windowsMenu = window.FindControl<MenuItem>("WindowsMenu")
                     ?? throw new Exception("WindowsMenu not found");
