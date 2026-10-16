@@ -30,6 +30,8 @@
         <vm:MainWindowViewModel/>
     </Design.DataContext>
 
+    <!-- Faz 8 D2: arayüz ölçeği (%100/%115/%130) — tüm içerik birlikte ölçeklenir (EditorUiScale). -->
+    <LayoutTransformControl x:Name="UiScaleHost">
     <Grid RowDefinitions="Auto, *, Auto">
 
         <!-- Üst çubuk: 56 px, AppBackground, markasız ortalanmış kapsül -->
@@ -463,6 +465,8 @@
         <StackPanel Grid.Row="1" Grid.RowSpan="2"
                     HorizontalAlignment="Right" VerticalAlignment="Bottom"
                     Margin="0,0,20,40" ZIndex="200" Spacing="8">
+            <!-- Faz 8 C2: Kaydet / Farklı kaydet / Dışa aktar sonucu (çalışıyor / başarılı / hatalı). -->
+            <panels:OperationStatusCard DataContext="{Binding OperationStatus}"/>
             <Border x:Name="ToastPanel" IsVisible="{Binding Toast.IsVisible}"
                     Background="{Binding Toast.ToastBackground}"
                     CornerRadius="8" Padding="16,10"
@@ -478,4 +482,5 @@
         </StackPanel>
 
     </Grid>
+    </LayoutTransformControl>
 </Window>

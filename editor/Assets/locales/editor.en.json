@@ -873,6 +873,30 @@
     "Hub.Delete": {
       "text": "Delete"
     },
+    "Hub.Dialog.CreateFailed": {
+      "text": "Could not create '{0}': {1}"
+    },
+    "Hub.Dialog.Delete.Confirm": {
+      "text": "Remove"
+    },
+    "Hub.Dialog.Delete.Message": {
+      "text": "Are you sure you want to remove '{0}' from the list?"
+    },
+    "Hub.Dialog.Delete.Title": {
+      "text": "Remove Project"
+    },
+    "Hub.Dialog.Error.Title": {
+      "text": "Error"
+    },
+    "Hub.Dialog.Ok": {
+      "text": "OK"
+    },
+    "Hub.Dialog.RenameFailed.Message": {
+      "text": "A project with this name already exists."
+    },
+    "Hub.Dialog.RenameFailed.Title": {
+      "text": "Rename Failed"
+    },
     "Hub.EmptyDescriptionPanel": {
       "text": "Create a project; then set up scenes, choices and preview in order."
     },
@@ -885,6 +909,9 @@
     "Hub.Import": {
       "text": "Import"
     },
+    "Hub.LastOpened": {
+      "text": "Last opened: {0}"
+    },
     "Hub.NewStory": {
       "text": "New story"
     },
@@ -894,11 +921,71 @@
     "Hub.Other": {
       "text": "More"
     },
+    "Hub.Picker.Cover": {
+      "text": "Select Cover Image"
+    },
+    "Hub.Picker.ImageFiles": {
+      "text": "Image Files (*.png;*.jpg;*.jpeg;*.bmp;*.tga)"
+    },
+    "Hub.Picker.ImportFolder": {
+      "text": "Select Existing Rowl Engine Project Folder"
+    },
     "Hub.Projects": {
       "text": "Projects"
     },
+    "Hub.RemoveFromList": {
+      "text": "Remove from list"
+    },
     "Hub.Rename": {
       "text": "Rename"
+    },
+    "Hub.State.Invalid": {
+      "text": "No project file"
+    },
+    "Hub.State.Missing": {
+      "text": "Folder not found"
+    },
+    "Hub.Status.AlreadyListed": {
+      "text": "'{0}' is already listed"
+    },
+    "Hub.Status.Count": {
+      "text": "{0} projects"
+    },
+    "Hub.Status.CountWithMissing": {
+      "text": "{0} projects · {1} missing"
+    },
+    "Hub.Status.CoverFailed": {
+      "text": "Could not change cover: {0}"
+    },
+    "Hub.Status.CoverRejected": {
+      "text": "Cover rejected: {0}"
+    },
+    "Hub.Status.CoverUpdated": {
+      "text": "Cover image updated"
+    },
+    "Hub.Status.Created": {
+      "text": "'{0}' created"
+    },
+    "Hub.Status.Empty": {
+      "text": "No projects yet — create your first project!"
+    },
+    "Hub.Status.Imported": {
+      "text": "'{0}' imported"
+    },
+    "Hub.Status.NotAProject": {
+      "text": "Selected folder is not a Rowl project (Assets/json/full_story_graph.json missing)"
+    },
+    "Hub.Status.OpenFailed": {
+      "text": "Could not open '{0}': {1}"
+    },
+    "Hub.Status.Removed": {
+      "text": "'{0}' removed from list"
+    },
+    "Hub.Status.RenameFailed": {
+      "text": "Rename failed"
+    },
+    "Hub.Status.Renamed": {
+      "text": "Renamed to '{0}'"
     },
     "Hub.Title": {
       "text": "Rowl Engine — Projects"
@@ -1524,6 +1611,48 @@
     "NodeControl.SubgraphBorderTooltip": {
       "text": "Subgraph boundary — double-click to enter"
     },
+    "Operation.Dismiss": {
+      "text": "Close"
+    },
+    "Operation.Export.Failed": {
+      "text": "Export failed"
+    },
+    "Operation.Export.Running": {
+      "text": "Exporting…"
+    },
+    "Operation.Export.Succeeded": {
+      "text": "Exported"
+    },
+    "Operation.OpenFolder": {
+      "text": "Open folder"
+    },
+    "Operation.Save.Failed": {
+      "text": "Save failed"
+    },
+    "Operation.Save.Running": {
+      "text": "Saving…"
+    },
+    "Operation.Save.Succeeded": {
+      "text": "Saved"
+    },
+    "Operation.Save.WriteFailed": {
+      "text": "The project file could not be written; see the Console."
+    },
+    "Operation.SaveAs.Failed": {
+      "text": "Save As failed"
+    },
+    "Operation.SaveAs.Running": {
+      "text": "Saving copy…"
+    },
+    "Operation.SaveAs.Succeeded": {
+      "text": "Copy saved"
+    },
+    "Operation.ShowLog": {
+      "text": "Go to log"
+    },
+    "Operation.UnknownError": {
+      "text": "Unknown error"
+    },
     "Panel.Assets": {
       "text": "Assets"
     },
@@ -1764,6 +1893,12 @@
     "Settings.Header.Eyebrow": {
       "text": "ROWL / SETTINGS"
     },
+    "Settings.HighContrast": {
+      "text": "High contrast"
+    },
+    "Settings.HighContrast.Hint": {
+      "text": "Sharpens faint text and borders."
+    },
     "Settings.Language": {
       "text": "Interface language"
     },
@@ -1857,6 +1992,9 @@
     "Settings.Shortcut.Undo": {
       "text": "Undo"
     },
+    "Settings.Shortcuts": {
+      "text": "Keyboard shortcuts"
+    },
     "Settings.Shortcuts.Title": {
       "text": "Keyboard Shortcuts"
     },
@@ -1899,8 +2037,77 @@
     "Settings.Theme.Title": {
       "text": "Theme & Appearance"
     },
+    "Settings.UiScale": {
+      "text": "UI scale"
+    },
+    "Settings.UiScale.Hint": {
+      "text": "Scales the whole editor UI; applied live."
+    },
+    "Settings.UiScale.Option": {
+      "text": "%{0}"
+    },
     "Settings.Window.Title": {
       "text": "Settings — Rowl Engine"
+    },
+    "Shortcut.Build": {
+      "text": "Build game"
+    },
+    "Shortcut.Cancel": {
+      "text": "Cancel / close"
+    },
+    "Shortcut.Copy": {
+      "text": "Copy selected nodes"
+    },
+    "Shortcut.DeleteNode": {
+      "text": "Delete selected node"
+    },
+    "Shortcut.Duplicate": {
+      "text": "Duplicate selected nodes"
+    },
+    "Shortcut.FocusNextPanel": {
+      "text": "Focus next panel"
+    },
+    "Shortcut.FocusPrevPanel": {
+      "text": "Focus previous panel"
+    },
+    "Shortcut.Fullscreen": {
+      "text": "Fullscreen"
+    },
+    "Shortcut.NewNode": {
+      "text": "New node"
+    },
+    "Shortcut.OpenHub": {
+      "text": "Open hub"
+    },
+    "Shortcut.Paste": {
+      "text": "Paste nodes from clipboard"
+    },
+    "Shortcut.Play": {
+      "text": "Toggle play mode"
+    },
+    "Shortcut.Redo": {
+      "text": "Redo"
+    },
+    "Shortcut.Rename": {
+      "text": "Rename"
+    },
+    "Shortcut.Save": {
+      "text": "Save project"
+    },
+    "Shortcut.SaveAs": {
+      "text": "Save project as"
+    },
+    "Shortcut.Search": {
+      "text": "Quick search"
+    },
+    "Shortcut.SelectAll": {
+      "text": "Select all nodes"
+    },
+    "Shortcut.Settings": {
+      "text": "Open settings"
+    },
+    "Shortcut.Undo": {
+      "text": "Undo"
     },
     "Status.Unsaved": {
       "text": "There are unsaved changes"

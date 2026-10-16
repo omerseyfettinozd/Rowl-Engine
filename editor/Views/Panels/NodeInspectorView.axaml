@@ -43,43 +43,47 @@
                 <DockPanel>
                     <!-- Faz 5 D4: çalışma alanı sabitle / kapat (panel bu başlığı kendi çizer) -->
                     <ws:PanelHeaderActions DockPanel.Dock="Right" Margin="4,0,-6,0"/>
-                    <TextBlock DockPanel.Dock="Right"
-                               Text="{Binding HierarchyViewModel.SelectedObject.Id, StringFormat='ID: {0}', FallbackValue=''}"
-                               Classes="panelSubtitle" MaxWidth="80" TextTrimming="CharacterEllipsis"
-                               ToolTip.Tip="{Binding HierarchyViewModel.SelectedObject.Id}"
-                               VerticalAlignment="Center"/>
-                            <!-- Unity kromu Dilim G3: nesne işlemleri
-                                 taşma menüsü (yalnızca mevcut komutlar).
-                                 Üç-nokta glifi lintte yasaktır, o
-                                 yüzden Content "..." yazılır. -->
-                            <Button DockPanel.Dock="Right" Content="..." Classes="tool"
-                                    ToolTip.Tip="{l:T Inspector.Object.Actions.Tip}"
-                                    IsEnabled="{Binding InspectorViewModel.HasSelectedObject}"
-                                    Foreground="{DynamicResource MutedText}" Margin="6,0,0,0"
-                                    VerticalAlignment="Center">
-                                <Button.Flyout>
-                                    <MenuFlyout Placement="BottomEdgeAlignedRight">
-                                        <MenuItem x:Name="DuplicateObjectMenuItem" Header="{l:T Inspector.Menu.Duplicate}"
-                                                  Command="{Binding HierarchyViewModel.DuplicateObjectCommand}"
-                                                  CommandParameter="{Binding HierarchyViewModel.SelectedObject}"/>
-                                        <MenuItem x:Name="DeleteObjectMenuItem" Header="{l:T Common.Delete}"
-                                                  Command="{Binding HierarchyViewModel.DeleteObjectCommand}"
-                                                  CommandParameter="{Binding HierarchyViewModel.SelectedObject}"/>
-                                        <Separator/>
-                                        <MenuItem x:Name="MoveObjectUpMenuItem" Header="{l:T Inspector.Menu.MoveUp}"
-                                                  Command="{Binding HierarchyViewModel.MoveObjectUpCommand}"
-                                                  CommandParameter="{Binding HierarchyViewModel.SelectedObject}"/>
-                                        <MenuItem x:Name="MoveObjectDownMenuItem" Header="{l:T Inspector.Menu.MoveDown}"
-                                                  Command="{Binding HierarchyViewModel.MoveObjectDownCommand}"
-                                                  CommandParameter="{Binding HierarchyViewModel.SelectedObject}"/>
-                                    </MenuFlyout>
-                                </Button.Flyout>
-                            </Button>
                     <!-- Prototip başlığı: ikon + ad (alt başlık kaldırıldı; dar panelde taşıyordu). -->
                     <Path DockPanel.Dock="Left" Classes="panelHeaderIcon"
                           Data="M4,7 h10 M18,7 h2 M4,17 h2 M10,17 h10 M14,5 v4 M6,15 v4"/>
-                    <TextBlock Text="{l:T Inspector.Header.Title}" Classes="panelTitle" TextTrimming="CharacterEllipsis"
+                    <TextBlock DockPanel.Dock="Left" Text="{l:T Inspector.Header.Title}" Classes="panelTitle" TextTrimming="CharacterEllipsis"
                                ToolTip.Tip="{l:T Inspector.Header.Subtitle}"/>
+                    <!-- Faz 8 D3: başlık önce ölçülür, kimlik + "..." kalan alanı paylaşır (%130 ölçekte
+                         "DENETÇİ" kesiliyor, kimlik yerini koruyordu). Görsel sıra değişmedi. -->
+                    <DockPanel>
+                        <TextBlock DockPanel.Dock="Right"
+                                   Text="{Binding HierarchyViewModel.SelectedObject.Id, StringFormat='ID: {0}', FallbackValue=''}"
+                                   Classes="panelSubtitle" MaxWidth="80" TextTrimming="CharacterEllipsis"
+                                   ToolTip.Tip="{Binding HierarchyViewModel.SelectedObject.Id}"
+                                   VerticalAlignment="Center"/>
+                                <!-- Unity kromu Dilim G3: nesne işlemleri
+                                     taşma menüsü (yalnızca mevcut komutlar).
+                                     Üç-nokta glifi lintte yasaktır, o
+                                     yüzden Content "..." yazılır. -->
+                                <Button DockPanel.Dock="Right" Content="..." Classes="tool"
+                                        ToolTip.Tip="{l:T Inspector.Object.Actions.Tip}"
+                                        IsEnabled="{Binding InspectorViewModel.HasSelectedObject}"
+                                        Foreground="{DynamicResource MutedText}" Margin="6,0,0,0"
+                                        VerticalAlignment="Center">
+                                    <Button.Flyout>
+                                        <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                            <MenuItem x:Name="DuplicateObjectMenuItem" Header="{l:T Inspector.Menu.Duplicate}"
+                                                      Command="{Binding HierarchyViewModel.DuplicateObjectCommand}"
+                                                      CommandParameter="{Binding HierarchyViewModel.SelectedObject}"/>
+                                            <MenuItem x:Name="DeleteObjectMenuItem" Header="{l:T Common.Delete}"
+                                                      Command="{Binding HierarchyViewModel.DeleteObjectCommand}"
+                                                      CommandParameter="{Binding HierarchyViewModel.SelectedObject}"/>
+                                            <Separator/>
+                                            <MenuItem x:Name="MoveObjectUpMenuItem" Header="{l:T Inspector.Menu.MoveUp}"
+                                                      Command="{Binding HierarchyViewModel.MoveObjectUpCommand}"
+                                                      CommandParameter="{Binding HierarchyViewModel.SelectedObject}"/>
+                                            <MenuItem x:Name="MoveObjectDownMenuItem" Header="{l:T Inspector.Menu.MoveDown}"
+                                                      Command="{Binding HierarchyViewModel.MoveObjectDownCommand}"
+                                                      CommandParameter="{Binding HierarchyViewModel.SelectedObject}"/>
+                                        </MenuFlyout>
+                                    </Button.Flyout>
+                                </Button>
+                    </DockPanel>
                 </DockPanel>
             </Border>
 

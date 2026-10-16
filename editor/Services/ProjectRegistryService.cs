@@ -14,13 +14,23 @@ namespace RowlEngine.Editor.Services
 
         public IReadOnlyList<ProjectInfo> Projects => _projects;
 
-        public ProjectRegistryService() : this(GetRegistryPath()) { }
+        public ProjectRegistryService() : this(GetRegistryPath(), DefaultSampleProjectsRoot()) { }
 
-        public ProjectRegistryService(string registryPath)
+        /// <summary>
+        /// Faz 8 C1: kayıt yolu verilen örnek (testler) kullanıcının ev dizinindeki örnek
+        /// projeleri kendiliğinden içe aktarmaz; aksi hâlde sonuç makineye bağlı olurdu.
+        /// </summary>
+        public ProjectRegistryService(string registryPath, string? sampleProjectsRoot = null)
         {
             _registryPath = registryPath;
+            _sampleProjectsRoot = sampleProjectsRoot;
             Load();
         }
+
+        private readonly string? _sampleProjectsRoot;
+
+        private static string DefaultSampleProjectsRoot() =>
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Belgeler", "Rowl Engine Project");
 
         public static string GetRegistryPath()
         {
@@ -153,8 +163,8 @@ namespace RowlEngine.Editor.Services
         private void TryAutoImportLegacyProject()
         {
             // Auto import sample projects if found in Documents or Projects directory
-            string userDocs = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Belgeler", "Rowl Engine Project");
-            if (Directory.Exists(userDocs))
+            string? userDocs = _sampleProjectsRoot;
+            if (userDocs != null && Directory.Exists(userDocs))
             {
                 try
                 {

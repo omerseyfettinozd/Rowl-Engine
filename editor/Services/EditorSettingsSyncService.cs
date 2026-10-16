@@ -29,7 +29,13 @@ public static class EditorSettingsSyncService
         settings.AssetGridItemSize = profile.AssetGridItemSize;
         settings.EditorLanguage = profile.EditorLanguage;
         settings.ReduceMotion = profile.ReduceMotion;
+        settings.UiScale = profile.UiScale;
+        settings.HighContrast = profile.HighContrast;
         Views.Workspace.WorkspaceHost.ProfilePrefersReducedMotion = profile.ReduceMotion;
+        // Canlı uygula: özellik setter'ı yalnız değer değişince çağırır; statik durum önceki
+        // pencereden farklıysa da eşitlensin (Apply durum aynıysa kaynaklara dokunmaz).
+        EditorUiScale.Apply(profile.UiScale);
+        EditorHighContrast.Apply(profile.HighContrast, settings.SelectedTheme);
     }
 
     public static void LoadProjectRuntimeSettings(ProjectRuntimeSettings projectSettings, SettingsViewModel settings)
@@ -54,7 +60,8 @@ public static class EditorSettingsSyncService
 
         if (propertyName is nameof(SettingsViewModel.AutoSaveEnabled) or nameof(SettingsViewModel.AutoSaveIntervalSeconds)
             or nameof(SettingsViewModel.AssetGridItemSize) or nameof(SettingsViewModel.EditorLanguage)
-            or nameof(SettingsViewModel.ReduceMotion))
+            or nameof(SettingsViewModel.ReduceMotion) or nameof(SettingsViewModel.UiScale)
+            or nameof(SettingsViewModel.HighContrast))
         {
             Views.Workspace.WorkspaceHost.ProfilePrefersReducedMotion = settings.ReduceMotion;
             // Faz 5 D5: read-modify-write — the profile also holds the dock workspace
@@ -66,6 +73,8 @@ public static class EditorSettingsSyncService
                 profile.AssetGridItemSize = settings.AssetGridItemSize;
                 profile.EditorLanguage = settings.EditorLanguage;
                 profile.ReduceMotion = settings.ReduceMotion;
+                profile.UiScale = settings.UiScale;
+                profile.HighContrast = settings.HighContrast;
             });
             return;
         }

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 
@@ -7,6 +8,9 @@ namespace RowlEngine.Editor.Services;
 /// <summary>Machine-local editor behaviour. It deliberately never travels with a game project.</summary>
 public sealed class EditorSettingsProfile
 {
+    // İzinli arayüz ölçekleri (Faz 8 D1).
+    public static readonly IReadOnlyList<double> AllowedUiScales = new[] { 1.0, 1.15, 1.3 };
+
     public bool AutoSaveEnabled { get; set; } = true;
     public int AutoSaveIntervalSeconds { get; set; } = 60;
 
@@ -18,6 +22,12 @@ public sealed class EditorSettingsProfile
 
     /// <summary>Faz 5 D6: çalışma alanı panel geçişlerini azaltma / devre dışı bırakma tercihi.</summary>
     public bool ReduceMotion { get; set; }
+
+    /// <summary>Faz 8 D1: arayüz ölçeği çarpanı (izinli değere oturtulur).</summary>
+    public double UiScale { get; set; } = 1.0;
+
+    /// <summary>Faz 8 D1: yüksek kontrast tercihi.</summary>
+    public bool HighContrast { get; set; }
 
     /// <summary>
     /// Faz 5 D5: dock workspace (split tree, bottom-strip tabs, pinned panels) as
@@ -35,7 +45,27 @@ public sealed class EditorSettingsProfile
         AssetGridItemSize = Math.Clamp(AssetGridItemSize, 40, 128);
         if (string.IsNullOrWhiteSpace(EditorLanguage))
             EditorLanguage = Strings.EditorStrings.SourceLanguage;
+        UiScale = SnapUiScale(UiScale);
         return this;
+    }
+
+    // En yakın izinli değere oturtur (NaN/sonsuz → 1.0).
+    private static double SnapUiScale(double value)
+    {
+        if (double.IsNaN(value) || double.IsInfinity(value))
+            return 1.0;
+        double best = AllowedUiScales[0];
+        double bestDist = Math.Abs(value - best);
+        for (int i = 1; i < AllowedUiScales.Count; i++)
+        {
+            double d = Math.Abs(value - AllowedUiScales[i]);
+            if (d < bestDist)
+            {
+                bestDist = d;
+                best = AllowedUiScales[i];
+            }
+        }
+        return best;
     }
 
     public static EditorSettingsProfile Load(string path) => Load(path, onError: null);

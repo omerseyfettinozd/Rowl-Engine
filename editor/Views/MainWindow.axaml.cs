@@ -1,6 +1,12 @@
+using System;
+using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Media;
+using Avalonia.VisualTree;
+using RowlEngine.Editor.Services;
+using RowlEngine.Editor.Services.Workspace;
 using RowlEngine.Editor.ViewModels;
 
 namespace RowlEngine.Editor.Views
@@ -34,6 +40,10 @@ namespace RowlEngine.Editor.Views
             DataContext = vm;
             vm.TopLevelHint = this;
             KeyDown += MainWindow_KeyDown;
+            // Faz 8 D2: arayüz ölçeği canlı uygulanır; pencere kapanınca abonelik bırakılır.
+            ApplyUiScale(EditorUiScale.Current);
+            EditorUiScale.Changed += ApplyUiScale;
+            Closed += (_, _) => EditorUiScale.Changed -= ApplyUiScale;
             // Faz 5 D3 — tek yön: bölücü taşınınca görünüm yalnız ağaç işlemini çağırır.
             WorkspaceHost.SplitResized += (_, e) =>
             {
@@ -96,12 +106,55 @@ namespace RowlEngine.Editor.Views
             e.Handled = true;
         }
 
+        private void ApplyUiScale(double scale)
+        {
+            if (!Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
+            {
+                Avalonia.Threading.Dispatcher.UIThread.Post(() => ApplyUiScale(scale));
+                return;
+            }
+            if (this.FindControl<LayoutTransformControl>("UiScaleHost") is { } host)
+                host.LayoutTransform = Math.Abs(scale - 1.0) < 0.001 ? null : new ScaleTransform(scale, scale);
+        }
+
+        /// <summary>
+        /// Faz 8 D1: F6 / Shift+F6 görünür paneller arasında ekran sırasıyla (üstten alta,
+        /// soldan sağa) odak gezdirir; panelin ilk odaklanabilir öğesi klavye odağı alır
+        /// (odak halkası görünür). Döner: odak taşındı mı.
+        /// </summary>
+        internal bool FocusAdjacentPanel(bool backwards)
+        {
+            var panels = this.GetVisualDescendants().OfType<Workspace.WorkspacePanel>()
+                .Where(p => p.IsEffectivelyVisible && !string.IsNullOrEmpty(p.PanelId) && p.Bounds.Width > 0)
+                .Select(p => (Panel: p, At: p.TranslatePoint(default, this) ?? default))
+                .OrderBy(x => Math.Round(x.At.Y / 8)).ThenBy(x => x.At.X)
+                .Select(x => x.Panel)
+                .ToList();
+            var focused = FocusManager?.GetFocusedElement() as Visual;
+            string? current = focused?.GetSelfAndVisualAncestors().OfType<Workspace.WorkspacePanel>().FirstOrDefault()?.PanelId;
+            string? next = WorkspaceFocusOrder.Next(panels.Select(p => p.PanelId!).ToList(), current, backwards);
+            var target = panels.FirstOrDefault(p => p.PanelId == next);
+            if (target is null)
+                return false;
+            var input = target.GetVisualDescendants().OfType<InputElement>()
+                .FirstOrDefault(c => c.Focusable && c.IsEffectivelyVisible && c.IsEffectivelyEnabled);
+            return input?.Focus(NavigationMethod.Tab) ?? false;
+        }
+
         private void MainWindow_KeyDown(object? sender, KeyEventArgs e)
         {
             if (DataContext is not MainWindowViewModel vm) return;
 
             bool ctrl = e.KeyModifiers.HasFlag(KeyModifiers.Control);
             bool shift = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
+
+            // Faz 8 D1: panel odak döngüsü (metin kutusunda da çalışır: F6 metin yazmaz).
+            if (e.Key == Key.F6 && !ctrl)
+            {
+                FocusAdjacentPanel(backwards: shift);
+                e.Handled = true;
+                return;
+            }
 
             // MS-5: canvas shortcuts must not steal keystrokes from text inputs.
             bool isTextInput = e.Source is Avalonia.Controls.TextBox;

@@ -52,6 +52,13 @@ public static class RowlEyeFixtureFactory
             foreach (string panel in panels.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
                 vm.ShowPanel(panel);
         }
+        // Faz 8: işlem kartı / arayüz ölçeği elle denetimi (ROWL_EYE_OPERATION_FAIL=metin, ROWL_EYE_UI_SCALE=1.3).
+        string? failure = Environment.GetEnvironmentVariable("ROWL_EYE_OPERATION_FAIL");
+        if (!string.IsNullOrWhiteSpace(failure))
+            vm.OperationStatus.Fail(OperationKind.Export, failure);
+        if (double.TryParse(Environment.GetEnvironmentVariable("ROWL_EYE_UI_SCALE"),
+                System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double uiScale))
+            RowlEngine.Editor.Services.EditorUiScale.Apply(uiScale);
         return (win, vm, new Size(1920, 1080));
     }
 

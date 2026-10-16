@@ -10,6 +10,18 @@
         WindowStartupLocation="CenterScreen"
         Background="{DynamicResource AppBackground}">
 
+    <Window.Styles>
+        <Style Selector="TextBlock.status">
+            <Setter Property="Foreground" Value="{DynamicResource MutedText}" />
+        </Style>
+        <Style Selector="TextBlock.status.error">
+            <Setter Property="Foreground" Value="{DynamicResource ErrorBrush}" />
+        </Style>
+        <Style Selector="TextBlock.status.success">
+            <Setter Property="Foreground" Value="{DynamicResource SuccessBrush}" />
+        </Style>
+    </Window.Styles>
+
     <Grid RowDefinitions="Auto,*,Auto">
         <Border Grid.Row="0" Background="{DynamicResource SurfaceBackground}" BorderBrush="{DynamicResource BorderColor}" BorderThickness="0,0,0,1" Padding="20,14">
             <DockPanel>
@@ -59,10 +71,14 @@
                                     <StackPanel Grid.Column="1" Margin="10,8" Spacing="2" VerticalAlignment="Center">
                                         <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="14" Foreground="{DynamicResource PrimaryText}" TextTrimming="CharacterEllipsis"/>
                                         <TextBlock Text="{Binding Path}" FontSize="10" Foreground="{DynamicResource MutedText}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Path}"/>
-                                        <TextBlock Text="{Binding LastOpenedText, StringFormat='Son çalışma: {0}'}" FontSize="10" Foreground="{DynamicResource DimText}"/>
+                                        <Border IsVisible="{Binding IsUnavailable}" HorizontalAlignment="Left" BorderBrush="{DynamicResource BorderSubtle}" BorderThickness="1" CornerRadius="{DynamicResource RadiusSmall}" Padding="6,2" Margin="0,2,0,0">
+                                            <TextBlock Text="{Binding StateText}" FontSize="10" Foreground="{DynamicResource WarningBrush}"/>
+                                        </Border>
+                                        <TextBlock Text="{Binding LastOpenedText}" FontSize="10" Foreground="{DynamicResource DimText}"/>
                                     </StackPanel>
                                     <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="0,0,10,0">
                                         <Button Content="{l:T Hub.Open}" Command="{Binding OpenCommand}" Background="{DynamicResource AccentButtonBg}" Foreground="{DynamicResource PrimaryText}" BorderThickness="0" CornerRadius="8" Padding="18,8" FontSize="12" FontWeight="SemiBold"/>
+                                        <Button Content="{l:T Hub.RemoveFromList}" Command="{Binding RemoveFromListCommand}" IsVisible="{Binding IsUnavailable}" Background="{DynamicResource ToolbarButtonBg}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1" CornerRadius="8" Padding="12,8" FontSize="12"/>
                                         <Button Content="{l:T Hub.Other}" Background="{DynamicResource ToolbarButtonBg}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1" CornerRadius="8" FontSize="14" Padding="8,6" MinWidth="36">
                                             <Button.Flyout>
                                                 <MenuFlyout>
@@ -84,7 +100,10 @@
 
         <!-- Status bar -->
         <Border Grid.Row="2" Background="{DynamicResource SurfaceBackground}" BorderBrush="{DynamicResource BorderColor}" BorderThickness="0,1,0,0" Padding="12,8">
-            <TextBlock Text="{Binding StatusText}" Foreground="{DynamicResource MutedText}" FontSize="12"/>
+            <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                <Path Data="M12,3 L12,13 M12,16.5 L12,17" Stroke="{DynamicResource ErrorBrush}" StrokeThickness="2" StrokeLineCap="Round" Width="14" Height="14" Stretch="Uniform" VerticalAlignment="Center" IsVisible="{Binding IsStatusError}"/>
+                <TextBlock Classes="status" Classes.error="{Binding IsStatusError}" Classes.success="{Binding IsStatusSuccess}" Text="{Binding StatusText}" FontSize="12" VerticalAlignment="Center"/>
+            </StackPanel>
         </Border>
     </Grid>
 </Window>

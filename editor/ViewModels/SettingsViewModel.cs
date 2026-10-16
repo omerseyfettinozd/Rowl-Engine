@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using Avalonia;
 using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using RowlEngine.Editor.Services;
 using RowlEngine.Editor.Services.Strings;
 
 namespace RowlEngine.Editor.ViewModels
@@ -62,6 +64,46 @@ namespace RowlEngine.Editor.ViewModels
         {
             Views.Workspace.WorkspaceHost.ProfilePrefersReducedMotion = value;
         }
+
+        // Faz 8 D1: arayüz ölçeği — canlı uygulanır.
+        [ObservableProperty]
+        private double _uiScale = 1.0;
+
+        partial void OnUiScaleChanged(double value)
+        {
+            EditorUiScale.Apply(value);
+            OnPropertyChanged(nameof(SelectedUiScaleOption));
+        }
+
+        public sealed record UiScaleOption(double Value, string Label);
+
+        public List<UiScaleOption> UiScaleOptions { get; } = BuildUiScaleOptions();
+
+        public UiScaleOption? SelectedUiScaleOption
+        {
+            get => UiScaleOptions.Find(o => o.Value == UiScale);
+            set { if (value is not null) UiScale = value.Value; }
+        }
+
+        private static List<UiScaleOption> BuildUiScaleOptions()
+        {
+            var options = new List<UiScaleOption>();
+            foreach (double v in EditorSettingsProfile.AllowedUiScales)
+                options.Add(new UiScaleOption(v, string.Format(CultureInfo.CurrentCulture, EditorStrings.T("Settings.UiScale.Option"), (int)Math.Round(v * 100))));
+            return options;
+        }
+
+        // Faz 8 D1: yüksek kontrast — canlı uygulanır.
+        [ObservableProperty]
+        private bool _highContrast;
+
+        partial void OnHighContrastChanged(bool value)
+        {
+            EditorHighContrast.Apply(value, SelectedTheme);
+        }
+
+        // Kısayol kataloğu (Ayarlar kartı listeler).
+        public IReadOnlyList<EditorShortcut> Shortcuts => EditorShortcutCatalog.All;
 
         private static List<EditorLanguageOption> BuildLanguageOptions()
         {
@@ -213,7 +255,8 @@ namespace RowlEngine.Editor.ViewModels
             ApplyTheme(SelectedTheme);
         }
 
-        public static void ApplyTheme(string themeName)
+        // Paleti yazar, overlay'e dokunmaz (HighContrast.Apply burayı çağırır).
+        internal static void ApplyPaletteOnly(string themeName)
         {
             if (!ThemePalettes.TryGetValue(themeName, out var palette)) return;
 
@@ -226,6 +269,19 @@ namespace RowlEngine.Editor.ViewModels
             }
         }
 
+        public static void ApplyTheme(string themeName)
+        {
+            ApplyPaletteOnly(themeName);
+            // Tema değişince yüksek kontrast kaybolmasın.
+            if (EditorHighContrast.Enabled)
+            {
+                var app = Application.Current;
+                if (app == null) return;
+                foreach (var (key, color) in EditorHighContrast.Overlay)
+                    app.Resources[key] = color;
+            }
+        }
+
         [RelayCommand]
         public void ResetDefaults()
         {
@@ -234,6 +290,8 @@ namespace RowlEngine.Editor.ViewModels
             AutoSaveIntervalSeconds = 60;
             EditorLanguage = EditorStrings.SourceLanguage;
             ReduceMotion = false;
+            UiScale = 1.0;
+            HighContrast = false;
             MasterVolume = BgmVolume = VoiceVolume = SfxVolume = 1;
             TextSpeedMultiplier = 1;
             AutoAdvanceDelay = 2;

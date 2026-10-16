@@ -873,6 +873,30 @@
     "Hub.Delete": {
       "text": "Sil"
     },
+    "Hub.Dialog.CreateFailed": {
+      "text": "'{0}' oluşturulamadı: {1}"
+    },
+    "Hub.Dialog.Delete.Confirm": {
+      "text": "Kaldır"
+    },
+    "Hub.Dialog.Delete.Message": {
+      "text": "'{0}' projesini listeden kaldırmak istediğinize emin misiniz?"
+    },
+    "Hub.Dialog.Delete.Title": {
+      "text": "Projeyi Sil"
+    },
+    "Hub.Dialog.Error.Title": {
+      "text": "Hata"
+    },
+    "Hub.Dialog.Ok": {
+      "text": "Tamam"
+    },
+    "Hub.Dialog.RenameFailed.Message": {
+      "text": "Bu isimde bir proje zaten mevcut."
+    },
+    "Hub.Dialog.RenameFailed.Title": {
+      "text": "Yeniden Adlandırma Başarısız"
+    },
     "Hub.EmptyDescriptionPanel": {
       "text": "Bir proje oluştur; sahneleri, seçimleri ve önizlemeyi sırayla kur."
     },
@@ -885,6 +909,9 @@
     "Hub.Import": {
       "text": "İçe Aktar"
     },
+    "Hub.LastOpened": {
+      "text": "Son çalışma: {0}"
+    },
     "Hub.NewStory": {
       "text": "Yeni hikâye"
     },
@@ -894,11 +921,71 @@
     "Hub.Other": {
       "text": "Diğer"
     },
+    "Hub.Picker.Cover": {
+      "text": "Kapak Resmi Seçin"
+    },
+    "Hub.Picker.ImageFiles": {
+      "text": "Resim Dosyaları (*.png;*.jpg;*.jpeg;*.bmp;*.tga)"
+    },
+    "Hub.Picker.ImportFolder": {
+      "text": "Mevcut Rowl Engine Proje Klasörünü Seçin"
+    },
     "Hub.Projects": {
       "text": "Projeler"
     },
+    "Hub.RemoveFromList": {
+      "text": "Listeden kaldır"
+    },
     "Hub.Rename": {
       "text": "İsim Değiştir"
+    },
+    "Hub.State.Invalid": {
+      "text": "Proje dosyası yok"
+    },
+    "Hub.State.Missing": {
+      "text": "Klasör bulunamadı"
+    },
+    "Hub.Status.AlreadyListed": {
+      "text": "'{0}' zaten listede"
+    },
+    "Hub.Status.Count": {
+      "text": "{0} proje"
+    },
+    "Hub.Status.CountWithMissing": {
+      "text": "{0} proje · {1} tanesi bulunamadı"
+    },
+    "Hub.Status.CoverFailed": {
+      "text": "Kapak değiştirilemedi: {0}"
+    },
+    "Hub.Status.CoverRejected": {
+      "text": "Kapak reddedildi: {0}"
+    },
+    "Hub.Status.CoverUpdated": {
+      "text": "Kapak resmi güncellendi"
+    },
+    "Hub.Status.Created": {
+      "text": "'{0}' oluşturuldu"
+    },
+    "Hub.Status.Empty": {
+      "text": "Henüz proje yok — ilk projeni oluştur!"
+    },
+    "Hub.Status.Imported": {
+      "text": "'{0}' içe aktarıldı"
+    },
+    "Hub.Status.NotAProject": {
+      "text": "Seçilen klasör bir Rowl projesi değil (Assets/json/full_story_graph.json yok)"
+    },
+    "Hub.Status.OpenFailed": {
+      "text": "'{0}' açılamadı: {1}"
+    },
+    "Hub.Status.Removed": {
+      "text": "'{0}' listeden kaldırıldı"
+    },
+    "Hub.Status.RenameFailed": {
+      "text": "Yeniden adlandırma başarısız oldu"
+    },
+    "Hub.Status.Renamed": {
+      "text": "'{0}' olarak yeniden adlandırıldı"
     },
     "Hub.Title": {
       "text": "Rowl Engine — Projeler"
@@ -1524,6 +1611,48 @@
     "NodeControl.SubgraphBorderTooltip": {
       "text": "Subgraph sınırı — içeri girmek için çift tıklayın"
     },
+    "Operation.Dismiss": {
+      "text": "Kapat"
+    },
+    "Operation.Export.Failed": {
+      "text": "Dışa aktarılamadı"
+    },
+    "Operation.Export.Running": {
+      "text": "Dışa aktarılıyor…"
+    },
+    "Operation.Export.Succeeded": {
+      "text": "Dışa aktarıldı"
+    },
+    "Operation.OpenFolder": {
+      "text": "Klasörü aç"
+    },
+    "Operation.Save.Failed": {
+      "text": "Kaydedilemedi"
+    },
+    "Operation.Save.Running": {
+      "text": "Kaydediliyor…"
+    },
+    "Operation.Save.Succeeded": {
+      "text": "Kaydedildi"
+    },
+    "Operation.Save.WriteFailed": {
+      "text": "Proje dosyası yazılamadı; ayrıntı Konsol'da."
+    },
+    "Operation.SaveAs.Failed": {
+      "text": "Farklı kaydedilemedi"
+    },
+    "Operation.SaveAs.Running": {
+      "text": "Farklı kaydediliyor…"
+    },
+    "Operation.SaveAs.Succeeded": {
+      "text": "Kopya kaydedildi"
+    },
+    "Operation.ShowLog": {
+      "text": "Konsola git"
+    },
+    "Operation.UnknownError": {
+      "text": "Bilinmeyen hata"
+    },
     "Panel.Assets": {
       "text": "Varlıklar"
     },
@@ -1764,6 +1893,12 @@
     "Settings.Header.Eyebrow": {
       "text": "ROWL / AYARLAR"
     },
+    "Settings.HighContrast": {
+      "text": "Yüksek kontrast"
+    },
+    "Settings.HighContrast.Hint": {
+      "text": "Soluk metin ve kenarları belirginleştirir."
+    },
     "Settings.Language": {
       "text": "Arayüz dili"
     },
@@ -1857,6 +1992,9 @@
     "Settings.Shortcut.Undo": {
       "text": "Geri Al (Undo)"
     },
+    "Settings.Shortcuts": {
+      "text": "Klavye kısayolları"
+    },
     "Settings.Shortcuts.Title": {
       "text": "Klavye Kısayolları"
     },
@@ -1899,8 +2037,77 @@
     "Settings.Theme.Title": {
       "text": "Tema & Görünüm"
     },
+    "Settings.UiScale": {
+      "text": "Arayüz ölçeği"
+    },
+    "Settings.UiScale.Hint": {
+      "text": "Tüm editör arayüzünü büyütür; canlı uygulanır."
+    },
+    "Settings.UiScale.Option": {
+      "text": "%{0}"
+    },
     "Settings.Window.Title": {
       "text": "Ayarlar — Rowl Engine"
+    },
+    "Shortcut.Build": {
+      "text": "Oyunu derle"
+    },
+    "Shortcut.Cancel": {
+      "text": "İptal / kapat"
+    },
+    "Shortcut.Copy": {
+      "text": "Seçili düğümleri kopyala"
+    },
+    "Shortcut.DeleteNode": {
+      "text": "Seçili düğümü sil"
+    },
+    "Shortcut.Duplicate": {
+      "text": "Seçili düğümleri çoğalt"
+    },
+    "Shortcut.FocusNextPanel": {
+      "text": "Sonraki panele odaklan"
+    },
+    "Shortcut.FocusPrevPanel": {
+      "text": "Önceki panele odaklan"
+    },
+    "Shortcut.Fullscreen": {
+      "text": "Tam ekran"
+    },
+    "Shortcut.NewNode": {
+      "text": "Yeni düğüm"
+    },
+    "Shortcut.OpenHub": {
+      "text": "Hub'ı aç"
+    },
+    "Shortcut.Paste": {
+      "text": "Panodan düğüm yapıştır"
+    },
+    "Shortcut.Play": {
+      "text": "Oynatma modunu aç/kapat"
+    },
+    "Shortcut.Redo": {
+      "text": "Yinele"
+    },
+    "Shortcut.Rename": {
+      "text": "Yeniden adlandır"
+    },
+    "Shortcut.Save": {
+      "text": "Projeyi kaydet"
+    },
+    "Shortcut.SaveAs": {
+      "text": "Projeyi farklı kaydet"
+    },
+    "Shortcut.Search": {
+      "text": "Hızlı arama"
+    },
+    "Shortcut.SelectAll": {
+      "text": "Tüm düğümleri seç"
+    },
+    "Shortcut.Settings": {
+      "text": "Ayarları aç"
+    },
+    "Shortcut.Undo": {
+      "text": "Geri al"
     },
     "Status.Unsaved": {
       "text": "Kaydedilmemiş değişiklikler var"

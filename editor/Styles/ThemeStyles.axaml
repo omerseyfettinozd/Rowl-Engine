@@ -23,6 +23,10 @@
     <SolidColorBrush x:Key="PanelBackground" Color="{DynamicResource PanelBackgroundColor}"/>
     <SolidColorBrush x:Key="InputBackground" Color="{DynamicResource InputBackgroundColor}"/>
     <SolidColorBrush x:Key="CanvasBackground" Color="{DynamicResource CanvasBackgroundColor}"/>
+    <!-- Faz 8 D1: klavye odak halkası (Fluent FocusAdorner) tema token'larından: kemik halka + koyu iç çizgi.
+         Yalnız klavyeyle odaklanınca görünür (Avalonia focus-visible davranışı). -->
+    <SolidColorBrush x:Key="SystemControlFocusVisualPrimaryBrush" Color="{DynamicResource PrimaryTextColor}"/>
+    <SolidColorBrush x:Key="SystemControlFocusVisualSecondaryBrush" Color="{DynamicResource AppBackgroundColor}"/>
     <!-- Faz 8 A1: tuval zemini prototip yüzeyi (#131315); nokta ızgara prototip .node-area tonu. -->
     <Color x:Key="GraphDotColorValue">#303034</Color>
     <SolidColorBrush x:Key="GraphDotColor" Color="{DynamicResource GraphDotColorValue}"/>

@@ -2209,6 +2209,7 @@ namespace RowlEngine.Editor.ViewModels
             catch (Exception ex)
             {
                 AppendLog($"Kayıt anlık görüntüsü alınamadı: {ex.Message}");
+                ReportSaveFailure(ex.Message);
                 return false;
             }
 
@@ -2218,7 +2219,12 @@ namespace RowlEngine.Editor.ViewModels
             {
                 Volatile.Write(ref _saveCompletedSequence, sequence);
                 IsProjectDirty = false;
+                ReportSaveSuccess();
                 AppendLog($"[PROJE KAYDEDİLDİ] {Nodes.Count} düğüm ve tüm bileşenler başarıyla kaydedildi ({DateTime.Now:HH:mm:ss})");
+            }
+            else if (!written)
+            {
+                ReportSaveFailure(string.Empty);
             }
             return written;
         }
@@ -2239,6 +2245,7 @@ namespace RowlEngine.Editor.ViewModels
             catch (Exception ex)
             {
                 AppendLog($"Kayıt anlık görüntüsü alınamadı: {ex.Message}");
+                ReportSaveFailure(ex.Message);
                 return Task.CompletedTask;
             }
 
@@ -2257,7 +2264,10 @@ namespace RowlEngine.Editor.ViewModels
                 {
                     string message = ex.Message;
                     Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                        AppendLog($"Arka plan kayıt başarısız: {message}"));
+                    {
+                        AppendLog($"Arka plan kayıt başarısız: {message}");
+                        ReportSaveFailure(message);
+                    });
                     return;
                 }
                 Avalonia.Threading.Dispatcher.UIThread.Post(() =>
@@ -2269,7 +2279,14 @@ namespace RowlEngine.Editor.ViewModels
                     if (written)
                     {
                         IsProjectDirty = false;
+                        ReportSaveSuccess();
                         AppendLog($"[PROJE KAYDEDİLDİ] {nodeCount} düğüm ve tüm bileşenler başarıyla kaydedildi ({DateTime.Now:HH:mm:ss})");
+                    }
+                    else
+                    {
+                        // Faz 8 C2: önceden sessizdi — yazılamayan kayıt artık görünür.
+                        AppendLog("Arka plan kayıt yazılamadı.");
+                        ReportSaveFailure(string.Empty);
                     }
                 });
             });
@@ -2393,7 +2410,13 @@ namespace RowlEngine.Editor.ViewModels
                 if (selectedDir != null)
                 {
                     string targetDir = EditorProjectLifecycleCoordinator.GenerateSaveAsTargetDirectory(selectedDir);
-                    SaveProjectToDirectory(targetDir);
+                    OperationStatus.Begin(OperationKind.SaveAs);
+                    int attempt = OperationStatus.Attempt;
+                    SaveAsResult result = SaveProjectToDirectory(targetDir);
+                    if (result.Succeeded)
+                        OperationStatus.Succeed(OperationKind.SaveAs, result.TargetDirectory, attempt: attempt);
+                    else
+                        OperationStatus.Fail(OperationKind.SaveAs, result.Message, attempt);
                 }
                 else
                 {
@@ -2404,15 +2427,16 @@ namespace RowlEngine.Editor.ViewModels
             catch (Exception ex)
             {
                 AppendLog($"Farklı kaydetme hatası: {ex.Message}");
+                OperationStatus.Fail(OperationKind.SaveAs, ex.Message);
             }
         }
 
         /// <summary>
         /// Helper to copy the entire project and assets to a target directory.
         /// </summary>
-        public void SaveProjectToDirectory(string targetDir)
+        public SaveAsResult SaveProjectToDirectory(string targetDir)
         {
-            EditorProjectLifecycleCoordinator.ExecuteSaveAs(
+            return EditorProjectLifecycleCoordinator.ExecuteSaveAs(
                 ProjectRoot,
                 targetDir,
                 Nodes.Count,
@@ -2454,7 +2478,9 @@ namespace RowlEngine.Editor.ViewModels
 
                 IsBuilding = true;
                 _buildCancellation = new CancellationTokenSource();
-                await EditorBuildCoordinator.BuildStandaloneGameAsync(
+                OperationStatus.Begin(OperationKind.Export);
+                int attempt = OperationStatus.Attempt;
+                StandaloneBuildResult result = await EditorBuildCoordinator.BuildStandaloneGameAsync(
                     ProjectRoot,
                     AssetsPath,
                     buildOutDir,
@@ -2475,10 +2501,17 @@ namespace RowlEngine.Editor.ViewModels
                     msg => BuildProgress = msg,
                     _buildCancellation.Token,
                     diagnostic => NotificationService.ReportBuildDiagnostic(diagnostic, AppendLog));
+                if (result.Cancelled)
+                    OperationStatus.Cancelled(OperationKind.Export);
+                else if (result.Succeeded)
+                    OperationStatus.Succeed(OperationKind.Export, result.OutputDirectory, attempt: attempt);
+                else
+                    OperationStatus.Fail(OperationKind.Export, result.Message, attempt);
             }
             catch (Exception ex)
             {
                 AppendLog($"Build işlemi sırasında hata oluştu: {ex.Message}");
+                OperationStatus.Fail(OperationKind.Export, ex.Message);
             }
             finally
             {

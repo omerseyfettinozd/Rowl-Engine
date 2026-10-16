@@ -2,6 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:RowlEngine.Editor.ViewModels"
         xmlns:l="using:RowlEngine.Editor.Services.Strings"
+        xmlns:s="using:RowlEngine.Editor.Services"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
@@ -180,7 +181,34 @@
                                     <TextBlock Classes="hint" Text="{l:T Settings.General.ReduceMotion.Hint}" TextWrapping="Wrap"/>
                                 </StackPanel>
                             </Border>
+
+                            <!-- Faz 8 D2: arayüz ölçeği + yüksek kontrast (erişilebilirlik) -->
+                            <Border Classes="settingsCard" Margin="0,0,12,12">
+                              <StackPanel Spacing="8">
+                                <TextBlock Classes="settingsCardTitle" Text="{l:T Settings.UiScale}" />
+                                <ComboBox x:Name="UiScaleCombo" ItemsSource="{Binding UiScaleOptions}"
+                                          SelectedItem="{Binding SelectedUiScaleOption}" MinWidth="220">
+                                  <ComboBox.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:SettingsViewModel+UiScaleOption">
+                                      <TextBlock Text="{Binding Label}" />
+                                    </DataTemplate>
+                                  </ComboBox.ItemTemplate>
+                                </ComboBox>
+                                <TextBlock Classes="hint" Text="{l:T Settings.UiScale.Hint}" TextWrapping="Wrap" />
+                              </StackPanel>
+                            </Border>
+                            <Border Classes="settingsCard" Margin="0,0,12,12">
+                              <StackPanel Spacing="6">
+                                <CheckBox x:Name="HighContrastCheckBox"
+                                          Content="{l:T Settings.HighContrast}"
+                                          FontSize="{DynamicResource FontSizeBody}"
+                                          IsChecked="{Binding HighContrast}"
+                                          Foreground="{DynamicResource PrimaryText}" FontWeight="SemiBold" />
+                                <TextBlock Classes="hint" Text="{l:T Settings.HighContrast.Hint}" TextWrapping="Wrap" />
+                              </StackPanel>
+                            </Border>
                         </UniformGrid>
+
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
@@ -301,63 +329,24 @@
                             <TextBlock FontSize="{DynamicResource FontSizeCaption}" LetterSpacing="1.5" Foreground="{DynamicResource MutedText}" Text="{l:T Settings.Scope.Preferences}"/>
                             <TextBlock FontSize="21" FontWeight="Normal" Foreground="{DynamicResource PrimaryText}" Text="{l:T Settings.Shortcuts.Title}"/>
                         </StackPanel>
+                        <!-- Faz 8 D1: tek kaynak EditorShortcutCatalog (MainWindow_KeyDown ile aynı; elle liste eksikti). -->
                         <Border Classes="settingsCard">
-                            <StackPanel Spacing="6">
-                                <Grid ColumnDefinitions="*, Auto">
-                                    <TextBlock Grid.Column="0" Classes="body" Text="{l:T Settings.Shortcut.Save}"/>
-                                    <TextBlock Grid.Column="1" Classes="fieldValue" Foreground="{DynamicResource Accent}" FontFamily="Consolas, Monospace">Ctrl + S</TextBlock>
-                                </Grid>
-                                <Grid ColumnDefinitions="*, Auto">
-                                    <TextBlock Grid.Column="0" Classes="body" Text="{l:T Settings.Shortcut.SaveAs}"/>
-                                    <TextBlock Grid.Column="1" Classes="fieldValue" Foreground="{DynamicResource Accent}" FontFamily="Consolas, Monospace">Ctrl + Shift + S</TextBlock>
-                                </Grid>
-                                <Grid ColumnDefinitions="*, Auto">
-                                    <TextBlock Grid.Column="0" Classes="body" Text="{l:T Settings.Shortcut.Undo}"/>
-                                    <TextBlock Grid.Column="1" Classes="fieldValue" Foreground="{DynamicResource Accent}" FontFamily="Consolas, Monospace">Ctrl + Z</TextBlock>
-                                </Grid>
-                                <Grid ColumnDefinitions="*, Auto">
-                                    <TextBlock Grid.Column="0" Classes="body" Text="{l:T Settings.Shortcut.Redo}"/>
-                                    <TextBlock Grid.Column="1" Classes="fieldValue" Foreground="{DynamicResource Accent}" FontFamily="Consolas, Monospace">Ctrl + Y</TextBlock>
-                                </Grid>
-                                <Separator Background="{DynamicResource BorderColor}" Height="1" Margin="0,4"/>
-                                <Grid ColumnDefinitions="*, Auto">
-                                    <TextBlock Grid.Column="0" Classes="body" Text="{l:T Settings.Shortcut.NewNode}"/>
-                                    <TextBlock Grid.Column="1" Classes="fieldValue" Foreground="{DynamicResource Accent}" FontFamily="Consolas, Monospace">Ctrl + N</TextBlock>
-                                </Grid>
-                                <Grid ColumnDefinitions="*, Auto">
-                                    <TextBlock Grid.Column="0" Classes="body" Text="{l:T Settings.Shortcut.DeleteNode}"/>
-                                    <TextBlock Grid.Column="1" Classes="fieldValue" Foreground="{DynamicResource Accent}" FontFamily="Consolas, Monospace">Delete</TextBlock>
-                                </Grid>
-                                <Grid ColumnDefinitions="*, Auto">
-                                    <TextBlock Grid.Column="0" Classes="body" Text="{l:T Settings.Shortcut.Rename}"/>
-                                    <TextBlock Grid.Column="1" Classes="fieldValue" Foreground="{DynamicResource Accent}" FontFamily="Consolas, Monospace">F2</TextBlock>
-                                </Grid>
-                                <Separator Background="{DynamicResource BorderColor}" Height="1" Margin="0,4"/>
-                                <Grid ColumnDefinitions="*, Auto">
-                                    <TextBlock Grid.Column="0" Classes="body" Text="{l:T Settings.Shortcut.Build}"/>
-                                    <TextBlock Grid.Column="1" Classes="fieldValue" Foreground="{DynamicResource Accent}" FontFamily="Consolas, Monospace">Ctrl + B</TextBlock>
-                                </Grid>
-                                <Grid ColumnDefinitions="*, Auto">
-                                    <TextBlock Grid.Column="0" Classes="body" Text="{l:T Settings.Shortcut.PlayMode}"/>
-                                    <TextBlock Grid.Column="1" Classes="fieldValue" Foreground="{DynamicResource Accent}" FontFamily="Consolas, Monospace">F5</TextBlock>
-                                </Grid>
-                                <Grid ColumnDefinitions="*, Auto">
-                                    <TextBlock Grid.Column="0" Classes="body" Text="{l:T Settings.Shortcut.Fullscreen}"/>
-                                    <TextBlock Grid.Column="1" Classes="fieldValue" Foreground="{DynamicResource Accent}" FontFamily="Consolas, Monospace">F11</TextBlock>
-                                </Grid>
-                                <Grid ColumnDefinitions="*, Auto">
-                                    <TextBlock Grid.Column="0" Classes="body" Text="{l:T Settings.Shortcut.QuickSearch}"/>
-                                    <TextBlock Grid.Column="1" Classes="fieldValue" Foreground="{DynamicResource Accent}" FontFamily="Consolas, Monospace">Ctrl + F</TextBlock>
-                                </Grid>
-                                <Grid ColumnDefinitions="*, Auto">
-                                    <TextBlock Grid.Column="0" Classes="body" Text="{l:T Settings.Shortcut.OpenHub}"/>
-                                    <TextBlock Grid.Column="1" Classes="fieldValue" Foreground="{DynamicResource Accent}" FontFamily="Consolas, Monospace">Ctrl + H</TextBlock>
-                                </Grid>
-                                <Grid ColumnDefinitions="*, Auto">
-                                    <TextBlock Grid.Column="0" Classes="body" Text="{l:T Settings.Shortcut.Settings}"/>
-                                    <TextBlock Grid.Column="1" Classes="fieldValue" Foreground="{DynamicResource Accent}" FontFamily="Consolas, Monospace">Ctrl + ,</TextBlock>
-                                </Grid>
-                            </StackPanel>
+                            <ItemsControl ItemsSource="{Binding Shortcuts}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Spacing="6"/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="s:EditorShortcut">
+                                        <Grid ColumnDefinitions="*, Auto">
+                                            <TextBlock Grid.Column="0" Classes="body" Text="{Binding Description}" TextWrapping="Wrap"/>
+                                            <TextBlock Grid.Column="1" Classes="fieldValue" Foreground="{DynamicResource Accent}" FontFamily="Consolas, Monospace"
+                                                       Text="{Binding DisplayGesture}" Margin="12,0,0,0"/>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
                         </Border>
                     </StackPanel>
                 </ScrollViewer>
