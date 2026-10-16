@@ -67,10 +67,13 @@
         <Grid ColumnDefinitions="*,Auto">
           <StackPanel Orientation="Vertical" Spacing="2">
             <TextBlock Text="{l:T Lua.BoundObject}" Classes="caption" />
+            <!-- Prototip .script-context select: kutusuz, düz metin + ok. -->
             <ComboBox x:Name="PART_BoundCombo"
                       ItemsSource="{Binding BoundObjects}"
                       SelectedItem="{Binding SelectedBoundObject, Mode=TwoWay}"
-                      PlaceholderText="{l:T Lua.BoundObject.None}">
+                      PlaceholderText="{l:T Lua.BoundObject.None}"
+                      Background="Transparent" BorderThickness="0" Padding="0,2"
+                      FontSize="{DynamicResource FontSizeBody}">
               <ComboBox.ItemTemplate>
                 <DataTemplate x:DataType="vm:FrameObjectViewModel">
                   <TextBlock Text="{Binding Name}" />
@@ -134,9 +137,7 @@
           </StackPanel>
           <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
             <TextBlock x:Name="PART_Caret" Text="{Binding StatusCaret}" Classes="luaStatus" />
-            <Border Classes="luaLanguageTag">
-              <TextBlock Text="{l:T Lua.Status.Language}" Classes="luaStatus" />
-            </Border>
+            <TextBlock Text="{l:T Lua.Status.Language}" Classes="luaStatus" Foreground="{DynamicResource InfoBrush}" />
           </StackPanel>
         </Grid>
       </Border>

@@ -225,3 +225,9 @@ Kapsam prototipteki davranıştır; yeni ürün özelliği eklenmez.
 - D6 Yerleşim/kısayol, RowlEye görüntüsü + prototip karşılaştırması, kilit testleri.
 
 Test kilitleri bilinçli güncellenir: Araçlar menüsü 7 → 9 kart (Ctrl+8 / Ctrl+9 kısayolları).
+
+**Faz 7 yapılan (2026-10-16):** D1 `b75f77d`, D4 `5c9b309`, D2 `b7d55d3`, D3+D5+entegrasyon `5972271`,
+görsel düzeltmeler (Muse Wonder denetimi: kütüphane 8/10, Lua 7/10 → düğüm ikonu, ayrık "…" hücresi,
+kutusuz bağlı obje seçici, düz "Lua" etiketi, Denetçi düğmelerinde normal ağırlık). Bilerek alınmayanlar:
+başlıkta sürekli üç düğme (sessiz başlık kararı), Lua'da "Dosyalar" ve sekme kapatmanın kaldırılması
+(gerçek projede dosya sayısı sınırsız). Yerel: editör 877/877, RowlEye golden + denetim 3/3.

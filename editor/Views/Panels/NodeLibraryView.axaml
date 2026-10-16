@@ -214,17 +214,20 @@
                 <Grid ColumnDefinitions="*,Auto">
                   <Button Command="{Binding ActivateCommand}" Classes="libraryRowMain">
                     <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-                      <Path Classes="libraryIcon" Data="M2,4 L8,4 L8,10 L2,10 Z M6,7 L12,7 L12,13 L6,13 Z"/>
+                      <Path Classes="libraryIcon" Data="M4,4 h6 v6 h-6 Z M14,14 h6 v6 h-6 Z M10,7 h3 a2,2 0 0 1 2,2 v5"/>
                       <StackPanel Spacing="2" VerticalAlignment="Center">
                         <TextBlock Text="{Binding Title}" Classes="libraryTitle" TextTrimming="CharacterEllipsis"/>
                         <TextBlock Text="{Binding Summary}" Classes="hint" TextTrimming="CharacterEllipsis"/>
                       </StackPanel>
                     </StackPanel>
                   </Button>
+                  <!-- Prototip: "…" satırın sağında, ince dikey çizgiyle ayrılmış kendi hücresinde. -->
                   <Button Grid.Column="1"
                           Classes="libraryDots"
                           IsVisible="{Binding CanMove}"
-                          VerticalAlignment="Center">
+                          VerticalAlignment="Stretch"
+                          BorderBrush="{DynamicResource BorderColor}"
+                          BorderThickness="1,0,0,0">
                     <StackPanel Orientation="Horizontal" Spacing="3"
                                 HorizontalAlignment="Center" VerticalAlignment="Center">
                       <Ellipse Width="3" Height="3" Fill="{DynamicResource MutedText}"/>
