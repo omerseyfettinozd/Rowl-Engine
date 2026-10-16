@@ -11,8 +11,21 @@ namespace RowlEngine.Editor.Views
         {
         }
 
-        public MainWindow(string projectPath) : this(new MainWindowViewModel(projectPath))
+        public MainWindow(string projectPath) : this(CreateAppViewModel(projectPath))
         {
+        }
+
+        /// <summary>
+        /// Faz 5 D5: the real app opens a project with the user's saved workspace
+        /// layout and keeps saving it (loaded before the window binds, so it never
+        /// flashes the default). Tests and RowlEye build the view model themselves
+        /// and so never touch the user's profile.
+        /// </summary>
+        private static MainWindowViewModel CreateAppViewModel(string projectPath)
+        {
+            var vm = new MainWindowViewModel(projectPath);
+            vm.AttachWorkspacePersistence();
+            return vm;
         }
 
         public MainWindow(MainWindowViewModel vm)

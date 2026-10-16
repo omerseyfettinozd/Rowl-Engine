@@ -371,6 +371,10 @@ public sealed class EditorWorkspaceViewModelTests : IDisposable
 
     public EditorWorkspaceViewModelTests()
     {
+        // The view model creates Dispatcher timers: built on an xUnit worker thread before the headless
+        // runtime exists, it would become Avalonia's UI thread and break later headless UI tests
+        // (order dependent). Headless runtime first, view model on its UI thread (as WorkspaceHostTests).
+        RowlEngine.Editor.Tools.RowlEye.RowlEyeHeadlessRuntime.EnsureInitialized();
         _previousRoot = MainWindowViewModel.ProjectRoot;
         string parent = Path.Combine(Path.GetTempPath(), "RowlWorkspace_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(parent);
@@ -378,13 +382,13 @@ public sealed class EditorWorkspaceViewModelTests : IDisposable
         if (!created.Success || created.Info == null)
             throw new Exception("ProjectFactory.CreateNewProject failed: " + created.Error);
         _root = created.Info.Path;
-        _vm = new MainWindowViewModel(_root, connectEngine: false);
+        _vm = Avalonia.Threading.Dispatcher.UIThread.Invoke(() => new MainWindowViewModel(_root, connectEngine: false));
         // KÖK GERİ VERİLMEZ: bkz. EditorAssetGridVirtualizationTests.
     }
 
     public void Dispose()
     {
-        try { _vm.Dispose(); } catch (Exception) { }
+        try { Avalonia.Threading.Dispatcher.UIThread.Invoke(() => _vm.Dispose()); } catch (Exception) { }
         try { Directory.Delete(Path.GetDirectoryName(_root)!, recursive: true); }
         catch (Exception) { }
         try

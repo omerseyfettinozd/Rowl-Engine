@@ -322,6 +322,41 @@ namespace RowlEngine.Editor.ViewModels
         public void ResizeWorkspaceSplit(string splitId, double ratio) =>
             Workspace = Workspace.WithSplitRatio(splitId, ratio);
 
+        private WorkspaceAutosave? _workspaceAutosave;
+
+        /// <summary>
+        /// Faz 5 D5: çalışma alanı düzeninin kalıcılığını açar. Kayıtlı düzeni yükler
+        /// (<see cref="EditorSettingsProfile.WorkspaceState"/>; yok/bozuk/eski sürüm/bilinmeyen
+        /// panel = sessizce varsayılan + geliştirme uyarısı), sonra her düzen değişimini kısa
+        /// bir sessizlik süresinden sonra TEK yazmada diske işler; pencere kapanırken bekleyen
+        /// değişiklik hemen yazılır. Gerçek uygulama (<c>MainWindow(string)</c>) çağırır; testler
+        /// ve RowlEye çağırmaz, böylece kullanıcı profiline dokunmaz.
+        /// </summary>
+        /// <param name="settingsPath">Profil dosyası; <c>null</c> = bu cihazın editor-settings.json'u.</param>
+        /// <param name="timers">Zamanlayıcı kaynağı; <c>null</c> = arayüz iş parçacığı zamanlayıcısı.</param>
+        /// <param name="delay">Sessizlik süresi; <c>null</c> = <see cref="WorkspaceAutosave.DefaultDelay"/>.</param>
+        public void AttachWorkspacePersistence(string? settingsPath = null, DebounceTimerFactory? timers = null, TimeSpan? delay = null)
+        {
+            string path = settingsPath ?? _editorSettingsPath;
+            _workspaceAutosave?.Dispose();
+            _workspaceAutosave = null;
+
+            EditorWorkspaceState loaded = WorkspaceStatePersistence.Load(path, WorkspaceWarning);
+            Workspace = loaded;
+            if (loaded.Bottom.IsOpen(BottomStripState.SaveSlotsTab))
+                SaveSlotsViewModel?.Refresh();
+
+            _workspaceAutosave = new WorkspaceAutosave(
+                state => WorkspaceStatePersistence.Save(path, state),
+                timers ?? EditorUiDebounceTimer.Create,
+                delay ?? WorkspaceAutosave.DefaultDelay,
+                loaded,
+                WorkspaceWarning);
+        }
+
+        private static void WorkspaceWarning(string message) =>
+            System.Diagnostics.Debug.WriteLine("[Workspace] " + message);
+
         /// <summary>Faz 5 D4: sabit (taşınamaz) paneller — WorkspaceHost başlıkları bunu gösterir (salt-okur).</summary>
         public PanelSet WorkspacePinnedPanels => Workspace.Pinned;
 
@@ -444,6 +479,7 @@ namespace RowlEngine.Editor.ViewModels
         partial void OnWorkspaceChanged(EditorWorkspaceState? oldValue, EditorWorkspaceState newValue)
         {
             EditorWorkspaceState before = oldValue ?? newValue;
+            _workspaceAutosave?.Notify(newValue);
             if (!ReferenceEquals(before.Layout, newValue.Layout))
                 OnPropertyChanged(nameof(WorkspaceLayout));
             NotifyIfChanged(nameof(WorkspacePinnedPanels), before.Pinned, newValue.Pinned);
@@ -1870,7 +1906,14 @@ namespace RowlEngine.Editor.ViewModels
         [RelayCommand]
         private void SelectLayoutPreset(string? presetName)
         {
-            if (presetName is not null && AvailableLayoutPresets.Contains(presetName))
+            if (presetName is null || !AvailableLayoutPresets.Contains(presetName))
+                return;
+            // Faz 5 D5: yeniden seçmek de uygulanır — elle bozulmuş düzen etiketi "Varsayılan"
+            // kalır, aynı önayarı seçmek "düzeni sıfırla" yoludur (özellik değişmediği için
+            // OnSelectedLayoutPresetChanged tetiklenmezdi).
+            if (SelectedLayoutPreset == presetName)
+                ApplyLayoutPresetState(presetName);
+            else
                 SelectedLayoutPreset = presetName;
         }
 
@@ -2603,6 +2646,9 @@ namespace RowlEngine.Editor.ViewModels
             _saveDebounceTimer?.Stop();
             _enginePreviewDebounceTimer?.Stop();
             _smoothTimer.Stop();
+            // Faz 5 D5: bekleyen düzen değişikliği kapanırken hemen yazılır.
+            try { _workspaceAutosave?.Dispose(); } catch { }
+            _workspaceAutosave = null;
 
             if (hasPendingSave)
             {

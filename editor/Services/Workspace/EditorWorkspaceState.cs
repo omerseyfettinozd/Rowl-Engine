@@ -94,6 +94,13 @@ public sealed record EditorWorkspaceState(WorkspaceLayout Layout, BottomStripSta
     /// </summary>
     public PanelSet Pinned { get; init; } = PanelSet.Empty;
 
+    /// <summary>
+    /// Faz 5 D5 — last known share of the side panels (Hierarchy / Inspector /
+    /// bottom strip) that were closed, so reopening restores the size the user
+    /// dragged them to. A layout preset resets it (presets are the "reset layout" path).
+    /// </summary>
+    public PanelShares Shares { get; init; } = PanelShares.Empty;
+
     /// <summary>"Varsayılan" preset — also the editor's start-up workspace.</summary>
     public static EditorWorkspaceState Default => EditorWorkspaceLayouts.Preset(EditorWorkspaceLayouts.DefaultPreset)!;
 
@@ -162,6 +169,7 @@ public sealed record EditorWorkspaceState(WorkspaceLayout Layout, BottomStripSta
             {
                 Layout = Layout.RemoveView(PanelIds.Bottom),
                 Bottom = Bottom with { Open = BottomTabs.None },
+                Shares = RememberShare(PanelIds.Bottom),
             }).Pruned(),
             _ => WithLayout(Layout.RemoveView(panelId)),
         };
@@ -175,9 +183,9 @@ public sealed record EditorWorkspaceState(WorkspaceLayout Layout, BottomStripSta
         if (IsVisible(panelId) == visible)
             return this;
         WorkspaceLayout layout = visible
-            ? (panelId == PanelIds.Hierarchy ? EditorWorkspaceLayouts.OpenHierarchy(Layout) : EditorWorkspaceLayouts.OpenInspector(Layout))
+            ? (panelId == PanelIds.Hierarchy ? EditorWorkspaceLayouts.OpenHierarchy(Layout, Shares) : EditorWorkspaceLayouts.OpenInspector(Layout, Shares))
             : Layout.RemoveView(panelId);
-        return (this with { Layout = layout }).Pruned();
+        return (this with { Layout = layout, Shares = visible ? Shares : RememberShare(panelId) }).Pruned();
     }
 
     /// <summary>Opens or closes one bottom tab; the strip leaf follows (first tab opens it, last closes it).</summary>
@@ -187,11 +195,15 @@ public sealed record EditorWorkspaceState(WorkspaceLayout Layout, BottomStripSta
         if (bottom == Bottom)
             return this;
         WorkspaceLayout layout = Layout;
+        PanelShares shares = Shares;
         if (bottom.AnyOpen && !IsBottomVisible)
-            layout = EditorWorkspaceLayouts.OpenBottom(layout);
+            layout = EditorWorkspaceLayouts.OpenBottom(layout, Shares);
         else if (!bottom.AnyOpen && IsBottomVisible)
+        {
+            shares = RememberShare(PanelIds.Bottom);
             layout = layout.RemoveView(PanelIds.Bottom);
-        return (this with { Layout = layout, Bottom = bottom }).Pruned();
+        }
+        return (this with { Layout = layout, Bottom = bottom, Shares = shares }).Pruned();
     }
 
     /// <summary>
@@ -296,6 +308,12 @@ public sealed record EditorWorkspaceState(WorkspaceLayout Layout, BottomStripSta
         Bottom.IsOpen(index) && Bottom.ActiveTab == index
             ? WithBottomTab(index, false)
             : WithBottomTab(index, true).WithActiveBottomTab(index);
+
+    /// <summary>Shares with <paramref name="panelId"/>'s current share in the tree (unchanged when it has no canonical split).</summary>
+    private PanelShares RememberShare(string panelId) =>
+        EditorWorkspaceLayouts.ShareOf(Layout, panelId) is { } share
+            ? Shares.With(panelId, Math.Clamp(share, WorkspaceLayout.MinRatio, WorkspaceLayout.MaxRatio))
+            : Shares;
 
     private EditorWorkspaceState WithLayout(WorkspaceLayout layout) =>
         ReferenceEquals(layout, Layout) || layout == Layout ? this : (this with { Layout = layout }).Pruned();
@@ -413,43 +431,85 @@ public static class EditorWorkspaceLayouts
     // ---- tree edits ----
 
     /// <summary>Hierarchy opens as the leftmost column (wraps the whole tree).</summary>
-    internal static WorkspaceLayout OpenHierarchy(WorkspaceLayout layout)
+    internal static WorkspaceLayout OpenHierarchy(WorkspaceLayout layout, PanelShares? shares = null)
     {
         var leaf = new LeafNode(PanelIds.Hierarchy);
         int last = layout.LastSplitId;
         LayoutNode tree = layout.Tree is null
             ? leaf
-            : new SplitNode(NextId(ref last), SplitAxis.Horizontal, HierarchyRatio, leaf, layout.Tree);
+            : new SplitNode(NextId(ref last), SplitAxis.Horizontal, RememberedOr(shares, PanelIds.Hierarchy, HierarchyRatio, firstSide: true), leaf, layout.Tree);
         return new WorkspaceLayout(tree, last);
     }
 
     /// <summary>Inspector opens as the rightmost column, inside the Hierarchy column when that is present.</summary>
-    internal static WorkspaceLayout OpenInspector(WorkspaceLayout layout)
+    internal static WorkspaceLayout OpenInspector(WorkspaceLayout layout, PanelShares? shares = null)
     {
+        double ratio = RememberedOr(shares, PanelIds.Inspector, InspectorSplitRatio, firstSide: false);
         var leaf = new LeafNode(PanelIds.Inspector);
         int last = layout.LastSplitId;
         LayoutNode tree = layout.Tree switch
         {
             null => leaf,
             SplitNode { Axis: SplitAxis.Horizontal, A: LeafNode { View: PanelIds.Hierarchy } } root =>
-                root with { B = new SplitNode(NextId(ref last), SplitAxis.Horizontal, InspectorSplitRatio, root.B, leaf) },
-            LayoutNode other => new SplitNode(NextId(ref last), SplitAxis.Horizontal, InspectorSplitRatio, other, leaf),
+                root with { B = new SplitNode(NextId(ref last), SplitAxis.Horizontal, ratio, root.B, leaf) },
+            LayoutNode other => new SplitNode(NextId(ref last), SplitAxis.Horizontal, ratio, other, leaf),
         };
         return new WorkspaceLayout(tree, last);
     }
 
     /// <summary>The bottom strip opens under the center area (falls back to under the whole tree).</summary>
-    internal static WorkspaceLayout OpenBottom(WorkspaceLayout layout)
+    internal static WorkspaceLayout OpenBottom(WorkspaceLayout layout, PanelShares? shares = null)
     {
+        double ratio = RememberedOr(shares, PanelIds.Bottom, BottomSplitRatio, firstSide: false);
         var leaf = new LeafNode(PanelIds.Bottom);
         int last = layout.LastSplitId;
         LayoutNode? center = FindCenter(layout.Tree);
         LayoutNode tree = layout.Tree is null
             ? leaf
             : center is null
-                ? new SplitNode(NextId(ref last), SplitAxis.Vertical, BottomSplitRatio, layout.Tree, leaf)
-                : Replace(layout.Tree, center, new SplitNode(NextId(ref last), SplitAxis.Vertical, BottomSplitRatio, center, leaf));
+                ? new SplitNode(NextId(ref last), SplitAxis.Vertical, ratio, layout.Tree, leaf)
+                : Replace(layout.Tree, center, new SplitNode(NextId(ref last), SplitAxis.Vertical, ratio, center, leaf));
         return new WorkspaceLayout(tree, last);
+    }
+
+    /// <summary>
+    /// Faz 5 D5 — the share a side panel takes in its parent split: the panel's
+    /// leaf must be a direct child of a split along the axis the canonical
+    /// layout opens it on (Hierarchy / Inspector: columns, bottom strip: rows).
+    /// <c>null</c> when it sits elsewhere (e.g. after a drag), so the previous
+    /// remembered value stays.
+    /// </summary>
+    internal static double? ShareOf(WorkspaceLayout layout, string panelId)
+    {
+        SplitAxis axis = panelId == PanelIds.Bottom ? SplitAxis.Vertical : SplitAxis.Horizontal;
+        return ShareIn(layout.Tree, panelId, axis);
+    }
+
+    private static double? ShareIn(LayoutNode? node, string panelId, SplitAxis axis)
+    {
+        if (node is not SplitNode split)
+            return null;
+        if (split.Axis == axis)
+        {
+            if (split.A is LeafNode a && a.View == panelId)
+                return split.Ratio;
+            if (split.B is LeafNode b && b.View == panelId)
+                return 1 - split.Ratio;
+        }
+        return ShareIn(split.A, panelId, axis) ?? ShareIn(split.B, panelId, axis);
+    }
+
+    /// <summary>
+    /// Ratio for a split that reopens a panel: the remembered share (when valid),
+    /// else <paramref name="fallback"/>. The ratio is that of the split, so a
+    /// panel on the second side gets <c>1 - share</c>.
+    /// </summary>
+    private static double RememberedOr(PanelShares? shares, string panelId, double fallback, bool firstSide)
+    {
+        if (shares is null || !shares.TryGet(panelId, out double share) || !(share > 0 && share < 1))
+            return fallback;
+        double ratio = firstSide ? share : 1 - share;
+        return Math.Clamp(ratio, WorkspaceLayout.MinRatio, WorkspaceLayout.MaxRatio);
     }
 
     /// <summary>
