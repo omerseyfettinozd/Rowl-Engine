@@ -180,6 +180,9 @@
     "Component.Audio.ChannelRight": {
       "text": "R"
     },
+    "Component.Audio.DisplayName": {
+      "text": "Ses ve DSP"
+    },
     "Component.Audio.Dsp.Label": {
       "text": "DSP filtresi"
     },
@@ -209,6 +212,9 @@
     },
     "Component.Background.Center": {
       "text": "Merkeze ortala"
+    },
+    "Component.Background.DisplayName": {
+      "text": "Arka Plan Katmanı"
     },
     "Component.Background.Drop.Hint": {
       "text": "Assets panelinden sürükleyin veya Gözat'a tıklayın"
@@ -257,6 +263,9 @@
     },
     "Component.Background.Y": {
       "text": "Y"
+    },
+    "Component.Camera.DisplayName": {
+      "text": "2D Kamera"
     },
     "Component.Camera.Easing": {
       "text": "Yumuşatma"
@@ -339,6 +348,9 @@
     "Component.Character.Assist.Title": {
       "text": "OBS Hızlı Hizalama (Assist)"
     },
+    "Component.Character.DisplayName": {
+      "text": "Karakter Spritesı"
+    },
     "Component.Character.Layers.Accessory": {
       "text": "Accessory"
     },
@@ -401,6 +413,9 @@
     },
     "Component.Choice.Add": {
       "text": "+ Seçim ekle"
+    },
+    "Component.Choice.DisplayName": {
+      "text": "Oyuncu Seçimleri"
     },
     "Component.Choice.Empty": {
       "text": "Henüz seçenek yok — + Seçim ekle'ye bas, hedefi graf kablosuyla ver."
@@ -474,6 +489,9 @@
     "Component.Choice.Title.Watermark": {
       "text": "Seçim başlığı"
     },
+    "Component.Condition.DisplayName": {
+      "text": "Koşul (Lua)"
+    },
     "Component.Dialogue.Align.Label": {
       "text": "Hizalama"
     },
@@ -524,6 +542,9 @@
     },
     "Component.Dialogue.ContentId.Label": {
       "text": "Content ID (kalıcı kimlik)"
+    },
+    "Component.Dialogue.DisplayName": {
+      "text": "Diyalog"
     },
     "Component.Dialogue.FontSize.Label": {
       "text": "Yazı boyutu (px)"
@@ -603,6 +624,9 @@
     "Component.Dialogue.WaitDelay.Label": {
       "text": "Bekleme süresi"
     },
+    "Component.Script.DisplayName": {
+      "text": "Lua Betiği"
+    },
     "Component.Script.Inline.Label": {
       "text": "Satır içi kod (isteğe bağlı)"
     },
@@ -623,6 +647,9 @@
     },
     "Component.Transition.ColorHex": {
       "text": "Renk hex"
+    },
+    "Component.Transition.DisplayName": {
+      "text": "Sahne Geçişi"
     },
     "Component.Transition.Duration": {
       "text": "Süre (saniye)"
@@ -668,6 +695,9 @@
     },
     "Component.Transition.Vignette.Radius": {
       "text": "Yarıçap"
+    },
+    "Component.Variable.DisplayName": {
+      "text": "Değişken Değiştirici"
     },
     "Dialog.Confirm.Cancel": {
       "text": "İptal"

@@ -8,7 +8,9 @@ namespace RowlEngine.Editor.ViewModels.Components
     /// </summary>
     public partial class ConditionComponentViewModel : NodeComponentViewModel
     {
-        public override string DisplayName => "Condition (Lua)";
+        public override string DisplayNameKey => "Component.Condition.DisplayName";
+        protected override string DisplayNameTrFallback => "Koşul (Lua)";
+        protected override string DisplayNameEnFallback => "Condition (Lua)";
         public override string Icon => "Koşul";
         public override string TypeKey => "condition";
 

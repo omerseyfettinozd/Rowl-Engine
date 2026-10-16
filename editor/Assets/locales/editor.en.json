@@ -180,6 +180,9 @@
     "Component.Audio.ChannelRight": {
       "text": "R"
     },
+    "Component.Audio.DisplayName": {
+      "text": "Audio & DSP"
+    },
     "Component.Audio.Dsp.Label": {
       "text": "DSP filter"
     },
@@ -209,6 +212,9 @@
     },
     "Component.Background.Center": {
       "text": "Center"
+    },
+    "Component.Background.DisplayName": {
+      "text": "Background Layer"
     },
     "Component.Background.Drop.Hint": {
       "text": "Drag from the Assets panel or click Browse"
@@ -257,6 +263,9 @@
     },
     "Component.Background.Y": {
       "text": "Y"
+    },
+    "Component.Camera.DisplayName": {
+      "text": "2D Camera"
     },
     "Component.Camera.Easing": {
       "text": "Easing"
@@ -339,6 +348,9 @@
     "Component.Character.Assist.Title": {
       "text": "OBS QUICK ALIGN"
     },
+    "Component.Character.DisplayName": {
+      "text": "Character Sprite"
+    },
     "Component.Character.Layers.Accessory": {
       "text": "Accessory"
     },
@@ -401,6 +413,9 @@
     },
     "Component.Choice.Add": {
       "text": "+ Add choice"
+    },
+    "Component.Choice.DisplayName": {
+      "text": "Player Choices"
     },
     "Component.Choice.Empty": {
       "text": "No options yet — press + Add choice, then set the target with a graph wire."
@@ -474,6 +489,9 @@
     "Component.Choice.Title.Watermark": {
       "text": "Choice title"
     },
+    "Component.Condition.DisplayName": {
+      "text": "Condition (Lua)"
+    },
     "Component.Dialogue.Align.Label": {
       "text": "Alignment"
     },
@@ -524,6 +542,9 @@
     },
     "Component.Dialogue.ContentId.Label": {
       "text": "Content ID (permanent)"
+    },
+    "Component.Dialogue.DisplayName": {
+      "text": "Dialogue"
     },
     "Component.Dialogue.FontSize.Label": {
       "text": "Font size (px)"
@@ -603,6 +624,9 @@
     "Component.Dialogue.WaitDelay.Label": {
       "text": "Wait delay"
     },
+    "Component.Script.DisplayName": {
+      "text": "Lua Script"
+    },
     "Component.Script.Inline.Label": {
       "text": "Inline code (optional)"
     },
@@ -623,6 +647,9 @@
     },
     "Component.Transition.ColorHex": {
       "text": "Color hex"
+    },
+    "Component.Transition.DisplayName": {
+      "text": "Scene Transition"
     },
     "Component.Transition.Duration": {
       "text": "Duration (seconds)"
@@ -668,6 +695,9 @@
     },
     "Component.Transition.Vignette.Radius": {
       "text": "Radius"
+    },
+    "Component.Variable.DisplayName": {
+      "text": "Variable Modifier"
     },
     "Dialog.Confirm.Cancel": {
       "text": "Cancel"
