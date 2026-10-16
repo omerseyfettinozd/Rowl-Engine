@@ -3,6 +3,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.VisualTree;
+using RowlEngine.Editor.Services;
 using RowlEngine.Editor.ViewModels;
 
 namespace RowlEngine.Editor.Views.Panels
@@ -168,6 +169,10 @@ namespace RowlEngine.Editor.Views.Panels
             return (null, null);
         }
 
+        // Grup taşıma başlangıcı (tek kayıt için).
+        private double _groupMoveStartX;
+        private double _groupMoveStartY;
+
         private void GroupGesturePressed(object? sender, PointerPressedEventArgs e)
         {
             if (DataContext is not MainWindowViewModel vm) return;
@@ -177,7 +182,9 @@ namespace RowlEngine.Editor.Views.Panels
 
             if (kind == "GroupDelete")
             {
+                int groupIndex = vm.Groups.IndexOf(group.GroupId);
                 vm.Groups.Delete(group.GroupId);
+                UndoRedoService.Instance.RecordAction(new GroupDeleteAction(vm.Groups, group, groupIndex));
                 e.Handled = true;
                 return;
             }
@@ -196,6 +203,8 @@ namespace RowlEngine.Editor.Views.Panels
             _groupResizeStartPos = canvasPos;
             _groupResizeStartW = group.Width;
             _groupResizeStartH = group.Height;
+            _groupMoveStartX = group.X;
+            _groupMoveStartY = group.Y;
             e.Handled = true;
         }
 
@@ -232,8 +241,27 @@ namespace RowlEngine.Editor.Views.Panels
         private void GroupGestureReleased(object? sender, PointerReleasedEventArgs e)
         {
             if (_groupDrag is null) return;
+            var releasedGroup = _groupDrag;
+            string? releasedKind = _groupDragKind;
             _groupDrag = null;
             _groupDragKind = null;
+            if (DataContext is MainWindowViewModel releaseVm && releasedKind is not null)
+            {
+                if (releasedKind == "GroupHeader")
+                {
+                    double rdx = releasedGroup.X - _groupMoveStartX;
+                    double rdy = releasedGroup.Y - _groupMoveStartY;
+                    if (Math.Abs(rdx) + Math.Abs(rdy) > 0.5)
+                        UndoRedoService.Instance.RecordAction(new GroupMoveAction(releaseVm.Groups, releasedGroup.GroupId, rdx, rdy));
+                }
+                else if (releasedKind == "GroupResize")
+                {
+                    double rbw = _groupResizeStartW;
+                    double rbh = _groupResizeStartH;
+                    if (Math.Abs(releasedGroup.Width - rbw) + Math.Abs(releasedGroup.Height - rbh) > 0.5)
+                        UndoRedoService.Instance.RecordAction(new GroupResizeAction(releaseVm.Groups, releasedGroup.GroupId, rbw, rbh, releasedGroup.Width, releasedGroup.Height));
+                }
+            }
             e.Handled = true;
         }
 

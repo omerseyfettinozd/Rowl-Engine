@@ -66,6 +66,28 @@ namespace RowlEngine.Editor.Services
             return Groups.Remove(group);
         }
 
+        /// <summary>Grup indeksi (yoksa -1).</summary>
+        public int IndexOf(string groupId)
+        {
+            for (int i = 0; i < Groups.Count; i++)
+                if (string.Equals(Groups[i].GroupId, groupId, StringComparison.Ordinal))
+                    return i;
+            return -1;
+        }
+
+        /// <summary>Aynı nesneyi indekse geri koyar (varsa dokunmaz).</summary>
+        public void Restore(CanvasGroupViewModel group, int index)
+        {
+            if (group is null)
+                return;
+            if (Find(group.GroupId) is not null)
+                return;
+            if (index < 0 || index > Groups.Count)
+                Groups.Add(group);
+            else
+                Groups.Insert(index, group);
+        }
+
         /// <summary>
         /// Drags a group by its header: the frame and every member node move
         /// by the same delta. Returns the number of member nodes translated.

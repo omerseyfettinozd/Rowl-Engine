@@ -1265,6 +1265,7 @@ namespace RowlEngine.Editor.ViewModels
             }
             var group = Groups.CreateFromNodes(
                 $"Grup {Groups.Groups.Count + 1}", CanvasGroupViewModel.DefaultColor, picked);
+            UndoRedoService.Instance.RecordAction(new GroupCreateAction(Groups, group));
             AppendLog($"Grup oluşturuldu: '{group.Title}' ({picked.Count} düğüm).");
         }
 
