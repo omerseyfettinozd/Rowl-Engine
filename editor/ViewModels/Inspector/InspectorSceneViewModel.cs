@@ -195,6 +195,7 @@ public sealed partial class InspectorSceneViewModel : ViewModelBase, IDisposable
             OnPropertyChanged(nameof(Title));
         else if (e.PropertyName is nameof(NodeViewModel.ChapterId) or nameof(NodeViewModel.ColorTag))
         {
+            OnPropertyChanged(nameof(ChapterLabel));
             OnPropertyChanged(nameof(MultiChapter));
             OnPropertyChanged(nameof(MultiColorTag));
             OnPropertyChanged(nameof(ChapterSummaries));
@@ -293,7 +294,7 @@ public sealed partial class InspectorSceneViewModel : ViewModelBase, IDisposable
     {
         OnPropertyChanged(nameof(Mode));
         OnPropertyChanged(nameof(Node));
-        OnPropertyChanged(nameof(Title));
+        OnPropertyChanged(nameof(Title)); OnPropertyChanged(nameof(ChapterLabel));
         OnPropertyChanged(nameof(Dialogue)); OnPropertyChanged(nameof(Character));
         OnPropertyChanged(nameof(Background)); OnPropertyChanged(nameof(Choice));
         OnPropertyChanged(nameof(Audio)); OnPropertyChanged(nameof(Transition));
@@ -335,6 +336,17 @@ public sealed partial class InspectorSceneViewModel : ViewModelBase, IDisposable
     }
 
     // ── Bileşen referansları ──
+
+    /// <summary>Başlığın altındaki soluk bölüm satırı (bölümsüz düğüm → varsayılan bölüm adı).</summary>
+    public string ChapterLabel => Node is null ? string.Empty : ChapterTitle(Node.ChapterId);
+
+    private string ChapterTitle(string? chapterId)
+    {
+        if (string.IsNullOrEmpty(chapterId))
+            return ChapterStorageService.DefaultChapterTitle;
+        var def = _main.Chapters.Definitions.FirstOrDefault(c => string.Equals(c.Id, chapterId, StringComparison.Ordinal));
+        return def is null ? chapterId : (!string.IsNullOrEmpty(def.Title) ? def.Title : def.Id);
+    }
 
     public DialogueComponentViewModel? Dialogue => _dialogue;
     public CharacterComponentViewModel? Character => _character;
