@@ -1164,6 +1164,9 @@
     "Issues.Reanalyze": {
       "text": "Re-analyze"
     },
+    "Issues.Row.GoTo": {
+      "text": "Go to related item"
+    },
     "Language.en": {
       "text": "English"
     },

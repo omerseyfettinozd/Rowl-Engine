@@ -1,4 +1,4 @@
-<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:vm="using:RowlEngine.Editor.ViewModels" xmlns:l="using:RowlEngine.Editor.Services.Strings" x:Class="RowlEngine.Editor.Views.Panels.ProjectIssuesView" x:DataType="vm:ProjectIssuesViewModel" x:Name="Root">
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:vm="using:RowlEngine.Editor.ViewModels" xmlns:l="using:RowlEngine.Editor.Services.Strings" xmlns:svc="using:RowlEngine.Editor.Services" x:Class="RowlEngine.Editor.Views.Panels.ProjectIssuesView" x:DataType="vm:ProjectIssuesViewModel" x:Name="Root">
   <Border Background="{DynamicResource PanelBackground}" Padding="8">
     <DockPanel>
       <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6" VerticalAlignment="Center">
@@ -8,9 +8,34 @@
                 ToolTip.Tip="{l:T Issues.Analyze.Tip}"/>
       </DockPanel>
       <Grid>
-      <ScrollViewer><ItemsControl ItemsSource="{Binding Issues}"><ItemsControl.ItemTemplate><DataTemplate>
-        <Button Classes="compact" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Padding="6,4" Command="{Binding #Root.DataContext.FocusCommand}" CommandParameter="{Binding}"><TextBlock Classes="body" Text="{Binding Message}" TextWrapping="Wrap" Foreground="{DynamicResource PrimaryText}"/></Button>
-      </DataTemplate></ItemsControl.ItemTemplate></ItemsControl></ScrollViewer>
+      <ScrollViewer>
+        <ItemsControl ItemsSource="{Binding Issues}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="svc:ProjectValidationIssue">
+              <Panel>
+                <Button IsVisible="{Binding HasTarget}" Classes="compact" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Padding="6,4" Command="{Binding #Root.DataContext.FocusCommand}" CommandParameter="{Binding}" ToolTip.Tip="{l:T Issues.Row.GoTo}">
+                  <Grid ColumnDefinitions="Auto,*">
+                    <Panel Width="8" Height="8" Margin="0,0,6,0" VerticalAlignment="Center">
+                      <Ellipse Width="8" Height="8" Fill="{DynamicResource ErrorBrush}" IsVisible="{Binding IsError}"/>
+                      <Ellipse Width="8" Height="8" Fill="{DynamicResource WarningBrush}" IsVisible="{Binding !IsError}"/>
+                    </Panel>
+                    <TextBlock Grid.Column="1" Classes="body" Text="{Binding Message}" TextWrapping="Wrap" Foreground="{DynamicResource PrimaryText}"/>
+                  </Grid>
+                </Button>
+                <Border IsVisible="{Binding !HasTarget}" Padding="6,4">
+                  <Grid ColumnDefinitions="Auto,*">
+                    <Panel Width="8" Height="8" Margin="0,0,6,0" VerticalAlignment="Center">
+                      <Ellipse Width="8" Height="8" Fill="{DynamicResource ErrorBrush}" IsVisible="{Binding IsError}"/>
+                      <Ellipse Width="8" Height="8" Fill="{DynamicResource WarningBrush}" IsVisible="{Binding !IsError}"/>
+                    </Panel>
+                    <TextBlock Grid.Column="1" Classes="body" Text="{Binding Message}" TextWrapping="Wrap" Foreground="{DynamicResource PrimaryText}"/>
+                  </Grid>
+                </Border>
+              </Panel>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </ScrollViewer>
       <!-- Faz 5: boş-durum — sorun yok (eylem: yeniden analiz) -->
       <StackPanel x:Name="IssuesEmptyPanel" IsVisible="{Binding #Root.DataContext.IsEmpty}"
                   VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="8" Margin="16">

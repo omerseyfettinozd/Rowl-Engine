@@ -1164,6 +1164,9 @@
     "Issues.Reanalyze": {
       "text": "Yeniden Analiz Et"
     },
+    "Issues.Row.GoTo": {
+      "text": "İlgili öğeye git"
+    },
     "Language.en": {
       "text": "English"
     },

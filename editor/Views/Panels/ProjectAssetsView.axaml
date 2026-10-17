@@ -238,18 +238,25 @@
                                         BorderBrush="{DynamicResource BorderColor}" BorderThickness="1"
                                         CornerRadius="10">
                                     <StackPanel Spacing="0">
-                                        <Border Background="{DynamicResource SurfaceBackground}"
-                                                CornerRadius="10,10,0,0" Padding="6"
-                                                Height="{Binding $parent[UserControl].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.GridItemImageSize}">
-                                            <Panel VerticalAlignment="Center" HorizontalAlignment="Center">
-                                                <Image Source="{Binding Thumbnail}" IsVisible="{Binding HasThumbnail}"
-                                                       Stretch="Uniform" VerticalAlignment="Center" HorizontalAlignment="Center"/>
-                                                <TextBlock Text="{Binding TypeLabel}" IsVisible="{Binding !HasThumbnail}"
-                                                           Classes="fieldLabel"
-                                                           HorizontalAlignment="Center" VerticalAlignment="Center"
-                                                           TextWrapping="Wrap" TextAlignment="Center"/>
-                                            </Panel>
-                                        </Border>
+                                        <Grid>
+                                            <Border Background="{DynamicResource SurfaceBackground}"
+                                                    CornerRadius="10,10,0,0" Padding="6"
+                                                    Height="{Binding $parent[UserControl].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.GridItemImageSize}">
+                                                <Panel VerticalAlignment="Center" HorizontalAlignment="Center">
+                                                    <Image Source="{Binding Thumbnail}" IsVisible="{Binding HasThumbnail}"
+                                                           Stretch="Uniform" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                                    <TextBlock Text="{Binding TypeLabel}" IsVisible="{Binding !HasThumbnail}"
+                                                               Classes="fieldLabel"
+                                                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                               TextWrapping="Wrap" TextAlignment="Center"/>
+                                                </Panel>
+                                            </Border>
+                                            <Border IsVisible="{Binding IsMissing}" Background="{DynamicResource ErrorSurface}"
+                                                    CornerRadius="{DynamicResource RadiusSmall}" Padding="4,1"
+                                                    HorizontalAlignment="Left" VerticalAlignment="Top" Margin="4">
+                                                <TextBlock Text="{l:T Assets.Badge.Missing}" Classes="fieldValue" Foreground="{DynamicResource ErrorBrush}"/>
+                                            </Border>
+                                        </Grid>
                                         <StackPanel Margin="10" Spacing="2">
                                             <TextBlock Text="{Binding Name}"
                                                        Foreground="{DynamicResource PrimaryText}"

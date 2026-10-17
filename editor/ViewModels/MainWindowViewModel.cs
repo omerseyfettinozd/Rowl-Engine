@@ -1326,6 +1326,22 @@ namespace RowlEngine.Editor.ViewModels
             Search.JumpTo(node);
         }
 
+        /// <summary>Faz 9: sorun satırından varlık hedefini göster.</summary>
+        public bool FocusIssueAsset(string assetPath)
+        {
+            // Boş yol: durum değişmeden false.
+            if (string.IsNullOrWhiteSpace(assetPath))
+                return false;
+            if (AssetBrowserViewModel == null)
+                return false;
+            bool ok = AssetBrowserViewModel.RevealAsset(assetPath);
+            if (!ok)
+                return false;
+            // Varlıklar sekmesini aç + etkin yap (Sorunlar açık kalır).
+            Workspace = Workspace.WithBottomTab(BottomStripState.AssetsTab, true).WithActiveBottomTab(BottomStripState.AssetsTab);
+            return true;
+        }
+
         /// <summary>Enters the subgraph owning the node (double-click path).</summary>
         public bool EnterSubgraphForNode(ulong nodeId)
         {
