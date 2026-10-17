@@ -14,13 +14,16 @@
           <ItemsControl.ItemTemplate>
             <DataTemplate x:DataType="svc:ProjectValidationIssue">
               <Panel>
-                <Button IsVisible="{Binding HasTarget}" Classes="compact" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Padding="6,4" Command="{Binding #Root.DataContext.FocusCommand}" CommandParameter="{Binding}" ToolTip.Tip="{l:T Issues.Row.GoTo}">
-                  <Grid ColumnDefinitions="Auto,*">
+                <Button IsVisible="{Binding HasTarget}" Classes="compact" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Padding="6,4" Command="{Binding #Root.DataContext.FocusCommand}" CommandParameter="{Binding}" ToolTip.Tip="{l:T Issues.Row.GoTo}">
+                  <Grid ColumnDefinitions="Auto,*,Auto">
                     <Panel Width="8" Height="8" Margin="0,0,6,0" VerticalAlignment="Center">
                       <Ellipse Width="8" Height="8" Fill="{DynamicResource ErrorBrush}" IsVisible="{Binding IsError}"/>
                       <Ellipse Width="8" Height="8" Fill="{DynamicResource WarningBrush}" IsVisible="{Binding !IsError}"/>
                     </Panel>
                     <TextBlock Grid.Column="1" Classes="body" Text="{Binding Message}" TextWrapping="Wrap" Foreground="{DynamicResource PrimaryText}"/>
+                    <!-- Tıklanabilir satır işareti: hedefe götürür (hedefsiz satırda yok). -->
+                    <Path Grid.Column="2" Data="M0,0 L4,4 L0,8" Stroke="{DynamicResource MutedText}" StrokeThickness="1.5"
+                          Margin="8,0,2,0" VerticalAlignment="Center"/>
                   </Grid>
                 </Button>
                 <Border IsVisible="{Binding !HasTarget}" Padding="6,4">
