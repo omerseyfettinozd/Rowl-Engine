@@ -360,3 +360,25 @@ süitini koşar. Dilim başına yerel commit; push gün sonunda tek sefer.
   yazısı soluk. Grup sürüklemesinde yakalama kaybı (bırakma olayı gelmezse) kayıt üretmez.
 - Faz sonu yerel: editör 995/995, RowlEye golden + denetim 3/3, RowlEye testleri 56/56, taşınabilirlik + launcher
   yeşil; native değişmedi.
+
+## Faz 10 — Donma, yan yana merkez görünümler, Denetçi yeniden tasarımı (2026-10-17)
+
+Karar (Chaple): (1) prototipteki gibi Node / Oyun / Sahne Düzenle aynı anda ayrı paneller; (2) panel
+taşırken donma giderilsin; (3) Denetçi sıfırdan, "uçak kokpiti değil, sanat eseri". Denetçi taslağı
+`prototypes/editor-workspace/inspector-redesign.html` onaylandı (kavram: `docs/design/inspector-redesign-concept.md`).
+
+**Yapılan:**
+- `aae20ca` donma kök nedeni: yerleşim animasyonu paneli ara boyutlarda yeniden ölçüyordu (Denetçi
+  40–120 ms/kare); panel son yerinde bir kez yerleşir, geçiş dönüşümle çizilir. Kilit testi.
+- `30a338d` merkez görünümler bağımsız aç-kapa, yan yana (`ToggleCenterView`, `EnsureCenterVisible`).
+
+**Denetçi dilimleri:**
+- **D1** `InspectorSceneViewModel`: mevcut bileşenlerin üstünde yazar dilinde uyarlayıcı (konuşan, söz,
+  yazı hızı Yavaş/Normal/Hızlı/Anında, karakter konumu Sol/Orta/Sağ → X, arka plan Doldur/Sığdır,
+  seçim satırları hedef sahne adıyla, ses, geçiş kartları + süre, kamera Sabit/Yaklaş/Uzaklaş).
+  Veri modeli değişmez.
+- **D2** yeni görünüm: hikâye akışıyla bölümler, "Ayrıntılar" katlanır; eski bileşen düzenleyicisi en altta
+  "Tüm sahne nesneleri (gelişmiş)" altında kalır — özellik kaybı yok.
+- **D3** seçim yok / çoklu seçim durumları (ortak: bölüm, etiket; çoğalt, sil).
+- Modelde karşılığı olmadığı için taslaktan alınmayanlar: "Işık: Gündüz/Akşam/Gece", "Seslendirme ekle"
+  (ses kaydı alanı yok); çoklu seçimde geçiş/müzik toplu atama sonraki dilim.
