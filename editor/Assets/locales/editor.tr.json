@@ -1035,6 +1035,9 @@
     "Import.Title": {
       "text": "İçe aktarılıyor"
     },
+    "Inspector.Choices.NewChoice": {
+      "text": "Yeni seçim"
+    },
     "Inspector.Components.Actions.Tip": {
       "text": "Bileşen işlemleri"
     },
@@ -1098,6 +1101,9 @@
     "Inspector.Menu.MoveUp": {
       "text": "Yukarı Taşı"
     },
+    "Inspector.Multi.AndMore": {
+      "text": "ve {0} tane daha"
+    },
     "Inspector.Node.Chapter.Label": {
       "text": "Bölüm:"
     },
@@ -1151,6 +1157,21 @@
     },
     "Inspector.Provenance.Title": {
       "text": "DÖNÜŞTÜRME KÖKENİ"
+    },
+    "Inspector.Scene.ImportedImage": {
+      "text": "İçe aktarılmış görsel"
+    },
+    "Inspector.Transition.Crossfade": {
+      "text": "Yumuşak geçiş"
+    },
+    "Inspector.Transition.Fade": {
+      "text": "Kararma"
+    },
+    "Inspector.Transition.FadeWhite": {
+      "text": "Beyaza açılma"
+    },
+    "Inspector.Transition.Wipe": {
+      "text": "Perde"
     },
     "Issues.Analyze": {
       "text": "Analiz"

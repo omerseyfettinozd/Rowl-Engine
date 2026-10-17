@@ -1035,6 +1035,9 @@
     "Import.Title": {
       "text": "Importing"
     },
+    "Inspector.Choices.NewChoice": {
+      "text": "New choice"
+    },
     "Inspector.Components.Actions.Tip": {
       "text": "Component actions"
     },
@@ -1098,6 +1101,9 @@
     "Inspector.Menu.MoveUp": {
       "text": "Move Up"
     },
+    "Inspector.Multi.AndMore": {
+      "text": "and {0} more"
+    },
     "Inspector.Node.Chapter.Label": {
       "text": "Chapter:"
     },
@@ -1151,6 +1157,21 @@
     },
     "Inspector.Provenance.Title": {
       "text": "CONVERSION PROVENANCE"
+    },
+    "Inspector.Scene.ImportedImage": {
+      "text": "Imported image"
+    },
+    "Inspector.Transition.Crossfade": {
+      "text": "Crossfade"
+    },
+    "Inspector.Transition.Fade": {
+      "text": "Fade"
+    },
+    "Inspector.Transition.FadeWhite": {
+      "text": "Fade to white"
+    },
+    "Inspector.Transition.Wipe": {
+      "text": "Wipe"
     },
     "Issues.Analyze": {
       "text": "Analyze"

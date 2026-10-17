@@ -639,6 +639,9 @@ namespace RowlEngine.Editor.ViewModels
         public SaveSlotsViewModel SaveSlotsViewModel { get; }
         public ProjectIssuesViewModel ProjectIssuesViewModel { get; }
         public InspectorViewModel InspectorViewModel { get; }
+
+        /// <summary>Faz 10: Denetçi'nin yazar dilindeki görünümü (mevcut bileşenlerin üstünde uyarlayıcı).</summary>
+        public RowlEngine.Editor.ViewModels.Inspector.InspectorSceneViewModel InspectorScene { get; }
         public NodeGraphViewModel NodeGraphViewModel { get; }
         /// <summary>Faz 4 Dilim 2 — global search + filter bar owner.</summary>
         public SearchViewModel Search { get; }
@@ -706,6 +709,7 @@ namespace RowlEngine.Editor.ViewModels
             InspectorViewModel = new InspectorViewModel(this);
             NodeGraphViewModel = new NodeGraphViewModel(this);
             Search = new SearchViewModel(this);
+            InspectorScene = new RowlEngine.Editor.ViewModels.Inspector.InspectorSceneViewModel(this);
             // Faz 4 Dilim 3 — session structure wiring (logic in services).
             Groups.Attach(Nodes);
             Subgraphs.Attach(Nodes);
@@ -2771,6 +2775,7 @@ namespace RowlEngine.Editor.ViewModels
             AssetBitmapCache.Clear();
             try { AssetScanner.Dispose(); } catch { }
             try { AssetBrowserViewModel.Dispose(); } catch { }
+            try { InspectorScene.Dispose(); } catch { }
         }
     }
 }
