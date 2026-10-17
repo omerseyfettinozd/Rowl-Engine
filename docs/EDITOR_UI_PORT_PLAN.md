@@ -382,3 +382,14 @@ taşırken donma giderilsin; (3) Denetçi sıfırdan, "uçak kokpiti değil, san
 - **D3** seçim yok / çoklu seçim durumları (ortak: bölüm, etiket; çoğalt, sil).
 - Modelde karşılığı olmadığı için taslaktan alınmayanlar: "Işık: Gündüz/Akşam/Gece", "Seslendirme ekle"
   (ses kaydı alanı yok); çoklu seçimde geçiş/müzik toplu atama sonraki dilim.
+
+**Faz 10 Denetçi yapılan (2026-10-17):**
+- D1 `59a6ee7` `InspectorSceneViewModel` (yalnız seçili düğümü ve seçenek hedeflerini dinler; ilk sürüm her düğüme
+  abone olup 2000 düğümlük yükleme bütçesini aşıyordu). Test kurulumunun `ProjectRoot`'u erken geri yüklemesi,
+  Dispose'daki kaydı deponun örnek projesine yazdırıyordu — düzeltildi.
+- D2/D3 `7bc08f8` `SceneInspectorView`: hikâye akışıyla bölümler, parçalı seçimler, boş durumlar, seçim yok /
+  çoklu seçim; eski düzenleyici "Gelişmiş ayarlar" altında katlı; başlıkta nesne kimliği gizli.
+- `ee4560c` Wonder cilası: "Ayrıntılar" ok şablonu, ölü boşluk, bölüm adı alt satırı, "+ Ekle".
+- Yerel kapılar: editör 1011/1011, RowlEye golden + denetim 3/3, taşınabilirlik + launcher yeşil; native değişmedi.
+- Taslaktan alınmayan (modelde yok): Işık, Seslendirme ekle, "Ana karakter · sahnede"; çoklu seçimde bölüm/etiket/
+  geçiş/müzik toplu alanları (VM'de `MultiChapter`/`MultiColorTag` hazır, görünüm sonraki dilim).
