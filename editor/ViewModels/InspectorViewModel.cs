@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Linq;
+using RowlEngine.Editor.Native;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using RowlEngine.Editor.Services;
@@ -135,9 +136,29 @@ namespace RowlEngine.Editor.ViewModels
                 return (TestProvenanceNativeCall, TestProvenanceEngineHandle);
             var host = MainViewModel.EngineHost;
             if (host.IsInitialized && host.Handle != IntPtr.Zero)
-                return (AssetProvenanceService.ProductionNativeCall, host.Handle);
+                return (EngineThreadProvenanceCall(host), host.Handle);
             return (null, IntPtr.Zero);
         }
+
+        /// <summary>
+        /// Kök neden düzeltmesi: Denetçi özelliği UI iş parçacığında okunur; native provenance
+        /// çağrısı motorun iş parçacığına taşınır (doğrudan çağrı WRONG_THREAD ile reddediliyor,
+        /// her düğüm seçiminde günlüğe hata yazılıyordu).
+        /// </summary>
+        private static AssetProvenanceService.ProvenanceNativeCall EngineThreadProvenanceCall(EngineHost host) =>
+            (IntPtr handle, string assetPath, IntPtr buffer, uint bufferSize, out uint requiredSize) =>
+            {
+                (NativeBridge.ResultCode code, uint required) = host.InvokeOnEngineThread(
+                    engine =>
+                    {
+                        NativeBridge.ResultCode rc = AssetProvenanceService.ProductionNativeCall(
+                            engine, assetPath, buffer, bufferSize, out uint needed);
+                        return (rc, needed);
+                    },
+                    (NativeBridge.ResultCode.InvalidHandle, 0u));
+                requiredSize = required;
+                return code;
+            };
 
         // ── Faz 4 Dilim 4 — chapter assignment ──
 

@@ -98,6 +98,13 @@ namespace RowlEngine.Editor.Native
             return runtime?.IsAvailable == true ? runtime.Invoke(command) : fallback;
         }
 
+        /// <summary>
+        /// Motor nesnesi yalnız sahibi olan çalışan iş parçacığından çağrılabilir (native taraf
+        /// başka iş parçacığından gelen çağrıyı WRONG_THREAD ile reddeder). Servislerin handle
+        /// alan native çağrıları buradan geçer; motor yoksa <paramref name="fallback"/> döner.
+        /// </summary>
+        internal T InvokeOnEngineThread<T>(Func<IntPtr, T> command, T fallback) => InvokeNative(command, fallback);
+
         private void InvokeNative(Action<IntPtr> command)
         {
             OffscreenRuntimeWorker? runtime = _runtime;
