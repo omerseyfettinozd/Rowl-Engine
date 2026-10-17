@@ -691,6 +691,9 @@ namespace RowlEngine.Editor.ViewModels
                 ProjectRoot = ResolveProjectRoot();
                 CurrentProjectPath = ProjectRoot;
             }
+            // Motoru hangi yol başlatırsa başlatsın (bu sınıf ya da önizleme
+            // denetimi) proje Init ile aynı turda bağlanır.
+            EngineHost.StartupProjectRoot = ProjectRoot;
 
             ProjectRuntimeSettings = ProjectRuntimeSettingsService.Load(
                 Path.Combine(ProjectRoot, "project.rowlproj"));
@@ -1130,6 +1133,7 @@ namespace RowlEngine.Editor.ViewModels
             // Task.Run yalnızca bekleyen tarafı UI'dan çeker. Her await
             // UI thread'ine döner; sıra, metin ve dallanma birebir aynıdır.
             string projectRoot = ProjectRoot;
+            EngineHost.StartupProjectRoot = projectRoot;
             bool success = await Task.Run(() => EngineHost.Initialize(1920, 1080, true));
             IsConnected = success;
             if (!success)
@@ -1139,8 +1143,18 @@ namespace RowlEngine.Editor.ViewModels
                 return;
             }
 
+            // Proje Initialize içinde Init ile aynı turda bağlanır. Motor
+            // daha önce başka bir yoldan (önizleme) başlatıldıysa ya da
+            // farklı bir köke bağlıysa burada bağlanır; ret sessiz kalmaz.
             StatusText = "Mounting project VFS...";
-            await Task.Run(() => EngineHost.SetProjectDirectory(projectRoot));
+            if (!string.Equals(EngineHost.MountedProjectRoot, projectRoot, StringComparison.Ordinal))
+                await Task.Run(() => EngineHost.SetProjectDirectoryChecked(projectRoot, out _));
+            if (!string.Equals(EngineHost.MountedProjectRoot, projectRoot, StringComparison.Ordinal))
+            {
+                string detail = EngineHost.LastProjectMountError;
+                AppendLog($"[HATA] Proje motora bağlanamadı: {detail}");
+                NotifyError($"Proje motora bağlanamadı; Oyun panelinde resimler görünmeyebilir ({detail}).", "Motor");
+            }
 
             StatusText = "Applying player settings...";
             await Task.Run(() => ApplyPlayerSettingsToEngine());
@@ -2442,6 +2456,7 @@ namespace RowlEngine.Editor.ViewModels
                     {
                         ProjectRoot = root;
                         CurrentProjectPath = path;
+                        EngineHost.StartupProjectRoot = root;
                     },
                     root => EngineHost.SetProjectDirectory(root),
                     LoadFullStoryGraphFile,

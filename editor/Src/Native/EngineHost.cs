@@ -86,6 +86,21 @@ namespace RowlEngine.Editor.Native
         // aynı). EmbeddedRuntimeBootstrap satır 134-159 emsaldir.
         internal string LastError { get; private set; } = string.Empty;
 
+        /// <summary>
+        /// Initialize'da RowlEngine_Init ile aynı motor iş parçacığı turunda
+        /// bağlanacak proje. Önizleme Init ile bağlama arasına sahne itince
+        /// motor oturumu "oynanmış" sayıyor (stepId 2) ve bağlamayı sessizce
+        /// reddediyordu: VFS boş kalıyor, Oyun panelinde hiçbir resim
+        /// çıkmıyordu. Initialize'dan önce kurulmalı.
+        /// </summary>
+        public string? StartupProjectRoot { get; set; }
+
+        /// <summary>Son başarılı proje bağlamasının kökü (yoksa boş).</summary>
+        public string MountedProjectRoot { get; private set; } = string.Empty;
+
+        /// <summary>Son proje bağlamasının red ayrıntısı; başarılı bağlama boşaltır.</summary>
+        public string LastProjectMountError { get; private set; } = string.Empty;
+
         // W8-f — test seam'i: varsayılan null iken gerçek worker kurulur;
         // testler deterministik başarısızlık dallarını (fırlatan fabrika,
         // handlesiz worker) bu fabrikayla enjekte eder. Üretim akışı
@@ -188,8 +203,21 @@ namespace RowlEngine.Editor.Native
             // taze sanılmaz. Anlık görüntü Dispose ÖNCESİ alınır.
             InvokeNative(handle => NativeBridge.RowlEngine_ClearLastResult(handle));
 
-            int result = InvokeNative(handle => NativeBridge.RowlEngine_Init(
-                handle, width, height, vsync ? 1 : 0), 0);
+            // Init ve başlangıç projesi tek iş parçacığı turunda: arada
+            // sıraya giren önizleme itişi bağlamayı reddettiremez.
+            string? startupRoot = StartupProjectRoot;
+            bool startupMounted = false;
+            string startupMountDetail = string.Empty;
+            int result = InvokeNative(handle =>
+            {
+                int init = NativeBridge.RowlEngine_Init(handle, width, height, vsync ? 1 : 0);
+                if (init != 0 && !string.IsNullOrEmpty(startupRoot))
+                    startupMounted = MountProjectOnEngineThread(handle, startupRoot, out startupMountDetail);
+                return init;
+            }, 0);
+
+            if (result != 0 && !string.IsNullOrEmpty(startupRoot))
+                RecordProjectMount(startupRoot, startupMounted, startupMountDetail);
 
             if (result == 0)
             {
@@ -729,13 +757,39 @@ namespace RowlEngine.Editor.Native
         {
             if (IsInitialized && !string.IsNullOrEmpty(projectRoot))
             {
-                _lastPreviewComponentsJson = null;
-                InvokeNative(handle => NativeBridge.RowlEngine_SetProjectDirectory(handle, projectRoot));
-                if (!IsPlaying)
-                {
-                    InvokeNative(handle => NativeBridge.RowlEngine_Step(handle, 0.0f));
-                    UpdatePixelBuffer();
-                }
+                SetProjectDirectoryChecked(projectRoot, out _);
+            }
+        }
+
+        /// <summary>
+        /// Motor iş parçacığında çalışır: sonuç kanalını temizler, projeyi
+        /// bağlar ve reddi okur. Sıfır-dışı her kod bu bağlamaya aittir
+        /// (ölü-kök reddi load_story_graph op'uyla damgalanır).
+        /// </summary>
+        private static bool MountProjectOnEngineThread(IntPtr handle, string projectRoot, out string detail)
+        {
+            NativeBridge.RowlEngine_ClearLastResult(handle);
+            NativeBridge.RowlEngine_SetProjectDirectory(handle, projectRoot);
+            int code = NativeBridge.RowlEngine_GetLastResultCode(handle);
+            detail = code == 0
+                ? string.Empty
+                : NativeBridge.PtrToString(
+                    NativeBridge.RowlEngine_GetLastResultMessageWithLength(handle, out uint msgLen), msgLen);
+            return code == 0;
+        }
+
+        private void RecordProjectMount(string projectRoot, bool mounted, string detail)
+        {
+            if (mounted)
+            {
+                MountedProjectRoot = projectRoot;
+                LastProjectMountError = string.Empty;
+            }
+            else
+            {
+                LastProjectMountError = string.IsNullOrEmpty(detail)
+                    ? "SetProjectDirectory rejected (no native detail)"
+                    : detail;
             }
         }
 
@@ -783,16 +837,19 @@ namespace RowlEngine.Editor.Native
             detail = string.Empty;
             if (!IsInitialized || string.IsNullOrEmpty(projectRoot)) return true;
             _lastPreviewComponentsJson = null;
-            InvokeNative(handle => NativeBridge.RowlEngine_ClearLastResult(handle));
-            InvokeNative(handle => NativeBridge.RowlEngine_SetProjectDirectory(handle, projectRoot));
-            // Kanal mount öncesi temizlendi; sıfır-dışı her kod bu mounta
-            // aittir (ölü-kök reddi load_story_graph op'uyla damgalanır).
-            // Anlık görüntü iç Step'ten ÖNCE alınır: Step WrongThread
-            // damgası yanlış reje yol açardı. Detay da burada yakalanır.
-            bool rejected = TryGetLastEngineResult(out int code, out _, out string message)
-                && code != 0;
+            // Temizle + bağla + oku tek turda: iç Step'in WrongThread damgası
+            // ya da araya giren başka bir çağrı yanlış reje yol açamaz.
+            string message = string.Empty;
+            bool mounted = InvokeNative(handle =>
+            {
+                bool ok = MountProjectOnEngineThread(handle, projectRoot, out string mountDetail);
+                message = mountDetail;
+                return ok;
+            }, false);
+            RecordProjectMount(projectRoot, mounted, message);
+            bool rejected = !mounted;
             if (rejected)
-                detail = message;
+                detail = LastProjectMountError;
             if (!IsPlaying)
             {
                 InvokeNative(handle => NativeBridge.RowlEngine_Step(handle, 0.0f));
