@@ -1598,8 +1598,8 @@ namespace RowlEngine.Editor.ViewModels
                     msg => AppendLog(msg),
                     () =>
                     {
-                        if (SplitScreenMode == 0)
-                            Workspace = Workspace.WithCenter(PanelIds.Game);
+                        // Faz 10: Oynat oyunu açar ama açık diğer görünümleri (Node, Sahne Düzenle) kapatmaz.
+                        Workspace = Workspace.EnsureCenterVisible(PanelIds.Game);
                     },
                     AssetsJsonPath);
 

@@ -92,16 +92,19 @@ internal static class EditorWorkspaceThemeTests
         Console.WriteLine(
             "  [PASS] Bottom tabs share one strip, toggle independently and reclaim height");
 
-        mainVm.ShowPanel("SplitScreen");
-        mainVm.ShowPanel("Preview");
-        if (mainVm.SplitScreenMode != 0 || !mainVm.IsPreviewActive || mainVm.IsNodeGraphActive)
-            throw new Exception("Preview mode did not exit split screen cleanly");
-        mainVm.ShowPanel("SplitScreen");
+        // Faz 10: Node / Game / Edit bağımsız aç-kapa; üçü aynı anda açık olabilir.
         mainVm.ShowPanel("EnginePreview");
-        if (mainVm.SplitScreenMode != 0 || !mainVm.IsEnginePreviewActive || mainVm.IsNodeGraphActive)
-            throw new Exception("Game preview mode did not exit split screen cleanly");
-        mainVm.ShowPanel("NodeGraph");
-        Console.WriteLine("  [PASS] Single preview modes exit split screen consistently");
+        mainVm.ShowPanel("Preview");
+        if (!mainVm.IsNodeGraphActive || !mainVm.IsEnginePreviewActive || !mainVm.IsPreviewActive)
+            throw new Exception("Center views did not open side by side");
+        mainVm.ShowPanel("EnginePreview");
+        mainVm.ShowPanel("Preview");
+        if (!mainVm.IsNodeGraphActive || mainVm.IsEnginePreviewActive || mainVm.IsPreviewActive)
+            throw new Exception("Center views did not close independently");
+        mainVm.ShowPanel("NodeGraph"); // son merkez kapanmaz
+        if (!mainVm.IsNodeGraphActive)
+            throw new Exception("The last center view closed");
+        Console.WriteLine("  [PASS] Center views open and close independently");
     }
 
     private static void RunWorkspaceSizes(MainWindowViewModel mainVm)

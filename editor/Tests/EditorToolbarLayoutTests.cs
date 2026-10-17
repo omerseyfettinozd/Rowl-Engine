@@ -74,9 +74,14 @@ namespace RowlEngine.Editor
                 mainVm.ShowPanelCommand.Execute("EnginePreview");
                 if (!mainVm.IsEnginePreviewActive || mainVm.GameTabBrush == "Transparent")
                     throw new Exception("Game tab highlight did not follow EnginePreview");
+                // Faz 10: düğmeler bağımsız aç-kapa — Oyun açıkken Node düğmesi grafiği kapatır, tekrar açar.
+                mainVm.ShowPanelCommand.Execute("NodeGraph");
+                if (mainVm.IsNodeGraphActive || mainVm.SceneTabBrush != "Transparent" || !mainVm.IsEnginePreviewActive)
+                    throw new Exception("Scene tab highlight did not follow closing NodeGraph");
                 mainVm.ShowPanelCommand.Execute("NodeGraph");
                 if (!mainVm.IsNodeGraphActive || mainVm.SceneTabBrush == "Transparent")
                     throw new Exception("Scene tab highlight did not follow NodeGraph");
+                mainVm.ShowPanelCommand.Execute("EnginePreview"); // sonraki adımlar için başlangıç düzeni
 
                 // "…" menüsü: proje, kayıt, dışa aktarma, düzen, bölünmüş ekran, ayarlar.
                 var more = window.FindControl<MenuItem>("MoreMenu")

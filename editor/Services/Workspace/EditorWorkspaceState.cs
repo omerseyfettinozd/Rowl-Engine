@@ -120,8 +120,8 @@ public sealed record EditorWorkspaceState(WorkspaceLayout Layout, BottomStripSta
 
     public bool IsNodeGraphActive => IsVisible(PanelIds.Node);
 
-    /// <summary>"Sahne Düzenle" tab highlight: only in single-view mode (as before D2).</summary>
-    public bool IsPreviewActive => SplitScreenMode == 0 && IsVisible(PanelIds.Edit);
+    /// <summary>"Sahne Düzenle" vurgusu: Edit açıkken (C1: bağımsız).</summary>
+    public bool IsPreviewActive => IsVisible(PanelIds.Edit);
 
     public bool IsEnginePreviewActive => IsVisible(PanelIds.Game);
 
@@ -235,6 +235,25 @@ public sealed record EditorWorkspaceState(WorkspaceLayout Layout, BottomStripSta
         return WithLayout(EditorWorkspaceLayouts.ReplaceCenter(Layout, _ => new LeafNode(centerView)));
     }
 
+    /// <summary>Faz 10 C1 — kapsül aç-kapa: açıksa kapatır (son merkez kalır), kapalıysa yanına ekler.</summary>
+    public EditorWorkspaceState ToggleCenterView(string view)
+    {
+        if (!EditorWorkspaceLayouts.IsCenter(view))
+            throw new ArgumentException("Not a center view.", nameof(view));
+        if (IsVisible(view))
+        {
+            // Tek merkez kalmışsa kapatma (en az bir merkez).
+            if (Layout.Views.Count(v => EditorWorkspaceLayouts.IsCenter(v)) <= 1)
+                return this;
+            return WithLayout(Layout.RemoveView(view));
+        }
+        return WithLayout(EditorWorkspaceLayouts.AddCenterView(Layout, view));
+    }
+
+    /// <summary>Faz 10 C1 — Oynat için: açıksa aynen, değilse diğerlerini kapatmadan açar.</summary>
+    public EditorWorkspaceState EnsureCenterVisible(string view) =>
+        IsVisible(view) ? this : ToggleCenterView(view);
+
     /// <summary>Split screen 1 (rows) / 2 (columns): Node + Sahne Düzenle; 0 returns to the Node graph alone.</summary>
     public EditorWorkspaceState WithSplitScreen(int mode) =>
         mode is 1 or 2
@@ -297,13 +316,13 @@ public sealed record EditorWorkspaceState(WorkspaceLayout Layout, BottomStripSta
                     next = next.WithActiveBottomTab(BottomStripState.IssuesTab);
                 break;
             case "NodeGraph":
-                next = WithCenter(PanelIds.Node);
+                next = ToggleCenterView(PanelIds.Node);
                 break;
             case "Preview":
-                next = WithCenter(PanelIds.Edit);
+                next = ToggleCenterView(PanelIds.Edit);
                 break;
             case "EnginePreview":
-                next = WithCenter(PanelIds.Game);
+                next = ToggleCenterView(PanelIds.Game);
                 break;
             case "SplitScreen":
                 next = WithSplitScreen(NextSplitScreenMode(SplitScreenMode));
@@ -586,7 +605,7 @@ public static class EditorWorkspaceLayouts
         {
             tree = new SplitNode(Next(), SplitAxis.Horizontal, SplitScreenRatio, layout.Tree, content(Next));
         }
-        else if (WorkspaceLayout.Leaves(center).All(IsCenter))
+        else if (WorkspaceLayout.Leaves(center).All(v => IsCenter(v)))
         {
             LayoutNode replacement = content(Next);
             if (replacement == center)
@@ -595,12 +614,52 @@ public static class EditorWorkspaceLayouts
         }
         else
         {
-            IReadOnlyList<string> centers = WorkspaceLayout.Leaves(layout.Tree).Where(IsCenter).ToArray();
+            IReadOnlyList<string> centers = WorkspaceLayout.Leaves(layout.Tree).Where(v => IsCenter(v)).ToArray();
             WorkspaceLayout trimmed = layout;
             foreach (string extra in centers.Skip(1))
                 trimmed = trimmed.RemoveView(extra);
             LeafNode first = FindLeaf(trimmed.Tree, centers[0])!;
             tree = Replace(trimmed.Tree!, first, content(Next));
+        }
+        return new WorkspaceLayout(tree, last);
+    }
+
+    /// <summary>Faz 10 C1 — kapalıyken ekler: Edit/Game dikey eşleşir, diğerleri Node'un yanına.</summary>
+    internal static WorkspaceLayout AddCenterView(WorkspaceLayout layout, string view)
+    {
+        int last = layout.LastSplitId;
+        string Next() => NextId(ref last);
+        LayoutNode? tree = layout.Tree;
+        if (tree is null)
+        {
+            tree = new LeafNode(view);
+        }
+        else if (FindCenter(tree) is null)
+        {
+            // Merkez yoksa sağa ekle (ReplaceCenter ile aynı).
+            tree = new SplitNode(Next(), SplitAxis.Horizontal, SplitScreenRatio, tree, new LeafNode(view));
+        }
+        else if (view == PanelIds.Edit && FindLeaf(tree, PanelIds.Game) is LeafNode gameLeaf)
+        {
+            // Edit, Game'in altına.
+            tree = Replace(tree, gameLeaf, new SplitNode(Next(), SplitAxis.Vertical, SplitScreenRatio, gameLeaf, new LeafNode(view)));
+        }
+        else if (view == PanelIds.Game && FindLeaf(tree, PanelIds.Edit) is LeafNode editLeaf)
+        {
+            // Game, Edit'in üstüne (A=Game, B=Edit).
+            tree = Replace(tree, editLeaf, new SplitNode(Next(), SplitAxis.Vertical, SplitScreenRatio, new LeafNode(view), editLeaf));
+        }
+        else
+        {
+            // Yana ekle: önce Node, yoksa ilk merkez.
+            string? anchorView = FindLeaf(tree, PanelIds.Node) is not null
+                ? PanelIds.Node
+                : WorkspaceLayout.Leaves(tree).FirstOrDefault(v => IsCenter(v));
+            LeafNode? anchor = anchorView is null ? null : FindLeaf(tree, anchorView);
+            if (anchor is null)
+                tree = new SplitNode(Next(), SplitAxis.Horizontal, SplitScreenRatio, tree, new LeafNode(view));
+            else
+                tree = Replace(tree, anchor, new SplitNode(Next(), SplitAxis.Horizontal, SplitScreenRatio, anchor, new LeafNode(view)));
         }
         return new WorkspaceLayout(tree, last);
     }

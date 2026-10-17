@@ -478,10 +478,11 @@ public sealed class WorkspaceHostTests : IDisposable
                     }
                 }
 
+                // Faz 10: Oyun açılınca düğüm grafiği kapanmaz; ikisi aynı anda görünür.
                 _vm.ShowPanel("EnginePreview");
                 window.UpdateLayout();
                 Assert.True(game.IsEffectivelyVisible);
-                Assert.False(graph.IsEffectivelyVisible);
+                Assert.True(graph.IsEffectivelyVisible);
                 Assert.Same(game, window.GetLogicalDescendants().OfType<EnginePreviewControl>().Single());
             }
             finally
