@@ -25,8 +25,9 @@ namespace RowlEngine.Editor.Views.Workspace;
 /// rectangle from where it was to where it is now. Panels that were not shown
 /// fade in and rise 6 px (prototype <c>enter</c>); splitters slide with their
 /// neighbours. Nothing is re-parented and no panel is hosted twice, so focus,
-/// scroll and selection are untouched. The per-frame work is one arrange of the panels (the same as a splitter drag); during a pointer drag only the highlight
-/// is arranged (one rectangle), the panels do not move.
+/// scroll and selection are untouched. A moving panel is laid out once, at its final slot; the
+/// in-between frames only change its render transform (scale + translate), so no frame re-measures
+/// panel content. During a pointer drag only the highlight is arranged (one rectangle).
 /// </para>
 /// </summary>
 public partial class WorkspaceHost
@@ -85,6 +86,7 @@ public partial class WorkspaceHost
     }
 
     private readonly Dictionary<string, TranslateTransform> _enterTransforms = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, (ScaleTransform Scale, TranslateTransform Move, TransformGroup Group)> _flipTransforms = new(StringComparer.Ordinal);
     private readonly Dictionary<string, TranslateTransform> _splitterTransforms = new(StringComparer.Ordinal);
     private readonly Dictionary<string, Rect> _displayRects = new(StringComparer.Ordinal);
     private readonly Dictionary<string, Rect> _displaySplitters = new(StringComparer.Ordinal);
@@ -279,9 +281,26 @@ public partial class WorkspaceHost
         from.Width + (to.Width - from.Width) * t,
         from.Height + (to.Height - from.Height) * t);
 
+    /// <summary>Hedef dikdörtgende yerleşmiş paneli <paramref name="shown"/> üzerinde gösteren ölçek + kaydırma (sol üst köken).</summary>
+    private Transform FlipTransform(string id, Rect shown, Rect target)
+    {
+        if (!_flipTransforms.TryGetValue(id, out (ScaleTransform Scale, TranslateTransform Move, TransformGroup Group) flip))
+        {
+            var scale = new ScaleTransform();
+            var move = new TranslateTransform();
+            flip = (scale, move, new TransformGroup { Children = { scale, move } });
+            _flipTransforms[id] = flip;
+        }
+        flip.Scale.ScaleX = target.Width > 0 ? shown.Width / target.Width : 1;
+        flip.Scale.ScaleY = target.Height > 0 ? shown.Height / target.Height : 1;
+        flip.Move.X = shown.X - target.X;
+        flip.Move.Y = shown.Y - target.Y;
+        return flip.Group;
+    }
+
     private void EndLayoutMotion()
     {
-        if (_plan is null && _enterTransforms.Count == 0 && _splitterTransforms.Count == 0)
+        if (_plan is null && _enterTransforms.Count == 0 && _splitterTransforms.Count == 0 && _flipTransforms.Count == 0)
             return;
         _plan = null;
         foreach (WorkspacePanel panel in _panels.Values)
@@ -297,6 +316,7 @@ public partial class WorkspaceHost
         }
         _enterTransforms.Clear();
         _splitterTransforms.Clear();
+        _flipTransforms.Clear();
     }
 
     /// <summary>
@@ -352,9 +372,13 @@ public partial class WorkspaceHost
             {
                 if (plan.Panels.TryGetValue(id, out Rect from))
                 {
+                    // Faz 10: panel yalnız son yerine yerleşir; ara kareler bir görsel dönüşümle
+                    // (kaydır + ölçekle) çizilir. Ara boyutlarda yeniden ölçmek, Denetçi gibi ağır
+                    // panellerde kare başına 30–120 ms tutup editörü donduruyordu.
                     shown = Blend(from, target, t);
                     panel.Opacity = 1;
-                    panel.RenderTransform = null;
+                    panel.RenderTransformOrigin = RelativePoint.TopLeft;
+                    panel.RenderTransform = FlipTransform(id, shown, target);
                     panel.ZIndex = 1;
                 }
                 else
@@ -370,8 +394,8 @@ public partial class WorkspaceHost
                 }
             }
             _displayRects[id] = shown;
-            panel.Measure(shown.Size);
-            panel.Arrange(shown);
+            panel.Measure(target.Size);
+            panel.Arrange(target);
         }
 
         foreach ((string id, SplitParts parts) in _splits)

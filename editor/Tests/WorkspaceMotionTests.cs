@@ -259,6 +259,15 @@ public sealed class WorkspaceMotionTests
                 AssertNear(nodeBefore, host.GetDisplayedPanelRect(PanelIds.Node)); // … while it is still drawn where it was
                 Assert.False(host.FindPanel(PanelIds.Hierarchy)!.IsVisible);
 
+                // Faz 10 donma kilidi: hareket eden panel yalnız son yerinde yerleşir (ara boyutta
+                // yeniden ölçülmez); eski yerinde görünmesi bir görsel dönüşümdür.
+                WorkspacePanel node = host.FindPanel(PanelIds.Node)!;
+                Assert.Equal(nodeAfter.Size, node.Bounds.Size);
+                Assert.IsType<TransformGroup>(node.RenderTransform);
+                Rect drawn = new Rect(node.Bounds.Size).TransformToAABB(node.RenderTransform!.Value)
+                    .Translate(node.Bounds.Position);
+                AssertNear(nodeBefore, drawn);
+
                 // The splitters slide with their neighbours.
                 TranslateTransform[] slides = SplitIds(host.Layout!.Tree)
                     .Select(id => host.FindSplitter(id)!.RenderTransform)
