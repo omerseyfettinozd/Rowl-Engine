@@ -1035,6 +1035,9 @@
     "Import.Title": {
       "text": "İçe aktarılıyor"
     },
+    "Inspector.Advanced.Title": {
+      "text": "Gelişmiş ayarlar"
+    },
     "Inspector.Choices.NewChoice": {
       "text": "Yeni seçim"
     },
@@ -1158,8 +1161,188 @@
     "Inspector.Provenance.Title": {
       "text": "DÖNÜŞTÜRME KÖKENİ"
     },
+    "Inspector.Scene.Add": {
+      "text": "Ekle"
+    },
+    "Inspector.Scene.AddChoice": {
+      "text": "+ Seçim ekle"
+    },
+    "Inspector.Scene.AudioQuestion": {
+      "text": "Ses nasıl?"
+    },
+    "Inspector.Scene.AutoAdvance": {
+      "text": "Otomatik devam"
+    },
+    "Inspector.Scene.CameraIn": {
+      "text": "Yaklaş"
+    },
+    "Inspector.Scene.CameraLabel": {
+      "text": "Kamera"
+    },
+    "Inspector.Scene.CameraOut": {
+      "text": "Uzaklaş"
+    },
+    "Inspector.Scene.CameraStill": {
+      "text": "Sabit"
+    },
+    "Inspector.Scene.ChoiceQuestion": {
+      "text": "Oyuncunun seçimleri ne?"
+    },
+    "Inspector.Scene.ContinuePrefix": {
+      "text": "Son çalışılan sahneye devam et:"
+    },
+    "Inspector.Scene.Delete": {
+      "text": "Sil"
+    },
+    "Inspector.Scene.Details": {
+      "text": "Ayrıntılar"
+    },
+    "Inspector.Scene.Duplicate": {
+      "text": "Çoğalt"
+    },
+    "Inspector.Scene.DurationLabel": {
+      "text": "Süre"
+    },
+    "Inspector.Scene.DurationLong": {
+      "text": "2 sn"
+    },
+    "Inspector.Scene.DurationMedium": {
+      "text": "1 sn"
+    },
+    "Inspector.Scene.DurationShort": {
+      "text": "0,5 sn"
+    },
+    "Inspector.Scene.Empty.Heading": {
+      "text": "Hikâyenin bölümleri"
+    },
+    "Inspector.Scene.EmptyHint": {
+      "text": "Düzenlemek için tuvalde bir sahne seçin."
+    },
+    "Inspector.Scene.Faint": {
+      "text": "Soluk"
+    },
+    "Inspector.Scene.Feeling": {
+      "text": "Duygusu"
+    },
+    "Inspector.Scene.FitFill": {
+      "text": "Doldur"
+    },
+    "Inspector.Scene.FitFit": {
+      "text": "Sığdır"
+    },
+    "Inspector.Scene.FitLabel": {
+      "text": "Boyut"
+    },
+    "Inspector.Scene.Full": {
+      "text": "Tam"
+    },
     "Inspector.Scene.ImportedImage": {
       "text": "İçe aktarılmış görsel"
+    },
+    "Inspector.Scene.LineQuestion": {
+      "text": "Ne diyor?"
+    },
+    "Inspector.Scene.Listen": {
+      "text": "Dinle"
+    },
+    "Inspector.Scene.MultiSuffix": {
+      "text": "sahne seçili"
+    },
+    "Inspector.Scene.NewScene": {
+      "text": "+ Yeni sahne"
+    },
+    "Inspector.Scene.NoAudio": {
+      "text": "Henüz ses yok."
+    },
+    "Inspector.Scene.NoBackground": {
+      "text": "Henüz arka plan yok."
+    },
+    "Inspector.Scene.NoCamera": {
+      "text": "Henüz kamera yok."
+    },
+    "Inspector.Scene.NoCharacter": {
+      "text": "Henüz karakter yok."
+    },
+    "Inspector.Scene.NoChoice": {
+      "text": "Henüz seçim yok."
+    },
+    "Inspector.Scene.NoDialogue": {
+      "text": "Henüz konuşma yok."
+    },
+    "Inspector.Scene.NoEffect": {
+      "text": "Henüz ses efekti yok."
+    },
+    "Inspector.Scene.NoMusic": {
+      "text": "Henüz müzik yok"
+    },
+    "Inspector.Scene.NoTransition": {
+      "text": "Henüz geçiş yok."
+    },
+    "Inspector.Scene.PaceFast": {
+      "text": "Hızlı"
+    },
+    "Inspector.Scene.PaceInstant": {
+      "text": "Anında"
+    },
+    "Inspector.Scene.PaceLabel": {
+      "text": "Yazı belirişi"
+    },
+    "Inspector.Scene.PaceNormal": {
+      "text": "Normal"
+    },
+    "Inspector.Scene.PaceSlow": {
+      "text": "Yavaş"
+    },
+    "Inspector.Scene.Placement": {
+      "text": "Konumu"
+    },
+    "Inspector.Scene.PlacementCenter": {
+      "text": "Orta"
+    },
+    "Inspector.Scene.PlacementLeft": {
+      "text": "Sol"
+    },
+    "Inspector.Scene.PlacementRight": {
+      "text": "Sağ"
+    },
+    "Inspector.Scene.SceneWord": {
+      "text": "sahne"
+    },
+    "Inspector.Scene.ShakeLabel": {
+      "text": "Sarsıntı"
+    },
+    "Inspector.Scene.ShakeLight": {
+      "text": "Hafif"
+    },
+    "Inspector.Scene.ShakeNone": {
+      "text": "Yok"
+    },
+    "Inspector.Scene.ShakeStrong": {
+      "text": "Deprem"
+    },
+    "Inspector.Scene.SpeakerQuestion": {
+      "text": "Kim konuşuyor?"
+    },
+    "Inspector.Scene.Stop": {
+      "text": "Durdur"
+    },
+    "Inspector.Scene.TargetMissing": {
+      "text": "Bu seçim artık var olmayan bir sahneye gidiyor"
+    },
+    "Inspector.Scene.TransitionQuestion": {
+      "text": "Geçiş ve kamera nasıl?"
+    },
+    "Inspector.Scene.VisibilityLabel": {
+      "text": "Görünürlük"
+    },
+    "Inspector.Scene.VisualHint": {
+      "text": "İnce ayar için görseli Sahne Düzenle'de sürükleyin."
+    },
+    "Inspector.Scene.VisualQuestion": {
+      "text": "Sahne nasıl görünüyor?"
+    },
+    "Inspector.Scene.VolumeLabel": {
+      "text": "Ses düzeyi"
     },
     "Inspector.Transition.Crossfade": {
       "text": "Yumuşak geçiş"

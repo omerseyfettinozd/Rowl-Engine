@@ -303,7 +303,7 @@ public sealed partial class InspectorSceneViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(HasAudio)); OnPropertyChanged(nameof(HasTransition));
         OnPropertyChanged(nameof(HasCamera));
         OnPropertyChanged(nameof(SpeakerName)); OnPropertyChanged(nameof(Portrait));
-        OnPropertyChanged(nameof(Expressions)); OnPropertyChanged(nameof(SelectedExpression));
+        OnPropertyChanged(nameof(Expressions)); OnPropertyChanged(nameof(SelectedExpression)); OnPropertyChanged(nameof(HasExpressions));
         OnPropertyChanged(nameof(Placement)); OnPropertyChanged(nameof(Line));
         OnPropertyChanged(nameof(Pace)); OnPropertyChanged(nameof(AutoAdvance));
         OnPropertyChanged(nameof(BackgroundImage)); OnPropertyChanged(nameof(BackgroundLabel));
@@ -375,6 +375,8 @@ public sealed partial class InspectorSceneViewModel : ViewModelBase, IDisposable
             return list;
         }
     }
+
+    public bool HasExpressions => Expressions.Count > 0;
 
     public string? SelectedExpression
     {

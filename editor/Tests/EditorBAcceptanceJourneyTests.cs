@@ -99,7 +99,7 @@ public sealed class EditorBAcceptanceJourneyTests : IDisposable
                     // Gerçek girdi: Denetçi başlık kutusuna yaz.
                     var inspector = window.GetVisualDescendants().OfType<NodeInspectorView>().First();
                     var titleBox = inspector.GetVisualDescendants().OfType<TextBox>()
-                        .First(t => ReferenceEquals(t.DataContext, vm) && t.Text == original);
+                        .First(t => ReferenceEquals(t.DataContext, vm.InspectorScene) && t.Text == original); // Faz 10: yeni Denetçi başlığı
                     titleBox.Focus();
                     Dispatcher.UIThread.RunJobs();
                     titleBox.Text = edited;
@@ -333,7 +333,7 @@ public sealed class EditorBAcceptanceJourneyTests : IDisposable
                     string original = node.Title;
                     var inspector = window.GetVisualDescendants().OfType<NodeInspectorView>().First();
                     var box = inspector.GetVisualDescendants().OfType<TextBox>()
-                        .First(t => ReferenceEquals(t.DataContext, vm) && t.Text == original);
+                        .First(t => ReferenceEquals(t.DataContext, vm.InspectorScene) && t.Text == original); // Faz 10: yeni Denetçi başlığı
                     box.Focus();
                     Dispatcher.UIThread.RunJobs();
                     box.Text = original + " Discard";

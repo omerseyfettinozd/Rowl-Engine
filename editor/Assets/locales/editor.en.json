@@ -1035,6 +1035,9 @@
     "Import.Title": {
       "text": "Importing"
     },
+    "Inspector.Advanced.Title": {
+      "text": "Advanced settings"
+    },
     "Inspector.Choices.NewChoice": {
       "text": "New choice"
     },
@@ -1158,8 +1161,188 @@
     "Inspector.Provenance.Title": {
       "text": "CONVERSION PROVENANCE"
     },
+    "Inspector.Scene.Add": {
+      "text": "Add"
+    },
+    "Inspector.Scene.AddChoice": {
+      "text": "+ Add choice"
+    },
+    "Inspector.Scene.AudioQuestion": {
+      "text": "How does it sound?"
+    },
+    "Inspector.Scene.AutoAdvance": {
+      "text": "Auto advance"
+    },
+    "Inspector.Scene.CameraIn": {
+      "text": "Zoom in"
+    },
+    "Inspector.Scene.CameraLabel": {
+      "text": "Camera"
+    },
+    "Inspector.Scene.CameraOut": {
+      "text": "Zoom out"
+    },
+    "Inspector.Scene.CameraStill": {
+      "text": "Still"
+    },
+    "Inspector.Scene.ChoiceQuestion": {
+      "text": "What are the player's choices?"
+    },
+    "Inspector.Scene.ContinuePrefix": {
+      "text": "Continue with last scene:"
+    },
+    "Inspector.Scene.Delete": {
+      "text": "Delete"
+    },
+    "Inspector.Scene.Details": {
+      "text": "Details"
+    },
+    "Inspector.Scene.Duplicate": {
+      "text": "Duplicate"
+    },
+    "Inspector.Scene.DurationLabel": {
+      "text": "Duration"
+    },
+    "Inspector.Scene.DurationLong": {
+      "text": "2s"
+    },
+    "Inspector.Scene.DurationMedium": {
+      "text": "1s"
+    },
+    "Inspector.Scene.DurationShort": {
+      "text": "0.5s"
+    },
+    "Inspector.Scene.Empty.Heading": {
+      "text": "Story chapters"
+    },
+    "Inspector.Scene.EmptyHint": {
+      "text": "Select a scene on the canvas to edit."
+    },
+    "Inspector.Scene.Faint": {
+      "text": "Faint"
+    },
+    "Inspector.Scene.Feeling": {
+      "text": "Emotion"
+    },
+    "Inspector.Scene.FitFill": {
+      "text": "Fill"
+    },
+    "Inspector.Scene.FitFit": {
+      "text": "Fit"
+    },
+    "Inspector.Scene.FitLabel": {
+      "text": "Size"
+    },
+    "Inspector.Scene.Full": {
+      "text": "Full"
+    },
     "Inspector.Scene.ImportedImage": {
       "text": "Imported image"
+    },
+    "Inspector.Scene.LineQuestion": {
+      "text": "What do they say?"
+    },
+    "Inspector.Scene.Listen": {
+      "text": "Listen"
+    },
+    "Inspector.Scene.MultiSuffix": {
+      "text": "scenes selected"
+    },
+    "Inspector.Scene.NewScene": {
+      "text": "+ New scene"
+    },
+    "Inspector.Scene.NoAudio": {
+      "text": "No audio yet."
+    },
+    "Inspector.Scene.NoBackground": {
+      "text": "No background yet."
+    },
+    "Inspector.Scene.NoCamera": {
+      "text": "No camera yet."
+    },
+    "Inspector.Scene.NoCharacter": {
+      "text": "No character yet."
+    },
+    "Inspector.Scene.NoChoice": {
+      "text": "No choices yet."
+    },
+    "Inspector.Scene.NoDialogue": {
+      "text": "No dialogue yet."
+    },
+    "Inspector.Scene.NoEffect": {
+      "text": "No sound effect yet."
+    },
+    "Inspector.Scene.NoMusic": {
+      "text": "No music yet"
+    },
+    "Inspector.Scene.NoTransition": {
+      "text": "No transition yet."
+    },
+    "Inspector.Scene.PaceFast": {
+      "text": "Fast"
+    },
+    "Inspector.Scene.PaceInstant": {
+      "text": "Instant"
+    },
+    "Inspector.Scene.PaceLabel": {
+      "text": "Text reveal"
+    },
+    "Inspector.Scene.PaceNormal": {
+      "text": "Normal"
+    },
+    "Inspector.Scene.PaceSlow": {
+      "text": "Slow"
+    },
+    "Inspector.Scene.Placement": {
+      "text": "Placement"
+    },
+    "Inspector.Scene.PlacementCenter": {
+      "text": "Center"
+    },
+    "Inspector.Scene.PlacementLeft": {
+      "text": "Left"
+    },
+    "Inspector.Scene.PlacementRight": {
+      "text": "Right"
+    },
+    "Inspector.Scene.SceneWord": {
+      "text": "scenes"
+    },
+    "Inspector.Scene.ShakeLabel": {
+      "text": "Shake"
+    },
+    "Inspector.Scene.ShakeLight": {
+      "text": "Light"
+    },
+    "Inspector.Scene.ShakeNone": {
+      "text": "None"
+    },
+    "Inspector.Scene.ShakeStrong": {
+      "text": "Quake"
+    },
+    "Inspector.Scene.SpeakerQuestion": {
+      "text": "Who is speaking?"
+    },
+    "Inspector.Scene.Stop": {
+      "text": "Stop"
+    },
+    "Inspector.Scene.TargetMissing": {
+      "text": "This choice goes to a scene that no longer exists"
+    },
+    "Inspector.Scene.TransitionQuestion": {
+      "text": "How are transition and camera?"
+    },
+    "Inspector.Scene.VisibilityLabel": {
+      "text": "Visibility"
+    },
+    "Inspector.Scene.VisualHint": {
+      "text": "Drag the image in Edit Scene for fine tuning."
+    },
+    "Inspector.Scene.VisualQuestion": {
+      "text": "How does the scene look?"
+    },
+    "Inspector.Scene.VolumeLabel": {
+      "text": "Volume"
     },
     "Inspector.Transition.Crossfade": {
       "text": "Crossfade"

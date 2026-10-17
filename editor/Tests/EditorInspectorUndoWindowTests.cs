@@ -66,7 +66,7 @@ public sealed class EditorInspectorUndoWindowTests : IDisposable
 
                 var inspector = window.GetVisualDescendants().OfType<NodeInspectorView>().First();
                 var titleBox = inspector.GetVisualDescendants().OfType<TextBox>()
-                    .First(t => ReferenceEquals(t.DataContext, _vm) && t.Text == original);
+                    .First(t => ReferenceEquals(t.DataContext, _vm.InspectorScene) && t.Text == original); // Faz 10: yeni Denetçi başlığı
                 titleBox.Focus();
                 Dispatcher.UIThread.RunJobs();
                 titleBox.Text = original + " A";
@@ -106,7 +106,7 @@ public sealed class EditorInspectorUndoWindowTests : IDisposable
 
                 var inspector = window.GetVisualDescendants().OfType<NodeInspectorView>().First();
                 var titleBox = inspector.GetVisualDescendants().OfType<TextBox>()
-                    .First(t => ReferenceEquals(t.DataContext, _vm) && t.Text == node.Title);
+                    .First(t => ReferenceEquals(t.DataContext, _vm.InspectorScene) && t.Text == node.Title);
                 titleBox.Focus();
                 Dispatcher.UIThread.RunJobs();
                 node.X += 120; // tuval sürüklemesi gibi Denetçi dışı değişim

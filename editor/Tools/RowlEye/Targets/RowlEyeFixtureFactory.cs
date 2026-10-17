@@ -59,6 +59,18 @@ public static class RowlEyeFixtureFactory
         if (double.TryParse(Environment.GetEnvironmentVariable("ROWL_EYE_UI_SCALE"),
                 System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double uiScale))
             RowlEngine.Editor.Services.EditorUiScale.Apply(uiScale);
+        // Faz 10: Denetçi kipleri elle denetim (ROWL_EYE_SELECT=none | multi); golden koşusu dokunmaz.
+        switch (Environment.GetEnvironmentVariable("ROWL_EYE_SELECT"))
+        {
+            case "none":
+                vm.SelectedNodes.Clear();
+                vm.SelectedNode = null;
+                break;
+            case "multi":
+                vm.SelectedNodes.Clear();
+                foreach (var n in vm.Nodes) { n.IsSelected = true; vm.SelectedNodes.Add(n); }
+                break;
+        }
         // Faz 9 F1: Sorunlar paneli örnek satırları (ROWL_EYE_ISSUES=1): düğümlü hata, varlıklı uyarı, hedefsiz uyarı.
         if (Environment.GetEnvironmentVariable("ROWL_EYE_ISSUES") == "1")
         {
