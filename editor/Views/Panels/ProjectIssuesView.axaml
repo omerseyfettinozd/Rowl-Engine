@@ -2,10 +2,11 @@
   <Border Background="{DynamicResource PanelBackground}" Padding="8">
     <DockPanel>
       <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6" VerticalAlignment="Center">
-        <TextBlock Classes="caption" Text="{l:T Panel.Issues}" VerticalAlignment="Center"/>
+        <!-- Sağa yaslı düğme önce gelir: DockPanel son çocuğu kalan alana yayar (Dock yok sayılır). -->
         <Button DockPanel.Dock="Right" Classes="ghost" Content="{l:T Issues.Analyze}"
                 Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AnalyzeStoryGraphCommand}"
                 ToolTip.Tip="{l:T Issues.Analyze.Tip}"/>
+        <TextBlock Classes="caption" Text="{l:T Panel.Issues}" VerticalAlignment="Center"/>
       </DockPanel>
       <Grid>
       <ScrollViewer>

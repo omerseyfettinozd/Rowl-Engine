@@ -59,6 +59,17 @@ public static class RowlEyeFixtureFactory
         if (double.TryParse(Environment.GetEnvironmentVariable("ROWL_EYE_UI_SCALE"),
                 System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double uiScale))
             RowlEngine.Editor.Services.EditorUiScale.Apply(uiScale);
+        // Faz 9 F1: Sorunlar paneli örnek satırları (ROWL_EYE_ISSUES=1): düğümlü hata, varlıklı uyarı, hedefsiz uyarı.
+        if (Environment.GetEnvironmentVariable("ROWL_EYE_ISSUES") == "1")
+        {
+            vm.ProjectIssuesViewModel.SetIssues(new[]
+            {
+                new RowlEngine.Editor.Services.ProjectValidationIssue(true, "Düğüm #101 seçeneği 'Git' silinmiş bir düğüme bağlı (hedef 140).", NodeId: 101),
+                new RowlEngine.Editor.Services.ProjectValidationIssue(false, "Kullanılmayan varlık: images/old_bg.png", AssetPath: "images/old_bg.png"),
+                new RowlEngine.Editor.Services.ProjectValidationIssue(false, "Disk taraması tamamlanamadı; bazı varlıklar denetlenmedi."),
+            });
+            vm.ShowPanel("ProjectIssues");
+        }
         // Faz 8 B: kurtarma + içe aktarma kartları örnek durumda (ROWL_EYE_CARDS=1); golden koşusu dokunmaz.
         if (Environment.GetEnvironmentVariable("ROWL_EYE_CARDS") == "1")
         {
