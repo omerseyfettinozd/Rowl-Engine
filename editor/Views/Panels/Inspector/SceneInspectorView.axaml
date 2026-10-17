@@ -4,6 +4,7 @@
              xmlns:l="using:RowlEngine.Editor.Services.Strings"
              xmlns:insp="using:RowlEngine.Editor.Views.Panels.Inspector"
              xmlns:views="using:RowlEngine.Editor.Views.Components"
+             xmlns:search="using:RowlEngine.Editor.Services.Search"
              x:Class="RowlEngine.Editor.Views.Panels.Inspector.SceneInspectorView"
              x:DataType="vm:InspectorSceneViewModel"
              Background="{DynamicResource SurfaceBackground}"
@@ -898,6 +899,79 @@
                    Foreground="{DynamicResource MutedText}"
                    TextWrapping="Wrap"
                    Margin="0,8,0,0" />
+        <!-- Toplu alanlar: kendi tek geri alma adımını yazar (kaydedici dışı). -->
+        <StackPanel x:Name="MultiBulkFields" Classes="self-undo" Spacing="0" Margin="0,20,0,0">
+          <TextBlock Text="{l:T Inspector.Scene.MultiChapterLabel}"
+                     FontSize="{DynamicResource FontSizeSmall}"
+                     Foreground="{DynamicResource MutedText}"
+                     Margin="0,0,0,8" />
+          <ComboBox x:Name="MultiChapterBox"
+                    ItemsSource="{Binding ChapterChoices}"
+                    SelectedItem="{Binding MultiChapterChoice, Mode=TwoWay}"
+                    PlaceholderText="{l:T Inspector.Scene.MultiMixed}"
+                    HorizontalAlignment="Stretch">
+            <ComboBox.ItemTemplate>
+              <DataTemplate x:DataType="vm:ChapterChoice">
+                <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" />
+              </DataTemplate>
+            </ComboBox.ItemTemplate>
+          </ComboBox>
+          <TextBlock Text="{l:T Inspector.Scene.MultiColorLabel}"
+                     FontSize="{DynamicResource FontSizeSmall}"
+                     Foreground="{DynamicResource MutedText}"
+                     Margin="0,14,0,8" />
+          <ComboBox x:Name="MultiColorBox"
+                    ItemsSource="{Binding ColorTagChoices}"
+                    SelectedItem="{Binding MultiColorTagChoice, Mode=TwoWay}"
+                    PlaceholderText="{l:T Inspector.Scene.MultiMixed}"
+                    HorizontalAlignment="Stretch">
+            <ComboBox.ItemTemplate>
+              <DataTemplate x:DataType="search:ColorTagOption">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <Ellipse Width="10" Height="10"
+                           Fill="{Binding Brush}"
+                           Stroke="{DynamicResource BorderSubtle}"
+                           StrokeThickness="1"
+                           VerticalAlignment="Center" />
+                  <TextBlock Text="{Binding Label}" VerticalAlignment="Center" />
+                </StackPanel>
+              </DataTemplate>
+            </ComboBox.ItemTemplate>
+          </ComboBox>
+          <StackPanel IsVisible="{Binding HasMultiTransition}" Margin="0,14,0,0">
+            <TextBlock Text="{l:T Inspector.Scene.MultiTransitionLabel}"
+                       FontSize="{DynamicResource FontSizeSmall}"
+                       Foreground="{DynamicResource MutedText}"
+                       Margin="0,0,0,8" />
+            <ListBox x:Name="MultiTransitionList"
+                     Classes="trans-list"
+                     ItemsSource="{Binding TransitionChoices}"
+                     SelectedValue="{Binding MultiTransitionKind, Mode=TwoWay}"
+                     SelectedValueBinding="{Binding Kind}">
+              <ListBox.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <WrapPanel Orientation="Horizontal" />
+                </ItemsPanelTemplate>
+              </ListBox.ItemsPanel>
+              <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:TransitionChoice">
+                  <Border Classes="trans-card" Width="96">
+                    <TextBlock Text="{Binding Label}"
+                               FontSize="{DynamicResource FontSizeSmall}"
+                               Foreground="{DynamicResource SecondaryText}"
+                               HorizontalAlignment="Center"
+                               TextWrapping="Wrap" />
+                  </Border>
+                </DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
+            <TextBlock Text="{Binding MultiTransitionHint}"
+                       FontSize="{DynamicResource FontSizeSmall}"
+                       Foreground="{DynamicResource DimText}"
+                       TextWrapping="Wrap"
+                       Margin="0,8,0,0" />
+          </StackPanel>
+        </StackPanel>
         <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,20,0,0">
           <Button Classes="text"
                   Content="{l:T Inspector.Scene.Duplicate}"

@@ -1245,8 +1245,23 @@
     "Inspector.Scene.Listen": {
       "text": "Listen"
     },
+    "Inspector.Scene.MultiChapterLabel": {
+      "text": "Chapter"
+    },
+    "Inspector.Scene.MultiColorLabel": {
+      "text": "Color tag"
+    },
+    "Inspector.Scene.MultiMixed": {
+      "text": "Mixed values"
+    },
     "Inspector.Scene.MultiSuffix": {
       "text": "scenes selected"
+    },
+    "Inspector.Scene.MultiTransitionCount": {
+      "text": "{0} of {1} scenes have a transition; only those change."
+    },
+    "Inspector.Scene.MultiTransitionLabel": {
+      "text": "Transition"
     },
     "Inspector.Scene.NewScene": {
       "text": "+ New scene"
@@ -1259,6 +1274,9 @@
     },
     "Inspector.Scene.NoCamera": {
       "text": "No camera yet."
+    },
+    "Inspector.Scene.NoChapter": {
+      "text": "No chapter"
     },
     "Inspector.Scene.NoCharacter": {
       "text": "No character yet."

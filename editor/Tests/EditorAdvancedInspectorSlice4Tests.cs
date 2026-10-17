@@ -290,6 +290,12 @@ public sealed class EditorAdvancedInspectorSlice4Tests
         Assert.Equal("ch1", node.ChapterId);
         Assert.Contains("Arrivals", vm.Subgraphs.AvailableChapterOptions);
 
+        // Öğe kaynağı yenilenirken açılır kutunun geri yazdığı null/boş bölümü silmez.
+        inspector.SelectedChapterOption = null!;
+        Assert.Equal("ch1", node.ChapterId);
+        inspector.SelectedChapterOption = string.Empty;
+        Assert.Equal("ch1", node.ChapterId);
+
         inspector.SelectedChapterOption = InspectorViewModel.NoChapterLabel;
         Assert.Equal(string.Empty, node.ChapterId);
     }

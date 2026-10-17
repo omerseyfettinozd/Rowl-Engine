@@ -1245,8 +1245,23 @@
     "Inspector.Scene.Listen": {
       "text": "Dinle"
     },
+    "Inspector.Scene.MultiChapterLabel": {
+      "text": "Bölüm"
+    },
+    "Inspector.Scene.MultiColorLabel": {
+      "text": "Renk etiketi"
+    },
+    "Inspector.Scene.MultiMixed": {
+      "text": "Farklı değerler"
+    },
     "Inspector.Scene.MultiSuffix": {
       "text": "sahne seçili"
+    },
+    "Inspector.Scene.MultiTransitionCount": {
+      "text": "{0}/{1} sahnede geçiş var; yalnız onlara uygulanır."
+    },
+    "Inspector.Scene.MultiTransitionLabel": {
+      "text": "Geçiş"
     },
     "Inspector.Scene.NewScene": {
       "text": "+ Yeni sahne"
@@ -1259,6 +1274,9 @@
     },
     "Inspector.Scene.NoCamera": {
       "text": "Henüz kamera yok."
+    },
+    "Inspector.Scene.NoChapter": {
+      "text": "Bölümsüz"
     },
     "Inspector.Scene.NoCharacter": {
       "text": "Henüz karakter yok."

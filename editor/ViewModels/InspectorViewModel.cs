@@ -163,20 +163,24 @@ namespace RowlEngine.Editor.ViewModels
         // ── Faz 4 Dilim 4 — chapter assignment ──
 
         /// <summary>Chapter dropdown options ("Yok" + effective chapters).</summary>
-        public List<string> ChapterAssignmentOptions
+        public List<string> ChapterAssignmentOptions => _chapterAssignmentOptions ??= BuildChapterAssignmentOptions();
+
+        // Liste yalnız içerik değişince yenilenir: öğe kaynağı değişen açılır kutu eski seçim
+        // indeksini geri yazar ("Yok" → düğümün bölümü silinirdi).
+        private List<string>? _chapterAssignmentOptions;
+        private bool _refreshingChapterOptions;
+
+        private List<string> BuildChapterAssignmentOptions()
         {
-            get
+            var options = new List<string> { NoChapterLabel };
+            foreach (var chapter in MainViewModel.Chapters.EffectiveChapters(
+                MainViewModel.Nodes.Select(n => n.ChapterId)))
             {
-                var options = new List<string> { NoChapterLabel };
-                foreach (var chapter in MainViewModel.Chapters.EffectiveChapters(
-                    MainViewModel.Nodes.Select(n => n.ChapterId)))
-                {
-                    string label = chapter.Title.Length > 0 ? chapter.Title : chapter.Id;
-                    if (!options.Contains(label))
-                        options.Add(label);
-                }
-                return options;
+                string label = chapter.Title.Length > 0 ? chapter.Title : chapter.Id;
+                if (!options.Contains(label))
+                    options.Add(label);
             }
+            return options;
         }
 
         /// <summary>Selected chapter option ("Yok" = unassigned). Two-way.</summary>
@@ -193,20 +197,27 @@ namespace RowlEngine.Editor.ViewModels
             }
             set
             {
-                if (SelectedNode is null)
+                // Boş değer açılır kutunun öğe kaynağı yenilenirken geri yazdığı sıfırlamadır;
+                // bölümü silmez. Temizleme yalnız "Yok" seçeneğiyle.
+                if (SelectedNode is null || string.IsNullOrEmpty(value) || _refreshingChapterOptions)
                     return;
-                if (string.Equals(value, NoChapterLabel, StringComparison.Ordinal) ||
-                    string.IsNullOrEmpty(value))
+                string next;
+                if (string.Equals(value, NoChapterLabel, StringComparison.Ordinal))
                 {
-                    SelectedNode.ChapterId = string.Empty;
+                    next = string.Empty;
                 }
                 else
                 {
                     var match = MainViewModel.Chapters.Definitions.FirstOrDefault(c =>
                         string.Equals(c.Id, value, StringComparison.Ordinal) ||
                         string.Equals(c.Title, value, StringComparison.Ordinal));
-                    SelectedNode.ChapterId = match?.Id ?? value;
+                    next = match?.Id ?? value;
                 }
+                // Aynı değer: liste yenilenmez. Yenilemek kutunun seçimi geri yazmasına,
+                // o da yeniden bu ayarlayıcıya döner (sonsuz özyineleme, yığın taşması).
+                if (string.Equals(SelectedNode.ChapterId ?? string.Empty, next, StringComparison.Ordinal))
+                    return;
+                SelectedNode.ChapterId = next;
                 RefreshChapterOptions();
                 OnPropertyChanged(nameof(SelectedChapterOption));
             }
@@ -221,7 +232,14 @@ namespace RowlEngine.Editor.ViewModels
             MainViewModel.Subgraphs.SetAvailableChapters(
                 MainViewModel.Chapters.EffectiveChapters(
                     MainViewModel.Nodes.Select(n => n.ChapterId)));
-            OnPropertyChanged(nameof(ChapterAssignmentOptions));
+            var next = BuildChapterAssignmentOptions();
+            if (_chapterAssignmentOptions is null || !next.SequenceEqual(_chapterAssignmentOptions))
+            {
+                _chapterAssignmentOptions = next;
+                _refreshingChapterOptions = true;
+                try { OnPropertyChanged(nameof(ChapterAssignmentOptions)); }
+                finally { _refreshingChapterOptions = false; }
+            }
             OnPropertyChanged(nameof(SelectedChapterOption));
         }
 

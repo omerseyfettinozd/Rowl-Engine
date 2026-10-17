@@ -219,6 +219,120 @@ public sealed class InspectorSceneViewModelTests
         });
     }
 
+    // Çoklu seçim kurulumu: iki çıplak düğüm, ikisi de seçili.
+    private static (NodeViewModel A, NodeViewModel B) SelectTwo(MainWindowViewModel vm)
+    {
+        var a = new NodeViewModel(1, "A", 0, 0, bare: true);
+        var b = new NodeViewModel(2, "B", 0, 0, bare: true);
+        vm.Nodes.Add(a);
+        vm.Nodes.Add(b);
+        vm.SelectedNodes.Clear();
+        vm.SelectedNodes.Add(a);
+        vm.SelectedNodes.Add(b);
+        return (a, b);
+    }
+
+    [Fact]
+    public void MultiChapterChoice_MixedIsNull_PickWritesAllAndUndoesOnce()
+    {
+        using var s = new Scope("MultiChapterChoice");
+        Dispatcher.UIThread.Invoke(() =>
+        {
+            var vm = s.Vm;
+            vm.Chapters.LoadDefinitions(new[] { new ChapterDefinition("ch1", "Varış", 0, string.Empty, null) });
+            var (a, b) = SelectTwo(vm);
+            a.ChapterId = "ch1";
+            UndoRedoService.Instance.Clear();
+            var insp = new InspectorSceneViewModel(vm);
+            try
+            {
+                Assert.Equal(new[] { string.Empty, "ch1" }, insp.ChapterChoices.Select(c => c.Id));
+                Assert.Null(insp.MultiChapterChoice);
+
+                insp.MultiChapterChoice = insp.ChapterChoices.Single(c => c.Id == "ch1");
+                Assert.Equal("ch1", b.ChapterId);
+                Assert.Equal("Varış", insp.MultiChapterChoice?.Label);
+
+                // Açılır kutunun null geri yazması değer silmez.
+                insp.MultiChapterChoice = null;
+                Assert.Equal("ch1", b.ChapterId);
+
+                UndoRedoService.Instance.Undo();
+                Assert.Equal("ch1", a.ChapterId);
+                Assert.Equal(string.Empty, b.ChapterId);
+                Assert.False(UndoRedoService.Instance.CanUndo);
+            }
+            finally { insp.Dispose(); UndoRedoService.Instance.Clear(); }
+        });
+    }
+
+    [Fact]
+    public void MultiColorTagChoice_PickWritesAll_SameValueRecordsNothing()
+    {
+        using var s = new Scope("MultiColor");
+        Dispatcher.UIThread.Invoke(() =>
+        {
+            var vm = s.Vm;
+            var (a, b) = SelectTwo(vm);
+            a.ColorTag = "red";
+            UndoRedoService.Instance.Clear();
+            var insp = new InspectorSceneViewModel(vm);
+            try
+            {
+                Assert.Null(insp.MultiColorTagChoice);
+                var green = insp.ColorTagChoices.Single(o => o.Value == "green");
+                insp.MultiColorTagChoice = green;
+                Assert.Equal("green", a.ColorTag);
+                Assert.Equal("green", b.ColorTag);
+                Assert.Same(green, insp.MultiColorTagChoice);
+
+                UndoRedoService.Instance.Clear();
+                insp.MultiColorTagChoice = green;
+                Assert.False(UndoRedoService.Instance.CanUndo);
+            }
+            finally { insp.Dispose(); UndoRedoService.Instance.Clear(); }
+        });
+    }
+
+    [Fact]
+    public void MultiTransitionKind_OnlyScenesWithTransition_SingleUndo()
+    {
+        using var s = new Scope("MultiTransition");
+        Dispatcher.UIThread.Invoke(() =>
+        {
+            var vm = s.Vm;
+            var (a, b) = SelectTwo(vm);
+            var c = new NodeViewModel(3, "C", 0, 0, bare: true);
+            vm.Nodes.Add(c);
+            vm.SelectedNodes.Add(c);
+            var ta = a.CreateObject("T").AddComponent<TransitionComponentViewModel>();
+            var tb = b.CreateObject("T").AddComponent<TransitionComponentViewModel>();
+            ta.Kind = "fade_black";
+            tb.Kind = "crossfade";
+            UndoRedoService.Instance.Clear();
+            var insp = new InspectorSceneViewModel(vm);
+            try
+            {
+                Assert.True(insp.HasMultiTransition);
+                Assert.Null(insp.MultiTransitionKind);
+                Assert.Contains("2", insp.MultiTransitionHint);
+                Assert.Contains("3", insp.MultiTransitionHint);
+
+                insp.MultiTransitionKind = "wipe_left";
+                Assert.Equal("wipe_left", ta.Kind);
+                Assert.Equal("wipe_left", tb.Kind);
+                Assert.Empty(c.AllComponents.OfType<TransitionComponentViewModel>());
+                Assert.Equal("wipe_left", insp.MultiTransitionKind);
+
+                UndoRedoService.Instance.Undo();
+                Assert.Equal("fade_black", ta.Kind);
+                Assert.Equal("crossfade", tb.Kind);
+                Assert.False(UndoRedoService.Instance.CanUndo);
+            }
+            finally { insp.Dispose(); UndoRedoService.Instance.Clear(); }
+        });
+    }
+
     [Fact]
     public void AddChoice_CreatesComponentAndRow()
     {

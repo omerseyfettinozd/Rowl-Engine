@@ -741,16 +741,26 @@ namespace RowlEngine.Editor.Services.Inspector
             });
         }
 
+        // Kendi geri alma adımını yazan alanlar (sınıf "self-undo" atası) kayda girmez:
+        // çoklu seçim toplu düzenlemesi birincil düğümü ayrıca kaydedip çift adım üretirdi.
+        public const string SelfUndoClass = "self-undo";
+
         private Control? FindInputControl(Visual? focused)
         {
+            Control? input = null;
             for (Visual? cur = focused; cur != null; cur = cur.GetVisualParent())
             {
-                if (cur is Control c && IsInputControl(c))
-                    return c;
+                if (cur is Control c)
+                {
+                    if (c.Classes.Contains(SelfUndoClass))
+                        return null;
+                    if (input is null && IsInputControl(c))
+                        input = c;
+                }
                 if (ReferenceEquals(cur, _root))
                     break;
             }
-            return null;
+            return input;
         }
 
         private static bool IsInputControl(Control c) =>

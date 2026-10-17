@@ -393,3 +393,15 @@ taşırken donma giderilsin; (3) Denetçi sıfırdan, "uçak kokpiti değil, san
 - Yerel kapılar: editör 1011/1011, RowlEye golden + denetim 3/3, taşınabilirlik + launcher yeşil; native değişmedi.
 - Taslaktan alınmayan (modelde yok): Işık, Seslendirme ekle, "Ana karakter · sahnede"; çoklu seçimde bölüm/etiket/
   geçiş/müzik toplu alanları (VM'de `MultiChapter`/`MultiColorTag` hazır, görünüm sonraki dilim).
+
+**Faz 10 sonrası — çoklu seçim toplu alanları (2026-10-17, YEREL):**
+- Çoklu seçimde Bölüm ve Renk etiketi açılır kutuları ("Farklı değerler" yer tutucusu) ve Geçiş kartları
+  ("3/5 sahnede geçiş var"; yalnız geçişi olan sahnelere uygulanır). Her toplu yazma tek geri alma adımı;
+  aynı değer kayıt üretmez. Müzik toplu ataması alınmadı (varlık seçici gerekiyor).
+- Toplu alanlar `self-undo` sınıfıyla Denetçi kaydedicisinin dışında: kaydedici çoklu seçimde de birincil
+  düğümü izlediği için ikinci (yarım) geri alma adımı üretirdi.
+- Kök neden (önceden vardı, ilk pencereli bölüm testinde çıktı): eski Denetçi'nin bölüm listesi her
+  değişimde yeni nesneydi; Avalonia eski seçim indeksini ("Yok") geri yazıp düğümün bölümünü siliyordu,
+  aynı değerde ayarlayıcı listeyi yeniden kurup sonsuz özyinelemeye (yığın taşması, süit çöküşü) giriyordu.
+  Liste yalnız içerik değişince yenilenir, yenileme sırasındaki ve boş geri yazmalar yok sayılır.
+- Yerel: editör 1019/1019, RowlEye golden + denetim 3/3, taşınabilirlik + launcher yeşil; native değişmedi.

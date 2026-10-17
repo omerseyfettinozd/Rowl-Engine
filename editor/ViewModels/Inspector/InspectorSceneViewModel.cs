@@ -46,6 +46,7 @@ public sealed partial class InspectorSceneViewModel : ViewModelBase, IDisposable
     private TransitionComponentViewModel? _transition;
     private CameraComponentViewModel? _camera;
     private ChoiceComponentViewModel? _choiceSubscribed;
+    private List<ChapterChoice>? _chapterChoices;
 
     public InspectorSceneViewModel(MainWindowViewModel main)
     {
@@ -198,6 +199,8 @@ public sealed partial class InspectorSceneViewModel : ViewModelBase, IDisposable
             OnPropertyChanged(nameof(ChapterLabel));
             OnPropertyChanged(nameof(MultiChapter));
             OnPropertyChanged(nameof(MultiColorTag));
+            OnPropertyChanged(nameof(MultiChapterChoice));
+            OnPropertyChanged(nameof(MultiColorTagChoice));
             OnPropertyChanged(nameof(ChapterSummaries));
         }
     }
@@ -318,6 +321,10 @@ public sealed partial class InspectorSceneViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(CameraShake));
         OnPropertyChanged(nameof(SelectedCount)); OnPropertyChanged(nameof(SelectionSummary));
         OnPropertyChanged(nameof(MultiChapter)); OnPropertyChanged(nameof(MultiColorTag));
+        RefreshChapterChoices(); OnPropertyChanged(nameof(MultiChapterChoice));
+        OnPropertyChanged(nameof(MultiColorTagChoice));
+        OnPropertyChanged(nameof(HasMultiTransition)); OnPropertyChanged(nameof(MultiTransitionHint));
+        OnPropertyChanged(nameof(MultiTransitionKind));
         OnPropertyChanged(nameof(ChapterSummaries)); OnPropertyChanged(nameof(LastEdited));
     }
 
@@ -702,10 +709,135 @@ public sealed partial class InspectorSceneViewModel : ViewModelBase, IDisposable
             if (sel.Count == 0) return;
             string after = value ?? string.Empty;
             var before = sel.ToDictionary(n => n, n => n.ChapterId);
+            if (before.Values.All(v => string.Equals(v, after, StringComparison.Ordinal))) return;
             foreach (var n in sel) n.ChapterId = after;
-            UndoRedoService.Instance.RecordAction(new BulkStringAction(before, after, (n, v) => n.ChapterId = v, "Chapter"));
-            RefreshAll();
+            UndoRedoService.Instance.RecordAction(new BulkStringAction<NodeViewModel>(
+                before, after, (n, v) => n.ChapterId = v, "Chapter", OnBulkChapterApplied));
+            OnBulkChapterApplied();
         }
+    }
+
+    // Bölüm ataması değişti: tuval bölüm süzgeci, kayıt ve Denetçi tazelenir.
+    private void OnBulkChapterApplied()
+    {
+        _main.Subgraphs.SetAvailableChapters(
+            _main.Chapters.EffectiveChapters(_main.Nodes.Select(n => n.ChapterId)));
+        _main.ScheduleSave();
+        RefreshAll();
+    }
+
+    /// <summary>
+    /// Çoklu seçim bölüm listesi: bölümsüz + tanımlı bölümler (ortak değer tanımsızsa o da).
+    /// Yalnız içerik değişince yenilenir: öğe kaynağı değişen açılır kutu seçimi sıfırlayıp geri yazar.
+    /// </summary>
+    public IReadOnlyList<ChapterChoice> ChapterChoices => _chapterChoices ??= BuildChapterChoices();
+
+    private void RefreshChapterChoices()
+    {
+        var next = BuildChapterChoices();
+        if (_chapterChoices is not null && next.SequenceEqual(_chapterChoices)) return;
+        _chapterChoices = next;
+        OnPropertyChanged(nameof(ChapterChoices));
+    }
+
+    private List<ChapterChoice> BuildChapterChoices()
+    {
+        var list = new List<ChapterChoice> { new(string.Empty, EditorStrings.T("Inspector.Scene.NoChapter")) };
+        foreach (var def in _main.Chapters.Definitions
+                     .OrderBy(c => c.Order)
+                     .ThenBy(c => c.Id, StringComparer.Ordinal))
+            list.Add(new ChapterChoice(def.Id, !string.IsNullOrEmpty(def.Title) ? def.Title : def.Id));
+        string? common = MultiChapter;
+        if (!string.IsNullOrEmpty(common) && !list.Any(c => string.Equals(c.Id, common, StringComparison.Ordinal)))
+            list.Add(new ChapterChoice(common, common));
+        return list;
+    }
+
+    /// <summary>Ortak bölüm (karışıksa null: açılır kutu "Farklı" gösterir).</summary>
+    public ChapterChoice? MultiChapterChoice
+    {
+        get
+        {
+            string? common = MultiChapter;
+            if (common is null) return null;
+            return ChapterChoices.FirstOrDefault(c => string.Equals(c.Id, common, StringComparison.Ordinal));
+        }
+        set { if (value is not null) MultiChapter = value.Id; }
+    }
+
+    /// <summary>Renk etiketi seçenekleri: yok + palet.</summary>
+    public IReadOnlyList<Services.Search.ColorTagOption> ColorTagChoices { get; } =
+        Services.Search.NodeColorTags.AssignmentOptions;
+
+    /// <summary>Ortak renk etiketi (karışık ya da palet dışıysa null).</summary>
+    public Services.Search.ColorTagOption? MultiColorTagChoice
+    {
+        get
+        {
+            string? common = MultiColorTag;
+            if (common is null) return null;
+            return ColorTagChoices.FirstOrDefault(o => string.Equals(o.Value, common, StringComparison.Ordinal));
+        }
+        set { if (value is not null) MultiColorTag = value.Value; }
+    }
+
+    // Seçili sahnelerdeki geçiş bileşenleri (her düğümde ilki).
+    private List<TransitionComponentViewModel> SelectedTransitions()
+    {
+        var list = new List<TransitionComponentViewModel>();
+        foreach (var n in _main.SelectedNodes)
+        {
+            var t = n.AllComponents.OfType<TransitionComponentViewModel>().FirstOrDefault();
+            if (t is not null) list.Add(t);
+        }
+        return list;
+    }
+
+    public bool HasMultiTransition => SelectedTransitions().Count > 0;
+
+    /// <summary>"3/5 sahnede geçiş var" — toplu geçiş yalnız geçişi olan sahnelere uygulanır.</summary>
+    public string MultiTransitionHint
+    {
+        get
+        {
+            int have = SelectedTransitions().Count;
+            string fmt = EditorStrings.T("Inspector.Scene.MultiTransitionCount");
+            try { return string.Format(fmt, have, SelectedCount); }
+            catch { return fmt; }
+        }
+    }
+
+    /// <summary>Ortak geçiş türü (karışıksa null).</summary>
+    public string? MultiTransitionKind
+    {
+        get
+        {
+            var ts = SelectedTransitions();
+            if (ts.Count == 0) return null;
+            string first = ts[0].Kind;
+            for (int i = 1; i < ts.Count; i++)
+                if (!string.Equals(ts[i].Kind, first, StringComparison.Ordinal))
+                    return null;
+            return first;
+        }
+        set
+        {
+            if (string.IsNullOrEmpty(value)) return;
+            var ts = SelectedTransitions();
+            if (ts.Count == 0) return;
+            var before = ts.ToDictionary(t => t, t => t.Kind);
+            if (before.Values.All(v => string.Equals(v, value, StringComparison.Ordinal))) return;
+            foreach (var t in ts) t.Kind = value;
+            UndoRedoService.Instance.RecordAction(new BulkStringAction<TransitionComponentViewModel>(
+                before, value, (t, v) => t.Kind = v, "Transition", OnBulkApplied));
+            OnBulkApplied();
+        }
+    }
+
+    private void OnBulkApplied()
+    {
+        _main.ScheduleSave();
+        RefreshAll();
     }
 
     public string? MultiColorTag
@@ -726,9 +858,11 @@ public sealed partial class InspectorSceneViewModel : ViewModelBase, IDisposable
             if (sel.Count == 0) return;
             string after = value ?? string.Empty;
             var before = sel.ToDictionary(n => n, n => n.ColorTag);
+            if (before.Values.All(v => string.Equals(v, after, StringComparison.Ordinal))) return;
             foreach (var n in sel) n.ColorTag = after;
-            UndoRedoService.Instance.RecordAction(new BulkStringAction(before, after, (n, v) => n.ColorTag = v, "ColorTag"));
-            RefreshAll();
+            UndoRedoService.Instance.RecordAction(new BulkStringAction<NodeViewModel>(
+                before, after, (n, v) => n.ColorTag = v, "ColorTag", OnBulkApplied));
+            OnBulkApplied();
         }
     }
 
@@ -779,19 +913,20 @@ public sealed partial class InspectorSceneViewModel : ViewModelBase, IDisposable
     private void NewScene() => _main.AddNode();
 
     // Tek geri alımlı toplu yazma.
-    private sealed class BulkStringAction : Services.IUndoAction
+    private sealed class BulkStringAction<T> : Services.IUndoAction where T : notnull
     {
-        private readonly Dictionary<NodeViewModel, string> _before;
+        private readonly Dictionary<T, string> _before;
         private readonly string _after;
-        private readonly Action<NodeViewModel, string> _apply;
+        private readonly Action<T, string> _apply;
         private readonly string _label;
-        public BulkStringAction(Dictionary<NodeViewModel, string> before, string after, Action<NodeViewModel, string> apply, string label)
+        private readonly Action? _applied;
+        public BulkStringAction(Dictionary<T, string> before, string after, Action<T, string> apply, string label, Action? applied = null)
         {
-            _before = before; _after = after; _apply = apply; _label = label;
+            _before = before; _after = after; _apply = apply; _label = label; _applied = applied;
         }
         public string Description => _label;
-        public void Undo() { foreach (var kv in _before) _apply(kv.Key, kv.Value); }
-        public void Redo() { foreach (var kv in _before) _apply(kv.Key, _after); }
+        public void Undo() { foreach (var kv in _before) _apply(kv.Key, kv.Value); _applied?.Invoke(); }
+        public void Redo() { foreach (var kv in _before) _apply(kv.Key, _after); _applied?.Invoke(); }
     }
 }
 
@@ -876,6 +1011,9 @@ public sealed partial class ChoiceRowViewModel : ViewModelBase
         _main.Search.JumpTo(node);
     }
 }
+
+/// <summary>Çoklu seçim bölüm seçeneği (boş kimlik = bölümsüz).</summary>
+public sealed record ChapterChoice(string Id, string Label);
 
 /// <summary>Seçim yok durumunda bölüm satırı.</summary>
 public sealed record ChapterSummary(string Title, int Count);
