@@ -2217,6 +2217,15 @@
     "Store.Name": {
       "text": "Assets Store"
     },
+    "Translation.State.Changed": {
+      "text": "Değişti"
+    },
+    "Translation.State.Missing": {
+      "text": "Eksik"
+    },
+    "Translation.State.Translated": {
+      "text": "Çevrildi"
+    },
     "Transport.Pause": {
       "text": "Duraklat"
     },

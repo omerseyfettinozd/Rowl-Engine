@@ -2217,6 +2217,15 @@
     "Store.Name": {
       "text": "Assets Store"
     },
+    "Translation.State.Changed": {
+      "text": "Changed"
+    },
+    "Translation.State.Missing": {
+      "text": "Missing"
+    },
+    "Translation.State.Translated": {
+      "text": "Translated"
+    },
     "Transport.Pause": {
       "text": "Pause"
     },

@@ -23,7 +23,7 @@ public enum TranslationFilter
 }
 
 /// <summary>One editable desk row: source snapshot plus catalog values.</summary>
-public sealed class TranslationRow
+public sealed class TranslationRow : CommunityToolkit.Mvvm.ComponentModel.ObservableObject
 {
     public string ContentId { get; set; } = string.Empty;
     /// <summary>Translated speaker name (editable, catalog-owned).</summary>
@@ -33,7 +33,23 @@ public sealed class TranslationRow
     public string SourceText { get; set; } = string.Empty;
     public string TranslatedText { get; set; } = string.Empty;
     public string AltText { get; set; } = string.Empty;
-    public TranslationState State { get; set; } = TranslationState.Missing;
+    private TranslationState _state = TranslationState.Missing;
+    public TranslationState State
+    {
+        get => _state;
+        set
+        {
+            if (SetProperty(ref _state, value))
+            {
+                OnPropertyChanged(nameof(IsTranslated));
+                OnPropertyChanged(nameof(IsMissing));
+                OnPropertyChanged(nameof(IsChanged));
+            }
+        }
+    }
+    public bool IsTranslated => State == TranslationState.Translated;
+    public bool IsMissing => State == TranslationState.Missing;
+    public bool IsChanged => State == TranslationState.Changed;
     public ulong NodeId { get; set; }
     public string NodeTitle { get; set; } = string.Empty;
 

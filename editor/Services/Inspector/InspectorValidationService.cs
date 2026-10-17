@@ -313,6 +313,9 @@ namespace RowlEngine.Editor.Services.Inspector
                     if (option.TargetNodeId == 0)
                         Add(node, InspectorFieldDescriptor.Keys.ChoiceOptionTarget, true,
                             $"Düğüm #{node.Id} seçeneği '{option.Text}' hedef düğüme bağlı değil (hedef 0).");
+                    else if (!NodeExists(option.TargetNodeId))
+                        Add(node, InspectorFieldDescriptor.Keys.ChoiceOptionTarget, true,
+                            $"Düğüm #{node.Id} seçeneği '{option.Text}' silinmiş bir düğüme bağlı (hedef {option.TargetNodeId}).");
                 }
             }
 
@@ -351,6 +354,18 @@ namespace RowlEngine.Editor.Services.Inspector
             var affected = UpdateContentIndex(node);
             if (affected.Count > 0)
                 RefreshDuplicateIds(affected);
+        }
+
+        // Grafikteki düğüm var mı (toplu lint ile aynı anlam).
+        private bool NodeExists(ulong id) =>
+            _nodes is null || _nodes.Any(n => n.Id == id);
+
+        // Hedefi eklenen/silinen düğümlere işaret eden seçeneklerin sahiplerini yeniden doğrula.
+        private void MarkChoiceSourcesTargeting(HashSet<ulong> ids)
+        {
+            foreach ((ChoiceOptionViewModel option, NodeViewModel owner) in _optionOwner)
+                if (ids.Contains(option.TargetNodeId))
+                    MarkDirty(owner);
         }
 
         private static string AssetFieldKey(string componentType, string dataKey) =>
@@ -699,14 +714,18 @@ namespace RowlEngine.Editor.Services.Inspector
                 foreach (ulong neighbor in neighbors)
                     if (TryGetNode(neighbor, out var node))
                         MarkDirty(node);
+                MarkChoiceSourcesTargeting(removedIds);
                 // A removed first-owner clears or re-points duplicate flags.
                 if (affectedContent.Count > 0)
                     RefreshDuplicateIds(affectedContent);
                 return;
             }
             if (e.NewItems is not null)
+            {
+                var addedIds = new HashSet<ulong>();
                 foreach (NodeViewModel node in e.NewItems)
                 {
+                    addedIds.Add(node.Id);
                     HookNode(node);
                     _nodeById.TryAdd(node.Id, node);
                     // Absent-guard: edges may predate the node (degrees
@@ -717,6 +736,8 @@ namespace RowlEngine.Editor.Services.Inspector
                         _outDegree[node.Id] = 0;
                     MarkDirty(node);
                 }
+                MarkChoiceSourcesTargeting(addedIds);
+            }
         }
 
         private void OnConnectionsChanged(object? sender, NotifyCollectionChangedEventArgs e)
