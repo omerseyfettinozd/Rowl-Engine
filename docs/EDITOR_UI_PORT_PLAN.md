@@ -323,9 +323,9 @@ Karar (Chaple, 2026-10-17): Aşama B'yi kapat — B02/B03 açıkları + gerçek 
   geri alınabilir; grup sürükleme tek adım.
 - **E3 Denetçi düzenleme geri alma** — Denetçi içindeki alan düzenlemeleri (odak oturumu başına tek
   adım) geri alınır/yinelenir; tuval taşıma gibi Denetçi dışı değişimler karışmaz.
-- **E4 Bağlantı dili** — reddedilen bağlantı nedenini kullanıcıya gösterir (kendine, yinelenen, hedef
-  yok); boş tuvale bırakılan kablo Oluştur menüsünü açar, seçilen düğüm bırakılan yerde oluşur ve
-  bağlanır (tek geri alma adımı).
+- **E4 Bağlantı dili** — reddedilen bağlantı nedenini kullanıcıya gösterir (kendine, yinelenen);
+  boş tuvale bırakılan yeni kablo bırakılan yerde varsayılan düğüm oluşturur ve bağlar (tek geri alma
+  adımı). Not: projede tuvalde açılan bir "Oluştur" menüsü yok; menü yerine doğrudan varsayılan düğüm.
 - **F1 Hata dili (B03)** — Sorunlar satırı varlık sorununda varlığı seçer; hata/uyarı simgesi ve
   hedefsiz sorun ayrımı; ızgara kartında eksik rozeti; Çeviri Masası durum rozeti (yerelleştirilmiş,
   renkli); Denetçi'de silinmiş düğüm hedefi uyarısı.
@@ -335,3 +335,28 @@ Karar (Chaple, 2026-10-17): Aşama B'yi kapat — B02/B03 açıkları + gerçek 
 
 Çalışma düzeni: kodlama Spark, küçük iş + görsel denetim Wonder; şef uygular, derler, tam editör
 süitini koşar. Dilim başına yerel commit; push gün sonunda tek sefer.
+
+**Faz 9 yapılan (2026-10-17):**
+- E1 `5a1405a`: çoklu silme tek adım (metin girişinde Delete düğüm silmez); düz tekerlek kaydırır, Ctrl+tekerlek
+  zoom; F seçimi / Shift+F hepsini sığdırır (48 px pay, en fazla %100); +/- merkez sabit; Tab / Shift+Tab düğüm gezer.
+  `ZoomToFit` kilit testi bilerek yeni kurala taşındı.
+- E3 `57afabc`: Denetçi alan düzenlemeleri geri alınır (giriş denetimi başına tek adım; düğmeler kendi eylemiyle
+  kalır; tuval konumu karışmaz). Panel yeniden yerleşince kayıtçı yeniden bağlanır. Pencere testi kayıtçısız kırmızı.
+- E2 `423b813`: grup oluştur/sil/taşı/boyutlandır geri alınır (sürükleme bırakışta tek adım).
+- E4 `75aa423`: bağlantı reddi bildirimi; boş tuvale bırakınca düğüm + bağlantı (tek adım).
+- F1b `fd132b9`: Çeviri Masası durum rozeti (canlı); Denetçi silinmiş seçenek hedefi hatası, düğüm silinince /
+  geri gelince yeniden doğrulanır (önceden yalnız toplu lint).
+- F1a `cae9c4e`: varlık sorunu tıklanınca Varlıklar sekmesi + varlık seçimi; hata/uyarı noktası; hedefsiz satır
+  düz; ızgara kartında eksik rozeti. `40eee6e`/`4302ee8`: Analiz düğmesi sağa (önceden yapışıktı), tıklanabilir
+  satırda ok işareti (Wonder denetimi), RowlEye `ROWL_EYE_ISSUES=1` kancası.
+- K1 `a7ce70c`: gerçek `MainWindow` (başsız) kabul yolculuğu: oluştur → Ctrl+N → Denetçi → Ctrl+Z/Y → Ctrl+S →
+  yeniden aç; içe aktarma iptal → içe aktar → önizleme; farklı kaydet → paketle; vazgeç; kurtarma kartı.
+  **Sınır:** klasör seçici diyalogları başsız sürülemez (o adımlar koordinatör yoluyla); gerçek ekranlı (X11/Wayland)
+  pencere kanıtı yok — Aşama C02 kapsamı.
+- Kök neden `2e21b5b`: başsız UI iş parçacığı kurulmadan `Dispatcher.UIThread`'e dokunan test dispatcher'ı
+  `NullDispatcherImpl` ile bağlıyordu → iki iş parçacığı aynı pencerede düzen koşuyor, `EditorHeadlessSuiteTests`
+  sıraya bağlı düşüyordu (~%75). Test derlemesinde `[ModuleInitializer]` ile çalışma zamanı önce kurulur.
+- Bilinen, bu fazda alınmayan (Wonder): Denetçi doku kimliği metni sağda kesiliyor; tuvaldeki "Görünümü Sıfırla"
+  yazısı soluk. Grup sürüklemesinde yakalama kaybı (bırakma olayı gelmezse) kayıt üretmez.
+- Faz sonu yerel: editör 995/995, RowlEye golden + denetim 3/3, RowlEye testleri 56/56, taşınabilirlik + launcher
+  yeşil; native değişmedi.
