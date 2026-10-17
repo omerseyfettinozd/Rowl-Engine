@@ -99,6 +99,15 @@
     "Backlog.OpenPlayer.Tip": {
       "text": "Open the player preview panel"
     },
+    "Canvas.Wire.CreatedNode": {
+      "text": "Dropped on empty canvas, new node created"
+    },
+    "Canvas.Wire.Rejected.Duplicate": {
+      "text": "This connection already exists"
+    },
+    "Canvas.Wire.Rejected.Self": {
+      "text": "A node can't connect to itself"
+    },
     "Common.Center": {
       "text": "Center"
     },

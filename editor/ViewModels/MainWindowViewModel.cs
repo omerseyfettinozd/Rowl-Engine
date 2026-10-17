@@ -6,6 +6,7 @@ using CommunityToolkit.Mvvm.Input;
 using RowlEngine.Editor.Native;
 using RowlEngine.Editor.Services;
 using RowlEngine.Editor.Services.Localization;
+using RowlEngine.Editor.Services.Strings;
 using RowlEngine.Editor.Services.Workspace;
 using RowlEngine.Editor.Models;
 using RowlEngine.Editor.ViewModels.Components;
@@ -935,8 +936,35 @@ namespace RowlEngine.Editor.ViewModels
         public void EndWireDrag(Point releasePos)
         {
             if (!IsDraggingWire || !_dragSession.IsWireDragActive) return;
+            // Oturumu kapatmadan önce kaynağı yakala (boş-tuval dalı için).
+            var srcNode = _dragSession.ActiveSourceNode;
+            var optId = _dragSession.ActiveOptionId ?? string.Empty;
+            var wasUnplug = _dragSession.ActiveUnpluggedConnection != null;
+            var prevSel = SelectedNode;
             IsDraggingWire = false;
-            _dragSession.EndWireDrag(releasePos, Nodes, Connections, UpdateStartNodeState, AppendLog, ScheduleSave);
+            var reason = _dragSession.EndWireDrag(releasePos, Nodes, Connections, UpdateStartNodeState, AppendLog, ScheduleSave, notify: key => ToastService.Instance.Show(EditorStrings.T(key), ToastType.Warning, 3000));
+            if (reason == WireConnectRejection.NoTarget && !wasUnplug && srcNode != null)
+            {
+                // Boş tuval + yeni tel: dünya uzayında düğüm oluştur + bağla, tek undo.
+                var newNode = AddNodeAt(releasePos.X, releasePos.Y - 20);
+                ulong targetBefore = StoryGraphCanvasService.GetChoiceTarget(srcNode, optId);
+                var replacedBefore = Connections.Where(c => c.SourceNode == srcNode && (string.IsNullOrEmpty(optId) || c.OptionId == optId)).ToList();
+                if (!string.IsNullOrEmpty(optId))
+                {
+                    foreach (var ex in Connections.Where(c => c.SourceNode == srcNode && c.OptionId == optId).ToList())
+                        Connections.Remove(ex);
+                    StoryGraphCanvasService.SetChoiceTarget(srcNode, optId, newNode.Id);
+                }
+                var conn = new ConnectionViewModel(srcNode, newNode, optId);
+                Connections.Add(conn);
+                StoryGraphCanvasService.EnforceSingleOutgoingWireRule(Connections);
+                var replaced = replacedBefore.Where(c => !Connections.Contains(c)).ToList();
+                UndoRedoService.Instance.RecordAction(new AddNodeAndConnectAction(Nodes, Connections, newNode, conn, replaced, srcNode, optId, targetBefore, newNode.Id, UpdateStartNodeState, s => SelectedNode = s, prevSel));
+                SelectedNode = newNode;
+                UpdateStartNodeState();
+                ScheduleSave();
+                AppendLog($"Created Node #{newNode.Id} on empty drop + connected from #{srcNode.Id}");
+            }
         }
 
         /// <summary>
@@ -1067,16 +1095,22 @@ namespace RowlEngine.Editor.ViewModels
         [RelayCommand]
         public void AddNode()
         {
-            ulong nextId = Nodes.Count > 0 ? Nodes.Max(n => n.Id) + 1 : 101;
             var (spawnX, spawnY) = StoryGraphCanvasService.CalculateSpawnPosition(Nodes.Count, PanX, PanY, ZoomScale);
-            var newNode = StoryGraphCanvasService.CreateDefaultNode(nextId, spawnX, spawnY);
+            var newNode = AddNodeAt(spawnX, spawnY);
+            UndoRedoService.Instance.RecordAction(new AddNodeUndoAction(this, newNode));
+            UpdateStartNodeState();
+            AppendLog($"Added new node #{newNode.Id} at visible screen center ({spawnX:F0}, {spawnY:F0})");
+        }
 
+        public NodeViewModel AddNodeAt(double worldX, double worldY)
+        {
+            ulong nextId = Nodes.Count > 0 ? Nodes.Max(n => n.Id) + 1 : 101;
+            var newNode = StoryGraphCanvasService.CreateDefaultNode(nextId, worldX, worldY);
             newNode.PropertyChanged += OnNodePropertyChanged;
             Nodes.Add(newNode);
             SelectedNode = newNode;
-            UndoRedoService.Instance.RecordAction(new AddNodeUndoAction(this, newNode));
             UpdateStartNodeState();
-            AppendLog($"Added new node #{nextId} at visible screen center ({spawnX:F0}, {spawnY:F0})");
+            return newNode;
         }
 
         [RelayCommand]

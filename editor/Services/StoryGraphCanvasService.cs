@@ -9,6 +9,15 @@ using RowlEngine.Editor.ViewModels.Components;
 
 namespace RowlEngine.Editor.Services
 {
+    /// <summary>Tel bağlama denemesinin red nedeni.</summary>
+    public enum WireConnectRejection
+    {
+        None,
+        SelfConnection,
+        Duplicate,
+        NoTarget
+    }
+
     /// <summary>
     /// Service responsible for canvas-level node and wire operations:
     /// spawn coordinates, wire drag hit-testing, cable routing, and node deletion.
@@ -34,6 +43,7 @@ namespace RowlEngine.Editor.Services
             };
         }
 
+        // Eski imza korunur: yeni aşırı yüklemeye delege eder.
         public static ConnectionViewModel? TryConnectWire(
             NodeViewModel sourceNode,
             Point releasePos,
@@ -42,7 +52,31 @@ namespace RowlEngine.Editor.Services
             string optionId = "",
             double snapDistance = 75.0)
         {
+            return TryConnectWire(sourceNode, releasePos, nodes, connections, out _, optionId, snapDistance);
+        }
+
+        /// <summary>Red nedenini dışarı verir; dünya uzayında isabet testi yapar.</summary>
+        public static ConnectionViewModel? TryConnectWire(
+            NodeViewModel sourceNode,
+            Point releasePos,
+            IEnumerable<NodeViewModel> nodes,
+            ObservableCollection<ConnectionViewModel> connections,
+            out WireConnectRejection reason,
+            string optionId = "",
+            double snapDistance = 75.0)
+        {
+            reason = WireConnectRejection.NoTarget;
             if (sourceNode == null) return null;
+            string opt = optionId ?? string.Empty;
+
+            // Kendine bırakma: kendi giriş pinine yakınsa reddet.
+            Point selfPin = new Point(sourceNode.X + 10, sourceNode.Y + 60);
+            double selfDist = Math.Sqrt(Math.Pow(releasePos.X - selfPin.X, 2) + Math.Pow(releasePos.Y - selfPin.Y, 2));
+            if (selfDist < snapDistance)
+            {
+                reason = WireConnectRejection.SelfConnection;
+                return null;
+            }
 
             NodeViewModel? targetNode = null;
             foreach (var node in nodes)
@@ -59,19 +93,30 @@ namespace RowlEngine.Editor.Services
 
             if (targetNode == null) return null;
 
-            if (!string.IsNullOrEmpty(optionId))
+            // Aynı porttan aynı hedefe ikinci tel: kopya.
+            foreach (var c in connections)
             {
-                var existingCables = connections.Where(c => c.SourceNode == sourceNode && c.OptionId == optionId).ToList();
+                if (c.SourceNode == sourceNode && c.TargetNode == targetNode && (c.OptionId ?? string.Empty) == opt)
+                {
+                    reason = WireConnectRejection.Duplicate;
+                    return null;
+                }
+            }
+
+            if (!string.IsNullOrEmpty(opt))
+            {
+                var existingCables = connections.Where(c => c.SourceNode == sourceNode && c.OptionId == opt).ToList();
                 foreach (var existing in existingCables)
                 {
                     connections.Remove(existing);
                 }
-                SetChoiceTarget(sourceNode, optionId, targetNode.Id);
+                SetChoiceTarget(sourceNode, opt, targetNode.Id);
             }
 
-            var newConn = new ConnectionViewModel(sourceNode, targetNode, optionId);
+            var newConn = new ConnectionViewModel(sourceNode, targetNode, opt);
             connections.Add(newConn);
             EnforceSingleOutgoingWireRule(connections);
+            reason = WireConnectRejection.None;
             return newConn;
         }
 

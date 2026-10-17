@@ -99,6 +99,15 @@
     "Backlog.OpenPlayer.Tip": {
       "text": "Oyuncu önizleme panelini aç"
     },
+    "Canvas.Wire.CreatedNode": {
+      "text": "Boş tuvale bırakıldı, yeni düğüm oluşturuldu"
+    },
+    "Canvas.Wire.Rejected.Duplicate": {
+      "text": "Bu bağlantı zaten var"
+    },
+    "Canvas.Wire.Rejected.Self": {
+      "text": "Düğüm kendine bağlanamaz"
+    },
     "Common.Center": {
       "text": "Orta"
     },
