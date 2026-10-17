@@ -544,11 +544,15 @@ namespace RowlEngine.Editor.Native
         public bool IsPaused()
             => InvokeNative(NativeBridge.RowlEngine_IsPaused, 0) != 0;
 
+        /// <summary>Tanı/test: kaç kez başlangıç düğümüne sıfırlandı (durdurmada tek sıfırlama kilidi).</summary>
+        internal int ResetToStartNodeCount { get; private set; }
+
         /// <summary>Resets the C++ engine story state back to the starting node.</summary>
         public void ResetToStartNode()
         {
             if (IsInitialized)
             {
+                ResetToStartNodeCount++;
                 _lastPreviewComponentsJson = null;
                 InvokeNative(handle =>
                 {

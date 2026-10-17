@@ -80,7 +80,7 @@ namespace RowlEngine.Editor.Views
                 UpdatePlayModeBadge();
                 if (_engineHost != null && !_engineHost.IsPlaying)
                 {
-                    RenderFirstFrame();
+                    RequestFirstFrame();
                 }
             }
             else if (e.PropertyName == nameof(EngineHost.RenderTargetBitmap))
@@ -143,7 +143,7 @@ namespace RowlEngine.Editor.Views
                 UpdatePlayModeBadge();
                 if (_engineHost != null && !_engineHost.IsPlaying)
                 {
-                    RenderFirstFrame();
+                    RequestFirstFrame();
                 }
             }
             else if (e.PropertyName == nameof(MainWindowViewModel.Nodes) ||
@@ -152,9 +152,28 @@ namespace RowlEngine.Editor.Views
                 HookStartNode();
                 if (_engineHost != null && !_engineHost.IsPlaying)
                 {
-                    RenderFirstFrame();
+                    RequestFirstFrame();
                 }
             }
+        }
+
+        private bool _firstFramePending;
+
+        /// <summary>
+        /// Durdururken "oynatma bitti", "oyun modu kapandı" ve düğüm/bağlantı değişimi aynı anda
+        /// gelir; her biri ayrı ayrı motoru sıfırlıyordu (günlükte üç "Engine Reset"). İstekler
+        /// tek bir sonraki iş kuyruğu turunda birleştirilir.
+        /// </summary>
+        private void RequestFirstFrame()
+        {
+            if (_firstFramePending)
+                return;
+            _firstFramePending = true;
+            Dispatcher.UIThread.Post(() =>
+            {
+                _firstFramePending = false;
+                RenderFirstFrame();
+            }, DispatcherPriority.Background);
         }
 
         private void RenderFirstFrame()
