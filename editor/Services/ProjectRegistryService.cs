@@ -168,12 +168,19 @@ namespace RowlEngine.Editor.Services
             {
                 try
                 {
-                    foreach (var sub in Directory.GetDirectories(userDocs, "*", SearchOption.AllDirectories))
+                    // Kısa yol önce: bulunan projenin alt klasörleri (Assets, Assets/json…)
+                    // kendi hikâye dosyalarını taşısa da ayrı proje sayılmaz.
+                    var found = new List<string>();
+                    foreach (var sub in Directory.GetDirectories(userDocs, "*", SearchOption.AllDirectories)
+                                 .OrderBy(d => d.Length))
                     {
+                        if (found.Any(root => sub.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.Ordinal)))
+                            continue;
                         if (File.Exists(Path.Combine(sub, "project.rowlproj")) ||
                             File.Exists(Path.Combine(sub, "full_story_graph.json")) ||
                             File.Exists(Path.Combine(sub, "Assets", "full_story_graph.json")))
                         {
+                            found.Add(sub);
                             string name = Path.GetFileName(sub);
                             if (!_projects.Any(p => p.Path == sub))
                             {

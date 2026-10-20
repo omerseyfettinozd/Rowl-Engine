@@ -7,6 +7,7 @@ using RowlEngine.Editor.ViewModels;
 using RowlEngine.Editor.ViewModels.Components;
 using RowlEngine.Editor.ViewModels.Inspector;
 using RowlEngine.Editor.Views;
+using RowlEngine.Editor.Views.Panels;
 using RowlEngine.Editor.Views.Panels.Inspector;
 
 namespace RowlEngine.Editor.Tests;
@@ -181,6 +182,45 @@ public sealed class SceneInspectorViewTests : IDisposable
                 Assert.True(string.IsNullOrEmpty(aa.BgmTrack));
                 Assert.True(string.IsNullOrEmpty(ab.BgmTrack));
                 Assert.False(UndoRedoService.Instance.CanUndo);
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void SelectingAnotherScene_ScrollsInspectorBackToTop()
+    {
+        Dispatcher.UIThread.Invoke(() =>
+        {
+            var window = new MainWindow(_vm) { Width = 1440, Height = 560 };
+            window.Show();
+            try
+            {
+                var first = _vm.Nodes.First();
+                var second = new NodeViewModel(9201, "B", 400, 0, bare: true);
+                second.CreateObject("Dialogue").AddComponent<DialogueComponentViewModel>();
+                // Seçili geçiş kartı: ListBox seçili öğeyi görünür yapmak için dış kaydırmayı
+                // aşağı çekiyordu (gerçek ekranda açılışta Denetçi ortadan başlıyordu).
+                second.CreateObject("Transition").AddComponent<TransitionComponentViewModel>().Kind = "fade_black";
+                _vm.Nodes.Add(second);
+                _vm.SelectedNode = first;
+                Dispatcher.UIThread.RunJobs();
+
+                var inspector = window.GetVisualDescendants().OfType<NodeInspectorView>().Single();
+                var scroll = inspector.FindControl<ScrollViewer>("InspectorScroll")
+                    ?? throw new Exception("InspectorScroll not found");
+                Assert.True(scroll.Extent.Height > scroll.Viewport.Height + 200,
+                    $"test kurgusu: Denetçi kaydırılamıyor (extent {scroll.Extent.Height}, viewport {scroll.Viewport.Height})");
+                scroll.Offset = new Avalonia.Vector(0, 200);
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal(200, scroll.Offset.Y, 1);
+
+                _vm.SelectedNode = second;
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal(0, scroll.Offset.Y, 1);
             }
             finally
             {

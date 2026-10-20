@@ -109,7 +109,7 @@
             <!-- Components List & Add Component Button -->
             <!-- Kök neden: ScrollViewer.Padding ölçümde düşülmüyor (yalnız yerleştirmede), içerik panelden
                  16 px geniş ölçülüp sağdan taşıyordu. İç boşluk Padding yerine Margin ile verilir. -->
-            <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled">
+            <ScrollViewer x:Name="InspectorScroll" Grid.Row="1" HorizontalScrollBarVisibility="Disabled">
               <StackPanel>
                 <!-- Faz 10: yazar dilinde Denetçi (onaylı taslak: prototypes/editor-workspace/inspector-redesign.html) -->
                 <insp:SceneInspectorView x:Name="SceneInspector" DataContext="{Binding InspectorScene}"/>

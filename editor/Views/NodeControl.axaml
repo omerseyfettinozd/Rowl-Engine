@@ -57,18 +57,22 @@
             <Ellipse Width="10" Height="10" Fill="{DynamicResource NodeCardBg}" Stroke="{DynamicResource NodePortStroke}" StrokeThickness="1.5" HorizontalAlignment="Center" VerticalAlignment="Center"/>
         </Border>
 
-        <!-- seçim çıkışları (seçimli düğümler) -->
-        <ItemsControl ItemsSource="{Binding ChoiceOptions}" Canvas.Left="245" Canvas.Top="45" ClipToBounds="False">
+        <!-- seçim çıkışları (seçimli düğümler). Nokta, telin çıktığı yerde (X+265; bkz.
+             ConnectionViewModel) ve düz çıkışla aynı sütunda durur. Etiket noktanın sağında,
+             telin üstünde; tam metin ipucunda. Eskiden nokta X+323'teydi: tel etiketin
+             içinden çıkıyor, yakın düğümde etiket sonraki düğümün giriş ucuna biniyordu. -->
+        <ItemsControl ItemsSource="{Binding ChoiceOptions}" Canvas.Left="250" Canvas.Top="45" ClipToBounds="False">
             <ItemsControl.ItemsPanel>
                 <ItemsPanelTemplate><StackPanel Spacing="0"/></ItemsPanelTemplate>
             </ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="comp:ChoiceOptionViewModel">
-                    <Border Tag="{Binding OptionId}" Width="90" Height="30" Background="Transparent" Cursor="Hand" ToolTip.Tip="{l:T NodeControl.ChoiceOutputTooltip}">
-                        <Grid ColumnDefinitions="*,24">
-                            <TextBlock Text="{Binding Text}" FontSize="9" Foreground="{DynamicResource MutedText}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,4,0"/>
-                            <Ellipse Grid.Column="1" Width="10" Height="10" Fill="{DynamicResource Accent}" VerticalAlignment="Center" HorizontalAlignment="Center"/>
-                        </Grid>
+                    <Border Tag="{Binding OptionId}" Width="30" Height="30" Background="Transparent" Cursor="Hand" ClipToBounds="False" ToolTip.Tip="{l:T NodeControl.ChoiceOutputTooltip}">
+                        <Canvas Width="30" Height="30" ClipToBounds="False">
+                            <Ellipse Canvas.Left="10" Canvas.Top="10" Width="10" Height="10" Fill="{DynamicResource Accent}"/>
+                            <TextBlock Classes="choicePortLabel" Canvas.Left="22" Canvas.Top="0" MaxWidth="84" Text="{Binding Text}" ToolTip.Tip="{Binding Text}"
+                                       FontSize="9" Foreground="{DynamicResource MutedText}" TextTrimming="CharacterEllipsis"/>
+                        </Canvas>
                     </Border>
                 </DataTemplate>
             </ItemsControl.ItemTemplate>

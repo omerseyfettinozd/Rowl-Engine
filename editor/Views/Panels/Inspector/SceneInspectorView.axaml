@@ -261,7 +261,7 @@
                          FontSize="{DynamicResource FontSizeSmall}"
                          Foreground="{DynamicResource MutedText}"
                          Margin="0,0,0,8" />
-              <ListBox Classes="chip-list" IsVisible="{Binding HasExpressions}"
+              <ListBox Classes="chip-list" AutoScrollToSelectedItem="False" IsVisible="{Binding HasExpressions}"
                        ItemsSource="{Binding Expressions}"
                        SelectedItem="{Binding SelectedExpression, Mode=TwoWay}">
                 <ListBox.ItemsPanel>
@@ -675,7 +675,7 @@
                     CommandParameter="transition" />
           </StackPanel>
           <StackPanel IsVisible="{Binding HasTransition}" Spacing="0">
-            <ListBox Classes="trans-list"
+            <ListBox Classes="trans-list" AutoScrollToSelectedItem="False"
                      ItemsSource="{Binding TransitionChoices}"
                      SelectedValue="{Binding TransitionKind, Mode=TwoWay}"
                      SelectedValueBinding="{Binding Kind}">
@@ -943,7 +943,7 @@
                        FontSize="{DynamicResource FontSizeSmall}"
                        Foreground="{DynamicResource MutedText}"
                        Margin="0,0,0,8" />
-            <ListBox x:Name="MultiTransitionList"
+            <ListBox x:Name="MultiTransitionList" AutoScrollToSelectedItem="False"
                      Classes="trans-list"
                      ItemsSource="{Binding TransitionChoices}"
                      SelectedValue="{Binding MultiTransitionKind, Mode=TwoWay}"

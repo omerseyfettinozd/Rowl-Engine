@@ -82,7 +82,13 @@ namespace RowlEngine.Editor.Views.Panels
         private void OnWatchedVmPropertyChanged(object? sender, PropertyChangedEventArgs e)
         {
             if (e.PropertyName == nameof(MainWindowViewModel.SelectedNode))
+            {
                 _editRecorder?.RefreshTrackedNode();
+                // Gerçek ekran bulgusu: yeni sahne önceki sahnenin kaydırma konumunda açılıyordu
+                // ("Kim konuşuyor?" görünmüyordu). Sahne değişince Denetçi en üstten başlar.
+                if (this.FindControl<ScrollViewer>("InspectorScroll") is { } scroll)
+                    scroll.Offset = default;
+            }
         }
     }
 }
