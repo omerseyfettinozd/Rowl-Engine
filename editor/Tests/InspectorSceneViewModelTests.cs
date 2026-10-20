@@ -334,6 +334,59 @@ public sealed class InspectorSceneViewModelTests
     }
 
     [Fact]
+    public void MultiMusic_ProjectAudioList_OnlyScenesWithAudio_SingleUndo()
+    {
+        using var s = new Scope("MultiMusic");
+        Dispatcher.UIThread.Invoke(() =>
+        {
+            var vm = s.Vm;
+            string audioDir = Path.Combine(MainWindowViewModel.AssetsPath, "audio");
+            Directory.CreateDirectory(audioDir);
+            File.WriteAllBytes(Path.Combine(audioDir, "tema.ogg"), new byte[] { 1 });
+            File.WriteAllBytes(Path.Combine(audioDir, "gece.wav"), new byte[] { 1 });
+            File.WriteAllText(Path.Combine(audioDir, "notlar.txt"), "x");
+            var (a, b) = SelectTwo(vm);
+            var c = new NodeViewModel(3, "C", 0, 0, bare: true);
+            vm.Nodes.Add(c);
+            vm.SelectedNodes.Add(c);
+            var aa = a.CreateObject("Audio").AddComponent<AudioComponentViewModel>();
+            var ab = b.CreateObject("Audio").AddComponent<AudioComponentViewModel>();
+            aa.BgmTrack = "eski.ogg";
+            ab.BgmTrack = string.Empty;
+            UndoRedoService.Instance.Clear();
+            var insp = new InspectorSceneViewModel(vm);
+            try
+            {
+                Assert.True(insp.HasMultiAudio);
+                Assert.Null(insp.MultiMusicChoice);
+                Assert.Contains("2", insp.MultiMusicHint);
+                Assert.Contains("3", insp.MultiMusicHint);
+                // Müzik yok + projedeki ses dosyaları (sıralı); ses olmayan dosya listede yok.
+                Assert.Equal(new[] { "", "gece.wav", "tema.ogg" }, insp.MusicChoices.Select(m => m.Track));
+
+                insp.MultiMusicChoice = insp.MusicChoices.Single(m => m.Track == "tema.ogg");
+                Assert.Equal("tema.ogg", aa.BgmTrack);
+                Assert.Equal("tema.ogg", ab.BgmTrack);
+                Assert.Empty(c.AllComponents.OfType<AudioComponentViewModel>());
+                Assert.Equal("tema.ogg", insp.MultiMusicChoice?.Track);
+
+                // Aynı değer ikinci kayıt üretmez.
+                insp.MultiMusicChoice = insp.MusicChoices.Single(m => m.Track == "tema.ogg");
+                UndoRedoService.Instance.Undo();
+                Assert.Equal("eski.ogg", aa.BgmTrack);
+                Assert.Equal(string.Empty, ab.BgmTrack);
+                Assert.False(UndoRedoService.Instance.CanUndo);
+
+                // Müzik yok: hepsini temizler.
+                insp.MultiMusicChoice = insp.MusicChoices[0];
+                Assert.Equal(string.Empty, aa.BgmTrack);
+                Assert.Equal(string.Empty, insp.MultiMusicChoice?.Track);
+            }
+            finally { insp.Dispose(); UndoRedoService.Instance.Clear(); }
+        });
+    }
+
+    [Fact]
     public void AddChoice_CreatesComponentAndRow()
     {
         using var s = new Scope("AddChoice");

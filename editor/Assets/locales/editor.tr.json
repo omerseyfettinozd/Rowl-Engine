@@ -1254,6 +1254,15 @@
     "Inspector.Scene.MultiMixed": {
       "text": "Farklı değerler"
     },
+    "Inspector.Scene.MusicNone": {
+      "text": "Müzik yok"
+    },
+    "Inspector.Scene.MultiMusicCount": {
+      "text": "{0}/{1} sahnede ses var; yalnız onlara uygulanır."
+    },
+    "Inspector.Scene.MultiMusicLabel": {
+      "text": "Müzik"
+    },
     "Inspector.Scene.MultiSuffix": {
       "text": "sahne seçili"
     },

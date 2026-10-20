@@ -1254,6 +1254,15 @@
     "Inspector.Scene.MultiMixed": {
       "text": "Mixed values"
     },
+    "Inspector.Scene.MusicNone": {
+      "text": "No music"
+    },
+    "Inspector.Scene.MultiMusicCount": {
+      "text": "{0}/{1} scenes have audio; applied to those only."
+    },
+    "Inspector.Scene.MultiMusicLabel": {
+      "text": "Music"
+    },
     "Inspector.Scene.MultiSuffix": {
       "text": "scenes selected"
     },

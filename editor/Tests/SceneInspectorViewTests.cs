@@ -4,6 +4,7 @@ using Avalonia.VisualTree;
 using RowlEngine.Editor.Services;
 using RowlEngine.Editor.Tools.RowlEye;
 using RowlEngine.Editor.ViewModels;
+using RowlEngine.Editor.ViewModels.Components;
 using RowlEngine.Editor.ViewModels.Inspector;
 using RowlEngine.Editor.Views;
 using RowlEngine.Editor.Views.Panels.Inspector;
@@ -128,6 +129,57 @@ public sealed class SceneInspectorViewTests : IDisposable
                 Dispatcher.UIThread.RunJobs();
                 Assert.Equal(beforeA, a.ChapterId);
                 Assert.Equal(beforeB, b.ChapterId);
+                Assert.False(UndoRedoService.Instance.CanUndo);
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void MultiSelection_BulkMusicCombo_FocusedEdit_IsOneUndoStep()
+    {
+        Dispatcher.UIThread.Invoke(() =>
+        {
+            var window = new MainWindow(_vm) { Width = 1440, Height = 900 };
+            window.Show();
+            try
+            {
+                string audioDir = Path.Combine(MainWindowViewModel.AssetsPath, "audio");
+                Directory.CreateDirectory(audioDir);
+                File.WriteAllBytes(Path.Combine(audioDir, "tema.ogg"), new byte[] { 1 });
+                var a = new NodeViewModel(9101, "A", 0, 0, bare: true);
+                var b = new NodeViewModel(9102, "B", 0, 0, bare: true);
+                var aa = a.CreateObject("Audio").AddComponent<AudioComponentViewModel>();
+                var ab = b.CreateObject("Audio").AddComponent<AudioComponentViewModel>();
+                _vm.Nodes.Add(a);
+                _vm.Nodes.Add(b);
+                _vm.SelectedNode = a;
+                _vm.SelectedNodes.Clear();
+                _vm.SelectedNodes.Add(a);
+                _vm.SelectedNodes.Add(b);
+                Dispatcher.UIThread.RunJobs();
+
+                var scene = window.GetVisualDescendants().OfType<SceneInspectorView>().Single();
+                var box = scene.GetVisualDescendants().OfType<ComboBox>().Single(c => c.Name == "MultiMusicBox");
+                Assert.True(box.IsEffectivelyVisible);
+
+                UndoRedoService.Instance.Clear();
+                box.Focus();
+                Dispatcher.UIThread.RunJobs();
+                box.SelectedItem = _vm.InspectorScene.MusicChoices.Single(m => m.Track == "tema.ogg");
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal("tema.ogg", aa.BgmTrack);
+                Assert.Equal("tema.ogg", ab.BgmTrack);
+                scene.GetVisualDescendants().OfType<Button>().First().Focus();
+                Dispatcher.UIThread.RunJobs();
+
+                UndoRedoService.Instance.Undo();
+                Dispatcher.UIThread.RunJobs();
+                Assert.True(string.IsNullOrEmpty(aa.BgmTrack));
+                Assert.True(string.IsNullOrEmpty(ab.BgmTrack));
                 Assert.False(UndoRedoService.Instance.CanUndo);
             }
             finally

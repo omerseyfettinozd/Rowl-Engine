@@ -47,6 +47,7 @@ public sealed partial class InspectorSceneViewModel : ViewModelBase, IDisposable
     private CameraComponentViewModel? _camera;
     private ChoiceComponentViewModel? _choiceSubscribed;
     private List<ChapterChoice>? _chapterChoices;
+    private List<MusicChoice>? _musicChoices;
 
     public InspectorSceneViewModel(MainWindowViewModel main)
     {
@@ -325,6 +326,8 @@ public sealed partial class InspectorSceneViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(MultiColorTagChoice));
         OnPropertyChanged(nameof(HasMultiTransition)); OnPropertyChanged(nameof(MultiTransitionHint));
         OnPropertyChanged(nameof(MultiTransitionKind));
+        RefreshMusicChoices(); OnPropertyChanged(nameof(MultiMusicChoice));
+        OnPropertyChanged(nameof(HasMultiAudio)); OnPropertyChanged(nameof(MultiMusicHint));
         OnPropertyChanged(nameof(ChapterSummaries)); OnPropertyChanged(nameof(LastEdited));
     }
 
@@ -840,6 +843,110 @@ public sealed partial class InspectorSceneViewModel : ViewModelBase, IDisposable
         RefreshAll();
     }
 
+    // Seçili sahnelerdeki ses bileşenleri (her düğümde ilki).
+    private List<AudioComponentViewModel> SelectedAudios()
+    {
+        var list = new List<AudioComponentViewModel>();
+        foreach (var n in _main.SelectedNodes)
+        {
+            var a = n.AllComponents.OfType<AudioComponentViewModel>().FirstOrDefault();
+            if (a is not null) list.Add(a);
+        }
+        return list;
+    }
+
+    public bool HasMultiAudio => SelectedAudios().Count > 0;
+
+    /// <summary>"3/5 sahnede ses var" — toplu müzik yalnız sesi olan sahnelere uygulanır.</summary>
+    public string MultiMusicHint
+    {
+        get
+        {
+            int have = SelectedAudios().Count;
+            string fmt = EditorStrings.T("Inspector.Scene.MultiMusicCount");
+            try { return string.Format(fmt, have, SelectedCount); }
+            catch { return fmt; }
+        }
+    }
+
+    /// <summary>Ortak müzik (boş = müzik yok; karışıksa null).</summary>
+    public string? MultiMusic
+    {
+        get
+        {
+            var auds = SelectedAudios();
+            if (auds.Count == 0) return null;
+            string first = auds[0].BgmTrack ?? string.Empty;
+            for (int i = 1; i < auds.Count; i++)
+                if (!string.Equals(auds[i].BgmTrack ?? string.Empty, first, StringComparison.Ordinal))
+                    return null;
+            return first;
+        }
+        set
+        {
+            if (value is null) return;
+            var auds = SelectedAudios();
+            if (auds.Count == 0) return;
+            var before = auds.ToDictionary(a => a, a => a.BgmTrack ?? string.Empty);
+            if (before.Values.All(v => string.Equals(v, value, StringComparison.Ordinal))) return;
+            foreach (var a in auds) a.BgmTrack = value;
+            UndoRedoService.Instance.RecordAction(new BulkStringAction<AudioComponentViewModel>(
+                before, value, (a, v) => a.BgmTrack = v, "Music", OnBulkApplied));
+            OnBulkApplied();
+        }
+    }
+
+    /// <summary>
+    /// Toplu müzik listesi: müzik yok + projedeki Assets/audio dosyaları (içe aktarmanın
+    /// yazdığı biçim: yalnız dosya adı) + listede olmayan ortak değer. Yalnız içerik
+    /// değişince yenilenir (açılır kutu seçimi geri yazmasın; bkz. ChapterChoices).
+    /// </summary>
+    public IReadOnlyList<MusicChoice> MusicChoices => _musicChoices ??= BuildMusicChoices();
+
+    private void RefreshMusicChoices()
+    {
+        var next = BuildMusicChoices();
+        if (_musicChoices is not null && next.SequenceEqual(_musicChoices)) return;
+        _musicChoices = next;
+        OnPropertyChanged(nameof(MusicChoices));
+    }
+
+    private List<MusicChoice> BuildMusicChoices()
+    {
+        var list = new List<MusicChoice> { new(string.Empty, EditorStrings.T("Inspector.Scene.MusicNone")) };
+        try
+        {
+            string folder = Path.Combine(MainWindowViewModel.AssetsPath, "audio");
+            if (Directory.Exists(folder))
+            {
+                foreach (var file in Directory.EnumerateFiles(folder)
+                             .Select(Path.GetFileName)
+                             .OfType<string>()
+                             .Where(MediaFormatCatalog.IsSupportedAudioExtension)
+                             .OrderBy(f => f, StringComparer.OrdinalIgnoreCase))
+                    list.Add(new MusicChoice(file, file));
+            }
+        }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
+        string? common = MultiMusic;
+        if (!string.IsNullOrEmpty(common) && !list.Any(c => string.Equals(c.Track, common, StringComparison.Ordinal)))
+            list.Add(new MusicChoice(common, common));
+        return list;
+    }
+
+    /// <summary>Ortak müzik seçeneği (karışıksa null: açılır kutu "Farklı" gösterir).</summary>
+    public MusicChoice? MultiMusicChoice
+    {
+        get
+        {
+            string? common = MultiMusic;
+            if (common is null) return null;
+            return MusicChoices.FirstOrDefault(c => string.Equals(c.Track, common, StringComparison.Ordinal));
+        }
+        set { if (value is not null) MultiMusic = value.Track; }
+    }
+
     public string? MultiColorTag
     {
         get
@@ -1014,6 +1121,9 @@ public sealed partial class ChoiceRowViewModel : ViewModelBase
 
 /// <summary>Çoklu seçim bölüm seçeneği (boş kimlik = bölümsüz).</summary>
 public sealed record ChapterChoice(string Id, string Label);
+
+/// <summary>Toplu müzik seçeneği (boş parça = müzik yok).</summary>
+public sealed record MusicChoice(string Track, string Label);
 
 /// <summary>Seçim yok durumunda bölüm satırı.</summary>
 public sealed record ChapterSummary(string Title, int Count);
