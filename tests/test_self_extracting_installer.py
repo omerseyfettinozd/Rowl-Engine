@@ -190,12 +190,13 @@ with tempfile.TemporaryDirectory() as directory:
             raise SystemExit(f"installed SHA256SUMS check failed: {sums.stdout}")
 
         # The installed demo package must verify.
-        if package_assets.verify_package(str(prefix / "game.rowlpkg")) != 0:
+        if package_assets.verify_package(str(prefix / "Assets" / "packages" / "game.rowlpkg")) != 0:
             raise SystemExit("installed game.rowlpkg failed verify")
 
         # The launcher must be executable.
-        if not os.access(prefix / "rowl_player", os.X_OK):
-            raise SystemExit("installed rowl_player is not executable")
+        for executable in ("RowlGame", "run_game.sh"):
+            if not os.access(prefix / executable, os.X_OK):
+                raise SystemExit(f"installed {executable} is not executable")
 
         # (a) Receipt exists with version + payload-sha + exact FILES set.
         stub_text = first.read_text(encoding="utf-8")
@@ -233,7 +234,9 @@ with tempfile.TemporaryDirectory() as directory:
         if bare_un.returncode != 0 or (default_cwd / "rowl-game").exists():
             raise SystemExit("default-prefix uninstall left leftovers")
 
-        # Uninstall: no leftovers, prefix dir removed when empty.
+        # Uninstall: no leftovers, prefix dir removed when empty — including
+        # the EMPTY crash-logs/ the player creates on every run.
+        (prefix / "crash-logs").mkdir(exist_ok=True)
         uninstalled = run([SH, str(first), "uninstall",
                            "--prefix", str(prefix)])
         if uninstalled.returncode != 0:
@@ -248,14 +251,27 @@ with tempfile.TemporaryDirectory() as directory:
         keep = prefix / "my-save.txt"
         keep.write_text("mine\n", encoding="utf-8")
         reinstall = run([SH, str(first), "--prefix", str(prefix)])
+        # A user mod inside an installed directory keeps that directory alive:
+        # uninstall prunes only EMPTY parents (rmdir), never a tree.
+        user_mod = prefix / "mods" / "images" / "hero.png"
+        user_mod.parent.mkdir(parents=True, exist_ok=True)
+        user_mod.write_bytes(b"user-mod")
+        # The player creates crash-logs/ on every run: empty -> removed,
+        # with a log inside -> the user's diagnostics survive.
+        crash_log = prefix / "crash-logs" / "crash-1.log"
+        crash_log.parent.mkdir()
+        crash_log.write_text("boom\n", encoding="utf-8")
         if reinstall.returncode != 0:
             raise SystemExit(f"reinstall failed: {reinstall.stderr}")
         if not (prefix / ".rowl-receipt").is_file():
             raise SystemExit("reinstall wrote no .rowl-receipt")
         guarded = run([SH, str(first), "uninstall",
                        "--prefix", str(prefix)])
-        if guarded.returncode != 0 or not keep.is_file():
+        if (guarded.returncode != 0 or not keep.is_file() or not user_mod.is_file()
+                or not crash_log.is_file()):
             raise SystemExit("uninstall touched a user file")
+        if (prefix / "Assets").exists():
+            raise SystemExit("uninstall left the emptied Assets/packages tree behind")
         if (prefix / ".rowl-receipt").exists():
             raise SystemExit("uninstall left .rowl-receipt behind")
         for name in stub_files:
@@ -430,7 +446,7 @@ with tempfile.TemporaryDirectory() as directory:
             raise SystemExit("poisoned-receipt uninstall was accepted")
         if canary.read_text(encoding="utf-8") != "do-not-touch\n":
             raise SystemExit("poisoned-receipt uninstall escaped the prefix")
-        if not (esc_prefix / "game.rowlpkg").is_file():
+        if not (esc_prefix / "Assets" / "packages" / "game.rowlpkg").is_file():
             raise SystemExit("poisoned-receipt uninstall was not fail-closed")
         if not (esc_prefix / ".rowl-receipt").is_file():
             raise SystemExit("poisoned-receipt uninstall deleted the receipt")
