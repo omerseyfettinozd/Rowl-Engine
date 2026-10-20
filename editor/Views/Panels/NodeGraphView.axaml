@@ -174,9 +174,10 @@
             </Border>
         </Panel>
 
-        <!-- Görünümü sıfırla (sağ alt, sessiz) -->
-        <Border x:Name="CanvasViewportOverlay" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="16" Background="Transparent" BorderThickness="0">
-            <Button x:Name="ResetViewButton" Classes="tool" Content="{l:T Graph.ResetView}" Command="{Binding ResetCanvasViewCommand}" FontSize="10" Foreground="{DynamicResource MutedText}" Background="Transparent" BorderThickness="0"/>
+        <!-- Görünümü sıfırla (sağ alt; zoom kapsülüyle aynı aile — soluk 10 px metin okunmuyordu) -->
+        <Border x:Name="CanvasViewportOverlay" Classes="canvasCapsule" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="16">
+            <Button x:Name="ResetViewButton" Classes="canvasTool" Content="{l:T Graph.ResetView}" Command="{Binding ResetCanvasViewCommand}"
+                    Width="NaN" Padding="12,0" FontSize="{DynamicResource FontSizeBody}"/>
         </Border>
     </Grid>
 </UserControl>
