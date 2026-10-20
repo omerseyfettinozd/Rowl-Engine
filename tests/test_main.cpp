@@ -127,6 +127,7 @@ int main(int argc, char* argv[]) {
     test_logger_concurrency();
     test_aspect_guardian();
     test_msdf_renderer();
+    test_gpu_truetype_text();
     test_game_state();
     test_audio_engine();
     test_audio_device_recovery();

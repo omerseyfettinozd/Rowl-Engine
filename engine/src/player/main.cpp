@@ -333,6 +333,11 @@ int rowlPlayerMain(int argc, char* argv[]) {
 
     if (!packageSmokeTest && !storyGraphPath.empty() && !storyPath.empty()) {
         RowlEngine_LoadStoryGraph(engine, storyGraphPath.c_str());
+    } else if (!packageSmokeTest && RowlEngine_GetCurrentNodeId(engine) != 0) {
+        // Gerçek ekran denemesi (2026-10-20): sürüm paketinde grafik zaten
+        // SetProjectDirectory ile VFS'ten (Assets/packages/game.rowlpkg) yüklenir;
+        // fiziksel aday yok diye "boş sahneyle başlıyor" demek yanıltıcıydı.
+        std::cout << "[Player] Story graph loaded from the project's packaged VFS.\n";
     } else if (!packageSmokeTest) {
         std::cerr << "[Player] ⚠️  Warning: No story graph file found!\n"
                   << "  Searched in: " << baseProjUtf8 << "\n"

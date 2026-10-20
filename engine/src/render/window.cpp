@@ -6,6 +6,7 @@
 #include "rowl/core/pause_menu.hpp"
 #include "rowl/render/frame_composition.hpp"
 #include "rowl/render/aspect_guardian.hpp"
+#include "rowl/render/gpu_truetype_text.hpp"
 #include "rowl/render/window_text_fallback.hpp"
 #include "rowl/render/window_font_resolve.hpp"
 #include "rowl/render/window_msdf_shaped.hpp"
@@ -1098,6 +1099,15 @@ void Window::renderVisualNovelFrame(
                     speakerMsdfOk = renderGpuMsdfText(dlg.speaker, tagX + 16.0f * metrics.scaleFactor, tagY + tagH * .72f, speakerFontPx, {255,255,255,255});
                 }
                 if (!speakerMsdfOk) {
+                    // A11: MSDF kapsamıyorsa debug-bitmap değil TrueType (offscreen
+                    // kolla aynı font ve yerleşim; bkz. gpu_truetype_text.hpp).
+                    speakerMsdfOk = drawTrueTypeTextOnGpu(
+                        m_sdlRenderer, m_fontRenderer.get(), nullptr, dlg.speaker,
+                        tagX + 16.0f * metrics.scaleFactor,
+                        tagY + (tagH - speakerFontPx) / 2.0f - (2.0f * metrics.scaleFactor),
+                        speakerFontPx, {255,255,255,255}, speakerWrapW, tagH, "Left");
+                }
+                if (!speakerMsdfOk) {
                     SDL_SetRenderDrawColor(m_sdlRenderer, 255, 255, 255, 255);
                     SDL_RenderDebugText(m_sdlRenderer, tagX + (16.0f * metrics.scaleFactor), tagY + (tagH - 8.0f) / 2.0f, dlg.speaker.c_str());
                 }
@@ -1138,6 +1148,14 @@ void Window::renderVisualNovelFrame(
                     dialogueMsdfOk = renderGpuMsdfText(dlg.dialogue, physBoxX + paddingLeft, physBoxY + paddingTop + dlg.fontSize * metrics.scaleFactor, dlg.fontSize * metrics.scaleFactor, textColor);
                 }
                 if (!dialogueMsdfOk) {
+                    // A11: TrueType yedeği (typewriter sınırı korunur).
+                    dialogueMsdfOk = drawTrueTypeTextOnGpu(
+                        m_sdlRenderer, m_fontRenderer.get(), shapedDialogue.get(), dlg.dialogue,
+                        physBoxX + paddingLeft, physBoxY + paddingTop, msdfFontPx, textColor,
+                        msdfMaxLineW, scaledDlgH - (36.0f * metrics.scaleFactor),
+                        dlg.textAlignment, shapedDialogue ? dialogueVisible : SIZE_MAX);
+                }
+                if (!dialogueMsdfOk) {
                     SDL_SetRenderDrawColor(m_sdlRenderer, textColor.r, textColor.g, textColor.b, textColor.a);
                     SDL_RenderDebugText(m_sdlRenderer, physBoxX + paddingLeft, physBoxY + paddingTop, dlg.dialogue.c_str());
                 }
@@ -1172,7 +1190,7 @@ void Window::renderVisualNovelFrame(
             // Şekillenemezse ham-MSDF legacy (birebir eski piksel/davranış).
             const float choiceFontPx = choice.fontSize * metrics.scaleFactor;
             const float choiceWrapW = rect.w - 24.0f * metrics.scaleFactor;
-            const FontRenderer* choiceMsdfFont = m_fontRenderer.get();
+            FontRenderer* choiceMsdfFont = m_fontRenderer.get();
             if (!choice.fontFamily.empty() && choice.fontFamily != "Default") {
                 const auto foundMsdfFont = m_buttonFontCache.find(choice.fontFamily);
                 if (foundMsdfFont != m_buttonFontCache.end()) choiceMsdfFont = foundMsdfFont->second.get();
@@ -1191,6 +1209,13 @@ void Window::renderVisualNovelFrame(
                 choiceMsdfOk = renderGpuMsdfText(choice.text, px + 12.0f * metrics.scaleFactor,
                                    py + rect.h * .5f + choice.fontSize * metrics.scaleFactor * .35f,
                                    choice.fontSize * metrics.scaleFactor, text);
+            }
+            if (!choiceMsdfOk) {
+                // A11: TrueType yedeği (offscreen kolla aynı yerleşim).
+                choiceMsdfOk = drawTrueTypeTextOnGpu(
+                    m_sdlRenderer, choiceMsdfFont, nullptr, choice.text,
+                    px + 12.0f * metrics.scaleFactor, py + (rect.h - choiceFontPx) * 0.5f,
+                    choiceFontPx, text, choiceWrapW, rect.h, choice.textAlignment);
             }
             if (!choiceMsdfOk) {
                 SDL_SetRenderDrawColor(m_sdlRenderer, text.r, text.g, text.b, text.a);

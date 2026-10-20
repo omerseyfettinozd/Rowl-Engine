@@ -50,13 +50,16 @@ sh "$GUIDE_WORK/install-rowl-guide.sh" --prefix "$GUIDE_WORK/prefix"
 
 ## 3. Oyna
 
-Kurulu oyuncu `prefix/rowl_player` dosyasıdır. Gerçek oyun penceresi açar:
+Oyunu `prefix/run_game.sh` başlatır: kendi klasörüne geçip kurulu oyuncuyu
+(`prefix/RowlGame`) çalıştırır; nereden açılırsa açılsın (dosya yöneticisi,
+mutlak yol) `Assets/packages/game.rowlpkg` bulunur. Gerçek oyun penceresi açar:
 
 ```text
-"$GUIDE_WORK/prefix/rowl_player" --project "$GUIDE_WORK/prefix"
+"$GUIDE_WORK/prefix/run_game.sh"
 ```
 
-Bayraklar (`rowl_player --help` çıktısıyla birebir — uydurma yok):
+Bayraklar (`RowlGame --help` çıktısıyla birebir — uydurma yok; `run_game.sh`
+hepsini aynen iletir):
 
 | Bayrak | Anlam |
 |---|---|
@@ -84,19 +87,19 @@ Burada tekrarlanmaz.
 
 ```sh
 # guide-probe: expect-ok
-"$GUIDE_WORK/prefix/rowl_player" --help
+"$GUIDE_WORK/prefix/RowlGame" --help
 ```
 
 ```sh
 # guide-probe: expect-ok
-"$GUIDE_WORK/prefix/rowl_player" --version
+"$GUIDE_WORK/prefix/RowlGame" --version
 ```
 
 Hatalı bayrak değeri 0-dışı çıkış verir (oyuncu argümanları doğrular):
 
 ```sh
 # guide-probe: expect-fail
-"$GUIDE_WORK/prefix/rowl_player" --slot 99
+"$GUIDE_WORK/prefix/RowlGame" --slot 99
 ```
 
 ## 4. Doğrula
@@ -111,7 +114,7 @@ cd "$GUIDE_WORK/prefix" && sha256sum -c SHA256SUMS
 
 ```sh
 # guide-probe: expect-ok
-python3 tools/package_assets.py verify "$GUIDE_WORK/prefix/game.rowlpkg"
+python3 tools/package_assets.py verify "$GUIDE_WORK/prefix/Assets/packages/game.rowlpkg"
 ```
 
 ### Bir şey ters giderse
@@ -134,7 +137,7 @@ Oyuncu çökerse `crash-logs/` dizinine (oyuncunun ÇALIŞMA dizini altında)
 # guide-probe: expect-ok
 mkdir -p "$GUIDE_WORK/smoke-cwd"
 cd "$GUIDE_WORK/smoke-cwd"
-"$GUIDE_WORK/prefix/rowl_player" --help >/dev/null
+"$GUIDE_WORK/prefix/RowlGame" --help >/dev/null
 test -d crash-logs
 ```
 

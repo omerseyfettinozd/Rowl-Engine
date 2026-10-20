@@ -323,6 +323,7 @@ set(ROWL_ENGINE_SOURCES
     src/render/window_font_resolve.cpp  # W8-d(4): font-cozumleme uc kademesi (saf taşıma)
     src/render/window_texture_cache.cpp  # A3-tur5: texture-cache bölünmesi
     src/render/window_text_fallback.cpp  # D10: font-fallback/MSDF çekirdek bölünmesi
+    src/render/gpu_truetype_text.cpp     # A11: GPU yolunda TrueType metin yedeği
     src/render/window_msdf_shaped.cpp  # D11: şekilli-MSDF plan/çizim bölünmesi
     src/render/camera2d.cpp
     src/render/transition_manager.cpp
