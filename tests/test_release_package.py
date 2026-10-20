@@ -264,6 +264,13 @@ with tempfile.TemporaryDirectory() as directory:
                              "mutation no longer matches the source")
         return mutated
 
+    def drop_posix_cd_line(source):
+        mutated = source.replace("    'cd \"$SCRIPT_DIR\" || exit 1\\n'\n", "")
+        if mutated == source:
+            raise SystemExit("drop_posix_cd_line changed nothing; the launcher "
+                             "working-directory mutation no longer matches the source")
+        return mutated
+
     def break_exe_name(source):
         mutated = source.replace('"RowlGame.exe %*\\r\\n"', '"RowlGameX.exe %*\\r\\n"')
         if mutated == source:
@@ -407,6 +414,7 @@ with tempfile.TemporaryDirectory() as directory:
     # state on POSIX, and on any other platform it is expected to stay green.
     MUTATIONS = [
         ("no-cd", drop_cd_line, "missing the working-directory pin", "any"),
+        ("posix-no-cd", drop_posix_cd_line, "does not cd into SCRIPT_DIR", "any"),
         ("bad-exe", break_exe_name,
          "is not a player executable the release verifier accepts", "any"),
         ("lf-endings", downgrade_to_lf, "bare LF line ending", "any"),

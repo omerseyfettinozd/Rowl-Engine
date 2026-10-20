@@ -317,7 +317,7 @@ public static class ProjectBuildService
             token.ThrowIfCancellationRequested();
 
             Report("[BUILD 3/4] Launchers are being created...");
-            ProjectFileSystem.WriteAllTextAtomically(Path.Combine(staging, "run_game.sh"), "#!/bin/bash\nSCRIPT_DIR=\"$(cd \"$(dirname \"${BASH_SOURCE[0]}\")\" && pwd)\"\nexport LD_LIBRARY_PATH=\"$SCRIPT_DIR:$LD_LIBRARY_PATH\"\nexec \"$SCRIPT_DIR/RowlGame\" \"$@\"\n");
+            ProjectFileSystem.WriteAllTextAtomically(Path.Combine(staging, "run_game.sh"), "#!/bin/bash\nSCRIPT_DIR=\"$(cd \"$(dirname \"${BASH_SOURCE[0]}\")\" && pwd)\"\nexport LD_LIBRARY_PATH=\"$SCRIPT_DIR:$LD_LIBRARY_PATH\"\ncd \"$SCRIPT_DIR\" || exit 1\nexec \"$SCRIPT_DIR/RowlGame\" \"$@\"\n");
             ProjectFileSystem.WriteAllTextAtomically(Path.Combine(staging, "run_game.bat"), "@echo off\r\ncd /d \"%~dp0\"\r\nRowlGame.exe %*\r\n");
             if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS()) File.SetUnixFileMode(Path.Combine(staging, "run_game.sh"), UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute | UnixFileMode.GroupRead | UnixFileMode.GroupExecute | UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
             token.ThrowIfCancellationRequested();

@@ -62,6 +62,12 @@ _POSIX_SCRIPT_DIR_DOLLAR_ZERO = re.compile(
     re.IGNORECASE,
 )
 _POSIX_LD_LIBRARY_PATH = re.compile(r"^\s*export\s+LD_LIBRARY_PATH=", re.MULTILINE)
+# The player takes its project root from the working directory (default "."),
+# so a launcher that only resolves SCRIPT_DIR still runs the game from the
+# caller's directory: double-clicked or started by absolute path it finds no
+# Assets/packages/game.rowlpkg and opens an empty scene. Gerçek ekran denemesi
+# (2026-10-20) bunu yakaladı; .bat'taki `cd /d "%~dp0"` karşılığı.
+_POSIX_CD_SCRIPT_DIR = re.compile(r"""^\s*cd\s+["']?\$\{?SCRIPT_DIR\}?["']?(\s|$)""", re.MULTILINE)
 _POSIX_EXEC = re.compile(
     r"""^\s*exec\s+(?P<command>"[^"]*"|'[^']*'|\S+)(?P<arguments>\s+.*)?$""",
     re.MULTILINE)
@@ -161,6 +167,11 @@ def posix_launcher_problems(text, player_names, full=True):
                 f"{POSIX_LAUNCHER_NAME} does not resolve its own directory into "
                 f"SCRIPT_DIR; a relocated or double-clicked launcher would run "
                 f"from the caller's directory")
+        if not _POSIX_CD_SCRIPT_DIR.search(text):
+            problems.append(
+                f"{POSIX_LAUNCHER_NAME} does not cd into SCRIPT_DIR; the player "
+                f"takes its project root from the working directory, so a "
+                f"launcher started from elsewhere opens an empty game")
         if not _POSIX_LD_LIBRARY_PATH.search(text) or "SCRIPT_DIR" not in text:
             problems.append(
                 f"{POSIX_LAUNCHER_NAME} does not put the release directory on "

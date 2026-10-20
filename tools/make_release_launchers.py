@@ -57,6 +57,7 @@ POSIX_LAUNCHER = (
     "#!/bin/bash\n"
     'SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"\n'
     'export LD_LIBRARY_PATH="$SCRIPT_DIR:$LD_LIBRARY_PATH"\n'
+    'cd "$SCRIPT_DIR" || exit 1\n'
     'exec "$SCRIPT_DIR/RowlGame" "$@"\n'
 )
 
