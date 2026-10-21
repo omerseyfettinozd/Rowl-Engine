@@ -1917,6 +1917,9 @@
     "Operation.Save.WriteFailed": {
       "text": "The project file could not be written; see the Console."
     },
+    "Settings.SaveFailed": {
+      "text": "Settings could not be saved or read; see the Console."
+    },
     "Operation.SaveAs.Failed": {
       "text": "Save As failed"
     },

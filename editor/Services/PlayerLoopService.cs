@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Collections.Generic;
 
 namespace RowlEngine.Editor.Services;
@@ -29,8 +30,16 @@ public sealed class PlayerLoopService
     /// <summary>Directory the profile persists to.</summary>
     public string ProfileDirectory => _profileDirectory;
 
+    /// <summary>How the profile file resolved at load time.</summary>
+    public PlayerProfileLoadStatus LoadStatus { get; private set; } = PlayerProfileLoadStatus.Loaded;
+
+    /// <summary>Load diagnostic (corrupt / newer-version file); the caller should log or show it.</summary>
+    public string? LoadDiagnostic { get; private set; }
+
     private readonly string _profileDirectory;
     private bool _dirty;
+    // Daha yeni sürüm profil: okunur-yalnız, üzerine yazılmaz (veri kaybı olmasın).
+    private bool _readOnly;
 
     public PlayerLoopService(PlayerProfile profile, string profileDirectory)
     {
@@ -44,7 +53,24 @@ public sealed class PlayerLoopService
     public static PlayerLoopService Load(string profileDirectory)
     {
         var loaded = PlayerProfileStore.Load(profileDirectory);
-        return new PlayerLoopService(loaded.Profile, profileDirectory);
+        var service = new PlayerLoopService(loaded.Profile, profileDirectory)
+        {
+            LoadStatus = loaded.Status,
+            LoadDiagnostic = loaded.Diagnostic,
+        };
+        string path = Path.Combine(profileDirectory, PlayerProfileStore.FileName);
+        if (loaded.Status == PlayerProfileLoadStatus.UnsupportedVersionDefaults)
+        {
+            service._readOnly = true;
+        }
+        else if (loaded.Status == PlayerProfileLoadStatus.CorruptDefaults && SettingsFileBackup.CanRead(path))
+        {
+            // Bozuk ama okunabilen dosya ilk Flush'ta varsayılanlarla ezilmeden yedeklenir.
+            string? backup = SettingsFileBackup.TryMoveCorrupt(path);
+            if (backup is not null)
+                service.LoadDiagnostic = loaded.Diagnostic + $" Old file kept as '{backup}'.";
+        }
+        return service;
     }
 
     /// <summary>
@@ -72,7 +98,7 @@ public sealed class PlayerLoopService
     /// </summary>
     public string? Flush()
     {
-        if (!_dirty)
+        if (!_dirty || _readOnly)
             return null;
         string? error = PlayerProfileStore.Save(_profileDirectory, Profile);
         if (error is null)

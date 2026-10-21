@@ -80,7 +80,13 @@ public sealed class EditorSettingsProfile
         try { return (JsonSerializer.Deserialize<EditorSettingsProfile>(File.ReadAllText(path)) ?? new()).Sanitized(); }
         catch (Exception ex)
         {
-            if (ex is not (FileNotFoundException or DirectoryNotFoundException))
+            if (ex is JsonException)
+            {
+                // Bozuk dosya sonraki Save'de varsayılanlarla ezilmesin: yedeğe taşı.
+                string? backup = SettingsFileBackup.TryMoveCorrupt(path);
+                onError?.Invoke(backup is null ? ex.Message : $"{ex.Message} (old file kept as '{backup}')");
+            }
+            else if (ex is not (FileNotFoundException or DirectoryNotFoundException))
                 onError?.Invoke(ex.Message);
             return new EditorSettingsProfile();
         }
@@ -93,13 +99,17 @@ public sealed class EditorSettingsProfile
     /// changes, the debounced workspace save) goes through here so one never
     /// drops the other's fields.
     /// </summary>
-    public static EditorSettingsProfile Update(string path, Action<EditorSettingsProfile> change)
+    public static EditorSettingsProfile Update(string path, Action<EditorSettingsProfile> change, Action<string>? onError = null)
     {
         lock (FileLock)
         {
-            EditorSettingsProfile profile = Load(path);
+            EditorSettingsProfile profile = Load(path, onError);
             change(profile);
-            profile.Save(path);
+            try { profile.Save(path); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                onError?.Invoke($"Editor settings could not be saved to '{path}' ({ex.GetType().Name}: {ex.Message}).");
+            }
             return profile;
         }
     }
@@ -108,5 +118,32 @@ public sealed class EditorSettingsProfile
     {
         Sanitized();
         ProjectFileSystem.WriteAllTextAtomically(path, JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true }));
+    }
+}
+
+/// <summary>Bozuk ayar/profil dosyasını yan yana <c>.corrupt-&lt;zaman&gt;</c> yedeğine taşır.</summary>
+internal static class SettingsFileBackup
+{
+    public static bool CanRead(string path)
+    {
+        try { File.ReadAllBytes(path); return true; } catch { return false; }
+    }
+
+    /// <summary>Returns the backup path, or null when the file is missing or could not be moved.</summary>
+    public static string? TryMoveCorrupt(string path)
+    {
+        try
+        {
+            if (!File.Exists(path)) return null;
+            string backup = path + ".corrupt-" + DateTime.UtcNow.ToString("yyyyMMddHHmmss", System.Globalization.CultureInfo.InvariantCulture);
+            for (int n = 2; File.Exists(backup); n++)
+                backup = path + ".corrupt-" + DateTime.UtcNow.ToString("yyyyMMddHHmmss", System.Globalization.CultureInfo.InvariantCulture) + "." + n;
+            File.Move(path, backup, overwrite: false);
+            return backup;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            return null;
+        }
     }
 }

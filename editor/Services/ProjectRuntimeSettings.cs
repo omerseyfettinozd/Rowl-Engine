@@ -55,19 +55,41 @@ public static class ProjectRuntimeSettingsService
         catch { return new ProjectRuntimeSettings(); }
     }
 
-    public static void Save(string manifestPath, ProjectRuntimeSettings settings)
+    /// <summary>
+    /// Writes the three runtime keys into the manifest. Returns null on success, otherwise an
+    /// error text; a corrupt / non-object manifest is never replaced (every other key would be lost).
+    /// </summary>
+    public static string? Save(string manifestPath, ProjectRuntimeSettings settings)
     {
         settings.Sanitized();
-        JsonObject manifest;
-        try { manifest = JsonNode.Parse(File.ReadAllText(manifestPath)) as JsonObject ?? new JsonObject(); }
-        catch { manifest = new JsonObject(); }
-        manifest["save_slot_count"] = settings.SaveSlotCount;
-        manifest["default_bgm_transition"] = settings.DefaultBgmTransition;
-        manifest["default_bgm_transition_duration_seconds"] = settings.DefaultBgmTransitionDurationSeconds;
-        var directory = Path.GetDirectoryName(manifestPath);
-        if (!string.IsNullOrWhiteSpace(directory)) Directory.CreateDirectory(directory);
-        var temporary = manifestPath + ".tmp";
-        File.WriteAllText(temporary, manifest.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
-        File.Move(temporary, manifestPath, true);
+        try
+        {
+            JsonObject manifest;
+            if (File.Exists(manifestPath))
+            {
+                try
+                {
+                    manifest = JsonNode.Parse(File.ReadAllText(manifestPath)) as JsonObject
+                        ?? throw new JsonException("root is not a JSON object");
+                }
+                catch (JsonException parseFailure)
+                {
+                    return $"Project manifest '{manifestPath}' is not a valid JSON object ({parseFailure.Message}); settings were not saved.";
+                }
+            }
+            else
+            {
+                manifest = new JsonObject();
+            }
+            manifest["save_slot_count"] = settings.SaveSlotCount;
+            manifest["default_bgm_transition"] = settings.DefaultBgmTransition;
+            manifest["default_bgm_transition_duration_seconds"] = settings.DefaultBgmTransitionDurationSeconds;
+            ProjectFileSystem.WriteAllTextAtomically(manifestPath, manifest.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+            return null;
+        }
+        catch (Exception failure) when (failure is IOException or UnauthorizedAccessException)
+        {
+            return $"Project settings could not be saved to '{manifestPath}' ({failure.GetType().Name}: {failure.Message}).";
+        }
     }
 }

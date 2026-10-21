@@ -1169,12 +1169,12 @@ namespace RowlEngine.Editor.ViewModels
 
         private void LoadPlayerSettings()
         {
-            EditorSettingsSyncService.LoadPlayerSettings(_playerSettingsPath, Settings);
+            EditorSettingsSyncService.LoadPlayerSettings(_playerSettingsPath, Settings, ReportSettingsFailure);
         }
 
         private void LoadEditorSettings()
         {
-            EditorSettingsSyncService.LoadEditorSettings(_editorSettingsPath, Settings);
+            EditorSettingsSyncService.LoadEditorSettings(_editorSettingsPath, Settings, ReportSettingsFailure);
         }
 
         private void LoadProjectRuntimeSettingsIntoEditor()
@@ -1193,7 +1193,15 @@ namespace RowlEngine.Editor.ViewModels
                 EngineHost,
                 () => ProjectRuntimeSettings,
                 updated => ProjectRuntimeSettings = updated,
-                () => SaveSlotsViewModel?.Refresh());
+                () => SaveSlotsViewModel?.Refresh(),
+                ReportSettingsFailure);
+        }
+
+        /// <summary>Ayar/profil yazımı/okuması başarısız: ayrıntı konsola, kısa bildirim toast olarak.</summary>
+        private void ReportSettingsFailure(string detail)
+        {
+            AppendLog(detail);
+            Toast.Show(EditorStrings.T("Settings.SaveFailed"), ToastType.Warning, 4000);
         }
 
         private void ApplyPlayerSettingsToEngine(PlayerSettingsProfile? profile = null)
@@ -1589,6 +1597,8 @@ namespace RowlEngine.Editor.ViewModels
         {
             var loop = Services.PlayerLoopService.Load(
                 PlayerProfileStore.ResolveDefaultProfileDirectory());
+            if (loop.LoadDiagnostic is not null && loop.LoadStatus != PlayerProfileLoadStatus.MissingDefaults)
+                ReportSettingsFailure(loop.LoadDiagnostic);
             var player = new ViewModels.Player.PlayerViewModel(
                 new ViewModels.Player.EngineHostPlayerAdapter(EngineHost), loop);
             var window = new Views.Player.PlayerWindow(player);

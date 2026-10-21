@@ -1917,6 +1917,9 @@
     "Operation.Save.WriteFailed": {
       "text": "Proje dosyası yazılamadı; ayrıntı Konsol'da."
     },
+    "Settings.SaveFailed": {
+      "text": "Ayarlar kaydedilemedi veya okunamadı; ayrıntı Konsol'da."
+    },
     "Operation.SaveAs.Failed": {
       "text": "Farklı kaydedilemedi"
     },

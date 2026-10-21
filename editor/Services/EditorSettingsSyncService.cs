@@ -10,9 +10,9 @@ namespace RowlEngine.Editor.Services;
 /// </summary>
 public static class EditorSettingsSyncService
 {
-    public static void LoadPlayerSettings(string path, SettingsViewModel settings)
+    public static void LoadPlayerSettings(string path, SettingsViewModel settings, Action<string>? onError = null)
     {
-        var profile = PlayerSettingsProfile.Load(path);
+        var profile = PlayerSettingsProfile.Load(path, onError);
         settings.MasterVolume = profile.MasterVolume;
         settings.BgmVolume = profile.BgmVolume;
         settings.VoiceVolume = profile.VoiceVolume;
@@ -21,9 +21,9 @@ public static class EditorSettingsSyncService
         settings.AutoAdvanceDelay = profile.AutoAdvanceDelay;
     }
 
-    public static void LoadEditorSettings(string path, SettingsViewModel settings)
+    public static void LoadEditorSettings(string path, SettingsViewModel settings, Action<string>? onError = null)
     {
-        var profile = EditorSettingsProfile.Load(path);
+        var profile = EditorSettingsProfile.Load(path, onError);
         settings.AutoSaveEnabled = profile.AutoSaveEnabled;
         settings.AutoSaveIntervalSeconds = profile.AutoSaveIntervalSeconds;
         settings.AssetGridItemSize = profile.AssetGridItemSize;
@@ -54,7 +54,8 @@ public static class EditorSettingsSyncService
         EngineHost host,
         Func<ProjectRuntimeSettings> getCurrentProjectSettings,
         Action<ProjectRuntimeSettings> updateProjectSettings,
-        Action refreshSaveSlots)
+        Action refreshSaveSlots,
+        Action<string>? reportError = null)
     {
         if (string.IsNullOrEmpty(propertyName)) return;
 
@@ -75,7 +76,7 @@ public static class EditorSettingsSyncService
                 profile.ReduceMotion = settings.ReduceMotion;
                 profile.UiScale = settings.UiScale;
                 profile.HighContrast = settings.HighContrast;
-            });
+            }, reportError);
             return;
         }
 
@@ -89,7 +90,14 @@ public static class EditorSettingsSyncService
                 DefaultBgmTransitionDurationSeconds = settings.ProjectDefaultBgmTransitionDurationSeconds
             }.Sanitized();
 
-            ProjectRuntimeSettingsService.Save(Path.Combine(projectPath, "project.rowlproj"), updated);
+            string? saveError = ProjectRuntimeSettingsService.Save(Path.Combine(projectPath, "project.rowlproj"), updated);
+            if (saveError is not null)
+            {
+                // Yazılamadı (bozuk manifest / disk): durum değişmez, kullanıcıya bildirilir.
+                reportError?.Invoke(saveError);
+                LoadProjectRuntimeSettings(getCurrentProjectSettings(), settings);
+                return;
+            }
             updateProjectSettings(updated);
             LoadProjectRuntimeSettings(updated, settings);
 
@@ -116,7 +124,9 @@ public static class EditorSettingsSyncService
             AutoAdvanceDelay = settings.AutoAdvanceDelay
         }.Sanitized();
 
-        playerProfile.Save(playerSettingsPath);
+        string? playerSaveError = playerProfile.Save(playerSettingsPath);
+        if (playerSaveError is not null)
+            reportError?.Invoke(playerSaveError);
         ApplyPlayerSettingsToEngine(host, settings, playerProfile);
     }
 
