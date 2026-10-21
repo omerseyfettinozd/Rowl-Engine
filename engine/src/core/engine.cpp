@@ -2748,6 +2748,7 @@ void Engine::shutdown() {
     m_externalWindowHeight = 0;
     // D2 (#113-kuzeni): proje-override save-dizini de oturuma aittir.
     m_saveDirectoryOverride.clear();
+    m_gameIdentity = {};
 
     m_isRunning   = false;
     m_initialized = false;

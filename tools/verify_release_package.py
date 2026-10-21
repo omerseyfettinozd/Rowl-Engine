@@ -5,6 +5,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import struct
 import sys
 
@@ -44,7 +45,8 @@ def canonical_package_key(normalized):
                     if segment not in ("", "."))
 
 
-def read_package_entries(package_path):
+def read_package_index(package_path):
+    """Validates the package and returns {path: (offset, csize, usize, flags)}."""
     package_size = os.path.getsize(package_path)
     if package_size < HEADER.size:
         fail("package is shorter than its v1 header")
@@ -131,7 +133,11 @@ def read_package_entries(package_path):
         if MANIFEST_PATH not in entries:
             fail("package is missing its embedded manifest: " + MANIFEST_PATH)
         verify_embedded_manifest(package, entries)
-    return set(entries)
+    return entries
+
+
+def read_package_entries(package_path):
+    return set(read_package_index(package_path))
 
 
 def read_payload(package, offset, size):
@@ -214,6 +220,41 @@ def verify_embedded_manifest(package, entries):
                 actual = hashlib.sha256(read_payload(package, entry[0], entry[1])).hexdigest()
                 if actual != compressed_digest:
                     fail("embedded manifest compressed checksum mismatch for: " + record["path"])
+
+
+GAME_IDENTITY_PATH = "rowl/game.json"
+_GAME_ID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+
+
+def verify_game_identity(package_path, entries, release_root):
+    """D01a: package must carry rowl/game.json with a canonical UUID game_id,
+    equal to the loose project.rowlproj project_uuid when that is present."""
+    if GAME_IDENTITY_PATH not in entries:
+        fail("package is missing the game identity carrier: " + GAME_IDENTITY_PATH)
+    offset, compressed_size, uncompressed_size, flags = entries[GAME_IDENTITY_PATH][:4]
+    if flags != 0:
+        fail("game identity carrier must be stored uncompressed")
+    with open(package_path, "rb") as package:
+        raw = read_payload(package, offset, compressed_size)
+    try:
+        doc = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError) as error:
+        fail("game identity carrier is not valid JSON: " + str(error))
+    if not isinstance(doc, dict) or doc.get("format") != 1:
+        fail("game identity carrier has an unsupported shape")
+    game_id = doc.get("game_id")
+    if not isinstance(game_id, str) or not _GAME_ID_RE.match(game_id):
+        fail("game identity carrier game_id is not a lowercase UUID")
+    loose = os.path.join(release_root, "project.rowlproj")
+    if os.path.isfile(loose):
+        try:
+            with open(loose, "r", encoding="utf-8") as handle:
+                loose_doc = json.load(handle)
+        except (OSError, ValueError):
+            loose_doc = None  # project.rowlproj is informational (A08): not fatal
+        loose_id = loose_doc.get("project_uuid") if isinstance(loose_doc, dict) else None
+        if isinstance(loose_id, str) and loose_id.strip().lower() != game_id:
+            fail("game id in rowl/game.json does not match project.rowlproj project_uuid")
 
 
 def verify_mod_overrides(mods_root):
@@ -301,9 +342,11 @@ def verify(release_root):
                for name in os.listdir(root)):
         fail("missing native RowlEngineCore runtime library")
 
-    entries = read_package_entries(package_path)
+    index = read_package_index(package_path)
+    entries = set(index)
     if "json/full_story_graph.json" not in entries:
         fail("canonical package does not contain json/full_story_graph.json")
+    verify_game_identity(package_path, index, root)
 
     # The release must not accidentally ship a full loose Assets tree.
     assets_root = os.path.join(root, "Assets")

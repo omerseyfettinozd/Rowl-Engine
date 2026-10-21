@@ -222,7 +222,11 @@ tsan_available() {
 g_package() {
     local work="$OUT/work/package"
     rm -rf "$work"; mkdir -p "$work/extracted"
-    python3 tools/package_assets.py samples/second_signal/Assets "$work/game.rowlpkg"
+    python3 tools/package_assets.py samples/second_signal/Assets "$work/game.rowlpkg" \
+        --game-id 5ec0d519-9a1e-4c2b-8f3d-2a6b7c8d9e01 --game-name "Second Signal"
+    # Golden Project dondurulmuş (project.rowlproj sağlaması kilitli; uuid
+    # taşımaz) → kapı sabit bir test kimliği gömer; doğrulayıcı loose
+    # manifestte uuid yoksa eşitlik aramaz.
     python3 tools/export_game.py portable-zip --output "$work/rowl-portable.zip" \
         --player "$DEBUG_BUILD/bin/rowl_player" \
         --runtime "$DEBUG_BUILD/lib/libRowlEngineCore.so" --package "$work/game.rowlpkg"

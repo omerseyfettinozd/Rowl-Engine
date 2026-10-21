@@ -457,6 +457,8 @@ void RowlEngine_SetProjectDirectory(RowlEngineHandle handle, const char* project
                     std::string(projectRoot));
             }
         }
+        // D01a: game identity (package carrier -> manifest -> derived).
+        engine->setGameIdentity(Rowl::Platform::resolveGameIdentity(engine->getVfs(), projectPath));
         // Faz 3 Dilim 1 (#92): manifest locales + catalogs load on project
         // mount — AFTER the VFS remount above, so the VFS-first catalog
         // probe sees packaged locales (Assets/locales inside .rowlpkg).

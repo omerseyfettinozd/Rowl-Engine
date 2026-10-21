@@ -40,7 +40,9 @@ with tempfile.TemporaryDirectory() as directory:
     release = root / "release"
     package = release / "Assets" / "packages" / "game.rowlpkg"
     package.parent.mkdir(parents=True)
-    subprocess.run([sys.executable, str(PACKAGER), str(ROOT / "Assets"), str(package)], check=True)
+    GAME_ID = "0b6f1c2e-7d3a-4e58-9c41-2a8f5d6e7b90"
+    subprocess.run([sys.executable, str(PACKAGER), str(ROOT / "Assets"), str(package),
+                    "--game-id", GAME_ID, "--game-name", "Probe"], check=True)
     (release / "mods").mkdir()
     (release / "mods" / "README.md").write_text("# mods\n", encoding="utf-8")
     (release / "README.txt").write_text("release\n", encoding="utf-8")
@@ -63,6 +65,32 @@ with tempfile.TemporaryDirectory() as directory:
     valid = run_verifier(release)
     if valid.returncode != 0 or "Valid release" not in valid.stdout:
         raise SystemExit("valid release package was rejected: " + valid.stderr)
+
+    # --- D01a: game identity carrier (rowl/game.json) ---
+    no_identity = root / "no-identity"
+    shutil.copytree(release, no_identity)
+    subprocess.run([sys.executable, str(PACKAGER), str(ROOT / "Assets"),
+                    str(no_identity / "Assets" / "packages" / "game.rowlpkg")], check=True)
+    require_rejection(no_identity, "missing the game identity carrier")
+
+    mismatch = root / "id-mismatch"
+    shutil.copytree(release, mismatch)
+    (mismatch / "project.rowlproj").write_text(
+        '{"project_uuid": "11111111-2222-4333-8444-555555555555"}\n', encoding="utf-8")
+    require_rejection(mismatch, "does not match project.rowlproj")
+
+    matching = root / "id-match"
+    shutil.copytree(release, matching)
+    (matching / "project.rowlproj").write_text(
+        '{"project_uuid": "' + GAME_ID.upper() + '"}\n', encoding="utf-8")
+    if run_verifier(matching).returncode != 0:
+        raise SystemExit("loose project.rowlproj with the same id (case-insensitive) must pass")
+
+    bad_id = subprocess.run(
+        [sys.executable, str(PACKAGER), str(ROOT / "Assets"), str(root / "bad.rowlpkg"),
+         "--game-id", "not-a-uuid"], capture_output=True, text=True, check=False)
+    if bad_id.returncode == 0:
+        raise SystemExit("packer accepted a malformed game id")
 
     missing_launcher = root / "missing-launcher"
     shutil.copytree(release, missing_launcher)
@@ -731,7 +759,10 @@ with tempfile.TemporaryDirectory() as directory:
     _ENTRY = struct.Struct("<QIQQQI")
 
     def craft_package(package_path, names):
-        blobs = [(name, b"w8g-payload:" + name.replace(b"\x00", b"_"))
+        carrier_blob = ('{"format":1,"game_id":"%s","name":"","content_format":1}\n'
+                        % GAME_ID).encode("utf-8")
+        blobs = [(name, carrier_blob if name == b"rowl/game.json"
+                  else b"w8g-payload:" + name.replace(b"\x00", b"_"))
                  for name in names]
         payload = bytearray(_HEADER.size)
         offsets = {}
@@ -783,7 +814,7 @@ with tempfile.TemporaryDirectory() as directory:
 
     # False-positive control: dotty but harmless names stay green.
     control_pkg = root / "w8g-control.rowlpkg"
-    craft_package(control_pkg, [b"a/..b", b"a/b..", b"...", graph_name])
+    craft_package(control_pkg, [b"a/..b", b"a/b..", b"...", graph_name, b"rowl/game.json"])
     control = run_verifier(stage_with_package("w8g-control", control_pkg))
     if control.returncode != 0 or "Valid release" not in control.stdout:
         raise SystemExit("traversal curtain rejected harmless dotty names: "

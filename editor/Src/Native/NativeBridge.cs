@@ -59,6 +59,20 @@ namespace RowlEngine.Editor.Native
         internal static extern ResultCode RowlEngine_GetProfileDirectoryUtf8(
             IntPtr handle, IntPtr buffer, uint bufferSize, out uint requiredSize);
 
+        // ── Game identity (CAPABILITY_GAME_IDENTITY = 4194304) ───────────────
+        // Source: 0 None, 1 Package, 2 Manifest, 3 Derived (path-derived, not authored).
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_GetGameIdUtf8(
+            IntPtr handle, IntPtr buffer, uint bufferSize, out uint requiredSize);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern int RowlEngine_GetGameIdentitySource(IntPtr handle);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_GetGameIdentityDiagnosticUtf8(
+            IntPtr handle, IntPtr buffer, uint bufferSize, out uint requiredSize);
+
         // ── Lifecycle ────────────────────────────────────────────────────────
 
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]

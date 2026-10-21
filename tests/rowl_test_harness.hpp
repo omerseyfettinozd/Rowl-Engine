@@ -176,6 +176,7 @@ void test_runtime_context_and_diagnostics();
 void test_crash_log();
 void test_story_graph_parser();
 void test_story_graph_format_version();
+void test_game_identity();
 void test_boot_story_diagnostics();  // #118/#119/#120: grafsiz/bozuk boot ayirt edilebilirlik kilidi
 void test_graph_vnext();
 void test_localization();

@@ -170,7 +170,7 @@ cat > "$AUTHOR_WORK/assets/json/full_story_graph.json" <<'JSON'
   {"type": "dialogue", "id": "dlg", "enabled": true, "data": {"speaker": "Yazar", "dialogue": "Merhaba!"}}]}],
  "next_nodes": []}]}
 JSON
-python3 tools/package_assets.py "$AUTHOR_WORK/assets" "$AUTHOR_WORK/author.rowlpkg"
+python3 tools/package_assets.py "$AUTHOR_WORK/assets" "$AUTHOR_WORK/author.rowlpkg" --game-id 4a1e7c52-9d03-4b86-a2f7-6c0d58e1b3a9 --game-name "Author Guide"
 python3 tools/package_assets.py verify "$AUTHOR_WORK/author.rowlpkg"
 python3 tools/package_assets.py verify "$AUTHOR_WORK/author.rowlpkg" --json | python3 -c "import json,sys; assert json.load(sys.stdin)['ok'], 'verify --json not ok'"
 ```

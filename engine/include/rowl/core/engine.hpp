@@ -4,6 +4,7 @@
 #include "rowl/scene/character_fx.hpp"
 #include "rowl/i18n/localization_manager.hpp"
 #include "rowl/core/pause_menu.hpp"
+#include "rowl/platform/game_identity.hpp"
 #include "rowl/platform/platform_host.hpp"
 #include "rowl/state/game_state.hpp"
 #include "rowl/state/session_persistence.hpp"
@@ -380,6 +381,9 @@ public:
     std::string getProfileDirectory() const;
     std::filesystem::path getProfileDirectoryPath() const;
     void setBgmTransitionDefaults(std::string kind, float durationSeconds);
+    /// D01a: identity of the mounted game (see platform/game_identity.hpp).
+    void setGameIdentity(Rowl::Platform::GameIdentity identity) { m_gameIdentity = std::move(identity); }
+    const Rowl::Platform::GameIdentity& getGameIdentity() const { return m_gameIdentity; }
     std::shared_ptr<const Rowl::State::GameState> getGameState() const { return m_gameState; }
     /// #86: stamps the live mixer gains (master/bgm/sfx/voice) into
     /// m_gameState WITHOUT advancing stepId (see withMixerVolumes), so later
@@ -411,6 +415,7 @@ private:
     // Faz 3 Dilim 1: manifest locales + content_id catalogs + fallback chain.
     Rowl::I18n::LocalizationManager m_localization;
     std::filesystem::path m_saveDirectoryOverride;
+    Rowl::Platform::GameIdentity m_gameIdentity;
     std::string m_defaultBgmTransition = "instant";
     float m_defaultBgmTransitionDurationSeconds = 1.0f;
 

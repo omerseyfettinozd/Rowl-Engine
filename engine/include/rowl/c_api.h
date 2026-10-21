@@ -149,6 +149,9 @@ typedef struct RowlEngine_ApiVersion {
  * noktalarina dokunulmaz. Bit E2a'dan sonraki bos bayrak (2^21): E2a
  * 524288/1048576'yi aldigindan cakismamasi icin 2097152. */
 #define ROWL_ENGINE_CAPABILITY_CHARACTER_FX UINT64_C(2097152)
+/* D01a: game identity (RowlEngine_GetGameIdUtf8 / GetGameIdentitySource /
+ * GetGameIdentityDiagnosticUtf8). Additive. */
+#define ROWL_ENGINE_CAPABILITY_GAME_IDENTITY UINT64_C(4194304)
 
 /** Current additive C API version. This query does not require an engine handle. */
 ROWL_API RowlEngine_ResultCode RowlEngine_GetApiVersion(
@@ -170,6 +173,30 @@ ROWL_API RowlEngine_ResultCode RowlEngine_GetSaveDirectoryUtf8(
 
 /** Same caller-buffer contract as RowlEngine_GetSaveDirectoryUtf8. */
 ROWL_API RowlEngine_ResultCode RowlEngine_GetProfileDirectoryUtf8(
+    RowlEngineHandle handle, char* buffer, uint32_t bufferSize,
+    uint32_t* outRequiredSize);
+
+/* ── Game identity (ROWL_ENGINE_CAPABILITY_GAME_IDENTITY) ─────────────────
+ * Resolved when a project is mounted (RowlEngine_SetProjectDirectory):
+ * rowl/game.json in a mounted package, else loose project.rowlproj
+ * project_uuid, else a path-derived UUIDv5. The id is a lowercase UUID.
+ * Same caller-buffer contract as RowlEngine_GetSaveDirectoryUtf8. */
+typedef enum RowlEngine_GameIdentitySource {
+    ROWL_GAME_IDENTITY_NONE = 0,     /* no project mounted yet (id is empty) */
+    ROWL_GAME_IDENTITY_PACKAGE = 1,
+    ROWL_GAME_IDENTITY_MANIFEST = 2,
+    ROWL_GAME_IDENTITY_DERIVED = 3   /* path-derived fallback; not authored */
+} RowlEngine_GameIdentitySource;
+
+ROWL_API RowlEngine_ResultCode RowlEngine_GetGameIdUtf8(
+    RowlEngineHandle handle, char* buffer, uint32_t bufferSize,
+    uint32_t* outRequiredSize);
+
+/** Returns a RowlEngine_GameIdentitySource value; NONE for a dead handle. */
+ROWL_API int32_t RowlEngine_GetGameIdentitySource(RowlEngineHandle handle);
+
+/** Why a carrier was ignored (empty when none). Same buffer contract. */
+ROWL_API RowlEngine_ResultCode RowlEngine_GetGameIdentityDiagnosticUtf8(
     RowlEngineHandle handle, char* buffer, uint32_t bufferSize,
     uint32_t* outRequiredSize);
 

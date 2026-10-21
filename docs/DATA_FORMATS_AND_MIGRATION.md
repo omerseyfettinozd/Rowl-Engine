@@ -136,6 +136,17 @@ optional fields and ignore unknown fields unless stated otherwise.
   bytes, sorted by path). `tools/verify_release_package.py` requires the
   manifest and cross-checks it against the index (order, path set, sizes;
   SHA-256 re-hash for raw entries).
+- **Game identity (`rowl/game.json`, D01a):** packages built with
+  `--game-manifest project.rowlproj` (or `--game-id <uuid>`) carry an
+  uncompressed `rowl/game.json` (`format = 1`, `game_id` = lowercase UUID
+  from `project_uuid`, `name`, `content_format`). The editor build persists a
+  missing `project_uuid` first and refuses a corrupt manifest. The release
+  verifier requires the entry and, when a loose `project.rowlproj` carries a
+  `project_uuid`, requires equality. The native engine resolves the id at
+  project mount (package, else loose manifest, else a path-derived UUIDv5
+  reported as `Derived`; loose `mods/` files cannot override it) and exposes
+  it through `RowlEngine_GetGameIdUtf8` / `RowlEngine_GetGameIdentitySource`.
+  `rowl/game.json` is a reserved package path.
 - **Release gate:** a valid standalone release carries exactly one
   package at `Assets/packages/game.rowlpkg` (no loose `Assets/` content),
   `mods/` overrides, launchers, the native runtime, `README.txt`, and

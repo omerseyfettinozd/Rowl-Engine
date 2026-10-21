@@ -106,6 +106,7 @@ import argparse
 import base64
 import datetime
 import hashlib
+import json
 import os
 import pathlib
 import re
@@ -113,6 +114,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import uuid
 import zipfile
 
 
@@ -312,6 +314,33 @@ def _portable_load_packager():
         return pack_directory
 
 
+_DEMO_ID_NAMESPACE = uuid.UUID("6f1b7d52-3c1e-4a8e-9a57-0d1c2b6e9f10")
+
+
+def _portable_demo_identity(assets):
+    """D01a: (game_id, name) for the demo package.
+
+    Uses the sample's project.rowlproj project_uuid when it has one; a sample
+    without one gets a deterministic UUIDv5 (so portable-zip stays reproducible).
+    """
+    manifest = pathlib.Path(assets).parent / "project.rowlproj"
+    name = ""
+    if manifest.is_file():
+        try:
+            doc = json.loads(manifest.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            doc = None
+        if isinstance(doc, dict):
+            name = doc.get("name") if isinstance(doc.get("name"), str) else ""
+            candidate = doc.get("project_uuid")
+            if isinstance(candidate, str):
+                try:
+                    return str(uuid.UUID(candidate)), name
+                except ValueError:
+                    pass
+    return str(uuid.uuid5(_DEMO_ID_NAMESPACE, "portable-demo:" + pathlib.Path(assets).parent.name)), name
+
+
 def _portable_demo_package(explicit, work_dir):
     """Return (arcname, bytes, sidecar_bytes) for the demo .rowlpkg."""
     arcname = "game.rowlpkg"
@@ -325,7 +354,8 @@ def _portable_demo_package(explicit, work_dir):
                 f"Portable-zip demo assets were not found: {assets}"
             )
         target = pathlib.Path(work_dir) / arcname
-        _portable_load_packager()(str(assets), str(target))
+        game_id, game_name = _portable_demo_identity(assets)
+        _portable_load_packager()(str(assets), str(target), game_id, game_name)
         data = target.read_bytes()
     digest = hashlib.sha256(data).hexdigest()
     sidecar = f"{digest}  {arcname}\n".encode("utf-8")
