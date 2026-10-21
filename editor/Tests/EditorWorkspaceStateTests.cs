@@ -68,7 +68,7 @@ public sealed class EditorWorkspaceStateTests
         Assert.Equal(
             "{\"version\":1,\"lastSplitId\":3,\"tree\":{\"type\":\"split\",\"id\":\"split-3\",\"axis\":\"x\",\"ratio\":0.14,"
             + "\"a\":{\"type\":\"leaf\",\"view\":\"hierarchy\"},\"b\":{\"type\":\"split\",\"id\":\"split-2\",\"axis\":\"x\",\"ratio\":0.772,"
-            + "\"a\":{\"type\":\"split\",\"id\":\"split-1\",\"axis\":\"y\",\"ratio\":0.78,\"a\":{\"type\":\"leaf\",\"view\":\"node\"},"
+            + "\"a\":{\"type\":\"split\",\"id\":\"split-1\",\"axis\":\"y\",\"ratio\":0.7,\"a\":{\"type\":\"leaf\",\"view\":\"node\"},"
             + "\"b\":{\"type\":\"leaf\",\"view\":\"bottom\"}},\"b\":{\"type\":\"leaf\",\"view\":\"inspector\"}}}}",
             WorkspaceLayoutJson.Serialize(state.Layout));
     }

@@ -46,7 +46,7 @@
     </Style>
     <Style Selector="RadioButton.segment:checked">
       <Setter Property="Background" Value="{DynamicResource AccentButtonHover}" />
-      <Setter Property="BorderBrush" Value="{DynamicResource Accent}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtle}" />
       <Setter Property="Foreground" Value="{DynamicResource PrimaryText}" />
     </Style>
     <Style Selector="Border.chip-border">
@@ -69,7 +69,7 @@
       <Setter Property="Margin" Value="0,0,8,8" />
     </Style>
     <Style Selector="ListBoxItem.chip-item:selected Border.chip-border">
-      <Setter Property="BorderBrush" Value="{DynamicResource Accent}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource SelectionBorder}" />
       <Setter Property="Background" Value="{DynamicResource SurfaceBackground}" />
     </Style>
     <Style Selector="Border.trans-card">
@@ -80,7 +80,7 @@
       <Setter Property="Padding" Value="8" />
     </Style>
     <Style Selector="ListBoxItem.trans-item:selected Border.trans-card">
-      <Setter Property="BorderBrush" Value="{DynamicResource Accent}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource SelectionBorder}" />
       <Setter Property="Background" Value="{DynamicResource SurfaceBackground}" />
     </Style>
     <Style Selector="ListBox.trans-list">

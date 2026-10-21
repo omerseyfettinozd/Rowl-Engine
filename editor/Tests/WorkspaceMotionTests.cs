@@ -492,7 +492,8 @@ public sealed class WorkspaceMotionTests
                 double w0 = host.GetPanelRect(PanelIds.Node).Width;
                 Key(window, PhysicalKey.ArrowUp);
                 AssertNear(h0 + 16, host.GetPanelRect(PanelIds.Bottom).Height, 0.6, "Up grows the strip (divider moves up)");
-                Key(window, PhysicalKey.ArrowDown, RawInputModifiers.Shift); // 64 px, but the strip stops at its 140 px minimum
+                for (int i = 0; i < 2; i++)
+                    Key(window, PhysicalKey.ArrowDown, RawInputModifiers.Shift); // 64 px each, but the strip stops at its 140 px minimum
                 Assert.True(host.GetPanelRect(PanelIds.Bottom).Height >= WorkspacePanelMetrics.BottomMinHeight - 0.5);
                 AssertNear(WorkspacePanelMetrics.BottomMinHeight, host.GetPanelRect(PanelIds.Bottom).Height, 0.5, "Shift+Down clamps at the minimum");
                 Key(window, PhysicalKey.ArrowLeft);

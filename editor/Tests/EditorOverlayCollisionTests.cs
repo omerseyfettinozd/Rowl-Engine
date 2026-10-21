@@ -54,26 +54,27 @@ public sealed class EditorOverlayCollisionTests : IDisposable
     // ── Saf hesap ─────────────────────────────────────────────────────
 
     [Fact]
-    public void Placement_WidePanel_StaysTopRight()
+    public void Placement_SitsBottomLeftAboveCapsule()
     {
         var r = MinimapPlacement.Resolve(new Size(900, 600), new Rect(12, 12, 420, 38), new Size(210, 140));
-        Assert.Equal(new MinimapPlacement.Result(MinimapPlacement.EdgeMargin, true, false), r);
-    }
-
-    [Fact]
-    public void Placement_NarrowPanel_DropsBelowToolRow()
-    {
-        var row = new Rect(12, 12, 420, 38);
-        var r = MinimapPlacement.Resolve(new Size(576, 590), row, new Size(210, 140));
-        Assert.True(r.IsDropped);
         Assert.True(r.IsVisible);
-        Assert.Equal(row.Bottom + MinimapPlacement.Gap, r.Top);
+        Assert.Equal(600 - MinimapPlacement.BottomReserve - 140, r.Top);
     }
 
     [Fact]
-    public void Placement_NarrowAndShortPanel_Hides()
+    public void Placement_NarrowPanel_StaysVisible()
     {
-        var r = MinimapPlacement.Resolve(new Size(400, 240), new Rect(12, 12, 420, 38), new Size(210, 140));
+        // Genişlik araç satırından dar olsa da kart altta durduğu için satıra değmez.
+        var row = new Rect(12, 12, 420, 38);
+        var r = MinimapPlacement.Resolve(new Size(300, 590), row, new Size(210, 140));
+        Assert.True(r.IsVisible);
+        Assert.True(r.Top >= row.Bottom + MinimapPlacement.Gap);
+    }
+
+    [Fact]
+    public void Placement_ShortPanel_HidesInsteadOfCoveringToolRow()
+    {
+        var r = MinimapPlacement.Resolve(new Size(900, 240), new Rect(12, 12, 420, 38), new Size(210, 140));
         Assert.False(r.IsVisible);
     }
 
@@ -105,9 +106,6 @@ public sealed class EditorOverlayCollisionTests : IDisposable
                 var rowRect = RectIn(window, row);
                 var cardRect = RectIn(window, card);
 
-                // Ön koşul: bu boyutta panel gerçekten dar (yan yana sığmıyor).
-                Assert.True(rowRect.Right + MinimapPlacement.Gap > cardRect.Right - cardRect.Width,
-                    $"Ön koşul tutmadı: araç satırı {rowRect}, harita {cardRect}");
                 if (card.IsEffectivelyVisible)
                     Assert.False(rowRect.Intersects(cardRect),
                         $"Mini harita araç satırına biniyor: satır {rowRect}, harita {cardRect}");

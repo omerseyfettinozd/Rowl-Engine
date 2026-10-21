@@ -76,6 +76,7 @@ namespace RowlEngine.Editor.Tests
             Assert.Equal(palette["PrimaryTextColor"], ThemeFallbackColors.Text);
             Assert.Equal(palette["MutedTextColor"], ThemeFallbackColors.Muted);
             Assert.Equal(palette["DimTextColor"], ThemeFallbackColors.Dim);
+            Assert.Equal(palette["SelectionBorderColorValue"], ThemeFallbackColors.Selection);
             Assert.Equal(palette["SuccessColor"], ThemeFallbackColors.Success);
             Assert.Equal(palette["WarningColor"], ThemeFallbackColors.Warning);
             Assert.Equal(palette["ErrorColor"], ThemeFallbackColors.Error);

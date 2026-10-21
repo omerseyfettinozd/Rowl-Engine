@@ -18,6 +18,7 @@ namespace RowlEngine.Editor.Services
         public static readonly Color Text = Color.Parse("#F2EFE6");
         public static readonly Color Muted = Color.Parse("#85858B");
         public static readonly Color Dim = Color.Parse("#66666D");
+        public static readonly Color Selection = Color.Parse("#8A877E");
         public static readonly Color Success = Color.Parse("#9DB58F");
         public static readonly Color Warning = Color.Parse("#D9B47A");
         public static readonly Color Error = Color.Parse("#E3A296");

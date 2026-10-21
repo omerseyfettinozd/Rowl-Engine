@@ -77,9 +77,9 @@
                                         <TextBlock Text="{Binding LastOpenedText}" FontSize="10" Foreground="{DynamicResource DimText}"/>
                                     </StackPanel>
                                     <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="0,0,10,0">
-                                        <Button Content="{l:T Hub.Open}" Command="{Binding OpenCommand}" Background="{DynamicResource AccentButtonBg}" Foreground="{DynamicResource PrimaryText}" BorderThickness="0" CornerRadius="8" Padding="18,8" FontSize="12" FontWeight="SemiBold"/>
+                                        <Button Content="{l:T Hub.Open}" Command="{Binding OpenCommand}" Background="{DynamicResource AccentButtonHover}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderSubtle}" BorderThickness="1" CornerRadius="8" Padding="18,8" FontSize="12" FontWeight="SemiBold"/>
                                         <Button Content="{l:T Hub.RemoveFromList}" Command="{Binding RemoveFromListCommand}" IsVisible="{Binding IsUnavailable}" Background="{DynamicResource ToolbarButtonBg}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1" CornerRadius="8" Padding="12,8" FontSize="12"/>
-                                        <Button Content="{l:T Hub.Other}" Background="{DynamicResource ToolbarButtonBg}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1" CornerRadius="8" FontSize="14" Padding="8,6" MinWidth="36">
+                                        <Button Content="{l:T Hub.Other}" Background="{DynamicResource ToolbarButtonBg}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1" CornerRadius="8" FontSize="12" Padding="12,8" MinWidth="36">
                                             <Button.Flyout>
                                                 <MenuFlyout>
                                                     <MenuItem Header="{l:T Hub.Rename}" Command="{Binding RenameCommand}"/>

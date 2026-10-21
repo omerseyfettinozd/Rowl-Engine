@@ -86,7 +86,7 @@ namespace RowlEngine.Editor
                     ?? throw new Exception("NodeInspectorView not found");
                 var titles = inspector.GetLogicalDescendants().OfType<TextBlock>()
                     .Select(t => t.Text ?? string.Empty).ToArray();
-                if (!titles.Contains("DENETÇİ") || titles.Any(t => t == "INSPECTOR"))
+                if (!titles.Contains("Denetçi") || titles.Any(t => t == "Inspector"))
                     throw new Exception("Inspector panel title diverged.");
 
                 // Faz 2b (K7): canlı dil değişimi — yeniden başlatmadan menü

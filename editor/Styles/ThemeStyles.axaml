@@ -36,6 +36,12 @@
     <Color x:Key="BorderSubtleColorValue">#4A4A52</Color>
     <SolidColorBrush x:Key="BorderColor" Color="{DynamicResource BorderColorValue}"/>
     <SolidColorBrush x:Key="BorderSubtle" Color="{DynamicResource BorderSubtleColorValue}"/>
+    <!-- Sade görünüm: seçim artık parlak kemik kontur değil, soluk kemik-gri kenar +
+         hafif dolgu (düğüm kartı, Denetçi bölmeli seçim, çip/geçiş kartları). -->
+    <Color x:Key="SelectionBorderColorValue">#8A877E</Color>
+    <Color x:Key="SelectionFillColorValue">#232326</Color>
+    <SolidColorBrush x:Key="SelectionBorder" Color="{DynamicResource SelectionBorderColorValue}"/>
+    <SolidColorBrush x:Key="SelectionFill" Color="{DynamicResource SelectionFillColorValue}"/>
 
     <!-- ── Metin Renkleri ──────────────────────────────────────────────── -->
     <Color x:Key="PrimaryTextColor">#F2EFE6</Color>
@@ -194,6 +200,43 @@
     <SolidColorBrush x:Key="TreeViewItemBackgroundSelected" Color="#2E2D2D"/>
     <SolidColorBrush x:Key="TreeViewItemBackgroundSelectedPointerOver" Color="#353434"/>
     <SolidColorBrush x:Key="TreeViewItemForegroundSelected" Color="{DynamicResource PrimaryTextColor}"/>
+
+    <!-- Sade görünüm: açılır pencereler (menü, sağ-tık, açılır kutu listesi, ipucu, flyout)
+         Fluent'in açık gri (#2B2B2B) yüzeyini kullanıyordu; editörün koyu panel tonuna
+         ve ince kenarına çekilir, üstüne gelince seçim dolgusu. -->
+    <SolidColorBrush x:Key="ComboBoxBackground" Color="{DynamicResource InputBackgroundColor}"/>
+    <SolidColorBrush x:Key="ComboBoxBackgroundPointerOver" Color="{DynamicResource InputBackgroundColor}"/>
+    <SolidColorBrush x:Key="ComboBoxBackgroundPressed" Color="{DynamicResource InputBackgroundColor}"/>
+    <SolidColorBrush x:Key="ComboBoxBackgroundUnfocused" Color="{DynamicResource InputBackgroundColor}"/>
+    <SolidColorBrush x:Key="ComboBoxBorderBrush" Color="{DynamicResource BorderSubtleColorValue}"/>
+    <SolidColorBrush x:Key="ComboBoxBorderBrushPointerOver" Color="{DynamicResource MutedTextColor}"/>
+    <SolidColorBrush x:Key="ComboBoxBorderBrushPressed" Color="{DynamicResource MutedTextColor}"/>
+    <SolidColorBrush x:Key="ComboBoxDropDownBackground" Color="{DynamicResource PanelBackgroundColor}"/>
+    <SolidColorBrush x:Key="ComboBoxDropDownBorderBrush" Color="{DynamicResource BorderColorValue}"/>
+    <SolidColorBrush x:Key="ComboBoxItemBackgroundPointerOver" Color="{DynamicResource AccentButtonHoverColor}"/>
+    <SolidColorBrush x:Key="ComboBoxItemBackgroundSelected" Color="{DynamicResource SelectionFillColorValue}"/>
+    <SolidColorBrush x:Key="ComboBoxItemBackgroundSelectedPointerOver" Color="{DynamicResource AccentButtonHoverColor}"/>
+    <SolidColorBrush x:Key="MenuFlyoutPresenterBackground" Color="{DynamicResource PanelBackgroundColor}"/>
+    <SolidColorBrush x:Key="MenuFlyoutPresenterBorderBrush" Color="{DynamicResource BorderColorValue}"/>
+    <SolidColorBrush x:Key="MenuFlyoutItemBackgroundPointerOver" Color="{DynamicResource AccentButtonHoverColor}"/>
+    <SolidColorBrush x:Key="MenuFlyoutItemBackgroundPressed" Color="{DynamicResource SelectionFillColorValue}"/>
+    <SolidColorBrush x:Key="MenuFlyoutItemForeground" Color="{DynamicResource SecondaryTextColor}"/>
+    <SolidColorBrush x:Key="MenuFlyoutItemForegroundPointerOver" Color="{DynamicResource PrimaryTextColor}"/>
+    <SolidColorBrush x:Key="MenuFlyoutItemForegroundPressed" Color="{DynamicResource PrimaryTextColor}"/>
+    <SolidColorBrush x:Key="MenuFlyoutItemKeyboardAcceleratorTextForeground" Color="{DynamicResource MutedTextColor}"/>
+    <SolidColorBrush x:Key="FlyoutPresenterBackground" Color="{DynamicResource PanelBackgroundColor}"/>
+    <SolidColorBrush x:Key="FlyoutBorderThemeBrush" Color="{DynamicResource BorderColorValue}"/>
+    <SolidColorBrush x:Key="ToolTipBackground" Color="{DynamicResource PanelBackgroundColor}"/>
+    <SolidColorBrush x:Key="ToolTipBorderBrush" Color="{DynamicResource BorderColorValue}"/>
+    <SolidColorBrush x:Key="ToolTipForeground" Color="{DynamicResource SecondaryTextColor}"/>
+
+    <!-- Sade görünüm: Fluent kaydırma çubuğu açık gri çizgi olarak ağaç/ızgara
+         kenarında parlıyordu; ince çizgi ve tutamak sessiz kenar tonlarına çekilir. -->
+    <Color x:Key="ScrollBarThumbBackgroundColor">#4A4A52</Color>
+    <Color x:Key="ScrollBarPanningThumbBackgroundColor">#3A3A40</Color>
+    <SolidColorBrush x:Key="ScrollBarPanningThumbBackground" Color="#3A3A40"/>
+    <SolidColorBrush x:Key="ScrollBarThumbFillPointerOver" Color="#5C5C64"/>
+    <SolidColorBrush x:Key="ScrollBarThumbFillPressed" Color="#6E6E76"/>
 
     <!-- ── Compatibility & Helper Aliases ──────────────────────────────── -->
     <SolidColorBrush x:Key="CardBackground" Color="{DynamicResource NodeCardBgColor}"/>

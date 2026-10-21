@@ -13,9 +13,12 @@ internal static class StoryGraphNodeHydrator
         string title = nodeJson.TryGetProperty("title", out var titleValue)
             ? titleValue.GetString() ?? $"Node #{nodeId}"
             : $"Node #{nodeId}";
+        // Konumsuz düğümler ızgaraya dizilir. Adım 360: kart 240 px, seçim çıkışı etiketi
+        // (en çok 84 px) kartın sağındaki boşluğa sığar; 280 adımda etiketler sonraki
+        // kartın altında kalıp "Ans", "Writ" gibi kesiliyordu.
         double x = nodeJson.TryGetProperty("editor_x", out var xValue)
             ? xValue.GetDouble()
-            : 60 + (nodeIndex % 5) * 280;
+            : 60 + (nodeIndex % 5) * 360;
         double y = nodeJson.TryGetProperty("editor_y", out var yValue)
             ? yValue.GetDouble()
             : 80 + (nodeIndex / 5) * 220;

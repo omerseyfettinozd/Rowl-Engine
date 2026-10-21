@@ -107,7 +107,7 @@ public sealed class EditorInspectorOverflowTests : IDisposable
             // Başlıklar korunur (Test 39 paritesi).
             var texts = view.GetLogicalDescendants().OfType<TextBlock>()
                 .Select(t => t.Text).ToList();
-            if (!texts.Contains("DENETÇİ") || !texts.Contains("BİLEŞENLER"))
+            if (!texts.Contains("Denetçi") || !texts.Contains("BİLEŞENLER"))
                 throw new Exception("Inspector headers must survive the overflow edit");
 
             // Kart 1: nesne işlemleri menüsü (sıra + mevcut komut kablosu).

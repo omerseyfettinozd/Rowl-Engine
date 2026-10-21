@@ -393,8 +393,9 @@ public static class EditorWorkspaceLayouts
     /// <summary>Center column's share next to the Inspector: Inspector = 0.228 × (1233 − 6) ≈ 280 px.</summary>
     public const double InspectorSplitRatio = 0.772;
 
-    /// <summary>Center's share above the bottom strip: strip = 0.22 × (820 − 6) ≈ 179 px.</summary>
-    public const double BottomSplitRatio = 0.78;
+    /// <summary>Center's share above the bottom strip: strip = 0.30 × (820 − 6) ≈ 244 px
+    /// (0.22 left the asset cards cut off below their preview — names never showed).</summary>
+    public const double BottomSplitRatio = 0.70;
 
     /// <summary>Split screen halves.</summary>
     public const double SplitScreenRatio = 0.5;

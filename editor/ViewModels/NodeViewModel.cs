@@ -60,12 +60,12 @@ namespace RowlEngine.Editor.ViewModels
             // Temporary search-jump highlight wins so the focused card is
             // unmistakable; selection stays second, start badge last.
             // Kart kenarlığı durum renkleri: arama-vurgusu (dikkat) > seçim
-            // (kemik) > başlangıç (başarı) > varsayılan (sınır). Tema
+            // (soluk kemik) > başlangıç (başarı) > varsayılan (sınır). Tema
             // değişimini takip eder (runtime token okuma).
             BorderColor = IsSearchHighlighted
                 ? ThemeFallbackColors.BrushHex("WarningBrush", ThemeFallbackColors.Warning)
                 : IsSelected
-                    ? ThemeFallbackColors.BrushHex("PrimaryText", ThemeFallbackColors.Text)
+                    ? ThemeFallbackColors.BrushHex("SelectionBorder", ThemeFallbackColors.Selection)
                     : IsStartNode
                         ? ThemeFallbackColors.BrushHex("SuccessBrush", ThemeFallbackColors.Success)
                         : ThemeFallbackColors.BrushHex("BorderColor", ThemeFallbackColors.Border);

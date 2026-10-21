@@ -57,6 +57,8 @@
         <Setter Property="Padding" Value="12,6"/>
         <Setter Property="Foreground" Value="{DynamicResource PrimaryText}"/>
         <Setter Property="FontSize" Value="{DynamicResource FontSizeBody}"/>
+        <!-- MinHeight 32'de metin üste yapışıyordu ("Liste", "Üst"). -->
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
     </Style>
     <Style Selector="Button.ghost:pointerover /template/ ContentPresenter#PART_ContentPresenter">
         <Setter Property="Background" Value="{DynamicResource AccentButtonHover}"/>

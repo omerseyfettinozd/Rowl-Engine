@@ -98,7 +98,7 @@
                            FontSize="{DynamicResource FontSizeBody}"
                            Margin="12,10,12,6"/>
                 <Border Grid.Row="1" Margin="16,0,8,8" Padding="8,0,0,0"
-                        BorderBrush="{DynamicResource BorderSubtle}" BorderThickness="1,0,0,0">
+                        BorderBrush="{DynamicResource BorderColor}" BorderThickness="1,0,0,0">
                     <ListBox ItemsSource="{Binding HierarchyViewModel.FilteredObjects}"
                              SelectedItem="{Binding HierarchyViewModel.SelectedObject, Mode=TwoWay}"
                              Background="Transparent"

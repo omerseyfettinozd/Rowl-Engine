@@ -4,7 +4,10 @@
              xmlns:comp="using:RowlEngine.Editor.ViewModels.Components"
              xmlns:l="using:RowlEngine.Editor.Services.Strings"
              x:Class="RowlEngine.Editor.Views.NodeControl"
-             x:DataType="vm:NodeViewModel">
+             x:DataType="vm:NodeViewModel"
+             ClipToBounds="False">
+    <!-- UserControl kendi 300 px sınırında kırpıyordu: kartın sağındaki seçim etiketleri
+         ("Answer the signal") ~30 px'de kesilip "Answe" görünüyordu. -->
 
     <Canvas Width="300" Height="{Binding NodeCardHeight}" Background="Transparent" ClipToBounds="False" Opacity="{Binding FilterOpacity}">
         <!-- renk etiketi şeridi (yoksa gizli) -->
@@ -69,7 +72,7 @@
                 <DataTemplate x:DataType="comp:ChoiceOptionViewModel">
                     <Border Tag="{Binding OptionId}" Width="30" Height="30" Background="Transparent" Cursor="Hand" ClipToBounds="False" ToolTip.Tip="{l:T NodeControl.ChoiceOutputTooltip}">
                         <Canvas Width="30" Height="30" ClipToBounds="False">
-                            <Ellipse Canvas.Left="10" Canvas.Top="10" Width="10" Height="10" Fill="{DynamicResource Accent}"/>
+                            <Ellipse Canvas.Left="10" Canvas.Top="10" Width="10" Height="10" Fill="{DynamicResource NodePortStroke}"/>
                             <TextBlock Classes="choicePortLabel" Canvas.Left="22" Canvas.Top="0" MaxWidth="84" Text="{Binding Text}" ToolTip.Tip="{Binding Text}"
                                        FontSize="9" Foreground="{DynamicResource MutedText}" TextTrimming="CharacterEllipsis"/>
                         </Canvas>

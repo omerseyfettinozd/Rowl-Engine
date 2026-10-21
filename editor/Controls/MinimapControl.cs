@@ -299,10 +299,10 @@ namespace RowlEngine.Editor.Controls
             new SolidColorBrush(Color.FromArgb(45, 58, 58, 64));
 
         private static readonly IPen s_viewportPen =
-            new Pen(new SolidColorBrush(Color.FromArgb(115, 242, 239, 230)), 1);
+            new Pen(new SolidColorBrush(Color.FromArgb(70, 242, 239, 230)), 1);
 
         private static readonly IBrush s_viewportFillBrush =
-            new SolidColorBrush(Color.FromArgb(18, 242, 239, 230));
+            new SolidColorBrush(Color.FromArgb(10, 242, 239, 230));
 
         private static readonly Dictionary<string, IBrush> s_groupBrushes = new(StringComparer.OrdinalIgnoreCase);
 

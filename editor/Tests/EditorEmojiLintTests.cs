@@ -25,7 +25,7 @@ namespace RowlEngine.Editor.Tests
         private static readonly Dictionary<string, string[]> AllowedHex = new()
         {
             ["SettingsDialog.axaml"] = new[] { "#111113", "#19191C", "#85858B", "#F2EFE6" },
-            ["ThemeFallbackColors.cs"] = new[] { "#131315", "#29292D", "#66666D", "#85858B", "#9DB58F", "#A9A3C9", "#D9B47A", "#E3A296", "#F2EFE6" },
+            ["ThemeFallbackColors.cs"] = new[] { "#131315", "#29292D", "#66666D", "#85858B", "#9DB58F", "#A9A3C9", "#D9B47A", "#E3A296", "#F2EFE6", "#8A877E" },
             ["DialogueComponentViewModel.cs"] = new[] { "#F1F5F9", "#38BDF8", "#0F0F1A", "#00F0FF", "#0A0A12", "#334155", "#000000", "#F59E0B", "#1E1E2E", "#EC4899" },
             ["ChoiceComponentViewModel.cs"] = new[] { "#111827", "#374151", "#6B7280", "#F5E6C8", "#E8C98E", "#241A12", "#7C5C3B", "#450A0A", "#B91C1C", "#FEE2E2", "#EF4444", "#1E293B", "#0EA5E9", "#FFFFFF", "#38BDF8", "#475569" },
             ["CanvasGroupViewModel.cs"] = new[] { "#3B82F6" },
@@ -36,7 +36,8 @@ namespace RowlEngine.Editor.Tests
             ["SettingsViewModel.cs"] = new[] { "#000000", "#070709", "#0A0A0B", "#0B0B0D", "#0F0F12", "#111113", "#111114", "#131315", "#18181B", "#19191C", "#19191D", "#1A1A1E", "#1E1E22", "#202023", "#222226", "#26262B", "#29292D", "#2B2A36", "#2C332C", "#3A3124", "#3E2B26", "#4A4A52", "#66666D", "#74736C", "#847F73", "#85858B", "#9DB58F", "#9E988A", "#A9A3C9", "#B9B3A3", "#D4CBB6", "#D9B47A", "#DAD7CF", "#E2DBC9", "#E3A296", "#EDE8DC", "#F2EFE6", "#FFFFFF",
                 /* Faz 6 görsel uyum token'ları */ "#999991", "#A5A49E", "#2E2E32", "#171719", "#ADABA4", "#ACA89D",
                 /* Faz 7 Lua renklendirmesi */ "#727E78", "#BFA8DA", "#C5CDA9", "#C9B089",
-                /* Faz 8 A1 tuval nokta ızgarası */ "#303034" },
+                /* Faz 8 A1 tuval nokta ızgarası */ "#303034",
+                /* Sade görünüm: yumuşak seçim + kaydırma çubuğu */ "#8A877E", "#232326", "#3A3A40" },
         };
         private static readonly string[] BannedSymbols = new[]
         {

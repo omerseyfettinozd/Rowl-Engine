@@ -86,7 +86,7 @@ internal static class EditorWorkspaceThemeTests
         // Faz 5 D3: panel boyutları sabit piksel özelliklerinden değil, ağaç oranlarından
         // WorkspaceHost'ta çizilir. Davranış eşdeğeri ölçülür: 1440 px genişlikte (çalışma
         // alanı 1440×820 = 1440×900 pencere − üst çubuk/durum çubuğu) varsayılan yerleşim
-        // Hiyerarşi ≈ 200, Denetçi ≈ 280, alt şerit ≈ 180 px (±%10); gizli panel yer tutmaz.
+        // Hiyerarşi ≈ 200, Denetçi ≈ 280, alt şerit ≈ 244 px (±%10); gizli panel yer tutmaz.
         Avalonia.Threading.Dispatcher.UIThread.Invoke(() => RunWorkspaceSizes(mainVm));
         Console.WriteLine("  [PASS] Hidden side panels release workspace width");
         Console.WriteLine(
@@ -145,7 +145,7 @@ internal static class EditorWorkspaceThemeTests
 
             Near("Default Hierarchy width", Measure(PanelIds.Hierarchy).Width, 200);
             Near("Default Inspector width", Measure(PanelIds.Inspector).Width, 280);
-            Near("Default bottom strip height", Measure(PanelIds.Bottom).Height, 180);
+            Near("Default bottom strip height", Measure(PanelIds.Bottom).Height, 244);
             double nodeWidth = Measure(PanelIds.Node).Width;
 
             mainVm.ShowPanel("Hierarchy");
@@ -172,7 +172,7 @@ internal static class EditorWorkspaceThemeTests
                 throw new Exception("Closing Assets incorrectly hid the shared strip");
             if (mainVm.BottomPanelActiveTab != 1)
                 throw new Exception("Active tab did not fall back to the visible Log tab");
-            Near("Shared strip height after Assets closed", Measure(PanelIds.Bottom).Height, 180);
+            Near("Shared strip height after Assets closed", Measure(PanelIds.Bottom).Height, 244);
             mainVm.ShowPanel("Log");
             if (mainVm.IsLogPanelVisible || mainVm.IsBottomPanelVisible)
                 throw new Exception("Bottom workspace remained visible after both tabs were closed");
@@ -181,7 +181,7 @@ internal static class EditorWorkspaceThemeTests
             mainVm.ShowPanel("Assets");
             if (!mainVm.IsAssetsPanelVisible || !mainVm.IsBottomPanelVisible || mainVm.BottomPanelActiveTab != 0)
                 throw new Exception("Assets tab did not restore the shared strip");
-            Near("Restored strip height", Measure(PanelIds.Bottom).Height, 180);
+            Near("Restored strip height", Measure(PanelIds.Bottom).Height, 244);
             mainVm.ShowPanel("Backlog");
             if (!mainVm.IsBacklogPanelVisible || mainVm.BottomPanelActiveTab != 2 || !mainVm.IsBottomPanelVisible)
                 throw new Exception("Dialogue backlog panel did not become an independent bottom workspace");
