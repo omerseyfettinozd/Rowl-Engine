@@ -52,6 +52,23 @@ wins and this document must be patched.
 - The status line always shows `N satır: T çevrilmiş, M eksik, C değişmiş`
   plus any load/save warnings; I/O failures never throw out of the desk.
 
+## 3b. Source-locale sync on save (C01 BUG-1)
+
+The story graph text is the source-locale text, but the runtime resolves
+catalogs before node text (active -> default -> original). So every graph
+save (`StoryGraphSaveService`, `StoryGraphDocumentWriter`) runs
+`SourceCatalogSyncService`:
+
+- default-locale catalog row for a `content_id` is rewritten to the graph
+  speaker/text (`alt_text` kept, `source_hash` stamped); plural-table rows
+  and corrupt catalogs are never touched;
+- other locales keep their translation; a row without `source_hash` whose
+  source changed is stamped with the OLD source hash, so the desk shows it
+  as Changed (rows already carrying a hash are compared as before);
+- the preview remounts the project before reloading the graph
+  (`EditorSceneSyncService.ReloadStoryGraphIntoEngine`) so the engine
+  re-reads the catalogs. Packaged builds read the same catalog files.
+
 ## 4. Pseudo-locale
 
 - Every Latin letter maps to a wider accented lookalike

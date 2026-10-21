@@ -457,8 +457,11 @@ internal static class StoryGraphSaveService
                 return new SaveWriteResult(SaveWriteStatus.Superseded);
 
             Directory.CreateDirectory(assetsJsonPath);
+            var sourceBefore = Localization.SourceCatalogSyncService.CaptureBefore(assetsJsonPath);
             ProjectFileSystem.WriteAllTextAtomically(
                 Path.Combine(assetsJsonPath, "full_story_graph.json"), fullGraphJson);
+            // Graph metni kaynak-dil metnidir; katalog onu gölgelemesin.
+            Localization.SourceCatalogSyncService.SyncAfterSave(assetsJsonPath, sourceBefore, log);
 
             if (sequence != latestSequence())
                 return new SaveWriteResult(SaveWriteStatus.Superseded);

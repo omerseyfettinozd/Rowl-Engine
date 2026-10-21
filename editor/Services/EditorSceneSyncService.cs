@@ -84,7 +84,16 @@ public static class EditorSceneSyncService
     {
         string graphPath = Path.Combine(assetsJsonPath, "full_story_graph.json");
         if (File.Exists(graphPath))
+        {
+            // Katalog motorda proje bağlanırken yüklenir; kayıt katalogları
+            // güncellediyse (kaynak-dil eşitleme) önizleme eski satırı
+            // göstermesin diye önce yeniden bağla.
+            string? root = Localization.SourceCatalogSyncService.ProjectRootFromAssetsJson(assetsJsonPath);
+            if (root is not null &&
+                Directory.Exists(Localization.TranslationStatusService.GetLocalesDirectory(root)))
+                host.SetProjectDirectoryChecked(root, out _);
             host.LoadStoryGraph(graphPath);
+        }
     }
 
     /// <summary>
