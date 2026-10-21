@@ -73,12 +73,48 @@ valid only when all of these fields match:
 - operating system;
 - process architecture (`x86_64` or `arm64` for supported releases);
 - CPU model and logical CPU count;
-- machine identity.
+- machine identity;
+- power profile (`power_profile`: cpufreq governor/EPP, or the
+  `ROWL_BENCHMARK_POWER_PROFILE` / `ROWL_EDITOR_BENCHMARK_POWER_PROFILE`
+  override). A `power-saver` series is never compared with a performance one.
 
 Schema-v1 reports remain readable and comparable only with other schema-v1
 reports. They must never be compared to schema-v2 reports. Absolute release
 thresholds may be set only after a reference-machine series exists for the
 same build and fixture.
+
+### C03 reference series (2026-10-21)
+
+Machine `Chaple-Pc` (Ryzen 9 8940HX, 16 logical CPUs, Linux x86_64),
+`power_profile` = `powersave/power` (the laptop's power-saver profile, i.e.
+the slow end). Editor = Debug, native = Release, 5 repetitions unless noted,
+2,000-node/6,000-edge fixture. CV stayed between 0.2 % and 5 %.
+
+| Metric | Median | Max | Budget (this identity) |
+|---|---|---|---|
+| `scale_graph_load_ms` (parse + hydrate) | 76 ms | 79 ms | 150 ms |
+| `scale_graph_viewmodel_population_ms` ¹ | 36 ms | 38 ms | 100 ms |
+| `scale_graph_worst_case_search_ms` | 1.0 ms | 1.1 ms | 2 ms |
+| `scale_graph_serialize_ms` | 140 ms | 142 ms | 250 ms |
+| `scale_graph_atomic_save_ms` | 5.2 ms | 5.5 ms | 10 ms |
+| `scale_graph_drag_step_ms` ¹ | 2.5 ms | 3.6 ms | 8 ms |
+| `scale_graph_visible_query_ms` ¹ | 0.84 ms | 1.4 ms | 3 ms |
+| `scale_graph_selection_input_ms` | 0.074 ms | 0.078 ms | 0.2 ms |
+| `scale_graph_managed_memory_bytes` | 27.7 MB | 27.7 MB | 40 MB |
+| native `first_frame_ms` (default scene) | 101 ms | — | 160 ms |
+| native `steady_frame_ms` (default scene) | 6.5 ms | — | 10 ms |
+| native process RSS | 129 MB | — | 170 MB |
+
+¹ 3 repetitions after the C03 fixes (`3756168`, `82b0a1a`); population was
+8,907 ms before them (per-item canvas index rebuild + per-add subgraph badge
+rescan). Quadratic regressions are additionally locked by count-based tests
+(`EditorGraphLoadBulkTests`, `EditorGraphBulkOpsTests`), which do not depend on
+the power profile.
+
+Budgets are ≈ 1.5 × max (2 × for noisy metrics) and apply only to the identity
+above; another power profile or machine needs its own series. Exact metric key
+names are those written by `EditorScaleBenchmark`; native rows use the
+`native-default-v2` fixture of `tests/test_native_performance_benchmarks.cpp`.
 
 ## Phase 0 remaining proof artifacts
 
