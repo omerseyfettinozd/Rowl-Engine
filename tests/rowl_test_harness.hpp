@@ -95,6 +95,7 @@ void test_logger_concurrency();
 void test_aspect_guardian();
 void test_msdf_renderer();
 void test_gpu_truetype_text();
+void test_pause_overlay_visible_window();  // C02 BUG-2: gorunur pencerede pause overlay
 void test_game_state();
 void test_audio_engine();
 void test_audio_device_recovery();

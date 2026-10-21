@@ -148,6 +148,7 @@ int main(int argc, char* argv[]) {
     test_aspect_guardian();
     test_msdf_renderer();
     test_gpu_truetype_text();
+    test_pause_overlay_visible_window();
     test_game_state();
     test_audio_engine();
     test_audio_device_recovery();

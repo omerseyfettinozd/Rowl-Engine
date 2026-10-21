@@ -10,13 +10,15 @@
 
 #include "rowl/core/pause_menu.hpp"
 #include "rowl/render/aspect_guardian.hpp"
+#include "rowl/render/font_renderer.hpp"
+#include "rowl/render/gpu_truetype_text.hpp"
 
 #include <SDL3/SDL.h>
 
 namespace Rowl::Render {
 
 void Window::renderPauseMenuOverlay(const Rowl::Core::PauseMenuView& view) {
-    if (!m_sdlRenderer || !m_offscreenSurface || !view.open) return;
+    if (!m_sdlRenderer || !view.open) return;
     using LM = Rowl::Core::PauseMenuLayout;
     const ViewportMetrics metrics =
         AspectGuardian::calculateViewport(m_width, m_height, 1920, 1080);
@@ -42,20 +44,37 @@ void Window::renderPauseMenuOverlay(const Rowl::Core::PauseMenuView& view) {
     SDL_SetRenderDrawColor(m_sdlRenderer, 56, 189, 248, 255);
     SDL_RenderRect(m_sdlRenderer, &panel);
 
+    // C02 BUG-2: gorunur pencerede overlay her kare dim basar; donmus hikaye
+    // karesi onbellekten atlanirsa arka tampon bos kalir / dim ust uste biner
+    // (siyah ekran, resize sonrasi dahil). Sonraki kare hikayeyi tam cizsin.
+    if (!m_isOffscreen) invalidateFrameCache();
+
     // Offscreen software path: flush queued rects before direct text writes.
     if (m_isOffscreen) {
         SDL_RenderPresent(m_sdlRenderer);
     }
     if (!m_fontRenderer || !m_fontRenderer->isLoaded()) return;
 
+    // C02 BUG-2: gorunur (GPU/standalone) pencerede offscreen yuzey yok; metin
+    // ayni FontRenderer ile dokuya cizilip renderer kuyruguna eklenir (rect'lerle
+    // dogru sirada). Offscreen kolda dogrudan yuzeye yazilir.
+    auto drawText = [&](const std::string& text, float x, float y, float px, SDL_Color color,
+                        float w, float h) {
+        if (m_offscreenSurface) {
+            m_fontRenderer->renderText(m_offscreenSurface, text, x, y, px, color, w, h, "Left");
+        } else {
+            drawTrueTypeTextOnGpu(m_sdlRenderer, m_fontRenderer.get(), nullptr, text, x, y, px,
+                                  color, w, h, "Left");
+        }
+    };
+
     const SDL_Color titleColor{56, 189, 248, 255};
     const SDL_Color textColor{241, 245, 249, 255};
     const SDL_Color dimColor{148, 163, 184, 255};
     float tx = 0.0f, ty = 0.0f;
     toPhys(LM::kRowX, 170.0f, tx, ty);
-    m_fontRenderer->renderText(m_offscreenSurface, view.title, tx, ty,
-                               40.0f * metrics.scaleFactor, titleColor,
-                               LM::kRowW * metrics.scaleFactor, 60.0f * metrics.scaleFactor, "Left");
+    drawText(view.title, tx, ty, 40.0f * metrics.scaleFactor, titleColor,
+             LM::kRowW * metrics.scaleFactor, 60.0f * metrics.scaleFactor);
 
     const int rows = static_cast<int>(view.rows.size());
     for (int i = 0; i < rows; ++i) {
@@ -79,20 +98,17 @@ void Window::renderPauseMenuOverlay(const Rowl::Core::PauseMenuView& view) {
         }
         const float fontPx = 24.0f * metrics.scaleFactor;
         const float textY = ry + rowH * 0.5f - fontPx * 0.35f;
-        m_fontRenderer->renderText(m_offscreenSurface, row.label, rx + 18.0f * metrics.scaleFactor,
-                                   textY, fontPx, selected ? titleColor : textColor,
-                                   rowW * 0.55f, rowH, "Left");
+        drawText(row.label, rx + 18.0f * metrics.scaleFactor, textY, fontPx,
+                 selected ? titleColor : textColor, rowW * 0.55f, rowH);
         if (!row.value.empty()) {
-            m_fontRenderer->renderText(m_offscreenSurface, row.value, rx + rowW * 0.55f,
-                                       textY, fontPx, dimColor, rowW * 0.4f, rowH, "Left");
+            drawText(row.value, rx + rowW * 0.55f, textY, fontPx, dimColor, rowW * 0.4f, rowH);
         }
     }
 
     float hx = 0.0f, hy = 0.0f;
     toPhys(LM::kRowX, LM::kPanelY + LM::kPanelH - 44.0f, hx, hy);
-    m_fontRenderer->renderText(m_offscreenSurface, view.hint, hx, hy,
-                               19.0f * metrics.scaleFactor, dimColor,
-                               LM::kRowW * metrics.scaleFactor, 30.0f * metrics.scaleFactor, "Left");
+    drawText(view.hint, hx, hy, 19.0f * metrics.scaleFactor, dimColor,
+             LM::kRowW * metrics.scaleFactor, 30.0f * metrics.scaleFactor);
 }
 
 }  // namespace Rowl::Render

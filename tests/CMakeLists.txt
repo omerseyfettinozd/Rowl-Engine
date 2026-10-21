@@ -7,6 +7,7 @@ add_executable(rowl_tests
     test_aspect_guardian.cpp
     test_msdf_renderer.cpp
     test_gpu_truetype_text.cpp
+    test_pause_overlay_visible_window.cpp
     test_game_state.cpp
     test_audio_engine.cpp
     test_audio_device_recovery.cpp
