@@ -65,8 +65,13 @@ internal static class EditorRuntimeStateTests
             if (!host.SaveGameSlot(10))
                 throw new Exception("EngineHost.SaveGameSlot(10) failed");
 
-            if (!File.Exists(Path.Combine(testProjectRoot, "saves", "save_slot_10.json")))
-                throw new Exception("Game save was not isolated under the selected project");
+            // D01b: a project with a stored project_uuid saves per game under the
+            // user-data root; one without keeps <project>/saves. Either way the
+            // slot lands in the data dir the engine reports for this project.
+            var data = host.InvokeOnEngineThread(GameDataBridge.Read, GameDataInfo.None);
+            if (string.IsNullOrEmpty(data.DataDirectory) ||
+                !File.Exists(Path.Combine(data.DataDirectory, "saves", "save_slot_10.json")))
+                throw new Exception("Game save was not isolated under the engine-reported game data directory");
 
             if (!host.HasSaveSlot(10))
                 throw new Exception("EngineHost.HasSaveSlot(10) failed");

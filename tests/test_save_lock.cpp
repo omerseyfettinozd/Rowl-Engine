@@ -8,8 +8,8 @@
 //   C  (#45): koşul yan-etkisi saflığı (ConditionPurityGuard).
 //   T  (#49): sahipsiz-pencerede Save/Load/Step/Rewind claim-or-reject
 //             (WrongThread(14), tufan-testi).
-//   D2 (#53): kayıt-dizini yazılabilirlik yoklaması (set-time refuse,
-//             IoError(7); getter yine yol döner).
+//   D2 (#53): D01b ile sert-ret kalktı: salt-okunur kayıt dizini mount'u
+//             reddetmez; yazma hatası save-anında (D1) yüksek sesle çıkar.
 //   G  (#70): graf-kimliği kilidi (node 102 grafında node 101 kaydı reddedilir).
 #include <cstdint>
 #include <cstdio>
@@ -490,11 +490,9 @@ void test_save_lock() {
         RowlEngine_Destroy(t);
     }
 
-    // ---- D2 (#53): set-time yazılabilirlik yoklaması ------------------------
-    // Yazılamaz saves/ ile SetProjectDirectory projeyi hiç mount etmeden
-    // reddedilir (IoError(7) + op); override kurulmaz, getter varsayılan
-    // yolu döndürmeye devam eder. Kaldırma-sonrası mount başarılıdır
-    // (mekanizma-duyarlılık). Enjektör D1 ile aynı (chmod/yedek-bloker).
+    // ---- D2 (#53, D01b ile yeniden yazıldı): yazılamaz saves/ -------------
+    // Eski sert-ret kalktı (bkz. aşağıdaki blok). Enjektör D1 ile aynı
+    // (chmod/yedek-bloker).
     {
         RowlEngineHandle h = RowlEngine_Create();
         checkSave(h != nullptr, "D2: Create failed");
@@ -525,37 +523,20 @@ void test_save_lock() {
             blocker << "blocked";
         }
 
+        // D01b: kayıtlar artık kurulum dizininde yaşamaz; salt-okunur kurulum
+        // dizini mount'u REDDETMEZ (eski D4 sert-reddi kalktı). Proje-yerel
+        // saves/ (kimliksiz/Derived oyun) yazılamazsa bile mount kurulur ve
+        // yol raporlanır; yazma hatası save-anında yüksek sesle çıkar (D1).
         RowlEngine_SetProjectDirectory(h, root.c_str());
-        checkSave(RowlEngine_GetLastResultCode(h) == ROWL_RESULT_IO_ERROR,
-                  "D2: unwritable saves must report IoError");
-        checkSave(std::string(RowlEngine_GetLastResultOperation(h)) ==
-                      "set_project_directory",
-                  "D2: refuse must stamp op=set_project_directory");
-        // Override kurulmadı: getter reddedilen yolu değil, sözleşmeyi döner.
-        const std::string dirAfterRefuse = saveDirOf(h);
-        checkSave(!dirAfterRefuse.empty(),
-                  "D2: save-directory getter must still return a path");
-        checkSave(std::filesystem::path(dirAfterRefuse) !=
-                      std::filesystem::path(savesPath),
-                  "D2: refused override must not be installed");
-
-        // Kaldırma: mount başarılı olur, override kurulur (duyarlılık).
-        if (readOnlyHolds) {
-            std::filesystem::permissions(
-                savesPath,
-                std::filesystem::perms::owner_write |
-                    std::filesystem::perms::group_write |
-                    std::filesystem::perms::others_write,
-                std::filesystem::perm_options::add, ecD);
-        } else {
-            std::filesystem::remove(savesPath, ecD);
-        }
-        RowlEngine_SetProjectDirectory(h, root.c_str());
-        checkSave(RowlEngine_GetLastResultCode(h) != ROWL_RESULT_IO_ERROR,
-                  "D2: writable saves must not report IoError");
+        checkSave(RowlEngine_GetLastResultCode(h) != ROWL_RESULT_IO_ERROR ||
+                      std::string(RowlEngine_GetLastResultOperation(h)) !=
+                          "set_project_directory",
+                  "D2: read-only saves dir must not refuse the mount");
+        checkSave(RowlEngine_GetGameIdentitySource(h) == ROWL_GAME_IDENTITY_DERIVED,
+                  "D2: mount must have completed (identity resolved)");
         checkSave(std::filesystem::path(saveDirOf(h)) ==
                       std::filesystem::path(savesPath),
-                  "D2: successful mount must install the override");
+                  "D2: project-local save dir is reported even when read-only");
 
         RowlEngine_Shutdown(h);
         RowlEngine_Destroy(h);

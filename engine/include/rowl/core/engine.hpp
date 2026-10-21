@@ -6,6 +6,7 @@
 #include "rowl/core/pause_menu.hpp"
 #include "rowl/platform/game_identity.hpp"
 #include "rowl/platform/platform_host.hpp"
+#include "rowl/state/game_data_layout.hpp"
 #include "rowl/state/game_state.hpp"
 #include "rowl/state/session_persistence.hpp"
 #include "rowl/core/runtime_context.hpp"
@@ -384,6 +385,9 @@ public:
     /// D01a: identity of the mounted game (see platform/game_identity.hpp).
     void setGameIdentity(Rowl::Platform::GameIdentity identity) { m_gameIdentity = std::move(identity); }
     const Rowl::Platform::GameIdentity& getGameIdentity() const { return m_gameIdentity; }
+    /// D01b: per-game data layout chosen at project mount (save dir, profile dir, migration).
+    void setGameDataLayout(Rowl::State::GameDataLayout layout) { m_gameDataLayout = std::move(layout); }
+    const Rowl::State::GameDataLayout& getGameDataLayout() const { return m_gameDataLayout; }
     std::shared_ptr<const Rowl::State::GameState> getGameState() const { return m_gameState; }
     /// #86: stamps the live mixer gains (master/bgm/sfx/voice) into
     /// m_gameState WITHOUT advancing stepId (see withMixerVolumes), so later
@@ -416,6 +420,7 @@ private:
     Rowl::I18n::LocalizationManager m_localization;
     std::filesystem::path m_saveDirectoryOverride;
     Rowl::Platform::GameIdentity m_gameIdentity;
+    Rowl::State::GameDataLayout m_gameDataLayout;
     std::string m_defaultBgmTransition = "instant";
     float m_defaultBgmTransitionDurationSeconds = 1.0f;
 

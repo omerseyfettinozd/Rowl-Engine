@@ -152,6 +152,9 @@ typedef struct RowlEngine_ApiVersion {
 /* D01a: game identity (RowlEngine_GetGameIdUtf8 / GetGameIdentitySource /
  * GetGameIdentityDiagnosticUtf8). Additive. */
 #define ROWL_ENGINE_CAPABILITY_GAME_IDENTITY UINT64_C(4194304)
+/* D01b: per-game data directory + legacy save migration report
+ * (RowlEngine_GetGameDataDirectoryUtf8 / GetLastDataMigrationJson). Additive. */
+#define ROWL_ENGINE_CAPABILITY_GAME_DATA UINT64_C(8388608)
 
 /** Current additive C API version. This query does not require an engine handle. */
 ROWL_API RowlEngine_ResultCode RowlEngine_GetApiVersion(
@@ -197,6 +200,24 @@ ROWL_API int32_t RowlEngine_GetGameIdentitySource(RowlEngineHandle handle);
 
 /** Why a carrier was ignored (empty when none). Same buffer contract. */
 ROWL_API RowlEngine_ResultCode RowlEngine_GetGameIdentityDiagnosticUtf8(
+    RowlEngineHandle handle, char* buffer, uint32_t bufferSize,
+    uint32_t* outRequiredSize);
+
+/* ── Per-game data (ROWL_ENGINE_CAPABILITY_GAME_DATA) ─────────────────────
+ * After RowlEngine_SetProjectDirectory: saves live in
+ * <user-data>/games/<game-id>/saves (profile/ beside it). A game without an
+ * authored id (identity source DERIVED), or an unwritable user-data dir, keeps
+ * <project>/saves; the reason is the last-result error of SetProjectDirectory.
+ * Same caller-buffer contract as RowlEngine_GetSaveDirectoryUtf8. */
+
+/** Directory holding saves/ (and profile/) of the mounted game. */
+ROWL_API RowlEngine_ResultCode RowlEngine_GetGameDataDirectoryUtf8(
+    RowlEngineHandle handle, char* buffer, uint32_t bufferSize,
+    uint32_t* outRequiredSize);
+
+/** JSON report of the last legacy <project>/saves copy: {format, source, time,
+ *  copied[], skipped[], errors[]}; empty string when nothing was migrated. */
+ROWL_API RowlEngine_ResultCode RowlEngine_GetLastDataMigrationJson(
     RowlEngineHandle handle, char* buffer, uint32_t bufferSize,
     uint32_t* outRequiredSize);
 

@@ -30,6 +30,7 @@ add_executable(rowl_tests
     test_story_graph_parser.cpp
     test_story_graph_format_version.cpp
     test_game_identity.cpp
+    test_game_data_layout.cpp
     test_boot_story_diagnostics.cpp
     test_graph_vnext.cpp
     test_localization.cpp

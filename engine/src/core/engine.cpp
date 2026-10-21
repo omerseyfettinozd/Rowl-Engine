@@ -137,6 +137,7 @@ std::string Engine::getProfileDirectory() const {
 }
 
 std::filesystem::path Engine::getProfileDirectoryPath() const {
+    if (!m_gameDataLayout.profileDirectory.empty()) return m_gameDataLayout.profileDirectory;
     if (const auto host = getPlatformHost()) {
         const auto path = host->writableProfilePath();
         if (!path.empty()) return path;
@@ -2749,6 +2750,7 @@ void Engine::shutdown() {
     // D2 (#113-kuzeni): proje-override save-dizini de oturuma aittir.
     m_saveDirectoryOverride.clear();
     m_gameIdentity = {};
+    m_gameDataLayout = {};
 
     m_isRunning   = false;
     m_initialized = false;

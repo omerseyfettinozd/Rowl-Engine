@@ -73,6 +73,16 @@ namespace RowlEngine.Editor.Native
         internal static extern ResultCode RowlEngine_GetGameIdentityDiagnosticUtf8(
             IntPtr handle, IntPtr buffer, uint bufferSize, out uint requiredSize);
 
+        // ── Per-game data (CAPABILITY_GAME_DATA = 8388608) ───────────────────
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_GetGameDataDirectoryUtf8(
+            IntPtr handle, IntPtr buffer, uint bufferSize, out uint requiredSize);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_GetLastDataMigrationJson(
+            IntPtr handle, IntPtr buffer, uint bufferSize, out uint requiredSize);
+
         // ── Lifecycle ────────────────────────────────────────────────────────
 
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]

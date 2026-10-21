@@ -119,4 +119,8 @@ UserDataDirectories resolveUserDataDirectories() {
     return makeUserDataDirectories(platformUserDataRoot());
 }
 
+std::filesystem::path resolveUserDataRoot() {
+    return platformUserDataRoot().lexically_normal();
+}
+
 } // namespace Rowl::Platform

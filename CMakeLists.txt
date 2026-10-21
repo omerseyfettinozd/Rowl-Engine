@@ -367,6 +367,19 @@ if(ROWL_BUILD_RUNTIME_TESTS AND TARGET rowl_player)
             # Offscreen smoke frame: must initialise with no display server.
             ENVIRONMENT "SDL_AUDIODRIVER=dummy;SDL_VIDEODRIVER=dummy"
         )
+        # D01b: two packaged games (different ids) never share saves; moving
+        # the game folder keeps them.
+        add_test(
+            NAME rowl_game_data_packaged
+            COMMAND ${Python3_EXECUTABLE} -u ${CMAKE_SOURCE_DIR}/tests/test_game_data_packaged.py
+                $<TARGET_FILE:RowlEngineCore>
+                ${CMAKE_SOURCE_DIR}/samples/first_light
+        )
+        set_tests_properties(rowl_game_data_packaged PROPERTIES
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+            TIMEOUT 120
+            ENVIRONMENT "SDL_AUDIODRIVER=dummy;SDL_VIDEODRIVER=dummy"
+        )
         add_test(
             NAME rowl_demo_second_signal_packaged
             COMMAND ${Python3_EXECUTABLE} -u ${CMAKE_SOURCE_DIR}/tests/test_demo_packaged.py
