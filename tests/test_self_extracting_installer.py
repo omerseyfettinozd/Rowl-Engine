@@ -334,6 +334,73 @@ with tempfile.TemporaryDirectory() as directory:
         unblock_install_dir(blocker)
         shutil.rmtree(half_prefix, ignore_errors=True)
 
+        # (d2) C04 upgrade rollback: a failed UPGRADE over a good v1 install
+        # must restore every v1 file byte-for-byte (not delete them), keep
+        # the v1 receipt, and leave user mods/ and crash-logs/ untouched.
+        if getattr(os, "geteuid", lambda: 1)() == 0:
+            print("SKIPPED (d2) upgrade-rollback: running as root, mode 444 "
+                  "does not block writes here; run this test as non-root "
+                  "to exercise C04", file=sys.stderr)
+        else:
+            up_prefix = fake_root / "upgrade-install"
+            v1 = run([SH, str(first), "--prefix", str(up_prefix)])
+            if v1.returncode != 0:
+                raise SystemExit(f"upgrade setup (v1) failed: {v1.stderr}")
+            user_mod = up_prefix / "mods" / "images" / "hero.png"
+            user_mod.parent.mkdir(parents=True)
+            user_mod.write_bytes(b"user-mod-upgrade")
+            crash_log = up_prefix / "crash-logs" / "crash-9.log"
+            crash_log.parent.mkdir()
+            crash_log.write_text("boom\n", encoding="utf-8")
+            before = {name: (up_prefix / name).read_bytes()
+                      for name in stub_files}
+            receipt_before = (up_prefix / ".rowl-receipt").read_bytes()
+
+            # v2: same names, different bytes in every payload file.
+            (fake_root / "build" / "bin" / "rowl_player").write_bytes(
+                b"fake-player-V2")
+            (fake_root / "build" / "lib" / "libRowlEngineCore.so").write_bytes(
+                b"fake-runtime-V2")
+            zip_v2 = fake_root / "rowl-portable-v2.zip"
+            EXPORT_GAME.export_portable_zip(output=zip_v2)
+            installer_v2 = fake_root / "install-v2.sh"
+            EXPORT_GAME.export_self_extracting(
+                input=zip_v2, output=installer_v2, version="9.9-v2")
+
+            # Fail the upgrade on the LAST entry (read-only v1 file), after
+            # earlier entries were already overwritten with v2 bytes.
+            up_blocker = up_prefix / stub_files[-1]
+            os.chmod(up_blocker, 0o444)
+            try:
+                with open(up_blocker, "ab"):
+                    pass
+            except OSError:
+                pass
+            else:
+                raise SystemExit("upgrade blocker ineffective on this host")
+            upgrade = run([SH, str(installer_v2), "--prefix", str(up_prefix)])
+            unblock_install_dir(up_blocker)
+            if upgrade.returncode == 0:
+                raise SystemExit("blocked upgrade was accepted")
+            for name, data in before.items():
+                if not (up_prefix / name).is_file():
+                    raise SystemExit(f"failed upgrade DELETED v1 file {name}")
+                if (up_prefix / name).read_bytes() != data:
+                    raise SystemExit(f"failed upgrade damaged v1 file {name}")
+            if (up_prefix / ".rowl-receipt").read_bytes() != receipt_before:
+                raise SystemExit("failed upgrade changed the v1 receipt")
+            if (up_prefix / ".rowl-receipt.tmp").exists():
+                raise SystemExit("failed upgrade left a receipt tmp file")
+            if user_mod.read_bytes() != b"user-mod-upgrade" or \
+                    crash_log.read_text(encoding="utf-8") != "boom\n":
+                raise SystemExit("failed upgrade touched user mods/crash-logs")
+            extra = sorted(p.name for p in up_prefix.iterdir()
+                           if p.name not in {n.split("/")[0] for n in stub_files}
+                           | {".rowl-receipt", "mods", "crash-logs"})
+            if extra:
+                raise SystemExit(f"failed upgrade left stray entries: {extra}")
+            shutil.rmtree(up_prefix, ignore_errors=True)
+
         # Corrupt payload (1 byte flip): rejected, target never created.
         # (e) No receipt is created on a rejected payload either.
         corrupt = fake_root / "install-corrupt.sh"

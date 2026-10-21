@@ -441,8 +441,9 @@ _SDE_STUB_TEMPLATE = """#!/bin/sh
 #      written atomically (tmp file + mv) as ROWL_SDE_VERSION=<ver>,
 #      PAYLOAD_SHA256=<sha>, then one installed name per line; a receipt
 #      failure fails the install and rolls back the copied files.
-#   Any copy/chmod/receipt failure removes the files copied so far and
-#   exits 1; the temp dir is guarded by a single trap on EXIT.
+#   Any copy/chmod/receipt failure removes the files this run created,
+#   restores files it overwrote (upgrade: previous copies are kept in
+#   $prefix/.rowl-backup until success) and exits 1; the temp dir is guarded by a single trap on EXIT.
 #
 # Uninstall deletes exactly the receipt-listed names when
 # $prefix/.rowl-receipt exists, else the FILES listed below (legacy
@@ -483,10 +484,18 @@ prune_dirs() {
   done
 }
 
+# Upgrade-safe rollback: a file that existed before this run was copied to
+# $bakdir first, so it is moved back (mv replaces by rename, even over a
+# half-written or read-only file); only files this run created are removed.
 rollback() {
   for f in $installed; do
-    rm -f "$prefix/$f"
+    if [ -f "$bakdir/$f" ]; then
+      mv -f "$bakdir/$f" "$prefix/$f"
+    else
+      rm -f "$prefix/$f"
+    fi
   done
+  rm -rf "$bakdir"
   prune_dirs "$prefix" "$installed"
 }
 
@@ -519,6 +528,8 @@ do_install() {
   fi
   mkdir -p "$prefix" || fail "cannot create target directory $prefix"
   installed=""
+  bakdir="$prefix/.rowl-backup"
+  [ ! -e "$bakdir" ] || fail "leftover $bakdir from an interrupted install; restore or remove it first"
   for name in $FILES; do
     case "$name" in
       */*)
@@ -527,11 +538,22 @@ do_install() {
           fail "cannot create directory for $name in $prefix"
         fi ;;
     esac
+    # Existing file (upgrade): keep a copy so a failed install restores it.
+    if [ -f "$prefix/$name" ]; then
+      case "$name" in
+        */*) mkdir -p "$bakdir/${name%/*}" || { rollback; fail "cannot create backup dir for $name"; } ;;
+        *) mkdir -p "$bakdir" || { rollback; fail "cannot create backup dir"; } ;;
+      esac
+      if ! cp -p "$prefix/$name" "$bakdir/$name"; then
+        rollback
+        fail "cannot back up $name before overwriting it"
+      fi
+    fi
+    installed="$installed $name"
     if ! cp "$staged/$name" "$prefix/$name"; then
       rollback
       fail "cannot install $name into $prefix"
     fi
-    installed="$installed $name"
   done
   for exe in $EXECUTABLES; do
     if ! chmod +x "$prefix/$exe"; then
@@ -555,6 +577,7 @@ do_install() {
     rm -f "$prefix/.rowl-receipt.tmp"
     fail "cannot write receipt into $prefix"
   fi
+  rm -rf "$bakdir"
   trap - EXIT
   rm -rf "$tmpdir"
   echo "rowl-installer: installed $ROWL_SDE_VERSION into $prefix"
