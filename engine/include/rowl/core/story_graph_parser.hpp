@@ -33,6 +33,10 @@ struct StoryGraphParseResult {
 class StoryGraphParser {
 public:
     static StoryGraphParseResult parse(std::string_view jsonContent);
+
+    /// format_version > kStoryGraphFormatVersion ise false + error doldurur.
+    /// Eksik / sayisal olmayan surum eski (legacy) sayilir ve kabul edilir.
+    static bool checkFormatVersion(const nlohmann::json& root, std::string& error);
 };
 
 } // namespace Rowl::Core

@@ -1932,6 +1932,9 @@
     "StoryGraph.Load.NewerFormat": {
       "text": "This story was saved by a newer Rowl version (format v{0}); this version cannot open it, the file was not touched."
     },
+    "Chapter.Storage.NewerFormat": {
+      "text": "File {0} was saved by a newer Rowl version (format v{1}); this version cannot open it, the file was not touched."
+    },
     "Settings.SaveFailed": {
       "text": "Settings could not be saved or read; see the Console."
     },

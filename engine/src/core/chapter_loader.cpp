@@ -169,7 +169,7 @@ bool parseChapterNodes(const nlohmann::json& nodes, const std::string& fileChapt
         return false;
     }
     nlohmann::json wrapper;
-    wrapper["format_version"] = 5;
+    wrapper["format_version"] = kStoryGraphFormatVersion;
     wrapper["start_node_id"] = firstId;
     wrapper["nodes"] = stripped;
     // Sarmalayici belge dosyanin chapter'ini deklare eder; aksi halde
@@ -343,6 +343,7 @@ bool ChapterLoader::loadIndexJson(const std::string& json, std::string& error) {
         error = "chapter index must be an object; rejected";
         return false;
     }
+    if (!StoryGraphParser::checkFormatVersion(doc, error)) return false;
     const auto chaptersIt = doc.find("chapters");
     if (chaptersIt == doc.end() || !chaptersIt->is_array()) {
         error = "chapter index without a chapters array; rejected";
@@ -394,6 +395,7 @@ bool ChapterLoader::appendChapterFileJson(const std::string& json, std::string& 
         error = "chapter file must be an object; rejected";
         return false;
     }
+    if (!StoryGraphParser::checkFormatVersion(doc, error)) return false;
     const auto idIt = doc.find("chapter_id");
     if (idIt == doc.end() || !idIt->is_string() || idIt->get<std::string>().empty()) {
         error = "chapter file without chapter_id; rejected";

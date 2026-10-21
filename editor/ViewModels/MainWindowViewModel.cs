@@ -1440,6 +1440,9 @@ namespace RowlEngine.Editor.ViewModels
             {
                 string merged = ChapterStorageService.Merge(
                     Path.Combine(AssetsJsonPath, "chapters"));
+                // C04: diskteki daha yeni sürüm grafik birleştirmeyle ezilmez.
+                if (StoryGraphFormatGuard.IsNewerOnDisk(AssetsPath, AssetsJsonPath, out int newer))
+                    throw new InvalidOperationException(StoryGraphFormatGuard.Message(newer));
                 Directory.CreateDirectory(AssetsJsonPath);
                 ProjectFileSystem.WriteAllTextAtomically(
                     Path.Combine(AssetsJsonPath, "full_story_graph.json"), merged);
