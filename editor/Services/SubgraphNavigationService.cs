@@ -287,11 +287,20 @@ namespace RowlEngine.Editor.Services
             if (_nodes is null)
                 return;
             foreach (var node in _nodes)
-            {
-                node.IsSubgraphBoundary = IsBoundaryNode(node.Id);
-                node.SubgraphBadge = GetBadge(node.Id) ?? string.Empty;
-            }
+                RefreshBadge(node);
         }
+
+        private void RefreshBadge(NodeViewModel node)
+        {
+            BadgeVisitCount++;
+            node.IsSubgraphBoundary = IsBoundaryNode(node.Id);
+            node.SubgraphBadge = GetBadge(node.Id) ?? string.Empty;
+        }
+
+        /// <summary>Test sayacı: rozet yenilemede ziyaret edilen düğüm sayısı.</summary>
+        internal int BadgeVisitCount { get; private set; }
+
+        internal void ResetBadgeVisitCount() => BadgeVisitCount = 0;
 
         private void ApplyChapterOption(string option)
         {
@@ -359,7 +368,17 @@ namespace RowlEngine.Editor.Services
         private void OnNodesChanged(object? sender,
             System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
         {
-            RefreshNodeBadges();
+            // Artımlı: tanımlar değişmedikçe rozet yalnız eklenen düğümlere bağlıdır;
+            // kaldırma/taşıma rozeti etkilemez. Sıfırlamada tüm liste taranır.
+            if (e.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Reset)
+            {
+                RefreshNodeBadges();
+                return;
+            }
+            if (e.NewItems is null)
+                return;
+            foreach (NodeViewModel node in e.NewItems)
+                RefreshBadge(node);
         }
     }
 }

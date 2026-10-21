@@ -50,6 +50,7 @@ namespace RowlEngine.Editor.Services
 
         public void Undo()
         {
+            using var bulk = NodeGraphViewModel.BeginBulkFor(_allNodes);
             foreach (var node in _deletedNodes)
             {
                 if (!_allNodes.Contains(node))
@@ -68,6 +69,7 @@ namespace RowlEngine.Editor.Services
 
         public void Redo()
         {
+            using var bulk = NodeGraphViewModel.BeginBulkFor(_allNodes);
             foreach (var conn in _deletedConnections)
             {
                 _allConnections.Remove(conn);
@@ -108,6 +110,7 @@ namespace RowlEngine.Editor.Services
 
         public void Undo()
         {
+            using var bulk = NodeGraphViewModel.BeginBulkFor(_allNodes);
             foreach (var conn in _clonedConnections)
             {
                 _allConnections.Remove(conn);
@@ -123,6 +126,7 @@ namespace RowlEngine.Editor.Services
 
         public void Redo()
         {
+            using var bulk = NodeGraphViewModel.BeginBulkFor(_allNodes);
             foreach (var node in _clonedNodes)
             {
                 if (!_allNodes.Contains(node))
@@ -156,6 +160,7 @@ namespace RowlEngine.Editor.Services
             var targetList = nodesToDelete.ToList();
             if (targetList.Count == 0) return 0;
 
+            using var bulk = NodeGraphViewModel.BeginBulkFor(allNodes);
             var targetSet = new HashSet<NodeViewModel>(targetList);
             var attachedConnections = connections.Where(c => 
                 (c.SourceNode != null && targetSet.Contains(c.SourceNode)) || 
@@ -197,6 +202,7 @@ namespace RowlEngine.Editor.Services
             var sources = sourceNodes.ToList();
             if (sources.Count == 0) return new List<NodeViewModel>();
 
+            using var bulk = NodeGraphViewModel.BeginBulkFor(allNodes);
             ulong maxExistingId = allNodes.Count > 0 ? allNodes.Max(n => n.Id) : 100;
             var clonedNodes = new List<NodeViewModel>();
             var clonedConnections = new List<ConnectionViewModel>();

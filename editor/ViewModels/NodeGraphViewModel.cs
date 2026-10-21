@@ -54,6 +54,7 @@ namespace RowlEngine.Editor.ViewModels
         {
             MainViewModel = main ?? throw new ArgumentNullException(nameof(main));
             MainViewModel.PropertyChanged += OnMainPropertyChanged;
+            _byNodes.AddOrUpdate(MainViewModel.Nodes, this);
             MainViewModel.Nodes.CollectionChanged += OnNodesChanged;
             MainViewModel.Connections.CollectionChanged += OnConnectionsChanged;
             foreach (var node in MainViewModel.Nodes)
@@ -225,6 +226,40 @@ namespace RowlEngine.Editor.ViewModels
         /// <see cref="EndBulkUpdate"/>. Nestable.
         /// </summary>
         public void BeginBulkUpdate() => _suspendCount++;
+
+        // Toplu servisler (sil/çoğalt/geri al) yalnız koleksiyonu bilir; canlı grafın
+        // tuval modeline koleksiyon üzerinden ulaşır.
+        private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<
+            ObservableCollection<NodeViewModel>, NodeGraphViewModel> _byNodes = new();
+
+        /// <summary>
+        /// Verilen düğüm koleksiyonunun tuval modelinde toplu modu açar; using ile
+        /// kapanır (try/finally eşdeğeri). Tuval modeli yoksa etkisiz.
+        /// </summary>
+        public static IDisposable BeginBulkFor(ObservableCollection<NodeViewModel> nodes)
+        {
+            if (nodes is null || !_byNodes.TryGetValue(nodes, out var graph))
+                return NoopScope.Instance;
+            graph.BeginBulkUpdate();
+            return new BulkScope(graph);
+        }
+
+        private sealed class NoopScope : IDisposable
+        {
+            public static readonly NoopScope Instance = new();
+            public void Dispose() { }
+        }
+
+        private sealed class BulkScope : IDisposable
+        {
+            private NodeGraphViewModel? _graph;
+            public BulkScope(NodeGraphViewModel graph) => _graph = graph;
+            public void Dispose()
+            {
+                _graph?.EndBulkUpdate();
+                _graph = null;
+            }
+        }
 
         public void EndBulkUpdate()
         {
