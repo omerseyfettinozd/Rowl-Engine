@@ -34,7 +34,7 @@ Interactive Windows Unicode save/load remains part of the real-device gate.
 
 | Target | Runtime build gate | Package/device gate | Status |
 | --- | --- | --- | --- |
-| Linux desktop x86_64 | Native CTest, shaderless fallback and GPU-MSDF smoke CI tests | Fresh deterministic `game.rowlpkg` (embedded manifest, license inventory) plus VFS package smoke | CI build/test/package gates green, incl. run 34744730099; interactive GUI proof pending |
+| Linux desktop x86_64 | Native CTest, shaderless fallback and GPU-MSDF smoke CI tests | Fresh deterministic `game.rowlpkg` (embedded manifest, license inventory) plus VFS package smoke | CI build/test/package gates green, incl. run 34744730099; real-screen Wayland/XWayland acceptance in `docs/LINUX_ACCEPTANCE_2026-10-21.md` (pure X11 awaiting external evidence) |
 | Linux desktop arm64 | Native `ubuntu-24.04-arm` compile job with ELF AArch64 artifact checks | No release package or GUI/device run in this gate | Compile portability only; package and device validation pending |
 | Windows desktop x64 | vcpkg CMake/CTest CI job | Fresh standalone package, DLL and shaderless VFS smoke in CI | CI build/test/package gates green, incl. run 34744730099; interactive GUI/input/audio device proof pending |
 | macOS desktop arm64 | Native `macos-15` compile job `macos-arm64-compile` (pinned SDL3 3.4.16, Mach-O arm64 `file` checks, artifact upload; no CTest) | No signed package or device run in this gate | D1 compile-gate only; package, signing and device validation pending |
