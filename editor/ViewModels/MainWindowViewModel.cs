@@ -2511,7 +2511,8 @@ namespace RowlEngine.Editor.ViewModels
 
                 if (selectedDir != null)
                 {
-                    string targetDir = EditorProjectLifecycleCoordinator.GenerateSaveAsTargetDirectory(selectedDir);
+                    string targetDir = EditorProjectLifecycleCoordinator.EnsureUniqueSaveAsTarget(
+                        EditorProjectLifecycleCoordinator.GenerateSaveAsTargetDirectory(selectedDir));
                     OperationStatus.Begin(OperationKind.SaveAs);
                     int attempt = OperationStatus.Attempt;
                     SaveAsResult result = SaveProjectToDirectory(targetDir);

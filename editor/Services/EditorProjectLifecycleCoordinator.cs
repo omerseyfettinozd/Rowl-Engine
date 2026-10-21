@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using RowlEngine.Editor.Views.Dialogs;
@@ -122,6 +123,22 @@ public static class EditorProjectLifecycleCoordinator
     }
 
     /// <summary>
+    /// Otomatik üretilen hedef zaten doluysa " (2)", " (3)"... ekleyerek boş bir ad bulur;
+    /// aynı dakikadaki iki Farklı Kaydet birbirini ezmez.
+    /// </summary>
+    public static string EnsureUniqueSaveAsTarget(string candidate)
+    {
+        if (!Directory.Exists(candidate) && !File.Exists(candidate)) return candidate;
+        if (Directory.Exists(candidate) && !Directory.EnumerateFileSystemEntries(candidate).Any()) return candidate;
+        for (int i = 2; i < 10000; i++)
+        {
+            string next = $"{candidate} ({i})";
+            if (!Directory.Exists(next) && !File.Exists(next)) return next;
+        }
+        return candidate;
+    }
+
+    /// <summary>
     /// Executes a complete Save-As operation: creates target directory, clones project assets and
     /// manifests via ProjectSaveAsCoordinator, and logs results.
     /// </summary>
@@ -135,7 +152,6 @@ public static class EditorProjectLifecycleCoordinator
     {
         try
         {
-            Directory.CreateDirectory(targetDirectory);
             var result = ProjectSaveAsCoordinator.SaveProjectCopy(
                 sourceProjectRoot,
                 targetDirectory,
