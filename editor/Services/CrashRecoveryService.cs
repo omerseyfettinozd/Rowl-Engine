@@ -349,7 +349,8 @@ internal static class CrashRecoveryService
                     string expected = File.ReadAllText(sidecar).Trim();
                     if (!string.Equals(expected, ComputeSha256(json), StringComparison.OrdinalIgnoreCase))
                     {
-                        error = "Last-good copy failed hash verification; journal has no valid entry.";
+                        error = "Last-good copy failed hash verification; journal has no valid entry." +
+                            RejectedJournalNote(dir);
                         return false;
                     }
                 }
@@ -362,7 +363,7 @@ internal static class CrashRecoveryService
                 return false;
             }
 
-            error = "No journal entry or last-good copy is available.";
+            error = "No journal entry or last-good copy is available." + RejectedJournalNote(dir);
             return false;
         }
         catch (Exception ex)
@@ -398,6 +399,42 @@ internal static class CrashRecoveryService
     }
 
     // Helpers
+
+    /// <summary>
+    /// Teşhis eki: günlükte reddedilen (bozuk, sha256 uyuşmaz, gelecek sürüm)
+    /// satır sayısı; boşsa boş döner. Salt okunur, atmaz.
+    /// </summary>
+    private static string RejectedJournalNote(string recoveryDir)
+    {
+        int rejected = 0;
+        try
+        {
+            if (Directory.Exists(recoveryDir))
+            {
+                foreach (string journal in Directory.GetFiles(recoveryDir, "journal-*.jsonl"))
+                {
+                    try
+                    {
+                        foreach (string line in File.ReadLines(journal))
+                        {
+                            if (!string.IsNullOrWhiteSpace(line) && !TryExtractSnapshot(line, out _))
+                                rejected++;
+                        }
+                    }
+                    catch (Exception)
+                    {
+                        rejected++; // okunamayan günlük dosyası da reddedilmiş sayılır
+                    }
+                }
+            }
+        }
+        catch (Exception)
+        {
+        }
+        return rejected == 0
+            ? string.Empty
+            : $" {rejected} journal entr{(rejected == 1 ? "y was" : "ies were")} rejected (corrupt, checksum mismatch or newer format).";
+    }
 
     internal static string ComputeSha256(string text)
     {
@@ -455,6 +492,10 @@ internal static class CrashRecoveryService
                 version.ValueKind == JsonValueKind.Number &&
                 version.TryGetInt32(out int parsed))
                 formatVersion = parsed;
+            // Gelecek sürüm: bu editör alanları kayıpla yükler ve v5 olarak
+            // yeniden yazar; kurtarma teklifi/restore bunu asla kabul etmez.
+            if (formatVersion > GraphStructureLimits.CurrentVersion)
+                return false;
             return true;
         }
         catch (Exception)

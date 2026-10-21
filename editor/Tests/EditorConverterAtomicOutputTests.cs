@@ -74,6 +74,82 @@ public sealed class EditorConverterAtomicOutputTests : IDisposable
         Assert.Equal(2, Directory.GetFiles(outDir).Length);
     }
 
+    // Part dosyasını yazıp iptal gelene dek bekler (ortada iptal benzetimi).
+    private static Func<ProcessStartInfo, CancellationToken, Task<ExternalToolResult>> BlockingRunner(
+        SemaphoreSlim started)
+        => async (startInfo, token) =>
+        {
+            string name = Path.GetFileName(startInfo.FileName);
+            var argv = startInfo.ArgumentList.ToArray();
+            if (name.Contains("ffmpeg", StringComparison.OrdinalIgnoreCase))
+            {
+                File.WriteAllBytes(argv[^1], new byte[] { 1, 2, 3, 4 });
+                return new ExternalToolResult(0, string.Empty, string.Empty);
+            }
+            int o = Array.IndexOf(argv, "-o");
+            int s = Array.IndexOf(argv, "--sidecar");
+            File.WriteAllBytes(argv[o + 1], new byte[] { 9, 9 });
+            File.WriteAllText(argv[s + 1], "{ half");
+            started.Release();
+            await Task.Delay(Timeout.Infinite, token); // iptal gelene dek
+            return new ExternalToolResult(0, string.Empty, string.Empty);
+        };
+
+    [Theory]
+    [InlineData("x.webp", "x.png", MediaConverterService.WebpToolName, "images")]
+    [InlineData("x.mp3", "x.ogg", MediaConverterService.OggToolName, "audio")]
+    public async Task CancelMidConversion_KeepsExistingGoodTarget_AndLeavesNoPart(
+        string srcName, string outName, string tool, string dir)
+    {
+        string src = Path.Combine(_root, srcName);
+        File.WriteAllBytes(src, new byte[] { 5, 6, 7 });
+        string outDir = Path.Combine(_root, "Assets", dir);
+        Directory.CreateDirectory(outDir);
+        string target = Path.Combine(outDir, outName);
+        string sidecar = MediaConverterService.SidecarPathForOutput(target);
+        byte[] good = { 0xAA, 0xBB, 0xCC };
+        File.WriteAllBytes(target, good);
+        File.WriteAllText(sidecar, "good-sidecar");
+
+        using var started = new SemaphoreSlim(0);
+        using var cts = new CancellationTokenSource();
+        var options = new MediaConverterService.ConverterOptions(
+            "oggenc", "webp2png", "ffmpeg", null, BlockingRunner(started));
+        var task = MediaConverterService.ConvertFileAsync(src, target, tool, options, null, cts.Token);
+        Assert.True(await started.WaitAsync(TimeSpan.FromSeconds(10)), "araç hiç başlamadı");
+        cts.Cancel();
+        var result = await task.WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal(MediaConverterService.ConversionOutcome.Failed, result.Outcome);
+        Assert.Contains("iptal", result.Message);
+        Assert.Equal(good, File.ReadAllBytes(target));
+        Assert.Equal("good-sidecar", File.ReadAllText(sidecar));
+        Assert.DoesNotContain(Directory.GetFiles(outDir), f => f.Contains(".part", StringComparison.Ordinal));
+        Assert.Equal(2, Directory.GetFiles(outDir).Length);
+    }
+
+    [Fact]
+    public async Task CancelMidImport_NewFile_LeavesNoOutputNoPart_AndThrowsCancelled()
+    {
+        string src = Path.Combine(_root, "x.webp");
+        File.WriteAllBytes(src, new byte[] { 5, 6, 7 });
+        string assets = Path.Combine(_root, "Assets");
+        using var started = new SemaphoreSlim(0);
+        using var cts = new CancellationTokenSource();
+        var options = new MediaConverterService.ConverterOptions(
+            "oggenc", "webp2png", "ffmpeg", null, BlockingRunner(started));
+
+        var task = EditorAssetImportService.ImportAssetFilesAsync(
+            new[] { src }, assets, options, null, cts.Token, null, null, new List<ImportFailure>());
+        Assert.True(await started.WaitAsync(TimeSpan.FromSeconds(10)));
+        cts.Cancel();
+        try { await task.WaitAsync(TimeSpan.FromSeconds(10)); } catch (OperationCanceledException) { }
+
+        string[] left = Directory.Exists(assets)
+            ? Directory.GetFiles(assets, "*", SearchOption.AllDirectories) : Array.Empty<string>();
+        Assert.Empty(left);
+    }
+
     [Fact]
     public async Task MissingFfmpeg_ImportReportsFailure_WithReason()
     {

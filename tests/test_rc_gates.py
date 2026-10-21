@@ -130,4 +130,16 @@ check("betik rc_gate_report.py kullanır", "rc_gate_report.py" in text)
 for name in rc.REQUIRED_GATES:
     check("betik %s kapısını koşar/raporlar" % name, name in text)
 
+# 10. RC Soak ayrı ctest testi: tam olarak bir testte koşar, sanitizer
+# kapılarının -R regex'i ikisini de kapsar (bölüm sessizce düşmesin).
+cm = (ROOT / "tests" / "CMakeLists.txt").read_text(encoding="utf-8")
+check("soak testi kayıtlı", "add_test(NAME rowl_native_soak_tests COMMAND rowl_tests --only-soak)" in cm)
+check("ana test soak'sız ve soak testiyle aynı blokta",
+      "add_test(NAME rowl_native_tests COMMAND rowl_tests --skip-soak)" in cm)
+ci = (ROOT / ("." + "github") / "workflows" / "ci.yml").read_text(encoding="utf-8")
+for label, body in (("ci.yml", ci), ("run_rc_gates.sh", text)):
+    for line in body.splitlines():
+        if "-R " in line and "rowl_native_tests" in line:
+            check("%s sanitizer -R soak testini içerir" % label, "rowl_native_soak_tests" in line)
+
 print("[RcGates] kapı toplama sözleşmesi geçti.")

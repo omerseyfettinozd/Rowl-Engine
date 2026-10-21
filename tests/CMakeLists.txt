@@ -112,8 +112,13 @@ target_compile_definitions(rowl_tests PRIVATE ROWL_BUILDING_DLL)
 target_compile_definitions(rowl_tests PRIVATE
     ROWL_TEST_GPU_MSDF_EXPECTED=${ROWL_GPU_MSDF_SHADER_AVAILABLE})
 
-add_test(NAME rowl_native_tests COMMAND rowl_tests)
-set_tests_properties(rowl_native_tests PROPERTIES
+# RC Soak (N-stress, 1000 kaydet/yükle) TSan altında ~1200 s; tek ctest
+# testinde kalırsa sonrasındaki bölümler 1800 s içinde hiç koşmaz. Ayrı test
+# olarak koşar; ana test --skip-soak'ı YALNIZ ayrı test kayıtlıysa alır, yani
+# bölüm tam olarak bir testte koşar (test_rc_gates.py bunu kilitler).
+add_test(NAME rowl_native_soak_tests COMMAND rowl_tests --only-soak)
+add_test(NAME rowl_native_tests COMMAND rowl_tests --skip-soak)
+set_tests_properties(rowl_native_tests rowl_native_soak_tests PROPERTIES
     WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
     # Dummy drivers keep the suite display-/audio-server free on headless
     # CI and sandbox machines; the offscreen engine needs neither.
@@ -666,7 +671,7 @@ if(WIN32)
     # 1500 gives a Debug run room to finish while staying a fast pointer
     # on a real hang (assert dialogs are suppressed in test_main.cpp).
     # Other hosts keep the CLI default: do not touch, they are green.
-    set_tests_properties(rowl_native_tests PROPERTIES TIMEOUT 1500)
+    set_tests_properties(rowl_native_tests rowl_native_soak_tests PROPERTIES TIMEOUT 1500)
 endif()
 
 add_executable(test_p1_7_resize_save test_p1_7_resize_save.cpp)

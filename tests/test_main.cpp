@@ -94,6 +94,12 @@ int main(int argc, char* argv[]) {
     std::cerr << std::unitbuf;
     std::string benchmarkJsonPath;
     std::string goldenJsonPath;
+    // TSan/ASan bütçesi: RC Soak tek başına ~1200 s sürebilir. ctest onu ayrı
+    // bir test (rowl_native_soak_tests) olarak koşar; rowl_native_tests yalnız
+    // o test kayıtlıysa --skip-soak alır (tests/CMakeLists.txt). Bölüm hiçbir
+    // zaman sessizce düşmez: --only-soak koşusu bölüm koşmadıysa 1 döner.
+    bool onlySoak = false;
+    bool skipSoak = false;
     // CI BÜTÇESİ (linux 25-dk tavanı): benchmark JSON'u, bu ikilinin ZATEN
     // koştuğu ctest turunun yan ürünü olarak yazılır. Ölçüm, ikisinin de
     // gerektirdiği sırada (transition ölçümünden SONRA) aynı yerde kalır —
@@ -113,11 +119,25 @@ int main(int argc, char* argv[]) {
             benchmarkJsonPath = argv[++index];
         } else if (argument == "--golden-benchmark-json" && index + 1 < argc) {
             goldenJsonPath = argv[++index];
+        } else if (argument == "--only-soak") {
+            onlySoak = true;
+        } else if (argument == "--skip-soak") {
+            skipSoak = true;
         } else {
-            std::cerr << "Usage: rowl_tests [--benchmark-json <output.json>] [--golden-benchmark-json <output.json>]"
+            std::cerr << "Usage: rowl_tests [--only-soak|--skip-soak] [--benchmark-json <output.json>] [--golden-benchmark-json <output.json>]"
                       << std::endl;
             return 1;
         }
+    }
+    if (onlySoak && skipSoak) {
+        std::cerr << "--only-soak and --skip-soak are mutually exclusive" << std::endl;
+        return 1;
+    }
+    if (onlySoak) {
+        std::cout << "[ROWL-TEST] mode: RC Soak only" << std::endl;
+        test_rc_soak_and_data_safety();
+        std::cout << "[ROWL-TEST] RC Soak section completed" << std::endl;
+        return 0;
     }
     std::cout << "\n=======================================================" << std::endl;
     std::cout << "🚀 ROWL ENGINE COMPREHENSIVE NATIVE UNIT TEST SUITE 🚀" << std::endl;
@@ -203,7 +223,11 @@ int main(int argc, char* argv[]) {
     test_character_layer_benchmarks();
     test_golden_project_benchmarks(goldenJsonPath);
     test_hardening_and_reliability();
-    test_rc_soak_and_data_safety();
+    if (skipSoak) {
+        std::cout << "[ROWL-TEST] RC Soak skipped here; runs in rowl_native_soak_tests" << std::endl;
+    } else {
+        test_rc_soak_and_data_safety();
+    }
     test_save_slot_and_package_fuzz();
     test_demo_first_light();
     test_demo_second_signal();

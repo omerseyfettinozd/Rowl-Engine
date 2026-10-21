@@ -196,7 +196,7 @@ g_asan() {
     ROWL_PERF_FLOOR=report ROWL_CAMERA_FPS_FLOOR=report \
         ASAN_OPTIONS=halt_on_error=1:print_stacktrace=1:detect_leaks=0 \
         UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 \
-        ctest --test-dir build-rc-asan -R "rowl_native_tests|rowl_benchmark_tool_tests" \
+        ctest --test-dir build-rc-asan -R "rowl_native_tests|rowl_native_soak_tests|rowl_benchmark_tool_tests" \
         --output-on-failure --timeout 1800 --no-tests=error
 }
 g_tsan() {
@@ -208,7 +208,7 @@ g_tsan() {
     cmake --build build-rc-tsan --target rowl_tests --parallel "$JOBS"
     ROWL_PERF_FLOOR=report ROWL_CAMERA_FPS_FLOOR=report \
         TSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 \
-        ctest --test-dir build-rc-tsan -R "rowl_native_tests|rowl_benchmark_tool_tests" \
+        ctest --test-dir build-rc-tsan -R "rowl_native_tests|rowl_native_soak_tests|rowl_benchmark_tool_tests" \
         --output-on-failure --timeout 1800 --no-tests=error
 }
 tsan_available() {
