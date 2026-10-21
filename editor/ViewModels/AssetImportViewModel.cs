@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Threading;
@@ -44,6 +45,12 @@ public partial class AssetImportViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(HasResult))]
     private string? _lastResultText;
 
+    /// <summary>Son çalışmada içe aktarılamayan dosyalar (neden ile).</summary>
+    public IReadOnlyList<ImportFailure> LastFailures { get; private set; } = Array.Empty<ImportFailure>();
+
+    // Test kancası: dönüştürücü seçenekleri (null = varsayılan araçlar).
+    internal MediaConverterService.ConverterOptions? ConverterOptions { get; set; }
+
     /// <summary>Sonuç kartı: çalışma bittiyse ve gösterilecek sonuç varsa.</summary>
     public bool HasResult => !IsRunning && !string.IsNullOrEmpty(LastResultText);
 
@@ -74,6 +81,7 @@ public partial class AssetImportViewModel : ObservableObject
         Total = sourcePaths.Count;
         CurrentFile = string.Empty;
         LastResultText = null;
+        LastFailures = Array.Empty<ImportFailure>();
         PendingConflict = null;
         ApplyToAll = false;
         _rememberedDecision = null;
@@ -88,19 +96,22 @@ public partial class AssetImportViewModel : ObservableObject
             var progress = new LatestProgress(p => PostToUi(() => ApplyProgress(p)));
 
             List<string> result;
+            var failures = new System.Collections.Concurrent.ConcurrentQueue<ImportFailure>();
+            var failureSink = new FailureSink(failures);
             if (ImportCoreOverride is not null)
             {
                 result = await Task.Run(() => ImportCoreOverride(sourcePaths, assetsRoot, cts.Token, progress, ResolveConflictAsync), cts.Token);
             }
             else
             {
-                result = await Task.Run(() => EditorAssetImportService.ImportAssetFilesAsync(sourcePaths, assetsRoot, null, log, cts.Token, progress, ResolveConflictAsync), cts.Token);
+                result = await Task.Run(() => EditorAssetImportService.ImportAssetFilesAsync(sourcePaths, assetsRoot, ConverterOptions, log, cts.Token, progress, ResolveConflictAsync, failureSink), cts.Token);
             }
 
             // ConfigureAwait yok: devam çağıranın bağlamında (uygulamada UI iş parçacığı) koşar.
             if (progress.Last is { } last)
                 ApplyProgress(last);
-            LastResultText = string.Format(CultureInfo.CurrentCulture, EditorStrings.T("Import.Result.Done"), result.Count);
+            LastFailures = failures.ToArray();
+            LastResultText = BuildSummary(result.Count, LastFailures);
             return result;
         }
         catch (OperationCanceledException)
@@ -123,6 +134,34 @@ public partial class AssetImportViewModel : ObservableObject
             _cts = null;
             try { cts.Dispose(); } catch { }
         }
+    }
+
+    private static string BuildSummary(int imported, IReadOnlyList<ImportFailure> failures)
+    {
+        string done = string.Format(CultureInfo.CurrentCulture, EditorStrings.T("Import.Result.Done"), imported);
+        if (failures.Count == 0)
+            return done;
+        const int shown = 3;
+        string detail = string.Join("; ", failures.Take(shown).Select(f => $"{f.FileName} — {f.Reason}"));
+        if (failures.Count > shown)
+            detail += "; …";
+        return string.Format(CultureInfo.CurrentCulture, EditorStrings.T("Import.Result.DoneWithFailures"),
+            imported, failures.Count, detail);
+    }
+
+    private sealed class FailureSink : ICollection<ImportFailure>
+    {
+        private readonly System.Collections.Concurrent.ConcurrentQueue<ImportFailure> _queue;
+        public FailureSink(System.Collections.Concurrent.ConcurrentQueue<ImportFailure> queue) => _queue = queue;
+        public void Add(ImportFailure item) => _queue.Enqueue(item);
+        public int Count => _queue.Count;
+        public bool IsReadOnly => false;
+        public void Clear() { }
+        public bool Contains(ImportFailure item) => _queue.Contains(item);
+        public void CopyTo(ImportFailure[] array, int arrayIndex) => _queue.CopyTo(array, arrayIndex);
+        public bool Remove(ImportFailure item) => false;
+        public IEnumerator<ImportFailure> GetEnumerator() => _queue.GetEnumerator();
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
     }
 
     public async Task<ImportConflictDecision> ResolveConflictAsync(ImportConflict conflict, CancellationToken ct)

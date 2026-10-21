@@ -21,6 +21,9 @@ public sealed record ImportConflictDecision(ImportConflictChoice Choice, bool Ap
 /// <summary>Çakışma bilgisi (hedef göreli yol '/' ayraçlı).</summary>
 public sealed record ImportConflict(string SourcePath, string DestinationRelative);
 
+/// <summary>İçe aktarılamayan dosya + neden (kullanıcıya gösterilir).</summary>
+public sealed record ImportFailure(string FileName, string Reason);
+
 /// <summary>İçe aktarma ilerlemesi.</summary>
 public sealed record ImportProgress(int Completed, int Total, string CurrentFile);
 
@@ -76,7 +79,8 @@ public static class EditorAssetImportService
         Action<string>? log = null,
         CancellationToken cancellationToken = default,
         IProgress<ImportProgress>? progress = null,
-        Func<ImportConflict, CancellationToken, Task<ImportConflictDecision>>? resolveConflict = null)
+        Func<ImportConflict, CancellationToken, Task<ImportConflictDecision>>? resolveConflict = null,
+        ICollection<ImportFailure>? failures = null)
     {
         var imported = new List<string>();
         if (string.IsNullOrWhiteSpace(assetsRoot) || sourcePaths == null) return imported;
@@ -128,6 +132,7 @@ public static class EditorAssetImportService
                 if (conversion.Outcome == MediaConverterService.ConversionOutcome.Failed)
                 {
                     log?.Invoke($"Import conversion failed: {conversion.Message}");
+                    failures?.Add(new ImportFailure(fileName, conversion.Message));
                     progress?.Report(new ImportProgress(i + 1, total, fileName));
                     continue;
                 }

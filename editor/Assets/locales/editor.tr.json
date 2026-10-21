@@ -1029,6 +1029,9 @@
     "Import.Result.Done": {
       "text": "{0} dosya içe aktarıldı"
     },
+    "Import.Result.DoneWithFailures": {
+      "text": "{0} dosya içe aktarıldı, {1} başarısız: {2}"
+    },
     "Import.Result.Failed": {
       "text": "İçe aktarma başarısız: {0}"
     },

@@ -1029,6 +1029,9 @@
     "Import.Result.Done": {
       "text": "{0} file(s) imported"
     },
+    "Import.Result.DoneWithFailures": {
+      "text": "{0} file(s) imported, {1} failed: {2}"
+    },
     "Import.Result.Failed": {
       "text": "Import failed: {0}"
     },

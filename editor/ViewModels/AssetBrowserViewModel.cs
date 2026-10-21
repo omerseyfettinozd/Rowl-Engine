@@ -501,6 +501,7 @@ namespace RowlEngine.Editor.ViewModels
             {
                 if (file.Name.StartsWith(".") ||
                     IgnoredFileExtensions.Contains(file.Extension) ||
+                    IsTransientFileName(file.Name) ||
                     file.Name.Equals(".gitkeep", StringComparison.OrdinalIgnoreCase))
                 {
                     snapshot.HiddenFileCount++;
@@ -1097,6 +1098,11 @@ namespace RowlEngine.Editor.ViewModels
         {
             "json", "packages", "test_assets", "bin", "obj", ".git", ".vs"
         };
+
+        /// <summary>Yarım kalmış dönüştürme part dosyaları (varlık sayılmaz).</summary>
+        internal static bool IsTransientFileName(string name)
+            => name.EndsWith(".part", StringComparison.OrdinalIgnoreCase)
+               || name.EndsWith(".part" + MediaConverterService.SidecarSuffix, StringComparison.OrdinalIgnoreCase);
 
         private static readonly HashSet<string> IgnoredFileExtensions = new(StringComparer.OrdinalIgnoreCase)
         {
