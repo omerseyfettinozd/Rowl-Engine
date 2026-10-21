@@ -1272,7 +1272,8 @@ namespace RowlEngine.Editor.ViewModels
                     EnforceSingleOutgoingWireRule,
                     node => SelectNodeQuiet(node),
                     AppendLog,
-                    ApplyLoadedStructure);
+                    ApplyLoadedStructure,
+                    message => NotifyError(message));
             }
             finally
             {

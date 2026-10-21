@@ -19,6 +19,11 @@ public static class StoryGraphDocumentWriter
         Action<string>? log = null,
         GraphStructureDocument? structure = null)
     {
+        if (StoryGraphFormatGuard.IsNewerOnDisk(assetsPath, assetsJsonPath, out int newer))
+        {
+            log?.Invoke(StoryGraphFormatGuard.Message(newer));
+            return false;
+        }
         try
         {
             // Canonical location is Assets/json/. The legacy Assets/ copy is no

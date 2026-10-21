@@ -34,6 +34,13 @@ public static class StoryGraphLoaderService
 
             result.FormatVersion = formatVersion;
 
+            // Daha yeni sürüm: bilinmeyen alanlar kayıpla yüklenip v5 olarak ezilirdi.
+            if (formatVersion > GraphStructureLimits.CurrentVersion)
+            {
+                result.ErrorMessage = StoryGraphFormatGuard.Message(formatVersion);
+                return result;
+            }
+
             if (!root.TryGetProperty("nodes", out var nodesArray) || nodesArray.ValueKind != JsonValueKind.Array)
             {
                 result.ErrorMessage = "Document does not contain a valid 'nodes' array.";

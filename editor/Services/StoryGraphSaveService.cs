@@ -430,6 +430,11 @@ internal static class StoryGraphSaveService
         Func<long> latestSequence,
         Action<string>? log = null)
     {
+        if (StoryGraphFormatGuard.IsNewerOnDisk(assetsJsonPath, out int newer))
+        {
+            log?.Invoke(StoryGraphFormatGuard.Message(newer));
+            return false;
+        }
         try
         {
             string fullGraphJson = SerializeFullGraph(snapshot);

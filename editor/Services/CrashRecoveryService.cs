@@ -373,6 +373,8 @@ internal static class CrashRecoveryService
             return false;
         try
         {
+            if (StoryGraphFormatGuard.IsNewerOnDisk(assetsJsonPath, out _))
+                return false;
             if (!TryDescribeSnapshot(offer.SnapshotJson, out _, out _))
                 return false;
             ProjectFileSystem.WriteAllTextAtomically(

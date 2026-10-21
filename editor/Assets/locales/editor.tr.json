@@ -1920,6 +1920,9 @@
     "Operation.Save.WriteFailed": {
       "text": "Proje dosyası yazılamadı; ayrıntı Konsol'da."
     },
+    "StoryGraph.Load.NewerFormat": {
+      "text": "Bu hikâye daha yeni bir Rowl sürümüyle kaydedilmiş (biçim v{0}); bu sürüm açamaz, dosyaya dokunulmadı."
+    },
     "Settings.SaveFailed": {
       "text": "Ayarlar kaydedilemedi veya okunamadı; ayrıntı Konsol'da."
     },

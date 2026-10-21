@@ -28,7 +28,8 @@ namespace RowlEngine.Editor.Services
             Action enforceSingleOutgoingWireRule,
             Action<NodeViewModel> selectNodeQuiet,
             Action<string>? log = null,
-            Action<GraphStructureDocument>? onStructureLoaded = null)
+            Action<GraphStructureDocument>? onStructureLoaded = null,
+            Action<string>? notifyUser = null)
         {
             if (!StoryGraphDocumentReader.TryRead(
                     assetsPath,
@@ -53,6 +54,8 @@ namespace RowlEngine.Editor.Services
                     var loadResult = StoryGraphLoaderService.Load(parsedDocument);
                     if (!loadResult.Success)
                     {
+                        if (loadResult.FormatVersion > GraphStructureLimits.CurrentVersion)
+                            notifyUser?.Invoke(loadResult.ErrorMessage ?? string.Empty);
                         if (!string.IsNullOrEmpty(loadResult.ErrorMessage))
                             log?.Invoke($"Failed to load story graph: {loadResult.ErrorMessage}");
                         return false;
