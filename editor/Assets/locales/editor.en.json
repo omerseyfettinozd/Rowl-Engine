@@ -1917,6 +1917,15 @@
     "Operation.Save.Succeeded": {
       "text": "Saved"
     },
+    "Operation.Save.DiskFull": {
+      "text": "The disk is full; the project could not be written. Free some space and save again."
+    },
+    "Operation.Save.PermissionDenied": {
+      "text": "No permission to write to the project folder; the project could not be written."
+    },
+    "Operation.Save.ReadOnly": {
+      "text": "The project is on a read-only location; the project could not be written."
+    },
     "Operation.Save.WriteFailed": {
       "text": "The project file could not be written; see the Console."
     },
@@ -2159,6 +2168,24 @@
     },
     "Recovery.Title": {
       "text": "Recovery ready"
+    },
+    "SaveSlots.Error.Io": {
+      "text": "disk error: full, no permission or unreachable"
+    },
+    "SaveSlots.Error.Invalid": {
+      "text": "slot is invalid or was saved by a newer version"
+    },
+    "SaveSlots.Error.Corrupt": {
+      "text": "slot file is corrupt"
+    },
+    "SaveSlots.Error.Missing": {
+      "text": "slot file not found"
+    },
+    "SaveSlots.Error.BadSlot": {
+      "text": "invalid slot number"
+    },
+    "SaveSlots.Error.NotStarted": {
+      "text": "the game has not started yet"
     },
     "SaveSlots.Load": {
       "text": "Load"

@@ -694,6 +694,7 @@ namespace RowlEngine.Editor.ViewModels
             // Motoru hangi yol başlatırsa başlatsın (bu sınıf ya da önizleme
             // denetimi) proje Init ile aynı turda bağlanır.
             EngineHost.StartupProjectRoot = ProjectRoot;
+            ProjectLeftoverSweeper.Sweep(ProjectRoot, AppendLog); // C04: kill sonrası yarım girdiler
 
             ProjectRuntimeSettings = ProjectRuntimeSettingsService.Load(
                 Path.Combine(ProjectRoot, "project.rowlproj"));
@@ -2324,8 +2325,9 @@ namespace RowlEngine.Editor.ViewModels
                 return false;
             }
 
-            bool written = CrashRecoveryService.TryWriteSnapshotWithRecovery(
+            var outcome = CrashRecoveryService.TryWriteSnapshotWithRecoveryDetailed(
                 snapshot, AssetsJsonPath, sequence, () => Volatile.Read(ref _saveSequence), AppendLog);
+            bool written = outcome.Written;
             if (written && sequence == Volatile.Read(ref _saveSequence))
             {
                 Volatile.Write(ref _saveCompletedSequence, sequence);
@@ -2333,9 +2335,9 @@ namespace RowlEngine.Editor.ViewModels
                 ReportSaveSuccess();
                 AppendLog($"[PROJE KAYDEDİLDİ] {Nodes.Count} düğüm ve tüm bileşenler başarıyla kaydedildi ({DateTime.Now:HH:mm:ss})");
             }
-            else if (!written)
+            else if (outcome.Status != SaveWriteStatus.Superseded) // devralınan kayıt hata değil
             {
-                ReportSaveFailure(string.Empty);
+                ReportSaveFailure(SaveFailureClassifier.ReasonFor(outcome));
             }
             return written;
         }
@@ -2366,10 +2368,12 @@ namespace RowlEngine.Editor.ViewModels
             return Task.Run(() =>
             {
                 bool written = false;
+                SaveWriteResult outcome = default;
                 try
                 {
-                    written = CrashRecoveryService.TryWriteSnapshotWithRecovery(
+                    outcome = CrashRecoveryService.TryWriteSnapshotWithRecoveryDetailed(
                         snapshot, assetsJsonPath, sequence, () => Volatile.Read(ref _saveSequence), null);
+                    written = outcome.Written;
                 }
                 catch (Exception ex)
                 {
@@ -2377,7 +2381,7 @@ namespace RowlEngine.Editor.ViewModels
                     Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                     {
                         AppendLog($"Arka plan kayıt başarısız: {message}");
-                        ReportSaveFailure(message);
+                        ReportSaveFailure(SaveFailureClassifier.Describe(ex) ?? message);
                     });
                     return;
                 }
@@ -2397,7 +2401,7 @@ namespace RowlEngine.Editor.ViewModels
                     {
                         // Faz 8 C2: önceden sessizdi — yazılamayan kayıt artık görünür.
                         AppendLog("Arka plan kayıt yazılamadı.");
-                        ReportSaveFailure(string.Empty);
+                        ReportSaveFailure(SaveFailureClassifier.ReasonFor(outcome));
                     }
                 });
             });
@@ -2489,6 +2493,7 @@ namespace RowlEngine.Editor.ViewModels
 
                 if (result.Succeeded)
                 {
+                    ProjectLeftoverSweeper.Sweep(ProjectRoot, AppendLog); // C04
                     ProjectRuntimeSettings = ProjectRuntimeSettingsService.Load(Path.Combine(ProjectRoot, "project.rowlproj"));
                     LoadProjectRuntimeSettingsIntoEditor();
                     SaveSlotsViewModel.Refresh();

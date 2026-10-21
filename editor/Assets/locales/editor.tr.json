@@ -1917,6 +1917,15 @@
     "Operation.Save.Succeeded": {
       "text": "Kaydedildi"
     },
+    "Operation.Save.DiskFull": {
+      "text": "Disk dolu; proje yazılamadı. Yer açıp yeniden kaydedin."
+    },
+    "Operation.Save.PermissionDenied": {
+      "text": "Proje klasörüne yazma izni yok; proje yazılamadı."
+    },
+    "Operation.Save.ReadOnly": {
+      "text": "Proje salt okunur bir konumda; proje yazılamadı."
+    },
     "Operation.Save.WriteFailed": {
       "text": "Proje dosyası yazılamadı; ayrıntı Konsol'da."
     },
@@ -2159,6 +2168,24 @@
     },
     "Recovery.Title": {
       "text": "Kurtarma hazır"
+    },
+    "SaveSlots.Error.Io": {
+      "text": "disk hatası: dolu, izin yok veya erişilemiyor"
+    },
+    "SaveSlots.Error.Invalid": {
+      "text": "slot geçersiz ya da daha yeni bir sürümle kaydedilmiş"
+    },
+    "SaveSlots.Error.Corrupt": {
+      "text": "slot dosyası bozuk"
+    },
+    "SaveSlots.Error.Missing": {
+      "text": "slot dosyası bulunamadı"
+    },
+    "SaveSlots.Error.BadSlot": {
+      "text": "geçersiz slot numarası"
+    },
+    "SaveSlots.Error.NotStarted": {
+      "text": "oyun henüz başlatılmadı"
     },
     "SaveSlots.Load": {
       "text": "Yükle"

@@ -429,11 +429,24 @@ internal static class StoryGraphSaveService
         long sequence,
         Func<long> latestSequence,
         Action<string>? log = null)
+        => TryWriteSnapshotDetailed(snapshot, assetsJsonPath, sequence, latestSequence, log).Written;
+
+    /// <summary>
+    /// <see cref="TryWriteSnapshot"/> ile aynı, ama nedeni de verir: yazıldı /
+    /// devralındı (daha yeni kayıt var — hata DEĞİL) / engellendi / istisna.
+    /// </summary>
+    public static SaveWriteResult TryWriteSnapshotDetailed(
+        StoryGraphSaveSnapshot snapshot,
+        string assetsJsonPath,
+        long sequence,
+        Func<long> latestSequence,
+        Action<string>? log = null)
     {
         if (StoryGraphFormatGuard.IsNewerOnDisk(assetsJsonPath, out int newer))
         {
-            log?.Invoke(StoryGraphFormatGuard.Message(newer));
-            return false;
+            string message = StoryGraphFormatGuard.Message(newer);
+            log?.Invoke(message);
+            return new SaveWriteResult(SaveWriteStatus.Blocked, null, message);
         }
         try
         {
@@ -441,14 +454,14 @@ internal static class StoryGraphSaveService
             string? activeJson = SerializeActiveStory(snapshot);
 
             if (sequence != latestSequence())
-                return false;
+                return new SaveWriteResult(SaveWriteStatus.Superseded);
 
             Directory.CreateDirectory(assetsJsonPath);
             ProjectFileSystem.WriteAllTextAtomically(
                 Path.Combine(assetsJsonPath, "full_story_graph.json"), fullGraphJson);
 
             if (sequence != latestSequence())
-                return false;
+                return new SaveWriteResult(SaveWriteStatus.Superseded);
 
             if (activeJson != null)
             {
@@ -457,12 +470,14 @@ internal static class StoryGraphSaveService
             }
 
             RemoveStaleLegacyCopy(assetsJsonPath, log);
-            return sequence == latestSequence();
+            return sequence == latestSequence()
+                ? new SaveWriteResult(SaveWriteStatus.Written)
+                : new SaveWriteResult(SaveWriteStatus.Superseded);
         }
         catch (Exception ex)
         {
             log?.Invoke($"Failed to save story graph: {ex.Message}");
-            return false;
+            return new SaveWriteResult(SaveWriteStatus.Failed, ex);
         }
     }
 

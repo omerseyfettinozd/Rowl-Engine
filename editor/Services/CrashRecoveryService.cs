@@ -100,13 +100,22 @@ internal static class CrashRecoveryService
         long sequence,
         Func<long> latestSequence,
         Action<string>? log = null)
+        => TryWriteSnapshotWithRecoveryDetailed(snapshot, assetsJsonPath, sequence, latestSequence, log).Written;
+
+    /// <summary>Aynı akış, nedenli sonuçla (C04: disk dolu / izin / devralındı ayrımı).</summary>
+    public static SaveWriteResult TryWriteSnapshotWithRecoveryDetailed(
+        StoryGraphSaveSnapshot snapshot,
+        string assetsJsonPath,
+        long sequence,
+        Func<long> latestSequence,
+        Action<string>? log = null)
     {
         MarkDirty(assetsJsonPath);
-        bool written = StoryGraphSaveService.TryWriteSnapshot(
+        var result = StoryGraphSaveService.TryWriteSnapshotDetailed(
             snapshot, assetsJsonPath, sequence, latestSequence, log);
-        if (written)
+        if (result.Written)
             NoteSuccessfulSave(assetsJsonPath, snapshot);
-        return written;
+        return result;
     }
 
     public static void NoteSuccessfulSave(string assetsJsonPath, StoryGraphSaveSnapshot snapshot)
