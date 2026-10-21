@@ -312,7 +312,7 @@ def load_game_identity_from_manifest(manifest_path):
     game_id = canonical_game_id(doc.get("project_uuid"))
     if game_id is None:
         raise PackError([("game-identity", str(manifest_path),
-                          "project manifest has no valid 'project_uuid'; open the project in the editor once or add one")])
+                          "project manifest has no valid 'project_uuid'; build the game once from the editor (Build/Export writes it) or add a lowercase-UUID 'project_uuid' to project.rowlproj")])
     name = doc.get("name")
     return game_id, name if isinstance(name, str) else ""
 
