@@ -49,6 +49,32 @@ A target is production-green only when **all** of these hold for it:
 - Not claimed: interactive GUI/input/audio-device proof on real Windows
   hardware (tracked as pending, same as Linux GUI proof).
 
+## Release-candidate gate runner (Linux x86_64)
+
+`tools/run_rc_gates.sh [--quick] [--allow-dirty] [--out DIR]` runs the gates
+above for one source commit on a clean tree and writes `report.md` +
+`report.json` under `build/rc-gates/<commit>/` (one log per gate in `logs/`).
+
+- Gates: static (`git diff --check`, portability, toolchain parity, launcher
+  parity), Debug build + ctest, additive C ABI, editor xUnit, RowlEye tests,
+  ASan+UBSan and TSan `rowl_native_tests`/`rowl_benchmark_tool_tests`
+  (nightly flags, absolute perf floors report-only), and the package gate
+  (`second_signal` -> `export_game.py portable-zip` -> extracted layout ->
+  `verify_release_package.py` -> packaged `--package-smoke-test`, SDL dummy).
+  Python tool tests run inside the ctest gate.
+- Each gate is PASS / FAIL / SKIPPED(reason) / ENV(reason). Overall is PASS
+  only when every required gate is PASS; SKIPPED, ENV and missing gates never
+  count as PASS. Exit codes: 0 PASS, 1 FAIL/INCOMPLETE, 2 partial.
+- `--quick` skips the sanitizer gates (reported SKIPPED(quick)); best result
+  is `PASS (partial)`, exit 2 — not release evidence. A dirty tree is refused
+  unless `--allow-dirty`; such a report is marked and is at best `PASS (dirty)`.
+- The RC Soak N-stress 300 s budget is not hidden: under a power-saver
+  profile it FAILs with an `env hint: power profile is power-saver` note;
+  the RC must be gated on a performance profile. The report records
+  commit, compiler/dotnet versions and power profile.
+- The aggregation rules are pinned by `tests/test_rc_gates.py`
+  (`rowl_rc_gates_tests`).
+
 ## Evidence-blocked targets (not supported — no illusion)
 
 - **Android arm64-v8a:** host has SDK + build-tools + platform-tools

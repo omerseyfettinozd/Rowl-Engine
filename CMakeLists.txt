@@ -228,6 +228,16 @@ if(ROWL_BUILD_RUNTIME_TESTS)
                 TIMEOUT 180
             )
         endif()
+        # C05: RC kapi toplayicisi (tools/rc_gate_report.py) sozlesmesi; salt
+        # python, derleme gerektirmez.
+        add_test(
+            NAME rowl_rc_gates_tests
+            COMMAND ${Python3_EXECUTABLE} -u ${CMAKE_SOURCE_DIR}/tests/test_rc_gates.py
+        )
+        set_tests_properties(rowl_rc_gates_tests PROPERTIES
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+            TIMEOUT 30
+        )
         add_test(
             NAME rowl_export_tool_tests
             COMMAND ${Python3_EXECUTABLE} -u ${CMAKE_SOURCE_DIR}/tests/test_export_game.py
