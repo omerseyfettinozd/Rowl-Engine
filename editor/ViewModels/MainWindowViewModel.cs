@@ -1259,16 +1259,25 @@ namespace RowlEngine.Editor.ViewModels
         /// </summary>
         public bool LoadFullStoryGraphFile()
         {
-            return StoryGraphLifecycleCoordinator.LoadGraphWithRollback(
-                AssetsPath,
-                AssetsJsonPath,
-                Nodes,
-                Connections,
-                OnNodePropertyChanged,
-                EnforceSingleOutgoingWireRule,
-                node => SelectNodeQuiet(node),
-                AppendLog,
-                ApplyLoadedStructure);
+            // Toplu yükleme: tuval dizini her düğüm/telde değil, bitişte bir kez kurulur (C03).
+            NodeGraphViewModel.BeginBulkUpdate();
+            try
+            {
+                return StoryGraphLifecycleCoordinator.LoadGraphWithRollback(
+                    AssetsPath,
+                    AssetsJsonPath,
+                    Nodes,
+                    Connections,
+                    OnNodePropertyChanged,
+                    EnforceSingleOutgoingWireRule,
+                    node => SelectNodeQuiet(node),
+                    AppendLog,
+                    ApplyLoadedStructure);
+            }
+            finally
+            {
+                NodeGraphViewModel.EndBulkUpdate();
+            }
         }
 
         public bool SaveFullStoryGraphFile()

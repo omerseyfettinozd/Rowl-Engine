@@ -56,8 +56,14 @@ internal static class EditorScaleBenchmark
         scaleVm.Nodes.Clear();
         scaleVm.Connections.Clear();
         stopwatch.Restart();
-        foreach (NodeViewModel node in loaded.Nodes) scaleVm.Nodes.Add(node);
-        foreach (ConnectionViewModel connection in loaded.Connections) scaleVm.Connections.Add(connection);
+        // Gerçek yükleme yolu gibi toplu: indeks bitişte bir kez kurulur.
+        scaleVm.NodeGraphViewModel.BeginBulkUpdate();
+        try
+        {
+            foreach (NodeViewModel node in loaded.Nodes) scaleVm.Nodes.Add(node);
+            foreach (ConnectionViewModel connection in loaded.Connections) scaleVm.Connections.Add(connection);
+        }
+        finally { scaleVm.NodeGraphViewModel.EndBulkUpdate(); }
         stopwatch.Stop();
         benchmark.Record("scale_graph_viewmodel_population_ms", stopwatch.Elapsed.TotalMilliseconds);
 
