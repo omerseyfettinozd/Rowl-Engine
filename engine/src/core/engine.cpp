@@ -384,6 +384,7 @@ bool Engine::initialize(const EngineConfig& config) {
 
     // Initialize GameState Subsystem (Root Step #1)
     m_gameState = Rowl::State::GameState::createInitialState(m_storyRuntime.currentNodeId());
+    m_startPresentationStepId = getCurrentStepId();
 
     // Load story graph from disk
     const bool storyLoaded = loadStoryGraphFile();
@@ -482,6 +483,7 @@ void Engine::resetToStartNode() {
         m_activeDialogueData.lastBlipCodepointIndex = 0;
         ROWL_LOG_INFO("Engine Reset to Start Node #" + std::to_string(m_storyRuntime.currentNodeId()));
     }
+    m_startPresentationStepId = getCurrentStepId();
 }
 
 void Engine::endSession() {
@@ -494,6 +496,7 @@ void Engine::endSession() {
     // right after the mount anyway).
     if (!m_storyRuntime.resetToStart()) return;
     m_gameState = Rowl::State::GameState::createInitialState(m_storyRuntime.startNodeId());
+    m_startPresentationStepId = getCurrentStepId();
     m_lastRecordedDialogueNodeId = 0;
     m_lastSfxPlaybackNodeId = 0;
 }
@@ -1558,6 +1561,10 @@ bool Engine::parseStoryGraphJson(const std::string& jsonContent) {
             startNode.dialogueBoxX, startNode.dialogueBoxY,
             startNode.dialogueBoxWidth, startNode.dialogueBoxHeight);
     }
+    // Entry effects of the start node (variable component, ...) advance
+    // stepId while nobody has played yet; the mid-session mount gate
+    // measures progress from here, not from the bare initial step.
+    m_startPresentationStepId = getCurrentStepId();
 
     ROWL_LOG_INFO("Story graph loaded: " + std::to_string(m_storyRuntime.size()) +
                   " nodes. Start node #" + std::to_string(m_storyRuntime.currentNodeId()));

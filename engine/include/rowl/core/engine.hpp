@@ -376,6 +376,11 @@ public:
     /// step; failure restores the pre-rewind session and fails loud.
     bool rewind(uint64_t steps = 1);
     uint64_t getCurrentStepId() const;
+    /// stepId right after the engine presented the start node (graph load,
+    /// reset, endSession). The start node's own entry effects are not
+    /// player progress; SetProjectDirectory's mid-session gate compares
+    /// against this instead of the bare initial step (1).
+    uint64_t getStartPresentationStepId() const { return m_startPresentationStepId; }
     void setSaveDirectory(const std::string& saveDir);
     std::string getSaveDirectory() const;
     std::filesystem::path getSaveDirectoryPath() const;
@@ -467,6 +472,7 @@ private:
     std::vector<std::string> m_activeScriptSources;
     std::vector<ScriptRuntimeStatus> m_scriptRuntimeStatuses;
     uint64_t m_lastRecordedDialogueNodeId = 0;
+    uint64_t m_startPresentationStepId = 1;
     // Audio components are applied while a scene is refreshed as well as when
     // a story node is entered. Keep the entry marker separate so inspector
     // preview refreshes cannot retrigger a one-shot SFX.

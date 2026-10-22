@@ -207,6 +207,7 @@ int main(int argc, char* argv[]) {
     test_game_identity();
     test_game_data_layout();
     test_boot_story_diagnostics();
+    test_project_mount_cwd();
     test_graph_vnext();
     test_localization();
     test_locale_cluster();

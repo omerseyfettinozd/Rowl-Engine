@@ -180,6 +180,7 @@ void test_story_graph_format_version();
 void test_game_identity();
 void test_game_data_layout();
 void test_boot_story_diagnostics();  // #118/#119/#120: grafsiz/bozuk boot ayirt edilebilirlik kilidi
+void test_project_mount_cwd();  // cwd = proje koku iken oynatici VFS baglamasi kilidi
 void test_graph_vnext();
 void test_localization();
 void test_locale_cluster();  // Dilim Locale kümesi kilitleri (T1-T7)

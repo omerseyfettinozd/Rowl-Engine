@@ -351,14 +351,19 @@ void RowlEngine_SetProjectDirectory(RowlEngineHandle handle, const char* project
         // aşamasındaki motorda (init'li ama oynanmamış — örn. sesin
         // mount-öncesi SetProjectDirectory akışı) mount serbesttir.
         // "Oynanmış" = history dolu, cursor start'tan ayrılmış veya
-        // script-variable step'i ilerlemiş (init tabanı stepId=1).
+        // script-variable step'i başlangıç sunumunun ötesine ilerlemiş.
+        // Taban sabit 1 değil: başlangıç düğümünün giriş etkileri
+        // (variable bileşeni) step'i kimse oynamadan 2'ye çıkarır; cwd =
+        // proje kökünde Init grafiği yükleyince oynatıcının bağlaması
+        // sessizce reddediliyordu (test_project_mount_cwd).
         bool sessionLive = false;
         if (engine->isInitialized()) {
             const auto& doc = engine->getStoryGraphDocument();
             if (!doc.nodes.empty()) {
                 sessionLive = !engine->getDialogueHistory().empty() ||
                               engine->getCurrentNodeId() != doc.startNodeId ||
-                              engine->getCurrentStepId() > 1;
+                              engine->getCurrentStepId() >
+                                  engine->getStartPresentationStepId();
             }
         }
         if (sessionLive) {
