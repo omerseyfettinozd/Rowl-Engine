@@ -71,6 +71,9 @@ public static class EditorPlayModeCoordinator
         // Sıfırlama burada yapılmaz: açık oyun önizlemesi durmayı görüp ilk kareyi tek kez
         // sıfırlayarak çizer; önizleme kapalıysa bir sonraki Oynat zaten başlangıca sıfırlar.
         host.SetPlayState(false);
+        // Durdur oyunu gerçekten kapatır: müzik arka planda çalmaya devam ediyordu
+        // (boşta bakım adımı akışı beslemeyi sürdürüyordu).
+        host.StopBgm();
 
         log("Play mode stopped.");
 

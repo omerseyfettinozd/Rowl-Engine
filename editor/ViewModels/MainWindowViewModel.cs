@@ -1574,17 +1574,16 @@ namespace RowlEngine.Editor.ViewModels
         }
 
         /// <summary>
-        /// Unity taşıma kümesi: duraklat/devam et. Native çağrı yalnızca
-        /// motor bağlıyken yapılır; VM durumu headless'ta da döner
-        /// (kilit testi motoru başlatmadan geçişi doğrular).
+        /// Unity taşıma kümesi: duraklat/devam et. Oyunu ve sesi olduğu yerde dondurur;
+        /// oyunun kendi Esc duraklatma menüsünü açmaz (eskiden native SetPaused'a gidip
+        /// menüyü açıyordu). VM durumu headless'ta da döner.
         /// </summary>
         [RelayCommand]
         public void PauseStandalone()
         {
             if (!IsPlayingStandalone) return;
             IsPlayPaused = !IsPlayPaused;
-            if (EngineHost.IsInitialized)
-                EngineHost.SetPaused(IsPlayPaused);
+            EngineHost.SetEditorFrozen(IsPlayPaused);
             StatusText = IsPlayPaused ? "Paused — simulation frozen" : "Offscreen Play Mode Active";
         }
 
@@ -1649,8 +1648,7 @@ namespace RowlEngine.Editor.ViewModels
                 {
                     IsPlayingStandalone = true;
                     IsPlayPaused = false;
-                    if (EngineHost.IsInitialized)
-                        EngineHost.SetPaused(false);
+                    EngineHost.SetEditorFrozen(false);
                     PlayButtonText = "Stop";
                     PlayButtonColor = ThemeFallbackColors.BrushHex("PlayButtonRedColor", ThemeFallbackColors.Surface);
                     StatusText = "Offscreen Play Mode Active";
@@ -1676,8 +1674,7 @@ namespace RowlEngine.Editor.ViewModels
 
             IsPlayingStandalone = false;
             IsPlayPaused = false;
-            if (EngineHost.IsInitialized)
-                EngineHost.SetPaused(false);
+            EngineHost.SetEditorFrozen(false);
             PlayButtonText = "Play";
             PlayButtonColor = ThemeFallbackColors.BrushHex("PlayButtonGreenColor", ThemeFallbackColors.Surface);
             StatusText = "Engine Ready — Offscreen C++ Runtime Active";

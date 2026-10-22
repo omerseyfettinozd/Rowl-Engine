@@ -46,6 +46,16 @@ namespace RowlEngine.Editor.Native
         /// <summary>True when Play mode is active (game loop running).</summary>
         public bool IsPlaying { get; private set; } = false;
 
+        /// <summary>
+        /// Editör Duraklat'ı (Unity Pause): oyun ve sesi olduğu yerde dondurur. Oyunun kendi
+        /// Esc menüsünü açan <see cref="SetPaused"/>'tan ayrıdır — editörde Duraklat'a basınca
+        /// oyun içi duraklatma menüsü çıkıyordu. Adım düğmesi <see cref="Step"/> ile tek kare ilerletir.
+        /// </summary>
+        public bool IsEditorFrozen { get; private set; }
+
+        // Donukken ses kısılır; motorda ses duraklatma çağrısı yok. Çözülünce bu seviye geri gelir.
+        private float _frozenMasterVolume = 1.0f;
+
         private WriteableBitmap? _renderTargetBitmap;
         public WriteableBitmap? RenderTargetBitmap
         {
@@ -356,7 +366,7 @@ namespace RowlEngine.Editor.Native
             if (dt > 0.25f) dt = 0.25f;
             if (dt < 0.0f)  dt = 0.0f;
 
-            if (IsPlaying)
+            if (IsPlaying && !IsEditorFrozen)
             {
                 InvokeNative(handle => NativeBridge.RowlEngine_Step(handle, dt));
                 RefreshDialogueHistoryIfStale();
@@ -377,12 +387,14 @@ namespace RowlEngine.Editor.Native
                 // tweens progress instead of stalling on Step(0). Paused story
                 // simulation stays frozen (engine.cpp paused branch), so this
                 // is story-safe.
-                float upkeepDt = (float)Math.Clamp(idleSeconds, 0.0, 0.25);
+                // Editör dondurmasında görsel saat de durur (kamera sarsıntısı, geçişler).
+                float upkeepDt = IsEditorFrozen ? 0f : (float)Math.Clamp(idleSeconds, 0.0, 0.25);
                 // Pre-clear so the read below belongs to this upkeep; Step
                 // never stamps success, so non-zero is always fresh evidence
                 // (e.g. the #160 stall StateError).
                 InvokeNative(handle => NativeBridge.RowlEngine_ClearLastResult(handle));
                 InvokeNative(handle => NativeBridge.RowlEngine_Step(handle, upkeepDt));
+                SilenceEditModeMusic();
                 if (TryGetLastEngineResult(out int upkeepCode, out string upkeepOp, out string upkeepMsg)
                     && upkeepCode != 0)
                     Debug.WriteLine($"EngineHost idle upkeep last-result {upkeepCode} ({upkeepOp}): {upkeepMsg}");
@@ -548,12 +560,14 @@ namespace RowlEngine.Editor.Native
             if (!IsInitialized) return;
             if (IsPlaying == isPlaying) return;
             IsPlaying = isPlaying;
+            _editAudioPreview = false;
             _lastTick = DateTime.UtcNow;
             _lastIdleUpkeep = _lastTick;
 
             InvokeNative(handle => NativeBridge.RowlEngine_SetPlayState(handle, isPlaying ? 1 : 0));
             if (!isPlaying)
             {
+                SetEditorFrozen(false);
                 // Render static frame when stopping
                 InvokeNative(handle => NativeBridge.RowlEngine_Step(handle, 0.0f));
                 UpdatePixelBuffer();
@@ -566,6 +580,49 @@ namespace RowlEngine.Editor.Native
         {
             if (IsInitialized)
                 InvokeNative(handle => NativeBridge.RowlEngine_SetPaused(handle, paused ? 1 : 0));
+        }
+
+        // Denetçi'deki "sesi dinle" ile elle başlatılan müzik; düzenleme susturmasından muaf.
+        private bool _editAudioPreview;
+
+        /// <summary>
+        /// Düzenleme modunda (oyun oynamıyorken) motorun sahne uygulayan çağrıları — ilk kare,
+        /// başlangıca sıfırlama, hikâye yükleme, önizleme itişi — başlangıç düğümünün ses
+        /// bileşeniyle müziği başlatıyordu: proje açılır açılmaz ve Durdur'dan sonra müzik
+        /// çalmaya devam ediyor, oyun arkada açık kalmış gibi görünüyordu. Müzik yalnız oyun
+        /// modunda ya da elle ses önizlemesinde çalar.
+        /// </summary>
+        private void SilenceEditModeMusic()
+        {
+            if (IsPlaying || _editAudioPreview || !IsInitialized) return;
+            InvokeNative(handle =>
+            {
+                if (NativeBridge.RowlEngine_IsBgmPlaying(handle) != 0)
+                    NativeBridge.RowlEngine_StopBgm(handle);
+            });
+        }
+
+        /// <summary>Editör Duraklat'ı: simülasyonu ve sesi dondurur / çözer (menü açmaz).</summary>
+        public void SetEditorFrozen(bool frozen)
+        {
+            if (IsEditorFrozen == frozen) return;
+            IsEditorFrozen = frozen;
+            _lastTick = DateTime.UtcNow;
+            _lastIdleUpkeep = _lastTick;
+            if (IsInitialized)
+            {
+                if (frozen)
+                {
+                    _frozenMasterVolume = GetMasterVolume();
+                    InvokeNative(handle => NativeBridge.RowlEngine_SetMasterVolume(handle, 0f));
+                }
+                else
+                {
+                    float restore = _frozenMasterVolume;
+                    InvokeNative(handle => NativeBridge.RowlEngine_SetMasterVolume(handle, restore));
+                }
+            }
+            OnPropertyChanged(nameof(IsEditorFrozen));
         }
 
         /// <summary>Reports the native pause flag (false when uninitialized).</summary>
@@ -587,6 +644,7 @@ namespace RowlEngine.Editor.Native
                     NativeBridge.RowlEngine_ResetToStartNode(handle);
                     NativeBridge.RowlEngine_Step(handle, 0.0f);
                 });
+                SilenceEditModeMusic();
                 InvalidateDialogueHistory();
                 UpdatePixelBuffer();
             }
@@ -664,6 +722,7 @@ namespace RowlEngine.Editor.Native
             var stopwatch = Stopwatch.StartNew();
             InvokeNative(handle => NativeBridge.RowlEngine_UpdateSceneFromJson(handle, componentsJson));
             stopwatch.Stop();
+            SilenceEditModeMusic();
             LastSceneUpdateMilliseconds = stopwatch.Elapsed.TotalMilliseconds;
             _lastPreviewComponentsJson = componentsJson;
             RefreshScriptRuntimeDiagnostics();
@@ -727,6 +786,7 @@ namespace RowlEngine.Editor.Native
             if (IsInitialized && !string.IsNullOrEmpty(jsonPath))
             {
                 InvokeNative(handle => NativeBridge.RowlEngine_LoadStoryGraph(handle, jsonPath));
+                SilenceEditModeMusic();
                 if (!IsPlaying)
                 {
                     InvokeNative(handle => NativeBridge.RowlEngine_Step(handle, 0.0f));
@@ -741,6 +801,7 @@ namespace RowlEngine.Editor.Native
             if (!IsInitialized || string.IsNullOrEmpty(vfsPath)) return false;
             bool loaded = InvokeNative(
                 handle => NativeBridge.RowlEngine_LoadStoryGraphFromVfs(handle, vfsPath) != 0, false);
+            SilenceEditModeMusic();
             if (loaded && !IsPlaying)
             {
                 InvokeNative(handle => NativeBridge.RowlEngine_Step(handle, 0.0f));
@@ -1141,6 +1202,12 @@ namespace RowlEngine.Editor.Native
         {
             if (!NativeGuard.TryClamp01(volume, out float v))
                 return;
+            if (IsEditorFrozen)
+            {
+                // Donukken gelen ayar (ör. tercih senkronu) sessizliği bozmasın; çözülünce uygulanır.
+                _frozenMasterVolume = v;
+                return;
+            }
             InvokeNative(handle => NativeBridge.RowlEngine_SetMasterVolume(handle, v));
         }
 
@@ -1212,11 +1279,16 @@ namespace RowlEngine.Editor.Native
         public void PlayAudio(string assetPath, int channelType = 0, int filterType = 0)
         {
             if (IsInitialized && !string.IsNullOrEmpty(assetPath))
+            {
+                if (!IsPlaying && channelType == 0)
+                    _editAudioPreview = true;
                 InvokeNative(handle => NativeBridge.RowlEngine_PlayAudio(handle, assetPath, channelType, filterType));
+            }
         }
 
         public void StopBgm()
         {
+            _editAudioPreview = false;
             InvokeNative(NativeBridge.RowlEngine_StopBgm);
         }
 

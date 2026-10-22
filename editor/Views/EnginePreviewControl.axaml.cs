@@ -202,7 +202,8 @@ namespace RowlEngine.Editor.Views
             if (_engineHost == null || !_engineHost.IsInitialized) return;
 
             // Unity behavior: Game interaction / click to advance is active ONLY in Play mode
-            if (!_engineHost.IsPlaying) return;
+            // (and not while the editor Pause has the game frozen).
+            if (!_engineHost.IsPlaying || _engineHost.IsEditorFrozen) return;
 
             var image = this.FindControl<Image>("EnginePreviewImage");
             var position = image != null ? e.GetPosition(image) : default;
