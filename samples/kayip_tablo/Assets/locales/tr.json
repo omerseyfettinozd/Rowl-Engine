@@ -1,0 +1,926 @@
+{
+  "schema_version": 1,
+  "locale": "tr",
+  "entries": {
+    "1aba00c8-6686-59e5-b5d4-765acd5d6f58": {
+      "speaker": "Anlatıcı",
+      "text": "İstanbul, Temmuz 1894. Boğaz’ın üstünde ince bir sıcak pus asılı, Pera’nın yokuşlarında martılar çığlık çığlığa.",
+      "alt_text": ""
+    },
+    "61c407b6-06d9-5435-b300-640ddc3148b4": {
+      "speaker": "Anlatıcı",
+      "text": "Galata’nın dar sokaklarından birinde, terebentin ve keten yağı kokan bir atölye var. Sahibi şehrin en inatçı ressamı: Usta Agop.",
+      "alt_text": ""
+    },
+    "11fe4dfc-29ba-5d19-8278-013bf231dd7a": {
+      "speaker": "Anlatıcı",
+      "text": "Usta iki yıldır tek bir tabloyla uğraşıyor: “Boğaz’ın Işığı”. Pera’daki yaz sergisine teslim günü, salı öğle vakti.",
+      "alt_text": ""
+    },
+    "ed5ed76d-7ff3-56f5-9537-458381e3b94d": {
+      "speaker": "Selim",
+      "text": "Ben Selim, on yedi yaşındayım. Üç yıldır Usta’nın fırçalarını yıkar, tuvallerini gererim. Bu tablo için o aylarca uyumadı, ben de onunla birlikte.",
+      "alt_text": ""
+    },
+    "77118639-05a5-531a-b0a7-524b60adfd8b": {
+      "speaker": "Anlatıcı",
+      "text": "Cumartesi sabahı Selim, elinde sıcak simitlerle atölyenin merdivenlerini ikişer ikişer çıktı ve yedek anahtarla kapıyı açtı.",
+      "alt_text": ""
+    },
+    "bf7c7ca1-6613-5244-b267-f6c67e1b4b0f": {
+      "speaker": "Anlatıcı",
+      "text": "İçeride sabah ışığı, tozlu camdan süzülüp şövalenin üstüne düşüyordu. Şövale bomboştu; ayaklarında yalnızca iki kopmuş ip parçası kalmıştı.",
+      "alt_text": ""
+    },
+    "38619575-ddaf-5ee4-ba68-83fe7fa698c5": {
+      "speaker": "Selim",
+      "text": "Usta? Tabloyu mu indirdiniz? Dün akşam tam burada, bu şövaledeydi.",
+      "alt_text": ""
+    },
+    "f2fad2aa-f55b-5203-bb2d-b11e6a510f47": {
+      "speaker": "Usta Agop",
+      "text": "Selim… Sen mi aldın? Doğruyu söyle oğlum. Şaka yapıyorsan, bu şaka bana çok pahalıya patlar.",
+      "alt_text": ""
+    },
+    "f2cad656-5be8-5752-9366-beea76c83667": {
+      "speaker": "Selim",
+      "text": "Yemin ederim hayır, Usta! Şimdi geldim; yedek anahtarla açtım, kapı kilitliydi.",
+      "alt_text": ""
+    },
+    "2e9113aa-105e-5961-86df-92d93c647c6b": {
+      "speaker": "Usta Agop",
+      "text": "Kapıyı dün gece ben kilitledim, anahtarı kendi cebimde tuttum. O halde geriye bir tek pencere kalıyor.",
+      "alt_text": ""
+    },
+    "a3ef152c-d258-50e2-b7ee-2305279a00ed": {
+      "speaker": "Anlatıcı",
+      "text": "Arka penceredeki mandal zorlanıp eğilmişti. Usta ağır ağır sandalyeye çöktü; omuzları bir gecede yaşlanmış gibiydi.",
+      "alt_text": ""
+    },
+    "2145cb66-ba9a-55b1-a62c-af818045996e": {
+      "speaker": "Usta Agop",
+      "text": "İki yıl, Selim. Her sabah o ışığı yakalamak için erkenden kalktım. Şimdi salı günü sergiye ne götüreceğim? Boş bir şövaleyi mi?",
+      "alt_text": ""
+    },
+    "78fbcb9e-2e50-57f5-9775-0de244ca0ba3": {
+      "speaker": "Usta Agop",
+      "text": "Çerçeveyi de götürmüşler… Onu Beyoğlu’ndaki Rum ustaya yaptırmıştım. Hırsız hem tabloyu hem çerçeveyi iyi tanıyan biri.",
+      "alt_text": ""
+    },
+    "140c39b0-b6b5-5862-b238-91c5f0c9f826": {
+      "speaker": "Anlatıcı",
+      "text": "Selim pencere eşiğine eğildi. Parmak ucu kadar bir tuval parçası duruyordu; kenarında altın varak tozu pırıldıyordu.",
+      "alt_text": ""
+    },
+    "c64ce2ac-afb7-5215-871f-2796804505d4": {
+      "speaker": "Selim",
+      "text": "Bakın Usta, çerçeveden sıyrılmış gibi. Demek tuvali çerçeveden sökerken bunu düşürmüşler.",
+      "alt_text": ""
+    },
+    "6c9973e1-dd92-54aa-a9b4-6fc0a37ececc": {
+      "speaker": "Usta Agop",
+      "text": "Altın varak tozu… Acele bir iş, ama tuvali kenarından, çok dikkatle sökmüşler. Elleri bilen biri.",
+      "alt_text": ""
+    },
+    "97b39347-6bcd-54f7-9308-47bcc4c521aa": {
+      "speaker": "Anlatıcı",
+      "text": "Çöp sepetinde buruşturulmuş bir ambalaj kâğıdı yatıyordu. Köşesinde kırmızı mürekkeple bir mühür vardı: Kapalıçarşı’dan bir dükkân. Selim, çerçeveyi bu kâğıda sarmışlar, diye düşündü.",
+      "alt_text": ""
+    },
+    "3cbe2501-fe31-56a1-b315-f549666f7d28": {
+      "speaker": "Anlatıcı",
+      "text": "Selim kâğıdı burnuna götürdü. Terebentinin altında hafif, tatlı bir koku vardı: gül suyu.",
+      "alt_text": ""
+    },
+    "cc1c57ee-07a1-5097-ae4e-557dd061080a": {
+      "speaker": "Selim",
+      "text": "Gül suyu kokuyor. Bir hırsız gül suyu sürünür mü, Usta? Bu koku bana başka bir şey söylüyor.",
+      "alt_text": ""
+    },
+    "52a37a55-634d-5d67-bc6d-a2d6941c925c": {
+      "speaker": "Usta Agop",
+      "text": "Geçen ay Hüsnü Bey yüz elli altın lira verip tabloyu istedi. Satılık değil, dedim. Gözlerimin içine öyle bir baktı ki, hâlâ aklımdan çıkmıyor.",
+      "alt_text": ""
+    },
+    "e4ccedaa-ea2d-5306-a46e-83bf868bef8a": {
+      "speaker": "Usta Agop",
+      "text": "İkisine de git. Ben sergi komitesine haber salayım. Ama aklında olsun: bu şehirde kapılar kabalıkla değil, nezaketle açılır.",
+      "alt_text": ""
+    },
+    "d2eae153-805d-5c17-81eb-cd0601e907ff": {
+      "speaker": "Usta Agop",
+      "text": "İşin bitince Beyazıt’ta Hoca Nureddin’e de uğra. Eski dostumdur; şehirde fısıldanan ne varsa kulağına gider.",
+      "alt_text": ""
+    },
+    "77c3e5e3-ed4c-54a5-ad90-9f9d5ee812d7": {
+      "speaker": "Selim",
+      "text": "İz iki yere çıkıyor: çarşı ve köşk. Önce hangisine gitmeliyim?",
+      "alt_text": ""
+    },
+    "9c78c9fe-eb94-5c86-b3f3-83b88b04734e": {
+      "speaker": "Anlatıcı",
+      "text": "Kapalıçarşı’nın kemerli sokakları sıcak, kalabalık ve gürültülüydü. Bakır tencereler, halılar, çığırtkanlar… Selim kâğıttaki mührün izini sürdü.",
+      "alt_text": ""
+    },
+    "9e49de8b-42bf-5c18-8c30-21c1989e1088": {
+      "speaker": "Anlatıcı",
+      "text": "Mühür, Bedesten’in yakınındaki küçük bir antikacıya çıkıyordu. Raflarda saatler, kâseler, eski çerçeveler. Kasanın arkasında geniş şapkalı bir kadın oturuyordu.",
+      "alt_text": ""
+    },
+    "911430e2-c3df-511a-9b34-37b8fe074d53": {
+      "speaker": "Madam Eleni",
+      "text": "Aa, bir müşteri! Ya da bir müfettiş. Gençsin, çok gençsin… Yani müşteri. Buyur evladım, ne arıyorsun?",
+      "alt_text": ""
+    },
+    "09e93e08-96a1-5130-be70-68d483b39427": {
+      "speaker": "Selim",
+      "text": "Ben Usta Agop’un çırağı Selim. Dün gece atölyemizden bir tablo çalındı. Hırsızın bıraktığı kâğıtta sizin dükkânın mührü var.",
+      "alt_text": ""
+    },
+    "fd2222ad-9381-59e3-8575-751723a9c39b": {
+      "speaker": "Madam Eleni",
+      "text": "Benim mührüm yüz dükkânda dolaşır. Kâğıdı yüz kişiye satarım. Bir hırsız bana gelip kâğıt alsa, ben ne bileyim, çocuğum?",
+      "alt_text": ""
+    },
+    "47852d04-375a-5549-ad0d-4df40ffc5449": {
+      "speaker": "Anlatıcı",
+      "text": "Selim etrafına baktı. Kasanın arkasında, duvara asılı altın varaklı bir çerçeve duruyordu; içi boştu. Selim oyma yaprak desenini bir bakışta tanıdı: Usta’nın tablosunun çerçevesi!",
+      "alt_text": ""
+    },
+    "9c0bd2e5-32e5-5979-b660-039e946214d1": {
+      "speaker": "Madam Eleni",
+      "text": "Bu mu? Çarşıda ne çok altın varaklı çerçeve var. Hepsi birbirine benzer, hepsi pahalıya satılır. Ben bir şey bilmiyorum, bir şey görmedim, bir şey duymadım.",
+      "alt_text": ""
+    },
+    "c66fc714-93c7-566c-ab65-43ab6a43b08d": {
+      "speaker": "Selim",
+      "text": "Madam Eleni her şeyi inkâr ediyor, ama gözlerinde bir tedirginlik var. Nasıl konuşmalıyım?",
+      "alt_text": ""
+    },
+    "69990dd5-3277-59b8-85cc-ad6847dc045f": {
+      "speaker": "Anlatıcı",
+      "text": "Selim cebinden tuval parçasını çıkarıp tezgâha koydu. Madam Eleni gözlüğünü takıp parçayı ışığa tuttu; kenardaki altın tozu parladı.",
+      "alt_text": ""
+    },
+    "09c7af36-cf0f-5f69-9861-2f4a143d7edf": {
+      "speaker": "Madam Eleni",
+      "text": "Hım… Aynı varak, aynı ahşap tozu. Bu parça benim çerçevemin köşesine tam oturuyor. Tüh. Şimdi inkâr edemem.",
+      "alt_text": ""
+    },
+    "bfcbc4d8-c95a-5149-9cc7-3c6d1ce3e5c5": {
+      "speaker": "Madam Eleni",
+      "text": "Peçeli genç bir kadın getirdi çerçeveyi, dün gece, dükkân kapanırken. Elinde tuval yoktu, yalnızca çerçeve. Ben de aldım. Paraya bakarım ama hırsıza ortak olmam.",
+      "alt_text": ""
+    },
+    "1cb85341-d8c7-572c-80a1-34ee35692fcd": {
+      "speaker": "Selim",
+      "text": "Madam, bu şapka Paris’ten mi geliyor? Çarşıda bu kadar şık bir dükkân sahibi görmedim; tezgâhınız bir sanat müzesi gibi.",
+      "alt_text": ""
+    },
+    "d7e88b99-382f-5981-8b90-3381485974a4": {
+      "speaker": "Madam Eleni",
+      "text": "Panagia’m! Bu çocuğun dili Boğaz kadar tatlı! İki damat adayı ve bir vergi memuru bana bu kadar güzel konuşmadı. Otur, kahve içeceksin.",
+      "alt_text": ""
+    },
+    "d96c0eff-4e86-54ed-a11c-d2998b4fa1ef": {
+      "speaker": "Madam Eleni",
+      "text": "Peki, peki, söylerim. Peçeli genç bir kadın getirdi çerçeveyi dün gece. Tuvali yoktu, yalnızca çerçeve. Parayı alınca arkasına bakmadan gitti, evladım.",
+      "alt_text": ""
+    },
+    "19136d08-9bbb-54d1-8b3e-3af6c92edb33": {
+      "speaker": "Selim",
+      "text": "Söyleyin yoksa jandarmayı çağırırım, Madam. Çerçeve sizde, tablo çalıntı. Hapse girmek istemezsiniz herhalde.",
+      "alt_text": ""
+    },
+    "1b0910af-05ae-5f0e-92b1-f5556c8ff5c9": {
+      "speaker": "Madam Eleni",
+      "text": "Jandarma mı? Benim dükkânıma mı? Defol buradan, kabadayı! Süpürgem nerede, süpürgem?",
+      "alt_text": ""
+    },
+    "0f76b2e0-05db-5554-8944-56c8b222fda4": {
+      "speaker": "Anlatıcı",
+      "text": "Selim savrulan süpürgeden kaçarak sokağa fırladı. Kapıda bir çırak çocuk eteğine yapıştı: Peçeli kız arzuhalciye gitti abi. Beyazıt Camii’nin duvarında oturur.",
+      "alt_text": ""
+    },
+    "06768519-14cc-5726-95e3-8daa81967468": {
+      "speaker": "Madam Eleni",
+      "text": "Kızın elinde bir de kâğıt vardı. Bunu yazdıracağım, dedi. Beyazıt Camii’nin duvarında arzuhalci Rıfat Efendi oturur; ona git, belki bir şey bilir.",
+      "alt_text": ""
+    },
+    "84c67a0a-d2c9-5c50-b67b-77a2512f3548": {
+      "speaker": "Madam Eleni",
+      "text": "Çerçeve burada emanet kalır evladım; ustana söyle, Eleni ona kızgın değil. Peçeli kız bana kötü biri gibi gelmedi. Hadi git, git!",
+      "alt_text": ""
+    },
+    "2d663c4d-5f91-58e7-af7c-2efb5a332811": {
+      "speaker": "Anlatıcı",
+      "text": "Beyazıt Camii’nin gölgeli duvarının dibinde, dizine tahta bir sehpa koymuş yaşlı bir adam kalem kesiyordu. Önünde üç kişi sıra bekliyordu.",
+      "alt_text": ""
+    },
+    "21a13ca1-3ff1-5c9a-901f-f36e08bb14b2": {
+      "speaker": "Selim",
+      "text": "Rıfat Efendi? Sizi bana gösterdiler. Dün peçeli genç bir kızın size geldiğini duydum.",
+      "alt_text": ""
+    },
+    "81534fa8-00d3-53fa-9c18-3c0c1e545654": {
+      "speaker": "Rıfat Efendi",
+      "text": "Evladım, kırk yıldır bu duvarın dibinde oturuyorum. Kimin ne yazdırdığını unutmam, ama kimseye de söylemem. Mesleğin namusu.",
+      "alt_text": ""
+    },
+    "f930f374-0d9f-58b5-9e61-f782716b2979": {
+      "speaker": "Selim",
+      "text": "Bir tablo kayboldu, Efendi. Bir ihtiyarın iki yıllık emeği. Belki o kâğıt, onu bulmamıza yarar.",
+      "alt_text": ""
+    },
+    "899f3764-a9e1-51b8-be0d-531565f170a4": {
+      "speaker": "Rıfat Efendi",
+      "text": "Hepsi öyle der. Biri nafaka dilekçesi için gelir, biri nişan mektubu için; hepsinin işi acildir. Ben ne yapayım şimdi seni?",
+      "alt_text": ""
+    },
+    "5a41079c-0395-5e74-afae-fc8314b80171": {
+      "speaker": "Anlatıcı",
+      "text": "Selim cebinden birkaç kuruş çıkarıp sehpanın kenarına koydu. Rıfat Efendi paraya bakmadı bile; ama kalemini yavaşça hokkanın üstüne bıraktı.",
+      "alt_text": ""
+    },
+    "7f5a4cc9-58ad-55a6-8939-54321f82df8b": {
+      "speaker": "Rıfat Efendi",
+      "text": "Kahve parası mı? İyi, kahve gibi acı bir şey anlatayım. Sırrı satın alamazsın evladım, ama dinlemeye değer bir yüzün var.",
+      "alt_text": ""
+    },
+    "46be497d-fb42-5e43-9221-f01493a7ae16": {
+      "speaker": "Selim",
+      "text": "Efendi, yazının insanın içini bildiğini söylerler. Siz de bir ihtiyarın bu yaşta öyle bir kayba dayanıp dayanamayacağını bilirsiniz.",
+      "alt_text": ""
+    },
+    "49b1365f-b0a2-5395-9bd1-1270951d26ff": {
+      "speaker": "Rıfat Efendi",
+      "text": "Ağır konuşuyorsun evladım, ama doğru konuşuyorsun. Dilimin mührünü bir kereliğine açacağım.",
+      "alt_text": ""
+    },
+    "ab4bf454-2c25-5f48-96ec-d2eae70a48c8": {
+      "speaker": "Rıfat Efendi",
+      "text": "Kız bir mektup yazdırdı. Zarfa Hüsnü Bey’in adını koydurdu. Kimin kızı olduğunu sormadım; ama mektubu babama diye yazdırdı. Elleri titriyordu.",
+      "alt_text": ""
+    },
+    "876ded50-f5b1-535f-8179-3adb7d38fd04": {
+      "speaker": "Rıfat Efendi",
+      "text": "Yazdırdığı şuydu: Tablo güvende. Salı öğle, Ayasofya. Başka tek kelime yok. Kendi el yazısını bile göstermek istemedi.",
+      "alt_text": ""
+    },
+    "24664704-34cb-5645-b4ce-55cea5430f79": {
+      "speaker": "Selim",
+      "text": "Hüsnü Bey’in kızı… Babasına tablonun güvende olduğunu yazıyor, ama yerini söylemiyor. Bu bir teslimat mı, yoksa bir oyun mu?",
+      "alt_text": ""
+    },
+    "a9aa0d8e-13d7-5d7e-8acb-1bbd93fd2776": {
+      "speaker": "Rıfat Efendi",
+      "text": "Bir şey daha söyleyeyim evladım: yazdırırken durmadan kapıya baktı. Hırsızlar öyle bakmaz; korkanlar bakar.",
+      "alt_text": ""
+    },
+    "5e4de0e6-ee05-5be1-b6d8-590db62bd9bd": {
+      "speaker": "Rıfat Efendi",
+      "text": "Yazı insanı ele verir evladım, ama hakikat mürekkepten daha dayanıklıdır. Git, bul tablonu.",
+      "alt_text": ""
+    },
+    "7926dd58-c065-52e4-a5b9-2bf897492fb6": {
+      "speaker": "Selim",
+      "text": "Çarşıdaki izler burada bitti. Sıradaki durağım neresi olmalı?",
+      "alt_text": ""
+    },
+    "9250741f-7022-550b-acd1-9e3b4a17a661": {
+      "speaker": "Anlatıcı",
+      "text": "Hüsnü Bey’in köşkü, Boğaz’a bakan yamaçta, selvilerin arkasındaydı. Bekçi Selim’i isteksizce içeri aldı; kitaplarla kaplı odada siyah takımlı bir adam pencerenin önünde bekliyordu.",
+      "alt_text": ""
+    },
+    "4786c1d6-7410-55a0-94b1-d6c35e4c1270": {
+      "speaker": "Hüsnü Bey",
+      "text": "Agop’un çırağı… Evet, seni tanırım. Buyur genç adam. Kahve? Hayır mı? Anlıyorum, işin acil.",
+      "alt_text": ""
+    },
+    "5dcd59e3-8a20-5d99-9225-d5244ad27f37": {
+      "speaker": "Selim",
+      "text": "Efendim, Usta Agop’un “Boğaz’ın Işığı” adlı tablosu dün gece atölyeden çalındı. Size bir şey sormaya geldim.",
+      "alt_text": ""
+    },
+    "686ee294-0f1f-502b-b3f9-aed48bfbcf5b": {
+      "speaker": "Hüsnü Bey",
+      "text": "Çalındı mı? Çok üzüldüm, gerçekten. Değerli şeyler bu şehirde artık hiç güvende değil. Ama benden ne bekliyorsun?",
+      "alt_text": ""
+    },
+    "9afc28ef-a410-506a-a5cd-72552d6d2942": {
+      "speaker": "Selim",
+      "text": "Geçen ay yüz elli altın teklif etmiştiniz. Usta reddetti.",
+      "alt_text": ""
+    },
+    "ca48ebde-0416-585a-8aac-fcd345f5797c": {
+      "speaker": "Hüsnü Bey",
+      "text": "Teklif ettim, evet. Reddedildim. Reddedilmek hırsızlık sebebi sayılsaydı bu şehirde tek bir namuslu adam kalmazdı. Başka sorun var mı?",
+      "alt_text": ""
+    },
+    "8c5a9106-92a3-5001-bb1b-32875d11fc8e": {
+      "speaker": "Selim",
+      "text": "Sizi suçlamak haddime değil efendim. Yalnızca bir ihtiyar sabaha kadar uyumadı; ben de ona bir haber götürmek istiyorum.",
+      "alt_text": ""
+    },
+    "b4bb31c2-12df-58b7-8e2b-53fbf88ff0d3": {
+      "speaker": "Hüsnü Bey",
+      "text": "Terbiyeli çocuksun. Ustan seni sever, anlaşılıyor. Böyle çırakları ender bulur insan.",
+      "alt_text": ""
+    },
+    "d2b4aa0b-3d92-56c5-b569-20044a358b09": {
+      "speaker": "Selim",
+      "text": "Reddedilen insan öfkelenir, efendim. Sizin gibi güçlü biri öfkesini de unutmaz. Dün gece neredeydiniz?",
+      "alt_text": ""
+    },
+    "0c6ceeb9-2397-5d76-93dd-8f264f230bdc": {
+      "speaker": "Hüsnü Bey",
+      "text": "Dikkat et evlat. Bu eve kabalıkla girenlerin çıkışı kolay olmaz. Ağzından çıkan kelimelere, ayağının altındaki halıdan daha çok özen göster.",
+      "alt_text": ""
+    },
+    "68e3cebc-b276-5e2c-9142-d80d0d82450e": {
+      "speaker": "Hüsnü Bey",
+      "text": "Sergi jürisi benim dostlarımdan oluşuyor, bilirsin. Belki Agop kaybını kabullenir de yeni bir tuval gönderir; bazı kayıplar insanı yeni şeylere mecbur eder.",
+      "alt_text": ""
+    },
+    "9d5385af-6ec6-5d4f-89cc-ae6b18a06796": {
+      "speaker": "Anlatıcı",
+      "text": "Gülümsemesi cilalı bir mermer kadar soğuktu. Selim konuşmanın bittiğini anladı. Koridora çıkarken üst kattan ince bir gül suyu kokusu süzüldü.",
+      "alt_text": ""
+    },
+    "bafca760-f7b6-5a8d-8db0-90772de8843a": {
+      "speaker": "Anlatıcı",
+      "text": "Merdiven başındaki aralık kapının ardında çinilerle kaplı küçük bir oda vardı. Sarı elbiseli bir kız, elindeki defteri hızla kapatmaya çalışıyordu.",
+      "alt_text": ""
+    },
+    "ff35de38-49c4-5d75-a114-94a3657f8547": {
+      "speaker": "Selim",
+      "text": "Özür dilerim, kapı aralıktı. Ben Selim, Agop Usta’nın çırağıyım. Yanlış kapıyı çalmış olabilirim.",
+      "alt_text": ""
+    },
+    "7e4a5ac7-95ca-5ebe-ad67-3735b7c60dda": {
+      "speaker": "Leyla",
+      "text": "Burası babamın evinin özel kısmı. Yabancılar buraya çıkmaz. Kimsiniz? Ne istiyorsunuz?",
+      "alt_text": ""
+    },
+    "0678e00a-d5a7-54c7-9d98-9103dea634e3": {
+      "speaker": "Anlatıcı",
+      "text": "Gül suyu kokusu odaya doldu; atölyedeki kâğıdın kokusunun tıpkısı. Kızın parmak uçlarında kurumuş mavi bir boya izi vardı.",
+      "alt_text": ""
+    },
+    "0db254c8-a52a-5131-ba72-fdabd4dc234a": {
+      "speaker": "Leyla",
+      "text": "Neye bakıyorsunuz? Cevap vermezseniz uşakları çağırırım.",
+      "alt_text": ""
+    },
+    "f6e93a85-ef4a-5801-9341-32e8feb043de": {
+      "speaker": "Selim",
+      "text": "Ustamın iki yıllık tablosu dün gece çalındı. Yaşlı adam sabaha kadar uyumadı. Bunu size anlatmam yersiz, biliyorum; ama başka kapı kalmadı.",
+      "alt_text": ""
+    },
+    "f30d1015-1d3d-55c6-a478-3e6f0cd0a0d0": {
+      "speaker": "Leyla",
+      "text": "Agop Usta’yı tanırım. Tablolarını camın ardından seyrederdim. Bunu duyduğuma üzüldüm. Gerçekten.",
+      "alt_text": ""
+    },
+    "7c992866-1f7d-538a-b089-0ced9f51074f": {
+      "speaker": "Selim",
+      "text": "Parmağınızdaki mavi boyayı gördüm. Siz de resim yapıyorsunuz, değil mi? Sanırım çok iyi yapıyorsunuz; bu odanın havası bile tuval gibi.",
+      "alt_text": ""
+    },
+    "150227e8-bcdf-5dd8-9027-334bf6c22609": {
+      "speaker": "Leyla",
+      "text": "Kimsenin haberi yok. Babam bilse defterlerimi yakar. Fazla gülmeyin, kötü olduğumu biliyorum. Ama teşekkür ederim.",
+      "alt_text": ""
+    },
+    "6eeae845-9192-53d4-afb9-a9004b305a17": {
+      "speaker": "Selim",
+      "text": "Peçeli kadın sensin. Çerçeveyi çarşıda sattın. Gül suyu kokundan biliyorum. İnkâr etme!",
+      "alt_text": ""
+    },
+    "790307ae-6646-53da-9c4d-45c9ebc07d99": {
+      "speaker": "Leyla",
+      "text": "Çıkın dışarı! Hemen! Babam beni çok sevdiği için sizi içeri sokmasını bile bilmiyor, ama ben bağırırsam uşaklar gelir.",
+      "alt_text": ""
+    },
+    "c5c18f3e-b947-59e8-af3f-627515b382da": {
+      "speaker": "Leyla",
+      "text": "Babam sizi burada görürse beni sorguya çeker. Benim de ona söylemeyeceğim şeyler var; bu yüzden çabuk konuşalım.",
+      "alt_text": ""
+    },
+    "f6c6ad57-9261-5d3c-954b-fbbbeab90260": {
+      "speaker": "Leyla",
+      "text": "Benden ne istiyorsunuz? Çabuk söyleyin.",
+      "alt_text": ""
+    },
+    "6970d548-9107-586b-a94f-45314f91bb70": {
+      "speaker": "Selim",
+      "text": "Size zarar vermek gibi bir niyetim yok. Ne bildiyseniz yalnız ikimizin arasında kalacak. Namusum üzerine söz.",
+      "alt_text": ""
+    },
+    "81257cad-9632-5489-bc19-1d5bcea74b78": {
+      "speaker": "Leyla",
+      "text": "Namusunuz üzerine… Bir ressam çırağı için büyük söz. Tablo kimsenin eline geçmedi, bunu söyleyebilirim. Daha fazlasını şimdi değil.",
+      "alt_text": ""
+    },
+    "55605a4e-4891-5865-bb44-ab7519e2d3d8": {
+      "speaker": "Selim",
+      "text": "Yalnızca tablonun yerini söyleyin, Leyla Hanım. Gerisi beni ilgilendirmez; kim neyi neden yapmış, umurumda değil.",
+      "alt_text": ""
+    },
+    "752173cd-bdea-5a85-836c-5a5c3f315fd4": {
+      "speaker": "Leyla",
+      "text": "Gerisi sizi ilgilendirmiyor mu? Ne kadar rahat konuşuyorsunuz. Ama hakkınız var; bu soruya cevabım yok.",
+      "alt_text": ""
+    },
+    "29a4b29d-6990-5626-a25c-984287c11d97": {
+      "speaker": "Selim",
+      "text": "Bu iş seni de ele veriyor, biliyor musun? Babanın kızı çerçeve satarken görüldü; yarın bütün Pera bunu konuşur.",
+      "alt_text": ""
+    },
+    "d4988d02-4fcc-5cd2-825a-97a53da92104": {
+      "speaker": "Leyla",
+      "text": "Tehdit mi ediyorsunuz? Bu kadar kaba olabileceğinizi tahmin etmeliydim. Gidin!",
+      "alt_text": ""
+    },
+    "58122194-ce2d-5599-b7e1-7922fdd4060a": {
+      "speaker": "Leyla",
+      "text": "Şimdi gidin, babam gelmeden. Ve Selim Efendi: ben her şeyi göründüğü gibi yaşamıyorum. Bunu bilmeniz yeter.",
+      "alt_text": ""
+    },
+    "2ee47686-88b7-517e-a4b6-dcb6db74ebfb": {
+      "speaker": "Anlatıcı",
+      "text": "Kapıdan çıkarken kızın defteri bir an açıldı. Sayfada Boğaz’ı çizen usta bir kalem vardı. Kız, gizlice bir ressamdı.",
+      "alt_text": ""
+    },
+    "e7114995-1220-517e-973d-d5d10c948b7d": {
+      "speaker": "Selim",
+      "text": "Bir şey saklıyor. Ama bu sır zarar vermek için değil, bir şeyi korumak için saklanıyor gibi. Neyi korumaya çalışıyor?",
+      "alt_text": ""
+    },
+    "6a2189a3-8921-58ef-9fc7-5b06f2730055": {
+      "speaker": "Selim",
+      "text": "Köşkte öğrenebileceğim her şeyi öğrendim sayılır. Şimdi nereye gideceğim?",
+      "alt_text": ""
+    },
+    "3622abdf-97f6-52a2-9d75-1f11d957a831": {
+      "speaker": "Anlatıcı",
+      "text": "Beyazıt’ın arka sokağında, sarmaşıklı bir medrese odasının penceresinde sarı cübbeli yaşlı bir adam kitabın üstüne eğilmişti. Işık, beyaz sakalında altın gibi duruyordu.",
+      "alt_text": ""
+    },
+    "904500ce-0321-5bc9-81a9-ede94513fcbb": {
+      "speaker": "Hoca Nureddin",
+      "text": "Selim… Gel, gel evladım. Agop senden çok söz eder. Yüzünden okudum: ya bir ölü var ya bir tablo kayıp.",
+      "alt_text": ""
+    },
+    "a9f120e7-3a5e-5151-b38f-f42336902ff4": {
+      "speaker": "Hoca Nureddin",
+      "text": "Agop yıllar önce bana bir sır emanet etti: “Boğaz’ın Işığı”nın altında karısı Anahit’in portresi yatıyor. Onu kaybedince yüzüne bakamadı, üstünü Boğaz’la örttü.",
+      "alt_text": ""
+    },
+    "f97c306e-fb04-5401-b2da-98d32db4462f": {
+      "speaker": "Selim",
+      "text": "Anahit Hanım mı? Ustamın hiç söz etmediği karısı…",
+      "alt_text": ""
+    },
+    "50ac4e6f-f3b4-5c6d-9af7-e195cf870f75": {
+      "speaker": "Hoca Nureddin",
+      "text": "Söz edemezdi. Yağlıboya yıllar geçtikçe saydamlaşır evladım. İki yıldır o gökyüzünün altından bir yüz, yavaş yavaş görünmeye başlamış.",
+      "alt_text": ""
+    },
+    "2f933a73-be6d-53cf-89a9-afb77d96a5fc": {
+      "speaker": "Hoca Nureddin",
+      "text": "Bunu bir restoratör fark etmiş, söz de Hüsnü Bey’in kulağına gitmiş. Adam tabloyu yurt dışına satmayı planlıyor.",
+      "alt_text": ""
+    },
+    "54d93412-5c55-5520-9987-92ca9e357025": {
+      "speaker": "Hoca Nureddin",
+      "text": "Kimsenin anlamaması için sergiye, ustanın imzasını taklit eden bir kopya asılacak. Jüri onun dostları; kimse bir şey demeyecek.",
+      "alt_text": ""
+    },
+    "b03dd808-65b1-5c23-9344-349d64b45be9": {
+      "speaker": "Selim",
+      "text": "Peki tablo şimdi nerede? Yurt dışına çoktan yola çıktı mı?",
+      "alt_text": ""
+    },
+    "e00035c6-e594-556a-8e41-0eb204f036d1": {
+      "speaker": "Hoca Nureddin",
+      "text": "Hüsnü Bey’in kızı Leyla, babasının planını duymuş. Cuma sabahı buraya, tezhip dersine, elleri titreyerek geldi.",
+      "alt_text": ""
+    },
+    "16d8cf71-1b67-5358-b53c-dd1119c61cd6": {
+      "speaker": "Hoca Nureddin",
+      "text": "Bana bir resmin altına başka bir resmin saklanıp saklanamayacağını sordu. Soru değil, itirafla karışıktı. Ellerinde gül suyu ve varak kokusu vardı.",
+      "alt_text": ""
+    },
+    "3a5cc0df-502f-5a21-b2c2-49c8344c6073": {
+      "speaker": "Selim",
+      "text": "Gül suyu… Peçeli kadın Leyla Hanım’mış. Tabloyu çalan değil, saklayan o.",
+      "alt_text": ""
+    },
+    "d21931a2-15f3-5084-85ee-b369644a634c": {
+      "speaker": "Hoca Nureddin",
+      "text": "Babasından kurtarmak istemiş. Ama kız tek başına; tabloyu kime verecek, sergiye nasıl ulaştıracak, bilmiyor.",
+      "alt_text": ""
+    },
+    "8f7098d6-9690-54fa-953f-43e98fd509e4": {
+      "speaker": "Hoca Nureddin",
+      "text": "Ona güvenirsen birlikte bir yol bulursunuz. Ona sert davrandıysan evladım, kapıları kendi ellerinle kapamışsındır.",
+      "alt_text": ""
+    },
+    "11d93467-3409-5e61-8511-f2c37ce848c1": {
+      "speaker": "Hoca Nureddin",
+      "text": "Salı öğle Ayasofya’da olacak; biliyorsun. Git, ama gönlünle git. Bir tablo kayıpsa, iki insan da kayıp demektir: biri ustan, biri o kız.",
+      "alt_text": ""
+    },
+    "08b3dc48-e3f1-534f-97e0-06366ab9cda9": {
+      "speaker": "Anlatıcı",
+      "text": "Pazar ve pazartesi boyunca çerçevecileri dolaştılar, hiçbir iz çıkmadı. Pazartesi gecesi Usta pencereden Boğaz’a baktı; ay suyun üstüne ince bir yol çizmişti.",
+      "alt_text": ""
+    },
+    "9159ccb2-b2e6-5a4b-a6a8-155e17e397db": {
+      "speaker": "Selim",
+      "text": "Usta, uyumadınız. Hoca Nureddin’in anlattıklarını size söylemem gerek.",
+      "alt_text": ""
+    },
+    "2bc5a861-1970-5276-a425-280e56837a34": {
+      "speaker": "Usta Agop",
+      "text": "Biliyorum çocuk, Nureddin sabah geldi. Yıllardır sakladığımı sana kendi ağzımdan anlatacaktım; yaşlılık insanı korkak yapıyor.",
+      "alt_text": ""
+    },
+    "cc5587a6-b3b8-59ce-a922-fd433c96de42": {
+      "speaker": "Usta Agop",
+      "text": "Anahit’i on iki yıl önce kolera aldı. Bir yıl fırçaya dokunamadım. Sonra bir sabah yüzünü tuvale geçirdim, ama bir daha bakmaya yüreğim yetmedi.",
+      "alt_text": ""
+    },
+    "0e79ea27-80a9-5bdc-b45e-1c7f8bbc0e6b": {
+      "speaker": "Usta Agop",
+      "text": "Üstünü Boğaz’ın ışığıyla kapattım. Meğer her sabah o ışığa bakarken onun gülüşünü arıyormuşum.",
+      "alt_text": ""
+    },
+    "7eac7b10-8736-5f73-bd84-bd488cd635dd": {
+      "speaker": "Selim",
+      "text": "Hüsnü Bey bunu biliyorsa tabloyu yalnızca ustalığı için istemiyor. Onu para edecek bir şey olarak görüyor.",
+      "alt_text": ""
+    },
+    "4c2a48c1-1a34-59e4-8242-3c10bffa9119": {
+      "speaker": "Usta Agop",
+      "text": "Bir ressam için en kötü ölüm, eserinin başkasının adıyla yaşamasıdır. Ama en kötü kayıp, onu kimsenin görememesidir.",
+      "alt_text": ""
+    },
+    "eba93421-7412-52a9-b1c6-094a286d8d51": {
+      "speaker": "Selim",
+      "text": "Yarın öğle Ayasofya’ya gideceğim, Usta. Leyla Hanım’la konuşurken doğru sözleri seçmiş miydim, bilmiyorum.",
+      "alt_text": ""
+    },
+    "53e899db-36ea-5925-9ad7-b2654b2987b2": {
+      "speaker": "Usta Agop",
+      "text": "Güven fırça gibidir. Sıkı tutarsan tuvali ezersin, gevşek tutarsan çizgi kaçar. Dün ne yaptıysan yaptın; yarın yalnızca doğruyu söyle.",
+      "alt_text": ""
+    },
+    "90d0f5b0-dfd5-5bbe-b98d-9627da696d9b": {
+      "speaker": "Usta Agop",
+      "text": "Ben sergi salonunda bekleyeceğim. Tabloyla gelirsen ışığa tutarız. Gelmezsen de… seni çırak değil, evlat bilirim.",
+      "alt_text": ""
+    },
+    "1d5a42b5-7c41-51a1-b066-c71a224a15e9": {
+      "speaker": "Selim",
+      "text": "Geleceğim, Usta. Söz.",
+      "alt_text": ""
+    },
+    "28f31245-5000-5b68-bdf4-31776c6c8c8d": {
+      "speaker": "Anlatıcı",
+      "text": "Ay ışığı yavaş yavaş soldu. Sabaha karşı Selim ilk vapurun düdüğünü duydu. Salı günü gelmişti.",
+      "alt_text": ""
+    },
+    "aa7db718-09da-5e1d-9113-94e574a24082": {
+      "speaker": "Anlatıcı",
+      "text": "Selim şapkasını başına geçirdi. Ayasofya’ya giden yol dar sokaklardan, kalabalık meydanlardan geçiyordu.",
+      "alt_text": ""
+    },
+    "0278faf4-47af-556e-aba0-7fc0873ac9ea": {
+      "speaker": "Anlatıcı",
+      "text": "10 Temmuz 1894, salı. Ayasofya meydanı öğle sıcağında titriyordu; güvercinler kubbenin gölgesine çekilmişti. Selim çeşmenin yanında bekledi.",
+      "alt_text": ""
+    },
+    "70ec0ce0-4e94-516e-a342-8bdc3305b9d0": {
+      "speaker": "Anlatıcı",
+      "text": "Saat on ikiye yaklaşırken peçeli bir kız meydanın karşı ucundan göründü. Kollarında kahverengi bezle sarılmış, yassı bir paket vardı.",
+      "alt_text": ""
+    },
+    "e27a5c6c-6999-5138-95fd-e7c9c82f7aa0": {
+      "speaker": "Selim",
+      "text": "Leyla Hanım… Gelmişsiniz. Kimse sizi takip etmiyor, değil mi?",
+      "alt_text": ""
+    },
+    "e09242c1-6cef-58e6-b120-4c2b596cbe3d": {
+      "speaker": "Leyla",
+      "text": "Selim. Geldiniz. Rıfat Efendi’nin dilini çözmüşsünüz, Hoca Nureddin’in sırrını da öğrenmişsiniz anlaşılan. Sizden saklayacak bir şeyim kalmadı.",
+      "alt_text": ""
+    },
+    "a27b2be6-eb93-509f-8792-a03220a23f70": {
+      "speaker": "Leyla",
+      "text": "Babam tabloyu yurt dışına satacak. Sergiye imzası taklit edilmiş bir kopya asılacak. Ben tuvali çerçevesinden sökerek kurtardım; çerçeveyi sattım ki iz kalmasın.",
+      "alt_text": ""
+    },
+    "1577b240-82cb-5460-b3a7-b47f6609ce40": {
+      "speaker": "Leyla",
+      "text": "Babama o mektubu onu oyalamak için yazdırdım. Paketi doğrudan Agop Usta’ya götürecektim, ama tek başıma sergiye ulaşamam; jüri onun dostları.",
+      "alt_text": ""
+    },
+    "9824c440-0707-5a48-baa1-c47735ec3954": {
+      "speaker": "Selim",
+      "text": "Yalnız değilsiniz. Usta salonda bekliyor. Birlikte gideriz; tabloyu ışığa tutarız, her şey ortaya çıkar.",
+      "alt_text": ""
+    },
+    "b992855d-5d1c-5801-ad39-e238d40a8d91": {
+      "speaker": "Leyla",
+      "text": "Yaklaşmayın! Önce söyleyin: Rıfat Efendi’ye mi gittiniz? Babama haber verdiniz mi?",
+      "alt_text": ""
+    },
+    "0d5951ad-917a-576e-9f5b-d3eb2764ebaa": {
+      "speaker": "Selim",
+      "text": "Hayır. Yalnızca ustamın tablosunu arıyorum. Kimseye haber vermedim.",
+      "alt_text": ""
+    },
+    "081b0d81-9d8a-5216-b32b-80b773f4a333": {
+      "speaker": "Leyla",
+      "text": "Size güvenmiyorum. Ama başka kimsem de yok. Babam bu tabloyu satacak, sergiye sahte bir kopya asacak. Ben onu kurtarmaya çalışıyorum.",
+      "alt_text": ""
+    },
+    "7ede6ed6-648d-5ccb-8e28-04d49670236b": {
+      "speaker": "Leyla",
+      "text": "Paketi size vermiyorum. Yalnız yanımda yürürseniz Agop Usta’ya birlikte gidebiliriz. Tek şartım var: sırrımı kimseye açmayın.",
+      "alt_text": ""
+    },
+    "b2534903-a693-5284-9551-83d6302df75b": {
+      "speaker": "Anlatıcı",
+      "text": "Tam o sırada meydanın öbür ucundan siyah redingotlu iri bir adam hızlı adımlarla yaklaşmaya başladı. Hüsnü Bey’in kâhyası Rüstem.",
+      "alt_text": ""
+    },
+    "6e5d523e-20ce-563c-9a80-4a86c7c78bb5": {
+      "speaker": "Adamın Biri",
+      "text": "Küçük hanım! Babanız çok endişeli. O paketi bana verin, eve dönelim. Burası sizin gibi bir hanımefendi için tehlikeli.",
+      "alt_text": ""
+    },
+    "0eb12425-637e-51fc-a2cb-071d3c7997f8": {
+      "speaker": "Leyla",
+      "text": "Hayır Rüstem Ağa. Bu paketi sana vermeyeceğim. Babamın planını biliyorum.",
+      "alt_text": ""
+    },
+    "0ca00878-f864-5639-b6f9-dfec2879ad81": {
+      "speaker": "Adamın Biri",
+      "text": "İnat etmeyin küçük hanım. Sen de çırak, çekil yoldan. Yoksa bu işin sonu kimseye hayır getirmez.",
+      "alt_text": ""
+    },
+    "d6afeb90-940d-57cb-b2f3-c67e4f78a892": {
+      "speaker": "Selim",
+      "text": "Bu tablo ustamındır. Bir adım daha yaklaşırsanız bağırırım; meydan dolu, şahit çok.",
+      "alt_text": ""
+    },
+    "db47c015-f549-568c-abcd-497d97357664": {
+      "speaker": "Anlatıcı",
+      "text": "Tam o anda yerin altından boğuk bir gümbürtü yükseldi. Güvercinler tek hamlede havalandı. Sonra yer, bir geminin güvertesi gibi eğildi.",
+      "alt_text": ""
+    },
+    "1e8f4e6e-8a9f-5856-a546-53f18ce12ab7": {
+      "speaker": "Anlatıcı",
+      "text": "Büyük deprem. 10 Temmuz 1894, öğle. Kubbenin kenarından toz yağıyordu; çığlıklar, kırılan camlar, ağlayan çocuklar. Kapalıçarşı yönünden gelen gürültü bir anda kesildi.",
+      "alt_text": ""
+    },
+    "fb1ca0ec-5122-50ee-bbb4-df857a922e20": {
+      "speaker": "Leyla",
+      "text": "Selim! Ayağım takıldı, tutun beni! Paket… Paket elimden kayıyor!",
+      "alt_text": ""
+    },
+    "0e5c89b9-a557-5a1d-b5dc-23c4a62b457b": {
+      "speaker": "Anlatıcı",
+      "text": "Leyla yere düştü; paket elinden kayıp taşların arasına yuvarlandı. Yukarıdan büyük bir sıva parçası, ikisinin tam ortasına doğru kopuyordu.",
+      "alt_text": ""
+    },
+    "402f086b-d336-5b3d-aa9c-561521d49468": {
+      "speaker": "Selim",
+      "text": "Bir saniyem var. Yalnızca bir saniye.",
+      "alt_text": ""
+    },
+    "d31f6bf6-67a6-5b4f-852a-1d0204288ad3": {
+      "speaker": "Anlatıcı",
+      "text": "Selim bir koluyla Leyla’yı, öbür koluyla paketi kavrayıp kubbenin altındaki kalın kemere sürükledi. Arkalarında sıva taşlara çarpıp dağıldı; bir süre ne ses vardı ne ışık.",
+      "alt_text": ""
+    },
+    "9c537f18-65ac-53a2-8740-acb8ecce4dd5": {
+      "speaker": "Leyla",
+      "text": "Yaşıyor musunuz? Paket… Paket yırtılmamış! Selim, başardık!",
+      "alt_text": ""
+    },
+    "40302293-94fe-5b80-b288-f97028f3c72f": {
+      "speaker": "Anlatıcı",
+      "text": "Hüsnü Bey’in kâhyası kendi derdine düşüp kalabalığın içinde kayboldu. O gün İstanbul’da kimse kimseyi kovalamadı; herkes bir çocuğun elinden tutmak istedi.",
+      "alt_text": ""
+    },
+    "c30dd891-4791-57b5-94e4-78710e8704da": {
+      "speaker": "Anlatıcı",
+      "text": "Bir hafta sonra, şehir yaralarını sarmaya çalışırken sergi salonu kapılarını açtı. Duvarda çatlaklar vardı; ama ışık içeri hiç bu kadar güzel girmemişti.",
+      "alt_text": ""
+    },
+    "6c705768-ba62-5753-bfc2-9cbe6b2fb803": {
+      "speaker": "Leyla",
+      "text": "Beyler, bu tablo Agop Usta’nındır; sergiye asılacak kopya ise sahte. Babamın yazdırdığı mektup ve Rıfat Efendi’nin defterindeki kayıt elimde.",
+      "alt_text": ""
+    },
+    "4533c5d5-e27c-5c17-a2f1-c6ed84ff6fb8": {
+      "speaker": "Hüsnü Bey",
+      "text": "Kızım, bu bir yanlış anlama… Konuşmayı eve taşıyalım. Burada, jürinin önünde bu doğru değil.",
+      "alt_text": ""
+    },
+    "a87c047d-65ac-5319-ad47-2a9a8343f1af": {
+      "speaker": "Anlatıcı",
+      "text": "Depremde Hüsnü Bey’in köşkünün bodrumundaki duvar çökmüştü; arkasından imzası taklit edilmiş bir kopya çıktı. Jüri sessizce birbirine baktı.",
+      "alt_text": ""
+    },
+    "cea54d3d-dafc-57a0-879f-6d772f701104": {
+      "speaker": "Usta Agop",
+      "text": "Selim… oğlum… Işığa tut şu tuvali. Ben bakamıyorum.",
+      "alt_text": ""
+    },
+    "250e0406-81d9-5b5f-8a98-e871507e77ed": {
+      "speaker": "Anlatıcı",
+      "text": "Pencereden süzülen ışık tuvale vurdu. Gökyüzünün altında, Boğaz’ın dalgalarının arasında, bir kadın yüzü belirdi: gülümseyen, çok tanıdık.",
+      "alt_text": ""
+    },
+    "1e159384-1884-5ddb-8da2-882d61104568": {
+      "speaker": "Usta Agop",
+      "text": "Anahit… Seni yeniden gördüm. On iki yıl sonra, ışıkta seni yeniden gördüm.",
+      "alt_text": ""
+    },
+    "23e1cdcf-89f5-5332-a481-0786c1a9b77e": {
+      "speaker": "Anlatıcı",
+      "text": "Aylar sonra, sisli bir sabah Boğaz’da yelkenliler beyaz bir sessizlik içinde ilerlerken, Selim ile Leyla atölyede yan yana yeni bir tuval geriyordu.",
+      "alt_text": ""
+    },
+    "511f98cc-e623-5d1f-b6ca-3eaf82afe54e": {
+      "speaker": "Anlatıcı",
+      "text": "SON: Işık Geri Döndü. Bazı yüzler yalnızca doğru ışık geldiğinde görünür; bazı ışıklar da yalnızca birlikte yakılır.",
+      "alt_text": ""
+    },
+    "02d545a6-2cb7-5f40-a96b-edf6c997639e": {
+      "speaker": "Anlatıcı",
+      "text": "Selim paketi bıraktı, Leyla’yı kolundan kendine çekti. Sıva parçası yerde duran bez paketin tam üstüne düştü.",
+      "alt_text": ""
+    },
+    "fd559d4d-5aa6-5b2b-89fa-de3492c71de7": {
+      "speaker": "Anlatıcı",
+      "text": "Toz dağıldığında taşların arasında yalnızca kırık bir ahşap köşe ve yırtılmış bir bez parçası kalmıştı.",
+      "alt_text": ""
+    },
+    "04f837cf-bb23-58a7-a563-93ad119b637b": {
+      "speaker": "Leyla",
+      "text": "Tablo… Tablo gitti. Onu kurtarmak için bu kadar yol geldik, Selim; şimdi hepsi bu taşların altında.",
+      "alt_text": ""
+    },
+    "5b6f45e2-b6c1-58ff-8061-d727bcc03f78": {
+      "speaker": "Anlatıcı",
+      "text": "Akşama doğru Selim yorgun adımlarla atölyenin merdivenlerini çıktı. Usta Agop kapıda bekliyordu; yüzü sessizce her şeyi sormuştu.",
+      "alt_text": ""
+    },
+    "3693c9df-8d68-57b8-98dc-b7caa529540e": {
+      "speaker": "Selim",
+      "text": "Usta… Tabloyu kurtaramadım.",
+      "alt_text": ""
+    },
+    "c33488c0-5604-540f-895b-51c365ad7e88": {
+      "speaker": "Usta Agop",
+      "text": "Bir tablo yeniden çizilebilir Selim. Bir insan yeniden çizilemez. Doğru olanı seçtin.",
+      "alt_text": ""
+    },
+    "12b7b364-6759-5a59-bba0-25b9e5209ad4": {
+      "speaker": "Anlatıcı",
+      "text": "Merdivenlerin başında Leyla belirdi; kolunda bir sıyrık, elinde küçük bir eskiz defteri vardı. Agop ona şöyle bir baktı.",
+      "alt_text": ""
+    },
+    "af905327-02b3-5953-bdc7-e488c907ef3a": {
+      "speaker": "Leyla",
+      "text": "Ustam, izin verirseniz sizden öğrenmek isterim. O tabloyu bir gece yakından seyrettim; hatırladığım her şeyi size anlatırım.",
+      "alt_text": ""
+    },
+    "2d734ffd-236b-5e8c-9965-2184d69eb0f0": {
+      "speaker": "Usta Agop",
+      "text": "Anahit’in yüzü zaten bende, kızım. Kayıp olan tuval; yüz değil. Getirin tuvalleri, birlikte yeniden başlıyoruz.",
+      "alt_text": ""
+    },
+    "0ba96c63-5d7a-513c-ab56-499bca1dbeec": {
+      "speaker": "Anlatıcı",
+      "text": "SON: Yarım Kalan Tablo. Sisli bir sabah, atölyenin penceresinde üç fırça birden bir tuvale değdi; Boğaz yeniden başlıyordu.",
+      "alt_text": ""
+    },
+    "4a07cf79-68a8-5ba0-a7b3-6336f9d9928d": {
+      "speaker": "Anlatıcı",
+      "text": "Selim tabloyu kucakladı ve kubbenin altına koştu. Arkasından bir çığlık, sonra kesilen bir ses duydu.",
+      "alt_text": ""
+    },
+    "2f10c927-117d-5b02-a39f-15ed55db4751": {
+      "speaker": "Anlatıcı",
+      "text": "Dönüp baktığında Leyla yerdeydi; koluna bir taş çarpmıştı. Hüsnü Bey’in adamları çoktan etrafını sarmıştı.",
+      "alt_text": ""
+    },
+    "946a42f5-db6b-5c62-8355-0b64cd9bf7d1": {
+      "speaker": "Leyla",
+      "text": "Gidin, Selim… Tabloyu götürün… Babam… Babam beni alacak.",
+      "alt_text": ""
+    },
+    "6c9b888a-4a02-5f7c-b333-1d817255f3fb": {
+      "speaker": "Anlatıcı",
+      "text": "Hüsnü Bey kalabalığı yararak geldi, kızını kucakladı. Gözlerinde ilk kez öfke değil korku vardı.",
+      "alt_text": ""
+    },
+    "f16793ba-d55a-5b6b-bc18-38eef795bcda": {
+      "speaker": "Hüsnü Bey",
+      "text": "Bu şehirde daha fazla kalmayacağız Leyla. Selanik’te halanın yanına gidiyoruz. Bir daha kimse seni tehlikeye atmayacak.",
+      "alt_text": ""
+    },
+    "a65ccdb4-c9ef-5679-bb6b-f190784c875b": {
+      "speaker": "Anlatıcı",
+      "text": "Sergi bir hafta sonra açıldı. “Boğaz’ın Işığı” salonun en iyi duvarına, altın çerçevesiyle asıldı. Jüri alkışladı; ama Selim alkışı duymadı.",
+      "alt_text": ""
+    },
+    "a9571782-a7c3-5f59-865b-9f655f1b4cb4": {
+      "speaker": "Usta Agop",
+      "text": "Altın çerçeve, ışığı güzel tutuyor. Ama içinde bir şey eksik gibi, Selim. Ya da ben eksik olanı arıyorum.",
+      "alt_text": ""
+    },
+    "b9c3b480-7fd4-54c1-a2b9-fe0f91b2cfd7": {
+      "speaker": "Selim",
+      "text": "Ona bir mektup yazacağım, Usta. Belki bir gün cevap verir.",
+      "alt_text": ""
+    },
+    "0a69f401-d0a7-590c-9798-01d090ae855e": {
+      "speaker": "Anlatıcı",
+      "text": "Cevap hiç gelmedi. Ama akşamları tablonun altın çerçevesine güneş vurunca, Selim bir kız sesini duyar gibi olurdu.",
+      "alt_text": ""
+    },
+    "e60ae0b1-5971-5a1d-a2b2-f5504a6b0be8": {
+      "speaker": "Anlatıcı",
+      "text": "SON: Altın Çerçeve. Bazen bir şeyi kurtarmak, başka bir şeyi geride bırakmaktır.",
+      "alt_text": ""
+    },
+    "f4b4d3a2-3dfc-547d-84a6-6fad36cf4004": {
+      "speaker": "Anlatıcı",
+      "text": "O sabah Selim Ayasofya’ya geç kaldı. Eminönü’nde bir araba ters dönmüş, yol tıkanmıştı; şaşırdığı sokakta kimse ona yol göstermedi.",
+      "alt_text": ""
+    },
+    "2093f7f8-5ef5-57ca-9d9d-38e3011466fc": {
+      "speaker": "Anlatıcı",
+      "text": "Çarşıda, köşkte, her yerde sözü ondan önce yola çıkmıştı: kabalığıyla tanınan çırak. Biri alaylı bir gülüşle onu sokağın yanlış ucuna gönderdi.",
+      "alt_text": ""
+    },
+    "618ce70e-4c96-5d20-8870-81e17f83ef82": {
+      "speaker": "Selim",
+      "text": "Yanlış yöne mi? Ne yaptım ben? Kaç kapıyı sertçe çaldım böyle, kaç kalbi kırdım.",
+      "alt_text": ""
+    },
+    "b9a558b4-6088-5542-91a6-f23de164cb3c": {
+      "speaker": "Anlatıcı",
+      "text": "Köprünün üstünde yürürken ayaklarının altındaki tahtalar sarsıldı. Denizdeki sandallar birbirine çarptı. İstanbul’un üstüne öğle deprem gelmişti.",
+      "alt_text": ""
+    },
+    "c6ab1f38-5239-5922-990e-dbb3690ae329": {
+      "speaker": "Anlatıcı",
+      "text": "Selim soluk soluğa Ayasofya’ya vardığında meydan toz içindeydi. Çeşmenin yanında yalnızca buruşmuş kahverengi bir bez parçası duruyordu.",
+      "alt_text": ""
+    },
+    "291d0bfc-7780-5693-854d-594baec123e4": {
+      "speaker": "Selim",
+      "text": "Leyla Hanım! Leyla Hanım!",
+      "alt_text": ""
+    },
+    "6f55c1c7-47c0-5ce6-b032-e00ea48fcb33": {
+      "speaker": "Anlatıcı",
+      "text": "Hiçbir yanıt gelmedi. Yaşlı bir bekçi başını salladı: Kızı babasının adamları arabayla götürdü evladım. Elindeki paketle birlikte.",
+      "alt_text": ""
+    },
+    "56d48692-1140-51a4-8bf4-6e815d140e39": {
+      "speaker": "Anlatıcı",
+      "text": "Usta Agop, sergi salonunda boş duvara bakarak sabaha kadar bekledi. Tablo hiç gelmedi.",
+      "alt_text": ""
+    },
+    "97a4b949-4ef1-512a-a4c2-ab9381858f73": {
+      "speaker": "Anlatıcı",
+      "text": "Yıllar geçti. 1903’te Paris’te, bir açık artırma salonunda Selim katalogda tanıdık bir ad gördü: “Boğaz’ın Işığı”, imzasız.",
+      "alt_text": ""
+    },
+    "2d1631ab-8598-58b0-b9d3-d24777deefc1": {
+      "speaker": "Selim",
+      "text": "Gökyüzünün altında, ışığa karşı yarım yarım görünen bir yüz vardı. Anahit… Dokuz yıl geç kalmış bir çırağın gözleriyle onu yeniden gördüm.",
+      "alt_text": ""
+    },
+    "8f27abca-25c8-5788-bdb1-ee7061be1f0e": {
+      "speaker": "Anlatıcı",
+      "text": "Cebinde yalnızca eski bir fırça ve utancı vardı. Teklif veremeden salondan çıktı.",
+      "alt_text": ""
+    },
+    "243bdee2-8352-51a1-96f0-41c2482415de": {
+      "speaker": "Anlatıcı",
+      "text": "SON: Geç Kalan Çırak. Bazı kapılar bir kez sertçe çalındı mı, bir daha kolay açılmaz.",
+      "alt_text": ""
+    }
+  }
+}
