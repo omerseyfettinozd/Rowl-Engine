@@ -125,6 +125,7 @@ void test_c_api_contract() {
         ROWL_ENGINE_CAPABILITY_SPRITE_SHEET |  // E2a
         ROWL_ENGINE_CAPABILITY_GAME_IDENTITY |  // D01a
         ROWL_ENGINE_CAPABILITY_GAME_DATA |  // D01b
+        ROWL_ENGINE_CAPABILITY_PLAYER_PROFILE |  // D01c-1
         ROWL_ENGINE_CAPABILITY_MSDF_RENDER;
     if ((capabilities & ~kKnownCapabilities) != 0) {
         std::cerr << "Unknown capability bits in mask" << std::endl;

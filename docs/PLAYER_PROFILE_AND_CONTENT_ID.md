@@ -75,9 +75,11 @@ and validate clean.
 
 ## 5. Limits
 
-Read set is bounded only by available memory in this slice (stressing it
-belongs to the Faz 4 large-project gate). Profile JSON must stay a single
-small object; multi-MB profiles are a Faz 5 concern.
+The read set is bounded at 1,000,000 ids in the native store (D01c-1; see
+section 8): new ids are refused with a diagnostic once it is full and
+existing ids are never dropped. The managed store is still bounded only by
+available memory. Profile JSON must stay a single small object; multi-MB
+profiles are a Faz 5 concern.
 
 ## 6. Tests
 
@@ -120,3 +122,20 @@ small object; multi-MB profiles are a Faz 5 concern.
   native save codec (round-trip, legacy fallback, hostile rejection),
   xUnit `EditorPlayerLoopSlice2Tests` (10): gate matrix, track-on-advance,
   query-failure abort, flush no-op, skip-step allow/stop, backlog parse.
+
+## 8. Native profile (D01c-1)
+
+The native engine now owns a profile store (`engine/src/state/player_profile.cpp`)
+that reads and writes the same `player-profile.json` keys as section 4, plus
+`game_id` and a reserved `unlocks` array. It loads when `SetProjectDirectory`
+resolves the game data layout (per-game dir `.../games/<game-id>/profile`;
+`<project>/profile` beside the project-local saves for derived ids), marks dialogues read when
+they are presented in play state, and exposes `RowlEngine_Profile*`
+(`ROWL_ENGINE_CAPABILITY_PLAYER_PROFILE`). Corrupt files are quarantined,
+files from a newer schema or another game are read-only and left untouched.
+The full contract (schema, statuses, flush policy) is in
+`docs/DATA_FORMATS_AND_MIGRATION.md` section 9. Not yet done: the native player
+does not apply the stored preferences, the line shown before play state starts
+(start node) is not marked by the native hook, and the managed store does not
+yet go through the native one or preserve `game_id`/`unlocks`/unknown keys
+(D01c-2).

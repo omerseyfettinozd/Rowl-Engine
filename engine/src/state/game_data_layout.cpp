@@ -206,6 +206,9 @@ GameDataLayout prepareGameData(const fs::path& userDataRoot,
     const fs::path legacy = projectRoot / "saves";
     layout.dataDirectory = projectRoot;
     layout.saveDirectory = legacy;
+    // D01c: the profile follows the saves, so two project-local games never
+    // share the global profiles/ dir.
+    layout.profileDirectory = projectRoot / "profile";
 
     if (identity.source == GameIdentitySource::Derived) {
         layout.diagnostic = "game id is path-derived (no authored id): saves stay in the project folder";

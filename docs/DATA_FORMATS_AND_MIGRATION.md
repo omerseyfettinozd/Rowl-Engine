@@ -259,3 +259,53 @@ filters), linter (`ProjectValidationService`), and the packager
   disables the Camera Rotation control with a tooltip pointing at the
   no-op. Character/Background object `rotation` is unaffected (separate
   object-rotation path, out of scope).
+
+## 9. Player profile (`player-profile.json`) — v1 (D01c-1)
+
+- **Location:** `<profile dir>/player-profile.json`, where the profile dir is
+  `RowlEngine_GetProfileDirectoryUtf8`: `<user-data>/games/<game-id>/profile`
+  once a project with an authored game id is mounted (D01b); games without an
+  authored id (derived id) or with unwritable user data keep it beside their
+  project-local saves in `<project>/profile` (never a dir shared between games). The native engine and the managed
+  `PlayerProfileStore` read/write the same keys.
+- **Schema (`version = 1`):** `version`, `game_id` (per-game dirs only),
+  `language` (`en`/`tr`, `tr-TR` → `tr`), `read_content_ids` (sorted array of
+  canonical lowercase UUIDs), `master/bgm/voice/sfx/ambience/ui_volume`
+  ([0,1]), `text_speed_multiplier` ([0.25,4]), `auto_advance_delay` ([0,60]),
+  `text_scale` (snapped to 1 / 1.25 / 1.5), `high_contrast`, `reduced_motion`,
+  `skip_mode` (`off`/`read_only`/`all`), `auto_enabled`, `mixer_fade_curve`
+  (`Linear`/`EqualPower`), `sfx_pool_depth` ([1,16]), and a reserved
+  `unlocks` array. Wrong-typed or missing fields fall back to their defaults;
+  out-of-range values are clamped. Unknown top-level keys and `unlocks` are
+  preserved verbatim on rewrite.
+- **Read set:** ids are normalized (`ContentIdService.Normalize` rules),
+  deduplicated, held in a hash set (O(1) lookup) and written sorted. Bounded at
+  1,000,000 ids: past that, new ids are refused with a diagnostic — existing
+  ids are never dropped. The engine marks a dialogue read when it presents it
+  in play state (same point as the backlog); legacy lines without an id never
+  are.
+- **Load statuses** (`RowlEngine_ProfileGetStatusJson`):
+  `loaded`, `missing` (defaults, first run), `corrupt`, `unsupported_version`,
+  `wrong_game`, `unmounted` (no project yet).
+  - *Corrupt* (not JSON, not an object, non-integer `version`, oversize):
+    the file is renamed to `player-profile.corrupt-<UTC>.json` (the 3 newest are
+    kept, only the oldest are deleted), defaults are used, the store stays
+    writable, and the status carries a diagnostic. A file that cannot even be
+    read is not touched: defaults + read-only.
+  - *Future version* (`version` > 1): defaults in memory, store **read-only** —
+    nothing is ever written (no temp, no quarantine) and the file stays
+    byte-identical; every mutator returns `ROWL_RESULT_STATE_ERROR`.
+  - *Wrong game* (`game_id` differs from the mounted game, per-game dir
+    only): same read-only handling.
+- **Writes:** atomic temp+rename (`writeSlotFileAtomically`). Changes are
+  buffered and flushed 2 s of engine time after the first change, by
+  `RowlEngine_ProfileFlush`, on project change, on `Shutdown` and on
+  destruction. A failed write keeps the change pending and retries after 30 s.
+- **C API (`ROWL_ENGINE_CAPABILITY_PLAYER_PROFILE = 16777216`):**
+  `RowlEngine_ProfileGetJson`, `…GetStatusJson`, `…SetPreferencesJson`
+  (all-or-nothing merge of known keys), `…MarkRead`, `…IsRead`, `…Flush`;
+  owner-thread, caller-buffer contract. Golden fixture shared with the managed
+  parity test: `tests/fixtures/profile/player-profile.v1.json`.
+- **Managed side:** the editor `PlayerProfileStore` still writes only the keys
+  it knows (it drops `game_id`, `unlocks` and unknown keys when it rewrites a
+  file); aligning it with the native preservation rules is the D01c-2 slice.

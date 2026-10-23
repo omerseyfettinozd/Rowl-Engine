@@ -32,6 +32,7 @@ add_executable(rowl_tests
     test_story_graph_format_version.cpp
     test_game_identity.cpp
     test_game_data_layout.cpp
+    test_native_player_profile.cpp
     test_boot_story_diagnostics.cpp
     test_project_mount_cwd.cpp
     test_graph_vnext.cpp
@@ -112,7 +113,9 @@ target_compile_definitions(rowl_tests PRIVATE ROWL_BUILDING_DLL)
 # B1: MSDF capability-bit varlık testi bu build'in shader-durumunu bilir
 # (CACHE'den; shaderless-fallback'ta bit 0 beklenir).
 target_compile_definitions(rowl_tests PRIVATE
-    ROWL_TEST_GPU_MSDF_EXPECTED=${ROWL_GPU_MSDF_SHADER_AVAILABLE})
+    ROWL_TEST_GPU_MSDF_EXPECTED=${ROWL_GPU_MSDF_SHADER_AVAILABLE}
+    # D01c-1: golden profile fixture lookup independent of the working dir.
+    ROWL_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 
 # RC Soak (N-stress, 1000 kaydet/yükle) TSan altında ~1200 s; tek ctest
 # testinde kalırsa sonrasındaki bölümler 1800 s içinde hiç koşmaz. Ayrı test

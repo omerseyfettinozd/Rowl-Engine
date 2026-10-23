@@ -31,7 +31,7 @@ struct LegacySaveMigration {
 struct GameDataLayout {
     std::filesystem::path dataDirectory;     ///< dir holding saves/ (+ profile/)
     std::filesystem::path saveDirectory;     ///< effective save dir
-    std::filesystem::path profileDirectory;  ///< empty = keep the global profile dir
+    std::filesystem::path profileDirectory;  ///< per-game profile/, else <project>/profile beside saves
     bool perGame = false;                    ///< false: legacy project-local saves
     std::string diagnostic;                  ///< why we did not use the per-game dir / notes
     std::string migrationJson;               ///< marker content of the last migration pass ("" if none)

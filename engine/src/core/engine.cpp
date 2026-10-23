@@ -145,6 +145,14 @@ std::filesystem::path Engine::getProfileDirectoryPath() const {
     return "profiles";
 }
 
+void Engine::openPlayerProfile() {
+    // A per-game profile dir is bound to the game id (WrongGame guard); the
+    // project-local fallback (derived id, unwritable user data) is not: a moved
+    // derived-id project gets a new id but keeps its own profile.
+    const bool perGame = m_gameDataLayout.perGame && !m_gameDataLayout.profileDirectory.empty();
+    m_playerProfile.open(getProfileDirectoryPath(), perGame ? m_gameIdentity.id : std::string());
+}
+
 Rowl::State::SessionPersistence& Engine::sessionPersistence() const {
     m_sessionPersistence.setSaveDirectory(getSaveDirectoryPath());
     return m_sessionPersistence;
@@ -1920,6 +1928,8 @@ void Engine::step(float deltaTime) {
         deltaTime = 0.25f;
     }
 
+    m_playerProfile.tick(deltaTime);  // D01c-1: debounced profile autosave
+
     const auto platformHost = getPlatformHost();
     if (platformHost && platformHost->lifecycleState() == Rowl::Platform::LifecycleState::Stopping) {
         applyAudioSuspension(platformHost);
@@ -2552,6 +2562,9 @@ void Engine::recordActiveDialogueHistory() {
     entries.reserve(m_activeDialogues.size());
     for (const auto& dialogue : m_activeDialogues) {
         if (!dialogue.dialogue.empty()) {
+            // D01c-1: presented to the player (play state, same point as the
+            // backlog) -> read. Legacy lines have no id and are never marked.
+            if (!dialogue.contentId.empty()) m_playerProfile.markRead(dialogue.contentId);
             entries.push_back(
                 {m_storyRuntime.currentNodeId(), dialogue.speaker, dialogue.dialogue, true,
                  dialogue.contentId});
@@ -2756,6 +2769,7 @@ void Engine::shutdown() {
     m_externalWindowHeight = 0;
     // D2 (#113-kuzeni): proje-override save-dizini de oturuma aittir.
     m_saveDirectoryOverride.clear();
+    m_playerProfile.close();  // D01c-1: flush pending profile changes
     m_gameIdentity = {};
     m_gameDataLayout = {};
 

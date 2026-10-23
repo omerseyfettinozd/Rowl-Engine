@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "language": "tr",
+  "read_content_ids": [
+    "0f0e0d0c-0b0a-0908-0706-050403020100",
+    "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+  ],
+  "master_volume": 0.5,
+  "bgm_volume": 0.75,
+  "voice_volume": 1,
+  "sfx_volume": 0.25,
+  "ambience_volume": 1,
+  "ui_volume": 0.5,
+  "text_speed_multiplier": 1.5,
+  "auto_advance_delay": 3,
+  "text_scale": 1.25,
+  "high_contrast": true,
+  "reduced_motion": false,
+  "skip_mode": "all",
+  "auto_enabled": true,
+  "mixer_fade_curve": "EqualPower",
+  "sfx_pool_depth": 12
+}

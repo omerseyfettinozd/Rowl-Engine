@@ -155,6 +155,9 @@ typedef struct RowlEngine_ApiVersion {
 /* D01b: per-game data directory + legacy save migration report
  * (RowlEngine_GetGameDataDirectoryUtf8 / GetLastDataMigrationJson). Additive. */
 #define ROWL_ENGINE_CAPABILITY_GAME_DATA UINT64_C(8388608)
+/* D01c-1: native player profile (preferences + read set), RowlEngine_Profile*.
+ * Additive. */
+#define ROWL_ENGINE_CAPABILITY_PLAYER_PROFILE UINT64_C(16777216)
 
 /** Current additive C API version. This query does not require an engine handle. */
 ROWL_API RowlEngine_ResultCode RowlEngine_GetApiVersion(
@@ -218,6 +221,67 @@ ROWL_API RowlEngine_ResultCode RowlEngine_GetGameDataDirectoryUtf8(
 /** JSON report of the last legacy <project>/saves copy: {format, source, time,
  *  copied[], skipped[], errors[]}; empty string when nothing was migrated. */
 ROWL_API RowlEngine_ResultCode RowlEngine_GetLastDataMigrationJson(
+    RowlEngineHandle handle, char* buffer, uint32_t bufferSize,
+    uint32_t* outRequiredSize);
+
+/* ── Player profile (ROWL_ENGINE_CAPABILITY_PLAYER_PROFILE) ───────────────
+ * One `player-profile.json` (schema v1) per game, in the profile directory
+ * (RowlEngine_GetProfileDirectoryUtf8), loaded by RowlEngine_SetProjectDirectory.
+ * It holds the player's preferences and the set of read dialogue content ids
+ * (canonical lowercase UUIDs; the engine marks a dialogue read when it is
+ * presented in play state). Same file/keys as the managed PlayerProfileStore.
+ *
+ * Threading: owner-thread API like the save/load family; a call from another
+ * thread returns ROWL_RESULT_WRONG_THREAD and touches nothing.
+ * Safety: a profile written by a newer schema (status "unsupported_version"),
+ * belonging to another game ("wrong_game") or unreadable is READ-ONLY: every
+ * mutator returns ROWL_RESULT_STATE_ERROR and the file is never written. A
+ * corrupt file is renamed to player-profile.corrupt-<UTC>.json (3 kept) and
+ * defaults are used. Before RowlEngine_SetProjectDirectory the profile is
+ * "unmounted" and mutators return ROWL_RESULT_STATE_ERROR.
+ * Persistence: changes are written atomically; automatically ~2 s of engine
+ * time after the first change (RowlEngine_Step), by RowlEngine_ProfileFlush,
+ * on project change and on shutdown. Variable-size outputs use the same
+ * caller-buffer contract as RowlEngine_GetSaveDirectoryUtf8. */
+
+/** Full current profile JSON (the document a flush would write). */
+ROWL_API RowlEngine_ResultCode RowlEngine_ProfileGetJson(
+    RowlEngineHandle handle, char* buffer, uint32_t bufferSize,
+    uint32_t* outRequiredSize);
+
+/** Merges known preference keys from a JSON object, e.g.
+ *  {"master_volume":0.5,"skip_mode":"all"}: language, master/bgm/voice/sfx/
+ *  ambience/ui_volume, text_speed_multiplier, auto_advance_delay, text_scale,
+ *  high_contrast, reduced_motion, skip_mode, auto_enabled, mixer_fade_curve,
+ *  sfx_pool_depth. Values are clamped/snapped like the managed sanitizer.
+ *  All-or-nothing: a malformed document, an unknown key or a wrong JSON type
+ *  returns ROWL_RESULT_INVALID_ARGUMENT and changes nothing. A read-only or
+ *  unmounted profile returns ROWL_RESULT_STATE_ERROR. */
+ROWL_API RowlEngine_ResultCode RowlEngine_ProfileSetPreferencesJson(
+    RowlEngineHandle handle, const char* json);
+
+/** Marks a dialogue content id read (any Guid form is normalized to lowercase
+ *  8-4-4-4-12). NULL/malformed id: ROWL_RESULT_INVALID_ARGUMENT, nothing
+ *  changes. Already read: OK. Read-only/unmounted: ROWL_RESULT_STATE_ERROR.
+ *  Set full (1,000,000 ids): ROWL_RESULT_VALIDATION_ERROR (existing ids are
+ *  never dropped). */
+ROWL_API RowlEngine_ResultCode RowlEngine_ProfileMarkRead(
+    RowlEngineHandle handle, const char* contentId);
+
+/** *outIsRead = 1 when the id was read, else 0 (malformed and unmounted give
+ *  0). NULL contentId or outIsRead: ROWL_RESULT_INVALID_ARGUMENT. */
+ROWL_API RowlEngine_ResultCode RowlEngine_ProfileIsRead(
+    RowlEngineHandle handle, const char* contentId, int32_t* outIsRead);
+
+/** Writes pending changes now. OK when nothing was pending or the profile is
+ *  read-only (nothing is ever written then); ROWL_RESULT_IO_ERROR when the
+ *  write failed (the change stays pending). */
+ROWL_API RowlEngine_ResultCode RowlEngine_ProfileFlush(RowlEngineHandle handle);
+
+/** {"status": "unmounted"|"loaded"|"missing"|"corrupt"|"unsupported_version"|
+ *  "wrong_game", "diagnostic", "read_only", "path", "read_count", "game_id",
+ *  "dirty"}. */
+ROWL_API RowlEngine_ResultCode RowlEngine_ProfileGetStatusJson(
     RowlEngineHandle handle, char* buffer, uint32_t bufferSize,
     uint32_t* outRequiredSize);
 

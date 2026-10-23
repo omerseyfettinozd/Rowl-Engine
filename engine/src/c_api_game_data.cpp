@@ -17,7 +17,13 @@ void applyProjectGameData(Rowl::Core::Engine& engine, const std::filesystem::pat
         engine.setGameDataLayout(std::move(layout));
     } catch (...) {
         engine.setSaveDirectory(Rowl::Platform::pathToUtf8(projectRoot / "saves"));
+        Rowl::State::GameDataLayout fallback;  // no stale per-game dir of a previous mount
+        fallback.dataDirectory = projectRoot;
+        fallback.saveDirectory = projectRoot / "saves";
+        fallback.profileDirectory = projectRoot / "profile";
+        engine.setGameDataLayout(std::move(fallback));
     }
+    engine.openPlayerProfile();  // D01c-1: load the player profile of this game
 }
 
 void reportProjectGameDataDiagnostic(Rowl::Core::Engine& engine) {

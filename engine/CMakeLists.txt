@@ -352,6 +352,7 @@ set(ROWL_ENGINE_SOURCES
     src/platform/user_data_directories.cpp
     src/platform/game_identity.cpp
     src/state/game_data_layout.cpp
+    src/state/player_profile.cpp
     src/platform/mobile_input.cpp
     src/platform/sdl_event_dispatcher.cpp
     src/platform/sdl_subsystem_lease.cpp
@@ -390,6 +391,7 @@ set(ROWL_ENGINE_SOURCES
     src/c_api_pause.cpp
     src/c_api_game_identity.cpp
     src/c_api_game_data.cpp
+    src/c_api_profile.cpp
     src/c_api_thread_contract_guard.cpp  # D14: legacy-mixer checked loud varyantlar
     src/c_api_observability.cpp          # AI Full-Observability log pipe & query
 )
