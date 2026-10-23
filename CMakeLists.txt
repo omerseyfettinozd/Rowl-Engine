@@ -380,6 +380,21 @@ if(ROWL_BUILD_RUNTIME_TESTS AND TARGET rowl_player)
             TIMEOUT 120
             ENVIRONMENT "SDL_AUDIODRIVER=dummy;SDL_VIDEODRIVER=dummy"
         )
+        # D01d: two packaged games (same sample, different ids) driven through
+        # the real player: distinct ids/data dirs, read state + preferences
+        # persist per game, future-version profile stays read-only/byte-identical.
+        add_test(
+            NAME rowl_packaged_game_isolation
+            COMMAND ${Python3_EXECUTABLE} -u ${CMAKE_SOURCE_DIR}/tests/test_packaged_game_isolation.py
+                $<TARGET_FILE:rowl_player>
+                $<TARGET_FILE:RowlEngineCore>
+                ${CMAKE_SOURCE_DIR}/samples/second_signal
+        )
+        set_tests_properties(rowl_packaged_game_isolation PROPERTIES
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+            TIMEOUT 180
+            ENVIRONMENT "SDL_AUDIODRIVER=dummy;SDL_VIDEODRIVER=dummy"
+        )
         add_test(
             NAME rowl_demo_second_signal_packaged
             COMMAND ${Python3_EXECUTABLE} -u ${CMAKE_SOURCE_DIR}/tests/test_demo_packaged.py

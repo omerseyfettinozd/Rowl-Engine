@@ -243,9 +243,15 @@ def main():
 
         env = dict(os.environ)
         env["SDL_AUDIODRIVER"] = "dummy"
+        # D01d: the smoke exercises the player profile, which lives in the
+        # per-game user-data dir. Keep it in the scratch tree, not the user's.
+        env["XDG_DATA_HOME"] = str(pathlib.Path(directory) / "xdg")
+        env["LOCALAPPDATA"] = env["XDG_DATA_HOME"]
         smoke = run(release / player_name, "--project", release,
                     "--package-smoke-test", env=env)
-        if smoke.returncode != 0 or "Package smoke frame rendered" not in smoke.stdout:
+        if (smoke.returncode != 0 or "Package smoke frame rendered" not in smoke.stdout
+                or "Package smoke profile: status=" not in smoke.stdout
+                or "flushed=true" not in smoke.stdout):
             print(f"package smoke failed (exit {smoke.returncode}): "
                   f"{smoke.stdout}{smoke.stderr}", file=sys.stderr)
             return 1

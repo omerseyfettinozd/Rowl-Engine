@@ -485,7 +485,7 @@ if(ROWL_BUILD_PLAYER)
     # eder (uretim topolojisi degismez); yalnizca crash TU'su player'a dogrudan
     # derlenir (motor ici bu sembolleri cagirmaz, .so'daki kopya oludur).
     add_executable(rowl_player src/player/main.cpp src/platform/crash_handler.cpp)
-    target_link_libraries(rowl_player PRIVATE RowlEngineCore ${SDL3_TARGET})
+    target_link_libraries(rowl_player PRIVATE RowlEngineCore ${SDL3_TARGET} nlohmann_json::nlohmann_json)
     set_target_properties(rowl_player PROPERTIES
         OUTPUT_NAME "rowl_player"
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"

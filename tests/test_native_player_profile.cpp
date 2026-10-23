@@ -10,7 +10,8 @@
  *  - bounded read set (never drops existing ids), invalid ids ignored
  *  - debounced autosave, flush on destroy / shutdown / project change
  *  - two games -> disjoint profile files; derived id -> shared dir, no game_id
- *  - engine marks read at presentation (play state only)
+ *  - engine marks read at presentation (play state only), incl. the start
+ *    node's line at the false->true play-state transition (D01d)
  *  - C API contract: null handle, size query, undersized buffer, wrong thread
  *  - golden fixture shared with the managed PlayerProfileStore parity test
  * XDG_DATA_HOME always points at a temp dir.
@@ -664,16 +665,57 @@ void test_native_player_profile() {
         RowlEngine_UpdateSceneFromJson(h, previewScene.c_str());
         profReq(RowlEngine_ProfileIsRead(h, kC2.c_str(), &isRead) == ROWL_RESULT_OK && isRead == 0,
                 "preview presentation must not mark read");
+        // D01d: the preview line is still on screen when play state begins, and
+        // from that moment it IS presented to the player -> read at the
+        // false->true transition (see the start-node section below).
         RowlEngine_SetPlayState(h, 1);
+        profReq(RowlEngine_ProfileIsRead(h, kC2.c_str(), &isRead) == ROWL_RESULT_OK && isRead == 1,
+                "the line on screen when play state began was not marked read");
         RowlEngine_UpdateSceneFromJson(h, scene.c_str());
         profReq(RowlEngine_ProfileIsRead(h, kC1.c_str(), &isRead) == ROWL_RESULT_OK && isRead == 1,
                 "presented dialogue was not marked read");
-        profReq(capiJson(h, RowlEngine_ProfileGetStatusJson)["read_count"] == 1,
+        profReq(capiJson(h, RowlEngine_ProfileGetStatusJson)["read_count"] == 2,
                 "legacy (id-less) dialogue must never be marked read");
-        profReq(RowlEngine_ProfileIsRead(h, kC2.c_str(), &isRead) == ROWL_RESULT_OK && isRead == 0, "preview id leaked");
         RowlEngine_Destroy(h);
     }
     TEST_PASS("Engine marks dialogue read at presentation (play state), never legacy lines or previews");
+
+    // 12b) D01d: the start node's dialogue is on screen BEFORE play state; it is
+    // marked read at the false->true transition (RowlEngine_Run and the
+    // editor's SetPlayState(1) share it) - read state only, no second backlog entry.
+    {
+        const fs::path game = makeGame(base / "gameFirstLine", "55555555-6666-4777-8888-999999999999");
+        writeText(game / "Assets" / "json" / "full_story_graph.json", R"({
+            "format_version": 4, "start_node_id": 1, "nodes": [
+              {"id": 1, "components": [
+                {"type": "dialogue", "id": "d1", "enabled": true, "data": {
+                  "speaker": "Evelyn", "dialogue": "First line.", "typewriter_enabled": false,
+                  "content_id": "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE"}},
+                {"type": "dialogue", "id": "d2", "enabled": true, "data": {
+                  "speaker": "Mina", "dialogue": "Legacy first line.", "typewriter_enabled": false}}
+              ], "next_nodes": []}]})");
+        RowlEngineHandle h = newEngine();
+        RowlEngine_SetProjectDirectory(h, game.string().c_str());
+        profReq(RowlEngine_GetCurrentNodeId(h) == 1, "story graph must load for the first-line test");
+        int32_t isRead = -1;
+        profReq(RowlEngine_ProfileIsRead(h, kC1.c_str(), &isRead) == ROWL_RESULT_OK && isRead == 0,
+                "start-node dialogue must not be read before play state");
+        RowlEngine_SetPlayState(h, 1);
+        profReq(RowlEngine_ProfileIsRead(h, kC1.c_str(), &isRead) == ROWL_RESULT_OK && isRead == 1,
+                "start-node dialogue was not marked read when play state began");
+        profReq(capiJson(h, RowlEngine_ProfileGetStatusJson)["read_count"] == 1,
+                "the id-less start-node line must never be marked read");
+        // Re-entering (stop -> play) and a redundant SetPlayState(1) are harmless.
+        const std::string historyBefore = RowlEngine_GetDialogueHistoryJson(h);
+        RowlEngine_SetPlayState(h, 1);
+        RowlEngine_SetPlayState(h, 0);
+        RowlEngine_SetPlayState(h, 1);
+        profReq(capiJson(h, RowlEngine_ProfileGetStatusJson)["read_count"] == 1, "read count drifted");
+        profReq(historyBefore == RowlEngine_GetDialogueHistoryJson(h),
+                "the play-state transition must not record backlog history");
+        RowlEngine_Destroy(h);
+    }
+    TEST_PASS("Start-node dialogue is marked read when play state begins (no duplicate backlog)");
 
     // 13) C API contract.
     {

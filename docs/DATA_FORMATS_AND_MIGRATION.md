@@ -283,7 +283,9 @@ filters), linter (`ProjectValidationService`), and the packager
   1,000,000 ids: past that, new ids are refused with a diagnostic — existing
   ids are never dropped. The engine marks a dialogue read when it presents it
   in play state (same point as the backlog); legacy lines without an id never
-  are.
+  are. The start node's lines, which are on screen before play state begins,
+  are marked at the false-to-true play-state transition (`RowlEngine_Run` and
+  the editor's `SetPlayState(1)`), without adding a backlog entry (D01d).
 - **Load statuses** (`RowlEngine_ProfileGetStatusJson`):
   `loaded`, `missing` (defaults, first run), `corrupt`, `unsupported_version`,
   `wrong_game`, `unmounted` (no project yet).
@@ -311,3 +313,29 @@ filters), linter (`ProjectValidationService`), and the packager
   `game_id`, `unlocks` and unknown keys on rewrite and is used per game as the
   fallback. Details and the one-time migration of the old global editor profile:
   `docs/PLAYER_PROFILE_AND_CONTENT_ID.md` section 9.
+
+## 10. Per-game identity, data layout and version rules (D01 summary)
+
+One place for the pieces a packaged game relies on (details in sections 3, 9
+and `docs/PLAYER_GUIDE.md`):
+
+| Piece | Where | Version | Rule |
+|---|---|---|---|
+| Game identity | `rowl/game.json` in `game.rowlpkg` (`format = 1`, `game_id` lowercase UUID, optional `game_name`); loose `project.rowlproj` `project_uuid` as secondary; else a path-derived UUIDv5 (flagged `derived`) | `format 1` | Package wins; a package/manifest mismatch is a build/verify error. The id never changes when the folder is moved or renamed. |
+| Data directory | `<user-data>/rowl-engine/games/<game-id>/{saves,profile}` (`$XDG_DATA_HOME`, `%LOCALAPPDATA%`, macOS Application Support) | - | Games with a derived id or an unwritable user-data dir keep `<project>/saves` + `<project>/profile`. Legacy `<game>/saves` is **copied** once (never deleted); the report is `RowlEngine_GetLastDataMigrationJson`. |
+| Save slots | `.../saves/save_slot_<n>.json` | v3 (v1/v2 migrate) | section 2 |
+| Player profile | `.../profile/player-profile.json` | `version = 1` | section 9 |
+
+Future-version rule (profile and saves): a file written by a **newer** schema is
+never rewritten, renamed or backed up. The profile stays in memory as defaults,
+read-only (`status = unsupported_version`, every mutator returns
+`ROWL_RESULT_STATE_ERROR`), and the standalone player says so on stdout
+(`--package-smoke-test`: "profile is read-only (unsupported_version)").
+`wrong_game` (another game's profile in this directory) is handled the same way;
+a corrupt profile is quarantined (`player-profile.corrupt-<UTC>.json`, 3 kept)
+and replaced by defaults. Releases launched through `run_game.sh` /
+`run_game.bat` keep exactly this layout: the launchers only `cd` into the game
+folder and must not assign `XDG_DATA_HOME`, `HOME`, `LOCALAPPDATA`, `APPDATA`,
+`USERPROFILE` or `TMPDIR` (`tools/launcher_contract.py`,
+`data_dir_override_problems`). Machine-checked by `rowl_packaged_game_isolation`
+(`tests/test_packaged_game_isolation.py`).

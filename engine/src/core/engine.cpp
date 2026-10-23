@@ -427,6 +427,7 @@ bool Engine::initialize(const EngineConfig& config) {
 }
 
 void Engine::setPlayState(bool isPlaying) {
+    const bool enteringPlay = isPlaying && !m_isPlaying;
     m_isPlaying = isPlaying;
     m_autoAdvanceElapsed = 0.0f;
     m_activeDialogueData.isPlaying = isPlaying;
@@ -436,6 +437,19 @@ void Engine::setPlayState(bool isPlaying) {
         for (auto& dlg : m_activeDialogues) {
             dlg.elapsedTypewriterTime = 0.0f;
             dlg.lastBlipCodepointIndex = 0;
+        }
+        // D01d: the start node's dialogue is presented BEFORE play state (the
+        // story graph is mounted by SetProjectDirectory / LoadStoryGraph), so
+        // recordActiveDialogueHistory never saw it. At the false->true
+        // transition the lines on screen are now presented to the player:
+        // mark them read. Read state only - no backlog entry is added here
+        // (the backlog bookkeeping is untouched, so nothing is recorded twice).
+        if (enteringPlay) {
+            for (const auto& dlg : m_activeDialogues) {
+                if (!dlg.dialogue.empty() && !dlg.contentId.empty()) {
+                    m_playerProfile.markRead(dlg.contentId);
+                }
+            }
         }
     } else {
         m_activeDialogueData.elapsedTypewriterTime = 9999.0f;

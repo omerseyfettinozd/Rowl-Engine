@@ -1,11 +1,14 @@
 #include "rowl/c_api.h"
 #include "rowl/platform/crash_handler.hpp"
+#include <nlohmann/json.hpp>
 #include <iostream>
 #include <string>
 #include <system_error>
 #include <vector>
 #include <filesystem>
 #include <charconv>
+#include <cstdio>
+#include <cstdint>
 #include <string_view>
 
 #if defined(_WIN32)
@@ -68,6 +71,167 @@ void refreshCrashSnapshot(RowlEngineHandle engine) {
                                               RowlEngine_GetLastResultTarget(engine));
 }
 
+// D01d: caller-buffer text query (size query, then copy). Empty on failure.
+template <typename Query>
+std::string playerQueryText(RowlEngineHandle engine, Query query) {
+    uint32_t required = 0;
+    if (query(engine, nullptr, 0, &required) != ROWL_RESULT_OK || required == 0) return {};
+    std::string buffer(required, '\0');
+    if (query(engine, buffer.data(), required, &required) != ROWL_RESULT_OK || required == 0) return {};
+    buffer.resize(required - 1);
+    return buffer;
+}
+
+nlohmann::json playerParseObject(const std::string& text) {
+    nlohmann::json parsed = nlohmann::json::parse(text, nullptr, false);
+    return parsed.is_object() ? parsed : nlohmann::json::object();
+}
+
+const char* playerIdentitySourceName(int32_t source) {
+    switch (source) {
+        case ROWL_GAME_IDENTITY_PACKAGE: return "package";
+        case ROWL_GAME_IDENTITY_MANIFEST: return "manifest";
+        case ROWL_GAME_IDENTITY_DERIVED: return "derived";
+        default: return "none";
+    }
+}
+
+// D01d: everything a player (or a test) needs to know about where this game
+// keeps its identity, saves and profile. Valid after RowlEngine_SetProjectDirectory.
+nlohmann::json collectGameIdentity(RowlEngineHandle engine) {
+    nlohmann::json out = nlohmann::json::object();
+    out["game_id"] = playerQueryText(engine, RowlEngine_GetGameIdUtf8);
+    out["identity_source"] = playerIdentitySourceName(RowlEngine_GetGameIdentitySource(engine));
+    out["identity_diagnostic"] = playerQueryText(engine, RowlEngine_GetGameIdentityDiagnosticUtf8);
+    out["data_dir"] = playerQueryText(engine, RowlEngine_GetGameDataDirectoryUtf8);
+    out["save_dir"] = playerQueryText(engine, RowlEngine_GetSaveDirectoryUtf8);
+    out["profile_dir"] = playerQueryText(engine, RowlEngine_GetProfileDirectoryUtf8);
+    out["profile"] = playerParseObject(playerQueryText(engine, RowlEngine_ProfileGetStatusJson));
+    const nlohmann::json migration =
+        nlohmann::json::parse(playerQueryText(engine, RowlEngine_GetLastDataMigrationJson), nullptr, false);
+    out["migration"] = migration.is_object() ? migration : nlohmann::json(nullptr);
+    return out;
+}
+
+std::string playerFieldText(const nlohmann::json& object, const char* key, const std::string& fallback) {
+    const auto it = object.find(key);
+    if (it == object.end() || it->is_null()) return fallback;
+    return it->is_string() ? it->get<std::string>() : it->dump();
+}
+
+// Human-readable block on stdout (diagnosable without a debugger).
+void printGameIdentityBlock(const nlohmann::json& info) {
+    const nlohmann::json& profile = info["profile"];
+    std::cout << "[Player] Game id: " << playerFieldText(info, "game_id", "") << " (source: "
+              << playerFieldText(info, "identity_source", "none") << ")\n";
+    const std::string identityNote = playerFieldText(info, "identity_diagnostic", "");
+    if (!identityNote.empty()) std::cout << "[Player]   identity note: " << identityNote << "\n";
+    std::cout << "[Player]   data dir: " << playerFieldText(info, "data_dir", "") << "\n"
+              << "[Player]   save dir: " << playerFieldText(info, "save_dir", "") << "\n"
+              << "[Player]   profile:  " << playerFieldText(profile, "path", "") << " (status: "
+              << playerFieldText(profile, "status", "unmounted")
+              << (profile.value("read_only", false) ? ", read-only" : "")
+              << ", read ids: " << playerFieldText(profile, "read_count", "0") << ")\n";
+    const std::string profileNote = playerFieldText(profile, "diagnostic", "");
+    if (!profileNote.empty()) std::cout << "[Player]   profile note: " << profileNote << "\n";
+    const nlohmann::json& migration = info["migration"];
+    if (migration.is_object()) {
+        const auto count = [&](const char* key) {
+            const auto it = migration.find(key);
+            return (it != migration.end() && it->is_array()) ? it->size() : std::size_t{0};
+        };
+        std::cout << "[Player]   legacy saves: copied " << count("copied") << ", skipped "
+                  << count("skipped") << ", errors " << count("errors") << " from "
+                  << playerFieldText(migration, "source", "?") << "\n";
+    }
+}
+
+// D01d: applies the stored player preferences with the existing public setters
+// and returns "key=value" pairs for the ones applied.
+//
+// Not applied here (no native setter yet - D02/D05): auto_advance_delay (the
+// native knob is an additive per-line offset, not an absolute delay),
+// skip_mode, auto_enabled. language is applied only when it is not the profile
+// default "en": the profile cannot tell "never chosen" from "chose en", and a
+// project whose own default locale is not "en" must keep it until the player
+// explicitly picks another language (explicit marker: D02).
+std::vector<std::string> applyStoredPreferences(RowlEngineHandle engine) {
+    std::vector<std::string> applied;
+    const nlohmann::json status = playerParseObject(playerQueryText(engine, RowlEngine_ProfileGetStatusJson));
+    if (status.value("status", std::string{}) != "loaded") return applied;  // defaults == engine defaults
+    const nlohmann::json prefs = playerParseObject(playerQueryText(engine, RowlEngine_ProfileGetJson));
+
+    const auto number = [&](const char* key, float& out) {
+        const auto it = prefs.find(key);
+        if (it == prefs.end() || !it->is_number()) return false;
+        out = it->get<float>();
+        return true;
+    };
+    const auto note = [&](const char* key, const std::string& value) {
+        applied.push_back(std::string(key) + "=" + value);
+    };
+    const auto floatText = [](float value) {
+        char text[32];
+        std::snprintf(text, sizeof(text), "%.4g", static_cast<double>(value));
+        return std::string(text);
+    };
+    // The value reported is read back from the engine, so the line proves the
+    // setter took effect (not just that the profile held a number).
+    const auto volume = [&](const char* key, void (*setter)(RowlEngineHandle, float),
+                            float (*getter)(RowlEngineHandle)) {
+        float value = 0.0f;
+        if (number(key, value)) {
+            setter(engine, value);
+            note(key, floatText(getter(engine)));
+        }
+    };
+    volume("master_volume", RowlEngine_SetMasterVolume, RowlEngine_GetMasterVolume);
+    volume("bgm_volume", RowlEngine_SetBgmVolume, RowlEngine_GetBgmVolume);
+    volume("voice_volume", RowlEngine_SetVoiceVolume, RowlEngine_GetVoiceVolume);
+    volume("sfx_volume", RowlEngine_SetSfxVolume, RowlEngine_GetSfxVolume);
+    volume("ambience_volume", RowlEngine_SetAmbienceVolume, RowlEngine_GetAmbienceVolume);
+    volume("ui_volume", RowlEngine_SetUiVolume, RowlEngine_GetUiVolume);
+
+    float value = 0.0f;
+    if (number("text_speed_multiplier", value)) {  // no native getter
+        RowlEngine_SetTextSpeedMultiplier(engine, value);
+        note("text_speed_multiplier", floatText(value));
+    }
+    if (number("text_scale", value)) {
+        RowlEngine_SetTextScale(engine, value);
+        note("text_scale", floatText(RowlEngine_GetTextScale(engine)));
+    }
+    if (prefs.value("high_contrast", false)) {
+        RowlEngine_SetHighContrast(engine, 1);
+        note("high_contrast", RowlEngine_IsHighContrast(engine) != 0 ? "true" : "false");
+    }
+    if (prefs.value("reduced_motion", false)) {
+        RowlEngine_SetReducedMotion(engine, 1);
+        note("reduced_motion", RowlEngine_IsReducedMotion(engine) != 0 ? "true" : "false");
+    }
+    if (prefs.value("mixer_fade_curve", std::string{}) == "EqualPower") {
+        RowlEngine_SetFadeCurve(engine, 1);
+        note("mixer_fade_curve", RowlEngine_GetFadeCurve(engine) == 1 ? "EqualPower" : "Linear");
+    }
+    if (const auto it = prefs.find("sfx_pool_depth"); it != prefs.end() && it->is_number_integer()) {
+        RowlEngine_SetSfxPoolDepth(engine, it->get<int>());
+        note("sfx_pool_depth", std::to_string(RowlEngine_GetSfxPoolDepth(engine)));
+    }
+    const std::string language = prefs.value("language", std::string{"en"});
+    if (language != "en") {
+        const std::string current = playerQueryText(engine, RowlEngine_GetLocale);
+        if (language != current) {
+            if (RowlEngine_SetLocale(engine, language.c_str()) == ROWL_RESULT_OK) {
+                note("language", playerQueryText(engine, RowlEngine_GetLocale));
+            } else {
+                std::cout << "[Player] Stored language '" << language
+                          << "' is not available in this game; keeping '" << current << "'.\n";
+            }
+        }
+    }
+    return applied;
+}
+
 constexpr uint32_t kMaxWindowDimension = 16'384;
 
 // Faz 6 Dilim 10: oyuncu sürümünün tek kaynağı. help başlığı ile --version
@@ -125,7 +289,11 @@ static void printHelp(const char* progName) {
               << "      --slot <N>           Active quick-save slot 0-9 for F5/F9 (default: 0)\n"
               << "      --no-vsync           Disable vertical sync\n\n"
               << "      --gpu-smoke-test     Render one standalone frame, then exit (CI)\n\n"
-              << "      --package-smoke-test Load the packaged VFS graph, render one frame, then exit\n\n"
+              << "      --package-smoke-test Load the packaged VFS graph, render one frame, exercise the\n"
+              << "                           player profile (mark the first line read, set a preference,\n"
+              << "                           flush), then exit. Writes to the game's profile.\n"
+              << "      --print-game-identity Mount the project, print one JSON line (game id, identity\n"
+              << "                           source, data/save/profile paths, profile status), exit\n\n"
               << "Controls:\n"
               << "  Space / Enter / Click    Advance to next dialogue line / select choice\n"
               << "  F5                       Quick Save (active slot)\n"
@@ -168,6 +336,7 @@ int rowlPlayerMain(int argc, char* argv[]) {
     bool vsync = true;
     bool gpuSmokeTest = false;
     bool packageSmokeTest = false;
+    bool printGameIdentity = false;
     int32_t quickSlot = 0;
 
     for (int i = 1; i < argc; ++i) {
@@ -210,6 +379,8 @@ int rowlPlayerMain(int argc, char* argv[]) {
             gpuSmokeTest = true;
         } else if (arg == "--package-smoke-test") {
             packageSmokeTest = true;
+        } else if (arg == "--print-game-identity") {
+            printGameIdentity = true;
         } else {
             std::cerr << "Unknown option: " << arg << "\n";
             printHelp(argv[0]);
@@ -223,7 +394,9 @@ int rowlPlayerMain(int argc, char* argv[]) {
         std::cerr << "Invalid --title-state value '" << titleState << "' (expected one of: title)\n";
         return 1;
     }
-    std::cout << "[Player] Title state selected: '" << titleState << "' (read-only; scene flow unchanged).\n";
+    if (!printGameIdentity) {
+        std::cout << "[Player] Title state selected: '" << titleState << "' (read-only; scene flow unchanged).\n";
+    }
 
     // A2b: argv UTF-8 sözleşmesi. POSIX'te argv zaten UTF-8'dir; Windows'ta
     // main'in char* argv'si ANSI-codepage mojibake üretir (non-ASCII proje
@@ -246,6 +419,10 @@ int rowlPlayerMain(int argc, char* argv[]) {
             std::cerr << "Story graph file does not exist or is not a regular file: " << storyGraphPath << "\n";
             return 1;
         }
+    }
+    if (printGameIdentity && (packageSmokeTest || gpuSmokeTest)) {
+        std::cerr << "--print-game-identity cannot be combined with a smoke test.\n";
+        return 1;
     }
     if (packageSmokeTest && !storyGraphPath.empty()) {
         std::cerr << "--package-smoke-test requires the graph to come from the packaged VFS; omit --story.\n";
@@ -275,8 +452,8 @@ int rowlPlayerMain(int argc, char* argv[]) {
 
     // Package smoke uses the normal offscreen engine so it runs on desktop CI
     // without opening a persistent native window. Interactive and GPU smoke
-    // modes retain the standalone path.
-    const int initialized = packageSmokeTest
+    // modes retain the standalone path. --print-game-identity needs no window.
+    const int initialized = (packageSmokeTest || printGameIdentity)
         ? RowlEngine_Init(engine, winWidth, winHeight, vsync ? 1 : 0)
         : RowlEngine_InitStandalone(engine, appTitle.c_str(), winWidth, winHeight, vsync ? 1 : 0);
     if (!initialized) {
@@ -298,6 +475,15 @@ int rowlPlayerMain(int argc, char* argv[]) {
     const std::string baseProjUtf8 = playerPathToUtf8(baseProj);
     RowlEngine_SetProjectDirectory(engine, baseProjUtf8.c_str());
     refreshCrashSnapshot(engine);
+
+    // D01d: say where this game keeps its identity, saves and profile.
+    const nlohmann::json gameInfo = collectGameIdentity(engine);
+    if (printGameIdentity) {
+        std::cout << gameInfo.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace) << std::endl;
+        RowlEngine_Destroy(engine);
+        return 0;
+    }
+    printGameIdentityBlock(gameInfo);
 
     // The release contract loads its graph through game.rowlpkg.  Physical
     // --story and legacy loose-file discovery remain available for development.
@@ -347,8 +533,51 @@ int rowlPlayerMain(int argc, char* argv[]) {
     }
     refreshCrashSnapshot(engine);
 
+    // D01d: the player's stored preferences (volumes, text speed, ...) take
+    // effect before the first frame. Only the existing public setters are used.
+    {
+        const std::vector<std::string> applied = applyStoredPreferences(engine);
+        if (!applied.empty()) {
+            std::cout << "[Player] Applied stored preferences:";
+            for (const std::string& entry : applied) std::cout << ' ' << entry;
+            std::cout << "\n";
+        }
+    }
+
     if (packageSmokeTest) {
+        // D01d: exercise the profile through the same paths the game uses:
+        // entering play state marks the first line read, a preference write
+        // goes through the store, and the flush must land on disk (or be
+        // refused for a read-only profile - future version / wrong game -
+        // which is reported, not fatal). The preference is changed and then
+        // restored, so a smoke run never alters the player's own settings.
+        RowlEngine_SetPlayState(engine, 1);
         RowlEngine_Step(engine, 1.0F / 60.0F);
+        const nlohmann::json before = playerParseObject(playerQueryText(engine, RowlEngine_ProfileGetJson));
+        const double originalSpeed = before.value("text_speed_multiplier", 1.0);
+        const double probeSpeed = originalSpeed == 1.5 ? 1.25 : 1.5;
+        auto setSpeed = [&](double speed) {
+            const std::string json = nlohmann::json{{"text_speed_multiplier", speed}}.dump();
+            return RowlEngine_ProfileSetPreferencesJson(engine, json.c_str()) == ROWL_RESULT_OK;
+        };
+        const bool preferenceSet = setSpeed(probeSpeed) && setSpeed(originalSpeed);
+        const bool flushed = RowlEngine_ProfileFlush(engine) == ROWL_RESULT_OK;
+        const nlohmann::json after = playerParseObject(playerQueryText(engine, RowlEngine_ProfileGetStatusJson));
+        const bool readOnly = after.value("read_only", false);
+        std::cout << "[Player] Package smoke profile: status=" << playerFieldText(after, "status", "unmounted")
+                  << " read_only=" << (readOnly ? "true" : "false")
+                  << " read_count=" << playerFieldText(after, "read_count", "0")
+                  << " preference_set=" << (preferenceSet ? "true" : "false")
+                  << " flushed=" << (flushed ? "true" : "false") << "\n";
+        if (readOnly) {
+            std::cout << "[Player] Package smoke profile is read-only ("
+                      << playerFieldText(after, "status", "unmounted")
+                      << "): nothing was written. " << playerFieldText(after, "diagnostic", "") << "\n";
+        } else if (!preferenceSet || !flushed) {
+            std::cerr << "[Player] Package smoke failed: the player profile could not be written.\n";
+            RowlEngine_Destroy(engine);
+            return 1;
+        }
         std::cout << "[Player] Package smoke frame rendered from VFS story graph.\n";
     } else if (gpuSmokeTest) {
         // This travels through the same standalone window, VFS-mounted atlas,

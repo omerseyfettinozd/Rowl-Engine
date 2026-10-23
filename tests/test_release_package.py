@@ -241,8 +241,28 @@ with tempfile.TemporaryDirectory() as directory:
         .encode("utf-8"))
     require_rejection(staged, "has a CR")
 
+    # D01d: a launcher must not redirect the per-game user-data directory
+    # (saves + player profile live under XDG data home / %LOCALAPPDATA%).
+    for tag, name, content in [
+        ("sh-xdg-redirect", "run_game.sh",
+         '#!/bin/bash\nSCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"\n'
+         'export XDG_DATA_HOME="$SCRIPT_DIR/data"\nexec "$SCRIPT_DIR/RowlGame" "$@"\n'),
+        ("sh-home-redirect", "run_game.sh",
+         '#!/bin/sh\nHOME=. exec ./RowlGame "$@"\n'),
+    ]:
+        staged = root / tag
+        shutil.copytree(release, staged)
+        (staged / name).write_bytes(content.encode("utf-8"))
+        require_rejection(staged, "a launcher must not redirect it")
+    require_rejection(
+        stage_windows_release(
+            "bat-localappdata-redirect",
+            b'@echo off\r\ncd /d "%~dp0"\r\nset LOCALAPPDATA=%~dp0data\r\nRowlGame.exe %*\r\n'),
+        "assigns LOCALAPPDATA")
+
     print("[ReleasePackageTests] POSIX launcher contract: bad exe name, "
-          "dropped argument forward and CR line endings are rejected.")
+          "dropped argument forward, CR line endings and user-data redirects "
+          "are rejected.")
 
     # --- P2-16 ADIM 5: the gates must be able to go RED ---
     #
@@ -351,6 +371,26 @@ with tempfile.TemporaryDirectory() as directory:
                              "emit() no longer calls write_launcher_bytes")
         return mutated
 
+    def redirect_posix_data_dir(source):
+        mutated = source.replace(
+            "    'cd \"$SCRIPT_DIR\" || exit 1\\n'\n",
+            "    'cd \"$SCRIPT_DIR\" || exit 1\\n'\n"
+            "    'export XDG_DATA_HOME=\"$SCRIPT_DIR/data\"\\n'\n")
+        if mutated == source:
+            raise SystemExit("redirect_posix_data_dir changed nothing; the "
+                             "launcher shape moved")
+        return mutated
+
+    def redirect_windows_data_dir(source):
+        mutated = source.replace(
+            "    'cd /d \"%~dp0\"\\r\\n'\n",
+            "    'cd /d \"%~dp0\"\\r\\n'\n"
+            "    'set \"LOCALAPPDATA=%~dp0data\"\\r\\n'\n")
+        if mutated == source:
+            raise SystemExit("redirect_windows_data_dir changed nothing; the "
+                             "launcher shape moved")
+        return mutated
+
     def drop_executable_bit(source):
         mutated = source.replace(
             "mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH", "mode")
@@ -450,6 +490,10 @@ with tempfile.TemporaryDirectory() as directory:
          "would write ['run_game.sh'], not 'run_game.bat'", "any"),
         ("text-mode-write", revert_to_text_mode_write,
          "simulated Windows host", "any"),
+        ("posix-data-redirect", redirect_posix_data_dir,
+         "assigns XDG_DATA_HOME", "any"),
+        ("windows-data-redirect", redirect_windows_data_dir,
+         "assigns LOCALAPPDATA", "any"),
         ("no-exec-bit", drop_executable_bit, "is not executable", "posix"),
     ]
 

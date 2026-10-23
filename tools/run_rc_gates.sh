@@ -241,7 +241,8 @@ g_package() {
     python3 tools/verify_release_package.py "$work/extracted"
     (
         cd "$work/extracted"
-        LD_LIBRARY_PATH=. $XVFB timeout 1800s ./RowlGame --project . --package-smoke-test
+        # D01d: the smoke writes the player profile; keep it out of ~/.local/share.
+        XDG_DATA_HOME="$work/xdg" LD_LIBRARY_PATH=. $XVFB timeout 1800s ./RowlGame --project . --package-smoke-test
     ) | tee "$work/smoke.out"
     grep -q "Package smoke frame rendered" "$work/smoke.out"
 }

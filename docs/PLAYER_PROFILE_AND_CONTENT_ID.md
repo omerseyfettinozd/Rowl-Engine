@@ -136,9 +136,8 @@ they are presented in play state, and exposes `RowlEngine_Profile*`
 (`ROWL_ENGINE_CAPABILITY_PLAYER_PROFILE`). Corrupt files are quarantined,
 files from a newer schema or another game are read-only and left untouched.
 The full contract (schema, statuses, flush policy) is in
-`docs/DATA_FORMATS_AND_MIGRATION.md` section 9. Not yet done: the native player
-does not apply the stored preferences, the line shown before play state starts
-(start node) is not marked by the native hook. The editor side (managed store
+`docs/DATA_FORMATS_AND_MIGRATION.md` section 9. Both gaps listed here in D01c-1 are
+closed in section 10 (D01d). The editor side (managed store
 parity, per-game location, single writer) is section 9.
 
 ## 9. Editor uses the per-game profile (D01c-2)
@@ -187,3 +186,43 @@ parity, per-game location, single writer) is section 9.
 - Tests: `EditorPlayerProfilePerGameTests` (two projects isolated and persisted,
   golden-fixture and native/managed round trips, read-only profiles
   byte-identical, project switch detach, migration once/claim/skip).
+
+## 10. Standalone player wiring (D01d)
+
+- **First line is marked read.** The start node's dialogue is presented before
+  play state begins, so the presentation hook never saw it. `Engine::setPlayState`
+  now marks the active dialogues (non-empty `content_id` only) read at the
+  false-to-true transition, which both `RowlEngine_Run` and the editor's
+  `RowlEngine_SetPlayState(1)` go through. It touches the read set only: no backlog
+  entry is recorded, so nothing is recorded twice; stopping and re-entering play
+  state is harmless (already-read ids are `Unchanged`). Native test:
+  `tests/test_native_player_profile.cpp` (start-node section).
+- **The player applies stored preferences at start.** After
+  `RowlEngine_SetProjectDirectory` (and the story graph) the player reads
+  `RowlEngine_ProfileGetJson` and, when the profile status is `loaded`, applies
+  through the existing public setters: master/bgm/voice/sfx/ambience/ui volume,
+  `text_speed_multiplier`, `text_scale`, `high_contrast`, `reduced_motion`,
+  `mixer_fade_curve`, `sfx_pool_depth`, and `language` (only when it is not the
+  profile default `en` and the game offers that locale: the profile cannot tell
+  "never chosen" from "chose en", and a project whose own default locale is not
+  `en` must keep it). It prints `[Player] Applied stored preferences: key=value ...`
+  with the values read back from the engine.
+  **Not applied yet** (no native setter or semantics): `auto_advance_delay` (the
+  native knob, `RowlEngine_SetAutoAdvanceDelayOffset`, is an additive per-line
+  offset, not an absolute delay), `skip_mode`, `auto_enabled`; the explicit
+  "language chosen" marker and a way for the in-game pause menu to write back
+  its volume/text-speed changes belong to the title/menu work (D02/D05).
+  Note that loading a save restores the volumes stored in that save.
+- **Diagnostics and `--print-game-identity`.** The player prints a short block
+  after mounting (game id and identity source, data/save dirs, profile path and
+  status, legacy-save migration summary). `--print-game-identity` prints the same
+  facts as one JSON line and exits without opening a window; `--package-smoke-test`
+  marks the first line read, changes `text_speed_multiplier` and restores it
+  (the player's settings stay as they were), flushes and prints
+  `Package smoke profile: status=... read_count=...` (a read-only profile is
+  reported, never written). See `docs/PLAYER_GUIDE.md`.
+- **Acceptance.** `rowl_packaged_game_isolation`: two packages of one sample with
+  different game ids keep separate ids, data dirs, profiles and saves; relaunch
+  finds the read id and applies the stored volumes; a hand-written
+  `"version": 99` profile stays byte-identical and is reported read-only; the
+  launcher does not move the data dir.
