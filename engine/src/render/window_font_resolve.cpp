@@ -54,7 +54,11 @@ void resolveWindowFont(FontRenderer& fontRenderer, Rowl::VFS::VFSManager& vfs) {
         "C:/Windows/Fonts/arial.ttf",
         "C:/Windows/Fonts/segoeui.ttf",
         "/System/Library/Fonts/Helvetica.ttc",
-        "/System/Library/Fonts/SFPro.ttf"
+        "/System/Library/Fonts/SFPro.ttf",
+        // Android ships Roboto (static and variable) and Droid Sans.
+        "/system/fonts/RobotoStatic-Regular.ttf",
+        "/system/fonts/Roboto-Regular.ttf",
+        "/system/fonts/DroidSans.ttf"
     };
 
     for (const auto& path : systemFontCandidates) {

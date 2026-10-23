@@ -90,7 +90,7 @@ above for one source commit on a clean tree and writes `report.md` +
   dylib resolve paths exist in the editor project. No build, no package,
   no notarization proof.
 - These targets stay blocked until hardware, SDKs/NDK, signing, and a
-  physical device exist; the skeleton code (`EngineActivity`, manifest,
+  physical device exist; the skeleton code (Android `RowlActivity` + manifest — now an experimental debug APK, see PLATFORM_SUPPORT.md —,
   `Info.plist`, build scripts) is kept only as a landing place.
 
 ## Clean-machine note

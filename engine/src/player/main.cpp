@@ -16,6 +16,11 @@
 #include <windows.h>
 #endif
 
+#if defined(__ANDROID__)
+// SDLActivity calls SDL_main from libmain.so; this header renames main().
+#include <SDL3/SDL_main.h>
+#endif
+
 namespace fs = std::filesystem;
 
 namespace {

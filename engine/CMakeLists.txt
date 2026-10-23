@@ -458,6 +458,9 @@ target_include_directories(rowl_engine_objects PUBLIC
 #     macOS/iOS     : libRowlEngineCore.dylib
 #
 add_library(RowlEngineCore SHARED)
+if(ANDROID)
+    target_link_libraries(RowlEngineCore PRIVATE log)  # logger -> logcat
+endif()
 target_link_libraries(RowlEngineCore PUBLIC
     rowl_engine_objects
     rowl_engine_thirdparty
@@ -484,10 +487,18 @@ if(ROWL_BUILD_PLAYER)
     # tek ic yuzeydir. C API yolu paylasilan RowlEngineCore'dan gelmeye devam
     # eder (uretim topolojisi degismez); yalnizca crash TU'su player'a dogrudan
     # derlenir (motor ici bu sembolleri cagirmaz, .so'daki kopya oludur).
-    add_executable(rowl_player src/player/main.cpp src/platform/crash_handler.cpp)
+    if(ANDROID)
+        # Android: SDLActivity loads libmain.so and calls SDL_main (main.cpp
+        # includes SDL_main.h on Android), so the player is a shared library.
+        add_library(rowl_player SHARED src/player/main.cpp src/platform/crash_handler.cpp)
+        set(ROWL_PLAYER_OUTPUT_NAME "main")
+    else()
+        add_executable(rowl_player src/player/main.cpp src/platform/crash_handler.cpp)
+        set(ROWL_PLAYER_OUTPUT_NAME "rowl_player")
+    endif()
     target_link_libraries(rowl_player PRIVATE RowlEngineCore ${SDL3_TARGET} nlohmann_json::nlohmann_json)
     set_target_properties(rowl_player PROPERTIES
-        OUTPUT_NAME "rowl_player"
+        OUTPUT_NAME "${ROWL_PLAYER_OUTPUT_NAME}"
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
         BUILD_RPATH "$ORIGIN/../lib:$ORIGIN"
         INSTALL_RPATH "$ORIGIN/../lib:$ORIGIN"

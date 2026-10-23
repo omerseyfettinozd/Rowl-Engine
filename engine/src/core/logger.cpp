@@ -6,6 +6,9 @@
 #include <iostream>
 #include <filesystem>
 #include <nlohmann/json.hpp>
+#if defined(__ANDROID__)
+#include <android/log.h>
+#endif
 
 namespace Rowl::Core {
 
@@ -167,7 +170,20 @@ void Logger::log(LogLevel level, std::string_view msg) {
         std::string logLine = "[" + timestamp + "] [" + std::string(colorCode) + std::string(levelStr) + colorReset + "] " + msgStr;
 
         // Console output
+#if defined(__ANDROID__)
+        // Android has no console for a native app: stdout is discarded, logcat is the console.
+        int priority = ANDROID_LOG_INFO;
+        switch (level) {
+            case LogLevel::Debug:    priority = ANDROID_LOG_DEBUG; break;
+            case LogLevel::Info:     priority = ANDROID_LOG_INFO; break;
+            case LogLevel::Warn:     priority = ANDROID_LOG_WARN; break;
+            case LogLevel::Error:    priority = ANDROID_LOG_ERROR; break;
+            case LogLevel::Critical: priority = ANDROID_LOG_FATAL; break;
+        }
+        __android_log_write(priority, "RowlEngine", msgStr.c_str());
+#else
         std::cout << logLine << std::endl;
+#endif
 
         // File output with rotation
         if (s_logFile && s_logFile->is_open()) {
