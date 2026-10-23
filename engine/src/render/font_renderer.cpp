@@ -384,8 +384,11 @@ void FontRenderer::renderShapedText(
             lineX += (maxWidth - line.width) * 0.5f;
         else if (alignment == "Right" && maxWidth > 0.0f)
             lineX += maxWidth - line.width;
-        for (uint32_t index = line.firstGlyph;
-             index < line.firstGlyph + line.glyphCount; ++index) {
+        // Without a shaping backend the lines can name glyphs the shaper never
+        // produced (glyphs empty): stay inside the vector instead of reading past it.
+        const std::size_t lineEnd = std::min<std::size_t>(
+            static_cast<std::size_t>(line.firstGlyph) + line.glyphCount, shaped.glyphs.size());
+        for (std::size_t index = line.firstGlyph; index < lineEnd; ++index) {
             const auto& shapedGlyph = shaped.glyphs[index];
             if (shapedGlyph.revealIndex >= maxVisibleRevealUnits) continue;
             const float glyphSize = effectiveFontSize(shapedGlyph.style.hasSize

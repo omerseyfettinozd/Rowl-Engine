@@ -34,6 +34,10 @@ bool drawTrueTypeTextOnGpu(SDL_Renderer* renderer, FontRenderer* font,
                            std::size_t visibleUnits) {
     if (renderer == nullptr || font == nullptr || !font->isLoaded()) return false;
     if (text.empty() || !(fontPx > 0.0f)) return false;
+    // Without a shaping backend (ROWL_ENABLE_TEXT_SHAPING off, e.g. Android)
+    // the shaper returns reveal units but no glyphs; renderShapedText would
+    // draw nothing and still report success. Lay out the plain text instead.
+    if (shaped != nullptr && shaped->glyphs.empty()) shaped = nullptr;
 
     // Sınırsız eksende ölçüye dayan: şekilli metin kendi kutusunu bilir; düz
     // metin tek satır genişliği + satır yüksekliği payıyla ölçülür.

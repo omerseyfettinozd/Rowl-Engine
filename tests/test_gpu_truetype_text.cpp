@@ -92,6 +92,27 @@ void test_gpu_truetype_text() {
                     std::to_string(drawn.lit));
     TEST_PASS("Typewriter reveal limit honoured on the GPU TrueType path");
 
+    // Şekillendirme arka ucu yoksa (Android, ROWL_ENABLE_TEXT_SHAPING kapalı)
+    // şekillendirici glif üretmez; metin yine de çizilmeli (önceden boş doku
+    // çizip true dönüyordu: telefonda diyalog kutusu boş kalıyordu).
+    Rowl::Text::ShapedText unshaped = *shaped;
+    unshaped.glyphs.clear();
+    unshaped.width = 0.0f;
+    // Doğrudan çizim de vektör dışına okumamalı (önceden glyphs[index] taşıyordu).
+    font.renderShapedText(surface, unshaped, 0.0f, 0.0f, 32.0f, SDL_Color{255, 255, 255, 255},
+                          600.0f, 60.0f, "Left", unshaped.revealUnits.size());
+    clear();
+    if (!Rowl::Render::drawTrueTypeTextOnGpu(renderer, &font, &unshaped, turkish, 12.0f, 20.0f,
+                                             32.0f, SDL_Color{255, 255, 255, 255}, 600.0f, 60.0f,
+                                             "Left", unshaped.revealUnits.size()))
+        gpuTextFail("glyph-less shaped text was not drawn");
+    SDL_RenderPresent(renderer);
+    const Coverage glyphless = measure(surface);
+    if (glyphless.lit < drawn.lit / 2)
+        gpuTextFail("glyph-less shaped text drew " + std::to_string(glyphless.lit) + " of " +
+                    std::to_string(drawn.lit) + " pixels");
+    TEST_PASS("Glyph-less shaped text (no shaping backend) falls back to plain TrueType");
+
     // Çizemiyorsa dokunmadan false (çağıran debug-bitmap'e düşebilsin).
     Rowl::Render::FontRenderer unloaded;
     clear();
