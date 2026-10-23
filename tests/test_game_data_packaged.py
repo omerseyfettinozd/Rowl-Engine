@@ -51,6 +51,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix="rowl-game-data-pkg-") as directory:
         base = pathlib.Path(directory)
         os.environ["XDG_DATA_HOME"] = str(base / "xdg")
+        os.environ["LOCALAPPDATA"] = str(base / "xdg")  # Windows reads %LOCALAPPDATA%
         os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
         os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
         game_a = base / "install" / "game_a"
@@ -58,7 +59,10 @@ def main():
         package_game(sample_dir, game_a, ID_A)
         package_game(sample_dir, game_b, ID_B)
 
-        lib = ctypes.CDLL(str(engine_lib))
+        # Windows: dependent DLLs (SDL3, Lua, zstd…) live next to the engine or on PATH;
+        # Python 3.8+ ignores PATH for them unless winmode=0 restores the standard search.
+        engine_path = str(engine_lib)
+        lib = ctypes.CDLL(engine_path, winmode=0) if os.name == "nt" else ctypes.CDLL(engine_path)
         lib.RowlEngine_Create.restype = ctypes.c_void_p
         for name in ("RowlEngine_Init", "RowlEngine_SaveGameSlot", "RowlEngine_HasSaveSlot"):
             getattr(lib, name).restype = ctypes.c_int

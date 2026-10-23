@@ -216,7 +216,10 @@ jobs:
         run: |
           release_dir="$RUNNER_TEMP/rowl-release"
           mkdir -p "$release_dir/Assets/packages" "$release_dir/mods"
-          python3 tools/package_assets.py Assets "$release_dir/Assets/packages/game.rowlpkg"
+          # D01a: the verifier requires the embedded game identity (rowl/game.json);
+          # the repo-root Assets have no project.rowlproj, so CI pins a test id.
+          python3 tools/package_assets.py Assets "$release_dir/Assets/packages/game.rowlpkg" \
+            --game-id 3f6b2a1e-8c4d-4e7a-9b1f-0c2d4e6f8a10 --game-name "Rowl CI"
           cp build/bin/rowl_player "$release_dir/RowlGame"
           cp build/lib/libRowlEngineCore.so "$release_dir/"
           # Launchers are produced by the shared helper, not inlined here.
@@ -761,7 +764,8 @@ jobs:
         run: |
           $release = Join-Path $env:RUNNER_TEMP 'rowl-release'
           New-Item -ItemType Directory -Force -Path (Join-Path $release 'Assets/packages'), (Join-Path $release 'mods') | Out-Null
-          python tools/package_assets.py Assets (Join-Path $release 'Assets/packages/game.rowlpkg')
+          # D01a: same pinned test identity as the Linux step (no project.rowlproj at the repo root).
+          python tools/package_assets.py Assets (Join-Path $release 'Assets/packages/game.rowlpkg') --game-id 3f6b2a1e-8c4d-4e7a-9b1f-0c2d4e6f8a10 --game-name 'Rowl CI'
           Copy-Item build/bin/rowl_player.exe (Join-Path $release 'RowlGame.exe')
           Copy-Item build/bin/RowlEngineCore.dll $release
           $dllSrc = 'build/vcpkg_installed/x64-windows/debug/bin'

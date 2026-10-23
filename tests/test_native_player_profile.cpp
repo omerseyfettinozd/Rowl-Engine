@@ -44,11 +44,32 @@ void profReq(bool condition, const std::string& message) {
     }
 }
 
+#ifdef _WIN32
+std::string g_localAppData;
+bool g_localAppDataSaved = false;
+#endif
+
 void setXdg(const fs::path& path) {
 #ifdef _WIN32
+    // Windows resolves user data from %LOCALAPPDATA% (XDG_DATA_HOME is Linux-only).
+    if (!g_localAppDataSaved) {
+        const char* previous = std::getenv("LOCALAPPDATA");
+        g_localAppData = previous ? previous : "";
+        g_localAppDataSaved = true;
+    }
     _putenv_s("XDG_DATA_HOME", path.string().c_str());
+    _putenv_s("LOCALAPPDATA", path.string().c_str());
 #else
     ::setenv("XDG_DATA_HOME", path.string().c_str(), 1);
+#endif
+}
+
+void restoreLocalAppData() {
+#ifdef _WIN32
+    if (g_localAppDataSaved) {
+        _putenv_s("LOCALAPPDATA", g_localAppData.c_str());
+        g_localAppDataSaved = false;
+    }
 #endif
 }
 
@@ -828,5 +849,6 @@ void test_native_player_profile() {
         ::unsetenv("XDG_DATA_HOME");
 #endif
     }
+    restoreLocalAppData();
     fs::remove_all(base, ec);
 }

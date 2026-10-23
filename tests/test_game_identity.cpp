@@ -132,9 +132,18 @@ void test_game_identity() {
     identityRequire(d1.id != d2.id, "two roots shared a derived id");
     identityRequire(Rowl::Platform::normalizeGameId(d1.id).has_value() && d1.id[14] == '5',
                     "derived id is not a UUIDv5");
+    // The id hashes the canonical native path, so the reference differs per
+    // platform: on Windows "/x" becomes drive-relative ("D:\\x"), hence a
+    // fully qualified path there. Both values come from python uuid5.
+#if defined(_WIN32)
+    identityRequire(Rowl::Platform::deriveGameIdFromPath("C:\\nonexistent-rowl-test\\x") ==
+                        "9a2447c9-d3a9-5084-b81f-75552bbeb50b",
+                    "derived id deviates from the reference UUIDv5 (python uuid5)");
+#else
     identityRequire(Rowl::Platform::deriveGameIdFromPath("/nonexistent-rowl-test/x") ==
                         "303a7856-775e-59ae-942f-bdd81c8e5b0e",
                     "derived id deviates from the reference UUIDv5 (python uuid5)");
+#endif
     TEST_PASS("Derived id is stable, flagged, per-root and reference-exact");
 
     // 4) Malformed carriers fall through with a diagnostic.

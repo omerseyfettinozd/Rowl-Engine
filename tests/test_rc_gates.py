@@ -7,7 +7,9 @@ kilitler. Bir test kusuru geri gelirse ilgili kapı FAIL olur ve RC geçmez.
 """
 
 import json
+import os
 import pathlib
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -124,7 +126,28 @@ with tempfile.TemporaryDirectory() as directory:
     check("finalize PASS exit 0", run.returncode == 0)
 
 # 9. betik sözdizimi ve yardımcıyı çağırdığı
-check("bash -n", subprocess.run(["bash", "-n", str(SCRIPT)]).returncode == 0)
+def posix_bash():
+    """The bash that can check a POSIX script. On Windows a bare "bash" is the
+    WSL launcher (fails without a distro), so use Git for Windows' bash."""
+    if os.name != "nt":
+        return "bash"
+    for base in (os.environ.get("ProgramFiles", r"C:\Program Files"),
+                 os.environ.get("ProgramW6432", r"C:\Program Files")):
+        candidate = pathlib.Path(base) / "Git" / "bin" / "bash.exe"
+        if candidate.is_file():
+            return str(candidate)
+    git = shutil.which("git")
+    if git:
+        candidate = pathlib.Path(git).resolve().parent.parent / "bin" / "bash.exe"
+        if candidate.is_file():
+            return str(candidate)
+    return None
+
+
+bash = posix_bash()
+check("bash -n (POSIX bash bulundu)", bash is not None)
+if bash is not None:
+    check("bash -n", subprocess.run([bash, "-n", SCRIPT.as_posix()]).returncode == 0)
 text = SCRIPT.read_text(encoding="utf-8")
 check("betik rc_gate_report.py kullanır", "rc_gate_report.py" in text)
 for name in rc.REQUIRED_GATES:
