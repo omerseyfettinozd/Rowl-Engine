@@ -40,12 +40,29 @@ public sealed class EditorPlayerProfilePerGameTests : IDisposable
 
     // ── helpers ────────────────────────────────────────────────────────────
 
+    /// <summary>Mirror of the native user-data root (user_data_directories.cpp) per platform.</summary>
     private static string UserDataRoot()
     {
-        string? xdg = Environment.GetEnvironmentVariable("XDG_DATA_HOME");
-        string baseDir = !string.IsNullOrEmpty(xdg) && Path.IsPathRooted(xdg)
-            ? xdg
-            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "share");
+        string baseDir;
+        if (OperatingSystem.IsWindows())
+        {
+            string? local = Environment.GetEnvironmentVariable("LOCALAPPDATA");
+            baseDir = !string.IsNullOrEmpty(local) && Path.IsPathRooted(local)
+                ? local
+                : Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        }
+        else if (OperatingSystem.IsMacOS())
+        {
+            baseDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                "Library", "Application Support");
+        }
+        else
+        {
+            string? xdg = Environment.GetEnvironmentVariable("XDG_DATA_HOME");
+            baseDir = !string.IsNullOrEmpty(xdg) && Path.IsPathRooted(xdg)
+                ? xdg
+                : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "share");
+        }
         return Path.Combine(baseDir, "rowl-engine");
     }
 
@@ -82,8 +99,7 @@ public sealed class EditorPlayerProfilePerGameTests : IDisposable
     private static PlayerLoopService Open(EngineHost host, string root, string globalDir, List<string>? log = null) =>
         PlayerProfileSession.Open(host, root, msg => log?.Add(msg), globalDir);
 
-    private static bool NativeProfileUsable() =>
-        OperatingSystem.IsLinux() && NativeProfileBridge.IsSupported();
+    private static bool NativeProfileUsable() => NativeProfileBridge.IsSupported();
 
     private static string FixturePath()
     {

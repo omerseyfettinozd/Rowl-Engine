@@ -29,6 +29,15 @@ std::filesystem::path absoluteEnvironmentPath(const char* name) {
 
 #if defined(_WIN32)
 std::filesystem::path windowsLocalAppData() {
+    // %LOCALAPPDATA% first: Windows always sets it to the same folder as the
+    // Known Folder below, and an explicit value (tests, portable setups)
+    // must be honoured the way XDG_DATA_HOME is on Linux.
+    const wchar_t* local = _wgetenv(L"LOCALAPPDATA");
+    if (local && local[0] != L'\0') {
+        std::filesystem::path result(local);
+        if (result.is_absolute()) return result.lexically_normal();
+    }
+
     PWSTR widePath = nullptr;
     if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_LocalAppData, KF_FLAG_DEFAULT,
                                        nullptr, &widePath)) && widePath) {
@@ -37,12 +46,6 @@ std::filesystem::path windowsLocalAppData() {
         return result.lexically_normal();
     }
     if (widePath) CoTaskMemFree(widePath);
-
-    const wchar_t* fallback = _wgetenv(L"LOCALAPPDATA");
-    if (fallback && fallback[0] != L'\0') {
-        std::filesystem::path result(fallback);
-        if (result.is_absolute()) return result.lexically_normal();
-    }
     return {};
 }
 #elif defined(__linux__)

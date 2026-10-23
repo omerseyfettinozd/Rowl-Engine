@@ -184,7 +184,10 @@ def main():
 
         os.environ.update(XDG_DATA_HOME=str(xdg), LOCALAPPDATA=str(xdg),
                           SDL_AUDIODRIVER="dummy", SDL_VIDEODRIVER="dummy")
-        lib = ctypes.CDLL(str(engine_lib.resolve()))
+        # Windows: dependent DLLs (SDL3, Lua, zstd…) live next to the engine or on PATH;
+        # Python 3.8+ ignores PATH for them unless winmode=0 restores the standard search.
+        engine_path = str(engine_lib.resolve())
+        lib = ctypes.CDLL(engine_path, winmode=0) if os.name == "nt" else ctypes.CDLL(engine_path)
         lib.RowlEngine_Create.restype = ctypes.c_void_p
         lib.RowlEngine_Init.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int]
         lib.RowlEngine_SetProjectDirectory.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
