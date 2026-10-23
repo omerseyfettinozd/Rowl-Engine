@@ -1608,8 +1608,9 @@ namespace RowlEngine.Editor.ViewModels
         [RelayCommand]
         public void OpenPlayerWindow()
         {
-            var loop = Services.PlayerLoopService.Load(
-                PlayerProfileStore.ResolveDefaultProfileDirectory());
+            // D01c-2: the profile belongs to the mounted game (native per-game
+            // store, managed per-game fallback), never to one global file.
+            var loop = Services.PlayerProfileSession.Open(EngineHost, ProjectRoot, AppendLog);
             if (loop.LoadDiagnostic is not null && loop.LoadStatus != PlayerProfileLoadStatus.MissingDefaults)
                 ReportSettingsFailure(loop.LoadDiagnostic);
             var player = new ViewModels.Player.PlayerViewModel(

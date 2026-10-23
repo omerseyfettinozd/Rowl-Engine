@@ -83,6 +83,32 @@ namespace RowlEngine.Editor.Native
         internal static extern ResultCode RowlEngine_GetLastDataMigrationJson(
             IntPtr handle, IntPtr buffer, uint bufferSize, out uint requiredSize);
 
+        // ── Player profile (CAPABILITY_PLAYER_PROFILE = 16777216) ────────────
+        // Owner-thread API: call through EngineHost.InvokeOnEngineThread only.
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_ProfileGetJson(
+            IntPtr handle, IntPtr buffer, uint bufferSize, out uint requiredSize);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_ProfileGetStatusJson(
+            IntPtr handle, IntPtr buffer, uint bufferSize, out uint requiredSize);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_ProfileSetPreferencesJson(
+            IntPtr handle, [MarshalAs(UnmanagedType.LPUTF8Str)] string json);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_ProfileMarkRead(
+            IntPtr handle, [MarshalAs(UnmanagedType.LPUTF8Str)] string contentId);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_ProfileIsRead(
+            IntPtr handle, [MarshalAs(UnmanagedType.LPUTF8Str)] string contentId, out int isRead);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_ProfileFlush(IntPtr handle);
+
         // ── Lifecycle ────────────────────────────────────────────────────────
 
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]

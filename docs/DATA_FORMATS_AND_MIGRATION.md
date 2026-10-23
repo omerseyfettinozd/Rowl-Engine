@@ -306,6 +306,8 @@ filters), linter (`ProjectValidationService`), and the packager
   (all-or-nothing merge of known keys), `…MarkRead`, `…IsRead`, `…Flush`;
   owner-thread, caller-buffer contract. Golden fixture shared with the managed
   parity test: `tests/fixtures/profile/player-profile.v1.json`.
-- **Managed side:** the editor `PlayerProfileStore` still writes only the keys
-  it knows (it drops `game_id`, `unlocks` and unknown keys when it rewrites a
-  file); aligning it with the native preservation rules is the D01c-2 slice.
+- **Managed side (D01c-2):** the editor player goes through the native store
+  (single writer) when it is available; the managed `PlayerProfileStore` keeps
+  `game_id`, `unlocks` and unknown keys on rewrite and is used per game as the
+  fallback. Details and the one-time migration of the old global editor profile:
+  `docs/PLAYER_PROFILE_AND_CONTENT_ID.md` section 9.

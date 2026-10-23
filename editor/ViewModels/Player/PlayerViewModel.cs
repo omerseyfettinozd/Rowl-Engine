@@ -416,7 +416,9 @@ public sealed partial class PlayerViewModel : ViewModelBase
         if (error is null)
         {
             // Flush is a no-op without new reads; preferences still need a save.
-            error = PlayerProfileStore.Save(Loop.ProfileDirectory, Profile);
+            // The loop picks the writer: the native per-game store when it owns
+            // the file, the managed store otherwise; read-only profiles are skipped.
+            error = Loop.SavePreferences();
         }
         if (error is not null)
             Fail(error);

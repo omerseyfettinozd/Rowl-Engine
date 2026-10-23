@@ -53,7 +53,9 @@ and validate clean.
 
 ## 4. PlayerProfile (skeleton, v1)
 
-- Save-slot independent, versioned (`version = 1`), persisted at
+- (Original slice-1 layout; since D01c-2 the editor uses the per-game profile of
+  section 9 and this global path is only the legacy migration source.)
+  Save-slot independent, versioned (`version = 1`), persisted at
   `profiles/player-profile.json` below the PlatformHost user-data root —
   the same `rowl-engine/profiles` layout the native
   `Rowl::Platform::resolveUserDataDirectories` produces. Hosts holding a
@@ -136,6 +138,52 @@ files from a newer schema or another game are read-only and left untouched.
 The full contract (schema, statuses, flush policy) is in
 `docs/DATA_FORMATS_AND_MIGRATION.md` section 9. Not yet done: the native player
 does not apply the stored preferences, the line shown before play state starts
-(start node) is not marked by the native hook, and the managed store does not
-yet go through the native one or preserve `game_id`/`unlocks`/unknown keys
-(D01c-2).
+(start node) is not marked by the native hook. The editor side (managed store
+parity, per-game location, single writer) is section 9.
+
+## 9. Editor uses the per-game profile (D01c-2)
+
+- **One profile per game.** The editor player window no longer shares one
+  global `profiles/player-profile.json` between projects. With the native
+  capability and a mounted project, `PlayerProfileSession.Open` takes the
+  directory from `RowlEngine_GetProfileDirectoryUtf8`
+  (`<user-data>/games/<game-id>/profile`, or `<project>/profile` for a game
+  without an authored id) and the **native store is the only writer** of the
+  file: the editor parses `RowlEngine_ProfileGetJson`, pushes preference changes
+  with `RowlEngine_ProfileSetPreferencesJson` + `RowlEngine_ProfileFlush`
+  (preferences screen, toggles), hands read lines to `RowlEngine_ProfileMarkRead`
+  (the native hook marks presented lines too; double marking is harmless), and
+  flushes when the player window closes. All native calls run on the engine
+  thread (`EngineHost.InvokeOnEngineThread`).
+- **Read-only stays read-only.** A newer-schema or other-game file (native
+  status `unsupported_version` / `wrong_game`) is shown as a diagnostic when the
+  player opens and is never written. A player window that outlives a project
+  switch detaches (one error, then silent) instead of writing the other game's
+  profile.
+- **Fallback without a native store** (no engine, older library, nothing
+  mounted): the managed `PlayerProfileStore`, but still per game
+  (`<user-data>/games/<project_uuid>/profile`, `<project>/profile` without an
+  id); the legacy global directory only when no project is known.
+- **Managed/native parity.** `PlayerProfileStore` keeps `game_id`, the opaque
+  `unlocks` array and unknown top-level keys on rewrite (`PlayerProfile.GameId /
+  Unlocks / ExtraKeys`), writes `unlocks: []` like the native store, and treats
+  a `game_id` of another game as `WrongGameDefaults` (read-only). Future-version
+  files stay read-only on the managed path too (the preferences save no longer
+  overwrites them).
+- **Migration of the old global profile.** If the game has no profile file yet
+  and the legacy `<user-data>/profiles/player-profile.json` exists and has not
+  been claimed, its preferences and read set are copied **once** into the first
+  project with an authored id whose player window is opened (native
+  `SetPreferencesJson` + `MarkRead` + `Flush`, so the store stamps `game_id`).
+  A claim marker `player-profile.migrated.json` (`{format, game_id, time,
+  read_count}`) is written next to the global file first, so no other project
+  inherits it; if the copy fails the marker is removed again. The global file is
+  never modified or deleted. Projects without an authored id (derived identity)
+  neither migrate nor claim. A one-line `[Profile]` log entry records it.
+- `LocalizationService.Load(profileDirectory)` is not wired into production; its
+  language is the player's per-game preference (resolved against the game's
+  manifest locales), so callers must pass the mounted game's profile directory.
+  The editor's own UI language is a separate editor setting.
+- Tests: `EditorPlayerProfilePerGameTests` (two projects isolated and persisted,
+  golden-fixture and native/managed round trips, read-only profiles
+  byte-identical, project switch detach, migration once/claim/skip).
