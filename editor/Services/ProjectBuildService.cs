@@ -274,6 +274,20 @@ public static class ProjectBuildService
             return Fail(BuildDiagnosticCode.InvalidInput, BuildDiagnosticSeverity.Error,
                 "build_standalone", "The build output directory already exists.", output);
 
+        // D01a: the game id is the project_uuid. Legacy projects get one
+        // persisted now; a corrupt/unwritable manifest refuses the build
+        // (never rewritten) so a release can never ship without identity.
+        string sourceManifest = Path.Combine(root, "project.rowlproj");
+        if (!File.Exists(sourceManifest))
+            return Fail(BuildDiagnosticCode.InvalidInput, BuildDiagnosticSeverity.Error,
+                "build_standalone",
+                $"Project manifest is missing: '{sourceManifest}'; the game id cannot be assigned.", sourceManifest);
+        var identity = ProjectIdentityService.EnsureProjectUuid(sourceManifest);
+        if (identity.Error is not null)
+            return Fail(BuildDiagnosticCode.InvalidInput, BuildDiagnosticSeverity.Error,
+                "build_standalone", identity.Error, sourceManifest);
+        Report($"[BUILD] Game id: {identity.ProjectUuid}{(identity.Created ? " (newly assigned)" : string.Empty)}");
+
         string baseDir = AppDomain.CurrentDomain.BaseDirectory;
         string repoRoot = ResolveRepoRoot(root);
         string[] playerCandidates = { Path.Combine(root, "build", "bin", "rowl_player"), Path.Combine(root, "build", "bin", "rowl_player.exe"), Path.Combine(repoRoot, "build", "bin", "rowl_player"), Path.Combine(repoRoot, "build", "bin", "rowl_player.exe"), Path.Combine(baseDir, "rowl_player"), Path.Combine(baseDir, "rowl_player.exe") };
@@ -295,8 +309,7 @@ public static class ProjectBuildService
             token.ThrowIfCancellationRequested(); Directory.CreateDirectory(staging);
             Report("[BUILD 1/4] Assets are being packaged...");
             string packagePath = Path.Combine(staging, "Assets", "packages", "game.rowlpkg");
-            RunCanonicalPackageTool(repoRoot, assetsPath, packagePath, token, Report);
-            string sourceManifest = Path.Combine(root, "project.rowlproj");
+            RunCanonicalPackageTool(repoRoot, assetsPath, packagePath, token, Report, sourceManifest);
             if (File.Exists(sourceManifest)) File.Copy(sourceManifest, Path.Combine(staging, "project.rowlproj"));
             string noticesSource = Path.Combine(repoRoot, "packaging", "THIRD_PARTY_NOTICES.md");
             if (!File.Exists(noticesSource))
@@ -317,7 +330,7 @@ public static class ProjectBuildService
             token.ThrowIfCancellationRequested();
 
             Report("[BUILD 3/4] Launchers are being created...");
-            ProjectFileSystem.WriteAllTextAtomically(Path.Combine(staging, "run_game.sh"), "#!/bin/bash\nSCRIPT_DIR=\"$(cd \"$(dirname \"${BASH_SOURCE[0]}\")\" && pwd)\"\nexport LD_LIBRARY_PATH=\"$SCRIPT_DIR:$LD_LIBRARY_PATH\"\nexec \"$SCRIPT_DIR/RowlGame\" \"$@\"\n");
+            ProjectFileSystem.WriteAllTextAtomically(Path.Combine(staging, "run_game.sh"), "#!/bin/bash\nSCRIPT_DIR=\"$(cd \"$(dirname \"${BASH_SOURCE[0]}\")\" && pwd)\"\nexport LD_LIBRARY_PATH=\"$SCRIPT_DIR:$LD_LIBRARY_PATH\"\ncd \"$SCRIPT_DIR\" || exit 1\nexec \"$SCRIPT_DIR/RowlGame\" \"$@\"\n");
             ProjectFileSystem.WriteAllTextAtomically(Path.Combine(staging, "run_game.bat"), "@echo off\r\ncd /d \"%~dp0\"\r\nRowlGame.exe %*\r\n");
             if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS()) File.SetUnixFileMode(Path.Combine(staging, "run_game.sh"), UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute | UnixFileMode.GroupRead | UnixFileMode.GroupExecute | UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
             token.ThrowIfCancellationRequested();
@@ -372,12 +385,12 @@ public static class ProjectBuildService
     }
 
     private static void RunCanonicalPackageTool(string repoRoot, string assetsPath, string packagePath,
-        CancellationToken token, Action<string> report)
+        CancellationToken token, Action<string> report, string gameManifestPath)
     {
         string tool = Path.Combine(repoRoot, "tools", "package_assets.py");
         if (!File.Exists(tool)) throw new MissingDependencyException("Canonical package tool is missing: " + tool);
         RunPythonTool(OperatingSystem.IsWindows() ? "python" : "python3", tool,
-            new[] { assetsPath, packagePath }, repoRoot, token, report);
+            new[] { assetsPath, packagePath, "--game-manifest", gameManifestPath }, repoRoot, token, report);
     }
 
     private static void RunReleaseVerifier(string repoRoot, string releaseRoot,

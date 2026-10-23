@@ -113,6 +113,8 @@ public static class WorkspaceStateJson
         var seen = new HashSet<string>(StringComparer.Ordinal);
         int version = 0;
         WorkspaceLayout? layout = null;
+        IReadOnlySet<string>? originalViews = null;
+        IReadOnlySet<string>? prunedViews = null;
         BottomStripState? bottom = null;
         PanelSet? pinned = null;
         PanelShares? shares = null;
@@ -129,10 +131,14 @@ public static class WorkspaceStateJson
                         return Fail("version is not an integer");
                     break;
                 case "layout":
-                    WorkspaceLayoutLoadResult loaded = WorkspaceLayoutJson.Parse(property.Value.GetRawText());
+                    WorkspaceLayoutJson.PrunedLayoutLoadResult loaded = WorkspaceLayoutJson.ParseCore(
+                        property.Value.GetRawText(),
+                        id => PanelIds.Editor.Contains(id, StringComparer.Ordinal));
                     if (!loaded.IsValid)
                         return Fail("layout: " + loaded.Error);
                     layout = loaded.Layout;
+                    originalViews = loaded.OriginalViews;
+                    prunedViews = loaded.PrunedViews;
                     break;
                 case "bottom":
                     bottom = ReadBottom(property.Value, out error);
@@ -153,13 +159,19 @@ public static class WorkspaceStateJson
 
         if (seen.Contains("version") && version != CurrentVersion)
             return Fail("unsupported version " + version.ToString(CultureInfo.InvariantCulture));
-        if (seen.Count != 5 || layout is null || bottom is null || pinned is null || shares is null)
+        if (seen.Count != 5 || layout is null || originalViews is null || prunedViews is null || bottom is null || pinned is null || shares is null)
             return Fail("missing version, layout, bottom, pinned or shares");
 
-        return Validate(layout, bottom, pinned, shares);
+        return Validate(layout, bottom, pinned, shares, originalViews, prunedViews);
     }
 
-    private static WorkspaceStateLoadResult Validate(WorkspaceLayout layout, BottomStripState bottom, PanelSet pinned, PanelShares shares)
+    private static WorkspaceStateLoadResult Validate(
+        WorkspaceLayout layout,
+        BottomStripState bottom,
+        PanelSet pinned,
+        PanelShares shares,
+        IReadOnlySet<string> originalViews,
+        IReadOnlySet<string> prunedViews)
     {
         if (layout.Tree is null)
             return Fail("layout has no panel");
@@ -170,11 +182,14 @@ public static class WorkspaceStateJson
             if (!PanelIds.Editor.Contains(view, StringComparer.Ordinal))
                 return Fail("panel '" + view + "' is not hosted by the editor");
         }
-        if (views.Contains(PanelIds.Bottom, StringComparer.Ordinal) != bottom.AnyOpen)
+        if (originalViews.Contains(PanelIds.Bottom) != bottom.AnyOpen)
             return Fail("bottom strip leaf and open tabs disagree");
+        var keptPinned = new List<string>();
         foreach (string id in pinned)
         {
-            if (!views.Contains(id, StringComparer.Ordinal))
+            if (views.Contains(id, StringComparer.Ordinal))
+                keptPinned.Add(id);
+            else if (!prunedViews.Contains(id))
                 return Fail("pinned panel '" + id + "' is not in the layout");
         }
 
@@ -183,7 +198,7 @@ public static class WorkspaceStateJson
             ? bottom with { ActiveTab = bottom.FirstOpenTab() }
             : bottom;
 
-        var state = new EditorWorkspaceState(layout, normalized) { Pinned = pinned, Shares = shares };
+        var state = new EditorWorkspaceState(layout, normalized) { Pinned = PanelSet.Of(keptPinned), Shares = shares };
         return new WorkspaceStateLoadResult(state, null);
     }
 

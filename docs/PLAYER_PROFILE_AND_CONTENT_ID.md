@@ -53,7 +53,9 @@ and validate clean.
 
 ## 4. PlayerProfile (skeleton, v1)
 
-- Save-slot independent, versioned (`version = 1`), persisted at
+- (Original slice-1 layout; since D01c-2 the editor uses the per-game profile of
+  section 9 and this global path is only the legacy migration source.)
+  Save-slot independent, versioned (`version = 1`), persisted at
   `profiles/player-profile.json` below the PlatformHost user-data root —
   the same `rowl-engine/profiles` layout the native
   `Rowl::Platform::resolveUserDataDirectories` produces. Hosts holding a
@@ -75,9 +77,11 @@ and validate clean.
 
 ## 5. Limits
 
-Read set is bounded only by available memory in this slice (stressing it
-belongs to the Faz 4 large-project gate). Profile JSON must stay a single
-small object; multi-MB profiles are a Faz 5 concern.
+The read set is bounded at 1,000,000 ids in the native store (D01c-1; see
+section 8): new ids are refused with a diagnostic once it is full and
+existing ids are never dropped. The managed store is still bounded only by
+available memory. Profile JSON must stay a single small object; multi-MB
+profiles are a Faz 5 concern.
 
 ## 6. Tests
 
@@ -120,3 +124,105 @@ small object; multi-MB profiles are a Faz 5 concern.
   native save codec (round-trip, legacy fallback, hostile rejection),
   xUnit `EditorPlayerLoopSlice2Tests` (10): gate matrix, track-on-advance,
   query-failure abort, flush no-op, skip-step allow/stop, backlog parse.
+
+## 8. Native profile (D01c-1)
+
+The native engine now owns a profile store (`engine/src/state/player_profile.cpp`)
+that reads and writes the same `player-profile.json` keys as section 4, plus
+`game_id` and a reserved `unlocks` array. It loads when `SetProjectDirectory`
+resolves the game data layout (per-game dir `.../games/<game-id>/profile`;
+`<project>/profile` beside the project-local saves for derived ids), marks dialogues read when
+they are presented in play state, and exposes `RowlEngine_Profile*`
+(`ROWL_ENGINE_CAPABILITY_PLAYER_PROFILE`). Corrupt files are quarantined,
+files from a newer schema or another game are read-only and left untouched.
+The full contract (schema, statuses, flush policy) is in
+`docs/DATA_FORMATS_AND_MIGRATION.md` section 9. Both gaps listed here in D01c-1 are
+closed in section 10 (D01d). The editor side (managed store
+parity, per-game location, single writer) is section 9.
+
+## 9. Editor uses the per-game profile (D01c-2)
+
+- **One profile per game.** The editor player window no longer shares one
+  global `profiles/player-profile.json` between projects. With the native
+  capability and a mounted project, `PlayerProfileSession.Open` takes the
+  directory from `RowlEngine_GetProfileDirectoryUtf8`
+  (`<user-data>/games/<game-id>/profile`, or `<project>/profile` for a game
+  without an authored id) and the **native store is the only writer** of the
+  file: the editor parses `RowlEngine_ProfileGetJson`, pushes preference changes
+  with `RowlEngine_ProfileSetPreferencesJson` + `RowlEngine_ProfileFlush`
+  (preferences screen, toggles), hands read lines to `RowlEngine_ProfileMarkRead`
+  (the native hook marks presented lines too; double marking is harmless), and
+  flushes when the player window closes. All native calls run on the engine
+  thread (`EngineHost.InvokeOnEngineThread`).
+- **Read-only stays read-only.** A newer-schema or other-game file (native
+  status `unsupported_version` / `wrong_game`) is shown as a diagnostic when the
+  player opens and is never written. A player window that outlives a project
+  switch detaches (one error, then silent) instead of writing the other game's
+  profile.
+- **Fallback without a native store** (no engine, older library, nothing
+  mounted): the managed `PlayerProfileStore`, but still per game
+  (`<user-data>/games/<project_uuid>/profile`, `<project>/profile` without an
+  id); the legacy global directory only when no project is known.
+- **Managed/native parity.** `PlayerProfileStore` keeps `game_id`, the opaque
+  `unlocks` array and unknown top-level keys on rewrite (`PlayerProfile.GameId /
+  Unlocks / ExtraKeys`), writes `unlocks: []` like the native store, and treats
+  a `game_id` of another game as `WrongGameDefaults` (read-only). Future-version
+  files stay read-only on the managed path too (the preferences save no longer
+  overwrites them).
+- **Migration of the old global profile.** If the game has no profile file yet
+  and the legacy `<user-data>/profiles/player-profile.json` exists and has not
+  been claimed, its preferences and read set are copied **once** into the first
+  project with an authored id whose player window is opened (native
+  `SetPreferencesJson` + `MarkRead` + `Flush`, so the store stamps `game_id`).
+  A claim marker `player-profile.migrated.json` (`{format, game_id, time,
+  read_count}`) is written next to the global file first, so no other project
+  inherits it; if the copy fails the marker is removed again. The global file is
+  never modified or deleted. Projects without an authored id (derived identity)
+  neither migrate nor claim. A one-line `[Profile]` log entry records it.
+- `LocalizationService.Load(profileDirectory)` is not wired into production; its
+  language is the player's per-game preference (resolved against the game's
+  manifest locales), so callers must pass the mounted game's profile directory.
+  The editor's own UI language is a separate editor setting.
+- Tests: `EditorPlayerProfilePerGameTests` (two projects isolated and persisted,
+  golden-fixture and native/managed round trips, read-only profiles
+  byte-identical, project switch detach, migration once/claim/skip).
+
+## 10. Standalone player wiring (D01d)
+
+- **First line is marked read.** The start node's dialogue is presented before
+  play state begins, so the presentation hook never saw it. `Engine::setPlayState`
+  now marks the active dialogues (non-empty `content_id` only) read at the
+  false-to-true transition, which both `RowlEngine_Run` and the editor's
+  `RowlEngine_SetPlayState(1)` go through. It touches the read set only: no backlog
+  entry is recorded, so nothing is recorded twice; stopping and re-entering play
+  state is harmless (already-read ids are `Unchanged`). Native test:
+  `tests/test_native_player_profile.cpp` (start-node section).
+- **The player applies stored preferences at start.** After
+  `RowlEngine_SetProjectDirectory` (and the story graph) the player reads
+  `RowlEngine_ProfileGetJson` and, when the profile status is `loaded`, applies
+  through the existing public setters: master/bgm/voice/sfx/ambience/ui volume,
+  `text_speed_multiplier`, `text_scale`, `high_contrast`, `reduced_motion`,
+  `mixer_fade_curve`, `sfx_pool_depth`, and `language` (only when it is not the
+  profile default `en` and the game offers that locale: the profile cannot tell
+  "never chosen" from "chose en", and a project whose own default locale is not
+  `en` must keep it). It prints `[Player] Applied stored preferences: key=value ...`
+  with the values read back from the engine.
+  **Not applied yet** (no native setter or semantics): `auto_advance_delay` (the
+  native knob, `RowlEngine_SetAutoAdvanceDelayOffset`, is an additive per-line
+  offset, not an absolute delay), `skip_mode`, `auto_enabled`; the explicit
+  "language chosen" marker and a way for the in-game pause menu to write back
+  its volume/text-speed changes belong to the title/menu work (D02/D05).
+  Note that loading a save restores the volumes stored in that save.
+- **Diagnostics and `--print-game-identity`.** The player prints a short block
+  after mounting (game id and identity source, data/save dirs, profile path and
+  status, legacy-save migration summary). `--print-game-identity` prints the same
+  facts as one JSON line and exits without opening a window; `--package-smoke-test`
+  marks the first line read, changes `text_speed_multiplier` and restores it
+  (the player's settings stay as they were), flushes and prints
+  `Package smoke profile: status=... read_count=...` (a read-only profile is
+  reported, never written). See `docs/PLAYER_GUIDE.md`.
+- **Acceptance.** `rowl_packaged_game_isolation`: two packages of one sample with
+  different game ids keep separate ids, data dirs, profiles and saves; relaunch
+  finds the read id and applies the stored volumes; a hand-written
+  `"version": 99` profile stays byte-identical and is reported read-only; the
+  launcher does not move the data dir.

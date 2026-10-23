@@ -1,0 +1,29 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:l="using:RowlEngine.Editor.Services.Strings"
+             x:Class="RowlEngine.Editor.Views.Panels.AssetStoreView"
+             Background="{DynamicResource PanelBackground}">
+    <StackPanel HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                Spacing="10">
+        <Path Width="34" Height="34"
+              HorizontalAlignment="Center"
+              Data="M3,8 a1,1 0 0 1 1,-1 h5 l2,2 h6 a1,1 0 0 1 1,1 v8 a1,1 0 0 1 -1,1 H4 a1,1 0 0 1 -1,-1 Z"
+              Stretch="Uniform"
+              Fill="Transparent"
+              Stroke="{DynamicResource MutedText}"
+              StrokeThickness="1.5"
+              StrokeLineCap="Round"
+              StrokeJoin="Round"/>
+        <TextBlock Text="{l:T Store.ComingSoon}"
+                   FontSize="{DynamicResource FontSizeHeading}"
+                   FontWeight="Medium"
+                   Foreground="{DynamicResource PrimaryText}"
+                   HorizontalAlignment="Center"
+                   Margin="0,10,0,0"/>
+        <TextBlock Classes="muted"
+                   Text="{l:T Store.Name}"
+                   FontSize="{DynamicResource FontSizeBody}"
+                   HorizontalAlignment="Center"/>
+    </StackPanel>
+</UserControl>

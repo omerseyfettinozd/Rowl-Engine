@@ -6,7 +6,13 @@ using RowlEngine.Editor.ViewModels;
 
 namespace RowlEngine.Editor.Services;
 
-public sealed record ProjectValidationIssue(bool IsError, string Message, ulong? NodeId = null, string? AssetPath = null);
+public sealed record ProjectValidationIssue(bool IsError, string Message, ulong? NodeId = null, string? AssetPath = null)
+{
+    // Türetilmiş hedef yardımcıları (imza değişmez).
+    public bool HasNodeTarget => NodeId is not null;
+    public bool HasAssetTarget => !string.IsNullOrWhiteSpace(AssetPath);
+    public bool HasTarget => HasNodeTarget || HasAssetTarget;
+}
 
 /// <summary>Pure graph checks shared by export and the editor's issue panel.</summary>
 internal static class ProjectValidationService

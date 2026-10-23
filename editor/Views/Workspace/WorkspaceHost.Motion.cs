@@ -8,6 +8,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
+using Avalonia.Threading;
 using RowlEngine.Editor.Services.Workspace;
 
 namespace RowlEngine.Editor.Views.Workspace;
@@ -24,8 +25,9 @@ namespace RowlEngine.Editor.Views.Workspace;
 /// rectangle from where it was to where it is now. Panels that were not shown
 /// fade in and rise 6 px (prototype <c>enter</c>); splitters slide with their
 /// neighbours. Nothing is re-parented and no panel is hosted twice, so focus,
-/// scroll and selection are untouched. The per-frame work is one arrange of the panels (the same as a splitter drag); during a pointer drag only the highlight
-/// is arranged (one rectangle), the panels do not move.
+/// scroll and selection are untouched. A moving panel is laid out once, at its final slot; the
+/// in-between frames only change its render transform (scale + translate), so no frame re-measures
+/// panel content. During a pointer drag only the highlight is arranged (one rectangle).
 /// </para>
 /// </summary>
 public partial class WorkspaceHost
@@ -36,8 +38,10 @@ public partial class WorkspaceHost
     /// <summary>Prototype <c>workspace-motion.js</c> <c>exit()</c>: 180 ms (also used for the drop highlight, which has no value of its own).</summary>
     public static readonly TimeSpan DropMotionDuration = TimeSpan.FromMilliseconds(180);
 
+    private static Easing? _motionEasing;
+
     /// <summary>Prototype easing: <c>cubic-bezier(.22,1,.36,1)</c>.</summary>
-    public static readonly Easing MotionEasing = new SplineEasing(0.22, 1, 0.36, 1);
+    public static Easing MotionEasing => _motionEasing ??= new SplineEasing(0.22, 1, 0.36, 1);
 
     /// <summary>Prototype <c>enter</c>: a new panel rises from <c>translateY(6px)</c>.</summary>
     public const double EnterRise = 6;
@@ -45,7 +49,8 @@ public partial class WorkspaceHost
     /// <summary>
     /// "Reduce motion": every transition is 0 ms. Avalonia 11.3 has no operating
     /// system reduced-motion query; the default comes from <see cref="SystemPrefersReducedMotion"/>
-    /// (the <c>ROWL_REDUCE_MOTION</c> environment variable) and a settings page can bind to the property later.
+    /// (the <c>ROWL_REDUCE_MOTION</c> environment variable) and the active editor settings profile
+    /// (<see cref="ProfilePrefersReducedMotion"/>), and can also be bound or set per host.
     /// </summary>
     public static readonly StyledProperty<bool> ReduceMotionProperty =
         AvaloniaProperty.Register<WorkspaceHost, bool>(nameof(ReduceMotion), ReadSystemPreference());
@@ -61,7 +66,27 @@ public partial class WorkspaceHost
     /// <summary>Best-effort operating-system preference (env <c>ROWL_REDUCE_MOTION</c> = 1 / true); false when unknown.</summary>
     public static bool SystemPrefersReducedMotion => ReadSystemPreference();
 
+    private static readonly List<WeakReference<WorkspaceHost>> LiveHosts = new();
+    private static bool _profilePrefersReducedMotion;
+
+    /// <summary>
+    /// Active editor settings profile preference (<c>EditorSettingsProfile.ReduceMotion</c>),
+    /// synchronized by <c>EditorSettingsSyncService</c> and <c>SettingsViewModel</c>.
+    /// </summary>
+    public static bool ProfilePrefersReducedMotion
+    {
+        get => _profilePrefersReducedMotion;
+        set
+        {
+            if (_profilePrefersReducedMotion == value)
+                return;
+            _profilePrefersReducedMotion = value;
+            NotifyLiveHosts();
+        }
+    }
+
     private readonly Dictionary<string, TranslateTransform> _enterTransforms = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, (ScaleTransform Scale, TranslateTransform Move, TransformGroup Group)> _flipTransforms = new(StringComparer.Ordinal);
     private readonly Dictionary<string, TranslateTransform> _splitterTransforms = new(StringComparer.Ordinal);
     private readonly Dictionary<string, Rect> _displayRects = new(StringComparer.Ordinal);
     private readonly Dictionary<string, Rect> _displaySplitters = new(StringComparer.Ordinal);
@@ -70,6 +95,8 @@ public partial class WorkspaceHost
     private MotionPlan? _pendingPlan;
     private MotionPlan? _plan;
     private bool _suppressMotion;
+    private bool _hasExplicitReduceMotion;
+    private bool _updatingFromExternal;
     private Rect? _dropTargetRect;
     private Rect _dropFrom;
     private bool _dropFresh;
@@ -87,6 +114,13 @@ public partial class WorkspaceHost
         set => SetValue(ReduceMotionProperty, value);
     }
 
+    /// <summary>
+    /// True when this host, the active editor settings profile, or the
+    /// <c>ROWL_REDUCE_MOTION</c> environment variable requests reduced motion.
+    /// </summary>
+    public bool EffectiveReduceMotion =>
+        ReduceMotion || _profilePrefersReducedMotion || ReadSystemPreference();
+
     public double LayoutProgress => GetValue(LayoutProgressProperty);
 
     public double DropProgress => GetValue(DropProgressProperty);
@@ -101,8 +135,45 @@ public partial class WorkspaceHost
             && (value == "1" || value.Equals("true", StringComparison.OrdinalIgnoreCase));
     }
 
+    private static void NotifyLiveHosts()
+    {
+        WorkspaceHost[] hosts;
+        lock (LiveHosts)
+        {
+            LiveHosts.RemoveAll(r => !r.TryGetTarget(out _));
+            hosts = LiveHosts
+                .Select(r => r.TryGetTarget(out WorkspaceHost? h) ? h : null)
+                .Where(h => h is not null)
+                .ToArray()!;
+        }
+        foreach (WorkspaceHost host in hosts)
+        {
+            if (Dispatcher.UIThread.CheckAccess())
+                host.ApplyExternalReduceMotion();
+            else
+                Dispatcher.UIThread.Post(host.ApplyExternalReduceMotion);
+        }
+    }
+
+    private void ApplyExternalReduceMotion()
+    {
+        if (!_hasExplicitReduceMotion)
+        {
+            _updatingFromExternal = true;
+            try
+            {
+                SetCurrentValue(ReduceMotionProperty, ReadSystemPreference() || _profilePrefersReducedMotion);
+            }
+            finally
+            {
+                _updatingFromExternal = false;
+            }
+        }
+        OnReduceMotionChanged(externalUpdate: true);
+    }
+
     /// <summary>The transitions of the current mode: two eased double transitions, or none when reduced.</summary>
-    private Transitions? BuildTransitions() => ReduceMotion
+    private Transitions? BuildTransitions() => EffectiveReduceMotion
         ? null
         : new Transitions
         {
@@ -112,13 +183,29 @@ public partial class WorkspaceHost
 
     private void InitializeMotion()
     {
+        lock (LiveHosts)
+            LiveHosts.Add(new WeakReference<WorkspaceHost>(this));
+        if (!IsSet(ReduceMotionProperty) && (ReadSystemPreference() || _profilePrefersReducedMotion))
+        {
+            _updatingFromExternal = true;
+            try
+            {
+                SetCurrentValue(ReduceMotionProperty, true);
+            }
+            finally
+            {
+                _updatingFromExternal = false;
+            }
+        }
         Transitions = BuildTransitions();
         // Before any child sees the press (a splitter drag starts from it): settle what is moving.
         AddHandler(PointerPressedEvent, OnMotionPointerPressed, RoutingStrategies.Tunnel, handledEventsToo: true);
     }
 
-    private void OnReduceMotionChanged()
+    private void OnReduceMotionChanged(bool externalUpdate = false)
     {
+        if (!externalUpdate && !_updatingFromExternal)
+            _hasExplicitReduceMotion = IsSet(ReduceMotionProperty);
         CompleteMotion();
         Transitions = BuildTransitions();
     }
@@ -163,7 +250,7 @@ public partial class WorkspaceHost
     /// <summary>Called when the tree is about to change: remember where everything is displayed now.</summary>
     private void CaptureMotion()
     {
-        if (ReduceMotion || _suppressMotion || _pendingPlan is not null || _displayRects.Count == 0)
+        if (EffectiveReduceMotion || _suppressMotion || _pendingPlan is not null || _displayRects.Count == 0)
             return;
         _pendingPlan = new MotionPlan(new Dictionary<string, Rect>(_displayRects, StringComparer.Ordinal),
             new Dictionary<string, Rect>(_displaySplitters, StringComparer.Ordinal));
@@ -194,9 +281,26 @@ public partial class WorkspaceHost
         from.Width + (to.Width - from.Width) * t,
         from.Height + (to.Height - from.Height) * t);
 
+    /// <summary>Hedef dikdörtgende yerleşmiş paneli <paramref name="shown"/> üzerinde gösteren ölçek + kaydırma (sol üst köken).</summary>
+    private Transform FlipTransform(string id, Rect shown, Rect target)
+    {
+        if (!_flipTransforms.TryGetValue(id, out (ScaleTransform Scale, TranslateTransform Move, TransformGroup Group) flip))
+        {
+            var scale = new ScaleTransform();
+            var move = new TranslateTransform();
+            flip = (scale, move, new TransformGroup { Children = { scale, move } });
+            _flipTransforms[id] = flip;
+        }
+        flip.Scale.ScaleX = target.Width > 0 ? shown.Width / target.Width : 1;
+        flip.Scale.ScaleY = target.Height > 0 ? shown.Height / target.Height : 1;
+        flip.Move.X = shown.X - target.X;
+        flip.Move.Y = shown.Y - target.Y;
+        return flip.Group;
+    }
+
     private void EndLayoutMotion()
     {
-        if (_plan is null && _enterTransforms.Count == 0 && _splitterTransforms.Count == 0)
+        if (_plan is null && _enterTransforms.Count == 0 && _splitterTransforms.Count == 0 && _flipTransforms.Count == 0)
             return;
         _plan = null;
         foreach (WorkspacePanel panel in _panels.Values)
@@ -212,6 +316,7 @@ public partial class WorkspaceHost
         }
         _enterTransforms.Clear();
         _splitterTransforms.Clear();
+        _flipTransforms.Clear();
     }
 
     /// <summary>
@@ -235,7 +340,7 @@ public partial class WorkspaceHost
         if (_pendingPlan is { } pending)
         {
             _pendingPlan = null;
-            if (!ReduceMotion && PlanChangesLayout(pending, targets, splitTargets))
+            if (!EffectiveReduceMotion && PlanChangesLayout(pending, targets, splitTargets))
             {
                 _plan = pending;
                 RunProgress(LayoutProgressProperty);
@@ -267,9 +372,13 @@ public partial class WorkspaceHost
             {
                 if (plan.Panels.TryGetValue(id, out Rect from))
                 {
+                    // Faz 10: panel yalnız son yerine yerleşir; ara kareler bir görsel dönüşümle
+                    // (kaydır + ölçekle) çizilir. Ara boyutlarda yeniden ölçmek, Denetçi gibi ağır
+                    // panellerde kare başına 30–120 ms tutup editörü donduruyordu.
                     shown = Blend(from, target, t);
                     panel.Opacity = 1;
-                    panel.RenderTransform = null;
+                    panel.RenderTransformOrigin = RelativePoint.TopLeft;
+                    panel.RenderTransform = FlipTransform(id, shown, target);
                     panel.ZIndex = 1;
                 }
                 else
@@ -285,8 +394,8 @@ public partial class WorkspaceHost
                 }
             }
             _displayRects[id] = shown;
-            panel.Measure(shown.Size);
-            panel.Arrange(shown);
+            panel.Measure(target.Size);
+            panel.Arrange(target);
         }
 
         foreach ((string id, SplitParts parts) in _splits)
@@ -332,7 +441,7 @@ public partial class WorkspaceHost
         _dropFrom = fresh ? target.Value : _dropShown;
         _dropFresh = fresh;
         _dropTargetRect = target;
-        if (ReduceMotion)
+        if (EffectiveReduceMotion)
         {
             _dropFresh = false;
             _dropFrom = target.Value;

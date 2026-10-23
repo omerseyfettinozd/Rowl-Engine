@@ -12,39 +12,15 @@
     <Border Background="{DynamicResource PanelBackground}">
         <Grid RowDefinitions="Auto, Auto, *">
 
-            <!-- Panel başlığı (ortak kalıp: Border.panelHeader) + Oluştur -->
+            <!-- Panel başlığı (ortak kalıp: Border.panelHeader) -->
             <Border Grid.Row="0" Classes="panelHeader">
                 <DockPanel>
                     <!-- Faz 5 D4: çalışma alanı sabitle / kapat (panel bu başlığı kendi çizer) -->
                     <ws:PanelHeaderActions DockPanel.Dock="Right" Margin="4,0,-6,0"/>
-                    <!-- Create Object Button -->
-                    <Button DockPanel.Dock="Right" Classes="ghost"
-                            Content="{l:T Hierarchy.Create}"
-                            Command="{Binding HierarchyViewModel.ToggleCreateObjectMenuCommand}"
-                            IsEnabled="{Binding HierarchyViewModel.HasCurrentNode}"
-                            HorizontalAlignment="Right">
-                        <Button.Flyout>
-                            <MenuFlyout Placement="BottomEdgeAlignedRight">
-                                <MenuItem Header="{l:T Hierarchy.Create.Empty}"
-                                          Command="{Binding HierarchyViewModel.CreateObjectCommand}"
-                                          CommandParameter="empty"/>
-                                <Separator/>
-                                <MenuItem Header="{l:T Hierarchy.Create.Background}"
-                                          Command="{Binding HierarchyViewModel.CreateObjectCommand}"
-                                          CommandParameter="background"/>
-                                <MenuItem Header="{l:T Hierarchy.Create.Character}"
-                                          Command="{Binding HierarchyViewModel.CreateObjectCommand}"
-                                          CommandParameter="character"/>
-                                <MenuItem Header="{l:T Hierarchy.Create.Dialogue}"
-                                          Command="{Binding HierarchyViewModel.CreateObjectCommand}"
-                                          CommandParameter="dialogue"/>
-                                <MenuItem Header="{l:T Hierarchy.Create.Audio}"
-                                          Command="{Binding HierarchyViewModel.CreateObjectCommand}"
-                                          CommandParameter="audio"/>
-                            </MenuFlyout>
-                        </Button.Flyout>
-                    </Button>
-                    <TextBlock Classes="panelTitle" Text="{l:T Panel.Hierarchy}"/>
+                    <!-- Prototip başlığı: ikon + ad (ikon WorkspacePanel ile aynı geometri). -->
+                    <Path DockPanel.Dock="Left" Classes="panelHeaderIcon"
+                          Data="M5,4 h5 v4 h-5 Z M8,8 v8 h5 M8,12 h5 M13,10 h6 v4 h-6 Z M13,14 h6 v4 h-6 Z"/>
+                    <TextBlock Classes="panelTitle" Text="{l:T Panel.Hierarchy}" TextTrimming="CharacterEllipsis"/>
                 </DockPanel>
             </Border>
 
@@ -53,15 +29,52 @@
                     BorderBrush="{DynamicResource BorderColor}" BorderThickness="0,0,0,1"
                     Padding="12,10">
                 <StackPanel Spacing="8">
-                    <!-- Unity kromu: nesne adı filtresi -->
-                    <TextBox Watermark="{l:T Hierarchy.Search}"
-                             Text="{Binding HierarchyViewModel.HierarchyFilterText}"
-                             IsVisible="{Binding HierarchyViewModel.HasCurrentNode}"
-                             Foreground="{DynamicResource PrimaryText}"
-                             MinHeight="{DynamicResource ControlHeight}"
-                             CornerRadius="{DynamicResource RadiusSmall}"
-                             Padding="10,4"
-                             FontSize="{DynamicResource FontSizeBody}"/>
+                    <!-- Unity kromu: nesne adı filtresi + Oluştur -->
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBox Grid.Column="0" Watermark="{l:T Hierarchy.Search}"
+                                 Text="{Binding HierarchyViewModel.HierarchyFilterText}"
+                                 IsVisible="{Binding HierarchyViewModel.HasCurrentNode}"
+                                 Foreground="{DynamicResource PrimaryText}"
+                                 MinHeight="{DynamicResource ControlHeight}"
+                                 CornerRadius="{DynamicResource RadiusSmall}"
+                                 Padding="10,4"
+                                 FontSize="{DynamicResource FontSizeBody}"/>
+                        <!-- Create Object Button -->
+                        <Button Grid.Column="1" Classes="workspaceHeaderButton"
+                                Margin="6,0,0,0" Width="32" Height="{DynamicResource ControlHeight}"
+                                Background="{DynamicResource InputBackground}"
+                                BorderBrush="{DynamicResource BorderSubtle}" BorderThickness="1"
+                                CornerRadius="{DynamicResource RadiusSmall}"
+                                VerticalAlignment="Center"
+                                ToolTip.Tip="{l:T Hierarchy.Create}"
+                                AutomationProperties.Name="{l:T Hierarchy.Create}"
+                                Command="{Binding HierarchyViewModel.ToggleCreateObjectMenuCommand}"
+                                IsEnabled="{Binding HierarchyViewModel.HasCurrentNode}">
+                            <Path Data="M12,5 v14 M5,12 h14" Width="14" Height="14" Stretch="Uniform"
+                                  StrokeThickness="1.5" StrokeLineCap="Round"
+                                  Stroke="{Binding $parent[Button].Foreground}"/>
+                            <Button.Flyout>
+                                <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                    <MenuItem Header="{l:T Hierarchy.Create.Empty}"
+                                              Command="{Binding HierarchyViewModel.CreateObjectCommand}"
+                                              CommandParameter="empty"/>
+                                    <Separator/>
+                                    <MenuItem Header="{l:T Hierarchy.Create.Background}"
+                                              Command="{Binding HierarchyViewModel.CreateObjectCommand}"
+                                              CommandParameter="background"/>
+                                    <MenuItem Header="{l:T Hierarchy.Create.Character}"
+                                              Command="{Binding HierarchyViewModel.CreateObjectCommand}"
+                                              CommandParameter="character"/>
+                                    <MenuItem Header="{l:T Hierarchy.Create.Dialogue}"
+                                              Command="{Binding HierarchyViewModel.CreateObjectCommand}"
+                                              CommandParameter="dialogue"/>
+                                    <MenuItem Header="{l:T Hierarchy.Create.Audio}"
+                                              Command="{Binding HierarchyViewModel.CreateObjectCommand}"
+                                              CommandParameter="audio"/>
+                                </MenuFlyout>
+                            </Button.Flyout>
+                        </Button>
+                    </Grid>
 
                     <!-- Seçili Node: küçük başlık + Node adı (kimlik ipucu olarak) -->
                     <StackPanel Spacing="2" IsVisible="{Binding HierarchyViewModel.HasCurrentNode}">
@@ -85,7 +98,7 @@
                            FontSize="{DynamicResource FontSizeBody}"
                            Margin="12,10,12,6"/>
                 <Border Grid.Row="1" Margin="16,0,8,8" Padding="8,0,0,0"
-                        BorderBrush="{DynamicResource BorderSubtle}" BorderThickness="1,0,0,0">
+                        BorderBrush="{DynamicResource BorderColor}" BorderThickness="1,0,0,0">
                     <ListBox ItemsSource="{Binding HierarchyViewModel.FilteredObjects}"
                              SelectedItem="{Binding HierarchyViewModel.SelectedObject, Mode=TwoWay}"
                              Background="Transparent"

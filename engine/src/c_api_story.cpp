@@ -323,45 +323,6 @@ RowlEngine_ResultCode RowlEngine_GetActiveDialogueContentIdsJson(
     }, ROWL_RESULT_UNKNOWN_ERROR);
 }
 
-namespace {
-
-// D4 (#53): set-time yazılabilirlik yoklaması. Hiçbir şey üretmez
-// (ölü-kökü diriltip #122 teşhisini bozardı): en-yakın mevcut atayı bulur,
-// girdisi-yaratılabilirliğini geçici-dizinle yoklar; saves/ mevcutsa onun
-// içini ayrıca yoklar (yazılabilir-ata + salt-okunur-dizin reddedilir).
-// Salt-okunur/engelli dizin config-anında belli olur; save-anı sürprizi ve
-// kayıt-kaybı olmaz. Throw etmez (noexcept çağrı yolundadır).
-bool probeSaveDirectoryWritable(const std::filesystem::path& dir) {
-    std::error_code ec;
-    std::filesystem::path anchor = dir;
-    while (!anchor.empty()) {
-        if (std::filesystem::exists(anchor, ec) && !ec) break;
-        if (ec) return false;
-        anchor = anchor.parent_path();
-    }
-    if (anchor.empty() || !std::filesystem::is_directory(anchor, ec) || ec) {
-        return false;
-    }
-    static std::atomic<unsigned> probeSeq{0};
-    const auto probeName = ".rowl_write_probe_" +
-        std::to_string(probeSeq.fetch_add(1)) + ".tmp";
-    if (!std::filesystem::create_directory(anchor / probeName, ec) || ec) {
-        return false;
-    }
-    std::filesystem::remove(anchor / probeName, ec);
-    if (std::filesystem::exists(dir, ec) && !ec) {
-        if (!std::filesystem::is_directory(dir, ec) || ec) return false;
-        const auto innerProbe = dir / probeName;
-        if (!std::filesystem::create_directory(innerProbe, ec) || ec) {
-            return false;
-        }
-        std::filesystem::remove(innerProbe, ec);
-    }
-    return true;
-}
-
-}  // namespace
-
 void RowlEngine_SetProjectDirectory(RowlEngineHandle handle, const char* projectRoot) {
     // W8-a (3): tek guard ikiye bolundu (LoadStoryGraph :136-146 emsali).
     // Yabanci handle WRONG_THREAD damgali ret; olu-handle sessiz ret aynen.
@@ -390,14 +351,19 @@ void RowlEngine_SetProjectDirectory(RowlEngineHandle handle, const char* project
         // aşamasındaki motorda (init'li ama oynanmamış — örn. sesin
         // mount-öncesi SetProjectDirectory akışı) mount serbesttir.
         // "Oynanmış" = history dolu, cursor start'tan ayrılmış veya
-        // script-variable step'i ilerlemiş (init tabanı stepId=1).
+        // script-variable step'i başlangıç sunumunun ötesine ilerlemiş.
+        // Taban sabit 1 değil: başlangıç düğümünün giriş etkileri
+        // (variable bileşeni) step'i kimse oynamadan 2'ye çıkarır; cwd =
+        // proje kökünde Init grafiği yükleyince oynatıcının bağlaması
+        // sessizce reddediliyordu (test_project_mount_cwd).
         bool sessionLive = false;
         if (engine->isInitialized()) {
             const auto& doc = engine->getStoryGraphDocument();
             if (!doc.nodes.empty()) {
                 sessionLive = !engine->getDialogueHistory().empty() ||
                               engine->getCurrentNodeId() != doc.startNodeId ||
-                              engine->getCurrentStepId() > 1;
+                              engine->getCurrentStepId() >
+                                  engine->getStartPresentationStepId();
             }
         }
         if (sessionLive) {
@@ -409,27 +375,7 @@ void RowlEngine_SetProjectDirectory(RowlEngineHandle handle, const char* project
             }
             return;
         }
-        // Save slots belong to the selected game/project. This prevents an
-        // embedded editor preview or another standalone game from sharing the
-        // process-relative default "saves" directory.
         const auto projectPath = Rowl::Platform::pathFromUtf8(projectRoot);
-        const auto savePath = projectPath / "saves";
-        // D4 (#53): yazılabilirlik yoklaması config-anında. Üretilemez/
-        // salt-okunur saves/ save-anında patlayıp kayıt kaybettiriyordu
-        // (create_directories fırlatırdı). Yazılamazsa projeyi hiç mount
-        // etmeden reddet (fail-fast IoError); yarım-mount ve eski-override
-        // üzerine yazma yok. Getter yine yol döner (varsayılan), sözleşme
-        // korunur.
-        if (!probeSaveDirectoryWritable(savePath)) {
-            if (auto* ctx = engine->getContext()) {
-                ctx->setError(Rowl::Core::RuntimeErrorCode::IoError,
-                              "SetProjectDirectory refused: save directory is not writable: " +
-                                  Rowl::Platform::pathToUtf8(savePath),
-                              "set_project_directory", "");
-            }
-            return;
-        }
-        engine->setSaveDirectory(Rowl::Platform::pathToUtf8(savePath));
         // Project-owned defaults are read at the mount boundary so player and
         // embedded editor preview resolve the same component contract.
         std::string transition = "instant";
@@ -457,6 +403,11 @@ void RowlEngine_SetProjectDirectory(RowlEngineHandle handle, const char* project
                     std::string(projectRoot));
             }
         }
+        // D01a: game identity (package carrier -> manifest -> derived).
+        engine->setGameIdentity(Rowl::Platform::resolveGameIdentity(engine->getVfs(), projectPath));
+        // D01b: per-game save/profile dirs + one-time legacy save copy
+        // (thin wrapper in c_api_game_data.cpp; falls back to <root>/saves).
+        applyProjectGameData(*engine, projectPath);
         // Faz 3 Dilim 1 (#92): manifest locales + catalogs load on project
         // mount — AFTER the VFS remount above, so the VFS-first catalog
         // probe sees packaged locales (Assets/locales inside .rowlpkg).
@@ -523,6 +474,10 @@ void RowlEngine_SetProjectDirectory(RowlEngineHandle handle, const char* project
                 }
             }
         }
+        // D01b: a degraded data layout (user-data dir unwritable, partial
+        // migration) is surfaced last, and only if nothing more specific
+        // already claimed the channel.
+        reportProjectGameDataDiagnostic(*engine);
     });
 }
 

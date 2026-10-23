@@ -187,6 +187,121 @@ namespace RowlEngine.Editor.Services
         }
     }
 
+    // Grup oluşturma (tek kayıt).
+    public sealed class GroupCreateAction : IUndoAction
+    {
+        private readonly GroupService _service;
+        private readonly CanvasGroupViewModel _group;
+
+        public string Description => "Create Group";
+
+        public GroupCreateAction(GroupService service, CanvasGroupViewModel group)
+        {
+            _service = service;
+            _group = group;
+        }
+
+        public void Undo()
+        {
+            _service.Delete(_group.GroupId);
+        }
+
+        public void Redo()
+        {
+            if (_service.Find(_group.GroupId) is null)
+                _service.Groups.Add(_group);
+        }
+    }
+
+    // Grup silme (aynı indekse döner).
+    public sealed class GroupDeleteAction : IUndoAction
+    {
+        private readonly GroupService _service;
+        private readonly CanvasGroupViewModel _group;
+        private readonly int _index;
+
+        public string Description => "Delete Group";
+
+        public GroupDeleteAction(GroupService service, CanvasGroupViewModel group, int index)
+        {
+            _service = service;
+            _group = group;
+            _index = index;
+        }
+
+        public void Undo()
+        {
+            _service.Restore(_group, _index);
+        }
+
+        public void Redo()
+        {
+            _service.Delete(_group.GroupId);
+        }
+    }
+
+    // Grup taşıma (üyeler MoveGroup ile gider).
+    public sealed class GroupMoveAction : IUndoAction
+    {
+        private readonly GroupService _service;
+        private readonly string _groupId;
+        private readonly double _dx;
+        private readonly double _dy;
+
+        public string Description => "Move Group";
+
+        public GroupMoveAction(GroupService service, string groupId, double dx, double dy)
+        {
+            _service = service;
+            _groupId = groupId;
+            _dx = dx;
+            _dy = dy;
+        }
+
+        public void Undo()
+        {
+            _service.MoveGroup(_groupId, -_dx, -_dy);
+        }
+
+        public void Redo()
+        {
+            _service.MoveGroup(_groupId, _dx, _dy);
+        }
+    }
+
+    // Grup boyutlandırma.
+    public sealed class GroupResizeAction : IUndoAction
+    {
+        private readonly GroupService _service;
+        private readonly string _groupId;
+        private readonly double _beforeW;
+        private readonly double _beforeH;
+        private readonly double _afterW;
+        private readonly double _afterH;
+
+        public string Description => "Resize Group";
+
+        public GroupResizeAction(GroupService service, string groupId, double beforeW, double beforeH, double afterW, double afterH)
+        {
+            _service = service;
+            _groupId = groupId;
+            _beforeW = beforeW;
+            _beforeH = beforeH;
+            _afterW = afterW;
+            _afterH = afterH;
+        }
+
+        public void Undo()
+        {
+            _service.ResizeGroup(_groupId, _beforeW, _beforeH);
+        }
+
+        public void Redo()
+        {
+            _service.ResizeGroup(_groupId, _afterW, _afterH);
+        }
+    }
+
     public sealed class ChoiceTargetChange
     {
         public NodeViewModel SourceNode { get; }
@@ -431,7 +546,7 @@ namespace RowlEngine.Editor.Services
         }
     }
 
-    public partial class UndoRedoService : ObservableObject
+    public partial class UndoRedoService : ObservableObject, IUndoActionSink
     {
         private static readonly Lazy<UndoRedoService> _instance = new(() => new UndoRedoService());
         public static UndoRedoService Instance => _instance.Value;

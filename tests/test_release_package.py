@@ -40,7 +40,9 @@ with tempfile.TemporaryDirectory() as directory:
     release = root / "release"
     package = release / "Assets" / "packages" / "game.rowlpkg"
     package.parent.mkdir(parents=True)
-    subprocess.run([sys.executable, str(PACKAGER), str(ROOT / "Assets"), str(package)], check=True)
+    GAME_ID = "0b6f1c2e-7d3a-4e58-9c41-2a8f5d6e7b90"
+    subprocess.run([sys.executable, str(PACKAGER), str(ROOT / "Assets"), str(package),
+                    "--game-id", GAME_ID, "--game-name", "Probe"], check=True)
     (release / "mods").mkdir()
     (release / "mods" / "README.md").write_text("# mods\n", encoding="utf-8")
     (release / "README.txt").write_text("release\n", encoding="utf-8")
@@ -63,6 +65,32 @@ with tempfile.TemporaryDirectory() as directory:
     valid = run_verifier(release)
     if valid.returncode != 0 or "Valid release" not in valid.stdout:
         raise SystemExit("valid release package was rejected: " + valid.stderr)
+
+    # --- D01a: game identity carrier (rowl/game.json) ---
+    no_identity = root / "no-identity"
+    shutil.copytree(release, no_identity)
+    subprocess.run([sys.executable, str(PACKAGER), str(ROOT / "Assets"),
+                    str(no_identity / "Assets" / "packages" / "game.rowlpkg")], check=True)
+    require_rejection(no_identity, "missing the game identity carrier")
+
+    mismatch = root / "id-mismatch"
+    shutil.copytree(release, mismatch)
+    (mismatch / "project.rowlproj").write_text(
+        '{"project_uuid": "11111111-2222-4333-8444-555555555555"}\n', encoding="utf-8")
+    require_rejection(mismatch, "does not match project.rowlproj")
+
+    matching = root / "id-match"
+    shutil.copytree(release, matching)
+    (matching / "project.rowlproj").write_text(
+        '{"project_uuid": "' + GAME_ID.upper() + '"}\n', encoding="utf-8")
+    if run_verifier(matching).returncode != 0:
+        raise SystemExit("loose project.rowlproj with the same id (case-insensitive) must pass")
+
+    bad_id = subprocess.run(
+        [sys.executable, str(PACKAGER), str(ROOT / "Assets"), str(root / "bad.rowlpkg"),
+         "--game-id", "not-a-uuid"], capture_output=True, text=True, check=False)
+    if bad_id.returncode == 0:
+        raise SystemExit("packer accepted a malformed game id")
 
     missing_launcher = root / "missing-launcher"
     shutil.copytree(release, missing_launcher)
@@ -213,8 +241,28 @@ with tempfile.TemporaryDirectory() as directory:
         .encode("utf-8"))
     require_rejection(staged, "has a CR")
 
+    # D01d: a launcher must not redirect the per-game user-data directory
+    # (saves + player profile live under XDG data home / %LOCALAPPDATA%).
+    for tag, name, content in [
+        ("sh-xdg-redirect", "run_game.sh",
+         '#!/bin/bash\nSCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"\n'
+         'export XDG_DATA_HOME="$SCRIPT_DIR/data"\nexec "$SCRIPT_DIR/RowlGame" "$@"\n'),
+        ("sh-home-redirect", "run_game.sh",
+         '#!/bin/sh\nHOME=. exec ./RowlGame "$@"\n'),
+    ]:
+        staged = root / tag
+        shutil.copytree(release, staged)
+        (staged / name).write_bytes(content.encode("utf-8"))
+        require_rejection(staged, "a launcher must not redirect it")
+    require_rejection(
+        stage_windows_release(
+            "bat-localappdata-redirect",
+            b'@echo off\r\ncd /d "%~dp0"\r\nset LOCALAPPDATA=%~dp0data\r\nRowlGame.exe %*\r\n'),
+        "assigns LOCALAPPDATA")
+
     print("[ReleasePackageTests] POSIX launcher contract: bad exe name, "
-          "dropped argument forward and CR line endings are rejected.")
+          "dropped argument forward, CR line endings and user-data redirects "
+          "are rejected.")
 
     # --- P2-16 ADIM 5: the gates must be able to go RED ---
     #
@@ -262,6 +310,13 @@ with tempfile.TemporaryDirectory() as directory:
         if mutated == source:
             raise SystemExit("drop_cd_line changed nothing; the P2-16 "
                              "mutation no longer matches the source")
+        return mutated
+
+    def drop_posix_cd_line(source):
+        mutated = source.replace("    'cd \"$SCRIPT_DIR\" || exit 1\\n'\n", "")
+        if mutated == source:
+            raise SystemExit("drop_posix_cd_line changed nothing; the launcher "
+                             "working-directory mutation no longer matches the source")
         return mutated
 
     def break_exe_name(source):
@@ -314,6 +369,26 @@ with tempfile.TemporaryDirectory() as directory:
         if mutated == source:
             raise SystemExit("revert_to_text_mode_write changed nothing; "
                              "emit() no longer calls write_launcher_bytes")
+        return mutated
+
+    def redirect_posix_data_dir(source):
+        mutated = source.replace(
+            "    'cd \"$SCRIPT_DIR\" || exit 1\\n'\n",
+            "    'cd \"$SCRIPT_DIR\" || exit 1\\n'\n"
+            "    'export XDG_DATA_HOME=\"$SCRIPT_DIR/data\"\\n'\n")
+        if mutated == source:
+            raise SystemExit("redirect_posix_data_dir changed nothing; the "
+                             "launcher shape moved")
+        return mutated
+
+    def redirect_windows_data_dir(source):
+        mutated = source.replace(
+            "    'cd /d \"%~dp0\"\\r\\n'\n",
+            "    'cd /d \"%~dp0\"\\r\\n'\n"
+            "    'set \"LOCALAPPDATA=%~dp0data\"\\r\\n'\n")
+        if mutated == source:
+            raise SystemExit("redirect_windows_data_dir changed nothing; the "
+                             "launcher shape moved")
         return mutated
 
     def drop_executable_bit(source):
@@ -407,6 +482,7 @@ with tempfile.TemporaryDirectory() as directory:
     # state on POSIX, and on any other platform it is expected to stay green.
     MUTATIONS = [
         ("no-cd", drop_cd_line, "missing the working-directory pin", "any"),
+        ("posix-no-cd", drop_posix_cd_line, "does not cd into SCRIPT_DIR", "any"),
         ("bad-exe", break_exe_name,
          "is not a player executable the release verifier accepts", "any"),
         ("lf-endings", downgrade_to_lf, "bare LF line ending", "any"),
@@ -414,6 +490,10 @@ with tempfile.TemporaryDirectory() as directory:
          "would write ['run_game.sh'], not 'run_game.bat'", "any"),
         ("text-mode-write", revert_to_text_mode_write,
          "simulated Windows host", "any"),
+        ("posix-data-redirect", redirect_posix_data_dir,
+         "assigns XDG_DATA_HOME", "any"),
+        ("windows-data-redirect", redirect_windows_data_dir,
+         "assigns LOCALAPPDATA", "any"),
         ("no-exec-bit", drop_executable_bit, "is not executable", "posix"),
     ]
 
@@ -723,7 +803,10 @@ with tempfile.TemporaryDirectory() as directory:
     _ENTRY = struct.Struct("<QIQQQI")
 
     def craft_package(package_path, names):
-        blobs = [(name, b"w8g-payload:" + name.replace(b"\x00", b"_"))
+        carrier_blob = ('{"format":1,"game_id":"%s","name":"","content_format":1}\n'
+                        % GAME_ID).encode("utf-8")
+        blobs = [(name, carrier_blob if name == b"rowl/game.json"
+                  else b"w8g-payload:" + name.replace(b"\x00", b"_"))
                  for name in names]
         payload = bytearray(_HEADER.size)
         offsets = {}
@@ -775,7 +858,7 @@ with tempfile.TemporaryDirectory() as directory:
 
     # False-positive control: dotty but harmless names stay green.
     control_pkg = root / "w8g-control.rowlpkg"
-    craft_package(control_pkg, [b"a/..b", b"a/b..", b"...", graph_name])
+    craft_package(control_pkg, [b"a/..b", b"a/b..", b"...", graph_name, b"rowl/game.json"])
     control = run_verifier(stage_with_package("w8g-control", control_pkg))
     if control.returncode != 0 or "Valid release" not in control.stdout:
         raise SystemExit("traversal curtain rejected harmless dotty names: "

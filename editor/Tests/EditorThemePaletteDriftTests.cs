@@ -56,6 +56,18 @@ namespace RowlEngine.Editor.Tests
         }
 
         [Fact]
+        public void CanvasBackground_IsPrototypeSurface()
+        {
+            // Faz 8 A1 kararı (Chaple, 2026-10-16): tuval zemini prototip yüzeyi, saf siyah değil;
+            // nokta ızgara prototip .node-area tonu. OLED teması saf siyahını korur.
+            var defaults = SettingsViewModel.GetThemePalette(DefaultTheme);
+            Assert.Equal(Color.Parse("#131315"), defaults["CanvasBackgroundColor"]);
+            Assert.Equal(defaults["SurfaceBackgroundColor"], defaults["CanvasBackgroundColor"]);
+            Assert.Equal(Color.Parse("#303034"), defaults["GraphDotColorValue"]);
+            Assert.Equal(Color.Parse("#000000"), SettingsViewModel.GetThemePalette(OledTheme)["CanvasBackgroundColor"]);
+        }
+
+        [Fact]
         public void FallbackColors_MatchDefaultPalette()
         {
             var palette = SettingsViewModel.GetThemePalette(DefaultTheme);
@@ -64,6 +76,7 @@ namespace RowlEngine.Editor.Tests
             Assert.Equal(palette["PrimaryTextColor"], ThemeFallbackColors.Text);
             Assert.Equal(palette["MutedTextColor"], ThemeFallbackColors.Muted);
             Assert.Equal(palette["DimTextColor"], ThemeFallbackColors.Dim);
+            Assert.Equal(palette["SelectionBorderColorValue"], ThemeFallbackColors.Selection);
             Assert.Equal(palette["SuccessColor"], ThemeFallbackColors.Success);
             Assert.Equal(palette["WarningColor"], ThemeFallbackColors.Warning);
             Assert.Equal(palette["ErrorColor"], ThemeFallbackColors.Error);

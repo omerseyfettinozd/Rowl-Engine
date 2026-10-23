@@ -1,0 +1,168 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:l="using:RowlEngine.Editor.Services.Strings"
+             xmlns:edit="using:AvaloniaEdit"
+             xmlns:vm="using:RowlEngine.Editor.ViewModels"
+             x:Class="RowlEngine.Editor.Views.Panels.LuaEditorView"
+             x:DataType="vm:LuaEditorViewModel"
+             x:Name="LuaPanel">
+  <!-- Ctrl+S kısayolu görünümde ya da kod arkasında ele alınır. -->
+  <UserControl.KeyBindings>
+    <KeyBinding Gesture="Ctrl+S" Command="{Binding SaveActiveCommand}" />
+  </UserControl.KeyBindings>
+  <!-- Kart çerçevesini WorkspacePanel çizer; burada yalnız zemin. -->
+  <Border Background="{DynamicResource PanelBackground}">
+    <DockPanel LastChildFill="True">
+      <!-- Sekme şeridi: 43 px, alt kenar çizgisi. -->
+      <Border DockPanel.Dock="Top" Classes="luaTabsStrip">
+        <DockPanel LastChildFill="True">
+          <Button x:Name="PART_FilesButton"
+                  DockPanel.Dock="Right"
+                  Classes="ghost"
+                  Content="{l:T Lua.Files}"
+                  ToolTip.Tip="{l:T Lua.Files.Tip}">
+            <Button.Flyout>
+              <MenuFlyout Placement="Bottom" />
+            </Button.Flyout>
+          </Button>
+          <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+            <ItemsControl x:Name="PART_Tabs" ItemsSource="{Binding Tabs}">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <StackPanel Orientation="Horizontal" />
+                </ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:LuaTabViewModel">
+                  <Border Classes="luaTab" Classes.luaActive="{Binding IsActive}">
+                    <StackPanel Orientation="Vertical" Spacing="0">
+                      <StackPanel Orientation="Horizontal" Spacing="6">
+                        <Button Command="{Binding $parent[ItemsControl].((vm:LuaEditorViewModel)DataContext).ActivateTabCommand}"
+                                CommandParameter="{Binding RelativePath}"
+                                Classes="luaTabButton">
+                          <StackPanel Orientation="Horizontal" Spacing="6">
+                            <Path Classes="luaIcon" Data="M4,5 L2,7 L4,9 M10,5 L12,7 L10,9 M8,4 L6,10" />
+                            <TextBlock Text="{Binding FileName}" Classes="luaTabName" />
+                            <Ellipse IsVisible="{Binding IsDirty}" Classes="luaDirtyDot" />
+                          </StackPanel>
+                        </Button>
+                        <Button Command="{Binding $parent[ItemsControl].((vm:LuaEditorViewModel)DataContext).CloseTabCommand}"
+                                CommandParameter="{Binding RelativePath}"
+                                Classes="luaTabClose"
+                                ToolTip.Tip="{l:T Lua.Tab.CloseTip}">
+                          <Path Classes="luaIcon" Data="M4,4 L10,10 M10,4 L4,10" />
+                        </Button>
+                      </StackPanel>
+                      <Border IsVisible="{Binding IsActive}" Classes="luaActiveUnderline" />
+                    </StackPanel>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </ScrollViewer>
+        </DockPanel>
+      </Border>
+      <!-- Bağlam satırı: bağlı obje + eylemler. -->
+      <Border DockPanel.Dock="Top" Classes="luaContextRow">
+        <Grid ColumnDefinitions="*,Auto">
+          <StackPanel Orientation="Vertical" Spacing="2">
+            <TextBlock Text="{l:T Lua.BoundObject}" Classes="caption" />
+            <!-- Prototip .script-context select: kutusuz, düz metin + ok. -->
+            <ComboBox x:Name="PART_BoundCombo"
+                      ItemsSource="{Binding BoundObjects}"
+                      SelectedItem="{Binding SelectedBoundObject, Mode=TwoWay}"
+                      PlaceholderText="{l:T Lua.BoundObject.None}"
+                      Background="Transparent" BorderThickness="0" Padding="0,2"
+                      FontSize="{DynamicResource FontSizeBody}">
+              <ComboBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:FrameObjectViewModel">
+                  <TextBlock Text="{Binding Name}" />
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
+          </StackPanel>
+          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
+            <Button x:Name="PART_NewButton"
+                    Command="{Binding CreateNewCommand}"
+                    Classes="icon"
+                    ToolTip.Tip="{l:T Lua.New.Tip}">
+              <Path Classes="luaIcon" Data="M7,3 L7,11 M3,7 L11,7" />
+            </Button>
+            <Button x:Name="PART_FindButton"
+                    Command="{Binding OpenSearchCommand}"
+                    Classes="icon"
+                    ToolTip.Tip="{l:T Lua.Find.Tip}">
+              <Path Classes="luaIcon" Data="M6,6 m-3,0 a3,3 0 1,0 6,0 a3,3 0 1,0 -6,0 M8.5,8.5 L12,12" />
+            </Button>
+            <Button x:Name="PART_SaveButton"
+                    Command="{Binding SaveActiveCommand}"
+                    Classes="secondary"
+                    Content="{l:T Lua.Save}" />
+          </StackPanel>
+        </Grid>
+      </Border>
+      <!-- Kapatma onayı: kirli sekme için satır içi doğrulama. -->
+      <Border DockPanel.Dock="Top"
+              IsVisible="{Binding IsCloseConfirmVisible}"
+              Classes="luaConfirmRow">
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <TextBlock Text="{l:T Lua.Close.Confirm}" Classes="luaConfirmText" />
+          <Button Content="{l:T Lua.Save}" Command="{Binding ConfirmCloseSaveCommand}" Classes="secondary" />
+          <Button Content="{l:T Lua.Close.Discard}" Command="{Binding ConfirmCloseDiscardCommand}" Classes="ghost" />
+          <Button Content="{l:T Lua.Close.Cancel}" Command="{Binding ConfirmCloseCancelCommand}" Classes="ghost" />
+        </StackPanel>
+      </Border>
+      <!-- Dış değişiklik şeridi: yeniden yükle / tut. -->
+      <Border DockPanel.Dock="Top"
+              IsVisible="{Binding IsExternalBannerVisible}"
+              Classes="luaBannerRow">
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <TextBlock Text="{l:T Lua.ExternalChange}" Classes="luaBannerText" />
+          <Button Content="{l:T Lua.External.Reload}" Command="{Binding ReloadExternalCommand}" Classes="secondary" />
+          <Button Content="{l:T Lua.External.Keep}" Command="{Binding DismissExternalCommand}" Classes="ghost" />
+        </StackPanel>
+      </Border>
+      <!-- Durum çubuğu: sol kayıt durumu, sağ imleç + dil etiketi. -->
+      <Border DockPanel.Dock="Bottom" Classes="luaStatusBar">
+        <Grid ColumnDefinitions="*,Auto">
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <TextBlock x:Name="PART_StatusSaved"
+                       Text="{l:T Lua.Status.Saved}"
+                       IsVisible="{Binding !IsActiveDirty}"
+                       Classes="luaStatus" />
+            <TextBlock x:Name="PART_StatusEdited"
+                       Text="{l:T Lua.Status.Edited}"
+                       IsVisible="{Binding IsActiveDirty}"
+                       Classes="luaStatusEdited" />
+          </StackPanel>
+          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+            <TextBlock x:Name="PART_Caret" Text="{Binding StatusCaret}" Classes="luaStatus" />
+            <TextBlock Text="{l:T Lua.Status.Language}" Classes="luaStatus" Foreground="{DynamicResource InfoBrush}" />
+          </StackPanel>
+        </Grid>
+      </Border>
+      <!-- Boş durum: henüz betik yok. -->
+      <Border IsVisible="{Binding HasNoTabs}" Classes="luaEmptyState">
+        <StackPanel Orientation="Vertical" Spacing="10">
+          <TextBlock Text="{l:T Lua.Empty.Title}" Classes="luaEmptyTitle" />
+          <Button Command="{Binding CreateNewCommand}" Classes="secondary">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <Path Classes="luaIcon" Data="M7,3 L7,11 M3,7 L11,7" />
+              <TextBlock Text="{l:T Lua.Empty.New}" />
+            </StackPanel>
+          </Button>
+        </StackPanel>
+      </Border>
+      <!-- Kod alanı: AvaloniaEdit metin düzenleyici. -->
+      <Border Background="{DynamicResource InputBackground}" IsVisible="{Binding HasTabs}">
+        <edit:TextEditor x:Name="PART_CodeEditor"
+                         ShowLineNumbers="True"
+                         FontFamily="DejaVu Sans Mono, Consolas, Menlo, monospace"
+                         FontSize="12"
+                         Background="{DynamicResource InputBackground}"
+                         Foreground="{DynamicResource PrimaryText}"
+                         LineNumbersForeground="{DynamicResource DimText}" />
+      </Border>
+    </DockPanel>
+  </Border>
+</UserControl>

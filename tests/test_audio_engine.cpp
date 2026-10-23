@@ -5,6 +5,9 @@
 #include "rowl_test_harness.hpp"
 #include "rowl/audio/long_audio_contract.hpp"
 
+#include "rowl/core/logger.hpp"
+#include <string_view>
+
 #if defined(_WIN32)
 #include <windows.h>
 #include <psapi.h>
@@ -105,6 +108,27 @@ void test_audio_engine() {
         exit(1);
     }
     TEST_PASS("Voice Ducking BGM Gain Restoration (100% Full Gain)");
+
+    // Harf seslendirmesi her blip sonunda "ses bitti" bildirir; değişmeyen durum günlüğe
+    // yeniden yazılmamalı (önceden saniyede onlarca "Voice Finished" satırı düşüyordu).
+    {
+        static int voiceFinishedLines = 0;
+        voiceFinishedLines = 0;
+        Rowl::Core::Logger::setLogCallback([](int, const char*, const char* message, const char*) {
+            if (message && std::string_view(message).find("Voice Finished") != std::string_view::npos)
+                ++voiceFinishedLines;
+        });
+        audio.triggerVoiceDucking(true);
+        audio.triggerVoiceDucking(false);
+        audio.triggerVoiceDucking(false);
+        audio.triggerVoiceDucking(false);
+        Rowl::Core::Logger::setLogCallback(nullptr);
+        if (voiceFinishedLines != 1 || audio.isDuckingActive() || std::abs(audio.getBgmGain() - 1.0f) > 0.001f) {
+            std::cerr << "Voice finished logged " << voiceFinishedLines << " times (expected 1)" << std::endl;
+            exit(1);
+        }
+    }
+    TEST_PASS("Voice Ducking Logs Only On State Change");
 
     // std::clamp does not itself sanitize NaN. The public audio boundary must
     // preserve the last valid gain instead of forwarding it to SDL.

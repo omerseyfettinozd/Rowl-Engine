@@ -14,19 +14,37 @@ public sealed class PlayerSettingsProfile
     public float TextSpeedMultiplier { get; set; } = 1;
     public float AutoAdvanceDelay { get; set; } = 2;
 
-    public static PlayerSettingsProfile Load(string path)
+    public static PlayerSettingsProfile Load(string path) => Load(path, onError: null);
+
+    /// <summary>A corrupt file is moved to a <c>.corrupt-*</c> backup (so a later Save cannot destroy it) and reported.</summary>
+    public static PlayerSettingsProfile Load(string path, Action<string>? onError)
     {
         try { return (JsonSerializer.Deserialize<PlayerSettingsProfile>(File.ReadAllText(path)) ?? new()).Sanitized(); }
-        catch { return new(); }
+        catch (Exception ex)
+        {
+            if (ex is JsonException)
+            {
+                string? backup = SettingsFileBackup.TryMoveCorrupt(path);
+                onError?.Invoke($"Player settings '{path}' are corrupt ({ex.Message}); defaults used" + (backup is null ? "." : $", old file kept as '{backup}'."));
+            }
+            else if (ex is not (FileNotFoundException or DirectoryNotFoundException))
+                onError?.Invoke($"Player settings '{path}' could not be read ({ex.GetType().Name}: {ex.Message}); defaults used.");
+            return new();
+        }
     }
 
-    public void Save(string path)
+    /// <summary>Atomic save. Returns null on success, otherwise an error text (never throws on I/O failure).</summary>
+    public string? Save(string path)
     {
-        var directory = Path.GetDirectoryName(path);
-        if (!string.IsNullOrWhiteSpace(directory)) Directory.CreateDirectory(directory);
-        var temp = path + ".tmp";
-        File.WriteAllText(temp, JsonSerializer.Serialize(Sanitized(), new JsonSerializerOptions { WriteIndented = true }));
-        File.Move(temp, path, true);
+        try
+        {
+            ProjectFileSystem.WriteAllTextAtomically(path, JsonSerializer.Serialize(Sanitized(), new JsonSerializerOptions { WriteIndented = true }));
+            return null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return $"Player settings could not be saved to '{path}' ({ex.GetType().Name}: {ex.Message}).";
+        }
     }
 
     public PlayerSettingsProfile Sanitized()

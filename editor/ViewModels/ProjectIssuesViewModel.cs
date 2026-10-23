@@ -28,8 +28,14 @@ public sealed partial class ProjectIssuesViewModel : ViewModelBase
     [RelayCommand]
     private void Focus(ProjectValidationIssue? issue)
     {
-        // Faz 4 Dilim 5 — deep-nav lives in MainWindowViewModel (scope sync
-        // + pan + amber highlight); null/global issues are a silent no-op.
-        _main.FocusIssueNode(issue?.NodeId);
+        // Node varsa mevcut yol; yoksa varlık hedefi; ikisi de yoksa no-op.
+        if (issue?.NodeId is ulong id)
+        {
+            _main.FocusIssueNode(id);
+            return;
+        }
+        string? path = issue?.AssetPath;
+        if (!string.IsNullOrWhiteSpace(path))
+            _main.FocusIssueAsset(path!);
     }
 }

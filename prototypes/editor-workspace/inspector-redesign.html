@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rowl Engine — Denetçi Yeniden Tasarımı</title>
+<style>
+:root{
+--app:#0A0A0B; --surface:#131315; --panel:#19191C; --input:#0F0F12;
+--text:#F2EFE6; --text2:#DAD7CF; --muted:#85858B; --dim:#66666D;
+--line:#2E2E32; --accent:#F2EFE6; --hover:#26262B;
+--ok:#9DB58F; --warn:#D9B47A; --err:#E3A296; --info:#A9A3C9;
+--ok-s:#2C332C; --warn-s:#3A3124; --err-s:#3E2B26;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+background:var(--app); color:var(--text);
+font-family:system-ui,"Inter",sans-serif;
+min-height:100vh; display:flex; justify-content:center;
+-webkit-font-smoothing:antialiased;
+}
+button,input,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:8px}
+.page-wrap{width:100%;max-width:1180px;padding:28px 24px 48px;display:flex;flex-direction:column;align-items:center}
+.page-head{display:flex;flex-direction:column;align-items:center;gap:16px;width:100%}
+.brand{font-size:13px;color:var(--muted);letter-spacing:.01em}
+.brand strong{color:var(--text2);font-weight:600}
+.brand span{color:var(--dim)}
+.tabs{background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:4px;display:flex;gap:4px}
+.tab{border:1px solid transparent;background:transparent;color:var(--muted);border-radius:999px;padding:8px 18px;font-size:13px;transition:background-color 150ms,color 150ms,border-color 150ms}
+.tab:hover{background:var(--hover);color:var(--text2)}
+.tab.is-active{background:var(--hover);color:var(--text);border-color:var(--accent)}
+.layout{display:flex;gap:36px;align-items:flex-start;justify-content:center;margin-top:24px;width:100%}
+/* Inspector */
+.inspector{width:380px;flex-shrink:0;background:var(--surface);border:1px solid var(--line);border-radius:18px;overflow:hidden;height:calc(100vh - 170px);min-height:620px;max-height:920px;display:flex}
+.panel-scroll{overflow-y:auto;width:100%;padding:22px 20px 32px;scrollbar-width:thin;scrollbar-color:var(--line) transparent}
+.panel-scroll::-webkit-scrollbar{width:8px}
+.panel-scroll::-webkit-scrollbar-thumb{background:var(--line);border-radius:8px}
+.view{display:none}
+.view.is-visible{display:block;animation:fadeIn 150ms ease}
+@keyframes fadeIn{from{opacity:.4}to{opacity:1}}
+/* type levels */
+.scene-title{font-size:20px;font-weight:600;line-height:1.3;margin:0;padding:6px 8px;margin-left:-8px;border:1px solid transparent;border-radius:8px;transition:border-color 150ms,background-color 150ms}
+.scene-title:hover{border-color:var(--line)}
+.scene-title:focus{outline:none;border-color:var(--line);background:var(--input)}
+.q{font-size:13px;font-weight:500;color:var(--text2);margin:0 0 12px}
+.content{font-size:13px;line-height:1.55;color:var(--text2)}
+/* head */
+.head-row{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.meta-row{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.chip{display:inline-flex;align-items:center;gap:7px;background:var(--hover);border:1px solid transparent;border-radius:999px;padding:5px 11px;font-size:12.5px;color:var(--text2);transition:background-color 150ms,border-color 150ms,color 150ms}
+button.chip:hover{background:#2e2e35;color:var(--text)}
+.chip.is-selected{border-color:var(--accent);color:var(--text);background:transparent}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--warn);display:inline-block;flex-shrink:0}
+.menu-wrap{position:relative;flex-shrink:0}
+.more-btn{background:transparent;border:1px solid transparent;border-radius:8px;color:var(--text2);font-size:20px;line-height:1;padding:4px 10px;letter-spacing:1px;transition:background-color 150ms}
+.more-btn:hover{background:var(--hover);color:var(--text)}
+.menu{position:absolute;right:0;top:34px;background:var(--panel);border:1px solid var(--line);border-radius:12px;list-style:none;margin:0;padding:6px;min-width:188px;z-index:20;box-shadow:0 12px 32px rgba(0,0,0,.5)}
+.menu button{display:flex;width:100%;text-align:left;background:transparent;border:0;border-radius:8px;padding:9px 10px;font-size:13px;color:var(--text2)}
+.menu button:hover{background:var(--hover);color:var(--text)}
+.menu button.danger{color:var(--err)}
+.block{padding:0}
+.block + .block{border-top:1px solid var(--line);margin-top:28px;padding-top:24px}
+.speaker{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.avatar{width:44px;height:44px;border-radius:50%;flex-shrink:0;background:radial-gradient(circle at 30% 30%, #E8E2D3 0%, #A9A3C9 28%, #66666D 62%, #19191C 100%);position:relative}
+.avatar::after{content:"";position:absolute;inset:0;border-radius:50%;background:linear-gradient(180deg,transparent 55%,rgba(0,0,0,.45) 100%)}
+.speaker-name{font-size:15px;font-weight:600}
+.speaker-sub{font-size:12.5px;color:var(--muted);margin-top:2px}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.label-mini{font-size:12.5px;color:var(--muted);margin:14px 0 8px}
+.seg{display:flex;background:var(--input);border-radius:10px;padding:3px;gap:3px}
+.seg button{flex:1;border:1px solid transparent;background:transparent;border-radius:8px;padding:7px 4px;font-size:13px;color:var(--muted);transition:all 150ms}
+.seg button:hover{color:var(--text);background:var(--hover)}
+.seg button.is-selected{background:var(--hover);color:var(--text);border-color:var(--accent)}
+.det{margin-top:12px}
+.det summary{list-style:none;display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);cursor:pointer;padding:6px 0;user-select:none}
+.det summary::-webkit-details-marker{display:none}
+.det summary:hover{color:var(--text)}
+.det summary svg{transition:transform 150ms}
+.det[open] summary svg{transform:rotate(180deg)}
+.det-body{padding:10px 0 2px;display:flex;flex-direction:column;gap:14px}
+.rowline{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:13px;color:var(--text2)}
+.switch{position:relative;width:36px;height:20px;background:var(--hover);border-radius:999px;border:1px solid var(--line);transition:background-color 150ms;flex-shrink:0}
+.switch::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:var(--muted);transition:all 150ms}
+.switch[aria-checked="true"]{background:var(--ok-s);border-color:var(--ok)}
+.switch[aria-checked="true"]::after{left:18px;background:var(--ok)}
+.palette{display:flex;gap:8px}
+.pal{width:26px;height:26px;border-radius:50%;border:1px solid transparent;padding:0;transition:border-color 150ms,transform 150ms}
+.pal:hover{transform:scale(1.08)}
+.pal.is-selected{border-color:var(--accent);box-shadow:0 0 0 2px var(--app),0 0 0 3px var(--accent)}
+.bigtext{width:100%;background:var(--input);border:1px solid var(--line);border-radius:12px;padding:14px;font-size:16px;line-height:1.6;color:var(--text);resize:vertical;min-height:86px;transition:border-color 150ms}
+.bigtext:focus{outline:none;border-color:var(--accent)}
+.btn{display:inline-flex;align-items:center;gap:8px;background:transparent;border:1px solid transparent;border-radius:10px;padding:8px 12px;font-size:13px;color:var(--text2);transition:background-color 150ms,color 150ms,border-color 150ms}
+.btn:hover{background:var(--hover);color:var(--text)}
+.btn.primary{background:var(--accent);color:#0A0A0B;font-weight:600;border-color:var(--accent)}
+.btn.primary:hover{background:#fff}
+.btn svg,.link svg{flex-shrink:0}
+.inline-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:12px}
+.thumb{position:relative;aspect-ratio:16/9;border-radius:12px;overflow:hidden;background:linear-gradient(180deg,#2b2b42 0%,#191926 45%,#0c0c14 70%,#3a3124 100%);border:0}
+.thumb::before{content:"";position:absolute;left:18%;top:22%;width:44px;height:60px;border-radius:8px;background:linear-gradient(180deg,#3f3f5a,#1a1a26);box-shadow:30px 10px 0 -4px rgba(0,0,0,.35)}
+.thumb::after{content:"";position:absolute;right:12%;bottom:18%;width:70px;height:8px;border-radius:4px;background:rgba(242,239,230,.18);box-shadow:0 -14px 0 rgba(242,239,230,.12)}
+.thumb-tag{position:absolute;left:10px;bottom:10px;background:rgba(10,10,11,.72);backdrop-filter:blur(6px);font-size:12px;color:var(--text2);padding:4px 9px;border-radius:999px}
+.hint{font-size:12.5px;color:var(--dim);line-height:1.5;margin:12px 0 0}
+.choices{display:flex;flex-direction:column}
+.choice{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;background:transparent;border:0;border-bottom:1px solid var(--line);padding:13px 6px;text-align:left;border-radius:8px;transition:background-color 150ms}
+.choice:hover{background:var(--hover)}
+.choice-text{font-size:13.5px}
+.choice-target{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted);flex-shrink:0}
+.choice-target strong{color:var(--text2);font-weight:500}
+.choice.is-error{align-items:flex-start}
+.error-line{margin:6px 0 0;font-size:12.5px;color:var(--err);display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.edot{width:6px;height:6px;border-radius:50%;background:var(--err);display:inline-block;flex-shrink:0}
+.link{background:none;border:0;padding:0;color:var(--text);text-decoration:underline;text-underline-offset:3px;font-size:12.5px}
+.link:hover{color:var(--accent)}
+.picklist{display:flex;gap:8px;margin-top:8px}
+.sound-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line);font-size:13px}
+.sound-row:last-of-type{border-bottom:0}
+.sound-ic{width:32px;height:32px;border-radius:9px;background:var(--input);display:flex;align-items:center;justify-content:center;color:var(--muted);flex-shrink:0}
+.empty{font-size:13px;color:var(--muted);margin:10px 0}
+.empty .link{color:var(--text)}
+.vol-wrap{margin-top:12px}
+.vol-labels{display:flex;justify-content:space-between;font-size:12px;color:var(--dim);margin-top:6px}
+input[type="range"]{width:100%;accent-color:var(--accent);background:transparent}
+.trans-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.trans{background:var(--input);border:1px solid transparent;border-radius:12px;padding:8px;transition:border-color 150ms,background-color 150ms}
+.trans:hover{background:var(--hover)}
+.trans.is-selected{border-color:var(--accent);background:transparent}
+.trans span{display:block;text-align:center;font-size:12px;color:var(--text2);margin-top:7px}
+.trans.is-selected span{color:var(--text)}
+.prev{height:38px;border-radius:7px;background:#222227;position:relative;overflow:hidden}
+.prev::after{content:"";position:absolute;inset:8px 12px;border-radius:4px;background:linear-gradient(90deg,var(--text2),var(--muted))}
+.prev.fade::after{animation:fadeP 2.4s ease-in-out infinite}
+.prev.curtain::after{transform-origin:left;animation:wipeP 2.4s ease-in-out infinite}
+.prev.soft::after{filter:blur(1px);animation:softP 2.4s ease-in-out infinite}
+@keyframes fadeP{0%,100%{opacity:1}50%{opacity:.15}}
+@keyframes wipeP{0%,100%{transform:scaleX(1)}50%{transform:scaleX(.2)}}
+@keyframes softP{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(.92)}}
+.dur-row{display:flex;gap:8px;margin-top:10px}
+/* empty / multi */
+.story-title{font-size:20px;font-weight:600;margin:0}
+.chap{margin-top:18px;display:flex;flex-direction:column}
+.chap-row{display:flex;justify-content:space-between;align-items:center;padding:12px 6px;border-bottom:1px solid var(--line);font-size:13px;color:var(--text2);background:transparent;border-top:0;border-left:0;border-right:0;width:100%;text-align:left;border-radius:8px}
+.chap-row:hover{background:var(--hover)}
+.chap-row small{color:var(--muted);font-size:12.5px}
+.stack{display:flex;flex-direction:column;gap:10px;margin-top:18px}
+.footline{margin-top:22px;font-size:12.5px;color:var(--dim);text-align:center}
+.multi-names{font-size:13px;color:var(--muted);margin:8px 0 0;line-height:1.6}
+.multi-names strong{color:var(--text2);font-weight:500}
+.field{padding:12px 0;border-bottom:1px solid var(--line)}
+.field-top{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.field-name{font-size:13px;color:var(--text2);font-weight:500}
+.diff{font-size:12.5px;color:var(--dim);font-style:italic}
+.apply-note{font-size:12px;color:var(--muted);margin-top:8px;display:none}
+.apply-note.show{display:block}
+.danger-row{display:flex;gap:8px;margin-top:20px}
+.btn.danger{color:var(--err)}
+.btn.danger:hover{background:var(--err-s);color:var(--err)}
+/* explainer */
+.explainer{width:290px;flex-shrink:0;background:transparent;border-left:1px solid var(--line);padding-left:24px}
+.explainer h2{font-size:13px;font-weight:500;color:var(--text2);margin:0 0 14px}
+.explainer ol{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:14px}
+.explainer li{font-size:12.5px;line-height:1.6;color:var(--muted);padding-left:18px;position:relative}
+.explainer li::before{content:"";position:absolute;left:0;top:8px;width:6px;height:6px;border-radius:50%;background:var(--dim)}
+.explainer li strong{color:var(--text2);font-weight:600}
+@media (max-width:1100px){
+.layout{flex-direction:column;align-items:center}
+.inspector{width:100%;max-width:380px}
+.explainer{width:100%;max-width:380px;border-left:0;border-top:1px solid var(--line);padding-left:0;padding-top:20px}
+}
+@media (prefers-reduced-motion:reduce){
+*{animation:none!important;transition:none!important}
+.view.is-visible{animation:none}
+}
+</style>
+</head>
+<body>
+<div class="page-wrap">
+<header class="page-head">
+<div class="brand"><strong>Rowl Engine</strong> · Denetçi yeniden tasarımı <span>— onay taslağı</span></div>
+<nav class="tabs" role="tablist" aria-label="Denetçi durumları">
+<button class="tab is-active" role="tab" aria-selected="true" data-tab="dialog">Diyalog sahnesi</button>
+<button class="tab" role="tab" aria-selected="false" data-tab="empty">Seçim yok</button>
+<button class="tab" role="tab" aria-selected="false" data-tab="multi">Çoklu seçim</button>
+</nav>
+</header>
+
+<div class="layout">
+<section class="inspector" aria-label="Denetçi paneli">
+<div class="panel-scroll">
+
+<!-- DIALOG -->
+<div id="view-dialog" class="view is-visible">
+<div class="head-row">
+<div>
+<h1 class="scene-title" contenteditable="true" spellcheck="false" aria-label="Sahne adı">Uyanış</h1>
+<div class="meta-row">
+<span class="chip">Bölüm 1 · Sabah</span>
+<span class="chip"><i class="dot"></i>Gece tonu</span>
+</div>
+</div>
+<div class="menu-wrap">
+<button class="more-btn" id="moreBtn" aria-haspopup="true" aria-expanded="false" aria-label="Diğer eylemler">⋯</button>
+<ul class="menu" id="moreMenu" hidden>
+<li><button type="button">Kütüphaneye kaydet</button></li>
+<li><button type="button">Gruba ekle</button></li>
+<li><button type="button">Çoğalt</button></li>
+<li><button type="button" class="danger">Sil</button></li>
+</ul>
+</div>
+</div>
+
+<div class="block" style="margin-top:28px;border-top:1px solid var(--line);padding-top:24px">
+<h2 class="q">Kim konuşuyor?</h2>
+<div class="speaker">
+<div class="avatar" aria-hidden="true"></div>
+<div><div class="speaker-name">Lain</div><div class="speaker-sub">Ana karakter · sahnede</div></div>
+</div>
+<div class="label-mini">Duygusu</div>
+<div class="chips js-single" role="group" aria-label="Duygu">
+<button class="chip is-selected" aria-pressed="true">Sakin</button>
+<button class="chip" aria-pressed="false">Mutlu</button>
+<button class="chip" aria-pressed="false">Endişeli</button>
+<button class="chip" aria-pressed="false">Kızgın</button>
+</div>
+<div class="label-mini">Konumu</div>
+<div class="seg js-single" role="group" aria-label="Konum">
+<button class="is-selected" aria-pressed="true">Sol</button>
+<button aria-pressed="false">Orta</button>
+<button aria-pressed="false">Sağ</button>
+</div>
+<details class="det">
+<summary><span>Ayrıntılar</span><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 5l4 4 4-4"/></svg></summary>
+<div class="det-body">
+<div class="rowline"><span>Anlatıcı modu</span><button class="switch" role="switch" aria-checked="false" aria-label="Anlatıcı modu"></button></div>
+<div class="rowline"><span>Ad rengi</span>
+<span class="palette js-single">
+<button class="pal is-selected" style="background:#F2EFE6" aria-label="Kemik"></button>
+<button class="pal" style="background:#9DB58F" aria-label="Adaçayı"></button>
+<button class="pal" style="background:#D9B47A" aria-label="Kum"></button>
+<button class="pal" style="background:#E3A296" aria-label="Gül"></button>
+<button class="pal" style="background:#A9A3C9" aria-label="Leylak"></button>
+</span></div>
+<div class="rowline"><span>Ses tonu</span>
+<span class="chips js-single"><button class="chip is-selected" aria-pressed="true">Yumuşak</button><button class="chip" aria-pressed="false">Ciddi</button></span></div>
+</div>
+</details>
+</div>
+
+<div class="block">
+<h2 class="q">Ne diyor?</h2>
+<textarea class="bigtext" rows="2" aria-label="Replik metni">Çocuklardan nefret ederim ama süreci seviyorum.</textarea>
+<div class="inline-row">
+<button class="btn" type="button"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="6" y="2" width="4" height="7" rx="2"/><path d="M3.5 7.5a4.5 4.5 0 0 0 9 0M8 12v2"/></svg>Seslendirme ekle</button>
+</div>
+<div class="label-mini">Yazı belirişi</div>
+<div class="seg js-single" role="group" aria-label="Yazı belirişi">
+<button aria-pressed="false">Yavaş</button>
+<button class="is-selected" aria-pressed="true">Normal</button>
+<button aria-pressed="false">Hızlı</button>
+<button aria-pressed="false">Anında</button>
+</div>
+<details class="det">
+<summary><span>Ayrıntılar</span><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 5l4 4 4-4"/></svg></summary>
+<div class="det-body">
+<div class="rowline"><span>Otomatik devam</span><button class="switch" role="switch" aria-checked="false" aria-label="Otomatik devam"></button></div>
+<div class="rowline"><span>Bekleme süresi</span>
+<span class="chips js-single"><button class="chip" aria-pressed="false">1 sn</button><button class="chip is-selected" aria-pressed="true">3 sn</button><button class="chip" aria-pressed="false">5 sn</button></span></div>
+</div>
+</details>
+</div>
+
+<div class="block">
+<h2 class="q">Sahne nasıl görünüyor?</h2>
+<div class="thumb"><span class="thumb-tag">Oda — gece</span></div>
+<div class="inline-row">
+<button class="btn" type="button"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="12" height="10" rx="2"/><circle cx="6" cy="7" r="1.2"/><path d="M2.5 12l3.5-3 2.5 2 2-1.5 2.5 2.5"/></svg>Değiştir</button>
+<span class="content" style="font-size:12.5px;color:var(--dim)">16:9 · 1920×1080</span>
+</div>
+<div class="label-mini">Boyut</div>
+<div class="seg js-single" role="group" aria-label="Boyut"><button class="is-selected" aria-pressed="true">Sığdır</button><button aria-pressed="false">Doldur</button></div>
+<div class="label-mini">Işık</div>
+<div class="chips js-single" role="group" aria-label="Işık"><button class="chip" aria-pressed="false">Gündüz</button><button class="chip" aria-pressed="false">Akşam</button><button class="chip is-selected" aria-pressed="true">Gece</button></div>
+<details class="det">
+<summary><span>Ayrıntılar</span><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 5l4 4 4-4"/></svg></summary>
+<div class="det-body">
+<div class="rowline"><span>Katmanlar</span><span class="content">3 katman</span></div>
+<div class="rowline"><span>Karartma</span><input type="range" value="30" style="width:130px" aria-label="Karartma"></div>
+<div class="rowline"><span>Bulanıklık</span><input type="range" value="10" style="width:130px" aria-label="Bulanıklık"></div>
+</div>
+</details>
+<p class="hint">İnce ayar için görseli Sahne Düzenle'de sürükleyin.</p>
+</div>
+
+<div class="block">
+<h2 class="q">Oyuncunun seçimleri ne?</h2>
+<div class="choices">
+<button class="choice" type="button"><span class="choice-text">Kapıyı aç</span><span class="choice-target"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 7h9M8 3.5L11.5 7 8 10.5"/></svg><strong>Koridor</strong></span></button>
+<button class="choice" type="button"><span class="choice-text">Uyumaya devam et</span><span class="choice-target"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 7h9M8 3.5L11.5 7 8 10.5"/></svg><strong>Rüya</strong></span></button>
+<div class="choice is-error"><div style="flex:1"><span class="choice-text">Pencereye bak</span>
+<p class="error-line"><i class="edot"></i>Bu seçim artık var olmayan bir sahneye gidiyor — <button class="link" id="pickSceneBtn">Sahne seç</button></p>
+<div class="picklist" id="pickList" hidden>
+<button class="chip">Koridor</button><button class="chip">Rüya</button><button class="chip">Uyanış</button>
+</div>
+</div></div>
+</div>
+<div class="inline-row"><button class="btn" type="button"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 3v10M3 8h10"/></svg>Seçim ekle</button></div>
+</div>
+
+<div class="block">
+<h2 class="q">Ses nasıl?</h2>
+<div class="sound-row" style="flex-wrap:wrap;row-gap:6px">
+<span class="sound-ic"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 6v4h2.5L9 13V3L5.5 6H3z"/><path d="M11 6a3 3 0 0 1 0 4"/></svg></span>
+<span style="flex:1 1 calc(100% - 52px);min-width:0">Müzik: <strong style="font-weight:500">Sessiz Oda</strong></span>
+<button class="btn" id="listenBtn" type="button"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 2.5l7 4.5-7 4.5v-9z"/></svg><span>Dinle</span></button>
+<button class="btn" type="button"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 4h8M3 10h8M7 2v3M7 9v3"/></svg>Değiştir</button>
+</div>
+<p class="empty">Henüz ses efekti yok. <button class="link">Ekle</button></p>
+<div class="vol-wrap">
+<div class="rowline"><span style="display:flex;align-items:center;gap:8px"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2.5 6v4h2L8 13V3L4.5 6h-2z"/><path d="M10.5 6c1 1 1 3 0 4"/></svg>Ses düzeyi</span><span class="content" id="volVal" style="font-size:12.5px">%60</span></div>
+<input type="range" id="vol" min="0" max="100" value="60" aria-label="Ses düzeyi">
+<div class="vol-labels"><span>Soluk</span><span>Tam</span></div>
+</div>
+</div>
+
+<div class="block">
+<h2 class="q">Geçiş ve kamera nasıl?</h2>
+<div class="trans-grid js-single" role="group" aria-label="Geçiş">
+<button class="trans is-selected" aria-pressed="true"><span class="prev fade"></span><span>Kararma</span></button>
+<button class="trans" aria-pressed="false"><span class="prev curtain"></span><span>Perde</span></button>
+<button class="trans" aria-pressed="false"><span class="prev soft"></span><span>Yumuşak geçiş</span></button>
+</div>
+<div class="dur-row js-single" role="group" aria-label="Süre">
+<button class="chip" aria-pressed="false">0,5 sn</button>
+<button class="chip is-selected" aria-pressed="true">1 sn</button>
+<button class="chip" aria-pressed="false">2 sn</button>
+</div>
+<div class="label-mini">Kamera</div>
+<div class="seg js-single" role="group" aria-label="Kamera"><button class="is-selected" aria-pressed="true">Sabit</button><button aria-pressed="false">Yaklaş</button><button aria-pressed="false">Uzaklaş</button></div>
+<p class="empty">Sarsıntı yok · <button class="link">Ekle</button></p>
+</div>
+
+</div>
+
+<!-- EMPTY -->
+<div id="view-empty" class="view">
+<h1 class="story-title">Kayıp Rüyalar</h1>
+<p class="content" style="margin:8px 0 0;color:var(--muted)">3 bölüm · 25 sahne · son değişiklik 2 saat önce</p>
+<div class="chap">
+<button class="chap-row">Bölüm 1 · Sabah <small>8 sahne</small></button>
+<button class="chap-row">Bölüm 2 · Koridor <small>5 sahne</small></button>
+<button class="chap-row">Bölüm 3 · Rüya <small>12 sahne</small></button>
+</div>
+<div class="stack">
+<button class="btn primary" type="button" style="justify-content:center"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 2.5l7 4.5-7 4.5v-9z"/></svg>Son çalışılan sahneye devam et: Uyanış</button>
+<button class="btn" type="button" style="justify-content:center"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 3v10M3 8h10"/></svg>Yeni sahne</button>
+</div>
+<p class="footline">Düzenlemek için tuvalde bir sahne seçin.</p>
+</div>
+
+<!-- MULTI -->
+<div id="view-multi" class="view">
+<h1 class="story-title">6 sahne seçili</h1>
+<p class="multi-names"><strong>Uyanış</strong>, <strong>Koridor</strong>, <strong>Rüya</strong> ve 3 tane daha</p>
+<div style="margin-top:16px">
+<div class="field">
+<div class="field-top"><span class="field-name">Bölüm</span><span class="chip">Bölüm 1 · Sabah</span></div>
+<p class="apply-note">6 sahneye uygulanır</p>
+</div>
+<div class="field">
+<div class="field-top"><span class="field-name">Etiket</span><span class="diff">Her biri farklı</span></div>
+<div class="chips js-multi" style="margin-top:10px"><button class="chip">Gece tonu</button><button class="chip">Gerilim</button><button class="chip">Sakin</button></div>
+<p class="apply-note">6 sahneye uygulanır</p>
+</div>
+<div class="field">
+<div class="field-top"><span class="field-name">Geçiş</span><span class="diff">Her biri farklı</span></div>
+<div class="chips js-multi" style="margin-top:10px"><button class="chip">Kararma</button><button class="chip">Perde</button><button class="chip">Yumuşak geçiş</button></div>
+<p class="apply-note">6 sahneye uygulanır</p>
+</div>
+<div class="field" style="border-bottom:0">
+<div class="field-top"><span class="field-name">Müzik</span><span class="content" style="font-size:12.5px">Sessiz Oda</span></div>
+<p class="apply-note">6 sahneye uygulanır</p>
+</div>
+</div>
+<div class="danger-row">
+<button class="btn" type="button"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M7 1.5v11M1.5 7h11M7 1.5 5.5 3M7 1.5 8.5 3M7 12.5 5.5 11M7 12.5 8.5 11M1.5 7 3 5.5M1.5 7 3 8.5M12.5 7 11 5.5M12.5 7 11 8.5"/></svg>Birlikte taşı</button>
+<button class="btn" type="button"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="4" width="8" height="8" rx="2"/><path d="M10 4V3a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg>Çoğalt</button>
+<button class="btn danger" type="button"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 4h10M5 2h4M4 4l.7 8h4.6L10 4"/></svg>Sil</button>
+</div>
+</div>
+
+</div>
+</section>
+
+<aside class="explainer" aria-label="Tasarım notları">
+<h2>Nerede, hangi kural?</h2>
+<ol>
+<li><strong>Üç yazı düzeyi:</strong> 20px sahne adı, 13px soru başlıkları, 13–16px içerik. Teknik küçük harf etiketi yok.</li>
+<li><strong>Kart yok, nefes var:</strong> bölümler 28px boşluk + ince ayraçla ayrılıyor; iç içe kutu kullanılmadı.</li>
+<li><strong>Sessiz kenarlık:</strong> çizgi yalnız yazılabilir alanda ve seçili çip / düğmede görünüyor.</li>
+<li><strong>İkon + sözcük:</strong> Dinle, Değiştir, Ekle hep yazılı; tek istisna ⋯ menüsü.</li>
+<li><strong>Yerinde dil:</strong> boş durum tek cümle + eylem; hata kırmızı kutu değil, nokta + insan cümlesi + Sahne seç.</li>
+<li><strong>Sakin hareket:</strong> 150ms geçiş, görünür klavye odağı, azaltılmış harekete saygı.</li>
+</ol>
+</aside>
+</div>
+</div>
+
+<script>
+const tabs=document.querySelectorAll('.tab');
+const views={dialog:document.getElementById('view-dialog'),empty:document.getElementById('view-empty'),multi:document.getElementById('view-multi')};
+tabs.forEach(t=>t.addEventListener('click',()=>{
+tabs.forEach(x=>{x.classList.remove('is-active');x.setAttribute('aria-selected','false')});
+t.classList.add('is-active');t.setAttribute('aria-selected','true');
+Object.values(views).forEach(v=>v.classList.remove('is-visible'));
+views[t.dataset.tab].classList.add('is-visible');
+document.querySelector('.panel-scroll').scrollTop=0;
+}));
+document.querySelectorAll('.js-single').forEach(g=>{
+const btns=g.querySelectorAll('button');
+btns.forEach(b=>b.addEventListener('click',()=>{
+btns.forEach(x=>{x.classList.remove('is-selected');x.setAttribute('aria-pressed','false')});
+b.classList.add('is-selected');b.setAttribute('aria-pressed','true');
+}));
+});
+document.querySelectorAll('.switch').forEach(s=>s.addEventListener('click',()=>{
+const on=s.getAttribute('aria-checked')==='true';
+s.setAttribute('aria-checked',String(!on));
+}));
+const moreBtn=document.getElementById('moreBtn'),moreMenu=document.getElementById('moreMenu');
+moreBtn.addEventListener('click',e=>{e.stopPropagation();const open=moreMenu.hidden;moreMenu.hidden=!open;moreBtn.setAttribute('aria-expanded',String(open));});
+document.addEventListener('click',()=>{moreMenu.hidden=true;moreBtn.setAttribute('aria-expanded','false')});
+const listenBtn=document.getElementById('listenBtn');
+listenBtn.addEventListener('click',()=>{
+const label=listenBtn.querySelector('span');
+label.textContent=label.textContent==='Dinle'?'Durdur':'Dinle';
+listenBtn.classList.toggle('is-selected');
+});
+const vol=document.getElementById('vol'),volVal=document.getElementById('volVal');
+if(vol)vol.addEventListener('input',()=>volVal.textContent='%'+vol.value);
+const pickBtn=document.getElementById('pickSceneBtn'),pickList=document.getElementById('pickList');
+if(pickBtn)pickBtn.addEventListener('click',()=>{pickList.hidden=!pickList.hidden;});
+if(pickList)pickList.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{
+pickList.querySelectorAll('button').forEach(x=>x.classList.remove('is-selected'));
+b.classList.add('is-selected');
+pickBtn.textContent=b.textContent;
+}));
+document.querySelectorAll('.js-multi').forEach(g=>{
+const note=g.parentElement.querySelector('.apply-note');
+g.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{
+const sel=b.classList.contains('is-selected');
+g.querySelectorAll('button').forEach(x=>x.classList.remove('is-selected'));
+if(!sel){b.classList.add('is-selected');if(note)note.classList.add('show');}
+else{if(note)note.classList.remove('show');}
+}));
+});
+</script>
+</body>
+</html>

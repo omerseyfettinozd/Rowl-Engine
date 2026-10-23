@@ -8,7 +8,9 @@ namespace RowlEngine.Editor.ViewModels.Components
     /// </summary>
     public partial class VariableComponentViewModel : NodeComponentViewModel
     {
-        public override string DisplayName => "Variable Modifier";
+        public override string DisplayNameKey => "Component.Variable.DisplayName";
+        protected override string DisplayNameTrFallback => "Değişken Değiştirici";
+        protected override string DisplayNameEnFallback => "Variable Modifier";
         public override string Icon => "Değişken";
         public override string TypeKey => "variable";
 

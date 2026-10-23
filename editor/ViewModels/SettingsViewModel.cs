@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using Avalonia;
 using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using RowlEngine.Editor.Services;
 using RowlEngine.Editor.Services.Strings;
 
 namespace RowlEngine.Editor.ViewModels
@@ -54,6 +56,55 @@ namespace RowlEngine.Editor.ViewModels
             OnPropertyChanged(nameof(SelectedEditorLanguageOption));
         }
 
+        // Faz 5 D6: azaltılmış hareket tercihi — makine profiline kalıcı, WorkspaceHost'a canlı uygulanır.
+        [ObservableProperty]
+        private bool _reduceMotion;
+
+        partial void OnReduceMotionChanged(bool value)
+        {
+            Views.Workspace.WorkspaceHost.ProfilePrefersReducedMotion = value;
+        }
+
+        // Faz 8 D1: arayüz ölçeği — canlı uygulanır.
+        [ObservableProperty]
+        private double _uiScale = 1.0;
+
+        partial void OnUiScaleChanged(double value)
+        {
+            EditorUiScale.Apply(value);
+            OnPropertyChanged(nameof(SelectedUiScaleOption));
+        }
+
+        public sealed record UiScaleOption(double Value, string Label);
+
+        public List<UiScaleOption> UiScaleOptions { get; } = BuildUiScaleOptions();
+
+        public UiScaleOption? SelectedUiScaleOption
+        {
+            get => UiScaleOptions.Find(o => o.Value == UiScale);
+            set { if (value is not null) UiScale = value.Value; }
+        }
+
+        private static List<UiScaleOption> BuildUiScaleOptions()
+        {
+            var options = new List<UiScaleOption>();
+            foreach (double v in EditorSettingsProfile.AllowedUiScales)
+                options.Add(new UiScaleOption(v, string.Format(CultureInfo.CurrentCulture, EditorStrings.T("Settings.UiScale.Option"), (int)Math.Round(v * 100))));
+            return options;
+        }
+
+        // Faz 8 D1: yüksek kontrast — canlı uygulanır.
+        [ObservableProperty]
+        private bool _highContrast;
+
+        partial void OnHighContrastChanged(bool value)
+        {
+            EditorHighContrast.Apply(value, SelectedTheme);
+        }
+
+        // Kısayol kataloğu (Ayarlar kartı listeler).
+        public IReadOnlyList<EditorShortcut> Shortcuts => EditorShortcutCatalog.All;
+
         private static List<EditorLanguageOption> BuildLanguageOptions()
         {
             var options = new List<EditorLanguageOption>();
@@ -94,9 +145,14 @@ namespace RowlEngine.Editor.ViewModels
                 ["SurfaceBackgroundColor"] = Color.Parse("#131315"),
                 ["PanelBackgroundColor"] = Color.Parse("#19191C"),
                 ["InputBackgroundColor"] = Color.Parse("#0F0F12"),
-                ["CanvasBackgroundColor"] = Color.Parse("#000000"),
+                ["CanvasBackgroundColor"] = Color.Parse("#131315"),
+                ["GraphDotColorValue"] = Color.Parse("#303034"),
                 ["BorderColorValue"] = Color.Parse("#29292D"),
                 ["BorderSubtleColorValue"] = Color.Parse("#4A4A52"),
+                ["SelectionBorderColorValue"] = Color.Parse("#8A877E"),
+                ["SelectionFillColorValue"] = Color.Parse("#232326"),
+                ["ScrollBarThumbBackgroundColor"] = Color.Parse("#4A4A52"),
+                ["ScrollBarPanningThumbBackgroundColor"] = Color.Parse("#3A3A40"),
                 ["PrimaryTextColor"] = Color.Parse("#F2EFE6"),
                 ["SecondaryTextColor"] = Color.Parse("#DAD7CF"),
                 ["MutedTextColor"] = Color.Parse("#85858B"),
@@ -114,6 +170,16 @@ namespace RowlEngine.Editor.ViewModels
                 ["NodeCardBgColor"] = Color.Parse("#19191D"),
                 ["NodeHeaderBgColor"] = Color.Parse("#202023"),
                 ["WireColor"] = Color.Parse("#74736C"),
+                ["NodeKindTextColor"] = Color.Parse("#999991"),
+                ["NodeFooterTextColor"] = Color.Parse("#A5A49E"),
+                ["NodeFooterLineColor"] = Color.Parse("#2E2E32"),
+                ["CanvasControlBgColor"] = Color.Parse("#171719"),
+                ["CanvasControlTextColor"] = Color.Parse("#ADABA4"),
+                ["ToolCardIconColor"] = Color.Parse("#ACA89D"),
+                ["LuaCommentColor"] = Color.Parse("#727E78"),
+                ["LuaKeywordColor"] = Color.Parse("#BFA8DA"),
+                ["LuaStringColor"] = Color.Parse("#C5CDA9"),
+                ["LuaNumberColor"] = Color.Parse("#C9B089"),
                 ["WireDragColor"] = Color.Parse("#F2EFE6"),
                 ["SuccessColor"] = Color.Parse("#9DB58F"),
                 ["WarningColor"] = Color.Parse("#D9B47A"),
@@ -138,8 +204,13 @@ namespace RowlEngine.Editor.ViewModels
                 ["PanelBackgroundColor"] = Color.Parse("#111113"),
                 ["InputBackgroundColor"] = Color.Parse("#070709"),
                 ["CanvasBackgroundColor"] = Color.Parse("#000000"),
+                ["GraphDotColorValue"] = Color.Parse("#222226"),
                 ["BorderColorValue"] = Color.Parse("#222226"),
                 ["BorderSubtleColorValue"] = Color.Parse("#4A4A52"),
+                ["SelectionBorderColorValue"] = Color.Parse("#8A877E"),
+                ["SelectionFillColorValue"] = Color.Parse("#232326"),
+                ["ScrollBarThumbBackgroundColor"] = Color.Parse("#4A4A52"),
+                ["ScrollBarPanningThumbBackgroundColor"] = Color.Parse("#3A3A40"),
                 ["PrimaryTextColor"] = Color.Parse("#F2EFE6"),
                 ["SecondaryTextColor"] = Color.Parse("#DAD7CF"),
                 ["MutedTextColor"] = Color.Parse("#85858B"),
@@ -157,6 +228,16 @@ namespace RowlEngine.Editor.ViewModels
                 ["NodeCardBgColor"] = Color.Parse("#111114"),
                 ["NodeHeaderBgColor"] = Color.Parse("#18181B"),
                 ["WireColor"] = Color.Parse("#74736C"),
+                ["NodeKindTextColor"] = Color.Parse("#999991"),
+                ["NodeFooterTextColor"] = Color.Parse("#A5A49E"),
+                ["NodeFooterLineColor"] = Color.Parse("#2E2E32"),
+                ["CanvasControlBgColor"] = Color.Parse("#171719"),
+                ["CanvasControlTextColor"] = Color.Parse("#ADABA4"),
+                ["ToolCardIconColor"] = Color.Parse("#ACA89D"),
+                ["LuaCommentColor"] = Color.Parse("#727E78"),
+                ["LuaKeywordColor"] = Color.Parse("#BFA8DA"),
+                ["LuaStringColor"] = Color.Parse("#C5CDA9"),
+                ["LuaNumberColor"] = Color.Parse("#C9B089"),
                 ["WireDragColor"] = Color.Parse("#F2EFE6"),
                 ["SuccessColor"] = Color.Parse("#9DB58F"),
                 ["WarningColor"] = Color.Parse("#D9B47A"),
@@ -182,7 +263,8 @@ namespace RowlEngine.Editor.ViewModels
             ApplyTheme(SelectedTheme);
         }
 
-        public static void ApplyTheme(string themeName)
+        // Paleti yazar, overlay'e dokunmaz (HighContrast.Apply burayı çağırır).
+        internal static void ApplyPaletteOnly(string themeName)
         {
             if (!ThemePalettes.TryGetValue(themeName, out var palette)) return;
 
@@ -195,6 +277,19 @@ namespace RowlEngine.Editor.ViewModels
             }
         }
 
+        public static void ApplyTheme(string themeName)
+        {
+            ApplyPaletteOnly(themeName);
+            // Tema değişince yüksek kontrast kaybolmasın.
+            if (EditorHighContrast.Enabled)
+            {
+                var app = Application.Current;
+                if (app == null) return;
+                foreach (var (key, color) in EditorHighContrast.Overlay)
+                    app.Resources[key] = color;
+            }
+        }
+
         [RelayCommand]
         public void ResetDefaults()
         {
@@ -202,6 +297,9 @@ namespace RowlEngine.Editor.ViewModels
             AutoSaveEnabled = true;
             AutoSaveIntervalSeconds = 60;
             EditorLanguage = EditorStrings.SourceLanguage;
+            ReduceMotion = false;
+            UiScale = 1.0;
+            HighContrast = false;
             MasterVolume = BgmVolume = VoiceVolume = SfxVolume = 1;
             TextSpeedMultiplier = 1;
             AutoAdvanceDelay = 2;

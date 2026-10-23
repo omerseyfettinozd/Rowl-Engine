@@ -136,6 +136,17 @@ optional fields and ignore unknown fields unless stated otherwise.
   bytes, sorted by path). `tools/verify_release_package.py` requires the
   manifest and cross-checks it against the index (order, path set, sizes;
   SHA-256 re-hash for raw entries).
+- **Game identity (`rowl/game.json`, D01a):** packages built with
+  `--game-manifest project.rowlproj` (or `--game-id <uuid>`) carry an
+  uncompressed `rowl/game.json` (`format = 1`, `game_id` = lowercase UUID
+  from `project_uuid`, `name`, `content_format`). The editor build persists a
+  missing `project_uuid` first and refuses a corrupt manifest. The release
+  verifier requires the entry and, when a loose `project.rowlproj` carries a
+  `project_uuid`, requires equality. The native engine resolves the id at
+  project mount (package, else loose manifest, else a path-derived UUIDv5
+  reported as `Derived`; loose `mods/` files cannot override it) and exposes
+  it through `RowlEngine_GetGameIdUtf8` / `RowlEngine_GetGameIdentitySource`.
+  `rowl/game.json` is a reserved package path.
 - **Release gate:** a valid standalone release carries exactly one
   package at `Assets/packages/game.rowlpkg` (no loose `Assets/` content),
   `mods/` overrides, launchers, the native runtime, `README.txt`, and
@@ -248,3 +259,83 @@ filters), linter (`ProjectValidationService`), and the packager
   disables the Camera Rotation control with a tooltip pointing at the
   no-op. Character/Background object `rotation` is unaffected (separate
   object-rotation path, out of scope).
+
+## 9. Player profile (`player-profile.json`) — v1 (D01c-1)
+
+- **Location:** `<profile dir>/player-profile.json`, where the profile dir is
+  `RowlEngine_GetProfileDirectoryUtf8`: `<user-data>/games/<game-id>/profile`
+  once a project with an authored game id is mounted (D01b); games without an
+  authored id (derived id) or with unwritable user data keep it beside their
+  project-local saves in `<project>/profile` (never a dir shared between games). The native engine and the managed
+  `PlayerProfileStore` read/write the same keys.
+- **Schema (`version = 1`):** `version`, `game_id` (per-game dirs only),
+  `language` (`en`/`tr`, `tr-TR` → `tr`), `read_content_ids` (sorted array of
+  canonical lowercase UUIDs), `master/bgm/voice/sfx/ambience/ui_volume`
+  ([0,1]), `text_speed_multiplier` ([0.25,4]), `auto_advance_delay` ([0,60]),
+  `text_scale` (snapped to 1 / 1.25 / 1.5), `high_contrast`, `reduced_motion`,
+  `skip_mode` (`off`/`read_only`/`all`), `auto_enabled`, `mixer_fade_curve`
+  (`Linear`/`EqualPower`), `sfx_pool_depth` ([1,16]), and a reserved
+  `unlocks` array. Wrong-typed or missing fields fall back to their defaults;
+  out-of-range values are clamped. Unknown top-level keys and `unlocks` are
+  preserved verbatim on rewrite.
+- **Read set:** ids are normalized (`ContentIdService.Normalize` rules),
+  deduplicated, held in a hash set (O(1) lookup) and written sorted. Bounded at
+  1,000,000 ids: past that, new ids are refused with a diagnostic — existing
+  ids are never dropped. The engine marks a dialogue read when it presents it
+  in play state (same point as the backlog); legacy lines without an id never
+  are. The start node's lines, which are on screen before play state begins,
+  are marked at the false-to-true play-state transition (`RowlEngine_Run` and
+  the editor's `SetPlayState(1)`), without adding a backlog entry (D01d).
+- **Load statuses** (`RowlEngine_ProfileGetStatusJson`):
+  `loaded`, `missing` (defaults, first run), `corrupt`, `unsupported_version`,
+  `wrong_game`, `unmounted` (no project yet).
+  - *Corrupt* (not JSON, not an object, non-integer `version`, oversize):
+    the file is renamed to `player-profile.corrupt-<UTC>.json` (the 3 newest are
+    kept, only the oldest are deleted), defaults are used, the store stays
+    writable, and the status carries a diagnostic. A file that cannot even be
+    read is not touched: defaults + read-only.
+  - *Future version* (`version` > 1): defaults in memory, store **read-only** —
+    nothing is ever written (no temp, no quarantine) and the file stays
+    byte-identical; every mutator returns `ROWL_RESULT_STATE_ERROR`.
+  - *Wrong game* (`game_id` differs from the mounted game, per-game dir
+    only): same read-only handling.
+- **Writes:** atomic temp+rename (`writeSlotFileAtomically`). Changes are
+  buffered and flushed 2 s of engine time after the first change, by
+  `RowlEngine_ProfileFlush`, on project change, on `Shutdown` and on
+  destruction. A failed write keeps the change pending and retries after 30 s.
+- **C API (`ROWL_ENGINE_CAPABILITY_PLAYER_PROFILE = 16777216`):**
+  `RowlEngine_ProfileGetJson`, `…GetStatusJson`, `…SetPreferencesJson`
+  (all-or-nothing merge of known keys), `…MarkRead`, `…IsRead`, `…Flush`;
+  owner-thread, caller-buffer contract. Golden fixture shared with the managed
+  parity test: `tests/fixtures/profile/player-profile.v1.json`.
+- **Managed side (D01c-2):** the editor player goes through the native store
+  (single writer) when it is available; the managed `PlayerProfileStore` keeps
+  `game_id`, `unlocks` and unknown keys on rewrite and is used per game as the
+  fallback. Details and the one-time migration of the old global editor profile:
+  `docs/PLAYER_PROFILE_AND_CONTENT_ID.md` section 9.
+
+## 10. Per-game identity, data layout and version rules (D01 summary)
+
+One place for the pieces a packaged game relies on (details in sections 3, 9
+and `docs/PLAYER_GUIDE.md`):
+
+| Piece | Where | Version | Rule |
+|---|---|---|---|
+| Game identity | `rowl/game.json` in `game.rowlpkg` (`format = 1`, `game_id` lowercase UUID, optional `game_name`); loose `project.rowlproj` `project_uuid` as secondary; else a path-derived UUIDv5 (flagged `derived`) | `format 1` | Package wins; a package/manifest mismatch is a build/verify error. The id never changes when the folder is moved or renamed. |
+| Data directory | `<user-data>/rowl-engine/games/<game-id>/{saves,profile}` (`$XDG_DATA_HOME`, `%LOCALAPPDATA%`, macOS Application Support) | - | Games with a derived id or an unwritable user-data dir keep `<project>/saves` + `<project>/profile`. Legacy `<game>/saves` is **copied** once (never deleted); the report is `RowlEngine_GetLastDataMigrationJson`. |
+| Save slots | `.../saves/save_slot_<n>.json` | v3 (v1/v2 migrate) | section 2 |
+| Player profile | `.../profile/player-profile.json` | `version = 1` | section 9 |
+
+Future-version rule (profile and saves): a file written by a **newer** schema is
+never rewritten, renamed or backed up. The profile stays in memory as defaults,
+read-only (`status = unsupported_version`, every mutator returns
+`ROWL_RESULT_STATE_ERROR`), and the standalone player says so on stdout
+(`--package-smoke-test`: "profile is read-only (unsupported_version)").
+`wrong_game` (another game's profile in this directory) is handled the same way;
+a corrupt profile is quarantined (`player-profile.corrupt-<UTC>.json`, 3 kept)
+and replaced by defaults. Releases launched through `run_game.sh` /
+`run_game.bat` keep exactly this layout: the launchers only `cd` into the game
+folder and must not assign `XDG_DATA_HOME`, `HOME`, `LOCALAPPDATA`, `APPDATA`,
+`USERPROFILE` or `TMPDIR` (`tools/launcher_contract.py`,
+`data_dir_override_problems`). Machine-checked by `rowl_packaged_game_isolation`
+(`tests/test_packaged_game_isolation.py`).

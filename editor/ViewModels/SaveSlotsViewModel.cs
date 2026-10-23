@@ -37,7 +37,7 @@ public sealed partial class SaveSlotsViewModel : ViewModelBase
     {
         if (slot is null) return;
         if (_main.EngineHost.SaveGameSlot(slot.Index)) { _main.AppendLog($"Oyun slotu {slot.Index + 1} kaydedildi."); Refresh(); }
-        else { _main.AppendLog($"Oyun slotu {slot.Index + 1} kaydedilemedi."); _main.CheckEngineDiagnostics(); }
+        else { _main.AppendLog(SaveSlotFailureMessages.WithReason($"Oyun slotu {slot.Index + 1} kaydedilemedi", _main.EngineHost.LastResultCode) + "."); _main.CheckEngineDiagnostics(); }
     }
 
     [RelayCommand]
@@ -45,7 +45,7 @@ public sealed partial class SaveSlotsViewModel : ViewModelBase
     {
         if (slot is null || !slot.IsOccupied) return;
         if (_main.EngineHost.LoadGameSlot(slot.Index)) { _main.SyncEditorToRuntimeNode(); _main.BacklogViewModel.Refresh(); _main.AppendLog($"Oyun slotu {slot.Index + 1} yüklendi."); }
-        else { _main.AppendLog($"Oyun slotu {slot.Index + 1} yüklenemedi; çalışan sahne korundu."); _main.CheckEngineDiagnostics(); }
+        else { _main.AppendLog(SaveSlotFailureMessages.WithReason($"Oyun slotu {slot.Index + 1} yüklenemedi", _main.EngineHost.LastResultCode) + "; çalışan sahne korundu."); _main.CheckEngineDiagnostics(); }
     }
 
     [RelayCommand]

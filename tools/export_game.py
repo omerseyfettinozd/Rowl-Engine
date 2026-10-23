@@ -10,16 +10,24 @@ portable-zip (Faz 6 Dilim 3) — deterministic portable release archive:
   python3 tools/export_game.py portable-zip [--output FILE] [--player FILE]
       [--runtime FILE]... [--package FILE]
 
-  Zip content (flat layout, no installer):
-    <player-name>            built launcher binary (rowl_player / rowl_player.exe);
-                             discovered under build/, overridable via --player
-                             (hardcode yok: parametre veya kesif).
+  Zip content (canonical release layout — the one the editor build and CI
+  produce and tools/verify_release_package.py accepts; no installer):
+    RowlGame                 built player binary (rowl_player discovered under
+                             build/, overridable via --player), renamed.
+    run_game.sh              POSIX launcher from tools/make_release_launchers.py
+                             (cd's into its own directory, then execs RowlGame).
     <runtime-name>           RowlEngineCore shared lib(s); discovered under
                              build/, repeat --runtime to override.
-    game.rowlpkg             demo package packed from samples/first_light/Assets
-                             (or --package to reuse a prebuilt .rowlpkg).
-    game.rowlpkg.sha256      canonical sha256sum sidecar for the demo package,
+    Assets/packages/game.rowlpkg
+                             demo package packed from samples/first_light/Assets
+                             (or --package to reuse a prebuilt .rowlpkg). The VFS
+                             mounts packages only from Assets/packages: the old
+                             flat layout extracted to an empty game.
+    Assets/packages/game.rowlpkg.sha256
+                             canonical sha256sum sidecar for the package,
                              so `package_assets.py verify` passes on extraction.
+    mods/README.md, README.txt
+                             release notes the verifier requires.
     THIRD_PARTY_NOTICES.md   copied byte-for-byte from packaging/.
     VERSION                  git-sha + tarih; git yoksa `unknown` + tarih
                              (fail degil).
@@ -29,8 +37,8 @@ portable-zip (Faz 6 Dilim 3) — deterministic portable release archive:
 
   Determinism: entries written in sorted arcname order with a fixed timestamp
   (1980-01-01, or SOURCE_DATE_EPOCH when set), fixed ZIP_DEFLATED compression
-  (level 9), fixed Unix permission bits (0o755 launcher, 0o644 everything
-  else), stdlib zipfile/ZipInfo only — no external `zip` binary. Two runs
+  (level 9), fixed Unix permission bits (0o755 RowlGame + run_game.sh,
+  0o644 everything else), stdlib zipfile/ZipInfo only — no external `zip` binary. Two runs
   produce byte-identical output ONLY under identical inputs: same commit (the
   git-sha lands in VERSION) and same UTC date — pin SOURCE_DATE_EPOCH for
   cross-day reproducibility (it fixes both the zip timestamps and the
@@ -38,8 +46,8 @@ portable-zip (Faz 6 Dilim 3) — deterministic portable release archive:
 
   Verification (after unzipping to a temp dir):
     1. `sha256sum -c SHA256SUMS`
-    2. `python3 tools/package_assets.py verify game.rowlpkg`
-    3. THIRD_PARTY_NOTICES.md and VERSION are present.
+    2. `python3 tools/package_assets.py verify Assets/packages/game.rowlpkg`
+    3. `python3 tools/verify_release_package.py <dir>` accepts the layout.
 
   NSIS/WiX/installer are explicitly out of scope for this slice (dilim-disi).
 
@@ -60,13 +68,15 @@ self-extracting (Faz 6 Dilim 4) — Linux POSIX `.sh` self-extracting installer:
     2. its SHA-256 must equal the build-time PAYLOAD_SHA256 (mismatch:
        exit 1, the target directory is never created),
     3. the zip is unpacked and its inner SHA256SUMS is re-checked
-       (`sha256sum -c`), and only then are files copied into --prefix with
-       rowl_player made executable.
+       (`sha256sum -c`), and only then are files copied into --prefix
+       (parent directories created) with RowlGame and run_game.sh made
+       executable.
   Receipt: after every copy plus chmod succeeds, `$prefix/.rowl-receipt`
   is written atomically (tmp file + `mv`) as `ROWL_SDE_VERSION=<ver>`,
   `PAYLOAD_SHA256=<sha>`, then one installed name per line.
   Rollback: any copy/chmod/receipt-write failure removes the files copied
-  so far (`rm -f`) and exits 1; the temp dir is guarded by a single
+  so far (`rm -f`, then their now-empty directories with `rmdir`) and
+  exits 1; the temp dir is guarded by a single
   `trap 'rm -rf "$tmpdir"' EXIT` (cancelled on success, no double-free).
   Uninstall deletes exactly the receipt-listed names when
   `$prefix/.rowl-receipt` exists, else falls back to the embedded FILES
@@ -96,6 +106,7 @@ import argparse
 import base64
 import datetime
 import hashlib
+import json
 import os
 import pathlib
 import re
@@ -103,6 +114,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import uuid
 import zipfile
 
 
@@ -126,6 +138,27 @@ _PORTABLE_SAMPLE_ASSETS = (
     pathlib.Path("samples") / "first_light" / "Assets"
 )
 _PORTABLE_NOTICES = pathlib.Path("packaging") / "THIRD_PARTY_NOTICES.md"
+_PORTABLE_PLAYER_ARC = "RowlGame"
+_PORTABLE_LAUNCHER_ARC = "run_game.sh"
+_PORTABLE_EXECUTABLES = frozenset({_PORTABLE_PLAYER_ARC, _PORTABLE_LAUNCHER_ARC})
+_PORTABLE_PACKAGE_DIR = "Assets/packages"
+_PORTABLE_MODS_README = (
+    "# Rowl Engine mods\n\nPlace an asset here using its package-relative path to "
+    "override it. For example, `images/hero.png` overrides `images/hero.png` in "
+    "`Assets/packages/game.rowlpkg`.\n")
+_PORTABLE_README = (
+    "ROWL ENGINE — STANDALONE GAME RELEASE\n\nRun ./run_game.sh.\n\n"
+    "Assets/packages/game.rowlpkg is the canonical game content. Put an asset in "
+    "mods/ with the same relative path to override it.\n")
+
+
+def _portable_posix_launcher():
+    """run_game.sh bytes from the single launcher source (make_release_launchers)."""
+    tools_dir = str(pathlib.Path(__file__).resolve().parent)
+    if tools_dir not in sys.path:
+        sys.path.insert(0, tools_dir)
+    import make_release_launchers
+    return make_release_launchers.POSIX_LAUNCHER.encode("utf-8")
 
 
 def _run(command):
@@ -281,6 +314,33 @@ def _portable_load_packager():
         return pack_directory
 
 
+_DEMO_ID_NAMESPACE = uuid.UUID("6f1b7d52-3c1e-4a8e-9a57-0d1c2b6e9f10")
+
+
+def _portable_demo_identity(assets):
+    """D01a: (game_id, name) for the demo package.
+
+    Uses the sample's project.rowlproj project_uuid when it has one; a sample
+    without one gets a deterministic UUIDv5 (so portable-zip stays reproducible).
+    """
+    manifest = pathlib.Path(assets).parent / "project.rowlproj"
+    name = ""
+    if manifest.is_file():
+        try:
+            doc = json.loads(manifest.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            doc = None
+        if isinstance(doc, dict):
+            name = doc.get("name") if isinstance(doc.get("name"), str) else ""
+            candidate = doc.get("project_uuid")
+            if isinstance(candidate, str):
+                try:
+                    return str(uuid.UUID(candidate)), name
+                except ValueError:
+                    pass
+    return str(uuid.uuid5(_DEMO_ID_NAMESPACE, "portable-demo:" + pathlib.Path(assets).parent.name)), name
+
+
 def _portable_demo_package(explicit, work_dir):
     """Return (arcname, bytes, sidecar_bytes) for the demo .rowlpkg."""
     arcname = "game.rowlpkg"
@@ -294,7 +354,8 @@ def _portable_demo_package(explicit, work_dir):
                 f"Portable-zip demo assets were not found: {assets}"
             )
         target = pathlib.Path(work_dir) / arcname
-        _portable_load_packager()(str(assets), str(target))
+        game_id, game_name = _portable_demo_identity(assets)
+        _portable_load_packager()(str(assets), str(target), game_id, game_name)
         data = target.read_bytes()
     digest = hashlib.sha256(data).hexdigest()
     sidecar = f"{digest}  {arcname}\n".encode("utf-8")
@@ -324,10 +385,18 @@ def export_portable_zip(output=None, player=None, runtime=None, package=None):
     with tempfile.TemporaryDirectory(prefix="rowl-portable-zip-") as work_dir:
         pkg_arc, pkg_data, pkg_sidecar = _portable_demo_package(package, work_dir)
 
+        # Canonical release layout — the same one the editor build and the CI
+        # release step produce and tools/verify_release_package.py accepts.
+        # The flat layout (player + game.rowlpkg side by side) never ran: the
+        # VFS mounts packages only from Assets/packages, so the extracted zip
+        # opened an empty scene (gerçek ekran denemesi, 2026-10-20).
         entries = {
-            player_path.name: player_path.read_bytes(),
-            pkg_arc: pkg_data,
-            f"{pkg_arc}.sha256": pkg_sidecar,
+            _PORTABLE_PLAYER_ARC: player_path.read_bytes(),
+            _PORTABLE_LAUNCHER_ARC: _portable_posix_launcher(),
+            f"{_PORTABLE_PACKAGE_DIR}/{pkg_arc}": pkg_data,
+            f"{_PORTABLE_PACKAGE_DIR}/{pkg_arc}.sha256": pkg_sidecar,
+            "mods/README.md": _PORTABLE_MODS_README.encode("utf-8"),
+            "README.txt": _PORTABLE_README.encode("utf-8"),
             _PORTABLE_NOTICES.name: notices_path.read_bytes(),
             "VERSION": version_text.encode("utf-8"),
         }
@@ -354,7 +423,7 @@ def export_portable_zip(output=None, player=None, runtime=None, package=None):
                     info = zipfile.ZipInfo(name, date_time=stamp)
                     info.create_system = 3
                     info.compress_type = zipfile.ZIP_DEFLATED
-                    mode = 0o755 if name == player_path.name else 0o644
+                    mode = 0o755 if name in _PORTABLE_EXECUTABLES else 0o644
                     info.external_attr = mode << 16
                     archive.writestr(info, entries[name])
             os.replace(temporary, out_path)
@@ -374,6 +443,9 @@ _SDE_PAYLOAD_MARKER = ("# __ROWL_PAYLOAD_B64_BELOW__: base64(portable-zip); "
 # (the tag lands inside a double-quoted shell string, names inside an
 # unquoted $FILES word-split — anything else is a generation-time error).
 _SDE_SAFE_TOKEN = re.compile(r"^[A-Za-z0-9._-]+$")
+# Payload entry names may carry directories (Assets/packages/game.rowlpkg);
+# every segment must still be a safe token (checked per part below).
+_SDE_SAFE_NAME = re.compile(r"^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$")
 
 # Fixed POSIX sh installer stub. Only @@...@@ placeholders vary, and only
 # with payload-derived values (hash, file list, payload start line), so the
@@ -399,8 +471,9 @@ _SDE_STUB_TEMPLATE = """#!/bin/sh
 #      written atomically (tmp file + mv) as ROWL_SDE_VERSION=<ver>,
 #      PAYLOAD_SHA256=<sha>, then one installed name per line; a receipt
 #      failure fails the install and rolls back the copied files.
-#   Any copy/chmod/receipt failure removes the files copied so far and
-#   exits 1; the temp dir is guarded by a single trap on EXIT.
+#   Any copy/chmod/receipt failure removes the files this run created,
+#   restores files it overwrote (upgrade: previous copies are kept in
+#   $prefix/.rowl-backup until success) and exits 1; the temp dir is guarded by a single trap on EXIT.
 #
 # Uninstall deletes exactly the receipt-listed names when
 # $prefix/.rowl-receipt exists, else the FILES listed below (legacy
@@ -418,11 +491,42 @@ ROWL_SDE_VERSION="@@VERSION@@"
 PAYLOAD_SHA256="@@PAYLOAD_SHA256@@"
 PAYLOAD_LINE=@@PAYLOAD_LINE@@
 FILES="@@FILES@@"
-PLAYER="@@PLAYER@@"
+EXECUTABLES="@@EXECUTABLES@@"
 
 usage() {
   echo "usage: sh $0 [--prefix DIR] [install|uninstall]" >&2
   echo "       default prefix: ./rowl-game" >&2
+}
+
+# Remove the now-empty parent directories of the listed names, deepest first
+# (rmdir only ever removes an EMPTY directory, so user files stay untouched).
+prune_dirs() {
+  for name in $2; do
+    dir="${name%/*}"
+    [ "$dir" = "$name" ] && continue
+    while [ -n "$dir" ]; do
+      rmdir "$1/$dir" 2>/dev/null || true
+      case "$dir" in
+        */*) dir="${dir%/*}" ;;
+        *) break ;;
+      esac
+    done
+  done
+}
+
+# Upgrade-safe rollback: a file that existed before this run was copied to
+# $bakdir first, so it is moved back (mv replaces by rename, even over a
+# half-written or read-only file); only files this run created are removed.
+rollback() {
+  for f in $installed; do
+    if [ -f "$bakdir/$f" ]; then
+      mv -f "$bakdir/$f" "$prefix/$f"
+    else
+      rm -f "$prefix/$f"
+    fi
+  done
+  rm -rf "$bakdir"
+  prune_dirs "$prefix" "$installed"
 }
 
 fail() {
@@ -454,23 +558,39 @@ do_install() {
   fi
   mkdir -p "$prefix" || fail "cannot create target directory $prefix"
   installed=""
+  bakdir="$prefix/.rowl-backup"
+  [ ! -e "$bakdir" ] || fail "leftover $bakdir from an interrupted install; restore or remove it first"
   for name in $FILES; do
-    if ! cp "$staged/$name" "$prefix/$name"; then
-      for f in $installed; do
-        rm -f "$prefix/$f"
-      done
-      fail "cannot install $name into $prefix"
+    case "$name" in
+      */*)
+        if ! mkdir -p "$prefix/${name%/*}"; then
+          rollback
+          fail "cannot create directory for $name in $prefix"
+        fi ;;
+    esac
+    # Existing file (upgrade): keep a copy so a failed install restores it.
+    if [ -f "$prefix/$name" ]; then
+      case "$name" in
+        */*) mkdir -p "$bakdir/${name%/*}" || { rollback; fail "cannot create backup dir for $name"; } ;;
+        *) mkdir -p "$bakdir" || { rollback; fail "cannot create backup dir"; } ;;
+      esac
+      if ! cp -p "$prefix/$name" "$bakdir/$name"; then
+        rollback
+        fail "cannot back up $name before overwriting it"
+      fi
     fi
     installed="$installed $name"
-  done
-  if [ -n "$PLAYER" ]; then
-    if ! chmod +x "$prefix/$PLAYER"; then
-      for f in $installed; do
-        rm -f "$prefix/$f"
-      done
-      fail "cannot make $PLAYER executable"
+    if ! cp "$staged/$name" "$prefix/$name"; then
+      rollback
+      fail "cannot install $name into $prefix"
     fi
-  fi
+  done
+  for exe in $EXECUTABLES; do
+    if ! chmod +x "$prefix/$exe"; then
+      rollback
+      fail "cannot make $exe executable"
+    fi
+  done
   if ! {
     echo "ROWL_SDE_VERSION=$ROWL_SDE_VERSION"
     echo "PAYLOAD_SHA256=$PAYLOAD_SHA256"
@@ -478,19 +598,16 @@ do_install() {
       echo "$name"
     done
   } > "$prefix/.rowl-receipt.tmp"; then
-    for f in $installed; do
-      rm -f "$prefix/$f"
-    done
+    rollback
     rm -f "$prefix/.rowl-receipt.tmp"
     fail "cannot write receipt into $prefix"
   fi
   if ! mv "$prefix/.rowl-receipt.tmp" "$prefix/.rowl-receipt"; then
-    for f in $installed; do
-      rm -f "$prefix/$f"
-    done
+    rollback
     rm -f "$prefix/.rowl-receipt.tmp"
     fail "cannot write receipt into $prefix"
   fi
+  rm -rf "$bakdir"
   trap - EXIT
   rm -rf "$tmpdir"
   echo "rowl-installer: installed $ROWL_SDE_VERSION into $prefix"
@@ -517,6 +634,10 @@ do_uninstall() {
   for name in $uninstall_list; do
     rm -f "$prefix/$name"
   done
+  prune_dirs "$prefix" "$uninstall_list"
+  # The player creates <prefix>/crash-logs on every run; an EMPTY one is the
+  # game's own scaffolding, a non-empty one is the user's diagnostics (kept).
+  rmdir "$prefix/crash-logs" 2>/dev/null || true
   rm -f "$prefix/.rowl-receipt"
   rmdir "$prefix" 2>/dev/null || true
   echo "rowl-installer: uninstalled $prefix"
@@ -634,7 +755,7 @@ def export_self_extracting(input=None, output=None, version=None):
                 parts = name.split("/")
                 if (not name or name.startswith("/") or "\\" in name
                         or any(part in ("", ".", "..") for part in parts)
-                        or _SDE_SAFE_TOKEN.match(name) is None):
+                        or _SDE_SAFE_NAME.match(name) is None):
                     raise ValueError(
                         f"Self-extracting input has an unsafe entry name: {name!r}"
                     )
@@ -648,14 +769,13 @@ def export_self_extracting(input=None, output=None, version=None):
         raise ValueError(
             f"Self-extracting version tag has unsafe characters: {tag!r}"
         )
-    player = next(
-        (name for name in sorted(names) if name.startswith("rowl_player")), ""
-    )
+    executables = " ".join(
+        name for name in sorted(names) if name in _PORTABLE_EXECUTABLES)
     stub = (_SDE_STUB_TEMPLATE
             .replace("@@VERSION@@", tag)
             .replace("@@PAYLOAD_SHA256@@", hashlib.sha256(blob).hexdigest())
             .replace("@@FILES@@", " ".join(sorted(names)))
-            .replace("@@PLAYER@@", player))
+            .replace("@@EXECUTABLES@@", executables))
     header = stub + _SDE_PAYLOAD_MARKER
     payload_line = header.count("\n") + 1  # first base64 line (1-based)
     header = header.replace("@@PAYLOAD_LINE@@", str(payload_line))

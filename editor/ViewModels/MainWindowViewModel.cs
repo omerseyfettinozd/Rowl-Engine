@@ -6,6 +6,7 @@ using CommunityToolkit.Mvvm.Input;
 using RowlEngine.Editor.Native;
 using RowlEngine.Editor.Services;
 using RowlEngine.Editor.Services.Localization;
+using RowlEngine.Editor.Services.Strings;
 using RowlEngine.Editor.Services.Workspace;
 using RowlEngine.Editor.Models;
 using RowlEngine.Editor.ViewModels.Components;
@@ -587,8 +588,46 @@ namespace RowlEngine.Editor.ViewModels
 
         private void ZoomStep(double delta)
         {
-            TargetZoom = Math.Clamp(Math.Round(TargetZoom + delta, 4), NodeGraphViewModel.MinZoom, NodeGraphViewModel.MaxZoom);
+            // Faz 9 E1: merkez sabit zoom; görünüm merkezindeki dünya noktası korunur.
+            double oldZoom = TargetZoom > 0 ? TargetZoom : 1.0;
+            double newZoom = Math.Clamp(Math.Round(oldZoom + delta, 4), NodeGraphViewModel.MinZoom, NodeGraphViewModel.MaxZoom);
+            double vw = this.NodeGraphViewModel.ViewportWidth;
+            double vh = this.NodeGraphViewModel.ViewportHeight;
+            if (vw > 0 && vh > 0 && Math.Abs(newZoom - oldZoom) > 0.0001)
+            {
+                double worldX = (vw / 2.0 - TargetPanX) / oldZoom;
+                double worldY = (vh / 2.0 - TargetPanY) / oldZoom;
+                TargetPanX = vw / 2.0 - worldX * newZoom;
+                TargetPanY = vh / 2.0 - worldY * newZoom;
+            }
+            TargetZoom = newZoom;
             StartSmoothViewAnimation();
+        }
+
+        /// <summary>
+        /// Faz 9 E1: Tab ile düğümler arasında gezinme (Nodes sırası, döner).
+        /// Tek seçim yapar; görünümde değilse ortalar.
+        /// </summary>
+        public void CycleNodeSelection(bool backwards)
+        {
+            if (Nodes.Count == 0) return;
+            int idx = SelectedNode != null ? Nodes.IndexOf(SelectedNode) : -1;
+            int nextIdx;
+            if (idx < 0)
+                nextIdx = backwards ? Nodes.Count - 1 : 0;
+            else
+                nextIdx = backwards ? (idx - 1 + Nodes.Count) % Nodes.Count : (idx + 1) % Nodes.Count;
+            var next = Nodes[nextIdx];
+            foreach (var n in Nodes)
+                n.IsSelected = n == next;
+            SelectedNodes.Clear();
+            SelectedNodes.Add(next);
+            SelectedNode = next;
+            var (x, y, w, h) = NodeGraphViewModel.NodeBounds(next);
+            var center = new Avalonia.Point(x + w / 2.0, y + h / 2.0);
+            var view = this.NodeGraphViewModel.ViewportRect;
+            if (!view.Contains(center))
+                this.NodeGraphViewModel.PanTo(center.X, center.Y);
         }
 
         public ObservableCollection<NodeViewModel> Nodes { get; } = new();
@@ -600,6 +639,9 @@ namespace RowlEngine.Editor.ViewModels
         public SaveSlotsViewModel SaveSlotsViewModel { get; }
         public ProjectIssuesViewModel ProjectIssuesViewModel { get; }
         public InspectorViewModel InspectorViewModel { get; }
+
+        /// <summary>Faz 10: Denetçi'nin yazar dilindeki görünümü (mevcut bileşenlerin üstünde uyarlayıcı).</summary>
+        public RowlEngine.Editor.ViewModels.Inspector.InspectorSceneViewModel InspectorScene { get; }
         public NodeGraphViewModel NodeGraphViewModel { get; }
         /// <summary>Faz 4 Dilim 2 — global search + filter bar owner.</summary>
         public SearchViewModel Search { get; }
@@ -649,6 +691,10 @@ namespace RowlEngine.Editor.ViewModels
                 ProjectRoot = ResolveProjectRoot();
                 CurrentProjectPath = ProjectRoot;
             }
+            // Motoru hangi yol başlatırsa başlatsın (bu sınıf ya da önizleme
+            // denetimi) proje Init ile aynı turda bağlanır.
+            EngineHost.StartupProjectRoot = ProjectRoot;
+            ProjectLeftoverSweeper.Sweep(ProjectRoot, AppendLog); // C04: kill sonrası yarım girdiler
 
             ProjectRuntimeSettings = ProjectRuntimeSettingsService.Load(
                 Path.Combine(ProjectRoot, "project.rowlproj"));
@@ -667,6 +713,7 @@ namespace RowlEngine.Editor.ViewModels
             InspectorViewModel = new InspectorViewModel(this);
             NodeGraphViewModel = new NodeGraphViewModel(this);
             Search = new SearchViewModel(this);
+            InspectorScene = new RowlEngine.Editor.ViewModels.Inspector.InspectorSceneViewModel(this);
             // Faz 4 Dilim 3 — session structure wiring (logic in services).
             Groups.Attach(Nodes);
             Subgraphs.Attach(Nodes);
@@ -769,8 +816,8 @@ namespace RowlEngine.Editor.ViewModels
                 if (CrashRecoveryService.TryBuildRestoreOffer(AssetsPath, AssetsJsonPath, out var offer, out _) &&
                     offer is not null)
                 {
-                    PendingRecoveryOffer = offer;
-                    AppendLog($"Proje dosyası bozuk/eksik ({status.CanonicalError}); kurtarma hazır ({offer.Source}, {offer.NodeCount} düğüm). RestoreFromRecovery ile geri yükleyin.");
+                    OfferRecovery(offer, status.CanonicalError);
+                    AppendLog($"Proje dosyası bozuk/eksik ({status.CanonicalError}); kurtarma hazır ({offer.Source}, {offer.NodeCount} düğüm). Kurtarma kartından geri yükleyin.");
                 }
             }
         }
@@ -897,8 +944,35 @@ namespace RowlEngine.Editor.ViewModels
         public void EndWireDrag(Point releasePos)
         {
             if (!IsDraggingWire || !_dragSession.IsWireDragActive) return;
+            // Oturumu kapatmadan önce kaynağı yakala (boş-tuval dalı için).
+            var srcNode = _dragSession.ActiveSourceNode;
+            var optId = _dragSession.ActiveOptionId ?? string.Empty;
+            var wasUnplug = _dragSession.ActiveUnpluggedConnection != null;
+            var prevSel = SelectedNode;
             IsDraggingWire = false;
-            _dragSession.EndWireDrag(releasePos, Nodes, Connections, UpdateStartNodeState, AppendLog, ScheduleSave);
+            var reason = _dragSession.EndWireDrag(releasePos, Nodes, Connections, UpdateStartNodeState, AppendLog, ScheduleSave, notify: key => ToastService.Instance.Show(EditorStrings.T(key), ToastType.Warning, 3000));
+            if (reason == WireConnectRejection.NoTarget && !wasUnplug && srcNode != null)
+            {
+                // Boş tuval + yeni tel: dünya uzayında düğüm oluştur + bağla, tek undo.
+                var newNode = AddNodeAt(releasePos.X, releasePos.Y - 20);
+                ulong targetBefore = StoryGraphCanvasService.GetChoiceTarget(srcNode, optId);
+                var replacedBefore = Connections.Where(c => c.SourceNode == srcNode && (string.IsNullOrEmpty(optId) || c.OptionId == optId)).ToList();
+                if (!string.IsNullOrEmpty(optId))
+                {
+                    foreach (var ex in Connections.Where(c => c.SourceNode == srcNode && c.OptionId == optId).ToList())
+                        Connections.Remove(ex);
+                    StoryGraphCanvasService.SetChoiceTarget(srcNode, optId, newNode.Id);
+                }
+                var conn = new ConnectionViewModel(srcNode, newNode, optId);
+                Connections.Add(conn);
+                StoryGraphCanvasService.EnforceSingleOutgoingWireRule(Connections);
+                var replaced = replacedBefore.Where(c => !Connections.Contains(c)).ToList();
+                UndoRedoService.Instance.RecordAction(new AddNodeAndConnectAction(Nodes, Connections, newNode, conn, replaced, srcNode, optId, targetBefore, newNode.Id, UpdateStartNodeState, s => SelectedNode = s, prevSel));
+                SelectedNode = newNode;
+                UpdateStartNodeState();
+                ScheduleSave();
+                AppendLog($"Created Node #{newNode.Id} on empty drop + connected from #{srcNode.Id}");
+            }
         }
 
         /// <summary>
@@ -1004,6 +1078,12 @@ namespace RowlEngine.Editor.ViewModels
         [RelayCommand]
         public void DeleteSelectedNode()
         {
+            // Faz 9 E1: çoklu seçim tek geri alma adımında silinir.
+            if (SelectedNodes.Count > 1)
+            {
+                DeleteSelectedNodes();
+                return;
+            }
             if (SelectedNode == null) return;
             DeleteNode(SelectedNode);
         }
@@ -1023,16 +1103,22 @@ namespace RowlEngine.Editor.ViewModels
         [RelayCommand]
         public void AddNode()
         {
-            ulong nextId = Nodes.Count > 0 ? Nodes.Max(n => n.Id) + 1 : 101;
             var (spawnX, spawnY) = StoryGraphCanvasService.CalculateSpawnPosition(Nodes.Count, PanX, PanY, ZoomScale);
-            var newNode = StoryGraphCanvasService.CreateDefaultNode(nextId, spawnX, spawnY);
+            var newNode = AddNodeAt(spawnX, spawnY);
+            UndoRedoService.Instance.RecordAction(new AddNodeUndoAction(this, newNode));
+            UpdateStartNodeState();
+            AppendLog($"Added new node #{newNode.Id} at visible screen center ({spawnX:F0}, {spawnY:F0})");
+        }
 
+        public NodeViewModel AddNodeAt(double worldX, double worldY)
+        {
+            ulong nextId = Nodes.Count > 0 ? Nodes.Max(n => n.Id) + 1 : 101;
+            var newNode = StoryGraphCanvasService.CreateDefaultNode(nextId, worldX, worldY);
             newNode.PropertyChanged += OnNodePropertyChanged;
             Nodes.Add(newNode);
             SelectedNode = newNode;
-            UndoRedoService.Instance.RecordAction(new AddNodeUndoAction(this, newNode));
             UpdateStartNodeState();
-            AppendLog($"Added new node #{nextId} at visible screen center ({spawnX:F0}, {spawnY:F0})");
+            return newNode;
         }
 
         [RelayCommand]
@@ -1048,6 +1134,7 @@ namespace RowlEngine.Editor.ViewModels
             // Task.Run yalnızca bekleyen tarafı UI'dan çeker. Her await
             // UI thread'ine döner; sıra, metin ve dallanma birebir aynıdır.
             string projectRoot = ProjectRoot;
+            EngineHost.StartupProjectRoot = projectRoot;
             bool success = await Task.Run(() => EngineHost.Initialize(1920, 1080, true));
             IsConnected = success;
             if (!success)
@@ -1057,8 +1144,18 @@ namespace RowlEngine.Editor.ViewModels
                 return;
             }
 
+            // Proje Initialize içinde Init ile aynı turda bağlanır. Motor
+            // daha önce başka bir yoldan (önizleme) başlatıldıysa ya da
+            // farklı bir köke bağlıysa burada bağlanır; ret sessiz kalmaz.
             StatusText = "Mounting project VFS...";
-            await Task.Run(() => EngineHost.SetProjectDirectory(projectRoot));
+            if (!string.Equals(EngineHost.MountedProjectRoot, projectRoot, StringComparison.Ordinal))
+                await Task.Run(() => EngineHost.SetProjectDirectoryChecked(projectRoot, out _));
+            if (!string.Equals(EngineHost.MountedProjectRoot, projectRoot, StringComparison.Ordinal))
+            {
+                string detail = EngineHost.LastProjectMountError;
+                AppendLog($"[HATA] Proje motora bağlanamadı: {detail}");
+                NotifyError($"Proje motora bağlanamadı; Oyun panelinde resimler görünmeyebilir ({detail}).", "Motor");
+            }
 
             StatusText = "Applying player settings...";
             await Task.Run(() => ApplyPlayerSettingsToEngine());
@@ -1073,12 +1170,12 @@ namespace RowlEngine.Editor.ViewModels
 
         private void LoadPlayerSettings()
         {
-            EditorSettingsSyncService.LoadPlayerSettings(_playerSettingsPath, Settings);
+            EditorSettingsSyncService.LoadPlayerSettings(_playerSettingsPath, Settings, ReportSettingsFailure);
         }
 
         private void LoadEditorSettings()
         {
-            EditorSettingsSyncService.LoadEditorSettings(_editorSettingsPath, Settings);
+            EditorSettingsSyncService.LoadEditorSettings(_editorSettingsPath, Settings, ReportSettingsFailure);
         }
 
         private void LoadProjectRuntimeSettingsIntoEditor()
@@ -1097,7 +1194,15 @@ namespace RowlEngine.Editor.ViewModels
                 EngineHost,
                 () => ProjectRuntimeSettings,
                 updated => ProjectRuntimeSettings = updated,
-                () => SaveSlotsViewModel?.Refresh());
+                () => SaveSlotsViewModel?.Refresh(),
+                ReportSettingsFailure);
+        }
+
+        /// <summary>Ayar/profil yazımı/okuması başarısız: ayrıntı konsola, kısa bildirim toast olarak.</summary>
+        private void ReportSettingsFailure(string detail)
+        {
+            AppendLog(detail);
+            Toast.Show(EditorStrings.T("Settings.SaveFailed"), ToastType.Warning, 4000);
         }
 
         private void ApplyPlayerSettingsToEngine(PlayerSettingsProfile? profile = null)
@@ -1155,16 +1260,26 @@ namespace RowlEngine.Editor.ViewModels
         /// </summary>
         public bool LoadFullStoryGraphFile()
         {
-            return StoryGraphLifecycleCoordinator.LoadGraphWithRollback(
-                AssetsPath,
-                AssetsJsonPath,
-                Nodes,
-                Connections,
-                OnNodePropertyChanged,
-                EnforceSingleOutgoingWireRule,
-                node => SelectNodeQuiet(node),
-                AppendLog,
-                ApplyLoadedStructure);
+            // Toplu yükleme: tuval dizini her düğüm/telde değil, bitişte bir kez kurulur (C03).
+            NodeGraphViewModel.BeginBulkUpdate();
+            try
+            {
+                return StoryGraphLifecycleCoordinator.LoadGraphWithRollback(
+                    AssetsPath,
+                    AssetsJsonPath,
+                    Nodes,
+                    Connections,
+                    OnNodePropertyChanged,
+                    EnforceSingleOutgoingWireRule,
+                    node => SelectNodeQuiet(node),
+                    AppendLog,
+                    ApplyLoadedStructure,
+                    message => NotifyError(message));
+            }
+            finally
+            {
+                NodeGraphViewModel.EndBulkUpdate();
+            }
         }
 
         public bool SaveFullStoryGraphFile()
@@ -1221,6 +1336,7 @@ namespace RowlEngine.Editor.ViewModels
             }
             var group = Groups.CreateFromNodes(
                 $"Grup {Groups.Groups.Count + 1}", CanvasGroupViewModel.DefaultColor, picked);
+            UndoRedoService.Instance.RecordAction(new GroupCreateAction(Groups, group));
             AppendLog($"Grup oluşturuldu: '{group.Title}' ({picked.Count} düğüm).");
         }
 
@@ -1245,6 +1361,22 @@ namespace RowlEngine.Editor.ViewModels
             if (Nodes.FirstOrDefault(n => n.Id == id) is not { } node) return;
             Subgraphs.TryEnterForNode(id);
             Search.JumpTo(node);
+        }
+
+        /// <summary>Faz 9: sorun satırından varlık hedefini göster.</summary>
+        public bool FocusIssueAsset(string assetPath)
+        {
+            // Boş yol: durum değişmeden false.
+            if (string.IsNullOrWhiteSpace(assetPath))
+                return false;
+            if (AssetBrowserViewModel == null)
+                return false;
+            bool ok = AssetBrowserViewModel.RevealAsset(assetPath);
+            if (!ok)
+                return false;
+            // Varlıklar sekmesini aç + etkin yap (Sorunlar açık kalır).
+            Workspace = Workspace.WithBottomTab(BottomStripState.AssetsTab, true).WithActiveBottomTab(BottomStripState.AssetsTab);
+            return true;
         }
 
         /// <summary>Enters the subgraph owning the node (double-click path).</summary>
@@ -1308,6 +1440,9 @@ namespace RowlEngine.Editor.ViewModels
             {
                 string merged = ChapterStorageService.Merge(
                     Path.Combine(AssetsJsonPath, "chapters"));
+                // C04: diskteki daha yeni sürüm grafik birleştirmeyle ezilmez.
+                if (StoryGraphFormatGuard.IsNewerOnDisk(AssetsPath, AssetsJsonPath, out int newer))
+                    throw new InvalidOperationException(StoryGraphFormatGuard.Message(newer));
                 Directory.CreateDirectory(AssetsJsonPath);
                 ProjectFileSystem.WriteAllTextAtomically(
                     Path.Combine(AssetsJsonPath, "full_story_graph.json"), merged);
@@ -1439,17 +1574,16 @@ namespace RowlEngine.Editor.ViewModels
         }
 
         /// <summary>
-        /// Unity taşıma kümesi: duraklat/devam et. Native çağrı yalnızca
-        /// motor bağlıyken yapılır; VM durumu headless'ta da döner
-        /// (kilit testi motoru başlatmadan geçişi doğrular).
+        /// Unity taşıma kümesi: duraklat/devam et. Oyunu ve sesi olduğu yerde dondurur;
+        /// oyunun kendi Esc duraklatma menüsünü açmaz (eskiden native SetPaused'a gidip
+        /// menüyü açıyordu). VM durumu headless'ta da döner.
         /// </summary>
         [RelayCommand]
         public void PauseStandalone()
         {
             if (!IsPlayingStandalone) return;
             IsPlayPaused = !IsPlayPaused;
-            if (EngineHost.IsInitialized)
-                EngineHost.SetPaused(IsPlayPaused);
+            EngineHost.SetEditorFrozen(IsPlayPaused);
             StatusText = IsPlayPaused ? "Paused — simulation frozen" : "Offscreen Play Mode Active";
         }
 
@@ -1474,8 +1608,11 @@ namespace RowlEngine.Editor.ViewModels
         [RelayCommand]
         public void OpenPlayerWindow()
         {
-            var loop = Services.PlayerLoopService.Load(
-                PlayerProfileStore.ResolveDefaultProfileDirectory());
+            // D01c-2: the profile belongs to the mounted game (native per-game
+            // store, managed per-game fallback), never to one global file.
+            var loop = Services.PlayerProfileSession.Open(EngineHost, ProjectRoot, AppendLog);
+            if (loop.LoadDiagnostic is not null && loop.LoadStatus != PlayerProfileLoadStatus.MissingDefaults)
+                ReportSettingsFailure(loop.LoadDiagnostic);
             var player = new ViewModels.Player.PlayerViewModel(
                 new ViewModels.Player.EngineHostPlayerAdapter(EngineHost), loop);
             var window = new Views.Player.PlayerWindow(player);
@@ -1503,8 +1640,8 @@ namespace RowlEngine.Editor.ViewModels
                     msg => AppendLog(msg),
                     () =>
                     {
-                        if (SplitScreenMode == 0)
-                            Workspace = Workspace.WithCenter(PanelIds.Game);
+                        // Faz 10: Oynat oyunu açar ama açık diğer görünümleri (Node, Sahne Düzenle) kapatmaz.
+                        Workspace = Workspace.EnsureCenterVisible(PanelIds.Game);
                     },
                     AssetsJsonPath);
 
@@ -1512,8 +1649,7 @@ namespace RowlEngine.Editor.ViewModels
                 {
                     IsPlayingStandalone = true;
                     IsPlayPaused = false;
-                    if (EngineHost.IsInitialized)
-                        EngineHost.SetPaused(false);
+                    EngineHost.SetEditorFrozen(false);
                     PlayButtonText = "Stop";
                     PlayButtonColor = ThemeFallbackColors.BrushHex("PlayButtonRedColor", ThemeFallbackColors.Surface);
                     StatusText = "Offscreen Play Mode Active";
@@ -1539,8 +1675,7 @@ namespace RowlEngine.Editor.ViewModels
 
             IsPlayingStandalone = false;
             IsPlayPaused = false;
-            if (EngineHost.IsInitialized)
-                EngineHost.SetPaused(false);
+            EngineHost.SetEditorFrozen(false);
             PlayButtonText = "Play";
             PlayButtonColor = ThemeFallbackColors.BrushHex("PlayButtonGreenColor", ThemeFallbackColors.Surface);
             StatusText = "Engine Ready — Offscreen C++ Runtime Active";
@@ -1790,28 +1925,6 @@ namespace RowlEngine.Editor.ViewModels
                 () => SaveProjectNow(),
                 () => IsProjectDirty,
                 dirty => IsProjectDirty = dirty);
-        }
-
-        [RelayCommand]
-        public async Task ImportAssetAsync()
-        {
-            try
-            {
-                if (EditorDialogService.GetMainWindow() == null) return;
-
-                var files = await EditorDialogService.PickAssetFilesAsync();
-
-                if (files != null && files.Count > 0)
-                {
-                    var filePaths = files.Select(f => f.Path.LocalPath);
-                    EditorAssetImportService.ImportAssetFiles(filePaths, MainWindowViewModel.AssetsPath, AppendLog);
-                    AssetBrowserViewModel.RefreshAssets();
-                }
-            }
-            catch (Exception ex)
-            {
-                AppendLog($"Failed to import asset: {ex.Message}");
-            }
         }
 
         public void AppendLog(string message)
@@ -2209,16 +2322,23 @@ namespace RowlEngine.Editor.ViewModels
             catch (Exception ex)
             {
                 AppendLog($"Kayıt anlık görüntüsü alınamadı: {ex.Message}");
+                ReportSaveFailure(ex.Message);
                 return false;
             }
 
-            bool written = CrashRecoveryService.TryWriteSnapshotWithRecovery(
+            var outcome = CrashRecoveryService.TryWriteSnapshotWithRecoveryDetailed(
                 snapshot, AssetsJsonPath, sequence, () => Volatile.Read(ref _saveSequence), AppendLog);
+            bool written = outcome.Written;
             if (written && sequence == Volatile.Read(ref _saveSequence))
             {
                 Volatile.Write(ref _saveCompletedSequence, sequence);
                 IsProjectDirty = false;
+                ReportSaveSuccess();
                 AppendLog($"[PROJE KAYDEDİLDİ] {Nodes.Count} düğüm ve tüm bileşenler başarıyla kaydedildi ({DateTime.Now:HH:mm:ss})");
+            }
+            else if (outcome.Status != SaveWriteStatus.Superseded) // devralınan kayıt hata değil
+            {
+                ReportSaveFailure(SaveFailureClassifier.ReasonFor(outcome));
             }
             return written;
         }
@@ -2239,6 +2359,7 @@ namespace RowlEngine.Editor.ViewModels
             catch (Exception ex)
             {
                 AppendLog($"Kayıt anlık görüntüsü alınamadı: {ex.Message}");
+                ReportSaveFailure(ex.Message);
                 return Task.CompletedTask;
             }
 
@@ -2248,16 +2369,21 @@ namespace RowlEngine.Editor.ViewModels
             return Task.Run(() =>
             {
                 bool written = false;
+                SaveWriteResult outcome = default;
                 try
                 {
-                    written = CrashRecoveryService.TryWriteSnapshotWithRecovery(
+                    outcome = CrashRecoveryService.TryWriteSnapshotWithRecoveryDetailed(
                         snapshot, assetsJsonPath, sequence, () => Volatile.Read(ref _saveSequence), null);
+                    written = outcome.Written;
                 }
                 catch (Exception ex)
                 {
                     string message = ex.Message;
                     Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                        AppendLog($"Arka plan kayıt başarısız: {message}"));
+                    {
+                        AppendLog($"Arka plan kayıt başarısız: {message}");
+                        ReportSaveFailure(SaveFailureClassifier.Describe(ex) ?? message);
+                    });
                     return;
                 }
                 Avalonia.Threading.Dispatcher.UIThread.Post(() =>
@@ -2269,7 +2395,14 @@ namespace RowlEngine.Editor.ViewModels
                     if (written)
                     {
                         IsProjectDirty = false;
+                        ReportSaveSuccess();
                         AppendLog($"[PROJE KAYDEDİLDİ] {nodeCount} düğüm ve tüm bileşenler başarıyla kaydedildi ({DateTime.Now:HH:mm:ss})");
+                    }
+                    else
+                    {
+                        // Faz 8 C2: önceden sessizdi — yazılamayan kayıt artık görünür.
+                        AppendLog("Arka plan kayıt yazılamadı.");
+                        ReportSaveFailure(SaveFailureClassifier.ReasonFor(outcome));
                     }
                 });
             });
@@ -2348,6 +2481,7 @@ namespace RowlEngine.Editor.ViewModels
                     {
                         ProjectRoot = root;
                         CurrentProjectPath = path;
+                        EngineHost.StartupProjectRoot = root;
                     },
                     root => EngineHost.SetProjectDirectory(root),
                     LoadFullStoryGraphFile,
@@ -2360,6 +2494,7 @@ namespace RowlEngine.Editor.ViewModels
 
                 if (result.Succeeded)
                 {
+                    ProjectLeftoverSweeper.Sweep(ProjectRoot, AppendLog); // C04
                     ProjectRuntimeSettings = ProjectRuntimeSettingsService.Load(Path.Combine(ProjectRoot, "project.rowlproj"));
                     LoadProjectRuntimeSettingsIntoEditor();
                     SaveSlotsViewModel.Refresh();
@@ -2392,8 +2527,15 @@ namespace RowlEngine.Editor.ViewModels
 
                 if (selectedDir != null)
                 {
-                    string targetDir = EditorProjectLifecycleCoordinator.GenerateSaveAsTargetDirectory(selectedDir);
-                    SaveProjectToDirectory(targetDir);
+                    string targetDir = EditorProjectLifecycleCoordinator.EnsureUniqueSaveAsTarget(
+                        EditorProjectLifecycleCoordinator.GenerateSaveAsTargetDirectory(selectedDir));
+                    OperationStatus.Begin(OperationKind.SaveAs);
+                    int attempt = OperationStatus.Attempt;
+                    SaveAsResult result = SaveProjectToDirectory(targetDir);
+                    if (result.Succeeded)
+                        OperationStatus.Succeed(OperationKind.SaveAs, result.TargetDirectory, attempt: attempt);
+                    else
+                        OperationStatus.Fail(OperationKind.SaveAs, result.Message, attempt);
                 }
                 else
                 {
@@ -2404,15 +2546,16 @@ namespace RowlEngine.Editor.ViewModels
             catch (Exception ex)
             {
                 AppendLog($"Farklı kaydetme hatası: {ex.Message}");
+                OperationStatus.Fail(OperationKind.SaveAs, ex.Message);
             }
         }
 
         /// <summary>
         /// Helper to copy the entire project and assets to a target directory.
         /// </summary>
-        public void SaveProjectToDirectory(string targetDir)
+        public SaveAsResult SaveProjectToDirectory(string targetDir)
         {
-            EditorProjectLifecycleCoordinator.ExecuteSaveAs(
+            return EditorProjectLifecycleCoordinator.ExecuteSaveAs(
                 ProjectRoot,
                 targetDir,
                 Nodes.Count,
@@ -2454,7 +2597,9 @@ namespace RowlEngine.Editor.ViewModels
 
                 IsBuilding = true;
                 _buildCancellation = new CancellationTokenSource();
-                await EditorBuildCoordinator.BuildStandaloneGameAsync(
+                OperationStatus.Begin(OperationKind.Export);
+                int attempt = OperationStatus.Attempt;
+                StandaloneBuildResult result = await EditorBuildCoordinator.BuildStandaloneGameAsync(
                     ProjectRoot,
                     AssetsPath,
                     buildOutDir,
@@ -2475,10 +2620,17 @@ namespace RowlEngine.Editor.ViewModels
                     msg => BuildProgress = msg,
                     _buildCancellation.Token,
                     diagnostic => NotificationService.ReportBuildDiagnostic(diagnostic, AppendLog));
+                if (result.Cancelled)
+                    OperationStatus.Cancelled(OperationKind.Export);
+                else if (result.Succeeded)
+                    OperationStatus.Succeed(OperationKind.Export, result.OutputDirectory, attempt: attempt);
+                else
+                    OperationStatus.Fail(OperationKind.Export, result.Message, attempt);
             }
             catch (Exception ex)
             {
                 AppendLog($"Build işlemi sırasında hata oluştu: {ex.Message}");
+                OperationStatus.Fail(OperationKind.Export, ex.Message);
             }
             finally
             {
@@ -2665,6 +2817,7 @@ namespace RowlEngine.Editor.ViewModels
             AssetBitmapCache.Clear();
             try { AssetScanner.Dispose(); } catch { }
             try { AssetBrowserViewModel.Dispose(); } catch { }
+            try { InspectorScene.Dispose(); } catch { }
         }
     }
 }

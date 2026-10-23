@@ -14,12 +14,13 @@ EDITOR_COMPARE_TOOL = ROOT / "tools" / "compare_editor_benchmarks.py"
 EDITOR_SUMMARY_TOOL = ROOT / "tools" / "summarize_editor_benchmarks.py"
 
 
-def report(machine="test-machine", architecture="x86_64", cpu_model="Test CPU"):
+def report(machine="test-machine", architecture="x86_64", cpu_model="Test CPU",
+           power_profile="performance"):
     return {
         "schema_version": 2,
         "build": {"id": "abc", "type": "Release"},
         "environment": {"os": "Linux", "architecture": architecture, "cpu_model": cpu_model,
-                        "cpu_count": 8, "machine": machine},
+                        "power_profile": power_profile, "cpu_count": 8, "machine": machine},
         "fixture_id": "native-default-v2",
         "metrics": {
             "vfs_io": {"avg_ms": 1.0},
@@ -32,12 +33,13 @@ def report(machine="test-machine", architecture="x86_64", cpu_model="Test CPU"):
     }
 
 
-def editor_report(machine="test-machine", architecture="x86_64", cpu_model="Test CPU"):
+def editor_report(machine="test-machine", architecture="x86_64", cpu_model="Test CPU",
+                  power_profile="performance"):
     return {
         "schema_version": 2,
         "build": {"id": "abc", "type": "Debug"},
         "environment": {"os": "Linux", "architecture": architecture, "cpu_model": cpu_model,
-                        "cpu_count": 8, "machine": machine},
+                        "power_profile": power_profile, "cpu_count": 8, "machine": machine},
         "fixture_id": "editor-headless-default-v1",
         "metrics": {
             "graph_drag_step_ms": 1.0,
@@ -95,6 +97,20 @@ with tempfile.TemporaryDirectory() as directory:
         raise SystemExit("cpu_model mismatch did not emit a loud SKIPPED banner")
     if "Test CPU" not in cpu_output or "AMD EPYC 7763" not in cpu_output:
         raise SystemExit("SKIPPED banner did not name both baseline and candidate hosts")
+
+    # C03 power-profile pin: the same CPU in power-saver measured soak-stress
+    # ~18x slower than in performance (2026-10-20, this repo's dev laptop).
+    # Two profiles must skip loudly, never compare as one host.
+    saver = directory / "power-saver.json"
+    saver.write_text(json.dumps(report(power_profile="powersave/power")), encoding="utf-8")
+    power_rejected = subprocess.run(
+        [sys.executable, str(TOOL), str(baseline), str(saver),
+         "--warn-percent", "20", "--fail-percent", "35"],
+        capture_output=True, text=True, check=False)
+    power_output = power_rejected.stdout + power_rejected.stderr
+    if power_rejected.returncode != 0 or "SKIPPED" not in power_output \
+            or "environment.power_profile" not in power_output:
+        raise SystemExit("different power_profile did not skip with a loud SKIPPED banner")
 
     # The skip must reach the step summary, not just the log.
     summary = directory / "summary.md"
@@ -364,6 +380,16 @@ with tempfile.TemporaryDirectory() as directory:
         capture_output=True, text=True, check=False)
     if editor_cpu_rejected.returncode == 0 or "environment.cpu_model" not in editor_cpu_rejected.stderr:
         raise SystemExit("different editor benchmark CPU models were not rejected")
+
+    editor_saver = directory / "editor-power-saver.json"
+    editor_saver.write_text(json.dumps(editor_report(power_profile="powersave/power")),
+                            encoding="utf-8")
+    editor_power_rejected = subprocess.run(
+        [sys.executable, str(EDITOR_COMPARE_TOOL), str(editor_baseline), str(editor_saver)],
+        capture_output=True, text=True, check=False)
+    if editor_power_rejected.returncode == 0 \
+            or "environment.power_profile" not in editor_power_rejected.stderr:
+        raise SystemExit("different editor benchmark power profiles were not rejected")
 
     editor_summary = subprocess.run(
         [sys.executable, str(EDITOR_SUMMARY_TOOL), str(editor_baseline), str(editor_candidate)],

@@ -38,6 +38,7 @@ lazy import so `pack` never pays for it and no import cycle exists).
 import hashlib
 import json
 import os
+import re
 import struct
 import sys
 
@@ -49,6 +50,13 @@ except ImportError:
 
 MANIFEST_PATH = "rowl/manifest.json"
 MANIFEST_FORMAT = 1
+# D01a: oyun kimligi tasiyicisi. Paketin icinde `rowl/game.json`
+# {content_format, format, game_id, name}; game_id = project.rowlproj
+# project_uuid (kucuk harfli kanonik UUID). Ham (sikistirilmamis) saklanir.
+GAME_IDENTITY_PATH = "rowl/game.json"
+GAME_IDENTITY_FORMAT = 1
+GAME_CONTENT_FORMAT = 1
+_UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 # #145: reader agreement — engine/src/vfs/rowlpkg_reader.cpp rejects flags==1
 # entries whose integer expansion ratio (uncompressed/compressed) exceeds this.
 # The packer must never emit what the reader must reject; over-compressible
@@ -257,6 +265,10 @@ def collect_files(input_dir):
                 issues.append(("reserved-path", rel_path,
                                f"'{MANIFEST_PATH}' is reserved for the embedded package manifest"))
                 continue
+            if rel_path == GAME_IDENTITY_PATH:
+                issues.append(("reserved-path", rel_path,
+                               f"'{GAME_IDENTITY_PATH}' is reserved for the game identity carrier"))
+                continue
             if os.path.islink(full_path) and not os.path.exists(full_path):
                 issues.append(("dangling-symlink", rel_path, "symbolic link target does not exist"))
                 continue
@@ -279,7 +291,39 @@ def collect_files(input_dir):
     return file_list, issues
 
 
-def pack_directory(input_dir, output_pkg):
+def canonical_game_id(value):
+    """Returns the lowercase canonical UUID text or None when malformed."""
+    if not isinstance(value, str):
+        return None
+    candidate = value.strip().lower()
+    return candidate if _UUID_RE.match(candidate) else None
+
+
+def load_game_identity_from_manifest(manifest_path):
+    """Reads (game_id, name) from a project.rowlproj; raises PackError otherwise."""
+    try:
+        with open(manifest_path, "r", encoding="utf-8") as handle:
+            doc = json.load(handle)
+    except (OSError, ValueError) as error:
+        raise PackError([("game-identity", str(manifest_path),
+                          f"project manifest cannot be read as JSON: {error}")])
+    if not isinstance(doc, dict):
+        raise PackError([("game-identity", str(manifest_path), "project manifest is not a JSON object")])
+    game_id = canonical_game_id(doc.get("project_uuid"))
+    if game_id is None:
+        raise PackError([("game-identity", str(manifest_path),
+                          "project manifest has no valid 'project_uuid'; build the game once from the editor (Build/Export writes it) or add a lowercase-UUID 'project_uuid' to project.rowlproj")])
+    name = doc.get("name")
+    return game_id, name if isinstance(name, str) else ""
+
+
+def build_game_identity_bytes(game_id, name):
+    doc = {"content_format": GAME_CONTENT_FORMAT, "format": GAME_IDENTITY_FORMAT,
+           "game_id": game_id, "name": name or ""}
+    return (json.dumps(doc, sort_keys=True, separators=(",", ":"), ensure_ascii=False) + "\n").encode("utf-8")
+
+
+def pack_directory(input_dir, output_pkg, game_id=None, game_name=""):
     input_dir = os.path.realpath(input_dir)
     output_pkg = os.path.abspath(output_pkg)
     print(f"[Packer] Compressing assets from '{input_dir}' into '{output_pkg}'...")
@@ -291,6 +335,15 @@ def pack_directory(input_dir, output_pkg):
     if issues:
         raise PackError(issues)
 
+    synthetic = {}
+    if game_id is not None:
+        canonical = canonical_game_id(game_id)
+        if canonical is None:
+            raise PackError([("game-identity", str(game_id), "game id is not a valid UUID")])
+        synthetic[GAME_IDENTITY_PATH] = build_game_identity_bytes(canonical, game_name)
+        file_list.append((None, GAME_IDENTITY_PATH))
+        file_list.sort(key=lambda item: item[1])
+
     entries = []
     payload_bytes = bytearray()
     manifest_records = []
@@ -301,18 +354,21 @@ def pack_directory(input_dir, output_pkg):
     cctx = zstd.ZstdCompressor(level=3) if HAS_ZSTD else None
 
     for full_path, rel_path in file_list:
-        try:
-            with open(full_path, "rb") as f:
-                uncompressed_data = f.read()
-        except OSError as error:
-            raise PackError([("unreadable", rel_path, str(error))])
+        if full_path is None:
+            uncompressed_data = synthetic[rel_path]
+        else:
+            try:
+                with open(full_path, "rb") as f:
+                    uncompressed_data = f.read()
+            except OSError as error:
+                raise PackError([("unreadable", rel_path, str(error))])
         if len(uncompressed_data) == 0:
             raise PackError([("zero-byte", rel_path, "file became empty while packing")])
 
         uncompressed_size = len(uncompressed_data)
         digest = hashlib.sha256(uncompressed_data).hexdigest()
 
-        if HAS_ZSTD and uncompressed_size > 0:
+        if HAS_ZSTD and uncompressed_size > 0 and full_path is not None:
             compressed_data = cctx.compress(uncompressed_data)
             flags = 1  # Zstd
             # #145 pack-time decision: the runtime reader fail-closes on
@@ -353,7 +409,7 @@ def pack_directory(input_dir, output_pkg):
             # additive'dir, okuyucu/ABI etkilenmez.
             **({"compressed_sha256": hashlib.sha256(compressed_data).hexdigest()}
                if flags == 1 else {}),
-            **({"converted_from": converted_from} if (converted_from := read_sidecar_converted_from(full_path)) else {}),
+            **({"converted_from": converted_from} if (full_path is not None and (converted_from := read_sidecar_converted_from(full_path))) else {}),
         })
 
         payload_bytes.extend(compressed_data)
@@ -548,7 +604,8 @@ def verify_package(package_path, as_json=False):
 
 def _print_usage():
     print("Usage:")
-    print("  python3 tools/package_assets.py <input_dir> <output_rowlpkg>")
+    print("  python3 tools/package_assets.py <input_dir> <output_rowlpkg>"
+          " [--game-manifest project.rowlproj | --game-id UUID] [--game-name NAME]")
     print("  python3 tools/package_assets.py verify <package_rowlpkg> [--json]")
 
 
@@ -568,8 +625,28 @@ if __name__ == "__main__":
 
     input_dir = sys.argv[1]
     output_pkg = sys.argv[2]
+    extra = sys.argv[3:]
+    options = {}
+    index = 0
+    while index < len(extra):
+        key = extra[index]
+        if key in ("--game-manifest", "--game-id", "--game-name") and index + 1 < len(extra):
+            options[key] = extra[index + 1]
+            index += 2
+        else:
+            _print_usage()
+            sys.exit(1)
     try:
-        pack_directory(input_dir, output_pkg)
+        pack_game_id = None
+        pack_game_name = options.get("--game-name", "")
+        if "--game-manifest" in options and "--game-id" in options:
+            raise PackError([("game-identity", "", "--game-manifest and --game-id are mutually exclusive")])
+        if "--game-manifest" in options:
+            pack_game_id, manifest_name = load_game_identity_from_manifest(options["--game-manifest"])
+            pack_game_name = pack_game_name or manifest_name
+        elif "--game-id" in options:
+            pack_game_id = options["--game-id"]
+        pack_directory(input_dir, output_pkg, pack_game_id, pack_game_name)
     except PackError as error:
         report_issues(error.issues)
         sys.exit(2)

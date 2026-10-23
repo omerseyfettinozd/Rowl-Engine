@@ -19,6 +19,11 @@ public static class StoryGraphDocumentWriter
         Action<string>? log = null,
         GraphStructureDocument? structure = null)
     {
+        if (StoryGraphFormatGuard.IsNewerOnDisk(assetsPath, assetsJsonPath, out int newer))
+        {
+            log?.Invoke(StoryGraphFormatGuard.Message(newer));
+            return false;
+        }
         try
         {
             // Canonical location is Assets/json/. The legacy Assets/ copy is no
@@ -26,7 +31,9 @@ public static class StoryGraphDocumentWriter
             // never disagree about which graph is current.
             Directory.CreateDirectory(assetsJsonPath);
             string content = StoryGraphSerializer.SerializeFullStoryGraph(nodes, connections, startId, structure);
+            var sourceBefore = Localization.SourceCatalogSyncService.CaptureBefore(assetsJsonPath);
             ProjectFileSystem.WriteAllTextAtomically(Path.Combine(assetsJsonPath, "full_story_graph.json"), content);
+            Localization.SourceCatalogSyncService.SyncAfterSave(assetsJsonPath, sourceBefore, log);
             try
             {
                 string legacyPath = Path.Combine(assetsPath, "full_story_graph.json");

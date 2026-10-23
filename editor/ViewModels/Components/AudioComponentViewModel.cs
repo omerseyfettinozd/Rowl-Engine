@@ -10,7 +10,9 @@ namespace RowlEngine.Editor.ViewModels.Components
     /// </summary>
     public partial class AudioComponentViewModel : NodeComponentViewModel
     {
-        public override string DisplayName => "Audio & DSP";
+        public override string DisplayNameKey => "Component.Audio.DisplayName";
+        protected override string DisplayNameTrFallback => "Ses ve DSP";
+        protected override string DisplayNameEnFallback => "Audio & DSP";
         public override string Icon => "Ses";
         public override string TypeKey => "audio";
 

@@ -20,7 +20,7 @@ internal static class EditorComponentHierarchyTests
         if (node.BorderColor != ThemeTestColors.Hex("SuccessColor"))
             throw new Exception("Start node visual state was not applied");
         node.IsSelected = true;
-        if (node.BorderColor != "#F2EFE6")
+        if (node.BorderColor != ThemeTestColors.Hex("SelectionBorderColorValue"))
             throw new Exception("Selected node visual state did not take priority");
         node.IsSelected = false;
         if (node.BorderColor != ThemeTestColors.Hex("SuccessColor") || !node.ComponentSummary.EndsWith("BİLEŞEN"))

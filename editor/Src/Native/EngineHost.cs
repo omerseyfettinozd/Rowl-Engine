@@ -46,6 +46,16 @@ namespace RowlEngine.Editor.Native
         /// <summary>True when Play mode is active (game loop running).</summary>
         public bool IsPlaying { get; private set; } = false;
 
+        /// <summary>
+        /// Editör Duraklat'ı (Unity Pause): oyun ve sesi olduğu yerde dondurur. Oyunun kendi
+        /// Esc menüsünü açan <see cref="SetPaused"/>'tan ayrıdır — editörde Duraklat'a basınca
+        /// oyun içi duraklatma menüsü çıkıyordu. Adım düğmesi <see cref="Step"/> ile tek kare ilerletir.
+        /// </summary>
+        public bool IsEditorFrozen { get; private set; }
+
+        // Donukken ses kısılır; motorda ses duraklatma çağrısı yok. Çözülünce bu seviye geri gelir.
+        private float _frozenMasterVolume = 1.0f;
+
         private WriteableBitmap? _renderTargetBitmap;
         public WriteableBitmap? RenderTargetBitmap
         {
@@ -86,6 +96,21 @@ namespace RowlEngine.Editor.Native
         // aynı). EmbeddedRuntimeBootstrap satır 134-159 emsaldir.
         internal string LastError { get; private set; } = string.Empty;
 
+        /// <summary>
+        /// Initialize'da RowlEngine_Init ile aynı motor iş parçacığı turunda
+        /// bağlanacak proje. Önizleme Init ile bağlama arasına sahne itince
+        /// motor oturumu "oynanmış" sayıyor (stepId 2) ve bağlamayı sessizce
+        /// reddediyordu: VFS boş kalıyor, Oyun panelinde hiçbir resim
+        /// çıkmıyordu. Initialize'dan önce kurulmalı.
+        /// </summary>
+        public string? StartupProjectRoot { get; set; }
+
+        /// <summary>Son başarılı proje bağlamasının kökü (yoksa boş).</summary>
+        public string MountedProjectRoot { get; private set; } = string.Empty;
+
+        /// <summary>Son proje bağlamasının red ayrıntısı; başarılı bağlama boşaltır.</summary>
+        public string LastProjectMountError { get; private set; } = string.Empty;
+
         // W8-f — test seam'i: varsayılan null iken gerçek worker kurulur;
         // testler deterministik başarısızlık dallarını (fırlatan fabrika,
         // handlesiz worker) bu fabrikayla enjekte eder. Üretim akışı
@@ -97,6 +122,13 @@ namespace RowlEngine.Editor.Native
             OffscreenRuntimeWorker? runtime = _runtime;
             return runtime?.IsAvailable == true ? runtime.Invoke(command) : fallback;
         }
+
+        /// <summary>
+        /// Motor nesnesi yalnız sahibi olan çalışan iş parçacığından çağrılabilir (native taraf
+        /// başka iş parçacığından gelen çağrıyı WRONG_THREAD ile reddeder). Servislerin handle
+        /// alan native çağrıları buradan geçer; motor yoksa <paramref name="fallback"/> döner.
+        /// </summary>
+        internal T InvokeOnEngineThread<T>(Func<IntPtr, T> command, T fallback) => InvokeNative(command, fallback);
 
         private void InvokeNative(Action<IntPtr> command)
         {
@@ -181,8 +213,21 @@ namespace RowlEngine.Editor.Native
             // taze sanılmaz. Anlık görüntü Dispose ÖNCESİ alınır.
             InvokeNative(handle => NativeBridge.RowlEngine_ClearLastResult(handle));
 
-            int result = InvokeNative(handle => NativeBridge.RowlEngine_Init(
-                handle, width, height, vsync ? 1 : 0), 0);
+            // Init ve başlangıç projesi tek iş parçacığı turunda: arada
+            // sıraya giren önizleme itişi bağlamayı reddettiremez.
+            string? startupRoot = StartupProjectRoot;
+            bool startupMounted = false;
+            string startupMountDetail = string.Empty;
+            int result = InvokeNative(handle =>
+            {
+                int init = NativeBridge.RowlEngine_Init(handle, width, height, vsync ? 1 : 0);
+                if (init != 0 && !string.IsNullOrEmpty(startupRoot))
+                    startupMounted = MountProjectOnEngineThread(handle, startupRoot, out startupMountDetail);
+                return init;
+            }, 0);
+
+            if (result != 0 && !string.IsNullOrEmpty(startupRoot))
+                RecordProjectMount(startupRoot, startupMounted, startupMountDetail);
 
             if (result == 0)
             {
@@ -321,7 +366,7 @@ namespace RowlEngine.Editor.Native
             if (dt > 0.25f) dt = 0.25f;
             if (dt < 0.0f)  dt = 0.0f;
 
-            if (IsPlaying)
+            if (IsPlaying && !IsEditorFrozen)
             {
                 InvokeNative(handle => NativeBridge.RowlEngine_Step(handle, dt));
                 RefreshDialogueHistoryIfStale();
@@ -342,12 +387,14 @@ namespace RowlEngine.Editor.Native
                 // tweens progress instead of stalling on Step(0). Paused story
                 // simulation stays frozen (engine.cpp paused branch), so this
                 // is story-safe.
-                float upkeepDt = (float)Math.Clamp(idleSeconds, 0.0, 0.25);
+                // Editör dondurmasında görsel saat de durur (kamera sarsıntısı, geçişler).
+                float upkeepDt = IsEditorFrozen ? 0f : (float)Math.Clamp(idleSeconds, 0.0, 0.25);
                 // Pre-clear so the read below belongs to this upkeep; Step
                 // never stamps success, so non-zero is always fresh evidence
                 // (e.g. the #160 stall StateError).
                 InvokeNative(handle => NativeBridge.RowlEngine_ClearLastResult(handle));
                 InvokeNative(handle => NativeBridge.RowlEngine_Step(handle, upkeepDt));
+                SilenceEditModeMusic();
                 if (TryGetLastEngineResult(out int upkeepCode, out string upkeepOp, out string upkeepMsg)
                     && upkeepCode != 0)
                     Debug.WriteLine($"EngineHost idle upkeep last-result {upkeepCode} ({upkeepOp}): {upkeepMsg}");
@@ -513,12 +560,14 @@ namespace RowlEngine.Editor.Native
             if (!IsInitialized) return;
             if (IsPlaying == isPlaying) return;
             IsPlaying = isPlaying;
+            _editAudioPreview = false;
             _lastTick = DateTime.UtcNow;
             _lastIdleUpkeep = _lastTick;
 
             InvokeNative(handle => NativeBridge.RowlEngine_SetPlayState(handle, isPlaying ? 1 : 0));
             if (!isPlaying)
             {
+                SetEditorFrozen(false);
                 // Render static frame when stopping
                 InvokeNative(handle => NativeBridge.RowlEngine_Step(handle, 0.0f));
                 UpdatePixelBuffer();
@@ -533,21 +582,69 @@ namespace RowlEngine.Editor.Native
                 InvokeNative(handle => NativeBridge.RowlEngine_SetPaused(handle, paused ? 1 : 0));
         }
 
+        // Denetçi'deki "sesi dinle" ile elle başlatılan müzik; düzenleme susturmasından muaf.
+        private bool _editAudioPreview;
+
+        /// <summary>
+        /// Düzenleme modunda (oyun oynamıyorken) motorun sahne uygulayan çağrıları — ilk kare,
+        /// başlangıca sıfırlama, hikâye yükleme, önizleme itişi — başlangıç düğümünün ses
+        /// bileşeniyle müziği başlatıyordu: proje açılır açılmaz ve Durdur'dan sonra müzik
+        /// çalmaya devam ediyor, oyun arkada açık kalmış gibi görünüyordu. Müzik yalnız oyun
+        /// modunda ya da elle ses önizlemesinde çalar.
+        /// </summary>
+        private void SilenceEditModeMusic()
+        {
+            if (IsPlaying || _editAudioPreview || !IsInitialized) return;
+            InvokeNative(handle =>
+            {
+                if (NativeBridge.RowlEngine_IsBgmPlaying(handle) != 0)
+                    NativeBridge.RowlEngine_StopBgm(handle);
+            });
+        }
+
+        /// <summary>Editör Duraklat'ı: simülasyonu ve sesi dondurur / çözer (menü açmaz).</summary>
+        public void SetEditorFrozen(bool frozen)
+        {
+            if (IsEditorFrozen == frozen) return;
+            IsEditorFrozen = frozen;
+            _lastTick = DateTime.UtcNow;
+            _lastIdleUpkeep = _lastTick;
+            if (IsInitialized)
+            {
+                if (frozen)
+                {
+                    _frozenMasterVolume = GetMasterVolume();
+                    InvokeNative(handle => NativeBridge.RowlEngine_SetMasterVolume(handle, 0f));
+                }
+                else
+                {
+                    float restore = _frozenMasterVolume;
+                    InvokeNative(handle => NativeBridge.RowlEngine_SetMasterVolume(handle, restore));
+                }
+            }
+            OnPropertyChanged(nameof(IsEditorFrozen));
+        }
+
         /// <summary>Reports the native pause flag (false when uninitialized).</summary>
         public bool IsPaused()
             => InvokeNative(NativeBridge.RowlEngine_IsPaused, 0) != 0;
+
+        /// <summary>Tanı/test: kaç kez başlangıç düğümüne sıfırlandı (durdurmada tek sıfırlama kilidi).</summary>
+        internal int ResetToStartNodeCount { get; private set; }
 
         /// <summary>Resets the C++ engine story state back to the starting node.</summary>
         public void ResetToStartNode()
         {
             if (IsInitialized)
             {
+                ResetToStartNodeCount++;
                 _lastPreviewComponentsJson = null;
                 InvokeNative(handle =>
                 {
                     NativeBridge.RowlEngine_ResetToStartNode(handle);
                     NativeBridge.RowlEngine_Step(handle, 0.0f);
                 });
+                SilenceEditModeMusic();
                 InvalidateDialogueHistory();
                 UpdatePixelBuffer();
             }
@@ -625,6 +722,7 @@ namespace RowlEngine.Editor.Native
             var stopwatch = Stopwatch.StartNew();
             InvokeNative(handle => NativeBridge.RowlEngine_UpdateSceneFromJson(handle, componentsJson));
             stopwatch.Stop();
+            SilenceEditModeMusic();
             LastSceneUpdateMilliseconds = stopwatch.Elapsed.TotalMilliseconds;
             _lastPreviewComponentsJson = componentsJson;
             RefreshScriptRuntimeDiagnostics();
@@ -688,6 +786,7 @@ namespace RowlEngine.Editor.Native
             if (IsInitialized && !string.IsNullOrEmpty(jsonPath))
             {
                 InvokeNative(handle => NativeBridge.RowlEngine_LoadStoryGraph(handle, jsonPath));
+                SilenceEditModeMusic();
                 if (!IsPlaying)
                 {
                     InvokeNative(handle => NativeBridge.RowlEngine_Step(handle, 0.0f));
@@ -702,6 +801,7 @@ namespace RowlEngine.Editor.Native
             if (!IsInitialized || string.IsNullOrEmpty(vfsPath)) return false;
             bool loaded = InvokeNative(
                 handle => NativeBridge.RowlEngine_LoadStoryGraphFromVfs(handle, vfsPath) != 0, false);
+            SilenceEditModeMusic();
             if (loaded && !IsPlaying)
             {
                 InvokeNative(handle => NativeBridge.RowlEngine_Step(handle, 0.0f));
@@ -718,13 +818,39 @@ namespace RowlEngine.Editor.Native
         {
             if (IsInitialized && !string.IsNullOrEmpty(projectRoot))
             {
-                _lastPreviewComponentsJson = null;
-                InvokeNative(handle => NativeBridge.RowlEngine_SetProjectDirectory(handle, projectRoot));
-                if (!IsPlaying)
-                {
-                    InvokeNative(handle => NativeBridge.RowlEngine_Step(handle, 0.0f));
-                    UpdatePixelBuffer();
-                }
+                SetProjectDirectoryChecked(projectRoot, out _);
+            }
+        }
+
+        /// <summary>
+        /// Motor iş parçacığında çalışır: sonuç kanalını temizler, projeyi
+        /// bağlar ve reddi okur. Sıfır-dışı her kod bu bağlamaya aittir
+        /// (ölü-kök reddi load_story_graph op'uyla damgalanır).
+        /// </summary>
+        private static bool MountProjectOnEngineThread(IntPtr handle, string projectRoot, out string detail)
+        {
+            NativeBridge.RowlEngine_ClearLastResult(handle);
+            NativeBridge.RowlEngine_SetProjectDirectory(handle, projectRoot);
+            int code = NativeBridge.RowlEngine_GetLastResultCode(handle);
+            detail = code == 0
+                ? string.Empty
+                : NativeBridge.PtrToString(
+                    NativeBridge.RowlEngine_GetLastResultMessageWithLength(handle, out uint msgLen), msgLen);
+            return code == 0;
+        }
+
+        private void RecordProjectMount(string projectRoot, bool mounted, string detail)
+        {
+            if (mounted)
+            {
+                MountedProjectRoot = projectRoot;
+                LastProjectMountError = string.Empty;
+            }
+            else
+            {
+                LastProjectMountError = string.IsNullOrEmpty(detail)
+                    ? "SetProjectDirectory rejected (no native detail)"
+                    : detail;
             }
         }
 
@@ -772,16 +898,19 @@ namespace RowlEngine.Editor.Native
             detail = string.Empty;
             if (!IsInitialized || string.IsNullOrEmpty(projectRoot)) return true;
             _lastPreviewComponentsJson = null;
-            InvokeNative(handle => NativeBridge.RowlEngine_ClearLastResult(handle));
-            InvokeNative(handle => NativeBridge.RowlEngine_SetProjectDirectory(handle, projectRoot));
-            // Kanal mount öncesi temizlendi; sıfır-dışı her kod bu mounta
-            // aittir (ölü-kök reddi load_story_graph op'uyla damgalanır).
-            // Anlık görüntü iç Step'ten ÖNCE alınır: Step WrongThread
-            // damgası yanlış reje yol açardı. Detay da burada yakalanır.
-            bool rejected = TryGetLastEngineResult(out int code, out _, out string message)
-                && code != 0;
+            // Temizle + bağla + oku tek turda: iç Step'in WrongThread damgası
+            // ya da araya giren başka bir çağrı yanlış reje yol açamaz.
+            string message = string.Empty;
+            bool mounted = InvokeNative(handle =>
+            {
+                bool ok = MountProjectOnEngineThread(handle, projectRoot, out string mountDetail);
+                message = mountDetail;
+                return ok;
+            }, false);
+            RecordProjectMount(projectRoot, mounted, message);
+            bool rejected = !mounted;
             if (rejected)
-                detail = message;
+                detail = LastProjectMountError;
             if (!IsPlaying)
             {
                 InvokeNative(handle => NativeBridge.RowlEngine_Step(handle, 0.0f));
@@ -1073,6 +1202,12 @@ namespace RowlEngine.Editor.Native
         {
             if (!NativeGuard.TryClamp01(volume, out float v))
                 return;
+            if (IsEditorFrozen)
+            {
+                // Donukken gelen ayar (ör. tercih senkronu) sessizliği bozmasın; çözülünce uygulanır.
+                _frozenMasterVolume = v;
+                return;
+            }
             InvokeNative(handle => NativeBridge.RowlEngine_SetMasterVolume(handle, v));
         }
 
@@ -1144,11 +1279,16 @@ namespace RowlEngine.Editor.Native
         public void PlayAudio(string assetPath, int channelType = 0, int filterType = 0)
         {
             if (IsInitialized && !string.IsNullOrEmpty(assetPath))
+            {
+                if (!IsPlaying && channelType == 0)
+                    _editAudioPreview = true;
                 InvokeNative(handle => NativeBridge.RowlEngine_PlayAudio(handle, assetPath, channelType, filterType));
+            }
         }
 
         public void StopBgm()
         {
+            _editAudioPreview = false;
             InvokeNative(NativeBridge.RowlEngine_StopBgm);
         }
 

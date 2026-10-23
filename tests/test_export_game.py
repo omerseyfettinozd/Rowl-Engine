@@ -87,6 +87,10 @@ with tempfile.TemporaryDirectory() as directory:
         "notices\n", encoding="utf-8")
     (fake_root / "samples" / "first_light" / "Assets" / "a.png").write_bytes(
         b"fake-png-bytes-0001")
+    # A release must carry its story graph (verify_release_package checks it).
+    (fake_root / "samples" / "first_light" / "Assets" / "json").mkdir()
+    (fake_root / "samples" / "first_light" / "Assets" / "json"
+     / "full_story_graph.json").write_text('{"nodes": []}\n', encoding="utf-8")
 
     with mock.patch.object(EXPORT_GAME, "ROOT", fake_root):
         out_a = fake_root / "a.zip"
@@ -148,24 +152,40 @@ with tempfile.TemporaryDirectory() as directory:
         if set(covered) != set(names) - {"SHA256SUMS"}:
             raise SystemExit("SHA256SUMS does not cover every zip entry")
 
-        for required in ("THIRD_PARTY_NOTICES.md", "VERSION",
-                         "game.rowlpkg", "game.rowlpkg.sha256"):
+        package_arc = "Assets/packages/game.rowlpkg"
+        for required in ("THIRD_PARTY_NOTICES.md", "VERSION", "RowlGame", "run_game.sh",
+                         package_arc, package_arc + ".sha256"):
             if not (extract / required).is_file():
                 raise SystemExit(f"portable-zip is missing {required}")
+        with zipfile.ZipFile(out_a) as archive:
+            for executable in ("RowlGame", "run_game.sh"):
+                mode = (archive.getinfo(executable).external_attr >> 16) & 0o777
+                if mode != 0o755:
+                    raise SystemExit(f"portable-zip {executable} mode is {oct(mode)}, want 0o755")
 
         tools_dir = str(ROOT / "tools")
         if tools_dir not in sys.path:
             sys.path.insert(0, tools_dir)
         import package_assets
-        if package_assets.verify_package(str(extract / "game.rowlpkg")) != 0:
+        if package_assets.verify_package(str(extract / package_arc)) != 0:
             raise SystemExit("extracted game.rowlpkg failed verify")
 
+        # Gerçek ekran denemesi (2026-10-20): the old flat layout passed every
+        # check above and still extracted to an empty game — the VFS mounts
+        # packages only from Assets/packages. The zip must BE a release the
+        # release verifier accepts, not merely contain the right bytes.
+        import verify_release_package
+        try:
+            verify_release_package.verify(str(extract))
+        except (OSError, ValueError) as error:
+            raise SystemExit(f"portable-zip is not a valid release layout: {error}")
+
         # Tamper probe (locked): 1 flipped byte must break the SHA256SUMS check.
-        tampered = bytearray((extract / "game.rowlpkg").read_bytes())
+        tampered = bytearray((extract / package_arc).read_bytes())
         if len(tampered) <= 25:
             raise SystemExit("tamper probe needs a package over 25 bytes")
         tampered[25] ^= 1
-        if hashlib.sha256(bytes(tampered)).hexdigest() == covered["game.rowlpkg"]:
+        if hashlib.sha256(bytes(tampered)).hexdigest() == covered[package_arc]:
             raise SystemExit("SHA256SUMS tamper probe did not go red")
 
     # export_pc staging must be untouched by the portable-zip path.

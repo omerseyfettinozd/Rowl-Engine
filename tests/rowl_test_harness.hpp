@@ -94,6 +94,8 @@ void test_logger_timestamp();
 void test_logger_concurrency();
 void test_aspect_guardian();
 void test_msdf_renderer();
+void test_gpu_truetype_text();
+void test_pause_overlay_visible_window();  // C02 BUG-2: gorunur pencerede pause overlay
 void test_game_state();
 void test_audio_engine();
 void test_audio_device_recovery();
@@ -174,7 +176,12 @@ void test_lua_sandbox_dos_probe();
 void test_runtime_context_and_diagnostics();
 void test_crash_log();
 void test_story_graph_parser();
+void test_story_graph_format_version();
+void test_game_identity();
+void test_game_data_layout();
+void test_native_player_profile();  // D01c-1: player profile v1 (preferences + read set)
 void test_boot_story_diagnostics();  // #118/#119/#120: grafsiz/bozuk boot ayirt edilebilirlik kilidi
+void test_project_mount_cwd();  // cwd = proje koku iken oynatici VFS baglamasi kilidi
 void test_graph_vnext();
 void test_localization();
 void test_locale_cluster();  // Dilim Locale kümesi kilitleri (T1-T7)

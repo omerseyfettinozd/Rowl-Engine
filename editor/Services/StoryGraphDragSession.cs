@@ -32,6 +32,11 @@ namespace RowlEngine.Editor.Services
         /// <summary>True while a node-drag snapshot is pending commit or cancel.</summary>
         public bool HasPendingNodeDrag => _nodeSnapshot != null && _nodeSnapshot.Count > 0;
 
+        // VM boş-tuval kararı için salt-okunur görünüm.
+        public NodeViewModel? ActiveSourceNode => _sourceNode;
+        public string ActiveOptionId => _optionId;
+        public ConnectionViewModel? ActiveUnpluggedConnection => _removedConn;
+
         /// <summary>
         /// Arms a wire gesture from a green output pin. Returns the wire
         /// start point so the owner can publish it to its bound property.
@@ -49,17 +54,18 @@ namespace RowlEngine.Editor.Services
         /// Commits a wire gesture: snap-connects (recording one undoable
         /// ConnectWireAction), records an unplug-disconnect when dropped in
         /// empty space, and clears the gesture state. No-op when no gesture
-        /// is armed.
+        /// is armed. Reddi notify anahtarıyla bildirir, geriye neden döner.
         /// </summary>
-        public void EndWireDrag(
+        public WireConnectRejection EndWireDrag(
             Point releasePos,
             ObservableCollection<NodeViewModel> nodes,
             ObservableCollection<ConnectionViewModel> connections,
             Action? updateStartNodeState,
             Action<string> log,
-            Action scheduleSave)
+            Action scheduleSave,
+            Action<string>? notify = null)
         {
-            if (_sourceNode == null) return;
+            if (_sourceNode == null) return WireConnectRejection.None;
 
             var sourceNode = _sourceNode;
             var optionId = _optionId;
@@ -76,6 +82,7 @@ namespace RowlEngine.Editor.Services
                 releasePos,
                 nodes,
                 connections,
+                out var reason,
                 optionId);
 
             if (newConn != null)
@@ -94,15 +101,24 @@ namespace RowlEngine.Editor.Services
                     connections, newConn, replaced, changes, updateStartNodeState));
                 log($"Connected Wire: Node #{sourceNode.Id} ---> Node #{newConn.TargetNode?.Id} (Total cables: {connections.Count})");
             }
-            else if (unplugged != null)
-            {
-                UndoRedoService.Instance.RecordAction(
-                    new DisconnectCablesUndoAction(connections, new List<ConnectionViewModel> { unplugged }, updateStartNodeState));
-                log("Connection dropped in empty space (cable unplugged / removed).");
-            }
             else
             {
-                log("Connection dropped in empty space (cable unplugged / removed).");
+                // Reddi bildir; unplug geri koyma davranışı aynen korunur.
+                if (reason == WireConnectRejection.SelfConnection)
+                    notify?.Invoke("Canvas.Wire.Rejected.Self");
+                else if (reason == WireConnectRejection.Duplicate)
+                    notify?.Invoke("Canvas.Wire.Rejected.Duplicate");
+
+                if (unplugged != null)
+                {
+                    UndoRedoService.Instance.RecordAction(
+                        new DisconnectCablesUndoAction(connections, new List<ConnectionViewModel> { unplugged }, updateStartNodeState));
+                    log("Connection dropped in empty space (cable unplugged / removed).");
+                }
+                else
+                {
+                    log("Connection dropped in empty space (cable unplugged / removed).");
+                }
             }
 
             updateStartNodeState?.Invoke();
@@ -110,6 +126,7 @@ namespace RowlEngine.Editor.Services
             _sourceNode = null;
             _optionId = string.Empty;
             _removedConn = null;
+            return newConn != null ? WireConnectRejection.None : reason;
         }
 
         /// <summary>
@@ -194,6 +211,85 @@ namespace RowlEngine.Editor.Services
                 UndoRedoService.Instance.RecordAction(new MoveNodesAction(before, after));
                 scheduleSave();
             }
+        }
+    }
+
+    /// <summary>Boş tuvale bırakınca düğüm+tel tek adımda; ChoiceTargetChange kalıbıyla.</summary>
+    public sealed class AddNodeAndConnectAction : IUndoAction
+    {
+        private readonly ObservableCollection<NodeViewModel> _nodes;
+        private readonly ObservableCollection<ConnectionViewModel> _connections;
+        private readonly NodeViewModel _node;
+        private readonly ConnectionViewModel _connection;
+        private readonly List<ConnectionViewModel> _replaced;
+        private readonly NodeViewModel? _choiceSource;
+        private readonly string _choiceOption;
+        private readonly ulong _choiceBefore;
+        private readonly ulong _choiceAfter;
+        private readonly Action? _update;
+        private readonly Action<NodeViewModel?>? _select;
+        private readonly NodeViewModel? _prevSelected;
+
+        public string Description => $"Add Node #{_node.Id} and Connect";
+
+        public AddNodeAndConnectAction(
+            ObservableCollection<NodeViewModel> nodes,
+            ObservableCollection<ConnectionViewModel> connections,
+            NodeViewModel node,
+            ConnectionViewModel connection,
+            List<ConnectionViewModel> replaced,
+            NodeViewModel? choiceSource,
+            string choiceOption,
+            ulong choiceBefore,
+            ulong choiceAfter,
+            Action? updateStartNodeState = null,
+            Action<NodeViewModel?>? selectNode = null,
+            NodeViewModel? previousSelected = null)
+        {
+            _nodes = nodes;
+            _connections = connections;
+            _node = node;
+            _connection = connection;
+            _replaced = replaced ?? new List<ConnectionViewModel>();
+            _choiceSource = choiceSource;
+            _choiceOption = choiceOption ?? string.Empty;
+            _choiceBefore = choiceBefore;
+            _choiceAfter = choiceAfter;
+            _update = updateStartNodeState;
+            _select = selectNode;
+            _prevSelected = previousSelected;
+        }
+
+        public void Undo()
+        {
+            // Önce teli kaldır, değişen hedefi geri yükle, düğümü sil.
+            if (_connections.Contains(_connection))
+                _connections.Remove(_connection);
+            foreach (var r in _replaced)
+                if (!_connections.Contains(r))
+                    _connections.Add(r);
+            if (_choiceSource != null && !string.IsNullOrEmpty(_choiceOption))
+                StoryGraphCanvasService.SetChoiceTarget(_choiceSource, _choiceOption, _choiceBefore);
+            if (_nodes.Contains(_node))
+                _nodes.Remove(_node);
+            _select?.Invoke(_prevSelected);
+            _update?.Invoke();
+        }
+
+        public void Redo()
+        {
+            // Düğümü ve teli geri ekle, hedefi yeniden uygula.
+            if (!_nodes.Contains(_node))
+                _nodes.Add(_node);
+            foreach (var r in _replaced)
+                if (_connections.Contains(r))
+                    _connections.Remove(r);
+            if (!_connections.Contains(_connection))
+                _connections.Add(_connection);
+            if (_choiceSource != null && !string.IsNullOrEmpty(_choiceOption))
+                StoryGraphCanvasService.SetChoiceTarget(_choiceSource, _choiceOption, _choiceAfter);
+            _select?.Invoke(_node);
+            _update?.Invoke();
         }
     }
 }

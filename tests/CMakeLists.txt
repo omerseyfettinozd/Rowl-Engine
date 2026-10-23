@@ -6,6 +6,8 @@ add_executable(rowl_tests
     test_logger.cpp
     test_aspect_guardian.cpp
     test_msdf_renderer.cpp
+    test_gpu_truetype_text.cpp
+    test_pause_overlay_visible_window.cpp
     test_game_state.cpp
     test_audio_engine.cpp
     test_audio_device_recovery.cpp
@@ -27,7 +29,12 @@ add_executable(rowl_tests
     test_crash_log.cpp
     test_save_slot_and_package_fuzz.cpp
     test_story_graph_parser.cpp
+    test_story_graph_format_version.cpp
+    test_game_identity.cpp
+    test_game_data_layout.cpp
+    test_native_player_profile.cpp
     test_boot_story_diagnostics.cpp
+    test_project_mount_cwd.cpp
     test_graph_vnext.cpp
     test_localization.cpp
     test_locale_cluster.cpp
@@ -106,10 +113,17 @@ target_compile_definitions(rowl_tests PRIVATE ROWL_BUILDING_DLL)
 # B1: MSDF capability-bit varlık testi bu build'in shader-durumunu bilir
 # (CACHE'den; shaderless-fallback'ta bit 0 beklenir).
 target_compile_definitions(rowl_tests PRIVATE
-    ROWL_TEST_GPU_MSDF_EXPECTED=${ROWL_GPU_MSDF_SHADER_AVAILABLE})
+    ROWL_TEST_GPU_MSDF_EXPECTED=${ROWL_GPU_MSDF_SHADER_AVAILABLE}
+    # D01c-1: golden profile fixture lookup independent of the working dir.
+    ROWL_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 
-add_test(NAME rowl_native_tests COMMAND rowl_tests)
-set_tests_properties(rowl_native_tests PROPERTIES
+# RC Soak (N-stress, 1000 kaydet/yükle) TSan altında ~1200 s; tek ctest
+# testinde kalırsa sonrasındaki bölümler 1800 s içinde hiç koşmaz. Ayrı test
+# olarak koşar; ana test --skip-soak'ı YALNIZ ayrı test kayıtlıysa alır, yani
+# bölüm tam olarak bir testte koşar (test_rc_gates.py bunu kilitler).
+add_test(NAME rowl_native_soak_tests COMMAND rowl_tests --only-soak)
+add_test(NAME rowl_native_tests COMMAND rowl_tests --skip-soak)
+set_tests_properties(rowl_native_tests rowl_native_soak_tests PROPERTIES
     WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
     # Dummy drivers keep the suite display-/audio-server free on headless
     # CI and sandbox machines; the offscreen engine needs neither.
@@ -662,7 +676,7 @@ if(WIN32)
     # 1500 gives a Debug run room to finish while staying a fast pointer
     # on a real hang (assert dialogs are suppressed in test_main.cpp).
     # Other hosts keep the CLI default: do not touch, they are green.
-    set_tests_properties(rowl_native_tests PROPERTIES TIMEOUT 1500)
+    set_tests_properties(rowl_native_tests rowl_native_soak_tests PROPERTIES TIMEOUT 1500)
 endif()
 
 add_executable(test_p1_7_resize_save test_p1_7_resize_save.cpp)

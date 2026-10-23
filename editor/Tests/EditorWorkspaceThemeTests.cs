@@ -10,6 +10,13 @@ internal static class EditorWorkspaceThemeTests
 {
     public static void Run(MainWindowViewModel mainVm)
     {
+        // Uygulama kaynakları UI thread'ine bağlı: Avalonia başka bir testte UI thread'iyle
+        // başlatıldıysa tema değişimi o thread'de yapılmalı (süitin diğer adımlarıyla aynı kalıp).
+        if (Application.Current != null && !Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
+        {
+            Avalonia.Threading.Dispatcher.UIThread.Invoke(() => Run(mainVm));
+            return;
+        }
         Console.WriteLine("\n[Test 2]: Theming (Kemik Beyazı + Saf Siyah OLED)...");
         var settings = new SettingsViewModel();
         if (settings.SelectedTheme != "Kemik Beyazı (Karanlık)")
@@ -79,22 +86,25 @@ internal static class EditorWorkspaceThemeTests
         // Faz 5 D3: panel boyutları sabit piksel özelliklerinden değil, ağaç oranlarından
         // WorkspaceHost'ta çizilir. Davranış eşdeğeri ölçülür: 1440 px genişlikte (çalışma
         // alanı 1440×820 = 1440×900 pencere − üst çubuk/durum çubuğu) varsayılan yerleşim
-        // Hiyerarşi ≈ 200, Denetçi ≈ 280, alt şerit ≈ 180 px (±%10); gizli panel yer tutmaz.
+        // Hiyerarşi ≈ 200, Denetçi ≈ 280, alt şerit ≈ 244 px (±%10); gizli panel yer tutmaz.
         Avalonia.Threading.Dispatcher.UIThread.Invoke(() => RunWorkspaceSizes(mainVm));
         Console.WriteLine("  [PASS] Hidden side panels release workspace width");
         Console.WriteLine(
             "  [PASS] Bottom tabs share one strip, toggle independently and reclaim height");
 
-        mainVm.ShowPanel("SplitScreen");
-        mainVm.ShowPanel("Preview");
-        if (mainVm.SplitScreenMode != 0 || !mainVm.IsPreviewActive || mainVm.IsNodeGraphActive)
-            throw new Exception("Preview mode did not exit split screen cleanly");
-        mainVm.ShowPanel("SplitScreen");
+        // Faz 10: Node / Game / Edit bağımsız aç-kapa; üçü aynı anda açık olabilir.
         mainVm.ShowPanel("EnginePreview");
-        if (mainVm.SplitScreenMode != 0 || !mainVm.IsEnginePreviewActive || mainVm.IsNodeGraphActive)
-            throw new Exception("Game preview mode did not exit split screen cleanly");
-        mainVm.ShowPanel("NodeGraph");
-        Console.WriteLine("  [PASS] Single preview modes exit split screen consistently");
+        mainVm.ShowPanel("Preview");
+        if (!mainVm.IsNodeGraphActive || !mainVm.IsEnginePreviewActive || !mainVm.IsPreviewActive)
+            throw new Exception("Center views did not open side by side");
+        mainVm.ShowPanel("EnginePreview");
+        mainVm.ShowPanel("Preview");
+        if (!mainVm.IsNodeGraphActive || mainVm.IsEnginePreviewActive || mainVm.IsPreviewActive)
+            throw new Exception("Center views did not close independently");
+        mainVm.ShowPanel("NodeGraph"); // son merkez kapanmaz
+        if (!mainVm.IsNodeGraphActive)
+            throw new Exception("The last center view closed");
+        Console.WriteLine("  [PASS] Center views open and close independently");
     }
 
     private static void RunWorkspaceSizes(MainWindowViewModel mainVm)
@@ -120,6 +130,10 @@ internal static class EditorWorkspaceThemeTests
         {
             Rect Measure(string id)
             {
+                // Faz 5 D6 sözleşmesi: düzen geçişi CompleteMotion'a (ya da bir render tick'ine)
+                // kadar 0'dan başlar; son yerleşimi ölçmek için geçişi bitir.
+                window.UpdateLayout();
+                host.CompleteMotion();
                 window.UpdateLayout();
                 return host.GetPanelRect(id);
             }
@@ -131,7 +145,7 @@ internal static class EditorWorkspaceThemeTests
 
             Near("Default Hierarchy width", Measure(PanelIds.Hierarchy).Width, 200);
             Near("Default Inspector width", Measure(PanelIds.Inspector).Width, 280);
-            Near("Default bottom strip height", Measure(PanelIds.Bottom).Height, 180);
+            Near("Default bottom strip height", Measure(PanelIds.Bottom).Height, 244);
             double nodeWidth = Measure(PanelIds.Node).Width;
 
             mainVm.ShowPanel("Hierarchy");
@@ -158,7 +172,7 @@ internal static class EditorWorkspaceThemeTests
                 throw new Exception("Closing Assets incorrectly hid the shared strip");
             if (mainVm.BottomPanelActiveTab != 1)
                 throw new Exception("Active tab did not fall back to the visible Log tab");
-            Near("Shared strip height after Assets closed", Measure(PanelIds.Bottom).Height, 180);
+            Near("Shared strip height after Assets closed", Measure(PanelIds.Bottom).Height, 244);
             mainVm.ShowPanel("Log");
             if (mainVm.IsLogPanelVisible || mainVm.IsBottomPanelVisible)
                 throw new Exception("Bottom workspace remained visible after both tabs were closed");
@@ -167,7 +181,7 @@ internal static class EditorWorkspaceThemeTests
             mainVm.ShowPanel("Assets");
             if (!mainVm.IsAssetsPanelVisible || !mainVm.IsBottomPanelVisible || mainVm.BottomPanelActiveTab != 0)
                 throw new Exception("Assets tab did not restore the shared strip");
-            Near("Restored strip height", Measure(PanelIds.Bottom).Height, 180);
+            Near("Restored strip height", Measure(PanelIds.Bottom).Height, 244);
             mainVm.ShowPanel("Backlog");
             if (!mainVm.IsBacklogPanelVisible || mainVm.BottomPanelActiveTab != 2 || !mainVm.IsBottomPanelVisible)
                 throw new Exception("Dialogue backlog panel did not become an independent bottom workspace");

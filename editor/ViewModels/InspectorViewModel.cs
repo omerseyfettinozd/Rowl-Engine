@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Linq;
+using RowlEngine.Editor.Native;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using RowlEngine.Editor.Services;
@@ -135,27 +136,51 @@ namespace RowlEngine.Editor.ViewModels
                 return (TestProvenanceNativeCall, TestProvenanceEngineHandle);
             var host = MainViewModel.EngineHost;
             if (host.IsInitialized && host.Handle != IntPtr.Zero)
-                return (AssetProvenanceService.ProductionNativeCall, host.Handle);
+                return (EngineThreadProvenanceCall(host), host.Handle);
             return (null, IntPtr.Zero);
         }
+
+        /// <summary>
+        /// Kök neden düzeltmesi: Denetçi özelliği UI iş parçacığında okunur; native provenance
+        /// çağrısı motorun iş parçacığına taşınır (doğrudan çağrı WRONG_THREAD ile reddediliyor,
+        /// her düğüm seçiminde günlüğe hata yazılıyordu).
+        /// </summary>
+        private static AssetProvenanceService.ProvenanceNativeCall EngineThreadProvenanceCall(EngineHost host) =>
+            (IntPtr handle, string assetPath, IntPtr buffer, uint bufferSize, out uint requiredSize) =>
+            {
+                (NativeBridge.ResultCode code, uint required) = host.InvokeOnEngineThread(
+                    engine =>
+                    {
+                        NativeBridge.ResultCode rc = AssetProvenanceService.ProductionNativeCall(
+                            engine, assetPath, buffer, bufferSize, out uint needed);
+                        return (rc, needed);
+                    },
+                    (NativeBridge.ResultCode.InvalidHandle, 0u));
+                requiredSize = required;
+                return code;
+            };
 
         // ── Faz 4 Dilim 4 — chapter assignment ──
 
         /// <summary>Chapter dropdown options ("Yok" + effective chapters).</summary>
-        public List<string> ChapterAssignmentOptions
+        public List<string> ChapterAssignmentOptions => _chapterAssignmentOptions ??= BuildChapterAssignmentOptions();
+
+        // Liste yalnız içerik değişince yenilenir: öğe kaynağı değişen açılır kutu eski seçim
+        // indeksini geri yazar ("Yok" → düğümün bölümü silinirdi).
+        private List<string>? _chapterAssignmentOptions;
+        private bool _refreshingChapterOptions;
+
+        private List<string> BuildChapterAssignmentOptions()
         {
-            get
+            var options = new List<string> { NoChapterLabel };
+            foreach (var chapter in MainViewModel.Chapters.EffectiveChapters(
+                MainViewModel.Nodes.Select(n => n.ChapterId)))
             {
-                var options = new List<string> { NoChapterLabel };
-                foreach (var chapter in MainViewModel.Chapters.EffectiveChapters(
-                    MainViewModel.Nodes.Select(n => n.ChapterId)))
-                {
-                    string label = chapter.Title.Length > 0 ? chapter.Title : chapter.Id;
-                    if (!options.Contains(label))
-                        options.Add(label);
-                }
-                return options;
+                string label = chapter.Title.Length > 0 ? chapter.Title : chapter.Id;
+                if (!options.Contains(label))
+                    options.Add(label);
             }
+            return options;
         }
 
         /// <summary>Selected chapter option ("Yok" = unassigned). Two-way.</summary>
@@ -172,20 +197,27 @@ namespace RowlEngine.Editor.ViewModels
             }
             set
             {
-                if (SelectedNode is null)
+                // Boş değer açılır kutunun öğe kaynağı yenilenirken geri yazdığı sıfırlamadır;
+                // bölümü silmez. Temizleme yalnız "Yok" seçeneğiyle.
+                if (SelectedNode is null || string.IsNullOrEmpty(value) || _refreshingChapterOptions)
                     return;
-                if (string.Equals(value, NoChapterLabel, StringComparison.Ordinal) ||
-                    string.IsNullOrEmpty(value))
+                string next;
+                if (string.Equals(value, NoChapterLabel, StringComparison.Ordinal))
                 {
-                    SelectedNode.ChapterId = string.Empty;
+                    next = string.Empty;
                 }
                 else
                 {
                     var match = MainViewModel.Chapters.Definitions.FirstOrDefault(c =>
                         string.Equals(c.Id, value, StringComparison.Ordinal) ||
                         string.Equals(c.Title, value, StringComparison.Ordinal));
-                    SelectedNode.ChapterId = match?.Id ?? value;
+                    next = match?.Id ?? value;
                 }
+                // Aynı değer: liste yenilenmez. Yenilemek kutunun seçimi geri yazmasına,
+                // o da yeniden bu ayarlayıcıya döner (sonsuz özyineleme, yığın taşması).
+                if (string.Equals(SelectedNode.ChapterId ?? string.Empty, next, StringComparison.Ordinal))
+                    return;
+                SelectedNode.ChapterId = next;
                 RefreshChapterOptions();
                 OnPropertyChanged(nameof(SelectedChapterOption));
             }
@@ -200,7 +232,14 @@ namespace RowlEngine.Editor.ViewModels
             MainViewModel.Subgraphs.SetAvailableChapters(
                 MainViewModel.Chapters.EffectiveChapters(
                     MainViewModel.Nodes.Select(n => n.ChapterId)));
-            OnPropertyChanged(nameof(ChapterAssignmentOptions));
+            var next = BuildChapterAssignmentOptions();
+            if (_chapterAssignmentOptions is null || !next.SequenceEqual(_chapterAssignmentOptions))
+            {
+                _chapterAssignmentOptions = next;
+                _refreshingChapterOptions = true;
+                try { OnPropertyChanged(nameof(ChapterAssignmentOptions)); }
+                finally { _refreshingChapterOptions = false; }
+            }
             OnPropertyChanged(nameof(SelectedChapterOption));
         }
 

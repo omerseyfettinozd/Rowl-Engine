@@ -33,6 +33,12 @@
 #pragma GCC visibility push(hidden)
 #endif
 
+/// D01b (c_api_game_data.cpp): picks the per-game save/profile dirs for the
+/// mounted project, migrates legacy saves, installs the save dir. Never throws.
+void applyProjectGameData(Rowl::Core::Engine& engine, const std::filesystem::path& projectRoot);
+/// D01b: stamps the layout diagnostic on the last-result channel when it is still Ok.
+void reportProjectGameDataDiagnostic(Rowl::Core::Engine& engine);
+
 // The opaque C handle is a generational slot token, not the Engine
 // allocation itself (R1 #7) — void* carries (index << 32 | generation).
 // Destroyed slots are RECYCLED via a free-list (memory bounded by peak-live)

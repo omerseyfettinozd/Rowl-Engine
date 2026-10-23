@@ -10,71 +10,88 @@
              x:DataType="vm:MainWindowViewModel">
     <Border Background="{DynamicResource PanelBackground}">
         <Grid RowDefinitions="Auto,*">
-            <!-- Konsol araç satırı (Temizle + sayaçlar). Prototip .console-toolbar:
-                 soluk 10 px metin, alt çizgi. Sayaç renkleri anlam taşır (K3):
-                 hata/uyarı/bilgi tema brush token'larından gelir. -->
             <Border Grid.Row="0" BorderBrush="{DynamicResource BorderColor}" BorderThickness="0,0,0,1"
                     Padding="8,4">
-                <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
-                    <Button Classes="compact"
+                <Grid ColumnDefinitions="*,Auto,Auto">
+                    <TextBlock Grid.Column="0" Classes="caption" LetterSpacing="0"
+                               Foreground="{DynamicResource MutedText}"
+                               Text="{l:T Log.SessionEvents}"
+                               VerticalAlignment="Center"/>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                        <TextBlock Classes="hint" Foreground="{DynamicResource ErrorBrush}"
+                                   FontWeight="SemiBold"
+                                   ToolTip.Tip="{l:T Log.Errors.Tip}"
+                                   VerticalAlignment="Center">
+                            <TextBlock.Text>
+                                <MultiBinding StringFormat="{}{0} {1}">
+                                    <l:T Key="Log.Errors"/>
+                                    <Binding Path="LogErrorCount"/>
+                                </MultiBinding>
+                            </TextBlock.Text>
+                        </TextBlock>
+                        <TextBlock Classes="hint" Foreground="{DynamicResource WarningBrush}"
+                                   FontWeight="SemiBold"
+                                   ToolTip.Tip="{l:T Log.Warnings.Tip}"
+                                   VerticalAlignment="Center">
+                            <TextBlock.Text>
+                                <MultiBinding StringFormat="{}{0} {1}">
+                                    <l:T Key="Log.Warnings"/>
+                                    <Binding Path="LogWarningCount"/>
+                                </MultiBinding>
+                            </TextBlock.Text>
+                        </TextBlock>
+                        <TextBlock Classes="hint" Foreground="{DynamicResource InfoBrush}"
+                                   ToolTip.Tip="{l:T Log.Infos.Tip}"
+                                   VerticalAlignment="Center">
+                            <TextBlock.Text>
+                                <MultiBinding StringFormat="{}{0} {1}">
+                                    <l:T Key="Log.Infos"/>
+                                    <Binding Path="LogInfoCount"/>
+                                </MultiBinding>
+                            </TextBlock.Text>
+                        </TextBlock>
+                    </StackPanel>
+                    <Button Grid.Column="2" Classes="text"
+                            Margin="12,0,0,0"
+                            VerticalAlignment="Center"
                             Content="{l:T Log.Clear}"
                             Command="{Binding ClearLogCommand}"
                             ToolTip.Tip="{l:T Log.Clear.Tip}"/>
-                    <TextBlock Classes="hint" Foreground="{DynamicResource ErrorBrush}"
-                               FontWeight="SemiBold"
-                               ToolTip.Tip="{l:T Log.Errors.Tip}"
-                               VerticalAlignment="Center">
-                        <TextBlock.Text>
-                            <MultiBinding StringFormat="{}{0} {1}">
-                                <l:T Key="Log.Errors"/>
-                                <Binding Path="LogErrorCount"/>
-                            </MultiBinding>
-                        </TextBlock.Text>
-                    </TextBlock>
-                    <TextBlock Classes="hint" Foreground="{DynamicResource WarningBrush}"
-                               FontWeight="SemiBold"
-                               ToolTip.Tip="{l:T Log.Warnings.Tip}"
-                               VerticalAlignment="Center">
-                        <TextBlock.Text>
-                            <MultiBinding StringFormat="{}{0} {1}">
-                                <l:T Key="Log.Warnings"/>
-                                <Binding Path="LogWarningCount"/>
-                            </MultiBinding>
-                        </TextBlock.Text>
-                    </TextBlock>
-                    <TextBlock Classes="hint" Foreground="{DynamicResource InfoBrush}"
-                               ToolTip.Tip="{l:T Log.Infos.Tip}"
-                               VerticalAlignment="Center">
-                        <TextBlock.Text>
-                            <MultiBinding StringFormat="{}{0} {1}">
-                                <l:T Key="Log.Infos"/>
-                                <Binding Path="LogInfoCount"/>
-                            </MultiBinding>
-                        </TextBlock.Text>
-                    </TextBlock>
-                </StackPanel>
+                </Grid>
             </Border>
-            <!-- Unity kromu (H4): satırlı gövde — arama/daraltma yok.
-                 Satırlar prototip .console-lines gibi alt çizgiyle ayrılır.
-                 Otomatik kaydırma kabul edilen farktır (manuel scroll). -->
-            <ListBox Grid.Row="1" Background="Transparent" Padding="8,4"
+            <ListBox Grid.Row="1" Background="Transparent" Padding="12,4"
                      ItemsSource="{Binding LogOutput, Converter={x:Static p:LogLinesConverter.Instance}}"
                      SelectionMode="Single">
                 <ListBox.Styles>
                     <Style Selector="ListBoxItem">
-                        <Setter Property="Padding" Value="4,1"/>
+                        <Setter Property="Padding" Value="0,6"/>
                         <Setter Property="Margin" Value="0"/>
                         <Setter Property="MinHeight" Value="0"/>
                         <Setter Property="CornerRadius" Value="0"/>
+                        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
                         <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}"/>
                         <Setter Property="BorderThickness" Value="0,0,0,1"/>
                     </Style>
                 </ListBox.Styles>
                 <ListBox.ItemTemplate>
-                    <DataTemplate>
-                        <TextBlock Text="{Binding}" FontFamily="Consolas, Monospace" FontSize="{DynamicResource FontSizeBodyLarge}"
-                                   Foreground="{DynamicResource PrimaryText}"
-                                   TextWrapping="Wrap"/>
+                    <DataTemplate x:DataType="x:String">
+                        <Grid ColumnDefinitions="Auto,*">
+                            <TextBlock Grid.Column="0"
+                                       Margin="0,0,10,0"
+                                       VerticalAlignment="Top"
+                                       Text="{Binding Converter={x:Static p:LogLinePartConverter.Instance}, ConverterParameter=time}"
+                                       Foreground="{DynamicResource DimText}"
+                                       FontFamily="Consolas, Monospace"
+                                       FontSize="{DynamicResource FontSizeCaption}"
+                                       TextWrapping="NoWrap"/>
+                            <TextBlock Grid.Column="1"
+                                       VerticalAlignment="Top"
+                                       Text="{Binding Converter={x:Static p:LogLinePartConverter.Instance}, ConverterParameter=message}"
+                                       Foreground="{DynamicResource SecondaryText}"
+                                       FontFamily="Consolas, Monospace"
+                                       FontSize="{DynamicResource FontSizeCaption}"
+                                       TextWrapping="Wrap"/>
+                        </Grid>
                     </DataTemplate>
                 </ListBox.ItemTemplate>
             </ListBox>

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json;
 using RowlEngine.Editor.ViewModels;
 using RowlEngine.Editor.ViewModels.Components;
@@ -32,6 +33,13 @@ public static class StoryGraphLoaderService
                 formatVersion = fv.GetInt32();
 
             result.FormatVersion = formatVersion;
+
+            // Daha yeni sürüm: bilinmeyen alanlar kayıpla yüklenip v5 olarak ezilirdi.
+            if (formatVersion > GraphStructureLimits.CurrentVersion)
+            {
+                result.ErrorMessage = StoryGraphFormatGuard.Message(formatVersion);
+                return result;
+            }
 
             if (!root.TryGetProperty("nodes", out var nodesArray) || nodesArray.ValueKind != JsonValueKind.Array)
             {
@@ -108,6 +116,18 @@ public static class StoryGraphLoaderService
             foreach (var connection in StoryGraphConnectionHydrator.Create(nodesArray, nodeMap))
             {
                 result.Connections.Add(connection);
+                // Hedef yalnız next_nodes'ta olabilir (elle yazılmış / eski dosyalar: seçim
+                // bileşeninde target_node_id yok). Seçenek hedefi boş kalırsa kaydedici ve
+                // motora giden grafik seçim kenarını düşürür; tel ekranda görünür ama seçim
+                // oyunda bulunamaz. Bileşendeki açık hedef önceliklidir.
+                if (!string.IsNullOrEmpty(connection.OptionId)
+                    && connection.SourceNode is { } sourceNode && connection.TargetNode is { } targetNode)
+                {
+                    var option = sourceNode.ChoiceOptions
+                        .FirstOrDefault(o => o.OptionId == connection.OptionId);
+                    if (option is { TargetNodeId: 0 })
+                        option.TargetNodeId = targetNode.Id;
+                }
             }
 
             // vNext structure sections are optional (absent in v4); shape

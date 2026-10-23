@@ -50,13 +50,16 @@ sh "$GUIDE_WORK/install-rowl-guide.sh" --prefix "$GUIDE_WORK/prefix"
 
 ## 3. Oyna
 
-Kurulu oyuncu `prefix/rowl_player` dosyasıdır. Gerçek oyun penceresi açar:
+Oyunu `prefix/run_game.sh` başlatır: kendi klasörüne geçip kurulu oyuncuyu
+(`prefix/RowlGame`) çalıştırır; nereden açılırsa açılsın (dosya yöneticisi,
+mutlak yol) `Assets/packages/game.rowlpkg` bulunur. Gerçek oyun penceresi açar:
 
 ```text
-"$GUIDE_WORK/prefix/rowl_player" --project "$GUIDE_WORK/prefix"
+"$GUIDE_WORK/prefix/run_game.sh"
 ```
 
-Bayraklar (`rowl_player --help` çıktısıyla birebir — uydurma yok):
+Bayraklar (`RowlGame --help` çıktısıyla birebir — uydurma yok; `run_game.sh`
+hepsini aynen iletir):
 
 | Bayrak | Anlam |
 |---|---|
@@ -69,10 +72,59 @@ Bayraklar (`rowl_player --help` çıktısıyla birebir — uydurma yok):
 | `--slot <N>` | Hızlı-kayıt slotu 0-9 (F5/F9, varsayılan: 0) |
 | `--no-vsync` | Dikey senkronu kapat |
 | `--gpu-smoke-test` | Tek kare çiz, çık (CI) |
-| `--package-smoke-test` | Paketli VFS grafiğinden tek kare çiz, çık |
+| `--package-smoke-test` | Paketli VFS grafiğinden tek kare çiz, oyuncu profilini dene (ilk satırı okundu say, bir tercihi değiştirip geri al, kaydet), çık. Oyunun profiline yazar (tercihler aynı kalır, ilk satır okundu sayılır); deneme için `XDG_DATA_HOME`'u geçici bir dizine ver |
+| `--print-game-identity` | Projeyi bağla, tek satır JSON yaz (oyun kimliği, kimlik kaynağı, veri/kayıt/profil yolları, profil durumu), çık; pencere açmaz |
 
 Kontroller: Space/Enter/Click ilerler · F5 hızlı-kayıt · F9 hızlı-yükleme ·
 0-9 slot seçer · Backspace/Z 1 adım geri · Escape/P duraklatma menüsü.
+
+### Kayıtlar ve oyuncu profili nerede?
+
+Her oyun kendi **oyun kimliği** (`game_id`, paketin içindeki `rowl/game.json`)
+ile anılır; kayıtlar ve oyuncu profili oyun klasöründe DEĞİL, kullanıcı veri
+dizininde, kimliğe göre ayrı tutulur:
+
+```text
+$XDG_DATA_HOME/rowl-engine/games/<game-id>/saves/     kayıt slotları
+$XDG_DATA_HOME/rowl-engine/games/<game-id>/profile/   player-profile.json
+```
+
+(`XDG_DATA_HOME` boşsa `~/.local/share`; Windows'ta `%LOCALAPPDATA%`.) Oyun
+klasörünü taşımak ya da `run_game.sh`'i başka bir dizinden açmak verini
+değiştirmez; aynı varlık adlarını kullanan iki ayrı oyun birbirinin kaydını,
+okundu bilgisini ya da tercihlerini görmez. Başlatıcı (`run_game.sh`) yalnız
+oyun klasörüne geçer, veri dizinini yönlendirmez. Kimliği yazılı olmayan
+(geliştirme) projeler eskisi gibi `<proje>/saves` ve `<proje>/profile`
+kullanır; eski `<oyun>/saves` kayıtları ilk açılışta kullanıcı veri dizinine
+**kopyalanır** (eskisi silinmez).
+
+Profil (`player-profile.json`, sürüm 1) okunan satırların kimliklerini ve
+oyuncu tercihlerini tutar. Oyuncu açılışta kayıtlı tercihleri uygular: ana /
+müzik / ses / efekt / ortam / arayüz seslerini, yazı hızını, yazı ölçeğini,
+yüksek karşıtlığı, azaltılmış hareketi, karışım eğrisini ve SFX havuz
+derinliğini; dil yalnız `en` dışındaysa ve oyun o dili sunuyorsa uygulanır.
+Henüz uygulanmayanlar (menü/başlık ekranı gelince): otomatik ilerleme
+gecikmesi, atlama kipi, otomatik mod.
+
+Açılışta oyuncu şunu stdout'a yazar (sorun gidermek için):
+
+```text
+[Player] Game id: <uuid> (source: package)
+[Player]   data dir: .../rowl-engine/games/<uuid>
+[Player]   save dir: .../games/<uuid>/saves
+[Player]   profile:  .../games/<uuid>/profile/player-profile.json (status: loaded, read ids: 12)
+```
+
+`status`: `loaded`, `missing` (ilk çalıştırma), `corrupt` (bozuk dosya
+`player-profile.corrupt-<zaman>.json` olarak kenara alındı, varsayılanlarla
+devam), `unsupported_version` (dosya daha yeni bir sürümden; **salt-okunur** —
+dosya asla değiştirilmez, smoke "profile is read-only" yazar) ve `wrong_game`
+(başka oyunun dosyası; salt-okunur). Aynı bilgi makine okunur biçimde:
+
+```sh
+# guide-probe: expect-ok
+SDL_AUDIODRIVER=dummy SDL_VIDEODRIVER=dummy "$GUIDE_WORK/prefix/RowlGame" --project "$GUIDE_WORK/prefix" --print-game-identity | grep -q '^{"data_dir"'
+```
 
 ### Smoke sınırı (neden pencere açılmıyor?)
 
@@ -84,19 +136,19 @@ Burada tekrarlanmaz.
 
 ```sh
 # guide-probe: expect-ok
-"$GUIDE_WORK/prefix/rowl_player" --help
+"$GUIDE_WORK/prefix/RowlGame" --help
 ```
 
 ```sh
 # guide-probe: expect-ok
-"$GUIDE_WORK/prefix/rowl_player" --version
+"$GUIDE_WORK/prefix/RowlGame" --version
 ```
 
 Hatalı bayrak değeri 0-dışı çıkış verir (oyuncu argümanları doğrular):
 
 ```sh
 # guide-probe: expect-fail
-"$GUIDE_WORK/prefix/rowl_player" --slot 99
+"$GUIDE_WORK/prefix/RowlGame" --slot 99
 ```
 
 ## 4. Doğrula
@@ -111,7 +163,7 @@ cd "$GUIDE_WORK/prefix" && sha256sum -c SHA256SUMS
 
 ```sh
 # guide-probe: expect-ok
-python3 tools/package_assets.py verify "$GUIDE_WORK/prefix/game.rowlpkg"
+python3 tools/package_assets.py verify "$GUIDE_WORK/prefix/Assets/packages/game.rowlpkg"
 ```
 
 ### Bir şey ters giderse
@@ -134,7 +186,7 @@ Oyuncu çökerse `crash-logs/` dizinine (oyuncunun ÇALIŞMA dizini altında)
 # guide-probe: expect-ok
 mkdir -p "$GUIDE_WORK/smoke-cwd"
 cd "$GUIDE_WORK/smoke-cwd"
-"$GUIDE_WORK/prefix/rowl_player" --help >/dev/null
+"$GUIDE_WORK/prefix/RowlGame" --help >/dev/null
 test -d crash-logs
 ```
 

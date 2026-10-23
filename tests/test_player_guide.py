@@ -152,6 +152,7 @@ def main():
         import os
         env = dict(os.environ,
                    GUIDE_WORK=work,
+                   XDG_DATA_HOME=os.path.join(work, "xdg"),
                    SDL_AUDIODRIVER="dummy",
                    SDL_VIDEODRIVER="dummy")
         # Blocks run with cwd=ROOT (guide commands use repo-relative paths),

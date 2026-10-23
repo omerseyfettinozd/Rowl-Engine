@@ -326,11 +326,14 @@ public sealed class EditorCanvasCullingSlice1Tests
             AddNode(vm, 1, 0, 0);
             AddNode(vm, 2, 4000, 2000);
             graph.ZoomToFitCommand.Execute(null);
-            Rect world = graph.WorldBounds;
-            double expected = Math.Min(1280 / world.Width, 800 / world.Height);
-            expected = Math.Clamp(expected, 0.15, 4.0);
+            // Faz 9 E1: düğüm kartlarının birleşimi + 48 px kenar payı; en fazla %100.
+            var (x2, y2, w2, h2) = NodeGraphViewModel.NodeBounds(vm.Nodes.Single(n => n.Id == 2));
+            var (x1, y1, _, _) = NodeGraphViewModel.NodeBounds(vm.Nodes.Single(n => n.Id == 1));
+            double width = x2 + w2 - x1, height = y2 + h2 - y1;
+            double expected = Math.Min(1280 / (width + 96), 800 / (height + 96));
+            expected = Math.Min(Math.Clamp(expected, 0.15, 4.0), 1.0);
             Assert.Equal(expected, vm.TargetZoom, precision: 6);
-            Assert.Equal(640 - (world.X + world.Width / 2) * expected,
+            Assert.Equal(640 - (x1 + width / 2) * expected,
                 vm.TargetPanX, precision: 3);
         }
         finally

@@ -150,7 +150,7 @@ public sealed class WorkspaceHostTests : IDisposable
                 // Default ratios ≈ the old fixed pixels at the reference size.
                 AssertNear(200, h.Width, 5, "hierarchy width");
                 AssertNear(280, i.Width, 5, "inspector width");
-                AssertNear(180, b.Height, 5, "bottom height");
+                AssertNear(244, b.Height, 5, "bottom height");
 
                 // One GridSplitter per split, star definitions = tree ratios.
                 int splits = 0;
@@ -410,10 +410,11 @@ public sealed class WorkspaceHostTests : IDisposable
             try
             {
                 WorkspaceHost host = HostOf(window);
-                // Pre-D3 MainWindow: Hierarchy 200, Inspector 280, bottom strip 180 px (±10%).
+                // Pre-D3 MainWindow: Hierarchy 200, Inspector 280 (±10%); bottom strip 244 px since the
+                // asset-card fix (180 px cut the card names off).
                 AssertNear(200, host.GetPanelRect(PanelIds.Hierarchy).Width, 20, "hierarchy");
                 AssertNear(280, host.GetPanelRect(PanelIds.Inspector).Width, 28, "inspector");
-                AssertNear(180, host.GetPanelRect(PanelIds.Bottom).Height, 18, "bottom strip");
+                AssertNear(244, host.GetPanelRect(PanelIds.Bottom).Height, 24, "bottom strip");
                 Assert.Equal(new[] { PanelIds.Hierarchy, PanelIds.Node, PanelIds.Bottom, PanelIds.Inspector }.OrderBy(v => v),
                     PanelIds.Editor.Where(id => host.FindPanel(id)!.IsVisible).OrderBy(v => v));
 
@@ -478,10 +479,11 @@ public sealed class WorkspaceHostTests : IDisposable
                     }
                 }
 
+                // Faz 10: Oyun açılınca düğüm grafiği kapanmaz; ikisi aynı anda görünür.
                 _vm.ShowPanel("EnginePreview");
                 window.UpdateLayout();
                 Assert.True(game.IsEffectivelyVisible);
-                Assert.False(graph.IsEffectivelyVisible);
+                Assert.True(graph.IsEffectivelyVisible);
                 Assert.Same(game, window.GetLogicalDescendants().OfType<EnginePreviewControl>().Single());
             }
             finally

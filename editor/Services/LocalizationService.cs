@@ -47,7 +47,15 @@ public sealed class LocalizationService
         Profile = profile ?? throw new ArgumentNullException(nameof(profile));
     }
 
-    /// <summary>Loads (or defaults) the profile for a directory.</summary>
+    /// <summary>
+    /// Loads (or defaults) the profile for a directory. D01c-2: the language
+    /// here is the player's per-game preference (it is resolved against the
+    /// game's manifest locales), so callers must pass the mounted game's
+    /// profile directory (<c>RowlEngine_GetProfileDirectoryUtf8</c>, or
+    /// <see cref="PlayerProfileSession"/> for the managed mirror), never the
+    /// legacy global one. The editor's own UI language lives in the editor
+    /// settings, not in the player profile.
+    /// </summary>
     public static LocalizationService Load(string profileDirectory)
     {
         var loaded = PlayerProfileStore.Load(profileDirectory);

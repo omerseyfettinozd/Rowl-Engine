@@ -1,0 +1,136 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:RowlEngine.Editor.ViewModels"
+             xmlns:l="using:RowlEngine.Editor.Services.Strings"
+             x:Class="RowlEngine.Editor.Views.Panels.AssetImportCard"
+             x:DataType="vm:AssetImportViewModel">
+    <UserControl.Styles>
+        <!-- Kenar rengi stilde: yerel değer stil setter'ını ezerdi. -->
+        <Style Selector="Border.statusCard">
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}"/>
+        </Style>
+    </UserControl.Styles>
+
+    <!-- Birleşik görünürlük özelliği yok: çalışıyor / sonuç parçaları ayrı Border'lar. -->
+    <Panel>
+        <Border Classes="statusCard"
+                IsVisible="{Binding IsRunning}"
+                Background="{DynamicResource PanelBackground}"
+                BorderThickness="1"
+                CornerRadius="{DynamicResource RadiusMedium}"
+                Padding="12,10"
+                MinWidth="280"
+                MaxWidth="420"
+                BoxShadow="0 8 24 0 #66000000">
+            <StackPanel>
+                <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Text="{l:T Import.Title}"
+                               Foreground="{DynamicResource PrimaryText}"
+                               FontSize="{DynamicResource FontSizeBody}"
+                               FontWeight="SemiBold"
+                               VerticalAlignment="Center"/>
+                    <TextBlock Grid.Column="1"
+                               Text="{Binding ProgressText}"
+                               Foreground="{DynamicResource DimText}"
+                               FontSize="{DynamicResource FontSizeCaption}"
+                               Margin="8,0,0,0"
+                               VerticalAlignment="Center"/>
+                </Grid>
+
+                <ProgressBar Minimum="0"
+                             Maximum="1"
+                             Value="{Binding ProgressFraction}"
+                             Height="4"
+                             Foreground="{DynamicResource PrimaryText}"
+                             Background="{DynamicResource BorderColor}"
+                             CornerRadius="2"
+                             Margin="0,8,0,0"/>
+
+                <TextBlock Classes="muted"
+                           Text="{Binding CurrentFile}"
+                           FontSize="{DynamicResource FontSizeCaption}"
+                           TextWrapping="NoWrap"
+                           TextTrimming="CharacterEllipsis"
+                           MaxLines="1"
+                           Margin="0,6,0,0"
+                           IsVisible="{Binding CurrentFile, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+
+                <StackPanel Orientation="Horizontal"
+                            HorizontalAlignment="Right"
+                            Spacing="6"
+                            Margin="0,8,0,0">
+                    <Button Classes="text"
+                            Content="{l:T Import.Cancel}"
+                            Command="{Binding CancelCommand}"/>
+                </StackPanel>
+
+                <Border IsVisible="{Binding HasPendingConflict}"
+                        BorderBrush="{DynamicResource BorderColor}"
+                        BorderThickness="0,1,0,0"
+                        Padding="0,10,0,0"
+                        Margin="0,10,0,0">
+                    <StackPanel>
+                        <TextBlock Text="{l:T Import.Conflict.Title}"
+                                   Foreground="{DynamicResource PrimaryText}"
+                                   FontSize="{DynamicResource FontSizeBody}"
+                                   FontWeight="SemiBold"/>
+                        <TextBlock Text="{Binding ConflictText}"
+                                   Foreground="{DynamicResource SecondaryText}"
+                                   FontSize="{DynamicResource FontSizeCaption}"
+                                   TextWrapping="Wrap"
+                                   Margin="0,4,0,0"/>
+                        <CheckBox FontSize="{DynamicResource FontSizeCaption}" Foreground="{DynamicResource SecondaryText}" Content="{l:T Import.Conflict.ApplyToAll}"
+                                  IsChecked="{Binding ApplyToAll, Mode=TwoWay}"
+                                  Margin="0,8,0,0"/>
+                        <StackPanel Orientation="Horizontal"
+                                    HorizontalAlignment="Right"
+                                    Spacing="6"
+                                    Margin="0,8,0,0">
+                            <Button Classes="text"
+                                    Content="{l:T Import.Conflict.Skip}"
+                                    Command="{Binding SkipCommand}"/>
+                            <Button Classes="secondary"
+                                    Content="{l:T Import.Conflict.KeepBoth}"
+                                    Command="{Binding KeepBothCommand}"/>
+                            <Button Classes="text"
+                                    Content="{l:T Import.Conflict.Overwrite}"
+                                    Command="{Binding OverwriteCommand}"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </Border>
+
+        <Border Classes="statusCard"
+                IsVisible="{Binding HasResult}"
+                Background="{DynamicResource PanelBackground}"
+                BorderThickness="1"
+                CornerRadius="{DynamicResource RadiusMedium}"
+                Padding="12,10"
+                MinWidth="280"
+                MaxWidth="420"
+                BoxShadow="0 8 24 0 #66000000">
+            <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Text="{Binding LastResultText}"
+                           Foreground="{DynamicResource SecondaryText}"
+                           FontSize="{DynamicResource FontSizeBody}"
+                           TextWrapping="Wrap"
+                           VerticalAlignment="Center"/>
+                <Button Grid.Column="1"
+                        Classes="icon"
+                        Command="{Binding DismissResultCommand}"
+                        ToolTip.Tip="{l:T Operation.Dismiss}"
+                        VerticalAlignment="Center"
+                        Margin="8,0,0,0">
+                    <Path Data="M6,6 L18,18 M18,6 L6,18"
+                          Stroke="{DynamicResource MutedText}"
+                          StrokeThickness="2"
+                          StrokeLineCap="Round"
+                          StrokeJoin="Round"
+                          Stretch="Uniform"
+                          Width="10" Height="10"/>
+                </Button>
+            </Grid>
+        </Border>
+    </Panel>
+</UserControl>

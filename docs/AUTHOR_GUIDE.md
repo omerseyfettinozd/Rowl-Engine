@@ -153,11 +153,24 @@ test "$(sha256sum "$AUTHOR_WORK/assets/tone.ogg" | cut -d' ' -f1)" = "$(sha256su
 
 Dönüştürülmüş çıktılar normal asset olarak paketlenir; yanlarındaki
 `.rowlconv.json` sidecar'lar da pakete girer ve gömülü manifestteki
-`converted_from` kaydını besler (`tools/package_assets.py:129-155,289`):
+`converted_from` kaydını besler (`tools/package_assets.py:129-155,289`).
+Paket bir **oyun** olmalı: hikâye grafiği (`json/full_story_graph.json`)
+olmadan yayınlanan paket açılır ama boş sahne gösterir. En küçük grafik,
+dönüştürülen görseli arka plan, sesi müzik olarak kullanır:
 
 ```sh
 # guide-probe: expect-ok
-python3 tools/package_assets.py "$AUTHOR_WORK/assets" "$AUTHOR_WORK/author.rowlpkg"
+mkdir -p "$AUTHOR_WORK/assets/json"
+cat > "$AUTHOR_WORK/assets/json/full_story_graph.json" <<'JSON'
+{"format_version": 4, "start_node_id": 1, "nodes": [{"id": 1, "title": "Başlangıç", "objects": [
+ {"id": "bg", "name": "Background", "is_active": true, "components": [
+  {"type": "background", "id": "bgc", "enabled": true, "data": {"texture": "pic.png"}}]},
+ {"id": "scene", "name": "Dialogue", "is_active": true, "components": [
+  {"type": "audio", "id": "aud", "enabled": true, "data": {"bgm_track": "tone.ogg", "volume": 0.8}},
+  {"type": "dialogue", "id": "dlg", "enabled": true, "data": {"speaker": "Yazar", "dialogue": "Merhaba!"}}]}],
+ "next_nodes": []}]}
+JSON
+python3 tools/package_assets.py "$AUTHOR_WORK/assets" "$AUTHOR_WORK/author.rowlpkg" --game-id 4a1e7c52-9d03-4b86-a2f7-6c0d58e1b3a9 --game-name "Author Guide"
 python3 tools/package_assets.py verify "$AUTHOR_WORK/author.rowlpkg"
 python3 tools/package_assets.py verify "$AUTHOR_WORK/author.rowlpkg" --json | python3 -c "import json,sys; assert json.load(sys.stdin)['ok'], 'verify --json not ok'"
 ```
@@ -178,7 +191,7 @@ test ! -e "$AUTHOR_WORK/assets/tone.flac"
 test ! -e "$AUTHOR_WORK/assets/pic.webp"
 for f in "$AUTHOR_WORK"/assets/*; do
   case "$f" in
-    *.ogg|*.png|*.rowlconv.json) ;;
+    *.ogg|*.png|*.rowlconv.json|*/json) ;;
     *) echo "ham kaynak pakete gidiyor: $f"; exit 1;;
   esac
 done
@@ -212,7 +225,20 @@ kurulum makbuzu atomik yazılır (aşağıda):
 # guide-probe: expect-ok
 sh "$AUTHOR_WORK/install-rowl-author.sh" --prefix "$AUTHOR_WORK/prefix"
 (cd "$AUTHOR_WORK/prefix" && sha256sum -c SHA256SUMS)
-python3 tools/package_assets.py verify "$AUTHOR_WORK/prefix/game.rowlpkg"
+python3 tools/package_assets.py verify "$AUTHOR_WORK/prefix/Assets/packages/game.rowlpkg"
+python3 tools/verify_release_package.py "$AUTHOR_WORK/prefix"
+```
+
+Kurulan oyun gerçekten açılmalı — dosyaların doğru olması yetmez. Eski düz
+düzen (oyuncu ile `game.rowlpkg` yan yana) bütün sağlama toplamlarını geçip
+boş sahneyle açılıyordu: VFS paketleri yalnız `Assets/packages` altından
+bağlar. Aşağıdaki prob başlatıcıyı **başka bir dizinden** çalıştırır
+(dosya yöneticisinden çift tıklamanın karşılığı); `run_game.sh` kendi
+klasörüne geçtiği için paket bulunur:
+
+```sh
+# guide-probe: expect-ok
+(cd / && SDL_AUDIODRIVER=dummy SDL_VIDEODRIVER=dummy "$AUTHOR_WORK/prefix/run_game.sh" --package-smoke-test)
 ```
 
 ### Makbuz / rollback
@@ -238,7 +264,7 @@ içeriğini makineyle doğrular, sonra kaldırır:
 test -s "$AUTHOR_WORK/prefix/.rowl-receipt"
 test "$(sed -n '1p' "$AUTHOR_WORK/prefix/.rowl-receipt")" = "ROWL_SDE_VERSION=author-guide"
 test "$(sed -n '2p' "$AUTHOR_WORK/prefix/.rowl-receipt" | cut -d= -f2)" = "$(sha256sum "$AUTHOR_WORK/rowl-portable.zip" | cut -d' ' -f1)"
-tail -n +3 "$AUTHOR_WORK/prefix/.rowl-receipt" | grep -x "game.rowlpkg"
+tail -n +3 "$AUTHOR_WORK/prefix/.rowl-receipt" | grep -x "Assets/packages/game.rowlpkg"
 for name in $(tail -n +3 "$AUTHOR_WORK/prefix/.rowl-receipt"); do test -e "$AUTHOR_WORK/prefix/$name" || exit 1; done
 sh "$AUTHOR_WORK/install-rowl-author.sh" uninstall --prefix "$AUTHOR_WORK/prefix"
 test ! -e "$AUTHOR_WORK/prefix"

@@ -1,0 +1,96 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:RowlEngine.Editor.ViewModels"
+             xmlns:l="using:RowlEngine.Editor.Services.Strings"
+             x:Class="RowlEngine.Editor.Views.Panels.OperationStatusCard"
+             x:DataType="vm:OperationStatusViewModel">
+    <UserControl.Styles>
+        <!-- Kenar rengi stilde: yerel değer stil setter'ını ezerdi (hata kenarı görünmezdi). -->
+        <Style Selector="Border.statusCard">
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}"/>
+        </Style>
+        <Style Selector="Border.statusCard.failed">
+            <Setter Property="BorderBrush" Value="{DynamicResource ErrorBrush}"/>
+        </Style>
+    </UserControl.Styles>
+
+    <Border Classes="statusCard"
+            Classes.failed="{Binding IsFailed}"
+            IsVisible="{Binding IsVisible}"
+            Background="{DynamicResource PanelBackground}"
+            BorderThickness="1"
+            CornerRadius="{DynamicResource RadiusMedium}"
+            Padding="12,10"
+            MinWidth="280"
+            MaxWidth="420"
+            BoxShadow="0 8 24 0 #66000000">
+        <StackPanel>
+            <Grid ColumnDefinitions="Auto,*,Auto">
+                <Panel Width="14" Height="14" VerticalAlignment="Center">
+                    <Ellipse Width="8" Height="8"
+                             HorizontalAlignment="Center"
+                             VerticalAlignment="Center"
+                             Fill="{DynamicResource MutedText}"
+                             IsVisible="{Binding IsRunning}"/>
+                    <!-- Durum noktası: renk yalnız anlam taşır (K3) — başarı yeşil, hata kırmızı. -->
+                    <Ellipse Width="8" Height="8"
+                             HorizontalAlignment="Center"
+                             VerticalAlignment="Center"
+                             Fill="{DynamicResource SuccessBrush}"
+                             IsVisible="{Binding IsSucceeded}"/>
+                    <Ellipse Width="8" Height="8"
+                             HorizontalAlignment="Center"
+                             VerticalAlignment="Center"
+                             Fill="{DynamicResource ErrorBrush}"
+                             IsVisible="{Binding IsFailed}"/>
+                </Panel>
+
+                <TextBlock Grid.Column="1"
+                           Text="{Binding Title}"
+                           Foreground="{DynamicResource PrimaryText}"
+                           FontSize="{DynamicResource FontSizeBody}"
+                           FontWeight="SemiBold"
+                           Margin="8,0,0,0"
+                           VerticalAlignment="Center"/>
+
+                <Button Grid.Column="2"
+                        Classes="icon"
+                        Command="{Binding DismissCommand}"
+                        ToolTip.Tip="{l:T Operation.Dismiss}"
+                        IsVisible="{Binding !IsRunning}"
+                        VerticalAlignment="Center">
+                    <Path Data="M6,6 L18,18 M18,6 L6,18"
+                          Stroke="{DynamicResource MutedText}"
+                          StrokeThickness="2"
+                          StrokeLineCap="Round"
+                          StrokeJoin="Round"
+                          Stretch="Uniform"
+                          Width="10" Height="10"/>
+                </Button>
+            </Grid>
+
+            <TextBlock Classes="muted"
+                       Text="{Binding Detail}"
+                       FontSize="{DynamicResource FontSizeCaption}"
+                       TextWrapping="Wrap"
+                       MaxLines="3"
+                       TextTrimming="CharacterEllipsis"
+                       Margin="22,4,0,0"
+                       IsVisible="{Binding Detail, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+
+            <StackPanel Orientation="Horizontal"
+                        HorizontalAlignment="Right"
+                        Spacing="6"
+                        Margin="0,8,0,0">
+                <Button Classes="text"
+                        Content="{l:T Operation.OpenFolder}"
+                        Command="{Binding OpenFolderCommand}"
+                        IsVisible="{Binding HasOutputPath}"/>
+                <Button Classes="text"
+                        Content="{l:T Operation.ShowLog}"
+                        Command="{Binding ShowLogCommand}"
+                        IsVisible="{Binding IsFailed}"/>
+            </StackPanel>
+        </StackPanel>
+    </Border>
+</UserControl>

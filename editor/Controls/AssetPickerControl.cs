@@ -59,8 +59,10 @@ namespace RowlEngine.Editor.Controls
             {
                 ColumnDefinitions = new ColumnDefinitions("*, Auto"),
             };
+            // Dar Denetçi'de uzun yol kutuya sığmayıp sağdan kesik görünür; tamamı ipucunda okunur.
             var box = new TextBox { Margin = new Thickness(0, 0, 4, 0) };
             box.Bind(TextBox.TextProperty, new Binding(nameof(AssetPath)) { Source = this, Mode = BindingMode.TwoWay });
+            box.Bind(ToolTip.TipProperty, new Binding(nameof(AssetPath)) { Source = this });
             box.Bind(TextBox.WatermarkProperty, new Binding(nameof(Watermark)) { Source = this });
             var browse = new Button { Content = "Gözat", Padding = new Thickness(8, 4), FontSize = 11 };
             browse.Bind(Button.CommandProperty, new Binding(nameof(BrowseCommand)) { Source = this });

@@ -68,10 +68,14 @@ public static class EditorPlayModeCoordinator
         Action<NodeViewModel> selectNode,
         Action<string> log)
     {
+        // Sıfırlama burada yapılmaz: açık oyun önizlemesi durmayı görüp ilk kareyi tek kez
+        // sıfırlayarak çizer; önizleme kapalıysa bir sonraki Oynat zaten başlangıca sıfırlar.
         host.SetPlayState(false);
-        host.ResetToStartNode();
+        // Durdur oyunu gerçekten kapatır: müzik arka planda çalmaya devam ediyordu
+        // (boşta bakım adımı akışı beslemeyi sürdürüyordu).
+        host.StopBgm();
 
-        log("Play mode stopped (Engine reset to first frame).");
+        log("Play mode stopped.");
 
         var startNode = getStartNode();
         if (startNode != null)

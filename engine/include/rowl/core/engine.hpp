@@ -4,8 +4,11 @@
 #include "rowl/scene/character_fx.hpp"
 #include "rowl/i18n/localization_manager.hpp"
 #include "rowl/core/pause_menu.hpp"
+#include "rowl/platform/game_identity.hpp"
 #include "rowl/platform/platform_host.hpp"
+#include "rowl/state/game_data_layout.hpp"
 #include "rowl/state/game_state.hpp"
+#include "rowl/state/player_profile.hpp"
 #include "rowl/state/session_persistence.hpp"
 #include "rowl/core/runtime_context.hpp"
 #include "rowl/core/story_graph.hpp"
@@ -374,12 +377,29 @@ public:
     /// step; failure restores the pre-rewind session and fails loud.
     bool rewind(uint64_t steps = 1);
     uint64_t getCurrentStepId() const;
+    /// stepId right after the engine presented the start node (graph load,
+    /// reset, endSession). The start node's own entry effects are not
+    /// player progress; SetProjectDirectory's mid-session gate compares
+    /// against this instead of the bare initial step (1).
+    uint64_t getStartPresentationStepId() const { return m_startPresentationStepId; }
     void setSaveDirectory(const std::string& saveDir);
     std::string getSaveDirectory() const;
     std::filesystem::path getSaveDirectoryPath() const;
     std::string getProfileDirectory() const;
     std::filesystem::path getProfileDirectoryPath() const;
     void setBgmTransitionDefaults(std::string kind, float durationSeconds);
+    /// D01a: identity of the mounted game (see platform/game_identity.hpp).
+    void setGameIdentity(Rowl::Platform::GameIdentity identity) { m_gameIdentity = std::move(identity); }
+    const Rowl::Platform::GameIdentity& getGameIdentity() const { return m_gameIdentity; }
+    /// D01b: per-game data layout chosen at project mount (save dir, profile dir, migration).
+    void setGameDataLayout(Rowl::State::GameDataLayout layout) { m_gameDataLayout = std::move(layout); }
+    const Rowl::State::GameDataLayout& getGameDataLayout() const { return m_gameDataLayout; }
+    /// D01c-1: player profile (preferences + read set) of the mounted game.
+    Rowl::State::PlayerProfileStore& playerProfile() { return m_playerProfile; }
+    const Rowl::State::PlayerProfileStore& playerProfile() const { return m_playerProfile; }
+    /// (Re)loads the profile for the current identity + data layout; flushes the
+    /// previous one first. Called by SetProjectDirectory after the layout is set.
+    void openPlayerProfile();
     std::shared_ptr<const Rowl::State::GameState> getGameState() const { return m_gameState; }
     /// #86: stamps the live mixer gains (master/bgm/sfx/voice) into
     /// m_gameState WITHOUT advancing stepId (see withMixerVolumes), so later
@@ -411,6 +431,9 @@ private:
     // Faz 3 Dilim 1: manifest locales + content_id catalogs + fallback chain.
     Rowl::I18n::LocalizationManager m_localization;
     std::filesystem::path m_saveDirectoryOverride;
+    Rowl::Platform::GameIdentity m_gameIdentity;
+    Rowl::State::GameDataLayout m_gameDataLayout;
+    Rowl::State::PlayerProfileStore m_playerProfile;
     std::string m_defaultBgmTransition = "instant";
     float m_defaultBgmTransitionDurationSeconds = 1.0f;
 
@@ -457,6 +480,7 @@ private:
     std::vector<std::string> m_activeScriptSources;
     std::vector<ScriptRuntimeStatus> m_scriptRuntimeStatuses;
     uint64_t m_lastRecordedDialogueNodeId = 0;
+    uint64_t m_startPresentationStepId = 1;
     // Audio components are applied while a scene is refreshed as well as when
     // a story node is entered. Keep the entry marker separate so inspector
     // preview refreshes cannot retrigger a one-shot SFX.

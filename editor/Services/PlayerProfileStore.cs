@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace RowlEngine.Editor.Services;
 
@@ -17,11 +18,20 @@ public enum PlayerProfileLoadStatus
     CorruptDefaults,
     /// <summary>Newer schema version; defaults with a diagnostic (never a half-state).</summary>
     UnsupportedVersionDefaults,
+    /// <summary>
+    /// D01c-2 — the file's <c>game_id</c> differs from the expected game;
+    /// defaults with a diagnostic and the file must stay untouched (read-only).
+    /// </summary>
+    WrongGameDefaults,
 }
 
 /// <summary>
 /// Faz 2 Dilim 1 — atomic, versioned <see cref="PlayerProfile"/> persistence.
 /// <list type="bullet">
+/// <item>D01c-2: with a native store mounted the native engine is the only
+/// writer and the editor reads through <see cref="Parse"/>; this class then
+/// serves as the per-game managed fallback (see <see cref="PlayerProfileSession"/>).
+/// It keeps <c>game_id</c>, <c>unlocks</c> and unknown keys like the native store.</item>
 /// <item>Location: <c>profiles/player-profile.json</c> below the PlatformHost
 /// user-data root (the same <c>rowl-engine/profiles</c> layout the native
 /// <c>Rowl::Platform::resolveUserDataDirectories</c> produces). Hosts holding
@@ -46,8 +56,22 @@ public static class PlayerProfileStore
         PlayerProfileLoadStatus Status,
         string? Diagnostic);
 
-    /// <summary>Loads the profile, falling back to sanitized defaults with a diagnostic.</summary>
-    public static LoadResult Load(string profileDirectory)
+    /// <summary>Known top-level keys (mirrors the native store's kKnownKeys).</summary>
+    private static readonly HashSet<string> KnownKeys = new(StringComparer.Ordinal)
+    {
+        "version", "game_id", "language", "read_content_ids", "master_volume", "bgm_volume",
+        "voice_volume", "sfx_volume", "ambience_volume", "ui_volume", "text_speed_multiplier",
+        "auto_advance_delay", "text_scale", "high_contrast", "reduced_motion", "skip_mode",
+        "auto_enabled", "mixer_fade_curve", "sfx_pool_depth", "unlocks",
+    };
+
+    /// <summary>
+    /// Loads the profile, falling back to sanitized defaults with a diagnostic.
+    /// <paramref name="expectedGameId"/> (per-game directories) makes a file
+    /// stamped with another game's id resolve to
+    /// <see cref="PlayerProfileLoadStatus.WrongGameDefaults"/>.
+    /// </summary>
+    public static LoadResult Load(string profileDirectory, string? expectedGameId = null)
     {
         string path = Path.Combine(profileDirectory, FileName);
         if (!File.Exists(path))
@@ -69,6 +93,17 @@ public static class PlayerProfileStore
                 PlayerProfileLoadStatus.CorruptDefaults,
                 $"Player profile '{path}' could not be read ({readFailure.GetType().Name}: {readFailure.Message}); using defaults.");
         }
+        return Parse(raw, path, expectedGameId);
+    }
+
+    /// <summary>
+    /// Parses one profile document (a file's text or the native
+    /// <c>RowlEngine_ProfileGetJson</c> output). <paramref name="source"/> only
+    /// labels diagnostics. Never throws.
+    /// </summary>
+    public static LoadResult Parse(string raw, string source, string? expectedGameId = null)
+    {
+        string path = source;
         JsonDocument document;
         try
         {
@@ -111,6 +146,38 @@ public static class PlayerProfileStore
             }
             var profile = new PlayerProfile { Version = Math.Max(version, 1) };
             var notes = new List<string>();
+            if (root.TryGetProperty("game_id", out var gameElement))
+            {
+                if (gameElement.ValueKind == JsonValueKind.String)
+                {
+                    string fileGame = gameElement.GetString() ?? string.Empty;
+                    if (!string.IsNullOrEmpty(expectedGameId) && fileGame.Length > 0
+                        && !string.Equals(fileGame, expectedGameId, StringComparison.Ordinal))
+                    {
+                        return new LoadResult(
+                            new PlayerProfile(),
+                            PlayerProfileLoadStatus.WrongGameDefaults,
+                            $"Player profile '{path}' belongs to game '{fileGame}', not '{expectedGameId}'; using defaults and leaving the file untouched.");
+                    }
+                    profile.GameId = fileGame;
+                }
+                else
+                {
+                    notes.Add("Non-string game_id ignored.");
+                }
+            }
+            if (root.TryGetProperty("unlocks", out var unlocksElement))
+            {
+                if (unlocksElement.ValueKind == JsonValueKind.Array)
+                    profile.Unlocks = JsonNode.Parse(unlocksElement.GetRawText());
+                else
+                    notes.Add("Non-array unlocks reset to an empty array.");
+            }
+            foreach (var property in root.EnumerateObject())
+            {
+                if (!KnownKeys.Contains(property.Name))
+                    profile.ExtraKeys[property.Name] = JsonNode.Parse(property.Value.GetRawText());
+            }
             profile.Language = ReadString(root, "language", PlayerProfile.DefaultLanguage);
             profile.MasterVolume = ReadSingle(root, "master_volume", 1);
             profile.BgmVolume = ReadSingle(root, "bgm_volume", 1);
@@ -148,30 +215,7 @@ public static class PlayerProfileStore
             profile.Version = PlayerProfile.CurrentVersion;
             profile.Sanitized();
             string path = Path.Combine(profileDirectory, FileName);
-            var payload = new Dictionary<string, object?>
-            {
-                ["version"] = profile.Version,
-                ["language"] = profile.Language,
-                ["read_content_ids"] = profile.ReadContentIds
-                    .OrderBy(id => id, StringComparer.Ordinal)
-                    .ToArray(),
-                ["master_volume"] = profile.MasterVolume,
-                ["bgm_volume"] = profile.BgmVolume,
-                ["voice_volume"] = profile.VoiceVolume,
-                ["sfx_volume"] = profile.SfxVolume,
-                ["ambience_volume"] = profile.AmbienceVolume,
-                ["ui_volume"] = profile.UiVolume,
-                ["text_speed_multiplier"] = profile.TextSpeedMultiplier,
-                ["auto_advance_delay"] = profile.AutoAdvanceDelay,
-                ["text_scale"] = profile.TextScale,
-                ["high_contrast"] = profile.HighContrast,
-                ["reduced_motion"] = profile.ReducedMotion,
-                ["skip_mode"] = SkipModeToString(profile.SkipMode),
-                ["auto_enabled"] = profile.AutoEnabled,
-                ["mixer_fade_curve"] = profile.MixerFadeCurve,
-                ["sfx_pool_depth"] = profile.SfxPoolDepth,
-            };
-            string json = JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });
+            string json = ToJson(profile);
             ProjectFileSystem.WriteAllTextAtomically(path, json);
             return null;
         }
@@ -179,6 +223,67 @@ public static class PlayerProfileStore
         {
             return $"Player profile could not be saved to '{profileDirectory}' ({saveFailure.GetType().Name}: {saveFailure.Message}).";
         }
+    }
+
+    /// <summary>
+    /// Serializes the full document the way the native store does: known keys
+    /// (plus <c>game_id</c> when set), the opaque <c>unlocks</c> array and every
+    /// unknown top-level key the profile carried.
+    /// </summary>
+    public static string ToJson(PlayerProfile profile)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+        var payload = new Dictionary<string, object?>
+        {
+            ["version"] = profile.Version,
+        };
+        if (!string.IsNullOrEmpty(profile.GameId))
+            payload["game_id"] = profile.GameId;
+        payload["language"] = profile.Language;
+        payload["read_content_ids"] = profile.ReadContentIds
+            .OrderBy(id => id, StringComparer.Ordinal)
+            .ToArray();
+        AddPreferences(payload, profile, includeLanguage: false);
+        payload["unlocks"] = profile.Unlocks?.DeepClone() ?? new JsonArray();
+        foreach (var extra in profile.ExtraKeys)
+        {
+            if (!KnownKeys.Contains(extra.Key))
+                payload[extra.Key] = extra.Value?.DeepClone();
+        }
+        return JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });
+    }
+
+    /// <summary>
+    /// Preference keys only (no read set, game id, unlocks or extras) - the
+    /// document accepted by <c>RowlEngine_ProfileSetPreferencesJson</c>.
+    /// </summary>
+    public static string PreferencesToJson(PlayerProfile profile)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+        var payload = new Dictionary<string, object?>();
+        AddPreferences(payload, profile, includeLanguage: true);
+        return JsonSerializer.Serialize(payload);
+    }
+
+    private static void AddPreferences(Dictionary<string, object?> payload, PlayerProfile profile, bool includeLanguage)
+    {
+        if (includeLanguage)
+            payload["language"] = profile.Language;
+        payload["master_volume"] = profile.MasterVolume;
+        payload["bgm_volume"] = profile.BgmVolume;
+        payload["voice_volume"] = profile.VoiceVolume;
+        payload["sfx_volume"] = profile.SfxVolume;
+        payload["ambience_volume"] = profile.AmbienceVolume;
+        payload["ui_volume"] = profile.UiVolume;
+        payload["text_speed_multiplier"] = profile.TextSpeedMultiplier;
+        payload["auto_advance_delay"] = profile.AutoAdvanceDelay;
+        payload["text_scale"] = profile.TextScale;
+        payload["high_contrast"] = profile.HighContrast;
+        payload["reduced_motion"] = profile.ReducedMotion;
+        payload["skip_mode"] = SkipModeToString(profile.SkipMode);
+        payload["auto_enabled"] = profile.AutoEnabled;
+        payload["mixer_fade_curve"] = profile.MixerFadeCurve;
+        payload["sfx_pool_depth"] = profile.SfxPoolDepth;
     }
 
     /// <summary>

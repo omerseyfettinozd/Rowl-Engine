@@ -5,6 +5,7 @@
 #include "rowl_test_harness.hpp"
 #include "rowl/state/save_metadata.hpp"
 #include "rowl/state/session_persistence.hpp"
+#include <nlohmann/json.hpp>
 #include <vector>
 
 void test_game_state() {
@@ -41,6 +42,113 @@ void test_game_state() {
         exit(1);
     }
     TEST_PASS("Multi-Step Historical Rewind (Step 3 -> Step 1)");
+
+    // Save-size/perf regression (soak-stress budget): the serialized rewind
+    // chain ("history") must not re-write the dialogue backlog once per link
+    // (that made saves ~5x larger and slower). Links share the root's backlog
+    // (also after the 500-entry cap starts trimming from the front) and the
+    // chain must still round-trip exactly.
+    {
+        using Rowl::State::DialogueHistoryEntry;
+        using Rowl::State::GameState;
+        std::shared_ptr<const GameState> chainState = GameState::createInitialState(1);
+        constexpr size_t kSteps = 70;   // 70 * 10 = 700 entries > 500 cap
+        constexpr size_t kPerStep = 10;
+        size_t serial = 0;
+        for (size_t step = 0; step < kSteps; ++step) {
+            chainState = GameState::createNextState(chainState, 2 + step);
+            std::vector<DialogueHistoryEntry> entries;
+            for (size_t k = 0; k < kPerStep; ++k, ++serial) {
+                entries.push_back({serial + 1, "spk", "line" + std::to_string(serial), true, ""});
+            }
+            chainState = GameState::withDialogueHistory(chainState, entries);
+        }
+        const std::string json = chainState->serializeJson();
+        size_t dialogueKeys = 0;
+        for (size_t at = json.find("\"dialogue\":"); at != std::string::npos;
+             at = json.find("\"dialogue\":", at + 1)) {
+            ++dialogueKeys;
+        }
+        const size_t rootSize = chainState->dialogueHistory->size();
+        // Root spells out its backlog once; each link only its trimmed head
+        // (<= kPerStep entries per step back). Old behaviour: ~5 * rootSize.
+        const size_t bound = rootSize + GameState::kMaxSerializedHistoryEntries *
+                                            GameState::kMaxSerializedHistoryEntries * kPerStep;
+        if (rootSize != 500 || dialogueKeys > bound) {
+            std::cerr << "Chain serialization duplicates the dialogue backlog: root=" << rootSize
+                      << " keys=" << dialogueKeys << " bound=" << bound << std::endl;
+            exit(1);
+        }
+        auto decoded = GameState::decodeJson(json);
+        if (!decoded.state) {
+            std::cerr << "Chain round-trip decode failed" << std::endl;
+            exit(1);
+        }
+        // Every link (rewind step 0..K) must carry the identical backlog.
+        auto sameChain = [&](std::shared_ptr<const GameState> x, std::shared_ptr<const GameState> y,
+                             const char* label) {
+            for (size_t depth = 0; depth <= GameState::kMaxSerializedHistoryEntries; ++depth) {
+                if (!x || !y || x->stepId != y->stepId || x->activeNodeId != y->activeNodeId ||
+                    x->dialogueHistory->size() != y->dialogueHistory->size()) {
+                    std::cerr << label << ": link mismatch at depth " << depth << std::endl;
+                    exit(1);
+                }
+                for (size_t k = 0; k < x->dialogueHistory->size(); ++k) {
+                    const auto& e = (*x->dialogueHistory)[k];
+                    const auto& f = (*y->dialogueHistory)[k];
+                    if (e.nodeId != f.nodeId || e.dialogue != f.dialogue || e.speaker != f.speaker ||
+                        e.read != f.read || e.contentId != f.contentId) {
+                        std::cerr << label << ": backlog mismatch at depth " << depth << std::endl;
+                        exit(1);
+                    }
+                }
+                x = x->previousState;
+                y = y->previousState;
+            }
+        };
+        sameChain(chainState, decoded.state, "shared-backlog round-trip");
+
+        // Back-compat: a D08 writer (history_format absent) spelled the full
+        // dialogue_history inside every link. Rebuild exactly that file from
+        // the new one and require identical decode + rewind results.
+        auto legacy = nlohmann::json::parse(json);
+        legacy.erase("history_format");
+        for (auto& link : legacy["history"]) {
+            if (!link.contains("dialogue_history_root_window")) continue;
+            const auto win = link["dialogue_history_root_window"];
+            nlohmann::json full = win["head"];
+            const size_t shared = win["shared"].get<size_t>();
+            for (size_t k = 0; k < shared; ++k) {
+                full.push_back(legacy["dialogue_history"][k]);
+            }
+            link.erase("dialogue_history_root_window");
+            link["dialogue_history"] = std::move(full);
+        }
+        const std::string legacyJson = legacy.dump(2);
+        if (legacyJson.find("dialogue_history_root_window") != std::string::npos) {
+            std::cerr << "legacy fixture still contains the shared-backlog key" << std::endl;
+            exit(1);
+        }
+        auto legacyDecoded = GameState::decodeJson(legacyJson);
+        if (!legacyDecoded.state ||
+            legacyDecoded.status != Rowl::State::GameStateDecodeStatus::Loaded) {
+            std::cerr << "Legacy (D08) chain no longer loads" << std::endl;
+            exit(1);
+        }
+        sameChain(chainState, legacyDecoded.state, "legacy D08 chain");
+
+        // Unknown future history_format: whole optional chain ignored, root
+        // still loads (same fail-open contract as any foreign "history").
+        auto future = nlohmann::json::parse(json);
+        future["history_format"] = 3;
+        auto futureDecoded = GameState::decodeJson(future.dump());
+        if (!futureDecoded.state || futureDecoded.state->previousState ||
+            futureDecoded.state->stepId != chainState->stepId) {
+            std::cerr << "Future history_format must drop the chain but keep the root" << std::endl;
+            exit(1);
+        }
+        TEST_PASS("Serialized rewind chain shares the dialogue backlog and round-trips exactly");
+    }
 
     // SessionPersistence owns checkpoint alignment and rewind stepping over
     // the immutable chain; Engine delegates to these without changing behavior.

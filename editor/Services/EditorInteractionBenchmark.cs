@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 
@@ -41,6 +42,7 @@ internal sealed class EditorInteractionBenchmark
                 os = RuntimeInformation.OSDescription,
                 architecture = NormalizeArchitecture(RuntimeInformation.ProcessArchitecture),
                 cpu_model = ResolveCpuModel(),
+                power_profile = ResolvePowerProfile(),
                 machine = Environment.GetEnvironmentVariable("ROWL_EDITOR_BENCHMARK_MACHINE") ?? Environment.MachineName,
                 cpu_count = Environment.ProcessorCount
             },
@@ -60,6 +62,27 @@ internal sealed class EditorInteractionBenchmark
         Architecture.Arm => "arm",
         _ => architecture.ToString().ToLowerInvariant()
     };
+
+    /// <summary>
+    /// C03: güç profili kıyaslama anahtarındadır (aynı CPU, profile göre katlarca
+    /// farklı ölçer). Linux: cpufreq governor + energy_performance_preference.
+    /// </summary>
+    private static string ResolvePowerProfile()
+    {
+        string? configured = Environment.GetEnvironmentVariable("ROWL_EDITOR_BENCHMARK_POWER_PROFILE");
+        if (!string.IsNullOrWhiteSpace(configured)) return configured.Trim();
+        if (!OperatingSystem.IsLinux()) return "unknown";
+        static string FirstLine(string path)
+        {
+            try { return File.Exists(path) ? (File.ReadLines(path).FirstOrDefault() ?? string.Empty).Trim() : string.Empty; }
+            catch (IOException) { return string.Empty; }
+            catch (UnauthorizedAccessException) { return string.Empty; }
+        }
+        string governor = FirstLine("/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor");
+        string preference = FirstLine("/sys/devices/system/cpu/cpu0/cpufreq/energy_performance_preference");
+        if (governor.Length == 0) return "unknown";
+        return preference.Length == 0 ? governor : governor + "/" + preference;
+    }
 
     private static string ResolveCpuModel()
     {

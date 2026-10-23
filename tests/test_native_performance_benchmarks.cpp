@@ -54,10 +54,33 @@ std::string benchmarkCpuModel() {
     return "unknown";
 }
 
+// C03 (2026-10-20): aynı CPU modeli güç profiline göre çok farklı ölçer —
+// bu dizüstünde soak-stress "performance"ta ~18 sn, "power-saver"da ~330 sn.
+// Profil kıyaslama anahtarındadır; farklı profillerdeki iki ölçüm kıyaslanmaz.
+// Linux: cpufreq governor + energy_performance_preference ("powersave/power").
+std::string benchmarkPowerProfile() {
+    const auto override = environmentValue("ROWL_BENCHMARK_POWER_PROFILE", "");
+    if (!override.empty()) return override;
+#if defined(__linux__)
+    const auto readFirstLine = [](const char* path) {
+        std::ifstream file(path);
+        std::string line;
+        std::getline(file, line);
+        return trimBenchmarkValue(line);
+    };
+    const auto governor = readFirstLine("/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor");
+    const auto preference = readFirstLine(
+        "/sys/devices/system/cpu/cpu0/cpufreq/energy_performance_preference");
+    if (!governor.empty()) return preference.empty() ? governor : governor + "/" + preference;
+#endif
+    return "unknown";
+}
+
 void writeBenchmarkEnvironment(std::ostream& stream) {
     stream << "  \"environment\": {\"os\": \"" << jsonEscape(SDL_GetPlatform())
            << "\", \"architecture\": \"" << jsonEscape(benchmarkArchitecture())
            << "\", \"cpu_model\": \"" << jsonEscape(benchmarkCpuModel())
+           << "\", \"power_profile\": \"" << jsonEscape(benchmarkPowerProfile())
            << "\", \"cpu_count\": " << SDL_GetNumLogicalCPUCores()
            << ", \"machine\": \"" << jsonEscape(environmentValue("ROWL_BENCHMARK_MACHINE", "unknown")) << "\"},\n";
 }

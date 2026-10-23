@@ -68,7 +68,7 @@ public sealed class EditorWorkspaceStateTests
         Assert.Equal(
             "{\"version\":1,\"lastSplitId\":3,\"tree\":{\"type\":\"split\",\"id\":\"split-3\",\"axis\":\"x\",\"ratio\":0.14,"
             + "\"a\":{\"type\":\"leaf\",\"view\":\"hierarchy\"},\"b\":{\"type\":\"split\",\"id\":\"split-2\",\"axis\":\"x\",\"ratio\":0.772,"
-            + "\"a\":{\"type\":\"split\",\"id\":\"split-1\",\"axis\":\"y\",\"ratio\":0.78,\"a\":{\"type\":\"leaf\",\"view\":\"node\"},"
+            + "\"a\":{\"type\":\"split\",\"id\":\"split-1\",\"axis\":\"y\",\"ratio\":0.7,\"a\":{\"type\":\"leaf\",\"view\":\"node\"},"
             + "\"b\":{\"type\":\"leaf\",\"view\":\"bottom\"}},\"b\":{\"type\":\"leaf\",\"view\":\"inspector\"}}}}",
             WorkspaceLayoutJson.Serialize(state.Layout));
     }
@@ -95,7 +95,7 @@ public sealed class EditorWorkspaceStateTests
         Assert.Equal(1, state.SplitScreenMode);
         Assert.Equal("x(hierarchy,x(y(y(node,edit),bottom),inspector))", Shape(state.Layout.Tree));
         Assert.True(state.IsNodeGraphActive);
-        Assert.False(state.IsPreviewActive);
+        Assert.True(state.IsPreviewActive); // Faz 10: açık her merkez görünüm vurgulanır
         Assert.False(state.IsEnginePreviewActive);
         AssertJsonRoundTrip(state.Layout);
 
@@ -109,12 +109,12 @@ public sealed class EditorWorkspaceStateTests
         Assert.Equal(Shape(EditorWorkspaceState.Default.Layout.Tree), Shape(state.Layout.Tree));
         Assert.True(state.IsNodeGraphActive);
 
-        // A single view leaves split screen.
+        // Faz 10: Sahne Düzenle düğmesi bağımsız aç-kapa — bölünmüş ekrandaki Edit'i kapatır, Node kalır.
         state = state.HandlePanelAction("SplitScreen").HandlePanelAction("Preview");
         Assert.Equal(0, state.SplitScreenMode);
-        Assert.Equal("x(hierarchy,x(y(edit,bottom),inspector))", Shape(state.Layout.Tree));
-        Assert.True(state.IsPreviewActive);
-        Assert.False(state.IsNodeGraphActive);
+        Assert.Equal(Shape(EditorWorkspaceState.Default.Layout.Tree), Shape(state.Layout.Tree));
+        Assert.False(state.IsPreviewActive);
+        Assert.True(state.IsNodeGraphActive);
     }
 
     [Fact]
@@ -212,7 +212,7 @@ public sealed class EditorWorkspaceStateTests
             {
                 string action = PanelActions[random.Next(PanelActions.Length)];
                 step = action;
-                legacy = legacy.HandlePanelAction(action);
+                legacy = legacy.HandlePanelAction(action, state.SplitScreenMode);
                 EditorWorkspaceState next = state.HandlePanelAction(action);
                 state = next.WithActiveBottomTab(BottomStripState.ClampTab(next.Bottom.ActiveTab));
             }
@@ -222,8 +222,10 @@ public sealed class EditorWorkspaceStateTests
             Assert.True(state.Layout.Validate() is null, where + ": " + state.Layout.Validate());
             Assert.All(state.Layout.Views, v => Assert.Contains(v, PanelIds.Editor));
             Assert.Equal(state.Bottom.AnyOpen, state.IsBottomVisible);
+            // Faz 10: merkez görünümler bağımsız; en az bir, en çok üç (Node / Game / Edit).
             int centers = state.Layout.Views.Count(EditorWorkspaceLayouts.IsCenter);
-            Assert.Equal(state.SplitScreenMode == 0 ? 1 : 2, centers);
+            Assert.InRange(centers, 1, 3);
+            Assert.Equal((state.IsNodeGraphActive ? 1 : 0) + (state.IsPreviewActive ? 1 : 0) + (state.IsEnginePreviewActive ? 1 : 0), centers);
             if (i % 97 == 0)
                 AssertJsonRoundTrip(state.Layout);
         }
@@ -264,7 +266,8 @@ public sealed class EditorWorkspaceStateTests
         EditorWorkspaceLayoutService.ToFlags(state,
             out bool h, out bool a, out bool ins, out bool log, out bool back, out bool slots, out bool issues,
             out int tab, out bool graph, out bool prev, out bool eng, out int split);
-        var actual = new LegacyFlags(h, a, ins, log, back, slots, issues, tab, graph, prev, eng, split);
+        // Split < 0: merkez aç-kapa sonrası bölme kipi ağaç biçimine bağlı, referans onu izlemez.
+        var actual = new LegacyFlags(h, a, ins, log, back, slots, issues, tab, graph, prev, eng, expected.Split < 0 ? -1 : split);
         Assert.True(expected == actual, $"{where}: expected {expected}, got {actual}");
     }
 
@@ -297,7 +300,7 @@ public sealed class EditorWorkspaceStateTests
     {
         public static LegacyFlags Default() => new(true, true, true, true, false, false, false, 0, true, false, false, 0);
 
-        public LegacyFlags HandlePanelAction(string panelName)
+        public LegacyFlags HandlePanelAction(string panelName, int actualSplit)
         {
             bool h = Hierarchy, a = Assets, ins = Inspector, log = Log, back = Backlog, slots = SaveSlots, issues = Issues;
             int tab = Tab, split = Split;
@@ -317,12 +320,13 @@ public sealed class EditorWorkspaceStateTests
                     issues = !issues;
                     if (issues) tab = 4;
                     break;
-                case "NodeGraph": graph = true; prev = false; eng = false; split = 0; break;
-                case "Preview": prev = true; graph = false; eng = false; split = 0; break;
-                case "EnginePreview": eng = true; graph = false; prev = false; split = 0; break;
+                // Faz 10: merkez görünümler bağımsız aç-kapa; son açık merkez kapanmaz.
+                case "NodeGraph": ToggleCenter(ref graph, prev || eng); split = -1; break;
+                case "Preview": ToggleCenter(ref prev, graph || eng); split = -1; break;
+                case "EnginePreview": ToggleCenter(ref eng, graph || prev); split = -1; break;
                 case "SplitScreen":
-                    split = (split + 1) % 3;
-                    graph = true; eng = false; prev = false;
+                    split = ((split < 0 ? actualSplit : split) + 1) % 3;
+                    graph = true; eng = false; prev = split > 0; // bölünmüş ekran = Node + Sahne Düzenle
                     break;
             }
             bool[] open = { a, log, back, slots, issues };
@@ -330,6 +334,14 @@ public sealed class EditorWorkspaceStateTests
                 tab = Array.IndexOf(open, true) is int first and >= 0 ? first : 0;
             tab = Math.Clamp(tab, 0, 4);
             return new(h, a, ins, log, back, slots, issues, tab, graph, prev, eng, split);
+        }
+
+        private static void ToggleCenter(ref bool open, bool anotherCenterOpen)
+        {
+            if (!open)
+                open = true;
+            else if (anotherCenterOpen)
+                open = false;
         }
 
         public LegacyFlags ApplyPreset(string preset)

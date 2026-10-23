@@ -60,6 +60,9 @@ public sealed class EditorStrings : INotifyPropertyChanged
 
     public static string T(string key) => Instance.Get(key);
 
+    public static string T(string key, string trFallback, string? enFallback = null) =>
+        Instance.Get(key, trFallback, enFallback);
+
     public static bool IsRightToLeft(string language)
     {
         string primary = language.Split('-', 2)[0];
@@ -94,6 +97,35 @@ public sealed class EditorStrings : INotifyPropertyChanged
 
         ReportMissing(_language, key);
         return Lookup(FallbackLanguage, key) ?? Lookup(SourceLanguage, key) ?? key;
+    }
+
+    /// <summary>
+    /// Anahtarı etkin dilde çözümler; katalogda henüz tanımlı değilse etkin dile
+    /// uygun yedek metne (<paramref name="trFallback"/> / <paramref name="enFallback"/>) düşer.
+    /// </summary>
+    public string Get(string key, string trFallback, string? enFallback = null)
+    {
+        if (string.IsNullOrEmpty(key))
+            return trFallback;
+
+        if (string.Equals(_language, PseudoLanguage, StringComparison.OrdinalIgnoreCase))
+        {
+            string source = Lookup(FallbackLanguage, key)
+                ?? Lookup(SourceLanguage, key)
+                ?? enFallback
+                ?? trFallback;
+            return PseudoLocaleGenerator.Generate(source);
+        }
+
+        string? value = Lookup(_language, key);
+        if (value is not null)
+            return value;
+
+        ReportMissing(_language, key);
+        if (string.Equals(_language, FallbackLanguage, StringComparison.OrdinalIgnoreCase) && enFallback is not null)
+            return enFallback;
+
+        return Lookup(FallbackLanguage, key) ?? Lookup(SourceLanguage, key) ?? trFallback;
     }
 
     /// <summary>Bir dilin anahtar kümesi (kapı testleri: tr ile en eşit olmalı).</summary>

@@ -155,6 +155,9 @@ namespace RowlEngine.Editor.Services
                 if (!buckets.ContainsKey(id))
                     buckets[id] = new List<JsonNode>();
 
+            // C04: daha yeni sürümün yazdığı dosyayı ezme — hiçbir şey yazmadan reddet.
+            ThrowIfAnyNewer(chaptersDir);
+
             Directory.CreateDirectory(chaptersDir);
 
             // Per-chapter node files.
@@ -203,6 +206,7 @@ namespace RowlEngine.Editor.Services
             if (!File.Exists(indexPath))
                 throw new InvalidOperationException(
                     $"Chapter manifest '{IndexFileName}' not found; rejected.");
+            ThrowIfAnyNewer(chaptersDir);
             JsonNode? manifest = JsonNode.Parse(File.ReadAllText(indexPath))
                 ?? throw new InvalidOperationException("Empty chapter manifest; rejected.");
 
@@ -288,6 +292,7 @@ namespace RowlEngine.Editor.Services
         /// <summary>Reads one per-chapter file (definition echo + node payloads).</summary>
         public static (string chapterId, JsonArray nodes) LoadChapterFile(string path)
         {
+            ThrowIfNewer(path);
             JsonNode? doc = JsonNode.Parse(File.ReadAllText(path))
                 ?? throw new InvalidOperationException($"Empty chapter file '{path}'; rejected.");
             string chapterId = doc["chapter_id"]?.GetValue<string>() ?? string.Empty;
@@ -295,6 +300,24 @@ namespace RowlEngine.Editor.Services
                 throw new InvalidOperationException($"Chapter file '{path}' has no chapter_id; rejected.");
             JsonArray nodes = doc["nodes"]?.AsArray() ?? new JsonArray();
             return (chapterId, (JsonArray)Clone(nodes));
+        }
+
+        /// <summary>C04: dosya daha yeni bir biçim sürümündeyse kullanıcıya okunur hata fırlatır.</summary>
+        private static void ThrowIfNewer(string path)
+        {
+            if (StoryGraphFormatGuard.IsNewerFile(path, out int version))
+                throw new InvalidOperationException(string.Format(
+                    System.Globalization.CultureInfo.CurrentCulture,
+                    Strings.EditorStrings.T("Chapter.Storage.NewerFormat"),
+                    Path.GetFileName(path),
+                    version.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+        }
+
+        private static void ThrowIfAnyNewer(string chaptersDir)
+        {
+            if (!Directory.Exists(chaptersDir)) return;
+            foreach (string file in Directory.EnumerateFiles(chaptersDir, "*.json"))
+                ThrowIfNewer(file);
         }
 
         private static string SanitizeFileName(string chapterId)

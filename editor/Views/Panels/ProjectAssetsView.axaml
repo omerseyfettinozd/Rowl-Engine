@@ -8,29 +8,71 @@
              x:Class="RowlEngine.Editor.Views.Panels.ProjectAssetsView"
              x:DataType="vm:MainWindowViewModel">
     <Border Background="{DynamicResource PanelBackground}">
-        <Grid RowDefinitions="Auto, Auto, Auto, *, Auto">
-            <!-- Araç çubuğu: başlık + 4 aksiyon (sıra + komutlar aynen). -->
-            <Border Grid.Row="0" Classes="panelHeader">
-                <DockPanel LastChildFill="True">
-                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="4"
-                                VerticalAlignment="Center">
-                        <Button Classes="ghost" Padding="8,4" Content="{l:T Assets.NewFolder}"
-                                ToolTip.Tip="{l:T Assets.NewFolder.Tip}"
-                                Command="{Binding AssetBrowserViewModel.CreateFolderCommand}"/>
-                        <Button Classes="primary" Padding="10,4" Content="{l:T Assets.Import}"
-                                ToolTip.Tip="{l:T Assets.Import.Tip}"
-                                Command="{Binding ImportAssetCommand}"/>
-                        <Button Classes="ghost" Padding="8,4" Content="{l:T Assets.Refresh}"
-                                ToolTip.Tip="{l:T Assets.Refresh.Tip}"
-                                Command="{Binding AssetBrowserViewModel.RefreshAssetsCommand}"/>
-                        <!-- Unity kromu Dilim G1: ızgara/liste anahtarı -->
-                        <Button Classes="ghost" Padding="8,4"
-                                Content="{Binding AssetBrowserViewModel.AssetViewToggleText}"
-                                ToolTip.Tip="{l:T Assets.ViewToggle.Tip}"
-                                Command="{Binding AssetBrowserViewModel.ToggleAssetViewCommand}"/>
-                    </StackPanel>
-                    <TextBlock Text="{l:T Assets.Title}" Classes="panelTitle" Margin="0,0,8,0"/>
-                </DockPanel>
+        <Grid RowDefinitions="Auto, Auto, *, Auto">
+            <!-- Arama öncelikli araç çubuğu: arama + filtre + sessiz simge eylemleri -->
+            <Border Grid.Row="0" Height="40" Padding="8,6">
+                <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto,Auto,Auto" VerticalAlignment="Center">
+                    <TextBox Grid.Column="0" Watermark="{l:T Assets.Search.Watermark}"
+                             Text="{Binding AssetBrowserViewModel.SearchText}"
+                             MinHeight="{DynamicResource ControlHeight}"
+                             CornerRadius="{DynamicResource RadiusSmall}"
+                             FontSize="{DynamicResource FontSizeBody}" Margin="0,0,6,0"
+                             VerticalAlignment="Center"/>
+                    <ComboBox Grid.Column="1"
+                              ItemsSource="{Binding AssetBrowserViewModel.AssetTypeFilters}"
+                              SelectedItem="{Binding AssetBrowserViewModel.SelectedTypeFilter, Mode=TwoWay}"
+                              MinHeight="{DynamicResource ControlHeight}"
+                              CornerRadius="{DynamicResource RadiusSmall}"
+                              FontSize="{DynamicResource FontSizeBody}" MinWidth="90"
+                              Margin="0,0,6,0" VerticalAlignment="Center"/>
+                    <Border Grid.Column="2" Width="1" Height="20"
+                            Background="{DynamicResource BorderColor}"
+                            Margin="0,0,6,0" VerticalAlignment="Center"/>
+                    <Button Grid.Column="3" Classes="assetTool" Margin="0,0,4,0" VerticalAlignment="Center"
+                            ToolTip.Tip="{l:T Assets.NewFolder.Tip}"
+                            AutomationProperties.Name="{l:T Assets.NewFolder}"
+                            Command="{Binding AssetBrowserViewModel.CreateFolderCommand}">
+                        <Path Data="M3,7 a1,1 0 0 1 1,-1 h5 l2,2 h8 a1,1 0 0 1 1,1 v8 a1,1 0 0 1 -1,1 H4 a1,1 0 0 1 -1,-1 Z M12,11 v5 M9.5,13.5 h5"
+                              Width="14" Height="14" Stretch="Uniform"
+                              Stroke="{Binding $parent[Button].Foreground}" StrokeThickness="1.5"
+                              StrokeLineCap="Round" StrokeJoin="Round" Fill="Transparent"
+                              VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                    </Button>
+                    <Button Grid.Column="4" Classes="assetTool" Margin="0,0,4,0" VerticalAlignment="Center"
+                            ToolTip.Tip="{l:T Assets.Refresh.Tip}"
+                            AutomationProperties.Name="{l:T Assets.Refresh}"
+                            Command="{Binding AssetBrowserViewModel.RefreshAssetsCommand}">
+                        <Path Data="M20,11 a8,8 0 1 0 -2.3,5.7 M20,5 v6 h-6"
+                              Width="14" Height="14" Stretch="Uniform"
+                              Stroke="{Binding $parent[Button].Foreground}" StrokeThickness="1.5"
+                              StrokeLineCap="Round" StrokeJoin="Round" Fill="Transparent"
+                              VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                    </Button>
+                    <!-- Unity kromu Dilim G1: ızgara/liste anahtarı -->
+                    <Button Grid.Column="5" Classes="ghost" Padding="8,4"
+                            FontSize="{DynamicResource FontSizeBody}"
+                            Content="{Binding AssetBrowserViewModel.AssetViewToggleText}"
+                            ToolTip.Tip="{l:T Assets.ViewToggle.Tip}"
+                            Command="{Binding AssetBrowserViewModel.ToggleAssetViewCommand}"
+                            Margin="0,0,4,0" VerticalAlignment="Center"/>
+                    <Button Grid.Column="6" Classes="ghost" Padding="8,4"
+                            FontSize="{DynamicResource FontSizeBody}"
+                            Background="{DynamicResource AccentButtonBg}"
+                            BorderBrush="{DynamicResource BorderSubtle}" BorderThickness="1"
+                            CornerRadius="{DynamicResource RadiusSmall}"
+                            ToolTip.Tip="{l:T Assets.Import.Tip}"
+                            Command="{Binding ImportAssetCommand}"
+                            VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                            <Path Data="M12,4 v11 M7,10 l5,5 l5,-5 M5,19 h14"
+                                  Width="14" Height="14" Stretch="Uniform"
+                                  Stroke="{Binding $parent[Button].Foreground}" StrokeThickness="1.5"
+                                  StrokeLineCap="Round" StrokeJoin="Round" Fill="Transparent"
+                                  VerticalAlignment="Center"/>
+                            <TextBlock Text="{l:T Assets.Import}" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                </Grid>
             </Border>
 
             <!-- Konum satırı: üst klasör + yol çipi -->
@@ -51,24 +93,9 @@
                 </Border>
             </Grid>
 
-            <!-- Arama + tür filtresi -->
-            <Grid Grid.Row="2" ColumnDefinitions="*, Auto" Margin="8,6,8,6">
-                <TextBox Grid.Column="0" Watermark="{l:T Assets.Search.Watermark}"
-                         Text="{Binding AssetBrowserViewModel.SearchText}"
-                         MinHeight="{DynamicResource ControlHeight}"
-                         CornerRadius="{DynamicResource RadiusSmall}"
-                         FontSize="{DynamicResource FontSizeBody}" Margin="0,0,6,0"/>
-                <ComboBox Grid.Column="1"
-                          ItemsSource="{Binding AssetBrowserViewModel.AssetTypeFilters}"
-                          SelectedItem="{Binding AssetBrowserViewModel.SelectedTypeFilter, Mode=TwoWay}"
-                          MinHeight="{DynamicResource ControlHeight}"
-                          CornerRadius="{DynamicResource RadiusSmall}"
-                          FontSize="{DynamicResource FontSizeBody}" MinWidth="90"/>
-            </Grid>
-
             <!-- Faz 6 Dilim 3: sol klasör ağacı + sağ simge ızgarası
                  (yol çipi üst araç çubuğunda). -->
-            <Grid Grid.Row="3" ColumnDefinitions="220,6,*">
+            <Grid Grid.Row="2" ColumnDefinitions="220,6,*">
             <TreeView Grid.Column="0"
                       Background="Transparent"
                       ItemsSource="{Binding AssetBrowserViewModel.AssetTree}"
@@ -137,14 +164,14 @@
                                 <TextBlock Text="{l:T Assets.Badge.Missing}" Classes="fieldValue" Foreground="{DynamicResource ErrorBrush}"/>
                             </Border>
 
-                            <TextBox Text="{Binding EditingName, Mode=TwoWay}" 
-                                     IsVisible="{Binding IsEditing}" 
-                                     FontSize="{DynamicResource FontSizeBodyLarge}" 
-                                     Padding="4,2" 
-                                     Margin="0,-2,0,-2" 
-                                     MinHeight="22" 
-                                     Background="{DynamicResource InputBackground}" 
-                                     Foreground="{DynamicResource PrimaryText}" 
+                            <TextBox Text="{Binding EditingName, Mode=TwoWay}"
+                                     IsVisible="{Binding IsEditing}"
+                                     FontSize="{DynamicResource FontSizeBodyLarge}"
+                                     Padding="4,2"
+                                     Margin="0,-2,0,-2"
+                                     MinHeight="22"
+                                     Background="{DynamicResource InputBackground}"
+                                     Foreground="{DynamicResource PrimaryText}"
                                      BorderBrush="{DynamicResource Accent}">
                                 <TextBox.KeyBindings>
                                     <KeyBinding Gesture="Enter" Command="{Binding CommitRenameCommand}"/>
@@ -187,7 +214,7 @@
                     <ListBox.ItemTemplate>
                         <DataTemplate x:DataType="vm:AssetNodeViewModel">
                             <StackPanel Width="{Binding $parent[UserControl].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.GridItemSize}"
-                                        Background="Transparent" Spacing="2" Margin="4"
+                                        Background="Transparent" Margin="4"
                                         PointerPressed="OnAssetPointerPressed"
                                         PointerMoved="OnAssetPointerMoved"
                                         PointerReleased="OnAssetPointerReleased"
@@ -206,25 +233,44 @@
                                         <MenuItem Header="{l:T Assets.Refresh}" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.RefreshAssetsCommand}"/>
                                     </ContextMenu>
                                 </StackPanel.ContextMenu>
-                                <Border Background="{DynamicResource ToolbarButtonBg}"
+                                <!-- Prototip varlık kartı: ön izleme üstte, ad + tür altta -->
+                                <Border Background="{DynamicResource PanelBackground}"
                                         BorderBrush="{DynamicResource BorderColor}" BorderThickness="1"
-                                        CornerRadius="{DynamicResource RadiusSmall}" Padding="6" HorizontalAlignment="Center"
-                                        Width="{Binding $parent[UserControl].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.GridItemImageSize}"
-                                        Height="{Binding $parent[UserControl].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.GridItemImageSize}">
-                                    <Panel VerticalAlignment="Center" HorizontalAlignment="Center">
-                                        <Image Source="{Binding Thumbnail}" IsVisible="{Binding HasThumbnail}"
-                                               Stretch="Uniform" VerticalAlignment="Center" HorizontalAlignment="Center"/>
-                                        <TextBlock Text="{Binding TypeLabel}" IsVisible="{Binding !HasThumbnail}"
-                                                   Classes="fieldLabel"
-                                                   HorizontalAlignment="Center" VerticalAlignment="Center"
-                                                   TextWrapping="Wrap" TextAlignment="Center"/>
-                                    </Panel>
+                                        CornerRadius="10">
+                                    <StackPanel Spacing="0">
+                                        <Grid>
+                                            <Border Background="{DynamicResource SurfaceBackground}"
+                                                    CornerRadius="10,10,0,0" Padding="6"
+                                                    Height="{Binding $parent[UserControl].((vm:MainWindowViewModel)DataContext).AssetBrowserViewModel.GridItemImageSize}">
+                                                <Panel VerticalAlignment="Center" HorizontalAlignment="Center">
+                                                    <Image Source="{Binding Thumbnail}" IsVisible="{Binding HasThumbnail}"
+                                                           Stretch="Uniform" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                                    <TextBlock Text="{Binding TypeLabel}" IsVisible="{Binding !HasThumbnail}"
+                                                               Classes="fieldLabel"
+                                                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                               TextWrapping="Wrap" TextAlignment="Center"/>
+                                                </Panel>
+                                            </Border>
+                                            <Border IsVisible="{Binding IsMissing}" Background="{DynamicResource ErrorSurface}"
+                                                    CornerRadius="{DynamicResource RadiusSmall}" Padding="4,1"
+                                                    HorizontalAlignment="Left" VerticalAlignment="Top" Margin="4">
+                                                <TextBlock Text="{l:T Assets.Badge.Missing}" Classes="fieldValue" Foreground="{DynamicResource ErrorBrush}"/>
+                                            </Border>
+                                        </Grid>
+                                        <StackPanel Margin="10" Spacing="2">
+                                            <TextBlock Text="{Binding Name}"
+                                                       Foreground="{DynamicResource PrimaryText}"
+                                                       FontSize="{DynamicResource FontSizeBodyLarge}" TextTrimming="CharacterEllipsis"
+                                                       MaxLines="1"
+                                                       TextAlignment="Left" HorizontalAlignment="Stretch"/>
+                                            <TextBlock Text="{Binding TypeLabel}"
+                                                       Foreground="{DynamicResource MutedText}"
+                                                       FontSize="{DynamicResource FontSizeSmall}" TextTrimming="CharacterEllipsis"
+                                                       MaxLines="1"
+                                                       TextAlignment="Left" HorizontalAlignment="Stretch"/>
+                                        </StackPanel>
+                                    </StackPanel>
                                 </Border>
-                                <TextBlock Text="{Binding Name}"
-                                           Foreground="{DynamicResource PrimaryText}"
-                                           FontSize="{DynamicResource FontSizeBody}" TextTrimming="CharacterEllipsis"
-                                           MaxLines="1"
-                                           TextAlignment="Center" HorizontalAlignment="Stretch"/>
                             </StackPanel>
                         </DataTemplate>
                     </ListBox.ItemTemplate>
@@ -298,7 +344,7 @@
                 <TextBlock Text="{l:T Assets.Empty}" Classes="hint" FontStyle="Italic"
                            HorizontalAlignment="Center"
                            TextWrapping="Wrap" TextAlignment="Center"/>
-                <Button Classes="primary" Content="{l:T Assets.ImportFile}" Command="{Binding ImportAssetCommand}"
+                <Button Classes="secondary" Content="{l:T Assets.ImportFile}" Command="{Binding ImportAssetCommand}"
                         ToolTip.Tip="{l:T Assets.Import.Tip}"
                         HorizontalAlignment="Center"/>
             </StackPanel>
@@ -311,7 +357,7 @@
                 <TextBlock Text="{l:T Assets.NoMatch}" Classes="hint" FontStyle="Italic"
                            HorizontalAlignment="Center"
                            TextWrapping="Wrap" TextAlignment="Center"/>
-                <Button Classes="primary" Content="{l:T Assets.ClearFilter}"
+                <Button Classes="secondary" Content="{l:T Assets.ClearFilter}"
                         Command="{Binding AssetBrowserViewModel.ClearFilterCommand}"
                         ToolTip.Tip="{l:T Assets.ClearFilter.Tip}"
                         HorizontalAlignment="Center"/>
@@ -321,7 +367,7 @@
 
             <!-- Faz 4: durum satırı + Faz 6 Dilim 3: ızgara boyut kaydırıcısı
                  (ince şerit: kaydırıcı yüksekliği kilitli). -->
-            <Border Grid.Row="4" Background="{DynamicResource SurfaceBackground}"
+            <Border Grid.Row="3" Background="{DynamicResource SurfaceBackground}"
                     BorderBrush="{DynamicResource BorderColor}" BorderThickness="0,1,0,0"
                     Padding="8,4">
                 <DockPanel LastChildFill="True">

@@ -71,7 +71,52 @@ bool saveNestingWithinBudget(std::string_view text) {
 // yazılır (mevcut tel format birebir korunur); "history" halkaları
 // withThumbnail=false ile yazılır (thumbnail yalnızca aktif state'te kalır,
 // 6. bölüm 768KB kilit payı korunur).
-nlohmann::json encodeStateObject(const GameState& s, bool withThumbnail) {
+// Perf: "history" halkalari kokun dialogue_history'si ile neredeyse ayni
+// listeyi tasir (gecmis yalniz buyur; 500 kapagindan sonra bastan kirpilir).
+// Halka L = [head (kokun kirptigi eski kayitlar)] + R[0..shared) ise liste
+// yeniden yazilmaz: "dialogue_history_root_window" {head:[...], shared:N}
+// yazilir (head cogunlukla bos/kucuk). Aksi halde her halka tum listeyi
+// tekrarlar ve save boyutu/suresi ~5x buyur (soak-stress). Eslesme yoksa
+// (dallanmis gecmis) tam liste yazilir.
+constexpr size_t kMaxHistoryWindowHead = 64;
+// Root-level "history_format": 2 marks that links may use
+// "dialogue_history_root_window". Absent/1 = legacy (D08) full lists. An
+// unknown (future) value makes the whole optional chain ignored (fail-open,
+// same as any foreign "history"); the top-level save "version" is untouched.
+constexpr uint32_t kHistoryFormatShared = 2;
+
+bool historyEntryEq(const DialogueHistoryEntry& x, const DialogueHistoryEntry& y) {
+    return x.nodeId == y.nodeId && x.read == y.read && x.speaker == y.speaker &&
+           x.dialogue == y.dialogue && x.contentId == y.contentId;
+}
+
+nlohmann::json encodeHistoryEntry(const DialogueHistoryEntry& entry) {
+    return {
+        {"node_id", entry.nodeId}, {"speaker", entry.speaker},
+        {"dialogue", entry.dialogue}, {"read", entry.read},
+        {"content_id", entry.contentId},
+    };
+}
+
+// Smallest head length h such that link[h..) == root[0..link.size()-h).
+bool findHistoryWindow(const std::vector<DialogueHistoryEntry>& link,
+                       const std::vector<DialogueHistoryEntry>& root, size_t& head) {
+    const size_t m = link.size();
+    for (size_t h = 0; h <= std::min(m, kMaxHistoryWindowHead); ++h) {
+        const size_t shared = m - h;
+        if (shared > root.size()) continue;
+        bool same = true;
+        for (size_t i = 0; i < shared && same; ++i) same = historyEntryEq(link[h + i], root[i]);
+        if (same) {
+            head = h;
+            return true;
+        }
+    }
+    return false;
+}
+
+nlohmann::json encodeStateObject(const GameState& s, bool withThumbnail,
+                                 const GameState* historyRoot = nullptr) {
     nlohmann::json j;
     j["version"] = GameState::CurrentSaveFormatVersion;
     j["step_id"] = s.stepId;
@@ -87,17 +132,24 @@ nlohmann::json encodeStateObject(const GameState& s, bool withThumbnail) {
     j["master_volume"] = s.masterVolume;
     j["sfx_volume"] = s.sfxVolume;
     j["voice_volume"] = s.voiceVolume;
-    nlohmann::json history = nlohmann::json::array();
-    if (s.dialogueHistory) {
-        for (const auto& entry : *s.dialogueHistory) {
-            history.push_back({
-                {"node_id", entry.nodeId}, {"speaker", entry.speaker},
-                {"dialogue", entry.dialogue}, {"read", entry.read},
-                {"content_id", entry.contentId},
-            });
+    size_t windowHead = 0;
+    const bool windowed = historyRoot && s.dialogueHistory && historyRoot->dialogueHistory &&
+                          findHistoryWindow(*s.dialogueHistory, *historyRoot->dialogueHistory,
+                                            windowHead);
+    if (windowed) {
+        nlohmann::json head = nlohmann::json::array();
+        for (size_t i = 0; i < windowHead; ++i) {
+            head.push_back(encodeHistoryEntry((*s.dialogueHistory)[i]));
         }
+        j["dialogue_history_root_window"] = {
+            {"head", std::move(head)}, {"shared", s.dialogueHistory->size() - windowHead}};
+    } else {
+        nlohmann::json history = nlohmann::json::array();
+        if (s.dialogueHistory) {
+            for (const auto& entry : *s.dialogueHistory) history.push_back(encodeHistoryEntry(entry));
+        }
+        j["dialogue_history"] = std::move(history);
     }
-    j["dialogue_history"] = std::move(history);
 
     nlohmann::json varObj = nlohmann::json::object();
     if (s.variables) {
@@ -134,7 +186,8 @@ nlohmann::json encodeStateObject(const GameState& s, bool withThumbnail) {
 // doğrulamadan geçer (bütçeler + fail-closed alanlar birebir); geçersiz
 // girdi nullptr döner. "history" anahtarına bakmaz (tek seviye — iç içe
 // history yoksayılır). previousState'e dokunmaz (zincirleme çağrıcının işi).
-std::shared_ptr<GameState> decodeStateObject(const nlohmann::json& j, uint32_t version) {
+std::shared_ptr<GameState> decodeStateObject(const nlohmann::json& j, uint32_t version,
+                                             const GameState* historyRoot = nullptr) {
     auto state = std::make_shared<GameState>();
     state->stepId = j.value("step_id", static_cast<uint64_t>(1));
     state->activeNodeId = j.value("active_node_id", static_cast<uint64_t>(101));
@@ -238,29 +291,51 @@ std::shared_ptr<GameState> decodeStateObject(const nlohmann::json& j, uint32_t v
     }
 
     auto history = std::make_shared<std::vector<DialogueHistoryEntry>>();
-    if (j.contains("dialogue_history")) {
+    auto decodeEntry = [](const nlohmann::json& rawEntry, DialogueHistoryEntry& entry) {
+        if (!rawEntry.is_object()) {
+            ROWL_LOG_ERROR("GameState JSON dialogue history entry must be an object");
+            return false;
+        }
+        entry.nodeId = rawEntry.value("node_id", uint64_t{0});
+        entry.speaker = rawEntry.value("speaker", "");
+        entry.dialogue = rawEntry.value("dialogue", "");
+        entry.read = rawEntry.value("read", true);
+        entry.contentId = rawEntry.value("content_id", "");
+        if (entry.nodeId == 0 || entry.speaker.size() > kMaxDialogueHistoryTextBytes ||
+            entry.dialogue.size() > kMaxDialogueHistoryTextBytes ||
+            entry.contentId.size() > kMaxContentIdBytes) {
+            ROWL_LOG_ERROR("GameState JSON contains an invalid dialogue history entry");
+            return false;
+        }
+        return true;
+    };
+    if (historyRoot && j.contains("dialogue_history_root_window")) {
+        // Halka: head + kokun dialogue_history'sinin ilk `shared` kaydi.
+        const auto& win = j["dialogue_history_root_window"];
+        if (!win.is_object() || !win.contains("head") || !win["head"].is_array() ||
+            win["head"].size() > kMaxHistoryWindowHead || !win.contains("shared") ||
+            !win["shared"].is_number_unsigned() || !historyRoot->dialogueHistory ||
+            win["shared"].get<uint64_t>() > historyRoot->dialogueHistory->size() ||
+            win["head"].size() + win["shared"].get<uint64_t>() > kMaxDialogueHistoryEntries) {
+            return nullptr;
+        }
+        for (const auto& rawEntry : win["head"]) {
+            DialogueHistoryEntry entry;
+            if (!decodeEntry(rawEntry, entry)) return nullptr;
+            history->push_back(std::move(entry));
+        }
+        const auto shared = static_cast<size_t>(win["shared"].get<uint64_t>());
+        history->insert(history->end(), historyRoot->dialogueHistory->begin(),
+                        historyRoot->dialogueHistory->begin() + shared);
+    } else if (j.contains("dialogue_history")) {
         if (!j["dialogue_history"].is_array() ||
             j["dialogue_history"].size() > kMaxDialogueHistoryEntries) {
             ROWL_LOG_ERROR("GameState JSON dialogue history is invalid or too large");
             return nullptr;
         }
         for (const auto& rawEntry : j["dialogue_history"]) {
-            if (!rawEntry.is_object()) {
-                ROWL_LOG_ERROR("GameState JSON dialogue history entry must be an object");
-                return nullptr;
-            }
             DialogueHistoryEntry entry;
-            entry.nodeId = rawEntry.value("node_id", uint64_t{0});
-            entry.speaker = rawEntry.value("speaker", "");
-            entry.dialogue = rawEntry.value("dialogue", "");
-            entry.read = rawEntry.value("read", true);
-            entry.contentId = rawEntry.value("content_id", "");
-            if (entry.nodeId == 0 || entry.speaker.size() > kMaxDialogueHistoryTextBytes ||
-                entry.dialogue.size() > kMaxDialogueHistoryTextBytes ||
-                entry.contentId.size() > kMaxContentIdBytes) {
-                ROWL_LOG_ERROR("GameState JSON contains an invalid dialogue history entry");
-                return nullptr;
-            }
+            if (!decodeEntry(rawEntry, entry)) return nullptr;
             history->push_back(std::move(entry));
         }
     }
@@ -275,7 +350,7 @@ std::shared_ptr<GameState> decodeStateObject(const nlohmann::json& j, uint32_t v
 // etkilemez, InvalidData'ya düşürmez.
 std::shared_ptr<GameState> decodeHistoryChain(const nlohmann::json& raw,
                                               const GameState& root,
-                                              uint32_t version) {
+                                              uint32_t version, bool sharedBacklog) {
     if (!raw.is_array() || raw.empty() ||
         raw.size() > GameState::kMaxSerializedHistoryEntries) {
         return nullptr;
@@ -284,7 +359,7 @@ std::shared_ptr<GameState> decodeHistoryChain(const nlohmann::json& raw,
     links.reserve(raw.size());
     for (const auto& rawEntry : raw) {
         if (!rawEntry.is_object()) return nullptr;
-        auto entry = decodeStateObject(rawEntry, version);
+        auto entry = decodeStateObject(rawEntry, version, sharedBacklog ? &root : nullptr);
         if (!entry) return nullptr;
         links.push_back(std::move(entry));
     }
@@ -577,9 +652,12 @@ std::string GameState::serializeJson() const {
     for (auto p = previousState;
          p && count < kMaxSerializedHistoryEntries;
          p = p->previousState, ++count) {
-        chain.push_back(encodeStateObject(*p, false));
+        chain.push_back(encodeStateObject(*p, false, this));
     }
-    if (!chain.empty()) j["history"] = std::move(chain);
+    if (!chain.empty()) {
+        j["history"] = std::move(chain);
+        j["history_format"] = kHistoryFormatShared;
+    }
 
     return j.dump(2);
 }
@@ -621,7 +699,18 @@ GameStateDecodeResult GameState::decodeJson(const std::string& jsonStr) {
         // decode başarısını etkilemez, InvalidData'ya düşürmez.
         std::shared_ptr<GameState> chain;
         if (j.contains("history")) {
-            chain = decodeHistoryChain(j["history"], *state, version);
+            uint32_t historyFormat = 1;
+            bool knownFormat = true;
+            if (j.contains("history_format")) {
+                knownFormat = j["history_format"].is_number_unsigned() &&
+                              (j["history_format"].get<uint64_t>() == 1 ||
+                               j["history_format"].get<uint64_t>() == kHistoryFormatShared);
+                if (knownFormat) historyFormat = j["history_format"].get<uint32_t>();
+            }
+            if (knownFormat) {
+                chain = decodeHistoryChain(j["history"], *state, version,
+                                           historyFormat == kHistoryFormatShared);
+            }
         }
         state->previousState = std::move(chain);
         const auto status = version == CurrentSaveFormatVersion

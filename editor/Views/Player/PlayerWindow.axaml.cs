@@ -14,6 +14,9 @@ namespace RowlEngine.Editor.Views.Player
         {
             DataContext = player;
             InitializeComponent();
+            // D01c-2: closing the window is the last explicit save point; the
+            // native store otherwise writes pending reads only ~2 s after the change.
+            Closed += (_, _) => player.Loop.Close();
         }
     }
 }

@@ -14,13 +14,23 @@ namespace RowlEngine.Editor.Services
 
         public IReadOnlyList<ProjectInfo> Projects => _projects;
 
-        public ProjectRegistryService() : this(GetRegistryPath()) { }
+        public ProjectRegistryService() : this(GetRegistryPath(), DefaultSampleProjectsRoot()) { }
 
-        public ProjectRegistryService(string registryPath)
+        /// <summary>
+        /// Faz 8 C1: kayıt yolu verilen örnek (testler) kullanıcının ev dizinindeki örnek
+        /// projeleri kendiliğinden içe aktarmaz; aksi hâlde sonuç makineye bağlı olurdu.
+        /// </summary>
+        public ProjectRegistryService(string registryPath, string? sampleProjectsRoot = null)
         {
             _registryPath = registryPath;
+            _sampleProjectsRoot = sampleProjectsRoot;
             Load();
         }
+
+        private readonly string? _sampleProjectsRoot;
+
+        private static string DefaultSampleProjectsRoot() =>
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Belgeler", "Rowl Engine Project");
 
         public static string GetRegistryPath()
         {
@@ -153,17 +163,24 @@ namespace RowlEngine.Editor.Services
         private void TryAutoImportLegacyProject()
         {
             // Auto import sample projects if found in Documents or Projects directory
-            string userDocs = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Belgeler", "Rowl Engine Project");
-            if (Directory.Exists(userDocs))
+            string? userDocs = _sampleProjectsRoot;
+            if (userDocs != null && Directory.Exists(userDocs))
             {
                 try
                 {
-                    foreach (var sub in Directory.GetDirectories(userDocs, "*", SearchOption.AllDirectories))
+                    // Kısa yol önce: bulunan projenin alt klasörleri (Assets, Assets/json…)
+                    // kendi hikâye dosyalarını taşısa da ayrı proje sayılmaz.
+                    var found = new List<string>();
+                    foreach (var sub in Directory.GetDirectories(userDocs, "*", SearchOption.AllDirectories)
+                                 .OrderBy(d => d.Length))
                     {
+                        if (found.Any(root => sub.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.Ordinal)))
+                            continue;
                         if (File.Exists(Path.Combine(sub, "project.rowlproj")) ||
                             File.Exists(Path.Combine(sub, "full_story_graph.json")) ||
                             File.Exists(Path.Combine(sub, "Assets", "full_story_graph.json")))
                         {
+                            found.Add(sub);
                             string name = Path.GetFileName(sub);
                             if (!_projects.Any(p => p.Path == sub))
                             {

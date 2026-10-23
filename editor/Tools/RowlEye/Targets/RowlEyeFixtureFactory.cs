@@ -37,7 +37,7 @@ public static class RowlEyeFixtureFactory
     {
         var win = new SettingsDialog();
         ApplyTheme(win, theme);
-        return (win, win.DataContext, new Size(720, 560));
+        return (win, win.DataContext, new Size(860, 620));
     }
 
     private static (Window, object?, Size) CreateMainWindow(string theme, string variant)
@@ -45,6 +45,56 @@ public static class RowlEyeFixtureFactory
         var vm = CreateSealedMainViewModel();
         var win = new MainWindow(vm) { Width = 1920, Height = 1080 };
         ApplyTheme(win, theme);
+        // Faz 8: elle görsel denetim için panel aç (ör. ROWL_EYE_PANELS=Store,Log); golden koşusunda boş kalır.
+        string? panels = Environment.GetEnvironmentVariable("ROWL_EYE_PANELS");
+        if (!string.IsNullOrWhiteSpace(panels))
+        {
+            foreach (string panel in panels.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                vm.ShowPanel(panel);
+        }
+        // Faz 8: işlem kartı / arayüz ölçeği elle denetimi (ROWL_EYE_OPERATION_FAIL=metin, ROWL_EYE_UI_SCALE=1.3).
+        string? failure = Environment.GetEnvironmentVariable("ROWL_EYE_OPERATION_FAIL");
+        if (!string.IsNullOrWhiteSpace(failure))
+            vm.OperationStatus.Fail(OperationKind.Export, failure);
+        if (double.TryParse(Environment.GetEnvironmentVariable("ROWL_EYE_UI_SCALE"),
+                System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double uiScale))
+            RowlEngine.Editor.Services.EditorUiScale.Apply(uiScale);
+        // Faz 10: Denetçi kipleri elle denetim (ROWL_EYE_SELECT=none | multi); golden koşusu dokunmaz.
+        switch (Environment.GetEnvironmentVariable("ROWL_EYE_SELECT"))
+        {
+            case "none":
+                vm.SelectedNodes.Clear();
+                vm.SelectedNode = null;
+                break;
+            case "multi":
+                vm.SelectedNodes.Clear();
+                foreach (var n in vm.Nodes) { n.IsSelected = true; vm.SelectedNodes.Add(n); }
+                break;
+        }
+        // Faz 9 F1: Sorunlar paneli örnek satırları (ROWL_EYE_ISSUES=1): düğümlü hata, varlıklı uyarı, hedefsiz uyarı.
+        if (Environment.GetEnvironmentVariable("ROWL_EYE_ISSUES") == "1")
+        {
+            vm.ProjectIssuesViewModel.SetIssues(new[]
+            {
+                new RowlEngine.Editor.Services.ProjectValidationIssue(true, "Düğüm #101 seçeneği 'Git' silinmiş bir düğüme bağlı (hedef 140).", NodeId: 101),
+                new RowlEngine.Editor.Services.ProjectValidationIssue(false, "Kullanılmayan varlık: images/old_bg.png", AssetPath: "images/old_bg.png"),
+                new RowlEngine.Editor.Services.ProjectValidationIssue(false, "Disk taraması tamamlanamadı; bazı varlıklar denetlenmedi."),
+            });
+            vm.ShowPanel("ProjectIssues");
+        }
+        // Faz 8 B: kurtarma + içe aktarma kartları örnek durumda (ROWL_EYE_CARDS=1); golden koşusu dokunmaz.
+        if (Environment.GetEnvironmentVariable("ROWL_EYE_CARDS") == "1")
+        {
+            vm.RecoveryOffer = new RecoveryOfferViewModel(
+                new RowlEngine.Editor.Services.RestoreOffer("journal",
+                    "{\"format_version\":5,\"nodes\":[{\"title\":\"Başlangıç\"},{\"title\":\"Koridor\"},{\"title\":\"Final\"}]}", 5, 3),
+                "Unexpected end of JSON (satır 1, konum 11)", () => true, () => { });
+            vm.AssetImport.IsRunning = true;
+            vm.AssetImport.Total = 12;
+            vm.AssetImport.Completed = 5;
+            vm.AssetImport.CurrentFile = "koridor_gece.png";
+            vm.AssetImport.PendingConflict = new RowlEngine.Editor.Services.ImportConflict("/tmp/koridor_gece.png", "images/koridor_gece.png");
+        }
         return (win, vm, new Size(1920, 1080));
     }
 

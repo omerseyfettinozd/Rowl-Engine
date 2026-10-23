@@ -3,6 +3,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.VisualTree;
+using RowlEngine.Editor.Services;
 using RowlEngine.Editor.ViewModels;
 
 namespace RowlEngine.Editor.Views.Panels
@@ -22,6 +23,47 @@ namespace RowlEngine.Editor.Views.Panels
         private double _groupResizeStartW;
         private double _groupResizeStartH;
         private Point _groupResizeStartPos;
+
+        /// <summary>
+        /// Tuvalin sol üstünü kaplayan araç satırının (kırıntı + düğüm komutları) bu görünümle
+        /// aynı koordinat düzlemindeki sınırları. Ana pencere satırın <c>Bounds</c>'una bağlar;
+        /// mini harita buna göre yer değiştirir (bkz. <see cref="Controls.MinimapPlacement"/>).
+        /// </summary>
+        public static readonly StyledProperty<Rect> MinimapObstacleProperty =
+            AvaloniaProperty.Register<NodeGraphView, Rect>(nameof(MinimapObstacle));
+
+        public Rect MinimapObstacle
+        {
+            get => GetValue(MinimapObstacleProperty);
+            set => SetValue(MinimapObstacleProperty, value);
+        }
+
+        protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+        {
+            base.OnPropertyChanged(change);
+            if (change.Property == MinimapObstacleProperty || change.Property == BoundsProperty)
+                UpdateMinimapPlacement();
+        }
+
+        private void UpdateMinimapPlacement()
+        {
+            if (this.FindControl<Panel>("MinimapSlot") is not { } slot ||
+                this.FindControl<Border>("MinimapCard") is not { } card ||
+                this.FindControl<Controls.MinimapControl>("CanvasMinimap") is not { } minimap)
+                return;
+            var cardSize = new Size(
+                minimap.Width + card.Padding.Left + card.Padding.Right + card.BorderThickness.Left + card.BorderThickness.Right,
+                minimap.Height + card.Padding.Top + card.Padding.Bottom + card.BorderThickness.Top + card.BorderThickness.Bottom);
+            var placement = Controls.MinimapPlacement.Resolve(Bounds.Size, MinimapObstacle, cardSize);
+            // Margin yerine çizim kaydırması: yeniden düzen istemez, bir sonraki karede hep güncel.
+            double offset = placement.Top - Controls.MinimapPlacement.EdgeMargin;
+            if (slot.RenderTransform is not Avalonia.Media.TranslateTransform shift)
+                slot.RenderTransform = shift = new Avalonia.Media.TranslateTransform();
+            if (shift.Y != offset)
+                shift.Y = offset;
+            if (slot.IsVisible != placement.IsVisible)
+                slot.IsVisible = placement.IsVisible;
+        }
 
         public NodeGraphView()
         {
@@ -67,19 +109,40 @@ namespace RowlEngine.Editor.Views.Panels
             if (DataContext is not MainWindowViewModel vm) return;
             if (sender is not Control control) return;
             var graph = vm.NodeGraphViewModel;
-            if (control.Bounds.Width > 0)
-                graph.ViewportWidth = control.Bounds.Width;
-            if (control.Bounds.Height > 0)
-                graph.ViewportHeight = control.Bounds.Height;
+            if (control.Bounds.Width > 0 || control.Bounds.Height > 0)
+            {
+                // Faz 9 E1: görünüm boyutu tek kaynaktan (Bounds) beslenir.
+                graph.ViewportSize = control.Bounds.Size;
+            }
         }
 
         private void NodeGraphView_KeyDown(object? sender, KeyEventArgs e)
         {
-            if (e.KeyModifiers != KeyModifiers.None) return;
             if (DataContext is not MainWindowViewModel vm) return;
-            if (e.Key == Key.F)
+            // Metin girişinde normal yazım/odak davranışı bozulmaz.
+            if (MainWindow.IsTextInputSource(e.Source))
+                return;
+            bool shift = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
+            bool noCtrlAlt = !e.KeyModifiers.HasFlag(KeyModifiers.Control) &&
+                !e.KeyModifiers.HasFlag(KeyModifiers.Meta) &&
+                !e.KeyModifiers.HasFlag(KeyModifiers.Alt);
+            if (e.Key == Key.F && noCtrlAlt && !shift)
             {
                 vm.NodeGraphViewModel.FitToSelectionCommand.Execute(null);
+                e.Handled = true;
+                return;
+            }
+            if (e.Key == Key.F && noCtrlAlt && shift)
+            {
+                vm.NodeGraphViewModel.ZoomToFitCommand.Execute(null);
+                e.Handled = true;
+                return;
+            }
+            if (e.Key == Key.Tab && noCtrlAlt)
+            {
+                // Bu işleyici yalnız tuval içinden kabaran tuşlarda çalışır;
+                // dış panellerdeki Tab buraya uğramaz.
+                vm.CycleNodeSelection(backwards: shift);
                 e.Handled = true;
             }
         }
@@ -106,6 +169,10 @@ namespace RowlEngine.Editor.Views.Panels
             return (null, null);
         }
 
+        // Grup taşıma başlangıcı (tek kayıt için).
+        private double _groupMoveStartX;
+        private double _groupMoveStartY;
+
         private void GroupGesturePressed(object? sender, PointerPressedEventArgs e)
         {
             if (DataContext is not MainWindowViewModel vm) return;
@@ -115,7 +182,9 @@ namespace RowlEngine.Editor.Views.Panels
 
             if (kind == "GroupDelete")
             {
+                int groupIndex = vm.Groups.IndexOf(group.GroupId);
                 vm.Groups.Delete(group.GroupId);
+                UndoRedoService.Instance.RecordAction(new GroupDeleteAction(vm.Groups, group, groupIndex));
                 e.Handled = true;
                 return;
             }
@@ -134,6 +203,8 @@ namespace RowlEngine.Editor.Views.Panels
             _groupResizeStartPos = canvasPos;
             _groupResizeStartW = group.Width;
             _groupResizeStartH = group.Height;
+            _groupMoveStartX = group.X;
+            _groupMoveStartY = group.Y;
             e.Handled = true;
         }
 
@@ -170,8 +241,27 @@ namespace RowlEngine.Editor.Views.Panels
         private void GroupGestureReleased(object? sender, PointerReleasedEventArgs e)
         {
             if (_groupDrag is null) return;
+            var releasedGroup = _groupDrag;
+            string? releasedKind = _groupDragKind;
             _groupDrag = null;
             _groupDragKind = null;
+            if (DataContext is MainWindowViewModel releaseVm && releasedKind is not null)
+            {
+                if (releasedKind == "GroupHeader")
+                {
+                    double rdx = releasedGroup.X - _groupMoveStartX;
+                    double rdy = releasedGroup.Y - _groupMoveStartY;
+                    if (Math.Abs(rdx) + Math.Abs(rdy) > 0.5)
+                        UndoRedoService.Instance.RecordAction(new GroupMoveAction(releaseVm.Groups, releasedGroup.GroupId, rdx, rdy));
+                }
+                else if (releasedKind == "GroupResize")
+                {
+                    double rbw = _groupResizeStartW;
+                    double rbh = _groupResizeStartH;
+                    if (Math.Abs(releasedGroup.Width - rbw) + Math.Abs(releasedGroup.Height - rbh) > 0.5)
+                        UndoRedoService.Instance.RecordAction(new GroupResizeAction(releaseVm.Groups, releasedGroup.GroupId, rbw, rbh, releasedGroup.Width, releasedGroup.Height));
+                }
+            }
             e.Handled = true;
         }
 
@@ -185,6 +275,9 @@ namespace RowlEngine.Editor.Views.Panels
             bool isBackground = e.Source is Grid || e.Source is Canvas || e.Source is Avalonia.Controls.Shapes.Rectangle;
 
             if (!isBackground) return;
+
+            // Faz 9 E1: boş tuvale basınca klavye odağı tuvale gelir (F/Tab çalışır).
+            Focus(NavigationMethod.Pointer);
 
             _pressStartPos = e.GetPosition(control);
 
@@ -269,19 +362,16 @@ namespace RowlEngine.Editor.Views.Panels
 
         private void NodeGraphContainer_PointerWheelChanged(object? sender, PointerWheelEventArgs e)
         {
-            if (DataContext is MainWindowViewModel vm)
-            {
-                // MUST hold Ctrl key to zoom
-                if (!e.KeyModifiers.HasFlag(KeyModifiers.Control))
-                {
-                    return;
-                }
+            if (DataContext is not MainWindowViewModel vm)
+                return;
+            Control? container = sender as Control;
+            if (container == null) return;
 
+            // Ctrl+tekerlek: mevcut imleç merkezli zoom.
+            if (e.KeyModifiers.HasFlag(KeyModifiers.Control))
+            {
                 double delta = e.Delta.Y;
                 if (System.Math.Abs(delta) < 0.001) return;
-
-                Control? container = sender as Control;
-                if (container == null) return;
 
                 // Get mouse position relative to NodeGraphContainer
                 Point mousePos = e.GetPosition(container);
@@ -304,7 +394,21 @@ namespace RowlEngine.Editor.Views.Panels
                 vm.StartSmoothViewAnimation();
 
                 e.Handled = true;
+                return;
             }
+
+            // Faz 9 E1: düz tekerlek dikey, Shift+tekerlek yatay kaydırır; adım ekran
+            // pikselinde sabit (60 px), böylece her zoom düzeyinde aynı hissettirir.
+            const double stepScreen = 60.0;
+            double dx = e.Delta.X, dy = e.Delta.Y;
+            if (e.KeyModifiers.HasFlag(KeyModifiers.Shift) && Math.Abs(dx) < 0.001)
+                (dx, dy) = (dy, 0);
+            if (Math.Abs(dx) < 0.001 && Math.Abs(dy) < 0.001) return;
+            vm.PanX += dx * stepScreen;
+            vm.PanY += dy * stepScreen;
+            vm.TargetPanX = vm.PanX;
+            vm.TargetPanY = vm.PanY;
+            e.Handled = true;
         }
     }
 }

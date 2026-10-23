@@ -1,6 +1,7 @@
 #include "rowl/core/story_graph_parser.hpp"
 
 #include <algorithm>
+#include <cstdint>
 #include <utility>
 
 namespace Rowl::Core {
@@ -34,6 +35,28 @@ bool appendComponent(const nlohmann::json& componentJson, StoryNode& node,
 
 } // namespace
 
+bool StoryGraphParser::checkFormatVersion(const nlohmann::json& root, std::string& error) {
+    if (!root.is_object()) return true;
+    const auto it = root.find("format_version");
+    if (it == root.end() || !it->is_number()) return true;
+    // uint64 disina tasan degerler nlohmann'da double olur; yine de "daha yeni".
+    if (it->is_number_float()) {
+        const double value = it->get<double>();
+        if (!(value > static_cast<double>(kStoryGraphFormatVersion))) return true;
+        error = "Story graph format_version is newer than this engine supports (" +
+                std::to_string(kStoryGraphFormatVersion) + "); rejected. Update Rowl.";
+        return false;
+    }
+    const int64_t version = it->is_number_unsigned()
+        ? static_cast<int64_t>(std::min<uint64_t>(it->get<uint64_t>(), INT64_MAX))
+        : it->get<int64_t>();
+    if (version <= kStoryGraphFormatVersion) return true;
+    error = "Story graph format_version " + std::to_string(version) +
+            " is newer than this engine supports (" +
+            std::to_string(kStoryGraphFormatVersion) + "); rejected. Update Rowl.";
+    return false;
+}
+
 StoryGraphParseResult StoryGraphParser::parse(std::string_view jsonContent) {
     if (jsonContent.empty()) {
         return validationFailure("Story graph JSON is empty; rejected");
@@ -51,6 +74,10 @@ StoryGraphParseResult StoryGraphParser::parse(std::string_view jsonContent) {
         }
         if (data["nodes"].size() > kMaxStoryNodes) {
             return validationFailure("Story graph exceeds the maximum node count; rejected");
+        }
+
+        if (std::string versionError; !checkFormatVersion(data, versionError)) {
+            return validationFailure(std::move(versionError));
         }
 
         StoryGraphParseResult result;

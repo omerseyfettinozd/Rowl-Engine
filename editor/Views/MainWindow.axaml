@@ -30,62 +30,66 @@
         <vm:MainWindowViewModel/>
     </Design.DataContext>
 
+    <!-- Faz 8 D2: arayüz ölçeği (%100/%115/%130) — tüm içerik birlikte ölçeklenir (EditorUiScale). -->
+    <LayoutTransformControl x:Name="UiScaleHost">
     <Grid RowDefinitions="Auto, *, Auto">
 
-        <!-- FAZ 3 (EDITOR_UI_PORT_PLAN K4): tek satır üst çubuk + ortada prototipin
-             kapsülü: görünümler | taşıma | Araçlar · Diğer (…). Proje/kayıt/düzen/ayar
-             komutları "…" menüsünde; düğüm komutları kanvastaki Node araç çubuğunda.
-             Kısayollar (Ctrl+S/Z/Y/N, Delete, Ctrl+,) MainWindow.axaml.cs'te. -->
-        <Border Grid.Row="0" Background="{DynamicResource SurfaceBackground}"
-                BorderBrush="{DynamicResource BorderColor}" BorderThickness="0,0,0,1"
-                Padding="12,6">
+        <!-- Üst çubuk: 56 px, AppBackground, markasız ortalanmış kapsül -->
+        <Border Grid.Row="0" Background="{DynamicResource AppBackground}" Height="56" Padding="0,4">
             <Grid ColumnDefinitions="*,Auto,*">
-
-                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                    <TextBlock Text="{l:T App.Brand.Name}" FontWeight="Black" Foreground="{DynamicResource Accent}" FontSize="13" VerticalAlignment="Center" LetterSpacing="0.5"/>
-                    <TextBlock Text="{l:T App.Brand.Tagline}" FontWeight="Light" Foreground="{DynamicResource MutedText}" FontSize="13" VerticalAlignment="Center" Margin="-2,0,0,0"/>
-                </StackPanel>
-
-                <!-- Kapsül (prototip .view-switcher) -->
+                <!-- Kapsül (prototip .view-switcher): görünümler | taşıma | Araçlar · Diğer -->
                 <Border x:Name="TopCapsule" Grid.Column="1"
                         Background="{DynamicResource ToolbarButtonBg}"
                         BorderBrush="{DynamicResource BorderColor}" BorderThickness="1"
-                        CornerRadius="14" Padding="3">
+                        CornerRadius="14" Padding="2"
+                        VerticalAlignment="Center" HorizontalAlignment="Center">
                     <StackPanel Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
-
-                        <StackPanel x:Name="CenterViewTabs" Orientation="Horizontal" Spacing="2">
-                            <Button Classes="capsule" Command="{Binding ShowPanelCommand}" CommandParameter="NodeGraph"
+                        <!-- Görünüm düğmeleri: simge + etkin noktası -->
+                        <StackPanel x:Name="CenterViewTabs" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+                            <Button Classes="capsule" Classes.active="{Binding IsNodeGraphActive}" Command="{Binding ShowPanelCommand}" CommandParameter="NodeGraph"
                                     ToolTip.Tip="{l:T View.Node.Tip}">
-                                <StackPanel Spacing="3">
-                                    <TextBlock Text="{l:T View.Node}" HorizontalAlignment="Center"/>
-                                    <Border Height="2" CornerRadius="1" Background="{Binding SceneTabBrush}"/>
-                                </StackPanel>
+                                <Grid Width="32" Height="32">
+                                    <Path Data="M4,4 h6 v6 h-6 Z M14,14 h6 v6 h-6 Z M10,7 h3 a2,2 0 0 1 2,2 v5"
+                                          Width="18" Height="18" Stretch="Uniform"
+                                          StrokeThickness="1.5" StrokeLineCap="Round" StrokeJoin="Round"
+                                          Fill="Transparent" Stroke="{Binding $parent[Button].Foreground}"
+                                          HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    <Ellipse Width="3" Height="3" HorizontalAlignment="Right" VerticalAlignment="Top" Fill="{Binding SceneTabBrush}"/>
+                                </Grid>
                             </Button>
-                            <Button Classes="capsule" Command="{Binding ShowPanelCommand}" CommandParameter="EnginePreview"
+                            <Button Classes="capsule" Classes.active="{Binding IsEnginePreviewActive}" Command="{Binding ShowPanelCommand}" CommandParameter="EnginePreview"
                                     ToolTip.Tip="{l:T View.Game.Tip}">
-                                <StackPanel Spacing="3">
-                                    <TextBlock Text="{l:T View.Game}" HorizontalAlignment="Center"/>
-                                    <Border Height="2" CornerRadius="1" Background="{Binding GameTabBrush}"/>
-                                </StackPanel>
+                                <Grid Width="32" Height="32">
+                                    <Path Data="M3,5 h18 v12 h-18 Z M8,21 h8 M10,8.5 L15,11 L10,13.5 Z"
+                                          Width="18" Height="18" Stretch="Uniform"
+                                          StrokeThickness="1.5" StrokeLineCap="Round" StrokeJoin="Round"
+                                          Fill="Transparent" Stroke="{Binding $parent[Button].Foreground}"
+                                          HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    <Ellipse Width="3" Height="3" HorizontalAlignment="Right" VerticalAlignment="Top" Fill="{Binding GameTabBrush}"/>
+                                </Grid>
                                 <Button.ContextMenu>
                                     <ContextMenu>
                                         <MenuItem Header="{l:T Menu.OpenInSeparateWindow}" Command="{Binding OpenPlayerWindowCommand}"/>
                                     </ContextMenu>
                                 </Button.ContextMenu>
                             </Button>
-                            <Button Classes="capsule" Command="{Binding ShowPanelCommand}" CommandParameter="Preview"
+                            <Button Classes="capsule" Classes.active="{Binding IsPreviewActive}" Command="{Binding ShowPanelCommand}" CommandParameter="Preview"
                                     ToolTip.Tip="{l:T View.SceneEdit.Tip}">
-                                <StackPanel Spacing="3">
-                                    <TextBlock Text="{l:T View.SceneEdit}" HorizontalAlignment="Center"/>
-                                    <Border Height="2" CornerRadius="1" Background="{Binding PreviewTabBrush}"/>
-                                </StackPanel>
+                                <Grid Width="32" Height="32">
+                                    <Path Data="M4,4 h4 M4,4 v4 M20,4 h-4 M20,4 v4 M4,20 v-4 M4,20 h4 M11,11 L19,14 L15.5,15.5 L14,19 Z"
+                                          Width="18" Height="18" Stretch="Uniform"
+                                          StrokeThickness="1.5" StrokeLineCap="Round" StrokeJoin="Round"
+                                          Fill="Transparent" Stroke="{Binding $parent[Button].Foreground}"
+                                          HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    <Ellipse Width="3" Height="3" HorizontalAlignment="Right" VerticalAlignment="Top" Fill="{Binding PreviewTabBrush}"/>
+                                </Grid>
                             </Button>
                         </StackPanel>
 
                         <Border Classes="capsuleDivider"/>
 
                         <!-- Taşıma kümesi (Oynat/Duraklat/Adım). Glifler bizim çizimimiz. -->
-                        <StackPanel x:Name="TransportCluster" Orientation="Horizontal" Spacing="2">
+                        <StackPanel x:Name="TransportCluster" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
                             <Button Classes="capsuleIcon" Command="{Binding TogglePlayStandaloneCommand}"
                                     ToolTip.Tip="{l:T Transport.Play}"
                                     Background="{Binding PlayButtonColor}">
@@ -108,17 +112,100 @@
 
                         <Border Classes="capsuleDivider"/>
 
-                        <Menu Background="Transparent" VerticalAlignment="Center">
-                            <MenuItem x:Name="WindowsMenu" Header="{l:T Menu.Windows}" Classes="capsuleMenu">
-                                <MenuItem Header="{l:T Panel.Hierarchy}" InputGesture="Ctrl+1" Command="{Binding ShowPanelCommand}" CommandParameter="Hierarchy"/>
-                                <MenuItem Header="{l:T Panel.Inspector}" InputGesture="Ctrl+2" Command="{Binding ShowPanelCommand}" CommandParameter="Inspector"/>
-                                <MenuItem Header="{l:T Panel.Log}" InputGesture="Ctrl+3" Command="{Binding ShowPanelCommand}" CommandParameter="Log"/>
-                                <MenuItem Header="{l:T Panel.Assets}" InputGesture="Ctrl+4" Command="{Binding ShowPanelCommand}" CommandParameter="Assets"/>
-                                <MenuItem Header="{l:T Panel.Backlog}" InputGesture="Ctrl+5" Command="{Binding ShowPanelCommand}" CommandParameter="Backlog"/>
-                                <MenuItem Header="{l:T Panel.SaveSlots}" InputGesture="Ctrl+6" Command="{Binding ShowPanelCommand}" CommandParameter="SaveSlots"/>
-                                <MenuItem Header="{l:T Panel.Issues}" InputGesture="Ctrl+7" Command="{Binding ShowPanelCommand}" CommandParameter="ProjectIssues"/>
+                        <!-- Araçlar + Diğer: simge başlık, kart açılır -->
+                        <Menu Background="Transparent" VerticalAlignment="Center" Padding="0" Margin="0">
+                            <MenuItem x:Name="WindowsMenu" Classes="capsuleMenu toolsMenu" ToolTip.Tip="{l:T Menu.Windows}">
+                                <MenuItem.Header>
+                                    <Path Data="M4,4 h6 v6 h-6 Z M14,4 h6 v6 h-6 Z M4,14 h6 v6 h-6 Z M17,14 v6 M14,17 h6"
+                                          Width="18" Height="18" Stretch="Uniform"
+                                          StrokeThickness="1.5" StrokeLineCap="Round" StrokeJoin="Round"
+                                          Fill="Transparent" Stroke="{Binding $parent[MenuItem].Foreground}"
+                                          HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </MenuItem.Header>
+                                <MenuItem.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <UniformGrid Columns="2"/>
+                                    </ItemsPanelTemplate>
+                                </MenuItem.ItemsPanel>
+                                <MenuItem Classes="toolCard" Header="{l:T Panel.Hierarchy}" InputGesture="Ctrl+1" Command="{Binding ShowPanelCommand}" CommandParameter="Hierarchy">
+                                    <MenuItem.Icon>
+                                        <Path Data="M6,4 h3 v3 h-3 Z M6,17 h3 v3 h-3 Z M15,10.5 h3 v3 h-3 Z M9,5.5 h2.5 a2,2 0 0 1 2,2 V9 M9,18.5 h2.5 a2,2 0 0 0 2,-2 V15"
+                                              Width="19" Height="19" Stretch="Uniform" StrokeThickness="1.5" StrokeLineCap="Round" StrokeJoin="Round"
+                                              Fill="Transparent" Stroke="{DynamicResource ToolCardIcon}"/>
+                                    </MenuItem.Icon>
+                                </MenuItem>
+                                <MenuItem Classes="toolCard" Header="{l:T Panel.Inspector}" InputGesture="Ctrl+2" Command="{Binding ShowPanelCommand}" CommandParameter="Inspector">
+                                    <MenuItem.Icon>
+                                        <Path Data="M4,7 h16 M4,17 h16 M14,5 v4 M8,15 v4"
+                                              Width="19" Height="19" Stretch="Uniform" StrokeThickness="1.5" StrokeLineCap="Round" StrokeJoin="Round"
+                                              Fill="Transparent" Stroke="{DynamicResource ToolCardIcon}"/>
+                                    </MenuItem.Icon>
+                                </MenuItem>
+                                <MenuItem Classes="toolCard" Header="{l:T Panel.Log}" InputGesture="Ctrl+3" Command="{Binding ShowPanelCommand}" CommandParameter="Log">
+                                    <MenuItem.Icon>
+                                        <Path Data="M4,5 h16 v14 h-16 Z M7,10 L10,12 L7,14 M12.5,14 H17"
+                                              Width="19" Height="19" Stretch="Uniform" StrokeThickness="1.5" StrokeLineCap="Round" StrokeJoin="Round"
+                                              Fill="Transparent" Stroke="{DynamicResource ToolCardIcon}"/>
+                                    </MenuItem.Icon>
+                                </MenuItem>
+                                <MenuItem Classes="toolCard" Header="{l:T Panel.Assets}" InputGesture="Ctrl+4" Command="{Binding ShowPanelCommand}" CommandParameter="Assets">
+                                    <MenuItem.Icon>
+                                        <Path Data="M3,8 a1,1 0 0 1 1,-1 h5 l2,2 h6 a1,1 0 0 1 1,1 v8 a1,1 0 0 1 -1,1 H4 a1,1 0 0 1 -1,-1 Z"
+                                              Width="19" Height="19" Stretch="Uniform" StrokeThickness="1.5" StrokeLineCap="Round" StrokeJoin="Round"
+                                              Fill="Transparent" Stroke="{DynamicResource ToolCardIcon}"/>
+                                    </MenuItem.Icon>
+                                </MenuItem>
+                                <MenuItem Classes="toolCard" Header="{l:T Panel.Backlog}" InputGesture="Ctrl+5" Command="{Binding ShowPanelCommand}" CommandParameter="Backlog">
+                                    <MenuItem.Icon>
+                                        <Path Data="M9,6 h11 M9,12 h11 M9,18 h11 M5,6 h.01 M5,12 h.01 M5,18 h.01"
+                                              Width="19" Height="19" Stretch="Uniform" StrokeThickness="1.5" StrokeLineCap="Round" StrokeJoin="Round"
+                                              Fill="Transparent" Stroke="{DynamicResource ToolCardIcon}"/>
+                                    </MenuItem.Icon>
+                                </MenuItem>
+                                <MenuItem Classes="toolCard" Header="{l:T Panel.SaveSlots}" InputGesture="Ctrl+6" Command="{Binding ShowPanelCommand}" CommandParameter="SaveSlots">
+                                    <MenuItem.Icon>
+                                        <Path Data="M5,4 h10 l4,4 v12 h-14 Z M8,4 v5 h7 V4 M8,20 v-6 h8 v6"
+                                              Width="19" Height="19" Stretch="Uniform" StrokeThickness="1.5" StrokeLineCap="Round" StrokeJoin="Round"
+                                              Fill="Transparent" Stroke="{DynamicResource ToolCardIcon}"/>
+                                    </MenuItem.Icon>
+                                </MenuItem>
+                                <MenuItem Classes="toolCard" Header="{l:T Panel.Issues}" InputGesture="Ctrl+7" Command="{Binding ShowPanelCommand}" CommandParameter="ProjectIssues">
+                                    <MenuItem.Icon>
+                                        <Path Data="M12,4 L21,20 H3 Z M12,10 v4.5 M12,17.5 h.01"
+                                              Width="19" Height="19" Stretch="Uniform" StrokeThickness="1.5" StrokeLineCap="Round" StrokeJoin="Round"
+                                              Fill="Transparent" Stroke="{DynamicResource ToolCardIcon}"/>
+                                    </MenuItem.Icon>
+                                </MenuItem>
+                                <MenuItem Classes="toolCard" Header="{l:T Panel.Library}" InputGesture="Ctrl+8" Command="{Binding ShowPanelCommand}" CommandParameter="Library">
+                                    <MenuItem.Icon>
+                                        <Path Data="M4,4 h6 v6 h-6 Z M14,4 h6 v6 h-6 Z M4,14 h6 v6 h-6 Z M17,13.5 l1.1,2.3 l2.4,.3 l-1.8,1.7 l.5,2.4 l-2.2,-1.2 l-2.2,1.2 l.5,-2.4 l-1.8,-1.7 l2.4,-.3 Z"
+                                              Width="19" Height="19" Stretch="Uniform" StrokeThickness="1.5" StrokeLineCap="Round" StrokeJoin="Round"
+                                              Fill="Transparent" Stroke="{DynamicResource ToolCardIcon}"/>
+                                    </MenuItem.Icon>
+                                </MenuItem>
+                                <MenuItem Classes="toolCard" Header="{l:T Panel.Lua}" InputGesture="Ctrl+9" Command="{Binding ShowPanelCommand}" CommandParameter="Lua">
+                                    <MenuItem.Icon>
+                                        <Path Data="M8,7 L3,12 L8,17 M16,7 L21,12 L16,17 M14,4 L10,20"
+                                              Width="19" Height="19" Stretch="Uniform" StrokeThickness="1.5" StrokeLineCap="Round" StrokeJoin="Round"
+                                              Fill="Transparent" Stroke="{DynamicResource ToolCardIcon}"/>
+                                    </MenuItem.Icon>
+                                </MenuItem>
+                                <!-- Faz 8 A3: prototip "Assets Store" kartı (kısayolsuz, prototipteki gibi). -->
+                                <MenuItem Classes="toolCard" Header="{l:T Panel.Store}" Command="{Binding ShowPanelCommand}" CommandParameter="Store">
+                                    <MenuItem.Icon>
+                                        <Path Data="M3,8 a1,1 0 0 1 1,-1 h5 l2,2 h6 a1,1 0 0 1 1,1 v8 a1,1 0 0 1 -1,1 H4 a1,1 0 0 1 -1,-1 Z M9,13.5 h6"
+                                              Width="19" Height="19" Stretch="Uniform" StrokeThickness="1.5" StrokeLineCap="Round" StrokeJoin="Round"
+                                              Fill="Transparent" Stroke="{DynamicResource ToolCardIcon}"/>
+                                    </MenuItem.Icon>
+                                </MenuItem>
                             </MenuItem>
-                            <MenuItem x:Name="MoreMenu" Header="…" Classes="capsuleMenu" ToolTip.Tip="{l:T Menu.More}">
+                            <MenuItem x:Name="MoreMenu" Classes="capsuleMenu moreMenu" ToolTip.Tip="{l:T Menu.More}">
+                                <MenuItem.Header>
+                                    <Path Data="M4.5,12 a1.5,1.5 0 1 0 3,0 a1.5,1.5 0 1 0 -3,0 Z M10.5,12 a1.5,1.5 0 1 0 3,0 a1.5,1.5 0 1 0 -3,0 Z M16.5,12 a1.5,1.5 0 1 0 3,0 a1.5,1.5 0 1 0 -3,0 Z"
+                                          Width="15" Height="3" Stretch="Uniform"
+                                          Fill="{Binding $parent[MenuItem].Foreground}"
+                                          HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </MenuItem.Header>
                                 <MenuItem x:Name="ProjectsMenu" Header="{l:T Menu.Projects}">
                                     <MenuItem Header="{l:T Menu.ProjectList}" Command="{Binding OpenProjectHubCommand}"/>
                                     <MenuItem Header="{l:T Menu.LocalizationDesk}" Command="{Binding OpenLocalizationDeskCommand}"/>
@@ -160,8 +247,11 @@
              kendi başlığını çiziyorsa OwnsHeader (Hiyerarşi, Denetçi, alt şerit sekmeleri),
              yoksa host Border.panelHeader çizer. Faz 5 D4: başlıktan sürükle-bırak, sabitle,
              kapat ve panel menüsü host'ta; istekler code-behind'dan VM ağaç işlemlerine gider. -->
-        <Grid Grid.Row="1">
-            <ws:WorkspaceHost x:Name="WorkspaceHost" Layout="{Binding WorkspaceLayout}" PinnedPanels="{Binding WorkspacePinnedPanels}">
+        <Grid Grid.Row="1" Margin="6,0,6,6">
+            <ws:WorkspaceHost x:Name="WorkspaceHost"
+                              Layout="{Binding WorkspaceLayout}"
+                              PinnedPanels="{Binding WorkspacePinnedPanels}"
+                              ReduceMotion="{Binding Settings.ReduceMotion}">
 
                 <ws:WorkspacePanel PanelId="{x:Static wsm:PanelIds.Hierarchy}" OwnsHeader="True" HeaderActionsInContent="True"
                                    Title="{l:T Panel.Hierarchy}"
@@ -174,49 +264,61 @@
                                    PanelMinHeight="{x:Static ws:WorkspacePanelMetrics.CenterMinHeight}"
                                    Background="{DynamicResource CanvasBackground}">
                     <Grid ClipToBounds="True">
-                        <panels:NodeGraphView/>
+                        <!-- Mini harita araç satırına göre yer alır (dar panelde altına iner). -->
+                        <panels:NodeGraphView MinimapObstacle="{Binding #CanvasToolRow.Bounds}"/>
 
-                        <!-- BREADCRUMB + CHAPTER SCOPE (Faz 4 Dilim 3) -->
-                        <Border x:Name="BreadcrumbPanel" Classes="floating" HorizontalAlignment="Left" VerticalAlignment="Top"
-                                Margin="12,12,0,0" ZIndex="90" Padding="8,4">
-                            <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                                <ItemsControl ItemsSource="{Binding Subgraphs.Crumbs}">
-                                    <ItemsControl.ItemsPanel>
-                                        <ItemsPanelTemplate>
-                                            <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center"/>
-                                        </ItemsPanelTemplate>
-                                    </ItemsControl.ItemsPanel>
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-                                                <TextBlock Text="/" Foreground="{DynamicResource MutedText}" FontSize="12" VerticalAlignment="Center"/>
-                                                <Button Tag="CrumbNav" Content="{Binding Title}" Padding="6,2" FontSize="11"
-                                                        ToolTip.Tip="{l:T Graph.Crumb.Tip}"/>
-                                            </StackPanel>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                                <Border Width="1" Height="14" Background="{DynamicResource BorderColor}"/>
-                                <TextBlock Text="{l:T Graph.Chapter}" Classes="muted" FontSize="{DynamicResource FontSizeBody}" VerticalAlignment="Center"/>
-                                <ComboBox ItemsSource="{Binding Subgraphs.AvailableChapterOptions}"
-                                          SelectedItem="{Binding Subgraphs.ChapterFilterOption}"
-                                          FontSize="11" MinWidth="110" ToolTip.Tip="{l:T Graph.Chapter.Tip}"/>
-                            </StackPanel>
-                        </Border>
+                        <!-- Kırıntı + bölüm ve düğüm araçları: tek satır iki kapsül -->
+                        <StackPanel x:Name="CanvasToolRow" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="12,12,0,0" ZIndex="90">
+                            <!-- BREADCRUMB + CHAPTER SCOPE (Faz 4 Dilim 3) -->
+                            <Border x:Name="BreadcrumbPanel" Classes="canvasCapsule" Padding="10,0" Height="38" VerticalAlignment="Center">
+                                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                    <ItemsControl ItemsSource="{Binding Subgraphs.Crumbs}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center"/>
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                                                    <TextBlock Text="/" Foreground="{DynamicResource MutedText}" FontSize="12" VerticalAlignment="Center"/>
+                                                    <Button Tag="CrumbNav" Content="{Binding Title}" Padding="6,2" FontSize="11"
+                                                            ToolTip.Tip="{l:T Graph.Crumb.Tip}"/>
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <Border Width="1" Height="14" Background="{DynamicResource BorderColor}"/>
+                                    <TextBlock Text="{l:T Graph.Chapter}" Classes="muted" FontSize="{DynamicResource FontSizeBody}" VerticalAlignment="Center"/>
+                                    <ComboBox ItemsSource="{Binding Subgraphs.AvailableChapterOptions}"
+                                              SelectedItem="{Binding Subgraphs.ChapterFilterOption}"
+                                              FontSize="11" MinWidth="90" Background="Transparent" BorderThickness="0"
+                                              ToolTip.Tip="{l:T Graph.Chapter.Tip}"/>
+                                </StackPanel>
+                            </Border>
 
-                        <!-- FAZ 3 (K4): Node paneli araç çubuğu — düğüm komutları üst çubuktan
-                             buraya taşındı; yalnız düğüm grafiği açıkken görünür. -->
-                        <Border x:Name="NodeToolbarPanel" HorizontalAlignment="Left" VerticalAlignment="Top"
-                                Classes="floating" Margin="12,58,0,0" ZIndex="90" IsVisible="{Binding IsNodeGraphActive}">
-                            <StackPanel x:Name="NodeToolbar" Orientation="Horizontal" Spacing="4">
-                                <Button Classes="tool" Content="{l:T Node.Add}" ToolTip.Tip="{l:T Node.Add.Tip}" Command="{Binding AddNodeCommand}"/>
-                                <Button Classes="tool" Content="{l:T Node.Disconnect}" ToolTip.Tip="{l:T Node.Disconnect.Tip}" Command="{Binding DisconnectSelectedNodeCablesCommand}"/>
-                                <Button Classes="tool" Content="{l:T Node.Delete}" ToolTip.Tip="{l:T Node.Delete.Tip}" Command="{Binding DeleteSelectedNodeCommand}"/>
-                                <Border Classes="capsuleDivider"/>
-                                <Button Classes="tool" Content="{l:T Node.Group}" ToolTip.Tip="{l:T Node.Group.Tip}" Command="{Binding CreateGroupFromSelectionCommand}"/>
-                                <Button Classes="tool" Content="{l:T Node.Up}" ToolTip.Tip="{l:T Node.Up.Tip}" Command="{Binding ExitSubgraphCommand}"/>
-                            </StackPanel>
-                        </Border>
+                            <!-- FAZ 3 (K4): Node araçları simge kapsülü -->
+                            <Border x:Name="NodeToolbarPanel" Classes="canvasCapsule" VerticalAlignment="Center" IsVisible="{Binding IsNodeGraphActive}">
+                                <StackPanel x:Name="NodeToolbar" Orientation="Horizontal" Spacing="0" VerticalAlignment="Center">
+                                    <Button Classes="canvasTool" Command="{Binding AddNodeCommand}" ToolTip.Tip="{l:T Node.Add.Tip}" AutomationProperties.Name="{l:T Node.Add}">
+                                        <Path Classes="canvasIcon" Data="M4,6 h10 v8 h-10 Z M18,15 v6 M15,18 h6"/>
+                                    </Button>
+                                    <Button Classes="canvasTool" Command="{Binding DisconnectSelectedNodeCablesCommand}" ToolTip.Tip="{l:T Node.Disconnect.Tip}" AutomationProperties.Name="{l:T Node.Disconnect}">
+                                        <Path Classes="canvasIcon" Data="M8,12 h3 M13,12 h3 M4,12 a2,2 0 1 0 4,0 a2,2 0 1 0 -4,0 M16,12 a2,2 0 1 0 4,0 a2,2 0 1 0 -4,0 M11,9 l2,6"/>
+                                    </Button>
+                                    <Button Classes="canvasTool" Command="{Binding DeleteSelectedNodeCommand}" ToolTip.Tip="{l:T Node.Delete.Tip}" AutomationProperties.Name="{l:T Node.Delete}">
+                                        <Path Classes="canvasIcon" Data="M5,7 h14 M10,7 V5 h4 v2 M7,7 l1,12 h8 l1,-12"/>
+                                    </Button>
+                                    <Border Classes="capsuleDivider"/>
+                                    <Button Classes="canvasTool" Command="{Binding CreateGroupFromSelectionCommand}" ToolTip.Tip="{l:T Node.Group.Tip}" AutomationProperties.Name="{l:T Node.Group}">
+                                        <Path Classes="canvasIcon" Data="M4,4 h7 v7 h-7 Z M13,13 h7 v7 h-7 Z M4,15 v5 h5 M20,9 V4 h-5"/>
+                                    </Button>
+                                    <Button Classes="canvasTool" Command="{Binding ExitSubgraphCommand}" ToolTip.Tip="{l:T Node.Up.Tip}" AutomationProperties.Name="{l:T Node.Up}">
+                                        <Path Classes="canvasIcon" Data="M12,19 V6 M6,12 l6,-6 l6,6"/>
+                                    </Button>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
                     </Grid>
                 </ws:WorkspacePanel>
 
@@ -257,6 +359,28 @@
                             <panels:ProjectIssuesView DataContext="{Binding ProjectIssuesViewModel}"/>
                         </TabItem>
                     </TabControl>
+                </ws:WorkspacePanel>
+
+                <!-- Faz 7 D3: Düğüm kütüphanesi (prototip library-categories.jpg; merkez alanın sağında açılır). -->
+                <ws:WorkspacePanel PanelId="{x:Static wsm:PanelIds.Library}" Title="{l:T Panel.Library}"
+                                   PanelMinWidth="{x:Static ws:WorkspacePanelMetrics.InspectorMinWidth}"
+                                   Background="{DynamicResource PanelBackground}">
+                    <panels:NodeLibraryView DataContext="{Binding NodeLibrary}"/>
+                </ws:WorkspacePanel>
+
+                <!-- Faz 8 A3: Assets Store "Yakında" ekranı (prototip assets-store.jpg; Kütüphane gibi sağda açılır). -->
+                <ws:WorkspacePanel PanelId="{x:Static wsm:PanelIds.Store}" Title="{l:T Panel.Store}"
+                                   PanelMinWidth="{x:Static ws:WorkspacePanelMetrics.InspectorMinWidth}"
+                                   Background="{DynamicResource PanelBackground}">
+                    <panels:AssetStoreView/>
+                </ws:WorkspacePanel>
+
+                <!-- Faz 7 D5: Lua editörü (prototip desktop.jpg; merkez alanın altında açılır). -->
+                <ws:WorkspacePanel PanelId="{x:Static wsm:PanelIds.Lua}" Title="{l:T Panel.Lua}"
+                                   PanelMinWidth="{x:Static ws:WorkspacePanelMetrics.CenterMinWidth}"
+                                   PanelMinHeight="{x:Static ws:WorkspacePanelMetrics.CenterMinHeight}"
+                                   Background="{DynamicResource PanelBackground}">
+                    <panels:LuaEditorView DataContext="{Binding LuaEditor}"/>
                 </ws:WorkspacePanel>
 
                 <ws:WorkspacePanel PanelId="{x:Static wsm:PanelIds.Inspector}" OwnsHeader="True" HeaderActionsInContent="True"
@@ -318,9 +442,9 @@
         </Grid>
 
         <!-- STATUS BAR (Alt Durum Çubuğu) -->
-        <Border x:Name="StatusBarPanel" Grid.Row="2" Background="{DynamicResource StatusBarBg}"
-                BorderBrush="{DynamicResource BorderColor}" BorderThickness="0,1,0,0" 
-                Padding="12,4" Height="28">
+        <!-- Faz 6 görsel uyum: prototipte durum çubuğu yok; zemine karışan, kenarsız soluk tek satır. -->
+        <Border x:Name="StatusBarPanel" Grid.Row="2" Background="{DynamicResource AppBackground}"
+                Padding="14,0,14,4" Height="24">
             <DockPanel>
                 <!-- Sağ: Build Hedefi + Zoom -->
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="12">
@@ -333,17 +457,32 @@
 
                 <!-- Sol: Status Text -->
                 <TextBlock x:Name="StatusMessageText" Text="{Binding StatusText}"
-                           Foreground="{DynamicResource MutedText}" FontSize="11" 
+                           Foreground="{DynamicResource DimText}" FontSize="10"
                            VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
             </DockPanel>
         </Border>
 
         <!-- TOAST NOTIFICATION OVERLAY (Sağ Alt) -->
-        <StackPanel Grid.Row="1" Grid.RowSpan="2"
+        <StackPanel x:Name="NotificationStack" Grid.Row="1" Grid.RowSpan="2"
                     HorizontalAlignment="Right" VerticalAlignment="Bottom"
                     Margin="0,0,20,40" ZIndex="200" Spacing="8">
+            <!-- Kartlar birlikte açılınca Denetçi/Varlıklar'ı örtmesin: yükseklik pencereye
+                 göre sınırlı (NotificationStackMetrics), fazlası kaydırılır. Toast dışarıda kalır. -->
+            <ScrollViewer x:Name="NotificationCardScroller"
+                          HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+                <StackPanel Spacing="8">
+                    <!-- Faz 8 B1: açılış kurtarma teklifi (incele / geri yükle / yoksay). -->
+                    <Panel IsVisible="{Binding RecoveryOffer, Converter={x:Static ObjectConverters.IsNotNull}}">
+                        <panels:RecoveryOfferCard DataContext="{Binding RecoveryOffer}"/>
+                    </Panel>
+                    <!-- Faz 8 B2–B3: içe aktarma ilerleme / iptal / aynı adlı varlık kararı. -->
+                    <panels:AssetImportCard DataContext="{Binding AssetImport}"/>
+                    <!-- Faz 8 C2: Kaydet / Farklı kaydet / Dışa aktar sonucu (çalışıyor / başarılı / hatalı). -->
+                    <panels:OperationStatusCard DataContext="{Binding OperationStatus}"/>
+                </StackPanel>
+            </ScrollViewer>
             <Border x:Name="ToastPanel" IsVisible="{Binding Toast.IsVisible}"
-                    Background="{Binding Toast.ToastBackground}" 
+                    Background="{Binding Toast.ToastBackground}"
                     CornerRadius="8" Padding="16,10"
                     MinWidth="260" MaxWidth="420"
                     BoxShadow="0 4 16 0 #50000000">
@@ -357,4 +496,5 @@
         </StackPanel>
 
     </Grid>
+    </LayoutTransformControl>
 </Window>

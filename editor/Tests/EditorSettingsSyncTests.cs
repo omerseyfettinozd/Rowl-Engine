@@ -28,11 +28,18 @@ internal static class EditorSettingsSyncTests
                 throw new Exception($"Non-functional editor setting '{property}' was exposed again.");
         }
 
-        var syncEditorProfile = new EditorSettingsProfile { AutoSaveEnabled = false, AutoSaveIntervalSeconds = 120 };
+        var syncEditorProfile = new EditorSettingsProfile { AutoSaveEnabled = false, AutoSaveIntervalSeconds = 120, ReduceMotion = true };
         syncEditorProfile.Save(testEditorSettingsPath);
-        EditorSettingsSyncService.LoadEditorSettings(testEditorSettingsPath, testSettingsVm);
-        if (testSettingsVm.AutoSaveEnabled || testSettingsVm.AutoSaveIntervalSeconds != 120)
-            throw new Exception("EditorSettingsSyncService.LoadEditorSettings mismatch");
+        try
+        {
+            EditorSettingsSyncService.LoadEditorSettings(testEditorSettingsPath, testSettingsVm);
+            if (testSettingsVm.AutoSaveEnabled || testSettingsVm.AutoSaveIntervalSeconds != 120 || !testSettingsVm.ReduceMotion)
+                throw new Exception("EditorSettingsSyncService.LoadEditorSettings mismatch");
+        }
+        finally
+        {
+            testSettingsVm.ReduceMotion = false;
+        }
 
         // Faz 2b: EditorLanguage artık İŞLEVSEL (eskiden no-op olduğu için yukarıdaki
         // listedeydi). Kalıcılık + canlı uygulama kanıtlanır; paylaşılan dil sonda geri alınır.

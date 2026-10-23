@@ -140,6 +140,10 @@ def compatibility_key(report):
         # spread between the slowest and fastest; without this key the gate
         # compares two different machines and calls the gap a regression.
         "environment.cpu_model": environment.get("cpu_model"),
+        # C03: the same CPU measures ~18x apart between power profiles on a
+        # laptop (soak-stress 18 s performance vs 330 s power-saver). Reports
+        # predating the field carry None and simply do not match new ones.
+        "environment.power_profile": environment.get("power_profile"),
     }
 
 

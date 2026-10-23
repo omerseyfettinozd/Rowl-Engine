@@ -19,7 +19,7 @@ workflows are not equivalent.
 | Pause, resume, adjust sound/text, exit safely | Pause overlay | Native SDL pause menu, volume/text-speed rows, two-step quit confirmation | Present |
 | Story rewind | Player commands and runtime rewind | Backspace/Z rewinds one step | Present |
 | Backlog | Scrollable speaker/dialogue history panel | Runtime history and C API JSON snapshot exist; no native backlog screen. Voice replay is absent from both surfaces. | Partial; native UI missing |
-| Persistent profile | Versioned atomic profile stores language, read IDs, audio/text/accessibility and auto/skip preferences | No equivalent native player profile load/save flow | Missing in exported player |
+| Persistent profile | Versioned atomic profile stores language, read IDs, audio/text/accessibility and auto/skip preferences | Native profile store + `RowlEngine_Profile*` C API exist (D01c-1); the player does not apply the stored preferences yet | Partial; player wiring missing |
 | Global auto and read-aware skip | Profile-driven AutoPlayDriver and SkipDriver | Per-node auto_advance exists; no global read-aware skip workflow | Partial |
 | Accessibility and language selection | Text scale, contrast, reduced motion, language preference | No equivalent player preferences screen | Missing in exported player |
 | Semantic input | Editor player semantic mapper | SDL keyboard/mouse controls; native pause menu handles keyboard/pointer; controller/touch parity is not established here | Partial / needs target proof |

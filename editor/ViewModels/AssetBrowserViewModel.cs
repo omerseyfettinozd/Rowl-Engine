@@ -501,6 +501,7 @@ namespace RowlEngine.Editor.ViewModels
             {
                 if (file.Name.StartsWith(".") ||
                     IgnoredFileExtensions.Contains(file.Extension) ||
+                    IsTransientFileName(file.Name) ||
                     file.Name.Equals(".gitkeep", StringComparison.OrdinalIgnoreCase))
                 {
                     snapshot.HiddenFileCount++;
@@ -754,6 +755,89 @@ namespace RowlEngine.Editor.ViewModels
             ResetGridRenderLimit();
             SelectedFolder = live;
             SelectedNode = live;
+        }
+
+        /// <summary>Varlığı bul, klasörüne gir ve seç (yoksa false).</summary>
+        public bool RevealAsset(string relativePath)
+        {
+            // Boş yol: durum değişmeden false.
+            if (string.IsNullOrWhiteSpace(relativePath))
+                return false;
+            string target = NormalizeAssetPath(relativePath);
+            if (string.IsNullOrEmpty(target))
+                return false;
+            // Canlı düğümü normalize yoldan bul.
+            AssetNodeViewModel? node = FindNodeNormalized(target);
+            if (node == null || node.IsMissing || node.IsMissingGroup)
+                return false;
+            // Bulunduğu klasöre gir, seçimi varlığa taşı.
+            if (node.IsDirectory)
+            {
+                EnterFolder(node);
+            }
+            else
+            {
+                AssetNodeViewModel? folder = FindParentFolder(node)
+                    ?? AssetTree.FirstOrDefault(n => n.IsDirectory && !n.IsMissingGroup);
+                if (folder != null)
+                    EnterFolder(folder);
+            }
+            SelectedNode = node;
+            return true;
+        }
+
+        // Eğik çizgiye çevir, Assets/ önekini at (Ordinal).
+        private static string NormalizeAssetPath(string path)
+        {
+            string p = path.Trim().Replace('\\', '/').TrimStart('/');
+            const string prefix = "Assets/";
+            if (p.StartsWith(prefix, StringComparison.Ordinal))
+                p = p.Substring(prefix.Length);
+            return p.TrimStart('/');
+        }
+
+        // Ağaçta normalize karşılaştırma (Ordinal).
+        private AssetNodeViewModel? FindNodeNormalized(string normalizedTarget)
+        {
+            // Hızlı yol: tam eşleşme dene.
+            AssetNodeViewModel? direct = FindNodeByRelativePath(normalizedTarget)
+                ?? FindNodeByRelativePath("Assets/" + normalizedTarget);
+            if (direct != null)
+                return direct;
+            var stack = new Stack<AssetNodeViewModel>(AssetTree);
+            while (stack.Count > 0)
+            {
+                var n = stack.Pop();
+                if (NormalizeAssetPath(n.RelativePath).Equals(normalizedTarget, StringComparison.Ordinal))
+                    return n;
+                foreach (var c in n.Children) stack.Push(c);
+            }
+            return null;
+        }
+
+        // Üst klasörü bul (FullPath öncelikli).
+        private AssetNodeViewModel? FindParentFolder(AssetNodeViewModel node)
+        {
+            try
+            {
+                string? parentFull = Path.GetDirectoryName(
+                    node.FullPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+                if (!string.IsNullOrEmpty(parentFull))
+                {
+                    AssetNodeViewModel? byFull = FindDirectoryByFullPath(parentFull);
+                    if (byFull != null)
+                        return byFull;
+                }
+            }
+            catch { }
+            string norm = NormalizeAssetPath(node.RelativePath);
+            int slash = norm.LastIndexOf('/');
+            if (slash <= 0)
+                return null;
+            string parentRel = norm.Substring(0, slash);
+            return FindNodeByRelativePath(parentRel)
+                ?? FindNodeByRelativePath("Assets/" + parentRel)
+                ?? FindNodeNormalized(parentRel);
         }
 
         /// <summary>Faz 6 Dilim 3: seçili öğe klasörse içine gir (Enter tuşu).</summary>
@@ -1014,6 +1098,11 @@ namespace RowlEngine.Editor.ViewModels
         {
             "json", "packages", "test_assets", "bin", "obj", ".git", ".vs"
         };
+
+        /// <summary>Yarım kalmış dönüştürme part dosyaları (varlık sayılmaz).</summary>
+        internal static bool IsTransientFileName(string name)
+            => name.EndsWith(".part", StringComparison.OrdinalIgnoreCase)
+               || name.EndsWith(".part" + MediaConverterService.SidecarSuffix, StringComparison.OrdinalIgnoreCase);
 
         private static readonly HashSet<string> IgnoredFileExtensions = new(StringComparer.OrdinalIgnoreCase)
         {

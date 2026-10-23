@@ -16,19 +16,32 @@
     <Color x:Key="SurfaceBackgroundColor">#131315</Color>
     <Color x:Key="PanelBackgroundColor">#19191C</Color>
     <Color x:Key="InputBackgroundColor">#0F0F12</Color>
-    <Color x:Key="CanvasBackgroundColor">#000000</Color>
+    <Color x:Key="CanvasBackgroundColor">#131315</Color>
 
     <SolidColorBrush x:Key="AppBackground" Color="{DynamicResource AppBackgroundColor}"/>
     <SolidColorBrush x:Key="SurfaceBackground" Color="{DynamicResource SurfaceBackgroundColor}"/>
     <SolidColorBrush x:Key="PanelBackground" Color="{DynamicResource PanelBackgroundColor}"/>
     <SolidColorBrush x:Key="InputBackground" Color="{DynamicResource InputBackgroundColor}"/>
     <SolidColorBrush x:Key="CanvasBackground" Color="{DynamicResource CanvasBackgroundColor}"/>
+    <!-- Faz 8 D1: klavye odak halkası (Fluent FocusAdorner) tema token'larından: kemik halka + koyu iç çizgi.
+         Yalnız klavyeyle odaklanınca görünür (Avalonia focus-visible davranışı). -->
+    <SolidColorBrush x:Key="SystemControlFocusVisualPrimaryBrush" Color="{DynamicResource PrimaryTextColor}"/>
+    <SolidColorBrush x:Key="SystemControlFocusVisualSecondaryBrush" Color="{DynamicResource AppBackgroundColor}"/>
+    <!-- Faz 8 A1: tuval zemini prototip yüzeyi (#131315); nokta ızgara prototip .node-area tonu. -->
+    <Color x:Key="GraphDotColorValue">#303034</Color>
+    <SolidColorBrush x:Key="GraphDotColor" Color="{DynamicResource GraphDotColorValue}"/>
 
     <!-- ── Kenarlıklar ─────────────────────────────────────────────────── -->
     <Color x:Key="BorderColorValue">#29292D</Color>
     <Color x:Key="BorderSubtleColorValue">#4A4A52</Color>
     <SolidColorBrush x:Key="BorderColor" Color="{DynamicResource BorderColorValue}"/>
     <SolidColorBrush x:Key="BorderSubtle" Color="{DynamicResource BorderSubtleColorValue}"/>
+    <!-- Sade görünüm: seçim artık parlak kemik kontur değil, soluk kemik-gri kenar +
+         hafif dolgu (düğüm kartı, Denetçi bölmeli seçim, çip/geçiş kartları). -->
+    <Color x:Key="SelectionBorderColorValue">#8A877E</Color>
+    <Color x:Key="SelectionFillColorValue">#232326</Color>
+    <SolidColorBrush x:Key="SelectionBorder" Color="{DynamicResource SelectionBorderColorValue}"/>
+    <SolidColorBrush x:Key="SelectionFill" Color="{DynamicResource SelectionFillColorValue}"/>
 
     <!-- ── Metin Renkleri ──────────────────────────────────────────────── -->
     <Color x:Key="PrimaryTextColor">#F2EFE6</Color>
@@ -98,6 +111,30 @@
     <SolidColorBrush x:Key="NodeCardBg" Color="{DynamicResource NodeCardBgColor}"/>
     <SolidColorBrush x:Key="NodeHeaderBg" Color="{DynamicResource NodeHeaderBgColor}"/>
 
+    <!-- Faz 6 görsel uyum: prototip .story-node / .zoom-controls / .tool-shortcuts tonları. -->
+    <Color x:Key="NodeKindTextColor">#999991</Color>
+    <Color x:Key="NodeFooterTextColor">#A5A49E</Color>
+    <Color x:Key="NodeFooterLineColor">#2E2E32</Color>
+    <Color x:Key="CanvasControlBgColor">#171719</Color>
+    <Color x:Key="CanvasControlTextColor">#ADABA4</Color>
+    <Color x:Key="ToolCardIconColor">#ACA89D</Color>
+    <SolidColorBrush x:Key="NodeKindText" Color="{DynamicResource NodeKindTextColor}"/>
+    <SolidColorBrush x:Key="NodeFooterText" Color="{DynamicResource NodeFooterTextColor}"/>
+    <SolidColorBrush x:Key="NodeFooterLine" Color="{DynamicResource NodeFooterLineColor}"/>
+    <SolidColorBrush x:Key="NodePortStroke" Color="{DynamicResource WireColor}"/>
+    <SolidColorBrush x:Key="CanvasControlBg" Color="{DynamicResource CanvasControlBgColor}"/>
+    <SolidColorBrush x:Key="CanvasControlText" Color="{DynamicResource CanvasControlTextColor}"/>
+    <SolidColorBrush x:Key="ToolCardIcon" Color="{DynamicResource ToolCardIconColor}"/>
+    <!-- Faz 7 Lua editörü renklendirmesi (prototip .lua-comment / keyword / string / number). -->
+    <Color x:Key="LuaCommentColor">#727E78</Color>
+    <Color x:Key="LuaKeywordColor">#BFA8DA</Color>
+    <Color x:Key="LuaStringColor">#C5CDA9</Color>
+    <Color x:Key="LuaNumberColor">#C9B089</Color>
+    <SolidColorBrush x:Key="LuaCommentBrush" Color="{DynamicResource LuaCommentColor}"/>
+    <SolidColorBrush x:Key="LuaKeywordBrush" Color="{DynamicResource LuaKeywordColor}"/>
+    <SolidColorBrush x:Key="LuaStringBrush" Color="{DynamicResource LuaStringColor}"/>
+    <SolidColorBrush x:Key="LuaNumberBrush" Color="{DynamicResource LuaNumberColor}"/>
+
     <!-- ── Faz 2: ölçek token'ları (EDITOR_UI_PORT_PLAN) ──────────────────
          Yazı ölçeği prototipin dağılımından; K2: masaüstü denetim yüksekliği 32. -->
     <x:Double x:Key="FontSizeCaption">9</x:Double>
@@ -164,11 +201,58 @@
     <SolidColorBrush x:Key="TreeViewItemBackgroundSelectedPointerOver" Color="#353434"/>
     <SolidColorBrush x:Key="TreeViewItemForegroundSelected" Color="{DynamicResource PrimaryTextColor}"/>
 
+    <!-- Sade görünüm: açılır pencereler (menü, sağ-tık, açılır kutu listesi, ipucu, flyout)
+         Fluent'in açık gri (#2B2B2B) yüzeyini kullanıyordu; editörün koyu panel tonuna
+         ve ince kenarına çekilir, üstüne gelince seçim dolgusu. -->
+    <SolidColorBrush x:Key="ComboBoxBackground" Color="{DynamicResource InputBackgroundColor}"/>
+    <SolidColorBrush x:Key="ComboBoxBackgroundPointerOver" Color="{DynamicResource InputBackgroundColor}"/>
+    <SolidColorBrush x:Key="ComboBoxBackgroundPressed" Color="{DynamicResource InputBackgroundColor}"/>
+    <SolidColorBrush x:Key="ComboBoxBackgroundUnfocused" Color="{DynamicResource InputBackgroundColor}"/>
+    <SolidColorBrush x:Key="ComboBoxBorderBrush" Color="{DynamicResource BorderSubtleColorValue}"/>
+    <SolidColorBrush x:Key="ComboBoxBorderBrushPointerOver" Color="{DynamicResource MutedTextColor}"/>
+    <SolidColorBrush x:Key="ComboBoxBorderBrushPressed" Color="{DynamicResource MutedTextColor}"/>
+    <SolidColorBrush x:Key="ComboBoxDropDownBackground" Color="{DynamicResource PanelBackgroundColor}"/>
+    <SolidColorBrush x:Key="ComboBoxDropDownBorderBrush" Color="{DynamicResource BorderColorValue}"/>
+    <SolidColorBrush x:Key="ComboBoxItemBackgroundPointerOver" Color="{DynamicResource AccentButtonHoverColor}"/>
+    <SolidColorBrush x:Key="ComboBoxItemBackgroundSelected" Color="{DynamicResource SelectionFillColorValue}"/>
+    <SolidColorBrush x:Key="ComboBoxItemBackgroundSelectedPointerOver" Color="{DynamicResource AccentButtonHoverColor}"/>
+    <SolidColorBrush x:Key="MenuFlyoutPresenterBackground" Color="{DynamicResource PanelBackgroundColor}"/>
+    <SolidColorBrush x:Key="MenuFlyoutPresenterBorderBrush" Color="{DynamicResource BorderColorValue}"/>
+    <SolidColorBrush x:Key="MenuFlyoutItemBackgroundPointerOver" Color="{DynamicResource AccentButtonHoverColor}"/>
+    <SolidColorBrush x:Key="MenuFlyoutItemBackgroundPressed" Color="{DynamicResource SelectionFillColorValue}"/>
+    <SolidColorBrush x:Key="MenuFlyoutItemForeground" Color="{DynamicResource SecondaryTextColor}"/>
+    <SolidColorBrush x:Key="MenuFlyoutItemForegroundPointerOver" Color="{DynamicResource PrimaryTextColor}"/>
+    <SolidColorBrush x:Key="MenuFlyoutItemForegroundPressed" Color="{DynamicResource PrimaryTextColor}"/>
+    <SolidColorBrush x:Key="MenuFlyoutItemKeyboardAcceleratorTextForeground" Color="{DynamicResource MutedTextColor}"/>
+    <SolidColorBrush x:Key="FlyoutPresenterBackground" Color="{DynamicResource PanelBackgroundColor}"/>
+    <SolidColorBrush x:Key="FlyoutBorderThemeBrush" Color="{DynamicResource BorderColorValue}"/>
+    <SolidColorBrush x:Key="ToolTipBackground" Color="{DynamicResource PanelBackgroundColor}"/>
+    <SolidColorBrush x:Key="ToolTipBorderBrush" Color="{DynamicResource BorderColorValue}"/>
+    <SolidColorBrush x:Key="ToolTipForeground" Color="{DynamicResource SecondaryTextColor}"/>
+
+    <!-- Sade görünüm: Fluent kaydırma çubuğu açık gri çizgi olarak ağaç/ızgara
+         kenarında parlıyordu; ince çizgi ve tutamak sessiz kenar tonlarına çekilir. -->
+    <Color x:Key="ScrollBarThumbBackgroundColor">#4A4A52</Color>
+    <Color x:Key="ScrollBarPanningThumbBackgroundColor">#3A3A40</Color>
+    <SolidColorBrush x:Key="ScrollBarPanningThumbBackground" Color="#3A3A40"/>
+    <SolidColorBrush x:Key="ScrollBarThumbFillPointerOver" Color="#5C5C64"/>
+    <SolidColorBrush x:Key="ScrollBarThumbFillPressed" Color="#6E6E76"/>
+
     <!-- ── Compatibility & Helper Aliases ──────────────────────────────── -->
     <SolidColorBrush x:Key="CardBackground" Color="{DynamicResource NodeCardBgColor}"/>
     <SolidColorBrush x:Key="CardHeaderBackground" Color="{DynamicResource NodeHeaderBgColor}"/>
     <SolidColorBrush x:Key="CardBorderColor" Color="{DynamicResource BorderColorValue}"/>
     <SolidColorBrush x:Key="AccentButtonFg" Color="{DynamicResource PrimaryTextColor}"/>
     <SolidColorBrush x:Key="GraphCanvasBg" Color="{DynamicResource CanvasBackgroundColor}"/>
+    <!-- Faz 6 görsel uyum: prototip .node-area nokta ızgarası (20 px karo, 1.6 px nokta).
+         Fırçalar aynı sözlükteki örneklere bağlı → tema rengi değişince ızgara da değişir. -->
+    <DrawingBrush x:Key="GraphDotGridBrush" TileMode="Tile" Stretch="None" DestinationRect="0,0,20,20">
+        <DrawingBrush.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="{StaticResource GraphCanvasBg}" Geometry="M0,0 H20 V20 H0 Z"/>
+                <GeometryDrawing Brush="{StaticResource GraphDotColor}" Geometry="M9.2,10 A0.8,0.8 0 1 0 10.8,10 A0.8,0.8 0 1 0 9.2,10 Z"/>
+            </DrawingGroup>
+        </DrawingBrush.Drawing>
+    </DrawingBrush>
 
 </ResourceDictionary>

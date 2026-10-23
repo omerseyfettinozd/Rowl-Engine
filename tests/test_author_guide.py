@@ -130,7 +130,10 @@ def main():
         raise SystemExit("guide lost its uninstall coverage")
 
     with tempfile.TemporaryDirectory(prefix="rowl-author-guide-") as work:
-        env = dict(os.environ, AUTHOR_WORK=work)
+        # D01d: the packaged smoke writes the player profile into the per-game
+        # user-data dir; keep it in the scratch tree.
+        env = dict(os.environ, AUTHOR_WORK=work,
+                   XDG_DATA_HOME=os.path.join(work, "xdg"))
         # Blocks run with cwd=ROOT (guide commands use repo-relative paths).
         # Snapshot crash-logs/ and remove ONLY what this run created --
         # never touch pre-existing files, never leave litter behind

@@ -29,6 +29,9 @@ namespace RowlEngine.Editor.ViewModels
         public const double MinZoom = 0.15;
         public const double MaxZoom = 4.0;
 
+        /// <summary>Faz 9 E1: sığdırma kenar payı (ekran pikseli).</summary>
+        public const double FitMargin = 48.0;
+
         public MainWindowViewModel MainViewModel { get; }
 
         private int _suspendCount;
@@ -51,6 +54,7 @@ namespace RowlEngine.Editor.ViewModels
         {
             MainViewModel = main ?? throw new ArgumentNullException(nameof(main));
             MainViewModel.PropertyChanged += OnMainPropertyChanged;
+            _byNodes.AddOrUpdate(MainViewModel.Nodes, this);
             MainViewModel.Nodes.CollectionChanged += OnNodesChanged;
             MainViewModel.Connections.CollectionChanged += OnConnectionsChanged;
             foreach (var node in MainViewModel.Nodes)
@@ -134,6 +138,31 @@ namespace RowlEngine.Editor.ViewModels
             }
         }
 
+        /// <summary>
+        /// Faz 9 E1: görünüm boyutu (view Bounds değişiminde güncellenir).
+        /// Width/Height ile aynı depoyu paylaşır.
+        /// </summary>
+        public Size ViewportSize
+        {
+            get => new Size(ViewportWidth, ViewportHeight);
+            set
+            {
+                bool changed = false;
+                if (Math.Abs(_viewportWidth - value.Width) >= 0.5)
+                {
+                    _viewportWidth = value.Width;
+                    changed = true;
+                }
+                if (Math.Abs(_viewportHeight - value.Height) >= 0.5)
+                {
+                    _viewportHeight = value.Height;
+                    changed = true;
+                }
+                if (changed)
+                    RefreshVisible();
+            }
+        }
+
         /// <summary>Visible rect in canvas coordinates (minimap + tests).</summary>
         public Rect ViewportRect { get; private set; }
 
@@ -158,11 +187,79 @@ namespace RowlEngine.Editor.ViewModels
         }
 
         /// <summary>
+        /// Faz 9 E1: saf sığdırma yardımcısı (UI'siz, test edilebilir).
+        /// Verilen sınırların birleşimine kenar payıyla sığan zoom + pan döndürür.
+        /// Zoom Min/Max ile sınırlıdır ve 1.0'ı aşmaz (küçük düğümde aşırı büyüme yok).
+        /// </summary>
+        public static (double Zoom, double PanX, double PanY) ComputeFitView(
+            IReadOnlyList<Rect> bounds, Size viewportSize, double margin = FitMargin)
+        {
+            if (bounds is null || bounds.Count == 0 ||
+                viewportSize.Width <= 0 || viewportSize.Height <= 0)
+                return (1.0, 0.0, 0.0);
+            double minX = double.PositiveInfinity, minY = double.PositiveInfinity;
+            double maxX = double.NegativeInfinity, maxY = double.NegativeInfinity;
+            foreach (var r in bounds)
+            {
+                minX = Math.Min(minX, r.X);
+                minY = Math.Min(minY, r.Y);
+                maxX = Math.Max(maxX, r.X + r.Width);
+                maxY = Math.Max(maxY, r.Y + r.Height);
+            }
+            double w = Math.Max(1.0, maxX - minX);
+            double h = Math.Max(1.0, maxY - minY);
+            double cx = (minX + maxX) / 2.0;
+            double cy = (minY + maxY) / 2.0;
+            double zoom = Math.Min(
+                viewportSize.Width / (w + margin * 2.0),
+                viewportSize.Height / (h + margin * 2.0));
+            zoom = Math.Clamp(zoom, MinZoom, MaxZoom);
+            zoom = Math.Min(zoom, 1.0);
+            double panX = viewportSize.Width / 2.0 - cx * zoom;
+            double panY = viewportSize.Height / 2.0 - cy * zoom;
+            return (zoom, panX, panY);
+        }
+
+        /// <summary>
         /// Suspends index/visible refreshes across bulk loads. Tracking
         /// still runs (O(1) per item); one rebuild happens at the matching
         /// <see cref="EndBulkUpdate"/>. Nestable.
         /// </summary>
         public void BeginBulkUpdate() => _suspendCount++;
+
+        // Toplu servisler (sil/çoğalt/geri al) yalnız koleksiyonu bilir; canlı grafın
+        // tuval modeline koleksiyon üzerinden ulaşır.
+        private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<
+            ObservableCollection<NodeViewModel>, NodeGraphViewModel> _byNodes = new();
+
+        /// <summary>
+        /// Verilen düğüm koleksiyonunun tuval modelinde toplu modu açar; using ile
+        /// kapanır (try/finally eşdeğeri). Tuval modeli yoksa etkisiz.
+        /// </summary>
+        public static IDisposable BeginBulkFor(ObservableCollection<NodeViewModel> nodes)
+        {
+            if (nodes is null || !_byNodes.TryGetValue(nodes, out var graph))
+                return NoopScope.Instance;
+            graph.BeginBulkUpdate();
+            return new BulkScope(graph);
+        }
+
+        private sealed class NoopScope : IDisposable
+        {
+            public static readonly NoopScope Instance = new();
+            public void Dispose() { }
+        }
+
+        private sealed class BulkScope : IDisposable
+        {
+            private NodeGraphViewModel? _graph;
+            public BulkScope(NodeGraphViewModel graph) => _graph = graph;
+            public void Dispose()
+            {
+                _graph?.EndBulkUpdate();
+                _graph = null;
+            }
+        }
 
         public void EndBulkUpdate()
         {
@@ -331,36 +428,60 @@ namespace RowlEngine.Editor.ViewModels
             MainViewModel.TargetPanY = MainViewModel.PanY;
         }
 
-        /// <summary>Focuses the selected node (F key). No-op without selection.</summary>
+        /// <summary>
+        /// Faz 9 E1: seçili düğümlere sığdır (çoklu dahil; seçim yoksa no-op).
+        /// Saf yardımcı üzerinden zoom + pan hesaplar.
+        /// </summary>
         [RelayCommand]
         public void FitToSelection()
         {
-            var node = MainViewModel.SelectedNode;
-            if (node is null)
+            var main = MainViewModel;
+            var rects = new List<Rect>();
+            if (main.SelectedNodes.Count > 0)
+            {
+                foreach (var n in main.SelectedNodes)
+                {
+                    var (x, y, w, h) = NodeBounds(n);
+                    rects.Add(new Rect(x, y, w, h));
+                }
+            }
+            else if (main.SelectedNode is not null)
+            {
+                var (x, y, w, h) = NodeBounds(main.SelectedNode);
+                rects.Add(new Rect(x, y, w, h));
+            }
+            else
+            {
                 return;
-            double zoom = MainViewModel.ZoomScale > 0 ? MainViewModel.ZoomScale : 1.0;
-            var (x, y, w, h) = NodeBounds(node);
-            MainViewModel.TargetPanX = ViewportWidth / 2 - (x + w / 2) * zoom;
-            MainViewModel.TargetPanY = ViewportHeight / 2 - (y + h / 2) * zoom;
+            }
+            if (ViewportWidth <= 0 || ViewportHeight <= 0)
+                return;
+            var (zoom, panX, panY) = ComputeFitView(rects, new Size(ViewportWidth, ViewportHeight), FitMargin);
+            MainViewModel.TargetZoom = zoom;
+            MainViewModel.TargetPanX = panX;
+            MainViewModel.TargetPanY = panY;
             MainViewModel.StartSmoothViewAnimation();
         }
 
-        /// <summary>Fits the whole graph into the viewport. No-op when empty.</summary>
+        /// <summary>
+        /// Faz 9 E1: tüm grafı görünüme sığdır (Shift+F ile aynı). Saf yardımcıyı kullanır.
+        /// </summary>
         [RelayCommand]
         public void ZoomToFit()
         {
-            if (WorldBounds.Width <= 0 || WorldBounds.Height <= 0 ||
+            if (MainViewModel.Nodes.Count == 0 ||
                 ViewportWidth <= 0 || ViewportHeight <= 0)
                 return;
-            double zoom = Math.Clamp(
-                Math.Min(ViewportWidth / WorldBounds.Width,
-                         ViewportHeight / WorldBounds.Height),
-                MinZoom, MaxZoom);
+            var rects = new List<Rect>(MainViewModel.Nodes.Count);
+            foreach (var node in MainViewModel.Nodes)
+            {
+                var (x, y, w, h) = NodeBounds(node);
+                rects.Add(new Rect(x, y, w, h));
+            }
+            var (zoom, panX, panY) = ComputeFitView(rects, new Size(ViewportWidth, ViewportHeight), FitMargin);
             MainViewModel.TargetZoom = zoom;
-            MainViewModel.TargetPanX = ViewportWidth / 2 -
-                (WorldBounds.X + WorldBounds.Width / 2) * zoom;
-            MainViewModel.TargetPanY = ViewportHeight / 2 -
-                (WorldBounds.Y + WorldBounds.Height / 2) * zoom;
+            MainViewModel.TargetPanX = panX;
+            MainViewModel.TargetPanY = panY;
             MainViewModel.StartSmoothViewAnimation();
         }
 

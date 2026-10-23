@@ -2,10 +2,11 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:RowlEngine.Editor.ViewModels.Player"
              xmlns:services="using:RowlEngine.Editor.Services"
+             xmlns:l="using:RowlEngine.Editor.Services.Strings"
              x:Class="RowlEngine.Editor.Views.Player.PlayerBacklogView"
              x:DataType="vm:PlayerViewModel">
   <Grid RowDefinitions="Auto, *">
-    <Button Grid.Row="0" Content="Geri" HorizontalAlignment="Left" Margin="0,0,0,8"
+    <Button Grid.Row="0" Content="{l:T Player.Backlog.Back}" HorizontalAlignment="Left" Margin="0,0,0,8"
             Command="{Binding RequestIntentCommand}"
             CommandParameter="{x:Static services:PlayerIntent.CloseOverlay}" />
     <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">

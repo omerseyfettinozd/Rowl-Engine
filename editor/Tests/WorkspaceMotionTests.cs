@@ -152,6 +152,61 @@ public sealed class WorkspaceMotionTests
         });
     }
 
+    [Fact]
+    public void ReduceMotion_FollowsSettingsProfile_AndUpdatesLiveHosts()
+    {
+        Ui(() =>
+        {
+            string tempDir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "RowlMotionProfile_" + Guid.NewGuid().ToString("N"));
+            System.IO.Directory.CreateDirectory(tempDir);
+            string settingsPath = System.IO.Path.Combine(tempDir, "editor-settings.json");
+            string playerPath = System.IO.Path.Combine(tempDir, "player-settings.json");
+            var host = new WorkspaceHost();
+            using var engineHost = new RowlEngine.Editor.Native.EngineHost();
+            try
+            {
+                Assert.False(host.EffectiveReduceMotion);
+                Assert.Equal(2, host.Transitions!.Count);
+
+                var settings = new RowlEngine.Editor.ViewModels.SettingsViewModel { ReduceMotion = true };
+                Assert.True(WorkspaceHost.ProfilePrefersReducedMotion);
+                Assert.True(host.ReduceMotion);
+                Assert.True(host.EffectiveReduceMotion);
+                Assert.True(host.Transitions is null || host.Transitions.Count == 0);
+
+                RowlEngine.Editor.Services.EditorSettingsSyncService.HandleSettingsPropertyChanged(
+                    nameof(RowlEngine.Editor.ViewModels.SettingsViewModel.ReduceMotion),
+                    settings,
+                    settingsPath,
+                    playerPath,
+                    tempDir,
+                    engineHost,
+                    () => new RowlEngine.Editor.Services.ProjectRuntimeSettings(),
+                    _ => { },
+                    () => { });
+
+                Assert.True(RowlEngine.Editor.Services.EditorSettingsProfile.Load(settingsPath).ReduceMotion);
+
+                settings.ResetDefaults();
+                Assert.False(settings.ReduceMotion);
+                Assert.False(WorkspaceHost.ProfilePrefersReducedMotion);
+                Assert.False(host.EffectiveReduceMotion);
+                Assert.Equal(2, host.Transitions!.Count);
+
+                RowlEngine.Editor.Services.EditorSettingsSyncService.LoadEditorSettings(settingsPath, settings);
+                Assert.True(settings.ReduceMotion);
+                Assert.True(WorkspaceHost.ProfilePrefersReducedMotion);
+                Assert.True(host.EffectiveReduceMotion);
+                Assert.True(host.Transitions is null || host.Transitions.Count == 0);
+            }
+            finally
+            {
+                WorkspaceHost.ProfilePrefersReducedMotion = false;
+                try { System.IO.Directory.Delete(tempDir, recursive: true); } catch (Exception) { }
+            }
+        });
+    }
+
     // ---- layout changes ----
 
     [Fact]
@@ -203,6 +258,15 @@ public sealed class WorkspaceMotionTests
                 Assert.True(nodeAfter.Width > nodeBefore.Width + 100);
                 AssertNear(nodeBefore, host.GetDisplayedPanelRect(PanelIds.Node)); // … while it is still drawn where it was
                 Assert.False(host.FindPanel(PanelIds.Hierarchy)!.IsVisible);
+
+                // Faz 10 donma kilidi: hareket eden panel yalnız son yerinde yerleşir (ara boyutta
+                // yeniden ölçülmez); eski yerinde görünmesi bir görsel dönüşümdür.
+                WorkspacePanel node = host.FindPanel(PanelIds.Node)!;
+                Assert.Equal(nodeAfter.Size, node.Bounds.Size);
+                Assert.IsType<TransformGroup>(node.RenderTransform);
+                Rect drawn = new Rect(node.Bounds.Size).TransformToAABB(node.RenderTransform!.Value)
+                    .Translate(node.Bounds.Position);
+                AssertNear(nodeBefore, drawn);
 
                 // The splitters slide with their neighbours.
                 TranslateTransform[] slides = SplitIds(host.Layout!.Tree)
@@ -428,7 +492,8 @@ public sealed class WorkspaceMotionTests
                 double w0 = host.GetPanelRect(PanelIds.Node).Width;
                 Key(window, PhysicalKey.ArrowUp);
                 AssertNear(h0 + 16, host.GetPanelRect(PanelIds.Bottom).Height, 0.6, "Up grows the strip (divider moves up)");
-                Key(window, PhysicalKey.ArrowDown, RawInputModifiers.Shift); // 64 px, but the strip stops at its 140 px minimum
+                for (int i = 0; i < 2; i++)
+                    Key(window, PhysicalKey.ArrowDown, RawInputModifiers.Shift); // 64 px each, but the strip stops at its 140 px minimum
                 Assert.True(host.GetPanelRect(PanelIds.Bottom).Height >= WorkspacePanelMetrics.BottomMinHeight - 0.5);
                 AssertNear(WorkspacePanelMetrics.BottomMinHeight, host.GetPanelRect(PanelIds.Bottom).Height, 0.5, "Shift+Down clamps at the minimum");
                 Key(window, PhysicalKey.ArrowLeft);

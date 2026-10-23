@@ -25,7 +25,8 @@ def key(report):
     return (report.get("schema_version"), report.get("fixture_id"), report.get("build", {}).get("type"),
             report.get("environment", {}).get("os"), report.get("environment", {}).get("machine"),
             report.get("environment", {}).get("architecture"), report.get("environment", {}).get("cpu_model"),
-            report.get("environment", {}).get("cpu_count"))
+            report.get("environment", {}).get("cpu_count"),
+            report.get("environment", {}).get("power_profile"))
 
 
 def metric_unit(name):

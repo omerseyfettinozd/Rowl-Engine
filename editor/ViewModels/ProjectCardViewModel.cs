@@ -1,13 +1,18 @@
 using System;
+using System.Globalization;
 using System.IO;
 using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using RowlEngine.Editor.Models;
 using RowlEngine.Editor.Services;
+using RowlEngine.Editor.Services.Strings;
 
 namespace RowlEngine.Editor.ViewModels
 {
+    // Kartın açılabilirlik durumu.
+    public enum ProjectCardState { Ready, Missing, Invalid }
+
     public partial class ProjectCardViewModel : ViewModelBase
     {
         private readonly ProjectHubViewModel _hub;
@@ -19,8 +24,20 @@ namespace RowlEngine.Editor.ViewModels
         public string Name => Info.Name;
         public string Path => Info.Path;
         public DateTime LastOpenedAt => Info.LastOpenedAt;
-        public string LastOpenedText => LastOpenedAt.ToString("dd MMM yyyy HH:mm");
+
+        // XAML'deki gömülü StringFormat yerine viewmodel metni.
+        public string LastOpenedText => string.Format(
+            CultureInfo.CurrentCulture,
+            EditorStrings.T("Hub.LastOpened"),
+            LastOpenedAt.ToLocalTime().ToString("g", CultureInfo.CurrentCulture));
+
         public bool HasCover => Info.HasCover;
+
+        // Durum değişince türetilmişler + Open CanExecute tazelenir.
+        [ObservableProperty]
+        [NotifyPropertyChangedFor(nameof(CanOpen), nameof(IsMissing), nameof(IsUnavailable), nameof(StateText))]
+        [NotifyCanExecuteChangedFor(nameof(OpenCommand))]
+        private ProjectCardState _state;
 
         [ObservableProperty]
         private Bitmap? _coverBitmap;
@@ -28,11 +45,23 @@ namespace RowlEngine.Editor.ViewModels
         [ObservableProperty]
         private bool _isCoverLoaded;
 
+        public bool CanOpen => State == ProjectCardState.Ready;
+        public bool IsMissing => State == ProjectCardState.Missing;
+        public bool IsUnavailable => State != ProjectCardState.Ready;
+
+        public string StateText => State switch
+        {
+            ProjectCardState.Missing => EditorStrings.T("Hub.State.Missing"),
+            ProjectCardState.Invalid => EditorStrings.T("Hub.State.Invalid"),
+            _ => string.Empty,
+        };
+
         public ProjectCardViewModel(ProjectInfo info, ProjectHubViewModel hub, ProjectRegistryService registry)
         {
             Info = info;
             _hub = hub;
             _registry = registry;
+            State = ProjectHubViewModel.ProbeProject(Info.Path);
             LoadCover();
         }
 
@@ -45,7 +74,14 @@ namespace RowlEngine.Editor.ViewModels
             OnPropertyChanged(nameof(LastOpenedText));
             OnPropertyChanged(nameof(HasCover));
             OnPropertyChanged(nameof(Id));
+            State = ProjectHubViewModel.ProbeProject(Info.Path);
             LoadCover();
+        }
+
+        // Diskteki güncel duruma bak.
+        public void Reprobe()
+        {
+            State = ProjectHubViewModel.ProbeProject(Info.Path);
         }
 
         private void LoadCover()
@@ -89,10 +125,17 @@ namespace RowlEngine.Editor.ViewModels
             await _hub.DeleteProjectAsync(this);
         }
 
-        [RelayCommand]
+        [RelayCommand(CanExecute = nameof(CanOpen))]
         public void Open()
         {
             _hub.OpenProject(this);
+        }
+
+        // Yalnız listeden çıkar, diske dokunmaz.
+        [RelayCommand]
+        public void RemoveFromList()
+        {
+            _hub.RemoveProject(this);
         }
     }
 }

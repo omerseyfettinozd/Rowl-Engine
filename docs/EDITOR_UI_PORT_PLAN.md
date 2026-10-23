@@ -190,3 +190,218 @@ kenar/odak, liste/ağaç seçimi prototip grisi.
 - `dotnet test` (RowlEye + editör testleri) yeşil; RowlEye golden'ları yalnız o fazın
   hedef panelleri için ve bilerek güncellenir.
 - Önce/sonra RowlEye görüntüsü + prototip görseli yan yana (PR açıklamasına eklenir).
+
+## Faz 7 — Düğüm kütüphanesi ve Lua editörü panelleri (2026-10-16)
+
+Kaynak: prototip `node-library.js` + `node-library-state.mjs` (+ testleri), `lua-editor.js`,
+görseller `library-categories.jpg`, `inspector-library.jpg`, `desktop.jpg` (Lua editörü).
+Kapsam prototipteki davranıştır; yeni ürün özelliği eklenmez.
+
+**Kararlar**
+- *Benim düğümlerim* kullanıcı düzeyinde saklanır (prototipte tarayıcı başına `localStorage`):
+  editör ayar profiliyle aynı dizinde `node-library.json`, sürümlü, atomik yazım; bozuk dosya
+  sessizce sıfırlanmaz (yedeklenir + uyarı). *Hazır paketler* salt okunur: prototipteki gibi
+  `Rowl` paketi → `Standart düğüm` (bugünkü varsayılan yeni düğüm). Uydurma içerik yok.
+- Kütüphane kaydı bağımsız şablondur: düğümün tüm objeleri, konum/görünürlük ve bileşen
+  değerleri; bağlantı hedefleri (seçenek/koşul hedefleri) boşaltılır; sahneye eklenen kopya yeni
+  kimlik ve yeni diyalog `content_id` alır (çoğaltma kuralıyla aynı); ekleme geri alınabilir.
+- Klasör kuralları prototiple aynı: iç içe, aynı konumda aynı ad yok (TR büyük/küçük harf),
+  kendi içine taşınamaz, silinen klasörün alt klasör/öğeleri üst konuma taşınır (çakışan ad
+  `Ad (2)` alır), kaynak kayıtlar korunur.
+- Lua editörü projedeki `.lua` dosyalarını sekme olarak açar; kayıt diske (atomik) yazar;
+  kirli nokta, Ctrl+S, `+` → `script-N.lua`, arama, satır/sütun, Tab = 2 boşluk. *Bağlı obje*
+  seçimi o objenin Betik bileşeninin `ScriptPath`'ini etkin dosyaya bağlar (geri alınabilir).
+  Kod alanı: `Avalonia.AvaloniaEdit` 11.3.0 (MIT); Lua renklendirmesi tema token'larıyla
+  (prototip `.lua-comment/keyword/string/number`).
+
+**Dilimler**
+- D1 Kütüphane modeli (saf C#) + JSON kalıcılık + prototip testlerinin taşınması.
+- D2 Düğüm ↔ şablon dönüşümü (yakala / sahneye ekle, geri al) + testler.
+- D3 Kütüphane paneli (`PanelIds.Library`: Hazır paketler / Benim düğümlerim, klasör ağacı,
+  yol, arama, Sahneye ekle, klasör yönet) + Denetçi'de *Düğüm kütüphanesi* bölümü
+  (yıldızla kaydet / kaldır, Kaydı güncelle) + Araçlar menüsünde kart.
+- D4 Lua çalışma alanı modeli (dosya listesi, aç/kirli/kaydet/yeni, obje bağlama) + testler.
+- D5 Lua editörü paneli (`PanelIds.Lua`, AvaloniaEdit) + Araçlar kartı.
+- D6 Yerleşim/kısayol, RowlEye görüntüsü + prototip karşılaştırması, kilit testleri.
+
+Test kilitleri bilinçli güncellenir: Araçlar menüsü 7 → 9 kart (Ctrl+8 / Ctrl+9 kısayolları).
+
+**Faz 7 yapılan (2026-10-16):** D1 `b75f77d`, D4 `5c9b309`, D2 `b7d55d3`, D3+D5+entegrasyon `5972271`,
+görsel düzeltmeler (Muse Wonder denetimi: kütüphane 8/10, Lua 7/10 → düğüm ikonu, ayrık "…" hücresi,
+kutusuz bağlı obje seçici, düz "Lua" etiketi, Denetçi düğmelerinde normal ağırlık). Bilerek alınmayanlar:
+başlıkta sürekli üç düğme (sessiz başlık kararı), Lua'da "Dosyalar" ve sekme kapatmanın kaldırılması
+(gerçek projede dosya sayısı sınırsız). Yerel: editör 877/877, RowlEye golden + denetim 3/3.
+
+## Faz 8 — Prototip kalanları + Aşama B (B04, B05, B06) (2026-10-16)
+
+Karar (Chaple, 2026-10-16): kapsam **hepsi** — prototipte kalanlar ve yol haritası Aşama B'nin
+B04/B05/B06 paketleri; tuval zemini prototip yüzeyi **#131315** (#000 değil).
+
+**Ölçülen başlangıç (koddan):**
+- `PanelIds.Console` ve `PanelIds.Store` tanımlı ama ayrı panel olarak barındırılmıyor; günlük alt
+  şeritte (`OutputLogView`). Araçlar menüsünde Konsol / Assets Store kartı yok (prototipte var).
+- Kurtarma: `CrashRecoveryService` teklif üretiyor, ama kullanıcı yüzeyi yok — yalnız günlüğe
+  "RestoreFromRecovery ile geri yükleyin" yazılıyor; yoksay (dismiss) yolu yok.
+- İçe aktarma: `ImportAssetAsync` async çekirdeği **senkron** çağırıyor (UI donar), ilerleme/iptal
+  yok; aynı adlı varlık `File.Copy(overwrite: true)` ile **sessizce eziliyor** (B04 bitiş kriterini çiğner).
+- Proje Merkezi: kart yolu silinmiş projeyi ayırt etmiyor; işlem sonuçları yalnız durum metni.
+- Erişilebilirlik: editör tarafında yalnız "azaltılmış hareket" tercihi var; arayüz metin ölçeği,
+  panel odak döngüsü, görünür odak halkası yok.
+
+**Dilimler**
+- **A1 Tuval zemini** — `CanvasBackgroundColor` #000000 → #131315 (ızgara/minimap kontrastı korunur);
+  tema kilit testi ve RowlEye golden'ı bilerek yeni değere taşınır.
+- **A2 Konsol paneli** — `PanelIds.Console` kendi yaprağı: prototip `.console-toolbar` (soluk
+  "Oturum olayları" + Temizle) ve zaman + mesaj satırları (eş aralıklı, ayırıcı çizgi); mevcut
+  günlük kaynağı (`LogOutput`) ve sayaçlar korunur. Araçlar menüsüne kart.
+- **A3 Assets Store** — `PanelIds.Store` "Yakında gelecek" boş ekranı (ikon + başlık + alt satır),
+  Araçlar kartı. Araçlar menüsü kilidi 9 → 11 kart, prototip sırasıyla.
+- **B1 Kurtarma kartı** — açılışta teklif varsa ana pencerede kart: kaynak (günlük/son sağlam kopya),
+  düğüm sayısı, bozulma nedeni; **Geri yükle** (geri alınamaz uyarısı, onay) / **İncele** (teklifin
+  özeti: düğüm başlıkları) / **Yoksay** (kurtarma dosyaları silinmez, teklif bu oturumda kapanır).
+- **B2 İçe aktarma ilerleme + iptal** — async çekirdek UI iş parçacığı dışında; ilerleme şeridi
+  (n / toplam, dosya adı) + İptal; iptalde yarım dosya kalmaz; UI yanıt verir (test: uzun dönüşümde
+  dispatcher kilitlenmez).
+- **B3 Çakışma kararı** — hedefte aynı adlı varlık varsa: içerik aynıysa atla; farklıysa kullanıcıya
+  **Üzerine yaz / İkisini de tut (`ad (2).ext`) / Atla** (+ "hepsine uygula"); karar verilmeden dosya
+  değişmez. Servis karar geri çağrısı alır; saf testler.
+- **C1 Proje Merkezi kart durumları** — yolu eksik proje "Bulunamadı" rozeti, Aç devre dışı, "Listeden
+  kaldır"; boş / yükleniyor / hata durumları; açma hatası başarı görünümü bırakmaz.
+- **C2 İşlem sonucu dili** — Kaydet / Farklı kaydet / Dışa aktar için ortak durum: çalışıyor →
+  başarılı (çıktı konumu + Klasörü aç) / hatalı (neden + Günlük'e git); başarısızlık asla başarı
+  bildirimi göstermez.
+- **D1 Klavye** — F6 / Shift+F6 panel odak döngüsü, Esc ile tuvale dönüş, görünür odak halkası (tema
+  token'ı), kısayol listesi Ayarlar'da; temel yazar yolu (düğüm ekle → düzenle → kaydet) yalnız klavyeyle.
+- **D2 Metin ölçeği + kontrast** — Ayarlar → Erişilebilirlik: arayüz metin ölçeği %100/%115/%130
+  (yazı token'ları ölçeklenir, canlı), yüksek kontrast teması (kenar/soluk metin tonları), mevcut
+  azaltılmış hareket; tercihler profilde kalıcı (test).
+- **D3 Ölçek denetimi** — RowlEye %130 ölçekte kesilme/taşma denetimi; kilit testleri.
+
+Çalışma düzeni: kodlama Spark (`muse-spark-1.3-contributor`), küçük iş + görsel denetim Wonder;
+şef derler, tam editör süitini koşar, ekran görüntüsüne kendisi bakar. Dilim başına yerel commit.
+
+**Faz 8 yapılan (2026-10-16):**
+- A `1176ffb`: zemin #131315 + `GraphDotColor` (#303034). Konsol = alt şeridin Günlük sekmesi
+  (yeniden adlandırma + prototip görünümü). Ayrı yaprak yapılmadı, çünkü kayıtlı düzen sekme
+  indekslerini bozardı. Store gerçek panel, Araçlar 10 kart.
+- C+D `36a5c6b`: Proje Merkezi kart durumları + içe aktarma doğrulaması; işlem sonucu kartı.
+  Sessiz arka plan kayıt hatası artık görünür. F6 / Shift+F6, tema odak halkası, Kısayollar sekmesi
+  tek kaynaktan. Arayüz ölçeği %100/%115/%130 ve yüksek kontrast. %115/%130'da Denetçi başlığı
+  kesiliyordu; düzeltildi, kilit testi var.
+- Kök neden düzeltmeleri: kayıt servisinin ev dizininden örnek proje içe aktarması (test makineye
+  bağlıydı); yüksek kontrastın her viewmodel kurulumunda kaynak yazması (UI dışı iş parçacığında 50 test).
+- Yerel: editör 929/929, RowlEye golden + denetim 3/3, taşınabilirlik + launcher yeşil.
+- B `d19583e`: kurtarma kartı (incele / iki adımlı geri yükle / yoksay — dosyalar silinmez);
+  içe aktarma UI dışı + ilerleme + iptal + atomik `.part` kopya; aynı adlı varlık kararı
+  (atla / ikisini de tut / üzerine yaz, kalanlara uygula). Sürükle-bırak yolları ezmez, yeni ad verir.
+  Kök neden: içe aktarma viewmodel'i sonucu UI dışında yazıyordu, son ilerleme kuyrukta kalabiliyordu.
+- Faz 8 sonu yerel: editör 951/951 (iki kez), RowlEye golden + denetim 3/3, taşınabilirlik + launcher
+  yeşil; native değişmedi.
+
+## Faz 9 — Aşama B kapanışı (B02 tuval, B03 hata dili, B kabulü) (2026-10-17)
+
+Karar (Chaple, 2026-10-17): Aşama B'yi kapat — B02/B03 açıkları + gerçek akış kabul turu.
+
+**Ölçülen başlangıç (koddan, 958/958 yeşil):**
+- Delete tuşu ve araç çubuğu yalnız tek `SelectedNode`'u siliyor; atomik `DeleteSelectedNodes`
+  (`BatchDeleteNodesUndoAction`) hiçbir yere bağlı değil; Delete dalında metin kutusu koruması yok.
+- Geri alma dışında kalan mutasyonlar: grup oluştur/sil/taşı/boyutlandır, Denetçi alan düzenlemeleri
+  (başlık, metin, konuşmacı, seçenek metni/hedefi), başlangıç düğümü değişikliği.
+- Zoom yalnız Ctrl+tekerlek; düz tekerlek bir şey yapmıyor. F yalnız tek düğümü ortalıyor (zoom yok,
+  çoklu seçim yok); "hepsini sığdır" kısayolu yok; +/- pan'ı korumuyor. Tuvalde Tab ile düğüm gezme yok.
+- Bağlantı reddi (kendine, yinelenen, hedef yok) sessiz; boş tuvale bırakılan kablo yalnız günlük satırı.
+- Sorunlar paneli: `AssetPath` hiç okunmuyor (varlığa gidilmiyor); hata/uyarı simgesi yok.
+- Varlık ızgara kartlarında eksik dosya rozeti yok; Çeviri Masası satır durumu çıplak enum metni.
+- Denetçi silinmiş düğüme işaret eden seçenek hedefini göstermiyor (yalnız toplu lint).
+
+**Dilimler**
+- **E1 Tuval klavye + zoom** — Delete/araç çubuğu çoklu seçimi tek adımda siler (metin girişinde
+  çalışmaz); düz tekerlek kaydırır (Shift yatay), Ctrl+tekerlek zoom; F seçimi (çoklu dahil) sığdırır,
+  Shift+F hepsini; +/- görünüm merkezine sabit; Tab / Shift+Tab düğümler arasında seçim gezdirir;
+  boş tuvale tıklamak tuvale odak verir.
+- **E2 Grup + başlangıç düğümü geri alma** — oluştur/sil/taşı/boyutlandır ve başlangıç düğümü değişimi
+  geri alınabilir; grup sürükleme tek adım.
+- **E3 Denetçi düzenleme geri alma** — Denetçi içindeki alan düzenlemeleri (odak oturumu başına tek
+  adım) geri alınır/yinelenir; tuval taşıma gibi Denetçi dışı değişimler karışmaz.
+- **E4 Bağlantı dili** — reddedilen bağlantı nedenini kullanıcıya gösterir (kendine, yinelenen);
+  boş tuvale bırakılan yeni kablo bırakılan yerde varsayılan düğüm oluşturur ve bağlar (tek geri alma
+  adımı). Not: projede tuvalde açılan bir "Oluştur" menüsü yok; menü yerine doğrudan varsayılan düğüm.
+- **F1 Hata dili (B03)** — Sorunlar satırı varlık sorununda varlığı seçer; hata/uyarı simgesi ve
+  hedefsiz sorun ayrımı; ızgara kartında eksik rozeti; Çeviri Masası durum rozeti (yerelleştirilmiş,
+  renkli); Denetçi'de silinmiş düğüm hedefi uyarısı.
+- **K1 B kabulü** — gerçek `MainWindow` üzerinde betikli yolculuk: oluştur → düzenle → içe aktar →
+  önizle → kaydet → farklı kaydet → dışa aktar; vazgeç, kurtarma, iptal. RowlEye görüntüsü + Wonder
+  görsel denetimi; gerçek pencere kanıtının sınırı açıkça yazılır.
+
+Çalışma düzeni: kodlama Spark, küçük iş + görsel denetim Wonder; şef uygular, derler, tam editör
+süitini koşar. Dilim başına yerel commit; push gün sonunda tek sefer.
+
+**Faz 9 yapılan (2026-10-17):**
+- E1 `5a1405a`: çoklu silme tek adım (metin girişinde Delete düğüm silmez); düz tekerlek kaydırır, Ctrl+tekerlek
+  zoom; F seçimi / Shift+F hepsini sığdırır (48 px pay, en fazla %100); +/- merkez sabit; Tab / Shift+Tab düğüm gezer.
+  `ZoomToFit` kilit testi bilerek yeni kurala taşındı.
+- E3 `57afabc`: Denetçi alan düzenlemeleri geri alınır (giriş denetimi başına tek adım; düğmeler kendi eylemiyle
+  kalır; tuval konumu karışmaz). Panel yeniden yerleşince kayıtçı yeniden bağlanır. Pencere testi kayıtçısız kırmızı.
+- E2 `423b813`: grup oluştur/sil/taşı/boyutlandır geri alınır (sürükleme bırakışta tek adım).
+- E4 `75aa423`: bağlantı reddi bildirimi; boş tuvale bırakınca düğüm + bağlantı (tek adım).
+- F1b `fd132b9`: Çeviri Masası durum rozeti (canlı); Denetçi silinmiş seçenek hedefi hatası, düğüm silinince /
+  geri gelince yeniden doğrulanır (önceden yalnız toplu lint).
+- F1a `cae9c4e`: varlık sorunu tıklanınca Varlıklar sekmesi + varlık seçimi; hata/uyarı noktası; hedefsiz satır
+  düz; ızgara kartında eksik rozeti. `40eee6e`/`4302ee8`: Analiz düğmesi sağa (önceden yapışıktı), tıklanabilir
+  satırda ok işareti (Wonder denetimi), RowlEye `ROWL_EYE_ISSUES=1` kancası.
+- K1 `a7ce70c`: gerçek `MainWindow` (başsız) kabul yolculuğu: oluştur → Ctrl+N → Denetçi → Ctrl+Z/Y → Ctrl+S →
+  yeniden aç; içe aktarma iptal → içe aktar → önizleme; farklı kaydet → paketle; vazgeç; kurtarma kartı.
+  **Sınır:** klasör seçici diyalogları başsız sürülemez (o adımlar koordinatör yoluyla); gerçek ekranlı (X11/Wayland)
+  pencere kanıtı yok — Aşama C02 kapsamı.
+- Kök neden `2e21b5b`: başsız UI iş parçacığı kurulmadan `Dispatcher.UIThread`'e dokunan test dispatcher'ı
+  `NullDispatcherImpl` ile bağlıyordu → iki iş parçacığı aynı pencerede düzen koşuyor, `EditorHeadlessSuiteTests`
+  sıraya bağlı düşüyordu (~%75). Test derlemesinde `[ModuleInitializer]` ile çalışma zamanı önce kurulur.
+- Bilinen, bu fazda alınmayan (Wonder): Denetçi doku kimliği metni sağda kesiliyor; tuvaldeki "Görünümü Sıfırla"
+  yazısı soluk. Grup sürüklemesinde yakalama kaybı (bırakma olayı gelmezse) kayıt üretmez.
+- Faz sonu yerel: editör 995/995, RowlEye golden + denetim 3/3, RowlEye testleri 56/56, taşınabilirlik + launcher
+  yeşil; native değişmedi.
+
+## Faz 10 — Donma, yan yana merkez görünümler, Denetçi yeniden tasarımı (2026-10-17)
+
+Karar (Chaple): (1) prototipteki gibi Node / Oyun / Sahne Düzenle aynı anda ayrı paneller; (2) panel
+taşırken donma giderilsin; (3) Denetçi sıfırdan, "uçak kokpiti değil, sanat eseri". Denetçi taslağı
+`prototypes/editor-workspace/inspector-redesign.html` onaylandı (kavram: `docs/design/inspector-redesign-concept.md`).
+
+**Yapılan:**
+- `aae20ca` donma kök nedeni: yerleşim animasyonu paneli ara boyutlarda yeniden ölçüyordu (Denetçi
+  40–120 ms/kare); panel son yerinde bir kez yerleşir, geçiş dönüşümle çizilir. Kilit testi.
+- `30a338d` merkez görünümler bağımsız aç-kapa, yan yana (`ToggleCenterView`, `EnsureCenterVisible`).
+
+**Denetçi dilimleri:**
+- **D1** `InspectorSceneViewModel`: mevcut bileşenlerin üstünde yazar dilinde uyarlayıcı (konuşan, söz,
+  yazı hızı Yavaş/Normal/Hızlı/Anında, karakter konumu Sol/Orta/Sağ → X, arka plan Doldur/Sığdır,
+  seçim satırları hedef sahne adıyla, ses, geçiş kartları + süre, kamera Sabit/Yaklaş/Uzaklaş).
+  Veri modeli değişmez.
+- **D2** yeni görünüm: hikâye akışıyla bölümler, "Ayrıntılar" katlanır; eski bileşen düzenleyicisi en altta
+  "Tüm sahne nesneleri (gelişmiş)" altında kalır — özellik kaybı yok.
+- **D3** seçim yok / çoklu seçim durumları (ortak: bölüm, etiket; çoğalt, sil).
+- Modelde karşılığı olmadığı için taslaktan alınmayanlar: "Işık: Gündüz/Akşam/Gece", "Seslendirme ekle"
+  (ses kaydı alanı yok); çoklu seçimde geçiş/müzik toplu atama sonraki dilim.
+
+**Faz 10 Denetçi yapılan (2026-10-17):**
+- D1 `59a6ee7` `InspectorSceneViewModel` (yalnız seçili düğümü ve seçenek hedeflerini dinler; ilk sürüm her düğüme
+  abone olup 2000 düğümlük yükleme bütçesini aşıyordu). Test kurulumunun `ProjectRoot`'u erken geri yüklemesi,
+  Dispose'daki kaydı deponun örnek projesine yazdırıyordu — düzeltildi.
+- D2/D3 `7bc08f8` `SceneInspectorView`: hikâye akışıyla bölümler, parçalı seçimler, boş durumlar, seçim yok /
+  çoklu seçim; eski düzenleyici "Gelişmiş ayarlar" altında katlı; başlıkta nesne kimliği gizli.
+- `ee4560c` Wonder cilası: "Ayrıntılar" ok şablonu, ölü boşluk, bölüm adı alt satırı, "+ Ekle".
+- Yerel kapılar: editör 1011/1011, RowlEye golden + denetim 3/3, taşınabilirlik + launcher yeşil; native değişmedi.
+- Taslaktan alınmayan (modelde yok): Işık, Seslendirme ekle, "Ana karakter · sahnede"; çoklu seçimde bölüm/etiket/
+  geçiş/müzik toplu alanları (VM'de `MultiChapter`/`MultiColorTag` hazır, görünüm sonraki dilim).
+
+**Faz 10 sonrası — çoklu seçim toplu alanları (2026-10-17, YEREL):**
+- Çoklu seçimde Bölüm ve Renk etiketi açılır kutuları ("Farklı değerler" yer tutucusu) ve Geçiş kartları
+  ("3/5 sahnede geçiş var"; yalnız geçişi olan sahnelere uygulanır). Her toplu yazma tek geri alma adımı;
+  aynı değer kayıt üretmez. Müzik toplu ataması alınmadı (varlık seçici gerekiyor).
+- Toplu alanlar `self-undo` sınıfıyla Denetçi kaydedicisinin dışında: kaydedici çoklu seçimde de birincil
+  düğümü izlediği için ikinci (yarım) geri alma adımı üretirdi.
+- Kök neden (önceden vardı, ilk pencereli bölüm testinde çıktı): eski Denetçi'nin bölüm listesi her
+  değişimde yeni nesneydi; Avalonia eski seçim indeksini ("Yok") geri yazıp düğümün bölümünü siliyordu,
+  aynı değerde ayarlayıcı listeyi yeniden kurup sonsuz özyinelemeye (yığın taşması, süit çöküşü) giriyordu.
+  Liste yalnız içerik değişince yenilenir, yenileme sırasındaki ve boş geri yazmalar yok sayılır.
+- Yerel: editör 1019/1019, RowlEye golden + denetim 3/3, taşınabilirlik + launcher yeşil; native değişmedi.

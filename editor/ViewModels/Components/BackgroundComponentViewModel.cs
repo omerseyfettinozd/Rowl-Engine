@@ -16,7 +16,9 @@ namespace RowlEngine.Editor.ViewModels.Components
         private const double DefaultWidth = 1920.0;
         private const double DefaultHeight = 1080.0;
 
-        public override string DisplayName => "Background Layer";
+        public override string DisplayNameKey => "Component.Background.DisplayName";
+        protected override string DisplayNameTrFallback => "Arka Plan Katmanı";
+        protected override string DisplayNameEnFallback => "Background Layer";
         public override string Icon => "Görsel";
         public override string TypeKey => "background";
 

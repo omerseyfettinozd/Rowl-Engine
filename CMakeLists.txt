@@ -228,6 +228,16 @@ if(ROWL_BUILD_RUNTIME_TESTS)
                 TIMEOUT 180
             )
         endif()
+        # C05: RC kapi toplayicisi (tools/rc_gate_report.py) sozlesmesi; salt
+        # python, derleme gerektirmez.
+        add_test(
+            NAME rowl_rc_gates_tests
+            COMMAND ${Python3_EXECUTABLE} -u ${CMAKE_SOURCE_DIR}/tests/test_rc_gates.py
+        )
+        set_tests_properties(rowl_rc_gates_tests PROPERTIES
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+            TIMEOUT 30
+        )
         add_test(
             NAME rowl_export_tool_tests
             COMMAND ${Python3_EXECUTABLE} -u ${CMAKE_SOURCE_DIR}/tests/test_export_game.py
@@ -355,6 +365,34 @@ if(ROWL_BUILD_RUNTIME_TESTS AND TARGET rowl_player)
             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
             TIMEOUT 120
             # Offscreen smoke frame: must initialise with no display server.
+            ENVIRONMENT "SDL_AUDIODRIVER=dummy;SDL_VIDEODRIVER=dummy"
+        )
+        # D01b: two packaged games (different ids) never share saves; moving
+        # the game folder keeps them.
+        add_test(
+            NAME rowl_game_data_packaged
+            COMMAND ${Python3_EXECUTABLE} -u ${CMAKE_SOURCE_DIR}/tests/test_game_data_packaged.py
+                $<TARGET_FILE:RowlEngineCore>
+                ${CMAKE_SOURCE_DIR}/samples/first_light
+        )
+        set_tests_properties(rowl_game_data_packaged PROPERTIES
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+            TIMEOUT 120
+            ENVIRONMENT "SDL_AUDIODRIVER=dummy;SDL_VIDEODRIVER=dummy"
+        )
+        # D01d: two packaged games (same sample, different ids) driven through
+        # the real player: distinct ids/data dirs, read state + preferences
+        # persist per game, future-version profile stays read-only/byte-identical.
+        add_test(
+            NAME rowl_packaged_game_isolation
+            COMMAND ${Python3_EXECUTABLE} -u ${CMAKE_SOURCE_DIR}/tests/test_packaged_game_isolation.py
+                $<TARGET_FILE:rowl_player>
+                $<TARGET_FILE:RowlEngineCore>
+                ${CMAKE_SOURCE_DIR}/samples/second_signal
+        )
+        set_tests_properties(rowl_packaged_game_isolation PROPERTIES
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+            TIMEOUT 180
             ENVIRONMENT "SDL_AUDIODRIVER=dummy;SDL_VIDEODRIVER=dummy"
         )
         add_test(

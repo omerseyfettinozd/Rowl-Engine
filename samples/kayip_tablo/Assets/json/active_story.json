@@ -1,0 +1,154 @@
+{
+  "format_version": 2,
+  "node_id": 1,
+  "components": [
+    {
+      "type": "background",
+      "id": "bg1c",
+      "enabled": true,
+      "data": {
+        "texture": "bogaz_gunduz.jpg",
+        "x": 0,
+        "y": 0,
+        "width": 1920,
+        "height": 1080,
+        "scale": 1,
+        "rotation": 0,
+        "parallax_x": 1,
+        "parallax_y": 1,
+        "opacity": 1
+      }
+    },
+    {
+      "type": "variable",
+      "id": "var1ipucu0",
+      "enabled": true,
+      "data": {
+        "key": "ipucu",
+        "value": "0",
+        "operation": "set"
+      }
+    },
+    {
+      "type": "variable",
+      "id": "var1leyla_guven1",
+      "enabled": true,
+      "data": {
+        "key": "leyla_guven",
+        "value": "0",
+        "operation": "set"
+      }
+    },
+    {
+      "type": "variable",
+      "id": "var1kaba2",
+      "enabled": true,
+      "data": {
+        "key": "kaba",
+        "value": "0",
+        "operation": "set"
+      }
+    },
+    {
+      "type": "variable",
+      "id": "var1carsi_gidildi3",
+      "enabled": true,
+      "data": {
+        "key": "carsi_gidildi",
+        "value": "0",
+        "operation": "set"
+      }
+    },
+    {
+      "type": "variable",
+      "id": "var1kosk_gidildi4",
+      "enabled": true,
+      "data": {
+        "key": "kosk_gidildi",
+        "value": "0",
+        "operation": "set"
+      }
+    },
+    {
+      "type": "audio",
+      "id": "aud1",
+      "enabled": true,
+      "data": {
+        "dsp_filter": "Normal",
+        "bgm_track": "audio/gymnopedie1.ogg",
+        "sfx_track": "",
+        "volume": 1,
+        "bgm_transition": "crossfade",
+        "bgm_transition_duration_seconds": 1.5
+      }
+    },
+    {
+      "type": "dialogue",
+      "id": "dlg1c",
+      "enabled": true,
+      "data": {
+        "speaker": "Anlatıcı",
+        "dialogue": "İstanbul, Temmuz 1894. Boğaz’ın üstünde ince bir sıcak pus asılı, Pera’nın yokuşlarında martılar çığlık çığlığa.",
+        "x": 80,
+        "y": 820,
+        "width": 1760,
+        "height": 190,
+        "scale": 1,
+        "typewriter_enabled": true,
+        "text_speed": 32,
+        "typewriter_sound": "",
+        "voice_blip_pitch": 1,
+        "voice_blip_variance": 0.08,
+        "voice_blip_cadence": 1,
+        "voice_blip_skip_punctuation": true,
+        "voice_blip_channel_name": "Voice",
+        "voice_blip_channel": 1,
+        "voice_blip_volume": 0.85,
+        "auto_advance": false,
+        "auto_advance_delay": 2,
+        "font_size": 26,
+        "speaker_font_size": 22,
+        "text_color": "#F3EBDD",
+        "speaker_color": "#6F675B",
+        "text_alignment": "Left",
+        "box_opacity": 0.9,
+        "box_color": "#14110D",
+        "border_color": "#C9A86A",
+        "border_thickness": 2,
+        "corner_radius": 10,
+        "custom_box_texture": "",
+        "content_id": "1aba00c8-6686-59e5-b5d4-765acd5d6f58"
+      }
+    }
+  ],
+  "speaker": "Anlatıcı",
+  "dialogue": "İstanbul, Temmuz 1894. Boğaz’ın üstünde ince bir sıcak pus asılı, Pera’nın yokuşlarında martılar çığlık çığlığa.",
+  "background": "bogaz_gunduz.jpg",
+  "background_x": 0,
+  "background_y": 0,
+  "background_width": 1920,
+  "background_height": 1080,
+  "background_rotation": 0,
+  "background_parallax_x": 1,
+  "background_parallax_y": 1,
+  "background_opacity": 1,
+  "character": "",
+  "character_pos": "Right",
+  "character_x": 1440,
+  "character_y": 340,
+  "character_width": 360,
+  "character_height": 540,
+  "character_scale": 1,
+  "dialogue_box_x": 80,
+  "dialogue_box_y": 820,
+  "dialogue_box_width": 1760,
+  "dialogue_box_height": 190,
+  "voice_blip_sound": "",
+  "voice_blip_pitch": 1,
+  "voice_blip_variance": 0.08,
+  "voice_blip_cadence": 1,
+  "voice_blip_skip_punctuation": true,
+  "voice_blip_volume": 0.85,
+  "voice_blip_channel": 1,
+  "dsp": "Normal"
+}

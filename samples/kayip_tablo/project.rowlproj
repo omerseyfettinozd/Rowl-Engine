@@ -1,0 +1,16 @@
+{
+  "project_uuid": "ee03b560-9e41-5e29-a247-922922868446",
+  "name": "Kayıp Tablo",
+  "version": "1.0.0",
+  "engineVersion": "1.0.0",
+  "nodeCount": 184,
+  "startNodeId": 1,
+  "defaultLocale": "tr",
+  "supportedLocales": [
+    "tr"
+  ],
+  "virtualResolution": {
+    "width": 1920,
+    "height": 1080
+  }
+}

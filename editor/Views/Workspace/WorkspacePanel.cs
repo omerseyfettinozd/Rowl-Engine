@@ -1,14 +1,19 @@
+using System;
+using System.Collections.Generic;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Metadata;
 using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Shapes;
 using Avalonia.Controls.Templates;
 using Avalonia.Data;
 using Avalonia.Input;
 using Avalonia.Layout;
+using Avalonia.Media;
 using RowlEngine.Editor.Services.Strings;
+using RowlEngine.Editor.Services.Workspace;
 
 namespace RowlEngine.Editor.Views.Workspace;
 
@@ -38,6 +43,7 @@ public class WorkspacePanel : ContentControl
     public const string HeaderPartName = "PART_Header";
     public const string TitlePartName = "PART_Title";
     public const string HeaderActionsPartName = "PART_HeaderActions";
+    public const string HeaderIconPartName = "PART_HeaderIcon";
     public const string PinnedPseudoClass = ":pinned";
 
     /// <summary>Header height (K2 panel header, matches <c>Border.panelHeader</c> MinHeight).</summary>
@@ -81,8 +87,31 @@ public class WorkspacePanel : ContentControl
     public const double DefaultMinWidth = 160;
     public const double DefaultMinHeight = 120;
 
+    // Prototip başlık ikonları (24 birim kutuda çizili, 14 px gösterilir).
+    private static readonly Dictionary<string, string> HeaderIconDataByPanelId = new(StringComparer.OrdinalIgnoreCase)
+    {
+        [PanelIds.Node] = "M4,4 h6 v6 h-6 Z M14,14 h6 v6 h-6 Z M10,7 h3 a2,2 0 0 1 2,2 v5",
+        [PanelIds.Game] = "M3,5 h18 v12 h-18 Z M8,21 h8 M10,8.5 L15,11 L10,13.5 Z",
+        [PanelIds.Edit] = "M4,4 h4 M4,4 v4 M20,4 h-4 M20,4 v4 M4,20 v-4 M4,20 h4 M11,11 L19,14 L15.5,15.5 L14,19 Z",
+        [PanelIds.Hierarchy] = "M5,4 h5 v4 h-5 Z M8,8 v8 h5 M8,12 h5 M13,10 h6 v4 h-6 Z M13,14 h6 v4 h-6 Z",
+        [PanelIds.Inspector] = "M4,7 h10 M18,7 h2 M4,17 h2 M10,17 h10 M14,5 v4 M6,15 v4",
+        [PanelIds.Library] = "M4,4 h6 v6 h-6 Z M14,4 h6 v6 h-6 Z M4,14 h6 v6 h-6 Z M17,13.5 l1.1,2.3 l2.4,.3 l-1.8,1.7 l.5,2.4 l-2.2,-1.2 l-2.2,1.2 l.5,-2.4 l-1.8,-1.7 l2.4,-.3 Z",
+        [PanelIds.Store] = "M3,8 a1,1 0 0 1 1,-1 h5 l2,2 h6 a1,1 0 0 1 1,1 v8 a1,1 0 0 1 -1,1 H4 a1,1 0 0 1 -1,-1 Z",
+        [PanelIds.Lua] = "M8,7 L3,12 L8,17 M16,7 L21,12 L16,17 M14,4 L10,20",
+        [PanelIds.Bottom] = "M3,7 a2,2 0 0 1 2,-2 h4 l2,2 h8 a2,2 0 0 1 2,2 v8 a2,2 0 0 1 -2,2 h-14 a2,2 0 0 1 -2,-2 Z",
+    };
+
+    /// <summary>Panel id → başlık ikon geometrisi (bilinmeyene null, ikon gizlenir).</summary>
+    public static string? GetHeaderIconData(string? panelId)
+    {
+        if (panelId is not null && HeaderIconDataByPanelId.TryGetValue(panelId, out var data))
+            return data;
+        return null;
+    }
+
     private Border? _header;
     private TextBlock? _title;
+    private Path? _headerIcon;
     private PanelHeaderActions? _actions;
 
     static WorkspacePanel()
@@ -168,17 +197,48 @@ public class WorkspacePanel : ContentControl
 
     private static Control BuildTemplate(WorkspacePanel panel, INameScope scope)
     {
+        // Başlık ikonu: 14 px, ince çizgi, MutedText.
+        var icon = new Path
+        {
+            Name = HeaderIconPartName,
+            Width = HeaderIconSize,
+            Height = HeaderIconSize,
+            Stretch = Stretch.Uniform,
+            StrokeThickness = 1.5,
+            StrokeLineCap = PenLineCap.Round,
+            StrokeJoin = PenLineJoin.Round,
+            VerticalAlignment = VerticalAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            // Başlık dolgusuyla hizalı; başlık çocuğu metin kalır (testler Child'ı TextBlock bekler).
+            Margin = new Thickness(HeaderPaddingLeft, 0, 0, 0),
+            IsHitTestVisible = false,
+            IsVisible = false,
+        };
+        icon.Bind(Shape.StrokeProperty, icon.GetResourceObservable("MutedText"));
+        icon.RegisterInNameScope(scope);
+
         // D4: the title leaves room for the pin / close buttons drawn over the header's trailing end.
         var title = new TextBlock
         {
             Name = TitlePartName,
-            TextTrimming = Avalonia.Media.TextTrimming.CharacterEllipsis,
-            Margin = new Thickness(0, 0, HeaderActionsReserve, 0),
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            Margin = new Thickness(HeaderIconSize + HeaderIconGap, 0, HeaderActionsReserve, 0),
+            VerticalAlignment = VerticalAlignment.Center,
         };
         title.Classes.Add("panelTitle");
         title.RegisterInNameScope(scope);
 
-        var header = new Border { Name = HeaderPartName, Child = title, Focusable = true };
+        var header = new Border
+        {
+            Name = HeaderPartName,
+            Child = title,
+            Focusable = true,
+            Height = HeaderHeight,
+            MinHeight = HeaderHeight,
+            Padding = new Thickness(HeaderPaddingLeft, 0, 6, 0),
+            BorderThickness = new Thickness(0, 0, 0, 1),
+            VerticalAlignment = VerticalAlignment.Top,
+        };
         header.Classes.Add("panelHeader");
         header.Classes.Add("workspaceDragHandle");
         header.Bind(AutomationProperties.NameProperty, panel.GetObservable(TitleProperty));
@@ -197,7 +257,12 @@ public class WorkspacePanel : ContentControl
         };
         actions.RegisterInNameScope(scope);
 
-        var pinnedOutline = new Border { IsHitTestVisible = false };
+        var pinnedOutline = new Border
+        {
+            IsHitTestVisible = false,
+            CornerRadius = new CornerRadius(12),
+            BorderThickness = new Thickness(1),
+        };
         pinnedOutline.Classes.Add("workspacePinnedOutline");
         pinnedOutline.Bind(IsVisibleProperty, panel.GetObservable(IsPinnedProperty));
         Grid.SetRowSpan(pinnedOutline, 2);
@@ -215,15 +280,23 @@ public class WorkspacePanel : ContentControl
 
         var grid = new Grid { RowDefinitions = new RowDefinitions("Auto,*") };
         grid.Children.Add(header);
+        grid.Children.Add(icon);
         grid.Children.Add(presenter);
         grid.Children.Add(actions);
         grid.Children.Add(pinnedOutline);
 
-        return new Border
+        // Ayrı yuvarlak kart: kenar + kırpma burada, içerik zemini panelden gelir.
+        var card = new Border
         {
             [~Border.BackgroundProperty] = panel[~BackgroundProperty],
             Child = grid,
+            CornerRadius = new CornerRadius(12),
+            BorderThickness = new Thickness(1),
+            ClipToBounds = true,
+            Margin = new Thickness(0),
         };
+        card.Bind(Border.BorderBrushProperty, card.GetResourceObservable("BorderColor"));
+        return card;
     }
 
     protected override void OnApplyTemplate(TemplateAppliedEventArgs e)
@@ -231,6 +304,7 @@ public class WorkspacePanel : ContentControl
         base.OnApplyTemplate(e);
         _header = e.NameScope.Find<Border>(HeaderPartName);
         _title = e.NameScope.Find<TextBlock>(TitlePartName);
+        _headerIcon = e.NameScope.Find<Path>(HeaderIconPartName);
         _actions = e.NameScope.Find<PanelHeaderActions>(HeaderActionsPartName);
         UpdateHeader();
     }
@@ -238,14 +312,18 @@ public class WorkspacePanel : ContentControl
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
-        if (change.Property == TitleProperty || change.Property == OwnsHeaderProperty || change.Property == IsPinnedProperty)
+        if (change.Property == TitleProperty || change.Property == OwnsHeaderProperty || change.Property == IsPinnedProperty || change.Property == PanelIdProperty)
             UpdateHeader();
         if (change.Property == IsPinnedProperty)
             PseudoClasses.Set(PinnedPseudoClass, IsPinned);
     }
 
     /// <summary>Width kept free at the header's trailing end for <see cref="PanelHeaderActions"/>.</summary>
-    private const double HeaderActionsReserve = 64;
+    private const double HeaderActionsReserve = 90;
+
+    private const double HeaderPaddingLeft = 13;
+    private const double HeaderIconSize = 14;
+    private const double HeaderIconGap = 8;
 
     private void UpdateHeader()
     {
@@ -257,6 +335,12 @@ public class WorkspacePanel : ContentControl
         }
         if (_title is not null)
             _title.Text = Title;
+        if (_headerIcon is not null)
+        {
+            var data = GetHeaderIconData(PanelId);
+            _headerIcon.Data = data is not null ? Geometry.Parse(data) : null;
+            _headerIcon.IsVisible = data is not null && !OwnsHeader;
+        }
         if (_actions is not null)
         {
             // Own header (e.g. tab row): float over the content's first 40 px row.

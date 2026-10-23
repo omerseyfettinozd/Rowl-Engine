@@ -27,4 +27,8 @@ UserDataDirectories makeUserDataDirectories(
 /// Windows uses the Unicode Known Folder API for LocalAppData.
 UserDataDirectories resolveUserDataDirectories();
 
+/// D01b: the per-user data root itself (e.g. $XDG_DATA_HOME/rowl-engine);
+/// per-game data lives below <root>/games/<game-id>.
+std::filesystem::path resolveUserDataRoot();
+
 } // namespace Rowl::Platform

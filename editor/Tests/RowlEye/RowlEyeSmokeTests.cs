@@ -66,8 +66,8 @@ public class RowlEyeSmokeTests
             using var mDoc = JsonDocument.Parse(manifestText);
             var mRoot = mDoc.RootElement;
             Assert.Equal("SettingsDialog", mRoot.GetProperty("TargetWindow").GetString());
-            Assert.Equal(720, mRoot.GetProperty("LogicalWidth").GetInt32());
-            Assert.Equal(560, mRoot.GetProperty("LogicalHeight").GetInt32());
+            Assert.Equal(860, mRoot.GetProperty("LogicalWidth").GetInt32()); // Faz 6: prototip ayarlar diyaloğu ölçüsü
+            Assert.Equal(620, mRoot.GetProperty("LogicalHeight").GetInt32());
         }
         finally
         {

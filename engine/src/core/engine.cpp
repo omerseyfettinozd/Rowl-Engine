@@ -137,11 +137,20 @@ std::string Engine::getProfileDirectory() const {
 }
 
 std::filesystem::path Engine::getProfileDirectoryPath() const {
+    if (!m_gameDataLayout.profileDirectory.empty()) return m_gameDataLayout.profileDirectory;
     if (const auto host = getPlatformHost()) {
         const auto path = host->writableProfilePath();
         if (!path.empty()) return path;
     }
     return "profiles";
+}
+
+void Engine::openPlayerProfile() {
+    // A per-game profile dir is bound to the game id (WrongGame guard); the
+    // project-local fallback (derived id, unwritable user data) is not: a moved
+    // derived-id project gets a new id but keeps its own profile.
+    const bool perGame = m_gameDataLayout.perGame && !m_gameDataLayout.profileDirectory.empty();
+    m_playerProfile.open(getProfileDirectoryPath(), perGame ? m_gameIdentity.id : std::string());
 }
 
 Rowl::State::SessionPersistence& Engine::sessionPersistence() const {
@@ -383,6 +392,7 @@ bool Engine::initialize(const EngineConfig& config) {
 
     // Initialize GameState Subsystem (Root Step #1)
     m_gameState = Rowl::State::GameState::createInitialState(m_storyRuntime.currentNodeId());
+    m_startPresentationStepId = getCurrentStepId();
 
     // Load story graph from disk
     const bool storyLoaded = loadStoryGraphFile();
@@ -417,6 +427,7 @@ bool Engine::initialize(const EngineConfig& config) {
 }
 
 void Engine::setPlayState(bool isPlaying) {
+    const bool enteringPlay = isPlaying && !m_isPlaying;
     m_isPlaying = isPlaying;
     m_autoAdvanceElapsed = 0.0f;
     m_activeDialogueData.isPlaying = isPlaying;
@@ -426,6 +437,19 @@ void Engine::setPlayState(bool isPlaying) {
         for (auto& dlg : m_activeDialogues) {
             dlg.elapsedTypewriterTime = 0.0f;
             dlg.lastBlipCodepointIndex = 0;
+        }
+        // D01d: the start node's dialogue is presented BEFORE play state (the
+        // story graph is mounted by SetProjectDirectory / LoadStoryGraph), so
+        // recordActiveDialogueHistory never saw it. At the false->true
+        // transition the lines on screen are now presented to the player:
+        // mark them read. Read state only - no backlog entry is added here
+        // (the backlog bookkeeping is untouched, so nothing is recorded twice).
+        if (enteringPlay) {
+            for (const auto& dlg : m_activeDialogues) {
+                if (!dlg.dialogue.empty() && !dlg.contentId.empty()) {
+                    m_playerProfile.markRead(dlg.contentId);
+                }
+            }
         }
     } else {
         m_activeDialogueData.elapsedTypewriterTime = 9999.0f;
@@ -481,6 +505,7 @@ void Engine::resetToStartNode() {
         m_activeDialogueData.lastBlipCodepointIndex = 0;
         ROWL_LOG_INFO("Engine Reset to Start Node #" + std::to_string(m_storyRuntime.currentNodeId()));
     }
+    m_startPresentationStepId = getCurrentStepId();
 }
 
 void Engine::endSession() {
@@ -493,6 +518,7 @@ void Engine::endSession() {
     // right after the mount anyway).
     if (!m_storyRuntime.resetToStart()) return;
     m_gameState = Rowl::State::GameState::createInitialState(m_storyRuntime.startNodeId());
+    m_startPresentationStepId = getCurrentStepId();
     m_lastRecordedDialogueNodeId = 0;
     m_lastSfxPlaybackNodeId = 0;
 }
@@ -1557,6 +1583,10 @@ bool Engine::parseStoryGraphJson(const std::string& jsonContent) {
             startNode.dialogueBoxX, startNode.dialogueBoxY,
             startNode.dialogueBoxWidth, startNode.dialogueBoxHeight);
     }
+    // Entry effects of the start node (variable component, ...) advance
+    // stepId while nobody has played yet; the mid-session mount gate
+    // measures progress from here, not from the bare initial step.
+    m_startPresentationStepId = getCurrentStepId();
 
     ROWL_LOG_INFO("Story graph loaded: " + std::to_string(m_storyRuntime.size()) +
                   " nodes. Start node #" + std::to_string(m_storyRuntime.currentNodeId()));
@@ -1911,6 +1941,8 @@ void Engine::step(float deltaTime) {
     } else if (deltaTime > 0.25f) {
         deltaTime = 0.25f;
     }
+
+    m_playerProfile.tick(deltaTime);  // D01c-1: debounced profile autosave
 
     const auto platformHost = getPlatformHost();
     if (platformHost && platformHost->lifecycleState() == Rowl::Platform::LifecycleState::Stopping) {
@@ -2544,6 +2576,9 @@ void Engine::recordActiveDialogueHistory() {
     entries.reserve(m_activeDialogues.size());
     for (const auto& dialogue : m_activeDialogues) {
         if (!dialogue.dialogue.empty()) {
+            // D01c-1: presented to the player (play state, same point as the
+            // backlog) -> read. Legacy lines have no id and are never marked.
+            if (!dialogue.contentId.empty()) m_playerProfile.markRead(dialogue.contentId);
             entries.push_back(
                 {m_storyRuntime.currentNodeId(), dialogue.speaker, dialogue.dialogue, true,
                  dialogue.contentId});
@@ -2748,6 +2783,9 @@ void Engine::shutdown() {
     m_externalWindowHeight = 0;
     // D2 (#113-kuzeni): proje-override save-dizini de oturuma aittir.
     m_saveDirectoryOverride.clear();
+    m_playerProfile.close();  // D01c-1: flush pending profile changes
+    m_gameIdentity = {};
+    m_gameDataLayout = {};
 
     m_isRunning   = false;
     m_initialized = false;

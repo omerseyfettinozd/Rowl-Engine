@@ -30,6 +30,7 @@ def compatibility_key(report):
         "environment.os": report.get("environment", {}).get("os"),
         "environment.architecture": report.get("environment", {}).get("architecture"),
         "environment.cpu_model": report.get("environment", {}).get("cpu_model"),
+        "environment.power_profile": report.get("environment", {}).get("power_profile"),
         "environment.machine": report.get("environment", {}).get("machine"),
         "environment.cpu_count": report.get("environment", {}).get("cpu_count"),
     }

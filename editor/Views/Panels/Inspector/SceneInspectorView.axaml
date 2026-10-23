@@ -1,0 +1,1008 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:RowlEngine.Editor.ViewModels.Inspector"
+             xmlns:l="using:RowlEngine.Editor.Services.Strings"
+             xmlns:insp="using:RowlEngine.Editor.Views.Panels.Inspector"
+             xmlns:views="using:RowlEngine.Editor.Views.Components"
+             xmlns:search="using:RowlEngine.Editor.Services.Search"
+             x:Class="RowlEngine.Editor.Views.Panels.Inspector.SceneInspectorView"
+             x:DataType="vm:InspectorSceneViewModel"
+             Background="{DynamicResource SurfaceBackground}"
+             FontSize="{DynamicResource FontSizeBody}">
+  <UserControl.Styles>
+    <Style Selector="Border.segment-wrap">
+      <Setter Property="Background" Value="{DynamicResource InputBackground}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource InputBackground}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="{DynamicResource RadiusMedium}" />
+      <Setter Property="Padding" Value="3" />
+    </Style>
+    <Style Selector="RadioButton.segment">
+      <Setter Property="Background" Value="{DynamicResource InputBackground}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource InputBackground}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="{DynamicResource RadiusSmall}" />
+      <Setter Property="Padding" Value="8,7" />
+      <Setter Property="Foreground" Value="{DynamicResource SecondaryText}" />
+      <Setter Property="FontSize" Value="{DynamicResource FontSizeBody}" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Border Background="{TemplateBinding Background}"
+                  BorderBrush="{TemplateBinding BorderBrush}"
+                  BorderThickness="{TemplateBinding BorderThickness}"
+                  CornerRadius="{DynamicResource RadiusSmall}"
+                  Padding="{TemplateBinding Padding}">
+            <ContentPresenter Content="{TemplateBinding Content}"
+                              Foreground="{TemplateBinding Foreground}"
+                              FontSize="{TemplateBinding FontSize}"
+                              HorizontalAlignment="Center"
+                              VerticalAlignment="Center" />
+          </Border>
+        </ControlTemplate>
+      </Setter>
+    </Style>
+    <Style Selector="RadioButton.segment:checked">
+      <Setter Property="Background" Value="{DynamicResource AccentButtonHover}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtle}" />
+      <Setter Property="Foreground" Value="{DynamicResource PrimaryText}" />
+    </Style>
+    <Style Selector="Border.chip-border">
+      <Setter Property="Background" Value="{DynamicResource PanelBackground}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource PanelBackground}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="{DynamicResource RadiusLarge}" />
+      <Setter Property="Padding" Value="11,5" />
+    </Style>
+    <Style Selector="ListBox.chip-list">
+      <Setter Property="Background" Value="{DynamicResource SurfaceBackground}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource SurfaceBackground}" />
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+    <Style Selector="ListBoxItem.chip-item">
+      <Setter Property="Background" Value="{DynamicResource SurfaceBackground}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource SurfaceBackground}" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Margin" Value="0,0,8,8" />
+    </Style>
+    <Style Selector="ListBoxItem.chip-item:selected Border.chip-border">
+      <Setter Property="BorderBrush" Value="{DynamicResource SelectionBorder}" />
+      <Setter Property="Background" Value="{DynamicResource SurfaceBackground}" />
+    </Style>
+    <Style Selector="Border.trans-card">
+      <Setter Property="Background" Value="{DynamicResource InputBackground}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource InputBackground}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="{DynamicResource RadiusMedium}" />
+      <Setter Property="Padding" Value="8" />
+    </Style>
+    <Style Selector="ListBoxItem.trans-item:selected Border.trans-card">
+      <Setter Property="BorderBrush" Value="{DynamicResource SelectionBorder}" />
+      <Setter Property="Background" Value="{DynamicResource SurfaceBackground}" />
+    </Style>
+    <Style Selector="ListBox.trans-list">
+      <Setter Property="Background" Value="{DynamicResource SurfaceBackground}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource SurfaceBackground}" />
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+    <Style Selector="Button.text">
+      <Setter Property="Background" Value="{DynamicResource SurfaceBackground}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource SurfaceBackground}" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Foreground" Value="{DynamicResource PrimaryText}" />
+      <Setter Property="FontSize" Value="{DynamicResource FontSizeBody}" />
+      <Setter Property="Padding" Value="8,6" />
+      <Setter Property="CornerRadius" Value="{DynamicResource RadiusSmall}" />
+    </Style>
+    <Style Selector="Button.text:pointerover">
+      <Setter Property="Background" Value="{DynamicResource AccentButtonHover}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource AccentButtonHover}" />
+    </Style>
+    <Style Selector="Button.primary">
+      <Setter Property="Background" Value="{DynamicResource Accent}" />
+      <Setter Property="Foreground" Value="{DynamicResource OnAccentForeground}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource Accent}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="FontSize" Value="{DynamicResource FontSizeBody}" />
+      <Setter Property="Padding" Value="12,9" />
+      <Setter Property="CornerRadius" Value="{DynamicResource RadiusMedium}" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.primary:pointerover">
+      <Setter Property="Background" Value="{DynamicResource AccentHover}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource AccentHover}" />
+    </Style>
+    <Style Selector="Button.danger-text">
+      <Setter Property="Background" Value="{DynamicResource SurfaceBackground}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource SurfaceBackground}" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Foreground" Value="{DynamicResource ErrorBrush}" />
+      <Setter Property="FontSize" Value="{DynamicResource FontSizeBody}" />
+      <Setter Property="Padding" Value="8,6" />
+      <Setter Property="CornerRadius" Value="{DynamicResource RadiusSmall}" />
+    </Style>
+    <Style Selector="Border.thumb">
+      <Setter Property="Background" Value="{DynamicResource InputBackground}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtle}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="{DynamicResource RadiusMedium}" />
+      <Setter Property="Padding" Value="0" />
+    </Style>
+    <Style Selector="Border.tag-chip">
+      <Setter Property="Background" Value="{DynamicResource PanelBackground}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource PanelBackground}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="{DynamicResource RadiusLarge}" />
+      <Setter Property="Padding" Value="9,4" />
+    </Style>
+    <Style Selector="Border.separator">
+      <Setter Property="Background" Value="{DynamicResource BorderSubtle}" />
+    </Style>
+    <!-- "Ayrıntılar": kutu değil, soluk metin + ok (taslak). Fluent başlığı ToggleButton#ExpanderHeader. -->
+    <Style Selector="Expander.details">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="0,6,0,0" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+    </Style>
+    <Style Selector="Expander.details /template/ ToggleButton#ExpanderHeader">
+      <Setter Property="Padding" Value="0,4" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="Foreground" Value="{DynamicResource MutedText}" />
+      <Setter Property="FontSize" Value="{DynamicResource FontSizeSmall}" />
+      <Setter Property="HorizontalAlignment" Value="Left" />
+      <!-- Kendi şablonu: metin + hemen yanında küçük ok (Fluent'te ok satırın sağına kopuyordu). -->
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Border Background="Transparent" Padding="{TemplateBinding Padding}">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <ContentPresenter Content="{TemplateBinding Content}"
+                                ContentTemplate="{TemplateBinding ContentTemplate}"
+                                Foreground="{TemplateBinding Foreground}"
+                                VerticalAlignment="Center" />
+              <Path Name="DetailsChevron" Data="M0,0 L4,4 L8,0" Stroke="{TemplateBinding Foreground}"
+                    StrokeThickness="1.3" VerticalAlignment="Center" RenderTransformOrigin="50%,50%" />
+            </StackPanel>
+          </Border>
+        </ControlTemplate>
+      </Setter>
+    </Style>
+    <Style Selector="Expander.details /template/ ToggleButton#ExpanderHeader:pointerover">
+      <Setter Property="Foreground" Value="{DynamicResource SecondaryText}" />
+    </Style>
+    <Style Selector="Expander.details:expanded /template/ ToggleButton#ExpanderHeader /template/ Path#DetailsChevron">
+      <Setter Property="RenderTransform" Value="rotate(180deg)" />
+    </Style>
+    <Style Selector="Expander.details /template/ ToggleButton#ExpanderHeader:pointerover /template/ Border#ToggleButtonBackground">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="Expander.details /template/ Border#ExpanderContent">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="0" />
+    </Style>
+  </UserControl.Styles>
+
+  <Border Padding="20,22,20,32">
+    <StackPanel Spacing="0">
+      <!-- Single -->
+      <StackPanel IsVisible="{Binding Mode, Converter={x:Static insp:EnumEqualsConverter.Instance}, ConverterParameter=Single}">
+        <TextBox Text="{Binding Title}"
+                 FontSize="{DynamicResource FontSizeHeading}"
+                 FontWeight="SemiBold"
+                 Background="{DynamicResource SurfaceBackground}"
+                 BorderThickness="0"
+                 Foreground="{DynamicResource PrimaryText}"
+                 Padding="0,6" />
+        <TextBlock Text="{Binding ChapterLabel}" FontSize="{DynamicResource FontSizeSmall}"
+                   Foreground="{DynamicResource MutedText}" Margin="0,2,0,0" />
+
+        <!-- Kim konusuyor? -->
+        <StackPanel Margin="0,24,0,0">
+          <Border Classes="separator" Height="1" Margin="0,0,0,24" />
+          <TextBlock Text="{l:T Inspector.Scene.SpeakerQuestion}"
+                     FontSize="{DynamicResource FontSizeBodyLarge}"
+                     Foreground="{DynamicResource SecondaryText}"
+                     FontWeight="Medium"
+                     Margin="0,0,0,12" />
+          <StackPanel IsVisible="{Binding !HasDialogue}"
+                      Orientation="Horizontal"
+                      Spacing="8">
+            <TextBlock Text="{l:T Inspector.Scene.NoDialogue}"
+                       FontSize="{DynamicResource FontSizeBody}"
+                       Foreground="{DynamicResource MutedText}"
+                       VerticalAlignment="Center" />
+            <Button Classes="text"
+                    Content="{l:T Inspector.Scene.Add}"
+                    Command="{Binding AddSectionCommand}"
+                    CommandParameter="dialogue" />
+          </StackPanel>
+          <StackPanel IsVisible="{Binding HasDialogue}" Spacing="0">
+            <StackPanel Orientation="Horizontal" Spacing="12">
+              <Grid Width="48" Height="48">
+                <Ellipse Width="48" Height="48" Fill="{DynamicResource SurfaceBackground}" />
+                <Image Width="48" Height="48"
+                       Source="{Binding Portrait}"
+                       Stretch="UniformToFill"
+                       IsVisible="{Binding !!Portrait}">
+                  <Image.Clip>
+                    <EllipseGeometry Center="24,24" RadiusX="24" RadiusY="24" />
+                  </Image.Clip>
+                </Image>
+              </Grid>
+              <TextBox Text="{Binding SpeakerName}"
+                       FontSize="{DynamicResource FontSizeBodyLarge}"
+                       FontWeight="SemiBold"
+                       Background="{DynamicResource SurfaceBackground}"
+                       BorderThickness="0"
+                       Foreground="{DynamicResource PrimaryText}"
+                       VerticalAlignment="Center"
+                       MinWidth="160" />
+            </StackPanel>
+            <StackPanel IsVisible="{Binding !HasCharacter}"
+                        Orientation="Horizontal"
+                        Spacing="8"
+                        Margin="0,14,0,0">
+              <TextBlock Text="{l:T Inspector.Scene.NoCharacter}"
+                         FontSize="{DynamicResource FontSizeBody}"
+                         Foreground="{DynamicResource MutedText}"
+                         VerticalAlignment="Center" />
+              <Button Classes="text"
+                      Content="{l:T Inspector.Scene.Add}"
+                      Command="{Binding AddSectionCommand}"
+                      CommandParameter="character" />
+            </StackPanel>
+            <StackPanel IsVisible="{Binding HasCharacter}" Margin="0,14,0,0" Spacing="0">
+              <TextBlock Text="{l:T Inspector.Scene.Feeling}" IsVisible="{Binding HasExpressions}"
+                         FontSize="{DynamicResource FontSizeSmall}"
+                         Foreground="{DynamicResource MutedText}"
+                         Margin="0,0,0,8" />
+              <ListBox Classes="chip-list" AutoScrollToSelectedItem="False" IsVisible="{Binding HasExpressions}"
+                       ItemsSource="{Binding Expressions}"
+                       SelectedItem="{Binding SelectedExpression, Mode=TwoWay}">
+                <ListBox.ItemsPanel>
+                  <ItemsPanelTemplate>
+                    <WrapPanel Orientation="Horizontal" />
+                  </ItemsPanelTemplate>
+                </ListBox.ItemsPanel>
+                <ListBox.ItemContainerTheme>
+                  <ControlTheme TargetType="ListBoxItem" x:DataType="vm:InspectorSceneViewModel">
+                    <Setter Property="Background" Value="{DynamicResource SurfaceBackground}" />
+                    <Setter Property="BorderBrush" Value="{DynamicResource SurfaceBackground}" />
+                    <Setter Property="BorderThickness" Value="0" />
+                    <Setter Property="Padding" Value="0" />
+                    <Setter Property="Margin" Value="0,0,8,8" />
+                  </ControlTheme>
+                </ListBox.ItemContainerTheme>
+                <ListBox.ItemTemplate>
+                  <DataTemplate x:DataType="x:String">
+                    <Border Classes="chip-border">
+                      <TextBlock Text="{Binding}"
+                                 FontSize="{DynamicResource FontSizeBody}"
+                                 Foreground="{DynamicResource SecondaryText}" />
+                    </Border>
+                  </DataTemplate>
+                </ListBox.ItemTemplate>
+              </ListBox>
+              <TextBlock Text="{l:T Inspector.Scene.Placement}"
+                         FontSize="{DynamicResource FontSizeSmall}"
+                         Foreground="{DynamicResource MutedText}"
+                         Margin="0,14,0,8" />
+              <Border Classes="segment-wrap">
+                <Grid ColumnDefinitions="*,*,*">
+                  <RadioButton Classes="segment" Grid.Column="0"
+                               GroupName="Placement"
+                               Content="{l:T Inspector.Scene.PlacementLeft}"
+                               IsChecked="{Binding Placement, Converter={x:Static insp:EnumEqualsConverter.Instance}, ConverterParameter=Left}" />
+                  <RadioButton Classes="segment" Grid.Column="1"
+                               GroupName="Placement"
+                               Content="{l:T Inspector.Scene.PlacementCenter}"
+                               IsChecked="{Binding Placement, Converter={x:Static insp:EnumEqualsConverter.Instance}, ConverterParameter=Center}" />
+                  <RadioButton Classes="segment" Grid.Column="2"
+                               GroupName="Placement"
+                               Content="{l:T Inspector.Scene.PlacementRight}"
+                               IsChecked="{Binding Placement, Converter={x:Static insp:EnumEqualsConverter.Instance}, ConverterParameter=Right}" />
+                </Grid>
+              </Border>
+            </StackPanel>
+            <Expander Classes="details" Header="{l:T Inspector.Scene.Details}"
+                      IsExpanded="False"
+                      FontSize="{DynamicResource FontSizeBody}"
+                      Foreground="{DynamicResource SecondaryText}"
+                      Background="{DynamicResource SurfaceBackground}"
+                      BorderBrush="{DynamicResource BorderSubtle}"
+                      Margin="0,12,0,0">
+              <StackPanel>
+              <ContentControl Content="{Binding Dialogue}">
+                <ContentControl.ContentTemplate>
+                  <views:ComponentTemplateSelector />
+                </ContentControl.ContentTemplate>
+              </ContentControl>
+              <!-- Konuşan ile karakter tek "Ayrıntılar" altında (taslakta tek). -->
+              <ContentControl Content="{Binding Character}" Margin="0,8,0,0">
+                <ContentControl.ContentTemplate>
+                  <views:ComponentTemplateSelector />
+                </ContentControl.ContentTemplate>
+              </ContentControl>
+              </StackPanel>
+            </Expander>
+          </StackPanel>
+        </StackPanel>
+
+        <!-- Ne diyor? -->
+        <StackPanel Margin="0,24,0,0">
+          <Border Classes="separator" Height="1" Margin="0,0,0,24" />
+          <TextBlock Text="{l:T Inspector.Scene.LineQuestion}"
+                     FontSize="{DynamicResource FontSizeBodyLarge}"
+                     Foreground="{DynamicResource SecondaryText}"
+                     FontWeight="Medium"
+                     Margin="0,0,0,12" />
+          <TextBox Text="{Binding Line}"
+                   AcceptsReturn="True"
+                   TextWrapping="Wrap"
+                   MinHeight="72"
+                   FontSize="{DynamicResource FontSizeTitle}"
+                   LineHeight="22"
+                   Background="{DynamicResource InputBackground}"
+                   BorderBrush="{DynamicResource BorderColor}"
+                   BorderThickness="1"
+                   CornerRadius="{DynamicResource RadiusMedium}"
+                   Foreground="{DynamicResource PrimaryText}"
+                   Padding="14" />
+          <TextBlock Text="{l:T Inspector.Scene.PaceLabel}"
+                     FontSize="{DynamicResource FontSizeSmall}"
+                     Foreground="{DynamicResource MutedText}"
+                     Margin="0,14,0,8" />
+          <Border Classes="segment-wrap">
+            <Grid ColumnDefinitions="*,*,*,*">
+              <RadioButton Classes="segment" Grid.Column="0"
+                           GroupName="Pace"
+                           Content="{l:T Inspector.Scene.PaceSlow}"
+                           IsChecked="{Binding Pace, Converter={x:Static insp:EnumEqualsConverter.Instance}, ConverterParameter=Slow}" />
+              <RadioButton Classes="segment" Grid.Column="1"
+                           GroupName="Pace"
+                           Content="{l:T Inspector.Scene.PaceNormal}"
+                           IsChecked="{Binding Pace, Converter={x:Static insp:EnumEqualsConverter.Instance}, ConverterParameter=Normal}" />
+              <RadioButton Classes="segment" Grid.Column="2"
+                           GroupName="Pace"
+                           Content="{l:T Inspector.Scene.PaceFast}"
+                           IsChecked="{Binding Pace, Converter={x:Static insp:EnumEqualsConverter.Instance}, ConverterParameter=Fast}" />
+              <RadioButton Classes="segment" Grid.Column="3"
+                           GroupName="Pace"
+                           Content="{l:T Inspector.Scene.PaceInstant}"
+                           IsChecked="{Binding Pace, Converter={x:Static insp:EnumEqualsConverter.Instance}, ConverterParameter=Instant}" />
+            </Grid>
+          </Border>
+          <CheckBox Content="{l:T Inspector.Scene.AutoAdvance}"
+                    IsChecked="{Binding AutoAdvance}"
+                    FontSize="{DynamicResource FontSizeBody}"
+                    Foreground="{DynamicResource PrimaryText}"
+                    Margin="0,12,0,0" />
+        </StackPanel>
+
+        <!-- Sahne nasil gorunuyor? -->
+        <StackPanel Margin="0,24,0,0">
+          <Border Classes="separator" Height="1" Margin="0,0,0,24" />
+          <TextBlock Text="{l:T Inspector.Scene.VisualQuestion}"
+                     FontSize="{DynamicResource FontSizeBodyLarge}"
+                     Foreground="{DynamicResource SecondaryText}"
+                     FontWeight="Medium"
+                     Margin="0,0,0,12" />
+          <StackPanel IsVisible="{Binding !HasBackground}"
+                      Orientation="Horizontal"
+                      Spacing="8">
+            <TextBlock Text="{l:T Inspector.Scene.NoBackground}"
+                       FontSize="{DynamicResource FontSizeBody}"
+                       Foreground="{DynamicResource MutedText}"
+                       VerticalAlignment="Center" />
+            <Button Classes="text"
+                    Content="{l:T Inspector.Scene.Add}"
+                    Command="{Binding AddSectionCommand}"
+                    CommandParameter="background" />
+          </StackPanel>
+          <StackPanel IsVisible="{Binding HasBackground}" Spacing="0">
+            <Border Classes="thumb"
+                    Height="180"
+                    ClipToBounds="True">
+              <Grid>
+                <Image Source="{Binding BackgroundImage}" Stretch="UniformToFill" />
+                <Border Classes="tag-chip"
+                        HorizontalAlignment="Left"
+                        VerticalAlignment="Bottom"
+                        Margin="10">
+                  <TextBlock Text="{Binding BackgroundLabel}"
+                             FontSize="{DynamicResource FontSizeSmall}"
+                             Foreground="{DynamicResource SecondaryText}" />
+                </Border>
+              </Grid>
+            </Border>
+            <TextBlock Text="{l:T Inspector.Scene.FitLabel}"
+                       FontSize="{DynamicResource FontSizeSmall}"
+                       Foreground="{DynamicResource MutedText}"
+                       Margin="0,14,0,8" />
+            <Border Classes="segment-wrap">
+              <Grid ColumnDefinitions="*,*">
+                <RadioButton Classes="segment" Grid.Column="0"
+                             GroupName="Fit"
+                             Content="{l:T Inspector.Scene.FitFill}"
+                             IsChecked="{Binding Fit, Converter={x:Static insp:EnumEqualsConverter.Instance}, ConverterParameter=Fill}" />
+                <RadioButton Classes="segment" Grid.Column="1"
+                             GroupName="Fit"
+                             Content="{l:T Inspector.Scene.FitFit}"
+                             IsChecked="{Binding Fit, Converter={x:Static insp:EnumEqualsConverter.Instance}, ConverterParameter=Fit}" />
+              </Grid>
+            </Border>
+            <TextBlock Text="{l:T Inspector.Scene.VisibilityLabel}"
+                       FontSize="{DynamicResource FontSizeSmall}"
+                       Foreground="{DynamicResource MutedText}"
+                       Margin="0,14,0,8" />
+            <Slider Minimum="0" Maximum="1" Value="{Binding BackgroundVisibility}" />
+            <Grid ColumnDefinitions="*,*">
+              <TextBlock Grid.Column="0"
+                         Text="{l:T Inspector.Scene.Faint}"
+                         FontSize="{DynamicResource FontSizeSmall}"
+                         Foreground="{DynamicResource DimText}"
+                         HorizontalAlignment="Left" />
+              <TextBlock Grid.Column="1"
+                         Text="{l:T Inspector.Scene.Full}"
+                         FontSize="{DynamicResource FontSizeSmall}"
+                         Foreground="{DynamicResource DimText}"
+                         HorizontalAlignment="Right" />
+            </Grid>
+            <TextBlock Text="{l:T Inspector.Scene.VisualHint}"
+                       FontSize="{DynamicResource FontSizeSmall}"
+                       Foreground="{DynamicResource DimText}"
+                       TextWrapping="Wrap"
+                       Margin="0,12,0,0" />
+            <Expander Classes="details" Header="{l:T Inspector.Scene.Details}"
+                      IsExpanded="False"
+                      FontSize="{DynamicResource FontSizeBody}"
+                      Foreground="{DynamicResource SecondaryText}"
+                      Background="{DynamicResource SurfaceBackground}"
+                      BorderBrush="{DynamicResource BorderSubtle}"
+                      Margin="0,12,0,0">
+              <ContentControl Content="{Binding Background}">
+                <ContentControl.ContentTemplate>
+                  <views:ComponentTemplateSelector />
+                </ContentControl.ContentTemplate>
+              </ContentControl>
+            </Expander>
+          </StackPanel>
+        </StackPanel>
+
+        <!-- Oyuncunun secimleri -->
+        <StackPanel Margin="0,24,0,0">
+          <Border Classes="separator" Height="1" Margin="0,0,0,24" />
+          <TextBlock Text="{l:T Inspector.Scene.ChoiceQuestion}"
+                     FontSize="{DynamicResource FontSizeBodyLarge}"
+                     Foreground="{DynamicResource SecondaryText}"
+                     FontWeight="Medium"
+                     Margin="0,0,0,12" />
+          <StackPanel IsVisible="{Binding !HasChoice}"
+                      Orientation="Horizontal"
+                      Spacing="8">
+            <TextBlock Text="{l:T Inspector.Scene.NoChoice}"
+                       FontSize="{DynamicResource FontSizeBody}"
+                       Foreground="{DynamicResource MutedText}"
+                       VerticalAlignment="Center" />
+            <Button Classes="text"
+                    Content="{l:T Inspector.Scene.Add}"
+                    Command="{Binding AddSectionCommand}"
+                    CommandParameter="choice" />
+          </StackPanel>
+          <StackPanel IsVisible="{Binding HasChoice}" Spacing="0">
+            <ItemsControl ItemsSource="{Binding ChoiceRows}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:ChoiceRowViewModel">
+                  <StackPanel Spacing="0" Margin="0,0,0,4">
+                    <Grid ColumnDefinitions="*,Auto">
+                      <TextBox Grid.Column="0"
+                               Text="{Binding Text}"
+                               FontSize="{DynamicResource FontSizeBody}"
+                               Background="{DynamicResource SurfaceBackground}"
+                               BorderThickness="0"
+                               Foreground="{DynamicResource PrimaryText}"
+                               VerticalAlignment="Center" />
+                      <Button Grid.Column="1"
+                              Classes="text"
+                              Command="{Binding GoToTargetCommand}"
+                              IsVisible="{Binding HasTarget}">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                          <TextBlock Text="→"
+                                     FontSize="{DynamicResource FontSizeBody}"
+                                     Foreground="{DynamicResource MutedText}"
+                                     VerticalAlignment="Center" />
+                          <TextBlock Text="{Binding TargetTitle}"
+                                     FontSize="{DynamicResource FontSizeBody}"
+                                     Foreground="{DynamicResource MutedText}"
+                                     VerticalAlignment="Center" />
+                        </StackPanel>
+                      </Button>
+                    </Grid>
+                    <StackPanel IsVisible="{Binding IsTargetMissing}"
+                                Orientation="Horizontal"
+                                Spacing="7"
+                                Margin="6,6,0,0">
+                      <Ellipse Width="6" Height="6"
+                               Fill="{DynamicResource ErrorBrush}"
+                               VerticalAlignment="Center" />
+                      <TextBlock Text="{l:T Inspector.Scene.TargetMissing}"
+                                 FontSize="{DynamicResource FontSizeSmall}"
+                                 Foreground="{DynamicResource ErrorBrush}"
+                                 TextWrapping="Wrap"
+                                 VerticalAlignment="Center" />
+                    </StackPanel>
+                  </StackPanel>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <Button Classes="text"
+                    Content="{l:T Inspector.Scene.AddChoice}"
+                    Command="{Binding AddChoiceCommand}"
+                    HorizontalAlignment="Left"
+                    Margin="0,8,0,0" />
+            <Expander Classes="details" Header="{l:T Inspector.Scene.Details}"
+                      IsExpanded="False"
+                      FontSize="{DynamicResource FontSizeBody}"
+                      Foreground="{DynamicResource SecondaryText}"
+                      Background="{DynamicResource SurfaceBackground}"
+                      BorderBrush="{DynamicResource BorderSubtle}"
+                      Margin="0,12,0,0">
+              <ContentControl Content="{Binding Choice}">
+                <ContentControl.ContentTemplate>
+                  <views:ComponentTemplateSelector />
+                </ContentControl.ContentTemplate>
+              </ContentControl>
+            </Expander>
+          </StackPanel>
+        </StackPanel>
+
+        <!-- Ses nasil? -->
+        <StackPanel Margin="0,24,0,0">
+          <Border Classes="separator" Height="1" Margin="0,0,0,24" />
+          <TextBlock Text="{l:T Inspector.Scene.AudioQuestion}"
+                     FontSize="{DynamicResource FontSizeBodyLarge}"
+                     Foreground="{DynamicResource SecondaryText}"
+                     FontWeight="Medium"
+                     Margin="0,0,0,12" />
+          <StackPanel IsVisible="{Binding !HasAudio}"
+                      Orientation="Horizontal"
+                      Spacing="8">
+            <TextBlock Text="{l:T Inspector.Scene.NoAudio}"
+                       FontSize="{DynamicResource FontSizeBody}"
+                       Foreground="{DynamicResource MutedText}"
+                       VerticalAlignment="Center" />
+            <Button Classes="text"
+                    Content="{l:T Inspector.Scene.Add}"
+                    Command="{Binding AddSectionCommand}"
+                    CommandParameter="audio" />
+          </StackPanel>
+          <StackPanel IsVisible="{Binding HasAudio}" Spacing="0">
+            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+              <Border Grid.Column="0"
+                      Width="32" Height="32"
+                      Background="{DynamicResource InputBackground}"
+                      BorderBrush="{DynamicResource InputBackground}"
+                      BorderThickness="1"
+                      CornerRadius="{DynamicResource RadiusSmall}">
+                <TextBlock Text="♪"
+                           FontSize="{DynamicResource FontSizeBodyLarge}"
+                           Foreground="{DynamicResource MutedText}"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center" />
+              </Border>
+              <TextBlock Grid.Column="1"
+                         Text="{Binding MusicLabel}"
+                         IsVisible="{Binding HasMusic}"
+                         FontSize="{DynamicResource FontSizeBody}"
+                         Foreground="{DynamicResource PrimaryText}"
+                         VerticalAlignment="Center"
+                         TextTrimming="CharacterEllipsis" />
+              <TextBlock Grid.Column="1"
+                         Text="{l:T Inspector.Scene.NoMusic}"
+                         IsVisible="{Binding !HasMusic}"
+                         FontSize="{DynamicResource FontSizeBody}"
+                         Foreground="{DynamicResource MutedText}"
+                         VerticalAlignment="Center" />
+              <Button Grid.Column="2"
+                      Classes="text"
+                      Command="{Binding ToggleMusicPreviewCommand}">
+                <Grid>
+                  <TextBlock Text="{l:T Inspector.Scene.Listen}"
+                             FontSize="{DynamicResource FontSizeBody}"
+                             Foreground="{DynamicResource PrimaryText}"
+                             IsVisible="{Binding !IsMusicPlaying}" />
+                  <TextBlock Text="{l:T Inspector.Scene.Stop}"
+                             FontSize="{DynamicResource FontSizeBody}"
+                             Foreground="{DynamicResource PrimaryText}"
+                             IsVisible="{Binding IsMusicPlaying}" />
+                </Grid>
+              </Button>
+            </Grid>
+            <TextBlock Text="{Binding EffectLabel}"
+                       IsVisible="{Binding HasEffect}"
+                       FontSize="{DynamicResource FontSizeBody}"
+                       Foreground="{DynamicResource PrimaryText}"
+                       Margin="0,10,0,0" />
+            <TextBlock Text="{l:T Inspector.Scene.NoEffect}"
+                       IsVisible="{Binding !HasEffect}"
+                       FontSize="{DynamicResource FontSizeBody}"
+                       Foreground="{DynamicResource MutedText}"
+                       Margin="0,10,0,0" />
+            <TextBlock Text="{l:T Inspector.Scene.VolumeLabel}"
+                       FontSize="{DynamicResource FontSizeSmall}"
+                       Foreground="{DynamicResource MutedText}"
+                       Margin="0,14,0,8" />
+            <Slider Minimum="0" Maximum="1" Value="{Binding Volume}" />
+            <Expander Classes="details" Header="{l:T Inspector.Scene.Details}"
+                      IsExpanded="False"
+                      FontSize="{DynamicResource FontSizeBody}"
+                      Foreground="{DynamicResource SecondaryText}"
+                      Background="{DynamicResource SurfaceBackground}"
+                      BorderBrush="{DynamicResource BorderSubtle}"
+                      Margin="0,12,0,0">
+              <ContentControl Content="{Binding Audio}">
+                <ContentControl.ContentTemplate>
+                  <views:ComponentTemplateSelector />
+                </ContentControl.ContentTemplate>
+              </ContentControl>
+            </Expander>
+          </StackPanel>
+        </StackPanel>
+
+        <!-- Gecis ve kamera -->
+        <StackPanel Margin="0,24,0,0">
+          <Border Classes="separator" Height="1" Margin="0,0,0,24" />
+          <TextBlock Text="{l:T Inspector.Scene.TransitionQuestion}"
+                     FontSize="{DynamicResource FontSizeBodyLarge}"
+                     Foreground="{DynamicResource SecondaryText}"
+                     FontWeight="Medium"
+                     Margin="0,0,0,12" />
+          <StackPanel IsVisible="{Binding !HasTransition}"
+                      Orientation="Horizontal"
+                      Spacing="8">
+            <TextBlock Text="{l:T Inspector.Scene.NoTransition}"
+                       FontSize="{DynamicResource FontSizeBody}"
+                       Foreground="{DynamicResource MutedText}"
+                       VerticalAlignment="Center" />
+            <Button Classes="text"
+                    Content="{l:T Inspector.Scene.Add}"
+                    Command="{Binding AddSectionCommand}"
+                    CommandParameter="transition" />
+          </StackPanel>
+          <StackPanel IsVisible="{Binding HasTransition}" Spacing="0">
+            <ListBox Classes="trans-list" AutoScrollToSelectedItem="False"
+                     ItemsSource="{Binding TransitionChoices}"
+                     SelectedValue="{Binding TransitionKind, Mode=TwoWay}"
+                     SelectedValueBinding="{Binding Kind}">
+              <ListBox.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <WrapPanel Orientation="Horizontal" />
+                </ItemsPanelTemplate>
+              </ListBox.ItemsPanel>
+              <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:TransitionChoice">
+                  <Border Classes="trans-card" Width="96">
+                    <StackPanel Spacing="7">
+                      <Border Height="38"
+                              Background="{DynamicResource PanelBackground}"
+                              BorderBrush="{DynamicResource BorderSubtle}"
+                              BorderThickness="1"
+                              CornerRadius="{DynamicResource RadiusSmall}"
+                              ClipToBounds="True">
+                        <Border Height="8"
+                                Background="{DynamicResource BorderSubtle}"
+                                CornerRadius="{DynamicResource RadiusSmall}"
+                                Margin="10,15,10,0"
+                                VerticalAlignment="Top" />
+                      </Border>
+                      <TextBlock Text="{Binding Label}"
+                                 FontSize="{DynamicResource FontSizeSmall}"
+                                 Foreground="{DynamicResource SecondaryText}"
+                                 HorizontalAlignment="Center"
+                                 TextWrapping="Wrap" />
+                    </StackPanel>
+                  </Border>
+                </DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
+            <TextBlock Text="{l:T Inspector.Scene.DurationLabel}"
+                       FontSize="{DynamicResource FontSizeSmall}"
+                       Foreground="{DynamicResource MutedText}"
+                       Margin="0,14,0,8" />
+            <Border Classes="segment-wrap">
+              <Grid ColumnDefinitions="*,*,*">
+                <RadioButton Classes="segment" Grid.Column="0"
+                             GroupName="Length"
+                             Content="{l:T Inspector.Scene.DurationShort}"
+                             IsChecked="{Binding Length, Converter={x:Static insp:EnumEqualsConverter.Instance}, ConverterParameter=Short}" />
+                <RadioButton Classes="segment" Grid.Column="1"
+                             GroupName="Length"
+                             Content="{l:T Inspector.Scene.DurationMedium}"
+                             IsChecked="{Binding Length, Converter={x:Static insp:EnumEqualsConverter.Instance}, ConverterParameter=Medium}" />
+                <RadioButton Classes="segment" Grid.Column="2"
+                             GroupName="Length"
+                             Content="{l:T Inspector.Scene.DurationLong}"
+                             IsChecked="{Binding Length, Converter={x:Static insp:EnumEqualsConverter.Instance}, ConverterParameter=Long}" />
+              </Grid>
+            </Border>
+            <Expander Classes="details" Header="{l:T Inspector.Scene.Details}"
+                      IsExpanded="False"
+                      FontSize="{DynamicResource FontSizeBody}"
+                      Foreground="{DynamicResource SecondaryText}"
+                      Background="{DynamicResource SurfaceBackground}"
+                      BorderBrush="{DynamicResource BorderSubtle}"
+                      Margin="0,12,0,0">
+              <ContentControl Content="{Binding Transition}">
+                <ContentControl.ContentTemplate>
+                  <views:ComponentTemplateSelector />
+                </ContentControl.ContentTemplate>
+              </ContentControl>
+            </Expander>
+          </StackPanel>
+          <StackPanel IsVisible="{Binding !HasCamera}"
+                      Orientation="Horizontal"
+                      Spacing="8"
+                      Margin="0,14,0,0">
+            <TextBlock Text="{l:T Inspector.Scene.NoCamera}"
+                       FontSize="{DynamicResource FontSizeBody}"
+                       Foreground="{DynamicResource MutedText}"
+                       VerticalAlignment="Center" />
+            <Button Classes="text"
+                    Content="{l:T Inspector.Scene.Add}"
+                    Command="{Binding AddSectionCommand}"
+                    CommandParameter="camera" />
+          </StackPanel>
+          <StackPanel IsVisible="{Binding HasCamera}" Margin="0,14,0,0" Spacing="0">
+            <TextBlock Text="{l:T Inspector.Scene.CameraLabel}"
+                       FontSize="{DynamicResource FontSizeSmall}"
+                       Foreground="{DynamicResource MutedText}"
+                       Margin="0,0,0,8" />
+            <Border Classes="segment-wrap">
+              <Grid ColumnDefinitions="*,*,*">
+                <RadioButton Classes="segment" Grid.Column="0"
+                             GroupName="CameraMove"
+                             Content="{l:T Inspector.Scene.CameraStill}"
+                             IsChecked="{Binding CameraMove, Converter={x:Static insp:EnumEqualsConverter.Instance}, ConverterParameter=Still}" />
+                <RadioButton Classes="segment" Grid.Column="1"
+                             GroupName="CameraMove"
+                             Content="{l:T Inspector.Scene.CameraIn}"
+                             IsChecked="{Binding CameraMove, Converter={x:Static insp:EnumEqualsConverter.Instance}, ConverterParameter=In}" />
+                <RadioButton Classes="segment" Grid.Column="2"
+                             GroupName="CameraMove"
+                             Content="{l:T Inspector.Scene.CameraOut}"
+                             IsChecked="{Binding CameraMove, Converter={x:Static insp:EnumEqualsConverter.Instance}, ConverterParameter=Out}" />
+              </Grid>
+            </Border>
+            <TextBlock Text="{l:T Inspector.Scene.ShakeLabel}"
+                       FontSize="{DynamicResource FontSizeSmall}"
+                       Foreground="{DynamicResource MutedText}"
+                       Margin="0,14,0,8" />
+            <Border Classes="segment-wrap">
+              <Grid ColumnDefinitions="*,*,*">
+                <RadioButton Classes="segment" Grid.Column="0"
+                             GroupName="CameraShake"
+                             Content="{l:T Inspector.Scene.ShakeNone}"
+                             IsChecked="{Binding CameraShake, Converter={x:Static insp:EnumEqualsConverter.Instance}, ConverterParameter=None}" />
+                <RadioButton Classes="segment" Grid.Column="1"
+                             GroupName="CameraShake"
+                             Content="{l:T Inspector.Scene.ShakeLight}"
+                             IsChecked="{Binding CameraShake, Converter={x:Static insp:EnumEqualsConverter.Instance}, ConverterParameter=Light}" />
+                <RadioButton Classes="segment" Grid.Column="2"
+                             GroupName="CameraShake"
+                             Content="{l:T Inspector.Scene.ShakeStrong}"
+                             IsChecked="{Binding CameraShake, Converter={x:Static insp:EnumEqualsConverter.Instance}, ConverterParameter=Strong}" />
+              </Grid>
+            </Border>
+            <Expander Classes="details" Header="{l:T Inspector.Scene.Details}"
+                      IsExpanded="False"
+                      FontSize="{DynamicResource FontSizeBody}"
+                      Foreground="{DynamicResource SecondaryText}"
+                      Background="{DynamicResource SurfaceBackground}"
+                      BorderBrush="{DynamicResource BorderSubtle}"
+                      Margin="0,12,0,0">
+              <ContentControl Content="{Binding Camera}">
+                <ContentControl.ContentTemplate>
+                  <views:ComponentTemplateSelector />
+                </ContentControl.ContentTemplate>
+              </ContentControl>
+            </Expander>
+          </StackPanel>
+        </StackPanel>
+      </StackPanel>
+
+      <!-- Empty -->
+      <StackPanel IsVisible="{Binding Mode, Converter={x:Static insp:EnumEqualsConverter.Instance}, ConverterParameter=Empty}">
+        <TextBlock Text="{l:T Inspector.Scene.Empty.Heading}"
+                   FontSize="{DynamicResource FontSizeHeading}" FontWeight="SemiBold"
+                   Foreground="{DynamicResource PrimaryText}"
+                   TextWrapping="Wrap"
+                   Margin="0,0,0,6" />
+        <ItemsControl ItemsSource="{Binding ChapterSummaries}" Margin="0,12,0,0">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:ChapterSummary">
+              <Border BorderBrush="{DynamicResource BorderSubtle}"
+                      BorderThickness="0,0,0,1"
+                      Padding="6,12">
+                <Grid ColumnDefinitions="*,Auto">
+                  <TextBlock Grid.Column="0"
+                             Text="{Binding Title}"
+                             FontSize="{DynamicResource FontSizeBody}"
+                             Foreground="{DynamicResource PrimaryText}"
+                             VerticalAlignment="Center" />
+                  <StackPanel Grid.Column="1"
+                              Orientation="Horizontal"
+                              Spacing="4">
+                    <TextBlock Text="{Binding Count}"
+                               FontSize="{DynamicResource FontSizeSmall}"
+                               Foreground="{DynamicResource MutedText}"
+                               VerticalAlignment="Center" />
+                    <TextBlock Text="{l:T Inspector.Scene.SceneWord}"
+                               FontSize="{DynamicResource FontSizeSmall}"
+                               Foreground="{DynamicResource MutedText}"
+                               VerticalAlignment="Center" />
+                  </StackPanel>
+                </Grid>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <StackPanel Spacing="10" Margin="0,18,0,0">
+          <Button Classes="primary"
+                  Command="{Binding ContinueCommand}"
+                  IsVisible="{Binding !!LastEdited}">
+            <StackPanel Orientation="Horizontal" Spacing="4">
+              <TextBlock Text="{l:T Inspector.Scene.ContinuePrefix}"
+                         FontSize="{DynamicResource FontSizeBody}"
+                         Foreground="{DynamicResource OnAccentForeground}"
+                         VerticalAlignment="Center" />
+              <TextBlock Text="{Binding LastEdited.Title}"
+                         FontSize="{DynamicResource FontSizeBody}"
+                         Foreground="{DynamicResource OnAccentForeground}"
+                         VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+          <Button Classes="text"
+                  Content="{l:T Inspector.Scene.NewScene}"
+                  Command="{Binding NewSceneCommand}"
+                  HorizontalAlignment="Stretch"
+                  HorizontalContentAlignment="Center" />
+        </StackPanel>
+        <TextBlock Text="{l:T Inspector.Scene.EmptyHint}"
+                   FontSize="{DynamicResource FontSizeSmall}"
+                   Foreground="{DynamicResource DimText}"
+                   HorizontalAlignment="Center"
+                   TextWrapping="Wrap"
+                   Margin="0,22,0,0" />
+      </StackPanel>
+
+      <!-- Multi -->
+      <StackPanel IsVisible="{Binding Mode, Converter={x:Static insp:EnumEqualsConverter.Instance}, ConverterParameter=Multi}">
+        <StackPanel Orientation="Horizontal" Spacing="6">
+          <TextBlock Text="{Binding SelectedCount}"
+                     FontSize="{DynamicResource FontSizeHeading}"
+                     Foreground="{DynamicResource PrimaryText}"
+                     FontWeight="SemiBold"
+                     VerticalAlignment="Center" />
+          <TextBlock Text="{l:T Inspector.Scene.MultiSuffix}"
+                     FontSize="{DynamicResource FontSizeHeading}"
+                     Foreground="{DynamicResource PrimaryText}"
+                     FontWeight="SemiBold"
+                     VerticalAlignment="Center" />
+        </StackPanel>
+        <TextBlock Text="{Binding SelectionSummary}"
+                   FontSize="{DynamicResource FontSizeBody}"
+                   Foreground="{DynamicResource MutedText}"
+                   TextWrapping="Wrap"
+                   Margin="0,8,0,0" />
+        <!-- Toplu alanlar: kendi tek geri alma adımını yazar (kaydedici dışı). -->
+        <StackPanel x:Name="MultiBulkFields" Classes="self-undo" Spacing="0" Margin="0,20,0,0">
+          <TextBlock Text="{l:T Inspector.Scene.MultiChapterLabel}"
+                     FontSize="{DynamicResource FontSizeSmall}"
+                     Foreground="{DynamicResource MutedText}"
+                     Margin="0,0,0,8" />
+          <ComboBox x:Name="MultiChapterBox"
+                    ItemsSource="{Binding ChapterChoices}"
+                    SelectedItem="{Binding MultiChapterChoice, Mode=TwoWay}"
+                    PlaceholderText="{l:T Inspector.Scene.MultiMixed}"
+                    HorizontalAlignment="Stretch">
+            <ComboBox.ItemTemplate>
+              <DataTemplate x:DataType="vm:ChapterChoice">
+                <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" />
+              </DataTemplate>
+            </ComboBox.ItemTemplate>
+          </ComboBox>
+          <TextBlock Text="{l:T Inspector.Scene.MultiColorLabel}"
+                     FontSize="{DynamicResource FontSizeSmall}"
+                     Foreground="{DynamicResource MutedText}"
+                     Margin="0,14,0,8" />
+          <ComboBox x:Name="MultiColorBox"
+                    ItemsSource="{Binding ColorTagChoices}"
+                    SelectedItem="{Binding MultiColorTagChoice, Mode=TwoWay}"
+                    PlaceholderText="{l:T Inspector.Scene.MultiMixed}"
+                    HorizontalAlignment="Stretch">
+            <ComboBox.ItemTemplate>
+              <DataTemplate x:DataType="search:ColorTagOption">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <Ellipse Width="10" Height="10"
+                           Fill="{Binding Brush}"
+                           Stroke="{DynamicResource BorderSubtle}"
+                           StrokeThickness="1"
+                           VerticalAlignment="Center" />
+                  <TextBlock Text="{Binding Label}" VerticalAlignment="Center" />
+                </StackPanel>
+              </DataTemplate>
+            </ComboBox.ItemTemplate>
+          </ComboBox>
+          <StackPanel IsVisible="{Binding HasMultiTransition}" Margin="0,14,0,0">
+            <TextBlock Text="{l:T Inspector.Scene.MultiTransitionLabel}"
+                       FontSize="{DynamicResource FontSizeSmall}"
+                       Foreground="{DynamicResource MutedText}"
+                       Margin="0,0,0,8" />
+            <ListBox x:Name="MultiTransitionList" AutoScrollToSelectedItem="False"
+                     Classes="trans-list"
+                     ItemsSource="{Binding TransitionChoices}"
+                     SelectedValue="{Binding MultiTransitionKind, Mode=TwoWay}"
+                     SelectedValueBinding="{Binding Kind}">
+              <ListBox.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <WrapPanel Orientation="Horizontal" />
+                </ItemsPanelTemplate>
+              </ListBox.ItemsPanel>
+              <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:TransitionChoice">
+                  <Border Classes="trans-card" Width="96">
+                    <TextBlock Text="{Binding Label}"
+                               FontSize="{DynamicResource FontSizeSmall}"
+                               Foreground="{DynamicResource SecondaryText}"
+                               HorizontalAlignment="Center"
+                               TextWrapping="Wrap" />
+                  </Border>
+                </DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
+            <TextBlock Text="{Binding MultiTransitionHint}"
+                       FontSize="{DynamicResource FontSizeSmall}"
+                       Foreground="{DynamicResource DimText}"
+                       TextWrapping="Wrap"
+                       Margin="0,8,0,0" />
+          </StackPanel>
+          <StackPanel IsVisible="{Binding HasMultiAudio}" Margin="0,14,0,0">
+            <TextBlock Text="{l:T Inspector.Scene.MultiMusicLabel}"
+                       FontSize="{DynamicResource FontSizeSmall}"
+                       Foreground="{DynamicResource MutedText}"
+                       Margin="0,0,0,8" />
+            <ComboBox x:Name="MultiMusicBox"
+                      ItemsSource="{Binding MusicChoices}"
+                      SelectedItem="{Binding MultiMusicChoice, Mode=TwoWay}"
+                      PlaceholderText="{l:T Inspector.Scene.MultiMixed}"
+                      HorizontalAlignment="Stretch">
+              <ComboBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:MusicChoice">
+                  <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" />
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
+            <TextBlock Text="{Binding MultiMusicHint}"
+                       FontSize="{DynamicResource FontSizeSmall}"
+                       Foreground="{DynamicResource DimText}"
+                       TextWrapping="Wrap"
+                       Margin="0,8,0,0" />
+          </StackPanel>
+        </StackPanel>
+        <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,20,0,0">
+          <Button Classes="text"
+                  Content="{l:T Inspector.Scene.Duplicate}"
+                  Command="{Binding DuplicateSelectedCommand}" />
+          <Button Classes="danger-text"
+                  Content="{l:T Inspector.Scene.Delete}"
+                  Command="{Binding DeleteSelectedCommand}" />
+        </StackPanel>
+      </StackPanel>
+    </StackPanel>
+  </Border>
+</UserControl>

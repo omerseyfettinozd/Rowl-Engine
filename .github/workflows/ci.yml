@@ -439,7 +439,7 @@ jobs:
           ROWL_PERF_FLOOR: 'enforced'
           ROWL_CAMERA_FPS_FLOOR: 'report'
         run: |
-          ASAN_OPTIONS=halt_on_error=1:print_stacktrace=1:detect_leaks=0 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 ctest --test-dir build-sanitizer -R "rowl_native_tests|rowl_benchmark_tool_tests" --output-on-failure --timeout 1800
+          ASAN_OPTIONS=halt_on_error=1:print_stacktrace=1:detect_leaks=0 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 ctest --test-dir build-sanitizer -R "rowl_native_tests|rowl_native_soak_tests|rowl_benchmark_tool_tests" --output-on-failure --timeout 1800
 
   sanitizer-nightly:
     # Tam süit (soak/stres dahil), yalnızca schedule'da koşar (T0).
@@ -499,7 +499,7 @@ jobs:
         # görmez; yavaşlayan şey motorun C++ kodu olur.
         # Bellek/UB/boyut kilitleri enforce kalir (TSan isiyle ayni desen).
         run: |
-          ROWL_PERF_FLOOR=report ROWL_CAMERA_FPS_FLOOR=report ASAN_OPTIONS=halt_on_error=1:print_stacktrace=1:detect_leaks=0 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 ctest --test-dir build-sanitizer -R "rowl_native_tests|rowl_benchmark_tool_tests" --output-on-failure --timeout 1800
+          ROWL_PERF_FLOOR=report ROWL_CAMERA_FPS_FLOOR=report ASAN_OPTIONS=halt_on_error=1:print_stacktrace=1:detect_leaks=0 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 ctest --test-dir build-sanitizer -R "rowl_native_tests|rowl_native_soak_tests|rowl_benchmark_tool_tests" --output-on-failure --timeout 1800
 
   tsan-nightly:
     # K6 (B3b): ThreadSanitizer tam-süit, yalnızca schedule'da koşar.
@@ -556,7 +556,7 @@ jobs:
 
       - name: Test under TSan (full suite, perf floors report-only)
         run: |
-          ROWL_PERF_FLOOR=report ROWL_CAMERA_FPS_FLOOR=report TSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 ctest --test-dir build-tsan -R "rowl_native_tests|rowl_benchmark_tool_tests" --output-on-failure --timeout 1800
+          ROWL_PERF_FLOOR=report ROWL_CAMERA_FPS_FLOOR=report TSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 ctest --test-dir build-tsan -R "rowl_native_tests|rowl_native_soak_tests|rowl_benchmark_tool_tests" --output-on-failure --timeout 1800
 
   linux-arm64-compile:
     # Compile-only portability gate. It does not claim GUI, audio-device or

@@ -107,6 +107,32 @@ with tempfile.TemporaryDirectory() as directory:
     if sha256_of(first) != sha256_of(third):
         raise SystemExit("file mtimes changed the package bytes")
 
+    # D01a: the game identity carrier is deterministic, uncompressed, listed
+    # in the embedded manifest, and a user file may not shadow it.
+    gid = "0b6f1c2e-7d3a-4e58-9c41-2a8f5d6e7b90"
+    id_a, id_b = root / "id_a.rowlpkg", root / "id_b.rowlpkg"
+    for output in (id_a, id_b):
+        result = subprocess.run([sys.executable, str(PACKAGER), str(fixture), str(output),
+                                 "--game-id", gid.upper(), "--game-name", "Probe"],
+                                capture_output=True, text=True, check=False)
+        if result.returncode != 0:
+            raise SystemExit(f"packer failed with --game-id: {result.stderr}")
+    if sha256_of(id_a) != sha256_of(id_b):
+        raise SystemExit("game.json made the package non-deterministic")
+    id_manifest = read_manifest(id_a)
+    carrier = [r for r in id_manifest["files"] if r["path"] == "rowl/game.json"]
+    if not carrier:
+        raise SystemExit("game.json missing from the embedded manifest")
+    if "rowl/game.json" in [r["path"] for r in read_manifest(first)["files"]]:
+        raise SystemExit("game.json must be absent when no game id is given")
+    if carrier[0]["flags"] != 0:
+        raise SystemExit("game.json must be stored uncompressed")
+    shadow = root / "shadow"
+    write_fixture(shadow)
+    (shadow / "rowl").mkdir()
+    (shadow / "rowl" / "game.json").write_text("{}\n", encoding="utf-8")
+    require_rejection(shadow, "reserved for the game identity carrier")
+
     # The embedded manifest must describe exactly the packed files.
     manifest = read_manifest(first)
     if manifest.get("format") != 1:
@@ -125,7 +151,7 @@ with tempfile.TemporaryDirectory() as directory:
     # placed in a complete layout (notices file included).
     release = root / "release"
     (release / "Assets" / "packages").mkdir(parents=True)
-    (release / "Assets" / "packages" / "game.rowlpkg").write_bytes(first.read_bytes())
+    (release / "Assets" / "packages" / "game.rowlpkg").write_bytes(id_a.read_bytes())
     (release / "mods").mkdir()
     (release / "mods" / "README.md").write_text("# mods\n", encoding="utf-8")
     (release / "README.txt").write_text("release\n", encoding="utf-8")

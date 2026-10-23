@@ -103,8 +103,8 @@ public sealed class EditorPlaybackMasterVolumeCheckedTests
         int total = bridgeMethods.Count;
         int resultCode = bridgeMethods.Count(m => m.ReturnType == typeof(NativeBridge.ResultCode));
         int legacy = total - resultCode;
-        if (total != 218 || resultCode != 57 || legacy != 161)
-            throw new Exception($"D16: bridge census must be 218=57+161, got {total}={resultCode}+{legacy}");
+        if (total != 229 || resultCode != 67 || legacy != 162)
+            throw new Exception($"D16: bridge census must be 229=67+162, got {total}={resultCode}+{legacy}");
 
         var covered = typeof(NativeBridgeChecked)
             .GetMethods(BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public)

@@ -190,7 +190,13 @@ def main():
         (release / "mods").mkdir(parents=True)
 
         package = release / "Assets" / "packages" / "game.rowlpkg"
-        pack = run(sys.executable, PACKAGER, sample_dir / "Assets", package)
+        # D01a: use the sample's own project_uuid when it has one (the release
+        # also carries the loose manifest, so both must agree); otherwise a
+        # fixed probe id.
+        sample_uuid = json.loads((sample_dir / "project.rowlproj").read_text(encoding="utf-8")).get("project_uuid")
+        game_args = (["--game-manifest", sample_dir / "project.rowlproj"] if sample_uuid
+                     else ["--game-id", "7c1d9a3e-2b54-4f68-8e0a-5d3b1c9f2a64"])
+        pack = run(sys.executable, PACKAGER, sample_dir / "Assets", package, *game_args)
         if pack.returncode != 0:
             print(f"packager failed: {pack.stdout}{pack.stderr}", file=sys.stderr)
             return 1
@@ -237,9 +243,15 @@ def main():
 
         env = dict(os.environ)
         env["SDL_AUDIODRIVER"] = "dummy"
+        # D01d: the smoke exercises the player profile, which lives in the
+        # per-game user-data dir. Keep it in the scratch tree, not the user's.
+        env["XDG_DATA_HOME"] = str(pathlib.Path(directory) / "xdg")
+        env["LOCALAPPDATA"] = env["XDG_DATA_HOME"]
         smoke = run(release / player_name, "--project", release,
                     "--package-smoke-test", env=env)
-        if smoke.returncode != 0 or "Package smoke frame rendered" not in smoke.stdout:
+        if (smoke.returncode != 0 or "Package smoke frame rendered" not in smoke.stdout
+                or "Package smoke profile: status=" not in smoke.stdout
+                or "flushed=true" not in smoke.stdout):
             print(f"package smoke failed (exit {smoke.returncode}): "
                   f"{smoke.stdout}{smoke.stderr}", file=sys.stderr)
             return 1

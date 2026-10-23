@@ -9,13 +9,19 @@
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="600"
              x:Class="RowlEngine.Editor.Views.Panels.NodeGraphView"
              x:DataType="vm:MainWindowViewModel">
-    <Grid x:Name="NodeGraphContainer" 
-          Background="{DynamicResource GraphCanvasBg}" 
+    <UserControl.Styles>
+        <!-- sessiz sıfırlama düğmesi vurgusu -->
+        <Style Selector="Button#ResetViewButton:pointerover">
+            <Setter Property="Foreground" Value="{DynamicResource PrimaryText}"/>
+        </Style>
+    </UserControl.Styles>
+    <Grid x:Name="NodeGraphContainer"
+          Background="{DynamicResource GraphCanvasBg}"
           ClipToBounds="True">
         <!-- Transformable Infinite Canvas Viewport (Unclipped 2D Infinite Coordinate Space) -->
-        <Canvas x:Name="OuterCanvas" 
-                HorizontalAlignment="Stretch" 
-                VerticalAlignment="Stretch" 
+        <Canvas x:Name="OuterCanvas"
+                HorizontalAlignment="Stretch"
+                VerticalAlignment="Stretch"
                 Background="Transparent"
                 ClipToBounds="False"
                 RenderTransformOrigin="0,0">
@@ -27,7 +33,7 @@
             </Canvas.RenderTransform>
 
             <!-- Infinite Grid Visual Background Surface -->
-            <Rectangle Width="400000" Height="400000" Canvas.Left="-200000" Canvas.Top="-200000" Fill="{DynamicResource GraphCanvasBg}"/>
+            <Rectangle Width="400000" Height="400000" Canvas.Left="-200000" Canvas.Top="-200000" Fill="{DynamicResource GraphDotGridBrush}"/>
 
             <!-- Group Frames Layer (Faz 4 Dilim 3, culled: visible rect only, behind wires) -->
             <ItemsControl ItemsSource="{Binding NodeGraphViewModel.VisibleGroups}" ClipToBounds="False">
@@ -82,13 +88,13 @@
                 </ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="vm:ConnectionViewModel">
-                        <controls:BezierWireRenderer StartPoint="{Binding StartPoint}" EndPoint="{Binding EndPoint}" WireBrush="{DynamicResource WireColor}" WireThickness="3.0"/>
+                        <controls:BezierWireRenderer StartPoint="{Binding StartPoint}" EndPoint="{Binding EndPoint}" WireBrush="{DynamicResource WireColor}" WireThickness="1.5"/>
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
 
             <!-- Active Drag Wire Layer -->
-            <controls:BezierWireRenderer StartPoint="{Binding WireStartPoint}" EndPoint="{Binding WireEndPoint}" IsVisible="{Binding IsDraggingWire}" WireBrush="{DynamicResource AccentColor}" WireThickness="3.5"/>
+            <controls:BezierWireRenderer StartPoint="{Binding WireStartPoint}" EndPoint="{Binding WireEndPoint}" IsVisible="{Binding IsDraggingWire}" WireBrush="{DynamicResource AccentColor}" WireThickness="2"/>
 
             <!-- Node Cards Layer (culled: visible rect only) -->
             <ItemsControl ItemsSource="{Binding NodeGraphViewModel.VisibleNodes}" ClipToBounds="False">
@@ -123,46 +129,56 @@
                        StrokeDashArray="4,2"/>
         </Canvas>
 
-        <!-- Sahne başlık şeridi (Unity görünüm kontrolleri): zoom, sığdır, harita.
-             Breadcrumb overlay'i (sol üst) ve minimap (sağ üst) yerinden oynamaz. -->
-        <!-- Görünüm kontrolleri (prototip: Node panelinin sol altı): zoom, sığdır,
-             seçime odaklan, harita. Kırıntı yolu + Node araç çubuğu sol üstte,
-             mini harita sağ üstte. -->
-        <Border x:Name="SceneViewHeader" Classes="floating" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="16">
-            <StackPanel Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
-                <Button Classes="tool" Content="−" Command="{Binding ZoomOutViewCommand}"
-                        ToolTip.Tip="{l:T Graph.ZoomOut}" FontWeight="Bold"/>
-                <TextBlock Text="{Binding ZoomScale, StringFormat='{}{0:P0}'}" Classes="body"
-                           VerticalAlignment="Center" MinWidth="42" TextAlignment="Center"
-                           ToolTip.Tip="{l:T Graph.ZoomLevel}"/>
-                <Button Classes="tool" Content="+" Command="{Binding ZoomInViewCommand}"
-                        ToolTip.Tip="{l:T Graph.ZoomIn}" FontWeight="Bold"/>
-                <Border Classes="capsuleDivider"/>
-                <Button Classes="tool" Content="{l:T Graph.Fit}" Command="{Binding NodeGraphViewModel.ZoomToFitCommand}"
-                        ToolTip.Tip="{l:T Graph.Fit.Tip}"/>
-                <Button Classes="tool" Content="{l:T Graph.FitSelection}" Command="{Binding NodeGraphViewModel.FitToSelectionCommand}"
-                        ToolTip.Tip="{l:T Graph.FitSelection.Tip}"/>
-                <Border Classes="capsuleDivider"/>
-                <CheckBox Content="{l:T Graph.Minimap}" IsChecked="{Binding IsMinimapVisible, Mode=TwoWay}"
-                          ToolTip.Tip="{l:T Graph.Minimap.Tip}" FontSize="{DynamicResource FontSizeBody}"
-                          Foreground="{DynamicResource SecondaryText}" VerticalAlignment="Center" Margin="4,0"/>
-            </StackPanel>
-        </Border>
+        <!-- Görünüm kontrolleri (prototip sol alt): zoom kapsülü + harita kapsülü -->
+        <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="16" Background="Transparent">
+            <!-- birincil zoom kapsülü -->
+            <Border x:Name="SceneViewHeader" Classes="canvasCapsule">
+                <StackPanel Orientation="Horizontal" Spacing="0" VerticalAlignment="Center">
+                    <Button Classes="canvasTool" Command="{Binding ZoomOutViewCommand}" ToolTip.Tip="{l:T Graph.ZoomOut}">
+                        <Path Classes="canvasIcon" Data="M0,7 h14" Stretch="None"/>
+                    </Button>
+                    <TextBlock Text="{Binding ZoomScale, StringFormat='{}{0:P0}'}" FontSize="10" Foreground="{DynamicResource CanvasControlText}" MinWidth="33" TextAlignment="Center" VerticalAlignment="Center" ToolTip.Tip="{l:T Graph.ZoomLevel}"/>
+                    <Button Classes="canvasTool" Command="{Binding ZoomInViewCommand}" ToolTip.Tip="{l:T Graph.ZoomIn}">
+                        <Path Classes="canvasIcon" Data="M5,12 h14 M12,5 v14"/>
+                    </Button>
+                    <Button Classes="canvasTool" Command="{Binding NodeGraphViewModel.ZoomToFitCommand}" ToolTip.Tip="{l:T Graph.Fit.Tip}">
+                        <Path Classes="canvasIcon" Data="M4,9 V4 h5 M20,9 V4 h-5 M4,15 v5 h5 M20,15 v5 h-5"/>
+                    </Button>
+                    <Button Classes="canvasTool" Command="{Binding NodeGraphViewModel.FitToSelectionCommand}" ToolTip.Tip="{l:T Graph.FitSelection.Tip}">
+                        <Path Classes="canvasIcon" Data="M4,4 h6 M4,4 v6 M20,20 h-6 M20,20 v-6 M9,9 h6 v6 h-6 Z"/>
+                    </Button>
+                </StackPanel>
+            </Border>
+            <!-- ikincil kapsül: mini harita aç/kapa -->
+            <Border Classes="canvasCapsule">
+                <StackPanel Orientation="Horizontal" Spacing="0" VerticalAlignment="Center">
+                    <ToggleButton Classes="canvasTool" IsChecked="{Binding IsMinimapVisible, Mode=TwoWay}" ToolTip.Tip="{l:T Graph.Minimap.Tip}">
+                        <Path Classes="canvasIcon" Data="M3,6 l6,-2 l6,2 l6,-2 v14 l-6,2 l-6,-2 l-6,2 Z M9,4 v14 M15,6 v14"/>
+                    </ToggleButton>
+                </StackPanel>
+            </Border>
+        </StackPanel>
 
-        <!-- Mini harita (kuş bakışı, sürükleyerek kaydır) -->
-        <Border x:Name="MinimapCard" Classes="floating" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="16"
-                IsVisible="{Binding IsMinimapVisible}" Padding="6">
-            <controls:MinimapControl x:Name="CanvasMinimap" Width="220" Height="150"
-                                     Background="{DynamicResource GraphCanvasBg}"
-                                     NodesSource="{Binding NodeGraphViewModel.Nodes}"
-                                     GroupsSource="{Binding Groups.Groups}"
-                                     WorldBounds="{Binding NodeGraphViewModel.WorldBounds}"
-                                     ViewportRect="{Binding NodeGraphViewModel.ViewportRect}"/>
-        </Border>
+        <!-- Mini harita (kuş bakışı, sürükleyerek kaydır). MinimapSlot: sol altta, aç/kapa
+             düğmesinin üstünde; kısa panelde araç satırına değecekse gizlenir
+             (MinimapPlacement; kod arkası). -->
+        <Panel x:Name="MinimapSlot" HorizontalAlignment="Left" VerticalAlignment="Top">
+            <Border x:Name="MinimapCard" Margin="16"
+                    IsVisible="{Binding IsMinimapVisible}" Padding="4" ClipToBounds="True"
+                    Background="{DynamicResource SurfaceBackground}" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1" CornerRadius="10" Opacity="0.92">
+                <controls:MinimapControl x:Name="CanvasMinimap" Width="200" Height="130"
+                                         Background="Transparent"
+                                         NodesSource="{Binding NodeGraphViewModel.Nodes}"
+                                         GroupsSource="{Binding Groups.Groups}"
+                                         WorldBounds="{Binding NodeGraphViewModel.WorldBounds}"
+                                         ViewportRect="{Binding NodeGraphViewModel.ViewportRect}"/>
+            </Border>
+        </Panel>
 
-        <!-- Görünümü sıfırla (sağ alt) -->
-        <Border x:Name="CanvasViewportOverlay" Classes="floating" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="16">
-            <Button x:Name="ResetViewButton" Classes="tool" Content="{l:T Graph.ResetView}" Command="{Binding ResetCanvasViewCommand}"/>
+        <!-- Görünümü sıfırla (sağ alt; zoom kapsülüyle aynı aile — soluk 10 px metin okunmuyordu) -->
+        <Border x:Name="CanvasViewportOverlay" Classes="canvasCapsule" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="16">
+            <Button x:Name="ResetViewButton" Classes="canvasTool" Content="{l:T Graph.ResetView}" Command="{Binding ResetCanvasViewCommand}"
+                    Width="NaN" Padding="12,0" FontSize="{DynamicResource FontSizeBody}"/>
         </Border>
     </Grid>
 </UserControl>

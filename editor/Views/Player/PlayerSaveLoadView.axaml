@@ -3,15 +3,16 @@
              xmlns:vm="using:RowlEngine.Editor.ViewModels.Player"
              xmlns:services="using:RowlEngine.Editor.Services"
              xmlns:player="using:RowlEngine.Editor.Views.Player"
+             xmlns:l="using:RowlEngine.Editor.Services.Strings"
              x:Class="RowlEngine.Editor.Views.Player.PlayerSaveLoadView"
              x:DataType="vm:PlayerViewModel">
   <Grid RowDefinitions="Auto, *, Auto">
     <StackPanel Grid.Row="0" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="8" Margin="0,0,0,8">
-      <Button Content="Geri"
+      <Button Content="{l:T Player.SaveLoad.Back}"
               Command="{Binding RequestIntentCommand}"
               CommandParameter="{x:Static services:PlayerIntent.CloseOverlay}" />
-      <Button Content="Önceki" Command="{Binding SlotsPreviousPageCommand}" />
-      <Button Content="Sonraki" Command="{Binding SlotsNextPageCommand}" />
+      <Button Content="{l:T Player.SaveLoad.Previous}" Command="{Binding SlotsPreviousPageCommand}" />
+      <Button Content="{l:T Player.SaveLoad.Next}" Command="{Binding SlotsNextPageCommand}" />
     </StackPanel>
     <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
       <ItemsControl ItemsSource="{Binding Slots.Entries}">
@@ -30,11 +31,11 @@
                   <TextBlock Text="{Binding Summary}" TextWrapping="Wrap" FontSize="12" MaxLines="2" />
                 </StackPanel>
                 <StackPanel Grid.Column="2" VerticalAlignment="Center" Spacing="6">
-                  <Button Content="Kaydet"
+                  <Button Content="{l:T Player.SaveLoad.Save}"
                           Command="{Binding $parent[UserControl].DataContext.SaveToSlotCommand}"
                           CommandParameter="{Binding Index}"
                           IsVisible="{Binding $parent[UserControl].DataContext.IsSave}" />
-                  <Button Content="Yükle"
+                  <Button Content="{l:T Player.SaveLoad.Load}"
                           Command="{Binding $parent[UserControl].DataContext.LoadFromSlotCommand}"
                           CommandParameter="{Binding Index}"
                           IsVisible="{Binding $parent[UserControl].DataContext.IsLoad}"

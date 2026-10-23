@@ -62,6 +62,12 @@ _POSIX_SCRIPT_DIR_DOLLAR_ZERO = re.compile(
     re.IGNORECASE,
 )
 _POSIX_LD_LIBRARY_PATH = re.compile(r"^\s*export\s+LD_LIBRARY_PATH=", re.MULTILINE)
+# The player takes its project root from the working directory (default "."),
+# so a launcher that only resolves SCRIPT_DIR still runs the game from the
+# caller's directory: double-clicked or started by absolute path it finds no
+# Assets/packages/game.rowlpkg and opens an empty scene. Gerçek ekran denemesi
+# (2026-10-20) bunu yakaladı; .bat'taki `cd /d "%~dp0"` karşılığı.
+_POSIX_CD_SCRIPT_DIR = re.compile(r"""^\s*cd\s+["']?\$\{?SCRIPT_DIR\}?["']?(\s|$)""", re.MULTILINE)
 _POSIX_EXEC = re.compile(
     r"""^\s*exec\s+(?P<command>"[^"]*"|'[^']*'|\S+)(?P<arguments>\s+.*)?$""",
     re.MULTILINE)
@@ -97,6 +103,33 @@ def crlf_problems(text, label):
     return problems
 
 
+# D01d: the player keeps saves and the profile in the per-game user-data dir
+# (XDG data home / %LOCALAPPDATA%), keyed by the game id - never relative to the
+# working directory the launcher cd's into. A launcher that re-points one of the
+# variables the engine resolves that directory from would silently move (or
+# fork) every player's data, so the launchers may not assign them.
+_DATA_DIR_VARIABLES = ("XDG_DATA_HOME", "XDG_DATA_DIRS", "HOME", "LOCALAPPDATA",
+                       "APPDATA", "USERPROFILE", "TMPDIR")
+_POSIX_DATA_DIR_ASSIGNMENT = re.compile(
+    r"(?:^|[\s;&|(])(?:export\s+|declare\s+(?:-x\s+)?|env\s+)?(%s)=" % "|".join(_DATA_DIR_VARIABLES),
+    re.MULTILINE)
+_WINDOWS_DATA_DIR_ASSIGNMENT = re.compile(
+    r"^\s*set\s+\"?(%s)\s*=" % "|".join(_DATA_DIR_VARIABLES),
+    re.IGNORECASE | re.MULTILINE)
+
+
+def data_dir_override_problems(text, label):
+    """A launcher must not redirect the per-game user-data directory."""
+    names = []
+    for pattern in (_POSIX_DATA_DIR_ASSIGNMENT, _WINDOWS_DATA_DIR_ASSIGNMENT):
+        for match in pattern.finditer(text):
+            if match.group(1).upper() not in names:
+                names.append(match.group(1).upper())
+    return [f"{label} assigns {name}; saves and the player profile live in the "
+            f"per-game user-data dir keyed by the game id and a launcher must "
+            f"not redirect it" for name in names]
+
+
 def windows_launcher_problems(text, player_names):
     """FULL-tier contract for run_game.bat."""
     problems = []
@@ -104,6 +137,7 @@ def windows_launcher_problems(text, player_names):
         return [f"{WINDOWS_LAUNCHER_NAME} is empty"]
 
     problems.extend(crlf_problems(text, WINDOWS_LAUNCHER_NAME))
+    problems.extend(data_dir_override_problems(text, WINDOWS_LAUNCHER_NAME))
     lines = _ANY_LINE_SPLIT.split(text)
     normalized = [_normalize_space(line) for line in lines]
 
@@ -151,6 +185,7 @@ def posix_launcher_problems(text, player_names, full=True):
         return [f"{POSIX_LAUNCHER_NAME} is empty"]
     if "\r" in text:
         problems.append(f"{POSIX_LAUNCHER_NAME} has a CR; /bin/sh will not run it")
+    problems.extend(data_dir_override_problems(text, POSIX_LAUNCHER_NAME))
     if not text.startswith("#!"):
         problems.append(f"{POSIX_LAUNCHER_NAME} has no shebang line")
 
@@ -161,6 +196,11 @@ def posix_launcher_problems(text, player_names, full=True):
                 f"{POSIX_LAUNCHER_NAME} does not resolve its own directory into "
                 f"SCRIPT_DIR; a relocated or double-clicked launcher would run "
                 f"from the caller's directory")
+        if not _POSIX_CD_SCRIPT_DIR.search(text):
+            problems.append(
+                f"{POSIX_LAUNCHER_NAME} does not cd into SCRIPT_DIR; the player "
+                f"takes its project root from the working directory, so a "
+                f"launcher started from elsewhere opens an empty game")
         if not _POSIX_LD_LIBRARY_PATH.search(text) or "SCRIPT_DIR" not in text:
             problems.append(
                 f"{POSIX_LAUNCHER_NAME} does not put the release directory on "

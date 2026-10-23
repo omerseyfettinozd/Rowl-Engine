@@ -323,6 +323,7 @@ set(ROWL_ENGINE_SOURCES
     src/render/window_font_resolve.cpp  # W8-d(4): font-cozumleme uc kademesi (saf taşıma)
     src/render/window_texture_cache.cpp  # A3-tur5: texture-cache bölünmesi
     src/render/window_text_fallback.cpp  # D10: font-fallback/MSDF çekirdek bölünmesi
+    src/render/gpu_truetype_text.cpp     # A11: GPU yolunda TrueType metin yedeği
     src/render/window_msdf_shaped.cpp  # D11: şekilli-MSDF plan/çizim bölünmesi
     src/render/camera2d.cpp
     src/render/transition_manager.cpp
@@ -349,6 +350,9 @@ set(ROWL_ENGINE_SOURCES
     # RowlCrash_* motor-icinden cagrilmaz) — lib listesinden dustu.
     src/platform/platform_host.cpp
     src/platform/user_data_directories.cpp
+    src/platform/game_identity.cpp
+    src/state/game_data_layout.cpp
+    src/state/player_profile.cpp
     src/platform/mobile_input.cpp
     src/platform/sdl_event_dispatcher.cpp
     src/platform/sdl_subsystem_lease.cpp
@@ -385,6 +389,9 @@ set(ROWL_ENGINE_SOURCES
     src/c_api_provenance.cpp
     src/c_api_state.cpp
     src/c_api_pause.cpp
+    src/c_api_game_identity.cpp
+    src/c_api_game_data.cpp
+    src/c_api_profile.cpp
     src/c_api_thread_contract_guard.cpp  # D14: legacy-mixer checked loud varyantlar
     src/c_api_observability.cpp          # AI Full-Observability log pipe & query
 )
@@ -451,6 +458,9 @@ target_include_directories(rowl_engine_objects PUBLIC
 #     macOS/iOS     : libRowlEngineCore.dylib
 #
 add_library(RowlEngineCore SHARED)
+if(ANDROID)
+    target_link_libraries(RowlEngineCore PRIVATE log)  # logger -> logcat
+endif()
 target_link_libraries(RowlEngineCore PUBLIC
     rowl_engine_objects
     rowl_engine_thirdparty
@@ -477,10 +487,18 @@ if(ROWL_BUILD_PLAYER)
     # tek ic yuzeydir. C API yolu paylasilan RowlEngineCore'dan gelmeye devam
     # eder (uretim topolojisi degismez); yalnizca crash TU'su player'a dogrudan
     # derlenir (motor ici bu sembolleri cagirmaz, .so'daki kopya oludur).
-    add_executable(rowl_player src/player/main.cpp src/platform/crash_handler.cpp)
-    target_link_libraries(rowl_player PRIVATE RowlEngineCore ${SDL3_TARGET})
+    if(ANDROID)
+        # Android: SDLActivity loads libmain.so and calls SDL_main (main.cpp
+        # includes SDL_main.h on Android), so the player is a shared library.
+        add_library(rowl_player SHARED src/player/main.cpp src/platform/crash_handler.cpp)
+        set(ROWL_PLAYER_OUTPUT_NAME "main")
+    else()
+        add_executable(rowl_player src/player/main.cpp src/platform/crash_handler.cpp)
+        set(ROWL_PLAYER_OUTPUT_NAME "rowl_player")
+    endif()
+    target_link_libraries(rowl_player PRIVATE RowlEngineCore ${SDL3_TARGET} nlohmann_json::nlohmann_json)
     set_target_properties(rowl_player PROPERTIES
-        OUTPUT_NAME "rowl_player"
+        OUTPUT_NAME "${ROWL_PLAYER_OUTPUT_NAME}"
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
         BUILD_RPATH "$ORIGIN/../lib:$ORIGIN"
         INSTALL_RPATH "$ORIGIN/../lib:$ORIGIN"

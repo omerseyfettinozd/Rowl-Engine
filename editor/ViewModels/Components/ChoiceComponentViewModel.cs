@@ -88,7 +88,9 @@ namespace RowlEngine.Editor.ViewModels.Components
     /// </summary>
     public partial class ChoiceComponentViewModel : NodeComponentViewModel
     {
-        public override string DisplayName => "Player Choices";
+        public override string DisplayNameKey => "Component.Choice.DisplayName";
+        protected override string DisplayNameTrFallback => "Oyuncu Seçimleri";
+        protected override string DisplayNameEnFallback => "Player Choices";
         public override string Icon => "Seçim";
         public override string TypeKey => "choice";
 

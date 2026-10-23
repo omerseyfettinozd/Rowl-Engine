@@ -1307,13 +1307,15 @@ void AudioEngine::setUiVolume(float volume) {
 }
 
 void AudioEngine::triggerVoiceDucking(bool isVoiceActive) {
-    m_isDuckingActive.store(isVoiceActive, std::memory_order_relaxed);
+    // Durum gerçekten değiştiğinde günlüğe yaz: harf seslendirmesi her blip sonunda "bitti"
+    // bildirir; değişmeyen durumu yeniden yazmak günlüğü saniyede onlarca satırla boğuyordu.
+    const bool changed = m_isDuckingActive.exchange(isVoiceActive, std::memory_order_relaxed) != isVoiceActive;
     if (isVoiceActive) {
         m_bgmGain.store(m_bgmVolume.load(std::memory_order_relaxed) * m_duckingFactor.load(std::memory_order_relaxed), std::memory_order_relaxed);
-        ROWL_LOG_INFO("Voice Ducking Triggered -> BGM Attenuated by " + std::to_string(m_duckingFactor.load(std::memory_order_relaxed) * 100.0f) + "% (Gain: " + std::to_string(m_bgmGain.load(std::memory_order_relaxed)) + ")");
+        if (changed) ROWL_LOG_INFO("Voice Ducking Triggered -> BGM Attenuated by " + std::to_string(m_duckingFactor.load(std::memory_order_relaxed) * 100.0f) + "% (Gain: " + std::to_string(m_bgmGain.load(std::memory_order_relaxed)) + ")");
     } else {
         m_bgmGain.store(m_bgmVolume.load(std::memory_order_relaxed), std::memory_order_relaxed);
-        ROWL_LOG_INFO("Voice Finished -> BGM Restored to Full Volume (Gain: " + std::to_string(m_bgmGain.load(std::memory_order_relaxed)) + ")");
+        if (changed) ROWL_LOG_INFO("Voice Finished -> BGM Restored to Full Volume (Gain: " + std::to_string(m_bgmGain.load(std::memory_order_relaxed)) + ")");
     }
     // Faz 5 Dilim 2: duck mixer'e bağlanır (mixer gainFor(Bgm) ==
     // master*m_bgmGain birebir korunur).

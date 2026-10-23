@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json.Nodes;
 
 namespace RowlEngine.Editor.Services;
 
@@ -83,6 +84,51 @@ public sealed class PlayerProfile
 
     public PlayerSkipMode SkipMode { get; set; } = PlayerSkipMode.ReadOnly;
     public bool AutoEnabled { get; set; } = false;
+
+    /// <summary>
+    /// D01c-2 — id of the game this profile belongs to (the native store stamps
+    /// it in per-game profile directories). Round-tripped verbatim; empty when
+    /// the file carried none.
+    /// </summary>
+    public string GameId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// D01c-2 — reserved, opaque <c>unlocks</c> array (native owns the meaning).
+    /// Preserved verbatim on rewrite; null means "none seen" (written as <c>[]</c>).
+    /// </summary>
+    public JsonNode? Unlocks { get; set; }
+
+    /// <summary>
+    /// D01c-2 — unknown top-level keys of a profile written by a newer build
+    /// or by the native store; kept and written back so a managed rewrite
+    /// never drops data.
+    /// </summary>
+    public Dictionary<string, JsonNode?> ExtraKeys { get; set; } = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Copies the preference fields (everything except the read set, game id,
+    /// unlocks and unknown keys) from <paramref name="other"/>.
+    /// </summary>
+    public void CopyPreferencesFrom(PlayerProfile other)
+    {
+        ArgumentNullException.ThrowIfNull(other);
+        Language = other.Language;
+        MasterVolume = other.MasterVolume;
+        BgmVolume = other.BgmVolume;
+        VoiceVolume = other.VoiceVolume;
+        SfxVolume = other.SfxVolume;
+        AmbienceVolume = other.AmbienceVolume;
+        UiVolume = other.UiVolume;
+        MixerFadeCurve = other.MixerFadeCurve;
+        SfxPoolDepth = other.SfxPoolDepth;
+        TextSpeedMultiplier = other.TextSpeedMultiplier;
+        AutoAdvanceDelay = other.AutoAdvanceDelay;
+        TextScale = other.TextScale;
+        HighContrast = other.HighContrast;
+        ReducedMotion = other.ReducedMotion;
+        SkipMode = other.SkipMode;
+        AutoEnabled = other.AutoEnabled;
+    }
 
     /// <summary>Marks one content id as read. Returns false for empty/invalid ids.</summary>
     public bool MarkRead(string? contentId)

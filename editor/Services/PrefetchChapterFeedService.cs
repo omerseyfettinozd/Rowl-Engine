@@ -48,8 +48,11 @@ public static class PrefetchChapterFeedService
             return FeedFromAssetsDir(
                 assetsJsonPath,
                 () => host.IsInitialized ? host.Handle : IntPtr.Zero,
-                (handle, json) => (int)NativeBridge.RowlEngine_LoadChapterIndexJson(handle, json),
-                (handle, json) => (int)NativeBridge.RowlEngine_AppendChapterFileJson(handle, json),
+                // Motor iş parçacığında (UI'dan doğrudan çağrı WRONG_THREAD ile reddediliyordu).
+                (_, json) => host.InvokeOnEngineThread(
+                    engine => (int)NativeBridge.RowlEngine_LoadChapterIndexJson(engine, json), (int)NativeBridge.ResultCode.InvalidHandle),
+                (_, json) => host.InvokeOnEngineThread(
+                    engine => (int)NativeBridge.RowlEngine_AppendChapterFileJson(engine, json), (int)NativeBridge.ResultCode.InvalidHandle),
                 log);
         }
         catch (Exception)
@@ -114,8 +117,12 @@ public static class PrefetchChapterFeedService
                     handle = getHandle();
                     if (handle == IntPtr.Zero)
                         return 0;
-                    loadIndexJson(handle, indexJson);
-                    forwarded++;
+                    // Yalnız motorun kabul ettiği yük sayılır (ret eskiden de "beslendi" sayılıyordu).
+                    int rc = loadIndexJson(handle, indexJson);
+                    if (rc == 0)
+                        forwarded++;
+                    else
+                        log?.Invoke($"[Play] Chapter feed: index reddedildi ({(NativeBridge.ResultCode)rc}).");
                 }
                 catch (Exception)
                 {
@@ -153,8 +160,11 @@ public static class PrefetchChapterFeedService
                     handle = getHandle();
                     if (handle == IntPtr.Zero)
                         return forwarded;
-                    appendChapterFileJson(handle, chapterJson);
-                    forwarded++;
+                    int rc = appendChapterFileJson(handle, chapterJson);
+                    if (rc == 0)
+                        forwarded++;
+                    else
+                        log?.Invoke($"[Play] Chapter feed: bölüm dosyası reddedildi ({(NativeBridge.ResultCode)rc}).");
                 }
                 catch (Exception)
                 {

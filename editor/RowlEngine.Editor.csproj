@@ -26,6 +26,8 @@
     <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.11" />
     <PackageReference Include="Avalonia.Fonts.Inter" Version="11.3.11" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
+    <!-- Faz 7 D5: Lua editörü kod alanı (satır numarası, arama, renklendirme). -->
+    <PackageReference Include="Avalonia.AvaloniaEdit" Version="11.3.0" />
     <!-- Security backport required by Avalonia.FreeDesktop's dependency chain. -->
     <PackageReference Include="Tmds.DBus.Protocol" Version="0.21.3" />
   </ItemGroup>

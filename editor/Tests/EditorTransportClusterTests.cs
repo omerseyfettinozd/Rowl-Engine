@@ -63,6 +63,8 @@ public sealed class EditorTransportClusterTests : IDisposable
         _vm.PauseStandaloneCommand.Execute(null);
         Assert.True(_vm.IsPlayPaused);
         Assert.True(_vm.CanStepStandalone);
+        // Unity Pause: oyun dondurulur, oyunun Esc menüsü (native SetPaused) açılmaz.
+        Assert.True(_vm.EngineHost.IsEditorFrozen);
 
         // Adım yalnızca duraklıyken geçer (motorsuz no-op, çökmez).
         _vm.StepStandaloneCommand.Execute(null);
@@ -70,6 +72,7 @@ public sealed class EditorTransportClusterTests : IDisposable
         _vm.PauseStandaloneCommand.Execute(null);
         Assert.False(_vm.IsPlayPaused);
         Assert.False(_vm.CanStepStandalone);
+        Assert.False(_vm.EngineHost.IsEditorFrozen);
 
         // Oynamıyorken Pause no-op'tur (bayrak korunur, çökmez).
         _vm.IsPlayingStandalone = false;

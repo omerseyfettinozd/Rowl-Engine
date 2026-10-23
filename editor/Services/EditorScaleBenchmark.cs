@@ -56,8 +56,14 @@ internal static class EditorScaleBenchmark
         scaleVm.Nodes.Clear();
         scaleVm.Connections.Clear();
         stopwatch.Restart();
-        foreach (NodeViewModel node in loaded.Nodes) scaleVm.Nodes.Add(node);
-        foreach (ConnectionViewModel connection in loaded.Connections) scaleVm.Connections.Add(connection);
+        // Gerçek yükleme yolu gibi toplu: indeks bitişte bir kez kurulur.
+        scaleVm.NodeGraphViewModel.BeginBulkUpdate();
+        try
+        {
+            foreach (NodeViewModel node in loaded.Nodes) scaleVm.Nodes.Add(node);
+            foreach (ConnectionViewModel connection in loaded.Connections) scaleVm.Connections.Add(connection);
+        }
+        finally { scaleVm.NodeGraphViewModel.EndBulkUpdate(); }
         stopwatch.Stop();
         benchmark.Record("scale_graph_viewmodel_population_ms", stopwatch.Elapsed.TotalMilliseconds);
 
@@ -77,6 +83,8 @@ internal static class EditorScaleBenchmark
         stopwatch.Stop();
         benchmark.Record("scale_graph_selection_input_ms", stopwatch.Elapsed.TotalMilliseconds / iterations);
 
+        RecordDragAndViewportQuery(benchmark, scaleVm);
+
         stopwatch.Restart();
         string serialized = StoryGraphSerializer.SerializeFullStoryGraph(
             scaleVm.Nodes, scaleVm.Connections, startNodeId: 1);
@@ -92,5 +100,54 @@ internal static class EditorScaleBenchmark
 
         long memoryAfter = GC.GetTotalMemory(forceFullCollection: true);
         benchmark.Record("scale_graph_managed_memory_bytes", Math.Max(0, memoryAfter - memoryBefore));
+    }
+
+    /// <summary>
+    /// Sürükleme: tuvalin kullandığı yol (node.X/Y += delta → indeks taşıma + görünür küme);
+    /// kenarı en çok bağlı düğüm seçilir. Görünüm sorgusu: pan değişimi → RefreshVisible.
+    /// İkisi de adım başına medyan (ms).
+    /// </summary>
+    private static void RecordDragAndViewportQuery(EditorInteractionBenchmark benchmark, MainWindowViewModel scaleVm)
+    {
+        const int steps = 100;
+        var degree = new System.Collections.Generic.Dictionary<NodeViewModel, int>();
+        foreach (ConnectionViewModel connection in scaleVm.Connections)
+        {
+            if (connection.SourceNode is { } source) degree[source] = (degree.TryGetValue(source, out int d) ? d : 0) + 1;
+            if (connection.TargetNode is { } target) degree[target] = (degree.TryGetValue(target, out int d2) ? d2 : 0) + 1;
+        }
+        NodeViewModel hub = scaleVm.Nodes[0];
+        int best = -1;
+        foreach (var pair in degree)
+            if (pair.Value > best) { best = pair.Value; hub = pair.Key; }
+
+        var samples = new double[steps];
+        for (int index = 0; index < steps; index++)
+        {
+            long start = Stopwatch.GetTimestamp();
+            hub.X += 1;
+            hub.Y -= 1;
+            samples[index] = Stopwatch.GetElapsedTime(start).TotalMilliseconds;
+        }
+        benchmark.Record("scale_graph_drag_step_ms", Median(samples));
+
+        // Pan: görünüm dikdörtgeni her adımda 400 px kayar; sorgu + fark-senkron süresi.
+        double startPanX = scaleVm.PanX;
+        for (int index = 0; index < steps; index++)
+        {
+            long start = Stopwatch.GetTimestamp();
+            scaleVm.PanX = startPanX - (index + 1) * 400.0;
+            samples[index] = Stopwatch.GetElapsedTime(start).TotalMilliseconds;
+        }
+        scaleVm.PanX = startPanX;
+        benchmark.Record("scale_graph_visible_query_ms", Median(samples));
+    }
+
+    private static double Median(double[] values)
+    {
+        var sorted = (double[])values.Clone();
+        Array.Sort(sorted);
+        int mid = sorted.Length / 2;
+        return sorted.Length % 2 == 1 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2.0;
     }
 }

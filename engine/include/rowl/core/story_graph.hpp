@@ -16,6 +16,10 @@
 namespace Rowl::Core {
 
 inline constexpr std::size_t kMaxStoryJsonBytes = 16 * 1024 * 1024;
+/// Motorun okuyabildigi en yeni hikaye grafigi biçim surumu. Yazici
+/// (chapter_loader) ve okuyucu (StoryGraphParser) bu sabiti paylasir; daha
+/// yeni dosya sessizce yari yuklenmez, reddedilir (C04).
+inline constexpr int64_t kStoryGraphFormatVersion = 5;
 inline constexpr std::size_t kMaxStoryNodes = 10'000;
 inline constexpr std::size_t kMaxEdgesPerStoryNode = 4'096;
 inline constexpr std::size_t kMaxComponentsPerScene = 2'048;

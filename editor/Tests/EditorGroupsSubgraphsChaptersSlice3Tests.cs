@@ -76,7 +76,8 @@ public sealed class EditorGroupsSubgraphsChaptersSlice3Tests
     {
         var a = BareNode(1, "A", 100, 200);
         var b = BareNode(2, "B", 500, 300);
-        // Bare card: (X-8, Y, 308, 120).
+        // Bare card: (X-8, Y, 308, 150) — Faz 6: prototip .story-node yüksekliği.
+        Assert.Equal(150, b.NodeCardHeight);
         var (x, y, w, h) = CanvasGroupViewModel.FrameAroundBounds(
             new[] { a, b }.Select(n =>
                 (n.X - 8.0, n.Y, NodeGraphViewModel.NodeCardWidth, n.NodeCardHeight)),
@@ -84,7 +85,7 @@ public sealed class EditorGroupsSubgraphsChaptersSlice3Tests
         Assert.Equal(100 - 8 - 48, x);
         Assert.Equal(200 - 48, y);
         Assert.Equal((500 - 8 + 308 - (100 - 8)) + 96, w);
-        Assert.Equal((300 + 120 - 200) + 96, h);
+        Assert.Equal((300 + 150 - 200) + 96, h);
     }
 
     [Fact]

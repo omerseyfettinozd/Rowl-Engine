@@ -338,15 +338,26 @@ public static class MediaConverterService
                 // Kararsızlık = dönüştür (fail-safe yeniden üretim).
             }
             string toolPath = ResolveToolPathFor(toolName, options);
-            ConversionResult result = await RunToolAsync(
-                BuildWebpStartInfo(toolPath, sourceFullPath, outputFullPath, sidecarFullPath),
-                toolPath, options, log, cancellationToken).ConfigureAwait(false);
-            if (result.Outcome == ConversionOutcome.Failed)
-                return result;
-            string? verifyError = VerifyFreshOutput(sourceFullPath, sourceHash, outputFullPath, toolName);
-            if (verifyError is not null)
-                return new(ConversionOutcome.Failed, outputRelative, verifyError);
-            StampSourcePath(outputFullPath, sourcePathStamp ?? Path.GetFileName(sourceFullPath));
+            string part = NewPartPath(outputFullPath);
+            try
+            {
+                ConversionResult result = await RunToolAsync(
+                    BuildWebpStartInfo(toolPath, sourceFullPath, part, SidecarPathForOutput(part)),
+                    toolPath, options, log, cancellationToken).ConfigureAwait(false);
+                if (result.Outcome == ConversionOutcome.Failed)
+                    return result;
+                string? verifyError = VerifyFreshOutput(sourceFullPath, sourceHash, part, toolName);
+                if (verifyError is not null)
+                    return new(ConversionOutcome.Failed, outputRelative, verifyError);
+                StampSourcePath(part, sourcePathStamp ?? Path.GetFileName(sourceFullPath));
+                string? commitError = CommitPart(part, outputFullPath);
+                if (commitError is not null)
+                    return new(ConversionOutcome.Failed, outputRelative, commitError);
+            }
+            finally
+            {
+                DeletePartFiles(part);
+            }
             log?.Invoke($"Dönüştürüldü: {Path.GetFileName(sourceFullPath)} -> {outputRelative}");
             return new(ConversionOutcome.Converted, outputRelative, $"Dönüştürüldü: '{outputRelative}'.");
         }
@@ -402,16 +413,27 @@ public static class MediaConverterService
                 // Kararsızlık = dönüştür.
             }
             string oggPath = ResolveToolPathFor(OggToolName, options);
-            ConversionResult encode = await RunToolAsync(
-                BuildOggStartInfo(oggPath, pcmTemp, outputFullPath, sidecarFullPath),
-                oggPath, options, log, cancellationToken).ConfigureAwait(false);
-            if (encode.Outcome == ConversionOutcome.Failed)
-                return encode;
-            // Sözleşme: OGG sidecar source_sha256 = decode PCM baytları.
-            string? verifyError = VerifyFreshOutput(pcmTemp, pcmHash, outputFullPath, OggToolName);
-            if (verifyError is not null)
-                return new(ConversionOutcome.Failed, outputRelative, verifyError);
-            StampSourcePath(outputFullPath, sourcePathStamp ?? Path.GetFileName(sourceFullPath));
+            string part = NewPartPath(outputFullPath);
+            try
+            {
+                ConversionResult encode = await RunToolAsync(
+                    BuildOggStartInfo(oggPath, pcmTemp, part, SidecarPathForOutput(part)),
+                    oggPath, options, log, cancellationToken).ConfigureAwait(false);
+                if (encode.Outcome == ConversionOutcome.Failed)
+                    return encode;
+                // Sözleşme: OGG sidecar source_sha256 = decode PCM baytları.
+                string? verifyError = VerifyFreshOutput(pcmTemp, pcmHash, part, OggToolName);
+                if (verifyError is not null)
+                    return new(ConversionOutcome.Failed, outputRelative, verifyError);
+                StampSourcePath(part, sourcePathStamp ?? Path.GetFileName(sourceFullPath));
+                string? commitError = CommitPart(part, outputFullPath);
+                if (commitError is not null)
+                    return new(ConversionOutcome.Failed, outputRelative, commitError);
+            }
+            finally
+            {
+                DeletePartFiles(part);
+            }
             log?.Invoke($"Dönüştürüldü: {Path.GetFileName(sourceFullPath)} -> {outputRelative}");
             return new(ConversionOutcome.Converted, outputRelative, $"Dönüştürüldü: '{outputRelative}'.");
         }
@@ -451,6 +473,37 @@ public static class MediaConverterService
         }
     }
 
+    /// <summary>Çıktının yanında benzersiz geçici yol: <c>&lt;hedef&gt;.&lt;guid&gt;.part</c>.</summary>
+    private static string NewPartPath(string outputFullPath)
+        => $"{outputFullPath}.{Guid.NewGuid():N}.part";
+
+    private static void DeletePartFiles(string partFullPath)
+    {
+        foreach (string path in new[] { partFullPath, SidecarPathForOutput(partFullPath) })
+        {
+            try { if (File.Exists(path)) File.Delete(path); } catch (Exception) { }
+        }
+    }
+
+    /// <summary>
+    /// Doğrulanmış part çıktısını (+sidecar) hedefin üzerine atomik taşır.
+    /// Önce çıktı, sonra sidecar: arada kesilirse sidecar hash'i uyuşmaz →
+    /// bir sonraki içe aktarma yeniden dönüştürür (fail-safe).
+    /// </summary>
+    private static string? CommitPart(string partFullPath, string outputFullPath)
+    {
+        try
+        {
+            File.Move(partFullPath, outputFullPath, overwrite: true);
+            File.Move(SidecarPathForOutput(partFullPath), SidecarPathForOutput(outputFullPath), overwrite: true);
+            return null;
+        }
+        catch (Exception error)
+        {
+            return $"Çıktı yerine taşınamadı ({error.GetType().Name}): '{outputFullPath}'.";
+        }
+    }
+
     private static async Task<ConversionResult> RunToolAsync(
         ProcessStartInfo startInfo,
         string toolPath,
@@ -476,6 +529,12 @@ public static class MediaConverterService
         catch (OperationCanceledException)
         {
             return new(ConversionOutcome.Failed, Path.GetFileName(toolPath), "Dönüştürme iptal edildi.");
+        }
+        catch (System.ComponentModel.Win32Exception)
+        {
+            string tool = Path.GetFileName(toolPath);
+            return new(ConversionOutcome.Failed, tool,
+                $"{tool} bulunamadı ('{toolPath}'). ROWL_OGGENC_PATH / ROWL_WEBP2PNG_PATH / FFMPEG_PATH ile araç yolunu verin.");
         }
         catch (Exception error)
         {

@@ -15,7 +15,7 @@ public sealed class EditorPlayerLoopSlice5Tests
     private const string TinyPngBase64 =
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
 
-    private sealed class FakePlayerEngine : IPlayerEngine
+    internal sealed class FakePlayerEngine : IPlayerEngine
     {
         public bool IsAvailable { get; set; } = true;
         public bool Paused { get; private set; }
