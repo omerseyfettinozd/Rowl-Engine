@@ -20,6 +20,7 @@
 #include <cmath>
 #include <cstdint>
 #include <string>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <unordered_map>
@@ -86,6 +87,11 @@ public:
 
     bool initialize(const EngineConfig& config = EngineConfig{});
     void run();          // Standalone blocking loop (runtime-only mode)
+    /// D06-3: same loop, plus a host hook called on the loop thread after every
+    /// successful step() while the engine is still running (never after quit).
+    /// It sits inside the loop's exception guard, so a throwing hook aborts the
+    /// run exactly like a throwing step() (#123). Empty = plain run().
+    void run(const std::function<void(float)>& afterStep);
     void step(float deltaTime);
     void shutdown();
 

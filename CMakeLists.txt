@@ -172,6 +172,16 @@ if(ROWL_BUILD_RUNTIME_TESTS)
             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
             TIMEOUT 60
         )
+        # D06-3: bolunmus bolum dosyalari ile tam graf sapmasi paketleme
+        # aninda net uyari verir (chapter-drift); paket yine yazilir.
+        add_test(
+            NAME rowl_package_chapter_consistency_tests
+            COMMAND ${Python3_EXECUTABLE} -u ${CMAKE_SOURCE_DIR}/tests/test_package_chapter_consistency.py
+        )
+        set_tests_properties(rowl_package_chapter_consistency_tests PROPERTIES
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+            TIMEOUT 60
+        )
         # W8-c bulgu-1 kilidi: expansion-ratio gate probu (pack RAW-karari +
         # verifier 2048x-forge reddi). D18b-ii blogu emsali; package_* icinde
         # alfabetik (determinism < ratio_gate). zstd'siz yorumlayicida yalniz
@@ -391,6 +401,19 @@ if(ROWL_BUILD_RUNTIME_TESTS AND TARGET rowl_player)
                 ${CMAKE_SOURCE_DIR}/samples/second_signal
         )
         set_tests_properties(rowl_packaged_game_isolation PROPERTIES
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+            TIMEOUT 180
+            ENVIRONMENT "SDL_AUDIODRIVER=dummy;SDL_VIDEODRIVER=dummy"
+        )
+        # D06-3: paketli/gevsek oyuncu bolum dosyalarini kendi dosyalarindan
+        # besler ve varliklari isitir (prefetch); bayat bolme yok sayilir.
+        add_test(
+            NAME rowl_player_chapter_prefetch_packaged
+            COMMAND ${Python3_EXECUTABLE} -u ${CMAKE_SOURCE_DIR}/tests/test_player_chapter_prefetch_packaged.py
+                $<TARGET_FILE:rowl_player>
+                $<TARGET_FILE:RowlEngineCore>
+        )
+        set_tests_properties(rowl_player_chapter_prefetch_packaged PROPERTIES
             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
             TIMEOUT 180
             ENVIRONMENT "SDL_AUDIODRIVER=dummy;SDL_VIDEODRIVER=dummy"

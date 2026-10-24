@@ -186,6 +186,7 @@ void test_title_screen();  // D02: native baslik ekrani / Devam Et / Tercihler
 void test_backlog_replay();  // D03-1: gecmis satirina ses + guvenli ses tekrari
 void test_backlog_screen();  // D03-2: oyuncuda Gecmis (backlog) ekrani
 void test_auto_skip();  // D04-1: oyuncu Otomatik + okunana duyarli Atla surucusu
+void test_chapter_boundary_persistence();  // D06-3: bolum siniri kayit/yukle/geri sarma + muzik + oyuncu prefetch surucusu
 void test_condition_component();  // D06-1: dugum 'condition' bileseni (giriste degerlendir / hedefe yonlendir)
 void test_auto_skip_ui();  // D04-2: Tercihler Otomatik/Atlama satirlari + AUTO/SKIP gostergesi
 void test_player_preferences_menu();  // D05-2: Tercihler pause'dan + dil / metin boyutu / kontrast / hareket satirlari, sigma

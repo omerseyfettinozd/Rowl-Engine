@@ -2555,6 +2555,10 @@ float Engine::getVignetteIntensity() const {
 }
 
 void Engine::run() {
+    run(std::function<void(float)>{});
+}
+
+void Engine::run(const std::function<void(float)>& afterStep) {
     if (!m_initialized) {
         ROWL_LOG_ERROR("Engine run() called without initialization!");
         return;
@@ -2619,6 +2623,8 @@ void Engine::run() {
 
             // step() internally calls pollEvents() and sets m_isRunning = false on quit
             step(dt);
+            // D06-3: host hook (player prefetch); skipped on the quit frame.
+            if (afterStep && m_isRunning) afterStep(dt);
         } catch (const std::exception& e) {
             abortRunLoop(e.what());
             break;

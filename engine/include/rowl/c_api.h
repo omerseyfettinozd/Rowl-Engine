@@ -398,6 +398,26 @@ ROWL_API int RowlEngine_InitStandalone(RowlEngineHandle handle,
 ROWL_API void RowlEngine_Run(RowlEngineHandle handle);
 
 /**
+ * Host hook for the blocking loop: called on the loop thread after every
+ * successful frame step while the engine is still running (not after quit),
+ * with the clamped frame time in seconds. Must not block, must not throw and
+ * must not call Run/Shutdown/Destroy; the update-thread rules of the other
+ * entry points apply (prefetch pumps, reads).
+ */
+typedef void (*RowlEngine_FrameCallbackFn)(RowlEngineHandle handle, float deltaSeconds,
+                                           void* userData);
+
+/**
+ * RowlEngine_Run with a per-frame host hook (D06-3: the packaged player
+ * drives asset prefetch from it). Identical contract to RowlEngine_Run - the
+ * same foreign-thread/offscreen refusals and the same exception abort - and
+ * a null callback behaves exactly like RowlEngine_Run.
+ */
+ROWL_API void RowlEngine_RunWithFrameCallback(RowlEngineHandle handle,
+                                              RowlEngine_FrameCallbackFn callback,
+                                              void* userData);
+
+/**
  * D3 (B1d #151): administrative ownership recovery for a handle whose owner
  * thread exited without destroying it. Transfers handle ownership AND the
  * process-wide SDL event-dispatch pin to the calling thread and reports
@@ -1646,6 +1666,26 @@ ROWL_API RowlEngine_ResultCode RowlEngine_LoadChapterIndexJson(
 /** Appends one chapter file (editor LoadChapterFile schema); re-feeding a chapter replaces it. */
 ROWL_API RowlEngine_ResultCode RowlEngine_AppendChapterFileJson(
     RowlEngineHandle handle, const char* chapterJsonUtf8);
+/**
+ * Feeds the chapter loader from the ACTIVE VFS (a packaged game or loose
+ * Assets), the standalone player's counterpart of the editor's chapter feed:
+ * reads `<chaptersDir>/chapter_index.json` (null/empty = "json/chapters"),
+ * then `<chaptersDir>/<chapter id>.json` for every chapter the index lists
+ * (the editor's file-name rule: characters illegal in file names become '_').
+ * outFedFiles (may be null) receives how many payloads the loader accepted.
+ *
+ * Unreadable or invalid chapter files are skipped and logged (the rest still
+ * feed). Returns OK when every listed chapter was fed and the fed node set
+ * equals the loaded story graph. FILE_NOT_FOUND when the project has no chapter index (a normal condition:
+ * the single implicit chapter / the graph's own chapter list is used, the
+ * loader stays untouched). PARSE_ERROR/VALIDATION_ERROR for a broken index.
+ * VALIDATION_ERROR also when the fed node set differs from the loaded story
+ * graph (a stale split): the loader is cleared again so prefetch falls back to
+ * the graph itself, and the difference is logged. Requires RowlEngine_Init
+ * and a loaded story graph (STATE_ERROR before Init).
+ */
+ROWL_API RowlEngine_ResultCode RowlEngine_FeedChaptersFromVfs(
+    RowlEngineHandle handle, const char* chaptersDirUtf8, int32_t* outFedFiles);
 /** Marks one chapter resident (widens the window, active unchanged). Unknown id -> INVALID_ARGUMENT. */
 ROWL_API RowlEngine_ResultCode RowlEngine_LoadChapter(
     RowlEngineHandle handle, const char* chapterIdUtf8);

@@ -367,18 +367,13 @@ int RowlEngine_InitStandalone(RowlEngineHandle handle,
     }, 0);
 }
 
-void RowlEngine_Run(RowlEngineHandle handle) {
-    // D13: bilerek serial-sız (by-design) — bloklar, seri Shutdown'u kilitlerdi.
-    // No video serial here by design: Run blocks until quit, so holding the
-    // serial would deadlock a concurrent Shutdown waiting for it. Liveness
-    // + shared ownership is the whole guard (D3 #106).
-    // W8-a (4): yabanci-thread Run sessiz no-op degil — Destroy :274-277
-    // emsaliyle WRONG_THREAD damgali ret (loud-tier; bloklanmaz).
-    if (classifyHandle(handle) == HandleStanding::Foreign) {
-        stampWrongThread(handle, "run");
-        return;
-    }
-    if (!isLiveHandle(handle)) return;
+// D06-3: RowlEngine_Run and RowlEngine_RunWithFrameCallback share ONE loop body
+// so the blocking loop keeps a single set of guards (offscreen refusal, #123
+// exception abort). Each public entry keeps its own foreign-thread / liveness
+// preamble (the static gates in tests/test_aux_gate.py and
+// test_w8e_video_serial_pin.cpp read RowlEngine_Run's body). `callback` may be null.
+static void runEngineLoop(RowlEngineHandle handle, RowlEngine_FrameCallbackFn callback,
+                          void* userData) {
     invokeNoexcept([&] {
         auto checked = toEngineChecked(handle);
         if (!checked) return;
@@ -405,8 +400,41 @@ void RowlEngine_Run(RowlEngineHandle handle) {
                 return;
             }
         }
-        checked->run();
+        if (callback == nullptr) {
+            checked->run();
+        } else {
+            checked->run([handle, callback, userData](float deltaSeconds) {
+                callback(handle, deltaSeconds, userData);
+            });
+        }
     });
+}
+
+void RowlEngine_Run(RowlEngineHandle handle) {
+    // D13: bilerek serial-sız (by-design) — bloklar, seri Shutdown'u kilitlerdi.
+    // No video serial here by design: Run blocks until quit, so holding the
+    // serial would deadlock a concurrent Shutdown waiting for it. Liveness
+    // + shared ownership is the whole guard (D3 #106).
+    // W8-a (4): yabanci-thread Run sessiz no-op degil — Destroy :274-277
+    // emsaliyle WRONG_THREAD damgali ret (loud-tier; bloklanmaz).
+    if (classifyHandle(handle) == HandleStanding::Foreign) {
+        stampWrongThread(handle, "run");
+        return;
+    }
+    if (!isLiveHandle(handle)) return;
+    runEngineLoop(handle, nullptr, nullptr);
+}
+
+void RowlEngine_RunWithFrameCallback(RowlEngineHandle handle,
+                                     RowlEngine_FrameCallbackFn callback,
+                                     void* userData) {
+    // Same preamble as RowlEngine_Run (serial-free, foreign-thread refusal).
+    if (classifyHandle(handle) == HandleStanding::Foreign) {
+        stampWrongThread(handle, "run");
+        return;
+    }
+    if (!isLiveHandle(handle)) return;
+    runEngineLoop(handle, callback, userData);
 }
 
 void RowlEngine_Step(RowlEngineHandle handle, float deltaTime) {

@@ -1,5 +1,6 @@
 #include "rowl/c_api.h"
 #include "rowl/platform/crash_handler.hpp"
+#include "rowl/player/chapter_prefetch_driver.hpp"
 #include "rowl/state/profile_language.hpp"
 #include <nlohmann/json.hpp>
 #include <iostream>
@@ -563,6 +564,13 @@ int rowlPlayerMain(int argc, char* argv[]) {
     }
     refreshCrashSnapshot(engine);
 
+    // D06-3: asset prefetch. Feeds the chapter loader from the game's own
+    // files (package or loose Assets) and warms the next scene's assets from
+    // the frame hook below. A warm-up only: failures are logged, never fatal.
+    Rowl::Player::ChapterPrefetchDriver prefetch(
+        2.0F, [](const std::string& line) { std::cout << line << "\n"; });
+    if (!gpuSmokeTest) prefetch.attach(engine);
+
     // D01d: the player's stored preferences (volumes, text speed, ...) take
     // effect before the first frame. Only the existing public setters are used.
     {
@@ -632,6 +640,24 @@ int rowlPlayerMain(int argc, char* argv[]) {
             }
             std::cout << "[Player] Package smoke title: ok continue_slot=" << continueSlot << "\n";
         }
+        // D06-3: prefetch drives from the same frame hook as the real loop.
+        // Frames are stepped until the queue drains (bounded), then the
+        // outcome is printed for the packaged-player test.
+        for (int frame = 0; frame < 600 && (frame == 0 || prefetch.pumping()); ++frame) {
+            RowlEngine_Step(engine, 1.0F / 60.0F);
+            prefetch.onFrame(engine);
+        }
+        {
+            const Rowl::Player::ChapterPrefetchDriver::Stats& stats = prefetch.stats();
+            const nlohmann::json progress = Rowl::Player::ChapterPrefetchDriver::progress(engine);
+            std::cout << "[Player] Package smoke prefetch: chapters_fed="
+                      << (stats.chaptersFed ? "true" : "false") << " fed_files=" << stats.fedFiles
+                      << " windows=" << stats.triggers << " refused=" << stats.refusedTriggers
+                      << " total=" << playerFieldText(progress, "total_assets", "0")
+                      << " ready=" << playerFieldText(progress, "ready_assets", "0")
+                      << " missing=" << playerFieldText(progress, "missing_assets", "0")
+                      << " complete=" << playerFieldText(progress, "complete", "false") << "\n";
+        }
         std::cout << "[Player] Package smoke frame rendered from VFS story graph.\n";
     } else if (gpuSmokeTest) {
         // This travels through the same standalone window, VFS-mounted atlas,
@@ -644,8 +670,10 @@ int rowlPlayerMain(int argc, char* argv[]) {
         if (titleState == "title" && RowlEngine_OpenTitleScreen(engine) != ROWL_RESULT_OK) {
             std::cerr << "[Player] Title screen could not be opened; starting the story.\n";
         }
-        // Start standalone interactive game loop
-        RowlEngine_Run(engine);
+        // Start standalone interactive game loop (D06-3: with the prefetch
+        // hook; same guards as RowlEngine_Run).
+        RowlEngine_RunWithFrameCallback(engine, &Rowl::Player::ChapterPrefetchDriver::frameCallback,
+                                        &prefetch);
     }
 
     // Clean teardown

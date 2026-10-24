@@ -20,7 +20,9 @@
 
 #include "c_api_internal.hpp"
 #include "rowl/core/chapter_loader.hpp"
+#include "rowl/core/logger.hpp"
 #include "rowl/core/prefetch.hpp"
+#include "rowl/vfs/vfs.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -29,7 +31,9 @@
 #include <mutex>
 #include <optional>
 #include <shared_mutex>
+#include <string>
 #include <unordered_map>
+#include <unordered_set>
 
 namespace {
 
@@ -75,6 +79,42 @@ RowlEngine_ResultCode checkChapterId(const char* chapterId, std::string_view& ou
 
 bool isParseError(const std::string& error) {
     return error.find("not valid JSON") != std::string::npos;
+}
+
+/// D06-3: default VFS folder of the editor's split chapters
+/// (<Assets>/json/chapters; the VFS root is the Assets folder).
+constexpr const char* kDefaultChaptersDir = "json/chapters";
+constexpr const char* kChapterIndexFileName = "chapter_index.json";
+
+/// The editor's chapter file name rule (ChapterStorageService.SanitizeFileName):
+/// characters a file name cannot hold become '_'. The editor runs on the OS
+/// that wrote the files, so the packaged player tries the raw id first and
+/// this portable (Windows-strict) form second.
+std::string sanitizedChapterFileStem(const std::string& chapterId) {
+    std::string out;
+    out.reserve(chapterId.size());
+    for (const char c : chapterId) {
+        const bool invalid = static_cast<unsigned char>(c) < 0x20 || c == '/' || c == '\\' ||
+                             c == '<' || c == '>' || c == ':' || c == '"' || c == '|' ||
+                             c == '?' || c == '*';
+        out.push_back(invalid ? '_' : c);
+    }
+    return out;
+}
+
+/// Reads a whole VFS file as text. nullopt = absent; oversize = also nullopt
+/// with `tooLarge` set (the caller reports it).
+std::optional<std::string> readVfsText(Rowl::VFS::VFSManager& vfs, const std::string& path,
+                                       std::size_t limitBytes, bool& tooLarge) {
+    tooLarge = false;
+    if (!vfs.exists(path)) return std::nullopt;
+    const std::vector<uint8_t> bytes = vfs.readBytes(path);
+    if (bytes.empty()) return std::nullopt;
+    if (bytes.size() > limitBytes) {
+        tooLarge = true;
+        return std::nullopt;
+    }
+    return std::string(bytes.begin(), bytes.end());
 }
 
 } // namespace
@@ -215,6 +255,121 @@ RowlEngine_ResultCode RowlEngine_AppendChapterFileJson(RowlEngineHandle handle,
                                        : ROWL_RESULT_VALIDATION_ERROR;
         }
         runtime.lastError.clear();
+        return ROWL_RESULT_OK;
+    }, ROWL_RESULT_UNKNOWN_ERROR);
+}
+
+RowlEngine_ResultCode RowlEngine_FeedChaptersFromVfs(RowlEngineHandle handle,
+                                                     const char* chaptersDirUtf8,
+                                                     int32_t* outFedFiles) {
+    if (outFedFiles != nullptr) *outFedFiles = 0;
+    // D3 (#150/#157): ölü-ayrımı guard'da; erase yalnız gerçek ölümde.
+    if (const auto guard = guardPrefetchEntry(handle, "feed_chapters_from_vfs")) {
+        return *guard;
+    }
+    std::string chaptersDir = kDefaultChaptersDir;
+    if (chaptersDirUtf8 != nullptr && *chaptersDirUtf8 != '\0') {
+        std::string_view view;
+        if (checkSizedInput(chaptersDirUtf8, view, kPrefetchInputLimitBytes) != ROWL_RESULT_OK) {
+            return ROWL_RESULT_INVALID_ARGUMENT;
+        }
+        chaptersDir.assign(view.data(), view.size());
+        while (!chaptersDir.empty() && chaptersDir.back() == '/') chaptersDir.pop_back();
+        if (chaptersDir.empty()) return ROWL_RESULT_INVALID_ARGUMENT;
+    }
+    std::unique_lock<std::shared_mutex> lock(g_prefetchMutex);
+    if (const auto guard = guardPrefetchEntryLocked(handle, "feed_chapters_from_vfs")) {
+        return *guard;
+    }
+    return invokeNoexcept<RowlEngine_ResultCode>([&] {
+        auto engine = toEngineChecked(handle);
+        if (engine == nullptr) return ROWL_RESULT_INVALID_HANDLE;
+        // D1 (#131) deseni: Init'siz VFS'te okuma hayalet-missing üretirdi.
+        if (!requireEngineInitialized(engine.get(), "feed_chapters_from_vfs")) {
+            return ROWL_RESULT_STATE_ERROR;
+        }
+        Rowl::VFS::VFSManager* vfs = engine->getVfs();
+        if (vfs == nullptr) return ROWL_RESULT_STATE_ERROR;
+
+        // Bölünmüş proje yoksa NORMAL durum: yükleyiciye dokunulmaz.
+        bool tooLarge = false;
+        const std::optional<std::string> indexText = readVfsText(
+            *vfs, chaptersDir + "/" + kChapterIndexFileName, kPrefetchInputLimitBytes, tooLarge);
+        if (!indexText) {
+            if (tooLarge) {
+                ROWL_LOG_WARN("[Chapters] " + chaptersDir + "/" + kChapterIndexFileName +
+                              " is larger than 256 KiB; chapter feed skipped");
+                return ROWL_RESULT_INVALID_ARGUMENT;
+            }
+            return ROWL_RESULT_FILE_NOT_FOUND;
+        }
+        const Rowl::Core::StoryGraphDocument& document = engine->getStoryGraphDocument();
+        if (document.nodes.empty()) {
+            ROWL_LOG_WARN("[Chapters] chapter feed needs a loaded story graph");
+            return ROWL_RESULT_STATE_ERROR;
+        }
+
+        PrefetchChapterRuntime& runtime = g_prefetchStates[handle];
+        std::string error;
+        if (!runtime.loader.loadIndexJson(*indexText, error)) {
+            runtime.lastError = error;
+            ROWL_LOG_WARN("[Chapters] chapter index rejected: " + error);
+            return isParseError(error) ? ROWL_RESULT_PARSE_ERROR : ROWL_RESULT_VALIDATION_ERROR;
+        }
+        int32_t fed = 1;
+        const std::vector<std::string> order = runtime.loader.orderedChapters();
+        for (const std::string& chapterId : order) {
+            std::vector<std::string> candidates{chaptersDir + "/" + chapterId + ".json"};
+            const std::string portable =
+                chaptersDir + "/" + sanitizedChapterFileStem(chapterId) + ".json";
+            if (portable != candidates.front()) candidates.push_back(portable);
+            std::optional<std::string> fileText;
+            for (const std::string& candidate : candidates) {
+                fileText = readVfsText(*vfs, candidate, kChapterFileInputLimitBytes, tooLarge);
+                if (fileText || tooLarge) break;
+            }
+            if (!fileText) {
+                ROWL_LOG_WARN("[Chapters] chapter file for '" + chapterId + "' is " +
+                              (tooLarge ? "over 16 MiB" : "missing") + "; skipped");
+                continue;
+            }
+            std::string fileError;
+            if (!runtime.loader.appendChapterFileJson(*fileText, fileError)) {
+                ROWL_LOG_WARN("[Chapters] chapter file for '" + chapterId +
+                              "' rejected: " + fileError);
+                continue;
+            }
+            ++fed;
+        }
+
+        // F8 (keşif): bölüm dosyaları tam grafikle sapabilir (bayat bölme).
+        // Fed düğüm kümesi grafikle aynı değilse yükleyici bırakılır; prefetch
+        // grafiğin kendi bölüm listesine döner (oyun akışı zaten grafiktedir).
+        std::unordered_set<uint64_t> fedIds;
+        for (const std::string& chapterId : runtime.loader.orderedChapters()) {
+            for (const uint64_t id : runtime.loader.chapterNodeIds(chapterId)) fedIds.insert(id);
+        }
+        std::size_t missingFromChapters = 0;
+        std::size_t extraInChapters = 0;
+        for (const auto& entry : document.nodes) {
+            if (fedIds.find(entry.first) == fedIds.end()) ++missingFromChapters;
+        }
+        for (const uint64_t id : fedIds) {
+            if (document.nodes.find(id) == document.nodes.end()) ++extraInChapters;
+        }
+        if (missingFromChapters != 0 || extraInChapters != 0) {
+            const std::string detail =
+                "chapter files disagree with the story graph (" +
+                std::to_string(missingFromChapters) + " graph nodes missing from the chapter files, " +
+                std::to_string(extraInChapters) + " chapter-file nodes not in the graph); "
+                "ignoring the chapter files - re-split the chapters in the editor";
+            runtime.loader = Rowl::Core::ChapterLoader{};
+            runtime.lastError = detail;
+            ROWL_LOG_WARN("[Chapters] " + detail);
+            return ROWL_RESULT_VALIDATION_ERROR;
+        }
+        runtime.lastError.clear();
+        if (outFedFiles != nullptr) *outFedFiles = fed;
         return ROWL_RESULT_OK;
     }, ROWL_RESULT_UNKNOWN_ERROR);
 }

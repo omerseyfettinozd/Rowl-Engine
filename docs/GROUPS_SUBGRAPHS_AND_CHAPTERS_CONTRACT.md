@@ -151,3 +151,24 @@ subgraph collapsed-proxy rendering (this slice uses boundary-pin
 scoping), chapter lazy-loading into the runtime (Faz 5 chapter index),
 linter issue navigation, autosave journal / crash recovery, background
 asset/thumbnail workers.
+
+## 9. Runtime behavior at a chapter boundary (D06-3)
+
+Locked by `tests/test_chapter_boundary_persistence.cpp` (two-chapter v5 graph,
+memory-resident BGM in chapter 1, streamed OGG BGM from the first node of
+chapter 2):
+
+- Crossing the boundary flips `GetCurrentChapterId`; the node's entry effects
+  (variable, sfx, BGM) run exactly once.
+- A save carries `chapter_id` and `chapter_title` (slot metadata JSON).
+- Load restores node, chapter, variables and the playing BGM (path and
+  streaming decision) and replays no entry effect; loading a pre-boundary save
+  from inside chapter 2 returns to chapter 1 and its memory track.
+- Rewind across the boundary returns to the earlier chapter and its music and
+  replays no sfx. `Rewind(1)` moves one state link, and a node with entry
+  effects owns several links (a variable and a BGM change each add one), so a
+  player may need several presses to leave a node; every landing in between is
+  still a consistent state of that node.
+- The chapter files of a split project never decide play: the runtime plays
+  `json/full_story_graph.json`; the files only feed prefetch
+  (`PREFETCH_AND_CHAPTERS_CONTRACT.md` section 8).
