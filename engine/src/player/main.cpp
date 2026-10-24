@@ -586,7 +586,7 @@ int rowlPlayerMain(int argc, char* argv[]) {
         }
         // D02: the title screen opens, New Game closes it again.
         {
-            bool titleOk = RowlEngine_OpenTitleScreen(engine) == 1;
+            bool titleOk = RowlEngine_OpenTitleScreen(engine) == ROWL_RESULT_OK;
             nlohmann::json menu = playerParseObject(RowlEngine_GetPauseMenuJson(engine));
             titleOk = titleOk && menu.value("mode", -1) == 3 && menu.value("title_active", false);
             const int continueSlot = menu.value("continue_slot", -1);
@@ -597,7 +597,9 @@ int rowlPlayerMain(int argc, char* argv[]) {
                     menu = playerParseObject(RowlEngine_GetPauseMenuJson(engine));
                 }
                 RowlEngine_PauseMenuCommand(engine, ROWL_PAUSE_MENU_CONFIRM);
-                titleOk = RowlEngine_IsTitleScreenActive(engine) == 0 && RowlEngine_IsPaused(engine) == 0;
+                int32_t titleActive = 1;
+                titleOk = RowlEngine_IsTitleScreenActive(engine, &titleActive) == ROWL_RESULT_OK &&
+                          titleActive == 0 && RowlEngine_IsPaused(engine) == 0;
             }
             if (!titleOk) {
                 std::cerr << "[Player] Package smoke failed: the title screen did not open/close.\n";
@@ -615,7 +617,7 @@ int rowlPlayerMain(int argc, char* argv[]) {
         std::cout << "[Player] GPU MSDF smoke frame rendered.\n";
     } else {
         // D02: the packaged player opens on the title screen.
-        if (titleState == "title" && RowlEngine_OpenTitleScreen(engine) != 1) {
+        if (titleState == "title" && RowlEngine_OpenTitleScreen(engine) != ROWL_RESULT_OK) {
             std::cerr << "[Player] Title screen could not be opened; starting the story.\n";
         }
         // Start standalone interactive game loop

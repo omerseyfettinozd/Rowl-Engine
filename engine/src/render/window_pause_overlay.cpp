@@ -97,7 +97,9 @@ void Window::renderPauseMenuOverlay(const Rowl::Core::PauseMenuView& view) {
     // C02 BUG-2: gorunur pencerede overlay her kare dim basar; donmus hikaye
     // karesi onbellekten atlanirsa arka tampon bos kalir / dim ust uste biner
     // (siyah ekran, resize sonrasi dahil). Sonraki kare hikayeyi tam cizsin.
-    if (!m_isOffscreen) invalidateFrameCache();
+    // Offscreen yuzeyde de ayni: onbellekteki kare onceki overlay'i tasir —
+    // dim her karede koyulasir, sayfa degisince eski menu soluk kalirdi.
+    invalidateFrameCache();
 
     // Offscreen software path: flush queued rects before direct text writes.
     if (m_isOffscreen) {

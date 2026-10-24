@@ -99,7 +99,17 @@ void Engine::menuActivateSelected() {
         case 0: setPaused(false); break;
         case 1: m_pauseMode = PauseMenuMode::SaveSlots; m_pauseSelected = 0; m_pauseConfirmQuit = false; break;
         case 2: m_pauseMode = PauseMenuMode::LoadSlots; m_pauseSelected = 0; m_pauseConfirmQuit = false; break;
-        case 8:
+        case PauseMenuLayout::kMainTitleRow:
+            // D02: back to the title screen; unsaved progress is lost, so it
+            // takes the same two-step confirmation as exit.
+            if (m_pauseConfirmQuit) {
+                ROWL_LOG_INFO("[Player] Returning to the title screen from pause menu.");
+                openTitleScreen();
+            } else {
+                m_pauseConfirmQuit = true;
+            }
+            break;
+        case PauseMenuLayout::kMainExitRow:
             if (m_pauseConfirmQuit) {
                 ROWL_LOG_INFO("[Player] Exit confirmed from pause menu.");
                 m_isRunning = false;
@@ -151,6 +161,9 @@ void Engine::pauseMenuClick(float virtualX, float virtualY) {
     if (row < 0) return; // gaps and outside miss; selection is kept
     const bool alreadySelected = (row == m_pauseSelected);
     m_pauseSelected = row;
+    // A confirmation armed on one row never carries over to another row
+    // (keyboard moves disarm the same way in pauseMenuMoveSelection).
+    if (!alreadySelected) m_pauseConfirmQuit = false;
     if (pauseMenuValueRow() >= 0) {
         const int dir = PauseMenuLayout::adjustDirection(virtualX);
         if (dir != 0) {
@@ -187,6 +200,9 @@ PauseMenuView Engine::getPauseMenuView() const {
     view.selected = m_pauseSelected;
     view.titleActive = m_titleActive;
     if (m_pauseMode == PauseMenuMode::Main) {
+        const bool confirmTitle =
+            m_pauseConfirmQuit && m_pauseSelected == PauseMenuLayout::kMainTitleRow;
+        const bool confirmExit = m_pauseConfirmQuit && !confirmTitle;
         view.title = "Duraklatildi";
         view.rows = {
             {"Devam Et", "", false},
@@ -197,9 +213,12 @@ PauseMenuView Engine::getPauseMenuView() const {
             {"SFX", pauseMenuPercent(pauseMenuVolume(5)), true},
             {"Seslendirme", pauseMenuPercent(pauseMenuVolume(6)), true},
             {"Metin Hizi", pauseMenuSpeedText(m_textSpeedMultiplier), true},
-            {"Cikis", m_pauseConfirmQuit ? "emin misin?" : "", false},
+            {"Ana Menu", confirmTitle ? "emin misin?" : "", false},
+            {"Cikis", confirmExit ? "emin misin?" : "", false},
         };
-        view.hint = m_pauseConfirmQuit
+        view.hint = confirmTitle
+            ? "ENTER: ana menuye don (kaydedilmemis ilerleme kaybolur)   ESC: vazgec"
+            : confirmExit
             ? "ENTER: cikisi onayla   ESC: vazgec"
             : "YUKARI/ASAGI: sec   SOL/SAG: ayar   ENTER: tamam   ESC: devam et";
     } else {
@@ -262,8 +281,11 @@ std::string Engine::getPauseMenuJson() const {
     out += std::to_string(static_cast<int>(m_pauseMode));
     out += ",\"selected\":";
     out += std::to_string(view.selected);
+    // D02: one armed flag serves both confirm rows; JSON tells them apart.
+    const bool confirmTitle = m_pauseConfirmQuit && m_pauseMode == PauseMenuMode::Main &&
+                              m_pauseSelected == PauseMenuLayout::kMainTitleRow;
     out += ",\"confirm_quit\":";
-    out += m_pauseConfirmQuit ? "true" : "false";
+    out += (m_pauseConfirmQuit && !confirmTitle) ? "true" : "false";
     out += ",\"quick_slot\":";
     out += std::to_string(m_activeQuickSlot);
     out += ",\"title\":";
@@ -289,6 +311,8 @@ std::string Engine::getPauseMenuJson() const {
     out += view.titleActive ? "true" : "false";
     out += ",\"continue_slot\":";
     out += std::to_string(view.continueSlot);
+    out += ",\"confirm_title\":";
+    out += confirmTitle ? "true" : "false";
     out += ",\"selected_has_thumbnail\":";
     out += view.thumbnailPng ? "true" : "false";
     out += "}";

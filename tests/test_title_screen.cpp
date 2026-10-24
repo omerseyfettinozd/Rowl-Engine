@@ -22,6 +22,8 @@
  */
 #include "rowl_test_harness.hpp"
 
+#include "rowl/core/pause_menu.hpp"
+
 #include <nlohmann/json.hpp>
 
 #include <chrono>
@@ -105,15 +107,23 @@ void expectNode(RowlEngineHandle h, uint64_t expected, const std::string& what) 
                                 ", got " + std::to_string(actual));
 }
 
+bool titleActive(RowlEngineHandle h) {
+    int32_t active = -1;
+    req(RowlEngine_IsTitleScreenActive(h, &active) == ROWL_RESULT_OK, "IsTitleScreenActive failed");
+    req(RowlEngine_IsTitleScreenActive(h, nullptr) == ROWL_RESULT_INVALID_ARGUMENT,
+        "IsTitleScreenActive(NULL) must be INVALID_ARGUMENT");
+    return active == 1;
+}
+
 void expectTitle(RowlEngineHandle h, int mode, const std::string& what) {
     const json m = menu(h);
-    req(RowlEngine_IsTitleScreenActive(h) == 1 && m["title_active"].get<bool>(), what + ": title not active");
+    req(titleActive(h) && m["title_active"].get<bool>(), what + ": title not active");
     req(m["mode"].get<int>() == mode, what + ": mode " + std::to_string(m["mode"].get<int>()) +
                                           ", expected " + std::to_string(mode));
 }
 
 void expectClosed(RowlEngineHandle h, const std::string& what) {
-    req(RowlEngine_IsTitleScreenActive(h) == 0, what + ": title still active");
+    req(!titleActive(h), what + ": title still active");
     req(RowlEngine_IsPaused(h) == 0, what + ": still paused");
 }
 
@@ -157,7 +167,7 @@ void test_title_screen() {
     RowlEngineHandle h = RowlEngine_Create();
     req(h && RowlEngine_Init(h, 320, 180, 0) == 1, "engine init failed");
     // Not initialized-engine guard is covered by the null-handle path.
-    req(RowlEngine_OpenTitleScreen(nullptr) == 0, "null handle must fail");
+    req(RowlEngine_OpenTitleScreen(nullptr) == ROWL_RESULT_INVALID_HANDLE, "null handle must fail");
     RowlEngine_SetProjectDirectory(h, game.string().c_str());
     const fs::path saveDir = capiText(h, RowlEngine_GetSaveDirectoryUtf8);
     fs::create_directories(saveDir);
@@ -171,7 +181,7 @@ void test_title_screen() {
         "TITLE_SCREEN capability bit missing");
 
     // 1. Open: no saves yet.
-    req(RowlEngine_OpenTitleScreen(h) == 1, "OpenTitleScreen failed");
+    req(RowlEngine_OpenTitleScreen(h) == ROWL_RESULT_OK, "OpenTitleScreen failed");
     {
         expectTitle(h, 3, "open");
         const json m = menu(h);
@@ -223,7 +233,7 @@ void test_title_screen() {
     setSavedAt(slotFile(saveDir, 5), "2026-02-02T09:30:00Z");
 
     RowlEngine_SetPaused(h, 1);  // host pause menu first: closing + reopening title
-    req(RowlEngine_OpenTitleScreen(h) == 1, "reopen title");
+    req(RowlEngine_OpenTitleScreen(h) == ROWL_RESULT_OK, "reopen title");
     {
         const json m = menu(h);
         req(m["continue_slot"].get<int>() == 5, "newest save is slot 5");
@@ -239,7 +249,7 @@ void test_title_screen() {
 
     // Flip the ages: slot 3 becomes newest.
     setSavedAt(slotFile(saveDir, 3), "2026-03-03T08:00:00Z");
-    req(RowlEngine_OpenTitleScreen(h) == 1, "reopen title (flip)");
+    req(RowlEngine_OpenTitleScreen(h) == ROWL_RESULT_OK, "reopen title (flip)");
     req(menu(h)["continue_slot"].get<int>() == 3, "continue follows saved_at, not slot order");
     cmd(h, ROWL_PAUSE_MENU_CONFIRM);
     expectNode(h, 2, "Continue loaded slot 3");
@@ -252,10 +262,10 @@ void test_title_screen() {
         const auto now = fs::file_time_type::clock::now();
         fs::last_write_time(slotFile(saveDir, 3), now - std::chrono::seconds(10));
         fs::last_write_time(slotFile(saveDir, 5), now);
-        req(RowlEngine_OpenTitleScreen(h) == 1, "reopen title (same second, 5 newer)");
+        req(RowlEngine_OpenTitleScreen(h) == ROWL_RESULT_OK, "reopen title (same second, 5 newer)");
         req(menu(h)["continue_slot"].get<int>() == 5, "same-second tie: slot written last (5)");
         fs::last_write_time(slotFile(saveDir, 3), now + std::chrono::seconds(10));
-        req(RowlEngine_OpenTitleScreen(h) == 1, "reopen title (same second, 3 newer)");
+        req(RowlEngine_OpenTitleScreen(h) == ROWL_RESULT_OK, "reopen title (same second, 3 newer)");
         req(menu(h)["continue_slot"].get<int>() == 3, "same-second tie: slot written last (3)");
         RowlEngine_SetPaused(h, 0);
         setSavedAt(slotFile(saveDir, 3), "2026-03-03T08:00:00Z");
@@ -264,7 +274,7 @@ void test_title_screen() {
 
     // Newest file corrupted: row "bozuk", Continue falls back to slot 5.
     corrupt(slotFile(saveDir, 3));
-    req(RowlEngine_OpenTitleScreen(h) == 1, "reopen title (corrupt newest)");
+    req(RowlEngine_OpenTitleScreen(h) == ROWL_RESULT_OK, "reopen title (corrupt newest)");
     req(menu(h)["continue_slot"].get<int>() == 5, "corrupt newest save is skipped");
     selectRow(h, 2);
     cmd(h, ROWL_PAUSE_MENU_CONFIRM);  // Load page
@@ -301,7 +311,7 @@ void test_title_screen() {
 
     // All corrupt: Continue disabled.
     corrupt(slotFile(saveDir, 5));
-    req(RowlEngine_OpenTitleScreen(h) == 1, "reopen title (all corrupt)");
+    req(RowlEngine_OpenTitleScreen(h) == ROWL_RESULT_OK, "reopen title (all corrupt)");
     {
         const json m = menu(h);
         req(m["continue_slot"].get<int>() == -1, "no valid save left");
@@ -373,6 +383,63 @@ void test_title_screen() {
     selectRow(h, 0);
     req(menu(h)["selected_has_thumbnail"] == false, "empty slot has no thumbnail");
     TEST_PASS("Slot rows carry date + summary; selected_has_thumbnail follows the selection");
+
+    // Offscreen overlay frames: the paused story frame used to be reused from
+    // the frame cache WITH the previous overlay still on it, so every frame
+    // dimmed again (the story faded to black) and a page switch left the old
+    // page's text as a ghost. The same menu page must give the same pixels.
+    {
+        auto frame = [&](int steps) {
+            for (int i = 0; i < steps; ++i) RowlEngine_Step(h, 0.016f);
+            uint32_t w = 0, hh = 0;
+            const uint8_t* pixels = RowlEngine_GetPixelBuffer(h, &w, &hh);
+            req(pixels != nullptr && w > 0 && hh > 0, "offscreen pixel buffer");
+            return std::string(reinterpret_cast<const char*>(pixels), size_t(w) * hh * 4);
+        };
+        // The first paused frame still reuses the pre-pause cached frame;
+        // compare re-rendered frames from the second one on.
+        frame(1);
+        const std::string first = frame(1);
+        req(frame(5) == first, "paused overlay compounds over frames (offscreen)");
+        cmd(h, ROWL_PAUSE_MENU_BACK);  // main pause page
+        frame(1);
+        selectRow(h, 2);
+        cmd(h, ROWL_PAUSE_MENU_CONFIRM);  // the same Load page again
+        req(menu(h)["mode"].get<int>() == 2 && menu(h)["selected"].get<int>() == 0, "back on the load page");
+        req(frame(1) == first, "previous menu page ghosts into the next one (offscreen)");
+    }
+    TEST_PASS("Offscreen pause overlay redraws on a clean story frame");
+
+    // Pause menu "Ana Menu" (row 8): two-step back to the title. An exit
+    // confirmation armed on row 9 must not carry over to a click on row 8
+    // (it used to: one click then skipped the confirmation).
+    {
+        cmd(h, ROWL_PAUSE_MENU_BACK);  // load page -> main pause page
+        req(menu(h)["mode"].get<int>() == 0 && menu(h)["rows"].size() == 10, "pause main has 10 rows");
+        req(menu(h)["rows"][8]["label"] == "Ana Menu" && menu(h)["rows"][9]["label"] == "Cikis",
+            "Ana Menu sits before Cikis");
+        selectRow(h, 9);
+        cmd(h, ROWL_PAUSE_MENU_CONFIRM);
+        req(menu(h)["confirm_quit"] == true && menu(h)["confirm_title"] == false, "exit armed");
+        const float row8Y = Rowl::Core::PauseMenuLayout::kRowY0 +
+                            8 * (Rowl::Core::PauseMenuLayout::kRowH + Rowl::Core::PauseMenuLayout::kRowGap) +
+                            Rowl::Core::PauseMenuLayout::kRowH * 0.5f;
+        // The engine surface is 320x180: map the 1920x1080 virtual point.
+        constexpr float kToPhysical = 320.0f / 1920.0f;
+        req(RowlEngine_PointerDown(h, 960.0f * kToPhysical, row8Y * kToPhysical) == 1,
+            "paused click is consumed by the menu");
+        req(!titleActive(h), "a click on Ana Menu used the exit row's armed confirmation");
+        req(menu(h)["confirm_title"] == true && menu(h)["confirm_quit"] == false,
+            "first click on Ana Menu only arms it");
+        cmd(h, ROWL_PAUSE_MENU_BACK);
+        req(menu(h)["confirm_title"] == false && RowlEngine_IsPaused(h) == 1, "Back disarms Ana Menu");
+        cmd(h, ROWL_PAUSE_MENU_CONFIRM);
+        req(!titleActive(h), "Ana Menu needs a second confirm");
+        cmd(h, ROWL_PAUSE_MENU_CONFIRM);
+        expectTitle(h, 3, "Ana Menu confirmed");
+        req(RowlEngine_IsRunning(h) == 1, "Ana Menu must not quit");
+    }
+    TEST_PASS("Pause menu Ana Menu returns to the title after a two-step confirm");
 
     RowlEngine_Shutdown(h);
     RowlEngine_Destroy(h);

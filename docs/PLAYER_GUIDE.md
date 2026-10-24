@@ -97,6 +97,11 @@ başlıkta kalınır (`kayit yuklenemedi`) ve sonraki Devam Et bir önceki geçe
 kaydı dener. Duraklatma menüsündeki ses ve metin hızı değişiklikleri de
 profile yazılır.
 
+Duraklatma menüsündeki **Ana Menu** satırı başlık ekranına döner. Kaydedilmemiş
+ilerleme kaybolacağı için Çıkış gibi iki adımlı onay ister (Enter, Enter; Esc
+vazgeçer). Bir satırda kurulan onay başka satıra taşınmaz: fareyle başka bir
+satıra tıklamak onu yalnız ilk adıma getirir.
+
 ### Kayıtlar ve oyuncu profili nerede?
 
 Her oyun kendi **oyun kimliği** (`game_id`, paketin içindeki `rowl/game.json`)

@@ -531,7 +531,7 @@ void test_native_c_api() {
         };
         nlohmann::json menu = menuJson();
         if (!menu["open"].get<bool>() || menu["mode"].get<int>() != 0 ||
-            menu["selected"].get<int>() != 0 || menu["rows"].size() != 9 ||
+            menu["selected"].get<int>() != 0 || menu["rows"].size() != 10 ||
             menu["rows"][0]["label"].get<std::string>() != "Devam Et") {
             std::cerr << "MS-6: freshly opened menu snapshot mismatch" << std::endl;
             exit(1);
@@ -641,7 +641,7 @@ void test_native_c_api() {
         // Up from row 0 wraps to the last row (exit).
         RowlEngine_PauseMenuCommand(quitHandle, ROWL_PAUSE_MENU_UP);
         nlohmann::json quitMenu = nlohmann::json::parse(RowlEngine_GetPauseMenuJson(quitHandle));
-        if (quitMenu["selected"].get<int>() != 8) {
+        if (quitMenu["selected"].get<int>() != 9) {
             std::cerr << "MS-6: menu selection did not wrap to exit" << std::endl;
             exit(1);
         }

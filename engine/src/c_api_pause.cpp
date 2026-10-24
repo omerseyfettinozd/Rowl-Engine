@@ -94,29 +94,34 @@ int RowlEngine_IsPaused(RowlEngineHandle handle) {
     }, 0);
 }
 
-int RowlEngine_OpenTitleScreen(RowlEngineHandle handle) {
-    // D02: SetPaused emsali — claim-or-reject ile loud (WRONG_THREAD damgali 0).
+RowlEngine_ResultCode RowlEngine_OpenTitleScreen(RowlEngineHandle handle) {
+    // D02: SetPaused emsali claim-or-reject; yeni yuzey ResultCode doner.
     if (claimHandleOrClassify(handle) == HandleStanding::Foreign) {
         stampWrongThread(handle, "open_title_screen");
-        return 0;
+        return ROWL_RESULT_WRONG_THREAD;
     }
-    if (!isLiveHandle(handle)) return 0;
-    return invokeNoexcept<int>([&] {
+    if (!isLiveHandle(handle)) return ROWL_RESULT_INVALID_HANDLE;
+    return invokeNoexcept<RowlEngine_ResultCode>([&] {
         auto checked = toEngineChecked(handle);
-        return (checked && checked->openTitleScreen()) ? 1 : 0;
-    }, 0);
+        if (!checked) return ROWL_RESULT_INVALID_HANDLE;
+        return checked->openTitleScreen() ? ROWL_RESULT_OK : ROWL_RESULT_STATE_ERROR;
+    }, ROWL_RESULT_UNKNOWN_ERROR);
 }
 
-int RowlEngine_IsTitleScreenActive(RowlEngineHandle handle) {
+RowlEngine_ResultCode RowlEngine_IsTitleScreenActive(RowlEngineHandle handle, int32_t* outActive) {
+    if (outActive) *outActive = 0;
     if (claimHandleOrClassify(handle) == HandleStanding::Foreign) {
         stampWrongThread(handle, "is_title_screen_active");
-        return 0;
+        return ROWL_RESULT_WRONG_THREAD;
     }
-    if (!isLiveHandle(handle)) return 0;
-    return invokeNoexcept<int>([&] {
+    if (!isLiveHandle(handle)) return ROWL_RESULT_INVALID_HANDLE;
+    if (!outActive) return ROWL_RESULT_INVALID_ARGUMENT;
+    return invokeNoexcept<RowlEngine_ResultCode>([&] {
         auto checked = toEngineChecked(handle);
-        return (checked && checked->isTitleScreenActive()) ? 1 : 0;
-    }, 0);
+        if (!checked) return ROWL_RESULT_INVALID_HANDLE;
+        *outActive = checked->isTitleScreenActive() ? 1 : 0;
+        return ROWL_RESULT_OK;
+    }, ROWL_RESULT_UNKNOWN_ERROR);
 }
 
 void RowlEngine_PauseMenuCommand(RowlEngineHandle handle, int command) {

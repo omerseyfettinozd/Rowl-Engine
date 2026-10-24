@@ -1294,12 +1294,15 @@ ROWL_API int RowlEngine_IsPaused(RowlEngineHandle handle);
  * It is driven through the pause-menu API (RowlEngine_PauseMenuCommand,
  * RowlEngine_GetPauseMenuJson: mode 3 = title root, 4 = preferences).
  * Esc/Back never start the story; RowlEngine_SetPaused(0) closes it.
- * Returns 1 on success, 0 on failure (not initialized, wrong thread, bad handle).
+ * ROWL_RESULT_OK, or STATE_ERROR (not initialized), INVALID_HANDLE,
+ * WRONG_THREAD.
  */
-ROWL_API int RowlEngine_OpenTitleScreen(RowlEngineHandle handle);
+ROWL_API RowlEngine_ResultCode RowlEngine_OpenTitleScreen(RowlEngineHandle handle);
 
-/** Returns 1 while the title screen is active, 0 otherwise. */
-ROWL_API int RowlEngine_IsTitleScreenActive(RowlEngineHandle handle);
+/** *outActive = 1 while the title screen is active, else 0. NULL outActive:
+ *  ROWL_RESULT_INVALID_ARGUMENT. */
+ROWL_API RowlEngine_ResultCode RowlEngine_IsTitleScreenActive(
+    RowlEngineHandle handle, int32_t* outActive);
 
 /** Pause-menu navigation commands for RowlEngine_PauseMenuCommand. */
 enum RowlPauseMenuCommand {

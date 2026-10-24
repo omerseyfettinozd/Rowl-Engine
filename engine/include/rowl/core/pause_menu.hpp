@@ -97,7 +97,11 @@ struct PauseMenuLayout {
     static constexpr float kRowGap = 8.0f;
     static constexpr float kMinusX1 = 880.0f;
     static constexpr float kPlusX0 = 1040.0f;
-    static constexpr int kMainRows = 9;
+    static constexpr int kMainRows = 10;
+    /// Main page rows with a two-step confirmation: back to the title (D02)
+    /// and exit (always the last row).
+    static constexpr int kMainTitleRow = 8;
+    static constexpr int kMainExitRow = 9;
     static constexpr int kSlotRows = 10;
     static constexpr int kTitleRows = 5;
     static constexpr int kPreferenceRows = 6;
