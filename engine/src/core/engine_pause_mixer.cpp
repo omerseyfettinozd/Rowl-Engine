@@ -20,6 +20,7 @@
 #include "rowl/audio/audio_engine.hpp"
 
 #include <algorithm>
+#include <cmath>
 
 namespace Rowl::Core {
 
@@ -50,8 +51,9 @@ void Engine::setPauseMenuVolume(int row, float volume) {
 }
 
 void Engine::pauseMenuAdjustSelected(int direction) {
-    // D02: the preferences page (title) maps its rows onto main rows 3..7
-    // (D04-2: 8/9 for its auto-delay / skip-mode rows).
+    // D02: the preferences page maps its rows onto value rows 3..7 (D04-2: 8/9
+    // for auto-delay / skip-mode, D05-2: 10..13 language / text size / contrast /
+    // motion); the pause main page has none since D05-2.
     if (m_pauseMode != PauseMenuMode::Main && m_pauseMode != PauseMenuMode::Preferences) return;
     const int row = pauseMenuValueRow();
     if (row >= 3 && row <= 6) {
@@ -72,6 +74,24 @@ void Engine::pauseMenuAdjustSelected(int direction) {
             if (kCycle[i] == m_skipPolicy) index = i;
         }
         setSkipPolicy(kCycle[(index + (direction > 0 ? 1 : 2)) % 3]);
+        persistPauseMenuPreference(row);
+    } else if (row == PauseMenuLayout::kPreferenceLanguageRow + 3) {
+        // D05-2: cycles the game's locales; persists itself on a real change.
+        cyclePreferenceLanguage(direction);
+    } else if (row == PauseMenuLayout::kPreferenceTextScaleRow + 3) {
+        // D05-2: 100% -> 125% -> 150% (wraps, Left reverses), applied live.
+        static constexpr float kScales[] = {1.0f, 1.25f, 1.5f};
+        int index = 0;
+        for (int i = 1; i < 3; ++i) {
+            if (std::fabs(textScale() - kScales[i]) < std::fabs(textScale() - kScales[index])) index = i;
+        }
+        setTextScale(kScales[(index + (direction > 0 ? 1 : 2)) % 3]);
+        persistPauseMenuPreference(row);
+    } else if (row == PauseMenuLayout::kPreferenceContrastRow + 3) {
+        setHighContrast(!highContrast());  // D05-2: either direction toggles
+        persistPauseMenuPreference(row);
+    } else if (row == PauseMenuLayout::kPreferenceMotionRow + 3) {
+        setReducedMotion(!reducedMotion());
         persistPauseMenuPreference(row);
     }
     m_pauseConfirmQuit = false;

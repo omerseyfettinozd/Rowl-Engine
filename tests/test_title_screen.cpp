@@ -329,9 +329,11 @@ void test_title_screen() {
     expectTitle(h, 4, "preferences page");
     {
         const json m = menu(h);
-        req(m["rows"].size() == 8 && m["rows"][4]["label"] == "Metin Hızı" &&
+        req(m["rows"].size() == 12 && m["rows"][4]["label"] == "Metin Hızı" &&
                 m["rows"][5]["label"] == "Otomatik Hızı" && m["rows"][6]["label"] == "Atlama" &&
-                m["rows"][7]["label"] == "Geri",
+                m["rows"][7]["label"] == "Dil" && m["rows"][8]["label"] == "Metin Boyutu" &&
+                m["rows"][9]["label"] == "Yüksek Kontrast" && m["rows"][10]["label"] == "Hareketi Azalt" &&
+                m["rows"][11]["label"] == "Geri",
             "preferences rows");
     }
     selectRow(h, 4);
@@ -350,7 +352,7 @@ void test_title_screen() {
     expectTitle(h, 3, "back from preferences");
     selectRow(h, 3);
     cmd(h, ROWL_PAUSE_MENU_CONFIRM);
-    selectRow(h, 7);
+    selectRow(h, 11);
     cmd(h, ROWL_PAUSE_MENU_CONFIRM);  // Geri
     expectTitle(h, 3, "Geri row");
     TEST_PASS("Title preferences persist volume/text speed; Back and Geri return to the title");
@@ -359,7 +361,9 @@ void test_title_screen() {
     RowlEngine_SetPaused(h, 0);
     expectClosed(h, "host override");
     RowlEngine_SetPaused(h, 1);
-    selectRow(h, 7);
+    selectRow(h, 3);  // D05-2: pause main -> Tercihler (the speed row lives there)
+    cmd(h, ROWL_PAUSE_MENU_CONFIRM);
+    selectRow(h, 4);
     cmd(h, ROWL_PAUSE_MENU_RIGHT);
     req(profile(h)["text_speed_multiplier"].get<double>() == 1.5, "pause menu text speed persisted");
     TEST_PASS("Pause-menu text speed also persists into the profile");
@@ -412,20 +416,21 @@ void test_title_screen() {
     }
     TEST_PASS("Offscreen pause overlay redraws on a clean story frame");
 
-    // Pause menu "Ana Menü" (row 9): two-step back to the title. An exit
-    // confirmation armed on row 10 must not carry over to a click on row 9
+    // Pause menu "Ana Menü" (row 5, D05-2): two-step back to the title. An exit
+    // confirmation armed on row 6 must not carry over to a click on row 5
     // (it used to: one click then skipped the confirmation).
     {
         cmd(h, ROWL_PAUSE_MENU_BACK);  // load page -> main pause page
-        req(menu(h)["mode"].get<int>() == 0 && menu(h)["rows"].size() == 11, "pause main has 11 rows");
-        req(menu(h)["rows"][8]["label"] == "Geçmiş" && menu(h)["rows"][9]["label"] == "Ana Menü" &&
-                menu(h)["rows"][10]["label"] == "Çıkış",
-            "Gecmis, Ana Menu, Cikis close the main page");
-        selectRow(h, 10);
+        req(menu(h)["mode"].get<int>() == 0 && menu(h)["rows"].size() == 7, "pause main has 7 rows");
+        req(menu(h)["rows"][3]["label"] == "Tercihler" && menu(h)["rows"][4]["label"] == "Geçmiş" &&
+                menu(h)["rows"][5]["label"] == "Ana Menü" && menu(h)["rows"][6]["label"] == "Çıkış",
+            "Tercihler, Gecmis, Ana Menu, Cikis close the main page");
+        selectRow(h, 6);
         cmd(h, ROWL_PAUSE_MENU_CONFIRM);
         req(menu(h)["confirm_quit"] == true && menu(h)["confirm_title"] == false, "exit armed");
         const float row9Y = Rowl::Core::PauseMenuLayout::kRowY0 +
-                            9 * (Rowl::Core::PauseMenuLayout::kRowH + Rowl::Core::PauseMenuLayout::kRowGap) +
+                            Rowl::Core::PauseMenuLayout::kMainTitleRow *
+                                (Rowl::Core::PauseMenuLayout::kRowH + Rowl::Core::PauseMenuLayout::kRowGap) +
                             Rowl::Core::PauseMenuLayout::kRowH * 0.5f;
         // The engine surface is 320x180: map the 1920x1080 virtual point.
         constexpr float kToPhysical = 320.0f / 1920.0f;

@@ -4,8 +4,9 @@
  * capsules on the story frame.
  *
  * Kilit:
- *  1. Tercihler sayfasi 8 satir: Ana Ses, Muzik, SFX, Seslendirme, Metin Hizi,
- *     Otomatik Hizi ("2.0 sn"), Atlama ("Okunan"), Geri; mevcut 5 satirin
+ *  1. Tercihler sayfasi 12 satir (D05-2): Ana Ses, Muzik, SFX, Seslendirme,
+ *     Metin Hizi, Otomatik Hizi ("2.0 sn"), Atlama ("Okunan"), Dil, Metin
+ *     Boyutu, Yuksek Kontrast, Hareketi Azalt, Geri; mevcut 7 satirin
  *     indeksi/davranisi ayni; Geri en sonda (Enter donusu: title, secili 3).
  *  2. Otomatik Hizi: SOL/SAG +-0.5 sn, [0,10] kiskaci (0'da SOL / 10'da SAG
  *     degistirmez), Enter SAG gibi; motor degeri (GetPlayerDriverStateJson) ve
@@ -15,7 +16,8 @@
  *     Kapali iken S / Ctrl atlamayi baslatmaz, Hepsi iken baslatir.
  *  4. Fare: eksi/arti bolgesi yeni satirlari ayni degistirir; orta bant yalniz
  *     secer (ikinci tik onaylar); Geri satirina tik title'a doner.
- *  5. Menu JSON: yeni satirlarin degeri; ana duraklatma sayfasi 11 satir kalir.
+ *  5. Menu JSON: yeni satirlarin degeri; ana duraklatma sayfasi 7 satir (D05-2:
+ *     ses / metin hizi satirlari Tercihler arkasina tasindi).
  *  6. Gosterge: A ile AUTO kapsulu sag ustte belirir (bolge farki, disi ayni),
  *     kapaninca kare ilk hikaye karesiyle BIT BIT ayni (bayat kare yok, cache'li
  *     kareler dahil); SKIP (Ctrl basili, okunmamis satir: ilerlemez) kapsulu;
@@ -188,7 +190,9 @@ struct Rig {
     }
     // Row center in the virtual canvas: x picks the minus / middle / plus zone.
     void click(int row, float x) const {
-        engine->pauseMenuClick(x, LM::kRowY0 + static_cast<float>(row) * (LM::kRowH + LM::kRowGap) + LM::kRowH * 0.5f);
+        // The page's own row geometry (D05-2: Preferences uses the compact pitch).
+        const int rowCount = static_cast<int>(menu()["rows"].size());
+        engine->pauseMenuClick(x, LM::rowTop(row, rowCount) + LM::rowH(rowCount) * 0.5f);
     }
     std::string frame(int steps = 3) const {
         step(0.016f, steps);
@@ -276,17 +280,18 @@ void test_auto_skip_ui() {
             const json m = rig.menu();
             req(m["mode"].get<int>() == 4, "Tercihler is mode 4");
             const json& rows = m["rows"];
-            req(rows.size() == 8 && LM::kPreferenceRows == 8, "8 preference rows: " + m.dump());
+            req(rows.size() == 12 && LM::kPreferenceRows == 12, "12 preference rows: " + m.dump());
             const char* labels[] = {"Ana Ses", "Müzik", "SFX", "Seslendirme", "Metin Hızı",
-                                    "Otomatik Hızı", "Atlama", "Geri"};
-            for (int i = 0; i < 8; ++i) {
+                                    "Otomatik Hızı", "Atlama", "Dil", "Metin Boyutu",
+                                    "Yüksek Kontrast", "Hareketi Azalt", "Geri"};
+            for (int i = 0; i < 12; ++i) {
                 req(rows[i]["label"] == labels[i], std::string("row ") + std::to_string(i) + " label");
             }
             req(delayText(m) == "2.0 sn", "default delay row: " + delayText(m));
             req(skipText(m) == "Okunan", "default skip row: " + skipText(m));
-            req(rows[7]["value"] == "" && rows[0]["value"] == "100%", "Geri has no value; mixer rows unchanged");
+            req(rows[11]["value"] == "" && rows[0]["value"] == "100%", "Geri has no value; mixer rows unchanged");
         }
-        TEST_PASS("Preferences lists 8 rows: five old ones in place, Otomatik Hizi, Atlama, Geri");
+        TEST_PASS("Preferences lists 12 rows: seven old ones in place, then Dil, Metin Boyutu, Yuksek Kontrast, Hareketi Azalt, Geri");
 
         // ── 2. Otomatik Hizi ───────────────────────────────────────────────
         rig.selectRow(5);
@@ -377,29 +382,29 @@ void test_auto_skip_ui() {
         req(skipText(rig.menu()) == "Hepsi" && rig.profile()["skip_mode"] == "all", "plus-zone click cycles the skip row");
         rig.click(6, 700.0f);
         req(skipText(rig.menu()) == "Okunan", "minus-zone click cycles back");
-        rig.click(7, 960.0f);  // Geri
+        rig.click(11, 960.0f);  // Geri
         {
             const json m = rig.menu();
             req(m["mode"].get<int>() == 3 && m["title_active"].get<bool>() && m["selected"].get<int>() == 3,
                 "clicking Geri returns to the title on Tercihler: " + m.dump());
         }
         rig.cmd(ROWL_PAUSE_MENU_CONFIRM);
-        rig.selectRow(7);
+        rig.selectRow(11);
         rig.cmd(ROWL_PAUSE_MENU_CONFIRM);
         req(rig.menu()["mode"].get<int>() == 3, "Enter on Geri returns to the title");
         TEST_PASS("Mouse: zones step the new rows, middle band selects, Geri clicks back to the title");
 
-        // ── 5. Pause main page is untouched ────────────────────────────────
+        // ── 5. Pause main page: D05-2 trimmed it to 7 rows ─────────────────
         RowlEngine_SetPaused(h, 0);
         RowlEngine_SetPaused(h, 1);
         {
             const json m = rig.menu();
-            req(m["mode"].get<int>() == 0 && m["rows"].size() == 11 && m["rows"][7]["label"] == "Metin Hızı" &&
-                    m["rows"][8]["label"] == "Geçmiş",
-                "pause main page keeps its 11 rows: " + m.dump());
+            req(m["mode"].get<int>() == 0 && m["rows"].size() == 7 && m["rows"][3]["label"] == "Tercihler" &&
+                    m["rows"][4]["label"] == "Geçmiş",
+                "pause main page has 7 rows, Tercihler at 3: " + m.dump());
         }
         RowlEngine_SetPaused(h, 0);
-        TEST_PASS("Pause main page keeps its 11 rows");
+        TEST_PASS("Pause main page: 7 rows (mixer / speed rows moved behind Tercihler)");
 
     }
 

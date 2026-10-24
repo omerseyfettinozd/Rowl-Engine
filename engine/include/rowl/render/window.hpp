@@ -360,6 +360,9 @@ public:
         for (auto& entry : m_buttonFontCache)
             if (entry.second) fn(*entry.second);
     }
+    /// D05-2: display settings (text scale, contrast) change glyph sizes without
+    /// touching scene content; the static-frame cache must re-render then.
+    void invalidateDisplayCache() { m_frameCacheValid = false; }
     void reloadFonts();
 
     /**

@@ -125,27 +125,43 @@ struct PauseMenuLayout {
     static constexpr float kPanelH = 860.0f;
     static constexpr float kRowX = 580.0f;
     static constexpr float kRowW = 760.0f;
-    // D03-2: 11 main rows (Gecmis) must clear the hint line at panel bottom;
-    // the first row still starts below the slot-page thumbnail box.
+    // D03-2: 11 rows must clear the hint line at panel bottom; the first row
+    // still starts below the slot-page thumbnail box.
     static constexpr float kRowY0 = 270.0f;
     static constexpr float kRowH = 54.0f;
     static constexpr float kRowGap = 4.0f;
+    /// D05-2: a page with more than kComfortRows rows (Preferences, 12) uses a
+    /// compact pitch that starts higher (no thumbnail on those pages): the 12th
+    /// row's bottom edge stays above the hint line (y = kPanelY + kPanelH - 44).
+    static constexpr int kComfortRows = 11;
+    static constexpr float kCompactRowY0 = 250.0f;
+    static constexpr float kCompactRowH = 50.0f;
+    static constexpr float kCompactRowGap = 4.0f;
     static constexpr float kMinusX1 = 880.0f;
     static constexpr float kPlusX0 = 1040.0f;
-    static constexpr int kMainRows = 11;
+    /// D05-2: pause main page. Resume 0, Save 1, Load 2, Preferences 3 (opens
+    /// the shared Preferences page; Back returns here), History 4, Main Menu 5,
+    /// Quit 6. The mixer / speed rows live on the Preferences page only.
+    static constexpr int kMainRows = 7;
+    static constexpr int kMainPrefsRow = 3;
     /// D03-2: opens the backlog page (no confirmation).
-    static constexpr int kMainBacklogRow = 8;
+    static constexpr int kMainBacklogRow = 4;
     /// Main page rows with a two-step confirmation: back to the title (D02)
     /// and exit (always the last row).
-    static constexpr int kMainTitleRow = 9;
-    static constexpr int kMainExitRow = 10;
+    static constexpr int kMainTitleRow = 5;
+    static constexpr int kMainExitRow = 6;
     static constexpr int kSlotRows = 10;
     static constexpr int kTitleRows = 5;
     /// Preferences page: 5 mixer/speed rows, D04-2 "Otomatik Hizi" (5) and
-    /// "Atlama" (6), then "Geri" (always the last row).
-    static constexpr int kPreferenceRows = 8;
+    /// "Atlama" (6), D05-2 "Dil" (7), "Metin Boyutu" (8), "Yuksek Kontrast" (9)
+    /// and "Hareketi Azalt" (10), then "Geri" (always the last row).
+    static constexpr int kPreferenceRows = 12;
     static constexpr int kPreferenceAutoDelayRow = 5;
     static constexpr int kPreferenceSkipRow = 6;
+    static constexpr int kPreferenceLanguageRow = 7;
+    static constexpr int kPreferenceTextScaleRow = 8;
+    static constexpr int kPreferenceContrastRow = 9;
+    static constexpr int kPreferenceMotionRow = 10;
     /// D02: slot-page thumbnail box (virtual canvas), panel top-right.
     static constexpr float kThumbX = 1180.0f;
     static constexpr float kThumbY = 150.0f;
@@ -167,13 +183,29 @@ struct PauseMenuLayout {
     static constexpr float kBacklogTextW = kRowW - 2.0f * kBacklogPadX - 60.0f;
     static constexpr int kBacklogMaxLines = 8;
 
+    /// Row geometry of a page with `rowCount` rows (virtual canvas): the
+    /// comfortable pitch up to kComfortRows rows, the compact one beyond.
+    static inline float rowY0(int rowCount) {
+        return rowCount > kComfortRows ? kCompactRowY0 : kRowY0;
+    }
+    static inline float rowH(int rowCount) {
+        return rowCount > kComfortRows ? kCompactRowH : kRowH;
+    }
+    static inline float rowStride(int rowCount) {
+        return rowH(rowCount) + (rowCount > kComfortRows ? kCompactRowGap : kRowGap);
+    }
+    static inline float rowTop(int index, int rowCount) {
+        return rowY0(rowCount) + static_cast<float>(index) * rowStride(rowCount);
+    }
+
     /// Row index under a virtual point, or -1 for gaps/outside.
     static inline int rowAt(float vx, float vy, int rowCount) {
-        if (vx < kRowX || vx > kRowX + kRowW || vy < kRowY0) return -1;
-        const float stride = kRowH + kRowGap;
-        const int index = static_cast<int>((vy - kRowY0) / stride);
+        const float y0 = rowY0(rowCount);
+        if (vx < kRowX || vx > kRowX + kRowW || vy < y0) return -1;
+        const float stride = rowStride(rowCount);
+        const int index = static_cast<int>((vy - y0) / stride);
         if (index < 0 || index >= rowCount) return -1;
-        return (vy <= kRowY0 + index * stride + kRowH) ? index : -1;
+        return (vy <= y0 + index * stride + rowH(rowCount)) ? index : -1;
     }
 
     /// -1 = minus zone, +1 = plus zone, 0 = middle (select only).

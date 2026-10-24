@@ -1062,7 +1062,11 @@ void Window::renderVisualNovelFrame(
             float tagW = std::clamp(speakerTextW + (32.0f * metrics.scaleFactor),
                                     120.0f * metrics.scaleFactor,
                                     std::max(scaledDlgW * 0.8f, 120.0f * metrics.scaleFactor));
-            float tagH = (dlg.speakerFontSize * 1.4f + 12.0f) * metrics.scaleFactor;
+            // D05-2: the renderer draws the name at speakerFontPx * textScale, so
+            // the badge height and the text's vertical centring follow that size.
+            const float speakerTextScale = m_fontRenderer ? m_fontRenderer->textScale() : 1.0f;
+            const float speakerDrawPx = speakerFontPx * speakerTextScale;
+            float tagH = (dlg.speakerFontSize * speakerTextScale * 1.4f + 12.0f) * metrics.scaleFactor;
             float tagX = physBoxX + (20.0f * metrics.scaleFactor);
             float tagY = physBoxY - (tagH * 0.6f);
 
@@ -1092,7 +1096,7 @@ void Window::renderVisualNovelFrame(
                     speakerMsdfOk = drawMsdfShapedAllOrNothing(
                         m_sdlRenderer, m_msdfRenderState, m_msdfRenderer.get(), m_msdfAtlasTexture,
                         *shapedSpeaker, dlg.speaker, tagX + 16.0f * metrics.scaleFactor,
-                        tagY + (tagH - speakerFontPx) / 2.0f - (2.0f * metrics.scaleFactor),
+                        tagY + (tagH - speakerDrawPx) / 2.0f - (2.0f * metrics.scaleFactor),
                         speakerFontPx, {255,255,255,255}, shapedSpeaker->revealUnits.size(),
                         speakerWrapW, "Left");
                 } else {
@@ -1104,7 +1108,7 @@ void Window::renderVisualNovelFrame(
                     speakerMsdfOk = drawTrueTypeTextOnGpu(
                         m_sdlRenderer, m_fontRenderer.get(), nullptr, dlg.speaker,
                         tagX + 16.0f * metrics.scaleFactor,
-                        tagY + (tagH - speakerFontPx) / 2.0f - (2.0f * metrics.scaleFactor),
+                        tagY + (tagH - speakerDrawPx) / 2.0f - (2.0f * metrics.scaleFactor),
                         speakerFontPx, {255,255,255,255}, speakerWrapW, tagH, "Left");
                 }
                 if (!speakerMsdfOk) {
@@ -1255,10 +1259,13 @@ void Window::renderVisualNovelFrame(
             float tagW = std::clamp(speakerTextW + (32.0f * metrics.scaleFactor),
                                     120.0f * metrics.scaleFactor,
                                     std::max(scaledDlgW * 0.8f, 120.0f * metrics.scaleFactor));
-                float tagH = (dlg.speakerFontSize * 1.4f + 12.0f) * metrics.scaleFactor;
+                // D05-2: same scaled-size rule as the GPU path above.
+                const float speakerTextScale = m_fontRenderer->textScale();
+                const float speakerDrawPx = speakerFontPx * speakerTextScale;
+                float tagH = (dlg.speakerFontSize * speakerTextScale * 1.4f + 12.0f) * metrics.scaleFactor;
                 float tagX = physBoxX + (20.0f * metrics.scaleFactor);
                 float tagY = physBoxY - (tagH * 0.6f);
-                float textDrawY = tagY + (tagH - speakerFontPx) / 2.0f - (2.0f * metrics.scaleFactor);
+                float textDrawY = tagY + (tagH - speakerDrawPx) / 2.0f - (2.0f * metrics.scaleFactor);
 
                 m_fontRenderer->renderText(
                     m_offscreenSurface,

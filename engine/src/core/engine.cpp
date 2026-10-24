@@ -166,7 +166,9 @@ void Engine::handleRuntimeInput(const Rowl::Platform::RuntimeInputEvent& event) 
         case Type::PauseToggle:
             // D02: Esc/P on the title screen never starts the story.
             // D03-2: on the backlog page it is Back (to the pause menu or the story).
-            if (m_titleActive || isBacklogOpen()) menuBack();
+            // D05-2: on the Preferences page it is Back too (to the pause menu).
+            if (m_titleActive || isBacklogOpen() ||
+                (m_paused && m_pauseMode == PauseMenuMode::Preferences)) menuBack();
             else togglePause();
             break;
         case Type::MenuUp:
@@ -2846,6 +2848,7 @@ void Engine::resetSessionProfile() {
     m_pauseSelected = 0;
     m_backlogTop = 0;  // D03-2
     m_backlogFromPause = false;
+    m_prefsFromPause = false;  // D05-2
     m_activeQuickSlot = 0;
     m_pauseSlotCacheValid = false;
     m_titleActive = false;  // D02

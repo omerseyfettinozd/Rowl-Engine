@@ -6,7 +6,7 @@
  *
  * Bacaklar (cikarim-oncesi YESIL baz = ongorulen gozlem + exit 0):
  *   (1) pause-menu (engine_pause_menu.cpp): SetPaused(1) -> JSON open:true,
- *       baslik "Duraklatıldı", 11 satir (D02: Ana Menu, D03-2: Gecmis); DOWN -> selected:1; ESC-back ->
+ *       baslik "Duraklatıldı", 7 satir (D02: Ana Menu, D03-2: Gecmis, D05-2: Tercihler); DOWN -> selected:1; ESC-back ->
  *       resume (open:false). Kilit-koruma: cift SetPaused(1) gezinmeyi
  *       sifirlamaz (selected korunur).
  *   (2) keymap (window_input.cpp): Escape/P -> PauseToggle, Space/Enter ->
@@ -124,7 +124,7 @@ int main() {
         const std::string json = raw ? raw : "";
         check(json.find("\"open\":true") != std::string::npos, "pause: open:true");
         check(json.find("Duraklatıldı") != std::string::npos, "pause: baslik Duraklatıldı");
-        check(countOccurrences(json, "\"label\"") == 11, "pause: 11 satir");
+        check(countOccurrences(json, "\"label\"") == 7, "pause: 7 satir");
         check(json.find("\"selected\":0") != std::string::npos, "pause: ilk secim 0");
     }
     RowlEngine_PauseMenuCommand(h, ROWL_PAUSE_MENU_DOWN);

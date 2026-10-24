@@ -122,6 +122,7 @@ bool Engine::openTitleScreen() {
     m_skipHold = false;
     resetAutoWait();
     m_pauseMode = PauseMenuMode::Title;
+    m_prefsFromPause = false;  // D05-2
     m_pauseConfirmQuit = false;
     m_titleHint = UiText::None;
     m_pauseSlotCacheValid = false;
@@ -213,7 +214,11 @@ void Engine::titleActivateSelected() {
                 case 0: titleStartNewGame(); break;
                 case 1: titleContinue(); break;
                 case 2: m_pauseMode = PauseMenuMode::LoadSlots; m_pauseSelected = 0; break;
-                case 3: m_pauseMode = PauseMenuMode::Preferences; m_pauseSelected = 0; break;
+                case 3:
+                    m_pauseMode = PauseMenuMode::Preferences;
+                    m_prefsFromPause = false;  // D05-2: Back returns to the title
+                    m_pauseSelected = 0;
+                    break;
                 case 4:
                     if (m_pauseConfirmQuit) {
                         ROWL_LOG_INFO("[Player] Exit confirmed from title screen.");
@@ -227,8 +232,7 @@ void Engine::titleActivateSelected() {
             break;
         case PauseMenuMode::Preferences:
             if (m_pauseSelected == PauseMenuLayout::kPreferenceRows - 1) {
-                m_pauseMode = PauseMenuMode::Title;
-                m_pauseSelected = 3;
+                leavePreferencesPage();
             } else {
                 pauseMenuAdjustSelected(+1);  // keyboard Confirm steps like Right
             }
@@ -251,22 +255,33 @@ void Engine::titleBack() {
         m_pauseMode = PauseMenuMode::Title;
         m_pauseSelected = 2;
     } else if (m_pauseMode == PauseMenuMode::Preferences) {
-        m_pauseMode = PauseMenuMode::Title;
-        m_pauseSelected = 3;
+        leavePreferencesPage();
     }
 }
 
-int Engine::pauseMenuValueRow() const {
-    // Main rows 3..7 are the adjustable ones; the preferences page lists the
-    // same five first (row r -> main row r+3), then D04-2's two page-only value
-    // rows (5 -> 8 auto delay, 6 -> 9 skip mode) followed by "Geri". Rows 8/9
-    // only exist as value rows on the preferences page (on the main page they
-    // are Gecmis / Ana Menu, which this never reports).
-    if (m_pauseMode == PauseMenuMode::Main) {
-        return (m_pauseSelected >= 3 && m_pauseSelected <= 7) ? m_pauseSelected : -1;
+void Engine::leavePreferencesPage() {
+    // D05-2: the page remembers where it was opened from. The pause menu's
+    // "Tercihler" row and the title's both land back on their own row.
+    if (m_prefsFromPause) {
+        m_prefsFromPause = false;
+        m_pauseMode = PauseMenuMode::Main;
+        m_pauseSelected = PauseMenuLayout::kMainPrefsRow;
+    } else {
+        m_pauseMode = PauseMenuMode::Title;
+        m_pauseSelected = 3;
     }
+    m_pauseConfirmQuit = false;
+}
+
+int Engine::pauseMenuValueRow() const {
+    // Only the Preferences page has adjustable rows (D05-2: the pause main page
+    // links to it). Page row r maps onto the value-row numbers r+3 used by
+    // pauseMenuAdjustSelected / persistPauseMenuPreference: 3..6 the four
+    // volumes, 7 text speed, then D04-2's 8 auto delay and 9 skip mode and
+    // D05-2's 10 language, 11 text size, 12 high contrast, 13 reduced motion.
+    // The last page row ("Geri") has no value.
     if (m_pauseMode == PauseMenuMode::Preferences) {
-        return (m_pauseSelected >= 0 && m_pauseSelected <= PauseMenuLayout::kPreferenceSkipRow)
+        return (m_pauseSelected >= 0 && m_pauseSelected <= PauseMenuLayout::kPreferenceMotionRow)
             ? m_pauseSelected + 3 : -1;
     }
     return -1;
@@ -289,6 +304,12 @@ void Engine::persistPauseMenuPreference(int row) {
             patch["skip_mode"] = m_skipPolicy == SkipPolicy::Off ? "off"
                                : m_skipPolicy == SkipPolicy::All ? "all" : "read_only";
             break;
+        // D05-2: language and accessibility rows. The stored value is read back
+        // from the engine (what really took effect), never the requested one.
+        case 10: patch["language"] = m_localization.getLocale(); break;
+        case 11: patch["text_scale"] = rounded(textScale()); break;
+        case 12: patch["high_contrast"] = highContrast(); break;
+        case 13: patch["reduced_motion"] = reducedMotion(); break;
         default: return;
     }
     m_playerProfile.setPreferencesJson(patch.dump());
@@ -315,6 +336,10 @@ PauseMenuView Engine::getTitleMenuView() const {
             {T(UiText::Skip), T(m_skipPolicy == SkipPolicy::Off ? UiText::Off
                               : m_skipPolicy == SkipPolicy::All ? UiText::All : UiText::ReadOnly),
              true, "", true},
+            {T(UiText::Language), preferenceLanguageText(), true, "", true},
+            {T(UiText::TextSize), pauseMenuPercent(textScale()), true, "", true},
+            {T(UiText::HighContrast), T(highContrast() ? UiText::On : UiText::Off), true, "", true},
+            {T(UiText::ReduceMotion), T(reducedMotion() ? UiText::On : UiText::Off), true, "", true},
             {T(UiText::Back), "", false},
         };
         view.hint = T(UiText::HintPreferences);

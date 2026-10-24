@@ -342,6 +342,17 @@ public:
     /// visible language flips without a node change.
     void refreshActiveDialogueLocalization();
 
+    // ── D05-2: accessibility state shared by the C API and the Preferences
+    // page (engine_pause_prefs.cpp). The state lives in the font renderers
+    // (scale / contrast) and the camera (reduced motion); with no window the
+    // setters are no-ops and the getters report the defaults.
+    void setTextScale(float scale);
+    float textScale() const;
+    void setHighContrast(bool enabled);
+    bool highContrast() const;
+    void setReducedMotion(bool enabled);
+    bool reducedMotion() const;
+
     // ── Voice Blips & Audio Effects (Milestone 25) ────────────────────────
     void setDialogueVoiceBlip(const std::string& soundPath, float basePitch, float pitchVariance, int cadence, bool skipPunctuation, int channelType);
     const std::string& getDialogueVoiceBlipSound() const { return m_activeDialogueData.typewriterSound; }
@@ -586,6 +597,9 @@ private:
     // mutable because the const view builder re-fits it after a font/scale change).
     mutable int m_backlogTop = 0;
     bool m_backlogFromPause = false;
+    // D05-2: the Preferences page was opened from the pause main page (Back and
+    // Esc return there); false = opened from the title screen.
+    bool m_prefsFromPause = false;
     int32_t m_activeQuickSlot = 0;
     // A2b: pause slot-page occupancy cache. getPauseMenuView runs per UI
     // refresh (up to every frame from the editor preview); 10 slots x 2
@@ -682,6 +696,8 @@ private:
     void ensureSlotCache() const;
     void titleActivateSelected();
     void titleBack();
+    /// D05-2: leaves the Preferences page for where it was opened from.
+    void leavePreferencesPage();
     bool titleLoadSlot(int32_t slotIndex);
     void titleStartNewGame();
     bool titleContinue();
@@ -689,6 +705,11 @@ private:
     void markPresentedDialoguesRead();
     int pauseMenuValueRow() const;
     void persistPauseMenuPreference(int row);
+    /// D05-2: Language row — cycles the game's supported locales (same path as
+    /// RowlEngine_SetLocale incl. refreshActiveDialogueLocalization); no-op on a
+    /// game with fewer than two switchable locales.
+    void cyclePreferenceLanguage(int direction);
+    std::string preferenceLanguageText() const;
     PauseMenuView getTitleMenuView() const;
     float pauseMenuVolume(int row) const;
     /// #86: setting a volume row also commits the mixer to the game state

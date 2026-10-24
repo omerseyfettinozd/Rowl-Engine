@@ -126,9 +126,16 @@ void Window::renderPauseMenuOverlay(const Rowl::Core::PauseMenuView& view) {
     const SDL_Color titleColor{56, 189, 248, 255};
     const SDL_Color textColor{241, 245, 249, 255};
     const SDL_Color dimColor{148, 163, 184, 255};
+    // D05-2: the renderer multiplies every font size by the accessibility text
+    // scale. The fixed-pitch menu boxes (title, hint, row detail) must not
+    // outgrow their rows, so those texts are drawn at their design size (the
+    // base is divided by the scale); a row's label/value may grow with the
+    // scale up to what its row box holds (see rowPx below). The backlog list
+    // keeps scaling: the engine laid it out with the same factor.
+    const float accessScale = std::max(1.0f, m_fontRenderer->textScale());
     float tx = 0.0f, ty = 0.0f;
     toPhys(LM::kRowX, 170.0f, tx, ty);
-    drawText(view.title, tx, ty, 40.0f * metrics.scaleFactor, titleColor,
+    drawText(view.title, tx, ty, 40.0f * metrics.scaleFactor / accessScale, titleColor,
              LM::kRowW * metrics.scaleFactor, 60.0f * metrics.scaleFactor);
 
     // D03-2: backlog page — engine-laid-out entries (wrapped lines, y/h in the
@@ -192,11 +199,13 @@ void Window::renderPauseMenuOverlay(const Rowl::Core::PauseMenuView& view) {
     const int rows = backlogEntries ? 0 : static_cast<int>(view.rows.size());
     for (int i = 0; i < rows; ++i) {
         const auto& row = view.rows[i];
-        const float rowTop = LM::kRowY0 + i * (LM::kRowH + LM::kRowGap);
+        // D05-2: pages with more than kComfortRows rows (Preferences) use the
+        // compact pitch so the last row clears the hint line.
+        const float rowTop = LM::rowTop(i, rows);
         float rx = 0.0f, ry = 0.0f;
         toPhys(LM::kRowX, rowTop, rx, ry);
         const float rowW = LM::kRowW * metrics.scaleFactor;
-        const float rowH = LM::kRowH * metrics.scaleFactor;
+        const float rowH = LM::rowH(rows) * metrics.scaleFactor;
         const bool selected = (i == view.selected);
         if (selected) {
             const SDL_FRect highlight{rx, ry, rowW, rowH};
@@ -209,28 +218,35 @@ void Window::renderPauseMenuOverlay(const Rowl::Core::PauseMenuView& view) {
                 SDL_RenderPresent(m_sdlRenderer);
             }
         }
-        const float fontPx = 24.0f * metrics.scaleFactor;
         // D02: a row with a detail line lifts label/value to make room for it;
         // detail-less rows keep the exact pre-D02 geometry.
         const bool hasDetail = !row.detail.empty();
+        // D05-2: label/value follow the text scale only as far as the row box
+        // holds them (60% of the row height); a detail row stays at design size.
+        const float rowPx = hasDetail ? 24.0f
+                                      : std::min(24.0f * accessScale, LM::rowH(rows) * 0.6f);
+        const float fontPx = rowPx * metrics.scaleFactor;
+        const float drawPx = fontPx / accessScale;  // what drawText is given
+        // The compact (12-row) pitch has 4 px less room under the glyphs.
         const float textY = ry + rowH * 0.5f - fontPx * 0.35f -
-                            (hasDetail ? 9.0f * metrics.scaleFactor : 0.0f);
+                            (hasDetail ? 9.0f * metrics.scaleFactor : 0.0f) -
+                            (rows > LM::kComfortRows ? 4.0f * metrics.scaleFactor : 0.0f);
         const SDL_Color labelColor = !row.enabled ? dimColor : (selected ? titleColor : textColor);
-        drawText(row.label, rx + 18.0f * metrics.scaleFactor, textY, fontPx,
+        drawText(row.label, rx + 18.0f * metrics.scaleFactor, textY, drawPx,
                  labelColor, rowW * 0.55f, rowH);
         if (!row.value.empty()) {
-            drawText(row.value, rx + rowW * 0.55f, textY, fontPx, dimColor, rowW * 0.4f, rowH);
+            drawText(row.value, rx + rowW * 0.55f, textY, drawPx, dimColor, rowW * 0.4f, rowH);
         }
         if (hasDetail) {
             drawText(row.detail, rx + 18.0f * metrics.scaleFactor,
-                     ry + rowH - 22.0f * metrics.scaleFactor, 16.0f * metrics.scaleFactor,
+                     ry + rowH - 22.0f * metrics.scaleFactor, 16.0f * metrics.scaleFactor / accessScale,
                      dimColor, rowW - 36.0f * metrics.scaleFactor, 20.0f * metrics.scaleFactor);
         }
     }
 
     float hx = 0.0f, hy = 0.0f;
     toPhys(LM::kRowX, LM::kPanelY + LM::kPanelH - 44.0f, hx, hy);
-    drawText(view.hint, hx, hy, 19.0f * metrics.scaleFactor, dimColor,
+    drawText(view.hint, hx, hy, 19.0f * metrics.scaleFactor / accessScale, dimColor,
              LM::kRowW * metrics.scaleFactor, 30.0f * metrics.scaleFactor);
 }
 

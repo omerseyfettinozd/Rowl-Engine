@@ -189,28 +189,25 @@ struct Labels {
     const char* resume;
     const char* save;
     const char* load;
-    const char* master;
-    const char* music;
-    const char* sfx;
-    const char* voice;
-    const char* textSpeed;
+    const char* preferences;
     const char* history;
     const char* mainMenu;
     const char* quit;
 };
 
-const Labels kTr = {"Duraklatıldı", "Devam Et", "Oyunu Kaydet", "Oyunu Yükle", "Ana Ses", "Müzik", "SFX",
-                    "Seslendirme", "Metin Hızı", "Geçmiş", "Ana Menü", "Çıkış"};
-const Labels kEn = {"Paused", "Resume", "Save Game", "Load Game", "Master Volume", "Music", "SFX",
-                    "Voice", "Text Speed", "History", "Main Menu", "Quit"};
+// D05-2: the pause main page lists Resume, Save, Load, Preferences, History,
+// Main Menu, Quit; mixer / speed rows live on the Preferences page.
+const Labels kTr = {"Duraklatıldı", "Devam Et", "Oyunu Kaydet", "Oyunu Yükle", "Tercihler", "Geçmiş",
+                    "Ana Menü", "Çıkış"};
+const Labels kEn = {"Paused", "Resume", "Save Game", "Load Game", "Preferences", "History",
+                    "Main Menu", "Quit"};
 
 void expectPauseMain(const Game& game, const Labels& L, const std::string& what) {
     const json m = game.menu();
-    req(m["mode"].get<int>() == 0 && m["rows"].size() == 11, what + ": pause main page shape");
+    req(m["mode"].get<int>() == 0 && m["rows"].size() == 7, what + ": pause main page shape");
     req(m["title"] == L.paused, what + ": title " + m["title"].dump());
-    const char* expected[] = {L.resume, L.save, L.load, L.master, L.music, L.sfx,
-                              L.voice, L.textSpeed, L.history, L.mainMenu, L.quit};
-    for (int i = 0; i < 11; ++i) {
+    const char* expected[] = {L.resume, L.save, L.load, L.preferences, L.history, L.mainMenu, L.quit};
+    for (int i = 0; i < 7; ++i) {
         req(m["rows"][i]["label"] == expected[i],
             what + ": row " + std::to_string(i) + " label " + m["rows"][i]["label"].dump());
     }
@@ -399,18 +396,20 @@ void test_player_ui_language() {
         expectPauseMain(g, kTr, "tr game");
         {
             const json m = g.menu();
-            req(m["rows"][1]["value"] == "yuva seç >" && m["rows"][8]["value"] == "satırlar >", "tr values");
-            req(m["hint"] == "YUKARI/AŞAĞI: seç   SOL/SAĞ: ayar   ENTER: tamam   ESC: devam et", "tr hint");
+            req(m["rows"][1]["value"] == "yuva seç >" && m["rows"][4]["value"] == "satırlar >" &&
+                    m["rows"][3]["value"] == ">",
+                "tr values");
+            req(m["hint"] == "YUKARI/AŞAĞI: seç   ENTER: tamam   ESC: devam et", "tr hint");
         }
 
         // Two-step confirm texts follow the language too.
-        g.selectRow(9);
+        g.selectRow(5);
         g.cmd(ROWL_PAUSE_MENU_CONFIRM);
-        req(g.menu()["rows"][9]["value"] == "emin misin?" &&
+        req(g.menu()["rows"][5]["value"] == "emin misin?" &&
                 g.menu()["hint"].get<std::string>().find("ana menüye dön") != std::string::npos,
             "tr confirm texts");
         g.setLocale("en");
-        req(g.menu()["rows"][9]["value"] == "are you sure?" &&
+        req(g.menu()["rows"][5]["value"] == "are you sure?" &&
                 g.menu()["hint"].get<std::string>().find("back to main menu") != std::string::npos,
             "en confirm texts follow a live switch");
         g.cmd(ROWL_PAUSE_MENU_BACK);
@@ -434,8 +433,8 @@ void test_player_ui_language() {
         // English pages.
         {
             const json m = g.menu();
-            req(m["rows"][1]["value"] == "pick slot >" && m["rows"][8]["value"] == "lines >", "en values");
-            req(m["hint"] == "UP/DOWN: select   LEFT/RIGHT: adjust   ENTER: OK   ESC: resume", "en hint");
+            req(m["rows"][1]["value"] == "pick slot >" && m["rows"][4]["value"] == "lines >", "en values");
+            req(m["hint"] == "UP/DOWN: select   ENTER: OK   ESC: resume", "en hint");
         }
         g.selectRow(1);
         g.cmd(ROWL_PAUSE_MENU_CONFIRM);  // save page
@@ -461,7 +460,7 @@ void test_player_ui_language() {
         g.cmd(ROWL_PAUSE_MENU_BACK);
 
         // Backlog: empty and with rows.
-        g.selectRow(8);
+        g.selectRow(4);
         g.cmd(ROWL_PAUSE_MENU_CONFIRM);
         {
             const json m = g.menu();
@@ -501,9 +500,12 @@ void test_player_ui_language() {
         g.cmd(ROWL_PAUSE_MENU_CONFIRM);
         {
             const json m = g.menu();
-            req(m["mode"].get<int>() == 4 && m["title"] == "Preferences" && m["rows"].size() == 8, "en preferences");
-            const char* en[] = {"Master Volume", "Music", "SFX", "Voice", "Text Speed", "Auto Speed", "Skip", "Back"};
-            for (int i = 0; i < 8; ++i) req(m["rows"][i]["label"] == en[i], std::string("en pref row ") + en[i]);
+            req(m["mode"].get<int>() == 4 && m["title"] == "Preferences" && m["rows"].size() == 12, "en preferences");
+            const char* en[] = {"Master Volume", "Music", "SFX", "Voice", "Text Speed", "Auto Speed", "Skip",
+                                "Language", "Text Size", "High Contrast", "Reduce Motion", "Back"};
+            for (int i = 0; i < 12; ++i) req(m["rows"][i]["label"] == en[i], std::string("en pref row ") + en[i]);
+            req(m["rows"][8]["value"] == "100%" && m["rows"][9]["value"] == "Off" && m["rows"][10]["value"] == "Off",
+                "en pref accessibility values");
             req(m["rows"][5]["value"] == "2.0 s" && m["rows"][6]["value"] == "Read only", "en pref values");
             req(m["hint"] == "UP/DOWN: select   LEFT/RIGHT: adjust   ESC: back", "en pref hint");
         }
@@ -518,7 +520,9 @@ void test_player_ui_language() {
             req(m["title"] == "Tercihler" && m["rows"][4]["label"] == "Metin Hızı" &&
                     m["rows"][5]["label"] == "Otomatik Hızı" && m["rows"][5]["value"] == "2.0 sn" &&
                     m["rows"][6]["label"] == "Atlama" && m["rows"][6]["value"] == "Kapalı" &&
-                    m["rows"][7]["label"] == "Geri",
+                    m["rows"][7]["label"] == "Dil" && m["rows"][8]["label"] == "Metin Boyutu" &&
+                    m["rows"][9]["label"] == "Yüksek Kontrast" && m["rows"][9]["value"] == "Kapalı" &&
+                    m["rows"][10]["label"] == "Hareketi Azalt" && m["rows"][11]["label"] == "Geri",
                 "tr preferences after a live switch: " + m.dump());
         }
     }

@@ -313,6 +313,7 @@ set(ROWL_ENGINE_SOURCES
     src/core/chapter_loader.cpp
     src/core/engine.cpp
     src/core/engine_pause_mixer.cpp  # D15: pause-menu/mixer dörtlüsü (davranışsız taşıma)
+    src/core/engine_pause_prefs.cpp  # D05-2: Tercihler sayfasi erisilebilirlik + dil satirlari
     src/core/engine_title_menu.cpp  # D02: native title screen / Devam Et / Tercihler
     src/core/player_ui_strings.cpp  # D05-1: oyuncu menu yazi tablosu (tr/en)
     src/core/engine_backlog.cpp     # D03-2: oyuncuda Gecmis (backlog) ekrani

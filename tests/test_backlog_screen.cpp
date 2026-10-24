@@ -423,21 +423,21 @@ void test_backlog_screen() {
     }
     TEST_PASS("Title ignores B/wheel; pause menu still consumes the wheel (no backlog)");
 
-    // 2. Pause-menu entry: Geri -> main page (row 8); direct entry: Geri -> story.
+    // 2. Pause-menu entry: Geri -> main page (row 4, D05-2); direct entry: Geri -> story.
     {
         RowlEngine_SetPaused(h, 1);
         {
             const json m = menu(h);
-            req(m["rows"].size() == 11 && m["rows"][8]["label"] == "Geçmiş" && m["rows"][9]["label"] == "Ana Menü",
+            req(m["rows"].size() == 7 && m["rows"][4]["label"] == "Geçmiş" && m["rows"][5]["label"] == "Ana Menü",
                 "main page lists Gecmis before Ana Menu");
         }
-        cmd(h, ROWL_PAUSE_MENU_DOWN, 8);
+        cmd(h, ROWL_PAUSE_MENU_DOWN, 4);
         cmd(h, ROWL_PAUSE_MENU_CONFIRM);
         req(rig.open() && rig.selected() == total - 1, "pause menu 'Gecmis' row opens the backlog on the newest row");
         cmd(h, ROWL_PAUSE_MENU_BACK);
         {
             const json m = menu(h);
-            req(rig.paused() && m["mode"] == 0 && m["selected"] == 8 && !m.contains("backlog"),
+            req(rig.paused() && m["mode"] == 0 && m["selected"] == 4 && !m.contains("backlog"),
                 "Geri returns to the pause main page on the Gecmis row");
         }
         cmd(h, ROWL_PAUSE_MENU_CONFIRM);
@@ -475,7 +475,7 @@ void test_backlog_screen() {
                                    std::to_string(path) + ")");
         }
     }
-    TEST_PASS("Geri/B/right click/Esc: pause-opened -> pause main page (row 8), story-opened -> story");
+    TEST_PASS("Geri/B/right click/Esc: pause-opened -> pause main page (row 4), story-opened -> story");
 
     // 3. Navigation, scroll window and layout.
     {

@@ -42,6 +42,7 @@ add_executable(rowl_tests
     test_auto_skip.cpp
     test_auto_skip_ui.cpp
     test_player_ui_language.cpp
+    test_player_preferences_menu.cpp
     test_graph_vnext.cpp
     test_localization.cpp
     test_locale_cluster.cpp

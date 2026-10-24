@@ -6,6 +6,7 @@
 
 #include <array>
 #include <cstddef>
+#include <string>
 
 namespace Rowl::Core {
 
@@ -37,8 +38,8 @@ constexpr std::array<Entry, static_cast<std::size_t>(UiText::Count)> kTable = {{
     /* LinesValue */ {"satırlar >", "lines >"},
     /* AreYouSure */ {"emin misin?", "are you sure?"},
     /* HintPauseMain */
-    {"YUKARI/AŞAĞI: seç   SOL/SAĞ: ayar   ENTER: tamam   ESC: devam et",
-     "UP/DOWN: select   LEFT/RIGHT: adjust   ENTER: OK   ESC: resume"},
+    {"YUKARI/AŞAĞI: seç   ENTER: tamam   ESC: devam et",
+     "UP/DOWN: select   ENTER: OK   ESC: resume"},
     /* HintConfirmMainMenu */
     {"ENTER: ana menüye dön (kaydedilmemiş ilerleme kaybolur)   ESC: vazgeç",
      "ENTER: back to main menu (unsaved progress is lost)   ESC: cancel"},
@@ -86,6 +87,11 @@ constexpr std::array<Entry, static_cast<std::size_t>(UiText::Count)> kTable = {{
     /* HintPreferences */
     {"YUKARI/AŞAĞI: seç   SOL/SAĞ: ayar   ESC: geri",
      "UP/DOWN: select   LEFT/RIGHT: adjust   ESC: back"},
+    /* Language */ {"Dil", "Language"},
+    /* TextSize */ {"Metin Boyutu", "Text Size"},
+    /* HighContrast */ {"Yüksek Kontrast", "High Contrast"},
+    /* ReduceMotion */ {"Hareketi Azalt", "Reduce Motion"},
+    /* On */ {"Açık", "On"},
 
     /* SecondsUnit */ {"sn", "s"},
 }};
@@ -107,4 +113,16 @@ UiLang uiLangForLocale(std::string_view activeLocale, bool localeDeclared) {
     return turkish ? UiLang::Turkish : UiLang::English;
 }
 
+std::string localeDisplayName(std::string_view tag) {
+    std::string lower(tag);
+    for (char& c : lower) {
+        if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a');
+    }
+    if (lower == "tr") return "Türkçe";
+    if (lower == "en") return "English";
+    if (lower == "de") return "Deutsch";
+    return std::string(tag);
+}
+
 }  // namespace Rowl::Core
+

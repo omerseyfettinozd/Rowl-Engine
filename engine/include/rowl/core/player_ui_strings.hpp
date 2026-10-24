@@ -1,5 +1,6 @@
 #pragma once
 
+#include <string>
 #include <string_view>
 
 namespace Rowl::Core {
@@ -34,6 +35,8 @@ enum class UiText : unsigned char {
     // Preferences page
     PreferencesTitle, AutoSpeed, Skip, Off, All, ReadOnly, Back,
     HintPreferences,
+    // D05-2: language / accessibility rows
+    Language, TextSize, HighContrast, ReduceMotion, On,
 
     // Units
     SecondsUnit,
@@ -50,5 +53,10 @@ const char* uiText(UiText id, UiLang lang);
 /// engine keeps its historical Turkish menus then, whatever the "en" fallback
 /// locale says.
 UiLang uiLangForLocale(std::string_view activeLocale, bool localeDeclared);
+
+/// D05-2: player-facing name of a locale tag for the Language row: "Türkçe" /
+/// "English" / "Deutsch" for "tr" / "en" / "de" (any case), the tag itself for
+/// every other (or regional) tag. Never empty for a non-empty tag.
+std::string localeDisplayName(std::string_view tag);
 
 }  // namespace Rowl::Core

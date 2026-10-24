@@ -47,6 +47,7 @@ void Engine::setPaused(bool paused) {
     m_pauseConfirmQuit = false;
     m_backlogTop = 0;  // D03-2: a fresh open never inherits backlog state
     m_backlogFromPause = false;
+    m_prefsFromPause = false;  // D05-2
     // A2b: a fresh menu open rebuilds slot occupancy — saves or deletes may
     // have happened out-of-band while unpaused (editor, quick keys).
     m_pauseSlotCacheValid = false;
@@ -115,6 +116,14 @@ void Engine::menuActivateSelected() {
         case 0: setPaused(false); break;
         case 1: m_pauseMode = PauseMenuMode::SaveSlots; m_pauseSelected = 0; m_pauseConfirmQuit = false; break;
         case 2: m_pauseMode = PauseMenuMode::LoadSlots; m_pauseSelected = 0; m_pauseConfirmQuit = false; break;
+        case PauseMenuLayout::kMainPrefsRow:
+            // D05-2: the shared Preferences page opens over the pause menu and
+            // Back / Esc return to this row.
+            m_pauseMode = PauseMenuMode::Preferences;
+            m_prefsFromPause = true;
+            m_pauseSelected = 0;
+            m_pauseConfirmQuit = false;
+            break;
         case PauseMenuLayout::kMainBacklogRow:
             // D03-2: the backlog opens over the pause menu and Back returns here.
             m_pauseMode = PauseMenuMode::Backlog;
@@ -142,11 +151,7 @@ void Engine::menuActivateSelected() {
                 m_pauseConfirmQuit = true;
             }
             break;
-        default:
-            // Value rows (3-7) have no activation of their own; keyboard
-            // Confirm still steps them up like Right for parity with clicks.
-            pauseMenuAdjustSelected(+1);
-            break;
+        default: break;
     }
 }
 
@@ -162,6 +167,10 @@ void Engine::menuBack() {
     }
     if (m_pauseConfirmQuit) {
         m_pauseConfirmQuit = false;
+        return;
+    }
+    if (m_pauseMode == PauseMenuMode::Preferences) {  // D05-2: back to its opener's row
+        leavePreferencesPage();
         return;
     }
     if (m_pauseMode != PauseMenuMode::Main) {
@@ -266,11 +275,7 @@ PauseMenuView Engine::getPauseMenuView() const {
             {T(UiText::Resume), "", false},
             {T(UiText::SaveGame), T(UiText::PickSlotValue), false},
             {T(UiText::LoadGame), T(UiText::PickSlotValue), false},
-            {T(UiText::MasterVolume), pauseMenuPercent(pauseMenuVolume(3)), true},
-            {T(UiText::Music), pauseMenuPercent(pauseMenuVolume(4)), true},
-            {T(UiText::Sfx), pauseMenuPercent(pauseMenuVolume(5)), true},
-            {T(UiText::Voice), pauseMenuPercent(pauseMenuVolume(6)), true},
-            {T(UiText::TextSpeed), pauseMenuSpeedText(m_textSpeedMultiplier), true},
+            {T(UiText::Preferences), ">", false, "", true},
             {T(UiText::History), T(UiText::LinesValue), false, "", true},
             {T(UiText::MainMenu), confirmTitle ? T(UiText::AreYouSure) : "", false},
             {T(UiText::Quit), confirmExit ? T(UiText::AreYouSure) : "", false},
