@@ -120,6 +120,9 @@ public:
         return count;
     }
 
+    /// Toplam baslatilan SFX sayisi (gozlem; slot atamalarinin monoton sayaci).
+    uint64_t startedCount() const { return m_sequenceCounter; }
+
     std::vector<SfxVoice>& voices() { return m_voices; }
     const std::vector<SfxVoice>& voices() const { return m_voices; }
 

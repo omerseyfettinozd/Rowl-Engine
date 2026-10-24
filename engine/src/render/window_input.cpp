@@ -69,6 +69,24 @@ bool Window::mapKeyToRuntimeInput(uint32_t sdlKey, Rowl::Platform::RuntimeInputE
         outEvent.type = Type::QuickLoad;
         return true;
     }
+    // D03-2: B opens/closes the dialogue backlog (Gecmis).
+    if (sdlKey == SDLK_B) {
+        outEvent.type = Type::Backlog;
+        return true;
+    }
+    // D04-1: A = Auto, S = Skip toggle, Ctrl held = Skip (release = KeyUp).
+    if (sdlKey == SDLK_A) {
+        outEvent.type = Type::ToggleAuto;
+        return true;
+    }
+    if (sdlKey == SDLK_S) {
+        outEvent.type = Type::ToggleSkip;
+        return true;
+    }
+    if (sdlKey == SDLK_LCTRL || sdlKey == SDLK_RCTRL) {
+        outEvent.type = Type::SkipHold;
+        return true;
+    }
     if (sdlKey == SDLK_BACKSPACE || sdlKey == SDLK_Z) {
         outEvent.type = Type::Rewind;
         return true;
@@ -98,6 +116,13 @@ void Window::pollEvents(bool& outShouldQuit) {
                 Rowl::Platform::RuntimeInputEvent input{
                     Rowl::Platform::RuntimeInputEvent::Type::Advance};
                 if (mapKeyToRuntimeInput(static_cast<uint32_t>(event.key.key), input)) {
+                    // D04-1: OS key repeat must not re-toggle Auto/Skip (the three
+                    // new keys only; Space/arrows keep their repeat behavior).
+                    using KeyType = Rowl::Platform::RuntimeInputEvent::Type;
+                    const bool driverKey = input.type == KeyType::ToggleAuto ||
+                                           input.type == KeyType::ToggleSkip ||
+                                           input.type == KeyType::SkipHold;
+                    if (driverKey && event.key.repeat) break;
                     if (m_inputHandler) m_inputHandler(input);
                 }
                 break;
@@ -106,6 +131,13 @@ void Window::pollEvents(bool& outShouldQuit) {
                 if (event.button.button == SDL_BUTTON_LEFT) {
                     if (m_inputHandler) m_inputHandler({Rowl::Platform::RuntimeInputEvent::Type::PointerDown,
                                                         event.button.x, event.button.y});
+                } else if (event.button.button == SDL_BUTTON_RIGHT) {
+                    // D03-2: right click closes the backlog (no story action).
+                    Rowl::Platform::RuntimeInputEvent input{};
+                    input.type = Rowl::Platform::RuntimeInputEvent::Type::SecondaryClick;
+                    input.x = event.button.x;
+                    input.y = event.button.y;
+                    if (m_inputHandler) m_inputHandler(input);
                 }
                 break;
             case SDL_EVENT_MOUSE_BUTTON_UP:

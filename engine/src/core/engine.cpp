@@ -165,7 +165,8 @@ void Engine::handleRuntimeInput(const Rowl::Platform::RuntimeInputEvent& event) 
     switch (event.type) {
         case Type::PauseToggle:
             // D02: Esc/P on the title screen never starts the story.
-            if (m_titleActive) menuBack();
+            // D03-2: on the backlog page it is Back (to the pause menu or the story).
+            if (m_titleActive || isBacklogOpen()) menuBack();
             else togglePause();
             break;
         case Type::MenuUp:
@@ -194,8 +195,9 @@ void Engine::handleRuntimeInput(const Rowl::Platform::RuntimeInputEvent& event) 
         case Type::Advance:
             // MS-6: Space/Enter confirm the menu selection while paused and
             // advance the story otherwise — one key, pause-routed.
+            // D04-1: a manual advance ends a running Skip.
             if (m_paused) menuActivateSelected();
-            else advanceToNextNode();
+            else { m_skipActive = false; advanceToNextNode(); }
             break;
         case Type::QuickSave:
             if (!m_paused) quickSave();
@@ -207,24 +209,62 @@ void Engine::handleRuntimeInput(const Rowl::Platform::RuntimeInputEvent& event) 
             if (!m_paused) rewind(1);
             break;
         case Type::PointerDown:
+            if (!m_paused) m_skipActive = false;  // D04-1: a click ends Skip
             if (!handlePointerDown(event.x, event.y)) advanceToNextNode();
             break;
         case Type::SwipeForward:
             if (m_paused) menuActivateSelected();
-            else advanceToNextNode();
+            else { m_skipActive = false; advanceToNextNode(); }
             break;
         case Type::SwipeBack:
             if (!m_paused) rewind(1);
             break;
-        case Type::PointerUp:
-        case Type::KeyUp:
-        case Type::PointerMotion:
+        case Type::Backlog:
+            // D03-2: B opens the backlog from the story and closes it again;
+            // the pause menu and the title ignore it.
+            if (isBacklogOpen()) menuBack();
+            else if (!m_paused) openBacklog();
+            break;
+        case Type::SecondaryClick:
+            // D03-2: right click closes the backlog; elsewhere it carries no action.
+            if (isBacklogOpen()) menuBack();
+            break;
         case Type::Scroll:
+            // D03-2: wheel up (y > 0) opens the backlog from the story; on the
+            // backlog page the wheel moves the selection (down at the newest
+            // row closes it). Every other state still consumes it silently.
+            if (event.y == 0.0f || !std::isfinite(event.y)) break;
+            if (isBacklogOpen()) backlogScroll(event.y);
+            else if (!m_paused && event.y > 0.0f) openBacklog();
+            break;
+        case Type::ToggleAuto:
+            // D04-1: A flips Auto and remembers it in the profile; inert on the
+            // title / pause / backlog / preferences screens.
+            if (!m_paused) toggleAutoMode();
+            break;
+        case Type::ToggleSkip:
+            // D04-1: S starts/stops Skip for this session (inert under policy Off).
+            if (!m_paused) setSkipActive(!m_skipActive);
+            break;
+        case Type::SkipHold:
+            // D04-1: Ctrl held = Skip until released (inert under policy Off).
+            if (!m_paused && m_skipPolicy != SkipPolicy::Off) {
+                m_skipHold = true;
+                m_skipStepCredit = 0.05f;
+                resetAutoWait();
+            }
+            break;
+        case Type::KeyUp:
+            // D04-1: releasing Ctrl ends the hold (an S-started Skip keeps going).
+            if (event.key == SDLK_LCTRL || event.key == SDLK_RCTRL) m_skipHold = false;
+            break;
+        case Type::PointerUp:
+        case Type::PointerMotion:
         case Type::TextInput:
         case Type::TextEditing:
             // #16: consciously consumed at the Window boundary (the input
             // handler fires observably) but carrying no story action:
-            // releases, hover/drag positions, scroll deltas, committed
+            // releases, hover/drag positions, committed
             // text and IME composition must never advance dialogue,
             // toggle pause, rewind, or touch save slots.
             break;
@@ -435,6 +475,7 @@ void Engine::setPlayState(bool isPlaying) {
     const bool enteringPlay = isPlaying && !m_isPlaying;
     m_isPlaying = isPlaying;
     m_autoAdvanceElapsed = 0.0f;
+    resetAutoWait();  // D04-1
     m_activeDialogueData.isPlaying = isPlaying;
     if (isPlaying) {
         m_activeDialogueData.elapsedTypewriterTime = 0.0f;
@@ -469,6 +510,8 @@ void Engine::resetToStartNode() {
     m_gameState = Rowl::State::GameState::createInitialState(m_storyRuntime.startNodeId());
     m_lastRecordedDialogueNodeId = 0;
     m_lastSfxPlaybackNodeId = 0;
+    m_skipActive = false;  // D04-1: a new game / reset starts with Auto and Skip idle
+    resetAutoWait();
     if (const StoryNode* activeNode = m_storyRuntime.currentNode()) {
         const auto& startNode = *activeNode;
         if (!startNode.components.empty()) {
@@ -609,6 +652,7 @@ void Engine::advanceStory(uint32_t choiceIndex, bool viaChoice) {
     // reaching here; this guard seals direct API calls too.)
     if (m_paused) return;
     m_autoAdvanceElapsed = 0.0f;
+    resetAutoWait();  // D04-1: any advance (manual, Auto, Skip) starts a fresh wait
 
     // If typewriter is still typing out any line, the request reveals the
     // full text immediately instead of advancing (MS-6 unified contract).
@@ -879,6 +923,7 @@ void Engine::updateActiveScene(
 
     ROWL_LOG_INFO("Scene Updated (Legacy) → Speaker: '" + m_activeSpeaker + "', Dialogue: '" +
                   m_activeDialogue + "', BG: '" + m_activeBackground + "'");
+    m_activeNodeVoiceTrack.clear();  // D03-1: legacy payloads carry no components
     recordActiveDialogueHistory();
 }
 
@@ -936,6 +981,8 @@ void Engine::updateSceneFromComponents(const nlohmann::json& root,
     const auto previousBackgroundOpacity = m_activeBackgroundOpacity;
     const auto previousLastSfxPlaybackNodeId = m_lastSfxPlaybackNodeId;
     const auto previousLastRecordedDialogueNodeId = m_lastRecordedDialogueNodeId;
+    const auto previousActiveNodeVoiceTrack = m_activeNodeVoiceTrack;
+    const auto previousVoiceClipNodeId = m_voiceClipNodeId;
     const auto previousLuaVariables = m_luaSandbox ? m_luaSandbox->getAllVariables() : std::unordered_map<std::string, std::string>{};
     // #86: camera + live-mixer snapshot. Component zinciri kamera/mikseri
     // TRY içinde mutasyona uğratır (camera bile replayEntryEffects=false iken;
@@ -987,6 +1034,8 @@ void Engine::updateSceneFromComponents(const nlohmann::json& root,
         m_activeBackgroundOpacity = previousBackgroundOpacity;
         m_lastSfxPlaybackNodeId = previousLastSfxPlaybackNodeId;
         m_lastRecordedDialogueNodeId = previousLastRecordedDialogueNodeId;
+        m_activeNodeVoiceTrack = previousActiveNodeVoiceTrack;
+        m_voiceClipNodeId = previousVoiceClipNodeId;
         m_activeCharacterX = previousCharacterX;
         m_activeCharacterY = previousCharacterY;
         m_activeCharacterWidth = previousCharacterWidth;
@@ -1452,6 +1501,19 @@ void Engine::updateSceneFromComponents(const nlohmann::json& root,
             applyScreenFxComponent(data);
         }
 
+        // D03-1: the node's full voice line. Read for every update (also
+        // load/rewind, replayEntryEffects=false) so blip suppression and the
+        // history row stay consistent; it only PLAYS on a real node entry.
+        m_activeNodeVoiceTrack.clear();
+        for (const auto& data : pendingAudioComponents) {
+            const auto voiceIt = data.find("voice_track");
+            if (voiceIt != data.end() && voiceIt->is_string() &&
+                !voiceIt->get_ref<const std::string&>().empty()) {
+                m_activeNodeVoiceTrack = voiceIt->get<std::string>();
+                break;
+            }
+        }
+
         for (const auto& data : pendingAudioComponents) {
             if (!replayEntryEffects) continue;
             std::string dsp = data.value("dsp_filter", "Normal");
@@ -1488,6 +1550,27 @@ void Engine::updateSceneFromComponents(const nlohmann::json& root,
             if (!sfx.empty() && m_isPlaying &&
                 m_lastSfxPlaybackNodeId != m_storyRuntime.currentNodeId())
                 m_audio->playAudio(sfx, Rowl::Audio::AudioChannelType::Sfx);
+        }
+
+        // D03-1: full voice line = node-entry event, same one-shot marker as
+        // SFX (editor refreshes of the same node never re-trigger it) and only
+        // with replayEntryEffects (load/rewind never replay it). Entering a
+        // different node first cuts the previous node's clip. The Voice
+        // stream also carries typewriter blips, which would clear the clip,
+        // so a node with a voice_track plays no blips (see step()).
+        // The cut also runs on load/rewind: a restored node never keeps
+        // another node's (or a backlog replay's) clip talking over it.
+        if (m_isPlaying && m_audio) {
+            const uint64_t entryNodeId = m_storyRuntime.currentNodeId();
+            if ((!replayEntryEffects || m_voiceClipNodeId != entryNodeId) &&
+                !m_audio->getCurrentVoicePath().empty())
+                m_audio->stopVoice();
+            if (replayEntryEffects && !m_activeNodeVoiceTrack.empty() &&
+                m_lastSfxPlaybackNodeId != entryNodeId) {
+                m_audio->stopVoice();
+                m_audio->playAudio(m_activeNodeVoiceTrack, Rowl::Audio::AudioChannelType::Voice);
+                m_voiceClipNodeId = entryNodeId;
+            }
         }
 
         if (m_isPlaying && !pendingAudioComponents.empty())
@@ -2149,7 +2232,9 @@ void Engine::step(float deltaTime) {
 
                     // MS-6: blip bookkeeping advances in every mode, but paused
                     // previews stay silent.
-                    if (m_isPlaying) m_audio->playVoiceBlip(dlg.typewriterSound, pitchMod, dlg.voiceBlipVolume, ch);
+                    // D03-1: a node with a full voice clip plays no blips (the
+                    // blip would clear the Voice stream under the clip).
+                    if (m_isPlaying && m_activeNodeVoiceTrack.empty()) m_audio->playVoiceBlip(dlg.typewriterSound, pitchMod, dlg.voiceBlipVolume, ch);
                     break;
                 }
             }
@@ -2189,7 +2274,7 @@ void Engine::step(float deltaTime) {
                             ? Rowl::Audio::AudioChannelType::Sfx
                             : Rowl::Audio::AudioChannelType::Voice;
                         // MS-6: paused previews stay silent (see dialogues loop).
-                        if (m_isPlaying) m_audio->playVoiceBlip(m_activeDialogueData.typewriterSound, pitchMod, m_activeDialogueData.voiceBlipVolume, ch);
+                        if (m_isPlaying && m_activeNodeVoiceTrack.empty()) m_audio->playVoiceBlip(m_activeDialogueData.typewriterSound, pitchMod, m_activeDialogueData.voiceBlipVolume, ch);
                         break;
                     }
                 }
@@ -2202,6 +2287,10 @@ void Engine::step(float deltaTime) {
     // sanitize edilir).
     advanceSpriteSheets(deltaTime);
 
+    // D04-1: the author's auto_advance below may already move the story this
+    // step; the player drivers then stand down (at most one node per step).
+    const uint64_t driverNodeBefore = m_storyRuntime.currentNodeId();
+    const uint64_t driverStepBefore = getCurrentStepId();
     bool autoAdvanceEnabled = false;
     float autoAdvanceDelay = 0.0f;
     for (const auto& dialogue : m_activeDialogues) {
@@ -2234,6 +2323,9 @@ void Engine::step(float deltaTime) {
     } else if (!advanceArmed) {
         m_autoAdvanceElapsed = 0.0f;
     }
+    // D04-1: player-driven Skip / Auto (separate from the author flag above).
+    stepPlayerDrivers(deltaTime, m_storyRuntime.currentNodeId() != driverNodeBefore ||
+                                     getCurrentStepId() != driverStepBefore);
     } // end MS-6 pause freeze of story simulation
 
     Rowl::Render::ComposedFrame frame;
@@ -2249,6 +2341,10 @@ void Engine::step(float deltaTime) {
     frame.backgroundParallaxX = m_activeBackgroundParallaxX;
     frame.backgroundParallaxY = m_activeBackgroundParallaxY;
     frame.backgroundOpacity = m_activeBackgroundOpacity;
+    // D04-2: AUTO / SKIP capsules only over a running, unpaused story (never
+    // on the title, pause menu, backlog or preferences).
+    frame.showAutoBadge = m_isPlaying && !m_paused && m_autoMode;
+    frame.showSkipBadge = m_isPlaying && !m_paused && isSkipEffective();
     // E2b: FX kapali iken composeCharacterFx girisin kopyasidir (legacy kare
     // bayt-birebir); acikken tween/vurgu/harman sunulan kopyaya isler.
     // Window imzasi/hash degismez — C0/D2 kilidine dokunulmaz.
@@ -2612,6 +2708,12 @@ const std::vector<Rowl::State::DialogueHistoryEntry>& Engine::getDialogueHistory
 }
 
 void Engine::recordActiveDialogueHistory() {
+    // D04-1: the read-before snapshot is taken HERE, before the loop below
+    // marks the lines read - afterwards every presented line is "read" and
+    // read-only Skip could never tell new text from old. Computed on every
+    // presentation (also when nothing is recorded: a node re-entered with the
+    // same id is still presented).
+    refreshReadSnapshot();
     if (!m_isPlaying || !m_gameState || m_storyRuntime.currentNodeId() == 0 ||
         m_lastRecordedDialogueNodeId == m_storyRuntime.currentNodeId() ||
         m_activeDialogues.empty()) {
@@ -2626,13 +2728,26 @@ void Engine::recordActiveDialogueHistory() {
             if (!dialogue.contentId.empty()) m_playerProfile.markRead(dialogue.contentId);
             entries.push_back(
                 {m_storyRuntime.currentNodeId(), dialogue.speaker, dialogue.dialogue, true,
-                 dialogue.contentId});
+                 dialogue.contentId, m_activeNodeVoiceTrack});
         }
     }
     if (!entries.empty()) {
         m_gameState = Rowl::State::GameState::withDialogueHistory(m_gameState, entries);
         m_lastRecordedDialogueNodeId = m_storyRuntime.currentNodeId();
     }
+}
+
+bool Engine::replayBacklogVoice(size_t index) {
+    // D03-1: a pure audio action. History is read, never written; only the
+    // Voice clip changes. A failed start (missing asset) leaves the previous
+    // clip cut - the Voice stream queues clips, so the cut has to come first.
+    const auto& history = getDialogueHistory();
+    if (!m_audio || index >= history.size() || history[index].voice.empty()) return false;
+    const std::string voicePath = history[index].voice;
+    const uint32_t clipsBefore = m_audio->getVoiceClipCount();
+    m_audio->stopVoice();
+    m_audio->playAudio(voicePath, Rowl::Audio::AudioChannelType::Voice);
+    return m_audio->getVoiceClipCount() != clipsBefore;
 }
 
 void Engine::refreshActiveDialogueLocalization() {
@@ -2657,6 +2772,7 @@ void Engine::refreshActiveDialogueLocalization() {
     };
     refreshOne(m_activeDialogueData);
     for (auto& dlg : m_activeDialogues) refreshOne(dlg);
+    resetAutoWait();  // D04-1: the line length changed; read state is unaffected (content ids are language-stable)
     if (m_hasDialogueBox && !m_activeDialogues.empty()) {
         m_activeSpeaker = m_activeDialogues.front().speaker;
         m_activeDialogue = m_activeDialogues.front().dialogue;
@@ -2728,6 +2844,8 @@ void Engine::resetSessionProfile() {
     m_pauseConfirmQuit = false;
     m_pauseMode   = PauseMenuMode::Main;
     m_pauseSelected = 0;
+    m_backlogTop = 0;  // D03-2
+    m_backlogFromPause = false;
     m_activeQuickSlot = 0;
     m_pauseSlotCacheValid = false;
     m_titleActive = false;  // D02
@@ -2735,6 +2853,17 @@ void Engine::resetSessionProfile() {
     m_slotLoadFailed.reset();
     m_textSpeedMultiplier = 1.0f;
     m_autoAdvanceDelayOffset = 0.0f;
+    // D04-1: Auto / Skip are session state; the policy and delay are restored by
+    // the host from the profile after a re-init, like the other preferences.
+    m_autoMode = false;
+    m_skipActive = false;
+    m_skipHold = false;
+    m_skipPolicy = SkipPolicy::ReadOnly;
+    m_autoDelay = 2.0f;
+    m_autoWaitElapsed = 0.0f;
+    m_autoWaitRemaining = 0.0f;
+    m_skipStepCredit = 0.0f;
+    m_activeLinesReadBeforePresentation = true;
     m_defaultBgmTransition = "instant";
     m_defaultBgmTransitionDurationSeconds = 1.0f;
     m_playtimeSeconds = 0.0;
@@ -3114,6 +3243,12 @@ bool Engine::loadGameSlot(int32_t slotIndex) {
                             "load_game_slot", std::to_string(slotIndex));
         return false;
     }
+    // D04-1: loading is not a presentation (nothing is marked read), so the
+    // read-before snapshot comes straight from the read set; Skip and the Auto
+    // wait start over.
+    refreshReadSnapshot();
+    m_skipActive = false;
+    resetAutoWait();
     ROWL_LOG_INFO("Loaded Game Slot #" + std::to_string(slotIndex) +
                   " → Node #" + std::to_string(m_storyRuntime.currentNodeId()));
     if (loadResult.migrated()) {
@@ -3300,6 +3435,10 @@ bool Engine::rewind(uint64_t steps) {
                             "rewind", std::to_string(steps));
         return false;
     }
+    // D04-1: same as load - snapshot from the read set, Skip / Auto start over.
+    refreshReadSnapshot();
+    m_skipActive = false;
+    resetAutoWait();
     m_context->setSuccess("rewind", std::to_string(steps));
     return true;
 }

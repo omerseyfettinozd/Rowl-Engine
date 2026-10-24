@@ -240,6 +240,11 @@ namespace RowlEngine.Editor.Native
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
         internal static extern ResultCode RowlEngine_IsTitleScreenActive(IntPtr handle, out int isActive);
 
+        // D03-1: replays only the voice clip of backlog row `index` (0 = oldest);
+        // never touches game state, variables, read marks or history.
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_ReplayBacklogVoice(IntPtr handle, uint index);
+
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
         internal static extern uint RowlEngine_GetChoiceCount(IntPtr handle);
 

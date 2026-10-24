@@ -177,9 +177,14 @@ void test_window_input_routing() {
         expect(SDLK_0, Type::SelectSlot, 0);
         expect(SDLK_3, Type::SelectSlot, 3);
         expect(SDLK_9, Type::SelectSlot, 9);
+        // D04-1: A = Auto, S = Skip toggle, Ctrl held = Skip.
+        expect(SDLK_A, Type::ToggleAuto);
+        expect(SDLK_S, Type::ToggleSkip);
+        expect(SDLK_LCTRL, Type::SkipHold);
+        expect(SDLK_RCTRL, Type::SkipHold);
         Event unmapped{Type::Advance};
         if (Rowl::Render::Window::mapKeyToRuntimeInput(SDLK_F1, unmapped) ||
-            Rowl::Render::Window::mapKeyToRuntimeInput(SDLK_A, unmapped)) {
+            Rowl::Render::Window::mapKeyToRuntimeInput(SDLK_Q, unmapped)) {
             std::cerr << "MS-6: unrelated keys must not map to player actions" << std::endl;
             exit(1);
         }
@@ -267,6 +272,40 @@ void test_window_input_routing_release_motion_wheel_text() {
         }
     }
 
+    // 1b. D04-1: OS key repeat must not re-toggle Auto/Skip (A, S, Ctrl); the
+    // first press maps, and other keys (Space) keep their repeat behavior.
+    {
+        auto press = [&](SDL_Keycode key, bool repeat) {
+            SDL_Event event{};
+            event.type = SDL_EVENT_KEY_DOWN;
+            event.key.key = key;
+            event.key.repeat = repeat;
+            event.key.windowID = wid;
+            pushOrDie(event, "KEY_DOWN");
+            seen.clear();
+            step();
+        };
+        struct Case { SDL_Keycode key; Type type; const char* name; };
+        for (const Case& c : {Case{SDLK_A, Type::ToggleAuto, "A"}, Case{SDLK_S, Type::ToggleSkip, "S"},
+                              Case{SDLK_LCTRL, Type::SkipHold, "LCtrl"}, Case{SDLK_RCTRL, Type::SkipHold, "RCtrl"}}) {
+            press(c.key, false);
+            if (!containsType(c.type)) {
+                std::cerr << "D04-1: first press of " << c.name << " must reach the handler" << std::endl;
+                exit(1);
+            }
+            press(c.key, true);
+            if (containsType(c.type)) {
+                std::cerr << "D04-1: a repeated " << c.name << " must not reach the handler" << std::endl;
+                exit(1);
+            }
+        }
+        press(SDLK_SPACE, true);
+        if (!containsType(Type::Advance)) {
+            std::cerr << "D04-1: repeated Space must keep advancing (repeat filter is for A/S/Ctrl only)" << std::endl;
+            exit(1);
+        }
+    }
+
     // 2. BUTTON_UP left: PointerUp with position.
     {
         SDL_Event event{};
@@ -297,6 +336,38 @@ void test_window_input_routing_release_motion_wheel_text() {
         step();
         if (containsType(Type::PointerUp)) {
             std::cerr << "Non-left BUTTON_UP must not produce PointerUp" << std::endl;
+            exit(1);
+        }
+    }
+
+    // 3b. D03-2: BUTTON_DOWN right is SecondaryClick (closes the backlog), never
+    // PointerDown; left stays PointerDown.
+    {
+        SDL_Event event{};
+        event.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+        event.button.button = SDL_BUTTON_RIGHT;
+        event.button.windowID = wid;
+        event.button.x = 12.0f;
+        event.button.y = 34.0f;
+        pushOrDie(event, "BUTTON_DOWN/right");
+        seen.clear();
+        step();
+        bool secondary = false;
+        for (const auto& e : seen) {
+            if (e.type == Type::SecondaryClick && std::abs(e.x - 12.0f) < 0.001f && std::abs(e.y - 34.0f) < 0.001f) {
+                secondary = true;
+            }
+        }
+        if (!secondary || containsType(Type::PointerDown)) {
+            std::cerr << "Right BUTTON_DOWN must produce SecondaryClick (and no PointerDown)" << std::endl;
+            exit(1);
+        }
+        event.button.button = SDL_BUTTON_LEFT;
+        pushOrDie(event, "BUTTON_DOWN/left");
+        seen.clear();
+        step();
+        if (!containsType(Type::PointerDown) || containsType(Type::SecondaryClick)) {
+            std::cerr << "Left BUTTON_DOWN must stay PointerDown (no SecondaryClick)" << std::endl;
             exit(1);
         }
     }

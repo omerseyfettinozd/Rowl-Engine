@@ -6,7 +6,7 @@
  *
  * Bacaklar (cikarim-oncesi YESIL baz = ongorulen gozlem + exit 0):
  *   (1) pause-menu (engine_pause_menu.cpp): SetPaused(1) -> JSON open:true,
- *       baslik "Duraklatildi", 10 satir (D02: Ana Menu); DOWN -> selected:1; ESC-back ->
+ *       baslik "Duraklatildi", 11 satir (D02: Ana Menu, D03-2: Gecmis); DOWN -> selected:1; ESC-back ->
  *       resume (open:false). Kilit-koruma: cift SetPaused(1) gezinmeyi
  *       sifirlamaz (selected korunur).
  *   (2) keymap (window_input.cpp): Escape/P -> PauseToggle, Space/Enter ->
@@ -102,7 +102,7 @@ int main() {
         check(mapKey(SDLK_F5, t, slot) && t == Type::QuickSave, "keymap: F5->QuickSave");
         check(mapKey(SDLK_F9, t, slot) && t == Type::QuickLoad, "keymap: F9->QuickLoad");
         check(mapKey(SDLK_3, t, slot) && t == Type::SelectSlot && slot == 3, "keymap: 3->SelectSlot(3)");
-        check(!mapKey(SDLK_A, t, slot), "keymap: A eslenmemis->false");
+        check(!mapKey(SDLK_Q, t, slot), "keymap: Q eslenmemis->false");  // D04-1: A artik ToggleAuto
         std::cout << "  keymap: 12/12 eslesme" << std::endl;
     }
 
@@ -124,7 +124,7 @@ int main() {
         const std::string json = raw ? raw : "";
         check(json.find("\"open\":true") != std::string::npos, "pause: open:true");
         check(json.find("Duraklatildi") != std::string::npos, "pause: baslik Duraklatildi");
-        check(countOccurrences(json, "\"label\"") == 10, "pause: 10 satir");
+        check(countOccurrences(json, "\"label\"") == 11, "pause: 11 satir");
         check(json.find("\"selected\":0") != std::string::npos, "pause: ilk secim 0");
     }
     RowlEngine_PauseMenuCommand(h, ROWL_PAUSE_MENU_DOWN);

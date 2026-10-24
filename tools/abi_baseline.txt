@@ -102,6 +102,7 @@ RowlEngine_GetPauseMenuJsonUtf8
 RowlEngine_GetPauseMenuJsonWithLength
 RowlEngine_GetPixelBuffer
 RowlEngine_GetPixelBufferEx
+RowlEngine_GetPlayerDriverStateJsonUtf8
 RowlEngine_GetPrefetchProgressJson
 RowlEngine_GetProfileDirectoryUtf8
 RowlEngine_GetQuickSaveSlot
@@ -167,6 +168,7 @@ RowlEngine_LoadGameSlot
 RowlEngine_LoadGameSlotResult
 RowlEngine_LoadStoryGraph
 RowlEngine_LoadStoryGraphFromVfs
+RowlEngine_OpenBacklog
 RowlEngine_OpenTitleScreen
 RowlEngine_ParseMarkup
 RowlEngine_PauseMenuCommand
@@ -188,6 +190,7 @@ RowlEngine_QuickLoad
 RowlEngine_QuickSave
 RowlEngine_ReclaimHandle
 RowlEngine_RegisterCharacterPreset
+RowlEngine_ReplayBacklogVoice
 RowlEngine_ResetCamera
 RowlEngine_ResetToStartNode
 RowlEngine_ResetVoiceBlipCount
@@ -201,6 +204,8 @@ RowlEngine_SelectChoice
 RowlEngine_SetAmbienceBedVolume
 RowlEngine_SetAmbienceVolume
 RowlEngine_SetAutoAdvanceDelayOffset
+RowlEngine_SetAutoDelay
+RowlEngine_SetAutoMode
 RowlEngine_SetBackgroundParallax
 RowlEngine_SetBgmTransitionDefaults
 RowlEngine_SetBgmVolume
@@ -228,6 +233,8 @@ RowlEngine_SetScreenTint
 RowlEngine_SetScreenTintHex
 RowlEngine_SetSfxPoolDepth
 RowlEngine_SetSfxVolume
+RowlEngine_SetSkipActive
+RowlEngine_SetSkipPolicy
 RowlEngine_SetSpeakerFocus
 RowlEngine_SetTextScale
 RowlEngine_SetTextSpeedMultiplier

@@ -28,7 +28,10 @@ enum class PauseMenuMode : int32_t {
     LoadSlots = 2,
     /// D02: native title screen (root page) and its preferences sub-page.
     Title = 3,
-    Preferences = 4
+    Preferences = 4,
+    /// D03-2: dialogue backlog (Gecmis). Opened from the pause main page or
+    /// straight from the story (B / wheel up); the game stays frozen.
+    Backlog = 5
 };
 
 /// Player quick-save slots selectable at runtime (digits 0-9 / --slot N).
@@ -57,6 +60,29 @@ struct PauseSlotInfo {
     std::shared_ptr<const std::string> thumbnailPng;
 };
 
+/// D03-2: one visible backlog entry. `y`/`h` are virtual-canvas pixels; `lines`
+/// are the dialogue text already wrapped (and capped) by the engine, so
+/// hit-testing and drawing agree on the geometry.
+struct PauseBacklogEntryView {
+    int index = 0;            // 0 = oldest history row
+    float y = 0.0f;
+    float h = 0.0f;
+    std::string speaker;
+    std::string dialogue;     // full text (JSON); `lines` is what is drawn
+    std::vector<std::string> lines;
+    bool hasVoice = false;
+    bool selected = false;
+};
+
+struct PauseBacklogView {
+    bool active = false;
+    int total = 0;            // history length
+    int selected = -1;        // history index, -1 when empty
+    int scroll = 0;           // history index of the first visible entry
+    std::string counter;      // "12 / 40"
+    std::vector<PauseBacklogEntryView> entries;
+};
+
 struct PauseMenuView {
     bool open = false;
     std::string title;
@@ -70,11 +96,15 @@ struct PauseMenuView {
     /// `thumbnailKey` ("slot|saved_at") identifies it for texture caching.
     std::shared_ptr<const std::string> thumbnailPng;
     std::string thumbnailKey;
+    /// D03-2: backlog page content (active only in PauseMenuMode::Backlog).
+    PauseBacklogView backlog;
 };
 
 /// "55%" / "1.25x" row values (engine_pause_menu.cpp), shared with D02 pages.
 std::string pauseMenuPercent(float volume);
 std::string pauseMenuSpeedText(float multiplier);
+/// D04-2: "2.0 sn" (one decimal) auto-advance delay row value.
+std::string pauseMenuDelayText(float seconds);
 /// D02: "<YYYY-MM-DD HH:MM>  <chapter>  <summary ~48 bytes>" of a valid slot,
 /// empty otherwise (engine_title_menu.cpp).
 std::string pauseSlotDetail(const PauseSlotInfo& info);
@@ -92,24 +122,47 @@ struct PauseMenuLayout {
     static constexpr float kPanelH = 860.0f;
     static constexpr float kRowX = 580.0f;
     static constexpr float kRowW = 760.0f;
-    static constexpr float kRowY0 = 290.0f;
-    static constexpr float kRowH = 56.0f;
-    static constexpr float kRowGap = 8.0f;
+    // D03-2: 11 main rows (Gecmis) must clear the hint line at panel bottom;
+    // the first row still starts below the slot-page thumbnail box.
+    static constexpr float kRowY0 = 270.0f;
+    static constexpr float kRowH = 54.0f;
+    static constexpr float kRowGap = 4.0f;
     static constexpr float kMinusX1 = 880.0f;
     static constexpr float kPlusX0 = 1040.0f;
-    static constexpr int kMainRows = 10;
+    static constexpr int kMainRows = 11;
+    /// D03-2: opens the backlog page (no confirmation).
+    static constexpr int kMainBacklogRow = 8;
     /// Main page rows with a two-step confirmation: back to the title (D02)
     /// and exit (always the last row).
-    static constexpr int kMainTitleRow = 8;
-    static constexpr int kMainExitRow = 9;
+    static constexpr int kMainTitleRow = 9;
+    static constexpr int kMainExitRow = 10;
     static constexpr int kSlotRows = 10;
     static constexpr int kTitleRows = 5;
-    static constexpr int kPreferenceRows = 6;
+    /// Preferences page: 5 mixer/speed rows, D04-2 "Otomatik Hizi" (5) and
+    /// "Atlama" (6), then "Geri" (always the last row).
+    static constexpr int kPreferenceRows = 8;
+    static constexpr int kPreferenceAutoDelayRow = 5;
+    static constexpr int kPreferenceSkipRow = 6;
     /// D02: slot-page thumbnail box (virtual canvas), panel top-right.
     static constexpr float kThumbX = 1180.0f;
     static constexpr float kThumbY = 150.0f;
     static constexpr float kThumbW = 192.0f;
     static constexpr float kThumbH = 108.0f;
+
+    /// D03-2 backlog list area (virtual canvas): entries stack from kBacklogY0
+    /// to kBacklogY1 inside the panel, text wraps to kBacklogTextW.
+    static constexpr float kBacklogY0 = 250.0f;
+    static constexpr float kBacklogY1 = 900.0f;
+    static constexpr float kBacklogPadX = 18.0f;
+    static constexpr float kBacklogPadY = 8.0f;
+    static constexpr float kBacklogGap = 6.0f;
+    static constexpr float kBacklogLineH = 28.0f;
+    static constexpr float kBacklogFontPx = 22.0f;
+    static constexpr float kBacklogSmallPx = 16.0f;
+    /// Wrap width: row width minus both paddings and a safety band (physical
+    /// glyph widths differ slightly from the virtual-size measurement).
+    static constexpr float kBacklogTextW = kRowW - 2.0f * kBacklogPadX - 60.0f;
+    static constexpr int kBacklogMaxLines = 8;
 
     /// Row index under a virtual point, or -1 for gaps/outside.
     static inline int rowAt(float vx, float vy, int rowCount) {

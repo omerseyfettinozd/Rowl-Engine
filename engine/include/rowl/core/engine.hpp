@@ -43,6 +43,10 @@ using Rowl::Render::CharacterRenderData;
 using Rowl::Render::DialogueRenderData;
 using Rowl::Render::ChoiceButtonRenderData;
 
+/// D04-1: which lines the player-driven Skip may pass. Names match the profile
+/// "skip_mode" values ("off" | "read_only" | "all").
+enum class SkipPolicy { Off, ReadOnly, All };
+
 struct EngineConfig {
     std::string appName     = "Rowl Engine Game";
     uint32_t virtualWidth   = 1920;
@@ -219,6 +223,42 @@ public:
     /// the serialized story graph or save state.
     void setTextSpeedMultiplier(float multiplier);
     void setAutoAdvanceDelayOffset(float seconds);
+
+    // ── D04-1: player-driven Auto / Skip ──────────────────────────────────
+    // Separate from the author's per-line auto_advance flag (which is
+    // untouched). Auto waits (delay + chars*0.04/textSpeed, clamped to
+    // [0.8, 30] s; also for the node's own voice clip) once the line is fully
+    // shown, then advances. Skip advances one node per >=0.05 s step while the
+    // lines obey the policy; it stops at a choice menu, at an unread line
+    // under read_only, at the chain end, and on pause / title / backlog /
+    // preferences / load / rewind / manual advance. Session-only state.
+    void setAutoMode(bool enabled);
+    bool isAutoMode() const { return m_autoMode; }
+    /// Auto toggle as the player does it (A key): flips the mode and writes
+    /// the profile's auto_enabled (a read-only/unmounted profile refuses
+    /// silently).
+    void toggleAutoMode();
+    /// Refused (false, state unchanged) while the policy is Off or the menu /
+    /// title / backlog is up. Turning it off always succeeds.
+    bool setSkipActive(bool active);
+    bool isSkipActive() const { return m_skipActive; }
+    /// True while skip is requested by S or by holding Ctrl.
+    bool isSkipEffective() const { return (m_skipActive || m_skipHold) && m_skipPolicy != SkipPolicy::Off; }
+    void setSkipPolicy(SkipPolicy policy);
+    SkipPolicy getSkipPolicy() const { return m_skipPolicy; }
+    /// NaN keeps the last value; finite values clamp to [0, 10].
+    void setAutoDelay(float seconds);
+    float getAutoDelay() const { return m_autoDelay; }
+    /// Were all lines of the current node already read when they were first
+    /// presented (before the presentation marked them)? Fail-closed: a line
+    /// without a content id counts as unread; a node without lines is true.
+    bool activeLinesReadBeforePresentation() const { return m_activeLinesReadBeforePresentation; }
+    /// Seconds of the current auto wait still to go (0 when auto is idle or
+    /// only the voice clip is awaited).
+    float getAutoWaitRemaining() const { return m_autoWaitRemaining; }
+    /// {auto, skip_active, skip_policy, auto_delay, line_read_before,
+    ///  auto_wait_remaining}
+    std::string getPlayerDriverStateJson() const;
     bool isPlaying() const { return m_isPlaying; }
     void resetToStartNode();
     /// Ends the live session without touching the presented scene: play state
@@ -369,6 +409,13 @@ public:
     /// from the host closes it.
     bool openTitleScreen();
     bool isTitleScreenActive() const { return m_titleActive; }
+    /// D03-2: opens the dialogue backlog (Gecmis) over the frozen story.
+    /// Fails (false, StateError) before init and on the title screen. Opened
+    /// from the story, Back returns straight to it; opened while the pause
+    /// menu is up, Back returns to the pause main page. Read-only: touches no
+    /// variable, step id, history row or save slot.
+    bool openBacklog();
+    bool isBacklogOpen() const { return m_paused && m_pauseMode == PauseMenuMode::Backlog; }
     /// Keyboard-equivalent menu navigation (window arrows / C API / tests).
     /// Confirm activates the selected row; Back leaves sub-pages, disarms the
     /// exit confirmation, or resumes from the main page.
@@ -427,6 +474,13 @@ public:
         return m_scriptRuntimeStatuses;
     }
     const std::vector<Rowl::State::DialogueHistoryEntry>& getDialogueHistory() const;
+    /// D03-1: plays ONLY the voice clip of backlog row `index` (0 = oldest) on
+    /// the Voice channel, cutting any previous Voice clip. Touches no
+    /// GameState, story cursor, variable, read mark, history or entry-effect
+    /// marker (no sfx/script/variable effect is re-run). Returns false for an
+    /// out-of-range index, a voiceless row or a clip the audio side did not
+    /// start (no audio engine, undecodable asset).
+    bool replayBacklogVoice(size_t index);
 
 private:
     std::shared_ptr<RuntimeContext> m_context;
@@ -494,6 +548,13 @@ private:
     // a story node is entered. Keep the entry marker separate so inspector
     // preview refreshes cannot retrigger a one-shot SFX.
     uint64_t m_lastSfxPlaybackNodeId = 0;
+    // D03-1: the active node's voice_track (first non-empty audio component
+    // value; refreshed by every component scene update, replay or not, so a
+    // load/rewind still knows the line has a full voice and keeps the
+    // typewriter blips quiet) and the node whose clip was started on node
+    // entry (the clip is cut when a different node is entered).
+    std::string m_activeNodeVoiceTrack;
+    uint64_t m_voiceClipNodeId = 0;
 
     // E2b sunum-durumu (canli listeye dokunmaz; yalnizca kare-birlestirmede
     // okunur — bkz. ustteki metot blogu).
@@ -514,6 +575,11 @@ private:
     bool m_pauseConfirmQuit = false;
     PauseMenuMode m_pauseMode = PauseMenuMode::Main;
     int m_pauseSelected = 0;
+    // D03-2: backlog page. m_pauseSelected is the selected history index;
+    // m_backlogTop the first visible one (kept consistent by backlogEnsureVisible,
+    // mutable because the const view builder re-fits it after a font/scale change).
+    mutable int m_backlogTop = 0;
+    bool m_backlogFromPause = false;
     int32_t m_activeQuickSlot = 0;
     // A2b: pause slot-page occupancy cache. getPauseMenuView runs per UI
     // refresh (up to every frame from the editor preview); 10 slots x 2
@@ -539,6 +605,25 @@ private:
     // idle step.
     bool m_cameraStallSignalled = false;
     float m_autoAdvanceElapsed = 0.0f;
+    // D04-1 (see setAutoMode): player-driven Auto / Skip state. Session-only
+    // (the persistent bits live in the profile). m_skipHold = Ctrl is down.
+    bool m_autoMode = false;
+    bool m_skipActive = false;
+    bool m_skipHold = false;
+    SkipPolicy m_skipPolicy = SkipPolicy::ReadOnly;
+    float m_autoDelay = 2.0f;
+    float m_autoWaitElapsed = 0.0f;
+    float m_autoWaitRemaining = 0.0f;
+    float m_skipStepCredit = 0.0f;
+    bool m_activeLinesReadBeforePresentation = true;
+    /// Recomputes m_activeLinesReadBeforePresentation from the profile's read
+    /// set. Must run BEFORE the presentation marks the lines read.
+    void refreshReadSnapshot();
+    /// Zeroes the Auto wait credit (manual advance, node change, load, rewind,
+    /// language change, title, new game).
+    void resetAutoWait();
+    void stepPlayerDrivers(float deltaTime, bool advancedThisStep);
+    float autoWaitSeconds() const;
     float m_textSpeedMultiplier = 1.0f;
     float m_autoAdvanceDelayOffset = 0.0f;
     // Faz 2 Dilim 4 total playtime: accumulated in step while playing and
@@ -574,6 +659,19 @@ private:
     void menuActivateSelected();
     void menuChooseSlot(int32_t slotIndex);
     void menuBack();
+    // D03-2 (engine_backlog.cpp)
+    struct BacklogCell {
+        std::vector<std::string> lines;
+        float height = 0.0f;
+    };
+    BacklogCell backlogCell(size_t index) const;
+    void backlogEnsureVisible() const;
+    void backlogMoveSelection(int direction);
+    void backlogScroll(float deltaY);
+    void backlogActivateSelected();
+    void backlogClose();
+    bool backlogClick(float virtualX, float virtualY);
+    PauseBacklogView buildBacklogView() const;
     // D02 (engine_title_menu.cpp)
     void ensureSlotCache() const;
     void titleActivateSelected();

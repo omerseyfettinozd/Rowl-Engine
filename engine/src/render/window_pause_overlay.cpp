@@ -16,6 +16,9 @@
 
 #include <SDL3/SDL.h>
 
+#include <algorithm>
+#include <cmath>
+
 namespace Rowl::Render {
 
 void Window::releasePauseThumbnail() {
@@ -128,7 +131,65 @@ void Window::renderPauseMenuOverlay(const Rowl::Core::PauseMenuView& view) {
     drawText(view.title, tx, ty, 40.0f * metrics.scaleFactor, titleColor,
              LM::kRowW * metrics.scaleFactor, 60.0f * metrics.scaleFactor);
 
-    const int rows = static_cast<int>(view.rows.size());
+    // D03-2: backlog page — engine-laid-out entries (wrapped lines, y/h in the
+    // virtual canvas) instead of the fixed-pitch row list. An empty history
+    // falls through to the generic loop with its single dim "Gecmis bos" row.
+    const bool backlogEntries = view.backlog.active && !view.backlog.entries.empty();
+    if (view.backlog.active) {
+        float cx = 0.0f, cy = 0.0f;
+        toPhys(LM::kRowX + LM::kRowW - 150.0f, 178.0f, cx, cy);
+        drawText(view.backlog.counter, cx, cy, 24.0f * metrics.scaleFactor, dimColor,
+                 150.0f * metrics.scaleFactor, 40.0f * metrics.scaleFactor);
+    }
+    if (backlogEntries) {
+        // The font's accessibility scale grows glyphs and line pitch alike
+        // (the engine laid the list out with the same factor).
+        const float textScale = std::max(1.0f, m_fontRenderer->textScale());
+        const float lineH = LM::kBacklogLineH * textScale;
+        for (const auto& entry : view.backlog.entries) {
+            float rx = 0.0f, ry = 0.0f;
+            toPhys(LM::kRowX, entry.y, rx, ry);
+            const float rowW = LM::kRowW * metrics.scaleFactor;
+            const float rowH = entry.h * metrics.scaleFactor;
+            if (entry.selected) {
+                const SDL_FRect highlight{rx, ry, rowW, rowH};
+                SDL_SetRenderDrawColor(m_sdlRenderer, 14, 116, 144, 255);
+                SDL_RenderFillRect(m_sdlRenderer, &highlight);
+                const SDL_FRect bar{rx, ry, 6.0f * metrics.scaleFactor, rowH};
+                SDL_SetRenderDrawColor(m_sdlRenderer, 56, 189, 248, 255);
+                SDL_RenderFillRect(m_sdlRenderer, &bar);
+                if (m_isOffscreen) {
+                    SDL_RenderPresent(m_sdlRenderer);
+                }
+            }
+            const float textX = rx + LM::kBacklogPadX * metrics.scaleFactor;
+            // Pre-wrapped lines are drawn one by one inside a generous box so
+            // the renderer never re-wraps them (width slack, one-line height).
+            const float boxW = (LM::kRowW - LM::kBacklogPadX) * metrics.scaleFactor;
+            const float boxH = lineH * 1.5f * metrics.scaleFactor;
+            float lineY = ry + LM::kBacklogPadY * metrics.scaleFactor;
+            if (!entry.speaker.empty()) {
+                drawText(entry.speaker, textX, lineY, 20.0f * metrics.scaleFactor, titleColor,
+                         boxW * 0.7f, boxH);
+            }
+            if (entry.hasVoice) {
+                // Small "(ses)" mark at the right edge of the first text row.
+                drawText("(ses)", rx + rowW - 74.0f * metrics.scaleFactor, lineY,
+                         LM::kBacklogSmallPx * metrics.scaleFactor, dimColor,
+                         64.0f * metrics.scaleFactor, boxH);
+            }
+            if (!entry.speaker.empty()) lineY += lineH * metrics.scaleFactor;
+            for (const auto& line : entry.lines) {
+                if (!line.empty()) {
+                    drawText(line, textX, lineY, LM::kBacklogFontPx * metrics.scaleFactor,
+                             textColor, boxW, boxH);
+                }
+                lineY += lineH * metrics.scaleFactor;
+            }
+        }
+    }
+
+    const int rows = backlogEntries ? 0 : static_cast<int>(view.rows.size());
     for (int i = 0; i < rows; ++i) {
         const auto& row = view.rows[i];
         const float rowTop = LM::kRowY0 + i * (LM::kRowH + LM::kRowGap);
@@ -171,6 +232,92 @@ void Window::renderPauseMenuOverlay(const Rowl::Core::PauseMenuView& view) {
     toPhys(LM::kRowX, LM::kPanelY + LM::kPanelH - 44.0f, hx, hy);
     drawText(view.hint, hx, hy, 19.0f * metrics.scaleFactor, dimColor,
              LM::kRowW * metrics.scaleFactor, 30.0f * metrics.scaleFactor);
+}
+
+void Window::renderPlayerBadges(bool autoBadge, bool skipBadge) {
+    if (!m_sdlRenderer || (!autoBadge && !skipBadge)) return;
+    // D04-2: AUTO / SKIP status capsules, top-right of the 1920x1080 canvas.
+    // Semi-transparent so the scene stays readable; palette = the pause menu's
+    // (panel navy / accent cyan / light text). SKIP sits left of AUTO.
+    constexpr float kBadgeW = 116.0f;
+    constexpr float kBadgeH = 44.0f;
+    constexpr float kBadgeGap = 12.0f;
+    constexpr float kMarginRight = 40.0f;
+    constexpr float kMarginTop = 28.0f;
+    const ViewportMetrics metrics =
+        AspectGuardian::calculateViewport(m_width, m_height, 1920, 1080);
+    if (metrics.scaleFactor <= 0.0f) return;
+
+    struct Badge {
+        const char* text;
+        SDL_Color fill;
+        SDL_Color textColor;
+        float left;
+    };
+    Badge badges[2];
+    int count = 0;
+    float left = 1920.0f - kMarginRight - kBadgeW;
+    if (autoBadge) {
+        badges[count++] = {"AUTO", {15, 15, 26, 200}, {56, 189, 248, 255}, left};
+        left -= kBadgeW + kBadgeGap;
+    }
+    if (skipBadge) {
+        badges[count++] = {"SKIP", {14, 116, 144, 210}, {241, 245, 249, 255}, left};
+    }
+
+    SDL_SetRenderDrawBlendMode(m_sdlRenderer, SDL_BLENDMODE_BLEND);
+    // Softly rounded rectangle: one whole-pixel row per strip (sub-pixel rects
+    // vanish in the software renderer on small surfaces); only the top and
+    // bottom few rows are inset by a small corner arc. A full half-height
+    // capsule would show hard 1px stair steps without anti-aliasing.
+    auto fillCapsule = [&](const SDL_FRect& r, SDL_Color c) {
+        SDL_SetRenderDrawColor(m_sdlRenderer, c.r, c.g, c.b, c.a);
+        const int rows = std::max(1, static_cast<int>(std::lround(r.h)));
+        const float corner = std::min(static_cast<float>(rows) * 0.2f, 6.0f);
+        const float top = std::floor(r.y);
+        const float width = std::max(1.0f, std::round(r.w));
+        const float x0 = std::round(r.x);
+        for (int row = 0; row < rows; ++row) {
+            const float edge = std::min(static_cast<float>(row) + 0.5f,
+                                        static_cast<float>(rows - row) - 0.5f);
+            float inset = 0.0f;
+            if (edge < corner) {
+                const float up = corner - edge;
+                inset = std::round(corner - std::sqrt(std::max(0.0f, corner * corner - up * up)));
+            }
+            const SDL_FRect strip{x0 + inset, top + static_cast<float>(row),
+                                  std::max(1.0f, width - 2.0f * inset), 1.0f};
+            SDL_RenderFillRect(m_sdlRenderer, &strip);
+        }
+    };
+    for (int i = 0; i < count; ++i) {
+        float px = 0.0f, py = 0.0f;
+        AspectGuardian::virtualToPhysical(badges[i].left, kMarginTop, metrics, px, py);
+        const SDL_FRect rect{px, py, kBadgeW * metrics.scaleFactor, kBadgeH * metrics.scaleFactor};
+        fillCapsule(rect, badges[i].fill);
+    }
+    // Offscreen software path: flush queued rects before direct text writes.
+    if (m_isOffscreen) {
+        SDL_RenderPresent(m_sdlRenderer);
+    }
+    if (!m_fontRenderer || !m_fontRenderer->isLoaded()) return;
+    const float fontPx = 24.0f * metrics.scaleFactor;
+    for (int i = 0; i < count; ++i) {
+        float px = 0.0f, py = 0.0f;
+        AspectGuardian::virtualToPhysical(badges[i].left, kMarginTop, metrics, px, py);
+        const float w = kBadgeW * metrics.scaleFactor;
+        const float h = kBadgeH * metrics.scaleFactor;
+        // The text box is laid out from its top edge: cap-height centre sits
+        // ~0.69 font-px above the box centre (measured against the font).
+        const float textY = py + h * 0.5f - fontPx * 0.69f;
+        if (m_offscreenSurface) {
+            m_fontRenderer->renderText(m_offscreenSurface, badges[i].text, px, textY, fontPx,
+                                       badges[i].textColor, w, h, "Center");
+        } else {
+            drawTrueTypeTextOnGpu(m_sdlRenderer, m_fontRenderer.get(), nullptr, badges[i].text,
+                                  px, textY, fontPx, badges[i].textColor, w, h, "Center");
+        }
+    }
 }
 
 }  // namespace Rowl::Render

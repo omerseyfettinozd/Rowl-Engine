@@ -31,6 +31,11 @@ namespace Rowl::Core {
 void Engine::setPaused(bool paused) {
     if (m_paused == paused) return;
     m_paused = paused;
+    // D04-1: opening any menu (pause / backlog / preferences) ends Skip.
+    if (paused) {
+        m_skipActive = false;
+        m_skipHold = false;
+    }
     // D02: a host closing the menu also closes the title screen; the hint
     // of the previous session never leaks into a fresh menu.
     if (!paused) m_titleActive = false;
@@ -40,6 +45,8 @@ void Engine::setPaused(bool paused) {
     m_pauseMode = PauseMenuMode::Main;
     m_pauseSelected = 0;
     m_pauseConfirmQuit = false;
+    m_backlogTop = 0;  // D03-2: a fresh open never inherits backlog state
+    m_backlogFromPause = false;
     // A2b: a fresh menu open rebuilds slot occupancy — saves or deletes may
     // have happened out-of-band while unpaused (editor, quick keys).
     m_pauseSlotCacheValid = false;
@@ -52,11 +59,16 @@ int Engine::pauseMenuRowCount() const {
         case PauseMenuMode::Main: return PauseMenuLayout::kMainRows;
         case PauseMenuMode::Title: return PauseMenuLayout::kTitleRows;
         case PauseMenuMode::Preferences: return PauseMenuLayout::kPreferenceRows;
+        case PauseMenuMode::Backlog: return static_cast<int>(getDialogueHistory().size());
         default: return PauseMenuLayout::kSlotRows;
     }
 }
 
 void Engine::pauseMenuMoveSelection(int direction) {
+    if (m_pauseMode == PauseMenuMode::Backlog) {  // D03-2: a list, never wraps
+        backlogMoveSelection(direction);
+        return;
+    }
     const int count = pauseMenuRowCount();
     if (count <= 0) return;
     m_pauseSelected = (m_pauseSelected + direction + count) % count;
@@ -91,6 +103,10 @@ void Engine::menuActivateSelected() {
         titleActivateSelected();
         return;
     }
+    if (m_pauseMode == PauseMenuMode::Backlog) {
+        backlogActivateSelected();
+        return;
+    }
     if (m_pauseMode != PauseMenuMode::Main) {
         menuChooseSlot(static_cast<int32_t>(m_pauseSelected));
         return;
@@ -99,6 +115,15 @@ void Engine::menuActivateSelected() {
         case 0: setPaused(false); break;
         case 1: m_pauseMode = PauseMenuMode::SaveSlots; m_pauseSelected = 0; m_pauseConfirmQuit = false; break;
         case 2: m_pauseMode = PauseMenuMode::LoadSlots; m_pauseSelected = 0; m_pauseConfirmQuit = false; break;
+        case PauseMenuLayout::kMainBacklogRow:
+            // D03-2: the backlog opens over the pause menu and Back returns here.
+            m_pauseMode = PauseMenuMode::Backlog;
+            m_backlogFromPause = true;
+            m_pauseConfirmQuit = false;
+            m_pauseSelected = std::max<int>(0, static_cast<int>(getDialogueHistory().size()) - 1);
+            m_backlogTop = m_pauseSelected;
+            backlogEnsureVisible();
+            break;
         case PauseMenuLayout::kMainTitleRow:
             // D02: back to the title screen; unsaved progress is lost, so it
             // takes the same two-step confirmation as exit.
@@ -131,6 +156,10 @@ void Engine::menuBack() {
         titleBack();
         return;
     }
+    if (m_pauseMode == PauseMenuMode::Backlog) {  // D03-2
+        backlogClose();
+        return;
+    }
     if (m_pauseConfirmQuit) {
         m_pauseConfirmQuit = false;
         return;
@@ -157,6 +186,10 @@ void Engine::pauseMenuCommand(PauseMenuCommand command) {
 
 void Engine::pauseMenuClick(float virtualX, float virtualY) {
     if (!m_paused) return;
+    if (m_pauseMode == PauseMenuMode::Backlog) {  // D03-2: variable-height list
+        backlogClick(virtualX, virtualY);
+        return;
+    }
     const int row = PauseMenuLayout::rowAt(virtualX, virtualY, pauseMenuRowCount());
     if (row < 0) return; // gaps and outside miss; selection is kept
     const bool alreadySelected = (row == m_pauseSelected);
@@ -190,6 +223,11 @@ std::string pauseMenuSpeedText(float multiplier) {
     return std::to_string(whole) + "." + (frac < 10 ? "0" : "") + std::to_string(frac) + "x";
 }
 
+std::string pauseMenuDelayText(float seconds) {
+    const int tenths = static_cast<int>(seconds * 10.0f + 0.5f);
+    return std::to_string(tenths / 10) + "." + std::to_string(tenths % 10) + " sn";
+}
+
 PauseMenuView Engine::getPauseMenuView() const {
     PauseMenuView view;
     view.open = m_paused;
@@ -199,6 +237,24 @@ PauseMenuView Engine::getPauseMenuView() const {
     }
     view.selected = m_pauseSelected;
     view.titleActive = m_titleActive;
+    if (m_pauseMode == PauseMenuMode::Backlog) {
+        // D03-2: entries (visible window) ride in view.backlog; an empty history
+        // shows one dim line instead and selects nothing.
+        view.title = "Gecmis";
+        view.backlog = buildBacklogView();
+        view.selected = view.backlog.selected;
+        if (view.backlog.total == 0) {
+            PauseMenuRow empty;
+            empty.label = "Gecmis bos";
+            empty.enabled = false;
+            view.rows.push_back(empty);
+        }
+        const bool voiced = view.backlog.selected >= 0 &&
+            !getDialogueHistory()[static_cast<size_t>(view.backlog.selected)].voice.empty();
+        view.hint = voiced ? "YUKARI/ASAGI: gez   ENTER: sesi dinle   ESC/B: kapat"
+                           : "YUKARI/ASAGI: gez   ESC/B: kapat";
+        return view;
+    }
     if (m_pauseMode == PauseMenuMode::Main) {
         const bool confirmTitle =
             m_pauseConfirmQuit && m_pauseSelected == PauseMenuLayout::kMainTitleRow;
@@ -213,6 +269,7 @@ PauseMenuView Engine::getPauseMenuView() const {
             {"SFX", pauseMenuPercent(pauseMenuVolume(5)), true},
             {"Seslendirme", pauseMenuPercent(pauseMenuVolume(6)), true},
             {"Metin Hizi", pauseMenuSpeedText(m_textSpeedMultiplier), true},
+            {"Gecmis", "satirlar >", false, "", true},
             {"Ana Menu", confirmTitle ? "emin misin?" : "", false},
             {"Cikis", confirmExit ? "emin misin?" : "", false},
         };
@@ -315,6 +372,35 @@ std::string Engine::getPauseMenuJson() const {
     out += confirmTitle ? "true" : "false";
     out += ",\"selected_has_thumbnail\":";
     out += view.thumbnailPng ? "true" : "false";
+    if (view.backlog.active) {
+        // D03-2: only the visible window rides along (history can hold 500
+        // rows of up to 64 KiB); `total`/`scroll`/`selected` index the full history.
+        out += ",\"backlog\":{\"total\":";
+        out += std::to_string(view.backlog.total);
+        out += ",\"selected\":";
+        out += std::to_string(view.backlog.selected);
+        out += ",\"scroll\":";
+        out += std::to_string(view.backlog.scroll);
+        out += ",\"counter\":";
+        appendPauseMenuJsonString(out, view.backlog.counter);
+        out += ",\"entries\":[";
+        for (size_t i = 0; i < view.backlog.entries.size(); ++i) {
+            const auto& entry = view.backlog.entries[i];
+            if (i > 0) out.push_back(',');
+            out += "{\"index\":";
+            out += std::to_string(entry.index);
+            out += ",\"speaker\":";
+            appendPauseMenuJsonString(out, entry.speaker);
+            out += ",\"dialogue\":";
+            appendPauseMenuJsonString(out, entry.dialogue);
+            out += ",\"has_voice\":";
+            out += entry.hasVoice ? "true" : "false";
+            out += ",\"selected\":";
+            out += entry.selected ? "true" : "false";
+            out.push_back('}');
+        }
+        out += "]}";
+    }
     out += "}";
     return out;
 }

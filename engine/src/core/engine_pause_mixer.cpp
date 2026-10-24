@@ -50,7 +50,8 @@ void Engine::setPauseMenuVolume(int row, float volume) {
 }
 
 void Engine::pauseMenuAdjustSelected(int direction) {
-    // D02: the preferences page (title) maps its rows onto main rows 3..7.
+    // D02: the preferences page (title) maps its rows onto main rows 3..7
+    // (D04-2: 8/9 for its auto-delay / skip-mode rows).
     if (m_pauseMode != PauseMenuMode::Main && m_pauseMode != PauseMenuMode::Preferences) return;
     const int row = pauseMenuValueRow();
     if (row >= 3 && row <= 6) {
@@ -58,6 +59,19 @@ void Engine::pauseMenuAdjustSelected(int direction) {
         persistPauseMenuPreference(row);
     } else if (row == 7) {
         setTextSpeedMultiplier(m_textSpeedMultiplier + direction * 0.25f);
+        persistPauseMenuPreference(row);
+    } else if (row == 8) {
+        // D04-2: auto-advance delay, 0.5 s steps, clamped to [0, 10] by the setter.
+        setAutoDelay(m_autoDelay + direction * 0.5f);
+        persistPauseMenuPreference(row);
+    } else if (row == 9) {
+        // D04-2: skip mode cycles Okunan -> Hepsi -> Kapali (Left reverses).
+        static constexpr SkipPolicy kCycle[] = {SkipPolicy::ReadOnly, SkipPolicy::All, SkipPolicy::Off};
+        int index = 0;
+        for (int i = 0; i < 3; ++i) {
+            if (kCycle[i] == m_skipPolicy) index = i;
+        }
+        setSkipPolicy(kCycle[(index + (direction > 0 ? 1 : 2)) % 3]);
         persistPauseMenuPreference(row);
     }
     m_pauseConfirmQuit = false;
