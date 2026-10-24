@@ -593,6 +593,15 @@ bool Engine::completeTypewriterIfTyping() {
 }
 
 void Engine::advanceToNextNode(uint32_t choiceIndex) {
+    advanceStory(choiceIndex, false);
+}
+
+bool Engine::choiceConditionHolds(const std::string& condition) const {
+    if (condition.empty() || condition == "true" || condition == "1") return true;
+    return m_luaSandbox && m_luaSandbox->evaluateCondition(condition);
+}
+
+void Engine::advanceStory(uint32_t choiceIndex, bool viaChoice) {
     if (m_storyRuntime.empty()) return;
     // MS-6: the pause menu is modal — story advance is suspended until resume.
     // (Paused Advance/Pointer inputs are rerouted to menu actions before
@@ -603,6 +612,17 @@ void Engine::advanceToNextNode(uint32_t choiceIndex) {
     // If typewriter is still typing out any line, the request reveals the
     // full text immediately instead of advancing (MS-6 unified contract).
     if (completeTypewriterIfTyping()) return;
+
+    // A presented choice menu is answered only by picking one of its options
+    // (advanceToChoice). A plain advance (Space/Enter, empty-canvas click,
+    // swipe, AdvanceNode) used to follow edge 0 — even when that option's
+    // condition was not met.
+    if (!viaChoice && !m_activeChoiceButtons.empty()) {
+        ROWL_LOG_INFO("Advance ignored on Node #" +
+                      std::to_string(m_storyRuntime.currentNodeId()) +
+                      ": waiting for a choice");
+        return;
+    }
 
     const auto advanceResult = m_storyRuntime.advance(choiceIndex);
     if (advanceResult == StoryRuntime::AdvanceResult::CurrentNodeMissing) {
@@ -675,6 +695,21 @@ bool Engine::advanceToChoice(const std::string& optionId) {
                       std::to_string(m_storyRuntime.currentNodeId()) + ": " + optionId);
         return false;
     }
+    // While a choice menu is presented only its selectable options count: a
+    // disabled option, one whose condition is not met right now, or an edge
+    // with no button is refused (legacy graphs without buttons keep working).
+    if (!m_activeChoiceButtons.empty()) {
+        const auto button = std::find_if(
+            m_activeChoiceButtons.begin(), m_activeChoiceButtons.end(),
+            [&](const Rowl::Render::ChoiceButtonRenderData& candidate) {
+                return candidate.optionId == optionId;
+            });
+        if (button == m_activeChoiceButtons.end() || !choiceButtonSelectable(*button)) {
+            ROWL_LOG_WARN("Choice option is not selectable on Node #" +
+                          std::to_string(m_storyRuntime.currentNodeId()) + ": " + optionId);
+            return false;
+        }
+    }
 
     if (m_hasActiveScript && m_luaSandbox) {
         for (const auto& moduleId : m_activeScriptModuleIds) {
@@ -682,7 +717,7 @@ bool Engine::advanceToChoice(const std::string& optionId) {
         }
     }
 
-    advanceToNextNode(choice->index);
+    advanceStory(choice->index, true);
     return m_storyRuntime.currentNodeId() == choice->targetNodeId;
 }
 
@@ -716,14 +751,24 @@ bool Engine::handlePointerDown(float physicalX, float physicalY) {
     }
     for (auto it = m_activeChoiceButtons.rbegin(); it != m_activeChoiceButtons.rend(); ++it) {
         const auto& button = *it;
-        if (!button.enabled) continue;
+        if (!choiceButtonSelectable(button)) continue;
         if (x >= button.x && x <= button.x + button.width &&
             y >= button.y && y <= button.y + button.height) {
-            advanceToChoice(button.optionId);
+            // Copy: a successful choice rebuilds m_activeChoiceButtons.
+            const std::string optionId = button.optionId;
+            advanceToChoice(optionId);
             return true;
         }
     }
-    return false;
+    // A click beside the buttons (or on a disabled one) is consumed: hosts
+    // turn an unconsumed click into AdvanceNode, which must not answer the menu.
+    // It still completes a typing line (MS-6 click-to-complete).
+    completeTypewriterIfTyping();
+    return true;
+}
+
+bool Engine::choiceButtonSelectable(const Rowl::Render::ChoiceButtonRenderData& button) const {
+    return button.authorEnabled && choiceConditionHolds(button.condition);
 }
 
 void Engine::updateActiveScene(
@@ -1317,14 +1362,13 @@ void Engine::updateSceneFromComponents(const nlohmann::json& root,
                     button.optionId = option.value("option_id", "");
                     button.text = option.value("text", "Choice");
                     button.enabled = option.value("enabled", true);
+                    button.authorEnabled = button.enabled;
 
                     // Lua condition check (fail-closed: without a sandbox the
                     // gated choice stays disabled rather than opening).
-                    std::string condition = option.value("condition", "");
-                    if (!condition.empty() && condition != "true" && condition != "1") {
-                        if (!m_luaSandbox || !m_luaSandbox->evaluateCondition(condition)) {
-                            button.enabled = false;
-                        }
+                    button.condition = option.value("condition", "");
+                    if (button.enabled && !choiceConditionHolds(button.condition)) {
+                        button.enabled = false;
                     }
 
                     button.x = option.value("x", 680.0f);

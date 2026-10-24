@@ -164,6 +164,10 @@ struct ChoiceButtonRenderData {
     std::string textAlignment = "Center";
     std::string fontFamily = "Default";
     bool enabled = true;
+    /// Author's own "enabled" flag, before the Lua condition was applied.
+    bool authorEnabled = true;
+    /// Lua gate ("" / "true" / "1" = always open). Re-checked at selection.
+    std::string condition;
 };
 
 class Window {

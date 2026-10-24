@@ -204,6 +204,8 @@ public:
     void recordStoryGraphMiss(const std::string& detail);
 
     // choiceIndex: which branch to follow (0 = first). Default 0 for backward compat.
+    // While a choice menu is presented this only completes a typing line; the
+    // menu is answered through advanceToChoice.
     void advanceToNextNode(uint32_t choiceIndex = 0);
     /// Advances by the stable option ID stored in graph v4. Returns false for
     /// missing/disabled options or when dialogue typewriter input consumed it.
@@ -541,6 +543,14 @@ private:
     /// Pure elapsed-time predicate — no play-state gate — so keyboard,
     /// pointer, swipe, and choice inputs share one click-to-complete path.
     bool completeTypewriterIfTyping();
+    /// Shared advance path. viaChoice = true only from advanceToChoice; a
+    /// plain advance never answers a presented choice menu.
+    void advanceStory(uint32_t choiceIndex, bool viaChoice);
+    /// Lua gate of a choice option ("" / "true" / "1" = open; fail-closed
+    /// without a sandbox).
+    bool choiceConditionHolds(const std::string& condition) const;
+    /// Author-enabled and its condition holds right now.
+    bool choiceButtonSelectable(const Rowl::Render::ChoiceButtonRenderData& button) const;
     // MS-6 pause-menu internals: keyboard and pointer funnels share these.
     int pauseMenuRowCount() const;
     void pauseMenuMoveSelection(int direction);
