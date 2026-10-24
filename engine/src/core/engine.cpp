@@ -2341,6 +2341,10 @@ void Engine::step(float deltaTime) {
     frame.backgroundParallaxX = m_activeBackgroundParallaxX;
     frame.backgroundParallaxY = m_activeBackgroundParallaxY;
     frame.backgroundOpacity = m_activeBackgroundOpacity;
+    // D04-2: AUTO / SKIP capsules only over a running, unpaused story (never
+    // on the title, pause menu, backlog or preferences).
+    frame.showAutoBadge = m_isPlaying && !m_paused && m_autoMode;
+    frame.showSkipBadge = m_isPlaying && !m_paused && isSkipEffective();
     // E2b: FX kapali iken composeCharacterFx girisin kopyasidir (legacy kare
     // bayt-birebir); acikken tween/vurgu/harman sunulan kopyaya isler.
     // Window imzasi/hash degismez — C0/D2 kilidine dokunulmaz.

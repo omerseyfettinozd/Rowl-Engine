@@ -310,6 +310,9 @@ public:
     /// MS-6: pause-menu overlay (dim + panel + rows + hint) in virtual
     /// 1920x1080 layout. No-op unless view.open; safe on offscreen surfaces.
     void renderPauseMenuOverlay(const Rowl::Core::PauseMenuView& view);
+    /// D04-2: AUTO / SKIP capsules, drawn on a freshly rendered story frame
+    /// (renderComposedFrame decides when).
+    void renderPlayerBadges(bool autoBadge, bool skipBadge);
     /// D02: frees the cached slot-thumbnail texture (renderer teardown).
     void releasePauseThumbnail();
     void endFrame();
@@ -503,6 +506,10 @@ private:
                               float bgRotation, float bgParallaxX, float bgParallaxY,
                               float bgOpacity) const;
     void invalidateFrameCache() { m_frameCacheValid = false; }
+    // D04-2: bit 0 = AUTO, bit 1 = SKIP capsule currently baked into the
+    // cached frame pixels. renderComposedFrame forces a re-render whenever it
+    // differs from the wanted set, so a stale capsule never survives.
+    uint8_t m_bakedBadges = 0;
 
     ScreenFxState m_screenFx;
     SDL_Texture* m_vignetteTexture = nullptr;

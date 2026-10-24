@@ -329,7 +329,9 @@ void test_title_screen() {
     expectTitle(h, 4, "preferences page");
     {
         const json m = menu(h);
-        req(m["rows"].size() == 6 && m["rows"][4]["label"] == "Metin Hizi" && m["rows"][5]["label"] == "Geri",
+        req(m["rows"].size() == 8 && m["rows"][4]["label"] == "Metin Hizi" &&
+                m["rows"][5]["label"] == "Otomatik Hizi" && m["rows"][6]["label"] == "Atlama" &&
+                m["rows"][7]["label"] == "Geri",
             "preferences rows");
     }
     selectRow(h, 4);
@@ -348,7 +350,7 @@ void test_title_screen() {
     expectTitle(h, 3, "back from preferences");
     selectRow(h, 3);
     cmd(h, ROWL_PAUSE_MENU_CONFIRM);
-    selectRow(h, 5);
+    selectRow(h, 7);
     cmd(h, ROWL_PAUSE_MENU_CONFIRM);  // Geri
     expectTitle(h, 3, "Geri row");
     TEST_PASS("Title preferences persist volume/text speed; Back and Geri return to the title");

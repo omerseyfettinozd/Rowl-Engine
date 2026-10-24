@@ -258,12 +258,16 @@ void Engine::titleBack() {
 
 int Engine::pauseMenuValueRow() const {
     // Main rows 3..7 are the adjustable ones; the preferences page lists the
-    // same five first (row r -> main row r+3) followed by "Geri".
+    // same five first (row r -> main row r+3), then D04-2's two page-only value
+    // rows (5 -> 8 auto delay, 6 -> 9 skip mode) followed by "Geri". Rows 8/9
+    // only exist as value rows on the preferences page (on the main page they
+    // are Gecmis / Ana Menu, which this never reports).
     if (m_pauseMode == PauseMenuMode::Main) {
         return (m_pauseSelected >= 3 && m_pauseSelected <= 7) ? m_pauseSelected : -1;
     }
     if (m_pauseMode == PauseMenuMode::Preferences) {
-        return (m_pauseSelected >= 0 && m_pauseSelected <= 4) ? m_pauseSelected + 3 : -1;
+        return (m_pauseSelected >= 0 && m_pauseSelected <= PauseMenuLayout::kPreferenceSkipRow)
+            ? m_pauseSelected + 3 : -1;
     }
     return -1;
 }
@@ -279,6 +283,12 @@ void Engine::persistPauseMenuPreference(int row) {
         case 5: patch["sfx_volume"] = rounded(pauseMenuVolume(5)); break;
         case 6: patch["voice_volume"] = rounded(pauseMenuVolume(6)); break;
         case 7: patch["text_speed_multiplier"] = rounded(m_textSpeedMultiplier); break;
+        // D04-2: preferences-page-only rows (see pauseMenuValueRow).
+        case 8: patch["auto_advance_delay"] = rounded(m_autoDelay); break;
+        case 9:
+            patch["skip_mode"] = m_skipPolicy == SkipPolicy::Off ? "off"
+                               : m_skipPolicy == SkipPolicy::All ? "all" : "read_only";
+            break;
         default: return;
     }
     m_playerProfile.setPreferencesJson(patch.dump());
@@ -299,6 +309,9 @@ PauseMenuView Engine::getTitleMenuView() const {
             {"SFX", pauseMenuPercent(pauseMenuVolume(5)), true},
             {"Seslendirme", pauseMenuPercent(pauseMenuVolume(6)), true},
             {"Metin Hizi", pauseMenuSpeedText(m_textSpeedMultiplier), true},
+            {"Otomatik Hizi", pauseMenuDelayText(m_autoDelay), true, "", true},
+            {"Atlama", m_skipPolicy == SkipPolicy::Off ? "Kapali"
+                     : m_skipPolicy == SkipPolicy::All ? "Hepsi" : "Okunan", true, "", true},
             {"Geri", "", false},
         };
         view.hint = "YUKARI/ASAGI: sec   SOL/SAG: ayar   ESC: geri";

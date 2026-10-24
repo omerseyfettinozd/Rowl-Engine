@@ -40,6 +40,7 @@ add_executable(rowl_tests
     test_backlog_replay.cpp
     test_backlog_screen.cpp
     test_auto_skip.cpp
+    test_auto_skip_ui.cpp
     test_graph_vnext.cpp
     test_localization.cpp
     test_locale_cluster.cpp

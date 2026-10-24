@@ -27,6 +27,10 @@ struct ComposedFrame {
     float backgroundParallaxX = 1.0f;
     float backgroundParallaxY = 1.0f;
     float backgroundOpacity = 1.0f;
+    /// D04-2: player Auto / Skip status capsules (top-right). Never part of
+    /// the content hash; the window tracks what is baked into its cached frame.
+    bool showAutoBadge = false;
+    bool showSkipBadge = false;
 };
 
 } // namespace Rowl::Render

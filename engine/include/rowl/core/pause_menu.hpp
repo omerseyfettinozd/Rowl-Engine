@@ -103,6 +103,8 @@ struct PauseMenuView {
 /// "55%" / "1.25x" row values (engine_pause_menu.cpp), shared with D02 pages.
 std::string pauseMenuPercent(float volume);
 std::string pauseMenuSpeedText(float multiplier);
+/// D04-2: "2.0 sn" (one decimal) auto-advance delay row value.
+std::string pauseMenuDelayText(float seconds);
 /// D02: "<YYYY-MM-DD HH:MM>  <chapter>  <summary ~48 bytes>" of a valid slot,
 /// empty otherwise (engine_title_menu.cpp).
 std::string pauseSlotDetail(const PauseSlotInfo& info);
@@ -136,7 +138,11 @@ struct PauseMenuLayout {
     static constexpr int kMainExitRow = 10;
     static constexpr int kSlotRows = 10;
     static constexpr int kTitleRows = 5;
-    static constexpr int kPreferenceRows = 6;
+    /// Preferences page: 5 mixer/speed rows, D04-2 "Otomatik Hizi" (5) and
+    /// "Atlama" (6), then "Geri" (always the last row).
+    static constexpr int kPreferenceRows = 8;
+    static constexpr int kPreferenceAutoDelayRow = 5;
+    static constexpr int kPreferenceSkipRow = 6;
     /// D02: slot-page thumbnail box (virtual canvas), panel top-right.
     static constexpr float kThumbX = 1180.0f;
     static constexpr float kThumbY = 150.0f;

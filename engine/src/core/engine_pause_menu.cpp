@@ -223,6 +223,11 @@ std::string pauseMenuSpeedText(float multiplier) {
     return std::to_string(whole) + "." + (frac < 10 ? "0" : "") + std::to_string(frac) + "x";
 }
 
+std::string pauseMenuDelayText(float seconds) {
+    const int tenths = static_cast<int>(seconds * 10.0f + 0.5f);
+    return std::to_string(tenths / 10) + "." + std::to_string(tenths % 10) + " sn";
+}
+
 PauseMenuView Engine::getPauseMenuView() const {
     PauseMenuView view;
     view.open = m_paused;

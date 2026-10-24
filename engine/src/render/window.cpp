@@ -1528,6 +1528,13 @@ uint64_t Window::hashFrameContent(bool hasBackground, const std::string& backgro
 }
 
 void Window::renderComposedFrame(const ComposedFrame& frame) {
+    // D04-2: the capsules are drawn onto the story frame, which the identical-
+    // frame cache may skip. Appearing/vanishing capsules therefore invalidate
+    // the cache (the content hash does not see them); an unchanged set rides
+    // the cache with its capsule already in the pixels.
+    const uint8_t wantedBadges = static_cast<uint8_t>((frame.showAutoBadge ? 1 : 0) |
+                                                       (frame.showSkipBadge ? 2 : 0));
+    if (wantedBadges != m_bakedBadges) invalidateFrameCache();
     renderVisualNovelFrame(
         frame.hasBackground,
         frame.background,
@@ -1541,6 +1548,13 @@ void Window::renderComposedFrame(const ComposedFrame& frame) {
         frame.backgroundParallaxY,
         frame.backgroundOpacity
     );
+    if (!m_lastFrameReusedCache) {
+        m_bakedBadges = 0;  // the redraw wiped whatever was baked before
+        if (wantedBadges != 0) {
+            renderPlayerBadges(frame.showAutoBadge, frame.showSkipBadge);
+            m_bakedBadges = wantedBadges;
+        }
+    }
 }
 
 void Window::endFrame() {

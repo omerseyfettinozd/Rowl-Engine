@@ -186,6 +186,7 @@ void test_title_screen();  // D02: native baslik ekrani / Devam Et / Tercihler
 void test_backlog_replay();  // D03-1: gecmis satirina ses + guvenli ses tekrari
 void test_backlog_screen();  // D03-2: oyuncuda Gecmis (backlog) ekrani
 void test_auto_skip();  // D04-1: oyuncu Otomatik + okunana duyarli Atla surucusu
+void test_auto_skip_ui();  // D04-2: Tercihler Otomatik/Atlama satirlari + AUTO/SKIP gostergesi
 void test_choice_input_guard();  // secim menusunu duz ilerleme yanitlamaz kilidi
 void test_graph_vnext();
 void test_localization();
