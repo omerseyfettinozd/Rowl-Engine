@@ -6,6 +6,7 @@
 #include <system_error>
 #include <vector>
 #include <filesystem>
+#include <algorithm>
 #include <charconv>
 #include <cstdio>
 #include <cstdint>
@@ -154,9 +155,10 @@ void printGameIdentityBlock(const nlohmann::json& info) {
 // D01d: applies the stored player preferences with the existing public setters
 // and returns "key=value" pairs for the ones applied.
 //
-// Not applied here (no native setter yet - D02/D05): auto_advance_delay (the
-// native knob is an additive per-line offset, not an absolute delay),
-// skip_mode, auto_enabled. language is applied only when it is not the profile
+// D04-1: auto_enabled, skip_mode and auto_advance_delay go through the native
+// player-driver setters (the delay is the player's absolute Auto base delay,
+// clamped by the engine to [0, 10] s; the old per-line offset knob is unrelated).
+// language is applied only when it is not the profile
 // default "en": the profile cannot tell "never chosen" from "chose en", and a
 // project whose own default locale is not "en" must keep it until the player
 // explicitly picks another language (explicit marker: D02).
@@ -201,6 +203,19 @@ std::vector<std::string> applyStoredPreferences(RowlEngineHandle engine) {
     if (number("text_speed_multiplier", value)) {  // no native getter
         RowlEngine_SetTextSpeedMultiplier(engine, value);
         note("text_speed_multiplier", floatText(value));
+    }
+    if (number("auto_advance_delay", value)) {
+        if (RowlEngine_SetAutoDelay(engine, value) == ROWL_RESULT_OK) {
+            note("auto_advance_delay", floatText(std::clamp(value, 0.0f, 10.0f)));
+        }
+    }
+    if (prefs.value("auto_enabled", false)) {
+        if (RowlEngine_SetAutoMode(engine, 1) == ROWL_RESULT_OK) note("auto_enabled", "true");
+    }
+    {
+        const std::string skipMode = prefs.value("skip_mode", std::string{"read_only"});
+        const int policy = skipMode == "off" ? 0 : (skipMode == "all" ? 2 : 1);
+        if (RowlEngine_SetSkipPolicy(engine, policy) == ROWL_RESULT_OK) note("skip_mode", skipMode);
     }
     if (number("text_scale", value)) {
         RowlEngine_SetTextScale(engine, value);
@@ -307,6 +322,8 @@ static void printHelp(const char* progName) {
               << "  F9                       Quick Load (active slot)\n"
               << "  0-9                      Select the active quick-save slot\n"
               << "  Backspace / Z            Rewind 1 step back in history\n"
+              << "  A                        Auto: lines advance by themselves (remembered)\n"
+              << "  S / hold Ctrl            Skip on/off / skip while held (read lines by default)\n"
               << "  B / Mouse wheel up       Backlog (Gecmis): past lines, replay a line's voice\n"
               << "  Escape / P               Pause menu (save/load slots, volumes,\n"
               << "                           text speed, backlog, exit confirmation)\n"

@@ -6,6 +6,8 @@
  */
 #include "c_api_internal.hpp"
 
+#include <cmath>
+
 // R1 (#6): WithLength boyutu bu tampondan alır.
 static thread_local std::string g_pauseMenuJsonBuf;
 
@@ -120,6 +122,67 @@ RowlEngine_ResultCode RowlEngine_OpenBacklog(RowlEngineHandle handle) {
         if (!checked) return ROWL_RESULT_INVALID_HANDLE;
         return checked->openBacklog() ? ROWL_RESULT_OK : ROWL_RESULT_STATE_ERROR;
     }, ROWL_RESULT_UNKNOWN_ERROR);
+}
+
+namespace {
+
+// D04-1: shared gate of the player-driver surface: claim-or-reject, live
+// handle, initialized engine. `body` runs with the checked engine.
+template <typename Body>
+RowlEngine_ResultCode withPlayerDriverEngine(RowlEngineHandle handle, const char* op, Body&& body) {
+    if (claimHandleOrClassify(handle) == HandleStanding::Foreign) {
+        stampWrongThread(handle, op);
+        return ROWL_RESULT_WRONG_THREAD;
+    }
+    if (!isLiveHandle(handle)) return ROWL_RESULT_INVALID_HANDLE;
+    return invokeNoexcept<RowlEngine_ResultCode>([&] {
+        auto checked = toEngineChecked(handle);
+        if (!checked) return ROWL_RESULT_INVALID_HANDLE;
+        if (!checked->isInitialized()) return ROWL_RESULT_STATE_ERROR;
+        return body(*checked);
+    }, ROWL_RESULT_UNKNOWN_ERROR);
+}
+
+}  // namespace
+
+RowlEngine_ResultCode RowlEngine_SetAutoMode(RowlEngineHandle handle, int enabled) {
+    return withPlayerDriverEngine(handle, "set_auto_mode", [&](Rowl::Core::Engine& engine) {
+        engine.setAutoMode(enabled != 0);
+        return ROWL_RESULT_OK;
+    });
+}
+
+RowlEngine_ResultCode RowlEngine_SetSkipActive(RowlEngineHandle handle, int active) {
+    return withPlayerDriverEngine(handle, "set_skip_active", [&](Rowl::Core::Engine& engine) {
+        return engine.setSkipActive(active != 0) ? ROWL_RESULT_OK : ROWL_RESULT_STATE_ERROR;
+    });
+}
+
+RowlEngine_ResultCode RowlEngine_SetSkipPolicy(RowlEngineHandle handle, int policy) {
+    return withPlayerDriverEngine(handle, "set_skip_policy", [&](Rowl::Core::Engine& engine) {
+        switch (policy) {
+            case 0: engine.setSkipPolicy(Rowl::Core::SkipPolicy::Off); break;
+            case 1: engine.setSkipPolicy(Rowl::Core::SkipPolicy::ReadOnly); break;
+            case 2: engine.setSkipPolicy(Rowl::Core::SkipPolicy::All); break;
+            default: return ROWL_RESULT_INVALID_ARGUMENT;
+        }
+        return ROWL_RESULT_OK;
+    });
+}
+
+RowlEngine_ResultCode RowlEngine_SetAutoDelay(RowlEngineHandle handle, float seconds) {
+    return withPlayerDriverEngine(handle, "set_auto_delay", [&](Rowl::Core::Engine& engine) {
+        if (!std::isfinite(seconds)) return ROWL_RESULT_INVALID_ARGUMENT;
+        engine.setAutoDelay(seconds);
+        return ROWL_RESULT_OK;
+    });
+}
+
+RowlEngine_ResultCode RowlEngine_GetPlayerDriverStateJsonUtf8(
+    RowlEngineHandle handle, char* buffer, uint32_t bufferSize, uint32_t* outRequiredSize) {
+    return withPlayerDriverEngine(handle, "get_player_driver_state", [&](Rowl::Core::Engine& engine) {
+        return copyUtf8ToCaller(engine.getPlayerDriverStateJson(), buffer, bufferSize, outRequiredSize);
+    });
 }
 
 RowlEngine_ResultCode RowlEngine_IsTitleScreenActive(RowlEngineHandle handle, int32_t* outActive) {

@@ -77,7 +77,12 @@ struct RuntimeInputEvent {
         // D03-2: backlog (Gecmis) access. Backlog = B key; SecondaryClick =
         // right mouse button. Engine routes them by pause/title state.
         Backlog,
-        SecondaryClick
+        SecondaryClick,
+        // D04-1: player Auto / Skip. ToggleAuto = A, ToggleSkip = S, SkipHold =
+        // Ctrl pressed (its release arrives as KeyUp with the Ctrl keycode).
+        ToggleAuto,
+        ToggleSkip,
+        SkipHold
     };
 
     Type type;

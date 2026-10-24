@@ -195,8 +195,9 @@ void Engine::handleRuntimeInput(const Rowl::Platform::RuntimeInputEvent& event) 
         case Type::Advance:
             // MS-6: Space/Enter confirm the menu selection while paused and
             // advance the story otherwise — one key, pause-routed.
+            // D04-1: a manual advance ends a running Skip.
             if (m_paused) menuActivateSelected();
-            else advanceToNextNode();
+            else { m_skipActive = false; advanceToNextNode(); }
             break;
         case Type::QuickSave:
             if (!m_paused) quickSave();
@@ -208,11 +209,12 @@ void Engine::handleRuntimeInput(const Rowl::Platform::RuntimeInputEvent& event) 
             if (!m_paused) rewind(1);
             break;
         case Type::PointerDown:
+            if (!m_paused) m_skipActive = false;  // D04-1: a click ends Skip
             if (!handlePointerDown(event.x, event.y)) advanceToNextNode();
             break;
         case Type::SwipeForward:
             if (m_paused) menuActivateSelected();
-            else advanceToNextNode();
+            else { m_skipActive = false; advanceToNextNode(); }
             break;
         case Type::SwipeBack:
             if (!m_paused) rewind(1);
@@ -235,8 +237,28 @@ void Engine::handleRuntimeInput(const Rowl::Platform::RuntimeInputEvent& event) 
             if (isBacklogOpen()) backlogScroll(event.y);
             else if (!m_paused && event.y > 0.0f) openBacklog();
             break;
-        case Type::PointerUp:
+        case Type::ToggleAuto:
+            // D04-1: A flips Auto and remembers it in the profile; inert on the
+            // title / pause / backlog / preferences screens.
+            if (!m_paused) toggleAutoMode();
+            break;
+        case Type::ToggleSkip:
+            // D04-1: S starts/stops Skip for this session (inert under policy Off).
+            if (!m_paused) setSkipActive(!m_skipActive);
+            break;
+        case Type::SkipHold:
+            // D04-1: Ctrl held = Skip until released (inert under policy Off).
+            if (!m_paused && m_skipPolicy != SkipPolicy::Off) {
+                m_skipHold = true;
+                m_skipStepCredit = 0.05f;
+                resetAutoWait();
+            }
+            break;
         case Type::KeyUp:
+            // D04-1: releasing Ctrl ends the hold (an S-started Skip keeps going).
+            if (event.key == SDLK_LCTRL || event.key == SDLK_RCTRL) m_skipHold = false;
+            break;
+        case Type::PointerUp:
         case Type::PointerMotion:
         case Type::TextInput:
         case Type::TextEditing:
@@ -453,6 +475,7 @@ void Engine::setPlayState(bool isPlaying) {
     const bool enteringPlay = isPlaying && !m_isPlaying;
     m_isPlaying = isPlaying;
     m_autoAdvanceElapsed = 0.0f;
+    resetAutoWait();  // D04-1
     m_activeDialogueData.isPlaying = isPlaying;
     if (isPlaying) {
         m_activeDialogueData.elapsedTypewriterTime = 0.0f;
@@ -487,6 +510,8 @@ void Engine::resetToStartNode() {
     m_gameState = Rowl::State::GameState::createInitialState(m_storyRuntime.startNodeId());
     m_lastRecordedDialogueNodeId = 0;
     m_lastSfxPlaybackNodeId = 0;
+    m_skipActive = false;  // D04-1: a new game / reset starts with Auto and Skip idle
+    resetAutoWait();
     if (const StoryNode* activeNode = m_storyRuntime.currentNode()) {
         const auto& startNode = *activeNode;
         if (!startNode.components.empty()) {
@@ -627,6 +652,7 @@ void Engine::advanceStory(uint32_t choiceIndex, bool viaChoice) {
     // reaching here; this guard seals direct API calls too.)
     if (m_paused) return;
     m_autoAdvanceElapsed = 0.0f;
+    resetAutoWait();  // D04-1: any advance (manual, Auto, Skip) starts a fresh wait
 
     // If typewriter is still typing out any line, the request reveals the
     // full text immediately instead of advancing (MS-6 unified contract).
@@ -2261,6 +2287,10 @@ void Engine::step(float deltaTime) {
     // sanitize edilir).
     advanceSpriteSheets(deltaTime);
 
+    // D04-1: the author's auto_advance below may already move the story this
+    // step; the player drivers then stand down (at most one node per step).
+    const uint64_t driverNodeBefore = m_storyRuntime.currentNodeId();
+    const uint64_t driverStepBefore = getCurrentStepId();
     bool autoAdvanceEnabled = false;
     float autoAdvanceDelay = 0.0f;
     for (const auto& dialogue : m_activeDialogues) {
@@ -2293,6 +2323,9 @@ void Engine::step(float deltaTime) {
     } else if (!advanceArmed) {
         m_autoAdvanceElapsed = 0.0f;
     }
+    // D04-1: player-driven Skip / Auto (separate from the author flag above).
+    stepPlayerDrivers(deltaTime, m_storyRuntime.currentNodeId() != driverNodeBefore ||
+                                     getCurrentStepId() != driverStepBefore);
     } // end MS-6 pause freeze of story simulation
 
     Rowl::Render::ComposedFrame frame;
@@ -2671,6 +2704,12 @@ const std::vector<Rowl::State::DialogueHistoryEntry>& Engine::getDialogueHistory
 }
 
 void Engine::recordActiveDialogueHistory() {
+    // D04-1: the read-before snapshot is taken HERE, before the loop below
+    // marks the lines read - afterwards every presented line is "read" and
+    // read-only Skip could never tell new text from old. Computed on every
+    // presentation (also when nothing is recorded: a node re-entered with the
+    // same id is still presented).
+    refreshReadSnapshot();
     if (!m_isPlaying || !m_gameState || m_storyRuntime.currentNodeId() == 0 ||
         m_lastRecordedDialogueNodeId == m_storyRuntime.currentNodeId() ||
         m_activeDialogues.empty()) {
@@ -2729,6 +2768,7 @@ void Engine::refreshActiveDialogueLocalization() {
     };
     refreshOne(m_activeDialogueData);
     for (auto& dlg : m_activeDialogues) refreshOne(dlg);
+    resetAutoWait();  // D04-1: the line length changed; read state is unaffected (content ids are language-stable)
     if (m_hasDialogueBox && !m_activeDialogues.empty()) {
         m_activeSpeaker = m_activeDialogues.front().speaker;
         m_activeDialogue = m_activeDialogues.front().dialogue;
@@ -2809,6 +2849,17 @@ void Engine::resetSessionProfile() {
     m_slotLoadFailed.reset();
     m_textSpeedMultiplier = 1.0f;
     m_autoAdvanceDelayOffset = 0.0f;
+    // D04-1: Auto / Skip are session state; the policy and delay are restored by
+    // the host from the profile after a re-init, like the other preferences.
+    m_autoMode = false;
+    m_skipActive = false;
+    m_skipHold = false;
+    m_skipPolicy = SkipPolicy::ReadOnly;
+    m_autoDelay = 2.0f;
+    m_autoWaitElapsed = 0.0f;
+    m_autoWaitRemaining = 0.0f;
+    m_skipStepCredit = 0.0f;
+    m_activeLinesReadBeforePresentation = true;
     m_defaultBgmTransition = "instant";
     m_defaultBgmTransitionDurationSeconds = 1.0f;
     m_playtimeSeconds = 0.0;
@@ -3188,6 +3239,12 @@ bool Engine::loadGameSlot(int32_t slotIndex) {
                             "load_game_slot", std::to_string(slotIndex));
         return false;
     }
+    // D04-1: loading is not a presentation (nothing is marked read), so the
+    // read-before snapshot comes straight from the read set; Skip and the Auto
+    // wait start over.
+    refreshReadSnapshot();
+    m_skipActive = false;
+    resetAutoWait();
     ROWL_LOG_INFO("Loaded Game Slot #" + std::to_string(slotIndex) +
                   " → Node #" + std::to_string(m_storyRuntime.currentNodeId()));
     if (loadResult.migrated()) {
@@ -3374,6 +3431,10 @@ bool Engine::rewind(uint64_t steps) {
                             "rewind", std::to_string(steps));
         return false;
     }
+    // D04-1: same as load - snapshot from the read set, Skip / Auto start over.
+    refreshReadSnapshot();
+    m_skipActive = false;
+    resetAutoWait();
     m_context->setSuccess("rewind", std::to_string(steps));
     return true;
 }

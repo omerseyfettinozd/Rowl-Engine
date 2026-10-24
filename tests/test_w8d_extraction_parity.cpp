@@ -102,7 +102,7 @@ int main() {
         check(mapKey(SDLK_F5, t, slot) && t == Type::QuickSave, "keymap: F5->QuickSave");
         check(mapKey(SDLK_F9, t, slot) && t == Type::QuickLoad, "keymap: F9->QuickLoad");
         check(mapKey(SDLK_3, t, slot) && t == Type::SelectSlot && slot == 3, "keymap: 3->SelectSlot(3)");
-        check(!mapKey(SDLK_A, t, slot), "keymap: A eslenmemis->false");
+        check(!mapKey(SDLK_Q, t, slot), "keymap: Q eslenmemis->false");  // D04-1: A artik ToggleAuto
         std::cout << "  keymap: 12/12 eslesme" << std::endl;
     }
 

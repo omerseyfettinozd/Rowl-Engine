@@ -165,6 +165,10 @@ typedef struct RowlEngine_ApiVersion {
  * RowlEngine_ReplayBacklogVoice replays only that clip; D03-2 adds the native
  * backlog screen (RowlEngine_OpenBacklog). Additive. */
 #define ROWL_ENGINE_CAPABILITY_BACKLOG_REPLAY UINT64_C(67108864)
+/* D04-1: player-driven Auto and read-aware Skip (RowlEngine_SetAutoMode /
+ * SetSkipActive / SetSkipPolicy / SetAutoDelay / GetPlayerDriverStateJsonUtf8).
+ * Additive. */
+#define ROWL_ENGINE_CAPABILITY_PLAYER_AUTO_SKIP UINT64_C(134217728)
 
 /** Current additive C API version. This query does not require an engine handle. */
 ROWL_API RowlEngine_ResultCode RowlEngine_GetApiVersion(
@@ -1332,6 +1336,47 @@ ROWL_API RowlEngine_ResultCode RowlEngine_OpenTitleScreen(RowlEngineHandle handl
  * RowlEngine_Init and on the title screen; INVALID_HANDLE; WRONG_THREAD.
  */
 ROWL_API RowlEngine_ResultCode RowlEngine_OpenBacklog(RowlEngineHandle handle);
+
+/* ── Player Auto / Skip (D04-1, ROWL_ENGINE_CAPABILITY_PLAYER_AUTO_SKIP) ───────
+ * The player's own drivers, independent of the author's per-line auto_advance
+ * flag (which is unchanged). All state is session-only; the player (A / S /
+ * Ctrl keys) uses the same engine paths. Every call: STATE_ERROR before
+ * RowlEngine_Init, INVALID_HANDLE, WRONG_THREAD.
+ *
+ * Auto: once the line is fully shown it waits auto_delay + characters * 0.04 /
+ * text-speed seconds (clamped to [0.8, 30]; the node's own voice clip is
+ * waited out too, at most 30 s in total) and then advances like a click. It
+ * idles while a choice menu is up, the game is paused or a transition runs.
+ * Skip: advances one node per step (at least 0.05 s apart) while the lines obey
+ * the policy; it stops by itself at a choice menu, at an unread line under
+ * read_only, at the end of the chain, and on pause / title / backlog / load /
+ * rewind / manual advance. Skip takes priority over Auto.
+ */
+
+/** enabled != 0 turns Auto on, 0 off. Does not touch the player profile. */
+ROWL_API RowlEngine_ResultCode RowlEngine_SetAutoMode(RowlEngineHandle handle, int enabled);
+
+/** active != 0 starts Skip, 0 stops it. Starting while the policy is off or the
+ *  pause menu / title / backlog is up is refused: ROWL_RESULT_STATE_ERROR and
+ *  nothing changes. */
+ROWL_API RowlEngine_ResultCode RowlEngine_SetSkipActive(RowlEngineHandle handle, int active);
+
+/** policy: 0 = off, 1 = read_only (the default), 2 = all. Anything else:
+ *  ROWL_RESULT_INVALID_ARGUMENT. Switching to off also stops a running Skip. */
+ROWL_API RowlEngine_ResultCode RowlEngine_SetSkipPolicy(RowlEngineHandle handle, int policy);
+
+/** Auto's base delay in seconds, clamped to [0, 10] (default 2). NaN/Inf:
+ *  ROWL_RESULT_INVALID_ARGUMENT, nothing changes. */
+ROWL_API RowlEngine_ResultCode RowlEngine_SetAutoDelay(RowlEngineHandle handle, float seconds);
+
+/** Caller-buffer JSON {"auto":bool,"skip_active":bool,
+ *  "skip_policy":"off"|"read_only"|"all","auto_delay":number,
+ *  "line_read_before":bool,"auto_wait_remaining":number}. line_read_before =
+ *  every line of the current node had already been read when it was first
+ *  presented (fail-closed: a line without a content id counts as unread).
+ *  Same buffer contract as RowlEngine_GetSaveDirectoryUtf8. */
+ROWL_API RowlEngine_ResultCode RowlEngine_GetPlayerDriverStateJsonUtf8(
+    RowlEngineHandle handle, char* buffer, uint32_t bufferSize, uint32_t* outRequiredSize);
 
 /** *outActive = 1 while the title screen is active, else 0. NULL outActive:
  *  ROWL_RESULT_INVALID_ARGUMENT. */

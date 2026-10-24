@@ -177,9 +177,14 @@ void test_window_input_routing() {
         expect(SDLK_0, Type::SelectSlot, 0);
         expect(SDLK_3, Type::SelectSlot, 3);
         expect(SDLK_9, Type::SelectSlot, 9);
+        // D04-1: A = Auto, S = Skip toggle, Ctrl held = Skip.
+        expect(SDLK_A, Type::ToggleAuto);
+        expect(SDLK_S, Type::ToggleSkip);
+        expect(SDLK_LCTRL, Type::SkipHold);
+        expect(SDLK_RCTRL, Type::SkipHold);
         Event unmapped{Type::Advance};
         if (Rowl::Render::Window::mapKeyToRuntimeInput(SDLK_F1, unmapped) ||
-            Rowl::Render::Window::mapKeyToRuntimeInput(SDLK_A, unmapped)) {
+            Rowl::Render::Window::mapKeyToRuntimeInput(SDLK_Q, unmapped)) {
             std::cerr << "MS-6: unrelated keys must not map to player actions" << std::endl;
             exit(1);
         }
@@ -263,6 +268,40 @@ void test_window_input_routing_release_motion_wheel_text() {
         step();
         if (!contains(Type::KeyUp, 0.0f, 0.0f, static_cast<uint32_t>(SDLK_SPACE), "")) {
             std::cerr << "Synthetic KEY_UP was not consciously consumed" << std::endl;
+            exit(1);
+        }
+    }
+
+    // 1b. D04-1: OS key repeat must not re-toggle Auto/Skip (A, S, Ctrl); the
+    // first press maps, and other keys (Space) keep their repeat behavior.
+    {
+        auto press = [&](SDL_Keycode key, bool repeat) {
+            SDL_Event event{};
+            event.type = SDL_EVENT_KEY_DOWN;
+            event.key.key = key;
+            event.key.repeat = repeat;
+            event.key.windowID = wid;
+            pushOrDie(event, "KEY_DOWN");
+            seen.clear();
+            step();
+        };
+        struct Case { SDL_Keycode key; Type type; const char* name; };
+        for (const Case& c : {Case{SDLK_A, Type::ToggleAuto, "A"}, Case{SDLK_S, Type::ToggleSkip, "S"},
+                              Case{SDLK_LCTRL, Type::SkipHold, "LCtrl"}, Case{SDLK_RCTRL, Type::SkipHold, "RCtrl"}}) {
+            press(c.key, false);
+            if (!containsType(c.type)) {
+                std::cerr << "D04-1: first press of " << c.name << " must reach the handler" << std::endl;
+                exit(1);
+            }
+            press(c.key, true);
+            if (containsType(c.type)) {
+                std::cerr << "D04-1: a repeated " << c.name << " must not reach the handler" << std::endl;
+                exit(1);
+            }
+        }
+        press(SDLK_SPACE, true);
+        if (!containsType(Type::Advance)) {
+            std::cerr << "D04-1: repeated Space must keep advancing (repeat filter is for A/S/Ctrl only)" << std::endl;
             exit(1);
         }
     }

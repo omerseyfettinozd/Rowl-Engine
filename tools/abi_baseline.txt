@@ -102,6 +102,7 @@ RowlEngine_GetPauseMenuJsonUtf8
 RowlEngine_GetPauseMenuJsonWithLength
 RowlEngine_GetPixelBuffer
 RowlEngine_GetPixelBufferEx
+RowlEngine_GetPlayerDriverStateJsonUtf8
 RowlEngine_GetPrefetchProgressJson
 RowlEngine_GetProfileDirectoryUtf8
 RowlEngine_GetQuickSaveSlot
@@ -203,6 +204,8 @@ RowlEngine_SelectChoice
 RowlEngine_SetAmbienceBedVolume
 RowlEngine_SetAmbienceVolume
 RowlEngine_SetAutoAdvanceDelayOffset
+RowlEngine_SetAutoDelay
+RowlEngine_SetAutoMode
 RowlEngine_SetBackgroundParallax
 RowlEngine_SetBgmTransitionDefaults
 RowlEngine_SetBgmVolume
@@ -230,6 +233,8 @@ RowlEngine_SetScreenTint
 RowlEngine_SetScreenTintHex
 RowlEngine_SetSfxPoolDepth
 RowlEngine_SetSfxVolume
+RowlEngine_SetSkipActive
+RowlEngine_SetSkipPolicy
 RowlEngine_SetSpeakerFocus
 RowlEngine_SetTextScale
 RowlEngine_SetTextSpeedMultiplier

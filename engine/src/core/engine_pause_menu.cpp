@@ -31,6 +31,11 @@ namespace Rowl::Core {
 void Engine::setPaused(bool paused) {
     if (m_paused == paused) return;
     m_paused = paused;
+    // D04-1: opening any menu (pause / backlog / preferences) ends Skip.
+    if (paused) {
+        m_skipActive = false;
+        m_skipHold = false;
+    }
     // D02: a host closing the menu also closes the title screen; the hint
     // of the previous session never leaks into a fresh menu.
     if (!paused) m_titleActive = false;

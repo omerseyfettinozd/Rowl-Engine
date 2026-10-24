@@ -118,6 +118,9 @@ bool Engine::openTitleScreen() {
     }
     m_paused = true;
     m_titleActive = true;
+    m_skipActive = false;  // D04-1: the title ends Skip; Auto's credit starts over
+    m_skipHold = false;
+    resetAutoWait();
     m_pauseMode = PauseMenuMode::Title;
     m_pauseConfirmQuit = false;
     m_titleHint.clear();
@@ -134,6 +137,12 @@ void Engine::leaveTitleScreen() {
 }
 
 void Engine::markPresentedDialoguesRead() {
+    // D04-1: snapshot before marking (see recordActiveDialogueHistory). When the
+    // presentation already recorded this node (New Game with play on: the reset
+    // re-presents the start node through recordActiveDialogueHistory, which
+    // marked it), the lines are "read" only because of that marking - keep the
+    // snapshot taken then.
+    if (m_lastRecordedDialogueNodeId != m_storyRuntime.currentNodeId()) refreshReadSnapshot();
     for (const auto& dlg : m_activeDialogues) {
         if (!dlg.dialogue.empty() && !dlg.contentId.empty()) {
             m_playerProfile.markRead(dlg.contentId);

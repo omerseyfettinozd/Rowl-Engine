@@ -185,6 +185,7 @@ void test_project_mount_cwd();  // cwd = proje koku iken oynatici VFS baglamasi 
 void test_title_screen();  // D02: native baslik ekrani / Devam Et / Tercihler
 void test_backlog_replay();  // D03-1: gecmis satirina ses + guvenli ses tekrari
 void test_backlog_screen();  // D03-2: oyuncuda Gecmis (backlog) ekrani
+void test_auto_skip();  // D04-1: oyuncu Otomatik + okunana duyarli Atla surucusu
 void test_choice_input_guard();  // secim menusunu duz ilerleme yanitlamaz kilidi
 void test_graph_vnext();
 void test_localization();
