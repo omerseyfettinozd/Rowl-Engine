@@ -2,7 +2,7 @@
 
 Native core (D07-1: the catalog file, the profile records, the triggers and the C API) and the
 player screens (D07-2, section 6: the title's "Ekstralar" pages and the achievement toast). The editor
-surface (the `unlock` component, an extras editor, lint) is D07-3. "Replay a scene" is **not**
+surface (the `unlock` component, an extras editor, lint) is D07-3 (section 7). "Replay a scene" is **not**
 part of this feature (it needs a side-effect-free sub-session; `docs/PRODUCTIZATION_BASELINE.md`
 lists it for 1.x). The gallery and the music room only ever show or play media, so they cannot
 change the story: variables, saves, read marks, history, `activeBgm` and the step id stay as they
@@ -97,7 +97,8 @@ whole scene update succeeded.
 
 Owner-thread API like the profile family; before `RowlEngine_Init` every call is `STATE_ERROR`;
 `WRONG_THREAD` / `INVALID_HANDLE` as elsewhere. There is no Lua `rowl.unlock` (the sandbox bridge
-stays untouched) and `NativeBridge` does not bind these functions (nor `RowlEngine_OpenExtras`, section 6) yet (D07-3).
+stays untouched). The managed `NativeBridge` binds only `RowlEngine_GetExtrasJson` (D07-3, for the
+rule-parity test); it does not bind `ProfileUnlock`, `ProfileIsUnlocked` or `RowlEngine_OpenExtras`.
 
 ## 5. Tests
 
@@ -162,3 +163,55 @@ unlocked cells); music `playing`, `items`; achievements `items[{description,at}]
 
 **Isolation.** Viewing, playing and scrolling write nothing: variables, GameState (`activeBgm` included), save
 slots (byte for byte), read marks, history and unlocks stay as they were.
+
+## 7. Editor authoring (D07-3)
+
+**An editor that does not know a component type must not delete it.** Before D07-3 the story loader
+skipped a component type it had no view model for ("Unknown component type ... skipping") and the next
+save wrote the node without it: opening and saving `samples/kayip_tablo` lost its four `unlock`
+components. Now `UnknownComponentViewModel` keeps `type`, `id`, `enabled` and the raw `data` object
+(detached JSON clones, nothing re-typed), writes them back in the same place, copies them on node
+duplication, and shows a read-only card in the Inspector. Node-library templates still skip a type
+they do not know (they report it).
+
+**`unlock` component** (`UnlockComponentViewModel`, "Add component" in the Inspector's advanced
+section): *Kind* (CG / Music / Achievement = JSON `cg|music|achievement`) and *Id*, the exact native
+schema. The id is a picker over the project catalog's items of that kind; with no usable catalog (no
+file, an unusable file, no item of that kind) it is a text box. An id the catalog lacks stays in the
+component and is shown as "not in catalog" (the lint reports it); a picker that is rebuilt never erases it.
+The edit-time preview (`SerializePreviewComponents`) leaves `unlock` out: the engine applies it as an
+entry effect that writes the player profile, and selecting a node in the editor must not unlock anything.
+Play mode runs the real story graph, where it applies as in the shipped player.
+
+**Catalog editor** ("..." menu > *Extras catalog*; also "Open the extras catalog" on the unlock card):
+`ExtrasCatalogEditorWindow` over `ExtrasCatalogEditorViewModel`. Three lists (Gallery, Music room,
+Achievements) with add, remove, move up / down and per-item fields (id, title tr / en, image and
+optional thumbnail, track, description tr / en, hidden). Images and tracks are picked with the OS file
+dialog and copied into the project like every other asset. `ExtrasCatalogModel` keeps what the editor has no field for
+(unknown top-level keys, unknown item keys, language entries other than tr / en, a plain-string title
+stays plain until one language is edited), so an untouched open + save leaves the document the same in
+meaning; `ExtrasCatalogStore.Save` writes `Assets/json/extras.json` atomically. A file the engine
+would ignore as a whole (not JSON, no `"format": 1`, over 256 KiB) is shown as an error and is never
+overwritten.
+
+**Rules** (`ExtrasRules`, `ExtrasCatalogModel.Validate`) are the native ones of section 1: id
+`[a-z0-9_.-]{1,64}` and unique per list; `image` / `track` required, safe relative paths (no absolute path, drive
+letter or `..`, at most 260 UTF-8 bytes); titles and descriptions at most 512 bytes and language
+tags at most 16; a wrong JSON type is an error; at most 256 items per list and 256 KiB per file.
+Saving is refused while any item would be skipped by the player. `canonicalMediaPath` is restated
+byte for byte (`ExtrasRules.CanonicalMediaPath`). `EditorD073ExtrasAuthoringTests` feeds 17 documents
+(every rule, boundary lengths in bytes, wrong types, repeated ids, 257 items, files the engine ignores) to the
+managed rules and to the native engine (`RowlEngine_GetExtrasJson` through `NativeProfileBridge`) and
+requires the same loaded items.
+
+**Project lint** (`ExtrasLint`, option `CheckExtras`): an enabled `unlock` component with an unknown
+kind, an empty id, or an id outside the loaded catalog of its kind (or no usable catalog at all) is an
+error; catalog items the engine would skip, a repeated id and an unusable file are errors; a catalog
+image / thumbnail / track missing on disk uses the node missing-asset level (error, with the asset path);
+an item nothing can open is a warning ("the player can never open it"): a gallery image no enabled
+background or character sprite shows and no unlock names, a music track no enabled audio component plays
+as BGM and no unlock names, an achievement without an unlock component. Catalog images and tracks
+count as referenced for the unused-asset rule. `samples/kayip_tablo` raises none of these.
+
+The editor `PlayerWindow` has no Ekstralar screens (the packaged native player has them);
+see `docs/CAPABILITY_MATRIX.md` and `docs/PLAYER_RELEASE_PARITY.md`.

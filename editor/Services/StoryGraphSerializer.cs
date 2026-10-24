@@ -141,11 +141,16 @@ internal static class StoryGraphSerializer
         return JsonSerializer.Serialize(activeNode, IndentedOptions);
     }
 
-    /// <summary>Serializes the enabled scene components for the native live preview.</summary>
+    /// <summary>
+    /// Serializes the enabled scene components for the native live preview. "unlock" components
+    /// stay out: the engine applies them as an entry effect (it writes the player profile), and
+    /// merely selecting a node in the editor must never unlock anything. Play mode runs the real
+    /// story graph, where they do apply.
+    /// </summary>
     public static string SerializePreviewComponents(NodeViewModel node)
     {
         var components = node.AllComponents
-            .Where(component => component.IsEnabled)
+            .Where(component => component.IsEnabled && component is not UnlockComponentViewModel)
             .Select(component => new
             {
                 type = component.TypeKey,

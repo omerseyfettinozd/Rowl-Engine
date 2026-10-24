@@ -1,6 +1,6 @@
 # Standalone Player Release Parity
 
-Status reviewed: 2026-10-24 (after D01-D06-3)
+Status reviewed: 2026-10-25 (after D01-D07-3)
 Scope: exported native RowlGame versus the Avalonia PlayerWindow available inside the editor.
 
 The exported game is built from engine/src/player/main.cpp and the native
@@ -20,6 +20,7 @@ per-capability evidence is in [CAPABILITY_MATRIX.md](CAPABILITY_MATRIX.md).
 | Save a chosen save | Save/load overlay with paged slots and metadata | Pause menu exposes slots 0-9; F5 saves the active slot | Partial (same slot-page limit) |
 | Pause, resume, adjust sound/text, exit safely | Pause overlay | Native SDL pause menu, two-step quit confirmation; volumes and text speed live on the Preferences page (D05-2) | Present |
 | Story rewind | Player commands and runtime rewind | Backspace/Z rewinds one state link (`rewind(1)`); a node with entry effects owns several links, so one press can land on the same node with its effects undone | Present (granularity caveat, see CAPABILITY_MATRIX.md "Open items") |
+| Unlockable extras (CG gallery, music room, achievements, toast) | **No screens**: the editor `PlayerWindow` has no Ekstralar pages and no achievement toast. The editor authors the content (D07-3: `unlock` component, extras catalog editor, lint) and the unlocks still land in the profile while it plays | Native title row "Ekstralar" (only when the game ships an `extras.json`) with Gallery / Music room / Achievements pages and a 3 s achievement toast (D07-2); the player records unlocks in `player-profile.json` (D07-1) | Native-only by design (editor PlayerWindow: Ekstralar yok, native oyuncuda var) |
 | Backlog | Scrollable speaker/dialogue history panel | Native backlog screen opened from the pause menu (D03-2), bounded history, per-line voice replay that reruns no story side effect (D03-1) | Present |
 | Persistent profile | Versioned atomic profile stores language, read IDs, audio/text/accessibility and auto/skip preferences | Native profile store + `RowlEngine_Profile*` (D01c-1); the player applies the stored preferences before the first frame (D01d, D05) | Present |
 | Global auto and read-aware skip | Profile-driven AutoPlayDriver and SkipDriver | Native Auto (A) and read-aware Skip (S / Ctrl) drivers with AUTO/SKIP badges and Preferences rows (D04) | Present (two driver implementations, no parity test) |

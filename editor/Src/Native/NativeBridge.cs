@@ -98,6 +98,14 @@ namespace RowlEngine.Editor.Native
         internal static extern ResultCode RowlEngine_ProfileSetPreferencesJson(
             IntPtr handle, [MarshalAs(UnmanagedType.LPUTF8Str)] string json);
 
+        // ── Unlockable content (CAPABILITY_EXTRAS_UNLOCKS = 268435456, D07-1/D07-3) ──
+        // Owner-thread API. The editor reads the catalog the engine actually loaded
+        // (parity check against the managed catalog rules); it never unlocks anything.
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_GetExtrasJson(
+            IntPtr handle, IntPtr buffer, uint bufferSize, out uint requiredSize);
+
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
         internal static extern ResultCode RowlEngine_ProfileMarkRead(
             IntPtr handle, [MarshalAs(UnmanagedType.LPUTF8Str)] string contentId);

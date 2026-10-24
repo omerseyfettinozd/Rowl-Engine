@@ -123,12 +123,14 @@ internal static class ProjectLintService
             ProjectValidationService.Validate(nodeList, connectionList, assetsPath, startNodeId, structure, disk));
 
         RunRule(issues, () => CheckChoiceAndConditionTargets(nodeList, issues, options));
+        if (options.CheckExtras)
+            RunRule(issues, () => Extras.ExtrasLint.Check(nodeList, assetsPath, disk, issues, options));
         if (options.CheckLuaScripts)
             RunRule(issues, () => CheckLuaScripts(nodeList, assetsPath, disk, issues, options));
         if (options.CheckTranslations || options.CheckGlyphCoverage)
             RunRule(issues, () => CheckDialogueText(nodeList, assetsPath, issues, options));
         if (options.CheckUnusedAssets)
-            RunRule(issues, () => CheckUnusedAssets(nodeList, disk, issues, options));
+            RunRule(issues, () => CheckUnusedAssets(nodeList, assetsPath, disk, issues, options));
         if (options.CheckLongAudio)
             RunRule(issues, () => CheckLongAudioStreaming(nodeList, assetsPath, disk, issues, options));
         if (options.CheckCharacterLayers)
@@ -1061,6 +1063,7 @@ internal static class ProjectLintService
 
     private static void CheckUnusedAssets(
         List<NodeViewModel> nodeList,
+        string assetsPath,
         ProjectValidationService.DiskIndex disk,
         List<ProjectValidationIssue> issues,
         ProjectLintOptions options)
@@ -1110,6 +1113,15 @@ internal static class ProjectLintService
                     // Bozuk katman datası unused taramasını düşürmez.
                 }
             }
+        }
+
+        // D07-3: the extras catalog (gallery image / thumbnail, music track) references its files;
+        // a picture that only an unlock component or the catalog uses is not an unused asset.
+        foreach (string catalogAsset in Extras.ExtrasLint.CatalogAssetPaths(assetsPath))
+        {
+            string normalized = catalogAsset.Replace('\\', '/');
+            foreach (string prefix in AssetPrefixes)
+                referenced.Add(prefix + normalized);
         }
 
         // Faz 5 Dilim 2 fix turu 1: per-node BedB kaldırıldı; kullanılmayan
@@ -1169,6 +1181,7 @@ internal sealed record ProjectLintOptions(
     bool CheckCharacterLayers = true,
     bool CheckPrefetch = true,
     bool CheckConvertedFreshness = true,
+    bool CheckExtras = true,
     MediaConverterService.ConverterOptions? ConverterOptions = null,
     long MaxLuaBytes = 256 * 1024,
     int MaxIssuesPerRule = 200);

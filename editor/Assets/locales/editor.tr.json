@@ -756,6 +756,51 @@
     "Component.Variable.DisplayName": {
       "text": "Değişken Değiştirici"
     },
+    "Component.Unlock.DisplayName": {
+      "text": "Açılabilir İçerik"
+    },
+    "Component.Unlock.Title": {
+      "text": "Açılabilir İçerik"
+    },
+    "Component.Unlock.Kind.Label": {
+      "text": "Tür"
+    },
+    "Component.Unlock.Kind.cg": {
+      "text": "Görsel (CG)"
+    },
+    "Component.Unlock.Kind.music": {
+      "text": "Müzik"
+    },
+    "Component.Unlock.Kind.achievement": {
+      "text": "Başarım"
+    },
+    "Component.Unlock.Id.Label": {
+      "text": "Kimlik"
+    },
+    "Component.Unlock.Id.Placeholder": {
+      "text": "Katalogdan seç"
+    },
+    "Component.Unlock.Id.Watermark": {
+      "text": "örn. bogaz_ay"
+    },
+    "Component.Unlock.NotInCatalog": {
+      "text": "katalogda yok"
+    },
+    "Component.Unlock.NotInCatalog.Warning": {
+      "text": "Bu kimlik katalogda yok: oyunda hiçbir şey açılmaz."
+    },
+    "Component.Unlock.NoCatalog.Hint": {
+      "text": "Bu türde katalog öğesi yok; kimliği elle yaz. Katalog: Araçlar > Ekstralar kataloğu."
+    },
+    "Component.Unlock.OpenCatalog": {
+      "text": "Ekstralar kataloğunu aç"
+    },
+    "Component.Unknown.DisplayName": {
+      "text": "Bilinmeyen bileşen"
+    },
+    "Component.Unknown.Hint": {
+      "text": "Bu sürüm bu bileşeni düzenleyemez. Olduğu gibi korunur ve kayıtta geri yazılır."
+    },
     "Dialog.Confirm.Cancel": {
       "text": "İptal"
     },
@@ -1124,6 +1169,9 @@
     },
     "Inspector.Components.Add.Transition": {
       "text": "Sahne Geçişi"
+    },
+    "Inspector.Components.Add.Unlock": {
+      "text": "Açılabilir içerik"
     },
     "Inspector.Components.CountSuffix": {
       "text": "etkin"
@@ -1887,6 +1935,9 @@
     "Menu.Windows": {
       "text": "Araçlar"
     },
+    "Menu.ExtrasCatalog": {
+      "text": "Ekstralar kataloğu"
+    },
     "Node.Add": {
       "text": "+ Node"
     },
@@ -2624,6 +2675,141 @@
     },
     "Workspace.Pin.Tip": {
       "text": "Pencereyi sabitle (başlıktan taşınamaz)"
+    },
+    "Extras.Window.Title": {
+      "text": "Ekstralar kataloğu"
+    },
+    "Extras.Header.Eyebrow": {
+      "text": "AÇILABİLİR İÇERİK"
+    },
+    "Extras.Header.Hint": {
+      "text": "Galeri görselleri, müzik odası parçaları ve başarımlar. Oyuncu bunları oynarken açar; liste Assets/json/extras.json dosyasına yazılır."
+    },
+    "Extras.Tab.Gallery": {
+      "text": "Galeri"
+    },
+    "Extras.Tab.Music": {
+      "text": "Müzik odası"
+    },
+    "Extras.Tab.Achievements": {
+      "text": "Başarımlar"
+    },
+    "Extras.Btn.Add": {
+      "text": "Ekle"
+    },
+    "Extras.Btn.Remove": {
+      "text": "Sil"
+    },
+    "Extras.Btn.Up": {
+      "text": "Yukarı"
+    },
+    "Extras.Btn.Down": {
+      "text": "Aşağı"
+    },
+    "Extras.Btn.Save": {
+      "text": "Kaydet"
+    },
+    "Extras.Btn.Reload": {
+      "text": "Yeniden yükle"
+    },
+    "Extras.Btn.Close": {
+      "text": "Kapat"
+    },
+    "Extras.Btn.Pick": {
+      "text": "Seç..."
+    },
+    "Extras.Field.Id": {
+      "text": "Kimlik"
+    },
+    "Extras.Field.Id.Hint": {
+      "text": "a-z, 0-9, _ . - ve en çok 64 karakter; listede tek olmalı."
+    },
+    "Extras.Field.TitleTr": {
+      "text": "Başlık (Türkçe)"
+    },
+    "Extras.Field.TitleEn": {
+      "text": "Başlık (İngilizce)"
+    },
+    "Extras.Field.DescriptionTr": {
+      "text": "Açıklama (Türkçe)"
+    },
+    "Extras.Field.DescriptionEn": {
+      "text": "Açıklama (İngilizce)"
+    },
+    "Extras.Field.Image": {
+      "text": "Görsel"
+    },
+    "Extras.Field.Image.Watermark": {
+      "text": "örn. bogaz_gunduz.jpg"
+    },
+    "Extras.Field.Thumbnail": {
+      "text": "Küçük görsel (isteğe bağlı)"
+    },
+    "Extras.Field.Thumbnail.Watermark": {
+      "text": "boşsa görselin kendisi"
+    },
+    "Extras.Field.Track": {
+      "text": "Parça"
+    },
+    "Extras.Field.Track.Watermark": {
+      "text": "örn. audio/nokturn.ogg"
+    },
+    "Extras.Field.Hidden": {
+      "text": "Gizli (açılana kadar adı ve açıklaması gizlenir)"
+    },
+    "Extras.Status.Saved": {
+      "text": "Kaydedildi."
+    },
+    "Extras.Status.Dirty": {
+      "text": "Kaydedilmemiş değişiklikler var."
+    },
+    "Extras.Status.Issues": {
+      "text": "{0} sorun var; düzeltmeden kaydedilemez."
+    },
+    "Extras.Status.SaveFailed": {
+      "text": "Kaydedilemedi: {0}"
+    },
+    "Extras.Load.TooLarge": {
+      "text": "extras.json 256 KiB'tan büyük; oyun dosyayı tümüyle yok sayar. Elle küçült."
+    },
+    "Extras.Load.NotJson": {
+      "text": "extras.json geçerli bir JSON nesnesi değil; oyun dosyayı yok sayar. Elle düzelt."
+    },
+    "Extras.Load.NoFormat": {
+      "text": "extras.json \"format\": 1 bildirmiyor; oyun dosyayı yok sayar. Elle düzelt."
+    },
+    "Extras.Load.Unreadable": {
+      "text": "extras.json okunamadı."
+    },
+    "Extras.Note.Dropped": {
+      "text": "{0} giriş nesne olmadığı için gösterilemedi; kayıtta atılır."
+    },
+    "Extras.Issue.InvalidId": {
+      "text": "Kimlik geçersiz: a-z, 0-9, _ . - ve 1-64 karakter."
+    },
+    "Extras.Issue.DuplicateId": {
+      "text": "Bu kimlik listede zaten var."
+    },
+    "Extras.Issue.MissingImage": {
+      "text": "Görsel seçilmemiş."
+    },
+    "Extras.Issue.MissingTrack": {
+      "text": "Parça seçilmemiş."
+    },
+    "Extras.Issue.UnsafePath": {
+      "text": "Yol kullanılamaz (mutlak, '..' içeren ya da 260 baytı aşan)."
+    },
+    "Extras.Issue.TextTooLong": {
+      "text": "Metin 512 baytı aşıyor."
+    },
+    "Extras.Issue.WrongType": {
+      "text": "Dosyada bu alanın türü yanlış; yeniden gir."
+    },
+    "Extras.Issue.TooManyItems": {
+      "text": "Liste 256 öğeyi aşıyor."
+    },
+    "Extras.Issue.FileTooLarge": {
+      "text": "Katalog 256 KiB sınırını aşıyor."
     }
   }
 }

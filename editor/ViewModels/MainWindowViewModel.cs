@@ -2669,6 +2669,11 @@ namespace RowlEngine.Editor.ViewModels
         public void OpenLocalizationDesk() =>
             LocalizationDeskCoordinator.OpenDesk(ProjectRoot);
 
+        /// <summary>D07-3: opens the unlockable-content catalog editor (<c>Assets/json/extras.json</c>).</summary>
+        [RelayCommand]
+        public void OpenExtrasCatalog() =>
+            Services.Extras.ExtrasCatalogEditorCoordinator.Open(AssetsPath);
+
         /// <summary>
         /// Faz 4 Dilim 5 — runs Validate+Lint off the UI thread (single disk
         /// scan, worker-serialized) and posts the merged issues back. The

@@ -1,0 +1,241 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:RowlEngine.Editor.ViewModels"
+        xmlns:ex="using:RowlEngine.Editor.Services.Extras"
+        xmlns:l="using:RowlEngine.Editor.Services.Strings"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        x:Class="RowlEngine.Editor.Views.Extras.ExtrasCatalogEditorWindow"
+        x:DataType="vm:ExtrasCatalogEditorViewModel"
+        Title="{l:T Extras.Window.Title}"
+        Width="920" Height="640"
+        MinWidth="720" MinHeight="460"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource SurfaceBackground}"
+        CanResize="True">
+
+    <Window.Styles>
+        <Style Selector="TabControl /template/ ContentPresenter#PART_SelectedContentHost">
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}"/>
+            <Setter Property="BorderThickness" Value="0,1,0,0"/>
+        </Style>
+    </Window.Styles>
+
+    <Grid RowDefinitions="Auto,Auto,*,Auto">
+
+        <!-- Başlık -->
+        <Border Grid.Row="0" Background="{DynamicResource SurfaceBackground}"
+                BorderBrush="{DynamicResource BorderColor}" BorderThickness="0,0,0,1" Padding="26,18,26,14">
+            <StackPanel Spacing="4">
+                <TextBlock FontSize="{DynamicResource FontSizeCaption}" LetterSpacing="1.5"
+                           Foreground="{DynamicResource MutedText}"
+                           Text="{l:T Extras.Header.Eyebrow}"/>
+                <TextBlock FontSize="21" FontWeight="SemiBold"
+                           Foreground="{DynamicResource PrimaryText}"
+                           Text="{l:T Extras.Window.Title}"/>
+                <TextBlock Classes="muted" FontSize="{DynamicResource FontSizeBody}" TextWrapping="Wrap"
+                           Text="{l:T Extras.Header.Hint}"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Dosya düzenlenemiyorsa ya da atılan giriş varsa uyarı -->
+        <StackPanel Grid.Row="1" Spacing="2" Margin="26,8,26,0">
+            <TextBlock x:Name="LoadErrorText" IsVisible="{Binding !CanEdit}" Text="{Binding LoadErrorText}"
+                       Foreground="{DynamicResource ErrorBrush}" TextWrapping="Wrap"/>
+            <TextBlock IsVisible="{Binding HasDroppedNote}" Text="{Binding DroppedNote}"
+                       Foreground="{DynamicResource WarningBrush}" TextWrapping="Wrap"/>
+        </StackPanel>
+
+        <TabControl Grid.Row="2" x:Name="Tabs" SelectedIndex="{Binding SelectedTabIndex}" Margin="0,6,0,0" Padding="0"
+                    Background="Transparent" IsEnabled="{Binding CanEdit}">
+
+            <!-- GALERİ -->
+            <TabItem FontSize="{DynamicResource FontSizeBodyLarge}" Header="{Binding GalleryHeader}">
+                <Grid ColumnDefinitions="300,*" Margin="20,12">
+                    <DockPanel Grid.Column="0" Margin="0,0,16,0">
+                        <WrapPanel DockPanel.Dock="Bottom" Margin="0,8,0,0" ItemSpacing="6" LineSpacing="6">
+                            <Button x:Name="GalleryAdd" Classes="secondary" Content="{l:T Extras.Btn.Add}" Command="{Binding AddItemCommand}"/>
+                            <Button Classes="ghost" Content="{l:T Extras.Btn.Remove}" Command="{Binding RemoveItemCommand}"/>
+                            <Button Classes="ghost" Content="{l:T Extras.Btn.Up}" Command="{Binding MoveItemUpCommand}"/>
+                            <Button Classes="ghost" Content="{l:T Extras.Btn.Down}" Command="{Binding MoveItemDownCommand}"/>
+                        </WrapPanel>
+                        <ListBox x:Name="GalleryList" ItemsSource="{Binding Gallery}" SelectedItem="{Binding SelectedGallery}">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate x:DataType="ex:ExtrasGalleryItem">
+                                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6">
+                                        <TextBlock Grid.Column="0" Text="!" FontWeight="Bold" IsVisible="{Binding HasIssue}"
+                                                   Foreground="{DynamicResource ErrorBrush}"/>
+                                        <TextBlock Grid.Column="1" Text="{Binding DisplayLabel}" TextTrimming="CharacterEllipsis"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </DockPanel>
+                    <ScrollViewer Grid.Column="1" HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel Spacing="10" IsVisible="{Binding HasGallerySelection}" Margin="0,0,12,0">
+                            <StackPanel Spacing="2" DataContext="{Binding SelectedGallery}" x:DataType="ex:ExtrasGalleryItem">
+                                <TextBlock Text="{l:T Extras.Field.Id}" Classes="body"/>
+                                <TextBox x:Name="GalleryId" Text="{Binding Id}"/>
+                                <TextBlock Text="{l:T Extras.Field.Id.Hint}" Classes="hint"/>
+                            </StackPanel>
+                            <Grid ColumnDefinitions="*,*" ColumnSpacing="10" DataContext="{Binding SelectedGallery}" x:DataType="ex:ExtrasGalleryItem">
+                                <StackPanel Grid.Column="0" Spacing="2">
+                                    <TextBlock Text="{l:T Extras.Field.TitleTr}" Classes="body"/>
+                                    <TextBox x:Name="GalleryTitleTr" Text="{Binding TitleTr}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Spacing="2">
+                                    <TextBlock Text="{l:T Extras.Field.TitleEn}" Classes="body"/>
+                                    <TextBox x:Name="GalleryTitleEn" Text="{Binding TitleEn}"/>
+                                </StackPanel>
+                            </Grid>
+                            <StackPanel Spacing="2" DataContext="{Binding SelectedGallery}" x:DataType="ex:ExtrasGalleryItem">
+                                <TextBlock Text="{l:T Extras.Field.Image}" Classes="body"/>
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                                    <TextBox Grid.Column="0" x:Name="GalleryImage" Text="{Binding Image}" Watermark="{l:T Extras.Field.Image.Watermark}"/>
+                                    <Button Grid.Column="1" x:Name="GalleryImagePick" Classes="secondary" Content="{l:T Extras.Btn.Pick}"/>
+                                </Grid>
+                            </StackPanel>
+                            <StackPanel Spacing="2" DataContext="{Binding SelectedGallery}" x:DataType="ex:ExtrasGalleryItem">
+                                <TextBlock Text="{l:T Extras.Field.Thumbnail}" Classes="body"/>
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                                    <TextBox Grid.Column="0" x:Name="GalleryThumb" Text="{Binding Thumbnail}" Watermark="{l:T Extras.Field.Thumbnail.Watermark}"/>
+                                    <Button Grid.Column="1" x:Name="GalleryThumbPick" Classes="secondary" Content="{l:T Extras.Btn.Pick}"/>
+                                </Grid>
+                                <TextBlock x:Name="GalleryIssue" Text="{Binding IssueText}" IsVisible="{Binding HasIssue}"
+                                           Foreground="{DynamicResource ErrorBrush}" TextWrapping="Wrap" Margin="0,8,0,0"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Grid>
+            </TabItem>
+
+            <!-- MÜZİK ODASI -->
+            <TabItem FontSize="{DynamicResource FontSizeBodyLarge}" Header="{Binding MusicHeader}">
+                <Grid ColumnDefinitions="300,*" Margin="20,12">
+                    <DockPanel Grid.Column="0" Margin="0,0,16,0">
+                        <WrapPanel DockPanel.Dock="Bottom" Margin="0,8,0,0" ItemSpacing="6" LineSpacing="6">
+                            <Button Classes="secondary" Content="{l:T Extras.Btn.Add}" Command="{Binding AddItemCommand}"/>
+                            <Button Classes="ghost" Content="{l:T Extras.Btn.Remove}" Command="{Binding RemoveItemCommand}"/>
+                            <Button Classes="ghost" Content="{l:T Extras.Btn.Up}" Command="{Binding MoveItemUpCommand}"/>
+                            <Button Classes="ghost" Content="{l:T Extras.Btn.Down}" Command="{Binding MoveItemDownCommand}"/>
+                        </WrapPanel>
+                        <ListBox x:Name="MusicList" ItemsSource="{Binding Music}" SelectedItem="{Binding SelectedMusic}">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate x:DataType="ex:ExtrasMusicItem">
+                                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6">
+                                        <TextBlock Grid.Column="0" Text="!" FontWeight="Bold" IsVisible="{Binding HasIssue}"
+                                                   Foreground="{DynamicResource ErrorBrush}"/>
+                                        <TextBlock Grid.Column="1" Text="{Binding DisplayLabel}" TextTrimming="CharacterEllipsis"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </DockPanel>
+                    <ScrollViewer Grid.Column="1" HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel Spacing="10" IsVisible="{Binding HasMusicSelection}" Margin="0,0,12,0">
+                            <StackPanel Spacing="2" DataContext="{Binding SelectedMusic}" x:DataType="ex:ExtrasMusicItem">
+                                <TextBlock Text="{l:T Extras.Field.Id}" Classes="body"/>
+                                <TextBox x:Name="MusicId" Text="{Binding Id}"/>
+                                <TextBlock Text="{l:T Extras.Field.Id.Hint}" Classes="hint"/>
+                            </StackPanel>
+                            <Grid ColumnDefinitions="*,*" ColumnSpacing="10" DataContext="{Binding SelectedMusic}" x:DataType="ex:ExtrasMusicItem">
+                                <StackPanel Grid.Column="0" Spacing="2">
+                                    <TextBlock Text="{l:T Extras.Field.TitleTr}" Classes="body"/>
+                                    <TextBox x:Name="MusicTitleTr" Text="{Binding TitleTr}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Spacing="2">
+                                    <TextBlock Text="{l:T Extras.Field.TitleEn}" Classes="body"/>
+                                    <TextBox x:Name="MusicTitleEn" Text="{Binding TitleEn}"/>
+                                </StackPanel>
+                            </Grid>
+                            <StackPanel Spacing="2" DataContext="{Binding SelectedMusic}" x:DataType="ex:ExtrasMusicItem">
+                                <TextBlock Text="{l:T Extras.Field.Track}" Classes="body"/>
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                                    <TextBox Grid.Column="0" x:Name="MusicTrack" Text="{Binding Track}" Watermark="{l:T Extras.Field.Track.Watermark}"/>
+                                    <Button Grid.Column="1" x:Name="MusicTrackPick" Classes="secondary" Content="{l:T Extras.Btn.Pick}"/>
+                                </Grid>
+                                <TextBlock x:Name="MusicIssue" Text="{Binding IssueText}" IsVisible="{Binding HasIssue}"
+                                           Foreground="{DynamicResource ErrorBrush}" TextWrapping="Wrap" Margin="0,8,0,0"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Grid>
+            </TabItem>
+
+            <!-- BAŞARIMLAR -->
+            <TabItem FontSize="{DynamicResource FontSizeBodyLarge}" Header="{Binding AchievementsHeader}">
+                <Grid ColumnDefinitions="300,*" Margin="20,12">
+                    <DockPanel Grid.Column="0" Margin="0,0,16,0">
+                        <WrapPanel DockPanel.Dock="Bottom" Margin="0,8,0,0" ItemSpacing="6" LineSpacing="6">
+                            <Button Classes="secondary" Content="{l:T Extras.Btn.Add}" Command="{Binding AddItemCommand}"/>
+                            <Button Classes="ghost" Content="{l:T Extras.Btn.Remove}" Command="{Binding RemoveItemCommand}"/>
+                            <Button Classes="ghost" Content="{l:T Extras.Btn.Up}" Command="{Binding MoveItemUpCommand}"/>
+                            <Button Classes="ghost" Content="{l:T Extras.Btn.Down}" Command="{Binding MoveItemDownCommand}"/>
+                        </WrapPanel>
+                        <ListBox x:Name="AchievementList" ItemsSource="{Binding Achievements}" SelectedItem="{Binding SelectedAchievement}">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate x:DataType="ex:ExtrasAchievementItem">
+                                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6">
+                                        <TextBlock Grid.Column="0" Text="!" FontWeight="Bold" IsVisible="{Binding HasIssue}"
+                                                   Foreground="{DynamicResource ErrorBrush}"/>
+                                        <TextBlock Grid.Column="1" Text="{Binding DisplayLabel}" TextTrimming="CharacterEllipsis"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </DockPanel>
+                    <ScrollViewer Grid.Column="1" HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel Spacing="10" IsVisible="{Binding HasAchievementSelection}" Margin="0,0,12,0">
+                            <StackPanel Spacing="2" DataContext="{Binding SelectedAchievement}" x:DataType="ex:ExtrasAchievementItem">
+                                <TextBlock Text="{l:T Extras.Field.Id}" Classes="body"/>
+                                <TextBox x:Name="AchievementId" Text="{Binding Id}"/>
+                                <TextBlock Text="{l:T Extras.Field.Id.Hint}" Classes="hint"/>
+                            </StackPanel>
+                            <Grid ColumnDefinitions="*,*" ColumnSpacing="10" DataContext="{Binding SelectedAchievement}" x:DataType="ex:ExtrasAchievementItem">
+                                <StackPanel Grid.Column="0" Spacing="2">
+                                    <TextBlock Text="{l:T Extras.Field.TitleTr}" Classes="body"/>
+                                    <TextBox x:Name="AchievementTitleTr" Text="{Binding TitleTr}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Spacing="2">
+                                    <TextBlock Text="{l:T Extras.Field.TitleEn}" Classes="body"/>
+                                    <TextBox x:Name="AchievementTitleEn" Text="{Binding TitleEn}"/>
+                                </StackPanel>
+                            </Grid>
+                            <Grid ColumnDefinitions="*,*" ColumnSpacing="10" DataContext="{Binding SelectedAchievement}" x:DataType="ex:ExtrasAchievementItem">
+                                <StackPanel Grid.Column="0" Spacing="2">
+                                    <TextBlock Text="{l:T Extras.Field.DescriptionTr}" Classes="body"/>
+                                    <TextBox x:Name="AchievementDescTr" Text="{Binding DescriptionTr}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="64"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Spacing="2">
+                                    <TextBlock Text="{l:T Extras.Field.DescriptionEn}" Classes="body"/>
+                                    <TextBox x:Name="AchievementDescEn" Text="{Binding DescriptionEn}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="64"/>
+                                </StackPanel>
+                            </Grid>
+                            <StackPanel Spacing="2" DataContext="{Binding SelectedAchievement}" x:DataType="ex:ExtrasAchievementItem">
+                                <CheckBox x:Name="AchievementHidden" IsChecked="{Binding Hidden}" Content="{l:T Extras.Field.Hidden}"/>
+                                <TextBlock x:Name="AchievementIssue" Text="{Binding IssueText}" IsVisible="{Binding HasIssue}"
+                                           Foreground="{DynamicResource ErrorBrush}" TextWrapping="Wrap" Margin="0,8,0,0"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Grid>
+            </TabItem>
+        </TabControl>
+
+        <!-- Alt çubuk: durum + düğmeler -->
+        <Border Grid.Row="3" Background="{DynamicResource SurfaceBackground}"
+                BorderBrush="{DynamicResource BorderColor}" BorderThickness="0,1,0,0" Padding="24,12">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8">
+                    <Button x:Name="ReloadButton" Classes="ghost" Content="{l:T Extras.Btn.Reload}" Command="{Binding ReloadCommand}"/>
+                    <Button x:Name="SaveButton" Classes="primary" Content="{l:T Extras.Btn.Save}" Command="{Binding SaveCommand}"
+                            CornerRadius="10" Padding="20,8"/>
+                    <Button x:Name="CloseButton" Classes="ghost" Content="{l:T Extras.Btn.Close}"/>
+                </StackPanel>
+                <TextBlock x:Name="StatusLine" Text="{Binding StatusText}" Classes="muted" VerticalAlignment="Center"
+                           TextWrapping="Wrap" Margin="0,0,16,0"/>
+            </DockPanel>
+        </Border>
+    </Grid>
+</Window>

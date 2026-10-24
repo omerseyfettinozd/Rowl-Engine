@@ -72,6 +72,13 @@ namespace RowlEngine.Editor.Native
         internal static string GetJson(IntPtr handle) =>
             handle == IntPtr.Zero ? string.Empty : ReadString(handle, NativeBridge.RowlEngine_ProfileGetJson);
 
+        /// <summary>
+        /// The unlockable-content catalog the engine loaded for the mounted game, with per-item
+        /// unlock state and the load diagnostics (<c>RowlEngine_GetExtrasJson</c>); empty on failure.
+        /// </summary>
+        internal static string GetExtrasJson(IntPtr handle) =>
+            handle == IntPtr.Zero ? string.Empty : ReadString(handle, NativeBridge.RowlEngine_GetExtrasJson);
+
         internal static NativeProfileStatus GetStatus(IntPtr handle)
         {
             if (handle == IntPtr.Zero)
