@@ -408,6 +408,10 @@ void RowlEngine_SetProjectDirectory(RowlEngineHandle handle, const char* project
         // D01b: per-game save/profile dirs + one-time legacy save copy
         // (thin wrapper in c_api_game_data.cpp; falls back to <root>/saves).
         applyProjectGameData(*engine, projectPath);
+        // D07-1: unlockable-content catalog (extras.json) - after the profile
+        // opened and before the story loads, so the start node's entry can
+        // already unlock.
+        engine->loadExtrasCatalog();
         // Faz 3 Dilim 1 (#92): manifest locales + catalogs load on project
         // mount — AFTER the VFS remount above, so the VFS-first catalog
         // probe sees packaged locales (Assets/locales inside .rowlpkg).

@@ -169,6 +169,10 @@ typedef struct RowlEngine_ApiVersion {
  * SetSkipActive / SetSkipPolicy / SetAutoDelay / GetPlayerDriverStateJsonUtf8).
  * Additive. */
 #define ROWL_ENGINE_CAPABILITY_PLAYER_AUTO_SKIP UINT64_C(134217728)
+/* D07-1: unlockable content - the extras.json catalog (CG gallery, music room,
+ * achievements), the profile `unlocks` records, the "unlock" node component and
+ * RowlEngine_GetExtrasJson / ProfileUnlock / ProfileIsUnlocked. Additive. */
+#define ROWL_ENGINE_CAPABILITY_EXTRAS_UNLOCKS UINT64_C(268435456)
 
 /** Current additive C API version. This query does not require an engine handle. */
 ROWL_API RowlEngine_ResultCode RowlEngine_GetApiVersion(
@@ -295,6 +299,47 @@ ROWL_API RowlEngine_ResultCode RowlEngine_ProfileFlush(RowlEngineHandle handle);
 ROWL_API RowlEngine_ResultCode RowlEngine_ProfileGetStatusJson(
     RowlEngineHandle handle, char* buffer, uint32_t bufferSize,
     uint32_t* outRequiredSize);
+
+/* ── Unlockable content (ROWL_ENGINE_CAPABILITY_EXTRAS_UNLOCKS, D07-1) ─────
+ * The game declares WHAT can be unlocked in Assets/json/extras.json (CG
+ * gallery, music room, achievements; loaded by RowlEngine_SetProjectDirectory,
+ * missing file = no extras). The player profile records WHAT the player has
+ * unlocked (`unlocks` in player-profile.json). The engine unlocks on a real
+ * node entry (never on load / rewind / scene restore): a gallery image shown as
+ * background or character sprite, a music item played as the node's bgm_track,
+ * and the explicit {"type":"unlock","data":{"kind","id"}} component. Unlocks
+ * never change the story state (variables, saves, read marks, history, audio).
+ * Threading and the read-only/unmounted rules are those of the profile API;
+ * before RowlEngine_Init every function here returns ROWL_RESULT_STATE_ERROR.
+ * `kind` is "cg", "music" or "achievement". */
+
+/** Catalog + per-item state as JSON: {"format","loaded","language",
+ *  "profile_status","diagnostics":[..],"gallery":[{"id","title","image",
+ *  "thumbnail","unlocked"}],"music":[{"id","title","track","unlocked"}],
+ *  "achievements":[{"id","title","description","hidden","unlocked","at"}],
+ *  "counts":{"gallery"|"music"|"achievements":{"total","unlocked"}},
+ *  "pending_notices":[{"kind","id"}]}. Titles follow the player UI language
+ *  ("tr" / "en"); "at" is the UTC ISO-8601 unlock time or null.
+ *  "pending_notices" lists achievements unlocked since the host last cleared the
+ *  queue (a later slice adds the acknowledge call). Same caller-buffer contract
+ *  as RowlEngine_GetSaveDirectoryUtf8. */
+ROWL_API RowlEngine_ResultCode RowlEngine_GetExtrasJson(
+    RowlEngineHandle handle, char* buffer, uint32_t bufferSize,
+    uint32_t* outRequiredSize);
+
+/** Unlocks an item (tool / test / host hook). NULL or unknown `kind`, a
+ *  malformed id, or an id that is not in the catalog of that kind:
+ *  ROWL_RESULT_INVALID_ARGUMENT (nothing is written). Already unlocked: OK.
+ *  Read-only / unmounted profile: ROWL_RESULT_STATE_ERROR. A full kind (1,024
+ *  records): ROWL_RESULT_VALIDATION_ERROR. */
+ROWL_API RowlEngine_ResultCode RowlEngine_ProfileUnlock(
+    RowlEngineHandle handle, const char* kind, const char* id);
+
+/** *outIsUnlocked = 1 when the profile records the id, else 0 (also for an id
+ *  the catalog does not know). NULL kind/id/out or an unknown kind:
+ *  ROWL_RESULT_INVALID_ARGUMENT. */
+ROWL_API RowlEngine_ResultCode RowlEngine_ProfileIsUnlocked(
+    RowlEngineHandle handle, const char* kind, const char* id, int32_t* outIsUnlocked);
 
 /* ── Lifecycle ───────────────────────────────────────────────────────────── */
 

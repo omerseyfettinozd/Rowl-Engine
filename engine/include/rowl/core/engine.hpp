@@ -7,6 +7,7 @@
 #include "rowl/core/player_ui_strings.hpp"
 #include "rowl/platform/game_identity.hpp"
 #include "rowl/platform/platform_host.hpp"
+#include "rowl/state/extras_catalog.hpp"
 #include "rowl/state/game_data_layout.hpp"
 #include "rowl/state/game_state.hpp"
 #include "rowl/state/player_profile.hpp"
@@ -20,6 +21,7 @@
 #include <cmath>
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -480,6 +482,27 @@ public:
     /// (Re)loads the profile for the current identity + data layout; flushes the
     /// previous one first. Called by SetProjectDirectory after the layout is set.
     void openPlayerProfile();
+
+    // ── D07-1: unlockable content (engine_extras.cpp) ─────────────────────
+    /// A queued "newly unlocked" signal (achievements only; D07-2 shows the toast).
+    struct UnlockNotice {
+        std::string kind;  ///< "achievement"
+        std::string id;
+    };
+    /// (Re)reads `Assets/json/extras.json` from the VFS; call after the project is
+    /// mounted (SetProjectDirectory does). A missing file is the normal "no
+    /// extras" state; an unusable one leaves an empty catalog + diagnostics.
+    void loadExtrasCatalog();
+    const Rowl::State::ExtrasCatalog& extrasCatalog() const { return m_extrasCatalog; }
+    /// Records an unlock in the profile. The id must exist in the catalog of
+    /// that kind (else Invalid, nothing written). Ok = newly unlocked (a new
+    /// achievement also queues a notice), Unchanged = already unlocked; the
+    /// other results are the profile's (ReadOnly / Unmounted / Full).
+    Rowl::State::ProfileMutation unlockExtra(Rowl::State::UnlockKind kind, std::string_view id);
+    /// Catalog + per-item unlock state as JSON (RowlEngine_GetExtrasJson).
+    std::string getExtrasJson() const;
+    const std::vector<UnlockNotice>& pendingUnlockNotices() const { return m_unlockNotices; }
+    void clearUnlockNotices() { m_unlockNotices.clear(); }
     std::shared_ptr<const Rowl::State::GameState> getGameState() const { return m_gameState; }
     /// #86: stamps the live mixer gains (master/bgm/sfx/voice) into
     /// m_gameState WITHOUT advancing stepId (see withMixerVolumes), so later
@@ -570,6 +593,15 @@ private:
     // D06-1: nodes whose condition problem was already logged (bad target,
     // evaluation error, redirect cycle) - one WARN per node and graph.
     std::unordered_set<uint64_t> m_conditionWarnedNodes;
+    // D07-1: catalog of unlockable content + canonical media keys parallel to
+    // its gallery / music lists, the not-yet-announced achievements, and the
+    // nodes whose bad "unlock" component was already logged (one WARN per node
+    // and graph, like the condition warnings).
+    Rowl::State::ExtrasCatalog m_extrasCatalog;
+    std::vector<std::string> m_extrasCgKeys;
+    std::vector<std::string> m_extrasMusicKeys;
+    std::vector<UnlockNotice> m_unlockNotices;
+    std::unordered_set<uint64_t> m_unlockWarnedNodes;
     // D06-1: the last advanceStory moved the cursor through a condition
     // redirect (advanceToChoice must still report the choice as taken).
     bool m_lastAdvanceRedirected = false;
@@ -689,6 +721,12 @@ private:
     /// most 16 hops) BEFORE any entry effect runs. Call only on real entries
     /// (advance, new game, graph mount) - never on load/rewind/restore.
     void resolveNodeEntryConditions();
+    /// D07-1: the unlock side of a REAL node entry (never load / rewind / restore,
+    /// never a node a condition skipped): explicit "unlock" components plus the
+    /// automatic CG (background / character sprite) and music (bgm_track)
+    /// matches against the catalog. Called once the scene update succeeded.
+    void applyEntryUnlocks(const std::vector<nlohmann::json>& unlockComponents,
+                           const std::vector<nlohmann::json>& audioComponents);
     /// Author-enabled and its condition holds right now.
     bool choiceButtonSelectable(const Rowl::Render::ChoiceButtonRenderData& button) const;
     // MS-6 pause-menu internals: keyboard and pointer funnels share these.

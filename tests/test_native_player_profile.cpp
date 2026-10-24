@@ -398,11 +398,14 @@ void test_native_player_profile() {
     }
     TEST_PASS("Wrong game_id: read-only + untouched; missing id stamped; shared dir not enforced");
 
-    // 7) Unknown top-level fields and `unlocks` survive a rewrite.
+    // 7) Unknown top-level fields and `unlocks` (D07-1 object form, unknown inner
+    //    keys included) survive a rewrite.
     {
         const fs::path dir = base / "extras";
         writeText(dir / "player-profile.json",
-                  R"({"version":1,"zeta":{"deep":[1,2,{"x":null}]},"unlocks":["gallery_1",{"id":2,"at":"t"}],
+                  R"({"version":1,"zeta":{"deep":[1,2,{"x":null}]},
+                      "unlocks":{"cg":["gallery_1"],"music":[],"achievements":[{"id":"a2","at":"2026-10-24T12:00:00Z"}],
+                                 "future_kind":[{"id":2,"at":"t"}]},
                       "alpha":"a","read_content_ids":["aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"]})");
         PlayerProfileStore store;
         store.open(dir, idA);
@@ -415,7 +418,8 @@ void test_native_player_profile() {
                     out.contains("master_volume") && out.contains("read_content_ids"),
                 "unknown fields / unlocks missing after rewrite: " + out.dump());
         profReq(out["zeta"] == json::parse(R"({"deep":[1,2,{"x":null}]})") && out["alpha"] == "a" &&
-                    out["unlocks"] == json::parse(R"(["gallery_1",{"id":2,"at":"t"}])") &&
+                    out["unlocks"] == json::parse(R"({"cg":["gallery_1"],"music":[],
+                        "achievements":[{"id":"a2","at":"2026-10-24T12:00:00Z"}],"future_kind":[{"id":2,"at":"t"}]})") &&
                     out["master_volume"] == 0.4 && out["read_content_ids"].size() == 2,
                 "unknown fields / unlocks not preserved: " + out.dump());
         // A second generation keeps them too.

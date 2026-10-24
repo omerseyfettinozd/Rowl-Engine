@@ -1,6 +1,6 @@
 # Capability and Node-Component Matrix
 
-Status reviewed: 2026-10-24 (D06-3, on top of D01-D06-2)
+Status reviewed: 2026-10-24 (D07-1, on top of D01-D06-3)
 Scope: every `ROWL_ENGINE_CAPABILITY_*` bit and every node-component JSON key, followed from the
 editor field to the native engine to the packaged player (`RowlGame`).
 
@@ -64,6 +64,7 @@ the editor mirrors a few values as constants (`LocalizationService`, `Accessibil
 | `TITLE_SCREEN` (33554432) | `NativeBridge.OpenTitleScreen` | pause-menu mode 3 / 4 | `engine_title_menu.cpp` | `rowl_demo_first_light_packaged` ("Package smoke title: ok") | full |
 | `BACKLOG_REPLAY` (67108864) | Editor player backlog panel (C#) | history JSON `voice`, `ReplayBacklogVoice`, `OpenBacklog` | `engine_backlog.cpp` | none through the packaged player; native `test_backlog_replay.cpp`, `test_backlog_screen.cpp` | partial (no packaged proof) |
 | `PLAYER_AUTO_SKIP` (134217728) | Editor player auto / skip drivers (C#, separate implementation) | `SetAutoMode`, `SetSkipActive`, profile `auto_*`, `skip_mode` | `engine_player_drivers.cpp` | none through the packaged player; native `test_auto_skip.cpp`, `test_auto_skip_ui.cpp` | partial (no packaged proof; two driver implementations, no parity test) |
+| `EXTRAS_UNLOCKS` (268435456) | none yet (D07-3: `unlock` component, extras editor); menus in D07-2 | `Assets/json/extras.json`, profile `unlocks`, `RowlEngine_GetExtrasJson` / `ProfileUnlock` / `ProfileIsUnlocked` | `extras_catalog.cpp`, `engine_extras.cpp`, `player_profile.cpp`, `c_api_extras.cpp` | none through the packaged player; native `test_extras_unlocks.cpp` (includes the shipped `kayip_tablo` catalog) | native-only (`docs/EXTRAS_UNLOCKS.md`) |
 
 ## 2. Node components (JSON `components[].type` and `data` keys)
 
@@ -90,6 +91,7 @@ helpers it calls. "Editor" means the field written by `editor/ViewModels/Compone
 | `choice.target_node_id`, `style_preset`, `anchor`, `layout`, `padding`, `title`, `hover_image`, `pressed_image`, `disabled_color`, `disabled_image` | written | same | **not read** (routing is `next_nodes[].option_id`; verified: no read in `engine/src`) | none | unused (editor layout / bookkeeping) |
 | `variable` | `VariableComponentViewModel` | `key`, `value`, `operation` (`set` / `add`) | yes (real node entry only; load / rewind restore saved variables) | none through the packaged player; native `test_chapter_boundary_persistence.cpp`, `test_condition_component.cpp` | full in editor + native (no packaged proof) |
 | `condition` | `ConditionComponentViewModel` (+ lint) | `expression`, `fail_target_node_id` | yes since D06-1 (real entry; Lua expression; invalid target warns once) | none through the packaged player; native `test_condition_component.cpp`, `docs/DATA_FORMATS_AND_MIGRATION.md` section 11 | full in editor + native (no packaged proof) |
+| `unlock` | none yet (D07-3) | `kind` (`cg` / `music` / `achievement`), `id` | yes since D07-1 (real entry only; id must be in `extras.json`, else one warning per node; load / rewind / skipped node unlock nothing) | none through the packaged player; native `test_extras_unlocks.cpp` | native-only |
 | `script` | `ScriptComponentViewModel` | `path`, `code` | yes (sandboxed Lua) | none through the packaged player; native `test_lua_sandbox.cpp` | full in editor + native (no packaged proof) |
 | `camera` (position, zoom, pan, easing, shake) | `CameraComponentViewModel` | `x`, `y`, `zoom`, `pan_duration`, `zoom_duration`, `easing`, `shake_*` | yes | none through the packaged player; native `test_camera_and_transition_pipeline.cpp` | full in editor + native (no packaged proof) |
 | `camera.rotation` | control disabled | `rotation` | read, then ignored on purpose | none | unused (see `CAMERA_ROTATION_IGNORED`) |
@@ -105,7 +107,8 @@ helpers it calls. "Editor" means the field written by `editor/ViewModels/Compone
   suite on the same engine code, not through the packaged binary. That is stated per row rather
   than assumed.
 - The sample `samples/kayip_tablo` uses only background, dialogue, character (body only),
-  variable, transition, audio (BGM crossfade), choice, camera and one script. It does **not**
+  variable, transition, audio (BGM crossfade), choice, camera, one script and (D07-1) four
+  `unlock` achievements at its endings, with an `extras.json` of 10 CG, 5 music items and 4 achievements. It does **not**
   exercise chapters, `condition`, `voice_track`, `ambience_track`, `sfx_track`, expressions or
   sprite sheets, so it cannot serve as evidence for those rows.
 - Editor-only keys that the engine never reads (`background.scale`, `character.position`,

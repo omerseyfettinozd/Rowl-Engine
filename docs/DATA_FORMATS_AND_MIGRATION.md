@@ -274,10 +274,11 @@ filters), linter (`ProjectValidationService`), and the packager
   ([0,1]), `text_speed_multiplier` ([0.25,4]), `auto_advance_delay` ([0,60]),
   `text_scale` (snapped to 1 / 1.25 / 1.5), `high_contrast`, `reduced_motion`,
   `skip_mode` (`off`/`read_only`/`all`), `auto_enabled`, `mixer_fade_curve`
-  (`Linear`/`EqualPower`), `sfx_pool_depth` ([1,16]), and a reserved
-  `unlocks` array. Wrong-typed or missing fields fall back to their defaults;
-  out-of-range values are clamped. Unknown top-level keys and `unlocks` are
-  preserved verbatim on rewrite.
+  (`Linear`/`EqualPower`), `sfx_pool_depth` ([1,16]), and `unlocks` (D07-1:
+  `{"cg": [ids], "music": [ids], "achievements": [{"id","at"}]}`, `[]` while nothing is
+  unlocked; schema and triggers in `docs/EXTRAS_UNLOCKS.md`). Wrong-typed or missing fields
+  fall back to their defaults; out-of-range values are clamped. Unknown top-level keys and
+  unknown keys inside `unlocks` are preserved verbatim on rewrite.
 - **Read set:** ids are normalized (`ContentIdService.Normalize` rules),
   deduplicated, held in a hash set (O(1) lookup) and written sorted. Bounded at
   1,000,000 ids: past that, new ids are refused with a diagnostic — existing
@@ -310,7 +311,7 @@ filters), linter (`ProjectValidationService`), and the packager
   parity test: `tests/fixtures/profile/player-profile.v1.json`.
 - **Managed side (D01c-2):** the editor player goes through the native store
   (single writer) when it is available; the managed `PlayerProfileStore` keeps
-  `game_id`, `unlocks` and unknown keys on rewrite and is used per game as the
+  `game_id`, `unlocks` (array or object, opaque) and unknown keys on rewrite and is used per game as the
   fallback. Details and the one-time migration of the old global editor profile:
   `docs/PLAYER_PROFILE_AND_CONTENT_ID.md` section 9.
 

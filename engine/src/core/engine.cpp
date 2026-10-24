@@ -1167,6 +1167,10 @@ void Engine::updateSceneFromComponents(const nlohmann::json& root,
         m_hasDialogueBox = false;
         std::vector<nlohmann::json> pendingAudioComponents;
         std::vector<nlohmann::json> pendingScripts;
+        // D07-1: "unlock" components are applied after the whole update
+        // succeeded (a throw must not leave a profile write behind a rolled-back
+        // scene) and only on real entries.
+        std::vector<nlohmann::json> pendingUnlocks;
         // #20/#21: kamera + pencere-FX de ses gibi ertelenir — dongu ici
         // cihaz mutasyonu kalmaz, kotu-alanli bilesen sahneyi yarim
         // birakamaz. Script yikimi (status-clear + deactivate) ayni sebeple
@@ -1494,6 +1498,9 @@ void Engine::updateSceneFromComponents(const nlohmann::json& root,
                 pendingFxComponents.push_back(data);
             } else if (type == "script") {
                 pendingScripts.push_back(data);
+            } else if (type == "unlock") {
+                if (!replayEntryEffects) continue;
+                pendingUnlocks.push_back(data);
             }
         }
 
@@ -1652,6 +1659,16 @@ void Engine::updateSceneFromComponents(const nlohmann::json& root,
 
         if (replayEntryEffects) recordActiveDialogueHistory();
 
+        // D07-1: last step of a successful real entry (never load / rewind /
+        // restore: replayEntryEffects is false there). Cannot throw past here.
+        if (replayEntryEffects) {
+            try {
+                applyEntryUnlocks(pendingUnlocks, pendingAudioComponents);
+            } catch (const std::exception& unlockError) {
+                ROWL_LOG_WARN(std::string("Unlock processing failed: ") + unlockError.what());
+            }
+        }
+
         ROWL_LOG_INFO("Scene Updated (Components) → " + std::to_string(comps.size()) +
                       " comps, " + std::to_string(m_activeCharacters.size()) + " chars, " +
                       std::to_string(m_activeDialogues.size()) + " dlgs, HasBg: " +
@@ -1700,6 +1717,7 @@ bool Engine::parseStoryGraphJson(const std::string& jsonContent) {
     // D06-1: new graph = new warning budget; the start node's conditions run
     // against the freshly cleared variables, before the initial snapshot.
     m_conditionWarnedNodes.clear();
+    m_unlockWarnedNodes.clear();
     resolveNodeEntryConditions();
     m_gameState = Rowl::State::GameState::createInitialState(m_storyRuntime.currentNodeId());
 
@@ -2988,6 +3006,10 @@ void Engine::shutdown() {
     // D2 (#113-kuzeni): proje-override save-dizini de oturuma aittir.
     m_saveDirectoryOverride.clear();
     m_playerProfile.close();  // D01c-1: flush pending profile changes
+    m_extrasCatalog = {};     // D07-1
+    m_extrasCgKeys.clear();
+    m_extrasMusicKeys.clear();
+    m_unlockNotices.clear();
     m_gameIdentity = {};
     m_gameDataLayout = {};
 

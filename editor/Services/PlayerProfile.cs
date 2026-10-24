@@ -100,8 +100,9 @@ public sealed class PlayerProfile
     public string GameId { get; set; } = string.Empty;
 
     /// <summary>
-    /// D01c-2 — reserved, opaque <c>unlocks</c> array (native owns the meaning).
-    /// Preserved verbatim on rewrite; null means "none seen" (written as <c>[]</c>).
+    /// D01c-2 — opaque <c>unlocks</c> value (native owns the meaning; since D07-1 an object
+    /// <c>{"cg": [...], "music": [...], "achievements": [...]}</c>, while nothing is unlocked an array).
+    /// Preserved verbatim on rewrite (array or object); null means "none seen" (written as <c>[]</c>).
     /// </summary>
     public JsonNode? Unlocks { get; set; }
 

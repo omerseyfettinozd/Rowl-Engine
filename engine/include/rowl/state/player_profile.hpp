@@ -8,6 +8,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_set>
+#include <vector>
 
 namespace Rowl::State {
 
@@ -17,7 +18,8 @@ namespace Rowl::State {
 /// directory is Engine::getProfileDirectoryPath() (per-game once a project
 /// with an authored id is mounted). The JSON keys are the SAME as the managed
 /// `PlayerProfileStore` (editor/Services/PlayerProfileStore.cs) writes, plus
-/// `game_id` and a reserved `unlocks` array, so both sides read one file.
+/// `game_id` and `unlocks` (D07-1: CG / music / achievement ids), so both sides
+/// read one file.
 /// See docs/DATA_FORMATS_AND_MIGRATION.md ("Player profile v1").
 
 inline constexpr const char* kPlayerProfileFileName = "player-profile.json";
@@ -28,6 +30,9 @@ inline constexpr std::size_t kPlayerProfileMaxReadIds = 1'000'000;
 /// A profile file larger than this is treated as corrupt (it would be 6x the
 /// size of a full read set); keeps the loader memory-bounded.
 inline constexpr std::uintmax_t kPlayerProfileMaxFileBytes = 256ull * 1024 * 1024;
+/// D07-1: per kind (cg / music / achievement) the profile keeps at most this
+/// many unlock records; a file holding more drops the surplus on load.
+inline constexpr std::size_t kPlayerProfileMaxUnlocksPerKind = 1024;
 /// Quarantined `player-profile.corrupt-*.json` files kept next to the profile.
 inline constexpr std::size_t kPlayerProfileMaxQuarantine = 3;
 /// Automatic flush debounce (seconds of engine time after the first change).
@@ -81,6 +86,13 @@ enum class ProfileMutation {
     Full,       ///< read-set limit reached; the new id was refused
 };
 
+/// D07-1: what can be unlocked. Wire names: "cg", "music", "achievement".
+enum class UnlockKind { Cg, Music, Achievement };
+
+const char* unlockKindName(UnlockKind kind);
+/// "cg" / "music" / "achievement" (exact lowercase), else nullopt.
+std::optional<UnlockKind> parseUnlockKind(std::string_view name);
+
 /// Owner-thread object (the engine's thread): no internal locking.
 class PlayerProfileStore {
 public:
@@ -120,6 +132,19 @@ public:
     ProfileMutation markRead(std::string_view contentId);
     bool isRead(std::string_view contentId) const;
 
+    /// D07-1: records an unlock. Ok = newly unlocked, Unchanged = already
+    /// unlocked, Invalid = `id` is not `[a-z0-9_.-]{1,64}`, Full = the kind
+    /// holds kPlayerProfileMaxUnlocksPerKind records. Achievements carry the
+    /// UTC time of the unlock (`atUtc`, ISO-8601 "YYYY-MM-DDTHH:MM:SSZ"; empty
+    /// = now). Writes follow the markRead path (dirty + debounced atomic flush).
+    ProfileMutation unlock(UnlockKind kind, std::string_view id, std::string_view atUtc = {});
+    bool isUnlocked(UnlockKind kind, std::string_view id) const;
+    std::size_t unlockCount(UnlockKind kind) const;
+    /// Unlocked ids of `kind` in unlock order.
+    std::vector<std::string> unlockedIds(UnlockKind kind) const;
+    /// UTC time an achievement was unlocked; empty when unknown / not unlocked.
+    std::string achievementTime(std::string_view id) const;
+
     /// Merges known preference keys from a JSON object (values are clamped /
     /// snapped like the managed sanitizer). All-or-nothing: an unknown key, a
     /// wrong JSON type or a malformed document changes nothing and yields
@@ -130,6 +155,12 @@ public:
     std::string toJson() const;
     /// {status, diagnostic, read_only, path, read_count, game_id, dirty}
     std::string statusJson() const;
+
+    /// Test seam: forgets every unlock (cg / music / achievements), so a test can
+    /// prove that a later scene update does NOT unlock again.
+    void clearUnlocksForTesting();
+    /// Test seam: lowers the per-kind unlock limit (default kPlayerProfileMaxUnlocksPerKind).
+    void setUnlockLimitForTesting(std::size_t limit) { m_unlockLimit = limit; }
 
     /// Test seam: lowers the read-set limit (default kPlayerProfileMaxReadIds).
     void setReadLimitForTesting(std::size_t limit) { m_readLimit = limit; }
@@ -154,7 +185,8 @@ private:
     PlayerPreferences m_preferences;
     std::unordered_set<std::string> m_readIds;
     std::size_t m_readLimit = kPlayerProfileMaxReadIds;
-    struct Extras;               ///< unknown top-level keys + `unlocks` (preserved opaquely)
+    std::size_t m_unlockLimit = kPlayerProfileMaxUnlocksPerKind;
+    struct Extras;               ///< unlock records + unknown keys (top level and inside `unlocks`)
     std::unique_ptr<Extras> m_extras;
 };
 

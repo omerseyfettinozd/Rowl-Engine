@@ -21157,6 +21157,15 @@
                 "custom_box_texture": "",
                 "content_id": "511f98cc-e623-5d1f-b6ca-3eaf82afe54e"
               }
+            },
+            {
+              "type": "unlock",
+              "id": "unl152",
+              "enabled": true,
+              "data": {
+                "kind": "achievement",
+                "id": "isik_geri_dondu"
+              }
             }
           ]
         }
@@ -22454,6 +22463,15 @@
                 "custom_box_texture": "",
                 "content_id": "0ba96c63-5d7a-513c-ab56-499bca1dbeec"
               }
+            },
+            {
+              "type": "unlock",
+              "id": "unl162",
+              "enabled": true,
+              "data": {
+                "kind": "achievement",
+                "id": "yarim_kalan_tablo"
+              }
             }
           ]
         }
@@ -23668,6 +23686,15 @@
                 "corner_radius": 10,
                 "custom_box_texture": "",
                 "content_id": "e60ae0b1-5971-5a1d-a2b2-f5504a6b0be8"
+              }
+            },
+            {
+              "type": "unlock",
+              "id": "unl172",
+              "enabled": true,
+              "data": {
+                "kind": "achievement",
+                "id": "altin_cerceve"
               }
             }
           ]
@@ -25067,6 +25094,15 @@
                 "corner_radius": 10,
                 "custom_box_texture": "",
                 "content_id": "243bdee2-8352-51a1-96f0-41c2482415de"
+              }
+            },
+            {
+              "type": "unlock",
+              "id": "unl184",
+              "enabled": true,
+              "data": {
+                "kind": "achievement",
+                "id": "gec_kalan_cirak"
               }
             }
           ]

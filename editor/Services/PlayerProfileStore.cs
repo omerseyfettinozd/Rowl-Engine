@@ -168,10 +168,12 @@ public static class PlayerProfileStore
             }
             if (root.TryGetProperty("unlocks", out var unlocksElement))
             {
-                if (unlocksElement.ValueKind == JsonValueKind.Array)
+                // D07-1: the native store writes {"cg": [...], "music": [...], "achievements": [...]};
+                // the managed side stays opaque and keeps an array (legacy / empty) or an object verbatim.
+                if (unlocksElement.ValueKind == JsonValueKind.Array || unlocksElement.ValueKind == JsonValueKind.Object)
                     profile.Unlocks = JsonNode.Parse(unlocksElement.GetRawText());
                 else
-                    notes.Add("Non-array unlocks reset to an empty array.");
+                    notes.Add("Non-array, non-object unlocks reset to an empty array.");
             }
             foreach (var property in root.EnumerateObject())
             {

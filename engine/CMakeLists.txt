@@ -319,6 +319,7 @@ set(ROWL_ENGINE_SOURCES
     src/core/engine_backlog.cpp     # D03-2: oyuncuda Gecmis (backlog) ekrani
     src/core/engine_player_drivers.cpp  # D04-1: oyuncu Otomatik / Atla surucusu
     src/core/engine_node_conditions.cpp  # D06-1: dugum 'condition' bileseni (giriste degerlendir / hedefe yonlendir)
+    src/core/engine_extras.cpp  # D07-1: acilabilir icerik (CG galerisi / muzik odasi / basarimlar) katalogu + giris acilislari
     src/core/engine_pause_menu.cpp  # W8-d(1): pause-menu state-machine + view/JSON (davranışsız taşıma)
     src/core/engine_render_facade.cpp  # W8-d(3): texture-cache/last-frame Engine facade'u (additive)
     src/core/engine_parity_presenter.cpp  # Dilim-7 parity (P1-C): salt-okunur slot/backlog/semantik sunum (additive)
@@ -359,6 +360,7 @@ set(ROWL_ENGINE_SOURCES
     src/platform/game_identity.cpp
     src/state/game_data_layout.cpp
     src/state/player_profile.cpp
+    src/state/extras_catalog.cpp  # D07-1: extras.json ayristiricisi
     src/platform/mobile_input.cpp
     src/platform/sdl_event_dispatcher.cpp
     src/platform/sdl_subsystem_lease.cpp
@@ -398,6 +400,7 @@ set(ROWL_ENGINE_SOURCES
     src/c_api_game_identity.cpp
     src/c_api_game_data.cpp
     src/c_api_profile.cpp
+    src/c_api_extras.cpp  # D07-1: GetExtrasJson / ProfileUnlock / ProfileIsUnlocked
     src/c_api_thread_contract_guard.cpp  # D14: legacy-mixer checked loud varyantlar
     src/c_api_observability.cpp          # AI Full-Observability log pipe & query
 )

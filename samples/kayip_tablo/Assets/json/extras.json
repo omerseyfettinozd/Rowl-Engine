@@ -1,0 +1,45 @@
+{
+  "format": 1,
+  "gallery": [
+    { "id": "bogaz_gunduz", "title": { "tr": "Boğaz'da Bir Gündüz", "en": "A Day on the Bosphorus" }, "image": "bogaz_gunduz.jpg" },
+    { "id": "atolye", "title": { "tr": "Atölye", "en": "The Studio" }, "image": "atolye.jpg" },
+    { "id": "kapali_carsi", "title": { "tr": "Kapalıçarşı", "en": "The Grand Bazaar" }, "image": "kapali_carsi.jpg" },
+    { "id": "arzuhalci", "title": { "tr": "Arzuhalci", "en": "The Public Scribe" }, "image": "arzuhalci.jpg" },
+    { "id": "aksam_isigi", "title": { "tr": "Akşam Işığı", "en": "Evening Light" }, "image": "aksam_isigi.jpg" },
+    { "id": "okuyan_kiz", "title": { "tr": "Okuyan Kız", "en": "The Reading Girl" }, "image": "okuyan_kiz.jpg" },
+    { "id": "bogaz_ay", "title": { "tr": "Ay Işığında Boğaz", "en": "The Bosphorus by Moonlight" }, "image": "bogaz_ay.jpg" },
+    { "id": "ayasofya", "title": { "tr": "Ayasofya", "en": "Hagia Sophia" }, "image": "ayasofya.jpg" },
+    { "id": "gun_batimi", "title": { "tr": "Gün Batımı", "en": "Sunset" }, "image": "gun_batimi.jpg" },
+    { "id": "sisli_sabah", "title": { "tr": "Sisli Sabah", "en": "Misty Morning" }, "image": "sisli_sabah.jpg" }
+  ],
+  "music": [
+    { "id": "gymnopedie1", "title": { "tr": "Gymnopédie No. 1", "en": "Gymnopédie No. 1" }, "track": "audio/gymnopedie1.ogg" },
+    { "id": "nokturn_fa_minor", "title": { "tr": "Nokturn, Fa minör", "en": "Nocturne in F minor" }, "track": "audio/nokturn_fa_minor.ogg" },
+    { "id": "nokturn_mi_minor", "title": { "tr": "Nokturn, Mi minör", "en": "Nocturne in E minor" }, "track": "audio/nokturn_mi_minor.ogg" },
+    { "id": "yagmur_gok", "title": { "tr": "Yağmur ve Gök Gürültüsü", "en": "Rain and Thunder" }, "track": "audio/yagmur_gok.ogg" },
+    { "id": "gymnopedie3", "title": { "tr": "Gymnopédie No. 3", "en": "Gymnopédie No. 3" }, "track": "audio/gymnopedie3.ogg" }
+  ],
+  "achievements": [
+    {
+      "id": "isik_geri_dondu",
+      "title": { "tr": "Işık Geri Döndü", "en": "The Light Returned" },
+      "description": { "tr": "Işık Geri Döndü sonuna ulaş.", "en": "Reach the ending The Light Returned." }
+    },
+    {
+      "id": "yarim_kalan_tablo",
+      "title": { "tr": "Yarım Kalan Tablo", "en": "The Unfinished Painting" },
+      "description": { "tr": "Yarım Kalan Tablo sonuna ulaş.", "en": "Reach the ending The Unfinished Painting." }
+    },
+    {
+      "id": "altin_cerceve",
+      "title": { "tr": "Altın Çerçeve", "en": "The Golden Frame" },
+      "description": { "tr": "Altın Çerçeve sonuna ulaş.", "en": "Reach the ending The Golden Frame." }
+    },
+    {
+      "id": "gec_kalan_cirak",
+      "title": { "tr": "Geç Kalan Çırak", "en": "The Late Apprentice" },
+      "description": { "tr": "Geç Kalan Çırak sonuna ulaş.", "en": "Reach the ending The Late Apprentice." },
+      "hidden": true
+    }
+  ]
+}
