@@ -510,6 +510,30 @@
     "Component.Condition.DisplayName": {
       "text": "Condition (Lua)"
     },
+    "Component.Condition.Title": {
+      "text": "Condition (Lua)"
+    },
+    "Component.Condition.Expression.Label": {
+      "text": "Expression (Lua)"
+    },
+    "Component.Condition.Expression.Watermark": {
+      "text": "e.g. gold >= 10"
+    },
+    "Component.Condition.Target.Label": {
+      "text": "If the condition is false, go to"
+    },
+    "Component.Condition.Target.None": {
+      "text": "— (the node still plays)"
+    },
+    "Component.Condition.Target.Missing.Option": {
+      "text": "node missing"
+    },
+    "Component.Condition.Target.Missing.Warning": {
+      "text": "This node does not exist: when the condition is false the node still plays."
+    },
+    "Component.Condition.Hint": {
+      "text": "When false, the node is not played and play moves to the target."
+    },
     "Component.Dialogue.Align.Label": {
       "text": "Alignment"
     },
@@ -755,6 +779,39 @@
     },
     "Component.Variable.DisplayName": {
       "text": "Variable Modifier"
+    },
+    "Component.Variable.Title": {
+      "text": "Variable Modifier"
+    },
+    "Component.Variable.Key.Label": {
+      "text": "Key"
+    },
+    "Component.Variable.Key.Watermark": {
+      "text": "e.g. gold"
+    },
+    "Component.Variable.Key.Empty.Warning": {
+      "text": "The key is empty: this component does nothing."
+    },
+    "Component.Variable.Operation.Label": {
+      "text": "Operation"
+    },
+    "Component.Variable.Operation.set": {
+      "text": "Set"
+    },
+    "Component.Variable.Operation.add": {
+      "text": "Add"
+    },
+    "Component.Variable.Value.Label": {
+      "text": "Value"
+    },
+    "Component.Variable.Value.Watermark": {
+      "text": "e.g. 10"
+    },
+    "Component.Variable.Add.Invalid.Warning": {
+      "text": "Add needs a finite number."
+    },
+    "Component.Variable.Hint": {
+      "text": "Applied once when the node is entered (not on rewind or replay)."
     },
     "Component.Unlock.DisplayName": {
       "text": "Unlockable Content"
