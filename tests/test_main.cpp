@@ -210,6 +210,7 @@ int main(int argc, char* argv[]) {
     test_boot_story_diagnostics();
     test_project_mount_cwd();
     test_choice_input_guard();
+    test_title_screen();
     test_graph_vnext();
     test_localization();
     test_locale_cluster();

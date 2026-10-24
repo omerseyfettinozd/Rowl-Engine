@@ -1,6 +1,8 @@
 #pragma once
 
+#include <array>
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -23,7 +25,10 @@ enum class PauseMenuCommand : int32_t {
 enum class PauseMenuMode : int32_t {
     Main = 0,
     SaveSlots = 1,
-    LoadSlots = 2
+    LoadSlots = 2,
+    /// D02: native title screen (root page) and its preferences sub-page.
+    Title = 3,
+    Preferences = 4
 };
 
 /// Player quick-save slots selectable at runtime (digits 0-9 / --slot N).
@@ -34,6 +39,22 @@ struct PauseMenuRow {
     std::string label;
     std::string value;
     bool isValue = false; // value rows adjust with Left/Right
+    /// D02: small dim second line (slot date / chapter / summary); empty keeps
+    /// the row drawing byte-identical to the pre-D02 menu.
+    std::string detail;
+    /// D02: false draws the row dim and makes Confirm on it a no-op.
+    bool enabled = true;
+};
+
+/// D02: per-slot metadata memo shared by the slot pages and the title screen.
+struct PauseSlotInfo {
+    enum class State : uint8_t { Empty = 0, Valid = 1, Corrupt = 2 };
+    State state = State::Empty;
+    std::string savedAt;       // ISO-8601 UTC ("saved_at")
+    std::string chapterTitle;
+    std::string summary;
+    double playtimeSeconds = 0.0;
+    std::shared_ptr<const std::string> thumbnailPng;
 };
 
 struct PauseMenuView {
@@ -42,7 +63,23 @@ struct PauseMenuView {
     std::vector<PauseMenuRow> rows;
     int selected = 0;
     std::string hint;
+    /// D02: title screen active / newest valid slot for Continue (-1 none).
+    bool titleActive = false;
+    int continueSlot = -1;
+    /// D02: thumbnail of the selected slot on a slot page (null = none);
+    /// `thumbnailKey` ("slot|saved_at") identifies it for texture caching.
+    std::shared_ptr<const std::string> thumbnailPng;
+    std::string thumbnailKey;
 };
+
+/// "55%" / "1.25x" row values (engine_pause_menu.cpp), shared with D02 pages.
+std::string pauseMenuPercent(float volume);
+std::string pauseMenuSpeedText(float multiplier);
+/// D02: "<YYYY-MM-DD HH:MM>  <chapter>  <summary ~48 bytes>" of a valid slot,
+/// empty otherwise (engine_title_menu.cpp).
+std::string pauseSlotDetail(const PauseSlotInfo& info);
+/// D02: "2026-10-24T12:34:56Z" -> "2026-10-24 12:34".
+std::string pauseSlotDateText(const std::string& savedAt);
 
 /// Single source of truth for overlay layout. Row i occupies
 /// [kRowY0 + i*(kRowH+kRowGap), +kRowH) at full kRowX..kRowX+kRowW width.
@@ -62,6 +99,13 @@ struct PauseMenuLayout {
     static constexpr float kPlusX0 = 1040.0f;
     static constexpr int kMainRows = 9;
     static constexpr int kSlotRows = 10;
+    static constexpr int kTitleRows = 5;
+    static constexpr int kPreferenceRows = 6;
+    /// D02: slot-page thumbnail box (virtual canvas), panel top-right.
+    static constexpr float kThumbX = 1180.0f;
+    static constexpr float kThumbY = 150.0f;
+    static constexpr float kThumbW = 192.0f;
+    static constexpr float kThumbH = 108.0f;
 
     /// Row index under a virtual point, or -1 for gaps/outside.
     static inline int rowAt(float vx, float vy, int rowCount) {

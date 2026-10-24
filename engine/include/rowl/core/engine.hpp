@@ -14,6 +14,7 @@
 #include "rowl/core/story_graph.hpp"
 #include "rowl/core/story_runtime.hpp"
 #include <array>
+#include <bitset>
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -362,6 +363,12 @@ public:
     void setPaused(bool paused);
     void togglePause() { setPaused(!m_paused); }
     bool isPaused() const { return m_paused; }
+    /// D02: opens the native title screen (New Game / Continue / Load /
+    /// Preferences / Exit) on top of the frozen story. Needs an initialized
+    /// engine. The title never starts the story on Esc/Back; setPaused(false)
+    /// from the host closes it.
+    bool openTitleScreen();
+    bool isTitleScreenActive() const { return m_titleActive; }
     /// Keyboard-equivalent menu navigation (window arrows / C API / tests).
     /// Confirm activates the selected row; Back leaves sub-pages, disarms the
     /// exit confirmation, or resumes from the main page.
@@ -515,7 +522,16 @@ private:
     // out-of-band delete only costs one fail-closed load. Mutable: the view
     // builder is const, the cache is an internal memo.
     mutable bool m_pauseSlotCacheValid = false;
-    mutable std::array<bool, 10> m_pauseSlotPresent{};
+    // D02: the memo now carries metadata per quick slot (0..9) plus the
+    // Continue candidate scanned over every valid slot (0..99).
+    mutable std::array<PauseSlotInfo, 10> m_pauseSlotInfo{};
+    mutable int m_continueSlot = -1;
+    mutable std::string m_continueSavedAt;
+    // D02: slots whose load failed this session (graph mismatch etc.) are
+    // shown as corrupt and skipped by Continue until they are saved again.
+    mutable std::bitset<100> m_slotLoadFailed;
+    bool m_titleActive = false;
+    std::string m_titleHint;
     bool m_windowAudioSuspended = false;
     // #160: stall-signal edge latch. Set on the first zero-dt step observed
     // while a camera tween is in flight, cleared when the tween progresses
@@ -558,6 +574,18 @@ private:
     void menuActivateSelected();
     void menuChooseSlot(int32_t slotIndex);
     void menuBack();
+    // D02 (engine_title_menu.cpp)
+    void ensureSlotCache() const;
+    void titleActivateSelected();
+    void titleBack();
+    bool titleLoadSlot(int32_t slotIndex);
+    void titleStartNewGame();
+    bool titleContinue();
+    void leaveTitleScreen();
+    void markPresentedDialoguesRead();
+    int pauseMenuValueRow() const;
+    void persistPauseMenuPreference(int row);
+    PauseMenuView getTitleMenuView() const;
     float pauseMenuVolume(int row) const;
     /// #86: setting a volume row also commits the mixer to the game state
     /// (see commitMixerVolumesToGameState) — pause-menu mixing survives

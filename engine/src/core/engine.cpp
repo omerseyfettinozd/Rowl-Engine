@@ -121,6 +121,8 @@ std::string Engine::getSaveDirectory() const {
 
 void Engine::setSaveDirectory(const std::string& saveDir) {
     m_saveDirectoryOverride = Rowl::Platform::pathFromUtf8(saveDir);
+    m_pauseSlotCacheValid = false;  // D02: another folder, another slots
+    m_slotLoadFailed.reset();
 }
 
 std::filesystem::path Engine::getSaveDirectoryPath() const {
@@ -162,7 +164,9 @@ void Engine::handleRuntimeInput(const Rowl::Platform::RuntimeInputEvent& event) 
     using Type = Rowl::Platform::RuntimeInputEvent::Type;
     switch (event.type) {
         case Type::PauseToggle:
-            togglePause();
+            // D02: Esc/P on the title screen never starts the story.
+            if (m_titleActive) menuBack();
+            else togglePause();
             break;
         case Type::MenuUp:
             if (m_paused) pauseMenuCommand(PauseMenuCommand::Up);
@@ -181,7 +185,8 @@ void Engine::handleRuntimeInput(const Rowl::Platform::RuntimeInputEvent& event) 
             break;
         case Type::SelectSlot:
             if (m_paused) {
-                if (m_pauseMode != PauseMenuMode::Main) menuChooseSlot(event.slot);
+                if (m_pauseMode == PauseMenuMode::SaveSlots ||
+                    m_pauseMode == PauseMenuMode::LoadSlots) menuChooseSlot(event.slot);
             } else {
                 setQuickSaveSlot(event.slot);
             }
@@ -444,13 +449,9 @@ void Engine::setPlayState(bool isPlaying) {
         // transition the lines on screen are now presented to the player:
         // mark them read. Read state only - no backlog entry is added here
         // (the backlog bookkeeping is untouched, so nothing is recorded twice).
-        if (enteringPlay) {
-            for (const auto& dlg : m_activeDialogues) {
-                if (!dlg.dialogue.empty() && !dlg.contentId.empty()) {
-                    m_playerProfile.markRead(dlg.contentId);
-                }
-            }
-        }
+        // D02: behind the title screen nothing is presented yet - New Game
+        // marks the start lines read when the player really enters the story.
+        if (enteringPlay && !m_titleActive) markPresentedDialoguesRead();
     } else {
         m_activeDialogueData.elapsedTypewriterTime = 9999.0f;
         m_activeDialogueData.lastBlipCodepointIndex = 99999;
@@ -2729,6 +2730,9 @@ void Engine::resetSessionProfile() {
     m_pauseSelected = 0;
     m_activeQuickSlot = 0;
     m_pauseSlotCacheValid = false;
+    m_titleActive = false;  // D02
+    m_titleHint.clear();
+    m_slotLoadFailed.reset();
     m_textSpeedMultiplier = 1.0f;
     m_autoAdvanceDelayOffset = 0.0f;
     m_defaultBgmTransition = "instant";
@@ -2909,6 +2913,7 @@ bool Engine::saveGameSlot(int32_t slotIndex) {
     m_gameState = staged;
     // A2b: the slot page memoizes occupancy — a successful write changes it.
     m_pauseSlotCacheValid = false;
+    m_slotLoadFailed.reset(static_cast<size_t>(slotIndex));  // D02: a fresh save is not corrupt
     m_context->setSuccess("save_game_slot", std::to_string(slotIndex));
     return true;
 }

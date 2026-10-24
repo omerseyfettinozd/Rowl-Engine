@@ -94,6 +94,31 @@ int RowlEngine_IsPaused(RowlEngineHandle handle) {
     }, 0);
 }
 
+int RowlEngine_OpenTitleScreen(RowlEngineHandle handle) {
+    // D02: SetPaused emsali — claim-or-reject ile loud (WRONG_THREAD damgali 0).
+    if (claimHandleOrClassify(handle) == HandleStanding::Foreign) {
+        stampWrongThread(handle, "open_title_screen");
+        return 0;
+    }
+    if (!isLiveHandle(handle)) return 0;
+    return invokeNoexcept<int>([&] {
+        auto checked = toEngineChecked(handle);
+        return (checked && checked->openTitleScreen()) ? 1 : 0;
+    }, 0);
+}
+
+int RowlEngine_IsTitleScreenActive(RowlEngineHandle handle) {
+    if (claimHandleOrClassify(handle) == HandleStanding::Foreign) {
+        stampWrongThread(handle, "is_title_screen_active");
+        return 0;
+    }
+    if (!isLiveHandle(handle)) return 0;
+    return invokeNoexcept<int>([&] {
+        auto checked = toEngineChecked(handle);
+        return (checked && checked->isTitleScreenActive()) ? 1 : 0;
+    }, 0);
+}
+
 void RowlEngine_PauseMenuCommand(RowlEngineHandle handle, int command) {
     // W8-f1 (1): SetQuickSaveSlot emsali — claim-or-reject ile loud:
     // yabanci WRONG_THREAD damgali sessiz ret, state'e dokunulmaz.

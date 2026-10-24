@@ -167,6 +167,28 @@ void test_platform_host() {
         exit(1);
     }
 
+    // D02: Esc/P (PauseToggle) and Back on the title screen never start the story.
+    {
+        const uint64_t nodeBefore = engine.getCurrentNodeId();
+        if (!engine.openTitleScreen()) {
+            std::cerr << "Title screen did not open" << std::endl;
+            exit(1);
+        }
+        host->input.push_back({Rowl::Platform::RuntimeInputEvent::Type::PauseToggle});
+        host->input.push_back({Rowl::Platform::RuntimeInputEvent::Type::MenuBack});
+        engine.step(1.0f / 60.0f);
+        if (!engine.isTitleScreenActive() || !engine.isPaused() ||
+            engine.getCurrentNodeId() != nodeBefore) {
+            std::cerr << "PauseToggle/Back on the title screen started the story" << std::endl;
+            exit(1);
+        }
+        engine.setPaused(false);
+        if (engine.isTitleScreenActive()) {
+            std::cerr << "setPaused(false) did not close the title screen" << std::endl;
+            exit(1);
+        }
+    }
+
     host->lifecycle = Rowl::Platform::LifecycleState::Stopping;
     engine.step(1.0f / 60.0f);
     if (engine.isRunning()) {

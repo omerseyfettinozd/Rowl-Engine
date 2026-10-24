@@ -50,6 +50,7 @@ unsigned char* loadTextureMemorySafely(const uint8_t* bytes, int byteCount,
 
 void Window::clearTextureCache() {
     invalidateFrameCache();
+    releasePauseThumbnail();  // D02
     const bool hadMsdfAtlas = m_msdfAtlasTexture != nullptr;
     std::unordered_set<SDL_Texture*> uniqueTextures;
     for (auto& [name, tex] : m_textureCache) {

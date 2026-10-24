@@ -158,6 +158,7 @@ RowlEngine_IsReducedMotion
 RowlEngine_IsRunning
 RowlEngine_IsScreenFlashActive
 RowlEngine_IsStreaming
+RowlEngine_IsTitleScreenActive
 RowlEngine_IsTransitionActive
 RowlEngine_IsVoicePlaying
 RowlEngine_LoadChapter
@@ -166,6 +167,7 @@ RowlEngine_LoadGameSlot
 RowlEngine_LoadGameSlotResult
 RowlEngine_LoadStoryGraph
 RowlEngine_LoadStoryGraphFromVfs
+RowlEngine_OpenTitleScreen
 RowlEngine_ParseMarkup
 RowlEngine_PauseMenuCommand
 RowlEngine_PlayAmbienceBed
