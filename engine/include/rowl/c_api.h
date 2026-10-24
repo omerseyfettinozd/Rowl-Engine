@@ -161,6 +161,9 @@ typedef struct RowlEngine_ApiVersion {
 /* D02: native title screen (RowlEngine_OpenTitleScreen / IsTitleScreenActive;
  * pause-menu mode 3 = title, 4 = preferences). Additive. */
 #define ROWL_ENGINE_CAPABILITY_TITLE_SCREEN UINT64_C(33554432)
+/* D03-1: backlog rows carry their voice clip ("voice" in the history JSON);
+ * RowlEngine_ReplayBacklogVoice replays only that clip. Additive. */
+#define ROWL_ENGINE_CAPABILITY_BACKLOG_REPLAY UINT64_C(67108864)
 
 /** Current additive C API version. This query does not require an engine handle. */
 ROWL_API RowlEngine_ResultCode RowlEngine_GetApiVersion(
@@ -1208,6 +1211,20 @@ ROWL_API const char* RowlEngine_GetDialogueHistoryJsonWithLength(RowlEngineHandl
 /** Caller-buffer variant of GetDialogueHistoryJson (B2a; no borrowed lifetime). */
 ROWL_API RowlEngine_ResultCode RowlEngine_GetDialogueHistoryJsonUtf8(
     RowlEngineHandle handle, char* buffer, uint32_t bufferSize, uint32_t* outRequiredSize);
+
+/**
+ * D03-1 (ROWL_ENGINE_CAPABILITY_BACKLOG_REPLAY): plays ONLY the voice clip of
+ * backlog row `index` (0 = oldest row of RowlEngine_GetDialogueHistoryJson) on
+ * the Voice channel, cutting any previous Voice clip. A pure audio action: the
+ * game state, story cursor, step id, variables, read marks, history, save
+ * slots and node-entry effects (variables, sfx, scripts, transitions) are
+ * never touched or re-run.
+ * ROWL_RESULT_OK; STATE_ERROR before RowlEngine_Init; INVALID_ARGUMENT for an
+ * index past the history; FILE_NOT_FOUND when the row has no voice or the clip
+ * could not be started; INVALID_HANDLE; WRONG_THREAD.
+ */
+ROWL_API RowlEngine_ResultCode RowlEngine_ReplayBacklogVoice(
+    RowlEngineHandle handle, uint32_t index);
 
 /* ── Save / Load Slots & History Rewind ───────────────────────────────────── */
 

@@ -879,6 +879,7 @@ void Engine::updateActiveScene(
 
     ROWL_LOG_INFO("Scene Updated (Legacy) → Speaker: '" + m_activeSpeaker + "', Dialogue: '" +
                   m_activeDialogue + "', BG: '" + m_activeBackground + "'");
+    m_activeNodeVoiceTrack.clear();  // D03-1: legacy payloads carry no components
     recordActiveDialogueHistory();
 }
 
@@ -936,6 +937,8 @@ void Engine::updateSceneFromComponents(const nlohmann::json& root,
     const auto previousBackgroundOpacity = m_activeBackgroundOpacity;
     const auto previousLastSfxPlaybackNodeId = m_lastSfxPlaybackNodeId;
     const auto previousLastRecordedDialogueNodeId = m_lastRecordedDialogueNodeId;
+    const auto previousActiveNodeVoiceTrack = m_activeNodeVoiceTrack;
+    const auto previousVoiceClipNodeId = m_voiceClipNodeId;
     const auto previousLuaVariables = m_luaSandbox ? m_luaSandbox->getAllVariables() : std::unordered_map<std::string, std::string>{};
     // #86: camera + live-mixer snapshot. Component zinciri kamera/mikseri
     // TRY içinde mutasyona uğratır (camera bile replayEntryEffects=false iken;
@@ -987,6 +990,8 @@ void Engine::updateSceneFromComponents(const nlohmann::json& root,
         m_activeBackgroundOpacity = previousBackgroundOpacity;
         m_lastSfxPlaybackNodeId = previousLastSfxPlaybackNodeId;
         m_lastRecordedDialogueNodeId = previousLastRecordedDialogueNodeId;
+        m_activeNodeVoiceTrack = previousActiveNodeVoiceTrack;
+        m_voiceClipNodeId = previousVoiceClipNodeId;
         m_activeCharacterX = previousCharacterX;
         m_activeCharacterY = previousCharacterY;
         m_activeCharacterWidth = previousCharacterWidth;
@@ -1452,6 +1457,19 @@ void Engine::updateSceneFromComponents(const nlohmann::json& root,
             applyScreenFxComponent(data);
         }
 
+        // D03-1: the node's full voice line. Read for every update (also
+        // load/rewind, replayEntryEffects=false) so blip suppression and the
+        // history row stay consistent; it only PLAYS on a real node entry.
+        m_activeNodeVoiceTrack.clear();
+        for (const auto& data : pendingAudioComponents) {
+            const auto voiceIt = data.find("voice_track");
+            if (voiceIt != data.end() && voiceIt->is_string() &&
+                !voiceIt->get_ref<const std::string&>().empty()) {
+                m_activeNodeVoiceTrack = voiceIt->get<std::string>();
+                break;
+            }
+        }
+
         for (const auto& data : pendingAudioComponents) {
             if (!replayEntryEffects) continue;
             std::string dsp = data.value("dsp_filter", "Normal");
@@ -1488,6 +1506,27 @@ void Engine::updateSceneFromComponents(const nlohmann::json& root,
             if (!sfx.empty() && m_isPlaying &&
                 m_lastSfxPlaybackNodeId != m_storyRuntime.currentNodeId())
                 m_audio->playAudio(sfx, Rowl::Audio::AudioChannelType::Sfx);
+        }
+
+        // D03-1: full voice line = node-entry event, same one-shot marker as
+        // SFX (editor refreshes of the same node never re-trigger it) and only
+        // with replayEntryEffects (load/rewind never replay it). Entering a
+        // different node first cuts the previous node's clip. The Voice
+        // stream also carries typewriter blips, which would clear the clip,
+        // so a node with a voice_track plays no blips (see step()).
+        // The cut also runs on load/rewind: a restored node never keeps
+        // another node's (or a backlog replay's) clip talking over it.
+        if (m_isPlaying && m_audio) {
+            const uint64_t entryNodeId = m_storyRuntime.currentNodeId();
+            if ((!replayEntryEffects || m_voiceClipNodeId != entryNodeId) &&
+                !m_audio->getCurrentVoicePath().empty())
+                m_audio->stopVoice();
+            if (replayEntryEffects && !m_activeNodeVoiceTrack.empty() &&
+                m_lastSfxPlaybackNodeId != entryNodeId) {
+                m_audio->stopVoice();
+                m_audio->playAudio(m_activeNodeVoiceTrack, Rowl::Audio::AudioChannelType::Voice);
+                m_voiceClipNodeId = entryNodeId;
+            }
         }
 
         if (m_isPlaying && !pendingAudioComponents.empty())
@@ -2149,7 +2188,9 @@ void Engine::step(float deltaTime) {
 
                     // MS-6: blip bookkeeping advances in every mode, but paused
                     // previews stay silent.
-                    if (m_isPlaying) m_audio->playVoiceBlip(dlg.typewriterSound, pitchMod, dlg.voiceBlipVolume, ch);
+                    // D03-1: a node with a full voice clip plays no blips (the
+                    // blip would clear the Voice stream under the clip).
+                    if (m_isPlaying && m_activeNodeVoiceTrack.empty()) m_audio->playVoiceBlip(dlg.typewriterSound, pitchMod, dlg.voiceBlipVolume, ch);
                     break;
                 }
             }
@@ -2189,7 +2230,7 @@ void Engine::step(float deltaTime) {
                             ? Rowl::Audio::AudioChannelType::Sfx
                             : Rowl::Audio::AudioChannelType::Voice;
                         // MS-6: paused previews stay silent (see dialogues loop).
-                        if (m_isPlaying) m_audio->playVoiceBlip(m_activeDialogueData.typewriterSound, pitchMod, m_activeDialogueData.voiceBlipVolume, ch);
+                        if (m_isPlaying && m_activeNodeVoiceTrack.empty()) m_audio->playVoiceBlip(m_activeDialogueData.typewriterSound, pitchMod, m_activeDialogueData.voiceBlipVolume, ch);
                         break;
                     }
                 }
@@ -2626,13 +2667,26 @@ void Engine::recordActiveDialogueHistory() {
             if (!dialogue.contentId.empty()) m_playerProfile.markRead(dialogue.contentId);
             entries.push_back(
                 {m_storyRuntime.currentNodeId(), dialogue.speaker, dialogue.dialogue, true,
-                 dialogue.contentId});
+                 dialogue.contentId, m_activeNodeVoiceTrack});
         }
     }
     if (!entries.empty()) {
         m_gameState = Rowl::State::GameState::withDialogueHistory(m_gameState, entries);
         m_lastRecordedDialogueNodeId = m_storyRuntime.currentNodeId();
     }
+}
+
+bool Engine::replayBacklogVoice(size_t index) {
+    // D03-1: a pure audio action. History is read, never written; only the
+    // Voice clip changes. A failed start (missing asset) leaves the previous
+    // clip cut - the Voice stream queues clips, so the cut has to come first.
+    const auto& history = getDialogueHistory();
+    if (!m_audio || index >= history.size() || history[index].voice.empty()) return false;
+    const std::string voicePath = history[index].voice;
+    const uint32_t clipsBefore = m_audio->getVoiceClipCount();
+    m_audio->stopVoice();
+    m_audio->playAudio(voicePath, Rowl::Audio::AudioChannelType::Voice);
+    return m_audio->getVoiceClipCount() != clipsBefore;
 }
 
 void Engine::refreshActiveDialogueLocalization() {

@@ -183,6 +183,7 @@ void test_native_player_profile();  // D01c-1: player profile v1 (preferences + 
 void test_boot_story_diagnostics();  // #118/#119/#120: grafsiz/bozuk boot ayirt edilebilirlik kilidi
 void test_project_mount_cwd();  // cwd = proje koku iken oynatici VFS baglamasi kilidi
 void test_title_screen();  // D02: native baslik ekrani / Devam Et / Tercihler
+void test_backlog_replay();  // D03-1: gecmis satirina ses + guvenli ses tekrari
 void test_choice_input_guard();  // secim menusunu duz ilerleme yanitlamaz kilidi
 void test_graph_vnext();
 void test_localization();

@@ -188,6 +188,7 @@ RowlEngine_QuickLoad
 RowlEngine_QuickSave
 RowlEngine_ReclaimHandle
 RowlEngine_RegisterCharacterPreset
+RowlEngine_ReplayBacklogVoice
 RowlEngine_ResetCamera
 RowlEngine_ResetToStartNode
 RowlEngine_ResetVoiceBlipCount

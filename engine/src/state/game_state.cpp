@@ -85,17 +85,23 @@ constexpr size_t kMaxHistoryWindowHead = 64;
 // same as any foreign "history"); the top-level save "version" is untouched.
 constexpr uint32_t kHistoryFormatShared = 2;
 
+// D03-1: bound for the optional per-line voice path (decode degrades to empty).
+constexpr size_t kMaxDialogueHistoryVoiceBytes = 1024;
+
 bool historyEntryEq(const DialogueHistoryEntry& x, const DialogueHistoryEntry& y) {
     return x.nodeId == y.nodeId && x.read == y.read && x.speaker == y.speaker &&
-           x.dialogue == y.dialogue && x.contentId == y.contentId;
+           x.dialogue == y.dialogue && x.contentId == y.contentId && x.voice == y.voice;
 }
 
 nlohmann::json encodeHistoryEntry(const DialogueHistoryEntry& entry) {
-    return {
+    nlohmann::json encoded = {
         {"node_id", entry.nodeId}, {"speaker", entry.speaker},
         {"dialogue", entry.dialogue}, {"read", entry.read},
         {"content_id", entry.contentId},
     };
+    // D03-1: optional key - voiceless lines keep the pre-D03 byte shape.
+    if (!entry.voice.empty()) encoded["voice"] = entry.voice;
+    return encoded;
 }
 
 // Smallest head length h such that link[h..) == root[0..link.size()-h).
@@ -301,6 +307,13 @@ std::shared_ptr<GameState> decodeStateObject(const nlohmann::json& j, uint32_t v
         entry.dialogue = rawEntry.value("dialogue", "");
         entry.read = rawEntry.value("read", true);
         entry.contentId = rawEntry.value("content_id", "");
+        // D03-1: voice is a convenience path, never a reason to refuse a
+        // save: a wrong-typed or oversized value degrades to "no voice".
+        entry.voice.clear();
+        if (rawEntry.contains("voice") && rawEntry["voice"].is_string()) {
+            const auto& voice = rawEntry["voice"].get_ref<const std::string&>();
+            if (voice.size() <= kMaxDialogueHistoryVoiceBytes) entry.voice = voice;
+        }
         if (entry.nodeId == 0 || entry.speaker.size() > kMaxDialogueHistoryTextBytes ||
             entry.dialogue.size() > kMaxDialogueHistoryTextBytes ||
             entry.contentId.size() > kMaxContentIdBytes) {

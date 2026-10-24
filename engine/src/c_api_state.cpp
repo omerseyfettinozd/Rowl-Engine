@@ -57,6 +57,7 @@ const char* RowlEngine_GetDialogueHistoryJson(RowlEngineHandle handle) {
                 {"node_id", entry.nodeId}, {"speaker", entry.speaker},
                 {"dialogue", entry.dialogue}, {"read", entry.read},
                 {"content_id", entry.contentId},
+                {"voice", entry.voice},
             });
         }
         buffer = history.dump();
@@ -112,10 +113,31 @@ RowlEngine_ResultCode RowlEngine_GetDialogueHistoryJsonUtf8(
                 {"node_id", entry.nodeId}, {"speaker", entry.speaker},
                 {"dialogue", entry.dialogue}, {"read", entry.read},
                 {"content_id", entry.contentId},
+                {"voice", entry.voice},
             });
         }
         return copyUtf8ToCaller(history.dump(), buffer,
                                 bufferSize, outRequiredSize);
+    }, ROWL_RESULT_UNKNOWN_ERROR);
+}
+
+RowlEngine_ResultCode RowlEngine_ReplayBacklogVoice(RowlEngineHandle handle, uint32_t index) {
+    // D03-1: save/load ile ayni claim-or-reject (ses akisini + gecmis okumasini
+    // iki thread kilitsiz yarıştırmasın). Saf ses eylemi: oyun durumuna dokunmaz.
+    if (claimHandleOrClassify(handle) == HandleStanding::Foreign) {
+        stampWrongThread(handle, "replay_backlog_voice");
+        return ROWL_RESULT_WRONG_THREAD;
+    }
+    if (!isLiveHandle(handle)) return ROWL_RESULT_INVALID_HANDLE;
+    return invokeNoexcept<RowlEngine_ResultCode>([&] {
+        auto engine = toEngineChecked(handle);
+        if (!engine) return ROWL_RESULT_INVALID_HANDLE;
+        if (!engine->isInitialized()) return ROWL_RESULT_STATE_ERROR;
+        if (static_cast<size_t>(index) >= engine->getDialogueHistory().size())
+            return ROWL_RESULT_INVALID_ARGUMENT;
+        return engine->replayBacklogVoice(static_cast<size_t>(index))
+            ? ROWL_RESULT_OK
+            : ROWL_RESULT_FILE_NOT_FOUND;
     }, ROWL_RESULT_UNKNOWN_ERROR);
 }
 

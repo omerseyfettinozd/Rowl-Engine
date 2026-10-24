@@ -427,6 +427,13 @@ public:
         return m_scriptRuntimeStatuses;
     }
     const std::vector<Rowl::State::DialogueHistoryEntry>& getDialogueHistory() const;
+    /// D03-1: plays ONLY the voice clip of backlog row `index` (0 = oldest) on
+    /// the Voice channel, cutting any previous Voice clip. Touches no
+    /// GameState, story cursor, variable, read mark, history or entry-effect
+    /// marker (no sfx/script/variable effect is re-run). Returns false for an
+    /// out-of-range index, a voiceless row or a clip the audio side did not
+    /// start (no audio engine, undecodable asset).
+    bool replayBacklogVoice(size_t index);
 
 private:
     std::shared_ptr<RuntimeContext> m_context;
@@ -494,6 +501,13 @@ private:
     // a story node is entered. Keep the entry marker separate so inspector
     // preview refreshes cannot retrigger a one-shot SFX.
     uint64_t m_lastSfxPlaybackNodeId = 0;
+    // D03-1: the active node's voice_track (first non-empty audio component
+    // value; refreshed by every component scene update, replay or not, so a
+    // load/rewind still knows the line has a full voice and keeps the
+    // typewriter blips quiet) and the node whose clip was started on node
+    // entry (the clip is cut when a different node is entered).
+    std::string m_activeNodeVoiceTrack;
+    uint64_t m_voiceClipNodeId = 0;
 
     // E2b sunum-durumu (canli listeye dokunmaz; yalnizca kare-birlestirmede
     // okunur — bkz. ustteki metot blogu).

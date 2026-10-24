@@ -55,6 +55,10 @@ struct DialogueHistoryEntry {
     /// Persistent Faz 2 content identity (UUID form); empty when the
     /// presented line predates content_id migration.
     std::string contentId;
+    /// D03-1: voice clip path (VFS/asset path of the node's voice_track) the
+    /// line was presented with; empty when the node had no voice. Optional
+    /// "voice" key in saves - older saves decode to empty.
+    std::string voice;
 };
 
 // GCC 16 false positive -Warray-bounds with shared_ptr template internals
