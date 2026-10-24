@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:l="using:RowlEngine.Editor.Services.Strings"
              xmlns:comp="using:RowlEngine.Editor.ViewModels.Components"
+             xmlns:svc="using:RowlEngine.Editor.Services"
              x:Class="RowlEngine.Editor.Views.Components.TransitionComponentView"
              x:DataType="comp:TransitionComponentViewModel">
   <Border Classes="card" ClipToBounds="True" Margin="0,4">
@@ -35,9 +36,15 @@
       <!-- Transition Kind -->
       <StackPanel Spacing="2">
         <TextBlock Text="{l:T Component.Transition.Kind}" Classes="body" />
-        <ComboBox ItemsSource="{x:Static comp:TransitionComponentViewModel.AvailableKinds}"
-                  SelectedItem="{Binding Kind}"
-                  HorizontalAlignment="Stretch" />
+        <ComboBox ItemsSource="{x:Static comp:TransitionComponentViewModel.KindOptions}"
+                  SelectedItem="{Binding SelectedKindOption}"
+                  HorizontalAlignment="Stretch">
+          <ComboBox.ItemTemplate>
+            <DataTemplate x:DataType="svc:TransitionKindOption">
+              <TextBlock Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis" />
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
       </StackPanel>
 
       <!-- Duration and Color -->

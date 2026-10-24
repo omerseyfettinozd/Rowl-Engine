@@ -213,6 +213,15 @@
     "Component.Audio.Title": {
       "text": "Audio"
     },
+    "Component.Audio.Voice.Label": {
+      "text": "Voice line (dialogue recording)"
+    },
+    "Component.Audio.Voice.Preview.Tip": {
+      "text": "Play / stop voice line preview"
+    },
+    "Component.Audio.Voice.Watermark": {
+      "text": "e.g. ayse_01.ogg"
+    },
     "Component.Audio.Volume.Label": {
       "text": "Volume"
     },
@@ -680,6 +689,45 @@
     },
     "Component.Transition.Kind": {
       "text": "Transition type"
+    },
+    "Component.Transition.Kind.crossfade": {
+      "text": "Crossfade"
+    },
+    "Component.Transition.Kind.dissolve": {
+      "text": "Dissolve"
+    },
+    "Component.Transition.Kind.fade_black": {
+      "text": "Fade to black"
+    },
+    "Component.Transition.Kind.fade_color": {
+      "text": "Fade to color"
+    },
+    "Component.Transition.Kind.fade_white": {
+      "text": "Fade to white"
+    },
+    "Component.Transition.Kind.iris_in": {
+      "text": "Iris in"
+    },
+    "Component.Transition.Kind.iris_out": {
+      "text": "Iris out"
+    },
+    "Component.Transition.Kind.push_down": {
+      "text": "Push down"
+    },
+    "Component.Transition.Kind.push_left": {
+      "text": "Push left"
+    },
+    "Component.Transition.Kind.push_right": {
+      "text": "Push right"
+    },
+    "Component.Transition.Kind.push_up": {
+      "text": "Push up"
+    },
+    "Component.Transition.Kind.wipe_left": {
+      "text": "Wipe left"
+    },
+    "Component.Transition.Kind.wipe_right": {
+      "text": "Wipe right"
     },
     "Component.Transition.Post.Label": {
       "text": "Post-process color tint &amp; vignette"

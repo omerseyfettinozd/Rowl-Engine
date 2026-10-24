@@ -213,6 +213,15 @@
     "Component.Audio.Title": {
       "text": "Ses"
     },
+    "Component.Audio.Voice.Label": {
+      "text": "Seslendirme (diyalog ses kaydı)"
+    },
+    "Component.Audio.Voice.Preview.Tip": {
+      "text": "Seslendirme önizlemesini çal / durdur"
+    },
+    "Component.Audio.Voice.Watermark": {
+      "text": "Örn: ayse_01.ogg"
+    },
     "Component.Audio.Volume.Label": {
       "text": "Ses seviyesi (Volume)"
     },
@@ -680,6 +689,45 @@
     },
     "Component.Transition.Kind": {
       "text": "Geçiş türü"
+    },
+    "Component.Transition.Kind.crossfade": {
+      "text": "Çapraz geçiş"
+    },
+    "Component.Transition.Kind.dissolve": {
+      "text": "Çözülme"
+    },
+    "Component.Transition.Kind.fade_black": {
+      "text": "Siyaha sönme"
+    },
+    "Component.Transition.Kind.fade_color": {
+      "text": "Renge sönme"
+    },
+    "Component.Transition.Kind.fade_white": {
+      "text": "Beyaza sönme"
+    },
+    "Component.Transition.Kind.iris_in": {
+      "text": "Daire ile açılma"
+    },
+    "Component.Transition.Kind.iris_out": {
+      "text": "Daire ile kapanma"
+    },
+    "Component.Transition.Kind.push_down": {
+      "text": "Aşağı itme"
+    },
+    "Component.Transition.Kind.push_left": {
+      "text": "Sola itme"
+    },
+    "Component.Transition.Kind.push_right": {
+      "text": "Sağa itme"
+    },
+    "Component.Transition.Kind.push_up": {
+      "text": "Yukarı itme"
+    },
+    "Component.Transition.Kind.wipe_left": {
+      "text": "Sola silme"
+    },
+    "Component.Transition.Kind.wipe_right": {
+      "text": "Sağa silme"
     },
     "Component.Transition.Post.Label": {
       "text": "Son işlem renk tonu ve vinyet"

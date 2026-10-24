@@ -114,6 +114,11 @@ namespace RowlEngine.Editor.Services.Inspector
                         InspectorFieldKind.Asset, "audio",
                         AssetKind: InspectorAssetKind.Audio,
                         Hint: "Boş bırakılabilir"),
+                    new InspectorFieldDescriptor(
+                        InspectorFieldDescriptor.Keys.AudioVoiceTrack, "Seslendirme Parçası",
+                        InspectorFieldKind.Asset, "audio",
+                        AssetKind: InspectorAssetKind.Audio,
+                        Hint: "Boş bırakılabilir"),
                 }),
                 ["choice"] = new ReadOnlyCollection<InspectorFieldDescriptor>(new[]
                 {

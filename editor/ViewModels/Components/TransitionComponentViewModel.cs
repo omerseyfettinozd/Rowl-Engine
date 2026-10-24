@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using CommunityToolkit.Mvvm.ComponentModel;
+using RowlEngine.Editor.Services;
 
 namespace RowlEngine.Editor.ViewModels.Components
 {
@@ -60,15 +61,31 @@ namespace RowlEngine.Editor.ViewModels.Components
         [ObservableProperty]
         private string _vignetteColorHex = "#000000";
 
-        public static IReadOnlyList<string> AvailableKinds { get; } = new[]
+        /// <summary>
+        /// Kind names the picker offers: the native engine's list, or the
+        /// six historic kinds when the library cannot be asked (D06-2).
+        /// </summary>
+        public static IReadOnlyList<string> AvailableKinds => TransitionKindCatalog.Kinds;
+
+        /// <summary>Picker entries (kind + editor-string display name).</summary>
+        public static IReadOnlyList<TransitionKindOption> KindOptions => TransitionKindCatalog.Options;
+
+        /// <summary>
+        /// Picker selection. Reads resolve native aliases ("fade" shows as
+        /// Crossfade); the stored <see cref="Kind"/> string is only replaced
+        /// when the author picks an entry.
+        /// </summary>
+        public TransitionKindOption? SelectedKindOption
         {
-            "crossfade",
-            "fade_black",
-            "fade_white",
-            "fade_color",
-            "wipe_left",
-            "wipe_right"
-        };
+            get => TransitionKindCatalog.FindOption(Kind);
+            set
+            {
+                if (value is not null)
+                    Kind = value.Kind;
+            }
+        }
+
+        partial void OnKindChanged(string value) => OnPropertyChanged(nameof(SelectedKindOption));
 
         public override Dictionary<string, object> Serialize()
         {

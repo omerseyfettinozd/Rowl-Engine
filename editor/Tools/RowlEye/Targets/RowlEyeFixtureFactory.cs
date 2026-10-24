@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using RowlEngine.Editor.ViewModels;
@@ -70,6 +71,24 @@ public static class RowlEyeFixtureFactory
                 vm.SelectedNodes.Clear();
                 foreach (var n in vm.Nodes) { n.IsSelected = true; vm.SelectedNodes.Add(n); }
                 break;
+        }
+        // D06-2: bileşen kartı elle denetimi (ROWL_EYE_OBJECT=<sahne nesnesi adı>): nesneyi seçer, sahne Denetçisini gizler
+        // ve "Ayrıntılar" katını açar; golden koşusu dokunmaz.
+        string? objectName = Environment.GetEnvironmentVariable("ROWL_EYE_OBJECT");
+        if (!string.IsNullOrWhiteSpace(objectName) && vm.SelectedNode is { } selected)
+        {
+            var target = selected.Objects.FirstOrDefault(o => string.Equals(o.Name, objectName, StringComparison.OrdinalIgnoreCase));
+            if (target is not null)
+            {
+                vm.HierarchyViewModel.SelectedObject = target;
+                foreach (var logical in Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants(win))
+                {
+                    if (logical is Expander { Name: "AdvancedInspectorExpander" } expander)
+                        expander.IsExpanded = true;
+                    else if (logical is Control { Name: "SceneInspector" } scene)
+                        scene.IsVisible = false;
+                }
+            }
         }
         // Faz 9 F1: Sorunlar paneli örnek satırları (ROWL_EYE_ISSUES=1): düğümlü hata, varlıklı uyarı, hedefsiz uyarı.
         if (Environment.GetEnvironmentVariable("ROWL_EYE_ISSUES") == "1")

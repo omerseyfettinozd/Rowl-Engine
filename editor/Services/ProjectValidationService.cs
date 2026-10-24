@@ -17,7 +17,7 @@ public sealed record ProjectValidationIssue(bool IsError, string Message, ulong?
 /// <summary>Pure graph checks shared by export and the editor's issue panel.</summary>
 internal static class ProjectValidationService
 {
-    internal static readonly string[] AssetKeys = { "texture", "sprite", "bgm_track", "sfx_track", "path", "typewriter_sound", "custom_box_texture" };
+    internal static readonly string[] AssetKeys = { "texture", "sprite", "bgm_track", "sfx_track", "voice_track", "path", "typewriter_sound", "custom_box_texture" };
 
     public static IReadOnlyList<ProjectValidationIssue> Validate(IEnumerable<NodeViewModel> nodes, IEnumerable<ConnectionViewModel> connections, string assetsPath, ulong? startNodeId = null)
         => Validate(nodes, connections, assetsPath, startNodeId, structure: null);

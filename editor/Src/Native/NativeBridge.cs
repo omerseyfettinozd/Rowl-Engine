@@ -377,6 +377,19 @@ namespace RowlEngine.Editor.Native
             uint bufferSize,
             out uint outRequiredSize);
 
+        // ── E2a transition repertoire (CAPABILITY_TRANSITION_REPERTOIRE) ──
+        //
+        // Handle-free pure helper: copies the transition kind names the
+        // native StartTransition accepts as a UTF-8 JSON string array.
+        // Caller-buffer contract is the ParseMarkup one (NULL/0 size query,
+        // BufferTooSmall + required size).
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_GetSupportedTransitionKindsJson(
+            IntPtr buffer,
+            uint bufferSize,
+            out uint outRequiredSize);
+
         // ── Faz 3 Dilim 3 text shaping (CAPABILITY_TEXT_SHAPING) ────────
 
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]

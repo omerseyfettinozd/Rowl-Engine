@@ -218,10 +218,37 @@ internal static class ProjectLintService
             {
                 if (!condition.IsEnabled || CapReached())
                     continue;
+                // D06-1 semantics (docs/DATA_FORMATS_AND_MIGRATION.md section 11): an empty
+                // expression gates nothing, and a false condition without a valid
+                // fail target lets the node play anyway.
+                bool hasExpression = !string.IsNullOrWhiteSpace(condition.Expression);
+                if (!hasExpression)
+                {
+                    issues.Add(new(false,
+                        $"Node #{node.Id} condition has an empty expression; it gates nothing and the node always plays. Write a Lua condition or disable the component.",
+                        node.Id));
+                    added++;
+                }
                 string raw = (condition.FailTargetNodeId ?? string.Empty).Trim();
                 if (raw.Length == 0)
+                {
+                    if (hasExpression && !CapReached())
+                    {
+                        issues.Add(new(false,
+                            $"Node #{node.Id} condition '{condition.Expression.Trim()}' has no fail target node; when the condition is false the node still plays.",
+                            node.Id));
+                        added++;
+                    }
                     continue;
-                if (!ulong.TryParse(raw, out ulong target) || target == 0)
+                }
+                if (ulong.TryParse(raw, out ulong selfTarget) && selfTarget == node.Id)
+                {
+                    issues.Add(new(false,
+                        $"Node #{node.Id} condition fail target is the node itself; a false condition cannot leave it (the node plays after 16 redirects).",
+                        node.Id));
+                    added++;
+                }
+                else if (!ulong.TryParse(raw, out ulong target) || target == 0)
                 {
                     issues.Add(new(true,
                         $"Node #{node.Id} condition has an invalid fail target '{condition.FailTargetNodeId}' (expected a node id).",

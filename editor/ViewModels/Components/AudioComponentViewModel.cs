@@ -25,6 +25,14 @@ namespace RowlEngine.Editor.ViewModels.Components
         [ObservableProperty]
         private string _sfxTrack = "";
 
+        /// <summary>
+        /// Full voice line played once on node entry (native reads
+        /// <c>voice_track</c> from the audio component, engine.cpp). Empty means
+        /// no voice; the key is then omitted from the JSON.
+        /// </summary>
+        [ObservableProperty]
+        private string _voiceTrack = "";
+
         [ObservableProperty]
         private float _volume = 1.0f;
 
@@ -41,6 +49,9 @@ namespace RowlEngine.Editor.ViewModels.Components
 
         [ObservableProperty]
         private bool _isPreviewingSfx = false;
+
+        [ObservableProperty]
+        private bool _isPreviewingVoice = false;
 
         [ObservableProperty]
         private float _bgmPeakL = 0.0f;
@@ -158,10 +169,28 @@ namespace RowlEngine.Editor.ViewModels.Components
         }
 
         [CommunityToolkit.Mvvm.Input.RelayCommand]
+        public void ToggleVoicePreview()
+        {
+            if (IsPreviewingVoice)
+            {
+                StopAllPreview();
+            }
+            else
+            {
+                if (string.IsNullOrWhiteSpace(VoiceTrack)) return;
+                StopAllPreview();
+                IsPreviewingVoice = true;
+                // Channel 1 = Voice (RowlEngine_PlayAudio channelType).
+                GlobalPreviewAudioAction?.Invoke(VoiceTrack, 1, GetFilterIndex());
+            }
+        }
+
+        [CommunityToolkit.Mvvm.Input.RelayCommand]
         public void StopAllPreview()
         {
             IsPreviewingBgm = false;
             IsPreviewingSfx = false;
+            IsPreviewingVoice = false;
             GlobalStopAudioAction?.Invoke();
             ResetTelemetry();
         }
@@ -198,7 +227,7 @@ namespace RowlEngine.Editor.ViewModels.Components
 
         public override Dictionary<string, object> Serialize()
         {
-            return new Dictionary<string, object>
+            var data = new Dictionary<string, object>
             {
                 ["dsp_filter"] = DspFilter,
                 ["bgm_track"]  = BgmTrack,
@@ -207,6 +236,11 @@ namespace RowlEngine.Editor.ViewModels.Components
                 ["bgm_transition"] = BgmTransition,
                 ["bgm_transition_duration_seconds"] = BgmTransitionDurationSeconds
             };
+            // Optional key: written only when set, so existing projects keep
+            // their JSON byte-for-byte until an author adds a voice line.
+            if (!string.IsNullOrWhiteSpace(VoiceTrack))
+                data["voice_track"] = VoiceTrack;
+            return data;
         }
 
         public override void Deserialize(Dictionary<string, object?> data)
@@ -217,6 +251,8 @@ namespace RowlEngine.Editor.ViewModels.Components
                 BgmTrack = b;
             if (data.TryGetValue("sfx_track", out var sfx) && sfx is string s)
                 SfxTrack = s;
+            VoiceTrack = data.TryGetValue("voice_track", out var voice) && voice is string voiceName
+                ? voiceName : "";
             if (data.TryGetValue("volume", out var v) && v != null)
             {
                 if (v is double vd) Volume = (float)vd;
